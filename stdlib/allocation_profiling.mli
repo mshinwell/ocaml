@@ -42,9 +42,6 @@ type t = [
     Source_location.t option * Int64.t * Source_location.t option
 ]
 
-(* CR mshinwell: enhance functionality to permit discovery of _when_
-   a value was allocated. *)
-
 (* [where_was_value_allocated v] attempts to determine the source
    location at which the value [v] was allocated.  If the source location
    cannot be determined, but the virtual memory address of the allocation
@@ -78,21 +75,63 @@ val where_was_value_allocated_address_only : 'a
 (* [to_string t] produces a human-readable representation of [t]. *)
 val to_string : t -> string
 
-(* [forget_where_values_were_allocated] erases allocation profiling
-   information on all values.  This is useful at the start of some
-   benchmarking period---for example to exclude allocations associated
-   with one-time startup costs from a profile.
+module Heap_snapshot : sig
+  (* This module contains profiling functions that work on snapshots
+     of the Caml heap.
 
-   This function causes a minor garbage collection with the usual
-   associated slice of major collection.
+     All of these functions cause a minor garbage collection
+     accompanied by the usual associated slice of major collection.
+  *)
+
+  (* [dump_allocators_of_major_heap_blocks] writes a file that may be
+     decoded using tools/allocation-profiling/decode-major-heap.sh
+     in order to show, for each block in the major heap, where it was
+     allocated. *)
+  val dump_allocators_of_major_heap_blocks : filename:string -> unit
+
+  (* [dump_heapgraph] writes two files that may be decoded using
+     tools/allocation-profiling/decode-heapgraph.sh in order to show
+     the graph of values in the heap quotiented by the equivalence
+     relation that identifies two values iff they were allocated at
+     the same source location.  This enables judgements such as
+     "a lot of values were allocated at foo.ml line 36 and they were
+     pointed at by values allocated at bar.ml line 42". *)
+  val dump_heapgraph : node_filename:string
+    -> edge_filename:string
+    -> unit
+
+  (* [forget_where_values_were_allocated] erases allocation profiling
+     information on all values.  This is useful at the start of some
+     benchmarking period---for example to exclude allocations associated
+     with one-time startup costs from a profile.
+
+     This function does not just affect the results of the functions
+     in this [Heap_snapshot] module; it also affects the results of
+     [where_was_value_allocated], etc, above.
+  *)
+  val forget_where_values_were_allocated : unit -> unit
+end
+
+module Global : sig
+  (* This module contains functions that provide access to global
+     profiling information rather than working on current snapshots
+     of the heap.
+  *)
+
+  (* [dump_allocations_by_address] writes a file that may be decoded
+     using tools/allocation-profiling/decode-by-address.sh in order
+     to show the total number of values and words allocated at each
+     program source location.  These counts will increment from the
+     start of the program unless the reset function, below, is
+     called.
+  *)
+(*
+  val dump_allocations_by_address : filename:string -> unit
+
+  (* [reset_allocations_by_address] resets all counts to zero. *)
+  val reset_allocations_by_address : unit -> unit
 *)
-val forget_where_values_were_allocated : unit -> unit
-
-val dump_allocators_of_major_heap_blocks : filename:string -> unit
-
-val dump_heapgraph : node_filename:string
-  -> edge_filename:string
-  -> unit
+end
 
 (* The following is only for the internal use of the OCaml system.
    User code should use the functions provided above. *)
@@ -107,3 +146,6 @@ module Source_location_map : sig
     -> [ `Exact of Source_location.t
        | `Between of Source_location.t option * Source_location.t option] option
 end
+
+(* CR mshinwell: enhance functionality to permit discovery of _when_
+   a value was allocated. *)

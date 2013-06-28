@@ -246,7 +246,6 @@ caml_where_was_this_allocated (value v)
   }
 
   approx_instr_pointer = ((uint64_t) (Profinfo_hd (Hd_val (v)))) << 4;
-  printf("header is %llx\n",(unsigned long long)(Hd_val(v)));fflush(stdout);
 
   if (approx_instr_pointer == 0ull) {
     CAMLreturn(Val_long(0));  /* None */

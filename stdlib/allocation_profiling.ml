@@ -216,16 +216,26 @@ let to_string = function
       (Source_location.to_string above_loc)
       addr
 
-external dump_allocators_of_major_heap_blocks : filename:string -> unit
-  = "caml_allocation_profiling_only_works_for_native_code"
-    "caml_dump_allocators_of_major_heap_blocks_from_ocaml"
+module Heap_snapshot = struct
+  external dump_allocators_of_major_heap_blocks : filename:string -> unit
+    = "caml_allocation_profiling_only_works_for_native_code"
+      "caml_dump_allocators_of_major_heap_blocks_from_ocaml"
 
-external forget_where_values_were_allocated : unit -> unit
-  = "caml_allocation_profiling_only_works_for_native_code"
-    "caml_forget_where_values_were_allocated"
+  external forget_where_values_were_allocated : unit -> unit
+    = "caml_allocation_profiling_only_works_for_native_code"
+      "caml_forget_where_values_were_allocated"
 
-external dump_heapgraph : node_filename:string
-  -> edge_filename:string
-  -> unit
-  = "caml_allocation_profiling_only_works_for_native_code"
-    "caml_dump_heapgraph_from_ocaml"
+  external dump_heapgraph : node_filename:string
+    -> edge_filename:string
+    -> unit
+    = "caml_allocation_profiling_only_works_for_native_code"
+      "caml_dump_heapgraph_from_ocaml"
+end
+
+module Global = struct
+  external dump_allocations_by_address : filename:string -> unit
+    = "caml_dump_allocation_tracing_arrays"
+
+  external reset_allocations_by_address : unit -> unit
+    = "caml_reset_allocation_tracing_arrays"
+end

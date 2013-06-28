@@ -164,8 +164,6 @@ extern void* caml_allocation_trace_caller __attribute__((weak));
 
 #define Modify(fp,val) caml_modify((fp), (val))
 
-CAMLextern value caml_dump_allocation_tracing_arrays(value);
-
 /* </private> */
 
 struct caml__roots_block {

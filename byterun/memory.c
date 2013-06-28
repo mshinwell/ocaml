@@ -623,31 +623,6 @@ CAMLexport void * caml_stat_resize (void * blk, asize_t sz)
   return result;
 }
 
-CAMLprim value caml_dump_allocation_tracing_arrays(value v_unit)
-{
-  if (caml_allocation_tracing) {
-    uint64_t i;
-    uint64_t limit =
-      (((uint64_t) caml_minor_allocation_tracing_array_end)
-        - ((uint64_t) caml_minor_allocation_tracing_array)) / sizeof(uint64_t);
-    v_unit = v_unit;
-    for (i = 0; i < limit; i++) {
-      void* code_ptr = (void*) (i * 8);
-      uint64_t count = caml_minor_allocation_tracing_array[i];
-      if (count != 0)
-        printf("minor,%p,%lld\n", code_ptr, (unsigned long long) count);
-    }
-    for (i = 0; i < limit; i++) {
-      void* code_ptr = (void*) (i * 8);
-      uint64_t count = caml_major_allocation_tracing_array[i];
-      if (count != 0)
-        printf("major,%p,%lld\n", code_ptr, (unsigned long long) count);
-    }
-    fflush(stdout);
-  }
-  return Val_unit;
-}
-
 extern void* caml_last_return_address __attribute__((weak));
 
 CAMLprim value caml_allocation_entry_point(value v_unit)
@@ -656,6 +631,39 @@ CAMLprim value caml_allocation_entry_point(value v_unit)
     caml_allocation_trace_caller = (void*) caml_last_return_address;
   }
   return v_unit;
+}
+
+CAMLprim value caml_dump_allocation_tracing_arrays(value v_output_file)
+{
+  if (caml_allocation_tracing) {
+    FILE* fp;
+    uint64_t i;
+    uint64_t limit =
+      (((uint64_t) caml_minor_allocation_tracing_array_end)
+        - ((uint64_t) caml_minor_allocation_tracing_array)) / sizeof(uint64_t);
+
+    fp = fopen(String_val(v_output_file), "w");
+    if (fp == NULL) {
+      fprintf(stderr, "couldn't open file '%s' for allocation tracing array dump\n",
+              String_val(v_output_file));
+      return Val_unit;
+    }
+
+    for (i = 0; i < limit; i++) {
+      void* code_ptr = (void*) (i * 8);
+      uint64_t count = caml_minor_allocation_tracing_array[i];
+      if (count != 0)
+        fprintf(fp, "minor,%p,%lld\n", code_ptr, (unsigned long long) count);
+    }
+    for (i = 0; i < limit; i++) {
+      void* code_ptr = (void*) (i * 8);
+      uint64_t count = caml_major_allocation_tracing_array[i];
+      if (count != 0)
+        fprintf(fp, "major,%p,%lld\n", code_ptr, (unsigned long long) count);
+    }
+    fclose(fp);
+  }
+  return Val_unit;
 }
 
 CAMLprim value caml_reset_allocation_tracing_arrays(value v_unit)
