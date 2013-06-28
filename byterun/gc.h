@@ -14,6 +14,7 @@
 #ifndef CAML_GC_H
 #define CAML_GC_H
 
+extern int caml_allocation_tracing;
 
 #include "mlvalues.h"
 
@@ -40,6 +41,15 @@
 #define Make_header(wosize, tag, color)                                       \
       (/*Assert ((wosize) <= Max_wosize),*/                                   \
        ((header_t) (((header_t) (wosize) << 10)                               \
+                    + (color)                                                 \
+                    + (tag_t) (tag)))                                         \
+      )
+
+#define Make_header_with_profinfo(wosize, tag, color, profinfo)               \
+      (/*Assert ((wosize) <= Max_wosize),*/                                   \
+       ((header_t) (((caml_allocation_tracing                    ) ?          \
+                       ((((header_t) profinfo) & 0x3fffffull) << 42) : 0)     \
+                    + ((header_t) (wosize) << 10)                             \
                     + (color)                                                 \
                     + (tag_t) (tag)))                                         \
       )

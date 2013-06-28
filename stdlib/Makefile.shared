@@ -18,7 +18,7 @@ CAMLC=$(RUNTIME) $(COMPILER)
 COMPFLAGS=-strict-sequence -w +33..39 -g -warn-error A -nostdlib
 OPTCOMPILER=../ocamlopt
 CAMLOPT=$(RUNTIME) $(OPTCOMPILER)
-OPTCOMPFLAGS=-warn-error A -nostdlib -g
+OPTCOMPFLAGS=-warn-error A -nostdlib -g -allocation-tracing
 CAMLDEP=../boot/ocamlrun ../tools/ocamldep
 
 OBJS=pervasives.cmo $(OTHERS)
@@ -34,7 +34,8 @@ OTHERS=array.cmo list.cmo char.cmo string.cmo sys.cmo \
   camlinternalOO.cmo oo.cmo camlinternalMod.cmo \
   genlex.cmo weak.cmo \
   filename.cmo complex.cmo \
-  arrayLabels.cmo listLabels.cmo stringLabels.cmo moreLabels.cmo stdLabels.cmo
+  arrayLabels.cmo listLabels.cmo stringLabels.cmo moreLabels.cmo stdLabels.cmo \
+  allocation_profiling.cmo
 
 all: stdlib.cma std_exit.cmo camlheader camlheader_ur
 

@@ -15,6 +15,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <unistd.h>
 #include "callback.h"
 #include "backtrace.h"
 #include "custom.h"
@@ -38,6 +40,7 @@
 extern int caml_parser_trace;
 CAMLexport header_t caml_atom_table[256];
 char * caml_code_area_start, * caml_code_area_end;
+int caml_allocation_tracing = 0;
 
 /* Initialize the atom table and the static data and code area limits. */
 
@@ -133,9 +136,51 @@ static void parse_camlrunparam(void)
       case 'v': scanmult (opt, &caml_verb_gc); break;
       case 'b': caml_record_backtrace(Val_true); break;
       case 'p': caml_parser_trace = 1; break;
+      case 'T': caml_allocation_tracing = 1; break;
       case 'a': scanmult (opt, &p); caml_set_allocation_policy (p); break;
       }
     }
+  }
+}
+
+size_t bytes_sufficient_for_code_section = 0;
+
+static void
+record_data_segment_limit(void)
+{
+  void* limit = sbrk(0);
+  if (limit != (void*) -1) {
+    bytes_sufficient_for_code_section = (uint64_t) limit;
+  }
+}
+
+uint64_t* caml_minor_allocation_tracing_array = NULL;
+uint64_t* caml_minor_allocation_tracing_array_end = NULL;
+uint64_t* caml_major_allocation_tracing_array = NULL;
+uint64_t* caml_major_allocation_tracing_array_end = NULL;
+void* caml_allocation_trace_caller = NULL;
+void (*__malloc_initialize_hook)(void) = record_data_segment_limit;
+
+static void
+initialize_allocation_tracing (void)
+{
+  if (caml_allocation_tracing && bytes_sufficient_for_code_section > 0) {
+    caml_minor_allocation_tracing_array =
+      (uint64_t*) calloc(bytes_sufficient_for_code_section, 1);
+    if (!caml_minor_allocation_tracing_array) abort();
+    caml_minor_allocation_tracing_array_end =
+      caml_minor_allocation_tracing_array +
+      (bytes_sufficient_for_code_section / sizeof(uint64_t));
+
+    caml_major_allocation_tracing_array =
+      (uint64_t*) calloc(bytes_sufficient_for_code_section, 1);
+    if (!caml_major_allocation_tracing_array) abort();
+    caml_major_allocation_tracing_array_end =
+      caml_major_allocation_tracing_array +
+      (bytes_sufficient_for_code_section / sizeof(uint64_t));
+  }
+  else {
+    caml_allocation_tracing = 0;
   }
 }
 
@@ -155,6 +200,8 @@ extern void caml_install_invalid_parameter_handler();
 #endif
 
 
+extern int ensure_alloc_profiling_dot_o_is_included;
+
 void caml_main(char **argv)
 {
   char * exe_name;
@@ -163,6 +210,8 @@ void caml_main(char **argv)
 #endif
   value res;
   char tos;
+
+  ensure_alloc_profiling_dot_o_is_included++;
 
   caml_init_ieee_floats();
 #ifdef _MSC_VER
@@ -174,6 +223,7 @@ void caml_main(char **argv)
 #endif
   caml_top_of_stack = &tos;
   parse_camlrunparam();
+  initialize_allocation_tracing();
   caml_init_gc (minor_heap_init, heap_size_init, heap_chunk_init,
                 percent_free_init, max_percent_free_init);
   init_atoms();

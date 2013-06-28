@@ -112,6 +112,7 @@ end;;
 module type Optcomp_options = sig
   val _a : unit -> unit
   val _absname : unit -> unit
+  val _allocation_tracing : unit -> unit
   val _annot : unit -> unit
   val _binannot : unit -> unit
   val _c : unit -> unit

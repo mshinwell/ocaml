@@ -18,6 +18,10 @@ let mk_absname f =
   "-absname", Arg.Unit f, "  Show absolute filenames in error messages"
 ;;
 
+let mk_allocation_tracing f =
+  "-allocation-tracing", Arg.Unit f, "  Emit code with minor heap allocation tracing"
+;;
+
 let mk_annot f =
   "-annot", Arg.Unit f, " Save information in <filename>.annot"
 ;;
@@ -517,6 +521,7 @@ end;;
 module type Optcomp_options = sig
   val _a : unit -> unit
   val _absname : unit -> unit
+  val _allocation_tracing : unit -> unit
   val _annot : unit -> unit
   val _binannot : unit -> unit
   val _c : unit -> unit
@@ -757,6 +762,7 @@ struct
   let list = [
     mk_a F._a;
     mk_absname F._absname;
+    mk_allocation_tracing F._allocation_tracing;
     mk_annot F._annot;
     mk_binannot F._binannot;
     mk_c F._c;

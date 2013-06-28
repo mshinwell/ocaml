@@ -38,7 +38,6 @@ let bind_nonvar name arg fn =
 
 (* Block headers. Meaning of the tag field: see stdlib/obj.ml *)
 
-let float_tag = Cconst_int Obj.double_tag
 let floatarray_tag = Cconst_int Obj.double_array_tag
 
 let block_header tag sz =
@@ -55,14 +54,14 @@ let boxedint32_header = block_header Obj.custom_tag 2
 let boxedint64_header = block_header Obj.custom_tag (1 + 8 / size_addr)
 let boxedintnat_header = block_header Obj.custom_tag 2
 
-let alloc_block_header tag sz = Cconst_natint(block_header tag sz)
-let alloc_float_header = Cconst_natint(float_header)
-let alloc_floatarray_header len = Cconst_natint(floatarray_header len)
-let alloc_closure_header sz = Cconst_natint(closure_header sz)
-let alloc_infix_header ofs = Cconst_natint(infix_header ofs)
-let alloc_boxedint32_header = Cconst_natint(boxedint32_header)
-let alloc_boxedint64_header = Cconst_natint(boxedint64_header)
-let alloc_boxedintnat_header = Cconst_natint(boxedintnat_header)
+let alloc_block_header tag sz = Cconst_blockheader(block_header tag sz)
+let alloc_float_header = Cconst_blockheader(float_header)
+let alloc_floatarray_header len = Cconst_blockheader(floatarray_header len)
+let alloc_closure_header sz = Cconst_blockheader(closure_header sz)
+let alloc_infix_header ofs = Cconst_blockheader(infix_header ofs)
+let alloc_boxedint32_header = Cconst_blockheader(boxedint32_header)
+let alloc_boxedint64_header = Cconst_blockheader(boxedint64_header)
+let alloc_boxedintnat_header = Cconst_blockheader(boxedintnat_header)
 
 (* Integers *)
 
@@ -294,7 +293,16 @@ let set_field ptr n newval =
   Cop(Cstore Word, [field_address ptr n; newval])
 
 let header ptr =
-  Cop(Cload Word, [Cop(Cadda, [ptr; Cconst_int(-size_int)])])
+(*
+  if !Clflags.allocation_tracing then
+*)
+    Cop(Cand, [Cop (Cload Word, [Cop(Cadda, [ptr; Cconst_int(-size_int)])]);
+               Cconst_int 0x0000_03ff_ffff_ffff;
+              ])
+(*
+  else
+    Cop(Cload Word, [Cop(Cadda, [ptr; Cconst_int(-size_int)])])
+*)
 
 let tag_offset =
   if big_endian then -1 else -size_int
@@ -398,7 +406,7 @@ let call_cached_method obj tag cache pos args dbg =
 
 let make_alloc_generic set_fn tag wordsize args =
   if wordsize <= Config.max_young_wosize then
-    Cop(Calloc, Cconst_natint(block_header tag wordsize) :: args)
+    Cop(Calloc, Cconst_blockheader(block_header tag wordsize) :: args)
   else begin
     let id = Ident.create "alloc" in
     let rec fill_fields idx = function
@@ -406,6 +414,7 @@ let make_alloc_generic set_fn tag wordsize args =
     | e1::el -> Csequence(set_fn (Cvar id) (Cconst_int idx) e1,
                           fill_fields (idx + 2) el) in
     Clet(id,
+         (* CR mshinwell: [caml_alloc] should use the %r12 value here for profinfo. *)
          Cop(Cextcall("caml_alloc", typ_addr, true, Debuginfo.none),
                  [Cconst_int wordsize; Cconst_int tag]),
          fill_fields 1 args)

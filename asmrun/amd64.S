@@ -357,6 +357,136 @@ LBL(caml_call_gc):
         ret
 CFI_ENDPROC
 
+/* Allocation with tracing. */
+
+FUNCTION(G(caml_alloc1_tracing))
+LBL(caml_alloc1_tracing):
+        subq    $16, %r15
+        CMP_VAR(caml_young_limit, %r15)
+        jb      LBL(200)
+        pushq   %r10
+        pushq   %r11
+        LOAD_VAR(caml_minor_allocation_tracing_array, %r10)
+        cmp     $0, %r10
+        je      LBL(skip_tracing1)
+        movq    16(%rsp),%r11
+        addq    %r11, %r10
+        subq    $8, %r10
+        andq    $0xfffffffffffffff8, %r10
+        LOAD_VAR(caml_minor_allocation_tracing_array_end, %r11)
+        cmp     %r11, %r10
+        jae     LBL(skip_tracing1)
+        movq    (%r10), %r11
+        addq    $2, %r11
+        movq    %r11, (%r10)
+LBL(skip_tracing1):
+        popq    %r11
+        popq    %r10
+        ret
+LBL(200):
+        RECORD_STACK_FRAME(0)
+        subq    $8, %rsp
+        call    LBL(caml_call_gc)
+        addq    $8, %rsp
+        jmp     LBL(caml_alloc1_tracing)
+
+FUNCTION(G(caml_alloc2_tracing))
+LBL(caml_alloc2_tracing):
+        subq    $24, %r15
+        CMP_VAR(caml_young_limit, %r15)
+        jb      LBL(201)
+        pushq   %r10
+        pushq   %r11
+        LOAD_VAR(caml_minor_allocation_tracing_array, %r10)
+        cmp     $0, %r10
+        je      LBL(skip_tracing2)
+        movq    16(%rsp),%r11
+        addq    %r11, %r10
+        sub     $8, %r10
+        andq    $0xfffffffffffffff8, %r10
+        LOAD_VAR(caml_minor_allocation_tracing_array_end, %r11)
+        cmp     %r11, %r10
+        jae     LBL(skip_tracing2)
+        movq    (%r10), %r11
+        addq    $3, %r11
+        movq    %r11, (%r10)
+LBL(skip_tracing2):
+        popq    %r11
+        popq    %r10
+        ret
+LBL(201):
+        RECORD_STACK_FRAME(0)
+        subq    $8, %rsp
+        call    LBL(caml_call_gc)
+        addq    $8, %rsp
+        jmp     LBL(caml_alloc2_tracing)
+
+FUNCTION(G(caml_alloc3_tracing))
+LBL(caml_alloc3_tracing):
+        subq    $32, %r15
+        CMP_VAR(caml_young_limit, %r15)
+        jb      LBL(202)
+        pushq   %r10
+        pushq   %r11
+        LOAD_VAR(caml_minor_allocation_tracing_array, %r10)
+        cmp     $0, %r10
+        je      LBL(skip_tracing3)
+        movq    16(%rsp),%r11
+        addq    %r11, %r10
+        sub     $8, %r10
+        andq    $0xfffffffffffffff8, %r10
+        LOAD_VAR(caml_minor_allocation_tracing_array_end, %r11)
+        cmp     %r11, %r10
+        jae     LBL(skip_tracing3)
+        movq    (%r10), %r11
+        addq    $4, %r11
+        movq    %r11, (%r10)
+LBL(skip_tracing3):
+        popq    %r11
+        popq    %r10
+        ret
+LBL(202):
+        RECORD_STACK_FRAME(0)
+        subq    $8, %rsp
+        call    LBL(caml_call_gc)
+        addq    $8, %rsp
+        jmp     LBL(caml_alloc3_tracing)
+
+FUNCTION(G(caml_allocN_tracing))
+LBL(caml_allocN_tracing):
+        pushq   %rax                       /* save desired size */
+        subq    %rax, %r15
+        CMP_VAR(caml_young_limit, %r15)
+        jb      LBL(203)
+        popq    %rax
+        sarq    $3, %rax
+        pushq   %r10
+        pushq   %r11
+        LOAD_VAR(caml_minor_allocation_tracing_array, %r10)
+        cmp     $0, %r10
+        je      LBL(skip_tracingN)
+        movq    16(%rsp),%r11
+        addq    %r11, %r10
+        sub     $8, %r10
+        andq    $0xfffffffffffffff8, %r10
+        LOAD_VAR(caml_minor_allocation_tracing_array_end, %r11)
+        cmp     %r11, %r10
+        jae     LBL(skip_tracingN)
+        movq    (%r10), %r11
+        addq    %rax, %r11
+        movq    %r11, (%r10)
+LBL(skip_tracingN):
+        popq    %r11
+        popq    %r10
+        ret
+LBL(203):
+        RECORD_STACK_FRAME(8)
+        call    LBL(caml_call_gc)
+        popq    %rax                      /* recover desired size */
+        jmp     LBL(caml_allocN_tracing)
+
+/* Original versions of allocation functions. */
+
 FUNCTION(G(caml_alloc1))
 CFI_STARTPROC
 LBL(caml_alloc1):
@@ -373,6 +503,7 @@ LBL(100):
 	LEAVE_FUNCTION
         jmp     LBL(caml_alloc1)
 CFI_ENDPROC
+
 
 FUNCTION(G(caml_alloc2))
 CFI_STARTPROC

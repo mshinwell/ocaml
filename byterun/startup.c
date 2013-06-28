@@ -62,6 +62,7 @@
 #endif
 
 extern int caml_parser_trace;
+int caml_allocation_tracing = 0;
 
 CAMLexport header_t caml_atom_table[256];
 
@@ -339,6 +340,8 @@ extern void caml_install_invalid_parameter_handler();
 
 #endif
 
+extern int ensure_alloc_profiling_dot_o_is_included;
+
 /* Main entry point when loading code from a file */
 
 CAMLexport void caml_main(char **argv)
@@ -352,6 +355,8 @@ CAMLexport void caml_main(char **argv)
 #ifdef __linux__
   static char proc_self_exe[256];
 #endif
+
+  ensure_alloc_profiling_dot_o_is_included++;
 
   /* Machine-dependent initialization of the floating-point hardware
      so that it behaves as much as possible as specified in IEEE */

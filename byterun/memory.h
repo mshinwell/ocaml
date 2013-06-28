@@ -27,6 +27,7 @@
 /* </private> */
 #include "misc.h"
 #include "mlvalues.h"
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,6 +35,7 @@ extern "C" {
 
 
 CAMLextern value caml_alloc_shr (mlsize_t, tag_t);
+CAMLextern value caml_alloc_shr_with_profinfo (mlsize_t, tag_t, intnat);
 CAMLextern void caml_adjust_gc_speed (mlsize_t, mlsize_t);
 CAMLextern void caml_alloc_dependent_memory (mlsize_t);
 CAMLextern void caml_free_dependent_memory (mlsize_t);
@@ -101,7 +103,26 @@ int caml_page_table_initialize(mlsize_t bytesize);
 #define DEBUG_clear(result, wosize)
 #endif
 
-#define Alloc_small(result, wosize, tag) do{    CAMLassert ((wosize) >= 1); \
+#define MY_PROFINFO ((((intnat)__builtin_return_address(0)) >> 4) & 0x3fffff)
+
+extern int caml_allocation_tracing;
+extern uint64_t* caml_minor_allocation_tracing_array __attribute__((weak));
+extern uint64_t* caml_minor_allocation_tracing_array_end __attribute__((weak));
+extern uint64_t* caml_major_allocation_tracing_array __attribute__((weak));
+extern uint64_t* caml_major_allocation_tracing_array_end __attribute__((weak));
+extern void* caml_allocation_trace_caller __attribute__((weak));
+
+#define ALLOCATION_ENTRY_POINT                                              \
+  if (caml_allocation_tracing && caml_allocation_trace_caller == NULL)      \
+    caml_allocation_trace_caller = __builtin_return_address(0);
+
+#define CLEAR_ALLOCATION_ENTRY_POINT                                        \
+  if (caml_allocation_tracing) {                                            \
+    caml_allocation_trace_caller = NULL;                                    \
+  }
+
+#define Alloc_small_with_profinfo(result, wosize, tag, profinfo) do {       \
+                                                CAMLassert ((wosize) >= 1); \
                                           CAMLassert ((tag_t) (tag) < 256); \
                                  CAMLassert ((wosize) <= Max_young_wosize); \
   caml_young_ptr -= Bhsize_wosize (wosize);                                 \
@@ -112,14 +133,38 @@ int caml_page_table_initialize(mlsize_t bytesize);
     Restore_after_gc;                                                       \
     caml_young_ptr -= Bhsize_wosize (wosize);                               \
   }                                                                         \
-  Hd_hp (caml_young_ptr) = Make_header ((wosize), (tag), Caml_black);       \
+  if (caml_allocation_tracing) {                                            \
+    uint64_t caller_aligned;                                                \
+    uint64_t* count;                                                        \
+    if (caml_allocation_trace_caller != NULL) {                             \
+      caller_aligned = (uint64_t) caml_allocation_trace_caller;             \
+      caml_allocation_trace_caller = NULL;                                  \
+    }                                                                       \
+    else {                                                                  \
+      caller_aligned = (uint64_t) __builtin_return_address(0);              \
+    }                                                                       \
+    caller_aligned &= 0xfffffffffffffff8;                                   \
+    count =                                                                 \
+      (uint64_t*) (((uint64_t) caml_minor_allocation_tracing_array)         \
+        + caller_aligned);                                                  \
+    if (count < caml_minor_allocation_tracing_array_end) {                  \
+      *count = *count + wosize + 1;                                         \
+    }                                                                       \
+  }                                                                         \
+  Hd_hp (caml_young_ptr) =                                                  \
+    Make_header_with_profinfo ((wosize), (tag), Caml_black, (profinfo));    \
   (result) = Val_hp (caml_young_ptr);                                       \
   DEBUG_clear ((result), (wosize));                                         \
 }while(0)
 
+#define Alloc_small(result, wosize, tag) \
+  Alloc_small_with_profinfo(result, wosize, tag, MY_PROFINFO)
+
 /* Deprecated alias for [caml_modify] */
 
 #define Modify(fp,val) caml_modify((fp), (val))
+
+CAMLextern value caml_dump_allocation_tracing_arrays(value);
 
 /* </private> */
 

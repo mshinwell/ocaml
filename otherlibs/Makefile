@@ -14,7 +14,7 @@
 # Common Makefile for otherlibs on the Unix ports
 
 CAMLC=$(ROOTDIR)/ocamlcomp.sh
-CAMLOPT=$(ROOTDIR)/ocamlcompopt.sh
+CAMLOPT=$(ROOTDIR)/ocamlcompopt.sh -allocation-tracing
 CFLAGS=-I$(ROOTDIR)/byterun -O $(SHAREDCCCOMPOPTS) $(EXTRACFLAGS)
 
 include ../Makefile.shared

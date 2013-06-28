@@ -14,7 +14,7 @@
 include ../../config/Makefile
 
 CAMLC=../../ocamlcomp.sh -I ../unix
-CAMLOPT=../../ocamlcompopt.sh -I ../unix
+CAMLOPT=../../ocamlcompopt.sh -I ../unix -allocation-tracing
 MKLIB=../../boot/ocamlrun ../../tools/ocamlmklib
 COMPFLAGS=-w +33..39 -warn-error A -g
 

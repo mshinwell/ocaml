@@ -412,6 +412,9 @@ method emit_expr env exp =
   | Cconst_natpointer n ->
       let r = self#regs_for typ_addr in
       Some(self#insert_op (Iconst_int n) [||] r)
+  | Cconst_blockheader n ->
+      let r = self#regs_for typ_int in
+      Some(self#insert_op (Iconst_blockheader n) [||] r)
   | Cvar v ->
       begin try
         Some(Tbl.find v env)
