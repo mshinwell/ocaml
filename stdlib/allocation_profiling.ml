@@ -58,11 +58,6 @@ module Source_location_map = struct
   module Map = Map.Make (Pc_value)
   type t = Source_location.t Map.t
 
-  let serialize t ~file =
-    let file = open_out_bin file in
-    Marshal.to_channel file t [];
-    close_out file
-
   let section_name = ".ocamllocs"
 
   external byte_offset_of_elf_section_contents : executable:string
@@ -79,45 +74,29 @@ module Source_location_map = struct
     if offset >= 0 then begin
       let channel = open_in_bin executable in
       seek_in channel offset;
-      let t = Marshal.from_channel channel in
-      close_in channel;
-      Some t
+      let t = ref Map.empty in
+      try
+        let finished = ref false in
+        while not !finished do
+          Scanf.fscanf channel "0x%Lx %s %s %d\n"
+            (fun instr_pointer function_name filename line_number ->
+              if instr_pointer = Int64.zero then
+                finished := true
+              else
+                let source_loc =
+                  Source_location.create ~filename ~function_name ~line_number
+                in
+                t := Map.add (Pc_value.create instr_pointer) source_loc !t)
+        done;
+        Some !t
+      with
+      | _exn -> close_in channel; Some !t
     end else
       None
 
-  let create_from_text_file ~file =
-    Printf.printf "creating from %s\n" file;
-    let file = open_in_bin file in
-    let t = ref Map.empty in
-    try
-      while true do
-        Printf.printf "reading a line\n";
-        Scanf.fscanf file "%Lx %s %s %d"
-          (fun instr_pointer function_name filename line_number ->
-            let source_loc =
-              Source_location.create ~filename ~function_name ~line_number
-            in
-            Printf.printf "created %s at %Lx\n"
-              (Source_location.to_string source_loc)
-              (instr_pointer);
-            t := Map.add (Pc_value.create instr_pointer) source_loc !t)
-      done;
-      assert false  (* unreachable *)
-    with
-    | End_of_file -> close_in file; Some !t
-    | _exn -> close_in file; None
-
-  let create_from_dwarf_information_exn ~executable ~run_command =
-    let output = Filename.temp_file "ocamlopt" "" in
-    run_command ("ocamlmklocs " ^ executable ^ " >" ^ output);
-    let t = create_from_text_file output in
-    Sys.remove output;
-    t
-
   let create_from_dwarf_then_stuff_into_elf_section_exn ~executable ~run_command =
-    let t = create_from_dwarf_information_exn ~executable ~run_command in
     let section_contents = Filename.temp_file "ocamlopt" "" in
-    serialize t ~file:section_contents;
+    run_command ("ocamlmklocs " ^ executable ^ " " ^ section_contents);
     let temp_exe = Filename.temp_file "ocamlopt" "" in
     run_command ("objcopy --add-section=" ^ section_name ^ "=" ^ section_contents
       ^ " " ^ executable ^ " " ^ temp_exe);
@@ -199,19 +178,19 @@ let where_was_value_allocated v =
 let to_string = function
   | `Not_boxed -> "value is not boxed"
   | `Unknown -> "point of allocation is unknown"
-  | `At_address addr -> Printf.sprintf "%Lx" addr
+  | `At_address addr -> Printf.sprintf "0x%Lx" addr
   | `At_source_location src_loc -> Source_location.to_string src_loc
   | `Between_source_locations (None, _addr, None) -> assert false
   | `Between_source_locations (Some below_loc, addr, None) ->
-    Printf.sprintf "somewhere after %s (%Lx)"
+    Printf.sprintf "somewhere after %s (0x%Lx)"
       (Source_location.to_string below_loc)
       addr
   | `Between_source_locations (None, addr, Some above_loc) ->
-    Printf.sprintf "somewhere before %s (%Lx)"
+    Printf.sprintf "somewhere before %s (0x%Lx)"
       (Source_location.to_string above_loc)
       addr
   | `Between_source_locations (Some below_loc, addr, Some above_loc) ->
-    Printf.sprintf "%s -> %s (%Lx)"
+    Printf.sprintf "%s -> %s (0x%Lx)"
       (Source_location.to_string below_loc)
       (Source_location.to_string above_loc)
       addr

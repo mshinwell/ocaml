@@ -86,7 +86,9 @@ module Heap_snapshot : sig
   (* [dump_allocators_of_major_heap_blocks] writes a file that may be
      decoded using tools/allocation-profiling/decode-major-heap.sh
      in order to show, for each block in the major heap, where it was
-     allocated. *)
+     allocated.  For example:
+       decode-major-heap.sh profile-output-file executable-file
+  *)
   val dump_allocators_of_major_heap_blocks : filename:string -> unit
 
   (* [dump_heapgraph] writes two files that may be decoded using
@@ -95,7 +97,10 @@ module Heap_snapshot : sig
      relation that identifies two values iff they were allocated at
      the same source location.  This enables judgements such as
      "a lot of values were allocated at foo.ml line 36 and they were
-     pointed at by values allocated at bar.ml line 42". *)
+     pointed at by values allocated at bar.ml line 42".
+     Example script invocation:
+       decode-heapgraph.sh node-filename edge-filename executable-file
+  *)
   val dump_heapgraph : node_filename:string
     -> edge_filename:string
     -> unit
@@ -107,7 +112,8 @@ module Heap_snapshot : sig
 
      This function does not just affect the results of the functions
      in this [Heap_snapshot] module; it also affects the results of
-     [where_was_value_allocated], etc, above.
+     [where_was_value_allocated], etc, above.  It does not however
+     affect the functions in the [Global] module below.
   *)
   val forget_where_values_were_allocated : unit -> unit
 end
@@ -123,14 +129,13 @@ module Global : sig
      to show the total number of values and words allocated at each
      program source location.  These counts will increment from the
      start of the program unless the reset function, below, is
-     called.
+     called.  Example script invocation:
+       decode-by-address.sh profile-output-file executable-file
   *)
-(*
   val dump_allocations_by_address : filename:string -> unit
 
   (* [reset_allocations_by_address] resets all counts to zero. *)
   val reset_allocations_by_address : unit -> unit
-*)
 end
 
 (* The following is only for the internal use of the OCaml system.
