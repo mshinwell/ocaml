@@ -124,8 +124,12 @@ startup.o: startup.c config.h ../config/m.h ../config/s.h compatibility.h \
  prims.h printexc.h reverse.h signals.h stacks.h sys.h startup.h \
  version.h
 str.o: str.c alloc.h compatibility.h misc.h config.h ../config/m.h \
+<<<<<<< HEAD
  ../config/s.h mlvalues.h fail.h memory.h gc.h major_gc.h freelist.h \
  minor_gc.h
+=======
+  ../config/s.h mlvalues.h fail.h int64_native.h
+>>>>>>> remotes/ocaml-upstream/4.01
 sys.o: sys.c config.h ../config/m.h ../config/s.h compatibility.h alloc.h \
  misc.h mlvalues.h debugger.h fail.h instruct.h osdeps.h signals.h \
  stacks.h memory.h gc.h major_gc.h freelist.h minor_gc.h sys.h
@@ -135,8 +139,16 @@ unix.o: unix.c config.h ../config/m.h ../config/s.h compatibility.h \
  memory.h gc.h mlvalues.h misc.h major_gc.h freelist.h minor_gc.h \
  osdeps.h
 weak.o: weak.c alloc.h compatibility.h misc.h config.h ../config/m.h \
+<<<<<<< HEAD
  ../config/s.h mlvalues.h fail.h major_gc.h freelist.h memory.h gc.h \
  minor_gc.h
+=======
+  ../config/s.h mlvalues.h fail.h major_gc.h freelist.h memory.h gc.h \
+  minor_gc.h
+win32.o: win32.c fail.h compatibility.h misc.h config.h ../config/m.h \
+  ../config/s.h mlvalues.h memory.h gc.h major_gc.h freelist.h minor_gc.h \
+  osdeps.h signals.h sys.h
+>>>>>>> remotes/ocaml-upstream/4.01
 alloc.d.o: alloc.c alloc.h compatibility.h misc.h config.h ../config/m.h \
  ../config/s.h mlvalues.h custom.h major_gc.h freelist.h memory.h gc.h \
  minor_gc.h stacks.h
@@ -265,8 +277,12 @@ startup.d.o: startup.c config.h ../config/m.h ../config/s.h compatibility.h \
  prims.h printexc.h reverse.h signals.h stacks.h sys.h startup.h \
  version.h
 str.d.o: str.c alloc.h compatibility.h misc.h config.h ../config/m.h \
+<<<<<<< HEAD
  ../config/s.h mlvalues.h fail.h memory.h gc.h major_gc.h freelist.h \
  minor_gc.h
+=======
+  ../config/s.h mlvalues.h fail.h int64_native.h
+>>>>>>> remotes/ocaml-upstream/4.01
 sys.d.o: sys.c config.h ../config/m.h ../config/s.h compatibility.h alloc.h \
  misc.h mlvalues.h debugger.h fail.h instruct.h osdeps.h signals.h \
  stacks.h memory.h gc.h major_gc.h freelist.h minor_gc.h sys.h
@@ -276,8 +292,16 @@ unix.d.o: unix.c config.h ../config/m.h ../config/s.h compatibility.h \
  memory.h gc.h mlvalues.h misc.h major_gc.h freelist.h minor_gc.h \
  osdeps.h
 weak.d.o: weak.c alloc.h compatibility.h misc.h config.h ../config/m.h \
+<<<<<<< HEAD
  ../config/s.h mlvalues.h fail.h major_gc.h freelist.h memory.h gc.h \
  minor_gc.h
+=======
+  ../config/s.h mlvalues.h fail.h major_gc.h freelist.h memory.h gc.h \
+  minor_gc.h
+win32.d.o: win32.c fail.h compatibility.h misc.h config.h ../config/m.h \
+  ../config/s.h mlvalues.h memory.h gc.h major_gc.h freelist.h minor_gc.h \
+  osdeps.h signals.h sys.h
+>>>>>>> remotes/ocaml-upstream/4.01
 alloc.pic.o: alloc.c alloc.h compatibility.h misc.h config.h ../config/m.h \
  ../config/s.h mlvalues.h custom.h major_gc.h freelist.h memory.h gc.h \
  minor_gc.h stacks.h
@@ -404,8 +428,12 @@ startup.pic.o: startup.c config.h ../config/m.h ../config/s.h compatibility.h \
  prims.h printexc.h reverse.h signals.h stacks.h sys.h startup.h \
  version.h
 str.pic.o: str.c alloc.h compatibility.h misc.h config.h ../config/m.h \
+<<<<<<< HEAD
  ../config/s.h mlvalues.h fail.h memory.h gc.h major_gc.h freelist.h \
  minor_gc.h
+=======
+  ../config/s.h mlvalues.h fail.h int64_native.h
+>>>>>>> remotes/ocaml-upstream/4.01
 sys.pic.o: sys.c config.h ../config/m.h ../config/s.h compatibility.h alloc.h \
  misc.h mlvalues.h debugger.h fail.h instruct.h osdeps.h signals.h \
  stacks.h memory.h gc.h major_gc.h freelist.h minor_gc.h sys.h
@@ -415,5 +443,13 @@ unix.pic.o: unix.c config.h ../config/m.h ../config/s.h compatibility.h \
  memory.h gc.h mlvalues.h misc.h major_gc.h freelist.h minor_gc.h \
  osdeps.h
 weak.pic.o: weak.c alloc.h compatibility.h misc.h config.h ../config/m.h \
+<<<<<<< HEAD
  ../config/s.h mlvalues.h fail.h major_gc.h freelist.h memory.h gc.h \
  minor_gc.h
+=======
+  ../config/s.h mlvalues.h fail.h major_gc.h freelist.h memory.h gc.h \
+  minor_gc.h
+win32.pic.o: win32.c fail.h compatibility.h misc.h config.h ../config/m.h \
+  ../config/s.h mlvalues.h memory.h gc.h major_gc.h freelist.h minor_gc.h \
+  osdeps.h signals.h sys.h
+>>>>>>> remotes/ocaml-upstream/4.01

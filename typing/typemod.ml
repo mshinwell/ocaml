@@ -381,9 +381,11 @@ let check_sig_item type_names module_names modtype_names loc = function
 let rec remove_duplicates val_ids exn_ids  = function
     [] -> []
   | Sig_value (id, _) :: rem
-    when List.exists (Ident.equal id) val_ids -> remove_duplicates val_ids exn_ids rem
+    when List.exists (Ident.equal id) val_ids ->
+      remove_duplicates val_ids exn_ids rem
   | Sig_exception(id, _) :: rem
-    when List.exists (Ident.equal id) exn_ids -> remove_duplicates val_ids exn_ids rem
+    when List.exists (Ident.equal id) exn_ids ->
+      remove_duplicates val_ids exn_ids rem
   | f :: rem -> f :: remove_duplicates val_ids exn_ids rem
 
 let rec get_values = function
@@ -688,20 +690,6 @@ let check_nongen_scheme env str =
 let check_nongen_schemes env str =
   List.iter (check_nongen_scheme env) str
 
-(* Extract the list of "value" identifiers bound by a signature.
-   "Value" identifiers are identifiers for signature components that
-   correspond to a run-time value: values, exceptions, modules, classes.
-   Note: manifest primitives do not correspond to a run-time value! *)
-
-let rec bound_value_identifiers = function
-    [] -> []
-  | Sig_value(id, {val_kind = Val_reg}) :: rem ->
-      id :: bound_value_identifiers rem
-  | Sig_exception(id, decl) :: rem -> id :: bound_value_identifiers rem
-  | Sig_module(id, mty, _) :: rem -> id :: bound_value_identifiers rem
-  | Sig_class(id, decl, _) :: rem -> id :: bound_value_identifiers rem
-  | _ :: rem -> bound_value_identifiers rem
-
 (* Helpers for typing recursive modules *)
 
 let anchor_submodule name anchor =
@@ -959,7 +947,8 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
           let loc = pstr.pstr_loc in
           let mk desc =
             let str = { str_desc = desc; str_loc = loc; str_env = env } in
-            Cmt_format.set_saved_types (Cmt_format.Partial_structure_item str :: previous_saved_types);
+            Cmt_format.set_saved_types (Cmt_format.Partial_structure_item str
+                                        :: previous_saved_types);
             str
           in
             match pstr.pstr_desc with
@@ -1146,7 +1135,7 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
         List.iter
           (check_sig_item type_names module_names modtype_names loc) sg;
         let new_env = Env.add_signature sg env in
-        let item = mk (Tstr_include (modl, bound_value_identifiers sg)) in
+        let item = mk (Tstr_include (modl, sg)) in
         let (str_rem, sig_rem, final_env) = type_struct new_env srem in
         (item :: str_rem,
          sg @ sig_rem,
@@ -1162,7 +1151,8 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
     (Cmt_format.Partial_structure str :: previous_saved_types);
   str, sg, final_env
 
-let type_toplevel_phrase env s = type_structure ~toplevel:true false None env s Location.none
+let type_toplevel_phrase env s =
+  type_structure ~toplevel:true false None env s Location.none
 let type_module = type_module true false None
 let type_structure = type_structure false None
 
