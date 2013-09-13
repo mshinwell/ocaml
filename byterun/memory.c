@@ -623,7 +623,7 @@ CAMLexport void * caml_stat_resize (void * blk, asize_t sz)
   return result;
 }
 
-extern void* caml_last_return_address __attribute__((weak));
+extern void* caml_last_return_address;
 
 CAMLprim value caml_allocation_entry_point(value v_unit)
 {

@@ -62,7 +62,14 @@
 #endif
 
 extern int caml_parser_trace;
+
 int caml_allocation_tracing = 0;
+uint64_t* caml_minor_allocation_tracing_array = NULL;
+uint64_t* caml_minor_allocation_tracing_array_end = NULL;
+uint64_t* caml_major_allocation_tracing_array = NULL;
+uint64_t* caml_major_allocation_tracing_array_end = NULL;
+void* caml_allocation_trace_caller = NULL;
+void* caml_last_return_address = NULL;
 
 CAMLexport header_t caml_atom_table[256];
 

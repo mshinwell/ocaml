@@ -360,6 +360,7 @@ CFI_ENDPROC
 /* Allocation with tracing. */
 
 FUNCTION(G(caml_alloc1_tracing))
+CFI_STARTPROC
 LBL(caml_alloc1_tracing):
         subq    $16, %r15
         CMP_VAR(caml_young_limit, %r15)
@@ -385,12 +386,14 @@ LBL(skip_tracing1):
         ret
 LBL(200):
         RECORD_STACK_FRAME(0)
-        subq    $8, %rsp
+        ENTER_FUNCTION
         call    LBL(caml_call_gc)
-        addq    $8, %rsp
+        LEAVE_FUNCTION
         jmp     LBL(caml_alloc1_tracing)
+CFI_ENDPROC
 
 FUNCTION(G(caml_alloc2_tracing))
+CFI_STARTPROC
 LBL(caml_alloc2_tracing):
         subq    $24, %r15
         CMP_VAR(caml_young_limit, %r15)
@@ -416,11 +419,13 @@ LBL(skip_tracing2):
         ret
 LBL(201):
         RECORD_STACK_FRAME(0)
-        subq    $8, %rsp
+        ENTER_FUNCTION
         call    LBL(caml_call_gc)
-        addq    $8, %rsp
+        LEAVE_FUNCTION
         jmp     LBL(caml_alloc2_tracing)
+CFI_ENDPROC
 
+CFI_STARTPROC
 FUNCTION(G(caml_alloc3_tracing))
 LBL(caml_alloc3_tracing):
         subq    $32, %r15
@@ -447,12 +452,14 @@ LBL(skip_tracing3):
         ret
 LBL(202):
         RECORD_STACK_FRAME(0)
-        subq    $8, %rsp
+        ENTER_FUNCTION
         call    LBL(caml_call_gc)
-        addq    $8, %rsp
+        LEAVE_FUNCTION
         jmp     LBL(caml_alloc3_tracing)
+CFI_ENDPROC
 
 FUNCTION(G(caml_allocN_tracing))
+CFI_STARTPROC
 LBL(caml_allocN_tracing):
         pushq   %rax                       /* save desired size */
         subq    %rax, %r15
@@ -481,9 +488,17 @@ LBL(skip_tracingN):
         ret
 LBL(203):
         RECORD_STACK_FRAME(8)
+#ifdef WITH_FRAME_POINTERS
+	/* Do we need 16-byte alignment here ? */
+	ENTER_FUNCTION
+#endif
         call    LBL(caml_call_gc)
-        popq    %rax                      /* recover desired size */
+#ifdef WITH_FRAME_POINTERS
+	LEAVE_FUNCTION
+#endif
+        popq    %rax; CFI_ADJUST(-8)       /* recover desired size */
         jmp     LBL(caml_allocN_tracing)
+CFI_ENDPROC
 
 /* Original versions of allocation functions. */
 

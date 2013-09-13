@@ -106,11 +106,11 @@ int caml_page_table_initialize(mlsize_t bytesize);
 #define MY_PROFINFO ((((intnat)__builtin_return_address(0)) >> 4) & 0x3fffff)
 
 extern int caml_allocation_tracing;
-extern uint64_t* caml_minor_allocation_tracing_array __attribute__((weak));
-extern uint64_t* caml_minor_allocation_tracing_array_end __attribute__((weak));
-extern uint64_t* caml_major_allocation_tracing_array __attribute__((weak));
-extern uint64_t* caml_major_allocation_tracing_array_end __attribute__((weak));
-extern void* caml_allocation_trace_caller __attribute__((weak));
+extern uint64_t* caml_minor_allocation_tracing_array;
+extern uint64_t* caml_minor_allocation_tracing_array_end;
+extern uint64_t* caml_major_allocation_tracing_array;
+extern uint64_t* caml_major_allocation_tracing_array_end;
+extern void* caml_allocation_trace_caller;
 
 #define ALLOCATION_ENTRY_POINT                                              \
   if (caml_allocation_tracing && caml_allocation_trace_caller == NULL)      \

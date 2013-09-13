@@ -27,7 +27,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef __APPLE__
 #include <elf.h>
+#endif
 #include <unistd.h>
 #include <fcntl.h>
 
