@@ -20,7 +20,25 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* Access to the allocation profiler from OCaml programs. *)
+(* Access to the allocation profiler from OCaml programs.
+
+   To use the allocation profiling you should:
+   - compile for native code;
+   - add "-allocation-tracing" to the ocamlopt command line;
+   - set OCAMLRUNPARAM to include the T character before running your
+     program, e.g.
+        $ OCAMLRUNPARAM=T ./myocamlprogram
+*)
+
+(* Note: The following functions are not currently supported except
+   on Linux systems.
+
+        where_was_value_allocated
+        where_was_value_allocated_address_only
+
+   In other words, use the [Heap_snapshot] or [Global] modules if
+   not running on Linux, for the moment.
+*)
 
 module Source_location : sig
   (* A value of type [t] identifies a point in a program's source code. *)
