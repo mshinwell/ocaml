@@ -141,7 +141,8 @@ static void mark_slice (intnat work)
         is_closure = (tag == Closure_tag || tag == Infix_tag);
         for (i = 0; i < size; i++){
           child = Field (v, i);
-          if (Is_block (child) && (!is_closure || Is_in_heap (child))) {
+          /* CR mshinwell: find out where the [child == NULL] case arises. */
+          if (Is_block (child) && child != NULL && (!is_closure || Is_in_heap (child))) {
             hd = Hd_val (child);
             if (Tag_hd (hd) == Forward_tag){
               value f = Forward_val (child);
