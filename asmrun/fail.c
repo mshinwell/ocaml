@@ -192,9 +192,9 @@ void caml_array_bound_error(void)
   if (! array_bound_error_bucket_inited) {
     mlsize_t wosize = (BOUND_MSG_LEN + sizeof(value)) / sizeof(value);
     mlsize_t offset_index = Bsize_wsize(wosize) - 1;
-    array_bound_error_msg.hdr = Make_header(wosize, String_tag, Caml_white);
+    array_bound_error_msg.hdr = Make_header(wosize, String_tag, Caml_black);
     array_bound_error_msg.data[offset_index] = offset_index - BOUND_MSG_LEN;
-    array_bound_error_bucket.hdr = Make_header(2, 0, Caml_white);
+    array_bound_error_bucket.hdr = Make_header(2, 0, Caml_black);
     array_bound_error_bucket.exn = (value) caml_exn_Invalid_argument;
     array_bound_error_bucket.arg = (value) array_bound_error_msg.data;
     array_bound_error_bucket_inited = 1;

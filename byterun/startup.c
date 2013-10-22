@@ -70,7 +70,7 @@ CAMLexport header_t caml_atom_table[256];
 static void init_atoms(void)
 {
   int i;
-  for(i = 0; i < 256; i++) caml_atom_table[i] = Make_header(0, i, Caml_white);
+  for(i = 0; i < 256; i++) caml_atom_table[i] = Make_header(0, i, Caml_black);
   if (caml_page_table_add(In_static_data,
                           caml_atom_table, caml_atom_table + 256) != 0) {
     caml_fatal_error("Fatal error: not enough memory for initial page table");
