@@ -124,6 +124,7 @@ static void mark_slice (intnat work)
   value v, child;
   header_t hd;
   mlsize_t size, i;
+  int is_closure, tag;
 
   caml_gc_message (0x40, "Marking %ld words\n", work);
   caml_gc_message (0x40, "Subphase = %ld\n", caml_gc_subphase);
@@ -135,10 +136,12 @@ static void mark_slice (intnat work)
       Assert (Is_gray_hd (hd));
       Hd_val (v) = Blackhd_hd (hd);
       size = Wosize_hd (hd);
-      if (Tag_hd (hd) < No_scan_tag){
+      tag = Tag_hd (hd);
+      if (tag < No_scan_tag){
+        is_closure = (tag == Closure_tag || tag == Infix_tag);
         for (i = 0; i < size; i++){
           child = Field (v, i);
-          if (Is_block (child) && Is_in_heap (child)) {
+          if (Is_block (child) && (!is_closure || Is_in_heap (child))) {
             hd = Hd_val (child);
             if (Tag_hd (hd) == Forward_tag){
               value f = Forward_val (child);
