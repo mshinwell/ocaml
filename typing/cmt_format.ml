@@ -215,7 +215,16 @@ let save_cmt filename modname binary_annots sourcefile initial_env sg =
       cmt_args = Sys.argv;
       cmt_sourcefile = sourcefile;
       cmt_builddir =  Sys.getcwd ();
-      cmt_loadpath = !Config.load_path;
+      (* CR mshinwell: work out what to do about this.  Example problem:
+         when building ocamlopt.opt, the load path ends up having non-absolute
+         paths such as "typing", and it's not clear how to interpret them. *)
+      cmt_loadpath =
+        ListLabels.map !Config.load_path
+          ~f:(fun path ->
+                if Filename.is_relative path then
+                  Sys.getcwd () ^ "/" ^ path
+                else
+                  path);
       cmt_source_digest = source_digest;
       cmt_initial_env = if need_to_clear_env then
           keep_only_summary initial_env else initial_env;
