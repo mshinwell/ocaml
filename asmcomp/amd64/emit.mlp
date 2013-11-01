@@ -854,7 +854,11 @@ let begin_assembly ~source_file_name =
      going through the emitaux stuff. *)
   dwarf_comp_unit_state := Some (
     Dwarf.Compilation_unit_state.create ~emitter:(Lazy.force emitter)
-      ~source_file_path:source_file_name
+      (* CR mshinwell: this is a hack, to find .cmt files in gdb *)
+      ~source_file_path:
+        (match source_file_name with
+         | None -> None
+         | Some name -> Some (Sys.getcwd () ^ "/" ^ name))
       ~start_of_code_label:(Compilenv.make_symbol (Some "code_begin"))
       ~end_of_code_label:(Compilenv.make_symbol (Some "code_end")));
   reset_debug_info();                   (* PR#5603 *)

@@ -212,7 +212,7 @@ let new_const_label () =
 
 let new_const_symbol () =
   incr const_label;
-  make_symbol (Some (string_of_int !const_label))
+  make_symbol (Some ("__ocaml_const_symbol_" ^ (string_of_int !const_label)))
 
 let new_structured_constant cst global =
   let lbl = new_const_symbol() in
