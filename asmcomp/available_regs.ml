@@ -2,7 +2,7 @@
 (*                                                                     *)
 (*                               OCaml                                 *)
 (*                                                                     *)
-(*                 Mark Shinwell, Jane Street Europe                   *)
+(*         Mark Shinwell and Thomas Refis, Jane Street Europe          *)
 (*                                                                     *)
 (*  Copyright 2013, Jane Street Holding                                *)
 (*                                                                     *)

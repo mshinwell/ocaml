@@ -136,38 +136,43 @@ module One_live_range = struct
       Printf.sprintf ".L%d" (ending_label_of_t_exn t)
     in
     let location_expression =
-      match Reg.location t.reg with
-      | Reg.Reg reg_number ->
-        (* CR mshinwell: this needs fixing, ESPECIALLY "R".  and below.
-           find out why there seems to be some problem with cloning [loc_args]
-           ---we could just name them for this function if we could do that
+      let internal_prefix = "__ocaml" in
+      if String.length (reg_name t) > String.length internal_prefix
+         && String.sub (reg_name t) 0 (String.length internal_prefix) = internal_prefix then
+        None
+      else
+        match Reg.location t.reg with
+        | Reg.Reg reg_number ->
+          (* CR mshinwell: this needs fixing, ESPECIALLY "R".  and below.
+             find out why there seems to be some problem with cloning [loc_args]
+             ---we could just name them for this function if we could do that
 
-           mshinwell: actually, now all we need to do is to work out how to avoid a
-           name clash on "R", then always return [None] for it here.  We artifically
-           extend the live ranges of the regs into which the "R" regs are moved, to
-           the start of the function.
-        *)
-        begin match reg_name t with
-        | "R" | "" -> None
-        | reg_name ->
-          if String.length reg_name >= 3
-            && reg_name.[0] = 'R'
-            && reg_name.[1] = '-'
-            && (try
-                  ignore (int_of_string (String.sub reg_name 2 (String.length reg_name - 2)));
-                  true
-                with Failure _ -> false)
-          then
-            None
-          else
-            Some (Dwarf_low.Location_expression.in_register reg_number)
-        end
-      | Reg.Stack (Reg.Local stack_slot_index) ->
-        Some (Dwarf_low.Location_expression.at_offset_from_stack_pointer
-            ~offset_in_bytes:(stack_slot_index * 8))
-      | Reg.Stack (Reg.Incoming _) -> None  (* CR mshinwell: don't know *)
-      | Reg.Stack (Reg.Outgoing _) -> None
-      | Reg.Unknown -> None
+             mshinwell: actually, now all we need to do is to work out how to avoid a
+             name clash on "R", then always return [None] for it here.  We artifically
+             extend the live ranges of the regs into which the "R" regs are moved, to
+             the start of the function.
+          *)
+          begin match reg_name t with
+          | "R" | "" -> None
+          | reg_name ->
+            if String.length reg_name >= 3
+              && reg_name.[0] = 'R'
+              && reg_name.[1] = '-'
+              && (try
+                    ignore (int_of_string (String.sub reg_name 2 (String.length reg_name - 2)));
+                    true
+                  with Failure _ -> false)
+            then
+              None
+            else
+              Some (Dwarf_low.Location_expression.in_register reg_number)
+          end
+        | Reg.Stack (Reg.Local stack_slot_index) ->
+          Some (Dwarf_low.Location_expression.at_offset_from_stack_pointer
+              ~offset_in_bytes:(stack_slot_index * 8))
+        | Reg.Stack (Reg.Incoming _) -> None  (* CR mshinwell: don't know *)
+        | Reg.Stack (Reg.Outgoing _) -> None
+        | Reg.Unknown -> None
     in
     match location_expression with
     | None -> None
