@@ -595,7 +595,7 @@ let rec close fenv cenv = function
       then begin
         (* Simple case: only function definitions *)
         let (clos, infos) = close_functions fenv cenv defs in
-        let clos_ident = Ident.create "clos" in
+        let clos_ident = Ident.create "__ocaml_clos" in
         let fenv_body =
           List.fold_right
             (fun (id, pos, approx) fenv -> Tbl.add id approx fenv)
@@ -778,7 +778,7 @@ and close_functions fenv cenv fun_defs =
     let dbg = match body with
       | Levent (_,({lev_kind=Lev_function} as ev)) -> Debuginfo.from_call ev
       | _ -> Debuginfo.none in
-    let env_param = Ident.create "env" in
+    let env_param = Ident.create "__ocaml_env" in
     let cenv_fv =
       build_closure_env env_param (fv_pos - env_pos) fv in
     let cenv_body =
