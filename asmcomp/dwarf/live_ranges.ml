@@ -343,13 +343,13 @@ let rec process_instruction ~insn ~first_insn ~prev_insn
       ~f:(fun (lbl, current_live_ranges) reg ->
             let parameter_or_variable, starts_at_beginning_of_function =
               match Reg.is_parameter reg with
-              | Some _parameter_index -> `Parameter (Reg.name reg), true
+              | Some _parameter_index -> `Parameter (Reg.name reg), false
               | None -> `Variable, false
             in
             let is_fresh, lbl = label_from_opt lbl in
             let live_range =
               One_live_range.create ~starting_label:lbl ~parameter_or_variable
-                ~reg ~starts_at_beginning_of_function ()
+                ~reg ~starts_at_beginning_of_function:(prev_insn = None) ()
             in
             let current_live_ranges =
               Reg_map.add current_live_ranges ~key:reg ~data:live_range

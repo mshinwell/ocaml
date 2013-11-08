@@ -360,8 +360,11 @@ method extract =
 (* Insert a sequence of moves from one pseudoreg set to another. *)
 
 method insert_move src dst =
-  if src.stamp <> dst.stamp then
-    self#insert (Iop Imove) [|src|] [|dst|]
+  if src.stamp <> dst.stamp then begin
+    self#insert (Iop Imove) [|src|] [|dst|];
+    if String.length (Reg.name src) > 0 && String.length (Reg.name dst) = 0 then
+      dst.Reg.name <- Reg.name src
+  end
 
 method insert_moves src dst =
   for i = 0 to min (Array.length src) (Array.length dst) - 1 do
@@ -445,7 +448,7 @@ method emit_expr env exp =
       begin match self#emit_expr env arg with
         None -> None
       | Some r1 ->
-          let rd = [|Proc.loc_exn_bucket|] in
+          let rd = Reg.with_name_fromv [| Proc.loc_exn_bucket |] ~from:r1 in
           self#insert (Iop Imove) r1 rd;
           self#insert_debug Iraise dbg rd [||];
           None
@@ -466,7 +469,11 @@ method emit_expr env exp =
               let rarg = Array.sub r1 1 (Array.length r1 - 1) in
               let rd = self#regs_for ty in
               let (loc_arg, stack_ofs) = Proc.loc_arguments rarg in
+              assert (Array.length rarg = Array.length loc_arg);
+              let loc_arg = Reg.with_name_fromv loc_arg ~from:rarg in
               let loc_res = Proc.loc_results rd in
+              assert (Array.length rd = Array.length loc_res);
+              let loc_res = Reg.with_name_fromv loc_res ~from:rd in
               self#insert_move_args rarg loc_arg stack_ofs;
               self#insert_debug (Iop Icall_ind) dbg
                           (Array.append [|r1.(0)|] loc_arg) loc_res;
@@ -477,7 +484,11 @@ method emit_expr env exp =
               let r1 = self#emit_tuple env new_args in
               let rd = self#regs_for ty in
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
+              assert (Array.length r1 = Array.length loc_arg);
+              let loc_arg = Reg.with_name_fromv loc_arg ~from:r1 in
               let loc_res = Proc.loc_results rd in
+              assert (Array.length rd = Array.length loc_res);
+              let loc_res = Reg.with_name_fromv loc_res ~from:rd in
               self#insert_move_args r1 loc_arg stack_ofs;
               self#insert_debug (Iop(Icall_imm lbl)) dbg loc_arg loc_res;
               self#insert_move_results loc_res rd stack_ofs;
@@ -487,8 +498,11 @@ method emit_expr env exp =
               let (loc_arg, stack_ofs) =
                 self#emit_extcall_args env new_args in
               let rd = self#regs_for ty in
+              let loc_res = Proc.loc_external_results rd in
+              assert (Array.length rd = Array.length loc_res);
+              let loc_res = Reg.with_name_fromv loc_res ~from:rd in
               let loc_res = self#insert_op_debug (Iextcall(lbl, alloc)) dbg
-                                    loc_arg (Proc.loc_external_results rd) in
+                                    loc_arg loc_res in
               self#insert_move_results loc_res rd stack_ofs;
               Some rd
           | Ialloc _ ->
@@ -699,6 +713,8 @@ method emit_tail env exp =
               let r1 = self#emit_tuple env new_args in
               let rarg = Array.sub r1 1 (Array.length r1 - 1) in
               let (loc_arg, stack_ofs) = Proc.loc_arguments rarg in
+              assert (Array.length rarg = Array.length loc_arg);
+              let loc_arg = Reg.with_name_fromv loc_arg ~from:rarg in
               if stack_ofs = 0 then begin
                 self#insert_moves rarg loc_arg;
                 self#insert (Iop Itailcall_ind)
@@ -707,6 +723,8 @@ method emit_tail env exp =
                 Proc.contains_calls := true;
                 let rd = self#regs_for ty in
                 let loc_res = Proc.loc_results rd in
+                assert (Array.length rd = Array.length loc_res);
+                let loc_res = Reg.with_name_fromv loc_res ~from:rd in
                 self#insert_move_args rarg loc_arg stack_ofs;
                 self#insert_debug (Iop Icall_ind) dbg
                             (Array.append [|r1.(0)|] loc_arg) loc_res;
@@ -716,6 +734,8 @@ method emit_tail env exp =
           | Icall_imm lbl ->
               let r1 = self#emit_tuple env new_args in
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
+              assert (Array.length r1 = Array.length loc_arg);
+              let loc_arg = Reg.with_name_fromv loc_arg ~from:r1 in
               if stack_ofs = 0 then begin
                 self#insert_moves r1 loc_arg;
                 self#insert (Iop(Itailcall_imm lbl)) loc_arg [||]
@@ -727,6 +747,8 @@ method emit_tail env exp =
                 Proc.contains_calls := true;
                 let rd = self#regs_for ty in
                 let loc_res = Proc.loc_results rd in
+                assert (Array.length rd = Array.length loc_res);
+                let loc_res = Reg.with_name_fromv loc_res ~from:rd in
                 self#insert_move_args r1 loc_arg stack_ofs;
                 self#insert_debug (Iop(Icall_imm lbl)) dbg loc_arg loc_res;
                 self#insert(Iop(Istackoffset(-stack_ofs))) [||] [||];
@@ -807,7 +829,12 @@ method emit_fundecl f =
       (fun (id, ty) -> let r = self#regs_for ty in name_regs id r; r)
       f.Cmm.fun_args in
   let rarg = Array.concat rargs in
-  let loc_arg = Proc.loc_parameters rarg in
+  let loc_arg =
+    (* Name the hard pseudoregisters that hold the function's arguments. *)
+    let loc_arg = Proc.loc_parameters rarg in
+    assert (Array.length rarg = Array.length loc_arg);
+    Reg.with_name_fromv loc_arg ~from:rarg
+  in
   let env =
     List.fold_right2
       (fun (id, ty) r env -> Tbl.add id r env)

@@ -29,6 +29,17 @@ let remove_regs_that_share_locations ~to_remove ~from =
       not (Reg.Set.exists has_same_location to_remove))
     from
 
+let remove_regs_by_name ~from ~names_in =
+  Reg.Set.filter
+    (fun reg ->
+      let has_same_name reg' =
+        let reg_name = Reg.name_strip_spilled reg in
+        let reg_name' = Reg.name_strip_spilled reg' in
+        reg_name = reg_name'
+      in
+      not (Reg.Set.exists has_same_name names_in))
+    from
+
 (* [available_regs ~instr ~currently_available] returns the registers
    that are available after [instr].  As a side effect the function
    updates the [available_before] members of all instructions in the
@@ -62,9 +73,9 @@ let rec available_regs ~instr ~currently_available =
         List.fold_left avail_cases ~init:avail_case1 ~f:Reg.Set.inter
       end
     | Mach.Iloop body ->
-      (* CR trefis for mshinwell: why [Reg.all_registers_set] instead of
+      (* XCR trefis for mshinwell: why [Reg.all_registers_set] instead of
          [currently_available] here? *)
-      let available_after = ref (Reg.all_registers_set ()) in
+      let available_after = ref currently_available in
       begin try
         while true do
           let new_available_after =
@@ -96,9 +107,11 @@ let rec available_regs ~instr ~currently_available =
            {R/0[%rax] R/1[%rbx]}
            accu/29[%rax] := R/0[%rax]
            {R/1[%rbx] accu/29[%rax]*}   <-- R/0[%rax] has been removed
+         Also, if a value (e.g.) moves between registers, then we forget the previous
+         location.
       *)
       remove_regs_that_share_locations ~to_remove:result_regs
-        ~from:without_destroyed
+        ~from:(remove_regs_by_name ~from:without_destroyed ~names_in:result_regs)
     in
     Reg.Set.union result_regs without_result_regs_and_destroyed
   in

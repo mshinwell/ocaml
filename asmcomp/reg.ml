@@ -156,6 +156,23 @@ let name t =
   | None -> t.name
   | Some index -> Printf.sprintf "%s-%d" t.name index
 
+(* CR mshinwell: think about a cleaner way to do this.  just a flag? *)
+let name_strip_spilled t =
+  let name = name t in
+  let prefix = "spilled-" in
+  let name =
+    if String.length name > String.length prefix
+       && String.sub name 0 (String.length prefix) = prefix
+    then
+      String.sub name (String.length prefix) (String.length name - String.length prefix)
+    else
+      name
+  in
+  (* CR mshinwell: work out why spilled- ones don't have the "which parameter" suffix. *)
+  match (try Some (String.rindex name '-') with Not_found -> None) with
+  | None -> name
+  | Some index -> String.sub name 0 index
+
 let location t =
   t.loc
 
@@ -172,3 +189,14 @@ let all_registers_set () =
 
 let same_location t t' =
   t.loc = t'.loc
+
+let with_name t ~name =
+  { t with name; }
+
+let with_name_from t ~from =
+  { t with name = from.name; }
+
+let with_name_fromv ts ~from =
+  if Array.length ts <> Array.length from then
+    failwith "Reg.with_name_fromv: arrays of regs are of different lengths";
+  Array.mapi (fun index reg -> with_name_from reg ~from:from.(index)) ts

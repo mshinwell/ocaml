@@ -59,7 +59,12 @@ val num_registers: unit -> int
 val reinit: unit -> unit
 
 val name : t -> string
+val name_strip_spilled : t -> string
 val location : t -> location
 
 val set_is_parameter : t -> parameter_index:int -> unit
 val is_parameter : t -> int option
+
+val with_name : t -> name:string -> t
+val with_name_from : t -> from:t -> t
+val with_name_fromv : t array -> from:t array -> t array
