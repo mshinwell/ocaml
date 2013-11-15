@@ -451,7 +451,23 @@ let rec process_instruction ~insn ~first_insn ~prev_insn
                     in
                     match Reg_map.bindings candidates with
                     | [] -> None
-                    | (reg, range)::_ranges -> Some (reg, range)
+                    | ranges ->
+                      (* Prefer regs that are on the stack, since they're more likely
+                         to still be there from a previous frame when deep in a call
+                         chain. *)
+                      let on_stack =
+                        List.filter ranges
+                          ~f:(fun (reg, _range) ->
+                                match Reg.location reg with
+                                | Reg.Stack _ -> true 
+                                | _ -> false)
+                      in
+                      match on_stack with
+                      | (reg, range)::_ranges -> Some (reg, range)
+                      | [] ->
+                        match ranges with
+                        | (reg, range)::_ranges -> Some (reg, range)
+                        | [] -> assert false
                   in
                   let current_live_ranges =
                     Reg_map.remove current_live_ranges reg
