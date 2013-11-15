@@ -200,3 +200,5 @@ let with_name_fromv ts ~from =
   if Array.length ts <> Array.length from then
     failwith "Reg.with_name_fromv: arrays of regs are of different lengths";
   Array.mapi (fun index reg -> with_name_from reg ~from:from.(index)) ts
+
+let stamp t = t.stamp

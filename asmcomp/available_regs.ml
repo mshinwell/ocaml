@@ -29,16 +29,8 @@ let remove_regs_that_share_locations ~to_remove ~from =
       not (Reg.Set.exists has_same_location to_remove))
     from
 
-let remove_regs_by_name ~from ~names_in =
-  Reg.Set.filter
-    (fun reg ->
-      let has_same_name reg' =
-        let reg_name = Reg.name_strip_spilled reg in
-        let reg_name' = Reg.name_strip_spilled reg' in
-        reg_name = reg_name'
-      in
-      not (Reg.Set.exists has_same_name names_in))
-    from
+(* CR mshinwell: consider rewriting this so the data structure used
+   is a map from register stamps to variable names. *)
 
 (* [available_regs ~instr ~currently_available] returns the registers
    that are available after [instr].  As a side effect the function
@@ -107,11 +99,8 @@ let rec available_regs ~instr ~currently_available =
            {R/0[%rax] R/1[%rbx]}
            accu/29[%rax] := R/0[%rax]
            {R/1[%rbx] accu/29[%rax]*}   <-- R/0[%rax] has been removed
-         Also, if a value (e.g.) moves between registers, then we forget the previous
-         location.
       *)
-      remove_regs_that_share_locations ~to_remove:result_regs
-        ~from:(remove_regs_by_name ~from:without_destroyed ~names_in:result_regs)
+      remove_regs_that_share_locations ~to_remove:result_regs ~from:without_destroyed
     in
     Reg.Set.union result_regs without_result_regs_and_destroyed
   in

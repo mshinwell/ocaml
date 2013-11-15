@@ -68,3 +68,5 @@ val is_parameter : t -> int option
 val with_name : t -> name:string -> t
 val with_name_from : t -> from:t -> t
 val with_name_fromv : t array -> from:t array -> t array
+
+val stamp : t -> int
