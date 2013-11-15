@@ -402,7 +402,7 @@ let rec process_instruction ~insn ~first_insn ~prev_insn
             in
             let parameter_or_variable =
               match Reg.is_parameter reg with
-              | Some _parameter_index -> `Parameter (Reg.name_strip_spilled reg)
+              | Some _parameter_index -> `Parameter (Reg.name reg)
               | None -> `Variable
             in
             let is_fresh, lbl = label_from_opt lbl in

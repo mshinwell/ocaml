@@ -159,8 +159,6 @@ let calling_conventions first_int last_int first_float last_float make_stack
         if !int <= last_int then begin
           loc.(i) <- phys_reg !int;
           incr int;
-          (* CR mshinwell: seems very likely that this is wrong. *)
-          Reg.set_is_parameter loc.(i) ~parameter_index:i
         end else begin
           loc.(i) <- stack_slot (make_stack !ofs) ty;
           ofs := !ofs + size_int

@@ -824,6 +824,7 @@ method private emit_tail_sequence env exp =
 method emit_fundecl f =
   Proc.contains_calls := false;
   current_function_name := f.Cmm.fun_name;
+  (* CR mshinwell: try to tidy up this code *)
   let rargs =
     List.map
       (fun (id, ty) -> let r = self#regs_for ty in name_regs id r; r)
@@ -833,7 +834,23 @@ method emit_fundecl f =
     (* Name the hard pseudoregisters that hold the function's arguments. *)
     let loc_arg = Proc.loc_parameters rarg in
     assert (Array.length rarg = Array.length loc_arg);
-    Reg.with_name_fromv loc_arg ~from:rarg
+    let regs = Reg.with_name_fromv loc_arg ~from:rarg in
+    let parameter_index = ref 0 in
+    let reg_index = ref 0 in
+    (* Mark the hard pseudoregs so we know which parameter (zero-indexed) they
+       correspond to. *)
+    List.iter
+      (fun regs_for_this_arg ->
+        let num_regs = Array.length regs_for_this_arg in
+        for reg_index = !reg_index to !reg_index + num_regs - 1 do
+          Reg.set_is_parameter regs.(reg_index) ~parameter_index:!parameter_index
+        done;
+        reg_index := !reg_index + num_regs;
+        parameter_index := !parameter_index + 1)
+      rargs;
+    assert (!parameter_index = List.length f.Cmm.fun_args);
+    assert (!reg_index = Array.length regs);
+    regs
   in
   let env =
     List.fold_right2
