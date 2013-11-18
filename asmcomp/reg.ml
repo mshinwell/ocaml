@@ -151,10 +151,15 @@ let set_of_array v =
            if i >= n then Set.empty else Set.add v.(i) (add_all(i+1))
          in add_all 0
 
-let name t =
+let name t = t.name
+(* CR mshinwell: temporarily removed; needs rethink.  Otherwise we hit the problem
+   whereby subsequent "variable" live ranges don't have the same names as preceding
+   "parameter" ones, even though it's the same value being held. *)
+(*
   match t.is_parameter with
   | None -> t.name
   | Some index -> Printf.sprintf "%s-%d" t.name index
+*)
 
 (* CR mshinwell: think about a cleaner way to do this.  just a flag? *)
 let name_strip_spilled t =

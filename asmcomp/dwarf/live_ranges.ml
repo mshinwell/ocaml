@@ -67,6 +67,28 @@ module One_live_range = struct
 
   include T
 
+  let to_string t =
+    Printf.sprintf
+      "(id %d)(parameter_or_variable %s)(reg %s %s)(ending_label %s)(canonical %s)"
+      t.id
+      (match t.parameter_or_variable with
+       | `Parameter name -> Printf.sprintf "(Parameter %s)" name
+       | `Variable -> "Variable")
+      (Reg.name t.reg)
+      (match Reg.location t.reg with
+       | Reg.Unknown -> "Unknown"
+       | Reg.Reg i -> Printf.sprintf "(Reg %d)" i
+       | Reg.Stack _ -> Printf.sprintf "Stack")
+      (match t.ending_label with
+       | None -> "()"
+       | Some label -> string_of_int label)
+      (match t.canonical with
+       | `Canonical `Starts_at_beginning_of_function ->
+         "(Canonical Starts_at_beginning_of_function)"
+       | `Canonical (`Starts_at_label label) ->
+         Printf.sprintf "(Canonical (Starts_at_label %d))" label
+       | `Not_canonical -> "Not_canonical")
+
   module Set = struct
     include Set.Make (T)
     let fold t ~init ~f = fold (fun elt acc -> f acc elt) t init
@@ -133,13 +155,18 @@ module One_live_range = struct
     | `Variable ->
       let name = Reg.name t.reg in
       let spilled_prefix = "spilled-" in
-      if String.length name <= String.length spilled_prefix then
-        name
-      else if String.sub name 0 (String.length spilled_prefix) = spilled_prefix then
-        String.sub name (String.length spilled_prefix)
-          (String.length name - String.length spilled_prefix)
-      else
-        name
+      let name =
+        if String.length name <= String.length spilled_prefix then
+          name
+        else if String.sub name 0 (String.length spilled_prefix) = spilled_prefix then
+          String.sub name (String.length spilled_prefix)
+            (String.length name - String.length spilled_prefix)
+        else
+          name
+      in
+      match (try Some (String.rindex name '-') with Not_found -> None) with
+      | None -> name
+      | Some dash -> String.sub name 0 dash
 
   let unique_name t = Printf.sprintf "%s__%d" (reg_name t) t.id
 
@@ -541,6 +568,9 @@ let process_fundecl fundecl =
       ~previous_live_ranges:[]
       ~fundecl
   in
+  Printf.printf "live ranges: %s: %s\n%!"
+    fundecl.Linearize.fun_name
+    (String.concat ", " (List.map live_ranges ~f:One_live_range.to_string));
   let name_map =
     List.fold live_ranges
       ~init:String.Map.empty
