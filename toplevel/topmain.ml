@@ -74,8 +74,8 @@ module Options = Main_args.Make_bytetop_options (struct
   let _nostdlib = set no_std_include
   let _ppx s = first_ppx := s :: !first_ppx
   let _principal = set principal
-  let _short_paths = clear real_paths
   let _rectypes = set recursive_types
+  let _short_paths = clear real_paths
   let _stdin () = file_argument ""
   let _strict_sequence = set strict_sequence
   let _unsafe = set fast
@@ -96,8 +96,9 @@ end);;
 
 
 let main () =
-  Compenv.readenv Before_args;
+  let ppf = Format.err_formatter in
+  Compenv.readenv ppf Before_args;
   Arg.parse Options.list file_argument usage;
-  Compenv.readenv Before_link;
-  if not (prepare Format.err_formatter) then exit 2;
+  Compenv.readenv ppf Before_link;
+  if not (prepare ppf) then exit 2;
   Toploop.loop Format.std_formatter
