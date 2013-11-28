@@ -171,6 +171,8 @@ let read_OCAMLPARAM ppf position =
       | "runtime-variant" -> runtime_variant := v
       | "cc" -> c_compiler := Some v
 
+      | "allocation-tracing" -> set "allocation-tracing" [Clflags.allocation_tracing] v
+
       (* assembly sources *)
       |  "s" ->
         set "s" [ Clflags.keep_asm_file ; Clflags.keep_startup_file ] v
