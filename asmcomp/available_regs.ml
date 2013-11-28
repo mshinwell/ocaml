@@ -45,6 +45,16 @@ let rec available_regs ~instr ~currently_available =
     (* CR mshinwell: should we remove "destroyed" here? *)
     match instr.Mach.desc with
     | Mach.Iexit _ | Mach.Iraise | Mach.Iend | Mach.Ireturn -> currently_available
+    (* We cannot rely on a value being available after an operation that might cause
+       a GC unless the value is live (as per the backwards dataflow analysis used for
+       register allocation). *)
+    | Mach.Iop Mach.Icall_ind | Mach.Iop Mach.Icall_imm _
+    | Mach.Iop Mach.Itailcall_ind | Mach.Iop Mach.Itailcall_imm _
+    | Mach.Iop Mach.Iextcall _ ->
+      (* CR mshinwell: determine if [Ialloc] needs to be in the above list. *)
+      (* CR mshinwell: check in gdb that we get the point at which a value is
+         deemed unavailable (due to not being live) exactly right on the [callq]. *)
+      Reg.Set.inter currently_available instr.Mach.live
     | Mach.Iop _op -> currently_available
     | Mach.Iifthenelse (_test, if_true, if_false) ->
       (* [inter] should be correct here: a register should only appear in the result

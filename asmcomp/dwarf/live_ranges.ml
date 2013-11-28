@@ -257,12 +257,18 @@ module Many_live_ranges = struct
      should now return stamped names, for example, which isn't made clear
      here (but is important). *)
 
-  type t = One_live_range.t list
+  type t = {
+    name : string;
+    live_ranges : One_live_range.t list;
+  }
 
-  let create live_ranges = List.sort ~cmp:One_live_range.compare live_ranges
+  let create (name, live_ranges) =
+    { name;
+      live_ranges = List.sort ~cmp:One_live_range.compare live_ranges;
+    }
 
   let compare t1 t2 =
-    match t1, t2 with
+    match t1.live_ranges, t2.live_ranges with
     (* weird cases. (can they really happen?) *)
     | [], _ -> -1
     | _, [] ->  1
@@ -270,35 +276,19 @@ module Many_live_ranges = struct
     | first1 :: _, first2 :: _ ->
       One_live_range.compare first1 first2
 
-  let starting_label ~start_of_function_label = function
+  let starting_label t ~start_of_function_label =
+    match t.live_ranges with
     | [] -> start_of_function_label
     | first :: _ -> One_live_range.starting_label ~start_of_function_label first
 
   let dwarf_tag t =
     (* CR mshinwell: needs sorting out too *)
-    match List.dedup (List.map t ~f:One_live_range.dwarf_tag) with
+    match List.dedup (List.map t.live_ranges ~f:One_live_range.dwarf_tag) with
     | [tag] -> tag
     | [] -> Dwarf_low.Tag.variable (* doesn't get used *)
     | _tags -> Dwarf_low.Tag.formal_parameter
 
-  let name t =
-    (* CR mshinwell: the name handling needs thought.  Maybe we should
-       attach properly-stamped idents to Regs?  This must be required to
-       fix problems when names are shadowed.
-
-       mshinwell: [Reg.t] values now have [Ident.unique_name]s upon them.
-       We need to fix up this old crap though, nonetheless. *)
-    let names = List.map t ~f:One_live_range.reg_name in
-    let without_dummies =
-      List.filter names ~f:(function "R" | "" -> false | _ -> true)
-    in
-    match List.dedup without_dummies with
-    | [name] -> name
-    | [] -> "<anon>"
-    | multiple ->
-      (* Is that case realistic considering the previous assumption? *)
-      (* CR mshinwell: this needs fixing.  see above *)
-      String.concat "/" multiple
+  let name t = t.name
 
   (* [human_name t] returns the name of the variable associated with the set
      of available ranges [t] as it would be written in source code or typed
@@ -325,7 +315,7 @@ module Many_live_ranges = struct
         ~base_address_label:start_of_function_label
     in
     let location_list_entries =
-      List.filter_map t
+      List.filter_map t.live_ranges
         ~f:(One_live_range.location_list_entry ~start_of_function_label)
     in
     match location_list_entries with
@@ -362,8 +352,8 @@ module Many_live_ranges = struct
     in
     tag, attribute_values, debug_loc_table
 
-  let introduce_param ranges =
-    List.exists ranges ~f:(fun range ->
+  let introduce_param t =
+    List.exists t.live_ranges ~f:(fun range ->
       match range.One_live_range.parameter_or_variable with
       | `Variable -> false
       | _ -> true
@@ -556,10 +546,19 @@ let rec process_instruction ~insn ~first_insn ~prev_insn
       ~previous_live_ranges
       ~fundecl
 
+let add_stamp ~stamped_name ~stamp =
+  let without_ident_stamp, ident_stamp =
+    match try Some (String.rindex stamped_name '_') with Not_found -> None with
+    | None ->
+      failwith (Printf.sprintf "add_stamp: name without ident stamp: %s" stamped_name)
+    | Some underscore ->
+      String.sub stamped_name 0 underscore, 
+        String.sub stamped_name (underscore + 1)
+          (String.length stamped_name - underscore - 1)
+  in
+  Printf.sprintf "%s^%d_%s" without_ident_stamp stamp ident_stamp
+
 let process_fundecl fundecl =
-(*
-  Printf.printf "STARTING FUNCTION: %s\n%!" fundecl.Linearize.fun_name;
-*)
   let first_insn, live_ranges =
     process_instruction ~insn:fundecl.Linearize.fun_body
       ~first_insn:(ref fundecl.Linearize.fun_body)
@@ -571,30 +570,78 @@ let process_fundecl fundecl =
   Printf.printf "live ranges: %s: %s\n%!"
     fundecl.Linearize.fun_name
     (String.concat ", " (List.map live_ranges ~f:One_live_range.to_string));
-  let name_map =
+  let name_map, _stamp_map =
     List.fold live_ranges
-      ~init:String.Map.empty
-      ~f:(fun name_map live_range ->
+      ~init:(String.Map.empty, String.Map.empty)
+      ~f:(fun (name_map, stamp_map) live_range ->
             if not (One_live_range.is_canonical live_range) then
-              name_map
+              name_map, stamp_map
             else
               let name = One_live_range.reg_name live_range in
-  (*             Printf.printf "adding lr: %s\n%!" name; *)
+              Printf.printf "name: %s... " name;
               match String.Map.find name_map name with
-              | None -> String.Map.add name_map ~key:name ~data:[live_range]
-              | Some live_ranges ->
-                (* CR mshinwell: does something need thinking about here? *)
-  (*
-                Printf.printf "more than one lr for '%s'\n%!" name;
-  *)
-                let data = live_range::live_ranges in
-                String.Map.add (* replace *) name_map ~key:name ~data)
+              | None ->
+                Printf.printf "not there\n%!";
+                let without_stamp =
+                  match try Some (String.rindex name '_') with Not_found -> None with
+                  | None -> None
+                  | Some underscore -> Some (String.sub name 0 underscore)
+                in
+                begin match without_stamp with
+                | None -> name_map, stamp_map  (* ignore names without [Ident] stamps *)
+                | Some without_stamp ->
+                  Printf.printf "without_stamp: '%s' ..." without_stamp;
+                  begin match String.Map.find stamp_map without_stamp with
+                  | None ->
+                    Printf.printf "first occurrence\n%!";
+                    let name_map =
+                      String.Map.add name_map ~key:name ~data:(name, [live_range])
+                    in
+                    let stamp_map =
+                      String.Map.add stamp_map ~key:without_stamp ~data:(name, 0)
+                    in
+                    name_map, stamp_map
+                  | Some (first_stamped_name, last_stamp) ->
+                    Printf.printf "not the first occurrence\n%!";
+                    let this_stamp = last_stamp + 1 in
+                    let name_map =
+                      if this_stamp <> 1 then name_map
+                      else
+                        match String.Map.find name_map first_stamped_name with
+                        | None -> assert false
+                        | Some (_scope_stamped_name, live_ranges) ->
+                          String.Map.add (* replace *) name_map
+                            ~key:first_stamped_name
+                            ~data:
+                              (add_stamp ~stamped_name:first_stamped_name ~stamp:0,
+                                live_ranges)
+                    in
+                    let name_map =
+                      String.Map.add name_map
+                        ~key:name
+                        ~data:
+                          (add_stamp ~stamped_name:name ~stamp:this_stamp, [live_range])
+                    in
+                    let stamp_map =
+                      String.Map.add (* or replace *) stamp_map
+                        ~key:without_stamp
+                        ~data:(first_stamped_name, this_stamp)
+                    in
+                    name_map, stamp_map
+                  end
+                end
+              | Some (scope_stamped_name, live_ranges) ->
+                Printf.printf "already has live range\n%!";
+                let live_ranges = live_range::live_ranges in
+                let name_map =
+                  String.Map.add (* replace *) name_map
+                    ~key:name
+                    ~data:(scope_stamped_name, live_ranges)
+                in
+                name_map, stamp_map)
   in
   let live_ranges =
     List.map (List.map (String.Map.to_alist name_map) ~f:snd)
       ~f:Many_live_ranges.create
   in
-(*
-  Printf.printf "FINISHING FUNCTION: %s\n%!" fundecl.Linearize.fun_name;
-*)
   live_ranges, { fundecl with Linearize. fun_body = first_insn; }

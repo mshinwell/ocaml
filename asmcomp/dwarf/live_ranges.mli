@@ -32,7 +32,7 @@ module Many_live_ranges : sig
 
   val compare : t -> t -> int
 
-  val starting_label : start_of_function_label:string -> t -> string
+  val starting_label : t -> start_of_function_label:string -> string
 
   val to_dwarf : t
     -> debug_loc_table:Dwarf_low.Debug_loc_table.t
