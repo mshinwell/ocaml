@@ -38,6 +38,11 @@ module Many_live_ranges : sig
     -> debug_loc_table:Dwarf_low.Debug_loc_table.t
     -> type_creator:(stamped_name:string -> string)
     -> start_of_function_label:string
+    -> slot_offset_in_bytes:(
+            reg_on_stack:Reg.t
+         -> stack_offset:int
+         -> int
+       )
     -> Dwarf_low.Tag.t * Dwarf_low.Attribute_value.t list
          * Dwarf_low.Debug_loc_table.t
 

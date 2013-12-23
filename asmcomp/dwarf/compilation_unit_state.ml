@@ -74,7 +74,7 @@ end
 let next_type_label = ref 0
 
 let put_ranges_in_scopes loc_table ~function_name ~starting_label ~ending_label lst
-      ~source_file_path =
+      ~source_file_path ~slot_offset_in_bytes =
   let live_ranges = List.sort ~cmp:Live_ranges.Many_live_ranges.compare lst in
   let rec aux id level debug_loc_table tags ~type_labels = function
     | [] -> debug_loc_table, tags, type_labels
@@ -102,6 +102,7 @@ let put_ranges_in_scopes loc_table ~function_name ~starting_label ~ending_label 
           ~type_creator
           ~debug_loc_table
           ~start_of_function_label:starting_label
+          ~slot_offset_in_bytes
       in
       let type_labels = !type_labels' @ type_labels in
       let id = id + 1 in
@@ -138,7 +139,7 @@ let put_ranges_in_scopes loc_table ~function_name ~starting_label ~ending_label 
   in
   aux 0 2 loc_table [] live_ranges ~type_labels:[]
 
-let start_function t ~linearized_fundecl =
+let start_function t ~linearized_fundecl ~slot_offset_in_bytes =
   let function_name = linearized_fundecl.Linearize.fun_name in
   (* CR mshinwell: sort this source_file_path stuff out *)
   match t.source_file_path with
@@ -153,7 +154,7 @@ let start_function t ~linearized_fundecl =
     in
     let debug_loc_table, live_range_tags, type_names =
       put_ranges_in_scopes t.debug_loc_table ~function_name ~starting_label
-        ~ending_label ~source_file_path live_ranges
+        ~ending_label ~source_file_path ~slot_offset_in_bytes live_ranges
     in
     let subprogram_tag =
       let tag =

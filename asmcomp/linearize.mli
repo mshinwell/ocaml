@@ -23,6 +23,11 @@ type instruction =
     dbg: Debuginfo.t;
     live: Reg.Set.t;
     available_before: Reg.Set.t;
+    (* The stack offset immediately prior to the instruction. *)
+    (* CR mshinwell: maybe investigate if this can be deduced from
+       the CFA.  Although this will probably yield more complicated
+       DWARF expressions (e.g. encoding [slot_offset] from emit.mlp) *)
+    mutable stack_offset: int option;
   }
 
 and instruction_desc =

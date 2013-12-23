@@ -48,7 +48,11 @@ end
 
 val start_function : t
   -> linearized_fundecl:Linearize.fundecl
-(*  -> arguments_and_locations:((Ident.t * Reg_location.t) list) *)
+  -> slot_offset_in_bytes:(
+          reg_on_stack:Reg.t
+       -> stack_offset:int
+       -> int
+     )
   -> Function.t * Linearize.fundecl
 
 val end_function : t -> Function.t -> unit

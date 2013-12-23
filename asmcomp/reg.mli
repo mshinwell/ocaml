@@ -65,6 +65,7 @@ val num_registers: unit -> int
 val reinit: unit -> unit
 
 val anonymous : t -> bool
+val has_name_suitable_for_debugger : t -> bool
 val name_for_printing : t -> string
 val location : t -> location
 

@@ -163,6 +163,11 @@ let anonymous t =
   | Anon | Named "" -> true
   | R | Named _ -> false
 
+let has_name_suitable_for_debugger t =
+  match t.raw_name with
+  | Anon | Named "" | R -> false
+  | Named _ -> true
+
 let name_for_printing t =
   let raw_name =
     match t.raw_name with

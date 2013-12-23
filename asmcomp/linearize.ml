@@ -29,6 +29,7 @@ type instruction =
     dbg: Debuginfo.t;
     live: Reg.Set.t;
     available_before: Reg.Set.t;
+    mutable stack_offset: int option;
   }
 
 and instruction_desc =
@@ -83,19 +84,24 @@ let rec end_instr =
     dbg = Debuginfo.none;
     live = Reg.Set.empty;
     available_before = Reg.Set.empty;
+    stack_offset = None;
   }
 
 (* Cons an instruction (live, debug empty) *)
 
 let instr_cons d a r n =
   { desc = d; next = n; arg = a; res = r;
-    dbg = Debuginfo.none; live = Reg.Set.empty; available_before = Reg.Set.empty; }
+    dbg = Debuginfo.none; live = Reg.Set.empty; available_before = Reg.Set.empty;
+    stack_offset = None;
+  }
 
 (* Cons a simple instruction (arg, res, live empty) *)
 
 let cons_instr d n =
   { desc = d; next = n; arg = [||]; res = [||];
-    dbg = Debuginfo.none; live = Reg.Set.empty; available_before = Reg.Set.empty; }
+    dbg = Debuginfo.none; live = Reg.Set.empty; available_before = Reg.Set.empty;
+    stack_offset = None;
+  }
 
 (* Build an instruction with arg, res, dbg, live, available_before taken from
    the given Mach.instruction *)
@@ -104,7 +110,9 @@ let copy_instr d i n =
   { desc = d; next = n;
     arg = i.Mach.arg; res = i.Mach.res;
     dbg = i.Mach.dbg; live = i.Mach.live;
-    available_before = i.Mach.available_before; }
+    available_before = i.Mach.available_before;
+    stack_offset = None;
+  }
 
 (*
    Label the beginning of the given instruction sequence.

@@ -42,26 +42,42 @@ let stack_offset = ref 0
 
 (* Layout of the stack frame *)
 
-let frame_required () =
-  fp || !contains_calls || num_stack_slots.(0) > 0 || num_stack_slots.(1) > 0
+let frame_required ~contains_calls =
+  fp || contains_calls || num_stack_slots.(0) > 0 || num_stack_slots.(1) > 0
 
-let frame_size () =                     (* includes return address *)
-  if frame_required() then begin
+let frame_size ~stack_offset ~contains_calls =     (* includes return address *)
+  if frame_required ~contains_calls then begin
     let sz =
-      (!stack_offset + 8 * (num_stack_slots.(0) + num_stack_slots.(1)) + 8
+      (stack_offset + 8 * (num_stack_slots.(0) + num_stack_slots.(1)) + 8
       + (if fp then 8 else 0) )
     in Misc.align sz 16
   end else
-    !stack_offset + 8
+    stack_offset + 8
 
-let slot_offset loc cl =
+let slot_offset_internal loc cl ~stack_offset ~contains_calls =
   match loc with
-    Incoming n -> frame_size() + n
+    Incoming n -> frame_size ~stack_offset ~contains_calls + n
   | Local n ->
       if cl = 0
-      then !stack_offset + n * 8
-      else !stack_offset + (num_stack_slots.(0) + n) * 8
+      then stack_offset + n * 8
+      else stack_offset + (num_stack_slots.(0) + n) * 8
   | Outgoing n -> n
+
+let slot_offset loc cl =
+  slot_offset_internal loc cl ~stack_offset:!stack_offset
+    ~contains_calls:!contains_calls
+
+let frame_required () =
+  frame_required ~contains_calls:!contains_calls
+
+let frame_size () =
+  frame_size ~contains_calls:!contains_calls ~stack_offset:!stack_offset
+
+let slot_offset_in_bytes ~reg_on_stack:reg ~contains_calls ~stack_offset =
+  match reg.loc with
+  | Unknown | Reg _ -> assert false
+  | Stack loc ->
+    slot_offset_internal loc (register_class reg) ~contains_calls ~stack_offset
 
 (* Symbols *)
 
@@ -103,6 +119,32 @@ let emit_align n =
 let emit_Llabel fallthrough lbl =
   if not fallthrough && !fastcode_flag then emit_align 4;
   emit_label lbl
+
+(*
+(* Record the offset that, at runtime, will get us from the current value of the stack
+   pointer (as it will be during any instruction referencing register [r]) to the stack
+   slot holding register [r].  This is used for the emission of DWARF debugging
+   information. *)
+
+let regs_whose_byte_offset_from_sp_was_set = ref []
+
+(* CR mshinwell: is this actually needed? *)
+let reset_regs_whose_byte_offset_from_sp_was_set () =
+  List.iter (fun reg -> reg.byte_offset_from_sp <- None)
+    !regs_whose_byte_offset_from_sp_was_set;
+  regs_whose_byte_offset_from_sp_was_set := []
+
+let record_slot_offset_from_stack_pointer r ofs =
+  begin match r.byte_offsets_from_sp with
+  | None -> ()
+  | Some offsets ->
+    if ofs <> ofs' then
+      failwith (Printf.sprintf "register '%s': inconsistent stack offsets (%d, %d)"
+        (Reg.name_for_printing r) ofs ofs')
+  end;
+  r.byte_offset_from_sp <- Some ofs;
+  regs_whose_byte_offset_from_sp_was_set := r :: !regs_whose_byte_offset_from_sp_was_set
+*)
 
 (* Output a pseudo-register *)
 
@@ -695,8 +737,11 @@ let emit_instr fallthrough i =
 
 let rec emit_all fallthrough i =
   match i.desc with
-  |  Lend -> ()
+  |  Lend ->
+      ()
   | _ ->
+      assert (i.stack_offset = None);
+      i.stack_offset <- Some !stack_offset;
       emit_instr fallthrough i;
       emit_all (Linearize.has_fallthrough i.desc) i.next
 
@@ -759,6 +804,7 @@ let fundecl fundecl =
         (* note that [start_function] may modify [fundecl] *)
         Dwarf.Compilation_unit_state.start_function (get_dwarf_comp_unit_state ())
           ~linearized_fundecl:fundecl
+          ~slot_offset_in_bytes:(slot_offset_in_bytes ~contains_calls:!contains_calls)
       in
       Some dwarf_func, fundecl
     else

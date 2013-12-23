@@ -51,6 +51,7 @@ module One_live_range = struct
       id : int;
       parameter_or_variable : [ `Parameter | `Variable ];
       reg : Reg.t;
+      first_insn : Linearize.instruction;
       mutable ending_label : Linearize.label option;
       mutable canonical : [
         | `Canonical of [
@@ -105,11 +106,12 @@ module One_live_range = struct
 
   let unique_id = ref 0  (* CR mshinwell: may not suffice for 32-bit *)
 
-  let create ~canonical ~parameter_or_variable ~reg =
+  let create ~canonical ~parameter_or_variable ~reg ~first_insn =
     let our_id = !unique_id in
     unique_id := !unique_id + 1;
     {
       id = our_id;
+      first_insn;
       parameter_or_variable;
       reg;
       ending_label = None;
@@ -157,7 +159,8 @@ module One_live_range = struct
   let starts_at_beginning_of_function t =
     match t.canonical with
     | `Not_canonical ->
-      failwith "starts_at_beginning_of_function on non-canonical available range"
+      failwith "starts_at_beginning_of_function on non-canonical \
+                available range"
     | `Canonical `Starts_at_beginning_of_function -> true
     | `Canonical (`Starts_at_label _label) -> false
 
@@ -170,58 +173,44 @@ module One_live_range = struct
     else
       Printf.sprintf ".L%d" (starting_label_of_t_exn t)
 
-  let location_list_entry t ~start_of_function_label =
+  let location_list_entry t ~start_of_function_label ~slot_offset_in_bytes =
     let starting_label = starting_label t ~start_of_function_label in
+    (* CR mshinwell: we need the same trick for the end of the function as
+       [starts_at_beginning_of_function].  Or we could try to fix emit.mlp *)
     let ending_label =
       Printf.sprintf ".L%d" (ending_label_of_t_exn t)
     in
-    let location_expression =
+    let is_internal =
       let internal_prefix = "__ocaml" in
-      if String.length (reg_name t) > String.length internal_prefix
-         && String.sub (reg_name t) 0 (String.length internal_prefix) = internal_prefix then
+      String.length (reg_name t) > String.length internal_prefix
+        && String.sub (reg_name t) 0 (String.length internal_prefix)
+             = internal_prefix
+    in
+    let location_expression =
+      if is_internal || not (Reg.has_name_suitable_for_debugger t.reg) then
         None
       else
+        let module LE = Dwarf_low.Location_expression in
         match Reg.location t.reg with
-        | Reg.Reg reg_number ->
-          (* CR mshinwell: this needs fixing, ESPECIALLY "R".  and below.
-             find out why there seems to be some problem with cloning [loc_args]
-             ---we could just name them for this function if we could do that
-
-             mshinwell: actually, now all we need to do is to work out how to avoid a
-             name clash on "R", then always return [None] for it here.  We artifically
-             extend the live ranges of the regs into which the "R" regs are moved, to
-             the start of the function.
-          *)
-          begin match reg_name t with
-          | "R" | "" -> None
-          | reg_name ->
-            if String.length reg_name >= 3
-              && reg_name.[0] = 'R'
-              && reg_name.[1] = '-'
-              && (try
-                    ignore (int_of_string (String.sub reg_name 2 (String.length reg_name - 2)));
-                    true
-                  with Failure _ -> false)
-            then
-              None
-            else
-              Some (Dwarf_low.Location_expression.in_register reg_number)
-          end
-        | Reg.Stack (Reg.Local stack_slot_index) ->
-          Some (Dwarf_low.Location_expression.at_offset_from_stack_pointer
-              ~offset_in_bytes:(stack_slot_index * 8))
-        | Reg.Stack (Reg.Incoming _) -> None  (* CR mshinwell: don't know *)
-        | Reg.Stack (Reg.Outgoing _) -> None
         | Reg.Unknown -> None
+        | Reg.Reg reg_number -> Some (LE.in_register reg_number)
+        | Reg.Stack stack_location ->
+          (* Byte offsets from the stack pointer will be computed during the
+             "emit" phase.  DWARF information will be emitted after such
+             computations, so we can use the offsets then. *)
+          let offset_in_bytes () =
+            let stack_offset =
+              match t.first_insn.Linearize.stack_offset with
+              | None -> failwith "first_insn has no stack_offset"
+              | Some stack_offset -> stack_offset
+            in
+            slot_offset_in_bytes ~reg_on_stack:t.reg ~stack_offset
+          in
+          Some (LE.at_computed_offset_from_stack_pointer ~offset_in_bytes)
     in
     match location_expression with
     | None -> None
     | Some location_expression ->
-(*
-      Printf.printf "reg '%s' (lr name %s): %s -> %s\n%!" (Reg.name t.reg)
-        (reg_name t)
-        starting_label ending_label;
-*)
       let location_list_entry =
         Dwarf_low.Location_list_entry.create_location_list_entry
           ~start_of_code_label:start_of_function_label
@@ -230,6 +219,12 @@ module One_live_range = struct
           ~location_expression
       in
       Some location_list_entry
+
+(*
+      Printf.printf "reg '%s' (lr name %s): %s -> %s\n%!" (Reg.name t.reg)
+        (reg_name t)
+        starting_label ending_label;
+*)
 end
 
 (* CR mshinwell: this many/one live ranges thing isn't great; consider
@@ -293,14 +288,15 @@ module Many_live_ranges = struct
     name t
 
   let dwarf_attribute_values t ~type_creator ~debug_loc_table
-      ~start_of_function_label =
+      ~start_of_function_label ~slot_offset_in_bytes =
     let base_address_selection_entry =
       Dwarf_low.Location_list_entry.create_base_address_selection_entry
         ~base_address_label:start_of_function_label
     in
     let location_list_entries =
       List.filter_map t.live_ranges
-        ~f:(One_live_range.location_list_entry ~start_of_function_label)
+        ~f:(One_live_range.location_list_entry ~start_of_function_label
+              ~slot_offset_in_bytes)
     in
     match location_list_entries with
     | [] -> [], debug_loc_table
@@ -326,13 +322,15 @@ module Many_live_ranges = struct
       in
       attribute_values, debug_loc_table
 
-  let to_dwarf t ~debug_loc_table ~type_creator ~start_of_function_label =
+  let to_dwarf t ~debug_loc_table ~type_creator ~start_of_function_label
+        ~slot_offset_in_bytes =
     let tag = dwarf_tag t in
     let attribute_values, debug_loc_table =
       dwarf_attribute_values t
         ~type_creator
         ~debug_loc_table
         ~start_of_function_label
+        ~slot_offset_in_bytes
     in
     tag, attribute_values, debug_loc_table
 
@@ -418,7 +416,12 @@ let rec process_instruction ~insn ~first_insn ~prev_insn
               | `Not_canonical -> `Not_canonical
             in
             let live_range =
+              (* [first_insn] is needed here so that, in the event that [reg]
+                 identifies the value as being on the stack, we can access
+                 the current stack offset when we need to translate the
+                 live range to DWARF (see above). *)
               One_live_range.create ~canonical ~parameter_or_variable ~reg
+                ~first_insn:insn
             in
             let current_live_ranges =
               Reg_map.add current_live_ranges ~key:reg ~data:live_range

@@ -27,3 +27,8 @@ include Emittable.S with type t := t
 
 val in_register : reg_number:int -> t
 val at_offset_from_stack_pointer : offset_in_bytes:int -> t
+
+(* [offset_in_bytes] will be evaluated each time the expression is
+   emitted or its size is queried. *)
+val at_computed_offset_from_stack_pointer : offset_in_bytes:(unit -> int)
+  -> t
