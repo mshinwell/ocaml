@@ -152,7 +152,7 @@ module One_live_range = struct
     | `Variable -> Dwarf_low.Tag.variable
 
   let reg_name t =
-    Reg.name_for_printing t.reg
+    Reg.name_for_debugger_exn t.reg
 
   let unique_name t = Printf.sprintf "%s__%d" (reg_name t) t.id
 
@@ -180,14 +180,8 @@ module One_live_range = struct
     let ending_label =
       Printf.sprintf ".L%d" (ending_label_of_t_exn t)
     in
-    let is_internal =
-      let internal_prefix = "__ocaml" in
-      String.length (reg_name t) > String.length internal_prefix
-        && String.sub (reg_name t) 0 (String.length internal_prefix)
-             = internal_prefix
-    in
     let location_expression =
-      if is_internal || not (Reg.has_name_suitable_for_debugger t.reg) then
+      if not (Reg.has_name_suitable_for_debugger t.reg) then
         None
       else
         let module LE = Dwarf_low.Location_expression in
@@ -342,12 +336,15 @@ module Many_live_ranges = struct
     )
 end
 
+let remove_unsuitable_regs regs =
+  Reg_set.filter regs ~f:Reg.has_name_suitable_for_debugger
+
 let rec process_instruction ~insn ~first_insn ~prev_insn
       ~current_live_ranges ~previous_live_ranges ~fundecl =
   let must_start_live_ranges_for =
     (* Regs whose live ranges will start immediately before this insn. *)
     match prev_insn with
-    | None -> insn.Linearize.available_before
+    | None -> remove_unsuitable_regs insn.Linearize.available_before
     | Some prev_insn ->
       (* Multiple registers in [available_before] may be holding the same named value.
          We pick one of them as the canonical representative (that is to say, the
@@ -356,13 +353,17 @@ let rec process_instruction ~insn ~first_insn ~prev_insn
          range might end yet the value continues to be available in one of these other
          locations.  (In which case one of those remaining ranges will then be chosen
          as canonical; see below.) *)
-      Reg_set.diff insn.Linearize.available_before prev_insn.Linearize.available_before
+      remove_unsuitable_regs
+        (Reg_set.diff insn.Linearize.available_before
+          prev_insn.Linearize.available_before)
   in
   let must_finish_live_ranges_for =
     match prev_insn with
     | None -> Reg_set.empty
     | Some prev_insn ->
-      Reg_set.diff prev_insn.Linearize.available_before insn.Linearize.available_before
+      remove_unsuitable_regs
+        (Reg_set.diff prev_insn.Linearize.available_before
+          insn.Linearize.available_before)
   in
   let label_from_opt = function
     | _, None ->
@@ -372,6 +373,21 @@ let rec process_instruction ~insn ~first_insn ~prev_insn
       end
     | b, Some l -> b, l
   in
+(*
+  Printf.eprintf "*** must_start_live_ranges_for is:\n";
+  Printmach.regset Format.err_formatter
+    must_start_live_ranges_for;
+  Format.pp_print_flush Format.err_formatter ();
+  Printf.eprintf "\n*** must_finish_live_ranges_for is:\n";
+  Printmach.regset Format.err_formatter
+    must_finish_live_ranges_for;
+  Format.pp_print_flush Format.err_formatter ();
+  Printf.eprintf "\n";
+  Printf.eprintf "\ninstruction is:\n";
+  Printlinear.instr Format.err_formatter insn;
+  Format.pp_print_flush Format.err_formatter ();
+  Printf.eprintf "\n";
+*)
   let lbl_before_opt, current_live_ranges =
     Reg_set.fold must_start_live_ranges_for
       ~init:((false, None), current_live_ranges)
@@ -382,22 +398,60 @@ let rec process_instruction ~insn ~first_insn ~prev_insn
                to record such a non-canonical range internally since we might need it
                later (in the case where it actually extends past the end of the
                canonical range). *)
+(*            Printf.eprintf "function '%s': must_start_live_ranges_for %s\n"
+              fundecl.Linearize.fun_name
+              (Reg.name_for_printing reg);*)
             let is_canonical =
               let existing_ranges =
                 Reg_map.filter current_live_ranges
-                 ~f:(fun existing_reg _range ->
-                       existing_reg.Reg.raw_name = reg.Reg.raw_name
-                         && not (Reg_set.mem must_finish_live_ranges_for existing_reg))
+                  ~f:(fun existing_reg _range ->
+                        existing_reg.Reg.raw_name = reg.Reg.raw_name
+                          && not (Reg_set.mem must_finish_live_ranges_for existing_reg))
               in
-              if Reg_map.cardinal existing_ranges = 0 then
+(*              Printf.eprintf "... num of existing ranges: %d\n"
+                (Reg_map.cardinal existing_ranges);*)
+              if Reg_map.cardinal existing_ranges = 0
+                 (* This next clause is to catch the case where the existing
+                    canonical range is about to end (i.e. within
+                    [must_finish_live_ranges_for]). *)
+                 (* CR mshinwell: this is hard to think about, add
+                    assertion? *)
+                 || not (Reg_map.exists existing_ranges
+                   ~f:(fun _reg range -> One_live_range.is_canonical range))
+              then
                 `Canonical
-              else begin
+              else
+(*
                 (* Sanity check: one of the existing ranges that we're saying still
-                   suffices to find [Reg.name_strip_spilled reg] must be canonical. *)
-(*                assert (Reg_map.exists existing_ranges
-                  ~f:(fun _reg range -> One_live_range.is_canonical range)); *)
+                   suffices to find the value in [reg] must be canonical. *)
+                 then begin
+                   Printf.eprintf "function '%s': canonical range '%s' lost\n"
+                     fundecl.Linearize.fun_name
+                     (Reg.name_for_printing reg);
+                   Printf.eprintf "must_start_live_ranges_for is:\n";
+                   Printmach.regset Format.err_formatter
+                     must_start_live_ranges_for;
+                   Format.pp_print_flush Format.err_formatter ();
+                   Printf.eprintf "\nmust_finish_live_ranges_for is:\n";
+                   Printmach.regset Format.err_formatter
+                     must_finish_live_ranges_for;
+                   Format.pp_print_flush Format.err_formatter ();
+                   Printf.eprintf "\nprevious instruction is:\n";
+                   begin match prev_insn with
+                   | None -> Printf.eprintf "<none>"
+                   | Some prev_insn ->
+                     Printlinear.instr Format.err_formatter prev_insn;
+                     Format.pp_print_flush Format.err_formatter ()
+                   end;
+                   Printf.eprintf "\n";
+                   Printf.eprintf "\ninstruction is:\n";
+                   Printlinear.instr Format.err_formatter insn;
+                   Format.pp_print_flush Format.err_formatter ();
+                   Printf.eprintf "\n";
+                   assert false
+                 end;
+*)
                 `Not_canonical
-              end
             in
             let parameter_or_variable =
               match Reg.is_parameter reg with
@@ -432,68 +486,81 @@ let rec process_instruction ~insn ~first_insn ~prev_insn
     Reg_set.fold must_finish_live_ranges_for
       ~init:(current_live_ranges, previous_live_ranges, lbl_before_opt)
       ~f:(fun (current_live_ranges, previous_live_ranges, lbl_opt) reg ->
+(*            Printf.eprintf "function '%s': must_finish_live_ranges_for %s\n"
+              fundecl.Linearize.fun_name
+              (Reg.name_for_printing reg);*)
             match Reg_map.find current_live_ranges reg with
             | None ->
               (* There should always be a range corresponding to [reg] (whether or not
                  it is canonical). *)
-              assert false
+              (* CR mshinwell: due to the problems regarding identification of
+                 registers in the sets and maps, I think we can end up in the
+                 situation here where there are multiple entries in the maps
+                 with: same ident name; same location; different stamps---so
+                 because identification on that triple doesn't coincide with
+                 the similar relation used for the ranges (which is just
+                 equality on the raw name), we can end up looking something
+                 up whose range has already gone.  Sigh. *)
+              
+(*              assert false*)
+              current_live_ranges, previous_live_ranges, lbl_opt
             | Some live_range ->
-              (* Nothing needs doing here for non-canonical ranges.
+              (* For non-canonical ranges, we just finish them now.
                  The case we do need to watch out for is when a (canonical) range finishes
                  yet there exists at least one other non-canonical range---that does not
                  also finish at this instruction---locating the same named value.
                  In this case we need to pick one of the other ranges as canonical (which
                  also involves setting its starting label to the current instruction). *)
-                if One_live_range.is_canonical live_range then begin
-                  let new_canonical_range =
-                    let candidates =
-                      Reg_map.filter current_live_ranges
-                        ~f:(fun reg' range ->
-                             reg.Reg.raw_name = reg'.Reg.raw_name
-                               && not (Reg_set.mem must_finish_live_ranges_for reg')
-                               && not (One_live_range.is_canonical range))
+              let new_canonical_range =
+                if not (One_live_range.is_canonical live_range) then
+                  None
+                else
+                  let candidates =
+                    Reg_map.filter current_live_ranges
+                      ~f:(fun reg' range ->
+                           reg.Reg.raw_name = reg'.Reg.raw_name
+                             && not (Reg_set.mem must_finish_live_ranges_for reg')
+                             && not (One_live_range.is_canonical range))
+                  in
+                  match Reg_map.bindings candidates with
+                  | [] -> None
+                  | ranges ->
+                    (* Prefer regs that are on the stack, since they're more likely
+                       to still be there from a previous frame when deep in a call
+                       chain. *)
+                    let on_stack =
+                      List.filter ranges
+                        ~f:(fun (reg, _range) ->
+                              match Reg.location reg with
+                              | Reg.Stack _ -> true 
+                              | _ -> false)
                     in
-                    match Reg_map.bindings candidates with
-                    | [] -> None
-                    | ranges ->
-                      (* Prefer regs that are on the stack, since they're more likely
-                         to still be there from a previous frame when deep in a call
-                         chain. *)
-                      let on_stack =
-                        List.filter ranges
-                          ~f:(fun (reg, _range) ->
-                                match Reg.location reg with
-                                | Reg.Stack _ -> true 
-                                | _ -> false)
-                      in
-                      match on_stack with
+                    match on_stack with
+                    | (reg, range)::_ranges -> Some (reg, range)
+                    | [] ->
+                      match ranges with
                       | (reg, range)::_ranges -> Some (reg, range)
-                      | [] ->
-                        match ranges with
-                        | (reg, range)::_ranges -> Some (reg, range)
-                        | [] -> assert false
-                  in
-                  let current_live_ranges =
-                    Reg_map.remove current_live_ranges reg
-                  in
-                  let previous_live_ranges =
-                    live_range :: previous_live_ranges
-                  in
-                  let b, end_label = label_from_opt lbl_opt in
-                  One_live_range.set_ending_label live_range end_label;
-                  let current_live_ranges =
-                    match new_canonical_range with
-                    | None -> current_live_ranges
-                    | Some (reg, range) ->
-                      (* CR mshinwell: convince ourselves that this really cannot
-                         happen, and write down the argument. *)
-                      assert (prev_insn <> None);
-                      One_live_range.make_canonical range ~starting_label:end_label;
-                      Reg_map.add current_live_ranges ~key:reg ~data:range
-                  in
-                  current_live_ranges, previous_live_ranges, (b, Some end_label)
-                end else
-                  current_live_ranges, previous_live_ranges, lbl_opt)
+                      | [] -> assert false
+              in
+              let current_live_ranges =
+                Reg_map.remove current_live_ranges reg
+              in
+              let previous_live_ranges =
+                live_range :: previous_live_ranges
+              in
+              let b, end_label = label_from_opt lbl_opt in
+              One_live_range.set_ending_label live_range end_label;
+              let current_live_ranges =
+                match new_canonical_range with
+                | None -> current_live_ranges
+                | Some (reg, range) ->
+                  (* CR mshinwell: convince ourselves that this really cannot
+                     happen, and write down the argument. *)
+                  assert (prev_insn <> None);
+                  One_live_range.make_canonical range ~starting_label:end_label;
+                  Reg_map.add current_live_ranges ~key:reg ~data:range
+              in
+              current_live_ranges, previous_live_ranges, (b, Some end_label))
 
   in
   begin match lbl_before_opt with

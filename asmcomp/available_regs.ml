@@ -48,6 +48,8 @@ let rec available_regs ~instr ~currently_available =
     (* We cannot rely on a value being available after an operation that might cause
        a GC unless the value is live (as per the backwards dataflow analysis used for
        register allocation). *)
+    (* CR mshinwell: here is an idea: how about having the GC update the values
+       that are still available, when compiling with -g-full? *)
     | Mach.Iop Mach.Icall_ind | Mach.Iop Mach.Icall_imm _
     | Mach.Iop Mach.Itailcall_ind | Mach.Iop Mach.Itailcall_imm _
     | Mach.Iop Mach.Iextcall _ ->

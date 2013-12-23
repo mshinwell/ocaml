@@ -166,7 +166,20 @@ let anonymous t =
 let has_name_suitable_for_debugger t =
   match t.raw_name with
   | Anon | Named "" | R -> false
-  | Named _ -> true
+  | Named reg_name ->
+    let is_internal =
+      let internal_prefix = "__ocaml" in
+      String.length reg_name > String.length internal_prefix
+        && String.sub reg_name 0 (String.length internal_prefix) = internal_prefix
+    in
+    not is_internal
+
+let name_for_debugger_exn t =
+  if not (has_name_suitable_for_debugger t) then
+    failwith "Reg.name_for_debugger_exn on register that is not for the debugger";
+  match t.raw_name with
+  | Named name when String.length name > 0 -> name
+  | _ -> assert false
 
 let name_for_printing t =
   let raw_name =

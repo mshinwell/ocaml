@@ -84,7 +84,7 @@ module Options = Main_args.Make_optcomp_options (struct
   let _config () = show_config ()
   let _for_pack s = for_package := Some s
   let _g = set debug
-  let _g_full = set debug_full
+  let _g_full () = debug := true; debug_full := true
   let _i () = print_types := true; compile_only := true
   let _I dir = include_dirs := dir :: !include_dirs
   let _impl = impl
