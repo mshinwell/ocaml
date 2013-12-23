@@ -12,8 +12,13 @@
 
 open Cmm
 
+type raw_name =
+  | Anon
+  | R
+  | Named of string
+
 type t =
-  { mutable name: string;
+  { mutable raw_name: raw_name;
     stamp: int;
     typ: Cmm.machtype_component;
     mutable loc: location;
@@ -23,6 +28,7 @@ type t =
     mutable degree: int;
     mutable spill_cost: int;
     mutable visited: bool;
+    mutable partial_value : int option;
     mutable is_parameter: int option;
   }
 
@@ -39,17 +45,18 @@ and stack_location =
 type reg = t
 
 let dummy =
-  { name = ""; stamp = 0; typ = Int; loc = Unknown; spill = false;
+  { raw_name = Anon; stamp = 0; typ = Int; loc = Unknown; spill = false;
     interf = []; prefer = []; degree = 0; spill_cost = 0; visited = false;
-    is_parameter = None; }
+    partial_value = None; is_parameter = None; }
 
 let currstamp = ref 0
 let reg_list = ref([] : t list)
 
 let create ty =
-  let r = { name = ""; stamp = !currstamp; typ = ty; loc = Unknown;
+  let r = { raw_name = Anon; stamp = !currstamp; typ = ty; loc = Unknown;
             spill = false; interf = []; prefer = []; degree = 0;
-            spill_cost = 0; visited = false; is_parameter = None; } in
+            spill_cost = 0; visited = false; partial_value = None;
+            is_parameter = None; } in
   reg_list := r :: !reg_list;
   incr currstamp;
   r
@@ -68,13 +75,13 @@ let createv_like rv =
 
 let clone r =
   let nr = create r.typ in
-  nr.name <- r.name;
+  nr.raw_name <- r.raw_name;
   nr
 
 let at_location ty loc =
-  let r = { name = "R"; stamp = !currstamp; typ = ty; loc = loc; spill = false;
+  let r = { raw_name = R; stamp = !currstamp; typ = ty; loc = loc; spill = false;
             interf = []; prefer = []; degree = 0; spill_cost = 0;
-            visited = false; is_parameter = None; } in
+            visited = false; partial_value = None; is_parameter = None; } in
   incr currstamp;
   r
 
@@ -151,32 +158,25 @@ let set_of_array v =
            if i >= n then Set.empty else Set.add v.(i) (add_all(i+1))
          in add_all 0
 
-let name t = t.name
-(* CR mshinwell: temporarily removed; needs rethink.  Otherwise we hit the problem
-   whereby subsequent "variable" live ranges don't have the same names as preceding
-   "parameter" ones, even though it's the same value being held. *)
-(*
-  match t.is_parameter with
-  | None -> t.name
-  | Some index -> Printf.sprintf "%s-%d" t.name index
-*)
+let anonymous t =
+  match t.raw_name with
+  | Anon | Named "" -> true
+  | R | Named _ -> false
 
-(* CR mshinwell: think about a cleaner way to do this.  just a flag? *)
-let name_strip_spilled t =
-  let name = name t in
-  let prefix = "spilled-" in
-  let name =
-    if String.length name > String.length prefix
-       && String.sub name 0 (String.length prefix) = prefix
-    then
-      String.sub name (String.length prefix) (String.length name - String.length prefix)
-    else
-      name
+let name_for_printing t =
+  let raw_name =
+    match t.raw_name with
+    | Anon | Named "" -> None
+    | R -> Some "R"
+    | Named name -> Some name
   in
-  (* CR mshinwell: work out why spilled- ones don't have the "which parameter" suffix. *)
-  match (try Some (String.rindex name '-') with Not_found -> None) with
-  | None -> name
-  | Some index -> String.sub name 0 index
+  match raw_name with
+  | None -> ""
+  | Some raw_name ->
+    Printf.sprintf "%s%s%s"
+      (if t.spill then "spilled-" else "")
+      raw_name
+      (match t.partial_value with None -> "" | Some part -> string_of_int part)
 
 let location t =
   t.loc
@@ -196,10 +196,10 @@ let same_location t t' =
   t.loc = t'.loc
 
 let with_name t ~name =
-  { t with name; }
+  { t with raw_name = name; }
 
 let with_name_from t ~from =
-  { t with name = from.name; }
+  { t with raw_name = from.raw_name; }
 
 let with_name_fromv ts ~from =
   if Array.length ts <> Array.length from then

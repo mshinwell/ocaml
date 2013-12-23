@@ -26,7 +26,7 @@ let liveness ppf phrase =
   Liveness.fundecl ppf phrase; phrase
 
 let available_regs _ppf phrase =
-  if !debug then Available_regs.function_declaration phrase;
+  if !debug_full then Available_regs.function_declaration phrase;
   phrase
 
 let dump_if ppf flag message phrase =

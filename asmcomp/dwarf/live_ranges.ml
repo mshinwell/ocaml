@@ -49,7 +49,7 @@ module One_live_range = struct
   module T = struct
     type t = {
       id : int;
-      parameter_or_variable : [ `Parameter of string | `Variable ];
+      parameter_or_variable : [ `Parameter | `Variable ];
       reg : Reg.t;
       mutable ending_label : Linearize.label option;
       mutable canonical : [
@@ -72,9 +72,9 @@ module One_live_range = struct
       "(id %d)(parameter_or_variable %s)(reg %s %s)(ending_label %s)(canonical %s)"
       t.id
       (match t.parameter_or_variable with
-       | `Parameter name -> Printf.sprintf "(Parameter %s)" name
+       | `Parameter -> "Parameter"
        | `Variable -> "Variable")
-      (Reg.name t.reg)
+      (Reg.name_for_printing t.reg)
       (match Reg.location t.reg with
        | Reg.Unknown -> "Unknown"
        | Reg.Reg i -> Printf.sprintf "(Reg %d)" i
@@ -146,27 +146,11 @@ module One_live_range = struct
 
   let dwarf_tag t =
     match t.parameter_or_variable with
-    | `Parameter _name -> Dwarf_low.Tag.formal_parameter
+    | `Parameter -> Dwarf_low.Tag.formal_parameter
     | `Variable -> Dwarf_low.Tag.variable
 
   let reg_name t =
-    match t.parameter_or_variable with
-    | `Parameter name -> name
-    | `Variable ->
-      let name = Reg.name t.reg in
-      let spilled_prefix = "spilled-" in
-      let name =
-        if String.length name <= String.length spilled_prefix then
-          name
-        else if String.sub name 0 (String.length spilled_prefix) = spilled_prefix then
-          String.sub name (String.length spilled_prefix)
-            (String.length name - String.length spilled_prefix)
-        else
-          name
-      in
-      match (try Some (String.rindex name '-') with Not_found -> None) with
-      | None -> name
-      | Some dash -> String.sub name 0 dash
+    Reg.name_for_printing t.reg
 
   let unique_name t = Printf.sprintf "%s__%d" (reg_name t) t.id
 
@@ -404,7 +388,7 @@ let rec process_instruction ~insn ~first_insn ~prev_insn
               let existing_ranges =
                 Reg_map.filter current_live_ranges
                  ~f:(fun existing_reg _range ->
-                       Reg.name_strip_spilled existing_reg = Reg.name_strip_spilled reg
+                       existing_reg.Reg.raw_name = reg.Reg.raw_name
                          && not (Reg_set.mem must_finish_live_ranges_for existing_reg))
               in
               if Reg_map.cardinal existing_ranges = 0 then
@@ -419,7 +403,7 @@ let rec process_instruction ~insn ~first_insn ~prev_insn
             in
             let parameter_or_variable =
               match Reg.is_parameter reg with
-              | Some _parameter_index -> `Parameter (Reg.name reg)
+              | Some _parameter_index -> `Parameter
               | None -> `Variable
             in
             let is_fresh, lbl = label_from_opt lbl in
@@ -462,7 +446,7 @@ let rec process_instruction ~insn ~first_insn ~prev_insn
                     let candidates =
                       Reg_map.filter current_live_ranges
                         ~f:(fun reg' range ->
-                             Reg.name_strip_spilled reg = Reg.name_strip_spilled reg'
+                             reg.Reg.raw_name = reg'.Reg.raw_name
                                && not (Reg_set.mem must_finish_live_ranges_for reg')
                                && not (One_live_range.is_canonical range))
                     in
@@ -567,9 +551,10 @@ let process_fundecl fundecl =
       ~previous_live_ranges:[]
       ~fundecl
   in
-  Printf.printf "live ranges: %s: %s\n%!"
+(*  Printf.printf "live ranges: %s: %s\n%!"
     fundecl.Linearize.fun_name
     (String.concat ", " (List.map live_ranges ~f:One_live_range.to_string));
+*)
   let name_map, _stamp_map =
     List.fold live_ranges
       ~init:(String.Map.empty, String.Map.empty)
@@ -578,10 +563,10 @@ let process_fundecl fundecl =
               name_map, stamp_map
             else
               let name = One_live_range.reg_name live_range in
-              Printf.printf "name: %s... " name;
+(*              Printf.printf "name: %s... " name;*)
               match String.Map.find name_map name with
               | None ->
-                Printf.printf "not there\n%!";
+(*                Printf.printf "not there\n%!";*)
                 let without_stamp =
                   match try Some (String.rindex name '_') with Not_found -> None with
                   | None -> None
@@ -590,10 +575,10 @@ let process_fundecl fundecl =
                 begin match without_stamp with
                 | None -> name_map, stamp_map  (* ignore names without [Ident] stamps *)
                 | Some without_stamp ->
-                  Printf.printf "without_stamp: '%s' ..." without_stamp;
+                  (*Printf.printf "without_stamp: '%s' ..." without_stamp; *)
                   begin match String.Map.find stamp_map without_stamp with
                   | None ->
-                    Printf.printf "first occurrence\n%!";
+(*                    Printf.printf "first occurrence\n%!";*)
                     let name_map =
                       String.Map.add name_map ~key:name ~data:(name, [live_range])
                     in
@@ -602,7 +587,7 @@ let process_fundecl fundecl =
                     in
                     name_map, stamp_map
                   | Some (first_stamped_name, last_stamp) ->
-                    Printf.printf "not the first occurrence\n%!";
+(*                    Printf.printf "not the first occurrence\n%!";*)
                     let this_stamp = last_stamp + 1 in
                     let name_map =
                       if this_stamp <> 1 then name_map
@@ -631,7 +616,7 @@ let process_fundecl fundecl =
                   end
                 end
               | Some (scope_stamped_name, live_ranges) ->
-                Printf.printf "already has live range\n%!";
+(*                Printf.printf "already has live range\n%!";*)
                 let live_ranges = live_range::live_ranges in
                 let name_map =
                   String.Map.add (* replace *) name_map

@@ -754,9 +754,15 @@ let fundecl fundecl =
   in
 *)
   let dwarf_func, fundecl =
-    (* note that [start_function] may modify [fundecl] *)
-    Dwarf.Compilation_unit_state.start_function (get_dwarf_comp_unit_state ())
-      ~linearized_fundecl:fundecl
+    if !Clflags.debug_full then
+      let dwarf_func, fundecl =
+        (* note that [start_function] may modify [fundecl] *)
+        Dwarf.Compilation_unit_state.start_function (get_dwarf_comp_unit_state ())
+          ~linearized_fundecl:fundecl
+      in
+      Some dwarf_func, fundecl
+    else
+      None, fundecl
   in
   emit_debug_info fundecl.fun_dbg;
   cfi_startproc ();
@@ -776,8 +782,12 @@ let fundecl fundecl =
   List.iter emit_call_gc !call_gc_sites;
   emit_call_bound_errors ();
   cfi_endproc ();
-  Dwarf.Compilation_unit_state.end_function (get_dwarf_comp_unit_state ())
-    dwarf_func;
+  begin match dwarf_func with
+  | None -> ()
+  | Some dwarf_func ->
+    Dwarf.Compilation_unit_state.end_function (get_dwarf_comp_unit_state ())
+      dwarf_func
+  end;
   begin match Config.system with
     "linux" | "gnu" ->
       `	.type	{emit_symbol fundecl.fun_name},@function\n`;

@@ -85,7 +85,7 @@ let swap_intcomp = function
 let all_regs_anonymous rv =
   try
     for i = 0 to Array.length rv - 1 do
-      if String.length rv.(i).name > 0 then raise Exit
+      if not (Reg.anonymous rv.(i)) then raise Exit
     done;
     true
   with Exit ->
@@ -93,10 +93,11 @@ let all_regs_anonymous rv =
 
 let name_regs id rv =
   if Array.length rv = 1 then
-    rv.(0).name <- Ident.unique_name id
+    rv.(0).raw_name <- Named (Ident.unique_name id)
   else
     for i = 0 to Array.length rv - 1 do
-      rv.(i).name <- Ident.unique_name id ^ "#" ^ string_of_int i
+      rv.(i).raw_name <- Named (Ident.unique_name id);
+      rv.(i).partial_value <- Some i
     done
 
 (* "Join" two instruction sequences, making sure they return their results
@@ -111,10 +112,10 @@ let join opt_r1 seq1 opt_r2 seq2 =
       assert (l1 = Array.length r2);
       let r = Array.create l1 Reg.dummy in
       for i = 0 to l1-1 do
-        if String.length r1.(i).name = 0 then begin
+        if Reg.anonymous r1.(i) then begin
           r.(i) <- r1.(i);
           seq2#insert_move r2.(i) r1.(i)
-        end else if String.length r2.(i).name = 0 then begin
+        end else if Reg.anonymous r2.(i) then begin
           r.(i) <- r2.(i);
           seq1#insert_move r1.(i) r2.(i)
         end else begin
@@ -362,8 +363,8 @@ method extract =
 method insert_move src dst =
   if src.stamp <> dst.stamp then begin
     self#insert (Iop Imove) [|src|] [|dst|];
-    if String.length (Reg.name src) > 0 && String.length (Reg.name dst) = 0 then
-      dst.Reg.name <- Reg.name src
+    if not (Reg.anonymous src) && Reg.anonymous dst then
+      dst.Reg.raw_name <- src.Reg.raw_name
   end
 
 method insert_moves src dst =

@@ -12,8 +12,13 @@
 
 (* Pseudo-registers *)
 
+type raw_name =
+  | Anon
+  | R
+  | Named of string
+
 type t =
-  { mutable name: string;               (* Name (for printing) *)
+  { mutable raw_name: raw_name;         (* Name (for printing) *)
     stamp: int;                         (* Unique stamp *)
     typ: Cmm.machtype_component;        (* Type of contents *)
     mutable loc: location;              (* Actual location *)
@@ -23,7 +28,8 @@ type t =
     mutable degree: int;                (* Number of other regs live sim. *)
     mutable spill_cost: int;            (* Estimate of spilling cost *)
     mutable visited: bool;              (* For graph walks *)
-    mutable is_parameter: int option;   (* Is a function parameter; if so, which one *)
+    mutable partial_value : int option; (* Which part of a value (0-based), if any *)
+    mutable is_parameter: int option;   (* Function parameter index (0-based), if any *)
   }
 
 and location =
@@ -58,14 +64,14 @@ val all_registers_set: unit -> Set.t
 val num_registers: unit -> int
 val reinit: unit -> unit
 
-val name : t -> string
-val name_strip_spilled : t -> string
+val anonymous : t -> bool
+val name_for_printing : t -> string
 val location : t -> location
 
 val set_is_parameter : t -> parameter_index:int -> unit
 val is_parameter : t -> int option
 
-val with_name : t -> name:string -> t
+val with_name : t -> name:raw_name -> t
 val with_name_from : t -> from:t -> t
 val with_name_fromv : t array -> from:t array -> t array
 

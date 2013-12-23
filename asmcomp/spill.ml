@@ -40,7 +40,6 @@ let spill_reg r =
   with Not_found ->
     let spill_r = Reg.create r.typ in
     spill_r.spill <- true;
-    if String.length r.name > 0 then spill_r.name <- "spilled-" ^ r.name;
     spill_env := Reg.Map.add r spill_r !spill_env;
     spill_r
 
