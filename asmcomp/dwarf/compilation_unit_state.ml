@@ -293,9 +293,17 @@ let emit_debugging_info_epilogue t =
       ~f:(fun (type_label, type_name) ->
             build_ocaml_type_tags ~type_label ~type_name)
   in
+  (* CR mshinwell: this "no children" thing (and above) is a symptom of a more general
+     problem. *)
+  let tag =
+    if List.length t.function_tags = 0 && List.length type_name_tags = 0 then
+      Tag.compile_unit_with_no_children
+    else
+      Tag.compile_unit
+  in
   let tags_with_attribute_values = [
     0, "compile_unit",
-      Tag.compile_unit, compile_unit_attribute_values;
+      tag, compile_unit_attribute_values;
   ] @ t.function_tags @ type_name_tags
   in
   let debug_info = Debug_info_section.create ~tags_with_attribute_values in

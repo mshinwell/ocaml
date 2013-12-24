@@ -25,6 +25,7 @@ type t
 include Emittable.S with type t := t
 
 val compile_unit : t
+val compile_unit_with_no_children : t
 val subprogram : t
 val subprogram_with_no_children : t
 val formal_parameter : t

@@ -22,6 +22,7 @@
 
 type t =
   | DW_TAG_compile_unit
+  | DW_TAG_compile_unit__no_children
   | DW_TAG_subprogram
   | DW_TAG_subprogram__no_children
   | DW_TAG_formal_parameter
@@ -33,6 +34,7 @@ let encode t =
   let code =
     match t with
     | DW_TAG_compile_unit -> 0x11
+    | DW_TAG_compile_unit__no_children -> 0x11
     | DW_TAG_subprogram -> 0x2e
     | DW_TAG_subprogram__no_children -> 0x2e
     | DW_TAG_formal_parameter -> 0x05
@@ -46,6 +48,7 @@ let encode t =
 
 let child_determination = function
   | DW_TAG_compile_unit -> Child_determination.yes
+  | DW_TAG_compile_unit__no_children -> Child_determination.no
   | DW_TAG_subprogram -> Child_determination.yes
   | DW_TAG_subprogram__no_children -> Child_determination.no
   | DW_TAG_formal_parameter -> Child_determination.no
@@ -54,6 +57,7 @@ let child_determination = function
   | DW_TAG_lexical_block -> Child_determination.yes
 
 let compile_unit = DW_TAG_compile_unit
+let compile_unit_with_no_children = DW_TAG_compile_unit__no_children
 let subprogram = DW_TAG_subprogram
 let subprogram_with_no_children = DW_TAG_subprogram__no_children
 let formal_parameter = DW_TAG_formal_parameter
