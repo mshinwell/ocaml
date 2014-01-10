@@ -275,6 +275,7 @@ let link_shared ppf objfiles output_name =
   remove_file startup_obj
 
 let call_linker file_list startup_file output_name =
+  (* CR mshinwell: work out what to do about need for -export-dynamic *)
   let main_dll = !Clflags.output_c_object
                  && Filename.check_suffix output_name Config.ext_dll
   in
