@@ -276,12 +276,21 @@ let emit_debugging_info_epilogue t =
   let producer_name = sprintf "ocamlopt %s" Sys.ocaml_version in
   let compile_unit_attribute_values =
     let module AV = Attribute_value in
+    let directory =
+      match t.source_file_path with
+      | None -> Sys.getcwd ()
+      | Some path ->
+        if Filename.is_relative path then
+          Sys.getcwd ()
+        else
+          Filename.dirname path
+    in
     let common = [
       AV.create_producer ~producer_name;
       AV.create_low_pc ~address_label:t.start_of_code_label;
       AV.create_high_pc ~address_label:t.end_of_code_label;
       AV.create_stmt_list ~section_offset_label:"Ldebug_line0";
-      AV.create_comp_dir ~directory:(Sys.getcwd ());
+      AV.create_comp_dir ~directory;
     ]
     in
     match t.source_file_path with
