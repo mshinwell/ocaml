@@ -154,6 +154,7 @@ extern void caml_install_invalid_parameter_handler();
 
 #endif
 
+extern int ensure_natdynlink_is_linked;
 
 void caml_main(char **argv)
 {
@@ -163,6 +164,8 @@ void caml_main(char **argv)
 #endif
   value res;
   char tos;
+
+  ensure_natdynlink_is_linked = 1;
 
   caml_init_ieee_floats();
 #ifdef _MSC_VER

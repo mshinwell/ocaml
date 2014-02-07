@@ -407,6 +407,20 @@ let function_name = ref ""
 (* Entry point for tail recursive calls *)
 let tailrec_entry_point = ref 0
 
+(* Annotation of call points, to work around gdb's lack of support for character
+   position information *)
+let emit_call_point_symbol =
+  let counter = ref 0 in
+  fun i ->
+    let name =
+      Printf.sprintf "call_point_%d_%d" !counter i.dbg.Debuginfo.dinfo_char_start
+    in
+    incr counter;
+    let lbl = Compilenv.make_symbol (Some name) in
+    `	.type	{emit_symbol lbl},@function\n`;
+    `	.globl	{emit_symbol lbl}\n`;
+    `{emit_symbol lbl}:\n`
+
 (* Emit an instruction *)
 let emit_instr fallthrough i =
     emit_debug_info i.dbg;
@@ -443,9 +457,11 @@ let emit_instr fallthrough i =
     | Lop(Iconst_symbol s) ->
         `	{load_symbol_addr s}, {emit_reg i.res.(0)}\n`
     | Lop(Icall_ind) ->
+        emit_call_point_symbol i;
         `	call	*{emit_reg i.arg.(0)}\n`;
         record_frame i.live i.dbg
     | Lop(Icall_imm(s)) ->
+        emit_call_point_symbol i;
         `	{emit_call s}\n`;
         record_frame i.live i.dbg
     | Lop(Itailcall_ind) ->

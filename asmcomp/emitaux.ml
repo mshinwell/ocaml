@@ -237,5 +237,6 @@ let emit_debug_info dbg =
         file_num in
     emit_string "\t.loc\t";
     emit_int file_num; emit_char '\t';
-    emit_int line; emit_char '\n'
+    emit_int line; emit_char '\t';
+    emit_int dbg.Debuginfo.dinfo_char_start; emit_char '\n'
   end

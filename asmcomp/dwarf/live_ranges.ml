@@ -112,7 +112,7 @@ module One_live_range = struct
     {
       id = our_id;
       first_insn;
-      parameter_or_variable;
+      parameter_or_variable; (* CR mshinwell: surely redundant; use [reg]? *)
       reg;
       ending_label = None;
       canonical;
@@ -145,6 +145,9 @@ module One_live_range = struct
 
   let parameter_or_variable t =
     t.parameter_or_variable
+
+  let parameter_index t =
+    Reg.is_parameter t.reg
 
   let dwarf_tag t =
     match t.parameter_or_variable with
@@ -279,7 +282,15 @@ module Many_live_ranges = struct
      gdb.)  These stamped names are used for cross-referencing with .cmt files
      in the debugger. *)
   let stamped_name t =
-    name t
+    let parameter_index =
+      match List.map t.live_ranges ~f:One_live_range.parameter_index with
+      | (Some index)::_ -> Some index
+      | _ -> None
+    in
+    let name = name t in
+    match parameter_index with
+    | None -> name
+    | Some index -> Printf.sprintf "%s-%d" name index
 
   let dwarf_attribute_values t ~type_creator ~debug_loc_table
       ~start_of_function_label ~slot_offset_in_bytes =

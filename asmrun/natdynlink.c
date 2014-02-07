@@ -23,6 +23,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 
 static void *getsym(void *handle, char *module, char *name){
   char *fullname = malloc(strlen(module) + strlen(name) + 5);
@@ -133,6 +134,80 @@ CAMLprim value caml_natdynlink_run_toplevel(value filename, value symbol)
     Store_field(res, 0, v);
   }
   CAMLreturn(res);
+}
+
+int ensure_natdynlink_is_linked = 0;
+int natdynlink_root_registered = 0;
+value natdynlink_return_value = Val_unit;
+
+CAMLprim value caml_natdynlink_gdb_set_result(value v)
+{
+  if (!natdynlink_root_registered) {
+    caml_register_generational_global_root(&natdynlink_return_value);
+    natdynlink_root_registered = 1;
+  }
+
+  natdynlink_return_value = v;
+
+  return Val_unit;
+}
+
+static int gdb_num_vars;
+static value* gdb_vars = NULL;
+
+CAMLprim value caml_natdynlink_gdb_get_var(value arg_index)
+{
+  int arg_index_int = Int_val(arg_index);
+  return gdb_vars[arg_index_int];
+}
+
+CAMLprim value caml_natdynlink_gdb_run(int num_args, ...)
+{
+  va_list ap;
+  void* handle;
+  char module_name[1000];
+  char cmxs_name[1000];
+  static int counter = 0;
+
+  va_start(ap, num_args);
+
+  if (num_args > 0) {
+    int var;
+    if (gdb_vars != NULL) {
+      for (var = 0; var < gdb_num_vars; var++) {
+        caml_remove_generational_global_root(&gdb_vars[var]);
+      }
+      free(gdb_vars);
+    }
+    gdb_vars = malloc(sizeof(value) * num_args);
+    gdb_num_vars = num_args;
+    for (var = 0; var < gdb_num_vars; var++) {
+      gdb_vars[var] = va_arg(ap, value);
+      caml_register_generational_global_root(&gdb_vars[var]);
+    }
+  }
+
+  /* TODO: dlclose in case of error... */
+
+  snprintf(cmxs_name, 1000, "/tmp/gdb_expr%d.cmxs", counter);
+  handle = caml_dlopen(cmxs_name, 1, 0);
+
+  if (NULL == handle) {
+    fprintf(stderr, "Failed to load expression into target for evaluation: %s\n",
+            caml_dlerror());
+    return Val_unit;
+  }
+
+  /* CR mshinwell: fix counting nonsense */
+  snprintf(module_name, 1000, "Gdb_expr%d", counter);
+
+  (void) caml_natdynlink_run(handle, caml_copy_string(module_name));
+
+  counter++;
+
+  va_end(ap);
+
+  return natdynlink_return_value;
 }
 
 CAMLprim value caml_natdynlink_loadsym(value symbol)
