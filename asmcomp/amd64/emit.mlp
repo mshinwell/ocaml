@@ -409,7 +409,8 @@ let tailrec_entry_point = ref 0
 
 (* Annotation of call points, to work around gdb's lack of support for character
    position information *)
-let emit_call_point_symbol =
+let emit_call_point_symbol _ = ()
+(*
   let counter = ref 0 in
   fun i ->
     let name =
@@ -420,6 +421,7 @@ let emit_call_point_symbol =
     `	.type	{emit_symbol lbl},@function\n`;
     `	.globl	{emit_symbol lbl}\n`;
     `{emit_symbol lbl}:\n`
+*)
 
 (* Emit an instruction *)
 let emit_instr fallthrough i =
