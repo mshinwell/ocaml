@@ -402,15 +402,45 @@ let emit_instr fallthrough i =
         end;
         begin match profiling_info_label with
           | None -> ()
-          | Some label -> (
+          | Some label -> begin
             assert (n <= 0xffff_ffffn);
+            let lifetime_tracking_label = new_label () in
+            let end_label = new_label () in
+            (* CR mshinwell: need to emit CFI stack adjustments *)
+            (* CR mshinwell: all this would be easier if major/promoted words were
+               int64 values. *)
+            `	pushq	%r14\n`;
+            `	{load_symbol_addr "caml_lifetime_tracking"}, %r14\n`;
+            `	movq	(%r14), %r14\n`;
+            `	cmpq    $1, %r14\n`;
+            `	je      {emit_label lifetime_tracking_label}\n`;
+            `	{load_label_addr label}, %r14\n`;
+            `	jmp	{emit_label end_label}\n`;
+            `	.align 16\n{emit_label lifetime_tracking_label}:`;
             `	pushq	%r15\n`;
-            `	{load_label_addr label}, %r15\n`;
-            `	andq	$0x0000000003fffff0, %r15\n`;
-            `	sal	$38, %r15\n`;
-            `	orq     %r15, {emit_reg i.res.(0)}\n`;
-            `	popq	%r15\n`
-          )
+            `	{load_symbol_addr "caml_young_end"}, %r14\n`;
+            `	movq	(%r14), %r14\n`;
+            `	subq	%r15, %r14\n`;
+            `	subq	$8, %rsp\n`;
+            `	movapd	%xmm0, (%rsp)\n`;
+            `	{load_symbol_addr "caml_stat_major_words"}, %r15\n`;
+            `	movsd	(%r15), %xmm0\n`;
+            `	cvttsd2si	%xmm0, %r15\n`;
+            `	addq	%r15, %r14\n`;
+            `	{load_symbol_addr "caml_stat_promoted_words"}, %r15\n`;
+            `	movsd	(%r15), %xmm0\n`;
+            `	cvttsd2si	%xmm0, %r15\n`;
+            `	subq	%r15, %r14\n`;
+            `	sar	$22, %r14\n`;  (* see memory.h:LIFETIME_SHIFT *)
+            `	movapd	(%rsp), %xmm0\n`;
+            `	addq	$8, %rsp\n`;
+            `	popq	%r15\n`;
+            `	.align 16\n{emit_label end_label}:`;
+            `	andq	$0x0000000003fffff0, %r14\n`;
+            `	sal	$38, %r14\n`;
+            `	orq     %r14, {emit_reg i.res.(0)}\n`;
+            `	popq	%r14\n`
+          end
         end
     | Lop(Iconst_float s) ->
         begin match Int64.bits_of_float (float_of_string s) with

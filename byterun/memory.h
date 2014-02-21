@@ -24,6 +24,7 @@
 #include "gc.h"
 #include "major_gc.h"
 #include "minor_gc.h"
+#include "gc_ctrl.h"
 /* </private> */
 #include "misc.h"
 #include "mlvalues.h"
@@ -103,9 +104,24 @@ int caml_page_table_initialize(mlsize_t bytesize);
 #define DEBUG_clear(result, wosize)
 #endif
 
-#define MY_PROFINFO ((((intnat)__builtin_return_address(0)) >> 4) & 0x3fffff)
+/* Corresponds to measuring block lifetimes in units of 8Mb.  With the 22 bits of
+   allocation profiling information this should enable us to get a bit over 10^13 bytes
+   as the maximum lifetime. */
+#define LIFETIME_SHIFT 22
+
+#define MY_PROFINFO \
+  ((caml_lifetime_tracking \
+    ? ((caml_young_end - caml_young_ptr \
+        + (intnat) caml_stat_major_words - (intnat) caml_stat_promoted_words) \
+       >> LIFETIME_SHIFT) \
+    : (((intnat)__builtin_return_address(0)) >> 4)) \
+   & 0x3fffff)
+
+#define Decode_profinfo_hd(hd) \
+  (((uint64_t) (Profinfo_hd (hd))) << (caml_lifetime_tracking ? LIFETIME_SHIFT : 4))
 
 extern int caml_allocation_tracing;
+extern int caml_lifetime_tracking;
 extern uint64_t* caml_minor_allocation_tracing_array;
 extern uint64_t* caml_minor_allocation_tracing_array_end;
 extern uint64_t* caml_major_allocation_tracing_array;

@@ -192,7 +192,7 @@ caml_dump_allocators_of_major_heap_blocks (const char* output_file)
         default: {
           uint64_t approx_instr_pointer;
 
-          approx_instr_pointer = ((uint64_t) (Profinfo_hd (hd))) << 4;
+          approx_instr_pointer = Decode_profinfo_hd(hd);
           if (approx_instr_pointer != 0ull) {
             uint64_t size_in_words_including_header;
             const char* colour;
@@ -247,7 +247,7 @@ caml_where_was_this_allocated (value v)
     CAMLreturn(Val_long(0));  /* None */
   }
 
-  approx_instr_pointer = ((uint64_t) (Profinfo_hd (Hd_val (v)))) << 4;
+  approx_instr_pointer = Decode_profinfo_hd (Hd_val (v));
 
   if (approx_instr_pointer == 0ull) {
     CAMLreturn(Val_long(0));  /* None */
@@ -332,7 +332,7 @@ caml_dump_heapgraph(const char* node_output_file, const char* edge_output_file)
         default: {
           uint64_t approx_instr_pointer_parent;
 
-          approx_instr_pointer_parent = ((uint64_t) (Profinfo_hd (hd_parent))) << 4;
+          approx_instr_pointer_parent = Decode_profinfo_hd (hd_parent);
 
           if (approx_instr_pointer_parent != 0ull) {
             fprintf(node_fp, "%p\n", (void*) approx_instr_pointer_parent);
@@ -353,7 +353,7 @@ caml_dump_heapgraph(const char* node_output_file, const char* edge_output_file)
                   header_t hd_child;
 
                   hd_child = Hd_val(child);
-                  approx_instr_pointer_child = ((uint64_t) (Profinfo_hd (hd_child))) << 4;
+                  approx_instr_pointer_child = Decode_profinfo_hd (hd_child);
 
                   if (approx_instr_pointer_child != 0ull) {
                     fprintf(edge_fp, "%p,%p\n",
