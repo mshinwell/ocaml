@@ -220,6 +220,21 @@ void caml_oldify_mopup (void)
   }
 }
 
+extern void caml_record_lifetime_sample(header_t, int);
+
+static void
+collect_lifetime_samples(void)
+{
+  value ptr = (value) caml_young_ptr;
+  while (ptr < caml_young_end) {
+    header_t hd = Hd_val(ptr);
+    if (hd != 0) {
+      caml_record_lifetime_sample(hd, 0);
+    }
+    ptr++;
+  }
+}
+
 /* Make sure the minor heap is empty by performing a minor collection
    if needed.
 */
@@ -244,6 +259,7 @@ void caml_empty_minor_heap (void)
         }
       }
     }
+    collect_lifetime_samples();
     if (caml_young_ptr < caml_young_start) caml_young_ptr = caml_young_start;
     caml_stat_minor_words += Wsize_bsize (caml_young_end - caml_young_ptr);
     caml_young_ptr = caml_young_end;

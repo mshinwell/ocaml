@@ -117,6 +117,8 @@ int caml_page_table_initialize(mlsize_t bytesize);
     : (((intnat)__builtin_return_address(0)) >> 4)) \
    & 0x3fffff)
 
+#define Profinfo_now (MY_PROFINFO << LIFETIME_SHIFT)
+
 #define Decode_profinfo_hd(hd) \
   (((uint64_t) (Profinfo_hd (hd))) << (caml_lifetime_tracking ? LIFETIME_SHIFT : 4))
 

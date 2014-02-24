@@ -340,6 +340,8 @@ static void add_major_work_stat (intnat dark_words, intnat blue_words,
   caml_major_work_end_of_sweep[MAJOR_WORK_SAMPLES - 1] = end_of_sweep;
 }
 
+extern void caml_record_lifetime_sample(header_t, int);
+
 static void sweep_slice (intnat work)
 {
   char *hp;
@@ -366,6 +368,9 @@ static void sweep_slice (intnat work)
         if (Tag_hd (hd) == Custom_tag){
           void (*final_fun)(value) = Custom_ops_val(Val_hp(hp))->finalize;
           if (final_fun != NULL) final_fun(Val_hp(hp));
+        }
+        if (caml_lifetime_tracking) {
+          caml_record_lifetime_sample(hd, 1);
         }
         caml_gc_sweep_hp = caml_fl_merge_block (Bp_hp (hp));
         white_words += block_size;

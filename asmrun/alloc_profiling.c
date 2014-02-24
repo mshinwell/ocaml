@@ -32,6 +32,7 @@
 #endif
 #include <unistd.h>
 #include <fcntl.h>
+#include <limits.h>
 
 #include "alloc.h"
 #include "gc.h"
@@ -39,6 +40,7 @@
 #include "memory.h"
 #include "minor_gc.h"
 #include "mlvalues.h"
+#include "signals.h"
 
 int ensure_alloc_profiling_dot_o_is_included = 42;
 
@@ -50,7 +52,6 @@ caml_byte_offset_of_source_location_map_elf_section_contents(value v_executable,
 #ifndef __APPLE__
   int fd;
   int bytes_read;
-  size_t offset;
   char* filename;
   char* section_name;
   Elf64_Ehdr elf_header;
@@ -387,4 +388,42 @@ caml_dump_heapgraph_from_ocaml(value node_output_file, value edge_output_file)
   caml_dump_heapgraph(String_val(node_output_file), String_val(edge_output_file));
 
   return Val_unit;
+}
+
+static uint64_t minor_min_lifetime = (uint64_t) ULLONG_MAX, minor_max_lifetime = 0;
+static uint64_t major_min_lifetime = (uint64_t) ULLONG_MAX, major_max_lifetime = 0;
+
+void
+caml_record_lifetime_sample(header_t hd, int in_major_heap)
+{
+  uint64_t allocation_time, now;
+  allocation_time = Decode_profinfo_hd(hd);
+  now = Profinfo_now;
+  if (now >= allocation_time) {
+    uint64_t lifetime = now - allocation_time;
+    if (!in_major_heap) {
+      if (lifetime < minor_min_lifetime) {
+        minor_min_lifetime = lifetime;
+      }
+      if (lifetime > minor_max_lifetime) {
+        minor_max_lifetime = lifetime;
+      }
+    }
+    else {
+      if (lifetime < major_min_lifetime) {
+        major_min_lifetime = lifetime;
+      }
+      if (lifetime > major_max_lifetime) {
+        major_max_lifetime = lifetime;
+      }
+    }
+  }
+}
+
+void
+caml_dump_lifetime_extremities(void)
+{
+  fprintf(stderr, "minor: min %Ld, max %Ld\nmajor: min %Ld, max %Ld\n",
+    (unsigned long long) minor_min_lifetime, (unsigned long long) minor_max_lifetime,
+    (unsigned long long) major_min_lifetime, (unsigned long long) major_max_lifetime);
 }

@@ -542,3 +542,9 @@ CAMLexport void caml_startup_code(
     caml_fatal_uncaught_exception(caml_exn_bucket);
   }
 }
+
+void
+caml_record_lifetime_sample(header_t hd)
+{
+  /* not supported for bytecode */
+}
