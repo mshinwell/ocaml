@@ -392,6 +392,20 @@ caml_dump_heapgraph_from_ocaml(value node_output_file, value edge_output_file)
 
 static uint64_t minor_min_lifetime = (uint64_t) ULLONG_MAX, minor_max_lifetime = 0;
 static uint64_t major_min_lifetime = (uint64_t) ULLONG_MAX, major_max_lifetime = 0;
+static uint64_t* lifetime_buckets = NULL;
+static uint64_t lifetime_bucket_width;
+static int num_lifetime_buckets = 1000;
+
+static void
+init_lifetime_buckets(void)
+{
+  char* buckets_env = getenv("CAML_LIFETIME_BUCKETS");
+  if (buckets_env) {
+    num_lifetime_buckets = atoi(buckets_env);
+  }
+  lifetime_buckets = (uint64_t*) calloc(num_lifetime_buckets, sizeof(uint64_t));
+  lifetime_bucket_width = PROFINFO_MASK / num_lifetime_buckets;
+}
 
 void
 caml_record_lifetime_sample(header_t hd, int in_major_heap)
@@ -399,8 +413,19 @@ caml_record_lifetime_sample(header_t hd, int in_major_heap)
   uint64_t allocation_time, now;
   allocation_time = Decode_profinfo_hd(hd);
   now = Profinfo_now;
+
   if (now >= allocation_time) {
-    uint64_t lifetime = now - allocation_time;
+    uint64_t lifetime = ((now - allocation_time) >> LIFETIME_SHIFT) & PROFINFO_MASK;
+    uint64_t bucket;
+
+    if (!lifetime_buckets) {
+      init_lifetime_buckets();
+    }
+
+    bucket = lifetime / lifetime_bucket_width;
+    assert(bucket < num_lifetime_buckets);
+    lifetime_buckets[bucket]++;
+
     if (!in_major_heap) {
       if (lifetime < minor_min_lifetime) {
         minor_min_lifetime = lifetime;
@@ -423,7 +448,15 @@ caml_record_lifetime_sample(header_t hd, int in_major_heap)
 void
 caml_dump_lifetime_extremities(void)
 {
+  uint64_t bucket;
+
   fprintf(stderr, "minor: min %Ld, max %Ld\nmajor: min %Ld, max %Ld\n",
     (unsigned long long) minor_min_lifetime, (unsigned long long) minor_max_lifetime,
     (unsigned long long) major_min_lifetime, (unsigned long long) major_max_lifetime);
+
+  for (bucket = 0ull; bucket < num_lifetime_buckets; bucket++) {
+    fprintf(stderr, "%lld,%lld\n",
+      (unsigned long long) (bucket * (lifetime_bucket_width << LIFETIME_SHIFT)),
+      (unsigned long long) lifetime_buckets[bucket]);
+  }
 }
