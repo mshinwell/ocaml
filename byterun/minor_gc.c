@@ -248,7 +248,7 @@ collect_lifetime_samples(void)
       ptr++;
     }
     else {
-      intnat block_size_incl_header;
+      intnat block_size_excl_header;
       header_t hd;
       value value_in_minor_heap;
 
@@ -261,22 +261,21 @@ collect_lifetime_samples(void)
 
       if (hd != 0) {
         /* If the value has not been promoted, it is about to be collected; take a lifetime
-           sample, and advance to the next value by skipping over the fields of the current
-           value. */
+           sample, and read the size of the block so we can skip to the next value. */
         caml_record_lifetime_sample(hd, 0);
-        block_size_incl_header = Wosize_val(value_in_minor_heap);
+        block_size_excl_header = Wosize_val(value_in_minor_heap);
       }
       else {
         /* If the value has been promoted, follow the forwarding pointer, and then read the
            size of the block.  This will be equal to the size of the block in the minor heap. */
         value forwarded_to = Field(value_in_minor_heap, 0);
         assert(Is_block(forwarded_to));
-        block_size_incl_header = Wosize_val(forwarded_to);
+        block_size_excl_header = Wosize_val(forwarded_to);
       }
 
       /* Move to the next value's header word.  Since [ptr] is of type [value*], it is correct
-         for [block_size_incl_header] to be measured in words. */
-      ptr += block_size_incl_header;
+         for [block_size_excl_header] to be measured in words. */
+      ptr += block_size_excl_header;
     }
   }
 }
