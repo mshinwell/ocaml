@@ -478,10 +478,13 @@ caml_dump_lifetime_extremities(void)
 
   fprintf(stderr, "total num words incl headers accounted for = %Ld\n",
     (unsigned long long) sum);
-  fprintf(stderr, "total num words allocated = %Ld\n",
+  fprintf(stderr, "total num words allocated = %Ld\nminors=%Ld majors=%Ld pw=%Ld\n",
     (unsigned long long) (caml_young_end - caml_young_ptr)
       + (unsigned long long) caml_stat_minor_words
       + (unsigned long long) caml_stat_major_words
       + (unsigned long long) caml_allocated_words
-      - (unsigned long long) caml_stat_promoted_words);
+      - (unsigned long long) caml_stat_promoted_words,
+    (unsigned long long) caml_stat_minor_words,
+    (unsigned long long) caml_stat_major_words,
+    (unsigned long long) caml_stat_promoted_words);
 }
