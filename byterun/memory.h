@@ -108,9 +108,10 @@ int caml_page_table_initialize(mlsize_t bytesize);
    allocation profiling information this should enable us to get a bit over 10^13 bytes
    as the maximum lifetime. */
 /* was 22 = 8Mb
-   now 19 = 1Mb
+   was 19 = 1Mb
+   now 16 = 128k
 */
-#define LIFETIME_SHIFT 19
+#define LIFETIME_SHIFT 16
 
 #define PROFINFO_MASK 0x3fffff
 
