@@ -117,6 +117,7 @@ int caml_page_table_initialize(mlsize_t bytesize);
 #define MY_PROFINFO \
   ((caml_lifetime_tracking \
     ? ((caml_young_end - caml_young_ptr \
+        + (intnat) caml_stat_minor_words \
         + (intnat) caml_stat_major_words + (intnat) caml_allocated_words \
         - (intnat) caml_stat_promoted_words) \
        >> LIFETIME_SHIFT) \

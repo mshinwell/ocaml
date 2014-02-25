@@ -423,17 +423,20 @@ let emit_instr fallthrough i =
             `	subq	%r15, %r14\n`;
             `	subq	$8, %rsp\n`;
             `	movapd	%xmm0, (%rsp)\n`;
+            `	{load_symbol_addr "caml_stat_minor_words"}, %r15\n`;
+            `	movsd	(%r15), %xmm0\n`;
+            `	cvttsd2siq	%xmm0, %r15\n`;
+            `	addq	%r15, %r14\n`;
             `	{load_symbol_addr "caml_stat_major_words"}, %r15\n`;
             `	movsd	(%r15), %xmm0\n`;
-            `	cvttsd2si	%xmm0, %r15\n`;
+            `	cvttsd2siq	%xmm0, %r15\n`;
             `	addq	%r15, %r14\n`;
             `	{load_symbol_addr "caml_stat_promoted_words"}, %r15\n`;
             `	movsd	(%r15), %xmm0\n`;
-            `	cvttsd2si	%xmm0, %r15\n`;
+            `	cvttsd2siq	%xmm0, %r15\n`;
             `	subq	%r15, %r14\n`;
             `	{load_symbol_addr "caml_allocated_words"}, %r15\n`;
-            `	movsd   (%r15), %xmm0\n`;
-            `	cvttsd2si       %xmm0, %r15\n`;
+            `	movq    (%r15), %r15\n`;
             `	addq    %r15, %r14\n`;
             `	sar	$19, %r14\n`;  (* see memory.h:LIFETIME_SHIFT *)
             `	movapd	(%rsp), %xmm0\n`;
