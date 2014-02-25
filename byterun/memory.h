@@ -109,13 +109,15 @@ int caml_page_table_initialize(mlsize_t bytesize);
    as the maximum lifetime. */
 #define LIFETIME_SHIFT 22
 
+#define PROFINFO_MASK 0x3fffff
+
 #define MY_PROFINFO \
   ((caml_lifetime_tracking \
     ? ((caml_young_end - caml_young_ptr \
         + (intnat) caml_stat_major_words - (intnat) caml_stat_promoted_words) \
        >> LIFETIME_SHIFT) \
     : (((intnat)__builtin_return_address(0)) >> 4)) \
-   & 0x3fffff)
+   & PROFINFO_MASK)
 
 #define Profinfo_now (MY_PROFINFO << LIFETIME_SHIFT)
 
