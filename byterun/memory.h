@@ -107,7 +107,10 @@ int caml_page_table_initialize(mlsize_t bytesize);
 /* Corresponds to measuring block lifetimes in units of 8Mb.  With the 22 bits of
    allocation profiling information this should enable us to get a bit over 10^13 bytes
    as the maximum lifetime. */
-#define LIFETIME_SHIFT 22
+/* was 22 = 8Mb
+   now 19 = 1Mb
+*/
+#define LIFETIME_SHIFT 19
 
 #define PROFINFO_MASK 0x3fffff
 
