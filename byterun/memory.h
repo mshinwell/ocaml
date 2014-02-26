@@ -111,7 +111,7 @@ int caml_page_table_initialize(mlsize_t bytesize);
    was 19 = 1Mb
    now 16 = 128k
 */
-extern int caml_lifetime_shift;
+extern uintnat caml_lifetime_shift;
 
 #define PROFINFO_MASK 0x3fffff
 
@@ -130,8 +130,8 @@ extern int caml_lifetime_shift;
 #define Decode_profinfo_hd(hd) \
   (((uint64_t) (Profinfo_hd (hd))) << (caml_lifetime_tracking ? caml_lifetime_shift : 4))
 
-extern int caml_allocation_tracing;
-extern int caml_lifetime_tracking;
+extern uintnat caml_allocation_tracing;
+extern uintnat caml_lifetime_tracking;
 extern uint64_t* caml_minor_allocation_tracing_array;
 extern uint64_t* caml_minor_allocation_tracing_array_end;
 extern uint64_t* caml_major_allocation_tracing_array;

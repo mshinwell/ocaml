@@ -14,9 +14,9 @@
 #ifndef CAML_GC_H
 #define CAML_GC_H
 
-extern int caml_allocation_tracing;
-
 #include "mlvalues.h"
+
+extern uintnat caml_allocation_tracing;
 
 #define Caml_white (0 << 8)
 #define Caml_gray  (1 << 8)

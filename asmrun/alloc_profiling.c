@@ -399,7 +399,7 @@ static uint64_t lifetime_bucket_width;
 static int num_lifetime_buckets = 1000;
 static uint64_t lifetime_priors_minor = 0;
 static uint64_t lifetime_priors_major = 0;
-extern int caml_lifetime_shift;
+extern uintnat caml_lifetime_shift;
 
 static void
 init_lifetime_buckets(void)

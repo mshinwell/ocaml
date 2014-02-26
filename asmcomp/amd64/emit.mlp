@@ -411,6 +411,23 @@ let emit_instr fallthrough i =
             (* CR mshinwell: need to emit CFI stack adjustments *)
             (* CR mshinwell: all this would be easier if major/promoted words were
                int64 values. *)
+(* CR mshinwell: consider rewriting this as per gcc output:
+   0x0000000001981aaf <+4>:     cmpl   $0x0,0x17a902a(%rip)        # 0x312aae0 <caml_lifetime_tracking>
+   0x0000000001981ab6 <+11>:    je     0x1981b02 <caml_alloc+87>
+   0x0000000001981ab8 <+13>:    cvttsd2si 0x1817107(%rip),%rax        # 0x3198bc8 <caml_stat_minor_words>
+   0x0000000001981ac1 <+22>:    add    0x180eea0(%rip),%rax        # 0x3190968 <caml_young_end>
+   0x0000000001981ac8 <+29>:    cvttsd2si 0x1817107(%rip),%rdx        # 0x3198bd8 <caml_stat_major_words>
+   0x0000000001981ad1 <+38>:    add    %rdx,%rax
+   0x0000000001981ad4 <+41>:    add    0x1817df5(%rip),%rax        # 0x31998d0 <caml_allocated_words>
+   0x0000000001981adb <+48>:    sub    0x180ee8e(%rip),%rax        # 0x3190970 <caml_young_ptr>
+   0x0000000001981ae2 <+55>:    cvttsd2si 0x18170e5(%rip),%rdx        # 0x3198bd0 <caml_stat_promoted_words>
+   0x0000000001981aeb <+64>:    sub    %rdx,%rax
+   0x0000000001981aee <+67>:    mov    0x17a643c(%rip),%ecx        # 0x3127f30 <caml_lifetime_shift>
+   0x0000000001981af4 <+73>:    sar    %cl,%rax
+   0x0000000001981af7 <+76>:    mov    %rax,%rdx
+=> 0x0000000001981afa <+79>:    and    $0x3fffff,%edx
+   0x0000000001981b00 <+85>:    jmp    0x1981b11 <caml_alloc+102>
+*)
             `	pushq	%r14\n`;
             `	{load_symbol_addr "caml_lifetime_tracking"}, %r14\n`;
             `	movq	(%r14), %r14\n`;
