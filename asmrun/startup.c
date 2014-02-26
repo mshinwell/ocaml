@@ -41,6 +41,14 @@ extern int caml_parser_trace;
 CAMLexport header_t caml_atom_table[256];
 char * caml_code_area_start, * caml_code_area_end;
 int caml_lifetime_tracking = 0;
+/* Corresponds to measuring block lifetimes in units of 8Mb.  With the 22 bits of
+   allocation profiling information this should enable us to get a bit over 10^13 bytes
+   as the maximum lifetime. */
+/* was 22 = 8Mb
+   was 19 = 1Mb
+   now 16 = 128k
+*/
+int caml_lifetime_shift = 16;
 int caml_allocation_tracing = 0;
 
 /* Initialize the atom table and the static data and code area limits. */
@@ -122,6 +130,7 @@ static void parse_camlrunparam(void)
 {
   char *opt = getenv ("OCAMLRUNPARAM");
   uintnat p;
+  uintnat lifetime_shift = caml_lifetime_shift;
 
   if (opt == NULL) opt = getenv ("CAMLRUNPARAM");
 
@@ -139,10 +148,13 @@ static void parse_camlrunparam(void)
       case 'p': caml_parser_trace = 1; break;
       case 'T': caml_allocation_tracing = 1; caml_lifetime_tracking = 0; break;
       case 'L': caml_allocation_tracing = 1; caml_lifetime_tracking = 1; break;
+      case 'I': scanmult (opt, &lifetime_shift); break;
       case 'a': scanmult (opt, &p); caml_set_allocation_policy (p); break;
       }
     }
   }
+  caml_lifetime_shift = (int) lifetime_shift;
+  /* CR mshinwell: validate [caml_lifetime_shift] */
 }
 
 size_t bytes_sufficient_for_code_section = 0;

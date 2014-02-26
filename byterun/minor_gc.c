@@ -237,8 +237,8 @@ collect_lifetime_samples(void)
      sample. */
 
   value* ptr = (value*) caml_young_ptr;
-  if (ptr < caml_young_start) {
-    ptr = caml_young_start;
+  if (ptr < (value*) caml_young_start) {
+    ptr = (value*) caml_young_start;
   }
   while (ptr < (value*) caml_young_end) {
     /* We ensure that empty words in the minor heap contain [Debug_free_minor] when using

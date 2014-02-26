@@ -393,10 +393,13 @@ caml_dump_heapgraph_from_ocaml(value node_output_file, value edge_output_file)
 static uint64_t minor_min_lifetime = (uint64_t) ULLONG_MAX, minor_max_lifetime = 0;
 static uint64_t major_min_lifetime = (uint64_t) ULLONG_MAX, major_max_lifetime = 0;
 static uint64_t lifetime_bucket_max = PROFINFO_MASK;
-static uint64_t* lifetime_buckets = NULL;
+static uint64_t* lifetime_buckets_minor = NULL;
+static uint64_t* lifetime_buckets_major = NULL;
 static uint64_t lifetime_bucket_width;
 static int num_lifetime_buckets = 1000;
-static uint64_t lifetime_priors = 0;
+static uint64_t lifetime_priors_minor = 0;
+static uint64_t lifetime_priors_major = 0;
+extern int caml_lifetime_shift;
 
 static void
 init_lifetime_buckets(void)
@@ -410,7 +413,8 @@ init_lifetime_buckets(void)
   if (bucket_max_env) {
     lifetime_bucket_max = (uint64_t) atoll(bucket_max_env);
   }
-  lifetime_buckets = (uint64_t*) calloc(num_lifetime_buckets, sizeof(uint64_t));
+  lifetime_buckets_minor = (uint64_t*) calloc(num_lifetime_buckets, sizeof(uint64_t));
+  lifetime_buckets_major = (uint64_t*) calloc(num_lifetime_buckets, sizeof(uint64_t));
   lifetime_bucket_width = lifetime_bucket_max / (num_lifetime_buckets - 1);
 }
 
@@ -422,10 +426,10 @@ caml_record_lifetime_sample(header_t hd, int in_major_heap)
   now = Profinfo_now;
 
   if (now >= allocation_time) {
-    uint64_t lifetime = (now - allocation_time) >> LIFETIME_SHIFT;
+    uint64_t lifetime = (now - allocation_time) >> caml_lifetime_shift;
     uint64_t bucket;
 
-    if (!lifetime_buckets) {
+    if (!lifetime_buckets_minor) {
       init_lifetime_buckets();
     }
 
@@ -433,28 +437,34 @@ caml_record_lifetime_sample(header_t hd, int in_major_heap)
       lifetime = lifetime_bucket_max;
     }
     bucket = lifetime / lifetime_bucket_width;
-    assert(bucket < num_lifetime_buckets);
-    lifetime_buckets[bucket] += (1 + Wosize_hd(hd));
-
-    if (!in_major_heap) {
-      if (lifetime < minor_min_lifetime) {
-        minor_min_lifetime = lifetime;
+    if (bucket < num_lifetime_buckets) {
+      if (!in_major_heap) {
+        lifetime_buckets_minor[bucket] += Wosize_hd(hd);
+        if (lifetime < minor_min_lifetime) {
+          minor_min_lifetime = lifetime;
+        }
+        if (lifetime > minor_max_lifetime) {
+          minor_max_lifetime = lifetime;
+        }
       }
-      if (lifetime > minor_max_lifetime) {
-        minor_max_lifetime = lifetime;
-      }
-    }
-    else {
-      if (lifetime < major_min_lifetime) {
-        major_min_lifetime = lifetime;
-      }
-      if (lifetime > major_max_lifetime) {
-        major_max_lifetime = lifetime;
+      else {
+        lifetime_buckets_major[bucket] += Wosize_hd(hd);
+        if (lifetime < major_min_lifetime) {
+          major_min_lifetime = lifetime;
+        }
+        if (lifetime > major_max_lifetime) {
+          major_max_lifetime = lifetime;
+        }
       }
     }
   }
   else {
-    lifetime_priors++;
+    if (!in_major_heap) {
+      lifetime_priors_minor++;
+    }
+    else {
+      lifetime_priors_major++;
+    }
   }
 }
 
@@ -464,20 +474,34 @@ caml_dump_lifetime_extremities(void)
   uint64_t bucket;
   uint64_t sum = 0;
 
-  fprintf(stderr, "minor: min %Ld, max %Ld\nmajor: min %Ld, max %Ld, priors %Ld\n",
+  fprintf(stderr, "minor: min %Ld, max %Ld\nmajor: min %Ld, max %Ld, min-ps=%Ld maj-ps=%Ld\n",
     (unsigned long long) minor_min_lifetime, (unsigned long long) minor_max_lifetime,
     (unsigned long long) major_min_lifetime, (unsigned long long) major_max_lifetime,
-    (unsigned long long) lifetime_priors);
+    (unsigned long long) lifetime_priors_minor,
+    (unsigned long long) lifetime_priors_major);
 
+  fprintf(stderr, "lifetime buckets for values that died in the minor heap:\n");
   for (bucket = 0ull; bucket < num_lifetime_buckets; bucket++) {
     fprintf(stderr, "%lld,%lld\n",
-      (unsigned long long) (bucket * (lifetime_bucket_width << LIFETIME_SHIFT)),
-      (unsigned long long) lifetime_buckets[bucket]);
-    sum += lifetime_buckets[bucket];
+      (unsigned long long) (bucket * (lifetime_bucket_width << caml_lifetime_shift)),
+      (unsigned long long) lifetime_buckets_minor[bucket]);
+    sum += lifetime_buckets_minor[bucket];
   }
-
-  fprintf(stderr, "total num words incl headers accounted for = %Ld\n",
+  fprintf(stderr, "total num minor words incl headers accounted for = %Ld\n",
     (unsigned long long) sum);
+
+  sum = 0;
+
+  fprintf(stderr, "lifetime buckets for values that died in the major heap:\n");
+  for (bucket = 0ull; bucket < num_lifetime_buckets; bucket++) {
+    fprintf(stderr, "%lld,%lld\n",
+      (unsigned long long) (bucket * (lifetime_bucket_width << caml_lifetime_shift)),
+      (unsigned long long) lifetime_buckets_major[bucket]);
+    sum += lifetime_buckets_major[bucket];
+  }
+  fprintf(stderr, "total num major words incl headers accounted for = %Ld\n",
+    (unsigned long long) sum);
+
   fprintf(stderr, "total num words allocated = %Ld\nminors=%Ld majors=%Ld pw=%Ld\n",
     (unsigned long long) (caml_young_end - caml_young_ptr)
       + (unsigned long long) caml_stat_minor_words

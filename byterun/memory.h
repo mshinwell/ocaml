@@ -111,7 +111,7 @@ int caml_page_table_initialize(mlsize_t bytesize);
    was 19 = 1Mb
    now 16 = 128k
 */
-#define LIFETIME_SHIFT 16
+extern int caml_lifetime_shift;
 
 #define PROFINFO_MASK 0x3fffff
 
@@ -121,14 +121,14 @@ int caml_page_table_initialize(mlsize_t bytesize);
         + (intnat) caml_stat_minor_words \
         + (intnat) caml_stat_major_words + (intnat) caml_allocated_words \
         - (intnat) caml_stat_promoted_words) \
-       >> LIFETIME_SHIFT) \
+       >> caml_lifetime_shift) \
     : (((intnat)__builtin_return_address(0)) >> 4)) \
    & PROFINFO_MASK)
 
-#define Profinfo_now (MY_PROFINFO << LIFETIME_SHIFT)
+#define Profinfo_now (MY_PROFINFO << caml_lifetime_shift)
 
 #define Decode_profinfo_hd(hd) \
-  (((uint64_t) (Profinfo_hd (hd))) << (caml_lifetime_tracking ? LIFETIME_SHIFT : 4))
+  (((uint64_t) (Profinfo_hd (hd))) << (caml_lifetime_tracking ? caml_lifetime_shift : 4))
 
 extern int caml_allocation_tracing;
 extern int caml_lifetime_tracking;

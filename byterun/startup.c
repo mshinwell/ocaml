@@ -63,6 +63,7 @@
 
 extern int caml_parser_trace;
 
+int caml_lifetime_shift = 0;
 int caml_lifetime_tracking = 0;
 int caml_allocation_tracing = 0;
 uint64_t* caml_minor_allocation_tracing_array = NULL;

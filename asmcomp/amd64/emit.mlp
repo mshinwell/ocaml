@@ -405,6 +405,8 @@ let emit_instr fallthrough i =
           | Some label -> begin
             assert (n <= 0xffff_ffffn);
             let lifetime_tracking_label = new_label () in
+            let shift_label = new_label () in
+            let shift_end_label = new_label () in
             let end_label = new_label () in
             (* CR mshinwell: need to emit CFI stack adjustments *)
             (* CR mshinwell: all this would be easier if major/promoted words were
@@ -438,7 +440,16 @@ let emit_instr fallthrough i =
             `	{load_symbol_addr "caml_allocated_words"}, %r15\n`;
             `	movq    (%r15), %r15\n`;
             `	addq    %r15, %r14\n`;
-            `	sar	$16, %r14\n`;  (* see memory.h:LIFETIME_SHIFT *)
+            `	{load_symbol_addr "caml_lifetime_shift"}, %r15\n`;
+            `	movq    (%r15), %r15\n`;
+            `	subq    $4, %r15\n`;  (* since the mask below is shifted 4 bits to the left *)
+            `	cmp	$1, %r15\n`;
+            `	jl	{emit_label shift_end_label}\n`;
+            `	.align 16\n{emit_label shift_label}:`;
+            `	sar	%r14\n`;
+            `	subq    $1, %r15\n`;
+            `	jne	{emit_label shift_label}\n`;
+            `	.align 16\n{emit_label shift_end_label}:`;
             `	movapd	(%rsp), %xmm0\n`;
             `	addq	$8, %rsp\n`;
             `	popq	%r15\n`;
