@@ -115,12 +115,15 @@ extern uintnat caml_lifetime_shift;
 
 #define PROFINFO_MASK 0x3fffff
 
+/*
+        + (intnat) caml_stat_major_words + (intnat) caml_allocated_words \
+        - (intnat) caml_stat_promoted_words) \
+*/
+
 #define MY_PROFINFO \
   ((caml_lifetime_tracking \
     ? ((caml_young_end - caml_young_ptr \
-        + (intnat) caml_stat_minor_words \
-        + (intnat) caml_stat_major_words + (intnat) caml_allocated_words \
-        - (intnat) caml_stat_promoted_words) \
+        + (intnat) caml_stat_minor_words) \
        >> caml_lifetime_shift) \
     : (((intnat)__builtin_return_address(0)) >> 4)) \
    & PROFINFO_MASK)

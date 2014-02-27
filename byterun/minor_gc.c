@@ -256,8 +256,13 @@ collect_lifetime_samples(void)
          it points at the first field, then extract the header. */
       ptr++;
       value_in_minor_heap = (value) ptr;
+      assert(Is_young(value_in_minor_heap));
       assert(Is_block(value_in_minor_heap));
+
       hd = Hd_val(value_in_minor_heap);
+
+      /* CR mshinwell: can probably assert that the tag of [value_in_minor_heap] is
+         never [Infix_tag]. */
 
       if (hd != 0) {
         /* If the value has not been promoted, it is about to be collected; take a lifetime
@@ -304,7 +309,9 @@ void caml_empty_minor_heap (void)
         }
       }
     }
-    collect_lifetime_samples();
+    if (caml_lifetime_tracking) {
+      collect_lifetime_samples();
+    }
     if (caml_young_ptr < caml_young_start) caml_young_ptr = caml_young_start;
     caml_stat_minor_words += Wsize_bsize (caml_young_end - caml_young_ptr);
     caml_young_ptr = caml_young_end;

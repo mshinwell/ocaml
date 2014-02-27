@@ -424,11 +424,13 @@ let emit_instr fallthrough i =
             `	subq	%r15, %r14\n`;  (* %r15 = caml_young_ptr *)
             `	cvttsd2siq	{emit_symbol "caml_stat_minor_words"}(%rip), %r15\n`;
             `	addq	%r15, %r14\n`;
+(*
             `	cvttsd2siq	{emit_symbol "caml_stat_major_words"}(%rip), %r15\n`;
             `	addq	%r15, %r14\n`;
             `	cvttsd2siq	{emit_symbol "caml_stat_promoted_words"}(%rip), %r15\n`;
             `	subq	%r15, %r14\n`;
             `	addq    {emit_symbol "caml_allocated_words"}(%rip), %r14\n`;
+*)
             `	movq    {emit_symbol "caml_lifetime_shift"}(%rip), %r15\n`;
             `	subq    $4, %r15\n`;  (* since the mask below is shifted 4 bits to the left *)
             `	cmp	$1, %r15\n`;

@@ -482,7 +482,7 @@ caml_dump_lifetime_extremities(void)
 
   fprintf(stderr, "lifetime buckets for values that died in the minor heap:\n");
   for (bucket = 0ull; bucket < num_lifetime_buckets; bucket++) {
-    fprintf(stderr, "%lld,%lld\n",
+    fprintf(stderr, "%lld %lld\n",
       (unsigned long long) (bucket * (lifetime_bucket_width << caml_lifetime_shift)),
       (unsigned long long) lifetime_buckets_minor[bucket]);
     sum += lifetime_buckets_minor[bucket];
