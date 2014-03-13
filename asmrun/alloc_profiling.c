@@ -425,45 +425,47 @@ caml_record_lifetime_sample(header_t hd, int in_major_heap)
   allocation_time = Decode_profinfo_hd(hd);
   now = Profinfo_now;
 
-  if (now >= allocation_time) {
-    uint64_t lifetime = (now - allocation_time) >> caml_lifetime_shift;
-    uint64_t bucket;
+  if (allocation_time > 0) {  /* in case we failed to annotate a block */
+    if (now >= allocation_time) {
+      uint64_t lifetime = (now - allocation_time) >> caml_lifetime_shift;
+      uint64_t bucket;
 
-    if (!lifetime_buckets_minor) {
-      init_lifetime_buckets();
-    }
+      if (!lifetime_buckets_minor) {
+        init_lifetime_buckets();
+      }
 
-    if (lifetime > lifetime_bucket_max) {
-      lifetime = lifetime_bucket_max;
-    }
-    bucket = lifetime / lifetime_bucket_width;
-    if (bucket < num_lifetime_buckets) {
-      if (!in_major_heap) {
-        lifetime_buckets_minor[bucket] += Wosize_hd(hd);
-        if (lifetime < minor_min_lifetime) {
-          minor_min_lifetime = lifetime;
+      if (lifetime > lifetime_bucket_max) {
+        lifetime = lifetime_bucket_max;
+      }
+      bucket = lifetime / lifetime_bucket_width;
+      if (bucket < num_lifetime_buckets) {
+        if (!in_major_heap) {
+          lifetime_buckets_minor[bucket] += Wosize_hd(hd);
+          if (lifetime < minor_min_lifetime) {
+            minor_min_lifetime = lifetime;
+          }
+          if (lifetime > minor_max_lifetime) {
+            minor_max_lifetime = lifetime;
+          }
         }
-        if (lifetime > minor_max_lifetime) {
-          minor_max_lifetime = lifetime;
+        else {
+          lifetime_buckets_major[bucket] += Wosize_hd(hd);
+          if (lifetime < major_min_lifetime) {
+            major_min_lifetime = lifetime;
+          }
+          if (lifetime > major_max_lifetime) {
+            major_max_lifetime = lifetime;
+          }
         }
       }
-      else {
-        lifetime_buckets_major[bucket] += Wosize_hd(hd);
-        if (lifetime < major_min_lifetime) {
-          major_min_lifetime = lifetime;
-        }
-        if (lifetime > major_max_lifetime) {
-          major_max_lifetime = lifetime;
-        }
-      }
-    }
-  }
-  else {
-    if (!in_major_heap) {
-      lifetime_priors_minor++;
     }
     else {
-      lifetime_priors_major++;
+      if (!in_major_heap) {
+        lifetime_priors_minor++;
+      }
+      else {
+        lifetime_priors_major++;
+      }
     }
   }
 }
