@@ -423,6 +423,7 @@ let emit_instr fallthrough i =
             `	movq	{emit_symbol "caml_young_end"}(%rip), %r14\n`;
             `	subq	%r15, %r14\n`;  (* %r15 = caml_young_ptr *)
             `	cvttsd2siq	{emit_symbol "caml_stat_minor_words"}(%rip), %r15\n`;
+            `	sal	$3, %r15\n`; (* CR mshinwell: should be configurable (=log2 word size) *)
             `	addq	%r15, %r14\n`;
 (*
             `	cvttsd2siq	{emit_symbol "caml_stat_major_words"}(%rip), %r15\n`;

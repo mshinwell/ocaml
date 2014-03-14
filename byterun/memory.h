@@ -123,7 +123,7 @@ extern uintnat caml_lifetime_shift;
 #define MY_PROFINFO \
   ((caml_lifetime_tracking \
     ? ((caml_young_end - caml_young_ptr \
-        + (intnat) caml_stat_minor_words) \
+        + (intnat) (caml_stat_minor_words * sizeof(intnat))) \
        >> caml_lifetime_shift) \
     : (((intnat)__builtin_return_address(0)) >> 4)) \
    & PROFINFO_MASK)
