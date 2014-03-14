@@ -474,8 +474,16 @@ void
 caml_dump_lifetime_extremities(void)
 {
   uint64_t bucket;
-  uint64_t sum = 0;
 
+  for (bucket = 0ull; bucket < num_lifetime_buckets; bucket++) {
+    fprintf(stderr, "%lld %lld %lld\n",
+      (unsigned long long) (bucket * (lifetime_bucket_width << caml_lifetime_shift)),
+      (unsigned long long) lifetime_buckets_minor[bucket],
+      (unsigned long long) lifetime_buckets_major[bucket]);
+  }
+
+/*
+  uint64_t sum = 0;
   fprintf(stderr, "minor: min %Ld, max %Ld\nmajor: min %Ld, max %Ld, min-ps=%Ld maj-ps=%Ld\n",
     (unsigned long long) minor_min_lifetime, (unsigned long long) minor_max_lifetime,
     (unsigned long long) major_min_lifetime, (unsigned long long) major_max_lifetime,
@@ -513,4 +521,5 @@ caml_dump_lifetime_extremities(void)
     (unsigned long long) caml_stat_minor_words,
     (unsigned long long) caml_stat_major_words,
     (unsigned long long) caml_stat_promoted_words);
+*/
 }
