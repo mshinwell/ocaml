@@ -457,8 +457,12 @@ caml_record_lifetime_sample(header_t hd, int in_major_heap)
         bucket = (log10_lifetime - lifetime_log10_bytes_min) / lifetime_bucket_width;
 
         if (bucket >= 0 && bucket < num_lifetime_buckets) {  /* just in case */
-          lifetime_buckets_minor[bucket] += Wosize_hd(hd);
-          lifetime_buckets_major[bucket] += Wosize_hd(hd);
+          if (in_major_heap) {
+            lifetime_buckets_major[bucket] += Wosize_hd(hd);
+          }
+          else {
+            lifetime_buckets_minor[bucket] += Wosize_hd(hd);
+          }
         }
       }
     }
@@ -474,9 +478,12 @@ caml_dump_lifetimes(void)
     double centre_of_bucket =
       (lifetime_bucket_width * (double) bucket) + (lifetime_bucket_width / 2.0);
 
-    fprintf(stderr, "%g %lld %lld\n",
-      centre_of_bucket,
-      (unsigned long long) lifetime_buckets_minor[bucket],
-      (unsigned long long) lifetime_buckets_major[bucket]);
+    if (lifetime_buckets_minor[bucket] != 0ull
+          || lifetime_buckets_major[bucket] != 0ull) {
+      fprintf(stderr, "%g %lld %lld\n",
+        centre_of_bucket,
+        (unsigned long long) lifetime_buckets_minor[bucket],
+        (unsigned long long) lifetime_buckets_major[bucket]);
+    }
   }
 }
