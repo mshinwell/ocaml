@@ -481,7 +481,7 @@ caml_dump_lifetimes(void)
     if (lifetime_buckets_minor[bucket] != 0ull
           || lifetime_buckets_major[bucket] != 0ull) {
       fprintf(stderr, "%g %lld %lld\n",
-        centre_of_bucket,
+        lifetime_log10_bytes_min + centre_of_bucket,
         (unsigned long long) lifetime_buckets_minor[bucket],
         (unsigned long long) lifetime_buckets_major[bucket]);
     }
