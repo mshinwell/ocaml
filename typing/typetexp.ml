@@ -69,7 +69,8 @@ let warning_attribute attrs =
     (function
       | ({txt = "warning"; loc}, payload) ->
           begin match payload with
-          | PStr [{pstr_desc=Pstr_eval({pexp_desc=Pexp_constant(Const_string(s, _))}, _)}] ->
+          | PStr [{pstr_desc=Pstr_eval
+                     ({pexp_desc=Pexp_constant(Const_string(s, _))}, _)}] ->
               if !prev_warnings = None then
                 prev_warnings := Some (Warnings.backup ());
               begin try Warnings.parse_options false s
@@ -207,7 +208,7 @@ let create_package_mty fake loc env (p, l) =
       (fun (s1, t1) (s2, t2) ->
          if s1.txt = s2.txt then
            raise (Error (loc, env, Multiple_constraints_on_type s1.txt));
-         compare s1 s2)
+         compare s1.txt s2.txt)
       l
   in
   l,
@@ -292,7 +293,8 @@ type policy = Fixed | Extensible | Univars
 let rec transl_type env policy styp =
   let loc = styp.ptyp_loc in
   let ctyp ctyp_desc ctyp_type =
-    { ctyp_desc; ctyp_type; ctyp_env = env; ctyp_loc = loc; ctyp_attributes = styp.ptyp_attributes }
+    { ctyp_desc; ctyp_type; ctyp_env = env;
+      ctyp_loc = loc; ctyp_attributes = styp.ptyp_attributes }
   in
   match styp.ptyp_desc with
     Ptyp_any ->
