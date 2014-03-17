@@ -44,7 +44,7 @@ let transl_exception path decl =
     | Some p -> Path.name p
   in
   Lprim(prim_set_oo_id,
-        [Lprim(Pmakeblock(Obj.object_tag, Immutable),
+        [Lprim(Pmakeblock(Obj.object_tag, Mutable),
               [Lconst(Const_base(Const_string (name,None)));
                Lconst(Const_base(Const_int 0))])])
 
@@ -159,9 +159,10 @@ let undefined_location loc =
 let init_shape modl =
   let rec init_shape_mod env mty =
     match Mtype.scrape env mty with
-      Mty_ident _
-    | Mty_alias _ ->
+      Mty_ident _ ->
         raise Not_found
+    | Mty_alias _ ->
+        Const_block (1, [Const_pointer 0])
     | Mty_signature sg ->
         Const_block(0, [Const_block(0, init_shape_struct env sg)])
     | Mty_functor(id, arg, res) ->

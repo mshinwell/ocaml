@@ -465,6 +465,15 @@ let strengthen_approx appl approx =
 let check_constant_result lam ulam approx =
   match approx with
     Value_const c when is_pure lam -> make_const c
+  | Value_global_field (id, i) when is_pure lam ->
+      begin match ulam with
+      | Uprim(Pfield _, [Uprim(Pgetglobal _, _, _)], _) -> (ulam, approx)
+      | _ ->
+          let glb =
+            Uprim(Pgetglobal (Ident.create_persistent id), [], Debuginfo.none)
+          in
+          Uprim(Pfield i, [glb], Debuginfo.none), approx
+      end
   | _ -> (ulam, approx)
 
 (* Evaluate an expression with known value for its side effects only,
@@ -679,7 +688,8 @@ let rec close fenv cenv = function
                             fieldapprox
   | Lprim(Psetfield(n, _), [Lprim(Pgetglobal id, []); lam]) ->
       let (ulam, approx) = close fenv cenv lam in
-      (!global_approx).(n) <- approx;
+      if approx <> Value_unknown then
+        (!global_approx).(n) <- approx;
       (Uprim(Psetfield(n, false), [getglobal id; ulam], Debuginfo.none),
        Value_unknown)
   | Lprim(Praise k, [Levent(arg, ev)]) ->
@@ -854,6 +864,7 @@ and close_functions fenv cenv fun_defs =
   (* Return the Uclosure node and the list of all identifiers defined,
      with offsets and approximations. *)
   let (clos, infos) = List.split clos_info_list in
+  let fv = if !useless_env then [] else fv in
   (Uclosure(clos, List.map (close_var fenv cenv) fv), infos)
 
 (* Same, for one non-recursive function *)
@@ -910,7 +921,7 @@ let collect_exported_structured_constants a =
         end
     | Value_tuple a -> Array.iter approx a
     | Value_const c -> const c
-    | Value_unknown -> ()
+    | Value_unknown | Value_global_field _ -> ()
   and const = function
     | Uconst_ref (s, c) ->
         Compilenv.add_exported_constant s;
@@ -953,7 +964,8 @@ let collect_exported_structured_constants a =
 
 let intro size lam =
   function_nesting_depth := 0;
-  global_approx := Array.create size Value_unknown;
+  let id = Compilenv.make_symbol None in
+  global_approx := Array.init size (fun i -> Value_global_field (id, i));
   Compilenv.set_global_approx(Value_tuple !global_approx);
   let (ulam, approx) = close Tbl.empty Tbl.empty lam in
   collect_exported_structured_constants (Value_tuple !global_approx);
