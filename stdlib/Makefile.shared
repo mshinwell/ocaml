@@ -15,10 +15,10 @@ include ../config/Makefile
 RUNTIME=../boot/ocamlrun
 COMPILER=../ocamlc
 CAMLC=$(RUNTIME) $(COMPILER)
-COMPFLAGS=-strict-sequence -w +33..39 -g -warn-error A -nostdlib
+COMPFLAGS=-strict-sequence -w +33..39 -g -warn-error A -bin-annot -nostdlib
 OPTCOMPILER=../ocamlopt
 CAMLOPT=$(RUNTIME) $(OPTCOMPILER)
-OPTCOMPFLAGS=-warn-error A -nostdlib -g -allocation-tracing
+OPTCOMPFLAGS=-warn-error A -nostdlib -g -allocation-tracing -bin-annot
 CAMLDEP=../boot/ocamlrun ../tools/ocamldep
 
 OBJS=pervasives.cmo $(OTHERS)
@@ -40,7 +40,7 @@ OTHERS=array.cmo list.cmo char.cmo string.cmo sys.cmo \
 all: stdlib.cma std_exit.cmo camlheader camlheader_ur
 
 install: install-$(RUNTIMED)
-	cp stdlib.cma std_exit.cmo *.cmi *.mli *.ml camlheader camlheader_ur \
+	cp stdlib.cma std_exit.cmo *.cmi *.mli *.ml *.cmt *.cmti camlheader camlheader_ur \
 	  $(LIBDIR)
 
 install-noruntimed:
