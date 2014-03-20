@@ -831,6 +831,7 @@ method emit_fundecl f =
        assignments, such as hard registers. *)
     Array.init (Array.length loc_arg) (fun index ->
       let reg =
+        assert (not (Reg.anonymous rarg.(index)));  (* see [rargs] defn. *)
         Reg.identical_except_in_name loc_arg.(index) rarg.(index).raw_name
       in
       begin match parts.(index) with
