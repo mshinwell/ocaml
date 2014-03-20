@@ -88,8 +88,14 @@ let clone r =
   nr.raw_name <- r.raw_name;
   nr
 
-let identical_except_in_name r raw_name =
-  { r with raw_name; }
+let identical_except_in_name r ~from =
+  { r with raw_name = from.raw_name; }
+
+let identical_except_in_namev rs ~from =
+  if Array.length rs <> Array.length from then
+    failwith "Reg.identical_except_in_namev with different length arrays";
+  Array.init (Array.length rs)
+    (fun index -> identical_except_in_name rs.(index) ~from:from.(index))
 
 let at_location ty loc =
   let r = { raw_name = Raw_name.R; stamp = !currstamp; typ = ty; loc;

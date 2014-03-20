@@ -352,8 +352,11 @@ method extract =
 (* Insert a sequence of moves from one pseudoreg set to another. *)
 
 method insert_move src dst =
-  if src.stamp <> dst.stamp then
-    self#insert (Iop Imove) [|src|] [|dst|]
+  if src.stamp <> dst.stamp then begin
+    self#insert (Iop Imove) [|src|] [|dst|];
+    if not (Reg.anonymous src) && Reg.anonymous dst then
+      dst.Reg.raw_name <- src.Reg.raw_name
+  end
 
 method insert_moves src dst =
   for i = 0 to min (Array.length src) (Array.length dst) - 1 do
@@ -383,6 +386,12 @@ method insert_op op rs rd =
 
 (* Add the instructions for the given expression
    at the end of the self sequence *)
+
+(* CR mshinwell: find what produces:
+    A/114[%rdi] := [env/150[%rax] + 56]
+   which is presumably a closure environment access, and then name (in this
+   case) %rdi according to the name of the free variable.
+*)
 
 method emit_expr env exp =
   match exp with
@@ -442,7 +451,9 @@ method emit_expr env exp =
       begin match self#emit_expr env arg with
         None -> None
       | Some r1 ->
-          let rd = [|Proc.loc_exn_bucket|] in
+          let rd =
+            Reg.identical_except_in_namev [| Proc.loc_exn_bucket |] ~from:r1
+          in
           self#insert (Iop Imove) r1 rd;
           self#insert_debug (Iraise k) dbg rd [||];
           None
@@ -463,7 +474,11 @@ method emit_expr env exp =
               let rarg = Array.sub r1 1 (Array.length r1 - 1) in
               let rd = self#regs_for ty in
               let (loc_arg, stack_ofs) = Proc.loc_arguments rarg in
+              assert (Array.length rarg = Array.length loc_arg);
+              let loc_arg = Reg.identical_except_in_namev loc_arg ~from:rarg in
               let loc_res = Proc.loc_results rd in
+              assert (Array.length rd = Array.length loc_res);
+              let loc_res = Reg.identical_except_in_namev loc_res ~from:rd in
               self#insert_move_args rarg loc_arg stack_ofs;
               self#insert_debug (Iop Icall_ind) dbg
                           (Array.append [|r1.(0)|] loc_arg) loc_res;
@@ -474,7 +489,11 @@ method emit_expr env exp =
               let r1 = self#emit_tuple env new_args in
               let rd = self#regs_for ty in
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
+              assert (Array.length r1 = Array.length loc_arg);
+              let loc_arg = Reg.identical_except_in_namev loc_arg ~from:r1 in
               let loc_res = Proc.loc_results rd in
+              assert (Array.length rd = Array.length loc_res);
+              let loc_res = Reg.identical_except_in_namev loc_res ~from:rd in
               self#insert_move_args r1 loc_arg stack_ofs;
               self#insert_debug (Iop(Icall_imm lbl)) dbg loc_arg loc_res;
               self#insert_move_results loc_res rd stack_ofs;
@@ -484,8 +503,11 @@ method emit_expr env exp =
               let (loc_arg, stack_ofs) =
                 self#emit_extcall_args env new_args in
               let rd = self#regs_for ty in
+              let loc_res = Proc.loc_external_results rd in
+              assert (Array.length rd = Array.length loc_res);
+              let loc_res = Reg.identical_except_in_namev loc_res ~from:rd in
               let loc_res = self#insert_op_debug (Iextcall(lbl, alloc)) dbg
-                                    loc_arg (Proc.loc_external_results rd) in
+                                    loc_arg loc_res in
               self#insert_move_results loc_res rd stack_ofs;
               Some rd
           | Ialloc _ ->
@@ -569,9 +591,12 @@ method emit_expr env exp =
       let rv = self#regs_for typ_addr in
       let (r2, s2) = self#emit_sequence (Tbl.add v rv env) e2 in
       let r = join r1 s1 r2 s2 in
+      let loc =
+        Reg.identical_except_in_namev [| Proc.loc_exn_bucket |] ~from:rv
+      in
       self#insert
         (Itrywith(s1#extract,
-                  instr_cons (Iop Imove) [|Proc.loc_exn_bucket|] rv
+                  instr_cons (Iop Imove) loc rv
                              (s2#extract)))
         [||] [||];
       r
@@ -643,6 +668,8 @@ method private emit_tuple env exp_list =
 method emit_extcall_args env args =
   let r1 = self#emit_tuple env args in
   let (loc_arg, stack_ofs as arg_stack) = Proc.loc_external_arguments r1 in
+  assert (Array.length r1 = Array.length loc_arg);
+  let loc_arg = Reg.identical_except_in_namev loc_arg ~from:r1 in
   self#insert_move_args r1 loc_arg stack_ofs;
   arg_stack
 
@@ -676,6 +703,8 @@ method private emit_return env exp =
     None -> ()
   | Some r ->
       let loc = Proc.loc_results r in
+      assert (Array.length r = Array.length loc);
+      let loc = Reg.identical_except_in_namev loc ~from:r in
       self#insert_moves r loc;
       self#insert Ireturn loc [||]
 
@@ -696,6 +725,8 @@ method emit_tail env exp =
               let r1 = self#emit_tuple env new_args in
               let rarg = Array.sub r1 1 (Array.length r1 - 1) in
               let (loc_arg, stack_ofs) = Proc.loc_arguments rarg in
+              assert (Array.length rarg = Array.length loc_arg);
+              let loc_arg = Reg.identical_except_in_namev loc_arg ~from:rarg in
               if stack_ofs = 0 then begin
                 self#insert_moves rarg loc_arg;
                 self#insert (Iop Itailcall_ind)
@@ -704,6 +735,8 @@ method emit_tail env exp =
                 Proc.contains_calls := true;
                 let rd = self#regs_for ty in
                 let loc_res = Proc.loc_results rd in
+                assert (Array.length rd = Array.length loc_res);
+                let loc_res = Reg.identical_except_in_namev loc_res ~from:rd in
                 self#insert_move_args rarg loc_arg stack_ofs;
                 self#insert_debug (Iop Icall_ind) dbg
                             (Array.append [|r1.(0)|] loc_arg) loc_res;
@@ -713,17 +746,25 @@ method emit_tail env exp =
           | Icall_imm lbl ->
               let r1 = self#emit_tuple env new_args in
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
+              assert (Array.length r1 = Array.length loc_arg);
+              let loc_arg = Reg.identical_except_in_namev loc_arg ~from:r1 in
               if stack_ofs = 0 then begin
                 self#insert_moves r1 loc_arg;
                 self#insert (Iop(Itailcall_imm lbl)) loc_arg [||]
               end else if lbl = !current_function_name then begin
                 let loc_arg' = Proc.loc_parameters r1 in
+                assert (Array.length r1 = Array.length loc_arg');
+                let loc_arg' =
+                  Reg.identical_except_in_namev loc_arg' ~from:r1
+                in
                 self#insert_moves r1 loc_arg';
                 self#insert (Iop(Itailcall_imm lbl)) loc_arg' [||]
               end else begin
                 Proc.contains_calls := true;
                 let rd = self#regs_for ty in
                 let loc_res = Proc.loc_results rd in
+                assert (Array.length rd = Array.length loc_res);
+                let loc_res = Reg.identical_except_in_namev loc_res ~from:rd in
                 self#insert_move_args r1 loc_arg stack_ofs;
                 self#insert_debug (Iop(Icall_imm lbl)) dbg loc_arg loc_res;
                 self#insert(Iop(Istackoffset(-stack_ofs))) [||] [||];
@@ -775,14 +816,19 @@ method emit_tail env exp =
       let (opt_r1, s1) = self#emit_sequence env e1 in
       let rv = self#regs_for typ_addr in
       let s2 = self#emit_tail_sequence (Tbl.add v rv env) e2 in
+      let loc =
+        Reg.identical_except_in_namev [| Proc.loc_exn_bucket |] ~from:rv
+      in
       self#insert
         (Itrywith(s1#extract,
-                  instr_cons (Iop Imove) [|Proc.loc_exn_bucket|] rv s2))
+                  instr_cons (Iop Imove) loc rv s2))
         [||] [||];
       begin match opt_r1 with
         None -> ()
       | Some r1 ->
           let loc = Proc.loc_results r1 in
+          assert (Array.length r1 = Array.length loc);
+          let loc = Reg.identical_except_in_namev loc ~from:r1 in
           self#insert_moves r1 loc;
           self#insert Ireturn loc [||]
       end
@@ -832,7 +878,7 @@ method emit_fundecl f =
     Array.init (Array.length loc_arg) (fun index ->
       let reg =
         assert (not (Reg.anonymous rarg.(index)));  (* see [rargs] defn. *)
-        Reg.identical_except_in_name loc_arg.(index) rarg.(index).raw_name
+        Reg.identical_except_in_name loc_arg.(index) ~from:rarg.(index)
       in
       begin match parts.(index) with
       | None -> ()

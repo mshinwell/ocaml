@@ -45,9 +45,11 @@ val create: Cmm.machtype_component -> t
 val createv: Cmm.machtype -> t array
 val createv_like: t array -> t array
 val clone: t -> t
-(* [identical_except_in_name t name] returns a copy of [t] that is the same in
-   all respects, including the stamp, as [t]---but has a new raw [name]. *)
-val identical_except_in_name : t -> Raw_name.t -> t
+(* [identical_except_in_name t ~from] returns a copy of [t] that is the same in
+   all respects, including the stamp, as [t]---but has the raw name of
+   [from]. *)
+val identical_except_in_name : t -> from:t -> t
+val identical_except_in_namev : t array -> from:t array -> t array
 val at_location: Cmm.machtype_component -> location -> t
 
 val anonymous : t -> bool
