@@ -88,6 +88,9 @@ let clone r =
   nr.raw_name <- r.raw_name;
   nr
 
+let identical_except_in_name r raw_name =
+  { r with raw_name; }
+
 let at_location ty loc =
   let r = { raw_name = Raw_name.R; stamp = !currstamp; typ = ty; loc;
             spill = false; interf = []; prefer = []; degree = 0;

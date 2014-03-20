@@ -804,7 +804,41 @@ method emit_fundecl f =
       (fun (id, ty) -> let r = self#regs_for ty in name_regs id r; r)
       f.Cmm.fun_args in
   let rarg = Array.concat rargs in
-  let loc_arg = Proc.loc_parameters rarg in
+  (* [parts] corresponds elementwise to [rarg] and identifies, for each
+     register in [rarg], which part of a value split across multiple registers
+     it corresponds to.  [None] is used to indicate that a value fits within
+     a single register. *)
+  let parts =
+    let parts_array arr =
+      if Array.length arr <= 1 then
+        [| None |]
+      else
+        Array.init (Array.length arr) (fun index -> Some index)
+    in
+    Array.concat (List.map parts_array rargs)
+  in
+  let loc_arg =
+    let loc_arg = Proc.loc_parameters rarg in
+    assert (Array.length rarg = Array.length loc_arg);
+    (* [loc_arg] corresponds elementwise to [rargs]; it identifies in which
+       "hard" pseudoregisters (hard registers or stack slots) the arguments to
+       the function will be found.  We duplicate each [Reg.t] value in
+       [loc_arg] such that we can annotate it with the name of the identifier
+       contained within the register for this function and the part of the
+       value it corresponds to (see above).  Note however that the stamps on
+       the duplicated [Reg.t] values are the *same* as the registers in
+       [loc_arg].  This is important, since some of those have fixed
+       assignments, such as hard registers. *)
+    Array.init (Array.length loc_arg) (fun index ->
+      let reg =
+        Reg.identical_except_in_name loc_arg.(index) rarg.(index).raw_name
+      in
+      begin match parts.(index) with
+      | None -> ()
+      | Some part -> reg.part <- Some part
+      end;
+      reg)
+  in
   let env =
     List.fold_right2
       (fun (id, ty) r env -> Tbl.add id r env)
