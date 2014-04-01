@@ -433,11 +433,10 @@ init_lifetime_buckets(void)
 }
 
 void
-caml_record_lifetime_sample(header_t hd, int in_major_heap)
+caml_record_lifetime_sample(header_t hd, int in_major_heap, uint64_t now)
 {
-  uint64_t allocation_time, now;
+  uint64_t allocation_time;
   allocation_time = Decode_profinfo_hd(hd);
-  now = Profinfo_now;
 
   if (allocation_time > 0) {  /* in case we failed to annotate a block */
     if (now >= allocation_time) {

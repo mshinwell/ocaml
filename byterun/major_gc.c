@@ -340,19 +340,24 @@ static void add_major_work_stat (intnat dark_words, intnat blue_words,
   caml_major_work_end_of_sweep[MAJOR_WORK_SAMPLES - 1] = end_of_sweep;
 }
 
-extern void caml_record_lifetime_sample(header_t, int);
+extern void caml_record_lifetime_sample(header_t, int, uint64_t);
 
 static void sweep_slice (intnat work)
 {
   char *hp;
   header_t hd;
   intnat dark_words, blue_words, white_words, end_of_chunk, end_of_sweep;
+  uint64_t now = 0ull;
 
   dark_words = 0;
   blue_words = 0;
   white_words = 0;
   end_of_chunk = 0;
   end_of_sweep = 0;
+
+  if (caml_lifetime_tracking) {
+    now = Profinfo_now;
+  }
 
   caml_gc_message (0x40, "Sweeping %ld words\n", work);
   while (work > 0){
@@ -370,7 +375,7 @@ static void sweep_slice (intnat work)
           if (final_fun != NULL) final_fun(Val_hp(hp));
         }
         if (caml_lifetime_tracking) {
-          caml_record_lifetime_sample(hd, 1);
+          caml_record_lifetime_sample(hd, 1, now);
         }
         caml_gc_sweep_hp = caml_fl_merge_block (Bp_hp (hp));
         white_words += block_size;

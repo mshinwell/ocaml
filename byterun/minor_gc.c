@@ -228,7 +228,7 @@ void caml_oldify_mopup (void)
   }
 }
 
-extern void caml_record_lifetime_sample(header_t, int);
+extern void caml_record_lifetime_sample(header_t, int, uint64_t);
 
 static void
 collect_lifetime_samples(void)
@@ -236,7 +236,11 @@ collect_lifetime_samples(void)
   /* For every value in the minor heap that has not been promoted, record a lifetime
      sample. */
 
+  uint64_t now;
   value* ptr = (value*) caml_young_ptr;
+
+  now = Profinfo_now;
+
   if (ptr < (value*) caml_young_start) {
     ptr = (value*) caml_young_start;
   }
@@ -267,7 +271,7 @@ collect_lifetime_samples(void)
       if (hd != 0) {
         /* If the value has not been promoted, it is about to be collected; take a lifetime
            sample, and read the size of the block so we can skip to the next value. */
-        caml_record_lifetime_sample(hd, 0);
+        caml_record_lifetime_sample(hd, 0, now);
         block_size_excl_header = Wosize_val(value_in_minor_heap);
       }
       else {
