@@ -391,8 +391,15 @@ caml_dump_heapgraph_from_ocaml(value node_output_file, value edge_output_file)
   return Val_unit;
 }
 
-static uint64_t* lifetime_buckets_minor = NULL;
-static uint64_t* lifetime_buckets_major = NULL;
+#define MAX_LOG2_OBJECT_SIZE 9
+typedef struct {
+  uint64_t num_words_by_log2_object_size[MAX_LOG2_OBJECT_SIZE + 1];
+  uint64_t num_blocks_by_log2_object_size[MAX_LOG2_OBJECT_SIZE + 1];
+  uint64_t total_words;
+  uint64_t total_blocks;
+} lifetime_bucket;
+static lifetime_bucket* lifetime_buckets_minor = NULL;
+static lifetime_bucket* lifetime_buckets_major = NULL;
 static double lifetime_log10_bytes_min = 2.0;
 static double lifetime_log10_bytes_max = 8.0;
 static uint64_t num_lifetime_buckets = 1000;
@@ -425,8 +432,8 @@ init_lifetime_buckets(void)
     abort();
   }
 
-  lifetime_buckets_minor = (uint64_t*) calloc(num_lifetime_buckets, sizeof(uint64_t));
-  lifetime_buckets_major = (uint64_t*) calloc(num_lifetime_buckets, sizeof(uint64_t));
+  lifetime_buckets_minor = (lifetime_bucket*) calloc(num_lifetime_buckets, sizeof(uint64_t));
+  lifetime_buckets_major = (lifetime_bucket*) calloc(num_lifetime_buckets, sizeof(uint64_t));
 
   lifetime_bucket_width =
     (lifetime_log10_bytes_max - lifetime_log10_bytes_min) / num_lifetime_buckets;
@@ -456,12 +463,20 @@ caml_record_lifetime_sample(header_t hd, int in_major_heap, uint64_t now)
         bucket = (log10_lifetime - lifetime_log10_bytes_min) / lifetime_bucket_width;
 
         if (bucket >= 0 && bucket < num_lifetime_buckets) {  /* just in case */
-          if (in_major_heap) {
-            lifetime_buckets_major[bucket] += Wosize_hd(hd);
+          lifetime_bucket* buckets;
+
+          int log2_object_size = (int) (floor(log((double) (Wosize_hd(hd)))));
+          if (log2_object_size > MAX_LOG2_OBJECT_SIZE) {
+            log2_object_size = MAX_LOG2_OBJECT_SIZE;
           }
-          else {
-            lifetime_buckets_minor[bucket] += Wosize_hd(hd);
-          }
+
+          buckets = in_major_heap ? lifetime_buckets_major : lifetime_buckets_minor;
+
+          buckets[bucket].num_blocks_by_log2_object_size[log2_object_size]++;
+          buckets[bucket].total_blocks++;
+
+          buckets[bucket].num_words_by_log2_object_size[log2_object_size] += Wosize_hd(hd);
+          buckets[bucket].total_words += Wosize_hd(hd);
         }
       }
     }
@@ -473,16 +488,50 @@ caml_dump_lifetimes(void)
 {
   uint64_t bucket;
 
+  /* Output format (columns left to right):
+        - centre of lifetime bucket, units are log10(bytes allocated)
+        - total number of blocks in this lifetime bucket, minor heap
+        - total number of words in this lifetime bucket, minor heap
+        - total number of blocks in this lifetime bucket, major heap
+        - total number of words in this lifetime bucket, major heap
+        then a sequence of MAX_LOG2_OBJECT_SIZE+1 column sets, each as follows, giving
+        object sizes in this lifetime bucket:
+        - minimum number of words in a block in this size bucket
+        - maximum number of words in a block in this size bucket
+        - number of blocks in this size bucket, minor heap
+        - number of words in this size bucket, minor heap
+        - number of blocks in this size bucket, major heap
+        - number of words in this size bucket, major heap
+     Lines are not output for lifetime buckets that are empty.
+  */
+
   for (bucket = 0ull; bucket < num_lifetime_buckets; bucket++) {
+    int size_bucket;
     double centre_of_bucket =
       (lifetime_bucket_width * (double) bucket) + (lifetime_bucket_width / 2.0);
 
-    if (lifetime_buckets_minor[bucket] != 0ull
-          || lifetime_buckets_major[bucket] != 0ull) {
-      fprintf(stderr, "%g %lld %lld\n",
+    if (lifetime_buckets_minor[bucket].total_blocks != 0ull
+          || lifetime_buckets_major[bucket].total_words != 0ull) {
+      fprintf(stderr, "%g %lld %lld %lld %lld",
         lifetime_log10_bytes_min + centre_of_bucket,
-        (unsigned long long) lifetime_buckets_minor[bucket],
-        (unsigned long long) lifetime_buckets_major[bucket]);
+        (unsigned long long) lifetime_buckets_minor[bucket].total_blocks,
+        (unsigned long long) lifetime_buckets_minor[bucket].total_words,
+        (unsigned long long) lifetime_buckets_major[bucket].total_blocks,
+        (unsigned long long) lifetime_buckets_major[bucket].total_words);
+      for (size_bucket = 0; size_bucket <= MAX_LOG2_OBJECT_SIZE; size_bucket++) {
+        fprintf(stderr, " %d %d %lld %lld %lld %lld",
+          (int) (pow(2.0, size_bucket)),
+          (int) (pow(2.0, size_bucket + 1)),
+          (unsigned long long)
+            lifetime_buckets_minor[bucket].num_blocks_by_log2_object_size[size_bucket],
+          (unsigned long long)
+            lifetime_buckets_minor[bucket].num_words_by_log2_object_size[size_bucket],
+          (unsigned long long)
+            lifetime_buckets_major[bucket].num_blocks_by_log2_object_size[size_bucket],
+          (unsigned long long)
+            lifetime_buckets_major[bucket].num_words_by_log2_object_size[size_bucket]);
+      }
+      fprintf(stderr, "\n");
     }
   }
 }
