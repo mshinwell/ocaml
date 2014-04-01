@@ -248,6 +248,7 @@ collect_lifetime_samples(void)
     /* We ensure that empty words in the minor heap contain [Debug_free_minor] when using
        allocation profiling.  We use these to advance to the block header in the minor heap
        with the lowest address. */
+    /* CR mshinwell: this may not be necessary */
     if (*ptr == Debug_free_minor) {
       ptr++;
     }
