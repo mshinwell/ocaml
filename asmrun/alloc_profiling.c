@@ -432,8 +432,10 @@ init_lifetime_buckets(void)
     abort();
   }
 
-  lifetime_buckets_minor = (lifetime_bucket*) calloc(num_lifetime_buckets, sizeof(uint64_t));
-  lifetime_buckets_major = (lifetime_bucket*) calloc(num_lifetime_buckets, sizeof(uint64_t));
+  lifetime_buckets_minor =
+    (lifetime_bucket*) calloc(num_lifetime_buckets, sizeof(lifetime_bucket));
+  lifetime_buckets_major =
+    (lifetime_bucket*) calloc(num_lifetime_buckets, sizeof(lifetime_bucket));
 
   lifetime_bucket_width =
     (lifetime_log10_bytes_max - lifetime_log10_bytes_min) / num_lifetime_buckets;
