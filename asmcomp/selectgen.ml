@@ -354,8 +354,8 @@ method extract =
 method insert_move src dst =
   if src.stamp <> dst.stamp then begin
     self#insert (Iop Imove) [|src|] [|dst|];
-    if not (Reg.anonymous src) && Reg.anonymous dst then
-      dst.Reg.raw_name <- src.Reg.raw_name
+(*    if not (Reg.anonymous src) && Reg.anonymous dst then
+      dst.Reg.raw_name <- src.Reg.raw_name*)
   end
 
 method insert_moves src dst =
