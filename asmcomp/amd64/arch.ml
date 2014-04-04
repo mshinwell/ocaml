@@ -123,3 +123,14 @@ let print_specific_operation printreg op ppf arg =
                    (Array.sub arg 1 (Array.length arg - 1))
   | Ibswap i ->
       fprintf ppf "bswap_%i %a" i printreg arg.(0)
+
+(* Identification of addressing modes for the debugger *)
+let addressing_mode_for_debugger args addressing_mode =
+  match addressing_mode with
+  | Iindexed displ ->
+    assert (Array.length args = 1);
+    Some (args.(0), displ)
+  | Ibased _
+  | Iindexed2 _
+  | Iscaled _
+  | Iindexed2scaled _ -> None

@@ -14,7 +14,15 @@
 
 module Raw_name : sig
   type t
+
   val create_from_ident : Ident.t -> t
+  val create_from_symbol : string -> t
+  val create_from_blockheader : nativeint -> t
+  val pointer_to_uninitialized_block : t
+
+  val augmented_with_displacement : t -> int -> t
+
+  val do_not_propagate : t -> bool
 end
 
 type t =
@@ -52,6 +60,12 @@ val identical_except_in_name : t -> from:t -> t
 val identical_except_in_namev : t array -> from:t array -> t array
 val at_location: Cmm.machtype_component -> location -> t
 
+(* If [immutable t] is [false] then the register [t] might hold a value that
+   can be mutated. *)
+val immutable : t -> bool
+
+(* [anonymous t] is to do with the name of the register [t], and nothing to do
+   with immutability of its contents (unlike in earlier versions of OCaml). *)
 val anonymous : t -> bool
 
 (* Name for printing *)

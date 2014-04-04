@@ -80,25 +80,31 @@ let swap_intcomp = function
     Isigned cmp -> Isigned(swap_comparison cmp)
   | Iunsigned cmp -> Iunsigned(swap_comparison cmp)
 
-(* Naming of registers *)
-
-let all_regs_anonymous rv =
+let all_regs_immutable rv =
   try
     for i = 0 to Array.length rv - 1 do
-      if not (Reg.anonymous rv.(i)) then raise Exit
+      if not (Reg.immutable rv.(i)) then raise Exit
     done;
     true
   with Exit ->
     false
 
-let name_regs id rv =
-  if Array.length rv = 1 then
-    rv.(0).raw_name <- Raw_name.create_from_ident id
+(* Naming of registers *)
+
+let name_regs' raw_name rv =
+  if Reg.Raw_name.do_not_propagate raw_name then ()
   else
-    for i = 0 to Array.length rv - 1 do
-      rv.(i).raw_name <- Raw_name.create_from_ident id;
-      rv.(i).part <- Some i
-    done
+    if Array.length rv = 1 then
+      rv.(0).raw_name <- raw_name
+    else
+      for i = 0 to Array.length rv - 1 do
+        rv.(i).raw_name <- raw_name;
+        rv.(i).part <- Some i
+      done
+
+let name_regs id rv =
+  if Ident.is_mutable id then ()
+  else name_regs' (Raw_name.create_from_ident id) rv
 
 (* "Join" two instruction sequences, making sure they return their results
    in the same registers. *)
@@ -112,10 +118,10 @@ let join opt_r1 seq1 opt_r2 seq2 =
       assert (l1 = Array.length r2);
       let r = Array.create l1 Reg.dummy in
       for i = 0 to l1-1 do
-        if Reg.anonymous r1.(i) then begin
+        if Reg.immutable r1.(i) then begin
           r.(i) <- r1.(i);
           seq2#insert_move r2.(i) r1.(i)
-        end else if Reg.anonymous r2.(i) then begin
+        end else if Reg.immutable r2.(i) then begin
           r.(i) <- r2.(i);
           seq1#insert_move r1.(i) r2.(i)
         end else begin
@@ -354,8 +360,11 @@ method extract =
 method insert_move src dst =
   if src.stamp <> dst.stamp then begin
     self#insert (Iop Imove) [|src|] [|dst|];
-(*    if not (Reg.anonymous src) && Reg.anonymous dst then
-      dst.Reg.raw_name <- src.Reg.raw_name*)
+    if Reg.immutable src
+        && not (Reg.Raw_name.do_not_propagate src.Reg.raw_name)
+    then begin
+      dst.Reg.raw_name <- src.Reg.raw_name
+    end
   end
 
 method insert_moves src dst =
@@ -403,12 +412,16 @@ method emit_expr env exp =
       Some(self#insert_op (Iconst_int n) [||] r)
   | Cconst_blockheader n ->
       let r = self#regs_for typ_int in
+      assert (Array.length r = 1);
+      r.(0).Reg.raw_name <- Reg.Raw_name.create_from_blockheader n;
       Some(self#insert_op (Iconst_blockheader n) [||] r)
   | Cconst_float n ->
       let r = self#regs_for typ_float in
       Some(self#insert_op (Iconst_float n) [||] r)
   | Cconst_symbol n ->
       let r = self#regs_for typ_addr in
+      assert (Array.length r = 1);
+      r.(0).Reg.raw_name <- Reg.Raw_name.create_from_symbol n;
       Some(self#insert_op (Iconst_symbol n) [||] r)
   | Cconst_pointer n ->
       let r = self#regs_for typ_addr in
@@ -513,6 +526,7 @@ method emit_expr env exp =
           | Ialloc _ ->
               Proc.contains_calls := true;
               let rd = self#regs_for typ_addr in
+              name_regs' Reg.Raw_name.pointer_to_uninitialized_block rd;
               let size = size_expr env (Ctuple new_args) in
               self#insert (Iop(Ialloc size)) [||] rd;
               self#emit_stores env new_args rd;
@@ -520,6 +534,25 @@ method emit_expr env exp =
           | op ->
               let r1 = self#emit_tuple env new_args in
               let rd = self#regs_for ty in
+              begin
+                match new_op with
+                | Iload (Word, mode) ->
+                  let mode = Arch.addressing_mode_for_debugger r1 mode in
+                  begin match mode with
+                  | None -> ()
+                  | Some (source_reg, displ) ->
+                    assert (Array.length rd = 1);
+                    if not (Reg.immutable source_reg) then ()
+                    else begin
+                      let new_name =
+                        Reg.Raw_name.augmented_with_displacement
+                          source_reg.Reg.raw_name displ
+                      in
+                      rd.(0).Reg.raw_name <- new_name
+                    end
+                  end
+                | _ -> ()
+              end;
               Some (self#insert_op_debug op dbg r1 rd)
       end
   | Csequence(e1, e2) ->
@@ -607,7 +640,7 @@ method private emit_sequence env exp =
   (r, s)
 
 method private bind_let env v r1 =
-  if all_regs_anonymous r1 then begin
+  if all_regs_immutable r1 then begin
     name_regs v r1;
     Tbl.add v r1 env
   end else begin
@@ -629,8 +662,8 @@ method private emit_parts env exp =
         else begin
           (* The normal case *)
           let id = Ident.create "bind" in
-          if all_regs_anonymous r then
-            (* r is an anonymous, unshared register; use it directly *)
+          if all_regs_immutable r then
+            (* r is a register holding an immutable value; use it directly *)
             Some (Cvar id, Tbl.add id r env)
           else begin
             (* Introduce a fresh temp to hold the result *)
@@ -840,6 +873,41 @@ method private emit_tail_sequence env exp =
   s#emit_tail env exp;
   s#extract
 
+method private mark_assigned_to_identifiers cmm =
+  match cmm with
+  | Cconst_int _ | Cconst_natint _ | Cconst_float _ | Cconst_symbol _
+  | Cconst_pointer _ | Cconst_natpointer _ | Cconst_blockheader _ -> ()
+  | Cvar _ident -> ()
+  | Clet (_ident, e1, e2) ->
+    self#mark_assigned_to_identifiers e1;
+    self#mark_assigned_to_identifiers e2
+  | Cassign (ident, e) ->
+    self#mark_assigned_to_identifiers e;
+    Ident.make_mutable ident
+  | Ctuple es ->
+    List.iter self#mark_assigned_to_identifiers es
+  | Cop (_op, es) ->
+    List.iter self#mark_assigned_to_identifiers es
+  | Csequence (e1, e2) ->
+    self#mark_assigned_to_identifiers e1;
+    self#mark_assigned_to_identifiers e2
+  | Cifthenelse (e1, e2, e3) ->
+    self#mark_assigned_to_identifiers e1;
+    self#mark_assigned_to_identifiers e2;
+    self#mark_assigned_to_identifiers e3
+  | Cswitch (e, _, es) ->
+    List.iter self#mark_assigned_to_identifiers (e::(Array.to_list es))
+  | Cloop e ->
+    self#mark_assigned_to_identifiers e
+  | Ccatch (_, _idents, e1, e2) ->
+    self#mark_assigned_to_identifiers e1;
+    self#mark_assigned_to_identifiers e2
+  | Cexit (_, es) ->
+    List.iter self#mark_assigned_to_identifiers es
+  | Ctrywith (e1, _ident, e2) ->
+    self#mark_assigned_to_identifiers e1;
+    self#mark_assigned_to_identifiers e2
+
 (* Sequentialization of a function definition *)
 
 method emit_fundecl f =
@@ -877,7 +945,6 @@ method emit_fundecl f =
        assignments, such as hard registers. *)
     Array.init (Array.length loc_arg) (fun index ->
       let reg =
-        assert (not (Reg.anonymous rarg.(index)));  (* see [rargs] defn. *)
         Reg.identical_except_in_name loc_arg.(index) ~from:rarg.(index)
       in
       begin match parts.(index) with
@@ -891,6 +958,7 @@ method emit_fundecl f =
       (fun (id, ty) r env -> Tbl.add id r env)
       f.Cmm.fun_args rargs Tbl.empty in
   self#insert_moves loc_arg rarg;
+  self#mark_assigned_to_identifiers f.Cmm.fun_body;
   self#emit_tail env f.Cmm.fun_body;
   { fun_name = f.Cmm.fun_name;
     fun_args = loc_arg;

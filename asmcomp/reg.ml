@@ -17,16 +17,77 @@ module Raw_name = struct
     | Anon
     | R
     | Ident of Ident.t
+    | Symbol of string
+    | Block_header of nativeint
+    | Uninitialized_block
+    | With_displacement of t * int
 
   let create_from_ident ident = Ident ident
+  let create_from_symbol sym = Symbol sym
+  let create_from_blockheader hdr = Block_header hdr
+  let pointer_to_uninitialized_block = Uninitialized_block
 
-  let to_string t =
+  let do_not_propagate _t = false
+(*
+  let rec do_not_propagate = function
+    | Symbol _
+    | Block_header _
+    | Uninitialized_block -> true
+    | Anon
+    | R
+    | Ident _ -> false
+    | With_displacement (t, _displ) -> do_not_propagate t
+*)
+
+  let rec to_string t =
     match t with
     | Anon -> None
     | R -> Some "R"
     | Ident ident ->
-      let name = Ident.name ident in
+      let name = Ident.unique_name ident in
       if String.length name <= 0 then None else Some name
+    | Symbol name -> Some (Printf.sprintf "symbol(%s)" name)
+    | Block_header hdr ->
+      (* CR mshinwell: fix for 32 bits (and large 64 bit blocks) *)
+      let hdr = Nativeint.to_int hdr in
+      let raw_tag = hdr land 0xff in
+      let raw_colour = (hdr lsr 8) land 0x3 in
+      let raw_size = hdr lsr 10 in
+      let tag =
+        if raw_tag = Obj.lazy_tag then "Lazy_tag"
+        else if raw_tag = Obj.lazy_tag then "Lazy_tag"
+        else if raw_tag = Obj.closure_tag then "Closure_tag"
+        else if raw_tag = Obj.object_tag then "Object_tag"
+        else if raw_tag = Obj.infix_tag then "Infix_tag"
+        else if raw_tag = Obj.forward_tag then "Forward_tag"
+        else if raw_tag = Obj.no_scan_tag then "No_scan_tag"
+        else if raw_tag = Obj.abstract_tag then "Abstract_tag"
+        else if raw_tag = Obj.string_tag then "String_tag"
+        else if raw_tag = Obj.double_tag then "Double_tag"
+        else if raw_tag = Obj.double_array_tag then "Double_array_tag"
+        else if raw_tag = Obj.custom_tag then "Custom_tag"
+        else Printf.sprintf "tag=%d" raw_tag
+      in
+      let colour =
+        match raw_colour with  (* see byterun/gc.h *)
+        | 0 -> "white"
+        | 1 -> "grey"
+        | 2 -> "blue"
+        | 3 -> "black"
+        | _ -> assert false
+      in
+      let size = Printf.sprintf "size=%d" raw_size in
+      Some (Printf.sprintf "hdr(%s,%s,%s)" tag colour size)
+    | Uninitialized_block -> Some "uninited-block"
+    | With_displacement (t, displ) ->
+      match to_string t with
+      | None -> None
+      | Some t_str ->
+        Some (Printf.sprintf "%s[%d]" t_str (displ / Arch.size_int))
+
+  let augmented_with_displacement t displ =
+    (* CR mshinwell: must check that we don't try to do this on a mutable one *)
+    With_displacement (t, displ)
 end
 
 type t =
@@ -105,9 +166,24 @@ let at_location ty loc =
   r
 
 let anonymous t =
-  match Raw_name.to_string t.raw_name with
-  | None -> true
-  | Some _raw_name -> false
+  match t.raw_name with
+  | Raw_name.Anon
+  | Raw_name.R -> true
+  | Raw_name.Ident _
+  | Raw_name.Symbol _
+  | Raw_name.Block_header _
+  | Raw_name.Uninitialized_block
+  | Raw_name.With_displacement _ -> false
+
+let immutable t =
+  match t.raw_name with
+  | Raw_name.Ident ident -> not (Ident.is_mutable ident)
+  | Raw_name.Anon
+  | Raw_name.R
+  | Raw_name.Symbol _
+  | Raw_name.Block_header _
+  | Raw_name.Uninitialized_block
+  | Raw_name.With_displacement _ -> true  (* CR mshinwell: see note above re. this case *)
 
 let name t =
   match Raw_name.to_string t.raw_name with

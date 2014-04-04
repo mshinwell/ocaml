@@ -37,8 +37,10 @@ val hide: t -> t
            up by name. *)
 
 val make_global: t -> unit
+val make_mutable: t -> unit
 val global: t -> bool
 val is_predef_exn: t -> bool
+val is_mutable: t -> bool
 
 val binding_time: t -> int
 val current_time: unit -> int
