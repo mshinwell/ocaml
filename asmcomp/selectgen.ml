@@ -47,7 +47,7 @@ let oper_result_type = function
 
 let size_expr env exp =
   let rec size localenv = function
-      Cconst_int _ | Cconst_natint _ -> Arch.size_int
+      Cconst_int _ | Cconst_natint _ | Cconst_blockheader _ -> Arch.size_int
     | Cconst_symbol _ | Cconst_pointer _ | Cconst_natpointer _ ->
         Arch.size_addr
     | Cconst_float _ -> Arch.size_float
@@ -183,6 +183,7 @@ class virtual selector_generic = object (self)
 
 method is_simple_expr = function
     Cconst_int _ -> true
+  | Cconst_blockheader _ -> true
   | Cconst_natint _ -> true
   | Cconst_float _ -> true
   | Cconst_symbol _ -> true
@@ -509,6 +510,7 @@ method emit_expr env exp =
               Proc.contains_calls := true;
               let (loc_arg, stack_ofs) =
                 self#emit_extcall_args env new_args in
+(* CR mshinwell: name args *)
               let rd = self#regs_for ty in
               let loc_res = Proc.loc_external_results rd in
               assert (Array.length rd = Array.length loc_res);
