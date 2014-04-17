@@ -12,16 +12,30 @@
 
 open Cmm
 
-module Raw_name = struct
+module Raw_name : sig
+  type t
+  val create_anon : unit -> t
+  val create_hard_reg : unit -> t
+  val create_from_ident : Ident.t -> t
+  val create_from_symbol : string -> t
+  val create_from_blockheader : nativeint -> t
+  val create_pointer_to_uninitialized_block : unit -> t
+  val augmented_with_displacement : t -> words:int -> t
+  val do_not_propagate : t -> bool
+  val to_string : t -> typ:Cmm.machtype_component -> string
+  val references_possibly_mutable_identifier : t -> bool
+end = struct
   type t =
     | Anon
-    | R
+    | Hard_reg
     | Ident of Ident.t
     | Symbol of string
     | Block_header of nativeint
     | Uninitialized_block
     | With_displacement of t * int
 
+  let create_anon () = Anon
+  let create_hard_reg () = Hard_reg
   let create_from_ident ident = Ident ident
   let create_from_symbol sym = Symbol sym
   let create_from_blockheader hdr = Block_header hdr
@@ -39,14 +53,30 @@ module Raw_name = struct
     | With_displacement (t, _displ) -> do_not_propagate t
 *)
 
-  let rec to_string t =
+  let references_possibly_mutable_identifier t =
     match t with
-    | Anon -> None
-    | R -> Some "R"
+    | Ident ident -> Ident.is_mutable ident
+    | Anon
+    | Hard_reg
+    | Symbol _
+    | Block_header _
+    | Uninitialized_block
+    | With_displacement _ -> false  (* CR mshinwell: see note below re. this case *)
+
+  let rec to_string t ~typ =
+    match t with
+    | Anon ->
+      begin match typ with
+      | Addr -> "A"
+      | Int -> "I"
+      | Float -> "F"
+      end
+    | Hard_reg -> "R"
     | Ident ident ->
       let name = Ident.unique_name ident in
-      if String.length name <= 0 then None else Some name
-    | Symbol name -> Some (Printf.sprintf "symbol(%s)" name)
+      assert (String.length name > 0);
+      name
+    | Symbol name -> Printf.sprintf "symbol(%s)" name
     | Block_header hdr ->
       (* CR mshinwell: fix for 32 bits (and large 64 bit blocks) *)
       let hdr = Nativeint.to_int hdr in
@@ -77,13 +107,10 @@ module Raw_name = struct
         | _ -> assert false
       in
       let size = Printf.sprintf "size=%d" raw_size in
-      Some (Printf.sprintf "hdr(%s,%s,%s)" tag colour size)
-    | Uninitialized_block -> Some "uninited-block"
+      Printf.sprintf "hdr(%s,%s,%s)" tag colour size
+    | Uninitialized_block -> "uninited-block"
     | With_displacement (t, displ) ->
-      match to_string t with
-      | None -> None
-      | Some t_str ->
-        Some (Printf.sprintf "%s[%d]" t_str (displ / Arch.size_int))
+      Printf.sprintf "%s[%d]" (to_string t ~typ) (displ / Arch.size_int)
 
   let augmented_with_displacement t ~words:displ =
     (* CR mshinwell: must check that we don't try to do this on a mutable one *)
@@ -116,7 +143,7 @@ and stack_location =
 type reg = t
 
 let dummy =
-  { raw_name = Raw_name.Anon; stamp = 0; typ = Int; loc = Unknown;
+  { raw_name = Raw_name.create_anon (); stamp = 0; typ = Int; loc = Unknown;
     spill = false; interf = []; prefer = []; degree = 0; spill_cost = 0;
     visited = false; part = None;
   }
@@ -125,7 +152,7 @@ let currstamp = ref 0
 let reg_list = ref([] : t list)
 
 let create ty =
-  let r = { raw_name = Raw_name.Anon; stamp = !currstamp; typ = ty;
+  let r = { raw_name = Raw_name.create_anon (); stamp = !currstamp; typ = ty;
             loc = Unknown; spill = false; interf = []; prefer = []; degree = 0;
             spill_cost = 0; visited = false; part = None; } in
   reg_list := r :: !reg_list;
@@ -158,46 +185,33 @@ let identical_except_in_namev rs ~from =
   Array.init (Array.length rs)
     (fun index -> identical_except_in_name rs.(index) ~from:from.(index))
 
-let at_location ty loc =
-  let r = { raw_name = Raw_name.R; stamp = !currstamp; typ = ty; loc;
+let create_hard_reg ty loc =
+  (* [Raw_name.Hard_reg] doesn't take an argument because we should always
+     take a copy of a value of type [t] used to represent a hard register (as
+     allocated by the various proc.ml files) and name it accordingly, for
+     example when moving from function argument registers.  See
+     selectgen.ml. *)
+  let r = { raw_name = Raw_name.create_hard_reg ();
+            stamp = !currstamp; typ = ty; loc;
             spill = false; interf = []; prefer = []; degree = 0;
             spill_cost = 0; visited = false; part = None; } in
   incr currstamp;
   r
 
-let anonymous t =
-  match t.raw_name with
-  | Raw_name.Anon
-  | Raw_name.R -> true
-  | Raw_name.Ident _
-  | Raw_name.Symbol _
-  | Raw_name.Block_header _
-  | Raw_name.Uninitialized_block
-  | Raw_name.With_displacement _ -> false
-
 let immutable t =
-  match t.raw_name with
-  | Raw_name.Ident ident -> not (Ident.is_mutable ident)
-  | Raw_name.Anon
-  | Raw_name.R
-  | Raw_name.Symbol _
-  | Raw_name.Block_header _
-  | Raw_name.Uninitialized_block
-  | Raw_name.With_displacement _ -> true  (* CR mshinwell: see note above re. this case *)
+  not (Raw_name.references_possibly_mutable_identifier t.raw_name)
 
 let name t =
-  match Raw_name.to_string t.raw_name with
-  | None -> ""
-  | Some raw_name ->
-    let with_spilled =
-      if t.spill then
-        "spilled-" ^ raw_name
-      else
-        raw_name
-    in
-    match t.part with
-    | None -> with_spilled
-    | Some part -> with_spilled ^ "#" ^ string_of_int part
+  let raw_name = Raw_name.to_string t.raw_name ~typ:t.typ in
+  let with_spilled =
+    if t.spill then
+      "spilled-" ^ raw_name
+    else
+      raw_name
+  in
+  match t.part with
+  | None -> with_spilled
+  | Some part -> with_spilled ^ "#" ^ string_of_int part
 
 let first_virtual_reg_stamp = ref (-1)
 

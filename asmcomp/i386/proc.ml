@@ -73,10 +73,10 @@ let rotate_registers = false
 
 let hard_int_reg =
   let v = Array.create 7 Reg.dummy in
-  for i = 0 to 6 do v.(i) <- Reg.at_location Int (Reg i) done;
+  for i = 0 to 6 do v.(i) <- Reg.create_hard_reg Int (Reg i) done;
   v
 
-let hard_float_reg = [| Reg.at_location Float (Reg 100) |]
+let hard_float_reg = [| Reg.create_hard_reg Float (Reg 100) |]
 
 let all_phys_regs =
   Array.append hard_int_reg hard_float_reg
@@ -90,7 +90,7 @@ let edx = phys_reg 3
 let tos = phys_reg 100
 
 let stack_slot slot ty =
-  Reg.at_location ty (Stack slot)
+  Reg.create_hard_reg ty (Stack slot)
 
 (* Instruction selection *)
 

@@ -13,8 +13,11 @@
 (* Hard and pseudo-registers *)
 
 module Raw_name : sig
-  (* A value of type [t] is a description, for informational and
-     debug info generation purposes, of the contents of a register. *)
+  (* A value of type [t] forms the core of a description, for informational
+     and debug info generation purposes, of the contents of a register.
+     (Certain extra information, such as whether a register contains a
+     spilled value or only part of a value, is stored within the value of
+     type [Reg.t] instead.) *)
   type t
 
   val create_from_ident : Ident.t -> t
@@ -65,6 +68,7 @@ and stack_location =
 
 val dummy: t
 val create: Cmm.machtype_component -> t
+val create_hard_reg: Cmm.machtype_component -> location -> t
 val createv: Cmm.machtype -> t array
 val createv_like: t array -> t array
 val clone: t -> t
@@ -73,7 +77,6 @@ val clone: t -> t
    [from]. *)
 val identical_except_in_name : t -> from:t -> t
 val identical_except_in_namev : t array -> from:t array -> t array
-val at_location: Cmm.machtype_component -> location -> t
 
 (* If [immutable t] is [false] then the register [t] might hold a value that
    can be mutated (using [Cassign], for example a [for] loop counter). *)
