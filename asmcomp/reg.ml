@@ -25,7 +25,7 @@ module Raw_name = struct
   let create_from_ident ident = Ident ident
   let create_from_symbol sym = Symbol sym
   let create_from_blockheader hdr = Block_header hdr
-  let pointer_to_uninitialized_block = Uninitialized_block
+  let create_pointer_to_uninitialized_block () = Uninitialized_block
 
   let do_not_propagate _t = false
 (*
@@ -85,7 +85,7 @@ module Raw_name = struct
       | Some t_str ->
         Some (Printf.sprintf "%s[%d]" t_str (displ / Arch.size_int))
 
-  let augmented_with_displacement t displ =
+  let augmented_with_displacement t ~words:displ =
     (* CR mshinwell: must check that we don't try to do this on a mutable one *)
     With_displacement (t, displ)
 end

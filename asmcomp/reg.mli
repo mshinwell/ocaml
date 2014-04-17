@@ -10,21 +10,36 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* Pseudo-registers *)
+(* Hard and pseudo-registers *)
 
 module Raw_name : sig
+  (* A value of type [t] is a description, for informational and
+     debug info generation purposes, of the contents of a register. *)
   type t
 
   val create_from_ident : Ident.t -> t
   val create_from_symbol : string -> t
   val create_from_blockheader : nativeint -> t
-  val pointer_to_uninitialized_block : t
+  val create_pointer_to_uninitialized_block : unit -> t
 
-  val augmented_with_displacement : t -> int -> t
+  (* [augmented_with_displacement t ~words] is an appropriate name for
+     a register containing the result of a memory load where the base
+     address was the contents of a register with name [t] and the
+     displacement applied to said address was [words]. *)
+  val augmented_with_displacement : t -> words:int -> t
 
+  (* [do_not_propagate t] being [true] indicates that a move from a
+     register [r] with name [t] into a register [r'] should not update
+     the name of [r'].  This is used to ensure that "uninitialized block"
+     register names do not appear after the block has been initialized. *)
   val do_not_propagate : t -> bool
 end
 
+(* Values of type [t] represent either hard registers or stack slots (in
+   the case where [loc] is not [Unknown]) or pseudoregisters yet to be
+   assigned.  There may be multiple values of type [t] with the same stamp
+   but different [raw_name]s (for example, hard registers used for function
+   arguments and results---see selectgen.ml). *)
 type t =
   { mutable raw_name: Raw_name.t;       (* Name *)
     stamp: int;                         (* Unique stamp *)
@@ -61,12 +76,8 @@ val identical_except_in_namev : t array -> from:t array -> t array
 val at_location: Cmm.machtype_component -> location -> t
 
 (* If [immutable t] is [false] then the register [t] might hold a value that
-   can be mutated. *)
+   can be mutated (using [Cassign], for example a [for] loop counter). *)
 val immutable : t -> bool
-
-(* [anonymous t] is to do with the name of the register [t], and nothing to do
-   with immutability of its contents (unlike in earlier versions of OCaml). *)
-val anonymous : t -> bool
 
 (* Name for printing *)
 val name : t -> string

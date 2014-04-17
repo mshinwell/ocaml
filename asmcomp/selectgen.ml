@@ -520,7 +520,8 @@ method emit_expr env exp =
           | Ialloc _ ->
               Proc.contains_calls := true;
               let rd = self#regs_for typ_addr in
-              name_regs' Reg.Raw_name.pointer_to_uninitialized_block rd;
+              name_regs'
+                (Reg.Raw_name.create_pointer_to_uninitialized_block ()) rd;
               let size = size_expr env (Ctuple new_args) in
               self#insert (Iop(Ialloc size)) [||] rd;
               self#emit_stores env new_args rd;
