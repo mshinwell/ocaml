@@ -103,8 +103,7 @@ let name_regs' raw_name rv =
       done
 
 let name_regs id rv =
-  if Ident.is_mutable id then ()
-  else name_regs' (Raw_name.create_from_ident id) rv
+  name_regs' (Raw_name.create_from_ident id) rv
 
 (* "Join" two instruction sequences, making sure they return their results
    in the same registers. *)
@@ -467,9 +466,6 @@ method emit_expr env exp =
       | Some r1 -> self#emit_expr (self#bind_let env v r1) e2
       end
   | Cassign(v, e1) ->
-      Printf.printf "%s: generating code for Cassign to '%s'\n%!"
-        !current_function_name
-        (Ident.unique_name v);
       let rv =
         try
           Tbl.find v env
@@ -904,9 +900,6 @@ method private mark_assigned_to_identifiers cmm =
     self#mark_assigned_to_identifiers e2
   | Cassign (ident, e) ->
     self#mark_assigned_to_identifiers e;
-    Printf.printf "%s: making '%s' mutable\n%!"
-      !current_function_name
-      (Ident.unique_name ident);
     Ident.make_mutable ident
   | Ctuple es ->
     List.iter self#mark_assigned_to_identifiers es
