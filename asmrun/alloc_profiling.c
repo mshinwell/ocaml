@@ -523,7 +523,7 @@ caml_dump_lifetimes(void)
       for (size_bucket = 0; size_bucket <= MAX_LOG2_OBJECT_SIZE; size_bucket++) {
         fprintf(stderr, " %d %d %lld %lld %lld %lld",
           (int) (pow(2.0, size_bucket)),
-          (int) (pow(2.0, size_bucket + 1)),
+          (int) (pow(2.0, size_bucket + 1) - 1),
           (unsigned long long)
             lifetime_buckets_minor[bucket].num_blocks_by_log2_object_size[size_bucket],
           (unsigned long long)
