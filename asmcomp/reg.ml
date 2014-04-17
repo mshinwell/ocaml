@@ -75,7 +75,10 @@ end = struct
     | Ident ident ->
       let name = Ident.unique_name ident in
       assert (String.length name > 0);
-      name
+      if Ident.is_mutable ident then
+        name ^ "M"
+      else
+        name
     | Symbol name -> Printf.sprintf "symbol(%s)" name
     | Block_header hdr ->
       (* CR mshinwell: fix for 32 bits (and large 64 bit blocks) *)

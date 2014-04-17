@@ -16,7 +16,7 @@ type t = { stamp: int; name: string; mutable flags: int }
 
 let global_flag = 1
 let predef_exn_flag = 2
-let mutable_flag = 3
+let mutable_flag = 4
 
 (* A stamp of 0 denotes a persistent identifier *)
 

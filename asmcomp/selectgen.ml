@@ -436,6 +436,9 @@ method emit_expr env exp =
       | Some r1 -> self#emit_expr (self#bind_let env v r1) e2
       end
   | Cassign(v, e1) ->
+      Printf.printf "%s: generating code for Cassign to '%s'\n%!"
+        !current_function_name
+        (Ident.unique_name v);
       let rv =
         try
           Tbl.find v env
@@ -880,6 +883,9 @@ method private mark_assigned_to_identifiers cmm =
     self#mark_assigned_to_identifiers e2
   | Cassign (ident, e) ->
     self#mark_assigned_to_identifiers e;
+    Printf.printf "%s: making '%s' mutable\n%!"
+      !current_function_name
+      (Ident.unique_name ident);
     Ident.make_mutable ident
   | Ctuple es ->
     List.iter self#mark_assigned_to_identifiers es
@@ -910,6 +916,7 @@ method private mark_assigned_to_identifiers cmm =
 method emit_fundecl f =
   Proc.contains_calls := false;
   current_function_name := f.Cmm.fun_name;
+  self#mark_assigned_to_identifiers f.Cmm.fun_body;
   let rargs =
     List.map
       (fun (id, ty) -> let r = self#regs_for ty in name_regs id r; r)
@@ -955,7 +962,6 @@ method emit_fundecl f =
       (fun (id, ty) r env -> Tbl.add id r env)
       f.Cmm.fun_args rargs Tbl.empty in
   self#insert_moves loc_arg rarg;
-  self#mark_assigned_to_identifiers f.Cmm.fun_body;
   self#emit_tail env f.Cmm.fun_body;
   { fun_name = f.Cmm.fun_name;
     fun_args = loc_arg;
