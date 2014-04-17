@@ -396,12 +396,6 @@ method insert_op op rs rd =
 (* Add the instructions for the given expression
    at the end of the self sequence *)
 
-(* CR mshinwell: find what produces:
-    A/114[%rdi] := [env/150[%rax] + 56]
-   which is presumably a closure environment access, and then name (in this
-   case) %rdi according to the name of the free variable.
-*)
-
 method emit_expr env exp =
   match exp with
     Cconst_int n ->
