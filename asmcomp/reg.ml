@@ -20,10 +20,12 @@ module Raw_name : sig
   val create_from_symbol : string -> t
   val create_from_blockheader : nativeint -> t
   val create_pointer_to_uninitialized_block : unit -> t
+  val combine : t -> t -> t
   val augmented_with_displacement : t -> words:int -> t
   val do_not_propagate : t -> bool
   val to_string : t -> typ:Cmm.machtype_component -> string
   val references_possibly_mutable_identifier : t -> bool
+  val has_good_name : t -> bool
 end = struct
   type t =
     | Anon
@@ -33,6 +35,7 @@ end = struct
     | Block_header of nativeint
     | Uninitialized_block
     | With_displacement of t * int
+    | Multiple_names of t * t
 
   let create_anon () = Anon
   let create_hard_reg () = Hard_reg
@@ -40,6 +43,13 @@ end = struct
   let create_from_symbol sym = Symbol sym
   let create_from_blockheader hdr = Block_header hdr
   let create_pointer_to_uninitialized_block () = Uninitialized_block
+
+  let combine t t' =
+    match t, t' with
+    | Anon, Anon -> Anon
+    | Anon, t' -> t'
+    | t, Anon -> t
+    | t, t' -> Multiple_names (t, t')
 
   let do_not_propagate _t = false
 (*
@@ -53,7 +63,18 @@ end = struct
     | With_displacement (t, _displ) -> do_not_propagate t
 *)
 
-  let references_possibly_mutable_identifier t =
+  let rec has_good_name t =
+    match t with
+    | Ident _ -> true
+    | Anon
+    | Hard_reg
+    | Symbol _
+    | Block_header _
+    | Uninitialized_block -> false
+    | With_displacement (t, _displ) -> has_good_name t
+    | Multiple_names (t, t') -> has_good_name t || has_good_name t'
+
+  let rec references_possibly_mutable_identifier t =
     match t with
     | Ident ident -> Ident.is_mutable ident
     | Anon
@@ -62,6 +83,9 @@ end = struct
     | Block_header _
     | Uninitialized_block
     | With_displacement _ -> false  (* CR mshinwell: see note below re. this case *)
+    | Multiple_names (t, t') ->
+      references_possibly_mutable_identifier t
+        || references_possibly_mutable_identifier t'
 
   let rec to_string t ~typ =
     match t with
@@ -114,6 +138,8 @@ end = struct
     | Uninitialized_block -> "uninited-block"
     | With_displacement (t, displ) ->
       Printf.sprintf "%s[%d]" (to_string t ~typ) (displ / Arch.size_int)
+    | Multiple_names (t, t') ->
+      Printf.sprintf "%s__%s" (to_string t ~typ) (to_string t' ~typ)
 
   let augmented_with_displacement t ~words:displ =
     (* CR mshinwell: must check that we don't try to do this on a mutable one *)

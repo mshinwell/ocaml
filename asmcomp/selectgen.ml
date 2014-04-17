@@ -95,10 +95,10 @@ let name_regs' raw_name rv =
   if Reg.Raw_name.do_not_propagate raw_name then ()
   else
     if Array.length rv = 1 then
-      rv.(0).raw_name <- raw_name
+      rv.(0).raw_name <- Raw_name.combine rv.(0).raw_name raw_name
     else
       for i = 0 to Array.length rv - 1 do
-        rv.(i).raw_name <- raw_name;
+        rv.(i).raw_name <- Raw_name.combine rv.(i).raw_name raw_name;
         rv.(i).part <- Some i
       done
 
@@ -659,14 +659,28 @@ method private emit_sequence env exp =
   let r = s#emit_expr env exp in
   (r, s)
 
+method private regs_have_good_names rv =
+  let result = ref true in
+  for i = 0 to Array.length rv - 1 do
+    if not (Reg.Raw_name.has_good_name rv.(i).Reg.raw_name) then
+      result := false
+  done;
+  !result
+
 method private bind_let env v r1 =
   if all_regs_immutable r1 then begin
+    (* This may yield multiple names for the same register, e.g. for
+       [let x = y] with [y] immutable, then [x] and [y] will both be
+       represented by a register whose name is "x and y". *)
     name_regs v r1;
     Tbl.add v r1 env
   end else begin
     let rv = Reg.createv_like r1 in
-    name_regs v rv;
     self#insert_moves r1 rv;
+    (* [name_regs] is after [insert_moves] since [insert_moves] propagates the
+       name from [r1], and we'd rather have the let-bound identifier name
+       ([v]). *)
+    name_regs v rv;
     Tbl.add v rv env
   end
 

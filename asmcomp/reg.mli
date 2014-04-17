@@ -25,6 +25,8 @@ module Raw_name : sig
   val create_from_blockheader : nativeint -> t
   val create_pointer_to_uninitialized_block : unit -> t
 
+  val combine : t -> t -> t
+
   (* [augmented_with_displacement t ~words] is an appropriate name for
      a register containing the result of a memory load where the base
      address was the contents of a register with name [t] and the
@@ -36,6 +38,9 @@ module Raw_name : sig
      the name of [r'].  This is used to ensure that "uninitialized block"
      register names do not appear after the block has been initialized. *)
   val do_not_propagate : t -> bool
+
+  (* CR mshinwell: remove? *)
+  val has_good_name : t -> bool
 end
 
 (* Values of type [t] represent either hard registers or stack slots (in
