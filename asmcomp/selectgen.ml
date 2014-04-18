@@ -95,10 +95,10 @@ let name_regs' raw_name rv =
   if Reg.Raw_name.do_not_propagate raw_name then ()
   else
     if Array.length rv = 1 then
-      rv.(0).raw_name <- Raw_name.combine rv.(0).raw_name raw_name
+      rv.(0).raw_name <- Raw_name.both rv.(0).raw_name raw_name
     else
       for i = 0 to Array.length rv - 1 do
-        rv.(i).raw_name <- Raw_name.combine rv.(i).raw_name raw_name;
+        rv.(i).raw_name <- Raw_name.both rv.(i).raw_name raw_name;
         rv.(i).part <- Some i
       done
 
@@ -535,7 +535,6 @@ method emit_expr env exp =
           | Iextcall(lbl, alloc) ->
               let (loc_arg, stack_ofs) =
                 self#emit_extcall_args env new_args in
-(* CR mshinwell: name args *)
               let rd = self#regs_for ty in
               let loc_res = Proc.loc_external_results rd in
               assert (Array.length rd = Array.length loc_res);

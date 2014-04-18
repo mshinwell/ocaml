@@ -21,11 +21,15 @@ module Raw_name : sig
   type t
 
   val create_from_ident : Ident.t -> t
+  val create_anon : unit -> t
   val create_from_symbol : string -> t
   val create_from_blockheader : nativeint -> t
   val create_pointer_to_uninitialized_block : unit -> t
 
-  val combine : t -> t -> t
+  (* [both t t'] is an appropriate name for a register that is both
+     named [t] and [t'] (for example, if it holds the values of two
+     value identifiers known to be equal to each other). *)
+  val both : t -> t -> t
 
   (* [augmented_with_displacement t ~words] is an appropriate name for
      a register containing the result of a memory load where the base

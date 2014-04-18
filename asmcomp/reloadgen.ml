@@ -25,6 +25,8 @@ let access_stack r =
   with Exit ->
     true
 
+(* CR mshinwell: names? *)
+
 let insert_move src dst next =
   if src.loc = dst.loc
   then next

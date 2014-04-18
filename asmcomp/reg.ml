@@ -20,7 +20,7 @@ module Raw_name : sig
   val create_from_symbol : string -> t
   val create_from_blockheader : nativeint -> t
   val create_pointer_to_uninitialized_block : unit -> t
-  val combine : t -> t -> t
+  val both : t -> t -> t
   val augmented_with_displacement : t -> words:int -> t
   val do_not_propagate : t -> bool
   val to_string : t -> typ:Cmm.machtype_component -> string
@@ -44,11 +44,10 @@ end = struct
   let create_from_blockheader hdr = Block_header hdr
   let create_pointer_to_uninitialized_block () = Uninitialized_block
 
-  let combine t t' =
+  let both t t' =
     match t, t' with
-    | Anon, Anon -> Anon
-    | Anon, t' -> t'
-    | t, Anon -> t
+    | (Anon | Hard_reg | Uninitialized_block), t' -> t'
+    | t, (Anon | Hard_reg | Uninitialized_block) -> t
     | t, t' -> Multiple_names (t, t')
 
   let do_not_propagate _t = false
