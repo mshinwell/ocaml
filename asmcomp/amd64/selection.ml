@@ -245,6 +245,14 @@ method! insert_op_debug op dbg rs rd =
     self#insert_moves rs rsrc;
     self#insert_debug (Iop op) dbg rsrc rdst;
     self#insert_moves rdst rd;
+    for i = 0 to Array.length rdst - 1 do
+      let dst_stamp = rdst.(i).Reg.stamp in
+      for j = 0 to Array.length rsrc - 1 do
+        let src_stamp = rsrc.(j).Reg.stamp in
+        if src_stamp = dst_stamp then
+          rsrc.(j).Reg.raw_name <- Reg.Raw_name.create_anon ()
+      done
+    done;
     rd
   with Use_default ->
     super#insert_op_debug op dbg rs rd
