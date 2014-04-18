@@ -34,7 +34,9 @@ module Raw_name : sig
   (* [augmented_with_displacement t ~words] is an appropriate name for
      a register containing the result of a memory load where the base
      address was the contents of a register with name [t] and the
-     displacement applied to said address was [words]. *)
+     displacement applied to said address was [words].  Note that this does
+     not make any guarantees about the freshness of the value in the
+     register; an intervening store may have occurred. *)
   val augmented_with_displacement : t -> words:int -> t
 
   (* [do_not_propagate t] being [true] indicates that a move from a
@@ -45,6 +47,9 @@ module Raw_name : sig
 
   (* CR mshinwell: remove? *)
   val has_good_name : t -> bool
+
+  (* CR mshinwell: proper (de)serializers for names, which we can use on
+     the debugger side *)
 end
 
 (* Values of type [t] represent either hard registers or stack slots (in

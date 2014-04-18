@@ -245,6 +245,8 @@ method! insert_op_debug op dbg rs rd =
     self#insert_moves rs rsrc;
     self#insert_debug (Iop op) dbg rsrc rdst;
     self#insert_moves rdst rd;
+    (* CR mshinwell: somewhere there should be a comment about why it's hard
+       with the current code structure to improve upon this *)
     (* If the operation overwrites the contents of one of its source registers,
        then erase the name on the appropriate pseudos, to make sure that we
        don't make false claims about what the destination registers contain
