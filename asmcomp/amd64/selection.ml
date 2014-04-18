@@ -245,6 +245,13 @@ method! insert_op_debug op dbg rs rd =
     self#insert_moves rs rsrc;
     self#insert_debug (Iop op) dbg rsrc rdst;
     self#insert_moves rdst rd;
+    (* If the operation overwrites the contents of one of its source registers,
+       then erase the name on the appropriate pseudos, to make sure that we
+       don't make false claims about what the destination registers contain
+       (which we could since the same [Reg.t] value is used for the source,
+       which might be named e.g. with an identifier name, and the
+       destination).
+    *)
     for i = 0 to Array.length rdst - 1 do
       let dst_stamp = rdst.(i).Reg.stamp in
       for j = 0 to Array.length rsrc - 1 do
