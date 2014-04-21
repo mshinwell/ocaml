@@ -15,134 +15,93 @@ open Cmm
 module Raw_name : sig
   type t
   val create_anon : unit -> t
-  val create_hard_reg : unit -> t
+  val create_procedure_call_convention : unit -> t
   val create_from_ident : Ident.t -> t
-  val create_from_symbol : string -> t
-  val create_from_blockheader : nativeint -> t
-  val create_pointer_to_uninitialized_block : unit -> t
-  val both : t -> t -> t
-  val augmented_with_displacement : t -> words:int -> t
-  val do_not_propagate : t -> bool
+  val augment : t -> new_name:t -> t
   val to_string : t -> typ:Cmm.machtype_component -> string
-  val references_possibly_mutable_identifier : t -> bool
-  val has_good_name : t -> bool
+  val immutable : t -> bool
+  val immutable_and_anonymous : t -> bool
 end = struct
+  module One = struct
+    type t =
+      | Anon
+      | Procedure_call_convention
+      | Immutable_ident of Ident.t
+
+    let compare = Pervasives.compare
+
+    let to_string t ~typ =
+      match t with
+      | Anon ->
+        begin match typ with
+        | Addr -> "A"
+        | Int -> "I"
+        | Float -> "F"
+        end
+      | Procedure_call_convention -> "R"
+      | Immutable_ident ident ->
+        let name = Ident.unique_name ident in
+        assert (String.length name > 0);
+        name
+  end
+
+  module O = One
+  module Set = Set.Make (O)
+
   type t =
-    | Anon
-    | Hard_reg
-    | Ident of Ident.t
-    | Symbol of string
-    | Block_header of nativeint
-    | Uninitialized_block
-    | With_displacement of t * int
-    | Multiple_names of t * t
+    | Immutable of Set.t
+    | Mutable_ident of Ident.t
 
-  let create_anon () = Anon
-  let create_hard_reg () = Hard_reg
-  let create_from_ident ident = Ident ident
-  let create_from_symbol sym = Symbol sym
-  let create_from_blockheader hdr = Block_header hdr
-  let create_pointer_to_uninitialized_block () = Uninitialized_block
+  let create_anon () =
+    Immutable (Set.singleton O.Anon)
 
-  let both t t' =
-    match t, t' with
-    | (Anon | Hard_reg | Uninitialized_block), t' -> t'
-    | t, (Anon | Hard_reg | Uninitialized_block) -> t
-    | t, t' -> Multiple_names (t, t')
+  let create_procedure_call_convention () =
+    Immutable (Set.singleton O.Procedure_call_convention)
 
-  let do_not_propagate _t = false
-(*
-  let rec do_not_propagate = function
-    | Symbol _
-    | Block_header _
-    | Uninitialized_block -> true
-    | Anon
-    | R
-    | Ident _ -> false
-    | With_displacement (t, _displ) -> do_not_propagate t
-*)
+  let create_from_ident ident =
+    if Ident.is_mutable ident then
+      Mutable_ident ident
+    else
+      Immutable (Set.singleton (O.Immutable_ident ident))
 
-  let rec has_good_name t =
-    match t with
-    | Ident _ -> true
-    | Anon
-    | Hard_reg
-    | Symbol _
-    | Block_header _
-    | Uninitialized_block -> false
-    | With_displacement (t, _displ) -> has_good_name t
-    | Multiple_names (t, t') -> has_good_name t || has_good_name t'
+  let augment t ~new_name =
+    match t, new_name with
+    | (Mutable_ident _ | Immutable _), Mutable_ident ident ->
+      Mutable_ident ident  (* A mutable name always clobbers any other name. *)
+    | Mutable_ident ident, Immutable _immset ->
+      Mutable_ident ident  (* To cope with updates of regs holding mutable values. *)
+    | Immutable immset, Immutable immset' ->
+      (* CR mshinwell: "R" should not overwrite "Anon" probably *)
+      match Set.elements immset with
+      | [O.Anon] | [O.Procedure_call_convention] -> Immutable immset'
+      | _ ->
+        match Set.elements immset' with
+        | [O.Anon] | [O.Procedure_call_convention] -> Immutable immset
+        | _ -> Immutable (Set.union immset immset')
 
-  let rec references_possibly_mutable_identifier t =
-    match t with
-    | Ident ident -> Ident.is_mutable ident
-    | Anon
-    | Hard_reg
-    | Symbol _
-    | Block_header _
-    | Uninitialized_block
-    | With_displacement _ -> false  (* CR mshinwell: see note below re. this case *)
-    | Multiple_names (t, t') ->
-      references_possibly_mutable_identifier t
-        || references_possibly_mutable_identifier t'
+  let immutable = function
+    | Immutable _ -> true
+    | Mutable_ident _ -> false
 
-  let rec to_string t ~typ =
-    match t with
-    | Anon ->
-      begin match typ with
-      | Addr -> "A"
-      | Int -> "I"
-      | Float -> "F"
+  let immutable_and_anonymous = function
+    | Immutable immset ->
+      begin match Set.elements immset with
+      | [O.Anon] -> true
+      | _ -> false
       end
-    | Hard_reg -> "R"
-    | Ident ident ->
+    | Mutable_ident _ -> false
+
+  let to_string t ~typ =
+    match t with
+    | Immutable immset ->
+      Set.fold (fun one result ->
+        let one = O.to_string one ~typ in
+        if result = "" then one
+        else one ^ "|" ^ result) immset ""
+    | Mutable_ident ident ->
       let name = Ident.unique_name ident in
       assert (String.length name > 0);
-      if Ident.is_mutable ident then
-        name ^ "M"
-      else
-        name
-    | Symbol name -> Printf.sprintf "symbol(%s)" name
-    | Block_header hdr ->
-      (* CR mshinwell: fix for 32 bits (and large 64 bit blocks) *)
-      let hdr = Nativeint.to_int hdr in
-      let raw_tag = hdr land 0xff in
-      let raw_colour = (hdr lsr 8) land 0x3 in
-      let raw_size = hdr lsr 10 in
-      let tag =
-        if raw_tag = Obj.lazy_tag then "Lazy_tag"
-        else if raw_tag = Obj.lazy_tag then "Lazy_tag"
-        else if raw_tag = Obj.closure_tag then "Closure_tag"
-        else if raw_tag = Obj.object_tag then "Object_tag"
-        else if raw_tag = Obj.infix_tag then "Infix_tag"
-        else if raw_tag = Obj.forward_tag then "Forward_tag"
-        else if raw_tag = Obj.no_scan_tag then "No_scan_tag"
-        else if raw_tag = Obj.abstract_tag then "Abstract_tag"
-        else if raw_tag = Obj.string_tag then "String_tag"
-        else if raw_tag = Obj.double_tag then "Double_tag"
-        else if raw_tag = Obj.double_array_tag then "Double_array_tag"
-        else if raw_tag = Obj.custom_tag then "Custom_tag"
-        else Printf.sprintf "tag=%d" raw_tag
-      in
-      let colour =
-        match raw_colour with  (* see byterun/gc.h *)
-        | 0 -> "white"
-        | 1 -> "grey"
-        | 2 -> "blue"
-        | 3 -> "black"
-        | _ -> assert false
-      in
-      let size = Printf.sprintf "size=%d" raw_size in
-      Printf.sprintf "hdr(%s,%s,%s)" tag colour size
-    | Uninitialized_block -> "uninited-block"
-    | With_displacement (t, displ) ->
-      Printf.sprintf "%s[%d]" (to_string t ~typ) (displ / Arch.size_int)
-    | Multiple_names (t, t') ->
-      Printf.sprintf "%s__%s" (to_string t ~typ) (to_string t' ~typ)
-
-  let augmented_with_displacement t ~words:displ =
-    (* CR mshinwell: must check that we don't try to do this on a mutable one *)
-    With_displacement (t, displ)
+      name ^ "M"
 end
 
 type t =
@@ -213,21 +172,21 @@ let identical_except_in_namev rs ~from =
   Array.init (Array.length rs)
     (fun index -> identical_except_in_name rs.(index) ~from:from.(index))
 
-let create_hard_reg ty loc =
-  (* [Raw_name.Hard_reg] doesn't take an argument because we should always
-     take a copy of a value of type [t] used to represent a hard register (as
-     allocated by the various proc.ml files) and name it accordingly, for
-     example when moving from function argument registers.  See
-     selectgen.ml. *)
-  let r = { raw_name = Raw_name.create_hard_reg ();
+let create_procedure_call_convention ty loc =
+  (* [Raw_name.Procedure_call_convention] doesn't take an argument because we
+     should always take a copy of a value of type [t] used to represent a hard
+     register / stack slot (as allocated by the various proc.ml files) and name
+     it accordingly, for example when moving from function argument registers.
+     See selectgen.ml. *)
+  let r = { raw_name = Raw_name.create_procedure_call_convention ();
             stamp = !currstamp; typ = ty; loc;
             spill = false; interf = []; prefer = []; degree = 0;
             spill_cost = 0; visited = false; part = None; } in
   incr currstamp;
   r
 
-let immutable t =
-  not (Raw_name.references_possibly_mutable_identifier t.raw_name)
+let immutable t = Raw_name.immutable t.raw_name
+let immutable_and_anonymous t = Raw_name.immutable_and_anonymous t.raw_name
 
 let name t =
   let raw_name = Raw_name.to_string t.raw_name ~typ:t.typ in

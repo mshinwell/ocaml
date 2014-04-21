@@ -92,19 +92,17 @@ let all_regs_immutable rv =
 
 (* Naming of registers *)
 
-let name_regs' raw_name rv =
-  if Reg.Raw_name.do_not_propagate raw_name then ()
-  else
-    if Array.length rv = 1 then
-      rv.(0).raw_name <- Raw_name.both rv.(0).raw_name raw_name
-    else
-      for i = 0 to Array.length rv - 1 do
-        rv.(i).raw_name <- Raw_name.both rv.(i).raw_name raw_name;
-        rv.(i).part <- Some i
-      done
-
 let name_regs id rv =
-  name_regs' (Raw_name.create_from_ident id) rv
+  let raw_name = Reg.Raw_name.create_from_ident id in
+  if Array.length rv = 1 then
+    rv.(0).raw_name <-
+      Reg.Raw_name.augment rv.(0).raw_name ~new_name:raw_name
+  else
+    for i = 0 to Array.length rv - 1 do
+      rv.(i).raw_name <-
+        Reg.Raw_name.augment rv.(i).raw_name ~new_name:raw_name;
+      rv.(i).part <- Some i
+    done
 
 (* "Join" two instruction sequences, making sure they return their results
    in the same registers. *)
@@ -118,11 +116,20 @@ let join opt_r1 seq1 opt_r2 seq2 =
       assert (l1 = Array.length r2);
       let r = Array.create l1 Reg.dummy in
       for i = 0 to l1-1 do
-        if Reg.immutable r1.(i) then begin
+        (* If we're going to reuse a register we'd like it to be both
+           holding an immutable value *and* anonymous.  The former condition
+           is necessary for correctness.  The latter condition avoids making
+           false claims about the contents of a register in the debugger
+           (for example if it held the value of some non-mutable identifier
+           on one branch of a conditional, yet at the join point might hold
+           a different value coming from the other branch). *)
+        if Reg.immutable_and_anonymous r1.(i) then begin
           r.(i) <- r1.(i);
           seq2#insert_move r2.(i) r1.(i)
-        end else if Reg.immutable r2.(i) then begin
+        end else if Reg.immutable_and_anonymous r2.(i) then begin
           r.(i) <- r2.(i);
+          (* Ditto. *)
+          r2.(i).Reg.raw_name <- Reg.Raw_name.create_anon ();
           seq1#insert_move r1.(i) r2.(i)
         end else begin
           r.(i) <- Reg.create r1.(i).typ;
@@ -185,7 +192,6 @@ method is_simple_expr = function
     Cconst_int _ -> true
   | Cconst_blockheader _ -> true
   | Cconst_natint _ -> true
-  | Cconst_blockheader _ -> true
   | Cconst_float _ -> true
   | Cconst_symbol _ -> true
   | Cconst_pointer _ -> true
@@ -393,11 +399,10 @@ method extract =
 method insert_move src dst =
   if src.stamp <> dst.stamp then begin
     self#insert (Iop Imove) [|src|] [|dst|];
-    if Reg.immutable src
-        && not (Reg.Raw_name.do_not_propagate src.Reg.raw_name)
-    then begin
-      dst.Reg.raw_name <- src.Reg.raw_name
-    end
+    (* To ensure that we don't incorrectly clobber mutability annotations
+       on [dst], we go via [Raw_name.augment]. *)
+    dst.Reg.raw_name <-
+      Reg.Raw_name.augment dst.Reg.raw_name ~new_name:src.Reg.raw_name
   end
 
 method insert_moves src dst =
@@ -439,16 +444,12 @@ method emit_expr env exp =
       Some(self#insert_op (Iconst_int n) [||] r)
   | Cconst_blockheader n ->
       let r = self#regs_for typ_int in
-      assert (Array.length r = 1);
-      r.(0).Reg.raw_name <- Reg.Raw_name.create_from_blockheader n;
       Some(self#insert_op (Iconst_blockheader n) [||] r)
   | Cconst_float n ->
       let r = self#regs_for typ_float in
       Some(self#insert_op (Iconst_float n) [||] r)
   | Cconst_symbol n ->
       let r = self#regs_for typ_addr in
-      assert (Array.length r = 1);
-      r.(0).Reg.raw_name <- Reg.Raw_name.create_from_symbol n;
       Some(self#insert_op (Iconst_symbol n) [||] r)
   | Cconst_pointer n ->
       let r = self#regs_for typ_addr in
@@ -514,8 +515,6 @@ method emit_expr env exp =
               assert (Array.length rarg = Array.length loc_arg);
               let loc_arg = Reg.identical_except_in_namev loc_arg ~from:rarg in
               let loc_res = Proc.loc_results rd in
-              assert (Array.length rd = Array.length loc_res);
-              let loc_res = Reg.identical_except_in_namev loc_res ~from:rd in
               self#insert_move_args rarg loc_arg stack_ofs;
               self#insert_debug (Iop Icall_ind) dbg
                           (Array.append [|r1.(0)|] loc_arg) loc_res;
@@ -528,8 +527,6 @@ method emit_expr env exp =
               assert (Array.length r1 = Array.length loc_arg);
               let loc_arg = Reg.identical_except_in_namev loc_arg ~from:r1 in
               let loc_res = Proc.loc_results rd in
-              assert (Array.length rd = Array.length loc_res);
-              let loc_res = Reg.identical_except_in_namev loc_res ~from:rd in
               self#insert_move_args r1 loc_arg stack_ofs;
               self#insert_debug (Iop(Icall_imm lbl)) dbg loc_arg loc_res;
               self#insert_move_results loc_res rd stack_ofs;
@@ -539,16 +536,12 @@ method emit_expr env exp =
                 self#emit_extcall_args env new_args in
               let rd = self#regs_for ty in
               let loc_res = Proc.loc_external_results rd in
-              assert (Array.length rd = Array.length loc_res);
-              let loc_res = Reg.identical_except_in_namev loc_res ~from:rd in
               let loc_res = self#insert_op_debug (Iextcall(lbl, alloc)) dbg
                                     loc_arg loc_res in
               self#insert_move_results loc_res rd stack_ofs;
               Some rd
           | Ialloc _ ->
               let rd = self#regs_for typ_addr in
-              name_regs'
-                (Reg.Raw_name.create_pointer_to_uninitialized_block ()) rd;
               let size = size_expr env (Ctuple new_args) in
               self#insert (Iop(Ialloc size)) [||] rd;
               self#emit_stores env new_args rd;
@@ -556,25 +549,6 @@ method emit_expr env exp =
           | op ->
               let r1 = self#emit_tuple env new_args in
               let rd = self#regs_for ty in
-              begin
-                match new_op with
-                | Iload (Word, mode) ->
-                  let mode = Arch.addressing_mode_for_debugger r1 mode in
-                  begin match mode with
-                  | None -> ()
-                  | Some (source_reg, displ) ->
-                    assert (Array.length rd = 1);
-                    if not (Reg.immutable source_reg) then ()
-                    else begin
-                      let new_name =
-                        Reg.Raw_name.augmented_with_displacement
-                          source_reg.Reg.raw_name displ
-                      in
-                      rd.(0).Reg.raw_name <- new_name
-                    end
-                  end
-                | _ -> ()
-              end;
               Some (self#insert_op_debug op dbg r1 rd)
       end
   | Csequence(e1, e2) ->
@@ -660,23 +634,19 @@ method private emit_sequence env exp =
   let r = s#emit_expr env exp in
   (r, s)
 
-method private regs_have_good_names rv =
-  let result = ref true in
-  for i = 0 to Array.length rv - 1 do
-    if not (Reg.Raw_name.has_good_name rv.(i).Reg.raw_name) then
-      result := false
-  done;
-  !result
-
 method private bind_let env v r1 =
-  if all_regs_immutable r1 then begin
-    (* This may yield multiple names for the same register, e.g. for
-       [let x = y] with [y] immutable, then [x] and [y] will both be
-       represented by a register whose name is "x and y". *)
+  (* We can re-use the register(s) [r1] so long as they don't contain the
+     value of a mutable identifier and the value [v] we are binding them to
+     is also not mutable. *)
+  if all_regs_immutable r1 && not (Ident.is_mutable v) then begin
     name_regs v r1;
     Tbl.add v r1 env
   end else begin
     let rv = Reg.createv_like r1 in
+    (* CR mshinwell: try to optimize (as we used to) for e.g.:
+        I/38 := 1
+        i/1315M/39 := I/38
+    *)
     self#insert_moves r1 rv;
     (* [name_regs] is after [insert_moves] since [insert_moves] propagates the
        name from [r1], and we'd rather have the let-bound identifier name
@@ -739,7 +709,7 @@ method emit_extcall_args env args =
   assert (Array.length r1 = Array.length loc_arg);
   let loc_arg = Reg.identical_except_in_namev loc_arg ~from:r1 in
   self#insert_move_args r1 loc_arg stack_ofs;
-  arg_stack
+  loc_arg, stack_ofs
 
 method emit_stores env data regs_addr =
   let a =
@@ -802,8 +772,6 @@ method emit_tail env exp =
               end else begin
                 let rd = self#regs_for ty in
                 let loc_res = Proc.loc_results rd in
-                assert (Array.length rd = Array.length loc_res);
-                let loc_res = Reg.identical_except_in_namev loc_res ~from:rd in
                 self#insert_move_args rarg loc_arg stack_ofs;
                 self#insert_debug (Iop Icall_ind) dbg
                             (Array.append [|r1.(0)|] loc_arg) loc_res;
@@ -829,8 +797,6 @@ method emit_tail env exp =
               end else begin
                 let rd = self#regs_for ty in
                 let loc_res = Proc.loc_results rd in
-                assert (Array.length rd = Array.length loc_res);
-                let loc_res = Reg.identical_except_in_namev loc_res ~from:rd in
                 self#insert_move_args r1 loc_arg stack_ofs;
                 self#insert_debug (Iop(Icall_imm lbl)) dbg loc_arg loc_res;
                 self#insert(Iop(Istackoffset(-stack_ofs))) [||] [||];

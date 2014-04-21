@@ -20,33 +20,10 @@ module Raw_name : sig
      type [Reg.t] instead.) *)
   type t
 
-  val create_from_ident : Ident.t -> t
   val create_anon : unit -> t
-  val create_from_symbol : string -> t
-  val create_from_blockheader : nativeint -> t
-  val create_pointer_to_uninitialized_block : unit -> t
+  val create_from_ident : Ident.t -> t
 
-  (* [both t t'] is an appropriate name for a register that is both
-     named [t] and [t'] (for example, if it holds the values of two
-     value identifiers known to be equal to each other). *)
-  val both : t -> t -> t
-
-  (* [augmented_with_displacement t ~words] is an appropriate name for
-     a register containing the result of a memory load where the base
-     address was the contents of a register with name [t] and the
-     displacement applied to said address was [words].  Note that this does
-     not make any guarantees about the freshness of the value in the
-     register; an intervening store may have occurred. *)
-  val augmented_with_displacement : t -> words:int -> t
-
-  (* [do_not_propagate t] being [true] indicates that a move from a
-     register [r] with name [t] into a register [r'] should not update
-     the name of [r'].  This is used to ensure that "uninitialized block"
-     register names do not appear after the block has been initialized. *)
-  val do_not_propagate : t -> bool
-
-  (* CR mshinwell: remove? *)
-  val has_good_name : t -> bool
+  val augment : t -> new_name:t -> t
 
   (* CR mshinwell: proper (de)serializers for names, which we can use on
      the debugger side *)
@@ -82,7 +59,7 @@ and stack_location =
 
 val dummy: t
 val create: Cmm.machtype_component -> t
-val create_hard_reg: Cmm.machtype_component -> location -> t
+val create_procedure_call_convention: Cmm.machtype_component -> location -> t
 val createv: Cmm.machtype -> t array
 val createv_like: t array -> t array
 val clone: t -> t
@@ -95,6 +72,16 @@ val identical_except_in_namev : t array -> from:t array -> t array
 (* If [immutable t] is [false] then the register [t] might hold a value that
    can be mutated (using [Cassign], for example a [for] loop counter). *)
 val immutable : t -> bool
+
+(* [immutable_and_anonymous t] being [true] tells us that the register [t] is
+   immutable (as above) and that we don't yet have any naming information as to
+   which particular value is stored within it.
+
+   The "anonymity" part of this should not be used for making code
+   generation decisions that affect semantics (whereas "immutability", above,
+   may be).
+*)
+val immutable_and_anonymous : t -> bool
 
 (* Name for printing *)
 val name : t -> string

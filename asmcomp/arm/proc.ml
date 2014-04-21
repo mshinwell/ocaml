@@ -84,14 +84,14 @@ let rotate_registers = true
 let hard_int_reg =
   let v = Array.create 9 Reg.dummy in
   for i = 0 to 8 do
-    v.(i) <- Reg.create_hard_reg Int (Reg i)
+    v.(i) <- Reg.create_procedure_call_convention Int (Reg i)
   done;
   v
 
 let hard_float_reg =
   let v = Array.create 32 Reg.dummy in
   for i = 0 to 31 do
-    v.(i) <- Reg.create_hard_reg Float (Reg(100 + i))
+    v.(i) <- Reg.create_procedure_call_convention Float (Reg(100 + i))
   done;
   v
 
@@ -102,7 +102,7 @@ let phys_reg n =
   if n < 100 then hard_int_reg.(n) else hard_float_reg.(n - 100)
 
 let stack_slot slot ty =
-  Reg.create_hard_reg ty (Stack slot)
+  Reg.create_procedure_call_convention ty (Stack slot)
 
 (* Calling conventions *)
 

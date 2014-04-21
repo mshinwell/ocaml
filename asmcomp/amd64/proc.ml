@@ -118,12 +118,12 @@ let rotate_registers = false
 
 let hard_int_reg =
   let v = Array.create 13 Reg.dummy in
-  for i = 0 to 12 do v.(i) <- Reg.create_hard_reg Int (Reg i) done;
+  for i = 0 to 12 do v.(i) <- Reg.create_procedure_call_convention Int (Reg i) done;
   v
 
 let hard_float_reg =
   let v = Array.create 16 Reg.dummy in
-  for i = 0 to 15 do v.(i) <- Reg.create_hard_reg Float (Reg (100 + i)) done;
+  for i = 0 to 15 do v.(i) <- Reg.create_procedure_call_convention Float (Reg (100 + i)) done;
   v
 
 let all_phys_regs =
@@ -139,7 +139,7 @@ let rbp = phys_reg 12
 let rxmm15 = phys_reg 115
 
 let stack_slot slot ty =
-  Reg.create_hard_reg ty (Stack slot)
+  Reg.create_procedure_call_convention ty (Stack slot)
 
 (* Instruction selection *)
 
