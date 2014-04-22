@@ -14,7 +14,7 @@
 
 module Raw_name : sig
   type t
-  val create_from_ident : Ident.t -> t
+  val create_ident : Ident.t -> t
 end
 
 type t =
@@ -45,9 +45,23 @@ val create: Cmm.machtype_component -> t
 val createv: Cmm.machtype -> t array
 val createv_like: t array -> t array
 val clone: t -> t
-val at_location: Cmm.machtype_component -> location -> t
+val create_procedure_call_convention: Cmm.machtype_component -> location -> t
 
-val anonymous : t -> bool
+(* [identical_except_in_namev t ~from] takes registers and names elementwise
+   from [t] and [from] respectively and returns a new array containing copies
+   of the registers with the new names.  The registers' stamps are not changed.
+   This is used for naming values of type [t] representing the hard registers
+   and stack slots of procedure call conventions; see selectgen.ml. *)
+val identical_except_in_namev : t array -> from:t array -> t array
+
+(* Like [identical_except_in_namev] except just for one register. *)
+val identical_except_in_name : t -> from:t -> t
+
+(* A register being "temporary" means that it is not mapped in the environment
+   as used during instruction selection.  Another way of thinking of this is
+   that it is never the canonical (as in, "in the environment") location of
+   the value of a given identifier. *)
+val is_temporary : t -> bool
 
 (* Name for printing *)
 val name : t -> string
