@@ -480,7 +480,7 @@ method emit_expr env exp =
       begin match self#emit_expr env arg with
         None -> None
       | Some r1 ->
-          let rd = Proc.loc_exn_bucket in
+          let rd = [|Proc.loc_exn_bucket|] in
           self#insert (Iop Imove) r1 rd;
           self#insert_debug (Iraise k) dbg rd [||];
           None
@@ -519,9 +519,8 @@ method emit_expr env exp =
               let (loc_arg, stack_ofs) =
                 self#emit_extcall_args env new_args in
               let rd = self#regs_for ty in
-              let loc_res = Proc.loc_external_results rd in
               let loc_res = self#insert_op_debug (Iextcall(lbl, alloc)) dbg
-                                    loc_arg loc_res in
+                                    loc_arg (Proc.loc_external_results rd) in
               self#insert_move_results loc_res rd stack_ofs;
               Some rd
           | Ialloc _ ->
@@ -603,10 +602,9 @@ method emit_expr env exp =
       let rv = self#regs_for typ_addr in
       let (r2, s2) = self#emit_sequence (Tbl.add v rv env) e2 in
       let r = join r1 s1 r2 s2 in
-      let loc = Proc.loc_exn_bucket in
       self#insert
         (Itrywith(s1#extract,
-                  instr_cons (Iop Imove) loc rv
+                  instr_cons (Iop Imove) [|Proc.loc_exn_bucket|] rv
                              (s2#extract)))
         [||] [||];
       r
@@ -807,10 +805,9 @@ method emit_tail env exp =
       let (opt_r1, s1) = self#emit_sequence env e1 in
       let rv = self#regs_for typ_addr in
       let s2 = self#emit_tail_sequence (Tbl.add v rv env) e2 in
-      let loc = Proc.loc_exn_bucket in
       self#insert
         (Itrywith(s1#extract,
-                  instr_cons (Iop Imove) loc rv s2))
+                  instr_cons (Iop Imove) [|Proc.loc_exn_bucket|] rv s2))
         [||] [||];
       begin match opt_r1 with
         None -> ()
