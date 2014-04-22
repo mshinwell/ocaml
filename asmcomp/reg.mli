@@ -59,8 +59,8 @@ val identical_except_in_name : t -> from:t -> t
 
 (* A register being "temporary" means that it is not mapped in the environment
    as used during instruction selection.  Another way of thinking of this is
-   that it is never the canonical (as in, "in the environment") location of
-   the value of a given identifier. *)
+   that it is never the canonical location of the value of a given
+   identifier. *)
 val is_temporary : t -> bool
 
 (* Name for printing *)
