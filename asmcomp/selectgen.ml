@@ -480,9 +480,7 @@ method emit_expr env exp =
       begin match self#emit_expr env arg with
         None -> None
       | Some r1 ->
-          let rd =
-            Reg.identical_except_in_namev [| Proc.loc_exn_bucket |] ~from:r1
-          in
+          let rd = Proc.loc_exn_bucket in
           self#insert (Iop Imove) r1 rd;
           self#insert_debug (Iraise k) dbg rd [||];
           None
@@ -502,8 +500,6 @@ method emit_expr env exp =
               let rarg = Array.sub r1 1 (Array.length r1 - 1) in
               let rd = self#regs_for ty in
               let (loc_arg, stack_ofs) = Proc.loc_arguments rarg in
-              assert (Array.length rarg = Array.length loc_arg);
-              let loc_arg = Reg.identical_except_in_namev loc_arg ~from:rarg in
               let loc_res = Proc.loc_results rd in
               self#insert_move_args rarg loc_arg stack_ofs;
               self#insert_debug (Iop Icall_ind) dbg
@@ -514,8 +510,6 @@ method emit_expr env exp =
               let r1 = self#emit_tuple env new_args in
               let rd = self#regs_for ty in
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
-              assert (Array.length r1 = Array.length loc_arg);
-              let loc_arg = Reg.identical_except_in_namev loc_arg ~from:r1 in
               let loc_res = Proc.loc_results rd in
               self#insert_move_args r1 loc_arg stack_ofs;
               self#insert_debug (Iop(Icall_imm lbl)) dbg loc_arg loc_res;
@@ -609,9 +603,7 @@ method emit_expr env exp =
       let rv = self#regs_for typ_addr in
       let (r2, s2) = self#emit_sequence (Tbl.add v rv env) e2 in
       let r = join r1 s1 r2 s2 in
-      let loc =
-        Reg.identical_except_in_namev [| Proc.loc_exn_bucket |] ~from:rv
-      in
+      let loc = Proc.loc_exn_bucket in
       self#insert
         (Itrywith(s1#extract,
                   instr_cons (Iop Imove) loc rv
@@ -686,10 +678,8 @@ method private emit_tuple env exp_list =
 method emit_extcall_args env args =
   let r1 = self#emit_tuple env args in
   let (loc_arg, stack_ofs as arg_stack) = Proc.loc_external_arguments r1 in
-  assert (Array.length r1 = Array.length loc_arg);
-  let loc_arg = Reg.identical_except_in_namev loc_arg ~from:r1 in
   self#insert_move_args r1 loc_arg stack_ofs;
-  loc_arg, stack_ofs
+  arg_stack
 
 method emit_stores env data regs_addr =
   let a =
@@ -721,8 +711,6 @@ method private emit_return env exp =
     None -> ()
   | Some r ->
       let loc = Proc.loc_results r in
-      assert (Array.length r = Array.length loc);
-      let loc = Reg.identical_except_in_namev loc ~from:r in
       self#insert_moves r loc;
       self#insert Ireturn loc [||]
 
@@ -743,8 +731,6 @@ method emit_tail env exp =
               let r1 = self#emit_tuple env new_args in
               let rarg = Array.sub r1 1 (Array.length r1 - 1) in
               let (loc_arg, stack_ofs) = Proc.loc_arguments rarg in
-              assert (Array.length rarg = Array.length loc_arg);
-              let loc_arg = Reg.identical_except_in_namev loc_arg ~from:rarg in
               if stack_ofs = 0 then begin
                 self#insert_moves rarg loc_arg;
                 self#insert (Iop Itailcall_ind)
@@ -761,17 +747,11 @@ method emit_tail env exp =
           | Icall_imm lbl ->
               let r1 = self#emit_tuple env new_args in
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
-              assert (Array.length r1 = Array.length loc_arg);
-              let loc_arg = Reg.identical_except_in_namev loc_arg ~from:r1 in
               if stack_ofs = 0 then begin
                 self#insert_moves r1 loc_arg;
                 self#insert (Iop(Itailcall_imm lbl)) loc_arg [||]
               end else if lbl = !current_function_name then begin
                 let loc_arg' = Proc.loc_parameters r1 in
-                assert (Array.length r1 = Array.length loc_arg');
-                let loc_arg' =
-                  Reg.identical_except_in_namev loc_arg' ~from:r1
-                in
                 self#insert_moves r1 loc_arg';
                 self#insert (Iop(Itailcall_imm lbl)) loc_arg' [||]
               end else begin
@@ -827,9 +807,7 @@ method emit_tail env exp =
       let (opt_r1, s1) = self#emit_sequence env e1 in
       let rv = self#regs_for typ_addr in
       let s2 = self#emit_tail_sequence (Tbl.add v rv env) e2 in
-      let loc =
-        Reg.identical_except_in_namev [| Proc.loc_exn_bucket |] ~from:rv
-      in
+      let loc = Proc.loc_exn_bucket in
       self#insert
         (Itrywith(s1#extract,
                   instr_cons (Iop Imove) loc rv s2))
@@ -838,8 +816,6 @@ method emit_tail env exp =
         None -> ()
       | Some r1 ->
           let loc = Proc.loc_results r1 in
-          assert (Array.length r1 = Array.length loc);
-          let loc = Reg.identical_except_in_namev loc ~from:r1 in
           self#insert_moves r1 loc;
           self#insert Ireturn loc [||]
       end
