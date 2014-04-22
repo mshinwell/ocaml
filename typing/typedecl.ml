@@ -723,7 +723,7 @@ let compute_variance_gadt env check (required, loc as rloc) decl
       | {desc=Tconstr (path, tyl, _)} ->
           (* let tyl = List.map (Ctype.expand_head env) tyl in *)
           let tyl = List.map Ctype.repr tyl in
-          let fvl = List.map Ctype.free_variables tyl in
+          let fvl = List.map (Ctype.free_variables ?env:None) tyl in
           let _ =
             List.fold_left2
               (fun (fv1,fv2) ty (c,n,i) ->
@@ -1049,19 +1049,38 @@ let transl_exception env excdecl =
   cd, exn_decl, newenv
 
 (* Translate an exception rebinding *)
-let transl_exn_rebind env loc lid =
+let transl_exn_rebind env loc ser =
+  let name = ser.pexrb_name in
+  let lid = ser.pexrb_lid in
   let cdescr =
     try
-      Env.lookup_constructor lid env
+      Env.lookup_constructor lid.txt env
     with Not_found ->
-      raise(Error(loc, Unbound_exception lid)) in
-  Env.mark_constructor Env.Positive env (Longident.last lid) cdescr;
-  match cdescr.cstr_tag with
-    Cstr_exception (path, _) ->
-      (path, {exn_args = cdescr.cstr_args;
-              exn_attributes = [];
-              Types.exn_loc = loc})
-  | _ -> raise(Error(loc, Not_an_exception lid))
+      raise(Error(loc, Unbound_exception lid.txt)) in
+  Env.mark_constructor Env.Positive env (Longident.last lid.txt) cdescr;
+  let path =
+    match cdescr.cstr_tag with
+      Cstr_exception (path, _) -> path
+    | _ -> raise(Error(loc, Not_an_exception lid.txt))
+  in
+  let exn_decl =
+    {
+     exn_args = cdescr.cstr_args;
+     exn_attributes = [];
+     Types.exn_loc = loc
+    }
+  in
+  let (id, newenv) = Env.enter_exception name.txt exn_decl env in
+  let er =
+    { exrb_id = id;
+      exrb_name = name;
+      exrb_path = path;
+      exrb_txt = lid;
+      exrb_type = exn_decl;
+      exrb_attributes = ser.pexrb_attributes;
+     }
+  in
+    er, newenv
 
 (* Translate a value declaration *)
 let transl_value_decl env loc valdecl =
@@ -1074,9 +1093,9 @@ let transl_value_decl env loc valdecl =
         val_attributes = valdecl.pval_attributes }
   | decl ->
       let arity = Ctype.arity ty in
-      if arity = 0 then
-        raise(Error(valdecl.pval_type.ptyp_loc, Null_arity_external));
       let prim = Primitive.parse_declaration arity decl in
+      if arity = 0 && prim.prim_name.[0] <> '%' then
+        raise(Error(valdecl.pval_type.ptyp_loc, Null_arity_external));
       if !Clflags.native_code
       && prim.prim_arity > 5
       && prim.prim_native_name = ""

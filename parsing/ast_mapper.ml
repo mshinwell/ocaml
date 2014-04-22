@@ -12,6 +12,12 @@
 
 (* A generic Parsetree mapping class *)
 
+(*
+[@@@warning "+9"]
+  (* Ensure that record patterns don't miss any field. *)
+*)
+
+
 open Parsetree
 open Ast_helper
 open Location
@@ -28,18 +34,25 @@ type mapper = {
   class_signature: mapper -> class_signature -> class_signature;
   class_structure: mapper -> class_structure -> class_structure;
   class_type: mapper -> class_type -> class_type;
-  class_type_declaration: mapper -> class_type_declaration -> class_type_declaration;
+  class_type_declaration: mapper -> class_type_declaration
+                          -> class_type_declaration;
   class_type_field: mapper -> class_type_field -> class_type_field;
-  constructor_declaration: mapper -> constructor_declaration -> constructor_declaration;
+  constructor_declaration: mapper -> constructor_declaration
+                           -> constructor_declaration;
+  exception_rebind: mapper -> exception_rebind -> exception_rebind;
   expr: mapper -> expression -> expression;
   extension: mapper -> extension -> extension;
+  include_declaration: mapper -> include_declaration -> include_declaration;
+  include_description: mapper -> include_description -> include_description;
   label_declaration: mapper -> label_declaration -> label_declaration;
   location: mapper -> Location.t -> Location.t;
   module_binding: mapper -> module_binding -> module_binding;
   module_declaration: mapper -> module_declaration -> module_declaration;
   module_expr: mapper -> module_expr -> module_expr;
   module_type: mapper -> module_type -> module_type;
-  module_type_declaration: mapper -> module_type_declaration -> module_type_declaration;
+  module_type_declaration: mapper -> module_type_declaration
+                           -> module_type_declaration;
+  open_description: mapper -> open_description -> open_description;
   pat: mapper -> pattern -> pattern;
   payload: mapper -> payload -> payload;
   signature: mapper -> signature -> signature;
@@ -104,7 +117,8 @@ module T = struct
     Type.mk (map_loc sub ptype_name)
       ~params:(List.map (map_fst (map_opt (map_loc sub))) ptype_params)
       ~priv:ptype_private
-      ~cstrs:(List.map (map_tuple3 (sub.typ sub) (sub.typ sub) (sub.location sub))
+      ~cstrs:(List.map
+                (map_tuple3 (sub.typ sub) (sub.typ sub) (sub.location sub))
                 ptype_cstrs)
       ~kind:(sub.type_kind sub ptype_kind)
       ?manifest:(map_opt (sub.typ sub) ptype_manifest)
@@ -191,10 +205,8 @@ module MT = struct
     | Psig_recmodule l ->
         rec_module ~loc (List.map (sub.module_declaration sub) l)
     | Psig_modtype x -> modtype ~loc (sub.module_type_declaration sub x)
-    | Psig_open (ovf, lid, attrs) ->
-        open_ ~loc ~attrs:(sub.attributes sub attrs) ovf (map_loc sub lid)
-    | Psig_include (mt, attrs) ->
-        include_ ~loc (sub.module_type sub mt) ~attrs:(sub.attributes sub attrs)
+    | Psig_open x -> open_ ~loc (sub.open_description sub x)
+    | Psig_include x -> include_ ~loc (sub.include_description sub x)
     | Psig_class l -> class_ ~loc (List.map (sub.class_description sub) l)
     | Psig_class_type l ->
         class_type ~loc (List.map (sub.class_type_declaration sub) l)
@@ -221,7 +233,8 @@ module M = struct
     | Pmod_apply (m1, m2) ->
         apply ~loc ~attrs (sub.module_expr sub m1) (sub.module_expr sub m2)
     | Pmod_constraint (m, mty) ->
-        constraint_ ~loc ~attrs (sub.module_expr sub m) (sub.module_type sub mty)
+        constraint_ ~loc ~attrs (sub.module_expr sub m)
+                    (sub.module_type sub mty)
     | Pmod_unpack e -> unpack ~loc ~attrs (sub.expr sub e)
     | Pmod_extension x -> extension ~loc ~attrs (sub.extension sub x)
 
@@ -235,19 +248,15 @@ module M = struct
     | Pstr_primitive vd -> primitive ~loc (sub.value_description sub vd)
     | Pstr_type l -> type_ ~loc (List.map (sub.type_declaration sub) l)
     | Pstr_exception ed -> exception_ ~loc (sub.constructor_declaration sub ed)
-    | Pstr_exn_rebind (s, lid, attrs) ->
-        exn_rebind ~loc (map_loc sub s) (map_loc sub lid)
-          ~attrs:(sub.attributes sub attrs)
+    | Pstr_exn_rebind x -> exn_rebind ~loc (sub.exception_rebind sub x)
     | Pstr_module x -> module_ ~loc (sub.module_binding sub x)
     | Pstr_recmodule l -> rec_module ~loc (List.map (sub.module_binding sub) l)
     | Pstr_modtype x -> modtype ~loc (sub.module_type_declaration sub x)
-    | Pstr_open (ovf, lid, attrs) ->
-        open_ ~loc ~attrs:(sub.attributes sub attrs) ovf (map_loc sub lid)
+    | Pstr_open x -> open_ ~loc (sub.open_description sub x)
     | Pstr_class l -> class_ ~loc (List.map (sub.class_declaration sub) l)
     | Pstr_class_type l ->
         class_type ~loc (List.map (sub.class_type_declaration sub) l)
-    | Pstr_include (e, attrs) ->
-        include_ ~loc (sub.module_expr sub e) ~attrs:(sub.attributes sub attrs)
+    | Pstr_include x -> include_ ~loc (sub.include_declaration sub x)
     | Pstr_extension (x, attrs) ->
         extension ~loc (sub.extension sub x) ~attrs:(sub.attributes sub attrs)
     | Pstr_attribute x -> attribute ~loc (sub.attribute sub x)
@@ -294,7 +303,8 @@ module E = struct
           (map_opt (sub.expr sub) e3)
     | Pexp_sequence (e1, e2) ->
         sequence ~loc ~attrs (sub.expr sub e1) (sub.expr sub e2)
-    | Pexp_while (e1, e2) -> while_ ~loc ~attrs (sub.expr sub e1) (sub.expr sub e2)
+    | Pexp_while (e1, e2) ->
+        while_ ~loc ~attrs (sub.expr sub e1) (sub.expr sub e2)
     | Pexp_for (p, e1, e2, d, e3) ->
         for_ ~loc ~attrs (sub.pat sub p) (sub.expr sub e1) (sub.expr sub e2) d
           (sub.expr sub e3)
@@ -343,8 +353,8 @@ module P = struct
         construct ~loc ~attrs (map_loc sub l) (map_opt (sub.pat sub) p)
     | Ppat_variant (l, p) -> variant ~loc ~attrs l (map_opt (sub.pat sub) p)
     | Ppat_record (lpl, cf) ->
-        record ~loc ~attrs (List.map (map_tuple (map_loc sub) (sub.pat sub)) lpl)
-          cf
+        record ~loc ~attrs
+               (List.map (map_tuple (map_loc sub) (sub.pat sub)) lpl) cf
     | Ppat_array pl -> array ~loc ~attrs (List.map (sub.pat sub) pl)
     | Ppat_or (p1, p2) -> or_ ~loc ~attrs (sub.pat sub p1) (sub.pat sub p2)
     | Ppat_constraint (p, t) ->
@@ -483,6 +493,28 @@ let default_mapper =
            ~loc:(this.location this pmb_loc)
       );
 
+
+    open_description =
+      (fun this {popen_lid; popen_override; popen_attributes} ->
+         Opn.mk (map_loc this popen_lid)
+           ~override:popen_override
+           ~attrs:(this.attributes this popen_attributes)
+      );
+
+
+    include_description =
+      (fun this {pincl_mod; pincl_attributes} ->
+         Incl.mk (this.module_type this pincl_mod)
+           ~attrs:(this.attributes this pincl_attributes)
+      );
+
+    include_declaration =
+      (fun this {pincl_mod; pincl_attributes} ->
+         Incl.mk (this.module_expr this pincl_mod)
+           ~attrs:(this.attributes this pincl_attributes)
+      );
+
+
     value_binding =
       (fun this {pvb_pat; pvb_expr; pvb_attributes} ->
          Vb.mk
@@ -510,6 +542,14 @@ let default_mapper =
            ~mut:pld_mutable
            ~loc:(this.location this pld_loc)
            ~attrs:(this.attributes this pld_attributes)
+      );
+
+    exception_rebind =
+      (fun this {pexrb_name; pexrb_lid; pexrb_attributes} ->
+         Exrb.mk
+           (map_loc this pexrb_name)
+           (map_loc this pexrb_lid)
+           ~attrs:(this.attributes this pexrb_attributes)
       );
 
     cases = (fun this l -> List.map (this.case this) l);
@@ -581,4 +621,3 @@ let run_main mapper =
 
 let register_function = ref (fun _name f -> run_main f)
 let register name f = !register_function name f
-
