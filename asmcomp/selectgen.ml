@@ -18,7 +18,17 @@ open Cmm
 open Reg
 open Mach
 
-type environment = (Ident.t, Reg.t array) Tbl.t
+module Env : sig
+  type t
+
+  val not_mapped_to : t -> Reg.t -> bool
+end = struct
+  type t = {
+    tbl : (Ident.t, Reg.t array) Tbl.t;
+    regs : Reg.Set.t;
+  }
+
+end
 
 (* Infer the type of the result of an operation *)
 
@@ -107,7 +117,7 @@ let name_regs id rv =
 (* "Join" two instruction sequences, making sure they return their results
    in the same registers. *)
 
-let join opt_r1 seq1 opt_r2 seq2 =
+let join env opt_r1 seq1 opt_r2 seq2 =
   match (opt_r1, opt_r2) with
     (None, _) -> opt_r2
   | (_, None) -> opt_r1
@@ -116,20 +126,14 @@ let join opt_r1 seq1 opt_r2 seq2 =
       assert (l1 = Array.length r2);
       let r = Array.create l1 Reg.dummy in
       for i = 0 to l1-1 do
-        (* If we're going to reuse a register we'd like it to be both
-           holding an immutable value *and* anonymous.  The former condition
-           is necessary for correctness.  The latter condition avoids making
-           false claims about the contents of a register in the debugger
-           (for example if it held the value of some non-mutable identifier
-           on one branch of a conditional, yet at the join point might hold
-           a different value coming from the other branch). *)
-        if Reg.immutable_and_anonymous r1.(i) then begin
+        (* We can only reuse a register if it is not mapped to by the
+           environment.  Otherwise, a later reference to some identifier may
+           not give the correct value. *)
+        if Env.not_mapped_to env r1.(i) then begin
           r.(i) <- r1.(i);
           seq2#insert_move r2.(i) r1.(i)
-        end else if Reg.immutable_and_anonymous r2.(i) then begin
+        end else if Env.not_mapped_to env r2.(i) then begin
           r.(i) <- r2.(i);
-          (* Ditto. *)
-          r2.(i).Reg.raw_name <- Reg.Raw_name.create_anon ();
           seq1#insert_move r1.(i) r2.(i)
         end else begin
           r.(i) <- Reg.create r1.(i).typ;

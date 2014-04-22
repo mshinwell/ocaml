@@ -252,13 +252,16 @@ method! insert_op_debug op dbg rs rd =
        don't make false claims about what the destination registers contain
        (which we could since the same [Reg.t] value is used for the source,
        which might be named e.g. with an identifier name, and the
-       destination).
+       destination).  The erasure is not performed if the identifier is
+       mutable: first, it's important that mutability annotations are not
+       removed for correctness; and second, such a value should be expected
+       to change.
     *)
     for i = 0 to Array.length rdst - 1 do
       let dst_stamp = rdst.(i).Reg.stamp in
       for j = 0 to Array.length rsrc - 1 do
         let src_stamp = rsrc.(j).Reg.stamp in
-        if src_stamp = dst_stamp then begin
+        if src_stamp = dst_stamp && Reg.immutable rsrc.(j) then begin
           rsrc.(j).Reg.raw_name <- Reg.Raw_name.create_anon ()
         end
       done
