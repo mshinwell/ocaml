@@ -83,23 +83,25 @@ let swap_intcomp = function
 
 (* Naming of registers *)
 
-let all_regs_anonymous rv =
+let all_regs_are_temporaries rv =
   try
     for i = 0 to Array.length rv - 1 do
-      if not (Reg.anonymous rv.(i)) then raise Exit
+      if not (Reg.is_temporary rv.(i)) then raise Exit
     done;
     true
   with Exit ->
     false
 
 let name_regs id rv =
-  if Array.length rv = 1 then
-    rv.(0).raw_name <- Raw_name.create_from_ident id
-  else
+  if Array.length rv = 1 then begin
+    rv.(0).raw_name <- Reg.Raw_name.create_ident id;
+    rv.(0).part <- None
+  end else begin
     for i = 0 to Array.length rv - 1 do
-      rv.(i).raw_name <- Raw_name.create_from_ident id;
+      rv.(i).raw_name <- Reg.Raw_name.create_ident id;
       rv.(i).part <- Some i
     done
+  end
 
 (* "Join" two instruction sequences, making sure they return their results
    in the same registers. *)
@@ -113,10 +115,15 @@ let join opt_r1 seq1 opt_r2 seq2 =
       assert (l1 = Array.length r2);
       let r = Array.create l1 Reg.dummy in
       for i = 0 to l1-1 do
-        if Reg.anonymous r1.(i) then begin
+        (* If either of the registers is a temporary then we can reuse it
+           for the joined result, since we know that it is not mapped to by
+           the environment, and thus a move into it cannot disturb any later
+           computation.
+        *)
+        if Reg.is_temporary r1.(i) then begin
           r.(i) <- r1.(i);
           seq2#insert_move r2.(i) r1.(i)
-        end else if Reg.anonymous r2.(i) then begin
+        end else if Reg.is_temporary r2.(i) then begin
           r.(i) <- r2.(i);
           seq1#insert_move r1.(i) r2.(i)
         end else begin
@@ -608,7 +615,7 @@ method private emit_sequence env exp =
   (r, s)
 
 method private bind_let env v r1 =
-  if all_regs_anonymous r1 then begin
+  if all_regs_are_temporaries r1 then begin
     name_regs v r1;
     Tbl.add v r1 env
   end else begin
@@ -630,7 +637,7 @@ method private emit_parts env exp =
         else begin
           (* The normal case *)
           let id = Ident.create "bind" in
-          if all_regs_anonymous r then
+          if all_regs_are_temporaries r then
             (* r is an anonymous, unshared register; use it directly *)
             Some (Cvar id, Tbl.add id r env)
           else begin
@@ -827,7 +834,41 @@ method emit_fundecl f =
       (fun (id, ty) -> let r = self#regs_for ty in name_regs id r; r)
       f.Cmm.fun_args in
   let rarg = Array.concat rargs in
-  let loc_arg = Proc.loc_parameters rarg in
+  (* [parts] corresponds elementwise to [rarg] and identifies, for each
+     register in [rarg], which part of a value split across multiple registers
+     it corresponds to.  [None] is used to indicate that a value fits within
+     a single register. *)
+  let parts =
+    let parts_array arr =
+      if Array.length arr <= 1 then
+        [| None |]
+      else
+        Array.init (Array.length arr) (fun index -> Some index)
+    in
+    Array.concat (List.map parts_array rargs)
+  in
+  let loc_arg =
+    let loc_arg = Proc.loc_parameters rarg in
+    assert (Array.length rarg = Array.length loc_arg);
+    (* [loc_arg] corresponds elementwise to [rargs]; it identifies in which
+       "hard" pseudoregisters (hard registers or stack slots) the arguments to
+       the function will be found.  We duplicate each [Reg.t] value in
+       [loc_arg] such that we can annotate it with the name of the identifier
+       contained within the register for this function and the part of the
+       value it corresponds to (see above).  Note however that the stamps on
+       the duplicated [Reg.t] values are the *same* as the registers in
+       [loc_arg].  This is important, since some of those have fixed
+       assignments, such as hard registers. *)
+    Array.init (Array.length loc_arg) (fun index ->
+      let reg =
+        Reg.identical_except_in_name loc_arg.(index) ~from:rarg.(index)
+      in
+      begin match parts.(index) with
+      | None -> ()
+      | Some part -> reg.part <- Some part
+      end;
+      reg)
+  in
   let env =
     List.fold_right2
       (fun (id, ty) r env -> Tbl.add id r env)

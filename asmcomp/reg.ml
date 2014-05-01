@@ -12,21 +12,47 @@
 
 open Cmm
 
-module Raw_name = struct
+module Raw_name : sig
+  type t
+
+  val create_temporary : unit -> t
+  val create_procedure_call_convention : unit -> t
+  val create_ident : Ident.t -> t
+
+  val to_string : t -> string option
+  val is_temporary : t -> bool
+end = struct
   type t =
-    | Anon
-    | R
+    | Temporary
+    | Procedure_call_convention
     | Ident of Ident.t
 
-  let create_from_ident ident = Ident ident
+  (* The reader may wonder why we don't allow multiple identifier names to
+     be associated with a given register.  The reason is that for situations
+     where this might arise, e.g.:
+
+        let x = y in
+        ...
+
+     we will always emit a move at the moment, since it is assumed [y] might
+     be mutable (in the [Cassign] sense).  See [bind_let] in selectgen.ml.
+  *)
+
+  let create_temporary () = Temporary
+  let create_procedure_call_convention () = Procedure_call_convention
+  let create_ident ident = Ident ident
 
   let to_string t =
     match t with
-    | Anon -> None
-    | R -> Some "R"
+    | Temporary -> None
+    | Procedure_call_convention -> Some "R"
     | Ident ident ->
       let name = Ident.name ident in
       if String.length name <= 0 then None else Some name
+
+  let is_temporary = function
+    | Temporary -> true
+    | Procedure_call_convention | Ident _ -> false
 end
 
 type t =
@@ -55,7 +81,8 @@ and stack_location =
 type reg = t
 
 let dummy =
-  { raw_name = Raw_name.Anon; stamp = 0; typ = Int; loc = Unknown;
+  { raw_name = Raw_name.create_temporary ();
+    stamp = 0; typ = Int; loc = Unknown;
     spill = false; interf = []; prefer = []; degree = 0; spill_cost = 0;
     visited = false; part = None;
   }
@@ -64,7 +91,8 @@ let currstamp = ref 0
 let reg_list = ref([] : t list)
 
 let create ty =
-  let r = { raw_name = Raw_name.Anon; stamp = !currstamp; typ = ty;
+  let r = { raw_name = Raw_name.create_temporary ();
+            stamp = !currstamp; typ = ty;
             loc = Unknown; spill = false; interf = []; prefer = []; degree = 0;
             spill_cost = 0; visited = false; part = None; } in
   reg_list := r :: !reg_list;
@@ -88,31 +116,44 @@ let clone r =
   nr.raw_name <- r.raw_name;
   nr
 
-let at_location ty loc =
-  let r = { raw_name = Raw_name.R; stamp = !currstamp; typ = ty; loc;
+let create_procedure_call_convention ty loc =
+  let r = { raw_name = Raw_name.create_procedure_call_convention ();
+            stamp = !currstamp; typ = ty; loc;
             spill = false; interf = []; prefer = []; degree = 0;
             spill_cost = 0; visited = false; part = None; } in
   incr currstamp;
   r
 
-let anonymous t =
-  match Raw_name.to_string t.raw_name with
-  | None -> true
-  | Some _raw_name -> false
+let identical_except_in_name r ~from =
+  { r with raw_name = from.raw_name; }
+
+let identical_except_in_namev rs ~from =
+  if Array.length rs <> Array.length from then
+    failwith "Reg.identical_except_in_namev with different length arrays";
+  Array.init (Array.length rs)
+    (fun index -> identical_except_in_name rs.(index) ~from:from.(index))
 
 let name t =
-  match Raw_name.to_string t.raw_name with
-  | None -> ""
-  | Some raw_name ->
-    let with_spilled =
-      if t.spill then
-        "spilled-" ^ raw_name
-      else
-        raw_name
-    in
-    match t.part with
-    | None -> with_spilled
-    | Some part -> with_spilled ^ "#" ^ string_of_int part
+  let raw_name =
+    match Raw_name.to_string t.raw_name with
+    | Some raw_name -> raw_name
+    | None ->
+      match t.typ with
+      | Addr -> "A"
+      | Int -> "I"
+      | Float -> "F"
+  in
+  let with_spilled =
+    if t.spill then
+      "spilled-" ^ raw_name
+    else
+      raw_name
+  in
+  match t.part with
+  | None -> with_spilled
+  | Some part -> with_spilled ^ "#" ^ string_of_int part
+
+let is_temporary t = Raw_name.is_temporary t.raw_name
 
 let first_virtual_reg_stamp = ref (-1)
 
