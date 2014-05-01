@@ -823,8 +823,9 @@ and label_x_expression i ppf (l,e) =
 
 and label_x_bool_x_core_type_list i ppf x =
   match x with
-    Rtag (l, b, ctl) ->
+    Rtag (l, attrs, b, ctl) ->
       line i ppf "Rtag \"%s\" %s\n" l (string_of_bool b);
+      attributes (i+1) ppf attrs;
       list (i+1) core_type ppf ctl
   | Rinherit (ct) ->
       line i ppf "Rinherit\n";
@@ -838,15 +839,15 @@ let rec toplevel_phrase i ppf x =
       structure (i+1) ppf s;
   | Ptop_dir (s, da) ->
       line i ppf "Ptop_dir \"%s\"\n" s;
-      list i directive_argument ppf da;
+      directive_argument i ppf da;
 
 and directive_argument i ppf x =
   match x with
+  | Pdir_none -> line i ppf "Pdir_none\n"
   | Pdir_string (s) -> line i ppf "Pdir_string \"%s\"\n" s;
   | Pdir_int (i) -> line i ppf "Pdir_int %d\n" i;
   | Pdir_ident (li) -> line i ppf "Pdir_ident %a\n" fmt_longident li;
   | Pdir_bool (b) -> line i ppf "Pdir_bool %s\n" (string_of_bool b);
-  | Pdir_keyword s -> line i ppf "Pdir_keyword %s\n" s;
 ;;
 
 let interface ppf x = list 0 signature_item ppf x;;
