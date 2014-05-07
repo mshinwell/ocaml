@@ -372,6 +372,28 @@ case $? in
      exit 2;;
 esac
 
+# Try to determine whether we're using clang, gcc, or something else
+
+byteccvariety=other
+if $bytecc --version 2>&1 | grep '^gcc (GCC) ' >/dev/null ; then
+  byteccvariety=gcc
+elif $bytecc --version 2>&1 | grep ' (clang-' >/dev/null ; then
+  byteccvariety=clang
+fi
+
+echo "bytecode C compiler variety: $byteccvariety"
+
+# Set higher optimization level if appropriate
+
+case $byteccvariety in
+  gcc|clang)
+    byteccoptimize="-fwrapv -fno-strict-aliasing -O2"
+    ;;
+  *)
+    byteccoptimize="-O"
+    ;;
+esac
+
 # Check the sizes of data types
 
 echo "Checking the sizes of integers and pointers..."
@@ -811,6 +833,30 @@ case "$arch,$model,$system" in
   *) profiling='noprof';;
 esac
 
+if test "$arch" != "none"; then
+  # Try to determine whether we're using clang, gcc, or something else
+
+  nativeccvariety=other
+  if $nativecc --version 2>&1 | grep '^gcc (GCC) ' >/dev/null ; then
+    nativeccvariety=gcc
+  elif $nativecc --version 2>&1 | grep ' (clang-' >/dev/null ; then
+    nativeccvariety=clang
+  fi
+
+  echo "native code C compiler variety: $nativeccvariety"
+
+  # Set higher optimization level if appropriate
+
+  case $nativeccvariety in
+    gcc|clang)
+      nativeccoptimize="-fwrapv -fno-strict-aliasing -O2"
+      ;;
+    *)
+      nativeccoptimize="-O"
+      ;;
+  esac
+fi
+
 # Where is ranlib?
 
 if sh ./searchpath ranlib; then
@@ -824,7 +870,6 @@ else
 fi
 
 echo "ARCMD=ar" >> Makefile
-
 
 # Do #! scripts work?
 
@@ -1622,6 +1667,7 @@ esac
 cclibs="$cclibs $mathlib"
 
 echo "BYTECC=$bytecc" >> Makefile
+echo "BYTECCOPTIMIZE=$byteccoptimize" >> Makefile
 echo "BYTECCCOMPOPTS=$bytecccompopts" >> Makefile
 echo "BYTECCLINKOPTS=$bytecclinkopts" >> Makefile
 echo "BYTECCLIBS=$cclibs $dllib $curseslibs $pthread_link" >> Makefile
@@ -1643,6 +1689,7 @@ echo "ARCH=$arch" >> Makefile
 echo "MODEL=$model" >> Makefile
 echo "SYSTEM=$system" >> Makefile
 echo "NATIVECC=$nativecc" >> Makefile
+echo "NATIVECCOPTIMIZE=$nativeccoptimize" >> Makefile
 echo "NATIVECCCOMPOPTS=$nativecccompopts" >> Makefile
 echo "NATIVECCPROFOPTS=$nativeccprofopts" >> Makefile
 echo "NATIVECCLINKOPTS=$nativecclinkopts" >> Makefile
@@ -1703,6 +1750,7 @@ echo "        manual pages.............. $mandir (with extension .$manext)"
 
 echo "Configuration for the bytecode compiler:"
 echo "        C compiler used........... $bytecc"
+echo "        optimization options...... $byteccoptimize"
 echo "        options for compiling..... $bytecccompopts"
 echo "        options for linking....... $bytecclinkopts $cclibs $dllib $curseslibs $pthread_link"
 if $shared_libraries_supported; then
@@ -1726,6 +1774,7 @@ else
   echo "        OS variant................ $system"
   fi
   echo "        C compiler used........... $nativecc"
+  echo "        optimization options...... $nativeccoptimize"
   echo "        options for compiling..... $nativecccompopts"
   echo "        options for linking....... $nativecclinkopts $cclibs"
   echo "        assembler ................ $as"

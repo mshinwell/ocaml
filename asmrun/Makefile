@@ -16,9 +16,9 @@ include ../config/Makefile
 CC=$(NATIVECC)
 FLAGS=-I../byterun -DCAML_NAME_SPACE -DNATIVE_CODE \
       -DTARGET_$(ARCH) -DSYS_$(SYSTEM) $(IFLEXDIR)
-CFLAGS=$(FLAGS) -O $(NATIVECCCOMPOPTS)
+CFLAGS=$(FLAGS) $(NATIVECCOPTIMIZE) $(NATIVECCCOMPOPTS)
 DFLAGS=$(FLAGS) -g -DDEBUG $(NATIVECCCOMPOPTS)
-PFLAGS=$(FLAGS) -pg -O -DPROFILING $(NATIVECCPROFOPTS)
+PFLAGS=$(FLAGS) -pg $(NATIVECCOPTIMIZE) -DPROFILING $(NATIVECCPROFOPTS)
 
 COBJS=startup.o main.o fail.o roots.o globroots.o signals.o signals_asm.o \
   misc.o freelist.o major_gc.o minor_gc.o memory.o alloc.o compare.o ints.o \
