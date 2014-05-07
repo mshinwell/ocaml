@@ -121,6 +121,8 @@ type primitive =
   (* byte swap *)
   | Pbswap16
   | Pbbswap of boxed_integer
+  (* Integer to external pointer *)
+  | Pint_as_pointer
 
 and comparison =
     Ceq | Cneq | Clt | Cgt | Cle | Cge
@@ -398,6 +400,12 @@ let raise_count = ref 0
 let next_raise_count () =
   incr raise_count ;
   !raise_count
+
+let negative_raise_count = ref 0
+
+let next_negative_raise_count () =
+  decr negative_raise_count ;
+  !negative_raise_count
 
 (* Anticipated staticraise, for guards *)
 let staticfail = Lstaticraise (0,[])

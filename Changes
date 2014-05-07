@@ -10,6 +10,7 @@ Language features:
 * Alternative syntax for string literals {id|...|id} (can break comments)
 - Separation between read-only strings (type string) and read-write byte
   sequences (type bytes). Activated by command-line option -safe-string.
+- Exception cases in pattern matching (patch by Jeremy Yallop).
 
 Build system for the OCaml distribution:
 - Use -bin-annot when building.
@@ -129,6 +130,8 @@ Bug fixes:
 - PR#6361: Hashtbl.hash not terminating on some lazy values w/ recursive types
 - PR#6383: Exception Not_found when using object type in absent module
 - PR#6384: Uncaught Not_found exception with a hidden .cmi file
+- PR#6385: wrong allocation of large closures by the bytecode interpreter
+- PR#6394: Assertion failed in Typecore.expand_path
 - fix -dsource printing of "external _pipe = ..."
   (Gabriel Scherer)
 - bound-checking bug in caml_string_{get,set}{16,32,64}
