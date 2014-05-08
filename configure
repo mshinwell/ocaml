@@ -375,7 +375,7 @@ esac
 # Try to determine whether we're using clang, gcc, or something else
 
 byteccvariety=other
-if $bytecc --version 2>&1 | grep '^gcc (GCC) ' >/dev/null ; then
+if $bytecc --version 2>&1 | grep ' (GCC) ' >/dev/null ; then
   byteccvariety=gcc
 elif $bytecc --version 2>&1 | grep ' (clang-' >/dev/null ; then
   byteccvariety=clang
@@ -837,7 +837,7 @@ if test "$arch" != "none"; then
   # Try to determine whether we're using clang, gcc, or something else
 
   nativeccvariety=other
-  if $nativecc --version 2>&1 | grep '^gcc (GCC) ' >/dev/null ; then
+  if $nativecc --version 2>&1 | grep ' (GCC) ' >/dev/null ; then
     nativeccvariety=gcc
   elif $nativecc --version 2>&1 | grep ' (clang-' >/dev/null ; then
     nativeccvariety=clang
