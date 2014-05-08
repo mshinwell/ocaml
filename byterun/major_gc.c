@@ -142,7 +142,7 @@ static void mark_slice (intnat work)
   header_t hd;
   mlsize_t size, i;
 #ifdef NATIVE_CODE_AND_NO_NAKED_POINTERS
-  int scanning_closure = 0;
+  int marking_closure = 0;
 #endif
 
   caml_gc_message (0x40, "Marking %ld words\n", work);
@@ -153,7 +153,7 @@ static void mark_slice (intnat work)
       v = *--gray_vals_ptr;
       hd = Hd_val(v);
 #ifdef NATIVE_CODE_AND_NO_NAKED_POINTERS
-      scanning_closure =
+      marking_closure =
         (Tag_hd (hd) == Closure_tag || Tag_hd (hd) == Infix_tag);
 #endif
       Assert (Is_gray_hd (hd));
@@ -167,8 +167,8 @@ static void mark_slice (intnat work)
                 && Wosize_val (child) > 0  /* Atoms never need to be marked. */
                 /* Closure blocks contain code pointers at offsets that cannot
                    be reliably determined, so we always use the page table when
-                   scanning such values. */
-                && (!scanning_closure || Is_in_heap (child))) {
+                   marking such values. */
+                && (!marking_closure || Is_in_heap (child))) {
             /* See [caml_darken] for a description of this assertion. */
             CAMLassert (Is_in_heap (child) || Is_black_hd (Hd_val (child)));
 #else
