@@ -1605,7 +1605,7 @@ if test "$with_frame_pointers" = "true"; then
 
 fi
 
-if test "$no_naked_pointers" = "true"; then
+if $no_naked_pointers; then
   echo "#define NO_NAKED_POINTERS" >> m.h
 fi
 
@@ -1744,7 +1744,7 @@ else
   else
   inf "        with frame pointers....... no"
   fi
-  if test "$no_naked_pointers" = "true"; then
+  if $no_naked_pointers; then
   inf "        naked pointers forbidden.. yes"
   else
   inf "        naked pointers forbidden.. no"

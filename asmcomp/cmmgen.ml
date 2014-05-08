@@ -52,9 +52,8 @@ let block_header tag sz =
    structured constants and static module definitions. *)
 let black_block_header tag sz = Nativeint.logor (block_header tag sz) caml_black
 let white_closure_header sz = block_header Obj.closure_tag sz
-let white_infix_header ofs = block_header Obj.infix_tag ofs
 let black_closure_header sz = black_block_header Obj.closure_tag sz
-let black_infix_header ofs = black_block_header Obj.infix_tag ofs
+let infix_header ofs = block_header Obj.infix_tag ofs
 let float_header = block_header Obj.double_tag (size_float / size_addr)
 let floatarray_header len =
       block_header Obj.double_array_tag (len * size_float / size_addr)
@@ -68,7 +67,7 @@ let alloc_block_header tag sz = Cconst_blockheader(block_header tag sz)
 let alloc_float_header = Cconst_blockheader(float_header)
 let alloc_floatarray_header len = Cconst_blockheader(floatarray_header len)
 let alloc_closure_header sz = Cconst_blockheader(white_closure_header sz)
-let alloc_infix_header ofs = Cconst_blockheader(white_infix_header ofs)
+let alloc_infix_header ofs = Cconst_blockheader(infix_header ofs)
 let alloc_boxedint32_header = Cconst_blockheader(boxedint32_header)
 let alloc_boxedint64_header = Cconst_blockheader(boxedint64_header)
 let alloc_boxedintnat_header = Cconst_blockheader(boxedintnat_header)
@@ -2283,12 +2282,12 @@ let emit_constant_closure symb fundecls cont =
         [] -> cont
       | f2 :: rem ->
           if f2.arity = 1 then
-            Cint(black_infix_header pos) ::
+            Cint(infix_header pos) ::
             Csymbol_address f2.label ::
             Cint 3n ::
             emit_others (pos + 3) rem
           else
-            Cint(black_infix_header pos) ::
+            Cint(infix_header pos) ::
             Csymbol_address(curry_function f2.arity) ::
             Cint(Nativeint.of_int (f2.arity lsl 1 + 1)) ::
             Csymbol_address f2.label ::
