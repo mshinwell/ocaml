@@ -96,7 +96,7 @@ void caml_darken (value v, value *p /* not used */)
        when the value is allocated in a read-only section.  (For the values
        where it would be safe it is a performance improvement since we avoid
        putting them on the grey list.) */
-    CAMLassert (Is_in_heap(v) || Is_black_hd (Hd_val (v)));
+    CAMLassert (Is_in_heap (v) || Is_black_hd (Hd_val (v)));
 #else
   if (Is_block (v) && Is_in_heap (v)) {
 #endif
