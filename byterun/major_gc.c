@@ -28,9 +28,9 @@
 #include "weak.h"
 
 #if defined (NATIVE_CODE) && defined (NO_NAKED_POINTERS)
-#define NATIVE_AND_NO_NAKED_POINTERS
+#define NATIVE_CODE_AND_NO_NAKED_POINTERS
 #else
-#undef NATIVE_AND_NO_NAKED_POINTERS
+#undef NATIVE_CODE_AND_NO_NAKED_POINTERS
 #endif
 
 uintnat caml_percent_free;
@@ -88,7 +88,7 @@ static void realloc_gray_vals (void)
 
 void caml_darken (value v, value *p /* not used */)
 {
-#ifdef NATIVE_AND_NO_NAKED_POINTERS
+#ifdef NATIVE_CODE_AND_NO_NAKED_POINTERS
   if (Is_block (v) && Wosize_val (v) > 0) {
     /* We insist that naked pointers to outside the heap point to things that
        look like values with headers coloured black.  This isn't always
@@ -141,7 +141,7 @@ static void mark_slice (intnat work)
   value v, child;
   header_t hd;
   mlsize_t size, i;
-#ifdef NATIVE_AND_NO_NAKED_POINTERS
+#ifdef NATIVE_CODE_AND_NO_NAKED_POINTERS
   int scanning_closure = 0;
 #endif
 
@@ -152,7 +152,7 @@ static void mark_slice (intnat work)
     if (gray_vals_ptr > gray_vals){
       v = *--gray_vals_ptr;
       hd = Hd_val(v);
-#ifdef NATIVE_AND_NO_NAKED_POINTERS
+#ifdef NATIVE_CODE_AND_NO_NAKED_POINTERS
       scanning_closure =
         (Tag_hd (hd) == Closure_tag || Tag_hd (hd) == Infix_tag);
 #endif
@@ -162,7 +162,7 @@ static void mark_slice (intnat work)
       if (Tag_hd (hd) < No_scan_tag){
         for (i = 0; i < size; i++){
           child = Field (v, i);
-#ifdef NATIVE_AND_NO_NAKED_POINTERS
+#ifdef NATIVE_CODE_AND_NO_NAKED_POINTERS
           if (Is_block (child)
                 && Wosize_val (child) > 0  /* Atoms never need to be marked. */
                 /* Closure blocks contain code pointers at offsets that cannot
