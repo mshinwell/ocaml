@@ -15,6 +15,7 @@
 
 #include <stdio.h>
 #include <signal.h>
+#include <assert.h>
 #include "alloc.h"
 #include "fail.h"
 #include "io.h"
@@ -179,4 +180,21 @@ int caml_is_special_exception(value exn) {
   return exn == (value) caml_exn_Match_failure
     || exn == (value) caml_exn_Assert_failure
     || exn == (value) caml_exn_Undefined_recursive_module;
+}
+
+void caml_field_access_out_of_bounds_error(value v_block, intnat index)
+{
+  assert(Is_block(v_block));
+  fprintf(stderr, "Fatal error: out-of-bounds access to field %ld ", index);
+  fprintf(stderr, "of block at %p (%s, size %ld, tag %d)\n",
+    (void*) v_block,
+    Is_young(v_block) ? "in minor heap"
+      : Is_in_heap(v_block) ? "in major heap"
+      : Is_in_value_area(v_block) ? "in static data"
+      : "out-of-heap",
+    (long) Wosize_val(v_block), (int) Tag_val(v_block));
+  fflush(stderr);
+  /* This error may have occurred in places where it is not reasonable to
+     attempt to continue. */
+  abort();
 }
