@@ -498,9 +498,9 @@ let get_tag ptr =
 let get_size ptr =
   Cop(Clsr, [header ptr; Cconst_int 10])
 
-(* Bounds checks for field access *)
+(* Bounds checks upon field access, for debugging the compiler *)
 
-let check_field_access ptr field_index if_success dbg =
+let check_field_access ptr field_index if_success =
   if not do_check_field_access then
     if_success
   else
@@ -1576,7 +1576,7 @@ and transl_prim_1 p arg dbg =
   | Pfield n ->
       let ptr = transl arg in
       let body = get_field ptr n in
-      check_field_access ptr n body dbg
+      check_field_access ptr n body
   | Pfloatfield n ->
       let ptr = transl arg in
       let body =
@@ -1585,7 +1585,7 @@ and transl_prim_1 p arg dbg =
               [if n = 0 then ptr
                          else Cop(Cadda, [ptr; Cconst_int(n * size_float)])]))
       in
-      check_field_access ptr n body dbg
+      check_field_access ptr n body
   | Pint_as_pointer ->
      Cop(Cadda, [transl arg; Cconst_int (-1)])
   (* Exceptions *)
@@ -1687,7 +1687,7 @@ and transl_prim_2 p arg1 arg2 dbg =
         else
           set_field ptr n (transl arg2)
       in
-      check_field_access ptr n (return_unit body) dbg
+      check_field_access ptr n (return_unit body)
   | Psetfloatfield n ->
       let ptr = transl arg1 in
       let body =
@@ -1696,7 +1696,7 @@ and transl_prim_2 p arg1 arg2 dbg =
                        else Cop(Cadda, [ptr; Cconst_int(n * size_float)]);
                    transl_unbox_float arg2])
       in
-      check_field_access ptr n (return_unit body) dbg
+      check_field_access ptr n (return_unit body)
   (* Boolean operations *)
   | Psequand ->
       Cifthenelse(test_bool(transl arg1), transl arg2, Cconst_int 1)
