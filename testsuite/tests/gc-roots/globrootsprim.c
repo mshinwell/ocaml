@@ -20,7 +20,7 @@
 
 struct block { value header; value v; };
 
-#define Block_val(v) ((struct block *) (v))
+#define Block_val(v) ((struct block*) &((value*) v)[-1])
 #define Val_block(b) ((value) &((b)->v))
 
 value gb_get(value vblock)
