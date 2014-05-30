@@ -22,10 +22,12 @@ open Clambda
 open Cmm
 open Cmx_format
 
-let do_check_field_access =
+let do_check_field_access = true
+(*
   match try Some (Sys.getenv "BOUNDS") with Not_found -> None with
   | None | Some "" -> false
   | Some _ -> true
+*)
 
 (* Local binding of complex expressions *)
 
