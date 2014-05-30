@@ -66,7 +66,7 @@ and core_type_desc =
            T tconstr
            (T1, ..., Tn) tconstr
          *)
-  | Ptyp_object of (string * core_type) list * closed_flag
+  | Ptyp_object of (string * attributes * core_type) list * closed_flag
         (* < l1:T1; ...; ln:Tn >     (flag = Closed)
            < l1:T1; ...; ln:Tn; .. > (flag = Open)
          *)
@@ -115,7 +115,7 @@ and package_type = Longident.t loc * (Longident.t loc * core_type) list
        *)
 
 and row_field =
-  | Rtag of label * bool * core_type list
+  | Rtag of label * attributes * bool * core_type list
         (* [`A]                   ( true,  [] )
            [`A of T]              ( false, [T] )
            [`A of T1 & .. & Tn]   ( false, [T1;...Tn] )
@@ -125,6 +125,8 @@ and row_field =
             constant (empty) constructor.
           - '&' occurs when several types are used for the same constructor
             (see 4.2 in the manual)
+
+          - TODO: switch to a record representation, and keep location
         *)
   | Rinherit of core_type
         (* [ T ] *)
@@ -182,6 +184,8 @@ and pattern_desc =
            Note: (module P : S) is represented as
            Ppat_constraint(Ppat_unpack, Ptyp_package)
          *)
+  | Ppat_exception of pattern
+        (* exception P *)
   | Ppat_extension of extension
         (* [%id] *)
 
@@ -297,7 +301,7 @@ and expression_desc =
            Pexp_constraint(Pexp_pack, Ptyp_package S) *)
   | Pexp_open of override_flag * Longident.t loc * expression
         (* let open M in E
-           let! open M in E 
+           let! open M in E
         *)
   | Pexp_extension of extension
         (* [%id] *)
@@ -332,7 +336,7 @@ and value_description =
 and type_declaration =
     {
      ptype_name: string loc;
-     ptype_params: (string loc option * variance) list;
+     ptype_params: (core_type * variance) list;
            (* ('a1,...'an) t; None represents  _*)
      ptype_cstrs: (core_type * core_type * Location.t) list;
            (* ... constraint T1=T1'  ... constraint Tn=Tn' *)
@@ -350,12 +354,14 @@ and type_declaration =
   type t = T0 = C of T | ... (variant,  manifest=T0)
   type t = {l: T; ...}       (record,   no manifest)
   type t = T0 = {l : T; ...} (record,   manifest=T0)
+  type t = ..                (open,     no manifest)
 *)
 
 and type_kind =
   | Ptype_abstract
   | Ptype_variant of constructor_declaration list
   | Ptype_record of label_declaration list
+  | Ptype_open
 
 and label_declaration =
     {
@@ -386,13 +392,37 @@ and constructor_declaration =
   | C: T1 * ... * Tn -> T0 (res = Some T0)
 *)
 
-and exception_rebind =
+and type_extension =
     {
-     pexrb_name: string loc;
-     pexrb_lid: Longident.t loc;
-     pexrb_attributes: attributes;
+     ptyext_path: Longident.t loc;
+     ptyext_params: (core_type * variance) list;
+     ptyext_constructors: extension_constructor list;
+     ptyext_private: private_flag;
+     ptyext_attributes: attributes;   (* ... [@@id1] [@@id2] *)
     }
-(* exception C = M.X *)
+(*
+  type t += ...
+*)
+
+and extension_constructor =
+    {
+     pext_name: string loc;
+     pext_kind : extension_constructor_kind;
+     pext_loc : Location.t;
+     pext_attributes: attributes; (* C [@id1] [@id2] of ... *)
+    }
+
+and extension_constructor_kind =
+    Pext_decl of core_type list * core_type option
+      (*
+         | C of T1 * ... * Tn     ([T1; ...; Tn], None)
+         | C: T0                  ([], Some T0)
+         | C: T1 * ... * Tn -> T0 ([T1; ...; Tn], Some T0)
+       *)
+  | Pext_rebind of Longident.t loc
+      (*
+         | C = D
+       *)
 
 (** {2 Class language} *)
 
@@ -447,13 +477,15 @@ and class_type_field_desc =
          *)
   | Pctf_constraint  of (core_type * core_type)
         (* constraint T1 = T2 *)
+  | Pctf_attribute of attribute
+        (* [@@@id] *)
   | Pctf_extension of extension
         (* [%%id] *)
 
 and 'a class_infos =
     {
      pci_virt: virtual_flag;
-     pci_params: (string loc * variance) list;
+     pci_params: (core_type * variance) list;
      pci_name: string loc;
      pci_expr: 'a;
      pci_loc: Location.t;
@@ -540,6 +572,8 @@ and class_field_desc =
         (* constraint T1 = T2 *)
   | Pcf_initializer of expression
         (* initializer E *)
+  | Pcf_attribute of attribute
+        (* [@@@id] *)
   | Pcf_extension of extension
         (* [%%id] *)
 
@@ -592,7 +626,9 @@ and signature_item_desc =
          *)
   | Psig_type of type_declaration list
         (* type t1 = ... and ... and tn = ... *)
-  | Psig_exception of constructor_declaration
+  | Psig_typext of type_extension
+        (* type t1 += ... *)
+  | Psig_exception of extension_constructor
         (* exception C of T *)
   | Psig_module of module_declaration
         (* module X : MT *)
@@ -638,6 +674,7 @@ and open_description =
     {
      popen_lid: Longident.t loc;
      popen_override: override_flag;
+     popen_loc: Location.t;
      popen_attributes: attributes;
     }
 (* open! X - popen_override = Override (silences the 'used identifier
@@ -648,6 +685,7 @@ and open_description =
 and 'a include_infos =
     {
      pincl_mod: 'a;
+     pincl_loc: Location.t;
      pincl_attributes: attributes;
     }
 
@@ -714,10 +752,11 @@ and structure_item_desc =
         (* external x: T = "s1" ... "sn" *)
   | Pstr_type of type_declaration list
         (* type t1 = ... and ... and tn = ... *)
-  | Pstr_exception of constructor_declaration
-        (* exception C of T *)
-  | Pstr_exn_rebind of exception_rebind
-        (* exception C = M.X *)
+  | Pstr_typext of type_extension
+        (* type t1 += ... *)
+  | Pstr_exception of extension_constructor
+        (* exception C of T
+           exception C = M.X *)
   | Pstr_module of module_binding
         (* module X = ME *)
   | Pstr_recmodule of module_binding list
@@ -742,6 +781,7 @@ and value_binding =
     pvb_pat: pattern;
     pvb_expr: expression;
     pvb_attributes: attributes;
+    pvb_loc: Location.t;
   }
 
 and module_binding =
@@ -759,12 +799,12 @@ and module_binding =
 
 type toplevel_phrase =
   | Ptop_def of structure
-  | Ptop_dir of string * directive_argument list
+  | Ptop_dir of string * directive_argument
      (* #use, #load ... *)
 
 and directive_argument =
+  | Pdir_none
   | Pdir_string of string
   | Pdir_int of int
   | Pdir_ident of Longident.t
   | Pdir_bool of bool
-  | Pdir_keyword of string

@@ -14,8 +14,8 @@
 (** The initially opened module.
 
    This module provides the basic operations over the built-in types
-   (numbers, booleans, strings, exceptions, references, lists, arrays,
-   input-output channels, ...).
+   (numbers, booleans, byte sequences, strings, exceptions, references,
+   lists, arrays, input-output channels, ...).
 
    This module is automatically opened at the beginning of each compilation.
    All components of this module can therefore be referred by their short
@@ -68,7 +68,7 @@ external ( <= ) : 'a -> 'a -> bool = "%lessequal"
 
 external ( >= ) : 'a -> 'a -> bool = "%greaterequal"
 (** Structural ordering functions. These functions coincide with
-   the usual orderings over integers, characters, strings
+   the usual orderings over integers, characters, strings, byte sequences
    and floating-point numbers, and extend them to a
    total ordering over all types.
    The ordering is compatible with [( = )]. As in the case
@@ -107,7 +107,7 @@ val max : 'a -> 'a -> 'a
 
 external ( == ) : 'a -> 'a -> bool = "%eq"
 (** [e1 == e2] tests for physical equality of [e1] and [e2].
-   On mutable types such as references, arrays, strings, records with
+   On mutable types such as references, arrays, byte sequences, records with
    mutable fields and objects with mutable instance variables,
    [e1 == e2] is true if and only if physical modification of [e1]
    also affects [e2].
@@ -143,16 +143,41 @@ external ( or ) : bool -> bool -> bool = "%sequor"
 (** {6 Debugging} *)
 
 external __LOC__ : string = "%loc_LOC"
+(** [__LOC__] returns the location at which this expression appears in
+    the file currently being parsed by the compiler, with the standard
+    error format of OCaml: "File %S, line %d, characters %d-%d" *)
 external __FILE__ : string = "%loc_FILE"
+(** [__FILE__] returns the name of the file currently being
+    parsed by the compiler. *)
 external __LINE__ : int = "%loc_LINE"
+(** [__LINE__] returns the line number at which this expression
+    appears in the file currently being parsed by the compiler. *)
 external __MODULE__ : string = "%loc_MODULE"
+(** [__MODULE__] returns the module name of the file being
+    parsed by the compiler. *)
 external __POS__ : string * int * int * int = "%loc_POS"
+(** [__POS__] returns a tuple [(file,lnum,cnum,enum)], corresponding
+    to the location at which this expression appears in the file
+    currently being parsed by the compiler. [file] is the current
+    filename, [lnum] the line number, [cnum] the character position in
+    the line and [enum] the last character position in the line. *)
 
 external __LOC_OF__ : 'a -> string * 'a = "%loc_LOC"
-external __FILE_OF__ : 'a -> string * 'a = "%loc_FILE"
+(** [__LOC_OF__ expr] returns a pair [(loc, expr)] where [loc] is the
+    location of [expr] in the file currently being parsed by the
+    compiler, with the standard error format of OCaml: "File %S, line
+    %d, characters %d-%d" *)
 external __LINE_OF__ : 'a -> int * 'a = "%loc_LINE"
-external __MODULE_OF__ : 'a -> string * 'a = "%loc_MODULE"
+(** [__LINE__ expr] returns a pair [(line, expr)], where [line] is the
+    line number at which the expression [expr] appears in the file
+    currently being parsed by the compiler. *)
 external __POS_OF__ : 'a -> (string * int * int * int) * 'a = "%loc_POS"
+(** [__POS_OF__ expr] returns a pair [(expr,loc)], where [loc] is a
+    tuple [(file,lnum,cnum,enum)] corresponding to the location at
+    which the expression [expr] appears in the file currently being
+    parsed by the compiler. [file] is the current filename, [lnum] the
+    line number, [cnum] the character position in the line and [enum]
+    the last character position in the line. *)
 
 (** {6 Composition operators} *)
 
@@ -566,6 +591,9 @@ val print_char : char -> unit
 val print_string : string -> unit
 (** Print a string on standard output. *)
 
+val print_bytes : bytes -> unit
+(** Print a byte sequence on standard output. *)
+
 val print_int : int -> unit
 (** Print an integer, in decimal, on standard output. *)
 
@@ -590,6 +618,9 @@ val prerr_char : char -> unit
 val prerr_string : string -> unit
 (** Print a string on standard error. *)
 
+val prerr_bytes : bytes -> unit
+(** Print a byte sequence on standard error. *)
+
 val prerr_int : int -> unit
 (** Print an integer, in decimal, on standard error. *)
 
@@ -597,8 +628,8 @@ val prerr_float : float -> unit
 (** Print a floating-point number, in decimal, on standard error. *)
 
 val prerr_endline : string -> unit
-(** Print a string, followed by a newline character on standard error
-   and flush standard error. *)
+(** Print a string, followed by a newline character on standard
+   error and flush standard error. *)
 
 val prerr_newline : unit -> unit
 (** Print a newline character on standard error, and flush
@@ -674,11 +705,18 @@ val output_char : out_channel -> char -> unit
 val output_string : out_channel -> string -> unit
 (** Write the string on the given output channel. *)
 
-val output : out_channel -> string -> int -> int -> unit
-(** [output oc buf pos len] writes [len] characters from string [buf],
+val output_bytes : out_channel -> bytes -> unit
+(** Write the byte sequence on the given output channel. *)
+
+val output : out_channel -> bytes -> int -> int -> unit
+(** [output oc buf pos len] writes [len] characters from byte sequence [buf],
    starting at offset [pos], to the given output channel [oc].
    Raise [Invalid_argument "output"] if [pos] and [len] do not
-   designate a valid substring of [buf]. *)
+   designate a valid range of [buf]. *)
+
+val output_substring : out_channel -> string -> int -> int -> unit
+(** Same as [output] but take a string as argument instead of
+   a byte sequence. *)
 
 val output_byte : out_channel -> int -> unit
 (** Write one 8-bit integer (as the single character with that code)
@@ -769,9 +807,9 @@ val input_line : in_channel -> string
    Raise [End_of_file] if the end of the file is reached
    at the beginning of line. *)
 
-val input : in_channel -> string -> int -> int -> int
+val input : in_channel -> bytes -> int -> int -> int
 (** [input ic buf pos len] reads up to [len] characters from
-   the given channel [ic], storing them in string [buf], starting at
+   the given channel [ic], storing them in byte sequence [buf], starting at
    character number [pos].
    It returns the actual number of characters read, between 0 and
    [len] (inclusive).
@@ -784,15 +822,21 @@ val input : in_channel -> string -> int -> int -> int
    if desired.  (See also {!Pervasives.really_input} for reading
    exactly [len] characters.)
    Exception [Invalid_argument "input"] is raised if [pos] and [len]
-   do not designate a valid substring of [buf]. *)
+   do not designate a valid range of [buf]. *)
 
-val really_input : in_channel -> string -> int -> int -> unit
+val really_input : in_channel -> bytes -> int -> int -> unit
 (** [really_input ic buf pos len] reads [len] characters from channel [ic],
-   storing them in string [buf], starting at character number [pos].
+   storing them in byte sequence [buf], starting at character number [pos].
    Raise [End_of_file] if the end of file is reached before [len]
    characters have been read.
    Raise [Invalid_argument "really_input"] if
-   [pos] and [len] do not designate a valid substring of [buf]. *)
+   [pos] and [len] do not designate a valid range of [buf]. *)
+
+val really_input_string : in_channel -> int -> string
+(** [really_input_string ic len] reads [len] characters from channel [ic]
+   and returns them in a new string.
+   Raise [End_of_file] if the end of file is reached before [len]
+   characters have been read. *)
 
 val input_byte : in_channel -> int
 (** Same as {!Pervasives.input_char}, but return the 8-bit integer representing
@@ -922,8 +966,291 @@ external decr : int ref -> unit = "%decr"
   {!Printf} and {!Format}.
 *)
 
+module CamlinternalFormatBasics : sig
+  (* No comments, OCaml stdlib internal use only. *)
+
+  type block_type = Pp_hbox | Pp_vbox | Pp_hvbox | Pp_hovbox | Pp_box | Pp_fits
+
+  type formatting =
+    | Open_box of string * block_type * int
+    | Close_box
+    | Open_tag of string * string
+    | Close_tag
+    | Break of string * int * int
+    | FFlush
+    | Force_newline
+    | Flush_newline
+    | Magic_size of string * int
+    | Escaped_at
+    | Escaped_percent
+    | Scan_indic of char
+
+  type padty = Left | Right | Zeros
+
+  type int_conv =
+    | Int_d | Int_pd | Int_sd | Int_i | Int_pi | Int_si
+    | Int_x | Int_Cx | Int_X | Int_CX | Int_o | Int_Co | Int_u
+
+  type float_conv =
+    | Float_f | Float_pf | Float_sf | Float_e | Float_pe | Float_se
+    | Float_E | Float_pE | Float_sE | Float_g | Float_pg | Float_sg
+    | Float_G | Float_pG | Float_sG | Float_F
+
+  type char_set = string
+
+  type counter = Line_counter | Char_counter | Token_counter
+
+  type ('a, 'b) padding =
+    | No_padding  : ('a, 'a) padding
+    | Lit_padding : padty * int -> ('a, 'a) padding
+    | Arg_padding : padty -> (int -> 'a, 'a) padding
+
+  type pad_option = int option
+
+  type ('a, 'b) precision =
+    | No_precision : ('a, 'a) precision
+    | Lit_precision : int -> ('a, 'a) precision
+    | Arg_precision : (int -> 'a, 'a) precision
+
+  type prec_option = int option
+
+type ('a, 'b, 'c, 'd, 'e, 'f) fmtty =
+     ('a, 'b, 'c, 'd, 'e, 'f,
+      'a, 'b, 'c, 'd, 'e, 'f) fmtty_rel
+and ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+     'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel =
+  | Char_ty :                                                 (* %c  *)
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      (char -> 'a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       char -> 'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel
+  | String_ty :                                               (* %s  *)
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      (string -> 'a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       string -> 'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel
+  | Int_ty :                                                  (* %d  *)
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      (int -> 'a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       int -> 'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel
+  | Int32_ty :                                                (* %ld *)
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      (int32 -> 'a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       int32 -> 'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel
+  | Nativeint_ty :                                            (* %nd *)
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      (nativeint -> 'a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       nativeint -> 'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel
+  | Int64_ty :                                                (* %Ld *)
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      (int64 -> 'a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       int64 -> 'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel
+  | Float_ty :                                                (* %f  *)
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      (float -> 'a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       float -> 'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel
+  | Bool_ty :                                                 (* %B  *)
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      (bool -> 'a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       bool -> 'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel
+  | Format_arg_ty :                                           (* %{...%} *)
+      ('g, 'h, 'i, 'j, 'k, 'l) fmtty *
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      (('g, 'h, 'i, 'j, 'k, 'l) format6 -> 'a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       ('g, 'h, 'i, 'j, 'k, 'l) format6 -> 'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel
+  | Format_subst_ty :                                         (* %(...%) *)
+      ('g, 'h, 'i, 'j, 'k, 'l,
+       'g1, 'b1, 'c1, 'j1, 'd1, 'a1) fmtty_rel *
+      ('g, 'h, 'i, 'j, 'k, 'l,
+       'g2, 'b2, 'c2, 'j2, 'd2, 'a2) fmtty_rel *
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      (('g, 'h, 'i, 'j, 'k, 'l) format6 -> 'g1, 'b1, 'c1, 'j1, 'e1, 'f1,
+       ('g, 'h, 'i, 'j, 'k, 'l) format6 -> 'g2, 'b2, 'c2, 'j2, 'e2, 'f2) fmtty_rel
+
+  (* Printf and Format specific constructors. *)
+  | Alpha_ty :                                                (* %a  *)
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      (('b1 -> 'x -> 'c1) -> 'x -> 'a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       ('b2 -> 'x -> 'c2) -> 'x -> 'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel
+  | Theta_ty :                                                (* %t  *)
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      (('b1 -> 'c1) -> 'a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       ('b2 -> 'c2) -> 'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel
+
+  (* Scanf specific constructor. *)
+  | Reader_ty :                                               (* %r  *)
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      ('x -> 'a1, 'b1, 'c1, ('b1 -> 'x) -> 'd1, 'e1, 'f1,
+       'x -> 'a2, 'b2, 'c2, ('b2 -> 'x) -> 'd2, 'e2, 'f2) fmtty_rel
+  | Ignored_reader_ty :                                       (* %_r  *)
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      ('a1, 'b1, 'c1, ('b1 -> 'x) -> 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, ('b2 -> 'x) -> 'd2, 'e2, 'f2) fmtty_rel
+
+  | End_of_fmtty :
+      ('f1, 'b1, 'c1, 'd1, 'd1, 'f1,
+       'f2, 'b2, 'c2, 'd2, 'd2, 'f2) fmtty_rel
+
+(***)
+
+(* List of format elements. *)
+and ('a, 'b, 'c, 'd, 'e, 'f) fmt =
+  | Char :                                                   (* %c *)
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        (char -> 'a, 'b, 'c, 'd, 'e, 'f) fmt
+  | Caml_char :                                              (* %C *)
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        (char -> 'a, 'b, 'c, 'd, 'e, 'f) fmt
+  | String :                                                 (* %s *)
+      ('x, string -> 'a) padding * ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        ('x, 'b, 'c, 'd, 'e, 'f) fmt
+  | Caml_string :                                            (* %S *)
+      ('x, string -> 'a) padding * ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        ('x, 'b, 'c, 'd, 'e, 'f) fmt
+  | Int :                                                    (* %[dixXuo] *)
+      int_conv * ('x, 'y) padding * ('y, int -> 'a) precision *
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        ('x, 'b, 'c, 'd, 'e, 'f) fmt
+  | Int32 :                                                  (* %l[dixXuo] *)
+      int_conv * ('x, 'y) padding * ('y, int32 -> 'a) precision *
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        ('x, 'b, 'c, 'd, 'e, 'f) fmt
+  | Nativeint :                                              (* %n[dixXuo] *)
+      int_conv * ('x, 'y) padding * ('y, nativeint -> 'a) precision *
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        ('x, 'b, 'c, 'd, 'e, 'f) fmt
+  | Int64 :                                                  (* %L[dixXuo] *)
+      int_conv * ('x, 'y) padding * ('y, int64 -> 'a) precision *
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        ('x, 'b, 'c, 'd, 'e, 'f) fmt
+  | Float :                                                  (* %[feEgGF] *)
+      float_conv * ('x, 'y) padding * ('y, float -> 'a) precision *
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        ('x, 'b, 'c, 'd, 'e, 'f) fmt
+  | Bool :                                                   (* %[bB] *)
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        (bool -> 'a, 'b, 'c, 'd, 'e, 'f) fmt
+  | Flush :                                                  (* %! *)
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        ('a, 'b, 'c, 'd, 'e, 'f) fmt
+
+  | String_literal :                                         (* abc *)
+      string * ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        ('a, 'b, 'c, 'd, 'e, 'f) fmt
+  | Char_literal :                                           (* x *)
+      char * ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        ('a, 'b, 'c, 'd, 'e, 'f) fmt
+
+  | Format_arg :                                             (* %{...%} *)
+      pad_option * ('g, 'h, 'i, 'j, 'k, 'l) fmtty *
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        (('g, 'h, 'i, 'j, 'k, 'l) format6 -> 'a, 'b, 'c, 'd, 'e, 'f) fmt
+  | Format_subst :                                           (* %(...%) *)
+      pad_option *
+      ('g, 'h, 'i, 'j, 'k, 'l,
+       'g2, 'b, 'c, 'j2, 'd, 'a) fmtty_rel *
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+      (('g, 'h, 'i, 'j, 'k, 'l) format6 -> 'g2, 'b, 'c, 'j2, 'e, 'f) fmt
+
+  (* Printf and Format specific constructor. *)
+  | Alpha :                                                  (* %a *)
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        (('b -> 'x -> 'c) -> 'x -> 'a, 'b, 'c, 'd, 'e, 'f) fmt
+  | Theta :                                                  (* %t *)
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        (('b -> 'c) -> 'a, 'b, 'c, 'd, 'e, 'f) fmt
+
+  (* Format specific constructor: *)
+  | Formatting :                                             (* @_ *)
+      formatting * ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        ('a, 'b, 'c, 'd, 'e, 'f) fmt
+
+  (* Scanf specific constructors: *)
+  | Reader :                                                 (* %r *)
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        ('x -> 'a, 'b, 'c, ('b -> 'x) -> 'd, 'e, 'f) fmt
+  | Scan_char_set :                                          (* %[...] *)
+      pad_option * char_set * ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        (string -> 'a, 'b, 'c, 'd, 'e, 'f) fmt
+  | Scan_get_counter :                                       (* %[nlNL] *)
+      counter * ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        (int -> 'a, 'b, 'c, 'd, 'e, 'f) fmt
+  | Ignored_param :                                          (* %_ *)
+      ('a, 'b, 'c, 'd, 'y, 'x) ignored * ('x, 'b, 'c, 'y, 'e, 'f) fmt ->
+        ('a, 'b, 'c, 'd, 'e, 'f) fmt
+
+  | End_of_format :
+        ('f, 'b, 'c, 'e, 'e, 'f) fmt
+
+  and ('a, 'b, 'c, 'd, 'e, 'f) ignored =
+    | Ignored_char :
+        ('a, 'b, 'c, 'd, 'd, 'a) ignored
+    | Ignored_caml_char :
+        ('a, 'b, 'c, 'd, 'd, 'a) ignored
+    | Ignored_string :
+        pad_option -> ('a, 'b, 'c, 'd, 'd, 'a) ignored
+    | Ignored_caml_string :
+        pad_option -> ('a, 'b, 'c, 'd, 'd, 'a) ignored
+    | Ignored_int :
+        int_conv * pad_option -> ('a, 'b, 'c, 'd, 'd, 'a) ignored
+    | Ignored_int32 :
+        int_conv * pad_option -> ('a, 'b, 'c, 'd, 'd, 'a) ignored
+    | Ignored_nativeint :
+        int_conv * pad_option -> ('a, 'b, 'c, 'd, 'd, 'a) ignored
+    | Ignored_int64 :
+        int_conv * pad_option -> ('a, 'b, 'c, 'd, 'd, 'a) ignored
+    | Ignored_float :
+        pad_option * prec_option -> ('a, 'b, 'c, 'd, 'd, 'a) ignored
+    | Ignored_bool :
+        ('a, 'b, 'c, 'd, 'd, 'a) ignored
+    | Ignored_format_arg :
+        pad_option * ('g, 'h, 'i, 'j, 'k, 'l) fmtty ->
+          ('a, 'b, 'c, 'd, 'd, 'a) ignored
+    | Ignored_format_subst :
+        pad_option * ('a, 'b, 'c, 'd, 'e, 'f) fmtty ->
+          ('a, 'b, 'c, 'd, 'e, 'f) ignored
+    | Ignored_reader :
+        ('a, 'b, 'c, ('b -> 'x) -> 'd, 'd, 'a) ignored
+    | Ignored_scan_char_set :
+        pad_option * char_set -> ('a, 'b, 'c, 'd, 'd, 'a) ignored
+    | Ignored_scan_get_counter :
+        counter -> ('a, 'b, 'c, 'd, 'd, 'a) ignored
+
+  and ('a, 'b, 'c, 'd, 'e, 'f) format6 =
+    Format of ('a, 'b, 'c, 'd, 'e, 'f) fmt * string
+
+  val concat_fmtty :
+    ('g1, 'b1, 'c1, 'j1, 'd1, 'a1,
+     'g2, 'b2, 'c2, 'j2, 'd2, 'a2) fmtty_rel ->
+    ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+     'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+    ('g1, 'b1, 'c1, 'j1, 'e1, 'f1,
+     'g2, 'b2, 'c2, 'j2, 'e2, 'f2) fmtty_rel
+
+  val erase_rel :
+    ('a, 'b, 'c, 'd, 'e, 'f,
+     'g, 'h, 'i, 'j, 'k, 'l) fmtty_rel -> ('a, 'b, 'c, 'd, 'e, 'f) fmtty
+
+  val concat_fmt :
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+      ('f, 'b, 'c, 'e, 'g, 'h) fmt ->
+      ('a, 'b, 'c, 'd, 'g, 'h) fmt
+end
+
 (** Format strings have a general and highly polymorphic type
-    [('a, 'b, 'c, 'd, 'e, 'f) format6]. Type [format6] is built in.
+    [('a, 'b, 'c, 'd, 'e, 'f) format6].
     The two simplified types, [format] and [format4] below are
     included for backward compatibility with earlier releases of
     OCaml.
@@ -962,6 +1289,10 @@ external decr : int ref -> unit = "%decr"
       for the [scanf]-style functions, it is typically the result type of the
       receiver function.
 *)
+
+type ('a, 'b, 'c, 'd, 'e, 'f) format6 =
+  ('a, 'b, 'c, 'd, 'e, 'f) CamlinternalFormatBasics.format6
+
 type ('a, 'b, 'c, 'd) format4 = ('a, 'b, 'c, 'c, 'c, 'd) format6
 
 type ('a, 'b, 'c) format = ('a, 'b, 'c, 'c) format4
@@ -1016,6 +1347,6 @@ val at_exit : (unit -> unit) -> unit
 
 val valid_float_lexem : string -> string
 
-val unsafe_really_input : in_channel -> string -> int -> int -> unit
+val unsafe_really_input : in_channel -> bytes -> int -> int -> unit
 
 val do_at_exit : unit -> unit

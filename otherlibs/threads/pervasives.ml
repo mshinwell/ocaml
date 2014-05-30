@@ -50,9 +50,7 @@ external __MODULE__ : string = "%loc_MODULE"
 external __POS__ : string * int * int * int = "%loc_POS"
 
 external __LOC_OF__ : 'a -> string * 'a = "%loc_LOC"
-external __FILE_OF__ : 'a -> string * 'a = "%loc_FILE"
 external __LINE_OF__ : 'a -> int * 'a = "%loc_LINE"
-external __MODULE_OF__ : 'a -> string * 'a = "%loc_MODULE"
 external __POS_OF__ : 'a -> (string * int * int * int) * 'a = "%loc_POS"
 
 (* Comparisons *)
@@ -87,7 +85,7 @@ external succ : int -> int = "%succint"
 external pred : int -> int = "%predint"
 external ( + ) : int -> int -> int = "%addint"
 external ( - ) : int -> int -> int = "%subint"
-external ( *  ) : int -> int -> int = "%mulint"
+external ( * ) : int -> int -> int = "%mulint"
 external ( / ) : int -> int -> int = "%divint"
 external ( mod ) : int -> int -> int = "%modint"
 
@@ -168,19 +166,24 @@ type fpclass =
   | FP_nan
 external classify_float : float -> fpclass = "caml_classify_float"
 
-(* String operations -- more in module String *)
+(* String and byte sequence operations -- more in modules String and Bytes *)
 
 external string_length : string -> int = "%string_length"
-external string_create : int -> string = "caml_create_string"
-external string_blit : string -> int -> string -> int -> int -> unit
+external bytes_length : bytes -> int = "%string_length"
+external bytes_create : int -> bytes = "caml_create_string"
+external string_blit : string -> int -> bytes -> int -> int -> unit
                      = "caml_blit_string" "noalloc"
+external bytes_blit : bytes -> int -> bytes -> int -> int -> unit
+                        = "caml_blit_string" "noalloc"
+external bytes_unsafe_to_string : bytes -> string = "%identity"
+external bytes_unsafe_of_string : string -> bytes = "%identity"
 
 let ( ^ ) s1 s2 =
   let l1 = string_length s1 and l2 = string_length s2 in
-  let s = string_create (l1 + l2) in
+  let s = bytes_create (l1 + l2) in
   string_blit s1 0 s 0 l1;
   string_blit s2 0 s l1 l2;
-  s
+  bytes_unsafe_to_string s
 
 (* Character operations -- more in module Char *)
 
@@ -223,12 +226,13 @@ let string_of_int n =
   format_int "%d" n
 
 external int_of_string : string -> int = "caml_int_of_string"
+external string_get : string -> int -> char = "%string_safe_get"
 
 let valid_float_lexem s =
   let l = string_length s in
   let rec loop i =
     if i >= l then s ^ "." else
-    match s.[i] with
+    match string_get s i with
     | '0' .. '9' | '-' -> loop (i + 1)
     | _ -> s
   in
@@ -319,7 +323,7 @@ let flush_all () =
         iter l
   in iter (out_channels_list ())
 
-external unsafe_output_partial : out_channel -> string -> int -> int -> int
+external unsafe_output_partial : out_channel -> bytes -> int -> int -> int
                         = "caml_ml_output_partial"
 
 let rec unsafe_output oc buf pos len =
@@ -343,15 +347,19 @@ let rec output_char oc c =
   with Sys_blocked_io ->
     wait_outchan oc 1; output_char oc c
 
+let output_bytes oc s =
+  unsafe_output oc s 0 (bytes_length s)
+
 let output_string oc s =
-  unsafe_output oc s 0 (string_length s)
+  unsafe_output oc (bytes_unsafe_of_string s) 0 (string_length s)
 
 let output oc s ofs len =
-  if ofs < 0 || len < 0 || ofs > string_length s - len
+  if ofs < 0 || len < 0 || ofs > bytes_length s - len
   then invalid_arg "output"
   else unsafe_output oc s ofs len
 
-let output' oc ~buf ~pos ~len = output oc buf pos len
+let output_substring oc s ofs len =
+  output oc (bytes_unsafe_of_string s) ofs len
 
 let rec output_byte oc b =
   try
@@ -405,7 +413,7 @@ let rec input_char ic =
   with Sys_blocked_io ->
     wait_inchan ic; input_char ic
 
-external unsafe_input_blocking : in_channel -> string -> int -> int -> int
+external unsafe_input_blocking : in_channel -> bytes -> int -> int -> int
                                = "caml_ml_input"
 
 let rec unsafe_input ic s ofs len =
@@ -415,7 +423,7 @@ let rec unsafe_input ic s ofs len =
     wait_inchan ic; unsafe_input ic s ofs len
 
 let input ic s ofs len =
-  if ofs < 0 || len < 0 || ofs > string_length s - len
+  if ofs < 0 || len < 0 || ofs > bytes_length s - len
   then invalid_arg "input"
   else unsafe_input ic s ofs len
 
@@ -428,31 +436,38 @@ let rec unsafe_really_input ic s ofs len =
   end
 
 let really_input ic s ofs len =
-  if ofs < 0 || len < 0 || ofs > string_length s - len
+  if ofs < 0 || len < 0 || ofs > bytes_length s - len
   then invalid_arg "really_input"
   else unsafe_really_input ic s ofs len
 
+let really_input_string ic len =
+  let s = bytes_create len in
+  really_input ic s 0 len;
+  bytes_unsafe_to_string s
+
+external bytes_set : bytes -> int -> char -> unit = "%string_safe_set"
+
 let input_line ic =
-  let buf = ref (string_create 128) in
+  let buf = ref (bytes_create 128) in
   let pos = ref 0 in
   begin try
     while true do
-      if !pos = string_length !buf then begin
-        let newbuf = string_create (2 * !pos) in
-        string_blit !buf 0 newbuf 0 !pos;
+      if !pos = bytes_length !buf then begin
+        let newbuf = bytes_create (2 * !pos) in
+        bytes_blit !buf 0 newbuf 0 !pos;
         buf := newbuf
       end;
       let c = input_char ic in
       if c = '\n' then raise Exit;
-      !buf.[!pos] <- c;
+      bytes_set !buf !pos c;
       incr pos
     done
   with Exit -> ()
      | End_of_file -> if !pos = 0 then raise End_of_file
   end;
-  let res = string_create !pos in
-  string_blit !buf 0 res 0 !pos;
-  res
+  let res = bytes_create !pos in
+  bytes_blit !buf 0 res 0 !pos;
+  bytes_unsafe_to_string res
 
 let rec input_byte ic =
   try
@@ -468,15 +483,15 @@ let input_binary_int ic =
   let b4 = input_byte ic in
   (n1 lsl 24) + (b2 lsl 16) + (b3 lsl 8) + b4
 
-external unmarshal : string -> int -> 'a = "caml_input_value_from_string"
-external marshal_data_size : string -> int -> int = "caml_marshal_data_size"
+external unmarshal : bytes -> int -> 'a = "caml_input_value_from_string"
+external marshal_data_size : bytes -> int -> int = "caml_marshal_data_size"
 
 let input_value ic =
-  let header = string_create 20 in
+  let header = bytes_create 20 in
   really_input ic header 0 20;
   let bsize = marshal_data_size header 0 in
-  let buffer = string_create (20 + bsize) in
-  string_blit header 0 buffer 0 20;
+  let buffer = bytes_create (20 + bsize) in
+  bytes_blit header 0 buffer 0 20;
   really_input ic buffer 20 bsize;
   unmarshal buffer 0
 
@@ -492,6 +507,7 @@ external set_binary_mode_in : in_channel -> bool -> unit
 
 let print_char c = output_char stdout c
 let print_string s = output_string stdout s
+let print_bytes s = output_bytes stdout s
 let print_int i = output_string stdout (string_of_int i)
 let print_float f = output_string stdout (string_of_float f)
 let print_endline s =
@@ -502,6 +518,7 @@ let print_newline () = output_char stdout '\n'; flush stdout
 
 let prerr_char c = output_char stderr c
 let prerr_string s = output_string stderr s
+let prerr_bytes s = output_bytes stderr s
 let prerr_int i = output_string stderr (string_of_int i)
 let prerr_float f = output_string stderr (string_of_float f)
 let prerr_endline s =
@@ -528,33 +545,503 @@ module LargeFile =
   end
 
 (* Formats *)
+
+module CamlinternalFormatBasics = struct
+(* Type of a block used by the Format pretty-printer. *)
+type block_type =
+  | Pp_hbox   (* Horizontal block no line breaking *)
+  | Pp_vbox   (* Vertical block each break leads to a new line *)
+  | Pp_hvbox  (* Horizontal-vertical block: same as vbox, except if this block
+                 is small enough to fit on a single line *)
+  | Pp_hovbox (* Horizontal or Vertical block: breaks lead to new line
+                 only when necessary to print the content of the block *)
+  | Pp_box    (* Horizontal or Indent block: breaks lead to new line
+                 only when necessary to print the content of the block, or
+                 when it leads to a new indentation of the current line *)
+  | Pp_fits   (* Internal usage: when a block fits on a single line *)
+
+(* Formatting element used by the Format pretty-printter. *)
+type formatting =
+  | Open_box of string * block_type * int   (* @[   *)
+  | Close_box                               (* @]   *)
+  | Open_tag of string * string             (* @{   *)
+  | Close_tag                               (* @}   *)
+  | Break of string * int * int             (* @, | @  | @; | @;<> *)
+  | FFlush                                  (* @?   *)
+  | Force_newline                           (* @\n  *)
+  | Flush_newline                           (* @.   *)
+  | Magic_size of string * int              (* @<n> *)
+  | Escaped_at                              (* @@   *)
+  | Escaped_percent                         (* @%%  *)
+  | Scan_indic of char                      (* @X   *)
+
+(***)
+
+(* Padding position. *)
+type padty =
+  | Left   (* Text is left justified ('-' option).               *)
+  | Right  (* Text is right justified (no '-' option).           *)
+  | Zeros  (* Text is right justified by zeros (see '0' option). *)
+
+(***)
+
+(* Integer conversion. *)
+type int_conv =
+  | Int_d | Int_pd | Int_sd        (*  %d | %+d | % d  *)
+  | Int_i | Int_pi | Int_si        (*  %i | %+i | % i  *)
+  | Int_x | Int_Cx                 (*  %x | %#x        *)
+  | Int_X | Int_CX                 (*  %X | %#X        *)
+  | Int_o | Int_Co                 (*  %o | %#o        *)
+  | Int_u                          (*  %u              *)
+
+(* Float conversion. *)
+type float_conv =
+  | Float_f | Float_pf | Float_sf  (*  %f | %+f | % f  *)
+  | Float_e | Float_pe | Float_se  (*  %e | %+e | % e  *)
+  | Float_E | Float_pE | Float_sE  (*  %E | %+E | % E  *)
+  | Float_g | Float_pg | Float_sg  (*  %g | %+g | % g  *)
+  | Float_G | Float_pG | Float_sG  (*  %G | %+G | % G  *)
+  | Float_F                        (*  %F              *)
+
+(***)
+
+(* Char sets (see %[...]) are bitmaps implemented as 32-char strings. *)
+type char_set = string
+
+(***)
+
+(* Counter used in Scanf. *)
+type counter =
+  | Line_counter     (*  %l      *)
+  | Char_counter     (*  %n      *)
+  | Token_counter    (*  %N, %L  *)
+
+(***)
+
+(* Padding of strings and numbers. *)
+type ('a, 'b) padding =
+  (* No padding (ex: "%d") *)
+  | No_padding  : ('a, 'a) padding
+  (* Literal padding (ex: "%8d") *)
+  | Lit_padding : padty * int -> ('a, 'a) padding
+  (* Padding as extra argument (ex: "%*d") *)
+  | Arg_padding : padty -> (int -> 'a, 'a) padding
+
+(* Some formats, such as %_d,
+   only accept an optional number as padding option (no extra argument) *)
+type pad_option = int option
+
+(* Precision of floats and '0'-padding of integers. *)
+type ('a, 'b) precision =
+  (* No precision (ex: "%f") *)
+  | No_precision : ('a, 'a) precision
+  (* Literal precision (ex: "%.3f") *)
+  | Lit_precision : int -> ('a, 'a) precision
+  (* Precision as extra argument (ex: "%.*f") *)
+  | Arg_precision : (int -> 'a, 'a) precision
+
+(* Some formats, such as %_f,
+   only accept an optional number as precision option (no extra argument) *)
+type prec_option = int option
+
+(***)
+
+(* List of format type elements. *)
+(* In particular used to represent %(...%) and %{...%} contents. *)
+type ('a, 'b, 'c, 'd, 'e, 'f) fmtty =
+     ('a, 'b, 'c, 'd, 'e, 'f,
+      'a, 'b, 'c, 'd, 'e, 'f) fmtty_rel
+and ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+     'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel =
+  | Char_ty :                                                 (* %c  *)
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      (char -> 'a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       char -> 'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel
+  | String_ty :                                               (* %s  *)
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      (string -> 'a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       string -> 'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel
+  | Int_ty :                                                  (* %d  *)
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      (int -> 'a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       int -> 'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel
+  | Int32_ty :                                                (* %ld *)
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      (int32 -> 'a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       int32 -> 'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel
+  | Nativeint_ty :                                            (* %nd *)
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      (nativeint -> 'a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       nativeint -> 'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel
+  | Int64_ty :                                                (* %Ld *)
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      (int64 -> 'a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       int64 -> 'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel
+  | Float_ty :                                                (* %f  *)
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      (float -> 'a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       float -> 'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel
+  | Bool_ty :                                                 (* %B  *)
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      (bool -> 'a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       bool -> 'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel
+
+  | Format_arg_ty :                                           (* %{...%} *)
+      ('g, 'h, 'i, 'j, 'k, 'l) fmtty *
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      (('g, 'h, 'i, 'j, 'k, 'l) format6 -> 'a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       ('g, 'h, 'i, 'j, 'k, 'l) format6 -> 'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel
+  | Format_subst_ty :                                         (* %(...%) *)
+      ('g, 'h, 'i, 'j, 'k, 'l,
+       'g1, 'b1, 'c1, 'j1, 'd1, 'a1) fmtty_rel *
+      ('g, 'h, 'i, 'j, 'k, 'l,
+       'g2, 'b2, 'c2, 'j2, 'd2, 'a2) fmtty_rel *
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      (('g, 'h, 'i, 'j, 'k, 'l) format6 -> 'g1, 'b1, 'c1, 'j1, 'e1, 'f1,
+       ('g, 'h, 'i, 'j, 'k, 'l) format6 -> 'g2, 'b2, 'c2, 'j2, 'e2, 'f2) fmtty_rel
+
+  (* Printf and Format specific constructors. *)
+  | Alpha_ty :                                                (* %a  *)
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      (('b1 -> 'x -> 'c1) -> 'x -> 'a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       ('b2 -> 'x -> 'c2) -> 'x -> 'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel
+  | Theta_ty :                                                (* %t  *)
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      (('b1 -> 'c1) -> 'a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       ('b2 -> 'c2) -> 'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel
+
+  (* Scanf specific constructor. *)
+  | Reader_ty :                                               (* %r  *)
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      ('x -> 'a1, 'b1, 'c1, ('b1 -> 'x) -> 'd1, 'e1, 'f1,
+       'x -> 'a2, 'b2, 'c2, ('b2 -> 'x) -> 'd2, 'e2, 'f2) fmtty_rel
+  | Ignored_reader_ty :                                       (* %_r  *)
+      ('a1, 'b1, 'c1, 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, 'd2, 'e2, 'f2) fmtty_rel ->
+      ('a1, 'b1, 'c1, ('b1 -> 'x) -> 'd1, 'e1, 'f1,
+       'a2, 'b2, 'c2, ('b2 -> 'x) -> 'd2, 'e2, 'f2) fmtty_rel
+
+  | End_of_fmtty :
+      ('f1, 'b1, 'c1, 'd1, 'd1, 'f1,
+       'f2, 'b2, 'c2, 'd2, 'd2, 'f2) fmtty_rel
+
+(***)
+
+(* List of format elements. *)
+and ('a, 'b, 'c, 'd, 'e, 'f) fmt =
+  | Char :                                                   (* %c *)
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        (char -> 'a, 'b, 'c, 'd, 'e, 'f) fmt
+  | Caml_char :                                              (* %C *)
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        (char -> 'a, 'b, 'c, 'd, 'e, 'f) fmt
+  | String :                                                 (* %s *)
+      ('x, string -> 'a) padding * ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        ('x, 'b, 'c, 'd, 'e, 'f) fmt
+  | Caml_string :                                            (* %S *)
+      ('x, string -> 'a) padding * ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        ('x, 'b, 'c, 'd, 'e, 'f) fmt
+  | Int :                                                    (* %[dixXuo] *)
+      int_conv * ('x, 'y) padding * ('y, int -> 'a) precision *
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        ('x, 'b, 'c, 'd, 'e, 'f) fmt
+  | Int32 :                                                  (* %l[dixXuo] *)
+      int_conv * ('x, 'y) padding * ('y, int32 -> 'a) precision *
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        ('x, 'b, 'c, 'd, 'e, 'f) fmt
+  | Nativeint :                                              (* %n[dixXuo] *)
+      int_conv * ('x, 'y) padding * ('y, nativeint -> 'a) precision *
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        ('x, 'b, 'c, 'd, 'e, 'f) fmt
+  | Int64 :                                                  (* %L[dixXuo] *)
+      int_conv * ('x, 'y) padding * ('y, int64 -> 'a) precision *
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        ('x, 'b, 'c, 'd, 'e, 'f) fmt
+  | Float :                                                  (* %[feEgGF] *)
+      float_conv * ('x, 'y) padding * ('y, float -> 'a) precision *
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        ('x, 'b, 'c, 'd, 'e, 'f) fmt
+  | Bool :                                                   (* %[bB] *)
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        (bool -> 'a, 'b, 'c, 'd, 'e, 'f) fmt
+  | Flush :                                                  (* %! *)
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        ('a, 'b, 'c, 'd, 'e, 'f) fmt
+
+  | String_literal :                                         (* abc *)
+      string * ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        ('a, 'b, 'c, 'd, 'e, 'f) fmt
+  | Char_literal :                                           (* x *)
+      char * ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        ('a, 'b, 'c, 'd, 'e, 'f) fmt
+
+  | Format_arg :                                             (* %{...%} *)
+      pad_option * ('g, 'h, 'i, 'j, 'k, 'l) fmtty *
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        (('g, 'h, 'i, 'j, 'k, 'l) format6 -> 'a, 'b, 'c, 'd, 'e, 'f) fmt
+  | Format_subst :                                           (* %(...%) *)
+      pad_option *
+      ('g, 'h, 'i, 'j, 'k, 'l,
+       'g2, 'b, 'c, 'j2, 'd, 'a) fmtty_rel *
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+      (('g, 'h, 'i, 'j, 'k, 'l) format6 -> 'g2, 'b, 'c, 'j2, 'e, 'f) fmt
+
+  (* Printf and Format specific constructor. *)
+  | Alpha :                                                  (* %a *)
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        (('b -> 'x -> 'c) -> 'x -> 'a, 'b, 'c, 'd, 'e, 'f) fmt
+  | Theta :                                                  (* %t *)
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        (('b -> 'c) -> 'a, 'b, 'c, 'd, 'e, 'f) fmt
+
+  (* Format specific constructor: *)
+  | Formatting :                                             (* @_ *)
+      formatting * ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        ('a, 'b, 'c, 'd, 'e, 'f) fmt
+
+  (* Scanf specific constructors: *)
+  | Reader :                                                 (* %r *)
+      ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        ('x -> 'a, 'b, 'c, ('b -> 'x) -> 'd, 'e, 'f) fmt
+  | Scan_char_set :                                          (* %[...] *)
+      pad_option * char_set * ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        (string -> 'a, 'b, 'c, 'd, 'e, 'f) fmt
+  | Scan_get_counter :                                       (* %[nlNL] *)
+      counter * ('a, 'b, 'c, 'd, 'e, 'f) fmt ->
+        (int -> 'a, 'b, 'c, 'd, 'e, 'f) fmt
+  | Ignored_param :                                          (* %_ *)
+      ('a, 'b, 'c, 'd, 'y, 'x) ignored * ('x, 'b, 'c, 'y, 'e, 'f) fmt ->
+        ('a, 'b, 'c, 'd, 'e, 'f) fmt
+
+  | End_of_format :
+        ('f, 'b, 'c, 'e, 'e, 'f) fmt
+
+(***)
+
+(* Type for ignored parameters (see "%_"). *)
+and ('a, 'b, 'c, 'd, 'e, 'f) ignored =
+  | Ignored_char :                                           (* %_c *)
+      ('a, 'b, 'c, 'd, 'd, 'a) ignored
+  | Ignored_caml_char :                                      (* %_C *)
+      ('a, 'b, 'c, 'd, 'd, 'a) ignored
+  | Ignored_string :                                         (* %_s *)
+      pad_option -> ('a, 'b, 'c, 'd, 'd, 'a) ignored
+  | Ignored_caml_string :                                    (* %_S *)
+      pad_option -> ('a, 'b, 'c, 'd, 'd, 'a) ignored
+  | Ignored_int :                                            (* %_d *)
+      int_conv * pad_option -> ('a, 'b, 'c, 'd, 'd, 'a) ignored
+  | Ignored_int32 :                                          (* %_ld *)
+      int_conv * pad_option -> ('a, 'b, 'c, 'd, 'd, 'a) ignored
+  | Ignored_nativeint :                                      (* %_nd *)
+      int_conv * pad_option -> ('a, 'b, 'c, 'd, 'd, 'a) ignored
+  | Ignored_int64 :                                          (* %_Ld *)
+      int_conv * pad_option -> ('a, 'b, 'c, 'd, 'd, 'a) ignored
+  | Ignored_float :                                          (* %_f *)
+      pad_option * prec_option -> ('a, 'b, 'c, 'd, 'd, 'a) ignored
+  | Ignored_bool :                                           (* %_B *)
+      ('a, 'b, 'c, 'd, 'd, 'a) ignored
+  | Ignored_format_arg :                                     (* %_{...%} *)
+      pad_option * ('g, 'h, 'i, 'j, 'k, 'l) fmtty ->
+        ('a, 'b, 'c, 'd, 'd, 'a) ignored
+  | Ignored_format_subst :                                   (* %_(...%) *)
+      pad_option * ('a, 'b, 'c, 'd, 'e, 'f) fmtty ->
+        ('a, 'b, 'c, 'd, 'e, 'f) ignored
+  | Ignored_reader :                                         (* %_r *)
+      ('a, 'b, 'c, ('b -> 'x) -> 'd, 'd, 'a) ignored
+  | Ignored_scan_char_set :                                  (* %_[...] *)
+      pad_option * char_set -> ('a, 'b, 'c, 'd, 'd, 'a) ignored
+  | Ignored_scan_get_counter :                               (* %_[nlNL] *)
+      counter -> ('a, 'b, 'c, 'd, 'd, 'a) ignored
+
+and ('a, 'b, 'c, 'd, 'e, 'f) format6 =
+  Format of ('a, 'b, 'c, 'd, 'e, 'f) fmt * string
+
+let rec erase_rel : type a b c d e f g h i j k l .
+  (a, b, c, d, e, f,
+   g, h, i, j, k, l) fmtty_rel -> (a, b, c, d, e, f) fmtty
+= function
+  | Char_ty rest ->
+    Char_ty (erase_rel rest)
+  | String_ty rest ->
+    String_ty (erase_rel rest)
+  | Int_ty rest ->
+    Int_ty (erase_rel rest)
+  | Int32_ty rest ->
+    Int32_ty (erase_rel rest)
+  | Int64_ty rest ->
+    Int64_ty (erase_rel rest)
+  | Nativeint_ty rest ->
+    Nativeint_ty (erase_rel rest)
+  | Float_ty rest ->
+    Float_ty (erase_rel rest)
+  | Bool_ty rest ->
+    Bool_ty (erase_rel rest)
+  | Format_arg_ty (ty, rest) ->
+    Format_arg_ty (ty, erase_rel rest)
+  | Format_subst_ty (ty1, ty2, rest) ->
+    Format_subst_ty (ty1, ty1, erase_rel rest)
+  | Alpha_ty rest ->
+    Alpha_ty (erase_rel rest)
+  | Theta_ty rest ->
+    Theta_ty (erase_rel rest)
+  | Reader_ty rest ->
+    Reader_ty (erase_rel rest)
+  | Ignored_reader_ty rest ->
+    Ignored_reader_ty (erase_rel rest)
+  | End_of_fmtty -> End_of_fmtty
+
+(******************************************************************************)
+                         (* Format type concatenation *)
+
+(* Concatenate two format types. *)
+(* Used by:
+   * reader_nb_unifier_of_fmtty to count readers in an fmtty,
+   * Scanf.take_fmtty_format_readers to extract readers inside %(...%),
+   * CamlinternalFormat.fmtty_of_ignored_format to extract format type. *)
+
+(*
+let rec concat_fmtty : type a b c d e f g h .
+    (a, b, c, d, e, f) fmtty ->
+    (f, b, c, e, g, h) fmtty ->
+    (a, b, c, d, g, h) fmtty =
+*)
+let rec concat_fmtty :
+  type a1 b1 c1 d1 e1 f1
+       a2 b2 c2 d2 e2 f2
+       g1 j1 g2 j2
+  .
+    (g1, b1, c1, j1, d1, a1,
+     g2, b2, c2, j2, d2, a2) fmtty_rel ->
+    (a1, b1, c1, d1, e1, f1,
+     a2, b2, c2, d2, e2, f2) fmtty_rel ->
+    (g1, b1, c1, j1, e1, f1,
+     g2, b2, c2, j2, e2, f2) fmtty_rel =
+fun fmtty1 fmtty2 -> match fmtty1 with
+  | Char_ty rest ->
+    Char_ty (concat_fmtty rest fmtty2)
+  | String_ty rest ->
+    String_ty (concat_fmtty rest fmtty2)
+  | Int_ty rest ->
+    Int_ty (concat_fmtty rest fmtty2)
+  | Int32_ty rest ->
+    Int32_ty (concat_fmtty rest fmtty2)
+  | Nativeint_ty rest ->
+    Nativeint_ty (concat_fmtty rest fmtty2)
+  | Int64_ty rest ->
+    Int64_ty (concat_fmtty rest fmtty2)
+  | Float_ty rest ->
+    Float_ty (concat_fmtty rest fmtty2)
+  | Bool_ty rest ->
+    Bool_ty (concat_fmtty rest fmtty2)
+  | Alpha_ty rest ->
+    Alpha_ty (concat_fmtty rest fmtty2)
+  | Theta_ty rest ->
+    Theta_ty (concat_fmtty rest fmtty2)
+  | Reader_ty rest ->
+    Reader_ty (concat_fmtty rest fmtty2)
+  | Ignored_reader_ty rest ->
+    Ignored_reader_ty (concat_fmtty rest fmtty2)
+  | Format_arg_ty (ty, rest) ->
+    Format_arg_ty (ty, concat_fmtty rest fmtty2)
+  | Format_subst_ty (ty1, ty2, rest) ->
+    Format_subst_ty (ty1, ty2, concat_fmtty rest fmtty2)
+  | End_of_fmtty -> fmtty2
+
+(******************************************************************************)
+                           (* Format concatenation *)
+
+(* Concatenate two formats. *)
+let rec concat_fmt : type a b c d e f g h .
+    (a, b, c, d, e, f) fmt ->
+    (f, b, c, e, g, h) fmt ->
+    (a, b, c, d, g, h) fmt =
+fun fmt1 fmt2 -> match fmt1 with
+  | String (pad, rest) ->
+    String (pad, concat_fmt rest fmt2)
+  | Caml_string (pad, rest) ->
+    Caml_string (pad, concat_fmt rest fmt2)
+
+  | Int (iconv, pad, prec, rest) ->
+    Int (iconv, pad, prec, concat_fmt rest fmt2)
+  | Int32 (iconv, pad, prec, rest) ->
+    Int32 (iconv, pad, prec, concat_fmt rest fmt2)
+  | Nativeint (iconv, pad, prec, rest) ->
+    Nativeint (iconv, pad, prec, concat_fmt rest fmt2)
+  | Int64 (iconv, pad, prec, rest) ->
+    Int64 (iconv, pad, prec, concat_fmt rest fmt2)
+  | Float (fconv, pad, prec, rest) ->
+    Float (fconv, pad, prec, concat_fmt rest fmt2)
+
+  | Char (rest) ->
+    Char (concat_fmt rest fmt2)
+  | Caml_char rest ->
+    Caml_char (concat_fmt rest fmt2)
+  | Bool rest ->
+    Bool (concat_fmt rest fmt2)
+  | Alpha rest ->
+    Alpha (concat_fmt rest fmt2)
+  | Theta rest ->
+    Theta (concat_fmt rest fmt2)
+  | Reader rest ->
+    Reader (concat_fmt rest fmt2)
+  | Flush rest ->
+    Flush (concat_fmt rest fmt2)
+
+  | String_literal (str, rest) ->
+    String_literal (str, concat_fmt rest fmt2)
+  | Char_literal (chr, rest) ->
+    Char_literal   (chr, concat_fmt rest fmt2)
+
+  | Format_arg (pad, fmtty, rest) ->
+    Format_arg   (pad, fmtty, concat_fmt rest fmt2)
+  | Format_subst (pad, fmtty, rest) ->
+    Format_subst (pad, fmtty, concat_fmt rest fmt2)
+
+  | Scan_char_set (width_opt, char_set, rest) ->
+    Scan_char_set (width_opt, char_set, concat_fmt rest fmt2)
+  | Scan_get_counter (counter, rest) ->
+    Scan_get_counter (counter, concat_fmt rest fmt2)
+  | Ignored_param (ign, rest) ->
+    Ignored_param (ign, concat_fmt rest fmt2)
+
+  | Formatting (fmting, rest) ->
+    Formatting (fmting, concat_fmt rest fmt2)
+
+  | End_of_format ->
+    fmt2
+end
+
+type ('a, 'b, 'c, 'd, 'e, 'f) format6
+   = ('a, 'b, 'c, 'd, 'e, 'f) CamlinternalFormatBasics.format6
+   = Format of ('a, 'b, 'c, 'd, 'e, 'f) CamlinternalFormatBasics.fmt
+               * string
+
 type ('a, 'b, 'c, 'd) format4 = ('a, 'b, 'c, 'c, 'c, 'd) format6
 
 type ('a, 'b, 'c) format = ('a, 'b, 'c, 'c) format4
+
+let string_of_format (Format (fmt, str)) = str
 
 external format_of_string :
  ('a, 'b, 'c, 'd, 'e, 'f) format6 ->
  ('a, 'b, 'c, 'd, 'e, 'f) format6 = "%identity"
 
-external format_to_string :
- ('a, 'b, 'c, 'd, 'e, 'f) format6 -> string = "%identity"
-external string_to_format :
- string -> ('a, 'b, 'c, 'd, 'e, 'f) format6 = "%identity"
-
-let (( ^^ ) :
-      ('a, 'b, 'c, 'd, 'e, 'f) format6 ->
-      ('f, 'b, 'c, 'e, 'g, 'h) format6 ->
-      ('a, 'b, 'c, 'd, 'g, 'h) format6) =
-  fun fmt1 fmt2 ->
-    string_to_format (format_to_string fmt1 ^ "%," ^ format_to_string fmt2)
-;;
-
-let string_of_format fmt =
-  let s = format_to_string fmt in
-  let l = string_length s in
-  let r = string_create l in
-  string_blit s 0 r 0 l;
-  r
+let (^^) (Format (fmt1, str1)) (Format (fmt2, str2)) =
+  Format (CamlinternalFormatBasics.concat_fmt fmt1 fmt2,
+          str1 ^ "%," ^ str2)
 
 (* Miscellaneous *)
 
