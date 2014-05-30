@@ -36,7 +36,7 @@ OCAMLBUILDNATIVE=$(WITH_OCAMLBUILD:=.native)
 OCAMLDOC_OPT=$(WITH_OCAMLDOC:=.opt)
 
 INCLUDES=-I utils -I parsing -I typing -I bytecomp -I asmcomp -I driver \
-	 -I toplevel -I asmcomp/dwarf_low
+	 -I toplevel -I asmcomp/dwarf_low -I asmcomp/dwarf
 
 UTILS=utils/misc.cmo utils/tbl.cmo utils/config.cmo \
   utils/clflags.cmo utils/terminfo.cmo utils/ccomp.cmo utils/warnings.cmo \
@@ -78,6 +78,11 @@ BYTECOMP=bytecomp/meta.cmo bytecomp/instruct.cmo bytecomp/bytegen.cmo \
   bytecomp/bytesections.cmo bytecomp/dll.cmo bytecomp/symtable.cmo \
   bytecomp/bytelink.cmo bytecomp/bytelibrarian.cmo bytecomp/bytepackager.cmo \
   driver/errors.cmo driver/compile.cmo
+
+DWARF=asmcomp/dwarf/dwarf_std_internal.cmo \
+  asmcomp/dwarf/live_ranges.cmo \
+  asmcomp/dwarf/compilation_unit_state.cmo \
+  asmcomp/dwarf/dwarf_dot_std.cmo
 
 DWARF_LOW=\
   asmcomp/dwarf_low/std_internal.cmo \
@@ -122,7 +127,7 @@ ASMCOMP=asmcomp/arch.cmo asmcomp/debuginfo.cmo \
   asmcomp/deadcode.cmo \
   asmcomp/printlinear.cmo asmcomp/linearize.cmo \
   asmcomp/schedgen.cmo asmcomp/scheduling.cmo \
-  $(DWARF_LOW) \
+  $(DWARF) $(DWARF_LOW) \
   asmcomp/emitaux.cmo asmcomp/emit.cmo asmcomp/asmgen.cmo \
   asmcomp/asmlink.cmo asmcomp/asmlibrarian.cmo asmcomp/asmpackager.cmo \
   driver/opterrors.cmo driver/optcompile.cmo
