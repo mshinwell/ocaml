@@ -36,7 +36,7 @@ OCAMLBUILDNATIVE=$(WITH_OCAMLBUILD:=.native)
 OCAMLDOC_OPT=$(WITH_OCAMLDOC:=.opt)
 
 INCLUDES=-I utils -I parsing -I typing -I bytecomp -I asmcomp -I driver \
-	 -I toplevel
+	 -I toplevel -I asmcomp/dwarf_low
 
 UTILS=utils/misc.cmo utils/tbl.cmo utils/config.cmo \
   utils/clflags.cmo utils/terminfo.cmo utils/ccomp.cmo utils/warnings.cmo \
@@ -79,6 +79,34 @@ BYTECOMP=bytecomp/meta.cmo bytecomp/instruct.cmo bytecomp/bytegen.cmo \
   bytecomp/bytelink.cmo bytecomp/bytelibrarian.cmo bytecomp/bytepackager.cmo \
   driver/errors.cmo driver/compile.cmo
 
+DWARF_LOW=\
+  asmcomp/dwarf_low/std_internal.cmo \
+  asmcomp/dwarf_low/emitter.cmo \
+  asmcomp/dwarf_low/emittable.cmo \
+  asmcomp/dwarf_low/value.cmo \
+  asmcomp/dwarf_low/child_determination.cmo \
+  asmcomp/dwarf_low/tag.cmo \
+  asmcomp/dwarf_low/form.cmo \
+  asmcomp/dwarf_low/attribute.cmo \
+  asmcomp/dwarf_low/abbreviation_code.cmo \
+  asmcomp/dwarf_low/abbreviations_table_entry.cmo \
+  asmcomp/dwarf_low/abbreviations_table.cmo \
+  asmcomp/dwarf_low/aranges_table.cmo \
+  asmcomp/dwarf_low/encoding_attribute.cmo \
+  asmcomp/dwarf_low/attribute_value.cmo \
+  asmcomp/dwarf_low/debugging_information_entry.cmo \
+  asmcomp/dwarf_low/version.cmo \
+  asmcomp/dwarf_low/operator.cmo \
+  asmcomp/dwarf_low/simple_location_expression.cmo \
+  asmcomp/dwarf_low/location_expression.cmo \
+  asmcomp/dwarf_low/location_list_entry.cmo \
+  asmcomp/dwarf_low/location_list.cmo \
+  asmcomp/dwarf_low/debug_info_section.cmo \
+  asmcomp/dwarf_low/debug_loc_table.cmo \
+  asmcomp/dwarf_low/pubnames_table.cmo \
+  asmcomp/dwarf_low/section_names.cmo \
+  asmcomp/dwarf_low/dwarf_low_dot_std.cmo
+
 ASMCOMP=asmcomp/arch.cmo asmcomp/debuginfo.cmo \
   asmcomp/cmm.cmo asmcomp/printcmm.cmo \
   asmcomp/reg.cmo asmcomp/mach.cmo asmcomp/proc.cmo \
@@ -94,6 +122,7 @@ ASMCOMP=asmcomp/arch.cmo asmcomp/debuginfo.cmo \
   asmcomp/deadcode.cmo \
   asmcomp/printlinear.cmo asmcomp/linearize.cmo \
   asmcomp/schedgen.cmo asmcomp/scheduling.cmo \
+  $(DWARF_LOW) \
   asmcomp/emitaux.cmo asmcomp/emit.cmo asmcomp/asmgen.cmo \
   asmcomp/asmlink.cmo asmcomp/asmlibrarian.cmo asmcomp/asmpackager.cmo \
   driver/opterrors.cmo driver/optcompile.cmo
