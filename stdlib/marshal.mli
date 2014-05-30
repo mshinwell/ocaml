@@ -33,12 +33,13 @@
    Anything can happen at run-time if the object in the file does not
    belong to the given type.
 
-   OCaml exception values (of type [exn]) returned by the unmarhsaller
-   should not be pattern-matched over through [match ... with] or [try
-   ... with], because unmarshalling does not preserve the information
-   required for matching their exception constructor. Structural
-   equalities with other exception values does not work either.  Most
-   other uses such as Printexc.to_string, will still work as expected.
+   Values of extensible variant types, for example exceptions (of
+   extensible type [exn]), returned by the unmarhsaller should not be
+   pattern-matched over through [match ... with] or [try ... with],
+   because unmarshalling does not preserve the information required for
+   matching their constructors. Structural equalities with other
+   extensible variant values does not work either.  Most other uses such
+   as Printexc.to_string, will still work as expected.
 
    The representation of marshaled values is not human-readable,
    and uses bytes that are not printable characters. Therefore,
@@ -47,7 +48,7 @@
    [open_out_bin] or [open_in_bin]; channels opened in text mode will
    cause unmarshaling errors on platforms where text channels behave
    differently than binary channels, e.g. Windows.
-*)
+ *)
 
 type extern_flags =
     No_sharing                          (** Don't preserve sharing *)
@@ -110,7 +111,7 @@ val to_channel : out_channel -> 'a -> extern_flags list -> unit
 
 external to_bytes :
   'a -> extern_flags list -> bytes = "caml_output_value_to_string"
-(** [Marshal.to_string v flags] returns a byte sequence containing
+(** [Marshal.to_bytes v flags] returns a byte sequence containing
    the representation of [v].
    The [flags] argument has the same meaning as for
    {!Marshal.to_channel}. *)
@@ -139,7 +140,7 @@ val from_bytes : bytes -> int -> 'a
 (** [Marshal.from_bytes buff ofs] unmarshals a structured value
    like {!Marshal.from_channel} does, except that the byte
    representation is not read from a channel, but taken from
-   the string [buff], starting at position [ofs]. *)
+   the byte sequence [buff], starting at position [ofs]. *)
 
 val from_string : string -> int -> 'a
 (** Same as [from_bytes] but take a string as argument instead of a

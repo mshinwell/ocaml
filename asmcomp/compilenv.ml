@@ -30,9 +30,9 @@ let global_infos_table =
 module CstMap =
   Map.Make(struct
     type t = Clambda.ustructured_constant
-    let compare = Pervasives.compare
-        (* could use a better version, comparing on the
-           first arg of Uconst_ref *)
+    let compare = Clambda.compare_structured_constants
+    (* PR#6442: it is incorrect to use Pervasives.compare on values of type t
+       because it compares "0.0" and "-0.0" equal. *)
   end)
 
 type structured_constants =
@@ -143,9 +143,6 @@ let read_library_info filename =
 
 (* Read and cache info on global identifiers *)
 
-let cmx_not_found_crc =
-  "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
-
 let get_global_info global_ident = (
   let modname = Ident.name global_ident in
   if modname = current_unit.ui_name then
@@ -161,9 +158,9 @@ let get_global_info global_ident = (
           let (ui, crc) = read_unit_info filename in
           if ui.ui_name <> modname then
             raise(Error(Illegal_renaming(modname, ui.ui_name, filename)));
-          (Some ui, crc)
+          (Some ui, Some crc)
         with Not_found ->
-          (None, cmx_not_found_crc) in
+          (None, None) in
       current_unit.ui_imports_cmx <-
         (modname, crc) :: current_unit.ui_imports_cmx;
       Hashtbl.add global_infos_table modname infos;
@@ -231,7 +228,7 @@ let write_unit_info info filename =
   close_out oc
 
 let save_unit_info filename =
-  current_unit.ui_imports_cmi <- Env.imported_units();
+  current_unit.ui_imports_cmi <- Env.imports();
   write_unit_info current_unit filename
 
 

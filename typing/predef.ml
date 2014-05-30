@@ -35,7 +35,6 @@ and ident_unit = ident_create "unit"
 and ident_exn = ident_create "exn"
 and ident_array = ident_create "array"
 and ident_list = ident_create "list"
-and ident_format6 = ident_create "format6"
 and ident_option = ident_create "option"
 and ident_nativeint = ident_create "nativeint"
 and ident_int32 = ident_create "int32"
@@ -52,7 +51,6 @@ and path_unit = Pident ident_unit
 and path_exn = Pident ident_exn
 and path_array = Pident ident_array
 and path_list = Pident ident_list
-and path_format6 = Pident ident_format6
 and path_option = Pident ident_option
 and path_nativeint = Pident ident_nativeint
 and path_int32 = Pident ident_int32
@@ -122,7 +120,7 @@ and ident_nil = ident_create "[]"
 and ident_cons = ident_create "::"
 and ident_none = ident_create "None"
 and ident_some = ident_create "Some"
-let common_initial_env add_type add_exception empty_env =
+let common_initial_env add_type add_extension empty_env =
   let decl_bool =
     {decl_abstr with
      type_kind = Type_variant([cstr ident_false []; cstr ident_true []])}
@@ -131,7 +129,7 @@ let common_initial_env add_type add_exception empty_env =
      type_kind = Type_variant([cstr ident_void []])}
   and decl_exn =
     {decl_abstr with
-     type_kind = Type_variant []}
+     type_kind = Type_open}
   and decl_array =
     let tvar = newgenvar() in
     {decl_abstr with
@@ -146,12 +144,6 @@ let common_initial_env add_type add_exception empty_env =
      type_kind =
      Type_variant([cstr ident_nil []; cstr ident_cons [tvar; type_list tvar]]);
      type_variance = [Variance.covariant]}
-  and decl_format6 =
-    let params = List.map (newgenvar ?name:None) [();();();();();()] in
-    {decl_abstr with
-     type_params = params;
-     type_arity = 6;
-     type_variance = List.map (fun _ -> Variance.full) params}
   and decl_option =
     let tvar = newgenvar() in
     {decl_abstr with
@@ -167,31 +159,36 @@ let common_initial_env add_type add_exception empty_env =
      type_variance = [Variance.covariant]}
   in
 
-  let add_exception id l =
-    add_exception id
-      { exn_args = l; exn_loc = Location.none; exn_attributes = [] }
+  let add_extension id l =
+    add_extension id
+      { ext_type_path = path_exn;
+        ext_type_params = [];
+        ext_args = l;
+        ext_ret_type = None;
+        ext_private = Asttypes.Public;
+        ext_loc = Location.none;
+        ext_attributes = [] }
   in
-  add_exception ident_match_failure
+  add_extension ident_match_failure
                          [newgenty (Ttuple[type_string; type_int; type_int])] (
-  add_exception ident_out_of_memory [] (
-  add_exception ident_stack_overflow [] (
-  add_exception ident_invalid_argument [type_string] (
-  add_exception ident_failure [type_string] (
-  add_exception ident_not_found [] (
-  add_exception ident_sys_blocked_io [] (
-  add_exception ident_sys_error [type_string] (
-  add_exception ident_end_of_file [] (
-  add_exception ident_division_by_zero [] (
-  add_exception ident_assert_failure
+  add_extension ident_out_of_memory [] (
+  add_extension ident_stack_overflow [] (
+  add_extension ident_invalid_argument [type_string] (
+  add_extension ident_failure [type_string] (
+  add_extension ident_not_found [] (
+  add_extension ident_sys_blocked_io [] (
+  add_extension ident_sys_error [type_string] (
+  add_extension ident_end_of_file [] (
+  add_extension ident_division_by_zero [] (
+  add_extension ident_assert_failure
                          [newgenty (Ttuple[type_string; type_int; type_int])] (
-  add_exception ident_undefined_recursive_module
+  add_extension ident_undefined_recursive_module
                          [newgenty (Ttuple[type_string; type_int; type_int])] (
   add_type ident_int64 decl_abstr (
   add_type ident_int32 decl_abstr (
   add_type ident_nativeint decl_abstr (
   add_type ident_lazy_t decl_lazy_t (
   add_type ident_option decl_option (
-  add_type ident_format6 decl_format6 (
   add_type ident_list decl_list (
   add_type ident_array decl_array (
   add_type ident_exn decl_exn (
@@ -201,7 +198,7 @@ let common_initial_env add_type add_exception empty_env =
   add_type ident_string decl_abstr (
   add_type ident_char decl_abstr (
   add_type ident_int decl_abstr (
-    empty_env)))))))))))))))))))))))))))
+    empty_env))))))))))))))))))))))))))
 
 let build_initial_env add_type add_exception empty_env =
   let common = common_initial_env add_type add_exception empty_env in

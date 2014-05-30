@@ -41,7 +41,11 @@ let rec live i finally =
       Reg.set_of_array i.arg
   | Iop op ->
       let after = live i.next finally in
-      if Proc.op_is_pure op && Reg.disjoint_set_array after i.res then begin
+      if Proc.op_is_pure op                    (* no side effects *)
+      && Reg.disjoint_set_array after i.res    (* results are not used after *)
+      && not (Proc.regs_are_volatile i.arg)    (* no stack-like hard reg *)
+      && not (Proc.regs_are_volatile i.res)    (*            is involved *)
+      then begin
         (* This operation is dead code.  Ignore its arguments. *)
         i.live <- after;
         after
@@ -114,6 +118,10 @@ let rec live i finally =
   | Iraise _ ->
       i.live <- !live_at_raise;
       Reg.add_set_array !live_at_raise i.arg
+
+let reset () =
+  live_at_raise := Reg.Set.empty;
+  live_at_exit := []
 
 let fundecl ppf f =
   let initially_live = live f.fun_body Reg.Set.empty in
