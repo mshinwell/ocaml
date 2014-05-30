@@ -22,6 +22,11 @@ open Clambda
 open Cmm
 open Cmx_format
 
+let do_check_field_access =
+  match try Some (Sys.getenv "BOUNDS") with Not_found -> None with
+  | None | Some "" -> false
+  | Some _ -> true
+
 (* Local binding of complex expressions *)
 
 let bind name arg fn =
@@ -493,6 +498,26 @@ let get_tag ptr =
 
 let get_size ptr =
   Cop(Clsr, [header ptr; Cconst_int 10])
+
+(* Bounds checks upon field access, for debugging the compiler *)
+
+let check_field_access ptr field_index if_success =
+  if not do_check_field_access then
+    if_success
+  else
+    let field_index = Cconst_int field_index in
+    let not_too_small = Cop (Ccmpi Cge, [field_index; Cconst_int 0]) in
+    let not_too_big = Cop (Ccmpi Clt, [field_index; get_size ptr]) in
+    let failure =
+      Cop (Cextcall ("caml_field_access_out_of_bounds_error", typ_addr, false,
+             Debuginfo.none),
+        [ptr; field_index])
+    in
+    Cifthenelse (not_too_small,
+      Cifthenelse (not_too_big,
+        if_success,
+        failure),
+      failure)
 
 (* Array indexing *)
 
@@ -1550,13 +1575,18 @@ and transl_prim_1 p arg dbg =
       return_unit(remove_unit (transl arg))
   (* Heap operations *)
   | Pfield n ->
-      get_field (transl arg) n
+      let ptr = transl arg in
+      let body = get_field ptr n in
+      check_field_access ptr n body
   | Pfloatfield n ->
       let ptr = transl arg in
-      box_float(
-        Cop(Cload Double_u,
-            [if n = 0 then ptr
-                       else Cop(Cadda, [ptr; Cconst_int(n * size_float)])]))
+      let body =
+        box_float(
+          Cop(Cload Double_u,
+              [if n = 0 then ptr
+                         else Cop(Cadda, [ptr; Cconst_int(n * size_float)])]))
+      in
+      check_field_access ptr n body
   | Pint_as_pointer ->
      Cop(Cadda, [transl arg; Cconst_int (-1)])
   (* Exceptions *)
@@ -1649,20 +1679,25 @@ and transl_prim_1 p arg dbg =
 and transl_prim_2 p arg1 arg2 dbg =
   match p with
   (* Heap operations *)
-    Psetfield(n, ptr) ->
-      if ptr then
-        return_unit(Cop(Cextcall("caml_modify", typ_void, false,Debuginfo.none),
-                        [field_address (transl arg1) n; transl arg2]))
-      else
-        return_unit(set_field (transl arg1) n (transl arg2))
+    Psetfield(n, is_ptr) ->
+      let ptr = transl arg1 in
+      let body =
+        if is_ptr then
+          Cop(Cextcall("caml_modify", typ_void, false,Debuginfo.none),
+            [field_address ptr n; transl arg2])
+        else
+          set_field ptr n (transl arg2)
+      in
+      check_field_access ptr n (return_unit body)
   | Psetfloatfield n ->
       let ptr = transl arg1 in
-      return_unit(
+      let body =
         Cop(Cstore Double_u,
             [if n = 0 then ptr
                        else Cop(Cadda, [ptr; Cconst_int(n * size_float)]);
-                   transl_unbox_float arg2]))
-
+                   transl_unbox_float arg2])
+      in
+      check_field_access ptr n (return_unit body)
   (* Boolean operations *)
   | Psequand ->
       Cifthenelse(test_bool(transl arg1), transl arg2, Cconst_int 1)
