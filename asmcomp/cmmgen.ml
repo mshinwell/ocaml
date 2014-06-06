@@ -508,6 +508,15 @@ let check_field_access ptr field_index if_success =
     if_success
   else
     let field_index = Cconst_int field_index in
+    (* If [ptr] points at an infix header, we need to move it back to the "main"
+       [Closure_tag] header. *)
+    let ptr =
+      Cifthenelse (Cop (Ccmpi Cne, [get_tag ptr; Cconst_int Obj.infix_tag]),
+        ptr,
+        Cop (Csuba, [ptr;
+          Cop (Cmuli, [get_size ptr (* == Infix_offset_val(ptr) *);
+            Cconst_int size_addr])]))
+    in
     let not_too_small = Cop (Ccmpi Cge, [field_index; Cconst_int 0]) in
     let not_too_big = Cop (Ccmpi Clt, [field_index; get_size ptr]) in
     let failure =
