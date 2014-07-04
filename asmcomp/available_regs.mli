@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013, Jane Street Holding                                *)
+(*  Copyright 2013--2014, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -20,11 +20,5 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* Available registers analysis.
-
-   The results are used for emission of debugging information
-   describing how to recover the values of variables from registers
-   and stack slots at runtime.
-*)
-
-val function_declaration : Mach.fundecl -> unit
+(* Available registers analysis.  See the .ml file for more details. *)
+val fundecl : Mach.fundecl -> Mach.fundecl

@@ -21,6 +21,9 @@ module Raw_name : sig
 
   val to_string : t -> string option
   val is_temporary : t -> bool
+  val is_procedure_call_convention : t -> bool
+
+  val (=) : t -> t -> bool
 end = struct
   type t =
     | Temporary
@@ -53,6 +56,12 @@ end = struct
   let is_temporary = function
     | Temporary -> true
     | Procedure_call_convention | Ident _ -> false
+
+  let is_procedure_call_convention = function
+    | Temporary | Ident _ -> false
+    | Procedure_call_convention -> true
+
+  let (=) = Pervasives.(=)
 end
 
 type t =
@@ -154,6 +163,8 @@ let name t =
   | Some part -> with_spilled ^ "#" ^ string_of_int part
 
 let is_temporary t = Raw_name.is_temporary t.raw_name
+let is_procedure_call_convention t =
+  Raw_name.is_procedure_call_convention t.raw_name
 
 let first_virtual_reg_stamp = ref (-1)
 
@@ -236,3 +247,10 @@ let set_of_array v =
   | n -> let rec add_all i =
            if i >= n then Set.empty else Set.add v.(i) (add_all(i+1))
          in add_all 0
+
+let holds_pointer t =
+  match t.typ with
+  | Addr -> true
+  | Int | Float -> false
+
+let holds_non_pointer t = not (holds_pointer t)

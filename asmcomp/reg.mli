@@ -15,6 +15,7 @@
 module Raw_name : sig
   type t
   val create_ident : Ident.t -> t
+  val (=) : t -> t -> bool
 end
 
 type t =
@@ -62,6 +63,11 @@ val identical_except_in_name : t -> from:t -> t
    that it is never the canonical location of the value of a given
    identifier. *)
 val is_temporary : t -> bool
+
+val is_procedure_call_convention : t -> bool
+
+val holds_pointer : t -> bool
+val holds_non_pointer : t -> bool
 
 (* Name for printing *)
 val name : t -> string

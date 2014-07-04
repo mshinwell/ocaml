@@ -88,6 +88,7 @@ ASMCOMP=asmcomp/arch.cmo asmcomp/debuginfo.cmo \
   asmcomp/comballoc.cmo \
   asmcomp/CSEgen.cmo asmcomp/CSE.cmo \
   asmcomp/liveness.cmo \
+  asmcomp/available_regs.cmo \
   asmcomp/spill.cmo asmcomp/split.cmo \
   asmcomp/interf.cmo asmcomp/coloring.cmo \
   asmcomp/reloadgen.cmo asmcomp/reload.cmo \

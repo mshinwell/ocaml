@@ -55,13 +55,38 @@ type operation =
   | Ifloatofint | Iintoffloat
   | Ispecific of Arch.specific_operation
 
+(* The [live] member of [instruction] holds those registers "live across" the
+   instruction.
+
+   "live across" means live at the point where:
+   - the arguments to the instruction i have been read
+     (and therefore are dead if this is their last use)
+   - the results of the instruction i have not been produced yet
+     (and therefore are not yet live even if they are used later).
+ 
+   If i is a function call, the temporaries "live across" are exactly
+   those that the GC must use as roots and preserve.  There is no need to
+   follow the arguments to the function call, because they will be
+   handled by the callee.  The GC must not follow the results of the
+   function call, because they are not defined yet.
+ 
+   The relations between live-across, live-immediately-before and
+   live-immediately-after are as follows:
+ 
+   live-immediately-before = live-across U arguments
+ 
+   live-immediately-after = live-across U results that are used later
+*)
+
 type instruction =
   { desc: instruction_desc;
     next: instruction;
     arg: Reg.t array;
     res: Reg.t array;
     dbg: Debuginfo.t;
-    mutable live: Reg.Set.t }
+    mutable live: Reg.Set.t;
+    mutable available_before: Reg.Set.t;
+  }
 
 and instruction_desc =
     Iend
