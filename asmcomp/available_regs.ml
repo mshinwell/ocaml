@@ -173,6 +173,9 @@ let rec available_regs instr ~avail_before =
          name.
          We start with [R.Set.empty] for the handler since we can't tell
          from where the exception might have been raised. *)
+      (* CR-someday mshinwell: there is one case where we might be able to:
+         if the body doesn't contain any calls, but does contain bounds
+         checks. *)
       R.Set.inter (available_regs body ~avail_before)
         (available_regs handler ~avail_before:R.Set.empty)
     | Iraise _ -> R.Set.empty
