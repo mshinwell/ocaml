@@ -129,15 +129,21 @@ let rec available_regs instr ~avail_before =
       with Exit -> ()
       end;
       !avail_after
-    (* CR mshinwell: some more thought is probably required here *)
-    | Icatch (_nfail, body, handler) -> join [body; handler]
+    | Icatch (_nfail, body, handler) ->
+      Reg.Set.inter (available_regs body ~avail_before)
+        (* CR mshinwell: actually, at the start of the handler we probably do
+           know what's available (correlate with Iexit via nfail). *)
+        (available_regs handler ~avail_before:Reg.Set.empty)
     | Iexit _nfail -> Reg.Set.empty
     | Itrywith (body, handler) ->
       (* Here, [Proc.loc_exn_bucket] should be available at the start of
          [handler], but it isn't clear it's useful (from the point of view of
          the debugger) to include it since there's no associated identifier
-         name. *)
-      join [body; handler]
+         name.
+         We start with [Reg.Set.empty] for the handler since we can't tell
+         from where the exception might have been raised. *)
+      Reg.Set.inter (available_regs body ~avail_before)
+        (available_regs handler ~avail_before:Reg.Set.empty)
     | Iraise _ -> Reg.Set.empty
   in
   let avail_after =
