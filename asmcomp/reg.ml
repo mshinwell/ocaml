@@ -22,6 +22,7 @@ module Raw_name : sig
   val to_string : t -> string option
   val is_temporary : t -> bool
   val is_procedure_call_convention : t -> bool
+  val is_ident : t -> bool
 
   val (=) : t -> t -> bool
 end = struct
@@ -60,6 +61,10 @@ end = struct
   let is_procedure_call_convention = function
     | Temporary | Ident _ -> false
     | Procedure_call_convention -> true
+
+  let is_ident = function
+    | Ident _ -> true
+    | Temporary | Procedure_call_convention -> false
 
   let (=) = Pervasives.(=)
 end

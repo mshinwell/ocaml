@@ -40,8 +40,8 @@ let overwrite_union reg_set ~overwrite_with =
 
 (* [available_regs ~instr ~avail_before] calculates, given the registers
    available before an instruction [instr], the registers that are available
-   after [instr].  The [avail_before] fields of instructions are updated
-   as a side effect.
+   after [instr].  The [avail_before] fields of instructions are updated with
+   the available registers, that have names, before each instruction.
 
    "available before" can be thought of, at the assembly level, as the set of
    registers available when the program counter is equal to the address of the
@@ -56,7 +56,9 @@ let overwrite_union reg_set ~overwrite_with =
 *)
 let rec available_regs instr ~avail_before =
   (* CR mshinwell: think about trying to make this algorithm good enough so
-     we can check this.
+     we can check this.  Maybe we should first measure the "badness" by
+     showing those regs that are known to be live but not deduced to be
+     available.
   (* A register should not be an input to an instruction unless it is
      available. *)
   assert (Reg.Set.subset (Reg.set_of_array instr.M.arg) avail_before);
@@ -64,7 +66,9 @@ let rec available_regs instr ~avail_before =
      before the instruction. *)
   assert (Reg.Set.subset instr.M.live instr.M.available_before);
   *)
-  instr.M.available_before <- avail_before;
+  instr.M.available_before <-
+    Reg.Set.filter (fun reg -> Reg.Raw_name.is_ident reg.Reg.raw_name)
+      avail_before;
   (* available-after = (available-before \ clobbers) U results
 
      "clobbers" has a subtlety: it needs to include registers in
