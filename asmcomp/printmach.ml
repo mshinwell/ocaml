@@ -142,6 +142,10 @@ let rec instr ppf i =
     if Array.length i.arg > 0 then fprintf ppf "@ +@ %a" regs i.arg;
     fprintf ppf "}@]@,";
   end;
+  if !print_live then begin
+    fprintf ppf "@[<1>avail={%a" regsetaddr i.available_before;
+    fprintf ppf "}@]@,";
+  end;
   begin match i.desc with
   | Iend -> ()
   | Iop op ->

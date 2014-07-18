@@ -42,7 +42,7 @@ let rec regalloc ppf round fd =
   if round > 50 then
     fatal_error(fd.Mach.fun_name ^
                 ": function too complex, cannot complete register allocation");
-  dump_if ppf dump_live "Liveness analysis" fd;
+(*  dump_if ppf dump_live "Liveness analysis" fd;*)
   Interf.build_graph fd;
   if !dump_interf then Printmach.interferences ppf ();
   if !dump_prefer then Printmach.preferences ppf ();
@@ -68,7 +68,7 @@ let compile_fundecl (ppf : formatter) fd_cmm =
   ++ pass_dump_if ppf dump_cse "After CSE"
   ++ liveness ppf
   ++ Deadcode.fundecl
-  ++ pass_dump_if ppf dump_live "Liveness analysis"
+(*  ++ pass_dump_if ppf dump_live "Liveness analysis"*)
   ++ Spill.fundecl
   ++ liveness ppf
   ++ pass_dump_if ppf dump_spill "After spilling"
@@ -76,6 +76,8 @@ let compile_fundecl (ppf : formatter) fd_cmm =
   ++ pass_dump_if ppf dump_split "After live range splitting"
   ++ liveness ppf
   ++ regalloc ppf 1
+  ++ Available_regs.fundecl
+  ++ pass_dump_if ppf dump_live "Liveness analysis"
   ++ Linearize.fundecl
   ++ pass_dump_linear_if ppf dump_linear "Linearized code"
   ++ Scheduling.fundecl
