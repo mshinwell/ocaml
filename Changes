@@ -93,6 +93,8 @@ Compilers:
   (Vladimir Brankov)
 - PR#6017: a new format implementation based on GADTs
   (Benoît Vaugon and Gabriel Scherer)
+- PR#6389: ocamlopt -opaque option for incremental native compilation
+  (Pierre Chambart, Gabriel Scherer)
 
 Toplevel interactive system:
 - PR#5377: New "#show_*" directives
@@ -141,6 +143,8 @@ Standard library:
   (John Whitington)
 - PR#6180: efficient creation of uninitialized float arrays
   (Alain Frisch, request by Markus Mottl)
+- Trigger warning 3 for all values marked as deprected in the documentation.
+  (Damien Doligez)
 
 OCamldoc:
 - PR#6257: handle full doc comments for variant constructors and
@@ -154,6 +158,12 @@ OCamldoc:
   (Maxence Guesdon, report by Anil Madhavapeddy)
 
 Bug fixes:
+- PR#6507: crash on AArch64 resulting from incorrect setting of
+  [caml_bottom_of_stack].  (Richard Jones, Mark Shinwell)
+- PR#2719: wrong scheduling of bound checks within a
+  try...with Invalid_argument -> _ ...  (Xavier Leroy)
+- PR#4771: Clarify documentation of Dynlink.allow_only
+  (Damien Doligez, report by David Allsopp)
 - PR#6232: Don't use [mktemp] on platforms where [mkstemp] is available
   (Stéphane Glondu, Mark Shinwell)
 - PR#6439: Don't use the deprecated [getpagesize] function
@@ -168,12 +178,19 @@ Bug fixes:
   (Damien Doligez)
 - PR#5820: Fix camlp4 lexer roll back problem
   (Hongbo Zhang)
+- PR#5946: CAMLprim taking (void) as argument
+  (Benoît Vaugon)
+- PR#6038: on x86-32, enforce 16-byte stack alignment for compatibility
+  with recent GCC and Clang.  Win32/MSVC keeps 4-byte stack alignment.
+  (Xavier Leroy)
 - PR#6062: Fix a regression bug caused by commit 13047
   (Hongbo Zhang, report by Christophe Troestler)
 - PR#6109: Typos in ocamlbuild error messages
   (Gabriel Kerneis)
 - PR#6116: more efficient implementation of Digest.to_hex
   (ygrek)
+- PR#6142: add cmt file support to ocamlobjinfo
+  (Anil Madhavapeddy)
 - PR#6165: Alterations to handling of \013 in source files breaking other tools
   (David Allsopp)
 - PR#6173: Typing error message is worse than before
@@ -188,6 +205,9 @@ Bug fixes:
   (Jacques-Pascal Deplaix)
 - PR#6194: Incorrect unused warning with first-class modules in patterns
   (Jacques Garrigue, report by Markus Mottl and Leo White)
+- PR#6211: in toplevel interactive use, bad interaction between uncaught
+  exceptions and multiple bindings of the form "let x = a let y = b;;".
+  (Xavier Leroy)
 - PR#6216: inlining of GADT matches generates invalid assembly
   (Xavier Leroy and Alain Frisch, report by Mark Shinwell)
 - PR#6233: out-of-bounds exceptions lose their locations on ARM, PowerPC
@@ -208,6 +228,8 @@ Bug fixes:
   (Alain Frisch and Leo White)
 - PR#6267: more information printed by "bt" command of ocamldebug
   (Josh Watzman)
+- PR#6268: -DMODEL_$(MODEL) not passed when building asmrun/arm.p.o
+  (Peter Michael Green)
 - PR#6273: fix Sys.file_exists on large files (Win32)
   (Christoph Bauer)
 - PR#6275: Soundness bug related to type constraints
@@ -240,14 +262,26 @@ Bug fixes:
   (Jacques Garrigue, report by Gabriel Scherer and Benoît Vaugon)
 - PR#6408: Optional arguments given as ~?arg instead of ?arg in message
   (Michael O'Connor)
+- PR#6418: reimplement parametrized Format tags/indentation with GADTs
+  (Benoît Vaugon)
 - PR#6436: Typos in @deprecated text in stdlib/arrayLabels.mli
 - PR#6443: ocaml segfault when List.fold_left is traced then executed
+- PR#6460: runtime assertion failure with large [| e1;...eN |]
+  float array expressions
+  (Leo White)
+- PR#6482: ocamlbuild fails when _tags file in unhygienic directory
+  (Gabriel Scherer)
+- PR#6505: Missed Type-error leads to a segfault upon record access
+- PR#6509: add -linkall flag to ocamlcommon.cma
+  (Frédéric Bour)
 - fix -dsource printing of "external _pipe = ..."
   (Gabriel Scherer)
 - bound-checking bug in caml_string_{get,set}{16,32,64}
   (Pierre Chambart and Gabriel Scherer, report by Nicolas Trangez)
 - sometimes wrong stack alignment at out-of-bounds array access
   (Gabriel Scherer and Xavier Leroy, report by Pierre Chambart)
+- make ocamldebug -I auto-detection work with ocamlbuild
+  (Josh Watzman)
 
 Features wishes:
 - PR#4243: make the Makefiles parallelizable
@@ -255,12 +289,12 @@ Features wishes:
 - PR#4323: have "of_string" in Num and Big_int work with binary and
            hex representations
   (Zoe Paraskevopoulou, review by Gabriel Scherer)
-- PR#5547: Enable the "-use-ocamlfind" option by default
-  (Wojciech Meyer)
 - PR#5650: Camlp4FoldGenerator doesn't handle well "abstract" types
   (Hongbo Zhang)
 - PR#5808: allow simple patterns, not just identifiers, in "let p : t = ..."
   (Alain Frisch)
+- PR#5899: a programmer-friendly access to backtrace information
+  (Jacques-Henri Jourdan and Gabriel Scherer)
 - PR#6000 comment 9644: add a warning for non-principal coercions to format
   (Jacques Garrigue, report by Damien Doligez)
 - PR#6054: add support for M.[ foo ], M.[| foo |] etc.
@@ -279,8 +313,8 @@ Features wishes:
   (Josh Watzman, review by Xavier Clerc and Alain Frisch)
 - PR#6358: obey DESTDIR in install targets
   (Gabriel Scherer, request by François Berenger)
-- PR#5899: a programmer-friendly access to backtrace information
-  (Jacques-Henri Jourdan and Gabriel Scherer)
+- PR#6406: Expose OCaml version in C headers
+  (Peter Zotov and Romain Calascibetta)
 - ocamllex: user-definable refill action
   (Frédéric Bour, review by Gabriel Scherer and Luc Maranget)
 - shorten syntax for functor signatures: "functor (M1:S1) (M2:S2) .. -> .."
@@ -639,8 +673,6 @@ Bug fixes:
   (Jacques Garrigue, report by Elnatan Reisner)
 - PR#6058: 'ocamlbuild -use-ocamlfind -tag thread -package threads t.cma' fails
   (Gabriel Scherer, report by Hezekiah M. Carty)
-- PR#6060: ocamlbuild rules for -principal, -strict-sequence and -short-paths
-  (Anil Madhavapeddy)
 - PR#6069: ocamldoc: lexing: empty token
   (Maxence Guesdon, Grégoire Henry, report by ygrek)
 - PR#6072: configure does not handle FreeBSD current (i.e. 10) correctly
@@ -706,6 +738,12 @@ Feature wishes:
   (Anil Madhavapeddy, review by Benedikt Meurer)
 - PR#6059: add -output-obj rules for ocamlbuild
   (Anil Madhavapeddy)
+- PR#6060: ocamlbuild tags 'principal', 'strict_sequence' and 'short_paths'
+  (Anil Madhavapeddy)
+- PR#6495: ocamlbuild tags 'safe_string', 'unsafe_string'
+  (Anil Madhavapeddy)
+- ocamlbuild tag 'no_alias_deps'
+  (Daniel Bünzli)
 
 Tools:
 - OCamlbuild now features a bin_annot tag to generate .cmt files.

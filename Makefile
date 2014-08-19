@@ -160,11 +160,7 @@ defaultentry:
 # Recompile the system using the bootstrap compiler
 all:
 	$(MAKE) runtime
-	$(MAKE) ocamlc
-	$(MAKE) ocamllex
-	$(MAKE) ocamlyacc
-	$(MAKE) ocamltools
-	$(MAKE) library
+	$(MAKE) coreall
 	$(MAKE) ocaml
 	$(MAKE) otherlibraries $(OCAMLBUILDBYTE) $(WITH_DEBUGGER) \
 	  $(WITH_OCAMLDOC)
@@ -236,8 +232,7 @@ coldstart:
 # Build the core system: the minimum needed to make depend and bootstrap
 core:
 	$(MAKE) coldstart
-	$(MAKE) ocamlc
-	$(MAKE) ocamllex ocamlyacc ocamltools library
+	$(MAKE) coreall
 
 # Recompile the core system using the bootstrap compiler
 coreall:
@@ -412,7 +407,7 @@ clean:: partialclean
 # Shared parts of the system
 
 compilerlibs/ocamlcommon.cma: $(COMMON)
-	$(CAMLC) -a -o $@ $(COMMON)
+	$(CAMLC) -a -linkall -o $@ $(COMMON)
 partialclean::
 	rm -f compilerlibs/ocamlcommon.cma
 
@@ -502,7 +497,6 @@ utils/config.ml: utils/config.mlp config/Makefile
 	    -e 's|%%HOST%%|$(HOST)|' \
 	    -e 's|%%TARGET%%|$(TARGET)|' \
 	    utils/config.mlp > utils/config.ml
-	@chmod -w utils/config.ml
 
 partialclean::
 	rm -f utils/config.ml
@@ -532,7 +526,7 @@ beforedepend:: parsing/lexer.ml
 # Shared parts of the system compiled with the native-code compiler
 
 compilerlibs/ocamlcommon.cmxa: $(COMMON:.cmo=.cmx)
-	$(CAMLOPT) -a -o $@ $(COMMON:.cmo=.cmx)
+	$(CAMLOPT) -a -linkall -o $@ $(COMMON:.cmo=.cmx)
 partialclean::
 	rm -f compilerlibs/ocamlcommon.cmxa compilerlibs/ocamlcommon.a
 

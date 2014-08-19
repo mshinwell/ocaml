@@ -73,9 +73,10 @@ let mk_dtypes f =
   "-dtypes", Arg.Unit f, " (deprecated) same as -annot"
 ;;
 
-let mk_for_pack_byt () =
-  "-for-pack", Arg.String ignore,
-  "<ident>  Ignored (for compatibility with ocamlopt)"
+let mk_for_pack_byt f =
+  "-for-pack", Arg.String f,
+  "<ident>  Generate code that can later be `packed' with\n\
+  \     ocamlc -pack -o <ident>.cmo"
 ;;
 
 let mk_for_pack_opt f =
@@ -446,6 +447,12 @@ let mk_dstartup f =
   "-dstartup", Arg.Unit f, " (undocumented)"
 ;;
 
+let mk_opaque f =
+  "-opaque", Arg.Unit f,
+  " Does not generate cross-module optimization information\n\
+  \     (reduces necessary recompilation on module change)"
+;;
+
 let mk__ f =
   "-", Arg.String f,
   "<file>  Treat <file> as a file name (even if it starts with `-')"
@@ -493,6 +500,7 @@ module type Compiler_options =  sig
   val _cclib : string -> unit
   val _ccopt : string -> unit
   val _config : unit -> unit
+  val _for_pack : string -> unit
   val _g : unit -> unit
   val _i : unit -> unit
   val _impl : string -> unit
@@ -514,7 +522,6 @@ module type Compiler_options =  sig
   val _v : unit -> unit
   val _verbose : unit -> unit
   val _where : unit -> unit
-
   val _nopervasives : unit -> unit
 end
 ;;
@@ -571,13 +578,13 @@ module type Optcomp_options = sig
   include Common_options
   include Compiler_options
   include Optcommon_options
-  val _for_pack : string -> unit
   val _no_float_const_prop : unit -> unit
   val _nodynlink : unit -> unit
   val _p : unit -> unit
   val _pp : string -> unit
   val _S : unit -> unit
   val _shared : unit -> unit
+  val _opaque :  unit -> unit
 end;;
 
 module type Opttop_options = sig
@@ -612,7 +619,7 @@ struct
     mk_dllib F._dllib;
     mk_dllpath F._dllpath;
     mk_dtypes F._annot;
-    mk_for_pack_byt ();
+    mk_for_pack_byt F._for_pack;
     mk_g_byt F._g;
     mk_i F._i;
     mk_I F._I;
@@ -794,6 +801,7 @@ struct
     mk_dscheduling F._dscheduling;
     mk_dlinear F._dlinear;
     mk_dstartup F._dstartup;
+    mk_opaque F._opaque;
   ]
 end;;
 

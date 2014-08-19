@@ -608,7 +608,7 @@ end) = struct
 
   let lookup_from_type env tpath lid =
     let descrs = get_descrs (Env.find_type_descrs tpath env) in
-    Env.mark_type_used (Path.last tpath) (Env.find_type tpath env);
+    Env.mark_type_used env (Path.last tpath) (Env.find_type tpath env);
     match lid.txt with
       Longident.Lident s -> begin
         try
@@ -991,6 +991,8 @@ let rec type_pat ~constrs ~labels ~no_existentials ~mode ~env sp expected_ty =
   | Ppat_interval _ ->
       raise (Error (loc, !env, Invalid_interval))
   | Ppat_tuple spl ->
+      if List.length spl < 2 then
+        Syntaxerr.ill_formed_ast loc "Tuples must have at least 2 components.";
       let spl_ann = List.map (fun p -> (p,newvar ())) spl in
       let ty = newty (Ttuple(List.map snd spl_ann)) in
       unify_pat_types loc !env ty expected_ty;
@@ -1083,6 +1085,8 @@ let rec type_pat ~constrs ~labels ~no_existentials ~mode ~env sp expected_ty =
         pat_attributes = sp.ppat_attributes;
         pat_env = !env }
   | Ppat_record(lid_sp_list, closed) ->
+      if lid_sp_list = [] then
+        Syntaxerr.ill_formed_ast loc "Records cannot be empty.";
       let opath, record_ty =
         try
           let (p0, p,_) = extract_concrete_record !env expected_ty in
@@ -1878,6 +1882,8 @@ and type_expect_ ?in_function env sexp ty_expected =
       type_function ?in_function
         loc sexp.pexp_attributes env ty_expected "" caselist
   | Pexp_apply(sfunct, sargs) ->
+      if sargs = [] then
+        Syntaxerr.ill_formed_ast loc "Function application with no argument.";
       begin_def (); (* one more level for non-returning functions *)
       if !Clflags.principal then begin_def ();
       let funct = type_exp env sfunct in
@@ -1947,6 +1953,8 @@ and type_expect_ ?in_function env sexp ty_expected =
         exp_attributes = sexp.pexp_attributes;
         exp_env = env }
   | Pexp_tuple sexpl ->
+      if List.length sexpl < 2 then
+        Syntaxerr.ill_formed_ast loc "Tuples must have at least 2 components.";
       let subtypes = List.map (fun _ -> newgenvar ()) sexpl in
       let to_unify = newgenty (Ttuple subtypes) in
       unify_exp_types loc env to_unify ty_expected;
@@ -1997,6 +2005,8 @@ and type_expect_ ?in_function env sexp ty_expected =
           exp_env = env }
       end
   | Pexp_record(lid_sexp_list, opt_sexp) ->
+      if lid_sexp_list = [] then
+        Syntaxerr.ill_formed_ast loc "Records cannot be empty.";
       let opt_exp =
         match opt_sexp with
           None -> None
@@ -2764,20 +2774,9 @@ and type_format loc str env =
       let mk_int n = mk_cst (Const_int n)
       and mk_string str = mk_cst (Const_string (str, None))
       and mk_char chr = mk_cst (Const_char chr) in
-      let mk_block_type bty = match bty with
-        | Pp_hbox   -> mk_constr "Pp_hbox"   []
-        | Pp_vbox   -> mk_constr "Pp_vbox"   []
-        | Pp_hvbox  -> mk_constr "Pp_hvbox"  []
-        | Pp_hovbox -> mk_constr "Pp_hovbox" []
-        | Pp_box    -> mk_constr "Pp_box"    []
-        | Pp_fits   -> mk_constr "Pp_fits"   [] in
-      let mk_formatting fmting = match fmting with
-        | Open_box (org, bty, idt) ->
-          mk_constr "Open_box" [ mk_string org; mk_block_type bty; mk_int idt ]
+      let rec mk_formatting_lit fmting = match fmting with
         | Close_box ->
           mk_constr "Close_box" []
-        | Open_tag (org, name) ->
-          mk_constr "Open_tag" [ mk_string org; mk_string name ]
         | Close_tag ->
           mk_constr "Close_tag" []
         | Break (org, ns, ni) ->
@@ -2796,6 +2795,17 @@ and type_format loc str env =
           mk_constr "Escaped_percent" []
         | Scan_indic c ->
           mk_constr "Scan_indic" [ mk_char c ]
+      and mk_formatting_gen : type a b c d e f .
+          (a, b, c, d, e, f) formatting_gen -> Parsetree.expression =
+        fun fmting -> match fmting with
+        | Open_tag (Format (fmt', str')) ->
+          mk_constr "Open_tag" [ mk_format fmt' str' ]
+        | Open_box (Format (fmt', str')) ->
+          mk_constr "Open_box" [ mk_format fmt' str' ]
+      and mk_format : type a b c d e f .
+          (a, b, c, d, e, f) CamlinternalFormatBasics.fmt -> string ->
+          Parsetree.expression = fun fmt str ->
+        mk_constr "Format" [ mk_fmt fmt; mk_string str ]
       and mk_side side = match side with
         | Left  -> mk_constr "Left"  []
         | Right -> mk_constr "Right" []
@@ -2835,8 +2845,8 @@ and type_format loc str env =
           mk_exp_loc (Pexp_construct (lid_loc, None))
         | Some n ->
           let lid_loc = mk_lid_loc (Longident.Lident "Some") in
-          mk_exp_loc (Pexp_construct (lid_loc, Some (mk_int n))) in
-      let rec mk_fmtty : type a b c d e f g h i j k l .
+          mk_exp_loc (Pexp_construct (lid_loc, Some (mk_int n)))
+      and mk_fmtty : type a b c d e f g h i j k l .
           (a, b, c, d, e, f, g, h, i, j, k, l) fmtty_rel -> Parsetree.expression =
       fun fmtty -> match fmtty with
         | Char_ty rest      -> mk_constr "Char_ty"      [ mk_fmtty rest ]
@@ -2858,8 +2868,7 @@ and type_format loc str env =
           mk_constr "Format_subst_ty"
             [ mk_fmtty sub_fmtty1; mk_fmtty sub_fmtty2; mk_fmtty rest ]
         | End_of_fmtty -> mk_constr "End_of_fmtty" []
-      in
-      let mk_ignored : type a b c d e f .
+      and mk_ignored : type a b c d e f .
           (a, b, c, d, e, f) ignored -> Parsetree.expression =
       fun ign -> match ign with
         | Ignored_char ->
@@ -2896,8 +2905,7 @@ and type_format loc str env =
           mk_constr "Ignored_scan_get_counter" [
             mk_counter counter
           ]
-      in
-      let mk_padding : type x y . (x, y) padding -> Parsetree.expression =
+      and mk_padding : type x y . (x, y) padding -> Parsetree.expression =
       fun pad -> match pad with
         | No_padding         -> mk_constr "No_padding" []
         | Lit_padding (s, w) -> mk_constr "Lit_padding" [ mk_side s; mk_int w ]
@@ -2906,8 +2914,8 @@ and type_format loc str env =
       fun prec -> match prec with
         | No_precision    -> mk_constr "No_precision" []
         | Lit_precision w -> mk_constr "Lit_precision" [ mk_int w ]
-        | Arg_precision   -> mk_constr "Arg_precision" [] in
-      let rec mk_fmt : type a b c d e f .
+        | Arg_precision   -> mk_constr "Arg_precision" []
+      and mk_fmt : type a b c d e f .
           (a, b, c, d, e, f) fmt -> Parsetree.expression =
       fun fmt -> match fmt with
         | Char rest ->
@@ -2951,8 +2959,10 @@ and type_format loc str env =
           mk_constr "Alpha" [ mk_fmt rest ]
         | Theta rest ->
           mk_constr "Theta" [ mk_fmt rest ]
-        | Formatting (fmting, rest) ->
-          mk_constr "Formatting" [ mk_formatting fmting; mk_fmt rest ]
+        | Formatting_lit (fmting, rest) ->
+          mk_constr "Formatting_lit" [ mk_formatting_lit fmting; mk_fmt rest ]
+        | Formatting_gen (fmting, rest) ->
+          mk_constr "Formatting_gen" [ mk_formatting_gen fmting; mk_fmt rest ]
         | Reader rest ->
           mk_constr "Reader" [ mk_fmt rest ]
         | Scan_char_set (width_opt, char_set, rest) ->
@@ -2963,7 +2973,8 @@ and type_format loc str env =
         | Ignored_param (ign, rest) ->
           mk_constr "Ignored_param" [ mk_ignored ign; mk_fmt rest ]
         | End_of_format ->
-          mk_constr "End_of_format" [] in
+          mk_constr "End_of_format" []
+      in
       let Fmt_EBB fmt = fmt_ebb_of_string str in
       mk_constr "Format" [ mk_fmt fmt; mk_string str ]
     ))
@@ -3642,7 +3653,7 @@ and type_let ?(check = fun s -> Warnings.Unused_var s)
                       slot := (name, vd) :: !slot; rec_needed := true
                   | None ->
                       List.iter
-                        (fun (name, vd) -> Env.mark_value_used name vd)
+                        (fun (name, vd) -> Env.mark_value_used env name vd)
                         (get_ref slot);
                       used := true;
                       some_used := true

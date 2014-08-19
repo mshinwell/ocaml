@@ -113,7 +113,7 @@ let join opt_r1 seq1 opt_r2 seq2 =
   | (Some r1, Some r2) ->
       let l1 = Array.length r1 in
       assert (l1 = Array.length r2);
-      let r = Array.create l1 Reg.dummy in
+      let r = Array.make l1 Reg.dummy in
       for i = 0 to l1-1 do
         (* If either of the registers is a temporary then we can reuse it
            for the joined result, since we know that it is not mapped to by
@@ -146,7 +146,7 @@ let join_array rs =
     None -> None
   | Some template ->
       let size_res = Array.length template in
-      let res = Array.create size_res Reg.dummy in
+      let res = Array.make size_res Reg.dummy in
       for i = 0 to size_res - 1 do
         res.(i) <- Reg.create template.(i).typ
       done;
