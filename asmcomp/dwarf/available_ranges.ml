@@ -31,6 +31,8 @@ module Available_subrange : sig
     -> reg:Reg.t
     -> t
 
+  val start_pos : t -> [ `Start_of_function | `At_label of L.label ]
+  val end_pos : t -> L.label
   val reg : t -> Reg.t
 end = struct
   type t = {
@@ -52,10 +54,46 @@ module Available_range : sig
 end = struct
   type t = {
     mutable subranges : Available_subrange.t list;
+    mutable min_pos : [ `Start_of_function | `At_label of L.label ] option;
+    mutable max_pos : [ `Start_of_function | `At_label of L.label ] option;
   }
 
-  let create () = { subranges = []; } 
-  let add_subrange t ~subrange = t.subranges <- subrange::t.subranges
+  let create () = { subranges = []; min_pos = None; max_pos = None; } 
+
+  let add_subrange t ~subrange =
+    let compare_pos pos1 pos2 =
+      (* This is dubious, but should be correct by virtue of the way label
+         counters are allocated (see linearize.ml) and the fact that, below,
+         we go through the code from lowest (code) address to highest.  As
+         such the label with the highest integer value should be the one with
+         the highest address, and vice-versa. *)
+      let pos1 =
+        match pos1 with
+        | `Start_of_function -> start_of_function
+        | `At_label label -> label
+      in
+      let pos2 =
+        match pos2 with
+        | `Start_of_function -> start_of_function
+        | `At_label label -> label
+      in
+      compare pos1 pos2
+    in
+    begin
+      let start_pos = Available_subrange.start_pos subrange in
+      match t.min_pos with
+      | None -> t.min_pos <- start_pos
+      | Some min_pos ->
+        if compare_pos start_pos t.min_pos < 0 then t.min_pos <- start_pos
+    end;
+    begin
+      let end_pos = Available_subrange.end_pos subrange in
+      match t.max_pos with
+      | None -> t.max_pos <- end_pos
+      | Some max_pos ->
+        if compare_pos end_pos t.max_pos > 0 then t.max_pos <- end_pos
+    end;
+    t.subranges <- subrange::t.subranges
 
   let is_parameter t =
     match t.subranges with
@@ -63,6 +101,12 @@ end = struct
     | subrange::_ ->
       let reg = Available_subrange.reg subrange in
       reg.Reg.is_parameter
+
+  let extremities t =
+    match t.min_pos, t.max_pos with
+    | Some min, Some max -> min, max
+    | Some _, None | None, Some _ -> assert false
+    | None, None -> failwith "Available_ranges.extremities on empty range"
 end
 
 type t = {

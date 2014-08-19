@@ -46,6 +46,7 @@ val fold
   -> init:'a
   -> f:('a
     -> ident:Ident.t
+    -> is_unique:bool  (* see available_ranges.mli *)
     -> scope:[ `Block_scope of Lexical_block.t | `Function_scope ]
     -> range:Available_range.t
     -> 'a)

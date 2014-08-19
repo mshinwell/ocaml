@@ -51,13 +51,14 @@ end = struct
 end
 
 type t =
-  ([ `Block_scope of Lexical_block.t | `Function_scope ]
+  (bool  (* = [is_unique] (see available_ranges.mli) *)
+    * [ `Block_scope of Lexical_block.t | `Function_scope ]
     * Available_range.t) Ident.tbl
 
 let create ~available_ranges =
   Available_ranges.fold available_ranges
     ~init:(Ident.empty, 0)
-    ~f:(fun (t, id) ~ident ~is_unique:_ ~range ->
+    ~f:(fun (t, id) ~ident ~is_unique ~range ->
       let scope, id =
         if Available_range.is_parameter range then
           `Function_scope, id
@@ -69,8 +70,9 @@ let create ~available_ranges =
           in
           (`Block_scope block), id + 1
       in
-      let t = Ident.add ident (scope, range) t in
+      let t = Ident.add ident (is_unique, scope, range) t in
       t, id)
 
 let fold t ~init ~f =
-  Ident.fold_all (fun ident (scope, range) acc -> f acc ~ident ~scope ~range)
+  Ident.fold_all (fun ident (is_unique, scope, range) acc ->
+    f acc ~ident ~is_unique ~scope ~range)
