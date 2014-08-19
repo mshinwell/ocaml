@@ -42,7 +42,7 @@ end = struct
   }
 
   let create ~start_pos ~end_pos ~function_name ~id =
-    let name = Printf.sprintf "%s__lb%d" function_name id in
+    let name = Printf.sprintf "L%s.lb%d" function_name id in
     { start_pos; end_pos; name; }
 
   let start_pos t = t.start_pos

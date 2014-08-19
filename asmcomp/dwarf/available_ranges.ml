@@ -62,6 +62,7 @@ end = struct
 
   let add_subrange t ~subrange =
     let compare_pos pos1 pos2 =
+      let start_of_function = min_int in
       (* This is dubious, but should be correct by virtue of the way label
          counters are allocated (see linearize.ml) and the fact that, below,
          we go through the code from lowest (code) address to highest.  As

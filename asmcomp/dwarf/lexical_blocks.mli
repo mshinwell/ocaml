@@ -20,7 +20,7 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* Deduce DWARF "lexical block" bounds from available range information.
+(* Deduce DWARF-style "lexical block" bounds from available range information.
    - Parameters are in the scope of a function, not a lexical block.
    - Lexical blocks do not exactly follow the OCaml source scoping: they
      start (resp. finish) when the register holding the value of a given

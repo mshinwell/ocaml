@@ -139,15 +139,126 @@ let put_ranges_in_scopes loc_table ~function_name ~starting_label ~ending_label 
   in
   aux 0 2 loc_table [] live_ranges ~type_labels:[]
 
-let start_function t ~linearized_fundecl ~slot_offset_in_bytes =
-  let function_name = linearized_fundecl.Linearize.fun_name in
+module L = Linearize
+
+let create_location_list_entry ~available_subrange ~slot_offset_in_bytes =
+  let starting_label = starting_label t ~start_of_function_label in
+  (* CR mshinwell: we need the same trick for the end of the function as
+     [starts_at_beginning_of_function].  Or we could try to fix emit.mlp *)
+  let ending_label =
+    Printf.sprintf ".L%d" (ending_label_of_t_exn t)
+  in
+  let location_expression =
+    if not (Reg.has_name_suitable_for_debugger t.reg) then
+      None
+    else
+      let module LE = Dwarf_low.Location_expression in
+      match Reg.location t.reg with
+      | Reg.Unknown -> None
+      | Reg.Reg reg_number -> Some (LE.in_register reg_number)
+      | Reg.Stack stack_location ->
+        (* Byte offsets from the stack pointer will be computed during the
+           "emit" phase.  DWARF information will be emitted after such
+           computations, so we can use the offsets then. *)
+        let offset_in_bytes () =
+          let stack_offset =
+            match t.first_insn.Linearize.stack_offset with
+            | None -> failwith "first_insn has no stack_offset"
+            | Some stack_offset -> stack_offset
+          in
+          slot_offset_in_bytes ~reg_on_stack:t.reg ~stack_offset
+        in
+        (* We use an offset from the frame base rather than the stack pointer
+           since it's possible the stack pointer might change during the
+           execution of an available subrange.  (This could presumably be
+           avoided by splitting subranges as required, but it seems easier to
+           work from the frame base.)
+           How would the debugger know where the frame base is, when we might
+           not have a frame pointer?  It knows from the DWARF derived by
+           the assembler (e.g. DW_AT_frame_base) from the CFI information we
+           emit. *)
+
+
+        Some (LE.at_computed_offset_from_frame_pointer ~offset_in_bytes)
+  in
+  match location_expression with
+  | None -> None
+  | Some location_expression ->
+    let location_list_entry =
+      Dwarf_low.Location_list_entry.create_location_list_entry
+        ~start_of_code_label:start_of_function_label
+        ~first_address_when_in_scope:starting_label
+        ~first_address_when_not_in_scope:ending_label
+        ~location_expression
+    in
+    Some location_list_entry
+
+let dwarf_attribute_values t ~type_creator ~debug_loc_table
+    ~start_of_function_label ~slot_offset_in_bytes =
+  let base_address_selection_entry =
+    Dwarf_low.Location_list_entry.create_base_address_selection_entry
+      ~base_address_label:start_of_function_label
+  in
+  let location_list_entries =
+    List.filter_map t.live_ranges
+      ~f:(One_live_range.location_list_entry ~start_of_function_label
+            ~slot_offset_in_bytes)
+  in
+  match location_list_entries with
+  | [] -> [], debug_loc_table
+  | _ ->
+    let location_list =
+      Dwarf_low.Location_list.create
+        (base_address_selection_entry :: location_list_entries)
+    in
+    let debug_loc_table, loclistptr_attribute_value =
+      Dwarf_low.Debug_loc_table.insert debug_loc_table ~location_list
+    in
+    let type_label_name =
+      type_creator ~stamped_name:(stamped_name t)
+    in
+    let attribute_values =
+      let open Dwarf_low in [
+        Attribute_value.create_name ~source_file_path:(human_name t);
+        Attribute_value.create_linkage_name
+          ~linkage_name:(stamped_name t);
+        loclistptr_attribute_value;
+        Attribute_value.create_type ~label_name:type_label_name;
+      ]
+    in
+    attribute_values, debug_loc_table
+
+let dwarf_for_lexical_blocks ... =
+  Lexical_blocks.fold ...
+    ~init:...
+    ~f:(fun acc ~ident ~is_unique ~scope ~range ->
+
+
+
+
+let to_dwarf t ~debug_loc_table ~type_creator ~start_of_function_label
+      ~slot_offset_in_bytes =
+  let tag = dwarf_tag t in
+  let attribute_values, debug_loc_table =
+    dwarf_attribute_values t
+      ~type_creator
+      ~debug_loc_table
+      ~start_of_function_label
+      ~slot_offset_in_bytes
+  in
+  tag, attribute_values, debug_loc_table
+
+let start_function t ~linearized_fundecl:fundecl ~slot_offset_in_bytes =
+  let function_name = fundecl.L.fun_name in
   (* CR mshinwell: sort this source_file_path stuff out *)
   match t.source_file_path with
   | None -> function_name, linearized_fundecl
   | Some source_file_path ->
-    let starting_label = sprintf "Llr_begin_%s" function_name in
-    let ending_label = sprintf "Llr_end_%s" function_name in
+    let starting_label = sprintf "L%s.start" function_name in
+    let ending_label = sprintf "L%s.end" function_name in
     Emitter.emit_label_declaration t.emitter starting_label;
+    let available_ranges = Available_ranges.create ~fundecl in
+
     let live_ranges, fundecl =
       (* note that [process_fundecl] may modify [linearize_fundecl] *)
       Live_ranges.process_fundecl linearized_fundecl

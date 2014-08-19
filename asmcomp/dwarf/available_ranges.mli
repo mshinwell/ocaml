@@ -21,15 +21,16 @@
 (***********************************************************************)
 
 (* Given a value identifier [x] and a function, an "available subrange" is
-   a contiguous code block where for every instruction in the block, we know
-   (via the availability information calculated by available_regs.ml) in which
-   register [x] may be found.
+   a contiguous subset of that function's code paired with a register [r],
+   such that at all times during the block's execution the value of [x] is
+   available in [r].
 
-   Say that an "available range" is a set of non-overlapping available
-   subranges, again for a single identifier and function.
+   Say that an "available range" is a set of available subranges that do not
+   overlap in code space, again for a single identifier and function.
 
    This module calculates, for a single function, available ranges for all
-   value identifiers for which we have availability information.  It also
+   value identifiers for which we have availability information (which in
+   turn comes from an earlier pass---see available_regs.ml).  It also
    mutates the linearized code to insert labels to delimit such ranges.
 *)
 
