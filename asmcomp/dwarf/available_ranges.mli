@@ -34,6 +34,13 @@
    mutates the linearized code to insert labels to delimit such ranges.
 *)
 
+module Available_subrange : sig
+  type t
+
+  val start_pos : t -> [ `Start_of_function | `At_label of L.label ]
+  val end_pos : t -> L.label
+end
+
 module Available_range : sig
   type t
   

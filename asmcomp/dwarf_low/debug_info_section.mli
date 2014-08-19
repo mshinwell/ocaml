@@ -24,6 +24,10 @@ type t
 
 include Emittable.S with type t := t
 
+type contents =
+  | Attribute_value of string * Tag.t * (Attribute_value.t list)
+      * contents option
+
 val create :
      tags_with_attribute_values:
        (int * string * Tag.t * (Attribute_value.t list)) list
