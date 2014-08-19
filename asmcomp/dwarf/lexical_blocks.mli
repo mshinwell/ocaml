@@ -20,38 +20,33 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* Given a value identifier [x] and a function, an "available subrange" is
-   a contiguous code block where for every instruction in the block, we know
-   (via the availability information calculated by available_regs.ml) in which
-   register [x] may be found.
-
-   Say that an "available range" is a set of non-overlapping available
-   subranges, again for a single identifier and function.
-
-   This module calculates, for a single function, available ranges for all
-   value identifiers for which we have availability information.  It also
-   mutates the linearized code to insert labels to delimit such ranges.
+(* Deduce DWARF "lexical block" bounds from available range information.
+   - Parameters are in the scope of a function, not a lexical block.
+   - Lexical blocks do not exactly follow the OCaml source scoping: they
+     start (resp. finish) when the register holding the value of a given
+     identifier first becomes available (resp. stops being available).
+     (This can in fact be a useful property; in particular, it may enable
+     the value of an identifier to be examined in the debugger even though
+     it's just gone out of scope.)
 *)
 
-module Available_range : sig
+module Lexical_block : sig
   type t
-  
-  val is_parameter : t -> bool
-  val extremities : t -> [ `Start_of_function | `At_label of L.label ] * L.label
+
+  val start_pos : t -> Linearize.label
+  val end_pos : t -> Linearize.label
 end
 
 type t
 
-val create : fundecl:Linearize.fundecl -> t
-
-val function_name : t -> string
+val create : available_ranges:Available_ranges.t -> t
 
 val fold
    : t
   -> init:'a
-  (* [is_unique] is [true] if there is no other value identifier with the
-     same (unstamped) name as [ident] in [t].  (It follows that using the
-     unstamped name is sufficient to uniquely identify the identifier amongst
-     a list of, say, local variables in a debugger.) *)
-  -> f:('a -> ident:Ident.t -> is_unique:bool -> range:Available_range.t -> 'a)
+  -> f:('a
+    -> ident:Ident.t
+    -> scope:[ `Block_scope of Lexical_block.t | `Function_scope ]
+    -> range:Available_range.t
+    -> 'a)
   -> 'a

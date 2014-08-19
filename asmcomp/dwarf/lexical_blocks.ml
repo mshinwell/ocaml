@@ -20,38 +20,57 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* Given a value identifier [x] and a function, an "available subrange" is
-   a contiguous code block where for every instruction in the block, we know
-   (via the availability information calculated by available_regs.ml) in which
-   register [x] may be found.
+module L = Linearize
 
-   Say that an "available range" is a set of non-overlapping available
-   subranges, again for a single identifier and function.
-
-   This module calculates, for a single function, available ranges for all
-   value identifiers for which we have availability information.  It also
-   mutates the linearized code to insert labels to delimit such ranges.
-*)
-
-module Available_range : sig
+module Lexical_block : sig
   type t
-  
-  val is_parameter : t -> bool
-  val extremities : t -> [ `Start_of_function | `At_label of L.label ] * L.label
+
+  val create
+     : start_pos:[ `Start_of_function | `At_label of L.label ]
+    -> end_pos:L.label
+    -> t
+
+  val name : t -> string
+
+  val start_pos : t -> L.label
+  val end_pos : t -> L.label
+end = struct
+  type t = {
+    start_pos : [ `Start_of_function | `At_label of L.label ];
+    end_pos : L.label;
+    name : string;
+  }
+
+  let create ~start_pos ~end_pos ~function_name ~id =
+    let name = Printf.sprintf "%s__lb%d" function_name id in
+    { start_pos; end_pos; name; }
+
+  let start_pos t = t.start_pos
+  let end_pos t = t.end_pos
+  let name t = t.name
 end
 
-type t
+type t =
+  ([ `Block_scope of Lexical_block.t | `Function_scope ]
+    * Available_range.t) Ident.tbl
 
-val create : fundecl:Linearize.fundecl -> t
+let create ~available_ranges =
+  Available_ranges.fold available_ranges
+    ~init:(Ident.empty, 0)
+    ~f:(fun (t, id) ~ident ~is_unique:_ ~range ->
+      let scope, id =
+        if Available_range.is_parameter range then
+          `Function_scope, id
+        else
+          let start_pos, end_pos = Available_range.extremities range in
+          let block =
+            Lexical_block.create ~start_pos ~end_pos ~id
+              ~function_name:(Available_ranges.function_name available_ranges)
+          in
+          (`Block_scope block), id + 1
+      in
+      let t = Ident.add ident (scope, range) t in
+      t, id)
 
-val function_name : t -> string
-
-val fold
-   : t
-  -> init:'a
-  (* [is_unique] is [true] if there is no other value identifier with the
-     same (unstamped) name as [ident] in [t].  (It follows that using the
-     unstamped name is sufficient to uniquely identify the identifier amongst
-     a list of, say, local variables in a debugger.) *)
-  -> f:('a -> ident:Ident.t -> is_unique:bool -> range:Available_range.t -> 'a)
-  -> 'a
+let fold t ~init ~f =
+  Ident.fold_all (fun ident (scope, range) acc -> f acc ~ident ~scope ~range)

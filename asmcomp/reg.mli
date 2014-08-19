@@ -27,6 +27,7 @@ type t =
     mutable loc: location;              (* Actual location *)
     mutable spill: bool;                (* "true" to force stack allocation  *)
     mutable part: int option;           (* Zero-based index of part of value *)
+    mutable is_parameter: bool;         (* Whether it holds a function arg. *)
     mutable interf: t list;             (* Other regs live simultaneously *)
     mutable prefer: (t * int) list;     (* Preferences for other regs *)
     mutable degree: int;                (* Number of other regs live sim. *)

@@ -81,6 +81,7 @@ type t =
     mutable loc: location;
     mutable spill: bool;
     mutable part: int option;
+    mutable is_parameter: bool;
     mutable interf: t list;
     mutable prefer: (t * int) list;
     mutable degree: int;
@@ -103,7 +104,7 @@ let dummy =
   { raw_name = Raw_name.create_temporary ();
     stamp = 0; typ = Int; loc = Unknown;
     spill = false; interf = []; prefer = []; degree = 0; spill_cost = 0;
-    visited = false; part = None;
+    visited = false; part = None; is_parameter = false;
   }
 
 let currstamp = ref 0
@@ -113,7 +114,8 @@ let create ty =
   let r = { raw_name = Raw_name.create_temporary ();
             stamp = !currstamp; typ = ty;
             loc = Unknown; spill = false; interf = []; prefer = []; degree = 0;
-            spill_cost = 0; visited = false; part = None; } in
+            spill_cost = 0; visited = false; part = None;
+            is_parameter = false; } in
   reg_list := r :: !reg_list;
   incr currstamp;
   r
@@ -139,7 +141,8 @@ let create_procedure_call_convention ty loc =
   let r = { raw_name = Raw_name.create_procedure_call_convention ();
             stamp = !currstamp; typ = ty; loc;
             spill = false; interf = []; prefer = []; degree = 0;
-            spill_cost = 0; visited = false; part = None; } in
+            spill_cost = 0; visited = false; part = None;
+            is_parameter = false; } in
   incr currstamp;
   r
 

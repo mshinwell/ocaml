@@ -46,23 +46,31 @@ module Available_range : sig
   type t
 
   val create : unit -> t
+  val is_parameter : t -> bool
   val add_subrange : t -> subrange:Available_subrange.t -> unit
+  val extremities : t -> [ `Start_of_function | `At_label of L.label ] * L.label
 end = struct
   type t = {
     mutable subranges : Available_subrange.t list;
   }
 
-  let create () =
-    { subranges = [];
-    }
+  let create () = { subranges = []; } 
+  let add_subrange t ~subrange = t.subranges <- subrange::t.subranges
 
-  let add_subrange t ~subrange =
-    t.subranges <- subrange::t.subranges
+  let is_parameter t =
+    match t.subranges with
+    | [] -> assert false
+    | subrange::_ ->
+      let reg = Available_subrange.reg subrange in
+      reg.Reg.is_parameter
 end
 
 type t = {
   mutable ranges : Available_ranges.t Ident.tbl;
+  function_name : string;
 }
+
+let function_name t = t.function_name
 
 let fold t ~init ~f =
   Ident.fold_all (fun ident range acc ->
@@ -91,16 +99,21 @@ let add_subrange t ~subrange =
   Available_range.add_subrange range ~subrange
 
 let insert_label_after ~insn =
-  let label = L.new_label () in
-  let insn' =
-    { insn with L.
-      desc = Llabel llabel;
-      arg = [| |];
-      res = [| |];
-    }
-  in
-  insn.Linearize.next <- insn';
-  label
+  match insn.L.next with
+  | L.Llabel label -> label  (* don't add unnecessary labels *)
+  | L.Lend | L.Lop _ | L.Lreloadretaddr | L.Lreturn L.Lbranch _
+  | L.Lcondbranch _ | L.Lcondbranch3 _ | L.Lswitch _ | L.Lsetuptrap _
+  | L.Lpushtrap | L.Lpoptrap | L.Lraise ->
+    let label = L.new_label () in
+    let insn' =
+      { insn with L.
+        desc = L.Llabel llabel;
+        arg = [| |];
+        res = [| |];
+      }
+    in
+    insn.L.next <- insn';
+    label
 
 let births_and_deaths ~insn ~prev_insn =
   let births =
@@ -155,7 +168,8 @@ let rec process_instruction t ~insn ~prev_insn ~open_subrange_start_positions =
 
 let create ~fundecl =
   let t =
-    { ranges = Ident.Map.empty;
+    { ranges = Ident.empty;
+      function_name = fundecl.L.fun_name;
     }
   in
   process_instruction t ~insn:fundecl.L.fun_body ~prev_insn:None
