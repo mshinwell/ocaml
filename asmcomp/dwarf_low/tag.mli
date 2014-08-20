@@ -24,10 +24,10 @@ type t
 
 include Emittable.S with type t := t
 
+val to_string : t -> string
+
 val compile_unit : t
-val compile_unit_with_no_children : t
 val subprogram : t
-val subprogram_with_no_children : t
 val formal_parameter : t
 val variable : t
 val base_type : t

@@ -128,6 +128,17 @@ let compile_implementation ?toplevel prefixname ppf (size, lam) =
             (List.map Primitive.native_name !Translmod.primitive_declarations))
       );
 
+    if !Clflags.debug_full then begin
+      let dwarf =
+        Dwarf.create ~source_file_path
+          ~emit_string:Emit.emit_string
+          ~emit_symbol:Emit.emit_symbol
+          ~emit_label_declaration:Emit.emit_label
+          ~emit_section_declaration:Emit.emit_section_declaration
+          ~emit_switch_to_section:Emit.emit_switch_to_section
+      in
+      Dwarf.emit dwarf
+    end;
     Emit.end_assembly();
     close_out oc
   with x ->

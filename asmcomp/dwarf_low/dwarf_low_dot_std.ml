@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013, Jane Street Holding                                *)
+(*  Copyright 2013--2014, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -31,6 +31,7 @@ module Dwarf_low = struct
   module Location_expression = Location_expression
   module Location_list = Location_list
   module Location_list_entry = Location_list_entry
+  module Proto_DIE = Proto_die
   module Pubnames_table = Pubnames_table
   module Section_names = Section_names
   module Tag = Tag

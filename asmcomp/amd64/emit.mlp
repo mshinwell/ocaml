@@ -783,6 +783,20 @@ let data l =
   `	.data\n`;
   List.iter emit_item l
 
+(* Miscellany for DWARF information emission *)
+
+let emit_string s =
+  emit_string_directive "	.ascii	" s
+
+let emit_label_declaration ~label_name =
+  emit_label label_name
+
+let emit_section_declaration ~section_name =
+  `	.{section_name}\n`;
+
+let emit_switch_to_section ~section_name =
+  `	.{section_name}\n`;
+
 (* Beginning / end of an assembly file *)
 
 let begin_assembly() =

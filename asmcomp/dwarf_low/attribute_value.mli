@@ -36,5 +36,6 @@ val create_type : label_name:string -> t
 val create_encoding : encoding:Encoding_attribute.t -> t
 val create_byte_size : byte_size:int -> t
 val create_linkage_name : linkage_name:string -> t
+val create_sibling : die_label:string -> t
 
 val attribute : t -> Attribute.t

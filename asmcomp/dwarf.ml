@@ -20,14 +20,28 @@
 (*                                                                     *)
 (***********************************************************************)
 
-open Dwarf_low_dot_std
-open Dwarf_low
-open Dwarf_std_internal
+open Dwarf_low_dot_std.Dwarf_low
 
 type t = {
-  source_file_path : string option;
+  source_file_path : string;
   mutable externally_visible_functions : string list;
+  emitter : Emitter.t;
 }
+
+let create ~source_file_path ~emit_string ~emit_symbol
+      ~emit_label_declaration ~emit_section_declaration
+      ~emit_switch_to_section =
+  let emitter =
+    Emitter.create ~emit_string
+      ~emit_symbol
+      ~emit_label_declaration
+      ~emit_section_declaration
+      ~emit_switch_to_section
+  in
+  { source_file_path;
+    externally_visible_functions = [];
+    emitter;
+  }
 
 let location_list_entry ~available_subrange ~start_of_function_label =
   let starting_label = starting_label t ~start_of_function_label in
@@ -58,7 +72,7 @@ let location_list_entry ~available_subrange ~start_of_function_label =
          not have a frame pointer?  It knows from the DWARF derived by
          the assembler (e.g. DW_AT_frame_base) from the CFI information we
          emit. *)
-      LE.at_computed_offset_from_frame_pointer ~offset_in_bytes
+      LE.at_offset_from_frame_pointer ~offset_in_bytes
   in
   Location_list_entry.create_location_list_entry
     ~start_of_code_label:start_of_function_label
@@ -124,8 +138,7 @@ let dwarf_for_identifier ~function_name ~start_of_function_label
      debugger by extracting the stamped name and then using that as a key
      for lookup into the .cmt file for the appropriate module. *)
   let type_proto_die =
-    Proto_DIE.create
-      ~parent:(Some compilation_unit_proto_die)
+    Proto_DIE.create ~parent:(Some compilation_unit_proto_die)
       ~tag:Tag.base_type
       ~attribute_values:[
         Attribute_value.create_name ~source_file_path:type_name;
@@ -153,38 +166,34 @@ let dwarf_for_identifier ~function_name ~start_of_function_label
 
 let start_function t ~compilation_unit_proto_die ~fundecl =
   let function_name = fundecl.Linearize.fun_name in
-  (* CR mshinwell: sort this source_file_path stuff out *)
-  match t.source_file_path with
-  | None -> function_name, fundecl
-  | Some source_file_path ->
-    let starting_label = sprintf "L%s.start" function_name in
-    let ending_label = sprintf "L%s.end" function_name in
-    let subprogram_proto_die =  (* "subprogram" means "function" for us. *)
-      Proto_DIE.create ~label_name:None
-        ~tag:Tag.subprogram
-        ~attribute_values:[
-          Attribute_value.create_name ~source_file_path:function_name;
-          Attribute_value.create_external ~is_visible_externally:true;
-          Attribute_value.create_low_pc ~address_label:starting_label;
-          Attribute_value.create_high_pc ~address_label:ending_label;
-        ]
-    in
-    Emitter.emit_label_declaration t.emitter starting_label;
-    (* [Available_ranges.create] may modify [fundecl], but it never changes
-       the first instruction. *)
-    let available_ranges = Available_ranges.create ~fundecl in
-    let lexical_block_cache = Hashtbl.create () in
-    (* For each identifier for which we have available ranges, construct
-       DWARF information to describe how to access the values of such
-       identifiers, indexed by program counter ranges. *)
-    Available_ranges.fold available_ranges
-      ~init:()
-      ~f:(fun () -> dwarf_for_identifier ~function_name
-        ~start_of_function_label ~compilation_unit_proto_die
-        ~function_proto_die:subprogram_proto_die ~debug_loc_table
-        ~lexical_block_cache);
-    t.externally_visible_functions
-      <- function_name::t.externally_visible_functions
+  let starting_label = sprintf "L%s.start" function_name in
+  let ending_label = sprintf "L%s.end" function_name in
+  let subprogram_proto_die =  (* "subprogram" means "function" for us. *)
+    Proto_DIE.create ~parent:(Some compilation_unit_proto_die)
+      ~tag:Tag.subprogram
+      ~attribute_values:[
+        Attribute_value.create_name ~source_file_path:function_name;
+        Attribute_value.create_external ~is_visible_externally:true;
+        Attribute_value.create_low_pc ~address_label:starting_label;
+        Attribute_value.create_high_pc ~address_label:ending_label;
+      ]
+  in
+  Emitter.emit_label_declaration t.emitter starting_label;
+  (* [Available_ranges.create] may modify [fundecl], but it never changes
+     the first instruction. *)
+  let available_ranges = Available_ranges.create ~fundecl in
+  let lexical_block_cache = Hashtbl.create () in
+  (* For each identifier for which we have available ranges, construct
+     DWARF information to describe how to access the values of such
+     identifiers, indexed by program counter ranges. *)
+  Available_ranges.fold available_ranges
+    ~init:()
+    ~f:(fun () -> dwarf_for_identifier ~function_name
+      ~start_of_function_label ~compilation_unit_proto_die
+      ~function_proto_die:subprogram_proto_die ~debug_loc_table
+      ~lexical_block_cache);
+  t.externally_visible_functions
+    <- function_name::t.externally_visible_functions
 
 let end_function t function_name =
   Emitter.emit_label_declaration t.emitter (sprintf "Llr_end_%s" function_name)
@@ -192,18 +201,7 @@ let end_function t function_name =
 let with_emitter emitter fs =
   List.iter (fun f -> f emitter) fs
 
-let emit_debugging_info_prologue t =
-  let module SN = Section_names in
-  with_emitter t.emitter [
-    Emitter.emit_section_declaration ~section_name:SN.debug_abbrev;
-    Emitter.emit_label_declaration ~label_name:"Ldebug_abbrev0";
-    Emitter.emit_section_declaration ~section_name:SN.debug_line;
-    Emitter.emit_label_declaration ~label_name:"Ldebug_line0";
-    Emitter.emit_section_declaration ~section_name:SN.debug_loc;
-    Emitter.emit_label_declaration ~label_name:"Ldebug_loc0";
-  ]
-
-let emit_debugging_info_epilogue t =
+let emit t =
   let compilation_unit_proto_die =
     let attribute_values =
       let producer_name = sprintf "ocamlopt %s" Sys.ocaml_version in
@@ -244,6 +242,14 @@ let emit_debugging_info_epilogue t =
       ~end_of_code_label:t.end_of_code_label
   in
   let module SN = Section_names in
+  with_emitter t.emitter [
+    Emitter.emit_section_declaration ~section_name:SN.debug_abbrev;
+    Emitter.emit_label_declaration ~label_name:"Ldebug_abbrev0";
+    Emitter.emit_section_declaration ~section_name:SN.debug_line;
+    Emitter.emit_label_declaration ~label_name:"Ldebug_line0";
+    Emitter.emit_section_declaration ~section_name:SN.debug_loc;
+    Emitter.emit_label_declaration ~label_name:"Ldebug_loc0";
+  ];
   (* CR-someday mshinwell: consider using [with_emitter] *)
   let emitter = t.emitter in
   Emitter.emit_section_declaration emitter ~section_name:SN.debug_info;

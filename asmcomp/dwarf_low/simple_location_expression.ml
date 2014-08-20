@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013, Jane Street Holding                                *)
+(*  Copyright 2013--2014, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -28,6 +28,9 @@ let in_register ~reg_number =
 
 let register_based_addressing ~reg_number ~offset_in_bytes =
   Operator.register_based_addressing ~reg_number ~offset_in_bytes
+
+let frame_base_register ~offset_in_bytes =
+  Operator.frame_base_register ~offset_in_bytes
 
 let size t =
   Operator.size t

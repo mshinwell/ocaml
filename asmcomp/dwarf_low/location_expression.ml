@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013, Jane Street Holding                                *)
+(*  Copyright 2013--2014, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -50,6 +50,9 @@ let in_register ~reg_number =
     SLE.in_register ~reg_number
   in
   Immediate sle
+
+let at_offset_from_frame_pointer ~offset_in_bytes =
+  Immediate (SLE.frame_base_register ~offset_in_bytes)
 
 let at_offset_from_stack_pointer ~offset_in_bytes =
   let sle =
