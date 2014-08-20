@@ -42,6 +42,12 @@ end = struct
     end_pos : L.label;
     reg : Reg.t;
   }
+
+  let create ~start_pos ~end_pos ~reg = { start_pos; end_pos; reg; }
+
+  let start_pos t = t.start_pos
+  let end_pos t = t.end_pos
+  let reg t = t.reg
 end
 
 module Available_range : sig
@@ -55,7 +61,7 @@ end = struct
   type t = {
     mutable subranges : Available_subrange.t list;
     mutable min_pos : [ `Start_of_function | `At_label of L.label ] option;
-    mutable max_pos : [ `Start_of_function | `At_label of L.label ] option;
+    mutable max_pos : L.label option;
   }
 
   let create () = { subranges = []; min_pos = None; max_pos = None; } 
@@ -80,19 +86,21 @@ end = struct
       in
       compare pos1 pos2
     in
+    let start_pos = Available_subrange.start_pos subrange in
+    let end_pos = Available_subrange.end_pos subrange in
+    assert (compare_pos start_pos (`At_label end_pos) <= 0);
     begin
-      let start_pos = Available_subrange.start_pos subrange in
       match t.min_pos with
-      | None -> t.min_pos <- start_pos
+      | None -> t.min_pos <- Some start_pos
       | Some min_pos ->
-        if compare_pos start_pos t.min_pos < 0 then t.min_pos <- start_pos
+        if compare_pos start_pos min_pos < 0 then t.min_pos <- Some start_pos
     end;
     begin
-      let end_pos = Available_subrange.end_pos subrange in
       match t.max_pos with
-      | None -> t.max_pos <- end_pos
+      | None -> t.max_pos <- Some end_pos
       | Some max_pos ->
-        if compare_pos end_pos t.max_pos > 0 then t.max_pos <- end_pos
+        if compare_pos (`At_label end_pos) (`At_label max_pos) > 0 then
+          t.max_pos <- Some end_pos
     end;
     t.subranges <- subrange::t.subranges
 
@@ -111,7 +119,7 @@ end = struct
 end
 
 type t = {
-  mutable ranges : Available_ranges.t Ident.tbl;
+  mutable ranges : Available_range.t Ident.tbl;
   function_name : string;
 }
 
@@ -124,7 +132,7 @@ let fold t ~init ~f =
       in
       f acc ~ident ~is_unique ~range)
     t.ranges
-    acc
+    init
 
 let ident_from_reg ~reg =
   match Reg.Raw_name.to_ident reg.Reg.raw_name with
@@ -144,15 +152,15 @@ let add_subrange t ~subrange =
   Available_range.add_subrange range ~subrange
 
 let insert_label_after ~insn =
-  match insn.L.next with
+  match insn.L.next.L.desc with
   | L.Llabel label -> label  (* don't add unnecessary labels *)
-  | L.Lend | L.Lop _ | L.Lreloadretaddr | L.Lreturn L.Lbranch _
+  | L.Lend | L.Lop _ | L.Lreloadretaddr | L.Lreturn | L.Lbranch _
   | L.Lcondbranch _ | L.Lcondbranch3 _ | L.Lswitch _ | L.Lsetuptrap _
-  | L.Lpushtrap | L.Lpoptrap | L.Lraise ->
+  | L.Lpushtrap | L.Lpoptrap | L.Lraise _ ->
     let label = L.new_label () in
     let insn' =
       { insn with L.
-        desc = L.Llabel llabel;
+        desc = L.Llabel label;
         arg = [| |];
         res = [| |];
       }
@@ -183,32 +191,34 @@ let rec process_instruction t ~insn ~prev_insn ~open_subrange_start_positions =
       | None -> `Start_of_function
       | Some prev_insn -> `At_label (insert_label_after ~insn:prev_insn))
   in
-  let t =
-    Reg.Set.fold (fun reg t ->
-        let start_pos =
-          try Reg.Map.find open_subrange_start_positions reg
-          with Not_found -> assert false
-        in
-        let subrange =
-          Available_subrange.create ~start_pos ~end_pos:(Lazy.force pos) ~reg
-        in
-        add_subrange t ~subrange)
-      deaths
-      t
-  in
+  Reg.Set.fold (fun reg () ->
+      let start_pos =
+        try Reg.Map.find reg open_subrange_start_positions
+        with Not_found -> assert false
+      in
+      let end_pos =
+        match Lazy.force pos with
+        | `Start_of_function -> assert false  (* only births at this point *)
+        | `At_label label -> label
+      in
+      let subrange = Available_subrange.create ~start_pos ~end_pos ~reg in
+      add_subrange t ~subrange)
+    deaths
+    ();
   let open_subrange_start_positions =
     Reg.Set.fold (fun reg open_subrange_start_positions ->
         assert (not (Reg.Map.mem reg open_subrange_start_positions));
         Reg.Map.add reg (Lazy.force pos) open_subrange_start_positions)
       births
-      (Reg.Map.filter (fun reg _start_pos -> not (Reg.Set.mem reg deaths)))
+      (Reg.Map.filter (fun reg _start_pos -> not (Reg.Set.mem reg deaths))
+        open_subrange_start_positions)
   in
   match insn.L.desc with
   | L.Lend -> ()
   | L.Lop _ | L.Lreloadretaddr | L.Lreturn | L.Llabel _ | L.Lbranch _
   | L.Lcondbranch _ | L.Lcondbranch3 _ | L.Lswitch _ | L.Lsetuptrap _
-  | L.Lpushtrap | L.Lpoptrap | L.Lraise ->
-    process_instruction t ~insn:insn.L.next ~prev_insn:insn
+  | L.Lpushtrap | L.Lpoptrap | L.Lraise _ ->
+    process_instruction t ~insn:insn.L.next ~prev_insn:(Some insn)
       ~open_subrange_start_positions
 
 let create ~fundecl =

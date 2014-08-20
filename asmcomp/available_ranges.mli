@@ -37,15 +37,17 @@
 module Available_subrange : sig
   type t
 
-  val start_pos : t -> [ `Start_of_function | `At_label of L.label ]
-  val end_pos : t -> L.label
+  val start_pos : t -> [ `Start_of_function | `At_label of Linearize.label ]
+  val end_pos : t -> Linearize.label
 end
 
 module Available_range : sig
   type t
   
   val is_parameter : t -> bool
-  val extremities : t -> [ `Start_of_function | `At_label of L.label ] * L.label
+  val extremities
+     : t
+    -> [ `Start_of_function | `At_label of Linearize.label ] * Linearize.label
 end
 
 type t

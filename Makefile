@@ -36,7 +36,7 @@ OCAMLBUILDNATIVE=$(WITH_OCAMLBUILD:=.native)
 OCAMLDOC_OPT=$(WITH_OCAMLDOC:=.opt)
 
 INCLUDES=-I utils -I parsing -I typing -I bytecomp -I asmcomp -I driver \
-	 -I toplevel -I asmcomp/dwarf_low -I asmcomp/dwarf
+	 -I toplevel -I asmcomp/dwarf_low
 
 UTILS=utils/misc.cmo utils/tbl.cmo utils/config.cmo \
   utils/clflags.cmo utils/terminfo.cmo utils/ccomp.cmo utils/warnings.cmo \
