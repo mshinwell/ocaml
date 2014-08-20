@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013, Jane Street Holding                                *)
+(*  Copyright 2013--2014, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -48,11 +48,11 @@ module Location_list_entry = struct
   let emit t ~emitter =
     Value.emit
       (Value.as_code_address_from_label_diff
-        t.beginning_address_label t.start_of_code_symbol)
+        t.beginning_address_label (`Symbol t.start_of_code_symbol))
       ~emitter;
     Value.emit
       (Value.as_code_address_from_label_diff_minus_8
-        t.ending_address_label t.start_of_code_symbol)
+        (`Label t.ending_address_label) t.start_of_code_symbol)
       ~emitter;
     Value.emit (Value.as_two_byte_int (expr_size t)) ~emitter;
     Location_expression.emit t.expr ~emitter
@@ -61,7 +61,7 @@ end
 module Base_address_selection_entry = struct
   type t = string
 
-  let create ~base_address_label = base_address_label
+  let create ~base_address_symbol = base_address_symbol
 
   let to_dwarf_values t =
     let largest_code_address = Int64.minus_one in
@@ -82,12 +82,12 @@ type t =
   | Location_list_entry of Location_list_entry.t
   | Base_address_selection_entry of Base_address_selection_entry.t
 
-let create_location_list_entry ~start_of_code_label
+let create_location_list_entry ~start_of_code_symbol
                                ~first_address_when_in_scope
                                ~first_address_when_not_in_scope
                                ~location_expression =
   Location_list_entry (
-    Location_list_entry.create ~start_of_code_label
+    Location_list_entry.create ~start_of_code_symbol
       ~first_address_when_in_scope
       ~first_address_when_not_in_scope
       ~location_expression)

@@ -1172,8 +1172,10 @@ asmcomp/dwarf_low/abbreviations_table.cmx : asmcomp/dwarf_low/value.cmx \
     asmcomp/dwarf_low/std_internal.cmx \
     asmcomp/dwarf_low/abbreviations_table_entry.cmx \
     asmcomp/dwarf_low/abbreviations_table.cmi
-asmcomp/dwarf_low/aranges_table.cmo : asmcomp/dwarf_low/aranges_table.cmi
-asmcomp/dwarf_low/aranges_table.cmx : asmcomp/dwarf_low/aranges_table.cmi
+asmcomp/dwarf_low/aranges_table.cmo : asmcomp/dwarf_low/value.cmi \
+    asmcomp/dwarf_low/std_internal.cmo asmcomp/dwarf_low/aranges_table.cmi
+asmcomp/dwarf_low/aranges_table.cmx : asmcomp/dwarf_low/value.cmx \
+    asmcomp/dwarf_low/std_internal.cmx asmcomp/dwarf_low/aranges_table.cmi
 asmcomp/dwarf_low/attribute.cmo : asmcomp/dwarf_low/value.cmi \
     asmcomp/dwarf_low/form.cmi asmcomp/dwarf_low/attribute.cmi
 asmcomp/dwarf_low/attribute.cmx : asmcomp/dwarf_low/value.cmx \

@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013, Jane Street Holding                                *)
+(*  Copyright 2013--2014, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -23,16 +23,12 @@
 open Std_internal
 
 type t = {
-  name : string;
+  name : Linearize.label;
   entries : Location_list_entry.t list;
 }
 
-let next_id = ref 0
-
 let create entries =
-  let id = !next_id in
-  next_id := !next_id + 1;
-  { name = sprintf "location_list%d" id;
+  { name = Linearize.new_label ();
     entries;
   }
 

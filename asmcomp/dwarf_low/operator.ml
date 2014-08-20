@@ -42,7 +42,7 @@ let frame_base_register ~offset_in_bytes =
 
 let opcode = function
   | DW_op_regx _ -> 0x90
-  | DW_op_fbreg -> 0x91
+  | DW_op_fbreg _ -> 0x91
   | DW_op_bregx _ -> 0x92
 
 let size t =
