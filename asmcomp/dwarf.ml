@@ -25,15 +25,20 @@ open Dwarf_low_dot_std.Dwarf_low
 module Available_subrange = Available_ranges.Available_subrange
 module Available_range = Available_ranges.Available_range
 
+(* DWARF-related state for a single compilation unit. *)
 type t = {
-  source_file_path : string;
+  compilation_unit_proto_die : Proto_DIE.t;
   mutable externally_visible_functions : string list;
   emitter : Emitter.t;
+  debug_loc_table : Debug_loc_table.t;
+  debug_line_label : Linearize.label;
+  start_of_code_label : Linearize.label;
+  end_of_code_label : Linearize.label;
 }
 
 let create ~source_file_path ~emit_string ~emit_symbol
       ~emit_label_declaration ~emit_section_declaration
-      ~emit_switch_to_section =
+      ~emit_switch_to_section ~start_of_code_label ~end_of_code_label =
   let emitter =
     Emitter.create ~emit_string
       ~emit_symbol
@@ -41,12 +46,43 @@ let create ~source_file_path ~emit_string ~emit_symbol
       ~emit_section_declaration
       ~emit_switch_to_section
   in
-  { source_file_path;
+  let debug_line_label = Linearize.new_label () in
+  let compilation_unit_proto_die =
+    let attribute_values =
+      let producer_name = Printf.sprintf "ocamlopt %s" Sys.ocaml_version in
+      let source_file_path, directory =
+        match source_file_path with
+        (* CR-soon mshinwell: think about the source file path stuff *)
+        | None -> "<unknown>", Sys.getcwd ()
+        | Some path ->
+          if Filename.is_relative path then
+            let dir = Sys.getcwd () in
+            Filename.concat dir path, dir
+          else
+            path, Filename.dirname path
+      in [
+        Attribute_value.create_producer ~producer_name;
+        Attribute_value.create_name source_file_path;
+        Attribute_value.create_comp_dir ~directory;
+        Attribute_value.create_low_pc ~address_label:start_of_code_label;
+        Attribute_value.create_high_pc ~address_label:end_of_code_label;
+        Attribute_value.create_stmt_list ~section_offset_label:debug_line_label;
+      ]
+    in
+    Proto_DIE.create ~parent:None
+      ~tag:Tag.compile_unit
+      ~attribute_values
+  in
+  { compilation_unit_proto_die;
     externally_visible_functions = [];
     emitter;
+    debug_loc_table = Debug_loc_table.create ();
+    debug_line_label;
+    start_of_code_label;
+    end_of_code_label;
   }
 
-let location_list_entry ~available_subrange ~start_of_function_label =
+let location_list_entry ~fundecl ~available_subrange =
   let reg = Available_subrange.reg available_subrange in
   let location_expression =
     let module LE = Location_expression in
@@ -80,19 +116,18 @@ let location_list_entry ~available_subrange ~start_of_function_label =
   in
   let first_address_when_in_scope =
     match Available_subrange.start_pos available_subrange with
-    | `Start_of_function -> start_of_function_label
-    | `At_label label -> label
+    | `Start_of_function -> `Symbol fundecl.Linearize.fun_name
+    | `At_label label -> `Label label
   in
   let first_address_when_not_in_scope = Available_subrange.end_pos available_subrange in
   Location_list_entry.create_location_list_entry
-    ~start_of_code_label:start_of_function_label
+    ~start_of_code_symbol:fundecl.Linearize.fun_name
     ~first_address_when_in_scope
     ~first_address_when_not_in_scope
     ~location_expression
 
-let dwarf_for_identifier ~function_name ~start_of_function_label
-      ~compilation_unit_proto_die ~function_proto_die ~debug_loc_table
-      ~lexical_block_cache ~ident ~is_unique ~range =
+let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
+      ~ident ~is_unique ~range =
   let (start_pos, end_pos) as cache_key = Available_range.extremities range in
   let parent_proto_die =
     if Available_range.is_parameter range then begin
@@ -107,13 +142,16 @@ let dwarf_for_identifier ~function_name ~start_of_function_label
         let lexical_block_proto_die =
           let start_pos =
             match start_pos with
-            | `Start_of_function -> start_of_function_label
-            | `At_label start_pos -> start_pos
+            | `Start_of_function ->
+              Attribute_value.create_low_pc_from_symbol
+                ~symbol:fundecl.Linearize.fun_name
+            | `At_label start_pos ->
+              Attribute_value.create_low_pc ~address_label:start_pos
           in
           Proto_DIE.create ~parent:(Some function_proto_die)
             ~tag:Tag.lexical_block
             ~attribute_values:[
-              Attribute_value.create_low_pc ~address_label:start_pos;
+              start_pos;
               Attribute_value.create_high_pc ~address_label:end_pos;
             ]
         in
@@ -125,24 +163,19 @@ let dwarf_for_identifier ~function_name ~start_of_function_label
   (* Build a location list that identifies where the value of [ident] may be
      found at runtime, indexed by program counter range, and insert the list
      into the .debug_loc table. *)
-  let location_list =
+  let location_list_attribute_value =
     let base_address_selection_entry =
       Location_list_entry.create_base_address_selection_entry
-        ~base_address_label:start_of_function_label
+        ~base_address_symbol:fundecl.Linearize.fun_name
     in
     let location_list_entries =
       Available_range.fold range
         ~init:[base_address_selection_entry]
         ~f:(fun location_list_entries ~available_subrange ->
-          let entry =
-            location_list_entry ~available_subrange ~start_of_function_label
-          in
-          entry::location_list_entries)
+          (location_list_entry ~fundecl ~available_subrange)::location_list_entries)
     in
-    Location_list.create location_list_entries
-  in
-  let loclistptr_attribute_value =
-    Debug_loc_table.insert debug_loc_table ~location_list
+    Debug_loc_table.insert t.debug_loc_table
+      ~location_list:(Location_list.create location_list_entries)
   in
   (* Build a new DWARF type for this identifier.  Each identifier has its
      own type, which is actually its stamped name, and is nothing to do with
@@ -150,7 +183,7 @@ let dwarf_for_identifier ~function_name ~start_of_function_label
      debugger by extracting the stamped name and then using that as a key
      for lookup into the .cmt file for the appropriate module. *)
   let type_proto_die =
-    Proto_DIE.create ~parent:(Some compilation_unit_proto_die)
+    Proto_DIE.create ~parent:(Some t.compilation_unit_proto_die)
       ~tag:Tag.base_type
       ~attribute_values:[
         Attribute_value.create_name (Ident.unique_name ident);
@@ -172,77 +205,40 @@ let dwarf_for_identifier ~function_name ~start_of_function_label
     ~attribute_values:[
       Attribute_value.create_name name_for_ident;
       Attribute_value.create_linkage_name (Ident.unique_name ident);
-      loclistptr_attribute_value;
-      Attribute_value.create_type ~proto_die:type_proto_die;
+      Attribute_value.create_type ~proto_die:(Proto_DIE.reference type_proto_die);
+      location_list_attribute_value;
     ]
 
-let start_function t ~compilation_unit_proto_die ~fundecl =
-  let function_name = fundecl.Linearize.fun_name in
-  let starting_label = sprintf "L%s.start" function_name in
-  let ending_label = sprintf "L%s.end" function_name in
+let stash_dwarf_for_function t ~fundecl ~end_of_function_label =
   let subprogram_proto_die =  (* "subprogram" means "function" for us. *)
-    Proto_DIE.create ~parent:(Some compilation_unit_proto_die)
+    Proto_DIE.create ~parent:(Some t.compilation_unit_proto_die)
       ~tag:Tag.subprogram
       ~attribute_values:[
-        Attribute_value.create_name ~source_file_path:function_name;
+        Attribute_value.create_name fundecl.Linearize.fun_name;
         Attribute_value.create_external ~is_visible_externally:true;
-        Attribute_value.create_low_pc ~address_label:starting_label;
-        Attribute_value.create_high_pc ~address_label:ending_label;
+        Attribute_value.create_low_pc_from_symbol ~symbol:fundecl.Linearize.fun_name;
+        Attribute_value.create_high_pc ~address_label:end_of_function_label;
       ]
   in
-  Emitter.emit_label_declaration t.emitter starting_label;
   (* [Available_ranges.create] may modify [fundecl], but it never changes
      the first instruction. *)
   let available_ranges = Available_ranges.create ~fundecl in
-  let lexical_block_cache = Hashtbl.create () in
+  let lexical_block_cache = Hashtbl.create 42 in
   (* For each identifier for which we have available ranges, construct
      DWARF information to describe how to access the values of such
      identifiers, indexed by program counter ranges. *)
   Available_ranges.fold available_ranges
     ~init:()
-    ~f:(fun () -> dwarf_for_identifier ~function_name
-      ~start_of_function_label ~compilation_unit_proto_die
-      ~function_proto_die:subprogram_proto_die ~debug_loc_table
-      ~lexical_block_cache);
+    ~f:(fun () -> dwarf_for_identifier t ~fundecl
+      ~function_proto_die:subprogram_proto_die ~lexical_block_cache);
   t.externally_visible_functions
-    <- function_name::t.externally_visible_functions
-
-let end_function t function_name =
-  Emitter.emit_label_declaration t.emitter (sprintf "Llr_end_%s" function_name)
-
-let with_emitter emitter fs =
-  List.iter (fun f -> f emitter) fs
+    <- fundecl.Linearize.fun_name::t.externally_visible_functions
 
 let emit t =
-  let compilation_unit_proto_die =
-    let attribute_values =
-      let producer_name = sprintf "ocamlopt %s" Sys.ocaml_version in
-      let directory =
-        match t.source_file_path with
-        | None -> Sys.getcwd ()
-        | Some path ->
-          if Filename.is_relative path then
-            Sys.getcwd ()
-          else
-            Filename.dirname path
-      in
-      let common = [
-        Attribute_value.create_producer ~producer_name;
-        Attribute_value.create_low_pc ~address_label:t.start_of_code_label;
-        Attribute_value.create_high_pc ~address_label:t.end_of_code_label;
-        Attribute_value.create_stmt_list ~section_offset_label:"Ldebug_line0";
-        Attribute_value.create_comp_dir ~directory;
-      ]
-      in
-      match t.source_file_path with
-      | None -> common
-      | Some source_file_path -> (AV.create_name source_file_path)::common
-    in
-    Proto_DIE.create ~parent:None
-      ~tag:Tag.compile_unit
-      ~attribute_values
+  let with_emitter emitter fs = List.iter (fun f -> f emitter) fs in
+  let debug_info =
+    Debug_info_section.create ~compilation_unit:t.compilation_unit_proto_die
   in
-  let debug_info = Debug_info_section.create ~tags_with_attribute_values in
   let debug_abbrev = Debug_info_section.to_abbreviations_table debug_info in
   let pubnames_table =
     Pubnames_table.create
@@ -258,7 +254,7 @@ let emit t =
     Emitter.emit_section_declaration ~section_name:SN.debug_abbrev;
     Emitter.emit_label_declaration ~label_name:"Ldebug_abbrev0";
     Emitter.emit_section_declaration ~section_name:SN.debug_line;
-    Emitter.emit_label_declaration ~label_name:"Ldebug_line0";
+    Emitter.emit_label_declaration ~label_name:t.debug_line_label;
     Emitter.emit_section_declaration ~section_name:SN.debug_loc;
     Emitter.emit_label_declaration ~label_name:"Ldebug_loc0";
   ];

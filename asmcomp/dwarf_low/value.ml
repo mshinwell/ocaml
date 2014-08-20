@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013, Jane Street Holding                                *)
+(*  Copyright 2013--2014, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -30,11 +30,14 @@ type t =
   | Uleb128 of int
   | Leb128 of int
   | String of string
-  | Code_address_from_label of string
-  | Code_address_from_label_diff of string * string
+  | Code_address_from_symbol of string
+  | Code_address_from_label of
+      [ `Label of Linearize.label | `Symbol of string ]
+    * [ `Label of Linearize.label | `Symbol of string ]
+  | Code_address_from_label_diff of Linearize.label * string
   (* CR mshinwell: remove the following once we probably address CR in
      location_list_entry.ml (to do with boundary conditions on PC ranges). *)
-  | Code_address_from_label_diff_minus_8 of string * string
+  | Code_address_from_label_diff_minus_8 of Linearize.label * string
   | Code_address of Int64.t
 
 exception Too_large_for_four_byte_int of int
@@ -71,6 +74,9 @@ let as_leb128 i =
 let as_string s =
   String s
 
+let as_code_address_from_symbol s =
+  Code_address_from_symbol s
+
 let as_code_address_from_label s =
   Code_address_from_label s
 
@@ -92,10 +98,11 @@ let size = function
     if i = 0 then 1
     else 1 + int_of_float (floor (log (float_of_int i) /. log 128.))
   | String s -> 1 + String.length s
-  | Code_address_from_label _ | Code_address _
+  | Code_address_from_symbol _ | Code_address_from_label _ | Code_address _
   | Code_address_from_label_diff _
   | Code_address_from_label_diff_minus_8 _ -> 8
 
+(* CR mshinwell: the assembler directives need to be target-specific *)
 let emit t ~emitter =
   match t with
   | Four_byte_int i ->
@@ -114,21 +121,34 @@ let emit t ~emitter =
     Emitter.emit_string emitter (sprintf "\t.sleb128\t0x%x\n" i)
   | String s ->
     Emitter.emit_string emitter (sprintf "\t.string\t\"%s\"\n" s)
+  | Code_address_from_symbol s ->
+    Emitter.emit_string emitter "\t.quad\t";
+    Emitter.emit_label emitter s;
+    Emitter.emit_string emitter "\n"
   | Code_address_from_label s ->
     Emitter.emit_string emitter "\t.quad\t";
-    Emitter.emit_symbol emitter s;
+    Emitter.emit_label emitter s;
     Emitter.emit_string emitter "\n"
   | Code_address_from_label_diff (s2, s1) ->
     Emitter.emit_string emitter "\t.quad\t";
-    Emitter.emit_symbol emitter s2;
+    begin match s2 with
+    | `Symbol s2 -> Emitter.emit_string emitter s2;
+    | `Label s2 -> Emitter.emit_label emitter s2
+    end;
     Emitter.emit_string emitter " - ";
-    Emitter.emit_symbol emitter s1;
+    begin match s1 with
+    | `Symbol s1 -> Emitter.emit_string emitter s1;
+    | `Label s1 -> Emitter.emit_label emitter s1
+    end;
     Emitter.emit_string emitter "\n"
   | Code_address_from_label_diff_minus_8 (s2, s1) ->
     Emitter.emit_string emitter "\t.quad\t";
-    Emitter.emit_symbol emitter s2;
+    begin match s2 with
+    | `Symbol s2 -> Emitter.emit_string emitter s2;
+    | `Label s2 -> Emitter.emit_label emitter s2
+    end;
     Emitter.emit_string emitter " - 1 - "; (* CR mshinwell: !!! *)
-    Emitter.emit_symbol emitter s1;
+    Emitter.emit_string emitter s1;
     Emitter.emit_string emitter "\n"
   | Code_address i ->
     Emitter.emit_string emitter (sprintf "\t.quad\t0x%Lx\n" i)

@@ -24,17 +24,17 @@ open Std_internal
 
 module Location_list_entry = struct
   type t = {
-    start_of_code_label : Linearize.label;
-    beginning_address_label : Linearize.label;
+    start_of_code_symbol : string;
+    beginning_address_label : [ `Symbol of string | `Label of Linearize.label ];
     ending_address_label : Linearize.label;
     expr : Location_expression.t;
   }
 
-  let create ~start_of_code_label
+  let create ~start_of_code_symbol
              ~first_address_when_in_scope
              ~first_address_when_not_in_scope
              ~location_expression =
-    { start_of_code_label;
+    { start_of_code_symbol;
       beginning_address_label = first_address_when_in_scope;
       ending_address_label = first_address_when_not_in_scope;
       expr = location_expression;
@@ -48,11 +48,11 @@ module Location_list_entry = struct
   let emit t ~emitter =
     Value.emit
       (Value.as_code_address_from_label_diff
-        t.beginning_address_label t.start_of_code_label)
+        t.beginning_address_label t.start_of_code_symbol)
       ~emitter;
     Value.emit
       (Value.as_code_address_from_label_diff_minus_8
-        t.ending_address_label t.start_of_code_label)
+        t.ending_address_label t.start_of_code_symbol)
       ~emitter;
     Value.emit (Value.as_two_byte_int (expr_size t)) ~emitter;
     Location_expression.emit t.expr ~emitter
@@ -66,7 +66,7 @@ module Base_address_selection_entry = struct
   let to_dwarf_values t =
     let largest_code_address = Int64.minus_one in
     [Value.as_code_address largest_code_address;
-     Value.as_code_address_from_label t;
+     Value.as_code_address_from_symbol t;
     ]
 
   let size t =
@@ -92,9 +92,9 @@ let create_location_list_entry ~start_of_code_label
       ~first_address_when_not_in_scope
       ~location_expression)
 
-let create_base_address_selection_entry ~base_address_label =
+let create_base_address_selection_entry ~base_address_symbol =
   Base_address_selection_entry (
-    Base_address_selection_entry.create ~base_address_label)
+    Base_address_selection_entry.create ~base_address_symbol)
 
 let size = function
   | Location_list_entry entry ->

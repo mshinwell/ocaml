@@ -46,6 +46,12 @@ val create_ignore
   -> attribute_values:Attribute_value.t list
   -> unit
 
+(* [reference t] returns a label that may be used when constructing other
+    attribute values. *)
+(* CR-someday mshinwell: ideally, attribute values could accept proto-DIE
+   values directly, but there is a circularity. *)
+val reference : t -> Linearize.label
+
 (* [depth_first_fold] traverses a proto-DIE tree in a depth-first order
    convenient for DWARF information emission.  (Section 2.3, DWARF-4 spec.)
    [`End_of_siblings] indicates that a chain of siblings---that is to say,

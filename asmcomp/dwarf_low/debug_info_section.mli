@@ -24,13 +24,5 @@ type t
 
 include Emittable.S with type t := t
 
-type contents =
-  | Attribute_value of string * Tag.t * (Attribute_value.t list)
-      * contents option
-
-val create :
-     tags_with_attribute_values:
-       (int * string * Tag.t * (Attribute_value.t list)) list
-  -> t
-
+val create : compilation_unit:Proto_die.t -> t
 val to_abbreviations_table : t -> Abbreviations_table.t

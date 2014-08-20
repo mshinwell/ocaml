@@ -101,11 +101,11 @@ DWARF_LOW=\
   asmcomp/dwarf_low/location_expression.cmo \
   asmcomp/dwarf_low/location_list_entry.cmo \
   asmcomp/dwarf_low/location_list.cmo \
+  asmcomp/dwarf_low/proto_die.cmo \
   asmcomp/dwarf_low/debug_info_section.cmo \
   asmcomp/dwarf_low/debug_loc_table.cmo \
   asmcomp/dwarf_low/pubnames_table.cmo \
   asmcomp/dwarf_low/section_names.cmo \
-  asmcomp/dwarf_low/proto_die.cmo \
   asmcomp/dwarf_low/dwarf_low_dot_std.cmo
 
 ASMCOMP=asmcomp/arch.cmo asmcomp/debuginfo.cmo \

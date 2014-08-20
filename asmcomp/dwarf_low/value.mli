@@ -31,7 +31,12 @@ val as_byte : int -> t
 val as_uleb128 : int -> t
 val as_leb128 : int -> t
 val as_string : string -> t
-val as_code_address_from_label : string -> t
-val as_code_address_from_label_diff : string -> string -> t
-val as_code_address_from_label_diff_minus_8 : string -> string -> t
+val as_code_address_from_symbol : string -> t
+val as_code_address_from_label : Linearize.label -> t
+val as_code_address_from_label_diff
+   : [ `Symbol of string | `Label of Linearize.label ]
+  -> [ `Symbol of string | `Label of Linearize.label ]
+  -> t
+val as_code_address_from_label_diff_minus_8
+  : [ `Symbol of string | `Label of Linearize.label ] -> string (* symbol *) -> t
 val as_code_address : Int64.t -> t

@@ -24,12 +24,21 @@
    information for a single compilation unit. *)
 type t
 
-val create : source_file_path:string
+val create
+   : source_file_path:string option
   -> emit_string:(string -> unit)
   -> emit_symbol:(string -> unit)
   -> emit_label_declaration:(label_name:string -> unit)
   -> emit_section_declaration:(section_name:string -> unit)
   -> emit_switch_to_section:(section_name:string -> unit)
+  -> start_of_code_label:Linearize.label
+  -> end_of_code_label:Linearize.label
   -> t
+
+val stash_dwarf_for_function
+   : t
+  -> fundecl:Linearize.fundecl
+  -> end_of_function_label:Linearize.label
+  -> unit
 
 val emit : t -> unit

@@ -704,7 +704,7 @@ let emit_profile () =
 
 (* Emission of a function declaration *)
 
-let fundecl fundecl =
+let fundecl fundecl ~dwarf =
   function_name := fundecl.fun_name;
   fastcode_flag := fundecl.fun_fast;
   tailrec_entry_point := new_label();
@@ -738,6 +738,12 @@ let fundecl fundecl =
   `{emit_label !tailrec_entry_point}:\n`;
   emit_all true fundecl.fun_body;
   List.iter emit_call_gc !call_gc_sites;
+  let end_of_function_label = new_label () in
+  `{emit_label end_of_function_label}:\n`;
+  begin match dwarf with
+  | None -> ()
+  | Some dwarf -> Dwarf.stash_dwarf_for_function dwarf ~fundecl ~end_of_function_label
+  end;
   emit_call_bound_errors ();
   cfi_endproc ();
   begin match Config.system with

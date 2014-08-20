@@ -26,6 +26,10 @@ let create_low_pc ~address_label =
   Attribute.low_pc,
     Value.as_code_address_from_label address_label
 
+let create_low_pc_from_symbol ~symbol =
+  Attribute.low_pc,
+    Value.as_code_address_from_symbol symbol
+
 let create_high_pc ~address_label =
   Attribute.high_pc,
     Value.as_code_address_from_label address_label

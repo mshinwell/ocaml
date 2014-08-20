@@ -24,10 +24,8 @@ type t = {
   mutable children : t list;
   tag : Tag.t;
   attribute_values : Attribute_value.t list;
-  die_label : string;  (* for references between DIEs in the emitted DWARF *)
+  label : Linearize.label;  (* for references between DIEs in the emitted DWARF *)
 }
-
-let die_label_counter = ref 0
 
 let create ~parent ~tag ~attribute_values =
   begin match parent with
@@ -39,8 +37,6 @@ let create ~parent ~tag ~attribute_values =
       failwith "attempt to attach proto-DIE to proto-DIE that \
                 never has children"
   end;
-  let die_label = Printf.sprintf "DIE_%d" !die_label_counter in
-  incr die_label_counter;
   (* Insert DW_AT_sibling to point at any next sibling of [t].  (Section 2.3,
      DWARF-4 spec).  The order of siblings probably matters; we make sure that
      it is preserved by the use of :: below and within [depth_first_fold]. *)
@@ -48,14 +44,14 @@ let create ~parent ~tag ~attribute_values =
     match parent.children with
     | [] -> attribute_values
     | next_sibling_of_t ->
-      (Attribute_value.create_sibling ~die_label:next_sibling_of_t.die_label)
+      (Attribute_value.create_sibling ~proto_die:next_sibling_of_t.label)
         :: t.attribute_values
   in
   let t =
     { children = [];
       tag;
       attribute_values;
-      die_label;
+      die_label = Linearize.new_label ();
     }
   in
   parent.children <- t :: parent.children;
@@ -78,3 +74,5 @@ let rec depth_first_fold t ~init ~f =
     | t::ts -> traverse_children ts ~acc:(depth_first_fold t ~init:acc ~f)
   in
   traverse_children t.children ~acc
+
+let reference t = t.label
