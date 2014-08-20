@@ -90,7 +90,11 @@ let mk_g_byt f =
 ;;
 
 let mk_g_opt f =
-  "-g", Arg.Unit f, " Record debugging information for exception backtrace"
+  "-g", Arg.Unit f, " Emit DWARF source location and frame unwinding information"
+;;
+
+let mk_g_full f =
+  "-g-full", Arg.Unit f, " Emit DWARF-4 information for enhanced debugger support"
 ;;
 
 let mk_i f =
@@ -502,6 +506,7 @@ module type Compiler_options =  sig
   val _config : unit -> unit
   val _for_pack : string -> unit
   val _g : unit -> unit
+  val _g_full : unit -> unit
   val _i : unit -> unit
   val _impl : string -> unit
   val _intf : string -> unit
@@ -735,6 +740,7 @@ struct
     mk_dtypes F._annot;
     mk_for_pack_opt F._for_pack;
     mk_g_opt F._g;
+    mk_g_full F._g_full;
     mk_i F._i;
     mk_I F._I;
     mk_impl F._impl;
