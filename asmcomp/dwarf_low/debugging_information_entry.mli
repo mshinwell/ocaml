@@ -26,8 +26,6 @@ include Emittable.S with type t := t
 
 val create : label:Linearize.label
   -> abbreviation_code:Abbreviation_code.t
-  -> tag:Tag.t
-  -> has_children:Child_determination.t
   -> attribute_values:Attribute_value.t list
   -> t
 

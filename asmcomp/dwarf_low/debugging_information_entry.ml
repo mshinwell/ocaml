@@ -23,35 +23,28 @@
 open Std_internal
 
 type t = {
-  label_name : string;
+  label : Linearize.label;
   abbreviation_code : Abbreviation_code.t;
-  tag : Tag.t option;
   attribute_values : Attribute_value.t list;
 }
 
-let create ~label_name ~abbreviation_code ~tag ~attribute_values =
-  { label_name;
+let create ~label ~abbreviation_code ~attribute_values =
+  { label;
     abbreviation_code;
-    tag = Some tag;
     attribute_values;
   }
 
-let create_null =
-  let counter = ref 0 in
-  fun () ->
-  let count = !counter in
-  counter := count + 1;
-  { label_name = sprintf "null%d" count;
-    abbreviation_code = Abbreviation_code.null ();
-    tag = None;
-    attribute_values = [];
-  }
+let null =
+  lazy (
+    { label = Linearize.new_label ();
+      abbreviation_code = Abbreviation_code.null ();
+      attribute_values = [];
+    })
+
+let create_null () = Lazy.force null
 
 let emit t ~emitter =
-  (* CR mshinwell: share code *)
-  Emitter.emit_string emitter "Ldie__";
-  Emitter.emit_symbol emitter t.label_name;
-  Emitter.emit_string emitter ":\n";
+  Emitter.emit_label emitter t.label;
   Abbreviation_code.emit t.abbreviation_code ~emitter;
   List.iter t.attribute_values ~f:(Attribute_value.emit ~emitter)
 
@@ -60,18 +53,3 @@ let size t =
     ~init:(Abbreviation_code.size t.abbreviation_code)
     ~f:(fun size attribute_value ->
           size + Attribute_value.size attribute_value)
-
-let to_abbreviations_table_entry t =
-  match t.tag with
-  | Some tag ->
-    let attributes =
-      List.map t.attribute_values ~f:Attribute_value.attribute
-    in
-    let entry =
-      Abbreviations_table_entry.create
-        ~abbreviation_code:t.abbreviation_code
-        ~tag
-        ~attributes
-    in
-    Some entry
-  | None -> None

@@ -28,7 +28,7 @@ type t = {
 }
 
 let sort_attribute_values ~attribute_values =
-  ...
+  List.sort Attribute.compare (List.map Attribute_value.attribute attribute_values)
 
 let create ~parent ~tag ~attribute_values =
   begin match parent with

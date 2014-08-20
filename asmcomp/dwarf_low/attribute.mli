@@ -25,6 +25,8 @@ type t
 (* [emit] emits the attribute followed by the form. *)
 include Emittable.S with type t := t
 
+val compare : t -> t -> int
+
 val low_pc : t
 val high_pc : t
 val producer : t

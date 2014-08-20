@@ -1105,8 +1105,8 @@ toplevel/trace.cmx : typing/types.cmx toplevel/toploop.cmx \
     toplevel/trace.cmi
 asmcomp/dwarf_low/abbreviation_code.cmi : asmcomp/dwarf_low/emittable.cmo
 asmcomp/dwarf_low/abbreviations_table_entry.cmi : asmcomp/dwarf_low/tag.cmi \
-    asmcomp/dwarf_low/emittable.cmo asmcomp/dwarf_low/attribute.cmi \
-    asmcomp/dwarf_low/abbreviation_code.cmi
+    asmcomp/dwarf_low/emittable.cmo asmcomp/dwarf_low/child_determination.cmi \
+    asmcomp/dwarf_low/attribute.cmi asmcomp/dwarf_low/abbreviation_code.cmi
 asmcomp/dwarf_low/abbreviations_table.cmi : asmcomp/dwarf_low/emittable.cmo \
     asmcomp/dwarf_low/abbreviations_table_entry.cmi
 asmcomp/dwarf_low/aranges_table.cmi : asmcomp/linearize.cmi \
@@ -1116,12 +1116,11 @@ asmcomp/dwarf_low/attribute_value.cmi : asmcomp/linearize.cmi \
     asmcomp/dwarf_low/encoding_attribute.cmi asmcomp/dwarf_low/emittable.cmo \
     asmcomp/dwarf_low/attribute.cmi
 asmcomp/dwarf_low/child_determination.cmi : asmcomp/dwarf_low/emittable.cmo
-asmcomp/dwarf_low/debugging_information_entry.cmi : \
-    asmcomp/dwarf_low/tag.cmi asmcomp/dwarf_low/emittable.cmo \
-    asmcomp/dwarf_low/attribute_value.cmi \
-    asmcomp/dwarf_low/abbreviations_table_entry.cmi \
+asmcomp/dwarf_low/debugging_information_entry.cmi : asmcomp/linearize.cmi \
+    asmcomp/dwarf_low/emittable.cmo asmcomp/dwarf_low/attribute_value.cmi \
     asmcomp/dwarf_low/abbreviation_code.cmi
 asmcomp/dwarf_low/debug_info_section.cmi : asmcomp/dwarf_low/proto_die.cmi \
+    asmcomp/linearize.cmi asmcomp/dwarf_low/emitter.cmi \
     asmcomp/dwarf_low/emittable.cmo asmcomp/dwarf_low/abbreviations_table.cmi
 asmcomp/dwarf_low/debug_loc_table.cmi : asmcomp/dwarf_low/location_list.cmi \
     asmcomp/dwarf_low/emittable.cmo asmcomp/dwarf_low/attribute_value.cmi
@@ -1133,7 +1132,8 @@ asmcomp/dwarf_low/location_list_entry.cmi : \
     asmcomp/dwarf_low/location_expression.cmi asmcomp/linearize.cmi \
     asmcomp/dwarf_low/emittable.cmo
 asmcomp/dwarf_low/location_list.cmi : \
-    asmcomp/dwarf_low/location_list_entry.cmi asmcomp/dwarf_low/emittable.cmo
+    asmcomp/dwarf_low/location_list_entry.cmi asmcomp/linearize.cmi \
+    asmcomp/dwarf_low/emittable.cmo
 asmcomp/dwarf_low/operator.cmi : asmcomp/dwarf_low/emittable.cmo
 asmcomp/dwarf_low/proto_die.cmi : asmcomp/dwarf_low/tag.cmi \
     asmcomp/linearize.cmi asmcomp/dwarf_low/child_determination.cmi \
@@ -1191,26 +1191,28 @@ asmcomp/dwarf_low/child_determination.cmo : asmcomp/dwarf_low/value.cmi \
 asmcomp/dwarf_low/child_determination.cmx : asmcomp/dwarf_low/value.cmx \
     asmcomp/dwarf_low/child_determination.cmi
 asmcomp/dwarf_low/debugging_information_entry.cmo : \
-    asmcomp/dwarf_low/tag.cmi asmcomp/dwarf_low/std_internal.cmo \
+    asmcomp/dwarf_low/std_internal.cmo asmcomp/linearize.cmi \
     asmcomp/dwarf_low/emitter.cmi asmcomp/dwarf_low/attribute_value.cmi \
-    asmcomp/dwarf_low/abbreviations_table_entry.cmi \
     asmcomp/dwarf_low/abbreviation_code.cmi \
     asmcomp/dwarf_low/debugging_information_entry.cmi
 asmcomp/dwarf_low/debugging_information_entry.cmx : \
-    asmcomp/dwarf_low/tag.cmx asmcomp/dwarf_low/std_internal.cmx \
+    asmcomp/dwarf_low/std_internal.cmx asmcomp/linearize.cmx \
     asmcomp/dwarf_low/emitter.cmx asmcomp/dwarf_low/attribute_value.cmx \
-    asmcomp/dwarf_low/abbreviations_table_entry.cmx \
     asmcomp/dwarf_low/abbreviation_code.cmx \
     asmcomp/dwarf_low/debugging_information_entry.cmi
 asmcomp/dwarf_low/debug_info_section.cmo : asmcomp/dwarf_low/version.cmi \
     asmcomp/dwarf_low/value.cmi asmcomp/dwarf_low/std_internal.cmo \
-    asmcomp/dwarf_low/debugging_information_entry.cmi \
+    asmcomp/linearize.cmi asmcomp/dwarf_low/debugging_information_entry.cmi \
+    asmcomp/dwarf_low/attribute_value.cmi asmcomp/arch.cmo \
+    asmcomp/dwarf_low/abbreviations_table_entry.cmi \
     asmcomp/dwarf_low/abbreviations_table.cmi \
     asmcomp/dwarf_low/abbreviation_code.cmi \
     asmcomp/dwarf_low/debug_info_section.cmi
 asmcomp/dwarf_low/debug_info_section.cmx : asmcomp/dwarf_low/version.cmx \
     asmcomp/dwarf_low/value.cmx asmcomp/dwarf_low/std_internal.cmx \
-    asmcomp/dwarf_low/debugging_information_entry.cmx \
+    asmcomp/linearize.cmx asmcomp/dwarf_low/debugging_information_entry.cmx \
+    asmcomp/dwarf_low/attribute_value.cmx asmcomp/arch.cmx \
+    asmcomp/dwarf_low/abbreviations_table_entry.cmx \
     asmcomp/dwarf_low/abbreviations_table.cmx \
     asmcomp/dwarf_low/abbreviation_code.cmx \
     asmcomp/dwarf_low/debug_info_section.cmi
@@ -1270,22 +1272,24 @@ asmcomp/dwarf_low/location_list_entry.cmx : asmcomp/dwarf_low/value.cmx \
     asmcomp/dwarf_low/location_list_entry.cmi
 asmcomp/dwarf_low/location_list.cmo : asmcomp/dwarf_low/value.cmi \
     asmcomp/dwarf_low/std_internal.cmo \
-    asmcomp/dwarf_low/location_list_entry.cmi asmcomp/dwarf_low/emitter.cmi \
-    asmcomp/dwarf_low/location_list.cmi
+    asmcomp/dwarf_low/location_list_entry.cmi asmcomp/linearize.cmi \
+    asmcomp/dwarf_low/emitter.cmi asmcomp/dwarf_low/location_list.cmi
 asmcomp/dwarf_low/location_list.cmx : asmcomp/dwarf_low/value.cmx \
     asmcomp/dwarf_low/std_internal.cmx \
-    asmcomp/dwarf_low/location_list_entry.cmx asmcomp/dwarf_low/emitter.cmx \
-    asmcomp/dwarf_low/location_list.cmi
+    asmcomp/dwarf_low/location_list_entry.cmx asmcomp/linearize.cmx \
+    asmcomp/dwarf_low/emitter.cmx asmcomp/dwarf_low/location_list.cmi
 asmcomp/dwarf_low/operator.cmo : asmcomp/dwarf_low/value.cmi \
     asmcomp/dwarf_low/operator.cmi
 asmcomp/dwarf_low/operator.cmx : asmcomp/dwarf_low/value.cmx \
     asmcomp/dwarf_low/operator.cmi
 asmcomp/dwarf_low/proto_die.cmo : asmcomp/dwarf_low/tag.cmi \
     asmcomp/linearize.cmi asmcomp/dwarf_low/child_determination.cmi \
-    asmcomp/dwarf_low/attribute_value.cmi asmcomp/dwarf_low/proto_die.cmi
+    asmcomp/dwarf_low/attribute_value.cmi asmcomp/dwarf_low/attribute.cmi \
+    asmcomp/dwarf_low/proto_die.cmi
 asmcomp/dwarf_low/proto_die.cmx : asmcomp/dwarf_low/tag.cmx \
     asmcomp/linearize.cmx asmcomp/dwarf_low/child_determination.cmx \
-    asmcomp/dwarf_low/attribute_value.cmx asmcomp/dwarf_low/proto_die.cmi
+    asmcomp/dwarf_low/attribute_value.cmx asmcomp/dwarf_low/attribute.cmx \
+    asmcomp/dwarf_low/proto_die.cmi
 asmcomp/dwarf_low/pubnames_table.cmo : asmcomp/dwarf_low/value.cmi \
     asmcomp/dwarf_low/std_internal.cmo asmcomp/dwarf_low/emitter.cmi \
     asmcomp/dwarf_low/debug_info_section.cmi \
@@ -1302,8 +1306,8 @@ asmcomp/dwarf_low/simple_location_expression.cmo : \
 asmcomp/dwarf_low/simple_location_expression.cmx : \
     asmcomp/dwarf_low/operator.cmx \
     asmcomp/dwarf_low/simple_location_expression.cmi
-asmcomp/dwarf_low/std_internal.cmo :
-asmcomp/dwarf_low/std_internal.cmx :
+asmcomp/dwarf_low/std_internal.cmo : asmcomp/dwarf_low/proto_die.cmi
+asmcomp/dwarf_low/std_internal.cmx : asmcomp/dwarf_low/proto_die.cmx
 asmcomp/dwarf_low/tag.cmo : asmcomp/dwarf_low/value.cmi \
     asmcomp/dwarf_low/child_determination.cmi asmcomp/dwarf_low/tag.cmi
 asmcomp/dwarf_low/tag.cmx : asmcomp/dwarf_low/value.cmx \

@@ -34,39 +34,43 @@ let create ~compilation_unit ~debug_abbrev0 =
 
 (* For each pattern of attributes found in the tree of proto-DIEs (of which there
    should be few compared to the number of DIEs), assign an abbreviation code,
-   generating an abbreviations table in the process.  At the same time, generate a
+   generating abbreviations table entries in the process.  At the same time, generate a
    list of DIEs in flattened format, ready for emission.  (These DIEs reference the
    particular patterns of attributes they use via the abbreviation codes.) *)
-let generate_abbrev_table_and_dies t =
+let generate_abbrev_table_entries_and_dies t =
   let next_abbreviation_code = ref 0 in
   Proto_DIE.depth_first_fold t.compilation_unit
-    ~init:(Abbrevations_table.empty, [])
-    ~f:(fun (abbrev_table, dies) action ~set_abbrev_code ->
-      let abbrev_table, die =
+    ~init:([], [])
+    ~f:(fun (abbrev_table_entries, dies) action ~set_abbrev_code ->
+      let abbrev_table_entry, die =
         match action with
-        | `End_of_siblings -> abbrev_table, Debugging_information_entry.create_null ()
+        | `End_of_siblings -> [], Debugging_information_entry.create_null ()
         | `DIE (tag, has_children, attribute_values, label) ->
           (* Note that [Proto_DIE.create] sorted the attribute values, ensuring that
              a simple re-ordering does not cause a new abbreviation to be created. *)
           let attributes = List.map Attribute_value.attribute attribute_values in
-          let abbrev_table, abbreviation_code =
+          let abbrev_table_entry, abbreviation_code =
             match Abbreviations_table.find abbrev_table ~tag ~attributes with
-            | Some abbrev_code -> abbrev_table, abbrev_code
+            | Some abbrev_code -> [], abbrev_code
             | None -> 
               let abbrev_code = Abbreviation_code.of_int !next_abbreviation_code in
               incr next_abbreviation_code;
-              let abbrev_table =
-                Abbreviations_table.add abbrev_table ~abbrev_code ~attribute_values
+              let abbrev_table_entry =
+                Abbreviations_table_entry.create abbrev_table
+                  ~abbreviation_code:abbrev_code
+                  ~tag
+                  ~has_children
+                  ~attributes
               in
-              abbrev_table, abbrev_code
+              [abbrev_table_entry], abbrev_code
           in
           let die =
             Debugging_information_entry.create ~label ~abbreviation_code
-              ~tag ~has_children ~attribute_values
+              ~attribute_values
           in
-          abbrev_table, die
+          abbrev_table_entry, die
       in
-      abbrev_table, die::dies)
+      abbrev_table_entry @ abbrev_table_entries, die::dies)
 
 let dwarf_version = Version.two
 let debug_abbrev_offset t = Value.as_four_byte_int_from_label t.debug_abbrev0
@@ -87,11 +91,11 @@ let size_without_first_word t ~dies =
 let size t = 4 + size_without_first_word t
 
 let emit t ~emitter =
-  let abbrev_table, dies = generate_abbrev_table_and_dies t in
+  let abbrev_table_entries, dies = generate_abbrev_table_and_dies t in
   let size = size_without_first_word t ~dies in
   Value.emit (Value.as_four_byte_int size) ~emitter;
   Version.emit dwarf_version ~emitter;
   Value.emit debug_abbrev_offset ~emitter;
   Value.emit address_width_in_bytes_on_target ~emitter;
   List.iter dies ~f:(Debugging_information_entry.emit ~emitter);
-  abbrev_table
+  Abbrevations_table.create abbrev_table_entries

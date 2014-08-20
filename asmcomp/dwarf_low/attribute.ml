@@ -50,6 +50,9 @@ let encode = function
   | DW_AT_linkage_name -> 0x6e
   | DW_AT_sibling -> 0x01
 
+let compare t1 t2 =
+  compare (encode t1) (encode t2)
+
 let form = function
   | DW_AT_low_pc -> Form.addr
   | DW_AT_high_pc -> Form.addr
