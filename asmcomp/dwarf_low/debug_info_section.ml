@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013, Jane Street Holding                                *)
+(*  Copyright 2013--2014, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -23,80 +23,75 @@
 open Std_internal
 
 type t = {
-  dies : Debugging_information_entry.t list;
+  compilation_unit : Proto_DIE.t;
+  debug_abbrev0 : Linearize.label;
 }
 
-let create ~tags_with_attribute_values =
-  let rec create_terminators acc = function
-    | 0 -> acc
-    | n ->
-      create_terminators (Debugging_information_entry.create_null () :: acc)
-        (n - 1)
-  in
-  let next_abbreviation_code = ref 1 in
-  (* CR mshinwell: the depth thing is nasty -- use a proper tree? *)
-  let depth, dies =
-    List.fold_left tags_with_attribute_values
-      ~init:(0, [])
-      ~f:(fun (current_depth, dies) 
-              (depth, label_name, tag, attribute_values) ->
-            let need_null_entry = depth < current_depth in
-            let dies =
-              if need_null_entry then
-                create_terminators dies (current_depth - depth)
-              else
-                dies
-            in
-            let abbreviation_code =
-              Abbreviation_code.of_int !next_abbreviation_code
-            in
-            next_abbreviation_code := !next_abbreviation_code + 1;
-            let die =
-              Debugging_information_entry.create ~label_name
-                ~abbreviation_code
-                ~tag
-                ~attribute_values
-            in
-            depth, (die::dies))
-  in
-(*  Printf.printf "[INFO_SECTION] Needs to insert %d terminators\n%!" depth ;*)
-  { dies = List.rev (create_terminators dies depth) }
+let create ~compilation_unit ~debug_abbrev0 =
+  { compilation_unit;
+    debug_abbrev0;
+  }
+
+(* For each pattern of attributes found in the tree of proto-DIEs (of which there
+   should be few compared to the number of DIEs), assign an abbreviation code,
+   generating an abbreviations table in the process.  At the same time, generate a
+   list of DIEs in flattened format, ready for emission.  (These DIEs reference the
+   particular patterns of attributes they use via the abbreviation codes.) *)
+let generate_abbrev_table_and_dies t =
+  let next_abbreviation_code = ref 0 in
+  Proto_DIE.depth_first_fold t.compilation_unit
+    ~init:(Abbrevations_table.empty, [])
+    ~f:(fun (abbrev_table, dies) action ~set_abbrev_code ->
+      let abbrev_table, die =
+        match action with
+        | `End_of_siblings -> abbrev_table, Debugging_information_entry.create_null ()
+        | `DIE (tag, has_children, attribute_values, label) ->
+          (* Note that [Proto_DIE.create] sorted the attribute values, ensuring that
+             a simple re-ordering does not cause a new abbreviation to be created. *)
+          let attributes = List.map Attribute_value.attribute attribute_values in
+          let abbrev_table, abbreviation_code =
+            match Abbreviations_table.find abbrev_table ~tag ~attributes with
+            | Some abbrev_code -> abbrev_table, abbrev_code
+            | None -> 
+              let abbrev_code = Abbreviation_code.of_int !next_abbreviation_code in
+              incr next_abbreviation_code;
+              let abbrev_table =
+                Abbreviations_table.add abbrev_table ~abbrev_code ~attribute_values
+              in
+              abbrev_table, abbrev_code
+          in
+          let die =
+            Debugging_information_entry.create ~label ~abbreviation_code
+              ~tag ~has_children ~attribute_values
+          in
+          abbrev_table, die
+      in
+      abbrev_table, die::dies)
 
 let dwarf_version = Version.two
-let debug_abbrev_offset =
-  Value.as_four_byte_int_from_label "Ldebug_abbrev0"
-let address_width_in_bytes_on_target = Value.as_byte 8
+let debug_abbrev_offset t = Value.as_four_byte_int_from_label t.debug_abbrev0
+let address_width_in_bytes_on_target = Value.as_byte Arch.size_addr
 
-let size_without_first_word t =
+let size_without_first_word t ~dies =
   let total_die_size =
-    List.fold_left t.dies
+    List.fold_left dies
       ~init:0
       ~f:(fun size die -> size + Debugging_information_entry.size die)
   in
   Version.size dwarf_version
-    + Value.size debug_abbrev_offset
+    + Value.size (debug_abbrev_offset t)
     + Value.size address_width_in_bytes_on_target
     + total_die_size
 
+(* The "4 +" is for the size field---see [emit], below. *)
 let size t = 4 + size_without_first_word t
 
 let emit t ~emitter =
-  let size = size_without_first_word t in
+  let abbrev_table, dies = generate_abbrev_table_and_dies t in
+  let size = size_without_first_word t ~dies in
   Value.emit (Value.as_four_byte_int size) ~emitter;
   Version.emit dwarf_version ~emitter;
   Value.emit debug_abbrev_offset ~emitter;
   Value.emit address_width_in_bytes_on_target ~emitter;
-  List.iter t.dies ~f:(Debugging_information_entry.emit ~emitter)
-
-let to_abbreviations_table t =
-  let entries =
-    List.fold_right t.dies
-      ~init:[]
-      ~f:(fun die entries ->
-            match
-              Debugging_information_entry.to_abbreviations_table_entry die
-            with
-            | None -> entries
-            | Some entry -> entry::entries)
-  in
-  Abbreviations_table.create entries
+  List.iter dies ~f:(Debugging_information_entry.emit ~emitter);
+  abbrev_table

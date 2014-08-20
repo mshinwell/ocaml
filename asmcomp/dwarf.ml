@@ -237,10 +237,11 @@ let stash_dwarf_for_function t ~fundecl ~end_of_function_label =
 
 let emit t =
   let with_emitter emitter fs = List.iter (fun f -> f emitter) fs in
+  let debug_abbrev0 = Linearize.new_label () in
   let debug_info =
     Debug_info_section.create ~compilation_unit:t.compilation_unit_proto_die
+      ~debug_abbrev0
   in
-  let debug_abbrev = Debug_info_section.to_abbreviations_table debug_info in
   let pubnames_table =
     Pubnames_table.create
       ~externally_visible_functions:t.externally_visible_functions
@@ -251,7 +252,6 @@ let emit t =
       ~end_of_code_label:t.end_of_code_label
   in
   let module SN = Section_names in
-  let debug_abbrev0 = Linearize.new_label () in
   let debug_loc0 = Linearize.new_label () in
   let debug_info0 = Linearize.new_label () in
   with_emitter t.emitter [
@@ -266,7 +266,7 @@ let emit t =
   let emitter = t.emitter in
   Emitter.emit_section_declaration emitter ~section_name:SN.debug_info;
   Emitter.emit_label_declaration emitter ~label_name:debug_info0;
-  Debug_info_section.emit debug_info ~emitter;
+  let debug_abbrev = Debug_info_section.emit debug_info ~emitter in
   Emitter.emit_switch_to_section emitter ~section_name:SN.debug_abbrev;
   Abbreviations_table.emit debug_abbrev ~emitter;
   Emitter.emit_section_declaration emitter ~section_name:SN.debug_pubnames;

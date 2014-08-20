@@ -65,6 +65,7 @@ val depth_first_fold
   -> init:'a
   -> f:('a
     -> [ `DIE of Tag.t * Child_determination.t * (Attribute_value.t list)
+           * Linearize.label
        | `End_of_siblings
        ]
     -> 'a)

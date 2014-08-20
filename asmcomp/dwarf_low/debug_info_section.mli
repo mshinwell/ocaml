@@ -24,5 +24,11 @@ type t
 
 include Emittable.S with type t := t
 
-val create : compilation_unit:Proto_die.t -> t
-val to_abbreviations_table : t -> Abbreviations_table.t
+val create
+   : compilation_unit:Proto_die.t
+  -> debug_abbrev0:Linearize.label
+  -> t
+
+(* Convert proto-DIEs to DIEs, assigning abbreviations in the process, and return
+   the necessary abbrevations table. *)
+val emit : t -> emitter:Emitter.t -> Abbreviations_table.t

@@ -27,6 +27,9 @@ type t = {
   label : Linearize.label;  (* for references between DIEs in the emitted DWARF *)
 }
 
+let sort_attribute_values ~attribute_values =
+  ...
+
 let create ~parent ~tag ~attribute_values =
   begin match parent with
   | None ->
@@ -37,24 +40,33 @@ let create ~parent ~tag ~attribute_values =
       failwith "attempt to attach proto-DIE to proto-DIE that \
                 never has children"
   end;
+  (* We impose an ordering on attributes to ensure that sharing of abbreviation table
+     entries (that is to say, patterns of attributes) is maximised. *)
+  let attribute_values = sort_attribute_values ~attribute_values in
   (* Insert DW_AT_sibling to point at any next sibling of [t].  (Section 2.3,
      DWARF-4 spec).  The order of siblings probably matters; we make sure that
      it is preserved by the use of :: below and within [depth_first_fold]. *)
   let attribute_values =
-    match parent.children with
-    | [] -> attribute_values
-    | next_sibling_of_t ->
-      (Attribute_value.create_sibling ~proto_die:next_sibling_of_t.label)
-        :: t.attribute_values
+    match parent with
+    | None -> attribute_values
+    | Some parent ->
+      match parent.children with
+      | [] -> attribute_values
+      | next_sibling_of_t::_ ->
+        (Attribute_value.create_sibling ~proto_die:next_sibling_of_t.label)
+          :: attribute_values
   in
   let t =
     { children = [];
       tag;
       attribute_values;
-      die_label = Linearize.new_label ();
+      label = Linearize.new_label ();
     }
   in
-  parent.children <- t :: parent.children;
+  begin match parent with
+  | None -> ()
+  | Some parent -> parent.children <- t :: parent.children
+  end;
   t
 
 let create_ignore ~parent ~tag ~attribute_values =
@@ -67,7 +79,7 @@ let rec depth_first_fold t ~init ~f =
     | [] -> Child_determination.no
     | _ -> Child_determination.yes
   in
-  let acc = f init (`DIE (t.tag, children, t.attribute_values)) in
+  let acc = f init (`DIE (t.tag, children, t.attribute_values, t.label)) in
   let rec traverse_children ts ~acc =
     match ts with
     | [] -> f acc `End_of_siblings

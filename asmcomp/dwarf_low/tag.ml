@@ -48,13 +48,14 @@ let encode t =
   in
   Value.as_uleb128 code
 
+(* Whether a DIE with the given tag may have children. *)
 let child_determination = function
   | DW_TAG_compile_unit -> Child_determination.yes
   | DW_TAG_subprogram -> Child_determination.yes
+  | DW_TAG_lexical_block -> Child_determination.yes
   | DW_TAG_formal_parameter -> Child_determination.no
   | DW_TAG_variable -> Child_determination.no
   | DW_TAG_base_type -> Child_determination.no
-  | DW_TAG_lexical_block -> Child_determination.yes
 
 let compile_unit = DW_TAG_compile_unit
 let subprogram = DW_TAG_subprogram
