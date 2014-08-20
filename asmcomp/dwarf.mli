@@ -28,7 +28,8 @@ val create
    : source_file_path:string option
   -> emit_string:(string -> unit)
   -> emit_symbol:(string -> unit)
-  -> emit_label_declaration:(label_name:string -> unit)
+  -> emit_label:(Linearize.label -> unit)
+  -> emit_label_declaration:(label_name:Linearize.label -> unit)
   -> emit_section_declaration:(section_name:string -> unit)
   -> emit_switch_to_section:(section_name:string -> unit)
   -> start_of_code_label:Linearize.label

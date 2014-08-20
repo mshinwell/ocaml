@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013, Jane Street Holding                                *)
+(*  Copyright 2013--2014, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -32,7 +32,8 @@ type t =
   | DW_AT_type
   | DW_AT_encoding
   | DW_AT_byte_size
-  | DW_AT_linkage_name  (* DWARF 4 *)
+  | DW_AT_linkage_name  (* DWARF-4 *)
+  | DW_AT_sibling
 
 let encode = function
   | DW_AT_low_pc -> 0x11
@@ -47,6 +48,7 @@ let encode = function
   | DW_AT_encoding -> 0x3e
   | DW_AT_byte_size -> 0x0b
   | DW_AT_linkage_name -> 0x6e
+  | DW_AT_sibling -> 0x01
 
 let form = function
   | DW_AT_low_pc -> Form.addr
@@ -61,6 +63,7 @@ let form = function
   | DW_AT_encoding -> Form.data1
   | DW_AT_byte_size -> Form.data1
   | DW_AT_linkage_name -> Form.string
+  | DW_AT_sibling -> Form.ref_addr
 
 let low_pc = DW_AT_low_pc
 let high_pc = DW_AT_high_pc
@@ -74,6 +77,7 @@ let typ' = DW_AT_type
 let encoding = DW_AT_encoding
 let byte_size = DW_AT_byte_size
 let linkage_name = DW_AT_linkage_name
+let sibling = DW_AT_sibling
 
 let size t =
   Value.size (Value.as_uleb128 (encode t)) + Form.size (form t)

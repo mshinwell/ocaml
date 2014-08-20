@@ -36,12 +36,13 @@ type t = {
   end_of_code_label : Linearize.label;
 }
 
-let create ~source_file_path ~emit_string ~emit_symbol
+let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
       ~emit_label_declaration ~emit_section_declaration
       ~emit_switch_to_section ~start_of_code_label ~end_of_code_label =
   let emitter =
     Emitter.create ~emit_string
       ~emit_symbol
+      ~emit_label
       ~emit_label_declaration
       ~emit_section_declaration
       ~emit_switch_to_section
@@ -250,18 +251,21 @@ let emit t =
       ~end_of_code_label:t.end_of_code_label
   in
   let module SN = Section_names in
+  let debug_abbrev0 = Linearize.new_label () in
+  let debug_loc0 = Linearize.new_label () in
+  let debug_info0 = Linearize.new_label () in
   with_emitter t.emitter [
     Emitter.emit_section_declaration ~section_name:SN.debug_abbrev;
-    Emitter.emit_label_declaration ~label_name:"Ldebug_abbrev0";
+    Emitter.emit_label_declaration ~label_name:debug_abbrev0;
     Emitter.emit_section_declaration ~section_name:SN.debug_line;
     Emitter.emit_label_declaration ~label_name:t.debug_line_label;
     Emitter.emit_section_declaration ~section_name:SN.debug_loc;
-    Emitter.emit_label_declaration ~label_name:"Ldebug_loc0";
+    Emitter.emit_label_declaration ~label_name:debug_loc0;
   ];
   (* CR-someday mshinwell: consider using [with_emitter] *)
   let emitter = t.emitter in
   Emitter.emit_section_declaration emitter ~section_name:SN.debug_info;
-  Emitter.emit_label_declaration emitter ~label_name:"Ldebug_info0";
+  Emitter.emit_label_declaration emitter ~label_name:debug_info0;
   Debug_info_section.emit debug_info ~emitter;
   Emitter.emit_switch_to_section emitter ~section_name:SN.debug_abbrev;
   Abbreviations_table.emit debug_abbrev ~emitter;

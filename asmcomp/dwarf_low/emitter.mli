@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013, Jane Street Holding                                *)
+(*  Copyright 2013--2014, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -24,13 +24,15 @@ type t
 
 val create : emit_string:(string -> unit)
   -> emit_symbol:(string -> unit)
-  -> emit_label_declaration:(label_name:string -> unit)
+  -> emit_label:(Linearize.label -> unit)
+  -> emit_label_declaration:(label_name:Linearize.label -> unit)
   -> emit_section_declaration:(section_name:string -> unit)
   -> emit_switch_to_section:(section_name:string -> unit)
   -> t
 
 val emit_string : t -> string -> unit
 val emit_symbol : t -> string -> unit
-val emit_label_declaration : t -> label_name:string -> unit
+val emit_label : t -> Linearize.label -> unit
+val emit_label_declaration : t -> label_name:Linearize.label -> unit
 val emit_section_declaration : t -> section_name:string -> unit
 val emit_switch_to_section : t -> section_name:string -> unit

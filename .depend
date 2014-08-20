@@ -1125,7 +1125,7 @@ asmcomp/dwarf_low/debug_info_section.cmi : asmcomp/dwarf_low/proto_die.cmi \
     asmcomp/dwarf_low/emittable.cmo asmcomp/dwarf_low/abbreviations_table.cmi
 asmcomp/dwarf_low/debug_loc_table.cmi : asmcomp/dwarf_low/location_list.cmi \
     asmcomp/dwarf_low/emittable.cmo asmcomp/dwarf_low/attribute_value.cmi
-asmcomp/dwarf_low/emitter.cmi :
+asmcomp/dwarf_low/emitter.cmi : asmcomp/linearize.cmi
 asmcomp/dwarf_low/encoding_attribute.cmi : asmcomp/dwarf_low/value.cmi
 asmcomp/dwarf_low/form.cmi : asmcomp/dwarf_low/emittable.cmo
 asmcomp/dwarf_low/location_expression.cmi : asmcomp/dwarf_low/emittable.cmo
@@ -1172,10 +1172,8 @@ asmcomp/dwarf_low/abbreviations_table.cmx : asmcomp/dwarf_low/value.cmx \
     asmcomp/dwarf_low/std_internal.cmx \
     asmcomp/dwarf_low/abbreviations_table_entry.cmx \
     asmcomp/dwarf_low/abbreviations_table.cmi
-asmcomp/dwarf_low/aranges_table.cmo : asmcomp/dwarf_low/value.cmi \
-    asmcomp/dwarf_low/std_internal.cmo asmcomp/dwarf_low/aranges_table.cmi
-asmcomp/dwarf_low/aranges_table.cmx : asmcomp/dwarf_low/value.cmx \
-    asmcomp/dwarf_low/std_internal.cmx asmcomp/dwarf_low/aranges_table.cmi
+asmcomp/dwarf_low/aranges_table.cmo : asmcomp/dwarf_low/aranges_table.cmi
+asmcomp/dwarf_low/aranges_table.cmx : asmcomp/dwarf_low/aranges_table.cmi
 asmcomp/dwarf_low/attribute.cmo : asmcomp/dwarf_low/value.cmi \
     asmcomp/dwarf_low/form.cmi asmcomp/dwarf_low/attribute.cmi
 asmcomp/dwarf_low/attribute.cmx : asmcomp/dwarf_low/value.cmx \
@@ -1242,8 +1240,10 @@ asmcomp/dwarf_low/dwarf_low_dot_std.cmx : asmcomp/dwarf_low/tag.cmx \
     asmcomp/dwarf_low/abbreviations_table.cmx
 asmcomp/dwarf_low/emittable.cmo : asmcomp/dwarf_low/emitter.cmi
 asmcomp/dwarf_low/emittable.cmx : asmcomp/dwarf_low/emitter.cmx
-asmcomp/dwarf_low/emitter.cmo : asmcomp/dwarf_low/emitter.cmi
-asmcomp/dwarf_low/emitter.cmx : asmcomp/dwarf_low/emitter.cmi
+asmcomp/dwarf_low/emitter.cmo : asmcomp/linearize.cmi \
+    asmcomp/dwarf_low/emitter.cmi
+asmcomp/dwarf_low/emitter.cmx : asmcomp/linearize.cmx \
+    asmcomp/dwarf_low/emitter.cmi
 asmcomp/dwarf_low/encoding_attribute.cmo : asmcomp/dwarf_low/value.cmi \
     asmcomp/dwarf_low/encoding_attribute.cmi
 asmcomp/dwarf_low/encoding_attribute.cmx : asmcomp/dwarf_low/value.cmx \

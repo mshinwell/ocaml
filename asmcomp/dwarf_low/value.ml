@@ -24,20 +24,22 @@ open Std_internal
 
 type t =
   | Four_byte_int of int
-  | Four_byte_int_from_label of string
+  | Four_byte_int_from_label of Linearize.label
   | Two_byte_int of int
   | Byte of int
   | Uleb128 of int
   | Leb128 of int
   | String of string
   | Code_address_from_symbol of string
-  | Code_address_from_label of
+  | Code_address_from_label of Linearize.label
+  | Code_address_from_label_diff of
       [ `Label of Linearize.label | `Symbol of string ]
     * [ `Label of Linearize.label | `Symbol of string ]
-  | Code_address_from_label_diff of Linearize.label * string
   (* CR mshinwell: remove the following once we probably address CR in
      location_list_entry.ml (to do with boundary conditions on PC ranges). *)
-  | Code_address_from_label_diff_minus_8 of Linearize.label * string
+  | Code_address_from_label_diff_minus_8 of
+      [ `Label of Linearize.label | `Symbol of string ]
+    * string
   | Code_address of Int64.t
 
 exception Too_large_for_four_byte_int of int
@@ -109,7 +111,7 @@ let emit t ~emitter =
     Emitter.emit_string emitter (sprintf "\t.long\t0x%x\n" i);
   | Four_byte_int_from_label l ->
     Emitter.emit_string emitter "\t.long\t";
-    Emitter.emit_symbol emitter l;
+    Emitter.emit_label emitter l;
     Emitter.emit_string emitter "\n"
   | Two_byte_int i ->
     Emitter.emit_string emitter (sprintf "\t.value\t0x%x\n" i)
@@ -123,7 +125,7 @@ let emit t ~emitter =
     Emitter.emit_string emitter (sprintf "\t.string\t\"%s\"\n" s)
   | Code_address_from_symbol s ->
     Emitter.emit_string emitter "\t.quad\t";
-    Emitter.emit_label emitter s;
+    Emitter.emit_symbol emitter s;
     Emitter.emit_string emitter "\n"
   | Code_address_from_label s ->
     Emitter.emit_string emitter "\t.quad\t";
@@ -132,19 +134,19 @@ let emit t ~emitter =
   | Code_address_from_label_diff (s2, s1) ->
     Emitter.emit_string emitter "\t.quad\t";
     begin match s2 with
-    | `Symbol s2 -> Emitter.emit_string emitter s2;
+    | `Symbol s2 -> Emitter.emit_string emitter s2
     | `Label s2 -> Emitter.emit_label emitter s2
     end;
     Emitter.emit_string emitter " - ";
     begin match s1 with
-    | `Symbol s1 -> Emitter.emit_string emitter s1;
+    | `Symbol s1 -> Emitter.emit_string emitter s1
     | `Label s1 -> Emitter.emit_label emitter s1
     end;
     Emitter.emit_string emitter "\n"
   | Code_address_from_label_diff_minus_8 (s2, s1) ->
     Emitter.emit_string emitter "\t.quad\t";
     begin match s2 with
-    | `Symbol s2 -> Emitter.emit_string emitter s2;
+    | `Symbol s2 -> Emitter.emit_string emitter s2
     | `Label s2 -> Emitter.emit_label emitter s2
     end;
     Emitter.emit_string emitter " - 1 - "; (* CR mshinwell: !!! *)

@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013, Jane Street Holding                                *)
+(*  Copyright 2013--2014, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -38,7 +38,7 @@ let create ~start_of_code_label ~end_of_code_label =
     Value.as_two_byte_int 0;
     Value.as_code_address_from_label start_of_code_label;
     Value.as_code_address_from_label_diff
-      end_of_code_label start_of_code_label;
+      (`Label end_of_code_label) (`Label start_of_code_label);
     Value.as_code_address Int64.zero;
     Value.as_code_address Int64.zero;
   ]

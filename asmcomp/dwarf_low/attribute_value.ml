@@ -57,15 +57,16 @@ let create_location ~offset_from_start_of_debug_loc =
     Value.as_four_byte_int offset_from_start_of_debug_loc
 *)
 let create_location ~location_list_label =
-  Attribute.location,
-    Value.as_code_address_from_label location_list_label
+  Attribute.location, Value.as_code_address_from_label location_list_label
 
 let create_type ~label_name =
-  Attribute.typ',
-    Value.as_code_address_from_label ("Ldie__" ^ label_name)
+  Attribute.typ', Value.as_code_address_from_label label_name
 
 let create_encoding ~encoding =
   Attribute.encoding, Encoding_attribute.as_dwarf_value encoding
+
+let create_sibling ~sibling =
+  Attribute.sibling, Value.as_code_address_from_label sibling
 
 let create_byte_size ~byte_size =
   assert (byte_size >= 1 && byte_size <= 0xff); (* CR mshinwell: not assert *)

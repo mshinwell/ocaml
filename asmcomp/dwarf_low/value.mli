@@ -25,7 +25,7 @@ type t
 include Emittable.S with type t := t
 
 val as_four_byte_int : int -> t
-val as_four_byte_int_from_label : string -> t
+val as_four_byte_int_from_label : Linearize.label -> t
 val as_two_byte_int : int -> t
 val as_byte : int -> t
 val as_uleb128 : int -> t
