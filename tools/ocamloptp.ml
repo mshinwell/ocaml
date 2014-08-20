@@ -55,6 +55,7 @@ module Options = Main_args.Make_optcomp_options (struct
   let _config = option "-config"
   let _for_pack s = option_with_arg "-for-pack" s
   let _g = option "-g"
+  let _g_full = option "-g-full"
   let _i = option "-i"
   let _I s = option_with_arg "-I" s
   let _impl s = with_impl := true; option_with_arg "-impl" s

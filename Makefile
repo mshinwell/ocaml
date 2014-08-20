@@ -79,11 +79,6 @@ BYTECOMP=bytecomp/meta.cmo bytecomp/instruct.cmo bytecomp/bytegen.cmo \
   bytecomp/bytelink.cmo bytecomp/bytelibrarian.cmo bytecomp/bytepackager.cmo \
   driver/errors.cmo driver/compile.cmo
 
-DWARF=asmcomp/dwarf/dwarf_std_internal.cmo \
-  asmcomp/dwarf/live_ranges.cmo \
-  asmcomp/dwarf/compilation_unit_state.cmo \
-  asmcomp/dwarf/dwarf_dot_std.cmo
-
 DWARF_LOW=\
   asmcomp/dwarf_low/std_internal.cmo \
   asmcomp/dwarf_low/emitter.cmo \
@@ -110,6 +105,7 @@ DWARF_LOW=\
   asmcomp/dwarf_low/debug_loc_table.cmo \
   asmcomp/dwarf_low/pubnames_table.cmo \
   asmcomp/dwarf_low/section_names.cmo \
+  asmcomp/dwarf_low/proto_die.cmo \
   asmcomp/dwarf_low/dwarf_low_dot_std.cmo
 
 ASMCOMP=asmcomp/arch.cmo asmcomp/debuginfo.cmo \
@@ -128,7 +124,8 @@ ASMCOMP=asmcomp/arch.cmo asmcomp/debuginfo.cmo \
   asmcomp/deadcode.cmo \
   asmcomp/printlinear.cmo asmcomp/linearize.cmo \
   asmcomp/schedgen.cmo asmcomp/scheduling.cmo \
-  $(DWARF) $(DWARF_LOW) \
+  asmcomp/available_regs.cmo asmcomp/available_ranges.cmo asmcomp/dwarf.cmo \
+  $(DWARF_LOW) \
   asmcomp/emitaux.cmo asmcomp/emit.cmo asmcomp/asmgen.cmo \
   asmcomp/asmlink.cmo asmcomp/asmlibrarian.cmo asmcomp/asmpackager.cmo \
   driver/opterrors.cmo driver/optcompile.cmo

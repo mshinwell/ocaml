@@ -506,7 +506,6 @@ module type Compiler_options =  sig
   val _config : unit -> unit
   val _for_pack : string -> unit
   val _g : unit -> unit
-  val _g_full : unit -> unit
   val _i : unit -> unit
   val _impl : string -> unit
   val _intf : string -> unit
@@ -583,6 +582,7 @@ module type Optcomp_options = sig
   include Common_options
   include Compiler_options
   include Optcommon_options
+  val _g_full : unit -> unit
   val _no_float_const_prop : unit -> unit
   val _nodynlink : unit -> unit
   val _p : unit -> unit
