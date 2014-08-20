@@ -704,7 +704,7 @@ let emit_profile () =
 
 (* Emission of a function declaration *)
 
-let fundecl fundecl ~dwarf =
+let fundecl ~dwarf fundecl =
   function_name := fundecl.fun_name;
   fastcode_flag := fundecl.fun_fast;
   tailrec_entry_point := new_label();
@@ -798,10 +798,10 @@ let emit_label_declaration ~label_name =
   emit_label label_name
 
 let emit_section_declaration ~section_name =
-  `	.{section_name}\n`
+  `	.{Emitaux.emit_string section_name}\n`
 
 let emit_switch_to_section ~section_name =
-  `	.{section_name}\n`
+  `	.{Emitaux.emit_string section_name}\n`
 
 (* Beginning / end of an assembly file *)
 
@@ -829,9 +829,11 @@ let begin_assembly() =
   `	.text\n`;
   `	.globl	{emit_symbol lbl_begin}\n`;
   `{emit_symbol lbl_begin}:\n`;
-  if macosx then `	nop\n` (* PR#4690 *)
+  if macosx then `	nop\n`; (* PR#4690 *)
+  let lbl_end = Compilenv.make_symbol (Some "code_end") in
+  lbl_begin, lbl_end
 
-let end_assembly() =
+let end_assembly ~end_of_code_symbol:lbl_end =
   if !float_constants <> [] then begin
     if macosx then
       `	.literal8\n`
@@ -841,7 +843,6 @@ let end_assembly() =
       `	.section .rodata.cst8,\"a\",@progbits\n`;
     List.iter emit_float_constant !float_constants
   end;
-  let lbl_end = Compilenv.make_symbol (Some "code_end") in
   `	.text\n`;
   if macosx then `	nop\n`; (* suppress "ld warning: atom sorting error" *)
   `	.globl	{emit_symbol lbl_end}\n`;

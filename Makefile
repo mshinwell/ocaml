@@ -117,15 +117,14 @@ ASMCOMP=asmcomp/arch.cmo asmcomp/debuginfo.cmo \
   asmcomp/comballoc.cmo \
   asmcomp/CSEgen.cmo asmcomp/CSE.cmo \
   asmcomp/liveness.cmo \
-  asmcomp/available_regs.cmo \
   asmcomp/spill.cmo asmcomp/split.cmo \
   asmcomp/interf.cmo asmcomp/coloring.cmo \
   asmcomp/reloadgen.cmo asmcomp/reload.cmo \
   asmcomp/deadcode.cmo \
   asmcomp/printlinear.cmo asmcomp/linearize.cmo \
   asmcomp/schedgen.cmo asmcomp/scheduling.cmo \
-  asmcomp/available_regs.cmo asmcomp/available_ranges.cmo asmcomp/dwarf.cmo \
   $(DWARF_LOW) \
+  asmcomp/available_regs.cmo asmcomp/available_ranges.cmo asmcomp/dwarf.cmo \
   asmcomp/emitaux.cmo asmcomp/emit.cmo asmcomp/asmgen.cmo \
   asmcomp/asmlink.cmo asmcomp/asmlibrarian.cmo asmcomp/asmpackager.cmo \
   driver/opterrors.cmo driver/optcompile.cmo

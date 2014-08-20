@@ -27,7 +27,7 @@ type t = {
   values : Value.t list;
 }
 
-let create ~start_of_code_label ~end_of_code_label =
+let create ~start_of_code_symbol ~end_of_code_symbol =
   let address_width_in_bytes_on_target = Value.as_byte 8 in
   let values = [
     Value.as_two_byte_int 2;  (* section version number *)
@@ -36,9 +36,9 @@ let create ~start_of_code_label ~end_of_code_label =
     Value.as_byte 0;
     Value.as_two_byte_int 0;
     Value.as_two_byte_int 0;
-    Value.as_code_address_from_label start_of_code_label;
+    Value.as_code_address_from_symbol start_of_code_symbol;
     Value.as_code_address_from_label_diff
-      (`Label end_of_code_label) (`Label start_of_code_label);
+      (`Symbol end_of_code_symbol) (`Symbol start_of_code_symbol);
     Value.as_code_address Int64.zero;
     Value.as_code_address Int64.zero;
   ]

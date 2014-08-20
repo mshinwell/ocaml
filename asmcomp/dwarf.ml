@@ -32,13 +32,13 @@ type t = {
   emitter : Emitter.t;
   debug_loc_table : Debug_loc_table.t;
   debug_line_label : Linearize.label;
-  start_of_code_label : Linearize.label;
-  end_of_code_label : Linearize.label;
+  start_of_code_symbol : string;
+  end_of_code_symbol : string;
 }
 
 let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
       ~emit_label_declaration ~emit_section_declaration
-      ~emit_switch_to_section ~start_of_code_label ~end_of_code_label =
+      ~emit_switch_to_section ~start_of_code_symbol ~end_of_code_symbol =
   let emitter =
     Emitter.create ~emit_string
       ~emit_symbol
@@ -65,8 +65,8 @@ let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
         Attribute_value.create_producer ~producer_name;
         Attribute_value.create_name source_file_path;
         Attribute_value.create_comp_dir ~directory;
-        Attribute_value.create_low_pc ~address_label:start_of_code_label;
-        Attribute_value.create_high_pc ~address_label:end_of_code_label;
+        Attribute_value.create_low_pc_from_symbol ~symbol:start_of_code_symbol;
+        Attribute_value.create_high_pc_from_symbol ~symbol:end_of_code_symbol;
         Attribute_value.create_stmt_list ~section_offset_label:debug_line_label;
       ]
     in
@@ -79,8 +79,8 @@ let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
     emitter;
     debug_loc_table = Debug_loc_table.create ();
     debug_line_label;
-    start_of_code_label;
-    end_of_code_label;
+    start_of_code_symbol;
+    end_of_code_symbol;
   }
 
 let location_list_entry ~fundecl ~available_subrange =
@@ -242,14 +242,15 @@ let emit t =
     Debug_info_section.create ~compilation_unit:t.compilation_unit_proto_die
       ~debug_abbrev0
   in
-  let pubnames_table =
+  Debug_info_section.assign_abbreviations debug_info;
+  let _pubnames_table =
     Pubnames_table.create
       ~externally_visible_functions:t.externally_visible_functions
       ~debug_info
   in
   let aranges_table =
-    Aranges_table.create ~start_of_code_label:t.start_of_code_label
-      ~end_of_code_label:t.end_of_code_label
+    Aranges_table.create ~start_of_code_symbol:t.start_of_code_symbol
+      ~end_of_code_symbol:t.end_of_code_symbol
   in
   let module SN = Section_names in
   let debug_loc0 = Linearize.new_label () in
@@ -270,7 +271,7 @@ let emit t =
   Emitter.emit_switch_to_section emitter ~section_name:SN.debug_abbrev;
   Abbreviations_table.emit debug_abbrev ~emitter;
   Emitter.emit_section_declaration emitter ~section_name:SN.debug_pubnames;
-  Pubnames_table.emit pubnames_table ~emitter;
+(*  Pubnames_table.emit pubnames_table ~emitter ~debug_info0; *)
   Emitter.emit_section_declaration emitter ~section_name:SN.debug_aranges;
   Aranges_table.emit aranges_table ~emitter;
   Emitter.emit_switch_to_section emitter ~section_name:SN.debug_loc;

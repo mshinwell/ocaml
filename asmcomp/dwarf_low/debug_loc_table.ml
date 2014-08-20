@@ -24,7 +24,7 @@ open Std_internal
 
 type t = Location_list.t list ref
 
-let create () = ((ref []) : t ref)
+let create () = ((ref []) : t)
 
 let insert t ~location_list =
 (*

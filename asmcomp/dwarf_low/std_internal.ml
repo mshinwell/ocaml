@@ -26,5 +26,3 @@ module List = struct
 end
 
 let sprintf = Printf.sprintf
-
-module Proto_DIE = Proto_die

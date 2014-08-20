@@ -24,6 +24,6 @@ type t
 
 include Emittable.S with type t := t
 
-val create : start_of_code_label:Linearize.label
-  -> end_of_code_label:Linearize.label
+val create : start_of_code_symbol:string
+  -> end_of_code_symbol:string
   -> t

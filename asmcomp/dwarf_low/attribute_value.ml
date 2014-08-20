@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013, Jane Street Holding                                *)
+(*  Copyright 2013--2014, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -33,6 +33,10 @@ let create_low_pc_from_symbol ~symbol =
 let create_high_pc ~address_label =
   Attribute.high_pc,
     Value.as_code_address_from_label address_label
+
+let create_high_pc_from_symbol ~symbol =
+  Attribute.high_pc,
+    Value.as_code_address_from_symbol symbol
 
 let create_producer ~producer_name =
   Attribute.producer, Value.as_string producer_name

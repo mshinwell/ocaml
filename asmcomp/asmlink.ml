@@ -198,12 +198,12 @@ let scan_file obj_name tolink = match read_file obj_name with
 (* Second pass: generate the startup file and link it with everything else *)
 
 let make_startup_file ppf filename units_list =
-  let compile_phrase p = Asmgen.compile_phrase ppf p in
+  let compile_phrase p = Asmgen.compile_phrase ppf p ~dwarf:None in
   let oc = open_out filename in
   Emitaux.output_channel := oc;
   Location.input_name := "caml_startup"; (* set name of "current" input *)
   Compilenv.reset "_startup"; (* set the name of the "current" compunit *)
-  Emit.begin_assembly();
+  let _, end_of_code_symbol = Emit.begin_assembly() in
   let name_list =
     List.flatten (List.map (fun (info,_,_) -> info.ui_defines) units_list) in
   compile_phrase (Cmmgen.entry_point name_list);
@@ -230,8 +230,7 @@ let make_startup_file ppf filename units_list =
   compile_phrase(Cmmgen.code_segment_table ("_startup" :: name_list));
   compile_phrase
     (Cmmgen.frame_table("_startup" :: "_system" :: name_list));
-
-  Emit.end_assembly();
+  Emit.end_assembly ~end_of_code_symbol;
   close_out oc
 
 let make_shared_startup_file ppf units filename =
@@ -240,17 +239,16 @@ let make_shared_startup_file ppf units filename =
   Emitaux.output_channel := oc;
   Location.input_name := "caml_startup";
   Compilenv.reset "_shared_startup";
-  Emit.begin_assembly();
-  List.iter compile_phrase
+  let _, end_of_code_symbol = Emit.begin_assembly() in
+  List.iter (compile_phrase ~dwarf:None)
     (Cmmgen.generic_functions true (List.map fst units));
-  compile_phrase (Cmmgen.plugin_header units);
+  compile_phrase (Cmmgen.plugin_header units) ~dwarf:None;
   compile_phrase
     (Cmmgen.global_table
-       (List.map (fun (ui,_) -> ui.ui_symbol) units));
+       (List.map (fun (ui,_) -> ui.ui_symbol) units)) ~dwarf:None;
   (* this is to force a reference to all units, otherwise the linker
      might drop some of them (in case of libraries) *)
-
-  Emit.end_assembly();
+  Emit.end_assembly ~end_of_code_symbol;
   close_out oc
 
 

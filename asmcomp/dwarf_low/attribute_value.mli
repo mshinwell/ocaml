@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013, Jane Street Holding                                *)
+(*  Copyright 2013--2014, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -27,6 +27,7 @@ include Emittable.S with type t := t
 val create_low_pc : address_label:Linearize.label -> t
 val create_high_pc : address_label:Linearize.label -> t
 val create_low_pc_from_symbol : symbol:string -> t
+val create_high_pc_from_symbol : symbol:string -> t
 val create_producer : producer_name:string -> t
 val create_name : string -> t
 val create_comp_dir : directory:string -> t

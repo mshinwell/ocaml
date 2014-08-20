@@ -32,8 +32,8 @@ val create
   -> emit_label_declaration:(label_name:Linearize.label -> unit)
   -> emit_section_declaration:(section_name:string -> unit)
   -> emit_switch_to_section:(section_name:string -> unit)
-  -> start_of_code_label:Linearize.label
-  -> end_of_code_label:Linearize.label
+  -> start_of_code_symbol:string
+  -> end_of_code_symbol:string
   -> t
 
 val stash_dwarf_for_function

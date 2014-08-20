@@ -30,5 +30,9 @@ val create
   -> t
 
 (* Convert proto-DIEs to DIEs, assigning abbreviations in the process, and return
-   the necessary abbrevations table. *)
+   the necessary abbrevations table.  This operation may only be performed once on
+   any given value of type [t].  It must be performed before size calculation or
+   emission. *)
+val assign_abbreviations : t -> unit
+
 val emit : t -> emitter:Emitter.t -> Abbreviations_table.t

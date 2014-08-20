@@ -29,3 +29,8 @@ val create : abbreviation_code:Abbreviation_code.t
   -> has_children:Child_determination.t
   -> attributes:Attribute.t list
   -> t
+
+val abbreviation_code : t -> Abbreviation_code.t
+val tag : t -> Tag.t
+val has_children : t -> Child_determination.t
+val attributes : t -> Attribute.t list

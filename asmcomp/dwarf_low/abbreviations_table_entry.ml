@@ -56,3 +56,8 @@ let emit t ~emitter =
      entry containing 0 for the name and 0 for the form." *)
   Value.emit (Value.as_uleb128 0) ~emitter;
   Value.emit (Value.as_uleb128 0) ~emitter
+
+let tag t = t.tag
+let has_children t = t.has_children
+let attributes t = t.attributes
+let abbreviation_code t = t.abbreviation_code

@@ -86,7 +86,8 @@ let implementation ppf sourcefile outputprefix =
       +++ print_if ppf Clflags.dump_rawlambda Printlambda.lambda
       +++ Simplif.simplify_lambda
       +++ print_if ppf Clflags.dump_lambda Printlambda.lambda
-      ++ Asmgen.compile_implementation outputprefix ppf;
+      ++ Asmgen.compile_implementation outputprefix ppf
+        ~source_file_path:(Some sourcefile);
       Compilenv.save_unit_info cmxfile;
     end;
     Warnings.check_fatal ();

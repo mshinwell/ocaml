@@ -56,7 +56,7 @@ let rec regalloc ppf round fd =
 
 let (++) x f = f x
 
-let compile_fundecl (ppf : formatter) fd_cmm =
+let compile_fundecl (ppf : formatter) ~dwarf fd_cmm =
   Proc.init ();
   Reg.reset();
   fd_cmm
@@ -82,12 +82,12 @@ let compile_fundecl (ppf : formatter) fd_cmm =
   ++ pass_dump_linear_if ppf dump_linear "Linearized code"
   ++ Scheduling.fundecl
   ++ pass_dump_linear_if ppf dump_scheduling "After instruction scheduling"
-  ++ Emit.fundecl
+  ++ Emit.fundecl ~dwarf
 
-let compile_phrase ppf p =
+let compile_phrase ppf ~dwarf p =
   if !dump_cmm then fprintf ppf "%a@." Printcmm.phrase p;
   match p with
-  | Cfunction fd -> compile_fundecl ppf fd
+  | Cfunction fd -> compile_fundecl ppf ~dwarf fd
   | Cdata dl -> Emit.data dl
 
 
@@ -97,11 +97,11 @@ let compile_genfuns ppf f =
   List.iter
     (function
        | (Cfunction {fun_name = name}) as ph when f name ->
-           compile_phrase ppf ph
+           compile_phrase ppf ~dwarf:None ph
        | _ -> ())
     (Cmmgen.generic_functions true [Compilenv.current_unit_infos ()])
 
-let compile_implementation ?toplevel prefixname ppf (size, lam) =
+let compile_implementation ?toplevel ~source_file_path prefixname ppf (size, lam) =
   let asmfile =
     if !keep_asm_file
     then prefixname ^ ext_asm
@@ -109,11 +109,28 @@ let compile_implementation ?toplevel prefixname ppf (size, lam) =
   let oc = open_out asmfile in
   begin try
     Emitaux.output_channel := oc;
-    Emit.begin_assembly();
+    let start_of_code_symbol, end_of_code_symbol = Emit.begin_assembly () in
+    let dwarf =
+      if !Clflags.debug_full then
+        let dwarf =
+          Dwarf.create ~source_file_path
+            ~emit_string:Emit.emit_string
+            ~emit_symbol:Emit.emit_symbol
+            ~emit_label:Emit.emit_label
+            ~emit_label_declaration:Emit.emit_label_declaration
+            ~emit_section_declaration:Emit.emit_section_declaration
+            ~emit_switch_to_section:Emit.emit_switch_to_section
+            ~start_of_code_symbol
+            ~end_of_code_symbol
+        in
+        Some dwarf
+      else
+        None
+    in
     Closure.intro size lam
     ++ clambda_dump_if ppf
     ++ Cmmgen.compunit size
-    ++ List.iter (compile_phrase ppf) ++ (fun () -> ());
+    ++ List.iter (compile_phrase ppf ~dwarf) ++ (fun () -> ());
     (match toplevel with None -> () | Some f -> compile_genfuns ppf f);
 
     (* We add explicit references to external primitive symbols.  This
@@ -122,24 +139,17 @@ let compile_implementation ?toplevel prefixname ppf (size, lam) =
        This is important if a module that uses such a symbol is later
        dynlinked. *)
 
-    compile_phrase ppf
+    compile_phrase ppf ~dwarf
       (Cmmgen.reference_symbols
          (List.filter (fun s -> s <> "" && s.[0] <> '%')
             (List.map Primitive.native_name !Translmod.primitive_declarations))
       );
 
-    if !Clflags.debug_full then begin
-      let dwarf =
-        Dwarf.create ~source_file_path
-          ~emit_string:Emit.emit_string
-          ~emit_symbol:Emit.emit_symbol
-          ~emit_label_declaration:Emit.emit_label
-          ~emit_section_declaration:Emit.emit_section_declaration
-          ~emit_switch_to_section:Emit.emit_switch_to_section
-      in
-      Dwarf.emit dwarf
+    Emit.end_assembly ~end_of_code_symbol;
+    begin match dwarf with
+    | None -> ()
+    | Some dwarf -> Dwarf.emit dwarf
     end;
-    Emit.end_assembly();
     close_out oc
   with x ->
     close_out oc;
