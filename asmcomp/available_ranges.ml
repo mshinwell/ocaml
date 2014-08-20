@@ -57,6 +57,12 @@ module Available_range : sig
   val is_parameter : t -> bool
   val add_subrange : t -> subrange:Available_subrange.t -> unit
   val extremities : t -> [ `Start_of_function | `At_label of L.label ] * L.label
+
+  val fold
+     : t
+    -> init:'a
+    -> f:('a -> available_subrange:Available_subrange.t -> 'a)
+    -> 'a
 end = struct
   type t = {
     mutable subranges : Available_subrange.t list;
@@ -116,6 +122,11 @@ end = struct
     | Some min, Some max -> min, max
     | Some _, None | None, Some _ -> assert false
     | None, None -> failwith "Available_ranges.extremities on empty range"
+
+  let fold t ~init ~f =
+    List.fold_left (fun acc available_subrange -> f acc ~available_subrange)
+      init
+      t.subranges
 end
 
 type t = {

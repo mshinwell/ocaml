@@ -24,9 +24,9 @@ open Std_internal
 
 module Location_list_entry = struct
   type t = {
-    start_of_code_label : string;
-    beginning_address_label : string;
-    ending_address_label : string;
+    start_of_code_label : Linearize.label;
+    beginning_address_label : Linearize.label;
+    ending_address_label : Linearize.label;
     expr : Location_expression.t;
   }
 

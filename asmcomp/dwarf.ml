@@ -22,6 +22,9 @@
 
 open Dwarf_low_dot_std.Dwarf_low
 
+module Available_subrange = Available_ranges.Available_subrange
+module Available_range = Available_ranges.Available_range
+
 type t = {
   source_file_path : string;
   mutable externally_visible_functions : string list;
@@ -44,14 +47,14 @@ let create ~source_file_path ~emit_string ~emit_symbol
   }
 
 let location_list_entry ~available_subrange ~start_of_function_label =
-  let starting_label = starting_label t ~start_of_function_label in
-  let ending_label = Printf.sprintf ".L%d" (ending_label_of_t_exn t) in
+  let reg = Available_subrange.reg available_subrange in
   let location_expression =
-    let module LE = Dwarf_low.Location_expression in
-    match Reg.location t.reg with
+    let module LE = Location_expression in
+    match reg.Reg.loc with
     | Reg.Unknown -> assert false  (* probably a bug in available_regs.ml *)
     | Reg.Reg reg_number -> LE.in_register reg_number
-    | Reg.Stack stack_location ->
+    | Reg.Stack stack_location -> LE.in_register 0 (* CR mshinwell: FIXME *)
+(*
       (* Byte offsets from the stack pointer will be computed during the
          "emit" phase.  DWARF information will be emitted after such
          computations, so we can use the offsets then. *)
@@ -73,17 +76,24 @@ let location_list_entry ~available_subrange ~start_of_function_label =
          the assembler (e.g. DW_AT_frame_base) from the CFI information we
          emit. *)
       LE.at_offset_from_frame_pointer ~offset_in_bytes
+*)
   in
+  let first_address_when_in_scope =
+    match Available_subrange.start_pos available_subrange with
+    | `Start_of_function -> start_of_function_label
+    | `At_label label -> label
+  in
+  let first_address_when_not_in_scope = Available_subrange.end_pos available_subrange in
   Location_list_entry.create_location_list_entry
     ~start_of_code_label:start_of_function_label
-    ~first_address_when_in_scope:starting_label
-    ~first_address_when_not_in_scope:ending_label
+    ~first_address_when_in_scope
+    ~first_address_when_not_in_scope
     ~location_expression
 
 let dwarf_for_identifier ~function_name ~start_of_function_label
       ~compilation_unit_proto_die ~function_proto_die ~debug_loc_table
       ~lexical_block_cache ~ident ~is_unique ~range =
-  let (start_pos, end_pos) as cache_key = Available_ranges.extremities range in
+  let (start_pos, end_pos) as cache_key = Available_range.extremities range in
   let parent_proto_die =
     if Available_range.is_parameter range then begin
       (* Parameters need to be children of the function in question. *)
@@ -92,9 +102,9 @@ let dwarf_for_identifier ~function_name ~start_of_function_label
       (* Local variables need to be children of "lexical blocks", which in turn
          are children of the function.  We use a cache to avoid creating more
          than one proto-DIE for any given lexical block position and size. *)
-      try Hashtbl.find cache_key lexical_block_cache
+      try Hashtbl.find lexical_block_cache cache_key
       with Not_found -> begin
-        let lexical_block =
+        let lexical_block_proto_die =
           let start_pos =
             match start_pos with
             | `Start_of_function -> start_of_function_label
@@ -107,8 +117,8 @@ let dwarf_for_identifier ~function_name ~start_of_function_label
               Attribute_value.create_high_pc ~address_label:end_pos;
             ]
         in
-        Hashtbl.add cache_key lexical_block_die lexical_block_cache;
-        lexical_block_die
+        Hashtbl.add lexical_block_cache cache_key lexical_block_proto_die;
+        lexical_block_proto_die
       end
     end
   in
@@ -117,17 +127,19 @@ let dwarf_for_identifier ~function_name ~start_of_function_label
      into the .debug_loc table. *)
   let location_list =
     let base_address_selection_entry =
-      Dwarf_low.Location_list_entry.create_base_address_selection_entry
+      Location_list_entry.create_base_address_selection_entry
         ~base_address_label:start_of_function_label
     in
     let location_list_entries =
       Available_range.fold range
-        ~init:[]
+        ~init:[base_address_selection_entry]
         ~f:(fun location_list_entries ~available_subrange ->
-          location_list_entry ~available_subrange ~start_of_function_label)
+          let entry =
+            location_list_entry ~available_subrange ~start_of_function_label
+          in
+          entry::location_list_entries)
     in
-    Dwarf_low.Location_list.create
-      (base_address_selection_entry :: location_list_entries)
+    Location_list.create location_list_entries
   in
   let loclistptr_attribute_value =
     Debug_loc_table.insert debug_loc_table ~location_list
@@ -141,7 +153,7 @@ let dwarf_for_identifier ~function_name ~start_of_function_label
     Proto_DIE.create ~parent:(Some compilation_unit_proto_die)
       ~tag:Tag.base_type
       ~attribute_values:[
-        Attribute_value.create_name ~source_file_path:type_name;
+        Attribute_value.create_name (Ident.unique_name ident);
         Attribute_value.create_encoding ~encoding:Encoding_attribute.signed;
         Attribute_value.create_byte_size ~byte_size:8;
       ]

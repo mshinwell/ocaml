@@ -61,6 +61,10 @@ let create ~parent ~tag ~attribute_values =
   parent.children <- t :: parent.children;
   t
 
+let create_ignore ~parent ~tag ~attribute_values =
+  let (_ : t) = create ~parent ~tag ~attribute_values in
+  ()
+
 let rec depth_first_fold t ~init ~f =
   let children =
     match t.children with

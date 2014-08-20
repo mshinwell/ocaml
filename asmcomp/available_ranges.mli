@@ -39,6 +39,7 @@ module Available_subrange : sig
 
   val start_pos : t -> [ `Start_of_function | `At_label of Linearize.label ]
   val end_pos : t -> Linearize.label
+  val reg : t -> Reg.t
 end
 
 module Available_range : sig
@@ -48,6 +49,12 @@ module Available_range : sig
   val extremities
      : t
     -> [ `Start_of_function | `At_label of Linearize.label ] * Linearize.label
+
+  val fold
+     : t
+    -> init:'a
+    -> f:('a -> available_subrange:Available_subrange.t -> 'a)
+    -> 'a
 end
 
 type t

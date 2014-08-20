@@ -792,10 +792,10 @@ let emit_label_declaration ~label_name =
   emit_label label_name
 
 let emit_section_declaration ~section_name =
-  `	.{section_name}\n`;
+  `	.{section_name}\n`
 
 let emit_switch_to_section ~section_name =
-  `	.{section_name}\n`;
+  `	.{section_name}\n`
 
 (* Beginning / end of an assembly file *)
 

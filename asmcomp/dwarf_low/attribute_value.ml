@@ -33,8 +33,8 @@ let create_high_pc ~address_label =
 let create_producer ~producer_name =
   Attribute.producer, Value.as_string producer_name
 
-let create_name ~source_file_path =  (* CR mshinwell: bad name for argument *)
-  Attribute.name, Value.as_string source_file_path
+let create_name name =
+  Attribute.name, Value.as_string name
 
 let create_comp_dir ~directory =
   Attribute.comp_dir, Value.as_string directory

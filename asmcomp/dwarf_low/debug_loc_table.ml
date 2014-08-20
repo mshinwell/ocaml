@@ -22,9 +22,9 @@
 
 open Std_internal
 
-type t = Location_list.t list
+type t = Location_list.t list ref
 
-let create () = []
+let create () = ((ref []) : t ref)
 
 let insert t ~location_list =
 (*
@@ -42,12 +42,13 @@ let insert t ~location_list =
     Attribute_value.create_location
       ~location_list_label:(Location_list.label location_list)
   in
-  (location_list::t), attribute_referencing_the_new_list
+  t := location_list::!t;
+  attribute_referencing_the_new_list
 
 let size t =
-  List.fold t
+  List.fold !t
     ~init:0
     ~f:(fun size loc_list -> size + Location_list.size loc_list)
 
 let emit t ~emitter =
-  List.iter (List.rev t) ~f:(Location_list.emit ~emitter)
+  List.iter (List.rev !t) ~f:(Location_list.emit ~emitter)

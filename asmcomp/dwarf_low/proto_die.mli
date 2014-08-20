@@ -40,6 +40,12 @@ val create
   -> attribute_values:Attribute_value.t list
   -> t
 
+val create_ignore
+   : parent:t option
+  -> tag:Tag.t
+  -> attribute_values:Attribute_value.t list
+  -> unit
+
 (* [depth_first_fold] traverses a proto-DIE tree in a depth-first order
    convenient for DWARF information emission.  (Section 2.3, DWARF-4 spec.)
    [`End_of_siblings] indicates that a chain of siblings---that is to say,

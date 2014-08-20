@@ -865,7 +865,7 @@ partialclean::
 	rm -f *~
 
 depend: beforedepend
-	(for d in utils parsing typing bytecomp asmcomp driver toplevel; \
+	(for d in utils parsing typing bytecomp asmcomp driver toplevel asmcomp/dwarf_low; \
 	 do $(CAMLDEP) $(DEPFLAGS) $$d/*.mli $$d/*.ml; \
 	 done) > .depend
 

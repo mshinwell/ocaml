@@ -28,4 +28,4 @@ val create : unit -> t
 
 val insert : t
   -> location_list:Location_list.t
-  -> t * Attribute_value.t
+  -> Attribute_value.t
