@@ -45,7 +45,7 @@ let size t =
     + Value.size (Value.as_uleb128 0)
 
 let emit t ~emitter =
-  List.iter t ~f:(Abbreviations_table_entry.emit ~emitter);
+  List.iter (List.rev t) ~f:(Abbreviations_table_entry.emit ~emitter);
   (* DWARF-4 spec section 7.5.3: "The abbreviations for a given compilation unit end
      with an entry consisting of a 0 byte for the abbreviation code." *)
   Value.emit (Value.as_uleb128 0) ~emitter
