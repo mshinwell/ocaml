@@ -705,6 +705,14 @@ let emit_profile () =
 (* Emission of a function declaration *)
 
 let fundecl ~dwarf fundecl =
+  let end_of_function_label = new_label () in
+  begin match dwarf with
+  | None -> ()
+  | Some dwarf ->
+    (* This may modify [fundecl] by adding labels, so must happen before
+       emission. *)
+    Dwarf.stash_dwarf_for_function dwarf ~fundecl ~end_of_function_label
+  end;
   function_name := fundecl.fun_name;
   fastcode_flag := fundecl.fun_fast;
   tailrec_entry_point := new_label();
@@ -738,12 +746,7 @@ let fundecl ~dwarf fundecl =
   `{emit_label !tailrec_entry_point}:\n`;
   emit_all true fundecl.fun_body;
   List.iter emit_call_gc !call_gc_sites;
-  let end_of_function_label = new_label () in
   `{emit_label end_of_function_label}:\n`;
-  begin match dwarf with
-  | None -> ()
-  | Some dwarf -> Dwarf.stash_dwarf_for_function dwarf ~fundecl ~end_of_function_label
-  end;
   emit_call_bound_errors ();
   cfi_endproc ();
   begin match Config.system with
@@ -788,20 +791,6 @@ let emit_item = function
 let data l =
   `	.data\n`;
   List.iter emit_item l
-
-(* Miscellany for DWARF information emission *)
-
-let emit_string s =
-  emit_string_directive "	.ascii	" s
-
-let emit_label_declaration ~label_name =
-  emit_label label_name
-
-let emit_section_declaration ~section_name =
-  `	.{Emitaux.emit_string section_name}\n`
-
-let emit_switch_to_section ~section_name =
-  `	.{Emitaux.emit_string section_name}\n`
 
 (* Beginning / end of an assembly file *)
 
@@ -877,3 +866,17 @@ let end_assembly ~end_of_code_symbol:lbl_end =
   if Config.system = "linux" then
     (* Mark stack as non-executable, PR#4564 *)
     `	.section .note.GNU-stack,\"\",%progbits\n`
+
+(* Miscellany for DWARF information emission *)
+
+let emit_string s =
+  `{Emitaux.emit_string s}`
+
+let emit_label_declaration ~label_name =
+  `{emit_label label_name}:\n`
+
+let emit_section_declaration ~section_name =
+  `	.section {Emitaux.emit_string section_name},\"\",%progbits\n`
+
+let emit_switch_to_section ~section_name =
+  `	.section {Emitaux.emit_string section_name}\n`

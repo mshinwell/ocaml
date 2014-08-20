@@ -164,7 +164,10 @@ let add_subrange t ~subrange =
 
 let insert_label_after ~insn =
   match insn.L.next.L.desc with
-  | L.Llabel label -> label  (* don't add unnecessary labels *)
+  (* CR mshinwell: unfortunately this breaks the ordering assumption
+     on labels. *)
+(*  | L.Llabel label -> label  (* don't add unnecessary labels *) *)
+  | L.Llabel _
   | L.Lend | L.Lop _ | L.Lreloadretaddr | L.Lreturn | L.Lbranch _
   | L.Lcondbranch _ | L.Lcondbranch3 _ | L.Lswitch _ | L.Lsetuptrap _
   | L.Lpushtrap | L.Lpoptrap | L.Lraise _ ->

@@ -44,7 +44,13 @@ let null =
 let create_null () = Lazy.force null
 
 let emit t ~emitter =
-  Emitter.emit_label emitter t.label;
+  (* The null DIE is likely to be emitted multiple times; we must not
+     emit its label multiple times, or the assembler would complain.
+     We don't actually need to point at this DIE from anywhere else, so
+     we elide emission of the label altogether. *)
+  if t.abbreviation_code <> Abbreviation_code.null () then begin
+    Emitter.emit_label_declaration emitter ~label_name:t.label
+  end;
   Abbreviation_code.emit t.abbreviation_code ~emitter;
   List.iter t.attribute_values ~f:(Attribute_value.emit ~emitter)
 

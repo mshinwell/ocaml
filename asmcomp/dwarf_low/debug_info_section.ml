@@ -46,7 +46,7 @@ let assign_abbreviations t =
     failwith "proto-DIE to DIE conversion may only be performed once"
   end;
   let abbrev_table_and_dies =
-    let next_abbreviation_code = ref 0 in
+    let next_abbreviation_code = ref 1 in
     Proto_DIE.depth_first_fold t.compilation_unit
       ~init:(Abbreviations_table.create (), [])
       ~f:(fun (abbrev_table, dies) action ->

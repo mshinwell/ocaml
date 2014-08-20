@@ -176,7 +176,8 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
           (location_list_entry ~fundecl ~available_subrange)::location_list_entries)
     in
     Debug_loc_table.insert t.debug_loc_table
-      ~location_list:(Location_list.create location_list_entries)
+      (* Note: the base address selection entry needs to be the first entry. *)
+      ~location_list:(Location_list.create (List.rev location_list_entries))
   in
   (* Build a new DWARF type for this identifier.  Each identifier has its
      own type, which is actually its stamped name, and is nothing to do with
