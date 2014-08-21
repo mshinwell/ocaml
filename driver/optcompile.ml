@@ -57,11 +57,11 @@ let print_if ppf flag printer arg =
 let (++) x f = f x
 let (+++) (x, y) f = (x, f y)
 
-let implementation ppf sourcefile outputprefix =
+let implementation ?initial_env ppf sourcefile outputprefix =
   Compmisc.init_path true;
   let modulename = module_of_filename ppf sourcefile outputprefix in
   Env.set_unit_name modulename;
-  let env = Compmisc.initial_env() in
+  let env = match initial_env with Some env -> env | None -> Compmisc.initial_env() in
   Compilenv.reset ?packname:!Clflags.for_package modulename;
   let cmxfile = outputprefix ^ ".cmx" in
   let objfile = outputprefix ^ ext_obj in
