@@ -34,6 +34,7 @@ type t = {
   debug_line_label : Linearize.label;
   start_of_code_symbol : string;
   end_of_code_symbol : string;
+  source_file_path : string;
 }
 
 let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
@@ -48,20 +49,20 @@ let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
       ~emit_switch_to_section
   in
   let debug_line_label = Linearize.new_label () in
+  let source_file_path, directory =
+    match source_file_path with
+    (* CR-soon mshinwell: think about the source file path stuff *)
+    | None -> "<unknown>", Sys.getcwd ()
+    | Some path ->
+      if Filename.is_relative path then
+        let dir = Sys.getcwd () in
+        Filename.concat dir path, dir
+      else
+        path, Filename.dirname path
+  in
   let compilation_unit_proto_die =
     let attribute_values =
-      let producer_name = Printf.sprintf "ocamlopt %s" Sys.ocaml_version in
-      let source_file_path, directory =
-        match source_file_path with
-        (* CR-soon mshinwell: think about the source file path stuff *)
-        | None -> "<unknown>", Sys.getcwd ()
-        | Some path ->
-          if Filename.is_relative path then
-            let dir = Sys.getcwd () in
-            Filename.concat dir path, dir
-          else
-            path, Filename.dirname path
-      in [
+      let producer_name = Printf.sprintf "ocamlopt %s" Sys.ocaml_version in [
         Attribute_value.create_producer ~producer_name;
         Attribute_value.create_name source_file_path;
         Attribute_value.create_comp_dir ~directory;
@@ -82,6 +83,7 @@ let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
     debug_line_label;
     start_of_code_symbol;
     end_of_code_symbol;
+    source_file_path;
   }
 
 let location_list_entry ~fundecl ~available_subrange =
@@ -164,12 +166,10 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
     (* DWARF-4 spec 2.6.2: "In the case of a compilation unit where all of the
        machine code is contained in a single contiguous section, no base
        address selection entry is needed." *)
-    (*
     let base_address_selection_entry =
       Location_list_entry.create_base_address_selection_entry
         ~base_address_symbol:fundecl.Linearize.fun_name
     in
-    *)
     let location_list_entries =
       Available_range.fold range
         ~init:[]
@@ -179,12 +179,12 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
     in
     let location_list =
       Location_list.create
-        ((* base_address_selection_entry :: *) location_list_entries)
+        (base_address_selection_entry :: location_list_entries)
     in
     Debug_loc_table.insert t.debug_loc_table ~location_list
   in
   (* Build a new DWARF type for this identifier.  Each identifier has its
-     own type, which is actually its stamped name, and is nothing to do with
+     own type, which is basically its stamped name, and is nothing to do with
      its inferred OCaml type.  The inferred type may be recovered by the
      debugger by extracting the stamped name and then using that as a key
      for lookup into the .cmt file for the appropriate module. *)
@@ -192,7 +192,8 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
     Proto_DIE.create ~parent:(Some t.compilation_unit_proto_die)
       ~tag:Tag.base_type
       ~attribute_values:[
-        Attribute_value.create_name (Ident.unique_name ident);
+        Attribute_value.create_name
+          ("__ocaml" ^ t.source_file_path ^ " " ^ (Ident.unique_name ident));
         Attribute_value.create_encoding ~encoding:Encoding_attribute.signed;
         Attribute_value.create_byte_size ~byte_size:8;
       ]
@@ -210,7 +211,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
     ~tag
     ~attribute_values:[
       Attribute_value.create_name name_for_ident;
-      Attribute_value.create_linkage_name (Ident.unique_name ident);
+(*      Attribute_value.create_linkage_name (Ident.unique_name ident); *)
       Attribute_value.create_type
         ~proto_die:(Proto_DIE.reference type_proto_die);
       location_list_attribute_value;

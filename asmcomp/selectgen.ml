@@ -864,6 +864,7 @@ method emit_fundecl f =
         Reg.identical_except_in_name loc_arg.(index) ~from:rarg.(index)
       in
       reg.Reg.is_parameter <- true;
+      rarg.(index).Reg.is_parameter <- true;
       begin match parts.(index) with
       | None -> ()
       | Some part -> reg.part <- Some part

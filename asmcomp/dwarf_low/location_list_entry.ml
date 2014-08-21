@@ -46,17 +46,13 @@ module Location_list_entry = struct
   let size t = 8 + 8 + 2 + (expr_size t)
 
   let emit t ~emitter =
-    Value.emit (Value.as_code_address_from_label t.beginning_address_label)
-(*
+    Value.emit
       (Value.as_code_address_from_label_diff
         (`Label t.beginning_address_label) (`Symbol t.start_of_code_symbol))
-*)
       ~emitter;
-    Value.emit (Value.as_code_address_from_label t.ending_address_label)
-(*
+    Value.emit
       (Value.as_code_address_from_label_diff_minus_8
         (`Label t.ending_address_label) t.start_of_code_symbol)
-*)
       ~emitter;
     Value.emit (Value.as_two_byte_int (expr_size t)) ~emitter;
     Location_expression.emit t.expr ~emitter

@@ -41,6 +41,7 @@ let spill_reg r =
     let spill_r = Reg.create r.typ in
     spill_r.spill <- true;
     if not (Reg.is_temporary r) then spill_r.raw_name <- r.raw_name;
+    if r.Reg.is_parameter then spill_r.Reg.is_parameter <- true;
     spill_env := Reg.Map.add r spill_r !spill_env;
     spill_r
 
