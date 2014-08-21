@@ -25,7 +25,7 @@ open Std_internal
 module Location_list_entry = struct
   type t = {
     start_of_code_symbol : string;
-    beginning_address_label : [ `Symbol of string | `Label of Linearize.label ];
+    beginning_address_label : Linearize.label;
     ending_address_label : Linearize.label;
     expr : Location_expression.t;
   }
@@ -46,13 +46,17 @@ module Location_list_entry = struct
   let size t = 8 + 8 + 2 + (expr_size t)
 
   let emit t ~emitter =
-    Value.emit
+    Value.emit (Value.as_code_address_from_label t.beginning_address_label)
+(*
       (Value.as_code_address_from_label_diff
-        t.beginning_address_label (`Symbol t.start_of_code_symbol))
+        (`Label t.beginning_address_label) (`Symbol t.start_of_code_symbol))
+*)
       ~emitter;
-    Value.emit
+    Value.emit (Value.as_code_address_from_label t.ending_address_label)
+(*
       (Value.as_code_address_from_label_diff_minus_8
         (`Label t.ending_address_label) t.start_of_code_symbol)
+*)
       ~emitter;
     Value.emit (Value.as_two_byte_int (expr_size t)) ~emitter;
     Location_expression.emit t.expr ~emitter
@@ -108,3 +112,14 @@ let emit t ~emitter =
     Location_list_entry.emit entry ~emitter
   | Base_address_selection_entry entry ->
     Base_address_selection_entry.emit entry ~emitter
+
+let compare_ascending_vma t1 t2 =
+  (* This relies on a certain ordering on labels.  See available_ranges.mli. *)
+  match t1, t2 with
+  | Base_address_selection_entry _, Base_address_selection_entry _ ->
+    failwith "Location_list_entry.compare_ascending_vma: unsupported"
+  | Base_address_selection_entry _, Location_list_entry _ -> -1
+  | Location_list_entry _, Base_address_selection_entry _ -> 1
+  | Location_list_entry entry1, Location_list_entry entry2 ->
+    compare entry1.Location_list_entry.beginning_address_label
+      entry2.Location_list_entry.beginning_address_label

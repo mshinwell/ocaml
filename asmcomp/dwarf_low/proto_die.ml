@@ -24,12 +24,13 @@ type t = {
   mutable children : t list;
   tag : Tag.t;
   attribute_values : Attribute_value.t list;
-  label : Linearize.label;  (* for references between DIEs in the emitted DWARF *)
+  label : Linearize.label;  (* for references between DIEs *)
 }
 
 let sort_attribute_values ~attribute_values =
   List.sort (fun av1 av2 ->
-    Attribute.compare (Attribute_value.attribute av1) (Attribute_value.attribute av2))
+    Attribute.compare
+      (Attribute_value.attribute av1) (Attribute_value.attribute av2))
     attribute_values
 
 let create ~parent ~tag ~attribute_values =
@@ -42,21 +43,26 @@ let create ~parent ~tag ~attribute_values =
       failwith "attempt to attach proto-DIE to proto-DIE that \
                 never has children"
   end;
-  (* We impose an ordering on attributes to ensure that sharing of abbreviation table
-     entries (that is to say, patterns of attributes) is maximised. *)
+  (* We impose an ordering on attributes to ensure that sharing of abbreviation
+     table entries (that is to say, patterns of attributes) is maximised. *)
   let attribute_values = sort_attribute_values ~attribute_values in
-  (* Insert DW_AT_sibling to point at any next sibling of [t].  (Section 2.3,
-     DWARF-4 spec).  The order of siblings probably matters; we make sure that
-     it is preserved by the use of :: below and within [depth_first_fold]. *)
+  (* Insert DW_AT_sibling to point at any next sibling of [t], if this new
+     node might have children.  (Section 2.3, DWARF-4 spec; and it seems
+     pointless if the node can never have children).  The order of siblings
+     probably matters; we make sure that it is preserved by the use of ::
+     below and within [depth_first_fold]. *)
   let attribute_values =
-    match parent with
-    | None -> attribute_values
-    | Some parent ->
-      match parent.children with
-      | [] -> attribute_values
-      | next_sibling_of_t::_ ->
-        (Attribute_value.create_sibling ~proto_die:next_sibling_of_t.label)
-          :: attribute_values
+    if Tag.child_determination tag = Child_determination.no then
+      attribute_values
+    else
+      match parent with
+      | None -> attribute_values
+      | Some parent ->
+        match parent.children with
+        | [] -> attribute_values
+        | next_sibling_of_t::_ ->
+          (Attribute_value.create_sibling ~proto_die:next_sibling_of_t.label)
+            :: attribute_values
   in
   let t =
     { children = [];
@@ -82,11 +88,14 @@ let rec depth_first_fold t ~init ~f =
     | _ -> Child_determination.yes
   in
   let acc = f init (`DIE (t.tag, children, t.attribute_values, t.label)) in
-  let rec traverse_children ts ~acc =
-    match ts with
-    | [] -> f acc `End_of_siblings
-    | t::ts -> traverse_children ts ~acc:(depth_first_fold t ~init:acc ~f)
-  in
-  traverse_children t.children ~acc
+  match t.children with
+  | [] -> acc
+  | _ ->
+    let rec traverse_children ts ~acc =
+      match ts with
+      | [] -> f acc `End_of_siblings
+      | t::ts -> traverse_children ts ~acc:(depth_first_fold t ~init:acc ~f)
+    in
+    traverse_children t.children ~acc
 
 let reference t = t.label

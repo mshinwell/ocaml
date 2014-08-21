@@ -27,9 +27,15 @@ type t = {
   entries : Location_list_entry.t list;
 }
 
+(* It isn't exactly clear what the sorting requirement is, but we sort
+   within a location list by increasing virtual memory address on the
+   start addresses of the entries. *)
+let sort entries =
+  List.sort Location_list_entry.compare_ascending_vma entries
+
 let create entries =
   { name = Linearize.new_label ();
-    entries;
+    entries = sort entries;
   }
 
 let label t = t.name
@@ -42,8 +48,18 @@ let size t =
   in
   body_size + 8 + 8
 
+let compare_increasing_vma t1 t2 =
+  match t1.entries, t2.entries with
+  | t1_entry::_, t2_entry::_ ->
+    Location_list_entry.compare_ascending_vma t1_entry t2_entry
+  | _ -> failwith "Location_list.compare on empty location list(s)"
+
 let emit t ~emitter =
   Emitter.emit_label_declaration emitter ~label_name:t.name;
   List.iter t.entries ~f:(Location_list_entry.emit ~emitter);
+  (* DWARF-4 spec, section 2.6.2:
+     The end of any given location list is marked by an end of list entry,
+     which consists of a 0 for the beginning address offset and a 0 for the
+     ending address offset. *)
   Value.emit (Value.as_code_address Int64.zero) ~emitter;
   Value.emit (Value.as_code_address Int64.zero) ~emitter

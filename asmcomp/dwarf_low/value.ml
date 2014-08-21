@@ -134,23 +134,23 @@ let emit t ~emitter =
   | Code_address_from_label_diff (s2, s1) ->
     Emitter.emit_string emitter "\t.quad\t";
     begin match s2 with
-    | `Symbol s2 -> Emitter.emit_string emitter s2
+    | `Symbol s2 -> Emitter.emit_symbol emitter s2
     | `Label s2 -> Emitter.emit_label emitter s2
     end;
     Emitter.emit_string emitter " - ";
     begin match s1 with
-    | `Symbol s1 -> Emitter.emit_string emitter s1
+    | `Symbol s1 -> Emitter.emit_symbol emitter s1
     | `Label s1 -> Emitter.emit_label emitter s1
     end;
     Emitter.emit_string emitter "\n"
   | Code_address_from_label_diff_minus_8 (s2, s1) ->
     Emitter.emit_string emitter "\t.quad\t";
     begin match s2 with
-    | `Symbol s2 -> Emitter.emit_string emitter s2
+    | `Symbol s2 -> Emitter.emit_symbol emitter s2
     | `Label s2 -> Emitter.emit_label emitter s2
     end;
     Emitter.emit_string emitter " - 1 - "; (* CR mshinwell: !!! *)
-    Emitter.emit_string emitter s1;
+    Emitter.emit_symbol emitter s1;
     Emitter.emit_string emitter "\n"
   | Code_address i ->
     Emitter.emit_string emitter (sprintf "\t.quad\t0x%Lx\n" i)

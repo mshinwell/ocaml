@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013, Jane Street Holding                                *)
+(*  Copyright 2013--2014, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -25,9 +25,11 @@ type t
 include Emittable.S with type t := t
 
 val create_location_list_entry : start_of_code_symbol:string
-  -> first_address_when_in_scope:[ `Label of Linearize.label | `Symbol of string ]
+  -> first_address_when_in_scope:Linearize.label
   -> first_address_when_not_in_scope:Linearize.label
   -> location_expression:Location_expression.t
   -> t
 
 val create_base_address_selection_entry : base_address_symbol:string -> t
+
+val compare_ascending_vma : t -> t -> int

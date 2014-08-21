@@ -26,17 +26,17 @@ module Available_subrange : sig
   type t
 
   val create
-     : start_pos:[ `Start_of_function | `At_label of L.label ]
+     : start_pos:L.label
     -> end_pos:L.label
     -> reg:Reg.t
     -> t
 
-  val start_pos : t -> [ `Start_of_function | `At_label of L.label ]
+  val start_pos : t -> L.label
   val end_pos : t -> L.label
   val reg : t -> Reg.t
 end = struct
   type t = {
-    start_pos : [ `Start_of_function | `At_label of L.label ];
+    start_pos : L.label;
     (* CR mshinwell: we need to check exactly what happens with function
        epilogues, including returns in the middle of functions. *)
     end_pos : L.label;
@@ -56,7 +56,7 @@ module Available_range : sig
   val create : unit -> t
   val is_parameter : t -> bool
   val add_subrange : t -> subrange:Available_subrange.t -> unit
-  val extremities : t -> [ `Start_of_function | `At_label of L.label ] * L.label
+  val extremities : t -> L.label * L.label
 
   val fold
      : t
@@ -66,46 +66,36 @@ module Available_range : sig
 end = struct
   type t = {
     mutable subranges : Available_subrange.t list;
-    mutable min_pos : [ `Start_of_function | `At_label of L.label ] option;
+    mutable min_pos : L.label option;
     mutable max_pos : L.label option;
   }
 
   let create () = { subranges = []; min_pos = None; max_pos = None; } 
 
   let add_subrange t ~subrange =
-    let compare_pos pos1 pos2 =
-      let start_of_function = min_int in
-      (* This is dubious, but should be correct by virtue of the way label
-         counters are allocated (see linearize.ml) and the fact that, below,
-         we go through the code from lowest (code) address to highest.  As
-         such the label with the highest integer value should be the one with
-         the highest address, and vice-versa. *)
-      let pos1 =
-        match pos1 with
-        | `Start_of_function -> start_of_function
-        | `At_label label -> label
-      in
-      let pos2 =
-        match pos2 with
-        | `Start_of_function -> start_of_function
-        | `At_label label -> label
-      in
-      compare pos1 pos2
-    in
     let start_pos = Available_subrange.start_pos subrange in
     let end_pos = Available_subrange.end_pos subrange in
-    assert (compare_pos start_pos (`At_label end_pos) <= 0);
+    (* CR-someday mshinwell: consider if there is a way of addressing the
+       label ordering problem *)
+    (* This is dubious, but should be correct by virtue of the way label
+       counters are allocated (see linearize.ml) and the fact that, below,
+       we go through the code from lowest (code) address to highest.  As
+       such the label with the highest integer value should be the one with
+       the highest address, and vice-versa.  (Note that we also exploit the
+       ordering when constructing location lists, to ensure that they are
+       sorted in increasing program counter order by start address.) *)
+    assert (compare start_pos end_pos <= 0);
     begin
       match t.min_pos with
       | None -> t.min_pos <- Some start_pos
       | Some min_pos ->
-        if compare_pos start_pos min_pos < 0 then t.min_pos <- Some start_pos
+        if compare start_pos min_pos < 0 then t.min_pos <- Some start_pos
     end;
     begin
       match t.max_pos with
       | None -> t.max_pos <- Some end_pos
       | Some max_pos ->
-        if compare_pos (`At_label end_pos) (`At_label max_pos) > 0 then
+        if compare (`At_label end_pos) (`At_label max_pos) > 0 then
           t.max_pos <- Some end_pos
     end;
     t.subranges <- subrange::t.subranges
@@ -132,6 +122,7 @@ end
 type t = {
   mutable ranges : Available_range.t Ident.tbl;
   function_name : string;
+  start_of_function_label : Linearize.label;
 }
 
 let function_name t = t.function_name
@@ -164,7 +155,7 @@ let add_subrange t ~subrange =
 
 let insert_label_after ~insn =
   match insn.L.next.L.desc with
-  (* CR mshinwell: unfortunately this breaks the ordering assumption
+  (* CR-someday mshinwell: unfortunately this breaks the ordering assumption
      on labels. *)
 (*  | L.Llabel label -> label  (* don't add unnecessary labels *) *)
   | L.Llabel _
@@ -202,19 +193,15 @@ let rec process_instruction t ~insn ~prev_insn ~open_subrange_start_positions =
   let pos =
     lazy (  (* avoid creating unnecessary labels *)
       match prev_insn with
-      | None -> `Start_of_function
-      | Some prev_insn -> `At_label (insert_label_after ~insn:prev_insn))
+      | None -> t.start_of_function_label
+      | Some prev_insn -> insert_label_after ~insn:prev_insn)
   in
   Reg.Set.fold (fun reg () ->
       let start_pos =
         try Reg.Map.find reg open_subrange_start_positions
         with Not_found -> assert false
       in
-      let end_pos =
-        match Lazy.force pos with
-        | `Start_of_function -> assert false  (* only births at this point *)
-        | `At_label label -> label
-      in
+      let end_pos = Lazy.force pos in
       let subrange = Available_subrange.create ~start_pos ~end_pos ~reg in
       add_subrange t ~subrange)
     deaths
@@ -239,8 +226,11 @@ let create ~fundecl =
   let t =
     { ranges = Ident.empty;
       function_name = fundecl.L.fun_name;
+      start_of_function_label = Linearize.new_label ();
     }
   in
   process_instruction t ~insn:fundecl.L.fun_body ~prev_insn:None
     ~open_subrange_start_positions:Reg.Map.empty;
   t
+
+let start_of_function_label t = t.start_of_function_label

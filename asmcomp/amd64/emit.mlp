@@ -706,13 +706,6 @@ let emit_profile () =
 
 let fundecl ~dwarf fundecl =
   let end_of_function_label = new_label () in
-  begin match dwarf with
-  | None -> ()
-  | Some dwarf ->
-    (* This may modify [fundecl] by adding labels, so must happen before
-       emission. *)
-    Dwarf.stash_dwarf_for_function dwarf ~fundecl ~end_of_function_label
-  end;
   function_name := fundecl.fun_name;
   fastcode_flag := fundecl.fun_fast;
   tailrec_entry_point := new_label();
@@ -730,6 +723,16 @@ let fundecl ~dwarf fundecl =
   else
     `	.globl	{emit_symbol fundecl.fun_name}\n`;
   `{emit_symbol fundecl.fun_name}:\n`;
+  begin match dwarf with
+  | None -> ()
+  | Some dwarf ->
+    (* This may modify [fundecl] by adding labels, so must happen before
+       emission. *)
+    let start_of_function_label =
+      Dwarf.stash_dwarf_for_function dwarf ~fundecl ~end_of_function_label
+    in
+    `{emit_label start_of_function_label}:\n`;
+  end;
   emit_debug_info fundecl.fun_dbg;
   cfi_startproc ();
   if fp then begin

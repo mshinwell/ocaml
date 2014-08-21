@@ -67,7 +67,8 @@ let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
         Attribute_value.create_comp_dir ~directory;
         Attribute_value.create_low_pc_from_symbol ~symbol:start_of_code_symbol;
         Attribute_value.create_high_pc_from_symbol ~symbol:end_of_code_symbol;
-        Attribute_value.create_stmt_list ~section_offset_label:debug_line_label;
+        Attribute_value.create_stmt_list
+          ~section_offset_label:debug_line_label;
       ]
     in
     Proto_DIE.create ~parent:None
@@ -116,11 +117,11 @@ let location_list_entry ~fundecl ~available_subrange =
 *)
   in
   let first_address_when_in_scope =
-    match Available_subrange.start_pos available_subrange with
-    | `Start_of_function -> `Symbol fundecl.Linearize.fun_name
-    | `At_label label -> `Label label
+    Available_subrange.start_pos available_subrange
   in
-  let first_address_when_not_in_scope = Available_subrange.end_pos available_subrange in
+  let first_address_when_not_in_scope =
+    Available_subrange.end_pos available_subrange
+  in
   Location_list_entry.create_location_list_entry
     ~start_of_code_symbol:fundecl.Linearize.fun_name
     ~first_address_when_in_scope
@@ -142,12 +143,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
       with Not_found -> begin
         let lexical_block_proto_die =
           let start_pos =
-            match start_pos with
-            | `Start_of_function ->
-              Attribute_value.create_low_pc_from_symbol
-                ~symbol:fundecl.Linearize.fun_name
-            | `At_label start_pos ->
-              Attribute_value.create_low_pc ~address_label:start_pos
+            Attribute_value.create_low_pc ~address_label:start_pos
           in
           Proto_DIE.create ~parent:(Some function_proto_die)
             ~tag:Tag.lexical_block
@@ -165,19 +161,27 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
      found at runtime, indexed by program counter range, and insert the list
      into the .debug_loc table. *)
   let location_list_attribute_value =
+    (* DWARF-4 spec 2.6.2: "In the case of a compilation unit where all of the
+       machine code is contained in a single contiguous section, no base
+       address selection entry is needed." *)
+    (*
     let base_address_selection_entry =
       Location_list_entry.create_base_address_selection_entry
         ~base_address_symbol:fundecl.Linearize.fun_name
     in
+    *)
     let location_list_entries =
       Available_range.fold range
-        ~init:[base_address_selection_entry]
+        ~init:[]
         ~f:(fun location_list_entries ~available_subrange ->
-          (location_list_entry ~fundecl ~available_subrange)::location_list_entries)
+          (location_list_entry ~fundecl ~available_subrange)
+            ::location_list_entries)
     in
-    Debug_loc_table.insert t.debug_loc_table
-      (* Note: the base address selection entry needs to be the first entry. *)
-      ~location_list:(Location_list.create (List.rev location_list_entries))
+    let location_list =
+      Location_list.create
+        ((* base_address_selection_entry :: *) location_list_entries)
+    in
+    Debug_loc_table.insert t.debug_loc_table ~location_list
   in
   (* Build a new DWARF type for this identifier.  Each identifier has its
      own type, which is actually its stamped name, and is nothing to do with
@@ -207,7 +211,8 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
     ~attribute_values:[
       Attribute_value.create_name name_for_ident;
       Attribute_value.create_linkage_name (Ident.unique_name ident);
-      Attribute_value.create_type ~proto_die:(Proto_DIE.reference type_proto_die);
+      Attribute_value.create_type
+        ~proto_die:(Proto_DIE.reference type_proto_die);
       location_list_attribute_value;
     ]
 
@@ -218,7 +223,8 @@ let stash_dwarf_for_function t ~fundecl ~end_of_function_label =
       ~attribute_values:[
         Attribute_value.create_name fundecl.Linearize.fun_name;
         Attribute_value.create_external ~is_visible_externally:true;
-        Attribute_value.create_low_pc_from_symbol ~symbol:fundecl.Linearize.fun_name;
+        Attribute_value.create_low_pc_from_symbol
+          ~symbol:fundecl.Linearize.fun_name;
         Attribute_value.create_high_pc ~address_label:end_of_function_label;
       ]
   in
@@ -234,7 +240,8 @@ let stash_dwarf_for_function t ~fundecl ~end_of_function_label =
     ~f:(fun () -> dwarf_for_identifier t ~fundecl
       ~function_proto_die:subprogram_proto_die ~lexical_block_cache);
   t.externally_visible_functions
-    <- fundecl.Linearize.fun_name::t.externally_visible_functions
+    <- fundecl.Linearize.fun_name::t.externally_visible_functions;
+  Available_ranges.start_of_function_label available_ranges
 
 let emit t =
   let with_emitter emitter fs = List.iter (fun f -> f emitter) fs in

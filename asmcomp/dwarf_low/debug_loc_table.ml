@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013, Jane Street Holding                                *)
+(*  Copyright 2013--2014, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -42,7 +42,7 @@ let insert t ~location_list =
     Attribute_value.create_location
       ~location_list_label:(Location_list.label location_list)
   in
-  t := location_list::!t;
+  t := location_list :: !t;
   attribute_referencing_the_new_list
 
 let size t =
@@ -50,5 +50,10 @@ let size t =
     ~init:0
     ~f:(fun size loc_list -> size + Location_list.size loc_list)
 
+(*
+let sort location_lists =
+  List.sort Location_list.compare_increasing_vma location_lists
+*)
+
 let emit t ~emitter =
-  List.iter (List.rev !t) ~f:(Location_list.emit ~emitter)
+  List.iter !t ~f:(Location_list.emit ~emitter)

@@ -37,7 +37,7 @@
 module Available_subrange : sig
   type t
 
-  val start_pos : t -> [ `Start_of_function | `At_label of Linearize.label ]
+  val start_pos : t -> Linearize.label
   val end_pos : t -> Linearize.label
   val reg : t -> Reg.t
 end
@@ -46,9 +46,7 @@ module Available_range : sig
   type t
   
   val is_parameter : t -> bool
-  val extremities
-     : t
-    -> [ `Start_of_function | `At_label of Linearize.label ] * Linearize.label
+  val extremities : t -> Linearize.label * Linearize.label
 
   val fold
      : t
@@ -62,6 +60,7 @@ type t
 val create : fundecl:Linearize.fundecl -> t
 
 val function_name : t -> string
+val start_of_function_label : t -> Linearize.label
 
 val fold
    : t
