@@ -36,6 +36,7 @@ and instruction_desc =
   | Lreloadretaddr
   | Lreturn
   | Llabel of label
+  | Llabel_with_saved_stackoffset of label * ((int option) ref)
   | Lbranch of label
   | Lcondbranch of test * label
   | Lcondbranch3 of label option * label option * label option

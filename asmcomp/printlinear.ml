@@ -34,7 +34,7 @@ let instr ppf i =
       fprintf ppf "reload retaddr"
   | Lreturn ->
       fprintf ppf "return %a" regs i.arg
-  | Llabel lbl ->
+  | Llabel lbl | Llabel_with_saved_stackoffset (lbl, _) ->
       fprintf ppf "%a:" label lbl
   | Lbranch lbl ->
       fprintf ppf "goto %a" label lbl

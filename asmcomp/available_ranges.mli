@@ -38,6 +38,7 @@ module Available_subrange : sig
   type t
 
   val start_pos : t -> Linearize.label
+  val start_insn : t -> Linearize.instruction option
   val end_pos : t -> Linearize.label
   val reg : t -> Reg.t
 end

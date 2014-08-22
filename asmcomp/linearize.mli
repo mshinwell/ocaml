@@ -30,6 +30,10 @@ and instruction_desc =
   | Lreloadretaddr
   | Lreturn
   | Llabel of label
+  (* A label with a space for the stack offset as it was at the time of emission of
+     the label.  This is necessary for DWARF location list entry construction
+     (dwarf.ml). *)
+  | Llabel_with_saved_stackoffset of label * ((int option) ref)
   | Lbranch of label
   | Lcondbranch of Mach.test * label
   | Lcondbranch3 of label option * label option * label option
