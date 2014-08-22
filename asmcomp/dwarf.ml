@@ -92,43 +92,40 @@ let location_list_entry ~fundecl ~available_subrange =
     let module LE = Location_expression in
     match reg.Reg.loc with
     | Reg.Unknown -> assert false  (* probably a bug in available_regs.ml *)
-    | Reg.Reg reg_number -> LE.in_register reg_number
-    | Reg.Stack stack_location -> LE.in_register 0 (* CR mshinwell: FIXME *)
-(*
-      (* Byte offsets from the stack pointer will be computed during the
-         "emit" phase.  DWARF information will be emitted after such
-         computations, so we can use the offsets then. *)
-      let offset_in_bytes () =
-        let stack_offset =
-          match t.first_insn.Linearize.stack_offset with
-          | None -> failwith "first_insn has no stack_offset"
-          | Some stack_offset -> stack_offset
-        in
-        slot_offset_in_bytes ~reg_on_stack:t.reg ~stack_offset
-      in
-      (* We use an offset from the frame base rather than the stack pointer
-         since it's possible the stack pointer might change during the
-         execution of an available subrange.  (This could presumably be
-         avoided by splitting subranges as required, but it seems easier to
-         work from the frame base.)
-         How would the debugger know where the frame base is, when we might
-         not have a frame pointer?  It knows from the DWARF derived by
-         the assembler (e.g. DW_AT_frame_base) from the CFI information we
-         emit. *)
-      LE.at_offset_from_frame_pointer ~offset_in_bytes
-*)
+    | Reg.Reg reg_number -> Some (LE.in_register reg_number)
+    | Reg.Stack stack_location ->
+      (* CR-soon mshinwell: Not sure what to do about [emit_subreg].  Think. *)
+      match reg.Reg.slot_offset with
+      | None -> None
+      | Some offset_in_bytes ->
+        (* We use an offset from the frame base rather than the stack pointer
+           since it's possible the stack pointer might change during the
+           execution of an available subrange.  (This could presumably be
+           avoided by splitting subranges as required, but it seems easier to
+           work from the frame base.)
+           How would the debugger know where the frame base is, when we might
+           not have a frame pointer?  It knows from the DWARF derived by
+           the assembler (e.g. DW_AT_frame_base) from the CFI information we
+           emit. *)
+        Some (LE.at_offset_from_stack_pointer ~offset_in_bytes)
   in
-  let first_address_when_in_scope =
-    Available_subrange.start_pos available_subrange
-  in
-  let first_address_when_not_in_scope =
-    Available_subrange.end_pos available_subrange
-  in
-  Location_list_entry.create_location_list_entry
-    ~start_of_code_symbol:fundecl.Linearize.fun_name
-    ~first_address_when_in_scope
-    ~first_address_when_not_in_scope
-    ~location_expression
+  match location_expression with
+  | None -> None
+  | Some location_expression ->
+    let first_address_when_in_scope =
+      Available_subrange.start_pos available_subrange
+    in
+    let first_address_when_not_in_scope =
+      Available_subrange.end_pos available_subrange
+    in
+    let entry =
+      Location_list_entry.create_location_list_entry
+        ~start_of_code_symbol:fundecl.Linearize.fun_name
+        ~first_address_when_in_scope
+        ~first_address_when_not_in_scope
+        ~location_expression
+    in
+    Some entry
 
 let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
       ~ident ~is_unique ~range =
@@ -165,7 +162,10 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
   let location_list_attribute_value =
     (* DWARF-4 spec 2.6.2: "In the case of a compilation unit where all of the
        machine code is contained in a single contiguous section, no base
-       address selection entry is needed." *)
+       address selection entry is needed."
+       However, we tried this (and emitted plain label addresses rather than
+       deltas in [Location_list_entry]), and the addresses were wrong in the
+       final executable.  Oh well. *)
     let base_address_selection_entry =
       Location_list_entry.create_base_address_selection_entry
         ~base_address_symbol:fundecl.Linearize.fun_name
@@ -174,8 +174,9 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
       Available_range.fold range
         ~init:[]
         ~f:(fun location_list_entries ~available_subrange ->
-          (location_list_entry ~fundecl ~available_subrange)
-            ::location_list_entries)
+           match location_list_entry ~fundecl ~available_subrange with
+           | None -> location_list_entries
+           | Some entry -> entry::location_list_entries)
     in
     let location_list =
       Location_list.create
@@ -211,13 +212,19 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
     ~tag
     ~attribute_values:[
       Attribute_value.create_name name_for_ident;
-(*      Attribute_value.create_linkage_name (Ident.unique_name ident); *)
       Attribute_value.create_type
         ~proto_die:(Proto_DIE.reference type_proto_die);
       location_list_attribute_value;
     ]
 
-let stash_dwarf_for_function t ~fundecl ~end_of_function_label =
+let pre_emission_dwarf_for_function t ~fundecl =
+  (* [Available_ranges.create] may modify [fundecl], but it never changes
+     the first instruction. *)
+  Available_ranges.create ~fundecl
+
+let post_emission_dwarf_for_function t ~fundecl ~available_ranges
+      ~end_of_function_label =
+  let lexical_block_cache = Hashtbl.create 42 in
   let subprogram_proto_die =  (* "subprogram" means "function" for us. *)
     Proto_DIE.create ~parent:(Some t.compilation_unit_proto_die)
       ~tag:Tag.subprogram
@@ -229,10 +236,6 @@ let stash_dwarf_for_function t ~fundecl ~end_of_function_label =
         Attribute_value.create_high_pc ~address_label:end_of_function_label;
       ]
   in
-  (* [Available_ranges.create] may modify [fundecl], but it never changes
-     the first instruction. *)
-  let available_ranges = Available_ranges.create ~fundecl in
-  let lexical_block_cache = Hashtbl.create 42 in
   (* For each identifier for which we have available ranges, construct
      DWARF information to describe how to access the values of such
      identifiers, indexed by program counter ranges. *)
@@ -241,8 +244,7 @@ let stash_dwarf_for_function t ~fundecl ~end_of_function_label =
     ~f:(fun () -> dwarf_for_identifier t ~fundecl
       ~function_proto_die:subprogram_proto_die ~lexical_block_cache);
   t.externally_visible_functions
-    <- fundecl.Linearize.fun_name::t.externally_visible_functions;
-  Available_ranges.start_of_function_label available_ranges
+    <- fundecl.Linearize.fun_name::t.externally_visible_functions
 
 let emit t =
   let with_emitter emitter fs = List.iter (fun f -> f emitter) fs in

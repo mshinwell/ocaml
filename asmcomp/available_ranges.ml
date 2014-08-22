@@ -231,6 +231,7 @@ let create ~fundecl =
   in
   process_instruction t ~insn:fundecl.L.fun_body ~prev_insn:None
     ~open_subrange_start_positions:Reg.Map.empty;
+  (*
   Printf.printf "Available ranges for function: %s\n" fundecl.L.fun_name;
   fold t ~init:()
     ~f:(fun () ~ident ~is_unique ~range ->
@@ -244,6 +245,7 @@ let create ~fundecl =
               (Reg.name (Available_subrange.reg available_subrange))
               (if (Available_subrange.reg available_subrange)
                 .Reg.is_parameter then "yes" else "no")));
+  *)
   t
 
 let start_of_function_label t = t.start_of_function_label

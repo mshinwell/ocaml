@@ -103,6 +103,7 @@ let emit_reg = function
       emit_string (register_name r)
   | { loc = Stack s } as r ->
       let ofs = slot_offset s (register_class r) in
+      r.slot_offset <- Some ofs;
       `{emit_int ofs}(%rsp)`
   | { loc = Unknown } ->
       assert false
@@ -125,6 +126,8 @@ let emit_subreg tbl r =
       emit_string tbl.(r)
   | Stack s ->
       let ofs = slot_offset s (register_class r) in
+      (* CR mshinwell: not really sure about this *)
+      r.slot_offset <- Some ofs;
       `{emit_int ofs}(%rsp)`
   | _ ->
       assert false
@@ -723,16 +726,20 @@ let fundecl ~dwarf fundecl =
   else
     `	.globl	{emit_symbol fundecl.fun_name}\n`;
   `{emit_symbol fundecl.fun_name}:\n`;
-  begin match dwarf with
-  | None -> ()
-  | Some dwarf ->
-    (* This may modify [fundecl] by adding labels, so must happen before
-       emission. *)
-    let start_of_function_label =
-      Dwarf.stash_dwarf_for_function dwarf ~fundecl ~end_of_function_label
-    in
-    `{emit_label start_of_function_label}:\n`;
-  end;
+  let available_ranges =
+    match dwarf with
+    | None -> None
+    | Some dwarf -> begin
+      (* This may modify [fundecl] by adding labels, so must happen before
+         emission. *)
+      let available_ranges = Dwarf.pre_emission_dwarf_for_function dwarf ~fundecl in
+      let start_of_function_label =
+        Available_ranges.start_of_function_label available_ranges
+      in
+      `{emit_label start_of_function_label}:\n`;
+      Some (dwarf, available_ranges)
+    end
+  in
   emit_debug_info fundecl.fun_dbg;
   cfi_startproc ();
   if fp then begin
@@ -751,6 +758,12 @@ let fundecl ~dwarf fundecl =
   List.iter emit_call_gc !call_gc_sites;
   `{emit_label end_of_function_label}:\n`;
   emit_call_bound_errors ();
+  begin match available_ranges with
+  | None -> ()
+  | Some (dwarf, available_ranges) ->
+    Dwarf.post_emission_dwarf_for_function dwarf ~fundecl ~available_ranges
+      ~end_of_function_label
+  end;
   cfi_endproc ();
   begin match Config.system with
     "linux" | "gnu" ->

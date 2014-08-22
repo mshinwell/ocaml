@@ -86,7 +86,9 @@ type t =
     mutable prefer: (t * int) list;
     mutable degree: int;
     mutable spill_cost: int;
-    mutable visited: bool }
+    mutable visited: bool;
+    mutable slot_offset: int option;
+  }
 
 and location =
     Unknown
@@ -105,6 +107,7 @@ let dummy =
     stamp = 0; typ = Int; loc = Unknown;
     spill = false; interf = []; prefer = []; degree = 0; spill_cost = 0;
     visited = false; part = None; is_parameter = false;
+    slot_offset = None;
   }
 
 let currstamp = ref 0
@@ -115,7 +118,7 @@ let create ty =
             stamp = !currstamp; typ = ty;
             loc = Unknown; spill = false; interf = []; prefer = []; degree = 0;
             spill_cost = 0; visited = false; part = None;
-            is_parameter = false; } in
+            is_parameter = false; slot_offset = None; } in
   reg_list := r :: !reg_list;
   incr currstamp;
   r
@@ -142,7 +145,7 @@ let create_procedure_call_convention ty loc =
             stamp = !currstamp; typ = ty; loc;
             spill = false; interf = []; prefer = []; degree = 0;
             spill_cost = 0; visited = false; part = None;
-            is_parameter = false; } in
+            is_parameter = false; slot_offset = None; } in
   incr currstamp;
   r
 

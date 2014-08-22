@@ -36,22 +36,31 @@ val create
   -> end_of_code_symbol:string
   -> t
 
-(* For the moment, [stash_dwarf_for_function] should be called on function
+(* For the moment, matching pairs of [pre_emission_dwarf_for_function] and
+   [post_emission_dwarf_for_function] should be called on function
    declarations in the same order (lowest address to highest) as they will be
    emitted in the executable file.  This is to ensure that the labels added
    to the linearized code end up with their integer ordering coinciding with
    program counter ordering.  (See CR in available_ranges.ml.)
 
-   This function returns a label that is to be inserted immediately after
+   It is required that the label returned by
+   [Available_ranges.start_of_function_label] on the return value of
+   [pre_emission_dwarf_for_function] is emitted immediately after
    the starting symbol for the function concerned, before any prologue.  (We
    do not just use the function symbol since all of our location list
    calculations are based off labels, so we can exploit the ordering property
    mentioned above.)
 *)
-val stash_dwarf_for_function
+val pre_emission_dwarf_for_function
    : t
   -> fundecl:Linearize.fundecl
+  -> Available_ranges.t
+
+val post_emission_dwarf_for_function
+   : t
+  -> fundecl:Linearize.fundecl
+  -> available_ranges:Available_ranges.t
   -> end_of_function_label:Linearize.label
-  -> Linearize.label
+  -> unit
 
 val emit : t -> unit

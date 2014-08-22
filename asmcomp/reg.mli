@@ -32,7 +32,11 @@ type t =
     mutable prefer: (t * int) list;     (* Preferences for other regs *)
     mutable degree: int;                (* Number of other regs live sim. *)
     mutable spill_cost: int;            (* Estimate of spilling cost *)
-    mutable visited: bool }             (* For graph walks *)
+    mutable visited: bool;              (* For graph walks *)
+    mutable slot_offset : int option;   (* Offset from the *frame base* the register
+                                           ended up in, if it's a pseudo assigned to
+                                           the stack. *)
+  }
 
 and location =
     Unknown
