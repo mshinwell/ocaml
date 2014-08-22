@@ -93,7 +93,7 @@ let location_list_entry ~fundecl ~available_subrange =
     match reg.Reg.loc with
     | Reg.Unknown -> assert false  (* probably a bug in available_regs.ml *)
     | Reg.Reg reg_number -> Some (LE.in_register reg_number)
-    | Reg.Stack stack_location ->
+    | Reg.Stack _ ->
       match Available_subrange.offset_from_stack_ptr available_subrange with
       | None -> assert false  (* emit.mlp should have set the offset *)
       | Some offset_in_bytes ->

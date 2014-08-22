@@ -38,10 +38,10 @@ and instruction_desc =
   | Lpushtrap
   | Lpoptrap
   | Lraise of Lambda.raise_kind
-  (* The second argument of [Lavailable_subrange] is used to hold the offset in bytes
+  (* The third argument of [Lavailable_subrange] is used to hold the offset in bytes
      from the stack pointer (which by definition does not change during an available
      subrange) of any stack slot corresponding to the subrange's register. *)
-  | Lavailable_subrange of label * (int option ref)
+  | Lavailable_subrange of label * Reg.t * (int option ref)
 
 val has_fallthrough :  instruction_desc -> bool
 val end_instr: instruction

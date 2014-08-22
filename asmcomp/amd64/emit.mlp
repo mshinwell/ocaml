@@ -578,14 +578,11 @@ let emit_instr fallthrough i =
         end
     | Llabel lbl ->
         `{emit_Llabel fallthrough lbl}:\n`
-    | Lavailable_subrange (lbl, available_subrange) ->
+    | Lavailable_subrange (lbl, reg, offset_from_rsp_ref) ->
         `{emit_label lbl}:\n`;
-        begin match (Available_subrange.reg available_subrange).loc with
+        begin match reg.loc with
         | Unknown | Reg _ -> ()
-        | Stack loc ->
-          let offset_from_rsp = slot_offset loc (register_class reg) in
-          Available_subrange.set_offset_from_stack_ptr available_subrange
-            ~bytes:offset_from_rsp
+        | Stack loc -> offset_from_rsp_ref := slot_offset loc (register_class reg)
         end
     | Lbranch lbl ->
         `	jmp	{emit_label lbl}\n`

@@ -44,7 +44,7 @@ and instruction_desc =
   | Lpushtrap
   | Lpoptrap
   | Lraise of Lambda.raise_kind
-  | Lavailable_subrange of label * (int option ref)
+  | Lavailable_subrange of label * Reg.t * (int option ref)
 
 let has_fallthrough = function
   | Lreturn | Lbranch _ | Lswitch _ | Lraise _

@@ -29,14 +29,13 @@ module Available_subrange : sig
      : start_pos:L.label
     -> end_pos:L.label
     -> reg:Reg.t
+    -> offset_from_stack_ptr_ref:int option ref
     -> t
 
   val start_pos : t -> L.label
   val end_pos : t -> L.label
   val reg : t -> Reg.t
   val offset_from_stack_ptr : t -> int
-
-  val set_offset_from_stack_ptr : t -> bytes:int -> unit
 end = struct
   type t = {
     start_pos : L.label;
@@ -44,21 +43,16 @@ end = struct
        epilogues, including returns in the middle of functions. *)
     end_pos : L.label;
     reg : Reg.t;
-    mutable offset_from_stack_ptr : int option;
+    offset_from_stack_ptr_ref : int option_ref;
   }
 
-  let create ~start_pos ~end_pos ~reg =
-    { start_pos; end_pos; reg; offset_from_stack_ptr = None; }
+  let create ~start_pos ~end_pos ~reg ~offset_from_stack_ptr_ref =
+    { start_pos; end_pos; reg; offset_from_stack_ptr_ref; }
 
   let start_pos t = t.start_pos
   let end_pos t = t.end_pos
   let reg t = t.reg
-  let offset_from_stack_ptr t = t.offset_from_stack_ptr
-
-  let set_offset_from_stack_ptr t ~bytes =
-    match t.offset_from_stack_ptr with
-    | Some _offset -> failwith "Available_subrange.set_offset_from_stack_ptr"
-    | None -> t.offset_from_stack_ptr <- Some bytes
+  let offset_from_stack_ptr t = !(t.offset_from_stack_ptr_ref)
 end
 
 module Available_range : sig
@@ -182,51 +176,63 @@ let births_and_deaths ~insn ~prev_insn =
 (* CR mshinwell: we need to make sure the stack pointer doesn't change during
    a range (or something like that) *)
 
-let rec process_instruction t ~insn ~prev_insn ~open_subrange_start_insns =
+let rec process_instruction t ~first_insn ~insn ~prev_insn
+      ~open_subrange_start_insns =
   let births, deaths = births_and_deaths ~insn ~prev_insn in
+  (* Note that we can't reuse an existing label in the code since we rely
+     on the ordering of range-related labels. *)
   let label = lazy (L.new_label ()) in
-    lazy (
-      (* Note that we can't reuse a label (in the case where [L.desc] is
-         [L.Llabel]) since the labels we insert must be increasing order. *)
-      let label = L.new_label () in
+  Reg.Set.fold (fun reg () ->
+      let start_insn =
+        try Reg.Map.find reg open_subrange_start_insns
+        with Not_found -> assert false
+      in
+      let start_pos, offset_ref =
+        match start_insn.L.desc with
+        | L.Lavailable_subrange (label, _reg, offset_ref) -> label, offset_ref
+        | _ -> assert false
+      in
+      let end_pos = Lazy.force label in
+      let subrange =
+        Available_subrange.create ~start_pos ~end_pos ~reg
+          ~offset_from_stack_ptr_ref:offset_ref
+      in
+      add_subrange t ~subrange)
+    deaths
+    ();
+  let open_subrange_start_insns =
+    Reg.Set.fold (fun reg open_subrange_start_insns ->
+      let label = Lazy.force label in
       let insn' =
         { insn with L.
-          desc = L.Lend;  (* temporary *)
+          desc = L.Lavailable_subrange (label, reg, ref None)
           arg = [| |];
           res = [| |];
         }
       in
+      let first_insn =
+        match prev_insn with
+        | None -> insn'
+        | Some prev_insn ->
+          prev_insn.L.next <- insn';
+          first_insn
+      in
+(* think about exactly where [insn'] should be placed. *)
       insn.L.next <- insn';
       label, Some insn'
       match prev_insn with
       | None -> t.start_of_function_label, None
       | Some prev_insn -> insert_label_after ~insn:prev_insn)
   in
-  Reg.Set.fold (fun reg () ->
-      let start_insn =
-        try Reg.Map.find reg open_subrange_start_insns
-        with Not_found -> assert false
-      in
-      let start_pos =
-        match start_insn.L.desc with
-        | L.Lavailable_subrange (label, _offset) -> label
-        | _ -> assert false
-      in
-      let end_pos = Lazy.force pos in
-      let subrange = Available_subrange.create ~start_pos ~end_pos ~reg in
-      add_subrange t ~subrange)
-    deaths
-    ();
-  let open_subrange_start_insns =
-    Reg.Set.fold (fun reg open_subrange_start_insns ->
-        assert (not (Reg.Map.mem reg open_subrange_start_insns));
+
+
         Reg.Map.add reg (Lazy.force pos) open_subrange_start_insns)
       births
       (Reg.Map.filter (fun reg _start_pos -> not (Reg.Set.mem reg deaths))
         open_subrange_start_insns)
   in
   match insn.L.desc with
-  | L.Lend -> ()
+  | L.Lend -> first_insn
   | L.Lop _ | L.Lreloadretaddr | L.Lreturn | L.Llabel _ | L.Lbranch _
   | L.Lcondbranch _ | L.Lcondbranch3 _ | L.Lswitch _ | L.Lsetuptrap _
   | L.Lpushtrap | L.Lpoptrap | L.Lraise _
