@@ -94,20 +94,10 @@ let location_list_entry ~fundecl ~available_subrange =
     | Reg.Unknown -> assert false  (* probably a bug in available_regs.ml *)
     | Reg.Reg reg_number -> Some (LE.in_register reg_number)
     | Reg.Stack stack_location ->
-      let stack_offset =
-        match Available_subrange.start_insn available_subrange with
-        | None -> 0  (* the subrange starts at the very top of the function *)
-        | Some start_insn ->
-          match start_insn.Linearize.desc with
-          | Linearize.Llabel_with_saved_stackoffset (_label, stack_offset) ->
-            begin match !stack_offset with
-            | Some stack_offset -> stack_offset
-            | None -> assert false  (* emit.mlp should have set the offset *)
-            end
-          | _ -> assert false  (* probably a bug in available_ranges.ml *)
-      in
-      let offset_in_bytes = stack_offset in
-      Some (LE.at_offset_from_stack_pointer ~offset_in_bytes)
+      match Available_subrange.offset_from_stack_ptr available_subrange with
+      | None -> assert false  (* emit.mlp should have set the offset *)
+      | Some offset_in_bytes ->
+        Some (LE.at_offset_from_stack_pointer ~offset_in_bytes)
   in
   match location_expression with
   | None -> None

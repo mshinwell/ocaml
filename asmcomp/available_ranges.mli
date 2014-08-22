@@ -38,9 +38,11 @@ module Available_subrange : sig
   type t
 
   val start_pos : t -> Linearize.label
-  val start_insn : t -> Linearize.instruction option
   val end_pos : t -> Linearize.label
   val reg : t -> Reg.t
+  val offset_from_stack_ptr : t -> int
+
+  val set_offset_from_stack_ptr : t -> bytes:int -> unit
 end
 
 module Available_range : sig
@@ -58,7 +60,9 @@ end
 
 type t
 
-val create : fundecl:Linearize.fundecl -> t
+(* [create ~fundecl] may change [fundecl].  It may change the first
+   instruction, even, which is why a new declaration is returned. *)
+val create : fundecl:Linearize.fundecl -> t * Linearize.fundecl
 
 val function_name : t -> string
 val start_of_function_label : t -> Linearize.label

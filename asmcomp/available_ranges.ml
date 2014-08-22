@@ -27,34 +27,38 @@ module Available_subrange : sig
 
   val create
      : start_pos:L.label
-    -> start_insn:L.instruction option
     -> end_pos:L.label
     -> reg:Reg.t
     -> t
 
   val start_pos : t -> L.label
-  (* [start_insn] returns [None] just when the available subrange starts at
-     the very top of the function. *)
-  val start_insn : t -> L.instruction option
   val end_pos : t -> L.label
   val reg : t -> Reg.t
+  val offset_from_stack_ptr : t -> int
+
+  val set_offset_from_stack_ptr : t -> bytes:int -> unit
 end = struct
   type t = {
     start_pos : L.label;
-    start_insn : L.instruction option;
     (* CR mshinwell: we need to check exactly what happens with function
        epilogues, including returns in the middle of functions. *)
     end_pos : L.label;
     reg : Reg.t;
+    mutable offset_from_stack_ptr : int option;
   }
 
-  let create ~start_pos ~start_insn ~end_pos ~reg =
-    { start_pos; start_insn; end_pos; reg; }
+  let create ~start_pos ~end_pos ~reg =
+    { start_pos; end_pos; reg; offset_from_stack_ptr = None; }
 
-  let start_insn t = t.start_insn
   let start_pos t = t.start_pos
   let end_pos t = t.end_pos
   let reg t = t.reg
+  let offset_from_stack_ptr t = t.offset_from_stack_ptr
+
+  let set_offset_from_stack_ptr t ~bytes =
+    match t.offset_from_stack_ptr with
+    | Some _offset -> failwith "Available_subrange.set_offset_from_stack_ptr"
+    | None -> t.offset_from_stack_ptr <- Some bytes
 end
 
 module Available_range : sig
@@ -160,25 +164,6 @@ let add_subrange t ~subrange =
   in
   Available_range.add_subrange range ~subrange
 
-let insert_label_after ~insn =
-  match insn.L.next.L.desc with
-  (* Note that we can't reuse a label (in the case where [L.desc] is
-     [L.Llabel]) since the labels we insert must be increasing order. *)
-  | L.Llabel _ | L.Llabel_with_saved_stackoffset _
-  | L.Lend | L.Lop _ | L.Lreloadretaddr | L.Lreturn | L.Lbranch _
-  | L.Lcondbranch _ | L.Lcondbranch3 _ | L.Lswitch _ | L.Lsetuptrap _
-  | L.Lpushtrap | L.Lpoptrap | L.Lraise _ ->
-    let label = L.new_label () in
-    let insn' =
-      { insn with L.
-        desc = L.Llabel_with_saved_stackoffset (label, ref None);
-        arg = [| |];
-        res = [| |];
-      }
-    in
-    insn.L.next <- insn';
-    label, Some insn'
-
 let births_and_deaths ~insn ~prev_insn =
   let births =
     match prev_insn with
@@ -197,42 +182,57 @@ let births_and_deaths ~insn ~prev_insn =
 (* CR mshinwell: we need to make sure the stack pointer doesn't change during
    a range (or something like that) *)
 
-let rec process_instruction t ~insn ~prev_insn ~open_subrange_start_positions =
+let rec process_instruction t ~insn ~prev_insn ~open_subrange_start_insns =
   let births, deaths = births_and_deaths ~insn ~prev_insn in
-  let pos =
-    lazy (  (* avoid creating unnecessary labels *)
+  let label = lazy (L.new_label ()) in
+    lazy (
+      (* Note that we can't reuse a label (in the case where [L.desc] is
+         [L.Llabel]) since the labels we insert must be increasing order. *)
+      let label = L.new_label () in
+      let insn' =
+        { insn with L.
+          desc = L.Lend;  (* temporary *)
+          arg = [| |];
+          res = [| |];
+        }
+      in
+      insn.L.next <- insn';
+      label, Some insn'
       match prev_insn with
       | None -> t.start_of_function_label, None
       | Some prev_insn -> insert_label_after ~insn:prev_insn)
   in
   Reg.Set.fold (fun reg () ->
-      let start_pos, start_insn =
-        try Reg.Map.find reg open_subrange_start_positions
+      let start_insn =
+        try Reg.Map.find reg open_subrange_start_insns
         with Not_found -> assert false
       in
-      let end_pos = fst (Lazy.force pos) in
-      let subrange =
-        Available_subrange.create ~start_pos ~start_insn ~end_pos ~reg
+      let start_pos =
+        match start_insn.L.desc with
+        | L.Lavailable_subrange (label, _offset) -> label
+        | _ -> assert false
       in
+      let end_pos = Lazy.force pos in
+      let subrange = Available_subrange.create ~start_pos ~end_pos ~reg in
       add_subrange t ~subrange)
     deaths
     ();
-  let open_subrange_start_positions =
-    Reg.Set.fold (fun reg open_subrange_start_positions ->
-        assert (not (Reg.Map.mem reg open_subrange_start_positions));
-        Reg.Map.add reg (Lazy.force pos) open_subrange_start_positions)
+  let open_subrange_start_insns =
+    Reg.Set.fold (fun reg open_subrange_start_insns ->
+        assert (not (Reg.Map.mem reg open_subrange_start_insns));
+        Reg.Map.add reg (Lazy.force pos) open_subrange_start_insns)
       births
       (Reg.Map.filter (fun reg _start_pos -> not (Reg.Set.mem reg deaths))
-        open_subrange_start_positions)
+        open_subrange_start_insns)
   in
   match insn.L.desc with
   | L.Lend -> ()
   | L.Lop _ | L.Lreloadretaddr | L.Lreturn | L.Llabel _ | L.Lbranch _
   | L.Lcondbranch _ | L.Lcondbranch3 _ | L.Lswitch _ | L.Lsetuptrap _
   | L.Lpushtrap | L.Lpoptrap | L.Lraise _
-  | L.Llabel_with_saved_stackoffset _ ->
+  | L.Lavailable_subrange _ ->
     process_instruction t ~insn:insn.L.next ~prev_insn:(Some insn)
-      ~open_subrange_start_positions
+      ~open_subrange_start_insns
 
 let create ~fundecl =
   let t =
@@ -241,8 +241,10 @@ let create ~fundecl =
       start_of_function_label = Linearize.new_label ();
     }
   in
-  process_instruction t ~insn:fundecl.L.fun_body ~prev_insn:None
-    ~open_subrange_start_positions:Reg.Map.empty;
+  let fundecl =
+    process_instruction t ~insn:fundecl.L.fun_body ~prev_insn:None
+      ~open_subrange_start_insns:Reg.Map.empty
+  in
   (*
   Printf.printf "Available ranges for function: %s\n" fundecl.L.fun_name;
   fold t ~init:()
@@ -258,6 +260,6 @@ let create ~fundecl =
               (if (Available_subrange.reg available_subrange)
                 .Reg.is_parameter then "yes" else "no")));
   *)
-  t
+  t, fundecl
 
 let start_of_function_label t = t.start_of_function_label

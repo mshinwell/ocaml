@@ -30,10 +30,6 @@ and instruction_desc =
   | Lreloadretaddr
   | Lreturn
   | Llabel of label
-  (* A label with a space for the stack offset as it was at the time of emission of
-     the label.  This is necessary for DWARF location list entry construction
-     (dwarf.ml). *)
-  | Llabel_with_saved_stackoffset of label * ((int option) ref)
   | Lbranch of label
   | Lcondbranch of Mach.test * label
   | Lcondbranch3 of label option * label option * label option
@@ -42,6 +38,10 @@ and instruction_desc =
   | Lpushtrap
   | Lpoptrap
   | Lraise of Lambda.raise_kind
+  (* The second argument of [Lavailable_subrange] is used to hold the offset in bytes
+     from the stack pointer (which by definition does not change during an available
+     subrange) of any stack slot corresponding to the subrange's register. *)
+  | Lavailable_subrange of label * (int option ref)
 
 val has_fallthrough :  instruction_desc -> bool
 val end_instr: instruction
