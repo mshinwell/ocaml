@@ -32,6 +32,7 @@ type instruction =
 
 and instruction_desc =
     Lend
+  | Lprologue
   | Lop of operation
   | Lreloadretaddr
   | Lreturn
@@ -44,7 +45,7 @@ and instruction_desc =
   | Lpushtrap
   | Lpoptrap
   | Lraise of Lambda.raise_kind
-  | Lavailable_subrange of label * Reg.t * (int option ref)
+  | Lavailable_subrange of int option ref
 
 let has_fallthrough = function
   | Lreturn | Lbranch _ | Lswitch _ | Lraise _
@@ -132,6 +133,7 @@ let rec discard_dead_code n =
   match n.desc with
     Lend -> n
   | Llabel _ -> n
+  | Lavailable_subrange _ -> n
 (* Do not discard Lpoptrap/Lpushtrap or Istackoffset instructions,
    as this may cause a stack imbalance later during assembler generation. *)
   | Lpoptrap | Lpushtrap -> n
@@ -298,6 +300,6 @@ let reset () =
 
 let fundecl f =
   { fun_name = f.Mach.fun_name;
-    fun_body = linear f.Mach.fun_body end_instr;
+    fun_body = cons_instr Lprologue (linear f.Mach.fun_body end_instr);
     fun_fast = f.Mach.fun_fast;
     fun_dbg  = f.Mach.fun_dbg }

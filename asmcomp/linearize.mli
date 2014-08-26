@@ -26,6 +26,7 @@ type instruction =
 
 and instruction_desc =
     Lend
+  | Lprologue
   | Lop of Mach.operation
   | Lreloadretaddr
   | Lreturn
@@ -38,10 +39,16 @@ and instruction_desc =
   | Lpushtrap
   | Lpoptrap
   | Lraise of Lambda.raise_kind
-  (* The third argument of [Lavailable_subrange] is used to hold the offset in bytes
-     from the stack pointer (which by definition does not change during an available
-     subrange) of any stack slot corresponding to the subrange's register. *)
-  | Lavailable_subrange of label * Reg.t * (int option ref)
+  (* [Lavailable_subrange] denotes the start of an available subrange (cf.
+     available_ranges.mli).  The associated register is stored in [arg.(0)] of the
+     instruction.  The optional integer must be filled in by the assembly emitter in
+     the case where that register is assigned to the stack; the integer denotes the
+     byte offset from the stack pointer of the register's slot at the start of the
+     subrange (and hence at all points during, since the stack pointer may not change
+     during a subrange).  We inline the arguments rather than using a record to avoid
+     extra indirection and allocation (there are likely to be very many of these
+     nodes). *)
+  | Lavailable_subrange of int option ref
 
 val has_fallthrough :  instruction_desc -> bool
 val end_instr: instruction

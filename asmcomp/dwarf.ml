@@ -28,13 +28,15 @@ module Available_range = Available_ranges.Available_range
 (* DWARF-related state for a single compilation unit. *)
 type t = {
   compilation_unit_proto_die : Proto_DIE.t;
-  mutable externally_visible_functions : string list;
   emitter : Emitter.t;
   debug_loc_table : Debug_loc_table.t;
   debug_line_label : Linearize.label;
   start_of_code_symbol : string;
   end_of_code_symbol : string;
   source_file_path : string;
+  mutable available_ranges_and_fundecl
+    : (Available_ranges.t * Linearize.fundecl) option;
+  mutable externally_visible_functions : string list;
 }
 
 let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
@@ -84,19 +86,32 @@ let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
     start_of_code_symbol;
     end_of_code_symbol;
     source_file_path;
+    available_ranges_and_fundecl = None;
   }
+
+let pre_emission_dwarf_for_function t ~fundecl =
+  if t.available_ranges_and_fundecl <> None then begin
+    failwith "Dwarf.pre_emission_dwarf_for_function"
+  end;
+  let available_ranges, fundecl = Available_ranges.create ~fundecl in
+  t.available_ranges_and_fundecl <- Some (available_ranges, fundecl);
+  fundecl
 
 let location_list_entry ~fundecl ~available_subrange =
   let reg = Available_subrange.reg available_subrange in
+  Printf.printf "location list entry for subrange t=%d start=%d... "
+    (Obj.magic available_subrange)
+    (Available_subrange.start_pos available_subrange);
   let location_expression =
     let module LE = Location_expression in
     match reg.Reg.loc with
     | Reg.Unknown -> assert false  (* probably a bug in available_regs.ml *)
-    | Reg.Reg reg_number -> Some (LE.in_register reg_number)
+    | Reg.Reg reg_number -> Printf.printf "reg\n%!"; Some (LE.in_register reg_number)
     | Reg.Stack _ ->
       match Available_subrange.offset_from_stack_ptr available_subrange with
       | None -> assert false  (* emit.mlp should have set the offset *)
       | Some offset_in_bytes ->
+        Printf.printf "stack\n%!";
         Some (LE.at_offset_from_stack_pointer ~offset_in_bytes)
   in
   match location_expression with
@@ -120,6 +135,8 @@ let location_list_entry ~fundecl ~available_subrange =
 
 let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
       ~ident ~is_unique ~range =
+  Printf.printf "------ dwarf for identifier '%s' -------\n%!"
+    (Ident.unique_name ident);
   let (start_pos, end_pos) as cache_key = Available_range.extremities range in
   let parent_proto_die =
     if Available_range.is_parameter range then begin
@@ -208,34 +225,32 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
       location_list_attribute_value;
     ]
 
-let pre_emission_dwarf_for_function t ~fundecl =
-  (* [Available_ranges.create] may modify [fundecl], but it never changes
-     the first instruction. *)
-  Available_ranges.create ~fundecl
-
-let post_emission_dwarf_for_function t ~fundecl ~available_ranges
-      ~end_of_function_label =
-  let lexical_block_cache = Hashtbl.create 42 in
-  let subprogram_proto_die =  (* "subprogram" means "function" for us. *)
-    Proto_DIE.create ~parent:(Some t.compilation_unit_proto_die)
-      ~tag:Tag.subprogram
-      ~attribute_values:[
-        Attribute_value.create_name fundecl.Linearize.fun_name;
-        Attribute_value.create_external ~is_visible_externally:true;
-        Attribute_value.create_low_pc_from_symbol
-          ~symbol:fundecl.Linearize.fun_name;
-        Attribute_value.create_high_pc ~address_label:end_of_function_label;
-      ]
-  in
-  (* For each identifier for which we have available ranges, construct
-     DWARF information to describe how to access the values of such
-     identifiers, indexed by program counter ranges. *)
-  Available_ranges.fold available_ranges
-    ~init:()
-    ~f:(fun () -> dwarf_for_identifier t ~fundecl
-      ~function_proto_die:subprogram_proto_die ~lexical_block_cache);
-  t.externally_visible_functions
-    <- fundecl.Linearize.fun_name::t.externally_visible_functions
+let post_emission_dwarf_for_function t ~end_of_function_label =
+  match t.available_ranges_and_fundecl with
+  | None -> failwith "Dwarf.post_emission_dwarf_for_function"
+  | Some (available_ranges, fundecl) ->
+    let lexical_block_cache = Hashtbl.create 42 in
+    let subprogram_proto_die =  (* "subprogram" means "function" for us. *)
+      Proto_DIE.create ~parent:(Some t.compilation_unit_proto_die)
+        ~tag:Tag.subprogram
+        ~attribute_values:[
+          Attribute_value.create_name fundecl.Linearize.fun_name;
+          Attribute_value.create_external ~is_visible_externally:true;
+          Attribute_value.create_low_pc_from_symbol
+            ~symbol:fundecl.Linearize.fun_name;
+          Attribute_value.create_high_pc ~address_label:end_of_function_label;
+        ]
+    in
+    (* For each identifier for which we have available ranges, construct
+       DWARF information to describe how to access the values of such
+       identifiers, indexed by program counter ranges. *)
+    Available_ranges.fold available_ranges
+      ~init:()
+      ~f:(fun () -> dwarf_for_identifier t ~fundecl
+        ~function_proto_die:subprogram_proto_die ~lexical_block_cache);
+    t.externally_visible_functions
+      <- fundecl.Linearize.fun_name::t.externally_visible_functions;
+    t.available_ranges_and_fundecl <- None
 
 let emit t =
   let with_emitter emitter fs = List.iter (fun f -> f emitter) fs in

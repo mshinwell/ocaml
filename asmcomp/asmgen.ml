@@ -54,6 +54,15 @@ let rec regalloc ppf round fd =
     Reg.reinit(); Liveness.fundecl ppf newfd; regalloc ppf (round + 1) newfd
   end else newfd
 
+let available_ranges_and_emit ppf fundecl ~dwarf =
+  let fundecl =
+    match dwarf with
+    | None -> fundecl
+    | Some dwarf -> Dwarf.pre_emission_dwarf_for_function dwarf ~fundecl
+  in
+  let _ = pass_dump_linear_if ppf dump_linear "Available subranges" fundecl in
+  Emit.fundecl fundecl ~dwarf
+
 let (++) x f = f x
 
 let compile_fundecl (ppf : formatter) ~dwarf fd_cmm =
@@ -82,7 +91,7 @@ let compile_fundecl (ppf : formatter) ~dwarf fd_cmm =
   ++ pass_dump_linear_if ppf dump_linear "Linearized code"
   ++ Scheduling.fundecl
   ++ pass_dump_linear_if ppf dump_scheduling "After instruction scheduling"
-  ++ Emit.fundecl ~dwarf
+  ++ available_ranges_and_emit ppf ~dwarf
 
 let compile_phrase ppf ~dwarf p =
   if !dump_cmm then fprintf ppf "%a@." Printcmm.phrase p;

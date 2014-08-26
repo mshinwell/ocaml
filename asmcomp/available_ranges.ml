@@ -26,33 +26,42 @@ module Available_subrange : sig
   type t
 
   val create
-     : start_pos:L.label
+     : start_insn:L.instruction  (* must be [Lavailable_subrange] *)
+    -> start_pos:L.label
     -> end_pos:L.label
-    -> reg:Reg.t
-    -> offset_from_stack_ptr_ref:int option ref
     -> t
 
   val start_pos : t -> L.label
   val end_pos : t -> L.label
   val reg : t -> Reg.t
-  val offset_from_stack_ptr : t -> int
+  val offset_from_stack_ptr : t -> int option
 end = struct
   type t = {
+    start_insn : L.instruction;
     start_pos : L.label;
     (* CR mshinwell: we need to check exactly what happens with function
        epilogues, including returns in the middle of functions. *)
     end_pos : L.label;
-    reg : Reg.t;
-    offset_from_stack_ptr_ref : int option_ref;
   }
 
-  let create ~start_pos ~end_pos ~reg ~offset_from_stack_ptr_ref =
-    { start_pos; end_pos; reg; offset_from_stack_ptr_ref; }
+  let create ~start_insn ~start_pos ~end_pos =
+    match start_insn.L.desc with
+    | L.Lavailable_subrange _ -> { start_insn; start_pos; end_pos; }
+    | _ -> failwith "Available_subrange.create"
 
   let start_pos t = t.start_pos
   let end_pos t = t.end_pos
-  let reg t = t.reg
-  let offset_from_stack_ptr t = !(t.offset_from_stack_ptr_ref)
+
+  let reg t =
+    assert (Array.length t.start_insn.L.arg = 1);
+    t.start_insn.L.arg.(0)
+
+  let offset_from_stack_ptr t =
+    match t.start_insn.L.desc with
+    | L.Lavailable_subrange offset ->
+      Printf.printf "<offset_from_stack_ptr ref=%d>" (Obj.magic offset);
+      !offset
+    | _ -> assert false
 end
 
 module Available_range : sig
@@ -126,11 +135,7 @@ end
 
 type t = {
   mutable ranges : Available_range.t Ident.tbl;
-  function_name : string;
-  start_of_function_label : Linearize.label;
 }
-
-let function_name t = t.function_name
 
 let fold t ~init ~f =
   Ident.fold_all (fun ident range acc ->
@@ -158,6 +163,10 @@ let add_subrange t ~subrange =
   in
   Available_range.add_subrange range ~subrange
 
+(* Imagine that the program counter is exactly at the start of [insn]; it has
+   not yet been executed.  This function calculates which available subranges
+   are to start at that point, and which are to stop.  [prev_insn] is the
+   instruction immediately prior to [insn], if such exists. *)
 let births_and_deaths ~insn ~prev_insn =
   let births =
     match prev_insn with
@@ -169,86 +178,119 @@ let births_and_deaths ~insn ~prev_insn =
     match prev_insn with
     | None -> Reg.Set.empty
     | Some prev_insn ->
-      Reg.Set.diff prev_insn.L.available_before insn.L.available_before
+      (* Available subranges must not cross points at which the stack pointer
+         changes.  (This is because we assign a single stack offset for each
+         available subrange, cf. [Lavailable_subrange].)  Thus, if the previous
+         instruction adjusted the stack pointer, then as soon as the program
+         counter reaches the first address immediately after that instruction
+         we must "restart" all continuing available subranges. *)
+      let adjusts_sp =
+        match prev_insn.L.desc with
+        | L.Lop (Mach.Istackoffset _) -> true
+        | _ -> false
+      in
+      if not adjusts_sp then
+        Reg.Set.diff prev_insn.L.available_before insn.L.available_before
+      else
+        insn.L.available_before  (* restart subranges for everything *)
   in
   births, deaths
-
-(* CR mshinwell: we need to make sure the stack pointer doesn't change during
-   a range (or something like that) *)
 
 let rec process_instruction t ~first_insn ~insn ~prev_insn
       ~open_subrange_start_insns =
   let births, deaths = births_and_deaths ~insn ~prev_insn in
+  let first_insn = ref first_insn in
+  let prev_insn = ref prev_insn in
+  let insert_insn ~new_insn =
+    assert (new_insn.L.next == insn);
+    (* (Note that by virtue of [Lprologue], we can insert labels prior
+       to the first assembly instruction of the function.) *)
+    begin match !prev_insn with
+    | None -> first_insn := new_insn
+    | Some prev_insn ->
+      assert (prev_insn.L.next == insn);
+      prev_insn.L.next <- new_insn
+    end;
+    prev_insn := Some new_insn
+  in
   (* Note that we can't reuse an existing label in the code since we rely
      on the ordering of range-related labels. *)
   let label = lazy (L.new_label ()) in
+  (* As a result of the code above to restart subranges where a stack
+     adjustment is involved, we may have a register occurring in both
+     [births] and [deaths]; and we would like the register to have an open
+     subrange from this point.  It follows that we should process deaths
+     before births. *)
   Reg.Set.fold (fun reg () ->
-      let start_insn =
+      let start_pos, start_insn =
         try Reg.Map.find reg open_subrange_start_insns
         with Not_found -> assert false
       in
-      let start_pos, offset_ref =
-        match start_insn.L.desc with
-        | L.Lavailable_subrange (label, _reg, offset_ref) -> label, offset_ref
-        | _ -> assert false
-      in
       let end_pos = Lazy.force label in
       let subrange =
-        Available_subrange.create ~start_pos ~end_pos ~reg
-          ~offset_from_stack_ptr_ref:offset_ref
+        Available_subrange.create ~start_pos ~start_insn ~end_pos
       in
+      Printf.printf "new subrange: start label=%d, start insn=%d, t=%d\n%!"
+        (Available_subrange.start_pos subrange)
+        (Obj.magic start_insn)
+        (Obj.magic subrange);
       add_subrange t ~subrange)
     deaths
     ();
   let open_subrange_start_insns =
-    Reg.Set.fold (fun reg open_subrange_start_insns ->
-      let label = Lazy.force label in
-      let insn' =
-        { insn with L.
-          desc = L.Lavailable_subrange (label, reg, ref None)
-          arg = [| |];
-          res = [| |];
-        }
-      in
-      let first_insn =
-        match prev_insn with
-        | None -> insn'
-        | Some prev_insn ->
-          prev_insn.L.next <- insn';
-          first_insn
-      in
-(* think about exactly where [insn'] should be placed. *)
-      insn.L.next <- insn';
-      label, Some insn'
-      match prev_insn with
-      | None -> t.start_of_function_label, None
-      | Some prev_insn -> insert_label_after ~insn:prev_insn)
-  in
-
-
-        Reg.Map.add reg (Lazy.force pos) open_subrange_start_insns)
-      births
-      (Reg.Map.filter (fun reg _start_pos -> not (Reg.Set.mem reg deaths))
+    let open_subrange_start_insns =
+      (Reg.Map.filter (fun reg _start_insn -> not (Reg.Set.mem reg deaths))
         open_subrange_start_insns)
+    in
+    Reg.Set.fold (fun reg open_subrange_start_insns ->
+        let new_insn =
+          { L.
+            desc = L.Lavailable_subrange (ref None);
+            next = insn;
+            arg = [| reg |];
+            res = [| |];
+            dbg = Debuginfo.none;
+            live = Reg.Set.empty;
+            available_before = Reg.Set.empty;
+          }
+        in
+        insert_insn ~new_insn;
+        Reg.Map.add reg (Lazy.force label, new_insn) open_subrange_start_insns)
+      births
+      open_subrange_start_insns
   in
+  begin if Lazy.is_val label then
+    let new_insn =
+      { L.
+        desc = L.Llabel (Lazy.force label);
+        next = insn;
+        arg = [| |];
+        res = [| |];
+        dbg = Debuginfo.none;
+        live = Reg.Set.empty;
+        available_before = Reg.Set.empty;
+      }
+    in
+    insert_insn ~new_insn
+  end;
+  let first_insn = !first_insn in
   match insn.L.desc with
   | L.Lend -> first_insn
-  | L.Lop _ | L.Lreloadretaddr | L.Lreturn | L.Llabel _ | L.Lbranch _
-  | L.Lcondbranch _ | L.Lcondbranch3 _ | L.Lswitch _ | L.Lsetuptrap _
-  | L.Lpushtrap | L.Lpoptrap | L.Lraise _
+  | L.Lprologue | L.Lop _ | L.Lreloadretaddr | L.Lreturn | L.Llabel _
+  | L.Lbranch _ | L.Lcondbranch _ | L.Lcondbranch3 _ | L.Lswitch _
+  | L.Lsetuptrap _ | L.Lpushtrap | L.Lpoptrap | L.Lraise _
   | L.Lavailable_subrange _ ->
-    process_instruction t ~insn:insn.L.next ~prev_insn:(Some insn)
+    process_instruction t ~first_insn ~insn:insn.L.next ~prev_insn:(Some insn)
       ~open_subrange_start_insns
 
 let create ~fundecl =
   let t =
     { ranges = Ident.empty;
-      function_name = fundecl.L.fun_name;
-      start_of_function_label = Linearize.new_label ();
     }
   in
-  let fundecl =
-    process_instruction t ~insn:fundecl.L.fun_body ~prev_insn:None
+  let first_insn =
+    let first_insn = fundecl.L.fun_body in
+    process_instruction t ~first_insn ~insn:first_insn ~prev_insn:None
       ~open_subrange_start_insns:Reg.Map.empty
   in
   (*
@@ -266,6 +308,4 @@ let create ~fundecl =
               (if (Available_subrange.reg available_subrange)
                 .Reg.is_parameter then "yes" else "no")));
   *)
-  t, fundecl
-
-let start_of_function_label t = t.start_of_function_label
+  t, { fundecl with L.fun_body = first_insn; }

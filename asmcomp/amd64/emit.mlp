@@ -103,7 +103,6 @@ let emit_reg = function
       emit_string (register_name r)
   | { loc = Stack s } as r ->
       let ofs = slot_offset s (register_class r) in
-      r.slot_offset <- Some ofs;
       `{emit_int ofs}(%rsp)`
   | { loc = Unknown } ->
       assert false
@@ -126,8 +125,6 @@ let emit_subreg tbl r =
       emit_string tbl.(r)
   | Stack s ->
       let ofs = slot_offset s (register_class r) in
-      (* CR mshinwell: not really sure about this *)
-      r.slot_offset <- Some ofs;
       `{emit_int ofs}(%rsp)`
   | _ ->
       assert false
@@ -361,11 +358,42 @@ let function_name = ref ""
 (* Entry point for tail recursive calls *)
 let tailrec_entry_point = ref 0
 
+(* Emission of the profiling prelude *)
+
+let emit_profile () =
+  match Config.system with
+  | "linux" | "gnu" ->
+      (* mcount preserves rax, rcx, rdx, rsi, rdi, r8, r9 explicitly
+         and rbx, rbp, r12-r15 like all C functions.  This includes
+         all the registers used for argument passing, so we don't
+         need to preserve other regs.  We do need to initialize rbp
+         like mcount expects it, though. *)
+      `	pushq	%r10\n`;
+      if not fp then
+        `	movq	%rsp, %rbp\n`;
+      `	{emit_call "mcount"}\n`;
+      `	popq	%r10\n`
+  | _ ->
+      () (*unsupported yet*)
+
 (* Emit an instruction *)
 let emit_instr fallthrough i =
     emit_debug_info i.dbg;
     match i.desc with
       Lend -> ()
+    | Lprologue ->
+      if fp then begin
+           `	pushq	%rbp\n`;
+           cfi_adjust_cfa_offset 8;
+           `	movq	%rsp, %rbp\n`;
+      end;
+      if !Clflags.gprofile then emit_profile();
+      if frame_required() then begin
+        let n = frame_size() - 8 - (if fp then 8 else 0) in
+        `	subq	${emit_int n}, %rsp\n`;
+        cfi_adjust_cfa_offset n;
+      end;
+      `{emit_label !tailrec_entry_point}:\n`;
     | Lop(Imove | Ispill | Ireload) ->
         let src = i.arg.(0) and dst = i.res.(0) in
         if src.loc <> dst.loc then begin
@@ -578,11 +606,14 @@ let emit_instr fallthrough i =
         end
     | Llabel lbl ->
         `{emit_Llabel fallthrough lbl}:\n`
-    | Lavailable_subrange (lbl, reg, offset_from_rsp_ref) ->
-        `{emit_label lbl}:\n`;
+    | Lavailable_subrange byte_offset_from_sp ->
+        assert (!byte_offset_from_sp = None);
+        assert (Array.length i.arg = 1);
+        let reg = i.arg.(0) in
         begin match reg.loc with
         | Unknown | Reg _ -> ()
-        | Stack loc -> offset_from_rsp_ref := slot_offset loc (register_class reg)
+        | Stack loc ->
+          byte_offset_from_sp := Some (slot_offset loc (register_class reg))
         end
     | Lbranch lbl ->
         `	jmp	{emit_label lbl}\n`
@@ -693,24 +724,6 @@ let rec emit_all fallthrough i =
       emit_instr fallthrough i;
       emit_all (Linearize.has_fallthrough i.desc) i.next
 
-(* Emission of the profiling prelude *)
-
-let emit_profile () =
-  match Config.system with
-  | "linux" | "gnu" ->
-      (* mcount preserves rax, rcx, rdx, rsi, rdi, r8, r9 explicitly
-         and rbx, rbp, r12-r15 like all C functions.  This includes
-         all the registers used for argument passing, so we don't
-         need to preserve other regs.  We do need to initialize rbp
-         like mcount expects it, though. *)
-      `	pushq	%r10\n`;
-      if not fp then
-        `	movq	%rsp, %rbp\n`;
-      `	{emit_call "mcount"}\n`;
-      `	popq	%r10\n`
-  | _ ->
-      () (*unsupported yet*)
-
 (* Emission of a function declaration *)
 
 let fundecl ~dwarf fundecl =
@@ -732,43 +745,20 @@ let fundecl ~dwarf fundecl =
   else
     `	.globl	{emit_symbol fundecl.fun_name}\n`;
   `{emit_symbol fundecl.fun_name}:\n`;
-  let available_ranges =
-    match dwarf with
-    | None -> None
-    | Some dwarf -> begin
-      (* This may modify [fundecl] by adding labels, so must happen before
-         emission. *)
-      let available_ranges = Dwarf.pre_emission_dwarf_for_function dwarf ~fundecl in
-      let start_of_function_label =
-        Available_ranges.start_of_function_label available_ranges
-      in
-      `{emit_label start_of_function_label}:\n`;
-      Some (dwarf, available_ranges)
-    end
-  in
   emit_debug_info fundecl.fun_dbg;
   cfi_startproc ();
-  if fp then begin
-       `	pushq	%rbp\n`;
-       cfi_adjust_cfa_offset 8;
-       `	movq	%rsp, %rbp\n`;
-  end;
-  if !Clflags.gprofile then emit_profile();
-  if frame_required() then begin
-    let n = frame_size() - 8 - (if fp then 8 else 0) in
-    `	subq	${emit_int n}, %rsp\n`;
-    cfi_adjust_cfa_offset n;
-  end;
-  `{emit_label !tailrec_entry_point}:\n`;
+  Printf.printf "------ emit_all for %s -------\n%!"
+    fundecl.fun_name;
   emit_all true fundecl.fun_body;
   List.iter emit_call_gc !call_gc_sites;
   `{emit_label end_of_function_label}:\n`;
   emit_call_bound_errors ();
-  begin match available_ranges with
+  begin match dwarf with
   | None -> ()
-  | Some (dwarf, available_ranges) ->
-    Dwarf.post_emission_dwarf_for_function dwarf ~fundecl ~available_ranges
-      ~end_of_function_label
+  | Some dwarf ->
+    Printf.printf "------ post-emit dwarf for %s -------\n%!"
+      fundecl.fun_name;
+    Dwarf.post_emission_dwarf_for_function dwarf ~end_of_function_label
   end;
   cfi_endproc ();
   begin match Config.system with
