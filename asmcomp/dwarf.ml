@@ -99,19 +99,15 @@ let pre_emission_dwarf_for_function t ~fundecl =
 
 let location_list_entry ~fundecl ~available_subrange =
   let reg = Available_subrange.reg available_subrange in
-  Printf.printf "location list entry for subrange t=%d start=%d... "
-    (Obj.magic available_subrange)
-    (Available_subrange.start_pos available_subrange);
   let location_expression =
     let module LE = Location_expression in
     match reg.Reg.loc with
     | Reg.Unknown -> assert false  (* probably a bug in available_regs.ml *)
-    | Reg.Reg reg_number -> Printf.printf "reg\n%!"; Some (LE.in_register reg_number)
+    | Reg.Reg reg_number -> Some (LE.in_register reg_number)
     | Reg.Stack _ ->
       match Available_subrange.offset_from_stack_ptr available_subrange with
       | None -> assert false  (* emit.mlp should have set the offset *)
       | Some offset_in_bytes ->
-        Printf.printf "stack\n%!";
         Some (LE.at_offset_from_stack_pointer ~offset_in_bytes)
   in
   match location_expression with
@@ -135,8 +131,6 @@ let location_list_entry ~fundecl ~available_subrange =
 
 let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
       ~ident ~is_unique ~range =
-  Printf.printf "------ dwarf for identifier '%s' -------\n%!"
-    (Ident.unique_name ident);
   let (start_pos, end_pos) as cache_key = Available_range.extremities range in
   let parent_proto_die =
     if Available_range.is_parameter range then begin

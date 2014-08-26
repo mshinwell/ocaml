@@ -747,8 +747,6 @@ let fundecl ~dwarf fundecl =
   `{emit_symbol fundecl.fun_name}:\n`;
   emit_debug_info fundecl.fun_dbg;
   cfi_startproc ();
-  Printf.printf "------ emit_all for %s -------\n%!"
-    fundecl.fun_name;
   emit_all true fundecl.fun_body;
   List.iter emit_call_gc !call_gc_sites;
   `{emit_label end_of_function_label}:\n`;
@@ -756,8 +754,6 @@ let fundecl ~dwarf fundecl =
   begin match dwarf with
   | None -> ()
   | Some dwarf ->
-    Printf.printf "------ post-emit dwarf for %s -------\n%!"
-      fundecl.fun_name;
     Dwarf.post_emission_dwarf_for_function dwarf ~end_of_function_label
   end;
   cfi_endproc ();

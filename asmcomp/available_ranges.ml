@@ -58,9 +58,7 @@ end = struct
 
   let offset_from_stack_ptr t =
     match t.start_insn.L.desc with
-    | L.Lavailable_subrange offset ->
-      Printf.printf "<offset_from_stack_ptr ref=%d>" (Obj.magic offset);
-      !offset
+    | L.Lavailable_subrange offset -> !offset
     | _ -> assert false
 end
 
@@ -168,31 +166,37 @@ let add_subrange t ~subrange =
    are to start at that point, and which are to stop.  [prev_insn] is the
    instruction immediately prior to [insn], if such exists. *)
 let births_and_deaths ~insn ~prev_insn =
+  (* Available subranges must not cross points at which the stack pointer
+     changes.  (This is because we assign a single stack offset for each
+     available subrange, cf. [Lavailable_subrange].)  Thus, if the previous
+     instruction adjusted the stack pointer, then as soon as the program
+     counter reaches the first address immediately after that instruction
+     we must "restart" all continuing available subranges. *)
+  let adjusts_sp =
+    match prev_insn with
+    | None -> false
+    | Some prev_insn ->
+      match prev_insn.L.desc with
+      | L.Lop (Mach.Istackoffset _) -> true
+      | _ -> false
+  in
   let births =
     match prev_insn with
     | None -> insn.L.available_before
     | Some prev_insn ->
-      Reg.Set.diff insn.L.available_before prev_insn.L.available_before
+      if not adjusts_sp then
+        Reg.Set.diff insn.L.available_before prev_insn.L.available_before
+      else
+        insn.L.available_before
   in
   let deaths =
     match prev_insn with
     | None -> Reg.Set.empty
     | Some prev_insn ->
-      (* Available subranges must not cross points at which the stack pointer
-         changes.  (This is because we assign a single stack offset for each
-         available subrange, cf. [Lavailable_subrange].)  Thus, if the previous
-         instruction adjusted the stack pointer, then as soon as the program
-         counter reaches the first address immediately after that instruction
-         we must "restart" all continuing available subranges. *)
-      let adjusts_sp =
-        match prev_insn.L.desc with
-        | L.Lop (Mach.Istackoffset _) -> true
-        | _ -> false
-      in
       if not adjusts_sp then
         Reg.Set.diff prev_insn.L.available_before insn.L.available_before
       else
-        insn.L.available_before  (* restart subranges for everything *)
+        prev_insn.L.available_before
   in
   births, deaths
 
@@ -230,10 +234,6 @@ let rec process_instruction t ~first_insn ~insn ~prev_insn
       let subrange =
         Available_subrange.create ~start_pos ~start_insn ~end_pos
       in
-      Printf.printf "new subrange: start label=%d, start insn=%d, t=%d\n%!"
-        (Available_subrange.start_pos subrange)
-        (Obj.magic start_insn)
-        (Obj.magic subrange);
       add_subrange t ~subrange)
     deaths
     ();
