@@ -298,8 +298,18 @@ let reset () =
   label_counter := 99;
   exit_label := []
 
+let add_prologue first_insn =
+  { desc = Lprologue;
+    next = first_insn;
+    arg = [| |];
+    res = [| |];
+    dbg = first_insn.dbg;
+    live = first_insn.live;
+    available_before = first_insn.available_before;
+  }
+
 let fundecl f =
   { fun_name = f.Mach.fun_name;
-    fun_body = cons_instr Lprologue (linear f.Mach.fun_body end_instr);
+    fun_body = add_prologue (linear f.Mach.fun_body end_instr);
     fun_fast = f.Mach.fun_fast;
     fun_dbg  = f.Mach.fun_dbg }

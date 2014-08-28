@@ -45,6 +45,8 @@ let overwrite_union reg_set ~overwrite_with =
 let filter_avail_before avail_before =
   R.Set.fold (fun reg acc ->
     if not (R.Raw_name.is_ident reg.R.raw_name) then acc
+    (* CR-soon mshinwell: handle values split across multiple registers *)
+    else if reg.R.part <> None then acc
     else
       let for_same_ident =
         R.Set.filter (fun reg' ->
@@ -198,5 +200,6 @@ let fundecl f =
   let fun_args = R.set_of_array f.M.fun_args in
   let first_instr_arg = R.set_of_array f.M.fun_body.M.arg in
   assert (R.Set.subset first_instr_arg fun_args);
-  ignore ((available_regs f.M.fun_body ~avail_before:fun_args) : R.Set.t);
+  let avail_before = filter_avail_before fun_args in
+  ignore ((available_regs f.M.fun_body ~avail_before) : R.Set.t);
   f
