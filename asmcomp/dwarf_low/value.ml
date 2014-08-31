@@ -104,7 +104,8 @@ let size = function
   | Code_address_from_label_diff _
   | Code_address_from_label_diff_minus_8 _ -> 8
 
-(* CR mshinwell: the assembler directives need to be target-specific *)
+let set_counter = ref 0
+
 let emit t ~emitter =
   match t with
   | Four_byte_int i ->
@@ -122,7 +123,27 @@ let emit t ~emitter =
   | Leb128 i ->
     Emitter.emit_string emitter (sprintf "\t.sleb128\t0x%x\n" i)
   | String s ->
-    Emitter.emit_string emitter (sprintf "\t.string\t\"%s\"\n" s)
+    (* Strings are collected together into ".debug_str". *)
+    let label = Emitter.cache_string emitter s in
+    begin match Emitter.target emitter with
+    | `Other ->
+      Emitter.emit_string emitter "\t.quad\t";
+      Emitter.emit_label emitter label;
+      Emitter.emit_string emitter "\n"
+    | `MacOS_X ->
+      let count = !set_counter in
+      let name = Printf.sprintf "Ldwarf_value%d" count in
+      incr set_counter;
+      Emitter.emit_string emitter name;
+      Emitter.emit_string emitter " = ";
+      Emitter.emit_label emitter label;
+      Emitter.emit_string emitter "-";
+      Emitter.emit_label emitter (Emitter.debug_str_label emitter);
+      Emitter.emit_string emitter "\n";
+      Emitter.emit_string emitter "\t.quad\t";
+      Emitter.emit_string emitter name;
+      Emitter.emit_string emitter "\n"
+    end
   | Code_address_from_symbol s ->
     Emitter.emit_string emitter "\t.quad\t";
     Emitter.emit_symbol emitter s;
@@ -132,25 +153,58 @@ let emit t ~emitter =
     Emitter.emit_label emitter s;
     Emitter.emit_string emitter "\n"
   | Code_address_from_label_diff (s2, s1) ->
-    Emitter.emit_string emitter "\t.quad\t";
+    let count = !set_counter in
+    let name = Printf.sprintf "Ldwarf_value%d" count in
+    incr set_counter;
+    begin match Emitter.target emitter with
+    | `Other -> Emitter.emit_string emitter "\t.quad\t"
+    | `MacOS_X ->
+      Emitter.emit_string emitter name;
+      Emitter.emit_string emitter " = "
+    end;
     begin match s2 with
     | `Symbol s2 -> Emitter.emit_symbol emitter s2
     | `Label s2 -> Emitter.emit_label emitter s2
     end;
-    Emitter.emit_string emitter " - ";
+    begin match Emitter.target emitter with
+    | `Other -> Emitter.emit_string emitter " - "
+    | `MacOS_X -> Emitter.emit_string emitter "-"
+    end;
     begin match s1 with
     | `Symbol s1 -> Emitter.emit_symbol emitter s1
     | `Label s1 -> Emitter.emit_label emitter s1
     end;
-    Emitter.emit_string emitter "\n"
+    Emitter.emit_string emitter "\n";
+    begin match Emitter.target emitter with
+    | `Other -> ()
+    | `MacOS_X ->
+      Emitter.emit_string emitter (Printf.sprintf "\t.quad\t%s\n" name)
+    end
   | Code_address_from_label_diff_minus_8 (s2, s1) ->
-    Emitter.emit_string emitter "\t.quad\t";
+    (* XXX fix this nonsense *)
+    let count = !set_counter in
+    let name = Printf.sprintf "Ldwarf_value%d" count in
+    incr set_counter;
+    begin match Emitter.target emitter with
+    | `Other -> Emitter.emit_string emitter "\t.quad\t"
+    | `MacOS_X ->
+      Emitter.emit_string emitter name;
+      Emitter.emit_string emitter " = "
+    end;
     begin match s2 with
     | `Symbol s2 -> Emitter.emit_symbol emitter s2
     | `Label s2 -> Emitter.emit_label emitter s2
     end;
-    Emitter.emit_string emitter " - 1 - "; (* CR mshinwell: !!! *)
+    begin match Emitter.target emitter with
+    | `Other -> Emitter.emit_string emitter " - 1 - "
+    | `MacOS_X -> Emitter.emit_string emitter "-1-"
+    end;
     Emitter.emit_symbol emitter s1;
-    Emitter.emit_string emitter "\n"
+    Emitter.emit_string emitter "\n";
+    begin match Emitter.target emitter with
+    | `Other -> ()
+    | `MacOS_X ->
+      Emitter.emit_string emitter (Printf.sprintf "\t.quad\t%s\n" name)
+    end
   | Code_address i ->
     Emitter.emit_string emitter (sprintf "\t.quad\t0x%Lx\n" i)

@@ -28,7 +28,12 @@ val create : emit_string:(string -> unit)
   -> emit_label_declaration:(label_name:Linearize.label -> unit)
   -> emit_section_declaration:(section_name:string -> unit)
   -> emit_switch_to_section:(section_name:string -> unit)
+  -> target:[ `MacOS_X | `Other ]
   -> t
+
+val cache_string : t -> string -> Linearize.label
+val debug_str_label : t -> Linearize.label
+val emit_strings : t -> unit
 
 val emit_string : t -> string -> unit
 val emit_symbol : t -> string -> unit
@@ -36,3 +41,4 @@ val emit_label : t -> Linearize.label -> unit
 val emit_label_declaration : t -> label_name:Linearize.label -> unit
 val emit_section_declaration : t -> section_name:string -> unit
 val emit_switch_to_section : t -> section_name:string -> unit
+val target : t -> [ `MacOS_X | `Other ]

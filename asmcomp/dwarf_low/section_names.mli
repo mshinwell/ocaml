@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013, Jane Street Holding                                *)
+(*  Copyright 2013--2014, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -20,11 +20,11 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* The textual names of those ELF file sections relevant to debugging
-   information. *)
+(* The textual names of those sections relevant to debugging information. *)
 val debug_abbrev : string
 val debug_line : string
 val debug_loc : string
 val debug_info : string
 val debug_pubnames : string
 val debug_aranges : string
+val debug_str : string

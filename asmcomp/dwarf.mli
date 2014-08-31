@@ -34,6 +34,7 @@ val create
   -> emit_switch_to_section:(section_name:string -> unit)
   -> start_of_code_symbol:string
   -> end_of_code_symbol:string
+  -> target:[ `MacOS_X | `Other ]
   -> t
 
 (* For the moment, matching pairs of [pre_emission_dwarf_for_function] and
