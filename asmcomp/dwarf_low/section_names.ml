@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013, Jane Street Holding                                *)
+(*  Copyright 2013--2014, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -20,9 +20,10 @@
 (*                                                                     *)
 (***********************************************************************)
 
-let debug_abbrev = ".debug_abbrev"
-let debug_line = ".debug_line"
-let debug_loc = ".debug_loc"
-let debug_info = ".debug_info"
-let debug_pubnames = ".debug_pubnames"
-let debug_aranges = ".debug_aranges"
+let debug_abbrev = "debug_abbrev"
+let debug_line = "debug_line"
+let debug_loc = "debug_loc"
+let debug_info = "debug_info"
+let debug_pubnames = "debug_pubnames"
+let debug_aranges = "debug_aranges"
+let debug_str = "debug_str"

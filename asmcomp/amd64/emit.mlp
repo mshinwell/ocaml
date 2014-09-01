@@ -884,7 +884,13 @@ let emit_label_declaration ~label_name =
   `{emit_label label_name}:\n`
 
 let emit_section_declaration ~section_name =
-  `	.section {Emitaux.emit_string section_name},\"\",%progbits\n`
+  if macosx then
+    `	.section __DWARF,__{Emitaux.emit_string section_name},regular,debug\n`
+  else
+    `	.section .{Emitaux.emit_string section_name},\"\",%progbits\n`
 
 let emit_switch_to_section ~section_name =
-  `	.section {Emitaux.emit_string section_name}\n`
+  if macosx then
+    emit_section_declaration ~section_name
+  else
+    `	.section .{Emitaux.emit_string section_name}\n`

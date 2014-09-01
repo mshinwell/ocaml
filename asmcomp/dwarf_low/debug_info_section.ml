@@ -90,8 +90,9 @@ let assign_abbreviations t =
   in
   t.abbrev_table_and_dies <- Some (abbrev_table, List.rev dies)
 
-let dwarf_version = Version.two
+let dwarf_version = Version.four
 let debug_abbrev_offset t = Value.as_four_byte_int_from_label t.debug_abbrev0
+  (* CR mshinwell: investigate further. *)
 let address_width_in_bytes_on_target = Value.as_byte Arch.size_addr
 
 let size_without_first_word t ~dies =

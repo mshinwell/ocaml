@@ -121,6 +121,10 @@ let compile_implementation ?toplevel ~source_file_path prefixname ppf (size, lam
     let start_of_code_symbol, end_of_code_symbol = Emit.begin_assembly () in
     let dwarf =
       if !Clflags.debug_full then
+        let macosx = (Config.system = "macosx") in
+        let target =
+          if macosx then `MacOS_X else `Other
+        in
         let dwarf =
           Dwarf.create ~source_file_path
             ~emit_string:Emit.emit_string
@@ -131,6 +135,7 @@ let compile_implementation ?toplevel ~source_file_path prefixname ppf (size, lam
             ~emit_switch_to_section:Emit.emit_switch_to_section
             ~start_of_code_symbol
             ~end_of_code_symbol
+            ~target
         in
         Some dwarf
       else

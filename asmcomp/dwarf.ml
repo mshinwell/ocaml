@@ -41,7 +41,8 @@ type t = {
 
 let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
       ~emit_label_declaration ~emit_section_declaration
-      ~emit_switch_to_section ~start_of_code_symbol ~end_of_code_symbol =
+      ~emit_switch_to_section ~start_of_code_symbol ~end_of_code_symbol
+      ~target =
   let emitter =
     Emitter.create ~emit_string
       ~emit_symbol
@@ -49,6 +50,7 @@ let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
       ~emit_label_declaration
       ~emit_section_declaration
       ~emit_switch_to_section
+      ~target
   in
   let debug_line_label = Linearize.new_label () in
   let source_file_path, directory =
@@ -286,4 +288,6 @@ let emit t =
   Emitter.emit_section_declaration emitter ~section_name:SN.debug_aranges;
   Aranges_table.emit aranges_table ~emitter;
   Emitter.emit_switch_to_section emitter ~section_name:SN.debug_loc;
-  Debug_loc_table.emit t.debug_loc_table ~emitter
+  Debug_loc_table.emit t.debug_loc_table ~emitter;
+  Emitter.emit_switch_to_section emitter ~section_name:SN.debug_str;
+  Emitter.emit_strings emitter
