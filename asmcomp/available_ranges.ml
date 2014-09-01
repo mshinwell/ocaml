@@ -293,19 +293,23 @@ let create ~fundecl =
     process_instruction t ~first_insn ~insn:first_insn ~prev_insn:None
       ~open_subrange_start_insns:Reg.Map.empty
   in
-  (*
-  Printf.printf "Available ranges for function: %s\n" fundecl.L.fun_name;
+(*
+  Printf.printf "Available ranges for function: %s\n%!" fundecl.L.fun_name;
   fold t ~init:()
     ~f:(fun () ~ident ~is_unique ~range ->
-        Printf.printf "  Identifier: %s (is unique? %s)\n"
+        Printf.printf "  Identifier: %s (is unique? %s)\n%!"
           (Ident.unique_name ident) (if is_unique then "yes" else "no");
         Available_range.fold range ~init:()
           ~f:(fun () ~available_subrange ->
-            Printf.printf "    Label range: %d -> %d  Register: %s (is param? %s)\n"
+            Printf.printf "    Label range: %d -> %d  Register: %s %s (is param? %s)\n%!"
               (Available_subrange.start_pos available_subrange)    
               (Available_subrange.end_pos available_subrange)
               (Reg.name (Available_subrange.reg available_subrange))
+              (begin match (Available_subrange.reg available_subrange).Reg.loc with
+               | Reg.Unknown -> "unknown"
+               | Reg.Reg n -> Printf.sprintf "r%d" n
+               | Reg.Stack _ -> "stack" end)
               (if (Available_subrange.reg available_subrange)
                 .Reg.is_parameter then "yes" else "no")));
-  *)
+*)
   t, { fundecl with L.fun_body = first_insn; }

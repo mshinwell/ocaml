@@ -31,13 +31,11 @@ let register ~reg_number =
 
 let register_based_addressing ~reg_number ~offset_in_bytes =
   let reg_number = Value.as_uleb128 reg_number in
-  (* CR mshinwell: strictly speaking the offset should be signed leb128 *)
-  let offset_in_bytes = Value.as_uleb128 offset_in_bytes in
+  let offset_in_bytes = Value.as_leb128 offset_in_bytes in
   DW_op_bregx (`Register reg_number, `Offset offset_in_bytes)
 
 let frame_base_register ~offset_in_bytes =
-  (* CR mshinwell: strictly speaking the offset should be signed leb128 *)
-  let offset_in_bytes = Value.as_uleb128 offset_in_bytes in
+  let offset_in_bytes = Value.as_leb128 offset_in_bytes in
   DW_op_fbreg offset_in_bytes
 
 let opcode = function

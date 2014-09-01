@@ -68,9 +68,7 @@ let as_uleb128 i =
   assert (i >= 0);
   Uleb128 i
 
-exception Negative_leb128_not_yet_thought_about
 let as_leb128 i =
-  if i < 0 then raise Negative_leb128_not_yet_thought_about;
   Leb128 i
 
 let as_string s =
@@ -92,13 +90,21 @@ let as_code_address_from_label_diff_minus_8 s2 s1 =
 let as_code_address i =
   Code_address i
 
+let rec uleb128_size i =
+  assert (i >= 0);
+  if i < 128 then 1
+  else 1 + (uleb128_size (i lsr 7))
+
+let rec leb128_size i =
+  if i >= -64 && i < 64 then 1
+  else 1 + (leb128_size (i asr 7))
+
 let size = function
   | Four_byte_int _ | Four_byte_int_from_label _ -> 4
   | Two_byte_int _ -> 2
   | Byte _ -> 1
-  | Uleb128 i | Leb128 i ->
-    if i = 0 then 1
-    else 1 + int_of_float (floor (log (float_of_int i) /. log 128.))
+  | Uleb128 i -> uleb128_size i
+  | Leb128 i -> leb128_size i
   | String s -> 1 + String.length s
   | Code_address_from_symbol _ | Code_address_from_label _ | Code_address _
   | Code_address_from_label_diff _
@@ -120,7 +126,7 @@ let emit t ~emitter =
   | Uleb128 i ->
     Emitter.emit_string emitter (sprintf "\t.uleb128\t0x%x\n" i)
   | Leb128 i ->
-    Emitter.emit_string emitter (sprintf "\t.sleb128\t0x%x\n" i)
+    Emitter.emit_string emitter (sprintf "\t.sleb128\t%d\n" i)
   | String s ->
     Emitter.emit_string emitter (sprintf "\t.string\t\"%s\"\n" s)
   | Code_address_from_symbol s ->
