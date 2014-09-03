@@ -16,7 +16,7 @@ include config/Makefile
 include stdlib/StdlibModules
 
 CAMLC=boot/ocamlrun boot/ocamlc -nostdlib -I boot
-CAMLOPT=boot/ocamlrun ./ocamlopt -nostdlib -I stdlib -I otherlibs/dynlink -g-full -g
+CAMLOPT=boot/ocamlrun ./ocamlopt -nostdlib -I stdlib -I otherlibs/dynlink -g-full -g -S
 COMPFLAGS=-strict-sequence -w +33..39+48 -warn-error A -bin-annot \
           -safe-string $(INCLUDES)
 LINKFLAGS=
@@ -81,9 +81,11 @@ BYTECOMP=bytecomp/meta.cmo bytecomp/instruct.cmo bytecomp/bytegen.cmo \
 
 DWARF_LOW=\
   asmcomp/dwarf_low/std_internal.cmo \
+  asmcomp/dwarf_low/dwarf_format.cmo \
   asmcomp/dwarf_low/emitter.cmo \
   asmcomp/dwarf_low/emittable.cmo \
   asmcomp/dwarf_low/value.cmo \
+  asmcomp/dwarf_low/initial_length.cmo \
   asmcomp/dwarf_low/child_determination.cmo \
   asmcomp/dwarf_low/tag.cmo \
   asmcomp/dwarf_low/form.cmo \

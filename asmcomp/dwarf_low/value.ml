@@ -23,10 +23,10 @@
 open Std_internal
 
 type t =
-  | Four_byte_int of int
-  | Four_byte_int_from_label of Linearize.label
-  | Two_byte_int of int
   | Byte of int
+  | Two_byte_int of int
+  | Four_byte_int of Int32.t
+  | Native_int of Nativeint.t
   | Uleb128 of int
   | Leb128 of int
   | String of string
@@ -40,19 +40,12 @@ type t =
   | Code_address_from_label_diff_minus_8 of
       [ `Label of Linearize.label | `Symbol of string ]
     * string
-  | Code_address of Int64.t
 
-exception Too_large_for_four_byte_int of int
 exception Too_large_for_two_byte_int of int
 exception Too_large_for_byte of int
 
-let as_four_byte_int i =
-  if not (i >= 0 && i <= 0xffff_ffff) then
-    raise (Too_large_for_four_byte_int i);
-  Four_byte_int i
-
-let as_four_byte_int_from_label l =
-  Four_byte_int_from_label l
+let as_four_byte_int i = Four_byte_int i
+let as_native_int i = Native_int i
 
 let as_two_byte_int i =
   if not (i >= 0 && i <= 0xffff) then
@@ -87,39 +80,67 @@ let as_code_address_from_label_diff s2 s1 =
 let as_code_address_from_label_diff_minus_8 s2 s1 =
   Code_address_from_label_diff_minus_8 (s2, s1)
 
-let as_code_address i =
-  Code_address i
+let as_code_address = as_native_int
 
-let rec uleb128_size i =
-  assert (i >= 0);
-  if i < 128 then 1
-  else 1 + (uleb128_size (i lsr 7))
-
-let rec leb128_size i =
-  if i >= -64 && i < 64 then 1
-  else 1 + (leb128_size (i asr 7))
-
-let size = function
-  | Four_byte_int _ | Four_byte_int_from_label _ -> 4
-  | Two_byte_int _ -> 2
-  | Byte _ -> 1
-  | Uleb128 i -> uleb128_size i
-  | Leb128 i -> leb128_size i
-  | String s -> 8  (* strings are emitted as .quad pointing to .debug_str *)
-  | Code_address_from_symbol _ | Code_address_from_label _ | Code_address _
-  | Code_address_from_label_diff _
-  | Code_address_from_label_diff_minus_8 _ -> 8
+let size =
+  (* DWARF-4 standard section 7.6. *)
+  let rec uleb128_size i =
+    assert (i >= 0);
+    if i < 128 then 1
+    else 1 + (uleb128_size (i lsr 7))
+  in
+  let rec leb128_size i =
+    if i >= -64 && i < 64 then 1
+    else 1 + (leb128_size (i asr 7))
+  in
+  function
+    | Byte _ -> 1
+    | Two_byte_int _ -> 2
+    | Four_byte_int _ -> 4
+    | Native_int _ -> Arch.size_addr
+    | Uleb128 i -> uleb128_size i
+    | Leb128 i -> leb128_size i
+    (* CR mshinwell: DW_FORM_strp is only 4 bytes on 32-bit *)
+    | String _
+      (* Strings are emitted as offsets into .debug_str.  The size of
+         DW_FORM_strp depends on the DWARF format (DWARF-4 standard section
+         7.4.3). *)
+    | Code_address_from_symbol _
+    | Code_address_from_label _
+    | Code_address_from_label_diff _
+    | Code_address_from_label_diff_minus_8 _ ->
+      begin match Dwarf_format.size () with
+      | `Thirty_two -> 4
+      | `Sixty_four -> 8
+      end
 
 let set_counter = ref 0
 
+let emit_directive_for_native_int ~emitter =
+  match Dwarf_format.size () with
+  | `Thirty_two -> Emitter.emit_string emitter "\t.long\t"
+  | `Sixty_four -> Emitter.emit_string emitter "\t.quad\t"
+
+let emit_as_native_int datum ~emitter =
+  emit_directive_for_native_int ~emitter;
+  match datum with
+  | `Native_int n ->
+    Emitter.emit_string emitter (Printf.sprintf "%nd\n" n)
+  | `Label label ->
+    Emitter.emit_label emitter label;
+    Emitter.emit_string emitter "\n"
+  | `String str ->
+    Emitter.emit_string emitter (Printf.sprintf "%s\n" str)
+  | `Symbol symbol ->
+    Emitter.emit_symbol emitter symbol;
+    Emitter.emit_string emitter "\n"
+
 let emit t ~emitter =
   match t with
+  | Native_int n ->
+    emit_as_native_int (`Native_int n) ~emitter
   | Four_byte_int i ->
-    Emitter.emit_string emitter (sprintf "\t.long\t0x%x\n" i);
-  | Four_byte_int_from_label l ->
-    Emitter.emit_string emitter "\t.long\t";
-    Emitter.emit_label emitter l;
-    Emitter.emit_string emitter "\n"
+    Emitter.emit_string emitter (sprintf "\t.long\t0x%lx\n" i);
   | Two_byte_int i ->
     Emitter.emit_string emitter (sprintf "\t.value\t0x%x\n" i)
   | Byte b ->
@@ -133,9 +154,7 @@ let emit t ~emitter =
     let label = Emitter.cache_string emitter s in
     begin match Emitter.target emitter with
     | `Other ->
-      Emitter.emit_string emitter "\t.quad\t";
-      Emitter.emit_label emitter label;
-      Emitter.emit_string emitter "\n"
+      emit_as_native_int (`Label label) ~emitter
     | `MacOS_X ->
       let count = !set_counter in
       let name = Printf.sprintf "Ldwarf_value%d" count in
@@ -146,24 +165,18 @@ let emit t ~emitter =
       Emitter.emit_string emitter "-";
       Emitter.emit_label emitter (Emitter.debug_str_label emitter);
       Emitter.emit_string emitter "\n";
-      Emitter.emit_string emitter "\t.quad\t";
-      Emitter.emit_string emitter name;
-      Emitter.emit_string emitter "\n"
+      emit_as_native_int (`String name) ~emitter
     end
-  | Code_address_from_symbol s ->
-    Emitter.emit_string emitter "\t.quad\t";
-    Emitter.emit_symbol emitter s;
-    Emitter.emit_string emitter "\n"
-  | Code_address_from_label s ->
-    Emitter.emit_string emitter "\t.quad\t";
-    Emitter.emit_label emitter s;
-    Emitter.emit_string emitter "\n"
+  | Code_address_from_symbol sym ->
+    emit_as_native_int (`Symbol sym) ~emitter
+  | Code_address_from_label label ->
+    emit_as_native_int (`Label label) ~emitter
   | Code_address_from_label_diff (s2, s1) ->
     let count = !set_counter in
     let name = Printf.sprintf "Ldwarf_value%d" count in
     incr set_counter;
     begin match Emitter.target emitter with
-    | `Other -> Emitter.emit_string emitter "\t.quad\t"
+    | `Other -> emit_directive_for_native_int ~emitter
     | `MacOS_X ->
       Emitter.emit_string emitter name;
       Emitter.emit_string emitter " = "
@@ -184,7 +197,7 @@ let emit t ~emitter =
     begin match Emitter.target emitter with
     | `Other -> ()
     | `MacOS_X ->
-      Emitter.emit_string emitter (Printf.sprintf "\t.quad\t%s\n" name)
+      emit_as_native_int (`String name) ~emitter
     end
   | Code_address_from_label_diff_minus_8 (s2, s1) ->
     (* XXX fix this nonsense *)
@@ -192,7 +205,7 @@ let emit t ~emitter =
     let name = Printf.sprintf "Ldwarf_value%d" count in
     incr set_counter;
     begin match Emitter.target emitter with
-    | `Other -> Emitter.emit_string emitter "\t.quad\t"
+    | `Other -> emit_directive_for_native_int ~emitter
     | `MacOS_X ->
       Emitter.emit_string emitter name;
       Emitter.emit_string emitter " = "
@@ -210,7 +223,5 @@ let emit t ~emitter =
     begin match Emitter.target emitter with
     | `Other -> ()
     | `MacOS_X ->
-      Emitter.emit_string emitter (Printf.sprintf "\t.quad\t%s\n" name)
+      emit_as_native_int (`String name) ~emitter
     end
-  | Code_address i ->
-    Emitter.emit_string emitter (sprintf "\t.quad\t0x%Lx\n" i)

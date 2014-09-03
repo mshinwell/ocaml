@@ -28,19 +28,18 @@ type t = {
 }
 
 let create ~start_of_code_symbol ~end_of_code_symbol =
-  let address_width_in_bytes_on_target = Value.as_byte 8 in
   let values = [
     Value.as_two_byte_int 2;  (* section version number *)
-    Value.as_four_byte_int 0;
-    address_width_in_bytes_on_target;
+    Value.as_four_byte_int Int32.zero;
+    Value.as_byte Arch.size_addr;
     Value.as_byte 0;
     Value.as_two_byte_int 0;
     Value.as_two_byte_int 0;
     Value.as_code_address_from_symbol start_of_code_symbol;
     Value.as_code_address_from_label_diff
       (`Symbol end_of_code_symbol) (`Symbol start_of_code_symbol);
-    Value.as_code_address Int64.zero;
-    Value.as_code_address Int64.zero;
+    Value.as_code_address Nativeint.zero;
+    Value.as_code_address Nativeint.zero;
   ]
   in
   let size =
@@ -53,5 +52,5 @@ let create ~start_of_code_symbol ~end_of_code_symbol =
 let size t = t.size
 
 let emit t ~emitter =
-  Value.emit (Value.as_four_byte_int t.size) ~emitter;
+  Value.emit (Value.as_four_byte_int (Int32.of_int t.size)) ~emitter;
   List.iter t.values ~f:(Value.emit ~emitter)

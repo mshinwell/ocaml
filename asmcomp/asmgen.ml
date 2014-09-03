@@ -126,6 +126,9 @@ let compile_implementation ?toplevel ~source_file_path prefixname ppf (size, lam
           if macosx then `MacOS_X else `Other
         in
         let dwarf =
+          (* CR mshinwell: How do we choose the DWARF format?  It must match
+             whatever the CFI directives compile down to, I think. *)
+          Dwarf_format.set_size `Thirty_two;
           Dwarf.create ~source_file_path
             ~emit_string:Emit.emit_string
             ~emit_symbol:Emit.emit_symbol

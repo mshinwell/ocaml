@@ -56,16 +56,16 @@ let compare t1 t2 =
 let form = function
   | DW_AT_low_pc -> Form.addr
   | DW_AT_high_pc -> Form.addr
-  | DW_AT_name -> Form.string
-  | DW_AT_comp_dir -> Form.string
-  | DW_AT_producer -> Form.string
+  | DW_AT_name -> Form.strp
+  | DW_AT_comp_dir -> Form.strp
+  | DW_AT_producer -> Form.strp
   | DW_AT_stmt_list -> Form.data4
   | DW_AT_external -> Form.flag
   | DW_AT_location -> Form.data8
   | DW_AT_type -> Form.ref_addr
   | DW_AT_encoding -> Form.data1
   | DW_AT_byte_size -> Form.data1
-  | DW_AT_linkage_name -> Form.string
+  | DW_AT_linkage_name -> Form.strp
   | DW_AT_sibling -> Form.ref_addr
 
 let low_pc = DW_AT_low_pc

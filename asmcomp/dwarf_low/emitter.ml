@@ -28,7 +28,7 @@ type t = {
   emit_section_declaration : section_name:string -> unit;
   emit_switch_to_section : section_name:string -> unit;
   target : [ `MacOS_X | `Other ];
-  mutable strings : (Linearize.label * string) list;
+  mutable strings : (string * Linearize.label) list;
   debug_str_label : Linearize.label;
 }
 
@@ -40,19 +40,21 @@ let create ~emit_string ~emit_symbol ~emit_label ~emit_label_declaration
     debug_str_label = Linearize.new_label ();
   }
 
-(* CR-soon mshinwell: work out a way of sharing labels *)
 let cache_string t s =
-  let label =
-    if t.strings = [] then t.debug_str_label else Linearize.new_label ()
-  in
-  t.strings <- (label, s)::t.strings;
-  label
+  try List.assoc s t.strings
+  with Not_found -> begin
+    let label =
+      if t.strings = [] then t.debug_str_label else Linearize.new_label ()
+    in
+    t.strings <- (s, label)::t.strings;
+    label
+  end
 
 let debug_str_label t = t.debug_str_label
 
 let emit_strings t =
   ListLabels.iter t.strings
-    ~f:(fun (label_name, s) ->
+    ~f:(fun (s, label_name) ->
           t.emit_label_declaration ~label_name;
           match t.target with
           | `MacOS_X ->

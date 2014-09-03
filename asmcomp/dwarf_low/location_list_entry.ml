@@ -64,7 +64,7 @@ module Base_address_selection_entry = struct
   let create ~base_address_symbol = base_address_symbol
 
   let to_dwarf_values t =
-    let largest_code_address = Int64.minus_one in
+    let largest_code_address = Nativeint.minus_one in
     [Value.as_code_address largest_code_address;
      Value.as_code_address_from_symbol t;
     ]

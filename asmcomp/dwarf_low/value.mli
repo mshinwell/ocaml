@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013, Jane Street Holding                                *)
+(*  Copyright 2013--2014, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -24,8 +24,8 @@ type t
 
 include Emittable.S with type t := t
 
-val as_four_byte_int : int -> t
-val as_four_byte_int_from_label : Linearize.label -> t
+val as_four_byte_int : Int32.t -> t
+val as_native_int : Nativeint.t -> t
 val as_two_byte_int : int -> t
 val as_byte : int -> t
 val as_uleb128 : int -> t
@@ -38,5 +38,7 @@ val as_code_address_from_label_diff
   -> [ `Symbol of string | `Label of Linearize.label ]
   -> t
 val as_code_address_from_label_diff_minus_8
-  : [ `Symbol of string | `Label of Linearize.label ] -> string (* symbol *) -> t
-val as_code_address : Int64.t -> t
+   : [ `Symbol of string | `Label of Linearize.label ]
+  -> string (* symbol *)
+  -> t
+val as_code_address : Nativeint.t -> t

@@ -91,9 +91,11 @@ let assign_abbreviations t =
   t.abbrev_table_and_dies <- Some (abbrev_table, List.rev dies)
 
 let dwarf_version = Version.four
-let debug_abbrev_offset t = Value.as_four_byte_int_from_label t.debug_abbrev0
-  (* CR mshinwell: investigate further. *)
+
 let address_width_in_bytes_on_target = Value.as_byte Arch.size_addr
+
+let debug_abbrev_offset t =
+  Value.as_code_address_from_label t.debug_abbrev0
 
 let size_without_first_word t ~dies =
   let total_die_size =
@@ -106,22 +108,28 @@ let size_without_first_word t ~dies =
     + Value.size address_width_in_bytes_on_target
     + total_die_size
 
-(* The "4 +" is for the size field---see [emit], below. *)
 let size t =
   match t.abbrev_table_and_dies with
   | None ->
     failwith "must assign abbreviations before calculating debug info \
               section size"
-  | Some abbrev_table_and_dies ->
-    4 + size_without_first_word t ~dies:(snd abbrev_table_and_dies)
+  | Some (_abbrev_table, dies) ->
+    let size_without_first_word = size_without_first_word t ~dies in
+    let initial_length =
+      Initial_length.create (Nativeint.of_int size_without_first_word)
+    in
+    Initial_length.size initial_length + size_without_first_word
 
 let emit t ~emitter =
   match t.abbrev_table_and_dies with
   | None ->
     failwith "must assign abbreviations before emitting debug info section"
   | Some (abbrev_table, dies) ->
-    let size = size_without_first_word t ~dies in
-    Value.emit (Value.as_four_byte_int size) ~emitter;
+    let size_without_first_word = size_without_first_word t ~dies in
+    let initial_length =
+      Initial_length.create (Nativeint.of_int size_without_first_word)
+    in
+    Initial_length.emit initial_length ~emitter;
     Version.emit dwarf_version ~emitter;
     Value.emit (debug_abbrev_offset t) ~emitter;
     Value.emit address_width_in_bytes_on_target ~emitter;

@@ -49,7 +49,7 @@ let create_comp_dir ~directory =
 
 let create_stmt_list ~section_offset_label =
   Attribute.stmt_list,
-    Value.as_four_byte_int_from_label section_offset_label
+    Value.as_code_address_from_label section_offset_label
 
 let create_external ~is_visible_externally =
   let flag = if is_visible_externally then 1 else 0 in

@@ -40,13 +40,15 @@ let create entries =
 
 let label t = t.name
 
+let end_marker = Value.as_code_address Nativeint.zero
+
 let size t =
   let body_size =
     List.fold t.entries
       ~init:0
       ~f:(fun size entry -> size + Location_list_entry.size entry)
   in
-  body_size + 8 + 8
+  body_size + Value.size end_marker + Value.size end_marker
 
 let compare_increasing_vma t1 t2 =
   match t1.entries, t2.entries with
@@ -61,5 +63,5 @@ let emit t ~emitter =
      The end of any given location list is marked by an end of list entry,
      which consists of a 0 for the beginning address offset and a 0 for the
      ending address offset. *)
-  Value.emit (Value.as_code_address Int64.zero) ~emitter;
-  Value.emit (Value.as_code_address Int64.zero) ~emitter
+  Value.emit end_marker ~emitter;
+  Value.emit end_marker ~emitter

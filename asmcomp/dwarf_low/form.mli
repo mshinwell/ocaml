@@ -29,6 +29,7 @@ val data1 : t
 val data4 : t
 val data8 : t
 val string : t
+val strp : t
 val flag : t
 val block : t
 val ref_addr : t
