@@ -37,12 +37,13 @@ let create ~abbreviation_code ~tag ~has_children ~attributes =
   }
 
 let size t =
+  let (+) = Int64.add in
   Abbreviation_code.size t.abbreviation_code
     + Tag.size t.tag
     + Child_determination.size t.has_children
     + List.fold t.attributes
-        ~init:0
-        ~f:(fun size attr -> size + Attribute.size attr)
+        ~init:Int64.zero
+        ~f:(fun size attr -> Int64.add size (Attribute.size attr))
     (* See below regarding the two zero words. *)
     + Value.size (Value.as_uleb128 0)
     + Value.size (Value.as_uleb128 0)

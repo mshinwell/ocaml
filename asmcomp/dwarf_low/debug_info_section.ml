@@ -95,12 +95,13 @@ let dwarf_version = Version.four
 let address_width_in_bytes_on_target = Value.as_byte Arch.size_addr
 
 let debug_abbrev_offset t =
-  Value.as_code_address_from_label t.debug_abbrev0
+  Value.as_offset_from_label t.debug_abbrev0
 
 let size_without_first_word t ~dies =
+  let (+) = Int64.add in
   let total_die_size =
     List.fold_left dies
-      ~init:0
+      ~init:Int64.zero
       ~f:(fun size die -> size + Debugging_information_entry.size die)
   in
   Version.size dwarf_version
@@ -115,10 +116,8 @@ let size t =
               section size"
   | Some (_abbrev_table, dies) ->
     let size_without_first_word = size_without_first_word t ~dies in
-    let initial_length =
-      Initial_length.create (Nativeint.of_int size_without_first_word)
-    in
-    Initial_length.size initial_length + size_without_first_word
+    let initial_length = Initial_length.create size_without_first_word in
+    Int64.add (Initial_length.size initial_length) size_without_first_word
 
 let emit t ~emitter =
   match t.abbrev_table_and_dies with
@@ -126,9 +125,7 @@ let emit t ~emitter =
     failwith "must assign abbreviations before emitting debug info section"
   | Some (abbrev_table, dies) ->
     let size_without_first_word = size_without_first_word t ~dies in
-    let initial_length =
-      Initial_length.create (Nativeint.of_int size_without_first_word)
-    in
+    let initial_length = Initial_length.create size_without_first_word in
     Initial_length.emit initial_length ~emitter;
     Version.emit dwarf_version ~emitter;
     Value.emit (debug_abbrev_offset t) ~emitter;

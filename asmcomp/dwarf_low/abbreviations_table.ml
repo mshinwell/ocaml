@@ -38,8 +38,9 @@ let find t ~tag ~has_children ~attributes =
   with Not_found -> None
 
 let size t =
+  let (+) = Int64.add in
   List.fold t
-    ~init:0
+    ~init:Int64.zero
     ~f:(fun size entry -> size + Abbreviations_table_entry.size entry)
     (* See below re. the zero word. *)
     + Value.size (Value.as_uleb128 0)

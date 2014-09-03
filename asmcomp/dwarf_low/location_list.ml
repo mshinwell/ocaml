@@ -45,9 +45,10 @@ let end_marker = Value.as_code_address Nativeint.zero
 let size t =
   let body_size =
     List.fold t.entries
-      ~init:0
-      ~f:(fun size entry -> size + Location_list_entry.size entry)
+      ~init:Int64.zero
+      ~f:(fun size entry -> Int64.add size (Location_list_entry.size entry))
   in
+  let (+) = Int64.add in
   body_size + Value.size end_marker + Value.size end_marker
 
 let compare_increasing_vma t1 t2 =

@@ -83,7 +83,8 @@ let linkage_name = DW_AT_linkage_name
 let sibling = DW_AT_sibling
 
 let size t =
-  Value.size (Value.as_uleb128 (encode t)) + Form.size (form t)
+  Int64.add (Value.size (Value.as_uleb128 (encode t)))
+    (Form.size (form t))
 
 let emit t ~emitter =
   Value.emit (Value.as_uleb128 (encode t)) ~emitter;

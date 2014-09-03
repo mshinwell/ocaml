@@ -44,15 +44,15 @@ let opcode = function
   | DW_op_bregx _ -> 0x92
 
 let size t =
-  let opcode_size = 1 in
+  let opcode_size = Int64.of_int 1 in
   let args_size =
     match t with
     | DW_op_regx reg_number -> Value.size reg_number
     | DW_op_fbreg offset -> Value.size offset
     | DW_op_bregx (`Register reg_number, `Offset offset) ->
-      Value.size reg_number + Value.size offset
+      Int64.add (Value.size reg_number) (Value.size offset)
   in
-  opcode_size + args_size
+  Int64.add opcode_size args_size
 
 let emit t ~emitter =
   Value.emit (Value.as_byte (opcode t)) ~emitter;

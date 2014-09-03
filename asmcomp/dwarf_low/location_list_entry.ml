@@ -40,10 +40,25 @@ module Location_list_entry = struct
       expr = location_expression;
     }
 
-  let expr_size t = Location_expression.size t.expr
+  let expr_size t =
+    let size = Location_expression.size t.expr in
+    if Int64.compare size 0xFFFFL > 0 then assert false;
+    Int64.to_int size
 
-  (* CR mshinwell: probably only correct for 64 bit *)
-  let size t = 8 + 8 + 2 + (expr_size t)
+  let size t =
+    (* CR mshinwell: share with below *)
+    let v1 = 
+      Value.as_code_address_from_label_diff
+       (`Label t.beginning_address_label) (`Symbol t.start_of_code_symbol)
+    in
+    let v2 =
+      Value.as_code_address_from_label_diff_minus_8
+        (`Label t.ending_address_label) t.start_of_code_symbol
+    in
+    let v3 = Value.as_two_byte_int (expr_size t) in
+    let (+) = Int64.add in
+    Value.size v1 + Value.size v2 + Value.size v3
+      + Location_expression.size t.expr
 
   let emit t ~emitter =
     Value.emit
@@ -71,8 +86,8 @@ module Base_address_selection_entry = struct
 
   let size t =
     List.fold (to_dwarf_values t)
-      ~init:0
-      ~f:(fun acc v -> acc + Value.size v)
+      ~init:Int64.zero
+      ~f:(fun acc v -> Int64.add acc (Value.size v))
 
   let emit t ~emitter =
     List.iter (to_dwarf_values t) ~f:(Value.emit ~emitter)

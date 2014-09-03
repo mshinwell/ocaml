@@ -47,8 +47,8 @@ let insert t ~location_list =
 
 let size t =
   List.fold !t
-    ~init:0
-    ~f:(fun size loc_list -> size + Location_list.size loc_list)
+    ~init:Int64.zero
+    ~f:(fun size loc_list -> Int64.add size (Location_list.size loc_list))
 
 (*
 let sort location_lists =

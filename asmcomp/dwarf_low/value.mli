@@ -24,10 +24,14 @@ type t
 
 include Emittable.S with type t := t
 
+val as_eight_byte_int : Int64.t -> t
 val as_four_byte_int : Int32.t -> t
-val as_native_int : Nativeint.t -> t
 val as_two_byte_int : int -> t
 val as_byte : int -> t
+
+val as_absolute_offset : Int64.t -> t
+val as_offset_from_label : Linearize.label -> t
+
 val as_uleb128 : int -> t
 val as_leb128 : int -> t
 val as_string : string -> t

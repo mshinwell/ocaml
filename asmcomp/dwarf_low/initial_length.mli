@@ -24,6 +24,6 @@
    (DWARF-4 standard section 7.4). *)
 type t
 
-val create : Nativeint.t -> t
+val create : Int64.t -> t
 
 include Emittable.S with type t := t

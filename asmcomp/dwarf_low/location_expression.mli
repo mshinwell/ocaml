@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013, Jane Street Holding                                *)
+(*  Copyright 2013--2014, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -20,12 +20,12 @@
 (*                                                                     *)
 (***********************************************************************)
 
-
 type t
 
 include Emittable.S with type t := t
 
 val in_register : reg_number:int -> t
+(* CR mshinwell: offsets should be [Nativeint.t] *)
 val at_offset_from_stack_pointer : offset_in_bytes:int -> t
 val at_offset_from_frame_pointer : offset_in_bytes:int -> t
 val at_computed_offset_from_stack_pointer : offset_in_bytes:(unit -> int) -> t

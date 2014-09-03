@@ -22,15 +22,17 @@
 
 open Std_internal
 
+(* DWARF-4 standard section 6.1.2. *)
+
 type t = {
-  size : int;
+  size : Int64.t;
   values : Value.t list;
 }
 
 let create ~start_of_code_symbol ~end_of_code_symbol =
   let values = [
     Value.as_two_byte_int 2;  (* section version number *)
-    Value.as_four_byte_int Int32.zero;
+    Value.as_absolute_offset Int64.zero;  (* offset into .debug_info *)
     Value.as_byte Arch.size_addr;
     Value.as_byte 0;
     Value.as_two_byte_int 0;
@@ -44,13 +46,13 @@ let create ~start_of_code_symbol ~end_of_code_symbol =
   in
   let size =
     List.fold_left values
-      ~init:0
-      ~f:(fun size value -> size + Value.size value)
+      ~init:Int64.zero
+      ~f:(fun size value -> Int64.add size (Value.size value))
   in
   { size; values; }
 
 let size t = t.size
 
 let emit t ~emitter =
-  Value.emit (Value.as_four_byte_int (Int32.of_int t.size)) ~emitter;
+  Initial_length.emit (Initial_length.create t.size) ~emitter;
   List.iter t.values ~f:(Value.emit ~emitter)

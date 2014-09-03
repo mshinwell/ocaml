@@ -20,7 +20,9 @@
 (*                                                                     *)
 (***********************************************************************)
 
+(*
 open Std_internal
+*)
 
 (* CR mshinwell: http://llvm.org/docs/SourceLevelDebugging.html
    claims this table is a waste of space.  Maybe we don't need to emit it.
@@ -36,16 +38,20 @@ type t = {
 let create ~externally_visible_functions ~debug_info ~debug_info0 =
   { externally_visible_functions; debug_info; debug_info0; }
 
-let size t =
+let size _t = Int64.zero
+(*
   let size_of_entry function_name =
     4 + (String.length function_name) + 1
   in
   let size_of_all_entries =
     List.fold t.externally_visible_functions
-      ~init:0
-      ~f:(fun size entry -> size + size_of_entry entry)
+      ~init:Int64.zero
+      ~f:(fun size entry ->
+            Int64.add size (Int64.of_int (size_of_entry entry)))
   in
+  let (+) = Int64.add in
   2 + 4 + 4 + size_of_all_entries + 4
+*)
 
 let emit _t ~emitter:_ = ()
 (*

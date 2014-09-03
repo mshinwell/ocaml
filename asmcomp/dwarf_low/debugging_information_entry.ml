@@ -58,4 +58,4 @@ let size t =
   List.fold_left t.attribute_values
     ~init:(Abbreviation_code.size t.abbreviation_code)
     ~f:(fun size attribute_value ->
-          size + Attribute_value.size attribute_value)
+          Int64.add size (Attribute_value.size attribute_value))

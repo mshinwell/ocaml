@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013, Jane Street Holding                                *)
+(*  Copyright 2013--2014, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -31,7 +31,7 @@ let encode = function
 let no = DW_CHILDREN_no
 let yes = DW_CHILDREN_yes
 
-let size _t = 1
+let size _t = Int64.of_int 1
 
 let emit t ~emitter =
   Value.emit (Value.as_byte (encode t)) ~emitter
