@@ -105,7 +105,7 @@ let size = function
   | Byte _ -> 1
   | Uleb128 i -> uleb128_size i
   | Leb128 i -> leb128_size i
-  | String s -> 1 + String.length s
+  | String s -> 8  (* strings are emitted as .quad pointing to .debug_str *)
   | Code_address_from_symbol _ | Code_address_from_label _ | Code_address _
   | Code_address_from_label_diff _
   | Code_address_from_label_diff_minus_8 _ -> 8
