@@ -146,13 +146,10 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
       try Hashtbl.find lexical_block_cache cache_key
       with Not_found -> begin
         let lexical_block_proto_die =
-          let start_pos =
-            Attribute_value.create_low_pc ~address_label:start_pos
-          in
           Proto_DIE.create ~parent:(Some function_proto_die)
             ~tag:Tag.lexical_block
             ~attribute_values:[
-              start_pos;
+              Attribute_value.create_low_pc ~address_label:start_pos;
               Attribute_value.create_high_pc ~address_label:end_pos;
             ]
         in
@@ -165,6 +162,16 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
      found at runtime, indexed by program counter range, and insert the list
      into the .debug_loc table. *)
   let location_list_attribute_value =
+    (* DWARF-4 spec 2.6.2: "In the case of a compilation unit where all of the
+       machine code is contained in a single contiguous section, no base
+       address selection entry is needed."
+       However, we tried this (and emitted plain label addresses rather than
+       deltas in [Location_list_entry]), and the addresses were wrong in the
+       final executable.  Oh well. *)
+    let base_address_selection_entry =
+      Location_list_entry.create_base_address_selection_entry
+        ~base_address_symbol:fundecl.Linearize.fun_name
+    in
     let location_list_entries =
       Available_range.fold range
         ~init:[]
@@ -173,7 +180,10 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
            | None -> location_list_entries
            | Some entry -> entry::location_list_entries)
     in
-    let location_list = Location_list.create ~location_list_entries in
+    let location_list =
+      Location_list.create
+        (base_address_selection_entry :: location_list_entries)
+    in
     Debug_loc_table.insert t.debug_loc_table ~location_list
   in
   (* Build a new DWARF type for this identifier.  Each identifier has its

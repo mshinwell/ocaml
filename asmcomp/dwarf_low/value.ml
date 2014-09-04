@@ -200,7 +200,8 @@ let rec emit t ~emitter =
     begin match Emitter.target emitter with
     | `Other ->
       emit_directive_for_offset ~emitter;
-      Emitter.emit_label emitter label
+      Emitter.emit_label emitter label;
+      Emitter.emit_string emitter "\n"
     | `MacOS_X ->
       let count = !set_counter in
       let name = Printf.sprintf "Ldwarf_value%d" count in
