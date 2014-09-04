@@ -40,3 +40,13 @@ let debug_info = create ~name:"debug_info"
 let debug_pubnames = create ~name:"debug_pubnames"
 let debug_aranges = create ~name:"debug_aranges"
 let debug_str = create ~name:"debug_str"
+
+let all = [
+ debug_abbrev;
+ debug_line;
+ debug_loc;
+ debug_info;
+ debug_pubnames;
+ debug_aranges;
+ debug_str;
+]

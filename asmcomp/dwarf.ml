@@ -73,7 +73,8 @@ let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
         Attribute_value.create_low_pc_from_symbol ~symbol:start_of_code_symbol;
         Attribute_value.create_high_pc_from_symbol ~symbol:end_of_code_symbol;
         Attribute_value.create_stmt_list
-          ~section_offset_label:debug_line_label;
+          ~section_offset_label:
+            (Section_names.starting_label Section_names.debug_line);
       ]
     in
     Proto_DIE.create ~parent:None
@@ -249,7 +250,6 @@ let post_emission_dwarf_for_function t ~end_of_function_label =
     t.available_ranges_and_fundecl <- None
 
 let emit t =
-  let with_emitter emitter fs = List.iter (fun f -> f emitter) fs in
   let debug_info =
     Debug_info_section.create ~compilation_unit:t.compilation_unit_proto_die
   in
@@ -264,20 +264,14 @@ let emit t =
       ~end_of_code_symbol:t.end_of_code_symbol
   in
   let module SN = Section_names in
-  with_emitter t.emitter [
-    Emitter.emit_section_declaration ~section_name:SN.debug_abbrev;
-    Emitter.emit_section_declaration ~section_name:SN.debug_line;
-    Emitter.emit_section_declaration ~section_name:SN.debug_loc;
-  ];
-  (* CR-someday mshinwell: consider using [with_emitter] *)
   let emitter = t.emitter in
-  Emitter.emit_section_declaration emitter ~section_name:SN.debug_info;
+  ListLabels.iter SN.all ~f:(fun section_name ->
+    Emitter.emit_section_declaration emitter ~section_name);
+  Emitter.emit_switch_to_section emitter ~section_name:SN.debug_info;
   let debug_abbrev = Debug_info_section.emit debug_info ~emitter in
   Emitter.emit_switch_to_section emitter ~section_name:SN.debug_abbrev;
   Abbreviations_table.emit debug_abbrev ~emitter;
-  Emitter.emit_section_declaration emitter ~section_name:SN.debug_pubnames;
-(*  Pubnames_table.emit pubnames_table ~emitter ~debug_info0; *)
-  Emitter.emit_section_declaration emitter ~section_name:SN.debug_aranges;
+  Emitter.emit_switch_to_section emitter ~section_name:SN.debug_aranges;
   Aranges_table.emit aranges_table ~emitter;
   Emitter.emit_switch_to_section emitter ~section_name:SN.debug_loc;
   Debug_loc_table.emit t.debug_loc_table ~emitter;

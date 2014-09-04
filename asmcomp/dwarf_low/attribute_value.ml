@@ -48,20 +48,19 @@ let create_comp_dir ~directory =
   Attribute.comp_dir, Value.as_string directory
 
 let create_stmt_list ~section_offset_label =
+  (* DWARF-4 standard section 3.1.1.4. *)
   Attribute.stmt_list,
-    Value.as_code_address_from_label section_offset_label
+    Value.as_offset_from_label section_offset_label
+      ~section:Section_names.debug_line
 
 let create_external ~is_visible_externally =
   let flag = if is_visible_externally then 1 else 0 in
   Attribute.extern'l, Value.as_byte flag
 
-(*
-let create_location ~offset_from_start_of_debug_loc =
-  Attribute.location,
-    Value.as_four_byte_int offset_from_start_of_debug_loc
-*)
 let create_location ~location_list_label =
-  Attribute.location, Value.as_code_address_from_label location_list_label
+  Attribute.location,
+    Value.as_offset_from_label location_list_label
+      ~section:Section_names.debug_loc
 
 let create_type ~proto_die =
   Attribute.typ', Value.as_code_address_from_label proto_die

@@ -228,7 +228,8 @@ let rec emit t ~emitter =
       Emitter.emit_string emitter " = ";
       Emitter.emit_label emitter label;
       Emitter.emit_string emitter "-";
-      Emitter.emit_label emitter (Emitter.debug_str_label emitter);
+      Emitter.emit_label emitter
+        (Section_names.starting_label Section_names.debug_str);
       Emitter.emit_string emitter "\n";
       emit (Offset_from_var name) ~emitter
     end

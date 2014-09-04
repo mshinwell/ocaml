@@ -29,7 +29,6 @@ type t = {
   emit_switch_to_section : section_name:string -> unit;
   target : [ `MacOS_X | `Other ];
   mutable strings : (string * Linearize.label) list;
-  debug_str_label : Linearize.label;
 }
 
 let create ~emit_string ~emit_symbol ~emit_label ~emit_label_declaration
@@ -37,20 +36,15 @@ let create ~emit_string ~emit_symbol ~emit_label ~emit_label_declaration
   { emit_string; emit_symbol; emit_label; emit_label_declaration;
     emit_section_declaration; emit_switch_to_section; target;
     strings = [];
-    debug_str_label = Linearize.new_label ();
   }
 
 let cache_string t s =
   try List.assoc s t.strings
   with Not_found -> begin
-    let label =
-      if t.strings = [] then t.debug_str_label else Linearize.new_label ()
-    in
+    let label = Linearize.new_label () in
     t.strings <- (s, label)::t.strings;
     label
   end
-
-let debug_str_label t = t.debug_str_label
 
 let emit_strings t =
   ListLabels.iter t.strings

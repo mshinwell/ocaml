@@ -32,7 +32,6 @@ val create : emit_string:(string -> unit)
   -> t
 
 val cache_string : t -> string -> Linearize.label
-val debug_str_label : t -> Linearize.label
 val emit_strings : t -> unit
 
 val emit_string : t -> string -> unit
