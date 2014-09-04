@@ -20,11 +20,16 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* The textual names of those sections relevant to debugging information. *)
-val debug_abbrev : string
-val debug_line : string
-val debug_loc : string
-val debug_info : string
-val debug_pubnames : string
-val debug_aranges : string
-val debug_str : string
+type t
+
+(* The names of those sections relevant to debugging information. *)
+val debug_abbrev : t
+val debug_line : t
+val debug_loc : t
+val debug_info : t
+val debug_pubnames : t
+val debug_aranges : t
+val debug_str : t
+
+val name : t -> string
+val starting_label : t -> Linearize.label

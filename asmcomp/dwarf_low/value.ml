@@ -34,8 +34,8 @@ type t =
      different size from the target's address width.)  We check during
      emission that the value is not too large. *)
   | Absolute_offset of Int64.t
-  | Offset_from_label of Linearize.label
-  | Offset_from_symbol of string
+  | Offset_from_label of Linearize.label * Section_names.t
+  | Offset_from_var of string
   (* CR-someday mshinwell: this will need adjusting for cross-compilation
      support *)
   (* Absolute or computed code addresses cannot be wider than the target's
@@ -81,7 +81,7 @@ let as_string s =
   String s
 
 let as_absolute_offset o = Absolute_offset o
-let as_offset_from_label l = Offset_from_label l
+let as_offset_from_label l ~section = Offset_from_label (l, section)
 
 let as_code_address_from_symbol s =
   Code_address_from_symbol s
@@ -125,7 +125,7 @@ let size =
            7.4.3). *)
       | Absolute_offset _
       | Offset_from_label _
-      | Offset_from_symbol _ ->
+      | Offset_from_var _ ->
         (* The size of offsets depends on the DWARF format being emitted, not
            on the target word size. *)
         begin match Dwarf_format.size () with
@@ -174,7 +174,12 @@ let rec emit t ~emitter =
   | Four_byte_int i ->
     Emitter.emit_string emitter (sprintf "\t.long\t0x%lx\n" i);
   | Two_byte_int i ->
-    Emitter.emit_string emitter (sprintf "\t.value\t0x%x\n" i)
+    let directive =
+      match Emitter.target emitter with
+      | `Other -> "value"
+      | `MacOS_X -> "short"
+    in
+    Emitter.emit_string emitter (sprintf "\t.%s\t0x%x\n" directive i)
   | Byte b ->
     Emitter.emit_string emitter (sprintf "\t.byte\t0x%x\n" b)
   | Uleb128 i ->
@@ -188,20 +193,33 @@ let rec emit t ~emitter =
     end;
     emit_directive_for_offset ~emitter;
     Emitter.emit_string emitter (sprintf "0x%Lx\n" o);
-  | Offset_from_label label ->
+  | Offset_from_label (label, section) ->
+    begin match Emitter.target emitter with
+    | `Other ->
+      emit_directive_for_offset ~emitter;
+      Emitter.emit_label emitter label
+    | `MacOS_X ->
+      let count = !set_counter in
+      let name = Printf.sprintf "Ldwarf_value%d" count in
+      incr set_counter;
+      Emitter.emit_string emitter name;
+      Emitter.emit_string emitter " = ";
+      Emitter.emit_label emitter label;
+      Emitter.emit_string emitter "-";
+      Emitter.emit_label emitter (Section_names.starting_label section);
+      Emitter.emit_string emitter "\n";
+      emit (Offset_from_var name) ~emitter
+    end
+  | Offset_from_var var ->
     emit_directive_for_offset ~emitter;
-    Emitter.emit_label emitter label;
-    Emitter.emit_string emitter "\n"
-  | Offset_from_symbol symbol ->
-    emit_directive_for_offset ~emitter;
-    Emitter.emit_symbol emitter symbol;
+    Emitter.emit_string emitter var;
     Emitter.emit_string emitter "\n"
   | String s ->
     (* Strings are collected together into ".debug_str". *)
     let label = Emitter.cache_string emitter s in
     begin match Emitter.target emitter with
     | `Other ->
-      emit (Offset_from_label label) ~emitter
+      emit (Offset_from_label (label, Section_names.debug_str)) ~emitter
     | `MacOS_X ->
       let count = !set_counter in
       let name = Printf.sprintf "Ldwarf_value%d" count in
@@ -212,7 +230,7 @@ let rec emit t ~emitter =
       Emitter.emit_string emitter "-";
       Emitter.emit_label emitter (Emitter.debug_str_label emitter);
       Emitter.emit_string emitter "\n";
-      emit (Offset_from_symbol name) ~emitter
+      emit (Offset_from_var name) ~emitter
     end
   | Code_address p ->
     emit_as_native_int (`Native_int p) ~emitter

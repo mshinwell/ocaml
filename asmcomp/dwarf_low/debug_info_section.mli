@@ -26,13 +26,12 @@ include Emittable.S with type t := t
 
 val create
    : compilation_unit:Proto_die.t
-  -> debug_abbrev0:Linearize.label
   -> t
 
-(* Convert proto-DIEs to DIEs, assigning abbreviations in the process, and return
-   the necessary abbrevations table.  This operation may only be performed once on
-   any given value of type [t].  It must be performed before size calculation or
-   emission. *)
+(* Convert proto-DIEs to DIEs, assigning abbreviations in the process, and
+   return the necessary abbrevations table.  This operation may only be
+   performed once on any given value of type [t].  It must be performed before
+   size calculation or emission. *)
 val assign_abbreviations : t -> unit
 
 val emit : t -> emitter:Emitter.t -> Abbreviations_table.t

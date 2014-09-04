@@ -30,7 +30,10 @@ val as_two_byte_int : int -> t
 val as_byte : int -> t
 
 val as_absolute_offset : Int64.t -> t
-val as_offset_from_label : Linearize.label -> t
+val as_offset_from_label
+   : Linearize.label
+  -> section:Section_names.t
+  -> t
 
 val as_uleb128 : int -> t
 val as_leb128 : int -> t

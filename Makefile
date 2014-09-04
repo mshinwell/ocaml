@@ -82,6 +82,7 @@ BYTECOMP=bytecomp/meta.cmo bytecomp/instruct.cmo bytecomp/bytegen.cmo \
 DWARF_LOW=\
   asmcomp/dwarf_low/std_internal.cmo \
   asmcomp/dwarf_low/dwarf_format.cmo \
+  asmcomp/dwarf_low/section_names.cmo \
   asmcomp/dwarf_low/emitter.cmo \
   asmcomp/dwarf_low/emittable.cmo \
   asmcomp/dwarf_low/value.cmo \
@@ -107,7 +108,6 @@ DWARF_LOW=\
   asmcomp/dwarf_low/debug_info_section.cmo \
   asmcomp/dwarf_low/debug_loc_table.cmo \
   asmcomp/dwarf_low/pubnames_table.cmo \
-  asmcomp/dwarf_low/section_names.cmo \
   asmcomp/dwarf_low/dwarf_low_dot_std.cmo
 
 ASMCOMP=asmcomp/arch.cmo asmcomp/debuginfo.cmo \

@@ -20,10 +20,23 @@
 (*                                                                     *)
 (***********************************************************************)
 
-let debug_abbrev = "debug_abbrev"
-let debug_line = "debug_line"
-let debug_loc = "debug_loc"
-let debug_info = "debug_info"
-let debug_pubnames = "debug_pubnames"
-let debug_aranges = "debug_aranges"
-let debug_str = "debug_str"
+type t = {
+  name : string;
+  starting_label : Linearize.label;
+}
+
+let create ~name =
+  { name;
+    starting_label = Linearize.new_label ();
+  }
+
+let name t = t.name
+let starting_label t = t.starting_label
+
+let debug_abbrev = create ~name:"debug_abbrev"
+let debug_line = create ~name:"debug_line"
+let debug_loc = create ~name:"debug_loc"
+let debug_info = create ~name:"debug_info"
+let debug_pubnames = create ~name:"debug_pubnames"
+let debug_aranges = create ~name:"debug_aranges"
+let debug_str = create ~name:"debug_str"

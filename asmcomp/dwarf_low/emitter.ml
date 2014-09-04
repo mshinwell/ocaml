@@ -66,6 +66,14 @@ let emit_string t = t.emit_string
 let emit_symbol t = t.emit_symbol
 let emit_label t = t.emit_label
 let emit_label_declaration t = t.emit_label_declaration
-let emit_section_declaration t = t.emit_section_declaration
-let emit_switch_to_section t = t.emit_switch_to_section
+
+let emit_section_declaration t ~section_name =
+  t.emit_section_declaration
+    ~section_name:(Section_names.name section_name);
+  emit_label_declaration t
+    ~label_name:(Section_names.starting_label section_name)
+
+let emit_switch_to_section t ~section_name =
+  t.emit_switch_to_section ~section_name:(Section_names.name section_name)
+
 let target t = t.target

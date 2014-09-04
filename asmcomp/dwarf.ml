@@ -250,10 +250,8 @@ let post_emission_dwarf_for_function t ~end_of_function_label =
 
 let emit t =
   let with_emitter emitter fs = List.iter (fun f -> f emitter) fs in
-  let debug_abbrev0 = Linearize.new_label () in
   let debug_info =
     Debug_info_section.create ~compilation_unit:t.compilation_unit_proto_die
-      ~debug_abbrev0
   in
   Debug_info_section.assign_abbreviations debug_info;
   let _pubnames_table =
@@ -266,20 +264,14 @@ let emit t =
       ~end_of_code_symbol:t.end_of_code_symbol
   in
   let module SN = Section_names in
-  let debug_loc0 = Linearize.new_label () in
-  let debug_info0 = Linearize.new_label () in
   with_emitter t.emitter [
     Emitter.emit_section_declaration ~section_name:SN.debug_abbrev;
-    Emitter.emit_label_declaration ~label_name:debug_abbrev0;
     Emitter.emit_section_declaration ~section_name:SN.debug_line;
-    Emitter.emit_label_declaration ~label_name:t.debug_line_label;
     Emitter.emit_section_declaration ~section_name:SN.debug_loc;
-    Emitter.emit_label_declaration ~label_name:debug_loc0;
   ];
   (* CR-someday mshinwell: consider using [with_emitter] *)
   let emitter = t.emitter in
   Emitter.emit_section_declaration emitter ~section_name:SN.debug_info;
-  Emitter.emit_label_declaration emitter ~label_name:debug_info0;
   let debug_abbrev = Debug_info_section.emit debug_info ~emitter in
   Emitter.emit_switch_to_section emitter ~section_name:SN.debug_abbrev;
   Abbreviations_table.emit debug_abbrev ~emitter;

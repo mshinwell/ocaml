@@ -32,11 +32,10 @@ open Std_internal
 type t = {
   externally_visible_functions : string list;
   debug_info : Debug_info_section.t;
-  debug_info0 : Linearize.label;
 }
 
-let create ~externally_visible_functions ~debug_info ~debug_info0 =
-  { externally_visible_functions; debug_info; debug_info0; }
+let create ~externally_visible_functions ~debug_info =
+  { externally_visible_functions; debug_info; }
 
 let size _t = Int64.zero
 (*

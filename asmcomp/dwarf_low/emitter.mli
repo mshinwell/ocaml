@@ -39,6 +39,6 @@ val emit_string : t -> string -> unit
 val emit_symbol : t -> string -> unit
 val emit_label : t -> Linearize.label -> unit
 val emit_label_declaration : t -> label_name:Linearize.label -> unit
-val emit_section_declaration : t -> section_name:string -> unit
-val emit_switch_to_section : t -> section_name:string -> unit
+val emit_section_declaration : t -> section_name:Section_names.t -> unit
+val emit_switch_to_section : t -> section_name:Section_names.t -> unit
 val target : t -> [ `MacOS_X | `Other ]

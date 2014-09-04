@@ -25,14 +25,12 @@ module Proto_DIE = Proto_die
 
 type t = {
   compilation_unit : Proto_DIE.t;
-  debug_abbrev0 : Linearize.label;
   mutable abbrev_table_and_dies
     : (Abbreviations_table.t * (Debugging_information_entry.t list)) option;
 }
 
-let create ~compilation_unit ~debug_abbrev0 =
+let create ~compilation_unit =
   { compilation_unit;
-    debug_abbrev0;
     abbrev_table_and_dies = None;
   }
 
@@ -95,7 +93,8 @@ let dwarf_version = Version.four
 let address_width_in_bytes_on_target = Value.as_byte Arch.size_addr
 
 let debug_abbrev_offset t =
-  Value.as_offset_from_label t.debug_abbrev0
+  let section = Section_names.debug_abbrev in
+  Value.as_offset_from_label (Section_names.starting_label section) ~section
 
 let size_without_first_word t ~dies =
   let (+) = Int64.add in
