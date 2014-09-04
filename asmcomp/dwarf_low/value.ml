@@ -36,6 +36,7 @@ type t =
   | Absolute_offset of Int64.t
   | Offset_from_label of Linearize.label * Section_names.t
   | Offset_from_var of string
+  | Reference_from_label of Linearize.label
   (* CR-someday mshinwell: this will need adjusting for cross-compilation
      support *)
   (* Absolute or computed code addresses cannot be wider than the target's
@@ -82,6 +83,7 @@ let as_string s =
 
 let as_absolute_offset o = Absolute_offset o
 let as_offset_from_label l ~section = Offset_from_label (l, section)
+let as_reference_from_label l = Reference_from_label l
 
 let as_code_address_from_symbol s =
   Code_address_from_symbol s
@@ -125,9 +127,10 @@ let size =
            7.4.3). *)
       | Absolute_offset _
       | Offset_from_label _
-      | Offset_from_var _ ->
+      | Offset_from_var _
+      | Reference_from_label _ ->
         (* The size of offsets depends on the DWARF format being emitted, not
-           on the target word size. *)
+           on the target word size.  Ditto for "ref_addr" forms. *)
         begin match Dwarf_format.size () with
         | `Thirty_two -> 4
         | `Sixty_four -> 8
@@ -233,6 +236,10 @@ let rec emit t ~emitter =
       Emitter.emit_string emitter "\n";
       emit (Offset_from_var name) ~emitter
     end
+  | Reference_from_label label ->
+    emit_directive_for_offset ~emitter;
+    Emitter.emit_label emitter label;
+    Emitter.emit_string emitter "\n"
   | Code_address p ->
     emit_as_native_int (`Native_int p) ~emitter
   | Code_address_from_symbol sym ->

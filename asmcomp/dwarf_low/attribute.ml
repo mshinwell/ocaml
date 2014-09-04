@@ -59,9 +59,11 @@ let form = function
   | DW_AT_name -> Form.strp
   | DW_AT_comp_dir -> Form.strp
   | DW_AT_producer -> Form.strp
-  | DW_AT_stmt_list -> Form.data4
+  | DW_AT_stmt_list -> Form.sec_offset
   | DW_AT_external -> Form.flag
-  | DW_AT_location -> Form.data8
+  (* DW_AT_location, in our case, is always used with "loclistptr" (DWARF-4
+     standard section 7.5.4). *)
+  | DW_AT_location -> Form.sec_offset
   | DW_AT_type -> Form.ref_addr
   | DW_AT_encoding -> Form.data1
   | DW_AT_byte_size -> Form.data1

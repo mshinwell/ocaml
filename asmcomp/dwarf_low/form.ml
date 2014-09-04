@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013, Jane Street Holding                                *)
+(*  Copyright 2013--2014, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -30,6 +30,7 @@ type t =
   | DW_FORM_flag
   | DW_FORM_block
   | DW_FORM_ref_addr
+  | DW_FORM_sec_offset
 
 let encode t =
   let code =
@@ -43,6 +44,7 @@ let encode t =
     | DW_FORM_flag -> 0x0c
     | DW_FORM_block -> 0x09
     | DW_FORM_ref_addr -> 0x10
+    | DW_FORM_sec_offset -> 0x17
   in
   Value.as_uleb128 code
 
@@ -55,6 +57,7 @@ let strp = DW_FORM_strp
 let flag = DW_FORM_flag
 let block = DW_FORM_block
 let ref_addr = DW_FORM_ref_addr
+let sec_offset = DW_FORM_sec_offset
 
 let size t =
   Value.size (encode t)

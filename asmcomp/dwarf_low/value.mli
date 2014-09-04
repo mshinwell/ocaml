@@ -34,6 +34,7 @@ val as_offset_from_label
    : Linearize.label
   -> section:Section_names.t
   -> t
+val as_reference_from_label : Linearize.label -> t
 
 val as_uleb128 : int -> t
 val as_leb128 : int -> t

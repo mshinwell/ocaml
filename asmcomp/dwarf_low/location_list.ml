@@ -33,9 +33,9 @@ type t = {
 let sort entries =
   List.sort Location_list_entry.compare_ascending_vma entries
 
-let create entries =
+let create ~location_list_entries =
   { name = Linearize.new_label ();
-    entries = sort entries;
+    entries = sort location_list_entries;
   }
 
 let label t = t.name

@@ -24,6 +24,9 @@ type t
 
 include Emittable.S with type t := t
 
-val create : Location_list_entry.t list -> t
+val create
+   : location_list_entries:Location_list_entry.t list
+  -> t
+
 val label : t -> Linearize.label
 val compare_increasing_vma : t -> t -> int

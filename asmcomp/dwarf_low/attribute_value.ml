@@ -58,18 +58,23 @@ let create_external ~is_visible_externally =
   Attribute.extern'l, Value.as_byte flag
 
 let create_location ~location_list_label =
+  (* This is the "loclistptr" case (DWARF-4 standard section 7.5.4). *)
   Attribute.location,
     Value.as_offset_from_label location_list_label
       ~section:Section_names.debug_loc
 
 let create_type ~proto_die =
-  Attribute.typ', Value.as_code_address_from_label proto_die
+  Attribute.typ',
+    Value.as_offset_from_label proto_die
+      ~section:Section_names.debug_info
 
 let create_encoding ~encoding =
   Attribute.encoding, Encoding_attribute.as_dwarf_value encoding
 
 let create_sibling ~proto_die =
-  Attribute.sibling, Value.as_code_address_from_label proto_die
+  Attribute.sibling,
+    Value.as_offset_from_label proto_die
+      ~section:Section_names.debug_info
 
 let create_byte_size ~byte_size =
   assert (byte_size >= 1 && byte_size <= 0xff); (* CR mshinwell: not assert *)
