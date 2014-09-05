@@ -19,7 +19,7 @@ CAMLC=boot/ocamlrun boot/ocamlc -nostdlib -I boot
 CAMLOPT=boot/ocamlrun ./ocamlopt -nostdlib -I stdlib -I otherlibs/dynlink -g-full -g -S
 COMPFLAGS=-strict-sequence -w +33..39+48 -warn-error A -bin-annot \
           -safe-string $(INCLUDES)
-LINKFLAGS=
+LINKFLAGS=-cclib -export-dynamic -g -g-full
 
 CAMLYACC=boot/ocamlyacc
 YACCFLAGS=-v
