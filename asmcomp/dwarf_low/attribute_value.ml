@@ -77,7 +77,9 @@ let create_sibling ~proto_die =
       ~section:Section_names.debug_info
 
 let create_byte_size ~byte_size =
-  assert (byte_size >= 1 && byte_size <= 0xff); (* CR mshinwell: not assert *)
+  if byte_size < 1 || byte_size > 0xff then begin
+    failwith "Attribute_value.create_byte_size"
+  end;
   Attribute.byte_size, Value.as_byte byte_size
 
 let create_linkage_name ~linkage_name =

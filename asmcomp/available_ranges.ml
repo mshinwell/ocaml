@@ -225,39 +225,40 @@ let rec process_instruction t ~first_insn ~insn ~prev_insn
      [births] and [deaths]; and we would like the register to have an open
      subrange from this point.  It follows that we should process deaths
      before births. *)
-  Reg.Set.fold (fun reg () ->
+  Reg_with_availability.Set.fold ~f:(fun reg () ->
       let start_pos, start_insn =
-        try Reg.Map.find reg open_subrange_start_insns
+        try Reg_with_availability.Map.find reg open_subrange_start_insns
         with Not_found -> assert false
       in
       let end_pos = Lazy.force label in
       let subrange =
         Available_subrange.create ~start_pos ~start_insn ~end_pos
+          ~confidence:(Reg_with_availability.confidence reg)
       in
       add_subrange t ~subrange)
     deaths
-    ();
+    ~init:();
   let open_subrange_start_insns =
     let open_subrange_start_insns =
       (Reg.Map.filter (fun reg _start_insn -> not (Reg.Set.mem reg deaths))
         open_subrange_start_insns)
     in
-    Reg.Set.fold (fun reg open_subrange_start_insns ->
+    Reg_with_availability.Set.fold ~f:(fun reg open_subrange_start_insns ->
         let new_insn =
           { L.
             desc = L.Lavailable_subrange (ref None);
             next = insn;
-            arg = [| reg |];
+            arg = [| Reg_with_availability.reg reg |];
             res = [| |];
             dbg = Debuginfo.none;
             live = Reg.Set.empty;
-            available_before = Reg.Set.empty;
+            available_before = Reg_with_availability.Set.empty;
           }
         in
         insert_insn ~new_insn;
         Reg.Map.add reg (Lazy.force label, new_insn) open_subrange_start_insns)
       births
-      open_subrange_start_insns
+      ~init:open_subrange_start_insns
   in
   begin if Lazy.is_val label then
     let new_insn =
@@ -268,7 +269,7 @@ let rec process_instruction t ~first_insn ~insn ~prev_insn
         res = [| |];
         dbg = Debuginfo.none;
         live = Reg.Set.empty;
-        available_before = Reg.Set.empty;
+        available_before = Reg_with_availability.Set.empty;
       }
     in
     insert_insn ~new_insn

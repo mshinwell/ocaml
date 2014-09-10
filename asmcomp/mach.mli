@@ -90,7 +90,7 @@ type instruction =
        tagged with value identifier names.  There will be at most one entry
        in any given [available_before] set for a given value identifier.
        See available_regs.ml for more details. *)
-    mutable available_before: Reg.Set.t;
+    mutable available_before: Reg_with_availability.Set.t;
   }
 
 and instruction_desc =

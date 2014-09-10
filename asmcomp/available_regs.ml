@@ -66,6 +66,8 @@ let filter_avail_before avail_before =
         else R.Set.add reg (R.Set.remove reg' acc)
       | _ -> assert false) avail_before (* ~init:*)R.Set.empty
 
+let destroyed_at_c_call = Array.to_list Proc.destroyed_at_c_call
+
 (* [available_regs ~instr ~avail_before] calculates, given the registers
    "available before" an instruction [instr], the registers that are available
    after [instr].
@@ -122,7 +124,21 @@ let rec available_regs instr ~avail_before =
     | Iend -> avail_before
     | Ireturn | Iop Itailcall_ind | Iop (Itailcall_imm _) ->
       R.Set.empty
-    | Iop Icall_ind | Iop (Icall_imm _) | Iop (Iextcall _) ->
+    | Iop (Iextcall false) ->
+      (* C call that does not allocate.
+         - Callee-save hard registers as per the target platform's ABI are
+           preserved, irrespective of their contents (since no GC may occur
+           during the call).
+         - Pseudos assigned to the stack are preserved, again, irrespective
+           of their contents.
+      *)
+      R.Set.filter (fun reg ->
+          match reg.R.location with
+          | R.Stack -> true
+          | R.Reg reg_num -> not (List.mem reg_num destroyed_at_c_call)
+          | R.Unknown -> failwith "R.Unknown in Iextcall false case"
+        ) avail_before
+    | Iop Icall_ind | Iop (Icall_imm _) | Iop (Iextcall true) ->
       (* For registers holding pointers:
          All we can guarantee is that registers live across [instr] (and the
          result, which will be unioned in below) will be available after the
