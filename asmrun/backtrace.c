@@ -347,15 +347,16 @@ CAMLprim value caml_get_exception_raw_backtrace(value unit)
     int saved_caml_backtrace_pos;
     intnat i;
 
-    if (caml_backtrace_pos > BACKTRACE_BUFFER_SIZE) {
-      caml_backtrace_pos = BACKTRACE_BUFFER_SIZE;
+    saved_caml_backtrace_pos = caml_backtrace_pos;
+
+    if (saved_caml_backtrace_pos > BACKTRACE_BUFFER_SIZE) {
+      saved_caml_backtrace_pos = BACKTRACE_BUFFER_SIZE;
     }
 
     memcpy(saved_caml_backtrace_buffer, caml_backtrace_buffer,
-           caml_backtrace_pos * sizeof(code_t));
-    saved_caml_backtrace_pos = caml_backtrace_pos;
+           saved_caml_backtrace_pos * sizeof(code_t));
 
-    res = caml_alloc(caml_backtrace_pos, tag);
+    res = caml_alloc(saved_caml_backtrace_pos, tag);
     for (i = 0; i < saved_caml_backtrace_pos; i++) {
       /* [Val_Descrptr] always returns an immediate. */
       Field(res, i) = Val_Descrptr(saved_caml_backtrace_buffer[i]);
