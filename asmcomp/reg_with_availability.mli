@@ -20,7 +20,12 @@
 (*                                                                     *)
 (***********************************************************************)
 
+(* A pair of a pseudoregister and a confidence judgement as to its
+   availability. *)
 type t
+
+val reg : t -> Reg.t
+val confidence : t -> [ `Definitely | `Maybe ]
 
 module Set : sig
   type ra = t
@@ -29,27 +34,18 @@ module Set : sig
      in a value of type [t]. *)
   type t
 
-  val mem : t -> ra -> bool
+  (* [of_array] assigns [`Definitely] confidence to each register. *)
+  val of_array : Reg.t array -> t
 
-  (* [inter] may lower confidence. *)
+  (* [inter] may lower confidence, but never raises it. *)
   val inter : t -> t -> t
 
-  val filter : t -> f:(ra -> bool) -> t
+  val filter_and_change_confidence
+     : t
+    -> f:(ra -> [ `Unchanged | `Degrade | `Remove ])
+    -> t
+
   val fold : t -> init:'a -> f:(ra -> 'a -> 'a) -> 'a
 end
 
-module Map : sig
-  (* There is at most one confidence judgement for a given register
-     in the domain of a value of type [t]. *)
-
-  type ra = t
-  type t
-
-  val find : t -> Reg.t -> ra option
-end
-
-val definitely_available : Reg.t -> t
-val maybe_available : Reg.t -> t
-
-val reg : t -> Reg.t
-val confidence : t -> [ `Definitely | `Maybe ]
+module Map : Map.S with type key = t

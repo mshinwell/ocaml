@@ -76,6 +76,7 @@ val holds_non_pointer : t -> bool
 (* Name for printing *)
 val name : t -> string
 
+val compare_stamps : t -> t -> int
 module Set: Set.S with type elt = t
 module Map: Map.S with type key = t
 

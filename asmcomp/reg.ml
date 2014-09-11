@@ -206,10 +206,12 @@ let reinit_reg r =
 let reinit() =
   List.iter reinit_reg !reg_list
 
+let compare_stamps r1 r2 = r1.stamp - r2.stamp
+
 module RegOrder =
   struct
     type t = reg
-    let compare r1 r2 = r1.stamp - r2.stamp
+    let compare = compare_stamps
   end
 
 module Set = Set.Make(RegOrder)

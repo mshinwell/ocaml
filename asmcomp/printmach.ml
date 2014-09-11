@@ -55,6 +55,21 @@ let regsetaddr ppf s =
       match r.typ with Addr -> fprintf ppf "*" | _ -> ())
     s
 
+let regavailsetaddr ppf s =
+  let first = ref true in
+  Reg_with_availability.Set.iter
+    (fun r ->
+      let confidence = Reg_with_availability.confidence r in
+      let r = Reg_with_availability.reg r in
+      if !first then begin first := false; fprintf ppf "%a" reg r end
+      else fprintf ppf "@ %a" reg r;
+      begin match confidence with
+      | `Definitely -> "[D]"
+      | `Maybe -> "[M]"
+      end;
+      match r.typ with Addr -> fprintf ppf "*" | _ -> ())
+    s
+
 let intcomp = function
   | Isigned c -> Printf.sprintf " %ss " (Printcmm.comparison c)
   | Iunsigned c -> Printf.sprintf " %su " (Printcmm.comparison c)
@@ -143,7 +158,7 @@ let rec instr ppf i =
     fprintf ppf "}@]@,";
   end;
   if !print_live then begin
-    fprintf ppf "@[<1>avail={%a" regsetaddr i.available_before;
+    fprintf ppf "@[<1>avail={%a" regavailsetaddr i.available_before;
     fprintf ppf "}@]@,";
   end;
   begin match i.desc with
