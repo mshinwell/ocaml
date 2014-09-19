@@ -111,7 +111,11 @@ let compile_genfuns ppf f =
     (Cmmgen.generic_functions true [Compilenv.current_unit_infos ()])
 
 let compile_implementation ?toplevel ~source_file_path prefixname ppf
-      ((size, _module_value_bindings), lam) =
+      ((size, module_value_bindings), lam) =
+  List.iter (fun (path, ident, typ, global, pos) ->
+    Printf.printf "global '%s' path '%s' ident '%s' pos=%d\n%!"
+      (Ident.name global) (Path.name path) (Ident.unique_name ident)
+      pos) module_value_bindings;
   let asmfile =
     if !keep_asm_file
     then prefixname ^ ext_asm
