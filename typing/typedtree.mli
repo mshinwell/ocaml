@@ -506,6 +506,8 @@ val rev_let_bound_idents: value_binding list -> Ident.t list
 
 val let_bound_idents_with_loc:
     value_binding list -> (Ident.t * string loc) list
+val let_bound_idents_with_type:
+    value_binding list -> (Ident.t * type_expr) list
 
 (* Alpha conversion of patterns *)
 val alpha_pat: (Ident.t * Ident.t) list -> pattern -> pattern

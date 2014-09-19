@@ -561,6 +561,10 @@ let nat_toplevel_name id =
   with Not_found ->
     fatal_error("Translmod.nat_toplevel_name: " ^ Ident.unique_name id)
 
+(* CR mshinwell: see if this can be improved *)
+let idents_to_expose_to_debugger = ref []
+let ident_positions = ref []
+
 let transl_store_structure glob map prims str =
   let rec transl_store rootpath subst = function
     [] ->
@@ -573,7 +577,36 @@ let transl_store_structure glob map prims str =
                 transl_store rootpath subst rem)
   | Tstr_value(rec_flag, pat_expr_list) ->
       let ids = let_bound_idents pat_expr_list in
+      ident_positions := [];
       let lam = transl_let rec_flag pat_expr_list (store_idents ids) in
+      let ident_positions = List.combine ids (List.rev !ident_positions) in
+      (* For later emission of debugging information in the native code
+         compiler, record the position within the module block of all
+         values (currently everything except modules, functors, etc.)
+         defined by this structure item, together with their corresponding
+         identifier names and types. *)
+      begin match rootpath with
+      | None -> ()
+      | Some path ->
+        let ids_and_types =
+          List.filter (fun (id, _type_expr) ->
+              (* CR mshinwell: ugly *)
+              let name = Ident.name id in
+              Char.uppercase (String.get name 0) <> String.get name 0)
+            (let_bound_idents_with_type pat_expr_list)
+        in
+        let idents_to_expose =
+          List.map (fun (id, type_expr) ->
+              let pos =
+                try List.assoc id ident_positions
+                with Not_found -> assert false
+              in
+              path, id, type_expr, glob, pos)
+            ids_and_types
+        in
+        idents_to_expose_to_debugger :=
+          idents_to_expose @ !idents_to_expose_to_debugger
+      end;
       Lsequence(subst_lambda subst lam,
                 transl_store rootpath (add_idents false ids subst) rem)
   | Tstr_primitive descr ->
@@ -662,6 +695,8 @@ let transl_store_structure glob map prims str =
     try
       let (pos, cc) = Ident.find_same id map in
       let init_val = apply_coercion Alias cc (Lvar id) in
+      (* CR mshinwell: rewrite this once we're sure it works *)
+      ident_positions := pos :: !ident_positions;
       Lprim(Psetfield(pos, false), [Lprim(Pgetglobal glob, []); init_val])
     with Not_found ->
       fatal_error("Translmod.store_ident: " ^ Ident.unique_name id)
@@ -755,9 +790,10 @@ let transl_store_phrases module_name str =
 let transl_store_implementation module_name (str, restr) =
   let s = !transl_store_subst in
   transl_store_subst := Ident.empty;
-  let r = transl_store_gen module_name (str, restr) false in
+  idents_to_expose_to_debugger := [];
+  let n, lam = transl_store_gen module_name (str, restr) false in
   transl_store_subst := s;
-  r
+  (n, !idents_to_expose_to_debugger), lam
 
 (* Compile a toplevel phrase *)
 
