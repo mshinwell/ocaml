@@ -22,7 +22,7 @@ type instruction =
     res: Reg.t array;
     dbg: Debuginfo.t;
     live: Reg.Set.t;
-    available_before: Reg_with_availability.Set.t; }
+    available_before: Reg.Set.t; }
 
 and instruction_desc =
     Lend

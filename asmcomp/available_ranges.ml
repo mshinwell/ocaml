@@ -21,7 +21,6 @@
 (***********************************************************************)
 
 module L = Linearize
-module RA = Reg_with_availability
 
 module Available_subrange : sig
   type t
@@ -30,14 +29,12 @@ module Available_subrange : sig
      : start_insn:L.instruction  (* must be [Lavailable_subrange] *)
     -> start_pos:L.label
     -> end_pos:L.label
-    -> confidence:[ `Definitely | `Maybe ]
     -> t
 
   val start_pos : t -> L.label
   val end_pos : t -> L.label
   val reg : t -> Reg.t
   val offset_from_stack_ptr : t -> int option
-  val confidence : t -> [ `Definitely | `Maybe ]
 end = struct
   type t = {
     start_insn : L.instruction;
@@ -45,18 +42,15 @@ end = struct
     (* CR mshinwell: we need to check exactly what happens with function
        epilogues, including returns in the middle of functions. *)
     end_pos : L.label;
-    confidence : [ `Definitely | `Maybe ];
   }
 
-  let create ~start_insn ~start_pos ~end_pos ~confidence =
+  let create ~start_insn ~start_pos ~end_pos =
     match start_insn.L.desc with
-    | L.Lavailable_subrange _ ->
-      { start_insn; start_pos; end_pos; confidence; }
+    | L.Lavailable_subrange _ -> { start_insn; start_pos; end_pos; }
     | _ -> failwith "Available_subrange.create"
 
   let start_pos t = t.start_pos
   let end_pos t = t.end_pos
-  let confidence t = t.confidence
 
   let reg t =
     assert (Array.length t.start_insn.L.arg = 1);
@@ -150,27 +144,14 @@ let fold t ~init ~f =
     t.ranges
     init
 
-let ident_from_subrange ~subrange =
-  let reg = Available_subrange.reg subrange in
-  let confidence = Available_subrange.confidence subrange in
-  let prefix =
-    match confidence with
-    | `Definitely -> ""
-    | `Maybe -> ".?"
-  in
+let ident_from_reg ~reg =
   match Reg.Raw_name.to_ident reg.Reg.raw_name with
-  | Some ident ->
-    let module I = Ident in
-    { I.
-      stamp = ident.I.stamp;
-      name = prefix ^ ident.I.name;
-      flags = ident.I.flags;
-    }
+  | Some ident -> ident
   | None -> assert false  (* most likely a bug in available_regs.ml *)
 
 let add_subrange t ~subrange =
+  let ident = ident_from_reg ~reg:(Available_subrange.reg subrange) in
   let range =
-    let ident = ident_from_subrange ~subrange in
     try Ident.find_same ident t.ranges
     with Not_found -> begin
       let range = Available_range.create () in
@@ -199,23 +180,21 @@ let births_and_deaths ~insn ~prev_insn =
       | L.Lop (Mach.Istackoffset _) -> true
       | _ -> false
   in
-  (* For calculating births and deaths we use plain [RA.Set.diff], which
-     treats changes in confidence as differences. *)
   let births =
     match prev_insn with
     | None -> insn.L.available_before
     | Some prev_insn ->
       if not adjusts_sp then
-        RA.Set.diff insn.L.available_before prev_insn.L.available_before
+        Reg.Set.diff insn.L.available_before prev_insn.L.available_before
       else
         insn.L.available_before
   in
   let deaths =
     match prev_insn with
-    | None -> Reg_with_availability.Set.empty
+    | None -> Reg.Set.empty
     | Some prev_insn ->
       if not adjusts_sp then
-        RA.Set.diff prev_insn.L.available_before insn.L.available_before
+        Reg.Set.diff prev_insn.L.available_before insn.L.available_before
       else
         prev_insn.L.available_before
   in
@@ -246,39 +225,39 @@ let rec process_instruction t ~first_insn ~insn ~prev_insn
      [births] and [deaths]; and we would like the register to have an open
      subrange from this point.  It follows that we should process deaths
      before births. *)
-  RA.Set.fold ~f:(fun ra () ->
+  Reg.Set.fold (fun reg () ->
       let start_pos, start_insn =
-        try Reg_with_availability.Map.find ra open_subrange_start_insns
+        try Reg.Map.find reg open_subrange_start_insns
         with Not_found -> assert false
       in
       let end_pos = Lazy.force label in
       let subrange =
         Available_subrange.create ~start_pos ~start_insn ~end_pos
-          ~confidence:(Reg_with_availability.confidence ra)
       in
       add_subrange t ~subrange)
     deaths
-    ~init:();
+    ();
   let open_subrange_start_insns =
     let open_subrange_start_insns =
-      (RA.Map.filter (fun ra _start_insn -> not (RA.Set.mem deaths ra))
+      (Reg.Map.filter (fun reg _start_insn -> not (Reg.Set.mem reg deaths))
         open_subrange_start_insns)
     in
-    RA.Set.fold births ~init:open_subrange_start_insns
-      ~f:(fun ra open_subrange_start_insns ->
+    Reg.Set.fold (fun reg open_subrange_start_insns ->
         let new_insn =
           { L.
             desc = L.Lavailable_subrange (ref None);
             next = insn;
-            arg = [| Reg_with_availability.reg ra |];
+            arg = [| reg |];
             res = [| |];
             dbg = Debuginfo.none;
             live = Reg.Set.empty;
-            available_before = Reg_with_availability.Set.empty;
+            available_before = Reg.Set.empty;
           }
         in
         insert_insn ~new_insn;
-        RA.Map.add ra (Lazy.force label, new_insn) open_subrange_start_insns)
+        Reg.Map.add reg (Lazy.force label, new_insn) open_subrange_start_insns)
+      births
+      open_subrange_start_insns
   in
   begin if Lazy.is_val label then
     let new_insn =
@@ -289,7 +268,7 @@ let rec process_instruction t ~first_insn ~insn ~prev_insn
         res = [| |];
         dbg = Debuginfo.none;
         live = Reg.Set.empty;
-        available_before = Reg_with_availability.Set.empty;
+        available_before = Reg.Set.empty;
       }
     in
     insert_insn ~new_insn
@@ -312,7 +291,7 @@ let create ~fundecl =
   let first_insn =
     let first_insn = fundecl.L.fun_body in
     process_instruction t ~first_insn ~insn:first_insn ~prev_insn:None
-      ~open_subrange_start_insns:RA.Map.empty
+      ~open_subrange_start_insns:Reg.Map.empty
   in
 (*
   Printf.printf "Available ranges for function: %s\n%!" fundecl.L.fun_name;

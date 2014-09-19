@@ -18,7 +18,6 @@ val reg: formatter -> Reg.t -> unit
 val regs: formatter -> Reg.t array -> unit
 val regset: formatter -> Reg.Set.t -> unit
 val regsetaddr: formatter -> Reg.Set.t -> unit
-val regavailsetaddr: formatter -> Reg_with_availability.Set.t -> unit
 val operation: Mach.operation -> Reg.t array -> formatter -> Reg.t array -> unit
 val test: Mach.test -> formatter -> Reg.t array -> unit
 val instr: formatter -> Mach.instruction -> unit

@@ -607,16 +607,14 @@ asmcomp/interf.cmi : asmcomp/mach.cmi
 asmcomp/linearize.cmi : asmcomp/reg.cmi asmcomp/mach.cmi bytecomp/lambda.cmi \
     asmcomp/debuginfo.cmi
 asmcomp/liveness.cmi : asmcomp/mach.cmi
-asmcomp/mach.cmi : asmcomp/reg_with_availability.cmi asmcomp/reg.cmi \
-    bytecomp/lambda.cmi asmcomp/debuginfo.cmi asmcomp/cmm.cmi \
-    asmcomp/arch.cmo
+asmcomp/mach.cmi : asmcomp/reg.cmi bytecomp/lambda.cmi asmcomp/debuginfo.cmi \
+    asmcomp/cmm.cmi asmcomp/arch.cmo
 asmcomp/printclambda.cmi : asmcomp/clambda.cmi
 asmcomp/printcmm.cmi : asmcomp/cmm.cmi
 asmcomp/printlinear.cmi : asmcomp/linearize.cmi
 asmcomp/printmach.cmi : asmcomp/reg.cmi asmcomp/mach.cmi
 asmcomp/proc.cmi : asmcomp/reg.cmi asmcomp/mach.cmi
 asmcomp/reg.cmi : typing/ident.cmi asmcomp/cmm.cmi
-asmcomp/reg_with_availability.cmi : asmcomp/reg.cmi
 asmcomp/reload.cmi : asmcomp/mach.cmi
 asmcomp/reloadgen.cmi : asmcomp/reg.cmi asmcomp/mach.cmi
 asmcomp/schedgen.cmi : asmcomp/mach.cmi asmcomp/linearize.cmi
@@ -685,18 +683,16 @@ asmcomp/asmpackager.cmx : typing/typemod.cmx bytecomp/translmod.cmx \
     utils/config.cmx asmcomp/compilenv.cmx asmcomp/cmx_format.cmi \
     utils/clflags.cmx utils/ccomp.cmx asmcomp/asmlink.cmx asmcomp/asmgen.cmx \
     asmcomp/asmpackager.cmi
-asmcomp/available_ranges.cmo : asmcomp/reg_with_availability.cmi \
-    asmcomp/reg.cmi asmcomp/mach.cmi asmcomp/linearize.cmi typing/ident.cmi \
-    asmcomp/debuginfo.cmi asmcomp/available_ranges.cmi
-asmcomp/available_ranges.cmx : asmcomp/reg_with_availability.cmx \
-    asmcomp/reg.cmx asmcomp/mach.cmx asmcomp/linearize.cmx typing/ident.cmx \
-    asmcomp/debuginfo.cmx asmcomp/available_ranges.cmi
-asmcomp/available_regs.cmo : asmcomp/reg_with_availability.cmi \
-    asmcomp/reg.cmi asmcomp/proc.cmi asmcomp/mach.cmi \
-    asmcomp/available_regs.cmi
-asmcomp/available_regs.cmx : asmcomp/reg_with_availability.cmx \
-    asmcomp/reg.cmx asmcomp/proc.cmx asmcomp/mach.cmx \
-    asmcomp/available_regs.cmi
+asmcomp/available_ranges.cmo : asmcomp/reg.cmi asmcomp/mach.cmi \
+    asmcomp/linearize.cmi typing/ident.cmi asmcomp/debuginfo.cmi \
+    asmcomp/available_ranges.cmi
+asmcomp/available_ranges.cmx : asmcomp/reg.cmx asmcomp/mach.cmx \
+    asmcomp/linearize.cmx typing/ident.cmx asmcomp/debuginfo.cmx \
+    asmcomp/available_ranges.cmi
+asmcomp/available_regs.cmo : asmcomp/reg.cmi asmcomp/proc.cmi \
+    asmcomp/mach.cmi asmcomp/available_regs.cmi
+asmcomp/available_regs.cmx : asmcomp/reg.cmx asmcomp/proc.cmx \
+    asmcomp/mach.cmx asmcomp/available_regs.cmi
 asmcomp/clambda.cmo : bytecomp/lambda.cmi typing/ident.cmi \
     asmcomp/debuginfo.cmi parsing/asttypes.cmi asmcomp/clambda.cmi
 asmcomp/clambda.cmx : bytecomp/lambda.cmx typing/ident.cmx \
@@ -767,8 +763,7 @@ asmcomp/dwarf.cmo : asmcomp/dwarf_low/tag.cmi \
     asmcomp/dwarf_low/emitter.cmi asmcomp/dwarf_low/dwarf_low_dot_std.cmo \
     asmcomp/dwarf_low/debug_loc_table.cmi \
     asmcomp/dwarf_low/debug_info_section.cmi asmcomp/available_ranges.cmi \
-    asmcomp/dwarf_low/attribute_value.cmi asmcomp/arch.cmo \
-    asmcomp/dwarf_low/aranges_table.cmi \
+    asmcomp/dwarf_low/attribute_value.cmi asmcomp/dwarf_low/aranges_table.cmi \
     asmcomp/dwarf_low/abbreviations_table.cmi asmcomp/dwarf.cmi
 asmcomp/dwarf.cmx : asmcomp/dwarf_low/tag.cmx \
     asmcomp/dwarf_low/section_names.cmx asmcomp/reg.cmx \
@@ -780,8 +775,7 @@ asmcomp/dwarf.cmx : asmcomp/dwarf_low/tag.cmx \
     asmcomp/dwarf_low/emitter.cmx asmcomp/dwarf_low/dwarf_low_dot_std.cmx \
     asmcomp/dwarf_low/debug_loc_table.cmx \
     asmcomp/dwarf_low/debug_info_section.cmx asmcomp/available_ranges.cmx \
-    asmcomp/dwarf_low/attribute_value.cmx asmcomp/arch.cmx \
-    asmcomp/dwarf_low/aranges_table.cmx \
+    asmcomp/dwarf_low/attribute_value.cmx asmcomp/dwarf_low/aranges_table.cmx \
     asmcomp/dwarf_low/abbreviations_table.cmx asmcomp/dwarf.cmi
 asmcomp/emit.cmo : asmcomp/reg.cmi asmcomp/proc.cmi utils/misc.cmi \
     asmcomp/mach.cmi asmcomp/linearize.cmi bytecomp/lambda.cmi \
@@ -813,12 +807,10 @@ asmcomp/liveness.cmo : asmcomp/reg.cmi asmcomp/proc.cmi \
 asmcomp/liveness.cmx : asmcomp/reg.cmx asmcomp/proc.cmx \
     asmcomp/printmach.cmx utils/misc.cmx asmcomp/mach.cmx \
     asmcomp/liveness.cmi
-asmcomp/mach.cmo : asmcomp/reg_with_availability.cmi asmcomp/reg.cmi \
-    bytecomp/lambda.cmi asmcomp/debuginfo.cmi asmcomp/cmm.cmi \
-    asmcomp/arch.cmo asmcomp/mach.cmi
-asmcomp/mach.cmx : asmcomp/reg_with_availability.cmx asmcomp/reg.cmx \
-    bytecomp/lambda.cmx asmcomp/debuginfo.cmx asmcomp/cmm.cmx \
-    asmcomp/arch.cmx asmcomp/mach.cmi
+asmcomp/mach.cmo : asmcomp/reg.cmi bytecomp/lambda.cmi asmcomp/debuginfo.cmi \
+    asmcomp/cmm.cmi asmcomp/arch.cmo asmcomp/mach.cmi
+asmcomp/mach.cmx : asmcomp/reg.cmx bytecomp/lambda.cmx asmcomp/debuginfo.cmx \
+    asmcomp/cmm.cmx asmcomp/arch.cmx asmcomp/mach.cmi
 asmcomp/printclambda.cmo : bytecomp/printlambda.cmi bytecomp/lambda.cmi \
     typing/ident.cmi asmcomp/clambda.cmi parsing/asttypes.cmi \
     asmcomp/printclambda.cmi
@@ -835,14 +827,14 @@ asmcomp/printlinear.cmo : asmcomp/printmach.cmi asmcomp/mach.cmi \
 asmcomp/printlinear.cmx : asmcomp/printmach.cmx asmcomp/mach.cmx \
     asmcomp/linearize.cmx bytecomp/lambda.cmx asmcomp/debuginfo.cmx \
     asmcomp/printlinear.cmi
-asmcomp/printmach.cmo : asmcomp/reg_with_availability.cmi asmcomp/reg.cmi \
-    asmcomp/proc.cmi asmcomp/printcmm.cmi asmcomp/mach.cmi \
-    bytecomp/lambda.cmi asmcomp/debuginfo.cmi asmcomp/cmm.cmi \
-    asmcomp/arch.cmo asmcomp/printmach.cmi
-asmcomp/printmach.cmx : asmcomp/reg_with_availability.cmx asmcomp/reg.cmx \
-    asmcomp/proc.cmx asmcomp/printcmm.cmx asmcomp/mach.cmx \
-    bytecomp/lambda.cmx asmcomp/debuginfo.cmx asmcomp/cmm.cmx \
-    asmcomp/arch.cmx asmcomp/printmach.cmi
+asmcomp/printmach.cmo : asmcomp/reg.cmi asmcomp/proc.cmi \
+    asmcomp/printcmm.cmi asmcomp/mach.cmi bytecomp/lambda.cmi \
+    asmcomp/debuginfo.cmi asmcomp/cmm.cmi asmcomp/arch.cmo \
+    asmcomp/printmach.cmi
+asmcomp/printmach.cmx : asmcomp/reg.cmx asmcomp/proc.cmx \
+    asmcomp/printcmm.cmx asmcomp/mach.cmx bytecomp/lambda.cmx \
+    asmcomp/debuginfo.cmx asmcomp/cmm.cmx asmcomp/arch.cmx \
+    asmcomp/printmach.cmi
 asmcomp/proc.cmo : asmcomp/reg.cmi utils/misc.cmi asmcomp/mach.cmi \
     utils/config.cmi asmcomp/cmm.cmi utils/clflags.cmi utils/ccomp.cmi \
     asmcomp/arch.cmo asmcomp/proc.cmi
@@ -851,10 +843,6 @@ asmcomp/proc.cmx : asmcomp/reg.cmx utils/misc.cmx asmcomp/mach.cmx \
     asmcomp/arch.cmx asmcomp/proc.cmi
 asmcomp/reg.cmo : typing/ident.cmi asmcomp/cmm.cmi asmcomp/reg.cmi
 asmcomp/reg.cmx : typing/ident.cmx asmcomp/cmm.cmx asmcomp/reg.cmi
-asmcomp/reg_with_availability.cmo : asmcomp/reg.cmi \
-    asmcomp/reg_with_availability.cmi
-asmcomp/reg_with_availability.cmx : asmcomp/reg.cmx \
-    asmcomp/reg_with_availability.cmi
 asmcomp/reload.cmo : asmcomp/reloadgen.cmi asmcomp/reg.cmi asmcomp/mach.cmi \
     asmcomp/cmm.cmi utils/clflags.cmi asmcomp/arch.cmo asmcomp/reload.cmi
 asmcomp/reload.cmx : asmcomp/reloadgen.cmx asmcomp/reg.cmx asmcomp/mach.cmx \
@@ -1202,11 +1190,9 @@ asmcomp/dwarf_low/attribute.cmo : asmcomp/dwarf_low/value.cmi \
 asmcomp/dwarf_low/attribute.cmx : asmcomp/dwarf_low/value.cmx \
     asmcomp/dwarf_low/form.cmx asmcomp/dwarf_low/attribute.cmi
 asmcomp/dwarf_low/attribute_value.cmo : asmcomp/dwarf_low/value.cmi \
-    asmcomp/dwarf_low/section_names.cmi \
     asmcomp/dwarf_low/encoding_attribute.cmi asmcomp/dwarf_low/attribute.cmi \
     asmcomp/dwarf_low/attribute_value.cmi
 asmcomp/dwarf_low/attribute_value.cmx : asmcomp/dwarf_low/value.cmx \
-    asmcomp/dwarf_low/section_names.cmx \
     asmcomp/dwarf_low/encoding_attribute.cmx asmcomp/dwarf_low/attribute.cmx \
     asmcomp/dwarf_low/attribute_value.cmi
 asmcomp/dwarf_low/child_determination.cmo : asmcomp/dwarf_low/value.cmi \

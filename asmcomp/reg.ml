@@ -42,7 +42,6 @@ end = struct
      we will always emit a move at the moment, since it is assumed [y] might
      be mutable (in the [Cassign] sense).  See [bind_let] in selectgen.ml.
   *)
-  (* CR-soon mshinwell: see if we can do better here *)
 
   let create_temporary () = Temporary
   let create_procedure_call_convention () = Procedure_call_convention
@@ -207,12 +206,10 @@ let reinit_reg r =
 let reinit() =
   List.iter reinit_reg !reg_list
 
-let compare_stamps r1 r2 = r1.stamp - r2.stamp
-
 module RegOrder =
   struct
     type t = reg
-    let compare = compare_stamps
+    let compare r1 r2 = r1.stamp - r2.stamp
   end
 
 module Set = Set.Make(RegOrder)
