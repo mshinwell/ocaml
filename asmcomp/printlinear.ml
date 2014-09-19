@@ -66,7 +66,7 @@ let instr ppf i =
   | Lavailable_subrange _offset ->
       fprintf ppf "<avail subrange>:"
   end;
-  fprintf ppf " @[<1>{avail=%a}@]" regsetaddr i.available_before;
+  fprintf ppf " @[<1>{avail=%a}@]" regavailsetaddr i.available_before;
   if not (Debuginfo.is_none i.dbg) then
     fprintf ppf " %s" (Debuginfo.to_string i.dbg)
 

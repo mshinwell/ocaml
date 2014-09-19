@@ -112,7 +112,8 @@ DWARF_LOW=\
 
 ASMCOMP=asmcomp/arch.cmo asmcomp/debuginfo.cmo \
   asmcomp/cmm.cmo asmcomp/printcmm.cmo \
-  asmcomp/reg.cmo asmcomp/mach.cmo asmcomp/proc.cmo \
+  asmcomp/reg.cmo asmcomp/reg_with_availability.cmo \
+  asmcomp/mach.cmo asmcomp/proc.cmo \
   asmcomp/clambda.cmo asmcomp/printclambda.cmo asmcomp/compilenv.cmo \
   asmcomp/closure.cmo asmcomp/strmatch.cmo asmcomp/cmmgen.cmo \
   asmcomp/printmach.cmo asmcomp/selectgen.cmo asmcomp/selection.cmo \

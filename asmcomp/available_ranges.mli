@@ -40,7 +40,6 @@ module Available_subrange : sig
   val start_pos : t -> Linearize.label
   val end_pos : t -> Linearize.label
   val reg : t -> Reg.t
-  val availability : t -> [ `Definitely | `Maybe ]
   (* [offset_from_stack_ptr] returns [None] just when [reg] is _not_
      assigned to the stack. *)
   val offset_from_stack_ptr : t -> int option

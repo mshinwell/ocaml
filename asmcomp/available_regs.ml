@@ -23,38 +23,39 @@
 module List = ListLabels
 module M = Mach
 module R = Reg
-module R = Reg_with_availability
+module RA = Reg_with_availability
 
 (* [overwrite_union reg_set ~overwrite_with] removes from [reg_set] all
    registers having the same location as [overwrite_with]; and then adds
    [overwrite_with] into the resulting set. *)
 let overwrite_union reg_set ~overwrite_with =
-  RA.Set.fold (fun ra acc ->
+  RA.Set.fold overwrite_with ~init:overwrite_with ~f:(fun ra acc ->
     match (RA.reg ra).R.loc with
     | R.Unknown ->
       (* This pass is always run after register allocation. *)
       failwith "overwrite_union: register has no location"
     | R.Reg _ | R.Stack _ ->
       let not_sharing_loc =
-        RA.Set.filter (fun ra' -> (RA.reg ra).R.loc <> (RA.reg ra').R.loc) acc
+        RA.Set.filter acc
+          ~f:(fun ra' -> (RA.reg ra).R.loc <> (RA.reg ra').R.loc)
       in
-      RA.Set.add ra not_sharing_loc) overwrite_with (* ~init:*)reg_set
+      RA.Set.add ra not_sharing_loc)
 
 (* Filter out registers that are not tagged with a value identifier name; and
    in the case where multiple registers exist for a given value identifier,
    choose a canonical one (see comment below). *)
 let filter_avail_before avail_before =
-  RA.Set.fold (fun ra acc ->
+  RA.Set.fold avail_before ~init:RA.Set.empty ~f:(fun ra acc ->
     let reg = RA.reg ra in
     if not (R.Raw_name.is_ident reg.R.raw_name) then acc
     (* CR-soon mshinwell: handle values split across multiple registers *)
     else if reg.R.part <> None then acc
     else
       let for_same_ident =
-        RA.Set.filter (fun ra' ->
-          R.Raw_name.(=) reg.R.raw_name (RA.reg ra').R.raw_name) acc
+        RA.Set.filter acc ~f:(fun ra' ->
+          R.Raw_name.(=) reg.R.raw_name (RA.reg ra').R.raw_name)
       in
-      match RA.Set.elements for_same_ident with
+      match RA.Set.to_list for_same_ident with
       | [] -> RA.Set.add ra acc
       | [ra'] ->
         let priority ra =
@@ -65,10 +66,8 @@ let filter_avail_before avail_before =
           | R.Stack _ -> 1
         in
         if priority ra' >= priority ra then acc
-        else R.Set.add ra (R.Set.remove ra' acc)
-      | _ -> assert false) avail_before (* ~init:*)RA.Set.empty
-
-let destroyed_at_c_call = Array.to_list Proc.destroyed_at_c_call
+        else RA.Set.add ra (RA.Set.remove ra' acc)
+      | _ -> assert false)
 
 (* [available_regs ~instr ~avail_before] calculates, given the registers
    "available before" an instruction [instr], the registers that are available
@@ -122,24 +121,27 @@ let rec available_regs instr ~avail_before =
       end
     in
     let open Mach in
+    let is_destroyed_at_oper reg =
+      R.Set.exists (fun reg' -> reg.R.loc = reg'.R.loc)
+        (R.set_of_array (Proc.destroyed_at_oper instr.desc))
+    in
     match instr.desc with
     | Iend -> avail_before
     | Ireturn | Iop Itailcall_ind | Iop (Itailcall_imm _) ->
       RA.Set.empty
-    | Iop (Iextcall false) ->
+    | Iop (Iextcall (_, false)) ->
       (* C call that does not allocate.
          - Callee-save hard registers as per the target platform's ABI are
            preserved, irrespective of their contents (since no GC may occur
            during the call).
          - Pseudos assigned to the stack are preserved, again, irrespective
            of their contents. *)
-      RA.Set.filter (fun ra ->
+      RA.Set.filter avail_before ~f:(fun ra ->
           match (RA.reg ra).R.loc with
-          | R.Stack -> true
-          | R.Reg reg_num -> not (List.mem reg_num destroyed_at_c_call)
-          | R.Unknown -> failwith "R.Unknown in Iextcall false case"
-        ) avail_before
-    | Iop Icall_ind | Iop (Icall_imm _) | Iop (Iextcall true) ->
+          | R.Stack _ -> true
+          | R.Reg _ -> not (is_destroyed_at_oper (RA.reg ra))
+          | R.Unknown -> failwith "R.Unknown in Iextcall false case")
+    | Iop Icall_ind | Iop (Icall_imm _) | Iop (Iextcall (_, true)) ->
       (* For registers that might hold pointers:
          1. If they are live across the instruction, their availability
             after the call is the same as before the call.
@@ -163,23 +165,21 @@ let rec available_regs instr ~avail_before =
          [instr.next]), since we will only arrive at [instr.next] if there
          was no exception. *)
       let non_ptr, maybe_ptr =
-        RA.Set.partition RA.holds_non_ptr avail_before
-      in
-      let destroyed_at_oper =
-        R.set_of_array (Proc.destroyed_at_oper instr.desc)
+        RA.Set.partition avail_before ~f:RA.definitely_holds_non_ptr
       in
       (* [union] is ok to use here since the sets of registers are known not
          to have overlapping locations. *)
-      (* CR mshinwell: check this assumption *)
-      RA.Set.union
+      (* CR mshinwell: check this assumption.  Using [overwrite_union]
+         anyway for the moment *)
+      overwrite_union
         (RA.Set.filter_and_change_confidence maybe_ptr ~f:(fun ra ->
             let reg = RA.reg ra in
-            if R.Set.mem instr.M.live reg then `Unchanged       (* case 1 *)
-            else if Set.mem destroyed_at_oper reg then `Remove  (* case 2(a) *)
+            if R.Set.mem reg instr.M.live then `Unchanged       (* case 1 *)
+            else if is_destroyed_at_oper reg then `Remove       (* case 2(a) *)
             else `Degrade                                       (* case 2(b) *)
           ))
         (RA.Set.filter_and_change_confidence non_ptr ~f:(fun ra -> (* case 3 *)
-            if R.Set.mem destroyed_at_oper (RA.reg ra) then `Remove
+            if is_destroyed_at_oper (RA.reg ra) then `Remove
             else `Unchanged
           ))
     | Iop (Iintop Icheckbound) | Iop (Iintop_imm (Icheckbound, _))
@@ -220,7 +220,7 @@ let rec available_regs instr ~avail_before =
     | Iraise _ -> RA.Set.empty
   in
   let avail_after =
-    overwrite_union without_res ~overwrite_with:(RA.set_of_array instr.M.res)
+    overwrite_union without_res ~overwrite_with:(RA.Set.of_array instr.M.res)
   in
   match instr.M.desc with
   | M.Iend -> avail_after
@@ -229,13 +229,13 @@ let rec available_regs instr ~avail_before =
    let avail_before =
      (* CR mshinwell: this seems dubious.  If this algorithm were exact,
         shouldn't this be redundant? *)
-     overwrite_union avail_after ~overwrite_with:(RA.set_of_array next.M.arg)
+     overwrite_union avail_after ~overwrite_with:(RA.Set.of_array next.M.arg)
    in
    available_regs next ~avail_before
 
 let fundecl f =
-  let fun_args = RA.set_of_array f.M.fun_args in
-  let first_instr_arg = RA.set_of_array f.M.fun_body.M.arg in
+  let fun_args = RA.Set.of_array f.M.fun_args in
+  let first_instr_arg = RA.Set.of_array f.M.fun_body.M.arg in
   assert (RA.Set.subset first_instr_arg fun_args);
   let avail_before = filter_avail_before fun_args in
   ignore ((available_regs f.M.fun_body ~avail_before) : RA.Set.t);

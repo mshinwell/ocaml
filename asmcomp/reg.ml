@@ -42,6 +42,7 @@ end = struct
      we will always emit a move at the moment, since it is assumed [y] might
      be mutable (in the [Cassign] sense).  See [bind_let] in selectgen.ml.
   *)
+  (* CR-soon mshinwell: see if we can do better here *)
 
   let create_temporary () = Temporary
   let create_procedure_call_convention () = Procedure_call_convention

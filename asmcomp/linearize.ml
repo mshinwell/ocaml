@@ -28,7 +28,7 @@ type instruction =
     res: Reg.t array;
     dbg: Debuginfo.t;
     live: Reg.Set.t;
-    available_before: Reg.Set.t; }
+    available_before: Reg_with_availability.Set.t; }
 
 and instruction_desc =
     Lend
@@ -82,21 +82,21 @@ let rec end_instr =
     res = [||];
     dbg = Debuginfo.none;
     live = Reg.Set.empty;
-    available_before = Reg.Set.empty; }
+    available_before = Reg_with_availability.Set.empty; }
 
 (* Cons an instruction (live, available_before, debug empty) *)
 
 let instr_cons d a r n =
   { desc = d; next = n; arg = a; res = r;
     dbg = Debuginfo.none; live = Reg.Set.empty;
-    available_before = Reg.Set.empty; }
+    available_before = Reg_with_availability.Set.empty; }
 
 (* Cons a simple instruction (arg, res, live, available_before empty) *)
 
 let cons_instr d n =
   { desc = d; next = n; arg = [||]; res = [||];
     dbg = Debuginfo.none; live = Reg.Set.empty;
-    available_before = Reg.Set.empty; }
+    available_before = Reg_with_availability.Set.empty; }
 
 (* Build an instruction with arg, res, dbg, live, available_before taken from
    the given Mach.instruction *)
