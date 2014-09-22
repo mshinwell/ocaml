@@ -634,26 +634,24 @@ asmcomp/asmgen.cmo : bytecomp/translmod.cmi asmcomp/split.cmi \
     asmcomp/spill.cmi asmcomp/selection.cmi asmcomp/scheduling.cmi \
     asmcomp/reload.cmi asmcomp/reg.cmi asmcomp/proc.cmi asmcomp/printmach.cmi \
     asmcomp/printlinear.cmi asmcomp/printcmm.cmi asmcomp/printclambda.cmi \
-    typing/primitive.cmi typing/path.cmi utils/misc.cmi asmcomp/mach.cmi \
-    parsing/location.cmi asmcomp/liveness.cmi asmcomp/linearize.cmi \
-    asmcomp/interf.cmi typing/ident.cmi asmcomp/emitaux.cmi asmcomp/emit.cmi \
-    asmcomp/dwarf_low/dwarf_format.cmi asmcomp/dwarf.cmi asmcomp/deadcode.cmi \
-    utils/config.cmi asmcomp/compilenv.cmi asmcomp/comballoc.cmi \
-    asmcomp/coloring.cmi asmcomp/cmmgen.cmi asmcomp/cmm.cmi \
-    asmcomp/closure.cmi utils/clflags.cmi asmcomp/CSE.cmo \
-    asmcomp/available_regs.cmi asmcomp/asmgen.cmi
+    typing/primitive.cmi utils/misc.cmi asmcomp/mach.cmi parsing/location.cmi \
+    asmcomp/liveness.cmi asmcomp/linearize.cmi asmcomp/interf.cmi \
+    asmcomp/emitaux.cmi asmcomp/emit.cmi asmcomp/dwarf_low/dwarf_format.cmi \
+    asmcomp/dwarf.cmi asmcomp/deadcode.cmi utils/config.cmi \
+    asmcomp/compilenv.cmi asmcomp/comballoc.cmi asmcomp/coloring.cmi \
+    asmcomp/cmmgen.cmi asmcomp/cmm.cmi asmcomp/closure.cmi utils/clflags.cmi \
+    asmcomp/CSE.cmo asmcomp/available_regs.cmi asmcomp/asmgen.cmi
 asmcomp/asmgen.cmx : bytecomp/translmod.cmx asmcomp/split.cmx \
     asmcomp/spill.cmx asmcomp/selection.cmx asmcomp/scheduling.cmx \
     asmcomp/reload.cmx asmcomp/reg.cmx asmcomp/proc.cmx asmcomp/printmach.cmx \
     asmcomp/printlinear.cmx asmcomp/printcmm.cmx asmcomp/printclambda.cmx \
-    typing/primitive.cmx typing/path.cmx utils/misc.cmx asmcomp/mach.cmx \
-    parsing/location.cmx asmcomp/liveness.cmx asmcomp/linearize.cmx \
-    asmcomp/interf.cmx typing/ident.cmx asmcomp/emitaux.cmx asmcomp/emit.cmx \
-    asmcomp/dwarf_low/dwarf_format.cmx asmcomp/dwarf.cmx asmcomp/deadcode.cmx \
-    utils/config.cmx asmcomp/compilenv.cmx asmcomp/comballoc.cmx \
-    asmcomp/coloring.cmx asmcomp/cmmgen.cmx asmcomp/cmm.cmx \
-    asmcomp/closure.cmx utils/clflags.cmx asmcomp/CSE.cmx \
-    asmcomp/available_regs.cmx asmcomp/asmgen.cmi
+    typing/primitive.cmx utils/misc.cmx asmcomp/mach.cmx parsing/location.cmx \
+    asmcomp/liveness.cmx asmcomp/linearize.cmx asmcomp/interf.cmx \
+    asmcomp/emitaux.cmx asmcomp/emit.cmx asmcomp/dwarf_low/dwarf_format.cmx \
+    asmcomp/dwarf.cmx asmcomp/deadcode.cmx utils/config.cmx \
+    asmcomp/compilenv.cmx asmcomp/comballoc.cmx asmcomp/coloring.cmx \
+    asmcomp/cmmgen.cmx asmcomp/cmm.cmx asmcomp/closure.cmx utils/clflags.cmx \
+    asmcomp/CSE.cmx asmcomp/available_regs.cmx asmcomp/asmgen.cmi
 asmcomp/asmlibrarian.cmo : utils/misc.cmi parsing/location.cmi \
     utils/config.cmi asmcomp/compilenv.cmi asmcomp/cmx_format.cmi \
     utils/clflags.cmi asmcomp/clambda.cmi utils/ccomp.cmi asmcomp/asmlink.cmi \
