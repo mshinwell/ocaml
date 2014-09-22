@@ -20,73 +20,87 @@
 (*                                                                     *)
 (***********************************************************************)
 
-type t = Attribute.t * Value.t
+type t = Attribute.t
+  * [ `Value of Value.t
+    | `Single_location_description of Single_location_description.t ]
 
 let create_low_pc ~address_label =
   Attribute.low_pc,
-    Value.as_code_address_from_label address_label
+    `Value (Value.as_code_address_from_label address_label)
 
 let create_low_pc_from_symbol ~symbol =
   Attribute.low_pc,
-    Value.as_code_address_from_symbol symbol
+    `Value (Value.as_code_address_from_symbol symbol)
 
 let create_high_pc ~address_label =
   Attribute.high_pc,
-    Value.as_code_address_from_label address_label
+    `Value (Value.as_code_address_from_label address_label)
 
 let create_high_pc_from_symbol ~symbol =
   Attribute.high_pc,
-    Value.as_code_address_from_symbol symbol
+    `Value (Value.as_code_address_from_symbol symbol)
 
 let create_producer ~producer_name =
-  Attribute.producer, Value.as_string producer_name
+  Attribute.producer, `Value (Value.as_string producer_name)
 
 let create_name name =
-  Attribute.name, Value.as_string name
+  Attribute.name, `Value (Value.as_string name)
 
 let create_comp_dir ~directory =
-  Attribute.comp_dir, Value.as_string directory
+  Attribute.comp_dir, `Value (Value.as_string directory)
 
 let create_stmt_list ~section_offset_label =
   (* DWARF-4 standard section 3.1.1.4. *)
   Attribute.stmt_list,
-    Value.as_offset_from_label section_offset_label
-      ~section:Section_names.debug_line
+    `Value (Value.as_offset_from_label section_offset_label
+      ~section:Section_names.debug_line)
 
 let create_external ~is_visible_externally =
   let flag = if is_visible_externally then 1 else 0 in
-  Attribute.extern'l, Value.as_byte flag
+  Attribute.extern'l, `Value (Value.as_byte flag)
 
 let create_location ~location_list_label =
-  (* This is the "loclistptr" case (DWARF-4 standard section 7.5.4). *)
-  Attribute.location,
-    Value.as_offset_from_label location_list_label
-      ~section:Section_names.debug_loc
+  (* CR mshinwell: rename this function *)
+  Attribute.location_using_location_list,
+    `Value (Value.as_offset_from_label location_list_label
+      ~section:Section_names.debug_loc)
+
+let create_single_location_description sld =
+  Attribute.location_using_single_location_description,
+    (`Single_location_description sld)
 
 let create_type ~proto_die =
   Attribute.typ',
-    Value.as_offset_from_label proto_die
-      ~section:Section_names.debug_info
+    `Value (Value.as_offset_from_label proto_die
+      ~section:Section_names.debug_info)
 
 let create_encoding ~encoding =
-  Attribute.encoding, Encoding_attribute.as_dwarf_value encoding
+  Attribute.encoding, `Value (Encoding_attribute.as_dwarf_value encoding)
 
 let create_sibling ~proto_die =
   Attribute.sibling,
-    Value.as_offset_from_label proto_die
-      ~section:Section_names.debug_info
+    `Value (Value.as_offset_from_label proto_die
+      ~section:Section_names.debug_info)
 
 let create_byte_size ~byte_size =
   assert (byte_size >= 1 && byte_size <= 0xff); (* CR mshinwell: not assert *)
-  Attribute.byte_size, Value.as_byte byte_size
+  Attribute.byte_size, `Value (Value.as_byte byte_size)
 
 let create_linkage_name ~linkage_name =
-  Attribute.linkage_name, Value.as_string linkage_name
+  Attribute.linkage_name, `Value (Value.as_string linkage_name)
 
-let emit (_attr, value) ~emitter =
-  Value.emit value ~emitter
+let emit (_attr, thing) ~emitter =
+  match thing with
+  | `Value value -> Value.emit value ~emitter
+  | `Single_location_description sld ->
+    (* DWARF-4 standard section 7.5.4 (page 148), "exprloc". *)
+    let size = Single_location_description.size sld in
+    Value.emit (Value.as_uleb128_64 size) ~emitter;
+    Single_location_description.emit sld ~emitter
 
-let size (_attr, value) =
-  Value.size value
+let size (_attr, thing) =
+  match thing with
+  | `Value value -> Value.size value
+  | `Single_location_description sld -> Single_location_description.size sld
 
-let attribute (attr, _value) = attr
+let attribute (attr, _thing) = attr

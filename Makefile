@@ -90,6 +90,9 @@ DWARF_LOW=\
   asmcomp/dwarf_low/child_determination.cmo \
   asmcomp/dwarf_low/tag.cmo \
   asmcomp/dwarf_low/form.cmo \
+  asmcomp/dwarf_low/operator.cmo \
+  asmcomp/dwarf_low/simple_location_expression.cmo \
+  asmcomp/dwarf_low/single_location_description.cmo \
   asmcomp/dwarf_low/attribute.cmo \
   asmcomp/dwarf_low/abbreviation_code.cmo \
   asmcomp/dwarf_low/abbreviations_table_entry.cmo \
@@ -99,8 +102,6 @@ DWARF_LOW=\
   asmcomp/dwarf_low/attribute_value.cmo \
   asmcomp/dwarf_low/debugging_information_entry.cmo \
   asmcomp/dwarf_low/version.cmo \
-  asmcomp/dwarf_low/operator.cmo \
-  asmcomp/dwarf_low/simple_location_expression.cmo \
   asmcomp/dwarf_low/location_expression.cmo \
   asmcomp/dwarf_low/location_list_entry.cmo \
   asmcomp/dwarf_low/location_list.cmo \

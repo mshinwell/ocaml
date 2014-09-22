@@ -36,13 +36,17 @@ val as_offset_from_label
   -> t
 val as_reference_from_label : Linearize.label -> t
 
+(* CR mshinwell: consider changing [as_uleb128] interface *)
+val as_uleb128_64 : Int64.t -> t
 val as_uleb128 : int -> t
 val as_leb128 : int -> t
 val as_string : string -> t
 val as_code_address_from_symbol : string -> t
 val as_code_address_from_label : Linearize.label -> t
 val as_code_address_from_label_diff
-   : [ `Symbol of string | `Label of Linearize.label ]
+   : [ `Symbol of string
+     | `Symbol_plus_offset_in_bytes of string * int
+     | `Label of Linearize.label ]
   -> [ `Symbol of string | `Label of Linearize.label ]
   -> t
 val as_code_address_from_label_diff_minus_8

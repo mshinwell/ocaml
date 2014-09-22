@@ -34,5 +34,7 @@ module Dwarf_low = struct
   module Proto_DIE = Proto_die
   module Pubnames_table = Pubnames_table
   module Section_names = Section_names
+  module Simple_location_description = Simple_location_expression
+  module Single_location_description = Single_location_description
   module Tag = Tag
 end

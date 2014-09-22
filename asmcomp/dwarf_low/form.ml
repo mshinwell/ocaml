@@ -31,9 +31,11 @@ type t =
   | DW_FORM_block
   | DW_FORM_ref_addr
   | DW_FORM_sec_offset
+  | DW_FORM_exprloc
 
 let encode t =
   let code =
+    (* DWARF-4 standard page 160 onwards. *)
     match t with
     | DW_FORM_addr -> 0x01
     | DW_FORM_data1 -> 0x0b
@@ -45,6 +47,7 @@ let encode t =
     | DW_FORM_block -> 0x09
     | DW_FORM_ref_addr -> 0x10
     | DW_FORM_sec_offset -> 0x17
+    | DW_FORM_exprloc -> 0x18
   in
   Value.as_uleb128 code
 
@@ -58,6 +61,7 @@ let flag = DW_FORM_flag
 let block = DW_FORM_block
 let ref_addr = DW_FORM_ref_addr
 let sec_offset = DW_FORM_sec_offset
+let exprloc = DW_FORM_exprloc
 
 let size t =
   Value.size (encode t)

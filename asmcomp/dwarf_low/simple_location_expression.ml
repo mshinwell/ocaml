@@ -23,6 +23,9 @@
 (* Single operators only for the moment.  There are other cases (p23-24) *)
 type t = Operator.t
 
+let at_offset_from_symbol ~base ~symbol ~offset_in_bytes =
+  Operator.at_offset_from_symbol ~base ~symbol ~offset_in_bytes
+
 let in_register ~reg_number =
   Operator.register ~reg_number
 

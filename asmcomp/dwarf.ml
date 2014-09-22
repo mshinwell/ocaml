@@ -24,6 +24,10 @@ open Dwarf_low_dot_std.Dwarf_low
 
 module Available_subrange = Available_ranges.Available_subrange
 module Available_range = Available_ranges.Available_range
+module String = struct
+  include String
+  module Set = Set.Make (String)
+end
 
 (* DWARF-related state for a single compilation unit. *)
 type t = {
@@ -33,16 +37,21 @@ type t = {
   debug_line_label : Linearize.label;
   start_of_code_symbol : string;
   end_of_code_symbol : string;
+  start_of_data_symbol : string;
   source_file_path : string;
   mutable available_ranges_and_fundecl
     : (Available_ranges.t * Linearize.fundecl) option;
   mutable externally_visible_functions : string list;
+  mutable have_emitted_dwarf_for_mangled_names : String.Set.t;
+  mutable emitted : bool;
+  mutable module_value_bindings
+    : (Path.t * Ident.t * Types.type_expr * Ident.t * int) list;
 }
 
 let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
       ~emit_label_declaration ~emit_section_declaration
       ~emit_switch_to_section ~start_of_code_symbol ~end_of_code_symbol
-      ~target =
+      ~target ~module_value_bindings ~start_of_data_symbol =
   let emitter =
     Emitter.create ~emit_string
       ~emit_symbol
@@ -81,21 +90,102 @@ let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
       ~tag:Tag.compile_unit
       ~attribute_values
   in
+  let debug_loc_table = Debug_loc_table.create () in
   { compilation_unit_proto_die;
     externally_visible_functions = [];
     emitter;
-    debug_loc_table = Debug_loc_table.create ();
+    debug_loc_table;
     debug_line_label;
     start_of_code_symbol;
     end_of_code_symbol;
+    start_of_data_symbol;
     source_file_path;
     available_ranges_and_fundecl = None;
+    have_emitted_dwarf_for_mangled_names = String.Set.empty;
+    emitted = false;
+    module_value_bindings;
   }
+
+(* Build a new DWARF type for [ident].  Each identifier has its
+   own type, which is basically its stamped name, and is nothing to do with
+   its inferred OCaml type.  The inferred type may be recovered by the
+   debugger by extracting the stamped name and then using that as a key
+   for lookup into the .cmt file for the appropriate module. *)
+let create_type_proto_die ~parent ~ident ~source_file_path =
+  Proto_DIE.create ~parent
+    ~tag:Tag.base_type
+    ~attribute_values:[
+      Attribute_value.create_name
+        ("__ocaml" ^ source_file_path ^ " " ^ (Ident.unique_name ident));
+      Attribute_value.create_encoding ~encoding:Encoding_attribute.signed;
+      Attribute_value.create_byte_size ~byte_size:Arch.size_addr;
+    ]
+
+let path_to_mangled_name path =
+  let rec traverse_path = function
+    | Path.Pident ident -> Some (Ident.name ident)
+    (* CR-someday mshinwell: handle [Papply] *)
+    | Path.Papply _ -> None
+    | Path.Pdot (path, component, _) ->
+      match traverse_path path with
+      | None -> None
+      | Some path -> Some (path ^ "__" ^ component)
+  in
+  match traverse_path path with
+  | None -> None
+  | Some path -> Some ("caml" ^ path)
+
+(* Create DWARF to describe a structure member that is not a function to
+   be emitted by [*_emission_dwarf_for_function], below.  This is only for
+   structures in the static data section, not heap-allocated structures,
+   since the addresses of the members are written directly into the DWARF. *)
+let create_dwarf_for_non_fundecl_structure_member t ~path ~ident ~typ:_ ~global
+      ~pos ~parent =
+  match path_to_mangled_name path with
+  | None -> ()
+  | Some path ->
+    match path_to_mangled_name (Path.Pident global) with
+    | None -> ()
+    | Some global ->
+      (* This next check excludes the functions (for which we have already
+         emitted DWARF). *)
+      if not (String.Set.mem path t.have_emitted_dwarf_for_mangled_names) then
+      begin
+        let type_proto_die =
+          create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
+            ~ident ~source_file_path:t.source_file_path
+        in
+        (* For the moment, just deem these values to be accessible always (even
+           before the module initializers have been run)... *)
+        let single_location_description =
+          let simple_location_description =
+            Simple_location_description.at_offset_from_symbol
+              ~base:t.start_of_data_symbol
+              ~symbol:global
+              ~offset_in_bytes:(pos * Arch.size_addr)
+          in
+          Single_location_description.of_simple_location_description
+            simple_location_description
+        in
+        Proto_DIE.create_ignore ~parent:(Some parent)
+          ~tag:Tag.variable
+          ~attribute_values:[
+            Attribute_value.create_name (path ^ "__" ^ (Ident.name ident));
+            Attribute_value.create_type
+              ~proto_die:(Proto_DIE.reference type_proto_die);
+            Attribute_value.create_single_location_description
+              single_location_description;
+          ]
+      end
 
 let pre_emission_dwarf_for_function t ~fundecl =
   if t.available_ranges_and_fundecl <> None then begin
     failwith "Dwarf.pre_emission_dwarf_for_function"
   end;
+  let name = fundecl.Linearize.fun_name in
+  assert (not (String.Set.mem name t.have_emitted_dwarf_for_mangled_names));
+  t.have_emitted_dwarf_for_mangled_names
+    <- String.Set.add name t.have_emitted_dwarf_for_mangled_names;
   let available_ranges, fundecl = Available_ranges.create ~fundecl in
   t.available_ranges_and_fundecl <- Some (available_ranges, fundecl);
   fundecl
@@ -186,20 +276,9 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
     in
     Debug_loc_table.insert t.debug_loc_table ~location_list
   in
-  (* Build a new DWARF type for this identifier.  Each identifier has its
-     own type, which is basically its stamped name, and is nothing to do with
-     its inferred OCaml type.  The inferred type may be recovered by the
-     debugger by extracting the stamped name and then using that as a key
-     for lookup into the .cmt file for the appropriate module. *)
   let type_proto_die =
-    Proto_DIE.create ~parent:(Some t.compilation_unit_proto_die)
-      ~tag:Tag.base_type
-      ~attribute_values:[
-        Attribute_value.create_name
-          ("__ocaml" ^ t.source_file_path ^ " " ^ (Ident.unique_name ident));
-        Attribute_value.create_encoding ~encoding:Encoding_attribute.signed;
-        Attribute_value.create_byte_size ~byte_size:Arch.size_addr;
-      ]
+    create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
+      ~ident ~source_file_path:t.source_file_path
   in
   (* If the unstamped name of [ident] is unambiguous within the function,
      then use it; otherwise, emit the stamped name. *)
@@ -247,6 +326,12 @@ let post_emission_dwarf_for_function t ~end_of_function_label =
     t.available_ranges_and_fundecl <- None
 
 let emit t =
+  assert (not t.emitted);
+  t.emitted <- true;
+  ListLabels.iter t.module_value_bindings
+    ~f:(fun (path, ident, typ, global, pos) ->
+      create_dwarf_for_non_fundecl_structure_member ~path ~ident ~typ ~global
+        ~pos ~parent:t.compilation_unit_proto_die t);
   let debug_info =
     Debug_info_section.create ~compilation_unit:t.compilation_unit_proto_die
   in

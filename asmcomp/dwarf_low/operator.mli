@@ -24,6 +24,11 @@ type t
 
 include Emittable.S with type t := t
 
+val at_offset_from_symbol
+   : base:string
+  -> symbol:string
+  -> offset_in_bytes:int
+  -> t
 val register : reg_number:int -> t
 val register_based_addressing : reg_number:int -> offset_in_bytes:int -> t
 val frame_base_register : offset_in_bytes:int -> t

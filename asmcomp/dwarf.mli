@@ -35,6 +35,9 @@ val create
   -> start_of_code_symbol:string
   -> end_of_code_symbol:string
   -> target:[ `MacOS_X | `Other ]
+  -> module_value_bindings:
+      (Path.t * Ident.t * Types.type_expr * Ident.t * int) list
+  -> start_of_data_symbol:string
   -> t
 
 (* For the moment, matching pairs of [pre_emission_dwarf_for_function] and

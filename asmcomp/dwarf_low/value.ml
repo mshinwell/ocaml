@@ -46,7 +46,8 @@ type t =
   | Code_address_from_symbol of string
   | Code_address_from_label of Linearize.label
   | Code_address_from_label_diff of
-      [ `Label of Linearize.label | `Symbol of string ]
+      [ `Label of Linearize.label | `Symbol of string
+      | `Symbol_plus_offset_in_bytes of string * int ]
     * [ `Label of Linearize.label | `Symbol of string ]
   (* CR mshinwell: remove the following once we probably address CR in
      location_list_entry.ml (to do with boundary conditions on PC ranges). *)
@@ -72,6 +73,12 @@ let as_byte i =
   Byte i
 
 let as_uleb128 i =
+  assert (i >= 0);
+  Uleb128 i
+
+let as_uleb128_64 i =
+  (* CR mshinwell: see mli *)
+  let i = Int64.to_int i in
   assert (i >= 0);
   Uleb128 i
 
@@ -259,6 +266,10 @@ let rec emit t ~emitter =
     end;
     begin match s2 with
     | `Symbol s2 -> Emitter.emit_symbol emitter s2
+    | `Symbol_plus_offset_in_bytes (s2, offset) ->
+      Emitter.emit_symbol emitter s2;
+      Emitter.emit_string emitter " + ";
+      Emitter.emit_string emitter (Printf.sprintf "%d" offset)
     | `Label s2 -> Emitter.emit_label emitter s2
     end;
     begin match Emitter.target emitter with

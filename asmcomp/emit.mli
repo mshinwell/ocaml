@@ -14,7 +14,9 @@
 
 val fundecl: dwarf:Dwarf.t option -> Linearize.fundecl -> unit
 val data: Cmm.data_item list -> unit
-val begin_assembly: unit -> string * string  (* beginning and end of code symbols *)
+(* [begin_assembly] returns: start of code symbol, end of code symbol,
+   start of data symbol. *)
+val begin_assembly: unit -> string * string * string
 val end_assembly: end_of_code_symbol:string -> unit
 
 val emit_string : string -> unit

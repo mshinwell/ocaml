@@ -34,7 +34,8 @@ val name : t
 val comp_dir : t
 val stmt_list : t
 val extern'l : t
-val location : t
+val location_using_single_location_description : t
+val location_using_location_list : t
 val typ' : t
 val encoding : t
 val byte_size : t

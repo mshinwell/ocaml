@@ -21,9 +21,18 @@
 (***********************************************************************)
 
 type t =
+  | DW_op_addr of Value.t
   | DW_op_regx of Value.t
   | DW_op_fbreg of Value.t
   | DW_op_bregx of [ `Register of Value.t ] * [ `Offset of Value.t ]
+
+let at_offset_from_symbol ~base ~symbol ~offset_in_bytes =
+  let value =
+    Value.as_code_address_from_label_diff
+      (`Symbol_plus_offset_in_bytes (symbol, offset_in_bytes))
+      (`Symbol base)
+  in
+  DW_op_addr value
 
 let register ~reg_number =
   let reg_number = Value.as_uleb128 reg_number in
@@ -38,7 +47,9 @@ let frame_base_register ~offset_in_bytes =
   let offset_in_bytes = Value.as_leb128 offset_in_bytes in
   DW_op_fbreg offset_in_bytes
 
+(* DWARF-4 spec section 7.7.1. *)
 let opcode = function
+  | DW_op_addr _ -> 0x03
   | DW_op_regx _ -> 0x90
   | DW_op_fbreg _ -> 0x91
   | DW_op_bregx _ -> 0x92
@@ -47,6 +58,7 @@ let size t =
   let opcode_size = Int64.of_int 1 in
   let args_size =
     match t with
+    | DW_op_addr addr -> Value.size addr
     | DW_op_regx reg_number -> Value.size reg_number
     | DW_op_fbreg offset -> Value.size offset
     | DW_op_bregx (`Register reg_number, `Offset offset) ->
@@ -57,6 +69,7 @@ let size t =
 let emit t ~emitter =
   Value.emit (Value.as_byte (opcode t)) ~emitter;
   match t with
+  | DW_op_addr addr -> Value.emit addr ~emitter
   | DW_op_regx reg_number -> Value.emit reg_number ~emitter
   | DW_op_fbreg offset -> Value.emit offset ~emitter
   | DW_op_bregx (`Register reg_number, `Offset offset) ->

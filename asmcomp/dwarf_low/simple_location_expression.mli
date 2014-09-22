@@ -20,10 +20,22 @@
 (*                                                                     *)
 (***********************************************************************)
 
+(* CR-soon mshinwell: Shouldn't this module be called
+   [Simple_location_description]?  (DWARF-4 spec 2.6.1) *)
+
 type t
 
 include Emittable.S with type t := t
 
+(* The address of [symbol + offset_in_bytes] relative to the symbol [base]. *)
+val at_offset_from_symbol
+   : base:string
+  -> symbol:string
+  -> offset_in_bytes:int
+  -> t
+
+(* CR-soon mshinwell: consider a new type to identify whose register
+   numbering is in use here *)
 val in_register : reg_number:int -> t
 val register_based_addressing : reg_number:int -> offset_in_bytes:int -> t
 val frame_base_register : offset_in_bytes:int -> t

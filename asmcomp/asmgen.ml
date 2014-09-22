@@ -112,10 +112,12 @@ let compile_genfuns ppf f =
 
 let compile_implementation ?toplevel ~source_file_path prefixname ppf
       ((size, module_value_bindings), lam) =
+(* CR mshinwell: remove
   List.iter (fun (path, ident, typ, global, pos) ->
     Printf.printf "global '%s' path '%s' ident '%s' pos=%d\n%!"
       (Ident.name global) (Path.name path) (Ident.unique_name ident)
       pos) module_value_bindings;
+*)
   let asmfile =
     if !keep_asm_file
     then prefixname ^ ext_asm
@@ -123,7 +125,10 @@ let compile_implementation ?toplevel ~source_file_path prefixname ppf
   let oc = open_out asmfile in
   begin try
     Emitaux.output_channel := oc;
-    let start_of_code_symbol, end_of_code_symbol = Emit.begin_assembly () in
+    (* CR-soon mshinwell: use a proper type *)
+    let start_of_code_symbol, end_of_code_symbol, start_of_data_symbol =
+      Emit.begin_assembly ()
+    in
     let dwarf =
       if !Clflags.debug_full then
         let macosx = (Config.system = "macosx") in
@@ -143,7 +148,9 @@ let compile_implementation ?toplevel ~source_file_path prefixname ppf
             ~emit_switch_to_section:Emit.emit_switch_to_section
             ~start_of_code_symbol
             ~end_of_code_symbol
+            ~start_of_data_symbol
             ~target
+            ~module_value_bindings
         in
         Some dwarf
       else

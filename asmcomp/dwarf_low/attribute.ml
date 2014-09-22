@@ -28,7 +28,9 @@ type t =
   | DW_AT_producer
   | DW_AT_stmt_list
   | DW_AT_external
-  | DW_AT_location
+  (* DW_AT_location may have two different classes (DWARF-4 standard
+     section 2.6, page 26). *)
+  | DW_AT_location of [ `exprloc | `loclistptr ]
   | DW_AT_type
   | DW_AT_encoding
   | DW_AT_byte_size
@@ -43,7 +45,7 @@ let encode = function
   | DW_AT_producer -> 0x25
   | DW_AT_stmt_list -> 0x10
   | DW_AT_external -> 0x3f
-  | DW_AT_location -> 0x02
+  | DW_AT_location _ -> 0x02
   | DW_AT_type -> 0x49
   | DW_AT_encoding -> 0x3e
   | DW_AT_byte_size -> 0x0b
@@ -61,9 +63,8 @@ let form = function
   | DW_AT_producer -> Form.strp
   | DW_AT_stmt_list -> Form.sec_offset
   | DW_AT_external -> Form.flag
-  (* DW_AT_location, in our case, is always used with "loclistptr" (DWARF-4
-     standard section 7.5.4). *)
-  | DW_AT_location -> Form.sec_offset
+  | DW_AT_location `exprloc -> Form.exprloc
+  | DW_AT_location `loclistptr -> Form.sec_offset
   | DW_AT_type -> Form.ref_addr
   | DW_AT_encoding -> Form.data1
   | DW_AT_byte_size -> Form.data1
@@ -77,7 +78,8 @@ let name = DW_AT_name
 let comp_dir = DW_AT_comp_dir
 let stmt_list = DW_AT_stmt_list
 let extern'l = DW_AT_external
-let location = DW_AT_location
+let location_using_single_location_description = DW_AT_location `exprloc
+let location_using_location_list = DW_AT_location `loclistptr
 let typ' = DW_AT_type
 let encoding = DW_AT_encoding
 let byte_size = DW_AT_byte_size

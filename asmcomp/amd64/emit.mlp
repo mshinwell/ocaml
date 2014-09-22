@@ -818,17 +818,17 @@ let begin_assembly() =
     emit_align 16;
     `{emit_symbol "caml_absf_mask"}:	.quad   0x7FFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF\n`
   end;
-  let lbl_begin = Compilenv.make_symbol (Some "data_begin") in
+  let lbl_data_begin = Compilenv.make_symbol (Some "data_begin") in
   `	.data\n`;
-  `	.globl	{emit_symbol lbl_begin}\n`;
-  `{emit_symbol lbl_begin}:\n`;
+  `	.globl	{emit_symbol lbl_data_begin}\n`;
+  `{emit_symbol lbl_data_begin}:\n`;
   let lbl_begin = Compilenv.make_symbol (Some "code_begin") in
   `	.text\n`;
   `	.globl	{emit_symbol lbl_begin}\n`;
   `{emit_symbol lbl_begin}:\n`;
   if macosx then `	nop\n`; (* PR#4690 *)
   let lbl_end = Compilenv.make_symbol (Some "code_end") in
-  lbl_begin, lbl_end
+  lbl_begin, lbl_end, lbl_data_begin
 
 let end_assembly ~end_of_code_symbol:lbl_end =
   if !float_constants <> [] then begin

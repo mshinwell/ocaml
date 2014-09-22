@@ -203,7 +203,7 @@ let make_startup_file ppf filename units_list =
   Emitaux.output_channel := oc;
   Location.input_name := "caml_startup"; (* set name of "current" input *)
   Compilenv.reset "_startup"; (* set the name of the "current" compunit *)
-  let _, end_of_code_symbol = Emit.begin_assembly() in
+  let _, end_of_code_symbol, _ = Emit.begin_assembly() in
   let name_list =
     List.flatten (List.map (fun (info,_,_) -> info.ui_defines) units_list) in
   compile_phrase (Cmmgen.entry_point name_list);
@@ -239,7 +239,7 @@ let make_shared_startup_file ppf units filename =
   Emitaux.output_channel := oc;
   Location.input_name := "caml_startup";
   Compilenv.reset "_shared_startup";
-  let _, end_of_code_symbol = Emit.begin_assembly() in
+  let _, end_of_code_symbol, _ = Emit.begin_assembly() in
   List.iter (compile_phrase ~dwarf:None)
     (Cmmgen.generic_functions true (List.map fst units));
   compile_phrase (Cmmgen.plugin_header units) ~dwarf:None;

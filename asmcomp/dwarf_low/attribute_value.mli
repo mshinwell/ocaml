@@ -39,5 +39,6 @@ val create_encoding : encoding:Encoding_attribute.t -> t
 val create_byte_size : byte_size:int -> t
 val create_linkage_name : linkage_name:string -> t
 val create_sibling : proto_die:Linearize.label -> t
+val create_single_location_description : Single_location_description.t -> t
 
 val attribute : t -> Attribute.t

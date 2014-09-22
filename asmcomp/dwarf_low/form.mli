@@ -34,3 +34,4 @@ val flag : t
 val block : t
 val ref_addr : t
 val sec_offset : t
+val exprloc : t
