@@ -101,6 +101,8 @@ let emit (_attr, thing) ~emitter =
 let size (_attr, thing) =
   match thing with
   | `Value value -> Value.size value
-  | `Single_location_description sld -> Single_location_description.size sld
+  | `Single_location_description sld ->
+    let size = Single_location_description.size sld in
+    Int64.add (Value.size (Value.as_uleb128_64 size)) size
 
 let attribute (attr, _thing) = attr

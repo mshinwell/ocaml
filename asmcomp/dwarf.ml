@@ -147,9 +147,10 @@ let create_dwarf_for_non_fundecl_structure_member t ~path ~ident ~typ:_ ~global
     match path_to_mangled_name (Path.Pident global) with
     | None -> ()
     | Some global ->
+      let name = path ^ "__" ^ (Ident.unique_name ident) in
       (* This next check excludes the functions (for which we have already
          emitted DWARF). *)
-      if not (String.Set.mem path t.have_emitted_dwarf_for_mangled_names) then
+      if not (String.Set.mem name t.have_emitted_dwarf_for_mangled_names) then
       begin
         let type_proto_die =
           create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
@@ -170,7 +171,7 @@ let create_dwarf_for_non_fundecl_structure_member t ~path ~ident ~typ:_ ~global
         Proto_DIE.create_ignore ~parent:(Some parent)
           ~tag:Tag.variable
           ~attribute_values:[
-            Attribute_value.create_name (path ^ "__" ^ (Ident.name ident));
+            Attribute_value.create_name name;
             Attribute_value.create_type
               ~proto_die:(Proto_DIE.reference type_proto_die);
             Attribute_value.create_single_location_description
