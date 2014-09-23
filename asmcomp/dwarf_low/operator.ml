@@ -26,11 +26,11 @@ type t =
   | DW_op_fbreg of Value.t
   | DW_op_bregx of [ `Register of Value.t ] * [ `Offset of Value.t ]
 
-let at_offset_from_symbol ~base ~symbol ~offset_in_bytes =
+let at_offset_from_symbol ~base:_ ~symbol ~offset_in_bytes =
   let value =
     Value.as_code_address_from_label_diff
       (`Symbol_plus_offset_in_bytes (symbol, offset_in_bytes))
-      (`Symbol base)
+      (`Symbol "0")
   in
   DW_op_addr value
 

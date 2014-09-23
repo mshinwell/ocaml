@@ -112,11 +112,15 @@ let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
    debugger by extracting the stamped name and then using that as a key
    for lookup into the .cmt file for the appropriate module. *)
 let create_type_proto_die ~parent ~ident ~source_file_path =
+  let ident =
+    match ident with
+    | `Ident ident -> Ident.unique_name ident
+    | `Unique_name name -> name
+  in
   Proto_DIE.create ~parent
     ~tag:Tag.base_type
     ~attribute_values:[
-      Attribute_value.create_name
-        ("__ocaml" ^ source_file_path ^ " " ^ (Ident.unique_name ident));
+      Attribute_value.create_name ("__ocaml" ^ source_file_path ^ " " ^ ident);
       Attribute_value.create_encoding ~encoding:Encoding_attribute.signed;
       Attribute_value.create_byte_size ~byte_size:Arch.size_addr;
     ]
@@ -154,7 +158,7 @@ let create_dwarf_for_non_fundecl_structure_member t ~path ~ident ~typ:_ ~global
       begin
         let type_proto_die =
           create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
-            ~ident ~source_file_path:t.source_file_path
+            ~ident:(`Ident ident) ~source_file_path:t.source_file_path
         in
         (* For the moment, just deem these values to be accessible always (even
            before the module initializers have been run)... *)
@@ -176,6 +180,7 @@ let create_dwarf_for_non_fundecl_structure_member t ~path ~ident ~typ:_ ~global
               ~proto_die:(Proto_DIE.reference type_proto_die);
             Attribute_value.create_single_location_description
               single_location_description;
+            Attribute_value.create_external ~is_visible_externally:true;
           ]
       end
 
@@ -279,7 +284,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
   in
   let type_proto_die =
     create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
-      ~ident ~source_file_path:t.source_file_path
+      ~ident:(`Ident ident) ~source_file_path:t.source_file_path
   in
   (* If the unstamped name of [ident] is unambiguous within the function,
      then use it; otherwise, emit the stamped name. *)
@@ -304,6 +309,11 @@ let post_emission_dwarf_for_function t ~end_of_function_label =
   | None -> failwith "Dwarf.post_emission_dwarf_for_function"
   | Some (available_ranges, fundecl) ->
     let lexical_block_cache = Hashtbl.create 42 in
+    let type_proto_die =
+      create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
+        ~ident:(`Unique_name fundecl.Linearize.fun_name)
+        ~source_file_path:t.source_file_path
+    in
     let subprogram_proto_die =  (* "subprogram" means "function" for us. *)
       Proto_DIE.create ~parent:(Some t.compilation_unit_proto_die)
         ~tag:Tag.subprogram
@@ -313,6 +323,8 @@ let post_emission_dwarf_for_function t ~end_of_function_label =
           Attribute_value.create_low_pc_from_symbol
             ~symbol:fundecl.Linearize.fun_name;
           Attribute_value.create_high_pc ~address_label:end_of_function_label;
+          Attribute_value.create_type
+            ~proto_die:(Proto_DIE.reference type_proto_die);
         ]
     in
     (* For each identifier for which we have available ranges, construct
