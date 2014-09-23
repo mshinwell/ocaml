@@ -137,7 +137,10 @@ let path_to_mangled_name path =
   in
   match traverse_path path with
   | None -> None
-  | Some path -> Some ("caml" ^ path)
+  | Some path ->
+    match !Clflags.for_package with
+    | None -> Some ("caml" ^ path)
+    | Some pack -> Some (Printf.sprintf "caml%s__%s" pack path)
 
 (* Create DWARF to describe a structure member that is not a function to
    be emitted by [*_emission_dwarf_for_function], below.  This is only for
