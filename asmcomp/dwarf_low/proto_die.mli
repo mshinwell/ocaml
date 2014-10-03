@@ -46,6 +46,10 @@ val create_ignore
   -> attribute_values:Attribute_value.t list
   -> unit
 
+val duplicate_as_sibling : t -> t
+
+val change_name_attribute_value : t -> new_name:string -> unit
+
 (* [reference t] returns a label that may be used when constructing other
     attribute values. *)
 (* CR-someday mshinwell: ideally, attribute values could accept proto-DIE

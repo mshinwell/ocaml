@@ -50,3 +50,5 @@ let all = [
  debug_aranges;
  debug_str;
 ]
+
+let text = create ~name:"text"

@@ -31,7 +31,9 @@ val debug_pubnames : t
 val debug_aranges : t
 val debug_str : t
 
-val all : t list
+val all : t list  (* all debugging sections *)
 
 val name : t -> string
 val starting_label : t -> Linearize.label
+
+val text : t

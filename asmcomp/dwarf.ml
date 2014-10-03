@@ -153,23 +153,29 @@ let path_to_mangled_name path =
    to emit DWARF describing functions rather than plain variables.  This is
    important to ensure debugger functionality (e.g. setting breakpoints) works
    correctly.
+   If the function returns [Some (new_sym, old_sym)] then assembly must be
+   emitted to define a global function symbol [new_sym] whose value is equal
+   to [old_sym].  (This is required since the presence of a subprogram DIE
+   alone does not seem to be sufficient for gdb to identify a function, which
+   is unfortunate.)
    This function is only for structures in the static data section, not
    heap-allocated structures, since the (relocatable) addresses of the members
    are written directly into the DWARF. *)
 let create_dwarf_for_non_fundecl_structure_member t ~path ~ident ~typ:_ ~global
       ~pos ~parent =
   match path_to_mangled_name path with
-  | None -> ()
+  | None -> None
   | Some path ->
     match path_to_mangled_name (Path.Pident global) with
-    | None -> ()
+    | None -> None
     | Some global ->
       let name = path ^ "__" ^ (Ident.unique_name ident) in
       assert (pos >= 0 && pos < Array.length t.global_approx);
       (* This next check excludes the members with fundecls, for which we
          have already constructed proto-DIEs. *)
-      if not (String.Set.mem name t.have_emitted_dwarf_for_mangled_names) then
-      begin
+      if String.Set.mem name t.have_emitted_dwarf_for_mangled_names then
+        None
+      else begin
         let module C = Clambda in
         match t.global_approx.(pos) with
         | C.Value_closure (fun_desc, _) ->
@@ -182,10 +188,18 @@ let create_dwarf_for_non_fundecl_structure_member t ~path ~ident ~typ:_ ~global
                 Hashtbl.find t.fundecl_proto_die_cache fun_name
               in
               (* If we get here, the fundecl corresponding to the member must
-                 be in the current compilation unit.  As such, we can use
-                 DW_TAG_imported_declaration (DWARF-4 spec section 3.2.3) to
-                 reference the debugging information entry of the fundecl.
+                 be in the current compilation unit.
+                 DW_TAG_imported_declaration (DWARF-4 spec section 3.2.3)
+                 doesn't seem to work properly in gdb, so just duplicate the
+                 proto-DIE and change its name.
               *)
+              let subprogram_proto_die =
+                Proto_DIE.duplicate_as_sibling subprogram_proto_die
+              in
+              Proto_DIE.change_name_attribute_value subprogram_proto_die
+                ~new_name:(Ident.name ident);
+              Some (name, fun_name)  (* see comment above *)
+              (* old DW_TAG_imported_declaration code:
               Proto_DIE.create_ignore ~parent:(Some parent)
                 ~tag:Tag.imported_declaration
                 ~attribute_values:[
@@ -193,7 +207,10 @@ let create_dwarf_for_non_fundecl_structure_member t ~path ~ident ~typ:_ ~global
                   Attribute_value.create_import
                     ~proto_die:(Proto_DIE.reference subprogram_proto_die);
                 ]
-            with Not_found -> ()  (* not yet implemented *)
+              *)
+            with Not_found -> begin
+              None  (* not yet implemented *)
+            end
           end
         | C.Value_tuple _
         | C.Value_unknown
@@ -229,7 +246,8 @@ let create_dwarf_for_non_fundecl_structure_member t ~path ~ident ~typ:_ ~global
               Attribute_value.create_single_location_description
                 single_location_description;
               Attribute_value.create_external ~is_visible_externally:true;
-            ]
+            ];
+          None
       end
 
 let pre_emission_dwarf_for_function t ~fundecl =
@@ -394,10 +412,17 @@ let set_global_approx t ~global_approx =
 let emit t =
   assert (not t.emitted);
   t.emitted <- true;
-  ListLabels.iter t.module_value_bindings
-    ~f:(fun (path, ident, typ, global, pos) ->
-      create_dwarf_for_non_fundecl_structure_member ~path ~ident ~typ ~global
-        ~pos ~parent:t.compilation_unit_proto_die t);
+  let sym_aliases =
+    ListLabels.fold_left t.module_value_bindings ~init:[]
+      ~f:(fun sym_aliases (path, ident, typ, global, pos) ->
+        let maybe_sym_alias =
+          create_dwarf_for_non_fundecl_structure_member ~path ~ident ~typ
+            ~global ~pos ~parent:t.compilation_unit_proto_die t
+        in
+        match maybe_sym_alias with
+        | None -> sym_aliases
+        | Some alias -> alias::sym_aliases)
+  in
   let debug_info =
     Debug_info_section.create ~compilation_unit:t.compilation_unit_proto_die
   in
@@ -413,6 +438,9 @@ let emit t =
   in
   let module SN = Section_names in
   let emitter = t.emitter in
+  Emitter.emit_switch_to_section emitter ~section_name:SN.text;
+  ListLabels.iter sym_aliases ~f:(fun (new_sym, old_sym) ->
+    Emitter.emit_symbol_alias emitter ~old_sym ~new_sym);
   ListLabels.iter SN.all ~f:(fun section_name ->
     Emitter.emit_section_declaration emitter ~section_name);
   Emitter.emit_switch_to_section emitter ~section_name:SN.debug_info;

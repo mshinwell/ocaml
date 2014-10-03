@@ -21,9 +21,10 @@
 (***********************************************************************)
 
 type t = {
+  parent : t option;
   mutable children : t list;
   tag : Tag.t;
-  attribute_values : Attribute_value.t list;
+  mutable attribute_values : Attribute_value.t list;
   label : Linearize.label;  (* for references between DIEs *)
 }
 
@@ -65,7 +66,8 @@ let create ~parent ~tag ~attribute_values =
             :: attribute_values
   in
   let t =
-    { children = [];
+    { parent;
+      children = [];
       tag;
       attribute_values;
       label = Linearize.new_label ();
@@ -80,6 +82,30 @@ let create ~parent ~tag ~attribute_values =
 let create_ignore ~parent ~tag ~attribute_values =
   let (_ : t) = create ~parent ~tag ~attribute_values in
   ()
+
+let duplicate_as_sibling t =
+  (* All we need to do is to copy the top level of [t] (assigning a new
+     [label] in the process, of course); the new proto-DIE will then share
+     the remainder with [t].  The sharing will be invisible after flattening
+     using [depth_first_fold], below, and as such should cause no trouble
+     during conversion to DWARF. *)
+  let attribute_values =
+    ListLabels.filter t.attribute_values ~f:(fun attribute_value ->
+      let attribute = Attribute_value.attribute attribute_value in
+      Attribute.compare attribute Attribute.sibling <> 0)
+  in
+  create ~parent:t.parent ~tag:t.tag ~attribute_values
+
+let change_name_attribute_value t ~new_name =
+  let attribute_values =
+    ListLabels.map t.attribute_values ~f:(fun attribute_value ->
+      let attribute = Attribute_value.attribute attribute_value in
+      if Attribute.compare attribute Attribute.name = 0 then
+        Attribute_value.create_name new_name
+      else
+        attribute_value)
+  in
+  t.attribute_values <- sort_attribute_values ~attribute_values
 
 let rec depth_first_fold t ~init ~f =
   let children =
