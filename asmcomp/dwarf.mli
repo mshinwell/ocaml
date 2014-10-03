@@ -40,6 +40,11 @@ val create
   -> start_of_data_symbol:string
   -> t
 
+val set_global_approx
+   : t
+  -> global_approx:Clambda.value_approximation array
+  -> unit
+
 (* For the moment, matching pairs of [pre_emission_dwarf_for_function] and
    [post_emission_dwarf_for_function] should be called on function
    declarations in the same order (lowest address to highest) as they will be

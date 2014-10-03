@@ -46,6 +46,8 @@ type t = {
   mutable emitted : bool;
   mutable module_value_bindings
     : (Path.t * Ident.t * Types.type_expr * Ident.t * int) list;
+  mutable global_approx : Clambda.value_approximation array;
+  fundecl_proto_die_cache : (string, Proto_DIE.t) Hashtbl.t;
 }
 
 let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
@@ -104,6 +106,8 @@ let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
     have_emitted_dwarf_for_mangled_names = String.Set.empty;
     emitted = false;
     module_value_bindings;
+    global_approx = [| |];
+    fundecl_proto_die_cache = Hashtbl.create 42;
   }
 
 (* Build a new DWARF type for [ident].  Each identifier has its
@@ -142,10 +146,16 @@ let path_to_mangled_name path =
     | None -> Some ("caml" ^ path)
     | Some pack -> Some (Printf.sprintf "caml%s__%s" pack path)
 
-(* Create DWARF to describe a structure member that is not a function to
-   be emitted by [*_emission_dwarf_for_function], below.  This is only for
-   structures in the static data section, not heap-allocated structures,
-   since the addresses of the members are written directly into the DWARF. *)
+(* Create DWARF to describe a structure member that has no corresponding
+   fundecl.  The member may still be a function: for example, [g] in the
+   case where [f] has a fundecl and the user writes [let g = f].  For these
+   cases we use the global approximation constructed during closure conversion
+   to emit DWARF describing functions rather than plain variables.  This is
+   important to ensure debugger functionality (e.g. setting breakpoints) works
+   correctly.
+   This function is only for structures in the static data section, not
+   heap-allocated structures, since the (relocatable) addresses of the members
+   are written directly into the DWARF. *)
 let create_dwarf_for_non_fundecl_structure_member t ~path ~ident ~typ:_ ~global
       ~pos ~parent =
   match path_to_mangled_name path with
@@ -155,36 +165,71 @@ let create_dwarf_for_non_fundecl_structure_member t ~path ~ident ~typ:_ ~global
     | None -> ()
     | Some global ->
       let name = path ^ "__" ^ (Ident.unique_name ident) in
-      (* This next check excludes the functions (for which we have already
-         emitted DWARF). *)
+      assert (pos >= 0 && pos < Array.length t.global_approx);
+      (* This next check excludes the members with fundecls, for which we
+         have already constructed proto-DIEs. *)
       if not (String.Set.mem name t.have_emitted_dwarf_for_mangled_names) then
       begin
-        let type_proto_die =
-          create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
-            ~ident:(`Ident ident) ~source_file_path:t.source_file_path
-        in
-        (* For the moment, just deem these values to be accessible always (even
-           before the module initializers have been run)... *)
-        let single_location_description =
-          let simple_location_description =
-            Simple_location_description.at_offset_from_symbol
-              ~base:t.start_of_data_symbol
-              ~symbol:global
-              ~offset_in_bytes:(pos * Arch.size_addr)
+        let module C = Clambda in
+        match t.global_approx.(pos) with
+        | C.Value_closure (fun_desc, _) ->
+          (* The member is actually a function.  (The fundecl may not actually
+             be in the compilation unit currently being emitted...) *)
+          begin
+            try
+              let fun_name = fun_desc.C.fun_label in
+              let subprogram_proto_die =
+                Hashtbl.find t.fundecl_proto_die_cache fun_name
+              in
+              (* If we get here, the fundecl corresponding to the member must
+                 be in the current compilation unit.  As such, we can use
+                 DW_TAG_imported_declaration (DWARF-4 spec section 3.2.3) to
+                 reference the debugging information entry of the fundecl.
+              *)
+              Proto_DIE.create_ignore ~parent:(Some parent)
+                ~tag:Tag.imported_declaration
+                ~attribute_values:[
+                  Attribute_value.create_name (Ident.name ident);
+                  Attribute_value.create_import
+                    ~proto_die:(Proto_DIE.reference subprogram_proto_die);
+                ]
+            with Not_found -> ()  (* not yet implemented *)
+          end
+        | C.Value_tuple _
+        | C.Value_unknown
+        (* CR-soon mshinwell: in the [Value_const] case, describe a constant. *)
+        | C.Value_const _
+        | C.Value_global_field (_, _) ->
+          (* The member is either of unknown approximation or a non-function,
+             in which case it is described in DWARF as a normal variable. *)
+          let type_proto_die =
+            create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
+              ~ident:(`Ident ident) ~source_file_path:t.source_file_path
           in
-          Single_location_description.of_simple_location_description
-            simple_location_description
-        in
-        Proto_DIE.create_ignore ~parent:(Some parent)
-          ~tag:Tag.variable
-          ~attribute_values:[
-            Attribute_value.create_name name;
-            Attribute_value.create_type
-              ~proto_die:(Proto_DIE.reference type_proto_die);
-            Attribute_value.create_single_location_description
-              single_location_description;
-            Attribute_value.create_external ~is_visible_externally:true;
-          ]
+          (* For the moment, just deem these values to be accessible always,
+             even before the module initializers have been run.  (Before
+             the initializers have run they will be printed as "()" in the
+             debugger.) *)
+          let single_location_description =
+            let simple_location_description =
+              Simple_location_description.at_offset_from_symbol
+                ~base:t.start_of_data_symbol
+                ~symbol:global
+                ~offset_in_bytes:(pos * Arch.size_addr)
+            in
+            Single_location_description.of_simple_location_description
+              simple_location_description
+          in
+          Proto_DIE.create_ignore ~parent:(Some parent)
+            ~tag:Tag.variable
+            ~attribute_values:[
+              Attribute_value.create_name name;
+              Attribute_value.create_type
+                ~proto_die:(Proto_DIE.reference type_proto_die);
+              Attribute_value.create_single_location_description
+                single_location_description;
+              Attribute_value.create_external ~is_visible_externally:true;
+            ]
       end
 
 let pre_emission_dwarf_for_function t ~fundecl =
@@ -312,16 +357,17 @@ let post_emission_dwarf_for_function t ~end_of_function_label =
   | None -> failwith "Dwarf.post_emission_dwarf_for_function"
   | Some (available_ranges, fundecl) ->
     let lexical_block_cache = Hashtbl.create 42 in
+    let fun_name = fundecl.Linearize.fun_name in
     let type_proto_die =
       create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
-        ~ident:(`Unique_name fundecl.Linearize.fun_name)
+        ~ident:(`Unique_name fun_name)
         ~source_file_path:t.source_file_path
     in
     let subprogram_proto_die =  (* "subprogram" means "function" for us. *)
       Proto_DIE.create ~parent:(Some t.compilation_unit_proto_die)
         ~tag:Tag.subprogram
         ~attribute_values:[
-          Attribute_value.create_name fundecl.Linearize.fun_name;
+          Attribute_value.create_name fun_name;
           Attribute_value.create_external ~is_visible_externally:true;
           Attribute_value.create_low_pc_from_symbol
             ~symbol:fundecl.Linearize.fun_name;
@@ -337,9 +383,13 @@ let post_emission_dwarf_for_function t ~end_of_function_label =
       ~init:()
       ~f:(fun () -> dwarf_for_identifier t ~fundecl
         ~function_proto_die:subprogram_proto_die ~lexical_block_cache);
+    Hashtbl.add t.fundecl_proto_die_cache fun_name subprogram_proto_die;
     t.externally_visible_functions
       <- fundecl.Linearize.fun_name::t.externally_visible_functions;
     t.available_ranges_and_fundecl <- None
+
+let set_global_approx t ~global_approx =
+  t.global_approx <- global_approx
 
 let emit t =
   assert (not t.emitted);

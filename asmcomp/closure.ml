@@ -1291,8 +1291,9 @@ let intro size lam =
   global_approx := Array.init size (fun i -> Value_global_field (id, i));
   Compilenv.set_global_approx(Value_tuple !global_approx);
   let (ulam, approx) = close Tbl.empty Tbl.empty lam in
+  let saved_global_approx = !global_approx in
   if !Clflags.opaque
   then Compilenv.set_global_approx(Value_unknown)
   else collect_exported_structured_constants (Value_tuple !global_approx);
   global_approx := [||];
-  ulam
+  ulam, saved_global_approx

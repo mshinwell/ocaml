@@ -36,6 +36,7 @@ type t =
   | DW_AT_byte_size
   | DW_AT_linkage_name  (* DWARF-4 *)
   | DW_AT_sibling
+  | DW_AT_import
 
 let encode = function
   | DW_AT_low_pc -> 0x11
@@ -51,6 +52,7 @@ let encode = function
   | DW_AT_byte_size -> 0x0b
   | DW_AT_linkage_name -> 0x6e
   | DW_AT_sibling -> 0x01
+  | DW_AT_import -> 0x18
 
 let compare t1 t2 =
   compare (encode t1) (encode t2)
@@ -70,6 +72,7 @@ let form = function
   | DW_AT_byte_size -> Form.data1
   | DW_AT_linkage_name -> Form.strp
   | DW_AT_sibling -> Form.ref_addr
+  | DW_AT_import -> Form.ref_addr
 
 let low_pc = DW_AT_low_pc
 let high_pc = DW_AT_high_pc
@@ -85,6 +88,7 @@ let encoding = DW_AT_encoding
 let byte_size = DW_AT_byte_size
 let linkage_name = DW_AT_linkage_name
 let sibling = DW_AT_sibling
+let import = DW_AT_import
 
 let size t =
   Int64.add (Value.size (Value.as_uleb128 (encode t)))

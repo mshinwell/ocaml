@@ -156,7 +156,12 @@ let compile_implementation ?toplevel ~source_file_path prefixname ppf
       else
         None
     in
-    Closure.intro size lam
+    let lam, global_approx = Closure.intro size lam in
+    begin match dwarf with
+    | None -> ()
+    | Some dwarf -> Dwarf.set_global_approx dwarf ~global_approx
+    end;
+    lam
     ++ clambda_dump_if ppf
     ++ Cmmgen.compunit size
     ++ List.iter (compile_phrase ppf ~dwarf) ++ (fun () -> ());

@@ -82,6 +82,11 @@ let create_sibling ~proto_die =
     `Value (Value.as_offset_from_label proto_die
       ~section:Section_names.debug_info)
 
+let create_import ~proto_die =
+  Attribute.import,
+    `Value (Value.as_offset_from_label proto_die
+      ~section:Section_names.debug_info)
+
 let create_byte_size ~byte_size =
   assert (byte_size >= 1 && byte_size <= 0xff); (* CR mshinwell: not assert *)
   Attribute.byte_size, `Value (Value.as_byte byte_size)

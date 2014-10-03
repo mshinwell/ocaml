@@ -12,5 +12,6 @@
 
 (* Introduction of closures, uncurrying, recognition of direct calls *)
 
-val intro: int -> Lambda.lambda -> Clambda.ulambda
+val intro: int -> Lambda.lambda
+  -> Clambda.ulambda * (Clambda.value_approximation array)
 val reset : unit -> unit
