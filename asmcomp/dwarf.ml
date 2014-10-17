@@ -129,6 +129,9 @@ let create_type_proto_die ~parent ~ident ~source_file_path =
       Attribute_value.create_byte_size ~byte_size:Arch.size_addr;
     ]
 
+let die_name_from_function_name fun_name =
+  "camlDIE__" ^ fun_name
+
 let path_to_mangled_name path =
   let rec traverse_path = function
     | Path.Pident ident -> Some (Ident.name ident)
@@ -181,9 +184,9 @@ let create_dwarf_for_non_fundecl_structure_member t ~path ~ident ~typ:_ ~global
         | C.Value_closure (fun_desc, _) ->
           (* The member is actually a function.  (The fundecl may not actually
              be in the compilation unit currently being emitted...) *)
+          let fun_name = fun_desc.C.fun_label in
           begin
             try
-              let fun_name = fun_desc.C.fun_label in
               let subprogram_proto_die =
                 Hashtbl.find t.fundecl_proto_die_cache fun_name
               in
@@ -197,21 +200,21 @@ let create_dwarf_for_non_fundecl_structure_member t ~path ~ident ~typ:_ ~global
                 Proto_DIE.duplicate_as_sibling subprogram_proto_die
               in
               Proto_DIE.change_name_attribute_value subprogram_proto_die
-                ~new_name:(Ident.name ident);
-              Some (name, fun_name)  (* see comment above *)
-              (* old DW_TAG_imported_declaration code:
-              Proto_DIE.create_ignore ~parent:(Some parent)
-                ~tag:Tag.imported_declaration
-                ~attribute_values:[
-                  Attribute_value.create_name (Ident.name ident);
-                  Attribute_value.create_import
-                    ~proto_die:(Proto_DIE.reference subprogram_proto_die);
-                ]
-              *)
+                ~new_name:(Ident.name ident)
             with Not_found -> begin
-              None  (* not yet implemented *)
+              (* The function declaration is in another compilation unit. *)
+              let die_symbol = die_name_from_function_name fun_name in
+              Proto_DIE.create_ignore
+                ~parent:(Some t.compilation_unit_proto_die)
+                ~tag:Tag.subprogram
+                ~attribute_values:[
+                  Attribute_value.create_name fun_name;
+                  Attribute_value.create_specification_different_unit
+                    ~die_symbol;
+                ]
             end
-          end
+          end;
+          Some (name, fun_name)  (* see comment above *)
         | C.Value_tuple _
         | C.Value_unknown
         (* CR-soon mshinwell: in the [Value_const] case, describe a constant. *)
@@ -381,17 +384,41 @@ let post_emission_dwarf_for_function t ~end_of_function_label =
         ~ident:(`Unique_name fun_name)
         ~source_file_path:t.source_file_path
     in
-    let subprogram_proto_die =  (* "subprogram" means "function" for us. *)
+    (* Functions are described in two parts:
+       - a "specification" (using DW_AT_specification) which contains all
+         attribute values except for the name;
+       - a DIE that references the specification.
+       The reason for this division is so that we can reference the
+       function's attribute values from a DIE in another compilation unit,
+       but under a different name.  (For example if another compilation
+       unit B binds a member of a structure to a function in the current
+       unit A: in b.ml, "let bar = A.foo".)  See above. *)
+    let specification_proto_die =
       Proto_DIE.create ~parent:(Some t.compilation_unit_proto_die)
         ~tag:Tag.subprogram
         ~attribute_values:[
-          Attribute_value.create_name fun_name;
           Attribute_value.create_external ~is_visible_externally:true;
           Attribute_value.create_low_pc_from_symbol
             ~symbol:fundecl.Linearize.fun_name;
           Attribute_value.create_high_pc ~address_label:end_of_function_label;
           Attribute_value.create_type
             ~proto_die:(Proto_DIE.reference type_proto_die);
+        ]
+    in
+    (* CR-someday mshinwell: we probably don't need to add names (and hence
+       global symbols) for functions not exported in the .mli for the current
+       unit. *)
+    (* The name of the specification DIE is used to reference it from other
+       units. *)
+    Proto_DIE.set_name specification_proto_die
+      (die_name_from_function_name fun_name);
+    let subprogram_proto_die =  (* "subprogram" means "function" for us. *)
+      Proto_DIE.create ~parent:(Some t.compilation_unit_proto_die)
+        ~tag:Tag.subprogram
+        ~attribute_values:[
+          Attribute_value.create_name fun_name;
+          Attribute_value.create_specification_same_unit
+            ~proto_die:(Proto_DIE.reference specification_proto_die);
         ]
     in
     (* For each identifier for which we have available ranges, construct

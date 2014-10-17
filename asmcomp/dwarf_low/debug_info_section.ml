@@ -53,7 +53,7 @@ let assign_abbreviations t =
           match action with
           | `End_of_siblings ->
             abbrev_table, Debugging_information_entry.create_null ()
-          | `DIE (tag, has_children, attribute_values, label) ->
+          | `DIE (tag, has_children, attribute_values, label, name) ->
             (* Note that [Proto_DIE.create] sorted the attribute values,
                ensuring that a simple re-ordering does not cause a new
                abbreviation to be created. *)
@@ -80,7 +80,7 @@ let assign_abbreviations t =
             in
             let die =
               Debugging_information_entry.create ~label ~abbreviation_code
-                ~attribute_values
+                ~attribute_values ~name
             in
             abbrev_table, die
         in

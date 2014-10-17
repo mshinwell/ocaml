@@ -41,5 +41,10 @@ val emit_label_declaration : t -> label_name:Linearize.label -> unit
 val emit_section_declaration : t -> section_name:Section_names.t -> unit
 val emit_switch_to_section : t -> section_name:Section_names.t -> unit
 val emit_symbol_alias : t -> old_sym:string -> new_sym:string -> unit
+val emit_symbol_to_label_alias
+   : t
+  -> old_label:Linearize.label
+  -> new_sym:string
+  -> unit
 
 val target : t -> [ `MacOS_X | `Other ]

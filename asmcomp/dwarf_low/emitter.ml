@@ -70,9 +70,24 @@ let emit_section_declaration t ~section_name =
 let emit_switch_to_section t ~section_name =
   t.emit_switch_to_section ~section_name:(Section_names.name section_name)
 
-(* CR mshinwell: put this through via [Emit] properly *)
 let emit_symbol_alias t ~old_sym ~new_sym =
-  t.emit_string (Printf.sprintf "\t.set %s,%s\n" new_sym old_sym);
-  t.emit_string (Printf.sprintf "\t.global %s\n" new_sym)
+  t.emit_string "\t.set ";
+  t.emit_symbol new_sym;
+  t.emit_string ",";
+  t.emit_symbol old_sym;
+  t.emit_string "\n";
+  t.emit_string "\t.global ";
+  t.emit_symbol new_sym;
+  t.emit_string "\n"
+
+let emit_symbol_to_label_alias t ~old_label ~new_sym =
+  t.emit_string "\t.set ";
+  t.emit_symbol new_sym;
+  t.emit_string ",";
+  t.emit_label old_label;
+  t.emit_string "\n";
+  t.emit_string "\t.global ";
+  t.emit_symbol new_sym;
+  t.emit_string "\n"
 
 let target t = t.target

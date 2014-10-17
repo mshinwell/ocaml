@@ -42,3 +42,4 @@ val byte_size : t
 val linkage_name : t
 val sibling : t
 val import : t
+val specification : t

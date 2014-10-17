@@ -24,7 +24,10 @@ type t
 
 include Emittable.S with type t := t
 
+(* If [name] is provided, then a global symbol will be created at the
+   same place as [label]. *)
 val create : label:Linearize.label
+  -> name:string option
   -> abbreviation_code:Abbreviation_code.t
   -> attribute_values:Attribute_value.t list
   -> t

@@ -34,6 +34,10 @@ val as_offset_from_label
    : Linearize.label
   -> section:Section_names.t
   -> t
+val as_offset_from_symbol
+   : string
+  -> section:Section_names.t
+  -> t
 val as_reference_from_label : Linearize.label -> t
 
 (* CR mshinwell: consider changing [as_uleb128] interface *)

@@ -42,4 +42,9 @@ val create_linkage_name : linkage_name:string -> t
 val create_sibling : proto_die:Linearize.label -> t
 val create_single_location_description : Single_location_description.t -> t
 
+(* DW_AT_specification across compilation units. *)
+val create_specification_different_unit : die_symbol:string -> t
+(* DW_AT_specification within the same compilation unit. *)
+val create_specification_same_unit : proto_die:Linearize.label -> t
+
 val attribute : t -> Attribute.t

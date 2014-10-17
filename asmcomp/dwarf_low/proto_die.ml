@@ -26,6 +26,9 @@ type t = {
   tag : Tag.t;
   mutable attribute_values : Attribute_value.t list;
   label : Linearize.label;  (* for references between DIEs *)
+  (* CR-someday mshinwell: consider combining [label] and [name] into one
+     "how to reference this DIE" value. *)
+  mutable name : string option;  (* for references between DIEs across units *)
 }
 
 let sort_attribute_values ~attribute_values =
@@ -71,6 +74,7 @@ let create ~parent ~tag ~attribute_values =
       tag;
       attribute_values;
       label = Linearize.new_label ();
+      name = None;
     }
   in
   begin match parent with
@@ -82,6 +86,8 @@ let create ~parent ~tag ~attribute_values =
 let create_ignore ~parent ~tag ~attribute_values =
   let (_ : t) = create ~parent ~tag ~attribute_values in
   ()
+
+let set_name t name = t.name <- Some name
 
 let duplicate_as_sibling t =
   (* All we need to do is to copy the top level of [t] (assigning a new
@@ -113,7 +119,9 @@ let rec depth_first_fold t ~init ~f =
     | [] -> Child_determination.no
     | _ -> Child_determination.yes
   in
-  let acc = f init (`DIE (t.tag, children, t.attribute_values, t.label)) in
+  let acc =
+    f init (`DIE (t.tag, children, t.attribute_values, t.label, t.name))
+  in
   match t.children with
   | [] -> acc
   | _ ->

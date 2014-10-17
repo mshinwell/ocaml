@@ -35,6 +35,7 @@ type t =
      emission that the value is not too large. *)
   | Absolute_offset of Int64.t
   | Offset_from_label of Linearize.label * Section_names.t
+  | Offset_from_symbol of string * Section_names.t
   | Offset_from_var of string
   | Reference_from_label of Linearize.label
   (* CR-someday mshinwell: this will need adjusting for cross-compilation
@@ -90,6 +91,7 @@ let as_string s =
 
 let as_absolute_offset o = Absolute_offset o
 let as_offset_from_label l ~section = Offset_from_label (l, section)
+let as_offset_from_symbol s ~section = Offset_from_symbol (s, section)
 let as_reference_from_label l = Reference_from_label l
 
 let as_code_address_from_symbol s =
@@ -134,6 +136,7 @@ let size =
            7.4.3). *)
       | Absolute_offset _
       | Offset_from_label _
+      | Offset_from_symbol _
       | Offset_from_var _
       | Reference_from_label _ ->
         (* The size of offsets depends on the DWARF format being emitted, not
@@ -216,6 +219,24 @@ let rec emit t ~emitter =
       Emitter.emit_string emitter name;
       Emitter.emit_string emitter " = ";
       Emitter.emit_label emitter label;
+      Emitter.emit_string emitter "-";
+      Emitter.emit_label emitter (Section_names.starting_label section);
+      Emitter.emit_string emitter "\n";
+      emit (Offset_from_var name) ~emitter
+    end
+  | Offset_from_symbol (symbol, section) ->
+    begin match Emitter.target emitter with
+    | `Other ->
+      emit_directive_for_offset ~emitter;
+      Emitter.emit_symbol emitter symbol;
+      Emitter.emit_string emitter "\n"
+    | `MacOS_X ->
+      let count = !set_counter in
+      let name = Printf.sprintf "Ldwarf_value%d" count in
+      incr set_counter;
+      Emitter.emit_string emitter name;
+      Emitter.emit_string emitter " = ";
+      Emitter.emit_symbol emitter symbol;
       Emitter.emit_string emitter "-";
       Emitter.emit_label emitter (Section_names.starting_label section);
       Emitter.emit_string emitter "\n";

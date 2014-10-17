@@ -46,6 +46,9 @@ val create_ignore
   -> attribute_values:Attribute_value.t list
   -> unit
 
+(* CR-someday mshinwell: add a [name] argument to the creation functions *)
+val set_name : t -> string -> unit
+
 val duplicate_as_sibling : t -> t
 
 val change_name_attribute_value : t -> new_name:string -> unit
@@ -69,7 +72,7 @@ val depth_first_fold
   -> init:'a
   -> f:('a
     -> [ `DIE of Tag.t * Child_determination.t * (Attribute_value.t list)
-           * Linearize.label
+           * Linearize.label * string option (* optional name *)
        | `End_of_siblings
        ]
     -> 'a)
