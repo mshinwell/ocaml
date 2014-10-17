@@ -208,7 +208,7 @@ let create_dwarf_for_non_fundecl_structure_member t ~path ~ident ~typ:_ ~global
                 ~parent:(Some t.compilation_unit_proto_die)
                 ~tag:Tag.subprogram
                 ~attribute_values:[
-                  Attribute_value.create_name fun_name;
+                  Attribute_value.create_name name;
                   Attribute_value.create_specification_different_unit
                     ~die_symbol;
                 ]
