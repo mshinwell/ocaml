@@ -47,8 +47,8 @@ end
 
 module Available_range : sig
   type t
-  
-  val is_parameter : t -> bool
+
+  val is_parameter : t -> int option  (* viz. reg.mli. *)
   val extremities : t -> Linearize.label * Linearize.label
 
   val fold

@@ -66,7 +66,7 @@ module Available_range : sig
   type t
 
   val create : unit -> t
-  val is_parameter : t -> bool
+  val is_parameter : t -> int option
   val add_subrange : t -> subrange:Available_subrange.t -> unit
   val extremities : t -> L.label * L.label
 
