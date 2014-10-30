@@ -114,7 +114,14 @@ let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
    own type, which is basically its stamped name, and is nothing to do with
    its inferred OCaml type.  The inferred type may be recovered by the
    debugger by extracting the stamped name and then using that as a key
-   for lookup into the .cmt file for the appropriate module. *)
+   for lookup into the .cmt file for the appropriate module.
+
+   We emit the parameter index into the type if the identifier in question
+   is a function parameter.  This is used in the debugger support library.
+   It would be nice not to have to have this hack, but it avoids changes
+   in the main gdb code to pass parameter indexes to the printing function.
+   It is arguably more robust, too.
+*)
 let create_type_proto_die ~parent ~ident ~source_file_path ~is_parameter =
   let ident =
     match ident with
@@ -396,22 +403,9 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
       ~is_parameter:(Available_range.is_parameter range)
   in
   (* If the unstamped name of [ident] is unambiguous within the function,
-     then use it; otherwise, emit the stamped name.
-     We emit the parameter index into the name if the identifier in question
-     is a function parameter.  This is used in the debugger support library.
-     It would be nice not to have to have this hack, but it avoids changes
-     in the main gdb code to pass parameter indexes to the printing function.
-     It is arguably more robust, too.
-  *)
+     then use it; otherwise, emit the stamped name. *)
   let name_for_ident =
-    let name =
-      if is_unique then Ident.name ident else Ident.unique_name ident
-    in
-    match Available_range.is_parameter range with
-    | None -> name
-    (* CR mshinwell: adding the index here may be redundant; it needs to be
-       in the DWARF type. *)
-    | Some index -> Printf.sprintf "__ocamlparam%s-%d" name index
+    if is_unique then Ident.name ident else Ident.unique_name ident
   in
   let tag =
     match Available_range.is_parameter range with
