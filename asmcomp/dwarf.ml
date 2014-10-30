@@ -132,6 +132,32 @@ let create_type_proto_die ~parent ~ident ~source_file_path =
 let die_name_from_function_name fun_name =
   "camlDIE__" ^ fun_name
 
+let dots_to_double_underscores path_as_string =
+  let num_dots = ref 0 in
+  let length = String.length path_as_string in
+  for i = 0 to length - 1 do
+    if String.get path_as_string i = '.' then incr num_dots
+  done;
+  let num_dots = !num_dots in
+  if num_dots < 1 then
+    path_as_string
+  else begin
+    let new_path_as_string = Bytes.create (length + num_dots) in
+    let pos = ref 0 in
+    for i = 0 to length - 1 do
+      let chr = String.get path_as_string i in
+      if chr <> '.' then
+        Bytes.set new_path_as_string !pos chr
+      else begin
+        Bytes.set new_path_as_string !pos '_';
+        incr pos;
+        Bytes.set new_path_as_string !pos '_'
+      end;
+      incr pos
+    done;
+    Bytes.to_string new_path_as_string
+  end
+
 let path_to_mangled_name path =
   let rec traverse_path = function
     | Path.Pident ident -> Some (Ident.name ident)
@@ -147,7 +173,11 @@ let path_to_mangled_name path =
   | Some path ->
     match !Clflags.for_package with
     | None -> Some ("caml" ^ path)
-    | Some pack -> Some (Printf.sprintf "caml%s__%s" pack path)
+    | Some pack ->
+      (* [pack] may contain a dot; if so, it must be replaced by the
+         double underscore encoding. *)
+      let pack = dots_to_double_underscores pack in
+      Some (Printf.sprintf "caml%s__%s" pack path)
 
 (* Create DWARF to describe a structure member that has no corresponding
    fundecl.  The member may still be a function: for example, [g] in the
