@@ -12,6 +12,7 @@
 
 (* Introduction of closures, uncurrying, recognition of direct calls *)
 
+val env_param_name : string
 val intro: int -> Lambda.lambda
   -> Clambda.ulambda * (Clambda.value_approximation array)
 val reset : unit -> unit

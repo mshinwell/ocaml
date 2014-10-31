@@ -39,14 +39,22 @@ let overwrite_union reg_set ~overwrite_with =
       in
       R.Set.add reg not_sharing_loc) overwrite_with (* ~init:*)reg_set
 
-(* Filter out registers that are not tagged with a value identifier name; and
-   in the case where multiple registers exist for a given value identifier,
-   choose a canonical one (see comment below). *)
+let should_hide_ident reg =
+  match R.Raw_name.to_ident reg with
+  | Some ident -> Ident.name ident = Closure.env_param_name
+  | None -> assert false
+
+(* Filter out registers that are not tagged with a value identifier name and
+   for identifier names (e.g. for the closure parameters of mutually-recursive
+   functions) that should be hidden in the debugger; and in the case where
+   multiple registers exist for a given value identifier, choose a canonical
+   one (see comment below). *)
 let filter_avail_before avail_before =
   R.Set.fold (fun reg acc ->
     if not (R.Raw_name.is_ident reg.R.raw_name) then acc
     (* CR-soon mshinwell: handle values split across multiple registers *)
     else if reg.R.part <> None then acc
+    else if should_hide_ident reg then acc
     else
       let for_same_ident =
         R.Set.filter (fun reg' ->

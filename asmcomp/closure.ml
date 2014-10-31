@@ -19,6 +19,8 @@ open Lambda
 open Switch
 open Clambda
 
+let env_param_name = ".env"
+
 module Storer =
   Switch.Store
     (struct
@@ -1103,7 +1105,7 @@ and close_functions fenv cenv fun_defs =
     let dbg = match body with
       | Levent (_,({lev_kind=Lev_function} as ev)) -> Debuginfo.from_call ev
       | _ -> Debuginfo.none in
-    let env_param = Ident.create "env" in
+    let env_param = Ident.create env_param_name in
     let cenv_fv =
       build_closure_env env_param (fv_pos - env_pos) fv in
     let cenv_body =
