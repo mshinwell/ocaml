@@ -40,7 +40,7 @@ let overwrite_union reg_set ~overwrite_with =
       R.Set.add reg not_sharing_loc) overwrite_with (* ~init:*)reg_set
 
 let should_hide_ident reg =
-  match R.Raw_name.to_ident reg with
+  match R.Raw_name.to_ident reg.R.raw_name with
   | Some ident -> Ident.name ident = Closure.env_param_name
   | None -> assert false
 
