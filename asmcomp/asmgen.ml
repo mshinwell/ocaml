@@ -130,7 +130,7 @@ let compile_implementation ?toplevel ~source_file_path prefixname ppf
       Emit.begin_assembly ()
     in
     let dwarf =
-      if !Clflags.debug_full then
+      if !Clflags.debug then
         let macosx = (Config.system = "macosx") in
         let target =
           if macosx then `MacOS_X else `Other

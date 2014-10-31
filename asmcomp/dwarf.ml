@@ -114,23 +114,64 @@ let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
    own type, which is basically its stamped name, and is nothing to do with
    its inferred OCaml type.  The inferred type may be recovered by the
    debugger by extracting the stamped name and then using that as a key
-   for lookup into the .cmt file for the appropriate module. *)
-let create_type_proto_die ~parent ~ident ~source_file_path =
+   for lookup into the .cmt file for the appropriate module.
+
+   We emit the parameter index into the type if the identifier in question
+   is a function parameter.  This is used in the debugger support library.
+   It would be nice not to have to have this hack, but it avoids changes
+   in the main gdb code to pass parameter indexes to the printing function.
+   It is arguably more robust, too.
+*)
+let create_type_proto_die ~parent ~ident ~source_file_path ~is_parameter =
   let ident =
     match ident with
     | `Ident ident -> Ident.unique_name ident
     | `Unique_name name -> name
   in
+  let name =
+    Printf.sprintf "__ocaml%s %s%s"
+      source_file_path
+      ident
+      (match is_parameter with
+        | None -> ""
+        | Some index -> Printf.sprintf "-%d" index)
+  in
   Proto_DIE.create ~parent
     ~tag:Tag.base_type
     ~attribute_values:[
-      Attribute_value.create_name ("__ocaml" ^ source_file_path ^ " " ^ ident);
+      Attribute_value.create_name name;
       Attribute_value.create_encoding ~encoding:Encoding_attribute.signed;
       Attribute_value.create_byte_size ~byte_size:Arch.size_addr;
     ]
 
 let die_name_from_function_name fun_name =
   "camlDIE__" ^ fun_name
+
+let dots_to_double_underscores path_as_string =
+  let num_dots = ref 0 in
+  let length = String.length path_as_string in
+  for i = 0 to length - 1 do
+    if String.get path_as_string i = '.' then incr num_dots
+  done;
+  let num_dots = !num_dots in
+  if num_dots < 1 then
+    path_as_string
+  else begin
+    let new_path_as_string = Bytes.create (length + num_dots) in
+    let pos = ref 0 in
+    for i = 0 to length - 1 do
+      let chr = String.get path_as_string i in
+      if chr <> '.' then
+        Bytes.set new_path_as_string !pos chr
+      else begin
+        Bytes.set new_path_as_string !pos '_';
+        incr pos;
+        Bytes.set new_path_as_string !pos '_'
+      end;
+      incr pos
+    done;
+    Bytes.to_string new_path_as_string
+  end
 
 let path_to_mangled_name path =
   let rec traverse_path = function
@@ -147,7 +188,11 @@ let path_to_mangled_name path =
   | Some path ->
     match !Clflags.for_package with
     | None -> Some ("caml" ^ path)
-    | Some pack -> Some (Printf.sprintf "caml%s__%s" pack path)
+    | Some pack ->
+      (* [pack] may contain a dot; if so, it must be replaced by the
+         double underscore encoding. *)
+      let pack = dots_to_double_underscores pack in
+      Some (Printf.sprintf "caml%s__%s" pack path)
 
 (* Create DWARF to describe a structure member that has no corresponding
    fundecl.  The member may still be a function: for example, [g] in the
@@ -225,6 +270,7 @@ let create_dwarf_for_non_fundecl_structure_member t ~path ~ident ~typ:_ ~global
           let type_proto_die =
             create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
               ~ident:(`Ident ident) ~source_file_path:t.source_file_path
+              ~is_parameter:None
           in
           (* For the moment, just deem these values to be accessible always,
              even before the module initializers have been run.  (Before
@@ -301,10 +347,11 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
       ~ident ~is_unique ~range =
   let (start_pos, end_pos) as cache_key = Available_range.extremities range in
   let parent_proto_die =
-    if Available_range.is_parameter range then begin
+    match Available_range.is_parameter range with
+    | Some _index ->
       (* Parameters need to be children of the function in question. *)
       function_proto_die
-    end else begin
+    | None ->
       (* Local variables need to be children of "lexical blocks", which in turn
          are children of the function.  We use a cache to avoid creating more
          than one proto-DIE for any given lexical block position and size. *)
@@ -321,7 +368,6 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
         Hashtbl.add lexical_block_cache cache_key lexical_block_proto_die;
         lexical_block_proto_die
       end
-    end
   in
   (* Build a location list that identifies where the value of [ident] may be
      found at runtime, indexed by program counter range, and insert the list
@@ -354,6 +400,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
   let type_proto_die =
     create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
       ~ident:(`Ident ident) ~source_file_path:t.source_file_path
+      ~is_parameter:(Available_range.is_parameter range)
   in
   (* If the unstamped name of [ident] is unambiguous within the function,
      then use it; otherwise, emit the stamped name. *)
@@ -361,8 +408,9 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
     if is_unique then Ident.name ident else Ident.unique_name ident
   in
   let tag =
-    if Available_range.is_parameter range then Tag.formal_parameter
-    else Tag.variable
+    match Available_range.is_parameter range with
+    | Some _index -> Tag.formal_parameter
+    | None -> Tag.variable
   in
   Proto_DIE.create_ignore ~parent:(Some parent_proto_die)
     ~tag
@@ -383,6 +431,7 @@ let post_emission_dwarf_for_function t ~end_of_function_label =
       create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
         ~ident:(`Unique_name fun_name)
         ~source_file_path:t.source_file_path
+        ~is_parameter:None
     in
     (* Functions are described in two parts:
        - a "specification" (using DW_AT_specification) which contains all
