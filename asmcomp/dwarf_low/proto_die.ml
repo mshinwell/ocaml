@@ -29,6 +29,7 @@ type t = {
   (* CR-someday mshinwell: consider combining [label] and [name] into one
      "how to reference this DIE" value. *)
   mutable name : string option;  (* for references between DIEs across units *)
+  mutable sort_priority : int;
 }
 
 let sort_attribute_values ~attribute_values =
@@ -75,6 +76,7 @@ let create ~parent ~tag ~attribute_values =
       attribute_values;
       label = Linearize.new_label ();
       name = None;
+      sort_priority = -1;
     }
   in
   begin match parent with
@@ -88,6 +90,7 @@ let create_ignore ~parent ~tag ~attribute_values =
   ()
 
 let set_name t name = t.name <- Some name
+let set_sort_priority t priority = t.sort_priority <- priority
 
 let duplicate_as_sibling t =
   (* All we need to do is to copy the top level of [t] (assigning a new
@@ -113,6 +116,9 @@ let change_name_attribute_value t ~new_name =
   in
   t.attribute_values <- sort_attribute_values ~attribute_values
 
+let sort_children ts =
+  ListLabels.sort ts ~cmp:(fun t1 t2 -> compare t1.sort_priority t2.sort_priority)
+
 let rec depth_first_fold t ~init ~f =
   let children =
     match t.children with
@@ -126,6 +132,7 @@ let rec depth_first_fold t ~init ~f =
   | [] -> acc
   | _ ->
     let rec traverse_children ts ~acc =
+      let ts = sort_children ts in
       match ts with
       | [] -> f acc `End_of_siblings
       | t::ts -> traverse_children ts ~acc:(depth_first_fold t ~init:acc ~f)

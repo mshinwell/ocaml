@@ -412,14 +412,22 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
     | Some _index -> Tag.formal_parameter
     | None -> Tag.variable
   in
-  Proto_DIE.create_ignore ~parent:(Some parent_proto_die)
-    ~tag
-    ~attribute_values:[
-      Attribute_value.create_name name_for_ident;
-      Attribute_value.create_type
-        ~proto_die:(Proto_DIE.reference type_proto_die);
-      location_list_attribute_value;
-    ]
+  let proto_die =
+    Proto_DIE.create ~parent:(Some parent_proto_die)
+      ~tag
+      ~attribute_values:[
+        Attribute_value.create_name name_for_ident;
+        Attribute_value.create_type
+          ~proto_die:(Proto_DIE.reference type_proto_die);
+        location_list_attribute_value;
+      ]
+  in
+  begin match Available_range.is_parameter range with
+  | None -> ()
+  | Some index ->
+    (* Ensure that parameters appear in the correct order in the debugger. *)
+    Proto_DIE.set_sort_priority proto_die index
+  end
 
 let post_emission_dwarf_for_function t ~end_of_function_label =
   match t.available_ranges_and_fundecl with

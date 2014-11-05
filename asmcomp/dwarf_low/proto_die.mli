@@ -46,6 +46,8 @@ val create_ignore
   -> attribute_values:Attribute_value.t list
   -> unit
 
+val set_sort_priority : t -> int -> unit
+
 (* CR-someday mshinwell: add a [name] argument to the creation functions *)
 val set_name : t -> string -> unit
 
