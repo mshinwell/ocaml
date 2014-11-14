@@ -161,6 +161,32 @@ let add_subrange t ~subrange =
   in
   Available_range.add_subrange range ~subrange
 
+let available_before insn =
+  let available_before, _idents_seen =
+    Reg.Set.fold (fun reg ((available_before, idents_seen) as acc) ->
+      (* CR-soon mshinwell: handle values split across multiple registers *)
+      if reg.Reg.part <> None then
+        acc
+      else
+        match Reg.Raw_name.to_ident reg.Reg.raw_name with
+        | None -> acc  (* ignore registers without proper names *)
+        | Some ident ->
+          if Ident.name ident = Closure.env_param_name then
+            acc
+          else
+            try
+              let () = Ident.find_same ident idents_seen in
+              (* We don't need more than one reg location for a given name. *)
+              acc
+            with Not_found -> begin
+              let available_before = Reg.Set.add reg available_before in
+              let idents_seen = Ident.add ident () idents_seen in
+              available_before, idents_seen
+            end)
+      insn.L.available_before (Reg.Set.empty, Ident.empty)
+  in
+  available_before
+
 (* Imagine that the program counter is exactly at the start of [insn]; it has
    not yet been executed.  This function calculates which available subranges
    are to start at that point, and which are to stop.  [prev_insn] is the
@@ -182,21 +208,21 @@ let births_and_deaths ~insn ~prev_insn =
   in
   let births =
     match prev_insn with
-    | None -> insn.L.available_before
+    | None -> (available_before insn)
     | Some prev_insn ->
       if not adjusts_sp then
-        Reg.Set.diff insn.L.available_before prev_insn.L.available_before
+        Reg.Set.diff (available_before insn) (available_before prev_insn)
       else
-        insn.L.available_before
+        (available_before insn)
   in
   let deaths =
     match prev_insn with
     | None -> Reg.Set.empty
     | Some prev_insn ->
       if not adjusts_sp then
-        Reg.Set.diff prev_insn.L.available_before insn.L.available_before
+        Reg.Set.diff (available_before prev_insn) (available_before insn)
       else
-        prev_insn.L.available_before
+        (available_before prev_insn)
   in
   births, deaths
 

@@ -85,6 +85,7 @@ let compile_fundecl (ppf : formatter) ~dwarf fd_cmm =
   ++ pass_dump_if ppf dump_split "After live range splitting"
   ++ liveness ppf
   ++ regalloc ppf 1
+(*  ++ pass_dump_if ppf dump_live "Liveness analysis before available regs"*)
   ++ Available_regs.fundecl
   ++ pass_dump_if ppf dump_live "Liveness analysis"
   ++ Linearize.fundecl

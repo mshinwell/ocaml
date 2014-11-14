@@ -17,6 +17,7 @@ module Raw_name : sig
   val create_ident : Ident.t -> t
   val is_ident : t -> bool
   val to_ident : t -> Ident.t option
+  val to_ident_exn : t -> Ident.t
   val (=) : t -> t -> bool
 end
 
