@@ -40,77 +40,17 @@ let reg_is_interesting reg =
 let instr_arg i =
   R.Set.filter reg_is_interesting (R.set_of_array i.M.arg)
 
+let instr_arg_array i =
+  Array.of_list (R.Set.elements (instr_arg i))
+
 let instr_res i =
   R.Set.filter reg_is_interesting (R.set_of_array i.M.res)
 
+let instr_res_array i =
+  Array.of_list (R.Set.elements (instr_res i))
+
 let instr_live i =
   R.Set.filter reg_is_interesting i.M.live
-
-(* [overwrite_union reg_set ~overwrite_with] removes from [reg_set] all
-   registers having the same location as [overwrite_with]; and then adds
-   [overwrite_with] into the resulting set. *)
-let overwrite_union reg_set ~overwrite_with =
-  R.Set.fold (fun reg acc ->
-    match reg.R.loc with
-    | R.Unknown ->
-      (* This pass is always run after register allocation. *)
-      failwith "overwrite_union: register has no location"
-    | R.Reg _ | R.Stack _ ->
-      let not_sharing_loc =
-        R.Set.filter (fun reg' ->
-          reg.R.loc <> reg'.R.loc
-            || (not (R.is_temporary reg')
-                  && reg.R.raw_name <> reg'.R.raw_name)) acc
-      in
-      R.Set.add reg not_sharing_loc) overwrite_with (* ~init:*)reg_set
-
-let should_ignore_reg _reg = false
-(*
-  match R.Raw_name.to_ident reg.R.raw_name with
-  | None -> true
-  | Some ident ->
-    Ident.name ident = Closure.env_param_name
-      (* CR-soon mshinwell: handle values split across multiple registers *)
-      || reg.R.part <> None
-*)
-
-(* Filter out registers that are not tagged with a value identifier name and
-   for identifier names (e.g. for the closure parameters of mutually-recursive
-   functions) that should be hidden in the debugger; and in the case where
-   multiple registers exist for a given value identifier, choose a canonical
-   one (see comment below). *)
-(*let filter_avail_before avail_before =
-  R.Set.filter (fun reg -> not (should_ignore_reg reg)) avail_before*)
-(*
-  R.Set.fold (fun reg acc ->
-    if should_ignore_reg reg then
-      acc
-    else
-      let for_same_ident =
-        R.Set.filter (fun reg' ->
-          R.Raw_name.(=) reg.R.raw_name reg'.R.raw_name) acc
-      in
-      match R.Set.elements for_same_ident with
-      | [] -> R.Set.add reg acc
-      | [reg'] ->
-        let priority reg =
-          match reg.R.loc with
-          | R.Unknown ->
-            failwith "filter_avail_before: register has no location"
-          | R.Reg _ -> 0
-          | R.Stack _ -> 1
-        in
-        if priority reg' >= priority reg then acc
-        else R.Set.add reg (R.Set.remove reg' acc)
-      | _ -> assert false) avail_before (* ~init:*)R.Set.empty
-*)
-
-(* Form the largest subset of the array [regs] that contains entirely
-   registers that we will not ignore during this analysis. *)
-(*
-let not_ignored_set_of_array regs =
-  R.Set.filter (fun reg -> not (should_ignore_reg reg)) (R.set_of_array regs)
-*)
 
 (* A special sentinel value meaning "all registers available"---used when a
    point in the code is unreachable. *)
@@ -121,6 +61,13 @@ let inter regs1 regs2 =
   if regs1 == all_regs then regs2
   else if regs2 == all_regs then regs1
   else R.Set.inter regs1 regs2
+
+let regs_have_same_location reg1 reg2 =
+  (* We need to check the register classes too: two locations both saying "stack offset
+     N" might actually be different physical locations, for example if one is of
+     class "Int" and another "Float" on amd64. *)
+  reg1.R.loc = reg2.R.loc
+    && Proc.register_class reg1 = Proc.register_class reg2
 
 let operation_can_raise = function
   | M.Icall_ind | M.Icall_imm _ | M.Iextcall _
@@ -134,7 +81,7 @@ let augment_availability_at_raise avail =
 
 (* [available_regs ~instr ~avail_before] calculates, given the registers
    "available before" an instruction [instr], the registers that are available
-   after [instr].
+   after [instr].  This is a forwards dataflow analysis.
 
    "available before" can be thought of, at the assembly level, as the set of
    registers available when the program counter is equal to the address of the
@@ -143,17 +90,12 @@ let augment_availability_at_raise avail =
    available at this point even if the instruction will clobber them.  Results
    from the previous instruction are also available at this point.
 
-   A register that holds a pointer becomes unavailable across any instruction
-   that may cause a GC unless said register is also "live across" (cf. mach.mli)
-   the instruction.
-
    The [available_before] field of each instruction is updated by this
    function to the subset of the [avail_before] argument consisting of those
-   registers that are tagged with identifier names.  (The rationale is that
-   these are the registers we may be interested in referencing by name when
-   debugging.)  In any such subset there will be at most one register for any
-   given name; preference is given to spilled registers since they are less
-   likely to become dead during the lifetime of a function activation.
+   registers that are tagged with identifier names, and are not related to special
+   parameters such as environments for mutually-recursive closures.  (The rationale is
+   that these are the registers we may be interested in referencing, by name, when
+   debugging.)
 *)
 let rec available_regs instr ~avail_before =
   instr.M.available_before <- avail_before;
@@ -195,6 +137,20 @@ let rec available_regs instr ~avail_before =
     match instr.desc with
     | Iend -> avail_before
     | Ireturn | Iop Itailcall_ind | Iop (Itailcall_imm _) -> all_regs
+    (* Detect initializing moves between named registers, including when either the
+       source or destination is a spill slot or reload target. *)
+    | Iop (Imove | Ispill | Ireload)
+        when begin match instr_arg_array instr, instr_res_array instr with
+          | [| arg |], [| res |] (* when regs_have_same_location arg res *) ->
+            let arg_name = arg.R.raw_name in
+            let res_name = res.R.raw_name in
+            begin match R.Raw_name.to_ident arg_name, R.Raw_name.to_ident res_name with
+            | Some _ident1, Some _ident2 (*when Ident.same ident1 ident2*) -> true
+            | _ -> false
+            end
+          | _ -> false
+          end ->
+      R.Set.union avail_before (instr_res instr)
     | Iop op ->
       if operation_can_raise op then begin
         augment_availability_at_raise avail_before
@@ -221,43 +177,35 @@ let rec available_regs instr ~avail_before =
       assert (R.Set.for_all reg_is_interesting avail_after);
       let results = instr_res instr in
       (* Calculate which registers will have been made unavailable by the
-         writing out of the results from the instruction. *)
+         writing out of the results from the instruction.  Thanks to the special case
+         above for moves, this is straightforward. *)
       let made_unavailable_by_results =
         R.Set.fold (fun reg acc ->
-          (* [reg] is a result of the operation holding the value of some
-             named identifier.  Any other register in the available-before set
-             holding the value of that identifier, in the same location, will
-             be replaced in the availability-after set by this register;
-             however, any other registers in the same location but identifying
-             _different_ identifiers are passed into the availability-after set
-             untouched.  This means in particular that moves from one named
-             value to another both in the same location (which would seem
-             unnecessary but are currently generated) are recorded correctly. *)
-          let reg_ident = R.Raw_name.to_ident_exn reg.R.raw_name in
           let made_unavailable =
-            R.Set.filter (fun reg' ->
-              (* Note that we do not compare the stamps here. *)
-              Ident.same reg_ident (R.Raw_name.to_ident_exn reg'.R.raw_name)
-                && reg.R.loc = reg'.R.loc)
-              avail_after
+            R.Set.filter (regs_have_same_location reg) avail_after
           in
           R.Set.union made_unavailable acc)
           results (* ~init:*)R.Set.empty
       in
-      R.Set.union results (R.Set.diff avail_after made_unavailable_by_results)
+      let avail_after =
+        R.Set.union results (R.Set.diff avail_after made_unavailable_by_results)
+      in
+      avail_after
     | Iifthenelse (_, ifso, ifnot) -> join [ifso; ifnot]
     | Iswitch (_, cases) -> join (Array.to_list cases)
     | Iloop body ->
       let avail_after = ref avail_before in
       begin try
         while true do
-          let avail_after' = available_regs body ~avail_before:!avail_after in
+          let avail_after' =
+            inter !avail_after (available_regs body ~avail_before:!avail_after)
+          in
           if R.Set.equal !avail_after avail_after' then raise Exit;
           avail_after := avail_after'
         done
       with Exit -> ()
       end;
-      !avail_after
+      all_regs
     | Icatch (nfail, body, handler) ->
       let avail_after_body = available_regs body ~avail_before in
       let avail_at_exit =
@@ -269,7 +217,6 @@ let rec available_regs instr ~avail_before =
       in
       Hashtbl.remove avail_at_exit_table nfail;
       let avail_after_handler =
-        assert (not (reg_is_interesting Proc.loc_exn_bucket));
         available_regs handler ~avail_before:avail_at_exit
       in
       inter avail_after_body avail_after_handler
@@ -283,6 +230,7 @@ let rec available_regs instr ~avail_before =
       all_regs
     | Itrywith (body, handler) ->
       let saved_avail_at_raise = !avail_at_raise in
+      avail_at_raise := None;
       let after_body = available_regs body ~avail_before in
       let avail_before_handler =
         match !avail_at_raise with
@@ -291,6 +239,7 @@ let rec available_regs instr ~avail_before =
       in
       avail_at_raise := saved_avail_at_raise;
       let after_handler =
+        assert (not (reg_is_interesting Proc.loc_exn_bucket));
         available_regs handler ~avail_before:avail_before_handler
       in
       inter after_body after_handler
