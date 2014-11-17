@@ -181,6 +181,7 @@ let name t =
   | Some part -> with_spilled ^ "#" ^ string_of_int part
 
 let is_temporary t = Raw_name.is_temporary t.raw_name
+let is_ident t = Raw_name.is_ident t.raw_name
 let is_procedure_call_convention t =
   Raw_name.is_procedure_call_convention t.raw_name
 

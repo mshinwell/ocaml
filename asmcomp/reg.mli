@@ -69,6 +69,7 @@ val identical_except_in_name : t -> from:t -> t
    that it is never the canonical location of the value of a given
    identifier. *)
 val is_temporary : t -> bool
+val is_ident : t -> bool
 
 val is_procedure_call_convention : t -> bool
 
