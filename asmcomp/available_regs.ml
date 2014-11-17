@@ -162,7 +162,7 @@ let rec available_regs instr ~avail_before =
         begin match
           try Some (Hashtbl.find avail_at_exit_table nfail) with Not_found -> None
         with
-        | None -> avail_after_body  (* The handler was never called. *)
+        | None -> avail_after_body  (* The handler is unreachable. *)
         | Some avail_at_exit ->
           Hashtbl.remove avail_at_exit_table nfail;
           inter avail_after_body (available_regs handler ~avail_before:avail_at_exit)
@@ -181,7 +181,7 @@ let rec available_regs instr ~avail_before =
         let after_body = available_regs body ~avail_before in
         let avail_before_handler =
           match !avail_at_raise with
-          | None -> R.Set.empty
+          | None -> all_regs  (* The handler is unreachable. *)
           | Some avail -> avail
         in
         avail_at_raise := saved_avail_at_raise;
