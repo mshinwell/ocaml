@@ -110,7 +110,8 @@ let rec available_regs instr ~avail_before =
             reg_is_interesting arg && reg_is_interesting res
           | _ -> false
           end ->
-        R.Set.union avail_before (R.set_of_array instr.res)
+        R.Set.diff (R.Set.union avail_before (R.set_of_array instr.res))
+          (R.set_of_array (Proc.destroyed_at_oper instr.desc))  (* just in case *)
       | Iop op ->
         if operation_can_raise op then augment_availability_at_raise avail_before;
         let candidate_avail_after =
