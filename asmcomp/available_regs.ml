@@ -59,7 +59,8 @@ let regs_have_same_location reg1 reg2 =
 
 let operation_can_raise = function
   | M.Icall_ind | M.Icall_imm _ | M.Iextcall _
-  | M.Iintop M.Icheckbound | M.Iintop_imm (M.Icheckbound, _) -> true
+  | M.Iintop M.Icheckbound | M.Iintop_imm (M.Icheckbound, _)
+  | M.Ialloc _ -> true
   | _ -> false
 
 let augment_availability_at_raise avail =
