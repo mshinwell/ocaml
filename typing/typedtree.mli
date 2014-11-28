@@ -502,7 +502,11 @@ val iter_pattern_desc: (pattern -> unit) -> pattern_desc -> unit
 val map_pattern_desc: (pattern -> pattern) -> pattern_desc -> pattern_desc
 
 val let_bound_idents: value_binding list -> Ident.t list
+val let_bound_idents_with_type_and_location :
+    value_binding list -> (Ident.t * type_expr * Location.t) list
 val rev_let_bound_idents: value_binding list -> Ident.t list
+val rev_let_bound_idents_with_type_and_location :
+    value_binding list -> (Ident.t * type_expr * Location.t) list
 
 val let_bound_idents_with_loc:
     value_binding list -> (Ident.t * string loc) list

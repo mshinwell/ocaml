@@ -20,8 +20,7 @@ val transl_implementation: string -> structure * module_coercion -> lambda
 val transl_store_phrases: string -> structure -> int * lambda
 val transl_store_implementation:
       string -> structure * module_coercion
-      (* CR mshinwell: abstract type *)
-      -> (int * ((Path.t * Ident.t * Types.type_expr * Ident.t * int) list)) * lambda
+      -> (Value_binding.t Ident.tbl * int) * lambda
 val transl_toplevel_definition: structure -> lambda
 val transl_package:
       Ident.t option list -> Ident.t -> module_coercion -> lambda

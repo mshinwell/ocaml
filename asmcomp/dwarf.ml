@@ -44,8 +44,7 @@ type t = {
   mutable externally_visible_functions : string list;
   mutable have_emitted_dwarf_for_mangled_names : String.Set.t;
   mutable emitted : bool;
-  mutable module_value_bindings
-    : (Path.t * Ident.t * Types.type_expr * Ident.t * int) list;
+  mutable module_value_bindings : Value_binding.t Ident.tbl;
   mutable global_approx : Clambda.value_approximation array;
   fundecl_proto_die_cache : (string, Proto_DIE.t) Hashtbl.t;
 }
@@ -497,15 +496,20 @@ let emit t =
   assert (not t.emitted);
   t.emitted <- true;
   let sym_aliases =
-    ListLabels.fold_left t.module_value_bindings ~init:[]
-      ~f:(fun sym_aliases (path, ident, typ, global, pos) ->
+    Ident.fold_all (fun ident vb sym_aliases ->
+        let module VB = Value_binding in
         let maybe_sym_alias =
-          create_dwarf_for_non_fundecl_structure_member ~path ~ident ~typ
-            ~global ~pos ~parent:t.compilation_unit_proto_die t
+          (* CR-soon mshinwell: handle the no-path case *)
+          match vb.VB.path with
+          | None -> None
+          | Some path ->
+            create_dwarf_for_non_fundecl_structure_member ~path
+              ~ident ~typ:vb.VB.ty ~global:vb.VB.module_id
+              ~pos:vb.VB.pos ~parent:t.compilation_unit_proto_die t
         in
         match maybe_sym_alias with
         | None -> sym_aliases
-        | Some alias -> alias::sym_aliases)
+        | Some alias -> alias::sym_aliases) t.module_value_bindings []
   in
   let debug_info =
     Debug_info_section.create ~compilation_unit:t.compilation_unit_proto_die

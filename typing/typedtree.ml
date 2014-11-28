@@ -579,6 +579,27 @@ let rev_let_bound_idents_with_type bindings =
 let let_bound_idents_with_type pat_expr_list =
   List.rev(rev_let_bound_idents_with_type pat_expr_list)
 
+let idents = ref([]: (Ident.t * type_expr * Location.t) list)
+
+let rec bound_idents_with_type_and_location pat =
+  match pat.pat_desc with
+  | Tpat_var (id,s) -> idents := (id,pat.pat_type,pat.pat_loc) :: !idents
+  | Tpat_alias(p, id, s ) ->
+      bound_idents_with_type_and_location p;
+      idents := (id,pat.pat_type,pat.pat_loc) :: !idents
+  | Tpat_or(p1, _, _) ->
+      (* Invariant : both arguments binds the same variables *)
+      bound_idents_with_type_and_location p1
+  | d -> iter_pattern_desc bound_idents_with_type_and_location d
+
+let rev_let_bound_idents_with_type_and_location bindings =
+  idents := [];
+  List.iter (fun vb -> bound_idents_with_type_and_location vb.vb_pat) bindings;
+  let res = !idents in idents := []; res
+
+let let_bound_idents_with_type_and_location pat_expr_list =
+  List.rev(rev_let_bound_idents_with_type_and_location pat_expr_list)
+
 let rev_let_bound_idents pat = List.map fst (rev_let_bound_idents_with_loc pat)
 let let_bound_idents pat = List.map  fst (let_bound_idents_with_loc pat)
 

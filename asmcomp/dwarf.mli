@@ -35,8 +35,7 @@ val create
   -> start_of_code_symbol:string
   -> end_of_code_symbol:string
   -> target:[ `MacOS_X | `Other ]
-  -> module_value_bindings:
-      (Path.t * Ident.t * Types.type_expr * Ident.t * int) list
+  -> module_value_bindings:Value_binding.t Ident.tbl
   -> start_of_data_symbol:string
   -> t
 

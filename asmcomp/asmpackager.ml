@@ -97,7 +97,7 @@ let make_package_object ppf members targetobj targetname coercion =
   in
   Asmgen.compile_implementation
     (chop_extension_if_any objtemp) ppf
-    ((size, []), lam)
+    ((Ident.empty, size), lam)
     ~source_file_path:None;
   let objfiles =
     List.map

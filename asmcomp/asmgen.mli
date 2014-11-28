@@ -16,7 +16,7 @@ val compile_implementation :
     ?toplevel:(string -> bool) ->
     source_file_path:string option ->
     string -> Format.formatter
-    -> (int * ((Path.t * Ident.t * Types.type_expr * Ident.t * int) list)) * Lambda.lambda
+    -> (Value_binding.t Ident.tbl * int) * Lambda.lambda
     -> unit
 val compile_phrase :
     Format.formatter -> dwarf:Dwarf.t option -> Cmm.phrase -> unit
