@@ -111,7 +111,8 @@ let compile_genfuns ppf f =
        | _ -> ())
     (Cmmgen.generic_functions true [Compilenv.current_unit_infos ()])
 
-let compile_implementation ?toplevel ~source_file_path prefixname ppf
+(* CR mshinwell: remove [source_file_path] *)
+let compile_implementation ?toplevel ~source_file_path:_ prefixname ppf
       ((value_bindings, size), lam) =
   Ident.iter (fun ident vb ->
     Printf.printf "%s: %s\n%!" (Ident.unique_name ident)
@@ -137,7 +138,7 @@ let compile_implementation ?toplevel ~source_file_path prefixname ppf
           (* CR mshinwell: How do we choose the DWARF format?  It must match
              whatever the CFI directives compile down to, I think. *)
           Dwarf_format.set_size `Thirty_two;
-          Dwarf.create ~source_file_path
+          Dwarf.create ~output_path:(Some prefixname)
             ~emit_string:Emit.emit_string
             ~emit_symbol:Emit.emit_symbol
             ~emit_label:Emit.emit_label

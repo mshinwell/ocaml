@@ -38,7 +38,7 @@ type t = {
   start_of_code_symbol : string;
   end_of_code_symbol : string;
   start_of_data_symbol : string;
-  source_file_path : string;
+  output_path : string;
   mutable available_ranges_and_fundecl
     : (Available_ranges.t * Linearize.fundecl) option;
   mutable externally_visible_functions : string list;
@@ -49,7 +49,7 @@ type t = {
   fundecl_proto_die_cache : (string, Proto_DIE.t) Hashtbl.t;
 }
 
-let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
+let create ~output_path ~emit_string ~emit_symbol ~emit_label
       ~emit_label_declaration ~emit_section_declaration
       ~emit_switch_to_section ~start_of_code_symbol ~end_of_code_symbol
       ~target ~module_value_bindings ~start_of_data_symbol =
@@ -63,8 +63,8 @@ let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
       ~target
   in
   let debug_line_label = Linearize.new_label () in
-  let source_file_path, directory =
-    match source_file_path with
+  let output_path, directory =
+    match output_path with
     (* CR-soon mshinwell: think about the source file path stuff *)
     | None -> "<unknown>", Sys.getcwd ()
     | Some path ->
@@ -78,7 +78,7 @@ let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
     let attribute_values =
       let producer_name = Printf.sprintf "ocamlopt %s" Sys.ocaml_version in [
         Attribute_value.create_producer ~producer_name;
-        Attribute_value.create_name source_file_path;
+        Attribute_value.create_name output_path;
         Attribute_value.create_comp_dir ~directory;
         Attribute_value.create_low_pc_from_symbol ~symbol:start_of_code_symbol;
         Attribute_value.create_high_pc_from_symbol ~symbol:end_of_code_symbol;
@@ -100,7 +100,7 @@ let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
     start_of_code_symbol;
     end_of_code_symbol;
     start_of_data_symbol;
-    source_file_path;
+    output_path;
     available_ranges_and_fundecl = None;
     have_emitted_dwarf_for_mangled_names = String.Set.empty;
     emitted = false;
@@ -121,7 +121,7 @@ let create ~source_file_path ~emit_string ~emit_symbol ~emit_label
    in the main gdb code to pass parameter indexes to the printing function.
    It is arguably more robust, too.
 *)
-let create_type_proto_die ~parent ~ident ~source_file_path ~is_parameter =
+let create_type_proto_die ~parent ~ident ~output_path ~is_parameter =
   let ident =
     match ident with
     | `Ident ident -> Ident.unique_name ident
@@ -129,7 +129,7 @@ let create_type_proto_die ~parent ~ident ~source_file_path ~is_parameter =
   in
   let name =
     Printf.sprintf "__ocaml%s %s%s"
-      source_file_path
+      output_path
       ident
       (match is_parameter with
         | None -> ""
@@ -268,7 +268,7 @@ let create_dwarf_for_non_fundecl_structure_member t ~path ~ident ~typ:_ ~global
              in which case it is described in DWARF as a normal variable. *)
           let type_proto_die =
             create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
-              ~ident:(`Ident ident) ~source_file_path:t.source_file_path
+              ~ident:(`Ident ident) ~output_path:t.output_path
               ~is_parameter:None
           in
           (* For the moment, just deem these values to be accessible always,
@@ -398,7 +398,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
   in
   let type_proto_die =
     create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
-      ~ident:(`Ident ident) ~source_file_path:t.source_file_path
+      ~ident:(`Ident ident) ~output_path:t.output_path
       ~is_parameter:(Available_range.is_parameter range)
   in
   (* If the unstamped name of [ident] is unambiguous within the function,
@@ -437,7 +437,7 @@ let post_emission_dwarf_for_function t ~end_of_function_label =
     let type_proto_die =
       create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
         ~ident:(`Unique_name fun_name)
-        ~source_file_path:t.source_file_path
+        ~output_path:t.output_path
         ~is_parameter:None
     in
     (* Functions are described in two parts:

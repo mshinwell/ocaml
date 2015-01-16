@@ -25,7 +25,7 @@
 type t
 
 val create
-   : source_file_path:string option
+   : output_path:string option
   -> emit_string:(string -> unit)
   -> emit_symbol:(string -> unit)
   -> emit_label:(Linearize.label -> unit)
