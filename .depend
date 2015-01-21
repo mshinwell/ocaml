@@ -837,10 +837,10 @@ asmcomp/emitaux.cmo : asmcomp/linearize.cmi bytecomp/debuginfo.cmi \
 asmcomp/emitaux.cmx : asmcomp/linearize.cmx bytecomp/debuginfo.cmx \
     utils/config.cmx utils/clflags.cmx asmcomp/arch.cmx asmcomp/emitaux.cmi
 asmcomp/flambda.cmo : asmcomp/symbol.cmi utils/misc.cmi \
-    asmcomp/flambdatypes.cmo utils/ext_types.cmi parsing/asttypes.cmi \
+    asmcomp/flambdatypes.cmo parsing/asttypes.cmi \
     asmcomp/abstract_identifiers.cmi asmcomp/flambda.cmi
 asmcomp/flambda.cmx : asmcomp/symbol.cmx utils/misc.cmx \
-    asmcomp/flambdatypes.cmx utils/ext_types.cmx parsing/asttypes.cmi \
+    asmcomp/flambdatypes.cmx parsing/asttypes.cmi \
     asmcomp/abstract_identifiers.cmx asmcomp/flambda.cmi
 asmcomp/flambda_ref_to_variables.cmo : bytecomp/lambda.cmi \
     asmcomp/flambdaiter.cmi asmcomp/flambda.cmi asmcomp/compilenv.cmi \
