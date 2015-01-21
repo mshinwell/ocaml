@@ -626,8 +626,7 @@ asmcomp/compilenv.cmi : asmcomp/symbol.cmi typing/ident.cmi \
 asmcomp/deadcode.cmi : asmcomp/mach.cmi
 asmcomp/emit.cmi : asmcomp/linearize.cmi asmcomp/cmm.cmi
 asmcomp/emitaux.cmi : bytecomp/debuginfo.cmi
-asmcomp/flambda.cmi : asmcomp/symbol.cmi bytecomp/lambda.cmi \
-    utils/ext_types.cmi bytecomp/debuginfo.cmi parsing/asttypes.cmi \
+asmcomp/flambda.cmi : asmcomp/flambdatypes.cmo \
     asmcomp/abstract_identifiers.cmi
 asmcomp/flambda_ref_to_variables.cmi : asmcomp/flambda.cmi \
     asmcomp/abstract_identifiers.cmi
@@ -837,11 +836,11 @@ asmcomp/emitaux.cmo : asmcomp/linearize.cmi bytecomp/debuginfo.cmi \
     utils/config.cmi utils/clflags.cmi asmcomp/arch.cmo asmcomp/emitaux.cmi
 asmcomp/emitaux.cmx : asmcomp/linearize.cmx bytecomp/debuginfo.cmx \
     utils/config.cmx utils/clflags.cmx asmcomp/arch.cmx asmcomp/emitaux.cmi
-asmcomp/flambda.cmo : asmcomp/symbol.cmi utils/misc.cmi bytecomp/lambda.cmi \
-    utils/ext_types.cmi bytecomp/debuginfo.cmi parsing/asttypes.cmi \
+asmcomp/flambda.cmo : asmcomp/symbol.cmi utils/misc.cmi \
+    asmcomp/flambdatypes.cmo utils/ext_types.cmi parsing/asttypes.cmi \
     asmcomp/abstract_identifiers.cmi asmcomp/flambda.cmi
-asmcomp/flambda.cmx : asmcomp/symbol.cmx utils/misc.cmx bytecomp/lambda.cmx \
-    utils/ext_types.cmx bytecomp/debuginfo.cmx parsing/asttypes.cmi \
+asmcomp/flambda.cmx : asmcomp/symbol.cmx utils/misc.cmx \
+    asmcomp/flambdatypes.cmx utils/ext_types.cmx parsing/asttypes.cmi \
     asmcomp/abstract_identifiers.cmx asmcomp/flambda.cmi
 asmcomp/flambda_ref_to_variables.cmo : bytecomp/lambda.cmi \
     asmcomp/flambdaiter.cmi asmcomp/flambda.cmi asmcomp/compilenv.cmi \
@@ -917,6 +916,12 @@ asmcomp/flambdasym.cmx : asmcomp/symbol.cmx asmcomp/printflambda.cmx \
     asmcomp/flambdaexport.cmx asmcomp/flambdaconstants.cmx \
     asmcomp/flambda.cmx asmcomp/compilenv.cmx parsing/asttypes.cmi \
     asmcomp/abstract_identifiers.cmx asmcomp/flambdasym.cmi
+asmcomp/flambdatypes.cmo : asmcomp/symbol.cmi bytecomp/lambda.cmi \
+    utils/ext_types.cmi bytecomp/debuginfo.cmi parsing/asttypes.cmi \
+    asmcomp/abstract_identifiers.cmi
+asmcomp/flambdatypes.cmx : asmcomp/symbol.cmx bytecomp/lambda.cmx \
+    utils/ext_types.cmx bytecomp/debuginfo.cmx parsing/asttypes.cmi \
+    asmcomp/abstract_identifiers.cmx
 asmcomp/interf.cmo : asmcomp/reg.cmi asmcomp/proc.cmi asmcomp/mach.cmi \
     asmcomp/interf.cmi
 asmcomp/interf.cmx : asmcomp/reg.cmx asmcomp/proc.cmx asmcomp/mach.cmx \
