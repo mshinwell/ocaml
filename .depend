@@ -638,6 +638,7 @@ asmcomp/flambdacheck.cmi : asmcomp/symbol.cmi bytecomp/lambda.cmi \
 asmcomp/flambdaconstants.cmi : asmcomp/symbol.cmi asmcomp/flambda.cmi \
     asmcomp/abstract_identifiers.cmi
 asmcomp/flambdacost.cmi : asmcomp/flambda.cmi
+asmcomp/flambdaeffects.cmi : asmcomp/flambda.cmi
 asmcomp/flambdaexport.cmi : asmcomp/symbol.cmi typing/ident.cmi \
     asmcomp/flambda.cmi utils/ext_types.cmi asmcomp/abstract_identifiers.cmi
 asmcomp/flambdagen.cmi : asmcomp/symbol.cmi bytecomp/lambda.cmi \
@@ -646,8 +647,8 @@ asmcomp/flambdainline.cmi : asmcomp/flambda.cmi \
     asmcomp/abstract_identifiers.cmi
 asmcomp/flambdaiter.cmi : asmcomp/flambda.cmi \
     asmcomp/abstract_identifiers.cmi
-asmcomp/flambdasimplify.cmi : asmcomp/flambda.cmi \
-    asmcomp/abstract_identifiers.cmi
+asmcomp/flambdasimplify.cmi : bytecomp/lambda.cmi asmcomp/flambdaapprox.cmi \
+    asmcomp/flambda.cmi asmcomp/abstract_identifiers.cmi
 asmcomp/flambdasym.cmi : asmcomp/symbol.cmi asmcomp/flambdaexport.cmi \
     asmcomp/flambda.cmi
 asmcomp/interf.cmi : asmcomp/mach.cmi
@@ -856,13 +857,13 @@ asmcomp/flambda_ref_to_variables.cmx : bytecomp/lambda.cmx \
     parsing/asttypes.cmi asmcomp/abstract_identifiers.cmx \
     asmcomp/flambda_ref_to_variables.cmi
 asmcomp/flambdaapprox.cmo : asmcomp/symbol.cmi typing/ident.cmi \
-    asmcomp/flambdaexport.cmi asmcomp/flambda.cmi asmcomp/compilenv.cmi \
-    parsing/asttypes.cmi asmcomp/abstract_identifiers.cmi \
-    asmcomp/flambdaapprox.cmi
+    asmcomp/flambdaexport.cmi asmcomp/flambdaeffects.cmi asmcomp/flambda.cmi \
+    asmcomp/compilenv.cmi parsing/asttypes.cmi \
+    asmcomp/abstract_identifiers.cmi asmcomp/flambdaapprox.cmi
 asmcomp/flambdaapprox.cmx : asmcomp/symbol.cmx typing/ident.cmx \
-    asmcomp/flambdaexport.cmx asmcomp/flambda.cmx asmcomp/compilenv.cmx \
-    parsing/asttypes.cmi asmcomp/abstract_identifiers.cmx \
-    asmcomp/flambdaapprox.cmi
+    asmcomp/flambdaexport.cmx asmcomp/flambdaeffects.cmx asmcomp/flambda.cmx \
+    asmcomp/compilenv.cmx parsing/asttypes.cmi \
+    asmcomp/abstract_identifiers.cmx asmcomp/flambdaapprox.cmi
 asmcomp/flambdacheck.cmo : asmcomp/symbol.cmi bytecomp/printlambda.cmi \
     utils/misc.cmi bytecomp/lambda.cmi typing/ident.cmi \
     asmcomp/flambdaiter.cmi asmcomp/flambda.cmi \
@@ -885,6 +886,12 @@ asmcomp/flambdacost.cmo : typing/primitive.cmi utils/misc.cmi \
 asmcomp/flambdacost.cmx : typing/primitive.cmx utils/misc.cmx \
     bytecomp/lambda.cmx asmcomp/flambda.cmx parsing/asttypes.cmi \
     asmcomp/abstract_identifiers.cmx asmcomp/flambdacost.cmi
+asmcomp/flambdaeffects.cmo : utils/misc.cmi bytecomp/lambda.cmi \
+    asmcomp/flambda.cmi asmcomp/abstract_identifiers.cmi \
+    asmcomp/flambdaeffects.cmi
+asmcomp/flambdaeffects.cmx : utils/misc.cmx bytecomp/lambda.cmx \
+    asmcomp/flambda.cmx asmcomp/abstract_identifiers.cmx \
+    asmcomp/flambdaeffects.cmi
 asmcomp/flambdaexport.cmo : asmcomp/symbol.cmi asmcomp/printflambda.cmi \
     typing/ident.cmi asmcomp/flambdaiter.cmi asmcomp/flambda.cmi \
     utils/ext_types.cmi asmcomp/abstract_identifiers.cmi \
@@ -903,30 +910,32 @@ asmcomp/flambdagen.cmx : typing/primitive.cmx utils/misc.cmx \
     asmcomp/abstract_identifiers.cmx asmcomp/flambdagen.cmi
 asmcomp/flambdainline.cmo : asmcomp/symbol.cmi asmcomp/printflambda.cmi \
     utils/misc.cmi bytecomp/lambda.cmi typing/ident.cmi \
-    asmcomp/flambdaiter.cmi asmcomp/flambdacost.cmi asmcomp/flambdaapprox.cmi \
-    asmcomp/flambda.cmi utils/ext_types.cmi bytecomp/debuginfo.cmi \
-    asmcomp/compilenv.cmi utils/clflags.cmi parsing/asttypes.cmi \
-    asmcomp/arch.cmo asmcomp/abstract_identifiers.cmi \
-    asmcomp/flambdainline.cmi
+    asmcomp/flambdasimplify.cmi asmcomp/flambdaiter.cmi \
+    asmcomp/flambdaeffects.cmi asmcomp/flambdacost.cmi \
+    asmcomp/flambdaapprox.cmi asmcomp/flambda.cmi utils/ext_types.cmi \
+    bytecomp/debuginfo.cmi asmcomp/compilenv.cmi utils/clflags.cmi \
+    asmcomp/abstract_identifiers.cmi asmcomp/flambdainline.cmi
 asmcomp/flambdainline.cmx : asmcomp/symbol.cmx asmcomp/printflambda.cmx \
     utils/misc.cmx bytecomp/lambda.cmx typing/ident.cmx \
-    asmcomp/flambdaiter.cmx asmcomp/flambdacost.cmx asmcomp/flambdaapprox.cmx \
-    asmcomp/flambda.cmx utils/ext_types.cmx bytecomp/debuginfo.cmx \
-    asmcomp/compilenv.cmx utils/clflags.cmx parsing/asttypes.cmi \
-    asmcomp/arch.cmx asmcomp/abstract_identifiers.cmx \
-    asmcomp/flambdainline.cmi
+    asmcomp/flambdasimplify.cmx asmcomp/flambdaiter.cmx \
+    asmcomp/flambdaeffects.cmx asmcomp/flambdacost.cmx \
+    asmcomp/flambdaapprox.cmx asmcomp/flambda.cmx utils/ext_types.cmx \
+    bytecomp/debuginfo.cmx asmcomp/compilenv.cmx utils/clflags.cmx \
+    asmcomp/abstract_identifiers.cmx asmcomp/flambdainline.cmi
 asmcomp/flambdaiter.cmo : utils/misc.cmi asmcomp/flambda.cmi \
     utils/ext_types.cmi asmcomp/abstract_identifiers.cmi \
     asmcomp/flambdaiter.cmi
 asmcomp/flambdaiter.cmx : utils/misc.cmx asmcomp/flambda.cmx \
     utils/ext_types.cmx asmcomp/abstract_identifiers.cmx \
     asmcomp/flambdaiter.cmi
-asmcomp/flambdasimplify.cmo : asmcomp/symbol.cmi bytecomp/lambda.cmi \
-    asmcomp/flambdaiter.cmi asmcomp/flambdaapprox.cmi asmcomp/flambda.cmi \
-    asmcomp/abstract_identifiers.cmi asmcomp/flambdasimplify.cmi
-asmcomp/flambdasimplify.cmx : asmcomp/symbol.cmx bytecomp/lambda.cmx \
-    asmcomp/flambdaiter.cmx asmcomp/flambdaapprox.cmx asmcomp/flambda.cmx \
-    asmcomp/abstract_identifiers.cmx asmcomp/flambdasimplify.cmi
+asmcomp/flambdasimplify.cmo : bytecomp/lambda.cmi asmcomp/flambdaiter.cmi \
+    asmcomp/flambdaeffects.cmi asmcomp/flambdaapprox.cmi asmcomp/flambda.cmi \
+    parsing/asttypes.cmi asmcomp/arch.cmo asmcomp/abstract_identifiers.cmi \
+    asmcomp/flambdasimplify.cmi
+asmcomp/flambdasimplify.cmx : bytecomp/lambda.cmx asmcomp/flambdaiter.cmx \
+    asmcomp/flambdaeffects.cmx asmcomp/flambdaapprox.cmx asmcomp/flambda.cmx \
+    parsing/asttypes.cmi asmcomp/arch.cmx asmcomp/abstract_identifiers.cmx \
+    asmcomp/flambdasimplify.cmi
 asmcomp/flambdasym.cmo : asmcomp/symbol.cmi asmcomp/printflambda.cmi \
     utils/misc.cmi bytecomp/lambda.cmi typing/ident.cmi \
     asmcomp/flambdaiter.cmi asmcomp/flambdaexport.cmi \
