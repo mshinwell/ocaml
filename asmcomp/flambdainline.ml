@@ -193,7 +193,7 @@ let subst_toplevel sb lam =
 (* Utility function to duplicate an expression and makes a function from it *)
 (* CR mshinwell for pchambart: can we kick this function out of this source
    file?  It seems generic, and maybe useful elsewhere in due course.
-   It certainly could.
+      pchambart: It certainly could.
  *)
 let make_closure_declaration id lam params =
   let free_variables = Flambdaiter.free_variables lam in
@@ -348,7 +348,7 @@ let transform_closure_expression r flam off rel annot =
     Flambdasubst.Alpha_renaming_map_for_ids_and_bound_vars_of_closures
   in
   (* CR mshinwell for pchambart: we should rename [off_id] now.
-     Clearly. is [closure_id] ok ? *)
+        pchambart: Clearly. is [closure_id] ok ? *)
   let off_id closure off =
     let off = AR.fun_off_id closure.ffunction_sb off in
     (try ignore (find_declaration off closure.ffunctions)
@@ -443,7 +443,10 @@ and loop_direct (env:Env.t) r tree : 'a flambda * ret =
          contained within the approximation deduced from [vc_closure] (as
          such, that approximation *must* identify which closure it is). *)
       (* CR mshinwell: this may be a stupid question, but why is "arg" called
-         "arg"? *)
+         "arg"?
+           pchambart: it is some kind of argument for the Fvariable_in_closure
+         construction. This is clearly a bad name. I will rename to "vc_closure".
+      *)
       let arg, r = loop env r fenv_field.vc_closure in
       let closure, approx_fun_id =
         match r.approx.descr with
@@ -515,7 +518,14 @@ and loop_direct (env:Env.t) r tree : 'a flambda * ret =
           { r with used_variables =
                      Variable.Set.union def_used_var r.used_variables }
         (* CR mshinwell for pchambart: This looks like a copy of
-           the function called [sequence], above *)
+           the function called [sequence], above
+              pchambart: it almost a copy, but we can't return the
+           same 'r' in both cases as in other uses of [sequence].
+           In fact in the other cases, it should also avoid preventing
+           the elimination of unused variables like here, but it didn't
+           seem as important as for the let.
+           I should find a nice pattern to allow to do that elsewhere
+           without too much syntactic noise. *)
         else if Flambdaeffects.no_effects lam
         then body, r
         else Fsequence(lam, body, annot),
@@ -985,8 +995,30 @@ and direct_apply env r clos funct fun_id func fapprox closure
            not_recursive
              && (unconditionally_inline_if_not_recursive
                    || env.inlining_level <= max_level)
+
+         pchambart:
+         Inlined functions can be recursive, in particular generated stub function
+         can be. The two existing cases are tuplified functions and default optionnal
+         arguments:
+         for
+
+           [let rec f (x,y) = f (x+1,y+1)]
+
+         flambdagen generates:
+
+           [let rec internal_f x y = f (x+1,y+1)
+            and f (x,y) = internal_f x y]
+
+         with f marked as stub.
+
+         What saves us from an infinite inlining loop is that the generated [f] is not
+         self recursive.
+
+         Even if in some special cases, it could be possible to have self recursive
+         stub function that does not trigger an infinite inlining loop, a reasonnable
+         solution would be to forbid recursive loops through stub functions.
       *)
-(*      assert ((not unconditionally_inline) || (not recursive)); *)
+      (* assert ((not unconditionally_inline) || (not recursive)); *)
       (* CR mshinwell for pchambart: two variables called [threshold] and
          [inline_threshold] is confusing *)
       let inline_threshold = env.inline_threshold in
