@@ -275,11 +275,12 @@ let rec lam ppf = function
               params;
             fprintf ppf ")" in
       fprintf ppf "@[<2>(function%a@ %a)@]" pr_params params lam body
-  | Llet(str, id, arg, body) ->
+  (* CR mshinwell: support attributes here *)
+  | Llet(str, id, _attributes, arg, body) ->
       let kind = function
         Alias -> "a" | Strict -> "" | StrictOpt -> "o" | Variable -> "v" in
       let rec letbody = function
-        | Llet(str, id, arg, body) ->
+        | Llet(str, id, _attributes, arg, body) ->
             fprintf ppf "@ @[<2>%a =%s@ %a@]" Ident.print id (kind str) lam arg;
             letbody body
         | expr -> expr in
@@ -291,7 +292,7 @@ let rec lam ppf = function
       let bindings ppf id_arg_list =
         let spc = ref false in
         List.iter
-          (fun (id, l) ->
+          (fun (id, _attributes, l) ->
             if !spc then fprintf ppf "@ " else spc := true;
             fprintf ppf "@[<2>%a@ %a@]" Ident.print id lam l)
           id_arg_list in

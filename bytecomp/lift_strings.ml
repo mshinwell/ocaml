@@ -12,10 +12,10 @@ let rec lift_strings acc = function
               Const_pointer _ | Const_block _ | Const_float_array _ |
               Const_immstring _) as lam ->
         acc, lam
-    | Llet(str, id, lam, body) ->
+    | Llet(str, id, attributes, lam, body) ->
         let acc, lam = lift_strings acc lam in
         let acc, body = lift_strings acc body in
-        acc, Llet(str, id, lam, body)
+        acc, Llet(str, id, attributes, lam, body)
     | Lfunction(kind, params, body) ->
         let acc, body = lift_strings acc body in
         acc, Lfunction(kind, params, body)
@@ -24,7 +24,7 @@ let rec lift_strings acc = function
         let acc, args = lift_strings_list acc args in
         acc, Lapply(funct, args, loc)
     | Lletrec(defs, body) ->
-        let acc, defs = lift_strings_couple_list acc defs in
+        let acc, defs = lift_strings_triple_list acc defs in
         acc, Lletrec(defs, body)
     | Lsend(kind, met, obj, args, loc) ->
         let acc, met = lift_strings acc met in
@@ -107,10 +107,19 @@ and lift_strings_couple_list :
         acc, (v,lam) :: lams)
       lams (acc, [])
 
+and lift_strings_triple_list :
+  'a 'b. 'acc -> ('a * 'b * Lambda.lambda) list
+    -> 'acc * ('a * 'b * Lambda.lambda) list =
+  fun acc lams ->
+    List.fold_right (fun (v,v',lam) (acc,lams) ->
+        let acc, lam = lift_strings acc lam in
+        acc, (v,v',lam) :: lams)
+      lams (acc, [])
+
 let lift_strings_to_toplevel lam =
   let bindings, lam = lift_strings [] lam in
   List.fold_left (fun lam (id, (string,opt)) ->
-      Llet(Strict,id,
+      Llet(Strict,id,[],
            Lconst (Const_base (Asttypes.Const_string (string,opt))),
            lam))
     lam bindings

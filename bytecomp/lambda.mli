@@ -185,8 +185,8 @@ type lambda =
   | Lconst of structured_constant
   | Lapply of lambda * lambda list * Location.t
   | Lfunction of function_kind * Ident.t list * lambda
-  | Llet of let_kind * Ident.t * lambda * lambda
-  | Lletrec of (Ident.t * lambda) list * lambda
+  | Llet of let_kind * Ident.t * Parsetree.attribute list * lambda * lambda
+  | Lletrec of (Ident.t * Parsetree.attribute list * lambda) list * lambda
   | Lprim of primitive * lambda list
   | Lswitch of lambda * lambda_switch
 (* switch on strings, clauses are sorted by string order,
@@ -239,7 +239,8 @@ val transl_path: ?loc:Location.t -> Env.t -> Path.t -> lambda
 val make_sequence: ('a -> lambda) -> 'a list -> lambda
 
 val subst_lambda: lambda Ident.tbl -> lambda -> lambda
-val bind : let_kind -> Ident.t -> lambda -> lambda -> lambda
+val bind : let_kind -> Ident.t -> Parsetree.attribute list -> lambda
+  -> lambda -> lambda
 
 val commute_comparison : comparison -> comparison
 val negate_comparison : comparison -> comparison

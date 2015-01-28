@@ -30,11 +30,12 @@ let rec eliminate_ref id = function
       if IdentSet.mem id (free_variables lam)
       then raise Real_reference
       else lam
-  | Llet(str, v, e1, e2) ->
-      Llet(str, v, eliminate_ref id e1, eliminate_ref id e2)
+  | Llet(str, v, attributes, e1, e2) ->
+      Llet(str, v, attributes, eliminate_ref id e1, eliminate_ref id e2)
   | Lletrec(idel, e2) ->
-      Lletrec(List.map (fun (v, e) -> (v, eliminate_ref id e)) idel,
-              eliminate_ref id e2)
+      Lletrec(List.map (fun (v, attributes, e) ->
+          (v, attributes, eliminate_ref id e)) idel,
+        eliminate_ref id e2)
   | Lprim(Pfield 0, [Lvar v]) when Ident.same v id ->
       Lvar id
   | Lprim(Psetfield(0, _), [Lvar v; e]) when Ident.same v id ->
@@ -108,10 +109,10 @@ let simplify_exits lam =
   | (Lvar _| Lconst _) -> ()
   | Lapply(l1, ll, _) -> count l1; List.iter count ll
   | Lfunction(kind, params, l) -> count l
-  | Llet(str, v, l1, l2) ->
+  | Llet(str, v, _attributes, l1, l2) ->
       count l2; count l1
   | Lletrec(bindings, body) ->
-      List.iter (fun (v, l) -> count l) bindings;
+      List.iter (fun (v, _attributes, l) -> count l) bindings;
       count body
   | Lprim(p, ll) -> List.iter count ll
   | Lswitch(l, sw) ->
@@ -195,9 +196,11 @@ let simplify_exits lam =
   | (Lvar _|Lconst _) as l -> l
   | Lapply(l1, ll, loc) -> Lapply(simplif l1, List.map simplif ll, loc)
   | Lfunction(kind, params, l) -> Lfunction(kind, params, simplif l)
-  | Llet(kind, v, l1, l2) -> Llet(kind, v, simplif l1, simplif l2)
+  | Llet(kind, v, attributes, l1, l2) ->
+      Llet(kind, v, attributes, simplif l1, simplif l2)
   | Lletrec(bindings, body) ->
-      Lletrec(List.map (fun (v, l) -> (v, simplif l)) bindings, simplif body)
+      Lletrec(List.map (fun (v, attributes, l) ->
+        (v, attributes, simplif l)) bindings, simplif body)
   | Lprim(p, ll) -> begin
     let ll = List.map simplif ll in
     match p, ll with
@@ -245,7 +248,7 @@ let simplify_exits lam =
             (fun x y t -> Ident.add x (Lvar y) t)
             xs ys Ident.empty in
         List.fold_right2
-          (fun y l r -> Llet (Alias, y, l, r))
+          (fun y l r -> Llet (Alias, y, [], l, r))
           ys ls (Lambda.subst_lambda env handler)
       with
       | Not_found -> Lstaticraise (i,ls)
@@ -285,7 +288,7 @@ let simplify_exits lam =
 *)
 
 let beta_reduce params body args =
-  List.fold_left2 (fun l param arg -> Llet(Strict, param, arg, l))
+  List.fold_left2 (fun l param arg -> Llet(Strict, param, [], arg, l))
                   body params args
 
 (* Simplification of lets *)
@@ -348,17 +351,17 @@ let simplify_lets lam =
       count bv l1; List.iter (count bv) ll
   | Lfunction(kind, params, l) ->
       count Tbl.empty l
-  | Llet(str, v, Lvar w, l2) when optimize ->
+  | Llet(str, v, _attributes, Lvar w, l2) when optimize ->
       (* v will be replaced by w in l2, so each occurrence of v in l2
          increases w's refcount *)
       count (bind_var bv v) l2;
       use_var bv w (count_var v)
-  | Llet(str, v, l1, l2) ->
+  | Llet(str, v, _attributes, l1, l2) ->
       count (bind_var bv v) l2;
       (* If v is unused, l1 will be removed, so don't count its variables *)
       if str = Strict || count_var v > 0 then count bv l1
   | Lletrec(bindings, body) ->
-      List.iter (fun (v, l) -> count bv l) bindings;
+      List.iter (fun (v, _attributes, l) -> count bv l) bindings;
       count bv body
   | Lprim(p, ll) -> List.iter (count bv) ll
   | Lswitch(l, sw) ->
@@ -417,9 +420,9 @@ let simplify_lets lam =
 (* This (small)  optimisation is always legal, it may uncover some
    tail call later on. *)
 
-  let mklet (kind,v,e1,e2) = match e2 with
+  let mklet (kind,v,attributes,e1,e2) = match e2 with
   | Lvar w when optimize && Ident.same v w -> e1
-  | _ -> Llet (kind,v,e1,e2) in
+  | _ -> Llet (kind,v,attributes,e1,e2) in
 
 
   let rec simplif = function
@@ -438,32 +441,34 @@ let simplify_lets lam =
       simplif (beta_reduce params body args)
   | Lapply(l1, ll, loc) -> Lapply(simplif l1, List.map simplif ll, loc)
   | Lfunction(kind, params, l) -> Lfunction(kind, params, simplif l)
-  | Llet(str, v, Lvar w, l2) when optimize ->
+  | Llet(str, v, _attributes, Lvar w, l2) when optimize ->
       Hashtbl.add subst v (simplif (Lvar w));
       simplif l2
-  | Llet(Strict, v, Lprim(Pmakeblock(0, Mutable), [linit]), lbody)
+  | Llet(Strict, v, attributes, Lprim(Pmakeblock(0, Mutable), [linit]), lbody)
     when optimize ->
       let slinit = simplif linit in
       let slbody = simplif lbody in
       begin try
-       mklet (Variable, v, slinit, eliminate_ref v slbody)
+       mklet (Variable, v, attributes, slinit, eliminate_ref v slbody)
       with Real_reference ->
-        mklet(Strict, v, Lprim(Pmakeblock(0, Mutable), [slinit]), slbody)
+        mklet(Strict, v, attributes, Lprim(Pmakeblock(0, Mutable), [slinit]), slbody)
       end
-  | Llet(Alias, v, l1, l2) ->
+  | Llet(Alias, v, attributes, l1, l2) ->
       begin match count_var v with
         0 -> simplif l2
       | 1 when optimize -> Hashtbl.add subst v (simplif l1); simplif l2
-      | n -> Llet(Alias, v, simplif l1, simplif l2)
+      | n -> Llet(Alias, v, attributes, simplif l1, simplif l2)
       end
-  | Llet(StrictOpt, v, l1, l2) ->
+  | Llet(StrictOpt, v, attributes, l1, l2) ->
       begin match count_var v with
         0 -> simplif l2
-      | n -> mklet(Alias, v, simplif l1, simplif l2)
+      | n -> mklet(Alias, v, attributes, simplif l1, simplif l2)
       end
-  | Llet(kind, v, l1, l2) -> mklet(kind, v, simplif l1, simplif l2)
+  | Llet(kind, v, attributes, l1, l2) ->
+    mklet(kind, v, attributes, simplif l1, simplif l2)
   | Lletrec(bindings, body) ->
-      Lletrec(List.map (fun (v, l) -> (v, simplif l)) bindings, simplif body)
+      Lletrec(List.map (fun (v, attributes, l) ->
+        (v, attributes, simplif l)) bindings, simplif body)
   | Lprim(p, ll) -> Lprim(p, List.map simplif ll)
   | Lswitch(l, sw) ->
       let new_l = simplif l
@@ -521,11 +526,11 @@ let rec emit_tail_infos is_tail lambda =
       Stypes.record (Stypes.An_call (loc, call_kind l))
   | Lfunction (_, _, lam) ->
       emit_tail_infos true lam
-  | Llet (_, _, lam, body) ->
+  | Llet (_, _, _, lam, body) ->
       emit_tail_infos false lam;
       emit_tail_infos is_tail body
   | Lletrec (bindings, body) ->
-      List.iter (fun (_, lam) -> emit_tail_infos false lam) bindings;
+      List.iter (fun (_, _, lam) -> emit_tail_infos false lam) bindings;
       emit_tail_infos is_tail body
   | Lprim (Pidentity, [arg]) ->
       emit_tail_infos is_tail arg
@@ -595,10 +600,10 @@ let rec map f lam =
         Lapply(map f e1, List.map (map f) el, loc)
     | Lfunction(kind, params, body) ->
         Lfunction(kind, params, map f body)
-    | Llet(str, v, e1, e2) ->
-        Llet(str, v, map f e1, map f e2)
+    | Llet(str, v, attributes, e1, e2) ->
+        Llet(str, v, attributes, map f e1, map f e2)
     | Lletrec(idel, e2) ->
-        Lletrec(List.map (fun (v, e) -> (v, map f e)) idel,
+        Lletrec(List.map (fun (v, attributes, e) -> (v, attributes, map f e)) idel,
                 map f e2)
     | Lprim(p, el) ->
         Lprim(p, List.map (map f) el)
@@ -664,12 +669,13 @@ let stubify body =
 
 let split_default_wrapper fun_id kind params body =
   let rec aux map = function
-    | Llet(Strict, id, (Lifthenelse(Lvar optparam, _, _) as def), rest) when
+    | Llet(Strict, id, attributes, (Lifthenelse(Lvar optparam, _, _) as def),
+           rest) when
         Ident.name optparam = "*opt*" && List.mem optparam params
           && not (List.mem_assoc optparam map)
       ->
         let wrapper_body, inner = aux ((optparam, id) :: map) rest in
-        Llet(Strict, id, def, wrapper_body), inner
+        Llet(Strict, id, attributes, def, wrapper_body), inner
     | _ when map = [] -> raise Exit
     | body ->
         (* Check that those *opt* identifiers don't appear in the remaining
@@ -701,25 +707,27 @@ let split_default_wrapper fun_id kind params body =
 
 let simplify_default_wrapper lam =
   let f = function
-    | Llet(( Strict | Alias | StrictOpt), id,
+    | Llet(( Strict | Alias | StrictOpt), id, attributes,
            Lfunction(kind, params, fbody), body) ->
         begin match split_default_wrapper id kind params fbody with
         | [fun_id, def] ->
-            Llet(Alias, fun_id, def, body)
+            Llet(Alias, fun_id, attributes, def, body)
+        (* CR mshinwell: not sure this is correct *)
         | [fun_id, def; inner_fun_id, def_inner] ->
-            Llet(Alias, inner_fun_id, def_inner,
-                 Llet(Alias, fun_id, def, body))
+            Llet(Alias, inner_fun_id, attributes, def_inner,
+                 Llet(Alias, fun_id, attributes, def, body))
         | _ -> assert false
         end
     | Lletrec(defs, body) as lam ->
-        if List.for_all (function (_, Lfunction _) -> true | _ -> false) defs
+        if List.for_all (function (_, _, Lfunction _) -> true | _ -> false) defs
         then
           let defs =
             List.flatten
               (List.map
                  (function
-                   | (id, Lfunction(kind, params, body)) ->
-                       split_default_wrapper id kind params body
+                   | (id, attributes, Lfunction(kind, params, body)) ->
+                       let ids_bodies = split_default_wrapper id kind params body in
+                       List.map (fun (id, body) -> id, attributes, body) ids_bodies
                    | _ -> assert false)
                  defs)
           in

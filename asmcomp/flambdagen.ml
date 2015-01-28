@@ -241,7 +241,7 @@ let rec close t env = function
       let var = find_var env id in
       Fvar (var, nid ~name:(Format.asprintf "var_%a" Variable.print var) ())
   | Lconst cst -> close_const cst
-  | Llet(let_kind, id, lam, body) ->
+  | Llet(let_kind, id, _attributes, lam, body) ->
       let let_kind =
         match let_kind with
         | Variable -> Assigned
@@ -273,12 +273,12 @@ let rec close t env = function
   | Lletrec(defs, body) ->
       let env =
         List.fold_right
-          (fun (id,  _) env -> add_var id (create_var t id) env)
+          (fun (id, _attributes, _) env -> add_var id (create_var t id) env)
           defs env in
       let function_declarations =
         (* Identify any bindings in the [let rec] that are functions. *)
         List.map (function
-            | (rec_ident, Lfunction(kind, params, body)) ->
+            | (rec_ident, _attributes, Lfunction(kind, params, body)) ->
                 let closure_bound_var = create_var t rec_ident in
                 let function_declaration =
                   Function_decl.create ~rec_ident:(Some rec_ident)
@@ -294,7 +294,7 @@ let rec close t env = function
              below *)
           let fdefs =
             List.map
-              (fun (id, def) ->
+              (fun (id, _attributes, def) ->
                  let var = find_var env id in
                  (var, close_named t ~rec_ident:id var env def))
               defs in

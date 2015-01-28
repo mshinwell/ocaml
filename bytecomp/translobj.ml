@@ -97,7 +97,7 @@ let prim_makearray =
 let transl_label_init expr =
   let expr =
     Hashtbl.fold
-      (fun c id expr -> Llet(Alias, id, Lconst c, expr))
+      (fun c id expr -> Llet(Alias, id, [], Lconst c, expr))
       consts expr
   in
   let expr =
@@ -149,7 +149,7 @@ let oo_wrap env req f x =
     let lambda =
       List.fold_left
         (fun lambda id ->
-          Llet(StrictOpt, id,
+          Llet(StrictOpt, id, [],
                Lprim(Pmakeblock(0, Mutable),
                      [lambda_unit; lambda_unit; lambda_unit]),
                lambda))

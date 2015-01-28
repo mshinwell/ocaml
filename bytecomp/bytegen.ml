@@ -142,14 +142,14 @@ let rec check_recordwith_updates id e =
 let rec size_of_lambda = function
   | Lfunction(kind, params, body) as funct ->
       RHS_function (1 + IdentSet.cardinal(free_variables funct), List.length params)
-  | Llet (Strict, id, Lprim (Pduprecord (kind, size), _), body)
+  | Llet (Strict, id, _, Lprim (Pduprecord (kind, size), _), body)
     when check_recordwith_updates id body ->
       begin match kind with
       | Record_regular | Record_inlined _ -> RHS_block size
       | Record_float -> RHS_floatblock size
       | Record_extension -> RHS_block (size + 1)
       end
-  | Llet(str, id, arg, body) -> size_of_lambda body
+  | Llet(str, id, _, arg, body) -> size_of_lambda body
   | Lletrec(bindings, body) -> size_of_lambda body
   | Lprim(Pmakeblock(tag, mut), args) -> RHS_block (List.length args)
   | Lprim (Pmakearray (Paddrarray|Pintarray), args) ->
@@ -501,21 +501,21 @@ let rec comp_expr env exp sz cont =
       Stack.push to_compile functions_to_compile;
       comp_args env (List.map (fun n -> Lvar n) fv) sz
         (Kclosure(lbl, List.length fv) :: cont)
-  | Llet(str, id, arg, body) ->
+  | Llet(str, id, _, arg, body) ->
       comp_expr env arg sz
         (Kpush :: comp_expr (add_var id (sz+1) env) body (sz+1)
           (add_pop 1 cont))
   | Lletrec(decl, body) ->
       let ndecl = List.length decl in
-      if List.for_all (function (_, Lfunction(_,_,_)) -> true | _ -> false)
+      if List.for_all (function (_, _, Lfunction(_,_,_)) -> true | _ -> false)
                       decl then begin
         (* let rec of functions *)
         let fv =
           IdentSet.elements (free_variables (Lletrec(decl, lambda_unit))) in
-        let rec_idents = List.map (fun (id, lam) -> id) decl in
+        let rec_idents = List.map (fun (id, _, lam) -> id) decl in
         let rec comp_fun pos = function
             [] -> []
-          | (id, Lfunction(kind, params, body)) :: rem ->
+          | (id, _, Lfunction(kind, params, body)) :: rem ->
               let lbl = new_label() in
               let to_compile =
                 { params = params; body = body; label = lbl; free_vars = fv;
@@ -530,7 +530,7 @@ let rec comp_expr env exp sz cont =
                        (add_pop ndecl cont)))
       end else begin
         let decl_size =
-          List.map (fun (id, exp) -> (id, exp, size_of_lambda exp)) decl in
+          List.map (fun (id, _, exp) -> (id, exp, size_of_lambda exp)) decl in
         let rec comp_init new_env sz = function
           | [] -> comp_nonrec new_env sz ndecl decl_size
           | (id, exp, RHS_floatblock blocksize) :: rem ->

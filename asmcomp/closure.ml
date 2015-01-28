@@ -12,6 +12,8 @@
 
 (* Introduction of closures, uncurrying, recognition of direct calls *)
 
+(* CR mshinwell for pchambart: We should remove as much of this as we can. *)
+
 open Misc
 open Asttypes
 open Primitive
@@ -104,12 +106,12 @@ let occurs_var var u =
 
 let split_default_wrapper fun_id kind params body =
   let rec aux map = function
-    | Llet(Strict, id, (Lifthenelse(Lvar optparam, _, _) as def), rest) when
+    | Llet(Strict, id, attributes, (Lifthenelse(Lvar optparam, _, _) as def), rest) when
         Ident.name optparam = "*opt*" && List.mem optparam params
           && not (List.mem_assoc optparam map)
       ->
         let wrapper_body, inner = aux ((optparam, id) :: map) rest in
-        Llet(Strict, id, def, wrapper_body), inner
+        Llet(Strict, id, attributes, def, wrapper_body), inner
     | _ when map = [] -> raise Exit
     | body ->
         (* Check that those *opt* identifiers don't appear in the remaining
@@ -871,7 +873,7 @@ let rec close fenv cenv = function
       let (uobj, _) = close fenv cenv obj in
       (Usend(kind, umet, uobj, close_list fenv cenv args, Debuginfo.none),
        Value_unknown)
-  | Llet(str, id, lam, body) ->
+  | Llet(str, id, _attributes, lam, body) ->
       let (ulam, alam) = close_named fenv cenv id lam in
       begin match (str, alam) with
         (Variable, _) ->
@@ -886,7 +888,7 @@ let rec close fenv cenv = function
       end
   | Lletrec(defs, body) ->
       if List.for_all
-           (function (id, Lfunction(_, _, _)) -> true | _ -> false)
+           (function (id, _attributes, Lfunction(_, _, _)) -> true | _ -> false)
            defs
       then begin
         (* Simple case: only function definitions *)
@@ -908,7 +910,7 @@ let rec close fenv cenv = function
         (* General case: recursive definition of values *)
         let rec clos_defs = function
           [] -> ([], fenv)
-        | (id, lam) :: rem ->
+        | (id, _attributes, lam) :: rem ->
             let (udefs, fenv_body) = clos_defs rem in
             let (ulam, approx) = close_named fenv cenv id lam in
             ((id, ulam) :: udefs, Tbl.add id approx fenv_body) in
@@ -1052,8 +1054,9 @@ and close_functions fenv cenv fun_defs =
     List.flatten
       (List.map
          (function
-           | (id, Lfunction(kind, params, body)) ->
-               split_default_wrapper id kind params body
+           | (id, attributes, Lfunction(kind, params, body)) ->
+               let ids_bodies = split_default_wrapper id kind params body in
+               List.map (fun (id, body) -> id, attributes, body) ids_bodies
            | _ -> assert false
          )
          fun_defs)
@@ -1072,7 +1075,7 @@ and close_functions fenv cenv fun_defs =
   let uncurried_defs =
     List.map
       (function
-          (id, Lfunction(kind, params, body)) ->
+          (id, _, Lfunction(kind, params, body)) ->
             let label = Compilenv.make_symbol (Some (Ident.unique_name id)) in
             let arity = List.length params in
             let fundesc =
@@ -1082,7 +1085,7 @@ and close_functions fenv cenv fun_defs =
                fun_inline = None;
                fun_float_const_prop = !Clflags.float_const_prop } in
             (id, params, body, fundesc)
-        | (_, _) -> fatal_error "Closure.close_functions")
+        | (_, _, _) -> fatal_error "Closure.close_functions")
       fun_defs in
   (* Build an approximate fenv for compiling the functions *)
   let fenv_rec =
@@ -1174,7 +1177,7 @@ and close_functions fenv cenv fun_defs =
 (* Same, for one non-recursive function *)
 
 and close_one_function fenv cenv id funct =
-  match close_functions fenv cenv [id, funct] with
+  match close_functions fenv cenv [id, [], funct] with
   | (clos, (i, _, approx) :: _) when id = i -> (clos, approx)
   | _ -> fatal_error "Closure.close_one_function"
 
