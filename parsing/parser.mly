@@ -40,8 +40,8 @@ let mkoperator name pos =
   let loc = rhs_loc pos in
   Exp.mk ~loc (Pexp_ident(mkloc (Lident name) loc))
 
-let mkpatvar name pos =
-  Pat.mk ~loc:(rhs_loc pos) (Ppat_var (mkrhs name pos))
+let mkpatvar ?attrs name pos =
+  Pat.mk ~loc:(rhs_loc pos) ?attrs (Ppat_var (mkrhs name pos))
 
 (*
   Ghost expressions and patterns:
@@ -1355,6 +1355,8 @@ let_binding:
 let_binding_:
     val_ident fun_binding
       { (mkpatvar $1 1, $2) }
+  | LPAREN val_ident one_or_more_attributes RPAREN fun_binding
+      { (mkpatvar ~attrs:$3 $2 2, $5) }
   | val_ident COLON typevar_list DOT core_type EQUAL seq_expr
       { (ghpat(Ppat_constraint(mkpatvar $1 1,
                                ghtyp(Ptyp_poly(List.rev $3,$5)))),
@@ -2204,6 +2206,9 @@ post_item_attributes:
 attributes:
     /* empty */{ [] }
   | attribute attributes { $1 :: $2 }
+;
+one_or_more_attributes:
+    attribute attributes { $1 :: $2 }
 ;
 ext_attributes:
     /* empty */  { None, [] }

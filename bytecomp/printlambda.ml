@@ -251,6 +251,12 @@ let primitive ppf = function
   | Pbbswap(bi) -> print_boxed_integer "bswap" ppf bi
   | Pint_as_pointer -> fprintf ppf "int_as_pointer"
 
+(* CR mshinwell: improve this *)
+let print_attributes ppf attributes =
+  match attributes with
+  | [] -> ()
+  | attributes -> fprintf ppf "[%d attributes]" (List.length attributes)
+
 let rec lam ppf = function
   | Lvar id ->
       Ident.print ppf id
@@ -275,26 +281,27 @@ let rec lam ppf = function
               params;
             fprintf ppf ")" in
       fprintf ppf "@[<2>(function%a@ %a)@]" pr_params params lam body
-  (* CR mshinwell: support attributes here *)
-  | Llet(str, id, _attributes, arg, body) ->
+  | Llet(str, id, attributes, arg, body) ->
       let kind = function
         Alias -> "a" | Strict -> "" | StrictOpt -> "o" | Variable -> "v" in
       let rec letbody = function
-        | Llet(str, id, _attributes, arg, body) ->
-            fprintf ppf "@ @[<2>%a =%s@ %a@]" Ident.print id (kind str) lam arg;
+        | Llet(str, id, attributes, arg, body) ->
+            fprintf ppf "@ @[<2>%a%a =%s@ %a@]" Ident.print id
+              print_attributes attributes (kind str) lam arg;
             letbody body
         | expr -> expr in
-      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a =%s@ %a@]"
-        Ident.print id (kind str) lam arg;
+      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a%a =%s@ %a@]"
+        Ident.print id print_attributes attributes (kind str) lam arg;
       let expr = letbody body in
       fprintf ppf ")@]@ %a)@]" lam expr
   | Lletrec(id_arg_list, body) ->
       let bindings ppf id_arg_list =
         let spc = ref false in
         List.iter
-          (fun (id, _attributes, l) ->
+          (fun (id, attributes, l) ->
             if !spc then fprintf ppf "@ " else spc := true;
-            fprintf ppf "@[<2>%a@ %a@]" Ident.print id lam l)
+            fprintf ppf "@[<2>%a%a@ %a@]" Ident.print id
+              print_attributes attributes lam l)
           id_arg_list in
       fprintf ppf
         "@[<2>(letrec@ (@[<hv 1>%a@])@ %a)@]" bindings id_arg_list lam body
