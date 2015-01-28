@@ -95,6 +95,10 @@ type const =
   | Fconst_float_array of string list
   | Fconst_immstring of string
 
+module Inlining_requirement = struct
+  type t = None | Never | Always of Location.t
+end
+
 (* The value of type ['a] may be used for annotation of an flambda expression
    by some optimization pass. *)
 type 'a flambda =
@@ -200,6 +204,7 @@ and 'a function_declaration = {
       convention.  For instance indirect calls to tuplified functions must go
       through a stub.  Stubs will be unconditionally inlined. *)
   dbg : Debuginfo.t;
+  inlining_requirement : Inlining_requirement.t;
 }
 
 and 'a ffunction = {

@@ -15,6 +15,11 @@ open Lambda
 open Abstract_identifiers
 open Flambda
 
+type error =
+  | Asked_for_both_never_inline_and_always_inline
+
+exception Error of Location.t * error
+
 type t = {
   current_compilation_unit : Symbol.compilation_unit;
   current_unit_id : Ident.t;
@@ -86,6 +91,7 @@ module Function_decl : sig
     -> kind:function_kind
     -> params:Ident.t list
     -> body:lambda
+    -> inlining_requirement:Inlining_requirement.t
     -> t
 
   val rec_ident : t -> Ident.t
@@ -93,6 +99,7 @@ module Function_decl : sig
   val kind : t -> function_kind
   val params : t -> Ident.t list
   val body : t -> lambda
+  val inlining_requirement : t -> Inlining_requirement.t
 
   (* [primitive_wrapper t] is [None] iff [t] is not an eta-expansion wrapper
      for a primitive.  Otherwise it is [Some body], where [body] is the body of
@@ -134,9 +141,11 @@ end = struct
     kind : function_kind;
     params : Ident.t list;
     body : lambda;
+    inlining_requirement : Inlining_requirement.t;
   }
 
-  let create ~rec_ident ~closure_bound_var ~kind ~params ~body =
+  let create ~rec_ident ~closure_bound_var ~kind ~params ~body
+      ~inlining_requirement =
     let rec_ident =
       match rec_ident with
       | None ->
@@ -150,6 +159,7 @@ end = struct
       kind;
       params;
       body;
+      inlining_requirement;
     }
 
   let rec_ident t = t.rec_ident
@@ -157,6 +167,7 @@ end = struct
   let kind t = t.kind
   let params t = t.params
   let body t = t.body
+  let inlining_requirement t = t.inlining_requirement
 
   (* CR-someday mshinwell: eliminate "*stub*" *)
   let primitive_wrapper t =
@@ -203,6 +214,27 @@ end = struct
       (all_free_idents ts)
 end
 
+let inlining_requirement_from_attributes ~attributes =
+  let find_attribute ~name =
+    let name = "ocaml." ^ name in
+    List.fold_left (fun found attribute ->
+      match found with
+      | Some found -> Some found
+      | None ->
+        match attribute with
+        | loc, Parsetree.PStr [] when loc.Asttypes.txt = name ->
+          Some loc.Asttypes.loc
+        | _ -> None) None attributes
+  in
+  let never_inline = find_attribute ~name:"never_inline" in
+  let always_inline = find_attribute ~name:"always_inline" in
+  match never_inline, always_inline with
+  | Some loc, Some _ ->
+    raise (Error (loc, Asked_for_both_never_inline_and_always_inline))
+  | Some _, None -> Inlining_requirement.Never
+  | None, Some loc -> Inlining_requirement.Always loc
+  | None, None -> Inlining_requirement.None
+
 let tupled_function_call_stub t id original_params tuplified_version =
   (* CR mshinwell for pchambart: This should carry the name of the original
      variable (for debugging information output). *)
@@ -225,7 +257,11 @@ let tupled_function_call_stub t id original_params tuplified_version =
     params = [tuple_param];
     free_variables = Variable.Set.of_list [tuple_param;tuplified_version];
     body;
-    dbg = Debuginfo.none }
+    dbg = Debuginfo.none;
+    (* CR mshinwell: consider if we can subsume the existing always-inline
+       stuff with [Inlining_requirement] *)
+    inlining_requirement = Inlining_requirement.None;
+  }
 
 let rec close_const = function
   | Const_base c -> Fconst(Fconst_base c, nid ~name:"cst" ())
@@ -241,14 +277,14 @@ let rec close t env = function
       let var = find_var env id in
       Fvar (var, nid ~name:(Format.asprintf "var_%a" Variable.print var) ())
   | Lconst cst -> close_const cst
-  | Llet(let_kind, id, _attributes, lam, body) ->
+  | Llet(let_kind, id, attributes, lam, body) ->
       let let_kind =
         match let_kind with
         | Variable -> Assigned
         | Strict | Alias | StrictOpt -> Not_assigned
       in
       let var = create_var t id in
-      Flet(let_kind, var, close_named t var env lam,
+      Flet(let_kind, var, close_named t var attributes env lam,
            close t (add_var id var env) body, nid ~name:"let" ())
   | Lfunction(kind, params, body) ->
       (* CR-someday mshinwell: Identifiers should have proper names.  If
@@ -256,7 +292,7 @@ let rec close t env = function
       let closure_bound_var = fresh_variable t "fun" in
       let decl =
         Function_decl.create ~rec_ident:None ~closure_bound_var ~kind
-          ~params ~body
+          ~params ~body ~inlining_requirement:Inlining_requirement.None
       in
       Fclosure(
         { fu_closure = close_functions t env [decl];
@@ -278,11 +314,13 @@ let rec close t env = function
       let function_declarations =
         (* Identify any bindings in the [let rec] that are functions. *)
         List.map (function
-            | (rec_ident, _attributes, Lfunction(kind, params, body)) ->
+            | (rec_ident, attributes, Lfunction(kind, params, body)) ->
                 let closure_bound_var = create_var t rec_ident in
                 let function_declaration =
                   Function_decl.create ~rec_ident:(Some rec_ident)
                     ~closure_bound_var ~kind ~params ~body
+                    ~inlining_requirement:(
+                      inlining_requirement_from_attributes ~attributes)
                 in
                 Some function_declaration
             | _ -> None)
@@ -294,9 +332,9 @@ let rec close t env = function
              below *)
           let fdefs =
             List.map
-              (fun (id, _attributes, def) ->
+              (fun (id, attributes, def) ->
                  let var = find_var env id in
-                 (var, close_named t ~rec_ident:id var env def))
+                 (var, close_named t ~rec_ident:id var attributes env def))
               defs in
           Fletrec(fdefs, close t env body, nid ~name:"letrec" ())
       | Some function_declarations ->
@@ -427,7 +465,10 @@ and close_functions t external_env function_declarations =
     let params = List.map (find_var closure_env) params in
     let closure_bound_var = Function_decl.closure_bound_var decl in
     let body = close t closure_env body in
-    let fun_decl = { stub; params; dbg; free_variables; body; } in
+    let inlining_requirement = Function_decl.inlining_requirement decl in
+    let fun_decl =
+      { stub; params; dbg; free_variables; body; inlining_requirement; }
+    in
     match Function_decl.kind decl with
     | Curried ->
         Variable.Map.add closure_bound_var fun_decl map
@@ -462,11 +503,13 @@ and close_list t sb l = List.map (close t sb) l
 (* CR mshinwell for pchambart: I know this name was taken from the existing
    code, but I think we should rename it.  It doesn't adequately express
    what's going on. *)
-and close_named t ?rec_ident let_bound_var env = function
+and close_named t ?rec_ident let_bound_var attributes env = function
   | Lfunction(kind, params, body) ->
       let closure_bound_var = rename_var t let_bound_var in
       let decl =
         Function_decl.create ~rec_ident ~closure_bound_var ~kind ~params ~body
+          ~inlining_requirement:(
+            inlining_requirement_from_attributes ~attributes)
       in
       Fclosure(
         { fu_closure = close_functions t env [decl];
@@ -525,3 +568,15 @@ let lambda_to_flambda ~current_compilation_unit ~current_unit_id
   let lam = Lift_strings.lift_strings_to_toplevel lam in
   let flam = close t Ident.empty lam in
   t.debugger_map, flam
+
+let () =
+  let report_error ppf = function
+    | Asked_for_both_never_inline_and_always_inline ->
+      Format.fprintf ppf
+        "Cannot specify both `always_inline' and `never_inline'"
+  in
+  Location.register_error_of_exn
+    (function
+      | Error (loc, err) ->
+        Some (Location.error_of_printer loc report_error err)
+      | _ -> None)

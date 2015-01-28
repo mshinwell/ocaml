@@ -18,6 +18,11 @@ open Flambdaapprox
 
 module IntMap = Ext_types.IntMap
 
+type error =
+  | Unable_to_satisfy_request_to_inline_recursive_function
+
+exception Error of Location.t * error
+
 let new_var name =
   Variable.create ~current_compilation_unit:(Compilenv.current_unit ()) name
 
@@ -212,7 +217,10 @@ let make_closure_declaration id lam params =
       params = List.map subst params;
       free_variables = Variable.Set.map subst free_variables;
       body;
-      dbg = Debuginfo.none } in
+      dbg = Debuginfo.none;
+      inlining_requirement = Inlining_requirement.None;
+    }
+  in
 
   let fv' =
     Variable.Map.fold (fun id id' fv' ->
@@ -326,15 +334,33 @@ let fold_over_exprs_for_variables_bound_by_closure ~fun_id ~clos_id ~clos
  *)
 
 let should_inline_function_known_to_be_recursive ~func ~clos ~env ~closure
-      ~approxs ~kept_params ~max_level =
+      ~approxs ~kept_params ~max_level ~inlining_requirement =
   assert (List.length func.params = List.length approxs);
-  (not (Env.inside_set_of_closures_declaration clos.ident env))
-    && (not (Variable.Set.is_empty closure.kept_params))
-    && Var_within_closure.Map.is_empty closure.bound_var (* closed *)
-    && env.inlining_level <= max_level
-    && List.exists2 (fun id approx ->
-          Flambdaapprox.useful approx && Variable.Set.mem id kept_params)
-        func.params approxs
+  let essential_condition =
+    (not (Env.inside_set_of_closures_declaration clos.ident env))
+      && (not (Variable.Set.is_empty closure.kept_params))
+      && Var_within_closure.Map.is_empty closure.bound_var (* closed *)
+  in
+  (* CR mshinwell: I'm not sure whether some of the predicate passed to
+     [List.exists2] below should be in [essential_condition] above, i.e. it
+     must be satisfied even if the user insists the function is to be inlined.
+  *)
+  if not essential_condition then
+    match inlining_requirement with
+    | Inlining_requirement.None -> false
+    | Inlining_requirement.Always loc ->
+      raise (Error (loc,
+          Unable_to_satisfy_request_to_inline_recursive_function))
+    | Inlining_requirement.Never -> assert false
+  else
+    match inlining_requirement with
+    | Inlining_requirement.Always _loc -> true
+    | Inlining_requirement.None ->
+      env.inlining_level <= max_level
+      && List.exists2 (fun id approx ->
+            Flambdaapprox.useful approx && Variable.Set.mem id kept_params)
+          func.params approxs
+    | Inlining_requirement.Never -> assert false
 
 (* Make an informed guess at whether [clos], with approximations [approxs],
    looks to be a functor. *)
@@ -986,9 +1012,11 @@ and direct_apply env r clos funct fun_id func fapprox closure
       Flambdacost.can_try_inlining func.body env.inline_threshold
         ~bonus:num_params
   in
-  match fun_cost with
-  | Flambdacost.Never_inline -> no_transformation ()
-  | (Flambdacost.Can_inline _) as threshold ->
+  match func.inlining_requirement, fun_cost with
+  | Inlining_requirement.Never, _   (* The user insisted we not inline it. *)
+  | _, Flambdacost.Never_inline ->  (* We decided not to inline it. *)
+      no_transformation ()
+  | _, ((Flambdacost.Can_inline _) as threshold) ->
       let fun_var = find_declaration_variable fun_id clos in
       let recursive = Variable.Set.mem fun_var (recursive_functions clos) in
 (* CR mshinwell: fix merge conflict
@@ -1050,6 +1078,11 @@ and direct_apply env r clos funct fun_id func fapprox closure
       (* Try inlining if the function is non-recursive and not too far above
          the threshold (or if the function is to be unconditionally inlined). *)
       if unconditionally_inline
+        || (not recursive
+             && match func.inlining_requirement with
+                | Inlining_requirement.Always _ -> true
+                | Inlining_requirement.None -> false
+                | Inlining_requirement.Never -> assert false)
         || (not recursive && env.inlining_level <= max_level)
       then
         let body, r_inlined =
@@ -1075,6 +1108,7 @@ and direct_apply env r clos funct fun_id func fapprox closure
         recursive
           && should_inline_function_known_to_be_recursive ~func ~clos ~env
                  ~closure ~approxs ~kept_params ~max_level
+                 ~inlining_requirement:func.inlining_requirement
       then
         inline_recursive_functions env r funct clos fun_id func fapprox closure
           (args,approxs) kept_params ap_dbg
@@ -1210,3 +1244,16 @@ let inline tree =
   assert (Variable.Set.is_empty r.used_variables);
   assert (Static_exception.Set.is_empty r.used_staticfail);
   result
+
+let () =
+  let report_error ppf = function
+    | Unable_to_satisfy_request_to_inline_recursive_function ->
+      Format.fprintf ppf
+        "The compiler is unable to inline this recursive function, but the \
+         source code insists the function is always to be inlined."
+  in
+  Location.register_error_of_exn
+    (function
+      | Error (loc, err) ->
+        Some (Location.error_of_printer loc report_error err)
+      | _ -> None)
