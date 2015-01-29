@@ -94,7 +94,9 @@ module Source_location_map = struct
     end else
       None
 
-  let create_from_dwarf_then_stuff_into_elf_section_exn ~executable ~run_command =
+  let create_from_dwarf_then_stuff_into_elf_section_exn ~executable:_ ~run_command:_ =
+    ()
+(*
     let section_contents = Filename.temp_file "ocamlopt" "" in
     run_command ("ocamlmklocs " ^ executable ^ " " ^ section_contents);
     let temp_exe = Filename.temp_file "ocamlopt" "" in
@@ -102,6 +104,7 @@ module Source_location_map = struct
       ^ " " ^ executable ^ " " ^ temp_exe);
     Sys.remove section_contents;
     run_command ("mv -f " ^ temp_exe ^ " " ^ executable)
+*)
 
   let resolve t ~instr_pointer =
     if Map.cardinal t < 1 then
