@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*         Mark Shinwell and Thomas Refis, Jane Street Europe          *)
 (*                                                                     *)
-(*  Copyright 2013--2014, Jane Street Holding                          *)
+(*  Copyright 2013--2015, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -30,7 +30,8 @@ let avail_at_exit_table = Hashtbl.create 42
 let avail_at_raise = ref None
 
 let reg_is_interesting reg =
-  (* CR-soon mshinwell: handle values split across multiple registers (and below) *)
+  (* CR-soon mshinwell: handle values split across multiple registers (and
+     below) *)
   if reg.R.part <> None then false
   else
     match R.Raw_name.to_ident reg.R.raw_name with
@@ -52,10 +53,11 @@ let inter regs1 regs2 =
   else R.Set.inter regs1 regs2
 
 let regs_have_same_location reg1 reg2 =
-  (* We need to check the register classes too: two locations both saying "stack offset
-     N" might actually be different physical locations, for example if one is of
-     class "Int" and another "Float" on amd64. *)
-  reg1.R.loc = reg2.R.loc && Proc.register_class reg1 = Proc.register_class reg2
+  (* We need to check the register classes too: two locations both saying
+     "stack offset N" might actually be different physical locations, for
+     example if one is of class "Int" and another "Float" on amd64. *)
+  reg1.R.loc = reg2.R.loc
+    && Proc.register_class reg1 = Proc.register_class reg2
 
 let operation_can_raise = function
   | M.Icall_ind | M.Icall_imm _ | M.Iextcall _
@@ -81,10 +83,10 @@ let augment_availability_at_raise avail =
 
    The [available_before] field of each instruction is updated by this
    function to the subset of the [avail_before] argument consisting of those
-   registers that are tagged with identifier names, and are not related to special
-   parameters such as environments for mutually-recursive closures.  (The rationale is
-   that these are the registers we may be interested in referencing, by name, when
-   debugging.)
+   registers that are tagged with identifier names, and are not related to
+   special parameters such as environments for mutually-recursive closures.
+   (The rationale is that these are the registers we may be interested in
+   referencing, by name, when debugging.)
 *)
 let rec available_regs instr ~avail_before =
   instr.M.available_before <- avail_before;
@@ -92,29 +94,34 @@ let rec available_regs instr ~avail_before =
     if avail_before == all_regs then
       all_regs  (* This instruction is unreachable. *)
     else begin
-      (* A register should not be an input to an instruction unless it is available. *)
+      (* A register should not be an input to an instruction unless it is
+         available. *)
       assert (R.Set.subset (instr_arg instr) avail_before);
-      (* Every register that is live across an instruction should also be available
-         before the instruction. *)
+      (* Every register that is live across an instruction should also be
+         available before the instruction. *)
       assert (R.Set.subset (instr_live instr) avail_before);
       let open Mach in
       match instr.desc with
       | Iend -> avail_before
       | Ireturn | Iop Itailcall_ind | Iop (Itailcall_imm _) -> all_regs
-      (* Detect initializing moves between named registers, including when either the
-         source or destination is a spill slot or reload target. *)
+      (* Detect initializing moves between named registers, including when
+         either the source or destination is a spill slot or reload target. *)
       | Iop (Imove | Ispill | Ireload)
           when begin match instr.arg, instr.res with
           | [| arg |], [| res |] ->
-            (* We need both [arg] and [res] to be named with identifiers.  However, this
-               is implied by them satisfying [reg_is_interesting]. *)
+            (* We need both [arg] and [res] to be named with identifiers.
+               However, this is implied by them satisfying
+               [reg_is_interesting]. *)
             reg_is_interesting arg && reg_is_interesting res
           | _ -> false
           end ->
         R.Set.diff (R.Set.union avail_before (R.set_of_array instr.res))
-          (R.set_of_array (Proc.destroyed_at_oper instr.desc))  (* just in case *)
+          (R.set_of_array
+            (Proc.destroyed_at_oper instr.desc))  (* just in case *)
       | Iop op ->
-        if operation_can_raise op then augment_availability_at_raise avail_before;
+        if operation_can_raise op then begin
+          augment_availability_at_raise avail_before
+        end;
         let candidate_avail_after =
           match op with
           | Icall_ind | Icall_imm _ | Iextcall _ ->
@@ -123,7 +130,8 @@ let rec available_regs instr ~avail_before =
                    calling convention; or
                (b) they are live across the call.
                The "not destroyed by the relevant calling convention" part is
-               handled by the removal of registers in [destroyed_at_oper], below.
+               handled by the removal of registers in [destroyed_at_oper],
+               below.
             *)
             R.Set.union (instr_live instr)
               (R.Set.filter R.holds_non_pointer avail_before)
@@ -131,16 +139,19 @@ let rec available_regs instr ~avail_before =
         in
         let results = instr_res instr in
         let made_unavailable =
-          (* Registers are made unavailable (possibly in addition to the above) by:
+          (* Registers are made unavailable (possibly in addition to the
+             above) by:
              1. the operation being marked as one that destroys them;
-             2. being clobbered by the instruction writing out results.  The special
-                case for moves above keeps the following code straightforward. *)
+             2. being clobbered by the instruction writing out results.  The
+                special case for moves above keeps the following code
+                straightforward. *)
           R.Set.fold (fun reg acc ->
             let made_unavailable =
               R.Set.filter (regs_have_same_location reg) candidate_avail_after
             in
             R.Set.union made_unavailable acc)
-            results (* ~init:*)(R.set_of_array (Proc.destroyed_at_oper instr.desc))
+            results
+            (* ~init:*)(R.set_of_array (Proc.destroyed_at_oper instr.desc))
         in
         R.Set.union results (R.Set.diff candidate_avail_after made_unavailable)
       | Iifthenelse (_, ifso, ifnot) -> join [ifso; ifnot] ~avail_before
@@ -150,7 +161,8 @@ let rec available_regs instr ~avail_before =
         begin try
           while true do
             let avail_after' =
-              inter !avail_after (available_regs body ~avail_before:!avail_after)
+              inter !avail_after
+                (available_regs body ~avail_before:!avail_after)
             in
             if R.Set.equal !avail_after avail_after' then raise Exit;
             avail_after := avail_after'
@@ -161,12 +173,14 @@ let rec available_regs instr ~avail_before =
       | Icatch (nfail, body, handler) ->
         let avail_after_body = available_regs body ~avail_before in
         begin match
-          try Some (Hashtbl.find avail_at_exit_table nfail) with Not_found -> None
+          try Some (Hashtbl.find avail_at_exit_table nfail)
+          with Not_found -> None
         with
         | None -> avail_after_body  (* The handler is unreachable. *)
         | Some avail_at_exit ->
           Hashtbl.remove avail_at_exit_table nfail;
-          inter avail_after_body (available_regs handler ~avail_before:avail_at_exit)
+          inter avail_after_body
+            (available_regs handler ~avail_before:avail_at_exit)
         end
       | Iexit nfail ->
         begin try
@@ -187,7 +201,8 @@ let rec available_regs instr ~avail_before =
         in
         avail_at_raise := saved_avail_at_raise;
         assert (not (reg_is_interesting Proc.loc_exn_bucket));
-        inter after_body (available_regs handler ~avail_before:avail_before_handler)
+        inter after_body
+          (available_regs handler ~avail_before:avail_before_handler)
       | Iraise _ ->
         augment_availability_at_raise avail_before;
         all_regs
