@@ -114,9 +114,6 @@ let compile_genfuns ppf f =
 (* CR mshinwell: remove [source_file_path] *)
 let compile_implementation ?toplevel ~source_file_path:_ prefixname ppf
       ((value_bindings, size), lam) =
-  Ident.iter (fun ident vb ->
-    Printf.printf "%s: %s\n%!" (Ident.unique_name ident)
-      (Value_binding.to_string vb)) value_bindings;
   let asmfile =
     if !keep_asm_file
     then prefixname ^ ext_asm

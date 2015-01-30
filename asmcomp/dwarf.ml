@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013--2014, Jane Street Holding                          *)
+(*  Copyright 2013--2015, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -193,6 +193,7 @@ let path_to_mangled_name path =
       let pack = dots_to_double_underscores pack in
       Some (Printf.sprintf "caml%s__%s" pack path)
 
+(* CR mshinwell: this comment is out of date *)
 (* Create DWARF to describe a structure member that has no corresponding
    fundecl.  The member may still be a function: for example, [g] in the
    case where [f] has a fundecl and the user writes [let g = f].  For these
@@ -208,95 +209,87 @@ let path_to_mangled_name path =
    This function is only for structures in the static data section, not
    heap-allocated structures, since the (relocatable) addresses of the members
    are written directly into the DWARF. *)
-let create_dwarf_for_non_fundecl_structure_member t ~path ~ident ~typ:_ ~global
-      ~pos ~parent =
+let create_dwarf_for_value_binding t ~path ~ident ~global ~pos ~parent =
   match path_to_mangled_name path with
-  | None -> None
+  | None -> ()
   | Some path ->
     match path_to_mangled_name (Path.Pident global) with
-    | None -> None
+    | None -> ()
     | Some global ->
       let name = path ^ "__" ^ (Ident.unique_name ident) in
       assert (pos >= 0 && pos < Array.length t.global_approx);
-      (* This next check excludes the members with fundecls, for which we
-         have already constructed proto-DIEs. *)
-      if String.Set.mem name t.have_emitted_dwarf_for_mangled_names then
-        None
-      else begin
-        let module C = Clambda in
-        match t.global_approx.(pos) with
-        | C.Value_closure (fun_desc, _) ->
-          (* The member is actually a function.  (The fundecl may not actually
-             be in the compilation unit currently being emitted...) *)
-          let fun_name = fun_desc.C.fun_label in
-          begin
-            try
-              let subprogram_proto_die =
-                Hashtbl.find t.fundecl_proto_die_cache fun_name
-              in
-              (* If we get here, the fundecl corresponding to the member must
-                 be in the current compilation unit.
-                 DW_TAG_imported_declaration (DWARF-4 spec section 3.2.3)
-                 doesn't seem to work properly in gdb, so just duplicate the
-                 proto-DIE and change its name.
-              *)
-              let subprogram_proto_die =
-                Proto_DIE.duplicate_as_sibling subprogram_proto_die
-              in
-              Proto_DIE.change_name_attribute_value subprogram_proto_die
-                ~new_name:(Ident.name ident)
-            with Not_found -> begin
-              (* The function declaration is in another compilation unit. *)
-              let die_symbol = die_name_from_function_name fun_name in
-              Proto_DIE.create_ignore
-                ~parent:(Some t.compilation_unit_proto_die)
-                ~tag:Tag.subprogram
-                ~attribute_values:[
-                  Attribute_value.create_name name;
-                  Attribute_value.create_specification_different_unit
-                    ~die_symbol;
-                ]
-            end
-          end;
-          Some (name, fun_name)  (* see comment above *)
-        | C.Value_tuple _
-        | C.Value_unknown
-        (* CR-soon mshinwell: in the [Value_const] case, describe a constant. *)
-        | C.Value_const _
-        | C.Value_global_field (_, _) ->
-          (* The member is either of unknown approximation or a non-function,
-             in which case it is described in DWARF as a normal variable. *)
-          let type_proto_die =
-            create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
-              ~ident:(`Ident ident) ~output_path:t.output_path
-              ~is_parameter:None
-          in
-          (* For the moment, just deem these values to be accessible always,
-             even before the module initializers have been run.  (Before
-             the initializers have run they will be printed as "()" in the
-             debugger.) *)
-          let single_location_description =
-            let simple_location_description =
-              Simple_location_description.at_offset_from_symbol
-                ~base:t.start_of_data_symbol
-                ~symbol:global
-                ~offset_in_bytes:(pos * Arch.size_addr)
-            in
-            Single_location_description.of_simple_location_description
-              simple_location_description
-          in
-          Proto_DIE.create_ignore ~parent:(Some parent)
-            ~tag:Tag.variable
+      let module C = Clambda in
+      match t.global_approx.(pos) with
+      | C.Value_closure (fun_desc, _) ->
+        (* The member is actually a function.  (The fundecl may not actually
+           be in the compilation unit currently being emitted...) *)
+        let fun_name = fun_desc.C.fun_label in
+        let parent = Some t.compilation_unit_proto_die in
+        (* [name_attribute_value] contains the full module path to the function,
+           unlike [fun_name].  For example if we are dealing with [Foo.Bar.f],
+           [fun_name] is effectively a mangled version of [Foo.f], whereas
+           [name_attribute_value] contains a mangled version of [Foo.Bar.f]. *)
+        let name_attribute_value = Attribute_value.create_name name in
+        begin match Hashtbl.find t.fundecl_proto_die_cache fun_name with
+        | specification_proto_die ->
+          (* If we get here, the fundecl corresponding to the member must
+             be in the current compilation unit.  The member may be the
+             fundecl itself or an alias to it. *)
+          Proto_DIE.create_ignore ~parent ~tag:Tag.subprogram
             ~attribute_values:[
-              Attribute_value.create_name name;
-              Attribute_value.create_type
-                ~proto_die:(Proto_DIE.reference type_proto_die);
-              Attribute_value.create_single_location_description
-                single_location_description;
-              Attribute_value.create_external ~is_visible_externally:true;
-            ];
-          None
-      end
+              name_attribute_value;
+              Attribute_value.create_specification_same_unit
+                ~proto_die:(Proto_DIE.reference specification_proto_die);
+            ]
+        | exception Not_found ->
+          (* The function declaration is in another compilation unit.
+             [fun_name] is used to reference the DIE in the other unit. *)
+          Proto_DIE.create_ignore ~parent ~tag:Tag.subprogram
+            ~attribute_values:[
+              name_attribute_value;
+              Attribute_value.create_specification_different_unit
+                ~die_symbol:(die_name_from_function_name fun_name);
+            ]
+        end;
+        (* Just mark all functions as externally visible. *)
+        t.externally_visible_functions
+          <- fun_name::t.externally_visible_functions
+      | C.Value_tuple _
+      | C.Value_unknown
+      (* CR-soon mshinwell: in the [Value_const] case, describe a constant. *)
+      | C.Value_const _
+      | C.Value_global_field (_, _) ->
+        (* The member is either of unknown approximation or a non-function,
+           in which case it is described in DWARF as a normal variable. *)
+        let type_proto_die =
+          create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
+            ~ident:(`Ident ident) ~output_path:t.output_path
+            ~is_parameter:None
+        in
+        (* For the moment, just deem these values to be accessible always,
+           even before the module initializers have been run.  (Before
+           the initializers have run they will be printed as "()" in the
+           debugger.) *)
+        let single_location_description =
+          let simple_location_description =
+            Simple_location_description.at_offset_from_symbol
+              ~base:t.start_of_data_symbol
+              ~symbol:global
+              ~offset_in_bytes:(pos * Arch.size_addr)
+          in
+          Single_location_description.of_simple_location_description
+            simple_location_description
+        in
+        Proto_DIE.create_ignore ~parent:(Some parent)
+          ~tag:Tag.variable
+          ~attribute_values:[
+            Attribute_value.create_name name;
+            Attribute_value.create_type
+              ~proto_die:(Proto_DIE.reference type_proto_die);
+            Attribute_value.create_single_location_description
+              single_location_description;
+            Attribute_value.create_external ~is_visible_externally:true;
+          ]
 
 let pre_emission_dwarf_for_function t ~fundecl =
   if t.available_ranges_and_fundecl <> None then begin
@@ -448,7 +441,11 @@ let post_emission_dwarf_for_function t ~end_of_function_label =
        function's attribute values from a DIE in another compilation unit,
        but under a different name.  (For example if another compilation
        unit B binds a member of a structure to a function in the current
-       unit A: in b.ml, "let bar = A.foo".)  See above. *)
+       unit A: in b.ml, "let bar = A.foo".)
+       At this point we only build the specification proto-DIE.  The
+       proto-DIE(s) referencing it (even if not across compilation units)
+       is/are built in [create_dwarf_for_value_binding].
+    *)
     let specification_proto_die =
       Proto_DIE.create ~parent:(Some t.compilation_unit_proto_die)
         ~tag:Tag.subprogram
@@ -461,32 +458,44 @@ let post_emission_dwarf_for_function t ~end_of_function_label =
             ~proto_die:(Proto_DIE.reference type_proto_die);
         ]
     in
-    (* CR-someday mshinwell: we probably don't need to add names (and hence
-       global symbols) for functions not exported in the .mli for the current
-       unit. *)
-    (* The name of the specification DIE is used to reference it from other
-       units. *)
+    (* Note: the name of the specification DIE is used to correlate across
+       compilation units.  (See [create_dwarf_for_value_binding].) *)
     Proto_DIE.set_name specification_proto_die
       (die_name_from_function_name fun_name);
-    let subprogram_proto_die =  (* "subprogram" means "function" for us. *)
-      Proto_DIE.create ~parent:(Some t.compilation_unit_proto_die)
+    (* The module initializer ("camlFoo__entry") will not be seen by
+       the loop that calls [create_dwarf_for_value_binding]; as such, we
+       explicitly create the subprogram proto-DIE for it now. *)
+    let unit_name = Env.get_unit_name () in
+    (* CR-soon mshinwell: work out how to construct this robustly *)
+    let initializer_underlying_name =
+      Printf.sprintf "caml%s__entry" unit_name
+    in
+    if fun_name = initializer_underlying_name then begin
+      let initializer_name =
+        (* We provide a nicer name for the user to see in the debugger. *)
+        let path =
+          Path.Pdot (Path.Pident (Ident.create unit_name), "initialize", 0)
+        in
+        match path_to_mangled_name path with
+        | Some initializer_name -> initializer_name
+        | None -> assert false
+      in
+      Proto_DIE.create_ignore ~parent:(Some t.compilation_unit_proto_die)
         ~tag:Tag.subprogram
         ~attribute_values:[
-          Attribute_value.create_name fun_name;
+          Attribute_value.create_name initializer_name;
           Attribute_value.create_specification_same_unit
             ~proto_die:(Proto_DIE.reference specification_proto_die);
         ]
-    in
+    end;
     (* For each identifier for which we have available ranges, construct
        DWARF information to describe how to access the values of such
        identifiers, indexed by program counter ranges. *)
     Available_ranges.fold available_ranges
       ~init:()
       ~f:(fun () -> dwarf_for_identifier t ~fundecl
-        ~function_proto_die:subprogram_proto_die ~lexical_block_cache);
-    Hashtbl.add t.fundecl_proto_die_cache fun_name subprogram_proto_die;
-    t.externally_visible_functions
-      <- fundecl.Linearize.fun_name::t.externally_visible_functions;
+        ~function_proto_die:specification_proto_die ~lexical_block_cache);
+    Hashtbl.add t.fundecl_proto_die_cache fun_name specification_proto_die;
     t.available_ranges_and_fundecl <- None
 
 let set_global_approx t ~global_approx =
@@ -495,22 +504,16 @@ let set_global_approx t ~global_approx =
 let emit t =
   assert (not t.emitted);
   t.emitted <- true;
-  let sym_aliases =
-    Ident.fold_all (fun ident vb sym_aliases ->
-        let module VB = Value_binding in
-        let maybe_sym_alias =
-          (* CR-soon mshinwell: handle the no-path case *)
-          match vb.VB.path with
-          | None -> None
-          | Some path ->
-            create_dwarf_for_non_fundecl_structure_member ~path
-              ~ident ~typ:vb.VB.ty ~global:vb.VB.module_id
-              ~pos:vb.VB.pos ~parent:t.compilation_unit_proto_die t
-        in
-        match maybe_sym_alias with
-        | None -> sym_aliases
-        | Some alias -> alias::sym_aliases) t.module_value_bindings []
-  in
+  Ident.iter (fun ident vb ->
+      let module VB = Value_binding in
+      (* CR-soon mshinwell: handle the no-path case *)
+      match vb.VB.path with
+      | None -> ()
+      | Some path ->
+        create_dwarf_for_value_binding ~path
+          ~ident ~global:vb.VB.module_id
+          ~pos:vb.VB.pos ~parent:t.compilation_unit_proto_die t)
+    t.module_value_bindings;
   let debug_info =
     Debug_info_section.create ~compilation_unit:t.compilation_unit_proto_die
   in
@@ -527,8 +530,6 @@ let emit t =
   let module SN = Section_names in
   let emitter = t.emitter in
   Emitter.emit_switch_to_section emitter ~section_name:SN.text;
-  ListLabels.iter sym_aliases ~f:(fun (new_sym, old_sym) ->
-    Emitter.emit_symbol_alias emitter ~old_sym ~new_sym);
   ListLabels.iter SN.all ~f:(fun section_name ->
     Emitter.emit_section_declaration emitter ~section_name);
   Emitter.emit_switch_to_section emitter ~section_name:SN.debug_info;

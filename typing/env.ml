@@ -413,6 +413,7 @@ let reset_cache_toplevel () =
 
 let set_unit_name name =
   current_unit := name
+let get_unit_name () = !current_unit
 
 (* Lookup by identifier *)
 

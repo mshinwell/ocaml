@@ -27,6 +27,7 @@ open Translclass
 type error =
   Circular_dependency of Ident.t
 
+
 exception Error of Location.t * error
 
 let native_and_debug () = !Clflags.native_code && !Clflags.debug
