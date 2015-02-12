@@ -39,6 +39,8 @@ type t =
   | DW_AT_import
   | DW_AT_specification
 
+let dw_at_low_user = 0x2000
+let dw_at_hi_user = 0x3fff
 
 let compare t1 t2 =
   compare (encode t1) (encode t2)
@@ -86,102 +88,206 @@ let emit t ~emitter =
   Value.emit (Value.as_uleb128 (encode t)) ~emitter;
   Form.emit (form t) ~emitter
 
+
+
 type 'value_types t = t
-  | DW_AT_sibling : reference t
-  | DW_AT_location : exprloc_or_loclistptr t
-  | DW_AT_name : string t
-  | DW_AT_ordering : constant t
-  | DW_AT_byte_size : constant_or_exprloc_or_reference t
-  | DW_AT_bit_offset : constant_or_exprloc_or_reference t
-  | DW_AT_bit_size : constant_or_exprloc_or_reference t
-  | DW_AT_stmt_list : lineptr t
-  | DW_AT_low_pc : address t
-  | DW_AT_high_pc : address_or_constant t
-  | DW_AT_language : constant t
-  | DW_AT_discr : reference t
-  | DW_AT_discr_value : constant t
-  | DW_AT_visibility : constant t
-  | DW_AT_import : reference t
-  | DW_AT_string_length : exprloc_or_loclistptr t
-  | DW_AT_common_reference : reference t
-  | DW_AT_comp_dir : string t
-  | DW_AT_const_value : block_or_constant_or_string t
-  | DW_AT_containing_type : reference t
-  | DW_AT_default_value : reference t
-  | DW_AT_inline : constant t
-  | DW_AT_is_optional : flag t
-  | DW_AT_lower_bound : constant_or_exprloc_or_reference t
-  | DW_AT_producer : string t
-  | DW_AT_prototyped : flag t
-  | DW_AT_return_addr : exprloc_or_loclistptr t
-  | DW_AT_start_scope : Constant_or_rangelistptr t
-  | DW_AT_bit_stride : constant_or_exprloc_or_reference t
-  | DW_AT_upper_bound : constant_or_exprloc_or_reference t
-  | DW_AT_abstract_origin : reference t
-  | DW_AT_accessibility : constant t
-  | DW_AT_address_class : constant t
-  | DW_AT_artificial : flag t
-  | DW_AT_base_types : reference t
-  | DW_AT_calling_convention : constant t
-  | DW_AT_count : constant_or_exprloc_or_reference t
-  | DW_AT_data_member_location : constant_or_exprloc_or_loclistptr t
-  | DW_AT_decl_column : constant t
-  | DW_AT_decl_file : constant t
-  | DW_AT_decl_line : constant t
-  | DW_AT_declaration : flag t
-  | DW_AT_discr_list : block t
-  | DW_AT_encoding : constant t
-  | DW_AT_external : flag t
-  | DW_AT_frame_base : exprloc_or_loclistptr t
-  | DW_AT_friend : reference t
-  | DW_AT_identifier_case : constant t
-  | DW_AT_macro_info : macptr t
-  | DW_AT_namelist_item : reference t
-  | DW_AT_priority : reference t
-  | DW_AT_segment : exprloc_or_loclistptr t
-  | DW_AT_specification : reference t
-  | DW_AT_static_link : exprloc_or_loclistptr t
-  | DW_AT_type : reference t
-  | DW_AT_use_location : exprloc_or_loclistptr t
-  | DW_AT_variable_parameter : flag t
-  | DW_AT_virtuality : constant t
-  | DW_AT_vtable_elem_location : exprloc_or_loclistptr t
-  | DW_AT_allocated : constant_or_exprloc_or_reference t
-  | DW_AT_associated : constant_or_exprloc_or_reference t
-  | DW_AT_data_location : exprloc t
-  | DW_AT_byte_stride : constant_or_exprloc_or_reference t
-  | DW_AT_entry_pc : address t
-  | DW_AT_use_UTF8 : flag t
-  | DW_AT_extension : reference t
-  | DW_AT_ranges : rangelistptr t
-  | DW_AT_trampoline : address_or_flag_or_reference_or_string t
-  | DW_AT_call_column : constant t
-  | DW_AT_call_file : constant t
-  | DW_AT_call_line : constant t
-  | DW_AT_description : string t
-  | DW_AT_binary_scale : constant t
-  | DW_AT_decimal_scale : constant t
-  | DW_AT_small : reference t
-  | DW_AT_decimal_sign : constant t
-  | DW_AT_digit_count : constant t
-  | DW_AT_picture_string : string t
-  | DW_AT_mutable : flag t
-  | DW_AT_threads_scaled : flag t
-  | DW_AT_explicit : flag t
-  | DW_AT_object_pointer : reference t
-  | DW_AT_endianity : constant t
-  | DW_AT_elemental : flag t
-  | DW_AT_pure : flag t
-  | DW_AT_recursive : flag t
-  | DW_AT_signature : reference t
-  | DW_AT_main_subprogram : flag t
-  | DW_AT_data_bit_offset : constant t
-  | DW_AT_const_expr : flag t
-  | DW_AT_enum_class : flag t
-  | DW_AT_linkage_name : string t
+  | DW_AT_sibling : Class.reference t
+  | DW_AT_location : Class.exprloc_or_loclistptr t
+  | DW_AT_name : Class.string t
+  | DW_AT_ordering : Class.constant t
+  | DW_AT_byte_size : Class.constant_or_exprloc_or_reference t
+  | DW_AT_bit_offset : Class.constant_or_exprloc_or_reference t
+  | DW_AT_bit_size : Class.constant_or_exprloc_or_reference t
+  | DW_AT_stmt_list : Class.lineptr t
+  | DW_AT_low_pc : Class.address t
+  | DW_AT_high_pc : Class.address_or_constant t
+  | DW_AT_language : Class.constant t
+  | DW_AT_discr : Class.reference t
+  | DW_AT_discr_value : Class.constant t
+  | DW_AT_visibility : Class.constant t
+  | DW_AT_import : Class.reference t
+  | DW_AT_string_length : Class.exprloc_or_loclistptr t
+  | DW_AT_common_reference : Class.reference t
+  | DW_AT_comp_dir : Class.string t
+  | DW_AT_const_value : Class.block_or_constant_or_string t
+  | DW_AT_containing_type : Class.reference t
+  | DW_AT_default_value : Class.reference t
+  | DW_AT_inline : Class.constant t
+  | DW_AT_is_optional : Class.flag t
+  | DW_AT_lower_bound : Class.constant_or_exprloc_or_reference t
+  | DW_AT_producer : Class.string t
+  | DW_AT_prototyped : Class.flag t
+  | DW_AT_return_addr : Class.exprloc_or_loclistptr t
+  | DW_AT_start_scope : Class.constant_or_rangelistptr t
+  | DW_AT_bit_stride : Class.constant_or_exprloc_or_reference t
+  | DW_AT_upper_bound : Class.constant_or_exprloc_or_reference t
+  | DW_AT_abstract_origin : Class.reference t
+  | DW_AT_accessibility : Class.constant t
+  | DW_AT_address_class : Class.constant t
+  | DW_AT_artificial : Class.flag t
+  | DW_AT_base_types : Class.reference t
+  | DW_AT_calling_convention : Class.constant t
+  | DW_AT_count : Class.constant_or_exprloc_or_reference t
+  | DW_AT_data_member_location : Class.constant_or_exprloc_or_loclistptr t
+  | DW_AT_decl_column : Class.constant t
+  | DW_AT_decl_file : Class.constant t
+  | DW_AT_decl_line : Class.constant t
+  | DW_AT_declaration : Class.flag t
+  | DW_AT_discr_list : Class.block t
+  | DW_AT_encoding : Class.constant t
+  | DW_AT_external : Class.flag t
+  | DW_AT_frame_base : Class.exprloc_or_loclistptr t
+  | DW_AT_friend : Class.reference t
+  | DW_AT_identifier_case : Class.constant t
+  | DW_AT_macro_info : Class.macptr t
+  | DW_AT_namelist_item : Class.reference t
+  | DW_AT_priority : Class.reference t
+  | DW_AT_segment : Class.exprloc_or_loclistptr t
+  | DW_AT_specification : Class.reference t
+  | DW_AT_static_link : Class.exprloc_or_loclistptr t
+  | DW_AT_type : Class.reference t
+  | DW_AT_use_location : Class.exprloc_or_loclistptr t
+  | DW_AT_variable_parameter : Class.flag t
+  | DW_AT_virtuality : Class.constant t
+  | DW_AT_vtable_elem_location : Class.exprloc_or_loclistptr t
+  | DW_AT_allocated : Class.constant_or_exprloc_or_reference t
+  | DW_AT_associated : Class.constant_or_exprloc_or_reference t
+  | DW_AT_data_location : Class.exprloc t
+  | DW_AT_byte_stride : Class.constant_or_exprloc_or_reference t
+  | DW_AT_entry_pc : Class.address t
+  | DW_AT_use_UTF8 : Class.flag t
+  | DW_AT_extension : Class.reference t
+  | DW_AT_ranges : Class.rangelistptr t
+  | DW_AT_trampoline : Class.address_or_flag_or_reference_or_string t
+  | DW_AT_call_column : Class.constant t
+  | DW_AT_call_file : Class.constant t
+  | DW_AT_call_line : Class.constant t
+  | DW_AT_description : Class.string t
+  | DW_AT_binary_scale : Class.constant t
+  | DW_AT_decimal_scale : Class.constant t
+  | DW_AT_small : Class.reference t
+  | DW_AT_decimal_sign : Class.constant t
+  | DW_AT_digit_count : Class.constant t
+  | DW_AT_picture_string : Class.string t
+  | DW_AT_mutable : Class.flag t
+  | DW_AT_threads_scaled : Class.flag t
+  | DW_AT_explicit : Class.flag t
+  | DW_AT_object_pointer : Class.reference t
+  | DW_AT_endianity : Class.constant t
+  | DW_AT_elemental : Class.flag t
+  | DW_AT_pure : Class.flag t
+  | DW_AT_recursive : Class.flag t
+  | DW_AT_signature : Class.reference t
+  | DW_AT_main_subprogram : Class.flag t
+  | DW_AT_data_bit_offset : Class.constant t
+  | DW_AT_const_expr : Class.flag t
+  | DW_AT_enum_class : Class.flag t
+  | DW_AT_linkage_name : Class.string t
 
 let parse ~stream =
-
+  Stream.read_uleb128_as_int64 stream
+  >>= fun code ->
+  Form.parse ~stream
+  >>= fun form ->
+  let t =
+    match code with
+    | 0x01 -> Some DW_AT_sibling
+    | 0x02 -> Some DW_AT_location
+    | 0x03 -> Some DW_AT_name
+    | 0x09 -> Some DW_AT_ordering
+    | 0x0b -> Some DW_AT_byte_size
+    | 0x0c -> Some DW_AT_bit_offset
+    | 0x0d -> Some DW_AT_bit_size
+    | 0x10 -> Some DW_AT_stmt_list
+    | 0x11 -> Some DW_AT_low_pc
+    | 0x12 -> Some DW_AT_high_pc
+    | 0x13 -> Some DW_AT_language
+    | 0x15 -> Some DW_AT_discr
+    | 0x16 -> Some DW_AT_discr_value
+    | 0x17 -> Some DW_AT_visibility
+    | 0x18 -> Some DW_AT_import
+    | 0x19 -> Some DW_AT_string_length
+    | 0x1a -> Some DW_AT_common_reference
+    | 0x1b -> Some DW_AT_comp_dir
+    | 0x1c -> Some DW_AT_const_value
+    | 0x1d -> Some DW_AT_containing_type
+    | 0x1e -> Some DW_AT_default_value
+    | 0x20 -> Some DW_AT_inline
+    | 0x21 -> Some DW_AT_is_optional
+    | 0x22 -> Some DW_AT_lower_bound
+    | 0x25 -> Some DW_AT_producer
+    | 0x27 -> Some DW_AT_prototyped
+    | 0x2a -> Some DW_AT_return_addr
+    | 0x2c -> Some DW_AT_start_scope
+    | 0x2e -> Some DW_AT_bit_stride
+    | 0x2f -> Some DW_AT_upper_bound
+    | 0x31 -> Some DW_AT_abstract_origin
+    | 0x32 -> Some DW_AT_accessibility
+    | 0x33 -> Some DW_AT_address_class
+    | 0x34 -> Some DW_AT_artificial
+    | 0x35 -> Some DW_AT_base_types
+    | 0x36 -> Some DW_AT_calling_convention
+    | 0x37 -> Some DW_AT_count
+    | 0x38 -> Some DW_AT_data_member_location
+    | 0x39 -> Some DW_AT_decl_column
+    | 0x3a -> Some DW_AT_decl_file
+    | 0x3b -> Some DW_AT_decl_line
+    | 0x3c -> Some DW_AT_declaration
+    | 0x3d -> Some DW_AT_discr_list
+    | 0x3e -> Some DW_AT_encoding
+    | 0x3f -> Some DW_AT_external
+    | 0x40 -> Some DW_AT_frame_base
+    | 0x41 -> Some DW_AT_friend
+    | 0x42 -> Some DW_AT_identifier_case
+    | 0x43 -> Some DW_AT_macro_info
+    | 0x44 -> Some DW_AT_namelist_item
+    | 0x45 -> Some DW_AT_priority
+    | 0x46 -> Some DW_AT_segment
+    | 0x47 -> Some DW_AT_specification
+    | 0x48 -> Some DW_AT_static_link
+    | 0x49 -> Some DW_AT_type
+    | 0x4a -> Some DW_AT_use_location
+    | 0x4b -> Some DW_AT_variable_parameter
+    | 0x4c -> Some DW_AT_virtuality
+    | 0x4d -> Some DW_AT_vtable_elem_location
+    | 0x4e -> Some DW_AT_allocated
+    | 0x4f -> Some DW_AT_associated
+    | 0x50 -> Some DW_AT_data_location
+    | 0x51 -> Some DW_AT_byte_stride
+    | 0x52 -> Some DW_AT_entry_pc
+    | 0x53 -> Some DW_AT_use_UTF8
+    | 0x54 -> Some DW_AT_extension
+    | 0x55 -> Some DW_AT_ranges
+    | 0x56 -> Some DW_AT_trampoline
+    | 0x57 -> Some DW_AT_call_column
+    | 0x58 -> Some DW_AT_call_file
+    | 0x59 -> Some DW_AT_call_line
+    | 0x5a -> Some DW_AT_description
+    | 0x5b -> Some DW_AT_binary_scale
+    | 0x5c -> Some DW_AT_decimal_scale
+    | 0x5d -> Some DW_AT_small
+    | 0x5e -> Some DW_AT_decimal_sign
+    | 0x5f -> Some DW_AT_digit_count
+    | 0x60 -> Some DW_AT_picture_string
+    | 0x61 -> Some DW_AT_mutable
+    | 0x62 -> Some DW_AT_threads_scaled
+    | 0x63 -> Some DW_AT_explicit
+    | 0x64 -> Some DW_AT_object_pointer
+    | 0x65 -> Some DW_AT_endianity
+    | 0x66 -> Some DW_AT_elemental
+    | 0x67 -> Some DW_AT_pure
+    | 0x68 -> Some DW_AT_recursive
+    | 0x69 -> Some DW_AT_signature
+    | 0x6a -> Some DW_AT_main_subprogram
+    | 0x6b -> Some DW_AT_data_bit_offset
+    | 0x6c -> Some DW_AT_const_expr
+    | 0x6d -> Some DW_AT_enum_class
+    | 0x6e -> Some DW_AT_linkage_name
+    | code when code >= dw_at_lo_user && code <= dw_at_hi_user ->
+      Some (User code)
+    | _code -> 
+      None
+  in
 
 let encode = function
   | DW_AT_sibling -> 0x01
@@ -276,8 +382,3 @@ let encode = function
   | DW_AT_const_expr -> 0x6c
   | DW_AT_enum_class -> 0x6d
   | DW_AT_linkage_name -> 0x6e
-
-(*
-DW_AT_lo_user 0x2000
-DW_AT_hi_user 0x3fff
-*)
