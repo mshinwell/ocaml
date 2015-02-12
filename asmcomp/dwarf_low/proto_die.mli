@@ -61,6 +61,11 @@ val change_name_attribute_value : t -> new_name:string -> unit
    values directly, but there is a circularity. *)
 val reference : t -> Linearize.label
 
+val replace_attribute_values
+   : t
+  -> f:(attribute_value:Attribute_value.t -> Attribute_value.t option)
+  -> unit
+
 (* [depth_first_fold] traverses a proto-DIE tree in a depth-first order
    convenient for DWARF information emission.  (Section 2.3, DWARF-4 spec.)
    [`End_of_siblings] indicates that a chain of siblings---that is to say,

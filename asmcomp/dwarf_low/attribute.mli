@@ -22,6 +22,30 @@
 
 type t
 
+(* keep a list of the attributes, and then a function identifying which ones have
+   arguments that need patching up when they are read. *)
+
+module Variant : sig
+  type t =
+    | Low_pc
+    | High_pc
+    | Producer
+    | Name
+    | Comp_dir
+    | Stmt_list
+    | Extern'l
+    | Location_using_single_location_description
+    | Location_using_location_list
+    | Typ'
+    | Encoding
+    | Byte_size
+    | Linkage_name
+    | Sibling
+    | Import
+    | Specification
+end
+val to_variant : t -> Variant.t
+
 (* [emit] emits the attribute followed by the form. *)
 include Emittable.S with type t := t
 

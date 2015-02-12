@@ -139,15 +139,15 @@ let emit t ~emitter =
     abbrev_table
 
 let rebuild_proto_dies ~dies ~abbrev_table =
-  let name_table = Hashtbl.create (List.length dies) in
-  let rec for_each_die ~proto_dies ~next_name ~parents ~dies =
+  let offset_table = Hashtbl.create (List.length dies) in
+  let rec for_each_die ~proto_dies ~parents ~dies =
     match dies with
     | [] -> failwith "DIE list ended prematurely"
-    | die::dies ->
+    | (offset_from_start_of_debug_info, die)::dies ->
       if DIE.is_null die then  (* end of siblings *)
         match parents with
         | _parent::parents ->
-          for_each_die ~proto_dies ~next_name ~parents ~dies
+          for_each_die ~proto_dies ~parents ~dies
         | [] ->
           match remaining_dies with
           | [] -> proto_dies  (* all DIEs processed successfully *)
@@ -165,7 +165,9 @@ let rebuild_proto_dies ~dies ~abbrev_table =
               abbreviation_code)
         | Some abbrev_table_entry ->
           let module A = Abbreviations_table_entry in
-          let name = string_of_int next_name in
+          let name =
+            Printf.sprintf ".debug_info+0x%x" offset_from_start_of_debug_info
+          in
           let parent =
             match parents with
             | parent::_ -> Some parent
@@ -177,23 +179,45 @@ let rebuild_proto_dies ~dies ~abbrev_table =
               ~attribute_values:(A.attribute_values abbrev_table_entry)
           in
           Proto_DIE.set_name proto_die name;
-          Hashtbl.replace name_table name proto_die;
+          Hashtbl.replace name_table offset_from_start_of_debug_info proto_die;
           let proto_dies = proto_die::proto_dies in
           let next_name = next_name + 1 in
           let parents =
             if A.has_children abbrev_table_entry then proto_die::parents
             else parents
           in
-          for_each_die ~proto_dies ~next_name ~parents ~dies
+          for_each_die ~proto_dies ~parents ~dies
   in
   (* First pass: create [Proto_DIE.t] values from [DIE.t] values.  References
      between DIEs, except for the normal parent/sibling relationships, are
      not patched up at this stage.  (An example is DW_AT_specification.) *)
-  let proto_dies =
-    for_each_die ~proto_dies:[] ~next_name:0 ~parents:[] ~dies
-  in
-  (* Second pass: patch up any inter-DIE references within attribute values. *)
+  let proto_dies = for_each_die ~proto_dies:[] ~parents:[] ~dies in
+  (* Second pass: patch up any inter-DIE references within attribute values,
+     together with references to the .debug_loc section (for locations). *)
+  List.iter proto_dies ~f:(fun proto_die ->
+    Proto_DIE.replace_attribute_values proto_die ~f:(fun ~attribute_value ->
+      let attribute = Attribute_value.attribute attribute_value in
+      let module A = Attribute in
+      match A.to_variant attribute with
+      | A.Stmt_list
+      | A.Location_using_single_location_description
+      | A.Location_using_location_list
 
+      | A.Low_pc
+      | A.High_pc
+      | A.Producer
+      | A.Name
+      | A.Comp_dir
+      | A.Extern'l
+      | A.Typ'
+      | A.Encoding
+      | A.Byte_size
+      | A.Linkage_name
+      | A.Sibling
+      | A.Import
+      | A.Specification
+    );
+  proto_dies
 
 let parse ~debug_info_stream:stream ~debug_abbrev_stream =
   Initial_length.parse ~stream
@@ -212,7 +236,7 @@ let parse ~debug_info_stream:stream ~debug_abbrev_stream =
     >>= fun debug_abbrev_offset ->
     Stream.parse_byte stream
     >>= fun address_width_in_bytes_on_target ->
-    Stream.parse_list stream ~f:DIE.parse
+    Stream.parse_list_with_stream_offsets stream ~f:DIE.parse
     >>= fun dies ->
     Stream.advance debug_abbrev_stream ~bytes:debug_abbrev_offset;
     Abbreviations_table.parse ~stream:debug_abbrev_stream

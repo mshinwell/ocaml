@@ -68,3 +68,29 @@ let size t =
 
 let emit t ~emitter =
   Value.emit (encode t) ~emitter
+
+DW_FORM_addr 0x01 address
+DW_FORM_block2 0x03 block
+DW_FORM_block4 0x04 block
+DW_FORM_data2 0x05 constant
+DW_FORM_data4 0x06 constant
+DW_FORM_data8 0x07 constant
+DW_FORM_string 0x08 string
+DW_FORM_block 0x09 block
+DW_FORM_block1 0x0a block
+DW_FORM_data1 0x0b constant
+DW_FORM_flag 0x0c flag
+DW_FORM_sdata 0x0d constant
+DW_FORM_strp 0x0e string
+DW_FORM_udata 0x0f constant
+DW_FORM_ref_addr 0x10 reference
+DW_FORM_ref1 0x11 reference
+DW_FORM_ref2 0x12 reference
+DW_FORM_ref4 0x13 reference
+DW_FORM_ref8 0x14 reference 
+DW_FORM_ref_udata 0x15 reference
+DW_FORM_indirect 0x16 (see Section 7.5.3)
+DW_FORM_sec_offset ‡ 0x17 lineptr, loclistptr, macptr, rangelistptr
+DW_FORM_exprloc ‡ 0x18 exprloc
+DW_FORM_flag_present ‡ 0x19 flag
+DW_FORM_ref_sig8 ‡ 0x20 reference 
