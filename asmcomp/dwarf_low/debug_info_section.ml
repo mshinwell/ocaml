@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013--2014, Jane Street Holding                          *)
+(*  Copyright 2013--2015, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -21,16 +21,21 @@
 (***********************************************************************)
 
 open Std_internal
+
+module DIE = Debugging_information_entry
 module Proto_DIE = Proto_die
 
 type t = {
+  address_width_in_bytes_on_target : int;
+  (* CR mshinwell: update name ("proto_die_root")? *)
   compilation_unit : Proto_DIE.t;
   mutable abbrev_table_and_dies
-    : (Abbreviations_table.t * (Debugging_information_entry.t list)) option;
+    : (Abbreviations_table.t * (DIE.t list)) option;
 }
 
 let create ~compilation_unit =
-  { compilation_unit;
+  { address_width_in_bytes_on_target = 8;
+    compilation_unit;
     abbrev_table_and_dies = None;
   }
 
@@ -52,7 +57,7 @@ let assign_abbreviations t =
         let abbrev_table, die =
           match action with
           | `End_of_siblings ->
-            abbrev_table, Debugging_information_entry.create_null ()
+            abbrev_table, DIE.create_null ()
           | `DIE (tag, has_children, attribute_values, label, name) ->
             (* Note that [Proto_DIE.create] sorted the attribute values,
                ensuring that a simple re-ordering does not cause a new
@@ -79,7 +84,7 @@ let assign_abbreviations t =
                   abbreviation_code
             in
             let die =
-              Debugging_information_entry.create ~label ~abbreviation_code
+              DIE.create ~label ~abbreviation_code
                 ~attribute_values ~name
             in
             abbrev_table, die
@@ -90,8 +95,6 @@ let assign_abbreviations t =
 
 let dwarf_version = Version.four
 
-let address_width_in_bytes_on_target = Value.as_byte Arch.size_addr
-
 let debug_abbrev_offset t =
   let section = Section_names.debug_abbrev in
   Value.as_offset_from_label (Section_names.starting_label section) ~section
@@ -101,7 +104,7 @@ let size_without_first_word t ~dies =
   let total_die_size =
     List.fold_left dies
       ~init:Int64.zero
-      ~f:(fun size die -> size + Debugging_information_entry.size die)
+      ~f:(fun size die -> size + DIE.size die)
   in
   Version.size dwarf_version
     + Value.size (debug_abbrev_offset t)
@@ -128,6 +131,94 @@ let emit t ~emitter =
     Initial_length.emit initial_length ~emitter;
     Version.emit dwarf_version ~emitter;
     Value.emit (debug_abbrev_offset t) ~emitter;
+    let address_width_in_bytes_on_target =
+      Value.as_byte Arch.size_addr t.address_width_in_bytes_on_target
+    in
     Value.emit address_width_in_bytes_on_target ~emitter;
-    List.iter dies ~f:(Debugging_information_entry.emit ~emitter);
+    List.iter dies ~f:(DIE.emit ~emitter);
     abbrev_table
+
+let rebuild_proto_dies ~dies ~abbrev_table =
+  let name_table = Hashtbl.create (List.length dies) in
+  let rec for_each_die ~proto_dies ~next_name ~parents ~dies =
+    match dies with
+    | [] -> failwith "DIE list ended prematurely"
+    | die::dies ->
+      if DIE.is_null die then  (* end of siblings *)
+        match parents with
+        | _parent::parents ->
+          for_each_die ~proto_dies ~next_name ~parents ~dies
+        | [] ->
+          match remaining_dies with
+          | [] -> proto_dies  (* all DIEs processed successfully *)
+          | _ ->
+            failwith (Printf.sprintf "reached end-of-sibling chain at \
+              toplevel, but there follow a further %d DIE(s)"
+              (List.length remaining_dies))
+      else
+        let abbreviation_code = DIE.abbreviation_code die in
+        match
+          Abbreviations_table.find_by_code abbrev_table ~abbreviation_code
+        with
+        | None ->
+          failwith (Printf.sprintf "no DIE for abbreviation code %d"
+              abbreviation_code)
+        | Some abbrev_table_entry ->
+          let module A = Abbreviations_table_entry in
+          let name = string_of_int next_name in
+          let parent =
+            match parents with
+            | parent::_ -> Some parent
+            | [] -> None
+          in
+          let proto_die =
+            Proto_DIE.create_whout_parent ~parent
+              ~tag:(A.tag abbrev_table_entry)
+              ~attribute_values:(A.attribute_values abbrev_table_entry)
+          in
+          Proto_DIE.set_name proto_die name;
+          Hashtbl.replace name_table name proto_die;
+          let proto_dies = proto_die::proto_dies in
+          let next_name = next_name + 1 in
+          let parents =
+            if A.has_children abbrev_table_entry then proto_die::parents
+            else parents
+          in
+          for_each_die ~proto_dies ~next_name ~parents ~dies
+  in
+  (* First pass: create [Proto_DIE.t] values from [DIE.t] values.  References
+     between DIEs, except for the normal parent/sibling relationships, are
+     not patched up at this stage.  (An example is DW_AT_specification.) *)
+  let proto_dies =
+    for_each_die ~proto_dies:[] ~next_name:0 ~parents:[] ~dies
+  in
+  (* Second pass: patch up any inter-DIE references within attribute values. *)
+
+
+let parse ~debug_info_stream:stream ~debug_abbrev_stream =
+  Initial_length.parse ~stream
+  >>= fun initial_length ->
+  Version.parse ~stream
+  >>= fun dwarf_version' ->
+  if dwarf_version' > dwarf_version then
+    Error (Printf.sprintf "DWARF version %d unsupported \
+        (latest supported is %d)" dwarf_version' dwarf_version)
+  else
+    let dwarf_format = Initial_length.dwarf_format initial_length in
+    begin match dwarf_format with
+    | Dwarf_format.Thirty_two -> Int64.of_int32 (Stream.parse_int32 stream)
+    | Dwarf_format.Sixty_four -> Stream.parse_int64 stream
+    end
+    >>= fun debug_abbrev_offset ->
+    Stream.parse_byte stream
+    >>= fun address_width_in_bytes_on_target ->
+    Stream.parse_list stream ~f:DIE.parse
+    >>= fun dies ->
+    Stream.advance debug_abbrev_stream ~bytes:debug_abbrev_offset;
+    Abbreviations_table.parse ~stream:debug_abbrev_stream
+    >>= fun abbrev_table ->
+    let compilation_unit = rebuild_proto_dies ~dies ~abbrev_table in
+    { address_width_in_bytes_on_target;
+      compilation_unit;
+      abbrev_table_and_dies = Some (abbrev_table, dies);
+    }

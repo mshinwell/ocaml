@@ -33,3 +33,7 @@ val create : label:Linearize.label
   -> t
 
 val create_null : unit -> t
+val is_null : t -> bool
+
+val abbreviation_code : t -> Abbreviation_code.t
+val attribute_values : t -> Attribute_value.t list

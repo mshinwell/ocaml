@@ -25,7 +25,11 @@
    native integer on the target processor.  (DWARF-4 standard section 7.4,
    page 142). *)
 
-val set_size : [ `Thirty_two | `Sixty_four ] -> unit
+type t =
+  | Thirty_two
+  | Sixty_four
+
+val set_size : t -> unit
 
 (* Raises if [set_size] has not been called. *)
-val size : unit -> [ `Thirty_two | `Sixty_four ]
+val size : unit -> t

@@ -32,3 +32,7 @@ val find
   -> has_children:Child_determination.t
   -> attributes:Attribute.t list
   -> Abbreviation_code.t option
+val find_by_code
+   : t
+  -> Abbreviation_code.t
+  -> Abbreviations_table_entry.t option

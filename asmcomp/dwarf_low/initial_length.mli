@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2014, Jane Street Holding                                *)
+(*  Copyright 2014--2015, Jane Street Holding                          *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -27,3 +27,4 @@ type t
 val create : Int64.t -> t
 
 include Emittable.S with type t := t
+include Parseable.S with type t := t
