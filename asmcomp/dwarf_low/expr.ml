@@ -128,36 +128,59 @@ type t =
   | DW_OP_reg29
   | DW_OP_reg30
   | DW_OP_reg31
-  | DW_OP_breg0 0x70 1
-  | DW_OP_breg1 0x71 1
-...
-  | DW_OP_breg31 0x8f 1
-SLEB128 offset
-base register 0..31 =
- (  | DW_OP_breg0 + regnum)
-  | DW_OP_regx 0x90 1 ULEB128 register
-  | DW_OP_fbreg 0x91 1 SLEB128 offset
-  | DW_OP_bregx 0x92 2 ULEB128 register followed by
-SLEB128 offset
-  | DW_OP_piece 0x93 1 ULEB128 size of piece addressed
-  | DW_OP_deref_size 0x94 1 1-byte size of data retrieved
-  | DW_OP_xderef_size 0x95 1 1-byte size of data retrieved
+  | DW_OP_breg0
+  | DW_OP_breg1
+  | DW_OP_breg2
+  | DW_OP_breg3
+  | DW_OP_breg4
+  | DW_OP_breg5
+  | DW_OP_breg6
+  | DW_OP_breg7
+  | DW_OP_breg8
+  | DW_OP_breg9
+  | DW_OP_breg10
+  | DW_OP_breg11
+  | DW_OP_breg12
+  | DW_OP_breg13
+  | DW_OP_breg14
+  | DW_OP_breg15
+  | DW_OP_breg16
+  | DW_OP_breg17
+  | DW_OP_breg18
+  | DW_OP_breg19
+  | DW_OP_breg20
+  | DW_OP_breg21
+  | DW_OP_breg22
+  | DW_OP_breg23
+  | DW_OP_breg24
+  | DW_OP_breg25
+  | DW_OP_breg26
+  | DW_OP_breg27
+  | DW_OP_breg28
+  | DW_OP_breg29
+  | DW_OP_breg30
+  | DW_OP_breg31
+  | DW_OP_regx of reg
+  | DW_OP_fbreg of offset
+  | DW_OP_bregx of reg * offset
+  | DW_OP_piece of Uleb128.t
+  | DW_OP_deref_size of Int8.t
+  | DW_OP_xderef_size of Int8.t
   | DW_OP_nop
   | DW_OP_push_object_address
-  | DW_OP_call2 0x98 1 2-byte offset of DIE
-  | DW_OP_call4 0x99 1 4-byte offset of DIE
-  | DW_OP_call_ref 0x9a 1 4- or 8-byte offset of DIE
+  (* DW_OP_call* take the offset of a DIE within the current compilation
+     unit. *)
+  | DW_OP_call2 of Int16.t
+  | DW_OP_call4 of Int32.t
+  | DW_OP_call_ref of ??? (4 or 8 byte offset)
   | DW_OP_form_tls_address
   | DW_OP_call_frame_cfa
-  | DW_OP_bit_piece 0x9d 2 ULEB128 size followed by
-ULEB128 offset
-  | DW_OP_implicit_value ‡ 0x9e 2 ULEB128 size followed by block
-of that size
+  | DW_OP_bit_piece of Uleb128.t * Uleb128.t  (* size, offset *)
+  | DW_OP_implicit_value of Uleb128.t * Block.t
   | DW_OP_stack_value
 
-
-  | DW_OP_lo_user 0xe0
-  | DW_OP_hi_user 0xff 
+let dw_op_lo_user = 0xe0
+let dw_op_hi_user = 0xff
 
 let write t ~stream =
   match t with
@@ -193,18 +216,18 @@ let write t ~stream =
     Stream.write_byte stream 0x10;
     Stream.write_uleb128 stream c
   | DW_OP_consts c ->
-    Stream.write_byte stream 0x10;
+    Stream.write_byte stream 0x11;
     Stream.write_sleb128 stream c
   | DW_OP_dup -> Stream.write_byte stream 0x12
   | DW_OP_drop -> Stream.write_byte stream 0x13
   | DW_OP_over -> Stream.write_byte stream 0x14
-  | DW_OP_pick 0x15 1 1-byte stack index
+  | DW_OP_pick -> Steram.write_byte stream 0x15 (* check 0x15 *)
   | DW_OP_swap -> Stream.write_byte stream 0x16
   | DW_OP_rot -> Stream.write_byte stream 0x17
   | DW_OP_xderef -> Stream.write_byte stream 0x18
   | DW_OP_abs -> Stream.write_byte stream 0x19
   | DW_OP_and -> Stream.write_byte stream 0x1a
-  | DW_OP_div -> Stream.write_byte stream 0x1b 0 
+  | DW_OP_div -> Stream.write_byte stream 0x1b
   | DW_OP_minus -> Stream.write_byte stream 0x1c
   | DW_OP_mod -> Stream.write_byte stream 0x1d
   | DW_OP_mul -> Stream.write_byte stream 0x1e
@@ -263,34 +286,189 @@ let write t ~stream =
   | DW_OP_lit29 -> Stream.write_byte stream 0x4d
   | DW_OP_lit30 -> Stream.write_byte stream 0x4e
   | DW_OP_lit31 -> Stream.write_byte stream 0x4f
-  | DW_OP_reg0 0x50 0
-  | DW_OP_reg1 0x51 0
-...
-  | DW_OP_reg31 0x6f 0
-reg 0..31 =
- (  | DW_OP_reg0 + regnum)
-  | DW_OP_breg0 0x70 1
-  | DW_OP_breg1 0x71 1
-...
-  | DW_OP_breg31 0x8f 1
-SLEB128 offset
-base register 0..31 =
- (  | DW_OP_breg0 + regnum)
-  | DW_OP_regx 0x90 1 ULEB128 register
-  | DW_OP_fbreg 0x91 1 SLEB128 offset
-  | DW_OP_bregx 0x92 2 ULEB128 register followed by SLEB128 offset
-  | DW_OP_piece 0x93 1 ULEB128 size of piece addressed
-  | DW_OP_deref_size 0x94 1 1-byte size of data retrieved
-  | DW_OP_xderef_size 0x95 1 1-byte size of data retrieved
+  | DW_OP_reg0 -> Stream.write_byte stream 0x50
+  | DW_OP_reg1 -> Stream.write_byte stream 0x51
+  | DW_OP_reg2 -> Stream.write_byte stream 0x52
+  | DW_OP_reg3 -> Stream.write_byte stream 0x53
+  | DW_OP_reg4 -> Stream.write_byte stream 0x54
+  | DW_OP_reg5 -> Stream.write_byte stream 0x55
+  | DW_OP_reg6 -> Stream.write_byte stream 0x56
+  | DW_OP_reg7 -> Stream.write_byte stream 0x57
+  | DW_OP_reg8 -> Stream.write_byte stream 0x58
+  | DW_OP_reg9 -> Stream.write_byte stream 0x59
+  | DW_OP_reg10 -> Stream.write_byte stream 0x5a
+  | DW_OP_reg11 -> Stream.write_byte stream 0x5b
+  | DW_OP_reg12 -> Stream.write_byte stream 0x5c
+  | DW_OP_reg13 -> Stream.write_byte stream 0x5d
+  | DW_OP_reg14 -> Stream.write_byte stream 0x5e
+  | DW_OP_reg15 -> Stream.write_byte stream 0x5f
+  | DW_OP_reg16 -> Stream.write_byte stream 0x60
+  | DW_OP_reg17 -> Stream.write_byte stream 0x61
+  | DW_OP_reg18 -> Stream.write_byte stream 0x62
+  | DW_OP_reg19 -> Stream.write_byte stream 0x63
+  | DW_OP_reg20 -> Stream.write_byte stream 0x64
+  | DW_OP_reg21 -> Stream.write_byte stream 0x65
+  | DW_OP_reg22 -> Stream.write_byte stream 0x66
+  | DW_OP_reg23 -> Stream.write_byte stream 0x67
+  | DW_OP_reg24 -> Stream.write_byte stream 0x68
+  | DW_OP_reg25 -> Stream.write_byte stream 0x69
+  | DW_OP_reg26 -> Stream.write_byte stream 0x6a
+  | DW_OP_reg27 -> Stream.write_byte stream 0x6b
+  | DW_OP_reg28 -> Stream.write_byte stream 0x6c
+  | DW_OP_reg29 -> Stream.write_byte stream 0x6d
+  | DW_OP_reg30 -> Stream.write_byte stream 0x6e
+  | DW_OP_reg31 -> Stream.write_byte stream 0x6f
+  | DW_OP_breg0 offset ->
+    Stream.write_byte stream 0x70;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg1 offset ->
+    Stream.write_byte stream 0x71;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg2 offset ->
+    Stream.write_byte stream 0x72;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg3 offset ->
+    Stream.write_byte stream 0x73;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg4 offset ->
+    Stream.write_byte stream 0x74;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg5 offset ->
+    Stream.write_byte stream 0x75;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg6 offset ->
+    Stream.write_byte stream 0x76;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg7 offset ->
+    Stream.write_byte stream 0x77;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg8 offset ->
+    Stream.write_byte stream 0x78;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg9 offset ->
+    Stream.write_byte stream 0x79;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg10 offset ->
+    Stream.write_byte stream 0x7a;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg11 offset ->
+    Stream.write_byte stream 0x7b;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg12 offset ->
+    Stream.write_byte stream 0x7c;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg13 offset ->
+    Stream.write_byte stream 0x7d;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg14 offset ->
+    Stream.write_byte stream 0x7e;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg15 offset ->
+    Stream.write_byte stream 0x7f;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg16 offset ->
+    Stream.write_byte stream 0x80;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg17 offset ->
+    Stream.write_byte stream 0x81;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg18 offset ->
+    Stream.write_byte stream 0x82;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg19 offset ->
+    Stream.write_byte stream 0x83;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg20 offset ->
+    Stream.write_byte stream 0x84;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg21 offset ->
+    Stream.write_byte stream 0x85;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg22 offset ->
+    Stream.write_byte stream 0x86;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg23 offset ->
+    Stream.write_byte stream 0x87;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg24 offset ->
+    Stream.write_byte stream 0x88;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg25 offset ->
+    Stream.write_byte stream 0x89;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg26 offset ->
+    Stream.write_byte stream 0x8a;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg27 offset ->
+    Stream.write_byte stream 0x8b;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg28 offset ->
+    Stream.write_byte stream 0x8c;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg29 offset ->
+    Stream.write_byte stream 0x8d;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg30 offset ->
+    Stream.write_byte stream 0x8e;
+    Stream.write_sleb128 stream offset
+  | DW_OP_breg31 offset ->
+    Stream.write_byte stream 0x8f;
+    Stream.write_sleb128 stream offset
+  | DW_OP_regx reg ->
+    Stream.write_byte stream 0x90;
+    Stream.write_uleb128 stream reg
+  | DW_OP_fbreg offset ->
+    Stream.write_byte stream 0x91;
+    Stream.write_sleb128 stream offset;
+  | DW_OP_bregx (reg, offset) ->
+    Stream.write_byte stream 0x92;
+    Stream.write_uleb128 stream reg;
+    Stream.write_sleb128 stream offset
+  | DW_OP_piece size ->
+    Stream.write_byte stream 0x93;
+    Stream.write_uleb128 stream size
+  | DW_OP_deref_size size ->
+    Stream.write_byte stream 0x94;
+    Stream.write_byte stream size
+  | DW_OP_xderef_size ->
+    Stream.write_byte stream 0x95;
+    Stream.write_byte stream size
   | DW_OP_nop -> Stream.write_byte stream 0x96
   | DW_OP_push_object_address -> Stream.write_byte stream 0x97
-  | DW_OP_call2 0x98 1 2-byte offset of DIE
-  | DW_OP_call4 0x99 1 4-byte offset of DIE
-  | DW_OP_call_ref 0x9a 1 4- or 8-byte offset of DIE
+  | DW_OP_call2 offset_of_die ->
+    Stream.write_byte stream 0x98;
+    Stream.write_int16 stream offset_of_die
+  | DW_OP_call4 offset_of_die ->
+    Stream.write_byte stream 0x99;
+    Stream.write_int32 stream offset_of_die
+  | DW_OP_call_ref offset_of_die ->
+    Stream.write_byte stream 0x9a;
+    Stream.write_???(32 or 64) stream offset_of_die
   | DW_OP_form_tls_address -> Stream.write_byte stream 0x9b
   | DW_OP_call_frame_cfa -> Stream.write_byte stream 0x9c
-  | DW_OP_bit_piece 0x9d 2 ULEB128 size followed by ULEB128 offset
-  | DW_OP_implicit_value 0x9e 2 ULEB128 size followed by block of that size
+  | DW_OP_bit_piece (size, offset) ->
+    Stream.write_byte stream 0x9d;
+    Stream.write_uleb128 stream size;
+    Stream.write_uleb128 stream offset
+  | DW_OP_implicit_value (size, block) ->
+    Stream.write_byte stream 0x9e;
+    Stream.write_uleb128 stream size;
+    Block.write block ~stream
   | DW_OP_stack_value -> Stream.write_byte stream 0x9f
-  | DW_OP_lo_user 0xe0
-  | DW_OP_hi_user 0xff 
+
+let literal_for_int64 =
+  let table = [|
+    DW_OP_lit0; DW_OP_lit1; DW_OP_lit2; DW_OP_lit3; DW_OP_lit4;
+    DW_OP_lit5; DW_OP_lit6; DW_OP_lit7; DW_OP_lit8; DW_OP_lit9;
+    DW_OP_lit10; DW_OP_lit11; DW_OP_lit12; DW_OP_lit13; DW_OP_lit14;
+    DW_OP_lit15; DW_OP_lit16; DW_OP_lit17; DW_OP_lit18; DW_OP_lit19;
+    DW_OP_lit20; DW_OP_lit21; DW_OP_lit22; DW_OP_lit23; DW_OP_lit24;
+    DW_OP_lit25; DW_OP_lit26; DW_OP_lit27; DW_OP_lit28; DW_OP_lit29;
+    DW_OP_lit30; DW_OP_lit31;
+  |] in
+  fun c ~emit ->
+    if Int64.compare c 0L >= 0 && Int64.compare c 31L <= 0 then begin
+      Some table.(Int64.to_int c)
+    end else begin
+      None
+    end
