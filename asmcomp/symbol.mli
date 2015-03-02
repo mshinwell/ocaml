@@ -36,9 +36,6 @@ val string_of_linkage_name : linkage_name -> string
 
 (***********************************************************************)
 
-(* CXR mshinwell for pchambart: Convert to use [Identifiable]
-   pchambart: done *)
-
 module Compilation_unit : sig
 
   type t

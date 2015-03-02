@@ -129,7 +129,8 @@ let print_approx ppf export =
   and print_descr ppf = function
     | Value_int i -> pp_print_int ppf i
     | Value_constptr i -> fprintf ppf "%ip" i
-    | Value_block (tag, fields) -> fprintf ppf "[%i:%a]" tag print_fields fields
+    | Value_block (tag, fields) ->
+      fprintf ppf "[%i:%a]" tag print_fields fields
     | Value_closure {fun_id; closure} ->
       fprintf ppf "(function %a, %a)" Closure_id.print fun_id print_closure closure
     | Value_set_of_closures closure ->
@@ -147,7 +148,8 @@ let print_approx ppf export =
     if Set_of_closures_id.Set.mem closure_id !printed_closure
     then fprintf ppf "%a" Set_of_closures_id.print closure_id
     else begin
-      printed_closure := Set_of_closures_id.Set.add closure_id !printed_closure;
+      printed_closure :=
+        Set_of_closures_id.Set.add closure_id !printed_closure;
       fprintf ppf "{%a: %a}"
         Set_of_closures_id.print closure_id
         print_binding bound_var
@@ -168,27 +170,30 @@ let print_symbols ppf export =
   let print_symbol eid sym =
     fprintf ppf "%a -> %a@." Symbol.print sym Export_id.print eid
   in
-   Compilation_unit.Map.iter (fun _ -> Export_id.Map.iter print_symbol) export.id_symbol
+    Compilation_unit.Map.iter (fun _ -> Export_id.Map.iter print_symbol)
+      export.id_symbol
 
 let print_all ppf export =
   let open Format in
   fprintf ppf "approxs@ %a@.@."
     print_approx export;
   fprintf ppf "id_symbol@ %a@.@."
-    (Compilation_unit.Map.print (Export_id.Map.print Symbol.print)) export.id_symbol;
+    (Compilation_unit.Map.print (Export_id.Map.print Symbol.print))
+      export.id_symbol;
   fprintf ppf "symbol_id@ %a@.@."
     (SymbolMap.print Export_id.print) export.symbol_id;
   fprintf ppf "constants@ %a@.@."
     SymbolSet.print export.constants;
   fprintf ppf "functions@ %a@.@."
-    (Set_of_closures_id.Map.print Printflambda.function_declarations) export.functions
-
+    (Set_of_closures_id.Map.print Printflambda.function_declarations)
+      export.functions
 
 let merge e1 e2 =
   let int_eq (i:int) j = i = j in
   { ex_values = eidmap_disjoint_union e1.ex_values e2.ex_values;
     globals = Ident.Map.disjoint_union e1.globals e2.globals;
-    functions = Set_of_closures_id.Map.disjoint_union e1.functions e2.functions;
+    functions = Set_of_closures_id.Map.disjoint_union e1.functions
+      e2.functions;
     functions_off =
       Closure_id.Map.disjoint_union e1.functions_off e2.functions_off;
     id_symbol = eidmap_disjoint_union  e1.id_symbol e2.id_symbol;
@@ -201,7 +206,9 @@ let merge e1 e2 =
     constant_closures =
       Set_of_closures_id.Set.union e1.constant_closures e2.constant_closures;
     kept_arguments =
-      Set_of_closures_id.Map.disjoint_union e1.kept_arguments e2.kept_arguments }
+      Set_of_closures_id.Map.disjoint_union e1.kept_arguments
+        e2.kept_arguments;
+  }
 
 (* importing informations to build a pack: the global identifying the
    compilation unit of symbols is changed to be the pack one *)
@@ -234,9 +241,11 @@ let import_approx_for_pack units pack = function
 let import_closure units pack closure =
   { closure_id = closure.closure_id;
     bound_var =
-      Var_within_closure.Map.map (import_approx_for_pack units pack) closure.bound_var;
+      Var_within_closure.Map.map (import_approx_for_pack units pack)
+        closure.bound_var;
     results =
-      Closure_id.Map.map (import_approx_for_pack units pack) closure.results }
+      Closure_id.Map.map (import_approx_for_pack units pack) closure.results;
+  }
 
 let import_descr_for_pack units pack = function
   | Value_int _
@@ -246,8 +255,8 @@ let import_descr_for_pack units pack = function
   | Value_boxed_int _ as desc -> desc
   | Value_block (tag, fields) ->
     Value_block (tag, Array.map (import_approx_for_pack units pack) fields)
-  | Value_closure {fun_id; closure} ->
-    Value_closure {fun_id; closure = import_closure units pack closure}
+  | Value_closure { fun_id; closure } ->
+    Value_closure { fun_id; closure = import_closure units pack closure }
   | Value_set_of_closures closure ->
     Value_set_of_closures (import_closure units pack closure)
 
@@ -261,27 +270,27 @@ let import_code_for_pack units pack expr =
 let import_ffunctions_for_pack units pack ffuns =
   { ffuns with
     funs = Variable.Map.map (fun ffun ->
-        {ffun with body = import_code_for_pack units pack ffun.body})
-        ffuns.funs }
+        { ffun with body = import_code_for_pack units pack ffun.body })
+      ffuns.funs;
+  }
 
 let functions_off functions =
   let aux_fun ffunctions function_id _ map =
     Closure_id.Map.add
-      (Closure_id.wrap function_id) ffunctions map in
+      (Closure_id.wrap function_id) ffunctions map
+  in
   let aux _ f map = Variable.Map.fold (aux_fun f) f.funs map in
   Set_of_closures_id.Map.fold aux functions Closure_id.Map.empty
 
 let import_eidmap_for_pack units pack f map =
   nest_eid_map
-    (Compilation_unit.Map.fold
-       (fun _ map acc -> Export_id.Map.disjoint_union map acc)
-       (Compilation_unit.Map.map
-          (fun map ->
-             Export_id.Map.map_keys
-            (import_eid_for_pack units pack)
-            (Export_id.Map.map f map))
-          map)
-       Export_id.Map.empty)
+    (Compilation_unit.Map.fold (fun _ map acc ->
+        Export_id.Map.disjoint_union map acc)
+    (Compilation_unit.Map.map (fun map ->
+        Export_id.Map.map_keys (import_eid_for_pack units pack)
+          (Export_id.Map.map f map))
+      map)
+  Export_id.Map.empty)
 
 let import_for_pack ~pack_units ~pack exp =
   let import_sym = import_symbol_for_pack pack_units pack in
@@ -291,11 +300,13 @@ let import_for_pack ~pack_units ~pack exp =
   let import_eidmap f map = import_eidmap_for_pack pack_units pack f map in
   let functions =
     Set_of_closures_id.Map.map (import_ffunctions_for_pack pack_units pack)
-      exp.functions in
+      exp.functions
+  in
   (* The only reachable global identifier of a pack is the pack itself *)
   let globals = Ident.Map.filter (fun unit _ ->
       Ident.same (Compilation_unit.get_persistent_ident pack) unit)
-      exp.globals in
+    exp.globals
+  in
   let res =
     { functions;
       functions_off = functions_off functions;
@@ -308,7 +319,9 @@ let import_for_pack ~pack_units ~pack exp =
           (SymbolMap.map import_eid exp.symbol_id);
       constants = SymbolSet.map import_sym exp.constants;
       constant_closures = exp.constant_closures;
-      kept_arguments = exp.kept_arguments } in
+      kept_arguments = exp.kept_arguments;
+    }
+  in
   res
 
 let clear_import_state () = Export_id.Tbl.clear rename_id_state
