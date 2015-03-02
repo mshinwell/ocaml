@@ -31,7 +31,7 @@ type descr =
   | Value_closure of value_offset
   | Value_unknown
   | Value_bottom
-  | Value_extern of Flambdaexport.ExportId.t
+  | Value_extern of Flambdaexport.Export_id.t
   | Value_symbol of Symbol.t
   | Value_unresolved of Symbol.t
 
@@ -65,7 +65,7 @@ let rec print_descr ppf = function
     Format.fprintf ppf "[%i:@ @[<1>%a@]]" tag p fields
   | Value_unknown -> Format.fprintf ppf "?"
   | Value_bottom -> Format.fprintf ppf "bottom"
-  | Value_extern id -> Format.fprintf ppf "_%a_" Flambdaexport.ExportId.print id
+  | Value_extern id -> Format.fprintf ppf "_%a_" Flambdaexport.Export_id.print id
   | Value_symbol sym -> Format.fprintf ppf "%a" Symbol.print sym
   | Value_closure { fun_id } ->
     Format.fprintf ppf "(fun:@ %a)" Closure_id.print fun_id
@@ -237,7 +237,7 @@ let rec meet_descr d1 d2 = match d1, d2 with
       d1
   | Value_symbol s1, Value_symbol s2 when Symbol.equal s1 s2 ->
       d1
-  | Value_extern e1, Value_extern e2 when Flambdaexport.ExportId.equal e1 e2 ->
+  | Value_extern e1, Value_extern e2 when Flambdaexport.Export_id.equal e1 e2 ->
       d1
   | Value_float i, Value_float j when i = j ->
       d1
@@ -283,7 +283,7 @@ module Import = struct
 
   let rec import_ex ex : t =
 
-    ignore(Compilenv.approx_for_global (ExportId.unit ex));
+    ignore(Compilenv.approx_for_global (Export_id.unit ex));
 
     let ex_info = Compilenv.approx_env () in
     try match find_description ex ex_info with

@@ -83,14 +83,14 @@ type const_sym =
 
 type infos =
   { global : (int, approx) Hashtbl.t;
-    ex_table : descr EidMap.t ref;
-    symbol_id : ExportId.t SymbolMap.t ref;
+    ex_table : descr Export_id.Map.t ref;
+    symbol_id : Export_id.t SymbolMap.t ref;
     constants : unit flambda SymbolTbl.t;
     symbol_alias : Symbol.t SymbolTbl.t }
 
 let init_infos () =
   { global = Hashtbl.create 10;
-    ex_table = ref EidMap.empty;
+    ex_table = ref Export_id.Map.empty;
     symbol_id = ref SymbolMap.empty;
     constants = SymbolTbl.create 10;
     symbol_alias = SymbolTbl.create 10 }
@@ -105,8 +105,8 @@ let rec canonical_symbol s infos =
   with Not_found -> s
 
 let new_descr descr infos =
-  let id = ExportId.create (Compilenv.current_unit ()) in
-  infos.ex_table := EidMap.add id descr !(infos.ex_table);
+  let id = Export_id.create (Compilenv.current_unit ()) in
+  infos.ex_table := Export_id.Map.add id descr !(infos.ex_table);
   id
 
 module Conv(P:Param1) = struct
@@ -184,12 +184,14 @@ module Conv(P:Param1) = struct
                            Closure_id.print fun_id)
 
   let not_constants = P.not_constants
-  let is_constant id = not (Variable.Set.mem id not_constants.Flambdaconstants.not_constant_id)
+  let is_constant id =
+    not (Variable.Set.mem id not_constants.Flambdaconstants.not_constant_id)
 
-  type env =
-    { sb : unit flambda Variable.Map.t; (* substitution *)
-      cm : Symbol.t Variable.Map.t; (* variables associated to constants *)
-      approx : approx Variable.Map.t }
+  type env = {
+    sb : unit flambda Variable.Map.t; (* substitution *)
+    cm : Symbol.t Variable.Map.t; (* variables associated to constants *)
+    approx : approx Variable.Map.t;
+  }
 
   let infos = init_infos ()
 
@@ -251,13 +253,13 @@ module Conv(P:Param1) = struct
     match approx with
     | Value_unknown -> None
     | Value_id ex ->
-        (try Some (EidMap.find ex !(infos.ex_table)) with
+        (try Some (Export_id.Map.find ex !(infos.ex_table)) with
          | Not_found ->
              extern_id_descr ex)
     | Value_symbol sym ->
         try
           let ex = SymbolMap.find sym !(infos.symbol_id) in
-          Some (EidMap.find ex !(infos.ex_table))
+          Some (Export_id.Map.find ex !(infos.ex_table))
         with Not_found ->
           extern_symbol_descr sym
 
@@ -871,7 +873,7 @@ module Prepare(P:Param2) = struct
 
   (* replace symbol by their representative in value approximations *)
   let ex_values =
-    EidMap.map canonical_descr !(infos.ex_table)
+    Export_id.Map.map canonical_descr !(infos.ex_table)
 
   (* build the symbol to id and id to symbol maps *)
   let module_symbol =
@@ -888,8 +890,8 @@ module Prepare(P:Param2) = struct
     SymbolMap.add module_symbol root_id
       symbol_id
   let id_symbol =
-    SymbolMap.fold (fun sym id map -> EidMap.add id sym map)
-      symbol_id EidMap.empty
+    SymbolMap.fold (fun sym id map -> Export_id.Map.add id sym map)
+      symbol_id Export_id.Map.empty
 
   let functions_off =
     let aux_fun ffunctions off_id _ map =

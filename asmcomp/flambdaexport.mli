@@ -16,10 +16,7 @@ open Ext_types
 open Symbol
 open Abstract_identifiers
 
-module ExportId : UnitId with module Compilation_unit := Compilation_unit
-module EidSet : ExtSet with module M := ExportId
-module EidMap : ExtMap with module M := ExportId
-module EidTbl : ExtHashtbl with module M := ExportId
+module Export_id : UnitId with module Compilation_unit := Compilation_unit
 
 type tag = int
 
@@ -38,20 +35,20 @@ type descr =
   | Value_closure of value_offset
   | Value_set_of_closures of value_closure
 
-and value_offset =
-  { fun_id : Closure_id.t;
-    closure : value_closure;
-  }
+and value_offset = {
+  fun_id : Closure_id.t;
+  closure : value_closure;
+}
 
-and value_closure =
-  { closure_id : Set_of_closures_id.t;
-    bound_var : approx Var_within_closure.Map.t;
-    results : approx Closure_id.Map.t;
-  }
+and value_closure = {
+  closure_id : Set_of_closures_id.t;
+  bound_var : approx Var_within_closure.Map.t;
+  results : approx Closure_id.Map.t;
+}
 
 and approx =
   | Value_unknown
-  | Value_id of ExportId.t
+  | Value_id of Export_id.t
   | Value_symbol of Symbol.t
 
 type exported = {
@@ -59,14 +56,14 @@ type exported = {
   (** Code of exported functions indexed by function identifier *)
   functions_off : unit Flambda.function_declarations Closure_id.Map.t;
   (** Code of exported functions indexed by offset identifier *)
-  ex_values : descr EidMap.t Compilation_unit.Map.t;
+  ex_values : descr Export_id.Map.t Compilation_unit.Map.t;
   (** Structure of exported values *)
   globals : approx Ident.Map.t;
   (** Global variables provided by the unit: usually only the top-level
       module identifier, but there may be multiple identifiers in the case
       of packs. *)
-  id_symbol : Symbol.t EidMap.t Compilation_unit.Map.t;
-  symbol_id : ExportId.t SymbolMap.t;
+  id_symbol : Symbol.t Export_id.Map.t Compilation_unit.Map.t;
+  symbol_id : Export_id.t SymbolMap.t;
   (** Associates symbols and values *)
   offset_fun : int Closure_id.Map.t;
   (** Positions of function pointers in their closures *)
@@ -99,9 +96,9 @@ val import_for_pack
 (** Drops the state after importing several units in the same pack. *)
 val clear_import_state : unit -> unit
 
-val find_description : ExportId.t -> exported -> descr
+val find_description : Export_id.t -> exported -> descr
 
-val nest_eid_map : 'a EidMap.t -> 'a EidMap.t Compilation_unit.Map.t
+val nest_eid_map : 'a Export_id.Map.t -> 'a Export_id.Map.t Compilation_unit.Map.t
 
 (**/**)
 (* debug printing functions *)

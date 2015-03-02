@@ -81,7 +81,6 @@ module Expr_id = struct
   module T : Id = Id(struct end)
 
   include T
-  include Identifiable.Make(T)
 end
 
 module Set_of_closures_id = struct
@@ -89,7 +88,6 @@ module Set_of_closures_id = struct
   module T = UnitId(Id)(Symbol.Compilation_unit)
 
   include T
-  include Identifiable.Make(T)
 end
 
 module Closure_element = struct

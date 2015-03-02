@@ -72,7 +72,7 @@ type descr =
   | Value_closure of value_offset
   | Value_unknown
   | Value_bottom
-  | Value_extern of Flambdaexport.ExportId.t
+  | Value_extern of Flambdaexport.Export_id.t
   | Value_symbol of Symbol.t
   | Value_unresolved of Symbol.t (* No description was found for this symbol *)
 
@@ -128,7 +128,7 @@ val value_closure : value_offset -> t
    pchambart: done *)
 val value_set_of_closures : value_set_of_closures -> t
 val value_block : tag * t array -> t
-val value_extern : Flambdaexport.ExportId.t -> t
+val value_extern : Flambdaexport.Export_id.t -> t
 val value_symbol : Symbol.t -> t
 val value_bottom : t
 val value_unresolved : Symbol.t -> t

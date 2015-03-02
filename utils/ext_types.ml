@@ -150,94 +150,6 @@ struct
         r
 end
 
-module type BaseId = sig
-  type t
-  val equal : t -> t -> bool
-  val compare : t -> t -> int
-  val hash : t -> int
-  val name : t -> string option
-  val to_string : t -> string
-  val output : out_channel -> t -> unit
-  val print : Format.formatter -> t -> unit
-end
-
-module type Id = sig
-  include BaseId
-  val create : ?name:string -> unit -> t
-end
-
-module type UnitId = sig
-  module Compilation_unit : PrintableHashOrdered
-  include BaseId
-  val create : ?name:string -> Compilation_unit.t -> t
-  val unit : t -> Compilation_unit.t
-end
-
-module Id(E:sig end) : Id = struct
-  type t = int * string
-  let empty_string = ""
-  let create = let r = ref 0 in
-    fun  ?(name=empty_string) () -> incr r; !r, name
-  let equal (t1,_) (t2,_) = (t1:int) = t2
-  let compare (t1,_) (t2,_) = t1 - t2
-  let hash (t,_) = t
-  let name (_,name) =
-    if name == empty_string
-    then None
-    else Some name
-  let to_string (t,name) =
-    if name == empty_string
-    then string_of_int t
-    else Printf.sprintf "%s_%i" name t
-  let output fd t = output_string fd (to_string t)
-  let print ppf v = Format.pp_print_string ppf (to_string v)
-end
-
-module UnitId(Innerid:Id)(Compilation_unit:PrintableHashOrdered) :
-  UnitId with module Compilation_unit := Compilation_unit = struct
-  type t = {
-    id : Innerid.t;
-    unit : Compilation_unit.t;
-  }
-  let compare x y =
-    let c = Innerid.compare x.id y.id in
-    if c <> 0
-    then c
-    else Compilation_unit.compare x.unit y.unit
-  let output oc x =
-    Printf.fprintf oc "%a.%a"
-      Compilation_unit.output x.unit
-      Innerid.output x.id
-  let print ppf x =
-    Format.fprintf ppf "%a.%a"
-      Compilation_unit.print x.unit
-      Innerid.print x.id
-  let hash off = Hashtbl.hash off
-  let equal o1 o2 = compare o1 o2 = 0
-  let name o = Innerid.name o.id
-  let to_string x =
-    Format.asprintf "%a.%a"
-      Compilation_unit.print x.unit
-      Innerid.print x.id
-  let create ?name unit =
-    let id = Innerid.create ?name () in
-    { id; unit }
-  let unit x = x.unit
-end
-
-module String_M = struct
-  type t = string
-  let compare = String.compare
-  let output = output_string
-  let hash (s:string) = Hashtbl.hash s
-  let equal (s1:string) s2 = s1 = s2
-  let print = Format.pp_print_string
-end
-
-module StringSet = ExtSet(String_M)
-module StringMap = ExtMap(String_M)
-module StringTbl = ExtHashtbl(String_M)
-
 module type Identifiable = sig
   type t
   module M : PrintableHashOrdered with type t = t
@@ -257,6 +169,104 @@ module Identifiable = struct
     module Tbl = ExtHashtbl(M)
   end
 end
+
+module type Id = sig
+  include Identifiable
+  val create : ?name:string -> unit -> t
+  val name : t -> string option
+  val to_string : t -> string
+end
+
+module type UnitId = sig
+  module Compilation_unit : PrintableHashOrdered
+  include Identifiable
+  val create : ?name:string -> Compilation_unit.t -> t
+  val unit : t -> Compilation_unit.t
+  val name : t -> string option
+  val to_string : t -> string
+end
+
+module Id (E : sig end) : Id = struct
+  let empty_string = ""
+
+  let to_string (t,name) =
+    if name == empty_string
+    then string_of_int t
+    else Printf.sprintf "%s_%i" name t
+
+  include Identifiable.Make (struct
+    type t = int * string
+    let equal (t1,_) (t2,_) = (t1:int) = t2
+    let compare (t1,_) (t2,_) = t1 - t2
+    let hash (t,_) = t
+    let output fd t = output_string fd (to_string t)
+    let print ppf v = Format.pp_print_string ppf (to_string v)
+  end)
+
+  let create =
+    let r = ref 0 in
+    fun ?(name=empty_string) () ->
+      incr r; !r, name
+
+  let name (_,name) =
+    if name == empty_string
+    then None
+    else Some name
+end
+
+module UnitId (Innerid : Id) (Compilation_unit : PrintableHashOrdered) :
+    UnitId with module Compilation_unit := Compilation_unit =
+struct
+  module M = struct
+    type t = {
+      id : Innerid.t;
+      unit : Compilation_unit.t;
+    }
+    let compare x y =
+      let c = Innerid.compare x.id y.id in
+      if c <> 0
+      then c
+      else Compilation_unit.compare x.unit y.unit
+    let output oc x =
+      Printf.fprintf oc "%a.%a"
+        Compilation_unit.output x.unit
+        Innerid.output x.id
+    let print ppf x =
+      Format.fprintf ppf "%a.%a"
+        Compilation_unit.print x.unit
+        Innerid.print x.id
+    let hash off = Hashtbl.hash off
+    let equal o1 o2 = compare o1 o2 = 0
+    let name o = Innerid.name o.id
+    let to_string x =
+      Format.asprintf "%a.%a"
+        Compilation_unit.print x.unit
+        Innerid.print x.id
+    let create ?name unit =
+      let id = Innerid.create ?name () in
+      { id; unit }
+    let unit x = x.unit
+  end
+
+  include M
+
+  module Set = ExtSet(M)
+  module Map = ExtMap(M)
+  module Tbl = ExtHashtbl(M)
+end
+
+module String_M = struct
+  type t = string
+  let compare = String.compare
+  let output = output_string
+  let hash (s:string) = Hashtbl.hash s
+  let equal (s1:string) s2 = s1 = s2
+  let print = Format.pp_print_string
+end
+
+module StringSet = ExtSet(String_M)
+module StringMap = ExtMap(String_M)
+module StringTbl = ExtHashtbl(String_M)
 
 module Int = Identifiable.Make(struct
     type t = int

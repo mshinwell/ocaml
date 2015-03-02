@@ -74,32 +74,40 @@ module ExtSet :
 module ExtHashtbl :
   functor (M : PrintableHashOrdered) -> ExtHashtbl with module M := M
 
-(** Generic identifier type *)
-module type BaseId =
-sig
+(* CR mshinwell: We should use [Identifiable] above so everything is
+   uniform. *)
+module type Identifiable = sig
   type t
-  val equal : t -> t -> bool
-  val compare : t -> t -> int
-  val hash : t -> int
-  val name : t -> string option
-  val to_string : t -> string
-  val output : out_channel -> t -> unit
-  val print : Format.formatter -> t -> unit
+  module M : PrintableHashOrdered with type t = t
+  include PrintableHashOrdered with type t := M.t
+  module Set : ExtSet with module M := M
+  module Map : ExtMap with module M := M
+  module Tbl : ExtHashtbl with module M := M
 end
 
+module Identifiable : sig
+  module Make (P : PrintableHashOrdered) : Identifiable
+    with type t := P.t
+end
+
+(** Identifiers, not qualified with a compilation unit. *)
 module type Id =
 sig
-  include BaseId
+  include Identifiable
   val create : ?name:string -> unit -> t
+  val name : t -> string option
+  val to_string : t -> string
 end
 
 (** Fully qualified identifiers *)
 module type UnitId =
 sig
   module Compilation_unit : PrintableHashOrdered
-  include BaseId
+  include Identifiable
   val create : ?name:string -> Compilation_unit.t -> t
   val unit : t -> Compilation_unit.t
+  val name : t -> string option
+  val to_string : t -> string
 end
 
 module Id : functor (E : sig end) -> Id
@@ -117,22 +125,6 @@ module String_M : PrintableHashOrdered with type t = string
 module StringSet : ExtSet with module M := String_M
 module StringMap : ExtMap with module M := String_M
 module StringTbl : ExtHashtbl with module M := String_M
-
-(* CR mshinwell: We should use [Identifiable] above so everything is
-   uniform. *)
-module type Identifiable = sig
-  type t
-  module M : PrintableHashOrdered with type t = t
-  include PrintableHashOrdered with type t := M.t
-  module Set : ExtSet with module M := M
-  module Map : ExtMap with module M := M
-  module Tbl : ExtHashtbl with module M := M
-end
-
-module Identifiable : sig
-  module Make (P : PrintableHashOrdered) : Identifiable
-    with type t := P.t
-end
 
 module Int : Identifiable with type t = int
 

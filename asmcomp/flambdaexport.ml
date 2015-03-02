@@ -15,11 +15,8 @@ open Symbol
 open Abstract_identifiers
 open Flambda
 
-module Innerid = Id(struct end)
-module ExportId = UnitId(Innerid)(Compilation_unit)
-module EidMap = ExtMap(ExportId)
-module EidSet = ExtSet(ExportId)
-module EidTbl = ExtHashtbl(ExportId)
+module Innerid = Id (struct end)
+module Export_id = UnitId (Innerid) (Compilation_unit)
 
 type tag = int
 
@@ -38,27 +35,29 @@ type descr =
   | Value_closure of value_offset
   | Value_set_of_closures of value_closure
 
-and value_offset =
-  { fun_id : Closure_id.t;
-    closure : value_closure }
+and value_offset = {
+  fun_id : Closure_id.t;
+  closure : value_closure;
+}
 
-and value_closure =
-  { closure_id : Set_of_closures_id.t;
-    bound_var : approx Var_within_closure.Map.t;
-    results : approx Closure_id.Map.t }
+and value_closure = {
+  closure_id : Set_of_closures_id.t;
+  bound_var : approx Var_within_closure.Map.t;
+  results : approx Closure_id.Map.t;
+}
 
 and approx =
   | Value_unknown
-  | Value_id of ExportId.t
+  | Value_id of Export_id.t
   | Value_symbol of Symbol.t
 
 type exported = {
   functions : unit function_declarations Set_of_closures_id.Map.t;
   functions_off : unit function_declarations Closure_id.Map.t;
-  ex_values : descr EidMap.t Compilation_unit.Map.t;
+  ex_values : descr Export_id.Map.t Compilation_unit.Map.t;
   globals : approx Ident.Map.t;
-  id_symbol : Symbol.t EidMap.t Compilation_unit.Map.t;
-  symbol_id : ExportId.t SymbolMap.t;
+  id_symbol : Symbol.t Export_id.Map.t Compilation_unit.Map.t;
+  symbol_id : Export_id.t SymbolMap.t;
   offset_fun : int Closure_id.Map.t;
   offset_fv : int Var_within_closure.Map.t;
   constants : SymbolSet.t;
@@ -81,9 +80,9 @@ let empty_export = {
 }
 
 let find_ex_value eid map =
-  let unit = ExportId.unit eid in
+  let unit = Export_id.unit eid in
   let unit_map = Compilation_unit.Map.find unit map in
-  EidMap.find eid unit_map
+  Export_id.Map.find eid unit_map
 
 let find_description eid ex = find_ex_value eid ex.ex_values
 
@@ -94,38 +93,38 @@ let eidmap_disjoint_union m1 m2 =
        | None, Some v
        | Some v, None -> Some v
        | Some v1, Some v2 ->
-           Some (EidMap.disjoint_union v1 v2))
+           Some (Export_id.Map.disjoint_union v1 v2))
     m1 m2
 
 let nest_eid_map map =
   let add_map eid v map =
-    let unit = ExportId.unit eid in
+    let unit = Export_id.unit eid in
     let m = try Compilation_unit.Map.find unit map
-      with Not_found -> EidMap.empty in
-    Compilation_unit.Map.add unit (EidMap.add eid v m) map
+      with Not_found -> Export_id.Map.empty in
+    Compilation_unit.Map.add unit (Export_id.Map.add eid v m) map
   in
-  EidMap.fold add_map map Compilation_unit.Map.empty
+  Export_id.Map.fold add_map map Compilation_unit.Map.empty
 
 let print_approx ppf export =
   let values = export.ex_values in
   let open Format in
-  let printed = ref EidSet.empty in
+  let printed = ref Export_id.Set.empty in
   let printed_closure = ref Set_of_closures_id.Set.empty in
   let rec print_approx ppf = function
     | Value_unknown -> fprintf ppf "?"
     | Value_id id ->
-      if EidSet.mem id !printed
-      then fprintf ppf "(%a: _)" ExportId.print id
+      if Export_id.Set.mem id !printed
+      then fprintf ppf "(%a: _)" Export_id.print id
       else
         (try
            let descr = find_ex_value id values in
-           printed := EidSet.add id !printed;
+           printed := Export_id.Set.add id !printed;
            fprintf ppf "(%a: %a)"
-             ExportId.print id
+             Export_id.print id
              print_descr descr
          with Not_found ->
            fprintf ppf "(%a: Not available)"
-             ExportId.print id)
+             Export_id.print id)
     | Value_symbol sym -> Symbol.print ppf sym
   and print_descr ppf = function
     | Value_int i -> pp_print_int ppf i
@@ -167,18 +166,18 @@ let print_approx ppf export =
 let print_symbols ppf export =
   let open Format in
   let print_symbol eid sym =
-    fprintf ppf "%a -> %a@." Symbol.print sym ExportId.print eid
+    fprintf ppf "%a -> %a@." Symbol.print sym Export_id.print eid
   in
-   Compilation_unit.Map.iter (fun _ -> EidMap.iter print_symbol) export.id_symbol
+   Compilation_unit.Map.iter (fun _ -> Export_id.Map.iter print_symbol) export.id_symbol
 
 let print_all ppf export =
   let open Format in
   fprintf ppf "approxs@ %a@.@."
     print_approx export;
   fprintf ppf "id_symbol@ %a@.@."
-    (Compilation_unit.Map.print (EidMap.print Symbol.print)) export.id_symbol;
+    (Compilation_unit.Map.print (Export_id.Map.print Symbol.print)) export.id_symbol;
   fprintf ppf "symbol_id@ %a@.@."
-    (SymbolMap.print ExportId.print) export.symbol_id;
+    (SymbolMap.print Export_id.print) export.symbol_id;
   fprintf ppf "constants@ %a@.@."
     SymbolSet.print export.constants;
   fprintf ppf "functions@ %a@.@."
@@ -207,18 +206,18 @@ let merge e1 e2 =
 (* importing informations to build a pack: the global identifying the
    compilation unit of symbols is changed to be the pack one *)
 
-let rename_id_state = EidTbl.create 100
+let rename_id_state = Export_id.Tbl.create 100
 
 let import_eid_for_pack units pack id =
-  try EidTbl.find rename_id_state id
+  try Export_id.Tbl.find rename_id_state id
   with Not_found ->
-    let unit_id = ExportId.unit id in
+    let unit_id = Export_id.unit id in
     let id' =
       if Compilation_unit.Set.mem unit_id units
       then
-        ExportId.create ?name:(ExportId.name id) pack
+        Export_id.create ?name:(Export_id.name id) pack
       else id in
-    EidTbl.add rename_id_state id id';
+    Export_id.Tbl.add rename_id_state id id';
     id'
 
 let import_symbol_for_pack units pack symbol =
@@ -272,18 +271,17 @@ let functions_off functions =
   let aux _ f map = Variable.Map.fold (aux_fun f) f.funs map in
   Set_of_closures_id.Map.fold aux functions Closure_id.Map.empty
 
-
 let import_eidmap_for_pack units pack f map =
   nest_eid_map
     (Compilation_unit.Map.fold
-       (fun _ map acc -> EidMap.disjoint_union map acc)
+       (fun _ map acc -> Export_id.Map.disjoint_union map acc)
        (Compilation_unit.Map.map
           (fun map ->
-             EidMap.map_keys
+             Export_id.Map.map_keys
             (import_eid_for_pack units pack)
-            (EidMap.map f map))
+            (Export_id.Map.map f map))
           map)
-       EidMap.empty)
+       Export_id.Map.empty)
 
 let import_for_pack ~pack_units ~pack exp =
   let import_sym = import_symbol_for_pack pack_units pack in
@@ -313,4 +311,4 @@ let import_for_pack ~pack_units ~pack exp =
       kept_arguments = exp.kept_arguments } in
   res
 
-let clear_import_state () = EidTbl.clear rename_id_state
+let clear_import_state () = Export_id.Tbl.clear rename_id_state
