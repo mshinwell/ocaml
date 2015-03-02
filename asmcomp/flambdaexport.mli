@@ -10,7 +10,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Exported informations about a compilation unit *)
+(** Information about a compilation unit stored in .cmx files. *)
 
 open Ext_types
 open Symbol
@@ -29,7 +29,7 @@ type _ boxed_int =
   | Nativeint : nativeint boxed_int
 
 type descr =
-    Value_block of tag * approx array
+  | Value_block of tag * approx array
   | Value_int of int
   | Value_constptr of int
   | Value_float of float
@@ -40,15 +40,17 @@ type descr =
 
 and value_offset =
   { fun_id : Closure_id.t;
-    closure : value_closure; }
+    closure : value_closure;
+  }
 
 and value_closure =
   { closure_id : Set_of_closures_id.t;
     bound_var : approx Var_within_closure.Map.t;
-    results : approx Closure_id.Map.t }
+    results : approx Closure_id.Map.t;
+  }
 
 and approx =
-    Value_unknown
+  | Value_unknown
   | Value_id of ExportId.t
   | Value_symbol of Symbol.t
 
@@ -58,31 +60,30 @@ type exported = {
   ex_functions_off : unit Flambda.function_declarations Closure_id.Map.t;
   (** Code of exported functions indexed by offset identifier *)
   ex_values : descr EidMap.t Compilation_unit.Map.t;
-  (** Structure of exported values  *)
+  (** Structure of exported values *)
   ex_globals : approx Ident.Map.t;
-  (** Global variables provided by the unit: usualy only the top-level
-      module identifier, but packs contains multiple ones. *)
-
+  (** Global variables provided by the unit: usually only the top-level
+      module identifier, but there may be multiple identifiers in the case
+      of packs. *)
   ex_id_symbol : Symbol.t EidMap.t Compilation_unit.Map.t;
   ex_symbol_id : ExportId.t SymbolMap.t;
   (** Associates symbols and values *)
-
   ex_offset_fun : int Closure_id.Map.t;
   (** Positions of function pointers in their closures *)
   ex_offset_fv : int Var_within_closure.Map.t;
   (** Positions of value pointers in their closures *)
   ex_constants : SymbolSet.t;
-  (** Symbols that are effectively constants (the top-level module is
-      not always a constant for instance) *)
+  (** Symbols that are effectively constants (the top-level module is not
+      always a constant for instance) *)
   ex_constant_closures : Set_of_closures_id.Set.t;
   ex_kept_arguments : Variable.Set.t Set_of_closures_id.Map.t;
 }
 
 val empty_export : exported
 
-val merge : exported -> exported -> exported
-(** Union of export informations. Verify that there is no identifier
+(** Union of export informations.  Verifies that there is no identifier
     clash. *)
+val merge : exported -> exported -> exported
 
 val import_for_pack :
   pack_units:Compilation_unit.Set.t -> pack:Compilation_unit.t -> exported -> exported
