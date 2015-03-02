@@ -63,13 +63,13 @@ type exported = {
       module identifier, but there may be multiple identifiers in the case
       of packs. *)
   id_symbol : Symbol.t Export_id.Map.t Compilation_unit.Map.t;
-  symbol_id : Export_id.t SymbolMap.t;
+  symbol_id : Export_id.t Symbol.Map.t;
   (** Associates symbols and values *)
   offset_fun : int Closure_id.Map.t;
   (** Positions of function pointers in their closures *)
   offset_fv : int Var_within_closure.Map.t;
   (** Positions of value pointers in their closures *)
-  constants : SymbolSet.t;
+  constants : Symbol.Set.t;
   (** Symbols that are effectively constants (the top-level module is not
       always a constant for instance) *)
   constant_closures : Set_of_closures_id.Set.t;

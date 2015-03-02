@@ -15,10 +15,11 @@
 open Config
 open Misc
 open Clambda
-open Symbol
 open Abstract_identifiers
 open Cmx_format
 open Ext_types
+
+module Compilation_unit = Symbol.Compilation_unit
 
 type error =
     Not_a_unit_info of string
@@ -104,7 +105,7 @@ let make_symbol ?(unitname = current_unit.ui_symbol) idopt =
   | Some id -> prefix ^ "__" ^ id
 
 let current_unit_linkage_name () =
-  linkage_name
+  Symbol.linkage_name
     (make_symbol ~unitname:current_unit.ui_symbol None)
 
 let reset ?packname name =
@@ -238,20 +239,20 @@ let symbol_for_global id =
   end
 
 let unit_for_global id =
-  let sym_label = linkage_name (symbol_for_global id) in
+  let sym_label = Symbol.linkage_name (symbol_for_global id) in
   Compilation_unit.create (Ident.name id) sym_label
 
 let predefined_exception_compilation_unit =
-  Compilation_unit.create "__dummy__" (linkage_name "__dummy__")
+  Compilation_unit.create "__dummy__" (Symbol.linkage_name "__dummy__")
 
-let is_predefined_exception sym =
+let is_predefined_exception (sym : Symbol.t) =
   Compilation_unit.equal
     predefined_exception_compilation_unit
     sym.sym_unit
 
 let symbol_for_global' id =
   let open Symbol in
-  let sym_label = linkage_name (symbol_for_global id) in
+  let sym_label = Symbol.linkage_name (symbol_for_global id) in
   if Ident.is_predef_exn id then
     { sym_unit = predefined_exception_compilation_unit;
       sym_label }
@@ -320,7 +321,7 @@ let save_unit_info filename =
   write_unit_info current_unit filename
 
 let current_unit_linkage_name () =
-  linkage_name
+  Symbol.linkage_name
     (make_symbol ~unitname:current_unit.ui_symbol None)
 
 let current_unit () =
@@ -328,9 +329,10 @@ let current_unit () =
   | Some current_unit -> current_unit
   | None -> Misc.fatal_error "Compilenv.current_unit"
 
-let current_unit_symbol () =
+let current_unit_symbol () : Symbol.t =
   { sym_unit = current_unit ();
-    sym_label = current_unit_linkage_name () }
+    sym_label = current_unit_linkage_name ();
+  }
 
 let const_label = ref 0
 
@@ -432,10 +434,11 @@ let structured_constants () =
        (symbols, cst)
     ) structured_constants.strcst_all
 
-let new_const_symbol' () =
+let new_const_symbol' () : Symbol.t =
   let sym_label = new_const_symbol () in
   { sym_unit = current_unit ();
-    sym_label = linkage_name sym_label }
+    sym_label = Symbol.linkage_name sym_label;
+  }
 
 let concat_symbol unitname id =
   unitname ^ "__" ^ id
@@ -445,11 +448,13 @@ let closure_symbol fv =
   let unitname =
     Symbol.string_of_linkage_name
       (Compilation_unit.get_linkage_name compilation_unit) in
-  { Symbol.sym_unit = compilation_unit;
+  { Symbol.
+    sym_unit = compilation_unit;
     sym_label =
-      linkage_name
+      Symbol.linkage_name
         (concat_symbol unitname
-           ((Closure_id.unique_name fv) ^ "_closure")) }
+           ((Closure_id.unique_name fv) ^ "_closure"));
+  }
 
 let function_label fv =
   let open Symbol in
@@ -460,7 +465,6 @@ let function_label fv =
   (concat_symbol unitname (Closure_id.unique_name fv))
 
 let imported_closure =
-  let open Symbol in
   let open Flambda in
   let import_closure clos =
 
@@ -469,14 +473,14 @@ let imported_closure =
         (fun id _ acc ->
            let fun_id = Closure_id.wrap id in
            let sym = closure_symbol fun_id in
-           SymbolMap.add sym id acc)
-        clos.funs SymbolMap.empty in
+           Symbol.Map.add sym id acc)
+        clos.funs Symbol.Map.empty in
 
     let sym_map = orig_var_map clos in
 
     let f = function
       | Fsymbol (sym, ()) as e ->
-          (try Fvar(SymbolMap.find sym sym_map,()) with
+          (try Fvar(Symbol.Map.find sym sym_map,()) with
            | Not_found -> e)
       | e -> e in
 

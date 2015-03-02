@@ -279,7 +279,7 @@ and meet a1 a2 =
 module Import = struct
   open Flambdaexport
 
-  let reported_missing_symbols = SymbolTbl.create 0
+  let reported_missing_symbols = Symbol.Tbl.create 0
 
   let rec import_ex ex : t =
 
@@ -340,11 +340,11 @@ module Import = struct
     else
       let symbol_id_map =
         (Compilenv.approx_for_global sym.sym_unit).symbol_id in
-      try import_ex (SymbolMap.find sym symbol_id_map) with
+      try import_ex (Symbol.Map.find sym symbol_id_map) with
       | Not_found ->
-        if not (SymbolTbl.mem reported_missing_symbols sym)
+        if not (Symbol.Tbl.mem reported_missing_symbols sym)
         then begin
-          SymbolTbl.add reported_missing_symbols sym ();
+          Symbol.Tbl.add reported_missing_symbols sym ();
           Location.prerr_warning (Location.in_file "some_file")
             (Warnings.Missing_symbol_information
                (Format.asprintf "%a" Symbol.print sym,

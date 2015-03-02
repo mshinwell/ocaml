@@ -84,6 +84,6 @@ end
 
 include Printers
 
-module SymbolSet = ExtSet(Printers)
-module SymbolMap = ExtMap(Printers)
-module SymbolTbl = ExtHashtbl(Printers)
+module Set = ExtSet(Printers)
+module Map = ExtMap(Printers)
+module Tbl = ExtHashtbl(Printers)

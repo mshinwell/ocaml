@@ -146,14 +146,14 @@ let flambda ppf (size, lam) =
   if !Clflags.dump_flambda
   then begin
     Format.fprintf ppf "flambdasym@ %a@." Printflambda.flambda fl;
-    Symbol.SymbolMap.iter (fun sym lam ->
+    Symbol.Map.iter (fun sym lam ->
         Format.fprintf ppf "sym: %a@ %a@."
           Symbol.print sym
           Printflambda.flambda lam)
       const
   end;
   Flambdacheck.check ~current_compilation_unit ~flambdasym:true fl;
-  Symbol.SymbolMap.iter (fun _ lam ->
+  Symbol.Map.iter (fun _ lam ->
       Flambdacheck.check ~current_compilation_unit
         ~flambdasym:true ~cmxfile:true lam)
     const;
@@ -257,14 +257,14 @@ let gen_implementation ?toplevel ppf (size, lam) =
   if !Clflags.dump_flambda
   then begin
     Format.fprintf ppf "flambdasym@ %a@." Printflambda.flambda fl;
-    Symbol.SymbolMap.iter (fun sym lam ->
+    Symbol.Symbol.Map.iter (fun sym lam ->
         Format.fprintf ppf "sym: %a@ %a@."
           Symbol.print sym
           Printflambda.flambda lam)
       const
   end;
   Flambdacheck.check ~current_compilation_unit ~flambdasym:true fl;
-  Symbol.SymbolMap.iter (fun _ lam ->
+  Symbol.Symbol.Map.iter (fun _ lam ->
       Flambdacheck.check ~current_compilation_unit
         ~flambdasym:true ~cmxfile:true lam)
     const;

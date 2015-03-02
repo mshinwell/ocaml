@@ -25,19 +25,12 @@ open Ext_types
     The label must be globaly unique: two compilation units linked
     in the same program must not share labels *)
 
-
-(***********************************************************************)
-
 (* CR mshinwell for pchambart: [module Linkage_name] *)
 type linkage_name
 val linkage_name : string -> linkage_name
 val string_of_linkage_name : linkage_name -> string
 
-
-(***********************************************************************)
-
 module Compilation_unit : sig
-
   type t
   include Identifiable with type t := t
 
@@ -51,14 +44,15 @@ module Compilation_unit : sig
   val get_current_exn : unit -> t
 end
 
-(***********************************************************************)
-
-type t = { sym_unit : Compilation_unit.t; sym_label : linkage_name }
+type t = {
+  sym_unit : Compilation_unit.t;
+  sym_label : linkage_name;
+}
 
 module Printers : PrintableHashOrdered with type t = t
 
 include (PrintableHashOrdered with type t := t)
 
-module SymbolSet : ExtSet with module M := Printers
-module SymbolMap : ExtMap with module M := Printers
-module SymbolTbl : ExtHashtbl with module M := Printers
+module Set : ExtSet with module M := Printers
+module Map : ExtMap with module M := Printers
+module Tbl : ExtHashtbl with module M := Printers

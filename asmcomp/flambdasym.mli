@@ -18,5 +18,5 @@ val convert
    : compilation_unit:Symbol.Compilation_unit.t
   -> 'a Flambda.flambda
   -> unit Flambda.flambda
-       * unit Flambda.flambda Symbol.SymbolMap.t
+       * unit Flambda.flambda Symbol.Map.t
        * Flambdaexport.exported

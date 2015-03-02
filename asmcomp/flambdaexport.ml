@@ -57,10 +57,10 @@ type exported = {
   ex_values : descr Export_id.Map.t Compilation_unit.Map.t;
   globals : approx Ident.Map.t;
   id_symbol : Symbol.t Export_id.Map.t Compilation_unit.Map.t;
-  symbol_id : Export_id.t SymbolMap.t;
+  symbol_id : Export_id.t Symbol.Map.t;
   offset_fun : int Closure_id.Map.t;
   offset_fv : int Var_within_closure.Map.t;
-  constants : SymbolSet.t;
+  constants : Symbol.Set.t;
   constant_closures : Set_of_closures_id.Set.t;
   kept_arguments : Variable.Set.t Set_of_closures_id.Map.t;
 }
@@ -71,10 +71,10 @@ let empty_export = {
   ex_values =  Compilation_unit.Map.empty;
   globals = Ident.Map.empty;
   id_symbol =  Compilation_unit.Map.empty;
-  symbol_id = SymbolMap.empty;
+  symbol_id = Symbol.Map.empty;
   offset_fun = Closure_id.Map.empty;
   offset_fv = Var_within_closure.Map.empty;
-  constants = SymbolSet.empty;
+  constants = Symbol.Set.empty;
   constant_closures = Set_of_closures_id.Set.empty;
   kept_arguments = Set_of_closures_id.Map.empty;
 }
@@ -181,9 +181,9 @@ let print_all ppf export =
     (Compilation_unit.Map.print (Export_id.Map.print Symbol.print))
       export.id_symbol;
   fprintf ppf "symbol_id@ %a@.@."
-    (SymbolMap.print Export_id.print) export.symbol_id;
+    (Symbol.Map.print Export_id.print) export.symbol_id;
   fprintf ppf "constants@ %a@.@."
-    SymbolSet.print export.constants;
+    Symbol.Set.print export.constants;
   fprintf ppf "functions@ %a@.@."
     (Set_of_closures_id.Map.print Printflambda.function_declarations)
       export.functions
@@ -197,12 +197,12 @@ let merge e1 e2 =
     functions_off =
       Closure_id.Map.disjoint_union e1.functions_off e2.functions_off;
     id_symbol = eidmap_disjoint_union  e1.id_symbol e2.id_symbol;
-    symbol_id = SymbolMap.disjoint_union e1.symbol_id e2.symbol_id;
+    symbol_id = Symbol.Map.disjoint_union e1.symbol_id e2.symbol_id;
     offset_fun = Closure_id.Map.disjoint_union
         ~eq:int_eq e1.offset_fun e2.offset_fun;
     offset_fv = Var_within_closure.Map.disjoint_union
         ~eq:int_eq e1.offset_fv e2.offset_fv;
-    constants = SymbolSet.union e1.constants e2.constants;
+    constants = Symbol.Set.union e1.constants e2.constants;
     constant_closures =
       Set_of_closures_id.Set.union e1.constant_closures e2.constant_closures;
     kept_arguments =
@@ -315,9 +315,9 @@ let import_for_pack ~pack_units ~pack exp =
       offset_fv = exp.offset_fv;
       ex_values = import_eidmap import_desr exp.ex_values;
       id_symbol = import_eidmap import_sym exp.id_symbol;
-      symbol_id = SymbolMap.map_keys import_sym
-          (SymbolMap.map import_eid exp.symbol_id);
-      constants = SymbolSet.map import_sym exp.constants;
+      symbol_id = Symbol.Map.map_keys import_sym
+          (Symbol.Map.map import_eid exp.symbol_id);
+      constants = Symbol.Set.map import_sym exp.constants;
       constant_closures = exp.constant_closures;
       kept_arguments = exp.kept_arguments;
     }

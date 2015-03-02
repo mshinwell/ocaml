@@ -34,7 +34,7 @@ let list_closures expr constants =
     | e -> ()
   in
   Flambdaiter.iter aux expr;
-  SymbolMap.iter (fun _ flam -> Flambdaiter.iter aux flam) constants;
+  Symbol.Map.iter (fun _ flam -> Flambdaiter.iter aux flam) constants;
   !closures
 
 let reexported_offset extern_fun_offset_table extern_fv_offset_table expr =
@@ -77,7 +77,7 @@ let structured_constant_label expected_symbol ~shared cst =
 module type Param1 = sig
   type t
   val expr : t flambda
-  val constants : t flambda SymbolMap.t
+  val constants : t flambda Symbol.Map.t
 end
 
 module Offsets(P:Param1) = struct
@@ -141,7 +141,7 @@ module Offsets(P:Param1) = struct
   let res =
     let run flam = Flambdaiter.iter_toplevel iter flam in
     run P.expr;
-    SymbolMap.iter (fun _ -> run) P.constants;
+    Symbol.Map.iter (fun _ -> run) P.constants;
     !fun_offset_table, !fv_offset_table
 
 end
@@ -663,7 +663,7 @@ module Conv(P:Param2) = struct
     | _ -> assert false
 
   let constants =
-    SymbolMap.mapi
+    Symbol.Map.mapi
       (fun sym lam ->
          let ulam = conv empty_env ~expected_symbol:sym lam in
          structured_constant_for_symbol sym ulam)
@@ -675,7 +675,7 @@ end
 
 let convert (type a)
     ((expr:a flambda),
-     (constants:a flambda SymbolMap.t),
+     (constants:a flambda Symbol.Map.t),
      exported) =
   let closures = list_closures expr constants in
   let module P1 = struct
@@ -707,7 +707,7 @@ let convert (type a)
       offset_fv = add_ext_offset_fv fv_offset_table }
   in
   Compilenv.set_export_info export;
-  SymbolMap.iter
+  Symbol.Map.iter
     (fun sym cst ->
        let lbl = string_of_linkage_name sym.sym_label in
        Compilenv.add_exported_constant lbl)
