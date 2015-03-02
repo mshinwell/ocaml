@@ -177,7 +177,7 @@ module NotConstants(P:Param) = struct
     | Fsymbol(_sym,_) ->
       (* for a later patch: *)
       (* if not (SymbolSet.mem sym *)
-      (*           (Compilenv.approx_env ()).Flambdaexport.ex_constants) *)
+      (*           (Compilenv.approx_env ()).Flambdaexport.constants) *)
       (* then mark_curr curr *)
 
       (* Until we have informations from external modules, we consider

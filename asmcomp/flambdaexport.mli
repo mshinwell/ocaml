@@ -55,46 +55,49 @@ and approx =
   | Value_symbol of Symbol.t
 
 type exported = {
-  ex_functions : unit Flambda.function_declarations Set_of_closures_id.Map.t;
+  functions : unit Flambda.function_declarations Set_of_closures_id.Map.t;
   (** Code of exported functions indexed by function identifier *)
-  ex_functions_off : unit Flambda.function_declarations Closure_id.Map.t;
+  functions_off : unit Flambda.function_declarations Closure_id.Map.t;
   (** Code of exported functions indexed by offset identifier *)
   ex_values : descr EidMap.t Compilation_unit.Map.t;
   (** Structure of exported values *)
-  ex_globals : approx Ident.Map.t;
+  globals : approx Ident.Map.t;
   (** Global variables provided by the unit: usually only the top-level
       module identifier, but there may be multiple identifiers in the case
       of packs. *)
-  ex_id_symbol : Symbol.t EidMap.t Compilation_unit.Map.t;
-  ex_symbol_id : ExportId.t SymbolMap.t;
+  id_symbol : Symbol.t EidMap.t Compilation_unit.Map.t;
+  symbol_id : ExportId.t SymbolMap.t;
   (** Associates symbols and values *)
-  ex_offset_fun : int Closure_id.Map.t;
+  offset_fun : int Closure_id.Map.t;
   (** Positions of function pointers in their closures *)
-  ex_offset_fv : int Var_within_closure.Map.t;
+  offset_fv : int Var_within_closure.Map.t;
   (** Positions of value pointers in their closures *)
-  ex_constants : SymbolSet.t;
+  constants : SymbolSet.t;
   (** Symbols that are effectively constants (the top-level module is not
       always a constant for instance) *)
-  ex_constant_closures : Set_of_closures_id.Set.t;
-  ex_kept_arguments : Variable.Set.t Set_of_closures_id.Map.t;
+  constant_closures : Set_of_closures_id.Set.t;
+  kept_arguments : Variable.Set.t Set_of_closures_id.Map.t;
 }
 
 val empty_export : exported
 
-(** Union of export informations.  Verifies that there is no identifier
-    clash. *)
+(** Union of export information.  Verifies that there are no identifier
+    clashes. *)
 val merge : exported -> exported -> exported
 
-val import_for_pack :
-  pack_units:Compilation_unit.Set.t -> pack:Compilation_unit.t -> exported -> exported
 (** Transform the informations from [exported] to be suitable to
     be reexported as the informations for a pack named [pack]
     containing units [pack_units].
     It mainly change symbols of units [pack_units] to refer to
     [pack] instead. *)
+val import_for_pack
+   : pack_units:Compilation_unit.Set.t
+  -> pack:Compilation_unit.t
+  -> exported
+  -> exported
 
-val clear_import_state : unit -> unit
 (** Drops the state after importing several units in the same pack. *)
+val clear_import_state : unit -> unit
 
 val find_description : ExportId.t -> exported -> descr
 

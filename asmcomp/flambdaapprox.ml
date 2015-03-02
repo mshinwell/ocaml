@@ -297,7 +297,7 @@ module Import = struct
       | Value_closure { fun_id; closure = { closure_id; bound_var } } ->
         let bound_var = Var_within_closure.Map.map import_approx bound_var in
         let unchanging_params =
-          try Set_of_closures_id.Map.find closure_id ex_info.ex_kept_arguments with
+          try Set_of_closures_id.Map.find closure_id ex_info.kept_arguments with
           | Not_found -> assert false
         in
         value_closure
@@ -314,7 +314,7 @@ module Import = struct
       | Value_set_of_closures { closure_id; bound_var } ->
         let bound_var = Var_within_closure.Map.map import_approx bound_var in
         let unchanging_params =
-          try Set_of_closures_id.Map.find closure_id ex_info.ex_kept_arguments with
+          try Set_of_closures_id.Map.find closure_id ex_info.kept_arguments with
           | Not_found -> assert false
         in
         value_set_of_closures
@@ -339,7 +339,7 @@ module Import = struct
       value_unknown
     else
       let symbol_id_map =
-        (Compilenv.approx_for_global sym.sym_unit).ex_symbol_id in
+        (Compilenv.approx_for_global sym.sym_unit).symbol_id in
       try import_ex (SymbolMap.find sym symbol_id_map) with
       | Not_found ->
         if not (SymbolTbl.mem reported_missing_symbols sym)
@@ -366,7 +366,7 @@ module Import = struct
   let import_global id =
     let unit = Compilenv.unit_for_global id in
     import_approx
-      (Ident.Map.find id (Compilenv.approx_for_global unit).ex_globals)
+      (Ident.Map.find id (Compilenv.approx_for_global unit).globals)
 end
 
 let really_import_approx approx =

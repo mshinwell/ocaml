@@ -179,15 +179,15 @@ module Conv(P:Param2) = struct
   (* offsets of functions and free variables in closures comming from
      a linked module *)
   let extern_fun_offset_table =
-    (Compilenv.approx_env ()).Flambdaexport.ex_offset_fun
+    (Compilenv.approx_env ()).Flambdaexport.offset_fun
   let extern_fv_offset_table =
-    (Compilenv.approx_env ()).Flambdaexport.ex_offset_fv
+    (Compilenv.approx_env ()).Flambdaexport.offset_fv
   let ex_closures =
-    (Compilenv.approx_env ()).Flambdaexport.ex_functions_off
-  let ex_functions =
-    (Compilenv.approx_env ()).Flambdaexport.ex_functions
-  let ex_constant_closures =
-    (Compilenv.approx_env ()).Flambdaexport.ex_constant_closures
+    (Compilenv.approx_env ()).Flambdaexport.functions_off
+  let functions =
+    (Compilenv.approx_env ()).Flambdaexport.functions
+  let constant_closures =
+    (Compilenv.approx_env ()).Flambdaexport.constant_closures
 
   let is_current_unit unit =
     Compilation_unit.equal (Compilenv.current_unit ()) unit
@@ -219,7 +219,7 @@ module Conv(P:Param2) = struct
   let functions_declaration_position fid =
     try Local (Set_of_closures_id.Map.find fid P.functions) with
     | Not_found ->
-        try External (Set_of_closures_id.Map.find fid ex_functions) with
+        try External (Set_of_closures_id.Map.find fid functions) with
         | Not_found ->
             Not_declared
 
@@ -228,7 +228,7 @@ module Conv(P:Param2) = struct
     | Local { ident } ->
         Set_of_closures_id.Set.mem ident P.constant_closures
     | External { ident } ->
-        Set_of_closures_id.Set.mem ident ex_constant_closures
+        Set_of_closures_id.Set.mem ident constant_closures
     | Not_declared ->
         fatal_error (Format.asprintf "missing closure %a"
                        Closure_id.print cf)
@@ -238,7 +238,7 @@ module Conv(P:Param2) = struct
     | Local { ident } ->
         Set_of_closures_id.Set.mem ident P.constant_closures
     | External { ident } ->
-        Set_of_closures_id.Set.mem ident ex_constant_closures
+        Set_of_closures_id.Set.mem ident constant_closures
     | Not_declared ->
         fatal_error (Format.asprintf "missing closure %a"
                        Set_of_closures_id.print fid)
@@ -682,29 +682,29 @@ let convert (type a)
     type t = a
     let expr = expr
     let constants = constants
-    let constant_closures = exported.Flambdaexport.ex_constant_closures
+    let constant_closures = exported.Flambdaexport.constant_closures
   end in
   let fun_offset_table, fv_offset_table =
     let module O = Offsets(P1) in
     O.res
   in
   let extern_fun_offset_table =
-    (Compilenv.approx_env ()).Flambdaexport.ex_offset_fun in
+    (Compilenv.approx_env ()).Flambdaexport.offset_fun in
   let extern_fv_offset_table =
-    (Compilenv.approx_env ()).Flambdaexport.ex_offset_fv in
+    (Compilenv.approx_env ()).Flambdaexport.offset_fv in
   let add_ext_offset_fun, add_ext_offset_fv =
     reexported_offset extern_fun_offset_table extern_fv_offset_table expr in
   let module P2 = struct include P1
     let fun_offset_table = fun_offset_table
     let fv_offset_table = fv_offset_table
     let closures = closures
-    let functions = exported.Flambdaexport.ex_functions
+    let functions = exported.Flambdaexport.functions
   end in
   let module C = Conv(P2) in
   let export = let open Flambdaexport in
     { exported with
-      ex_offset_fun = add_ext_offset_fun fun_offset_table;
-      ex_offset_fv = add_ext_offset_fv fv_offset_table }
+      offset_fun = add_ext_offset_fun fun_offset_table;
+      offset_fv = add_ext_offset_fv fv_offset_table }
   in
   Compilenv.set_export_info export;
   SymbolMap.iter
