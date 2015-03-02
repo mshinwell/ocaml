@@ -40,6 +40,17 @@ let variables_bound_by_the_closure cf
     (Variable.Set.diff func.free_variables params)
     functions
 
+let all_used_vars_defined_within_closures t =
+  let used = ref Var_within_closure.Set.empty in
+  let aux (expr : _ Flambda.t) =
+    match expr with
+    | Fvariable_in_closure ({ vc_var }, _) ->
+       used := Var_within_closure.Set.add vc_var !used
+    | e -> ()
+  in
+  Flambdaiter.iter aux t;
+  !used
+
 let data_at_toplevel_node (expr : _ Flambda.t) =
   match expr with
   | Fsymbol (_,data)
@@ -94,6 +105,76 @@ let description_of_toplevel_node (expr : _ Flambda.t) =
   | Fassign(id, lam,data) -> "assign"
   | Fevent(lam, ev, data) -> "event"
   | Funreachable _ -> "unreachable"
+
+let expression_free_variables (expr : _ Flambda.t) =
+  match expr with
+  | Fvar (id,_) -> Variable.Set.singleton id
+  | Fassign (id,_,_) -> Variable.Set.singleton id
+  | Fset_of_closures ({cl_free_var; cl_specialised_arg},_) ->
+      let set = Variable.Map.keys (Variable.Map.revert cl_specialised_arg) in
+      Variable.Map.fold (fun _ expr set ->
+          (* HACK:
+             This is not needed, but it avoids moving lets inside free_vars *)
+          match (expr : _ Flambda.t) with
+          | Fvar(var, _) -> Variable.Set.add var set
+          | _ -> set)
+        cl_free_var set
+  | _ -> Variable.Set.empty
+
+let subexpression_bound_variables (expr : _ Flambda.t) =
+  match expr with
+  | Ftrywith(body,id,handler,_) ->
+    [Variable.Set.singleton id, handler;
+     Variable.Set.empty, body]
+  | Ffor(id, lo, hi, _, body, _) ->
+    [Variable.Set.empty, lo;
+     Variable.Set.empty, hi;
+     Variable.Set.singleton id, body]
+  | Flet ( _, id, def, body,_) ->
+    [Variable.Set.empty, def;
+     Variable.Set.singleton id, body]
+  | Fletrec (defs, body,_) ->
+    let vars = Variable.Set.of_list (List.map fst defs) in
+    let defs = List.map (fun (_,def) -> vars, def) defs in
+    (vars, body) :: defs
+  | Fstaticcatch (_,ids,body,handler,_) ->
+    [Variable.Set.empty, body;
+     Variable.Set.of_list ids, handler]
+  | Fset_of_closures ({ cl_fun; cl_free_var },_) ->
+    let free_vars =
+      List.map (fun (_, def) -> Variable.Set.empty, def)
+        (Variable.Map.bindings cl_free_var) in
+    let funs =
+      List.map (fun (_, (fun_def : _ Flambda.function_declaration)) ->
+          fun_def.free_variables, fun_def.body)
+        (Variable.Map.bindings cl_fun.funs)in
+    funs @ free_vars
+  | e ->
+    List.map (fun s -> Variable.Set.empty, s) (Flambdaiter.subexpressions e)
+
+let free_variables (tree : _ Flambda.t) =
+  let free = ref Variable.Set.empty in
+  let bound = ref Variable.Set.empty in
+  let add id =
+    if not (Variable.Set.mem id !free) then free := Variable.Set.add id !free
+  in
+  let aux (tree : _ Flambda.t) =
+    match tree with
+    | Fvar (id,_) -> add id
+    | Fassign (id,_,_) -> add id
+    | Fset_of_closures ({cl_specialised_arg},_) ->
+      Variable.Map.iter (fun _ id -> add id) cl_specialised_arg
+    | Ftrywith(_,id,_,_)
+    | Ffor(id, _, _, _, _, _)
+    | Flet ( _, id, _, _,_) -> bound := Variable.Set.add id !bound
+    | Fletrec (l, _,_) ->
+      List.iter (fun (id,_) -> bound := Variable.Set.add id !bound) l
+    | Fstaticcatch (_,ids,_,_,_) ->
+      List.iter (fun id -> bound := Variable.Set.add id !bound) ids
+    | _ -> ()
+  in
+  Flambdaiter.iter_toplevel aux tree;
+  Variable.Set.diff !free !bound
 
 let recursive_functions ({ funs } : _ Flambda.function_declarations) =
   let function_variables = Variable.Map.keys funs in
@@ -242,7 +323,7 @@ let fold_over_exprs_for_variables_bound_by_closure ~fun_id ~clos_id ~clos
     (variables_bound_by_the_closure fun_id clos) init
 
 let make_closure_declaration ~id ~body ~params : _ Flambda.t =
-  let free_variables = Flambdaiter.free_variables body in
+  let free_variables = free_variables body in
   let param_set = Variable.Set.of_list params in
   if not (Variable.Set.subset param_set free_variables) then begin
     Misc.fatal_error "Flambdautils.make_closure_declaration"
@@ -508,3 +589,5 @@ let unchanging_params_in_recursion (decls : _ Flambda.function_declarations) =
     decls.funs Variable.Set.empty
   in
   Variable.Set.diff variables not_unchanging
+
+

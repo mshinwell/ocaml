@@ -28,7 +28,7 @@ val find_declaration_variable :
     [decl]. *)
 
 val find_free_variable :
-  Var_within_closure.t -> 'a Flambda.fset_of_closures -> 'a Flambda.flambda
+  Var_within_closure.t -> 'a Flambda.fset_of_closures -> 'a Flambda.t
 (** [find_free_variable v clos] raises [Not_found] if [c] is not in [clos]. *)
 
 (** Utility functions *)
@@ -46,13 +46,22 @@ val variables_bound_by_the_closure :
     [f], [g] or [h] are bound in any of the closures for [f], [g] and [h].
 *)
 
-val can_be_merged : 'a Flambda.flambda -> 'a Flambda.flambda -> bool
+(** All variables used by a given expression that are defined within
+    closures.  (In other words, the union of all variables contained within
+    [Fvariable_in_closure] nodes.) *)
+(* CR mshinwell: we should fix the naming of [Fvariable_in_closure] vs.
+   [Var_within_closure]. *)
+val all_used_vars_defined_within_closures
+   : _ Flambda.t
+  -> Var_within_closure.Set.t
+
+val can_be_merged : 'a Flambda.t -> 'a Flambda.t -> bool
 (** If [can_be_merged f1 f2] is [true], it is safe to merge switch
     branches containing [f1] and [f2]. *)
 
-val data_at_toplevel_node : 'a Flambda.flambda -> 'a
+val data_at_toplevel_node : 'a Flambda.t -> 'a
 
-val description_of_toplevel_node : 'a Flambda.flambda -> string
+val description_of_toplevel_node : 'a Flambda.t -> string
 
 val recursive_functions : 'a Flambda.function_declarations -> Variable.Set.t
 (** Recursive functions are the one that can call themselves or call
@@ -68,7 +77,7 @@ val recursive_functions : 'a Flambda.function_declarations -> Variable.Set.t
 (** Sharing key *)
 (* CR mshinwell for pchambart: this needs a proper comment as discussed *)
 type sharing_key
-val make_key : 'a Flambda.flambda -> sharing_key option
+val make_key : 'a Flambda.t -> sharing_key option
 
 (* Fold over the variables bound by a given closure, at the same time
    creating [Fvariable_in_closure] expressions to access them. *)
@@ -77,7 +86,7 @@ val fold_over_exprs_for_variables_bound_by_closure
   -> clos_id:Variable.t
   -> clos:'a Flambda.function_declarations
   -> init:'b
-  -> f:(acc:'b -> var:Variable.t -> expr:Expr_id.t Flambda.flambda -> 'b)
+  -> f:(acc:'b -> var:Variable.t -> expr:Expr_id.t Flambda.t -> 'b)
   -> 'b
 
 (* Given an expression, freshen all variables within it, and form a function
@@ -87,9 +96,9 @@ val fold_over_exprs_for_variables_bound_by_closure
    free variables of [body]. *)
 val make_closure_declaration
    : id:Variable.t
-  -> body:Expr_id.t Flambda.flambda
+  -> body:Expr_id.t Flambda.t
   -> params:Variable.t list
-  -> Expr_id.t Flambda.flambda
+  -> Expr_id.t Flambda.t
 
 (* [unchanging_params_in_recursion] calculates the set of parameters whose
    values are known not to change during the execution of a recursive
@@ -104,5 +113,13 @@ val make_closure_declaration
      let rec f x l = List.iter (f x) l
 *)
 val unchanging_params_in_recursion
-   : 'a Flambda.function_declarations
+   : _ Flambda.function_declarations
   -> Variable.Set.t
+
+val free_variables : _ Flambda.t -> Variable.Set.t
+
+val expression_free_variables : _ Flambda.t -> Variable.Set.t
+
+val subexpression_bound_variables
+   : 'a Flambda.t
+  -> (Variable.Set.t * 'a Flambda.t) list

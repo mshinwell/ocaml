@@ -110,6 +110,8 @@ type 'a flambda =
   | Fclosure of 'a ffunction * 'a
   (* CR mshinwell for pchambart: rename to [Fvar_within_closure] to match
      [Var_within_closure]? *)
+  (** A variable in a closure can either be used by the closure itself
+      or by an inlined version of the function. *)
   | Fvariable_in_closure of 'a fvariable_in_closure * 'a
   | Flet of let_kind * Variable.t * 'a flambda * 'a flambda * 'a
   | Fletrec of (Variable.t * 'a flambda) list * 'a flambda * 'a

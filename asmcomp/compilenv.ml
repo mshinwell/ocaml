@@ -486,14 +486,13 @@ let imported_closure =
           (fun ff ->
              let body = Flambdaiter.map_toplevel f ff.body in
              let body = Flambdaiter.map_data(fun () -> Expr_id.create ()) body in
-             let free_variables = Flambdaiter.free_variables body in
+             let free_variables = Flambdautils.free_variables body in
              { ff with body; free_variables })
           clos.funs } in
   let aux fun_id =
     let ex_info = approx_env () in
-    let closure = Set_of_closures_id.Map.find fun_id ex_info.Flambdaexport.ex_functions in
-    let cl = import_closure closure in
-    cl
+    import_closure
+      (Set_of_closures_id.Map.find fun_id ex_info.Flambdaexport.ex_functions)
   in
   Set_of_closures_id.Tbl.memoize imported_closure_table aux
 

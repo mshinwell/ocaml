@@ -719,7 +719,7 @@ and transform_set_of_closures_expression env r cl annot =
       Variable.Set.fold
         (fun id r -> R.exit_scope r id)
         ffun.free_variables r in
-    let free_variables = Flambdaiter.free_variables body in
+    let free_variables = Flambdautils.free_variables body in
     Variable.Map.add fid { ffun with body; free_variables } funs,
     used_params, r in
 
@@ -734,12 +734,16 @@ and transform_set_of_closures_expression env r cl annot =
       (fun id _ -> Variable.Set.mem id used_params)
       cl_specialised_arg in
 
-  let r = Variable.Map.fold (fun _id' v acc -> R.use_var acc v) cl_specialised_arg r in
+  let r =
+    Variable.Map.fold (fun _id' v acc -> R.use_var acc v) cl_specialised_arg r
+  in
   let ffuns = { ffuns with funs } in
 
   let unchanging_params = Flambdautils.unchanging_params_in_recursion ffuns in
 
-  let closure = { internal_closure with ffunctions = ffuns; unchanging_params } in
+  let closure =
+    { internal_closure with ffunctions = ffuns; unchanging_params }
+  in
   let r = Variable.Map.fold (fun id _ r -> R.exit_scope r id) ffuns.funs r in
   Fset_of_closures ({cl_fun = ffuns; cl_free_var = Variable.Map.map fst fv;
              cl_specialised_arg}, annot),

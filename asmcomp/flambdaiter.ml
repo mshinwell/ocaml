@@ -285,20 +285,6 @@ let map_general ~toplevel f tree =
 let map f tree = map_general ~toplevel:false f tree
 let map_toplevel f tree = map_general ~toplevel:true f tree
 
-let expression_free_variables = function
-  | Fvar (id,_) -> Variable.Set.singleton id
-  | Fassign (id,_,_) -> Variable.Set.singleton id
-  | Fset_of_closures ({cl_free_var; cl_specialised_arg},_) ->
-      let set = Variable.Map.keys (Variable.Map.revert cl_specialised_arg) in
-      Variable.Map.fold (fun _ expr set ->
-          (* HACK:
-             This is not needed, but it avoids moving lets inside free_vars *)
-          match expr with
-          | Fvar(var, _) -> Variable.Set.add var set
-          | _ -> set)
-        cl_free_var set
-  | _ -> Variable.Set.empty
-
 let fold_subexpressions f acc = function
   | Ftrywith(body,id,handler,d) ->
       let acc, body = f acc Variable.Set.empty body in
@@ -455,59 +441,6 @@ let fold_subexpressions f acc = function
     | Fconst _
     | Funreachable _) as e ->
       acc, e
-
-let subexpression_bound_variables = function
-  | Ftrywith(body,id,handler,_) ->
-      [Variable.Set.singleton id, handler;
-       Variable.Set.empty, body]
-  | Ffor(id, lo, hi, _, body, _) ->
-      [Variable.Set.empty, lo;
-       Variable.Set.empty, hi;
-       Variable.Set.singleton id, body]
-  | Flet ( _, id, def, body,_) ->
-      [Variable.Set.empty, def;
-       Variable.Set.singleton id, body]
-  | Fletrec (defs, body,_) ->
-      let vars = Variable.Set.of_list (List.map fst defs) in
-      let defs = List.map (fun (_,def) -> vars, def) defs in
-      (vars, body) :: defs
-  | Fstaticcatch (_,ids,body,handler,_) ->
-      [Variable.Set.empty, body;
-       Variable.Set.of_list ids, handler]
-  | Fset_of_closures ({ cl_fun; cl_free_var },_) ->
-      let free_vars =
-        List.map (fun (_, def) -> Variable.Set.empty, def)
-          (Variable.Map.bindings cl_free_var) in
-      let funs =
-        List.map (fun (_, fun_def) ->
-            fun_def.free_variables, fun_def.body)
-          (Variable.Map.bindings cl_fun.funs)in
-      funs @ free_vars
-  | e ->
-      List.map (fun s -> Variable.Set.empty, s) (subexpressions e)
-
-let free_variables tree =
-  let free = ref Variable.Set.empty in
-  let bound = ref Variable.Set.empty in
-  let add id =
-    if not (Variable.Set.mem id !free) then free := Variable.Set.add id !free in
-  let aux = function
-    | Fvar (id,_) -> add id
-    | Fassign (id,_,_) -> add id
-    | Fset_of_closures ({cl_specialised_arg},_) ->
-        Variable.Map.iter (fun _ id -> add id) cl_specialised_arg
-    | Ftrywith(_,id,_,_)
-    | Ffor(id, _, _, _, _, _)
-    | Flet ( _, id, _, _,_) ->
-        bound := Variable.Set.add id !bound
-    | Fletrec (l, _,_) ->
-        List.iter (fun (id,_) -> bound := Variable.Set.add id !bound) l
-    | Fstaticcatch (_,ids,_,_,_) ->
-        List.iter (fun id -> bound := Variable.Set.add id !bound) ids
-    | _ -> ()
-  in
-  iter_toplevel aux tree;
-  Variable.Set.diff !free !bound
 
 let map_data (type t1) (type t2) (f:t1 -> t2) (tree:t1 flambda) : t2 flambda =
   let rec mapper : t1 flambda -> t2 flambda = function
