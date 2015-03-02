@@ -10,7 +10,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Symbol
+(* Detection of non-constant values. *)
+
 open Abstract_identifiers
 
 type constant_result = {
@@ -18,11 +19,13 @@ type constant_result = {
   not_constant_closure : Set_of_closures_id.Set.t;
 }
 
-val not_constants :
-  for_clambda:bool -> compilation_unit:Compilation_unit.t ->
-  'a Flambda.flambda -> constant_result
 (** [not_constant ~for_clambda expr]
     If for_clambda is true, are marked constant only expressions that can
     effectively be compiled to constants by Clambdagen.
     When for_clambda is false, field access to a constant are not considered
     constant *)
+val not_constants
+   : for_clambda:bool
+  -> compilation_unit:Symbol.Compilation_unit.t
+  -> 'a Flambda.t
+  -> constant_result

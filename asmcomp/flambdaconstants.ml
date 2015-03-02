@@ -10,8 +10,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* Detection of not constant values *)
-
 (* This cannot be done in a single recursive pass due to expressions like:
 
   let ... =
@@ -65,9 +63,7 @@ module type Param = sig
   val compilation_unit : Compilation_unit.t
 end
 
-module NotConstants(P:Param) = struct
-
-
+module NotConstants (P:Param) = struct
   let for_clambda = P.for_clambda
   let compilation_unit = P.compilation_unit
 
@@ -84,7 +80,8 @@ module NotConstants(P:Param) = struct
   (* if the table associates [v1;v2;...;vn] to v, it represents
      v in NC => v1 in NC /\ v2 in NC ... /\ vn in NC *)
   let id_dep_table : dep list Variable.Tbl.t = Variable.Tbl.create 100
-  let fun_dep_table : dep list Set_of_closures_id.Tbl.t = Set_of_closures_id.Tbl.create 100
+  let fun_dep_table : dep list Set_of_closures_id.Tbl.t =
+    Set_of_closures_id.Tbl.create 100
   let glob_dep_table : dep list Int.Tbl.t = Int.Tbl.create 100
 
   (* adds in the tables 'dep in NC => curr in NC' *)
