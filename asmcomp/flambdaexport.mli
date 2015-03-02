@@ -12,11 +12,11 @@
 
 (** Information about a compilation unit stored in .cmx files. *)
 
-open Ext_types
 open Symbol
 open Abstract_identifiers
 
-module Export_id : UnitId with module Compilation_unit := Compilation_unit
+module Export_id : Ext_types.UnitId
+   with module Compilation_unit := Compilation_unit
 
 type tag = int
 
@@ -98,13 +98,10 @@ val clear_import_state : unit -> unit
 
 val find_description : Export_id.t -> exported -> descr
 
-val nest_eid_map : 'a Export_id.Map.t -> 'a Export_id.Map.t Compilation_unit.Map.t
-
-(**/**)
-(* debug printing functions *)
+val nest_eid_map
+   : 'a Export_id.Map.t
+  -> 'a Export_id.Map.t Compilation_unit.Map.t
 
 val print_approx : Format.formatter -> exported -> unit
-
 val print_symbols : Format.formatter -> exported -> unit
-
 val print_all : Format.formatter -> exported -> unit
