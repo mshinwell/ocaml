@@ -382,7 +382,7 @@ let add_structured_constant lbl cst ~shared =
   structured_constants := res;
   name
 
-let cannonical_symbol lbl =
+let canonical_symbol lbl =
   try StringMap.find lbl (!structured_constants).strcst_original
   with Not_found -> lbl
 
@@ -414,6 +414,13 @@ let new_structured_constant cst ~shared =
     lbl
 let clear_structured_constants () =
   structured_constants := structured_constants_empty
+
+let structured_constant_label (expected_symbol : Symbol.t option) ~shared cst =
+  match expected_symbol with
+  | None -> new_structured_constant cst ~shared
+  | Some sym ->
+    let lbl = Symbol.string_of_linkage_name sym.sym_label in
+    add_structured_constant lbl cst ~shared
 
 let add_exported_constant s =
   Hashtbl.replace exported_constants s ()

@@ -18,21 +18,12 @@ type ('a,'b) declaration_position =
   | External of 'b
   | Not_declared
 
-let list_closures expr constants =
-  let closures = ref Closure_id.Map.empty in
-  Flambdautils.list_closures expr ~closures;
-  Symbol.Map.iter (fun _ expr -> Flambdautils.list_closures expr ~closures)
-      constants;
-  !closures
+type const_lbl =
+  | Lbl of string
+  | No_lbl
+  | Not_const
 
-let structured_constant_label (expected_symbol : Symbol.t option) ~shared cst =
-  match expected_symbol with
-  | None -> Compilenv.new_structured_constant cst ~shared
-  | Some sym ->
-    let lbl = Symbol.string_of_linkage_name sym.sym_label in
-    Compilenv.add_structured_constant lbl cst ~shared
-
-module type Param2 = sig
+module Conv (P : sig
   type t
   val expr : t Flambda.t
   val constants : t Flambda.t Symbol.Map.t
@@ -41,14 +32,7 @@ module type Param2 = sig
   val closures : t Flambda.function_declarations Closure_id.Map.t
   val constant_closures : Set_of_closures_id.Set.t
   val functions : unit Flambda.function_declarations Set_of_closures_id.Map.t
-end
-
-type const_lbl =
-  | Lbl of string
-  | No_lbl
-  | Not_const
-
-module Conv (P : Param2) = struct
+end) = struct
   module Storer =
     Switch.Store (struct
       type t = P.t Flambda.t
@@ -69,9 +53,6 @@ module Conv (P : Param2) = struct
   let ex_closures = (Compilenv.approx_env ()).functions_off
   let functions = (Compilenv.approx_env ()).functions
   let constant_closures = (Compilenv.approx_env ()).constant_closures
-
-  let is_current_unit unit =
-    Compilation_unit.equal (Compilenv.current_unit ()) unit
 
   let get_fun_offset off =
     try
@@ -159,7 +140,7 @@ module Conv (P : Param2) = struct
 
     | Fsymbol (sym,_) ->
         let lbl =
-          Compilenv.cannonical_symbol
+          Compilenv.canonical_symbol
             (Symbol.string_of_linkage_name sym.sym_label)
         in
         Uconst (Uconst_ref
@@ -277,11 +258,14 @@ module Conv (P : Param2) = struct
         let args = conv_list env args in
         begin match constant_list args with
         | None ->
-            Uprim(p, args, dbg)
+          Uprim(p, args, dbg)
         | Some l ->
-            let cst : Clambda.ustructured_constant = Uconst_block (tag,l) in
-            let lbl = structured_constant_label expected_symbol ~shared:true cst in
-            Uconst(Uconst_ref (lbl, Some (cst)))
+          let cst : Clambda.ustructured_constant = Uconst_block (tag,l) in
+          let lbl =
+            Compilenv.structured_constant_label expected_symbol ~shared:true
+              cst
+          in
+          Uconst(Uconst_ref (lbl, Some (cst)))
         end
 
     | Fprim(p, args, dbg, _) ->
@@ -502,7 +486,9 @@ module Conv (P : Param2) = struct
   and conv_const expected_symbol cst =
     let open Asttypes in
     let str ~shared cst : Clambda.uconstant =
-      let name = structured_constant_label expected_symbol ~shared cst in
+      let name =
+        Compilenv.structured_constant_label expected_symbol ~shared cst
+      in
       Uconst_ref (name, Some cst)
     in
     match cst with
@@ -544,10 +530,10 @@ module Conv (P : Param2) = struct
     match ulambda with
     | Uconst(Uconst_ref (lbl', Some cst)) ->
       let lbl =
-        Compilenv.cannonical_symbol
+        Compilenv.canonical_symbol
           (Symbol.string_of_linkage_name sym.sym_label)
       in
-      assert(lbl = Compilenv.cannonical_symbol lbl');
+      assert(lbl = Compilenv.canonical_symbol lbl');
       cst
     (* | Uconst(Uconst_ref(None, Some cst)) -> cst *)
     | _ -> assert false
@@ -566,7 +552,13 @@ let convert (type a)
     ((expr : a Flambda.t),
      (constants : a Flambda.t Symbol.Map.t),
      exported) =
-  let closures = list_closures expr constants in
+  let closures =
+    let closures = ref Closure_id.Map.empty in
+    Flambdautils.list_closures expr ~closures;
+    Symbol.Map.iter (fun _ expr -> Flambdautils.list_closures expr ~closures)
+        constants;
+    !closures
+  in
   let module P1 = struct
     type t = a
     let expr = expr

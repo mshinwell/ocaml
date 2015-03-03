@@ -19,7 +19,7 @@ Transform an expression to prepare conversion to clambda
 - build value approximations for export
 
 During symbol assignment, some alias can be created (when building let rec for instance).
-They are replaced by their cannonical representent in the Prepare functor application.
+They are replaced by their canonical representent in the Prepare functor application.
 
 Then the tables needed to build the Flambdaexport.exported type are build.
 *)
@@ -803,7 +803,7 @@ module Prepare(P:Param2) = struct
   open P
 
   (*** Preparing export informations: Replacing every symbol by its
-       cannonical representant ***)
+       canonical representant ***)
 
   let canonical_symbol s = canonical_symbol s infos
 
