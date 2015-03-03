@@ -20,18 +20,9 @@ type ('a,'b) declaration_position =
 
 let list_closures expr constants =
   let closures = ref Closure_id.Map.empty in
-  let aux (expr : _ Flambda.t) =
-    match expr with
-    | Fset_of_closures({ cl_fun = functs; cl_free_var = fv }, data) ->
-        let add off_id _ map =
-          Closure_id.Map.add
-            (Closure_id.wrap off_id)
-            functs map in
-        closures := Variable.Map.fold add functs.funs !closures;
-    | e -> ()
-  in
-  Flambdaiter.iter aux expr;
-  Symbol.Map.iter (fun _ flam -> Flambdaiter.iter aux flam) constants;
+  Flambdautils.list_closures expr ~closures;
+  Symbol.Map.iter (fun _ expr -> Flambdautils.list_closures expr ~closures)
+      constants;
   !closures
 
 let structured_constant_label (expected_symbol : Symbol.t option) ~shared cst =

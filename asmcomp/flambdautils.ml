@@ -590,4 +590,15 @@ let unchanging_params_in_recursion (decls : _ Flambda.function_declarations) =
   in
   Variable.Set.diff variables not_unchanging
 
-
+let list_closures expr ~closures =
+  let aux (expr : _ Flambda.t) =
+    match expr with
+    | Fset_of_closures({ cl_fun = functs; cl_free_var = fv }, data) ->
+        let add off_id _ map =
+          Closure_id.Map.add
+            (Closure_id.wrap off_id)
+            functs map in
+        closures := Variable.Map.fold add functs.funs !closures;
+    | e -> ()
+  in
+  Flambdaiter.iter aux expr

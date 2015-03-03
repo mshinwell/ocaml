@@ -124,3 +124,10 @@ val expression_free_variables : _ Flambda.t -> Variable.Set.t
 val subexpression_bound_variables
    : 'a Flambda.t
   -> (Variable.Set.t * 'a Flambda.t) list
+
+(* [list_closures expr ~closures] adds all closure identifiers defined in
+   [expr] to [closures]. *)
+val list_closures
+   : 'a Flambda.t
+  -> closures:'a Flambda.function_declarations Closure_id.Map.t ref
+  -> unit
