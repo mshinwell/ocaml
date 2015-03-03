@@ -34,117 +34,17 @@ let list_closures expr constants =
   Symbol.Map.iter (fun _ flam -> Flambdaiter.iter aux flam) constants;
   !closures
 
-let reexported_offset extern_fun_offset_table extern_fv_offset_table expr =
-  let set_fun = ref Closure_id.Set.empty in
-  let set_fv = ref Var_within_closure.Set.empty in
-  let aux (expr : _ Flambda.t) =
-    match expr with
-    | Fvariable_in_closure({vc_var = env_var; vc_fun = env_fun_id}, _) ->
-        set_fun := Closure_id.Set.add env_fun_id !set_fun;
-        set_fv := Var_within_closure.Set.add env_var !set_fv;
-    | Fclosure({fu_fun = id; fu_relative_to = rel}, _) ->
-        let set = match rel with
-          | None -> !set_fun
-          | Some rel -> Closure_id.Set.add rel !set_fun in
-        set_fun := Closure_id.Set.add id set;
-    | e -> ()
-  in
-  Flambdaiter.iter aux expr;
-  let f extern_map offset new_map =
-    try
-      Closure_id.Map.add offset (Closure_id.Map.find offset extern_map) new_map
-    with Not_found -> new_map (* local function *)
-  in
-  let f' extern_map offset new_map =
-    try
-      Var_within_closure.Map.add offset (Var_within_closure.Map.find offset extern_map) new_map
-    with Not_found -> new_map (* local function *)
-  in
-  let fun_map = Closure_id.Set.fold (f extern_fun_offset_table) !set_fun in
-  let fv_map = Var_within_closure.Set.fold (f' extern_fv_offset_table) !set_fv in
-  fun_map, fv_map
-
 let structured_constant_label (expected_symbol : Symbol.t option) ~shared cst =
   match expected_symbol with
-  | None ->
-      Compilenv.new_structured_constant cst ~shared
+  | None -> Compilenv.new_structured_constant cst ~shared
   | Some sym ->
-      let lbl = Symbol.string_of_linkage_name sym.sym_label in
-      Compilenv.add_structured_constant lbl cst ~shared
+    let lbl = Symbol.string_of_linkage_name sym.sym_label in
+    Compilenv.add_structured_constant lbl cst ~shared
 
-module type Param1 = sig
+module type Param2 = sig
   type t
   val expr : t Flambda.t
   val constants : t Flambda.t Symbol.Map.t
-end
-
-module Offsets (P : Param1) = struct
-  module Storer =
-    Switch.Store (struct
-      type t = P.t Flambda.t
-      type key = Flambdautils.sharing_key
-      let make_key = Flambdautils.make_key
-    end)
-
-  (* The offset table associate a function label to its offset
-     inside a closure *)
-  let fun_offset_table = ref Closure_id.Map.empty
-  (* The offset table associate a free variable to its offset inside a
-     closure *)
-  let fv_offset_table = ref Var_within_closure.Map.empty
-
-  let rec iter (expr : _ Flambda.t) =
-    match expr with
-    | Fset_of_closures({cl_fun = funct; cl_free_var = fv}, _) ->
-        iter_closure funct fv
-    | _ -> ()
-
-  and iter_closure functs fv =
-    let funct = Variable.Map.bindings functs.funs in
-    let fv = Variable.Map.bindings fv in
-
-    (* build the table mapping the function to the offset of its code
-       pointer inside the closure value *)
-    let aux_fun_offset (map,env_pos) (id, func) =
-      let pos = env_pos + 1 in
-      let arity = Flambdautils.function_arity func in
-      let env_pos = env_pos + 1 +
-                    (if arity <> 1 then 3 else 2) in
-      let map = Closure_id.Map.add (Closure_id.wrap id) pos map in
-      (map,env_pos)
-    in
-    let fun_offset, fv_pos =
-      List.fold_left aux_fun_offset (!fun_offset_table, -1) funct in
-
-    (* Adds the mapping of free variables to their offset. It is not
-       used inside the body of the function: it is directly
-       substituted here. But if the function is inlined, it is
-       possible that the closure is accessed from outside its body. *)
-    let aux_fv_offset (map,pos) (id, _) =
-      let off = Var_within_closure.wrap id in
-      assert(not (Var_within_closure.Map.mem off map));
-      let map = Var_within_closure.Map.add off pos map in
-      (map,pos + 1)
-    in
-    let fv_offset, _ = List.fold_left aux_fv_offset
-        (!fv_offset_table, fv_pos) fv in
-
-    fun_offset_table := fun_offset;
-    fv_offset_table := fv_offset;
-
-    List.iter (fun (_, { Flambda. body }) ->
-        Flambdaiter.iter_toplevel iter body)
-      funct
-
-  let res =
-    let run flam = Flambdaiter.iter_toplevel iter flam in
-    run P.expr;
-    Symbol.Map.iter (fun _ -> run) P.constants;
-    !fun_offset_table, !fv_offset_table
-end
-
-module type Param2 = sig
-  include Param1
   val fun_offset_table : int Closure_id.Map.t
   val fv_offset_table : int Var_within_closure.Map.t
   val closures : t Flambda.function_declarations Closure_id.Map.t
@@ -618,23 +518,17 @@ module Conv (P : Param2) = struct
     | Fconst_pointer c -> Uconst_ptr c
     | Fconst_base (Const_int c) -> Uconst_int c
     | Fconst_base (Const_char c) -> Uconst_int (Char.code c)
-    | Fconst_float f ->
-      str ~shared:true (Uconst_float f)
+    | Fconst_float f -> str ~shared:true (Uconst_float f)
     | Fconst_base (Const_float x) ->
       str ~shared:true (Uconst_float (float_of_string x))
-    | Fconst_base (Const_int32 x) ->
-      str ~shared:true (Uconst_int32 x)
-    | Fconst_base (Const_int64 x) ->
-      str ~shared:true (Uconst_int64 x)
-    | Fconst_base (Const_nativeint x) ->
-      str ~shared:true (Uconst_nativeint x)
-    | Fconst_base (Const_string (s,o)) ->
-      str ~shared:false (Uconst_string s)
+    | Fconst_base (Const_int32 x) -> str ~shared:true (Uconst_int32 x)
+    | Fconst_base (Const_int64 x) -> str ~shared:true (Uconst_int64 x)
+    | Fconst_base (Const_nativeint x) -> str ~shared:true (Uconst_nativeint x)
+    | Fconst_base (Const_string (s,o)) -> str ~shared:false (Uconst_string s)
     | Fconst_float_array c ->
       (* constant float arrays are really immutable *)
       str ~shared:true (Uconst_float_array (List.map float_of_string c))
-    | Fconst_immstring c ->
-      str ~shared:true (Uconst_string c)
+    | Fconst_immstring c -> str ~shared:true (Uconst_string c)
 
   and constant_list l =
     let rec aux acc (ulambda : Clambda.ulambda list) =
@@ -689,15 +583,18 @@ let convert (type a)
     let constant_closures = exported.Flambdaexport.constant_closures
   end in
   let fun_offset_table, fv_offset_table =
-    let module O = Offsets(P1) in
-    O.res
+    Flambda_lay_out_closure.assign_offsets ~expr ~constants
   in
-  let extern_fun_offset_table =
-    (Compilenv.approx_env ()).Flambdaexport.offset_fun in
-  let extern_fv_offset_table =
-    (Compilenv.approx_env ()).Flambdaexport.offset_fv in
   let add_ext_offset_fun, add_ext_offset_fv =
-    reexported_offset extern_fun_offset_table extern_fv_offset_table expr in
+    let extern_fun_offset_table =
+      (Compilenv.approx_env ()).Flambdaexport.offset_fun
+    in
+    let extern_fv_offset_table =
+      (Compilenv.approx_env ()).Flambdaexport.offset_fv
+    in
+    Flambda_lay_out_closure.reexported_offsets ~extern_fun_offset_table
+      ~extern_fv_offset_table ~expr
+  in
   let module P2 = struct include P1
     let fun_offset_table = fun_offset_table
     let fv_offset_table = fv_offset_table
