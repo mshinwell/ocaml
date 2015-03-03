@@ -15,7 +15,6 @@ open Symbol
 open Abstract_identifiers
 open Lambda
 open Clambda
-open Flambda
 
 type ('a,'b) declaration_position =
   | Local of 'a
@@ -24,7 +23,8 @@ type ('a,'b) declaration_position =
 
 let list_closures expr constants =
   let closures = ref Closure_id.Map.empty in
-  let aux expr = match expr with
+  let aux (expr : _ Flambda.t) =
+    match expr with
     | Fset_of_closures({ cl_fun = functs; cl_free_var = fv }, data) ->
         let add off_id _ map =
           Closure_id.Map.add
@@ -40,7 +40,8 @@ let list_closures expr constants =
 let reexported_offset extern_fun_offset_table extern_fv_offset_table expr =
   let set_fun = ref Closure_id.Set.empty in
   let set_fv = ref Var_within_closure.Set.empty in
-  let aux expr = match expr with
+  let aux (expr : _ Flambda.t) =
+    match expr with
     | Fvariable_in_closure({vc_var = env_var; vc_fun = env_fun_id}, _) ->
         set_fun := Closure_id.Set.add env_fun_id !set_fun;
         set_fv := Var_within_closure.Set.add env_var !set_fv;
@@ -76,19 +77,17 @@ let structured_constant_label expected_symbol ~shared cst =
 
 module type Param1 = sig
   type t
-  val expr : t flambda
-  val constants : t flambda Symbol.Map.t
+  val expr : t Flambda.t
+  val constants : t Flambda.t Symbol.Map.t
 end
 
-module Offsets(P:Param1) = struct
-
+module Offsets (P : Param1) = struct
   module Storer =
-    Switch.Store
-      (struct
-        type t = P.t flambda
-        type key = Flambdautils.sharing_key
-        let make_key = Flambdautils.make_key
-      end)
+    Switch.Store (struct
+      type t = P.t Flambda.t
+      type key = Flambdautils.sharing_key
+      let make_key = Flambdautils.make_key
+    end)
 
   (* The offset table associate a function label to its offset
      inside a closure *)
@@ -97,13 +96,13 @@ module Offsets(P:Param1) = struct
      closure *)
   let fv_offset_table = ref Var_within_closure.Map.empty
 
-  let rec iter = function
+  let rec iter (expr : _ Flambda.t) =
+    match expr with
     | Fset_of_closures({cl_fun = funct; cl_free_var = fv}, _) ->
         iter_closure funct fv
     | _ -> ()
 
   and iter_closure functs fv =
-
     let funct = Variable.Map.bindings functs.funs in
     let fv = Variable.Map.bindings fv in
 
@@ -136,14 +135,15 @@ module Offsets(P:Param1) = struct
     fun_offset_table := fun_offset;
     fv_offset_table := fv_offset;
 
-    List.iter (fun (_,{body}) -> Flambdaiter.iter_toplevel iter body) funct
+    List.iter (fun (_, { Flambda. body }) ->
+        Flambdaiter.iter_toplevel iter body)
+      funct
 
   let res =
     let run flam = Flambdaiter.iter_toplevel iter flam in
     run P.expr;
     Symbol.Map.iter (fun _ -> run) P.constants;
     !fun_offset_table, !fv_offset_table
-
 end
 
 module type Param2 = sig
@@ -160,15 +160,13 @@ type const_lbl =
   | No_lbl
   | Not_const
 
-module Conv(P:Param2) = struct
-
+module Conv (P : Param2) = struct
   module Storer =
-    Switch.Store
-      (struct
-        type t = P.t flambda
-        type key = Flambdautils.sharing_key
-        let make_key = Flambdautils.make_key
-      end)
+    Switch.Store (struct
+      type t = P.t Flambda.t
+      type key = Flambdautils.sharing_key
+      let make_key = Flambdautils.make_key
+    end)
 
   (* The offset table associate a function label to its offset
      inside a closure *)
@@ -178,16 +176,11 @@ module Conv(P:Param2) = struct
 
   (* offsets of functions and free variables in closures comming from
      a linked module *)
-  let extern_fun_offset_table =
-    (Compilenv.approx_env ()).Flambdaexport.offset_fun
-  let extern_fv_offset_table =
-    (Compilenv.approx_env ()).Flambdaexport.offset_fv
-  let ex_closures =
-    (Compilenv.approx_env ()).Flambdaexport.functions_off
-  let functions =
-    (Compilenv.approx_env ()).Flambdaexport.functions
-  let constant_closures =
-    (Compilenv.approx_env ()).Flambdaexport.constant_closures
+  let extern_fun_offset_table = (Compilenv.approx_env ()).offset_fun
+  let extern_fv_offset_table = (Compilenv.approx_env ()).offset_fv
+  let ex_closures = (Compilenv.approx_env ()).functions_off
+  let functions = (Compilenv.approx_env ()).functions
+  let constant_closures = (Compilenv.approx_env ()).constant_closures
 
   let is_current_unit unit =
     Compilation_unit.equal (Compilenv.current_unit ()) unit
@@ -261,7 +254,9 @@ module Conv(P:Param2) = struct
     let id = Variable.unique_ident var in
     id, { env with var = Variable.Map.add var id env.var }
 
-  let rec conv ?(expected_symbol:Symbol.t option) (env : env) = function
+  let rec conv ?(expected_symbol:Symbol.t option) (env : env)
+        (expr : _ Flambda.t) =
+    match expr with
     | Fvar (var,_) ->
         begin
           (* If the variable is a recursive access to the function
@@ -344,25 +339,27 @@ module Conv(P:Param2) = struct
                    us_index_blocks = block_index;
                    us_actions_blocks = block_actions})
         in
-        let rec simple_expr = function
+        let rec simple_expr (expr : _ Flambda.t) =
+          match expr with
           | Fconst( Fconst_base (Asttypes.Const_string _), _ ) -> false
           | Fvar _ | Fsymbol _ | Fconst _ -> true
           | Fstaticraise (_,args,_) -> List.for_all simple_expr args
-          | _ -> false in
+          | _ -> false
+        in
         (* Check that failaction is effectively copiable: i.e. it
            can't declare symbols. If it is not the case, share it
            through a staticraise/staticcatch *)
         begin match sw.fs_failaction with
         | None -> aux ()
         | Some (Fstaticraise (_,args,_))
-          when List.for_all simple_expr args -> aux ()
+            when List.for_all simple_expr args -> aux ()
         | Some failaction ->
-            let exn = Static_exception.create () in
-            let fs_failaction = Some (Fstaticraise(exn,[], d)) in
-            let sw = { sw with fs_failaction } in
-            let expr =
-              Fstaticcatch(exn, [], Fswitch(arg, sw, d), failaction, d) in
-            conv env expr
+          let exn = Static_exception.create () in
+          let fs_failaction = Some (Flambda.Fstaticraise(exn,[], d)) in
+          let sw = { sw with fs_failaction } in
+          let expr : _ Flambda.t =
+            Fstaticcatch(exn, [], Fswitch(arg, sw, d), failaction, d) in
+          conv env expr
         end
 
     | Fstringswitch(arg, sw, def, d) ->
@@ -544,7 +541,7 @@ module Conv(P:Param2) = struct
 
     let fv_ulam = List.map (fun (id,lam) -> id,conv env lam) fv in
 
-    let conv_function (id,func) =
+    let conv_function (id, (func : _ Flambda.function_declaration)) =
       let cf = Closure_id.wrap id in
       (* adds variables from the closure to the substitution environment *)
       let fun_offset = Closure_id.Map.find cf fun_offset_table in
@@ -670,12 +667,11 @@ module Conv(P:Param2) = struct
       P.constants
 
   let res = conv empty_env P.expr
-
 end
 
 let convert (type a)
-    ((expr:a flambda),
-     (constants:a flambda Symbol.Map.t),
+    ((expr : a Flambda.t),
+     (constants : a Flambda.t Symbol.Map.t),
      exported) =
   let closures = list_closures expr constants in
   let module P1 = struct
