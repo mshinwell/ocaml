@@ -10,11 +10,8 @@
 (*                                                                     *)
 (***********************************************************************)
 
-open Misc
-open Symbol
 open Abstract_identifiers
-open Lambda
-open Clambda
+module Compilation_unit = Symbol.Compilation_unit
 
 type ('a,'b) declaration_position =
   | Local of 'a
@@ -67,12 +64,12 @@ let reexported_offset extern_fun_offset_table extern_fv_offset_table expr =
   let fv_map = Var_within_closure.Set.fold (f' extern_fv_offset_table) !set_fv in
   fun_map, fv_map
 
-let structured_constant_label expected_symbol ~shared cst =
+let structured_constant_label (expected_symbol : Symbol.t option) ~shared cst =
   match expected_symbol with
   | None ->
       Compilenv.new_structured_constant cst ~shared
   | Some sym ->
-      let lbl = string_of_linkage_name sym.sym_label in
+      let lbl = Symbol.string_of_linkage_name sym.sym_label in
       Compilenv.add_structured_constant lbl cst ~shared
 
 module type Param1 = sig
@@ -191,58 +188,55 @@ module Conv (P : Param2) = struct
       then Closure_id.Map.find off fun_offset_table
       else Closure_id.Map.find off extern_fun_offset_table
     with Not_found ->
-      fatal_error (Format.asprintf "missing offset %a" Closure_id.print off)
+      Misc.fatal_error (Format.asprintf "missing offset %a"
+          Closure_id.print off)
 
   let get_fv_offset off =
     if Var_within_closure.in_compilation_unit (Compilenv.current_unit ()) off
     then
-      if not (Var_within_closure.Map.mem off fv_offset_table)
-      then fatal_error (Format.asprintf "env field offset not found: %a\n%!"
-                          Var_within_closure.print off)
+      if not (Var_within_closure.Map.mem off fv_offset_table) then
+        Misc.fatal_error (Format.asprintf "env field offset not found: %a\n%!"
+            Var_within_closure.print off)
       else Var_within_closure.Map.find off fv_offset_table
     else Var_within_closure.Map.find off extern_fv_offset_table
 
   let function_declaration_position cf =
     try Local (Closure_id.Map.find cf P.closures) with
     | Not_found ->
-        try External (Closure_id.Map.find cf ex_closures) with
-        | Not_found ->
-            Not_declared
+      try External (Closure_id.Map.find cf ex_closures) with
+      | Not_found -> Not_declared
 
   let functions_declaration_position fid =
     try Local (Set_of_closures_id.Map.find fid P.functions) with
     | Not_found ->
-        try External (Set_of_closures_id.Map.find fid functions) with
-        | Not_found ->
-            Not_declared
+      try External (Set_of_closures_id.Map.find fid functions) with
+      | Not_found -> Not_declared
 
   let is_function_constant cf =
     match function_declaration_position cf with
-    | Local { ident } ->
-        Set_of_closures_id.Set.mem ident P.constant_closures
-    | External { ident } ->
-        Set_of_closures_id.Set.mem ident constant_closures
+    | Local { ident } -> Set_of_closures_id.Set.mem ident P.constant_closures
+    | External { ident } -> Set_of_closures_id.Set.mem ident constant_closures
     | Not_declared ->
-        fatal_error (Format.asprintf "missing closure %a"
-                       Closure_id.print cf)
+      Misc.fatal_error (Format.asprintf "missing closure %a"
+          Closure_id.print cf)
 
   let is_closure_constant fid =
     match functions_declaration_position fid with
-    | Local { ident } ->
-        Set_of_closures_id.Set.mem ident P.constant_closures
-    | External { ident } ->
-        Set_of_closures_id.Set.mem ident constant_closures
+    | Local { ident } -> Set_of_closures_id.Set.mem ident P.constant_closures
+    | External { ident } -> Set_of_closures_id.Set.mem ident constant_closures
     | Not_declared ->
-        fatal_error (Format.asprintf "missing closure %a"
-                       Set_of_closures_id.print fid)
+      Misc.fatal_error (Format.asprintf "missing closure %a"
+          Set_of_closures_id.print fid)
 
-  type env =
-    { subst : ulambda Variable.Map.t;
-      var : Ident.t Variable.Map.t }
+  type env = {
+    subst : Clambda.ulambda Variable.Map.t;
+    var : Ident.t Variable.Map.t;
+  }
 
   let empty_env =
     { subst = Variable.Map.empty;
-      var = Variable.Map.empty }
+      var = Variable.Map.empty;
+    }
 
   let add_sb id subst env =
     { env with subst = Variable.Map.add id subst env.subst }
@@ -255,7 +249,7 @@ module Conv (P : Param2) = struct
     id, { env with var = Variable.Map.add var id env.var }
 
   let rec conv ?(expected_symbol:Symbol.t option) (env : env)
-        (expr : _ Flambda.t) =
+        (expr : _ Flambda.t) : Clambda.ulambda =
     match expr with
     | Fvar (var,_) ->
         begin
@@ -267,13 +261,16 @@ module Conv (P : Param2) = struct
           with Not_found ->
             try Uvar (find_var var env)
             with Not_found ->
-              fatal_error
+              Misc.fatal_error
                 (Format.asprintf "Clambdagen.conv: unbound variable %a@."
                    Variable.print var)
         end
 
     | Fsymbol (sym,_) ->
-        let lbl = Compilenv.cannonical_symbol (string_of_linkage_name sym.sym_label) in
+        let lbl =
+          Compilenv.cannonical_symbol
+            (Symbol.string_of_linkage_name sym.sym_label)
+        in
         Uconst (Uconst_ref
                   (* Should delay the conversion a bit more *)
                   (lbl, None))
@@ -328,7 +325,7 @@ module Conv (P : Param2) = struct
         Ugeneric_apply(conv env funct, conv_list env args, dbg)
 
     | Fswitch(arg, sw, d) ->
-        let aux () =
+        let aux () : Clambda.ulambda =
           let const_index, const_actions =
             conv_switch env sw.fs_consts sw.fs_numconsts sw.fs_failaction
           and block_index, block_actions =
@@ -391,7 +388,7 @@ module Conv (P : Param2) = struct
         | None ->
             Uprim(p, args, dbg)
         | Some l ->
-            let cst = Uconst_block (tag,l) in
+            let cst : Clambda.ustructured_constant = Uconst_block (tag,l) in
             let lbl = structured_constant_label expected_symbol ~shared:true cst in
             Uconst(Uconst_ref (lbl, Some (cst)))
         end
@@ -461,16 +458,18 @@ module Conv (P : Param2) = struct
       let uargs = conv_list env args in
       if closed then uargs else uargs @ [ufunct] in
 
-    let apply = Udirect_apply(label, uargs, dbg) in
+    let apply : Clambda.ulambda = Udirect_apply(label, uargs, dbg) in
 
     (* This is usualy sufficient to detect closure with side effects *)
-    let rec no_effect = function
+    let rec no_effect (ulambda : Clambda.ulambda) =
+      match ulambda with
       | Uvar _ | Uconst _ | Uprim(Pgetglobalfield _, _, _)
       | Uprim(Pgetglobal _, _, _) -> true
       | Uprim(Pfield _, [arg], _) -> no_effect arg
       | _ -> false in
 
-    let no_effect = function
+    let no_effect (ulambda : Clambda.ulambda) =
+      match ulambda with
       | Uclosure _ ->
           (* if the function is closed, then it is a Uconst otherwise,
              we do not call this function *)
@@ -536,7 +535,7 @@ module Conv (P : Param2) = struct
           Compilenv.new_const_symbol ()
       | Some sym ->
           (* should delay conversion *)
-          string_of_linkage_name sym.sym_label
+          Symbol.string_of_linkage_name sym.sym_label
     in
 
     let fv_ulam = List.map (fun (id,lam) -> id,conv env lam) fv in
@@ -575,7 +574,7 @@ module Conv (P : Param2) = struct
         else
           let add_offset_subst pos env (id,_) =
             let offset = Closure_id.Map.find (Closure_id.wrap id) fun_offset_table in
-            let exp = Uoffset(Uvar env_var, offset - pos) in
+            let exp : Clambda.ulambda = Uoffset(Uvar env_var, offset - pos) in
             add_sb id exp env in
           List.fold_left (add_offset_subst fun_offset) env funct
       in
@@ -593,14 +592,17 @@ module Conv (P : Param2) = struct
 
     let ufunct = List.map conv_function funct in
 
-    if closed
-    then
+    if closed then
       match constant_list (List.map snd fv_ulam) with
       | None -> assert false
       | Some fv_const ->
-          let cst = Uconst_closure (ufunct, closure_lbl, fv_const) in
-          let closure_lbl = Compilenv.add_structured_constant closure_lbl cst ~shared:true in
-          Uconst(Uconst_ref (closure_lbl, Some cst))
+        let cst : Clambda.ustructured_constant =
+          Uconst_closure (ufunct, closure_lbl, fv_const)
+        in
+        let closure_lbl =
+          Compilenv.add_structured_constant closure_lbl cst ~shared:true
+        in
+        Uconst(Uconst_ref (closure_lbl, Some cst))
     else
       Uclosure (ufunct, List.map snd fv_ulam)
 
@@ -608,7 +610,7 @@ module Conv (P : Param2) = struct
 
   and conv_const expected_symbol cst =
     let open Asttypes in
-    let str ~shared cst =
+    let str ~shared cst : Clambda.uconstant =
       let name = structured_constant_label expected_symbol ~shared cst in
       Uconst_ref (name, Some cst)
     in
@@ -617,25 +619,26 @@ module Conv (P : Param2) = struct
     | Fconst_base (Const_int c) -> Uconst_int c
     | Fconst_base (Const_char c) -> Uconst_int (Char.code c)
     | Fconst_float f ->
-        str ~shared:true (Uconst_float f)
+      str ~shared:true (Uconst_float f)
     | Fconst_base (Const_float x) ->
-        str ~shared:true (Uconst_float (float_of_string x))
+      str ~shared:true (Uconst_float (float_of_string x))
     | Fconst_base (Const_int32 x) ->
-        str ~shared:true (Uconst_int32 x)
+      str ~shared:true (Uconst_int32 x)
     | Fconst_base (Const_int64 x) ->
-        str ~shared:true (Uconst_int64 x)
+      str ~shared:true (Uconst_int64 x)
     | Fconst_base (Const_nativeint x) ->
-        str ~shared:true (Uconst_nativeint x)
+      str ~shared:true (Uconst_nativeint x)
     | Fconst_base (Const_string (s,o)) ->
-        str ~shared:false (Uconst_string s)
+      str ~shared:false (Uconst_string s)
     | Fconst_float_array c ->
-        (* constant float arrays are really immutable *)
-        str ~shared:true (Uconst_float_array (List.map float_of_string c))
+      (* constant float arrays are really immutable *)
+      str ~shared:true (Uconst_float_array (List.map float_of_string c))
     | Fconst_immstring c ->
-        str ~shared:true (Uconst_string c)
+      str ~shared:true (Uconst_string c)
 
   and constant_list l =
-    let rec aux acc = function
+    let rec aux acc (ulambda : Clambda.ulambda list) =
+      match ulambda with
       | [] ->
           Some (List.rev acc)
       | Uconst(v) :: q ->
@@ -644,18 +647,23 @@ module Conv (P : Param2) = struct
     in
     aux [] l
 
-  and constant_label : ulambda -> const_lbl = function
+  and constant_label : Clambda.ulambda -> const_lbl = function
     | Uconst(Uconst_int _ | Uconst_ptr _) -> No_lbl
     | Uconst(Uconst_ref (lbl, _)) -> Lbl lbl
     | Uprim(Pgetglobal id, [], _) ->
         Lbl (Ident.name id)
     | _ -> Not_const
 
-  let structured_constant_for_symbol sym = function
+  let structured_constant_for_symbol (sym : Symbol.t)
+        (ulambda : Clambda.ulambda) =
+    match ulambda with
     | Uconst(Uconst_ref (lbl', Some cst)) ->
-        let lbl = Compilenv.cannonical_symbol (string_of_linkage_name sym.sym_label) in
-        assert(lbl = Compilenv.cannonical_symbol lbl');
-        cst
+      let lbl =
+        Compilenv.cannonical_symbol
+          (Symbol.string_of_linkage_name sym.sym_label)
+      in
+      assert(lbl = Compilenv.cannonical_symbol lbl');
+      cst
     (* | Uconst(Uconst_ref(None, Some cst)) -> cst *)
     | _ -> assert false
 
@@ -697,15 +705,15 @@ let convert (type a)
     let functions = exported.Flambdaexport.functions
   end in
   let module C = Conv(P2) in
-  let export = let open Flambdaexport in
+  let export : Flambdaexport.exported =
     { exported with
       offset_fun = add_ext_offset_fun fun_offset_table;
-      offset_fv = add_ext_offset_fv fv_offset_table }
+      offset_fv = add_ext_offset_fv fv_offset_table;
+    }
   in
   Compilenv.set_export_info export;
-  Symbol.Map.iter
-    (fun sym cst ->
-       let lbl = string_of_linkage_name sym.sym_label in
+  Symbol.Map.iter (fun sym cst ->
+       let lbl = Symbol.string_of_linkage_name sym.sym_label in
        Compilenv.add_exported_constant lbl)
     C.constants;
   C.res
