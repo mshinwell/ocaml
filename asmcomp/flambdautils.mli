@@ -98,6 +98,7 @@ val make_closure_declaration
    : id:Variable.t
   -> body:Expr_id.t Flambda.t
   -> params:Variable.t list
+  -> debuginfo:Debuginfo.t
   -> Expr_id.t Flambda.t
 
 (* [unchanging_params_in_recursion] calculates the set of parameters whose

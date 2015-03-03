@@ -645,7 +645,8 @@ asmcomp/flambdagen.cmi : asmcomp/symbol.cmi bytecomp/lambda.cmi \
     typing/ident.cmi asmcomp/flambda.cmi asmcomp/abstract_identifiers.cmi
 asmcomp/flambda_inline_env.cmi : asmcomp/flambdasubst.cmi \
     asmcomp/flambdaapprox.cmi asmcomp/flambda_inlining_stats_types.cmi \
-    asmcomp/flambda_inlining_stats.cmi asmcomp/abstract_identifiers.cmi
+    asmcomp/flambda_inlining_stats.cmi bytecomp/debuginfo.cmi \
+    asmcomp/abstract_identifiers.cmi
 asmcomp/flambdainline.cmi : asmcomp/flambda.cmi \
     asmcomp/abstract_identifiers.cmi
 asmcomp/flambda_inline_result.cmi : asmcomp/flambdacost.cmi \
@@ -673,7 +674,7 @@ asmcomp/flambdasubst.cmi : asmcomp/symbol.cmi asmcomp/flambda.cmi \
     asmcomp/abstract_identifiers.cmi
 asmcomp/flambdasym.cmi : asmcomp/symbol.cmi asmcomp/flambdaexport.cmi \
     asmcomp/flambda.cmi
-asmcomp/flambdautils.cmi : asmcomp/flambda.cmi \
+asmcomp/flambdautils.cmi : asmcomp/flambda.cmi bytecomp/debuginfo.cmi \
     asmcomp/abstract_identifiers.cmi
 asmcomp/interf.cmi : asmcomp/mach.cmi
 asmcomp/linearize.cmi : asmcomp/reg.cmi asmcomp/mach.cmi bytecomp/lambda.cmi \
@@ -821,17 +822,17 @@ asmcomp/comballoc.cmo : asmcomp/reg.cmi asmcomp/mach.cmi utils/config.cmi \
 asmcomp/comballoc.cmx : asmcomp/reg.cmx asmcomp/mach.cmx utils/config.cmx \
     asmcomp/arch.cmx asmcomp/comballoc.cmi
 asmcomp/compilenv.cmo : asmcomp/symbol.cmi utils/misc.cmi \
-    parsing/location.cmi typing/ident.cmi asmcomp/flambdaiter.cmi \
-    asmcomp/flambdaexport.cmi asmcomp/flambda.cmi utils/ext_types.cmi \
-    typing/env.cmi utils/config.cmi asmcomp/cmx_format.cmi \
-    asmcomp/clambda.cmi asmcomp/abstract_identifiers.cmi \
-    asmcomp/compilenv.cmi
+    parsing/location.cmi typing/ident.cmi asmcomp/flambdautils.cmi \
+    asmcomp/flambdaiter.cmi asmcomp/flambdaexport.cmi asmcomp/flambda.cmi \
+    utils/ext_types.cmi typing/env.cmi utils/config.cmi \
+    asmcomp/cmx_format.cmi asmcomp/clambda.cmi \
+    asmcomp/abstract_identifiers.cmi asmcomp/compilenv.cmi
 asmcomp/compilenv.cmx : asmcomp/symbol.cmx utils/misc.cmx \
-    parsing/location.cmx typing/ident.cmx asmcomp/flambdaiter.cmx \
-    asmcomp/flambdaexport.cmx asmcomp/flambda.cmi utils/ext_types.cmx \
-    typing/env.cmx utils/config.cmx asmcomp/cmx_format.cmi \
-    asmcomp/clambda.cmx asmcomp/abstract_identifiers.cmx \
-    asmcomp/compilenv.cmi
+    parsing/location.cmx typing/ident.cmx asmcomp/flambdautils.cmx \
+    asmcomp/flambdaiter.cmx asmcomp/flambdaexport.cmx asmcomp/flambda.cmi \
+    utils/ext_types.cmx typing/env.cmx utils/config.cmx \
+    asmcomp/cmx_format.cmi asmcomp/clambda.cmx \
+    asmcomp/abstract_identifiers.cmx asmcomp/compilenv.cmi
 asmcomp/CSEgen.cmo : asmcomp/reg.cmi asmcomp/proc.cmi asmcomp/mach.cmi \
     asmcomp/CSEgen.cmi
 asmcomp/CSEgen.cmx : asmcomp/reg.cmx asmcomp/proc.cmx asmcomp/mach.cmx \
@@ -929,21 +930,21 @@ asmcomp/flambda_inline_env.cmx : utils/misc.cmx asmcomp/flambdasubst.cmx \
 asmcomp/flambdainline.cmo : utils/warnings.cmi asmcomp/printflambda.cmi \
     utils/misc.cmi parsing/location.cmi typing/ident.cmi \
     asmcomp/flambdautils.cmi asmcomp/flambdasubst.cmi \
-    asmcomp/flambdasimplify.cmi asmcomp/flambdaiter.cmi \
-    asmcomp/flambdaeffects.cmi asmcomp/flambdacost.cmi \
-    asmcomp/flambdaapprox.cmi asmcomp/flambda_inlining_decision.cmi \
-    asmcomp/flambda_inline_result.cmi asmcomp/flambda_inline_env.cmi \
-    asmcomp/flambda.cmi bytecomp/debuginfo.cmi asmcomp/compilenv.cmi \
-    asmcomp/abstract_identifiers.cmi asmcomp/flambdainline.cmi
+    asmcomp/flambdasimplify.cmi asmcomp/flambdaeffects.cmi \
+    asmcomp/flambdacost.cmi asmcomp/flambdaapprox.cmi \
+    asmcomp/flambda_inlining_decision.cmi asmcomp/flambda_inline_result.cmi \
+    asmcomp/flambda_inline_env.cmi asmcomp/flambda.cmi bytecomp/debuginfo.cmi \
+    asmcomp/compilenv.cmi asmcomp/abstract_identifiers.cmi \
+    asmcomp/flambdainline.cmi
 asmcomp/flambdainline.cmx : utils/warnings.cmx asmcomp/printflambda.cmx \
     utils/misc.cmx parsing/location.cmx typing/ident.cmx \
     asmcomp/flambdautils.cmx asmcomp/flambdasubst.cmx \
-    asmcomp/flambdasimplify.cmx asmcomp/flambdaiter.cmx \
-    asmcomp/flambdaeffects.cmx asmcomp/flambdacost.cmx \
-    asmcomp/flambdaapprox.cmx asmcomp/flambda_inlining_decision.cmx \
-    asmcomp/flambda_inline_result.cmx asmcomp/flambda_inline_env.cmx \
-    asmcomp/flambda.cmi bytecomp/debuginfo.cmx asmcomp/compilenv.cmx \
-    asmcomp/abstract_identifiers.cmx asmcomp/flambdainline.cmi
+    asmcomp/flambdasimplify.cmx asmcomp/flambdaeffects.cmx \
+    asmcomp/flambdacost.cmx asmcomp/flambdaapprox.cmx \
+    asmcomp/flambda_inlining_decision.cmx asmcomp/flambda_inline_result.cmx \
+    asmcomp/flambda_inline_env.cmx asmcomp/flambda.cmi bytecomp/debuginfo.cmx \
+    asmcomp/compilenv.cmx asmcomp/abstract_identifiers.cmx \
+    asmcomp/flambdainline.cmi
 asmcomp/flambda_inline_result.cmo : utils/misc.cmi asmcomp/flambdacost.cmi \
     asmcomp/flambdaapprox.cmi utils/ext_types.cmi utils/clflags.cmi \
     asmcomp/abstract_identifiers.cmi asmcomp/flambda_inline_result.cmi
@@ -1014,12 +1015,12 @@ asmcomp/flambdasym.cmx : asmcomp/symbol.cmx asmcomp/printflambda.cmx \
     asmcomp/abstract_identifiers.cmx asmcomp/flambdasym.cmi
 asmcomp/flambdautils.cmo : asmcomp/symbol.cmi utils/misc.cmi \
     asmcomp/flambdasubst.cmi asmcomp/flambdaiter.cmi asmcomp/flambda.cmi \
-    utils/ext_types.cmi bytecomp/debuginfo.cmi parsing/asttypes.cmi \
-    asmcomp/abstract_identifiers.cmi asmcomp/flambdautils.cmi
+    utils/ext_types.cmi parsing/asttypes.cmi asmcomp/abstract_identifiers.cmi \
+    asmcomp/flambdautils.cmi
 asmcomp/flambdautils.cmx : asmcomp/symbol.cmx utils/misc.cmx \
     asmcomp/flambdasubst.cmx asmcomp/flambdaiter.cmx asmcomp/flambda.cmi \
-    utils/ext_types.cmx bytecomp/debuginfo.cmx parsing/asttypes.cmi \
-    asmcomp/abstract_identifiers.cmx asmcomp/flambdautils.cmi
+    utils/ext_types.cmx parsing/asttypes.cmi asmcomp/abstract_identifiers.cmx \
+    asmcomp/flambdautils.cmi
 asmcomp/interf.cmo : asmcomp/reg.cmi asmcomp/proc.cmi asmcomp/mach.cmi \
     asmcomp/interf.cmi
 asmcomp/interf.cmx : asmcomp/reg.cmx asmcomp/proc.cmx asmcomp/mach.cmx \

@@ -58,6 +58,7 @@ val note_entering_closure
    : t
   -> closure_id:Closure_id.t
   -> where:Flambda_inlining_stats_types.where_entering_closure
+  -> debuginfo:Debuginfo.t
   -> t
 
 val inlining_stats_closure_stack

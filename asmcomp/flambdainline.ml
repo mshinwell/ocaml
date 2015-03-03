@@ -706,6 +706,7 @@ and transform_set_of_closures_expression env r cl annot =
     let closure_env =
       E.note_entering_closure closure_env ~closure_id:(Closure_id.wrap fid)
         ~where:Transform_set_of_closures_expression
+        ~debuginfo:ffun.dbg
     in
     let body, r = loop closure_env r ffun.body in
     let used_params =
@@ -825,7 +826,9 @@ and partial_apply funct fun_id func args ap_dbg : _ Flambda.t =
       ap_dbg;
     }, Expr_id.create ())
   in
-  let closures = make_closure_declaration new_fun_id expr remaining_args in
+  let closures =
+    make_closure_declaration new_fun_id expr remaining_args ap_dbg
+  in
   let with_args = List.fold_right (fun (id', arg) expr ->
       Flambda.Flet(Not_assigned, id', arg, expr, Expr_id.create ()))
     applied_args closures
@@ -877,7 +880,8 @@ and partial_apply funct fun_id func args ap_dbg : _ Flambda.t =
        let y' = y + snd x in
        f (fst x') (y' + snd x')  (* body of [f] with parameters freshened *)
 *)
-and inline_by_copying_function_body ~env ~r ~clos ~lfunc ~fun_id ~func ~args =
+and inline_by_copying_function_body ~env ~r ~clos ~lfunc ~fun_id ~func ~args
+      ~ap_dbg =
   let r = R.map_benefit r Flambdacost.remove_call in
   let env = E.inlining_level_up env in
   let clos_id = new_var "inline_by_copying_function_body" in
@@ -916,6 +920,7 @@ and inline_by_copying_function_body ~env ~r ~clos ~lfunc ~fun_id ~func ~args =
   let env =
     E.note_entering_closure env ~closure_id:fun_id
       ~where:Inline_by_copying_function_body
+      ~debuginfo:ap_dbg
   in
   loop (E.activate_substitution env) r
        (Flet (Not_assigned, clos_id, lfunc, expr, Expr_id.create ()))
@@ -982,6 +987,7 @@ and inline_by_copying_function_declaration ~env ~r ~funct ~clos ~fun_id ~func
   let env =
     E.note_entering_closure env ~closure_id:fun_id
       ~where:Inline_by_copying_function_declaration
+      ~debuginfo:ap_dbg
   in
   loop (E.activate_substitution env) r expr
 

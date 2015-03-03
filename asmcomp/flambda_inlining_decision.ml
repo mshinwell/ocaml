@@ -33,7 +33,7 @@ let inlining_decision_for_call_site ~env ~r ~clos ~funct ~fun_id
   let record_decision =
     let closure_stack =
       E.inlining_stats_closure_stack (E.note_entering_closure env
-          ~closure_id:fun_id ~where:Inlining_decision)
+          ~closure_id:fun_id ~where:Inlining_decision ~debuginfo:ap_dbg)
     in
     Flambda_inlining_stats.record_decision ~closure_stack ~debuginfo:ap_dbg
   in
@@ -139,7 +139,7 @@ let inlining_decision_for_call_site ~env ~r ~clos ~funct ~fun_id
       then
         let body, r_inlined =
           inline_by_copying_function_body ~env ~r:(R.clear_benefit r) ~clos
-            ~lfunc:funct ~fun_id ~func ~args
+            ~lfunc:funct ~fun_id ~func ~args ~ap_dbg
         in
         (* Now we know how large the inlined version actually is, determine
            whether or not to keep it. *)
@@ -188,7 +188,7 @@ let inlining_decision_for_call_site ~env ~r ~clos ~funct ~fun_id
             let env = E.inside_unrolled_function env in
             let body, r_inlined =
               inline_by_copying_function_body ~env ~r:(R.clear_benefit r)
-                ~clos ~lfunc:funct ~fun_id ~func ~args
+                ~clos ~lfunc:funct ~fun_id ~func ~args ~ap_dbg
             in
             tried_unrolling := true;
             let wsb =

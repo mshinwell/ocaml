@@ -69,6 +69,7 @@ module Variable = struct
 
   let get_compilation_unit var = var.var_unit
 
+  let name var = Ident.name var.var_var
   let unique_name var = Ident.unique_name var.var_var
 
   let output_full c t =

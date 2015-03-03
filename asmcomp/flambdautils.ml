@@ -322,7 +322,7 @@ let fold_over_exprs_for_variables_bound_by_closure ~fun_id ~clos_id ~clos
       f ~acc ~var ~expr)
     (variables_bound_by_the_closure fun_id clos) init
 
-let make_closure_declaration ~id ~body ~params : _ Flambda.t =
+let make_closure_declaration ~id ~body ~params ~debuginfo : _ Flambda.t =
   let free_variables = free_variables body in
   let param_set = Variable.Set.of_list params in
   if not (Variable.Set.subset param_set free_variables) then begin
@@ -339,7 +339,7 @@ let make_closure_declaration ~id ~body ~params : _ Flambda.t =
       params = List.map subst params;
       free_variables = Variable.Set.map subst free_variables;
       body;
-      dbg = Debuginfo.none;
+      dbg = debuginfo;
     }
   in
   let fv' =

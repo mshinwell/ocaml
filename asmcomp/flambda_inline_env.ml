@@ -91,10 +91,10 @@ let inlining_level t = t.inlining_level
 let sb t = t.sb
 let never_inline t = t.never_inline
 
-let note_entering_closure t ~closure_id ~where =
+let note_entering_closure t ~closure_id ~where ~debuginfo =
   { t with
     inlining_stats_closure_stack =
       Flambda_inlining_stats.Closure_stack.note_entering_closure
-        t.inlining_stats_closure_stack ~closure_id ~where;
+        t.inlining_stats_closure_stack ~closure_id ~where ~debuginfo;
   }
 let inlining_stats_closure_stack t = t.inlining_stats_closure_stack

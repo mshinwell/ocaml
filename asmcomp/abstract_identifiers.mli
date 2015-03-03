@@ -66,6 +66,7 @@ module Closure_id : sig
   val in_compilation_unit : Symbol.Compilation_unit.t -> t -> bool
   val get_compilation_unit : t -> Symbol.Compilation_unit.t
 
+  val name : t -> string
   val unique_name : t -> string
 
   val output_full : out_channel -> t -> unit

@@ -25,6 +25,7 @@ val inlining_decision_for_call_site
       -> fun_id:Closure_id.t
       -> func:'a Flambda.function_declaration
       -> args:Expr_id.t Flambda.t list
+      -> ap_dbg:Debuginfo.t
       -> Expr_id.t Flambda.t * Flambda_inline_result.t)
   -> inline_by_copying_function_declaration:(
          env:Flambda_inline_env.t
