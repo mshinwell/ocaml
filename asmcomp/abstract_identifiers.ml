@@ -35,6 +35,10 @@ module Variable = struct
       Format.fprintf ppf "%a.%a"
         Compilation_unit.print v.var_unit
         Ident.print v.var_var
+    let to_string t =
+      Printf.sprintf "%s.%s"
+        (Compilation_unit.to_string t.var_unit)
+        (Ident.to_string t.var_var)
   end
 
   include T

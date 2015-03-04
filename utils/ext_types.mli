@@ -17,6 +17,7 @@ module type PrintableHashOrdered = sig
   val compare : t -> t -> int
   val output : out_channel -> t -> unit
   val print : Format.formatter -> t -> unit
+  val to_string : t -> string
   val hash : t -> int
   val equal : t -> t -> bool
 end

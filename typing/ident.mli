@@ -21,6 +21,7 @@ val rename: t -> t
 val name: t -> string
 val unique_name: t -> string
 val unique_toplevel_name: t -> string
+val to_string : t -> string
 val persistent: t -> bool
 val equal: t -> t -> bool
         (* Compare identifiers by name. *)

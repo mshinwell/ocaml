@@ -42,6 +42,7 @@ module Compilation_unit = struct
     let equal x y = compare x y = 0
 
     let print ppf x = Format.pp_print_string ppf x.id
+    let to_string t = t.id
     let output oc x = output_string oc x.id
     let hash x = Hashtbl.hash x.id
   end
@@ -79,7 +80,10 @@ module Printers = struct
   let hash s = Hashtbl.hash s.sym_label
   let equal s1 s2 = s1.sym_label = s2.sym_label
   let print ppf s =
+    (* CR mshinwell: this notation is confusing *)
     Format.fprintf ppf "%a - %s" Compilation_unit.print s.sym_unit s.sym_label
+  let to_string (t : symbol) =
+    Printf.sprintf "%s.%s" (Compilation_unit.to_string t.sym_unit) t.sym_label
 end
 
 include Printers

@@ -52,9 +52,9 @@ end) = struct
      again suffices. *)
   let extern_fun_offset_table = (Compilenv.approx_env ()).offset_fun
   let extern_fv_offset_table = (Compilenv.approx_env ()).offset_fv
-  let ex_closures = (Compilenv.approx_env ()).functions_off
-  let functions = (Compilenv.approx_env ()).functions
-  let constant_closures = (Compilenv.approx_env ()).constant_closures
+  let extern_closures = (Compilenv.approx_env ()).functions_off
+  let extern_functions = (Compilenv.approx_env ()).functions
+  let extern_constant_closures = (Compilenv.approx_env ()).constant_closures
 
   let get_fun_offset off =
     try
@@ -77,35 +77,34 @@ end) = struct
   type ('a, 'b) declaration_position =
     | Local of 'a
     | External of 'b
-    | Not_declared
 
   let is_function_constant cf =
     let closure_declaration_position cf =
       try Local (Closure_id.Map.find cf P.closures) with
       | Not_found ->
-        try External (Closure_id.Map.find cf ex_closures) with
-        | Not_found -> Not_declared
+        try External (Closure_id.Map.find cf extern_closures) with
+        | Not_found ->
+          Misc.fatal_error (Format.asprintf "missing closure %a"
+              Closure_id.print cf)
     in
     match closure_declaration_position cf with
     | Local { ident } -> Set_of_closures_id.Set.mem ident P.constant_closures
-    | External { ident } -> Set_of_closures_id.Set.mem ident constant_closures
-    | Not_declared ->
-      Misc.fatal_error (Format.asprintf "missing closure %a"
-          Closure_id.print cf)
+    | External { ident } ->
+      Set_of_closures_id.Set.mem ident extern_constant_closures
 
   let is_closure_constant fid =
     let set_of_closures_declaration_position fid =
       try Local (Set_of_closures_id.Map.find fid P.functions) with
       | Not_found ->
-        try External (Set_of_closures_id.Map.find fid functions) with
-        | Not_found -> Not_declared
+        try External (Set_of_closures_id.Map.find fid extern_functions) with
+        | Not_found ->
+          Misc.fatal_error (Format.asprintf "missing closure %a"
+              Set_of_closures_id.print fid)
     in
     match set_of_closures_declaration_position fid with
     | Local { ident } -> Set_of_closures_id.Set.mem ident P.constant_closures
-    | External { ident } -> Set_of_closures_id.Set.mem ident constant_closures
-    | Not_declared ->
-      Misc.fatal_error (Format.asprintf "missing closure %a"
-          Set_of_closures_id.print fid)
+    | External { ident } ->
+      Set_of_closures_id.Set.mem ident extern_constant_closures
 
   type env = {  (* See the [Fvar] case below for documentation. *)
     subst : Clambda.ulambda Variable.Map.t;
@@ -426,20 +425,30 @@ end) = struct
         (* Create a substitution that shows how to access variables
            that were originally free in the function from the closure. *)
         let env =
-          List.fold_left (fun env (id, lam) ->
+          List.fold_left (fun env (id, (lam : Clambda.ulambda)) ->
               match
                 Var_within_closure.Map.find (Var_within_closure.wrap id)
                   P.fv_offset_table
               with
               | exception Not_found -> env
               | var_offset ->
-                if not closure_is_constant then
-                  Printf.printf "closure %s\n%!"
-                    (Closure_id.unique_name cf);
-                assert (not closure_is_constant);
-                let pos = var_offset - fun_offset in
-                add_sb id (Uprim (Pfield pos, [Uvar env_var],
-                    Debuginfo.none)) env)
+                let closure_element_not_statically_known =
+                  (* CR mshinwell for pchambart: Didn't you say that some of
+                     these should have been substituted out earlier?  That
+                     appears not to be the case. *)
+                  match lam with
+                  | Uconst (Uconst_int _ | Uconst_ptr _ | Uconst_ref _)
+                  | Uprim (Pgetglobal _, [], _) -> false
+                  | _ -> true
+                in
+                assert (not (closure_is_constant
+                  && closure_element_not_statically_known));
+                if closure_element_not_statically_known then
+                  let pos = var_offset - fun_offset in
+                  add_sb id (Uprim (Pfield pos, [Uvar env_var],
+                      Debuginfo.none)) env
+                else
+                  env)
             (* Inside the body of the function, we cannot access variables
                declared outside, so take a clean substitution table. *)
             empty_env
@@ -543,7 +552,7 @@ end
 let convert (type a)
     ((expr : a Flambda.t),
      (constants : a Flambda.t Symbol.Map.t),
-     exported) =
+     (exported : Flambdaexport.exported)) =
   let closures =
     let closures = ref Closure_id.Map.empty in
     Flambdautils.list_closures expr ~closures;
@@ -566,11 +575,11 @@ let convert (type a)
     type t = a
     let expr = expr
     let constants = constants
-    let constant_closures = exported.Flambdaexport.constant_closures
+    let constant_closures = exported.constant_closures
     let fun_offset_table = fun_offset_table
     let fv_offset_table = fv_offset_table
     let closures = closures
-    let functions = exported.Flambdaexport.functions
+    let functions = exported.functions
   end) in
   let export : Flambdaexport.exported =
     { exported with

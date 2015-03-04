@@ -17,6 +17,7 @@ module type PrintableHashOrdered = sig
   val compare : t -> t -> int
   val output : out_channel -> t -> unit
   val print : Format.formatter -> t -> unit
+  val to_string : t -> string
   val hash : t -> int
   val equal : t -> t -> bool
 end
@@ -189,16 +190,15 @@ end
 module Id (E : sig end) : Id = struct
   let empty_string = ""
 
-  let to_string (t,name) =
-    if name == empty_string
-    then string_of_int t
-    else Printf.sprintf "%s_%i" name t
-
   include Identifiable.Make (struct
     type t = int * string
     let equal (t1,_) (t2,_) = (t1:int) = t2
     let compare (t1,_) (t2,_) = t1 - t2
     let hash (t,_) = t
+    let to_string (t,name) =
+      if name == empty_string
+      then string_of_int t
+      else Printf.sprintf "%s_%i" name t
     let output fd t = output_string fd (to_string t)
     let print ppf v = Format.pp_print_string ppf (to_string v)
   end)
@@ -260,6 +260,7 @@ module String_M = struct
   let compare = String.compare
   let output = output_string
   let hash (s:string) = Hashtbl.hash s
+  let to_string t = t
   let equal (s1:string) s2 = s1 = s2
   let print = Format.pp_print_string
 end
@@ -273,6 +274,7 @@ module Int = Identifiable.Make(struct
     let compare x y = x - y
     let output oc x = Printf.fprintf oc "%i" x
     let hash i = i
+    let to_string = string_of_int
     let equal (i:int) j = i = j
     let print = Format.pp_print_int
   end)
@@ -294,6 +296,8 @@ struct
     else B.compare b1 b2
   let output oc (a,b) = Printf.fprintf oc "(%a, %a)" A.output a B.output b
   let hash (a,b) = Hashtbl.hash (A.hash a, B.hash b)
+  let to_string (a, b) =
+    Printf.sprintf "(%s, %s)" (A.to_string a) (B.to_string b)
   let equal (a1,b1) (a2,b2) = A.equal a1 a2 && B.equal b1 b2
   let print ppf (a,b) = Format.fprintf ppf "(%a,@ %a)" A.print a B.print b
 end
