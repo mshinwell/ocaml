@@ -78,19 +78,24 @@ end) = struct
     | Local of 'a
     | External of 'b
 
-  let is_function_constant cf =
-    let closure_declaration_position cf =
-      try Local (Closure_id.Map.find cf P.closures) with
+  let closure_declaration_position cf =
+    try Local (Closure_id.Map.find cf P.closures) with
+    | Not_found ->
+      try External (Closure_id.Map.find cf extern_closures) with
       | Not_found ->
-        try External (Closure_id.Map.find cf extern_closures) with
-        | Not_found ->
-          Misc.fatal_error (Format.asprintf "missing closure %a"
-              Closure_id.print cf)
-    in
+        Misc.fatal_error (Format.asprintf "missing closure %a"
+            Closure_id.print cf)
+
+  let is_function_constant cf =
     match closure_declaration_position cf with
     | Local { ident } -> Set_of_closures_id.Set.mem ident P.constant_closures
     | External { ident } ->
       Set_of_closures_id.Set.mem ident extern_constant_closures
+
+  let is_local_function_constant cf =
+    match closure_declaration_position cf with
+    | Local { ident } -> Set_of_closures_id.Set.mem ident P.constant_closures
+    | External _ -> false
 
   let is_closure_constant fid =
     let set_of_closures_declaration_position fid =
@@ -105,6 +110,15 @@ end) = struct
     | Local { ident } -> Set_of_closures_id.Set.mem ident P.constant_closures
     | External { ident } ->
       Set_of_closures_id.Set.mem ident extern_constant_closures
+
+  let function_arity fun_id =
+    let arity clos off = function_arity (find_declaration fun_id clos) in
+    try arity (Closure_id.Map.find fun_id closures) fun_id with
+    | Not_found ->
+        try arity (Closure_id.Map.find fun_id (ex_closures ())) fun_id with
+        | Not_found ->
+            fatal_error (Format.asprintf "missing closure %a"
+                           Closure_id.print fun_id)
 
   type env = {  (* See the [Fvar] case below for documentation. *)
     subst : Clambda.ulambda Variable.Map.t;
@@ -130,10 +144,29 @@ end) = struct
      scope during any one call to [conv].  Accesses to outer closures are
      performed via this distinguished one.  (This was arranged during closure
      conversion---see [Flambdagen].) *)
+  (* CR mshinwell: put [expected_symbol] in [env] *)
   let rec conv ?(expected_symbol:Symbol.t option) (env : env)
         (expr : _ Flambda.t) : Clambda.ulambda =
     match expr with
     | Fvar (var, _) ->
+      let ulam, approx =
+        (* If the variable references a constant, it is replaced by the
+           constant's label. *)
+        begin match Variable.Map.find id env.cm with
+        | lbl -> Fsymbol (lbl, ()), Value_symbol lbl
+        | exception Not_found ->
+          (* If the variable is a recursive access to the function currently
+             being defined, it is replaced by an offset in the closure.  If
+             the variable is bound by the closure, it is replaced by a field
+             access inside the closure. *)
+          try
+            let ulam =
+          (* unfinished *)
+                clambda_for_expr ?expected_symbol env (Variable.Map.find id env.sb) in
+            lam, get_approx id env
+          with Not_found ->
+            Fvar (id, ()), get_approx id env
+      in
       (* If the variable is bound by any current closure, or is one of the
          function identifiers bound by any current set of closures, then we
          can find out how to access the variable by looking in the
@@ -153,18 +186,63 @@ end) = struct
             (Format.asprintf "Clambdagen.conv: unbound variable %a@."
                Variable.print var)
       end
+    (* from flambdasym:
+              (* If the variable reference a constant, it is replaced by the
+                 constant label *)
+              try
+                let lbl = Variable.Map.find id env.cm in
+                Fsymbol(lbl, ()), Value_symbol lbl
+              with Not_found ->
+
+                (* If the variable is a recursive access to the function
+                   currently being defined: it is replaced by an offset in the
+                   closure. If the variable is bound by the closure, it is
+                   replace by a field access inside the closure *)
+                try
+                  let lam = Variable.Map.find id env.sb in
+                  lam, get_approx id env
+                with Not_found ->
+                  Fvar (id, ()), get_approx id env
+    *)
     | Fsymbol (sym, _) ->
+      let sym = canonicalize_symbol sym in
       let lbl =
         Compilenv.canonical_symbol
           (Symbol.string_of_linkage_name sym.sym_label)
       in
       (* CR pchambart for pchambart: Should delay the conversion a bit more
          mshinwell: I turned this comment into a CR *)
-      Uconst (Uconst_ref (lbl, None))
+      Uconst (Uconst_ref (lbl, None)), Value_symbol sym
     | Fconst (cst, _) -> Uconst (conv_const expected_symbol cst)
     | Flet (str, var, lam, body, _) ->
-      let id, env_body = add_unique_ident var env in
-      Ulet (id, conv env lam, conv env_body body)
+      let ulam, approx =
+        clambda_and_approx_for_expr ?expected_symbol env lam
+      in
+      let env =
+        if is_constant id || str = Not_assigned
+        then add_approx id approx env
+        else add_approx id Value_unknown env
+      in
+      begin match is_constant id, constant_symbol lam, str with
+      | _, _, Assigned
+      | false, (Not_const | No_lbl | Const_closure), _ ->
+        let id, env_body = add_unique_ident var env in
+        let ubody, body_approx =
+          clambda_and_approx_for_expr ?expected_symbol env body
+        in
+        Ulet (id, conv env lam, conv env_body body), body_approx
+      | true, No_lbl, Not_assigned ->
+        (* No label => the value is an integer: substitute it. *)
+        clambda_and_approx_for_expr ?expected_symbol (add_sb id lam env) body
+      | _, Lbl lbl, Not_assigned ->
+        (* Label => the value is a block: reference it. *)
+        clambda_and_approx_for_expr ?expected_symbol (add_cm id lbl env) body
+      | true, Const_closure, Not_assigned ->
+        clambda_and_approx_for_expr ?expected_symbol env body
+      | true, Not_const, Not_assigned ->
+        Format.eprintf "%a@.%a" Variable.print id Printflambda.flambda lam;
+        assert false
+      end
     | Fletrec (defs, body, _) ->
       let env, defs = List.fold_right (fun (var, def) (env, defs) ->
           let id, env = add_unique_ident var env in
@@ -173,10 +251,41 @@ end) = struct
       in
       let udefs = List.map (fun (id, def) -> id, conv env def) defs in
       Uletrec (udefs, conv env body)
-    | Fset_of_closures ({ cl_fun = funct; cl_free_var = fv }, _) ->
-      conv_closure env ~expected_symbol funct fv
+    | Fset_of_closures ({ cl_fun = funct; cl_free_var = fv;
+          cl_specialised_arg = spec_arg; }, _) ->
+      let args_approx =
+        Variable.Map.map (fun id -> get_approx id env) spec_arg
+      in
+      clambda_and_approx_for_set_of_closures ?expected_symbol env funct
+        args_approx spec_arg fv
     | Fclosure ({ fu_closure = lam; fu_fun = id; fu_relative_to = rel }, _) ->
-      let ulam = conv env lam in
+      let ulam, approx =
+        if is_local_function_constant id then
+          (* Only references to functions declared in the current module should
+             need rewriting to a symbol.  For external functions this should
+             already have been done at the original declaration. *)
+          let sym = Compilenv.closure_symbol id in
+          clambda_and_approx_for_expr ?expected_symbol env (Fsymbol (sym, ()))
+        else
+          let ulam, fun_approx =
+            clambda_and_approx_for_expr ?expected_symbol env lam
+          in
+          let approx =
+            match get_descr fun_approx with
+            | Some (Value_set_of_closures closure)
+            | Some (Value_closure { closure }) ->
+              Value_id (new_descr (Value_closure { fun_id = id; closure }))
+            | Some _ -> assert false
+            | _ ->
+              Format.printf "Bad approximation for [Fclosure] expression: %a@."
+                Printflambda.flambda expr;
+              assert false
+          in
+          clambda_and_approx_for_expr ?expected_symbol env
+              (Fclosure ({ fu_closure = ulam; fu_fun = id;
+                  fu_relative_to = rel }, ()),
+            approx
+      in
       let relative_offset =
         let offset = get_fun_offset id in
         match rel with
@@ -189,20 +298,36 @@ end) = struct
       else Uoffset (ulam, relative_offset)
     | Fvariable_in_closure ({ vc_closure = lam; vc_var = env_var;
           vc_fun = env_fun_id }, _) ->
+        let ulam, fun_approx = conv_approx env lam in
+        let approx = match get_descr fun_approx with
+          | Some (Value_closure { closure = { bound_var } }) ->
+              (try Var_within_closure.Map.find env_var bound_var with
+               | Not_found ->
+                   Format.printf "Wrong closure in env_field %a@.%a@."
+                     Printflambda.flambda expr
+                     Printflambda.flambda ulam;
+                   assert false)
+          | Some _ -> assert false
+          | None ->
+              Format.printf "Unknown closure in env_field %a@.%a@."
+                Printflambda.flambda expr
+                Printflambda.flambda ulam;
+              assert false in
+        Fvariable_in_closure({vc_closure = ulam;vc_var = env_var;vc_fun = env_fun_id}, ()),
+        approx
+      (* end flambdasym stuff *)
       let ulam = conv env lam in
       let pos = get_fv_offset env_var - get_fun_offset env_fun_id in
       Uprim (Pfield pos, [ulam], Debuginfo.none)
-    | Fapply ({ ap_function = funct; ap_arg = args;
-          ap_kind = Direct direct_func; ap_dbg = dbg }, _) ->
-      conv_direct_apply (conv env funct) args direct_func dbg env
-    | Fapply ({ ap_function = funct; ap_arg = args;
-          ap_kind = Indirect; ap_dbg = dbg }, _) ->
-      (* the closure parameter of the function is added by cmmgen, but
-         it already appears in the list of parameters of the clambda
-         function for generic calls. Notice that for direct calls it is
-         added here. *)
-      Ugeneric_apply (conv env funct, conv_list env args, dbg)
+    | Fapply apply ->
+      clambda_and_approx_for_application env apply
     | Fswitch (arg, sw, d) ->
+      let arg = clambda_for_expr ?expected_symbol env arg in
+      (*
+        fs_consts = List.map (fun (i,lam) -> i, conv env lam) sw.fs_consts;
+        fs_blocks = List.map (fun (i,lam) -> i, conv env lam) sw.fs_blocks;
+        fs_failaction = may_map (conv env) sw.fs_failaction }, ()),
+      *)
       let aux () : Clambda.ulambda =
         let const_index, const_actions =
           conv_switch env sw.fs_consts sw.fs_numconsts sw.fs_failaction
@@ -226,28 +351,34 @@ end) = struct
       (* Check that failaction is effectively copyable: i.e. it can't declare
          symbols.  If this is not the case, share it through a
          staticraise/staticcatch *)
-      begin match sw.fs_failaction with
-      | None -> aux ()
-      | Some (Fstaticraise (_, args, _))
-          when List.for_all simple_expr args -> aux ()
-      | Some failaction ->
-        let exn = Static_exception.create () in
-        let fs_failaction = Some (Flambda.Fstaticraise (exn, [], d)) in
-        let sw = { sw with fs_failaction } in
-        let expr : _ Flambda.t =
-          Fstaticcatch (exn, [], Fswitch (arg, sw, d), failaction, d)
-        in
-        conv env expr
-      end
+      let ulam =
+        match sw.fs_failaction with
+        | None -> aux ()
+        | Some (Fstaticraise (_, args, _))
+            when List.for_all simple_expr args -> aux ()
+        | Some failaction ->
+          let exn = Static_exception.create () in
+          let fs_failaction = Some (Flambda.Fstaticraise (exn, [], d)) in
+          let sw = { sw with fs_failaction } in
+          clambda_for_expr ?expected_symbol env
+            (Fstaticcatch (exn, [], Fswitch (arg, sw, d), failaction, d))
+      in
+      ulam, Value_unknown
     | Fstringswitch (arg, sw, def, d) ->
-      let arg = conv env arg in
-      let sw = List.map (fun (s, e) -> s, conv env e) sw in
-      let def = Misc.may_map (conv env) def in
-      Ustringswitch (arg, sw, def)
+      let arg = clambda_for_expr ?expected_symbol env arg in
+      let sw =
+        List.map (fun (s, e) ->
+            s, clambda_for_expr ?expected_symbol env e)
+          sw
+      in
+      let def = Misc.may_map (clambda_for_expr ?expected_symbol env) def in
+      Ustringswitch (arg, sw, def), Value_unknown
     | Fprim (primitive, args, dbg, _annot) ->
+      ... (* conv_list env args *)
       conv_primitive ?expected_symbol ~env ~primitive ~args ~dbg
     | Fstaticraise (i, args, _) ->
-      Ustaticfail (Static_exception.to_int i, conv_list env args)
+      let uargs = clambda_for_expr_list ?expected_symbol env args in
+      Ustaticfail (Static_exception.to_int i, uargs), Value_unknown
     | Fstaticcatch (i, vars, body, handler, _) ->
       let env_handler, ids =
         List.fold_right (fun var (env, ids) ->
@@ -255,60 +386,117 @@ end) = struct
             env, id :: ids)
           vars (env, [])
       in
-      Ucatch (Static_exception.to_int i, ids,
-          conv env body, conv env_handler handler)
+      let body = clambda_for_expr ?expected_symbol env body in
+      let handler = clambda_for_expr ?expected_symbol env_handler body in
+      Ucatch (Static_exception.to_int i, ids, body, handler),
+        Value_unknown
     | Ftrywith (body, var, handler, _) ->
       let id, env_handler = add_unique_ident var env in
-      Utrywith (conv env body, id, conv env_handler handler)
+      let body = clambda_for_expr ?expected_symbol env body in
+      let handler = clambda_for_expr ?expected_symbol env_handler body in
+      Utrywith (body, id, handler), Value_unknown
     | Fifthenelse (arg, ifso, ifnot, _) ->
-      Uifthenelse (conv env arg, conv env ifso, conv env ifnot)
-    | Fsequence (lam1, lam2, _) -> Usequence (conv env lam1, conv env lam2)
-    | Fwhile (cond, body, _) -> Uwhile (conv env cond, conv env body)
+      let uarg = clambda_for_expr ?expected_symbol env arg in
+      let uifso = clambda_for_expr ?expected_symbol env ifso in
+      let uifnot = clambda_for_expr ?expected_symbol env ifnot in
+      Uifthenelse (uarg, uifso, uifnot), Value_unknown
+    | Fsequence (lam1, lam2, _) ->
+      let ulam1 = clambda_for_expr ?expected_symbol env lam1 in
+      let ulam2, approx =
+        clambda_and_approx_for_expr ?expected_symbol env lam2
+      in
+      Usequence (ulam1, ulam2, approx)
+    | Fwhile (cond, body, _) ->
+      Uwhile (conv env cond, conv env body), unit_approx ()
     | Ffor (var, lo, hi, dir, body, _) ->
       let id, env_body = add_unique_ident var env in
-      Ufor (id, conv env lo, conv env hi, dir, conv env_body body)
+      Ufor (id, conv env lo, conv env hi, dir, conv env_body body),
+        unit_approx ()
     | Fassign (var, lam, _) ->
       let id = try find_var var env with Not_found -> assert false in
-      Uassign (id, conv env lam)
+      Uassign (id, conv env lam), unit_approx ()
     | Fsend (kind, met, obj, args, dbg, _) ->
-      Usend (kind, conv env met, conv env obj, conv_list env args, dbg)
+      Usend (kind, conv env met, conv env obj, conv_list env args, dbg),
+        Value_unknown
     (* CR pchambart for pchambart: shouldn't be executable, maybe build
        something else
        mshinwell: I turned this into a CR. *)
-    | Funreachable _ -> Uunreachable
+    | Funreachable _ -> Uunreachable, Value_unknown
       (* Uprim (Praise, [Uconst (Uconst_pointer 0, None)], Debuginfo.none) *)
     | Fevent _ -> assert false
 
-  and conv_primitive ?expected_symbol ~env ~(primitive : Lambda.primitive)
-        ~args ~dbg : Clambda.ulambda =
+  and clambda_and_approx_for_primitive ?expected_symbol ~env
+        ~(primitive : Lambda.primitive) ~args ~dbg
+        : Clambda.ulambda * Flambdaexport.descr =
     match primitive, args, dbg with
-    | Pgetglobal id, _, _ ->
-      (* Should have been converted to a symbol access by the previous pass. *)
-      assert false
+    | Pgetglobal id, l, _ ->
+      (* Accesses to globals are transformed into symbol accesses. *)
+      assert (l = []);
+      let sym = Compilenv.symbol_for_global' id in
+      clambda_and_approx_for_expr ?expected_symbol env (Fsymbol (sym, ()))
     | Pgetglobalfield (id, i), l, dbg ->
       assert (l = []);
+      let lam : _ Flambda.t =
+        Fprim (Pfield i, [Fprim (Pgetglobal id, l, dbg, v)], dbg, v)
+      in
+      if id <> Compilenv.current_unit_id () then
+        clambda_and_approx_for_expr env lam
+      else
+        let approx = get_global i in
+        begin match approx with
+        | Value_symbol sym -> clambda_for_expr env (Fsymbol (sym, ())), approx
+        | _ -> clambda_for_expr env lam, approx
+        end
+      (* not sure what's going on here---is the following dead code?
       Uprim (Pfield i,
           [Uprim (Pgetglobal (Ident.create_persistent
               (Compilenv.symbol_for_global id)), [], dbg)],
           dbg)
+      *)
     | Psetglobalfield i, [arg], dbg ->
+      let uarg, approx =
+        clambda_and_approx_for_expr ?expected_symbol env arg
+      in
+      add_global i approx;
       Uprim (Psetfield (i, false),
           [Uprim (Pgetglobal (Ident.create_persistent
               (Compilenv.make_symbol None)), [], dbg);
            conv env arg],
-          dbg)
+          dbg),
+        Value_unknown
     | (Pmakeblock (tag, Asttypes.Immutable)) as p, args, dbg ->
-      let args = conv_list env args in
+      (* If we know the values of all of the fields of the new block, then
+         emit it as data, with a symbol to identify it.  The original
+         [Pmakeblock] turns into a reference to the symbol. *)
+      let args, approxs =
+        clambda_and_approx_for_list ?expected_symbol env args
+      in
+      let ex = new_descr (Value_block (tag, Array.of_list approxs)) in
       begin match constant_list args with
-      | None -> Uprim (p, args, dbg)
-      | Some l ->
-        let cst : Clambda.ustructured_constant = Uconst_block (tag, l) in
-        let lbl =
-          Compilenv.structured_constant_label expected_symbol ~shared:true cst
+      | None -> Uprim (p, args, dbg), Value_id ex
+      | Some arg_values ->
+        (* CR mshinwell: probably shouldn't be Uprim.  Just store [args] *)
+        let sym = add_constant (Uprim (p, args, dbg)) ex in
+        let cst : Clambda.ustructured_constant =
+          Uconst_block (tag, arg_values)
         in
-        Uconst (Uconst_ref (lbl, Some cst))
+        let lbl = Compilenv.structured_constant_label sym ~shared:true cst in
+        Uconst (Uconst_ref (lbl, Some cst)), Value_symbol sym
       end
-    | primitive, args, dbg -> Uprim (primitive, conv_list env args, dbg)
+    | Pfield i, [arg], dbg ->
+      let block, block_approx =
+        clambda_and_approx_for_expr ?unknown_symbol env arg
+      in
+      let approx =
+        match get_descr block_approx with
+        | Some (Value_block (_, fields)) ->
+          if i >= 0 && i < Array.length fields then fields.(i)
+          else Value_unknown
+        | _ -> Value_unknown
+      in
+      Uprim (Pfield i, [block], dbg, ()), approx
+    | primitive, args, dbg ->
+      Uprim (primitive, conv_list env args, dbg), Value_unknown
 
   and conv_switch env cases num_keys default =
     let num_keys =
@@ -331,36 +519,60 @@ end) = struct
     | [| |] -> [| |], [| |] (* May happen when [default] is [None] *)
     | _ -> index, actions
 
-  and conv_direct_apply ufunct args direct_func dbg env =
-    let closed = is_function_constant direct_func in
-    let label = Compilenv.function_label direct_func in
-    let uargs =
-      let uargs = conv_list env args in
-      if closed then uargs else uargs @ [ufunct]
-    in
-    let apply : Clambda.ulambda = Udirect_apply (label, uargs, dbg) in
-    let no_effect (ulambda : Clambda.ulambda) =
-      (* This is usually sufficient to detect application expressions where
-         the left-hand side has a side effect. *)
-      let rec no_effect (ulambda : Clambda.ulambda) =
-        match ulambda with
-        | Uvar _ | Uconst _ | Uprim (Pgetglobalfield _, _, _)
-        | Uprim (Pgetglobal _, _, _) -> true
-        | Uprim (Pfield _, [arg], _) -> no_effect arg
-        | _ -> false
-      in
-      match ulambda with
-      (* if the function is closed, then it is a Uconst otherwise,
-         we do not call this function *)
-      | Uclosure _ -> assert false
-      | e -> no_effect e
-    in
-    (* if the function is closed, the closure is not in the parameters,
-       so we must ensure that it is executed if it does some side effects *)
-    if closed && not (no_effect ufunct) then Usequence (ufunct, apply)
-    else apply
+  and clambda_and_approx_for_let_rec env defs body =
+        let consts, not_consts =
+          List.partition (fun (id,_) -> is_constant id) defs in
 
-  and conv_closure env functs fv ~expected_symbol =
+        let env, consts = List.fold_left
+            (fun (env, acc) (id,def) ->
+               let open Asttypes in
+               match def with
+               | Fconst (( Fconst_pointer _
+                         | Fconst_base
+                             (Const_int _ | Const_char _
+                             | Const_float _ | Const_int32 _
+                             | Const_int64 _ | Const_nativeint _)), _) ->
+                   (* When the value is an integer constant, we cannot affect a label
+                      to it: hence we must substitute it directly.
+                      For other numerical constant, a label could be attributed, but
+                      unboxing doesn't handle it well *)
+                   add_sb id (conv env def) env, acc
+               | Fvar (var_id, _) ->
+                   assert(List.for_all(fun (id,_) -> not (Variable.equal var_id id)) consts);
+                   (* For variables: the variable could have been substituted to
+                      a constant: avoid it by substituting it directly *)
+                   add_sb id (conv env def) env, acc
+               | _ ->
+                   let sym = Compilenv.new_const_symbol' () in
+                   let env = add_cm id sym env in
+                   env, (id,sym,def)::acc) (env,[]) consts in
+
+        List.iter (fun (id,sym,def) ->
+            match constant_symbol (conv env def) with
+            | Lbl sym' ->
+                (match symbol_id sym' with
+                 | None -> ()
+                 | Some eid -> add_symbol sym eid);
+                set_symbol_alias sym sym'
+            | _ ->
+                fatal_error (Format.asprintf
+                               "recursive constant value without symbol %a"
+                               Variable.print id))
+          consts;
+
+        let not_consts, env =
+          List.fold_right (fun (id,def) (not_consts,env') ->
+              let flam, approx = conv_approx env def in
+              let env' = add_approx id approx env' in
+              (id, flam) :: not_consts, env') not_consts ([],env) in
+
+        let body, approx = conv_approx env body in
+        (match not_consts with
+         | [] -> body
+         | _ -> Fletrec(not_consts, body, ())),
+        approx
+
+  and clambda_and_approx_for_set_of_closures env functs fv ~expected_symbol =
     (* Make the substitutions for variables bound by the closure:
        the variables bounds are the functions inside the closure and
        the free variables of the functions.
@@ -504,9 +716,275 @@ end) = struct
     else
       Uclosure (ufunct, List.map snd fv_ulam)
 
+  and conv_closure env functs param_approxs spec_arg fv =
+    let closed = Set_of_closures_id.Set.mem functs.ident P.constant_closures in
+
+    let fv_ulam_approx = Variable.Map.map (conv_approx env) fv in
+    let fv_ulam = Variable.Map.map (fun (lam,approx) -> lam) fv_ulam_approx in
+
+    let kept_fv id =
+      let cv = Var_within_closure.wrap id in
+      not (is_constant id)
+      || (Var_within_closure.Set.mem cv used_variable_withing_closure) in
+
+    let used_fv_approx = Variable.Map.filter (fun id _ -> kept_fv id) fv_ulam_approx in
+    let used_fv = Variable.Map.map (fun (lam,approx) -> lam) used_fv_approx in
+
+    let varmap_to_closfun_map map =
+      Variable.Map.fold (fun var v acc ->
+          let cf = Closure_id.wrap var in
+          Closure_id.Map.add cf v acc)
+        map Closure_id.Map.empty in
+
+    let value_closure' =
+      { closure_id = functs.ident;
+        bound_var =
+          Variable.Map.fold (fun off_id (_,approx) map ->
+              let cv = Var_within_closure.wrap off_id in
+              Var_within_closure.Map.add cv approx map)
+            used_fv_approx Var_within_closure.Map.empty;
+        results =
+          varmap_to_closfun_map
+            (Variable.Map.map (fun _ -> Value_unknown) functs.funs) } in
+
+    (* add informations about free variables *)
+    let env =
+      Variable.Map.fold (fun id (_,approx) -> add_approx id approx)
+        fv_ulam_approx env in
+
+    (* add info about symbols in specialised_arg *)
+    let env = Variable.Map.fold copy_env spec_arg env in
+
+    (* Constant closures will be moved out of their scope and assigned to
+       symbols.  When this happens, we must erase any constraint that
+       specializes an argument to another variable, since that variable may
+       no longer be in scope.  (Specializations of variables to values that
+       are now referenced by symbols, rather than variables, will already have
+       been performed.  As such, the operation is equivalent to erasing all
+       specialization information.) *)
+    let spec_arg =
+      if closed then Variable.Map.empty
+      else
+        Variable.Map.filter (fun _ id -> not (Variable.Map.mem id env.cm))
+          spec_arg
+    in
+
+    let conv_function id func =
+
+      (* inside the body of the function, we cannot access variables
+         declared outside, so take a clean substitution table. *)
+      let env = { env with sb = Variable.Map.empty } in
+
+      (* add informations about currently defined functions to
+         allow direct call *)
+      let env =
+        Variable.Map.fold (fun id _ env ->
+            let fun_id = Closure_id.wrap id in
+            let desc = Value_closure { fun_id; closure = value_closure' } in
+            let ex = new_descr desc in
+            if closed then add_symbol (Compilenv.closure_symbol fun_id) ex;
+            add_approx id (Value_id ex) env)
+          functs.funs env
+      in
+
+      let env =
+        (* param_approxs must be constants: part of specialised_args *)
+        Variable.Map.fold (fun id approx env -> add_approx id approx env)
+          param_approxs env in
+
+      (* Add to the substitution the value of the free variables *)
+      let add_env_variable id lam env =
+        match constant_symbol lam with
+        | Not_const ->
+            assert(not closed);
+            env
+        | No_lbl ->
+            add_sb id lam env
+        | Lbl lbl ->
+            add_cm id lbl env
+        | Const_closure ->
+            env
+      in
+      let env = Variable.Map.fold add_env_variable fv_ulam env in
+
+      let env =
+        if closed
+        then
+          (* if the function is closed, recursive call access those constants *)
+          Variable.Map.fold (fun id _ env ->
+              let fun_id = Closure_id.wrap id in
+              add_cm id (Compilenv.closure_symbol fun_id) env) functs.funs env
+        else env
+      in
+      let body, approx = conv_approx env func.body in
+      { func with
+        free_variables = Variable.Set.filter kept_fv func.free_variables;
+        body }, approx
+    in
+
+    let funs_approx = Variable.Map.mapi conv_function functs.funs in
+
+    let ufunct = { functs with funs = Variable.Map.map fst funs_approx } in
+
+    let value_closure' =
+      { value_closure' with
+        results = varmap_to_closfun_map (Variable.Map.map snd funs_approx) } in
+
+    let closure_ex_id = new_descr (Value_set_of_closures value_closure') in
+    let value_closure = Value_id closure_ex_id in
+
+    let expr =
+      let expr =
+        Fset_of_closures ({ cl_fun = ufunct;
+                    cl_free_var = used_fv;
+                    cl_specialised_arg = spec_arg }, ()) in
+      if Set_of_closures_id.Set.mem ufunct.ident P.constant_closures
+      then
+        let sym = add_constant expr closure_ex_id in
+        Fsymbol(sym, ())
+      else expr in
+    expr, value_closure
+
+  and clambda_for_direct_application ufunct args direct_func dbg env =
+    let closed = is_function_constant direct_func in
+    let label = Compilenv.function_label direct_func in
+    let uargs =
+      let uargs = conv_list env args in
+      if closed then uargs else uargs @ [ufunct]
+    in
+    let apply : Clambda.ulambda = Udirect_apply (label, uargs, dbg) in
+    let no_effect (ulambda : Clambda.ulambda) =
+      (* This is usually sufficient to detect application expressions where
+         the left-hand side has a side effect. *)
+      let rec no_effect (ulambda : Clambda.ulambda) =
+        match ulambda with
+        | Uvar _ | Uconst _ | Uprim (Pgetglobalfield _, _, _)
+        | Uprim (Pgetglobal _, _, _) -> true
+        | Uprim (Pfield _, [arg], _) -> no_effect arg
+        | _ -> false
+      in
+      match ulambda with
+      (* if the function is closed, then it is a Uconst otherwise,
+         we do not call this function *)
+      | Uclosure _ -> assert false
+      | e -> no_effect e
+    in
+    (* if the function is closed, the closure is not in the parameters,
+       so we must ensure that it is executed if it does some side effects *)
+    if closed && not (no_effect ufunct) then Usequence (ufunct, apply)
+    else apply
+
+  and clambda_and_approx_for_application env = function
+    | Fapply ({
+        (* The simple case: direct call of a closure from a known set of
+           closures. *)
+        ap_function =
+          Fclosure ({
+            fu_closure =
+              Fset_of_closures ({ cl_fun = ffuns; cl_free_var = fv;
+                  cl_specialised_arg }, _);
+            fu_fun = off;
+            fu_relative_to = (None as rel) }, _);
+        ap_arg = args;
+        ap_kind = Direct direc;
+        ap_dbg = dbg }, _) ->
+
+        assert (Closure_id.equal off direc);
+        let uargs, args_approx = conv_list_approx env args in
+        let func =
+          try find_declaration off ffuns
+          with Not_found -> assert false in
+        assert(List.length uargs = List.length func.params);
+        let args_approx =
+          List.fold_right2 Variable.Map.add func.params args_approx Variable.Map.empty
+          |> Variable.Map.filter (fun var _ -> Variable.Map.mem var cl_specialised_arg) in
+        let uffuns, fun_approx = conv_closure env ffuns args_approx cl_specialised_arg fv in
+        let approx = match get_descr fun_approx with
+          | Some(Value_closure { fun_id; closure = { results } }) ->
+              Closure_id.Map.find fun_id results
+          | _ -> Value_unknown
+        in
+
+        Fapply({ap_function =
+                  Fclosure ({fu_closure = uffuns;
+                              fu_fun = off;
+                              fu_relative_to = rel}, ());
+                ap_arg = uargs;
+                ap_kind = Direct direc;
+                ap_dbg = dbg}, ()),
+        approx
+
+
+    | Fapply ({ ap_function = funct; ap_arg = args; ap_kind = direct;
+          ap_dbg = dbg}, _) ->
+
+        let ufunct, fun_approx = conv_approx env funct in
+        let direct = match direct with
+          | Direct _ -> direct
+          | Indirect -> match get_descr fun_approx with
+            (* We mark some calls as direct when it is unknown:
+               for instance if simplify wasn't run before. *)
+            | Some (Value_closure { fun_id }) when
+                (function_arity fun_id) = List.length args ->
+                Direct fun_id
+            | _ -> Indirect
+        in
+        let approx = match get_descr fun_approx with
+          | Some(Value_closure { fun_id; closure = { results } }) ->
+              Closure_id.Map.find fun_id results
+          | _ -> Value_unknown
+        in
+        Fapply({ap_function = ufunct; ap_arg = conv_list env args;
+                ap_kind = direct;
+                ap_dbg = dbg}, ()),
+        approx
+
+    (* two cases from pass 2: *)
+    | Fapply ({ ap_function = funct; ap_arg = args;
+          ap_kind = Direct direct_func; ap_dbg = dbg }, _) ->
+      conv_direct_apply (conv env funct) args direct_func dbg env
+    | Fapply ({ ap_function = funct; ap_arg = args;
+          ap_kind = Indirect; ap_dbg = dbg }, _) ->
+      (* the closure parameter of the function is added by cmmgen, but
+         it already appears in the list of parameters of the clambda
+         function for generic calls. Notice that for direct calls it is
+         added here. *)
+      Ugeneric_apply (conv env funct, conv_list env args, dbg)
+
   and conv_list env l = List.map (conv env) l
 
-  and conv_const expected_symbol cst =
+  and add_symbols_and_compute_approx_for_constant (cst : Flambda.const)
+        : (_ Flambda.t option * Flambdaexport.descr) =
+    match cst with
+    | Fconst_base c ->
+      begin match c with
+      | Const_int i -> None, Value_id (new_descr (Value_int i))
+      | Const_char c -> None, Value_id (new_descr (Value_int (Char.code c)))
+      | Const_float s ->
+        None, Value_id (new_descr (Value_float (float_of_string s)))
+      | Const_int32 i ->
+        None, Value_id (new_descr (Value_boxed_int (Int32, i)))
+      | Const_int64 i ->
+        None, Value_id (new_descr (Value_boxed_int (Int64, i)))
+      | Const_nativeint i ->
+        None, Value_id (new_descr (Value_boxed_int (Nativeint, i)))
+      | Const_string _ ->
+        let ex_id = new_descr Value_string in
+        Some (Fsymbol (add_constant (Fconst (cst, ())) ex_id, ())),
+          Value_id ex_id
+      end
+    | Fconst_float f -> None, Value_id (new_descr (Value_float f))
+    | Fconst_pointer c -> None, Value_id (new_descr (Value_constptr c))
+    | Fconst_float_array c ->
+      let ex_id = new_descr Value_string in
+      Some (Fsymbol (add_constant (Fconst (cst, ())) ex_id, ())),
+        Value_id ex_id
+    | Fconst_immstring c ->
+      let ex_id = new_descr Value_string in
+      Some (Fsymbol (add_constant (Fconst (cst, ())) ex_id, ())),
+        Value_id ex_id
+
+  and clambda_for_constant expected_symbol cst =
     let str ~shared cst : Clambda.uconstant =
       let name =
         Compilenv.structured_constant_label expected_symbol ~shared cst

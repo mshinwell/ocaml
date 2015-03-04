@@ -10,6 +10,20 @@
 (*                                                                     *)
 (***********************************************************************)
 
+(*
+Transform an expression to prepare conversion to clambda
+- attributes symbols to structured constants
+- replace access to constants from the current compilation unit by Fsymbol nodes,
+  including access to fields from a constant closure inside the body of the function.
+- Find used closure fields and remove unused ones.
+- build value approximations for export
+
+During symbol assignment, some alias can be created (when building let rec for instance).
+They are replaced by their canonical representent in the Prepare functor application.
+
+Then the tables needed to build the Flambdaexport.exported type are build.
+*)
+
 (* Converts a flambda expression to clambda.
    During the conversion it:
     * substitute variables bound by a closure by a field access

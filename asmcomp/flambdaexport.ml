@@ -325,3 +325,28 @@ let import_for_pack ~pack_units ~pack exp =
   res
 
 let clear_import_state () = Export_id.Tbl.clear rename_id_state
+
+let canonical_approx (approx : Flambdaexport.approx) =
+  match approx with
+  | Value_unknown
+  | Value_id _ as v -> v
+  | Value_symbol sym -> Value_symbol (canonical_symbol sym)
+
+let rec canonical_descr (descr : Flambdaexport.descr) =
+  match descr with
+  | Value_block (tag, fields) ->
+    Value_block (tag, Array.map canonical_approx fields)
+  | Value_int _
+  | Value_constptr _
+  | Value_string
+  | Value_float _
+  | Value_boxed_int _ as v -> v
+  | Value_closure offset ->
+    Value_closure { offset with closure = (aux_closure offset.closure) }
+  | Value_set_of_closures clos -> Value_set_of_closures (aux_closure clos)
+
+and aux_closure clos =
+  { closure_id = clos.closure_id;
+    bound_var = Var_within_closure.Map.map canonical_approx clos.bound_var;
+    results = Closure_id.Map.map canonical_approx clos.results;
+  }

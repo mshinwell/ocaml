@@ -590,6 +590,13 @@ let unchanging_params_in_recursion (decls : _ Flambda.function_declarations) =
   in
   Variable.Set.diff variables not_unchanging
 
+let all_closures expr =
+  let closures = ref Set_of_closures_id.Set.empty in
+  Flambdaiter.iter_on_closures (fun cl _ ->
+      closures := Set_of_closures_id.Set.add cl.cl_fun.ident !closures)
+    expr;
+  !closures
+
 let list_closures expr ~closures =
   let aux (expr : _ Flambda.t) =
     match expr with
@@ -601,3 +608,13 @@ let list_closures expr ~closures =
     | e -> ()
   in
   Flambdaiter.iter aux expr
+
+let list_used_variables_within_closure expr =
+  let used = ref Var_within_closure.Set.empty in
+  let aux expr = match expr with
+    | Fvariable_in_closure({ vc_var },_) ->
+        used := Var_within_closure.Set.add vc_var !used
+    | e -> ()
+  in
+  Flambdaiter.iter aux expr;
+  !used
