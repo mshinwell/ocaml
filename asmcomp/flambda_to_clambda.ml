@@ -26,10 +26,30 @@ open Abstract_identifiers
 module Compilation_unit = Symbol.Compilation_unit
 module E = Flambda_exports_by_unit
 
-type t = E.t
+type t = {
+  exported : E.t;
+  symbol_alias : Symbol.t Symbol.Tbl.t;
+  mutable ex_table : Flambdaexport.descr Export_id.Map.t;
+}
 
 let create () =
-  E.create ()
+  { exported = E.create ();
+    symbol_alias = Symbol.Tbl.create 42;
+    ex_table = Export_id.Map.empty;
+  }
+
+let rec canonical_symbol t s =
+  try
+    let s' = Symbol.Tbl.find t.symbol_alias s in
+    let s'' = canonical_symbol t s' in
+    if s' != s'' then Symbol.Tbl.replace t.symbol_alias s s'';
+    s''
+  with Not_found -> s
+
+let set_symbol_alias t s1 s2 =
+  let s1' = canonical_symbol t s1 in
+  let s2' = canonical_symbol t s2 in
+  if s1' <> s2' then Symbol.Tbl.add t.symbol_alias s1' s2'
 
 let structured_constant_for_symbol (sym : Symbol.t)
       (ulambda : Clambda.ulambda) =
@@ -46,9 +66,53 @@ let structured_constant_for_symbol (sym : Symbol.t)
   (* | Uconst (Uconst_ref (None, Some cst)) -> cst *)
   | _ -> assert false
 
+(* Given a description of a value to be exported from the current
+   compilation unit, assign it a new export ID, and record the mapping from
+   ID to description. *)
+let add_new_export t (descr : Flambdaexport.descr) =
+  let id = Export_id.create (Compilenv.current_unit ()) in
+  t.ex_table <- Export_id.Map.add id descr t.ex_table;
+  id
+
+let extern_symbol_descr sym =
+  if Compilenv.is_predefined_exception sym
+  then None
+  else
+    let export = Compilenv.approx_for_global sym.sym_unit in
+    try
+      let id = Symbol.Map.find sym export.symbol_id in
+      let descr = find_description id export in
+      Some descr
+    with
+    | Not_found -> None
+
+let extern_id_descr ex =
+  let export = Compilenv.approx_env () in
+  try Some (find_description ex export)
+  with Not_found -> None
+
+let get_descr approx =
+  match approx with
+  | Value_unknown -> None
+  | Value_id ex ->
+      (try Some (Export_id.Map.find ex !(infos.ex_table)) with
+       | Not_found ->
+           extern_id_descr ex)
+  | Value_symbol sym ->
+      try
+        let ex = Symbol.Map.find sym !(infos.symbol_id) in
+        Some (Export_id.Map.find ex !(infos.ex_table))
+      with Not_found ->
+        extern_symbol_descr sym
+
+let add_new_export descr = add_new_export descr infos
+
+let unit_approx () = Value_id (add_new_export (Value_constptr 0))
+
 type env = {  (* See the [Fvar] case below for documentation. *)
-  subst : Clambda.ulambda Variable.Map.t;
-  var : Ident.t Variable.Map.t;
+  subst : (unit Flambda.t * Clambda.ulambda) Variable.Map.t;
+  constants : (Symbol.t * Ident.t) Variable.Map.t;
+  approx : approx Variable.Map.t;
 }
 
 let empty_env =
@@ -75,6 +139,73 @@ let add_unique_idents vars env =
   in
   ids, env_handler
 
+let rewritten_flambda_and_approx_for_constant (cst : Flambda.const)
+      : (_ Flambda.t option * Flambdaexport.descr) =
+  match cst with
+  | Fconst_base (Const_int i) ->
+    None, Value_id (add_new_export (Value_int i))
+  | Fconst_base (Const_char c) ->
+    None, Value_id (add_new_export (Value_int (Char.code c)))
+  | Fconst_base (Const_float s) ->
+    None, Value_id (add_new_export (Value_float (float_of_string s)))
+  | Fconst_base (Const_int32 i) ->
+    None, Value_id (add_new_export (Value_boxed_int (Int32, i)))
+  | Fconst_base (Const_int64 i) ->
+    None, Value_id (add_new_export (Value_boxed_int (Int64, i)))
+  | Fconst_base (Const_nativeint i) ->
+    None, Value_id (add_new_export (Value_boxed_int (Nativeint, i)))
+  | Fconst_float f ->
+    None, Value_id (add_new_export (Value_float f))
+  | Fconst_pointer c ->
+    None, Value_id (add_new_export (Value_constptr c))
+  | Fconst_base (Const_string _) | Fconst_immstring _
+  | Fconst_float_array _ ->
+    let id = add_new_export Value_string in
+    Some (Fsymbol (add_constant (Fconst (cst, ())) id, ())), Value_id id
+
+let clambda_for_constant expected_symbol cst : Clambda.uconstant =
+  let add_new_exported_structured_const ?not_shared cst : Clambda.uconstant =
+    (* CR mshinwell: try to hoist this function *)
+    let name =
+      let shared =
+        match not_shared with
+        | None -> true
+        | Some () -> false
+      in
+      Compilenv.structured_constant_label expected_symbol ~shared cst
+    in
+    Uconst_ref (name, Some cst)
+  in
+  match cst with
+  | Fconst_base (Const_int c) -> Uconst_int c
+  | Fconst_base (Const_char c) -> Uconst_int (Char.code c)
+  | Fconst_pointer c -> Uconst_ptr c
+  | Fconst_float f -> add_new_exported_structured_const (Uconst_float f)
+  | Fconst_float_array c ->  (* constant float arrays are really immutable *)
+    add_new_exported_structured_const
+      (Uconst_float_array (List.map float_of_string c))
+  | Fconst_immstring c ->
+    add_new_exported_structured_const (Uconst_string c)
+  | Fconst_base (Const_float x) ->
+    add_new_exported_structured_const (Uconst_float (float_of_string x))
+  | Fconst_base (Const_int32 x) ->
+    add_new_exported_structured_const (Uconst_int32 x)
+  | Fconst_base (Const_int64 x) ->
+    add_new_exported_structured_const (Uconst_int64 x)
+  | Fconst_base (Const_nativeint x) ->
+    add_new_exported_structured_const (Uconst_nativeint x)
+  | Fconst_base (Const_string (s, o)) ->
+    add_new_exported_structured_const ~not_shared:() (Uconst_string s)
+
+let fclambda_and_approx_for_constant cst =
+  let flambda, approx =
+    match rewritten_flambda_and_approx_for_constant cst with
+    | None, approx -> flambda, approx
+    | Some flambda, approx -> flambda, approx
+  in
+  let clambda = clambda_for_constant cst in
+  flambda, clambda, approx
+
 (* Note: there is at most one closure (likewise, one set of closures) in
    scope during any one call to [conv].  Accesses to outer closures are
    performed via this distinguished one.  (This was arranged during closure
@@ -85,7 +216,7 @@ let rec fclambda_and_approx_for_expr t (env : env) (expr : _ Flambda.t)
   match expr with
   | Fvar (var, _) -> flambda_and_approx_for_var t env ~var
   | Fsymbol (sym, _) ->
-    let sym = canonicalize_symbol sym in
+    let sym = canonical_symbol t sym in
     let linkage_name = Symbol.string_of_linkage_name sym.sym_label in
     let label = Compilenv.canonical_symbol linkage_name in
     (* CR pchambart for pchambart: Should delay the conversion a bit more
@@ -191,27 +322,26 @@ and fclambda_for_expr_pair env expr1 expr2 =
   let expr2, uexpr2 = fclambda_for_expr env expr2 in
   expr1, uexpr1, expr2, uexpr2
 
-and fclambda_and_approx_for_primitive ?expected_symbol ~env
-      ~(primitive : Lambda.primitive) ~args ~dbg
-      : Clambda.ulambda * Flambdaexport.descr =
+and fclambda_and_approx_for_primitive t env ~(primitive : Lambda.primitive)
+      ~args ~dbg : unit Flambda.t * Clambda.ulambda * Flambdaexport.descr =
   match primitive, args, dbg with
   | Pgetglobal id, l, _ ->
     (* Accesses to globals are transformed into symbol accesses. *)
     assert (l = []);
     let sym = Compilenv.symbol_for_global' id in
-    clambda_and_approx_for_expr ?expected_symbol env (Fsymbol (sym, ()))
+    fclambda_and_approx_for_expr t env (Fsymbol (sym, ()))
   | Pgetglobalfield (id, i), l, dbg ->
     assert (l = []);
     let lam : _ Flambda.t =
       Fprim (Pfield i, [Fprim (Pgetglobal id, l, dbg, v)], dbg, v)
     in
     if id <> Compilenv.current_unit_id () then
-      clambda_and_approx_for_expr env lam
+      fclambda_and_approx_for_expr env lam
     else
       let approx = get_global i in
       begin match approx with
-      | Value_symbol sym -> clambda_for_expr env (Fsymbol (sym, ())), approx
-      | _ -> clambda_for_expr env lam, approx
+      | Value_symbol sym -> fclambda_for_expr env (Fsymbol (sym, ())), approx
+      | _ -> fclambda_for_expr env lam, approx
       end
     (* not sure what's going on here---is the following dead code?
     Uprim (Pfield i,
@@ -220,10 +350,11 @@ and fclambda_and_approx_for_primitive ?expected_symbol ~env
         dbg)
     *)
   | Psetglobalfield i, [arg], dbg ->
-    let uarg, approx =
-      clambda_and_approx_for_expr ?expected_symbol env arg
+    let arg, uarg, approx =
+      fclambda_and_approx_for_expr ?expected_symbol env arg
     in
     add_global i approx;
+
     Uprim (Psetfield (i, false),
         [Uprim (Pgetglobal (Ident.create_persistent
             (Compilenv.make_symbol None)), [], dbg);
@@ -237,7 +368,7 @@ and fclambda_and_approx_for_primitive ?expected_symbol ~env
     let args, approxs =
       clambda_and_approx_for_list ?expected_symbol env args
     in
-    let ex = new_descr (Value_block (tag, Array.of_list approxs)) in
+    let ex = add_new_export (Value_block (tag, Array.of_list approxs)) in
     begin match constant_list args with
     | None -> Uprim (p, args, dbg), Value_id ex
     | Some arg_values ->
@@ -338,10 +469,10 @@ and fclambda_and_approx_for_closure env
         match get_descr fun_approx with
         | Some (Value_set_of_closures closure)
         | Some (Value_closure { closure }) ->
-          Value_id (new_descr (Value_closure { fun_id = id; closure }))
+          Value_id (add_new_export (Value_closure { fun_id = id; closure }))
         | Some _ -> assert false
         | _ ->
-          Format.printf "Bad approximation for [Fclosure] expression: %a@."
+          Format.printf "Bad approximation for Fclosure expression: %a@."
             Printflambda.flambda expr;
           assert false
       in
@@ -764,7 +895,7 @@ and conv_closure env functs param_approxs spec_arg fv =
       Variable.Map.fold (fun id _ env ->
           let fun_id = Closure_id.wrap id in
           let desc = Value_closure { fun_id; closure = value_closure' } in
-          let ex = new_descr desc in
+          let ex = add_new_export desc in
           if closed then add_symbol (Compilenv.closure_symbol fun_id) ex;
           add_approx id (Value_id ex) env)
         functs.funs env
@@ -813,7 +944,7 @@ and conv_closure env functs param_approxs spec_arg fv =
     { value_closure' with
       results = varmap_to_closfun_map (Variable.Map.map snd funs_approx) } in
 
-  let closure_ex_id = new_descr (Value_set_of_closures value_closure') in
+  let closure_ex_id = add_new_export (Value_set_of_closures value_closure') in
   let value_closure = Value_id closure_ex_id in
 
   let expr =
@@ -935,61 +1066,6 @@ and clambda_and_approx_for_application env = function
     Ugeneric_apply (conv env funct, conv_list env args, dbg)
 
 and conv_list env l = List.map (conv env) l
-
-and add_symbols_and_compute_approx_for_constant (cst : Flambda.const)
-      : (_ Flambda.t option * Flambdaexport.descr) =
-  match cst with
-  | Fconst_base c ->
-    begin match c with
-    | Const_int i -> None, Value_id (new_descr (Value_int i))
-    | Const_char c -> None, Value_id (new_descr (Value_int (Char.code c)))
-    | Const_float s ->
-      None, Value_id (new_descr (Value_float (float_of_string s)))
-    | Const_int32 i ->
-      None, Value_id (new_descr (Value_boxed_int (Int32, i)))
-    | Const_int64 i ->
-      None, Value_id (new_descr (Value_boxed_int (Int64, i)))
-    | Const_nativeint i ->
-      None, Value_id (new_descr (Value_boxed_int (Nativeint, i)))
-    | Const_string _ ->
-      let ex_id = new_descr Value_string in
-      Some (Fsymbol (add_constant (Fconst (cst, ())) ex_id, ())),
-        Value_id ex_id
-    end
-  | Fconst_float f -> None, Value_id (new_descr (Value_float f))
-  | Fconst_pointer c -> None, Value_id (new_descr (Value_constptr c))
-  | Fconst_float_array c ->
-    let ex_id = new_descr Value_string in
-    Some (Fsymbol (add_constant (Fconst (cst, ())) ex_id, ())),
-      Value_id ex_id
-  | Fconst_immstring c ->
-    let ex_id = new_descr Value_string in
-    Some (Fsymbol (add_constant (Fconst (cst, ())) ex_id, ())),
-      Value_id ex_id
-
-and clambda_for_constant expected_symbol cst =
-  let str ~shared cst : Clambda.uconstant =
-    let name =
-      Compilenv.structured_constant_label expected_symbol ~shared cst
-    in
-    Uconst_ref (name, Some cst)
-  in
-  match cst with
-  | Fconst_pointer c -> Uconst_ptr c
-  | Fconst_float f -> str ~shared:true (Uconst_float f)
-  | Fconst_float_array c ->
-    (* constant float arrays are really immutable *)
-    str ~shared:true (Uconst_float_array (List.map float_of_string c))
-  | Fconst_immstring c -> str ~shared:true (Uconst_string c)
-  | Fconst_base base ->
-    match base with
-    | Const_int c -> Uconst_int c
-    | Const_char c -> Uconst_int (Char.code c)
-    | Const_float x -> str ~shared:true (Uconst_float (float_of_string x))
-    | Const_int32 x -> str ~shared:true (Uconst_int32 x)
-    | Const_int64 x -> str ~shared:true (Uconst_int64 x)
-    | Const_nativeint x -> str ~shared:true (Uconst_nativeint x)
-    | Const_string (s, o) -> str ~shared:false (Uconst_string s)
 
 and constant_list l =
   let rec aux acc (ulambda : Clambda.ulambda list) =

@@ -27,7 +27,6 @@
 *)
 
 open Abstract_identifiers
-module E = Flambdaexport.Exported
 
 type t
 
