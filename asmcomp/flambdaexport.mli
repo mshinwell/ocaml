@@ -67,6 +67,11 @@ type exported = {
   (** Associates symbols and values *)
   offset_fun : int Closure_id.Map.t;
   (** Positions of function pointers in their closures *)
+  (* CR mshinwell: update comments, just pasted in from elsewhere *)
+  (* [fun_offset_table] associates a function label to its offset inside
+     a closure.  One table suffices, since the identifiers used as keys
+     are globally unique. *)
+  (* [fv_offset_table] is like [fun_offset_table], but for free variables. *)
   offset_fv : int Var_within_closure.Map.t;
   (** Positions of value pointers in their closures *)
   constants : Symbol.Set.t;

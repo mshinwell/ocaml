@@ -38,6 +38,7 @@ module Variable : sig
     ?append:string -> t -> t
 
   val in_compilation_unit : Symbol.Compilation_unit.t -> t -> bool
+  val in_current_compilation_unit : t -> bool
 
   val unique_name : t -> string
 end
@@ -64,6 +65,7 @@ module Closure_id : sig
   val unwrap : t -> Variable.t
 
   val in_compilation_unit : Symbol.Compilation_unit.t -> t -> bool
+  val in_current_compilation_unit : t -> bool
   val get_compilation_unit : t -> Symbol.Compilation_unit.t
 
   val name : t -> string

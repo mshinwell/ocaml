@@ -51,19 +51,42 @@ and approx =
   | Value_id of Export_id.t
   | Value_symbol of Symbol.t
 
-type exported = {
-  functions : unit function_declarations Set_of_closures_id.Map.t;
-  functions_off : unit function_declarations Closure_id.Map.t;
-  ex_values : descr Export_id.Map.t Compilation_unit.Map.t;
-  globals : approx Ident.Map.t;
-  id_symbol : Symbol.t Export_id.Map.t Compilation_unit.Map.t;
-  symbol_id : Export_id.t Symbol.Map.t;
-  offset_fun : int Closure_id.Map.t;
-  offset_fv : int Var_within_closure.Map.t;
-  constants : Symbol.Set.t;
-  constant_closures : Set_of_closures_id.Set.t;
-  kept_arguments : Variable.Set.t Set_of_closures_id.Map.t;
-}
+module Exported = struct
+  type t = {
+    functions : unit function_declarations Set_of_closures_id.Map.t;
+    functions_off : unit function_declarations Closure_id.Map.t;
+    ex_values : descr Export_id.Map.t Compilation_unit.Map.t;
+    globals : approx Ident.Map.t;
+    id_symbol : Symbol.t Export_id.Map.t Compilation_unit.Map.t;
+    symbol_id : Export_id.t Symbol.Map.t;
+    offset_fun : int Closure_id.Map.t;
+    offset_fv : int Var_within_closure.Map.t;
+    constants : Symbol.Set.t;
+    constant_closures : Set_of_closures_id.Set.t;
+    kept_arguments : Variable.Set.t Set_of_closures_id.Map.t;
+  }
+
+  let find_declaration t closure_id =
+    Closure_id.Map.find closure_id t.functions_off
+
+  let get_fun_offset_exn t closure_id =
+    Closure_id.Map.find closure_id t.fun_offset_table
+
+  let get_fv_offset_exn t var =
+    Var_within_closure.Map.find var t.fv_offset_table
+
+  let closure_declaration_position_exn t closure_id =
+    Closure_id.Map.find closure_id t.functions_off
+
+  let set_of_closures_declaration_position_exn t set_of_closures_id =
+    Set_of_closures_id.Map.find set_of_closures_id t.functions
+
+  (* CR mshinwell: consider renaming to [is_set_of_closures_constant] *)
+  let is_function_constant t set_of_closures_id =
+    Set_of_closures_id.Set.mem set_of_closures_id t.constant_closures
+end
+
+type exported = Exported.t
 
 let empty_export = {
   functions = Set_of_closures_id.Map.empty;
