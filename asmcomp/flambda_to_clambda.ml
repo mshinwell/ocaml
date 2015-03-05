@@ -341,14 +341,8 @@ and fclambda_and_approx_for_primitive t env ~(primitive : Lambda.primitive)
       let approx = get_global i in
       begin match approx with
       | Value_symbol sym -> fclambda_for_expr env (Fsymbol (sym, ())), approx
-      | _ -> fclambda_for_expr env lam, approx
+      | Value_unknown _ | Value_id _ -> fclambda_for_expr env lam, approx
       end
-    (* not sure what's going on here---is the following dead code?
-    Uprim (Pfield i,
-        [Uprim (Pgetglobal (Ident.create_persistent
-            (Compilenv.symbol_for_global id)), [], dbg)],
-        dbg)
-    *)
   | Psetglobalfield i, [arg], dbg ->
     let arg, uarg, approx =
       fclambda_and_approx_for_expr ?expected_symbol env arg
@@ -455,7 +449,7 @@ and fclambda_and_approx_for_var t env ~var =
 and fclambda_and_approx_for_closure env
       { fu_closure = lam; fu_fun = id; fu_relative_to = rel } =
   let ulam, approx =
-    if is_local_function_constant id then
+    if E.is_function_local_and_constant t.exported id then
       (* Only references to functions declared in the current module should
          need rewriting to a symbol.  For external functions this should
          already have been done at the original declaration. *)
