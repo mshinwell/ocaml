@@ -132,3 +132,8 @@ let function_arity t (closure_id : Closure_id.t) =
       Misc.fatal_error "cannot find declaration of closure to compute \
           arity: %a"
         Closure_id.print fun_id
+
+
+  let not_constants = P.not_constants
+  let is_constant id =
+    not (Variable.Set.mem id not_constants.Flambdaconstants.not_constant_id)

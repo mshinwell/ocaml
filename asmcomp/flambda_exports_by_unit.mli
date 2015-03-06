@@ -45,3 +45,6 @@ val is_function_local_and_constant : t -> Closure_id.t -> bool
 val is_set_of_closures_local_and_constant : t -> Set_of_closures_id.t -> bool
 
 val function_arity : t -> Closure_id.t -> int
+
+(* XXX does this risk confusion with [is_function_constant]? *)
+val is_variable_constant : t -> Variable.t -> bool
