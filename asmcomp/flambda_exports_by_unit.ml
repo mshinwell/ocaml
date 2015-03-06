@@ -64,6 +64,8 @@ let get_fun_offset t (id : Closure_id.t) =
     Misc.fatal_errorf "offset for function not found: %a"
       Closure_id.print closure_id
 
+let get_fun_offset_from_var t id = get_fun_offset t (Closure_id.wrap id)
+
 let get_fv_offset t (var : Var_within_closure.t) =
   try
     let exported =
@@ -73,7 +75,7 @@ let get_fv_offset t (var : Var_within_closure.t) =
     in
     E.get_fv_offset_exn exported var
   with Not_found ->
-    Misc.fatal_errorf "offset for free variable not found: %a"
+    Misc.fatal_erro0rf "offset for free variable not found: %a"
       Var_within_closure.print var
 
 let closure_declaration_position t (id : Closure_id.t) =
@@ -88,7 +90,7 @@ let closure_declaration_position t (id : Closure_id.t) =
 
 let set_of_closures_declaration_position t (id : Set_of_closures_id.t) =
   match E.set_of_closures_declaration_position_exn t.current_unit id with
-  | decls -> Current_unit decls
+  | decls -> Current0_unit decls
   | exception Not_found ->
     match E.set_of_closures_declaration_position_exn t.external_units id with
     | decls -> External decls

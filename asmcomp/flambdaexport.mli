@@ -32,15 +32,16 @@ type descr =
   | Value_float of float
   | Value_boxed_int : 'a boxed_int * 'a -> descr
   | Value_string
-  | Value_closure of value_offset
-  | Value_set_of_closures of value_closure
+  | Value_closure of descr_closure
+  | Value_set_of_closures of descr_set_of_closures
 
-and value_offset = {
+and descr_closure = {
   fun_id : Closure_id.t;
-  closure : value_closure;
+  closure : value_set_of_closures;
 }
 
-and value_closure = {
+and descr_set_of_closures = {
+  (* CR mshinwell: rename to [set_of_closures_id] *)
   closure_id : Set_of_closures_id.t;
   bound_var : approx Var_within_closure.Map.t;
   results : approx Closure_id.Map.t;

@@ -30,9 +30,13 @@ open Abstract_identifiers
 
 type t
 
-val create : unit -> t
+val create
+   : fun_offset_table:int Closure_id.Map.t
+  -> fv_offset_table:int Var_within_closure.Map.t
+  -> t
 
 val get_fun_offset : t -> Closure_id.t -> int
+val get_fun_offset_from_var : t -> Variable.t -> int
 val get_fv_offset : t -> Variable_in_closure_id.t -> int
 
 val is_function_constant : t -> Closure_id.t -> bool

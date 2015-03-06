@@ -32,6 +32,21 @@ type t
 
 val create : unit -> t
 
+(* [clean t] erases all information in the environment [t] that is local
+   to a given function.  For example, how to access some free variable of
+   a particular function is a local piece of information, whereas how to
+   access some globally-defined constant attached to a symbol is not. *)
+val clean : t -> t
+
+(* [add_variable t var lam ulam] records that the value of [var] is the
+   Flambda expression [lam] whose translation to Clambda was [ulam]. *)
+val add_variable
+   : t
+  -> Variable.t
+  -> _ Flambda.t
+  -> Clambda.ulambda
+  -> t
+
 (* [add_approximations t approx_map] adds mappings to [t] that identify
    known approximations for given variables. *)
 val add_approximations : t -> Flambdaexport.approx Variable.Map.t -> t

@@ -777,16 +777,6 @@ module Conv(P:Param1) = struct
     | Fsymbol _ -> true
     | _ -> false
 
-  and constant_symbol : unit flambda -> const_sym = function
-    | Fsymbol(sym, ()) ->
-        Lbl sym
-    | Fconst(_, ()) ->
-        No_lbl
-    | Fset_of_closures ({ cl_fun }, _) ->
-        if Set_of_closures_id.Set.mem cl_fun.ident P.constant_closures
-        then Const_closure
-        else Not_const
-    | _ -> Not_const
 
 
   let expr = conv empty_env P.expr

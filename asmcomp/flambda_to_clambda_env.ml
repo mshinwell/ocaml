@@ -25,8 +25,12 @@ type t = {
   subst : (unit Flambda.t * Clambda.ulambda) Variable.Map.t;
   (* XXX merge the next two *)
   variable_symbol_equalities : Symbol.t Variable.Map.t;
+  (* CR mshinwell: [constants] might be misleading, since [subst] can
+     map constants too (but not ones that have symbols associated
+     with them). *)
   constants : (Symbol.t * Ident.t) Variable.Map.t;
   approx : approx Variable.Map.t;
+  constant_closures : ...;
 }
 
 
@@ -34,6 +38,41 @@ let create () =
   {
 
   }
+
+let clean t = { t with subst = Variable.Map.empty; }
+
+type constant_classification =
+  | Constant_accessed_via_symbol of Symbol.t
+  | Constant_not_accessed_via_symbol
+  | Constant_closure
+  | Not_constant
+
+let classify_constant t (expr : unit Flambda.t) : constant_classification =
+  match expr with
+  | Fsymbol (sym, ()) -> Constant_accessed_via_symbol sym
+  | Fconst (_, ()) -> Constant_not_accessed_via_symbol
+  | Fset_of_closures ({ cl_fun }, _) ->
+      if Set_of_closures_id.Set.mem cl_fun.ident t.constant_closures
+      then Constant_closure
+      else Not_constant
+  | _ -> Not_constant
+
+let add_variable t var lam =
+  (* CR mshinwell: consider checking that [var] is not already mapped *)
+  match classify_constant lam with
+  | Constant_accessed_via_symbol symbol ->
+    { t with
+      constants = Variable.Map.add var symbol t.constants;
+    }
+  | Constant_not_accessed_via_symbol ->
+    { t with
+      (* XXX what about the clambda component? *)
+      subst = Variable.Map.add var lam t.subst;
+    }
+  | Constant_closure -> t
+  | Not_constant ->
+    assert (not is_constant);
+    env
 
 let add_approximations t vars_to_approxs =
 
