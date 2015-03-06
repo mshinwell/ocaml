@@ -836,69 +836,72 @@ and fclambda_and_approx_for_set_of_closures t env
   let closure_needs_variable id =
     (* CR mshinwell: I'm still a bit hazy on this, we should think about
        it more.  See email thread "kept_fv" *)
-
     let cv = Var_within_closure.wrap id in
     not (is_constant id)
-    || (Var_within_closure.Set.mem cv used_variable_withing_closure)
+      || (Var_within_closure.Set.mem cv used_variable_within_closure)
   in
   (* CR mshinwell: can this move up above? *)
   let fvs_with_approxs =
     Variable.Map.filter (fun fv _ -> do_not_eliminate_fv fv) fvs_with_approxs
   in
-
-  let varmap_to_closfun_map map =
-    Variable.Map.fold (fun var v acc ->
-        let cf = Closure_id.wrap var in
-        Closure_id.Map.add cf v acc)
-      map Closure_id.Map.empty in
-
-  let export_descr_for_set_of_closures : Flambdaexport.value_set_of_closures =
+  (* Build the export description of the set of closures.
+     We have to start with [Value_unknown] in [results], since
+     [fclambda_and_approx_for_one_closure_in_a_set_of_closures] needs to
+     construct values pointing at the export description, yet [results] cannot
+     be properly computed until we have called that function. *)
+  let descr_set_of_closures : Flambdaexport.descr_set_of_closures =
     { closure_id = fundecls.ident;
-      bound_var = ...;
-      results = ...;
-    }
-  in
-
-  let value_closure' =
-    { closure_id = functs.ident;
       bound_var =
-        Variable.Map.fold (fun off_id (_,approx) map ->
-            let cv = Var_within_closure.wrap off_id in
-            Var_within_closure.Map.add cv approx map)
-          used_fv_approx Var_within_closure.Map.empty;
+        let module M = Map_map (Variable) (Var_within_closure) in
+        M.map used_fv_approx ~map_data:snd;
       results =
-        varmap_to_closfun_map
-          (Variable.Map.map (fun _ -> Value_unknown) functs.funs) } in
-
-  let funs_approx = Variable.Map.mapi conv_function functs.funs in
-(* conv_function -> fclambda_and_approx_for_one_closure_in_a_set_of_closures *)
-
-  let fundecls =
-    { fundecls with
-      funs = ...;
+        let module M = Map_map (Variable) (Closure_id) in
+        M.map functs.funs ~map_data:(fun _ -> Value_unknown);
     }
   in
-(*  let ufunct = { functs with funs = Variable.Map.map fst funs_approx } in*)
-
-  let value_closure' =
-    { value_closure' with
-      results = varmap_to_closfun_map (Variable.Map.map snd funs_approx) } in
-
+  (* Assign symbols throughout the individual function declarations making
+     up the set of closures, convert them to Clambda, and obtain their
+     approximations. *)
+  let fclambda_for_fundecls_with_approxs =
+    Variable.Map.mapi
+      (fclambda_and_approx_for_one_closure_in_a_set_of_closures t env
+        ~descr_set_of_closures)
+      fundecls.funs
+  in
+  let fundecls =
+    (* Build a new set of function declarations incorporating the rewritten
+       Flambda terms. *)
+    { fundecls with
+      funs = Variable.Map.map fst fclambda_for_fundecls_with_approxs;
+    }
+  in
+  let descr_set_of_closures =
+    (* Update [results] now we can properly compute it. *)
+    { descr_set_of_closures =
+      results =
+        let module M = Map_map (Variable) (Closure_id) in
+        M.map fclambda_for_fundecls_with_approxs ~map_data:snd;
+    }
+  in
   (* The set of closures will always be exported; assign a new export ID
      and build the approximation. *)
   let closure_ex_id = add_new_export (Value_set_of_closures value_closure') in
-
+  (* Build the rewritten Flambda term.  If the set of closures are constant,
+     then we will emit it as a constant and replace it by a symbol access;
+     otherwise, it remains as an [Fset_of_closures] to be turned into a
+     dynamically-constructed closure value at runtime. *)
   let expr =
-    let expr =
+    let expr : _ Flambda.t =
       Fset_of_closures ({ cl_fun = ufunct;
-                  cl_free_var = used_fv;
-                  cl_specialised_arg = spec_arg }, ()) in
-    if Set_of_closures_id.Set.mem ufunct.ident P.constant_closures
-    then
+          cl_free_var = used_fv;
+          cl_specialised_arg = spec_arg },
+        ())
+    in
+    if E.is_function_local_and_constant t.exported ufunct.ident then
       let sym = add_constant expr closure_ex_id in
-      Fsymbol(sym, ())
-    else expr in
-  expr, value_closure
+      Fsymbol (sym, ())
+    else expr
+  in
 (* end flambdasym set of closures "conv_closure" case *)
   (* Substitute variables bound by the set of closures (function identifiers
      and free variables) for code that accesses their values from the

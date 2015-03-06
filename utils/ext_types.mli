@@ -47,6 +47,13 @@ module type ExtMap = sig
     (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
 end
 
+module Map_map (X : ExtMap) (Y : sig
+  include ExtMap
+  val wrap : X.key -> key
+end) : sig
+  val map : ?(map_data : 'a -> 'b) -> 'a X.t -> 'b Y.t
+end
+
 module type ExtSet = sig
   module M : PrintableHashOrdered
   include Set.S with type elt = M.t

@@ -301,3 +301,12 @@ struct
   let equal (a1,b1) (a2,b2) = A.equal a1 a2 && B.equal b1 b2
   let print ppf (a,b) = Format.fprintf ppf "(%a,@ %a)" A.print a B.print b
 end
+
+module Map_map (X : ExtMap) (Y : sig
+  include ExtMap
+  val wrap : X.key -> key
+end) = struct
+  let map ?(map_data = fun data -> data) map =
+    X.Map.fold (fun key data acc -> Y.add (Y.wrap key) (map_data data) acc)
+      map Y.empty
+end
