@@ -26,6 +26,13 @@ open Abstract_identifiers
 module Compilation_unit = Symbol.Compilation_unit
 module E = Flambda_exports_by_unit
 
+(* In this file, the terminology "fclambda" corresponds to a pair of
+   an Flambda and a Clambda expression; these are produced from an
+   incoming Flambda expression.  The output Flambda expression differs
+   from the input in that it is suitable for storing in a .cmx file.
+   The main transformation to enable this is the assignment of symbols.
+*)
+
 type t = {
   exported : E.t;
   symbol_alias : Symbol.t Symbol.Tbl.t;
@@ -197,8 +204,7 @@ let rec fclambda_and_approx_for_expr t (env : Flambda_to_clambda_env.t)
   | Flet (str, var, lam, body, _) ->
     fclambda_and_approx_for_let t ~env ~str ~var ~lam ~body
   | Fletrec (defs, body, _) ->
-    (* XXX this needs fixing up *)
-    ... = fclambda_and_approx_for_let_rec t env ...
+    fclambda_and_approx_for_let_rec t env defs body
     Uletrec (udefs, conv env body)
   | Fset_of_closures set_of_closures ->
     fclambda_and_approx_for_set_of_closures_declaration t env set_of_closures
@@ -226,7 +232,7 @@ let rec fclambda_and_approx_for_expr t (env : Flambda_to_clambda_env.t)
       Value_unknown
   | Fprim (primitive, args, dbg, _) ->
     let args, uargs = fclambda_for_expr_list env args in
-    conv_primitive ~env ~primitive ~args ~uargs ~dbg
+    fclambda_and_approx_for_primitive ~env ~primitive ~args ~uargs ~dbg
   | Fstaticraise (i, args, _) ->
     let args, uargs = fclambda_for_expr_list env args in
     Fstaticraise (i, args, ()),
@@ -1090,9 +1096,12 @@ let id_and_approximation_of_global_module_block t =
       + 1  (* the maximum index is zero-based, but the size is 1-based *)
     in
     let fields =
-      Array.init size_global (fun i ->
-          try canonical_approx (Hashtbl.find t.global i) with
-          | Not_found -> Value_unknown)
+      Array.init size_global (fun index_in_block ->
+          match Hashtbl.find t.global index_in_block with
+          | exception Not_found -> Value_unknown
+          | approx ->
+            Flambdaexport.canonical_approx approx
+              ~canonicalize_symbol:...
     in
     add_new_export (Value_block (0, fields))
   in
@@ -1116,14 +1125,31 @@ let convert (type a) t ~(expr : a Flambda.t)
         constants;
     !closures
   in
+  let root_id, root_approx = id_and_approximation_of_global_module_block t in
   (* stuff from flambdasym: *)
   (* replace symbol by their representative in value approximations *)
-  let ex_values =
-    Export_id.Map.map canonical_descr !(infos.ex_table)
-
+  let ex_values = Export_id.Map.map canonical_descr !(t.ex_table) in
   (* build the symbol to id and id to symbol maps *)
-  let module_symbol =
-    Compilenv.current_unit_symbol ()
+  let module_symbol = Compilenv.current_unit_symbol () in
+  let symbol_id =
+    let aux sym ex map =
+      let sym' = canonical_symbol sym in
+      Symbol.Map.add sym' ex map
+    in
+    Symbol.Map.fold aux !(infos.symbol_id) Symbol.Map.empty
+  let symbol_id =
+    Symbol.Map.add module_symbol root_id
+      symbol_id
+  let id_symbol =
+    Symbol.Map.fold (fun sym id map -> Export_id.Map.add id sym map)
+      symbol_id Export_id.Map.empty
+  let functions_off =
+    let aux_fun ffunctions off_id _ map =
+      let fun_id = Closure_id.wrap off_id in
+      Closure_id.Map.add fun_id ffunctions map in
+    let aux _ f map = Variable.Map.fold (aux_fun f) f.funs map in
+    Set_of_closures_id.Map.fold aux functions Closure_id.Map.empty
+  (* end of stuff not looked at *)
   let exported =
     (* Lay out closures for the current compilation unit, assigning offsets
        for function identifiers and free variables.  A single table
@@ -1145,6 +1171,17 @@ let convert (type a) t ~(expr : a Flambda.t)
 (*
     let constant_closures = exported.constant_closures
     let functions = exported.functions
+  let export = let open Flambdaexport in
+    { empty_export with
+      ex_values = Flambdaexport.nest_eid_map C2.ex_values;
+      globals = Ident.Map.singleton
+          (Compilenv.current_unit_id ()) C2.root_approx;
+      symbol_id = C2.symbol_id;
+      id_symbol = Flambdaexport.nest_eid_map C2.id_symbol;
+      functions = C2.functions;
+      functions_off = C2.functions_off;
+      constant_closures = constant_closures;
+      kept_arguments = C.kept_arguments }
 *)
     E.create ~fun_offset_table:(add_ext_offset_fun fun_offset_table)
       ~fv_offset_table:(add_ext_offset_fv fv_offset_table)
