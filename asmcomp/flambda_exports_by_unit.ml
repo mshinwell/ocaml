@@ -100,6 +100,8 @@ let set_of_closures_declaration_position t (id : Set_of_closures_id.t) =
 let is_function_constant t (id : Closure_id.t) =
   match closure_declaration_position t id with
   | Current_unit decls ->
+    (* CR mshinwell: [E.is_function_constant] needs to be renamed to
+       [E.is_set_of_closures_constant] *)
     E.is_function_constant t.current_unit decls.set_of_closures_id
   | External decls ->
     E.is_function_constant t.external_units decls.set_of_closures_id
@@ -109,6 +111,9 @@ let is_function_local_and_constant t (id : Closure_id.t) =
   | Current_unit decls ->
     E.is_function_constant t.current_unit decls.set_of_closures_id
   | External _ -> false
+
+let is_set_of_closures_local_and_constant t (id : Set_of_closures_id.t) =
+  E.is_function_constant t.current_unit id
 
 let is_closure_constant t (id : Set_of_closures_id.t) =
   match set_of_closures_declaration_position t id with

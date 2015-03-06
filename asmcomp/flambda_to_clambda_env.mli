@@ -21,23 +21,32 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* Tracking of export information collated from two sources:
-   1. the current compilation unit;
-   2. units imported by the current compilation unit.
+(* Environments used during Flambda -> Clambda conversion.  These keep
+   track of:
+   - variables whose approximations we know;
+   - variables whose value we know will always be the value referenced
+     by a given symbol.  We call these "variable-symbol equalities".
 *)
-
-open Abstract_identifiers
 
 type t
 
 val create : unit -> t
 
-val get_fun_offset : t -> Closure_id.t -> int
-val get_fv_offset : t -> Variable_in_closure_id.t -> int
+(* [add_approximations t approx_map] adds mappings to [t] that identify
+   known approximations for given variables. *)
+val add_approximations : t -> Flambdaexport.approx Variable.Map.t -> t
 
-val is_function_constant : t -> Closure_id.t -> bool
-(* CR mshinwell: we've introduced "local" by accident to mean "current unit" *)
-val is_function_local_and_constant : t -> Closure_id.t -> bool
-val is_set_of_closures_local_and_constant : t -> Set_of_closures_id.t -> bool
+(* [add_variable_symbol_equalities t var_mapping] examines each mapping
+   v |-> v' in [var_mapping] and determines whether [t] tells us that
+   the value of v' is always the value associated with some symbol S.
+   If this is the case, then [t] is updated to also note down that v
+   has the same relationship with S. *)
+val add_variable_symbol_equalities : t -> Variable.t Variable.Map.t -> t
 
-val function_arity : t -> Closure_id.t -> int
+(* [find_variable_symbol_equality t var] identifiers whether the value
+   of [var] is known to always be that associated with some symbol. *)
+val find_variable_symbol_equality : t -> Variable.t -> Symbol.t option
+
+(* [variable_has_symbol_equality t var] returns [true] iff [t] has a
+   variable-symbol equality for [var]. *)
+val variable_has_symbol_equality : t -> Variable.t -> bool

@@ -21,23 +21,31 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* Tracking of export information collated from two sources:
-   1. the current compilation unit;
-   2. units imported by the current compilation unit.
-*)
+type t = {
+  subst : (unit Flambda.t * Clambda.ulambda) Variable.Map.t;
+  (* XXX merge the next two *)
+  variable_symbol_equalities : Symbol.t Variable.Map.t;
+  constants : (Symbol.t * Ident.t) Variable.Map.t;
+  approx : approx Variable.Map.t;
+}
 
-open Abstract_identifiers
 
-type t
+let create () =
+  {
 
-val create : unit -> t
+  }
 
-val get_fun_offset : t -> Closure_id.t -> int
-val get_fv_offset : t -> Variable_in_closure_id.t -> int
+let add_approximations t vars_to_approxs =
 
-val is_function_constant : t -> Closure_id.t -> bool
-(* CR mshinwell: we've introduced "local" by accident to mean "current unit" *)
-val is_function_local_and_constant : t -> Closure_id.t -> bool
-val is_set_of_closures_local_and_constant : t -> Set_of_closures_id.t -> bool
+let find_variable_symbol_equality t var =
+  Variable.Map.find var t.variable_symbol_equalities
 
-val function_arity : t -> Closure_id.t -> int
+let variable_has_symbol_equality t var =
+  match find_variable_symbol_equality t var with
+  | None -> false
+  | Some _ -> true
+
+let add_variable_symbol_equalities t vars_to_vars =
+  Variable.Map.filter_mapi (fun arg specialised_to ->
+      find_variable_symbol_equality t specialised_to)
+    vars_to_vars

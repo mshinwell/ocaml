@@ -109,12 +109,6 @@ let add_new_export descr = add_new_export descr infos
 
 let unit_approx () = Value_id (add_new_export (Value_constptr 0))
 
-type env = {  (* See the [Fvar] case below for documentation. *)
-  subst : (unit Flambda.t * Clambda.ulambda) Variable.Map.t;
-  constants : (Symbol.t * Ident.t) Variable.Map.t;
-  approx : approx Variable.Map.t;
-}
-
 let empty_env =
   { subst = Variable.Map.empty;
     var = Variable.Map.empty;
@@ -344,16 +338,18 @@ and fclambda_and_approx_for_primitive t env ~(primitive : Lambda.primitive)
       | Value_unknown _ | Value_id _ -> fclambda_for_expr env lam, approx
       end
   | Psetglobalfield i, [arg], dbg ->
+    (* CR mshinwell: review this case and the one above once we figure out
+       what is going on *)
     let arg, uarg, approx =
       fclambda_and_approx_for_expr ?expected_symbol env arg
     in
     add_global i approx;
-
-    Uprim (Psetfield (i, false),
-        [Uprim (Pgetglobal (Ident.create_persistent
-            (Compilenv.make_symbol None)), [], dbg);
-         conv env arg],
-        dbg),
+    Fprim (Psetglobalfield i, [arg], dbg, ()),
+      Uprim (Psetfield (i, false),
+          [Uprim (Pgetglobal (Ident.create_persistent
+              (Compilenv.make_symbol None)), [], dbg);
+           conv env arg],
+          dbg),
       Value_unknown
   | (Pmakeblock (tag, Asttypes.Immutable)) as p, args, dbg ->
     (* If we know the values of all of the fields of the new block, then
@@ -448,6 +444,10 @@ and fclambda_and_approx_for_var t env ~var =
 
 and fclambda_and_approx_for_closure env
       { fu_closure = lam; fu_fun = id; fu_relative_to = rel } =
+
+
+
+
   let ulam, approx =
     if E.is_function_local_and_constant t.exported id then
       (* Only references to functions declared in the current module should
@@ -673,70 +673,57 @@ and clambda_and_approx_for_let_rec env defs body =
        | _ -> Fletrec(not_consts, body, ())),
       approx
 
-and clambda_and_approx_for_set_of_closures env functs fv ~expected_symbol =
-  | Fset_of_closures ({ cl_fun = funct; cl_free_var = fv;
-        cl_specialised_arg = spec_arg; }, _) ->
-    let args_approx =
-      Variable.Map.map (fun id -> get_approx id env) spec_arg
-    in
-    clambda_and_approx_for_set_of_closures ?expected_symbol env funct
-      args_approx spec_arg fv
-  (* Make the substitutions for variables bound by the closure:
-     the variables bounds are the functions inside the closure and
-     the free variables of the functions.
-     For instance the closure for code like:
+and fclambda_and_approx_for_one_closure_in_a_set_of_closures t env id func =
+  (* inside the body of the function, we cannot access variables
+     declared outside, so take a clean substitution table. *)
+  let env = { env with sb = Variable.Map.empty } in
 
-       let rec fun_a x =
-         if x <= 0 then 0 else fun_b (x-1) v1
-       and fun_b x y =
-         if x <= 0 then 0 else v1 + v2 + y + fun_a (x-1)
-
-     will be represented in memory as:
-
-       [ closure header; fun_a;
-         1; infix header; fun caml_curry_2;
-         2; fun_b; v1; v2 ]
-
-     fun_a and fun_b will take an additional parameter 'env' to
-     access their closure.  It will be shifted such that in the body
-     of a function the env parameter points to its code
-     pointer. i.e. in fun_b it will be shifted by 3 words.
-
-     Hence accessing to v1 in the body of fun_a is accessing to the
-     6th field of 'env' and in the body of fun_b it is the 1st
-     field.
-
-     If the closure can be compiled to a constant, the env parameter
-     is not always passed to the function (for direct calls). Inside
-     the body of the function, we acces a constant globaly defined:
-     there are label camlModule__id created to access the functions.
-     fun_a can be accessed by 'camlModule__id' and fun_b by
-     'camlModule__id_3' (3 is the offset of fun_b in the closure).
-     This can happen even for (toplevel) mutually-recursive functions.
-
-     Inside a constant closure, there will be no access to the
-     closure for the free variables, but if the function is inlined,
-     some variables can be retrieved from the closure outside of its
-     body, so constant closure still contains their free
-     variables. *)
-  let funct = Variable.Map.bindings functs.funs in
-  let closure_is_constant = is_closure_constant functs.ident in
-  (* The environment used for non constant closures. *)
-  let env_var = Ident.create "env" in
-  (* The label used for constant closures. *)
-  let closure_lbl =
-    match expected_symbol with
-    | None ->
-      assert (not closure_is_constant);
-      Compilenv.new_const_symbol ()
-    | Some sym ->
-      (* CR mshinwell for pchambart: please clarify comment *)
-      (* should delay conversion *)
-      Symbol.string_of_linkage_name sym.sym_label
+  (* add informations about currently defined functions to
+     allow direct call *)
+  let env =
+    Variable.Map.fold (fun id _ env ->
+        let fun_id = Closure_id.wrap id in
+        let desc = Value_closure { fun_id; closure = value_closure' } in
+        let ex = add_new_export desc in
+        if closed then add_symbol (Compilenv.closure_symbol fun_id) ex;
+        add_approx id (Value_id ex) env)
+      functs.funs env
   in
-  let fv_ulam =
-    List.map (fun (id, lam) -> id, conv env lam) (Variable.Map.bindings fv)
+
+  let env =
+    (* param_approxs must be constants: part of specialised_args *)
+    Variable.Map.fold (fun id approx env -> add_approx id approx env)
+      param_approxs env in
+
+  (* Add to the substitution the value of the free variables *)
+  let add_env_variable id lam env =
+    match constant_symbol lam with
+    | Not_const ->
+        assert(not closed);
+        env
+    | No_lbl ->
+        add_sb id lam env
+    | Lbl lbl ->
+        add_cm id lbl env
+    | Const_closure ->
+        env
   in
+  let env = Variable.Map.fold add_env_variable fv_ulam env in
+
+  let env =
+    if closed
+    then
+      (* if the function is closed, recursive call access those constants *)
+      Variable.Map.fold (fun id _ env ->
+          let fun_id = Closure_id.wrap id in
+          add_cm id (Compilenv.closure_symbol fun_id) env) functs.funs env
+    else env
+  in
+  let body, approx = conv_approx env func.body in
+  { func with
+    free_variables = Variable.Set.filter kept_fv func.free_variables;
+    body }, approx
+  (* there follows the Clambdagen part *)
   let conv_function (id, (func : _ Flambda.function_declaration))
         : Clambda.ufunction =
     let cf = Closure_id.wrap id in
@@ -809,26 +796,51 @@ and clambda_and_approx_for_set_of_closures env functs fv ~expected_symbol =
       dbg = func.dbg;
     }
   in
-  let ufunct = List.map conv_function funct in
-  if closure_is_constant then
-    match constant_list (List.map snd fv_ulam) with
-    | Some fv_const ->
-      let cst : Clambda.ustructured_constant =
-        Uconst_closure (ufunct, closure_lbl, fv_const)
-      in
-      let closure_lbl =
-        Compilenv.add_structured_constant closure_lbl cst ~shared:true
-      in
-      Uconst (Uconst_ref (closure_lbl, Some cst))
-    | None -> assert false
-  else
-    Uclosure (ufunct, List.map snd fv_ulam)
 
-and conv_closure env functs param_approxs spec_arg fv =
-  let closed = Set_of_closures_id.Set.mem functs.ident P.constant_closures in
-
-  let fv_ulam_approx = Variable.Map.map (conv_approx env) fv in
-  let fv_ulam = Variable.Map.map (fun (lam,approx) -> lam) fv_ulam_approx in
+(* renamed functs -> fundecls. *)
+and fclambda_and_approx_for_set_of_closures t env
+      (fundecls : _ Flambda.function_declarations)
+      (fv : _ Flambda.t Variable.Map.t)
+      (specialised_args : Variable.t Variable.Map.t) =
+  let is_constant = E.is_set_of_closures_local_and_constant fundecls.ident in
+  (* Compute fclambda and approximations for the free variables of the
+     set of closures. *)
+  let fvs_with_approxs =
+    Variable.Map.map (fclambda_and_approx_for_expr t env) fv
+  in
+  let fvs_to_approxs =
+    Variable.Map.map (fun (_flambda, _clambda, approx) -> approx)
+      fvs_with_approxs
+  in
+  (* Augment the environment with:
+     1. approximations of the free variables of the set of closures;
+     2. variable-symbol equalities, for arguments whose values are known to
+        always be equal to the value associated with a given symbol. *)
+  let env =
+    Env.add_variable_symbol_equalities
+      (Env.add_approximations env fvs_to_approxs)
+      specialised_args_with_symbol_equalities
+  in
+  let specialised_args =
+    if closed then
+      (* CR mshinwell: "already have been performed" where? *)
+      (* Constant closures will be moved out of their scope and assigned to
+         symbols.  When this happens, we must erase any constraint that
+         specializes an argument to another variable, since that variable may
+         no longer be in scope.  (Specializations of variables to values that
+         are now referenced by symbols, rather than variables, will already have
+         been performed.  As such, the operation is equivalent to erasing all
+         specialization information.)
+      *)
+      Variable.Map.empty
+    else
+      (* For a set of closures that is non-constant, remove from
+         [specialised_args] any arguments that have a variable-symbol
+         equality. *)
+      Variable.Map.filter (fun _arg specialised_to ->
+          not (Env.variable_has_symbol_equality env specialised_to))
+        specialised_args
+  in
 
   let kept_fv id =
     let cv = Var_within_closure.wrap id in
@@ -855,91 +867,27 @@ and conv_closure env functs param_approxs spec_arg fv =
         varmap_to_closfun_map
           (Variable.Map.map (fun _ -> Value_unknown) functs.funs) } in
 
-  (* add informations about free variables *)
-  let env =
-    Variable.Map.fold (fun id (_,approx) -> add_approx id approx)
-      fv_ulam_approx env in
 
-  (* add info about symbols in specialised_arg *)
-  let env = Variable.Map.fold copy_env spec_arg env in
 
-  (* Constant closures will be moved out of their scope and assigned to
-     symbols.  When this happens, we must erase any constraint that
-     specializes an argument to another variable, since that variable may
-     no longer be in scope.  (Specializations of variables to values that
-     are now referenced by symbols, rather than variables, will already have
-     been performed.  As such, the operation is equivalent to erasing all
-     specialization information.) *)
-  let spec_arg =
-    if closed then Variable.Map.empty
-    else
-      Variable.Map.filter (fun _ id -> not (Variable.Map.mem id env.cm))
-        spec_arg
-  in
 
-  let conv_function id func =
-
-    (* inside the body of the function, we cannot access variables
-       declared outside, so take a clean substitution table. *)
-    let env = { env with sb = Variable.Map.empty } in
-
-    (* add informations about currently defined functions to
-       allow direct call *)
-    let env =
-      Variable.Map.fold (fun id _ env ->
-          let fun_id = Closure_id.wrap id in
-          let desc = Value_closure { fun_id; closure = value_closure' } in
-          let ex = add_new_export desc in
-          if closed then add_symbol (Compilenv.closure_symbol fun_id) ex;
-          add_approx id (Value_id ex) env)
-        functs.funs env
-    in
-
-    let env =
-      (* param_approxs must be constants: part of specialised_args *)
-      Variable.Map.fold (fun id approx env -> add_approx id approx env)
-        param_approxs env in
-
-    (* Add to the substitution the value of the free variables *)
-    let add_env_variable id lam env =
-      match constant_symbol lam with
-      | Not_const ->
-          assert(not closed);
-          env
-      | No_lbl ->
-          add_sb id lam env
-      | Lbl lbl ->
-          add_cm id lbl env
-      | Const_closure ->
-          env
-    in
-    let env = Variable.Map.fold add_env_variable fv_ulam env in
-
-    let env =
-      if closed
-      then
-        (* if the function is closed, recursive call access those constants *)
-        Variable.Map.fold (fun id _ env ->
-            let fun_id = Closure_id.wrap id in
-            add_cm id (Compilenv.closure_symbol fun_id) env) functs.funs env
-      else env
-    in
-    let body, approx = conv_approx env func.body in
-    { func with
-      free_variables = Variable.Set.filter kept_fv func.free_variables;
-      body }, approx
-  in
 
   let funs_approx = Variable.Map.mapi conv_function functs.funs in
+(* conv_function -> fclambda_and_approx_for_one_closure_in_a_set_of_closures *)
 
-  let ufunct = { functs with funs = Variable.Map.map fst funs_approx } in
+  let fundecls =
+    { fundecls with
+      funs = ...;
+    }
+  in
+(*  let ufunct = { functs with funs = Variable.Map.map fst funs_approx } in*)
 
   let value_closure' =
     { value_closure' with
       results = varmap_to_closfun_map (Variable.Map.map snd funs_approx) } in
 
+  (* The set of closures will always be exported; assign a new export ID
+     and build the approximation. *)
   let closure_ex_id = add_new_export (Value_set_of_closures value_closure') in
-  let value_closure = Value_id closure_ex_id in
 
   let expr =
     let expr =
@@ -952,6 +900,78 @@ and conv_closure env functs param_approxs spec_arg fv =
       Fsymbol(sym, ())
     else expr in
   expr, value_closure
+(* end flambdasym set of closures "conv_closure" case *)
+  (* Substitute variables bound by the set of closures (function identifiers
+     and free variables) for code that accesses their values from the
+     closure value that will exist at runtime.  There is one closure value
+     for each set of closures.  As an example, the closure value for:
+       let rec fun_a x =
+         if x <= 0 then 0 else fun_b (x-1) v1
+       and fun_b x y =
+         if x <= 0 then 0 else v1 + v2 + y + fun_a (x-1)
+
+     will be represented in memory like this:
+       [ Closure_tag header; fun_a; 1;
+         Infix_tag header; fun caml_curry_2; 2; fun_b; v1; v2;
+       ]
+
+     fun_a and fun_b will take an additional parameter 'env' to
+     access their closure.  It will be shifted such that in the body
+     of a function the env parameter points to its code
+     pointer. i.e. in fun_b it will be shifted by 3 words.
+
+     Hence accessing to v1 in the body of fun_a is accessing to the
+     6th field of 'env' and in the body of fun_b it is the 1st
+     field.
+
+     If the closure can be compiled to a constant, the env parameter
+     is not always passed to the function (for direct calls). Inside
+     the body of the function, we acces a constant globaly defined:
+     there are label camlModule__id created to access the functions.
+     fun_a can be accessed by 'camlModule__id' and fun_b by
+     'camlModule__id_3' (3 is the offset of fun_b in the closure).
+     This can happen even for (toplevel) mutually-recursive functions.
+
+     Inside a constant closure, there will be no access to the
+     closure for the free variables, but if the function is inlined,
+     some variables can be retrieved from the closure outside of its
+     body, so constant closure still contains their free
+     variables. *)
+(*
+    | Fset_of_closures({ cl_fun = functs; cl_free_var = fv }, _) ->
+(in original code, cl_fun = funct, then passed to "functs" argument)
+*)
+  let funct = Variable.Map.bindings functs.funs in
+  (* The environment used for non constant closures. *)
+  let env_var = Ident.create "env" in
+  (* The label used for constant closures. *)
+  let closure_lbl =
+    match expected_symbol with
+    | None ->
+      assert (not closure_is_constant);
+      Compilenv.new_const_symbol ()
+    | Some sym ->
+      (* CR mshinwell for pchambart: please clarify comment *)
+      (* should delay conversion *)
+      Symbol.string_of_linkage_name sym.sym_label
+  in
+  (* Build the clambda expression representing the set of closures. *)
+  let clambda_for_set_of_closures =
+    if is_constant then
+      match constant_list (List.map snd fv_ulam) with
+      | Some fv_const ->
+        let cst : Clambda.ustructured_constant =
+          Uconst_closure (ufunct, closure_lbl, fv_const)
+        in
+        let closure_lbl =
+          Compilenv.add_structured_constant closure_lbl cst ~shared:true
+        in
+        Uconst (Uconst_ref (closure_lbl, Some cst))
+      | None -> assert false
+    else
+      Uclosure (ufunct, List.map snd fv_ulam)
+  in
+  ???, clambda_for_set_of_closures, Value_id closure_ex_id
 
 and clambda_for_direct_application ufunct args direct_func dbg env =
   let closed = is_function_constant direct_func in
