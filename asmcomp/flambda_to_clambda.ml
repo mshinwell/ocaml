@@ -834,7 +834,8 @@ and fclambda_and_approx_for_set_of_closures t env
   (* Identify which variables really are needed in the closure value that
      will exist at runtime to correspond to [fundecls]. *)
   let closure_needs_variable id =
-
+    (* CR mshinwell: I'm still a bit hazy on this, we should think about
+       it more.  See email thread "kept_fv" *)
 
     let cv = Var_within_closure.wrap id in
     not (is_constant id)
@@ -1097,7 +1098,10 @@ let constants =
 
 let clambda_expr = conv empty_env P.expr
 
-let convert (type a)
+let create () =
+  ...
+
+let convert (type a) t
     ((expr : a Flambda.t),
      (constants : a Flambda.t Symbol.Map.t),
      (exported : Flambdaexport.exported)) =
@@ -1126,29 +1130,16 @@ let convert (type a)
       Flambda_lay_out_closure.reexported_offsets ~extern_fun_offset_table
         ~extern_fv_offset_table ~expr
     in
+(*
+    let constant_closures = exported.constant_closures
+    let functions = exported.functions
+*)
     E.create ~fun_offset_table:(add_ext_offset_fun fun_offset_table)
       ~fv_offset_table:(add_ext_offset_fv fv_offset_table)
-  in
-
-  let module C = Generate_clambda (struct
-    type t = a
-    let expr = expr
-    let constants = constants
-    let constant_closures = exported.constant_closures
-    let fun_offset_table = fun_offset_table
-    let fv_offset_table = fv_offset_table
-    let closures = closures
-    let functions = exported.functions
-  end) in
-  let export : Flambdaexport.exported =
-    { exported with
-      offset_fun = add_ext_offset_fun fun_offset_table;
-      offset_fv = add_ext_offset_fv fv_offset_table;
-    }
   in
   Compilenv.set_export_info export;
   Symbol.Map.iter (fun sym cst ->
        let lbl = Symbol.string_of_linkage_name sym.sym_label in
        Compilenv.add_exported_constant lbl)
     C.constants;
-  C.clambda_expr
+  fclambda_and_approx_for_expr t env expr

@@ -41,6 +41,7 @@ let create () =
 
 let clean t = { t with subst = Variable.Map.empty; }
 
+(* XXX this is needed in the [Flet] case in flambda_to_clambda *)
 type constant_classification =
   | Constant_accessed_via_symbol of Symbol.t
   | Constant_not_accessed_via_symbol
