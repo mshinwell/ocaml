@@ -47,6 +47,10 @@ val add_variable
   -> Clambda.ulambda
   -> t
 
+(* [add_approximation t var approx] adds a mapping to [t] that identifies
+   the variable [var] as having approximation [approx]. *)
+val add_approximation : t -> Variable.t -> Flambdaexport.approx -> t
+
 (* [add_approximations t approx_map] adds mappings to [t] that identify
    known approximations for given variables. *)
 val add_approximations : t -> Flambdaexport.approx Variable.Map.t -> t

@@ -153,3 +153,12 @@ let compare_structured_constants c1 c2 =
       String.compare lbl1 lbl2
   | _, _ -> rank_structured_constant c1 - rank_structured_constant c2
                 (* no overflow possible here *)
+
+let all_constants l =
+  let rec aux acc (ulambda : ulambda list) =
+    match ulambda with
+    | [] -> Some (List.rev acc)
+    | (Uconst v)::q -> aux (v :: acc) q
+    | _ -> None
+  in
+  aux [] l

@@ -89,3 +89,29 @@ let add_variable_symbol_equalities t vars_to_vars =
   Variable.Map.filter_mapi (fun arg specialised_to ->
       find_variable_symbol_equality t specialised_to)
     vars_to_vars
+
+
+
+let empty_env =
+  { subst = Variable.Map.empty;
+    var = Variable.Map.empty;
+  }
+
+let add_sb id subst env =
+  { env with subst = Variable.Map.add id subst env.subst }
+
+let find_sb id env = Variable.Map.find id env.subst
+let find_var id env = Variable.Map.find id env.var
+
+let add_unique_ident var env =
+  let id = Variable.unique_ident var in
+  id, { env with var = Variable.Map.add var id env.var }
+
+let add_unique_idents vars env =
+  let env_handler, ids =
+    List.fold_right (fun var (env, ids) ->
+        let id, env = add_unique_ident var env in
+        env, id :: ids)
+      vars (env, [])
+  in
+  ids, env_handler

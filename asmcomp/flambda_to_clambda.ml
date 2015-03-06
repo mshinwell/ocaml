@@ -29,12 +29,14 @@ module E = Flambda_exports_by_unit
 type t = {
   exported : E.t;
   symbol_alias : Symbol.t Symbol.Tbl.t;
+  global : (int, Flambdaexport.approx) Hashtbl.t;
   mutable ex_table : Flambdaexport.descr Export_id.Map.t;
 }
 
 let create () =
   { exported = E.create ();
     symbol_alias = Symbol.Tbl.create 42;
+    global = Hashtbl.create 42;
     ex_table = Export_id.Map.empty;
   }
 
@@ -74,6 +76,8 @@ let add_new_export t (descr : Flambdaexport.descr) =
   t.ex_table <- Export_id.Map.add id descr t.ex_table;
   id
 
+let unit_approx t = Value_id (add_new_export t (Value_constptr 0))
+
 let extern_symbol_descr sym =
   if Compilenv.is_predefined_exception sym
   then None
@@ -88,50 +92,22 @@ let extern_symbol_descr sym =
 
 let extern_id_descr ex =
   let export = Compilenv.approx_env () in
-  try Some (find_description ex export)
+  try Some (find_description ex (Compilenv.approx_env ()))
   with Not_found -> None
 
-let get_descr approx =
+let get_descr t approx =
   match approx with
   | Value_unknown -> None
   | Value_id ex ->
-      (try Some (Export_id.Map.find ex !(infos.ex_table)) with
+      (try Some (Export_id.Map.find ex !(t.ex_table)) with
        | Not_found ->
            extern_id_descr ex)
   | Value_symbol sym ->
       try
-        let ex = Symbol.Map.find sym !(infos.symbol_id) in
-        Some (Export_id.Map.find ex !(infos.ex_table))
+        let ex = Symbol.Map.find sym !(t.symbol_id) in
+        Some (Export_id.Map.find ex !(t.ex_table))
       with Not_found ->
         extern_symbol_descr sym
-
-let add_new_export descr = add_new_export descr infos
-
-let unit_approx () = Value_id (add_new_export (Value_constptr 0))
-
-let empty_env =
-  { subst = Variable.Map.empty;
-    var = Variable.Map.empty;
-  }
-
-let add_sb id subst env =
-  { env with subst = Variable.Map.add id subst env.subst }
-
-let find_sb id env = Variable.Map.find id env.subst
-let find_var id env = Variable.Map.find id env.var
-
-let add_unique_ident var env =
-  let id = Variable.unique_ident var in
-  id, { env with var = Variable.Map.add var id env.var }
-
-let add_unique_idents vars env =
-  let env_handler, ids =
-    List.fold_right (fun var (env, ids) ->
-        let id, env = add_unique_ident var env in
-        env, id :: ids)
-      vars (env, [])
-  in
-  ids, env_handler
 
 let rewritten_flambda_and_approx_for_constant (cst : Flambda.const)
       : (_ Flambda.t option * Flambdaexport.descr) =
@@ -225,8 +201,8 @@ let rec fclambda_and_approx_for_expr t (env : Flambda_to_clambda_env.t)
     ... = fclambda_and_approx_for_let_rec t env ...
     Uletrec (udefs, conv env body)
   | Fset_of_closures set_of_closures ->
-    fclambda_and_approx_for_set_of_closures t env set_of_closures
-  | Fclosure closure -> fclambda_and_approx_for_closure env closure
+    fclambda_and_approx_for_set_of_closures_declaration t env set_of_closures
+  | Fclosure closure -> fclambda_and_approx_for_closure_reference env closure
   | Fvariable_in_closure var_in_closure ->
     fclambda_and_approx_for_variable_in_closure env var_in_closure
   | Fapply apply -> fclambda_and_approx_for_application env apply
@@ -279,17 +255,17 @@ let rec fclambda_and_approx_for_expr t (env : Flambda_to_clambda_env.t)
     Fsequence (lam1, lam2, ()), Usequence (ulam1, ulam2), approx
   | Fwhile (cond, body, _) ->
     let cond, ucond, body, ubody = fclambda_for_expr_pair env cond body in
-    Fwhile (cond, body, ()), Uwhile (cond, body), unit_approx ()
+    Fwhile (cond, body, ()), Uwhile (cond, body), unit_approx t
   | Ffor (var, lo, hi, dir, body, _) ->
     let lo, ulo, hi, uhi = fclambda_for_expr_pair env lo hi in
     let id, env_body = add_unique_ident var env in
     let body, ubody = fclambda_for_expr env_body body in
     Ffor (var, lo, hi, dir, body, ()), Ufor (id, lo, hi, dir, body),
-      unit_approx ()
+      unit_approx t
   | Fassign (var, lam, _) ->
     let lam, ulam = fclambda_for_expr env lam in
     let id = try find_var var env with Not_found -> assert false in
-    Fassign (var, lam, ()), Uassign (id, ulam), unit_approx ()
+    Fassign (var, lam, ()), Uassign (id, ulam), unit_approx t
   | Fsend (kind, met, obj, args, dbg, _) ->
     let met, umet = fclambda_for_expr env met in
     let obj, uobj = fclambda_for_expr env obj in
@@ -304,8 +280,8 @@ let rec fclambda_and_approx_for_expr t (env : Flambda_to_clambda_env.t)
   | Fevent _ -> assert false
 
 and fclambda_for_expr env expr =
-  let expr, _approx = fclambda_and_approx_for_expr env expr in
-  expr
+  let expr, uexpr, _approx = fclambda_and_approx_for_expr env expr in
+  expr, uexpr
 
 and fclambda_for_expr_pair env expr1 expr2 =
   let expr1, uexpr1 = fclambda_for_expr env expr1 in
@@ -335,7 +311,18 @@ and fclambda_and_approx_for_primitive t env ~(primitive : Lambda.primitive)
       end
   | Psetglobalfield i, [arg], dbg ->
     (* CR mshinwell: review this case and the one above once we figure out
-       what is going on *)
+       what is going on.  here is the description:
+       There is a different handling for getglobalfield and setglobalfield because
+       setglobalfield cannot be inlined across modules, so it does not take the
+       compilation
+       unit as argument: it always correspond to the current one. When loading
+       from the
+       global module of a compilaiton unit that is not the current one, there
+       is no need
+       for special handling (there is no potential side effects), so it is
+       possible to convert
+       the getglobalfield to field(getglobal).
+     *)
     let arg, uarg, approx =
       fclambda_and_approx_for_expr ?expected_symbol env arg
     in
@@ -355,7 +342,7 @@ and fclambda_and_approx_for_primitive t env ~(primitive : Lambda.primitive)
       clambda_and_approx_for_list ?expected_symbol env args
     in
     let ex = add_new_export (Value_block (tag, Array.of_list approxs)) in
-    begin match constant_list args with
+    begin match Clambda.all_constants args with
     | None -> Uprim (p, args, dbg), Value_id ex
     | Some arg_values ->
       (* CR mshinwell: probably shouldn't be Uprim.  Just store [args] *)
@@ -438,46 +425,6 @@ and fclambda_and_approx_for_var t env ~var =
               Fvar (id, ()), get_approx id env
 *)
 
-and fclambda_and_approx_for_closure env
-      { fu_closure = lam; fu_fun = id; fu_relative_to = rel } =
-  let ulam, approx =
-    if E.is_function_local_and_constant t.exported id then
-      (* Only references to functions declared in the current module should
-         need rewriting to a symbol.  For external functions this should
-         already have been done at the original declaration. *)
-      let sym = Compilenv.closure_symbol id in
-      clambda_and_approx_for_expr ?expected_symbol env (Fsymbol (sym, ()))
-    else
-      let ulam, fun_approx =
-        clambda_and_approx_for_expr ?expected_symbol env lam
-      in
-      let approx =
-        match get_descr fun_approx with
-        | Some (Value_set_of_closures closure)
-        | Some (Value_closure { closure }) ->
-          Value_id (add_new_export (Value_closure { fun_id = id; closure }))
-        | Some _ -> assert false
-        | _ ->
-          Format.printf "Bad approximation for Fclosure expression: %a@."
-            Printflambda.flambda expr;
-          assert false
-      in
-      clambda_and_approx_for_expr ?expected_symbol env
-          (Fclosure ({ fu_closure = ulam; fu_fun = id;
-              fu_relative_to = rel }, ()),
-        approx
-  in
-  let relative_offset =
-    let offset = get_fun_offset id in
-    match rel with
-    | None -> offset
-    | Some rel -> offset - get_fun_offset rel
-  in
-  (* Compilation of [let rec] in [Cmmgen] assumes that a closure is not
-     offseted ([Cmmgen.expr_size]). *)
-  if relative_offset = 0 then ulam
-  else Uoffset (ulam, relative_offset)
-
 and fclambda_and_approx_for_let t ~env ~str ~var ~lam ~body =
   let ulam, approx =
     clambda_and_approx_for_expr ?expected_symbol env lam
@@ -549,11 +496,14 @@ and fclambda_and_approx_for_let_rec t env defs body =
             Variable.print id)
     consts;
   let not_consts, env =
-    List.fold_right (fun (id,def) (not_consts,env') ->
-        let flam, approx = conv_approx env def in
-        let env' = add_approx id approx env' in
-        (id, flam) :: not_consts, env')
-      not_consts ([],env)
+    (* Produce rewritten Flambda terms, their Clambda equivalents, and
+       approximations for the variables bound by the [let rec] whose values
+       are not known to be constants. *)
+    List.fold_right (fun (id, def) (not_consts, env') ->
+        let def, udef, approx = flambda_and_approx_for_expr t env def in
+        let env' = Env.add_approximation env' id approx in
+        (id, def, udef)::not_consts, env')
+      not_consts ([], env)
   in
   let body, ubody, approx = fclambda_and_approx_for_expr t env body in
   let flambda, clambda =
@@ -635,6 +585,8 @@ and fclambda_and_approx_for_switch t env cases num_keys default =
   | [| |] -> [| |], [| |] (* May happen when [default] is [None] *)
   | _ -> index, actions
 
+(* Handle an expression that retrieves the value of a variable bound by
+   some closure. *)
 and fclambda_and_approx_for_variable_in_closure t env
       { vc_closure = closure; vc_var = var; vc_fun = fun_id } =
   let closure, uclosure, closure_approx =
@@ -669,7 +621,52 @@ and fclambda_and_approx_for_variable_in_closure t env
     Uprim (Pfield offset_within_closure, [uclosure], Debuginfo.none),
     approx
 
-and fclambda_and_approx_for_one_closure_in_a_set_of_closures t env id func =
+(* Handle an expression that retrieves an actual closure, rather than the
+   value of some variable bound by a closure. *)
+and fclambda_and_approx_for_closure_reference t env
+      { fu_closure = lam; fu_fun = id; fu_relative_to = rel } =
+  let ulam, approx =
+    if E.is_function_local_and_constant t.exported id then
+      (* Only references to functions declared in the current module should
+         need rewriting to a symbol.  For external functions this should
+         already have been done when the external compilation unit was
+         compiled. *)
+      let sym = Compilenv.closure_symbol id in
+      fclambda_and_approx_for_expr ?expected_symbol env (Fsymbol (sym, ()))
+    else
+      let lam, ulam, fun_approx =
+        fclambda_and_approx_for_expr ?expected_symbol env lam
+      in
+      let approx =
+        match get_descr fun_approx with
+        | Some (Value_set_of_closures closure)
+        | Some (Value_closure { closure }) ->
+          Value_id (add_new_export (Value_closure { fun_id = id; closure }))
+        | Some _ -> assert false
+        | _ ->
+          Misc.fatal_errorf "Bad approximation for Fclosure expression: %a@."
+            Printflambda.flambda expr
+      in
+      fclambda_for_expr ?expected_symbol env
+          (Fclosure ({ fu_closure = ulam; fu_fun = id;
+              fu_relative_to = rel }, ()),
+        approx
+  in
+  let relative_offset =
+    let offset = E.get_fun_offset t.exported id in
+    match rel with
+    | None -> offset
+    | Some rel -> offset - get_fun_offset rel
+  in
+  (* CR mshinwell: clarify comment *)
+  (* Compilation of [let rec] in [Cmmgen] assumes that a closure is not
+     offseted ([Cmmgen.expr_size]). *)
+  if relative_offset = 0 then ulam
+  else Uoffset (ulam, relative_offset)
+
+(* Handle a single closure declaration---which comes along with a function
+   body---such as occurs within a declaration of a set of closures. *)
+and fclambda_and_approx_for_closure_declaration t env id func =
   (* cf -> closure_id *)
   let closure_id = Closure_id.wrap id in
   let fun_offset = E.get_fun_offset t.exported closure_id in
@@ -823,7 +820,7 @@ and fclambda_and_approx_for_one_closure_in_a_set_of_closures t env id func =
    some variables can be retrieved from the closure outside of its
    body, so constant closure still contains their free
    variables. *)
-and fclambda_and_approx_for_set_of_closures t env
+and fclambda_and_approx_for_set_of_closures_declaration t env
       (fundecls : _ Flambda.function_declarations)
       (* [fv] maps free variables of the function declaration to Flambda
          expressions computing their values. *)
@@ -901,7 +898,7 @@ and fclambda_and_approx_for_set_of_closures t env
   in
   (* Build the export description of the set of closures.
      We have to start with [Value_unknown] in [results], since
-     [fclambda_and_approx_for_one_closure_in_a_set_of_closures] needs to
+     [fclambda_and_approx_for_closure_declaration] needs to
      construct values pointing at the export description, yet [results] cannot
      be properly computed until we have called that function. *)
   let descr_set_of_closures : Flambdaexport.descr_set_of_closures =
@@ -919,7 +916,7 @@ and fclambda_and_approx_for_set_of_closures t env
      Clambda, and obtain their approximations. *)
   let fclambda_for_fundecls_with_approxs =
     Variable.Map.mapi
-      (fclambda_and_approx_for_one_closure_in_a_set_of_closures t env
+      (fclambda_and_approx_for_closure_declaration t env
         ~descr_set_of_closures)
       fundecls.funs
   in
@@ -963,7 +960,7 @@ and fclambda_and_approx_for_set_of_closures t env
       List.map snd3 Variable.Map.data fclambda_for_fundecls_with_approxs
     in
     if is_constant then
-      match constant_list (List.map snd fv_ulam) with
+      match Clambda.all_constants (List.map snd fv_ulam) with
       | Some fv_const ->
         let cst : Clambda.ustructured_constant =
           Uconst_closure (clambda_ufunctions, closure_lbl, fv_const)
@@ -979,7 +976,7 @@ and fclambda_and_approx_for_set_of_closures t env
   in
   flambda, clambda, Value_id closure_ex_id
 
-and clambda_for_direct_application ufunct args direct_func dbg env =
+and fclambda_for_direct_application t env ufunct args direct_func dbg env =
   let closed = is_function_constant direct_func in
   let label = Compilenv.function_label direct_func in
   let uargs =
@@ -1008,7 +1005,7 @@ and clambda_for_direct_application ufunct args direct_func dbg env =
   if closed && not (no_effect ufunct) then Usequence (ufunct, apply)
   else apply
 
-and clambda_and_approx_for_application env = function
+and fclambda_and_approx_for_application t env = function
   | Fapply ({
       (* The simple case: direct call of a closure from a known set of
          closures. *)
@@ -1038,7 +1035,6 @@ and clambda_and_approx_for_application env = function
             Closure_id.Map.find fun_id results
         | _ -> Value_unknown
       in
-
       Fapply({ap_function =
                 Fclosure ({fu_closure = uffuns;
                             fu_fun = off;
@@ -1047,11 +1043,8 @@ and clambda_and_approx_for_application env = function
               ap_kind = Direct direc;
               ap_dbg = dbg}, ()),
       approx
-
-
   | Fapply ({ ap_function = funct; ap_arg = args; ap_kind = direct;
         ap_dbg = dbg}, _) ->
-
       let ufunct, fun_approx = conv_approx env funct in
       let direct = match direct with
         | Direct _ -> direct
@@ -1072,7 +1065,6 @@ and clambda_and_approx_for_application env = function
               ap_kind = direct;
               ap_dbg = dbg}, ()),
       approx
-
   (* two cases from pass 2: *)
   | Fapply ({ ap_function = funct; ap_arg = args;
         ap_kind = Direct direct_func; ap_dbg = dbg }, _) ->
@@ -1085,33 +1077,38 @@ and clambda_and_approx_for_application env = function
        added here. *)
     Ugeneric_apply (conv env funct, conv_list env args, dbg)
 
-and conv_list env l = List.map (conv env) l
-
-and constant_list l =
-  let rec aux acc (ulambda : Clambda.ulambda list) =
-    match ulambda with
-    | [] -> Some (List.rev acc)
-    | (Uconst v)::q -> aux (v :: acc) q
-    | _ -> None
-  in
-  aux [] l
-
-let constants =
-  Symbol.Map.mapi
-    (fun sym lam ->
-       let ulam = conv empty_env ~expected_symbol:sym lam in
-       structured_constant_for_symbol sym ulam)
-    P.constants
-
-let clambda_expr = conv empty_env P.expr
-
 let create () =
   ...
 
-let convert (type a) t
-    ((expr : a Flambda.t),
-     (constants : a Flambda.t Symbol.Map.t),
-     (exported : Flambdaexport.exported)) =
+let id_and_approximation_of_global_module_block t =
+  let root_id =
+    let size_global =
+      Hashtbl.fold (fun index_in_block _ max_index ->
+          assert (index_in_block >= 0);
+          max index_in_block max_index)
+        t.global (-1)
+      + 1  (* the maximum index is zero-based, but the size is 1-based *)
+    in
+    let fields =
+      Array.init size_global (fun i ->
+          try canonical_approx (Hashtbl.find t.global i) with
+          | Not_found -> Value_unknown)
+    in
+    add_new_export (Value_block (0, fields))
+  in
+  root_id, Value_id root_id
+
+let convert (type a) t ~(expr : a Flambda.t)
+      ~(constants : a Flambda.t Symbol.Map.t)
+      ~(exported : Flambdaexport.exported)
+      : unit Flambda.t * Clambda.ulambda * Flambdaexport.approx =
+  let constants =
+    Symbol.Map.mapi
+      (fun sym lam ->
+         let ulam = conv empty_env ~expected_symbol:sym lam in
+         structured_constant_for_symbol sym ulam)
+      constants
+  in
   let closures =
     let closures = ref Closure_id.Map.empty in
     Flambdautils.list_closures expr ~closures;
@@ -1119,6 +1116,14 @@ let convert (type a) t
         constants;
     !closures
   in
+  (* stuff from flambdasym: *)
+  (* replace symbol by their representative in value approximations *)
+  let ex_values =
+    Export_id.Map.map canonical_descr !(infos.ex_table)
+
+  (* build the symbol to id and id to symbol maps *)
+  let module_symbol =
+    Compilenv.current_unit_symbol ()
   let exported =
     (* Lay out closures for the current compilation unit, assigning offsets
        for function identifiers and free variables.  A single table
