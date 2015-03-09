@@ -48,3 +48,8 @@ val function_arity : t -> Closure_id.t -> int
 
 (* XXX does this risk confusion with [is_function_constant]? *)
 val is_variable_constant : t -> Variable.t -> bool
+
+val find_approx_descr
+   : t
+  -> Flambdaexport.approx
+  -> Flambdaexport.descr option

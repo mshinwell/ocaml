@@ -115,3 +115,9 @@ let add_unique_idents vars env =
       vars (env, [])
   in
   ids, env_handler
+
+let add_approx id approx env =
+  { env with approx = Variable.Map.add id approx env.approx }
+
+let get_approx id env =
+  try Variable.Map.find id env.approx with Not_found -> Value_unknown

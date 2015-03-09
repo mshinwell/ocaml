@@ -137,3 +137,55 @@ let function_arity t (closure_id : Closure_id.t) =
   let not_constants = P.not_constants
   let is_constant id =
     not (Variable.Set.mem id not_constants.Flambdaconstants.not_constant_id)
+
+(* [find_approx_descr t approx] obtains the approximation description
+   referenced by [approx] by looking in the maps of exported approximations
+   for the current and the imported compilation units. *)
+(* CR mshinwell: I inlined all the cases here and wrote out all the Not_found
+   cases explicitly, to try to make it clearer what's going on.  However it
+   still seems really complicated.  Can this be simplified?  It seems like
+   we're mixing up stages in some way (export IDs vs. symbols); also, the
+   Value_symbol case in particular seems dubious.  For exmaple, if we find
+   an export ID in [t.symbol_to_export_id] then why isn't the failure to
+   find the export ID in [t.ex_table] a fatal error?
+*)
+let find_approx_descr t approx =
+  match approx with
+  | Value_unknown -> None
+  | Value_id export_id ->
+    (* For export IDs, look in the table of values that the current unit
+       exports, and then in the table that contains the values that all
+       imported units export. *)
+    begin match Export_id.Map.find export_id t.ex_table with
+    | descr -> Some descr
+    | exception Not_found ->
+      begin match
+        Flambdaexport.find_description export_id (Compilenv.approx_env ())
+      with
+      | descr -> Some descr
+      | exception Not_found -> None
+      end
+    end
+  | Value_symbol symbol ->
+    let descr =
+      match Symbol.Map.find symbol t.symbol_to_export_id with
+      | export_id ->
+        begin match Export_id.Map.find export_id t.ex_table with
+        | descr -> Some descr
+        | exception Not_found -> None
+        end
+      | exception Not_found -> None
+    in
+    match descr with
+    | Some descr -> descr
+    | None ->
+      if Compilenv.is_predefined_exception sym then None
+      else
+        let exported = Compilenv.approx_for_global sym.sym_unit in
+        match Symbol.Map.find sym export.symbol_id with
+        | Some export_id ->
+          begin match Flambdaexport.find_description export_id exported with
+          | Some descr -> descr
+          | None -> None
+          end
+        | None -> None

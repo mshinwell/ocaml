@@ -227,11 +227,6 @@ module Conv(P:Param1) = struct
       (* Value_unknown *)
       fatal_error (Format.asprintf "no global %i" i)
 
-  let add_approx id approx env =
-    { env with approx = Variable.Map.add id approx env.approx }
-  let get_approx id env =
-    try Variable.Map.find id env.approx with Not_found -> Value_unknown
-
   let extern_symbol_descr sym =
     if Compilenv.is_predefined_exception sym
     then None

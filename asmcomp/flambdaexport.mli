@@ -42,11 +42,11 @@ and descr_closure = {
 
 and descr_set_of_closures = {
   set_of_closures_id : Set_of_closures_id.t;
-  (* Approximations to the variables bound by the set of closures, indexed by
-     variable-in-closure ID. *)
+  (** Approximations to the variables bound by the set of closures, indexed by
+      variable-in-closure ID. *)
   bound_var : approx Var_within_closure.Map.t;
-  (* Approximations to the results of the functions bound by the set of closures,
-     indexed by closure ID. *)
+  (** Approximations to the results of the functions bound by the set of closures,
+      indexed by closure ID. *)
   results : approx Closure_id.Map.t;
 }
 
