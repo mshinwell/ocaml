@@ -154,85 +154,11 @@ let fclambda_and_approx_for_constant t env ~(cst : Flambda.const) =
   in
   flambda, clambda, approx
 
-let rec fclambda_and_approx_for_primitive t env ~(primitive : Lambda.primitive)
-      ~args ~dbg : unit Flambda.t * Clambda.ulambda * Flambdaexport.descr =
-  match primitive, args, dbg with
-  | Pgetglobalfield (id, index), l, dbg ->
-    (* [Pgetglobalfield] may correspond to an access to a global in either
-       the current compilation unit or an imported one. *)
-    assert (l = []);
-    let lam : _ Flambda.t =
-      Fprim (Pfield index, [Fprim (Pgetglobal id, l, dbg, v)], dbg, v)
-    in
-    if id <> Compilenv.current_unit_id () then
-      fclambda_and_approx_for_expr env lam
-    else
-      let approx = get_approx_for_global ~index in
-      begin match approx with
-      | Value_symbol sym -> fclambda_for_expr env (Fsymbol (sym, ())), approx
-      | Value_unknown _ | Value_id _ -> fclambda_for_expr env lam, approx
-      end
-  | Psetglobalfield index, [arg], dbg ->
-    (* [Psetglobalfield] always corresponds to the current compilation unit,
-       and cannot be inlined across modules. *)
-    let arg, uarg, approx =
-      fclambda_and_approx_for_expr env arg
-    in
-    add_approx_for_global t ~index ~approx;
-    Fprim (Psetglobalfield index, [arg], dbg, ()),
-      Uprim (Psetfield (index, false),
-          [Uprim (Pgetglobal (Ident.create_persistent
-              (Compilenv.make_symbol None)), [], dbg);
-           conv env arg],
-          dbg),
-      Value_unknown
-  | Pgetglobal id, l, _ ->
-    (* Accesses to globals are transformed into symbol accesses. *)
-    (* CR mshinwell for pchambart: Does this case only arise from the
-       previous [Pgetglobalfield] case?  If so, we should probably make
-       this case fail, and inline this code above. *)
-    assert (l = []);
-    let sym = Compilenv.symbol_for_global' id in
-    fclambda_and_approx_for_expr t env (Fsymbol (sym, ()))
-  | (Pmakeblock (tag, Asttypes.Immutable)) as p, args, dbg ->
-    (* If we know the values of all of the fields of the new block, then
-       emit it as data, with a symbol to identify it.  The original
-       [Pmakeblock] turns into a reference to the symbol. *)
-    let args, approxs =
-      clambda_and_approx_for_list env args
-    in
-    let ex = add_new_export (Value_block (tag, Array.of_list approxs)) in
-    begin match Clambda.all_constants args with
-    | None -> Uprim (p, args, dbg), Value_id ex
-    | Some arg_values ->
-      (* CR mshinwell: probably shouldn't be Uprim.  Just store [args] *)
-      let sym = add_constant (Uprim (p, args, dbg)) ex in
-      let cst : Clambda.ustructured_constant =
-        Uconst_block (tag, arg_values)
-      in
-      let lbl = Compilenv.structured_constant_label sym ~shared:true cst in
-      Uconst (Uconst_ref (lbl, Some cst)), Value_symbol sym
-    end
-  | Pfield i, [arg], dbg ->
-    let block, block_approx =
-      clambda_and_approx_for_expr ?unknown_symbol env arg
-    in
-    let approx =
-      match E.find_approx_descr t block_approx with
-      | Some (Value_block (_, fields)) ->
-        if i >= 0 && i < Array.length fields then fields.(i)
-        else Value_unknown
-      | _ -> Value_unknown
-    in
-    Uprim (Pfield i, [block], dbg, ()), approx
-  | primitive, args, dbg ->
-    Uprim (primitive, conv_list env args, dbg), Value_unknown
-
-and fclambda_and_approx_for_var t env ~var =
-  (* If the variable references a constant, it is replaced by the label
+let rec fclambda_and_approx_for_var t env ~var =
+  (* If the variable references a constant, it is replaced by the symbol
      associated with said constant. *)
-  match Env.constant_named_by_variable env var with
-  | Some label -> fclambda_and_approx_for_expr t env (Fsymbol (label, ()))
+  match Env.find_variable_symbol_equality env var with
+  | Some symbol -> fclambda_and_approx_for_expr t env (Fsymbol (symbol, ()))
   | None ->
     (* If the variable is bound by any current closure, or is one of the
        function identifiers bound by any current set of closures, then we
@@ -248,6 +174,84 @@ and fclambda_and_approx_for_var t env ~var =
       | None -> Fvar (id, ()), Uvar id
     in
     lam, ulam, Env.get_approx env id
+
+and fclambda_and_approx_for_primitive t env ~(primitive : Lambda.primitive)
+      ~args ~dbg : unit Flambda.t * Clambda.ulambda * Flambdaexport.descr =
+  match primitive, args, dbg with
+  | Pgetglobalfield (id, index), l, dbg ->
+    (* [Pgetglobalfield] may correspond to an access to a global in either
+       the current compilation unit or an imported one. *)
+    assert (l = []);
+    let lam : _ Flambda.t =
+      Fprim (Pfield index, [Fprim (Pgetglobal id, l, dbg, v)], dbg, v)
+    in
+    if id <> Compilenv.current_unit_id () then
+      fclambda_and_approx_for_expr env lam
+    else
+      let approx = get_approx_for_global ~index in
+      begin match approx with
+      | Value_symbol sym ->
+        fclambda_for_expr t env (Fsymbol (sym, ())), approx
+      | Value_unknown _ | Value_id _ -> fclambda_for_expr t env lam, approx
+      end
+  | Psetglobalfield index, [arg], dbg ->
+    (* [Psetglobalfield] always corresponds to the current compilation unit,
+       and cannot be inlined across modules. *)
+    let arg, uarg, approx = fclambda_and_approx_for_expr t env arg in
+    (* CR mshinwell for pchambart: Can any global fields be changed again
+       once they have been set for the first time?  I assume the answer is
+       no, otherwise this next line looks wrong (couldn't the approximation
+       change)? *)
+    add_approx_for_global t ~index ~approx;
+    Fprim (Psetglobalfield index, [arg], dbg, ()),
+      Uprim (Psetfield (index, false),
+          [Uprim (Pgetglobal (Ident.create_persistent
+              (Compilenv.make_symbol None)), [], dbg);
+           uarg],
+          dbg),
+      Value_unknown
+  | Pgetglobal id, l, _ ->
+    (* Accesses to globals are transformed into symbol accesses. *)
+    (* CR mshinwell for pchambart: Does this case only arise from the
+       previous [Pgetglobalfield] case?  If so, we should probably make
+       this case fail, and inline this code above. *)
+    assert (l = []);
+    let sym = Compilenv.symbol_for_global' id in
+    fclambda_and_approx_for_expr t env (Fsymbol (sym, ()))
+  | (Pmakeblock (tag, Asttypes.Immutable)) as p, args, dbg ->
+    (* If we know the values of all of the fields of the new block, then
+       emit it as data, with a symbol to identify it.  The original
+       [Pmakeblock] turns into a reference to the symbol. *)
+    let args, uargs, approxs = fclambda_and_approx_for_expr_list t env args in
+    let ex = add_new_export (Value_block (tag, Array.of_list approxs)) in
+    begin match Clambda.all_constants args with
+    | None -> Uprim (p, args, dbg), Value_id ex
+    | Some arg_values ->
+      (* CR mshinwell: probably shouldn't be Uprim.  Just store [args] *)
+      let sym = add_constant (Uprim (p, args, dbg)) ex in
+      let cst : Clambda.ustructured_constant =
+        Uconst_block (tag, arg_values)
+      in
+      let lbl = Compilenv.structured_constant_label sym ~shared:true cst in
+      Uconst (Uconst_ref (lbl, Some cst)), Value_symbol sym
+    end
+  | Pfield index, [arg], dbg ->
+    (* For arbitrary field access, we try to identify the approximation
+       of the field itself, if we know enough about the block. *)
+    let block, ublock, block_approx = fclambda_and_approx_for_expr t env arg in
+    let approx =
+      match E.find_approx_descr t block_approx with
+      | Some (Value_block (_, fields)) ->
+        if index >= 0 && index < Array.length fields then fields.(index)
+        else Value_unknown
+      | _ -> Value_unknown
+    in
+    Fprim (Pfield index, [block], dbg, ()),
+      Uprim (Pfield index, [block], dbg, ()), approx
+  | primitive, args, dbg ->
+    let args, uargs = fclambda_for_expr_list t env args in
+    Fprim (primitive, args, dbg, ()), Uprim (primitive, uargs, dbg),
+      Value_unknown
 
 and fclambda_and_approx_for_let t ~env ~str ~var ~lam ~body =
   let lam, ulam, approx = fclambda_and_approx_for_expr t env lam in

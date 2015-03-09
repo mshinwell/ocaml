@@ -377,3 +377,9 @@ and aux_closure clos ~canonical_symbol =
     bound_var = Var_within_closure.Map.map canonical_approx clos.bound_var;
     results = Closure_id.Map.map canonical_approx clos.results;
   }
+
+      match E.find_approx_descr t block_approx with
+      | Some (Value_block (_, fields)) ->
+        if index >= 0 && index < Array.length fields then fields.(index)
+        else Value_unknown
+      | _ -> Value_unknown
