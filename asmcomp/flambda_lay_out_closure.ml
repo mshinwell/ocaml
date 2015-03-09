@@ -82,6 +82,8 @@ let reexported_offsets ~extern_fun_offset_table ~extern_fv_offset_table ~expr =
     | e -> ()
   in
   Flambdaiter.iter aux expr;
+(* 385a6a4f573 *)
++  SymbolMap.iter (fun _ flam -> Flambdaiter.iter aux flam) constants;
   let f extern_map closure_id new_map =
     try
       Closure_id.Map.add closure_id

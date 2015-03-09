@@ -26,6 +26,9 @@ open Ext_types
     in the same program must not share labels *)
 
 (* CR mshinwell for pchambart: [module Linkage_name] *)
+
+(* CR mshinwell: make Identifiable *)
+
 type linkage_name
 val linkage_name : string -> linkage_name
 val string_of_linkage_name : linkage_name -> string
