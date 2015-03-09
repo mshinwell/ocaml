@@ -22,15 +22,7 @@
 (***********************************************************************)
 
 open Abstract_identifiers
-
 module E = Flambda_exports_by_unit
-
-(* In this file, the terminology "fclambda" corresponds to a pair of
-   an Flambda and a Clambda expression; these are produced from an
-   incoming Flambda expression.  The output Flambda expression differs
-   from the input in that it is suitable for storing in a .cmx file.
-   The main transformation to enable this is the assignment of symbols.
-*)
 
 type t = {
   exported : E.t;
@@ -93,188 +85,71 @@ let add_new_export t (descr : Flambdaexport.descr) =
   t.ex_table <- Export_id.Map.add id descr t.ex_table;
   id
 
-(* An approximation to the unit value. *)
-let unit_approx t = Value_id (add_new_export t (Value_constptr 0))
+(* "fclambda" means a pair of an Flambda term, rewritten to have references
+   to symbols as required for exporting, together with a Clambda term.  The
+   associated approximation of the Clambda term is also often present. *)
 
-let rewritten_flambda_and_approx_for_constant (cst : Flambda.const)
-      : (_ Flambda.t option * Flambdaexport.descr) =
-  match cst with
-  | Fconst_base (Const_int i) ->
-    None, Value_id (add_new_export (Value_int i))
-  | Fconst_base (Const_char c) ->
-    None, Value_id (add_new_export (Value_int (Char.code c)))
-  | Fconst_base (Const_float s) ->
-    None, Value_id (add_new_export (Value_float (float_of_string s)))
-  | Fconst_base (Const_int32 i) ->
-    None, Value_id (add_new_export (Value_boxed_int (Int32, i)))
-  | Fconst_base (Const_int64 i) ->
-    None, Value_id (add_new_export (Value_boxed_int (Int64, i)))
-  | Fconst_base (Const_nativeint i) ->
-    None, Value_id (add_new_export (Value_boxed_int (Nativeint, i)))
-  | Fconst_float f ->
-    None, Value_id (add_new_export (Value_float f))
-  | Fconst_pointer c ->
-    None, Value_id (add_new_export (Value_constptr c))
-  | Fconst_base (Const_string _) | Fconst_immstring _
-  | Fconst_float_array _ ->
-    let id = add_new_export Value_string in
-    Some (Fsymbol (add_constant (Fconst (cst, ())) id, ())), Value_id id
-
-let clambda_for_constant expected_symbol cst : Clambda.uconstant =
-  let add_new_exported_structured_const ?not_shared cst : Clambda.uconstant =
-    (* CR mshinwell: try to hoist this function *)
-    let name =
-      let shared =
-        match not_shared with
-        | None -> true
-        | Some () -> false
-      in
-      Compilenv.structured_constant_label expected_symbol ~shared cst
-    in
-    Uconst_ref (name, Some cst)
-  in
-  match cst with
-  | Fconst_base (Const_int c) -> Uconst_int c
-  | Fconst_base (Const_char c) -> Uconst_int (Char.code c)
-  | Fconst_pointer c -> Uconst_ptr c
-  | Fconst_float f -> add_new_exported_structured_const (Uconst_float f)
-  | Fconst_float_array c ->  (* constant float arrays are really immutable *)
-    add_new_exported_structured_const
-      (Uconst_float_array (List.map float_of_string c))
-  | Fconst_immstring c ->
-    add_new_exported_structured_const (Uconst_string c)
-  | Fconst_base (Const_float x) ->
-    add_new_exported_structured_const (Uconst_float (float_of_string x))
-  | Fconst_base (Const_int32 x) ->
-    add_new_exported_structured_const (Uconst_int32 x)
-  | Fconst_base (Const_int64 x) ->
-    add_new_exported_structured_const (Uconst_int64 x)
-  | Fconst_base (Const_nativeint x) ->
-    add_new_exported_structured_const (Uconst_nativeint x)
-  | Fconst_base (Const_string (s, o)) ->
-    add_new_exported_structured_const ~not_shared:() (Uconst_string s)
-
-let fclambda_and_approx_for_constant cst =
+let fclambda_and_approx_for_constant t env ~(cst : Flambda.const) =
   let flambda, approx =
-    match rewritten_flambda_and_approx_for_constant cst with
-    | None, approx -> flambda, approx
-    | Some flambda, approx -> flambda, approx
+    match cst with
+    | Fconst_base (Const_int i) ->
+      cst, Value_id (add_new_export t (Value_int i))
+    | Fconst_base (Const_char c) ->
+      cst, Value_id (add_new_export t (Value_int (Char.code c)))
+    | Fconst_base (Const_float s) ->
+      cst, Value_id (add_new_export t (Value_float (float_of_string s)))
+    | Fconst_base (Const_int32 i) ->
+      cst, Value_id (add_new_export t (Value_boxed_int (Int32, i)))
+    | Fconst_base (Const_int64 i) ->
+      cst, Value_id (add_new_export t (Value_boxed_int (Int64, i)))
+    | Fconst_base (Const_nativeint i) ->
+      cst, Value_id (add_new_export t (Value_boxed_int (Nativeint, i)))
+    | Fconst_float f ->
+      cst, Value_id (add_new_export t (Value_float f))
+    | Fconst_pointer c ->
+      cst, Value_id (add_new_export t (Value_constptr c))
+    | Fconst_base (Const_string _) | Fconst_immstring _
+    | Fconst_float_array _ ->
+      let id = add_new_export t Value_string in
+      Some (Fsymbol (add_constant (Fconst (cst, ())) id, ())), Value_id id
   in
-  let clambda = clambda_for_constant cst in
+  let clambda : Clambda.uconstant =
+    let add_new_exported_structured_const ?not_shared cst : Clambda.uconstant =
+      (* CR mshinwell: try to hoist this function *)
+      let name =
+        let shared =
+          match not_shared with
+          | None -> true
+          | Some () -> false
+        in
+        Compilenv.structured_constant_label expected_symbol ~shared cst
+      in
+      Uconst_ref (name, Some cst)
+    in
+    match cst with
+    | Fconst_base (Const_int c) -> Uconst_int c
+    | Fconst_base (Const_char c) -> Uconst_int (Char.code c)
+    | Fconst_pointer c -> Uconst_ptr c
+    | Fconst_float f -> add_new_exported_structured_const (Uconst_float f)
+    | Fconst_float_array c ->  (* constant float arrays are really immutable *)
+      add_new_exported_structured_const
+        (Uconst_float_array (List.map float_of_string c))
+    | Fconst_immstring c ->
+      add_new_exported_structured_const (Uconst_string c)
+    | Fconst_base (Const_float x) ->
+      add_new_exported_structured_const (Uconst_float (float_of_string x))
+    | Fconst_base (Const_int32 x) ->
+      add_new_exported_structured_const (Uconst_int32 x)
+    | Fconst_base (Const_int64 x) ->
+      add_new_exported_structured_const (Uconst_int64 x)
+    | Fconst_base (Const_nativeint x) ->
+      add_new_exported_structured_const (Uconst_nativeint x)
+    | Fconst_base (Const_string (s, o)) ->
+      add_new_exported_structured_const ~not_shared:() (Uconst_string s)
+  in
   flambda, clambda, approx
 
-(* Note: there is at most one closure (likewise, one set of closures) in
-   scope during any one call to [conv].  Accesses to outer closures are
-   performed via this distinguished one.  (This was arranged during closure
-   conversion---see [Flambdagen].) *)
-(* CR mshinwell: put [expected_symbol] in [env] *)
-let rec fclambda_and_approx_for_expr t (env : Flambda_to_clambda_env.t)
-      (expr : _ Flambda.t)
-      : unit Flambda.t * Clambda.ulambda * Flambdaexport.approx =
-  match expr with
-  | Fvar (var, _) -> flambda_and_approx_for_var t env ~var
-  | Fsymbol (sym, _) ->
-    let sym = canonical_symbol t sym in
-    let linkage_name = Symbol.string_of_linkage_name sym.sym_label in
-    let label = Compilenv.canonical_symbol linkage_name in
-    (* CR pchambart for pchambart: Should delay the conversion a bit more
-       mshinwell: I turned this comment into a CR.  What does it mean? *)
-    Fsymbol sym, Uconst (Uconst_ref (label, None)), Value_symbol sym
-  | Fconst (cst, _) -> Uconst (conv_const expected_symbol cst)
-  | Flet (str, var, lam, body, _) ->
-    fclambda_and_approx_for_let t ~env ~str ~var ~lam ~body
-  | Fletrec (defs, body, _) ->
-    fclambda_and_approx_for_let_rec t env defs body
-    Uletrec (udefs, conv env body)
-  | Fset_of_closures set_of_closures ->
-    fclambda_and_approx_for_set_of_closures_declaration t env set_of_closures
-  | Fclosure closure -> fclambda_and_approx_for_closure_reference env closure
-  | Fvariable_in_closure var_in_closure ->
-    fclambda_and_approx_for_variable_in_closure env var_in_closure
-  | Fapply apply -> fclambda_and_approx_for_application env apply
-  | Fswitch (arg, sw, d) -> fclambda_and_approx_for_switch env ~arg ~sw ~d
-  | Fstringswitch (arg, sw, def, d) ->
-    let arg, uarg = fclambda_for_expr env arg in
-    let sw, usw =
-      List.fold_left (fun (sw, usw) (s, e) ->
-          let e, ue = fclambda_for_expr env e in
-          e::sw, ue::usw)
-        [] sw
-    in
-    let def, udef =
-      match def with
-      | None -> None, None
-      | Some def ->
-        let def, udef = fclambda_for_expr env def in
-        Some def, Some udef
-    in
-    Fstringswitch (arg, sw, def, d), Ustringswitch (uarg, usw, udef),
-      Value_unknown
-  | Fprim (primitive, args, dbg, _) ->
-    let args, uargs = fclambda_for_expr_list env args in
-    fclambda_and_approx_for_primitive ~env ~primitive ~args ~uargs ~dbg
-  | Fstaticraise (i, args, _) ->
-    let args, uargs = fclambda_for_expr_list env args in
-    Fstaticraise (i, args, ()),
-      Ustaticfail (Static_exception.to_int i, uargs), Value_unknown
-  | Fstaticcatch (i, vars, body, handler, _) ->
-    let body, ubody = fclambda_for_expr env body in
-    let ids, env_handler = add_unique_idents vars env in
-    let handler = fclambda_for_expr env_handler body in
-    Fstaticcatch (i, vars, body, handler),
-      Ucatch (Static_exception.to_int i, ids, ubody, uhandler),
-      Value_unknown
-  | Ftrywith (body, var, handler, _) ->
-    let body, ubody = fclambda_for_expr env body in
-    let id, env_handler = add_unique_ident var env in
-    let handler, uhandler = fclambda_for_expr env_handler body in
-    Ftrywith (body, var, handler), Utrywith (ubody, id, uhandler),
-      Value_unknown
-  | Fifthenelse (arg, ifso, ifnot, _) ->
-    let arg, uarg = fclambda_for_expr env arg in
-    let ifso, uifso, ifnot, uifnot = fclambda_for_expr_pair env ifso ifnot in
-    Fifthenelse (arg, ifso, ifnot, ()), Uifthenelse (uarg, uifso, uifnot),
-      Value_unknown
-  | Fsequence (lam1, lam2, _) ->
-    let lam1, ulam1 = fclambda_for_expr env lam1 in
-    let lam2, ulam2, approx = fclambda_and_approx_for_expr env lam2 in
-    Fsequence (lam1, lam2, ()), Usequence (ulam1, ulam2), approx
-  | Fwhile (cond, body, _) ->
-    let cond, ucond, body, ubody = fclambda_for_expr_pair env cond body in
-    Fwhile (cond, body, ()), Uwhile (cond, body), unit_approx t
-  | Ffor (var, lo, hi, dir, body, _) ->
-    let lo, ulo, hi, uhi = fclambda_for_expr_pair env lo hi in
-    let id, env_body = add_unique_ident var env in
-    let body, ubody = fclambda_for_expr env_body body in
-    Ffor (var, lo, hi, dir, body, ()), Ufor (id, lo, hi, dir, body),
-      unit_approx t
-  | Fassign (var, lam, _) ->
-    let lam, ulam = fclambda_for_expr env lam in
-    let id = try find_var var env with Not_found -> assert false in
-    Fassign (var, lam, ()), Uassign (id, ulam), unit_approx t
-  | Fsend (kind, met, obj, args, dbg, _) ->
-    let met, umet = fclambda_for_expr env met in
-    let obj, uobj = fclambda_for_expr env obj in
-    let args, uargs = fclambda_for_expr_list env args in
-    Fsend (kind, met, obj, args, dbg, ()),
-      Usend (kind, umet, uobj, uargs, dbg), Value_unknown
-  (* CR pchambart for pchambart: shouldn't be executable, maybe build
-     something else
-     mshinwell: I turned this into a CR. *)
-  | Funreachable _ -> Funreachable (), Uunreachable, Value_unknown
-    (* Uprim (Praise, [Uconst (Uconst_pointer 0, None)], Debuginfo.none) *)
-  | Fevent _ -> assert false
-
-and fclambda_for_expr env expr =
-  let expr, uexpr, _approx = fclambda_and_approx_for_expr env expr in
-  expr, uexpr
-
-and fclambda_for_expr_pair env expr1 expr2 =
-  let expr1, uexpr1 = fclambda_for_expr env expr1 in
-  let expr2, uexpr2 = fclambda_for_expr env expr2 in
-  expr1, uexpr1, expr2, uexpr2
-
-and fclambda_and_approx_for_primitive t env ~(primitive : Lambda.primitive)
+let rec fclambda_and_approx_for_primitive t env ~(primitive : Lambda.primitive)
       ~args ~dbg : unit Flambda.t * Clambda.ulambda * Flambdaexport.descr =
   match primitive, args, dbg with
   | Pgetglobalfield (id, index), l, dbg ->
@@ -1134,8 +1009,123 @@ and fclambda_and_approx_for_application t env (expr : _ Flambda.t) =
     fclambda_and_approx_for_non_simple_application t env ~expr ~direct
       ~fundecls ~fv ~specialised_args ~closure_id ~args ~dbg
 
+(* Note: there is at most one closure (likewise, one set of closures) in
+   scope during any one call to [conv].  Accesses to outer closures are
+   performed via this distinguished one.  (This was arranged during closure
+   conversion---see [Flambdagen].) *)
+and fclambda_and_approx_for_expr t (env : Flambda_to_clambda_env.t)
+      (expr : _ Flambda.t)
+      : unit Flambda.t * Clambda.ulambda * Flambdaexport.approx =
+  match expr with
+  | Fvar (var, _) -> flambda_and_approx_for_var t env ~var
+  | Fsymbol (sym, _) ->
+    let sym = canonical_symbol t sym in
+    let linkage_name = Symbol.string_of_linkage_name sym.sym_label in
+    let label = Compilenv.canonical_symbol linkage_name in
+    (* CR pchambart for pchambart: Should delay the conversion a bit more
+       mshinwell: I turned this comment into a CR.  What does it mean? *)
+    Fsymbol sym, Uconst (Uconst_ref (label, None)), Value_symbol sym
+  | Fconst (cst, _) ->
+    fclambda_and_approx_for_constant t env ~cst
+  | Flet (str, var, lam, body, _) ->
+    fclambda_and_approx_for_let t ~env ~str ~var ~lam ~body
+  | Fletrec (defs, body, _) ->
+    fclambda_and_approx_for_let_rec t env defs body
+    Uletrec (udefs, conv env body)
+  | Fset_of_closures set_of_closures ->
+    fclambda_and_approx_for_set_of_closures_declaration t env set_of_closures
+  | Fclosure closure -> fclambda_and_approx_for_closure_reference env closure
+  | Fvariable_in_closure var_in_closure ->
+    fclambda_and_approx_for_variable_in_closure env var_in_closure
+  | Fapply apply -> fclambda_and_approx_for_application env apply
+  | Fswitch (arg, sw, d) -> fclambda_and_approx_for_switch env ~arg ~sw ~d
+  | Fstringswitch (arg, sw, def, d) ->
+    let arg, uarg = fclambda_for_expr env arg in
+    let sw, usw =
+      List.fold_left (fun (sw, usw) (s, e) ->
+          let e, ue = fclambda_for_expr env e in
+          e::sw, ue::usw)
+        [] sw
+    in
+    let def, udef =
+      match def with
+      | None -> None, None
+      | Some def ->
+        let def, udef = fclambda_for_expr env def in
+        Some def, Some udef
+    in
+    Fstringswitch (arg, sw, def, d), Ustringswitch (uarg, usw, udef),
+      Value_unknown
+  | Fprim (primitive, args, dbg, _) ->
+    let args, uargs = fclambda_for_expr_list env args in
+    fclambda_and_approx_for_primitive ~env ~primitive ~args ~uargs ~dbg
+  | Fstaticraise (i, args, _) ->
+    let args, uargs = fclambda_for_expr_list env args in
+    Fstaticraise (i, args, ()),
+      Ustaticfail (Static_exception.to_int i, uargs), Value_unknown
+  | Fstaticcatch (i, vars, body, handler, _) ->
+    let body, ubody = fclambda_for_expr env body in
+    let ids, env_handler = add_unique_idents vars env in
+    let handler = fclambda_for_expr env_handler body in
+    Fstaticcatch (i, vars, body, handler),
+      Ucatch (Static_exception.to_int i, ids, ubody, uhandler),
+      Value_unknown
+  | Ftrywith (body, var, handler, _) ->
+    let body, ubody = fclambda_for_expr env body in
+    let id, env_handler = add_unique_ident var env in
+    let handler, uhandler = fclambda_for_expr env_handler body in
+    Ftrywith (body, var, handler), Utrywith (ubody, id, uhandler),
+      Value_unknown
+  | Fifthenelse (arg, ifso, ifnot, _) ->
+    let arg, uarg = fclambda_for_expr env arg in
+    let ifso, uifso, ifnot, uifnot = fclambda_for_expr_pair env ifso ifnot in
+    Fifthenelse (arg, ifso, ifnot, ()), Uifthenelse (uarg, uifso, uifnot),
+      Value_unknown
+  | Fsequence (lam1, lam2, _) ->
+    let lam1, ulam1 = fclambda_for_expr env lam1 in
+    let lam2, ulam2, approx = fclambda_and_approx_for_expr env lam2 in
+    Fsequence (lam1, lam2, ()), Usequence (ulam1, ulam2), approx
+  | Fwhile (cond, body, _) ->
+    let cond, ucond, body, ubody = fclambda_for_expr_pair env cond body in
+    Fwhile (cond, body, ()), Uwhile (cond, body), t.unit_approx
+  | Ffor (var, lo, hi, dir, body, _) ->
+    let lo, ulo, hi, uhi = fclambda_for_expr_pair env lo hi in
+    let id, env_body = add_unique_ident var env in
+    let body, ubody = fclambda_for_expr env_body body in
+    Ffor (var, lo, hi, dir, body, ()), Ufor (id, lo, hi, dir, body),
+      t.unit_approx
+  | Fassign (var, lam, _) ->
+    let lam, ulam = fclambda_for_expr env lam in
+    let id = try find_var var env with Not_found -> assert false in
+    Fassign (var, lam, ()), Uassign (id, ulam), t.unit_approx
+  | Fsend (kind, met, obj, args, dbg, _) ->
+    let met, umet = fclambda_for_expr env met in
+    let obj, uobj = fclambda_for_expr env obj in
+    let args, uargs = fclambda_for_expr_list env args in
+    Fsend (kind, met, obj, args, dbg, ()),
+      Usend (kind, umet, uobj, uargs, dbg), Value_unknown
+  (* CR pchambart for pchambart: shouldn't be executable, maybe build
+     something else
+     mshinwell: I turned this into a CR. *)
+  | Funreachable _ -> Funreachable (), Uunreachable, Value_unknown
+    (* Uprim (Praise, [Uconst (Uconst_pointer 0, None)], Debuginfo.none) *)
+  | Fevent _ -> assert false
+
+and fclambda_for_expr env expr =
+  let expr, uexpr, _approx = fclambda_and_approx_for_expr env expr in
+  expr, uexpr
+
+and fclambda_for_expr_pair env expr1 expr2 =
+  let expr1, uexpr1 = fclambda_for_expr env expr1 in
+  let expr2, uexpr2 = fclambda_for_expr env expr2 in
+  expr1, uexpr1, expr2, uexpr2
+
 let create () =
-  ...
+  let t = {
+
+  } in
+  let unit_approx = Value_id (add_new_export t (Value_constptr 0))
+  t
 
 let id_and_approximation_of_global_module_block t =
   let root_id =
