@@ -36,14 +36,17 @@ type descr =
   | Value_set_of_closures of descr_set_of_closures
 
 and descr_closure = {
-  fun_id : Closure_id.t;
-  closure : value_set_of_closures;
+  closure_id : Closure_id.t;
+  set_of_closures : value_set_of_closures;
 }
 
 and descr_set_of_closures = {
-  (* CR mshinwell: rename to [set_of_closures_id] *)
-  closure_id : Set_of_closures_id.t;
+  set_of_closures_id : Set_of_closures_id.t;
+  (* Approximations to the variables bound by the set of closures, indexed by
+     variable-in-closure ID. *)
   bound_var : approx Var_within_closure.Map.t;
+  (* Approximations to the results of the functions bound by the set of closures,
+     indexed by closure ID. *)
   results : approx Closure_id.Map.t;
 }
 
@@ -51,6 +54,8 @@ and approx =
   | Value_unknown
   | Value_id of Export_id.t
   | Value_symbol of Symbol.t
+
+val print_descr : Format.formatter -> descr -> unit
 
 type exported = {
   functions : unit Flambda.function_declarations Set_of_closures_id.Map.t;

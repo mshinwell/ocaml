@@ -784,6 +784,7 @@ and fclambda_and_approx_for_closure_declaration t env id func =
   in
   ???, ufunc, ...
 
+(* XXX update comment *)
 (* [fclambda_and_approx_for_set_of_closures] assigns symbols throughout a
    given Flambda term corresponding to a set of closures (which correspond to
    a single set of simultaneous function declarations), converts the
@@ -826,12 +827,16 @@ and fclambda_and_approx_for_closure_declaration t env id func =
    some variables can be retrieved from the closure outside of its
    body, so constant closure still contains their free
    variables. *)
-and fclambda_and_approx_for_set_of_closures_declaration t env
+and fclambda_and_approx_for_function_declarations t env
       (fundecls : _ Flambda.function_declarations)
+      (* CR mshinwell: see comment in the application function below.  If
+         this is only supposed to contain approximations for specialised
+         args, we need to rename it. *)
+      (args_approx : Flambdaexport.approx Variable.Map.t)
+      (specialised_args : Variable.t Variable.Map.t)
       (* [fv] maps free variables of the function declaration to Flambda
          expressions computing their values. *)
-      (fv : _ Flambda.t Variable.Map.t)
-      (specialised_args : Variable.t Variable.Map.t) =
+      (fv : _ Flambda.t Variable.Map.t) =
   let is_constant = E.is_set_of_closures_local_and_constant fundecls.ident in
   (* The environment parameter used for non-constant closures. *)
   let env_var = Ident.create "env" in
@@ -982,7 +987,7 @@ and fclambda_and_approx_for_set_of_closures_declaration t env
   in
   flambda, clambda, Value_id closure_ex_id
 
-and fclambda_for_direct_application t env ufunct args direct_func dbg env =
+and clambda_for_direct_application t env ~fundecl ~args ~dbg =
   let closed = is_function_constant direct_func in
   let label = Compilenv.function_label direct_func in
   let uargs =
@@ -1011,77 +1016,155 @@ and fclambda_for_direct_application t env ufunct args direct_func dbg env =
   if closed && not (no_effect ufunct) then Usequence (ufunct, apply)
   else apply
 
-and fclambda_and_approx_for_application t env = function
+and clambda_for_indirect_application t env ~ufundecl ~uargs ~dbg =
+  (* the closure parameter of the function is added by cmmgen, but
+     it already appears in the list of parameters of the clambda
+     function for generic calls. Notice that for direct calls it is
+     added here. *)
+  (* CR mshinwell: update comment *)
+  Ugeneric_apply (ufundecl, uargs, dbg)
+
+and clambda_for_application t env ~direct ~ufundecl ~uargs ~dbg =
+  let handler =
+    match direct with
+    | Direct _ -> clambda_for_direct_application
+    | Indirect -> clambda_for_indirect_application
+  in
+  handler t env ~ufundecl ~uargs ~dbg
+
+(* Given the approximation for a closure (which always corresponds to a single
+   function), find the approximation of the function's result, if known. *)
+and approx_for_application t ~(fundecl_approx : Flambdaexport.approx) =
+  match get_descr t fundecl_approx with
+  | None -> Value_unknown
+  | Some fundecl_descr ->
+    match fundecl_descr with
+    | Value_closure { closure_id; set_of_closures = { results } } ->
+      begin match Closure_id.Map.find closure_id results with
+      | result_approx -> result_approx
+      | exception Not_found ->
+        Misc.fatal_error "Value_closure approximation provides no \
+            approximation for the result of the given closure ID: %a %a"
+          Flambdaexport.print_approx fundecl_approx
+          Flambdaexport.print_descr fundecl_descr
+      end
+    (* CR mshinwell for pchambart: I added cases here to cause a fatal error;
+       is this correct? *)
+    | Value_block _ | Value_int _ | Value_constptr _ | Value_float _
+    | Value_boxed_int _ | Value_string | Value_set_of_closures _ ->
+      Misc.fatal_error "Inappropriate approximation for function
+          being applied: %a %a"
+        Flambdaexport.print_approx fundecl_approx
+        Flambdaexport.print_descr fundecl_descr
+
+and fclambda_and_approx_for_simple_application t env ~expr ~fundecls
+      ~fv ~specialised_args ~closure_id ~args ~dbg =
+  let args, uargs, args_approx =
+    fclambda_and_approx_for_expr_list t env args
+  in
+  let fundecl =
+    try find_declaration closure_id fundecls
+    with Not_found ->
+      Misc.fatal_errorf "Direct-application expression contains closure ID not
+          present in corresponding set of closures: %a %a"
+        Printflambda.flambda expr
+        Closure_id.print closure_id
+  in
+  assert (List.length args = List.length fundecl.params);
+  assert (List.length uargs = List.length fundecl.params);
+  assert (List.length args_approx = List.length fundecl.params);
+  let params_to_args_approx =
+    (* CR mshinwell for pchambart: would it be harmful to avoid this
+       [filter]?  (Presumably if an argument is not specialized we won't
+       look at its approximation.) *)
+    Variable.Map.filter (fun var _ ->
+        Variable.Map.mem var specialised_args)
+      (Variable.Map.of_list (List.combine fundecl.params args_approx))
+  in
+  let fundecl, ufundecl, fundecl_approx =
+    fclambda_and_approx_for_function_declaration t env fundecl
+      args_approx specialised_args fv
+  in
+  let flambda =
+    Fapply ({
+      ap_function =
+        Fclosure ({
+          fu_closure = fundecls; (* XXX check *)
+          fu_fun = closure_id;
+          fu_relative_to = None
+        }, ());
+      ap_arg = args;
+      ap_kind = Direct closure_id;
+      ap_dbg = dbg;
+    }, ()),
+  in
+  let clambda = clambda_for_application t env ~direct ~ufundecl ~uargs ~dbg in
+  flambda, clambda, approx_for_application t ~fundecl_approx
+
+and fclambda_and_approx_for_non_simple_application t env ~expr ~direct
+      ~fundecls ~fv ~specialised_args ~closure_id ~args ~dbg =
+  let args, uargs, args_approx =
+    fclambda_and_approx_for_expr_list t env args
+  in
+  let fundecl, ufundecl, fundecl_approx =
+    fclambda_and_approx_for_function_declaration env funct
+  in
+  assert (List.length args = List.length fundecl.params);
+  assert (List.length uargs = List.length fundecl.params);
+  assert (List.length args_approx = List.length fundecl.params);
+  let direct =
+    match direct with
+    | Direct _ -> direct
+    | Indirect ->
+      (* CR mshinwell for pchambart: Do we still need to do this?  It it
+         definitely the case that we don't need to do this for the "simple"
+         case above, too (before checking [ap_kind])? *)
+      match get_descr fun_approx with
+      (* We mark some calls as direct when it is unknown:
+         for instance if simplify wasn't run before. *)
+      | Some (Value_closure { closure_id }) when
+          (function_arity closure_id) = List.length args ->
+        Direct closure_id
+      | _ -> Indirect
+  in
+  let flambda =
+    Fapply ({
+      ap_function = fundecl;
+      ap_arg = args;
+      ap_kind = direct;
+      ap_dbg = dbg;
+    }, ())
+  in
+  let clambda = clambda_for_application t env ~direct ~ufundecl ~uargs ~dbg in
+  fclambda, clambda, approx_for_application ~fundecl_approx
+
+and fclambda_and_approx_for_application t env (expr : _ Flambda.t) =
+  match expr with
   | Fapply ({
-      (* The simple case: direct call of a closure from a known set of
-         closures. *)
+    (* The simple case: direct call of a closure from a known set of
+       closures. *)
       ap_function =
         Fclosure ({
           fu_closure =
-            Fset_of_closures ({ cl_fun = ffuns; cl_free_var = fv;
-                cl_specialised_arg }, _);
-          fu_fun = off;
+            Fset_of_closures ({ cl_fun = fundecls; cl_free_var = fv;
+                cl_specialised_arg = specialised_args; }, _);
+          fu_fun = closure_id;
           fu_relative_to = (None as rel) }, _);
       ap_arg = args;
-      ap_kind = Direct direc;
+      ap_kind = Direct closure_id';
       ap_dbg = dbg }, _) ->
-
-      assert (Closure_id.equal off direc);
-      let uargs, args_approx = conv_list_approx env args in
-      let func =
-        try find_declaration off ffuns
-        with Not_found -> assert false in
-      assert(List.length uargs = List.length func.params);
-      let args_approx =
-        List.fold_right2 Variable.Map.add func.params args_approx Variable.Map.empty
-        |> Variable.Map.filter (fun var _ -> Variable.Map.mem var cl_specialised_arg) in
-      let uffuns, fun_approx = conv_closure env ffuns args_approx cl_specialised_arg fv in
-      let approx = match get_descr fun_approx with
-        | Some(Value_closure { fun_id; closure = { results } }) ->
-            Closure_id.Map.find fun_id results
-        | _ -> Value_unknown
-      in
-      Fapply({ap_function =
-                Fclosure ({fu_closure = uffuns;
-                            fu_fun = off;
-                            fu_relative_to = rel}, ());
-              ap_arg = uargs;
-              ap_kind = Direct direc;
-              ap_dbg = dbg}, ()),
-      approx
+    (* CR mshinwell: investigate why [Direct] needs to specify the
+       closure ID; it would be nice to statically eliminate the possibility
+       that it doesn't match [closure_id] *)
+    assert (Closure_id.equal closure_id closure_id');
+    fclambda_and_approx_for_simple_application t env ~expr ~fundecls ~fv
+      ~specialised_args ~closure_id ~args ~dbg
   | Fapply ({ ap_function = funct; ap_arg = args; ap_kind = direct;
-        ap_dbg = dbg}, _) ->
-      let ufunct, fun_approx = conv_approx env funct in
-      let direct = match direct with
-        | Direct _ -> direct
-        | Indirect -> match get_descr fun_approx with
-          (* We mark some calls as direct when it is unknown:
-             for instance if simplify wasn't run before. *)
-          | Some (Value_closure { fun_id }) when
-              (function_arity fun_id) = List.length args ->
-              Direct fun_id
-          | _ -> Indirect
-      in
-      let approx = match get_descr fun_approx with
-        | Some(Value_closure { fun_id; closure = { results } }) ->
-            Closure_id.Map.find fun_id results
-        | _ -> Value_unknown
-      in
-      Fapply({ap_function = ufunct; ap_arg = conv_list env args;
-              ap_kind = direct;
-              ap_dbg = dbg}, ()),
-      approx
-  (* two cases from pass 2: *)
-  | Fapply ({ ap_function = funct; ap_arg = args;
-        ap_kind = Direct direct_func; ap_dbg = dbg }, _) ->
-    conv_direct_apply (conv env funct) args direct_func dbg env
-  | Fapply ({ ap_function = funct; ap_arg = args;
-        ap_kind = Indirect; ap_dbg = dbg }, _) ->
-    (* the closure parameter of the function is added by cmmgen, but
-       it already appears in the list of parameters of the clambda
-       function for generic calls. Notice that for direct calls it is
-       added here. *)
-    Ugeneric_apply (conv env funct, conv_list env args, dbg)
+      ap_dbg = dbg }, _) ->
+    (* CR mshinwell: consider adding comments illustrating what ends up
+       here. *)
+    fclambda_and_approx_for_non_simple_application t env ~expr ~direct
+      ~fundecls ~fv ~specialised_args ~closure_id ~args ~dbg
 
 let create () =
   ...
