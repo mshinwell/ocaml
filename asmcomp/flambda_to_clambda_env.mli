@@ -39,8 +39,8 @@ val create : unit -> t
 val clean : t -> t
 
 (* [add_substitution_for_variable t var lam ulam] records that the value of
-   [var] is the Flambda expression [lam] whose translation to Clambda was
-   [ulam]. *)
+   [var] is the Flambda expression [lam].  Such expressions have not yet
+   been through the symbol rewriting/Clambda generation translation. *)
 val add_substitution_for_variable : t -> Variable.t -> _ Flambda.t -> t
 
 (* [find_substitution_for_variable] retrieves a substitution previously
@@ -59,6 +59,8 @@ val add_approxs : t -> Flambdaexport.approx Variable.Map.t -> t
    or [add_approxs]. *)
 val get_approx : t -> Variable.t -> Flambdaexport.approx option
 
+val add_variable_symbol_equality : t -> Variable.t -> t
+
 (* [add_variable_symbol_equalities t var_mapping] examines each mapping
    v |-> v' in [var_mapping] and determines whether [t] tells us that
    the value of v' is always the value associated with some symbol S.
@@ -67,7 +69,7 @@ val get_approx : t -> Variable.t -> Flambdaexport.approx option
 (* CR mshinwell: check whether these symbols only reference constants, and
    consider changing the name of these functions if so *)
 val add_variable_symbol_equalities : t -> Variable.t Variable.Map.t -> t
-
+(* CR mshinwell: should these be Ident.t? *)
 (* [find_variable_symbol_equality t var] identifiers whether the value
    of [var] is known to always be that associated with some symbol. *)
 val find_variable_symbol_equality : t -> Variable.t -> Symbol.t option

@@ -254,28 +254,42 @@ and fclambda_and_approx_for_primitive t env ~(primitive : Lambda.primitive)
       Value_unknown
 
 and fclambda_and_approx_for_let t ~env ~str ~var ~lam ~body =
+  (* CR mshinwell: rename [str] everywhere once we fix [Flambda.let_kind] *)
+  let id, env = Env.add_unique_ident env var in
   let lam, ulam, approx = fclambda_and_approx_for_expr t env lam in
+  (* [id_is_constant] holds just when [id] may be compiled to a Clambda
+     constant. *)
+  let id_is_constant = is_constant id in
   let env =
-    if is_constant id || str = Not_assigned
-    then Env.add_approx env id approx
-    else Env.add_approx env id Value_unknown
-  in
-  match is_constant id, constant_symbol lam, str with
-  | _, _, Assigned
-  | false, (Not_const | No_lbl | Const_closure), _ ->
-    let id, env_body = add_unique_ident var env in
-    let ubody, body_approx =
-      clambda_and_approx_for_expr env body
+    let approx_is_known =
+      id_is_constant
+        || match str with
+           | Not_assigned -> true
+           | Assigned -> false
     in
-    Ulet (id, conv env lam, conv env_body body), body_approx
-  | true, No_lbl, Not_assigned ->
+    Env.add_approx env id (if approx_is_known then approx else Value_unknown)
+  in
+  (* CR mshinwell: This code is confusing, and needs comments.  Also worth
+     considering whether this can somehow be restructured *)
+  match id_is_constant, Env.classify_constant env lam, str with
+  | _, _, Assigned
+  | false,
+    (Not_constant | Constant_not_accessed_via_symbol | Constant_closure), _ ->
+    let id, env_body = add_unique_ident var env in
+    let body, ubody, body_approx =
+      fclambda_and_approx_for_expr t env_body body
+    in
+    Flet (str, id, lam, body, ()), Ulet (id, ulam, ubody), body_approx
+  | true, Constant_not_accessed_via_symbol, Not_assigned ->
     (* No label => the value is an integer: substitute it. *)
-    clambda_and_approx_for_expr (add_sb id lam env) body
-  | _, Lbl lbl, Not_assigned ->
-    (* Label => the value is a block: reference it. *)
-    clambda_and_approx_for_expr (add_cm id lbl env) body
-  | true, Const_closure, Not_assigned ->
-    clambda_and_approx_for_expr env body
+    (* XXX should these be indexed by id or variable? *)
+    let env = Env.add_substitution_for_variable env id lam in
+    fclambda_and_approx_for_expr t env body
+  | _, Constant_accessed_via_symbol sym, Not_assigned ->
+    let env = Env.add_variable_symbol_equality id sym in
+    fclambda_and_approx_for_expr t env body
+  | true, Constant_closure, Not_assigned ->
+    fclambda_and_approx_for_expr t env body
   | true, Not_const, Not_assigned ->
     (* CR mshinwell: add description to error message *)
     Misc.fatal_errorf "%a@.%a" Variable.print id Printflambda.flambda lam
@@ -284,56 +298,82 @@ and fclambda_and_approx_for_let_rec t env defs body =
   let consts, not_consts =
     List.partition (fun (id, _) -> E.is_constant t.exported id) defs
   in
+  (* Add substitutions and variable-symbol equalities to the environment
+     for those variables bound by the [let rec] whose values we know are
+     constant. *)
   let env, consts =
-    List.fold_left (fun (env, acc) (var, def) -> (* renamed id -> var *)
+    List.fold_left (fun (env, consts) (var, def) ->
         let id = add_unique_ident var env in
-
         match def with
+        (* If the expression on the right-hand side is manifestly a
+           constant, we arrange for a substitution. *)
         | Fconst (( Fconst_pointer _
                   | Fconst_base
-                      (Const_int _ | Const_char _
+                      ( Const_int _ | Const_char _
                       | Const_float _ | Const_int32 _
                       | Const_int64 _ | Const_nativeint _)), _) ->
-          (* When the value is an integer constant, we cannot affect a label
-             to it: hence we must substitute it directly.
-             For other numerical constant, a label could be attributed, but
-             unboxing doesn't handle it well *)
-          add_sb id (conv env def) env, acc
+          (* When the value is an integer constant, we cannot attribute a
+             label to it: hence we must substitute it directly.
+             For other numerical constants, a label could be attributed, but
+             unboxing doesn't handle it well. *)
+          Env.add_substitution_for_variable env var def, consts
         | Fvar (var_id, _) ->
-          assert(List.for_all(fun (id,_) -> not (Variable.equal var_id id)) consts);
+          (* If the expression on the right-hand side is manifestly a
+             variable, whose value is known to be constant, we again
+             arrange for a substitution. *)
+          assert (List.for_all (fun (id, _) ->
+              not (Variable.equal var_id id)) consts);
+          (* CR mshinwell for pchambart: I don't understand this comment *)
           (* For variables: the variable could have been substituted to
              a constant: avoid it by substituting it directly *)
-          add_sb id (conv env def) env, acc
+          Env.add_substitution_for_variable env var def, consts
         | _ ->
+          (* If the expression on the right-hand side is something
+             complicated (but which we still know to be constant), assign a
+             new symbol, in preparation for translating the right-hand side.
+             The actual translation is performed below, once the augmented
+             environment has been fully constructed. *)
           let sym = Compilenv.new_const_symbol' () in
-          let env = add_cm id sym env in
-          env, (id,sym,def)::acc) (env,[]) consts
+          let env = Env.add_variable_symbol_equality env var sym in
+          env, (id, sym, def)::acc)
+      (env, []) consts
   in
-  List.iter (fun (id,sym,def) ->
-      match constant_symbol (conv env def) with
-      | Lbl sym' ->
+  (* In the augmented environment, verify that all bindings deemed constant
+     that we have not been able to directly substitute are assigned symbols. *)
+  List.iter (fun (id, sym, def) ->
+      match Env.classify_constant env (conv env def) with
+      (* CR mshinwell: we should have an example as to how a chain of
+         symbol aliases can happen *)
+      | Constant_accessed_via_symbol sym' ->
         (match symbol_id sym' with
          | None -> ()
          | Some eid -> add_symbol sym eid);
         set_symbol_alias sym sym'
       | _ ->
-        Misc.fatal_errorf "recursive constant value without symbol %a"
-            Variable.print id)
+        Misc.fatal_errorf "Recursive constant value without symbol %a %a"
+          Variable.print id
+          Printflambda.flambda def)
     consts;
+  (* Translate bindings whose right-hand sides are not known to be
+     constant.  This again happens in the augmented environment from
+     above, and indeed augments the environment further. *)
   let not_consts, env =
-    (* Produce rewritten Flambda terms, their Clambda equivalents, and
-       approximations for the variables bound by the [let rec] whose values
-       are not known to be constants. *)
     List.fold_right (fun (id, def) (not_consts, env') ->
-        let def, udef, approx = flambda_and_approx_for_expr t env def in
+        (* N.B. [def] is evaluated w.r.t. [env] not [env']. *)
+        let def, udef, approx = fclambda_and_approx_for_expr t env def in
         let env' = Env.add_approx env' id approx in
         (id, def, udef)::not_consts, env')
       not_consts ([], env)
   in
+  (* [env] now contains all bindings, so we can translate the body of the
+     [let rec] expression. *)
   let body, ubody, approx = fclambda_and_approx_for_expr t env body in
   let flambda, clambda =
     (* The "let rec" may be completely eliminated in the case where all
-       of the bound variables are constant. *)
+       of the bound variables are constant.  Otherwise, we still need the
+       "let rec", but we can remove any constant bindings from it
+       (since their corresponding values will have been substituted for
+       the bound variables). *)
     match not_consts with
     | [] -> body, ubody
     | _ -> Fletrec (not_consts, body, ()), Uletrec (unot_consts, ubody)
@@ -1173,18 +1213,22 @@ let convert (type a) t ~(expr : a Flambda.t)
       Symbol.Map.add sym' ex map
     in
     Symbol.Map.fold aux !(infos.symbol_id) Symbol.Map.empty
+  in
   let symbol_id =
     Symbol.Map.add module_symbol root_id
       symbol_id
+  in
   let id_symbol =
     Symbol.Map.fold (fun sym id map -> Export_id.Map.add id sym map)
       symbol_id Export_id.Map.empty
+  in
   let functions_off =
     let aux_fun ffunctions off_id _ map =
       let fun_id = Closure_id.wrap off_id in
       Closure_id.Map.add fun_id ffunctions map in
     let aux _ f map = Variable.Map.fold (aux_fun f) f.funs map in
     Set_of_closures_id.Map.fold aux functions Closure_id.Map.empty
+  in
   (* end of stuff not looked at *)
   let exported =
     (* Lay out closures for the current compilation unit, assigning offsets
