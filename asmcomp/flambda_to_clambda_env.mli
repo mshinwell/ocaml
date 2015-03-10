@@ -38,10 +38,14 @@ val create : unit -> t
    access some globally-defined constant attached to a symbol is not. *)
 val clean : t -> t
 
-(* [add_substitution_for_variable t var lam ulam] records that the value of
-   [var] is the Flambda expression [lam].  Such expressions have not yet
-   been through the symbol rewriting/Clambda generation translation. *)
-val add_substitution_for_variable : t -> Variable.t -> _ Flambda.t -> t
+val add_unique_ident : t -> Variable.t -> Ident.t * t
+
+val add_substitution_for_variable
+   : t
+  -> Variable.t
+  -> _ Flambda.t
+  -> Clambda.ulambda
+  -> t
 
 (* [find_substitution_for_variable] retrieves a substitution previously
    added with [add_substitution_for_variable]. *)

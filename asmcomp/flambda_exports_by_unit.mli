@@ -38,6 +38,7 @@ val create
 val get_fun_offset : t -> Closure_id.t -> int
 val get_fun_offset_from_var : t -> Variable.t -> int
 val get_fv_offset : t -> Variable_in_closure_id.t -> int
+val get_local_fv_offset_from_var_exn : t -> Variable.t -> int
 
 val is_function_constant : t -> Closure_id.t -> bool
 (* CR mshinwell: we've introduced "local" by accident to mean "current unit" *)

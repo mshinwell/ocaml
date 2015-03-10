@@ -75,8 +75,11 @@ let get_fv_offset t (var : Var_within_closure.t) =
     in
     E.get_fv_offset_exn exported var
   with Not_found ->
-    Misc.fatal_erro0rf "offset for free variable not found: %a"
+    Misc.fatal_errorf "offset for free variable not found: %a"
       Var_within_closure.print var
+
+let get_local_fv_offset_from_var_exn t (var : Variable.t) =
+  E.get_fv_offset_exn t.current_unit (Var_within_closure.wrap var)
 
 let closure_declaration_position t (id : Closure_id.t) =
   match E.closure_declaration_position_exn t.current_unit id with
@@ -90,7 +93,7 @@ let closure_declaration_position t (id : Closure_id.t) =
 
 let set_of_closures_declaration_position t (id : Set_of_closures_id.t) =
   match E.set_of_closures_declaration_position_exn t.current_unit id with
-  | decls -> Current0_unit decls
+  | decls -> Current_unit decls
   | exception Not_found ->
     match E.set_of_closures_declaration_position_exn t.external_units id with
     | decls -> External decls

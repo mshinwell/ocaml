@@ -1,12 +1,5 @@
 open Abstract_identifiers
 
-module Storer =
-  Switch.Store (struct
-    type t = Expr_id.t Flambda.t
-    type key = Flambdautils.sharing_key
-    let make_key = Flambdautils.make_key
-  end)
-
 (* [fun_offset_table] associates a function label to its offset inside a
    closure *)
 let fun_offset_table = ref Closure_id.Map.empty
