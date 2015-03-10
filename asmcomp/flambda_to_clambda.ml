@@ -35,15 +35,22 @@ type t = {
   global : (int, Flambdaexport.approx) Hashtbl.t;
   mutable symbol_to_export_id : Export_id.t Symbol.Map.t;
   mutable ex_table : Flambdaexport.descr Export_id.Map.t;
+  mutable unit_approx : Flambdaexport.approx;
 }
 
 let create () =
-  { exported = E.create ();
-    symbol_alias = Symbol.Tbl.create 42;
-    global = Hashtbl.create 42;
-    ex_table = Export_id.Map.empty;
-  }
+  let t =
+    { exported = E.create ();
+      symbol_alias = Symbol.Tbl.create 42;
+      global = Hashtbl.create 42;
+      ex_table = Export_id.Map.empty;
+      unit_approx = Value_unknown;
+    }
+  in
+  t.unit_approx <- Value_id (add_new_export t (Value_constptr 0));
+  t
 
+(* Return the canonical symbol for the value attributed to the symbol [s]. *)
 let rec canonical_symbol t s =
   try
     let s' = Symbol.Tbl.find t.symbol_alias s in
@@ -52,11 +59,13 @@ let rec canonical_symbol t s =
     s''
   with Not_found -> s
 
+(* Record that symbols [s1] and [s2] are aliases for the same value. *)
 let set_symbol_alias t s1 s2 =
   let s1' = canonical_symbol t s1 in
   let s2' = canonical_symbol t s2 in
   if s1' <> s2' then Symbol.Tbl.add t.symbol_alias s1' s2'
 
+(* CR mshinwell: Bad function name.  Can this go elsewhere? *)
 let structured_constant_for_symbol (sym : Symbol.t)
       (ulambda : Clambda.ulambda) =
   match ulambda with
@@ -381,7 +390,15 @@ and fclambda_and_approx_for_let_rec t env defs body =
   flambda, clambda, approx
 
 and fclambda_and_approx_for_switch t env ~arg ~sw =
-  let fclambda_for_cases ~cases ~num_keys ~default =
+  let arg, uarg = fclambda_for_expr t env arg in
+  let default, udefault =
+    match sw.fs_failaction with
+    | None -> None, None
+    | Some failaction ->
+      let flambda, clambda = fclambda_for_expr t failaction in
+      Some flambda, Some clambda
+  in
+  let fclambda_for_cases ~cases ~num_keys =
     (* Produce rewritten Flambda and Clambda for a subset of the cases within
        a switch. *)
     let module Switch_storer =
@@ -402,12 +419,16 @@ and fclambda_and_approx_for_switch t env ~arg ~sw =
     | Some default when List.length cases < num_keys ->
       ignore ((store.act_store default) : int)
     | _ -> ()
-    end ;
+    end;
     (* Then all other cases. *)
     List.iter (fun (key, lam) -> index.(key) <- store.act_store lam) cases;
     (* Compile the actions. *)
     let actions_and_uactions =
-      List.map (fun action -> fclambda_for_expr t env action)
+      List.map (fun action ->
+          (* Avoid translating [default] more than once.  (The translation
+             is performed below.) *)
+          if action == default then default, udefault
+          else fclambda_for_expr t env action)
         (Array.to_list (store.act_get ()))
     in
     match actions_and_uactions with
@@ -416,22 +437,21 @@ and fclambda_and_approx_for_switch t env ~arg ~sw =
       let actions, uactions = List.split actions, uactions in
       index, Array.of_list actions, Array.of_list uactions
   in
-  let arg, uarg = fclambda_for_expr t env arg in
   let fclambda_for_all_cases () : unit Flambda.t * Clambda.ulambda =
     let const_index, const_actions, const_uactions =
       (* Cases matching on immediate values. *)
-      fclambda_for_cases sw.fs_consts sw.fs_numconsts sw.fs_failaction
+      fclambda_for_cases ~cases:sw.fs_consts ~num_keys:sw.fs_numconsts
     in
     let block_index, block_actions, block_uactions =
       (* Cases matching on boxed values ("blocks"). *)
-      fclambda_for_cases sw.fs_blocks sw.fs_numblocks sw.fs_failaction
+      fclambda_for_cases ~cases:sw.fs_blocks ~num_keys:sw.fs_numblocks
     in
     let flambda =
       Fswitch (arg, {
         sw with
         fs_consts = const_actions;
         fs_blocks = block_actions;
-        fs_failaction = ...;
+        fs_failaction = default;
       })
     in
     let clambda =
@@ -839,7 +859,7 @@ and fclambda_and_approx_for_function_declarations t env
     { descr_set_of_closures with
       results =
         let module M = Map_map (Variable) (Closure_id) in
-        M.map fclambda_for_fundecls_with_approxs ~map_data:trd3;
+        M.map fclambda_for_fundecls_with_approxs ~map_data:Misc.thd3;
     }
   in
   (* The set of closures will always be exported; assign a new export ID
@@ -855,7 +875,7 @@ and fclambda_and_approx_for_function_declarations t env
     let expr : _ Flambda.t =
       let fundecls =
         { fundecls with
-          funs = Variable.Map.map fst3 fclambda_for_fundecls_with_approxs;
+          funs = Variable.Map.map Misc.fst3 fclambda_for_fundecls_with_approxs;
         }
       in
       Fset_of_closures ({ cl_fun = fundecls;
@@ -871,7 +891,7 @@ and fclambda_and_approx_for_function_declarations t env
   (* Build the Clambda expression representing the set of closures. *)
   let clambda =
     let clambda_ufunctions =
-      List.map snd3 Variable.Map.data fclambda_for_fundecls_with_approxs
+      List.map Misc.snd3 Variable.Map.data fclambda_for_fundecls_with_approxs
     in
     if is_constant then
       match Clambda.all_constants (List.map snd fv_ulam) with
@@ -1178,13 +1198,6 @@ and fclambda_for_expr_pair env expr1 expr2 =
   let expr1, uexpr1 = fclambda_for_expr env expr1 in
   let expr2, uexpr2 = fclambda_for_expr env expr2 in
   expr1, uexpr1, expr2, uexpr2
-
-let create () =
-  let t = {
-
-  } in
-  let unit_approx = Value_id (add_new_export t (Value_constptr 0))
-  t
 
 let id_and_approximation_of_global_module_block t =
   let root_id =
