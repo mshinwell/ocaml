@@ -380,75 +380,96 @@ and fclambda_and_approx_for_let_rec t env defs body =
   in
   flambda, clambda, approx
 
-and fclambda_and_approx_for_switch t env cases num_keys default =
-  let module Switch_storer =
-    Switch.Store (struct
-      type t = _ Flambda.t
-      type key = Flambdautils.sharing_key
-      let make_key = Flambdautils.make_key
-    end)
+and fclambda_and_approx_for_switch t env ~arg ~sw =
+  let fclambda_for_cases ~cases ~num_keys ~default =
+    (* Produce rewritten Flambda and Clambda for a subset of the cases within
+       a switch. *)
+    let module Switch_storer =
+      Switch.Store (struct
+        type t = _ Flambda.t
+        type key = Flambdautils.sharing_key
+        let make_key = Flambdautils.make_key
+      end)
+    in
+    let num_keys =
+      if Ext_types.Int.Set.cardinal num_keys = 0
+      then 0
+      else Ext_types.Int.Set.max_elt num_keys + 1 in
+    let index = Array.make num_keys 0 in
+    let store = Switch_storer.mk_store () in
+    (* First the default case. *)
+    begin match default with
+    | Some default when List.length cases < num_keys ->
+      ignore ((store.act_store default) : int)
+    | _ -> ()
+    end ;
+    (* Then all other cases. *)
+    List.iter (fun (key, lam) -> index.(key) <- store.act_store lam) cases;
+    (* Compile the actions. *)
+    let actions_and_uactions =
+      List.map (fun action -> fclambda_for_expr t env action)
+        (Array.to_list (store.act_get ()))
+    in
+    match actions_and_uactions with
+    | [] -> [| |], [| |], [| |]  (* May happen when [default] is [None]. *)
+    | _ ->
+      let actions, uactions = List.split actions, uactions in
+      index, Array.of_list actions, Array.of_list uactions
   in
-    let arg = clambda_for_expr env arg in
-    (*
-      fs_consts = List.map (fun (i,lam) -> i, conv env lam) sw.fs_consts;
-      fs_blocks = List.map (fun (i,lam) -> i, conv env lam) sw.fs_blocks;
-      fs_failaction = may_map (conv env) sw.fs_failaction }, ()),
-    *)
-    let aux () : Clambda.ulambda =
-      let const_index, const_actions =
-        conv_switch env sw.fs_consts sw.fs_numconsts sw.fs_failaction
-      and block_index, block_actions =
-        conv_switch env sw.fs_blocks sw.fs_numblocks sw.fs_failaction
-      in
-      Uswitch (conv env arg, {
+  let arg, uarg = fclambda_for_expr t env arg in
+  let fclambda_for_all_cases () : unit Flambda.t * Clambda.ulambda =
+    let const_index, const_actions, const_uactions =
+      (* Cases matching on immediate values. *)
+      fclambda_for_cases sw.fs_consts sw.fs_numconsts sw.fs_failaction
+    in
+    let block_index, block_actions, block_uactions =
+      (* Cases matching on boxed values ("blocks"). *)
+      fclambda_for_cases sw.fs_blocks sw.fs_numblocks sw.fs_failaction
+    in
+    let flambda =
+      Fswitch (arg, {
+        sw with
+        fs_consts = const_actions;
+        fs_blocks = block_actions;
+        fs_failaction = ...;
+      })
+    in
+    let clambda =
+      Uswitch (uarg, {
         us_index_consts = const_index;
         us_actions_consts = const_actions;
         us_index_blocks = block_index;
         us_actions_blocks = block_actions;
       })
     in
+    flambda, clambda
+  in
+  let lam, ulam =
+    (* CR mshinwell for pchambart: "effectively copyable" needs
+       clarification *)
+    (* Check that failaction is effectively copyable: i.e. it can't declare
+       symbols.  If this is not the case, share it through a
+       staticraise/staticcatch. *)
     let rec simple_expr (expr : _ Flambda.t) =
       match expr with
-      | Fconst ( Fconst_base (Asttypes.Const_string _), _ ) -> false
+      | Fconst (Fconst_base (Const_string _), _) -> false
       | Fvar _ | Fsymbol _ | Fconst _ -> true
       | Fstaticraise (_, args, _) -> List.for_all simple_expr args
       | _ -> false
     in
-    (* Check that failaction is effectively copyable: i.e. it can't declare
-       symbols.  If this is not the case, share it through a
-       staticraise/staticcatch *)
-    let ulam =
-      match sw.fs_failaction with
-      | None -> aux ()
-      | Some (Fstaticraise (_, args, _))
-          when List.for_all simple_expr args -> aux ()
-      | Some failaction ->
-        let exn = Static_exception.create () in
-        let fs_failaction = Some (Flambda.Fstaticraise (exn, [], d)) in
-        let sw = { sw with fs_failaction } in
-        clambda_for_expr env
-          (Fstaticcatch (exn, [], Fswitch (arg, sw, d), failaction, d))
-    in
-    ulam, Value_unknown
-  let num_keys =
-    if Ext_types.Int.Set.cardinal num_keys = 0
-    then 0
-    else Ext_types.Int.Set.max_elt num_keys + 1 in
-  let index = Array.make num_keys 0 in
-  let store = Switch_storer.mk_store () in
-  (* First the default case. *)
-  begin match default with
-  | Some def when List.length cases < num_keys ->
-      ignore (store.Switch.act_store def)
-  | _ -> ()
-  end ;
-  (* Then all other cases. *)
-  List.iter (fun (key, lam) -> index.(key) <- store.Switch.act_store lam) cases;
-  (* Compile the actions. *)
-  let actions = Array.map (conv env) (store.Switch.act_get ()) in
-  match actions with
-  | [| |] -> [| |], [| |] (* May happen when [default] is [None] *)
-  | _ -> index, actions
+    match sw.fs_failaction with
+    | None -> fclambda_for_all_cases ()
+    | Some (Fstaticraise (_, args, _))
+        when List.for_all simple_expr args -> fclambda_for_all_cases ()
+    | Some failaction ->
+      (* Replace the [failaction] with a static raise, and re-translate
+         the whole expression, wrapped in a [Fstaticcatch]. *)
+      let exn = Static_exception.create () in
+      let sw = { sw with fs_failaction = Some (Fstaticraise (exn, [], d)) } in
+      fclambda_for_expr t env
+        (Fstaticcatch (exn, [], Fswitch (arg, sw, d), failaction, d))
+  in
+  lam, ulam, Value_unknown
 
 (* Handle an expression that retrieves the value of a variable bound by
    some closure. *)
@@ -1072,12 +1093,12 @@ and fclambda_and_approx_for_expr t (env : Flambda_to_clambda_env.t)
   | Fvariable_in_closure var_in_closure ->
     fclambda_and_approx_for_variable_in_closure env var_in_closure
   | Fapply apply -> fclambda_and_approx_for_application env apply
-  | Fswitch (arg, sw, d) -> fclambda_and_approx_for_switch env ~arg ~sw ~d
-  | Fstringswitch (arg, sw, def, d) ->
-    let arg, uarg = fclambda_for_expr env arg in
+  | Fswitch (arg, sw, _) -> fclambda_and_approx_for_switch env ~arg ~sw
+  | Fstringswitch (arg, sw, def, _) ->
+    let arg, uarg = fclambda_for_expr t env arg in
     let sw, usw =
       List.fold_left (fun (sw, usw) (s, e) ->
-          let e, ue = fclambda_for_expr env e in
+          let e, ue = fclambda_for_expr t env e in
           e::sw, ue::usw)
         [] sw
     in
@@ -1085,10 +1106,10 @@ and fclambda_and_approx_for_expr t (env : Flambda_to_clambda_env.t)
       match def with
       | None -> None, None
       | Some def ->
-        let def, udef = fclambda_for_expr env def in
+        let def, udef = fclambda_for_expr t env def in
         Some def, Some udef
     in
-    Fstringswitch (arg, sw, def, d), Ustringswitch (uarg, usw, udef),
+    Fstringswitch (arg, sw, def, ()), Ustringswitch (uarg, usw, udef),
       Value_unknown
   | Fprim (primitive, args, dbg, _) ->
     let args, uargs = fclambda_for_expr_list env args in
