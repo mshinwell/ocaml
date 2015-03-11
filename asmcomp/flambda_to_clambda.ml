@@ -36,6 +36,8 @@ type t = {
   mutable symbol_to_export_id : Export_id.t Symbol.Map.t;
   mutable ex_table : Flambdaexport.descr Export_id.Map.t;
   mutable unit_approx : Flambdaexport.approx;
+  mutable can_be_compiled_to_clambda_constant : Variable.Set.t;
+  constant_closures : Set_of_closures_id.t;
 }
 
 let create () =
@@ -49,6 +51,23 @@ let create () =
   in
   t.unit_approx <- Value_id (add_new_export t (Value_constptr 0));
   t
+
+type constant_classification =
+  | Constant_accessed_via_symbol of Symbol.t
+  | Constant_not_accessed_via_symbol
+  | Constant_closure
+  | Not_constant
+
+let constant_classification_for_expr t (expr : unit Flambda.t)
+      : constant_classification =
+  match expr with
+  | Fsymbol (sym, ()) -> Constant_accessed_via_symbol sym
+  | Fconst (_, ()) -> Constant_not_accessed_via_symbol
+  | Fset_of_closures ({ cl_fun }, _) ->
+    if Set_of_closures_id.Set.mem cl_fun.ident t.constant_closures
+    then Constant_closure
+    else Not_constant
+  | _ -> Not_constant
 
 (* Return the canonical symbol for the value attributed to the symbol [s]. *)
 let rec canonical_symbol t s =
@@ -163,28 +182,17 @@ let fclambda_and_approx_for_constant t env ~(cst : Flambda.const) =
   in
   flambda, clambda, approx
 
-let rec fclambda_and_approx_for_var t env ~var =
-  (* If the variable references a constant, it is replaced by the symbol
-     associated with said constant. *)
-  match Env.find_variable_symbol_equality env var with
-  | Some symbol -> fclambda_and_approx_for_expr t env (Fsymbol (symbol, ()))
+let fclambda_and_approx_for_var t env ~var =
+  let default_flambda = Fvar (var, ()) in
+  match Env.find_substitution env var ~default_flambda with
+  | Some (None, ulam, approx) -> Fvar (var, ()), ulam, approx
+  | Some (lam, ulam, approx) -> lam, ulam, approx
   | None ->
-    (* If the variable is bound by any current closure, or is one of the
-       function identifiers bound by any current set of closures, then we
-       can find out how to access the variable by looking in the
-       substitution inside [env].  Such substitutions are constructed below,
-       in [conv_closure].
-       For variables not falling into these categories, we must ask the
-       environment which identifier is associated with the variable, and
-       emit a Clambda term referencing said variable. *)
-    let lam, ulam =
-      match Env.substitution_for_variable env var with
-      | Some lam -> fclambda_and_approx_for_expr t env lam
-      | None -> Fvar (id, ()), Uvar id
-    in
-    lam, ulam, Env.get_approx env id
+    Misc.fatal_errorf "Environment does not know about variable %a: %a"
+      Variable.print var
+      Env.print env
 
-and fclambda_and_approx_for_primitive t env ~(primitive : Lambda.primitive)
+let rec fclambda_and_approx_for_primitive t env ~(primitive : Lambda.primitive)
       ~args ~dbg : unit Flambda.t * Clambda.ulambda * Flambdaexport.descr =
   match primitive, args, dbg with
   | Pgetglobalfield (id, index), l, dbg ->
@@ -195,7 +203,7 @@ and fclambda_and_approx_for_primitive t env ~(primitive : Lambda.primitive)
       Fprim (Pfield index, [Fprim (Pgetglobal id, l, dbg, v)], dbg, v)
     in
     if id <> Compilenv.current_unit_id () then
-      fclambda_and_approx_for_expr env lam
+      fclambda_and_approx_for_expr t env lam
     else
       let approx = get_approx_for_global ~index in
       begin match approx with
@@ -262,46 +270,32 @@ and fclambda_and_approx_for_primitive t env ~(primitive : Lambda.primitive)
     Fprim (primitive, args, dbg, ()), Uprim (primitive, uargs, dbg),
       Value_unknown
 
+(* CR mshinwell: consider renaming [str] and [lam].  For [str], need to
+   fix [Flambda.let_kind] *)
 and fclambda_and_approx_for_let t ~env ~str ~var ~lam ~body =
-  (* CR mshinwell: rename [str] everywhere once we fix [Flambda.let_kind] *)
-  let id, env = Env.add_unique_ident env var in
   let lam, ulam, approx = fclambda_and_approx_for_expr t env lam in
-  (* [id_is_constant] holds just when [id] may be compiled to a Clambda
-     constant. *)
-  let id_is_constant = is_constant id in
-  let env =
-    let approx_is_known =
-      id_is_constant
+  let is_constant = can_be_compiled_to_clambda_constant t var in
+  let approx =
+    let approx_never_changes_during_execution_of_body =
+      is_constant
         || match str with
            | Not_assigned -> true
            | Assigned -> false
     in
-    Env.add_approx env id (if approx_is_known then approx else Value_unknown)
+    if approx_never_changes_during_execution_of_body then approx
+    else Value_unknown
   in
-  (* CR mshinwell: This code is confusing, and needs comments.  Also worth
-     considering whether this can somehow be restructured *)
-  match id_is_constant, Env.classify_constant env lam, str with
-  | _, _, Assigned
-  | false,
-    (Not_constant | Constant_not_accessed_via_symbol | Constant_closure), _ ->
-    let id, env_body = add_unique_ident var env in
-    let body, ubody, body_approx =
-      fclambda_and_approx_for_expr t env_body body
-    in
-    Flet (str, id, lam, body, ()), Ulet (id, ulam, ubody), body_approx
-  | true, Constant_not_accessed_via_symbol, Not_assigned ->
-    (* No label => the value is an integer: substitute it. *)
-    (* XXX should these be indexed by id or variable? *)
-    let env = Env.add_substitution_for_variable env var lam ulam in
+  let id, env = Env.add_unique_ident t var in
+  let env = Env.add_substitution env var lam ulam approx in
+  if not is_constant then begin
+    assert (constant_classification_for_expr t lam = Not_constant);
+    let body, ubody, body_approx = fclambda_and_approx_for_expr t env body in
+    Flet (str, var, lam, body, ()), Ulet (id, ulam, ubody), body_approx
+  end else
+    (* The [let] is not needed; the value of the constant (which might be
+       a symbol reference to obtain it) will be directly substituted
+       for [var] within [body]. *)
     fclambda_and_approx_for_expr t env body
-  | _, Constant_accessed_via_symbol sym, Not_assigned ->
-    let env = Env.add_variable_symbol_equality var sym in
-    fclambda_and_approx_for_expr t env body
-  | true, Constant_closure, Not_assigned ->
-    fclambda_and_approx_for_expr t env body
-  | true, Not_const, Not_assigned ->
-    (* CR mshinwell: add description to error message *)
-    Misc.fatal_errorf "%a@.%a" Variable.print id Printflambda.flambda lam
 
 and fclambda_and_approx_for_let_rec t env defs body =
   let consts, not_consts =
@@ -315,7 +309,7 @@ and fclambda_and_approx_for_let_rec t env defs body =
         let id = add_unique_ident var env in
         match def with
         (* If the expression on the right-hand side is manifestly a
-           constant, we arrange for a substitution. *)
+           constant, we will substitute the constant for the variable. *)
         | Fconst (( Fconst_pointer _
                   | Fconst_base
                       ( Const_int _ | Const_char _
@@ -325,7 +319,8 @@ and fclambda_and_approx_for_let_rec t env defs body =
              label to it: hence we must substitute it directly.
              For other numerical constants, a label could be attributed, but
              unboxing doesn't handle it well. *)
-          Env.add_substitution_for_variable env var def, consts
+          let def, udef = fclambda_for_expr t env def in
+          Env.add_substitution_for_variable env var (Some def) udef, consts
         | Fvar (var_id, _) ->
           (* If the expression on the right-hand side is manifestly a
              variable, whose value is known to be constant, we again
@@ -335,7 +330,8 @@ and fclambda_and_approx_for_let_rec t env defs body =
           (* CR mshinwell for pchambart: I don't understand this comment *)
           (* For variables: the variable could have been substituted to
              a constant: avoid it by substituting it directly *)
-          Env.add_substitution_for_variable env var def, consts
+          let def, udef = fclambda_for_expr t env def in
+          Env.add_substitution_for_variable env var (Some def) udef, consts
         | _ ->
           (* If the expression on the right-hand side is something
              complicated (but which we still know to be constant), assign a
@@ -425,8 +421,7 @@ and fclambda_and_approx_for_switch t env ~arg ~sw =
     (* Compile the actions. *)
     let actions_and_uactions =
       List.map (fun action ->
-          (* Avoid translating [default] more than once.  (The translation
-             is performed below.) *)
+          (* Avoid translating [default] more than once. *)
           if action == default then default, udefault
           else fclambda_for_expr t env action)
         (Array.to_list (store.act_get ()))
@@ -595,46 +590,120 @@ and fclambda_and_approx_for_closure_reference t env
   else Uoffset (ulam, relative_offset)
 
 (* Handle a single function declaration (contained within a set of
-   closures). *)
-and fclambda_and_approx_for_function_declaration t env id
+   closures).  [env] already contains the relevant information about the
+   following:
+   - the free variables of the set of closures;
+   - the function identifiers bound by the set of closures. *)
+and fclambda_and_approx_for_function_declaration t env fun_id
       ~(fundecl : _ Flambda.function_declaration)
       ~(fv : (_ Flambda.t * Clambda.ulambda) Variable.Map.t)
-      ~env_var =
-  let closure_id = Closure_id.wrap id in
-  let fun_offset = E.get_fun_offset t.exported closure_id in
+      ~env_var ~descr_set_of_closures =
+  let closure_id = Closure_id.wrap fun_id in
+  (* Inside the body of the function, we cannot access variables declared
+     outside, so forget any substitutions we know about. *)
+  let env = Env.forget_substitutions env in
+  (* Now we populate the environment with information relating to various
+     kinds of variable, as per the comments below. *)
   let env =
-    (* param_approxs must be constants: part of specialised_args *)
-    Variable.Map.fold (fun id approx env -> Env.add_approx env id approx)
-      param_approxs env in
-  let env =
-    if is_constant then begin
-      (* Recursive calls within constant functions must go through the symbols
-         associated with the functions. *)
-      Variable.Map.fold (fun id _ env ->
-          let symbol = Compilenv.closure_symbol (Closure_id.wrap id) in
-          Env.add_variable_symbol_equality env id symbol)
-        fundecls env
-    end else
-      env
+    (* 1. The free variables of the function.  The corresponding Clambda
+       terms (which have already been produced, together with the rewritten
+       Flambda) describe how to extract the variables' values from the closure.
+       We should never need to do this for constant closures, since none
+       of their free variables should have satisfied [closure_needs_variable],
+       above. *)
+    assert ((not closure_is_constant) || List.length fvs = 0);
+    let fun_offset = E.get_fun_offset t.exported closure_id in
+    List.fold_left (fun env (fv, (lam, ulam)) ->
+        match E.get_local_fv_offset_from_var_exn t.exported fv with
+        | var_offset ->
+          (* CR mshinwell for pchambart: [pos] can be negative, right? *)
+          let pos = var_offset - fun_offset in
+          (* CR mshinwell: Debuginfo.none is almost certainly wrong *)
+          let ulam : Clambda.ulambda =
+            Uprim (Pfield pos, [Uvar env_var], Debuginfo.none)
+          in
+          Env.add_substitution_for_variable env fv (Some lam) ulam
+        | exception Not_found ->
+          Misc.fatal_errorf "Free variable has no offset: %a %a"
+            Printflambda.function_declarations fundecls
+            Variable.print fv)
+      env fvs
   in
-  (* Rewrite the body of the function, translate to clambda, and obtain its
-     approximation. *)
-  let body, ubody, approx = fclambda_and_approx_for_expr t env func.body in
-  let env_body, params =
+  let env =
+    (* 2. Function identifiers bound by the set-of-closures declaration. *)
+    Variable.Map.fold (fun env closure_var ->
+        let closure_id = Closure_id.wrap closure_var in
+        let descr : Flambdaexport.descr =
+          Value_closure {
+            closure_id;
+            set_of_closures = descr_set_of_closures;
+          }
+        in
+        let export_id = add_new_export descr in
+        if closure_is_constant then begin
+          (* Constant closures must have a symbol attributed to them. *)
+          add_symbol (Compilenv.closure_symbol fun_id) export_id
+        end;
+        let env = Env.add_approx env closure_var (Value_id export_id) in
+        (* CR mshinwell for pchambart: We need to understand if there might
+           be a case where [closure_is_constant] is true and we inserted
+           values into the substitution, above.  If there is no such case,
+           we should consider moving this next [if] above the [fold_left].
+           (Actually, there's something in the large comment above that may
+           be relevant.) *)
+        if closure_is_constant then
+          (* If the set of closures is constant, recursive calls to a
+             function bound by the closure must go via the symbol associated
+             with the given function. *)
+          let symbol = Compilenv.closure_symbol closure_id in
+          Env.add_variable_symbol_equality env closure_var symbol
+        else
+          (* If the set of closures is non-constant, recursive calls
+             translate to accesses through a closure value. *)
+          let offset = E.get_fun_offset t.exported closure_var in
+          (* Note that the resulting offset may be negative, in the case
+             where we are accessing an earlier (= with lower address)
+             closure in a block holding multiple closures. *)
+          let ulam : Clambda.ulambda = Uoffset (Uvar env_var, offset - pos) in
+          Env.add_substitution_for_variable env closure_var None ulam)
+      env funcs.funs
+  in
+  let env, uparams =
+    (* 3. The parameters of the function. *)
     List.fold_right (fun var (env, params) ->
-        let id, env = add_unique_ident var env in
+        let id, env = Env.add_unique_ident var env in
         env, id :: params)
       func.params (env, [])
   in
-  let ufunc : Clambda.ufunction =
-    { label = Compilenv.function_label cf;
-      arity = Flambdautils.function_arity func;
-      params = if closure_is_constant then params else params @ [env_var];
-      body = conv env_body func.body;
-      dbg = func.dbg;
+  let body, ubody, body_approx =
+    fclambda_and_approx_for_expr t env fundecl.body
+  in
+  let flambda =
+    { fundecl with
+      (* Some of the free variables may have been filtered out (see
+         [fclambda_and_approx_for_function_declarations], below), so we must
+         update the record field here. *)
+      free_variables = Variable.Map.keys fv;
+      body;
     }
   in
-  ???, ufunc, ...
+  let uparams =
+    (* If the closure is not constant, then the Clambda function needs an
+       extra parameter, to receive the environment. *)
+    if closure_is_constant then
+      uparams
+    else
+      uparams @ [env_var]
+  in
+  let clambda : Clambda.ufunction =
+    { label = Compilenv.function_label closure_id;
+      arity = Flambdautils.function_arity fundecl;
+      params = uparams;
+      body = ubody;
+      dbg = fundecl.dbg;
+    }
+  in
+  flambda, clambda, body_approx
 
 (* XXX update comment *)
 (* [fclambda_and_approx_for_set_of_closures] assigns symbols throughout a
@@ -776,60 +845,12 @@ and fclambda_and_approx_for_function_declarations t env
         M.map functs.funs ~map_data:(fun _ -> Value_unknown);
     }
   in
-  (* Prepare the environment in which we are going to translate each
-     function declaration.  For robustness, we start with the environment at
-     the current point, and remove any information that we know must be
-     local to each function declaration. *)
   let env =
-    (* Add substitutions for the free variables of the function.  These
-       explain how to extract the values of said variables from the
-       closure.
-       We should never need to do this for constant closures, since none
-       of their free variables should have satisfied [closure_needs_variable],
-       above.
-    *)
-    assert ((not closure_is_constant) || List.length fvs = 0);
-    List.fold_left (fun env (fv, (lam, ulam)) ->
-        match E.get_local_fv_offset_from_var_exn t.exported fv with
-        | var_offset ->
-          (* CR mshinwell for pchambart: [pos] can be negative, right? *)
-          let pos = var_offset - fun_offset in
-          (* CR mshinwell: Debuginfo.none is almost certainly wrong *)
-          let ulam : Clambda.ulambda =
-            Uprim (Pfield pos, [Uvar env_var], Debuginfo.none)
-          in
-          Env.add_variable env id lam ulam
-        | exception Not_found ->
-          Misc.fatal_errorf "Free variable has no offset: %a %a"
-            Printflambda.function_declarations fundecls
-            Variable.print fv)
-      (Env.clean env) fvs
-  in
-  let env =
-    (* Now add substitutions for the function identifiers bound by the
-       set-of-closures declaration. *)
-    Variable.Map.fold (fun env fun_id  ->
-        let fun_id = Closure_id.wrap fun_id in
-        let desc = Value_closure { fun_id; closure = value_closure' } in
-        let ex = add_new_export desc in
-        if closed then add_symbol (Compilenv.closure_symbol fun_id) ex;
-        let env = Env.add_approx env id (Value_id ex) in
-        (* CR mshinwell for pchambart: We need to understand if there might
-           be a case where [closure_is_constant] is true and we inserted
-           values into the substitution, above.  If there is no such case,
-           we should consider moving this next [if] above the [fold_left].
-           (Actually, there's something in the large comment above that may
-           be relevant.) *)
-        if closure_is_constant then env
-        else
-          let offset = E.get_fun_offset_from_var t.exported id in
-          (* Note that the resulting offset may be negative, in the case
-             where we are accessing an earlier (= with lower address)
-             closure in a block holding multiple closures. *)
-          let ulam : Clambda.ulambda = Uoffset (Uvar env_var, offset - pos) in
-          (* XXX what is the flambda term? *)
-          Env.add_variable env id ??? ulam)
-      env funcs.funs
+    (* XXX this was in conv_function in flambdasym originally, but I'm
+       not sure why.  Should there be some filtering here? *)
+    (* param_approxs must be constants: part of specialised_args *)
+    Variable.Map.fold (fun id approx env -> Env.add_approx env id approx)
+      param_approxs env
   in
   (* Assign symbols throughout the individual function declarations making
      up the set of closures (yielding new Flambda terms), convert them to

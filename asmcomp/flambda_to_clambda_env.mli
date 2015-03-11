@@ -40,17 +40,23 @@ val clean : t -> t
 
 val add_unique_ident : t -> Variable.t -> Ident.t * t
 
-val add_substitution_for_variable
+val add_substitution
    : t
   -> Variable.t
-  -> _ Flambda.t
+  -> _ Flambda.t option
   -> Clambda.ulambda
+  -> Flambdaexport.approx
   -> t
 
 (* [find_substitution_for_variable] retrieves a substitution previously
    added with [add_substitution_for_variable]. *)
-val find_substitution_for_variable : t -> Variable.t -> _ Flambda.t option
+val find_substitution
+   : t
+  -> Variable.t
+  -> default_flambda:unit Flambda.t
+  -> (unit Flambda.t * Clambda.ulambda * Flambdaexport.approx) option
 
+(*
 (* [add_approx t var approx] adds a mapping to [t] that identifies
    the variable [var] as having approximation [approx]. *)
 val add_approx : t -> Variable.t -> Flambdaexport.approx -> t
@@ -62,7 +68,9 @@ val add_approxs : t -> Flambdaexport.approx Variable.Map.t -> t
 (* [get_approx] retrieves an approximation previously added with [add_approx]
    or [add_approxs]. *)
 val get_approx : t -> Variable.t -> Flambdaexport.approx option
+*)
 
+(*
 val add_variable_symbol_equality : t -> Variable.t -> t
 
 (* [add_variable_symbol_equalities t var_mapping] examines each mapping
@@ -81,3 +89,4 @@ val find_variable_symbol_equality : t -> Variable.t -> Symbol.t option
 (* [variable_has_symbol_equality t var] returns [true] iff [t] has a
    variable-symbol equality for [var]. *)
 val variable_has_symbol_equality : t -> Variable.t -> bool
+*)

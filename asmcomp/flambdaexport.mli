@@ -37,7 +37,7 @@ type descr =
 
 and descr_closure = {
   closure_id : Closure_id.t;
-  set_of_closures : value_set_of_closures;
+  set_of_closures : descr_set_of_closures;
 }
 
 and descr_set_of_closures = {

@@ -22,9 +22,9 @@
 (***********************************************************************)
 
 type t = {
-  subst : (unit Flambda.t * Clambda.ulambda) Variable.Map.t;
-  (* XXX merge the next two *)
+  substitution : (unit Flambda.t option * Clambda.ulambda) Variable.Map.t;
   variable_symbol_equalities : Symbol.t Variable.Map.t;
+
   (* CR mshinwell: [constants] might be misleading, since [subst] can
      map constants too (but not ones that have symbols associated
      with them). *)
@@ -116,8 +116,8 @@ let add_unique_idents vars env =
   in
   ids, env_handler
 
-let add_approx id approx env =
-  { env with approx = Variable.Map.add id approx env.approx }
+let add_approx t var approx =
+  { env with approx = Variable.Map.add var approx env.approx }
 
-let get_approx id env =
-  try Variable.Map.find id env.approx with Not_found -> Value_unknown
+let get_approx_exn t var =
+  Variable.Map.find var t.approx
