@@ -270,42 +270,45 @@ let rec fclambda_and_approx_for_primitive t env ~(primitive : Lambda.primitive)
     Fprim (primitive, args, dbg, ()), Uprim (primitive, uargs, dbg),
       Value_unknown
 
-(* CR mshinwell: consider renaming [str] and [lam].  For [str], need to
-   fix [Flambda.let_kind] *)
-and fclambda_and_approx_for_let t ~env ~str ~var ~lam ~body =
-  let lam, ulam, approx = fclambda_and_approx_for_expr t env lam in
+and fclambda_and_approx_for_let t ~env ~is_assigned ~var ~rhs ~body
+      : unit Flambda.t * Clambda.ulambda * Flambdaexport.approx =
+  let rhs, urhs, approx = fclambda_and_approx_for_expr t env rhs in
   let is_constant = can_be_compiled_to_clambda_constant t var in
   let approx =
     let approx_never_changes_during_execution_of_body =
       is_constant
-        || match str with
+        || match is_assigned with
            | Not_assigned -> true
            | Assigned -> false
     in
     if approx_never_changes_during_execution_of_body then approx
     else Value_unknown
   in
-  let id, env = Env.add_unique_ident t var in
-  let env = Env.add_substitution env var lam ulam approx in
+  let id, env =
+    Env.add_unique_id_and_substitution env var (Some rhs) urhs approx
+  in
   if not is_constant then begin
-    assert (constant_classification_for_expr t lam = Not_constant);
+    (* The [let]-binding must remain, in the Clambda code. *)
+    assert (constant_classification_for_expr t rhs = Not_constant);
     let body, ubody, body_approx = fclambda_and_approx_for_expr t env body in
-    Flet (str, var, lam, body, ()), Ulet (id, ulam, ubody), body_approx
-  end else
+    Flet (is_assigned, var, rhs, body, ()), Ulet (id, urhs, ubody), body_approx
+  end else begin
     (* The [let] is not needed; the value of the constant (which might be
        a symbol reference to obtain it) will be directly substituted
        for [var] within [body]. *)
     fclambda_and_approx_for_expr t env body
+  end
 
 and fclambda_and_approx_for_let_rec t env defs body =
   let consts, not_consts =
     List.partition (fun (id, _) -> E.is_constant t.exported id) defs
   in
-  (* Add substitutions and variable-symbol equalities to the environment
-     for those variables bound by the [let rec] whose values we know are
-     constant. *)
-  let env, consts =
-    List.fold_left (fun (env, consts) (var, def) ->
+  (* Add substitutions to the environment for those variables bound by the
+     [let rec] whose values we know are constant.  Also note down which of
+     these variables, if any, have bindings that we know to be constant but
+     where we do not know the actual value (and thus cannot substitute). *)
+  let env, constant_but_cannot_be_substituted =
+    List.fold_left (fun (env, constant_but_cannot_be_substituted) (var, def) ->
         let id = add_unique_ident var env in
         match def with
         (* If the expression on the right-hand side is manifestly a
@@ -319,8 +322,11 @@ and fclambda_and_approx_for_let_rec t env defs body =
              label to it: hence we must substitute it directly.
              For other numerical constants, a label could be attributed, but
              unboxing doesn't handle it well. *)
-          let def, udef = fclambda_for_expr t env def in
-          Env.add_substitution_for_variable env var (Some def) udef, consts
+          let def, udef, def_approx = fclambda_and_approx_for_expr t env def in
+          let id, env =
+            Env.add_substitution env var (Some def) udef def_approx
+          in
+          env, constant_but_cannot_be_substituted
         | Fvar (var_id, _) ->
           (* If the expression on the right-hand side is manifestly a
              variable, whose value is known to be constant, we again
@@ -330,7 +336,7 @@ and fclambda_and_approx_for_let_rec t env defs body =
           (* CR mshinwell for pchambart: I don't understand this comment *)
           (* For variables: the variable could have been substituted to
              a constant: avoid it by substituting it directly *)
-          let def, udef = fclambda_for_expr t env def in
+          let def, udef, def_approx = fclambda_for_expr t env def in
           Env.add_substitution_for_variable env var (Some def) udef, consts
         | _ ->
           (* If the expression on the right-hand side is something

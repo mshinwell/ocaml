@@ -38,18 +38,24 @@ val create : unit -> t
    access some globally-defined constant attached to a symbol is not. *)
 val clean : t -> t
 
-val add_unique_ident : t -> Variable.t -> Ident.t * t
+(* [add_substitution] assigns a fresh [Ident.t] to the given variable and
+   records the mapping within the environment.
 
-val add_substitution
+   Within the environment will also be recorded a mapping from the variable
+   to the given Clambda term, export approximation and (optionally) Flambda
+   term. *)
+val add_and_substitution
    : t
   -> Variable.t
   -> _ Flambda.t option
   -> Clambda.ulambda
   -> Flambdaexport.approx
-  -> t
+  -> Ident.t * t
 
 (* [find_substitution_for_variable] retrieves a substitution previously
-   added with [add_substitution_for_variable]. *)
+   added with [add_substitution_for_variable].  If [None] was provided as the
+   Flambda argument to [add_unique_id_and_substitution], [default_flambda]
+   is returned as the Flambda term. *)
 val find_substitution
    : t
   -> Variable.t
