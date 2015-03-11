@@ -42,22 +42,6 @@ let create () =
 let clean t = { t with subst = Variable.Map.empty; }
 
 (* XXX this is needed in the [Flet] case in flambda_to_clambda *)
-type constant_classification =
-  | Constant_accessed_via_symbol of Symbol.t
-  | Constant_not_accessed_via_symbol
-  | Constant_closure
-  | Not_constant
-
-let classify_constant t (expr : unit Flambda.t) : constant_classification =
-  match expr with
-  | Fsymbol (sym, ()) -> Constant_accessed_via_symbol sym
-  | Fconst (_, ()) -> Constant_not_accessed_via_symbol
-  | Fset_of_closures ({ cl_fun }, _) ->
-      if Set_of_closures_id.Set.mem cl_fun.ident t.constant_closures
-      then Constant_closure
-      else Not_constant
-  | _ -> Not_constant
-
 let add_variable t var lam =
   (* CR mshinwell: consider checking that [var] is not already mapped *)
   match classify_constant lam with
@@ -121,3 +105,6 @@ let add_approx t var approx =
 
 let get_approx_exn t var =
   Variable.Map.find var t.approx
+
+let add_substitution_via_symbol env var lam ulam approx =
+  let sym = Compilenv.new_const_symbol' () in

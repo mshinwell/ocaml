@@ -44,13 +44,33 @@ val clean : t -> t
    Within the environment will also be recorded a mapping from the variable
    to the given Clambda term, export approximation and (optionally) Flambda
    term. *)
-val add_and_substitution
+val add_substitution
    : t
   -> Variable.t
   -> _ Flambda.t option
   -> Clambda.ulambda
   -> Flambdaexport.approx
   -> Ident.t * t
+
+(* [add_substitution_via_symbol] is like [add_substitution], but also creates
+   a new symbol that will be associated with the given Clambda term.
+   [find_substitution], upon returning the values from a substitution, will
+   return Flambda and Clambda terms to access the symbol.  The mappings
+   from all such symbols to their defining Flambda and Clambda terms, along
+   with their approximations, may be retrieved using [symbol_assignment]. *)
+val add_substitution_via_symbol
+   : t
+  -> Variable.t
+  (* XXX maybe we don't need the flambda term. *)
+  -> _ Flambda.t option
+  -> Clambda.ulambda
+  -> Flambdaexport.approx
+  -> Ident.t * Symbol.t * t
+
+val symbol_assignment
+   : t
+  -> (unit Flambda.t option * Clambda.ulambda * Flambdaexport.approx)
+      Symbol.Map.t
 
 (* [find_substitution_for_variable] retrieves a substitution previously
    added with [add_substitution_for_variable].  If [None] was provided as the

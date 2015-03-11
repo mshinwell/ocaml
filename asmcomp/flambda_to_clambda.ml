@@ -309,10 +309,11 @@ and fclambda_and_approx_for_let_rec t env defs body =
      where we do not know the actual value (and thus cannot substitute). *)
   let env, constant_but_cannot_be_substituted =
     List.fold_left (fun (env, constant_but_cannot_be_substituted) (var, def) ->
-        let id = add_unique_ident var env in
+        let def, udef, def_approx = fclambda_and_approx_for_expr t env def in
+        (* CR mshinwell: improve comment *)
+        (* Where possible, substitute a constant (which might be a reference
+           via a symbol) for the variable. *)
         match def with
-        (* If the expression on the right-hand side is manifestly a
-           constant, we will substitute the constant for the variable. *)
         | Fconst (( Fconst_pointer _
                   | Fconst_base
                       ( Const_int _ | Const_char _
@@ -322,43 +323,47 @@ and fclambda_and_approx_for_let_rec t env defs body =
              label to it: hence we must substitute it directly.
              For other numerical constants, a label could be attributed, but
              unboxing doesn't handle it well. *)
-          let def, udef, def_approx = fclambda_and_approx_for_expr t env def in
-          let id, env =
+          let _id, env =
             Env.add_substitution env var (Some def) udef def_approx
           in
           env, constant_but_cannot_be_substituted
-        | Fvar (var_id, _) ->
+        | Fvar (rhs_var, _) ->
           (* If the expression on the right-hand side is manifestly a
              variable, whose value is known to be constant, we again
              arrange for a substitution. *)
-          assert (List.for_all (fun (id, _) ->
-              not (Variable.equal var_id id)) consts);
-          (* CR mshinwell for pchambart: I don't understand this comment *)
+          (* CR mshinwell for pchambart: please document this assertion *)
+          assert (List.for_all (fun (const_var, _, _) ->
+              not (Variable.equal rhs_var const_var)) consts);
+          (* CR mshinwell for pchambart: this comment needs clarifying *)
           (* For variables: the variable could have been substituted to
              a constant: avoid it by substituting it directly *)
-          let def, udef, def_approx = fclambda_for_expr t env def in
-          Env.add_substitution_for_variable env var (Some def) udef, consts
+          let _id, env =
+            Env.add_substitution env var (Some def) udef def_approx
+          in
+          env, constant_but_cannot_be_substituted
         | _ ->
-          (* If the expression on the right-hand side is something
+          (* If the expression on the right-hand side is something more
              complicated (but which we still know to be constant), assign a
-             new symbol, in preparation for translating the right-hand side.
-             The actual translation is performed below, once the augmented
-             environment has been fully constructed. *)
-          let sym = Compilenv.new_const_symbol' () in
-          let env = Env.add_variable_symbol_equality env var sym in
-          env, (id, sym, def)::acc)
+             new symbol, which may be referenced from any of the right-hand
+             sides. *)
+          let id, sym, env =
+            Env.add_substitution_via_symbol env var def udef def_approx
+          in
+          env, (var, id, sym, def)::acc)
       (env, []) consts
   in
+(* where does udef go to? *)
   (* In the augmented environment, verify that all bindings deemed constant
      that we have not been able to directly substitute are assigned symbols. *)
   List.iter (fun (id, sym, def) ->
-      match Env.classify_constant env (conv env def) with
+      match constant_classification_for_expr t def with
       (* CR mshinwell: we should have an example as to how a chain of
          symbol aliases can happen *)
       | Constant_accessed_via_symbol sym' ->
-        (match symbol_id sym' with
-         | None -> ()
-         | Some eid -> add_symbol sym eid);
+        begin match symbol_id sym' with
+        | None -> ()
+        | Some eid -> add_symbol sym eid
+        end;
         set_symbol_alias sym sym'
       | _ ->
         Misc.fatal_errorf "Recursive constant value without symbol %a %a"
@@ -368,13 +373,16 @@ and fclambda_and_approx_for_let_rec t env defs body =
   (* Translate bindings whose right-hand sides are not known to be
      constant.  This again happens in the augmented environment from
      above, and indeed augments the environment further. *)
-  let not_consts, env =
-    List.fold_right (fun (id, def) (not_consts, env') ->
+  let not_consts, unot_consts, env =
+    List.fold_right (fun (var, def) (not_consts, unot_consts, env') ->
         (* N.B. [def] is evaluated w.r.t. [env] not [env']. *)
         let def, udef, approx = fclambda_and_approx_for_expr t env def in
-        let env' = Env.add_approx env' id approx in
-        (id, def, udef)::not_consts, env')
-      not_consts ([], env)
+        let id, env' =
+          Env.add_substitution env var (Some def) udef def_approx
+        in
+        let env' = Env.add_approx env' var approx in
+        (var, def)::not_consts, (id, udef)::unot_consts, env')
+      not_consts ([], [], env)
   in
   (* [env] now contains all bindings, so we can translate the body of the
      [let rec] expression. *)
@@ -385,6 +393,7 @@ and fclambda_and_approx_for_let_rec t env defs body =
        "let rec", but we can remove any constant bindings from it
        (since their corresponding values will have been substituted for
        the bound variables). *)
+    assert (List.length not_consts = List.length unot_consts);
     match not_consts with
     | [] -> body, ubody
     | _ -> Fletrec (not_consts, body, ()), Uletrec (unot_consts, ubody)
