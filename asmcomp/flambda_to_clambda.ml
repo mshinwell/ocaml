@@ -185,12 +185,19 @@ let fclambda_and_approx_for_constant t env ~(cst : Flambda.const) =
 let fclambda_and_approx_for_var t env ~var =
   let default_flambda = Fvar (var, ()) in
   match Env.find_substitution env var ~default_flambda with
-  | Some (None, ulam, approx) -> Fvar (var, ()), ulam, approx
   | Some (lam, ulam, approx) -> lam, ulam, approx
   | None ->
     Misc.fatal_errorf "Environment does not know about variable %a: %a"
       Variable.print var
       Env.print env
+
+let rec fclambda_and_approx_for_symbol t env sym =
+  let sym = canonical_symbol t sym in
+  let linkage_name = Symbol.string_of_linkage_name sym.sym_label in
+  let label = Compilenv.canonical_symbol linkage_name in
+  (* CR pchambart for pchambart: Should delay the conversion a bit more
+     mshinwell: I turned this comment into a CR.  What does it mean? *)
+  Fsymbol sym, Uconst (Uconst_ref (label, None)), Value_symbol sym
 
 let rec fclambda_and_approx_for_primitive t env ~(primitive : Lambda.primitive)
       ~args ~dbg : unit Flambda.t * Clambda.ulambda * Flambdaexport.descr =
@@ -347,12 +354,11 @@ and fclambda_and_approx_for_let_rec t env defs body =
              new symbol, which may be referenced from any of the right-hand
              sides. *)
           let id, sym, env =
-            Env.add_substitution_via_symbol env var def udef def_approx
+            Env.add_substitution_via_fresh_symbol env var def udef def_approx
           in
           env, (var, id, sym, def)::acc)
       (env, []) consts
   in
-(* where does udef go to? *)
   (* In the augmented environment, verify that all bindings deemed constant
      that we have not been able to directly substitute are assigned symbols. *)
   List.iter (fun (id, sym, def) ->
@@ -655,9 +661,10 @@ and fclambda_and_approx_for_function_declaration t env fun_id
           }
         in
         let export_id = add_new_export descr in
+        let closure_symbol = Compilenv.closure_symbol closure_id in
         if closure_is_constant then begin
           (* Constant closures must have a symbol attributed to them. *)
-          add_symbol (Compilenv.closure_symbol fun_id) export_id
+          add_symbol closure_symbol export_id
         end;
         let env = Env.add_approx env closure_var (Value_id export_id) in
         (* CR mshinwell for pchambart: We need to understand if there might
@@ -670,8 +677,11 @@ and fclambda_and_approx_for_function_declaration t env fun_id
           (* If the set of closures is constant, recursive calls to a
              function bound by the closure must go via the symbol associated
              with the given function. *)
-          let symbol = Compilenv.closure_symbol closure_id in
-          Env.add_variable_symbol_equality env closure_var symbol
+          let id, env =
+            Env.add_substitution_via_known_symbol env closure_var
+              closure_symbol XXX XXX XXX
+          in
+          XXX
         else
           (* If the set of closures is non-constant, recursive calls
              translate to accesses through a closure value. *)
@@ -1110,24 +1120,15 @@ and fclambda_and_approx_for_application t env (expr : _ Flambda.t) =
    scope during any one call to [conv].  Accesses to outer closures are
    performed via this distinguished one.  (This was arranged during closure
    conversion---see [Flambdagen].) *)
-and fclambda_and_approx_for_expr t (env : Flambda_to_clambda_env.t)
-      (expr : _ Flambda.t)
+and fclambda_and_approx_for_expr t env (expr : _ Flambda.t)
       : unit Flambda.t * Clambda.ulambda * Flambdaexport.approx =
   match expr with
   | Fvar (var, _) -> flambda_and_approx_for_var t env ~var
-  | Fsymbol (sym, _) ->
-    let sym = canonical_symbol t sym in
-    let linkage_name = Symbol.string_of_linkage_name sym.sym_label in
-    let label = Compilenv.canonical_symbol linkage_name in
-    (* CR pchambart for pchambart: Should delay the conversion a bit more
-       mshinwell: I turned this comment into a CR.  What does it mean? *)
-    Fsymbol sym, Uconst (Uconst_ref (label, None)), Value_symbol sym
-  | Fconst (cst, _) ->
-    fclambda_and_approx_for_constant t env ~cst
+  | Fsymbol (sym, _) -> fclambda_and_approx_for_symbol t env sym
+  | Fconst (cst, _) -> fclambda_and_approx_for_constant t env ~cst
   | Flet (str, var, lam, body, _) ->
     fclambda_and_approx_for_let t ~env ~str ~var ~lam ~body
-  | Fletrec (defs, body, _) ->
-    fclambda_and_approx_for_let_rec t env defs body
+  | Fletrec (defs, body, _) -> fclambda_and_approx_for_let_rec t env defs body
     Uletrec (udefs, conv env body)
   | Fset_of_closures set_of_closures ->
     fclambda_and_approx_for_set_of_closures_declaration t env set_of_closures

@@ -59,24 +59,24 @@ let assign_offsets ~expr ~constants =
   fv_offset_table := Var_within_closure.Map.empty;
   result
 
-let reexported_offsets ~extern_fun_offset_table ~extern_fv_offset_table ~expr =
+let reexported_offsets ~extern_fun_offset_table ~extern_fv_offset_table ~expr
+      ~constants =
   let set_fun = ref Closure_id.Set.empty in
   let set_fv = ref Var_within_closure.Set.empty in
   let aux (expr : _ Flambda.t) =
     match expr with
-    | Fvariable_in_closure({vc_var = env_var; vc_fun = env_fun_id}, _) ->
-        set_fun := Closure_id.Set.add env_fun_id !set_fun;
-        set_fv := Var_within_closure.Set.add env_var !set_fv;
-    | Fclosure({fu_fun = id; fu_relative_to = rel}, _) ->
-        let set = match rel with
-          | None -> !set_fun
-          | Some rel -> Closure_id.Set.add rel !set_fun in
-        set_fun := Closure_id.Set.add id set;
+    | Fvariable_in_closure ({vc_var = env_var; vc_fun = env_fun_id}, _) ->
+      set_fun := Closure_id.Set.add env_fun_id !set_fun;
+      set_fv := Var_within_closure.Set.add env_var !set_fv
+    | Fclosure ({fu_fun = id; fu_relative_to = rel}, _) ->
+      let set = match rel with
+        | None -> !set_fun
+        | Some rel -> Closure_id.Set.add rel !set_fun in
+      set_fun := Closure_id.Set.add id set
     | e -> ()
   in
   Flambdaiter.iter aux expr;
-(* 385a6a4f573 *)
-+  SymbolMap.iter (fun _ flam -> Flambdaiter.iter aux flam) constants;
+  Symbol.Map.iter (fun _ flam -> Flambdaiter.iter aux flam) constants;
   let f extern_map closure_id new_map =
     try
       Closure_id.Map.add closure_id

@@ -32,16 +32,16 @@ type descr =
   | Value_float of float
   | Value_boxed_int : 'a boxed_int * 'a -> descr
   | Value_string
-  | Value_closure of value_offset
-  | Value_set_of_closures of value_closure
+  | Value_closure of descr_closure
+  | Value_set_of_closures of descr_set_of_closures
 
-and value_offset = {
-  fun_id : Closure_id.t;
-  closure : value_closure;
+and descr_closure = {
+  closure_id : Closure_id.t;
+  set_of_closures : descr_set_of_closures;
 }
 
-and value_closure = {
-  closure_id : Set_of_closures_id.t;
+and descr_set_of_closures = {
+  set_of_closures_id : Set_of_closures_id.t;
   bound_var : approx Var_within_closure.Map.t;
   results : approx Closure_id.Map.t;
 }
@@ -66,14 +66,28 @@ module Exported = struct
     kept_arguments : Variable.Set.t Set_of_closures_id.Map.t;
   }
 
+  let empty : t = {
+    functions = Set_of_closures_id.Map.empty;
+    functions_off = Closure_id.Map.empty;
+    ex_values =  Compilation_unit.Map.empty;
+    globals = Ident.Map.empty;
+    id_symbol =  Compilation_unit.Map.empty;
+    symbol_id = Symbol.Map.empty;
+    offset_fun = Closure_id.Map.empty;
+    offset_fv = Var_within_closure.Map.empty;
+    constants = Symbol.Set.empty;
+    constant_closures = Set_of_closures_id.Set.empty;
+    kept_arguments = Set_of_closures_id.Map.empty;
+  }
+
   let find_declaration t closure_id =
     Closure_id.Map.find closure_id t.functions_off
 
   let get_fun_offset_exn t closure_id =
-    Closure_id.Map.find closure_id t.fun_offset_table
+    Closure_id.Map.find closure_id t.offset_fun
 
   let get_fv_offset_exn t var =
-    Var_within_closure.Map.find var t.fv_offset_table
+    Var_within_closure.Map.find var t.offset_fv
 
   let closure_declaration_position_exn t closure_id =
     Closure_id.Map.find closure_id t.functions_off
@@ -86,21 +100,9 @@ module Exported = struct
     Set_of_closures_id.Set.mem set_of_closures_id t.constant_closures
 end
 
-type exported = Exported.t
-
-let empty_export = {
-  functions = Set_of_closures_id.Map.empty;
-  functions_off = Closure_id.Map.empty;
-  ex_values =  Compilation_unit.Map.empty;
-  globals = Ident.Map.empty;
-  id_symbol =  Compilation_unit.Map.empty;
-  symbol_id = Symbol.Map.empty;
-  offset_fun = Closure_id.Map.empty;
-  offset_fv = Var_within_closure.Map.empty;
-  constants = Symbol.Set.empty;
-  constant_closures = Set_of_closures_id.Set.empty;
-  kept_arguments = Set_of_closures_id.Map.empty;
-}
+open Exported
+type exported = t
+let empty_export = empty
 
 let find_ex_value eid map =
   let unit = Export_id.unit eid in
@@ -154,10 +156,11 @@ let print_approx ppf export =
     | Value_constptr i -> fprintf ppf "%ip" i
     | Value_block (tag, fields) ->
       fprintf ppf "[%i:%a]" tag print_fields fields
-    | Value_closure {fun_id; closure} ->
-      fprintf ppf "(function %a, %a)" Closure_id.print fun_id print_closure closure
-    | Value_set_of_closures closure ->
-      fprintf ppf "(ufunction %a)" print_closure closure
+    | Value_closure {closure_id; set_of_closures} ->
+      fprintf ppf "(function %a, %a)"
+        Closure_id.print closure_id print_set_of_closures set_of_closures
+    | Value_set_of_closures set_of_closures ->
+      fprintf ppf "(ufunction %a)" print_set_of_closures set_of_closures
     | Value_string -> Format.pp_print_string ppf "string"
     | Value_float f -> Format.pp_print_float ppf f
     | Value_boxed_int (t, i) ->
@@ -167,14 +170,14 @@ let print_approx ppf export =
       | Nativeint -> Format.fprintf ppf "%ni" i
   and print_fields ppf fields =
     Array.iter (fun approx -> fprintf ppf "%a@ " print_approx approx) fields
-  and print_closure ppf { closure_id; bound_var } =
-    if Set_of_closures_id.Set.mem closure_id !printed_closure
-    then fprintf ppf "%a" Set_of_closures_id.print closure_id
+  and print_set_of_closures ppf { set_of_closures_id; bound_var } =
+    if Set_of_closures_id.Set.mem set_of_closures_id !printed_closure
+    then fprintf ppf "%a" Set_of_closures_id.print set_of_closures_id
     else begin
       printed_closure :=
-        Set_of_closures_id.Set.add closure_id !printed_closure;
+        Set_of_closures_id.Set.add set_of_closures_id !printed_closure;
       fprintf ppf "{%a: %a}"
-        Set_of_closures_id.print closure_id
+        Set_of_closures_id.print set_of_closures_id
         print_binding bound_var
     end
   and print_binding ppf bound_var =
@@ -187,6 +190,17 @@ let print_approx ppf export =
     fprintf ppf "%a -> %a;@ " Ident.print id print_approx approx
   in
   Ident.Map.iter print_approxs export.globals
+
+(* CR mshinwell: this should be improved.  Fix the code above. *)
+let print_descr ppf = function
+  | Value_int _ -> Format.fprintf ppf "Value_int"
+  | Value_constptr _ -> Format.fprintf ppf "Value_constptr"
+  | Value_block _ -> Format.fprintf ppf "Value_block"
+  | Value_closure _ -> Format.fprintf ppf "Value_closure"
+  | Value_set_of_closures _ -> Format.fprintf ppf "Value_set_of_closures"
+  | Value_string -> Format.fprintf ppf "Value_string"
+  | Value_float _ -> Format.fprintf ppf "Value_float"
+  | Value_boxed_int _ -> Format.fprintf ppf "Value_boxed_int"
 
 let print_symbols ppf export =
   let open Format in
@@ -261,13 +275,14 @@ let import_approx_for_pack units pack = function
   | Value_id eid -> Value_id (import_eid_for_pack units pack eid)
   | Value_unknown -> Value_unknown
 
-let import_closure units pack closure =
-  { closure_id = closure.closure_id;
+let import_set_of_closures units pack set_of_closures =
+  { set_of_closures_id = set_of_closures.set_of_closures_id;
     bound_var =
       Var_within_closure.Map.map (import_approx_for_pack units pack)
-        closure.bound_var;
+        set_of_closures.bound_var;
     results =
-      Closure_id.Map.map (import_approx_for_pack units pack) closure.results;
+      Closure_id.Map.map (import_approx_for_pack units pack)
+       set_of_closures.results;
   }
 
 let import_descr_for_pack units pack = function
@@ -278,10 +293,13 @@ let import_descr_for_pack units pack = function
   | Value_boxed_int _ as desc -> desc
   | Value_block (tag, fields) ->
     Value_block (tag, Array.map (import_approx_for_pack units pack) fields)
-  | Value_closure { fun_id; closure } ->
-    Value_closure { fun_id; closure = import_closure units pack closure }
-  | Value_set_of_closures closure ->
-    Value_set_of_closures (import_closure units pack closure)
+  | Value_closure { closure_id; set_of_closures } ->
+    Value_closure {
+      closure_id;
+      set_of_closures = import_set_of_closures units pack set_of_closures;
+    }
+  | Value_set_of_closures set_of_closures ->
+    Value_set_of_closures (import_set_of_closures units pack set_of_closures)
 
 let import_code_for_pack units pack expr =
   Flambdaiter.map (function
@@ -349,14 +367,14 @@ let import_for_pack ~pack_units ~pack exp =
 
 let clear_import_state () = Export_id.Tbl.clear rename_id_state
 
-let canonical_approx (approx : Flambdaexport.approx)
+let canonical_approx (approx : approx)
       ~canonical_symbol =
   match approx with
   | Value_unknown
   | Value_id _ as v -> v
   | Value_symbol sym -> Value_symbol (canonical_symbol sym)
 
-let rec canonical_descr (descr : Flambdaexport.descr) ~canonical_symbol =
+let rec canonical_descr (descr : descr) ~canonical_symbol =
   match descr with
   | Value_block (tag, fields) ->
     Value_block (tag, Array.map (canonical_approx ~canonical_symbol) fields)
@@ -366,20 +384,16 @@ let rec canonical_descr (descr : Flambdaexport.descr) ~canonical_symbol =
   | Value_float _
   | Value_boxed_int _ as v -> v
   | Value_closure offset ->
-    Value_closure { offset with closure =
-      (aux_closure offset.closure ~canonical_symbol ) }
-  | Value_set_of_closures clos ->
-    Value_set_of_closures (aux_closure clos ~canonical_symbol)
+    Value_closure { offset with set_of_closures =
+      (aux_set_of_closures offset.set_of_closures ~canonical_symbol ) }
+  | Value_set_of_closures set_of_closures ->
+    Value_set_of_closures
+      (aux_set_of_closures set_of_closures ~canonical_symbol)
 
-and aux_closure clos ~canonical_symbol =
+and aux_set_of_closures set_of_closures ~canonical_symbol =
   let canonical_approx = canonical_approx ~canonical_symbol in
-  { closure_id = clos.closure_id;
-    bound_var = Var_within_closure.Map.map canonical_approx clos.bound_var;
-    results = Closure_id.Map.map canonical_approx clos.results;
+  { set_of_closures_id = set_of_closures.set_of_closures_id;
+    bound_var = Var_within_closure.Map.map canonical_approx
+        set_of_closures.bound_var;
+    results = Closure_id.Map.map canonical_approx set_of_closures.results;
   }
-
-      match E.find_approx_descr t block_approx with
-      | Some (Value_block (_, fields)) ->
-        if index >= 0 && index < Array.length fields then fields.(index)
-        else Value_unknown
-      | _ -> Value_unknown

@@ -51,7 +51,7 @@ module Map_map (X : ExtMap) (Y : sig
   include ExtMap
   val wrap : X.key -> key
 end) : sig
-  val map : ?(map_data : 'a -> 'b) -> 'a X.t -> 'b Y.t
+  val map : 'a X.t -> map_data:('a -> 'b) -> 'b Y.t
 end
 
 module type ExtSet = sig

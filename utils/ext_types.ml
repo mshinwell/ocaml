@@ -306,7 +306,7 @@ module Map_map (X : ExtMap) (Y : sig
   include ExtMap
   val wrap : X.key -> key
 end) = struct
-  let map ?(map_data = fun data -> data) map =
-    X.Map.fold (fun key data acc -> Y.add (Y.wrap key) (map_data data) acc)
-      map Y.empty
+  let map m ~map_data =
+    X.fold (fun key data acc -> Y.add (Y.wrap key) (map_data data) acc)
+      m Y.empty
 end

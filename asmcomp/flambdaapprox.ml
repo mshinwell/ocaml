@@ -27,19 +27,20 @@ type descr =
   | Value_constptr of int
   | Value_float of float
   | Value_boxed_int : 'a boxed_int * 'a -> descr
-  | Value_set_of_closures of value_set_of_closures
-  | Value_closure of value_offset
+  | Value_set_of_closures of descr_set_of_closures
+  | Value_closure of descr_closure
   | Value_unknown
   | Value_bottom
   | Value_extern of Flambdaexport.Export_id.t
   | Value_symbol of Symbol.t
   | Value_unresolved of Symbol.t
 
-and value_offset =
-  { fun_id : Closure_id.t;
-    set_of_closures : value_set_of_closures }
+and descr_closure =
+  { closure_id : Closure_id.t;
+    set_of_closures : descr_set_of_closures;
+  }
 
-and value_set_of_closures =
+and descr_set_of_closures =
   { ffunctions : Expr_id.t function_declarations;
     bound_var : t Var_within_closure.Map.t;
     unchanging_params : Variable.Set.t;
@@ -59,16 +60,17 @@ let descr t = t.descr
 let rec print_descr ppf = function
   | Value_int i -> Format.pp_print_int ppf i
   | Value_constptr i -> Format.fprintf ppf "%ia" i
-  | Value_block (tag,fields) ->
+  | Value_block (tag, fields) ->
     let p ppf fields =
-      Array.iter (fun v -> Format.fprintf ppf "%a@ " print_approx v) fields in
+      Array.iter (fun v -> Format.fprintf ppf "%a@ " print_approx v) fields
+    in
     Format.fprintf ppf "[%i:@ @[<1>%a@]]" tag p fields
   | Value_unknown -> Format.fprintf ppf "?"
   | Value_bottom -> Format.fprintf ppf "bottom"
   | Value_extern id -> Format.fprintf ppf "_%a_" Flambdaexport.Export_id.print id
   | Value_symbol sym -> Format.fprintf ppf "%a" Symbol.print sym
-  | Value_closure { fun_id } ->
-    Format.fprintf ppf "(fun:@ %a)" Closure_id.print fun_id
+  | Value_closure { closure_id } ->
+    Format.fprintf ppf "(fun:@ %a)" Closure_id.print closure_id
   | Value_set_of_closures { ffunctions = { funs } } ->
     Format.fprintf ppf "(set_of_closures:@ %a)"
       (fun ppf -> Variable.Map.iter (fun id _ -> Variable.print ppf id)) funs
@@ -209,7 +211,7 @@ let equal_boxed_int (type t1) (type t2)
   | Nativeint, Nativeint -> Nativeint.equal i1 i2
   | _ -> false
 
-(* Closures and set of closures descriptions cannot be merged.
+(* Closure and set of closures descriptions cannot be merged.
 
    let f x =
      let g y -> x + y in
@@ -225,10 +227,10 @@ let equal_boxed_int (type t1) (type t2)
    The approximation for [f 1] and [f 2] could both contain the
    description of [g]. But if [f] where inlined, a new [g] would
    be created in each branch, leading to incompatible description.
-   And we must never make the descrition for a function less
-   precise that it used to be: its information are needed for
+   And we must never make the description for a function less
+   precise than it used to be: its information is needed for
    rewriting [Fvariable_in_closure] and [Fclosure] constructions
-   in [Flambdainline.loop]
+   in [Flambdainline.loop].
 *)
 let rec meet_descr d1 d2 = match d1, d2 with
   | Value_int i, Value_int j when i = j ->
@@ -294,16 +296,19 @@ module Import = struct
       | Value_string -> value_unknown
       | Value_block (tag, fields) ->
           value_block (tag, Array.map import_approx fields)
-      | Value_closure { fun_id; closure = { closure_id; bound_var } } ->
+      | Value_closure
+          { closure_id;
+            set_of_closures = { set_of_closures_id; bound_var };
+          } ->
         let bound_var = Var_within_closure.Map.map import_approx bound_var in
         let unchanging_params =
-          try Set_of_closures_id.Map.find closure_id ex_info.kept_arguments with
+          try Set_of_closures_id.Map.find set_of_closures_id ex_info.kept_arguments with
           | Not_found -> assert false
         in
         value_closure
-          { fun_id;
+          { closure_id;
             set_of_closures =
-              { ffunctions = Compilenv.imported_closure closure_id;
+              { ffunctions = Compilenv.imported_closure set_of_closures_id;
                 bound_var;
                 unchanging_params = unchanging_params;
                 specialised_args = Variable.Set.empty;
@@ -311,20 +316,24 @@ module Import = struct
                   Flambdasubst.
                   Alpha_renaming_map_for_ids_and_bound_vars_of_closures.empty;
               } }
-      | Value_set_of_closures { closure_id; bound_var } ->
+      | Value_set_of_closures { set_of_closures_id; bound_var } ->
         let bound_var = Var_within_closure.Map.map import_approx bound_var in
         let unchanging_params =
-          try Set_of_closures_id.Map.find closure_id ex_info.kept_arguments with
+          try
+            Set_of_closures_id.Map.find set_of_closures_id
+              ex_info.kept_arguments
+          with
           | Not_found -> assert false
         in
         value_set_of_closures
-          { ffunctions = Compilenv.imported_closure closure_id;
+          { ffunctions = Compilenv.imported_closure set_of_closures_id;
             bound_var;
             unchanging_params = unchanging_params;
             specialised_args = Variable.Set.empty;
             ffunction_sb =
               Flambdasubst.
-              Alpha_renaming_map_for_ids_and_bound_vars_of_closures.empty; }
+              Alpha_renaming_map_for_ids_and_bound_vars_of_closures.empty;
+          }
     with Not_found ->
       value_unknown
 

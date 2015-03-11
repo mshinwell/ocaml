@@ -35,6 +35,8 @@ val assign_offsets
 val reexported_offsets
    : extern_fun_offset_table:int Closure_id.Map.t
   -> extern_fv_offset_table:int Var_within_closure.Map.t
+  (* CR mshinwell: consider improving types, too specific to current use *)
   -> expr:'a Flambda.t
+  -> constants:'a Flambda.t Symbol.Map.t
   -> (int Closure_id.Map.t -> int Closure_id.Map.t)
        * (int Var_within_closure.Map.t -> int Var_within_closure.Map.t)

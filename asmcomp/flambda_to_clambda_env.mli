@@ -30,7 +30,10 @@
 
 type t
 
-val create : unit -> t
+val create :
+     fclambda_and_approx_for_symbol:
+       (Symbol.t -> unit Flambda.t * Clambda.ulambda * Flambdaexport.approx)
+  -> t
 
 (* [clean t] erases all information in the environment [t] that is local
    to a given function.  For example, how to access some free variable of
@@ -40,6 +43,9 @@ val clean : t -> t
 
 (* [add_substitution] assigns a fresh [Ident.t] to the given variable and
    records the mapping within the environment.
+
+   The mapping from variables to identifiers may be retrieved using
+   [identifier_assignment].
 
    Within the environment will also be recorded a mapping from the variable
    to the given Clambda term, export approximation and (optionally) Flambda
@@ -52,13 +58,14 @@ val add_substitution
   -> Flambdaexport.approx
   -> Ident.t * t
 
-(* [add_substitution_via_symbol] is like [add_substitution], but also creates
-   a new symbol that will be associated with the given Clambda term.
+(* [add_substitution_via_fresh_symbol] is like [add_substitution] but also
+   creates a new symbol that will be associated with the given terms.
+
    [find_substitution], upon returning the values from a substitution, will
    return Flambda and Clambda terms to access the symbol.  The mappings
    from all such symbols to their defining Flambda and Clambda terms, along
    with their approximations, may be retrieved using [symbol_assignment]. *)
-val add_substitution_via_symbol
+val add_substitution_via_fresh_symbol
    : t
   -> Variable.t
   (* XXX maybe we don't need the flambda term. *)
@@ -66,6 +73,18 @@ val add_substitution_via_symbol
   -> Clambda.ulambda
   -> Flambdaexport.approx
   -> Ident.t * Symbol.t * t
+
+(* [add_substitution_via_known_symbol] is like [add_substitution
+val add_substitution_via_known_symbol
+   : t
+  -> Variable.t
+  -> Symbol.t
+  -> _ Flambda.t option
+  -> Clambda.ulambda
+  -> Flambdaexport.approx
+  -> Ident.t * Symbol.t * t
+
+val identifier_assignment : t -> Ident.t Variable.Map.t
 
 val symbol_assignment
    : t

@@ -96,6 +96,4 @@ val compare_structured_constants:
 val compare_constants:
         uconstant -> uconstant -> int
 
-(* [all_constant ulams] returns [true] iff all elements of [ulam] are
-   [Uconst] nodes. *)
-val all_constant : ulambda list -> bool
+val all_constants : ulambda list -> uconstant list option

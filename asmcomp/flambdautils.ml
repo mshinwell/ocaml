@@ -609,11 +609,13 @@ let list_closures expr ~closures =
   in
   Flambdaiter.iter aux expr
 
+(* CR mshinwell: change name *)
 let list_used_variables_within_closure expr =
   let used = ref Var_within_closure.Set.empty in
-  let aux expr = match expr with
-    | Fvariable_in_closure({ vc_var },_) ->
-        used := Var_within_closure.Set.add vc_var !used
+  let aux (expr : _ Flambda.t) =
+    match expr with
+    | Fvariable_in_closure ({ vc_var }, _) ->
+      used := Var_within_closure.Set.add vc_var !used
     | e -> ()
   in
   Flambdaiter.iter aux expr;

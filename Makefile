@@ -125,8 +125,9 @@ ASMCOMP=\
   asmcomp/flambda_inlining_decision.cmo \
   asmcomp/flambdainline.cmo \
   asmcomp/flambda_ref_to_variables.cmo \
-  asmcomp/flambdasym.cmo \
-  asmcomp/clambdagen.cmo \
+  asmcomp/flambda_exports_by_unit.cmo \
+  asmcomp/flambda_to_clambda_env.cmo \
+  asmcomp/flambda_to_clambda.cmo \
   asmcomp/strmatch.cmo asmcomp/cmmgen.cmo \
   asmcomp/printmach.cmo asmcomp/selectgen.cmo asmcomp/selection.cmo \
   asmcomp/comballoc.cmo \

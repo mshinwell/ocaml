@@ -22,25 +22,55 @@
 (***********************************************************************)
 
 type t = {
-  substitution : (unit Flambda.t option * Clambda.ulambda) Variable.Map.t;
-  variable_symbol_equalities : Symbol.t Variable.Map.t;
-
-  (* CR mshinwell: [constants] might be misleading, since [subst] can
-     map constants too (but not ones that have symbols associated
-     with them). *)
-  constants : (Symbol.t * Ident.t) Variable.Map.t;
-  approx : approx Variable.Map.t;
-  constant_closures : ...;
+  fclambda_and_approx_for_symbol :
+    (Symbol.t -> unit Flambda.t * Clambda.ulambda * Flambdaapprox.t);
+  substitution :
+    (unit Flambda.t option * Clambda.ulambda * Flambdaapprox.t) Variable.Map.t;
+  identifier_assignment : Ident.t Variable.Map.t;
+  symbol_assignment : (Symbol.t * Ident.t) Variable.Map.t;
 }
 
-
-let create () =
-  {
-
+let create ~fclambda_and_approx_for_symbol =
+  { fclambda_and_approx_for_symbol;
+    substitution;
+    identifier_assignment;
+    symbol_assignment;
   }
 
-let clean t = { t with subst = Variable.Map.empty; }
+let identifier_assignment t = t.identifier_assignment
+let symbol_assignment t = t.symbol_assignment
 
+let add_unique_ident t var =
+  let id = Variable.unique_ident var in
+  let identifier_assignment =
+    Variable.Map.add var id t.identifier_assignment
+  in
+  id, { t with identifier_assignment; }
+
+let add_substitution t var lam ulam approx =
+  let id, env = add_unique_ident t in
+  let substitution =
+    Variable.Map.add var (lam, ulam, approx) t.substitution
+  in
+  id, { t with substitution; }
+
+let add_substitution_via_known_symbol t var sym lam ulam approx =
+  t.symbol_assignment <-
+    Symbol.Map.add sym (lam, ulam, approx) t.symbol_assignment;
+  let lam, ulam, approx = t.fclambda_and_approx_for_symbol sym in
+  (* XXX not sure which approximation should be added here *)
+  let id, env = add_substitution t var lam ulam approx in
+  id, sym, env
+
+let add_substitution_via_fresh_symbol t var lam ulam approx =
+  let sym = Compilenv.new_const_symbol' () in
+  add_substitution_via_known_symbol t var sym lam ulam approx
+
+let clean t =
+  (* XXX this may erase too much *)
+  { t with substitution = Variable.Map.empty; }
+
+(*
 (* XXX this is needed in the [Flet] case in flambda_to_clambda *)
 let add_variable t var lam =
   (* CR mshinwell: consider checking that [var] is not already mapped *)
@@ -58,39 +88,9 @@ let add_variable t var lam =
   | Not_constant ->
     assert (not is_constant);
     env
+*)
 
-let add_approximations t vars_to_approxs =
-
-let find_variable_symbol_equality t var =
-  Variable.Map.find var t.variable_symbol_equalities
-
-let variable_has_symbol_equality t var =
-  match find_variable_symbol_equality t var with
-  | None -> false
-  | Some _ -> true
-
-let add_variable_symbol_equalities t vars_to_vars =
-  Variable.Map.filter_mapi (fun arg specialised_to ->
-      find_variable_symbol_equality t specialised_to)
-    vars_to_vars
-
-
-
-let empty_env =
-  { subst = Variable.Map.empty;
-    var = Variable.Map.empty;
-  }
-
-let add_sb id subst env =
-  { env with subst = Variable.Map.add id subst env.subst }
-
-let find_sb id env = Variable.Map.find id env.subst
-let find_var id env = Variable.Map.find id env.var
-
-let add_unique_ident var env =
-  let id = Variable.unique_ident var in
-  id, { env with var = Variable.Map.add var id env.var }
-
+(*
 let add_unique_idents vars env =
   let env_handler, ids =
     List.fold_right (fun var (env, ids) ->
@@ -99,12 +99,4 @@ let add_unique_idents vars env =
       vars (env, [])
   in
   ids, env_handler
-
-let add_approx t var approx =
-  { env with approx = Variable.Map.add var approx env.approx }
-
-let get_approx_exn t var =
-  Variable.Map.find var t.approx
-
-let add_substitution_via_symbol env var lam ulam approx =
-  let sym = Compilenv.new_const_symbol' () in
+*)

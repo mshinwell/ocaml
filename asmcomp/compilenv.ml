@@ -503,7 +503,8 @@ let imported_closure =
   let aux fun_id =
     let ex_info = approx_env () in
     import_closure
-      (Set_of_closures_id.Map.find fun_id ex_info.Flambdaexport.functions)
+      (Set_of_closures_id.Map.find fun_id
+        ex_info.Flambdaexport.Exported.functions)
   in
   Set_of_closures_id.Tbl.memoize imported_closure_table aux
 

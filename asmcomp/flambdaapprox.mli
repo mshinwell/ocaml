@@ -68,20 +68,20 @@ type descr =
   | Value_constptr of int
   | Value_float of float
   | Value_boxed_int : 'a boxed_int * 'a -> descr
-  | Value_set_of_closures of value_set_of_closures
-  | Value_closure of value_offset
+  | Value_set_of_closures of descr_set_of_closures
+  | Value_closure of descr_closure
   | Value_unknown
   | Value_bottom
   | Value_extern of Flambdaexport.Export_id.t
   | Value_symbol of Symbol.t
   | Value_unresolved of Symbol.t (* No description was found for this symbol *)
 
-and value_offset = {
-  fun_id : Closure_id.t;
-  set_of_closures : value_set_of_closures;
+and descr_closure = {
+  closure_id : Closure_id.t;
+  set_of_closures : descr_set_of_closures;
 }
 
-and value_set_of_closures = {
+and descr_set_of_closures = {
   ffunctions : Expr_id.t Flambda.function_declarations;
   bound_var : t Var_within_closure.Map.t;
   unchanging_params : Variable.Set.t;
@@ -123,10 +123,8 @@ val value_int : int -> t
 val value_float : float -> t
 val value_boxed_int : 'i boxed_int -> 'i -> t
 val value_constptr : int -> t
-val value_closure : value_offset -> t
-(* CXR mshinwell for pchambart: update name of [value_unoffseted_closure]
-   pchambart: done *)
-val value_set_of_closures : value_set_of_closures -> t
+val value_closure : descr_closure -> t
+val value_set_of_closures : descr_set_of_closures -> t
 val value_block : tag * t array -> t
 val value_extern : Flambdaexport.Export_id.t -> t
 val value_symbol : Symbol.t -> t

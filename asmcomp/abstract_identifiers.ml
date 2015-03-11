@@ -71,6 +71,9 @@ module Variable = struct
   let in_compilation_unit cu var =
     Compilation_unit.equal cu var.var_unit
 
+  let in_current_compilation_unit var =
+    Compilation_unit.equal (Compilenv.current_unit ()) var.var_unit
+
   let get_compilation_unit var = var.var_unit
 
   let name var = Ident.name var.var_var
