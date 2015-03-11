@@ -17,6 +17,14 @@ exception Fatal_error
 let fatal_error msg =
   prerr_string ">> Fatal error: "; prerr_endline msg; raise Fatal_error
 
+let fatal_errorf fmt =
+  let buffer = Buffer.create 42 in
+  Format.kfprintf (fun formatter ->
+      Format.pp_print_flush formatter ();
+      fatal_error (Buffer.contents buffer))
+    (Format.formatter_of_buffer buffer)
+    fmt
+
 (* Exceptions *)
 
 let try_finally work cleanup =

@@ -13,7 +13,7 @@ val inlining_decision_for_call_site
   -> funct:Expr_id.t Flambda.t
   -> fun_id:Closure_id.t
   -> func:'a Flambda.function_declaration
-  -> closure:Flambdaapprox.value_set_of_closures
+  -> closure:Flambdaapprox.descr_set_of_closures
   -> args_with_approxs:((Expr_id.t Flambda.t list) * (Flambdaapprox.t list))
   -> ap_dbg:Debuginfo.t
   -> eid:Expr_id.t

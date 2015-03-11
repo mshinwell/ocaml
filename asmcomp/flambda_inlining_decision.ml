@@ -13,7 +13,7 @@ let is_probably_a_functor env clos approxs =
 let should_inline_function_known_to_be_recursive
       ~(func : 'a Flambda.function_declaration)
       ~(clos : 'a Flambda.function_declarations)
-      ~env ~(closure : A.value_set_of_closures) ~approxs ~unchanging_params
+      ~env ~(closure : A.descr_set_of_closures) ~approxs ~unchanging_params
       ~max_level =
   assert (List.length func.params = List.length approxs);
   (not (E.inside_set_of_closures_declaration clos.ident env))
@@ -26,7 +26,7 @@ let should_inline_function_known_to_be_recursive
 
 let inlining_decision_for_call_site ~env ~r ~clos ~funct ~fun_id
       ~(func : 'a Flambda.function_declaration)
-      ~(closure : Flambdaapprox.value_set_of_closures)
+      ~(closure : A.descr_set_of_closures)
       ~args_with_approxs ~ap_dbg ~eid
       ~inline_by_copying_function_body
       ~inline_by_copying_function_declaration =

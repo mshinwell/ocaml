@@ -149,7 +149,7 @@ let transform_variable_in_closure_expression env r expr vc_closure
       (fenv_field : _ Flambda.fvariable_in_closure) annot
       : _ Flambda.t * R.t =
   match A.descr (R.approx r) with
-  | Value_closure { set_of_closures; fun_id } ->
+  | Value_closure { set_of_closures; closure_id } ->
     let module AR =
       Flambdasubst.Alpha_renaming_map_for_ids_and_bound_vars_of_closures
     in
@@ -160,7 +160,7 @@ let transform_variable_in_closure_expression env r expr vc_closure
     let env_fun_id =
       AR.subst_closure_id set_of_closures.ffunction_sb fenv_field.vc_fun
     in
-    assert(Closure_id.equal env_fun_id fun_id);
+    assert(Closure_id.equal env_fun_id closure_id);
     let approx =
       try Var_within_closure.Map.find env_var set_of_closures.bound_var with
       | Not_found ->
@@ -199,7 +199,7 @@ let transform_closure_expression r fu_closure closure_id rel annot =
   let module AR =
     Flambdasubst.Alpha_renaming_map_for_ids_and_bound_vars_of_closures
   in
-  let subst_closure_id (closure : A.value_set_of_closures) closure_id =
+  let subst_closure_id (closure : A.descr_set_of_closures) closure_id =
     let closure_id = AR.subst_closure_id closure.ffunction_sb closure_id in
     (try ignore (find_declaration closure_id closure.ffunctions)
      with Not_found ->
@@ -213,9 +213,7 @@ let transform_closure_expression r fu_closure closure_id rel annot =
   | Value_closure { A.set_of_closures } ->
     let closure_id = subst_closure_id set_of_closures closure_id in
     let rel = Misc.may_map (subst_closure_id set_of_closures) rel in
-    let ret_approx =
-      A.value_closure { fun_id = closure_id; set_of_closures }
-    in
+    let ret_approx = A.value_closure { closure_id; set_of_closures } in
     let closure =
       match rel with
       | Some relative_to_id when Closure_id.equal closure_id relative_to_id ->
@@ -666,7 +664,7 @@ and transform_set_of_closures_expression env r cl annot =
   let env = E.enter_set_of_closures_declaration ffuns.ident env in
 
   (* we use the previous closure for evaluating the functions *)
-  let internal_closure : A.value_set_of_closures =
+  let internal_closure : A.descr_set_of_closures =
     { ffunctions = ffuns;
       bound_var = Variable.Map.fold (fun id (_,desc) map ->
           Var_within_closure.Map.add (Var_within_closure.wrap id) desc map)
@@ -682,7 +680,7 @@ and transform_set_of_closures_expression env r cl annot =
      the set of closures. *)
   let set_of_closures_env = Variable.Map.fold
       (fun id _ env -> E.add_approx id
-          (A.value_closure { fun_id = Closure_id.wrap id;
+          (A.value_closure { closure_id = Closure_id.wrap id;
                              set_of_closures = internal_closure }) env)
       ffuns.funs env in
 
@@ -770,31 +768,31 @@ and transform_application_expression env r (funct, fapprox)
       ret r A.value_unknown
   in
   match fapprox.descr with
-  | Value_closure { fun_id; set_of_closures } ->
+  | Value_closure { closure_id; set_of_closures } ->
       let clos = set_of_closures.ffunctions in
       let func =
-        try find_declaration fun_id clos with
+        try find_declaration closure_id clos with
         | Not_found ->
             Format.printf "approximation references non-existent closure %a@."
-                Closure_id.print fun_id;
+                Closure_id.print closure_id;
             assert false
       in
       let nargs = List.length args in
       let arity = function_arity func in
       if nargs = arity then
-        direct_apply env r clos funct fun_id func set_of_closures
+        direct_apply env r clos funct closure_id func set_of_closures
           (args, approxs) dbg eid
       else if nargs > arity then
         let h_args, q_args = Misc.split_at arity args in
         let h_approxs, _q_approxs = Misc.split_at arity approxs in
         let expr, r =
-          direct_apply env r clos funct fun_id func set_of_closures
+          direct_apply env r clos funct closure_id func set_of_closures
             (h_args,h_approxs) dbg (Expr_id.create ())
         in
         loop env r (Fapply({ ap_function = expr; ap_arg = q_args;
                              ap_kind = Indirect; ap_dbg = dbg}, eid))
       else if nargs > 0 && nargs < arity then
-        let partial_fun = partial_apply funct fun_id func args dbg in
+        let partial_fun = partial_apply funct closure_id func args dbg in
         loop env r partial_fun
       else
         no_transformation ()

@@ -14,6 +14,7 @@
 
 val fatal_error: string -> 'a
 exception Fatal_error
+val fatal_errorf : ('a, Format.formatter, unit, 'b) format4 -> 'a
 
 val try_finally : (unit -> 'a) -> (unit -> unit) -> 'a;;
 

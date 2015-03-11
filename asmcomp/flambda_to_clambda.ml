@@ -37,7 +37,6 @@ type t = {
   mutable ex_table : Flambdaexport.descr Export_id.Map.t;
   mutable unit_approx : Flambdaexport.approx;
   mutable can_be_compiled_to_clambda_constant : Variable.Set.t;
-  constant_closures : Set_of_closures_id.t;
 }
 
 let create () =
@@ -64,7 +63,7 @@ let constant_classification_for_expr t (expr : unit Flambda.t)
   | Fsymbol (sym, ()) -> Constant_accessed_via_symbol sym
   | Fconst (_, ()) -> Constant_not_accessed_via_symbol
   | Fset_of_closures ({ cl_fun }, _) ->
-    if Set_of_closures_id.Set.mem cl_fun.ident t.constant_closures
+    if E.is_set_of_closures_local_and_constant cl_fun.ident t.exported
     then Constant_closure
     else Not_constant
   | _ -> Not_constant

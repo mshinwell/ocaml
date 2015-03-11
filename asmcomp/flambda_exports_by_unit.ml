@@ -38,31 +38,21 @@ type ('a, 'b) closure_declaration_position =
   | External of 'b
 
 let create () =
-  let current_unit =
-    ...
-  in
-  let external_units =
-    let approx_env = Compilenv.approx_env () in
-    { offset_fun = approx_env.offset_fun;
-      offset_fv = approx_env.offset_fv;
-      functions_off = approx_env.functions_off;
-      functions = approx_env.functions;
-      constant_closures = approx_env.constant_closures;
-    }
-  in
-  { current_unit; external_units; }
+  { current_unit = E.empty;
+    external_units = Compilenv.approx_env ();
+  }
 
 let get_fun_offset t (id : Closure_id.t) =
   try
     let exported =
       if Closure_id.in_current_compilation_unit id
       then t.current_unit
-      else t.external_unit
+      else t.external_units
     in
-    E.get_fun_offset_exn exported closure_id
+    E.get_fun_offset_exn exported id
   with Not_found ->
     Misc.fatal_errorf "offset for function not found: %a"
-      Closure_id.print closure_id
+      Closure_id.print id
 
 let get_fun_offset_from_var t id = get_fun_offset t (Closure_id.wrap id)
 
@@ -71,7 +61,7 @@ let get_fv_offset t (var : Var_within_closure.t) =
     let exported =
       if Var_within_closure.in_current_compilation_unit var
       then t.current_unit
-      else t.external_unit
+      else t.external_units
     in
     E.get_fv_offset_exn exported var
   with Not_found ->
@@ -89,7 +79,7 @@ let closure_declaration_position t (id : Closure_id.t) =
     | decls -> External decls
     | exception Not_found ->
       Misc.fatal_errorf "could not find declaration position of closure: %a"
-        Closure_id.print cf
+        Closure_id.print id
 
 let set_of_closures_declaration_position t (id : Set_of_closures_id.t) =
   match E.set_of_closures_declaration_position_exn t.current_unit id with
@@ -100,32 +90,33 @@ let set_of_closures_declaration_position t (id : Set_of_closures_id.t) =
     | exception Not_found ->
       Misc.fatal_errorf "could not find declaration position of set of \
           closures: %a"
-        Closure_id.print id
+        Set_of_closures_id.print id
 
-let is_function_constant t (id : Closure_id.t) =
+let is_closure_constant t (id : Closure_id.t) =
   match closure_declaration_position t id with
   | Current_unit decls ->
-    (* CR mshinwell: [E.is_function_constant] needs to be renamed to
-       [E.is_set_of_closures_constant] *)
-    E.is_function_constant t.current_unit decls.set_of_closures_id
+    E.is_set_of_closures_constant t.current_unit decls.ident
   | External decls ->
-    E.is_function_constant t.external_units decls.set_of_closures_id
+    E.is_set_of_closures_constant t.external_units decls.ident
 
-let is_function_local_and_constant t (id : Closure_id.t) =
+let is_closure_local_and_constant t (id : Closure_id.t) =
   match closure_declaration_position t id with
   | Current_unit decls ->
-    E.is_function_constant t.current_unit decls.set_of_closures_id
+    E.is_set_of_closures_constant t.current_unit decls.ident
   | External _ -> false
 
-let is_set_of_closures_local_and_constant t (id : Set_of_closures_id.t) =
-  E.is_function_constant t.current_unit id
-
-let is_closure_constant t (id : Set_of_closures_id.t) =
+let is_set_of_closures_constant t (id : Set_of_closures_id.t) =
   match set_of_closures_declaration_position t id with
-  | Current_unit decls -> E.is_function_constant t.current_unit decls.ident
-  | External decls -> E.is_function_constant t.external_units decls.ident
+  | Current_unit decls ->
+    E.is_set_of_closures_constant t.current_unit decls.ident
+  | External decls ->
+    E.is_set_of_closures_constant t.external_units decls.ident
+
+let is_set_of_closures_local_and_constant t (id : Set_of_closures_id.t) =
+  E.is_set_of_closures_constant t.current_unit id
 
 let function_arity t (closure_id : Closure_id.t) =
+(* [find_declaration] is in Flambdautils, this is wrong *)
   match E.find_declaration t.current_unit closure_id with
   | decl -> Flambdautils.function_arity decl
   | exception Not_found ->
@@ -136,10 +127,11 @@ let function_arity t (closure_id : Closure_id.t) =
           arity: %a"
         Closure_id.print fun_id
 
-
+(*
   let not_constants = P.not_constants
   let is_constant id =
     not (Variable.Set.mem id not_constants.Flambdaconstants.not_constant_id)
+*)
 
 (* [find_approx_descr t approx] obtains the approximation description
    referenced by [approx] by looking in the maps of exported approximations

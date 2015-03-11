@@ -95,8 +95,7 @@ module Exported = struct
   let set_of_closures_declaration_position_exn t set_of_closures_id =
     Set_of_closures_id.Map.find set_of_closures_id t.functions
 
-  (* CR mshinwell: consider renaming to [is_set_of_closures_constant] *)
-  let is_function_constant t set_of_closures_id =
+  let is_set_of_closures_constant t set_of_closures_id =
     Set_of_closures_id.Set.mem set_of_closures_id t.constant_closures
 end
 
