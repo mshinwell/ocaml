@@ -21,35 +21,43 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* Tracking of export information collated from two sources:
-   1. the current compilation unit;
-   2. units imported by the current compilation unit.
-*)
+module Export_id : Ext_types.UnitId
+   with module Compilation_unit := Compilation_unit
 
-open Abstract_identifiers
+type tag = int
 
-type t
+type _ boxed_int =
+  | Int32 : int32 boxed_int
+  | Int64 : int64 boxed_int
+  | Nativeint : nativeint boxed_int
 
-val create
-   : fun_offset_table:int Closure_id.Map.t
-  -> fv_offset_table:int Var_within_closure.Map.t
-  -> t
+type descr =
+  | Value_block of tag * approx array
+  | Value_int of int
+  | Value_constptr of int
+  | Value_float of float
+  | Value_boxed_int : 'a boxed_int * 'a -> descr
+  | Value_string
+  | Value_closure of descr_closure
+  | Value_set_of_closures of descr_set_of_closures
 
-(* These accessor functions cause fatal errors upon failure. *)
-include Flambdaexport.Accessors with type 'a result := 'a
+and descr_closure = {
+  closure_id : Closure_id.t;
+  set_of_closures : descr_set_of_closures;
+}
 
+and descr_set_of_closures = {
+  set_of_closures_id : Set_of_closures_id.t;
+  (** Approximations to the variables bound by the set of closures. *)
+  bound_var : approx Var_within_closure.Map.t;
+  (** Approximations to the results of the functions bound by the set of
+      closures. *)
+  results : approx Closure_id.Map.t;
+}
 
-val is_function_constant : t -> Closure_id.t -> bool
-(* CR mshinwell: we've introduced "local" by accident to mean "current unit" *)
-val is_function_local_and_constant : t -> Closure_id.t -> bool
-val is_set_of_closures_local_and_constant : t -> Set_of_closures_id.t -> bool
+type approx =
+  | Value_unknown
+  | Value_id of Export_id.t
+  | Value_symbol of Symbol.t
 
-val function_arity : t -> Closure_id.t -> int
-
-(* XXX does this risk confusion with [is_function_constant]? *)
-val is_variable_constant : t -> Variable.t -> bool
-
-val find_approx_descr
-   : t
-  -> Flambdaexport.approx
-  -> Flambdaexport.descr option
+val print_descr : Format.formatter -> descr -> unit

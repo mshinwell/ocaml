@@ -23,7 +23,7 @@
    of these infos *)
 
 type unit_infos =
-  { mutable ui_name: string;                    (* Name of unit implemented *)
+  { mutable ui_name: Compilation_unit.t;        (* Name of unit implemented *)
     mutable ui_symbol: string;            (* Prefix for symbols *)
     mutable ui_defines: string list;      (* Unit and sub-units implemented *)
     mutable ui_imports_cmi:
@@ -33,7 +33,7 @@ type unit_infos =
     mutable ui_curry_fun: int list;             (* Currying functions needed *)
     mutable ui_apply_fun: int list;             (* Apply functions needed *)
     mutable ui_send_fun: int list;              (* Send functions needed *)
-    mutable ui_export_info: Flambdaexport.exported;
+    mutable ui_export_info: Flambdaexport_info.t;
     mutable ui_force_link: bool }               (* Always linked *)
 
 (* Each .a library has a matching .cmxa file that provides the following
