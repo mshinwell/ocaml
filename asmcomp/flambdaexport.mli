@@ -57,6 +57,23 @@ and approx =
 
 val print_descr : Format.formatter -> descr -> unit
 
+module type Accessors = sig
+  val fundecls_for_closure_id
+     : t
+    -> Closure_id.t
+    -> unit Flambda.function_declarations option
+
+  val fundecls_for_set_of_closures_id
+     : t
+    -> Set_of_closures_id.t
+    -> unit Flambda.function_declarations option
+
+  val is_set_of_closures_constant
+     : t
+    -> Set_of_closures_id.t
+    -> bool
+end
+
 module Exported : sig
   (* CR mshinwell: try to make private, or preferably abstract *)
   type t = {
@@ -64,13 +81,13 @@ module Exported : sig
     (** Code of exported functions indexed by function identifier *)
     functions_off : unit Flambda.function_declarations Closure_id.Map.t;
     (** Code of exported functions indexed by offset identifier *)
-    ex_values : descr Export_id.Map.t Compilation_unit.Map.t;
+    ex_values : descr Export_id.Map.t;
     (** Structure of exported values *)
     globals : approx Ident.Map.t;
     (** Global variables provided by the unit: usually only the top-level
         module identifier, but there may be multiple identifiers in the case
         of packs. *)
-    id_symbol : Symbol.t Export_id.Map.t Compilation_unit.Map.t;
+    id_symbol : Symbol.t Export_id.Map.t;
     symbol_id : Export_id.t Symbol.Map.t;
     (** Associates symbols and values *)
     offset_fun : int Closure_id.Map.t;
@@ -91,29 +108,15 @@ module Exported : sig
 
   val empty : t
 
+  val get_fun_offset : t -> Closure_id.t -> int option
+  val get_fv_offset : t -> Var_within_closure.t -> int option
+
   val find_declaration
      : t
     -> Closure_id.t
     -> unit Flambda.function_declarations
 
-  val get_fun_offset_exn : t -> Closure_id.t -> int
-  val get_fv_offset_exn : t -> Var_within_closure.t -> int
-
-  (* CR mshinwell: bad function name *)
-  val closure_declaration_position_exn
-     : t
-    -> Closure_id.t
-    -> unit Flambda.function_declarations
-
-  val set_of_closures_declaration_position_exn
-     : t
-    -> Set_of_closures_id.t
-    -> unit Flambda.function_declarations
-
-  val is_set_of_closures_constant
-     : t
-    -> Set_of_closures_id.t
-    -> bool
+  include Accessors
 end
 
 type exported = Exported.t

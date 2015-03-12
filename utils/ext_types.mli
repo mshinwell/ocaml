@@ -45,6 +45,16 @@ module type ExtMap = sig
   val revert : key t -> key t
   val print :
     (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
+
+  (* [find_predicate t ~f] iterates through bindings in [t], in the usual
+     order, applying [f] to each one.  If [f] returns [true] then that
+     binding will be returned by [find_predicate]; otherwise, iteration
+     continues.  [None] is returned if there was no match.  (Note that [f]
+     is never applied again after it returns [true].) *)
+  val find_map_predicate
+     : 'a t
+    -> f:(key:M.t -> data:'a -> 'b option)
+    -> (M.t * 'a * 'b) option
 end
 
 module Map_map (X : ExtMap) (Y : sig

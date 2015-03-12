@@ -290,9 +290,7 @@ and fclambda_and_approx_for_let t ~env ~is_assigned ~var ~rhs ~body
     if approx_never_changes_during_execution_of_body then approx
     else Value_unknown
   in
-  let id, env =
-    Env.add_unique_id_and_substitution env var (Some rhs) urhs approx
-  in
+  let id, env = Env.add_substitution env var (Some rhs) urhs approx in
   if not is_constant then begin
     (* The [let]-binding must remain, in the Clambda code. *)
     assert (constant_classification_for_expr t rhs = Not_constant);
@@ -1072,6 +1070,8 @@ and fclambda_and_approx_for_non_simple_application t env ~expr ~direct
       (* We mark some calls as direct when it is unknown:
          for instance if simplify wasn't run before. *)
       | Some (Value_closure { closure_id }) when
+(* XXX get rid of this [function_arity] function if possible, or else
+   work out where the map of closure id -> fundecl is going to be stored *)
           (function_arity closure_id) = List.length args ->
         Direct closure_id
       | _ -> Indirect
