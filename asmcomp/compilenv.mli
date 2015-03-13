@@ -25,11 +25,14 @@ val unit_id_from_name: string -> Ident.t
 val current_unit_infos: unit -> unit_infos
         (* Return the infos for the unit being compiled *)
 
-val current_unit: unit -> Compilation_unit.t
+val current_unit_name: unit -> string
+        (* Return the name of the unit being compiled *)
 val current_unit_linkage_name: unit -> linkage_name
         (* Return the linkage_name of the unit being compiled *)
 val current_unit_id: unit -> Ident.t
         (* Return the id of the unit being compiled *)
+
+val current_unit: unit -> Compilation_unit.t
 
 val current_unit_symbol: unit -> Symbol.t
 
@@ -60,33 +63,11 @@ val record_global_approx_toplevel: unit -> unit
         (* Record the current approximation for the current toplevel phrase *)
 
 val set_export_info: Flambdaexport.exported -> unit
-        (* Record the export information of the unit being compiled *)
-
-val load_cmx_if_possible_and_get_flambda_export_info
-   : Compilation_unit.t
-  -> Flambdaexport.t
-
-type ('a, 'b) which_unit =
-  | Current_unit of 'a
-  | Imported_unit of 'b
-
-(* Find the first thing in a compilation unit that matches the predicate [f],
-   returning only the value produced by [f].  Note that this function never
-   causes a .cmx file to be loaded. *)
-val find_flambda_export_info_in_any_loaded_unit
-   : 'a
-  -> (Flambdaexport_info.t -> 'a -> 'b option)
-  -> 'b option
-
-(* Find the first thing in a compilation unit that matches the predicate [f],
-   returning which unit it was found in (classified as to whether the unit is
-   the current unit or an imported unit), the [Exported.t] value containing the
-   thing, and the return value from [f].  This function again never causes a
-   .cmx file to be loaded. *)
-val find_flambda_export_info_in_any_loaded_unit'
-   : 'a
-  -> (Flambdaexport_info.t -> 'a -> 'b option)
-  -> (Flambdaexport_info.t * 'b) Current_unit.t option
+        (* Record the informations of the unit being compiled *)
+val approx_env: unit -> Flambdaexport.exported
+        (* Returns all the information loaded from extenal compilation units *)
+val approx_for_global: Compilation_unit.t -> Flambdaexport.exported
+        (* Loads the exported information declaring the compilation_unit *)
 
 val imported_closure
    : Set_of_closures_id.t

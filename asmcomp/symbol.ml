@@ -65,7 +65,6 @@ module Compilation_unit = struct
     match !current with
     | Some current -> current
     | None -> Misc.fatal_error "Compilation_unit.get_current_exn"
-  let is_current t = (get_current () = Some t)
 end
 
 (** *)

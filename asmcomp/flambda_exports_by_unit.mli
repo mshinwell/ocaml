@@ -35,9 +35,10 @@ val create
   -> fv_offset_table:int Var_within_closure.Map.t
   -> t
 
-(* These accessor functions cause fatal errors upon failure. *)
-include Flambdaexport.Accessors with type 'a result := 'a
-
+val get_fun_offset : t -> Closure_id.t -> int
+val get_fun_offset_from_var : t -> Variable.t -> int
+val get_fv_offset : t -> Var_within_closure.t -> int
+val get_local_fv_offset_from_var_exn : t -> Variable.t -> int
 
 val is_function_constant : t -> Closure_id.t -> bool
 (* CR mshinwell: we've introduced "local" by accident to mean "current unit" *)

@@ -39,10 +39,6 @@ module type ExtMap = sig
   val revert : key t -> key t
   val print :
     (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
-  val find_map_predicate
-     : 'a t
-    -> f:(key:M.t -> data:'a -> 'b option)
-    -> (M.t * 'a * 'b) option
 end
 
 module type ExtSet = sig
@@ -122,19 +118,6 @@ struct
 
   let revert map = fold (fun k v m -> add v k m) map empty
 
-  let find_map_predicate (type a) (type b) t ~f =
-    let module M = struct exception Find_predicate_exit of M.t * a * b end in
-    let open M in
-    try
-      iter (fun key data ->
-          match f ~key ~data with
-          | None -> ()
-          | Some (key, data, mapped_data) ->
-            raise (Find_predicate_exit (key, data, mapped_data)))
-        t;
-      None
-    with Find_predicate_exit (key, data, mapped_data) ->
-      Some (key, data, mapped_data)
 end
 
 module ExtSet(M:PrintableHashOrdered) : ExtSet with module M := M =

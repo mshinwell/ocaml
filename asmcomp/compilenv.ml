@@ -29,7 +29,9 @@ type error =
 exception Error of error
 
 let global_infos_table =
-  (Hashtbl.create 17 : (Compilation_unit.t, unit_infos option) Hashtbl.t)
+  (Hashtbl.create 17 : (string, unit_infos option) Hashtbl.t)
+let export_infos_table =
+  (Hashtbl.create 10 : (string, Flambdaexport.exported) Hashtbl.t)
 
 let imported_closure_table =
   (Set_of_closures_id.Tbl.create 10
@@ -78,8 +80,7 @@ let current_unit =
     ui_apply_fun = [];
     ui_send_fun = [];
     ui_force_link = false;
-    ui_export_info = Flambdaexport.empty;
-  }
+    ui_export_info = Flambdaexport.empty_export }
 
 let symbolname_for_pack pack name =
   match pack with
@@ -112,12 +113,7 @@ let reset ?packname name =
   Set_of_closures_id.Tbl.clear imported_closure_table;
   let symbol = symbolname_for_pack packname name in
   current_unit_id := unit_id_from_name name;
-  let compilation_unit =
-    Compilation_unit.create
-      (Ident.name !current_unit_id)
-      (current_unit_linkage_name ())
-  in
-  current_unit.ui_name <- compilation_unit;
+  current_unit.ui_name <- name;
   current_unit.ui_symbol <- symbol;
   current_unit.ui_defines <- [symbol];
   current_unit.ui_imports_cmi <- [];
@@ -131,6 +127,11 @@ let reset ?packname name =
   current_unit.ui_export_info <- Flambdaexport.empty_export;
   merged_environment := Flambdaexport.empty_export;
   Hashtbl.clear export_infos_table;
+  let compilation_unit =
+    Compilation_unit.create
+      (Ident.name !current_unit_id)
+      (current_unit_linkage_name ())
+  in
   Compilation_unit.set_current compilation_unit
 
 let current_unit_infos () =
@@ -175,25 +176,19 @@ let read_library_info filename =
   close_in ic;
   infos
 
-(* Record that the current unit depends on the given [compilation_unit].
-   Then, if a .cmx file can be found for such unit, load it. *)
-let get_global_info compilation_unit =
-  let id = Compilation_unit.get_persistent_ident compilation_unit in
-  if (Compilation_unit.equal
-      predefined_exception_compilation_unit
-      comp_unit)
-     || Ident.is_predef_exn id
-     || not (Ident.global id)
-  then invalid_arg (Format.asprintf "approx_for_global %a" Ident.print id);
-  if Compilation_unit.equal compilation_unit current_unit.ui_name then
+
+(* Read and cache info on global identifiers *)
+
+let get_global_info global_ident = (
+  let modname = Ident.name global_ident in
+  if modname = current_unit.ui_name then
     Some current_unit
   else begin
     try
-      Hashtbl.find global_infos_table compilation_unit
+      Hashtbl.find global_infos_table modname
     with Not_found ->
       let (infos, crc) =
         try
-          let modname = Compilation_unit.name compilation_unit in
           let filename =
             find_in_path_uncap !load_path (modname ^ ".cmx") in
           let (ui, crc) = read_unit_info filename in
@@ -204,35 +199,13 @@ let get_global_info compilation_unit =
           (None, None) in
       current_unit.ui_imports_cmx <-
         (modname, crc) :: current_unit.ui_imports_cmx;
-      Hashtbl.add global_infos_table compilation_unit infos;
+      Hashtbl.add global_infos_table modname infos;
       infos
   end
-
-let load_cmx_and_get_flambda_export_info compilation_unit =
-  try (get_global_info compilation_unit).ui_export_info
-  with Not_found -> Flambdaexport.empty
+)
 
 let cache_unit_info ui =
   Hashtbl.add global_infos_table ui.ui_name (Some ui)
-
-(* Exporting and importing cross module information *)
-
-let set_export_info export_info =
-  current_unit.ui_export_info <- export_info
-
-(*
-let approx_for_global comp_unit =
-  try Hashtbl.find export_infos_table modname with
-  | Not_found ->
-    let exported = match get_global_info id with
-      | None -> Flambdaexport.empty_export
-      | Some ui -> ui.ui_export_info in
-    Hashtbl.add export_infos_table modname exported;
-    merged_environment := Flambdaexport.merge !merged_environment exported;
-    exported
-
-let approx_env () = !merged_environment
-*)
 
 (* Return the approximation of a global identifier *)
 
@@ -291,6 +264,31 @@ let symbol_for_global' id =
 
 let set_global_approx approx =
   current_unit.ui_approx <- approx
+
+(* Exporting and importing cross module information *)
+
+let set_export_info export_info =
+  current_unit.ui_export_info <- export_info
+
+let approx_for_global comp_unit =
+  let id = Compilation_unit.get_persistent_ident comp_unit in
+  if (Compilation_unit.equal
+      predefined_exception_compilation_unit
+      comp_unit)
+     || Ident.is_predef_exn id
+     || not (Ident.global id)
+  then invalid_arg (Format.asprintf "approx_for_global %a" Ident.print id);
+  let modname = Ident.name id in
+  try Hashtbl.find export_infos_table modname with
+  | Not_found ->
+    let exported = match get_global_info id with
+      | None -> Flambdaexport.empty_export
+      | Some ui -> ui.ui_export_info in
+    Hashtbl.add export_infos_table modname exported;
+    merged_environment := Flambdaexport.merge !merged_environment exported;
+    exported
+
+let approx_env () = !merged_environment
 
 (* Record that a currying function or application function is needed *)
 
@@ -532,18 +530,3 @@ let () =
       | Error err -> Some (Location.error_of_printer_file report_error err)
       | _ -> None
     )
-
-let find_flambda_export_info_in_any_loaded_unit thing f =
-  Compilation_unit.Map.find_map_predicate global_infos_table
-    ~f:(fun ~key:compilation_unit ~data:exported -> f exported thing)
-
-let find_flambda_export_info_in_any_loaded_unit' thing f =
-  Compilation_unit.Map.find_map_predicate global_infos_table
-    ~f:(fun ~key:compilation_unit ~data:exported ->
-      match f exported thing with
-      | Some result ->
-        if Compilation_unit.is_current compilation_unit then
-          Some (Current_unit (exported, result))
-        else
-          Some (Imported_unit (exported, result))
-      | None -> None)

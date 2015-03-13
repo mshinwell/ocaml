@@ -112,7 +112,6 @@ ASMCOMP=\
   asmcomp/flambdaconstants.cmo \
   asmcomp/flambda_lay_out_closure.cmo \
   asmcomp/flambdagen.cmo \
-  asmcomp/flambdaexport_approx.cmo \
   asmcomp/flambdaexport.cmo \
   asmcomp/compilenv.cmo \
   asmcomp/flambdaeffects.cmo \
@@ -126,6 +125,7 @@ ASMCOMP=\
   asmcomp/flambda_inlining_decision.cmo \
   asmcomp/flambdainline.cmo \
   asmcomp/flambda_ref_to_variables.cmo \
+  asmcomp/flambda_exports_by_unit.cmo \
   asmcomp/flambda_to_clambda_env.cmo \
   asmcomp/flambda_to_clambda.cmo \
   asmcomp/strmatch.cmo asmcomp/cmmgen.cmo \

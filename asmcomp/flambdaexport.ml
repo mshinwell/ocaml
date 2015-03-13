@@ -10,54 +10,98 @@
 (*                                                                     *)
 (***********************************************************************)
 
+open Ext_types
+open Symbol
 open Abstract_identifiers
+open Flambda
 
-let get_fun_offset t (id : Closure_id.t) =
-  match Compilenv.find_in_any_unit t id E.get_fun_offset with
-  | Some offset -> offset
-  | None ->
-    Misc.fatal_errorf "offset for function not found: %a"
-      Closure_id.print id
+module Innerid = Id (struct end)
+module Export_id = UnitId (Innerid) (Compilation_unit)
 
-let get_fun_offset_from_var t id =
-  get_fun_offset t (Closure_id.wrap id)
+type tag = int
 
-let get_fv_offset t (var : Var_within_closure.t) =
-  match Compilenv.find_in_any_unit t id E.get_fv_offset with
-  | Some offset -> offset
-  | None ->
-    Misc.fatal_errorf "offset for free variable not found: %a"
-      Var_within_closure.print id
+type _ boxed_int =
+  | Int32 : int32 boxed_int
+  | Int64 : int64 boxed_int
+  | Nativeint : nativeint boxed_int
 
-let get_fv_offset_from_var t var =
-  get_fv_offset t (Var_within_closure.wrap var)
+type descr =
+  | Value_block of tag * approx array
+  | Value_int of int
+  | Value_constptr of int
+  | Value_float of float
+  | Value_boxed_int : 'a boxed_int * 'a -> descr
+  | Value_string
+  | Value_closure of descr_closure
+  | Value_set_of_closures of descr_set_of_closures
 
-let get_local_fv_offset_from_var t (var : Variable.t) =
-  match Compilenv.find_in_any_unit' t id E.get_fv_offset with
-  | Some (Current_unit (_, offset)) -> offset
-  | Some (Imported_unit _) ->
-    Misc.fatal_errorf "offset for free variable was expected to be in the \
-      current compilation unit, but was found in an imported unit: %a"
-      Var_within_closure.print id
-  | None ->
-    Misc.fatal_errorf "(local) offset for free variable not found: %a"
-      Var_within_closure.print id
+and descr_closure = {
+  closure_id : Closure_id.t;
+  set_of_closures : descr_set_of_closures;
+}
 
-let fundecls_for_closure_id t (id : Closure_id.t) =
-  match Compilenv.find_in_any_unit t id E.fundecls_for_closure_id with
-  | Some fundecls -> fundecls
-  | None ->
-    Misc.fatal_errorf "could not find function declarations corresponding \
-        to closure ID: %a"
-      Closure_id.print id
+and descr_set_of_closures = {
+  set_of_closures_id : Set_of_closures_id.t;
+  bound_var : approx Var_within_closure.Map.t;
+  results : approx Closure_id.Map.t;
+}
 
-let fundecls_for_set_of_closures_id t (id : Set_of_closures_id.t) =
-  match Compilenv.find_in_any_unit t id E.fundecls_for_set_of_closures_id with
-  | Some fundecls -> fundecls
-  | None ->
-    Misc.fatal_errorf "could not find function declarations corresponding \
-        to set-of-closures ID: %a"
-      Set_of_closures_id.print id
+and approx =
+  | Value_unknown
+  | Value_id of Export_id.t
+  | Value_symbol of Symbol.t
+
+module Exported = struct
+  type t = {
+    functions : unit function_declarations Set_of_closures_id.Map.t;
+    functions_off : unit function_declarations Closure_id.Map.t;
+    ex_values : descr Export_id.Map.t Compilation_unit.Map.t;
+    globals : approx Ident.Map.t;
+    id_symbol : Symbol.t Export_id.Map.t Compilation_unit.Map.t;
+    symbol_id : Export_id.t Symbol.Map.t;
+    offset_fun : int Closure_id.Map.t;
+    offset_fv : int Var_within_closure.Map.t;
+    constants : Symbol.Set.t;
+    constant_closures : Set_of_closures_id.Set.t;
+    kept_arguments : Variable.Set.t Set_of_closures_id.Map.t;
+  }
+
+  let empty : t = {
+    functions = Set_of_closures_id.Map.empty;
+    functions_off = Closure_id.Map.empty;
+    ex_values =  Compilation_unit.Map.empty;
+    globals = Ident.Map.empty;
+    id_symbol =  Compilation_unit.Map.empty;
+    symbol_id = Symbol.Map.empty;
+    offset_fun = Closure_id.Map.empty;
+    offset_fv = Var_within_closure.Map.empty;
+    constants = Symbol.Set.empty;
+    constant_closures = Set_of_closures_id.Set.empty;
+    kept_arguments = Set_of_closures_id.Map.empty;
+  }
+
+  let find_declaration t closure_id =
+    Closure_id.Map.find closure_id t.functions_off
+
+  let get_fun_offset_exn t closure_id =
+    Closure_id.Map.find closure_id t.offset_fun
+
+  let get_fv_offset_exn t var =
+    Var_within_closure.Map.find var t.offset_fv
+
+  let closure_declaration_position_exn t closure_id =
+    Closure_id.Map.find closure_id t.functions_off
+
+  let set_of_closures_declaration_position_exn t set_of_closures_id =
+    Set_of_closures_id.Map.find set_of_closures_id t.functions
+
+  let is_set_of_closures_constant t set_of_closures_id =
+    Set_of_closures_id.Set.mem set_of_closures_id t.constant_closures
+end
+
+open Exported
+type exported = t
+let empty_export = empty
 
 let find_ex_value eid map =
   let unit = Export_id.unit eid in
@@ -84,6 +128,123 @@ let nest_eid_map map =
     Compilation_unit.Map.add unit (Export_id.Map.add eid v m) map
   in
   Export_id.Map.fold add_map map Compilation_unit.Map.empty
+
+let print_approx ppf export =
+  let values = export.ex_values in
+  let open Format in
+  let printed = ref Export_id.Set.empty in
+  let printed_closure = ref Set_of_closures_id.Set.empty in
+  let rec print_approx ppf = function
+    | Value_unknown -> fprintf ppf "?"
+    | Value_id id ->
+      if Export_id.Set.mem id !printed
+      then fprintf ppf "(%a: _)" Export_id.print id
+      else
+        (try
+           let descr = find_ex_value id values in
+           printed := Export_id.Set.add id !printed;
+           fprintf ppf "(%a: %a)"
+             Export_id.print id
+             print_descr descr
+         with Not_found ->
+           fprintf ppf "(%a: Not available)"
+             Export_id.print id)
+    | Value_symbol sym -> Symbol.print ppf sym
+  and print_descr ppf = function
+    | Value_int i -> pp_print_int ppf i
+    | Value_constptr i -> fprintf ppf "%ip" i
+    | Value_block (tag, fields) ->
+      fprintf ppf "[%i:%a]" tag print_fields fields
+    | Value_closure {closure_id; set_of_closures} ->
+      fprintf ppf "(function %a, %a)"
+        Closure_id.print closure_id print_set_of_closures set_of_closures
+    | Value_set_of_closures set_of_closures ->
+      fprintf ppf "(ufunction %a)" print_set_of_closures set_of_closures
+    | Value_string -> Format.pp_print_string ppf "string"
+    | Value_float f -> Format.pp_print_float ppf f
+    | Value_boxed_int (t, i) ->
+      match t with
+      | Int32 -> Format.fprintf ppf "%li" i
+      | Int64 -> Format.fprintf ppf "%Li" i
+      | Nativeint -> Format.fprintf ppf "%ni" i
+  and print_fields ppf fields =
+    Array.iter (fun approx -> fprintf ppf "%a@ " print_approx approx) fields
+  and print_set_of_closures ppf { set_of_closures_id; bound_var } =
+    if Set_of_closures_id.Set.mem set_of_closures_id !printed_closure
+    then fprintf ppf "%a" Set_of_closures_id.print set_of_closures_id
+    else begin
+      printed_closure :=
+        Set_of_closures_id.Set.add set_of_closures_id !printed_closure;
+      fprintf ppf "{%a: %a}"
+        Set_of_closures_id.print set_of_closures_id
+        print_binding bound_var
+    end
+  and print_binding ppf bound_var =
+    Var_within_closure.Map.iter (fun clos_id approx ->
+        fprintf ppf "%a -> %a,@ "
+          Var_within_closure.print clos_id
+          print_approx approx) bound_var
+  in
+  let print_approxs id approx =
+    fprintf ppf "%a -> %a;@ " Ident.print id print_approx approx
+  in
+  Ident.Map.iter print_approxs export.globals
+
+(* CR mshinwell: this should be improved.  Fix the code above. *)
+let print_descr ppf = function
+  | Value_int _ -> Format.fprintf ppf "Value_int"
+  | Value_constptr _ -> Format.fprintf ppf "Value_constptr"
+  | Value_block _ -> Format.fprintf ppf "Value_block"
+  | Value_closure _ -> Format.fprintf ppf "Value_closure"
+  | Value_set_of_closures _ -> Format.fprintf ppf "Value_set_of_closures"
+  | Value_string -> Format.fprintf ppf "Value_string"
+  | Value_float _ -> Format.fprintf ppf "Value_float"
+  | Value_boxed_int _ -> Format.fprintf ppf "Value_boxed_int"
+
+let print_symbols ppf export =
+  let open Format in
+  let print_symbol eid sym =
+    fprintf ppf "%a -> %a@." Symbol.print sym Export_id.print eid
+  in
+    Compilation_unit.Map.iter (fun _ -> Export_id.Map.iter print_symbol)
+      export.id_symbol
+
+let print_all ppf export =
+  let open Format in
+  fprintf ppf "approxs@ %a@.@."
+    print_approx export;
+  fprintf ppf "id_symbol@ %a@.@."
+    (Compilation_unit.Map.print (Export_id.Map.print Symbol.print))
+      export.id_symbol;
+  fprintf ppf "symbol_id@ %a@.@."
+    (Symbol.Map.print Export_id.print) export.symbol_id;
+  fprintf ppf "constants@ %a@.@."
+    Symbol.Set.print export.constants;
+  fprintf ppf "functions@ %a@.@."
+    (Set_of_closures_id.Map.print Printflambda.function_declarations)
+      export.functions
+
+let merge e1 e2 =
+  let int_eq (i:int) j = i = j in
+  { ex_values = eidmap_disjoint_union e1.ex_values e2.ex_values;
+    globals = Ident.Map.disjoint_union e1.globals e2.globals;
+    functions = Set_of_closures_id.Map.disjoint_union e1.functions
+      e2.functions;
+    functions_off =
+      Closure_id.Map.disjoint_union e1.functions_off e2.functions_off;
+    id_symbol = eidmap_disjoint_union  e1.id_symbol e2.id_symbol;
+    symbol_id = Symbol.Map.disjoint_union e1.symbol_id e2.symbol_id;
+    offset_fun = Closure_id.Map.disjoint_union
+        ~eq:int_eq e1.offset_fun e2.offset_fun;
+    offset_fv = Var_within_closure.Map.disjoint_union
+        ~eq:int_eq e1.offset_fv e2.offset_fv;
+    constants = Symbol.Set.union e1.constants e2.constants;
+    constant_closures =
+      Set_of_closures_id.Set.union e1.constant_closures e2.constant_closures;
+    kept_arguments =
+      Set_of_closures_id.Map.disjoint_union e1.kept_arguments
+        e2.kept_arguments;
+  }
 
 (* importing informations to build a pack: the global identifying the
    compilation unit of symbols is changed to be the pack one *)
