@@ -26,78 +26,30 @@ open Abstract_identifiers
 module Compilation_unit = Symbol.Compilation_unit
 module E = Flambdaexport.Exported
 
-type t = {
-  current_unit : E.t;
-  (* [external_units] is used to obtain information about closure layouts
-     in imported ("external") compilation units. *)
-  external_units : E.t;
-}
 
-type ('a, 'b) closure_declaration_position =
-  | Current_unit of 'a
-  | External of 'b
 
-let create () =
-  { current_unit = E.empty;
-    external_units = Compilenv.approx_env ();
-  }
 
-let get_fun_offset t (id : Closure_id.t) =
-  try
-    let exported =
-      if Closure_id.in_current_compilation_unit id
-      then t.current_unit
-      else t.external_units
-    in
-    E.get_fun_offset_exn exported id
-  with Not_found ->
-    Misc.fatal_errorf "offset for function not found: %a"
+
+let core_is_closure_constant t (id : Closure_id.t) =
+  match find_in_any_unit t id E.fundecls_for_set_of_closures_id with
+  | Some (Current_unit (exported, fundecls)) ->
+    Some (Current_unit (E.is_set_of_closures_constant exported fundecls.ident))
+  | Some (Imported_unit (exported, fundecls)) ->
+    Some (Imported_unit (E.is_set_of_closures_constant exported fundecls.ident))
+  | None ->
+    Misc.fatal_errorf "(is_closure_constant) could not find function
+        declarations corresponding to closure ID: %a"
       Closure_id.print id
 
-let get_fun_offset_from_var t id = get_fun_offset t (Closure_id.wrap id)
-
-let get_fv_offset t (var : Var_within_closure.t) =
-  try
-    let exported =
-      if Var_within_closure.in_current_compilation_unit var
-      then t.current_unit
-      else t.external_units
-    in
-    E.get_fv_offset_exn exported var
-  with Not_found ->
-    Misc.fatal_errorf "offset for free variable not found: %a"
-      Var_within_closure.print var
-
-let get_local_fv_offset_from_var_exn t (var : Variable.t) =
-  E.get_fv_offset_exn t.current_unit (Var_within_closure.wrap var)
-
-let closure_declaration_position t (id : Closure_id.t) =
-  match E.closure_declaration_position_exn t.current_unit id with
-  | decls -> Current_unit decls
-  | exception Not_found ->
-    match E.closure_declaration_position_exn t.external_units id with
-    | decls -> External decls
-    | exception Not_found ->
-      Misc.fatal_errorf "could not find declaration position of closure: %a"
-        Closure_id.print id
-
-let set_of_closures_declaration_position t (id : Set_of_closures_id.t) =
-  match E.set_of_closures_declaration_position_exn t.current_unit id with
-  | decls -> Current_unit decls
-  | exception Not_found ->
-    match E.set_of_closures_declaration_position_exn t.external_units id with
-    | decls -> External decls
-    | exception Not_found ->
-      Misc.fatal_errorf "could not find declaration position of set of \
-          closures: %a"
-        Set_of_closures_id.print id
-
-let is_closure_constant t (id : Closure_id.t) =
-  match closure_declaration_position t id with
-  | Current_unit decls ->
-    E.is_set_of_closures_constant t.current_unit decls.ident
-  | External decls ->
-    E.is_set_of_closures_constant t.external_units decls.ident
+let is_closure_local_and_constant t (id : Closure_id.t) =
+  match find_in_any_unit t id E.fundecls_for_set_of_closures_id with
+  | Some (Current_unit (exported, fundecls)) ->
+    E.is_set_of_closures_constant exported fundecls.ident
+  | Some (Imported_unit _) -> false
+  | None ->
+    Misc.fatal_errorf "(is_closure_constant) could not find function
+        declarations corresponding to closure ID: %a"
+      Closure_id.print id
 
 let is_closure_local_and_constant t (id : Closure_id.t) =
   match closure_declaration_position t id with
@@ -115,6 +67,7 @@ let is_set_of_closures_constant t (id : Set_of_closures_id.t) =
 let is_set_of_closures_local_and_constant t (id : Set_of_closures_id.t) =
   E.is_set_of_closures_constant t.current_unit id
 
+(*
 let function_arity t (closure_id : Closure_id.t) =
 (* [find_declaration] is in Flambdautils, this is wrong *)
   match E.find_declaration t.current_unit closure_id with
@@ -126,6 +79,7 @@ let function_arity t (closure_id : Closure_id.t) =
       Misc.fatal_error "cannot find declaration of closure to compute \
           arity: %a"
         Closure_id.print fun_id
+*)
 
 (*
   let not_constants = P.not_constants
@@ -144,18 +98,19 @@ let function_arity t (closure_id : Closure_id.t) =
    an export ID in [t.symbol_to_export_id] then why isn't the failure to
    find the export ID in [t.ex_table] a fatal error?
 *)
-let find_approx_descr t approx =
+let find_approx_descr t (approx : Flambdaexport.approx) =
   match approx with
   | Value_unknown -> None
   | Value_id export_id ->
     (* For export IDs, look in the table of values that the current unit
        exports, and then in the table that contains the values that all
        imported units export. *)
-    begin match Export_id.Map.find export_id t.ex_table with
+    let module Export_id = Flambdaexport.Export_id in
+    begin match Export_id.Map.find export_id t.current_unit
     | descr -> Some descr
     | exception Not_found ->
       begin match
-        Flambdaexport.find_description export_id (Compilenv.approx_env ())
+        Flambdaexport.find_description export_id t.external_units
       with
       | descr -> Some descr
       | exception Not_found -> None
