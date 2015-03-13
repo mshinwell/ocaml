@@ -106,8 +106,8 @@ type exported_mutable = {
     unit Flambda.function_declarations Set_of_closures_id.Map.t;
   closures : unit Flambda.function_declarations Closure_id.Map.t;
   constant_closures : Set_of_closures_id.Set.t;
-  offset_fun : int Closure_id.Map.t;
-  offset_fv : int Var_within_closure.Map.t;
+  offset_fun : int Closure_id.Tbl.t;
+  offset_fv : int Var_within_closure.Tbl.t;
 }
 
 val empty_export : exported

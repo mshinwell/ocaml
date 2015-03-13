@@ -77,11 +77,11 @@ let create ~compilation_unit ~expr =
     globals = Ident.Tbl.create ();
     symbol_id = Symbol.Tbl.create ();
     constants = Symbol.Set.empty;
+    offset_fun = Closure_id.Tbl.create 42;
+    offset_fv = Var_within_closure_id.Tbl.create 42;
     sets_of_closures;
     closures;
     constant_closures;
-    offset_fun =
-    offset_fv =
   } in
   let unit_approx =
     Value_id (add_new_export' exported_mutable (Value_constptr 0));
