@@ -45,7 +45,6 @@ module Compilation_unit : sig
   val set_current : t -> unit
   val get_current : unit -> t option
   val get_current_exn : unit -> t
-  val is_current : t -> bool
 end
 
 type t = {
