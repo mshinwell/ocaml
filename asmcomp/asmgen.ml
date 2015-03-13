@@ -139,8 +139,10 @@ let flambda ppf (size, lam) =
       loop (rounds - 1) flam in
   let flam = loop !Clflags.simplify_rounds flam in
   dump_and_check "flambdasimplify" flam;
+  let flam = Flambdasimplify.remove_unused_closure_variables flam in
   let fl_sym =
-    Flambdasym.convert ~compilation_unit:current_compilation_unit flam in
+    Flambdasym.convert ~compilation_unit:current_compilation_unit flam
+  in
   let fl,const,export = fl_sym in
   Compilenv.set_export_info export;
   if !Clflags.dump_flambda
@@ -152,12 +154,19 @@ let flambda ppf (size, lam) =
           Printflambda.flambda lam)
       const
   end;
-  Flambdacheck.check ~current_compilation_unit ~flambdasym:true fl;
+  let constants =
+    Flambda_share_constants.compute_sharing ~constants:const
+      ~fclambda_for_expr:(fclambda_for_expr t Env.empty)
+  in
+  let  clambda, approx =
+    Flambda_to_clambda.convert ~expr:fl ~constants ~exported:export
+  in
+  (* XXX not sure about [const] yet *)
   Symbol.Map.iter (fun _ lam ->
       Flambdacheck.check ~current_compilation_unit
         ~flambdasym:true ~cmxfile:true lam)
     const;
-  Clambdagen.convert fl_sym
+  flambda, clambda, approx
 
 let compile_unit output_prefix asm_filename keep_asm obj_filename gen =
   let create_asm = keep_asm || not !Emitaux.binary_backend_available in

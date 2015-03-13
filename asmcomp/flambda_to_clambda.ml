@@ -39,6 +39,7 @@ let add_new_export' exported_mutable (descr : Flambdaexport.descr) =
 
 let create ~compilation_unit ~expr =
   let constant_closures =
+    (* CR mshinwell: try to move to flambdautils or somewhere else? *)
     let all_closures =
       let closures = ref Set_of_closures_id.Set.empty in
       Flambdaiter.iter_on_closures (fun cl _ ->
@@ -53,7 +54,8 @@ let create ~compilation_unit ~expr =
       not_constants.not_constant_closure
   in
   let sets_of_closures, closures, kept_arguments =
-    (* CR mshinwell: try to simplify *)
+    (* CR mshinwell: try to simplify.  This should probably move to
+       Flambdautils. *)
     let cf_map = ref Closure_id.Map.empty in
     let fun_id_map = ref Set_of_closures_id.Map.empty in
     let argument_kept = ref Set_of_closures_id.Map.empty in
@@ -179,7 +181,7 @@ let find_approx_descr t approx =
     (* For export IDs, look in the table of values that the current unit
        exports, and then in the table that contains the values that all
        imported units export. *)
-    begin match Export_id.Map.find export_id t.ex_table with
+    begin match Export_id.Map.find export_id t.current_unit.values with
     | descr -> Some descr
     | exception Not_found ->
       begin match
@@ -191,9 +193,9 @@ let find_approx_descr t approx =
     end
   | Value_symbol symbol ->
     let descr =
-      match Symbol.Map.find symbol t.symbol_to_export_id with
+      match Symbol.Map.find symbol t.current_unit.symbol_id with
       | export_id ->
-        begin match Export_id.Map.find export_id t.ex_table with
+        begin match Export_id.Map.find export_id t.current_unit.values with
         | descr -> Some descr
         | exception Not_found -> None
         end
@@ -205,9 +207,9 @@ let find_approx_descr t approx =
       if Compilenv.is_predefined_exception sym then None
       else
         let exported = Compilenv.approx_for_global sym.sym_unit in
-        match Symbol.Map.find sym export.symbol_id with
+        match Symbol.Map.find sym t.imported_units.symbol_id with
         | Some export_id ->
-          begin match Flambdaexport.find_description export_id exported with
+          begin match Flambdaexport.descr_for_export_id export_id exported with
           | Some descr -> descr
           | None -> None
           end
@@ -998,21 +1000,6 @@ and fclambda_and_approx_for_function_declarations t env
           not (Env.variable_has_symbol_equality env specialised_to))
         specialised_args
   in
-  (* Identify which variables really are needed in the closure value that
-     will exist at runtime to correspond to [fundecls]. *)
-  let closure_needs_variable id =
-    (* CR mshinwell: I'm still a bit hazy on this, we should think about
-       it more.  See email thread "kept_fv" *)
-    let cv = Var_within_closure.wrap id in
-    not (is_constant id)
-      || (Var_within_closure.Set.mem cv used_variable_within_closure)
-  in
-  (* CR mshinwell: can this move up above?
-     XXX also check below - use of [used_fv]
-  *)
-  let fvs_with_approxs =
-    Variable.Map.filter (fun fv _ -> closure_needs_variable fv) fvs_with_approxs
-  in
   (* Determine the runtime layout of the set of closures. *)
   Flambda_lay_out_closure.assign_offsets ...
   (* Build the export description of the set of closures.
@@ -1403,13 +1390,12 @@ let id_and_approximation_of_global_module_block t =
   in
   root_id, Value_id root_id
 
-let convert (type a) t ~(expr : a Flambda.t)
+let convert (type a) ~(expr : a Flambda.t)
       ~(constants : a Flambda.t Symbol.Map.t)
       ~(exported : Flambdaexport.exported)
       : unit Flambda.t * Clambda.ulambda * Flambdaexport.approx =
-  let constants =
-    Flambda_share_constants.compute_sharing ~constants
-      ~fclambda_for_expr:(fclambda_for_expr t Env.empty)
+  let t =
+    create ~compilation_unit:(Compilenv.current_unit ()) ~expr
   in
   let closures =
     let closures = ref Closure_id.Map.empty in
@@ -1448,12 +1434,16 @@ let convert (type a) t ~(expr : a Flambda.t)
   in
   (* end of stuff not looked at *)
   let exported =
+(*
     (* Lay out closures for the current compilation unit, assigning offsets
        for function identifiers and free variables.  A single table
        suffices, since all of the relevant ids are globally unique. *)
     let fun_offset_table, fv_offset_table =
       Flambda_lay_out_closure.assign_offsets ~expr ~constants
     in
+
+not here any more...
+*)
     (* Offsets into closures defined in external units, that are used by the
        current unit, need to be exported by the current unit. *)
     (* CR mshinwell: reference the other comment, whereever it is *)
@@ -1483,9 +1473,13 @@ let convert (type a) t ~(expr : a Flambda.t)
     E.create ~fun_offset_table:(add_ext_offset_fun fun_offset_table)
       ~fv_offset_table:(add_ext_offset_fv fv_offset_table)
   in
-  Compilenv.set_export_info export;
+
+(* This part should be separate, since it side-effects Compilenv *)
+  Compilenv.set_export_info (Flambdaexport.freeze t.current_unit);
   Symbol.Map.iter (fun sym cst ->
        let lbl = Symbol.string_of_linkage_name sym.sym_label in
        Compilenv.add_exported_constant lbl)
     C.constants;
-  fclambda_and_approx_for_expr t env expr
+  let flambda, clambda, approx = fclambda_and_approx_for_expr t env expr in
+  Flambdacheck.check flambda ~current_compilation_unit ~flambdasym:true;
+  clambda, approx

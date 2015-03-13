@@ -99,6 +99,7 @@ type exported = private {
 type exported_mutable = {
   values : descr Export_id.Tbl.t Compilation_unit.Tbl.t;
   globals : approx Ident.Tbl.t;
+  (* CR mshinwell: symbol_id is a bad name.  symbol_to_export_id? *)
   symbol_id : Export_id.t Symbol.Tbl.t;
   mutable constants : Symbol.Set.t;
   sets_of_closures :
@@ -110,6 +111,8 @@ type exported_mutable = {
 }
 
 val empty_export : exported
+
+val descr_for_export_id : exported -> Export_id.t -> descr option
 
 val freeze : exported_mutable -> exported
 
