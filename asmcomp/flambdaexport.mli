@@ -109,40 +109,9 @@ type exported_mutable = {
   offset_fv : int Var_within_closure.Map.t;
 }
 
-val freeze : exported_mutable -> exported
-
-
-
-
-  val empty : t
-
-  val find_declaration
-     : t
-    -> Closure_id.t
-    -> unit Flambda.function_declarations
-
-  val get_fun_offset_exn : t -> Closure_id.t -> int
-  val get_fv_offset_exn : t -> Var_within_closure.t -> int
-
-  (* CR mshinwell: bad function name *)
-  val closure_declaration_position_exn
-     : t
-    -> Closure_id.t
-    -> unit Flambda.function_declarations
-
-  val set_of_closures_declaration_position_exn
-     : t
-    -> Set_of_closures_id.t
-    -> unit Flambda.function_declarations
-
-  val is_set_of_closures_constant
-     : t
-    -> Set_of_closures_id.t
-    -> bool
-end
-
-type exported = Exported.t
 val empty_export : exported
+
+val freeze : exported_mutable -> exported
 
 (** Union of export information.  Verifies that there are no identifier
     clashes. *)
