@@ -23,21 +23,140 @@
 
 open Abstract_identifiers
 
-module E = Flambda_exports_by_unit
 module Env = Flambda_to_clambda_env
 
-(* A value of type [t] holds "global" state that builds up whilst the
-   functions in this module traverse Flambda trees.  There are also
-   locally-scoped "environments" of type [Env.t]. *)
 type t = {
-  exported : E.t;
-  symbol_alias : Symbol.t Symbol.Tbl.t;
-  global : (int, Flambdaexport.approx) Hashtbl.t;
-  mutable symbol_to_export_id : Export_id.t Symbol.Map.t;
-  mutable ex_table : Flambdaexport.descr Export_id.Map.t;
+  current_unit : Flambdaexport.exported_mutable;
+  imported_units : Flambdaexport.exported;
+
+
   mutable unit_approx : Flambdaexport.approx;
   mutable can_be_compiled_to_clambda_constant : Variable.Set.t;
 }
+
+type ('a, 'b) which_unit = Current_unit of 'a | Imported_unit of 'b
+
+let get_fun_offset t (id : Closure_id.t) =
+  let offset_fun =
+    if Closure_id.in_current_compilation_unit id then
+      t.current_unit.offset_fun
+    else
+      t.imported_units.offset_fun
+  in
+  try Closure_id.Map.find id offset_fun
+  with Not_found ->
+    Misc.fatal_errorf "Offset for function not found: %a"
+      Closure_id.print id
+
+let get_fv_offset t (id : Var_within_closure.t) =
+  let offset_fv =
+    if Var_within_closure.in_current_compilation_unit id then
+      t.current_unit.offset_fv
+    else
+      t.imported_units.offset_fv
+  in
+  try Var_within_closure.Map.find id offset_fv
+  with Not_found ->
+    Misc.fatal_errorf "Offset for fv not found: %a"
+      Var_within_closure.print id
+
+let get_local_fv_offset_from_var_exn t (var : Variable.t) =
+  let id = Var_within_closure.wrap var in
+  try Var_within_closure.Map.find id t.current_unit.offset_fv
+  with Not_found ->
+    Misc.fatal_errorf "Offset for local fv not found: %a"
+      Var_within_closure.print id
+
+let find_closure_declaration t (id : Closure_id.t) =
+  match Closure_id.Map.find id t.current_unit.closures with
+  | decls -> Current_unit decls
+  | exception Not_found ->
+    match Closure_id.Map.find id t.imported_units.closures with
+    | decls -> Imported_unit decls
+    | exception Not_found ->
+      Misc.fatal_errorf "Could not find declaration for closure: %a"
+        Closure_id.print id
+
+let find_set_of_closures_declaration t (id : Closure_id.t) =
+  match Set_of_closures_id.Map.find id t.current_unit.sets_of_closures with
+  | decls -> Current_unit decls
+  | exception Not_found ->
+    match Set_of_closures_id.Map.find id t.imported_units.sets_of_closures with
+    | decls -> Imported_unit decls
+    | exception Not_found ->
+      Misc.fatal_errorf "Could not find declaration for set of closures: %a"
+        Set_of_closures_id.print id
+
+let is_set_of_closures_constant t (id : Set_of_closures_id.t) =
+  match find_set_of_closures_declaration t id with
+  | Current_unit decls ->
+    Set_of_closures_id.Set.mem t.current_unit.constant_closures decls.ident
+  | Imported_unit decls ->
+    Set_of_closures_id.Set.mem t.imported_units.constant_closures decls.ident
+
+let is_set_of_closures_local_and_constant t (id : Set_of_closures_id.t) =
+  match find_set_of_closures_declaration t id with
+  | Current_unit decls ->
+    Set_of_closures_id.Set.mem t.current_unit.constant_closures decls.ident
+  | Imported_unit decls -> false
+
+let function_arity t (id : Closure_id.t) =
+  Flambdautils.function_arity (find_closure_declaration t id)
+
+(* [find_approx_descr t approx] obtains the approximation description
+   referenced by [approx] by looking in the maps of exported approximations
+   for the current and the imported compilation units. *)
+(* CR mshinwell: I inlined all the cases here and wrote out all the Not_found
+   cases explicitly, to try to make it clearer what's going on.  However it
+   still seems really complicated.  Can this be simplified?  It seems like
+   we're mixing up stages in some way (export IDs vs. symbols); also, the
+   Value_symbol case in particular seems dubious.  For exmaple, if we find
+   an export ID in [t.symbol_to_export_id] then why isn't the failure to
+   find the export ID in [t.ex_table] a fatal error?
+*)
+let find_approx_descr t approx =
+  match approx with
+  | Value_unknown -> None
+  | Value_id export_id ->
+    (* For export IDs, look in the table of values that the current unit
+       exports, and then in the table that contains the values that all
+       imported units export. *)
+    begin match Export_id.Map.find export_id t.ex_table with
+    | descr -> Some descr
+    | exception Not_found ->
+      begin match
+        Flambdaexport.find_description export_id (Compilenv.approx_env ())
+      with
+      | descr -> Some descr
+      | exception Not_found -> None
+      end
+    end
+  | Value_symbol symbol ->
+    let descr =
+      match Symbol.Map.find symbol t.symbol_to_export_id with
+      | export_id ->
+        begin match Export_id.Map.find export_id t.ex_table with
+        | descr -> Some descr
+        | exception Not_found -> None
+        end
+      | exception Not_found -> None
+    in
+    match descr with
+    | Some descr -> descr
+    | None ->
+      if Compilenv.is_predefined_exception sym then None
+      else
+        let exported = Compilenv.approx_for_global sym.sym_unit in
+        match Symbol.Map.find sym export.symbol_id with
+        | Some export_id ->
+          begin match Flambdaexport.find_description export_id exported with
+          | Some descr -> descr
+          | None -> None
+          end
+        | None -> None
+
+
+
 
 let create () =
   let t =
