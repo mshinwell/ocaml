@@ -28,11 +28,69 @@ module Env = Flambda_to_clambda_env
 type t = {
   current_unit : Flambdaexport.exported_mutable;
   imported_units : Flambdaexport.exported;
-
-
-  mutable unit_approx : Flambdaexport.approx;
+  unit_approx : Flambdaexport.approx;
   mutable can_be_compiled_to_clambda_constant : Variable.Set.t;
 }
+
+let add_new_export' exported_mutable (descr : Flambdaexport.descr) =
+  let id = Export_id.create (Compilenv.current_unit ()) in
+  Export_id.Tbl.add id descr exported_mutable.values;
+  id
+
+let create ~compilation_unit ~expr =
+  let constant_closures =
+    let all_closures =
+      let closures = ref Set_of_closures_id.Set.empty in
+      Flambdaiter.iter_on_closures (fun cl _ ->
+          closures := Set_of_closures_id.Set.add cl.cl_fun.ident !closures)
+        expr;
+      !closures
+    in
+    let not_constants =
+      Flambdaconstants.not_constants ~compilation_unit ~for_clambda:true expr
+    in
+    Set_of_closures_id.Set.diff all_closures
+      not_constants.not_constant_closure
+  in
+  let sets_of_closures, closures, kept_arguments =
+    (* CR mshinwell: try to simplify *)
+    let cf_map = ref Closure_id.Map.empty in
+    let fun_id_map = ref Set_of_closures_id.Map.empty in
+    let argument_kept = ref Set_of_closures_id.Map.empty in
+    let aux ({ cl_fun } as cl) _ =
+      let add var _ map =
+        Closure_id.Map.add (Closure_id.wrap var) cl_fun map in
+      cf_map := Variable.Map.fold add cl_fun.funs !cf_map;
+      fun_id_map :=
+        Set_of_closures_id.Map.add cl.cl_fun.ident cl.cl_fun !fun_id_map;
+      argument_kept :=
+        Set_of_closures_id.Map.add cl.cl_fun.ident
+          (Flambdautils.unchanging_params_in_recursion cl_fun) !argument_kept
+    in
+    Flambdaiter.iter_on_closures aux expr;
+    !fun_id_map, !cf_map, !argument_kept
+  in
+  let exported_mutable = {
+    values = Compilation_unit.Tbl.create ();
+    globals = Ident.Tbl.create ();
+    symbol_id = Symbol.Tbl.create ();
+    constants = Symbol.Set.empty;
+    sets_of_closures;
+    closures;
+    constant_closures;
+    offset_fun =
+    offset_fv =
+  } in
+  let unit_approx =
+    Value_id (add_new_export' exported_mutable (Value_constptr 0));
+  in
+  let t =
+    { current_unit = exported_mutable;
+      imported_units;
+      unit_approx;
+    }
+  in
+  t
 
 type ('a, 'b) which_unit = Current_unit of 'a | Imported_unit of 'b
 
@@ -155,21 +213,6 @@ let find_approx_descr t approx =
           end
         | None -> None
 
-
-
-
-let create () =
-  let t =
-    { exported = E.create ();
-      symbol_alias = Symbol.Tbl.create 42;
-      global = Hashtbl.create 42;
-      ex_table = Export_id.Map.empty;
-      unit_approx = Value_unknown;
-    }
-  in
-  t.unit_approx <- Value_id (add_new_export t (Value_constptr 0));
-  t
-
 type constant_classification =
   | Constant_accessed_via_symbol of Symbol.t
   | Constant_not_accessed_via_symbol
@@ -218,23 +261,20 @@ let structured_constant_for_symbol (sym : Symbol.t)
   (* | Uconst (Uconst_ref (None, Some cst)) -> cst *)
   | _ -> assert false
 
-(* Record that the global at position [index] (within the global block for
-   the current compilation unit) has approximation [approx]. *)
-let add_approx_for_global t ~index ~approx =
-  Hashtbl.add t.global index approx
-
-(* Find the approximation for a global in the current compilation unit. *)
-let approx_for_global t ~index =
-  try Hashtbl.find t.global index
-  with Not_found -> Misc.fatal_errorf "No global at index %d" i
-
 (* Given a description of a value to be exported from the current
    compilation unit, assign it a new export ID, and record the mapping from
    ID to description. *)
-let add_new_export t (descr : Flambdaexport.descr) =
-  let id = Export_id.create (Compilenv.current_unit ()) in
-  t.ex_table <- Export_id.Map.add id descr t.ex_table;
-  id
+let add_new_export t descr = add_new_export' t.current_unit descr
+
+(* Record that the global at position [index] (within the global block for
+   the current compilation unit) has approximation [approx]. *)
+let add_approx_for_global t ~index ~approx =
+  Ident.Tbl.add t.current_unit.globals index approx
+
+(* Find the approximation for a global in the current compilation unit. *)
+let approx_for_global t ~index =
+  try Ident.Tbl.find t.current_unit.globals index
+  with Not_found -> Misc.fatal_errorf "No global at index %d" i
 
 (* "fclambda" means a pair of an Flambda term, rewritten to have references
    to symbols as required for exporting, together with a Clambda term.  The
@@ -973,6 +1013,8 @@ and fclambda_and_approx_for_function_declarations t env
   let fvs_with_approxs =
     Variable.Map.filter (fun fv _ -> closure_needs_variable fv) fvs_with_approxs
   in
+  (* Determine the runtime layout of the set of closures. *)
+  Flambda_lay_out_closure.assign_offsets ...
   (* Build the export description of the set of closures.
      We have to start with [Value_unknown] in [results], since
      [fclambda_and_approx_for_closure_declaration] needs to
@@ -1103,7 +1145,7 @@ and clambda_for_application t env ~direct ~ufundecl ~uargs ~dbg =
 (* Given the approximation for a closure (which always corresponds to a single
    function), find the approximation of the function's result, if known. *)
 and approx_for_application t ~(fundecl_approx : Flambdaexport.approx) =
-  match E.find_approx_descr t t fundecl_approx with
+  match E.find_approx_descr t fundecl_approx with
   | None -> Value_unknown
   | Some fundecl_descr ->
     match fundecl_descr with

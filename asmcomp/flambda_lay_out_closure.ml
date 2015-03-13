@@ -1,5 +1,6 @@
 open Abstract_identifiers
 
+(*
 (* [fun_offset_table] associates a function label to its offset inside a
    closure *)
 let fun_offset_table = ref Closure_id.Map.empty
@@ -12,6 +13,7 @@ let rec iter (expr : _ Flambda.t) =
   | Fset_of_closures({cl_fun = funct; cl_free_var = fv}, _) ->
     iter_closure funct fv
   | _ -> ()
+*)
 
 and iter_closure functs fv =
   let funct = Variable.Map.bindings functs.funs in
@@ -42,14 +44,16 @@ and iter_closure functs fv =
   in
   let fv_offset, _ = List.fold_left aux_fv_offset
       (!fv_offset_table, fv_pos) fv in
-
+  fun_offset, fv_offset
+(*
   fun_offset_table := fun_offset;
   fv_offset_table := fv_offset;
 
   List.iter (fun (_, { Flambda. body }) ->
       Flambdaiter.iter_toplevel iter body)
     funct
-
+*)
+(*
 let assign_offsets ~expr ~constants =
   let run flam = Flambdaiter.iter_toplevel iter flam in
   run expr;
@@ -58,6 +62,7 @@ let assign_offsets ~expr ~constants =
   fun_offset_table := Closure_id.Map.empty;
   fv_offset_table := Var_within_closure.Map.empty;
   result
+*)
 
 let reexported_offsets ~extern_fun_offset_table ~extern_fv_offset_table ~expr
       ~constants =
