@@ -22,11 +22,38 @@
 (***********************************************************************)
 
 open Abstract_identifiers
-module Env = Flambda_to_clambda_env
+
+module Symbol_alias_db : sig
+  type t
+
+  val create : unit -> t
+  val canonical_symbol : t -> Symbol.t -> Symbol.t
+  val set_symbol_alias : t -> Symbol.t -> Symbol.t -> unit
+end = struct
+  type t = Symbol.t Symbol.Table.t
+
+  let create () = Symbol.Table.create ()
+
+  (* XXX there used to be something doing this within value descriptions,
+     where does this happen now? *)
+  let rec canonical_symbol t s =
+    try
+      let s' = Symbol.Tbl.find t.symbol_alias s in
+      let s'' = canonical_symbol t s' in
+      if s' != s'' then Symbol.Tbl.replace t.symbol_alias s s'';
+      s''
+    with Not_found -> s
+
+  let set_symbol_alias t s1 s2 =
+    let s1' = canonical_symbol t s1 in
+    let s2' = canonical_symbol t s2 in
+    if s1' <> s2' then Symbol.Tbl.add t.symbol_alias s1' s2'
+end
 
 type 'a t = {
   current_unit : 'a Flambdaexport.exported_mutable;
   imported_units : Flambdaexport.exported;
+  symbol_alias_db : Symbol_alias_db.t;
   unit_approx : Flambdaexport.approx;
 }
 
@@ -101,35 +128,31 @@ let function_arity t (id : Closure_id.t) =
 
 (* [find_approx_descr t approx] obtains the approximation description
    referenced by [approx] by looking in the maps of exported approximations
-   for the current and the imported compilation units. *)
-(* CR mshinwell: I inlined all the cases here and wrote out all the Not_found
-   cases explicitly, to try to make it clearer what's going on.  However it
-   still seems really complicated.  Can this be simplified?  It seems like
-   we're mixing up stages in some way (export IDs vs. symbols); also, the
-   Value_symbol case in particular seems dubious.  For exmaple, if we find
-   an export ID in [t.symbol_to_export_id] then why isn't the failure to
-   find the export ID in [t.ex_table] a fatal error?
-*)
+   for the current and the imported compilation units.  This function may
+   cause a .cmx file to be read. *)
 let find_approx_descr t approx =
   match approx with
   | Value_unknown -> None
   | Value_id export_id ->
-    (* For export IDs, look in the table of values that the current unit
-       exports, and then in the table that contains the values that all
-       imported units export. *)
     begin match Export_id.Map.find export_id t.current_unit.values with
     | descr -> Some descr
     | exception Not_found ->
+      (* XXX there's something a bit weird going on here; this doesn't try
+         to load any .cmx files.  Needs a comment (or fixing) *)
       begin match
-        Flambdaexport.find_description export_id (Compilenv.approx_env ())
+        Flambdaexport.find_description export_id t.imported_units.ex_values
       with
       | descr -> Some descr
       | exception Not_found -> None
       end
     end
-  | Value_symbol symbol ->
+  | Value_symbol sym ->
+    (* Try to resolve the symbol to a value being exported by the current
+       unit.  If that fails, attempt to load the .cmx file for the unit known
+       to hold the symbol (if it has not been loaded already), and then try
+       the lookup there. *)
     let descr =
-      match Symbol.Map.find symbol t.current_unit.symbol_id with
+      match Symbol.Map.find sym t.current_unit.symbol_id with
       | export_id ->
         begin match Export_id.Map.find export_id t.current_unit.values with
         | descr -> Some descr
@@ -141,7 +164,8 @@ let find_approx_descr t approx =
     | Some descr -> descr
     | None ->
       if Compilenv.is_predefined_exception sym then None
-      else
+      else begin
+        (* [approx_for_global] is the .cmx-loading step. *)
         let exported = Compilenv.approx_for_global sym.sym_unit in
         match Symbol.Map.find sym t.imported_units.symbol_id with
         | Some export_id ->
@@ -150,23 +174,7 @@ let find_approx_descr t approx =
           | None -> None
           end
         | None -> None
-
-(* Return the canonical symbol for the value attributed to the symbol [s]. *)
-(* XXX there used to be something doing this within value descriptions,
-   where does this happen now? *)
-let rec canonical_symbol t s =
-  try
-    let s' = Symbol.Tbl.find t.symbol_alias s in
-    let s'' = canonical_symbol t s' in
-    if s' != s'' then Symbol.Tbl.replace t.symbol_alias s s'';
-    s''
-  with Not_found -> s
-
-(* Record that symbols [s1] and [s2] are aliases for the same value. *)
-let set_symbol_alias t s1 s2 =
-  let s1' = canonical_symbol t s1 in
-  let s2' = canonical_symbol t s2 in
-  if s1' <> s2' then Symbol.Tbl.add t.symbol_alias s1' s2'
+      end
 
 (* Given a description of a value to be exported from the current
    compilation unit, assign it a new export ID, and record the mapping from
@@ -202,7 +210,76 @@ let approx_for_global t ~index =
 
 (* "fclambda" means a pair of an Flambda term, rewritten to have references
    to symbols as required for exporting, together with a Clambda term.  The
-   associated approximation of the Clambda term is also often present. *)
+   associated approximation of the Clambda term is also often present.
+   Locally-scoped environments of type [Env.t] are present throughout the
+   translation.  These give information about variables currently in scope.
+*)
+
+module Env : sig
+  type t
+
+  val create : unit -> t
+
+  (* [add_substitution] assigns a fresh [Ident.t] to the given variable and
+     records the mapping within the environment.
+
+     The mapping from variables to identifiers may be retrieved using
+     [identifier_assignment].
+
+     Within the environment will also be recorded a mapping from the variable
+     to the given Clambda term, export approximation and (optionally) Flambda
+     term. *)
+  val add_substitution
+     : t
+    -> Variable.t
+    -> _ Flambda.t option
+    -> Clambda.ulambda
+    -> Flambdaexport.approx
+    -> Ident.t * t
+
+  (* [find_substitution_for_variable] retrieves a substitution previously
+     added with [add_substitution_for_variable].  If [None] was provided as the
+     Flambda argument to [add_unique_id_and_substitution], [default_flambda]
+     is returned as the Flambda term. *)
+  val find_substitution
+     : t
+    -> Variable.t
+    -> default_flambda:unit Flambda.t
+    -> (unit Flambda.t * Clambda.ulambda * Flambdaexport.approx) option
+end = struct
+
+end
+
+let fclambda_and_approx_for_symbol t env sym =
+  (* Ensure all symbols are replaced with their canonical representative. *)
+  let sym = Symbol_alias_db.canonical_symbol t.symbol_alias_db sym in
+  let linkage_name = Symbol.string_of_linkage_name sym.sym_label in
+  let label = Compilenv.canonical_symbol linkage_name in
+  (* CR pchambart for pchambart: Should delay the conversion a bit more
+     mshinwell: I turned this comment into a CR.  What does it mean? *)
+  Fsymbol sym, Uconst (Uconst_ref (label, None)), Value_symbol sym
+
+(* Sometimes we need to move an Flambda expression (bound to some variable) to
+   be the defining expression of a symbol, with the original expression
+   replaced by a reference to the symbol.  The typical scenario is for
+   expressions defining certain kinds of structured constants.  What has to be
+   done is to update the environment with a substitution to put in place the
+   reference(s) to the symbol; and to record separately the defining
+   expression. *)
+let make_defining_expr_of_symbol ?symbol t env defining_expr =
+  let symbol =
+    match symbol with
+    | None -> Compilenv.new_const_symbol' ()
+    | Some symbol -> symbol
+  in
+  let reference_expr, ureference_expr, approx =
+    fclambda_and_approx_for_symbol t env symbol
+  in
+  let id, env =
+    Env.add_substitution env reference_expr ureference_expr approx
+  in
+  (* XXX (still need to reconcile with [add_constant]) *)
+  symbol, id, env
 
 let fclambda_and_approx_for_constant t env ~(cst : Flambda.const) =
   let flambda, approx =
@@ -273,14 +350,6 @@ let fclambda_and_approx_for_var t env ~var =
       Variable.print var
       Env.print env
 
-let rec fclambda_and_approx_for_symbol t env sym =
-  let sym = canonical_symbol t sym in
-  let linkage_name = Symbol.string_of_linkage_name sym.sym_label in
-  let label = Compilenv.canonical_symbol linkage_name in
-  (* CR pchambart for pchambart: Should delay the conversion a bit more
-     mshinwell: I turned this comment into a CR.  What does it mean? *)
-  Fsymbol sym, Uconst (Uconst_ref (label, None)), Value_symbol sym
-
 let rec fclambda_and_approx_for_primitive t env ~(primitive : Lambda.primitive)
       ~args ~dbg : unit Flambda.t * Clambda.ulambda * Flambdaexport.descr =
   match primitive, args, dbg with
@@ -345,7 +414,7 @@ let rec fclambda_and_approx_for_primitive t env ~(primitive : Lambda.primitive)
        of the field itself, if we know enough about the block. *)
     let block, ublock, block_approx = fclambda_and_approx_for_expr t env arg in
     let approx =
-      match E.find_approx_descr t block_approx with
+      match find_approx_descr t block_approx with
       | Some (Value_block (_, fields)) ->
         if index >= 0 && index < Array.length fields then fields.(index)
         else Value_unknown
@@ -376,9 +445,7 @@ and fclambda_and_approx_for_let t ~env ~is_assigned ~var ~rhs ~body
     if approx_never_changes_during_execution_of_body then approx
     else Value_unknown
   in
-  let id, env =
-    Env.add_unique_id_and_substitution env var (Some rhs) urhs approx
-  in
+  let id, env = Env.add_substitution env var (Some rhs) urhs approx in
   if not is_constant then begin
     (* We still require a [let]-binding in the Clambda expression. *)
     let body, ubody, body_approx = fclambda_and_approx_for_expr t env body in
@@ -392,7 +459,7 @@ and fclambda_and_approx_for_let t ~env ~is_assigned ~var ~rhs ~body
 
 and fclambda_and_approx_for_let_rec t env defs body =
   let consts, not_consts =
-    List.partition (fun (id, _) -> E.is_constant t.exported id) defs
+    List.partition (fun (id, _) -> is_constant t.exported id) defs
   in
   (* Add substitutions to the environment for those variables bound by the
      [let rec] whose values we know are constant.  Also note down which of
@@ -438,7 +505,7 @@ and fclambda_and_approx_for_let_rec t env defs body =
              new symbol, which may be referenced from any of the right-hand
              sides. *)
           let id, sym, env =
-            Env.add_substitution_via_fresh_symbol env var def udef def_approx
+            Env.add_substitution_via_symbol env var def udef def_approx
           in
           env, (var, id, sym, def)::acc)
       (env, []) consts
@@ -599,7 +666,7 @@ and fclambda_and_approx_for_variable_in_closure t env
     fclambda_and_approx_for_expr env closure
   in
   let approx =
-    match E.find_approx_descr t closure_approx with
+    match find_approx_descr t closure_approx with
     | Some (Value_closure { closure = { bound_var = bound_vars; } }) ->
       begin match Var_within_closure.Map.find var bound_vars with
       | approx -> approx
@@ -643,7 +710,7 @@ and fclambda_and_approx_for_variable_in_closure t env
 and fclambda_and_approx_for_closure_reference t env
       { fu_closure = lam; fu_fun = id; fu_relative_to = rel } =
   let ulam, approx =
-    if E.is_function_local_and_constant t.exported id then
+    if is_function_local_and_constant t.exported id then
       (* Only references to functions declared in the current module should
          need rewriting to a symbol.  For external functions this should
          already have been done when the external compilation unit was
@@ -655,7 +722,7 @@ and fclambda_and_approx_for_closure_reference t env
         fclambda_and_approx_for_expr env lam
       in
       let approx =
-        match E.find_approx_descr t fun_approx with
+        match find_approx_descr t fun_approx with
         | Some (Value_set_of_closures closure)
         | Some (Value_closure { closure }) ->
           Value_id (add_new_export (Value_closure { fun_id = id; closure }))
@@ -683,7 +750,7 @@ and fclambda_and_approx_for_closure_reference t env
         approx
   in
   let relative_offset =
-    let offset = E.get_fun_offset t.exported id in
+    let offset = get_fun_offset t.exported id in
     match rel with
     | None -> offset
     | Some rel -> offset - get_fun_offset rel
@@ -717,9 +784,9 @@ and fclambda_and_approx_for_function_declaration t env fun_id
        of their free variables should have satisfied [closure_needs_variable],
        above. *)
     assert ((not closure_is_constant) || List.length fvs = 0);
-    let fun_offset = E.get_fun_offset t.exported closure_id in
+    let fun_offset = get_fun_offset t.exported closure_id in
     List.fold_left (fun env (fv, (lam, ulam)) ->
-        match E.get_local_fv_offset_from_var_exn t.exported fv with
+        match get_local_fv_offset_from_var_exn t.exported fv with
         | var_offset ->
           (* CR mshinwell for pchambart: [pos] can be negative, right? *)
           let pos = var_offset - fun_offset in
@@ -769,7 +836,7 @@ and fclambda_and_approx_for_function_declaration t env fun_id
         else
           (* If the set of closures is non-constant, recursive calls
              translate to accesses through a closure value. *)
-          let offset = E.get_fun_offset t.exported closure_var in
+          let offset = get_fun_offset t.exported closure_var in
           (* Note that the resulting offset may be negative, in the case
              where we are accessing an earlier (= with lower address)
              closure in a block holding multiple closures. *)
@@ -867,7 +934,7 @@ and fclambda_and_approx_for_function_declarations t env
       (* [fv] maps free variables of the function declaration to Flambda
          expressions computing their values. *)
       (fv : _ Flambda.t Variable.Map.t) =
-  let is_constant = E.is_set_of_closures_local_and_constant fundecls.ident in
+  let is_constant = is_set_of_closures_local_and_constant fundecls.ident in
   (* The environment parameter used for non-constant closures. *)
   let env_var = Ident.create "env" in
   (* The label used for constant closures. *)
@@ -986,7 +1053,7 @@ and fclambda_and_approx_for_function_declarations t env
           cl_specialised_arg = spec_arg },
         ())
     in
-    if E.is_function_local_and_constant t.exported ufunct.ident then
+    if is_function_local_and_constant t.exported ufunct.ident then
       let sym = add_constant t expr closure_ex_id in
       Fsymbol (sym, ())
     else expr
@@ -1056,7 +1123,7 @@ and clambda_for_application t env ~direct ~ufundecl ~uargs ~dbg =
 (* Given the approximation for a closure (which always corresponds to a single
    function), find the approximation of the function's result, if known. *)
 and approx_result_of_application t ~(fundecl_approx : Flambdaexport.approx) =
-  match E.find_approx_descr t fundecl_approx with
+  match find_approx_descr t fundecl_approx with
   | None -> Value_unknown
   | Some fundecl_descr ->
     match fundecl_descr with
@@ -1143,7 +1210,7 @@ and fclambda_and_approx_for_non_simple_application t env ~expr ~direct
          follow-up: we should just ensure simplify is run, perhaps.  The
          tighter the invariants are here, the better.
       *)
-      match E.find_approx_descr t fun_approx with
+      match find_approx_descr t fun_approx with
       (* We mark some calls as direct when it is unknown:
          for instance if simplify wasn't run before. *)
       | Some (Value_closure { closure_id }) when
@@ -1372,7 +1439,10 @@ let translate_and_update_compilenv ~compilation_unit ~(expr : _ Flambda.t)
   let unit_approx =
     Value_id (add_new_export' current_unit (Value_constptr 0))
   in
-  let t = { current_unit; imported_units; unit_approx; } in
+  let symbol_alias_db = Symbol_alias_db.create () in
+  let t =
+    { current_unit; imported_units; unit_approx; symbol_alias_db; }
+  in
   let expr, uexpr = fclambda_for_expr t (Env.create ()) expr in
   Flambdacheck.check expr ~current_compilation_unit:compilation_unit
     ~flambdasym:true;

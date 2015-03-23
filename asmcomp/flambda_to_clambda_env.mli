@@ -41,38 +41,6 @@ val create :
    access some globally-defined constant attached to a symbol is not. *)
 val clean : t -> t
 
-(* [add_substitution] assigns a fresh [Ident.t] to the given variable and
-   records the mapping within the environment.
-
-   The mapping from variables to identifiers may be retrieved using
-   [identifier_assignment].
-
-   Within the environment will also be recorded a mapping from the variable
-   to the given Clambda term, export approximation and (optionally) Flambda
-   term. *)
-val add_substitution
-   : t
-  -> Variable.t
-  -> _ Flambda.t option
-  -> Clambda.ulambda
-  -> Flambdaexport.approx
-  -> Ident.t * t
-
-(* [add_substitution_via_fresh_symbol] is like [add_substitution] but also
-   creates a new symbol that will be associated with the given terms.
-
-   [find_substitution], upon returning the values from a substitution, will
-   return Flambda and Clambda terms to access the symbol.  The mappings
-   from all such symbols to their defining Flambda and Clambda terms, along
-   with their approximations, may be retrieved using [symbol_assignment]. *)
-val add_substitution_via_fresh_symbol
-   : t
-  -> Variable.t
-  (* XXX maybe we don't need the flambda term. *)
-  -> _ Flambda.t option
-  -> Clambda.ulambda
-  -> Flambdaexport.approx
-  -> Ident.t * Symbol.t * t
 
 (* [add_substitution_via_known_symbol] is like [add_substitution
 val add_substitution_via_known_symbol
@@ -90,16 +58,6 @@ val symbol_assignment
    : t
   -> (unit Flambda.t option * Clambda.ulambda * Flambdaexport.approx)
       Symbol.Map.t
-
-(* [find_substitution_for_variable] retrieves a substitution previously
-   added with [add_substitution_for_variable].  If [None] was provided as the
-   Flambda argument to [add_unique_id_and_substitution], [default_flambda]
-   is returned as the Flambda term. *)
-val find_substitution
-   : t
-  -> Variable.t
-  -> default_flambda:unit Flambda.t
-  -> (unit Flambda.t * Clambda.ulambda * Flambdaexport.approx) option
 
 (*
 (* [add_approx t var approx] adds a mapping to [t] that identifies

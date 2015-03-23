@@ -61,7 +61,7 @@ val print_descr : Format.formatter -> descr -> unit
    information about the compilation unit.  A single record of this
    type is also used to hold the union of such information for all
    imported units, for speed of access. *)
-type exported = private {
+type exported = {
   sets_of_closures : unit Flambda.function_declarations Set_of_closures_id.Map.t;
   (** Code of exported functions indexed by function identifier *)
   closures : unit Flambda.function_declarations Closure_id.Map.t;
