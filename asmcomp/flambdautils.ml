@@ -590,12 +590,12 @@ let unchanging_params_in_recursion (decls : _ Flambda.function_declarations) =
   in
   Variable.Set.diff variables not_unchanging
 
-let all_closures expr =
-  let closures = ref Set_of_closures_id.Set.empty in
+let all_set_of_closures_identifiers =
+  let sets_of_closures = ref Set_of_closures_id.Set.empty in
   Flambdaiter.iter_on_closures (fun cl _ ->
-      closures := Set_of_closures_id.Set.add cl.cl_fun.ident !closures)
+      sets_of_closures := Set_of_closures_id.Set.add cl.cl_fun.ident !closures)
     expr;
-  !closures
+  !sets_of_closures
 
 let list_closures expr ~closures =
   let aux (expr : _ Flambda.t) =
@@ -620,3 +620,20 @@ let list_used_variables_within_closure expr =
   in
   Flambdaiter.iter aux expr;
   !used
+
+let sets_of_closures_and_closures_and_kept_arguments expr =
+  let cf_map = ref Closure_id.Map.empty in
+  let fun_id_map = ref Set_of_closures_id.Map.empty in
+  let argument_kept = ref Set_of_closures_id.Map.empty in
+  let aux ({ cl_fun } as cl) _ =
+    let add var _ map =
+      Closure_id.Map.add (Closure_id.wrap var) cl_fun map in
+    cf_map := Variable.Map.fold add cl_fun.funs !cf_map;
+    fun_id_map :=
+      Set_of_closures_id.Map.add cl.cl_fun.ident cl.cl_fun !fun_id_map;
+    argument_kept :=
+      Set_of_closures_id.Map.add cl.cl_fun.ident
+        (Flambdautils.unchanging_params_in_recursion cl_fun) !argument_kept
+  in
+  Flambdaiter.iter_on_closures aux expr;
+  !fun_id_map, !cf_map, !argument_kept

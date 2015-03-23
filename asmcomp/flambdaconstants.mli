@@ -29,3 +29,5 @@ val not_constants
   -> compilation_unit:Symbol.Compilation_unit.t
   -> 'a Flambda.t
   -> constant_result
+
+val constant_closures : _ Flambda.t -> Set_of_closures_id.Set.t

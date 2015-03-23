@@ -96,25 +96,33 @@ type exported = private {
 
 (* A partially mutable version of [exported], used when constructing export
    information for the current unit. *)
-type exported_mutable = {
+type 'a exported_mutable = {
   values : descr Export_id.Tbl.t Compilation_unit.Tbl.t;
   globals : approx Ident.Tbl.t;
   (* CR mshinwell: symbol_id is a bad name.  symbol_to_export_id? *)
   symbol_id : Export_id.t Symbol.Tbl.t;
-  mutable constants : Symbol.Set.t;
-  sets_of_closures :
-    unit Flambda.function_declarations Set_of_closures_id.Map.t;
-  closures : unit Flambda.function_declarations Closure_id.Map.t;
+  (* The expressions defining structured constants that the Flambda phase
+     will emit.  (Some structured constants are not emitted until Cmmgen;
+     they are not listed here.) *)
+  (* XXX note: [constants] in [exported] can be produced by using
+     [constants] here and [symbol_id] just above. *)
+  constants : unit Flambda.t Export_id.Tbl.t;
   constant_closures : Set_of_closures_id.Set.t;
+  sets_of_closures : 'a Flambda.function_declarations Set_of_closures_id.Map.t;
+  closures : 'a Flambda.function_declarations Closure_id.Map.t;
   offset_fun : int Closure_id.Tbl.t;
   offset_fv : int Var_within_closure.Tbl.t;
+  kept_arguments : Variable.Set.t Set_of_closures_id.Map.t;
 }
+
+val freeze_values
+   : _ exported_mutable
+  -> compilation_unit:Compilation_unit.t
+  -> descr Export_id.Map.t Compilation_unit.Map.t
 
 val empty_export : exported
 
 val descr_for_export_id : exported -> Export_id.t -> descr option
-
-val freeze : exported_mutable -> exported
 
 (** Union of export information.  Verifies that there are no identifier
     clashes. *)

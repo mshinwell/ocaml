@@ -132,8 +132,22 @@ val list_closures
   -> closures:'a Flambda.function_declarations Closure_id.Map.t ref
   -> unit
 
-val all_closures : _ Flambda.t -> Set_of_closures_id.Set.t
+val all_set_of_closures_identifiers : _ Flambda.t -> Set_of_closures_id.Set.t
 
 val list_used_variables_within_closure
    : _ Flambda.t
   -> Var_within_closure.Set.t
+
+val sets_of_closures_and_closures_and_kept_arguments
+   : 'a Flambda.t
+  -> 'a Flambda.function_declarations Set_of_closures_id.Map.t
+    * 'a Flambda.function_declaration Closure_id.Map.t
+    * Variable.Set.t Set_of_closures_id.Map.t
+
+val all_sets_of_closures_defined_by
+   : 'a Flambda.t
+  -> 'a Flambda.function_declarations Set_of_closures_id.Map.t
+
+val sets_of_closures_map_to_closures_map
+   : 'a Flambda.function_declarations Set_of_closures_id.Map.t
+  -> 'a Flambda.function_declaration_id.Map.t

@@ -25,8 +25,8 @@ open Abstract_identifiers
 
 module Env = Flambda_to_clambda_env
 
-type t = {
-  current_unit : Flambdaexport.exported_mutable;
+type 'a t = {
+  current_unit : 'a Flambdaexport.exported_mutable;
   imported_units : Flambdaexport.exported;
   unit_approx : Flambdaexport.approx;
   mutable can_be_compiled_to_clambda_constant : Variable.Set.t;
@@ -36,63 +36,6 @@ let add_new_export' exported_mutable (descr : Flambdaexport.descr) =
   let id = Export_id.create (Compilenv.current_unit ()) in
   Export_id.Tbl.add id descr exported_mutable.values;
   id
-
-let create ~compilation_unit ~expr =
-  let constant_closures =
-    (* CR mshinwell: try to move to flambdautils or somewhere else? *)
-    let all_closures =
-      let closures = ref Set_of_closures_id.Set.empty in
-      Flambdaiter.iter_on_closures (fun cl _ ->
-          closures := Set_of_closures_id.Set.add cl.cl_fun.ident !closures)
-        expr;
-      !closures
-    in
-    let not_constants =
-      Flambdaconstants.not_constants ~compilation_unit ~for_clambda:true expr
-    in
-    Set_of_closures_id.Set.diff all_closures
-      not_constants.not_constant_closure
-  in
-  let sets_of_closures, closures, kept_arguments =
-    (* CR mshinwell: try to simplify.  This should probably move to
-       Flambdautils. *)
-    let cf_map = ref Closure_id.Map.empty in
-    let fun_id_map = ref Set_of_closures_id.Map.empty in
-    let argument_kept = ref Set_of_closures_id.Map.empty in
-    let aux ({ cl_fun } as cl) _ =
-      let add var _ map =
-        Closure_id.Map.add (Closure_id.wrap var) cl_fun map in
-      cf_map := Variable.Map.fold add cl_fun.funs !cf_map;
-      fun_id_map :=
-        Set_of_closures_id.Map.add cl.cl_fun.ident cl.cl_fun !fun_id_map;
-      argument_kept :=
-        Set_of_closures_id.Map.add cl.cl_fun.ident
-          (Flambdautils.unchanging_params_in_recursion cl_fun) !argument_kept
-    in
-    Flambdaiter.iter_on_closures aux expr;
-    !fun_id_map, !cf_map, !argument_kept
-  in
-  let exported_mutable = {
-    values = Compilation_unit.Tbl.create ();
-    globals = Ident.Tbl.create ();
-    symbol_id = Symbol.Tbl.create ();
-    constants = Symbol.Set.empty;
-    offset_fun = Closure_id.Tbl.create 42;
-    offset_fv = Var_within_closure_id.Tbl.create 42;
-    sets_of_closures;
-    closures;
-    constant_closures;
-  } in
-  let unit_approx =
-    Value_id (add_new_export' exported_mutable (Value_constptr 0));
-  in
-  let t =
-    { current_unit = exported_mutable;
-      imported_units;
-      unit_approx;
-    }
-  in
-  t
 
 type ('a, 'b) which_unit = Current_unit of 'a | Imported_unit of 'b
 
@@ -215,24 +158,9 @@ let find_approx_descr t approx =
           end
         | None -> None
 
-type constant_classification =
-  | Constant_accessed_via_symbol of Symbol.t
-  | Constant_not_accessed_via_symbol
-  | Constant_closure
-  | Not_constant
-
-let constant_classification_for_expr t (expr : unit Flambda.t)
-      : constant_classification =
-  match expr with
-  | Fsymbol (sym, ()) -> Constant_accessed_via_symbol sym
-  | Fconst (_, ()) -> Constant_not_accessed_via_symbol
-  | Fset_of_closures ({ cl_fun }, _) ->
-    if E.is_set_of_closures_local_and_constant cl_fun.ident t.exported
-    then Constant_closure
-    else Not_constant
-  | _ -> Not_constant
-
 (* Return the canonical symbol for the value attributed to the symbol [s]. *)
+(* XXX there used to be something doing this within value descriptions,
+   where does this happen now? *)
 let rec canonical_symbol t s =
   try
     let s' = Symbol.Tbl.find t.symbol_alias s in
@@ -267,6 +195,19 @@ let structured_constant_for_symbol (sym : Symbol.t)
    compilation unit, assign it a new export ID, and record the mapping from
    ID to description. *)
 let add_new_export t descr = add_new_export' t.current_unit descr
+
+(* Record that [defining_expr] defines a constant with the given [export_id]
+   that will be added as a structured constant by this file, not Cmmgen. *)
+let add_constant t defining_expr export_id =
+  match Export_id.Tbl.find t.current_unit.constants export_id with
+  | exception Not_found ->
+    Export_id.Tbl.replace t.current_unit.constants export_id defining_expr
+  | existing_defining_expr ->
+    Misc.fatal_errorf "Constant with export ID %a already defined as %a, \
+        yet an attempt was made to redefine it as %a"
+      Export_id.print export_id
+      Flambdaprint.flambda existing_defining_expr
+      Flambdaprint.flambda defining_expr
 
 (* Record that the global at position [index] (within the global block for
    the current compilation unit) has approximation [approx]. *)
@@ -304,7 +245,7 @@ let fclambda_and_approx_for_constant t env ~(cst : Flambda.const) =
     | Fconst_base (Const_string _) | Fconst_immstring _
     | Fconst_float_array _ ->
       let id = add_new_export t Value_string in
-      Some (Fsymbol (add_constant (Fconst (cst, ())) id, ())), Value_id id
+      Some (Fsymbol (add_constant t (Fconst (cst, ())) id, ())), Value_id id
   in
   let clambda : Clambda.uconstant =
     let add_new_exported_structured_const ?not_shared cst : Clambda.uconstant =
@@ -412,7 +353,7 @@ let rec fclambda_and_approx_for_primitive t env ~(primitive : Lambda.primitive)
     | None -> Uprim (p, args, dbg), Value_id ex
     | Some arg_values ->
       (* CR mshinwell: probably shouldn't be Uprim.  Just store [args] *)
-      let sym = add_constant (Uprim (p, args, dbg)) ex in
+      let sym = add_constant t (Uprim (p, args, dbg)) ex in
       let cst : Clambda.ustructured_constant =
         Uconst_block (tag, arg_values)
       in
@@ -455,8 +396,7 @@ and fclambda_and_approx_for_let t ~env ~is_assigned ~var ~rhs ~body
     Env.add_unique_id_and_substitution env var (Some rhs) urhs approx
   in
   if not is_constant then begin
-    (* The [let]-binding must remain, in the Clambda code. *)
-    assert (constant_classification_for_expr t rhs = Not_constant);
+    (* We still require a [let]-binding in the Clambda expression. *)
     let body, ubody, body_approx = fclambda_and_approx_for_expr t env body in
     Flet (is_assigned, var, rhs, body, ()), Ulet (id, urhs, ubody), body_approx
   end else begin
@@ -522,10 +462,10 @@ and fclambda_and_approx_for_let_rec t env defs body =
   (* In the augmented environment, verify that all bindings deemed constant
      that we have not been able to directly substitute are assigned symbols. *)
   List.iter (fun (id, sym, def) ->
-      match constant_classification_for_expr t def with
+      match def with
+      | Fsymbol (sym', ()) ->
       (* CR mshinwell: we should have an example as to how a chain of
          symbol aliases can happen *)
-      | Constant_accessed_via_symbol sym' ->
         begin match symbol_id sym' with
         | None -> ()
         | Some eid -> add_symbol sym eid
@@ -1063,7 +1003,7 @@ and fclambda_and_approx_for_function_declarations t env
         ())
     in
     if E.is_function_local_and_constant t.exported ufunct.ident then
-      let sym = add_constant expr closure_ex_id in
+      let sym = add_constant t expr closure_ex_id in
       Fsymbol (sym, ())
     else expr
   in
@@ -1390,26 +1330,98 @@ let id_and_approximation_of_global_module_block t =
   in
   root_id, Value_id root_id
 
-let convert (type a) ~(expr : a Flambda.t)
-      ~(constants : a Flambda.t Symbol.Map.t)
-      ~(exported : Flambdaexport.exported)
-      : unit Flambda.t * Clambda.ulambda * Flambdaexport.approx =
-  let t =
-    create ~compilation_unit:(Compilenv.current_unit ()) ~expr
+let starting_state_for_current_unit ~expr =
+  let constant_closures = Flambdaconstants.constant_closures expr in
+  let sets_of_closures, closures, kept_arguments =
+    Flambdautils.sets_of_closures_and_closures_and_kept_arguments expr in
+  in
+  { values = Compilation_unit.Tbl.create ();
+    globals = Ident.Tbl.create ();
+    symbol_id = Symbol.Tbl.create ();
+    constants = Symbol.Tbl.create ();
+    offset_fun = Closure_id.Tbl.create 42;
+    offset_fv = Var_within_closure_id.Tbl.create 42;
+    sets_of_closures;
+    closures;
+    constant_closures;
+    kept_arguments;
+  }
+
+(* Offsets into closures defined in external units, that are used by the
+   current unit, need to be exported by the current unit.  This function
+   returns such offsets together with those defined by the current unit. *)
+let fun_and_fv_offsets_for_export t ~expr =
+  (* CR mshinwell: reference the other comment, whereever it is *)
+  let add_reexported_offsets_fun, add_reexported_offsets_fv =
+    let extern_fun_offset_table, extern_fv_offset_table =
+      (Compilenv.approx_env ()).offset_fun,
+        (Compilenv.approx_env ()).offset_fv
+    in
+    Flambda_lay_out_closure.reexported_offsets
+      ~extern_fun_offset_table:t.imported_units.offset_fun
+      ~extern_fv_offset_table:t.imported_units.offset_fv
+      ~expr
+      ~constants:t.current_unit.constants
+  in
+  add_reexported_offsets_fun t.current_unit.offset_fun,
+    add_reexported_offsets_fv t.current_unit.offset_fv
+
+(* Add to [Compilenv] the definitions of those structured constants emitted
+   by this pass, as opposed to those emitted by Cmmgen.  A set of all
+   symbols corresponding to such constants is returned. *)
+let add_exported_constants_to_compilenv t =
+  let constants =
+    Flambda_share_constants.compute_sharing
+      ~constants:t.current_unit.constants
+      (* XXX work out why this is trying to translate *)
+      ~fclambda_for_expr:(fclambda_for_expr t Env.empty)
+  in
+  Symbol.Map.fold (fun sym _cst all_syms ->
+      let lbl = Symbol.string_of_linkage_name sym.sym_label in
+      Compilenv.add_exported_constant lbl;
+      Symbol.Set.add sym all_syms)
+    constants
+    Symbol.Set.empty
+
+(* Translate an Flambda term to Clambda, recording necessary information
+   (including export information) in Compilenv. *)
+let translate_and_update_compilenv ~compilation_unit ~(expr : _ Flambda.t)
+      : Clambda.ulambda =
+  let current_unit = starting_state_for_current_unit ~expr in
+  let unit_approx =
+    Value_id (add_new_export' current_unit (Value_constptr 0))
+  in
+  let t = { current_unit; imported_units; unit_approx; } in
+  let env = Flambda_to_clambda_env.create () in
+  let expr, uexpr = fclambda_for_expr t env expr in
+  Flambdacheck.check expr ~current_compilation_unit:compilation_unit
+    ~flambdasym:true;
+  let constants = add_exported_constants_to_compilenv t in
+  let sets_of_closures =
+    (* Recover the defining expressions for all function declarations.  These
+       may occur directly within [expr], but may also have been moved out into
+       [t.current_unit.constants] (and been replaced by a symbol access within
+       [expr]). *)
+    Set_of_closures_id.Map.disjoint_union
+      (Flambdautils.all_sets_of_closures_defined_by expr)
+      (Export_id.Tbl.fold (fun _export_id constant sets_of_closures ->
+          Set_of_closures_id.Map.disjoint_union sets_of_closures
+            (Flambdautils.all_sets_of_closures_defined_by constant))
+        t.current_unit.constants
+        Set_of_closures_id.Map.empty
   in
   let closures =
-    let closures = ref Closure_id.Map.empty in
-    Flambdautils.list_closures expr ~closures;
-    Symbol.Map.iter (fun _ expr -> Flambdautils.list_closures expr ~closures)
-        constants;
-    !closures
+    Flambdautils.sets_of_closures_map_to_closures_map sets_of_closures
+  in
+  let ex_values =
+    Flambdaexport.freeze_values t.current_unit ~compilation_unit
   in
   let root_id, root_approx = id_and_approximation_of_global_module_block t in
-  (* stuff from flambdasym: *)
-  (* replace symbol by their representative in value approximations *)
-  let ex_values = Export_id.Map.map canonical_descr !(t.ex_table) in
-  (* build the symbol to id and id to symbol maps *)
-  let module_symbol = Compilenv.current_unit_symbol () in
+  let globals =
+    Ident.Map.singleton (Compilenv.current_unit_id ()) root_approx
+  in
+  let offset_fun, offset_fv = fun_and_fv_offsets_for_export t ~expr in
+  (* XXX this next part need work.  Where do we populate [symbol_id]? *)
   let symbol_id =
     let aux sym ex map =
       let sym' = canonical_symbol sym in
@@ -1418,68 +1430,25 @@ let convert (type a) ~(expr : a Flambda.t)
     Symbol.Map.fold aux !(infos.symbol_id) Symbol.Map.empty
   in
   let symbol_id =
-    Symbol.Map.add module_symbol root_id
-      symbol_id
+    Symbol.Map.add (Compilenv.current_unit_symbol ()) root_id symbol_id
   in
   let id_symbol =
     Symbol.Map.fold (fun sym id map -> Export_id.Map.add id sym map)
       symbol_id Export_id.Map.empty
   in
-  let functions_off =
-    let aux_fun ffunctions off_id _ map =
-      let fun_id = Closure_id.wrap off_id in
-      Closure_id.Map.add fun_id ffunctions map in
-    let aux _ f map = Variable.Map.fold (aux_fun f) f.funs map in
-    Set_of_closures_id.Map.fold aux functions Closure_id.Map.empty
+  let exported : Flambdaexport.exported =
+    { sets_of_closures;
+      closures;
+      ex_values;
+      globals;
+      id_symbol = ...;
+      symbol_id = ...;
+      offset_fun;
+      offset_fv;
+      constants;
+      constant_closures = t.current_unit.constant_closures;
+      kept_arguments = t.current_unit.kept_arguments;
+    }
   in
-  (* end of stuff not looked at *)
-  let exported =
-(*
-    (* Lay out closures for the current compilation unit, assigning offsets
-       for function identifiers and free variables.  A single table
-       suffices, since all of the relevant ids are globally unique. *)
-    let fun_offset_table, fv_offset_table =
-      Flambda_lay_out_closure.assign_offsets ~expr ~constants
-    in
-
-not here any more...
-*)
-    (* Offsets into closures defined in external units, that are used by the
-       current unit, need to be exported by the current unit. *)
-    (* CR mshinwell: reference the other comment, whereever it is *)
-    let add_ext_offset_fun, add_ext_offset_fv =
-      let extern_fun_offset_table, extern_fv_offset_table =
-        (Compilenv.approx_env ()).offset_fun,
-          (Compilenv.approx_env ()).offset_fv
-      in
-      Flambda_lay_out_closure.reexported_offsets ~extern_fun_offset_table
-        ~extern_fv_offset_table ~expr ~constants
-    in
-(*
-    let constant_closures = exported.constant_closures
-    let functions = exported.functions
-  let export = let open Flambdaexport in
-    { empty_export with
-      ex_values = Flambdaexport.nest_eid_map C2.ex_values;
-      globals = Ident.Map.singleton
-          (Compilenv.current_unit_id ()) C2.root_approx;
-      symbol_id = C2.symbol_id;
-      id_symbol = Flambdaexport.nest_eid_map C2.id_symbol;
-      functions = C2.functions;
-      functions_off = C2.functions_off;
-      constant_closures = constant_closures;
-      kept_arguments = C.kept_arguments }
-*)
-    E.create ~fun_offset_table:(add_ext_offset_fun fun_offset_table)
-      ~fv_offset_table:(add_ext_offset_fv fv_offset_table)
-  in
-
-(* This part should be separate, since it side-effects Compilenv *)
-  Compilenv.set_export_info (Flambdaexport.freeze t.current_unit);
-  Symbol.Map.iter (fun sym cst ->
-       let lbl = Symbol.string_of_linkage_name sym.sym_label in
-       Compilenv.add_exported_constant lbl)
-    C.constants;
-  let flambda, clambda, approx = fclambda_and_approx_for_expr t env expr in
-  Flambdacheck.check flambda ~current_compilation_unit ~flambdasym:true;
-  clambda, approx
+  Compilenv.set_export_info exported;
+  uexpr

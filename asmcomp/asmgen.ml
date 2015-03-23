@@ -154,12 +154,8 @@ let flambda ppf (size, lam) =
           Printflambda.flambda lam)
       const
   end;
-  let constants =
-    Flambda_share_constants.compute_sharing ~constants:const
-      ~fclambda_for_expr:(fclambda_for_expr t Env.empty)
-  in
   let  clambda, approx =
-    Flambda_to_clambda.convert ~expr:fl ~constants ~exported:export
+    Flambda_to_clambda.convert ~expr:fl
   in
   (* XXX not sure about [const] yet *)
   Symbol.Map.iter (fun _ lam ->

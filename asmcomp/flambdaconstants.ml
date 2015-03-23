@@ -355,3 +355,16 @@ let not_constants (type a) ~for_clambda ~compilation_unit
   let module A = NotConstants(P) in
   A.res
 
+let constant_closures expr =
+  let all_closures =
+    let closures = ref Set_of_closures_id.Set.empty in
+    Flambdaiter.iter_on_closures (fun cl _ ->
+        closures := Set_of_closures_id.Set.add cl.cl_fun.ident !closures)
+      expr;
+    !closures
+  in
+  let not_constants =
+    Flambdaconstants.not_constants ~compilation_unit ~for_clambda:true expr
+  in
+  Set_of_closures_id.Set.diff all_closures
+    not_constants.not_constant_closure
