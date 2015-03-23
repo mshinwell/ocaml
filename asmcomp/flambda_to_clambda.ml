@@ -22,20 +22,13 @@
 (***********************************************************************)
 
 open Abstract_identifiers
-
 module Env = Flambda_to_clambda_env
 
 type 'a t = {
   current_unit : 'a Flambdaexport.exported_mutable;
   imported_units : Flambdaexport.exported;
   unit_approx : Flambdaexport.approx;
-  mutable can_be_compiled_to_clambda_constant : Variable.Set.t;
 }
-
-let add_new_export' exported_mutable (descr : Flambdaexport.descr) =
-  let id = Export_id.create (Compilenv.current_unit ()) in
-  Export_id.Tbl.add id descr exported_mutable.values;
-  id
 
 type ('a, 'b) which_unit = Current_unit of 'a | Imported_unit of 'b
 
@@ -175,25 +168,13 @@ let set_symbol_alias t s1 s2 =
   let s2' = canonical_symbol t s2 in
   if s1' <> s2' then Symbol.Tbl.add t.symbol_alias s1' s2'
 
-(* CR mshinwell: Bad function name.  Can this go elsewhere? *)
-let structured_constant_for_symbol (sym : Symbol.t)
-      (ulambda : Clambda.ulambda) =
-  match ulambda with
-  | Uconst (Uconst_ref (lbl', Some cst)) ->
-    let lbl =
-      Compilenv.canonical_symbol
-        (Symbol.string_of_linkage_name sym.sym_label)
-    in
-    assert (lbl = Compilenv.canonical_symbol lbl');
-    cst
-  (* CR mshinwell for pchambart: We need to work out whether the following
-     line is needed, or not. *)
-  (* | Uconst (Uconst_ref (None, Some cst)) -> cst *)
-  | _ -> assert false
-
 (* Given a description of a value to be exported from the current
    compilation unit, assign it a new export ID, and record the mapping from
    ID to description. *)
+let add_new_export' exported_mutable (descr : Flambdaexport.descr) =
+  let id = Export_id.create (Compilenv.current_unit ()) in
+  Export_id.Tbl.add id descr exported_mutable.values;
+  id
 let add_new_export t descr = add_new_export' t.current_unit descr
 
 (* Record that [defining_expr] defines a constant with the given [export_id]
@@ -349,10 +330,9 @@ let rec fclambda_and_approx_for_primitive t env ~(primitive : Lambda.primitive)
        [Pmakeblock] turns into a reference to the symbol. *)
     let args, uargs, approxs = fclambda_and_approx_for_expr_list t env args in
     let ex = add_new_export (Value_block (tag, Array.of_list approxs)) in
-    begin match Clambda.all_constants args with
+    begin match Clambda.all_constants uargs with
     | None -> Uprim (p, args, dbg), Value_id ex
     | Some arg_values ->
-      (* CR mshinwell: probably shouldn't be Uprim.  Just store [args] *)
       let sym = add_constant t (Uprim (p, args, dbg)) ex in
       let cst : Clambda.ustructured_constant =
         Uconst_block (tag, arg_values)
@@ -381,6 +361,10 @@ let rec fclambda_and_approx_for_primitive t env ~(primitive : Lambda.primitive)
 and fclambda_and_approx_for_let t ~env ~is_assigned ~var ~rhs ~body
       : unit Flambda.t * Clambda.ulambda * Flambdaexport.approx =
   let rhs, urhs, approx = fclambda_and_approx_for_expr t env rhs in
+  (* XXX this next line needs fixing.  where is the function?
+     Also, we should add a comment to explain why this let-simplification
+     cannot be done in an earlier pass.  Or maybe we should do it earlier.
+  *)
   let is_constant = can_be_compiled_to_clambda_constant t var in
   let approx =
     let approx_never_changes_during_execution_of_body =
@@ -1155,7 +1139,10 @@ and fclambda_and_approx_for_non_simple_application t env ~expr ~direct
     | Indirect ->
       (* CR mshinwell for pchambart: Do we still need to do this?  It it
          definitely the case that we don't need to do this for the "simple"
-         case above, too (before checking [ap_kind])? *)
+         case above, too (before checking [ap_kind])?
+         follow-up: we should just ensure simplify is run, perhaps.  The
+         tighter the invariants are here, the better.
+      *)
       match E.find_approx_descr t fun_approx with
       (* We mark some calls as direct when it is unknown:
          for instance if simplify wasn't run before. *)
@@ -1309,27 +1296,6 @@ and fclambda_for_expr_pair env expr1 expr2 =
   let expr2, uexpr2 = fclambda_for_expr env expr2 in
   expr1, uexpr1, expr2, uexpr2
 
-let id_and_approximation_of_global_module_block t =
-  let root_id =
-    let size_global =
-      Hashtbl.fold (fun index_in_block _ max_index ->
-          assert (index_in_block >= 0);
-          max index_in_block max_index)
-        t.global (-1)
-      + 1  (* the maximum index is zero-based, but the size is 1-based *)
-    in
-    let fields =
-      Array.init size_global (fun index_in_block ->
-          match Hashtbl.find t.global index_in_block with
-          | exception Not_found -> Value_unknown
-          | approx ->
-            Flambdaexport.canonical_approx approx
-              ~canonicalize_symbol:xxx
-    in
-    add_new_export (Value_block (0, fields))
-  in
-  root_id, Value_id root_id
-
 let starting_state_for_current_unit ~expr =
   let constant_closures = Flambdaconstants.constant_closures expr in
   let sets_of_closures, closures, kept_arguments =
@@ -1341,11 +1307,42 @@ let starting_state_for_current_unit ~expr =
     constants = Symbol.Tbl.create ();
     offset_fun = Closure_id.Tbl.create 42;
     offset_fv = Var_within_closure_id.Tbl.create 42;
-    sets_of_closures;
-    closures;
-    constant_closures;
-    kept_arguments;
+    sets_of_closures; closures; constant_closures; kept_arguments;
   }
+
+(* Add to [Compilenv] the definitions of those structured constants emitted
+   by this pass, as opposed to those emitted by Cmmgen.  A set of all
+   symbols corresponding to such constants is returned. *)
+let add_exported_constants_to_compilenv t =
+  let constants =
+    Flambda_share_constants.compute_sharing
+      ~constants:t.current_unit.constants
+      (* XXX work out why this is trying to translate *)
+      ~fclambda_for_expr:(fclambda_for_expr t Env.empty)
+  in
+  Symbol.Map.fold (fun sym _cst all_syms ->
+      let lbl = Symbol.string_of_linkage_name sym.sym_label in
+      Compilenv.add_exported_constant lbl;
+      Symbol.Set.add sym all_syms)
+    constants
+    Symbol.Set.empty
+
+let export_id_of_global_module_block t =
+  let max_index =
+    Hashtbl.fold (fun index_in_block _ max_index ->
+        assert (index_in_block >= 0);
+        max index_in_block max_index)
+      t.global (-1)
+  in
+  let fields =
+    Array.init (max_index + 1) (fun index_in_block ->
+        match Hashtbl.find t.global index_in_block with
+        | exception Not_found -> Value_unknown
+        | approx ->
+          Flambdaexport.canonical_approx approx
+            ~canonicalize_symbol:xxx
+  in
+  add_new_export (Value_block (0, fields))
 
 (* Offsets into closures defined in external units, that are used by the
    current unit, need to be exported by the current unit.  This function
@@ -1366,23 +1363,6 @@ let fun_and_fv_offsets_for_export t ~expr =
   add_reexported_offsets_fun t.current_unit.offset_fun,
     add_reexported_offsets_fv t.current_unit.offset_fv
 
-(* Add to [Compilenv] the definitions of those structured constants emitted
-   by this pass, as opposed to those emitted by Cmmgen.  A set of all
-   symbols corresponding to such constants is returned. *)
-let add_exported_constants_to_compilenv t =
-  let constants =
-    Flambda_share_constants.compute_sharing
-      ~constants:t.current_unit.constants
-      (* XXX work out why this is trying to translate *)
-      ~fclambda_for_expr:(fclambda_for_expr t Env.empty)
-  in
-  Symbol.Map.fold (fun sym _cst all_syms ->
-      let lbl = Symbol.string_of_linkage_name sym.sym_label in
-      Compilenv.add_exported_constant lbl;
-      Symbol.Set.add sym all_syms)
-    constants
-    Symbol.Set.empty
-
 (* Translate an Flambda term to Clambda, recording necessary information
    (including export information) in Compilenv. *)
 let translate_and_update_compilenv ~compilation_unit ~(expr : _ Flambda.t)
@@ -1392,8 +1372,7 @@ let translate_and_update_compilenv ~compilation_unit ~(expr : _ Flambda.t)
     Value_id (add_new_export' current_unit (Value_constptr 0))
   in
   let t = { current_unit; imported_units; unit_approx; } in
-  let env = Flambda_to_clambda_env.create () in
-  let expr, uexpr = fclambda_for_expr t env expr in
+  let expr, uexpr = fclambda_for_expr t (Env.create ()) expr in
   Flambdacheck.check expr ~current_compilation_unit:compilation_unit
     ~flambdasym:true;
   let constants = add_exported_constants_to_compilenv t in
@@ -1416,36 +1395,30 @@ let translate_and_update_compilenv ~compilation_unit ~(expr : _ Flambda.t)
   let ex_values =
     Flambdaexport.freeze_values t.current_unit ~compilation_unit
   in
-  let root_id, root_approx = id_and_approximation_of_global_module_block t in
+  let export_id_of_global_module_block = export_id_of_global_module_block t in
   let globals =
-    Ident.Map.singleton (Compilenv.current_unit_id ()) root_approx
+    Ident.Map.singleton (Compilenv.current_unit_id ())
+      (Value_id export_id_of_global_module_block)
   in
   let offset_fun, offset_fv = fun_and_fv_offsets_for_export t ~expr in
-  (* XXX this next part need work.  Where do we populate [symbol_id]? *)
+  (* XXX this next part needs work.  Where do we populate [symbol_id]? *)
   let symbol_id =
     let aux sym ex map =
       let sym' = canonical_symbol sym in
       Symbol.Map.add sym' ex map
     in
-    Symbol.Map.fold aux !(infos.symbol_id) Symbol.Map.empty
-  in
-  let symbol_id =
-    Symbol.Map.add (Compilenv.current_unit_symbol ()) root_id symbol_id
+    Symbol.Map.fold aux !(infos.symbol_id)
+      (Symbol.Map.add (Compilenv.current_unit_symbol ())
+        export_id_of_global_module_block
+        Symbol.Map.empty)
   in
   let id_symbol =
     Symbol.Map.fold (fun sym id map -> Export_id.Map.add id sym map)
       symbol_id Export_id.Map.empty
   in
   let exported : Flambdaexport.exported =
-    { sets_of_closures;
-      closures;
-      ex_values;
-      globals;
-      id_symbol = ...;
-      symbol_id = ...;
-      offset_fun;
-      offset_fv;
-      constants;
+    { sets_of_closures; closures; ex_values; globals; id_symbol; symbol_id;
+      offset_fun; offset_fv; constants;
       constant_closures = t.current_unit.constant_closures;
       kept_arguments = t.current_unit.kept_arguments;
     }

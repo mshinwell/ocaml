@@ -27,9 +27,10 @@
 
    Structured constants are assigned to symbols, yielding new Flambda
    terms that reference the constants via the symbols.  Value approximations
-   are built that encapsulate these rewritten terms; these may subsequently
-   be saved into .cmx files.  At the same time, Clambda terms are produced,
-   ready for the next phase of the compilation pipeline.
+   are built that encapsulate these rewritten terms; these are recorded
+   within [Compilenv], ready for subsequent writing into .cmx files.  At the
+   same time, Clambda terms are produced, ready for the next phase of the
+   compilation pipeline.
 
    The most significant transformations when producing Clambda relate to
    closures.  These are as follows:
@@ -40,7 +41,7 @@
      construction indexing by an integer;
    - addition of the extra "environment" parameter to a function that
      requires to access its closure from within its body.  *)
-val convert
-   : expr:'a Flambda.flambda
-  -> constants:...
-  -> Clambda.ulambda * Flambdaexport.exported
+val translate_and_update_compilenv
+   : compilation_unit:Compilation_unit.t
+  -> expr:_ Flambda.flambda
+  -> Clambda.ulambda

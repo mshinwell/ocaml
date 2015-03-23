@@ -114,24 +114,3 @@ val add_approxs : t -> Flambdaexport.approx Variable.Map.t -> t
    or [add_approxs]. *)
 val get_approx : t -> Variable.t -> Flambdaexport.approx option
 *)
-
-(*
-val add_variable_symbol_equality : t -> Variable.t -> t
-
-(* [add_variable_symbol_equalities t var_mapping] examines each mapping
-   v |-> v' in [var_mapping] and determines whether [t] tells us that
-   the value of v' is always the value associated with some symbol S.
-   If this is the case, then [t] is updated to also note down that v
-   has the same relationship with S. *)
-(* CR mshinwell: check whether these symbols only reference constants, and
-   consider changing the name of these functions if so *)
-val add_variable_symbol_equalities : t -> Variable.t Variable.Map.t -> t
-(* CR mshinwell: should these be Ident.t? *)
-(* [find_variable_symbol_equality t var] identifiers whether the value
-   of [var] is known to always be that associated with some symbol. *)
-val find_variable_symbol_equality : t -> Variable.t -> Symbol.t option
-
-(* [variable_has_symbol_equality t var] returns [true] iff [t] has a
-   variable-symbol equality for [var]. *)
-val variable_has_symbol_equality : t -> Variable.t -> bool
-*)
