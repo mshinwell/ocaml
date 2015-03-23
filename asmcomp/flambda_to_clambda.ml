@@ -1055,7 +1055,7 @@ and clambda_for_application t env ~direct ~ufundecl ~uargs ~dbg =
 
 (* Given the approximation for a closure (which always corresponds to a single
    function), find the approximation of the function's result, if known. *)
-and approx_for_application t ~(fundecl_approx : Flambdaexport.approx) =
+and approx_result_of_application t ~(fundecl_approx : Flambdaexport.approx) =
   match E.find_approx_descr t fundecl_approx with
   | None -> Value_unknown
   | Some fundecl_descr ->
@@ -1120,7 +1120,7 @@ and fclambda_and_approx_for_simple_application t env ~expr ~fundecls
     }, ()),
   in
   let clambda = clambda_for_application t env ~direct ~ufundecl ~uargs ~dbg in
-  flambda, clambda, approx_for_application t ~fundecl_approx
+  flambda, clambda, approx_result_of_application t ~fundecl_approx
 
 and fclambda_and_approx_for_non_simple_application t env ~expr ~direct
       ~fundecls ~fv ~specialised_args ~closure_id ~args ~dbg =
@@ -1368,6 +1368,7 @@ let fun_and_fv_offsets_for_export t ~expr =
 let translate_and_update_compilenv ~compilation_unit ~(expr : _ Flambda.t)
       : Clambda.ulambda =
   let current_unit = starting_state_for_current_unit ~expr in
+  let imported_units = Compilenv.approx_env () in
   let unit_approx =
     Value_id (add_new_export' current_unit (Value_constptr 0))
   in
