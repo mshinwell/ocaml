@@ -15,6 +15,26 @@
 open Symbol
 open Abstract_identifiers
 
+(* Export ids are identifiers for a value information. It is not exactly
+   related to a symbol because some may not correspond to a constant:
+
+let a = (1, Random.int 10)
+
+[a] will have an export id to which is associated the description
+
+ [Value_block (0, [Value_id eid1; Value_unknown])]
+
+Normally, Symbols will always have an export id (which may not be available if
+some cmx file is missing). A compilation unit never contains export ids comming
+from another compilation unit. When a value contains another one from another
+compilation unit, the link is done with the [Value_symbol] case of the approx
+type. This is needed to avoid bloating too much cmx files. A previous version
+didn't have that indirection and compiling core would make horribly big cmx.
+*)
+
+(* XXX the above comment illustrates that we need to think carefully
+about the "constants" thing. *)
+
 module Export_id : Ext_types.UnitId
    with module Compilation_unit := Compilation_unit
 
@@ -75,6 +95,9 @@ type exported = {
       module identifier, but there may be multiple identifiers in the case
       of packs. *)
   id_symbol : Symbol.t Export_id.Map.t Compilation_unit.Map.t;
+  (* XXX if Symbol -> Export_id can be set up like this, why do we need the
+     map from compilation units in id_symbol?  Maybe we need to look up by
+     cu somewhere... check *)
   symbol_id : Export_id.t Symbol.Map.t;
   (** Associates symbols and values *)
   offset_fun : int Closure_id.Map.t;

@@ -36,6 +36,8 @@ end = struct
 
   (* XXX there used to be something doing this within value descriptions,
      where does this happen now? *)
+  (* CR mshinwell: check this function has the necessary property and
+     document it *)
   let rec canonical_symbol t s =
     try
       let s' = Symbol.Tbl.find t.symbol_alias s in
@@ -179,24 +181,69 @@ let find_approx_descr t approx =
 (* Given a description of a value to be exported from the current
    compilation unit, assign it a new export ID, and record the mapping from
    ID to description. *)
-let add_new_export' exported_mutable (descr : Flambdaexport.descr) =
+let add_value_description' exported_mutable (descr : Flambdaexport.descr) =
   let id = Export_id.create (Compilenv.current_unit ()) in
   Export_id.Tbl.add id descr exported_mutable.values;
   id
-let add_new_export t descr = add_new_export' t.current_unit descr
+let add_value_description t descr = add_value_description' t.current_unit descr
 
-(* Record that [defining_expr] defines a constant with the given [export_id]
-   that will be added as a structured constant by this file, not Cmmgen. *)
-let add_constant t defining_expr export_id =
-  match Export_id.Tbl.find t.current_unit.constants export_id with
-  | exception Not_found ->
-    Export_id.Tbl.replace t.current_unit.constants export_id defining_expr
-  | existing_defining_expr ->
-    Misc.fatal_errorf "Constant with export ID %a already defined as %a, \
-        yet an attempt was made to redefine it as %a"
-      Export_id.print export_id
-      Flambdaprint.flambda existing_defining_expr
-      Flambdaprint.flambda defining_expr
+(*
+The old add_constant from flambdasym
+  let add_symbol sym id =
+    infos.ex_symbol_id := SymbolMap.add sym id !(infos.ex_symbol_id)
+
+  let add_constant lam ex_id =
+    let sym = Compilenv.new_const_symbol' () in
+    SymbolTbl.add infos.constants sym lam;
+    add_symbol sym ex_id;
+    sym
+
+It is only used for
+- the Fconst cases
+- Pmakeblock
+- constant closures.
+
+It receives the export ID to be associated with the value.
+It always generates the new symbol itself.
+
+The rewritten flambda term is always Fsymbol ...
+but the approximation might be something more complicated than Value_symbol.
+
+It isn't used for binding constructs, so there's no update of the
+environment.
+
+--
+
+The old add_cm from flambdasym
+This only affects the environment.
+The env info is read in two places
+- Fvar
+- when erasing specialized argument information.
+add_cm is called in these places:
+- Flet
+- Fletrec
+- translating a closure
+i.e. all the binding places.
+*)
+
+(* Remember the defining expression of a structured constant such that it
+   can be recalled later.  Also assign a fresh symbol to the constant and
+   associate the given export identifier.  The symbol and the corresponding
+   Clambda structured constant label (to be used in [Uconst_ref]) are
+   returned. *)
+let add_structured_constant t lam ulam export_id ?not_shared =
+  let sym = Compilenv.new_const_symbol' () in
+  let shared =
+    match not_shared with
+    | None -> true
+    | Some () -> false
+  in
+  assert (not (SymbolTbl.mem t.current_unit.constants sym));
+  SymbolTbl.add t.current_unit.constants sym lam;
+  assert (not (SymbolTbl.mem t.current_unit.ex_symbol_id sym));
+  SymbolTbl.add t.current_unit.ex_symbol_id sym export_id;
+  let label = Compilenv.structured_constant_label sym ~shared ulam in
+  sym, label
 
 (* Record that the global at position [index] (within the global block for
    the current compilation unit) has approximation [approx]. *)
@@ -206,7 +253,8 @@ let add_approx_for_global t ~index ~approx =
 (* Find the approximation for a global in the current compilation unit. *)
 let approx_for_global t ~index =
   try Ident.Tbl.find t.current_unit.globals index
-  with Not_found -> Misc.fatal_errorf "No global at index %d" i
+  with Not_found ->
+    Misc.fatal_errorf "No global at index %d in the current compilation unit" i
 
 (* "fclambda" means a pair of an Flambda term, rewritten to have references
    to symbols as required for exporting, together with a Clambda term.  The
@@ -248,17 +296,7 @@ module Env : sig
     -> (unit Flambda.t * Clambda.ulambda * Flambdaexport.approx) option
 end = struct
 
-end
-
-let fclambda_and_approx_for_symbol t env sym =
-  (* Ensure all symbols are replaced with their canonical representative. *)
-  let sym = Symbol_alias_db.canonical_symbol t.symbol_alias_db sym in
-  let linkage_name = Symbol.string_of_linkage_name sym.sym_label in
-  let label = Compilenv.canonical_symbol linkage_name in
-  (* CR pchambart for pchambart: Should delay the conversion a bit more
-     mshinwell: I turned this comment into a CR.  What does it mean? *)
-  Fsymbol sym, Uconst (Uconst_ref (label, None)), Value_symbol sym
-
+(*
 (* Sometimes we need to move an Flambda expression (bound to some variable) to
    be the defining expression of a symbol, with the original expression
    replaced by a reference to the symbol.  The typical scenario is for
@@ -280,70 +318,65 @@ let make_defining_expr_of_symbol ?symbol t env defining_expr =
   in
   (* XXX (still need to reconcile with [add_constant]) *)
   symbol, id, env
+*)
+
+end
+
+let fclambda_and_approx_for_symbol t env sym =
+  (* Ensure all symbols are replaced with their canonical representative. *)
+  let sym = Symbol_alias_db.canonical_symbol t.symbol_alias_db sym in
+  let linkage_name = Symbol.string_of_linkage_name sym.sym_label in
+  let label = Compilenv.canonical_symbol linkage_name in
+  (* CR pchambart for pchambart: Should delay the conversion a bit more
+     mshinwell: I turned this comment into a CR.  What does it mean? *)
+  Fsymbol sym, Uconst (Uconst_ref (label, None)), Value_symbol sym
 
 let fclambda_and_approx_for_constant t env ~(cst : Flambda.const) =
-  let flambda, approx =
-    match cst with
-    | Fconst_base (Const_int i) ->
-      cst, Value_id (add_new_export t (Value_int i))
-    | Fconst_base (Const_char c) ->
-      cst, Value_id (add_new_export t (Value_int (Char.code c)))
-    | Fconst_base (Const_float s) ->
-      cst, Value_id (add_new_export t (Value_float (float_of_string s)))
-    | Fconst_base (Const_int32 i) ->
-      cst, Value_id (add_new_export t (Value_boxed_int (Int32, i)))
-    | Fconst_base (Const_int64 i) ->
-      cst, Value_id (add_new_export t (Value_boxed_int (Int64, i)))
-    | Fconst_base (Const_nativeint i) ->
-      cst, Value_id (add_new_export t (Value_boxed_int (Nativeint, i)))
-    | Fconst_float f ->
-      cst, Value_id (add_new_export t (Value_float f))
-    | Fconst_pointer c ->
-      cst, Value_id (add_new_export t (Value_constptr c))
-    | Fconst_base (Const_string _) | Fconst_immstring _
-    | Fconst_float_array _ ->
-      let id = add_new_export t Value_string in
-      Some (Fsymbol (add_constant t (Fconst (cst, ())) id, ())), Value_id id
-  in
-  let clambda : Clambda.uconstant =
-    let add_new_exported_structured_const ?not_shared cst : Clambda.uconstant =
-      (* CR mshinwell: try to hoist this function *)
-      let name =
-        let shared =
-          match not_shared with
-          | None -> true
-          | Some () -> false
-        in
-        Compilenv.structured_constant_label expected_symbol ~shared cst
-      in
-      Uconst_ref (name, Some cst)
+  (* There are two kinds of constants: those that are translated to
+     values of type [Clambda.ustructured_constant], and those that are not.
+     The ones in the former category have to be assigned symbols, since we
+     need symbols in order to compute the "label" for the [Clambda.Uconst_ref]
+     constructor associated with a [Clambda.ustructured_constant]. *)
+  let structured ?not_shared (ucst : Clambda.ustructured_constant) descr =
+    let export_id = add_value_description t descr in
+    let symbol, label =
+      add_structured_constant t cst ucst export_id ?not_shared
     in
-    match cst with
-    | Fconst_base (Const_int c) -> Uconst_int c
-    | Fconst_base (Const_char c) -> Uconst_int (Char.code c)
-    | Fconst_pointer c -> Uconst_ptr c
-    | Fconst_float f -> add_new_exported_structured_const (Uconst_float f)
-    | Fconst_float_array c ->  (* constant float arrays are really immutable *)
-      add_new_exported_structured_const
-        (Uconst_float_array (List.map float_of_string c))
-    | Fconst_immstring c ->
-      add_new_exported_structured_const (Uconst_string c)
-    | Fconst_base (Const_float x) ->
-      add_new_exported_structured_const (Uconst_float (float_of_string x))
-    | Fconst_base (Const_int32 x) ->
-      add_new_exported_structured_const (Uconst_int32 x)
-    | Fconst_base (Const_int64 x) ->
-      add_new_exported_structured_const (Uconst_int64 x)
-    | Fconst_base (Const_nativeint x) ->
-      add_new_exported_structured_const (Uconst_nativeint x)
-    | Fconst_base (Const_string (s, o)) ->
-      add_new_exported_structured_const ~not_shared:() (Uconst_string s)
+    Fsymbol (symbol, ()), Uconst_ref (label, Some ucst), Value_id export_id
   in
-  flambda, clambda, approx
+  let not_structured ulam descr =
+    cst, Value_id (add_value_description t descr)
+  in
+  match cst with
+  | Fconst_base (Const_float f) ->
+    (* CR mshinwell for pchambart: Is there any chance [float_of_string]
+       might fail due to user error? *)
+    let f = float_of_string f in
+    structured (Uconst_float f) (Value_float f)
+  | Fconst_base (Const_int32 i) ->
+    structured (Uconst_int32 i) (Value_boxed_int (Int32, i))
+  | Fconst_base (Const_int64 i) ->
+    structured (Uconst_int64 i) (Value_boxed_int (Int64, i))
+  | Fconst_base (Const_nativeint i) ->
+    structured (Uconst_nativeint i) (Value_boxed_int (Nativeint, i))
+  | Fconst_base (Const_string s) ->
+    structured (Uconst_string s) Value_string ~not_shared:()
+  | Fconst_float_array fs ->
+    let fs = List.map float_of_string fs in
+    (* CR mshinwell for pchambart: Why is this [Value_string]? *)
+    structured (Uconst_float_array fs) Value_string
+  | Fconst_immstring s ->
+    structured (Uconst_string s) Value_string
+  | Fconst_base (Const_int i) ->
+    not_structured (Uconst_int i) (Value_int i)
+  | Fconst_base (Const_char c) ->
+    let c = Char.code c in
+    not_structured (Uconst_int c) (Value_int c)
+  | Fconst_pointer ptr ->
+    not_structured (Uconst_ptr ptr) (Value_constptr ptr)
 
 let fclambda_and_approx_for_var t env ~var =
-  let default_flambda = Fvar (var, ()) in
-  match Env.find_substitution env var ~default_flambda with
+  match Env.find_substitution env var ~default_flambda:(Fvar (var, ()) with
   | Some (lam, ulam, approx) -> lam, ulam, approx
   | None ->
     Misc.fatal_errorf "Environment does not know about variable %a: %a"
@@ -398,7 +431,7 @@ let rec fclambda_and_approx_for_primitive t env ~(primitive : Lambda.primitive)
        emit it as data, with a symbol to identify it.  The original
        [Pmakeblock] turns into a reference to the symbol. *)
     let args, uargs, approxs = fclambda_and_approx_for_expr_list t env args in
-    let ex = add_new_export (Value_block (tag, Array.of_list approxs)) in
+    let ex = add_value_description (Value_block (tag, Array.of_list approxs)) in
     begin match Clambda.all_constants uargs with
     | None -> Uprim (p, args, dbg), Value_id ex
     | Some arg_values ->
@@ -725,7 +758,7 @@ and fclambda_and_approx_for_closure_reference t env
         match find_approx_descr t fun_approx with
         | Some (Value_set_of_closures closure)
         | Some (Value_closure { closure }) ->
-          Value_id (add_new_export (Value_closure { fun_id = id; closure }))
+          Value_id (add_value_description (Value_closure { fun_id = id; closure }))
         | Some ((Value_block _ | Value_int _ | Value_constptr _ | Value_float _
             | Flambdaexport.Value_boxed_int _ | Value_string _
             | Value_set_of_closures _) as descr) ->
@@ -811,7 +844,7 @@ and fclambda_and_approx_for_function_declaration t env fun_id
             set_of_closures = descr_set_of_closures;
           }
         in
-        let export_id = add_new_export descr in
+        let export_id = add_value_description descr in
         let closure_symbol = Compilenv.closure_symbol closure_id in
         if closure_is_constant then begin
           (* Constant closures must have a symbol attributed to them. *)
@@ -1034,7 +1067,7 @@ and fclambda_and_approx_for_function_declarations t env
   in
   (* The set of closures will always be exported; assign a new export ID
      and build the approximation. *)
-  let closure_ex_id = add_new_export (Value_set_of_closures value_closure') in
+  let closure_ex_id = add_value_description (Value_set_of_closures value_closure') in
   (* Build the rewritten Flambda term representing the set of closures.
      If the set of closures is constant, then we will emit a constant
      definition (labelled with a symbol) and replace the set of closures
@@ -1363,7 +1396,7 @@ and fclambda_for_expr_pair env expr1 expr2 =
   let expr2, uexpr2 = fclambda_for_expr env expr2 in
   expr1, uexpr1, expr2, uexpr2
 
-let starting_state_for_current_unit ~expr =
+let starting_state_for_current_unit ~expr : Flambdaexport.exported_mutable =
   let constant_closures = Flambdaconstants.constant_closures expr in
   let sets_of_closures, closures, kept_arguments =
     Flambdautils.sets_of_closures_and_closures_and_kept_arguments expr in
@@ -1409,7 +1442,7 @@ let export_id_of_global_module_block t =
           Flambdaexport.canonical_approx approx
             ~canonicalize_symbol:xxx
   in
-  add_new_export (Value_block (0, fields))
+  add_value_description (Value_block (0, fields))
 
 (* Offsets into closures defined in external units, that are used by the
    current unit, need to be exported by the current unit.  This function
@@ -1437,7 +1470,7 @@ let translate_and_update_compilenv ~compilation_unit ~(expr : _ Flambda.t)
   let current_unit = starting_state_for_current_unit ~expr in
   let imported_units = Compilenv.approx_env () in
   let unit_approx =
-    Value_id (add_new_export' current_unit (Value_constptr 0))
+    Value_id (add_value_description' current_unit (Value_constptr 0))
   in
   let symbol_alias_db = Symbol_alias_db.create () in
   let t =
