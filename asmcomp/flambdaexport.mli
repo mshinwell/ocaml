@@ -124,12 +124,12 @@ type 'a exported_mutable = {
   globals : approx Ident.Tbl.t;
   (* CR mshinwell: symbol_id is a bad name.  symbol_to_export_id? *)
   symbol_id : Export_id.t Symbol.Tbl.t;
-  (* The expressions defining structured constants that the Flambda phase
-     will emit.  (Some structured constants are not emitted until Cmmgen;
-     they are not listed here.) *)
-  (* XXX note: [constants] in [exported] can be produced by using
-     [constants] here and [symbol_id] just above. *)
-  constants : unit Flambda.t Export_id.Tbl.t;
+  (* Defining expressions of structured constants.  (Note ['a Flambda.t] not
+     [unit Flambda.t].  The expressions are written down first, and then
+     rewritten and translated to Clambda after reordering, to try to ensure
+     maximal sharing.  See [add_exported_constants_to_compilenv] in
+     flambda_to_clambda.ml.) *)
+  constants : 'a Flambda.t Export_id.Tbl.t;
   constant_closures : Set_of_closures_id.Set.t;
   sets_of_closures : 'a Flambda.function_declarations Set_of_closures_id.Map.t;
   closures : 'a Flambda.function_declarations Closure_id.Map.t;

@@ -331,7 +331,7 @@ let fclambda_and_approx_for_symbol t env sym =
      mshinwell: I turned this comment into a CR.  What does it mean? *)
   Fsymbol sym, Uconst (Uconst_ref (label, None)), Value_symbol sym
 
-let fclambda_and_approx_for_constant t env ~(cst : Flambda.const) =
+let fclambda_and_approx_for_constant t env ~(cst : Flambda.const) ~annot =
   (* There are two kinds of constants: those that are translated to
      values of type [Clambda.ustructured_constant], and those that are not.
      The ones in the former category have to be assigned symbols, since we
@@ -340,12 +340,13 @@ let fclambda_and_approx_for_constant t env ~(cst : Flambda.const) =
   let structured ?not_shared (ucst : Clambda.ustructured_constant) descr =
     let export_id = add_value_description t descr in
     let symbol, label =
-      add_structured_constant t cst ucst export_id ?not_shared
+      add_structured_constant t (Fconst (cst, annot)) ucst export_id
+        ?not_shared
     in
     Fsymbol (symbol, ()), Uconst_ref (label, Some ucst), Value_id export_id
   in
-  let not_structured ulam descr =
-    cst, Value_id (add_value_description t descr)
+  let not_structured ucst descr =
+    Fconst (cst, ()), ucst, Value_id (add_value_description t descr)
   in
   match cst with
   | Fconst_base (Const_float f) ->
@@ -435,6 +436,7 @@ let rec fclambda_and_approx_for_primitive t env ~(primitive : Lambda.primitive)
     begin match Clambda.all_constants uargs with
     | None -> Uprim (p, args, dbg), Value_id ex
     | Some arg_values ->
+      (* XXX needs fixing after changes above *)
       let sym = add_constant t (Uprim (p, args, dbg)) ex in
       let cst : Clambda.ustructured_constant =
         Uconst_block (tag, arg_values)
@@ -1299,7 +1301,7 @@ and fclambda_and_approx_for_expr t env (expr : _ Flambda.t)
   match expr with
   | Fvar (var, _) -> flambda_and_approx_for_var t env ~var
   | Fsymbol (sym, _) -> fclambda_and_approx_for_symbol t env sym
-  | Fconst (cst, _) -> fclambda_and_approx_for_constant t env ~cst
+  | Fconst (cst, annot) -> fclambda_and_approx_for_constant t env ~cst ~annot
   | Flet (str, var, lam, body, _) ->
     fclambda_and_approx_for_let t ~env ~str ~var ~lam ~body
   | Fletrec (defs, body, _) -> fclambda_and_approx_for_let_rec t env defs body
@@ -1417,9 +1419,9 @@ let add_exported_constants_to_compilenv t =
   let constants =
     Flambda_share_constants.compute_sharing
       ~constants:t.current_unit.constants
-      (* XXX work out why this is trying to translate *)
       ~fclambda_for_expr:(fclambda_for_expr t Env.empty)
   in
+  (* XXX what happens to the constant's defining expr? *)
   Symbol.Map.fold (fun sym _cst all_syms ->
       let lbl = Symbol.string_of_linkage_name sym.sym_label in
       Compilenv.add_exported_constant lbl;
