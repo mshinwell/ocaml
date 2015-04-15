@@ -46,6 +46,9 @@ type error =
   | Unbound_type_var_ext of type_expr * extension_constructor
   | Varying_anonymous
   | Val_in_structure
+  | Invalid_unbox_attribute_payload
+  | Cannot_unbox_type
+  | Type_does_not_match_unbox_attribute_payload
 
 open Typedtree
 
@@ -1349,6 +1352,66 @@ let transl_exception env sext =
   let newenv = Env.add_extension ~check:true ext.ext_id ext.ext_type env in
     ext, newenv
 
+type unbox_attribute =
+  | Unbox_attr_absent
+  | Unbox_attr_present
+  | Unbox_attr_present_with_type of Parsetree.core_type
+
+let get_unbox_attribute core_type =
+  match
+    List.find (fun (n, _) -> n.Location.txt = "unbox") core_type.ptyp_attributes
+  with
+  | exception Not_found ->
+      Unbox_attr_absent
+  | (_, PStr []) ->
+      Unbox_attr_present
+  | (_, PTyp core_type) ->
+      Unbox_attr_present_with_type core_type
+  | (n, _) ->
+      raise (Error (n.Location.loc, Invalid_unbox_attribute_payload))
+
+let unbox_of_type env ty =
+  match (Ctype.expand_head_opt env ty).desc with
+  | Tconstr (path, _, _) when Path.same path Predef.path_float ->
+      Some Unbox_float
+  | Tconstr (path, _, _) when Path.same path Predef.path_int32 ->
+      Some Unbox_int32
+  | Tconstr (path, _, _) when Path.same path Predef.path_int64 ->
+      Some Unbox_int64
+  | Tconstr (path, _, _) when Path.same path Predef.path_nativeint ->
+      Some Unbox_nativeint
+  | _ ->
+      None
+
+let make_unbox env core_type ty =
+  match get_unbox_attribute core_type with
+  | Unbox_attr_absent -> Do_not_unbox
+  | Unbox_attr_present ->
+      begin match unbox_of_type env ty with
+      | None -> raise (Error (core_type.ptyp_loc, Cannot_unbox_type))
+      | Some unbox -> unbox
+      end
+  | Unbox_attr_present_with_type core_type' ->
+      let ty' = (Typetexp.transl_simple_type env false core_type').ctyp_type in
+      match unbox_of_type env ty, unbox_of_type env ty' with
+      | _, None -> raise (Error (core_type'.ptyp_loc, Cannot_unbox_type))
+      | None, Some unbox -> unbox
+      | Some unbox, Some unbox' ->
+          if unbox = unbox' then
+            unbox
+          else
+            raise (Error (core_type.ptyp_loc,
+                          Type_does_not_match_unbox_attribute_payload))
+
+let rec parse_unbox_attributes env core_type ty =
+  match core_type.ptyp_desc, (Ctype.repr ty).desc with
+  | Ptyp_arrow (_, ct1, ct2), Tarrow (_, t1, t2, _) ->
+      let unbox_arg = make_unbox env ct1 t1 in
+      let unbox_args, unbox_res = parse_unbox_attributes env ct2 t2 in
+      (unbox_arg :: unbox_args, unbox_res)
+  | Ptyp_arrow _, _ | _, Tarrow _ -> assert false
+  | _ -> ([], make_unbox env core_type ty)
+
 (* Translate a value declaration *)
 let transl_value_decl env loc valdecl =
   let cty = Typetexp.transl_type_scheme env valdecl.pval_type in
@@ -1360,10 +1423,17 @@ let transl_value_decl env loc valdecl =
         val_attributes = valdecl.pval_attributes }
   | [] ->
       raise (Error(valdecl.pval_loc, Val_in_structure))
-  | decl ->
-      let arity = Ctype.arity ty in
-      let prim = Primitive.parse_declaration arity decl in
-      if arity = 0 && (prim.prim_name = "" || prim.prim_name.[0] <> '%') then
+  | _ ->
+      let native_unbox_args, native_unbox_res =
+        parse_unbox_attributes env valdecl.pval_type ty
+      in
+      let prim =
+        Primitive.parse_declaration valdecl
+          ~native_unbox_args
+          ~native_unbox_res
+      in
+      if prim.prim_arity = 0 &&
+         (prim.prim_name = "" || prim.prim_name.[0] <> '%') then
         raise(Error(valdecl.pval_type.ptyp_loc, Null_arity_external));
       if !Clflags.native_code
       && prim.prim_arity > 5
@@ -1712,6 +1782,15 @@ let report_error ppf = function
         "cannot be checked"
   | Val_in_structure ->
       fprintf ppf "Value declarations are only allowed in signatures"
+  | Invalid_unbox_attribute_payload ->
+      fprintf ppf "Payload of [@@unbox ] attribute must be \
+                   either a type either nothing"
+  | Cannot_unbox_type ->
+      fprintf ppf "Don't know how to unbox this type. Only float, int32, \
+                   int64 and nativeint can be unboxed"
+  | Type_does_not_match_unbox_attribute_payload ->
+      fprintf ppf "Type and payload of [@unbox: ] have different unboxing \
+                   methods"
 
 let () =
   Location.register_error_of_exn

@@ -1019,8 +1019,7 @@ let check_bound unsafe dbg a1 a2 k =
 (* Simplification of some primitives into C calls *)
 
 let default_prim name =
-  { prim_name = name; prim_arity = 0 (*ignored*);
-    prim_alloc = true; prim_native_name = ""; prim_native_float = false }
+  Primitive.simple ~name ~arity:0(*ignored*) ~alloc:true
 
 let simplif_primitive_32bits = function
     Pbintofint Pint64 -> Pccall (default_prim "caml_int64_of_int")
@@ -1194,12 +1193,19 @@ type unboxed_number_kind =
   | Boxed_float
   | Boxed_integer of boxed_integer
 
+let unboxed_number_kind_of_unbox = function
+  | Do_not_unbox -> No_unboxing
+  | Unbox_float -> Boxed_float
+  | Unbox_int32 -> Boxed_integer Pint32
+  | Unbox_int64 -> Boxed_integer Pint64
+  | Unbox_nativeint -> Boxed_integer Pnativeint
+
 let rec is_unboxed_number = function
     Uconst(Uconst_ref(_, Uconst_float _)) ->
       Boxed_float
   | Uprim(p, _, _) ->
       begin match simplif_primitive p with
-          Pccall p -> if p.prim_native_float then Boxed_float else No_unboxing
+          Pccall p -> unboxed_number_kind_of_unbox p.prim_native_unbox_res
         | Pfloatfield _ -> Boxed_float
         | Pfloatofint -> Boxed_float
         | Pnegfloat -> Boxed_float
@@ -1379,14 +1385,7 @@ let rec transl = function
       | (Pmakeblock(tag, mut), args) ->
           make_alloc tag (List.map transl args)
       | (Pccall prim, args) ->
-          if prim.prim_native_float then
-            box_float
-              (Cop(Cextcall(prim.prim_native_name, typ_float, false, dbg),
-                   List.map transl_unbox_float args))
-          else
-            Cop(Cextcall(Primitive.native_name prim, typ_addr, prim.prim_alloc,
-                         dbg),
-                List.map transl args)
+          transl_ccall prim args dbg
       | (Pmakearray kind, []) ->
           transl_structured_constant (Uconst_block(0, []))
       | (Pmakearray kind, args) ->
@@ -1540,6 +1539,36 @@ let rec transl = function
                  Ctuple []))))
   | Uassign(id, exp) ->
       return_unit(Cassign(id, transl exp))
+
+and transl_ccall prim args dbg =
+  let transl_arg unbox arg =
+    match unboxed_number_kind_of_unbox unbox with
+    | No_unboxing -> transl arg
+    | Boxed_float -> transl_unbox_float arg
+    | Boxed_integer bi -> transl_unbox_int bi arg
+  in
+  let rec transl_args unbox_args args =
+    match unbox_args, args with
+    | [], args ->
+        (* We don't require the two lists to be of the same length as
+           [default_prim] always sets the arity to [0]. *)
+        List.map transl args
+    | _, [] -> assert false
+    | unbox :: unbox_args, arg :: args ->
+        let arg = transl_arg unbox arg in
+        arg :: transl_args unbox_args args
+  in
+  let typ_res, box_result =
+    match unboxed_number_kind_of_unbox prim.prim_native_unbox_res with
+    | No_unboxing -> (typ_addr, fun x -> x)
+    | Boxed_float -> (typ_float, box_float)
+    | Boxed_integer Pint64 when size_int = 4 -> ([|Int; Int|], box_int Pint64)
+    | Boxed_integer bi -> (typ_int, box_int bi)
+  in
+  box_result
+    (Cop(Cextcall(Primitive.native_name prim, typ_res, prim.prim_alloc,
+                  dbg),
+         transl_args prim.prim_native_unbox_args args))
 
 and transl_prim_1 p arg dbg =
   match p with

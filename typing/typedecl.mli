@@ -83,6 +83,9 @@ type error =
   | Unbound_type_var_ext of type_expr * extension_constructor
   | Varying_anonymous
   | Val_in_structure
+  | Invalid_unbox_attribute_payload
+  | Cannot_unbox_type
+  | Type_does_not_match_unbox_attribute_payload
 
 exception Error of Location.t * error
 
