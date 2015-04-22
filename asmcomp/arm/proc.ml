@@ -107,7 +107,8 @@ let stack_slot slot ty =
 (* Calling conventions *)
 
 let calling_conventions
-    first_int last_int first_float last_float make_stack arg =
+    first_int last_int first_float last_float make_stack arg
+    ~is_external =
   let loc = Array.make (Array.length arg) Reg.dummy in
   let int = ref first_int in
   let float = ref first_float in
@@ -116,12 +117,34 @@ let calling_conventions
     match arg.(i).typ with
       Int | Addr as ty ->
         if !int <= last_int then begin
-          loc.(i) <- phys_reg !int;
+          loc.(i) <- One_reg (phys_reg !int);
           incr int
         end else begin
-          loc.(i) <- stack_slot (make_stack !ofs) ty;
+          loc.(i) <- One_reg (stack_slot (make_stack !ofs) ty);
           ofs := !ofs + size_int
         end
+(*
+    | Int64 when not is_external -> assert false
+    | Int64 ->
+        (* 64-bit quantities split across two registers must either be in a
+           consecutive pair of registers where the lowest numbered is an
+           even-numbered register; or in a stack slot that is 8-byte
+           aligned. *)
+        let int = if int % 2 = 0 then int else int + 1 in
+        if !int <= last_int - 1 then begin
+          loc.(i) <- Two_regs (phys_reg !int, phys_reg (1 + !int));
+          int := int + 2
+        end else begin
+          assert (size_int = 4);
+          assert (ofs % 4 = 0);
+          let ofs = if ofs % 8 = 0 then ofs else ofs + 4 in
+          let stack_0 = stack_slot (make_stack !ofs) ty in
+          (* XXX check the "4 + " *)
+          let stack_1 = stack_slot (make_stack (4 + !ofs)) ty in
+          loc.(i) <- Two_regs (stack_0, stack_1);
+          ofs := !ofs + size_int
+        end
+*)
     | Float ->
         assert (abi = EABI_HF);
         assert (!fpu >= VFPv2);

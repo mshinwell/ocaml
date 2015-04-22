@@ -271,22 +271,33 @@ method! insert_op_debug op dbg rs rd =
   with Use_default ->
     super#insert_op_debug op dbg rs rd
 
-(* Selection of push instructions for external calls *)
+(* Selection of push instructions for external calls. *)
 
 method select_push exp =
   match exp with
-    Cconst_int n -> (Ispecific(Ipush_int(Nativeint.of_int n)), Ctuple [])
-  | Cconst_natint n -> (Ispecific(Ipush_int n), Ctuple [])
-  | Cconst_pointer n -> (Ispecific(Ipush_int(Nativeint.of_int n)), Ctuple [])
-  | Cconst_natpointer n -> (Ispecific(Ipush_int n), Ctuple [])
-  | Cconst_symbol s -> (Ispecific(Ipush_symbol s), Ctuple [])
+    Cconst_int n ->
+      (Ispecific(Ipush_int(Nativeint.of_int n)), Ctuple []), None
+  | Cconst_natint n -> (Ispecific(Ipush_int n), Ctuple []), None
+  | Cconst_pointer n ->
+      (Ispecific(Ipush_int(Nativeint.of_int n)), Ctuple []), None
+  | Cconst_natpointer n -> (Ispecific(Ipush_int n), Ctuple []), None
+  | Cconst_symbol s -> (Ispecific(Ipush_symbol s), Ctuple []), None
   | Cop(Cload Word, [loc]) ->
       let (addr, arg) = self#select_addressing Word loc in
-      (Ispecific(Ipush_load addr), arg)
+      (Ispecific(Ipush_load addr), arg), None
   | Cop(Cload Double_u, [loc]) ->
       let (addr, arg) = self#select_addressing Double_u loc in
-      (Ispecific(Ipush_load_float addr), arg)
-  | _ -> (Ispecific(Ipush), exp)
+      (Ispecific(Ipush_load_float addr), arg), None
+  | Cop(Cload Int64, [loc]) ->
+      (* The low part of the int64 is at a lower address than the
+         high part. *)
+      let (low_addr, low_arg) = self#select_addressing Word loc in
+      let high_addr = Cop (Cadda (Cconst_int 4, [loc])) in
+      let (high_addr, high_arg) = self#select_addressing Word high_addr in
+      (* First push the high part, then the low part. *)
+      (Ispecific(Ipush_load high_addr), high_arg),
+        Some (Ispecific(Ipush_load low_addr), low_arg)
+  | _ -> (Ispecific(Ipush), exp), None
 
 method! mark_c_tailcall =
   Proc.contains_calls := true
@@ -303,10 +314,20 @@ method! emit_extcall_args env args =
         self#insert (Iop (Istackoffset (sz2 - sz1))) [||] [||]
   | e :: el ->
       emit_pushes el;
-      let (op, arg) = self#select_push e in
+      let (op, arg), maybe_second_op = self#select_push e in
       match self#emit_expr env arg with
-      | None -> ()
-      | Some r -> self#insert (Iop op) r [||] in
+      | None ->
+        assert (maybe_second_op = None);
+        ()
+      | Some r ->
+        self#insert (Iop op) r [||];
+        match maybe_second_op with
+        | None -> ()
+        | Some (op, arg) ->
+          match self#emit_expr env arg with
+          | None -> ()
+          | Some r -> self#insert (Iop op) r [||]
+  in
   emit_pushes args;
   ([||], sz2)
 

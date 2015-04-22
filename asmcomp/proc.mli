@@ -24,12 +24,23 @@ val register_name: int -> string
 val phys_reg: int -> Reg.t
 val rotate_registers: bool
 
+(* Description of registers required to pass an argument or a result to
+   or from an external function. *)
+type how_many_regs =
+  | One_reg of Reg.t
+  | Two_regs of [ `Low_part of Reg.t ] * [ `High_part of Reg.t ]
+
+val split_value
+   : least_significant:Reg.t
+  -> most_significant:Reg.t
+  -> how_many_regs
+
 (* Calling conventions *)
 val loc_arguments: Reg.t array -> Reg.t array * int
 val loc_results: Reg.t array -> Reg.t array
 val loc_parameters: Reg.t array -> Reg.t array
-val loc_external_arguments: Reg.t array -> Reg.t array * int
-val loc_external_results: Reg.t array -> Reg.t array
+val loc_external_arguments: Reg.t array -> how_many_regs array * int
+val loc_external_results: Reg.t array -> how_many_regs array
 val loc_exn_bucket: Reg.t
 
 (* Maximal register pressures for pre-spilling *)

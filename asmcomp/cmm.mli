@@ -15,6 +15,7 @@
 type machtype_component =
     Addr
   | Int
+  | Int64  (* only used for 32-bit targets *)
   | Float
 
 type machtype = machtype_component array
@@ -22,6 +23,7 @@ type machtype = machtype_component array
 val typ_void: machtype
 val typ_addr: machtype
 val typ_int: machtype
+val typ_int64: machtype
 val typ_float: machtype
 
 val size_component: machtype_component -> int
@@ -49,6 +51,7 @@ type memory_chunk =
   | Single
   | Double                              (* 64-bit-aligned 64-bit float *)
   | Double_u                            (* word-aligned 64-bit float *)
+  | Int64                               (* only used for 32-bit targets *)
 
 type operation =
     Capply of machtype * Debuginfo.t

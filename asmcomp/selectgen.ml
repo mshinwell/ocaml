@@ -29,6 +29,9 @@ let oper_result_type = function
       begin match c with
         Word -> typ_addr
       | Single | Double | Double_u -> typ_float
+      | Int64 ->
+        assert (Arch.size_int = 4);
+        typ_int64
       | _ -> typ_int
       end
   | Calloc -> typ_addr
@@ -421,6 +424,32 @@ method insert_move_results loc res stacksize =
   if stacksize <> 0 then self#insert(Iop(Istackoffset(-stacksize))) [||] [||];
   self#insert_moves loc res
 
+(* Similar to the above, but for external calls, where (on 32-bit targets)
+   unboxed 64-bit integers may need to be split across multiple registers. *)
+
+method insert_external_move_args env arg loc stacksize =
+  if stacksize <> 0 then self#insert (Iop(Istackoffset stacksize)) [||] [||];
+  for i = 0 to min (Array.length arg) (Array.length loc) - 1 do
+    match loc.(i) with
+    | One_reg dst -> self#insert_move arg.(i) dst
+    | Two_regs (low_dst, high_dst) ->
+      (* Unboxing of 64-bit integers on 32-bit targets. *)
+      assert (Arch.size_int = 4);
+      let low_addr, high_addr =
+        if Arch.big_endian then
+          Cop (Cadda, [Cconst_int 4; arg.(i)]), arg.(i)
+        else
+          arg.(i), Cop (Cadda, [Cconst_int 4; arg.(i)])
+      in
+      let low = self#emit_expr env (Cop (Cload Word, [low_addr])) in
+      let high = self#emit_expr env (Cop (Cload Word, [high_addr])) in
+      match low, high with
+      | Some [| low |], Some [| high |] ->
+        self#insert_move low low_dst;
+        self#insert_move high high_dst
+      | Some _ | None -> assert false
+  done
+
 (* Add an Iop opcode. Can be overridden by processor description
    to insert moves before and after the operation, i.e. for two-address
    instructions, or instructions using dedicated registers. *)
@@ -687,7 +716,7 @@ method private emit_tuple env exp_list =
 method emit_extcall_args env args =
   let r1 = self#emit_tuple env args in
   let (loc_arg, stack_ofs as arg_stack) = Proc.loc_external_arguments r1 in
-  self#insert_move_args r1 loc_arg stack_ofs;
+  self#insert_external_move_args env r1 loc_arg stack_ofs;
   arg_stack
 
 method emit_stores env data regs_addr =
