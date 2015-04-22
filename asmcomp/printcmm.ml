@@ -18,6 +18,7 @@ open Cmm
 let machtype_component ppf = function
   | Addr -> fprintf ppf "addr"
   | Int -> fprintf ppf "int"
+  | Int64 -> fprintf ppf "int64"
   | Float -> fprintf ppf "float"
 
 let machtype ppf mty =
@@ -47,6 +48,7 @@ let chunk = function
   | Single -> "float32"
   | Double -> "float64"
   | Double_u -> "float64u"
+  | Int64 -> "int64"
 
 let operation = function
   | Capply(ty, d) -> "app" ^ Debuginfo.to_string d
