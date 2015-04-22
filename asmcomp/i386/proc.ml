@@ -55,6 +55,7 @@ let num_register_classes = 2
 let register_class r =
   match r.typ with
     Int -> 0
+  | Int64 -> 0
   | Addr -> 0
   | Float -> 1
 
@@ -111,7 +112,7 @@ let word_addressed = false
    times. *)
 
 let calling_conventions first_int last_int first_float last_float make_stack
-                        arg ~is_external =
+                        arg =
   let loc = Array.make (Array.length arg) Reg.dummy in
   let int = ref first_int in
   let float = ref first_float in
@@ -126,9 +127,7 @@ let calling_conventions first_int last_int first_float last_float make_stack
           loc.(i) <- stack_slot (make_stack !ofs) ty;
           ofs := !ofs + size_int
         end
-    | Int64 when not is_external -> assert false
-    | Int64 ->
-
+    | Int64 -> assert false
     | Float ->
         if !float <= last_float then begin
           loc.(i) <- phys_reg !float;
