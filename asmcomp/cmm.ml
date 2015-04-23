@@ -63,7 +63,6 @@ type memory_chunk =
   | Single
   | Double
   | Double_u
-  | Int64
 
 type operation =
     Capply of machtype * Debuginfo.t
