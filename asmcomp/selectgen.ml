@@ -685,7 +685,7 @@ method private emit_tuple_not_flattened env exp_list =
   emit_list exp_list
 
 method private emit_tuple env exp_list =
-  Array.concat (emit_tuple_not_flattened env exp_list)
+  Array.concat (self#emit_tuple_not_flattened env exp_list)
 
 method emit_extcall_args env args =
   let args = self#emit_tuple_not_flattened env args in
