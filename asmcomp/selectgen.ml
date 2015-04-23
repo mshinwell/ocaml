@@ -689,7 +689,9 @@ method private emit_tuple env exp_list =
 
 method emit_extcall_args env args =
   let args = self#emit_tuple_not_flattened env args in
-  let arg_hard_regs, stack_ofs = Proc.loc_external_arguments args in
+  let arg_hard_regs, stack_ofs =
+    Proc.loc_external_arguments (Array.of_list args)
+  in
   (* Flattening [args] and [arg_hard_regs] causes parts of values split
      across multiple registers to line up correctly, by virtue of the
      semantics of [split_int64_for_32bit_target] in cmmgen.ml, and the
