@@ -28,7 +28,7 @@ val rotate_registers: bool
 val loc_arguments: Reg.t array -> Reg.t array * int
 val loc_results: Reg.t array -> Reg.t array
 val loc_parameters: Reg.t array -> Reg.t array
-val loc_external_arguments: Reg.t array -> Reg.how_many_regs array * int
+val loc_external_arguments: Reg.t array -> Reg.one_or_two_regs array * int
 val loc_external_results: Reg.t array -> Reg.t array
 val loc_exn_bucket: Reg.t
 

@@ -196,6 +196,6 @@ let set_of_array v =
            if i >= n then Set.empty else Set.add v.(i) (add_all(i+1))
          in add_all 0
 
-type how_many_regs =
+type one_or_two_regs =
   | One_reg of t
   | Two_regs of [ `Low_part of t ] * [ `High_part of t ]

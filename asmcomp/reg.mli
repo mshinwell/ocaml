@@ -66,8 +66,7 @@ val all_registers: unit -> t list
 val num_registers: unit -> int
 val reinit: unit -> unit
 
-(* Description of registers required to pass an argument or a result to
-   or from an external function. *)
-type how_many_regs =
+(* For the passing of unboxed arguments to external functions. *)
+type one_or_two_regs =
   | One_reg of t
   | Two_regs of [ `Low_part of t ] * [ `High_part of t ]
