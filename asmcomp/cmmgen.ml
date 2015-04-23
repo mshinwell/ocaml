@@ -726,6 +726,20 @@ let box_int bi arg =
                    Cconst_symbol(operations_boxed_int bi);
                    arg'])
 
+let split_int64_for_32bit_target arg =
+  bind "split_int64" arg (fun arg ->
+    let low_addr, high_addr =
+      (* Recall that the custom operations pointer will be at offset zero
+         from [args.(i)]; the two halves of the integer follow that. *)
+      let second_word = Cop (Cadda, [Cconst_int size_addr; arg]) in
+      let third_word = Cop (Cadda, [Cconst_int (size_addr * 2); arg]) in
+      if Arch.big_endian then
+        third_word, second_word
+      else
+        second_word, third_word
+    in
+    Ctuple [Cop (Cload Word, [low_addr]); Cop (Cload Word, [high_addr])])
+
 let rec unbox_int bi arg =
   match arg with
     Cop(Calloc, [hdr; ops; Cop(Clsl, [contents; Cconst_int 32])])
@@ -747,7 +761,7 @@ let rec unbox_int bi arg =
   | Ctrywith(e1, id, e2) -> Ctrywith(unbox_int bi e1, id, unbox_int bi e2)
   | _ ->
       if size_int = 4 && bi = Pint64 then
-        Cop(Cload Int64, [arg])
+        split_int64_for_32bit_target arg
       else
         Cop(Cload(if bi = Pint32 then Thirtytwo_signed else Word),
             [Cop(Cadda, [arg; Cconst_int size_addr])])
@@ -1546,22 +1560,23 @@ let rec transl = function
 and transl_ccall prim args dbg =
   let transl_arg unbox arg =
     match unboxed_number_kind_of_unbox unbox with
-    | No_unboxing -> transl arg
+    | No_unboxing -> typ_addr, transl arg
     (* CR mshinwell for jdimino: maybe call these "Unboxed_float" and
        "Unboxed_integer" *)
-    | Boxed_float -> transl_unbox_float arg
-    | Boxed_integer bi -> transl_unbox_int bi arg
+    | Boxed_float -> typ_float, transl_unbox_float arg
+    | Boxed_integer Pint64 when size_int = 4 ->
+      ([|Int; Int|], transl_unbox_int Pint64 arg)
+    | Boxed_integer bi -> typ_int, transl_unbox_int bi arg
   in
   let rec transl_args unbox_args args =
     match unbox_args, args with
     | [], args ->
         (* We don't require the two lists to be of the same length as
            [default_prim] always sets the arity to [0]. *)
-        List.map transl args
+        List.map (fun arg -> typ_addr, transl arg) args
     | _, [] -> assert false
     | unbox :: unbox_args, arg :: args ->
-        let arg = transl_arg unbox arg in
-        arg :: transl_args unbox_args args
+        (transl_arg unbox arg) :: transl_args unbox_args args
   in
   let typ_res, box_result =
     match unboxed_number_kind_of_unbox prim.prim_native_unbox_res with
@@ -1570,10 +1585,12 @@ and transl_ccall prim args dbg =
     | Boxed_integer Pint64 when size_int = 4 -> ([|Int; Int|], box_int Pint64)
     | Boxed_integer bi -> (typ_int, box_int bi)
   in
+  let typ_args, args =
+    List.split (transl_args prim.prim_native_unbox_args args)
+  in
   box_result
-    (Cop(Cextcall(Primitive.native_name prim, typ_res, prim.prim_alloc,
-                  dbg),
-         transl_args prim.prim_native_unbox_args args))
+    (Cop(Cextcall(Primitive.native_name prim, typ_args,
+                  typ_res, prim.prim_alloc, dbg), args))
 
 and transl_prim_1 p arg dbg =
   match p with

@@ -15,7 +15,6 @@
 type machtype_component =
     Addr
   | Int
-  | Int64  (* only used for 32-bit targets *)
   | Float
 
 type machtype = machtype_component array
@@ -51,11 +50,10 @@ type memory_chunk =
   | Single
   | Double                              (* 64-bit-aligned 64-bit float *)
   | Double_u                            (* word-aligned 64-bit float *)
-  | Int64                               (* only used for 32-bit targets *)
 
 type operation =
     Capply of machtype * Debuginfo.t
-  | Cextcall of string * machtype * bool * Debuginfo.t
+  | Cextcall of string * machtype list * machtype * bool * Debuginfo.t
   | Cload of memory_chunk
   | Calloc
   | Cstore of memory_chunk
@@ -70,6 +68,7 @@ type operation =
   | Ccmpf of comparison
   | Craise of Lambda.raise_kind * Debuginfo.t
   | Ccheckbound of Debuginfo.t
+  | Csplit_int64
 
 type expression =
     Cconst_int of int

@@ -24,7 +24,7 @@ type environment = (Ident.t, Reg.t array) Tbl.t
 
 let oper_result_type = function
     Capply(ty, _) -> ty
-  | Cextcall(s, ty, alloc, _) -> ty
+  | Cextcall(s, _, ty, alloc, _) -> ty
   | Cload c ->
       begin match c with
         Word -> typ_addr
@@ -157,7 +157,7 @@ let join_array rs =
 (* Extract debug info contained in a C-- operation *)
 let debuginfo_op = function
   | Capply(_, dbg) -> dbg
-  | Cextcall(_, _, _, dbg) -> dbg
+  | Cextcall(_, _, _, _, dbg) -> dbg
   | Craise (_, dbg) -> dbg
   | Ccheckbound dbg -> dbg
   | _ -> Debuginfo.none
@@ -424,40 +424,6 @@ method insert_move_results loc res stacksize =
   if stacksize <> 0 then self#insert(Iop(Istackoffset(-stacksize))) [||] [||];
   self#insert_moves loc res
 
-(* Similar to the above, but for external calls. *)
-
-method private insert_external_move_args env args arg loc stacksize =
-  if stacksize <> 0 then self#insert (Iop(Istackoffset stacksize)) [||] [||];
-  let all_dst_regs = ref [] in
-  for i = 0 to min (Array.length arg) (Array.length loc) - 1 do
-    match loc.(i) with
-    | One_reg dst ->
-      all_dst_regs := dst :: !all_dst_regs;
-      self#insert_move arg.(i) dst
-    | Two_regs (`Low_part low_dst, `High_part high_dst) ->
-      (* Unboxing of 64-bit integers on 32-bit targets. *)
-      assert (Arch.size_int = 4);
-      let low_addr, high_addr =
-        (* Recall that the custom operations pointer will be at offset zero
-           from [args.(i)]; the two halves of the integer follow that. *)
-        let offset_by_4 = Cop (Cadda, [Cconst_int 4; args.(i)]) in
-        let offset_by_8 = Cop (Cadda, [Cconst_int 8; args.(i)]) in
-        if Arch.big_endian then
-          offset_by_8, offset_by_4
-        else
-          offset_by_4, offset_by_8
-      in
-      let low = self#emit_expr env (Cop (Cload Word, [low_addr])) in
-      let high = self#emit_expr env (Cop (Cload Word, [high_addr])) in
-      match low, high with
-      | Some [| low |], Some [| high |] ->
-        self#insert_move low low_dst;
-        self#insert_move high high_dst;
-        all_dst_regs := high_dst :: low_dst :: !all_dst_regs
-      | _, _ -> assert false
-  done;
-  Array.of_list (List.rev !all_dst_regs)
-
 (* Add an Iop opcode. Can be overridden by processor description
    to insert moves before and after the operation, i.e. for two-address
    instructions, or instructions using dedicated registers. *)
@@ -564,8 +530,7 @@ method emit_expr env exp =
               self#insert_move_results loc_res rd stack_ofs;
               Some rd
           | Iextcall(lbl, alloc) ->
-              let (loc_arg, stack_ofs) =
-                self#emit_extcall_args env new_args in
+              let (loc_arg, stack_ofs) = self#emit_extcall_args env new_args in
               let rd = self#regs_for ty in
               let loc_res = self#insert_op_debug (Iextcall(lbl, alloc)) dbg
                                     loc_arg (Proc.loc_external_results rd) in
@@ -710,7 +675,7 @@ method private emit_parts_list env exp_list =
             None -> None
           | Some(new_exp, fin_env) -> Some(new_exp :: new_rem, fin_env)
 
-method private emit_tuple env exp_list =
+method private emit_tuple_not_flattened env exp_list =
   let rec emit_list = function
     [] -> []
   | exp :: rem ->
@@ -719,15 +684,21 @@ method private emit_tuple env exp_list =
       match self#emit_expr env exp with
         None -> assert false  (* should have been caught in emit_parts *)
       | Some loc_exp -> loc_exp :: loc_rem in
-  Array.concat(emit_list exp_list)
+
+method private emit_tuple env exp_list =
+  Array.concat (emit_tuple_not_flattened env exp_list)
 
 method emit_extcall_args env args =
-  let r1 = self#emit_tuple env args in
-  let loc_arg, stack_ofs = Proc.loc_external_arguments r1 in
-  let args = Array.of_list args in
-  assert (Array.length r1 = Array.length args);
-  let loc_arg = self#insert_external_move_args env args r1 loc_arg stack_ofs in
-  loc_arg, stack_ofs
+  let args = self#emit_tuple_not_flattened env args in
+  let arg_hard_regs, stack_ofs = Proc.loc_external_arguments args in
+  (* Flattening [args] and [arg_hard_regs] causes parts of values split
+     across multiple registers to line up correctly, by virtue of the
+     semantics of [split_int64_for_32bit_target] in cmmgen.ml, and the
+     required semantics of [loc_external_arguments] (see proc.mli). *)
+  let args = Array.concat args in
+  let arg_hard_regs = Array.concat (Array.to_list arg_hard_regs) in
+  self#insert_move_args args arg_hard_regs stack_ofs;
+  arg_hard_regs, stack_ofs
 
 method emit_stores env data regs_addr =
   let a =

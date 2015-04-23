@@ -13,7 +13,6 @@
 type machtype_component =
     Addr
   | Int
-  | Int64
   | Float
 
 type machtype = machtype_component array
@@ -21,13 +20,11 @@ type machtype = machtype_component array
 let typ_void = ([||] : machtype_component array)
 let typ_addr = [|Addr|]
 let typ_int = [|Int|]
-let typ_int64 = [|Int64|]
 let typ_float = [|Float|]
 
 let size_component = function
     Addr -> Arch.size_addr
   | Int -> Arch.size_int
-  | Int64 -> 8
   | Float -> Arch.size_float
 
 let size_machtype mty =
