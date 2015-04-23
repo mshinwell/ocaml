@@ -22,7 +22,6 @@ type machtype = machtype_component array
 val typ_void: machtype
 val typ_addr: machtype
 val typ_int: machtype
-val typ_int64: machtype
 val typ_float: machtype
 
 val size_component: machtype_component -> int
@@ -68,7 +67,6 @@ type operation =
   | Ccmpf of comparison
   | Craise of Lambda.raise_kind * Debuginfo.t
   | Ccheckbound of Debuginfo.t
-  | Csplit_int64
 
 type expression =
     Cconst_int of int
