@@ -24,7 +24,7 @@ type environment = (Ident.t, Reg.t array) Tbl.t
 
 let oper_result_type = function
     Capply(ty, _) -> ty
-  | Cextcall(s, _, ty, alloc, _) -> ty
+  | Cextcall(s, ty, alloc, _) -> ty
   | Cload c ->
       begin match c with
         Word -> typ_addr
@@ -157,7 +157,7 @@ let join_array rs =
 (* Extract debug info contained in a C-- operation *)
 let debuginfo_op = function
   | Capply(_, dbg) -> dbg
-  | Cextcall(_, _, _, _, dbg) -> dbg
+  | Cextcall(_, _, _, dbg) -> dbg
   | Craise (_, dbg) -> dbg
   | Ccheckbound dbg -> dbg
   | _ -> Debuginfo.none
