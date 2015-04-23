@@ -581,8 +581,6 @@ let emit_instr fallthrough i =
           I.fld (addressing addr REAL4 i 0)
       | Double | Double_u ->
           I.fld (addressing addr REAL8 i 0)
-      | Int64 ->
-          assert false  (* should have been expanded in selection.ml *)
       end
   | Lop(Istore(chunk, addr, _)) ->
       begin match chunk with
@@ -606,8 +604,6 @@ let emit_instr fallthrough i =
             I.fld (reg i.arg.(0));
             I.fstp (addressing addr REAL8 i 1)
           end
-      | Int64 ->
-          assert false  (* [Int64] is never used for stores *)
       end
   | Lop(Ialloc n) ->
       if !fastcode_flag then begin
