@@ -683,7 +683,9 @@ method private emit_tuple_not_flattened env exp_list =
       let loc_rem = emit_list rem in
       match self#emit_expr env exp with
         None -> assert false  (* should have been caught in emit_parts *)
-      | Some loc_exp -> loc_exp :: loc_rem in
+      | Some loc_exp -> loc_exp :: loc_rem
+  in
+  emit_list exp_list
 
 method private emit_tuple env exp_list =
   Array.concat (emit_tuple_not_flattened env exp_list)
