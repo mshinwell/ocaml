@@ -29,9 +29,6 @@ let oper_result_type = function
       begin match c with
         Word -> typ_addr
       | Single | Double | Double_u -> typ_float
-      | Int64 ->
-        assert (Arch.size_int = 4);
-        typ_int64
       | _ -> typ_int
       end
   | Calloc -> typ_addr
