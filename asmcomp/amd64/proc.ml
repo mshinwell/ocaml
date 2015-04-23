@@ -101,6 +101,7 @@ let num_register_classes = 2
 let register_class r =
   match r.typ with
     Int -> 0
+  | Int64 -> assert false  (* never used for 64-bit targets *)
   | Addr -> 0
   | Float -> 1
 
@@ -164,6 +165,7 @@ let calling_conventions first_int last_int first_float last_float make_stack
           loc.(i) <- stack_slot (make_stack !ofs) ty;
           ofs := !ofs + size_int
         end
+    | Int64 -> assert false  (* never used for 64-bit targets *)
     | Float ->
         if !float <= last_float then begin
           loc.(i) <- phys_reg !float;
@@ -224,6 +226,7 @@ let win64_loc_external_arguments arg =
           loc.(i) <- stack_slot (Outgoing !ofs) ty;
           ofs := !ofs + size_int
         end
+    | Int64 -> assert false  (* never used for 64-bit targets *)
     | Float ->
         if !reg < 4 then begin
           loc.(i) <- phys_reg win64_float_external_arguments.(!reg);
@@ -235,8 +238,12 @@ let win64_loc_external_arguments arg =
   done;
   (loc, Misc.align !ofs 16)  (* keep stack 16-aligned *)
 
-let loc_external_arguments =
-  if win64 then win64_loc_external_arguments else unix_loc_external_arguments
+let loc_external_arguments arg =
+  let loc, alignment =
+    if win64 then win64_loc_external_arguments arg
+    else unix_loc_external_arguments arg
+  in
+  Array.map (fun reg -> One_reg reg) loc, alignment
 
 let loc_exn_bucket = rax
 
