@@ -55,7 +55,6 @@ let num_register_classes = 2
 let register_class r =
   match r.typ with
     Int -> 0
-  | Int64 -> 0
   | Addr -> 0
   | Float -> 1
 
@@ -127,7 +126,6 @@ let calling_conventions first_int last_int first_float last_float make_stack
           loc.(i) <- stack_slot (make_stack !ofs) ty;
           ofs := !ofs + size_int
         end
-    | Int64 -> assert false
     | Float ->
         if !float <= last_float then begin
           loc.(i) <- phys_reg !float;
