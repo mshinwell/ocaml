@@ -60,6 +60,7 @@ let num_register_classes = 2
 let register_class r =
   match r.typ with
   | (Int | Addr)  -> 0
+  | Int64 -> assert false  (* never used for 64-bit targets *)
   | Float         -> 1
 
 let num_available_registers =
@@ -154,7 +155,9 @@ let loc_results res =
    Return values in r0...r1 or d0. *)
 
 let loc_external_arguments arg =
-  calling_conventions 0 7 100 107 outgoing arg
+  let loc, alignment = calling_conventions 0 7 100 107 outgoing arg in
+  Array.map (fun reg -> One_reg reg) loc, alignment
+
 let loc_external_results res =
   let (loc, _) = calling_conventions 0 1 100 100 not_supported res in loc
 
