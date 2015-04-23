@@ -2077,9 +2077,12 @@ and transl_unbox_int bi = function
   | Uconst(Uconst_ref(_, Uconst_nativeint n)) ->
       Cconst_natint n
   | Uconst(Uconst_ref(_, Uconst_int64 n)) ->
-      (* CR mshinwell for jdimino: this assertion fails when giving int64
-         constants for unboxing on 32-bit *)
-      assert (size_int = 8); Cconst_natint (Int64.to_nativeint n)
+      if size_int = 8 then
+        Cconst_natint (Int64.to_nativeint n)
+      else
+        let low = Int64.to_nativeint n in
+        let high = Int64.to_nativeint (Int64.shift_right_logical n 32) in
+        Ctuple [Cconst_natint low; Cconst_natint high]
   | Uprim(Pbintofint bi',[Uconst(Uconst_int i)],_) when bi = bi' ->
       Cconst_int i
   | exp -> unbox_int bi (transl exp)
