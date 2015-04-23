@@ -746,8 +746,11 @@ let rec unbox_int bi arg =
   | Ccatch(n, ids, e1, e2) -> Ccatch(n, ids, unbox_int bi e1, unbox_int bi e2)
   | Ctrywith(e1, id, e2) -> Ctrywith(unbox_int bi e1, id, unbox_int bi e2)
   | _ ->
-      Cop(Cload(if bi = Pint32 then Thirtytwo_signed else Word),
-          [Cop(Cadda, [arg; Cconst_int size_addr])])
+      if size_int = 4 && bi = Pint64 then
+        Cop(Cload Int64, [arg])
+      else
+        Cop(Cload(if bi = Pint32 then Thirtytwo_signed else Word),
+            [Cop(Cadda, [arg; Cconst_int size_addr])])
 
 let make_unsigned_int bi arg =
   if bi = Pint32 && size_int = 8
@@ -1544,6 +1547,8 @@ and transl_ccall prim args dbg =
   let transl_arg unbox arg =
     match unboxed_number_kind_of_unbox unbox with
     | No_unboxing -> transl arg
+    (* CR mshinwell for jdimino: maybe call these "Unboxed_float" and
+       "Unboxed_integer" *)
     | Boxed_float -> transl_unbox_float arg
     | Boxed_integer bi -> transl_unbox_int bi arg
   in
@@ -2059,6 +2064,8 @@ and transl_unbox_int bi = function
   | Uconst(Uconst_ref(_, Uconst_nativeint n)) ->
       Cconst_natint n
   | Uconst(Uconst_ref(_, Uconst_int64 n)) ->
+      (* CR mshinwell for jdimino: this assertion fails when giving int64
+         constants for unboxing on 32-bit *)
       assert (size_int = 8); Cconst_natint (Int64.to_nativeint n)
   | Uprim(Pbintofint bi',[Uconst(Uconst_int i)],_) when bi = bi' ->
       Cconst_int i

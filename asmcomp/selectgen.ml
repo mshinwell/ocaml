@@ -424,9 +424,8 @@ method insert_move_results loc res stacksize =
   if stacksize <> 0 then self#insert(Iop(Istackoffset(-stacksize))) [||] [||];
   self#insert_moves loc res
 
-(* Similar to the above, but for external calls, where (on 32-bit targets)
-   unboxed 64-bit integers may need to be split across multiple registers. *)
-
+(* Similar to the above, but for external calls. *)
+(*
 method insert_external_move_args env arg loc stacksize =
   if stacksize <> 0 then self#insert (Iop(Istackoffset stacksize)) [||] [||];
   for i = 0 to min (Array.length arg) (Array.length loc) - 1 do
@@ -449,6 +448,7 @@ method insert_external_move_args env arg loc stacksize =
         self#insert_move high high_dst
       | Some _ | None -> assert false
   done
+*)
 
 (* Add an Iop opcode. Can be overridden by processor description
    to insert moves before and after the operation, i.e. for two-address
@@ -713,11 +713,13 @@ method private emit_tuple env exp_list =
       | Some loc_exp -> loc_exp :: loc_rem in
   Array.concat(emit_list exp_list)
 
-method emit_extcall_args env args =
+method emit_extcall_args env args = assert false
+(*
   let r1 = self#emit_tuple env args in
   let (loc_arg, stack_ofs as arg_stack) = Proc.loc_external_arguments r1 in
   self#insert_external_move_args env r1 loc_arg stack_ofs;
   arg_stack
+*)
 
 method emit_stores env data regs_addr =
   let a =

@@ -290,9 +290,11 @@ method select_push exp =
       (Ispecific(Ipush_load_float addr), arg), None
   | Cop(Cload Int64, [loc]) ->
       (* The low part of the int64 is at a lower address than the
-         high part. *)
-      let (low_addr, low_arg) = self#select_addressing Word loc in
-      let high_addr = Cop (Cadda (Cconst_int 4, [loc])) in
+         high part.  We must be careful not to forget the pointer to the
+         custom operations struct, which comes before the two parts. *)
+      let low_addr = Cop (Cadda, [Cconst_int 4; loc]) in
+      let (low_addr, low_arg) = self#select_addressing Word low_addr in
+      let high_addr = Cop (Cadda, [Cconst_int 8; loc]) in
       let (high_addr, high_arg) = self#select_addressing Word high_addr in
       (* First push the high part, then the low part. *)
       (Ispecific(Ipush_load high_addr), high_arg),
