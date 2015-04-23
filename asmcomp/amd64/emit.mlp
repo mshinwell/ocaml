@@ -534,8 +534,6 @@ let emit_instr fallthrough i =
           I.cvtss2sd (addressing addr REAL4 i 0) dest
       | Double | Double_u ->
           I.movsd (addressing addr REAL8 i 0) dest
-      | Int64 ->
-          assert false  (* not used for 64-bit targets *)
       end
   | Lop(Istore(chunk, addr, _)) ->
       begin match chunk with
@@ -552,8 +550,6 @@ let emit_instr fallthrough i =
           I.movss xmm15 (addressing addr REAL4 i 1)
       | Double | Double_u ->
           I.movsd (arg i 0) (addressing addr REAL8 i 1)
-      | Int64 ->
-          assert false  (* not used for 64-bit targets *)
       end
   | Lop(Ialloc n) ->
       if !fastcode_flag then begin
