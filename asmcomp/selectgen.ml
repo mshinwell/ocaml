@@ -428,11 +428,11 @@ method insert_move_results loc res stacksize =
 
 method private insert_external_move_args env args arg loc stacksize =
   if stacksize <> 0 then self#insert (Iop(Istackoffset stacksize)) [||] [||];
-  let used_regs = ref [] in
+  let all_dst_regs = ref [] in
   for i = 0 to min (Array.length arg) (Array.length loc) - 1 do
     match loc.(i) with
     | One_reg dst ->
-      used_regs := dst :: !used_regs;
+      all_dst_regs := dst :: !all_dst_regs;
       self#insert_move arg.(i) dst
     | Two_regs (`Low_part low_dst, `High_part high_dst) ->
       (* Unboxing of 64-bit integers on 32-bit targets. *)
@@ -449,10 +449,10 @@ method private insert_external_move_args env args arg loc stacksize =
       | Some [| low |], Some [| high |] ->
         self#insert_move low low_dst;
         self#insert_move high high_dst;
-        used_regs := high_dst :: low_dst :: !used_regs
+        all_dst_regs := high_dst :: low_dst :: !all_dst_regs
       | _, _ -> assert false
   done;
-  Array.of_list (List.rev !used_regs)
+  Array.of_list (List.rev !all_dst_regs)
 
 (* Add an Iop opcode. Can be overridden by processor description
    to insert moves before and after the operation, i.e. for two-address
