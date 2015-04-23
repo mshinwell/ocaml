@@ -1560,20 +1560,18 @@ let rec transl = function
 and transl_ccall prim args dbg =
   let transl_arg unbox arg =
     match unboxed_number_kind_of_unbox unbox with
-    | No_unboxing -> typ_addr, transl arg
+    | No_unboxing -> transl arg
     (* CR mshinwell for jdimino: maybe call these "Unboxed_float" and
        "Unboxed_integer" *)
-    | Boxed_float -> typ_float, transl_unbox_float arg
-    | Boxed_integer Pint64 when size_int = 4 ->
-      ([|Int; Int|], transl_unbox_int Pint64 arg)
-    | Boxed_integer bi -> typ_int, transl_unbox_int bi arg
+    | Boxed_float -> transl_unbox_float arg
+    | Boxed_integer bi -> transl_unbox_int bi arg
   in
   let rec transl_args unbox_args args =
     match unbox_args, args with
     | [], args ->
         (* We don't require the two lists to be of the same length as
            [default_prim] always sets the arity to [0]. *)
-        List.map (fun arg -> typ_addr, transl arg) args
+        List.map transl args
     | _, [] -> assert false
     | unbox :: unbox_args, arg :: args ->
         (transl_arg unbox arg) :: transl_args unbox_args args
@@ -1585,11 +1583,9 @@ and transl_ccall prim args dbg =
     | Boxed_integer Pint64 when size_int = 4 -> ([|Int; Int|], box_int Pint64)
     | Boxed_integer bi -> (typ_int, box_int bi)
   in
-  let typ_args, args =
-    List.split (transl_args prim.prim_native_unbox_args args)
-  in
+  let args = transl_args prim.prim_native_unbox_args args in
   box_result
-    (Cop(Cextcall(Primitive.native_name prim, typ_args,
+    (Cop(Cextcall(Primitive.native_name prim,
                   typ_res, prim.prim_alloc, dbg), args))
 
 and transl_prim_1 p arg dbg =
