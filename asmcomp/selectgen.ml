@@ -438,10 +438,14 @@ method private insert_external_move_args env args arg loc stacksize =
       (* Unboxing of 64-bit integers on 32-bit targets. *)
       assert (Arch.size_int = 4);
       let low_addr, high_addr =
+        (* Recall that the custom operations pointer will be at offset zero
+           from [args.(i)]; the two halves of the integer follow that. *)
+        let offset_by_4 = Cop (Cadda, [Cconst_int 4; args.(i)]) in
+        let offset_by_8 = Cop (Cadda, [Cconst_int 8; args.(i)]) in
         if Arch.big_endian then
-          Cop (Cadda, [Cconst_int 4; args.(i)]), args.(i)
+          offset_by_8, offset_by_4
         else
-          args.(i), Cop (Cadda, [Cconst_int 4; args.(i)])
+          offset_by_4, offset_by_8
       in
       let low = self#emit_expr env (Cop (Cload Word, [low_addr])) in
       let high = self#emit_expr env (Cop (Cload Word, [high_addr])) in
