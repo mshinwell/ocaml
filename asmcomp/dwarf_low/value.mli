@@ -20,16 +20,18 @@
 (*                                                                     *)
 (***********************************************************************)
 
+(* Values encoded in DWARF forms. *)
+
 type 'form t
 
 include Emittable.S with type t := t
 
 val constant_true : Form.flag_present t
 val constant_bool : bool -> Form.data1 t
-val constant_one_byte_int_exn : int -> Form.data1 t
-val constant_two_byte_int_exn : int -> Form.data2 t
-val constant_four_byte_int_exn : Int32.t -> Form.data4 t
-val constant_eight_byte_int_exn : Int64.t -> Form.data8 t
+val constant_one_byte_int : Int8.t -> Form.data1 t
+val constant_two_byte_int : Int16.t -> Form.data2 t
+val constant_four_byte_int : Int32.t -> Form.data4 t
+val constant_eight_byte_int : Int64.t -> Form.data8 t
 
 val indirect_string : string -> Form.strp t
 

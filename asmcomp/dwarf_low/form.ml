@@ -46,6 +46,7 @@ type exprloc = [ `exprloc ]
 type flag_present = [ `flag_present ]
 type ref_sig8 = [ `ref_sig8 ]
 
+(* We omit the "DW_FORM_" prefix. *)
 type ('dwarf_classes, 'form) t =
   | Addr : (Class.address, addr) t
   | Block : (Class.block, block) t

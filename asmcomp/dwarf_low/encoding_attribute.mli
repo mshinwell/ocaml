@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013, Jane Street Holding                                *)
+(*  Copyright 2013--2015, Jane Street Group, LLC                       *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -20,9 +20,24 @@
 (*                                                                     *)
 (***********************************************************************)
 
-type t
+type t =
+  | Address
+  | Boolean
+  | Complex_float
+  | Float
+  | Signed
+  | Signed_char
+  | Unsigned
+  | Unsigned_char
+  | Imaginary_float
+  | Packed_decimal
+  | Numeric_string
+  | Edited
+  | Signed_fixed
+  | Unsigned_fixed
+  | Decimal_float
+  | UTF
+  | User of Int8.t
 
-val signed : t
-
-val size : t -> int
-val as_dwarf_value : t -> Form.data1 Value.t
+include Emittable with type t := t
+include Parseable with type t := t

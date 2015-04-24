@@ -122,15 +122,10 @@ let compare t1 t2 =
   compare (encode t1) (encode t2)
 
 let size t =
-  Int64.add (Value.size (Value.as_uleb128 (encode t)))
-    (Form.size (form t))
+  Value.size (Value.as_uleb128 (encode t))
 
 let emit t ~emitter =
-  Value.emit (Value.as_uleb128 (encode t)) ~emitter;
-  Form.emit (form t) ~emitter
-
-
-
+  Value.emit (Value.as_uleb128 (encode t)) ~emitter
 
 let parse ~stream =
   Stream.read_uleb128_as_int stream

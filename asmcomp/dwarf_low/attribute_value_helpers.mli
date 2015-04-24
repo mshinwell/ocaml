@@ -23,25 +23,80 @@
 (* Helper functions for constructing attribute values that do not
    require a knowledge of DWARF forms. *)
 
-val create_low_pc : address_label:Linearize.label -> t
-val create_high_pc : address_label:Linearize.label -> t
-val create_low_pc_from_symbol : symbol:string -> t
-val create_high_pc_from_symbol : symbol:string -> t
-val create_producer : producer_name:string -> t
-val create_name : string -> t
-val create_comp_dir : directory:string -> t
-val create_stmt_list : section_offset_label:Linearize.label -> t
-val create_external : is_visible_externally:bool -> t
-val create_location : location_list_label:Linearize.label -> t
-val create_type : proto_die:Linearize.label -> t
-val create_import : proto_die:Linearize.label -> t
-val create_encoding : encoding:Encoding_attribute.t -> t
-val create_byte_size_exn : byte_size:int -> t
-val create_linkage_name : linkage_name:string -> t
-val create_sibling : proto_die:Linearize.label -> t
-val create_single_location_description : Single_location_description.t -> t
+val create_low_pc
+   : address_label:Linearize.label
+  -> Attribute_value.t
+
+val create_high_pc
+   : address_label:Linearize.label
+  -> Attribute_value.t
+
+val create_low_pc_from_symbol
+   : symbol:string
+  -> Attribute_value.t
+
+val create_high_pc_from_symbol
+   : symbol:string
+  -> Attribute_value.t
+
+val create_producer
+   : producer_name:string
+  -> Attribute_value.t
+
+val create_name
+   : string
+  -> Attribute_value.t
+
+val create_comp_dir
+   : directory:string
+  -> Attribute_value.t
+
+val create_stmt_list
+   : section_offset_label:Linearize.label
+  -> Attribute_value.t
+
+val create_external
+   : is_visible_externally:bool
+  -> Attribute_value.t
+
+val create_location
+   : location_list_label:Linearize.label
+  -> Attribute_value.t
+
+val create_type
+   : proto_die:Linearize.label
+  -> Attribute_value.t
+
+val create_import
+   : proto_die:Linearize.label
+  -> Attribute_value.t
+
+val create_encoding
+   : encoding:Encoding_attribute.t
+  -> Attribute_value.t
+
+val create_byte_size_exn
+   : byte_size:int
+  -> Attribute_value.t
+
+val create_linkage_name
+   : linkage_name:string
+  -> Attribute_value.t
+
+val create_sibling
+   : proto_die:Linearize.label
+  -> Attribute_value.t
+
+val create_single_location_description
+   : Single_location_description.t
+  -> Attribute_value.t
 
 (* DW_AT_specification across compilation units. *)
-val create_specification_different_unit : die_symbol:string -> t
+val create_specification_different_unit
+   : die_symbol:string
+  -> Attribute_value.t
+
 (* DW_AT_specification within the same compilation unit. *)
-val create_specification_same_unit : proto_die:Linearize.label -> t
+val create_specification_same_unit
+   : proto_die:Linearize.label
+  -> Attribute_value.t

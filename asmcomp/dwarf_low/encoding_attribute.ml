@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013--2015, Jane Street Holding                          *)
+(*  Copyright 2013--2015, Jane Street Group, LLC                       *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -20,53 +20,77 @@
 (*                                                                     *)
 (***********************************************************************)
 
+(* We omit the "DW_ATE_" prefix. *)
 type t =
-  | DW_ATE_address
-  | DW_ATE_boolean
-  | DW_ATE_complex_float
-  | DW_ATE_float
-  | DW_ATE_signed
-  | DW_ATE_signed_char
-  | DW_ATE_unsigned
-  | DW_ATE_unsigned_char
-  | DW_ATE_imaginary_float
-  | DW_ATE_packed_decimal
-  | DW_ATE_numeric_string
-  | DW_ATE_edited
-  | DW_ATE_signed_fixed
-  | DW_ATE_unsigned_fixed
-  | DW_ATE_decimal_float
-  | DW_ATE_UTF
+  | Address
+  | Boolean
+  | Complex_float
+  | Float
+  | Signed
+  | Signed_char
+  | Unsigned
+  | Unsigned_char
+  | Imaginary_float
+  | Packed_decimal
+  | Numeric_string
+  | Edited
+  | Signed_fixed
+  | Unsigned_fixed
+  | Decimal_float
+  | UTF
   | User of Int8.t
 
-let dw_ate_lo_user = 0x80
-let dw_ate_hi_user = 0xff
+let lo_user = 0x80
+let hi_user = 0xff
 
-let signed = DW_ATE_signed
+let encode t =
+  let code =
+    | Signed -> 0x05
+    | Address -> 0x01
+    | Boolean -> 0x02
+    | Complex_float -> 0x03
+    | Float -> 0x04
+    | Signed -> 0x05
+    | Signed_char -> 0x06
+    | Unsigned -> 0x07
+    | Unsigned_char -> 0x08
+    | Imaginary_float -> 0x09
+    | Packed_decimal -> 0x0a
+    | Numeric_string -> 0x0b
+    | Edited -> 0x0c
+    | Signed_fixed -> 0x0d
+    | Unsigned_fixed -> 0x0e
+    | Decimal_float -> 0x0f
+    | UTF -> 0x10
+    | User code ->
+      assert (code >= lo_user && code <= hi_user);
+      code
+  in
+  Value.constant_one_byte_int code
 
-let encode = function
-  | DW_ATE_signed -> 0x05
-  | DW_ATE_address -> 0x01
-  | DW_ATE_boolean -> 0x02
-  | DW_ATE_complex_float -> 0x03
-  | DW_ATE_float -> 0x04
-  | DW_ATE_signed -> 0x05
-  | DW_ATE_signed_char -> 0x06
-  | DW_ATE_unsigned -> 0x07
-  | DW_ATE_unsigned_char -> 0x08
-  | DW_ATE_imaginary_float -> 0x09
-  | DW_ATE_packed_decimal -> 0x0a
-  | DW_ATE_numeric_string -> 0x0b
-  | DW_ATE_edited -> 0x0c
-  | DW_ATE_signed_fixed -> 0x0d
-  | DW_ATE_unsigned_fixed -> 0x0e
-  | DW_ATE_decimal_float -> 0x0f
-  | DW_ATE_UTF -> 0x10
-  | User code ->
-    assert (code >= dw_ate_lo_user && code <= dw_ate_hi_user);
-    code
+let parse ~stream =
+  Stream.read_byte stream
+  >>= function
+  | 0x05 -> Ok Signed
+  | 0x01 -> Ok Address
+  | 0x02 -> Ok Boolean
+  | 0x03 -> Ok Complex_float
+  | 0x04 -> Ok Float
+  | 0x05 -> Ok Signed
+  | 0x06 -> Ok Signed_char
+  | 0x07 -> Ok Unsigned
+  | 0x08 -> Ok Unsigned_char
+  | 0x09 -> Ok Imaginary_float
+  | 0x0a -> Ok Packed_decimal
+  | 0x0b -> Ok Numeric_string
+  | 0x0c -> Ok Edited
+  | 0x0d -> Ok Signed_fixed
+  | 0x0e -> Ok Unsigned_fixed
+  | 0x0f -> Ok Decimal_float
+  | 0x10 -> Ok UTF
+  | code when code >= lo_user && code <= hi_user -> Ok (User code)
+  | code ->
+    Error (Printf.sprintf "unknown DWARF encoding attribute code 0x%x" code)
 
-let size _t = 1
-
-let as_dwarf_value t =
-  Value.as_byte (encode t)
+let emit t ~emitter = Value.emit (encode t) ~emitter
+let size t = Value.size (encode t)

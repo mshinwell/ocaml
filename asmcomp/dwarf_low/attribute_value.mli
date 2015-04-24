@@ -20,24 +20,15 @@
 (*                                                                     *)
 (***********************************************************************)
 
-type ('dwarf_classes, 'form) t
+(* The value of an attribute in a given form. *)
+
+type t
 
 include Emittable.S with type t := t
 
 val create
-   : 'dwarf_classes Attribute.t
-  -> ('dwarf_classes, 'form) Form.t
+   : ('dwarf_classes, 'form) Attribute_specification.t
   -> 'form Value.t
-  -> ('dwarf_classes, 'form) t
+  -> t
 
-(*
-Attribute_value.create Attribute.Low_pc Form.address
-  (Value.code_address_from_label ...)
-*)
-
-
-val attribute : ('dwarf_classes, _) t -> 'dwarf_classes Attribute.t
-
-val form
-   : ('dwarf_classes, 'value_layout) t
-  -> ('dwarf_classes, 'value_layout) Form.t
+val attribute_specification : t -> Attribute_specification.Sealed.t
