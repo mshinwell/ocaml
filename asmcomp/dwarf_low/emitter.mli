@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013--2014, Jane Street Holding                          *)
+(*  Copyright 2013--2015, Jane Street Group, LLC                       *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -51,3 +51,19 @@ val emit_symbol_to_label_alias
   -> unit
 
 val target : t -> [ `MacOS_X | `Other ]
+
+val emit_byte : t -> Int8.t -> unit
+val emit_two_byte_int : t -> Int16.t -> unit
+val emit_four_byte_int : t -> Int32.t -> unit
+val emit_eight_byte_int : t -> Int64.t -> unit
+val emit_native_int : t -> Nativeint.t -> unit
+
+val emit_uleb128 : t -> int -> unit
+
+val emit_offset_into_section
+   : t
+  -> [ `Label of Linearize.label | `Symbol of string ]
+  -> Section_names.t
+  -> unit
+val emit_code_address_from_label : t -> Linearize.label -> unit
+val emit_code_address_from_symbol : t -> string -> unit

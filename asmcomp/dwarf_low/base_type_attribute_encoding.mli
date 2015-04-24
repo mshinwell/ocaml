@@ -20,6 +20,9 @@
 (*                                                                     *)
 (***********************************************************************)
 
+(* DWARF base type attribute encodings (DWARF-4 specification section 7.8). *)
+
+(* We omit the "DW_ATE_" prefix. *)
 type t =
   | Address
   | Boolean

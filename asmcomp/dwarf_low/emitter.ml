@@ -99,3 +99,112 @@ let emit_symbol_to_label_alias t ~old_label ~new_sym =
   t.emit_string ",@function\n"
 
 let target t = t.target
+
+let emit_directive_for_offset t =
+  match Dwarf_format.size () with
+  | `Thirty_two -> emit_string t "\t.long\t"
+  | `Sixty_four -> emit_string t "\t.quad\t"
+
+let emit_directive_for_nativeint t =
+  match Arch.size_addr with
+  | 4 -> emit_string t "\t.long\t"
+  | 8 -> emit_string t "\t.quad\t"
+  | _ -> failwith "DWARF emitter does not understand Arch.size_addr's value"
+
+let emit_as_native_int datum t =
+  emit_directive_for_nativeint t;
+  match datum with
+  | `Native_int n ->
+    emit_string t (Printf.sprintf "%nd\n" n)
+  | `Label label ->
+    emit_label t label;
+    emit_string t "\n"
+  | `String str ->
+    emit_string t (Printf.sprintf "%s\n" str)
+  | `Symbol symbol ->
+    emit_symbol t symbol;
+    emit_string t "\n"
+
+let emit_code_address_from_label t label =
+  emit_as_native_int (`Label label) t
+
+let emit_code_address_from_symbol t symbol =
+  emit_as_native_int (`Symbol symbol) t
+
+let emit_eight_byte_int t i =
+  emit_string t (sprintf "\t.quad\t0x%Lx\n" i)
+
+let emit_four_byte_int t i =
+  emit_string t (sprintf "\t.long\t0x%lx\n" i)
+
+let emit_two_byte_int t i =
+  let directive =
+    match target t with
+    | `Other -> "value"
+    | `MacOS_X -> "short"
+  in
+  emit_string t (sprintf "\t.%s\t0x%x\n" directive i)
+
+let emit_byte t i =
+  emit_string t (sprintf "\t.byte\t0x%x\n" b)
+
+let emit_uleb128 t i =
+  emit_string t (sprintf "\t.uleb128\t0x%x\n" i)
+
+let emit_leb128 t i =
+  emit_string t (sprintf "\t.sleb128\t%d\n" i)
+
+let emit_offset_into_section t datum section =
+  match target t with
+  | `Other ->
+    emit_directive_for_offset ~emitter;
+    begin match datum with
+    | `Label label -> emit_label t label
+    | `Symbol symbol -> emit_symbol t symbol
+    end;
+    emit_string t "\n"
+  | `MacOS_X -> assert false
+
+(* offset from label
+let emit_offset_from_var t var = (* CR mshinwell: bad name? *)
+  emit_directive_for_offset t;
+  emit_string t var;
+  emit_string t "\n"
+
+let set_counter = ref 0
+    begin match Emitter.target emitter with
+    | `Other ->
+      emit_directive_for_offset ~emitter;
+      Emitter.emit_label emitter label;
+      Emitter.emit_string emitter "\n"
+    | `MacOS_X ->
+      let count = !set_counter in
+      let name = Printf.sprintf "Ldwarf_value%d" count in
+      incr set_counter;
+      Emitter.emit_string emitter name;
+      Emitter.emit_string emitter " = ";
+      Emitter.emit_label emitter label;
+      Emitter.emit_string emitter "-";
+      Emitter.emit_label emitter (Section_names.starting_label section);
+      Emitter.emit_string emitter "\n";
+      emit (Offset_from_var name) ~emitter
+    end
+
+let emit_offset_from_symbol t name symbol =
+  match target t with
+  | `Other ->
+    emit_directive_for_offset t;
+    emit_symbol t symbol;
+    emit_string t "\n"
+  | `MacOS_X ->
+    let count = !set_counter in
+    let name = Printf.sprintf "Ldwarf_value%d" count in
+    incr set_counter;
+    emit_string t name;
+    emit_string t " = ";
+    emit_symbol t symbol;
+    emit_string t "-";
+    emit_label t (Section_names.starting_label section);
+    emit_string t "\n";
+    emit_offset_from_var t name
+*)
