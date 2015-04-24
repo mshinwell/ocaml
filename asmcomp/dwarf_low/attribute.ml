@@ -118,120 +118,106 @@ type 'dwarf_classes t =
 let low_user = 0x2000
 let hi_user = 0x3fff
 
-let compare t1 t2 =
-  compare (encode t1) (encode t2)
-
-let size t =
-  Value.size (Value.as_uleb128 (encode t))
-
-let emit t ~emitter =
-  Value.emit (Value.as_uleb128 (encode t)) ~emitter
+let compare = Pervasives.compare
 
 let parse ~stream =
   Stream.read_uleb128_as_int stream
-  >>= fun code ->
-  Form.parse ~stream
-  >>= fun form ->
-  let t =
-    (* XXX (0, 0) as (code, form) = end of attribute specifications *)
-    match code with
-    | 0x01 -> Some Sibling
-    | 0x02 -> Some Location
-    | 0x03 -> Some Name
-    | 0x09 -> Some Ordering
-    | 0x0b -> Some Byte_size
-    | 0x0c -> Some Bit_offset
-    | 0x0d -> Some Bit_size
-    | 0x10 -> Some Stmt_list
-    | 0x11 -> Some Low_pc
-    | 0x12 -> Some High_pc
-    | 0x13 -> Some Language
-    | 0x15 -> Some Discr
-    | 0x16 -> Some Discr_value
-    | 0x17 -> Some Visibility
-    | 0x18 -> Some Import
-    | 0x19 -> Some String_length
-    | 0x1a -> Some Common_reference
-    | 0x1b -> Some Comp_dir
-    | 0x1c -> Some Const_value
-    | 0x1d -> Some Containing_type
-    | 0x1e -> Some Default_value
-    | 0x20 -> Some Inline
-    | 0x21 -> Some Is_optional
-    | 0x22 -> Some Lower_bound
-    | 0x25 -> Some Producer
-    | 0x27 -> Some Prototyped
-    | 0x2a -> Some Return_addr
-    | 0x2c -> Some Start_scope
-    | 0x2e -> Some Bit_stride
-    | 0x2f -> Some Upper_bound
-    | 0x31 -> Some Abstract_origin
-    | 0x32 -> Some Accessibility
-    | 0x33 -> Some Address_class
-    | 0x34 -> Some Artificial
-    | 0x35 -> Some Base_types
-    | 0x36 -> Some Calling_convention
-    | 0x37 -> Some Count
-    | 0x38 -> Some Data_member_location
-    | 0x39 -> Some Decl_column
-    | 0x3a -> Some Decl_file
-    | 0x3b -> Some Decl_line
-    | 0x3c -> Some Declaration
-    | 0x3d -> Some Discr_list
-    | 0x3e -> Some Encoding
-    | 0x3f -> Some External
-    | 0x40 -> Some Frame_base
-    | 0x41 -> Some Friend
-    | 0x42 -> Some Identifier_case
-    | 0x43 -> Some Macro_info
-    | 0x44 -> Some Namelist_item
-    | 0x45 -> Some Priority
-    | 0x46 -> Some Segment
-    | 0x47 -> Some Specification
-    | 0x48 -> Some Static_link
-    | 0x49 -> Some Type
-    | 0x4a -> Some Use_location
-    | 0x4b -> Some Variable_parameter
-    | 0x4c -> Some Virtuality
-    | 0x4d -> Some Vtable_elem_location
-    | 0x4e -> Some Allocated
-    | 0x4f -> Some Associated
-    | 0x50 -> Some Data_location
-    | 0x51 -> Some Byte_stride
-    | 0x52 -> Some Entry_pc
-    | 0x53 -> Some Use_UTF8
-    | 0x54 -> Some Extension
-    | 0x55 -> Some Ranges
-    | 0x56 -> Some Trampoline
-    | 0x57 -> Some Call_column
-    | 0x58 -> Some Call_file
-    | 0x59 -> Some Call_line
-    | 0x5a -> Some Description
-    | 0x5b -> Some Binary_scale
-    | 0x5c -> Some Decimal_scale
-    | 0x5d -> Some Small
-    | 0x5e -> Some Decimal_sign
-    | 0x5f -> Some Digit_count
-    | 0x60 -> Some Picture_string
-    | 0x61 -> Some Mutable
-    | 0x62 -> Some Threads_scaled
-    | 0x63 -> Some Explicit
-    | 0x64 -> Some Object_pointer
-    | 0x65 -> Some Endianity
-    | 0x66 -> Some Elemental
-    | 0x67 -> Some Pure
-    | 0x68 -> Some Recursive
-    | 0x69 -> Some Signature
-    | 0x6a -> Some Main_subprogram
-    | 0x6b -> Some Data_bit_offset
-    | 0x6c -> Some Const_expr
-    | 0x6d -> Some Enum_class
-    | 0x6e -> Some Linkage_name
-    | code when code >= lo_user && code <= hi_user ->
-      Ok (User code)
-    | code -> 
-      Error (Printf.sprintf "unknown DWARF attribute code 0x%x" code)
-  in
+  >>= function
+  | 0x00 -> Ok None
+  | 0x01 -> Ok (Some Sibling)
+  | 0x02 -> Ok (Some Location)
+  | 0x03 -> Ok (Some Name)
+  | 0x09 -> Ok (Some Ordering)
+  | 0x0b -> Ok (Some Byte_size)
+  | 0x0c -> Ok (Some Bit_offset)
+  | 0x0d -> Ok (Some Bit_size)
+  | 0x10 -> Ok (Some Stmt_list)
+  | 0x11 -> Ok (Some Low_pc)
+  | 0x12 -> Ok (Some High_pc)
+  | 0x13 -> Ok (Some Language)
+  | 0x15 -> Ok (Some Discr)
+  | 0x16 -> Ok (Some Discr_value)
+  | 0x17 -> Ok (Some Visibility)
+  | 0x18 -> Ok (Some Import)
+  | 0x19 -> Ok (Some String_length)
+  | 0x1a -> Ok (Some Common_reference)
+  | 0x1b -> Ok (Some Comp_dir)
+  | 0x1c -> Ok (Some Const_value)
+  | 0x1d -> Ok (Some Containing_type)
+  | 0x1e -> Ok (Some Default_value)
+  | 0x20 -> Ok (Some Inline)
+  | 0x21 -> Ok (Some Is_optional)
+  | 0x22 -> Ok (Some Lower_bound)
+  | 0x25 -> Ok (Some Producer)
+  | 0x27 -> Ok (Some Prototyped)
+  | 0x2a -> Ok (Some Return_addr)
+  | 0x2c -> Ok (Some Start_scope)
+  | 0x2e -> Ok (Some Bit_stride)
+  | 0x2f -> Ok (Some Upper_bound)
+  | 0x31 -> Ok (Some Abstract_origin)
+  | 0x32 -> Ok (Some Accessibility)
+  | 0x33 -> Ok (Some Address_class)
+  | 0x34 -> Ok (Some Artificial)
+  | 0x35 -> Ok (Some Base_types)
+  | 0x36 -> Ok (Some Calling_convention)
+  | 0x37 -> Ok (Some Count)
+  | 0x38 -> Ok (Some Data_member_location)
+  | 0x39 -> Ok (Some Decl_column)
+  | 0x3a -> Ok (Some Decl_file)
+  | 0x3b -> Ok (Some Decl_line)
+  | 0x3c -> Ok (Some Declaration)
+  | 0x3d -> Ok (Some Discr_list)
+  | 0x3e -> Ok (Some Encoding)
+  | 0x3f -> Ok (Some External)
+  | 0x40 -> Ok (Some Frame_base)
+  | 0x41 -> Ok (Some Friend)
+  | 0x42 -> Ok (Some Identifier_case)
+  | 0x43 -> Ok (Some Macro_info)
+  | 0x44 -> Ok (Some Namelist_item)
+  | 0x45 -> Ok (Some Priority)
+  | 0x46 -> Ok (Some Segment)
+  | 0x47 -> Ok (Some Specification)
+  | 0x48 -> Ok (Some Static_link)
+  | 0x49 -> Ok (Some Type)
+  | 0x4a -> Ok (Some Use_location)
+  | 0x4b -> Ok (Some Variable_parameter)
+  | 0x4c -> Ok (Some Virtuality)
+  | 0x4d -> Ok (Some Vtable_elem_location)
+  | 0x4e -> Ok (Some Allocated)
+  | 0x4f -> Ok (Some Associated)
+  | 0x50 -> Ok (Some Data_location)
+  | 0x51 -> Ok (Some Byte_stride)
+  | 0x52 -> Ok (Some Entry_pc)
+  | 0x53 -> Ok (Some Use_UTF8)
+  | 0x54 -> Ok (Some Extension)
+  | 0x55 -> Ok (Some Ranges)
+  | 0x56 -> Ok (Some Trampoline)
+  | 0x57 -> Ok (Some Call_column)
+  | 0x58 -> Ok (Some Call_file)
+  | 0x59 -> Ok (Some Call_line)
+  | 0x5a -> Ok (Some Description)
+  | 0x5b -> Ok (Some Binary_scale)
+  | 0x5c -> Ok (Some Decimal_scale)
+  | 0x5d -> Ok (Some Small)
+  | 0x5e -> Ok (Some Decimal_sign)
+  | 0x5f -> Ok (Some Digit_count)
+  | 0x60 -> Ok (Some Picture_string)
+  | 0x61 -> Ok (Some Mutable)
+  | 0x62 -> Ok (Some Threads_scaled)
+  | 0x63 -> Ok (Some Explicit)
+  | 0x64 -> Ok (Some Object_pointer)
+  | 0x65 -> Ok (Some Endianity)
+  | 0x66 -> Ok (Some Elemental)
+  | 0x67 -> Ok (Some Pure)
+  | 0x68 -> Ok (Some Recursive)
+  | 0x69 -> Ok (Some Signature)
+  | 0x6a -> Ok (Some Main_subprogram)
+  | 0x6b -> Ok (Some Data_bit_offset)
+  | 0x6c -> Ok (Some Const_expr)
+  | 0x6d -> Ok (Some Enum_class)
+  | 0x6e -> Ok (Some Linkage_name)
+  | code when code >= lo_user && code <= hi_user -> Ok (Some (User code))
+  | code -> Error (Printf.sprintf "unknown DWARF attribute code 0x%x" code)
 
 let encode = function
   | Sibling -> 0x01
@@ -327,3 +313,9 @@ let encode = function
   | Enum_class -> 0x6d
   | Linkage_name -> 0x6e
   | User code -> code
+
+let size t =
+  Variable_length_encoding.uleb128_size (encode t)
+
+let emit t ~emitter =
+  Emitter.emit_uleb128 emitter (encode t)

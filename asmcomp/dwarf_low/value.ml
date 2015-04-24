@@ -20,8 +20,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-open Std_internal
-
 (* CR-someday mshinwell: if proper cross compilation support is
    implemented, change this as appropriate. *)
 module Target_int = Nativeint
@@ -42,16 +40,6 @@ type 'form t =
   | Offset_into_debug_info_from_symbol : string -> Form.ref_addr t
   | Offset_into_debug_loc : Linearize.label -> Form.sec_offset t
   | Location_description : Single_location_description.t -> Form.exprloc t
-
-(* DWARF-4 standard section 7.6. *)
-let rec uleb128_size i =
-  assert (i >= 0);
-  if i < 128 then 1
-  else 1 + (uleb128_size (i lsr 7))
-
-let rec leb128_size i =
-  if i >= -64 && i < 64 then 1
-  else 1 + (leb128_size (i asr 7))
 
 let size t =
   let size =
@@ -76,7 +64,7 @@ let size t =
       end
     | Location_description loc_desc ->
       let loc_desc_size = Single_location_description.size loc_desc in
-      (uleb128_size loc_desc_size) + loc_desc_size
+      (Variable_length_encoding.uleb128_size loc_desc_size) + loc_desc_size
   in
   Int64.of_int size
 
@@ -173,21 +161,6 @@ type t =
     * string
   | String of string
 
-exception Too_large_for_two_byte_int of int
-exception Too_large_for_byte of int
-
-let as_four_byte_int i = Four_byte_int i
-let as_eight_byte_int i = Eight_byte_int i
-
-let as_two_byte_int i =
-  if not (i >= 0 && i <= 0xffff) then
-    raise (Too_large_for_two_byte_int i);
-  Two_byte_int i
-
-let as_byte i =
-  if not (i >= 0 && i <= 0xff) then
-    raise (Too_large_for_byte i);
-  Byte i
 
 let as_uleb128 i =
   assert (i >= 0);

@@ -28,3 +28,8 @@
 type t
 
 include Emittable.S with type t := t
+
+(* A value of [None] from [parse] indicates that a zero was read from the
+   stream; this is likely to be the end of a sequence of attribute
+   specifications (DWARF-4 specification section 7.5.3). *)
+include Parseable.S with type t := t option

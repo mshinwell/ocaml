@@ -46,24 +46,11 @@ module Variant : sig
 end
 val to_variant : t -> Variant.t
 
-(* [emit] emits the attribute followed by the form. *)
 include Emittable.S with type t := t
 
-val compare : t -> t -> int
+(* A value of [None] from [parse] indicates that a zero was read from the
+   stream; this is likely to be the end of a sequence of attribute
+   specifications (DWARF-4 specification section 7.5.3). *)
+include Parseable.S with type t := t option
 
-val low_pc : t
-val high_pc : t
-val producer : t
-val name : t
-val comp_dir : t
-val stmt_list : t
-val extern'l : t
-val location_using_single_location_description : t
-val location_using_location_list : t
-val typ' : t
-val encoding : t
-val byte_size : t
-val linkage_name : t
-val sibling : t
-val import : t
-val specification : t
+val compare : t -> t -> int
