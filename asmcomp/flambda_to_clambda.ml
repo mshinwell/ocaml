@@ -323,12 +323,8 @@ let make_defining_expr_of_symbol ?symbol t env defining_expr =
 end
 
 let fclambda_and_approx_for_symbol t env sym =
-  (* Ensure all symbols are replaced with their canonical representative. *)
-  let sym = Symbol_alias_db.canonical_symbol t.symbol_alias_db sym in
   let linkage_name = Symbol.string_of_linkage_name sym.sym_label in
   let label = Compilenv.canonical_symbol linkage_name in
-  (* CR pchambart for pchambart: Should delay the conversion a bit more
-     mshinwell: I turned this comment into a CR.  What does it mean? *)
   Fsymbol sym, Uconst (Uconst_ref (label, None)), Value_symbol sym
 
 let fclambda_and_approx_for_constant t env ~(cst : Flambda.const) ~annot =
@@ -343,7 +339,7 @@ let fclambda_and_approx_for_constant t env ~(cst : Flambda.const) ~annot =
       add_structured_constant t (Fconst (cst, annot)) ucst export_id
         ?not_shared
     in
-    Fsymbol (symbol, ()), Uconst_ref (label, Some ucst), Value_id export_id
+    Fsymbol (symbol, ()), Uconst_ref (label, None), Value_id export_id
   in
   let not_structured ucst descr =
     Fconst (cst, ()), ucst, Value_id (add_value_description t descr)
