@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013--2015, Jane Street Holding                          *)
+(*  Copyright 2013--2015, Jane Street Group, LLC                       *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -20,34 +20,59 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* DWARF attribute forms (DWARF-4 specification section 7.5.4). *)
+type addr = [ `addr ]
+type block = [ `block ]
+type block1 = [ `block1 ]
+type block2 = [ `block2 ]
+type block4 = [ `block4 ]
+type data1 = [ `data1 ]
+type data2 = [ `data2 ]
+type data4 = [ `data4 ]
+type data8 = [ `data8 ]
+type string = [ `string ]
+type flag = [ `flag ]
+type sdata = [ `sdata ]
+type strp = [ `strp ]
+type udata = [ `udata ]
+type ref_addr = [ `ref_addr ]
+type ref1 = [ `ref1 ]
+type ref2 = [ `ref2 ]
+type ref4 = [ `ref4 ]
+type ref8 = [ `ref8 ]
+type ref_udata = [ `ref_udata ]
+type indirect = [ `indirect ]
+type sec_offset = [ `sec_offset ]
+type exprloc = [ `exprloc ]
+type flag_present = [ `flag_present ]
+type ref_sig8 = [ `ref_sig8 ]
 
-type 'dwarf_class t =
-  | DW_FORM_addr : Class.address t
-  | DW_FORM_block : Class.block t
-  | DW_FORM_block1 : Class.block t
-  | DW_FORM_block2 : Class.block t
-  | DW_FORM_block4 : Class.block t
-  | DW_FORM_data1 : Class.constant t
-  | DW_FORM_data2 : Class.constant t
-  | DW_FORM_data4 : Class.constant t
-  | DW_FORM_data8 : Class.constant t
-  | DW_FORM_string : Class.string t
-  | DW_FORM_flag : Class.flag t
-  | DW_FORM_sdata : Class.constant t
-  | DW_FORM_strp : Class.string t
-  | DW_FORM_udata : Class.constant t
-  | DW_FORM_ref_addr : Class.reference t
-  | DW_FORM_ref1 : Class.reference t
-  | DW_FORM_ref2 : Class.reference t
-  | DW_FORM_ref4 : Class.reference t
-  | DW_FORM_ref8 : Class.reference t
-  | DW_FORM_ref_udata : Class.reference t
-  | DW_FORM_indirect : 'dwarf_class t -> 'dwarf_class t
-  | DW_FORM_sec_offset : Class.lineptr_or_loclistptr_or_macptr_or_rangelistptr
-  | DW_FORM_exprloc : Class.exprloc t
-  | DW_FORM_flag_present : Class.flag t
-  | DW_FORM_ref_sig8 : Class.reference  t
+type ('dwarf_classes, 'form) t =
+  | Addr : (Class.address, addr) t
+  | Block : (Class.block, block) t
+  | Block1 : (Class.block, block1) t
+  | Block2 : (Class.block, [ block1 | block2 ]) t
+  | Block4 : (Class.block, [ block1 | block2 | block4 ]) t
+  | Data1 : (Class.constant, data1) t
+  | Data2 : (Class.constant, [ data1 | data2 ]) t
+  | Data4 : (Class.constant, [ data1 | data2 | data4 ]) t
+  | Data8 : (Class.constant, [ data1 | data2 | data4 | data8 ]) t
+  | String : (Class.string, string) t
+  | Flag : (Class.flag, data1) t
+  | Sdata : (Class.constant, sdata) t
+  | Strp : (Class.string, strp) t
+  | Udata : (Class.constant, udata) t
+  | Ref_addr : (Class.reference, ref_addr) t
+  | Ref1 : (Class.reference, ref1) t
+  | Ref2 : (Class.reference, [ ref1 | ref2 ]) t
+  | Ref4 : (Class.reference, [ ref1 | ref2 | ref4 ]) t
+  | Ref8 : (Class.reference, [ ref1 | ref2 | ref4 | ref8 ]) t
+  | Ref_udata : (Class.reference, ref_udata) t
+  | Indirect : 'dwarf_class t -> 'dwarf_class t (* XXX *)
+  | Sec_offset :
+    (Class.lineptr_or_loclistptr_or_macptr_or_rangelistptr, sec_offset) t
+  | Exprloc : (Class.exprloc, exprloc) t
+  | Flag_present : (Class.flag, flag_present) t
+  | Ref_sig8 : (Class.reference, ref_sig8) t
 
 let encode t =
   let code =
@@ -81,20 +106,38 @@ let encode t =
   in
   Value.as_uleb128 code
 
-let addr = DW_FORM_addr
-let data1 = DW_FORM_data1
-let data4 = DW_FORM_data4
-let data8 = DW_FORM_data8
-let string = DW_FORM_string
-let strp = DW_FORM_strp
-let flag = DW_FORM_flag
-let block = DW_FORM_block
-let ref_addr = DW_FORM_ref_addr
-let sec_offset = DW_FORM_sec_offset
-let exprloc = DW_FORM_exprloc
-
 let size t =
   Value.size (encode t)
 
 let emit t ~emitter =
   Value.emit (encode t) ~emitter
+
+let parse stream =
+  Stream.read_uleb128_as_int stream
+  >>= function
+  | 0x01 -> Ok DW_FORM_addr
+  | 0x09 -> Ok DW_FORM_block
+  | 0x0a -> Ok DW_FORM_block1
+  | 0x03 -> Ok DW_FORM_block2
+  | 0x04 -> Ok DW_FORM_block4
+  | 0x0b -> Ok DW_FORM_data1
+  | 0x05 -> Ok DW_FORM_data2
+  | 0x06 -> Ok DW_FORM_data4
+  | 0x07 -> Ok DW_FORM_data8
+  | 0x08 -> Ok DW_FORM_string
+  | 0x0c -> Ok DW_FORM_flag
+  | 0x0d -> Ok DW_FORM_sdata
+  | 0x0e -> Ok DW_FORM_strp
+  | 0x0f -> Ok DW_FORM_udata
+  | 0x10 -> Ok DW_FORM_ref_addr
+  | 0x11 -> Ok DW_FORM_ref1
+  | 0x12 -> Ok DW_FORM_ref2
+  | 0x13 -> Ok DW_FORM_ref4
+  | 0x14 -> Ok DW_FORM_ref8
+  | 0x15 -> Ok DW_FORM_ref_udata
+  | 0x16 -> Ok DW_FORM_indirect
+  | 0x17 -> Ok DW_FORM_sec_offset
+  | 0x18 -> Ok DW_FORM_exprloc
+  | 0x19 -> Ok DW_FORM_flag_present
+  | 0x20 -> Ok DW_FORM_ref_sig8
+  | _ -> Error (Printf.sprintf "unknown DWARF form code 0x%x" code)

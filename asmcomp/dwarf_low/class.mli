@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2015, Jane Street Holding                                *)
+(*  Copyright 2015, Jane Street Group, LLC                             *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -20,7 +20,11 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* DWARF-4 specification section 7.5.4, page 147 *)
+(* DWARF-4 specification section 7.5.4, page 147.
+   "Each class is a set of forms which have related representations and
+    which are given a common interpretation according to the attribute
+    in which the form is used."
+*)
 
 type address = [ `address ]
 type address_or_constant = [ `address | `constant ]

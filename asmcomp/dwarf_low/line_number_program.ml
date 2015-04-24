@@ -352,7 +352,7 @@ end = struct
     | DW_LNE_define_file of string * int * int * int
     | DW_LNE_set_discriminator * int
 
-  let parse_exn stream
+  let parse stream
     Stream.parse_??? stream
     >>= function
     | 0x01 -> Ok DW_LNE_end_sequence
