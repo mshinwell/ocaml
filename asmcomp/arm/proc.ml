@@ -147,8 +147,8 @@ let calling_conventions first_int last_int first_float last_float make_stack
              contains the least significant part. *)
           int := Misc.align !int 2;
           if !int <= last_int - 1 then begin
-            let reg_least = phys_reg !int in
-            let reg_most = phys_reg (1 + !int) in
+            let reg_least = phys_reg (1 + !int) in
+            let reg_most = phys_reg !int in
             loc.(i) <- [| reg_most; reg_least |];
             int := !int + 2
           end else begin
