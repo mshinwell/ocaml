@@ -106,56 +106,64 @@ let stack_slot slot ty =
 
 (* Calling conventions *)
 
-let calling_conventions
-    first_int last_int first_float last_float make_stack arg
-    ~is_external =
+let calling_conventions first_int last_int first_float last_float make_stack
+      arg =
   let loc = Array.make (Array.length arg) Reg.dummy in
   let int = ref first_int in
   let float = ref first_float in
   let ofs = ref 0 in
   for i = 0 to Array.length arg - 1 do
-    match arg.(i).typ with
-      Int | Addr as ty ->
-        if !int <= last_int then begin
-          loc.(i) <- One_reg (phys_reg !int);
-          incr int
-        end else begin
-          loc.(i) <- One_reg (stack_slot (make_stack !ofs) ty);
-          ofs := !ofs + size_int
-        end
-(*
-    | Int64 when not is_external -> assert false
-    | Int64 ->
-        (* 64-bit quantities split across two registers must either be in a
-           consecutive pair of registers where the lowest numbered is an
-           even-numbered register; or in a stack slot that is 8-byte
-           aligned. *)
-        let int = if int % 2 = 0 then int else int + 1 in
-        if !int <= last_int - 1 then begin
-          loc.(i) <- Two_regs (phys_reg !int, phys_reg (1 + !int));
-          int := int + 2
-        end else begin
-          assert (size_int = 4);
-          assert (ofs % 4 = 0);
-          let ofs = if ofs % 8 = 0 then ofs else ofs + 4 in
-          let stack_0 = stack_slot (make_stack !ofs) ty in
-          (* XXX check the "4 + " *)
-          let stack_1 = stack_slot (make_stack (4 + !ofs)) ty in
-          loc.(i) <- Two_regs (stack_0, stack_1);
-          ofs := !ofs + size_int
-        end
-*)
-    | Float ->
-        assert (abi = EABI_HF);
-        assert (!fpu >= VFPv2);
-        if !float <= last_float then begin
-          loc.(i) <- phys_reg !float;
-          incr float
-        end else begin
-          ofs := Misc.align !ofs size_float;
-          loc.(i) <- stack_slot (make_stack !ofs) Float;
-          ofs := !ofs + size_float
-        end
+    match arg.(i) with
+    | [| arg |] ->
+      begin match arg.typ with
+      | Int | Addr as ty ->
+          if !int <= last_int then begin
+            loc.(i) <- [| phys_reg !int |];
+            incr int
+          end else begin
+            loc.(i) <- [| stack_slot (make_stack !ofs) ty |];
+            ofs := !ofs + size_int
+          end
+      | Float ->
+          assert (abi = EABI_HF);
+          assert (!fpu >= VFPv2);
+          if !float <= last_float then begin
+            loc.(i) <- [| phys_reg !float |];
+            incr float
+          end else begin
+            ofs := Misc.align !ofs size_float;
+            loc.(i) <- [| stack_slot (make_stack !ofs) Float |];
+            ofs := !ofs + size_float
+          end
+      end
+    | [| arg1; arg2 |] ->
+      begin match arg1.typ, arg2.typ with
+      | Int, Int ->
+          (* 64-bit quantities split across two registers must either be in a
+             consecutive pair of registers where the lowest numbered is an
+             even-numbered register; or in a stack slot that is 8-byte
+             aligned.  Since we are compiling for little-endian, the lowest-
+             numbered register (or the stack slot with the lowest address)
+             contains the least significant part. *)
+          let int = Misc.align int 2 in
+          if !int <= last_int - 1 then begin
+            let reg_least = phys_reg !int in
+            let reg_most = phys_reg (1 + !int) in
+            loc.(i) <- [| reg_most; reg_least |];
+            int := !int + 2
+          end else begin
+            let size_int64 = size_int * 2 in
+            ofs := Misc.align !ofs size_int64;
+            (* Lower stack address => higher [!ofs] value. *)
+            let stack_least = stack_slot (make_stack (size_int + !ofs)) ty in
+            let stack_most = stack_slot (make_stack !ofs) ty in
+            loc.(i) <- [| stack_most; stack_least |];
+            ofs := !ofs + size_int64
+          end
+      | _, _ ->
+        fatal_error "Proc.calling_conventions: bad register type(s) for \
+          multi-register argument"
+      end
   done;
   (loc, Misc.align !ofs 8)  (* keep stack 8-aligned *)
 
@@ -169,12 +177,17 @@ let not_supported ofs = fatal_error "Proc.loc_results: cannot call"
      remaining args on stack.
    Return values in r0...r7 or d0...d15. *)
 
+let single_regs arg = Array.map (fun arg -> [| arg |]) arg
+
 let loc_arguments arg =
-  calling_conventions 0 7 100 115 outgoing arg
+  calling_conventions 0 7 100 115 outgoing (single_regs arg)
 let loc_parameters arg =
-  let (loc, _) = calling_conventions 0 7 100 115 incoming arg in loc
+  let (loc, _) = calling_conventions 0 7 100 115 incoming (single_regs arg) in
+  loc
 let loc_results res =
-  let (loc, _) = calling_conventions 0 7 100 115 not_supported res in loc
+  let (loc, _) =
+    calling_conventions 0 7 100 115 not_supported (single_regs res)
+  in loc
 
 (* C calling convention:
      first integer args in r0...r3
@@ -185,7 +198,10 @@ let loc_results res =
 let loc_external_arguments arg =
   calling_conventions 0 3 100 107 outgoing arg
 let loc_external_results res =
-  let (loc, _) = calling_conventions 0 1 100 100 not_supported res in loc
+  let (loc, _) =
+    calling_conventions 0 1 100 100 not_supported (single_regs res)
+  in
+  loc
 
 let loc_exn_bucket = phys_reg 0
 
