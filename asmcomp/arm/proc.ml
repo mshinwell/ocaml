@@ -188,8 +188,10 @@ let ensure_single_regs res =
     res
 
 let loc_arguments arg =
-  ensure_single_regs
-    (calling_conventions 0 7 100 115 outgoing (single_regs arg))
+  let (loc, alignment) =
+    calling_conventions 0 7 100 115 outgoing (single_regs arg)
+  in
+  ensure_single_regs loc, alignment
 let loc_parameters arg =
   let (loc, _) = calling_conventions 0 7 100 115 incoming (single_regs arg) in
   ensure_single_regs loc
