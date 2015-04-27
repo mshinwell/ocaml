@@ -137,6 +137,7 @@ let calling_conventions first_int last_int first_float last_float make_stack
           end
       end
     | [| arg1; arg2 |] ->
+      (* Passing of 64-bit quantities to external functions. *)
       begin match arg1.typ, arg2.typ with
       | Int, Int ->
           (* 64-bit quantities split across two registers must either be in a
