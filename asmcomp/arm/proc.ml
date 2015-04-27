@@ -184,7 +184,7 @@ let single_regs arg = Array.map (fun arg -> [| arg |]) arg
 let ensure_single_regs res =
   Array.map (function
       | [| res |] -> res
-      | _ -> failwithf "Proc.ensure_single_regs")
+      | _ -> failwith "Proc.ensure_single_regs")
     res
 
 let loc_arguments arg =
