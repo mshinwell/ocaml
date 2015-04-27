@@ -153,7 +153,7 @@ let calling_conventions first_int last_int first_float last_float make_stack
             int := !int + 2
           end else begin
             let size_int64 = size_int * 2 in
-            assert (!ofs = Misc.align !ofs size_int64);
+            ofs := Misc.align !ofs size_int64;
             (* Lower stack address => higher [!ofs] value. *)
             let stack_least = stack_slot (make_stack (size_int + !ofs)) Int in
             let stack_most = stack_slot (make_stack !ofs) Int in
