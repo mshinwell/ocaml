@@ -728,7 +728,7 @@ let box_int bi arg =
 
 let split_int64_for_32bit_target arg =
   bind "split_int64" arg (fun arg ->
-    let low_addr, high_addr =
+    let least_sig_addr, most_sig_addr =
       (* Recall that the custom operations pointer will be at offset zero
          from [args.(i)]; the two halves of the integer follow that. *)
       let second_word = Cop (Cadda, [Cconst_int size_addr; arg]) in
@@ -738,8 +738,8 @@ let split_int64_for_32bit_target arg =
       else
         second_word, third_word
     in
-    Ctuple [Cop (Cload Thirtytwo_unsigned, [low_addr]);
-      Cop (Cload Thirtytwo_unsigned, [high_addr])])
+    Ctuple [Cop (Cload Thirtytwo_unsigned, [least_sig_addr]);
+      Cop (Cload Thirtytwo_unsigned, [most_sig_addr])])
 
 let rec unbox_int bi arg =
   match arg with

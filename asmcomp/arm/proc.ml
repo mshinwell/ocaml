@@ -147,9 +147,9 @@ let calling_conventions first_int last_int first_float last_float make_stack
              contains the least significant part. *)
           int := Misc.align !int 2;
           if !int <= last_int - 1 then begin
-            let reg_least = phys_reg (1 + !int) in
-            let reg_most = phys_reg !int in
-            loc.(i) <- [| reg_most; reg_least |];
+            let reg_least = phys_reg !int in
+            let reg_most = phys_reg (1 + !int) in
+            loc.(i) <- [| reg_least; reg_most |];
             int := !int + 2
           end else begin
             let size_int64 = size_int * 2 in
@@ -157,7 +157,7 @@ let calling_conventions first_int last_int first_float last_float make_stack
             (* Lower stack address => higher [!ofs] value. *)
             let stack_least = stack_slot (make_stack (size_int + !ofs)) Int in
             let stack_most = stack_slot (make_stack !ofs) Int in
-            loc.(i) <- [| stack_most; stack_least |];
+            loc.(i) <- [| stack_least; stack_most |];
             ofs := !ofs + size_int64
           end
       | _, _ ->
