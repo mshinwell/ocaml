@@ -164,6 +164,9 @@ let calling_conventions first_int last_int first_float last_float make_stack
         fatal_error "Proc.calling_conventions: bad register type(s) for \
           multi-register argument"
       end
+    | _ ->
+      fatal_error "Proc.calling_conventions: bad number of registers for \
+        multi-register argument"
   done;
   (loc, Misc.align !ofs 8)  (* keep stack 8-aligned *)
 
@@ -178,16 +181,23 @@ let not_supported ofs = fatal_error "Proc.loc_results: cannot call"
    Return values in r0...r7 or d0...d15. *)
 
 let single_regs arg = Array.map (fun arg -> [| arg |]) arg
+let ensure_single_regs res =
+  Array.map (function
+      | [| res |] -> res
+      | _ -> failwithf "Proc.ensure_single_regs")
+    res
 
 let loc_arguments arg =
-  calling_conventions 0 7 100 115 outgoing (single_regs arg)
+  ensure_single_regs
+    (calling_conventions 0 7 100 115 outgoing (single_regs arg))
 let loc_parameters arg =
   let (loc, _) = calling_conventions 0 7 100 115 incoming (single_regs arg) in
-  loc
+  ensure_single_regs loc
 let loc_results res =
   let (loc, _) =
     calling_conventions 0 7 100 115 not_supported (single_regs res)
-  in loc
+  in
+  ensure_single_regs loc
 
 (* C calling convention:
      first integer args in r0...r3
@@ -201,7 +211,7 @@ let loc_external_results res =
   let (loc, _) =
     calling_conventions 0 1 100 100 not_supported (single_regs res)
   in
-  loc
+  ensure_single_regs loc
 
 let loc_exn_bucket = phys_reg 0
 
