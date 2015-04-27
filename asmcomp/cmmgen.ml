@@ -738,7 +738,8 @@ let split_int64_for_32bit_target arg =
       else
         second_word, third_word
     in
-    Ctuple [Cop (Cload Word, [low_addr]); Cop (Cload Word, [high_addr])])
+    Ctuple [Cop (Cload Thirtytwo_unsigned, [low_addr]);
+      Cop (Cload Thirtytwo_unsigned, [high_addr])])
 
 let rec unbox_int bi arg =
   match arg with
