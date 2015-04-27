@@ -161,8 +161,10 @@ let calling_conventions first_int last_int first_float last_float make_stack
             ofs := !ofs + size_int64
           end
       | _, _ ->
-        fatal_error "Proc.calling_conventions: bad register type(s) for \
-          multi-register argument"
+        fatal_error (Printf.sprintf "Proc.calling_conventions: bad register \
+            type(s) for multi-register argument: %s, %s"
+          (match arg1.typ with Int -> "I" | Addr -> "A" | Float -> "F")
+          (match arg2.typ with Int -> "I" | Addr -> "A" | Float -> "F"))
       end
     | _ ->
       fatal_error "Proc.calling_conventions: bad number of registers for \
