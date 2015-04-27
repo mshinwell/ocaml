@@ -145,7 +145,7 @@ let calling_conventions first_int last_int first_float last_float make_stack
              aligned.  Since we are compiling for little-endian, the lowest-
              numbered register (or the stack slot with the lowest address)
              contains the least significant part. *)
-          let int = Misc.align int 2 in
+          int := Misc.align !int 2;
           if !int <= last_int - 1 then begin
             let reg_least = phys_reg !int in
             let reg_most = phys_reg (1 + !int) in
