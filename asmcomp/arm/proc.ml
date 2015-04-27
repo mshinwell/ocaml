@@ -142,9 +142,7 @@ let calling_conventions first_int last_int first_float last_float make_stack
           (* 64-bit quantities split across two registers must either be in a
              consecutive pair of registers where the lowest numbered is an
              even-numbered register; or in a stack slot that is 8-byte
-             aligned.  Since we are compiling for little-endian, the lowest-
-             numbered register (or the stack slot with the lowest address)
-             contains the least significant part. *)
+             aligned. *)
           int := Misc.align !int 2;
           if !int <= last_int - 1 then begin
             let reg_least = phys_reg !int in
@@ -154,9 +152,8 @@ let calling_conventions first_int last_int first_float last_float make_stack
           end else begin
             let size_int64 = size_int * 2 in
             ofs := Misc.align !ofs size_int64;
-            (* Lower stack address => higher [!ofs] value. *)
-            let stack_least = stack_slot (make_stack (size_int + !ofs)) Int in
-            let stack_most = stack_slot (make_stack !ofs) Int in
+            let stack_least = stack_slot (make_stack !ofs) Int in
+            let stack_most = stack_slot (make_stack (size_int + !ofs)) Int in
             loc.(i) <- [| stack_least; stack_most |];
             ofs := !ofs + size_int64
           end
