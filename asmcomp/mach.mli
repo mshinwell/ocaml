@@ -53,6 +53,8 @@ type operation =
   | Iintop_imm of integer_operation * int
   | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
   | Ifloatofint | Iintoffloat
+  | Ialign_to_n_byte_boundary of int
+  | Iprogram_counter
   | Ispecific of Arch.specific_operation
 
 type instruction =

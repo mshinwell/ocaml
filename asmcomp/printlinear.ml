@@ -62,6 +62,10 @@ let instr ppf i =
       fprintf ppf "pop trap"
   | Lraise k ->
       fprintf ppf "%s %a" (Lambda.raise_kind k) reg i.arg.(0)
+  | Lalign_to_n_byte_boundary n ->
+      fprintf "align to %d byte boundary" n
+  | Laddress_of_label lbl ->
+      fprintf ppf "address of label %a" label lbl
   end;
   if not (Debuginfo.is_none i.dbg) then
     fprintf ppf " %s" (Debuginfo.to_string i.dbg)

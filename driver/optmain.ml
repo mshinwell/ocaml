@@ -74,6 +74,7 @@ module Options = Main_args.Make_optcomp_options (struct
 
   let _a = set make_archive
   let _absname = set Location.absname
+  let _allocation_profiling = set allocation_profiling
   let _annot = set annotations
   let _binannot = set binary_annotations
   let _c = set compile_only
@@ -168,6 +169,9 @@ let main () =
                       compile_only; output_c_object]) > 1
     then
       fatal "Please specify at most one of -pack, -a, -shared, -c, -output-obj";
+    if !allocation_profiling && Sys.word_size <> 64 then begin
+      fatal "Allocation profiling is only available for 64-bit target systems."
+    end;
     if !make_archive then begin
       if !cmxa_present then
         fatal "Option -a cannot be used with .cmxa input files.";

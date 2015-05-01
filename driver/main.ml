@@ -154,6 +154,9 @@ let main () =
         fatal "Option -i is incompatible with -pack, -a, -output-obj"
       else
         fatal "Please specify at most one of -pack, -a, -c, -output-obj";
+    if !allocation_profiling then begin
+      fatal "Allocation profiling is not supported by the bytecode compiler"
+    end;
     if !make_archive then begin
       Compmisc.init_path false;
 

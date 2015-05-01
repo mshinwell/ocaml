@@ -43,6 +43,8 @@ and instruction_desc =
   | Lpushtrap
   | Lpoptrap
   | Lraise of Lambda.raise_kind
+  | Lalign_to_n_byte_boundary of int
+  | Laddress_of_label of label
 
 let has_fallthrough = function
   | Lreturn | Lbranch _ | Lswitch _ | Lraise _
@@ -182,6 +184,12 @@ let rec linear i n =
   | Iop(Imove | Ireload | Ispill)
     when i.Mach.arg.(0).loc = i.Mach.res.(0).loc ->
       linear i.Mach.next n
+  | Iop (Ialign_to_n_byte_boundary n_bytes) ->
+      copy_instr (Lalign_to_n_byte_boundary n_bytes) i (linear i.Mach.next n)
+  | Iop Iprogram_counter ->
+      let lbl = new_label () in
+      let l = copy_instr (Laddress_of_label lbl) i (linear i.Mach.next n) in
+      cons_instr (Llabel lbl) l
   | Iop op ->
       copy_instr (Lop op) i (linear i.Mach.next n)
   | Ireturn ->

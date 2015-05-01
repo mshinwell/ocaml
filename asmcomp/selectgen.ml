@@ -425,9 +425,31 @@ method emit_expr env exp =
   | Cconst_natint n ->
       let r = self#regs_for typ_int in
       Some(self#insert_op (Iconst_int n) [||] r)
-  | Cconst_blockheader n ->
-      let r = self#regs_for typ_int in
-      Some(self#insert_op (Iconst_blockheader n) [||] r)
+  | Cconst_blockheader header ->
+      if not !Clflags.allocation_profiling then
+        emit_expr env (Cconst_int n)
+      else begin
+        let r = self#regs_for typ_int in
+        let header = Nativeint.of_int header in
+        self#insert_debug (Iop (Iconst_int header)) [| |] r;
+        let shift = Allocation_profiling.aligned_pc_shift in
+        let mask = Allocation_profiling.mask in
+        let alignment = Allocation_profiling.pc_alignment_in_bytes in
+        self#insert_debug (Iop (Ialign alignment)) [| |] [| |];
+        (* CR mshinwell: [typ_addr] or [typ_int]? *)
+        let pc = self#regs_for typ_addr in
+        self#insert_debug (Iop Iprogram_counter) [| |] pc;
+        let pc_masked = self#regs_for typ_addr in
+        self#insert_debug (Iop (Iintop_imm (Iand, mask)))
+          [| pc |] [| pc_masked |];
+        let pc_masked_and_shifted = self#regs_for typ_addr in
+        self#insert_debug (Iop (Iintop_imm (Ilsl, shift)))
+          [| pc_masked |] [| pc_masked_and_shifted |];
+        let rd = self#regs_for typ_int in
+        self#insert_debug (Iop (Iintop Iand))
+          [| pc_masked_and_shifted; header |] [| rd |];
+        rd
+      end
   | Cconst_float n ->
       let r = self#regs_for typ_float in
       Some(self#insert_op (Iconst_float n) [||] r)

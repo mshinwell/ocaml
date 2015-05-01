@@ -78,6 +78,13 @@ let load_symbol_addr s =
   then `leaq	{emit_symbol s}(%rip)`
   else `movq	${emit_symbol s}`
 
+let load_label_addr lbl =
+  if !Clflags.dlcode && not mingw64 && not cygwin
+  then `movq	{emit_label lbl}@GOTPCREL(%rip)`
+  else if !pic_code
+  then `leaq	{emit_label lbl}(%rip)`
+  else `movq	${emit_label lbl}`
+
 (* Output a label *)
 
 let emit_label lbl =
@@ -676,6 +683,10 @@ let emit_instr fallthrough i =
           `	popq	%r14\n`;
           `	ret\n`
         end
+    | Lalign_to_n_byte_boundary n_bytes ->
+        `	{emit_align n_bytes}`
+    | Laddress_of_label lbl ->
+        `	{load_label_addr lbl}, {emit_reg i.res.(0)}\n`;
 
 let rec emit_all fallthrough i =
   match i.desc with
