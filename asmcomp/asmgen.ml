@@ -120,6 +120,12 @@ let flambda ppf (size, lam) =
       Format.fprintf ppf "%a@."
         Printflambda.flambda flam;
       raise e in
+  (* Strings are the only expressions that can't be duplicated without
+     changing the semantics. So we lift them to toplevel to avoid
+     having to handle special cases later.
+     There is no runtime cost to this transformation: strings are
+     constants, they will not appear in the closures *)
+  let lam = Lift_strings.lift_strings_to_toplevel lam in
   let flam =
     Flambdagen.lambda_to_flambda
       ~current_compilation_unit

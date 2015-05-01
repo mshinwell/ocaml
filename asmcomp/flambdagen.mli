@@ -43,20 +43,9 @@
 
 open Abstract_identifiers
 
-(* CXR mshinwell for pchambart: Why is the [current_unit_id] not inside
-   the type [compilation_unit]?
-   pchambart: It is, I removed the argument. In bytecode the compilation unit
-     was a dummy argument.
-*)
 val lambda_to_flambda
    : current_compilation_unit:Symbol.Compilation_unit.t
-  (* CR mshinwell for pchambart: Can we remove the ' on this label name?
-     pchambart: this reflects the name of the Compilenv.symbol_for_global'
-       function. Compilenv.symbol_for_global is the same function
-       returning a string (which is probably not well named)
-       This argument is not strictly necessary, but it is usefull for
-       unit testing witout relying on compilenv. As all those tests
-       are currently disabled, this may not be necessary. *)
+  (* [symbol_for_global'] is as per [Compilenv]. *)
   -> symbol_for_global':(Ident.t -> Symbol.t)
   -> Lambda.lambda
   -> Expr_id.t Flambda.flambda

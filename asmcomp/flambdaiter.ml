@@ -166,7 +166,7 @@ let iter_general ~toplevel f t =
   and iter_list l = List.iter aux l in
   aux t
 
-let iter f t = iter_general ~toplevel:false f t
+let iter ~f t = iter_general ~toplevel:false f t
 let iter_toplevel f t = iter_general ~toplevel:true f t
 
 let iter_on_closures f t =
