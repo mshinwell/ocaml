@@ -50,6 +50,7 @@ uintnat caml_lifetime_tracking = 0;
 */
 uintnat caml_lifetime_shift = 16;
 uintnat caml_allocation_profiling = 1;
+uintnat caml_override_profinfo = DO_NOT_OVERRIDE_PROFINFO;
 
 /* Initialize the atom table and the static data and code area limits. */
 

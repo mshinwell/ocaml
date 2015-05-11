@@ -63,6 +63,7 @@ color_t caml_allocation_color (void *hp);
 extern uintnat caml_lifetime_shift;
 
 #define PROFINFO_MASK 0x3fffff
+#define DO_NOT_OVERRIDE_PROFINFO ((uintnat) -1)
 #define BUILTIN_RETURN_ADDRESS \
   (__builtin_return_address(0) == NULL ? (void*)(0x1<<4) : __builtin_return_address(0))
 
@@ -72,11 +73,13 @@ extern uintnat caml_lifetime_shift;
 */
 
 #define MY_PROFINFO \
-  ((caml_lifetime_tracking \
-    ? ((caml_young_end - caml_young_ptr \
-        + (intnat) (caml_stat_minor_words * sizeof(intnat))) \
-       >> caml_lifetime_shift) \
-    : (((intnat)BUILTIN_RETURN_ADDRESS) >> 4)) \
+  (((caml_override_profinfo != DO_NOT_OVERRIDE_PROFINFO) \
+    ? caml_override_profinfo \
+    : (caml_lifetime_tracking \
+      ? ((caml_young_end - caml_young_ptr \
+          + (intnat) (caml_stat_minor_words * sizeof(intnat))) \
+         >> caml_lifetime_shift) \
+      : (((intnat)BUILTIN_RETURN_ADDRESS) >> 4))) \
    & PROFINFO_MASK)
 
 /* <private> */
@@ -139,6 +142,7 @@ int caml_page_table_initialize(mlsize_t bytesize);
 
 extern uintnat caml_allocation_profiling;
 extern uintnat caml_lifetime_tracking;
+extern uintnat caml_override_profinfo;
 extern uint64_t* caml_minor_allocation_profiling_array;
 extern uint64_t* caml_minor_allocation_profiling_array_end;
 extern uint64_t* caml_major_allocation_profiling_array;

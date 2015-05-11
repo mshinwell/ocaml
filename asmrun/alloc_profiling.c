@@ -603,3 +603,22 @@ caml_dump_lifetimes(void)
     }
   }
 }
+
+CAMLprim value
+caml_do_not_override_profinfo (value v_unit)
+{
+  v_unit = v_unit;
+  caml_override_profinfo = DO_NOT_OVERRIDE_PROFINFO;
+  return Val_unit;
+}
+
+CAMLprim value
+caml_set_override_profinfo (value v_override)
+{
+  uintnat override = Long_val (v_override);
+  if (override == DO_NOT_OVERRIDE_PROFINFO || override > PROFINFO_MASK) {
+    caml_invalid_argument ("Allocation profiling info override too large");
+  }
+  caml_override_profinfo = override;
+  return Val_unit;
+}

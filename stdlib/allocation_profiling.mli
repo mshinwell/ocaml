@@ -72,6 +72,14 @@ module Heap_snapshot : sig
      affect the functions in the [Global] module below.
   *)
   val forget_where_values_were_allocated : unit -> unit
+
+  (* Going forward, annotate all allocated values with their
+     allocation location (the default). *)
+  val annotate_values_with_allocation_location : unit -> unit
+
+  (* Going forward, annotate all allocated values with the given
+     integer. *)
+  val annotate_values_with_given_integer : int -> unit
 end
 
 module Global : sig

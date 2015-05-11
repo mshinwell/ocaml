@@ -221,6 +221,15 @@ module Heap_snapshot = struct
     -> unit
     = "caml_allocation_profiling_only_works_for_native_code"
       "caml_dump_heapgraph_from_ocaml"
+
+  external annotate_values_with_allocation_location : unit -> unit
+    = "%identity" (*"caml_do_not_override_profinfo" "noalloc"*)
+
+  external annotate_values_with_given_integer : int -> unit
+= "%identity"
+(*
+    = "caml_set_override_profinfo"
+*)
 end
 
 module Global = struct
