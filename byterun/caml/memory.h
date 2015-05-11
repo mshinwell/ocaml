@@ -64,23 +64,6 @@ extern uintnat caml_lifetime_shift;
 
 #define PROFINFO_MASK 0x3fffff
 #define DO_NOT_OVERRIDE_PROFINFO ((uintnat) -1)
-#define BUILTIN_RETURN_ADDRESS \
-  (__builtin_return_address(0) == NULL ? (void*)(0x1<<4) : __builtin_return_address(0))
-
-/*
-        + (intnat) caml_stat_major_words + (intnat) caml_allocated_words \
-        - (intnat) caml_stat_promoted_words) \
-*/
-
-#define MY_PROFINFO \
-  (((caml_override_profinfo != DO_NOT_OVERRIDE_PROFINFO) \
-    ? caml_override_profinfo \
-    : (caml_lifetime_tracking \
-      ? ((caml_young_end - caml_young_ptr \
-          + (intnat) (caml_stat_minor_words * sizeof(intnat))) \
-         >> caml_lifetime_shift) \
-      : (((intnat)BUILTIN_RETURN_ADDRESS) >> 4))) \
-   & PROFINFO_MASK)
 
 /* <private> */
 
@@ -133,8 +116,6 @@ int caml_page_table_initialize(mlsize_t bytesize);
 #define DEBUG_clear(result, wosize)
 #endif
 
-#define Profinfo_now (MY_PROFINFO << caml_lifetime_shift)
-
 #define Decode_profinfo_hd(hd) \
   (((uint64_t) (Profinfo_hd (hd))) << (caml_lifetime_tracking ? caml_lifetime_shift : 4))
 
@@ -148,18 +129,13 @@ extern uint64_t* caml_minor_allocation_profiling_array;
 extern uint64_t* caml_minor_allocation_profiling_array_end;
 extern uint64_t* caml_major_allocation_profiling_array;
 extern uint64_t* caml_major_allocation_profiling_array_end;
-extern void* caml_allocation_trace_caller;
 
-#define ALLOCATION_ENTRY_POINT                                              \
-  if (caml_allocation_profiling && caml_allocation_trace_caller == NULL)    \
-    caml_allocation_trace_caller = BUILTIN_RETURN_ADDRESS;
+#ifdef NATIVE_CODE
+extern uint64_t caml_allocation_profiling_profinfo_for_backtrace(void);
+#endif
 
-#define CLEAR_ALLOCATION_ENTRY_POINT                                        \
-  if (caml_allocation_profiling) {                                          \
-    caml_allocation_trace_caller = NULL;                                    \
-  }
-
-#define Alloc_small_with_profinfo(result, wosize, tag, profinfo) do {       \
+#ifndef NATIVE_CODE
+#define Alloc_small(result, wosize, tag) do {                               \
                                                 CAMLassert ((wosize) >= 1); \
                                           CAMLassert ((tag_t) (tag) < 256); \
                                  CAMLassert ((wosize) <= Max_young_wosize); \
@@ -171,32 +147,30 @@ extern void* caml_allocation_trace_caller;
     Restore_after_gc;                                                       \
     caml_young_ptr -= Bhsize_wosize (wosize);                               \
   }                                                                         \
-  if (caml_allocation_profiling) {                                          \
-    uint64_t caller_aligned;                                                \
-    uint64_t* count;                                                        \
-    if (caml_allocation_trace_caller != NULL) {                             \
-      caller_aligned = (uint64_t) caml_allocation_trace_caller;             \
-      caml_allocation_trace_caller = NULL;                                  \
-    }                                                                       \
-    else {                                                                  \
-      caller_aligned = (uint64_t) BUILTIN_RETURN_ADDRESS;                   \
-    }                                                                       \
-    caller_aligned &= 0xfffffffffffffff8;                                   \
-    count =                                                                 \
-      (uint64_t*) (((uint64_t) caml_minor_allocation_profiling_array)       \
-        + caller_aligned);                                                  \
-    if (count < caml_minor_allocation_profiling_array_end) {                \
-      *count = *count + wosize + 1;                                         \
-    }                                                                       \
-  }                                                                         \
-  Hd_hp (caml_young_ptr) =                                                  \
-    Make_header_with_profinfo ((wosize), (tag), Caml_black, (profinfo));    \
+  Hd_hp (caml_young_ptr) = Make_header ((wosize), (tag), Caml_black);       \
   (result) = Val_hp (caml_young_ptr);                                       \
   DEBUG_clear ((result), (wosize));                                         \
 }while(0)
-
-#define Alloc_small(result, wosize, tag) \
-  Alloc_small_with_profinfo(result, wosize, tag, MY_PROFINFO)
+#else
+#define Alloc_small(result, wosize, tag) do {                               \
+                                                CAMLassert ((wosize) >= 1); \
+                                          CAMLassert ((tag_t) (tag) < 256); \
+                                 CAMLassert ((wosize) <= Max_young_wosize); \
+  caml_young_ptr -= Bhsize_wosize (wosize);                                 \
+  if (caml_young_ptr < caml_young_start){                                   \
+    caml_young_ptr += Bhsize_wosize (wosize);                               \
+    Setup_for_gc;                                                           \
+    caml_minor_collection ();                                               \
+    Restore_after_gc;                                                       \
+    caml_young_ptr -= Bhsize_wosize (wosize);                               \
+  }                                                                         \
+  Hd_hp (caml_young_ptr) =                                                  \
+    Make_header_with_profinfo ((wosize), (tag), Caml_black,                 \
+      caml_allocation_profiling_profinfo_for_backtrace());                  \
+  (result) = Val_hp (caml_young_ptr);                                       \
+  DEBUG_clear ((result), (wosize));                                         \
+}while(0)
+#endif
 
 /* Deprecated alias for [caml_modify] */
 

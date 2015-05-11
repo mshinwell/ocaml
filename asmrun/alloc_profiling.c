@@ -730,7 +730,7 @@ bucket_index_for_backtrace(void* backtrace, int depth)
 
 static uint64_t next_profinfo = 1ull;  /* zero is reserved---see above. */
 
-uint64_t
+static uint64_t
 caml_allocation_profiling_profinfo_for_backtrace(void)
 {
   /* Capture the current stack backtrace and return the profinfo value that
@@ -788,6 +788,37 @@ caml_allocation_profiling_profinfo_for_backtrace(void)
   memcpy(&bucket->first_instr_ptr, backtrace_buffer, size_in_bytes);
 
   return profinfo;
+}
+
+intnat
+caml_allocation_profiling_my_profinfo(void)
+{
+#ifndef ARCH_SIXTYFOUR
+  return (intnat) 0;  /* No room for profinfo in the header on 32 bit. */
+#else
+  uint64_t profinfo;
+
+  if (!caml_allocation_profiling && !caml_lifetime_tracking) {
+    profinfo = 0ull;
+  }
+  else if (caml_override_profinfo != DO_NOT_OVERRIDE_PROFINFO) {
+    profinfo = caml_override_profinfo;
+  }
+  else if (caml_lifetime_tracking) {
+    profinfo = (caml_young_end - caml_young_ptr
+        + (intnat) (caml_stat_minor_words * sizeof(intnat)))
+        >> caml_lifetime_shift;
+  }
+  else {
+#ifndef HAS_LIBUNWIND
+    profinfo = ((uint64_t) __builtin_return_address(0)) >> 4;
+#else
+    profinfo = caml_allocation_profiling_profinfo_for_backtrace();
+#endif
+  }
+
+  return (intnat) ((profinfo & PROFINFO_MASK) << PROFINFO_SHIFT);
+#endif
 }
 
 void

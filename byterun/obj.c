@@ -159,7 +159,7 @@ CAMLprim value caml_obj_truncate (value v, value newsize)
      ref_table. */
   Field (v, new_wosize) =
     Make_header_with_profinfo (Wosize_whsize (wosize-new_wosize), 1, Caml_white,
-      MY_PROFINFO);
+      caml_allocation_profiling_profinfo_for_backtrace ());
   Hd_val (v) = Make_header_with_profinfo (new_wosize, tag, color, Profinfo_val(v));
   return Val_unit;
 }

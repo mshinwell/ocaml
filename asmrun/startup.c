@@ -156,51 +156,6 @@ static void parse_camlrunparam(void)
   /* CR mshinwell: validate [caml_lifetime_shift] */
 }
 
-size_t bytes_sufficient_for_code_section = 0;
-
-static void
-record_data_segment_limit(void)
-{
-  void* limit = sbrk(0);
-  if (limit != (void*) -1) {
-    bytes_sufficient_for_code_section = (uint64_t) limit;
-  }
-}
-
-uint64_t* caml_minor_allocation_profiling_array = NULL;
-uint64_t* caml_minor_allocation_profiling_array_end = NULL;
-uint64_t* caml_major_allocation_profiling_array = NULL;
-uint64_t* caml_major_allocation_profiling_array_end = NULL;
-void* caml_allocation_trace_caller = NULL;
-void (*__malloc_initialize_hook)(void) = record_data_segment_limit;
-
-extern void caml_allocation_profiling_initialize();
-
-static void
-initialize_allocation_profiling (void)
-{
-  if (caml_allocation_profiling && bytes_sufficient_for_code_section > 0) {
-    caml_minor_allocation_profiling_array =
-      (uint64_t*) calloc(bytes_sufficient_for_code_section, 1);
-    if (!caml_minor_allocation_profiling_array) abort();
-    caml_minor_allocation_profiling_array_end =
-      caml_minor_allocation_profiling_array +
-      (bytes_sufficient_for_code_section / sizeof(uint64_t));
-
-    caml_major_allocation_profiling_array =
-      (uint64_t*) calloc(bytes_sufficient_for_code_section, 1);
-    if (!caml_major_allocation_profiling_array) abort();
-    caml_major_allocation_profiling_array_end =
-      caml_major_allocation_profiling_array +
-      (bytes_sufficient_for_code_section / sizeof(uint64_t));
-
-    caml_allocation_profiling_initialize();
-  }
-  else {
-    caml_allocation_profiling = 0;
-  }
-}
-
 /* These are termination hooks used by the systhreads library */
 struct longjmp_buffer caml_termination_jmpbuf;
 void (*caml_termination_hook)(void *) = NULL;
@@ -216,17 +171,12 @@ extern void caml_install_invalid_parameter_handler();
 
 #endif
 
-
-extern int ensure_alloc_profiling_dot_o_is_included;
-
 void caml_main(char **argv)
 {
   char * exe_name;
   static char proc_self_exe[256];
   value res;
   char tos;
-
-  ensure_alloc_profiling_dot_o_is_included++;
 
   caml_init_ieee_floats();
 #ifdef _MSC_VER
@@ -238,7 +188,7 @@ void caml_main(char **argv)
 #endif
   caml_top_of_stack = &tos;
   parse_camlrunparam();
-  initialize_allocation_profiling();
+  caml_allocation_profiling_initialize();
   caml_init_gc (minor_heap_init, heap_size_init, heap_chunk_init,
                 percent_free_init, max_percent_free_init);
   init_atoms();

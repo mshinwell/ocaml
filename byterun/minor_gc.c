@@ -228,7 +228,9 @@ void caml_oldify_mopup (void)
   }
 }
 
+#ifdef NATIVE_CODE
 extern void caml_record_lifetime_sample(header_t, int, uint64_t);
+extern intnat caml_allocation_profiling_profinfo_for_backtrace(intnat);
 
 static void
 collect_lifetime_samples(void)
@@ -239,7 +241,7 @@ collect_lifetime_samples(void)
   uint64_t now;
   value* ptr = (value*) caml_young_ptr;
 
-  now = Profinfo_now;
+  now = caml_allocation_profiling_profinfo_for_backtrace();
 
   if (ptr < (value*) caml_young_start) {
     ptr = (value*) caml_young_start;
@@ -289,6 +291,7 @@ collect_lifetime_samples(void)
     }
   }
 }
+#endif
 
 /* Make sure the minor heap is empty by performing a minor collection
    if needed.

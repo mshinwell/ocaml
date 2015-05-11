@@ -16,8 +16,6 @@
 
 #include "mlvalues.h"
 
-extern uintnat caml_allocation_profiling;
-
 #define Caml_white (0 << 8)
 #define Caml_gray  (1 << 8)
 #define Caml_blue  (2 << 8)
@@ -45,14 +43,15 @@ extern uintnat caml_allocation_profiling;
                     + (tag_t) (tag)))                                         \
       )
 
-#define Make_header_with_profinfo(wosize, tag, color, profinfo)               \
-      (/*Assert ((wosize) <= Max_wosize),*/                                   \
-       ((header_t) (((caml_allocation_profiling                    ) ?          \
-                       ((((header_t) profinfo) & 0x3fffffull) << 42) : 0)     \
-                    + ((header_t) (wosize) << 10)                             \
-                    + (color)                                                 \
-                    + (tag_t) (tag)))                                         \
+#ifndef NATIVE_CODE
+#define Make_header_with_my_profinfo Make_header
+#else
+extern intnat caml_allocation_profiling_my_profinfo(void);
+#define Make_header_with_my_profinfo(wosize, tag, color)                      \
+      (Make_header(wosize, tag, color)                                        \
+        | caml_allocation_profiling_my_profinfo()                             \
       )
+#endif
 
 #define Is_white_val(val) (Color_val(val) == Caml_white)
 #define Is_gray_val(val) (Color_val(val) == Caml_gray)
