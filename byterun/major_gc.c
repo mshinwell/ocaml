@@ -390,7 +390,9 @@ static void sweep_slice (intnat work)
   char *hp;
   header_t hd;
   intnat dark_words, blue_words, white_words, end_of_chunk, end_of_sweep;
-  uint64_t now = 0ull;
+#ifdef NATIVE_CODE
+  intnat now = (intnat) 0;
+#endif
 
   dark_words = 0;
   blue_words = 0;

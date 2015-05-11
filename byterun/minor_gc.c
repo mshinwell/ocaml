@@ -321,9 +321,11 @@ void caml_empty_minor_heap (void)
       }
     }
     if (caml_young_ptr < caml_young_start) caml_young_ptr = caml_young_start;
+#ifdef NATIVE_CODE
     if (caml_lifetime_tracking) {
       collect_lifetime_samples();
     }
+#endif
     caml_stat_minor_words += Wsize_bsize (caml_young_end - caml_young_ptr);
     caml_young_ptr = caml_young_end;
     caml_young_limit = caml_young_start;

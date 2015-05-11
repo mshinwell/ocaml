@@ -319,7 +319,7 @@ static char *expand_heap (mlsize_t request)
   prev = hp = mem;
   /* FIXME find a way to do this with a call to caml_make_free_blocks */
   while (Wosize_bhsize (remain) > Max_wosize){
-    Hd_hp (hp) = Make_header_with_profinfo (Max_wosize, 0, Caml_blue, MY_PROFINFO);
+    Hd_hp (hp) = Make_header_with_my_profinfo (Max_wosize, 0, Caml_blue);
 #ifdef DEBUG
     caml_set_fields (Bp_hp (hp), 0, Debug_free_major);
 #endif
@@ -338,7 +338,7 @@ static char *expand_heap (mlsize_t request)
   }else{
     Field (Op_hp (prev), 0) = (value) NULL;
     if (remain == 1) {
-      Hd_hp (hp) = Make_header_with_profinfo (0, 0, Caml_white, MY_PROFINFO);
+      Hd_hp (hp) = Make_header_with_my_profinfo (0, 0, Caml_white);
     }
   }
   Assert (Wosize_hp (mem) >= request);
@@ -436,7 +436,8 @@ CAMLexport value caml_alloc_shr_with_profinfo (mlsize_t wosize, tag_t tag,
     Hd_hp (hp) = Make_header_with_profinfo (wosize, tag, Caml_white, profinfo);
   }
   Assert (Hd_hp (hp)
-    == Make_header_with_profinfo (wosize, tag, caml_allocation_color (hp), profinfo));
+    == Make_header_with_profinfo (wosize, tag, caml_allocation_color (hp),
+                                  profinfo));
   caml_allocated_words += Whsize_wosize (wosize);
   if (caml_allocated_words > Wsize_bsize (caml_minor_heap_size)){
     caml_urge_major_slice ();
@@ -449,35 +450,21 @@ CAMLexport value caml_alloc_shr_with_profinfo (mlsize_t wosize, tag_t tag,
     }
   }
 #endif
-  if (caml_allocation_profiling) {
-    uint64_t caller_aligned;
-    uint64_t* count;
-    if (caml_allocation_trace_caller != NULL) {
-      caller_aligned = (uint64_t) caml_allocation_trace_caller;
-      caml_allocation_trace_caller = NULL;
-    }
-    else {
-      caller_aligned = (uint64_t) BUILTIN_RETURN_ADDRESS;
-    }
-    caller_aligned &= 0xfffffffffffffff8;
-    count =
-      (uint64_t*) (((uint64_t) caml_major_allocation_profiling_array)
-        + caller_aligned);
-    if (count < caml_major_allocation_profiling_array_end) {
-      *count = *count + Bhsize_wosize (wosize);
-    }
-  }
   return Val_hp (hp);
 }
 
+#ifndef NATIVE_CODE
 CAMLexport value caml_alloc_shr (mlsize_t wosize, tag_t tag)
 {
-  if (caml_allocation_profiling) {
-    return caml_alloc_shr_with_profinfo (wosize, tag, MY_PROFINFO);
-  }
-
   return caml_alloc_shr_with_profinfo (wosize, tag, 0);
 }
+#else
+CAMLexport value caml_alloc_shr (mlsize_t wosize, tag_t tag)
+{
+  return caml_alloc_shr_with_profinfo (wosize, tag,
+    caml_allocation_profiling_my_profinfo ());
+}
+#endif
 
 /* Dependent memory is all memory blocks allocated out of the heap
    that depend on the GC (and finalizers) for deallocation.
@@ -624,62 +611,4 @@ CAMLexport void * caml_stat_resize (void * blk, asize_t sz)
 
   if (result == NULL) caml_raise_out_of_memory ();
   return result;
-}
-
-extern void* caml_last_return_address;
-
-CAMLprim value caml_allocation_entry_point(value v_unit)
-{
-  if (caml_allocation_profiling && caml_allocation_trace_caller == NULL) {
-    caml_allocation_trace_caller = (void*) caml_last_return_address;
-  }
-  return v_unit;
-}
-
-CAMLprim value caml_dump_allocation_profiling_arrays(value v_output_file)
-{
-  if (caml_allocation_profiling) {
-    FILE* fp;
-    uint64_t i;
-    uint64_t limit =
-      (((uint64_t) caml_minor_allocation_profiling_array_end)
-        - ((uint64_t) caml_minor_allocation_profiling_array)) / sizeof(uint64_t);
-
-    fp = fopen(String_val(v_output_file), "w");
-    if (fp == NULL) {
-      fprintf(stderr, "couldn't open file '%s' for allocation tracing array dump\n",
-              String_val(v_output_file));
-      return Val_unit;
-    }
-
-    for (i = 0; i < limit; i++) {
-      void* code_ptr = (void*) (i * 8);
-      uint64_t count = caml_minor_allocation_profiling_array[i];
-      if (count != 0)
-        fprintf(fp, "minor,%p,%lld\n", code_ptr, (unsigned long long) count);
-    }
-    for (i = 0; i < limit; i++) {
-      void* code_ptr = (void*) (i * 8);
-      uint64_t count = caml_major_allocation_profiling_array[i];
-      if (count != 0)
-        fprintf(fp, "major,%p,%lld\n", code_ptr, (unsigned long long) count);
-    }
-    fclose(fp);
-  }
-  return Val_unit;
-}
-
-CAMLprim value caml_reset_allocation_profiling_arrays(value v_unit)
-{
-  if (caml_allocation_profiling) {
-    uint64_t i;
-    uint64_t limit =
-      (((uint64_t) caml_minor_allocation_profiling_array_end)
-        - ((uint64_t) caml_minor_allocation_profiling_array)) / sizeof(uint64_t);
-    for (i = 0; i < limit; i++) {
-      caml_minor_allocation_profiling_array[i] = 0;
-      caml_major_allocation_profiling_array[i] = 0;
-    }
-  }
-  return v_unit;
 }

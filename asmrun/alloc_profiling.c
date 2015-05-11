@@ -628,34 +628,6 @@ caml_set_override_profinfo (value v_override)
   return Val_unit;
 }
 
-#pragma GCC optimize ("-O3")
-
-static int
-capture_backtrace(void** backtrace, int depth)
-{
-#ifdef HAS_LIBUNWIND
-  unw_cursor_t cur;
-  unw_context_t ctx;
-  int ret;
-
-  unw_getcontext(&ctx);
-  unw_init_local(&cur, &ctx);
-  if ((ret = unw_tdep_trace(&cur, addrs, &depth)) < 0) {
-    depth = 0;
-    unw_getcontext(&ctx);
-    unw_init_local(&cur, &ctx);
-    while ((ret = unw_step(&cur)) > 0 && depth < 128) {
-      unw_word_t ip;
-      unw_get_reg(&cur, UNW_REG_IP, &ip);
-      backtrace[depth++] = (void*) ip;
-    }
-  }
-  return depth;
-#else
-  return 0;
-#endif
-}
-
 #define MAX_NUM_BACKTRACES_PER_DEPTH 10000
 #define MAX_BACKTRACE_DEPTH 10
 
@@ -713,6 +685,30 @@ caml_allocation_profiling_initialize(void)
   }
 
   reallocate_backtrace_buffer();
+}
+
+#pragma GCC optimize ("-O3")
+
+static int
+capture_backtrace(void** backtrace, int depth)
+{
+  unw_cursor_t cur;
+  unw_context_t ctx;
+  int ret;
+
+  unw_getcontext(&ctx);
+  unw_init_local(&cur, &ctx);
+  if ((ret = unw_tdep_trace(&cur, addrs, &depth)) < 0) {
+    depth = 0;
+    unw_getcontext(&ctx);
+    unw_init_local(&cur, &ctx);
+    while ((ret = unw_step(&cur)) > 0 && depth < MAX_BACKTRACE_DEPTH) {
+      unw_word_t ip;
+      unw_get_reg(&cur, UNW_REG_IP, &ip);
+      backtrace[depth++] = (void*) ip;
+    }
+  }
+  return depth;
 }
 
 static uint64_t

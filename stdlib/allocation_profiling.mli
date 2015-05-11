@@ -82,26 +82,6 @@ module Heap_snapshot : sig
   val annotate_values_with_given_integer : int -> unit
 end
 
-module Global : sig
-  (* This module contains functions that provide access to global
-     profiling information rather than working on current snapshots
-     of the heap.
-  *)
-
-  (* [dump_allocations_by_address] writes a file that may be decoded
-     using tools/allocation-profiling/decode-by-address.sh in order
-     to show the total number of values and words allocated at each
-     program source location.  These counts will increment from the
-     start of the program unless the reset function, below, is
-     called.  Example script invocation:
-       decode-by-address.sh profile-output-file executable-file
-  *)
-  val dump_allocations_by_address : filename:string -> unit
-
-  (* [reset_allocations_by_address] resets all counts to zero. *)
-  val reset_allocations_by_address : unit -> unit
-end
-
 
 (* The following is only for the internal use of the OCaml system.
    User code should use the functions provided above. *)
