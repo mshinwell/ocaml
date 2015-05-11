@@ -239,3 +239,8 @@ module Global = struct
   external reset_allocations_by_address : unit -> unit
     = "caml_reset_allocation_profiling_arrays"
 end
+
+(*
+external dump_backtraces_to_file : filename:string -> unit
+  = "caml_allocation_profiling_dump_backtraces_to_file"
+*)

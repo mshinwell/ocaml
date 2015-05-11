@@ -174,6 +174,8 @@ uint64_t* caml_major_allocation_profiling_array_end = NULL;
 void* caml_allocation_trace_caller = NULL;
 void (*__malloc_initialize_hook)(void) = record_data_segment_limit;
 
+extern void caml_allocation_profiling_initialize();
+
 static void
 initialize_allocation_profiling (void)
 {
@@ -191,6 +193,8 @@ initialize_allocation_profiling (void)
     caml_major_allocation_profiling_array_end =
       caml_major_allocation_profiling_array +
       (bytes_sufficient_for_code_section / sizeof(uint64_t));
+
+    caml_allocation_profiling_initialize();
   }
   else {
     caml_allocation_profiling = 0;

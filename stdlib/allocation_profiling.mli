@@ -187,3 +187,7 @@ val where_was_value_allocated_address_only : 'a
 (* [to_string t] produces a human-readable representation of [t]. *)
 val to_string : t -> string
 *)
+
+(*
+val dump_backtraces_to_file : filename:string -> unit
+*)

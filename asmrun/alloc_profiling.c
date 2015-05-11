@@ -4,7 +4,7 @@
 /*                                                                     */
 /*                 Mark Shinwell, Jane Street Europe                   */
 /*                                                                     */
-/*  Copyright 2013, Jane Street Holding                                */
+/*  Copyright 2013--2015, Jane Street Group                            */
 /*                                                                     */
 /*  Licensed under the Apache License, Version 2.0 (the "License");    */
 /*  you may not use this file except in compliance with the License.   */
@@ -42,6 +42,11 @@
 #include "caml/minor_gc.h"
 #include "caml/mlvalues.h"
 #include "caml/signals.h"
+
+#include "config/s.h"
+#ifdef HAS_LIBUNWIND
+#include "libunwind.h"
+#endif
 
 int ensure_alloc_profiling_dot_o_is_included = 42;
 
@@ -620,5 +625,214 @@ caml_set_override_profinfo (value v_override)
     caml_invalid_argument ("Allocation profiling info override too large");
   }
   caml_override_profinfo = override;
+  return Val_unit;
+}
+
+#pragma GCC optimize ("-O3")
+
+static int
+capture_backtrace(void** backtrace, int depth)
+{
+#ifdef HAS_LIBUNWIND
+  unw_cursor_t cur;
+  unw_context_t ctx;
+  int ret;
+
+  unw_getcontext(&ctx);
+  unw_init_local(&cur, &ctx);
+  if ((ret = unw_tdep_trace(&cur, addrs, &depth)) < 0) {
+    depth = 0;
+    unw_getcontext(&ctx);
+    unw_init_local(&cur, &ctx);
+    while ((ret = unw_step(&cur)) > 0 && depth < 128) {
+      unw_word_t ip;
+      unw_get_reg(&cur, UNW_REG_IP, &ip);
+      backtrace[depth++] = (void*) ip;
+    }
+  }
+  return depth;
+#else
+  return 0;
+#endif
+}
+
+#define MAX_NUM_BACKTRACES_PER_DEPTH 10000
+#define MAX_BACKTRACE_DEPTH 10
+
+typedef struct {
+  uint64_t profinfo;  /* 0 indicates the bucket is empty */
+  struct backtrace_table_bucket* next;
+  /* Backtrace follows. */
+  void* first_instr_ptr;
+} backtrace_table_bucket;
+
+/* There is one hash table per depth of backtrace. */
+static backtrace_table_bucket* backtrace_tables[MAX_BACKTRACE_DEPTH];
+static void** backtrace_buffer = NULL;
+
+static void
+reallocate_backtrace_buffer(void)
+{
+  if (backtrace_buffer) {
+    free(backtrace_buffer);
+  }
+  backtrace_buffer = (void**) malloc(sizeof(void*) * MAX_BACKTRACE_DEPTH);
+  if (!backtrace_buffer) {
+    abort();
+  }
+}
+
+static int
+backtrace_table_bucket_size_in_bytes_for_depth(int depth)
+{
+  return sizeof(backtrace_table_bucket) - sizeof(void*)
+      + (depth * sizeof(void*));
+}
+
+void
+caml_allocation_profiling_initialize(void)
+{
+  int bucket;
+  int depth_minus_one;
+
+  for (depth_minus_one = 0; depth_minus_one < MAX_BACKTRACE_DEPTH;
+       depth_minus_one++) {
+    size_t bucket_size_in_bytes =
+      backtrace_table_bucket_size_in_bytes_for_depth(1 + depth_minus_one);
+
+    backtrace_table[depth_minus_one] = (backtrace_table_bucket*)
+      malloc(bucket_size_in_bytes * MAX_NUM_BACKTRACES_PER_DEPTH);
+    if (!backtrace_table[depth_minus_one]) {
+      abort();
+    }
+
+    for (bucket = 0; bucket < MAX_NUM_BACKTRACES_PER_DEPTH; bucket++) {
+      (backtrace_table[depth_minus_one])[bucket]->depth = -1;
+      (backtrace_table[depth_minus_one])[bucket]->next = NULL;
+    }
+  }
+
+  reallocate_backtrace_buffer();
+}
+
+static uint64_t
+bucket_index_for_backtrace(void* backtrace, int depth)
+{
+  int frame;
+  uint64_t hash = 0;
+
+  for (frame = 0; frame < depth; frame++) {
+    hash = hash ^ (uint64_t) (backtrace[frame]);
+  }
+
+  return hash % MAX_NUM_BACKTRACES_PER_DEPTH;
+}
+
+static uint64_t next_profinfo = 1ull;  /* zero is reserved---see above. */
+
+uint64_t
+caml_allocation_profiling_profinfo_for_backtrace(void)
+{
+  /* Capture the current stack backtrace and return the profinfo value that
+     is to be written into the value's header at the current allocation point.
+     The returned profinfo value is not shifted by [PROFINFO_SHIFT]. */
+
+  int depth;
+  uint64_t profinfo;
+  uint64_t bucket_index;
+  uint64_t size_in_bytes;
+  backtrace_table_bucket* bucket;
+
+  depth = capture_backtrace(backtrace_buffer, MAX_BACKTRACE_DEPTH);
+  if (depth <= 0) {
+    return 0ull;
+  }
+  if (depth > MAX_BACKTRACE_DEPTH) {
+    depth = MAX_BACKTRACE_DEPTH;
+  }
+
+  bucket_index = bucket_index_for_backtrace(backtrace_buffer, depth);
+  bucket = &((backtrace_table[depth - 1])[bucket_index]);
+
+  size_in_bytes = sizeof(void*) * depth;
+
+  if (bucket->profinfo != 0ull) {
+    backtrace_table_bucket* prev_bucket = bucket;
+    bucket = bucket->next;
+    while (bucket != NULL) {
+      if (!memcmp(&bucket->first_instr_ptr, backtrace_buffer, size_in_bytes)) {
+        /* The backtrace matches [bucket], so just return the previously-
+           allocated profinfo. */
+        return bucket->profinfo;
+      }
+      bucket = bucket->next;
+    }
+    /* End of the chain reached; we must allocate a new bucket. */
+    bucket = (backtrace_table_bucket*) malloc(sizeof(
+      backtrace_table_bucket_size_in_bytes_for_depth(depth)));
+    if (!bucket) {
+      return 0ull;
+    }
+    bucket->next = NULL;
+  }
+
+  /* We haven't seen this backtrace before.  Allocate a unique profinfo id
+     for block headers. */
+  profinfo = next_profinfo++;
+  if (profinfo > PROFINFO_MASK) {
+    /* Too many distinct backtraces have been captured. */
+    return 0ull;
+  }
+  bucket->profinfo = profinfo;
+  /* [bucket->next] has already been initialized (see above, two places). */
+  memcpy(&bucket->first_instr_ptr, backtrace_buffer, size_in_bytes);
+
+  return profinfo;
+}
+
+void
+caml_allocation_profiling_dump_backtraces_to_file(char* filename)
+{
+  int depth;
+  int frame;
+  uint64_t bucket_index;
+  FILE* fp;
+
+  fp = fopen(filename, "w");
+  if (!fp) {
+    fprintf(stderr, "Couldn't open %s for backtrace dump\n", filename);
+    return;
+  }
+
+  for (depth = 1; depth <= MAX_BACKTRACE_DEPTH; depth++) {
+    backtrace_table_bucket* table = backtrace_table[depth - 1];
+    for (bucket_index = 0; bucket_index < MAX_NUM_BACKTRACES_PER_DEPTH;
+         bucket_index++) {
+      backtrace_table_bucket* bucket = &table[bucket_index];
+      while (bucket && bucket->profinfo != 0ull) {
+        fprintf(stderr, "%llu ", (unsigned long long) bucket->profinfo);
+        for (frame = 0; frame < depth; frame++) {
+          fprintf(stderr, "%p",
+            ((void**) &bucket->first_instr_ptr)[frame]);
+          if (frame < (depth - 1)) {
+            fprintf(stderr, " ");
+          }
+          else {
+            fprintf(stderr, "\n");
+          }
+        }
+        bucket = bucket->next;
+      }
+    }
+  }
+
+  fclose(fp);
+}
+
+CAMLprim value
+caml_allocation_profiling_dump_backtraces_to_file_from_ocaml(value v_filename)
+{
+  caml_allocation_profiling_dump_backtraces_to_file_from_ocaml(
+    String_val(v_filename));
   return Val_unit;
 }

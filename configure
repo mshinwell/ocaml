@@ -1341,6 +1341,12 @@ if sh ./hasgot nice; then
   echo "#define HAS_NICE" >> s.h
 fi
 
+# Whether libunwind is present (for allocation profiling)
+
+if sh ./hasgot -i libunwind.h; then
+  echo "#define HAS_LIBUNWIND" >> s.h
+fi
+
 # Determine if the debugger is supported
 
 if test -n "$with_debugger"; then

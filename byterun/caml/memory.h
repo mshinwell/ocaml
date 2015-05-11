@@ -138,7 +138,8 @@ int caml_page_table_initialize(mlsize_t bytesize);
 #define Decode_profinfo_hd(hd) \
   (((uint64_t) (Profinfo_hd (hd))) << (caml_lifetime_tracking ? caml_lifetime_shift : 4))
 
-#define Hd_no_profinfo(hd) ((hd) & ~(0x3fffffull << 42))
+#define PROFINFO_SHIFT 42
+#define Hd_no_profinfo(hd) ((hd) & ~(0x3fffffull << PROFINFO_SHIFT))
 
 extern uintnat caml_allocation_profiling;
 extern uintnat caml_lifetime_tracking;
