@@ -726,6 +726,86 @@ bucket_index_for_backtrace(void* backtrace, int depth)
 
 static uint64_t next_profinfo = 1ull;  /* zero is reserved---see above. */
 
+/* Backtrace stack layout:
+
+        ------------------------   (higher address)
+        |                      |
+        |                      |
+        |  zero-initialized    |
+        |                      |
+        |                      |
+        ------------------------
+        |  return address N    |
+        ------------------------
+        |        ...           |
+        ------------------------
+        |  return address 0    |
+        ------------------------
+        |  hash                |
+        ------------------------  <-- top of stack pointer
+
+  [caml_allocation_profiling_backtrace_top_of_stack] holds the top of stack
+  pointer.  There is one stack per thread.
+
+  The hash value is the hash of the return addresses 0 through N inclusive.
+  The hash word is always present even when there are no return addresses.
+
+  The number of zero-initialized words is equal to the maximum length of
+  an allocation profiling backtrace minus one.  These words ensure that we
+  do not have garbage in the backtraces, which are captured as fixed-size.
+
+
+  Backtrace bucket layout (increasing addresses to the right):
+
+  Suppose the function has M allocation points.
+  Suppose there are N frames on the backtrace stack before ours.
+
+                       M of these              N of these
+                  --------------------- -----------------------
+                 |                     |                       |
+  --------------------------------------------------------------
+  | saved ptr    | profinfo  | PC of   |     | return    |     |
+  | to backtrace | for alloc | alloc   | ... | address 0 | ... |
+  | top of stack | point 0   | point 0 |     |           | ... |
+  --------------------------------------------------------------
+  ^
+  |
+  \------- backtrace register points here after the prologue
+
+  After the allocation profiling prologue, the backtrace register (%r11 on
+  x86-64) is saved into the backtrace bucket for the given function, and
+  the register changed to point at the bucket.  It is restored around
+  calls.  The rationale for this is that the number of allocation points in
+  the typical function probably exceeds the number of function calls, so it's
+  worth making the allocation point sequence faster at the expense of the
+  call sequence.
+
+  In future the PC values could be elided, perhaps in favour of
+  distinguished symbols emitted into the executable; each symbol would have
+  the corresponding allocation point number.
+
+  The profinfo word is that written into values' headers.
+
+
+  Calling from OCaml to C: the backtrace top of stack pointer variable is
+  updated from the register.
+
+  Taking backtraces from C: the entire backtrace is captured each time,
+  using libunwind.
+
+  Calling from C to OCaml: the caml_callback* functions use libunwind to
+  populate the first part of the backtrace stack.  Then the backtrace
+  top of stack pointer register is updated from the variable, and vice-versa
+  at the end of the OCaml function upon return to C.
+*/
+
+void* caml_allocation_profiling_backtrace_top_of_stack;
+
+void
+caml_allocation_profiling_capture_partial_backtrace(void* backtrace_buffer,
+
+}
+
 static uint64_t
 caml_allocation_profiling_profinfo_for_backtrace(void)
 {

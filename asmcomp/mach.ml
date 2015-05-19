@@ -38,7 +38,7 @@ type operation =
   | Iconst_int of nativeint
   | Iconst_float of float
   | Iconst_symbol of string
-  | Iconst_blockheader of nativeint
+  | Iblockheader of nativeint
   | Icall_ind
   | Icall_imm of string
   | Itailcall_ind

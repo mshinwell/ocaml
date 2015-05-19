@@ -28,14 +28,14 @@ let bind name arg fn =
   match arg with
     Cvar _ | Cconst_int _ | Cconst_natint _ | Cconst_symbol _
   | Cconst_pointer _ | Cconst_natpointer _
-  | Cconst_blockheader _ -> fn arg
+  | Cblockheader _ -> fn arg
   | _ -> let id = Ident.create name in Clet(id, arg, fn (Cvar id))
 
 let bind_nonvar name arg fn =
   match arg with
     Cconst_int _ | Cconst_natint _ | Cconst_symbol _
   | Cconst_pointer _ | Cconst_natpointer _
-  | Cconst_blockheader _ -> fn arg
+  | Cblockheader _ -> fn arg
   | _ -> let id = Ident.create name in Clet(id, arg, fn (Cvar id))
 
 let caml_black = Nativeint.shift_left (Nativeint.of_int 3) 8
@@ -64,14 +64,14 @@ let boxedint32_header = block_header Obj.custom_tag 2
 let boxedint64_header = block_header Obj.custom_tag (1 + 8 / size_addr)
 let boxedintnat_header = block_header Obj.custom_tag 2
 
-let alloc_block_header tag sz = Cconst_blockheader(block_header tag sz)
-let alloc_float_header = Cconst_blockheader(float_header)
-let alloc_floatarray_header len = Cconst_blockheader(floatarray_header len)
-let alloc_closure_header sz = Cconst_blockheader(white_closure_header sz)
-let alloc_infix_header ofs = Cconst_blockheader(infix_header ofs)
-let alloc_boxedint32_header = Cconst_blockheader(boxedint32_header)
-let alloc_boxedint64_header = Cconst_blockheader(boxedint64_header)
-let alloc_boxedintnat_header = Cconst_blockheader(boxedintnat_header)
+let alloc_block_header tag sz = Cblockheader(block_header tag sz)
+let alloc_float_header = Cblockheader(float_header)
+let alloc_floatarray_header len = Cblockheader(floatarray_header len)
+let alloc_closure_header sz = Cblockheader(white_closure_header sz)
+let alloc_infix_header ofs = Cblockheader(infix_header ofs)
+let alloc_boxedint32_header = Cblockheader(boxedint32_header)
+let alloc_boxedint64_header = Cblockheader(boxedint64_header)
+let alloc_boxedintnat_header = Cblockheader(boxedintnat_header)
 
 (* Integers *)
 
@@ -594,7 +594,7 @@ let call_cached_method obj tag cache pos args dbg =
 
 let make_alloc_generic set_fn tag wordsize args =
   if wordsize <= Config.max_young_wosize then
-    Cop(Calloc, Cconst_blockheader(block_header tag wordsize) :: args)
+    Cop(Calloc, Cblockheader(block_header tag wordsize) :: args)
   else begin
     let id = Ident.create "alloc" in
     let rec fill_fields idx = function
@@ -1290,7 +1290,7 @@ let subst_boxed_number unbox_fn boxed_id unboxed_id box_chunk box_offset exp =
     | Ctrywith(e1, id, e2) -> Ctrywith(subst e1, id, subst e2)
     | Cconst_int _ | Cconst_natint _ | Cconst_float _ | Cconst_symbol _
     | Cconst_pointer _ | Cconst_natpointer _
-    | Cconst_blockheader _ as e -> e
+    | Cblockheader _ as e -> e
   in
   let res = subst exp in
   (res, !need_boxed, !assigned)
@@ -2236,7 +2236,7 @@ let rec emit_structured_constant symb cst cont =
     (* Headers for structured constants must be marked black in case we
        are in no-naked-pointers mode.  See [caml_darken]. *)
     let black_header = Nativeint.logor white_header caml_black in
-    Cconst_blockheader_structured_constant black_header :: Cdefine_symbol symb :: cont
+    Cblockheader_structured_constant black_header :: Cdefine_symbol symb :: cont
   in
   match cst with
   | Uconst_float s->
@@ -2304,17 +2304,17 @@ let emit_constant_closure symb fundecls cont =
         [] -> cont
       | f2 :: rem ->
           if f2.arity = 1 then
-            Cconst_blockheader_constant_closure(infix_header pos) ::
+            Cblockheader_constant_closure(infix_header pos) ::
             Csymbol_address f2.label ::
             Cint 3n ::
             emit_others (pos + 3) rem
           else
-            Cconst_blockheader_constant_closure(infix_header pos) ::
+            Cblockheader_constant_closure(infix_header pos) ::
             Csymbol_address(curry_function f2.arity) ::
             Cint(Nativeint.of_int (f2.arity lsl 1 + 1)) ::
             Csymbol_address f2.label ::
             emit_others (pos + 4) rem in
-      Cconst_blockheader_constant_closure
+      Cblockheader_constant_closure
         (black_closure_header (fundecls_size fundecls)) ::
       Cdefine_symbol symb ::
       if f1.arity = 1 then
@@ -2366,7 +2366,7 @@ let compunit size ulam =
       (Array.init size (fun _index ->
         Cint (Nativeint.of_int 1 (* Val_unit *))))
   in
-  Cdata ([Cconst_blockheader_compilation_unit(black_block_header 0 size);
+  Cdata ([Cblockheader_compilation_unit(black_block_header 0 size);
          Cglobal_symbol glob;
          Cdefine_symbol glob] @ space) :: c3
 

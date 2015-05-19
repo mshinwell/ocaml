@@ -284,6 +284,9 @@ LBL(caml_call_gc):
 #else
         pushq   %rbp; CFI_ADJUST(8);
 #endif
+        /* We don't need to save and restore r11 if we are using allocation
+           profiling, but we might as well do it anyway, to preserve the stack
+           alignment. */
         pushq   %r11; CFI_ADJUST (8);
         pushq   %r10; CFI_ADJUST (8);
         pushq   %r13; CFI_ADJUST (8);
@@ -300,6 +303,10 @@ LBL(caml_call_gc):
     /* Save caml_young_ptr, caml_exception_pointer */
         STORE_VAR(%r15, caml_young_ptr)
         STORE_VAR(%r14, caml_exception_pointer)
+    /* Save allocation profiling backtrace stack pointer */
+#ifdef WITH_ALLOCATION_PROFILING
+        STORE_VAR(%r11, caml_allocation_profiling_backtrace_top_of_stack)
+#endif
     /* Save floating-point registers */
         subq    $(16*8), %rsp; CFI_ADJUST (16*8);
         movsd   %xmm0, 0*8(%rsp)
@@ -325,6 +332,10 @@ LBL(caml_call_gc):
     /* Restore caml_young_ptr, caml_exception_pointer */
         LOAD_VAR(caml_young_ptr, %r15)
         LOAD_VAR(caml_exception_pointer, %r14)
+    /* Restore allocation profiling backtrace stack pointer */
+#ifdef WITH_ALLOCATION_PROFILING
+        LOAD_VAR(caml_allocation_profiling_backtrace_top_of_stack, %r11)
+#endif
     /* Restore all regs used by the code generator */
         movsd   0*8(%rsp), %xmm0
         movsd   1*8(%rsp), %xmm1
@@ -363,151 +374,6 @@ LBL(caml_call_gc):
     /* Return to caller */
         ret
 CFI_ENDPROC
-
-/* Allocation with tracing. */
-
-FUNCTION(G(caml_alloc1_tracing))
-CFI_STARTPROC
-LBL(caml_alloc1_tracing):
-        subq    $16, %r15
-        CMP_VAR(caml_young_limit, %r15)
-        jb      LBL(200)
-        pushq   %r10
-        pushq   %r11
-        LOAD_VAR(caml_minor_allocation_profiling_array, %r10)
-        cmp     $0, %r10
-        je      LBL(skip_tracing1)
-        movq    16(%rsp),%r11
-        addq    %r11, %r10
-        subq    $8, %r10
-        andq    $0xfffffffffffffff8, %r10
-        LOAD_VAR(caml_minor_allocation_profiling_array_end, %r11)
-        cmp     %r11, %r10
-        jae     LBL(skip_tracing1)
-        movq    (%r10), %r11
-        addq    $2, %r11
-        movq    %r11, (%r10)
-LBL(skip_tracing1):
-        popq    %r11
-        popq    %r10
-        ret
-LBL(200):
-        RECORD_STACK_FRAME(0)
-        ENTER_FUNCTION
-        call    LBL(caml_call_gc)
-        LEAVE_FUNCTION
-        jmp     LBL(caml_alloc1_tracing)
-CFI_ENDPROC
-
-FUNCTION(G(caml_alloc2_tracing))
-CFI_STARTPROC
-LBL(caml_alloc2_tracing):
-        subq    $24, %r15
-        CMP_VAR(caml_young_limit, %r15)
-        jb      LBL(201)
-        pushq   %r10
-        pushq   %r11
-        LOAD_VAR(caml_minor_allocation_profiling_array, %r10)
-        cmp     $0, %r10
-        je      LBL(skip_tracing2)
-        movq    16(%rsp),%r11
-        addq    %r11, %r10
-        sub     $8, %r10
-        andq    $0xfffffffffffffff8, %r10
-        LOAD_VAR(caml_minor_allocation_profiling_array_end, %r11)
-        cmp     %r11, %r10
-        jae     LBL(skip_tracing2)
-        movq    (%r10), %r11
-        addq    $3, %r11
-        movq    %r11, (%r10)
-LBL(skip_tracing2):
-        popq    %r11
-        popq    %r10
-        ret
-LBL(201):
-        RECORD_STACK_FRAME(0)
-        ENTER_FUNCTION
-        call    LBL(caml_call_gc)
-        LEAVE_FUNCTION
-        jmp     LBL(caml_alloc2_tracing)
-CFI_ENDPROC
-
-CFI_STARTPROC
-FUNCTION(G(caml_alloc3_tracing))
-LBL(caml_alloc3_tracing):
-        subq    $32, %r15
-        CMP_VAR(caml_young_limit, %r15)
-        jb      LBL(202)
-        pushq   %r10
-        pushq   %r11
-        LOAD_VAR(caml_minor_allocation_profiling_array, %r10)
-        cmp     $0, %r10
-        je      LBL(skip_tracing3)
-        movq    16(%rsp),%r11
-        addq    %r11, %r10
-        sub     $8, %r10
-        andq    $0xfffffffffffffff8, %r10
-        LOAD_VAR(caml_minor_allocation_profiling_array_end, %r11)
-        cmp     %r11, %r10
-        jae     LBL(skip_tracing3)
-        movq    (%r10), %r11
-        addq    $4, %r11
-        movq    %r11, (%r10)
-LBL(skip_tracing3):
-        popq    %r11
-        popq    %r10
-        ret
-LBL(202):
-        RECORD_STACK_FRAME(0)
-        ENTER_FUNCTION
-        call    LBL(caml_call_gc)
-        LEAVE_FUNCTION
-        jmp     LBL(caml_alloc3_tracing)
-CFI_ENDPROC
-
-FUNCTION(G(caml_allocN_tracing))
-CFI_STARTPROC
-LBL(caml_allocN_tracing):
-        pushq   %rax                       /* save desired size */
-        subq    %rax, %r15
-        CMP_VAR(caml_young_limit, %r15)
-        jb      LBL(203)
-        popq    %rax
-        sarq    $3, %rax
-        pushq   %r10
-        pushq   %r11
-        LOAD_VAR(caml_minor_allocation_profiling_array, %r10)
-        cmp     $0, %r10
-        je      LBL(skip_tracingN)
-        movq    16(%rsp),%r11
-        addq    %r11, %r10
-        sub     $8, %r10
-        andq    $0xfffffffffffffff8, %r10
-        LOAD_VAR(caml_minor_allocation_profiling_array_end, %r11)
-        cmp     %r11, %r10
-        jae     LBL(skip_tracingN)
-        movq    (%r10), %r11
-        addq    %rax, %r11
-        movq    %r11, (%r10)
-LBL(skip_tracingN):
-        popq    %r11
-        popq    %r10
-        ret
-LBL(203):
-        RECORD_STACK_FRAME(8)
-#ifdef WITH_FRAME_POINTERS
-	/* Do we need 16-byte alignment here ? */
-	ENTER_FUNCTION
-#endif
-        call    LBL(caml_call_gc)
-#ifdef WITH_FRAME_POINTERS
-	LEAVE_FUNCTION
-#endif
-        popq    %rax; CFI_ADJUST(-8)       /* recover desired size */
-        jmp     LBL(caml_allocN_tracing)
-CFI_ENDPROC
-
-/* Original versions of allocation functions. */
 
 FUNCTION(G(caml_alloc1))
 CFI_STARTPROC
@@ -628,6 +494,10 @@ LBL(caml_start_program):
     /* Setup alloc ptr and exception ptr */
         LOAD_VAR(caml_young_ptr, %r15)
         LOAD_VAR(caml_exception_pointer, %r14)
+    /* Set up allocation profiling backtrace stack pointer */
+#ifdef WITH_ALLOCATION_PROFILING
+        LOAD_VAR(caml_allocation_profiling_backtrace_top_of_stack, %r11)
+#endif
     /* Build an exception handler */
         lea     LBL(108)(%rip), %r13
         pushq   %r13; CFI_ADJUST(8)
@@ -645,6 +515,10 @@ LBL(109):
     /* Update alloc ptr and exception ptr */
         STORE_VAR(%r15,caml_young_ptr)
         STORE_VAR(%r14,caml_exception_pointer)
+    /* Update allocation profiling backtrace stack pointer */
+#ifdef WITH_ALLOCATION_PROFILING
+        STORE_VAR(%r11, caml_allocation_profiling_backtrace_top_of_stack)
+#endif
     /* Pop the callback link, restoring the global variables */
         POP_VAR(caml_bottom_of_stack)
         POP_VAR(caml_last_return_address)
@@ -763,8 +637,23 @@ FUNCTION(G(caml_stack_overflow))
 
 /* Callback from C to OCaml */
 
+#ifndef WITH_ALLOCATION_PROFILING
+#define CAPTURE_BACKTRACE_FOR_ALLOCATION_PROFILING \
+    /* Save arguments to caml_callback* */
+        pushq   %rbx
+        pushq   %rax
+    /* Write the backtrace onto the backtrace stack */
+        call    GCALL(caml_allocation_profiling_capture_backtrace)
+    /* Restore arguments to caml_callback* */
+        popq    %rbx
+        popq    %rax
+#else
+#define CAPTURE_BACKTRACE_FOR_ALLOCATION_PROFILING /* nothing */
+#endif
+
 FUNCTION(G(caml_callback_exn))
 CFI_STARTPROC
+        CAPTURE_BACKTRACE_FOR_ALLOCATION_PROFILING
     /* Save callee-save registers */
         PUSH_CALLEE_SAVE_REGS
     /* Initial loading of arguments */
@@ -776,6 +665,7 @@ CFI_ENDPROC
 
 FUNCTION(G(caml_callback2_exn))
 CFI_STARTPROC
+        CAPTURE_BACKTRACE_FOR_ALLOCATION_PROFILING
     /* Save callee-save registers */
         PUSH_CALLEE_SAVE_REGS
     /* Initial loading of arguments */
@@ -788,6 +678,7 @@ CFI_ENDPROC
 
 FUNCTION(G(caml_callback3_exn))
 CFI_STARTPROC
+        CAPTURE_BACKTRACE_FOR_ALLOCATION_PROFILING
     /* Save callee-save registers */
         PUSH_CALLEE_SAVE_REGS
     /* Initial loading of arguments */

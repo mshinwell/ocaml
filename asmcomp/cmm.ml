@@ -89,7 +89,7 @@ type expression =
   | Cconst_symbol of string
   | Cconst_pointer of int
   | Cconst_natpointer of nativeint
-  | Cconst_blockheader of nativeint
+  | Cblockheader of nativeint
   | Cvar of Ident.t
   | Clet of Ident.t * expression * expression
   | Cassign of Ident.t * expression
@@ -114,9 +114,9 @@ type data_item =
     Cdefine_symbol of string
   | Cdefine_label of int
   | Cglobal_symbol of string
-  | Cconst_blockheader_constant_closure of nativeint
-  | Cconst_blockheader_compilation_unit of nativeint
-  | Cconst_blockheader_structured_constant of nativeint
+  | Cblockheader_constant_closure of nativeint
+  | Cblockheader_compilation_unit of nativeint
+  | Cblockheader_structured_constant of nativeint
   | Cint8 of int
   | Cint16 of int
   | Cint32 of nativeint

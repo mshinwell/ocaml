@@ -92,7 +92,7 @@ For 64-bit architectures:
      +--------+-------+-----+
 bits  63    10 9     8 7   0
 
-For x86-64 with allocation profiling:
+For x86-64 with allocation profiling:  (max block size = 32Gbytes)
 
            22 bits         32 bits
      +----------------+----------------+-------------+

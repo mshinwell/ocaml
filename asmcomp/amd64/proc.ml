@@ -53,6 +53,9 @@ let masm =
     r14         trap pointer
     r15         allocation pointer
 
+  When using allocation profiling, r11 is repurposed to point at the top of the
+  backtrace stack.
+
   xmm0 - xmm15  100 - 115  *)
 
 (* Conventions:

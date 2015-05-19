@@ -63,7 +63,7 @@ static void init_atoms(void)
   struct code_fragment * cf;
 
   for (i = 0; i < 256; i++) {
-    caml_atom_table[i] = Make_header_with_profinfo(0, i, Caml_white, MY_PROFINFO);
+    caml_atom_table[i] = Make_header_with_my_profinfo(0, i, Caml_white);
   }
   if (caml_page_table_add(In_static_data,
                           caml_atom_table, caml_atom_table + 256) != 0)

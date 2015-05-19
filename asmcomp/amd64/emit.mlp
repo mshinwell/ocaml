@@ -553,26 +553,6 @@ let emit_instr fallthrough i =
           let lbl_call_gc = new_label() in
           let lbl_frame = record_frame_label i.live Debuginfo.none in
           `	jb	{emit_label lbl_call_gc}\n`;
-          if !Clflags.allocation_profiling then begin
-          let skip_tracing_label = new_label () in
-          `	pushq	%r10\n`;
-          `	pushq	%r11\n`;
-          `	{load_symbol_addr "caml_minor_allocation_profiling_array"}, %r11\n`;
-          `	movq	(%r11), %r10\n`;
-          `     cmpq    $0, %r10\n`;
-          `     je      {emit_label skip_tracing_label}\n`;
-          `	lea 	(%rip), %r11\n`;
-          `	addq	%r11, %r10\n`;
-          `	andq	$0xfffffffffffffff8, %r10\n`;
-          `	{load_symbol_addr "caml_minor_allocation_profiling_array_end"}, %r11\n`;
-          `	cmpq    (%r11), %r10\n`;
-          `	jae	{emit_label skip_tracing_label}\n`;
-          `	movq	(%r10), %r11\n`;
-          `	addq	${emit_int (n / 8)}, %r11\n`;
-          `	movq	%r11, (%r10)\n`;
-          `{emit_label skip_tracing_label}:	popq	%r11\n`;
-          `	popq	%r10\n`;
-          end;
           `	leaq	8(%r15), {emit_reg i.res.(0)}\n`;
           call_gc_sites :=
             { gc_lbl = lbl_call_gc;
@@ -580,28 +560,12 @@ let emit_instr fallthrough i =
               gc_frame = lbl_frame } :: !call_gc_sites
         end else begin
           begin match n with
-            16  ->
-            if !Clflags.allocation_profiling then
-              `	{emit_call "caml_alloc1_tracing"}\n`
-            else
-              `	{emit_call "caml_alloc1"}\n`
-          | 24 ->
-            if !Clflags.allocation_profiling then
-              `	{emit_call "caml_alloc2_tracing"}\n`
-            else
-              `	{emit_call "caml_alloc2"}\n`
-          | 32 ->
-            if !Clflags.allocation_profiling then
-              `	{emit_call "caml_alloc3_tracing"}\n`
-            else
-              `	{emit_call "caml_alloc3"}\n`
-          | _  -> begin
+            16  -> `	{emit_call "caml_alloc1"}\n`
+          | 24 -> `	{emit_call "caml_alloc2"}\n`
+          | 32 -> `	{emit_call "caml_alloc3"}\n`
+          | _  ->
             `	movq	${emit_int n}, %rax\n`;
-            if !Clflags.allocation_profiling then
-              `	{emit_call "caml_allocN_tracing"}\n`
-            else
-              `	{emit_call "caml_allocN"}\n`
-          end
+            `	{emit_call "caml_allocN"}\n`
           end;
           `{record_frame i.live Debuginfo.none}	leaq	8(%r15), {emit_reg i.res.(0)}\n`
         end
