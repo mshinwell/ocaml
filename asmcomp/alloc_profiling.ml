@@ -71,6 +71,8 @@ let code_for_allocation_point ~value's_header ~alloc_point_number
         existing_profinfo),
       Cop (Cor, [profinfo; value's_header])))
 
+(* XXX need to increment the stack pointer by 2 words upon return *)
+
 let instrument_code expr =
   let next_alloc_point_number = ref 0 in
   let backtrace_bucket = Ident.create "backtrace_bucket" in
