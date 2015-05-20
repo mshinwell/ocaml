@@ -724,7 +724,151 @@ bucket_index_for_backtrace(void* backtrace, int depth)
   return hash % MAX_NUM_BACKTRACES_PER_DEPTH;
 }
 
-static uint64_t next_profinfo = 1ull;  /* zero is reserved---see above. */
+#define BACKTRACE_TABLE_SIZE 100000
+#define MAX_BACKTRACE_DEPTH 16
+
+/* The next profinfo value that will be generated.  Shared across all
+   threads.  We do not use zero as a profinfo value; this is reserved to
+   mean "none". */
+uint64_t caml_allocation_profiling_profinfo = 1ull;
+
+/* Backtrace hash table, shared across all threads.
+   As a point of information, libunwind-captured backtraces should never
+   coincide with OCaml-captured backtraces, since a libunwind call never
+   exists directly inside an OCaml function.
+ */
+typedef struct {
+  void* pc;
+  uint64_t profinfo;
+} allocation_point;
+typedef struct {
+  struct backtrace_table_bucket* next;
+  void* return_addresses[MAX_BACKTRACE_DEPTH];  /* most recent first */
+  uint64_t num_allocation_points;
+  /* [num_allocation_points] number of [allocation_point] structures follow
+     here. */
+  allocation_point profinfos[];
+} backtrace_table_bucket;
+static backtrace_table_bucket* backtrace_table[BACKTRACE_TABLE_SIZE];
+
+/* Top of backtrace stack for the current thread.  This always points at
+   the hash of all previous frames.  If there are no previous frames, it
+   points at the initial hash value. */
+void* caml_allocation_profiling_top_of_backtrace_stack;
+
+/* Limit of backtrace stack for the current thread. */
+void* caml_allocation_profiling_limit_of_backtrace_stack;
+
+/* Initial hash value. */
+static uint64_t initial_hash_value = 5381;
+
+void
+caml_allocation_profiling_initialize(void)
+{
+  uint64_t bucket;
+
+  for (bucket = 0; bucket < BACKTRACE_TABLE_SIZE; bucket++) {
+    backtrace_table[bucket] = NULL;
+  }
+}
+
+static uint64_t
+hash(uint64_t previous_hash, void* new_pointer)
+{
+  /* djb2 hash using XOR. */
+
+  int i;
+  for (i = 0; i < sizeof (void*); i++) {
+    previous_hash = (previous_hash * 33) ^ (((char*) new_pointer)[i]);
+  }
+  return previous_hash;
+}
+
+void*
+caml_allocation_profiling_prologue(value num_allocation_points,
+                                   void* return_address)
+{
+  /* This function is called at the top of every OCaml function that might
+     allocate. */
+
+  uint64_t hash_of_previous_frames;
+  uint64_t hash_of_all_frames;
+  uint64_t depth;
+  uint64_t bucket_index;
+  uint64_t bucket_size;
+  backtrace_table_bucket* bucket;
+  backtrace_table_bucket** where_to_put_bucket;
+
+  hash_of_previous_frames =
+    *(uint64_t *) caml_allocation_profiling_limit_of_backtrace_stack;
+
+  /* If the stack would overflow, for the moment, we just fail. */
+  if (caml_allocation_profiling_top_of_backtrace_stack
+      <= caml_allocation_profiling_limit_of_backtrace_stack) {
+    fprintf(stderr, "Allocation profiling backtrace stack overflow\n");
+    abort();
+  }
+
+  hash_of_all_frames = hash(hash_of_previous_frames, return_address);
+
+  caml_allocation_profiling_top_of_backtrace_stack[0] = hash_of_all_frames;
+  caml_allocation_profiling_top_of_backtrace_stack[1] = return_address;
+
+  bucket_index = hash_of_all_frames % BACKTRACE_TABLE_SIZE;
+  where_to_put_bucket = &(backtrace_table[bucket_index]);
+  bucket = *where_to_put_bucket;
+
+  if (bucket != NULL) {
+    /* The bucket has a chain (possibly of length one). */
+
+    where_to_put_bucket = &(bucket->next);
+    bucket = bucket->next;
+    while (bucket != NULL) {
+      /* Note that there are always sufficiently many NULL entries above a
+         backtrace stack's hash slot that we can always read
+         [MAX_BACKTRACE_DEPTH] words starting at one word above the hash
+         slot (i.e. the most recent return address). */
+      if (!memcmp(bucket->return_addresses,
+                  caml_allocation_profiling_top_of_backtrace_stack + 1,
+                  MAX_BACKTRACE_DEPTH * sizeof(void*))) {
+        /* The backtrace matches [bucket]. */
+        return bucket;
+      }
+      bucket = bucket->next;
+    }
+    /* End of the chain reached; we must allocate a new bucket. */
+  }
+
+  bucket_size = sizeof(backtrace_table_bucket)
+    - sizeof(backtrace_table_bucket.profinfos)
+    + (sizeof(allocation_point) * Long_val(num_allocation_points));
+
+  bucket = (backtrace_table_bucket*) malloc(bucket_size);
+  if (!bucket) {
+    fprintf(stderr, "Allocation profiling backtrace malloc failure");
+    abort();
+  }
+
+  /* Put the bucket in the table (possibly on the end of a chain). */
+  *where_to_put_bucket = bucket;
+
+  bucket->num_allocation_points = Long_val(num_allocation_points);
+  bucket->next = NULL;
+  /* Copy the backtrace, which includes the OCaml function's frame (our
+     caller) and all previous frames, into the bucket. */
+  memcpy(bucket->return_addresses,
+         caml_allocation_profiling_top_of_backtrace_stack + 1,
+         MAX_BACKTRACE_DEPTH * sizeof(void*));
+  /* We zero-initialize the PC values in the [profinfos] member of the
+     bucket so we know which allocation points have been hit. */
+  memset(bucket->profinfos, '\0',
+    bucket->num_allocation_points * sizeof(allocation_point));
+
+  /* (We don't allocate any profinfo values here; they will be done at
+     the allocation points throughout the OCaml function.) */
+
+  return bucket;
+}
 
 /* Backtrace stack layout:
 
@@ -760,18 +904,16 @@ static uint64_t next_profinfo = 1ull;  /* zero is reserved---see above. */
   Suppose the function has M allocation points.
   Suppose there are N frames on the backtrace stack before ours.
 
-                       M of these              N of these
-                  --------------------- -----------------------
-                 |                     |                       |
-  --------------------------------------------------------------
-  | saved ptr    | profinfo  | PC of   |     | return    |     |
-  | to backtrace | for alloc | alloc   | ... | address 0 | ... |
-  | top of stack | point 0   | point 0 |     |           | ... |
-  --------------------------------------------------------------
-  ^
-  |
-  \------- backtrace register points here after the prologue
+       M of these              N of these
+  --------------------- -----------------------
+  |                     |                       |
+  -----------------------------------------------
+  | profinfo  | PC of   |     | return    |     |
+  | for alloc | alloc   | ... | address 0 | ... |
+  | point 0   | point 0 |     |           | ... |
+  ----------------------------------------------
 
+  ... we now rely on normal optimizations to do this.
   After the allocation profiling prologue, the backtrace register (%r11 on
   x86-64) is saved into the backtrace bucket for the given function, and
   the register changed to point at the bucket.  It is restored around
@@ -786,6 +928,9 @@ static uint64_t next_profinfo = 1ull;  /* zero is reserved---see above. */
 
   The profinfo word is that written into values' headers.
 
+  Calling from OCaml to OCaml: callees are responsible for putting their return
+  address onto the backtrace stack and updating the hash, since there are probably
+  fewer callees than call points (keeps code size down).
 
   Calling from OCaml to C: the backtrace top of stack pointer variable is
   updated from the register.

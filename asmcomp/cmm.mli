@@ -67,7 +67,8 @@ type operation =
   | Ccmpf of comparison
   | Craise of Lambda.raise_kind * Debuginfo.t
   | Ccheckbound of Debuginfo.t
-  | Ccapture_backtrace
+  | Cprogram_counter
+  | Creturn_address
 
 type expression =
     Cconst_int of int
