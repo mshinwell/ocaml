@@ -81,6 +81,8 @@ let add_epilogue ~function_body ~saved_backtrace_stack_ptr =
         in
         Ctuple (List.rev (e_last::e_rest))
       end
+    (* XXX: note: we could trap extcalls that are not "noalloc" and record
+       things, if it helps the veneers *)
     | Cop _ -> expr
     | Csequence (e1, e2) -> Csequence (e1, instrument_exit_points e2)
     | Cifthenelse (e1, e2, e3) ->
@@ -95,6 +97,8 @@ let add_epilogue ~function_body ~saved_backtrace_stack_ptr =
       Ctrywith (instrument_exit_points e1, id, instrument_exit_points e2)
   in
   instrument_exit_points function_body
+
+(* XXX need to think about tail calls *)
 
 let profinfo_counter =
   Ident.create_persistent "caml_allocation_profiling_profinfo"
