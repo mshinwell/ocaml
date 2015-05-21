@@ -288,6 +288,8 @@ method select_operation op args =
   | (Cfloatofint, _) -> (Ifloatofint, args)
   | (Cintoffloat, _) -> (Iintoffloat, args)
   | (Ccheckbound _, _) -> self#select_arith Icheckbound args
+  | (Cprogram_counter, _) -> (Iprogram_counter, args)
+  | (Creturn_address, _) -> (Ireturn_address, args)
   | _ -> fatal_error "Selection.select_oper"
 
 method private select_arith_comm op = function
@@ -426,8 +428,11 @@ method emit_expr env exp =
       let r = self#regs_for typ_int in
       Some(self#insert_op (Iconst_int n) [||] r)
   | Cblockheader n ->
+      (* [Cblockheader] nodes should be expanded by [Alloc_profiling] when
+         using allocation profiling. *)
+      assert (not !Clflags.allocation_profiling);
       let r = self#regs_for typ_int in
-      Some(self#insert_op (Iblockheader n) [||] r)
+      Some(self#insert_op (Iconst_int n) [||] r)
   | Cconst_float n ->
       let r = self#regs_for typ_float in
       Some(self#insert_op (Iconst_float n) [||] r)

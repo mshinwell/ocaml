@@ -34,6 +34,7 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <math.h>
+#include <sys/resource.h>
 
 #include "caml/alloc.h"
 #include "caml/gc.h"
@@ -656,6 +657,9 @@ capture_backtrace(void** backtrace, int depth)
 }
 
 #define BACKTRACE_TABLE_SIZE 100000
+
+/* Maximum depth for a captured backtrace.  This is not the maximum size of
+   the backtrace stack. */
 #define MAX_BACKTRACE_DEPTH 16
 
 /* The next profinfo value that will be generated.  Shared across all
@@ -738,6 +742,46 @@ caml_allocation_profiling_initialize(void)
   for (bucket = 0; bucket < BACKTRACE_TABLE_SIZE; bucket++) {
     backtrace_table[bucket] = NULL;
   }
+}
+
+#define DEFAULT_STACK_SIZE_IN_BYTES (10240 * 1024)
+
+void
+caml_allocation_profiling_create_backtrace_stack(void** top,
+    void** bottom, void** limit)
+{
+  /* Create and initialize a new backtrace stack.  The highest address
+     (bottom of stack) is written into [*bottom]; the current stack pointer
+     into [*top]; and the limit into [*limit].  If possible, we use the
+     system stack size as the default size of the stack. */
+
+  struct rlimit rlim;
+  uint64_t size_in_bytes;
+
+  if (getrlimit(RLIMIT_STACK, &rlim) != 0) {
+    caml_failwith("Could not read stack rlimit to create backtrace stack");
+  }
+
+  size_in_bytes =
+    (rlim.rlim_cur != RLIM_INFINITY
+      ? rlim.rlim_cur
+      : (rlim.rlim_max == RLIM_INFINITY
+        ? rlim.rlim_max
+        : DEFAULT_STACK_SIZE_IN_BYTES));
+
+  *limit = calloc(size_in_bytes, 1);
+  if (*bottom == NULL) {
+    caml_failwith("Could not allocate backtrace stack");
+  }
+  *bottom = *limit + (size_in_bytes / sizeof(void*));
+
+  /* Leave empty space (see diagrams above). */
+  *top = *bottom - MAX_BACKTRACE_DEPTH;
+
+  /* Put initial hash value into place.  The top of stack pointer must end
+     up pointing at this value upon return from this function. */
+  (*top)--;
+  *((uint64_t*) *top) = initial_hash_value;
 }
 
 static uint64_t

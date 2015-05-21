@@ -104,7 +104,6 @@ let operation op arg ppf res =
   | Ispill -> fprintf ppf "%a (spill)" regs arg
   | Ireload -> fprintf ppf "%a (reload)" regs arg
   | Iconst_int n -> fprintf ppf "%s" (Nativeint.to_string n)
-  | Iblockheader n -> fprintf ppf "block-hdr(%s)" (Nativeint.to_string n)
   | Iconst_float f -> fprintf ppf "%F" f
   | Iconst_symbol s -> fprintf ppf "\"%s\"" s
   | Icall_ind -> fprintf ppf "call %a" regs arg
@@ -139,6 +138,8 @@ let operation op arg ppf res =
   | Iintoffloat -> fprintf ppf "intoffloat %a" reg arg.(0)
   | Ispecific op ->
       Arch.print_specific_operation reg op ppf arg
+  | Iprogram_counter -> fprintf ppf "program_counter"
+  | Ireturn_address -> fprintf ppf "return_address"
 
 let rec instr ppf i =
   if !print_live then begin

@@ -38,7 +38,6 @@ type operation =
   | Iconst_int of nativeint
   | Iconst_float of float
   | Iconst_symbol of string
-  | Iblockheader of nativeint
   | Icall_ind
   | Icall_imm of string
   | Itailcall_ind
@@ -54,6 +53,8 @@ type operation =
   | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
   | Ifloatofint | Iintoffloat
   | Ispecific of Arch.specific_operation
+  | Iprogram_counter
+  | Ireturn_address
 
 type instruction =
   { desc: instruction_desc;
