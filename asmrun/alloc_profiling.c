@@ -908,6 +908,9 @@ caml_allocation_profiling_c_to_ocaml(void)
 
 }
 
+/* XXX what happens when an exception is raised?  The trap frame probably
+   needs to store the backtrace stack pointers to restore. */
+
 /* XXX the return from caml_callback* needs thinking about.
    Also, upon C -> OCaml transition, it isn't clear how we know how to
    restore things (e.g. there might be another C call). */
