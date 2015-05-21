@@ -472,6 +472,69 @@ hash(uint64_t previous_hash, void* new_pointer)
   return previous_hash;
 }
 
+static backtrace_table_bucket*
+find_or_add_hash_bucket(uint64_t hash_of_all_frames,
+                        void** backtrace,  /* MAX_BACKTRACE_DEPTH in size */
+                        uint64_t num_allocation_points)
+{
+  uint64_t bucket_index;
+  uint64_t bucket_size;
+  backtrace_table_bucket* bucket;
+  backtrace_table_bucket** where_to_put_bucket;
+
+  bucket_index = hash_of_all_frames % BACKTRACE_TABLE_SIZE;
+  where_to_put_bucket = &(backtrace_table[bucket_index]);
+  bucket = *where_to_put_bucket;
+
+  if (bucket != NULL) {
+    /* The bucket has a chain (possibly of length one). */
+
+    where_to_put_bucket = &(bucket->next);
+    bucket = bucket->next;
+    while (bucket != NULL) {
+      /* Note that there are always sufficiently many NULL entries above a
+         backtrace stack's hash slot that we can always read
+         [MAX_BACKTRACE_DEPTH] words starting at one word above the hash
+         slot (i.e. the most recent return address). */
+      if (!memcmp(bucket->return_addresses, backtrace,
+                  MAX_BACKTRACE_DEPTH * sizeof(void*))) {
+        /* The backtrace matches [bucket]. */
+        return bucket;
+      }
+      bucket = bucket->next;
+    }
+    /* End of the chain reached; we must allocate a new bucket. */
+  }
+
+  /* The backtrace bucket's size varies according to the number of
+     allocation points, but currently we keep the depth constant. */
+  bucket_size = sizeof(backtrace_table_bucket)
+    - sizeof(backtrace_table_bucket.profinfos)
+    + (sizeof(allocation_point) * num_allocation_points);
+
+  bucket = (backtrace_table_bucket*) malloc(bucket_size);
+  if (!bucket) {
+    fprintf(stderr, "Allocation profiling backtrace malloc failure");
+    abort();
+  }
+
+  /* Put the bucket in the table (possibly on the end of a chain). */
+  *where_to_put_bucket = bucket;
+
+  bucket->num_allocation_points = num_allocation_points;
+  bucket->next = NULL;
+  /* Copy the backtrace, which includes the OCaml function's frame (our
+     caller) and all previous frames, into the bucket. */
+  memcpy(bucket->return_addresses, backtrace,
+         MAX_BACKTRACE_DEPTH * sizeof(void*));
+  /* We zero-initialize the PC values in the [profinfos] member of the
+     bucket so we know which allocation points have been hit. */
+  memset(bucket->profinfos, '\0',
+    bucket->num_allocation_points * sizeof(allocation_point));
+
+  return bucket;
+}
+
 void*
 caml_allocation_profiling_prologue(value num_allocation_points,
                                    void* return_address)
@@ -486,10 +549,6 @@ caml_allocation_profiling_prologue(value num_allocation_points,
   uint64_t hash_of_previous_frames;
   uint64_t hash_of_all_frames;
   uint64_t depth;
-  uint64_t bucket_index;
-  uint64_t bucket_size;
-  backtrace_table_bucket* bucket;
-  backtrace_table_bucket** where_to_put_bucket;
 
   hash_of_previous_frames =
     *(uint64_t *) caml_allocation_profiling_limit_of_backtrace_stack;
@@ -506,57 +565,9 @@ caml_allocation_profiling_prologue(value num_allocation_points,
   caml_allocation_profiling_top_of_backtrace_stack[0] = hash_of_all_frames;
   caml_allocation_profiling_top_of_backtrace_stack[1] = return_address;
 
-  bucket_index = hash_of_all_frames % BACKTRACE_TABLE_SIZE;
-  where_to_put_bucket = &(backtrace_table[bucket_index]);
-  bucket = *where_to_put_bucket;
-
-  if (bucket != NULL) {
-    /* The bucket has a chain (possibly of length one). */
-
-    where_to_put_bucket = &(bucket->next);
-    bucket = bucket->next;
-    while (bucket != NULL) {
-      /* Note that there are always sufficiently many NULL entries above a
-         backtrace stack's hash slot that we can always read
-         [MAX_BACKTRACE_DEPTH] words starting at one word above the hash
-         slot (i.e. the most recent return address). */
-      if (!memcmp(bucket->return_addresses,
-                  caml_allocation_profiling_top_of_backtrace_stack + 1,
-                  MAX_BACKTRACE_DEPTH * sizeof(void*))) {
-        /* The backtrace matches [bucket]. */
-        return bucket;
-      }
-      bucket = bucket->next;
-    }
-    /* End of the chain reached; we must allocate a new bucket. */
-  }
-
-  /* The backtrace bucket's size varies according to the number of
-     allocation points, but currently we keep the depth constant. */
-  bucket_size = sizeof(backtrace_table_bucket)
-    - sizeof(backtrace_table_bucket.profinfos)
-    + (sizeof(allocation_point) * Long_val(num_allocation_points));
-
-  bucket = (backtrace_table_bucket*) malloc(bucket_size);
-  if (!bucket) {
-    fprintf(stderr, "Allocation profiling backtrace malloc failure");
-    abort();
-  }
-
-  /* Put the bucket in the table (possibly on the end of a chain). */
-  *where_to_put_bucket = bucket;
-
-  bucket->num_allocation_points = Long_val(num_allocation_points);
-  bucket->next = NULL;
-  /* Copy the backtrace, which includes the OCaml function's frame (our
-     caller) and all previous frames, into the bucket. */
-  memcpy(bucket->return_addresses,
-         caml_allocation_profiling_top_of_backtrace_stack + 1,
-         MAX_BACKTRACE_DEPTH * sizeof(void*));
-  /* We zero-initialize the PC values in the [profinfos] member of the
-     bucket so we know which allocation points have been hit. */
-  memset(bucket->profinfos, '\0',
-    bucket->num_allocation_points * sizeof(allocation_point));
+  bucket = find_or_add_hash_bucket(hash_of_all_frames,
+    caml_allocation_profiling_top_of_backtrace_stack + 1,
+    Long_val(num_allocation_points));
 
   /* (We don't allocate any profinfo values here; they will be done at
      the allocation points throughout the OCaml function.) */
@@ -610,12 +621,37 @@ caml_allocation_profiling_my_profinfo(void)
     profinfo = caml_override_profinfo;
   }
   else {
+    void* backtrace[MAX_BACKTRACE_DEPTH];
+    int depth;
+    uint64_t hash_of_all_frames = initial_hash_value;
+
+    memset((void*) backtrace, '\0', MAX_BACKTRACE_DEPTH * sizeof(void*));
+
 #ifndef HAS_LIBUNWIND
     /* In the absence of libunwind, just use our return address. */
-    profinfo = ((uint64_t) __builtin_return_address(0)) >> 4;
+    backtrace[0] = __builtin_return_address(0);
 #else
-    profinfo = caml_allocation_profiling_profinfo_for_backtrace();
+    depth = capture_backtrace(backtrace, MAX_BACKTRACE_DEPTH);
 #endif
+
+    for (/* empty */; depth >= 0; depth--) {
+      hash_of_all_frames = hash(hash_of_all_frames, backtrace[depth]);
+    }
+
+    bucket = find_or_add_hash_bucket(hash_of_all_frames, backtrace, 2);
+
+    /* A full libunwind backtrace, such as we have in [backtrace], should
+       never be the same as a backtrace from an OCaml function. */
+    /* XXX consider making this not an assertion */
+    assert (bucket->profinfos[0].pc == NULL);
+    assert (bucket->num_allocation_points == 1);
+
+    if (bucket->profinfos[0] != 0ull) {
+      profinfo = bucket->profinfos[0];
+    }
+    /* XXX is profinfo shifted in the table? */
+    profinfo = caml_allocation_profinfo++;
+    bucket->profinfos[0].profinfo = profinfo;
   }
 
   return (intnat) ((profinfo & PROFINFO_MASK) << PROFINFO_SHIFT);
