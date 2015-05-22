@@ -628,18 +628,72 @@ caml_allocation_profiling_c_to_ocaml(void)
      the OCaml caller.  What we do is to write a zero word into the stack
      that can be detected by the backtrace decoder; this causes the decoder
      to ignore anything further on the backtrace stack.  This means that we
-     don't need to disturb the existing stack contents. */
+     don't need to disturb the existing stack contents.  We also add further
+     zero words for the same purpose as those at the bottom of the backtrace
+     stack.
 
-/* save backtrace pointer (which is in the variable)
- * write special word
- * capture backtrace into tmp buffer
- * copy backtrace onto stack
- * call OCaml function
- * restore backtrace pointer
- */
+     The hash value that will end up on the top of the stack is going to be
+     the hash only of the libunwind portion.  We need to restore the original
+     hash value, so we don't overwrite it.
+
+     Backtrace stack on entry to this function:
+
+        ------------------------  <-- bottom of stack pointer
+        |                      |
+        |                      |
+        |  zero-initialized    |
+        |                      |
+        |                      |
+        ------------------------
+        |  return address Q    |
+        ------------------------
+        |        ...           |
+        ------------------------
+        |  return address P    |
+        ------------------------
+        |  hash                |  (hash of frames P .. Q inclusive)
+        ------------------------  <-- [caml_allocation_profiling
+                                        _top_of_backtrace_stack]
+
+     Backtrace stack when the OCaml code starts executing (after the
+     backtrace stack pointer has been loaded by the [caml_start_program] code,
+     which happens after this function returns):
+
+        ------------------------  <-- bottom of stack pointer
+        |                      |
+        |                      |
+        |  zero-initialized    |
+        |                      |
+        |                      |
+        ------------------------
+        |  return address Q    |
+        ------------------------
+        |        ...           |
+        ------------------------
+        |  return address P    |
+        ------------------------
+        |  hash                |  (hash of frames P .. Q inclusive)
+        |----------------------|     ]
+        |  zero                |     ]  at least one zero word, plus
+        ------------------------     ]  MAX_BACKTRACE_SIZE - N - 1
+        |        ...           |     ]  extra zero words
+        ------------------------  ]
+        |  return address N    |  ]
+        ------------------------  ]
+        |        ...           |  ] libunwind-captured backtrace
+        ------------------------  ]
+        |  return address 0    |  ]
+        ------------------------  ]
+        |  hash                |  (hash of frames 0 .. N inclusive)
+        ------------------------  <-- backtrace stack pointer register
+  */
+
+/* XXX: alternatively, consider finding [caml_last_return_address] in the
+   libunwind backtrace, and graft it on properly.
+
+   Also: we could just recompute the hash of P..Q, in either case. */
 
   caml_allocation_profiling_top_of_backtrace_stack--;
-  *caml_allocation_profiling_
 
   capture_backtrace(caml_al, int depth)
 
