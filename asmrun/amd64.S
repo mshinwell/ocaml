@@ -495,6 +495,8 @@ LBL(caml_start_program):
         PUSH_VAR(caml_gc_regs)
         PUSH_VAR(caml_last_return_address)
         PUSH_VAR(caml_bottom_of_stack)
+/* XXX alignment! And hash value... */
+        PUSH_VAR(caml_allocation_profiling_backtrace_top_of_stack)
     /* Setup alloc ptr and exception ptr */
         LOAD_VAR(caml_young_ptr, %r15)
         LOAD_VAR(caml_exception_pointer, %r14)
@@ -510,6 +512,8 @@ LBL(caml_start_program):
         movq    %rsp, %r14
     /* Call the OCaml code */
         call    *%r12
+/* XXX on return, we need to restore the backtrace stack pointer and
+   hash value.  These should probably be pushed on the stack, above. */
 LBL(107):
     /* Pop the exception handler */
         popq    %r14; CFI_ADJUST(-8)

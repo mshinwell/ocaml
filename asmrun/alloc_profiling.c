@@ -354,6 +354,8 @@ capture_backtrace(void** backtrace, int depth)
    the backtrace stack. */
 #define MAX_BACKTRACE_DEPTH 16
 
+#define MAX_LIBUNWIND_BACKTRACE_DEPTH 1024
+
 /* The next profinfo value that will be generated.  Shared across all
    threads.  We do not use zero as a profinfo value; this is reserved to
    mean "none". */
@@ -620,98 +622,58 @@ caml_allocation_profiling_c_to_ocaml(void)
 {
   /* This function is called whenever we transfer control from a C function
      to an OCaml function.  The current backtrace is captured using
-     libunwind and written into the backtrace stack.
-
-     This libunwind backtrace should partially overlap the existing backtrace
-     from OCaml function(s) on the stack.  The backtrace on the stack must
-     be preserved when we return from C, to satisfy the expectations of
-     the OCaml caller.  What we do is to write a zero word into the stack
-     that can be detected by the backtrace decoder; this causes the decoder
-     to ignore anything further on the backtrace stack.  This means that we
-     don't need to disturb the existing stack contents.  We also add further
-     zero words for the same purpose as those at the bottom of the backtrace
-     stack.
-
-     The hash value that will end up on the top of the stack is going to be
-     the hash only of the libunwind portion.  We need to restore the original
-     hash value, so we don't overwrite it.
-
-     Backtrace stack on entry to this function:
-
-        ------------------------  <-- bottom of stack pointer
-        |                      |
-        |                      |
-        |  zero-initialized    |
-        |                      |
-        |                      |
-        ------------------------
-        |  return address Q    |
-        ------------------------
-        |        ...           |
-        ------------------------
-        |  return address P    |
-        ------------------------
-        |  hash                |  (hash of frames P .. Q inclusive)
-        ------------------------  <-- [caml_allocation_profiling
-                                        _top_of_backtrace_stack]
-
-     Backtrace stack when the OCaml code starts executing (after the
-     backtrace stack pointer has been loaded by the [caml_start_program] code,
-     which happens after this function returns):
-
-        ------------------------  <-- bottom of stack pointer
-        |                      |
-        |                      |
-        |  zero-initialized    |
-        |                      |
-        |                      |
-        ------------------------
-        |  return address Q    |
-        ------------------------
-        |        ...           |
-        ------------------------
-        |  return address P    |
-        ------------------------
-        |  hash                |  (hash of frames P .. Q inclusive)
-        |----------------------|     ]
-        |  zero                |     ]  at least one zero word, plus
-        ------------------------     ]  MAX_BACKTRACE_SIZE - N - 1
-        |        ...           |     ]  extra zero words
-        ------------------------  ]
-        |  return address N    |  ]
-        ------------------------  ]
-        |        ...           |  ] libunwind-captured backtrace
-        ------------------------  ]
-        |  return address 0    |  ]
-        ------------------------  ]
-        |  hash                |  (hash of frames 0 .. N inclusive)
-        ------------------------  <-- backtrace stack pointer register
+     libunwind and written into the backtrace stack.  We then find out the
+     most recent OCaml frame by looking at [caml_last_return_address] and
+     graft the more recent portion of the backtrace onto the stack,
+     recomputing the hash value.  The existing hash value and stack pointer
+     will already have been saved by the [caml_start_program] code (also
+     used by [caml_callback*]).
   */
 
-/* XXX: alternatively, consider finding [caml_last_return_address] in the
-   libunwind backtrace, and graft it on properly.
+  void* backtrace[MAX_LIBUNWIND_BACKTRACE_DEPTH];
+  int frame;
+  int depth;
+  uint64_t hash_value;
+  int last_return_address_frame;
 
-   Also: we could just recompute the hash of P..Q, in either case. */
+  depth = capture_backtrace(backtrace, MAX_LIBUNWIND_BACKTRACE_DEPTH);
 
-  caml_allocation_profiling_top_of_backtrace_stack--;
+  hash = *(uint64_t*) caml_allocation_profiling_top_of_backtrace_stack;
 
-  capture_backtrace(caml_al, int depth)
+  for (frame = 0; last_return_address_frame == -1 && frame < depth; frame++) {
+    if (backtrace[frame] == caml_last_return_address) {
+      last_return_address_frame = frame;
+    }
+    else {
+      hash_value = hash(hash_value, backtrace[frame]);
+    }
+  }
 
+  if (last_return_address_frame == -1) {
+    /* You get the whole backtrace (or MAX_LIBUNWIND_BACKTRACE_DEPTH frames,
+       anyway...)! */
+  }
+  else {
+    depth = last_return_address_frame + 1;
+  }
+
+  /* XXX: make sure the trap page is large enough */
+
+  caml_allocation_profiling_top_of_backtrace_stack -= depth;
+  memcpy(caml_allocation_profiling_top_of_backtrace_stack + 1, backtrace,
+      sizeof(void*) * depth);
+  *(uint64_t*) caml_allocation_profiling_top_of_backtrace_stack = hash_value;
 }
 
 /* XXX what happens when an exception is raised?  The trap frame probably
    needs to store the backtrace stack pointers to restore. */
-
-/* XXX the return from caml_callback* needs thinking about.
-   Also, upon C -> OCaml transition, it isn't clear how we know how to
-   restore things (e.g. there might be another C call). */
 
 intnat
 caml_allocation_profiling_my_profinfo(void)
 {
   /* This function is called whenever a C function causes an allocation.
      The current backtrace is captured using libunwind and added to the
-     hash table.  The backtrace stack is untouched. */
+     hash table.  The backtrace stack is neither read nor written. */
 
 #ifndef ARCH_SIXTYFOUR
   return (intnat) 0;  /* No room for profinfo in the header on 32 bit. */
