@@ -34,10 +34,15 @@ let rec instrument_tails_and_returns insn =
     | Ireturn -> true
     | Iop Itailcall_ind -> true
     | Iop (Itailcall_imm _) -> true
-    (* The backtrace stack pointer does not need to be adjusted when tail
-       calling the current function, since we will enter via the "tailrec
-       entry point", after the backtrace bucket-calculating prologue. *)
+      (* The backtrace stack pointer does not need to be adjusted when tail
+         calling the current function, since we will enter via the "tailrec
+         entry point", after the backtrace bucket-calculating prologue. *)
     | Iop (Itailcall_imm lbl) when lbl = !current_function_name -> false
+    | Iop (Iextcall (_, true)) ->
+      (* Upon return from an external call that might allocate, we need to
+         restore the backtrace stack pointer, to compensate for what we did
+         in [caml_c_call]. *)
+
     | _ -> false
   in
   if needs_increment then

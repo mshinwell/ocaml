@@ -417,6 +417,9 @@ static backtrace_table_bucket* backtrace_table[BACKTRACE_TABLE_SIZE];
   do not have garbage in the backtraces, which are captured as fixed-size.
 */
 
+/* XXX the diagrams don't take into account what happens if there was
+   a C -> OCaml callback */
+
 void* caml_allocation_profiling_top_of_backtrace_stack;
 void* caml_allocation_profiling_bottom_of_backtrace_stack;
 
@@ -612,21 +615,31 @@ caml_allocation_profiling_prologue(value num_allocation_points,
   return &bucket->profinfos;
 }
 
-/* XXX maybe the constant depth thing doesn't work: on the stack it cannot
-   be so, or we don't know how much to unwind it. */
-
 void
 caml_allocation_profiling_c_to_ocaml(void)
 {
   /* This function is called whenever we transfer control from a C function
      to an OCaml function.  The current backtrace is captured using
-     libunwind and written into the backtrace stack. */
+     libunwind and written into the backtrace stack.
 
-  /* XXX this assumes the backtrace stack is always big enough */
+     This libunwind backtrace should partially overlap the existing backtrace
+     from OCaml function(s) on the stack.  The backtrace on the stack must
+     be preserved when we return from C, to satisfy the expectations of
+     the OCaml caller.  What we do is to write a zero word into the stack
+     that can be detected by the backtrace decoder; this causes the decoder
+     to ignore anything further on the backtrace stack.  This means that we
+     don't need to disturb the existing stack contents. */
 
-  caml_allocation_profiling_top_of_backtrace_stack
-    = caml_allocation_profiling_bottom_of_backtrace_stack
-      - M
+/* save backtrace pointer (which is in the variable)
+ * write special word
+ * capture backtrace into tmp buffer
+ * copy backtrace onto stack
+ * call OCaml function
+ * restore backtrace pointer
+ */
+
+  caml_allocation_profiling_top_of_backtrace_stack--;
+  *caml_allocation_profiling_
 
   capture_backtrace(caml_al, int depth)
 
