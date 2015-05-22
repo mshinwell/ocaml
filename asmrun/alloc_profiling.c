@@ -286,23 +286,39 @@ caml_dump_heapgraph_from_ocaml(value node_output_file, value edge_output_file)
   return Val_unit;
 }
 
+value caml_allocation_profiling_use_override_profinfo = Val_false;
+uint64_t caml_allocation_profiling_override_profinfo;
+
 CAMLprim value
-caml_do_not_override_profinfo (value v_unit)
+caml_allocation_profiling_do_not_override_profinfo (value v_unit)
 {
   v_unit = v_unit;
-  caml_override_profinfo = DO_NOT_OVERRIDE_PROFINFO;
+  caml_allocation_profiling_use_override_profinfo = Val_false;
   return Val_unit;
 }
 
 CAMLprim value
-caml_set_override_profinfo (value v_override)
+caml_allocation_profiling_set_override_profinfo (value v_override)
 {
   uintnat override = Long_val (v_override);
   if (override == DO_NOT_OVERRIDE_PROFINFO || override > PROFINFO_MASK) {
-    caml_invalid_argument ("Allocation profiling info override too large");
+    return Val_false;
   }
-  caml_override_profinfo = override;
-  return Val_unit;
+  caml_allocation_profiling_use_override_profinfo = Val_true;
+  caml_allocation_profiling_override_profinfo = override;
+  return Val_true;
+}
+
+CAMLprim value
+caml_allocation_profiling_max_override_profinfo (value v_unit)
+{
+  return Val_long(PROFINFO_MASK);
+}
+
+CAMLprim value
+caml_allocation_profiling_get_profinfo (value v)
+{
+  return Val_long(Profinfo_val(v));
 }
 
 #pragma GCC optimize ("-O3")
@@ -445,6 +461,8 @@ caml_allocation_profiling_create_backtrace_stack(void** top,
         ? rlim.rlim_max
         : DEFAULT_STACK_SIZE_IN_BYTES));
 
+  /* XXX we must allocate the trap page */
+
   *limit = calloc(size_in_bytes, 1);
   if (*bottom == NULL) {
     caml_failwith("Could not allocate backtrace stack");
@@ -535,8 +553,9 @@ find_or_add_hash_bucket(uint64_t hash_of_all_frames,
   return bucket;
 }
 
-void*
+allocation_point*
 caml_allocation_profiling_prologue(value num_allocation_points,
+                                   void* backtrace_top_of_stack,
                                    void* return_address)
 {
   /* This function is called at the top of every OCaml function that might
@@ -544,35 +563,53 @@ caml_allocation_profiling_prologue(value num_allocation_points,
      current backtrace---importantly, including the current function---and
      leaves space in that bucket ready for execution of the optimized code
      used at allocation points throughout the current function.
-     (See asmcomp/alloc_profiling.ml). */
+     (See asmcomp/alloc_profiling.ml).
+
+     Upon entry to this function, the backtrace stack looks like this:
+
+        ------------------------  <-- bottom of stack pointer
+        |                      |
+        |                      |
+        |  zero-initialized    |
+        |                      |
+        |                      |
+        ------------------------
+        |  return address N    |
+        ------------------------
+        |        ...           |
+        ------------------------
+        |  return address 1    |
+        ------------------------
+        |  hash                |  (hash of return addresses 1 .. N)
+        ------------------------
+        |  uninitialized       |
+        ------------------------  <-- [backtrace_top_of_stack]
+
+     The return address for the current frame is provided in
+     [return_address].
+  */
 
   uint64_t hash_of_previous_frames;
   uint64_t hash_of_all_frames;
-  uint64_t depth;
 
-  hash_of_previous_frames =
-    *(uint64_t *) caml_allocation_profiling_limit_of_backtrace_stack;
+  /* CR-someday mshinwell: A possible test is to call libunwind in this
+     function and make sure the backtrace matches the one on the backtrace
+     stack. */
 
-  /* If the stack would overflow, for the moment, we just fail. */
-  if (caml_allocation_profiling_top_of_backtrace_stack
-      <= caml_allocation_profiling_limit_of_backtrace_stack) {
-    fprintf(stderr, "Allocation profiling backtrace stack overflow\n");
-    abort();
-  }
-
+  hash_of_previous_frames = *(uint64_t*) (backtrace_top_of_stack + 1);
   hash_of_all_frames = hash(hash_of_previous_frames, return_address);
 
-  caml_allocation_profiling_top_of_backtrace_stack[0] = hash_of_all_frames;
-  caml_allocation_profiling_top_of_backtrace_stack[1] = return_address;
+  /* If the stack overflows, we will write to the trap page, and fault. */
+  backtrace_top_of_stack[1] = return_address;
+  backtrace_top_of_stack[0] = (void*) hash_of_all_frames;
 
   bucket = find_or_add_hash_bucket(hash_of_all_frames,
-    caml_allocation_profiling_top_of_backtrace_stack + 1,
-    Long_val(num_allocation_points));
+    &backtrace_top_of_stack[1], Long_val(num_allocation_points));
 
   /* (We don't allocate any profinfo values here; they will be done at
      the allocation points throughout the OCaml function.) */
 
-  return bucket;
+  return &bucket->profinfos;
 }
 
 /* XXX maybe the constant depth thing doesn't work: on the stack it cannot
@@ -617,8 +654,8 @@ caml_allocation_profiling_my_profinfo(void)
   if (!caml_allocation_profiling && !caml_lifetime_tracking) {
     profinfo = 0ull;
   }
-  else if (caml_override_profinfo != DO_NOT_OVERRIDE_PROFINFO) {
-    profinfo = caml_override_profinfo;
+  else if (caml_allocation_profiling_use_override_profinfo != Val_false) {
+    profinfo = caml_allocation_profiling_override_profinfo;
   }
   else {
     void* backtrace[MAX_BACKTRACE_DEPTH];

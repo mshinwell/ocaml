@@ -67,8 +67,8 @@ type operation =
   | Ccmpf of comparison
   | Craise of Lambda.raise_kind * Debuginfo.t
   | Ccheckbound of Debuginfo.t
+  | Cbacktrace_stack  (* see alloc_profiling_cmm.mli for an explanation *)
   | Cprogram_counter
-  | Creturn_address
 
 type expression =
     Cconst_int of int
@@ -90,13 +90,16 @@ type expression =
   | Ccatch of int * Ident.t list * expression * expression
   | Cexit of int * expression list
   | Ctrywith of expression * Ident.t * expression
+  | Ctailrec_entry_point
 
 type fundecl =
   { fun_name: string;
     fun_args: (Ident.t * machtype) list;
     fun_body: expression;
     fun_fast: bool;
-    fun_dbg : Debuginfo.t; }
+    fun_dbg : Debuginfo.t;
+    fun_num_instrumented_alloc_points : int;
+  }
 
 type data_item =
     Cdefine_symbol of string

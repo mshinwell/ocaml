@@ -303,8 +303,8 @@ LBL(caml_call_gc):
     /* Save caml_young_ptr, caml_exception_pointer */
         STORE_VAR(%r15, caml_young_ptr)
         STORE_VAR(%r14, caml_exception_pointer)
-    /* Save allocation profiling backtrace stack pointer */
 #ifdef WITH_ALLOCATION_PROFILING
+    /* Save allocation profiling backtrace stack pointer */
         STORE_VAR(%r11, caml_allocation_profiling_backtrace_top_of_stack)
 #endif
     /* Save floating-point registers */
@@ -332,8 +332,9 @@ LBL(caml_call_gc):
     /* Restore caml_young_ptr, caml_exception_pointer */
         LOAD_VAR(caml_young_ptr, %r15)
         LOAD_VAR(caml_exception_pointer, %r14)
-    /* Restore allocation profiling backtrace stack pointer */
 #ifdef WITH_ALLOCATION_PROFILING
+    /* Restore allocation profiling backtrace stack pointer */
+/* XXX this may not need to save into this variable.  (See elsewhere) */
         LOAD_VAR(caml_allocation_profiling_backtrace_top_of_stack, %r11)
 #endif
     /* Restore all regs used by the code generator */
@@ -460,6 +461,13 @@ LBL(caml_c_call):
         STORE_VAR(%r12, caml_last_return_address)
         STORE_VAR(%rsp, caml_bottom_of_stack)
         subq    $8, %rsp; CFI_ADJUST(8) /* equivalent to pushq %r12 */
+#ifdef WITH_ALLOCATION_PROFILING
+/* XXX not finished.  Two problems:
+- some difficulty with using %r11
+- need to determine if the C code needs this variable at all.
+    /* Save allocation profiling backtrace stack pointer */
+        STORE_VAR(%r11, caml_allocation_profiling_backtrace_top_of_stack)
+#endif
 #if !defined(SYS_mingw64) && !defined(SYS_cygwin)
     /* Touch the stack to trigger a recoverable segfault
        if insufficient space remains */

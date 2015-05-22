@@ -36,3 +36,52 @@
 
   Clet (backtrace_bucket, Cop (Cbacktrace_bucket, []),
 *)
+
+let top_of_stack =
+  Ident.create_persistent "caml_allocation_profiling_backtrace_top_of_stack"
+
+
+let code_for_exit_point expr ~saved_backtrace_stack_ptr =
+  (* Upon exit from an OCaml function, the backtrace stack pointer must
+     be restored.  To reduce the chance of error, we restore it to an
+     absolute position, instead of using a relative offset. *)
+  Csequence (
+    Cop (Cstore Word, [saved_backtrace_stack_ptr; Cvar top_of_stack]),
+    expr)
+
+let add_epilogue ~function_body ~saved_backtrace_stack_ptr =
+  let code_for_exit_point = code_for_exit_point ~saved_backtrace_stack_ptr in
+  let rec instrument_exit_points expr =
+    match expr with
+    | (Cconst_int _ | Cconst_natint _ | Cconst_float _ | Cconst_symbol _
+      | Cconst_pointer _ | Cconst_natpointer _ | Cvar _) ->
+      code_for_exit_point expr
+    | Clet (id, e1, e2) ->
+      Clet (id, e1, instrument_exit_points e2)
+    | Cassign (id, e) -> code_for_exit_point (Cassign (id, e))
+    | Ctuple es -> 
+      begin match List.rev es with
+      | [] -> code_for_exit_point expr
+      | e_last::e_rest ->
+        let e_last =
+          let id = Ident.create "tuple_result" in
+          Clet (id, e_last, code_for_exit_point (Cvar id))
+        in
+        Ctuple (List.rev (e_last::e_rest))
+      end
+    (* XXX: note: we could trap extcalls that are not "noalloc" and record
+       things, if it helps the veneers *)
+    | Cop _ -> expr
+    | Csequence (e1, e2) -> Csequence (e1, instrument_exit_points e2)
+    | Cifthenelse (e1, e2, e3) ->
+      Cifthenelse (e1, instrument_exit_points e2, instrument_exit_points e3)
+    | Cswitch (e, is, es) ->
+      Cswitch (e, is, Array.map instrument_exit_points es)
+    | Cloop _ -> expr
+    | Ccatch (n, ids, e1, e2) ->
+      Ccatch (n, ids, instrument_exit_points e1, instrument_exit_points e2)
+    | Cexit _ -> expr
+    | Ctrywith (e1, id, e2) ->
+      Ctrywith (instrument_exit_points e1, id, instrument_exit_points e2)
+  in
+  instrument_exit_points function_body

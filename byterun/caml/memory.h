@@ -63,7 +63,6 @@ color_t caml_allocation_color (void *hp);
 extern uintnat caml_lifetime_shift;
 
 #define PROFINFO_MASK 0x3fffff
-#define DO_NOT_OVERRIDE_PROFINFO ((uintnat) -1)
 
 /* <private> */
 

@@ -103,6 +103,7 @@ let std_include_dir () =
   if !no_std_include then [] else [Config.standard_library]
 ;;
 
+(* CR mshinwell: prevent [allocation_profiling] being set on 32 bit *)
 let allocation_profiling = ref false
 
 let shared = ref false (* -shared *)

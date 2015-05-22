@@ -192,6 +192,8 @@ method is_simple_expr = function
       begin match op with
         (* The following may have side effects *)
       | Capply _ | Cextcall _ | Calloc | Cstore _ | Craise _ -> false
+        (* [Cprogram_counter] must never be moved *)
+      | Cprogram_counter -> false
         (* The remaining operations are simple if their args are *)
       | _ ->
           List.for_all self#is_simple_expr args
@@ -289,7 +291,7 @@ method select_operation op args =
   | (Cintoffloat, _) -> (Iintoffloat, args)
   | (Ccheckbound _, _) -> self#select_arith Icheckbound args
   | (Cprogram_counter, _) -> (Iprogram_counter, args)
-  | (Creturn_address, _) -> (Ireturn_address, args)
+  | (Cbacktrace_stack, _) -> (Ibacktrace_stack, args)
   | _ -> fatal_error "Selection.select_oper"
 
 method private select_arith_comm op = function
@@ -527,6 +529,11 @@ method emit_expr env exp =
               self#insert (Iop(Ialloc size)) [||] rd;
               self#emit_stores env new_args rd;
               Some rd
+          | Ibacktrace_stack ->
+              let rd = self#regs_for ty in
+              self#insert (Iop Idecrement_backtrace_stack) [| |] [| |];
+              self#insert_move [| Proc.loc_backtrace_stack |] rd;
+              Some rd
           | op ->
               let r1 = self#emit_tuple env new_args in
               let rd = self#regs_for ty in
@@ -606,6 +613,8 @@ method emit_expr env exp =
                              (s2#extract)))
         [||] [||];
       r
+  | Ctailrec_entry_point ->
+      self#insert_op Itailrec_entry_point [| |] [| |]
 
 method private emit_sequence env exp =
   let s = {< instr_seq = dummy_instr >} in

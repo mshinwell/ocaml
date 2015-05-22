@@ -372,6 +372,8 @@ let emit_instr fallthrough i =
     emit_debug_info i.dbg;
     match i.desc with
       Lend -> ()
+    | Ltailrec_entry_point ->
+        `{emit_label !tailrec_entry_point}:\n`;
     | Lop(Imove | Ispill | Ireload) ->
         let src = i.arg.(0) and dst = i.res.(0) in
         if src.loc <> dst.loc then begin
@@ -576,6 +578,8 @@ let emit_instr fallthrough i =
         `	sqrtsd	{emit_reg i.arg.(0)}, {emit_reg i.res.(0)}\n`
     | Lop(Ispecific(Ifloatsqrtf addr)) ->
         `	sqrtsd	{emit_addressing addr i.arg 0}, {emit_reg i.res.(0)}\n`
+    | Lop Idecrement_backtrace_stack ->
+        `	subq	${emit_int Arch.size_addr}, %r11\n`
     | Lop Iprogram_counter ->
         let label = new_label () in
         `{emit_label label}:\n`;
@@ -751,7 +755,6 @@ let fundecl fundecl =
     `	subq	${emit_int n}, %rsp\n`;
     cfi_adjust_cfa_offset n;
   end;
-  `{emit_label !tailrec_entry_point}:\n`;
   emit_all true fundecl.fun_body;
   List.iter emit_call_gc !call_gc_sites;
   emit_call_bound_errors ();
