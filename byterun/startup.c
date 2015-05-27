@@ -63,17 +63,6 @@
 
 extern int caml_parser_trace;
 
-uintnat caml_lifetime_shift = 0;
-uintnat caml_lifetime_tracking = 0;
-uintnat caml_allocation_profiling = 0;
-uintnat caml_override_profinfo = DO_NOT_OVERRIDE_PROFINFO;
-uint64_t* caml_minor_allocation_profiling_array = NULL;
-uint64_t* caml_minor_allocation_profiling_array_end = NULL;
-uint64_t* caml_major_allocation_profiling_array = NULL;
-uint64_t* caml_major_allocation_profiling_array_end = NULL;
-void* caml_allocation_trace_caller = NULL;
-void* caml_last_return_address = NULL;
-
 CAMLexport header_t caml_atom_table[256];
 
 /* Initialize the atom table */

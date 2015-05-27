@@ -145,6 +145,7 @@ let code_for_allocation_point ~value's_header ~alloc_point_number
 
 let instrument_function_body expr =
   let next_alloc_point_number = ref 0 in
+  let contains_calls = ref false in
   let rec instrument_headers expr =
     (* Instrument the calculation of block headers so as to insert profiling
        information. *)
@@ -162,6 +163,10 @@ let instrument_function_body expr =
     | Ctuple es ->
       Ctuple (List.map instrument_headers es)
     | Cop (op, es) ->
+      begin match op with
+      | Capply _ | Cextcall _ -> contains_calls := true
+      | _ -> ()
+      end;
       Cop (op, List.map instrument_headers es)
     | Csequence (e1, e2) ->
       Csequence (instrument_headers e1, instrument_headers e2)
@@ -192,7 +197,9 @@ let fundecl decl =
     let num_allocation_points, body =
       instrument_function_body decl.expression ~backtrace_bucket
     in
-    if num_allocation_points < 1 then decl
+    (* Even if there are no allocation points, we must record a backtrace
+       stack frame unless the function is a leaf function. *)
+    if num_allocation_points < 1 && (not contains_calls) then decl
     else
       let body =
         add_prologue ~body ~num_allocation_points ~backtrace_bucket

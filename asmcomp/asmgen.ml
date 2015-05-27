@@ -60,9 +60,11 @@ let compile_fundecl (ppf : formatter) fd_cmm =
   Proc.init ();
   Reg.reset();
   fd_cmm
-  ++ Alloc_profiling.fundecl
+  ++ Alloc_profiling_cmm.fundecl
   ++ Selection.fundecl
   ++ pass_dump_if ppf dump_selection "After instruction selection"
+  ++ Alloc_profiling_mach.fundecl
+  ++ pass_dump_if ppf dump_alloc_profiling_mach "After alloc profiling/mach"
   ++ Comballoc.fundecl
   ++ pass_dump_if ppf dump_combine "After allocation combining"
   ++ CSE.fundecl

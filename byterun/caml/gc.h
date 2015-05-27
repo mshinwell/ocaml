@@ -48,15 +48,22 @@
 #define Make_header_with_profinfo(wosize, tag, color, profinfo) \
   Make_header(wosize, tag, color)
 #else
+#ifdef WITH_ALLOCATION_PROFILING
+/* CR mshinwell: fix the headers */
 extern intnat caml_allocation_profiling_my_profinfo(void);
 #define Make_header_with_profinfo(wosize, tag, color, profinfo)               \
       (Make_header(wosize, tag, color)                                        \
-        | ((profinfo & PROFINFO_MASK) << PROFINFO_SHIFT)                      \
+        | ((((intnat) profinfo) & PROFINFO_MASK) << PROFINFO_SHIFT)           \
       )
 #define Make_header_with_my_profinfo(wosize, tag, color)                      \
       (Make_header(wosize, tag, color)                                        \
         | caml_allocation_profiling_my_profinfo()                             \
       )
+#else
+#define Make_header_with_my_profinfo Make_header
+#define Make_header_with_profinfo(wosize, tag, color, profinfo) \
+  Make_header(wosize, tag, color)
+#endif
 #endif
 
 #define Is_white_val(val) (Color_val(val) == Caml_white)

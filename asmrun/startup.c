@@ -33,6 +33,9 @@
 #include "caml/printexc.h"
 #include "stack.h"
 #include "caml/sys.h"
+#ifdef WITH_ALLOCATION_PROFILING
+#include "alloc_profiling.h"
+#endif
 #ifdef HAS_UI
 #include "caml/ui.h"
 #endif
@@ -40,17 +43,6 @@
 extern int caml_parser_trace;
 CAMLexport header_t caml_atom_table[256];
 char * caml_code_area_start, * caml_code_area_end;
-uintnat caml_lifetime_tracking = 0;
-/* Corresponds to measuring block lifetimes in units of 8Mb.  With the 22 bits of
-   allocation profiling information this should enable us to get a bit over 10^13 bytes
-   as the maximum lifetime. */
-/* was 22 = 8Mb
-   was 19 = 1Mb
-   now 16 = 128k
-*/
-uintnat caml_lifetime_shift = 16;
-uintnat caml_allocation_profiling = 1;
-uintnat caml_override_profinfo = DO_NOT_OVERRIDE_PROFINFO;
 
 /* Initialize the atom table and the static data and code area limits. */
 
@@ -188,7 +180,9 @@ void caml_main(char **argv)
 #endif
   caml_top_of_stack = &tos;
   parse_camlrunparam();
+#ifdef WITH_ALLOCATION_PROFILING
   caml_allocation_profiling_initialize();
+#endif
   caml_init_gc (minor_heap_init, heap_size_init, heap_chunk_init,
                 percent_free_init, max_percent_free_init);
   init_atoms();

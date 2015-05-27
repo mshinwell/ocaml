@@ -20,9 +20,9 @@
 (*                                                                     *)
 (***********************************************************************)
 
-external annotation_of_value : 'a -> int option
+external annotation_of_value : 'a -> int
   = "caml_allocation_profiling_only_works_for_native_code"
-    "caml_where_was_this_allocated"
+    "caml_allocation_profiling_get_profinfo"
 
 external dump_allocators_of_major_heap_blocks
    : filename:string
@@ -54,7 +54,7 @@ external annotate_values_with_given_integer : int -> bool
     = "caml_set_override_profinfo" "noalloc"
 *)
 
-let annotate_value_with_given_integer i =
+let annotate_values_with_given_integer i =
   if i < 0 then `Out_of_range
   else if annotate_values_with_given_integer i then `Ok
   else `Out_of_range

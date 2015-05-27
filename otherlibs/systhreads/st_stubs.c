@@ -25,6 +25,9 @@
 #include "caml/signals.h"
 #ifdef NATIVE_CODE
 #include "stack.h"
+#ifdef WITH_ALLOCATION_PROFILING
+#include "alloc_profiling.h"
+#endif
 #else
 #include "caml/stacks.h"
 #endif
@@ -70,13 +73,16 @@ struct caml_thread_struct {
   char * exception_pointer;     /* Saved value of caml_exception_pointer */
   struct caml__roots_block * local_roots; /* Saved value of local_roots */
   struct longjmp_buffer * exit_buf; /* For thread exit */
+#ifdef ALLOCATION_PROFILING
+  /* Backtrace stack for this thread: */
+  backtrace_table_entry* backtrace_stack_top;
+  backtrace_table_entry* backtrace_stack_bottom;
+  backtrace_table_entry* backtrace_stack_limit;
+#endif
 #else
   value * stack_low;            /* The execution stack for this thread */
   value * stack_high;
   value * stack_threshold;
-  void* backtrace_stack_top;    /* The backtrace stack for this thread */
-  void* backtrace_stack_bottom;
-  void* backtrace_stack_limit;
   value * sp;                   /* Saved value of extern_sp for this thread */
   value * trapsp;               /* Saved value of trapsp for this thread */
   struct caml__roots_block * local_roots; /* Saved value of local_roots */
@@ -161,14 +167,14 @@ static void caml_thread_enter_blocking_section(void)
      of the current thread */
 #ifdef NATIVE_CODE
   curr_thread->bottom_of_stack = caml_bottom_of_stack;
-  if (caml_allocation_profiling) {
-    curr_thread->backtrace_stack_top =
-      caml_allocation_profiling_top_of_backtrace_stack;
-    curr_thread->backtrace_stack_bottom =
-      caml_allocation_profiling_bottom_of_backtrace_stack;
-    curr_thread->backtrace_stack_limit =
-      caml_allocation_profiling_limit_of_backtrace_stack;
-  }
+#ifdef WITH_ALLOCATION_PROFILING
+  curr_thread->backtrace_stack_top =
+    caml_allocation_profiling_top_of_backtrace_stack;
+  curr_thread->backtrace_stack_bottom =
+    caml_allocation_profiling_bottom_of_backtrace_stack;
+  curr_thread->backtrace_stack_limit =
+    caml_allocation_profiling_limit_of_backtrace_stack;
+#endif
   curr_thread->last_retaddr = caml_last_return_address;
   curr_thread->gc_regs = caml_gc_regs;
   curr_thread->exception_pointer = caml_exception_pointer;
@@ -199,14 +205,14 @@ static void caml_thread_leave_blocking_section(void)
   /* Restore the stack-related global variables */
 #ifdef NATIVE_CODE
   caml_bottom_of_stack= curr_thread->bottom_of_stack;
-  if (caml_allocation_profiling) {
-    caml_allocation_profiling_top_of_backtrace_stack =
-      curr_thread->backtrace_stack_top;
-    caml_allocation_profiling_bottom_of_backtrace_stack =
-      curr_thread->backtrace_stack_bottom;
-    caml_allocation_profiling_limit_of_backtrace_stack =
-      curr_thread->backtrace_stack_limit;
-  }
+#ifdef WITH_ALLOCATION_PROFILING
+  caml_allocation_profiling_top_of_backtrace_stack =
+    curr_thread->backtrace_stack_top;
+  caml_allocation_profiling_bottom_of_backtrace_stack =
+    curr_thread->backtrace_stack_bottom;
+  caml_allocation_profiling_limit_of_backtrace_stack =
+    curr_thread->backtrace_stack_limit;
+#endif
   caml_last_return_address = curr_thread->last_retaddr;
   caml_gc_regs = curr_thread->gc_regs;
   caml_exception_pointer = curr_thread->exception_pointer;
@@ -321,6 +327,12 @@ static caml_thread_t caml_thread_new_info(void)
   th->exception_pointer = NULL;
   th->local_roots = NULL;
   th->exit_buf = NULL;
+#ifdef WITH_ALLOCATION_PROFILING
+  /* Allocate backtrace stack */
+  caml_allocation_profiling_create_backtrace_stack
+    (&th->backtrace_stack_top, &th->backtrace_stack_bottom,
+     &th->backtrace_stack_limit);
+#endif
 #else
   /* Allocate the stacks */
   th->stack_low = (value *) caml_stat_alloc(Thread_stack_size);
@@ -330,12 +342,6 @@ static caml_thread_t caml_thread_new_info(void)
   th->trapsp = th->stack_high;
   th->local_roots = NULL;
   th->external_raise = NULL;
-  /* Allocate backtrace stack */
-  if (caml_allocation_profiling) {
-    caml_allocation_profiling_create_backtrace_stack
-      (&th->backtrace_stack_top, &th->backtrace_stack_bottom,
-       &th->backtrace_stack_limit);
-  }
 #endif
   th->backtrace_pos = 0;
   th->backtrace_buffer = NULL;
