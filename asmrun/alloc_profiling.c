@@ -42,6 +42,7 @@
 #include "caml/mlvalues.h"
 #include "caml/signals.h"
 #include "alloc_profiling.h"
+#include "stack.h"
 
 #include "../config/s.h"
 #ifdef HAS_LIBUNWIND
@@ -681,7 +682,7 @@ caml_allocation_profiling_c_to_ocaml(void)
   int frame;
   int depth;
   uint64_t hash_value;
-  int last_return_address_frame;
+  int last_return_address_frame = -1;
 
   caml_allocation_profiling_top_of_backtrace_stack--;
   caml_allocation_profiling_top_of_backtrace_stack[0].marker = END_OF_C_FRAMES;
@@ -691,7 +692,7 @@ caml_allocation_profiling_c_to_ocaml(void)
   hash_value = caml_allocation_profiling_top_of_backtrace_stack[0].hash;
 
   for (frame = 0; last_return_address_frame == -1 && frame < depth; frame++) {
-    if (backtrace[frame].return_address == caml_last_return_address) {
+    if (backtrace[frame].return_address == (void*) caml_last_return_address) {
       last_return_address_frame = frame;
     }
     else {  /* omit the most recent OCaml frame---already hashed. */
@@ -735,15 +736,17 @@ caml_allocation_profiling_my_profinfo(void)
   else {
     backtrace_entry backtrace[MAX_BACKTRACE_DEPTH];
     int depth;
+    backtrace_table_bucket* bucket;
     uint64_t hash_of_all_frames = initial_hash_value;
 
-    memset((backtrace_entry) backtrace, '\0',
+    memset((void*) backtrace, '\0',
       MAX_BACKTRACE_DEPTH * sizeof(backtrace_entry));
 
     depth = capture_backtrace(backtrace, MAX_BACKTRACE_DEPTH);
 
     for (/* empty */; depth >= 0; depth--) {
-      hash_of_all_frames = hash(hash_of_all_frames, backtrace[depth].hash);
+      hash_of_all_frames =
+        hash(hash_of_all_frames, backtrace[depth].return_address);
     }
 
     bucket = find_or_add_hash_bucket(hash_of_all_frames, backtrace, 1);
@@ -754,16 +757,16 @@ caml_allocation_profiling_my_profinfo(void)
     assert (bucket->profinfos[0].pc == NULL);
     assert (bucket->num_allocation_points == 1);
 
-    if (bucket->profinfos[0] != 0ull) {
+    if (bucket->profinfos[0].profinfo != 0ull) {
       profinfo = bucket->profinfos[0].profinfo;
     }
     else {
-      if (caml_allocation_profinfo == PROFINFO_MASK) {
+      if (caml_allocation_profiling_profinfo == PROFINFO_MASK) {
         /* Counter overflow.  Using zero here is harmless. */
         profinfo = 0ull;
       }
       else {
-        profinfo = caml_allocation_profinfo++;
+        profinfo = caml_allocation_profiling_profinfo++;
       }
       bucket->profinfos[0].profinfo = profinfo << PROFINFO_SHIFT;
     }
@@ -819,7 +822,6 @@ caml_allocation_profiling_dump_backtraces_to_file(char* filename)
 CAMLprim value
 caml_allocation_profiling_dump_backtraces_to_file_from_ocaml(value v_filename)
 {
-  caml_allocation_profiling_dump_backtraces_to_file_from_ocaml(
-    String_val(v_filename));
+  caml_allocation_profiling_dump_backtraces_to_file(String_val(v_filename));
   return Val_unit;
 }

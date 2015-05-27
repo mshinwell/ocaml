@@ -84,6 +84,8 @@ let operation = function
   | Ccmpf c -> Printf.sprintf "%sf" (comparison c)
   | Craise (k, d) -> Lambda.raise_kind k ^ Debuginfo.to_string d
   | Ccheckbound d -> "checkbound" ^ Debuginfo.to_string d
+  | Cbacktrace_stack -> "backtrace_stack"
+  | Cprogram_counter -> "program_counter"
 
 let rec expr ppf = function
   | Cconst_int n -> fprintf ppf "%i" n
@@ -163,6 +165,7 @@ let rec expr ppf = function
   | Ctrywith(e1, id, e2) ->
       fprintf ppf "@[<2>(try@ %a@;<1 -2>with@ %a@ %a)@]"
              sequence e1 Ident.print id sequence e2
+  | Ctailrec_entry_point -> fprintf ppf "tailrec_entry_point"
 
 and sequence ppf = function
   | Csequence(e1, e2) -> fprintf ppf "%a@ %a" sequence e1 sequence e2

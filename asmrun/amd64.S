@@ -624,14 +624,14 @@ LBL(111):
         PREPARE_FOR_C_CALL            /* no need to cleanup after */
         call    GCALL(caml_stash_backtrace)
         movq    %r12, %rax            /* Recover exception bucket */
-        j       LBL(1100)
+        jmp     LBL(1100)
 CFI_ENDPROC
 
 FUNCTION(G(caml_reraise_exn))
 CFI_STARTPROC
         TESTL_VAR($1, caml_backtrace_active)
         jne     LBL(111)
-        j       LBL(1100)
+        jmp     LBL(1100)
 CFI_ENDPROC
 
 /* Raise an exception from C */
@@ -644,7 +644,7 @@ CFI_STARTPROC
 LBL(1120):
         LOAD_VAR(caml_exception_pointer, %rsp)  /* Cut stack */
         LOAD_VAR(caml_young_ptr, %r15) /* Reload alloc ptr */
-        j       LBL(1100)
+        jmp     LBL(1100)
 LBL(112):
 #ifdef WITH_FRAME_POINTERS
         ENTER_FUNCTION          ;
@@ -660,7 +660,7 @@ LBL(112):
         PREPARE_FOR_C_CALL            /* no need to cleanup after */
         call    GCALL(caml_stash_backtrace)
         movq    %r12, %rax            /* Recover exception bucket */
-        j       LBL(1120)
+        jmp     LBL(1120)
 CFI_ENDPROC
 
 /* Raise a Stack_overflow exception on return from segv_handler()
@@ -671,7 +671,7 @@ CFI_ENDPROC
 
 FUNCTION(G(caml_stack_overflow))
         LEA_VAR(caml_exn_Stack_overflow, %rax)
-        j       LBL(1100)
+        jmp     LBL(1100)
 
 /* Callback from C to OCaml */
 
