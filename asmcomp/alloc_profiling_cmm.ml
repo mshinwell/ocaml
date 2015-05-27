@@ -63,7 +63,7 @@ let add_prologue ~body ~num_allocation_points ~backtrace_bucket =
         Debuginfo.none),
       [Cconst_int num_allocation_points;
        (* [Cbacktrace_stack] decrements the contents of the fixed backtrace
-          top of stack register by one word, and returns that new value. *)
+          top of stack register by two words, and returns that new value. *)
        Cbacktrace_stack;
        Creturn_address;  (* return address for the current frame *)
       ]),
@@ -75,9 +75,10 @@ let add_prologue ~body ~num_allocation_points ~backtrace_bucket =
 let code_for_allocation_point ~value's_header ~alloc_point_number
       ~backtrace_bucket =
   let pc = Ident.create "pc" in
-  let existing_profinfo = Ident.create "existing_profinfo" in
-  let new_profinfo = Ident.create "new_profinfo" in
-  let profinfo = Ident.create "profinfo" in
+  let existing_profinfo = Cvar (Ident.create "existing_profinfo") in
+  let new_profinfo = Cvar (Ident.create "new_profinfo") in
+  let new_profinfo' = Cvar (Ident.create "new_profinfo'") in
+  let profinfo = Cvar (Ident.create "profinfo") in
   let offset_into_backtrace_bucket =
     ((2 * Arch.size_addr) * alloc_point_number)
   in
@@ -101,23 +102,29 @@ let code_for_allocation_point ~value's_header ~alloc_point_number
       Cconst_int 0;
     ])
   in
+  (* CR mshinwell: ensure these match the C code *)
+  let profinfo_shift = Cconst_int 42 in
+  let max_profinfo = Cconst_int 0x3f_ffff in
   let default =
     let generate_new_profinfo =
       (* When a new profinfo value is required, we obtain the current
          program counter, and store it together with a fresh profinfo value
          into the current backtrace hash table bucket. *)
       Clet (pc, Cop (Cprogram_counter, []),
-        Clet (new_profinfo, Cop (Cload Word, [profinfo_counter]),
-          Csequence (
-            Cop (Cstore Word, [
-              Cop (Cadda, [new_profinfo; Cconst_int 1]);
-              profinfo_counter;
-            ]),
-            Csequence (
+        Clet (new_profinfo,
+          Clet (new_profinfo', Cop (Cload Word, [profinfo_counter]),
+            Cifthenelse (Cop (Ccmpi gt, [new_profinfo', max_profinfo]),
+              Cconst_int 0,  (* profiling counter overflow *)
               Csequence (
-                Cop (Cstore Word, [pc, address_of_pc]);
-                Cop (Cstore Word, [new_profinfo, address_of_profinfo])),
-              new_profinfo))))
+                Cop (Cstore Word, [
+                  Cop (Cadda, [new_profinfo'; Cconst_int 1]);
+                  profinfo_counter;
+                ]),
+                Csequence (
+                  Csequence (
+                    Cop (Cstore Word, [pc, address_of_pc]);
+                    Cop (Cstore Word, [new_profinfo, address_of_profinfo])),
+                  Cop (Clsl, [new_profinfo; Cconst_int profinfo_shift])))))))
     in
     (* Check if we have already allocated a profinfo value for this allocation
        point with the current backtrace.  If so, use that value; if not,
@@ -125,9 +132,10 @@ let code_for_allocation_point ~value's_header ~alloc_point_number
     Clet (existing_profinfo, Cop (Cload Word, [address_of_profinfo]),
       Clet (profinfo,
         Cifthenelse (
-          Cop (Ccmpa Ceq, [Cvar existing_profinfo; Cconst_pointer 0]),
+          Cop (Ccmpa Ceq, [existing_profinfo; Cconst_pointer 0]),
           generate_new_profinfo,
           existing_profinfo),
+        (* [profinfo] is already shifted by [PROFINFO_SHIFT]. *)
         Cop (Cor, [profinfo; value's_header])))
   in
   let with_override =

@@ -323,6 +323,7 @@ caml_allocation_profiling_get_profinfo (value v)
 
 #pragma GCC optimize ("-O3")
 
+#ifdef HAS_LIBUNWIND
 static int
 capture_backtrace(void** backtrace, int depth)
 {
@@ -347,6 +348,18 @@ capture_backtrace(void** backtrace, int depth)
   }
   return depth;
 }
+#else
+static int
+capture_backtrace(void** backtrace, int depth)
+{
+  /* In the absence of libunwind, try to just use our return address. */
+  if (depth > 0) {
+    backtrace[0] = __builtin_return_address(0);
+    return backtrace[0] == NULL ? 0 : 1;
+  }
+  return 0;
+}
+#else
 
 #define BACKTRACE_TABLE_SIZE 100000
 
@@ -368,11 +381,15 @@ uint64_t caml_allocation_profiling_profinfo = 1ull;
  */
 typedef struct {
   void* pc;
+  /* [profinfo] may be zero in the case where the counter overflowed.
+     The [profinfo] value is already shifted by [PROFINFO_SHIFT], to save
+     recomputation.
+   */
   uint64_t profinfo;
 } allocation_point;
 typedef struct {
   struct backtrace_table_bucket* next;
-  void* return_addresses[MAX_BACKTRACE_DEPTH];  /* most recent first */
+  void* return_addrs_and_hashes[MAX_BACKTRACE_DEPTH];  /* most recent first */
   uint64_t num_allocation_points;
   /* [num_allocation_points] number of [allocation_point] structures follow
      here. */
@@ -402,7 +419,11 @@ static backtrace_table_bucket* backtrace_table[BACKTRACE_TABLE_SIZE];
         |                      |
         |                      |
         ------------------------
+        |  initial hash value  |
+        ------------------------
         |  return address N    |
+        ------------------------
+        |  hash                |  (hash of initial value and return address N)
         ------------------------
         |        ...           |
         ------------------------
@@ -411,16 +432,18 @@ static backtrace_table_bucket* backtrace_table[BACKTRACE_TABLE_SIZE];
         |  hash                |
         ------------------------  <-- top of stack pointer
 
-  The hash value is the hash of the return addresses 0 through N inclusive.
+  Each hash value is the hash of all return addresses prior to it on the
+  stack.
+
   The hash word is always present even when there are no return addresses.
 
-  The number of zero-initialized words is equal to the maximum length of
-  an allocation profiling backtrace minus one.  These words ensure that we
-  do not have garbage in the backtraces, which are captured as fixed-size.
+  The number of zero-initialized words is such that we can always capture a
+  fixed-size backtrace without going above the bottom of stack pointer.
 */
 
-/* XXX the diagrams don't take into account what happens if there was
-   a C -> OCaml callback */
+/* CR-someday mshinwell: as an observation, we could interleave return
+   address and hash values, which would allow for faster exception raising.
+   However the resulting overhead may not be worth it. */
 
 void* caml_allocation_profiling_top_of_backtrace_stack;
 void* caml_allocation_profiling_bottom_of_backtrace_stack;
@@ -430,16 +453,6 @@ void* caml_allocation_profiling_limit_of_backtrace_stack;
 
 /* Initial hash value. */
 static uint64_t initial_hash_value = 5381;
-
-void
-caml_allocation_profiling_initialize(void)
-{
-  uint64_t bucket;
-
-  for (bucket = 0; bucket < BACKTRACE_TABLE_SIZE; bucket++) {
-    backtrace_table[bucket] = NULL;
-  }
-}
 
 #define DEFAULT_STACK_SIZE_IN_BYTES (10240 * 1024)
 
@@ -475,12 +488,30 @@ caml_allocation_profiling_create_backtrace_stack(void** top,
   *bottom = *limit + (size_in_bytes / sizeof(void*));
 
   /* Leave empty space (see diagrams above). */
-  *top = *bottom - MAX_BACKTRACE_DEPTH;
+  *top = *bottom - (2 * MAX_BACKTRACE_DEPTH) + 1;
 
   /* Put initial hash value into place.  The top of stack pointer must end
      up pointing at this value upon return from this function. */
   (*top)--;
   *((uint64_t*) *top) = initial_hash_value;
+
+  /* Ensure we can always capture a fixed-size backtrace. */
+  assert ((*bottom) - (*top) == 2 * MAX_BACKTRACE_DEPTH);
+}
+
+void
+caml_allocation_profiling_initialize(void)
+{
+  uint64_t bucket;
+
+  for (bucket = 0; bucket < BACKTRACE_TABLE_SIZE; bucket++) {
+    backtrace_table[bucket] = NULL;
+  }
+
+  caml_allocation_profiling_create_backtrace_stack(
+    &caml_allocation_profiling_top_of_backtrace_stack,
+    &caml_allocation_profiling_bottom_of_backtrace_stack,
+    &caml_allocation_profiling_limit_of_backtrace_stack);
 }
 
 static uint64_t
@@ -497,9 +528,10 @@ hash(uint64_t previous_hash, void* new_pointer)
 
 static backtrace_table_bucket*
 find_or_add_hash_bucket(uint64_t hash_of_all_frames,
-                        void** backtrace,  /* MAX_BACKTRACE_DEPTH in size */
+                        void** backtrace,  /* 2*MAX_BACKTRACE_DEPTH in size */
                         uint64_t num_allocation_points)
 {
+  /* CR mshinwell: rename backtrace -> return_addrs_and_hashes? */
   uint64_t bucket_index;
   uint64_t bucket_size;
   backtrace_table_bucket* bucket;
@@ -519,8 +551,8 @@ find_or_add_hash_bucket(uint64_t hash_of_all_frames,
          backtrace stack's hash slot that we can always read
          [MAX_BACKTRACE_DEPTH] words starting at one word above the hash
          slot (i.e. the most recent return address). */
-      if (!memcmp(bucket->return_addresses, backtrace,
-                  MAX_BACKTRACE_DEPTH * sizeof(void*))) {
+      if (!memcmp(bucket->return_addrs_and_hashes, backtrace,
+                  2 * MAX_BACKTRACE_DEPTH * sizeof(void*))) {
         /* The backtrace matches [bucket]. */
         return bucket;
       }
@@ -548,8 +580,8 @@ find_or_add_hash_bucket(uint64_t hash_of_all_frames,
   bucket->next = NULL;
   /* Copy the backtrace, which includes the OCaml function's frame (our
      caller) and all previous frames, into the bucket. */
-  memcpy(bucket->return_addresses, backtrace,
-         MAX_BACKTRACE_DEPTH * sizeof(void*));
+  memcpy(bucket->return_addrs_and_hashes, backtrace,
+         2 * MAX_BACKTRACE_DEPTH * sizeof(void*));
   /* We zero-initialize the PC values in the [profinfos] member of the
      bucket so we know which allocation points have been hit. */
   memset(bucket->profinfos, '\0',
@@ -581,11 +613,15 @@ caml_allocation_profiling_prologue(value num_allocation_points,
         ------------------------
         |  return address N    |
         ------------------------
+        |  hash                |
+        ------------------------
         |        ...           |
         ------------------------
         |  return address 1    |
         ------------------------
         |  hash                |  (hash of return addresses 1 .. N)
+        ------------------------
+        |  uninitialized       |
         ------------------------
         |  uninitialized       |
         ------------------------  <-- [backtrace_top_of_stack]
@@ -601,7 +637,7 @@ caml_allocation_profiling_prologue(value num_allocation_points,
      function and make sure the backtrace matches the one on the backtrace
      stack. */
 
-  hash_of_previous_frames = *(uint64_t*) (backtrace_top_of_stack + 1);
+  hash_of_previous_frames = *(uint64_t*) (backtrace_top_of_stack + 2);
   hash_of_all_frames = hash(hash_of_previous_frames, return_address);
 
   /* If the stack overflows, we will write to the trap page, and fault. */
@@ -609,7 +645,7 @@ caml_allocation_profiling_prologue(value num_allocation_points,
   backtrace_top_of_stack[0] = (void*) hash_of_all_frames;
 
   bucket = find_or_add_hash_bucket(hash_of_all_frames,
-    &backtrace_top_of_stack[1], Long_val(num_allocation_points));
+    backtrace_top_of_stack, Long_val(num_allocation_points));
 
   /* (We don't allocate any profinfo values here; they will be done at
      the allocation points throughout the OCaml function.) */
@@ -624,10 +660,10 @@ caml_allocation_profiling_c_to_ocaml(void)
      to an OCaml function.  The current backtrace is captured using
      libunwind and written into the backtrace stack.  We then find out the
      most recent OCaml frame by looking at [caml_last_return_address] and
-     graft the more recent portion of the backtrace onto the stack,
-     recomputing the hash value.  The existing hash value and stack pointer
-     will already have been saved by the [caml_start_program] code (also
-     used by [caml_callback*]).
+     graft the more recent portion of the backtrace onto the stack, computing
+     the hash of all frames as we go.  (Since we never unwind into the middle
+     of a libunwind portion of backtrace, intermediate hash values there are
+     not needed, but we initialize them anyway.)
   */
 
   void* backtrace[MAX_LIBUNWIND_BACKTRACE_DEPTH];
@@ -644,25 +680,24 @@ caml_allocation_profiling_c_to_ocaml(void)
     if (backtrace[frame] == caml_last_return_address) {
       last_return_address_frame = frame;
     }
-    else {
-      hash_value = hash(hash_value, backtrace[frame]);
-    }
   }
 
-  if (last_return_address_frame == -1) {
-    /* You get the whole backtrace (or MAX_LIBUNWIND_BACKTRACE_DEPTH frames,
-       anyway...)! */
-  }
-  else {
+  if (last_return_address_frame != -1) {
     depth = last_return_address_frame + 1;
   }
+  /* If we couldn't find [caml_last_return_address], we use the whole
+     backtrace (up to MAX_LIBUNWIND_BACKTRACE_DEPTH frames, anyway). */
 
   /* XXX: make sure the trap page is large enough */
 
-  caml_allocation_profiling_top_of_backtrace_stack -= depth;
-  memcpy(caml_allocation_profiling_top_of_backtrace_stack + 1, backtrace,
-      sizeof(void*) * depth);
-  *(uint64_t*) caml_allocation_profiling_top_of_backtrace_stack = hash_value;
+  while (depth > 0) {
+    caml_allocation_profiling_top_of_backtrace_stack -= 2;
+
+    hash_value = hash(hash_value, backtrace[depth]);
+
+    caml_allocation_profiling_top_of_backtrace_stack[1] = backtrace[depth];
+    caml_allocation_profiling_top_of_backtrace_stack[0] = hash_value;
+  }
 }
 
 /* XXX what happens when an exception is raised?  The trap frame probably
@@ -675,9 +710,6 @@ caml_allocation_profiling_my_profinfo(void)
      The current backtrace is captured using libunwind and added to the
      hash table.  The backtrace stack is neither read nor written. */
 
-#ifndef ARCH_SIXTYFOUR
-  return (intnat) 0;  /* No room for profinfo in the header on 32 bit. */
-#else
   uint64_t profinfo;
 
   if (!caml_allocation_profiling && !caml_lifetime_tracking) {
@@ -693,12 +725,7 @@ caml_allocation_profiling_my_profinfo(void)
 
     memset((void*) backtrace, '\0', MAX_BACKTRACE_DEPTH * sizeof(void*));
 
-#ifndef HAS_LIBUNWIND
-    /* In the absence of libunwind, just use our return address. */
-    backtrace[0] = __builtin_return_address(0);
-#else
     depth = capture_backtrace(backtrace, MAX_BACKTRACE_DEPTH);
-#endif
 
     for (/* empty */; depth >= 0; depth--) {
       hash_of_all_frames = hash(hash_of_all_frames, backtrace[depth]);
@@ -713,15 +740,21 @@ caml_allocation_profiling_my_profinfo(void)
     assert (bucket->num_allocation_points == 1);
 
     if (bucket->profinfos[0] != 0ull) {
-      profinfo = bucket->profinfos[0];
+      profinfo = bucket->profinfos[0].profinfo;
     }
-    /* XXX is profinfo shifted in the table? */
-    profinfo = caml_allocation_profinfo++;
-    bucket->profinfos[0].profinfo = profinfo;
+    else {
+      if (caml_allocation_profinfo == PROFINFO_MASK) {
+        /* Counter overflow.  Using zero here is harmless. */
+        profinfo = 0ull;
+      }
+      else {
+        profinfo = caml_allocation_profinfo++;
+      }
+      bucket->profinfos[0].profinfo = profinfo << PROFINFO_SHIFT;
+    }
   }
 
-  return (intnat) ((profinfo & PROFINFO_MASK) << PROFINFO_SHIFT);
-#endif
+  return (intnat) profinfo;
 }
 
 void

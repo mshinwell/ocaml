@@ -491,12 +491,14 @@ FUNCTION(G(caml_start_program))
     /* Common code for caml_start_program and caml_callback* */
 LBL(caml_start_program):
     /* Build a callback link */
+#ifndef WITH_ALLOCATION_PROFILING
+        /* When using allocation profiling, we push an extra word onto the
+           stack (below), which means this alignment must be omitted. */
         subq    $8, %rsp; CFI_ADJUST (8)        /* stack 16-aligned */
+#endif
         PUSH_VAR(caml_gc_regs)
         PUSH_VAR(caml_last_return_address)
         PUSH_VAR(caml_bottom_of_stack)
-/* XXX alignment! And hash value... */
-        PUSH_VAR(caml_allocation_profiling_backtrace_top_of_stack)
     /* Setup alloc ptr and exception ptr */
         LOAD_VAR(caml_young_ptr, %r15)
         LOAD_VAR(caml_exception_pointer, %r14)
@@ -508,14 +510,21 @@ LBL(caml_start_program):
         lea     LBL(108)(%rip), %r13
         pushq   %r13; CFI_ADJUST(8)
         pushq   %r14; CFI_ADJUST(8)
+#ifdef WITH_ALLOCATION_PROFILING
+        pushq   %r11
+        CFI_ADJUST(8)
+#endif
+        pushq   %r14
         CFI_ADJUST(16)
         movq    %rsp, %r14
     /* Call the OCaml code */
         call    *%r12
-/* XXX on return, we need to restore the backtrace stack pointer and
-   hash value.  These should probably be pushed on the stack, above. */
 LBL(107):
     /* Pop the exception handler */
+#ifdef WITH_ALLOCATION_PROFILING
+        popq    %r14
+        CFI_ADJUST(-8)
+#endif
         popq    %r14; CFI_ADJUST(-8)
         popq    %r12; CFI_ADJUST(-8)   /* dummy register */
         CFI_ADJUST(-16)
@@ -531,7 +540,9 @@ LBL(109):
         POP_VAR(caml_bottom_of_stack)
         POP_VAR(caml_last_return_address)
         POP_VAR(caml_gc_regs)
+#ifndef WITH_ALLOCATION_PROFILING
         addq    $8, %rsp; CFI_ADJUST (-8);
+#endif
     /* Restore callee-save registers. */
         POP_CALLEE_SAVE_REGS
     /* Return to caller. */
@@ -563,7 +574,12 @@ FUNCTION(G(caml_raise_exn))
 CFI_STARTPROC
         TESTL_VAR($1, caml_backtrace_active)
         jne     LBL(110)
+LBL(1100):
         movq    %r14, %rsp
+#ifdef WITH_ALLOCATION_PROFILING
+        /* Load backtrace stack pointer as it was at the trap frame */
+        popq    %r11
+#endif
         popq    %r14
         ret
 LBL(110):
@@ -585,18 +601,14 @@ LBL(111):
         PREPARE_FOR_C_CALL            /* no need to cleanup after */
         call    GCALL(caml_stash_backtrace)
         movq    %r12, %rax            /* Recover exception bucket */
-        movq    %r14, %rsp
-        popq    %r14
-        ret
+        j       LBL(1100)
 CFI_ENDPROC
 
 FUNCTION(G(caml_reraise_exn))
 CFI_STARTPROC
         TESTL_VAR($1, caml_backtrace_active)
         jne     LBL(111)
-        movq    %r14, %rsp
-        popq    %r14
-        ret
+        j       LBL(1100)
 CFI_ENDPROC
 
 /* Raise an exception from C */
@@ -606,10 +618,10 @@ CFI_STARTPROC
         TESTL_VAR($1, caml_backtrace_active)
         jne     LBL(112)
         movq    C_ARG_1, %rax
+LBL(1120):
         LOAD_VAR(caml_exception_pointer, %rsp)  /* Cut stack */
-        popq    %r14                   /* Recover previous exception handler */
         LOAD_VAR(caml_young_ptr, %r15) /* Reload alloc ptr */
-        ret
+        j       LBL(1100)
 LBL(112):
 #ifdef WITH_FRAME_POINTERS
         ENTER_FUNCTION          ;
@@ -625,10 +637,7 @@ LBL(112):
         PREPARE_FOR_C_CALL            /* no need to cleanup after */
         call    GCALL(caml_stash_backtrace)
         movq    %r12, %rax            /* Recover exception bucket */
-        LOAD_VAR(caml_exception_pointer,%rsp)
-        popq    %r14                  /* Recover previous exception handler */
-        LOAD_VAR(caml_young_ptr,%r15) /* Reload alloc ptr */
-        ret
+        j       LBL(1120)
 CFI_ENDPROC
 
 /* Raise a Stack_overflow exception on return from segv_handler()
@@ -639,9 +648,7 @@ CFI_ENDPROC
 
 FUNCTION(G(caml_stack_overflow))
         LEA_VAR(caml_exn_Stack_overflow, %rax)
-        movq    %r14, %rsp            /* cut the stack */
-        popq    %r14                  /* recover previous exn handler */
-        ret                           /* jump to handler's code */
+        j       LBL(1100)
 
 /* Callback from C to OCaml */
 
@@ -650,8 +657,6 @@ FUNCTION(G(caml_stack_overflow))
     /* Save arguments to caml_callback* */
         pushq   %rbx
         pushq   %rax
-    /* Save backtrace stack pointer */
-        pushq   %r11
     /* Write the backtrace onto the backtrace stack */
         call    GCALL(caml_allocation_profiling_backtrace_c_to_ocaml)
     /* Restore arguments to caml_callback* */
