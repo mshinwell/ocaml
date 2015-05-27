@@ -491,38 +491,60 @@ FUNCTION(G(caml_start_program))
     /* Common code for caml_start_program and caml_callback* */
 LBL(caml_start_program):
     /* Build a callback link */
-#ifndef WITH_ALLOCATION_PROFILING
-        /* When using allocation profiling, we push an extra word onto the
-           stack (below), which means this alignment must be omitted. */
-        subq    $8, %rsp; CFI_ADJUST (8)        /* stack 16-aligned */
+#ifdef WITH_ALLOCATION_PROFILING
+        PUSH_VAR(caml_allocation_profiling_backtrace_top_of_stack)
+#else
+        subq    $8, %rsp  /* stack 16-aligned */
+        CFI_ADJUST(8)
 #endif
         PUSH_VAR(caml_gc_regs)
         PUSH_VAR(caml_last_return_address)
         PUSH_VAR(caml_bottom_of_stack)
+#ifdef WITH_ALLOCATION_PROFILING
+    /* Write the backtrace onto the backtrace stack.  This may write an
+       arbitrary number of frames onto that stack; the callback link we just
+       built enables us to restore the pointer correctly if/when the OCaml
+       code returns.  This function also affects
+       [caml_allocation_profiling_backtrace_top_of_stack]. */
+        call    GCALL(caml_allocation_profiling_backtrace_c_to_ocaml)
+#endif
     /* Setup alloc ptr and exception ptr */
         LOAD_VAR(caml_young_ptr, %r15)
         LOAD_VAR(caml_exception_pointer, %r14)
-    /* Set up allocation profiling backtrace stack pointer */
-#ifdef WITH_ALLOCATION_PROFILING
-        LOAD_VAR(caml_allocation_profiling_backtrace_top_of_stack, %r11)
-#endif
     /* Build an exception handler */
         lea     LBL(108)(%rip), %r13
         pushq   %r13; CFI_ADJUST(8)
-        pushq   %r14; CFI_ADJUST(8)
 #ifdef WITH_ALLOCATION_PROFILING
+    /* When executing the exception handler, we must unwind the backtrace
+       stack in the same way as a normal return from the OCaml function.
+       (This is in contrast to the system stack; the analogous frames would
+       be unwound as the stack of C functions gradually returns.)  As such,
+       we must grab the pointer from the callback link, rather than using
+       the global variable. */
+        movq    40(%rsp), %r11
         pushq   %r11
         CFI_ADJUST(8)
 #endif
-        pushq   %r14
+        pushq   %r14; CFI_ADJUST(8)
         CFI_ADJUST(16)
+#ifdef WITH_ALLOCATION_PROFILING
+    /* Keep stack 16-aligned. */
+        subq    $8, %rsp
+        CFI_ADJUST(8)
+    /* Set up allocation profiling backtrace stack pointer */
+        LOAD_VAR(caml_allocation_profiling_backtrace_top_of_stack, %r11)
+#endif
         movq    %rsp, %r14
     /* Call the OCaml code */
         call    *%r12
 LBL(107):
     /* Pop the exception handler */
 #ifdef WITH_ALLOCATION_PROFILING
-        popq    %r14
+        addq    $8, %rsp
+        CFI_ADJUST(-8)
+    /* This may unwind an arbitrary number of backtrace stack frames (see
+       comment above). */
+        popq    %r11
         CFI_ADJUST(-8)
 #endif
         popq    %r14; CFI_ADJUST(-8)
@@ -532,16 +554,17 @@ LBL(109):
     /* Update alloc ptr and exception ptr */
         STORE_VAR(%r15,caml_young_ptr)
         STORE_VAR(%r14,caml_exception_pointer)
-    /* Update allocation profiling backtrace stack pointer */
-#ifdef WITH_ALLOCATION_PROFILING
-        STORE_VAR(%r11, caml_allocation_profiling_backtrace_top_of_stack)
-#endif
     /* Pop the callback link, restoring the global variables */
         POP_VAR(caml_bottom_of_stack)
         POP_VAR(caml_last_return_address)
         POP_VAR(caml_gc_regs)
-#ifndef WITH_ALLOCATION_PROFILING
-        addq    $8, %rsp; CFI_ADJUST (-8);
+#ifdef WITH_ALLOCATION_PROFILING
+        POP_VAR(caml_allocation_profiling_backtrace_top_of_stack)
+    /* Update allocation profiling backtrace stack pointer */
+        STORE_VAR(%r11, caml_allocation_profiling_backtrace_top_of_stack)
+#else
+        addq    $8, %rsp
+        CFI_ADJUST(-8)
 #endif
     /* Restore callee-save registers. */
         POP_CALLEE_SAVE_REGS
@@ -652,23 +675,8 @@ FUNCTION(G(caml_stack_overflow))
 
 /* Callback from C to OCaml */
 
-#ifndef WITH_ALLOCATION_PROFILING
-#define CAPTURE_BACKTRACE_FOR_ALLOCATION_PROFILING \
-    /* Save arguments to caml_callback* */
-        pushq   %rbx
-        pushq   %rax
-    /* Write the backtrace onto the backtrace stack */
-        call    GCALL(caml_allocation_profiling_backtrace_c_to_ocaml)
-    /* Restore arguments to caml_callback* */
-        popq    %rbx
-        popq    %rax
-#else
-#define CAPTURE_BACKTRACE_FOR_ALLOCATION_PROFILING /* nothing */
-#endif
-
 FUNCTION(G(caml_callback_exn))
 CFI_STARTPROC
-        CAPTURE_BACKTRACE_FOR_ALLOCATION_PROFILING
     /* Save callee-save registers */
         PUSH_CALLEE_SAVE_REGS
     /* Initial loading of arguments */
@@ -680,7 +688,6 @@ CFI_ENDPROC
 
 FUNCTION(G(caml_callback2_exn))
 CFI_STARTPROC
-        CAPTURE_BACKTRACE_FOR_ALLOCATION_PROFILING
     /* Save callee-save registers */
         PUSH_CALLEE_SAVE_REGS
     /* Initial loading of arguments */
@@ -693,7 +700,6 @@ CFI_ENDPROC
 
 FUNCTION(G(caml_callback3_exn))
 CFI_STARTPROC
-        CAPTURE_BACKTRACE_FOR_ALLOCATION_PROFILING
     /* Save callee-save registers */
         PUSH_CALLEE_SAVE_REGS
     /* Initial loading of arguments */

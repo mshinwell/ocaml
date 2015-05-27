@@ -389,6 +389,9 @@ typedef struct {
 } allocation_point;
 typedef struct {
   struct backtrace_table_bucket* next;
+  /* A word in [return_addrs_and_hashes] may be [END_OF_C_FRAMES].  These
+     are used to delimit portions that do not contain any hash values
+     (see below). */
   void* return_addrs_and_hashes[MAX_BACKTRACE_DEPTH];  /* most recent first */
   uint64_t num_allocation_points;
   /* [num_allocation_points] number of [allocation_point] structures follow
@@ -653,17 +656,24 @@ caml_allocation_profiling_prologue(value num_allocation_points,
   return &bucket->profinfos;
 }
 
+#define START_OF_C_FRAMES UINT64_MAX
+#define END_OF_C_FRAMES ((uint64_t) 0)
+
 void
 caml_allocation_profiling_c_to_ocaml(void)
 {
   /* This function is called whenever we transfer control from a C function
      to an OCaml function.  The current backtrace is captured using
-     libunwind and written into the backtrace stack.  We then find out the
-     most recent OCaml frame by looking at [caml_last_return_address] and
-     graft the more recent portion of the backtrace onto the stack, computing
-     the hash of all frames as we go.  (Since we never unwind into the middle
-     of a libunwind portion of backtrace, intermediate hash values there are
-     not needed, but we initialize them anyway.)
+     libunwind and written, after a marker word, into the backtrace stack,
+     We then find out the most recent OCaml frame by looking at
+     [caml_last_return_address] and graft the more recent portion of the
+     backtrace onto the stack, computing the hash of all frames as we go.
+     The hash value is written after a second marker word.
+
+     As a speed optimization, the backtrace corresponding to the C frames is
+     not interspersed with hash values; we never unwind into the middle of
+     that stack.  The marker words enable the offline tool to work out where
+     the libunwind backtrace stops.
   */
 
   void* backtrace[MAX_LIBUNWIND_BACKTRACE_DEPTH];
@@ -672,6 +682,8 @@ caml_allocation_profiling_c_to_ocaml(void)
   uint64_t hash_value;
   int last_return_address_frame;
 
+  *caml_allocation_profiling_top_of_backtrace_stack-- = END_OF_C_FRAMES;
+
   depth = capture_backtrace(backtrace, MAX_LIBUNWIND_BACKTRACE_DEPTH);
 
   hash = *(uint64_t*) caml_allocation_profiling_top_of_backtrace_stack;
@@ -679,6 +691,9 @@ caml_allocation_profiling_c_to_ocaml(void)
   for (frame = 0; last_return_address_frame == -1 && frame < depth; frame++) {
     if (backtrace[frame] == caml_last_return_address) {
       last_return_address_frame = frame;
+    }
+    else {  /* omit the most recent OCaml frame---already hashed. */
+      hash_value = hash(hash_value, backtrace[depth]);
     }
   }
 
@@ -690,14 +705,11 @@ caml_allocation_profiling_c_to_ocaml(void)
 
   /* XXX: make sure the trap page is large enough */
 
-  while (depth > 0) {
-    caml_allocation_profiling_top_of_backtrace_stack -= 2;
-
-    hash_value = hash(hash_value, backtrace[depth]);
-
-    caml_allocation_profiling_top_of_backtrace_stack[1] = backtrace[depth];
-    caml_allocation_profiling_top_of_backtrace_stack[0] = hash_value;
-  }
+  caml_allocation_profiling_top_of_backtrace_stack -= depth;
+  memcpy(caml_allocation_profiling_top_of_backtrace_stack, backtrace,
+    sizeof(void*) * depth);
+  *caml_allocation_profiling_top_of_backtrace_stack-- = START_OF_C_FRAMES;
+  *caml_allocation_profiling_top_of_backtrace_stack = hash_value;
 }
 
 /* XXX what happens when an exception is raised?  The trap frame probably
@@ -731,7 +743,7 @@ caml_allocation_profiling_my_profinfo(void)
       hash_of_all_frames = hash(hash_of_all_frames, backtrace[depth]);
     }
 
-    bucket = find_or_add_hash_bucket(hash_of_all_frames, backtrace, 2);
+    bucket = find_or_add_hash_bucket(hash_of_all_frames, backtrace, 1);
 
     /* A full libunwind backtrace, such as we have in [backtrace], should
        never be the same as a backtrace from an OCaml function. */
