@@ -58,14 +58,14 @@ let add_prologue ~body ~num_allocation_points ~backtrace_bucket =
   *)
   Clet (backtrace_bucket,
     Cop (Cextcall ("caml_allocation_profiling_prologue",
-        Int,   (* Actually a naked pointer, just don't tell anyone. *)
+        [| Int |],   (* Actually a naked pointer, just don't tell anyone. *)
         false, (* = noalloc *)
         Debuginfo.none),
       [Cconst_int num_allocation_points;
        (* [Cbacktrace_stack] decrements the contents of the fixed backtrace
           top of stack register by two words, and returns that new value. *)
-       Cbacktrace_stack;
-       Creturn_address;  (* return address for the current frame *)
+       Cop (Cbacktrace_stack, []);
+       Cop (Creturn_address, []);  (* return address for the current frame *)
       ]),
     (* [Ctailrec_entry_point] in this position ensures that we do not run
        the bucket calculation code when re-entering the same function from
@@ -75,10 +75,11 @@ let add_prologue ~body ~num_allocation_points ~backtrace_bucket =
 let code_for_allocation_point ~value's_header ~alloc_point_number
       ~backtrace_bucket =
   let pc = Ident.create "pc" in
-  let existing_profinfo = Cvar (Ident.create "existing_profinfo") in
-  let new_profinfo = Cvar (Ident.create "new_profinfo") in
-  let new_profinfo' = Cvar (Ident.create "new_profinfo'") in
-  let profinfo = Cvar (Ident.create "profinfo") in
+  let existing_profinfo = Ident.create "existing_profinfo" in
+  let new_profinfo = Ident.create "new_profinfo" in
+  let new_profinfo' = Ident.create "new_profinfo'" in
+  let new_profinfo'' = Ident.create "new_profinfo''" in
+  let profinfo = Ident.create "profinfo" in
   let offset_into_backtrace_bucket =
     ((2 * Arch.size_addr) * alloc_point_number)
   in
@@ -97,8 +98,8 @@ let code_for_allocation_point ~value's_header ~alloc_point_number
   let do_not_use_override_profinfo =
     (* Determine whether values should be annotated with a user-specified
        profinfo. *)
-    Cop (Ccmpi eq, [
-      Cop (Cload Word; [Cvar use_override_profinfo]);
+    Cop (Ccmpi Ceq, [
+      Cop (Cload Word, [Cvar use_override_profinfo]);
       Cconst_int 0;
     ])
   in
@@ -112,19 +113,22 @@ let code_for_allocation_point ~value's_header ~alloc_point_number
          into the current backtrace hash table bucket. *)
       Clet (pc, Cop (Cprogram_counter, []),
         Clet (new_profinfo,
-          Clet (new_profinfo', Cop (Cload Word, [profinfo_counter]),
-            Cifthenelse (Cop (Ccmpi gt, [new_profinfo', max_profinfo]),
+          Clet (new_profinfo', Cop (Cload Word, [Cvar profinfo_counter]),
+            Cifthenelse (
+              Cop (Ccmpi Cgt, [Cvar new_profinfo'; max_profinfo]),
               Cconst_int 0,  (* profiling counter overflow *)
-              Csequence (
-                Cop (Cstore Word, [
-                  Cop (Cadda, [new_profinfo'; Cconst_int 1]);
-                  profinfo_counter;
-                ]),
+              Clet (new_profinfo'',
+                Cop (Caddi, [Cvar new_profinfo'; Cconst_int 1]),
                 Csequence (
-                  Csequence (
-                    Cop (Cstore Word, [pc, address_of_pc]);
-                    Cop (Cstore Word, [new_profinfo, address_of_profinfo])),
-                  Cop (Clsl, [new_profinfo; Cconst_int profinfo_shift])))))))
+                  Cop (Cstore Word,
+                    [Cvar new_profinfo''; Cvar profinfo_counter]),
+                  Cvar new_profinfo
+                )))),
+          Csequence (
+            Csequence (
+              Cop (Cstore Word, [Cvar pc; address_of_pc]),
+              Cop (Cstore Word, [Cvar new_profinfo; address_of_profinfo])),
+            Cop (Clsl, [Cvar new_profinfo; profinfo_shift]))))
     in
     (* Check if we have already allocated a profinfo value for this allocation
        point with the current backtrace.  If so, use that value; if not,
@@ -132,19 +136,20 @@ let code_for_allocation_point ~value's_header ~alloc_point_number
     Clet (existing_profinfo, Cop (Cload Word, [address_of_profinfo]),
       Clet (profinfo,
         Cifthenelse (
-          Cop (Ccmpa Ceq, [existing_profinfo; Cconst_pointer 0]),
+          Cop (Ccmpa Ceq, [Cvar existing_profinfo; Cconst_pointer 0]),
           generate_new_profinfo,
-          existing_profinfo),
+          Cvar existing_profinfo),
         (* [profinfo] is already shifted by [PROFINFO_SHIFT]. *)
-        Cop (Cor, [profinfo; value's_header])))
+        Cop (Cor, [Cvar profinfo; Cconst_natint value's_header])))
   in
   let with_override =
-    Cop (Cload Word; [Cvar override_profinfo])
+    Cop (Cload Word, [Cvar override_profinfo])
   in
   Cifthenelse (do_not_use_override_profinfo, default, with_override)
 
-let instrument_function_body expr =
+let instrument_function_body expr ~backtrace_bucket =
   let next_alloc_point_number = ref 0 in
+  (* CR mshinwell: misleading variable name *)
   let contains_calls = ref false in
   let rec instrument_headers expr =
     (* Instrument the calculation of block headers so as to insert profiling
@@ -154,6 +159,7 @@ let instrument_function_body expr =
       let alloc_point_number = !next_alloc_point_number in
       incr next_alloc_point_number;
       code_for_allocation_point ~value's_header ~alloc_point_number
+        ~backtrace_bucket
     | (Cconst_int _ | Cconst_natint _ | Cconst_float _ | Cconst_symbol _
       | Cconst_pointer _ | Cconst_natpointer _ | Cvar _) -> expr
     | Clet (id, e1, e2) ->
@@ -164,7 +170,8 @@ let instrument_function_body expr =
       Ctuple (List.map instrument_headers es)
     | Cop (op, es) ->
       begin match op with
-      | Capply _ | Cextcall _ -> contains_calls := true
+      | Calloc | Capply _
+      | Cextcall (_, _, true, _) -> contains_calls := true
       | _ -> ()
       end;
       Cop (op, List.map instrument_headers es)
@@ -183,9 +190,10 @@ let instrument_function_body expr =
       Cexit (n, List.map instrument_headers es)
     | Ctrywith (e1, id, e2) ->
       Ctrywith (instrument_headers e1, id, instrument_headers e2)
+    | Ctailrec_entry_point -> Ctailrec_entry_point
   in
   let expr = instrument_headers expr in
-  !next_alloc_point_number, expr
+  !next_alloc_point_number, !contains_calls, expr
 
 let fundecl decl =
   if not !Clflags.allocation_profiling then
@@ -194,8 +202,8 @@ let fundecl decl =
     }
   else
     let backtrace_bucket = Ident.create "backtrace_bucket" in
-    let num_allocation_points, body =
-      instrument_function_body decl.expression ~backtrace_bucket
+    let num_allocation_points, contains_calls, body =
+      instrument_function_body decl.fun_body ~backtrace_bucket
     in
     (* Even if there are no allocation points, we must record a backtrace
        stack frame unless the function is a leaf function. *)

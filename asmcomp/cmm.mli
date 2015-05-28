@@ -69,6 +69,7 @@ type operation =
   | Ccheckbound of Debuginfo.t
   | Cbacktrace_stack  (* see alloc_profiling_cmm.mli for an explanation *)
   | Cprogram_counter
+  | Creturn_address
 
 type expression =
     Cconst_int of int

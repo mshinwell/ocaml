@@ -86,6 +86,7 @@ let operation = function
   | Ccheckbound d -> "checkbound" ^ Debuginfo.to_string d
   | Cbacktrace_stack -> "backtrace_stack"
   | Cprogram_counter -> "program_counter"
+  | Creturn_address -> "return_address"
 
 let rec expr ppf = function
   | Cconst_int n -> fprintf ppf "%i" n

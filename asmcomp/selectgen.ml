@@ -42,6 +42,9 @@ let oper_result_type = function
   | Cintoffloat -> typ_int
   | Craise _ -> typ_void
   | Ccheckbound _ -> typ_void
+  | Cbacktrace_stack -> typ_int
+  | Cprogram_counter -> typ_int
+  | Creturn_address -> typ_int
 
 (* Infer the size in bytes of the result of a simple expression *)
 

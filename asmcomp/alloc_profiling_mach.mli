@@ -20,4 +20,4 @@
 (*                                                                     *)
 (***********************************************************************)
 
-
+val fundecl : Mach.fundecl -> current_function_name:string -> Mach.fundecl

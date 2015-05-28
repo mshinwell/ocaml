@@ -83,6 +83,7 @@ type operation =
   | Ccheckbound of Debuginfo.t
   | Cbacktrace_stack
   | Cprogram_counter
+  | Creturn_address
 
 type expression =
     Cconst_int of int
