@@ -307,7 +307,7 @@ module BR = Branch_relaxation.Make (struct
 
   let all_cond_branches = [TB; CB; Bcc]
 
-  let max_displacement_in_words = function
+  let max_displacement_in_bits = function
     | TB -> 14
     | CB -> 19
     | Bcc -> 19
