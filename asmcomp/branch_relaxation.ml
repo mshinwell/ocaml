@@ -87,7 +87,7 @@ end) = struct
           instr.desc <- T.relax_allocation ~num_words;
           fixup true (pc + T.instr_size instr.desc) instr.next
         | Lop (Iintop Icheckbound) ->
-          instr.desc <- T.relax_intop_checkbound ~num_words;
+          instr.desc <- T.relax_intop_checkbound ();
           fixup true (pc + T.instr_size instr.desc) instr.next
         | Lop (Iintop_imm (Icheckbound, bound)) ->
           instr.desc <- T.relax_intop_imm_checkbound ~bound;
