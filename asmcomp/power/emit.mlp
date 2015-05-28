@@ -368,7 +368,7 @@ module BR = Branch_relaxation.Make (struct
     | Branch -> 8192 - 12
 
   let classify_instr = function
-    | Lalloc -> Some Branch
+    | Lop (Ialloc _) -> Some Branch
     | Lcondbranch _ -> Some Branch
     | Lcondbranch3 _ -> Some Branch
     | _ -> None
