@@ -20,7 +20,7 @@ module Make (T : sig
   val max_displacement_in_words : cond_branch -> int
 
   val instr_size : Linearize.instruction_desc -> int
-  val classify_instr : Linearize.instruction -> cond_branch option
+  val classify_instr : Linearize.instruction_desc -> cond_branch option
 
   val code_for_far_allocation : num_words:int -> Linearize.instruction_desc
 end) : sig
