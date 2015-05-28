@@ -12,7 +12,6 @@
 (***********************************************************************)
 
 open Linearize
-open Mach
 
 module Make (T : sig
   type cond_branch
@@ -49,10 +48,10 @@ end) = struct
     | Some branch ->
       let max_branch_offset = T.max_displacement_in_words branch in
       match instr.desc with
-      | Lop (Ialloc _)
-      | Lop (Iintop Icheckbound)
-      | Lop (Iintop_imm (Icheckbound, _))
-      | Lop (Ispecific _) ->
+      | Lop (Mach.Ialloc _)
+      | Lop (Mach.Iintop Icheckbound)
+      | Lop (Mach.Iintop_imm (Icheckbound, _))
+      | Lop (Mach.Ispecific _) ->
         codesize - pc >= max_branch_offset
       | Lcondbranch (_, lbl) ->
         branch_overflows map pc lbl max_branch_offset
@@ -77,14 +76,14 @@ end) = struct
       else
         match instr.desc with
         | Lend -> did_fix
-        | Lop (Ialloc num_words) ->
+        | Lop (Mach.Ialloc num_words) ->
           instr.desc <- T.code_for_far_allocation ~num_words;
-          fixup true (pc + T.instr_size instr.desc) instr.next
-        | Lop (Iintop Icheckbound) ->
+          fixup true (Mach.pc + T.instr_size instr.desc) instr.next
+        | Lop (Mach.Iintop Icheckbound) ->
           assert false
-        | Lop (Iintop_imm (Icheckbound, _)) ->
+        | Lop (Mach.Iintop_imm (Icheckbound, _)) ->
           assert false
-        | Lop (Ispecific _) ->
+        | Lop (Mach.Ispecific _) ->
           assert false
         | Lcondbranch (test, lbl) ->
           let old_size = T.instr_size instr.desc in
