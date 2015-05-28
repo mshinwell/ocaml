@@ -379,6 +379,8 @@ module BR = Branch_relaxation.Make (struct
     Lop (Ispecific (Ialloc_far num_words))
 
   let relax_specific_op _ = assert false
+  let relax_intop_checkbound () = assert false
+  let relax_intop_imm_checkbound ~bound:_ = assert false
 end)
 
 (* Output the assembly code for an instruction *)
