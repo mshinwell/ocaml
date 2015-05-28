@@ -40,7 +40,7 @@ end) = struct
     match opt_lbl_dest with
     | None -> false
     | Some lbl_dest ->
-      branch_overflows branch map pc_branch lbl_dest max_branch_offset
+      branch_overflows map pc_branch lbl_dest max_branch_offset
 
   let instr_overflows codesize instr map pc =
     let max_branch_offset = T.max_displacement_in_words branch in
