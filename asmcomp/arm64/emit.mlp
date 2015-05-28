@@ -302,6 +302,37 @@ let emit_load_symbol_addr dst s =
     `	ldr	{emit_reg dst}, [{emit_reg dst}, #:got_lo12:{emit_symbol s}]\n`
   end
 
+module BR = Branch_relaxation.Make (struct
+
+  type cond_branch = TB | CB | Bcc
+
+  let max_displacement_in_bits = function
+    | TB -> 14
+    | CB -> 19
+    | Bcc -> 19
+
+  let max_displacement_in_words branch =
+    1 lsl (max_displacement_in_bits branch)
+
+  let classify_instr = function
+    | Lop (Ialloc n) -> Some Bcc
+    | Lop (Iintop Icheckbound) -> Some Bcc
+    | Lop (Iintop_imm (Icheckbound, _)) -> Some Bcc
+    | Lop (Ispecific (Ishiftcheckbound _)) -> Some Bcc
+    | Lcondbranch (Itruetest, _) -> Some CB
+    | Lcondbranch (Ifalsetest, _) -> Some CB
+    | Lcondbranch (Iinttest, _) -> Some Bcc
+    | Lcondbranch (Iinttest_imm, _) -> Some Bcc
+    | Lcondbranch (Ifloattest _, _) -> Some Bcc
+    | Lcondbranch (Ioddtest, _) -> Some TB
+    | Lcondbranch (Ieventest, _) -> Some TB
+    | Lcondbranch3 _ -> Some Bcc
+    | _ -> None
+
+  let code_for_far_allocation ~num_words =
+
+end)
+
 (* Output the assembly code for an instruction *)
 
 let emit_instr i =
@@ -659,6 +690,7 @@ let fundecl fundecl =
     `	str	x30, [sp, #{emit_int (n-8)}]\n`
   end;
   `{emit_label !tailrec_entry_point}:\n`;
+  BR.fixup_branches fundecl.fun_body;
   emit_all fundecl.fun_body;
   List.iter emit_call_gc !call_gc_sites;
   List.iter emit_call_bound_error !bound_error_sites;
