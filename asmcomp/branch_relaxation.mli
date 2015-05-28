@@ -16,9 +16,12 @@
 module Make (T : sig
   type cond_branch
 
+  val all_cond_branches : cond_branch list
+  val max_displacement_in_words : cond_branch -> int
+
   val instr_size : Linearize.instruction_desc -> int
   val classify_instr : Linearize.instruction -> cond_branch option
-  val max_displacement_in_words : cond_branch -> int
+
   val code_for_far_allocation : num_words:int -> Linearize.instruction_desc
 end) : sig
   val fixup_branches : Linearize.instruction -> unit
