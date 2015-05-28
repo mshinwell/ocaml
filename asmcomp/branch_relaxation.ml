@@ -46,7 +46,7 @@ end) = struct
       branch_overflows map pc_branch lbl_dest max_branch_offset
 
   let instr_overflows codesize instr map pc =
-    match T.classify_instr instr with
+    match T.classify_instr instr.desc with
     | None -> false
     | Some branch ->
       let max_branch_offset = T.max_displacement_in_words branch in
