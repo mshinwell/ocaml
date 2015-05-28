@@ -12,6 +12,7 @@
 (***********************************************************************)
 
 open Linearize
+open Mach
 
 module Make (T : sig
   type cond_branch
@@ -51,7 +52,7 @@ end) = struct
       | Lop (Ialloc _)
       | Lop (Iintop Icheckbound)
       | Lop (Iintop_imm (Icheckbound, _))
-      | Lop (Ispecific (Ishiftcheckbound _)) ->
+      | Lop (Ispecific _) ->
         codesize - pc >= max_branch_offset
       | Lcondbranch (_, lbl) ->
         branch_overflows map pc lbl max_branch_offset
@@ -83,7 +84,7 @@ end) = struct
           assert false
         | Lop (Iintop_imm (Icheckbound, _)) ->
           assert false
-        | Lop (Ispecific (Ishiftcheckbound _)) ->
+        | Lop (Ispecific _) ->
           assert false
         | Lcondbranch (test, lbl) ->
           let old_size = T.instr_size instr.desc in
