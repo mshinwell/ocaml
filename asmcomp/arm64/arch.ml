@@ -34,8 +34,12 @@ type addressing_mode =
 (* Specific operations *)
 
 type specific_operation =
+  | Ifar_alloc of int
+  | Ifar_intop_checkbound
+  | Ifar_intop_imm_checkbound of int
   | Ishiftarith of arith_operation * int
   | Ishiftcheckbound of int
+  | Ifar_shiftcheckbound of int
   | Imuladd       (* multiply and add *)
   | Imulsub       (* multiply and subtract *)
   | Inegmulf      (* floating-point negate and multiply *)
