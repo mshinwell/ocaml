@@ -43,20 +43,24 @@ end) = struct
       branch_overflows map pc_branch lbl_dest max_branch_offset
 
   let instr_overflows codesize instr map pc =
-    let max_branch_offset = T.max_displacement_in_words branch in
-    match instr.desc with
-    | Lop (Ialloc _)
-    | Lop (Iintop Icheckbound)
-    | Lop (Iintop_imm (Icheckbound, _))
-    | Lop (Ispecific (Ishiftcheckbound _)) ->
-      codesize - pc >= max_branch_offset
-    | Lcondbranch (_, lbl) ->
-      branch_overflows map pc lbl max_branch_offset
-    | Lcondbranch3 (lbl0, lbl1, lbl2) ->
-      opt_branch_overflows map pc lbl0 max_branch_offset
-        || opt_branch_overflows map pc lbl1 max_branch_offset
-        || opt_branch_overflows map pc lbl2 max_branch_offset
-    | _ -> false
+    match T.classify_instr instr with
+    | None -> false
+    | Some branch ->
+      let max_branch_offset = T.max_displacement_in_words branch in
+      match instr.desc with
+      | Lop (Ialloc _)
+      | Lop (Iintop Icheckbound)
+      | Lop (Iintop_imm (Icheckbound, _))
+      | Lop (Ispecific (Ishiftcheckbound _)) ->
+        codesize - pc >= max_branch_offset
+      | Lcondbranch (_, lbl) ->
+        branch_overflows map pc lbl max_branch_offset
+      | Lcondbranch3 (lbl0, lbl1, lbl2) ->
+        opt_branch_overflows map pc lbl0 max_branch_offset
+          || opt_branch_overflows map pc lbl1 max_branch_offset
+          || opt_branch_overflows map pc lbl2 max_branch_offset
+      | _ ->
+        Misc.fatal_error "Unsupported instruction for branch relaxation"
 
   let fixup_branches codesize map code =
     let expand_optbranch lbl n arg next =
