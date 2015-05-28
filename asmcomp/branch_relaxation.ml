@@ -96,7 +96,6 @@ end) = struct
           instr.desc <- T.relax_specific_op specific;
           fixup true (pc + T.instr_size instr.desc) instr.next
         | Lcondbranch (test, lbl) ->
-          let old_size = T.instr_size instr.desc in
           let lbl2 = new_label() in
           let new_desc0 = Lbranch lbl in
           let new_desc1 = Llabel lbl2 in
@@ -110,7 +109,8 @@ end) = struct
             T.instr_size instr.desc + T.instr_size new_desc0
               + T.instr_size new_desc1
           in
-          fixup true (pc - old_size + new_size) instr.next
+          (* CR mshinwell: check this size calculation matches the old code *)
+          fixup true (pc + new_size) instr.next
         | Lcondbranch3 (lbl0, lbl1, lbl2) ->
           let cont =
             expand_optbranch lbl0 0 instr.arg
