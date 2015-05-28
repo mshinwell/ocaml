@@ -128,13 +128,15 @@ end) = struct
   (* Iterate branch expansion till all conditional branches are OK *)
 
   let rec relax code =
-    let max_branch_offset =
-      List.fold_left (fun current_max branch ->
-          max current_max (T.max_displacement_in_words branch))
-        0 T.all_cond_branches
+    let min_of_max_branch_offsets =
+      List.fold_left (fun min_of_max_branch_offsets branch ->
+          min min_of_max_branch_offsets
+            (T.max_displacement_in_words branch))
+        max_int T.all_cond_branches
     in
     let (codesize, map) = label_map code in
-    if codesize >= max_branch_offset && fixup_branches codesize map code
+    if codesize >= min_of_max_branch_offsets
+        && fixup_branches codesize map code
     then relax code
     else ()
 end
