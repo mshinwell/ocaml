@@ -344,6 +344,40 @@ module BR = Branch_relaxation.Make (struct
     | _ -> assert false
 end)
 
+(* Output the assembly code for allocation. *)
+
+let assembly_code_for_allocation i ~n ~far =
+  let lbl_frame = record_frame_label i.live i.dbg in
+  if !fastcode_flag then begin
+    let lbl_redo = new_label() in
+    let lbl_call_gc = new_label() in
+    `{emit_label lbl_redo}:`;
+    `	sub	{emit_reg reg_alloc_ptr}, {emit_reg reg_alloc_ptr}, #{emit_int n}\n`;
+    `	cmp	{emit_reg reg_alloc_ptr}, {emit_reg reg_alloc_limit}\n`;
+    `	add	{emit_reg i.res.(0)}, {emit_reg reg_alloc_ptr}, #8\n`;
+    if not fast then begin
+      `	b.lo	{emit_label lbl_call_gc}\n`
+    end else begin
+      let lbl = new_label () in
+      `	b.cs	{emit_label lbl}\n`;
+      `	b	{emit_label lbl_call_gc}\n`;
+      `{emit_label lbl}:\n`
+    end;
+    call_gc_sites :=
+      { gc_lbl = lbl_call_gc;
+        gc_return_lbl = lbl_redo;
+        gc_frame_lbl = lbl_frame } :: !call_gc_sites
+  end else begin
+    begin match n with
+    | 16 -> `	bl	{emit_symbol "caml_alloc1"}\n`
+    | 24 -> `	bl	{emit_symbol "caml_alloc2"}\n`
+    | 32 -> `	bl	{emit_symbol "caml_alloc3"}\n`
+    | _  -> emit_intconst reg_x15 (Nativeint.of_int n);
+            `	bl	{emit_symbol "caml_allocN"}\n`
+    end;
+    `{emit_label lbl_frame}:	add	{emit_reg i.res.(0)}, {emit_reg reg_alloc_ptr}, #8\n`
+  end
+
 (* Output the assembly code for an instruction *)
 
 let emit_instr i =
@@ -451,30 +485,8 @@ let emit_instr i =
         | Word | Double | Double_u ->
             `	str	{emit_reg src}, {emit_addressing addr base}\n`
         end
-    | Lop(Ialloc n) ->
-        let lbl_frame = record_frame_label i.live i.dbg in
-        if !fastcode_flag then begin
-          let lbl_redo = new_label() in
-          let lbl_call_gc = new_label() in
-          `{emit_label lbl_redo}:`;
-          `	sub	{emit_reg reg_alloc_ptr}, {emit_reg reg_alloc_ptr}, #{emit_int n}\n`;
-          `	cmp	{emit_reg reg_alloc_ptr}, {emit_reg reg_alloc_limit}\n`;
-          `	add	{emit_reg i.res.(0)}, {emit_reg reg_alloc_ptr}, #8\n`;
-          `	b.lo	{emit_label lbl_call_gc}\n`;
-          call_gc_sites :=
-            { gc_lbl = lbl_call_gc;
-              gc_return_lbl = lbl_redo;
-              gc_frame_lbl = lbl_frame } :: !call_gc_sites
-        end else begin
-          begin match n with
-          | 16 -> `	bl	{emit_symbol "caml_alloc1"}\n`
-          | 24 -> `	bl	{emit_symbol "caml_alloc2"}\n`
-          | 32 -> `	bl	{emit_symbol "caml_alloc3"}\n`
-          | _  -> emit_intconst reg_x15 (Nativeint.of_int n);
-                  `	bl	{emit_symbol "caml_allocN"}\n`
-          end;
-          `{emit_label lbl_frame}:	add	{emit_reg i.res.(0)}, {emit_reg reg_alloc_ptr}, #8\n`
-        end
+    | Lop(Ialloc n) -> assembly_code_for_allocation i ~n ~far:false
+    | Lop(Ispecific (Ifar_alloc n)) -> assembly_code_for_allocation i ~n ~far:true
     | Lop(Iintop(Icomp cmp)) ->
         `	cmp	{emit_reg i.arg.(0)}, {emit_reg i.arg.(1)}\n`;
         `	cset	{emit_reg i.res.(0)}, {emit_string (name_for_comparison cmp)}\n`
@@ -490,7 +502,7 @@ let emit_instr i =
         let lbl2 = new_label () in
         `	cmp	{emit_reg i.arg.(0)}, {emit_reg i.arg.(1)}\n`;
         `	b.ge	{emit_label lbl2}\n`;
-        `       b       {emit_lbl lbl}\n`;
+        `	b	{emit_lbl lbl}\n`;
         `{emit_label lbl2}:\n`;
     | Lop(Iintop_imm(Icheckbound, n)) ->
         let lbl = bound_error_label i.dbg in
@@ -500,20 +512,20 @@ let emit_instr i =
         let lbl = bound_error_label i.dbg in
         let lbl2 = new_label () in
         `	cmp	{emit_reg i.arg.(0)}, #{emit_int n}\n`;
-        `	b.ge	{emit_label lbl2}\n`
-        `       b       {emit_lbl lbl}\n`;
+        `	b.ge	{emit_label lbl2}\n`;
+        `	b	{emit_lbl lbl}\n`;
         `{emit_label lbl2}:\n`;
     | Lop(Ispecific(Ishiftcheckbound shift)) ->
         let lbl = bound_error_label i.dbg in
         `	cmp	{emit_reg i.arg.(1)}, {emit_reg i.arg.(0)}, lsr #{emit_int shift}\n`;
         `	b.cs	{emit_label lbl}\n`
     | Lop(Ispecific(Ifar_shiftcheckbound shift)) ->
-
         let lbl = bound_error_label i.dbg in
         let lbl2 = new_label () in
         `	cmp	{emit_reg i.arg.(1)}, {emit_reg i.arg.(0)}, lsr #{emit_int shift}\n`;
+        `	b.ge	{emit_label lbl2}\n`;
+        `	b	{emit_label lbl}\n`;
         `{emit_label lbl2}:\n`;
-        `	b.cs	{emit_label lbl}\n`
     | Lop(Iintop Imod) ->
         `	sdiv	{emit_reg reg_tmp1}, {emit_reg i.arg.(0)}, {emit_reg i.arg.(1)}\n`;
         `	msub	{emit_reg i.res.(0)}, {emit_reg reg_tmp1}, {emit_reg i.arg.(1)}, {emit_reg i.arg.(0)}\n`
