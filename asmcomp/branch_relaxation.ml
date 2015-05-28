@@ -36,8 +36,7 @@ end) = struct
     let delta = pc_dest - (pc_branch + 1) in
     delta <= -max_branch_offset || delta >= max_branch_offset
 
-  let opt_branch_overflows branch map pc_branch opt_lbl_dest
-        max_branch_offset =
+  let opt_branch_overflows map pc_branch opt_lbl_dest max_branch_offset =
     match opt_lbl_dest with
     | None -> false
     | Some lbl_dest ->
