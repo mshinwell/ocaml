@@ -303,8 +303,9 @@ let emit_load_symbol_addr dst s =
   end
 
 module BR = Branch_relaxation.Make (struct
-
   type cond_branch = TB | CB | Bcc
+
+  let all_cond_branches = [TB; CB; Bcc]
 
   let max_displacement_in_bits = function
     | TB -> 14
