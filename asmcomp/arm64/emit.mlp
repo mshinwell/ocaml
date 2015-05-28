@@ -340,7 +340,7 @@ module BR = Branch_relaxation.Make (struct
     | Lop (Iload (Single, _)) -> 2
     | Lop (Iload _) -> 1
     | Lop (Istore (size, addr, _)) ->
-      let based = match addr with Iindexed -> 0 | Ibased -> 1 in
+      let based = match addr with Iindexed _ -> 0 | Ibased _ -> 1 in
       based + begin match size with Single -> 2 | _ -> 1 end
     | Lop (Ialloc _) -> if !fastcode_flag then 4 else 3
     | Lop (Ispecific (Ifar_alloc _)) -> if !fastcode_flag then 5 else 3
@@ -399,8 +399,8 @@ module BR = Branch_relaxation.Make (struct
     | Lop (Ispecific (Ishiftcheckbound _)) -> Some Bcc
     | Lcondbranch (Itruetest, _) -> Some CB
     | Lcondbranch (Ifalsetest, _) -> Some CB
-    | Lcondbranch (Iinttest, _) -> Some Bcc
-    | Lcondbranch (Iinttest_imm, _) -> Some Bcc
+    | Lcondbranch (Iinttest _, _) -> Some Bcc
+    | Lcondbranch (Iinttest_imm _, _) -> Some Bcc
     | Lcondbranch (Ifloattest _, _) -> Some Bcc
     | Lcondbranch (Ioddtest, _) -> Some TB
     | Lcondbranch (Ieventest, _) -> Some TB
@@ -417,7 +417,7 @@ module BR = Branch_relaxation.Make (struct
     Lop (Ispecific (Ifar_intop_imm_checkbound bound))
 
   let relax_specific_op = function
-    | Ishiftcheckbound -> Ifar_shiftcheckbound
+    | Ishiftcheckbound shift -> Lop (Ispecific (Ifar_shiftcheckbound shift))
     | _ -> assert false
 end)
 
