@@ -72,7 +72,7 @@ end) = struct
     in
     let rec fixup did_fix pc instr =
       if not (instr_overflows codesize instr map pc) then
-        fixup did_fix (pc + T.instr_size op) instr.next
+        fixup did_fix (pc + T.instr_size instr.desc) instr.next
       else
         match instr.desc with
         | Lend -> did_fix
