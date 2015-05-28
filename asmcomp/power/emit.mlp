@@ -361,6 +361,8 @@ module BR = Branch_relaxation.Make (struct
 
   type cond_branch = Branch
 
+  let all_cond_branches = [Branch]
+
   let max_displacement_in_words = function
     (* 14-bit signed offset in words.  Remember to cut some slack
        for multi-word instructions where the branch can be anywhere in
