@@ -23,7 +23,10 @@ module Make (T : sig
   val instr_size : Linearize.instruction_desc -> int
   val classify_instr : Linearize.instruction_desc -> cond_branch option
 
-  val code_for_far_allocation : num_words:int -> Linearize.instruction_desc
+  val relax_allocation : num_words:int -> Linearize.instruction_desc
+  val relax_intop_checkbound : unit -> Linearize.instruction_desc
+  val relax_intop_imm_checkbound : bound:int -> Linearize.instruction_desc
+  val relax_specific_op : Arch.specific_operation -> Linearize.instruction_desc
 end) = struct
   let label_map code =
     let map = Hashtbl.create 37 in
@@ -32,7 +35,8 @@ end) = struct
       | Lend -> (pc, map)
       | Llabel lbl -> Hashtbl.add map lbl pc; fill_map pc instr.next
       | op -> fill_map (pc + T.instr_size op) instr.next
-    in fill_map 0 code
+    in
+    fill_map 0 code
 
   let branch_overflows map pc_branch lbl_dest max_branch_offset =
     let pc_dest = Hashtbl.find map lbl_dest in
@@ -80,14 +84,17 @@ end) = struct
         match instr.desc with
         | Lend -> did_fix
         | Lop (Ialloc num_words) ->
-          instr.desc <- T.code_for_far_allocation ~num_words;
+          instr.desc <- T.relax_allocation ~num_words;
           fixup true (pc + T.instr_size instr.desc) instr.next
         | Lop (Iintop Icheckbound) ->
-          assert false
-        | Lop (Iintop_imm (Icheckbound, _)) ->
-          assert false
-        | Lop (Ispecific _) ->
-          assert false
+          instr.desc <- T.relax_intop_checkbound ~num_words;
+          fixup true (pc + T.instr_size instr.desc) instr.next
+        | Lop (Iintop_imm (Icheckbound, bound)) ->
+          instr.desc <- T.relax_intop_imm_checkbound ~bound;
+          fixup true (pc + T.instr_size instr.desc) instr.next
+        | Lop (Ispecific specific) ->
+          instr.desc <- T.relax_specific_op specific;
+          fixup true (pc + T.instr_size instr.desc) instr.next
         | Lcondbranch (test, lbl) ->
           let old_size = T.instr_size instr.desc in
           let lbl2 = new_label() in
@@ -95,7 +102,8 @@ end) = struct
           let new_desc1 = Llabel lbl2 in
           let cont =
             instr_cons new_desc0 [||] [||]
-              (instr_cons new_desc1 [||] [||] instr.next) in
+              (instr_cons new_desc1 [||] [||] instr.next)
+          in
           instr.desc <- Lcondbranch (invert_test test, lbl2);
           instr.next <- cont;
           let new_size =
@@ -107,7 +115,8 @@ end) = struct
           let cont =
             expand_optbranch lbl0 0 instr.arg
               (expand_optbranch lbl1 1 instr.arg
-                (expand_optbranch lbl2 2 instr.arg instr.next)) in
+                (expand_optbranch lbl2 2 instr.arg instr.next))
+          in
           instr.desc <- cont.desc;
           instr.next <- cont.next;
           fixup true pc instr

@@ -307,13 +307,13 @@ module BR = Branch_relaxation.Make (struct
 
   let all_cond_branches = [TB; CB; Bcc]
 
-  let max_displacement_in_bits = function
+  let max_displacement_in_words = function
     | TB -> 14
     | CB -> 19
     | Bcc -> 19
 
   let max_displacement_in_words branch =
-    1 lsl (max_displacement_in_bits branch)
+    ((1 lsl (max_displacement_in_bits branch - 1)) - 1) * 4
 
   let classify_instr = function
     | Lop (Ialloc n) -> Some Bcc
@@ -330,8 +330,18 @@ module BR = Branch_relaxation.Make (struct
     | Lcondbranch3 _ -> Some Bcc
     | _ -> None
 
-  let code_for_far_allocation ~num_words =
+  let relax_allocation ~num_words =
+    Lop (Ispecific (Ifar_alloc num_words))
 
+  let relax_intop_checkbound () =
+    Lop (Ispecific Ifar_intop_checkbound)
+
+  let relax_intop_imm_checkbound ~bound =
+    Lop (Ispecific (Ifar_intop_imm_checkbound bound))
+
+  let relax_specific_op = function
+    | Ishiftcheckbound -> Ifar_shiftcheckbound
+    | _ -> assert false
 end)
 
 (* Output the assembly code for an instruction *)
@@ -475,13 +485,25 @@ let emit_instr i =
         let lbl = bound_error_label i.dbg in
         `	cmp	{emit_reg i.arg.(0)}, {emit_reg i.arg.(1)}\n`;
         `	b.ls	{emit_label lbl}\n`
+    | Lop(Ispecific Ifar_intop_checkbound) ->
+
+
     | Lop(Iintop_imm(Icheckbound, n)) ->
         let lbl = bound_error_label i.dbg in
         `	cmp	{emit_reg i.arg.(0)}, #{emit_int n}\n`;
         `	b.ls	{emit_label lbl}\n`
+    | Lop(Ispecific(Ifar_intop_imm_checkbound bound)) ->
+
     | Lop(Ispecific(Ishiftcheckbound shift)) ->
         let lbl = bound_error_label i.dbg in
         `	cmp	{emit_reg i.arg.(1)}, {emit_reg i.arg.(0)}, lsr #{emit_int shift}\n`;
+        `	b.cs	{emit_label lbl}\n`
+    | Lop(Ispecific(Ifar_shiftcheckbound shift)) ->
+
+        let lbl = bound_error_label i.dbg in
+        let lbl2 = new_label () in
+        `	cmp	{emit_reg i.arg.(1)}, {emit_reg i.arg.(0)}, lsr #{emit_int shift}\n`;
+        `{emit_label lbl2}:\n`;
         `	b.cs	{emit_label lbl}\n`
     | Lop(Iintop Imod) ->
         `	sdiv	{emit_reg reg_tmp1}, {emit_reg i.arg.(0)}, {emit_reg i.arg.(1)}\n`;

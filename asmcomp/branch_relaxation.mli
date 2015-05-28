@@ -22,7 +22,10 @@ module Make (T : sig
   val instr_size : Linearize.instruction_desc -> int
   val classify_instr : Linearize.instruction_desc -> cond_branch option
 
-  val code_for_far_allocation : num_words:int -> Linearize.instruction_desc
+  val relax_allocation : num_words:int -> Linearize.instruction_desc
+  val relax_intop_checkbound : unit -> Linearize.instruction_desc
+  val relax_intop_imm_checkbound : bound:int -> Linearize.instruction_desc
+  val relax_specific_op : Arch.specific_operation -> Linearize.instruction_desc
 end) : sig
   val relax : Linearize.instruction -> unit
 end
