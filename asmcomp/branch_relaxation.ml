@@ -67,11 +67,11 @@ end) = struct
       match lbl with
       | None -> next
       | Some l ->
-        instr_cons (Lcondbranch (Iinttest_imm (Isigned Ceq, n), l))
+        instr_cons (Lcondbranch (Iinttest_imm (Isigned Cmm.Ceq, n), l))
           arg [||] next
     in
     let rec fixup did_fix pc instr =
-      if not (instr_overflows codesize instr map codesize pc) then
+      if not (instr_overflows codesize instr map pc) then
         fixup did_fix (pc + T.instr_size op) instr.next
       else
         match instr.desc with
