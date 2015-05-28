@@ -15,7 +15,6 @@
 
 module Make (T : sig
   type cond_branch
-  type measured_from = ...
 
   val instr_size : Linearize.instruction_desc -> int
   val classify_instr : Linearize.instruction -> cond_branch option

@@ -310,12 +310,12 @@ let call_gc_label = ref 0
 
 module BR = Branch_relaxation.Make (struct
   let load_store_size = function
-      Ibased(s, d) -> 2
+    | Ibased(s, d) -> 2
     | Iindexed ofs -> if is_immediate ofs then 1 else 3
     | Iindexed2 -> 1
 
   let instr_size = function
-      Lend -> 0
+    | Lend -> 0
     | Lop(Imove | Ispill | Ireload) -> 1
     | Lop(Iconst_int n | Iconst_blockheader n) ->
       if is_native_immediate n then 1 else 2
@@ -329,9 +329,9 @@ module BR = Branch_relaxation.Make (struct
     | Lop(Iextcall(s, false)) -> if pic_externals then 4 else 1
     | Lop(Istackoffset n) -> 1
     | Lop(Iload(chunk, addr)) ->
-        if chunk = Byte_signed
-        then load_store_size addr + 1
-        else load_store_size addr
+      if chunk = Byte_signed
+      then load_store_size addr + 1
+      else load_store_size addr
     | Lop(Istore(chunk, addr, _)) -> load_store_size addr
     | Lop(Ialloc n) -> 4
     | Lop(Ispecific(Ialloc_far n)) -> 5
@@ -350,9 +350,9 @@ module BR = Branch_relaxation.Make (struct
     | Lbranch lbl -> 1
     | Lcondbranch(tst, lbl) -> 2
     | Lcondbranch3(lbl0, lbl1, lbl2) ->
-        1 + (if lbl0 = None then 0 else 1)
-          + (if lbl1 = None then 0 else 1)
-          + (if lbl2 = None then 0 else 1)
+      1 + (if lbl0 = None then 0 else 1)
+        + (if lbl1 = None then 0 else 1)
+        + (if lbl2 = None then 0 else 1)
     | Lswitch jumptbl -> 8
     | Lsetuptrap lbl -> 1
     | Lpushtrap -> 4

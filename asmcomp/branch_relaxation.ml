@@ -14,15 +14,20 @@
 open Linearize
 
 module Make (T : sig
+  type cond_branch
 
+  val instr_size : Linearize.instruction_desc -> int
+  val classify_instr : Linearize.instruction -> cond_branch option
+  val max_displacement_in_words : cond_branch -> int
+  val code_for_far_allocation : num_words:int -> Linearize.instruction_desc
 end) = struct
   let label_map code =
     let map = Hashtbl.create 37 in
     let rec fill_map pc instr =
       match instr.desc with
-        Lend -> (pc, map)
+      | Lend -> (pc, map)
       | Llabel lbl -> Hashtbl.add map lbl pc; fill_map pc instr.next
-      | op -> fill_map (pc + instr_size op) instr.next
+      | op -> fill_map (pc + T.instr_size op) instr.next
     in fill_map 0 code
 
   let branch_overflows map pc_branch lbl_dest max_branch_offset =
@@ -58,7 +63,8 @@ end) = struct
       match lbl with
       | None -> next
       | Some l ->
-        instr_cons (Lcondbranch(Iinttest_imm(Isigned Ceq, n), l)) arg [||] next
+        instr_cons (Lcondbranch (Iinttest_imm (Isigned Ceq, n), l))
+          arg [||] next
     in
     let rec fixup did_fix pc instr =
       if not (instr_overflows codesize instr map codesize pc) then
@@ -67,14 +73,16 @@ end) = struct
         match instr.desc with
         | Lend -> did_fix
         | Lop (Ialloc num_words) ->
-          let desc, size =
           instr.desc <- T.code_for_far_allocation ~num_words;
           fixup true (pc + T.instr_size instr.desc) instr.next
         | Lop (Iintop Icheckbound) ->
+          assert false
         | Lop (Iintop_imm (Icheckbound, _)) ->
+          assert false
         | Lop (Ispecific (Ishiftcheckbound _)) ->
+          assert false
         | Lcondbranch (test, lbl) ->
-          let existing_size = T.instr_size instr.desc in
+          let old_size = T.instr_size instr.desc in
           let lbl2 = new_label() in
           let new_desc0 = Lbranch lbl in
           let new_desc1 = Llabel lbl2 in
@@ -87,21 +95,8 @@ end) = struct
             T.instr_size instr.desc + T.instr_size new_desc0
               + T.instr_size new_desc1
           in
-          fixup true (pc - existing_size + new_size) instr.next
+          fixup true (pc - old_size + new_size) instr.next
         | Lcondbranch3 (lbl0, lbl1, lbl2) ->
-
-        | _ ->
-          Misc.fatal_error "Unsupported instruction for branch relaxation"
-    in
-    fixup false 0 code
-
-
-
-      | Lcondbranch(test, lbl) when branch_overflows instr map pc lbl ->
-      | Lcondbranch3(lbl0, lbl1, lbl2)
-        when opt_branch_overflows map pc lbl0
-          || opt_branch_overflows map pc lbl1
-          || opt_branch_overflows map pc lbl2 ->
           let cont =
             expand_optbranch lbl0 0 instr.arg
               (expand_optbranch lbl1 1 instr.arg
@@ -109,8 +104,10 @@ end) = struct
           instr.desc <- cont.desc;
           instr.next <- cont.next;
           fixup true pc instr
-      | op ->
-          fixup did_fix (pc + instr_size op) instr.next
+        | _ ->
+          Misc.fatal_error "Unsupported instruction for branch relaxation"
+    in
+    fixup false 0 code
 
   (* Iterate branch expansion till all conditional branches are OK *)
 
