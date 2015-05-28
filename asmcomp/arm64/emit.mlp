@@ -432,7 +432,7 @@ let assembly_code_for_allocation i ~n ~far =
     `	sub	{emit_reg reg_alloc_ptr}, {emit_reg reg_alloc_ptr}, #{emit_int n}\n`;
     `	cmp	{emit_reg reg_alloc_ptr}, {emit_reg reg_alloc_limit}\n`;
     `	add	{emit_reg i.res.(0)}, {emit_reg reg_alloc_ptr}, #8\n`;
-    if not fast then begin
+    if not far then begin
       `	b.lo	{emit_label lbl_call_gc}\n`
     end else begin
       let lbl = new_label () in
@@ -579,7 +579,7 @@ let emit_instr i =
         let lbl2 = new_label () in
         `	cmp	{emit_reg i.arg.(0)}, {emit_reg i.arg.(1)}\n`;
         `	b.ge	{emit_label lbl2}\n`;
-        `	b	{emit_lbl lbl}\n`;
+        `	b	{emit_label lbl}\n`;
         `{emit_label lbl2}:\n`;
     | Lop(Iintop_imm(Icheckbound, n)) ->
         let lbl = bound_error_label i.dbg in
@@ -588,9 +588,9 @@ let emit_instr i =
     | Lop(Ispecific(Ifar_intop_imm_checkbound bound)) ->
         let lbl = bound_error_label i.dbg in
         let lbl2 = new_label () in
-        `	cmp	{emit_reg i.arg.(0)}, #{emit_int n}\n`;
+        `	cmp	{emit_reg i.arg.(0)}, #{emit_int bound}\n`;
         `	b.ge	{emit_label lbl2}\n`;
-        `	b	{emit_lbl lbl}\n`;
+        `	b	{emit_label lbl}\n`;
         `{emit_label lbl2}:\n`;
     | Lop(Ispecific(Ishiftcheckbound shift)) ->
         let lbl = bound_error_label i.dbg in
