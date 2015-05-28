@@ -303,17 +303,94 @@ let emit_load_symbol_addr dst s =
   end
 
 module BR = Branch_relaxation.Make (struct
+  (* CR-someday mshinwell: B and BL have +/- 128Mb ranges; for the moment we
+     assume we will never exceed this. *)
+
   type cond_branch = TB | CB | Bcc
 
   let all_cond_branches = [TB; CB; Bcc]
 
-  let max_displacement_in_bits = function
-    | TB -> 14
-    | CB -> 19
-    | Bcc -> 19
+  (* AArch64 instructions are 32 bits wide, so "word" in this module means
+     32 bits. *)
 
-  let max_displacement_in_words branch =
-    ((1 lsl (max_displacement_in_bits branch - 1)) - 1) * 4
+  let max_displacement_in_words = function
+    | TB -> 32 * 1024 / 4  (* +/- 32Kb *)
+    | CB | Bcc -> 1 * 1024 * 1024 / 4  (* +/- 1Mb *)
+
+  let epilogue_size () =
+    if !contains_calls then 3 else 2
+
+  let instr_size = function
+    (* CR mshinwell: this is an initial guesstimate, we should check these.
+       We should also think about the call-GC site measurement. *)
+    | Lend -> 0
+    | Lop (Imove | Ispill | Ireload) -> 1
+    (* CR mshinwell: inaccurate *)
+    | Lop (Iconst_int _ | Iconst_blockheader _) -> 4
+    | Lop (Iconst_float _) -> 2
+    | Lop (Iconst_symbol _) -> 2
+    | Lop (Icall_ind) -> 1
+    | Lop (Icall_imm _) -> 1
+    | Lop (Itailcall_ind) -> epilogue_size ()
+    | Lop (Itailcall_imm s) ->
+      if s = !function_name then 1 else epilogue_size ()
+    | Lop (Iextcall (_, false)) -> 1
+    | Lop (Iextcall (_, true)) -> 3
+    | Lop (Istackoffset _) -> 1
+    | Lop (Iload (Single, _)) -> 2
+    | Lop (Iload _) -> 1
+    | Lop (Istore (size, addr, _)) ->
+      let based = match addr with Iindexed -> 0 | Ibased -> 1 in
+      based + begin match size with Single -> 2 | _ -> 1 end
+    | Lop (Ialloc _) -> if !fastcode_flag then 4 else 3
+    | Lop (Ispecific (Ifar_alloc _)) -> if !fastcode_flag then 5 else 3
+    | Lop (Iintop (Icomp _)) -> 2
+    | Lop (Iintop_imm (Icomp _, _)) -> 2
+    | Lop (Iintop Icheckbound) -> 2
+    | Lop (Ispecific Ifar_intop_checkbound) -> 3
+    | Lop (Iintop_imm (Icheckbound, _)) -> 2
+    | Lop (Ispecific (Ifar_intop_imm_checkbound _)) -> 3
+    | Lop (Ispecific (Ishiftcheckbound _)) -> 2
+    | Lop (Ispecific (Ifar_shiftcheckbound _)) -> 3
+    | Lop (Iintop Imod) -> 2
+    | Lop (Iintop Imulh) -> 1
+    | Lop (Iintop _) -> 1
+    | Lop (Iintop_imm _) -> 1
+    | Lop (Ifloatofint | Iintoffloat | Iabsf | Inegf | Ispecific Isqrtf) -> 1
+    | Lop (Iaddf | Isubf | Imulf | Idivf | Ispecific Inegmulf) -> 1
+    | Lop (Ispecific (Imuladdf | Inegmuladdf | Imulsubf | Inegmulsubf)) -> 1
+    | Lop (Ispecific (Ishiftarith _)) -> 1
+    | Lop (Ispecific (Imuladd | Imulsub)) -> 1
+    | Lop (Ispecific (Ibswap 16)) -> 2
+    | Lop (Ispecific (Ibswap _)) -> 1
+    | Lreloadretaddr -> 0
+    | Lreturn -> epilogue_size ()
+    | Llabel _ -> 0
+    | Lbranch _ -> 1
+    | Lcondbranch (tst, _) ->
+      begin match tst with
+      | Itruetest -> 1
+      | Ifalsetest -> 1
+      | Iinttest _ -> 2
+      | Iinttest_imm _ -> 2
+      | Ifloattest _ -> 2
+      | Ioddtest -> 1
+      | Ieventest -> 1
+      end
+    | Lcondbranch3 (lbl0, lbl1, lbl2) ->
+      1 + begin match lbl0 with None -> 0 | Some _ -> 1 end
+        + begin match lbl1 with None -> 0 | Some _ -> 1 end
+        + begin match lbl2 with None -> 0 | Some _ -> 1 end
+    | Lswitch jumptbl -> 3 + Array.length jumptbl
+    | Lsetuptrap _ -> 2
+    | Lpushtrap -> 3
+    | Lpoptrap -> 1
+    | Lraise k ->
+      begin match !Clflags.debug, k with
+      | true, (Lambda.Raise_regular | Lambda.Raise_reraise) -> 1
+      | false, _
+      | true, Lambda.Raise_notrace -> 4
+      end
 
   let classify_instr = function
     | Lop (Ialloc n) -> Some Bcc
