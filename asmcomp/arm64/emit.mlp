@@ -690,7 +690,7 @@ let fundecl fundecl =
     `	str	x30, [sp, #{emit_int (n-8)}]\n`
   end;
   `{emit_label !tailrec_entry_point}:\n`;
-  BR.fixup_branches fundecl.fun_body;
+  BR.relax fundecl.fun_body;
   emit_all fundecl.fun_body;
   List.iter emit_call_gc !call_gc_sites;
   List.iter emit_call_bound_error !bound_error_sites;

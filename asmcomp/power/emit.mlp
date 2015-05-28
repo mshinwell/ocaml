@@ -796,7 +796,7 @@ let fundecl fundecl =
       `	addi	{emit_gpr 1}, {emit_gpr 1}, {emit_int(-n)}\n`
   end;
   `{emit_label !tailrec_entry_point}:\n`;
-  BR.fixup_branches fundecl.fun_body;
+  BR.relax fundecl.fun_body;
   emit_all fundecl.fun_body;
   (* Emit the glue code to call the GC *)
   if !call_gc_label > 0 then begin

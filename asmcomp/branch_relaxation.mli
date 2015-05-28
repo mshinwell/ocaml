@@ -24,5 +24,5 @@ module Make (T : sig
 
   val code_for_far_allocation : num_words:int -> Linearize.instruction_desc
 end) : sig
-  val fixup_branches : Linearize.instruction -> unit
+  val relax : Linearize.instruction -> unit
 end
