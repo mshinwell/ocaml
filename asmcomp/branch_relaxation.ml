@@ -78,50 +78,45 @@ end) = struct
           arg [||] next
     in
     let rec fixup did_fix pc instr =
-      if not (instr_overflows codesize instr map pc) then
-        fixup did_fix (pc + T.instr_size instr.desc) instr.next
-      else
-        match instr.desc with
-        | Lend -> did_fix
-        | Lop (Ialloc num_words) ->
-          instr.desc <- T.relax_allocation ~num_words;
-          fixup true (pc + T.instr_size instr.desc) instr.next
-        | Lop (Iintop Icheckbound) ->
-          instr.desc <- T.relax_intop_checkbound ();
-          fixup true (pc + T.instr_size instr.desc) instr.next
-        | Lop (Iintop_imm (Icheckbound, bound)) ->
-          instr.desc <- T.relax_intop_imm_checkbound ~bound;
-          fixup true (pc + T.instr_size instr.desc) instr.next
-        | Lop (Ispecific specific) ->
-          instr.desc <- T.relax_specific_op specific;
-          fixup true (pc + T.instr_size instr.desc) instr.next
-        | Lcondbranch (test, lbl) ->
-          let lbl2 = new_label() in
-          let new_desc0 = Lbranch lbl in
-          let new_desc1 = Llabel lbl2 in
-          let cont =
-            instr_cons new_desc0 [||] [||]
-              (instr_cons new_desc1 [||] [||] instr.next)
-          in
-          instr.desc <- Lcondbranch (invert_test test, lbl2);
-          instr.next <- cont;
-          let new_size =
-            T.instr_size instr.desc + T.instr_size new_desc0
-              + T.instr_size new_desc1
-          in
-          (* CR mshinwell: check this size calculation matches the old code *)
-          fixup true (pc + new_size) instr.next
-        | Lcondbranch3 (lbl0, lbl1, lbl2) ->
-          let cont =
-            expand_optbranch lbl0 0 instr.arg
-              (expand_optbranch lbl1 1 instr.arg
-                (expand_optbranch lbl2 2 instr.arg instr.next))
-          in
-          instr.desc <- cont.desc;
-          instr.next <- cont.next;
-          fixup true pc instr
-        | _ ->
-          Misc.fatal_error "Unsupported instruction for branch relaxation"
+      match instr.desc with
+      | Lend -> did_fix
+      | _ ->
+        if not (instr_overflows codesize instr map pc) then
+          fixup did_fix (pc + T.instr_size instr.desc) instr.next
+        else
+          match instr.desc with
+          | Lop (Ialloc num_words) ->
+            instr.desc <- T.relax_allocation ~num_words;
+            fixup true (pc + T.instr_size instr.desc) instr.next
+          | Lop (Iintop Icheckbound) ->
+            instr.desc <- T.relax_intop_checkbound ();
+            fixup true (pc + T.instr_size instr.desc) instr.next
+          | Lop (Iintop_imm (Icheckbound, bound)) ->
+            instr.desc <- T.relax_intop_imm_checkbound ~bound;
+            fixup true (pc + T.instr_size instr.desc) instr.next
+          | Lop (Ispecific specific) ->
+            instr.desc <- T.relax_specific_op specific;
+            fixup true (pc + T.instr_size instr.desc) instr.next
+          | Lcondbranch (test, lbl) ->
+            let lbl2 = new_label() in
+            let cont =
+              instr_cons (Lbranch lbl) [||] [||]
+                (instr_cons (Llabel lbl2) [||] [||] instr.next)
+            in
+            instr.desc <- Lcondbranch (invert_test test, lbl2);
+            instr.next <- cont;
+            fixup true (pc + T.instr_size instr.desc) instr.next
+          | Lcondbranch3 (lbl0, lbl1, lbl2) ->
+            let cont =
+              expand_optbranch lbl0 0 instr.arg
+                (expand_optbranch lbl1 1 instr.arg
+                  (expand_optbranch lbl2 2 instr.arg instr.next))
+            in
+            instr.desc <- cont.desc;
+            instr.next <- cont.next;
+            fixup true pc instr
+          | _ ->
+            Misc.fatal_error "Unsupported instruction for branch relaxation"
     in
     fixup false 0 code
 
