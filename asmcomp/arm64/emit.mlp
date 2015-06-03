@@ -231,6 +231,32 @@ let emit_intconst dst n =
   in
     if n < 0n then emit_neg true 48 else emit_pos true 48
 
+let num_instructions_for_intconst n =
+  let num_instructions = ref 0 in
+  let rec count_pos first shift =
+    if shift < 0 then begin
+      if first then incr num_instructions
+    end else begin
+      let s = Nativeint.(logand (shift_right_logical n shift) 0xFFFFn) in
+      if s = 0n then count_pos first (shift - 16) else begin
+        incr num_instructions;
+        count_pos false (shift - 16)
+      end
+    end
+  and count_neg first shift =
+    if shift < 0 then begin
+      if first then incr num_instructions
+    end else begin
+      let s = Nativeint.(logand (shift_right_logical n shift) 0xFFFFn) in
+      if s = 0xFFFFn then count_neg first (shift - 16) else begin
+        incr num_instructions;
+        count_neg false (shift - 16)
+      end
+    end
+  in
+  if n < 0n then count_neg true 48 else count_pos true 48;
+  !num_instructions
+
 (* Recognize float constants appropriate for FMOV dst, #fpimm instruction:
    "a normalized binary floating point encoding with 1 sign bit, 4
     bits of fraction and a 3-bit exponent" *)
@@ -304,29 +330,70 @@ let emit_load_symbol_addr dst s =
 
 module BR = Branch_relaxation.Make (struct
   (* CR-someday mshinwell: B and BL have +/- 128Mb ranges; for the moment we
-     assume we will never exceed this. *)
+     assume we will never exceed this.  It would seem to be most likely to
+     occur for branches between functions; in this case, the linker should be
+     able to insert veneers anyway.  (See section 4.6.7 of the document
+     "ELF for the ARM 64-bit architecture (AArch64)".) *)
 
-  type cond_branch = TB | CB | Bcc
+  module Cond_branch = struct
+    type t = TB | CB | Bcc
 
-  let all_cond_branches = [TB; CB; Bcc]
+    let all = [TB; CB; Bcc]
 
-  (* AArch64 instructions are 32 bits wide, so "word" in this module means
-     32 bits. *)
+    (* AArch64 instructions are 32 bits wide, so [Distance.t] in this module
+       means units of 32-bit words. *)
+    let max_displacement = function
+      | TB -> 32 * 1024 / 4  (* +/- 32Kb *)
+      | CB | Bcc -> 1 * 1024 * 1024 / 4  (* +/- 1Mb *)
 
-  let max_displacement_in_words = function
-    | TB -> 32 * 1024 / 4  (* +/- 32Kb *)
-    | CB | Bcc -> 1 * 1024 * 1024 / 4  (* +/- 1Mb *)
+    let classify_instr = function
+      | Lop (Ialloc n) -> Some Bcc
+      | Lop (Iintop Icheckbound) -> Some Bcc
+      | Lop (Iintop_imm (Icheckbound, _)) -> Some Bcc
+      | Lop (Ispecific (Ishiftcheckbound _)) -> Some Bcc
+      (* The various "far" variants in [specific_operation] don't need to
+         return [Some] here, since their code sequences never contain any
+         conditional branches that might need relaxing. *)
+      | Lcondbranch (Itruetest, _) -> Some CB
+      | Lcondbranch (Ifalsetest, _) -> Some CB
+      | Lcondbranch (Iinttest _, _) -> Some Bcc
+      | Lcondbranch (Iinttest_imm _, _) -> Some Bcc
+      | Lcondbranch (Ifloattest _, _) -> Some Bcc
+      | Lcondbranch (Ioddtest, _) -> Some TB
+      | Lcondbranch (Ieventest, _) -> Some TB
+      | Lcondbranch3 _ -> Some Bcc
+      | _ -> None
+  end
+
+  module Out_of_line_code = struct
+    type t = Call_gc | Bounds_check
+
+    let classify_specific_operation = function
+      | Ifar_alloc -> Some Call_gc
+      | Ishiftcheckbound _
+      | Ifar_intop_checkbound
+      | Ifar_intop_imm_checkbound _
+      | Ifar_shiftcheckbound _ -> Some Bounds_check
+      | _ -> None
+
+    let max_size = function
+      | Call_gc -> 2
+      | Bounds_check -> 1
+  end
+
+  let out_of_line_code_size = `Variable
+
+  (* CR mshinwell: I'm not sure if this should be zero or one *)
+  let offset_pc_at_branch = 0
 
   let epilogue_size () =
     if !contains_calls then 3 else 2
 
   let instr_size = function
-    (* CR mshinwell: this is an initial guesstimate, we should check these.
-       We should also think about the call-GC site measurement. *)
     | Lend -> 0
     | Lop (Imove | Ispill | Ireload) -> 1
-    (* CR mshinwell: inaccurate *)
-    | Lop (Iconst_int _ | Iconst_blockheader _) -> 4
+    | Lop (Iconst_int n | Iconst_blockheader n) ->
+      num_instructions_for_int_const n
     | Lop (Iconst_float _) -> 2
     | Lop (Iconst_symbol _) -> 2
     | Lop (Icall_ind) -> 1
@@ -336,14 +403,17 @@ module BR = Branch_relaxation.Make (struct
       if s = !function_name then 1 else epilogue_size ()
     | Lop (Iextcall (_, false)) -> 1
     | Lop (Iextcall (_, true)) -> 3
-    | Lop (Istackoffset _) -> 1
-    | Lop (Iload (Single, _)) -> 2
-    | Lop (Iload _) -> 1
-    | Lop (Istore (size, addr, _)) ->
+    | Lop (Istackoffset _) -> 2
+    | Lop (Iload (size, addr)) | Lop (Istore (size, addr, _)) ->
       let based = match addr with Iindexed _ -> 0 | Ibased _ -> 1 in
       based + begin match size with Single -> 2 | _ -> 1 end
-    | Lop (Ialloc _) -> if !fastcode_flag then 4 else 3
-    | Lop (Ispecific (Ifar_alloc _)) -> if !fastcode_flag then 5 else 3
+    | Lop (Ialloc _) when !fastcode_flag -> 4
+    | Lop (Ispecific (Ifar_alloc _)) when !fastcode_flag -> 5
+    | Lop (Ialloc num_words) | Lop (Ispecific (Ifar_alloc num_words)) ->
+      begin match num_words with
+      | 16 | 24 | 32 -> 1
+      | _ -> 1 + num_instructions_for_int_const num_words
+      end
     | Lop (Iintop (Icomp _)) -> 2
     | Lop (Iintop_imm (Icomp _, _)) -> 2
     | Lop (Iintop Icheckbound) -> 2
@@ -391,21 +461,6 @@ module BR = Branch_relaxation.Make (struct
       | false, _
       | true, Lambda.Raise_notrace -> 4
       end
-
-  let classify_instr = function
-    | Lop (Ialloc n) -> Some Bcc
-    | Lop (Iintop Icheckbound) -> Some Bcc
-    | Lop (Iintop_imm (Icheckbound, _)) -> Some Bcc
-    | Lop (Ispecific (Ishiftcheckbound _)) -> Some Bcc
-    | Lcondbranch (Itruetest, _) -> Some CB
-    | Lcondbranch (Ifalsetest, _) -> Some CB
-    | Lcondbranch (Iinttest _, _) -> Some Bcc
-    | Lcondbranch (Iinttest_imm _, _) -> Some Bcc
-    | Lcondbranch (Ifloattest _, _) -> Some Bcc
-    | Lcondbranch (Ioddtest, _) -> Some TB
-    | Lcondbranch (Ieventest, _) -> Some TB
-    | Lcondbranch3 _ -> Some Bcc
-    | _ -> None
 
   let relax_allocation ~num_words =
     Lop (Ispecific (Ifar_alloc num_words))
