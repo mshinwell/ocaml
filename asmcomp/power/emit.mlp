@@ -309,6 +309,40 @@ let defined_functions = ref StringSet.empty
 let call_gc_label = ref 0
 
 module BR = Branch_relaxation.Make (struct
+  module Cond_branch = struct
+    type t = Branch
+
+    let all = [Branch]
+
+    let max_displacement = function
+      (* 14-bit signed offset in words.  Remember to cut some slack
+         for multi-word instructions where the branch can be anywhere in
+         the middle.  12 words of slack is plenty. *)
+      | Branch -> 8192 - 12
+
+    let classify_instr = function
+      | Lop (Ialloc _)
+      (* [Ialloc_far] does not need to be here, since its code sequence
+         never involves any conditional branches that might need relaxing. *)
+      | Lcondbranch _
+      | Lcondbranch3 _ -> Some Branch
+      | _ -> None
+  end
+
+  module Out_of_line_code = struct
+    type t = Call_gc | Bounds_check
+
+    let classify_specific_op = function
+      | Ialloc_far -> Some Call_gc
+      | Imultaddf | Imultsubf -> None
+
+    (* Should never be called, since we specify [`Constant] below. *)
+    let max_size _ = Misc.fatal_error "Out_of_line_code.max_size"
+  end
+
+  let out_of_line_code_size = `Constant 0
+  let offset_pc_at_branch = 1
+
   let load_store_size = function
     | Ibased(s, d) -> 2
     | Iindexed ofs -> if is_immediate ofs then 1 else 3
@@ -359,25 +393,10 @@ module BR = Branch_relaxation.Make (struct
     | Lpoptrap -> 2
     | Lraise _ -> 6
 
-  type cond_branch = Branch
+  let relax_allocation ~num_words = Lop (Ispecific (Ialloc_far num_words))
 
-  let all_cond_branches = [Branch]
-
-  let max_displacement_in_words = function
-    (* 14-bit signed offset in words.  Remember to cut some slack
-       for multi-word instructions where the branch can be anywhere in
-       the middle.  12 words of slack is plenty. *)
-    | Branch -> 8192 - 12
-
-  let classify_instr = function
-    | Lop (Ialloc _) -> Some Branch
-    | Lcondbranch _ -> Some Branch
-    | Lcondbranch3 _ -> Some Branch
-    | _ -> None
-
-  let relax_allocation ~num_words =
-    Lop (Ispecific (Ialloc_far num_words))
-
+  (* [classify_addr], above, never identifies these instructions as needing
+     relaxing.  As such, these functions should never be called. *)
   let relax_specific_op _ = assert false
   let relax_intop_checkbound () = assert false
   let relax_intop_imm_checkbound ~bound:_ = assert false
