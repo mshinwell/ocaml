@@ -318,7 +318,7 @@ module BR = Branch_relaxation.Make (struct
 
     let max_displacement = function
       (* 14-bit signed offset in words. *)
-      | Branch -> 8192 - 12
+      | Branch -> 8192
 
     let classify_instr = function
       | Lop (Ialloc _)
