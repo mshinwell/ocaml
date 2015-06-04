@@ -343,7 +343,7 @@ let num_call_gc_and_check_bound_points instr =
       loop instr.next (call_gc, check_bound + 1)
     (* The following four should never be seen, since this function is run
        before branch relaxation. *)
-    | Lop (Ispecific Ifar_alloc)
+    | Lop (Ispecific (Ifar_alloc _))
     | Lop (Ispecific Ifar_intop_checkbound)
     | Lop (Ispecific (Ifar_intop_imm_checkbound _))
     | Lop (Ispecific (Ifar_shiftcheckbound _)) -> assert false
@@ -420,7 +420,7 @@ module BR = Branch_relaxation.Make (struct
     | Lend -> 0
     | Lop (Imove | Ispill | Ireload) -> 1
     | Lop (Iconst_int n | Iconst_blockheader n) ->
-      num_instructions_for_int_const n
+      num_instructions_for_intconst n
     | Lop (Iconst_float _) -> 2
     | Lop (Iconst_symbol _) -> 2
     | Lop (Icall_ind) -> 1
@@ -439,7 +439,7 @@ module BR = Branch_relaxation.Make (struct
     | Lop (Ialloc num_words) | Lop (Ispecific (Ifar_alloc num_words)) ->
       begin match num_words with
       | 16 | 24 | 32 -> 1
-      | _ -> 1 + num_instructions_for_int_const num_words
+      | _ -> 1 + num_instructions_for_intconst (Nativeint.of_int num_words)
       end
     | Lop (Iintop (Icomp _)) -> 2
     | Lop (Iintop_imm (Icomp _, _)) -> 2
@@ -906,7 +906,7 @@ let fundecl fundecl =
   emit_all fundecl.fun_body;
   List.iter emit_call_gc !call_gc_sites;
   List.iter emit_call_bound_error !bound_error_sites;
-  assert (List.length !call_gc_sizes = num_call_gc);
+  assert (List.length !call_gc_sites = num_call_gc);
   assert (List.length !bound_error_sites = num_check_bound);
   cfi_endproc();
   `	.type	{emit_symbol fundecl.fun_name}, %function\n`;
