@@ -51,8 +51,9 @@ module Make (T : Branch_relaxation_intf.S) = struct
       | Lop (Iintop Icheckbound)
       | Lop (Iintop_imm (Icheckbound, _))
       | Lop (Ispecific _) ->
-        (* We assume that all of these may branch to an out-of-line code
-           block. *)
+        (* We assume that any branches eligible for relaxation generated
+           by these instructions only branch forward.  We further assume
+           that any of these may branch to an out-of-line code block. *)
         code_size + max_out_of_line_code_offset - pc >= max_branch_offset
       | Lcondbranch (_, lbl) ->
         branch_overflows map pc lbl max_branch_offset
