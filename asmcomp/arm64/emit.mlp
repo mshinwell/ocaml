@@ -351,7 +351,8 @@ let num_call_gc_and_check_bound_points instr =
   in
   let call_gc, check_bound = loop instr (0, 0) in
   let call_gc =
-    (* When not in "fastcode" mode, there are actually never any call GC sites. *)
+    (* When not in "fastcode" mode, there are actually never any call GC
+       sites. *)
     if !fastcode_flag then call_gc else 0
   in
   let check_bound =
@@ -390,26 +391,26 @@ module BR = Branch_relaxation.Make (struct
 
     let all = [TB; CB; Bcc]
 
-    (* AArch64 instructions are 32 bits wide, so [Distance.t] in this module
+    (* AArch64 instructions are 32 bits wide, so [distance] in this module
        means units of 32-bit words. *)
     let max_displacement = function
       | TB -> 32 * 1024 / 4  (* +/- 32Kb *)
       | CB | Bcc -> 1 * 1024 * 1024 / 4  (* +/- 1Mb *)
 
     let classify_instr = function
-      | Lop (Ialloc n) -> Some Bcc
-      | Lop (Iintop Icheckbound) -> Some Bcc
-      | Lop (Iintop_imm (Icheckbound, _)) -> Some Bcc
+      | Lop (Ialloc _)
+      | Lop (Iintop Icheckbound)
+      | Lop (Iintop_imm (Icheckbound, _))
       | Lop (Ispecific (Ishiftcheckbound _)) -> Some Bcc
       (* The various "far" variants in [specific_operation] don't need to
          return [Some] here, since their code sequences never contain any
          conditional branches that might need relaxing. *)
-      | Lcondbranch (Itruetest, _) -> Some CB
+      | Lcondbranch (Itruetest, _)
       | Lcondbranch (Ifalsetest, _) -> Some CB
-      | Lcondbranch (Iinttest _, _) -> Some Bcc
-      | Lcondbranch (Iinttest_imm _, _) -> Some Bcc
+      | Lcondbranch (Iinttest _, _)
+      | Lcondbranch (Iinttest_imm _, _)
       | Lcondbranch (Ifloattest _, _) -> Some Bcc
-      | Lcondbranch (Ioddtest, _) -> Some TB
+      | Lcondbranch (Ioddtest, _)
       | Lcondbranch (Ieventest, _) -> Some TB
       | Lcondbranch3 _ -> Some Bcc
       | _ -> None
