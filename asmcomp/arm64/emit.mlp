@@ -350,6 +350,10 @@ let num_call_gc_and_check_bound_points instr =
     | _ -> loop instr.next totals
   in
   let call_gc, check_bound = loop instr (0, 0) in
+  let call_gc =
+    (* When not in "fastcode" mode, there are actually never any call GC sites. *)
+    if !fastcode_flag then call_gc else 0
+  in
   let check_bound =
     (* When not in debug mode, there is at most one check-bound point. *)
     if check_bound < 1 then check_bound
