@@ -309,6 +309,8 @@ let defined_functions = ref StringSet.empty
 let call_gc_label = ref 0
 
 module BR = Branch_relaxation.Make (struct
+  type distance = int
+
   module Cond_branch = struct
     type t = Branch
 

@@ -379,6 +379,8 @@ module BR = Branch_relaxation.Make (struct
      able to insert veneers anyway.  (See section 4.6.7 of the document
      "ELF for the ARM 64-bit architecture (AArch64)".) *)
 
+  type distance = int
+
   module Cond_branch = struct
     type t = TB | CB | Bcc
 
