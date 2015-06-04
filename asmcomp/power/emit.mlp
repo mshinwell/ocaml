@@ -329,18 +329,6 @@ module BR = Branch_relaxation.Make (struct
       | _ -> None
   end
 
-  module Out_of_line_code = struct
-    type t = Call_gc | Bounds_check
-
-    let classify_specific_op = function
-      | Ialloc_far -> Some Call_gc
-      | Imultaddf | Imultsubf -> None
-
-    (* Should never be called, since we specify [`Constant] below. *)
-    let max_size _ = Misc.fatal_error "Out_of_line_code.max_size"
-  end
-
-  let out_of_line_code_size = `Constant 0
   let offset_pc_at_branch = 1
 
   let load_store_size = function
@@ -538,6 +526,8 @@ let rec emit_instr i dslot =
         `	addi	{emit_reg i.res.(0)}, {emit_gpr 31}, {emit_int size_addr}\n`;
         `	bltl	{emit_label !call_gc_label}\n`;
         record_frame i.live Debuginfo.none
+    | Lop(Ispecific Icall_gc) ->
+
     | Lop(Ispecific(Ialloc_far n)) ->
         if !call_gc_label = 0 then call_gc_label := new_label();
         let lbl = new_label() in
@@ -821,7 +811,10 @@ let fundecl fundecl =
       `	addi	{emit_gpr 1}, {emit_gpr 1}, {emit_int(-n)}\n`
   end;
   `{emit_label !tailrec_entry_point}:\n`;
-  BR.relax fundecl.fun_body;
+  (* On this target, there is at most one "out of line" code block per
+     function: a single "call GC" point.  It comes immediately after the
+     function's body. *)
+  BR.relax fundecl.fun_body ~max_out_of_line_code_offset:0;
   emit_all fundecl.fun_body;
   (* Emit the glue code to call the GC *)
   if !call_gc_label > 0 then begin

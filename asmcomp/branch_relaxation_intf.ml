@@ -35,25 +35,6 @@ module type S = sig
     val classify_instr : Linearize.instruction_desc -> t option
   end
 
-  module Out_of_line_code : sig
-    (* Modelling of blocks of out-of-line code emitted immediately and
-       contiguously after a function body itself. *)
-
-    type t = Call_gc | Check_bound
-
-    (* Determine whether a specific operation may branch to an
-       out-of-line code block. *)
-    val classify_specific_op : Arch.specific_operation -> t option
-
-    (* The maximum size of an out-of-line code block.  This is never called
-       if [out_of_line_code_size], below, is [`Constant]. *)
-    val max_size : t -> distance
-  end
-
-  (* Whether the target has a constant out-of-line code block size or if
-     we need to calculate it from the instruction stream. *)
-  val out_of_line_code_size : [ `Constant of distance | `Variable ]
-
   (* The value to be added to the program counter (in [distance] units)
      when it is at a branch instruction, prior to calculating the distance
      to a branch target. *)
@@ -63,9 +44,8 @@ module type S = sig
   val instr_size : Linearize.instruction_desc -> distance
 
   (* Insertion of target-specific code to relax operations that cannot be
-     relaxed generically.  For efficiency and simplicity, these relaxation
-     operations are not allowed to change the number of call GC or bounds
-     check points. *)
+     relaxed generically.  It is assumed that these rewrites do not change
+     the size of out-of-line code (cf. branch_relaxation.mli). *)
   val relax_allocation : num_words:int -> Linearize.instruction_desc
   val relax_intop_checkbound : unit -> Linearize.instruction_desc
   val relax_intop_imm_checkbound : bound:int -> Linearize.instruction_desc

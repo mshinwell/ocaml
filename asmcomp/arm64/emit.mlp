@@ -328,6 +328,50 @@ let emit_load_symbol_addr dst s =
     `	ldr	{emit_reg dst}, [{emit_reg dst}, #:got_lo12:{emit_symbol s}]\n`
   end
 
+(* The following functions are used for calculating the sizes of the
+   call GC and bounds check points emitted out-of-line from the function
+   body.  See branch_relaxation.mli. *)
+
+let num_call_gc_and_check_bound_points instr =
+  let rec loop instr ((call_gc, check_bound) as totals) =
+    match instr.desc with
+    | Lend -> totals
+    | Lop (Ialloc _) -> loop instr.next (call_gc + 1, check_bound)
+    | Lop (Iintop Icheckbound)
+    | Lop (Iintop_imm (Icheckbound, _))
+    | Lop (Ispecific (Ishiftcheckbound _)) ->
+      loop instr.next (call_gc, check_bound + 1)
+    (* The following four should never be seen, since this function is run
+       before branch relaxation. *)
+    | Lop (Ispecific Ifar_alloc)
+    | Lop (Ispecific Ifar_intop_checkbound)
+    | Lop (Ispecific (Ifar_intop_imm_checkbound _))
+    | Lop (Ispecific (Ifar_shiftcheckbound _)) -> assert false
+    | _ -> loop instr.next totals
+  in
+  let call_gc, check_bound = loop instr (0, 0) in
+  let check_bound =
+    (* When not in debug mode, there is at most one check-bound point. *)
+    if check_bound < 1 then check_bound
+    else if not !Clflags.debug then 1
+    else check_bound
+  in
+  call_gc, check_bound
+
+let max_out_of_line_code_offset instr ~num_call_gc ~num_check_bound =
+  if num_call_gc < 1 && num_check_bound < 1 then 0
+  else
+    let size_of_call_gc = 2 in
+    let size_of_check_bound = 1 in
+    let size_of_last_thing =
+      (* Call-GC points come before check-bound points. *)
+      if num_check_bound > 1 then size_of_check_bound else size_of_call_gc
+    in
+    let total_size =
+      size_of_call_gc*num_call_gc + size_of_check_bound*num_check_bound
+    in
+    total_size - size_of_last_thing
+
 module BR = Branch_relaxation.Make (struct
   (* CR-someday mshinwell: B and BL have +/- 128Mb ranges; for the moment we
      assume we will never exceed this.  It would seem to be most likely to
@@ -365,25 +409,6 @@ module BR = Branch_relaxation.Make (struct
       | _ -> None
   end
 
-  module Out_of_line_code = struct
-    type t = Call_gc | Bounds_check
-
-    let classify_specific_operation = function
-      | Ifar_alloc -> Some Call_gc
-      | Ishiftcheckbound _
-      | Ifar_intop_checkbound
-      | Ifar_intop_imm_checkbound _
-      | Ifar_shiftcheckbound _ -> Some Bounds_check
-      | _ -> None
-
-    let max_size = function
-      | Call_gc -> 2
-      | Bounds_check -> 1
-  end
-
-  let out_of_line_code_size = `Variable
-
-  (* CR mshinwell: I'm not sure if this should be zero or one *)
   let offset_pc_at_branch = 0
 
   let epilogue_size () =
@@ -617,8 +642,10 @@ let emit_instr i =
         | Word | Double | Double_u ->
             `	str	{emit_reg src}, {emit_addressing addr base}\n`
         end
-    | Lop(Ialloc n) -> assembly_code_for_allocation i ~n ~far:false
-    | Lop(Ispecific (Ifar_alloc n)) -> assembly_code_for_allocation i ~n ~far:true
+    | Lop(Ialloc n) ->
+        assembly_code_for_allocation i ~n ~far:false
+    | Lop(Ispecific (Ifar_alloc n)) ->
+        assembly_code_for_allocation i ~n ~far:true
     | Lop(Iintop(Icomp cmp)) ->
         `	cmp	{emit_reg i.arg.(0)}, {emit_reg i.arg.(1)}\n`;
         `	cset	{emit_reg i.res.(0)}, {emit_string (name_for_comparison cmp)}\n`
@@ -866,10 +893,19 @@ let fundecl fundecl =
     `	str	x30, [sp, #{emit_int (n-8)}]\n`
   end;
   `{emit_label !tailrec_entry_point}:\n`;
-  BR.relax fundecl.fun_body;
+  let num_call_gc, num_check_bound =
+    num_call_gc_and_check_bound_points fundecl.fun_body
+  in
+  let max_out_of_line_code_offset =
+    max_out_of_line_code_offset fundecl.fun_body ~num_call_gc
+      ~num_check_bound
+  in
+  BR.relax fundecl.fun_body ~max_out_of_line_code_offset;
   emit_all fundecl.fun_body;
   List.iter emit_call_gc !call_gc_sites;
   List.iter emit_call_bound_error !bound_error_sites;
+  assert (List.length !call_gc_sizes = num_call_gc);
+  assert (List.length !bound_error_sites = num_check_bound);
   cfi_endproc();
   `	.type	{emit_symbol fundecl.fun_name}, %function\n`;
   `	.size	{emit_symbol fundecl.fun_name}, .-{emit_symbol fundecl.fun_name}\n`;
