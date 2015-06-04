@@ -40,7 +40,12 @@ module Make (T : Branch_relaxation_intf.S) = struct
     match T.Cond_branch.classify_instr instr.desc with
     | None -> false
     | Some branch ->
-      let max_branch_offset = T.Cond_branch.max_displacement branch in
+      let max_branch_offset =
+        (* Remember to cut some slack for multi-word instructions (in the
+           [Linearize] sense of the word) where the branch can be anywhere in
+           the middle.  12 words of slack is plenty. *)
+        T.Cond_branch.max_displacement branch - 12
+      in
       match instr.desc with
       | Lop (Ialloc _)
       | Lop (Iintop Icheckbound)

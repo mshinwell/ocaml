@@ -317,9 +317,7 @@ module BR = Branch_relaxation.Make (struct
     let all = [Branch]
 
     let max_displacement = function
-      (* 14-bit signed offset in words.  Remember to cut some slack
-         for multi-word instructions where the branch can be anywhere in
-         the middle.  12 words of slack is plenty. *)
+      (* 14-bit signed offset in words. *)
       | Branch -> 8192 - 12
 
     let classify_instr = function
