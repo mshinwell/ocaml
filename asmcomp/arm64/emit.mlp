@@ -336,11 +336,17 @@ let num_call_gc_and_check_bound_points instr =
   let rec loop instr ((call_gc, check_bound) as totals) =
     match instr.desc with
     | Lend -> totals
-    | Lop (Ialloc _) -> loop instr.next (call_gc + 1, check_bound)
+    | Lop (Ialloc _) when !fastcode_flag ->
+      loop instr.next (call_gc + 1, check_bound)
     | Lop (Iintop Icheckbound)
     | Lop (Iintop_imm (Icheckbound, _))
     | Lop (Ispecific (Ishiftcheckbound _)) ->
-      loop instr.next (call_gc, check_bound + 1)
+      let check_bound =
+        (* When not in debug mode, there is at most one check-bound point. *)
+        if not !Clflags.debug then min (check_bound + 1, 1)
+        else check_bound + 1
+      in
+      loop instr.next (call_gc, check_bound)
     (* The following four should never be seen, since this function is run
        before branch relaxation. *)
     | Lop (Ispecific (Ifar_alloc _))
@@ -349,23 +355,11 @@ let num_call_gc_and_check_bound_points instr =
     | Lop (Ispecific (Ifar_shiftcheckbound _)) -> assert false
     | _ -> loop instr.next totals
   in
-  let call_gc, check_bound = loop instr (0, 0) in
-  let call_gc =
-    (* When not in "fastcode" mode, there are actually never any call GC
-       sites. *)
-    if !fastcode_flag then call_gc else 0
-  in
-  let check_bound =
-    (* When not in debug mode, there is at most one check-bound point. *)
-    if check_bound < 1 then check_bound
-    else if not !Clflags.debug then 1
-    else check_bound
-  in
-  call_gc, check_bound
+  loop instr (0, 0)
 
 let max_out_of_line_code_offset instr ~num_call_gc ~num_check_bound =
   if num_call_gc < 1 && num_check_bound < 1 then 0
-  else
+  else begin
     let size_of_call_gc = 2 in
     let size_of_check_bound = 1 in
     let size_of_last_thing =
@@ -375,7 +369,10 @@ let max_out_of_line_code_offset instr ~num_call_gc ~num_check_bound =
     let total_size =
       size_of_call_gc*num_call_gc + size_of_check_bound*num_check_bound
     in
-    total_size - size_of_last_thing
+    let max_offset = total_size - size_of_last_thing in
+    assert (max_offset >= 0);
+    max_offset
+  end
 
 module BR = Branch_relaxation.Make (struct
   (* CR-someday mshinwell: B and BL have +/- 128Mb ranges; for the moment we
