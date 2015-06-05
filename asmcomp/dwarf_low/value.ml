@@ -20,10 +20,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* CR-someday mshinwell: if proper cross compilation support is
-   implemented, change this as appropriate. *)
-module Target_int = Nativeint
-
 type 'form t =
   | True : Form.flag_present t
   | Bool : bool -> Form.data1 t

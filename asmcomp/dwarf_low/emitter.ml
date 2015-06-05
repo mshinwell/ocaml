@@ -148,11 +148,20 @@ let emit_two_byte_int t i =
 let emit_byte t i =
   emit_string t (sprintf "\t.byte\t0x%x\n" b)
 
+let emit_byte_exn t i =
+  emit_byte (Int8.of_int_exn i)
+
 let emit_uleb128 t i =
   emit_string t (sprintf "\t.uleb128\t0x%x\n" i)
 
+let emit_uleb128_from_int64 t i =
+  emit_string t (sprintf "\t.uleb128\t0x%Lx\n" i)
+
 let emit_leb128 t i =
   emit_string t (sprintf "\t.sleb128\t%d\n" i)
+
+let emit_leb128_from_int64 t i =
+  emit_string t (sprintf "\t.sleb128\t%Ld\n" i)
 
 let emit_offset_into_section t datum section =
   match target t with

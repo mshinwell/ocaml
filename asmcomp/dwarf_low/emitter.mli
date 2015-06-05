@@ -53,12 +53,16 @@ val emit_symbol_to_label_alias
 val target : t -> [ `MacOS_X | `Other ]
 
 val emit_byte : t -> Int8.t -> unit
+val emit_byte_exn : t -> int -> unit
 val emit_two_byte_int : t -> Int16.t -> unit
 val emit_four_byte_int : t -> Int32.t -> unit
 val emit_eight_byte_int : t -> Int64.t -> unit
 val emit_native_int : t -> Nativeint.t -> unit
 
 val emit_uleb128 : t -> int -> unit
+val emit_uleb128_from_int64 : t -> Int64.t -> unit
+val emit_leb128 : t -> int -> unit
+val emit_leb128_from_int64 : t -> Int64.t -> unit
 
 val emit_offset_into_section
    : t
