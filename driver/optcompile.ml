@@ -12,8 +12,8 @@
 
 (* The batch compiler *)
 
-open Misc
-open Config
+(*open Misc*)
+(*open Config*)
 open Format
 open Typedtree
 open Compenv
@@ -57,6 +57,8 @@ let print_if ppf flag printer arg =
 let (++) x f = f x
 let (+++) (x, y) f = (x, f y)
 
+external reraise : exn -> 'a = "%reraise"
+
 let implementation ppf sourcefile outputprefix =
   Compmisc.init_path true;
   let modulename = module_of_filename ppf sourcefile outputprefix in
@@ -64,7 +66,7 @@ let implementation ppf sourcefile outputprefix =
   let env = Compmisc.initial_env() in
   Compilenv.reset ?packname:!Clflags.for_package modulename;
   let cmxfile = outputprefix ^ ".cmx" in
-  let objfile = outputprefix ^ ext_obj in
+(*  let objfile = outputprefix ^ ext_obj in*)
   let comp ast =
     let (typedtree, coercion) =
       ast
@@ -86,12 +88,14 @@ let implementation ppf sourcefile outputprefix =
     Warnings.check_fatal ();
     Stypes.dump (Some (outputprefix ^ ".annot"))
   in
-  try comp (Pparse.parse_implementation ~tool_name ppf sourcefile)
+ (* try *) comp (Pparse.parse_implementation ~tool_name ppf sourcefile)
+(*
   with x ->
     Stypes.dump (Some (outputprefix ^ ".annot"));
     remove_file objfile;
     remove_file cmxfile;
-    raise x
+    reraise x
+*)
 
 let c_file name =
   if Ccomp.compile_file name <> 0 then exit 2

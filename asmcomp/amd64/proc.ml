@@ -138,6 +138,7 @@ let phys_reg n =
 let rax = phys_reg 0
 let rcx = phys_reg 5
 let rdx = phys_reg 4
+let r11 = phys_reg 11
 let rbp = phys_reg 12
 let rxmm15 = phys_reg 115
 
@@ -242,6 +243,8 @@ let loc_external_arguments =
 
 let loc_exn_bucket = rax
 
+let loc_backtrace_stack = r11
+
 (* Volatile registers: none *)
 
 let regs_are_volatile rs = false
@@ -271,35 +274,49 @@ let destroyed_at_oper = function
         -> [| rax |]
   | Iswitch(_, _) -> [| rax; rdx |]
   | _ ->
-    if fp then
-(* prevent any use of the frame pointer ! *)
-      [| rbp |]
-    else
-      [||]
-
+    let destroyed =
+      begin
+        if fp then
+          (* prevent any use of the frame pointer ! *)
+          [rbp]
+        else
+          []
+      end @
+        begin
+          if !Clflags.allocation_profiling then
+            [r11]
+          else
+            []
+        end
+    in
+    Array.of_list destroyed
 
 let destroyed_at_raise = all_phys_regs
 
 (* Maximal register pressure *)
 
+let safe_register_pressure instr =
+  let extra =
+    (if fp then 1 else 0) + (if !Clflags.allocation_profiling then 1 else 0)
+  in
+  match instr with
+  | Iextcall(_,_) -> if win64 then 8 - extra else 0
+  | _ -> 11 - extra
 
-let safe_register_pressure = function
-    Iextcall(_,_) -> if win64 then if fp then 7 else 8 else 0
-  | _ -> if fp then 10 else 11
-
-let max_register_pressure = function
-    Iextcall(_, _) ->
-      if win64 then
-        if fp then [| 7; 10 |]  else [| 8; 10 |]
-        else
-        if fp then [| 3; 0 |] else  [| 4; 0 |]
-  | Iintop(Idiv | Imod) | Iintop_imm((Idiv | Imod), _) ->
-    if fp then [| 10; 16 |] else [| 11; 16 |]
-  | Ialloc _ | Iintop(Icomp _) | Iintop_imm((Icomp _), _) ->
-    if fp then [| 11; 16 |] else [| 12; 16 |]
-  | Istore(Single, _, _) ->
-    if fp then [| 12; 15 |] else [| 13; 15 |]
-  | _ -> if fp then [| 12; 16 |] else [| 13; 16 |]
+let max_register_pressure instr =
+  let int_pressure, float_pressure =
+    match instr with
+    | Iextcall(_, _) -> if win64 then 8, 10 else 4, 0
+    | Iintop(Idiv | Imod) | Iintop_imm((Idiv | Imod), _) -> 11, 16
+    | Ialloc _ | Iintop(Icomp _) | Iintop_imm((Icomp _), _) -> 12, 16
+    | Istore(Single, _, _) -> 13, 15
+    | _ -> 13, 16
+  in
+  let int_pressure =
+    int_pressure - (if fp then 1 else 0)
+      - (if !Clflags.allocation_profiling then 1 else 0)
+  in
+  [| int_pressure; float_pressure |]
 
 (* Pure operations (without any side effect besides updating their result
    registers). *)
@@ -310,6 +327,9 @@ let op_is_pure = function
   | Iintop(Icheckbound) | Iintop_imm(Icheckbound, _) -> false
   | Ispecific(Ilea _) -> true
   | Ispecific _ -> false
+  (* CR mshinwell: hmm. *)
+  | Iincrement_backtrace_stack
+  | Idecrement_backtrace_stack -> false
   | _ -> true
 
 (* Layout of the stack frame *)
@@ -329,7 +349,6 @@ let assemble_file infile outfile =
                    Filename.quote outfile ^ " " ^ Filename.quote infile)
 
 let init () =
-  if fp then begin
-    num_available_registers.(0) <- 12
-  end else
-    num_available_registers.(0) <- 13
+  num_available_registers.(0)
+    <- 13 - (if fp then 1 else 0)
+        - (if !Clflags.allocation_profiling then 1 else 0)

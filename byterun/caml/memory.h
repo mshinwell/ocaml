@@ -53,15 +53,6 @@ color_t caml_allocation_color (void *hp);
 
 /* void caml_shrink_heap (char *);        Only used in compact.c */
 
-/* Corresponds to measuring block lifetimes in units of 8Mb.  With the 22 bits of
-   allocation profiling information this should enable us to get a bit over 10^13 bytes
-   as the maximum lifetime. */
-/* was 22 = 8Mb
-   was 19 = 1Mb
-   now 16 = 128k
-*/
-extern uintnat caml_lifetime_shift;
-
 #define PROFINFO_MASK 0x3fffff
 
 /* <private> */
@@ -116,13 +107,12 @@ int caml_page_table_initialize(mlsize_t bytesize);
 #endif
 
 #define Decode_profinfo_hd(hd) \
-  (((uint64_t) (Profinfo_hd (hd))) << (caml_lifetime_tracking ? caml_lifetime_shift : 4))
+  (((uint64_t) (Profinfo_hd (hd))) << 4)
 
 #define PROFINFO_SHIFT 42
 #define Hd_no_profinfo(hd) ((hd) & ~(0x3fffffull << PROFINFO_SHIFT))
 
-extern uintnat caml_allocation_profiling;
-extern uintnat caml_lifetime_tracking;
+extern int caml_allocation_profiling;
 extern uintnat caml_override_profinfo;
 extern uint64_t* caml_minor_allocation_profiling_array;
 extern uint64_t* caml_minor_allocation_profiling_array_end;

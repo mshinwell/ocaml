@@ -2237,7 +2237,7 @@ let rec emit_structured_constant symb cst cont =
     (* Headers for structured constants must be marked black in case we
        are in no-naked-pointers mode.  See [caml_darken]. *)
     let black_header = Nativeint.logor white_header caml_black in
-    Cblockheader_structured_constant black_header :: Cdefine_symbol symb :: cont
+    Cint black_header :: Cdefine_symbol symb :: cont
   in
   match cst with
   | Uconst_float s->
@@ -2305,17 +2305,17 @@ let emit_constant_closure symb fundecls cont =
         [] -> cont
       | f2 :: rem ->
           if f2.arity = 1 then
-            Cblockheader_constant_closure(infix_header pos) ::
+            Cint(infix_header pos) ::
             Csymbol_address f2.label ::
             Cint 3n ::
             emit_others (pos + 3) rem
           else
-            Cblockheader_constant_closure(infix_header pos) ::
+            Cint(infix_header pos) ::
             Csymbol_address(curry_function f2.arity) ::
             Cint(Nativeint.of_int (f2.arity lsl 1 + 1)) ::
             Csymbol_address f2.label ::
             emit_others (pos + 4) rem in
-      Cblockheader_constant_closure
+      Cint
         (black_closure_header (fundecls_size fundecls)) ::
       Cdefine_symbol symb ::
       if f1.arity = 1 then
@@ -2368,7 +2368,7 @@ let compunit size ulam =
       (Array.init size (fun _index ->
         Cint (Nativeint.of_int 1 (* Val_unit *))))
   in
-  Cdata ([Cblockheader_compilation_unit(black_block_header 0 size);
+  Cdata ([Cint(black_block_header 0 size);
          Cglobal_symbol glob;
          Cdefine_symbol glob] @ space) :: c3
 

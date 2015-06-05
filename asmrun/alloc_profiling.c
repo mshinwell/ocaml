@@ -49,6 +49,8 @@
 #include "libunwind.h"
 #endif
 
+int caml_allocation_profiling = 1;
+
 void
 caml_dump_allocators_of_major_heap_blocks (const char* output_file,
                                            int sample_strings)
@@ -227,6 +229,7 @@ caml_dump_heapgraph(const char* node_output_file, const char* edge_output_file)
         default: {
           uint64_t approx_instr_pointer_parent;
 
+/* All wrong now, needs fixing */
           approx_instr_pointer_parent = Decode_profinfo_hd (hd_parent);
 
           if (approx_instr_pointer_parent != 0ull) {

@@ -120,7 +120,7 @@ let find_exit_subst k =
 
 let rec rename i sub =
   match i.desc with
-    Iend ->
+    Iend | Itailrec_entry_point ->
       (i, sub)
   | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) ->
       (instr_cons i.desc (subst_regs i.arg sub) [||] i.next,

@@ -178,6 +178,8 @@ let local_exit k =
 let rec linear i n =
   match i.Mach.desc with
     Iend -> n
+  | Itailrec_entry_point ->
+      copy_instr Ltailrec_entry_point i (linear i.Mach.next n)
   | Iop(Itailcall_ind | Itailcall_imm _ as op) ->
       copy_instr (Lop op) i (discard_dead_code n)
   | Iop(Imove | Ireload | Ispill)

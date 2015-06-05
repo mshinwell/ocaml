@@ -198,6 +198,10 @@ method class_of_operation op =
   | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
   | Ifloatofint | Iintoffloat -> Op_pure
   | Ispecific _ -> Op_other
+  (* CR mshinwell: should review these carefully *)
+  | Ibacktrace_stack -> Op_other
+  | Iincrement_backtrace_stack -> Op_other
+  | Idecrement_backtrace_stack -> Op_other
   | Iprogram_counter -> Op_other
   | Ireturn_address -> Op_pure
 
@@ -205,7 +209,7 @@ method class_of_operation op =
 
 method is_cheap_operation op =
   match op with
-  | Iconst_int _ | Iblockheader _ -> true
+  | Iconst_int _ -> true
   | _ -> false
 
 (* Forget all equations involving memory loads.  Performed after a
@@ -220,7 +224,7 @@ method private kill_loads n =
 method private cse n i =
   match i.desc with
   | Iend | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _)
-  | Iexit _ | Iraise _ ->
+  | Iexit _ | Iraise _ | Itailrec_entry_point ->
       i
   | Iop (Imove | Ispill | Ireload) ->
       (* For moves, we associate the same value number to the result reg

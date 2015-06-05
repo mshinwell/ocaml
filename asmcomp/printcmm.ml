@@ -190,12 +190,6 @@ let data_item ppf = function
   | Cdefine_symbol s -> fprintf ppf "\"%s\":" s
   | Cdefine_label l -> fprintf ppf "L%i:" l
   | Cglobal_symbol s -> fprintf ppf "global \"%s\"" s
-  | Cblockheader_constant_closure n ->
-    fprintf ppf "hdr-clos(%s)" (Nativeint.to_string n)
-  | Cblockheader_compilation_unit n ->
-    fprintf ppf "hdr-cu(%s)" (Nativeint.to_string n)
-  | Cblockheader_structured_constant n ->
-    fprintf ppf "hdr-cst(%s)" (Nativeint.to_string n)
   | Cint8 n -> fprintf ppf "byte %i" n
   | Cint16 n -> fprintf ppf "int16 %i" n
   | Cint32 n -> fprintf ppf "int32 %s" (Nativeint.to_string n)

@@ -23,6 +23,8 @@ let label ppf l =
 let instr ppf i =
   begin match i.desc with
   | Lend -> ()
+  | Ltailrec_entry_point ->
+      fprintf ppf "tailrec entry point"
   | Lop op ->
       begin match op with
       | Ialloc _ | Icall_ind | Icall_imm _ | Iextcall(_, _) ->

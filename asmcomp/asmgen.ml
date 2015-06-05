@@ -56,6 +56,8 @@ let rec regalloc ppf round fd =
 
 let (++) x f = f x
 
+let dump_alloc_profiling_mach = ref !Clflags.allocation_profiling
+
 let compile_fundecl (ppf : formatter) fd_cmm =
   Proc.init ();
   Reg.reset();
@@ -63,8 +65,11 @@ let compile_fundecl (ppf : formatter) fd_cmm =
   ++ Alloc_profiling_cmm.fundecl
   ++ Selection.fundecl
   ++ pass_dump_if ppf dump_selection "After instruction selection"
-  ++ Alloc_profiling_mach.fundecl
+(*
+  ++ (Alloc_profiling_mach.fundecl
+       ~current_function_name:fd_cmm.fun_name)
   ++ pass_dump_if ppf dump_alloc_profiling_mach "After alloc profiling/mach"
+*)
   ++ Comballoc.fundecl
   ++ pass_dump_if ppf dump_combine "After allocation combining"
   ++ CSE.fundecl

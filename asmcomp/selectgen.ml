@@ -294,6 +294,7 @@ method select_operation op args =
   | (Cintoffloat, _) -> (Iintoffloat, args)
   | (Ccheckbound _, _) -> self#select_arith Icheckbound args
   | (Cprogram_counter, _) -> (Iprogram_counter, args)
+  | (Creturn_address, _) -> (Ireturn_address, args)
   | (Cbacktrace_stack, _) -> (Ibacktrace_stack, args)
   | _ -> fatal_error "Selection.select_oper"
 
@@ -535,7 +536,7 @@ method emit_expr env exp =
           | Ibacktrace_stack ->
               let rd = self#regs_for ty in
               self#insert (Iop Idecrement_backtrace_stack) [| |] [| |];
-              self#insert_move [| Proc.loc_backtrace_stack |] rd;
+              self#insert_moves [| Proc.loc_backtrace_stack |] rd;
               Some rd
           | op ->
               let r1 = self#emit_tuple env new_args in
@@ -617,7 +618,8 @@ method emit_expr env exp =
         [||] [||];
       r
   | Ctailrec_entry_point ->
-      self#insert_op Itailrec_entry_point [| |] [| |]
+      self#insert Itailrec_entry_point [| |] [| |];
+      None
 
 method private emit_sequence env exp =
   let s = {< instr_seq = dummy_instr >} in

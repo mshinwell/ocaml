@@ -120,9 +120,6 @@ type data_item =
     Cdefine_symbol of string
   | Cdefine_label of int
   | Cglobal_symbol of string
-  | Cblockheader_constant_closure of nativeint
-  | Cblockheader_compilation_unit of nativeint
-  | Cblockheader_structured_constant of nativeint
   | Cint8 of int
   | Cint16 of int
   | Cint32 of nativeint

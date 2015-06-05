@@ -578,6 +578,8 @@ let emit_instr fallthrough i =
         `	sqrtsd	{emit_reg i.arg.(0)}, {emit_reg i.res.(0)}\n`
     | Lop(Ispecific(Ifloatsqrtf addr)) ->
         `	sqrtsd	{emit_addressing addr i.arg 0}, {emit_reg i.res.(0)}\n`
+    | Lop Ibacktrace_stack ->
+        `	movq	%r11, {emit_reg i.res.(0)}\n`
     | Lop Iincrement_backtrace_stack ->
         `	addq	${emit_int (2 * Arch.size_addr)}, %r11\n`
     | Lop Idecrement_backtrace_stack ->
@@ -585,10 +587,10 @@ let emit_instr fallthrough i =
     | Lop Iprogram_counter ->
         let label = new_label () in
         `{emit_label label}:\n`;
-        `	{load_label_addr label}, {emit_reg i.arg.(0)}\n`
+        `	{load_label_addr label}, {emit_reg i.res.(0)}\n`
     | Lop Ireturn_address ->
         let n = frame_size () - 8 in
-        `	movq	${emit_int n}(%rsp), {emit_reg i.arg.(0)}\n`
+        `	movq	{emit_int n}(%rsp), {emit_reg i.res.(0)}\n`
     | Lreloadretaddr ->
         ()
     | Lreturn ->

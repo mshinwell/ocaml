@@ -53,6 +53,7 @@ type operation =
   | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
   | Ifloatofint | Iintoffloat
   | Ispecific of Arch.specific_operation
+  | Ibacktrace_stack
   | Iincrement_backtrace_stack
   | Idecrement_backtrace_stack
   | Iprogram_counter

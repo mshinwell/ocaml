@@ -84,6 +84,8 @@ let build_graph fundecl =
     match i.desc with
       Iend -> ()
     | Ireturn -> ()
+    | Itailrec_entry_point ->
+        interf i.next
     | Iop(Imove | Ispill | Ireload) ->
         add_interf_move i.arg.(0) i.res.(0) i.live;
         interf i.next
@@ -150,6 +152,8 @@ let build_graph fundecl =
     match i.desc with
       Iend -> ()
     | Ireturn -> ()
+    | Itailrec_entry_point ->
+        prefer weight i.next
     | Iop(Imove) ->
         add_mutual_pref weight i.arg.(0) i.res.(0);
         prefer weight i.next
