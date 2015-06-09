@@ -168,6 +168,9 @@ let catch_regs = ref []
 (* Name of function being compiled *)
 let current_function_name = ref ""
 
+(* Pseudoregisters assigned to current function's arguments *)
+let pseudos_for_arguments = ref [| |]
+
 (* The default instruction selection class *)
 
 class virtual selector_generic = object (self)
@@ -761,11 +764,13 @@ method emit_tail env exp =
           | Icall_imm lbl ->
               let r1 = self#emit_tuple env new_args in
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
-              if stack_ofs = 0 then begin
+              if stack_ofs = 0 && lbl <> !current_function_name then begin
                 self#insert_moves r1 loc_arg;
                 self#insert (Iop(Itailcall_imm lbl)) loc_arg [||]
               end else if lbl = !current_function_name then begin
-                let loc_arg' = Proc.loc_parameters r1 in
+(*                let loc_arg' = Proc.loc_parameters r1 in
+*)
+                let loc_arg' = !pseudos_for_arguments in
                 self#insert_moves r1 loc_arg';
                 self#insert (Iop(Itailcall_imm lbl)) loc_arg' [||]
               end else begin
@@ -859,6 +864,7 @@ method emit_fundecl f =
     List.fold_right2
       (fun (id, ty) r env -> Tbl.add id r env)
       f.Cmm.fun_args rargs Tbl.empty in
+  pseudos_for_arguments := rarg;
   self#insert_moves loc_arg rarg;
   self#emit_tail env f.Cmm.fun_body;
   let body = self#extract in

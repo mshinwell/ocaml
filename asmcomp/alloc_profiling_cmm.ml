@@ -143,7 +143,7 @@ let code_for_allocation_point ~value's_header ~alloc_point_number
       (* [profinfo] is already shifted by [PROFINFO_SHIFT]. *)
       Cop (Cor, [Cvar profinfo; Cconst_natint value's_header])))
 
-let instrument_function_body expr ~backtrace_bucket =
+let instrument_function_body expr ~backtrace_bucket ~fun_name =
   let next_alloc_point_number = ref 0 in
   (* CR mshinwell: misleading variable name *)
   let contains_calls = ref false in
@@ -166,7 +166,13 @@ let instrument_function_body expr ~backtrace_bucket =
       Ctuple (List.map instrument_headers es)
     | Cop (op, es) ->
       begin match op with
-      | Calloc | Capply _
+      (* CR mshinwell: what about bounds checks? *)
+      | Calloc -> contains_calls := true
+      | Capply _ ->
+        begin match es with
+        | (Cconst_symbol s)::_ when s = fun_name -> ()
+        | _ -> contains_calls := true
+        end
       | Cextcall (_, _, true, _) -> contains_calls := true
       | _ -> ()
       end;
@@ -200,6 +206,7 @@ let fundecl decl =
     let backtrace_bucket = Ident.create "backtrace_bucket" in
     let num_allocation_points, contains_calls, body =
       instrument_function_body decl.fun_body ~backtrace_bucket
+        ~fun_name:decl.fun_name
     in
     (* Even if there are no allocation points, we must record a backtrace
        stack frame unless the function is a leaf function. *)

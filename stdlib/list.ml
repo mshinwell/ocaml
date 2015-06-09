@@ -13,6 +13,11 @@
 
 (* List operations *)
 
+let rec is_tailrec l n =
+  match l with
+  | [] -> failwith "nth"
+  | a::l -> if n = 0 then (a, 42, 43) else is_tailrec l (n-1)
+
 let rec length_aux len = function
     [] -> len
   | a::l -> length_aux (len + 1) l

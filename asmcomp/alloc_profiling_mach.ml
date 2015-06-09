@@ -22,6 +22,10 @@
 
 open Mach
 
+(* CR mshinwell: it looks like the tail heuristic might be accurate in
+   alloc_profiling_cmm now, which means we could consider removing this.
+   May not be worth the effort though *)
+
 let fundecl decl ~current_function_name =
   let rec instrument_tails_and_returns insn result_rev =
     (* At every tail call point and return point, insert code to adjust the
