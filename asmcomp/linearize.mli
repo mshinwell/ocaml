@@ -25,7 +25,6 @@ type instruction =
 
 and instruction_desc =
     Lend
-  | Ltailrec_entry_point
   | Lop of Mach.operation
   | Lreloadretaddr
   | Lreturn

@@ -136,7 +136,7 @@ let rec reload i before =
   record_use i.arg;
   record_use i.res;
   match i.desc with
-    Iend | Itailrec_entry_point ->
+    Iend ->
       (i, before)
   | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) ->
       (add_reloads (Reg.inter_set_array before i.arg) i,
@@ -281,7 +281,7 @@ let add_spills regset i =
 
 let rec spill i finally =
   match i.desc with
-    Iend | Itailrec_entry_point ->
+    Iend ->
       (i, finally)
   | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) ->
       (i, Reg.Set.empty)

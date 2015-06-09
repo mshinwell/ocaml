@@ -39,10 +39,6 @@ let rec live i finally =
   | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) ->
       i.live <- Reg.Set.empty; (* no regs are live across *)
       Reg.set_of_array i.arg
-  | Itailrec_entry_point ->
-      let after = live i.next finally in
-      i.live <- after;
-      after
   | Iop op ->
       let after = live i.next finally in
       if Proc.op_is_pure op                    (* no side effects *)

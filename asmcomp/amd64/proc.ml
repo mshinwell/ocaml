@@ -19,6 +19,7 @@ open Reg
 open Mach
 
 let fp = Config.with_frame_pointers
+let allocation_profiling = true
 
 (* Which ABI to use *)
 
@@ -283,7 +284,7 @@ let destroyed_at_oper = function
           []
       end @
         begin
-          if !Clflags.allocation_profiling then
+          if allocation_profiling then
             [r11]
           else
             []
@@ -297,7 +298,7 @@ let destroyed_at_raise = all_phys_regs
 
 let safe_register_pressure instr =
   let extra =
-    (if fp then 1 else 0) + (if !Clflags.allocation_profiling then 1 else 0)
+    (if fp then 1 else 0) + (if allocation_profiling then 1 else 0)
   in
   match instr with
   | Iextcall(_,_) -> if win64 then 8 - extra else 0
@@ -314,7 +315,7 @@ let max_register_pressure instr =
   in
   let int_pressure =
     int_pressure - (if fp then 1 else 0)
-      - (if !Clflags.allocation_profiling then 1 else 0)
+      - (if allocation_profiling then 1 else 0)
   in
   [| int_pressure; float_pressure |]
 
@@ -351,4 +352,4 @@ let assemble_file infile outfile =
 let init () =
   num_available_registers.(0)
     <- 13 - (if fp then 1 else 0)
-        - (if !Clflags.allocation_profiling then 1 else 0)
+        - (if allocation_profiling then 1 else 0)

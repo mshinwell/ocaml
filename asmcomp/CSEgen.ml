@@ -204,6 +204,7 @@ method class_of_operation op =
   | Idecrement_backtrace_stack -> Op_other
   | Iprogram_counter -> Op_other
   | Ireturn_address -> Op_pure
+  | Itailrec_entry_point -> Op_other
 
 (* Operations that are so cheap that it isn't worth factoring them. *)
 
@@ -224,7 +225,7 @@ method private kill_loads n =
 method private cse n i =
   match i.desc with
   | Iend | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _)
-  | Iexit _ | Iraise _ | Itailrec_entry_point ->
+  | Iexit _ | Iraise _ ->
       i
   | Iop (Imove | Ispill | Ireload) ->
       (* For moves, we associate the same value number to the result reg

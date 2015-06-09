@@ -543,6 +543,10 @@ method emit_expr env exp =
               let rd = self#regs_for ty in
               Some (self#insert_op_debug op dbg r1 rd)
       end
+  (* CR mshinwell: think about this properly *)
+  | Csequence(Ctailrec_entry_point, e2) ->
+      self#insert (Iop Itailrec_entry_point) [| |] [| |];
+      self#emit_expr env e2
   | Csequence(e1, e2) ->
       begin match self#emit_expr env e1 with
         None -> None
@@ -618,7 +622,7 @@ method emit_expr env exp =
         [||] [||];
       r
   | Ctailrec_entry_point ->
-      self#insert Itailrec_entry_point [| |] [| |];
+      self#insert (Iop Itailrec_entry_point) [| |] [| |];
       None
 
 method private emit_sequence env exp =
@@ -774,6 +778,10 @@ method emit_tail env exp =
               end
           | _ -> fatal_error "Selection.emit_tail"
       end
+  (* CR mshinwell: think about this properly *)
+  | Csequence(Ctailrec_entry_point, e2) ->
+      self#insert (Iop Itailrec_entry_point) [| |] [| |];
+      self#emit_tail env e2
   | Csequence(e1, e2) ->
       begin match self#emit_expr env e1 with
         None -> ()

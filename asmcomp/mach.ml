@@ -57,6 +57,7 @@ type operation =
   | Idecrement_backtrace_stack
   | Iprogram_counter
   | Ireturn_address
+  | Itailrec_entry_point
 
 type instruction =
   { desc: instruction_desc;
@@ -68,7 +69,6 @@ type instruction =
 
 and instruction_desc =
     Iend
-  | Itailrec_entry_point
   | Iop of operation
   | Ireturn
   | Iifthenelse of test * instruction * instruction

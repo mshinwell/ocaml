@@ -32,13 +32,13 @@
 open Cmm
 
 let use_override_profinfo =
-  Ident.create_persistent "caml_allocation_profiling_use_override_profinfo"
+  Cconst_symbol "caml_allocation_profiling_use_override_profinfo"
 
 let override_profinfo =
-  Ident.create_persistent "caml_allocation_profiling_use_override_profinfo"
+  Cconst_symbol "caml_allocation_profiling_override_profinfo"
 
 let profinfo_counter =
-  Ident.create_persistent "caml_allocation_profiling_profinfo"
+  Cconst_symbol "caml_allocation_profiling_profinfo"
 
 let add_prologue ~body ~num_allocation_points ~backtrace_bucket =
   (* Upon entry to an OCaml function, the backtrace top of stack pointer
@@ -99,53 +99,49 @@ let code_for_allocation_point ~value's_header ~alloc_point_number
     (* Determine whether values should be annotated with a user-specified
        profinfo. *)
     Cop (Ccmpi Ceq, [
-      Cop (Cload Word, [Cvar use_override_profinfo]);
+      Cop (Cload Word, [use_override_profinfo]);
       Cconst_int 0;
     ])
   in
   (* CR mshinwell: ensure these match the C code *)
   let profinfo_shift = Cconst_int 42 in
   let max_profinfo = Cconst_int 0x3f_ffff in
-  let default =
-    let generate_new_profinfo =
-      (* When a new profinfo value is required, we obtain the current
-         program counter, and store it together with a fresh profinfo value
-         into the current backtrace hash table bucket. *)
-      Clet (pc, Cop (Cprogram_counter, []),
-        Clet (new_profinfo,
-          Clet (new_profinfo', Cop (Cload Word, [Cvar profinfo_counter]),
-            Cifthenelse (
-              Cop (Ccmpi Cgt, [Cvar new_profinfo'; max_profinfo]),
-              Cconst_int 0,  (* profiling counter overflow *)
-              Clet (new_profinfo'',
-                Cop (Caddi, [Cvar new_profinfo'; Cconst_int 1]),
-                Csequence (
-                  Cop (Cstore Word,
-                    [Cvar new_profinfo''; Cvar profinfo_counter]),
-                  Cvar new_profinfo
-                )))),
+  let generate_new_profinfo =
+    (* When a new profinfo value is required, we obtain the current
+       program counter, and store it together with a fresh profinfo value
+       into the current backtrace hash table bucket. *)
+    Clet (pc, Cop (Cprogram_counter, []),
+      Clet (new_profinfo,
+        Clet (new_profinfo', Cop (Cload Word, [profinfo_counter]),
+          Cifthenelse (
+            Cop (Ccmpi Cgt, [Cvar new_profinfo'; max_profinfo]),
+            Cconst_int 0,  (* profiling counter overflow *)
+            Clet (new_profinfo'',
+              Cop (Caddi, [Cvar new_profinfo'; Cconst_int 1]),
+              Csequence (
+                Cop (Cstore Word,
+                  [profinfo_counter; Cvar new_profinfo'']),
+                Cvar new_profinfo'
+              )))),
+        Csequence (
           Csequence (
-            Csequence (
-              Cop (Cstore Word, [Cvar pc; address_of_pc]),
-              Cop (Cstore Word, [Cvar new_profinfo; address_of_profinfo])),
-            Cop (Clsl, [Cvar new_profinfo; profinfo_shift]))))
-    in
-    (* Check if we have already allocated a profinfo value for this allocation
-       point with the current backtrace.  If so, use that value; if not,
-       allocate a new one. *)
-    Clet (existing_profinfo, Cop (Cload Word, [address_of_profinfo]),
-      Clet (profinfo,
-        Cifthenelse (
-          Cop (Ccmpa Ceq, [Cvar existing_profinfo; Cconst_pointer 0]),
+            Cop (Cstore Word, [address_of_pc; Cvar pc]),
+            Cop (Cstore Word, [address_of_profinfo; Cvar new_profinfo])),
+          Cop (Clsl, [Cvar new_profinfo; profinfo_shift]))))
+  in
+  (* Check if we have already allocated a profinfo value for this allocation
+     point with the current backtrace.  If so, use that value; if not,
+     allocate a new one. *)
+  Clet (existing_profinfo, Cop (Cload Word, [address_of_profinfo]),
+    Clet (profinfo,
+      Cifthenelse (
+        Cop (Ccmpa Ceq, [Cvar existing_profinfo; Cconst_pointer 0]),
+        Cvar existing_profinfo,
+        Cifthenelse (do_not_use_override_profinfo,
           generate_new_profinfo,
-          Cvar existing_profinfo),
-        (* [profinfo] is already shifted by [PROFINFO_SHIFT]. *)
-        Cop (Cor, [Cvar profinfo; Cconst_natint value's_header])))
-  in
-  let with_override =
-    Cop (Cload Word, [Cvar override_profinfo])
-  in
-  Cifthenelse (do_not_use_override_profinfo, default, with_override)
+          Cop (Cload Word, [override_profinfo]))),
+      (* [profinfo] is already shifted by [PROFINFO_SHIFT]. *)
+      Cop (Cor, [Cvar profinfo; Cconst_natint value's_header])))
 
 let instrument_function_body expr ~backtrace_bucket =
   let next_alloc_point_number = ref 0 in

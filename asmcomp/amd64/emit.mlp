@@ -372,7 +372,7 @@ let emit_instr fallthrough i =
     emit_debug_info i.dbg;
     match i.desc with
       Lend -> ()
-    | Ltailrec_entry_point ->
+    | Lop Itailrec_entry_point ->
         `{emit_label !tailrec_entry_point}:\n`;
     | Lop(Imove | Ispill | Ireload) ->
         let src = i.arg.(0) and dst = i.res.(0) in

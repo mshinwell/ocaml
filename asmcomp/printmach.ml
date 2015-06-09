@@ -143,6 +143,7 @@ let operation op arg ppf res =
   | Idecrement_backtrace_stack -> fprintf ppf "decrement_backtrace_stack"
   | Iprogram_counter -> fprintf ppf "program_counter"
   | Ireturn_address -> fprintf ppf "return_address"
+  | Itailrec_entry_point -> fprintf ppf "tailrec_entry_point"
 
 let rec instr ppf i =
   if !print_live then begin
@@ -152,7 +153,6 @@ let rec instr ppf i =
   end;
   begin match i.desc with
   | Iend -> ()
-  | Itailrec_entry_point -> fprintf ppf "tailrec_entry_point"
   | Iop op ->
       operation op i.arg ppf i.res
   | Ireturn ->
