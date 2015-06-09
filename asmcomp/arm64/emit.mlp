@@ -364,7 +364,7 @@ let max_out_of_line_code_offset instr ~num_call_gc ~num_check_bound =
     let size_of_check_bound = 1 in
     let size_of_last_thing =
       (* Call-GC points come before check-bound points. *)
-      if num_check_bound > 1 then size_of_check_bound else size_of_call_gc
+      if num_check_bound >= 1 then size_of_check_bound else size_of_call_gc
     in
     let total_size =
       size_of_call_gc*num_call_gc + size_of_check_bound*num_check_bound
