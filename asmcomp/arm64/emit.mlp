@@ -664,7 +664,7 @@ let emit_instr i =
         let lbl = bound_error_label i.dbg in
         let lbl2 = new_label () in
         `	cmp	{emit_reg i.arg.(0)}, {emit_reg i.arg.(1)}\n`;
-        `	b.ge	{emit_label lbl2}\n`;
+        `	b.hi	{emit_label lbl2}\n`;
         `	b	{emit_label lbl}\n`;
         `{emit_label lbl2}:\n`;
     | Lop(Iintop_imm(Icheckbound, n)) ->
@@ -675,7 +675,7 @@ let emit_instr i =
         let lbl = bound_error_label i.dbg in
         let lbl2 = new_label () in
         `	cmp	{emit_reg i.arg.(0)}, #{emit_int bound}\n`;
-        `	b.ge	{emit_label lbl2}\n`;
+        `	b.hi	{emit_label lbl2}\n`;
         `	b	{emit_label lbl}\n`;
         `{emit_label lbl2}:\n`;
     | Lop(Ispecific(Ishiftcheckbound shift)) ->
@@ -686,7 +686,7 @@ let emit_instr i =
         let lbl = bound_error_label i.dbg in
         let lbl2 = new_label () in
         `	cmp	{emit_reg i.arg.(1)}, {emit_reg i.arg.(0)}, lsr #{emit_int shift}\n`;
-        `	b.ge	{emit_label lbl2}\n`;
+        `	b.lo	{emit_label lbl2}\n`;
         `	b	{emit_label lbl}\n`;
         `{emit_label lbl2}:\n`;
     | Lop(Iintop Imod) ->
