@@ -343,7 +343,7 @@ let num_call_gc_and_check_bound_points instr =
     | Lop (Ispecific (Ishiftcheckbound _)) ->
       let check_bound =
         (* When not in debug mode, there is at most one check-bound point. *)
-        if not !Clflags.debug then min (check_bound + 1) 1
+        if not !Clflags.debug then 1
         else check_bound + 1
       in
       loop instr.next (call_gc, check_bound)
