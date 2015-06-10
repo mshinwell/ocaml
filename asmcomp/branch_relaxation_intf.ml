@@ -31,7 +31,17 @@ module type S = sig
 
     (* Which variety of conditional branch may be produced by the emitter for a
        given instruction description.  For the moment we assume that only one
-       such variety per instruction description is needed. *)
+       such variety per instruction description is needed.
+
+       N.B. The only instructions supported are the following:
+                - Lop (Ialloc _)
+                - Lop (Iintop Icheckbound)
+                - Lop (Iintop_imm (Icheckbound, _))
+                - Lop (Ispecific _)
+                - Lcondbranch (_, _)
+                - Lcondbranch3 (_, _, _)
+       [classify_instr] is expected to return [None] when called on any
+       instruction not in this list. *)
     val classify_instr : Linearize.instruction_desc -> t option
   end
 

@@ -114,7 +114,10 @@ module Make (T : Branch_relaxation_intf.S) = struct
             instr.next <- cont.next;
             fixup true pc instr
           | _ ->
-            Misc.fatal_error "Unsupported instruction for branch relaxation"
+            (* Any other instruction has already been rejected in
+               [instr_overflows] above.
+               We can *never* get here. *)
+            assert false
     in
     fixup false 0 code
 
