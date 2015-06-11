@@ -23,8 +23,8 @@ type environment = (Ident.t, Reg.t array) Tbl.t
 (* Infer the type of the result of an operation *)
 
 let oper_result_type = function
-    Capply(ty, _) -> ty
-  | Cextcall(s, ty, alloc, _) -> ty
+    Capply(ty, _, _) -> ty
+  | Cextcall(s, ty, alloc, _, _) -> ty
   | Cload c ->
       begin match c with
         Word -> typ_addr
@@ -156,8 +156,8 @@ let join_array rs =
 
 (* Extract debug info contained in a C-- operation *)
 let debuginfo_op = function
-  | Capply(_, dbg) -> dbg
-  | Cextcall(_, _, _, dbg) -> dbg
+  | Capply(_, _, dbg) -> dbg
+  | Cextcall(_, _, _, _, dbg) -> dbg
   | Craise (_, dbg) -> dbg
   | Ccheckbound dbg -> dbg
   | _ -> Debuginfo.none
@@ -167,9 +167,6 @@ let catch_regs = ref []
 
 (* Name of function being compiled *)
 let current_function_name = ref ""
-
-(* Pseudoregisters assigned to current function's arguments *)
-let pseudos_for_arguments = ref [| |]
 
 (* The default instruction selection class *)
 
@@ -220,6 +217,32 @@ method virtual select_addressing :
 method select_store is_assign addr arg =
   (Istore(Word, addr, is_assign), arg)
 
+(* Counters used for inserting allocation profiling code *)
+
+module Call_type_table = struct
+  module T = struct
+    type t = Cmm.call_type
+    let compare = Pervasives.compare
+    let hash = Pervasives.hash
+  end
+
+  include Hashtbl.Make (T)
+
+  let find_default t key ~default =
+    try find key
+    with Not_found -> default
+end
+
+val mutable call_type_counters : int Call_type_hashtbl.t =
+  Call_type_table.create ()
+
+method increment_call_type_counter kind =
+  let current_count =
+    try Hashtbl.find call_type_counters kind
+    with Not_found -> 0
+  in
+  Hashtbl.replace call_type_counters kind (current_count + 1)
+
 (* call marking methods, documented in selectgen.mli *)
 
 method mark_call =
@@ -230,7 +253,7 @@ method mark_tailcall = ()
 method mark_c_tailcall = ()
 
 method mark_instr = function
-  | Iop (Icall_ind | Icall_imm _ | Iextcall _) ->
+  | Iop (Icall_imm _ | Icall_ind | Iextcall _) ->
       self#mark_call
   | Iop (Itailcall_ind | Itailcall_imm _) ->
       self#mark_tailcall
@@ -242,10 +265,11 @@ method mark_instr = function
     begin match raise_kind with
       | Lambda.Raise_notrace -> ()
       | Lambda.Raise_regular | Lambda.Raise_reraise ->
-        if !Clflags.debug then (* PR#6239 *)
-        (* caml_stash_backtrace; we #mark_call rather than
-           #mark_c_tailcall to get a good stack backtrace *)
+        if !Clflags.debug then begin (* PR#6239 *)
+          (* caml_stash_backtrace; we #mark_call rather than
+             #mark_c_tailcall to get a good stack backtrace *)
           self#mark_call
+        end
     end
   | Itrywith _ ->
     self#mark_call
@@ -255,9 +279,9 @@ method mark_instr = function
 
 method select_operation op args =
   match (op, args) with
-    (Capply(ty, dbg), Cconst_symbol s :: rem) -> (Icall_imm s, rem)
-  | (Capply(ty, dbg), _) -> (Icall_ind, args)
-  | (Cextcall(s, ty, alloc, dbg), _) -> (Iextcall(s, alloc), args)
+    (Capply(ty, _, dbg), Cconst_symbol s :: rem) -> (Icall_imm s, rem)
+  | (Capply(ty, _, dbg), _) -> (Icall_ind, args)
+  | (Cextcall(s, ty, alloc, _, dbg), _) -> (Iextcall(s, alloc), args)
   | (Cload chunk, [arg]) ->
       let (addr, eloc) = self#select_addressing chunk arg in
       (Iload(chunk, addr), [eloc])
@@ -436,12 +460,6 @@ method emit_expr env exp =
   | Cconst_natint n ->
       let r = self#regs_for typ_int in
       Some(self#insert_op (Iconst_int n) [||] r)
-  | Cblockheader n ->
-      (* [Cblockheader] nodes should be expanded by [Alloc_profiling] when
-         using allocation profiling. *)
-      assert (not !Clflags.allocation_profiling);
-      let r = self#regs_for typ_int in
-      Some(self#insert_op (Iconst_int n) [||] r)
   | Cconst_float n ->
       let r = self#regs_for typ_float in
       Some(self#insert_op (Iconst_float n) [||] r)
@@ -503,6 +521,26 @@ method emit_expr env exp =
           let dbg = debuginfo_op op in
           match new_op with
             Icall_ind ->
+              let instrumentation =
+                match exp with
+                | Capply (_, _, instrumentation) ->
+                  begin match instrumentation with
+                  | None -> ()
+                  | Some f ->
+                    match
+                      f Indirect_call
+                        ~counters_without_this_call:call_type_counters
+                    with
+                    | None -> ()
+                    | Some instrumentation ->
+                      let (_ : Reg.t array) = emit_expr env instrumentation in
+                      ()
+                  end
+                | _ ->
+                  Misc.fatal_error "[select_operation] may not introduce \
+                    [Icall_ind] operations that do not come from [Capply]"
+              in
+              increment_call_type_counter Indirect_call;
               let r1 = self#emit_tuple env new_args in
               let rarg = Array.sub r1 1 (Array.length r1 - 1) in
               let rd = self#regs_for ty in
@@ -514,6 +552,26 @@ method emit_expr env exp =
               self#insert_move_results loc_res rd stack_ofs;
               Some rd
           | Icall_imm lbl ->
+              let instrumentation =
+                match exp with
+                | Capply (_, _, instrumentation) ->
+                  begin match instrumentation with
+                  | None -> ()
+                  | Some f ->
+                    match
+                      f Direct_call
+                        ~counters_without_this_call:call_type_counters
+                    with
+                    | None -> ()
+                    | Some instrumentation ->
+                      let (_ : Reg.t array) = emit_expr env instrumentation in
+                      ()
+                  end
+                | _ ->
+                  Misc.fatal_error "[select_operation] may not introduce \
+                    [Icall_imm] operations that do not come from [Capply]"
+              in
+              increment_call_type_counter Direct_call;
               let r1 = self#emit_tuple env new_args in
               let rd = self#regs_for ty in
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
@@ -523,6 +581,26 @@ method emit_expr env exp =
               self#insert_move_results loc_res rd stack_ofs;
               Some rd
           | Iextcall(lbl, alloc) ->
+              let instrumentation =
+                match exp with
+                | Cextcall (_, _, _, _, instrumentation) ->
+                  begin match instrumentation with
+                  | None -> ()
+                  | Some f ->
+                    match
+                      f External_direct_call
+                        ~counters_without_this_call:call_type_counters
+                    with
+                    | None -> ()
+                    | Some instrumentation ->
+                      let (_ : Reg.t array) = emit_expr env instrumentation in
+                      ()
+                  end
+                | _ ->
+                  Misc.fatal_error "[select_operation] may not introduce \
+                    [Iextcall] operations that do not come from [Capply]"
+              in
+              increment_call_type_counter External_direct_call;
               let (loc_arg, stack_ofs) =
                 self#emit_extcall_args env new_args in
               let rd = self#regs_for ty in
@@ -535,6 +613,7 @@ method emit_expr env exp =
               let size = size_expr env (Ctuple new_args) in
               self#insert (Iop(Ialloc size)) [||] rd;
               self#emit_stores env new_args rd;
+              num_allocation_points <- num_allocation_points + 1;
               Some rd
           | Ibacktrace_stack ->
               let rd = self#regs_for ty in
@@ -738,7 +817,7 @@ method emit_tail env exp =
         None -> ()
       | Some r1 -> self#emit_tail (self#bind_let env v r1) e2
       end
-  | Cop(Capply(ty, dbg) as op, args) ->
+  | Cop(Capply(ty, instrumentation, dbg) as op, args) ->
       begin match self#emit_parts_list env args with
         None -> ()
       | Some(simple_args, env) ->
@@ -748,6 +827,22 @@ method emit_tail env exp =
               let r1 = self#emit_tuple env new_args in
               let rarg = Array.sub r1 1 (Array.length r1 - 1) in
               let (loc_arg, stack_ofs) = Proc.loc_arguments rarg in
+              let tailcall = (stack_ofs = 0) in
+              let kind =
+                if tailcall then Indirect_tailcall else Indirect_call
+              in
+              begin match instrumentation with
+              | None -> ()
+              | Some f ->
+                match
+                  f kind ~counters_without_this_call:call_type_counters
+                with
+                | None -> ()
+                | Some instrumentation ->
+                  let (_ : Reg.t array) = emit_expr env instrumentation in
+                  ()
+              end;
+              increment_call_type_counter kind;
               if stack_ofs = 0 then begin
                 self#insert_moves rarg loc_arg;
                 self#insert (Iop Itailcall_ind)
@@ -764,15 +859,35 @@ method emit_tail env exp =
           | Icall_imm lbl ->
               let r1 = self#emit_tuple env new_args in
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
-              if stack_ofs = 0 && lbl <> !current_function_name then begin
+              let tailcall = (stack_ofs = 0) in
+              let calls_self = (lbl = !current_function_name) in
+              let kind =
+                if tailcall && calls_self then Self_direct_tailcall
+                else if tailcall then Non_self_direct_tailcall
+                else Direct_call
+              in
+              begin match instrumentation with
+              | None -> ()
+              | Some f ->
+                match
+                  f kind ~counters_without_this_call:call_type_counters
+                with
+                | None -> ()
+                | Some instrumentation ->
+                  let (_ : Reg.t array) = emit_expr env instrumentation in
+                  ()
+              end;
+              increment_call_type_counter kind;
+              if tailcall && (not calls_self) then begin
                 self#insert_moves r1 loc_arg;
                 self#insert (Iop(Itailcall_imm lbl)) loc_arg [||]
-              end else if lbl = !current_function_name then begin
-(*                let loc_arg' = Proc.loc_parameters r1 in
-*)
-                let loc_arg' = !pseudos_for_arguments in
+              end else if calls_self then begin
+(*
+                let loc_arg' = Proc.loc_parameters r1 in
                 self#insert_moves r1 loc_arg';
-                self#insert (Iop(Itailcall_imm lbl)) loc_arg' [||]
+*)
+                self#insert_moves r1 loc_arg;
+                self#insert (Iop(Itailcall_imm lbl)) loc_arg [||]
               end else begin
                 let rd = self#regs_for ty in
                 let loc_res = Proc.loc_results rd in
@@ -849,11 +964,50 @@ method private emit_tail_sequence env exp =
   s#emit_tail env exp;
   s#extract
 
+(* Insertion of allocation profiling prologue code *)
+
+method emit_allocation_profiling_prologue f ~env_after_main_prologue
+      ~last_insn_of_main_prologue =
+  if !Clflags.allocation_profiling then begin
+    let num_instrumented_alloc_points =
+      f.Cmm.fun_num_instrumented_alloc_points
+    in
+    let needs_prologue =
+      num_instrumented_alloc_points > 0
+        || num_direct_calls_that_are_not_self_tail_calls > 0
+        || num_indirect_calls > 0
+    in
+    if needs_prologue then begin
+      let prologue_cmm =
+        Alloc_profiling_cmm.prologue ~num_instrumented_alloc_points
+          ~num_direct_calls_that_are_not_self_tail_calls
+          ~num_indirect_calls
+      in
+      (* Splice the allocation prologue after the main prologue but before the
+         function body.  Remember that [instr_seq] points at the last
+         instruction (the list is in reverse order). *)
+      let last_insn_of_body = instr_seq in
+      let first_insn_of_body = ref dummy_instr in
+      while not (instr_seq == last_insn_of_main_prologue) do
+        first_insn_of_body := instr_seq;
+        instr_seq <- instr_seq.next
+      done;
+      let (_ : Reg.t array option) =
+        self#emit_expr env_after_main_prologue prologue_cmm
+      in
+      if not (first_insn_of_body == dummy_instr) then begin
+        first_insn_of_body.next <- instr_seq;
+        instr_seq <- last_insn_of_body
+      end
+    end
+  end
+
 (* Sequentialization of a function definition *)
 
 method emit_fundecl f =
   Proc.contains_calls := false;
   current_function_name := f.Cmm.fun_name;
+  call_type_map <- Call_type_map.empty;
   let rargs =
     List.map
       (fun (id, ty) -> let r = self#regs_for ty in name_regs id r; r)
@@ -864,9 +1018,14 @@ method emit_fundecl f =
     List.fold_right2
       (fun (id, ty) r env -> Tbl.add id r env)
       f.Cmm.fun_args rargs Tbl.empty in
-  pseudos_for_arguments := rarg;
   self#insert_moves loc_arg rarg;
+  let env_after_main_prologue = env in
+  let last_insn_of_main_prologue = instr_seq in
   self#emit_tail env f.Cmm.fun_body;
+  let last_insn_of_allocation_profiling_prologue =
+    self#emit_allocation_profiling_prologue f ~env_after_main_prologue
+      ~last_insn_of_main_prologue
+  in
   let body = self#extract in
   instr_iter (fun instr -> self#mark_instr instr.Mach.desc) body;
   { fun_name = f.Cmm.fun_name;

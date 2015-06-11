@@ -50,9 +50,31 @@ type memory_chunk =
   | Double                              (* 64-bit-aligned 64-bit float *)
   | Double_u                            (* word-aligned 64-bit float *)
 
-type operation =
-    Capply of machtype * Debuginfo.t
-  | Cextcall of string * machtype * bool * Debuginfo.t
+module Call_type : sig
+  type t =
+    | Direct_call  (* to an OCaml function that is not the current function *)
+    | External_direct_call
+    | Indirect_call
+    | Self_direct_tailcall
+    | Non_self_direct_tailcall
+    | Indirect_tailcall
+
+  val is_direct : t -> bool
+
+  module Table : sig
+    include Hashtbl.S with type key = t
+    val find_default : 'a t -> key -> default:'a -> 'a
+  end
+end
+
+type call_instrumentation =
+  (Call_type.t
+    -> counters_without_this_call:int Call_type.Table.t
+    -> expression) option
+
+and operation =
+    Capply of machtype * call_instrumentation * Debuginfo.t
+  | Cextcall of string * machtype * bool * call_instrumentation * Debuginfo.t
   | Cload of memory_chunk
   | Calloc
   | Cstore of memory_chunk
@@ -71,7 +93,7 @@ type operation =
   | Cprogram_counter
   | Creturn_address
 
-type expression =
+and expression =
     Cconst_int of int
   | Cconst_natint of nativeint
   | Cconst_float of float

@@ -22,9 +22,23 @@
 
 open Mach
 
-(* CR mshinwell: it looks like the tail heuristic might be accurate in
-   alloc_profiling_cmm now, which means we could consider removing this.
-   May not be worth the effort though *)
+let count_call_points decl =
+  let rec count insn ~direct ~indirect =
+    match insn.desc with
+    | Iend -> direct, indirect
+    | _ ->
+      let direct, indirect =
+        match insn.desc with
+        | Iop Icall_ind -> direct, indirect + 1
+        | Iop (Icall_imm _) -> direct + 1, indirect
+        | Iop Itailcall_ind -> direct, indirect + 1
+        | Iop (Iextcall _) -> direct + 1, indirect
+        | _ -> direct, indirect
+      in
+      count insn.next ~direct ~indirect
+  in
+  let direct, indirect = count insn ~direct:0 ~indirect:0 in
+  `Direct direct, `Indirect indirect
 
 let fundecl decl ~current_function_name =
   let rec instrument_tails_and_returns insn result_rev =

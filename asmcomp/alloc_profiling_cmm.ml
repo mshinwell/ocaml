@@ -72,6 +72,23 @@ let add_prologue ~body ~num_allocation_points ~backtrace_bucket =
        a tail call. *)
     Csequence (Ctailrec_entry_point, body))
 
+let code_for_call_point kind ~counters_without_this_call =
+  if not !Clflags.allocation_profiling then None
+  else
+    match kind with
+    | Self_direct_tailcall -> ()
+    | _ ->
+      let call_point_index =
+        Call_type.Table.find_default counters_without_this_call
+          kind ~default:0
+      in
+      if Call_type.is_direct kind then
+        Cop (Cmove_backtrace_pointer_direct_call call_point_index)
+      else
+
+
+      Cop (Cmove_backtrace_pointer (call_point_index, call_point_kind))
+
 let code_for_allocation_point ~value's_header ~alloc_point_number
       ~backtrace_bucket =
   let pc = Ident.create "pc" in

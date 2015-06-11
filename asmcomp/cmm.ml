@@ -64,8 +64,17 @@ type memory_chunk =
   | Double
   | Double_u
 
-type operation =
-    Capply of machtype * Debuginfo.t
+type call_type =
+  | Direct_call  (* not to the current function *)
+  | Indirect_call
+  | Self_direct_tailcall
+  | Non_self_direct_tailcall
+  | Indirect_tailcall
+
+type apply_instrumentation = (call_type -> expression) option
+
+and operation =
+    Capply of machtype * Debuginfo.t * apply_instrumentation
   | Cextcall of string * machtype * bool * Debuginfo.t
   | Cload of memory_chunk
   | Calloc
