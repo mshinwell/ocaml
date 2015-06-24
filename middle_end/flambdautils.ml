@@ -154,7 +154,7 @@ let rec same (l1 : 'a Flambda.t) (l2 : 'a Flambda.t) =
       same a1 a2 && Variable.equal v1 v2 && same b1 b2
   | Ftrywith _, _ | _, Ftrywith _ -> false
   | Fifthenelse (a1, b1, c1, _), Fifthenelse (a2, b2, c2, _) ->
-      same a1 a2 && same b1 b2 && same c1 c2
+      Variable.equal a1 a2 && same b1 b2 && same c1 c2
   | Fifthenelse _, _ | _, Fifthenelse _ -> false
   | Fsequence (a1, b1, _), Fsequence (a2, b2, _) ->
       same a1 a2 && same b1 b2

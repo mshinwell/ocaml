@@ -283,9 +283,9 @@ module NotConstants(P:Param) = struct
       mark_loop ~toplevel [] f1;
       mark_loop ~toplevel:false [] body
 
-    | Fifthenelse (f1,f2,f3,_) ->
+    | Fifthenelse (cond,f2,f3,_) ->
       mark_curr curr;
-      mark_loop ~toplevel [] f1;
+      register_implication ~in_nc:(Var cond) ~implies_in_nc:curr;
       mark_loop ~toplevel [] f2;
       mark_loop ~toplevel [] f3
 

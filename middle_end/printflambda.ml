@@ -147,7 +147,7 @@ let rec lam ppf (flam : _ Flambda.t) =
       fprintf ppf "@[<2>(try@ %a@;<1 -1>with %a@ %a)@]"
         lam lbody Variable.print param lam lhandler
   | Fifthenelse(lcond, lif, lelse,_) ->
-      fprintf ppf "@[<2>(if@ %a@ %a@ %a)@]" lam lcond lam lif lam lelse
+      fprintf ppf "@[<2>(if@ %a@ %a@ %a)@]" Variable.print lcond lam lif lam lelse
   | Fsequence(l1, l2,_) ->
       fprintf ppf "@[<2>(seq@ %a@ %a)@]" lam l1 sequence l2
   | Fwhile(lcond, lbody,_) ->

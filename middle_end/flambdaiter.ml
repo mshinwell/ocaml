@@ -30,9 +30,10 @@ let apply_on_subexpressions f (flam : _ Flambda.t) =
   | Fstaticcatch (_,_,f1,f2,_) ->
     f f1; f f2;
 
-  | Ffor (_,f1,f2,_,f3,_)
-  | Fifthenelse (f1,f2,f3,_) ->
+  | Ffor (_,f1,f2,_,f3,_) ->
     f f1;f f2;f f3
+  | Fifthenelse (_,f2,f3,_) ->
+    f f2;f f3
 
   | Fstaticraise (_,l,_)
   | Fprim (_,l,_,_) ->
@@ -79,9 +80,10 @@ let subexpressions (flam : _ Flambda.t) =
   | Fstaticcatch (_,_,f1,f2,_) ->
       [f1; f2]
 
-  | Ffor (_,f1,f2,_,f3,_)
-  | Fifthenelse (f1,f2,f3,_) ->
+  | Ffor (_,f1,f2,_,f3,_) ->
       [f1; f2; f3]
+  | Fifthenelse (_,f2,f3,_) ->
+      [f2; f3]
 
   | Fstaticraise (_,l,_)
   | Fprim (_,l,_,_) -> l
@@ -130,9 +132,10 @@ let iter_general ~toplevel f t =
     | Fstaticcatch (_,_,f1,f2,_) ->
       aux f1; aux f2;
 
-    | Ffor (_,f1,f2,_,f3,_)
-    | Fifthenelse (f1,f2,f3,_) ->
+    | Ffor (_,f1,f2,_,f3,_) ->
       aux f1;aux f2;aux f3
+    | Fifthenelse (_,f2,f3,_) ->
+      aux f2;aux f3
 
     | Fstaticraise (_,l,_)
     | Fprim (_,l,_,_) ->
@@ -240,7 +243,6 @@ let map_general ~toplevel f tree =
           let handler = aux handler in
           Ftrywith(body, id, handler, annot)
       | Fifthenelse(arg, ifso, ifnot, annot) ->
-          let arg = aux arg in
           let ifso = aux ifso in
           let ifnot = aux ifnot in
           Fifthenelse(arg, ifso, ifnot, annot)
@@ -428,7 +430,6 @@ let fold_subexpressions (type acc) f (acc : acc) (flam : _ Flambda.t)
       acc, Fwhile(cond, body, d)
 
   | Fifthenelse(cond,ifso,ifnot,d) ->
-      let acc, cond = f acc Variable.Set.empty cond in
       let acc, ifso = f acc Variable.Set.empty ifso in
       let acc, ifnot = f acc Variable.Set.empty ifnot in
       acc, Fifthenelse(cond,ifso,ifnot,d)
@@ -566,7 +567,7 @@ let map_data (type t1) (type t2) (f:t1 -> t2)
     | Ftrywith(body, id, handler, v) ->
         Ftrywith(mapper body, id, mapper handler, f v)
     | Fifthenelse(arg, ifso, ifnot, v) ->
-        Fifthenelse(mapper arg, mapper ifso, mapper ifnot, f v)
+        Fifthenelse(arg, mapper ifso, mapper ifnot, f v)
     | Fsequence(lam1, lam2, v) ->
         Fsequence(mapper lam1, mapper lam2, f v)
     | Fwhile(cond, body, v) ->

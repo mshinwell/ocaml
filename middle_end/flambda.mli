@@ -113,7 +113,7 @@ type 'a t =
   | Fstaticraise of Static_exception.t * 'a t list * 'a
   | Fstaticcatch of Static_exception.t * Variable.t list * 'a t * 'a t * 'a
   | Ftrywith of 'a t * Variable.t * 'a t * 'a
-  | Fifthenelse of 'a t * 'a t * 'a t * 'a
+  | Fifthenelse of Variable.t * 'a t * 'a t * 'a
   | Fsequence of 'a t * 'a t * 'a
   | Fwhile of 'a t * 'a t * 'a
   | Ffor of Variable.t * 'a t * 'a t * Asttypes.direction_flag * 'a t * 'a

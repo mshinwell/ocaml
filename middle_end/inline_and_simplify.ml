@@ -315,15 +315,17 @@ let rec loop env r tree =
      exactly is happening here? *)
   f, ret r (Backend.really_import_approx (R.approx r))
 
+and loop_var env r id annot : 'a Flambda.t * R.t =
+  let id = Freshening.apply_variable (E.freshening env) id in
+  let tree : _ Flambda.t = Fvar (id, annot) in
+  check_var_and_constant_result env r tree (E.find id env)
+
 and loop_direct env r (tree : 'a Flambda.t) : 'a Flambda.t * R.t =
   match tree with
   | Fsymbol (sym, _annot) ->
     let module Backend = (val (E.backend env) : Backend_intf.S) in
     check_constant_result r tree (Backend.import_symbol sym)
-  | Fvar (id, annot) ->
-    let id = Freshening.apply_variable (E.freshening env) id in
-    let tree : _ Flambda.t = Fvar (id, annot) in
-    check_var_and_constant_result env r tree (E.find id env)
+  | Fvar (id, annot) -> loop_var env r id annot
   | Fconst (cst, _) -> tree, ret r (A.const_approx cst)
   | Fapply ({ func = funct; args; kind = _; dbg = dbg }, annot) ->
     let funct, r = loop env r funct in
@@ -535,7 +537,8 @@ and loop_direct env r (tree : 'a Flambda.t) : 'a Flambda.t * R.t =
     (* When arg is the constant false or true (or something considered
        as true), we can drop the if and replace it by a sequence.
        if arg is not effectful we can also drop it. *)
-    let arg, r = loop env r arg in
+    (* CR mshinwell: not quite right (remove annot) *)
+    let arg, r = loop_var env r arg annot in
     begin match (R.approx r).descr with
     | Value_constptr 0 ->
       (* constant false, keep ifnot *)

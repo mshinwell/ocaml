@@ -99,8 +99,8 @@ let rec no_effects (flam : _ Flambda.t) =
     Variable.Map.for_all (fun _id def -> no_effects def) free_vars
   | Fselect_closure ({ set_of_closures }, _) -> no_effects set_of_closures
   | Fvar_within_closure ({ closure }, _) -> no_effects closure
-  | Fifthenelse (cond, ifso, ifnot, _) ->
-    no_effects cond && no_effects ifso && no_effects ifnot
+  | Fifthenelse (_, ifso, ifnot, _) ->
+    no_effects ifso && no_effects ifnot
   | Fswitch (lam, sw, _) ->
     let aux (_, lam) = no_effects lam in
     no_effects lam

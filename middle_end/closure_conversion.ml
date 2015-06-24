@@ -468,8 +468,13 @@ let rec close t env (lam : Lambda.lambda) : _ Flambda.t =
     Ftrywith (close t env body, var, close t (Env.add_var env id var) handler,
       nid ())
   | Lifthenelse (arg, ifso, ifnot) ->
-    Fifthenelse (close t env arg, close t env ifso, close t env ifnot,
-      nid ~name:"if" ())
+    let arg = close t env arg in
+    let arg_var = fresh_variable t ~name:"if_condition" in
+    let ifso = close t env ifso in
+    let ifnot = close t env ifnot in
+    Flet (Immutable, arg_var, arg,
+      Fifthenelse (arg_var, ifso, ifnot, nid ~name:"if" ()),
+      nid ~name:"if_let" ())
   | Lsequence (lam1, lam2) ->
     Fsequence (close t env lam1, close t env lam2, nid ~name:"seq" ())
   | Lwhile (cond, body) -> Fwhile (close t env cond, close t env body, nid ())

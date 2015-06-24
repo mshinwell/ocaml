@@ -101,9 +101,9 @@ let lambda_smaller' lam ~than:threshold =
       incr size; lambda_size body; lambda_size handler
     | Ftrywith (body, _, handler, _) ->
       size := !size + 8; lambda_size body; lambda_size handler
-    | Fifthenelse (cond, ifso, ifnot, _) ->
+    | Fifthenelse (_, ifso, ifnot, _) ->
       size := !size + 2;
-      lambda_size cond; lambda_size ifso; lambda_size ifnot
+      lambda_size ifso; lambda_size ifnot
     | Fsequence (lam1, lam2, _) ->
       lambda_size lam1; lambda_size lam2
     | Fwhile (cond, body, _) ->
