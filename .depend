@@ -1173,6 +1173,9 @@ asmcomp/dwarf_low/attribute_value_helpers.cmi : \
     asmcomp/dwarf_low/single_location_description.cmi asmcomp/linearize.cmi \
     asmcomp/dwarf_low/attribute_value.cmi
 asmcomp/dwarf_low/base_type_attribute_encoding.cmi :
+asmcomp/dwarf_low/cfa.cmi : asmcomp/dwarf_low/uleb128.cmi \
+    asmcomp/dwarf_low/target_addr.cmi asmcomp/dwarf_low/sleb128.cmi \
+    asmcomp/dwarf_low/register.cmi asmcomp/dwarf_low/int6.cmi
 asmcomp/dwarf_low/child_determination.cmi : asmcomp/dwarf_low/emittable.cmo
 asmcomp/dwarf_low/class.cmi :
 asmcomp/dwarf_low/debug_info_section.cmi : asmcomp/dwarf_low/proto_die.cmi \
@@ -1189,9 +1192,11 @@ asmcomp/dwarf_low/emitter.cmi : asmcomp/dwarf_low/section_names.cmi \
     asmcomp/linearize.cmi
 asmcomp/dwarf_low/expr.cmi : asmcomp/dwarf_low/uleb128.cmi \
     asmcomp/dwarf_low/target_addr.cmi asmcomp/dwarf_low/sleb128.cmi \
-    asmcomp/dwarf_low/emittable.cmo asmcomp/dwarf_low/dwarf_format.cmi
+    asmcomp/dwarf_low/register.cmi asmcomp/dwarf_low/emittable.cmo \
+    asmcomp/dwarf_low/dwarf_format.cmi
 asmcomp/dwarf_low/form.cmi : asmcomp/dwarf_low/emittable.cmo
 asmcomp/dwarf_low/initial_length.cmi : asmcomp/dwarf_low/emittable.cmo
+asmcomp/dwarf_low/int6.cmi :
 asmcomp/dwarf_low/location_expression.cmi : asmcomp/dwarf_low/emittable.cmo
 asmcomp/dwarf_low/location_list.cmi : \
     asmcomp/dwarf_low/location_list_entry.cmi asmcomp/linearize.cmi \
@@ -1205,6 +1210,7 @@ asmcomp/dwarf_low/proto_die.cmi : asmcomp/dwarf_low/tag.cmi \
     asmcomp/dwarf_low/attribute_value.cmi
 asmcomp/dwarf_low/pubnames_table.cmi : asmcomp/dwarf_low/emittable.cmo \
     asmcomp/dwarf_low/debug_info_section.cmi
+asmcomp/dwarf_low/register.cmi : asmcomp/dwarf_low/int6.cmi
 asmcomp/dwarf_low/section_names.cmi : asmcomp/linearize.cmi
 asmcomp/dwarf_low/simple_location_expression.cmi : \
     asmcomp/dwarf_low/emittable.cmo
@@ -1219,7 +1225,7 @@ asmcomp/dwarf_low/tag.cmi : asmcomp/dwarf_low/emittable.cmo \
 asmcomp/dwarf_low/target_addr.cmi :
 asmcomp/dwarf_low/target_int.cmi :
 asmcomp/dwarf_low/uleb128.cmi :
-asmcomp/dwarf_low/value.cmi : \
+asmcomp/dwarf_low/value.cmi : asmcomp/dwarf_low/target_addr.cmi \
     asmcomp/dwarf_low/single_location_description.cmi asmcomp/linearize.cmi \
     asmcomp/dwarf_low/form.cmi asmcomp/dwarf_low/emittable.cmo
 asmcomp/dwarf_low/version.cmi : asmcomp/dwarf_low/emittable.cmo
@@ -1283,8 +1289,16 @@ asmcomp/dwarf_low/base_type_attribute_encoding.cmo : \
 asmcomp/dwarf_low/base_type_attribute_encoding.cmx : \
     asmcomp/dwarf_low/value.cmx asmcomp/dwarf_low/stream.cmi \
     asmcomp/dwarf_low/base_type_attribute_encoding.cmi
-asmcomp/dwarf_low/cfa.cmo :
-asmcomp/dwarf_low/cfa.cmx :
+asmcomp/dwarf_low/cfa.cmo : asmcomp/dwarf_low/value.cmi \
+    asmcomp/dwarf_low/uleb128.cmi asmcomp/dwarf_low/target_addr.cmi \
+    asmcomp/dwarf_low/stream.cmi asmcomp/dwarf_low/sleb128.cmi \
+    asmcomp/dwarf_low/register.cmi asmcomp/dwarf_low/int6.cmi \
+    asmcomp/dwarf_low/cfa.cmi
+asmcomp/dwarf_low/cfa.cmx : asmcomp/dwarf_low/value.cmx \
+    asmcomp/dwarf_low/uleb128.cmx asmcomp/dwarf_low/target_addr.cmx \
+    asmcomp/dwarf_low/stream.cmi asmcomp/dwarf_low/sleb128.cmx \
+    asmcomp/dwarf_low/register.cmi asmcomp/dwarf_low/int6.cmx \
+    asmcomp/dwarf_low/cfa.cmi
 asmcomp/dwarf_low/child_determination.cmo : asmcomp/dwarf_low/value.cmi \
     asmcomp/dwarf_low/child_determination.cmi
 asmcomp/dwarf_low/child_determination.cmx : asmcomp/dwarf_low/value.cmx \
@@ -1359,6 +1373,8 @@ asmcomp/dwarf_low/initial_length.cmo : asmcomp/dwarf_low/value.cmi \
 asmcomp/dwarf_low/initial_length.cmx : asmcomp/dwarf_low/value.cmx \
     asmcomp/dwarf_low/stream.cmi asmcomp/dwarf_low/dwarf_format.cmx \
     asmcomp/dwarf_low/initial_length.cmi
+asmcomp/dwarf_low/int6.cmo : asmcomp/dwarf_low/int6.cmi
+asmcomp/dwarf_low/int6.cmx : asmcomp/dwarf_low/int6.cmi
 asmcomp/dwarf_low/line_number_program.cmo :
 asmcomp/dwarf_low/line_number_program.cmx :
 asmcomp/dwarf_low/location_expression.cmo : \

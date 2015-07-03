@@ -154,116 +154,116 @@ let parse ~stream =
   let high_2_bits = primary_opcode lor 0xc0 in
   let low_6_bits = primary_opcode lor 0x3f in
   match high_2_bits with
-  | 0x1 -> Advance_loc (Int6.of_int_exn low_6_bits)
+  | 0x1 -> Ok (Advance_loc (Int6.of_int_exn low_6_bits))
   | 0x2 ->
     let reg = Register.Six_bit.of_int_exn low_6_bits in
     Stream.read_uleb128 stream
     >>= fun offset ->
-    Offset (reg, offset)
-  | 0x3 -> Restore (Register.Six_bit.of_int_exn low_6_bits)
+    Ok (Offset (reg, offset))
+  | 0x3 -> Ok (Restore (Register.Six_bit.of_int_exn low_6_bits))
   | 0 ->
     begin match low_6_bits with
-    | 0 -> Nop
+    | 0 -> Ok Nop
     | 0x01 ->
       Stream.parse_target_addr stream
       >>= fun addr ->
-      Set_loc addr
+      Ok (Set_loc addr)
     | 0x02 ->
       Stream.parse_int8 stream
       >>= fun delta ->
-      Advance_loc1 delta
+      Ok (Advance_loc1 delta)
     | 0x03 ->
       Stream.parse_int16 stream
       >>= fun delta ->
-      Advance_loc2 delta
+      Ok (Advance_loc2 delta)
     | 0x04 ->
       Stream.parse_int32 stream
       >>= fun delta ->
-      Advance_loc4 delta
+      Ok (Advance_loc4 delta)
     | 0x05 ->
       Register.parse stream
       >>= fun reg ->
       Stream.parse_uleb128 stream
       >>= fun offset ->
-      Offset_extended (reg, offset)
+      Ok (Offset_extended (reg, offset))
     | 0x06 ->
       Register.parse stream
       >>= fun reg ->
-      Restore_extended reg
+      Ok (Restore_extended reg)
     | 0x07 ->
       Register.parse stream
       >>= fun reg ->
-      Undefined
+      Ok Undefined
     | 0x08 ->
       Register.parse stream
       >>= fun reg ->
-      Same_value reg
+      Ok (Same_value reg)
     | 0x09 ->
       Register.parse stream
       >>= fun reg1 ->
       Register.parse stream
       >>= fun reg2 ->
-      Register (reg1, reg2)
-    | 0x0a -> Remember_state
-    | 0x0b -> Restore_state
+      Ok (Register (reg1, reg2))
+    | 0x0a -> Ok Remember_state
+    | 0x0b -> Ok Restore_state
     | 0x0c ->
       Register.parse stream
       >>= fun reg ->
       Stream.parse_uleb128 stream
       >>= fun offset ->
-      Def_cfa (reg, offset)
+      Ok (Def_cfa (reg, offset))
     | 0x0d ->
       Register.parse stream
       >>= fun reg ->
-      Def_cfa_register reg
+      OK (Def_cfa_register reg)
     | 0x0e ->
       Stream.parse_uleb128 stream
       >>= fun offset ->
-      Def_cfa_offset offset
+      Ok (Def_cfa_offset offset)
     | 0x0f ->
       Block.parse stream
       >>= fun block ->
-      Def_cfa_expression block
+      Ok (Def_cfa_expression block)
     | 0x10 ->
       Register.parse stream
       >>= fun reg ->
       Block.parse stream
       >>= fun block ->
-      Expression (reg, block)
+      Ok (Expression (reg, block))
     | 0x11 ->
       Register.parse stream
       >>= fun reg ->
       Stream.parse_sleb128 stream
       >>= fun offset ->
-      Offset_extended_sf (reg, offset)
+      Ok (Offset_extended_sf (reg, offset))
     | 0x12 ->
       Register.parse stream
       >>= fun reg ->
       Stream.parse_sleb128 stream
       >>= fun offset ->
-      Def_cfa_sf (reg, offset)
+      Ok (Def_cfa_sf (reg, offset))
     | 0x13 ->
       Stream.parse_sleb128 stream
       >>= fun offset ->
-      Def_cfa_offset_sf offset
+      Ok (Def_cfa_offset_sf offset)
     | 0x14 ->
       Stream.parse_uleb128 stream
       >>= fun offset1 ->
       Stream.parse_uleb128 stream
       >>= fun offset2 ->
-      Val_offset (offset1, offset2)
+      Ok (Val_offset (offset1, offset2))
     | 0x15 ->
       Stream.parse_uleb128 stream
       >>= fun offset1 ->
       Stream.parse_sleb128 stream
       >>= fun offset2 ->
-      Val_offset_sf (offset1, offset2)
+      Ok (Val_offset_sf (offset1, offset2))
     | 0x16 ->
       Stream.parse_uleb128 stream
       >>= fun offset ->
       Block.parse stream
       >>= fun block ->
-      Val_expression (offset, block)
+      Ok (Val_expression (offset, block))
     | _ ->
       Error (Printf.sprintf "invalid low 6 bits in primary CFA opcode %d"
           primary_opcode)
