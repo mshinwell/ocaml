@@ -117,12 +117,6 @@ let read_int64 t : _ Or_error.t =
                 (Int64.logor (Int64.shift_left second_byte 8)
                   first_byte)))
 
-let read_uleb128 t : _ Or_error.t =
-
-
-let read_sleb128 t : _ Or_error.t =
-
-
 let read_null_terminated_string t : _ Or_error.t =
   let buf = Buffer.create 42 in
   let result = ref None in

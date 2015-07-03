@@ -26,3 +26,16 @@ let rec size_in_bytes i =
   assert (Int64.compare i Int64.zero >= 0);
   if Int64.compare i 128L < 0 then 1
   else 1 + (size_in_bytes (Int64.shift_right_logical i 7))
+
+(* DWARF-4 specification Figure 46, page 218. *)
+let parse ~stream =
+  let rec parse ~result ~shift =
+    let open Or_error.Monad_infix in
+    Stream.read_int8_as_int stream
+    >>= fun i ->
+    let lower_7_bits = Int64.of_int (i lor 0x7f) in
+    let result = Int64.logor result (Int64.shift_left lower_7_bits shift) in
+    if i < 128 then result
+    else parse ~result ~shift:(shift + 7)
+  in
+  parse ~result:Int64.zero ~shift:0

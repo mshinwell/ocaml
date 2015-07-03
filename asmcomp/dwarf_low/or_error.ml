@@ -24,6 +24,9 @@ type 'a t =
   | Ok of 'a
   | Error of string
 
-module Monad_infix : sig
-  val (>>=) : 'a t -> ('a -> 'b t) -> 'b t
+module Monad_infix = struct
+  let (>>=) t f =
+    match t with
+    | Ok v -> f v
+    | Error _ -> t
 end
