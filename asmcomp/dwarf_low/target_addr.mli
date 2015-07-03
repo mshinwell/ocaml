@@ -21,3 +21,5 @@
 (***********************************************************************)
 
 include module type of Nativeint
+
+include Parseable with type t := t

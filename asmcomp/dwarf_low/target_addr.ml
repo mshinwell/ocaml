@@ -23,3 +23,17 @@
 (* CR-someday mshinwell: if proper cross compilation support is
    implemented, change this as appropriate. *)
 include Nativeint
+
+let parse t ~stream =
+  let open Or_error.Monad_infix in
+  match Sys.word_size with
+  | 8 ->
+    Stream.read_int64 stream
+    >>= fun addr ->
+    Ok (Int64.to_nativeint addr)
+  | 4 ->
+    Stream.read_int32 stream
+    >>= fun addr ->
+    Ok (Nativeint.of_int32 addr)
+  | size ->
+    Error (Printf.sprintf "bad system word size %d for Target_addr" size)
