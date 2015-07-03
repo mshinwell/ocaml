@@ -20,9 +20,8 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* The number of bytes occupied by the ULEB128 representation of the
-   given integer. *)
-val uleb128_size : int -> int
+(* Unsigned LEB128 encoding (DWARF-4 standard section 7.6). *)
 
-(* Similarly for LEB128 (= signed). *)
-val leb128_size : int -> int
+type t
+
+val size_in_bytes : t -> int

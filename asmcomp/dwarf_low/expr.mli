@@ -20,169 +20,166 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* DWARF expressions (DWARF-4 standard section 7.7.1) *)
+(** DWARF expressions (DWARF-4 standard section 7.7.1) *)
 
-type register_number = int
-
-(* Some constructors that accept [Int64.t] arguments are actually
-   represented in DWARF sections using variable-length encodings. *)
+(** We omit the "DW_OP" prefix. *)
 type t =
-  | DW_OP_addr of Target_addr.t
-  | DW_OP_deref
-  | DW_OP_const1u of Int8.t
-  | DW_OP_const1s of Int8.t
-  | DW_OP_const2u of Int16.t
-  | DW_OP_const2s of Int16.t
-  | DW_OP_const4u of Int32.t
-  | DW_OP_const4s of Int32.t
-  | DW_OP_const8u of Int64.t
-  | DW_OP_const8s of Int64.t
-  | DW_OP_constu of Int64.t
-  | DW_OP_consts of Int64.t
-  | DW_OP_du
-  | DW_OP_drop
-  | DW_OP_over
-  | DW_OP_pick of Int8.t
-  | DW_OP_swap
-  | DW_OP_rot
-  | DW_OP_xderef
-  | DW_OP_abs
-  | DW_OP_and
-  | DW_OP_div
-  | DW_OP_minus
-  | DW_OP_mod
-  | DW_OP_mul
-  | DW_OP_neg
-  | DW_OP_not
-  | DW_OP_or
-  | DW_OP_plus
-  | DW_OP_plus_uconst of Int64.t
-  | DW_OP_shl
-  | DW_OP_shr
-  | DW_OP_shra
-  | DW_OP_xor
-  | DW_OP_skip of Int16.t
-  | DW_OP_bra of Int16.t
-  | DW_OP_eq
-  | DW_OP_ge
-  | DW_OP_gt
-  | DW_OP_le
-  | DW_OP_lt
-  | DW_OP_ne
-  | DW_OP_lit0
-  | DW_OP_lit1
-  | DW_OP_lit2
-  | DW_OP_lit3
-  | DW_OP_lit4
-  | DW_OP_lit5
-  | DW_OP_lit6
-  | DW_OP_lit7
-  | DW_OP_lit8
-  | DW_OP_lit9
-  | DW_OP_lit10
-  | DW_OP_lit11
-  | DW_OP_lit12
-  | DW_OP_lit13
-  | DW_OP_lit14
-  | DW_OP_lit15
-  | DW_OP_lit16
-  | DW_OP_lit17
-  | DW_OP_lit18
-  | DW_OP_lit19
-  | DW_OP_lit20
-  | DW_OP_lit21
-  | DW_OP_lit22
-  | DW_OP_lit23
-  | DW_OP_lit24
-  | DW_OP_lit25
-  | DW_OP_lit26
-  | DW_OP_lit27
-  | DW_OP_lit28
-  | DW_OP_lit29
-  | DW_OP_lit30
-  | DW_OP_lit31
-  | DW_OP_reg0
-  | DW_OP_reg1
-  | DW_OP_reg2
-  | DW_OP_reg3
-  | DW_OP_reg4
-  | DW_OP_reg5
-  | DW_OP_reg6
-  | DW_OP_reg7
-  | DW_OP_reg8
-  | DW_OP_reg9
-  | DW_OP_reg10
-  | DW_OP_reg11
-  | DW_OP_reg12
-  | DW_OP_reg13
-  | DW_OP_reg14
-  | DW_OP_reg15
-  | DW_OP_reg16
-  | DW_OP_reg17
-  | DW_OP_reg18
-  | DW_OP_reg19
-  | DW_OP_reg20
-  | DW_OP_reg21
-  | DW_OP_reg22
-  | DW_OP_reg23
-  | DW_OP_reg24
-  | DW_OP_reg25
-  | DW_OP_reg26
-  | DW_OP_reg27
-  | DW_OP_reg28
-  | DW_OP_reg29
-  | DW_OP_reg30
-  | DW_OP_reg31
-  | DW_OP_breg0 of Target_addr.t
-  | DW_OP_breg1 of Target_addr.t
-  | DW_OP_breg2 of Target_addr.t
-  | DW_OP_breg3 of Target_addr.t
-  | DW_OP_breg4 of Target_addr.t
-  | DW_OP_breg5 of Target_addr.t
-  | DW_OP_breg6 of Target_addr.t
-  | DW_OP_breg7 of Target_addr.t
-  | DW_OP_breg8 of Target_addr.t
-  | DW_OP_breg9 of Target_addr.t
-  | DW_OP_breg10 of Target_addr.t
-  | DW_OP_breg11 of Target_addr.t
-  | DW_OP_breg12 of Target_addr.t
-  | DW_OP_breg13 of Target_addr.t
-  | DW_OP_breg14 of Target_addr.t
-  | DW_OP_breg15 of Target_addr.t
-  | DW_OP_breg16 of Target_addr.t
-  | DW_OP_breg17 of Target_addr.t
-  | DW_OP_breg18 of Target_addr.t
-  | DW_OP_breg19 of Target_addr.t
-  | DW_OP_breg20 of Target_addr.t
-  | DW_OP_breg21 of Target_addr.t
-  | DW_OP_breg22 of Target_addr.t
-  | DW_OP_breg23 of Target_addr.t
-  | DW_OP_breg24 of Target_addr.t
-  | DW_OP_breg25 of Target_addr.t
-  | DW_OP_breg26 of Target_addr.t
-  | DW_OP_breg27 of Target_addr.t
-  | DW_OP_breg28 of Target_addr.t
-  | DW_OP_breg29 of Target_addr.t
-  | DW_OP_breg30 of Target_addr.t
-  | DW_OP_breg31 of Target_addr.t
-  | DW_OP_regx of register_number
-  | DW_OP_fbreg of Target_addr.t
-  | DW_OP_bregx of register_number * Target_addr.t
-  | DW_OP_piece of Int64.t
-  | DW_OP_deref_size of Int8.t
-  | DW_OP_xderef_size of Int8.t
-  | DW_OP_nop
-  | DW_OP_push_object_address
-  (* DW_OP_call* take the offset of a DIE within the current compilation
+  | Addr of Target_addr.t
+  | Deref
+  | Const1u of Int8.t
+  | Const1s of Int8.t
+  | Const2u of Int16.t
+  | Const2s of Int16.t
+  | Const4u of Int32.t
+  | Const4s of Int32.t
+  | Const8u of Int64.t
+  | Const8s of Int64.t
+  | Constu of Uleb128.t
+  | Consts of Sleb128.t
+  | Du
+  | Drop
+  | Over
+  | Pick of Int8.t
+  | Swap
+  | Rot
+  | Xderef
+  | Abs
+  | And
+  | Div
+  | Minus
+  | Mod
+  | Mul
+  | Neg
+  | Not
+  | Or
+  | Plus
+  | Plus_uconst of Uleb128.t
+  | Shl
+  | Shr
+  | Shra
+  | Xor
+  | Skip of Int16.t
+  | Bra of Int16.t
+  | Eq
+  | Ge
+  | Gt
+  | Le
+  | Lt
+  | Ne
+  | Lit0
+  | Lit1
+  | Lit2
+  | Lit3
+  | Lit4
+  | Lit5
+  | Lit6
+  | Lit7
+  | Lit8
+  | Lit9
+  | Lit10
+  | Lit11
+  | Lit12
+  | Lit13
+  | Lit14
+  | Lit15
+  | Lit16
+  | Lit17
+  | Lit18
+  | Lit19
+  | Lit20
+  | Lit21
+  | Lit22
+  | Lit23
+  | Lit24
+  | Lit25
+  | Lit26
+  | Lit27
+  | Lit28
+  | Lit29
+  | Lit30
+  | Lit31
+  | Reg0
+  | Reg1
+  | Reg2
+  | Reg3
+  | Reg4
+  | Reg5
+  | Reg6
+  | Reg7
+  | Reg8
+  | Reg9
+  | Reg10
+  | Reg11
+  | Reg12
+  | Reg13
+  | Reg14
+  | Reg15
+  | Reg16
+  | Reg17
+  | Reg18
+  | Reg19
+  | Reg20
+  | Reg21
+  | Reg22
+  | Reg23
+  | Reg24
+  | Reg25
+  | Reg26
+  | Reg27
+  | Reg28
+  | Reg29
+  | Reg30
+  | Reg31
+  | Breg0 of Target_addr.t
+  | Breg1 of Target_addr.t
+  | Breg2 of Target_addr.t
+  | Breg3 of Target_addr.t
+  | Breg4 of Target_addr.t
+  | Breg5 of Target_addr.t
+  | Breg6 of Target_addr.t
+  | Breg7 of Target_addr.t
+  | Breg8 of Target_addr.t
+  | Breg9 of Target_addr.t
+  | Breg10 of Target_addr.t
+  | Breg11 of Target_addr.t
+  | Breg12 of Target_addr.t
+  | Breg13 of Target_addr.t
+  | Breg14 of Target_addr.t
+  | Breg15 of Target_addr.t
+  | Breg16 of Target_addr.t
+  | Breg17 of Target_addr.t
+  | Breg18 of Target_addr.t
+  | Breg19 of Target_addr.t
+  | Breg20 of Target_addr.t
+  | Breg21 of Target_addr.t
+  | Breg22 of Target_addr.t
+  | Breg23 of Target_addr.t
+  | Breg24 of Target_addr.t
+  | Breg25 of Target_addr.t
+  | Breg26 of Target_addr.t
+  | Breg27 of Target_addr.t
+  | Breg28 of Target_addr.t
+  | Breg29 of Target_addr.t
+  | Breg30 of Target_addr.t
+  | Breg31 of Target_addr.t
+  | Regx of Register.t
+  | Fbreg of Target_addr.t
+  | Bregx of Register.t * Target_addr.t
+  | Piece of Uleb128.t
+  | Deref_size of Int8.t
+  | Xderef_size of Int8.t
+  | Nop
+  | Push_object_address
+  (* Call* take the offset of a DIE within the current compilation
      unit. *)
-  | DW_OP_call2 of Int16.t
-  | DW_OP_call4 of Int32.t
-  | DW_OP_call_ref of ??? (4 or 8 byte offset)
-  | DW_OP_form_tls_address
-  | DW_OP_call_frame_cfa
-  | DW_OP_bit_piece of Int64.t * Int64.t  (* size, offset *)
-  | DW_OP_implicit_value of Int64.t * Block.t
-  | DW_OP_stack_value
+  | Call2 of Int16.t
+  | Call4 of Int32.t
+  | Call_ref of Dwarf_format.Int.t
+  | Form_tls_address
+  | Call_frame_cfa
+  | Bit_piece of Uleb128.t * Uleb128.t  (* size, offset *)
+  | Implicit_value of Uleb128.t * Block.t
+  | Stack_value
 
 include Emittable.S with type t := t
 include Parseable.S with type t := t

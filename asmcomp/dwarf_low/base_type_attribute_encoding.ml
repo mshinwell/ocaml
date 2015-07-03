@@ -20,6 +20,8 @@
 (*                                                                     *)
 (***********************************************************************)
 
+type user = Int8.t
+
 type t =
   | Address
   | Boolean
@@ -37,13 +39,14 @@ type t =
   | Unsigned_fixed
   | Decimal_float
   | UTF
-  | User of Int8.t
+  | User of user
 
 let lo_user = 0x80
 let hi_user = 0xff
 
 let encode t =
   let code =
+    match t with
     | Signed -> 0x05
     | Address -> 0x01
     | Boolean -> 0x02
@@ -68,6 +71,7 @@ let encode t =
   Value.constant_one_byte_int code
 
 let parse ~stream =
+  let open Stream.Monad_infix in
   Stream.read_byte stream
   >>= function
   | 0x05 -> Ok Signed

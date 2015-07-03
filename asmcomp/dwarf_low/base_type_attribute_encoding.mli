@@ -20,9 +20,11 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* DWARF base type attribute encodings (DWARF-4 specification section 7.8). *)
+(** DWARF base type attribute encodings (DWARF-4 specification section 7.8). *)
 
-(* We omit the "DW_ATE_" prefix. *)
+type user = private Int8.t
+
+(** We omit the "DW_ATE_" prefix. *)
 type t =
   | Address
   | Boolean
@@ -40,7 +42,7 @@ type t =
   | Unsigned_fixed
   | Decimal_float
   | UTF
-  | User of Int8.t
+  | User of user
 
 include Emittable with type t := t
 include Parseable with type t := t

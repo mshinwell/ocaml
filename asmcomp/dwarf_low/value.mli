@@ -26,12 +26,19 @@ type 'form t
 
 include Emittable.S with type t := t
 
+val total_size : t list -> Int64.t
+
 val constant_true : Form.flag_present t
 val constant_bool : bool -> Form.data1 t
 val constant_one_byte_int : Int8.t -> Form.data1 t
 val constant_two_byte_int : Int16.t -> Form.data2 t
 val constant_four_byte_int : Int32.t -> Form.data4 t
 val constant_eight_byte_int : Int64.t -> Form.data8 t
+
+of_int8
+of_int16
+of_target_addr
+of_uleb128
 
 val indirect_string : string -> Form.strp t
 
@@ -45,6 +52,7 @@ val offset_into_debug_loc : Linearize.label -> Form.sec_offset t
 
 val location_description : Single_location_description.t -> Form.exprloc t
 
+val target_addr : Target_addr.t -> Form.xxx t
 
 
 

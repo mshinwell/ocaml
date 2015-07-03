@@ -185,287 +185,287 @@ let dw_op_hi_user = 0xff
 
 let emit t ~emitter =
   match t with
-  | DW_OP_addr addr ->
+  | Addr addr ->
     Emitter.emit_byte_exn emitter 0x03;
     Emitter.emit_native_int emitter addr
-  | DW_OP_deref -> Emitter.emit_byte_exn emitter 0x06
-  | DW_OP_const1u c ->
+  | Deref -> Emitter.emit_byte_exn emitter 0x06
+  | Const1u c ->
     Emitter.emit_byte_exn emitter 0x08;
     Emitter.emit_byte_exn emitter c
-  | DW_OP_const1s c ->
+  | Const1s c ->
     Emitter.emit_byte_exn emitter 0x09;
     Emitter.emit_byte_exn emitter c
-  | DW_OP_const2u c ->
+  | Const2u c ->
     Emitter.emit_byte_exn emitter 0x0a;
     Emitter.emit_two_byte_int emitter c
-  | DW_OP_const2s c ->
+  | Const2s c ->
     Emitter.emit_byte_exn emitter 0x0b;
     Emitter.emit_two_byte_int emitter c
-  | DW_OP_const4u c ->
+  | Const4u c ->
     Emitter.emit_byte_exn emitter 0x0c;
     Emitter.emit_four_byte_int emitter c
-  | DW_OP_const4s c ->
+  | Const4s c ->
     Emitter.emit_byte_exn emitter 0x0d;
     Emitter.emit_four_byte_int emitter c
-  | DW_OP_const8u c ->
+  | Const8u c ->
     Emitter.emit_byte_exn emitter 0x0e;
     Stream.write_int64 stream c
-  | DW_OP_const8s c ->
+  | Const8s c ->
     Emitter.emit_byte_exn emitter 0x0f;
     Stream.write_int64 stream c
-  | DW_OP_constu c ->
+  | Constu c ->
     Emitter.emit_byte_exn emitter 0x10;
     Emitter.emit_uleb128_from_int64 emitter c
-  | DW_OP_consts c ->
+  | Consts c ->
     Emitter.emit_byte_exn emitter 0x11;
     Emitter.emit_leb128_from_int64 emitter c
-  | DW_OP_dup -> Emitter.emit_byte_exn emitter 0x12
-  | DW_OP_drop -> Emitter.emit_byte_exn emitter 0x13
-  | DW_OP_over -> Emitter.emit_byte_exn emitter 0x14
-  | DW_OP_pick -> Emitter.write_byte emitter 0x15 (* check 0x15 *)
-  | DW_OP_swap -> Emitter.emit_byte_exn emitter 0x16
-  | DW_OP_rot -> Emitter.emit_byte_exn emitter 0x17
-  | DW_OP_xderef -> Emitter.emit_byte_exn emitter 0x18
-  | DW_OP_abs -> Emitter.emit_byte_exn emitter 0x19
-  | DW_OP_and -> Emitter.emit_byte_exn emitter 0x1a
-  | DW_OP_div -> Emitter.emit_byte_exn emitter 0x1b
-  | DW_OP_minus -> Emitter.emit_byte_exn emitter 0x1c
-  | DW_OP_mod -> Emitter.emit_byte_exn emitter 0x1d
-  | DW_OP_mul -> Emitter.emit_byte_exn emitter 0x1e
-  | DW_OP_neg -> Emitter.emit_byte_exn emitter 0x1f
-  | DW_OP_not -> Emitter.emit_byte_exn emitter 0x20
-  | DW_OP_or -> Emitter.emit_byte_exn emitter 0x21
-  | DW_OP_plus -> Emitter.emit_byte_exn emitter 0x22
-  | DW_OP_plus_uconst addend ->
+  | Dup -> Emitter.emit_byte_exn emitter 0x12
+  | Drop -> Emitter.emit_byte_exn emitter 0x13
+  | Over -> Emitter.emit_byte_exn emitter 0x14
+  | Pick -> Emitter.write_byte emitter 0x15 (* check 0x15 *)
+  | Swap -> Emitter.emit_byte_exn emitter 0x16
+  | Rot -> Emitter.emit_byte_exn emitter 0x17
+  | Xderef -> Emitter.emit_byte_exn emitter 0x18
+  | Abs -> Emitter.emit_byte_exn emitter 0x19
+  | And -> Emitter.emit_byte_exn emitter 0x1a
+  | Div -> Emitter.emit_byte_exn emitter 0x1b
+  | Minus -> Emitter.emit_byte_exn emitter 0x1c
+  | Mod -> Emitter.emit_byte_exn emitter 0x1d
+  | Mul -> Emitter.emit_byte_exn emitter 0x1e
+  | Neg -> Emitter.emit_byte_exn emitter 0x1f
+  | Not -> Emitter.emit_byte_exn emitter 0x20
+  | Or -> Emitter.emit_byte_exn emitter 0x21
+  | Plus -> Emitter.emit_byte_exn emitter 0x22
+  | Plus_uconst addend ->
     Emitter.emit_byte_exn emitter 0x23;
     Emitter.emit_uleb128_from_int64 emitter addend
-  | DW_OP_shl -> Emitter.emit_byte_exn emitter 0x24
-  | DW_OP_shr -> Emitter.emit_byte_exn emitter 0x25
-  | DW_OP_shra -> Emitter.emit_byte_exn emitter 0x26
-  | DW_OP_xor -> Emitter.emit_byte_exn emitter 0x27
-  | DW_OP_skip c ->
+  | Shl -> Emitter.emit_byte_exn emitter 0x24
+  | Shr -> Emitter.emit_byte_exn emitter 0x25
+  | Shra -> Emitter.emit_byte_exn emitter 0x26
+  | Xor -> Emitter.emit_byte_exn emitter 0x27
+  | Skip c ->
     Emitter.emit_byte_exn emitter 0x2f;
     Emitter.emit_two_byte_int emitter c
-  | DW_OP_bra ->
+  | Bra ->
     Emitter.emit_byte_exn emitter 0x28;
     Emitter.emit_two_byte_int emitter c
-  | DW_OP_eq -> Emitter.emit_byte_exn emitter 0x29
-  | DW_OP_ge -> Emitter.emit_byte_exn emitter 0x2a
-  | DW_OP_gt -> Emitter.emit_byte_exn emitter 0x2b
-  | DW_OP_le -> Emitter.emit_byte_exn emitter 0x2c
-  | DW_OP_lt -> Emitter.emit_byte_exn emitter 0x2d
-  | DW_OP_ne -> Emitter.emit_byte_exn emitter 0x2e
-  | DW_OP_lit0 -> Emitter.emit_byte_exn emitter 0x30
-  | DW_OP_lit1 -> Emitter.emit_byte_exn emitter 0x31
-  | DW_OP_lit2 -> Emitter.emit_byte_exn emitter 0x32
-  | DW_OP_lit3 -> Emitter.emit_byte_exn emitter 0x33
-  | DW_OP_lit4 -> Emitter.emit_byte_exn emitter 0x34
-  | DW_OP_lit5 -> Emitter.emit_byte_exn emitter 0x35
-  | DW_OP_lit6 -> Emitter.emit_byte_exn emitter 0x36
-  | DW_OP_lit7 -> Emitter.emit_byte_exn emitter 0x37
-  | DW_OP_lit8 -> Emitter.emit_byte_exn emitter 0x38
-  | DW_OP_lit9 -> Emitter.emit_byte_exn emitter 0x39
-  | DW_OP_lit10 -> Emitter.emit_byte_exn emitter 0x3a
-  | DW_OP_lit11 -> Emitter.emit_byte_exn emitter 0x3b
-  | DW_OP_lit12 -> Emitter.emit_byte_exn emitter 0x3c
-  | DW_OP_lit13 -> Emitter.emit_byte_exn emitter 0x3d
-  | DW_OP_lit14 -> Emitter.emit_byte_exn emitter 0x3e
-  | DW_OP_lit15 -> Emitter.emit_byte_exn emitter 0x3f
-  | DW_OP_lit16 -> Emitter.emit_byte_exn emitter 0x40
-  | DW_OP_lit17 -> Emitter.emit_byte_exn emitter 0x41
-  | DW_OP_lit18 -> Emitter.emit_byte_exn emitter 0x42
-  | DW_OP_lit19 -> Emitter.emit_byte_exn emitter 0x43
-  | DW_OP_lit20 -> Emitter.emit_byte_exn emitter 0x44
-  | DW_OP_lit21 -> Emitter.emit_byte_exn emitter 0x45
-  | DW_OP_lit22 -> Emitter.emit_byte_exn emitter 0x46
-  | DW_OP_lit23 -> Emitter.emit_byte_exn emitter 0x47
-  | DW_OP_lit24 -> Emitter.emit_byte_exn emitter 0x48
-  | DW_OP_lit25 -> Emitter.emit_byte_exn emitter 0x49
-  | DW_OP_lit26 -> Emitter.emit_byte_exn emitter 0x4a
-  | DW_OP_lit27 -> Emitter.emit_byte_exn emitter 0x4b
-  | DW_OP_lit28 -> Emitter.emit_byte_exn emitter 0x4c
-  | DW_OP_lit29 -> Emitter.emit_byte_exn emitter 0x4d
-  | DW_OP_lit30 -> Emitter.emit_byte_exn emitter 0x4e
-  | DW_OP_lit31 -> Emitter.emit_byte_exn emitter 0x4f
-  | DW_OP_reg0 -> Emitter.emit_byte_exn emitter 0x50
-  | DW_OP_reg1 -> Emitter.emit_byte_exn emitter 0x51
-  | DW_OP_reg2 -> Emitter.emit_byte_exn emitter 0x52
-  | DW_OP_reg3 -> Emitter.emit_byte_exn emitter 0x53
-  | DW_OP_reg4 -> Emitter.emit_byte_exn emitter 0x54
-  | DW_OP_reg5 -> Emitter.emit_byte_exn emitter 0x55
-  | DW_OP_reg6 -> Emitter.emit_byte_exn emitter 0x56
-  | DW_OP_reg7 -> Emitter.emit_byte_exn emitter 0x57
-  | DW_OP_reg8 -> Emitter.emit_byte_exn emitter 0x58
-  | DW_OP_reg9 -> Emitter.emit_byte_exn emitter 0x59
-  | DW_OP_reg10 -> Emitter.emit_byte_exn emitter 0x5a
-  | DW_OP_reg11 -> Emitter.emit_byte_exn emitter 0x5b
-  | DW_OP_reg12 -> Emitter.emit_byte_exn emitter 0x5c
-  | DW_OP_reg13 -> Emitter.emit_byte_exn emitter 0x5d
-  | DW_OP_reg14 -> Emitter.emit_byte_exn emitter 0x5e
-  | DW_OP_reg15 -> Emitter.emit_byte_exn emitter 0x5f
-  | DW_OP_reg16 -> Emitter.emit_byte_exn emitter 0x60
-  | DW_OP_reg17 -> Emitter.emit_byte_exn emitter 0x61
-  | DW_OP_reg18 -> Emitter.emit_byte_exn emitter 0x62
-  | DW_OP_reg19 -> Emitter.emit_byte_exn emitter 0x63
-  | DW_OP_reg20 -> Emitter.emit_byte_exn emitter 0x64
-  | DW_OP_reg21 -> Emitter.emit_byte_exn emitter 0x65
-  | DW_OP_reg22 -> Emitter.emit_byte_exn emitter 0x66
-  | DW_OP_reg23 -> Emitter.emit_byte_exn emitter 0x67
-  | DW_OP_reg24 -> Emitter.emit_byte_exn emitter 0x68
-  | DW_OP_reg25 -> Emitter.emit_byte_exn emitter 0x69
-  | DW_OP_reg26 -> Emitter.emit_byte_exn emitter 0x6a
-  | DW_OP_reg27 -> Emitter.emit_byte_exn emitter 0x6b
-  | DW_OP_reg28 -> Emitter.emit_byte_exn emitter 0x6c
-  | DW_OP_reg29 -> Emitter.emit_byte_exn emitter 0x6d
-  | DW_OP_reg30 -> Emitter.emit_byte_exn emitter 0x6e
-  | DW_OP_reg31 -> Emitter.emit_byte_exn emitter 0x6f
-  | DW_OP_breg0 offset ->
+  | Eq -> Emitter.emit_byte_exn emitter 0x29
+  | Ge -> Emitter.emit_byte_exn emitter 0x2a
+  | Gt -> Emitter.emit_byte_exn emitter 0x2b
+  | Le -> Emitter.emit_byte_exn emitter 0x2c
+  | Lt -> Emitter.emit_byte_exn emitter 0x2d
+  | Ne -> Emitter.emit_byte_exn emitter 0x2e
+  | Lit0 -> Emitter.emit_byte_exn emitter 0x30
+  | Lit1 -> Emitter.emit_byte_exn emitter 0x31
+  | Lit2 -> Emitter.emit_byte_exn emitter 0x32
+  | Lit3 -> Emitter.emit_byte_exn emitter 0x33
+  | Lit4 -> Emitter.emit_byte_exn emitter 0x34
+  | Lit5 -> Emitter.emit_byte_exn emitter 0x35
+  | Lit6 -> Emitter.emit_byte_exn emitter 0x36
+  | Lit7 -> Emitter.emit_byte_exn emitter 0x37
+  | Lit8 -> Emitter.emit_byte_exn emitter 0x38
+  | Lit9 -> Emitter.emit_byte_exn emitter 0x39
+  | Lit10 -> Emitter.emit_byte_exn emitter 0x3a
+  | Lit11 -> Emitter.emit_byte_exn emitter 0x3b
+  | Lit12 -> Emitter.emit_byte_exn emitter 0x3c
+  | Lit13 -> Emitter.emit_byte_exn emitter 0x3d
+  | Lit14 -> Emitter.emit_byte_exn emitter 0x3e
+  | Lit15 -> Emitter.emit_byte_exn emitter 0x3f
+  | Lit16 -> Emitter.emit_byte_exn emitter 0x40
+  | Lit17 -> Emitter.emit_byte_exn emitter 0x41
+  | Lit18 -> Emitter.emit_byte_exn emitter 0x42
+  | Lit19 -> Emitter.emit_byte_exn emitter 0x43
+  | Lit20 -> Emitter.emit_byte_exn emitter 0x44
+  | Lit21 -> Emitter.emit_byte_exn emitter 0x45
+  | Lit22 -> Emitter.emit_byte_exn emitter 0x46
+  | Lit23 -> Emitter.emit_byte_exn emitter 0x47
+  | Lit24 -> Emitter.emit_byte_exn emitter 0x48
+  | Lit25 -> Emitter.emit_byte_exn emitter 0x49
+  | Lit26 -> Emitter.emit_byte_exn emitter 0x4a
+  | Lit27 -> Emitter.emit_byte_exn emitter 0x4b
+  | Lit28 -> Emitter.emit_byte_exn emitter 0x4c
+  | Lit29 -> Emitter.emit_byte_exn emitter 0x4d
+  | Lit30 -> Emitter.emit_byte_exn emitter 0x4e
+  | Lit31 -> Emitter.emit_byte_exn emitter 0x4f
+  | Reg0 -> Emitter.emit_byte_exn emitter 0x50
+  | Reg1 -> Emitter.emit_byte_exn emitter 0x51
+  | Reg2 -> Emitter.emit_byte_exn emitter 0x52
+  | Reg3 -> Emitter.emit_byte_exn emitter 0x53
+  | Reg4 -> Emitter.emit_byte_exn emitter 0x54
+  | Reg5 -> Emitter.emit_byte_exn emitter 0x55
+  | Reg6 -> Emitter.emit_byte_exn emitter 0x56
+  | Reg7 -> Emitter.emit_byte_exn emitter 0x57
+  | Reg8 -> Emitter.emit_byte_exn emitter 0x58
+  | Reg9 -> Emitter.emit_byte_exn emitter 0x59
+  | Reg10 -> Emitter.emit_byte_exn emitter 0x5a
+  | Reg11 -> Emitter.emit_byte_exn emitter 0x5b
+  | Reg12 -> Emitter.emit_byte_exn emitter 0x5c
+  | Reg13 -> Emitter.emit_byte_exn emitter 0x5d
+  | Reg14 -> Emitter.emit_byte_exn emitter 0x5e
+  | Reg15 -> Emitter.emit_byte_exn emitter 0x5f
+  | Reg16 -> Emitter.emit_byte_exn emitter 0x60
+  | Reg17 -> Emitter.emit_byte_exn emitter 0x61
+  | Reg18 -> Emitter.emit_byte_exn emitter 0x62
+  | Reg19 -> Emitter.emit_byte_exn emitter 0x63
+  | Reg20 -> Emitter.emit_byte_exn emitter 0x64
+  | Reg21 -> Emitter.emit_byte_exn emitter 0x65
+  | Reg22 -> Emitter.emit_byte_exn emitter 0x66
+  | Reg23 -> Emitter.emit_byte_exn emitter 0x67
+  | Reg24 -> Emitter.emit_byte_exn emitter 0x68
+  | Reg25 -> Emitter.emit_byte_exn emitter 0x69
+  | Reg26 -> Emitter.emit_byte_exn emitter 0x6a
+  | Reg27 -> Emitter.emit_byte_exn emitter 0x6b
+  | Reg28 -> Emitter.emit_byte_exn emitter 0x6c
+  | Reg29 -> Emitter.emit_byte_exn emitter 0x6d
+  | Reg30 -> Emitter.emit_byte_exn emitter 0x6e
+  | Reg31 -> Emitter.emit_byte_exn emitter 0x6f
+  | Breg0 offset ->
     Emitter.emit_byte_exn emitter 0x70;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg1 offset ->
+  | Breg1 offset ->
     Emitter.emit_byte_exn emitter 0x71;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg2 offset ->
+  | Breg2 offset ->
     Emitter.emit_byte_exn emitter 0x72;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg3 offset ->
+  | Breg3 offset ->
     Emitter.emit_byte_exn emitter 0x73;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg4 offset ->
+  | Breg4 offset ->
     Emitter.emit_byte_exn emitter 0x74;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg5 offset ->
+  | Breg5 offset ->
     Emitter.emit_byte_exn emitter 0x75;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg6 offset ->
+  | Breg6 offset ->
     Emitter.emit_byte_exn emitter 0x76;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg7 offset ->
+  | Breg7 offset ->
     Emitter.emit_byte_exn emitter 0x77;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg8 offset ->
+  | Breg8 offset ->
     Emitter.emit_byte_exn emitter 0x78;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg9 offset ->
+  | Breg9 offset ->
     Emitter.emit_byte_exn emitter 0x79;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg10 offset ->
+  | Breg10 offset ->
     Emitter.emit_byte_exn emitter 0x7a;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg11 offset ->
+  | Breg11 offset ->
     Emitter.emit_byte_exn emitter 0x7b;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg12 offset ->
+  | Breg12 offset ->
     Emitter.emit_byte_exn emitter 0x7c;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg13 offset ->
+  | Breg13 offset ->
     Emitter.emit_byte_exn emitter 0x7d;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg14 offset ->
+  | Breg14 offset ->
     Emitter.emit_byte_exn emitter 0x7e;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg15 offset ->
+  | Breg15 offset ->
     Emitter.emit_byte_exn emitter 0x7f;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg16 offset ->
+  | Breg16 offset ->
     Emitter.emit_byte_exn emitter 0x80;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg17 offset ->
+  | Breg17 offset ->
     Emitter.emit_byte_exn emitter 0x81;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg18 offset ->
+  | Breg18 offset ->
     Emitter.emit_byte_exn emitter 0x82;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg19 offset ->
+  | Breg19 offset ->
     Emitter.emit_byte_exn emitter 0x83;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg20 offset ->
+  | Breg20 offset ->
     Emitter.emit_byte_exn emitter 0x84;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg21 offset ->
+  | Breg21 offset ->
     Emitter.emit_byte_exn emitter 0x85;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg22 offset ->
+  | Breg22 offset ->
     Emitter.emit_byte_exn emitter 0x86;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg23 offset ->
+  | Breg23 offset ->
     Emitter.emit_byte_exn emitter 0x87;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg24 offset ->
+  | Breg24 offset ->
     Emitter.emit_byte_exn emitter 0x88;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg25 offset ->
+  | Breg25 offset ->
     Emitter.emit_byte_exn emitter 0x89;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg26 offset ->
+  | Breg26 offset ->
     Emitter.emit_byte_exn emitter 0x8a;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg27 offset ->
+  | Breg27 offset ->
     Emitter.emit_byte_exn emitter 0x8b;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg28 offset ->
+  | Breg28 offset ->
     Emitter.emit_byte_exn emitter 0x8c;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg29 offset ->
+  | Breg29 offset ->
     Emitter.emit_byte_exn emitter 0x8d;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg30 offset ->
+  | Breg30 offset ->
     Emitter.emit_byte_exn emitter 0x8e;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_breg31 offset ->
+  | Breg31 offset ->
     Emitter.emit_byte_exn emitter 0x8f;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_regx reg ->
+  | Regx reg ->
     Emitter.emit_byte_exn emitter 0x90;
     Emitter.emit_uleb128 emitter reg
-  | DW_OP_fbreg offset ->
+  | Fbreg offset ->
     Emitter.emit_byte_exn emitter 0x91;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_bregx (reg, offset) ->
+  | Bregx (reg, offset) ->
     Emitter.emit_byte_exn emitter 0x92;
     Emitter.emit_uleb128 emitter reg;
     Emitter.emit_sleb128_from_int64 emitter (Target_addr.to_int64 offset)
-  | DW_OP_piece size ->
+  | Piece size ->
     Emitter.emit_byte_exn emitter 0x93;
     Emitter.emit_uleb128_from_int64 emitter size
-  | DW_OP_deref_size size ->
+  | Deref_size size ->
     Emitter.emit_byte_exn emitter 0x94;
     Emitter.emit_byte_exn emitter size
-  | DW_OP_xderef_size ->
+  | Xderef_size ->
     Emitter.emit_byte_exn emitter 0x95;
     Emitter.emit_byte_exn emitter size
-  | DW_OP_nop -> Emitter.emit_byte_exn emitter 0x96
-  | DW_OP_push_object_address -> Emitter.emit_byte_exn emitter 0x97
-  | DW_OP_call2 offset_of_die ->
+  | Nop -> Emitter.emit_byte_exn emitter 0x96
+  | Push_object_address -> Emitter.emit_byte_exn emitter 0x97
+  | Call2 offset_of_die ->
     Emitter.emit_byte_exn emitter 0x98;
     Emitter.emit_two_byte_int emitter offset_of_die
-  | DW_OP_call4 offset_of_die ->
+  | Call4 offset_of_die ->
     Emitter.emit_byte_exn emitter 0x99;
     Emitter.emit_four_byte_int emitter offset_of_die
-  | DW_OP_call_ref offset_of_die ->
+  | Call_ref offset_of_die ->
     Emitter.emit_byte_exn emitter 0x9a;
     Stream.write_???(32 or 64) stream offset_of_die
-  | DW_OP_form_tls_address -> Emitter.emit_byte_exn emitter 0x9b
-  | DW_OP_call_frame_cfa -> Emitter.emit_byte_exn emitter 0x9c
-  | DW_OP_bit_piece (size, offset) ->
+  | Form_tls_address -> Emitter.emit_byte_exn emitter 0x9b
+  | Call_frame_cfa -> Emitter.emit_byte_exn emitter 0x9c
+  | Bit_piece (size, offset) ->
     Emitter.emit_byte_exn emitter 0x9d;
     Emitter.emit_uleb128_from_int64 emitter size;
     Emitter.emit_uleb128_from_int64 emitter offset
-  | DW_OP_implicit_value (size, block) ->
+  | Implicit_value (size, block) ->
     Emitter.emit_byte_exn emitter 0x9e;
     Emitter.emit_uleb128_from_int64 emitter size;
     Block.write block ~stream
-  | DW_OP_stack_value -> Emitter.emit_byte_exn emitter 0x9f
+  | Stack_value -> Emitter.emit_byte_exn emitter 0x9f
 
 let literal_for_int64 =
   let table = [|
-    DW_OP_lit0; DW_OP_lit1; DW_OP_lit2; DW_OP_lit3; DW_OP_lit4;
-    DW_OP_lit5; DW_OP_lit6; DW_OP_lit7; DW_OP_lit8; DW_OP_lit9;
-    DW_OP_lit10; DW_OP_lit11; DW_OP_lit12; DW_OP_lit13; DW_OP_lit14;
-    DW_OP_lit15; DW_OP_lit16; DW_OP_lit17; DW_OP_lit18; DW_OP_lit19;
-    DW_OP_lit20; DW_OP_lit21; DW_OP_lit22; DW_OP_lit23; DW_OP_lit24;
-    DW_OP_lit25; DW_OP_lit26; DW_OP_lit27; DW_OP_lit28; DW_OP_lit29;
-    DW_OP_lit30; DW_OP_lit31;
+    Lit0; Lit1; Lit2; Lit3; Lit4;
+    Lit5; Lit6; Lit7; Lit8; Lit9;
+    Lit10; Lit11; Lit12; Lit13; Lit14;
+    Lit15; Lit16; Lit17; Lit18; Lit19;
+    Lit20; Lit21; Lit22; Lit23; Lit24;
+    Lit25; Lit26; Lit27; Lit28; Lit29;
+    Lit30; Lit31;
   |] in
   fun c ->
     if Int64.compare c 0L >= 0 && Int64.compare c 31L <= 0 then begin

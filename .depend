@@ -2,6 +2,7 @@ utils/ccomp.cmi :
 utils/clflags.cmi :
 utils/config.cmi :
 utils/consistbl.cmi :
+utils/domainstate.cmi :
 utils/misc.cmi :
 utils/tbl.cmi :
 utils/terminfo.cmi :
@@ -16,6 +17,8 @@ utils/config.cmo : utils/config.cmi
 utils/config.cmx : utils/config.cmi
 utils/consistbl.cmo : utils/consistbl.cmi
 utils/consistbl.cmx : utils/consistbl.cmi
+utils/domainstate.cmo : utils/domainstate.cmi
+utils/domainstate.cmx : utils/domainstate.cmi
 utils/misc.cmo : utils/misc.cmi
 utils/misc.cmx : utils/misc.cmi
 utils/tbl.cmo : utils/tbl.cmi
@@ -25,14 +28,16 @@ utils/terminfo.cmx : utils/terminfo.cmi
 utils/warnings.cmo : utils/warnings.cmi
 utils/warnings.cmx : utils/warnings.cmi
 parsing/ast_helper.cmi : parsing/parsetree.cmi parsing/longident.cmi \
-    parsing/location.cmi parsing/asttypes.cmi
+    parsing/location.cmi parsing/docstrings.cmi parsing/asttypes.cmi
 parsing/ast_mapper.cmi : parsing/parsetree.cmi parsing/location.cmi
 parsing/asttypes.cmi : parsing/location.cmi
+parsing/docstrings.cmi : parsing/parsetree.cmi parsing/location.cmi
 parsing/lexer.cmi : parsing/parser.cmi parsing/location.cmi
 parsing/location.cmi : utils/warnings.cmi
 parsing/longident.cmi :
 parsing/parse.cmi : parsing/parsetree.cmi
-parsing/parser.cmi : parsing/parsetree.cmi parsing/location.cmi
+parsing/parser.cmi : parsing/parsetree.cmi parsing/location.cmi \
+    parsing/docstrings.cmi
 parsing/parsetree.cmi : parsing/longident.cmi parsing/location.cmi \
     parsing/asttypes.cmi
 parsing/pprintast.cmi : parsing/parsetree.cmi parsing/longident.cmi \
@@ -40,9 +45,11 @@ parsing/pprintast.cmi : parsing/parsetree.cmi parsing/longident.cmi \
 parsing/printast.cmi : parsing/parsetree.cmi
 parsing/syntaxerr.cmi : parsing/location.cmi
 parsing/ast_helper.cmo : parsing/parsetree.cmi parsing/longident.cmi \
-    parsing/location.cmi parsing/asttypes.cmi parsing/ast_helper.cmi
+    parsing/location.cmi parsing/docstrings.cmi parsing/asttypes.cmi \
+    parsing/ast_helper.cmi
 parsing/ast_helper.cmx : parsing/parsetree.cmi parsing/longident.cmx \
-    parsing/location.cmx parsing/asttypes.cmi parsing/ast_helper.cmi
+    parsing/location.cmx parsing/docstrings.cmx parsing/asttypes.cmi \
+    parsing/ast_helper.cmi
 parsing/ast_mapper.cmo : parsing/parsetree.cmi utils/misc.cmi \
     parsing/longident.cmi parsing/location.cmi utils/config.cmi \
     utils/clflags.cmi parsing/asttypes.cmi parsing/ast_helper.cmi \
@@ -51,10 +58,14 @@ parsing/ast_mapper.cmx : parsing/parsetree.cmi utils/misc.cmx \
     parsing/longident.cmx parsing/location.cmx utils/config.cmx \
     utils/clflags.cmx parsing/asttypes.cmi parsing/ast_helper.cmx \
     parsing/ast_mapper.cmi
+parsing/docstrings.cmo : utils/warnings.cmi parsing/parsetree.cmi \
+    parsing/location.cmi parsing/asttypes.cmi parsing/docstrings.cmi
+parsing/docstrings.cmx : utils/warnings.cmx parsing/parsetree.cmi \
+    parsing/location.cmx parsing/asttypes.cmi parsing/docstrings.cmi
 parsing/lexer.cmo : utils/warnings.cmi parsing/parser.cmi utils/misc.cmi \
-    parsing/location.cmi parsing/lexer.cmi
+    parsing/location.cmi parsing/docstrings.cmi parsing/lexer.cmi
 parsing/lexer.cmx : utils/warnings.cmx parsing/parser.cmx utils/misc.cmx \
-    parsing/location.cmx parsing/lexer.cmi
+    parsing/location.cmx parsing/docstrings.cmx parsing/lexer.cmi
 parsing/location.cmo : utils/warnings.cmi utils/terminfo.cmi \
     parsing/location.cmi
 parsing/location.cmx : utils/warnings.cmx utils/terminfo.cmx \
@@ -62,15 +73,19 @@ parsing/location.cmx : utils/warnings.cmx utils/terminfo.cmx \
 parsing/longident.cmo : utils/misc.cmi parsing/longident.cmi
 parsing/longident.cmx : utils/misc.cmx parsing/longident.cmi
 parsing/parse.cmo : parsing/syntaxerr.cmi parsing/parser.cmi \
-    parsing/location.cmi parsing/lexer.cmi parsing/parse.cmi
+    parsing/location.cmi parsing/lexer.cmi parsing/docstrings.cmi \
+    parsing/parse.cmi
 parsing/parse.cmx : parsing/syntaxerr.cmx parsing/parser.cmx \
-    parsing/location.cmx parsing/lexer.cmx parsing/parse.cmi
+    parsing/location.cmx parsing/lexer.cmx parsing/docstrings.cmx \
+    parsing/parse.cmi
 parsing/parser.cmo : parsing/syntaxerr.cmi parsing/parsetree.cmi \
-    parsing/longident.cmi parsing/location.cmi utils/clflags.cmi \
-    parsing/asttypes.cmi parsing/ast_helper.cmi parsing/parser.cmi
+    parsing/longident.cmi parsing/location.cmi parsing/docstrings.cmi \
+    utils/clflags.cmi parsing/asttypes.cmi parsing/ast_helper.cmi \
+    parsing/parser.cmi
 parsing/parser.cmx : parsing/syntaxerr.cmx parsing/parsetree.cmi \
-    parsing/longident.cmx parsing/location.cmx utils/clflags.cmx \
-    parsing/asttypes.cmi parsing/ast_helper.cmx parsing/parser.cmi
+    parsing/longident.cmx parsing/location.cmx parsing/docstrings.cmx \
+    utils/clflags.cmx parsing/asttypes.cmi parsing/ast_helper.cmx \
+    parsing/parser.cmi
 parsing/pprintast.cmo : parsing/parsetree.cmi utils/misc.cmi \
     parsing/longident.cmi parsing/location.cmi parsing/asttypes.cmi \
     parsing/pprintast.cmi
@@ -130,7 +145,8 @@ typing/typecore.cmi : typing/types.cmi typing/typedtree.cmi typing/path.cmi \
     typing/ident.cmi typing/env.cmi parsing/asttypes.cmi typing/annot.cmi
 typing/typedecl.cmi : typing/types.cmi typing/typedtree.cmi typing/path.cmi \
     parsing/parsetree.cmi parsing/longident.cmi parsing/location.cmi \
-    typing/includecore.cmi typing/ident.cmi typing/env.cmi
+    typing/includecore.cmi typing/ident.cmi typing/env.cmi \
+    parsing/asttypes.cmi
 typing/typedtree.cmi : typing/types.cmi typing/primitive.cmi typing/path.cmi \
     parsing/parsetree.cmi parsing/longident.cmi parsing/location.cmi \
     typing/ident.cmi typing/env.cmi parsing/asttypes.cmi
@@ -284,20 +300,20 @@ typing/typeclass.cmo : utils/warnings.cmi typing/typetexp.cmi \
     typing/types.cmi typing/typedtree.cmi typing/typedecl.cmi \
     typing/typecore.cmi parsing/syntaxerr.cmi typing/subst.cmi \
     typing/stypes.cmi typing/printtyp.cmi typing/predef.cmi typing/path.cmi \
-    parsing/parsetree.cmi typing/parmatch.cmi utils/misc.cmi \
-    parsing/longident.cmi parsing/location.cmi typing/includeclass.cmi \
-    typing/ident.cmi typing/env.cmi typing/ctype.cmi typing/cmt_format.cmi \
-    utils/clflags.cmi typing/btype.cmi parsing/asttypes.cmi \
-    parsing/ast_helper.cmi typing/typeclass.cmi
+    parsing/parsetree.cmi utils/misc.cmi parsing/longident.cmi \
+    parsing/location.cmi typing/includeclass.cmi typing/ident.cmi \
+    typing/env.cmi typing/ctype.cmi typing/cmt_format.cmi utils/clflags.cmi \
+    typing/btype.cmi parsing/asttypes.cmi parsing/ast_helper.cmi \
+    typing/typeclass.cmi
 typing/typeclass.cmx : utils/warnings.cmx typing/typetexp.cmx \
     typing/types.cmx typing/typedtree.cmx typing/typedecl.cmx \
     typing/typecore.cmx parsing/syntaxerr.cmx typing/subst.cmx \
     typing/stypes.cmx typing/printtyp.cmx typing/predef.cmx typing/path.cmx \
-    parsing/parsetree.cmi typing/parmatch.cmx utils/misc.cmx \
-    parsing/longident.cmx parsing/location.cmx typing/includeclass.cmx \
-    typing/ident.cmx typing/env.cmx typing/ctype.cmx typing/cmt_format.cmx \
-    utils/clflags.cmx typing/btype.cmx parsing/asttypes.cmi \
-    parsing/ast_helper.cmx typing/typeclass.cmi
+    parsing/parsetree.cmi utils/misc.cmx parsing/longident.cmx \
+    parsing/location.cmx typing/includeclass.cmx typing/ident.cmx \
+    typing/env.cmx typing/ctype.cmx typing/cmt_format.cmx utils/clflags.cmx \
+    typing/btype.cmx parsing/asttypes.cmi parsing/ast_helper.cmx \
+    typing/typeclass.cmi
 typing/typecore.cmo : utils/warnings.cmi typing/typetexp.cmi \
     typing/types.cmi typing/typedtree.cmi parsing/syntaxerr.cmi \
     typing/subst.cmi typing/stypes.cmi typing/printtyp.cmi \
@@ -432,15 +448,17 @@ bytecomp/bytelibrarian.cmx : utils/misc.cmx parsing/location.cmx \
     utils/config.cmx bytecomp/cmo_format.cmi utils/clflags.cmx \
     bytecomp/bytelink.cmx bytecomp/bytelibrarian.cmi
 bytecomp/bytelink.cmo : utils/warnings.cmi bytecomp/symtable.cmi \
-    bytecomp/opcodes.cmo utils/misc.cmi parsing/location.cmi typing/ident.cmi \
-    bytecomp/dll.cmi utils/consistbl.cmi utils/config.cmi \
-    bytecomp/cmo_format.cmi utils/clflags.cmi utils/ccomp.cmi \
-    bytecomp/bytesections.cmi bytecomp/bytelink.cmi
+    bytecomp/opcodes.cmo utils/misc.cmi parsing/location.cmi \
+    bytecomp/instruct.cmi typing/ident.cmi bytecomp/dll.cmi \
+    utils/consistbl.cmi utils/config.cmi bytecomp/cmo_format.cmi \
+    utils/clflags.cmi utils/ccomp.cmi bytecomp/bytesections.cmi \
+    bytecomp/bytelink.cmi
 bytecomp/bytelink.cmx : utils/warnings.cmx bytecomp/symtable.cmx \
-    bytecomp/opcodes.cmx utils/misc.cmx parsing/location.cmx typing/ident.cmx \
-    bytecomp/dll.cmx utils/consistbl.cmx utils/config.cmx \
-    bytecomp/cmo_format.cmi utils/clflags.cmx utils/ccomp.cmx \
-    bytecomp/bytesections.cmx bytecomp/bytelink.cmi
+    bytecomp/opcodes.cmx utils/misc.cmx parsing/location.cmx \
+    bytecomp/instruct.cmx typing/ident.cmx bytecomp/dll.cmx \
+    utils/consistbl.cmx utils/config.cmx bytecomp/cmo_format.cmi \
+    utils/clflags.cmx utils/ccomp.cmx bytecomp/bytesections.cmx \
+    bytecomp/bytelink.cmi
 bytecomp/bytepackager.cmo : typing/typemod.cmi bytecomp/translmod.cmi \
     typing/subst.cmi bytecomp/printlambda.cmi typing/path.cmi utils/misc.cmi \
     parsing/location.cmi bytecomp/instruct.cmi typing/ident.cmi \
@@ -521,12 +539,12 @@ bytecomp/switch.cmo : bytecomp/switch.cmi
 bytecomp/switch.cmx : bytecomp/switch.cmi
 bytecomp/symtable.cmo : utils/tbl.cmi bytecomp/runtimedef.cmi \
     typing/predef.cmi utils/misc.cmi bytecomp/meta.cmi parsing/location.cmi \
-    bytecomp/lambda.cmi typing/ident.cmi bytecomp/dll.cmi \
+    bytecomp/lambda.cmi typing/ident.cmi bytecomp/dll.cmi utils/config.cmi \
     bytecomp/cmo_format.cmi utils/clflags.cmi bytecomp/bytesections.cmi \
     parsing/asttypes.cmi bytecomp/symtable.cmi
 bytecomp/symtable.cmx : utils/tbl.cmx bytecomp/runtimedef.cmx \
     typing/predef.cmx utils/misc.cmx bytecomp/meta.cmx parsing/location.cmx \
-    bytecomp/lambda.cmx typing/ident.cmx bytecomp/dll.cmx \
+    bytecomp/lambda.cmx typing/ident.cmx bytecomp/dll.cmx utils/config.cmx \
     bytecomp/cmo_format.cmi utils/clflags.cmx bytecomp/bytesections.cmx \
     parsing/asttypes.cmi bytecomp/symtable.cmi
 bytecomp/translclass.cmo : typing/types.cmi bytecomp/typeopt.cmi \
@@ -594,6 +612,8 @@ asmcomp/asmpackager.cmi : typing/env.cmi
 asmcomp/available_ranges.cmi : asmcomp/reg.cmi asmcomp/linearize.cmi \
     typing/ident.cmi
 asmcomp/available_regs.cmi : asmcomp/mach.cmi
+asmcomp/branch_relaxation.cmi : asmcomp/linearize.cmi \
+    asmcomp/branch_relaxation_intf.cmo
 asmcomp/clambda.cmi : bytecomp/lambda.cmi typing/ident.cmi \
     asmcomp/debuginfo.cmi parsing/asttypes.cmi
 asmcomp/closure.cmi : bytecomp/lambda.cmi asmcomp/clambda.cmi
@@ -642,25 +662,23 @@ asmcomp/CSEgen.cmx : asmcomp/reg.cmx asmcomp/proc.cmx asmcomp/mach.cmx \
     asmcomp/CSEgen.cmi
 asmcomp/arch.cmo :
 asmcomp/arch.cmx :
-asmcomp/asmgen.cmo : bytecomp/value_binding.cmo bytecomp/translmod.cmi \
-    asmcomp/split.cmi asmcomp/spill.cmi asmcomp/selection.cmi \
-    asmcomp/scheduling.cmi asmcomp/reload.cmi asmcomp/reg.cmi \
-    asmcomp/proc.cmi asmcomp/printmach.cmi asmcomp/printlinear.cmi \
-    asmcomp/printcmm.cmi asmcomp/printclambda.cmi typing/primitive.cmi \
-    utils/misc.cmi asmcomp/mach.cmi parsing/location.cmi asmcomp/liveness.cmi \
-    asmcomp/linearize.cmi asmcomp/interf.cmi typing/ident.cmi \
+asmcomp/asmgen.cmo : bytecomp/translmod.cmi asmcomp/split.cmi \
+    asmcomp/spill.cmi asmcomp/selection.cmi asmcomp/scheduling.cmi \
+    asmcomp/reload.cmi asmcomp/reg.cmi asmcomp/proc.cmi asmcomp/printmach.cmi \
+    asmcomp/printlinear.cmi asmcomp/printcmm.cmi asmcomp/printclambda.cmi \
+    typing/primitive.cmi utils/misc.cmi asmcomp/mach.cmi parsing/location.cmi \
+    asmcomp/liveness.cmi asmcomp/linearize.cmi asmcomp/interf.cmi \
     asmcomp/emitaux.cmi asmcomp/emit.cmi asmcomp/dwarf_low/dwarf_format.cmi \
     asmcomp/dwarf.cmi asmcomp/deadcode.cmi utils/config.cmi \
     asmcomp/compilenv.cmi asmcomp/comballoc.cmi asmcomp/coloring.cmi \
     asmcomp/cmmgen.cmi asmcomp/cmm.cmi asmcomp/closure.cmi utils/clflags.cmi \
     asmcomp/CSE.cmo asmcomp/available_regs.cmi asmcomp/asmgen.cmi
-asmcomp/asmgen.cmx : bytecomp/value_binding.cmx bytecomp/translmod.cmx \
-    asmcomp/split.cmx asmcomp/spill.cmx asmcomp/selection.cmx \
-    asmcomp/scheduling.cmx asmcomp/reload.cmx asmcomp/reg.cmx \
-    asmcomp/proc.cmx asmcomp/printmach.cmx asmcomp/printlinear.cmx \
-    asmcomp/printcmm.cmx asmcomp/printclambda.cmx typing/primitive.cmx \
-    utils/misc.cmx asmcomp/mach.cmx parsing/location.cmx asmcomp/liveness.cmx \
-    asmcomp/linearize.cmx asmcomp/interf.cmx typing/ident.cmx \
+asmcomp/asmgen.cmx : bytecomp/translmod.cmx asmcomp/split.cmx \
+    asmcomp/spill.cmx asmcomp/selection.cmx asmcomp/scheduling.cmx \
+    asmcomp/reload.cmx asmcomp/reg.cmx asmcomp/proc.cmx asmcomp/printmach.cmx \
+    asmcomp/printlinear.cmx asmcomp/printcmm.cmx asmcomp/printclambda.cmx \
+    typing/primitive.cmx utils/misc.cmx asmcomp/mach.cmx parsing/location.cmx \
+    asmcomp/liveness.cmx asmcomp/linearize.cmx asmcomp/interf.cmx \
     asmcomp/emitaux.cmx asmcomp/emit.cmx asmcomp/dwarf_low/dwarf_format.cmx \
     asmcomp/dwarf.cmx asmcomp/deadcode.cmx utils/config.cmx \
     asmcomp/compilenv.cmx asmcomp/comballoc.cmx asmcomp/coloring.cmx \
@@ -706,6 +724,14 @@ asmcomp/available_regs.cmo : asmcomp/reg.cmi asmcomp/proc.cmi \
 asmcomp/available_regs.cmx : asmcomp/reg.cmx asmcomp/proc.cmx \
     asmcomp/mach.cmx typing/ident.cmx asmcomp/closure.cmx \
     asmcomp/available_regs.cmi
+asmcomp/branch_relaxation.cmo : utils/misc.cmi asmcomp/mach.cmi \
+    asmcomp/linearize.cmi asmcomp/cmm.cmi asmcomp/branch_relaxation_intf.cmo \
+    asmcomp/branch_relaxation.cmi
+asmcomp/branch_relaxation.cmx : utils/misc.cmx asmcomp/mach.cmx \
+    asmcomp/linearize.cmx asmcomp/cmm.cmx asmcomp/branch_relaxation_intf.cmx \
+    asmcomp/branch_relaxation.cmi
+asmcomp/branch_relaxation_intf.cmo : asmcomp/linearize.cmi asmcomp/arch.cmo
+asmcomp/branch_relaxation_intf.cmx : asmcomp/linearize.cmx asmcomp/arch.cmx
 asmcomp/clambda.cmo : bytecomp/lambda.cmi typing/ident.cmi \
     asmcomp/debuginfo.cmi parsing/asttypes.cmi asmcomp/clambda.cmi
 asmcomp/clambda.cmx : bytecomp/lambda.cmx typing/ident.cmx \
@@ -773,8 +799,8 @@ asmcomp/dwarf.cmo : bytecomp/value_binding.cmo asmcomp/dwarf_low/tag.cmi \
     asmcomp/dwarf_low/location_list_entry.cmi \
     asmcomp/dwarf_low/location_list.cmi \
     asmcomp/dwarf_low/location_expression.cmi asmcomp/linearize.cmi \
-    typing/ident.cmi asmcomp/dwarf_low/encoding_attribute.cmi \
-    asmcomp/dwarf_low/emitter.cmi asmcomp/dwarf_low/dwarf_low_dot_std.cmo \
+    typing/ident.cmi typing/env.cmi asmcomp/dwarf_low/emitter.cmi \
+    asmcomp/dwarf_low/dwarf_low_dot_std.cmo \
     asmcomp/dwarf_low/debug_loc_table.cmi \
     asmcomp/dwarf_low/debug_info_section.cmi utils/clflags.cmi \
     asmcomp/clambda.cmi asmcomp/available_ranges.cmi \
@@ -788,8 +814,8 @@ asmcomp/dwarf.cmx : bytecomp/value_binding.cmx asmcomp/dwarf_low/tag.cmx \
     asmcomp/dwarf_low/location_list_entry.cmx \
     asmcomp/dwarf_low/location_list.cmx \
     asmcomp/dwarf_low/location_expression.cmx asmcomp/linearize.cmx \
-    typing/ident.cmx asmcomp/dwarf_low/encoding_attribute.cmx \
-    asmcomp/dwarf_low/emitter.cmx asmcomp/dwarf_low/dwarf_low_dot_std.cmx \
+    typing/ident.cmx typing/env.cmx asmcomp/dwarf_low/emitter.cmx \
+    asmcomp/dwarf_low/dwarf_low_dot_std.cmx \
     asmcomp/dwarf_low/debug_loc_table.cmx \
     asmcomp/dwarf_low/debug_info_section.cmx utils/clflags.cmx \
     asmcomp/clambda.cmx asmcomp/available_ranges.cmx \
@@ -800,12 +826,12 @@ asmcomp/emit.cmo : asmcomp/reg.cmi asmcomp/proc.cmi utils/misc.cmi \
     asmcomp/mach.cmi asmcomp/linearize.cmi bytecomp/lambda.cmi \
     asmcomp/emitaux.cmi asmcomp/dwarf.cmi asmcomp/debuginfo.cmi \
     utils/config.cmi asmcomp/compilenv.cmi asmcomp/cmm.cmi utils/clflags.cmi \
-    asmcomp/arch.cmo asmcomp/emit.cmi
+    asmcomp/branch_relaxation.cmi asmcomp/arch.cmo asmcomp/emit.cmi
 asmcomp/emit.cmx : asmcomp/reg.cmx asmcomp/proc.cmx utils/misc.cmx \
     asmcomp/mach.cmx asmcomp/linearize.cmx bytecomp/lambda.cmx \
     asmcomp/emitaux.cmx asmcomp/dwarf.cmx asmcomp/debuginfo.cmx \
     utils/config.cmx asmcomp/compilenv.cmx asmcomp/cmm.cmx utils/clflags.cmx \
-    asmcomp/arch.cmx asmcomp/emit.cmi
+    asmcomp/branch_relaxation.cmx asmcomp/arch.cmx asmcomp/emit.cmi
 asmcomp/emitaux.cmo : asmcomp/linearize.cmi asmcomp/debuginfo.cmi \
     utils/config.cmi utils/clflags.cmi asmcomp/arch.cmo asmcomp/emitaux.cmi
 asmcomp/emitaux.cmx : asmcomp/linearize.cmx asmcomp/debuginfo.cmx \
@@ -1011,13 +1037,15 @@ toplevel/expunge.cmo : bytecomp/symtable.cmi bytecomp/runtimedef.cmi \
 toplevel/expunge.cmx : bytecomp/symtable.cmx bytecomp/runtimedef.cmx \
     utils/misc.cmx typing/ident.cmx bytecomp/bytesections.cmx
 toplevel/genprintval.cmo : typing/types.cmi typing/printtyp.cmi \
-    typing/predef.cmi typing/path.cmi typing/outcometree.cmi utils/misc.cmi \
-    parsing/longident.cmi typing/ident.cmi typing/env.cmi typing/datarepr.cmi \
-    typing/ctype.cmi typing/btype.cmi toplevel/genprintval.cmi
+    typing/predef.cmi typing/path.cmi typing/outcometree.cmi \
+    typing/oprint.cmi utils/misc.cmi parsing/longident.cmi typing/ident.cmi \
+    typing/env.cmi typing/datarepr.cmi typing/ctype.cmi typing/btype.cmi \
+    toplevel/genprintval.cmi
 toplevel/genprintval.cmx : typing/types.cmx typing/printtyp.cmx \
-    typing/predef.cmx typing/path.cmx typing/outcometree.cmi utils/misc.cmx \
-    parsing/longident.cmx typing/ident.cmx typing/env.cmx typing/datarepr.cmx \
-    typing/ctype.cmx typing/btype.cmx toplevel/genprintval.cmi
+    typing/predef.cmx typing/path.cmx typing/outcometree.cmi \
+    typing/oprint.cmx utils/misc.cmx parsing/longident.cmx typing/ident.cmx \
+    typing/env.cmx typing/datarepr.cmx typing/ctype.cmx typing/btype.cmx \
+    toplevel/genprintval.cmi
 toplevel/opttopdirs.cmo : utils/warnings.cmi typing/types.cmi \
     typing/printtyp.cmi toplevel/opttoploop.cmi utils/misc.cmi \
     parsing/longident.cmi typing/ident.cmi typing/env.cmi typing/ctype.cmi \
@@ -1069,7 +1097,7 @@ toplevel/topdirs.cmo : utils/warnings.cmi typing/typetexp.cmi \
     parsing/longident.cmi parsing/location.cmi typing/ident.cmi \
     typing/env.cmi bytecomp/dll.cmi typing/ctype.cmi utils/consistbl.cmi \
     utils/config.cmi bytecomp/cmo_format.cmi utils/clflags.cmi \
-    parsing/asttypes.cmi toplevel/topdirs.cmi
+    typing/btype.cmi parsing/asttypes.cmi toplevel/topdirs.cmi
 toplevel/topdirs.cmx : utils/warnings.cmx typing/typetexp.cmx \
     typing/types.cmx toplevel/trace.cmx toplevel/toploop.cmx \
     bytecomp/symtable.cmx typing/printtyp.cmx typing/predef.cmx \
@@ -1077,7 +1105,7 @@ toplevel/topdirs.cmx : utils/warnings.cmx typing/typetexp.cmx \
     parsing/longident.cmx parsing/location.cmx typing/ident.cmx \
     typing/env.cmx bytecomp/dll.cmx typing/ctype.cmx utils/consistbl.cmx \
     utils/config.cmx bytecomp/cmo_format.cmi utils/clflags.cmx \
-    parsing/asttypes.cmi toplevel/topdirs.cmi
+    typing/btype.cmx parsing/asttypes.cmi toplevel/topdirs.cmi
 toplevel/toploop.cmo : utils/warnings.cmi typing/types.cmi \
     typing/typemod.cmi typing/typedtree.cmi typing/typecore.cmi \
     bytecomp/translmod.cmi bytecomp/symtable.cmi bytecomp/simplif.cmi \
@@ -1132,14 +1160,21 @@ asmcomp/dwarf_low/abbreviations_table.cmi : asmcomp/dwarf_low/tag.cmi \
     asmcomp/dwarf_low/abbreviation_code.cmi
 asmcomp/dwarf_low/abbreviations_table_entry.cmi : asmcomp/dwarf_low/tag.cmi \
     asmcomp/dwarf_low/emittable.cmo asmcomp/dwarf_low/child_determination.cmi \
-    asmcomp/dwarf_low/attribute.cmi asmcomp/dwarf_low/abbreviation_code.cmi
+    asmcomp/dwarf_low/attribute_specification.cmi \
+    asmcomp/dwarf_low/abbreviation_code.cmi
 asmcomp/dwarf_low/aranges_table.cmi : asmcomp/dwarf_low/emittable.cmo
 asmcomp/dwarf_low/attribute.cmi : asmcomp/dwarf_low/emittable.cmo
-asmcomp/dwarf_low/attribute_value.cmi : \
+asmcomp/dwarf_low/attribute_specification.cmi : \
+    asmcomp/dwarf_low/emittable.cmo
+asmcomp/dwarf_low/attribute_value.cmi : asmcomp/dwarf_low/value.cmi \
+    asmcomp/dwarf_low/emittable.cmo \
+    asmcomp/dwarf_low/attribute_specification.cmi
+asmcomp/dwarf_low/attribute_value_helpers.cmi : \
     asmcomp/dwarf_low/single_location_description.cmi asmcomp/linearize.cmi \
-    asmcomp/dwarf_low/encoding_attribute.cmi asmcomp/dwarf_low/emittable.cmo \
-    asmcomp/dwarf_low/attribute.cmi
+    asmcomp/dwarf_low/attribute_value.cmi
+asmcomp/dwarf_low/base_type_attribute_encoding.cmi :
 asmcomp/dwarf_low/child_determination.cmi : asmcomp/dwarf_low/emittable.cmo
+asmcomp/dwarf_low/class.cmi :
 asmcomp/dwarf_low/debug_info_section.cmi : asmcomp/dwarf_low/proto_die.cmi \
     asmcomp/dwarf_low/emitter.cmi asmcomp/dwarf_low/emittable.cmo \
     asmcomp/dwarf_low/abbreviations_table.cmi
@@ -1149,9 +1184,12 @@ asmcomp/dwarf_low/debugging_information_entry.cmi : asmcomp/linearize.cmi \
     asmcomp/dwarf_low/emittable.cmo asmcomp/dwarf_low/attribute_value.cmi \
     asmcomp/dwarf_low/abbreviation_code.cmi
 asmcomp/dwarf_low/dwarf_format.cmi :
+asmcomp/dwarf_low/elf.cmi :
 asmcomp/dwarf_low/emitter.cmi : asmcomp/dwarf_low/section_names.cmi \
     asmcomp/linearize.cmi
-asmcomp/dwarf_low/encoding_attribute.cmi : asmcomp/dwarf_low/value.cmi
+asmcomp/dwarf_low/expr.cmi : asmcomp/dwarf_low/uleb128.cmi \
+    asmcomp/dwarf_low/target_addr.cmi asmcomp/dwarf_low/sleb128.cmi \
+    asmcomp/dwarf_low/emittable.cmo asmcomp/dwarf_low/dwarf_format.cmi
 asmcomp/dwarf_low/form.cmi : asmcomp/dwarf_low/emittable.cmo
 asmcomp/dwarf_low/initial_length.cmi : asmcomp/dwarf_low/emittable.cmo
 asmcomp/dwarf_low/location_expression.cmi : asmcomp/dwarf_low/emittable.cmo
@@ -1173,10 +1211,17 @@ asmcomp/dwarf_low/simple_location_expression.cmi : \
 asmcomp/dwarf_low/single_location_description.cmi : \
     asmcomp/dwarf_low/simple_location_expression.cmi \
     asmcomp/dwarf_low/emittable.cmo
+asmcomp/dwarf_low/sleb128.cmi :
+asmcomp/dwarf_low/source_language.cmi : asmcomp/dwarf_low/emittable.cmo
+asmcomp/dwarf_low/stream.cmi :
 asmcomp/dwarf_low/tag.cmi : asmcomp/dwarf_low/emittable.cmo \
     asmcomp/dwarf_low/child_determination.cmi
-asmcomp/dwarf_low/value.cmi : asmcomp/dwarf_low/section_names.cmi \
-    asmcomp/linearize.cmi asmcomp/dwarf_low/emittable.cmo
+asmcomp/dwarf_low/target_addr.cmi :
+asmcomp/dwarf_low/target_int.cmi :
+asmcomp/dwarf_low/uleb128.cmi :
+asmcomp/dwarf_low/value.cmi : \
+    asmcomp/dwarf_low/single_location_description.cmi asmcomp/linearize.cmi \
+    asmcomp/dwarf_low/form.cmi asmcomp/dwarf_low/emittable.cmo
 asmcomp/dwarf_low/version.cmi : asmcomp/dwarf_low/emittable.cmo
 asmcomp/dwarf_low/abbreviation_code.cmo : asmcomp/dwarf_low/value.cmi \
     asmcomp/dwarf_low/abbreviation_code.cmi
@@ -1208,43 +1253,45 @@ asmcomp/dwarf_low/aranges_table.cmo : asmcomp/dwarf_low/value.cmi \
 asmcomp/dwarf_low/aranges_table.cmx : asmcomp/dwarf_low/value.cmx \
     asmcomp/dwarf_low/std_internal.cmx asmcomp/dwarf_low/initial_length.cmx \
     asmcomp/arch.cmx asmcomp/dwarf_low/aranges_table.cmi
-asmcomp/dwarf_low/attribute.cmo : asmcomp/dwarf_low/value.cmi \
-    asmcomp/dwarf_low/form.cmi asmcomp/dwarf_low/attribute.cmi
-asmcomp/dwarf_low/attribute.cmx : asmcomp/dwarf_low/value.cmx \
-    asmcomp/dwarf_low/form.cmx asmcomp/dwarf_low/attribute.cmi
+asmcomp/dwarf_low/attribute.cmo : asmcomp/dwarf_low/stream.cmi \
+    asmcomp/dwarf_low/emitter.cmi asmcomp/dwarf_low/class.cmi \
+    asmcomp/dwarf_low/attribute.cmi
+asmcomp/dwarf_low/attribute.cmx : asmcomp/dwarf_low/stream.cmi \
+    asmcomp/dwarf_low/emitter.cmx asmcomp/dwarf_low/class.cmi \
+    asmcomp/dwarf_low/attribute.cmi
+asmcomp/dwarf_low/attribute_specification.cmo : asmcomp/dwarf_low/form.cmi \
+    asmcomp/dwarf_low/attribute.cmi \
+    asmcomp/dwarf_low/attribute_specification.cmi
+asmcomp/dwarf_low/attribute_specification.cmx : asmcomp/dwarf_low/form.cmx \
+    asmcomp/dwarf_low/attribute.cmx \
+    asmcomp/dwarf_low/attribute_specification.cmi
 asmcomp/dwarf_low/attribute_value.cmo : asmcomp/dwarf_low/value.cmi \
-    asmcomp/dwarf_low/single_location_description.cmi \
-    asmcomp/dwarf_low/section_names.cmi \
-    asmcomp/dwarf_low/encoding_attribute.cmi asmcomp/dwarf_low/attribute.cmi \
     asmcomp/dwarf_low/attribute_value.cmi
 asmcomp/dwarf_low/attribute_value.cmx : asmcomp/dwarf_low/value.cmx \
-    asmcomp/dwarf_low/single_location_description.cmx \
-    asmcomp/dwarf_low/section_names.cmx \
-    asmcomp/dwarf_low/encoding_attribute.cmx asmcomp/dwarf_low/attribute.cmx \
     asmcomp/dwarf_low/attribute_value.cmi
+asmcomp/dwarf_low/attribute_value_helpers.cmo : asmcomp/dwarf_low/value.cmi \
+    asmcomp/dwarf_low/form.cmi asmcomp/dwarf_low/attribute_value.cmi \
+    asmcomp/dwarf_low/attribute.cmi \
+    asmcomp/dwarf_low/attribute_value_helpers.cmi
+asmcomp/dwarf_low/attribute_value_helpers.cmx : asmcomp/dwarf_low/value.cmx \
+    asmcomp/dwarf_low/form.cmx asmcomp/dwarf_low/attribute_value.cmx \
+    asmcomp/dwarf_low/attribute.cmx \
+    asmcomp/dwarf_low/attribute_value_helpers.cmi
+asmcomp/dwarf_low/base_type_attribute_encoding.cmo : \
+    asmcomp/dwarf_low/value.cmi asmcomp/dwarf_low/stream.cmi \
+    asmcomp/dwarf_low/base_type_attribute_encoding.cmi
+asmcomp/dwarf_low/base_type_attribute_encoding.cmx : \
+    asmcomp/dwarf_low/value.cmx asmcomp/dwarf_low/stream.cmi \
+    asmcomp/dwarf_low/base_type_attribute_encoding.cmi
+asmcomp/dwarf_low/cfa.cmo :
+asmcomp/dwarf_low/cfa.cmx :
 asmcomp/dwarf_low/child_determination.cmo : asmcomp/dwarf_low/value.cmi \
     asmcomp/dwarf_low/child_determination.cmi
 asmcomp/dwarf_low/child_determination.cmx : asmcomp/dwarf_low/value.cmx \
     asmcomp/dwarf_low/child_determination.cmi
-asmcomp/dwarf_low/debug_info_section.cmo : asmcomp/dwarf_low/version.cmi \
-    asmcomp/dwarf_low/value.cmi asmcomp/dwarf_low/std_internal.cmo \
-    asmcomp/dwarf_low/section_names.cmi asmcomp/dwarf_low/proto_die.cmi \
-    asmcomp/dwarf_low/initial_length.cmi \
-    asmcomp/dwarf_low/debugging_information_entry.cmi \
-    asmcomp/dwarf_low/attribute_value.cmi asmcomp/arch.cmo \
-    asmcomp/dwarf_low/abbreviations_table_entry.cmi \
-    asmcomp/dwarf_low/abbreviations_table.cmi \
-    asmcomp/dwarf_low/abbreviation_code.cmi \
+asmcomp/dwarf_low/debug_info_section.cmo : \
     asmcomp/dwarf_low/debug_info_section.cmi
-asmcomp/dwarf_low/debug_info_section.cmx : asmcomp/dwarf_low/version.cmx \
-    asmcomp/dwarf_low/value.cmx asmcomp/dwarf_low/std_internal.cmx \
-    asmcomp/dwarf_low/section_names.cmx asmcomp/dwarf_low/proto_die.cmx \
-    asmcomp/dwarf_low/initial_length.cmx \
-    asmcomp/dwarf_low/debugging_information_entry.cmx \
-    asmcomp/dwarf_low/attribute_value.cmx asmcomp/arch.cmx \
-    asmcomp/dwarf_low/abbreviations_table_entry.cmx \
-    asmcomp/dwarf_low/abbreviations_table.cmx \
-    asmcomp/dwarf_low/abbreviation_code.cmx \
+asmcomp/dwarf_low/debug_info_section.cmx : \
     asmcomp/dwarf_low/debug_info_section.cmi
 asmcomp/dwarf_low/debug_loc_table.cmo : asmcomp/dwarf_low/std_internal.cmo \
     asmcomp/dwarf_low/location_list.cmi asmcomp/dwarf_low/attribute_value.cmi \
@@ -1270,8 +1317,7 @@ asmcomp/dwarf_low/dwarf_low_dot_std.cmo : asmcomp/dwarf_low/tag.cmi \
     asmcomp/dwarf_low/section_names.cmi asmcomp/dwarf_low/pubnames_table.cmi \
     asmcomp/dwarf_low/proto_die.cmi asmcomp/dwarf_low/location_list_entry.cmi \
     asmcomp/dwarf_low/location_list.cmi \
-    asmcomp/dwarf_low/location_expression.cmi \
-    asmcomp/dwarf_low/encoding_attribute.cmi asmcomp/dwarf_low/emitter.cmi \
+    asmcomp/dwarf_low/location_expression.cmi asmcomp/dwarf_low/emitter.cmi \
     asmcomp/dwarf_low/debug_loc_table.cmi \
     asmcomp/dwarf_low/debug_info_section.cmi \
     asmcomp/dwarf_low/attribute_value.cmi asmcomp/dwarf_low/aranges_table.cmi \
@@ -1282,30 +1328,39 @@ asmcomp/dwarf_low/dwarf_low_dot_std.cmx : asmcomp/dwarf_low/tag.cmx \
     asmcomp/dwarf_low/section_names.cmx asmcomp/dwarf_low/pubnames_table.cmx \
     asmcomp/dwarf_low/proto_die.cmx asmcomp/dwarf_low/location_list_entry.cmx \
     asmcomp/dwarf_low/location_list.cmx \
-    asmcomp/dwarf_low/location_expression.cmx \
-    asmcomp/dwarf_low/encoding_attribute.cmx asmcomp/dwarf_low/emitter.cmx \
+    asmcomp/dwarf_low/location_expression.cmx asmcomp/dwarf_low/emitter.cmx \
     asmcomp/dwarf_low/debug_loc_table.cmx \
     asmcomp/dwarf_low/debug_info_section.cmx \
     asmcomp/dwarf_low/attribute_value.cmx asmcomp/dwarf_low/aranges_table.cmx \
     asmcomp/dwarf_low/abbreviations_table.cmx
+asmcomp/dwarf_low/elf.cmo : asmcomp/dwarf_low/elf.cmi
+asmcomp/dwarf_low/elf.cmx : asmcomp/dwarf_low/elf.cmi
 asmcomp/dwarf_low/emittable.cmo : asmcomp/dwarf_low/emitter.cmi
 asmcomp/dwarf_low/emittable.cmx : asmcomp/dwarf_low/emitter.cmx
 asmcomp/dwarf_low/emitter.cmo : asmcomp/dwarf_low/section_names.cmi \
-    asmcomp/linearize.cmi asmcomp/dwarf_low/emitter.cmi
+    asmcomp/linearize.cmi asmcomp/dwarf_low/dwarf_format.cmi asmcomp/arch.cmo \
+    asmcomp/dwarf_low/emitter.cmi
 asmcomp/dwarf_low/emitter.cmx : asmcomp/dwarf_low/section_names.cmx \
-    asmcomp/linearize.cmx asmcomp/dwarf_low/emitter.cmi
-asmcomp/dwarf_low/encoding_attribute.cmo : asmcomp/dwarf_low/value.cmi \
-    asmcomp/dwarf_low/encoding_attribute.cmi
-asmcomp/dwarf_low/encoding_attribute.cmx : asmcomp/dwarf_low/value.cmx \
-    asmcomp/dwarf_low/encoding_attribute.cmi
+    asmcomp/linearize.cmx asmcomp/dwarf_low/dwarf_format.cmx asmcomp/arch.cmx \
+    asmcomp/dwarf_low/emitter.cmi
+asmcomp/dwarf_low/expr.cmo : asmcomp/dwarf_low/expr.cmi
+asmcomp/dwarf_low/expr.cmx : asmcomp/dwarf_low/expr.cmi
+asmcomp/dwarf_low/expr_high.cmo :
+asmcomp/dwarf_low/expr_high.cmx :
 asmcomp/dwarf_low/form.cmo : asmcomp/dwarf_low/value.cmi \
+    asmcomp/dwarf_low/stream.cmi asmcomp/dwarf_low/class.cmi \
     asmcomp/dwarf_low/form.cmi
 asmcomp/dwarf_low/form.cmx : asmcomp/dwarf_low/value.cmx \
+    asmcomp/dwarf_low/stream.cmi asmcomp/dwarf_low/class.cmi \
     asmcomp/dwarf_low/form.cmi
 asmcomp/dwarf_low/initial_length.cmo : asmcomp/dwarf_low/value.cmi \
-    asmcomp/dwarf_low/dwarf_format.cmi asmcomp/dwarf_low/initial_length.cmi
+    asmcomp/dwarf_low/stream.cmi asmcomp/dwarf_low/dwarf_format.cmi \
+    asmcomp/dwarf_low/initial_length.cmi
 asmcomp/dwarf_low/initial_length.cmx : asmcomp/dwarf_low/value.cmx \
-    asmcomp/dwarf_low/dwarf_format.cmx asmcomp/dwarf_low/initial_length.cmi
+    asmcomp/dwarf_low/stream.cmi asmcomp/dwarf_low/dwarf_format.cmx \
+    asmcomp/dwarf_low/initial_length.cmi
+asmcomp/dwarf_low/line_number_program.cmo :
+asmcomp/dwarf_low/line_number_program.cmx :
 asmcomp/dwarf_low/location_expression.cmo : \
     asmcomp/dwarf_low/simple_location_expression.cmi \
     asmcomp/dwarf_low/location_expression.cmi
@@ -1328,6 +1383,8 @@ asmcomp/dwarf_low/location_list_entry.cmx : asmcomp/dwarf_low/value.cmx \
     asmcomp/dwarf_low/std_internal.cmx \
     asmcomp/dwarf_low/location_expression.cmx asmcomp/linearize.cmx \
     asmcomp/dwarf_low/location_list_entry.cmi
+asmcomp/dwarf_low/lower_expr_high.cmo :
+asmcomp/dwarf_low/lower_expr_high.cmx :
 asmcomp/dwarf_low/operator.cmo : asmcomp/dwarf_low/value.cmi \
     asmcomp/dwarf_low/operator.cmi
 asmcomp/dwarf_low/operator.cmx : asmcomp/dwarf_low/value.cmx \
@@ -1362,20 +1419,32 @@ asmcomp/dwarf_low/single_location_description.cmo : \
 asmcomp/dwarf_low/single_location_description.cmx : \
     asmcomp/dwarf_low/simple_location_expression.cmx \
     asmcomp/dwarf_low/single_location_description.cmi
+asmcomp/dwarf_low/sleb128.cmo : asmcomp/dwarf_low/sleb128.cmi
+asmcomp/dwarf_low/sleb128.cmx : asmcomp/dwarf_low/sleb128.cmi
+asmcomp/dwarf_low/source_language.cmo : asmcomp/dwarf_low/value.cmi \
+    asmcomp/dwarf_low/stream.cmi asmcomp/dwarf_low/source_language.cmi
+asmcomp/dwarf_low/source_language.cmx : asmcomp/dwarf_low/value.cmx \
+    asmcomp/dwarf_low/stream.cmi asmcomp/dwarf_low/source_language.cmi
 asmcomp/dwarf_low/std_internal.cmo :
 asmcomp/dwarf_low/std_internal.cmx :
-asmcomp/dwarf_low/tag.cmo : asmcomp/dwarf_low/value.cmi \
-    asmcomp/dwarf_low/child_determination.cmi asmcomp/dwarf_low/tag.cmi
-asmcomp/dwarf_low/tag.cmx : asmcomp/dwarf_low/value.cmx \
-    asmcomp/dwarf_low/child_determination.cmx asmcomp/dwarf_low/tag.cmi
-asmcomp/dwarf_low/value.cmo : asmcomp/dwarf_low/std_internal.cmo \
+asmcomp/dwarf_low/tag.cmo : asmcomp/dwarf_low/tag.cmi
+asmcomp/dwarf_low/tag.cmx : asmcomp/dwarf_low/tag.cmi
+asmcomp/dwarf_low/target_addr.cmo : asmcomp/dwarf_low/target_addr.cmi
+asmcomp/dwarf_low/target_addr.cmx : asmcomp/dwarf_low/target_addr.cmi
+asmcomp/dwarf_low/target_int.cmo : asmcomp/dwarf_low/target_int.cmi
+asmcomp/dwarf_low/target_int.cmx : asmcomp/dwarf_low/target_int.cmi
+asmcomp/dwarf_low/uleb128.cmo : asmcomp/dwarf_low/uleb128.cmi
+asmcomp/dwarf_low/uleb128.cmx : asmcomp/dwarf_low/uleb128.cmi
+asmcomp/dwarf_low/value.cmo : asmcomp/dwarf_low/target_int.cmi \
+    asmcomp/dwarf_low/single_location_description.cmi \
     asmcomp/dwarf_low/section_names.cmi asmcomp/linearize.cmi \
-    asmcomp/dwarf_low/emitter.cmi asmcomp/dwarf_low/dwarf_format.cmi \
-    asmcomp/arch.cmo asmcomp/dwarf_low/value.cmi
-asmcomp/dwarf_low/value.cmx : asmcomp/dwarf_low/std_internal.cmx \
+    asmcomp/dwarf_low/form.cmi asmcomp/dwarf_low/emitter.cmi \
+    asmcomp/dwarf_low/dwarf_format.cmi asmcomp/dwarf_low/value.cmi
+asmcomp/dwarf_low/value.cmx : asmcomp/dwarf_low/target_int.cmx \
+    asmcomp/dwarf_low/single_location_description.cmx \
     asmcomp/dwarf_low/section_names.cmx asmcomp/linearize.cmx \
-    asmcomp/dwarf_low/emitter.cmx asmcomp/dwarf_low/dwarf_format.cmx \
-    asmcomp/arch.cmx asmcomp/dwarf_low/value.cmi
+    asmcomp/dwarf_low/form.cmx asmcomp/dwarf_low/emitter.cmx \
+    asmcomp/dwarf_low/dwarf_format.cmx asmcomp/dwarf_low/value.cmi
 asmcomp/dwarf_low/version.cmo : asmcomp/dwarf_low/value.cmi \
     asmcomp/dwarf_low/version.cmi
 asmcomp/dwarf_low/version.cmx : asmcomp/dwarf_low/value.cmx \

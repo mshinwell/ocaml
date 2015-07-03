@@ -33,3 +33,8 @@ val set_size : t -> unit
 
 (* Raises if [set_size] has not been called. *)
 val size : unit -> t
+
+module Int : sig
+  (** An integer that has the same width as a given DWARF format. *)
+  type t
+end
