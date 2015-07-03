@@ -51,5 +51,5 @@ type t =
   | Val_offset_sf of Uleb128.t * Sleb128.t
   | Val_expression of Uleb128.t * Block.t
 
-include Emittable with type t := t
-include Parseable with type t := t
+include Emittable.S with type t := t
+include Parseable.S with type t := t

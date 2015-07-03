@@ -20,7 +20,19 @@
 (*                                                                     *)
 (***********************************************************************)
 
+(** Stream-based input. *)
+
 type t
 
-val read_byte : t -> int
-val read_two_byte_int : t -> int
+val read_int8 : t -> Int8.t Or_error.t
+val read_int8_as_int : t -> int Or_error.t
+val read_int16 : t -> Int16.t Or_error.t
+val read_int32 : t -> Int32.t Or_error.t
+val read_int64 : t -> Int64.t Or_error.t
+
+val read_uleb128 : t -> Uleb128.t Or_error.t
+val read_sleb128 : t -> Sleb128.t Or_error.t
+
+val read_null_terminated_string : t -> string Or_error.t
+
+val read_target_addr : t -> Target_addr.t

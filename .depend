@@ -1175,7 +1175,8 @@ asmcomp/dwarf_low/attribute_value_helpers.cmi : \
 asmcomp/dwarf_low/base_type_attribute_encoding.cmi :
 asmcomp/dwarf_low/cfa.cmi : asmcomp/dwarf_low/uleb128.cmi \
     asmcomp/dwarf_low/target_addr.cmi asmcomp/dwarf_low/sleb128.cmi \
-    asmcomp/dwarf_low/register.cmi asmcomp/dwarf_low/int6.cmi
+    asmcomp/dwarf_low/register.cmi asmcomp/dwarf_low/int6.cmi \
+    asmcomp/dwarf_low/emittable.cmo
 asmcomp/dwarf_low/child_determination.cmi : asmcomp/dwarf_low/emittable.cmo
 asmcomp/dwarf_low/class.cmi :
 asmcomp/dwarf_low/debug_info_section.cmi : asmcomp/dwarf_low/proto_die.cmi \
@@ -1219,9 +1220,9 @@ asmcomp/dwarf_low/single_location_description.cmi : \
     asmcomp/dwarf_low/emittable.cmo
 asmcomp/dwarf_low/sleb128.cmi :
 asmcomp/dwarf_low/source_language.cmi : asmcomp/dwarf_low/emittable.cmo
-asmcomp/dwarf_low/stream.cmi :
-asmcomp/dwarf_low/tag.cmi : asmcomp/dwarf_low/emittable.cmo \
-    asmcomp/dwarf_low/child_determination.cmi
+asmcomp/dwarf_low/stream.cmi : asmcomp/dwarf_low/uleb128.cmi \
+    asmcomp/dwarf_low/sleb128.cmi
+asmcomp/dwarf_low/tag.cmi : asmcomp/dwarf_low/emittable.cmo
 asmcomp/dwarf_low/target_addr.cmi :
 asmcomp/dwarf_low/target_int.cmi :
 asmcomp/dwarf_low/uleb128.cmi :
@@ -1359,8 +1360,6 @@ asmcomp/dwarf_low/emitter.cmx : asmcomp/dwarf_low/section_names.cmx \
     asmcomp/dwarf_low/emitter.cmi
 asmcomp/dwarf_low/expr.cmo : asmcomp/dwarf_low/expr.cmi
 asmcomp/dwarf_low/expr.cmx : asmcomp/dwarf_low/expr.cmi
-asmcomp/dwarf_low/expr_high.cmo :
-asmcomp/dwarf_low/expr_high.cmx :
 asmcomp/dwarf_low/form.cmo : asmcomp/dwarf_low/value.cmi \
     asmcomp/dwarf_low/stream.cmi asmcomp/dwarf_low/class.cmi \
     asmcomp/dwarf_low/form.cmi
@@ -1399,8 +1398,6 @@ asmcomp/dwarf_low/location_list_entry.cmx : asmcomp/dwarf_low/value.cmx \
     asmcomp/dwarf_low/std_internal.cmx \
     asmcomp/dwarf_low/location_expression.cmx asmcomp/linearize.cmx \
     asmcomp/dwarf_low/location_list_entry.cmi
-asmcomp/dwarf_low/lower_expr_high.cmo :
-asmcomp/dwarf_low/lower_expr_high.cmx :
 asmcomp/dwarf_low/operator.cmo : asmcomp/dwarf_low/value.cmi \
     asmcomp/dwarf_low/operator.cmi
 asmcomp/dwarf_low/operator.cmx : asmcomp/dwarf_low/value.cmx \

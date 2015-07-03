@@ -29,13 +29,13 @@ end = struct
     { full_or_relative_path_name; dir_index; mtime; length; }
 
   let parse stream =
-    Stream.parse_null_terminated_string stream
+    Stream.read_null_terminated_string stream
     >>= fun full_or_relative_path_name ->
-    Stream.parse_uleb128 stream
+    Stream.read_uleb128 stream
     >>= fun dir_index ->
-    Stream.parse_uleb128 stream
+    Stream.read_uleb128 stream
     >>= fun mtime ->
-    Stream.parse_uleb128 stream
+    Stream.read_uleb128 stream
     >>| fun length ->
     create ~full_or_relative_path_name ~dir_index ~mtime ~length
 end
@@ -65,33 +65,33 @@ end = struct
   }
 
   let parse stream ~dwarf_format =
-    Stream.parse_initial_length stream
+    Stream.read_initial_length stream
     >>= fun unit_length ->
-    Stream.parse_uhalf stream
+    Stream.read_uhalf stream
     >>= fun version ->
     begin match Dwarf_format.size dwarf_format with
-    | `Thirty_two -> Stream.parse_four_byte_unsigned_length stream
-    | `Sixty_four -> Stream.parse_eight_byte_unsigned_length stream
+    | `Thirty_two -> Stream.read_four_byte_unsigned_length stream
+    | `Sixty_four -> Stream.read_eight_byte_unsigned_length stream
     end
     >>= fun header_length ->
-    Stream.parse_ubyte stream
+    Stream.read_ubyte stream
     >>= fun minimum_instruction_length ->
-    Stream.parse_ubyte stream
+    Stream.read_ubyte stream
     >>= fun maximum_operations_per_instruction ->
-    Stream.parse_ubyte_as_bool stream
+    Stream.read_ubyte_as_bool stream
     >>= fun default_is_stmt ->
-    Stream.parse_sbyte stream
+    Stream.read_sbyte stream
     >>= fun line_base ->
-    Stream.parse_ubyte stream
+    Stream.read_ubyte stream
     >>= fun line_range ->
-    Stream.parse_ubyte stream
+    Stream.read_ubyte stream
     >>= fun opcode_base ->
-    Stream.parse_ubyte_array stream
+    Stream.read_ubyte_array stream
     >>= fun standard_opcode_lengths ->
-    Stream.parse_null_byte_terminated_sequence stream
-      Stream.parse_null_terminated_string
+    Stream.read_null_byte_terminated_sequence stream
+      Stream.read_null_terminated_string
     >>= fun include_directories ->
-    Stream.parse_null_byte_terminated_sequence stream File_name.parse
+    Stream.read_null_byte_terminated_sequence stream File_name.parse
     >>| fun file_names ->
     { unit_length; version; header_length; minimum_instruction_length;
       maximum_operations_per_instruction; default_is_stmt; line_base;
@@ -264,36 +264,36 @@ end = struct
     | DW_LNS_set_isa of int
 
   let parse stream =
-    Stream.parse_??? stream
+    Stream.read_??? stream
     >>= function
     | 0x01 -> Ok DW_LNS_copy
     | 0x02 ->
-      Stream.parse_uleb128 stream
+      Stream.read_uleb128 stream
       >>= fun operation_advance ->
       Ok (DW_LNS_advance_pc operation_advance)
     | 0x03 ->
-      Stream.parse_leb128 stream
+      Stream.read_leb128 stream
       >>= fun delta_line ->
       Ok (DW_LNS_advance_line delta_line)
     | 0x04 ->
-      Stream.parse_uleb128 stream
+      Stream.read_uleb128 stream
       >>= fun file ->
       Ok (DW_LNS_set_file file)
     | 0x05 ->
-      Stream.parse_uleb128 stream
+      Stream.read_uleb128 stream
       >>= fun column ->
       Ok (DW_LNS_set_column column)
     | 0x06 -> Ok DW_LNS_negate_stmt
     | 0x07 -> Ok DW_LNS_set_basic_block
     | 0x08 -> Ok DW_LNS_const_add_pc
     | 0x09 ->
-      Stream.parse_uhalf stream
+      Stream.read_uhalf stream
       >>= fun delta_address ->
       Ok (DW_LNS_fixed_advance_pc delta_address)
     | 0x0a -> Ok DW_LNS_set_prologue_end
     | 0x0b -> Ok DW_LNS_set_epilogue_begin
     | 0x0c ->
-      Stream.parse_uleb128 stream
+      Stream.read_uleb128 stream
       >>= fun isa ->
       Ok (DW_LNS_set_isa isa)
     | opcode -> Error (Printf.sprintf "unknown standard opcode %x" opcode)
@@ -348,30 +348,30 @@ end = struct
 
   type t =
     | DW_LNE_end_sequence
-    | DW_LNE_set_address of Relocatable_address.t
-    | DW_LNE_define_file of string * int * int * int
-    | DW_LNE_set_discriminator * int
+    | DW_LNE_set_address of Target_addr.t
+    | DW_LNE_define_file of string * Uleb128.t * Uleb128.t * Sleb128.t
+    | DW_LNE_set_discriminator * Uleb128.t
 
   let parse stream
-    Stream.parse_??? stream
+    Stream.read_int8_as_int stream
     >>= function
     | 0x01 -> Ok DW_LNE_end_sequence
     | 0x02 ->
-      Stream.parse_relocatable_address stream
+      Stream.read_target_addr stream
       >>| fun addr ->
       DW_LNE_set_address addr
     | 0x03 ->
-      Stream.parse_null_terminated_string stream
+      Stream.read_null_terminated_string stream
       >>= fun path ->
-      Stream.parse_uleb128 stream
+      Stream.read_uleb128 stream
       >>= fun dir_index ->
-      Stream.parse_uleb128 stream
+      Stream.read_uleb128 stream
       >>= fun mtime ->
-      Stream.parse_leb128 stream
+      Stream.read_sleb128 stream
       >>| fun length ->
       DW_LNE_define_file (path, dir_index, mtime, length)
     | 0x04 ->
-      Stream.parse_uleb128 stream
+      Stream.read_uleb128 stream
       >>| fun discriminator ->
       DW_LNE_set_discriminator discriminator
     | opcode -> Error (Printf.sprintf "unknown extended opcode %x" opcode)
