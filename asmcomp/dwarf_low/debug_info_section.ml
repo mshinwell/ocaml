@@ -138,6 +138,7 @@ let emit t ~emitter =
     List.iter dies ~f:(DIE.emit ~emitter);
     abbrev_table
 
+(*
 let rebuild_proto_dies ~dies ~abbrev_table =
   let offset_table = Hashtbl.create (List.length dies) in
   let rec for_each_die ~proto_dies ~parents ~dies =
@@ -246,3 +247,4 @@ let parse ~debug_info_stream:stream ~debug_abbrev_stream =
       compilation_unit;
       abbrev_table_and_dies = Some (abbrev_table, dies);
     }
+*)

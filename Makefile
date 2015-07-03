@@ -84,6 +84,9 @@ DWARF_LOW=\
   asmcomp/dwarf_low/std_internal.cmo \
   asmcomp/dwarf_low/uleb128.cmo \
   asmcomp/dwarf_low/sleb128.cmo \
+  asmcomp/dwarf_low/int6.cmo \
+  asmcomp/dwarf_low/int8.cmo \
+  asmcomp/dwarf_low/int16.cmo \
   asmcomp/dwarf_low/dwarf_format.cmo \
   asmcomp/dwarf_low/section_names.cmo \
   asmcomp/dwarf_low/emitter.cmo \

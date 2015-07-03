@@ -214,7 +214,7 @@ let encode t =
     | Type_unit -> 0x41
     | Rvalue_reference_type -> 0x42
     | Template_alias -> 0x43
-    | User of code ->
+    | User code ->
       assert (code >= dw_tag_lo_user && code <= dw_tag_hi_user);
       code
   in

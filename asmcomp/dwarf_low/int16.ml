@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2014--2015, Jane Street Group, LLC                       *)
+(*  Copyright 2015, Jane Street Holding                                *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -20,9 +20,4 @@
 (*                                                                     *)
 (***********************************************************************)
 
-type t = Int64.t
-
-let rec size_in_bytes i =
-  assert (Int64.compare i Int64.zero >= 0);
-  if Int64.compare i 128L < 0 then 1
-  else 1 + (size_in_bytes (Int64.shift_right_logical i 7))
+type t = int

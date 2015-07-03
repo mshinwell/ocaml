@@ -23,5 +23,5 @@
 type t = Int64.t
 
 let rec size_in_bytes i =
-  if i >= -64 && i < 64 then 1
-  else 1 + (size_in_bytes (i asr 7))
+  if Int64.compare i (-64L) >= 0 && Int64.compare i 64L < 0 then 1
+  else 1 + (size_in_bytes (Int64.(*arithmetic_*)shift_right i 7))
