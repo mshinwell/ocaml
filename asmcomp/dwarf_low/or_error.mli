@@ -20,11 +20,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* Whether we are emitting 32-bit or 64-bit DWARF.
-   Note that this width does not necessarily coincide with the width of a
-   native integer on the target processor.  (DWARF-4 standard section 7.4,
-   page 142). *)
-
-type t =
-  | Thirty_two
-  | Sixty_four
+type 'a t =
+  | Ok of 'a
+  | Error of string

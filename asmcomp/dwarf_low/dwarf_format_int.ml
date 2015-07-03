@@ -20,11 +20,17 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* Whether we are emitting 32-bit or 64-bit DWARF.
-   Note that this width does not necessarily coincide with the width of a
-   native integer on the target processor.  (DWARF-4 standard section 7.4,
-   page 142). *)
-
 type t =
-  | Thirty_two
-  | Sixty_four
+  | Thirty_two of Int32.t
+  | Sixty_four of Int64.t
+
+let parse ~stream : t =
+  match Stream.dwarf_format stream with
+  | Thirty_two ->
+    Stream.read_int32 stream
+    >>= fun i ->
+    Thirty_two i
+  | Sixty_four ->
+    Stream.read_int64 stream
+    >>= fun i ->
+    Sixty_four i

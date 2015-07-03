@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2014, Jane Street Holding                                *)
+(*  Copyright 2014--2015, Jane Street Group, LLC                       *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -20,12 +20,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-let size_ref = ref None
-
-let set_size (new_size : [ `Thirty_two | `Sixty_four ]) =
-  size_ref := Some new_size
-
-let size () =
-  match !size_ref with
-  | None -> failwith "Dwarf_format.set_size has not been called"
-  | Some size -> size
+type t =
+  | Thirty_two
+  | Sixty_four

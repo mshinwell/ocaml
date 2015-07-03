@@ -88,6 +88,9 @@ DWARF_LOW=\
   asmcomp/dwarf_low/int8.cmo \
   asmcomp/dwarf_low/int16.cmo \
   asmcomp/dwarf_low/dwarf_format.cmo \
+  asmcomp/dwarf_low/stream.cmo \
+  asmcomp/dwarf_low/parseable.cmo \
+  asmcomp/dwarf_low/dwarf_format_int.cmo \
   asmcomp/dwarf_low/section_names.cmo \
   asmcomp/dwarf_low/emitter.cmo \
   asmcomp/dwarf_low/emittable.cmo \

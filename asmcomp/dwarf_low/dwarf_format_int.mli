@@ -4,7 +4,7 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2014--2015, Jane Street Group, LLC                       *)
+(*  Copyright 2015, Jane Street Group, LLC                             *)
 (*                                                                     *)
 (*  Licensed under the Apache License, Version 2.0 (the "License");    *)
 (*  you may not use this file except in compliance with the License.   *)
@@ -20,11 +20,7 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* Whether we are emitting 32-bit or 64-bit DWARF.
-   Note that this width does not necessarily coincide with the width of a
-   native integer on the target processor.  (DWARF-4 standard section 7.4,
-   page 142). *)
+(** An integer that has the same width as a given DWARF format. *)
+type t
 
-type t =
-  | Thirty_two
-  | Sixty_four
+include Parseable.S with type t := t
