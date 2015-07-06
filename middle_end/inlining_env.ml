@@ -13,6 +13,9 @@
 
 type t = {
   backend : (module Backend_intf.S);
+  (* CR mshinwell: Maybe this environment should be split into two parts
+     (one global, one following the scope). *)
+  approx_env : Simple_value_approx.Env.t;
   env_approx : Simple_value_approx.t Variable.Map.t;
   current_functions : Set_of_closures_id.Set.t;
   (* The functions currently being declared: used to avoid inlining
@@ -30,6 +33,7 @@ type t = {
 
 let empty ~never_inline ~backend =
   { backend;
+    approx_env = Simple_value_approx.Env.create ();
     env_approx = Variable.Map.empty;
     current_functions = Set_of_closures_id.Set.empty;
     inlining_level = 0;
@@ -43,6 +47,7 @@ let empty ~never_inline ~backend =
       Inlining_stats.Closure_stack.create ();
   }
 
+let approx_env t = t.approx_env
 let backend t = t.backend
 
 let local env =
