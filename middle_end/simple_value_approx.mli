@@ -102,9 +102,11 @@ type value_string = {
     cannot prove it and must therefore keep it.
 *)
 
+(*
 (** A value of type [Id.t] is the key in a memoization table mapping to
     approximations. *)
 module Id : Ext_types.Identifiable
+*)
 
 type approx = private {
   descr : descr;
@@ -113,7 +115,7 @@ type approx = private {
 }
 
 and descr = private
-  | Value_block of Tag.t * Id.t array
+  | Value_block of Tag.t * approx array
   | Value_int of int
   | Value_constptr of int
   | Value_float of float
@@ -129,13 +131,14 @@ and descr = private
   | Value_unresolved of Symbol.t (* No description was found for this symbol *)
 
 and value_closure = {
-  set_of_closures : Id.t;
+  set_of_closures : approx;
   closure_id : Closure_id.t;
 }
 
 and value_set_of_closures = {
+  (* CR mshinwell: Maybe [Function_decls_id.t]?  And rename field. *)
   function_decls : Set_of_closures_id.t;
-  bound_vars : Id.t Var_within_closure.Map.t;
+  bound_vars : approx Var_within_closure.Map.t;
   unchanging_params : Variable.Set.t;
   specialised_args : Variable.Set.t;
   (* Any freshening that has been applied to [function_decls]. *)
@@ -151,8 +154,10 @@ module Env : sig
 
   val create : unit -> t
 
+(*
   val add : t -> approx -> Id.t
   val find : t -> Id.t -> approx option
+*)
 
   val add_function_decls_exn
      : t
@@ -171,8 +176,8 @@ val descr : t -> descr
 val descrs : t list -> descr list
 
 (** Pretty-printing of approximations to a formatter. *)
-val print : Format.formatter -> t -> unit
-val print_descr : Format.formatter -> descr -> unit
+val print : Env.t -> Format.formatter -> t -> unit
+val print_descr : Env.t -> Format.formatter -> descr -> unit
 
 (** Basic construction of approximations. *)
 val value_unknown : t

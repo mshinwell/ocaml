@@ -22,16 +22,19 @@ type value_string = {
 }
 
 module Id_base = Ext_types.Id (struct end)
-module Id = Identifiable.Make (Id_base)
+module Id : Ext_types.Identifiable = struct
+  type t = Id_base.t
+  include Ext_types.Identifiable.Make (Id_base)
+end
 
 module T = struct
-  type t = {
+  type approx = private {
     descr : descr;
     var : Variable.t option;
     symbol : Symbol.t option;
   }
 
-  and descr =
+  and descr = private
     | Value_block of Tag.t * Id.t array
     | Value_int of int
     | Value_constptr of int
@@ -40,28 +43,33 @@ module T = struct
     | Value_set_of_closures of value_set_of_closures
     | Value_closure of value_closure
     | Value_string of value_string
-    | Value_float_array of int (* size *)
+    | Value_float_array of int
     | Value_unknown
     | Value_bottom
     | Value_extern of Export_id.t
     | Value_symbol of Symbol.t
-    | Value_unresolved of Symbol.t (* No description was found for this symbol *)
+    | Value_unresolved of Symbol.t
 
   and value_closure = {
-    set_of_closures : Id.t;
+    set_of_closures : approx;
     closure_id : Closure_id.t;
   }
 
   and value_set_of_closures = {
-    function_decls : Expr_id.t Flambda.function_declarations;
-    bound_vars : Id.t Var_within_closure.Map.t;
+    function_decls : Set_of_closures_id.t;
+    bound_vars : approx Var_within_closure.Map.t;
     unchanging_params : Variable.Set.t;
     specialised_args : Variable.Set.t;
     freshening : Freshening.Project_var.t;
   }
 
+  type t = approx
+
   let compare = Pervasives.compare
   let hash = Hashtbl.hash
+  let equal t1 t2 = (compare t1 t2 = 0)
+  let print _ppf _t = Misc.fatal_error "not yet implemented"
+  let output _ppf _t = Misc.fatal_error "not yet implemented"
 end
 
 include T
@@ -69,17 +77,19 @@ module Tbl = Ext_types.ExtHashtbl (T)
 
 module Env = struct
   type t = {
-    approx : t Id.Tbl.t;
+    approx : approx Id.Tbl.t;
     approx_reverse : Id.t Tbl.t;
-    function_decls : t Set_of_closures_id.Tbl.t;
+    function_decls : Expr_id.t Flambda.function_declarations
+        Set_of_closures_id.Tbl.t;
   }
 
   let create () =
-    { approx = Id.Tbl.create ();
-      approx_reverse = Tbl.create ();
-      function_decls = Set_of_closures_id.Tbl.create ();
+    { approx = Id.Tbl.create 42;
+      approx_reverse = Tbl.create 42;
+      function_decls = Set_of_closures_id.Tbl.create 42;
     }
 
+(*
   let add t approx =
     match Tbl.find t.approx_reverse approx with
     | id -> id
@@ -92,31 +102,37 @@ module Env = struct
   let find t id =
     try Some (Id.Tbl.find t.approx id)
     with Not_found -> None
+*)
 
   let find_function_decls t set_of_closures_id =
     try Some (Set_of_closures_id.Tbl.find t.function_decls set_of_closures_id)
     with Not_found -> None
 
-  exception Approx_env_already_contains_mapping of Variable.t
+  exception Approx_env_already_contains_mapping of Set_of_closures_id.t
 
   let add_function_decls_exn t set_of_closures_id function_decls =
     match find_function_decls t set_of_closures_id with
-    | None -> Id.Tbl.add t.function_decls set_of_closures_id function_decls
-    | Some _ -> raise (Approx_env_already_contains_mapping set_of_closures_var)
+    | None ->
+      Set_of_closures_id.Tbl.add t.function_decls set_of_closures_id
+        function_decls
+    | Some _ -> raise (Approx_env_already_contains_mapping set_of_closures_id)
 end
 
 let descr t = t.descr
 
-let print_value_set_of_closures ppf { function_decls = { funs } } =
-  Format.fprintf ppf "(set_of_closures:@ %a)"
-    (fun ppf -> Variable.Map.iter (fun id _ -> Variable.print ppf id)) funs
+let print_value_set_of_closures env ppf { function_decls; _ } =
+  match Env.find_function_decls env function_decls with
+  | None -> Format.fprintf ppf "(set_of_closures: not in env)"
+  | Some { funs; _ } ->
+    Format.fprintf ppf "(set_of_closures:@ %a)"
+      (fun ppf -> Variable.Map.iter (fun id _ -> Variable.print ppf id)) funs
 
-let rec print_descr ppf = function
+let rec print_descr env ppf = function
   | Value_int i -> Format.pp_print_int ppf i
   | Value_constptr i -> Format.fprintf ppf "%ia" i
   | Value_block (tag,fields) ->
     let p ppf fields =
-      Array.iter (fun v -> Format.fprintf ppf "%a@ " print v) fields in
+      Array.iter (fun v -> Format.fprintf ppf "%a@ " (print env) v) fields in
     Format.fprintf ppf "[%i:@ @[<1>%a@]]" (Tag.to_int tag) p fields
   | Value_unknown -> Format.fprintf ppf "?"
   | Value_bottom -> Format.fprintf ppf "bottom"
@@ -125,7 +141,7 @@ let rec print_descr ppf = function
   | Value_closure { closure_id } ->
     Format.fprintf ppf "(fun:@ %a)" Closure_id.print closure_id
   | Value_set_of_closures set_of_closures ->
-    print_value_set_of_closures ppf set_of_closures
+    print_value_set_of_closures env ppf set_of_closures
   | Value_unresolved sym ->
     Format.fprintf ppf "(unresolved %a)" Symbol.print sym
   | Value_float f -> Format.pp_print_float ppf f
@@ -149,7 +165,7 @@ let rec print_descr ppf = function
     | Int64 -> Format.fprintf ppf "%Li" i
     | Nativeint -> Format.fprintf ppf "%ni" i
 
-and print ppf { descr } = print_descr ppf descr
+and print env ppf { descr } = print_descr env ppf descr
 
 let approx descr = { descr; var = None; symbol = None }
 

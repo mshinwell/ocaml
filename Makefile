@@ -107,6 +107,7 @@ ASMCOMP=\
   asmcomp/flambdaexport.cmo \
   asmcomp/compilenv.cmo \
   asmcomp/import_approx.cmo \
+  asmcomp/lift_constants.cmo \
   asmcomp/flambdasym.cmo \
   asmcomp/clambdagen.cmo \
   asmcomp/strmatch.cmo asmcomp/cmmgen.cmo \

@@ -795,8 +795,11 @@ and simplify_set_of_closures original_env r
     }
   in
   let r = Variable.Map.fold (fun id _ r -> R.exit_scope r id) function_decls.funs r in
+  let set_of_closures_id = Set_of_closures_id.create () in
+  A.Env.add_function_decls (E.approx_env env) set_of_closures_id
+    function_decls;
   let set_of_closures : _ Flambda.set_of_closures =
-    { function_decls;
+    { function_decls = set_of_closures_id;
       free_vars = Variable.Map.map fst free_vars;
       specialised_args;
     }

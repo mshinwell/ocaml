@@ -121,6 +121,7 @@ type 'a t =
   (* Restrictions on [Lambda.Lstringswitch] also apply here *)
   | Fstringswitch of 'a t * (string * 'a t) list * 'a t option * 'a
   | Fstaticraise of Static_exception.t * 'a t list * 'a
+  (* CR mshinwell: Why isn't it (Variable.t * 'a) list? *)
   | Fstaticcatch of Static_exception.t * Variable.t list * 'a t * 'a t * 'a
   | Ftrywith of 'a t * Variable.t * 'a t * 'a
   | Fifthenelse of 'a t * 'a t * 'a t * 'a
