@@ -440,7 +440,7 @@ module Conv(P:Param1) = struct
           Fselect_closure({ set_of_closures = ulam; closure_id = id; relative_to = rel },()),
           approx
 
-    | Fvar_within_closure({closure = lam;var = env_var;closure_id = env_fun_id}, _) as expr ->
+    | Fproject_var ({closure = lam;var = env_var;closure_id = env_fun_id}, _) as expr ->
         let ulam, fun_approx = conv_approx env lam in
         let approx : ET.approx =
           match get_descr fun_approx with
@@ -464,7 +464,7 @@ module Conv(P:Param1) = struct
                 Printflambda.flambda expr
                 Printflambda.flambda ulam;
               assert false in
-        Fvar_within_closure({closure = ulam;var = env_var;closure_id = env_fun_id}, ()),
+        Fproject_var ({closure = ulam;var = env_var;closure_id = env_fun_id}, ()),
         approx
 
     | Fapply({func = funct; args; kind = direct; dbg = dbg}, _) ->
