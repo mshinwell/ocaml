@@ -45,6 +45,8 @@ let rec lift_constants expr =
       in
       Fletrec (List.map lift_binding bindings, body, ())
     | Fset_of_closures (set_of_closures, _) ->
+      (* CR mshinwell: need to erase specialised argument information.
+         Anything else? *)
       if set_of_closures_id_is_constant
         set_of_closures.function_decls.set_of_closures_id
       then
