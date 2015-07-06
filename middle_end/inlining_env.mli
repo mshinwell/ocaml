@@ -18,6 +18,8 @@ val empty
   -> backend:(module Backend_intf.S)
   -> t
 
+val approx_env : t -> Simple_value_approx.Env.t
+
 val backend : t -> (module Backend_intf.S)
 
 val local : t -> t

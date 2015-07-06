@@ -21,40 +21,89 @@ type value_string = {
   size : int;
 }
 
-type t = {
-  descr : descr;
-  var : Variable.t option;
-  symbol : Symbol.t option;
-}
+module Id_base = Ext_types.Id (struct end)
+module Id = Identifiable.Make (Id_base)
 
-and descr =
-  | Value_block of Tag.t * t array
-  | Value_int of int
-  | Value_constptr of int
-  | Value_float of float
-  | Value_boxed_int : 'a boxed_int * 'a -> descr
-  | Value_set_of_closures of value_set_of_closures
-  | Value_closure of value_closure
-  | Value_string of value_string
-  | Value_float_array of int (* size *)
-  | Value_unknown
-  | Value_bottom
-  | Value_extern of Export_id.t
-  | Value_symbol of Symbol.t
-  | Value_unresolved of Symbol.t (* No description was found for this symbol *)
+module T = struct
+  type t = {
+    descr : descr;
+    var : Variable.t option;
+    symbol : Symbol.t option;
+  }
 
-and value_closure = {
-  set_of_closures : t;
-  closure_id : Closure_id.t;
-}
+  and descr =
+    | Value_block of Tag.t * Id.t array
+    | Value_int of int
+    | Value_constptr of int
+    | Value_float of float
+    | Value_boxed_int : 'a boxed_int * 'a -> descr
+    | Value_set_of_closures of value_set_of_closures
+    | Value_closure of value_closure
+    | Value_string of value_string
+    | Value_float_array of int (* size *)
+    | Value_unknown
+    | Value_bottom
+    | Value_extern of Export_id.t
+    | Value_symbol of Symbol.t
+    | Value_unresolved of Symbol.t (* No description was found for this symbol *)
 
-and value_set_of_closures = {
-  function_decls : Expr_id.t Flambda.function_declarations;
-  bound_vars : t Var_within_closure.Map.t;
-  unchanging_params : Variable.Set.t;
-  specialised_args : Variable.Set.t;
-  freshening : Freshening.Project_var.t;
-}
+  and value_closure = {
+    set_of_closures : Id.t;
+    closure_id : Closure_id.t;
+  }
+
+  and value_set_of_closures = {
+    function_decls : Expr_id.t Flambda.function_declarations;
+    bound_vars : Id.t Var_within_closure.Map.t;
+    unchanging_params : Variable.Set.t;
+    specialised_args : Variable.Set.t;
+    freshening : Freshening.Project_var.t;
+  }
+
+  let compare = Pervasives.compare
+  let hash = Hashtbl.hash
+end
+
+include T
+module Tbl = Ext_types.ExtHashtbl (T)
+
+module Env = struct
+  type t = {
+    approx : t Id.Tbl.t;
+    approx_reverse : Id.t Tbl.t;
+    function_decls : t Set_of_closures_id.Tbl.t;
+  }
+
+  let create () =
+    { approx = Id.Tbl.create ();
+      approx_reverse = Tbl.create ();
+      function_decls = Set_of_closures_id.Tbl.create ();
+    }
+
+  let add t approx =
+    match Tbl.find t.approx_reverse approx with
+    | id -> id
+    | exception Not_found ->
+      let id = Id.create () in
+      Id.Tbl.add t.approx id approx;
+      Id.Tbl.add t.approx_reverse approx id;
+      id
+
+  let find t id =
+    try Some (Id.Tbl.find t.approx id)
+    with Not_found -> None
+
+  let find_function_decls t set_of_closures_id =
+    try Some (Set_of_closures_id.Tbl.find t.function_decls set_of_closures_id)
+    with Not_found -> None
+
+  exception Approx_env_already_contains_mapping of Variable.t
+
+  let add_function_decls_exn t set_of_closures_id function_decls =
+    match find_function_decls t set_of_closures_id with
+    | None -> Id.Tbl.add t.function_decls set_of_closures_id function_decls
+    | Some _ -> raise (Approx_env_already_contains_mapping set_of_closures_var)
+end
 
 let descr t = t.descr
 
