@@ -11,7 +11,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-let rec lift_constants expr =
+let lift_constants expr =
   let inconstants =
     Inconstant_idents.inconstants ~for_clambda:false
       ~compilation_unit:(Compilation_unit.get_current_exn ())
