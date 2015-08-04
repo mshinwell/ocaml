@@ -394,8 +394,7 @@ let rec report_exception_rec n ppf exn =
   with exn when n > 0 ->
     report_exception_rec (n-1) ppf exn
 
-external reraise : exn -> 'a = "%reraise"
-let report_exception ppf exn = reraise exn (* report_exception_rec 5 ppf exn*)
+let report_exception ppf exn = report_exception_rec 5 ppf exn
 
 
 exception Error of error
