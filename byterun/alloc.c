@@ -153,6 +153,12 @@ CAMLprim value caml_alloc_dummy(value size)
   return caml_alloc (wosize, 0);
 }
 
+CAMLprim value caml_alloc_dummy_function(value size,value arity)
+{
+  /* the arity argument is used by the js_of_ocaml runtime */
+  return caml_alloc_dummy(size);
+}
+
 CAMLprim value caml_alloc_dummy_float (value size)
 {
   mlsize_t wosize = Int_val(size) * Double_wosize;
@@ -184,3 +190,7 @@ CAMLprim value caml_update_dummy(value dummy, value newval)
   }
   return Val_unit;
 }
+
+
+
+
