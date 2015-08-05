@@ -25,6 +25,7 @@
 val code_for_function_prologue
    : num_instrumented_alloc_points:int
   -> num_direct_call_points:int
+  -> node:Ident.t
   -> Cmm.expression
 
 val code_for_direct_call

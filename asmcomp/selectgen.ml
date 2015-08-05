@@ -908,7 +908,7 @@ method private emit_tail_sequence env exp =
 (* Insertion of allocation profiling prologue code *)
 
 method private emit_allocation_profiling_prologue f ~env_after_main_prologue
-      ~last_insn_of_main_prologue =
+      ~last_insn_of_main_prologue ~node =
   if !Clflags.allocation_profiling then begin
     let needs_prologue =
       true
@@ -920,7 +920,7 @@ method private emit_allocation_profiling_prologue f ~env_after_main_prologue
     in
     if needs_prologue then begin
       let prologue_cmm =
-        Alloc_profiling_cmm.code_for_function_prologue
+        Alloc_profiling_cmm.code_for_function_prologue ~node
           ~num_instrumented_alloc_points
           ~num_direct_call_points:num_direct_non_tail_calls
       in
@@ -970,7 +970,7 @@ method emit_fundecl f =
   let last_insn_of_main_prologue = instr_seq in
   self#emit_tail env f.Cmm.fun_body;
   self#emit_allocation_profiling_prologue f ~env_after_main_prologue
-    ~last_insn_of_main_prologue;
+    ~last_insn_of_main_prologue ~node:f.Cmm.fun_alloc_profiling_node;
   let body = self#extract in
   instr_iter (fun instr -> self#mark_instr instr.Mach.desc) body;
   { fun_name = f.Cmm.fun_name;
