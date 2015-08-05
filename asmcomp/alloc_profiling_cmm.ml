@@ -38,7 +38,7 @@ let code_to_allocate_trie_node ~num_allocation_points ~call_types =
       Cop (Cstore Word, [node, Cconst_natint header]);
       Cop (Caddi, [node, Cconst_int Arch.size_addr])))
 
-let function_prologue ~num_allocation_points ~call_types =
+let code_for_function_prologue ~num_allocation_points ~call_types =
   let node_hole = Ident.create "node_hole" in
   let node = Ident.create "node" in
   let new_node = Ident.create "new_node" in
@@ -105,12 +105,11 @@ let code_for_allocation_point ~value's_header ~alloc_point_number ~node =
         Clet (new_profinfo', Cop (Cload Word, [profinfo_counter]),
           Cifthenelse (
             Cop (Ccmpi Cgt, [Cvar new_profinfo'; max_profinfo]),
-            Cconst_int 0,  (* profiling counter overflow *)
+            Cconst_int 1,  (* profiling counter overflow *)
             Clet (new_profinfo'',
               Cop (Caddi, [Cvar new_profinfo'; Cconst_int 1]),
               Csequence (
-                Cop (Cstore Word,
-                  [profinfo_counter; Cvar new_profinfo'']),
+                Cop (Cstore Word, [profinfo_counter; Cvar new_profinfo'']),
                 Cvar new_profinfo'
               )))),
         Csequence (
@@ -145,6 +144,7 @@ let code_for_direct_call ~node ~num_instrumented_alloc_points ~callee
     ]
   in
   let callee_addr =
+    (* Bit 1 being set indicates this is not an allocation point. *)
     Cop (Cor, [Cconst_symbol callee; Cconst_int 3])
   in
   let node_hole_ptr =

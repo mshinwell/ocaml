@@ -304,8 +304,8 @@ LBL(caml_call_gc):
         STORE_VAR(%r15, caml_young_ptr)
         STORE_VAR(%r14, caml_exception_pointer)
 #ifdef WITH_ALLOCATION_PROFILING
-    /* Save allocation profiling backtrace stack pointer */
-        STORE_VAR(%r11, caml_allocation_profiling_backtrace_top_of_stack)
+    /* Save allocation profiling trie node pointer */
+        STORE_VAR(%r11, caml_alloc_profiling_trie_node_ptr)
 #endif
     /* Save floating-point registers */
         subq    $(16*8), %rsp; CFI_ADJUST (16*8);
@@ -461,8 +461,8 @@ LBL(caml_c_call):
         STORE_VAR(%rsp, caml_bottom_of_stack)
         subq    $8, %rsp; CFI_ADJUST(8) /* equivalent to pushq %r12 */
 #ifdef WITH_ALLOCATION_PROFILING
-    /* Save allocation profiling backtrace stack pointer */
-        STORE_VAR(%r11, caml_allocation_profiling_backtrace_top_of_stack)
+    /* Save allocation profiling backtrace trie node pointer */
+        STORE_VAR(%r11, caml_alloc_profiling_trie_node_ptr)
 #endif
 #if !defined(SYS_mingw64) && !defined(SYS_cygwin)
     /* Touch the stack to trigger a recoverable segfault
@@ -492,7 +492,7 @@ FUNCTION(G(caml_start_program))
 LBL(caml_start_program):
     /* Build a callback link */
 #ifdef WITH_ALLOCATION_PROFILING
-        PUSH_VAR(caml_allocation_profiling_backtrace_top_of_stack)
+        PUSH_VAR(caml_alloc_profiling_trie_node_ptr)
 #else
         subq    $8, %rsp  /* stack 16-aligned */
         CFI_ADJUST(8)
@@ -500,6 +500,7 @@ LBL(caml_start_program):
         PUSH_VAR(caml_gc_regs)
         PUSH_VAR(caml_last_return_address)
         PUSH_VAR(caml_bottom_of_stack)
+#if 0
 #ifdef WITH_ALLOCATION_PROFILING
     /* Write the backtrace onto the backtrace stack.  This may write an
        arbitrary number of frames onto that stack; the callback link we just
@@ -507,6 +508,7 @@ LBL(caml_start_program):
        code returns.  This function also affects
        [caml_allocation_profiling_backtrace_top_of_stack]. */
         call    GCALL(caml_allocation_profiling_backtrace_c_to_ocaml)
+#endif
 #endif
     /* Setup alloc ptr and exception ptr */
         LOAD_VAR(caml_young_ptr, %r15)
@@ -516,11 +518,11 @@ LBL(caml_start_program):
         pushq   %r13; CFI_ADJUST(8)
 #ifdef WITH_ALLOCATION_PROFILING
     /* When executing the exception handler, we must unwind the backtrace
-       stack in the same way as a normal return from the OCaml function.
-       (This is in contrast to the system stack; the analogous frames would
-       be unwound as the stack of C functions gradually returns.)  As such,
-       we must grab the pointer from the callback link, rather than using
-       the global variable. */
+       trie node hole pointer in the same way as a normal return from the OCaml
+       function.  (This is in contrast to the system stack; the analogous
+       frames would be unwound as the stack of C functions gradually returns.)
+       As such, we must grab the pointer from the callback link, rather than
+       using the global variable. */
         movq    40(%rsp), %r11
         pushq   %r11
         CFI_ADJUST(8)
@@ -531,8 +533,8 @@ LBL(caml_start_program):
     /* Keep stack 16-aligned. */
         subq    $8, %rsp
         CFI_ADJUST(8)
-    /* Set up allocation profiling backtrace stack pointer */
-        LOAD_VAR(caml_allocation_profiling_backtrace_top_of_stack, %r11)
+    /* Set up allocation profiling backtrace trie node hole pointer */
+        LOAD_VAR(caml_alloc_profiling_trie_node_ptr, %r11)
 #endif
         movq    %rsp, %r14
     /* Call the OCaml code */
@@ -559,9 +561,7 @@ LBL(109):
         POP_VAR(caml_last_return_address)
         POP_VAR(caml_gc_regs)
 #ifdef WITH_ALLOCATION_PROFILING
-        POP_VAR(caml_allocation_profiling_backtrace_top_of_stack)
-    /* Update allocation profiling backtrace stack pointer */
-        STORE_VAR(%r11, caml_allocation_profiling_backtrace_top_of_stack)
+        POP_VAR(caml_alloc_profiling_trie_node_ptr)
 #else
         addq    $8, %rsp
         CFI_ADJUST(-8)
@@ -600,7 +600,7 @@ CFI_STARTPROC
 LBL(1100):
         movq    %r14, %rsp
 #ifdef WITH_ALLOCATION_PROFILING
-        /* Load backtrace stack pointer as it was at the trap frame */
+        /* Load trie node pointer as it was at the trap frame */
         popq    %r11
 #endif
         popq    %r14

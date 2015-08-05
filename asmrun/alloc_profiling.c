@@ -413,7 +413,10 @@ The code sequence in the callee is something like:
 
 */
 
+value caml_alloc_profiling_trie_root = (value) 0;
+value* caml_alloc_profiling_trie_node_ptr = &caml_alloc_profiling_trie_root;
 
+#if 0
 
 #define BACKTRACE_TABLE_SIZE 100000
 
@@ -875,3 +878,4 @@ caml_allocation_profiling_dump_backtraces_to_file_from_ocaml(value v_filename)
   caml_allocation_profiling_dump_backtraces_to_file(String_val(v_filename));
   return Val_unit;
 }
+#endif
