@@ -36,7 +36,7 @@ let code_to_allocate_trie_node ~num_instrumented_alloc_points
   Clet (node,
     Cop (Cextcall ("calloc", [| Int |], false, Debuginfo.none),
       [Cconst_int (1 + size);  (* "1 + " for a header *)
-       Cconst_int Sys.word_size;
+       Cconst_int Arch.size_addr;
       ]),
     Csequence (
       Cop (Cstore Word, [Cvar node; Cconst_natint header]),
@@ -132,6 +132,7 @@ let code_for_allocation_point ~value's_header ~alloc_point_number ~node =
       Cifthenelse (
         Cop (Ccmpa Ceq, [Cvar existing_profinfo; Cconst_pointer 0]),
         Cvar existing_profinfo,
+        (* CR mshinwell: consider an option to disable "override_profinfo" *)
         Cifthenelse (do_not_use_override_profinfo,
           generate_new_profinfo,
           Cop (Cload Word, [override_profinfo]))),
