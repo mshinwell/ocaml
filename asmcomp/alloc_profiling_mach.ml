@@ -20,6 +20,18 @@
 (*                                                                     *)
 (***********************************************************************)
 
+let instrument_direct_call_point ~call_types ~call_point_index_this_type
+      ~callee ~arg ~res ~dbg ~live ~next ~select_addressing =
+  let offset = offset_for_call_point ~call_types ~call_point_index_this_type in
+  let load_node_hole_ptr =
+    let chunk = [| Int |] in
+
+    { Mach.
+      desc = Iop (Iload ([| Int |], select_addressing [|
+  in
+
+
+(*
 open Mach
 
 let count_call_points decl =
@@ -88,3 +100,4 @@ let fundecl decl ~current_function_name =
           last rest
       in
       { decl with fun_body = result; }
+*)

@@ -368,6 +368,53 @@ capture_backtrace(backtrace_entry* backtrace, int depth)
 }
 #endif
 
+
+/*
+
+Upon entry to an OCaml function, a distinguished register holds the address of
+the node hole.  If we've been here before then the hole will contain a pointer
+to a trie node.  Otherwise, it will be NULL, and the callee must allocate a
+new trie node.
+
+The distinguished register is treated as containing immediates for the
+purposes of GC.
+
+Each OCaml callee will have knowledge, deduced at compile time, of any call
+points it contains.
+
+Trie nodes for OCaml functions hold:
+
+- (pc, profinfo) pairs for each allocation point in the function;
+- node holes for callees that are called directly in non-tail position;
+- node holes for callees that are called directly in tail position (self tail
+  calls are excluded);
+- node holes for callees that are called indirectly.  Some of these might be
+  in tail position.
+
+We could in the future exclude the pc from the allocation point section,
+but its presence makes decoding easier.
+
+The indirect callee section is actually (node hole, branch target) pairs
+and can be dynamically-extended; it lives at the end of the node.
+
+Identification of a node hole at a call site, to pass to the callee, is
+usually easy except in the case of an indirect call.  In this case we use
+linear search.
+
+The code sequence in the callee is something like:
+
+- create a new trie node if one doesn't exist and fill the node hole
+- change the distinguished register to hold the address of the current node
+- immediately prior to any call, change the distinguished register to point
+  at the node hole.  We will need to establish a convention as to what happens
+  to this register upon return.
+- at any allocation point, the code is straightforward (a new profinfo value
+  may need to be assigned).
+
+*/
+
+
+
 #define BACKTRACE_TABLE_SIZE 100000
 
 /* Maximum depth for a captured backtrace.  This is not the maximum size of

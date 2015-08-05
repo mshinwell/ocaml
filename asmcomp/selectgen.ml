@@ -979,9 +979,7 @@ method emit_allocation_profiling_prologue f ~env_after_main_prologue
     in
     if needs_prologue then begin
       let prologue_cmm =
-        Alloc_profiling_cmm.prologue ~num_instrumented_alloc_points
-          ~num_direct_calls_that_are_not_self_tail_calls
-          ~num_indirect_calls
+        Alloc_profiling_cmm.prologue ~num_instrumented_alloc_points ~call_types
       in
       (* Splice the allocation prologue after the main prologue but before the
          function body.  Remember that [instr_seq] points at the last

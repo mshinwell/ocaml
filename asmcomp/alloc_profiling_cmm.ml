@@ -20,96 +20,81 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* Instrumentation for allocation profiling falls into two halves.
-   Code for instrumenting allocation points and adding prologue code
-   is expressed in Cmm, to decrease complexity.
-   The remainder is expressed in Mach, since we need information
-   about any tail call optimizations that have been performed, in order
-   to keep the backtrace stack in sync with the system stack.  (This also
-   enables us to prevent unnecessary recomputation of the hash bucket
-   upon a tail call to the current function.) *)
+let size_in_words_of_trie_node ~num_allocation_points ~call_types =
+  let module C = Cmm.Call_type in
+  let direct =
+    C.Table.find_default call_types C.Direct_call ~default:0
+  in
+  let external_direct =
+    C.Table.find_default call_types C.External_direct_call ~default:0
+  in
+  let indirect =
+    C.Table.find_default call_types C.Indirect_call ~default:0
+  in
+  let non_self_direct_tail =
+    C.Table.find_default call_types C.Non_self_direct_tailcall ~default:0
+  in
+  let indirect_tail =
+    C.Table.find_default call_types C.Indirect_tailcall ~default:0
+  in
+  let direct_calls = direct + external_direct + non_self_direct_tail in
+  let indirect_calls = indirect + indirect_tail in
+  2*num_allocation_points + direct_calls + 2*indirect_calls
 
-open Cmm
+let code_to_allocate_trie_node ~num_allocation_points ~call_types =
+  let size = size_in_words_of_trie_node ~num_allocation_points ~call_types in
+  let node = Ident.create "node" in
+  let open Cmm in
+  Cop (Cextcall ("calloc", [| Int |], false, Debuginfo.none),
+    [Cconst_int size;
+     Cconst_int Sys.word_size;
+    ])
+
+let function_prologue ~num_allocation_points ~call_types =
+  let node_hole = Ident.create "node_hole" in
+  let node = Ident.create "node" in
+  let new_node = Ident.create "new_node" in
+  let open Cmm in
+  Clet (node_hole, Cop (Calloc_profiling_node_hole, []),
+    Clet (node, Cop (Cload Word, [Cvar node_hole]),
+      Cifthenelse (Cop (Ccmpi Cne, [Cvar node, Cconst_int 0]),
+        Cvar node,
+        Clet (new_node,
+          code_to_allocate_trie_node ~num_allocation_points ~call_types,
+          Csequence (
+            Cop (Cstore Word, [Cvar node_hole; Cvar new_node]),
+            Cvar new_node)))))
 
 let use_override_profinfo =
-  Cconst_symbol "caml_allocation_profiling_use_override_profinfo"
+  Cmm.Cconst_symbol "caml_allocation_profiling_use_override_profinfo"
 
 let override_profinfo =
-  Cconst_symbol "caml_allocation_profiling_override_profinfo"
+  Cmm.Cconst_symbol "caml_allocation_profiling_override_profinfo"
 
 let profinfo_counter =
-  Cconst_symbol "caml_allocation_profiling_profinfo"
+  Cmm.Cconst_symbol "caml_allocation_profiling_profinfo"
 
-let add_prologue ~body ~num_allocation_points ~backtrace_bucket =
-  (* Upon entry to an OCaml function, the backtrace top of stack pointer
-     points at the word holding the hash of all previous frames.  There is a
-     fixed register assignment for this.  It is the responsibility of the
-     callee to push their return address and to update the hash.  We make
-     callees do this rather than callers to keep code size down; there should
-     be fewer callees than call points.  The callee must then determine which
-     backtrace hash bucket is to be used for the current function; this
-     pointer is held in the [backtrace_bucket] variable.  There is no fixed
-     register assignment for this.
-
-     To reduce complexity, part of this logic is implemented in C as a
-     "noalloc" function; the overhead should be small since it's reached via
-     a static branch and the C compiler should be able to apply high
-     optimization to the code.
-  *)
-  Clet (backtrace_bucket,
-    Cop (Cextcall ("caml_allocation_profiling_prologue",
-        [| Int |],   (* Actually a naked pointer, just don't tell anyone. *)
-        false, (* = noalloc *)
-        Debuginfo.none),
-      [Cconst_int num_allocation_points;
-       (* [Cbacktrace_stack] decrements the contents of the fixed backtrace
-          top of stack register by two words, and returns that new value. *)
-       Cop (Cbacktrace_stack, []);
-       Cop (Creturn_address, []);  (* return address for the current frame *)
-      ]),
-    (* [Ctailrec_entry_point] in this position ensures that we do not run
-       the bucket calculation code when re-entering the same function from
-       a tail call. *)
-    Csequence (Ctailrec_entry_point, body))
-
-let code_for_call_point kind ~counters_without_this_call =
-  if not !Clflags.allocation_profiling then None
-  else
-    match kind with
-    | Self_direct_tailcall -> ()
-    | _ ->
-      let call_point_index =
-        Call_type.Table.find_default counters_without_this_call
-          kind ~default:0
-      in
-      if Call_type.is_direct kind then
-        Cop (Cmove_backtrace_pointer_direct_call call_point_index)
-      else
-
-
-      Cop (Cmove_backtrace_pointer (call_point_index, call_point_kind))
-
-let code_for_allocation_point ~value's_header ~alloc_point_number
-      ~backtrace_bucket =
+let code_for_allocation_point ~value's_header ~alloc_point_number ~node =
   let pc = Ident.create "pc" in
   let existing_profinfo = Ident.create "existing_profinfo" in
   let new_profinfo = Ident.create "new_profinfo" in
   let new_profinfo' = Ident.create "new_profinfo'" in
   let new_profinfo'' = Ident.create "new_profinfo''" in
   let profinfo = Ident.create "profinfo" in
-  let offset_into_backtrace_bucket =
+  let offset_into_node =
     ((2 * Arch.size_addr) * alloc_point_number)
   in
+  let open Cmm in
   let address_of_profinfo =
     Cop (Cadda, [
-      Cvar backtrace_bucket;
-      Cconst_int offset_into_backtrace_bucket;
+      Cvar node;
+      Cconst_int offset_into_node;
     ])
   in
   let address_of_pc =
     Cop (Cadda, [
-      Cvar backtrace_bucket;
-      Cconst_int (offset_into_backtrace_bucket + Arch.size_addr);
+      Cvar node;
+      Cconst_int (offset_into_node + Arch.size_addr);
     ])
   in
   let do_not_use_override_profinfo =
@@ -126,7 +111,7 @@ let code_for_allocation_point ~value's_header ~alloc_point_number
   let generate_new_profinfo =
     (* When a new profinfo value is required, we obtain the current
        program counter, and store it together with a fresh profinfo value
-       into the current backtrace hash table bucket. *)
+       into the current trie node. *)
     Clet (pc, Cop (Cprogram_counter, []),
       Clet (new_profinfo,
         Clet (new_profinfo', Cop (Cload Word, [profinfo_counter]),
@@ -159,6 +144,22 @@ let code_for_allocation_point ~value's_header ~alloc_point_number
           Cop (Cload Word, [override_profinfo]))),
       (* [profinfo] is already shifted by [PROFINFO_SHIFT]. *)
       Cop (Cor, [Cvar profinfo; Cconst_natint value's_header])))
+
+let code_for_direct_call ~node ~num_instrumented_alloc_points ~callee
+      ~direct_call_point_index =
+  let offset_in_trie_node_in_words =
+    1 + num_instrumented_alloc_points*2 + direct_call_point_index*2
+  in
+  let within_node =
+    Cop (Caddi, [
+      node;
+      Cconst_int (offset_in_trie_node * Sys.word_size);
+    ]
+  in
+  Csequence (
+    Cop (Cstore Word, [within_node; Cprogram_counter]),
+    Cop (Calloc_profiling_load_node_hole_ptr,
+      [Cop (Caddi, [within_node; Sys.word_size])]))
 
 let instrument_function_body expr ~backtrace_bucket ~fun_name =
   let next_alloc_point_number = ref 0 in
