@@ -50,6 +50,7 @@ type memory_chunk =
   | Double                              (* 64-bit-aligned 64-bit float *)
   | Double_u                            (* word-aligned 64-bit float *)
 
+(*
 module Call_type : sig
   type t =
     | Direct_call  (* to an OCaml function that is not the current function *)
@@ -66,15 +67,11 @@ module Call_type : sig
     val find_default : 'a t -> key -> default:'a -> 'a
   end
 end
-
-type call_instrumentation =
-  (Call_type.t
-    -> counters_without_this_call:int Call_type.Table.t
-    -> expression) option
+*)
 
 and operation =
-    Capply of machtype * call_instrumentation * Debuginfo.t
-  | Cextcall of string * machtype * bool * call_instrumentation * Debuginfo.t
+    Capply of machtype * Debuginfo.t
+  | Cextcall of string * machtype * bool * Debuginfo.t
   | Cload of memory_chunk
   | Calloc
   | Cstore of memory_chunk
@@ -89,7 +86,8 @@ and operation =
   | Ccmpf of comparison
   | Craise of Lambda.raise_kind * Debuginfo.t
   | Ccheckbound of Debuginfo.t
-  | Cbacktrace_stack  (* see alloc_profiling_cmm.mli for an explanation *)
+  | Calloc_profiling_node_hole
+  | Calloc_profiling_load_node_hole_ptr
   | Cprogram_counter
   | Creturn_address
 
@@ -121,6 +119,7 @@ type fundecl =
     fun_body: expression;
     fun_fast: bool;
     fun_dbg : Debuginfo.t;
+    fun_alloc_profiling_node : Ident.t;
     fun_num_instrumented_alloc_points : int;
   }
 

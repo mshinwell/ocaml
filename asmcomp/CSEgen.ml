@@ -199,9 +199,8 @@ method class_of_operation op =
   | Ifloatofint | Iintoffloat -> Op_pure
   | Ispecific _ -> Op_other
   (* CR mshinwell: should review these carefully *)
-  | Ibacktrace_stack -> Op_other
-  | Iincrement_backtrace_stack -> Op_other
-  | Idecrement_backtrace_stack -> Op_other
+  | Ialloc_profiling_node_hole -> Op_other
+  | Ialloc_profiling_load_node_hole_ptr -> Op_other
   | Iprogram_counter -> Op_other
   | Ireturn_address -> Op_pure
   | Itailrec_entry_point -> Op_other

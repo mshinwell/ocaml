@@ -64,17 +64,8 @@ type memory_chunk =
   | Double
   | Double_u
 
-type call_type =
-  | Direct_call  (* not to the current function *)
-  | Indirect_call
-  | Self_direct_tailcall
-  | Non_self_direct_tailcall
-  | Indirect_tailcall
-
-type apply_instrumentation = (call_type -> expression) option
-
 and operation =
-    Capply of machtype * Debuginfo.t * apply_instrumentation
+    Capply of machtype * Debuginfo.t
   | Cextcall of string * machtype * bool * Debuginfo.t
   | Cload of memory_chunk
   | Calloc
@@ -90,7 +81,8 @@ and operation =
   | Ccmpf of comparison
   | Craise of Lambda.raise_kind * Debuginfo.t
   | Ccheckbound of Debuginfo.t
-  | Cbacktrace_stack
+  | Calloc_profiling_node_hole
+  | Calloc_profiling_load_node_hole_ptr
   | Cprogram_counter
   | Creturn_address
 
@@ -122,6 +114,7 @@ type fundecl =
     fun_body: expression;
     fun_fast: bool;
     fun_dbg : Debuginfo.t;
+    fun_alloc_profiling_node : Ident.t;
     fun_num_instrumented_alloc_points : int;
   }
 

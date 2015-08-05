@@ -244,7 +244,7 @@ let loc_external_arguments =
 
 let loc_exn_bucket = rax
 
-let loc_backtrace_stack = r11
+let loc_alloc_profiling_node = r11
 
 (* Volatile registers: none *)
 
@@ -329,8 +329,7 @@ let op_is_pure = function
   | Ispecific(Ilea _) -> true
   | Ispecific _ -> false
   (* CR mshinwell: hmm. *)
-  | Iincrement_backtrace_stack
-  | Idecrement_backtrace_stack -> false
+  | Ialloc_profiling_load_node_hole_ptr -> false
   | _ -> true
 
 (* Layout of the stack frame *)

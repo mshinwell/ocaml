@@ -138,9 +138,9 @@ let operation op arg ppf res =
   | Iintoffloat -> fprintf ppf "intoffloat %a" reg arg.(0)
   | Ispecific op ->
       Arch.print_specific_operation reg op ppf arg
-  | Ibacktrace_stack -> fprintf ppf "backtrace_stack"
-  | Iincrement_backtrace_stack -> fprintf ppf "increment_backtrace_stack"
-  | Idecrement_backtrace_stack -> fprintf ppf "decrement_backtrace_stack"
+  | Ialloc_profiling_load_node_hole_ptr ->
+    fprintf ppf "alloc_profiling_load_node_hole_ptr"
+  | Ialloc_profiling_node_hole -> fprintf ppf "alloc_profiling_node_hole"
   | Iprogram_counter -> fprintf ppf "program_counter"
   | Ireturn_address -> fprintf ppf "return_address"
   | Itailrec_entry_point -> fprintf ppf "tailrec_entry_point"

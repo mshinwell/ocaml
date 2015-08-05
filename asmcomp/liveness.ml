@@ -155,7 +155,7 @@ let fundecl ppf f =
   (* CR mshinwell: this might not be right *)
   let wrong_live =
     if !Clflags.allocation_profiling then
-      Reg.Set.remove Proc.loc_backtrace_stack wrong_live
+      Reg.Set.remove Proc.loc_alloc_profiling_node wrong_live
     else
       wrong_live
   in

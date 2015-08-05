@@ -584,12 +584,12 @@ let emit_instr fallthrough i =
         `	sqrtsd	{emit_reg i.arg.(0)}, {emit_reg i.res.(0)}\n`
     | Lop(Ispecific(Ifloatsqrtf addr)) ->
         `	sqrtsd	{emit_addressing addr i.arg 0}, {emit_reg i.res.(0)}\n`
-    | Lop Ibacktrace_stack ->
-        `	movq	%r11, {emit_reg i.res.(0)}\n`
-    | Lop Iincrement_backtrace_stack ->
-        `	addq	${emit_int (2 * Arch.size_addr)}, %r11\n`
-    | Lop Idecrement_backtrace_stack ->
-        `	subq	${emit_int (2 * Arch.size_addr)}, %r11\n`
+    | Lop Ialloc_profiling_node_hole ->
+        Misc.fatal_error "Ialloc_profiling_node_hole should have been \
+            expanded by Selectgen"
+    | Lop Ialloc_profiling_load_node_hole_ptr ->
+        Misc.fatal_error "Ialloc_profiling_load_node_hole_ptr should have \
+            been expanded by Selectgen"
     | Lop Iprogram_counter ->
         let label = new_label () in
         `{emit_label label}:\n`;

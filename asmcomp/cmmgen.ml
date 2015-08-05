@@ -2207,6 +2207,7 @@ let transl_function f =
              fun_body = transl f.body;
              fun_fast = !Clflags.optimize_for_speed;
              fun_dbg  = f.dbg;
+             fun_alloc_profiling_node = Ident.create "alloc_profiling_node";
              fun_num_instrumented_alloc_points = 0; }
 
 (* Translate all function definitions *)
@@ -2356,6 +2357,8 @@ let compunit size ulam =
                        fun_args = [];
                        fun_body = init_code; fun_fast = false;
                        fun_dbg  = Debuginfo.none;
+                       fun_alloc_profiling_node =
+                         Ident.create "alloc_profiling_node";
                        fun_num_instrumented_alloc_points = 0 }] in
   let c2 = transl_all_functions StringSet.empty c1 in
   let c3 = emit_all_constants c2 in
@@ -2495,6 +2498,7 @@ let send_function arity =
     fun_body = body;
     fun_fast = true;
     fun_dbg  = Debuginfo.none;
+    fun_alloc_profiling_node = Ident.create "alloc_profiling_node";
     fun_num_instrumented_alloc_points = 0}
 
 let apply_function arity =
@@ -2506,6 +2510,7 @@ let apply_function arity =
     fun_body = body;
     fun_fast = true;
     fun_dbg  = Debuginfo.none;
+    fun_alloc_profiling_node = Ident.create "alloc_profiling_node";
     fun_num_instrumented_alloc_points = 0}
 
 (* Generate tuplifying functions:
@@ -2527,6 +2532,7 @@ let tuplify_function arity =
           get_field (Cvar clos) 2 :: access_components 0 @ [Cvar clos]);
     fun_fast = true;
     fun_dbg  = Debuginfo.none;
+    fun_alloc_profiling_node = Ident.create "alloc_profiling_node";
     fun_num_instrumented_alloc_points = 0}
 
 (* Generate currying functions:
@@ -2587,6 +2593,7 @@ let final_curry_function arity =
     fun_body = curry_fun [] last_clos (arity-1);
     fun_fast = true;
     fun_dbg  = Debuginfo.none;
+    fun_alloc_profiling_node = Ident.create "alloc_profiling_node";
     fun_num_instrumented_alloc_points = 0; }
 
 let rec intermediate_curry_functions arity num =
@@ -2614,6 +2621,7 @@ let rec intermediate_curry_functions arity num =
                       int_const 1; Cvar arg; Cvar clos]);
       fun_fast = true;
       fun_dbg  = Debuginfo.none;
+      fun_alloc_profiling_node = Ident.create "alloc_profiling_node";
       fun_num_instrumented_alloc_points = 0; }
     ::
       (if arity <= max_arity_optimized && arity - num > 2 then
@@ -2642,6 +2650,7 @@ let rec intermediate_curry_functions arity num =
                   (List.map (fun (arg,_) -> Cvar arg) direct_args) clos;
                fun_fast = true;
                fun_dbg = Debuginfo.none;
+               fun_alloc_profiling_node = Ident.create "alloc_profiling_node";
                fun_num_instrumented_alloc_points = 0}
           in
           cf :: intermediate_curry_functions arity (num+1)
@@ -2700,6 +2709,7 @@ let entry_point namelist =
              fun_body = body;
              fun_fast = false;
              fun_dbg  = Debuginfo.none;
+             fun_alloc_profiling_node = Ident.create "alloc_profiling_node";
              fun_num_instrumented_alloc_points = 0}
 
 (* Generate the table of globals *)

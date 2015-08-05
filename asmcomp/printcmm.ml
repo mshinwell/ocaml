@@ -84,7 +84,8 @@ let operation = function
   | Ccmpf c -> Printf.sprintf "%sf" (comparison c)
   | Craise (k, d) -> Lambda.raise_kind k ^ Debuginfo.to_string d
   | Ccheckbound d -> "checkbound" ^ Debuginfo.to_string d
-  | Cbacktrace_stack -> "backtrace_stack"
+  | Calloc_profiling_load_node_hole_ptr -> "alloc_profiling_load_node_hole_ptr"
+  | Calloc_profiling_node_hole -> "alloc_profiling_node_hole"
   | Cprogram_counter -> "program_counter"
   | Creturn_address -> "return_address"
 

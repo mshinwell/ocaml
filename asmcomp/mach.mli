@@ -53,16 +53,15 @@ type operation =
   | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
   | Ifloatofint | Iintoffloat
   | Ispecific of Arch.specific_operation
-  | Ibacktrace_stack
-  | Iincrement_backtrace_stack
-  | Idecrement_backtrace_stack
+  | Ialloc_profiling_node_hole
+  | Ialloc_profiling_load_node_hole_ptr
   | Iprogram_counter
   | Ireturn_address
   | Itailrec_entry_point
 
 type instruction =
   { desc: instruction_desc;
-    next: instruction;
+    mutable next: instruction;
     arg: Reg.t array;
     res: Reg.t array;
     dbg: Debuginfo.t;
