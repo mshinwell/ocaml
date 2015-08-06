@@ -50,7 +50,7 @@
 #else
 #ifdef WITH_ALLOCATION_PROFILING
 /* CR mshinwell: fix the headers */
-extern intnat caml_allocation_profiling_my_profinfo(void);
+extern uintnat caml_allocation_profiling_my_profinfo(void);
 #define Make_header_with_profinfo(wosize, tag, color, profinfo)               \
       (Make_header(wosize, tag, color)                                        \
         | ((((intnat) profinfo) & PROFINFO_MASK) << PROFINFO_SHIFT)           \

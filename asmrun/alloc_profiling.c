@@ -392,6 +392,11 @@ static const uintnat profinfo_overflow = (uintnat) 1;
 static const uintnat profinfo_lowest = (uintnat) 2;
 uintnat caml_allocation_profiling_profinfo = (uintnat) 2;
 
+void caml_allocation_profiling_initialize (void)
+{
+
+}
+
 CAMLprim value caml_allocation_profiling_trie_is_initialized (value v_unit)
 {
   return (caml_alloc_profiling_trie_root == (value) 0) ? Val_false : Val_true;

@@ -20,6 +20,9 @@
 (*                                                                     *)
 (***********************************************************************)
 
+(* CR mshinwell: must ensure -allocation-profiling does not appear as a
+   compiler option if WITH_ALLOCATION_PROFILING was not set *)
+
 external annotation_of_value : 'a -> int
   = "caml_allocation_profiling_only_works_for_native_code"
     "caml_allocation_profiling_get_profinfo"
@@ -69,3 +72,36 @@ external max_annotation_value : unit -> int
 external dump_backtraces_to_file : filename:string -> unit
   = "caml_allocation_profiling_dump_backtraces_to_file"
 *)
+
+type profinfo = int
+
+external min_override_profinfo : unit -> profinfo
+  = "caml_allocation_profiling_only_works_for_native_code"
+    "caml_allocation_profiling_min_override_profinfo" "noalloc"
+
+external max_override_profinfo : unit -> profinfo
+  = "caml_allocation_profiling_only_works_for_native_code"
+    "caml_allocation_profiling_max_override_profinfo" "noalloc"
+
+external profinfo_none : unit -> profinfo
+  = "caml_allocation_profiling_only_works_for_native_code"
+    "caml_allocation_profiling_profinfo_none" "noalloc"
+
+external profinfo_overflow : unit -> profinfo
+  = "caml_allocation_profiling_only_works_for_native_code"
+    "caml_allocation_profiling_profinfo_none" "noalloc"
+
+external get_profinfo : 'a -> profinfo
+  = "caml_allocation_profiling_only_works_for_native_code"
+    "caml_allocation_profiling_get_profinfo" "noalloc"
+
+external trie_is_initialized : unit -> bool
+  = "caml_allocation_profiling_only_works_for_native_code"
+    "caml_allocation_profiling_trie_is_initialized" "noalloc"
+
+external get_trie_root : unit -> Obj.t
+  = "caml_allocation_profiling_only_works_for_native_code"
+    "caml_allocation_profiling_get_trie_root" "noalloc"
+
+let debug () =
+  Printf.printf "trie initialized? %b\n%!" (trie_is_initialized ())

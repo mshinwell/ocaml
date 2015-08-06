@@ -82,7 +82,7 @@ extern uint64_t* caml_major_allocation_profiling_array;
 extern uint64_t* caml_major_allocation_profiling_array_end;
 
 #ifdef NATIVE_CODE
-extern uint64_t caml_allocation_profiling_profinfo_for_backtrace(void);
+extern uintnat caml_allocation_profiling_my_profinfo(void);
 #endif
 
 #ifndef NATIVE_CODE
@@ -117,7 +117,7 @@ extern uint64_t caml_allocation_profiling_profinfo_for_backtrace(void);
   }                                                                         \
   Hd_hp (caml_young_ptr) =                                                  \
     Make_header_with_profinfo ((wosize), (tag), Caml_black,                 \
-      caml_allocation_profiling_profinfo_for_backtrace());                  \
+      caml_allocation_profiling_my_profinfo());                             \
   (result) = Val_hp (caml_young_ptr);                                       \
   DEBUG_clear ((result), (wosize));                                         \
 }while(0)
