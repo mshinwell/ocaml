@@ -19,7 +19,7 @@ open Reg
 open Mach
 
 let fp = Config.with_frame_pointers
-let allocation_profiling = true
+let allocation_profiling = !Clflags.allocation_profiling
 
 (* Which ABI to use *)
 
@@ -54,9 +54,6 @@ let masm =
     r14         trap pointer
     r15         allocation pointer
 
-  When using allocation profiling, r11 is repurposed to point at the top of the
-  backtrace stack.
-
   xmm0 - xmm15  100 - 115  *)
 
 (* Conventions:
@@ -85,8 +82,11 @@ let int_reg_name =
       [| "rax"; "rbx"; "rdi"; "rsi"; "rdx"; "rcx"; "r8"; "r9";
          "r12"; "r13"; "r10"; "r11"; "rbp" |]
   | _ ->
+      (* %r13 comes before %rbp since it is reserved for allocation
+         profiling and there must be a contiguous block of registers available
+         for allocation. *)
       [| "%rax"; "%rbx"; "%rdi"; "%rsi"; "%rdx"; "%rcx"; "%r8"; "%r9";
-         "%r12"; "%r13"; "%r10"; "%r11"; "%rbp" |]
+         "%r12"; "%r10"; "%r11"; "%r13"; "%rbp" |]
 
 let float_reg_name =
   match Config.ccomp_type with
@@ -139,8 +139,7 @@ let phys_reg n =
 let rax = phys_reg 0
 let rcx = phys_reg 5
 let rdx = phys_reg 4
-let r13 = phys_reg 9
-let r11 = phys_reg 11
+let r13 = phys_reg 11
 let rbp = phys_reg 12
 let rxmm15 = phys_reg 115
 
@@ -292,7 +291,7 @@ let destroyed_at_oper = function
       end @
         begin
           if allocation_profiling then
-            [r11]
+            [r13]
           else
             []
         end
@@ -356,6 +355,6 @@ let assemble_file infile outfile =
                    Filename.quote outfile ^ " " ^ Filename.quote infile)
 
 let init () =
-  num_available_registers.(0)
-    <- 13 - (if fp then 1 else 0)
+    num_available_registers.(0)
+      <- 13 - (if fp then 1 else 0)
         - (if allocation_profiling then 1 else 0)
