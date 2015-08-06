@@ -19,7 +19,7 @@
 (*  language governing permissions and limitations under the License.  *)
 (*                                                                     *)
 (***********************************************************************)
-
+(*
 external annotation_of_value : 'a -> int
   = "caml_allocation_profiling_only_works_for_native_code"
     "caml_allocation_profiling_get_profinfo"
@@ -68,4 +68,5 @@ external max_annotation_value : unit -> int
 (*
 external dump_backtraces_to_file : filename:string -> unit
   = "caml_allocation_profiling_dump_backtraces_to_file"
+*)
 *)

@@ -934,9 +934,15 @@ method private emit_allocation_profiling_prologue f ~env_after_main_prologue
         instr_seq <- instr_seq.next
       done;
       instr_seq <- last_insn_of_main_prologue;
-      let (_ : Reg.t array option) =
-        self#emit_expr env_after_main_prologue prologue_cmm
+      let node_temp_reg =
+        match self#emit_expr env_after_main_prologue prologue_cmm with
+        | None ->
+          Misc.fatal_error "Alloc_profiling_cmm prologue instruction \
+              selection did not yield a destination register"
+        | Some node_temp_reg -> node_temp_reg
       in
+      let node_reg = Tbl.find node env_after_main_prologue in
+      self#insert_moves node_temp_reg node_reg;
       if not (!first_insn_of_body == dummy_instr) then begin
         (!first_insn_of_body).next <- instr_seq;
         instr_seq <- last_insn_of_body

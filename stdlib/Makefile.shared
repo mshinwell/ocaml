@@ -81,10 +81,10 @@ clean::
 	$(CAMLC) $(COMPFLAGS) `./Compflags $@` -c $<
 
 .ml.cmx:
-	$(CAMLOPT) -g -allocation-profiling $(OPTCOMPFLAGS) `./Compflags $@` -c $<
+	$(CAMLOPT) -g $(OPTCOMPFLAGS) `./Compflags $@` -c $<
 
 .ml.p.cmx:
-	$(CAMLOPT) -g -allocation-profiling $(OPTCOMPFLAGS) `./Compflags $@` -p -c -o $*.p.cmx $<
+	$(CAMLOPT) -g $(OPTCOMPFLAGS) `./Compflags $@` -p -c -o $*.p.cmx $<
 
 # Dependencies on the compiler
 $(OBJS) std_exit.cmo: $(COMPILER)

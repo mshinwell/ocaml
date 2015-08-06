@@ -68,6 +68,46 @@ let profinfo_counter =
   Cmm.Cconst_symbol "caml_allocation_profiling_profinfo"
 
 let code_for_allocation_point ~value's_header ~alloc_point_number ~node =
+  let existing_profinfo = Ident.create "existing_profinfo" in
+  let profinfo = Ident.create "profinfo" in
+  let pc = Ident.create "pc" in
+  let address_of_profinfo = Ident.create "address_of_profinfo" in
+  let offset_into_node =
+    ((2 * Arch.size_addr) * alloc_point_number)
+  in
+  let open Cmm in
+  let generate_new_profinfo =
+    (* This will generate a static branch to a function that should usually
+       be in the cache, which hopefully gives a good code size/performance
+       balance. *)
+    Clet (pc, Cop (Cor, [Cop (Cprogram_counter, []); Cconst_int 1]),
+      Cop (Cextcall ("caml_alloc_profiling_generate_profinfo", [| Int |],
+          false, Debuginfo.none),
+        [Cvar pc; Cvar address_of_profinfo]))
+  in
+  (* Check if we have already allocated a profinfo value for this allocation
+     point with the current backtrace.  If so, use that value; if not,
+     allocate a new one. *)
+  Clet (address_of_profinfo,
+    begin if offset_into_node <> 0 then
+      Cop (Cadda, [
+        Cvar node;
+        Cconst_int offset_into_node;
+      ])
+    else
+      Cvar node
+    end,
+    Clet (existing_profinfo, Cop (Cload Word, [Cvar address_of_profinfo]),
+      Clet (profinfo,
+        Cifthenelse (
+          Cop (Ccmpa Ceq, [Cvar existing_profinfo; Cconst_pointer 0]),
+          Cvar existing_profinfo,
+          generate_new_profinfo),
+        (* [profinfo] is already shifted by [PROFINFO_SHIFT]. *)
+        Cop (Cor, [Cvar profinfo; Cconst_natint value's_header]))))
+
+
+(*
   let pc = Ident.create "pc" in
   let existing_profinfo = Ident.create "existing_profinfo" in
   let new_profinfo = Ident.create "new_profinfo" in
@@ -137,6 +177,7 @@ let code_for_allocation_point ~value's_header ~alloc_point_number ~node =
             Cop (Cload Word, [override_profinfo]))),
         (* [profinfo] is already shifted by [PROFINFO_SHIFT]. *)
         Cop (Cor, [Cvar profinfo; Cconst_natint value's_header]))))
+*)
 
 let code_for_direct_call ~node ~num_instrumented_alloc_points ~callee
       ~direct_call_point_index =

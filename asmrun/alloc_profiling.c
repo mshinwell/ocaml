@@ -293,42 +293,9 @@ caml_dump_heapgraph_from_ocaml(value node_output_file, value edge_output_file)
   return Val_unit;
 }
 
-value caml_allocation_profiling_use_override_profinfo = Val_false;
-uint64_t caml_allocation_profiling_override_profinfo;
-
-CAMLprim value
-caml_allocation_profiling_do_not_override_profinfo (value v_unit)
-{
-  v_unit = v_unit;
-  caml_allocation_profiling_use_override_profinfo = Val_false;
-  return Val_unit;
-}
-
-CAMLprim value
-caml_allocation_profiling_set_override_profinfo (value v_override)
-{
-  uintnat override = (uintnat) Long_val (v_override);
-  if (override > PROFINFO_MASK) {
-    return Val_false;
-  }
-  caml_allocation_profiling_use_override_profinfo = Val_true;
-  caml_allocation_profiling_override_profinfo = override;
-  return Val_true;
-}
-
-CAMLprim value
-caml_allocation_profiling_max_override_profinfo (value v_unit)
-{
-  return Val_long(PROFINFO_MASK);
-}
-
-CAMLprim value
-caml_allocation_profiling_get_profinfo (value v)
-{
-  return Val_long(Profinfo_val(v));
-}
-
 #pragma GCC optimize ("-O3")
+
+#if 0
 
 #ifdef HAS_LIBUNWIND
 static int
@@ -366,6 +333,7 @@ capture_backtrace(backtrace_entry* backtrace, int depth)
   }
   return 0;
 }
+#endif
 #endif
 
 
@@ -416,6 +384,93 @@ The code sequence in the callee is something like:
 value caml_alloc_profiling_trie_root = (value) 0;
 value* caml_alloc_profiling_trie_node_ptr = &caml_alloc_profiling_trie_root;
 
+value caml_allocation_profiling_use_override_profinfo = Val_false;
+uintnat caml_allocation_profiling_override_profinfo;
+
+static const uintnat profinfo_none = (uintnat) 0;
+static const uintnat profinfo_overflow = (uintnat) 1;
+static const uintnat profinfo_lowest = (uintnat) 2;
+uintnat caml_allocation_profiling_profinfo = (uintnat) 2;
+
+CAMLprim value caml_allocation_profiling_trie_is_initialized (value v_unit)
+{
+  return (caml_alloc_profiling_trie_root == (value) 0) ? Val_false : Val_true;
+}
+
+CAMLprim value caml_allocation_profiling_get_trie_root (value v_unit)
+{
+  return caml_alloc_profiling_trie_root;
+}
+
+CAMLprim value caml_allocation_profiling_do_not_override_profinfo (value v_unit)
+{
+  v_unit = v_unit;
+  caml_allocation_profiling_use_override_profinfo = Val_false;
+  return Val_unit;
+}
+
+CAMLprim value caml_allocation_profiling_set_override_profinfo (value v_override)
+{
+  uintnat override = (uintnat) Long_val (v_override);
+  if (override == profinfo_none
+      || override == profinfo_overflow
+      || override > PROFINFO_MASK) {
+    return Val_false;
+  }
+  caml_allocation_profiling_use_override_profinfo = Val_true;
+  caml_allocation_profiling_override_profinfo = override;
+  return Val_true;
+}
+
+CAMLprim value caml_allocation_profiling_min_override_profinfo (value v_unit)
+{
+  return Val_long(profinfo_lowest);
+}
+
+CAMLprim value caml_allocation_profiling_max_override_profinfo (value v_unit)
+{
+  return Val_long(PROFINFO_MASK);
+}
+
+CAMLprim value caml_allocation_profiling_get_profinfo (value v)
+{
+  return Val_long(Profinfo_val(v));
+}
+
+CAMLprim value caml_allocation_profiling_profinfo_none (value v_unit)
+{
+  return Val_long(profinfo_none);
+}
+
+CAMLprim value caml_allocation_profiling_profinfo_overflow (value v_unit)
+{
+  return Val_long(profinfo_overflow);
+}
+
+CAMLprim uintnat caml_alloc_profiling_generate_profinfo (uintnat pc,
+    uintnat* alloc_point_within_node)
+{
+  uintnat profinfo;
+
+  if (caml_allocation_profiling_use_override_profinfo == Val_true) {
+    return caml_allocation_profiling_override_profinfo;
+  }
+
+  profinfo = caml_allocation_profiling_profinfo++;
+  if (caml_allocation_profiling_profinfo > PROFINFO_MASK) {
+    /* Profiling counter overflow. */
+    profinfo = profinfo_overflow;
+  }
+
+  Assert (alloc_point_within_node[0] == (uintnat) 0);
+  Assert ((pc & 1) == 1);
+  alloc_point_within_node[0] = pc;
+  Assert (alloc_point_within_node[1] == profinfo_none);
+  alloc_point_within_node[1] = profinfo;
+
+  return profinfo << PROFINFO_SHIFT;
+}
+
 #if 0
 
 #define BACKTRACE_TABLE_SIZE 100000
@@ -427,10 +482,6 @@ value* caml_alloc_profiling_trie_node_ptr = &caml_alloc_profiling_trie_root;
 
 #define MAX_LIBUNWIND_BACKTRACE_DEPTH 1024
 
-/* The next profinfo value that will be generated.  Shared across all
-   threads.  We do not use zero as a profinfo value; this is reserved to
-   mean "none". */
-uint64_t caml_allocation_profiling_profinfo = 1ull;
 
 /* Backtrace hash table, shared across all threads.
    As a point of information, libunwind-captured backtraces should never
