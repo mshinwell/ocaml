@@ -139,6 +139,7 @@ let phys_reg n =
 let rax = phys_reg 0
 let rcx = phys_reg 5
 let rdx = phys_reg 4
+let r13 = phys_reg 9
 let r11 = phys_reg 11
 let rbp = phys_reg 12
 let rxmm15 = phys_reg 115
@@ -183,10 +184,16 @@ let incoming ofs = Incoming ofs
 let outgoing ofs = Outgoing ofs
 let not_supported ofs = fatal_error "Proc.loc_results: cannot call"
 
+let max_int_args_in_regs =
+  if !Clflags.allocation_profiling then 9 else 10
+
 let loc_arguments arg =
-  calling_conventions 0 9 100 109 outgoing arg
+  calling_conventions 0 (max_int_args_in_regs - 1) 100 109 outgoing arg
 let loc_parameters arg =
-  let (loc, ofs) = calling_conventions 0 9 100 109 incoming arg in loc
+  let (loc, ofs) =
+    calling_conventions 0 (max_int_args_in_regs - 1) 100 109 incoming arg
+  in
+  loc
 let loc_results res =
   let (loc, ofs) = calling_conventions 0 0 100 100 not_supported res in loc
 
@@ -244,7 +251,7 @@ let loc_external_arguments =
 
 let loc_exn_bucket = rax
 
-let loc_alloc_profiling_node = r11
+let loc_alloc_profiling_node = r13
 
 (* Volatile registers: none *)
 

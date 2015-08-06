@@ -683,10 +683,18 @@ let emit_instr fallthrough i =
     | Lpushtrap ->
         cfi_adjust_cfa_offset 8;
         `	pushq	%r14\n`;
+        if !Clflags.allocation_profiling then begin
+          cfi_adjust_cfa_offset 8;
+          `	pushq	%r13\n`
+        end;
         cfi_adjust_cfa_offset 8;
         `	movq	%rsp, %r14\n`;
         stack_offset := !stack_offset + 16
     | Lpoptrap ->
+        if !Clflags.allocation_profiling then begin
+          `	addq	$8, %rsp\n`;
+          cfi_adjust_cfa_offset (-8)
+        end;
         `	popq	%r14\n`;
         cfi_adjust_cfa_offset (-8);
         `	addq	$8, %rsp\n`;
@@ -703,6 +711,10 @@ let emit_instr fallthrough i =
         | false, _
         | true, Lambda.Raise_notrace ->
           `	movq	%r14, %rsp\n`;
+          if !Clflags.allocation_profiling then begin
+            (* See comment in amd64.S, [caml_raise_exn]. *)
+            `	popq	%r13\n`
+          end;
           `	popq	%r14\n`;
           `	ret\n`
         end

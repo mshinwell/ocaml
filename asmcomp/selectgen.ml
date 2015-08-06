@@ -410,6 +410,7 @@ method regs_for tys = Reg.createv tys
 val mutable instr_seq = dummy_instr
 
 val mutable alloc_profiling_node = Cvar (Ident.create "dummy")
+val mutable alloc_profiling_node_ident = Ident.create "dummy"
 val mutable num_instrumented_alloc_points = 0
 val mutable num_direct_non_tail_calls = 0
 
@@ -966,11 +967,13 @@ method emit_fundecl f =
       (fun (id, ty) r env -> Tbl.add id r env)
       f.Cmm.fun_args rargs Tbl.empty in
   let env =
-    Tbl.add f.Cmm.fun_alloc_profiling_node (self#regs_for typ_int) env
+    Tbl.add f.Cmm.fun_alloc_profiling_node [| Proc.loc_alloc_profiling_node |]
+      env
   in
   num_direct_non_tail_calls <- 0;
   num_instrumented_alloc_points <- f.Cmm.fun_num_instrumented_alloc_points;
   alloc_profiling_node <- Cmm.Cvar f.Cmm.fun_alloc_profiling_node;
+  alloc_profiling_node_ident <- f.Cmm.fun_alloc_profiling_node;
   self#insert_moves loc_arg rarg;
   let env_after_main_prologue = env in
   let last_insn_of_main_prologue = instr_seq in

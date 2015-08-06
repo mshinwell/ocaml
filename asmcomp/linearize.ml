@@ -264,6 +264,7 @@ let rec linear i n =
          only to inform the later pass about this stack offset
          (corresponding to N traps).
        *)
+      (* CR mshinwell: needs fixing for allocation profiling *)
       let rec loop i tt =
         if t = tt then i
         else loop (cons_instr Lpushtrap i) (tt - 1)
@@ -277,11 +278,12 @@ let rec linear i n =
   | Itrywith(body, handler) ->
       let (lbl_join, n1) = get_label (linear i.Mach.next n) in
       incr try_depth;
+      assert (i.arg = [| |] || !Clflags.allocation_profiling);
       let (lbl_body, n2) =
-        get_label (cons_instr Lpushtrap
+        get_label (instr_cons Lpushtrap i.arg [| |]
                     (linear body (cons_instr Lpoptrap n1))) in
       decr try_depth;
-      cons_instr (Lsetuptrap lbl_body)
+      instr_cons (Lsetuptrap lbl_body) i.arg [| |]
         (linear handler (add_branch lbl_join n2))
   | Iraise k ->
       copy_instr (Lraise k) i (discard_dead_code n)

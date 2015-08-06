@@ -23,8 +23,10 @@
 #include "caml/printexc.h"
 #include "caml/roots.h"
 #include "caml/signals.h"
+
 #ifdef NATIVE_CODE
 #include "stack.h"
+#undef WITH_ALLOCATION_PROFILING
 #ifdef WITH_ALLOCATION_PROFILING
 #include "alloc_profiling.h"
 #endif
@@ -33,6 +35,8 @@
 #endif
 #include "caml/sys.h"
 #include "threads.h"
+
+#undef WITH_ALLOCATION_PROFILING
 
 /* Initial size of bytecode stack when a thread is created (4 Ko) */
 #define Thread_stack_size (Stack_size / 4)

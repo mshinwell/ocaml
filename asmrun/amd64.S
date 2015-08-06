@@ -284,9 +284,6 @@ LBL(caml_call_gc):
 #else
         pushq   %rbp; CFI_ADJUST(8);
 #endif
-        /* We don't need to save and restore r11 if we are using allocation
-           profiling, but we might as well do it anyway, to preserve the stack
-           alignment. */
         pushq   %r11; CFI_ADJUST (8);
         pushq   %r10; CFI_ADJUST (8);
         pushq   %r13; CFI_ADJUST (8);
@@ -305,7 +302,7 @@ LBL(caml_call_gc):
         STORE_VAR(%r14, caml_exception_pointer)
 #ifdef WITH_ALLOCATION_PROFILING
     /* Save allocation profiling trie node pointer */
-        STORE_VAR(%r11, caml_alloc_profiling_trie_node_ptr)
+        STORE_VAR(%r13, caml_alloc_profiling_trie_node_ptr)
 #endif
     /* Save floating-point registers */
         subq    $(16*8), %rsp; CFI_ADJUST (16*8);
@@ -333,8 +330,8 @@ LBL(caml_call_gc):
         LOAD_VAR(caml_young_ptr, %r15)
         LOAD_VAR(caml_exception_pointer, %r14)
 #ifdef WITH_ALLOCATION_PROFILING
-    /* Restore allocation profiling backtrace stack pointer */
-        LOAD_VAR(caml_allocation_profiling_backtrace_top_of_stack, %r11)
+    /* Restore allocation profiling trie node pointer */
+        LOAD_VAR(caml_alloc_profiling_trie_node_ptr, %r13)
 #endif
     /* Restore all regs used by the code generator */
         movsd   0*8(%rsp), %xmm0
@@ -462,7 +459,7 @@ LBL(caml_c_call):
         subq    $8, %rsp; CFI_ADJUST(8) /* equivalent to pushq %r12 */
 #ifdef WITH_ALLOCATION_PROFILING
     /* Save allocation profiling backtrace trie node pointer */
-        STORE_VAR(%r11, caml_alloc_profiling_trie_node_ptr)
+        STORE_VAR(%r13, caml_alloc_profiling_trie_node_ptr)
 #endif
 #if !defined(SYS_mingw64) && !defined(SYS_cygwin)
     /* Touch the stack to trigger a recoverable segfault
@@ -523,8 +520,8 @@ LBL(caml_start_program):
        frames would be unwound as the stack of C functions gradually returns.)
        As such, we must grab the pointer from the callback link, rather than
        using the global variable. */
-        movq    40(%rsp), %r11
-        pushq   %r11
+        movq    40(%rsp), %r13
+        pushq   %r13
         CFI_ADJUST(8)
 #endif
         pushq   %r14; CFI_ADJUST(8)
@@ -534,7 +531,7 @@ LBL(caml_start_program):
         subq    $8, %rsp
         CFI_ADJUST(8)
     /* Set up allocation profiling backtrace trie node hole pointer */
-        LOAD_VAR(caml_alloc_profiling_trie_node_ptr, %r11)
+        LOAD_VAR(caml_alloc_profiling_trie_node_ptr, %r13)
 #endif
         movq    %rsp, %r14
     /* Call the OCaml code */
@@ -544,9 +541,9 @@ LBL(107):
 #ifdef WITH_ALLOCATION_PROFILING
         addq    $8, %rsp
         CFI_ADJUST(-8)
-    /* This may unwind an arbitrary number of backtrace stack frames (see
+    /* This may unwind across an arbitrary number of trie nodes (see
        comment above). */
-        popq    %r11
+        popq    %r13
         CFI_ADJUST(-8)
 #endif
         popq    %r14; CFI_ADJUST(-8)
@@ -600,8 +597,8 @@ CFI_STARTPROC
 LBL(1100):
         movq    %r14, %rsp
 #ifdef WITH_ALLOCATION_PROFILING
-        /* Load trie node pointer as it was at the trap frame */
-        popq    %r11
+        /* Load trie node pointer as it was at the trap frame. */
+        popq    %r13
 #endif
         popq    %r14
         ret
