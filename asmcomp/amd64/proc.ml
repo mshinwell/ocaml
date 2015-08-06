@@ -252,9 +252,13 @@ let loc_exn_bucket = rax
 
 let loc_alloc_profiling_node = r13
 
-(* Volatile registers: none *)
+(* Volatile registers: none, except when allocation profiling *)
 
-let regs_are_volatile rs = false
+let regs_are_volatile rs =
+  if not allocation_profiling then false
+  else
+    List.exists (fun reg -> reg.loc = loc_alloc_profiling_node.loc)
+      (Array.to_list rs)
 
 (* Registers destroyed by operations *)
 
@@ -304,7 +308,7 @@ let destroyed_at_raise = all_phys_regs
 
 let safe_register_pressure instr =
   let extra =
-    (if fp then 1 else 0) + (if allocation_profiling then 1 else 0)
+    (if fp then 1 else 0) + (if allocation_profiling then 2 else 0)
   in
   match instr with
   | Iextcall(_,_) -> if win64 then 8 - extra else 0
@@ -332,10 +336,9 @@ let op_is_pure = function
   | Icall_ind | Icall_imm _ | Itailcall_ind | Itailcall_imm _
   | Iextcall _ | Istackoffset _ | Istore _ | Ialloc _
   | Iintop(Icheckbound) | Iintop_imm(Icheckbound, _) -> false
+  | Ialloc_profiling_load_node_hole_ptr -> false
   | Ispecific(Ilea _) -> true
   | Ispecific _ -> false
-  (* CR mshinwell: hmm. *)
-  | Ialloc_profiling_load_node_hole_ptr -> false
   | _ -> true
 
 (* Layout of the stack frame *)

@@ -967,8 +967,7 @@ method emit_fundecl f =
       (fun (id, ty) r env -> Tbl.add id r env)
       f.Cmm.fun_args rargs Tbl.empty in
   let env =
-    Tbl.add f.Cmm.fun_alloc_profiling_node [| Proc.loc_alloc_profiling_node |]
-      env
+    Tbl.add f.Cmm.fun_alloc_profiling_node (self#regs_for typ_int) env
   in
   num_direct_non_tail_calls <- 0;
   num_instrumented_alloc_points <- f.Cmm.fun_num_instrumented_alloc_points;

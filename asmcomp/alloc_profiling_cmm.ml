@@ -100,7 +100,7 @@ let code_for_allocation_point ~value's_header ~alloc_point_number ~node =
     Clet (existing_profinfo, Cop (Cload Word, [Cvar address_of_profinfo]),
       Clet (profinfo,
         Cifthenelse (
-          Cop (Ccmpa Ceq, [Cvar existing_profinfo; Cconst_pointer 0]),
+          Cop (Ccmpa Cne, [Cvar existing_profinfo; Cconst_pointer 0]),
           Cvar existing_profinfo,
           generate_new_profinfo),
         (* [profinfo] is already shifted by [PROFINFO_SHIFT]. *)

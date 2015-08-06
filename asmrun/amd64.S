@@ -598,7 +598,7 @@ LBL(1100):
         movq    %r14, %rsp
 #ifdef WITH_ALLOCATION_PROFILING
         /* Load trie node pointer as it was at the trap frame. */
-        popq    %r13
+        popq    %r11
 #endif
         popq    %r14
         ret

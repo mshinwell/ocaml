@@ -65,11 +65,7 @@
 
 struct caml_context {
 #ifdef WITH_ALLOCATION_PROFILING
-  /* The backtrace top of stack pointer must be saved when going from
-     C to OCaml since the [caml_allocation_profiling_backtrace_c_to_ocaml]
-     function may write an arbitrary amount of frames to the backtrace
-     stack. */
-  void* backtrace_top_of_stack;
+  void* trie_node;
 #endif
   char * bottom_of_stack;       /* beginning of OCaml stack chunk */
   uintnat last_retaddr;         /* last return address in OCaml code */

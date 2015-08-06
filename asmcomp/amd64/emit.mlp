@@ -685,7 +685,7 @@ let emit_instr fallthrough i =
         `	pushq	%r14\n`;
         if !Clflags.allocation_profiling then begin
           cfi_adjust_cfa_offset 8;
-          `	pushq	%r13\n`
+          `	pushq	%r11\n`
         end;
         cfi_adjust_cfa_offset 8;
         `	movq	%rsp, %r14\n`;
@@ -712,8 +712,7 @@ let emit_instr fallthrough i =
         | true, Lambda.Raise_notrace ->
           `	movq	%r14, %rsp\n`;
           if !Clflags.allocation_profiling then begin
-            (* See comment in amd64.S, [caml_raise_exn]. *)
-            `	popq	%r13\n`
+            `	popq	%r11\n`
           end;
           `	popq	%r14\n`;
           `	ret\n`
