@@ -1,4 +1,3 @@
-(*
 (***********************************************************************)
 (*                                                                     *)
 (*                               OCaml                                 *)
@@ -88,5 +87,4 @@ val annotation_of_value : 'a -> int
 
 (*
 val dump_backtraces_to_file : filename:string -> unit
-*)
 *)

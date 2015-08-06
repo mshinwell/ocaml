@@ -471,6 +471,23 @@ CAMLprim uintnat caml_alloc_profiling_generate_profinfo (uintnat pc,
   return profinfo << PROFINFO_SHIFT;
 }
 
+uintnat caml_allocation_profiling_my_profinfo (void)
+{
+  uint64_t profinfo;
+
+  if (!caml_allocation_profiling) {
+    profinfo = 0ull;
+  }
+  else if (caml_allocation_profiling_use_override_profinfo != Val_false) {
+    profinfo = caml_allocation_profiling_override_profinfo;
+  }
+  else {
+    profinfo = 0ull;
+  }
+
+  return profinfo;
+}
+
 #if 0
 
 #define BACKTRACE_TABLE_SIZE 100000

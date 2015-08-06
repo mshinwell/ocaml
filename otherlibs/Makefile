@@ -15,7 +15,7 @@
 
 CAMLC=$(CAMLRUN) $(ROOTDIR)/ocamlc -nostdlib -I $(ROOTDIR)/stdlib
 CAMLOPT=$(CAMLRUN) $(ROOTDIR)/ocamlopt -nostdlib \
-        -I $(ROOTDIR)/stdlib -allocation-profiling
+        -I $(ROOTDIR)/stdlib
 CFLAGS=-I$(ROOTDIR)/byterun $(SHAREDCCCOMPOPTS) $(EXTRACFLAGS)
 
 include ../Makefile.shared

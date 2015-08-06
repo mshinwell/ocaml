@@ -22,21 +22,6 @@
 
 #include "caml/mlvalues.h"
 
-typedef enum {
-  END_OF_C_FRAMES = 0ull,
-  START_OF_C_FRAMES = 0xffffffffffffffffll
-} backtrace_marker;
-
-typedef union {
-  void* return_address;
-  uint64_t hash;
-  backtrace_marker marker;
-} backtrace_entry;
-
-extern void caml_allocation_profiling_create_backtrace_stack(
-    backtrace_entry** top, backtrace_entry** bottom,
-    backtrace_entry** limit);
-
 extern void caml_allocation_profiling_initialize(void);
 
-extern intnat caml_allocation_profiling_my_profinfo(void);
+extern uintnat caml_allocation_profiling_my_profinfo(void);
