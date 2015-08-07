@@ -300,10 +300,6 @@ LBL(caml_call_gc):
     /* Save caml_young_ptr, caml_exception_pointer */
         STORE_VAR(%r15, caml_young_ptr)
         STORE_VAR(%r14, caml_exception_pointer)
-#ifdef WITH_ALLOCATION_PROFILING
-    /* Save allocation profiling trie node pointer */
-        STORE_VAR(%r13, caml_alloc_profiling_trie_node_ptr)
-#endif
     /* Save floating-point registers */
         subq    $(16*8), %rsp; CFI_ADJUST (16*8);
         movsd   %xmm0, 0*8(%rsp)
@@ -329,10 +325,6 @@ LBL(caml_call_gc):
     /* Restore caml_young_ptr, caml_exception_pointer */
         LOAD_VAR(caml_young_ptr, %r15)
         LOAD_VAR(caml_exception_pointer, %r14)
-#ifdef WITH_ALLOCATION_PROFILING
-    /* Restore allocation profiling trie node pointer */
-        LOAD_VAR(caml_alloc_profiling_trie_node_ptr, %r13)
-#endif
     /* Restore all regs used by the code generator */
         movsd   0*8(%rsp), %xmm0
         movsd   1*8(%rsp), %xmm1
@@ -388,7 +380,6 @@ LBL(100):
         LEAVE_FUNCTION
         jmp     LBL(caml_alloc1)
 CFI_ENDPROC
-
 
 FUNCTION(G(caml_alloc2))
 CFI_STARTPROC
@@ -456,11 +447,12 @@ LBL(caml_c_call):
         popq    %r12; CFI_ADJUST(-8)
         STORE_VAR(%r12, caml_last_return_address)
         STORE_VAR(%rsp, caml_bottom_of_stack)
-        subq    $8, %rsp; CFI_ADJUST(8) /* equivalent to pushq %r12 */
 #ifdef WITH_ALLOCATION_PROFILING
-    /* Save allocation profiling backtrace trie node pointer */
+    /* Record the trie node hole pointer that corresponds to
+       [caml_last_return_address] */
         STORE_VAR(%r13, caml_alloc_profiling_trie_node_ptr)
 #endif
+        subq    $8, %rsp; CFI_ADJUST(8) /* equivalent to pushq %r12 */
 #if !defined(SYS_mingw64) && !defined(SYS_cygwin)
     /* Touch the stack to trigger a recoverable segfault
        if insufficient space remains */
@@ -491,20 +483,18 @@ LBL(caml_start_program):
 #ifdef WITH_ALLOCATION_PROFILING
         PUSH_VAR(caml_alloc_profiling_trie_node_ptr)
 #else
-        subq    $8, %rsp  /* stack 16-aligned */
-        CFI_ADJUST(8)
+        subq    $8, %rsp; CFI_ADJUST (8)        /* stack 16-aligned */
 #endif
         PUSH_VAR(caml_gc_regs)
         PUSH_VAR(caml_last_return_address)
         PUSH_VAR(caml_bottom_of_stack)
 #if 0
 #ifdef WITH_ALLOCATION_PROFILING
-    /* Write the backtrace onto the backtrace stack.  This may write an
-       arbitrary number of frames onto that stack; the callback link we just
-       built enables us to restore the pointer correctly if/when the OCaml
-       code returns.  This function also affects
-       [caml_allocation_profiling_backtrace_top_of_stack]. */
-        call    GCALL(caml_allocation_profiling_backtrace_c_to_ocaml)
+    /* XXX: need to populate the trie using libunwind.
+       This function should update [caml_alloc_profiling_trie_node_ptr]
+       (which at the moment should be pointing at the node corresponding to
+       [caml_last_return_address], as per caml_c_call) */
+        call    GCALL(caml_allocation_profiling_c_to_ocaml)
 #endif
 #endif
     /* Setup alloc ptr and exception ptr */
@@ -513,39 +503,19 @@ LBL(caml_start_program):
     /* Build an exception handler */
         lea     LBL(108)(%rip), %r13
         pushq   %r13; CFI_ADJUST(8)
-#ifdef WITH_ALLOCATION_PROFILING
-    /* When executing the exception handler, we must unwind the backtrace
-       trie node hole pointer in the same way as a normal return from the OCaml
-       function.  (This is in contrast to the system stack; the analogous
-       frames would be unwound as the stack of C functions gradually returns.)
-       As such, we must grab the pointer from the callback link, rather than
-       using the global variable. */
-        movq    40(%rsp), %r13
-        pushq   %r13
-        CFI_ADJUST(8)
-#endif
         pushq   %r14; CFI_ADJUST(8)
         CFI_ADJUST(16)
+        movq    %rsp, %r14
 #ifdef WITH_ALLOCATION_PROFILING
-    /* Keep stack 16-aligned. */
-        subq    $8, %rsp
-        CFI_ADJUST(8)
-    /* Set up allocation profiling backtrace trie node hole pointer */
+    /* Set up allocation profiling backtrace trie node hole pointer.
+       This effectively unwinds the trie to the state it was when our
+       calling C code was entered from OCaml via [caml_c_call]. */
         LOAD_VAR(caml_alloc_profiling_trie_node_ptr, %r13)
 #endif
-        movq    %rsp, %r14
     /* Call the OCaml code */
         call    *%r12
 LBL(107):
     /* Pop the exception handler */
-#ifdef WITH_ALLOCATION_PROFILING
-        addq    $8, %rsp
-        CFI_ADJUST(-8)
-    /* This may unwind across an arbitrary number of trie nodes (see
-       comment above). */
-        popq    %r13
-        CFI_ADJUST(-8)
-#endif
         popq    %r14; CFI_ADJUST(-8)
         popq    %r12; CFI_ADJUST(-8)   /* dummy register */
         CFI_ADJUST(-16)
@@ -560,8 +530,7 @@ LBL(109):
 #ifdef WITH_ALLOCATION_PROFILING
         POP_VAR(caml_alloc_profiling_trie_node_ptr)
 #else
-        addq    $8, %rsp
-        CFI_ADJUST(-8)
+        addq    $8, %rsp; CFI_ADJUST (-8);
 #endif
     /* Restore callee-save registers. */
         POP_CALLEE_SAVE_REGS
@@ -594,12 +563,7 @@ FUNCTION(G(caml_raise_exn))
 CFI_STARTPROC
         TESTL_VAR($1, caml_backtrace_active)
         jne     LBL(110)
-LBL(1100):
         movq    %r14, %rsp
-#ifdef WITH_ALLOCATION_PROFILING
-        /* Load trie node pointer as it was at the trap frame. */
-        popq    %r11
-#endif
         popq    %r14
         ret
 LBL(110):
@@ -621,14 +585,18 @@ LBL(111):
         PREPARE_FOR_C_CALL            /* no need to cleanup after */
         call    GCALL(caml_stash_backtrace)
         movq    %r12, %rax            /* Recover exception bucket */
-        jmp     LBL(1100)
+        movq    %r14, %rsp
+        popq    %r14
+        ret
 CFI_ENDPROC
 
 FUNCTION(G(caml_reraise_exn))
 CFI_STARTPROC
         TESTL_VAR($1, caml_backtrace_active)
         jne     LBL(111)
-        jmp     LBL(1100)
+        movq    %r14, %rsp
+        popq    %r14
+        ret
 CFI_ENDPROC
 
 /* Raise an exception from C */
@@ -638,10 +606,10 @@ CFI_STARTPROC
         TESTL_VAR($1, caml_backtrace_active)
         jne     LBL(112)
         movq    C_ARG_1, %rax
-LBL(1120):
         LOAD_VAR(caml_exception_pointer, %rsp)  /* Cut stack */
+        popq    %r14                   /* Recover previous exception handler */
         LOAD_VAR(caml_young_ptr, %r15) /* Reload alloc ptr */
-        jmp     LBL(1100)
+        ret
 LBL(112):
 #ifdef WITH_FRAME_POINTERS
         ENTER_FUNCTION          ;
@@ -657,7 +625,10 @@ LBL(112):
         PREPARE_FOR_C_CALL            /* no need to cleanup after */
         call    GCALL(caml_stash_backtrace)
         movq    %r12, %rax            /* Recover exception bucket */
-        jmp     LBL(1120)
+        LOAD_VAR(caml_exception_pointer,%rsp)
+        popq    %r14                  /* Recover previous exception handler */
+        LOAD_VAR(caml_young_ptr,%r15) /* Reload alloc ptr */
+        ret
 CFI_ENDPROC
 
 /* Raise a Stack_overflow exception on return from segv_handler()
@@ -668,7 +639,9 @@ CFI_ENDPROC
 
 FUNCTION(G(caml_stack_overflow))
         LEA_VAR(caml_exn_Stack_overflow, %rax)
-        jmp     LBL(1100)
+        movq    %r14, %rsp            /* cut the stack */
+        popq    %r14                  /* recover previous exn handler */
+        ret                           /* jump to handler's code */
 
 /* Callback from C to OCaml */
 

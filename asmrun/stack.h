@@ -64,12 +64,12 @@
 /* Structure of OCaml callback contexts */
 
 struct caml_context {
-#ifdef WITH_ALLOCATION_PROFILING
-  void* trie_node;
-#endif
   char * bottom_of_stack;       /* beginning of OCaml stack chunk */
   uintnat last_retaddr;         /* last return address in OCaml code */
   value * gc_regs;              /* pointer to register block */
+#ifdef WITH_ALLOCATION_PROFILING
+  void* trie_node;
+#endif
 };
 
 /* Structure of frame descriptors */
