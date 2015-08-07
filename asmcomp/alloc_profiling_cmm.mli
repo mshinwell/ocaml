@@ -28,7 +28,14 @@ val code_for_function_prologue
   -> node:Ident.t
   -> Cmm.expression
 
-val code_for_direct_call
+val code_for_direct_non_tail_call
+   : node:Cmm.expression
+  -> num_instrumented_alloc_points:int
+  -> callee:string
+  -> direct_call_point_index:int
+  -> Cmm.expression
+
+val code_for_direct_tail_call
    : node:Cmm.expression
   -> num_instrumented_alloc_points:int
   -> callee:string

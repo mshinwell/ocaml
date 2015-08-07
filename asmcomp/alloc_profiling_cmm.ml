@@ -181,12 +181,41 @@ let code_for_allocation_point ~value's_header ~alloc_point_number ~node =
         Cop (Cor, [Cvar profinfo; Cconst_natint value's_header]))))
 *)
 
-let code_for_direct_call ~node ~num_instrumented_alloc_points ~callee
+let code_for_direct_non_tail_call ~node ~num_instrumented_alloc_points ~callee
       ~direct_call_point_index =
 (*  Printf.printf "callee %s code_for_direct_call num_allocs %d direct index %d: %s \n%!" callee
     num_instrumented_alloc_points direct_call_point_index
     (Printexc.raw_backtrace_to_string (Printexc.get_callstack 5));
 *)
+  let offset_in_trie_node_in_words =
+    num_instrumented_alloc_points*2 + direct_call_point_index*2
+  in
+  let open Cmm in
+  let place_within_node = Ident.create "place_within_node" in
+  let callee_addr =
+    Cop (Cor, [Cop (Clsl, [Cconst_symbol callee; Cconst_int 2]); Cconst_int 2])
+  in
+  Clet (place_within_node,
+    begin if offset_in_trie_node_in_words = 0 then
+      node
+    else
+      Cop (Caddi, [
+        node;
+        Cconst_int (offset_in_trie_node_in_words * Arch.size_addr);
+      ])
+    end,
+    Csequence (
+      Cop (Cstore Word, [Cvar place_within_node; callee_addr]),
+      Cop (Calloc_profiling_load_node_hole_ptr, [
+        Cop (Caddi, [Cvar place_within_node; Cconst_int Arch.size_addr])
+      ])))
+
+let code_for_direct_self_tail_call ~node ~num_instrumented_alloc_points
+      ~callee ~direct_call_point_index =
+  (* For tail calls, we write a pointer back to the current node into the
+     relevant entry of that same node, and then proceed as usual.  The
+     prologue of the function being tail called will then re-use the same
+     node. *)
   let offset_in_trie_node_in_words =
     num_instrumented_alloc_points*2 + direct_call_point_index*2
   in

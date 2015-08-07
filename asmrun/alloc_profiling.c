@@ -541,16 +541,19 @@ static void print_trie_node(value node)
           break;
 
         case 2:
+        case 3:
           if (is_last) {
             printf("Node is too short\n");
           }
           else {
             value pc = (entry & ~3) >> 2;
             value child = Field(node, field + 1);
-            printf("Direct call point %d: pc=%p, child node=%p\n",
+            value is_tail = ((entry & 3) == 3);
+            printf("Direct call point %d: pc=%p, child node=%p%s\n",
               direct_call_point,
               (void*) pc,
-              (void*) child);
+              (void*) child,
+              (if is_tail then " (tail call)" else ""));
             direct_call_point++;
             if (child != (value) 0) {
               print_trie_node(child);
@@ -585,7 +588,8 @@ static void mark_trie_node_black(value node)
     }
 
     switch (entry & 3) {
-      case 2: {
+      case 2:
+      case 3: {
         value child = Field(node, field + 1);
         if (child != (value) 0) {
           mark_trie_node_black(child);

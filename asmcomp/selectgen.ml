@@ -174,6 +174,8 @@ let alloc_profiling_node_ident = ref (Ident.create "dummy")
 let num_instrumented_alloc_points = ref 0
 let next_direct_non_tail_call_point_index = ref 0
 let direct_non_tail_calls = Hashtbl.create 42
+let next_direct_tail_call_point_index = ref 0
+let direct_tail_calls = Hashtbl.create 42
 
 (* The default instruction selection class *)
 
@@ -562,7 +564,7 @@ method emit_expr env exp =
                     index
                 in
                 let instrumentation =
-                  Alloc_profiling_cmm.code_for_direct_call
+                  Alloc_profiling_cmm.code_for_direct_non_tail_call
                     ~node:!alloc_profiling_node
                     ~num_instrumented_alloc_points:
                       !num_instrumented_alloc_points
@@ -796,7 +798,6 @@ method emit_tail env exp =
               let r1 = self#emit_tuple env new_args in
               let rarg = Array.sub r1 1 (Array.length r1 - 1) in
               let (loc_arg, stack_ofs) = Proc.loc_arguments rarg in
-              let _tailcall = (stack_ofs = 0) in
               if stack_ofs = 0 then begin
                 self#insert_moves rarg loc_arg;
                 self#insert (Iop Itailcall_ind)
@@ -813,26 +814,37 @@ method emit_tail env exp =
           | Icall_imm lbl ->
               let r1 = self#emit_tuple env new_args in
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
-              let tailcall = (stack_ofs = 0) in
-              let calls_self = (lbl = !current_function_name) in
-(*
-              let kind =
-                if tailcall && calls_self then Self_direct_tailcall
-                else if tailcall then Non_self_direct_tailcall
-                else Direct_call
+              let maybe_instrument_for_allocation_profiling_tail () =
+                if !Clflags.allocation_profiling then begin
+                  let direct_call_point_index =
+                    match Hashtbl.find direct_tail_calls lbl with
+                    | index -> index
+                    | exception Not_found ->
+                      let index = !next_direct_tail_call_point_index in
+                      incr next_direct_tail_call_point_index;
+                      Hashtbl.add direct_tail_calls lbl index;
+                      index
+                  in
+                  let instrumentation =
+                    Alloc_profiling_cmm.code_for_direct_tail_call
+                      ~node:!alloc_profiling_node
+                      ~num_instrumented_alloc_points:
+                        !num_instrumented_alloc_points
+                      ~callee:lbl
+                      ~direct_call_point_index
+                  in
+                  ignore (self#emit_expr env instrumentation)
+                end
               in
-              increment_call_type_counter kind;
-*)
-              if tailcall && (not calls_self) then begin
+              if stack_ofs = 0 then begin
+                maybe_instrument_for_allocation_profiling_tail ();
                 self#insert_moves r1 loc_arg;
                 self#insert (Iop(Itailcall_imm lbl)) loc_arg [||]
-              end else if calls_self then begin
-(*
+              end else if lbl = !current_function_name then begin
+                maybe_instrument_for_allocation_profiling_tail ();
                 let loc_arg' = Proc.loc_parameters r1 in
                 self#insert_moves r1 loc_arg';
-*)
-                self#insert_moves r1 loc_arg;
-                self#insert (Iop(Itailcall_imm lbl)) loc_arg [||]
+                self#insert (Iop(Itailcall_imm lbl)) loc_arg' [||]
               end else begin
                 let rd = self#regs_for ty in
                 let loc_res = Proc.loc_results rd in
@@ -970,6 +982,8 @@ method emit_fundecl f =
   in
   next_direct_non_tail_call_point_index := 0;
   Hashtbl.clear direct_non_tail_calls;
+  next_direct_tail_call_point_index := 0;
+  Hashtbl.clear direct_tail_calls;
   num_instrumented_alloc_points := f.Cmm.fun_num_instrumented_alloc_points;
   alloc_profiling_node := Cmm.Cvar f.Cmm.fun_alloc_profiling_node;
   alloc_profiling_node_ident := f.Cmm.fun_alloc_profiling_node;
