@@ -575,15 +575,17 @@ static void mark_trie_node_black(value node)
 {
   int field;
 
+  if (Color_val(node) == Caml_black) {
+    return;
+  }
   Hd_val(node) = Blackhd_hd(Hd_val(node));
 
-  for (field = 0; field < Wosize_val(node); field++) {
+  for (field = 0; field < Wosize_val(node); field += 2) {
     value entry;
 
     entry = Field(node, field);
 
     if (entry == (value) 0) {
-      field++;
       continue;
     }
 
@@ -594,12 +596,10 @@ static void mark_trie_node_black(value node)
         if (child != (value) 0) {
           mark_trie_node_black(child);
         }
-        field++;
         break;
       }
 
       default:
-        field++;
         break;
     }
   }

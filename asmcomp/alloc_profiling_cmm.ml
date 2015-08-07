@@ -146,7 +146,7 @@ let code_for_direct_self_tail_call ~node ~num_instrumented_alloc_points
   let place_within_node = Ident.create "place_within_node" in
   let node_hole = Ident.create "node_hole" in
   let callee_addr =
-    Cop (Cor, [Cop (Clsl, [Cconst_symbol callee; Cconst_int 3]); Cconst_int 2])
+    Cop (Cor, [Cop (Clsl, [Cconst_symbol callee; Cconst_int 2]); Cconst_int 3])
   in
   Clet (place_within_node,
     begin if offset_in_trie_node_in_words = 0 then
