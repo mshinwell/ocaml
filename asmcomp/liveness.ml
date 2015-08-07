@@ -24,7 +24,6 @@ let find_live_at_exit k =
   | Not_found -> Misc.fatal_error "Liveness.find_live_at_exit"
 
 let live_at_raise = ref Reg.Set.empty
-let must_be_live_at_tailcall_imm = ref Reg.Set.empty
 
 let rec live i finally =
   (* finally is the set of registers live after execution of the
@@ -37,19 +36,9 @@ let rec live i finally =
     Iend ->
       i.live <- finally;
       finally
-  | Iop Itailrec_entry_point ->
-      let after = live i.next finally in
-      i.live <- after;
-      i.live
-  | Ireturn | Iop(Itailcall_ind) ->
+  | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) ->
       i.live <- Reg.Set.empty; (* no regs are live across *)
       Reg.set_of_array i.arg
-  (* CR mshinwell: consider restructuring to see if we can remove the
-     hack? *)
-  | Iop(Itailcall_imm _) ->
-      i.live <- Reg.Set.diff !must_be_live_at_tailcall_imm
-        (Reg.set_of_array i.arg);
-      Reg.add_set_array i.live i.arg
   | Iop op ->
       let after = live i.next finally in
       if Proc.op_is_pure op                    (* no side effects *)
@@ -130,25 +119,11 @@ let rec live i finally =
       i.live <- !live_at_raise;
       Reg.add_set_array !live_at_raise i.arg
 
-let rec live_at_tailrec_entry_point instr =
-  match instr.desc with
-  | Iend -> Reg.Set.empty
-  | Iop Itailrec_entry_point -> instr.live
-  | _ -> live_at_tailrec_entry_point instr.next
-
 let reset () =
   live_at_raise := Reg.Set.empty;
-  live_at_exit := [];
-  must_be_live_at_tailcall_imm := Reg.Set.empty
+  live_at_exit := []
 
 let fundecl ppf f =
-  must_be_live_at_tailcall_imm := Reg.Set.empty;
-  let _initially_live = live f.fun_body Reg.Set.empty in
-  must_be_live_at_tailcall_imm := live_at_tailrec_entry_point f.fun_body;
-(*
-  Format.fprintf ppf "at tailcall: %a@."
-    Printmach.regset !must_be_live_at_tailcall_imm;
-*)
   let initially_live = live f.fun_body Reg.Set.empty in
   (* Sanity check: only function parameters can be live at entrypoint *)
   let wrong_live = Reg.Set.diff initially_live (Reg.set_of_array f.fun_args) in
@@ -160,8 +135,6 @@ let fundecl ppf f =
       wrong_live
   in
   if not (Reg.Set.is_empty wrong_live) then begin
-    Printmach.print_live := true;
-    Format.fprintf ppf "%s: %a %a@." f.fun_name Printmach.regset wrong_live
-      Printmach.instr f.fun_body;
+    Format.fprintf ppf "%a@." Printmach.regset wrong_live;
     Misc.fatal_error "Liveness.fundecl"
   end

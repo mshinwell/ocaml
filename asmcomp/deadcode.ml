@@ -22,9 +22,6 @@ let rec deadcode i =
   match i.desc with
   | Iend | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) | Iraise _ ->
       (i, Reg.add_set_array i.live i.arg)
-  | Iop Itailrec_entry_point ->
-      let (s, before) = deadcode i.next in
-      ({i with next = s}, Reg.add_set_array i.live i.arg)
   | Iop op ->
       let (s, before) = deadcode i.next in
       if Proc.op_is_pure op                     (* no side effects *)

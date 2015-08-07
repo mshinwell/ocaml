@@ -247,19 +247,16 @@ let instrument_function_body expr ~node ~fun_name =
       Cexit (n, List.map instrument_headers es)
     | Ctrywith (e1, id, e2) ->
       Ctrywith (instrument_headers e1, id, instrument_headers e2)
-    | Ctailrec_entry_point -> Ctailrec_entry_point
   in
   let expr = instrument_headers expr in
   !next_alloc_point_number, expr
 
 let instrument_fundecl decl =
-  let open Cmm in
   if not !Clflags.allocation_profiling then
-    { decl with
-      fun_body = Csequence (Ctailrec_entry_point, decl.fun_body);
-    }
+    decl
   else
     let node = Ident.create "alloc_profiling_node" in
+    let open Cmm in
     let num_instrumented_alloc_points, body =
       instrument_function_body decl.fun_body ~node ~fun_name:decl.fun_name
     in

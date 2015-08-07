@@ -111,7 +111,6 @@ and expression =
   | Ccatch of int * Ident.t list * expression * expression
   | Cexit of int * expression list
   | Ctrywith of expression * Ident.t * expression
-  | Ctailrec_entry_point
 
 type fundecl =
   { fun_name: string;

@@ -57,7 +57,6 @@ type operation =
   | Ialloc_profiling_load_node_hole_ptr
   | Iprogram_counter
   | Ireturn_address
-  | Itailrec_entry_point
 
 type instruction =
   { desc: instruction_desc;

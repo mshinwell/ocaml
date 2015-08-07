@@ -19,7 +19,7 @@ open Reg
 open Mach
 
 let fp = Config.with_frame_pointers
-let allocation_profiling = !Clflags.allocation_profiling
+let allocation_profiling = true (* !Clflags.allocation_profiling*)
 
 (* Which ABI to use *)
 
@@ -82,9 +82,9 @@ let int_reg_name =
       [| "rax"; "rbx"; "rdi"; "rsi"; "rdx"; "rcx"; "r8"; "r9";
          "r12"; "r13"; "r10"; "r11"; "rbp" |]
   | _ ->
-      (* %r13 comes before %rbp since it is reserved for allocation
+      (* %r11 comes before %r13 since the latter is reserved for allocation
          profiling and there must be a contiguous block of registers available
-         for allocation. *)
+         for allocation prior to that one. *)
       [| "%rax"; "%rbx"; "%rdi"; "%rsi"; "%rdx"; "%rcx"; "%r8"; "%r9";
          "%r12"; "%r10"; "%r11"; "%r13"; "%rbp" |]
 
@@ -184,7 +184,7 @@ let outgoing ofs = Outgoing ofs
 let not_supported ofs = fatal_error "Proc.loc_results: cannot call"
 
 let max_int_args_in_regs =
-  if !Clflags.allocation_profiling then 9 else 10
+  if allocation_profiling then 9 else 10
 
 let loc_arguments arg =
   calling_conventions 0 (max_int_args_in_regs - 1) 100 109 outgoing arg

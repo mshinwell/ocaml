@@ -167,7 +167,6 @@ let rec expr ppf = function
   | Ctrywith(e1, id, e2) ->
       fprintf ppf "@[<2>(try@ %a@;<1 -2>with@ %a@ %a)@]"
              sequence e1 Ident.print id sequence e2
-  | Ctailrec_entry_point -> fprintf ppf "tailrec_entry_point"
 
 and sequence ppf = function
   | Csequence(e1, e2) -> fprintf ppf "%a@ %a" sequence e1 sequence e2

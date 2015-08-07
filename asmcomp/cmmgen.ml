@@ -1290,7 +1290,7 @@ let subst_boxed_number unbox_fn boxed_id unboxed_id box_chunk box_offset exp =
     | Ctrywith(e1, id, e2) -> Ctrywith(subst e1, id, subst e2)
     | Cconst_int _ | Cconst_natint _ | Cconst_float _ | Cconst_symbol _
     | Cconst_pointer _ | Cconst_natpointer _
-    | Cblockheader _ | Ctailrec_entry_point as e -> e
+    | Cblockheader _ as e -> e
   in
   let res = subst exp in
   (res, !need_boxed, !assigned)

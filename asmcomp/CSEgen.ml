@@ -203,7 +203,6 @@ method class_of_operation op =
   | Ialloc_profiling_load_node_hole_ptr -> Op_other
   | Iprogram_counter -> Op_other
   | Ireturn_address -> Op_pure
-  | Itailrec_entry_point -> Op_other
 
 (* Operations that are so cheap that it isn't worth factoring them. *)
 
