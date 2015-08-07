@@ -172,7 +172,8 @@ let current_function_name = ref ""
 let alloc_profiling_node = ref (Cvar (Ident.create "dummy"))
 let alloc_profiling_node_ident = ref (Ident.create "dummy")
 let num_instrumented_alloc_points = ref 0
-let num_direct_non_tail_calls = ref 0
+let next_direct_non_tail_call_point_index = ref 0
+let direct_non_tail_calls = Hashtbl.create 42
 
 (* The default instruction selection class *)
 
@@ -551,15 +552,23 @@ method emit_expr env exp =
               let loc_res = Proc.loc_results rd in
               self#insert_move_args r1 loc_arg stack_ofs;
               if !Clflags.allocation_profiling then begin
+                let direct_call_point_index =
+                  match Hashtbl.find direct_non_tail_calls lbl with
+                  | index -> index
+                  | exception Not_found ->
+                    let index = !next_direct_non_tail_call_point_index in
+                    incr next_direct_non_tail_call_point_index;
+                    Hashtbl.add direct_non_tail_calls lbl index;
+                    index
+                in
                 let instrumentation =
                   Alloc_profiling_cmm.code_for_direct_call
                     ~node:!alloc_profiling_node
                     ~num_instrumented_alloc_points:
                       !num_instrumented_alloc_points
                     ~callee:lbl
-                    ~direct_call_point_index:!num_direct_non_tail_calls
+                    ~direct_call_point_index
                 in
-                incr num_direct_non_tail_calls;
                 ignore (self#emit_expr env instrumentation)
               end;
               self#insert_debug (Iop(Icall_imm lbl)) dbg loc_arg loc_res;
@@ -913,7 +922,7 @@ method private emit_allocation_profiling_prologue f ~env_after_main_prologue
       let prologue_cmm =
         Alloc_profiling_cmm.code_for_function_prologue ~node
           ~num_instrumented_alloc_points:!num_instrumented_alloc_points
-          ~num_direct_call_points:!num_direct_non_tail_calls
+          ~num_direct_call_points:!next_direct_non_tail_call_point_index
       in
       (* Splice the allocation prologue after the main prologue but before the
          function body.  Remember that [instr_seq] points at the last
@@ -959,7 +968,8 @@ method emit_fundecl f =
   let env =
     Tbl.add f.Cmm.fun_alloc_profiling_node (self#regs_for typ_int) env
   in
-  num_direct_non_tail_calls := 0;
+  next_direct_non_tail_call_point_index := 0;
+  Hashtbl.clear direct_non_tail_calls;
   num_instrumented_alloc_points := f.Cmm.fun_num_instrumented_alloc_points;
   alloc_profiling_node := Cmm.Cvar f.Cmm.fun_alloc_profiling_node;
   alloc_profiling_node_ident := f.Cmm.fun_alloc_profiling_node;
