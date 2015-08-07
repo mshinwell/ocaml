@@ -183,6 +183,10 @@ let code_for_allocation_point ~value's_header ~alloc_point_number ~node =
 
 let code_for_direct_call ~node ~num_instrumented_alloc_points ~callee
       ~direct_call_point_index =
+(*  Printf.printf "callee %s code_for_direct_call num_allocs %d direct index %d: %s \n%!" callee
+    num_instrumented_alloc_points direct_call_point_index
+    (Printexc.raw_backtrace_to_string (Printexc.get_callstack 5));
+*)
   let offset_in_trie_node_in_words =
     num_instrumented_alloc_points*2 + direct_call_point_index*2
   in
@@ -192,10 +196,14 @@ let code_for_direct_call ~node ~num_instrumented_alloc_points ~callee
     Cop (Cor, [Cop (Clsl, [Cconst_symbol callee; Cconst_int 2]); Cconst_int 2])
   in
   Clet (place_within_node,
-    Cop (Caddi, [
-      node;
-      Cconst_int (offset_in_trie_node_in_words * Arch.size_addr);
-    ]),
+    begin if offset_in_trie_node_in_words = 0 then
+      node
+    else
+      Cop (Caddi, [
+        node;
+        Cconst_int (offset_in_trie_node_in_words * Arch.size_addr);
+      ])
+    end,
     Csequence (
       Cop (Cstore Word, [Cvar place_within_node; callee_addr]),
       Cop (Calloc_profiling_load_node_hole_ptr, [

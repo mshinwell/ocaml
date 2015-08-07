@@ -457,6 +457,9 @@ CAMLprim uintnat caml_alloc_profiling_generate_profinfo (uintnat pc,
 {
   uintnat profinfo;
 
+  printf("generating profinfo, encoded pc=%p, target=%p\n",
+    (void*) pc, (void*) alloc_point_within_node);
+
   if (caml_allocation_profiling_use_override_profinfo == Val_true) {
     return caml_allocation_profiling_override_profinfo;
   }
@@ -467,10 +470,10 @@ CAMLprim uintnat caml_alloc_profiling_generate_profinfo (uintnat pc,
     profinfo = profinfo_overflow;
   }
 
-  Assert (alloc_point_within_node[0] == (uintnat) 0);
-  Assert ((pc & 1) == 1);
+  assert (alloc_point_within_node[0] == (uintnat) 0);
+  assert ((pc & 3) == 1);
   alloc_point_within_node[0] = pc;
-  Assert (alloc_point_within_node[1] == profinfo_none);
+  assert (alloc_point_within_node[1] == profinfo_none);
   alloc_point_within_node[1] = profinfo;
 
   return profinfo << PROFINFO_SHIFT;
@@ -500,6 +503,11 @@ static void print_trie_node(value node)
   }
   else {
     int field;
+    int alloc_point;
+    int direct_call_point;
+
+    alloc_point = 0;
+    direct_call_point = 0;
 
     Hd_val(node) = Whitehd_hd(Hd_val(node));
 
@@ -507,8 +515,6 @@ static void print_trie_node(value node)
     for (field = 0; field < Wosize_val(node); field++) {
       value entry;
       int is_last;
-      int alloc_point;
-      int direct_call_point;
 
       entry = Field(node, field);
 
@@ -518,8 +524,6 @@ static void print_trie_node(value node)
       }
 
       is_last = (field == Wosize_val(node) - 1);
-      alloc_point = 0;
-      direct_call_point = 0;
 
       switch (entry & 3) {
         case 1:
@@ -560,12 +564,41 @@ static void print_trie_node(value node)
           break;
       }
     }
+    printf("End of node %p\n", (void*) node);
   }
 }
 
 static void mark_trie_node_black(value node)
 {
+  int field;
 
+  Hd_val(node) = Blackhd_hd(Hd_val(node));
+
+  for (field = 0; field < Wosize_val(node); field++) {
+    value entry;
+
+    entry = Field(node, field);
+
+    if (entry == (value) 0) {
+      field++;
+      continue;
+    }
+
+    switch (entry & 3) {
+      case 2: {
+        value child = Field(node, field + 1);
+        if (child != (value) 0) {
+          mark_trie_node_black(child);
+        }
+        field++;
+        break;
+      }
+
+      default:
+        field++;
+        break;
+    }
+  }
 }
 
 CAMLprim value caml_allocation_profiling_debug(value v_unit)
@@ -578,6 +611,7 @@ CAMLprim value caml_allocation_profiling_debug(value v_unit)
   else {
     print_trie_node(trie_node);
     mark_trie_node_black(trie_node);
+    printf("End of trie dump.\n");
   }
 
   fflush(stdout);

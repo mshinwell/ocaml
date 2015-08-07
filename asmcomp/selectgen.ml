@@ -169,6 +169,11 @@ let catch_regs = ref []
 (* Name of function being compiled *)
 let current_function_name = ref ""
 
+let alloc_profiling_node = ref (Cvar (Ident.create "dummy"))
+let alloc_profiling_node_ident = ref (Ident.create "dummy")
+let num_instrumented_alloc_points = ref 0
+let num_direct_non_tail_calls = ref 0
+
 (* The default instruction selection class *)
 
 class virtual selector_generic = object (self)
@@ -409,11 +414,6 @@ method regs_for tys = Reg.createv tys
 
 val mutable instr_seq = dummy_instr
 
-val mutable alloc_profiling_node = Cvar (Ident.create "dummy")
-val mutable alloc_profiling_node_ident = Ident.create "dummy"
-val mutable num_instrumented_alloc_points = 0
-val mutable num_direct_non_tail_calls = 0
-
 method insert_debug desc dbg arg res =
   instr_seq <- instr_cons_debug desc arg res dbg instr_seq
 
@@ -553,13 +553,14 @@ method emit_expr env exp =
               if !Clflags.allocation_profiling then begin
                 let instrumentation =
                   Alloc_profiling_cmm.code_for_direct_call
-                    ~node:alloc_profiling_node
-                    ~num_instrumented_alloc_points
+                    ~node:!alloc_profiling_node
+                    ~num_instrumented_alloc_points:
+                      !num_instrumented_alloc_points
                     ~callee:lbl
-                    ~direct_call_point_index:num_direct_non_tail_calls
+                    ~direct_call_point_index:!num_direct_non_tail_calls
                 in
-                ignore (self#emit_expr env instrumentation);
-                num_direct_non_tail_calls <- num_direct_non_tail_calls + 1
+                incr num_direct_non_tail_calls;
+                ignore (self#emit_expr env instrumentation)
               end;
               self#insert_debug (Iop(Icall_imm lbl)) dbg loc_arg loc_res;
               self#insert_move_results loc_res rd stack_ofs;
@@ -922,8 +923,8 @@ method private emit_allocation_profiling_prologue f ~env_after_main_prologue
     if needs_prologue then begin
       let prologue_cmm =
         Alloc_profiling_cmm.code_for_function_prologue ~node
-          ~num_instrumented_alloc_points
-          ~num_direct_call_points:num_direct_non_tail_calls
+          ~num_instrumented_alloc_points:!num_instrumented_alloc_points
+          ~num_direct_call_points:!num_direct_non_tail_calls
       in
       (* Splice the allocation prologue after the main prologue but before the
          function body.  Remember that [instr_seq] points at the last
@@ -969,10 +970,10 @@ method emit_fundecl f =
   let env =
     Tbl.add f.Cmm.fun_alloc_profiling_node (self#regs_for typ_int) env
   in
-  num_direct_non_tail_calls <- 0;
-  num_instrumented_alloc_points <- f.Cmm.fun_num_instrumented_alloc_points;
-  alloc_profiling_node <- Cmm.Cvar f.Cmm.fun_alloc_profiling_node;
-  alloc_profiling_node_ident <- f.Cmm.fun_alloc_profiling_node;
+  num_direct_non_tail_calls := 0;
+  num_instrumented_alloc_points := f.Cmm.fun_num_instrumented_alloc_points;
+  alloc_profiling_node := Cmm.Cvar f.Cmm.fun_alloc_profiling_node;
+  alloc_profiling_node_ident := f.Cmm.fun_alloc_profiling_node;
   self#insert_moves loc_arg rarg;
   let env_after_main_prologue = env in
   let last_insn_of_main_prologue = instr_seq in
