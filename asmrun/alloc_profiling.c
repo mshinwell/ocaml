@@ -553,7 +553,7 @@ static void print_trie_node(value node)
               direct_call_point,
               (void*) pc,
               (void*) child,
-              (if is_tail then " (tail call)" else ""));
+              (is_tail ? " (tail call)" : ""));
             direct_call_point++;
             if (child != (value) 0) {
               print_trie_node(child);

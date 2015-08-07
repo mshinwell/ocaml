@@ -108,85 +108,8 @@ let code_for_allocation_point ~value's_header ~alloc_point_number ~node =
         (* [profinfo] is already shifted by [PROFINFO_SHIFT]. *)
         Cop (Cor, [Cvar profinfo; Cconst_natint value's_header]))))
 
-
-(*
-  let pc = Ident.create "pc" in
-  let existing_profinfo = Ident.create "existing_profinfo" in
-  let new_profinfo = Ident.create "new_profinfo" in
-  let new_profinfo' = Ident.create "new_profinfo'" in
-  let new_profinfo'' = Ident.create "new_profinfo''" in
-  let profinfo = Ident.create "profinfo" in
-  let offset_into_node =
-    ((2 * Arch.size_addr) * alloc_point_number)
-  in
-  let open Cmm in
-  let address_of_profinfo = Ident.create "address_of_profinfo" in
-  let address_of_pc = Ident.create "address_of_pc" in
-  let do_not_use_override_profinfo =
-    (* Determine whether values should be annotated with a user-specified
-       profinfo. *)
-    Cop (Ccmpi Ceq, [
-      Cop (Cload Word, [use_override_profinfo]);
-      Cconst_int 0;
-    ])
-  in
-  (* CR mshinwell: ensure these match the C code *)
-  let profinfo_shift = Cconst_int 42 in
-  let max_profinfo = Cconst_int 0x3f_ffff in
-  let generate_new_profinfo =
-    (* When a new profinfo value is required, we obtain the current
-       program counter, and store it together with a fresh profinfo value
-       into the current trie node. *)
-    Clet (pc, Cop (Cor, [Cop (Cprogram_counter, []); Cconst_int 1]),
-      Clet (new_profinfo,
-        Clet (new_profinfo', Cop (Cload Word, [profinfo_counter]),
-          Cifthenelse (
-            Cop (Ccmpi Cgt, [Cvar new_profinfo'; max_profinfo]),
-            Cconst_int 1,  (* profiling counter overflow *)
-            Clet (new_profinfo'',
-              Cop (Caddi, [Cvar new_profinfo'; Cconst_int 1]),
-              Csequence (
-                Cop (Cstore Word, [profinfo_counter; Cvar new_profinfo'']),
-                Cvar new_profinfo'
-              )))),
-        Csequence (
-          Clet (address_of_pc,
-            Cop (Cadda, [
-              Cvar node;
-              Cconst_int (offset_into_node + Arch.size_addr);
-            ]),
-            Csequence (
-              Cop (Cstore Word, [Cvar address_of_pc; Cvar pc]),
-              Cop (Cstore Word, [Cvar address_of_profinfo; Cvar new_profinfo]))),
-          Cop (Clsl, [Cvar new_profinfo; profinfo_shift]))))
-  in
-  (* Check if we have already allocated a profinfo value for this allocation
-     point with the current backtrace.  If so, use that value; if not,
-     allocate a new one. *)
-  Clet (address_of_profinfo,
-    Cop (Cadda, [
-      Cvar node;
-      Cconst_int offset_into_node;
-    ]),
-    Clet (existing_profinfo, Cop (Cload Word, [Cvar address_of_profinfo]),
-      Clet (profinfo,
-        Cifthenelse (
-          Cop (Ccmpa Ceq, [Cvar existing_profinfo; Cconst_pointer 0]),
-          Cvar existing_profinfo,
-          (* CR mshinwell: consider an option to disable "override_profinfo" *)
-          Cifthenelse (do_not_use_override_profinfo,
-            generate_new_profinfo,
-            Cop (Cload Word, [override_profinfo]))),
-        (* [profinfo] is already shifted by [PROFINFO_SHIFT]. *)
-        Cop (Cor, [Cvar profinfo; Cconst_natint value's_header]))))
-*)
-
 let code_for_direct_non_tail_call ~node ~num_instrumented_alloc_points ~callee
       ~direct_call_point_index =
-(*  Printf.printf "callee %s code_for_direct_call num_allocs %d direct index %d: %s \n%!" callee
-    num_instrumented_alloc_points direct_call_point_index
-    (Printexc.raw_backtrace_to_string (Printexc.get_callstack 5));
-*)
   let offset_in_trie_node_in_words =
     num_instrumented_alloc_points*2 + direct_call_point_index*2
   in
@@ -221,8 +144,9 @@ let code_for_direct_self_tail_call ~node ~num_instrumented_alloc_points
   in
   let open Cmm in
   let place_within_node = Ident.create "place_within_node" in
+  let node_hole = Ident.create "node_hole" in
   let callee_addr =
-    Cop (Cor, [Cop (Clsl, [Cconst_symbol callee; Cconst_int 2]); Cconst_int 2])
+    Cop (Cor, [Cop (Clsl, [Cconst_symbol callee; Cconst_int 3]); Cconst_int 2])
   in
   Clet (place_within_node,
     begin if offset_in_trie_node_in_words = 0 then
@@ -235,9 +159,12 @@ let code_for_direct_self_tail_call ~node ~num_instrumented_alloc_points
     end,
     Csequence (
       Cop (Cstore Word, [Cvar place_within_node; callee_addr]),
-      Cop (Calloc_profiling_load_node_hole_ptr, [
-        Cop (Caddi, [Cvar place_within_node; Cconst_int Arch.size_addr])
-      ])))
+      Clet (node_hole,
+        Cop (Caddi, [Cvar place_within_node; Cconst_int Arch.size_addr]),
+        Csequence (
+          (* This next line is the important one for self tail calls. *)
+          Cop (Cstore Word, [Cvar node_hole; node]),
+          Cop (Calloc_profiling_load_node_hole_ptr, [Cvar node_hole])))))
 
 let instrument_function_body expr ~node ~fun_name =
   (* This only instruments allocation points; the remaining instrumentation

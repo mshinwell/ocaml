@@ -815,7 +815,9 @@ method emit_tail env exp =
               let r1 = self#emit_tuple env new_args in
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
               let maybe_instrument_for_allocation_profiling_tail () =
-                if !Clflags.allocation_profiling then begin
+                if !Clflags.allocation_profiling
+                  && lbl = !current_function_name then
+                begin
                   let direct_call_point_index =
                     match Hashtbl.find direct_tail_calls lbl with
                     | index -> index
@@ -826,7 +828,7 @@ method emit_tail env exp =
                       index
                   in
                   let instrumentation =
-                    Alloc_profiling_cmm.code_for_direct_tail_call
+                    Alloc_profiling_cmm.code_for_direct_self_tail_call
                       ~node:!alloc_profiling_node
                       ~num_instrumented_alloc_points:
                         !num_instrumented_alloc_points

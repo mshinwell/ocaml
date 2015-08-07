@@ -35,7 +35,7 @@ val code_for_direct_non_tail_call
   -> direct_call_point_index:int
   -> Cmm.expression
 
-val code_for_direct_tail_call
+val code_for_direct_self_tail_call
    : node:Cmm.expression
   -> num_instrumented_alloc_points:int
   -> callee:string
