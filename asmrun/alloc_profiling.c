@@ -493,6 +493,143 @@ uintnat caml_allocation_profiling_my_profinfo (void)
   return profinfo;
 }
 
+static void print_trie_node(value node)
+{
+  if (Color_val(node) != Caml_black) {
+    printf("Node %p visited before\n", (void*) node);
+  }
+  else {
+    int field;
+
+    Hd_val(node) = Whitehd_hd(Hd_val(node));
+
+    printf("Node %p (size %d):\n", (void*) node, (int) Wosize_val(node));
+    for (field = 0; field < Wosize_val(node); field++) {
+      value entry;
+      int is_last;
+      int alloc_point;
+      int direct_call_point;
+
+      entry = Field(node, field);
+
+      if (entry == (value) 0) {
+        field++;
+        continue;
+      }
+
+      is_last = (field == Wosize_val(node) - 1);
+      alloc_point = 0;
+      direct_call_point = 0;
+
+      switch (entry & 3) {
+        case 1:
+          if (is_last) {
+            printf("Node is too short\n");
+          }
+          else {
+            value pc = (entry & ~3) >> 2;
+            printf("Allocation point %d: pc=%p, profinfo=%lld\n", alloc_point,
+              (void*) pc,
+              (unsigned long long) Field(node, field + 1));
+            alloc_point++;
+            field++;
+          }
+          break;
+
+        case 2:
+          if (is_last) {
+            printf("Node is too short\n");
+          }
+          else {
+            value pc = (entry & ~3) >> 2;
+            value child = Field(node, field + 1);
+            printf("Direct call point %d: pc=%p, child node=%p\n",
+              direct_call_point,
+              (void*) pc,
+              (void*) child);
+            direct_call_point++;
+            if (child != (value) 0) {
+              print_trie_node(child);
+            }
+            field++;
+          }
+          break;
+
+        default:
+          printf("Field %d = %p is malformed\n", field, (void*) entry);
+          break;
+      }
+    }
+  }
+}
+
+static void mark_trie_node_black(value node)
+{
+
+}
+
+CAMLprim value caml_allocation_profiling_debug(value v_unit)
+{
+  value trie_node = caml_alloc_profiling_trie_root;
+
+  if (trie_node == (value) 0) {
+    printf("Allocation profiling trie is empty\n");
+  }
+  else {
+    print_trie_node(trie_node);
+    mark_trie_node_black(trie_node);
+  }
+
+  fflush(stdout);
+
+  return Val_unit;
+}
+
+void
+caml_allocation_profiling_c_to_ocaml(void)
+{
+#if 0
+  backtrace_entry backtrace[MAX_LIBUNWIND_BACKTRACE_DEPTH];
+  int frame;
+  int depth;
+  uint64_t hash_value;
+  int last_return_address_frame = -1;
+
+  caml_allocation_profiling_top_of_backtrace_stack--;
+  caml_allocation_profiling_top_of_backtrace_stack[0].marker = END_OF_C_FRAMES;
+
+  depth = capture_backtrace(backtrace, MAX_LIBUNWIND_BACKTRACE_DEPTH);
+
+  hash_value = caml_allocation_profiling_top_of_backtrace_stack[0].hash;
+
+  for (frame = 0; last_return_address_frame == -1 && frame < depth; frame++) {
+    if (backtrace[frame].return_address == (void*) caml_last_return_address) {
+      last_return_address_frame = frame;
+    }
+    else {  /* omit the most recent OCaml frame---already hashed. */
+      hash_value = hash(hash_value, backtrace[depth].return_address);
+    }
+  }
+
+  if (last_return_address_frame != -1) {
+    depth = last_return_address_frame + 1;
+  }
+  /* If we couldn't find [caml_last_return_address], we use the whole
+     backtrace (up to MAX_LIBUNWIND_BACKTRACE_DEPTH frames, anyway). */
+
+  /* XXX: make sure the trap page is large enough */
+
+  caml_allocation_profiling_top_of_backtrace_stack -= depth;
+  memcpy(caml_allocation_profiling_top_of_backtrace_stack, backtrace,
+    sizeof(backtrace_entry) * depth);
+  caml_allocation_profiling_top_of_backtrace_stack--;
+  caml_allocation_profiling_top_of_backtrace_stack[0].marker =
+    START_OF_C_FRAMES;
+  caml_allocation_profiling_top_of_backtrace_stack--;
+  caml_allocation_profiling_top_of_backtrace_stack[0].hash = hash_value;
+#endif
+}
+
 #if 0
 
 #define BACKTRACE_TABLE_SIZE 100000

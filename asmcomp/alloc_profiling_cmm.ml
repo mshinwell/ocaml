@@ -80,7 +80,9 @@ let code_for_allocation_point ~value's_header ~alloc_point_number ~node =
     (* This will generate a static branch to a function that should usually
        be in the cache, which hopefully gives a good code size/performance
        balance. *)
-    Clet (pc, Cop (Cor, [Cop (Cprogram_counter, []); Cconst_int 1]),
+    Clet (pc, Cop (Cor, [
+        Cop (Clsl, [Cop (Cprogram_counter, []); Cconst_int 2]);
+        Cconst_int 1]),
       Cop (Cextcall ("caml_alloc_profiling_generate_profinfo", [| Int |],
           false, Debuginfo.none),
         [Cvar pc; Cvar address_of_profinfo]))
@@ -187,8 +189,7 @@ let code_for_direct_call ~node ~num_instrumented_alloc_points ~callee
   let open Cmm in
   let place_within_node = Ident.create "place_within_node" in
   let callee_addr =
-    (* Bit 1 being set indicates this is not an allocation point. *)
-    Cop (Cor, [Cconst_symbol callee; Cconst_int 3])
+    Cop (Cor, [Cop (Clsl, [Cconst_symbol callee; Cconst_int 2]); Cconst_int 2])
   in
   Clet (place_within_node,
     Cop (Caddi, [
