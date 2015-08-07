@@ -457,9 +457,6 @@ CAMLprim uintnat caml_alloc_profiling_generate_profinfo (uintnat pc,
 {
   uintnat profinfo;
 
-  printf("generating profinfo, encoded pc=%p, target=%p\n",
-    (void*) pc, (void*) alloc_point_within_node);
-
   if (caml_allocation_profiling_use_override_profinfo == Val_true) {
     return caml_allocation_profiling_override_profinfo;
   }
@@ -474,7 +471,7 @@ CAMLprim uintnat caml_alloc_profiling_generate_profinfo (uintnat pc,
   assert ((pc & 3) == 1);
   alloc_point_within_node[0] = pc;
   assert (alloc_point_within_node[1] == profinfo_none);
-  alloc_point_within_node[1] = profinfo;
+  alloc_point_within_node[1] = Val_long(profinfo);
 
   return profinfo << PROFINFO_SHIFT;
 }
@@ -494,6 +491,23 @@ uintnat caml_allocation_profiling_my_profinfo (void)
   }
 
   return profinfo;
+}
+
+extern int caml_extern_allow_out_of_heap;
+extern value caml_output_value(value vchan, value v, value flags);
+
+CAMLprim value caml_allocation_profiling_marshal_trie (value v_channel)
+{
+  if (caml_alloc_profiling_trie_root == (value) 0) {
+    caml_output_value(v_channel, Val_unit, Val_long(0));
+  }
+  else {
+    caml_extern_allow_out_of_heap = 1;
+    caml_output_value(v_channel, caml_alloc_profiling_trie_root, Val_long(0));
+    caml_extern_allow_out_of_heap = 0;
+  }
+
+  return Val_unit;
 }
 
 static void print_trie_node(value node)

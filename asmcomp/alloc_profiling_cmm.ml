@@ -31,7 +31,9 @@ let code_to_allocate_trie_node ~num_instrumented_alloc_points
       ~num_direct_call_points
   in
   let node = Ident.create "node" in
-  let header = Cmmgen.black_block_header Obj.abstract_tag size in
+  let header =
+    Cmmgen.black_block_header Obj.first_non_constant_constructor_tag size
+  in
   let open Cmm in
   Clet (node,
     Cop (Cextcall ("calloc", [| Int |], false, Debuginfo.none),

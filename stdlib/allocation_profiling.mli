@@ -89,4 +89,9 @@ val annotation_of_value : 'a -> int
 val dump_backtraces_to_file : filename:string -> unit
 *)
 
+val marshal_trie : out_channel -> unit
+
+type trie
+val unmarshal_trie : in_channel -> trie
+
 val debug : unit -> unit

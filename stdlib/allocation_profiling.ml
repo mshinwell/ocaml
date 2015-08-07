@@ -111,3 +111,20 @@ let debug () =
 external debug : unit -> unit
   = "caml_allocation_profiling_only_works_for_native_code"
     "caml_allocation_profiling_debug" "noalloc"
+
+external marshal_trie : out_channel -> unit
+  = "caml_allocation_profiling_only_works_for_native_code"
+    "caml_allocation_profiling_marshal_trie"
+
+type trie_node = Obj.t array
+
+type trie =
+  | Empty
+  | Non_empty of trie_node
+
+let unmarshal_trie in_channel =
+  let trie = Marshal.from_channel in_channel in
+  if trie = () then
+    Empty
+  else
+    Non_empty ((Obj.magic trie) : trie_node)
