@@ -30,19 +30,15 @@ let code_to_allocate_trie_node ~num_instrumented_alloc_points
     size_in_words_of_trie_node ~num_instrumented_alloc_points
       ~num_direct_call_points
   in
-  let node = Ident.create "node" in
   let header =
     Cmmgen.black_block_header Obj.first_non_constant_constructor_tag size
   in
   let open Cmm in
-  Clet (node,
-    Cop (Cextcall ("calloc", [| Int |], false, Debuginfo.none),
-      [Cconst_int (1 + size);  (* "1 + " for a header *)
-       Cconst_int Arch.size_addr;
-      ]),
-    Csequence (
-      Cop (Cstore Word, [Cvar node; Cconst_natint header]),
-      Cop (Caddi, [Cvar node; Cconst_int Arch.size_addr])))
+  Cop (Cextcall ("caml_allocation_profiling_allocate_node", [| Int |],
+      false, Debuginfo.none),
+    [Cconst_int (1 + size);  (* "1 + " for a header *)
+     Cconst_natint header;
+    ])
 
 let code_for_function_prologue ~num_instrumented_alloc_points
       ~num_direct_call_points ~node =
@@ -51,7 +47,7 @@ let code_for_function_prologue ~num_instrumented_alloc_points
   let open Cmm in
   Clet (node_hole, Cop (Calloc_profiling_node_hole, []),
     Clet (node, Cop (Cload Word, [Cvar node_hole]),
-      Cifthenelse (Cop (Ccmpi Cne, [Cvar node; Cconst_int 0]),
+      Cifthenelse (Cop (Ccmpi Cne, [Cvar node; Cconst_int 1]),
         Cvar node,
         Clet (new_node,
           code_to_allocate_trie_node ~num_instrumented_alloc_points
@@ -104,7 +100,7 @@ let code_for_allocation_point ~value's_header ~alloc_point_number ~node =
     Clet (existing_profinfo, Cop (Cload Word, [Cvar address_of_profinfo]),
       Clet (profinfo,
         Cifthenelse (
-          Cop (Ccmpa Cne, [Cvar existing_profinfo; Cconst_pointer 0]),
+          Cop (Ccmpa Cne, [Cvar existing_profinfo; Cconst_pointer 1]),
           Cvar existing_profinfo,
           generate_new_profinfo),
         (* [profinfo] is already shifted by [PROFINFO_SHIFT]. *)
@@ -118,7 +114,7 @@ let code_for_direct_non_tail_call ~node ~num_instrumented_alloc_points ~callee
   let open Cmm in
   let place_within_node = Ident.create "place_within_node" in
   let callee_addr =
-    Cop (Cor, [Cop (Clsl, [Cconst_symbol callee; Cconst_int 2]); Cconst_int 2])
+    Cop (Cor, [Cop (Clsl, [Cconst_symbol callee; Cconst_int 2]); Cconst_int 3])
   in
   Clet (place_within_node,
     begin if offset_in_trie_node_in_words = 0 then

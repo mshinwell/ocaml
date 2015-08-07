@@ -39,12 +39,16 @@
 #include "caml/major_gc.h"
 #include "caml/memory.h"
 #include "caml/minor_gc.h"
+#include "caml/misc.h"
 #include "caml/mlvalues.h"
 #include "caml/signals.h"
 #include "alloc_profiling.h"
 #include "stack.h"
 
 #include "../config/s.h"
+
+#define HAS_LIBUNWIND
+
 #ifdef HAS_LIBUNWIND
 #include "libunwind.h"
 #endif
@@ -381,7 +385,7 @@ The code sequence in the callee is something like:
 
 */
 
-value caml_alloc_profiling_trie_root = (value) 0;
+value caml_alloc_profiling_trie_root = Val_unit;
 value* caml_alloc_profiling_trie_node_ptr = &caml_alloc_profiling_trie_root;
 
 value caml_allocation_profiling_use_override_profinfo = Val_false;
@@ -399,7 +403,7 @@ void caml_allocation_profiling_initialize (void)
 
 CAMLprim value caml_allocation_profiling_trie_is_initialized (value v_unit)
 {
-  return (caml_alloc_profiling_trie_root == (value) 0) ? Val_false : Val_true;
+  return (caml_alloc_profiling_trie_root == Val_unit) ? Val_false : Val_true;
 }
 
 CAMLprim value caml_allocation_profiling_get_trie_root (value v_unit)
@@ -452,6 +456,21 @@ CAMLprim value caml_allocation_profiling_profinfo_overflow (value v_unit)
   return Val_long(profinfo_overflow);
 }
 
+CAMLprim uintnat* caml_allocation_profiling_allocate_node (
+      int size_including_header, uintnat header)
+{
+  int word;
+  uintnat* node = (uintnat*) malloc(sizeof(uintnat) * size_including_header);
+  if (node == NULL) {
+    abort ();
+  }
+  node[0] = header;
+  for (word = 1; word < size_including_header; word++) {
+    node[word] = Val_unit;
+  }
+  return &node[1];
+}
+
 CAMLprim uintnat caml_alloc_profiling_generate_profinfo (uintnat pc,
     uintnat* alloc_point_within_node)
 {
@@ -467,13 +486,88 @@ CAMLprim uintnat caml_alloc_profiling_generate_profinfo (uintnat pc,
     profinfo = profinfo_overflow;
   }
 
-  assert (alloc_point_within_node[0] == (uintnat) 0);
+  assert (alloc_point_within_node[0] == (uintnat) Val_unit);
+  assert (alloc_point_within_node[1] == (uintnat) Val_unit);
+
   assert ((pc & 3) == 1);
   alloc_point_within_node[0] = pc;
-  assert (alloc_point_within_node[1] == profinfo_none);
   alloc_point_within_node[1] = Val_long(profinfo);
 
   return profinfo << PROFINFO_SHIFT;
+}
+
+static uintnat* find_trie_node_from_libunwind (void)
+{
+  unw_cursor_t cur;
+  unw_context_t ctx;
+  int ret;
+  int stop;
+  int frame;
+  struct ext_table frames;
+  uintnat* node_hole;
+
+  caml_ext_table_init(&frames, 42);
+
+  unw_getcontext(&ctx);
+  unw_init_local(&cur, &ctx);
+
+  stop = 0;
+  while (!stop && (ret = unw_step(&cur)) > 0) {
+    unw_word_t ip;
+    unw_get_reg(&cur, UNW_REG_IP, &ip);
+    if (caml_last_return_address == (uintnat) ip) {
+      stop = 1;
+    }
+    else {
+      caml_ext_table_add(&frames, (void*) ip);
+    }
+  }
+
+  /* frames.contents[0] should be the current PC.
+     frames.contents[frames.size - 1] should be the PC in the most
+     recent non-OCaml frame. */
+
+  node_hole = caml_alloc_profiling_trie_node_ptr;
+  for (frame = frames.size - 1; frame >= 1; frame--) {
+    void* return_addr = frames.contents[frame];
+
+    if (*node_hole == Val_unit) {
+      *node_hole = caml_allocation_profiling_allocate_node (3,
+        Make_header(4, 1, Caml_black));
+      /* Layout of a C node:
+         node[-1]  OCaml GC header
+         node[0]   Program counter at call or allocation shifted left by 2
+                   Bit 0 is always set.
+                   Bit 1 being set means it's a call not an allocation.
+         node[1]   Pointer to callee, if it's a call, or else profinfo.
+         node[2]   Linked list pointer to another C node.
+      */
+      (*node_hole)[0] = return_addr;
+      node_hole = &((*node_hole)[1]);
+    }
+    else {
+      /* We always expect a C node, not an OCaml node. */
+      int found = 0;
+      if (Tag_val((value) *node_hole) != 1) {
+        fprintf("Node at %p has the wrong tag\n", (void*) node);
+        abort();
+      }
+      while (!found && *node_hole != (uintnat*) Val_unit) {
+
+      }
+      if (!found) {
+        *node_hole = caml_allocation_profiling_allocate_node (3,
+          Make_header(3, 1, Caml_black));
+        (*node_hole)[0] = return_addr;
+        node_hole = &((*node_hole)[1]);
+      }
+    }
+
+
+    printf("find_trie_node, frame=%d, ra=%p\n", frame, return_addr);
+  }
+
+  return NULL;
 }
 
 uintnat caml_allocation_profiling_my_profinfo (void)
@@ -487,6 +581,7 @@ uintnat caml_allocation_profiling_my_profinfo (void)
     profinfo = caml_allocation_profiling_override_profinfo;
   }
   else {
+    uintnat* node = find_trie_node_from_libunwind ();
     profinfo = 0ull;
   }
 
@@ -498,14 +593,9 @@ extern value caml_output_value(value vchan, value v, value flags);
 
 CAMLprim value caml_allocation_profiling_marshal_trie (value v_channel)
 {
-  if (caml_alloc_profiling_trie_root == (value) 0) {
-    caml_output_value(v_channel, Val_unit, Val_long(0));
-  }
-  else {
-    caml_extern_allow_out_of_heap = 1;
-    caml_output_value(v_channel, caml_alloc_profiling_trie_root, Val_long(0));
-    caml_extern_allow_out_of_heap = 0;
-  }
+  caml_extern_allow_out_of_heap = 1;
+  caml_output_value(v_channel, caml_alloc_profiling_trie_root, Val_long(0));
+  caml_extern_allow_out_of_heap = 0;
 
   return Val_unit;
 }
@@ -532,7 +622,7 @@ static void print_trie_node(value node)
 
       entry = Field(node, field);
 
-      if (entry == (value) 0) {
+      if (entry == Val_unit) {
         field++;
         continue;
       }
@@ -554,7 +644,6 @@ static void print_trie_node(value node)
           }
           break;
 
-        case 2:
         case 3:
           if (is_last) {
             printf("Node is too short\n");
@@ -562,14 +651,14 @@ static void print_trie_node(value node)
           else {
             value pc = (entry & ~3) >> 2;
             value child = Field(node, field + 1);
-            value is_tail = ((entry & 3) == 3);
+            value is_self_tail = (child == node);
             printf("Direct call point %d: pc=%p, child node=%p%s\n",
               direct_call_point,
               (void*) pc,
               (void*) child,
-              (is_tail ? " (tail call)" : ""));
+              (is_self_tail ? " (self tail call)" : ""));
             direct_call_point++;
-            if (child != (value) 0) {
+            if (child != Val_unit) {
               print_trie_node(child);
             }
             field++;
@@ -599,15 +688,14 @@ static void mark_trie_node_black(value node)
 
     entry = Field(node, field);
 
-    if (entry == (value) 0) {
+    if (entry == Val_unit) {
       continue;
     }
 
     switch (entry & 3) {
-      case 2:
       case 3: {
         value child = Field(node, field + 1);
-        if (child != (value) 0) {
+        if (child != Val_unit) {
           mark_trie_node_black(child);
         }
         break;
