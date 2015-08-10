@@ -539,15 +539,17 @@ static c_node* allocate_c_node(void)
 
 static uintnat* stored_pointer_to_c_node(c_node* node)
 {
+  assert(node != NULL);
   return &((uintnat*) node)[1];
 }
 
 static c_node* c_node_of_stored_pointer(uintnat* node)
 {
-  return (c_node*) &node[-1];
+  c_node* node = (c_node*) &node[-1];
+  return (node == Val_unit) ? NULL : node;
 }
 
-static uintnat* find_trie_node_from_libunwind(void)
+static c_node* find_trie_node_from_libunwind(void)
 {
   unw_cursor_t cur;
   unw_context_t ctx;
@@ -556,6 +558,7 @@ static uintnat* find_trie_node_from_libunwind(void)
   int frame;
   struct ext_table frames;
   uintnat* node_hole;
+  c_node* node = NULL;
 
   caml_ext_table_init(&frames, 42);
 
@@ -584,8 +587,10 @@ static uintnat* find_trie_node_from_libunwind(void)
      function that sometimes calls C and sometimes calls OCaml. */
 
   for (frame = frames.size - 1; frame >= 0; frame--) {
-    c_node* node = NULL;
+      c_node_type expected_type;
     void* pc = frames.contents[frame];
+
+    expected_type = (frame > 0 ? CALL : ALLOCATION);
 
     /* Invariant at this point: [node_hole] is an address in the frame at
        index [frame + 1] (where we take the frame at index [frames.size]
@@ -599,17 +604,19 @@ static uintnat* find_trie_node_from_libunwind(void)
 
     if (*node_hole == Val_unit) {
       node = allocate_c_node();
-      node->pc = (pc << 2) | 3;
       *node_hole = stored_pointer_to_c_node(node);
     }
     else {
       c_node* prev;
       int found = 0;
+
       node = c_node_of_stored_pointer(*node_hole);
+      assert(node != NULL);
+
       prev = NULL;
-      assert(node != Val_unit);
-      while (!found && node != Val_unit) {
-        if (classify_c_node(node) == CALL
+
+      while (!found && node != NULL) {
+        if (classify_c_node(node) == expected_type
             && pc_inside_c_node_matches(pc)) {
           found = 1;
         }
@@ -618,24 +625,23 @@ static uintnat* find_trie_node_from_libunwind(void)
         }
       }
       if (!found) {
-        /* [prev] cannot be [NULL] because there is at least one [c_node] in
-           the linked list and at least one [pc] did not match. */
         assert(prev != NULL);
         node = allocate_c_node();
-        node->pc = (pc << 2) | 3;
         prev->next = stored_pointer_to_c_node(node);
       }
     }
 
     assert(node != NULL);
-    assert(classify_c_node(node) == CALL);
+    node->pc = (pc << 2) | (frame > 0 ? 3 : 1);
+
+    assert(classify_c_node(node) == expected_node_type);
     assert(pc_inside_c_node_matches(node, pc));
     node_hole = &node->data.callee_node;
 
     printf("find_trie_node, frame=%d, ra=%p\n", frame, return_addr);
   }
 
-  return NULL;
+  return node;
 }
 
 uintnat caml_allocation_profiling_my_profinfo (void)
