@@ -523,172 +523,16 @@ static c_node_type classify_c_node(c_node* node)
   return (node->pc & 2) ? CALL : ALLOCATION;
 }
 
-static int pc_inside_c_node_matches(c_node* node, void* pc)
-{
-  return (node->pc & ~3) == (((uintnat) pc) << 2);
-}
-
-static c_node* allocate_c_node(void)
-{
-  c_node* node;
-
-  node = (c_node*) malloc(sizeof(c_node));
-  if (!node) {
-    abort();
-  }
-
-  node->gc_header =
-    Make_header(sizeof(c_node) / sizeof(uintnat), 1, Caml_black);
-  node->data.callee_node = Val_unit;
-  node->next = Val_unit;
-
-  return node;
-}
-
-static value stored_pointer_to_c_node(c_node* node)
-{
-  assert(node != NULL);
-  return (value) &((uintnat*) node)[1];
-}
-
 static c_node* c_node_of_stored_pointer(value node_stored)
 {
   return (node_stored == Val_unit) ? NULL
     : (c_node*) (((uintnat*) node_stored) - 1);
 }
 
-static c_node* find_trie_node_from_libunwind(void)
+static value stored_pointer_to_c_node(c_node* node)
 {
-  unw_cursor_t cur;
-  unw_context_t ctx;
-  int ret;
-  int stop;
-  int frame;
-  struct ext_table frames;
-  value* node_hole;
-  c_node* node = NULL;
-
-  caml_ext_table_init(&frames, 42);
-
-  unw_getcontext(&ctx);
-  unw_init_local(&cur, &ctx);
-
-  stop = 0;
-  while (!stop && (ret = unw_step(&cur)) > 0) {
-    unw_word_t ip;
-    unw_get_reg(&cur, UNW_REG_IP, &ip);
-    if (caml_last_return_address == (uintnat) ip) {
-      stop = 1;
-    }
-    else {
-      caml_ext_table_add(&frames, (void*) ip);
-    }
-  }
-
-  /* frames.contents[0] should be the current PC.
-     frames.contents[frames.size - 1] should be the PC in the most
-     recent non-OCaml frame. */
-
-  node_hole = caml_alloc_profiling_trie_node_ptr;
-  printf("*** find_trie_node_from_libunwind: starting at %p\n",
-    *node_hole);
-  /* Note that if [node_hole] is filled, then it must point to a C node,
-     since it is not possible for there to be a call point in an OCaml
-     function that sometimes calls C and sometimes calls OCaml. */
-
-  for (frame = frames.size - 1; frame >= 0; frame--) {
-    c_node_type expected_type;
-    void* pc = frames.contents[frame];
-    assert (pc != caml_last_return_address);
-
-    expected_type = (frame > 0 ? CALL : ALLOCATION);
-
-    /* Invariant at this point: [node_hole] is an address in the frame at
-       index [frame + 1] (where we take the frame at index [frames.size]
-       to be the most recent OCaml frame).
-
-       The aim is to add a new child node, pointed at by [*node_hole],
-       corresponding to the frame at index [frame].  When [frame > 0] then
-       we are still in the call chain; when [frame == 0] we have reached the
-       allocation point.
-    */
-
-    if (*node_hole == Val_unit) {
-      node = allocate_c_node();
-      printf("making new node %p\n", node);
-      node->pc = (((uintnat) pc) << 2) | (frame > 0 ? 3 : 1);
-      *node_hole = stored_pointer_to_c_node(node);
-    }
-    else {
-      c_node* prev;
-      int found = 0;
-
-      node = c_node_of_stored_pointer(*node_hole);
-      printf("using existing node %p\n", node);
-      assert(node != NULL);
-
-      prev = NULL;
-
-      while (!found && node != NULL) {
-        if (classify_c_node(node) == expected_type
-            && pc_inside_c_node_matches(node, pc)) {
-          found = 1;
-        }
-        else {
-          prev = node;
-          node = c_node_of_stored_pointer(node->next);
-        }
-      }
-      if (!found && node == NULL) {
-        assert(prev != NULL);
-        node = allocate_c_node();
-        node->pc = (((uintnat) pc) << 2) | (frame > 0 ? 3 : 1);
-        prev->next = stored_pointer_to_c_node(node);
-      }
-    }
-
-    assert(node != NULL);
-
-    assert(classify_c_node(node) == expected_type);
-    assert(pc_inside_c_node_matches(node, pc));
-    node_hole = &node->data.callee_node;
-
-    printf("find_trie_node, frame=%d, ra=%p\n", frame, pc);
-  }
-
-  assert(classify_c_node(node) == ALLOCATION);
-  return node;
-}
-
-uintnat caml_allocation_profiling_my_profinfo (void)
-{
-  uint64_t profinfo;
-
-  if (!caml_allocation_profiling) {
-    profinfo = 0ull;
-  }
-  else if (caml_allocation_profiling_use_override_profinfo != Val_false) {
-    profinfo = caml_allocation_profiling_override_profinfo;
-  }
-  else {
-    c_node* node = find_trie_node_from_libunwind ();
-    profinfo = generate_profinfo();
-    node->data.profinfo = profinfo;
-  }
-
-  return profinfo;
-}
-
-extern int caml_extern_allow_out_of_heap;
-extern value caml_output_value(value vchan, value v, value flags);
-
-CAMLprim value caml_allocation_profiling_marshal_trie (value v_channel)
-{
-  caml_extern_allow_out_of_heap = 1;
-  caml_output_value(v_channel, caml_alloc_profiling_trie_root, Val_long(0));
-  caml_extern_allow_out_of_heap = 0;
-
-  return Val_unit;
+  assert(node != NULL);
+  return (value) &((uintnat*) node)[1];
 }
 
 static void print_trie_node(value node)
@@ -706,60 +550,86 @@ static void print_trie_node(value node)
 
     Hd_val(node) = Whitehd_hd(Hd_val(node));
 
-    printf("Node %p (size %d):\n", (void*) node, (int) Wosize_val(node));
-    for (field = 0; field < Wosize_val(node); field++) {
-      value entry;
-      int is_last;
+    printf("Node %p (%s) (size %d):\n", (void*) node,
+      Tag_val(node) == 0 ? "OCaml node" : "C node", (int) Wosize_val(node));
+    if (Tag_val(node) == 0) {
+      for (field = 0; field < Wosize_val(node); field++) {
+        value entry;
+        int is_last;
 
-      entry = Field(node, field);
+        entry = Field(node, field);
 
-      if (entry == Val_unit) {
-        field++;
-        continue;
-      }
+        if (entry == Val_unit) {
+          field++;
+          continue;
+        }
 
-      is_last = (field == Wosize_val(node) - 1);
+        is_last = (field == Wosize_val(node) - 1);
 
-      switch (entry & 3) {
-        case 1:
-          if (is_last) {
-            printf("Node is too short\n");
-          }
-          else {
-            value pc = (entry & ~3) >> 2;
-            printf("Allocation point %d: pc=%p, profinfo=%lld\n", alloc_point,
-              (void*) pc,
-              (unsigned long long) Field(node, field + 1));
-            alloc_point++;
-            field++;
-          }
-          break;
-
-        case 3:
-          if (is_last) {
-            printf("Node is too short\n");
-          }
-          else {
-            value pc = (entry & ~3) >> 2;
-            value child = Field(node, field + 1);
-            value is_self_tail = (child == node);
-            printf("Direct call point %d: pc=%p, child node=%p%s\n",
-              direct_call_point,
-              (void*) pc,
-              (void*) child,
-              (is_self_tail ? " (self tail call)" : ""));
-            direct_call_point++;
-            if (child != Val_unit) {
-              print_trie_node(child);
+        switch (entry & 3) {
+          case 1:
+            if (is_last) {
+              printf("Node is too short\n");
             }
-            field++;
-          }
-          break;
+            else {
+              value pc = (entry & ~3) >> 2;
+              printf("Allocation point %d: pc=%p, profinfo=%lld\n", alloc_point,
+                (void*) pc,
+                (unsigned long long) Field(node, field + 1));
+              alloc_point++;
+              field++;
+            }
+            break;
 
-        default:
-          printf("Field %d = %p is malformed\n", field, (void*) entry);
-          break;
+          case 3:
+            if (is_last) {
+              printf("Node is too short\n");
+            }
+            else {
+              value pc = (entry & ~3) >> 2;
+              value child = Field(node, field + 1);
+              value is_self_tail = (child == node);
+              printf("Direct call point %d: pc=%p, child node=%p%s\n",
+                direct_call_point,
+                (void*) pc,
+                (void*) child,
+                (is_self_tail ? " (self tail call)" : ""));
+              direct_call_point++;
+              if (child != Val_unit) {
+                print_trie_node(child);
+              }
+              field++;
+            }
+            break;
+
+          default:
+            printf("Field %d = %p is malformed\n", field, (void*) entry);
+            break;
+        }
       }
+    } else {
+      c_node* c_node = c_node_of_stored_pointer(node);
+      assert (c_node != NULL);
+      while (c_node != NULL) {
+        switch (classify_c_node(c_node)) {
+          case CALL:
+            printf("Call point at %p: child node=%p\n",
+              (void*) (c_node->pc >> 2),
+              (void*) c_node->data.callee_node);
+            print_trie_node(c_node->data.callee_node);
+            break;
+
+          case ALLOCATION:
+            printf("Allocation point at %p: profinfo=%lld\n",
+              (void*) (c_node->pc >> 2),
+              (unsigned long long) c_node->data.profinfo);
+            break;
+
+          default:
+            abort();
+        }
+      }
+      c_node = c_node_of_stored_pointer(c_node->next);
     }
     printf("End of node %p\n", (void*) node);
   }
@@ -812,6 +682,172 @@ CAMLprim value caml_allocation_profiling_debug(value v_unit)
   }
 
   fflush(stdout);
+
+  return Val_unit;
+}
+
+static int pc_inside_c_node_matches(c_node* node, void* pc)
+{
+  return (node->pc & ~3) == (((uintnat) pc) << 2);
+}
+
+static c_node* allocate_c_node(void)
+{
+  c_node* node;
+
+  node = (c_node*) malloc(sizeof(c_node));
+  if (!node) {
+    abort();
+  }
+
+  node->gc_header =
+    Make_header(sizeof(c_node) / sizeof(uintnat), 1, Caml_black);
+  node->data.callee_node = Val_unit;
+  node->next = Val_unit;
+
+  return node;
+}
+
+static c_node* find_trie_node_from_libunwind(void)
+{
+  unw_cursor_t cur;
+  unw_context_t ctx;
+  int ret;
+  int stop;
+  int frame;
+  struct ext_table frames;
+  value* node_hole;
+  c_node* node = NULL;
+
+  caml_ext_table_init(&frames, 42);
+
+  unw_getcontext(&ctx);
+  unw_init_local(&cur, &ctx);
+
+  stop = 0;
+  while (!stop && (ret = unw_step(&cur)) > 0) {
+    unw_word_t ip;
+    unw_get_reg(&cur, UNW_REG_IP, &ip);
+    if (caml_last_return_address == (uintnat) ip) {
+      stop = 1;
+    }
+    else {
+      caml_ext_table_add(&frames, (void*) ip);
+    }
+  }
+
+  /* frames.contents[0] should be the current PC.
+     frames.contents[frames.size - 1] should be the PC in the most
+     recent non-OCaml frame. */
+/*
+  node_hole = caml_alloc_profiling_trie_node_ptr;
+*/
+  node_hole = &caml_alloc_profiling_trie_root;
+  printf("*** find_trie_node_from_libunwind: starting at %p\n",
+    (void*) *node_hole);
+  /* Note that if [node_hole] is filled, then it must point to a C node,
+     since it is not possible for there to be a call point in an OCaml
+     function that sometimes calls C and sometimes calls OCaml. */
+
+  for (frame = frames.size - 1; frame >= 0; frame--) {
+    c_node_type expected_type;
+    void* pc = frames.contents[frame];
+/*
+    assert (pc != caml_last_return_address);
+*/
+
+    expected_type = (frame > 0 ? CALL : ALLOCATION);
+
+    /* Invariant at this point: [node_hole] is an address in the frame at
+       index [frame + 1] (where we take the frame at index [frames.size]
+       to be the most recent OCaml frame).
+
+       The aim is to add a new child node, pointed at by [*node_hole],
+       corresponding to the frame at index [frame].  When [frame > 0] then
+       we are still in the call chain; when [frame == 0] we have reached the
+       allocation point.
+    */
+
+    if (*node_hole == Val_unit) {
+      node = allocate_c_node();
+      printf("making new node %p\n", node);
+      node->pc = (((uintnat) pc) << 2) | (frame > 0 ? 3 : 1);
+      *node_hole = stored_pointer_to_c_node(node);
+    }
+    else {
+      c_node* prev;
+      int found = 0;
+
+      node = c_node_of_stored_pointer(*node_hole);
+      printf("using existing node %p (size %lld)\n", (void*) node,
+        (unsigned long long) Wosize_val(*node_hole));
+      assert(node != NULL);
+
+      prev = NULL;
+
+      while (!found && node != NULL) {
+        printf("...linked list entry pc=%p: ", (void*) node->pc);
+        if (classify_c_node(node) == expected_type
+            && pc_inside_c_node_matches(node, pc)) {
+          printf("found\n");
+          found = 1;
+        }
+        else {
+          printf("doesn't match\n");
+          prev = node;
+          node = c_node_of_stored_pointer(node->next);
+        }
+      }
+      if (!found && node == NULL) {
+        assert(prev != NULL);
+        node = allocate_c_node();
+        node->pc = (((uintnat) pc) << 2) | (frame > 0 ? 3 : 1);
+        prev->next = stored_pointer_to_c_node(node);
+      }
+    }
+
+    assert(node != NULL);
+
+    assert(classify_c_node(node) == expected_type);
+    assert(pc_inside_c_node_matches(node, pc));
+    node_hole = &node->data.callee_node;
+
+    printf("find_trie_node, frame=%d, ra=%p\n", frame, pc);
+  }
+
+  assert(classify_c_node(node) == ALLOCATION);
+  return node;
+}
+
+uintnat caml_allocation_profiling_my_profinfo (void)
+{
+  uint64_t profinfo;
+
+  if (!caml_allocation_profiling) {
+    profinfo = 0ull;
+  }
+  else if (caml_allocation_profiling_use_override_profinfo != Val_false) {
+    profinfo = caml_allocation_profiling_override_profinfo;
+  }
+  else {
+    c_node* node = find_trie_node_from_libunwind ();
+    profinfo = generate_profinfo();
+    node->data.profinfo = profinfo;
+  }
+
+  caml_allocation_profiling_debug(Val_unit);
+
+  return profinfo;
+}
+
+extern int caml_extern_allow_out_of_heap;
+extern value caml_output_value(value vchan, value v, value flags);
+
+CAMLprim value caml_allocation_profiling_marshal_trie (value v_channel)
+{
+  caml_extern_allow_out_of_heap = 1;
+  caml_output_value(v_channel, caml_alloc_profiling_trie_root, Val_long(0));
+  caml_extern_allow_out_of_heap = 0;
 
   return Val_unit;
 }
