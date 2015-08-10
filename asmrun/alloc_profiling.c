@@ -496,7 +496,53 @@ CAMLprim uintnat caml_alloc_profiling_generate_profinfo (uintnat pc,
   return profinfo << PROFINFO_SHIFT;
 }
 
-static uintnat* find_trie_node_from_libunwind (void)
+typedef struct {
+  uintnat gc_header;
+  void* pc;             /* always has bit 0 set.  Bit 1 set => CALL. */
+  enum {
+    void* callee_node;  /* for CALL */
+    uintnat profinfo;   /* for ALLOCATION */
+  } data;
+  struct c_node* next;  /* [Val_unit] for the end of the list */
+} c_node;
+
+typedef enum {
+  CALL,
+  ALLOCATION
+} c_node_type;
+
+static c_node_type classify_c_node(c_node* node)
+{
+  return (pc & 2) ? CALL : ALLOCATION;
+}
+
+static int pc_inside_c_node_matches(void* pc)
+{
+  return (node->pc & ~3) == (pc << 2);
+}
+
+static c_node* allocate_c_node(void)
+{
+  c_node* node;
+
+  node = (c_node*) malloc(sizeof(c_node));
+  if (!node) {
+    abort();
+  }
+
+  node->gc_header =
+    Make_header(sizeof(c_node) / sizeof(uintnat), 1, Caml_black);
+  node->next = NULL;
+
+  return node;
+}
+
+static uintnat* stored_pointer_to_c_node(c_node* node)
+{
+  return &((uintnat*) node)[1];
+}
+
+static uintnat* find_trie_node_from_libunwind(void)
 {
   unw_cursor_t cur;
   unw_context_t ctx;
@@ -529,22 +575,32 @@ static uintnat* find_trie_node_from_libunwind (void)
 
   node_hole = caml_alloc_profiling_trie_node_ptr;
   for (frame = frames.size - 1; frame >= 1; frame--) {
+    c_node* node;
+    int found;
     void* return_addr = frames.contents[frame];
 
-    if (*node_hole == Val_unit) {
-      *node_hole = caml_allocation_profiling_allocate_node (3,
-        Make_header(4, 1, Caml_black));
-      /* Layout of a C node:
-         node[-1]  OCaml GC header
-         node[0]   Program counter at call or allocation shifted left by 2
-                   Bit 0 is always set.
-                   Bit 1 being set means it's a call not an allocation.
-         node[1]   Pointer to callee, if it's a call, or else profinfo.
-         node[2]   Linked list pointer to another C node.
-      */
-      (*node_hole)[0] = return_addr;
-      node_hole = &((*node_hole)[1]);
+    found = 0;
+    node = NULL;
+    while (!found && *node_hole != Val_unit) {
+      node = c_node_of_stored_pointer(*node_hole);
+      if (classify_c_node(node) == CALL
+          && pc_inside_c_node_matches(return_addr)) {
+        found = 1;
+      }
+      node_hole = &node->next;
     }
+
+    if (!found) {
+      node = allocate_c_node(return_addr);
+      node->pc = (pc << 2) | 3;
+      *node_hole = stored_pointer_to_c_node(node);
+    }
+
+    assert(node != NULL && classify_c_node(node) == CALL);
+
+
+
+
     else {
       /* We always expect a C node, not an OCaml node. */
       int found = 0;
