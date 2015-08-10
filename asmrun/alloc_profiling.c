@@ -611,6 +611,7 @@ static void print_trie_node(value node)
       c_node* c_node = c_node_of_stored_pointer(node);
       assert (c_node != NULL);
       while (c_node != NULL) {
+        printf("(Debug: about to classify node %p)\n", (void*) c_node);
         switch (classify_c_node(c_node)) {
           case CALL:
             printf("Call point at %p: child node=%p\n",
@@ -628,8 +629,11 @@ static void print_trie_node(value node)
           default:
             abort();
         }
+        printf("(Debug: before 'about to classify node %p' with %p)\n",
+          (void*) (c_node_of_stored_pointer(c_node->next)),
+          (void*) c_node);
+        c_node = c_node_of_stored_pointer(c_node->next);
       }
-      c_node = c_node_of_stored_pointer(c_node->next);
     }
     printf("End of node %p\n", (void*) node);
   }
@@ -644,26 +648,42 @@ static void mark_trie_node_black(value node)
   }
   Hd_val(node) = Blackhd_hd(Hd_val(node));
 
-  for (field = 0; field < Wosize_val(node); field += 2) {
-    value entry;
+  if (Tag_val(node) == 0) {
+    for (field = 0; field < Wosize_val(node); field += 2) {
+      value entry;
 
-    entry = Field(node, field);
+      entry = Field(node, field);
 
-    if (entry == Val_unit) {
-      continue;
-    }
-
-    switch (entry & 3) {
-      case 3: {
-        value child = Field(node, field + 1);
-        if (child != Val_unit) {
-          mark_trie_node_black(child);
-        }
-        break;
+      if (entry == Val_unit) {
+        continue;
       }
 
-      default:
-        break;
+      switch (entry & 3) {
+        case 3: {
+          value child = Field(node, field + 1);
+          if (child != Val_unit) {
+            mark_trie_node_black(child);
+          }
+          break;
+        }
+
+        default:
+          break;
+      }
+    }
+  } else {
+    c_node* c_node = c_node_of_stored_pointer(node);
+    assert (c_node != NULL);
+    while (c_node != NULL) {
+      switch (classify_c_node(c_node)) {
+        case CALL:
+          mark_trie_node_black(c_node->data.callee_node);
+          break;
+
+        default:
+          break;
+      }
+      c_node = c_node_of_stored_pointer(c_node->next);
     }
   }
 }
@@ -672,7 +692,7 @@ CAMLprim value caml_allocation_profiling_debug(value v_unit)
 {
   value trie_node = caml_alloc_profiling_trie_root;
 
-  if (trie_node == (value) 0) {
+  if (trie_node == Val_unit) {
     printf("Allocation profiling trie is empty\n");
   }
   else {
@@ -738,23 +758,21 @@ static c_node* find_trie_node_from_libunwind(void)
 
   /* frames.contents[0] should be the current PC.
      frames.contents[frames.size - 1] should be the PC in the most
-     recent non-OCaml frame. */
-/*
+     recent non-OCaml frame.  This PC has already been written into
+     [*caml_alloc_profiling_trie_node_ptr], meaning that the loop below
+     starts at [frames.size - 2]. */
   node_hole = caml_alloc_profiling_trie_node_ptr;
-*/
-  node_hole = &caml_alloc_profiling_trie_root;
   printf("*** find_trie_node_from_libunwind: starting at %p\n",
     (void*) *node_hole);
+  caml_allocation_profiling_debug(Val_unit);
   /* Note that if [node_hole] is filled, then it must point to a C node,
      since it is not possible for there to be a call point in an OCaml
      function that sometimes calls C and sometimes calls OCaml. */
 
-  for (frame = frames.size - 1; frame >= 0; frame--) {
+  for (frame = frames.size - 2; frame >= 0; frame--) {
     c_node_type expected_type;
     void* pc = frames.contents[frame];
-/*
-    assert (pc != caml_last_return_address);
-*/
+    assert (pc != (void*) caml_last_return_address);
 
     expected_type = (frame > 0 ? CALL : ALLOCATION);
 
@@ -816,6 +834,8 @@ static c_node* find_trie_node_from_libunwind(void)
   }
 
   assert(classify_c_node(node) == ALLOCATION);
+  assert(c_node_of_stored_pointer(node->next) != node);
+
   return node;
 }
 
