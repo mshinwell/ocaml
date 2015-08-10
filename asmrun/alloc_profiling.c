@@ -582,9 +582,20 @@ static uintnat* find_trie_node_from_libunwind(void)
   /* Note that if [node_hole] is filled, then it must point to a C node,
      since it is not possible for there to be a call point in an OCaml
      function that sometimes calls C and sometimes calls OCaml. */
-  for (frame = frames.size - 1; frame >= 1; frame--) {
+
+  for (frame = frames.size - 1; frame >= 0; frame--) {
     c_node* node = NULL;
     void* pc = frames.contents[frame];
+
+    /* Invariant at this point: [node_hole] is an address in the frame at
+       index [frame + 1] (where we take the frame at index [frames.size]
+       to be the most recent OCaml frame).
+
+       The aim is to add a new child node, pointed at by [*node_hole],
+       corresponding to the frame at index [frame].  When [frame > 0] then
+       we are still in the call chain; when [frame == 0] we have reached the
+       allocation point.
+    */
 
     if (*node_hole == Val_unit) {
       node = allocate_c_node();
