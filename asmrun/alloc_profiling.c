@@ -471,8 +471,7 @@ CAMLprim uintnat* caml_allocation_profiling_allocate_node (
   return &node[1];
 }
 
-CAMLprim uintnat caml_alloc_profiling_generate_profinfo (uintnat pc,
-    uintnat* alloc_point_within_node)
+static uintnat generate_profinfo(void)
 {
   uintnat profinfo;
 
@@ -486,6 +485,14 @@ CAMLprim uintnat caml_alloc_profiling_generate_profinfo (uintnat pc,
     profinfo = profinfo_overflow;
   }
 
+  return profinfo;
+}
+
+CAMLprim uintnat caml_alloc_profiling_generate_profinfo (uintnat pc,
+    uintnat* alloc_point_within_node)
+{
+  uintnat profinfo = generate_profinfo();
+
   assert (alloc_point_within_node[0] == (uintnat) Val_unit);
   assert (alloc_point_within_node[1] == (uintnat) Val_unit);
 
@@ -498,12 +505,12 @@ CAMLprim uintnat caml_alloc_profiling_generate_profinfo (uintnat pc,
 
 typedef struct {
   uintnat gc_header;
-  void* pc;             /* always has bit 0 set.  Bit 1 set => CALL. */
-  enum {
-    void* callee_node;  /* for CALL */
+  uintnat pc;           /* always has bit 0 set.  Bit 1 set => CALL. */
+  union {
+    value callee_node;  /* for CALL */
     uintnat profinfo;   /* for ALLOCATION */
   } data;
-  uintnat* next;        /* [Val_unit] for the end of the list */
+  value next;           /* [Val_unit] for the end of the list */
 } c_node;
 
 typedef enum {
@@ -513,12 +520,12 @@ typedef enum {
 
 static c_node_type classify_c_node(c_node* node)
 {
-  return (pc & 2) ? CALL : ALLOCATION;
+  return (node->pc & 2) ? CALL : ALLOCATION;
 }
 
 static int pc_inside_c_node_matches(c_node* node, void* pc)
 {
-  return (node->pc & ~3) == (pc << 2);
+  return (node->pc & ~3) == (((uintnat) pc) << 2);
 }
 
 static c_node* allocate_c_node(void)
@@ -532,21 +539,21 @@ static c_node* allocate_c_node(void)
 
   node->gc_header =
     Make_header(sizeof(c_node) / sizeof(uintnat), 1, Caml_black);
-  node->next = NULL;
+  node->next = Val_unit;
 
   return node;
 }
 
-static uintnat* stored_pointer_to_c_node(c_node* node)
+static value stored_pointer_to_c_node(c_node* node)
 {
   assert(node != NULL);
-  return &((uintnat*) node)[1];
+  return (value) &((uintnat*) node)[1];
 }
 
-static c_node* c_node_of_stored_pointer(uintnat* node)
+static c_node* c_node_of_stored_pointer(value node_stored)
 {
-  c_node* node = (c_node*) &node[-1];
-  return (node == Val_unit) ? NULL : node;
+  return (node_stored == Val_unit) ? NULL
+    : (c_node*) (((uintnat*) node_stored) + 1);
 }
 
 static c_node* find_trie_node_from_libunwind(void)
@@ -557,7 +564,7 @@ static c_node* find_trie_node_from_libunwind(void)
   int stop;
   int frame;
   struct ext_table frames;
-  uintnat* node_hole;
+  value* node_hole;
   c_node* node = NULL;
 
   caml_ext_table_init(&frames, 42);
@@ -587,7 +594,7 @@ static c_node* find_trie_node_from_libunwind(void)
      function that sometimes calls C and sometimes calls OCaml. */
 
   for (frame = frames.size - 1; frame >= 0; frame--) {
-      c_node_type expected_type;
+    c_node_type expected_type;
     void* pc = frames.contents[frame];
 
     expected_type = (frame > 0 ? CALL : ALLOCATION);
@@ -617,7 +624,7 @@ static c_node* find_trie_node_from_libunwind(void)
 
       while (!found && node != NULL) {
         if (classify_c_node(node) == expected_type
-            && pc_inside_c_node_matches(pc)) {
+            && pc_inside_c_node_matches(node, pc)) {
           found = 1;
         }
         else {
@@ -632,15 +639,16 @@ static c_node* find_trie_node_from_libunwind(void)
     }
 
     assert(node != NULL);
-    node->pc = (pc << 2) | (frame > 0 ? 3 : 1);
+    node->pc = (((uintnat) pc) << 2) | (frame > 0 ? 3 : 1);
 
-    assert(classify_c_node(node) == expected_node_type);
+    assert(classify_c_node(node) == expected_type);
     assert(pc_inside_c_node_matches(node, pc));
     node_hole = &node->data.callee_node;
 
-    printf("find_trie_node, frame=%d, ra=%p\n", frame, return_addr);
+    printf("find_trie_node, frame=%d, ra=%p\n", frame, pc);
   }
 
+  assert(classify_c_node(node) == ALLOCATION);
   return node;
 }
 
@@ -655,8 +663,9 @@ uintnat caml_allocation_profiling_my_profinfo (void)
     profinfo = caml_allocation_profiling_override_profinfo;
   }
   else {
-    uintnat* node = find_trie_node_from_libunwind ();
-    profinfo = 0ull;
+    c_node* node = find_trie_node_from_libunwind ();
+    profinfo = generate_profinfo();
+    node->data.profinfo = profinfo;
   }
 
   return profinfo;
