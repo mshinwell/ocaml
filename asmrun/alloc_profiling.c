@@ -503,7 +503,7 @@ typedef struct {
     void* callee_node;  /* for CALL */
     uintnat profinfo;   /* for ALLOCATION */
   } data;
-  struct c_node* next;  /* [Val_unit] for the end of the list */
+  uintnat* next;        /* [Val_unit] for the end of the list */
 } c_node;
 
 typedef enum {
@@ -516,7 +516,7 @@ static c_node_type classify_c_node(c_node* node)
   return (pc & 2) ? CALL : ALLOCATION;
 }
 
-static int pc_inside_c_node_matches(void* pc)
+static int pc_inside_c_node_matches(c_node* node, void* pc)
 {
   return (node->pc & ~3) == (pc << 2);
 }
@@ -540,6 +540,11 @@ static c_node* allocate_c_node(void)
 static uintnat* stored_pointer_to_c_node(c_node* node)
 {
   return &((uintnat*) node)[1];
+}
+
+static c_node* c_node_of_stored_pointer(uintnat* node)
+{
+  return (c_node*) &node[-1];
 }
 
 static uintnat* find_trie_node_from_libunwind(void)
@@ -574,51 +579,47 @@ static uintnat* find_trie_node_from_libunwind(void)
      recent non-OCaml frame. */
 
   node_hole = caml_alloc_profiling_trie_node_ptr;
+  /* Note that if [node_hole] is filled, then it must point to a C node,
+     since it is not possible for there to be a call point in an OCaml
+     function that sometimes calls C and sometimes calls OCaml. */
   for (frame = frames.size - 1; frame >= 1; frame--) {
-    c_node* node;
-    int found;
-    void* return_addr = frames.contents[frame];
+    c_node* node = NULL;
+    void* pc = frames.contents[frame];
 
-    found = 0;
-    node = NULL;
-    while (!found && *node_hole != Val_unit) {
-      node = c_node_of_stored_pointer(*node_hole);
-      if (classify_c_node(node) == CALL
-          && pc_inside_c_node_matches(return_addr)) {
-        found = 1;
-      }
-      node_hole = &node->next;
-    }
-
-    if (!found) {
-      node = allocate_c_node(return_addr);
+    if (*node_hole == Val_unit) {
+      node = allocate_c_node();
       node->pc = (pc << 2) | 3;
       *node_hole = stored_pointer_to_c_node(node);
     }
-
-    assert(node != NULL && classify_c_node(node) == CALL);
-
-
-
-
     else {
-      /* We always expect a C node, not an OCaml node. */
+      c_node* prev;
       int found = 0;
-      if (Tag_val((value) *node_hole) != 1) {
-        fprintf("Node at %p has the wrong tag\n", (void*) node);
-        abort();
-      }
-      while (!found && *node_hole != (uintnat*) Val_unit) {
-
+      node = c_node_of_stored_pointer(*node_hole);
+      prev = NULL;
+      assert(node != Val_unit);
+      while (!found && node != Val_unit) {
+        if (classify_c_node(node) == CALL
+            && pc_inside_c_node_matches(pc)) {
+          found = 1;
+        }
+        else {
+          node = c_node_of_stored_pointer(node->next);
+        }
       }
       if (!found) {
-        *node_hole = caml_allocation_profiling_allocate_node (3,
-          Make_header(3, 1, Caml_black));
-        (*node_hole)[0] = return_addr;
-        node_hole = &((*node_hole)[1]);
+        /* [prev] cannot be [NULL] because there is at least one [c_node] in
+           the linked list and at least one [pc] did not match. */
+        assert(prev != NULL);
+        node = allocate_c_node();
+        node->pc = (pc << 2) | 3;
+        prev->next = stored_pointer_to_c_node(node);
       }
     }
 
+    assert(node != NULL);
+    assert(classify_c_node(node) == CALL);
+    assert(pc_inside_c_node_matches(node, pc));
+    node_hole = &node->data.callee_node;
 
     printf("find_trie_node, frame=%d, ra=%p\n", frame, return_addr);
   }
