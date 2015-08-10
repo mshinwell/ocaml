@@ -539,6 +539,7 @@ static c_node* allocate_c_node(void)
 
   node->gc_header =
     Make_header(sizeof(c_node) / sizeof(uintnat), 1, Caml_black);
+  node->data.callee_node = Val_unit;
   node->next = Val_unit;
 
   return node;
@@ -553,7 +554,7 @@ static value stored_pointer_to_c_node(c_node* node)
 static c_node* c_node_of_stored_pointer(value node_stored)
 {
   return (node_stored == Val_unit) ? NULL
-    : (c_node*) (((uintnat*) node_stored) + 1);
+    : (c_node*) (((uintnat*) node_stored) - 1);
 }
 
 static c_node* find_trie_node_from_libunwind(void)
@@ -589,6 +590,8 @@ static c_node* find_trie_node_from_libunwind(void)
      recent non-OCaml frame. */
 
   node_hole = caml_alloc_profiling_trie_node_ptr;
+  printf("*** find_trie_node_from_libunwind: starting at %p\n",
+    *node_hole);
   /* Note that if [node_hole] is filled, then it must point to a C node,
      since it is not possible for there to be a call point in an OCaml
      function that sometimes calls C and sometimes calls OCaml. */
@@ -596,6 +599,7 @@ static c_node* find_trie_node_from_libunwind(void)
   for (frame = frames.size - 1; frame >= 0; frame--) {
     c_node_type expected_type;
     void* pc = frames.contents[frame];
+    assert (pc != caml_last_return_address);
 
     expected_type = (frame > 0 ? CALL : ALLOCATION);
 
@@ -611,6 +615,8 @@ static c_node* find_trie_node_from_libunwind(void)
 
     if (*node_hole == Val_unit) {
       node = allocate_c_node();
+      printf("making new node %p\n", node);
+      node->pc = (((uintnat) pc) << 2) | (frame > 0 ? 3 : 1);
       *node_hole = stored_pointer_to_c_node(node);
     }
     else {
@@ -618,6 +624,7 @@ static c_node* find_trie_node_from_libunwind(void)
       int found = 0;
 
       node = c_node_of_stored_pointer(*node_hole);
+      printf("using existing node %p\n", node);
       assert(node != NULL);
 
       prev = NULL;
@@ -628,18 +635,19 @@ static c_node* find_trie_node_from_libunwind(void)
           found = 1;
         }
         else {
+          prev = node;
           node = c_node_of_stored_pointer(node->next);
         }
       }
-      if (!found) {
+      if (!found && node == NULL) {
         assert(prev != NULL);
         node = allocate_c_node();
+        node->pc = (((uintnat) pc) << 2) | (frame > 0 ? 3 : 1);
         prev->next = stored_pointer_to_c_node(node);
       }
     }
 
     assert(node != NULL);
-    node->pc = (((uintnat) pc) << 2) | (frame > 0 ? 3 : 1);
 
     assert(classify_c_node(node) == expected_type);
     assert(pc_inside_c_node_matches(node, pc));
