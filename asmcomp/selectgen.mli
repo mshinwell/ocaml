@@ -83,7 +83,8 @@ class virtual selector_generic : object
      above; overloading this is useful if Ispecific instructions need
      marking *)
 
-  (* The following method is the entry point and should not be overridden *)
+  (* The following method is the entry point and should not be overridden
+     (except by [Alloc_profiling]). *)
   method emit_fundecl : Cmm.fundecl -> Mach.fundecl
 
   (* The following methods should not be overridden.  They cannot be

@@ -198,11 +198,43 @@ class instruction_selection = object (self)
       self#instrument_direct_call ~callee:(Direct lbl) ~is_tail:false
     | _ -> ()
 
-  method! emit_fundecl f =
+  method private emit_prologue f ~env_after_main_prologue
+        ~last_insn_of_main_prologue =
     if !Clflags.allocation_profiling then begin
-      reset ~alloc_profiling_node_ident:f.Cmm.fun_alloc_profiling_node
-    in
-    super#emit_fundecl f
+      let needs_prologue =
+        true
+      in
+      if needs_prologue then begin
+        let prologue_cmm =
+          Alloc_profiling_cmm.code_for_function_prologue
+            ~num_instrumented_alloc_points:!num_instrumented_alloc_points
+            ~num_direct_call_points:!next_direct_call_point_index
+        in
+        (* Splice the allocation prologue after the main prologue but before the
+           function body.  Remember that [instr_seq] points at the last
+           instruction (the list is in reverse order). *)
+        let last_insn_of_body = instr_seq in
+        let first_insn_of_body = ref dummy_instr in
+        while not (instr_seq == last_insn_of_main_prologue) do
+          first_insn_of_body := instr_seq;
+          instr_seq <- instr_seq.next
+        done;
+        instr_seq <- last_insn_of_main_prologue;
+        let node_temp_reg =
+          match self#emit_expr env_after_main_prologue prologue_cmm with
+          | None ->
+            Misc.fatal_error "Alloc_profiling prologue instruction \
+                selection did not yield a destination register"
+          | Some node_temp_reg -> node_temp_reg
+        in
+        let node_reg = Tbl.find node env_after_main_prologue in
+        self#insert_moves node_temp_reg node_reg;
+        if not (!first_insn_of_body == dummy_instr) then begin
+          (!first_insn_of_body).next <- instr_seq;
+          instr_seq <- last_insn_of_body
+        end
+      end
+    end
 
   method! insert_debug desc dbg arg res =
     if !Clflags.allocation_profiling then maybe_instrument desc ~arg ~res;
@@ -211,4 +243,23 @@ class instruction_selection = object (self)
   method! insert desc arg res =
     if !Clflags.allocation_profiling then maybe_instrument desc ~arg ~res;
     super#insert desc dbg arg res
+
+  method! initial_env () =
+    if !Clflags.allocation_profiling then
+      Tbl.add !alloc_profiling_node_ident (self#regs_for typ_int) Tbl.empty
+    else
+      Tbl.empty
+
+  method! emit_fundecl f =
+    if !Clflags.allocation_profiling then begin
+      reset ~alloc_profiling_node_ident:f.Cmm.fun_alloc_profiling_node
+    in
+    super#emit_fundecl f
+
+  method! after_body f ~env_after_prologue ~last_insn_of_prologue =
+    if !Clflags.allocation_profiling then begin
+      self#emit_prologue f ~env_after_main_prologue:env_after_prologue
+        ~last_insn_of_main_prologue:last_insn_of_prologue
+    else
+      ()
 end

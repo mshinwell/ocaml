@@ -22,18 +22,4 @@
 
 (** Insertion of instrumentation code for allocation profiling. *)
 
-val code_for_function_prologue
-   : node:Ident.t
-  -> max_index_within_node:int
-  -> Cmm.expression
-
-type callee =
-  | Direct of string
-  | Indirect of Cmm.expression
-
-val code_for_call
-   : node:Cmm.expression
-  -> index_within_node:int
-  -> callee:callee
-  -> is_tail:bool
-  -> Cmm.expression
+class instruction_selection : Selectgen.selector_generic

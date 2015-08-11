@@ -456,45 +456,6 @@ method insert_op op rs rd =
 
 (* Instrumentation for allocation profiling. *)
 
-method private instrument_direct_call_for_allocation_profiling ~lbl =
-  if !Clflags.allocation_profiling then begin
-    let call_point_index =
-      match Hashtbl.find direct_calls lbl with
-      | index -> index
-      | exception Not_found ->
-        let index = !next_call_point_index in
-        incr next_call_point_index;
-        Hashtbl.add direct_calls lbl index;
-        index
-    in
-    let instrumentation =
-      Alloc_profiling_cmm.code_for_call
-        ~node:!alloc_profiling_node
-        ~callee:(Alloc_profiling_cmm.Direct lbl)
-        ~call_point_index
-    in
-    ignore (self#emit_expr env instrumentation)
-  end
-
-method private instrument_indirect_call_for_allocation_profiling ~callee =
-  if !Clflags.allocation_profiling then begin
-    let call_point_index =
-      let index = !next_call_point_index in
-      incr next_call_point_index;
-      index
-    in
-    let callee_ident = Ident.create "callee" in
-    let callee_expr = Cmm.Cvar callee_ident in
-    let instrumentation =
-      Alloc_profiling_cmm.code_for_call
-        ~node:!alloc_profiling_node
-        ~callee:(Alloc_profiling_cmm.Indirect callee_expr)
-        ~call_point_index
-    in
-    let env = Tbl.add callee_ident callee env in
-    ignore (self#emit_expr env instrumentation)
-  end
-
 (* Add the instructions for the given expression
    at the end of the self sequence *)
 
@@ -922,52 +883,11 @@ method private emit_tail_sequence env exp =
   s#emit_tail env exp;
   s#extract
 
-(* Insertion of allocation profiling prologue code *)
-
-method private emit_allocation_profiling_prologue f ~env_after_main_prologue
-      ~last_insn_of_main_prologue ~node =
-  if !Clflags.allocation_profiling then begin
-    let needs_prologue =
-      true
-(*
-      num_instrumented_alloc_points > 0
-        || num_direct_calls_that_are_not_self_tail_calls > 0
-        || num_indirect_calls > 0
-*)
-    in
-    if needs_prologue then begin
-      let prologue_cmm =
-        Alloc_profiling_cmm.code_for_function_prologue ~node
-          ~num_instrumented_alloc_points:!num_instrumented_alloc_points
-          ~num_direct_call_points:!next_direct_call_point_index
-      in
-      (* Splice the allocation prologue after the main prologue but before the
-         function body.  Remember that [instr_seq] points at the last
-         instruction (the list is in reverse order). *)
-      let last_insn_of_body = instr_seq in
-      let first_insn_of_body = ref dummy_instr in
-      while not (instr_seq == last_insn_of_main_prologue) do
-        first_insn_of_body := instr_seq;
-        instr_seq <- instr_seq.next
-      done;
-      instr_seq <- last_insn_of_main_prologue;
-      let node_temp_reg =
-        match self#emit_expr env_after_main_prologue prologue_cmm with
-        | None ->
-          Misc.fatal_error "Alloc_profiling_cmm prologue instruction \
-              selection did not yield a destination register"
-        | Some node_temp_reg -> node_temp_reg
-      in
-      let node_reg = Tbl.find node env_after_main_prologue in
-      self#insert_moves node_temp_reg node_reg;
-      if not (!first_insn_of_body == dummy_instr) then begin
-        (!first_insn_of_body).next <- instr_seq;
-        instr_seq <- last_insn_of_body
-      end
-    end
-  end
-
 (* Sequentialization of a function definition *)
+
+method initial_env () = Tbl.empty
+
+method after_body _f ~env_after_prologue:_ ~last_insn_of_prologue:_ = ()
 
 method emit_fundecl f =
   Proc.contains_calls := false;
@@ -981,23 +901,12 @@ method emit_fundecl f =
   let env =
     List.fold_right2
       (fun (id, ty) r env -> Tbl.add id r env)
-      f.Cmm.fun_args rargs Tbl.empty in
-  let env =
-    Tbl.add f.Cmm.fun_alloc_profiling_node (self#regs_for typ_int) env
-  in
-  next_direct_call_point_index := 0;
-  Hashtbl.clear direct_non_tail_calls;
-  next_direct_call_point_index := 0;
-  Hashtbl.clear direct_tail_calls;
-  num_instrumented_alloc_points := f.Cmm.fun_num_instrumented_alloc_points;
-  alloc_profiling_node := Cmm.Cvar f.Cmm.fun_alloc_profiling_node;
-  alloc_profiling_node_ident := f.Cmm.fun_alloc_profiling_node;
+      f.Cmm.fun_args rargs (self#initial_env ()) in
   self#insert_moves loc_arg rarg;
-  let env_after_main_prologue = env in
-  let last_insn_of_main_prologue = instr_seq in
+  let env_after_prologue = env in
+  let last_insn_of_prologue = instr_seq in
   self#emit_tail env f.Cmm.fun_body;
-  self#emit_allocation_profiling_prologue f ~env_after_main_prologue
-    ~last_insn_of_main_prologue ~node:f.Cmm.fun_alloc_profiling_node;
+  self#after_body f ~env_after_main_prologue ~last_insn_of_prologue;
   let body = self#extract in
   instr_iter (fun instr -> self#mark_instr instr.Mach.desc) body;
   { fun_name = f.Cmm.fun_name;
