@@ -23,23 +23,17 @@
 (** Insertion of instrumentation code for allocation profiling. *)
 
 val code_for_function_prologue
-   : num_instrumented_alloc_points:int
-  -> num_direct_call_points:int
-  -> node:Ident.t
+   : node:Ident.t
+  -> max_index_within_node:int
   -> Cmm.expression
 
-val code_for_direct_non_tail_call
+type callee =
+  | Direct of string
+  | Indirect of Cmm.expression
+
+val code_for_call
    : node:Cmm.expression
-  -> num_instrumented_alloc_points:int
-  -> callee:string
-  -> direct_call_point_index:int
+  -> index_within_node:int
+  -> callee:callee
+  -> is_tail:bool
   -> Cmm.expression
-
-val code_for_direct_self_tail_call
-   : node:Cmm.expression
-  -> num_instrumented_alloc_points:int
-  -> callee:string
-  -> direct_call_point_index:int
-  -> Cmm.expression
-
-val instrument_fundecl : Cmm.fundecl -> Cmm.fundecl

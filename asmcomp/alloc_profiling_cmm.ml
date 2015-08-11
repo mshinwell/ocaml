@@ -20,28 +20,29 @@
 (*                                                                     *)
 (***********************************************************************)
 
-let size_in_words_of_trie_node ~num_instrumented_alloc_points
-      ~num_direct_call_points =
-  2*num_instrumented_alloc_points + 2*num_direct_call_points
+let index_within_node = ref 0
+let alloc_profiling_node = ref (Cvar (Ident.create "dummy"))
+let alloc_profiling_node_ident = ref (Ident.create "dummy")
+let direct_calls = Hashtbl.create 42
 
-let code_to_allocate_trie_node ~num_instrumented_alloc_points
-      ~num_direct_call_points =
-  let size =
-    size_in_words_of_trie_node ~num_instrumented_alloc_points
-      ~num_direct_call_points
-  in
+let reset ~alloc_profiling_node_ident:ident =
+  index_within_node := 0;
+  alloc_profiling_node := Cvar ident;
+  alloc_profiling_node_ident = ref ident;
+  Hashtbl.clear direct_calls
+
+let code_to_allocate_trie_node ~max_index_within_node =
   let header =
     Cmmgen.black_block_header Obj.first_non_constant_constructor_tag size
   in
   let open Cmm in
   Cop (Cextcall ("caml_allocation_profiling_allocate_node", [| Int |],
       false, Debuginfo.none),
-    [Cconst_int (1 + size);  (* "1 + " for a header *)
+    [Cconst_int (2 + max_index_within_node);
      Cconst_natint header;
     ])
 
-let code_for_function_prologue ~num_instrumented_alloc_points
-      ~num_direct_call_points ~node =
+let code_for_function_prologue ~node ~max_index_within_node =
   let node_hole = Ident.create "node_hole" in
   let new_node = Ident.create "new_node" in
   let open Cmm in
@@ -50,29 +51,18 @@ let code_for_function_prologue ~num_instrumented_alloc_points
       Cifthenelse (Cop (Ccmpi Cne, [Cvar node; Cconst_int 1]),
         Cvar node,
         Clet (new_node,
-          code_to_allocate_trie_node ~num_instrumented_alloc_points
-            ~num_direct_call_points,
+          code_to_allocate_trie_node ~max_index_within_node,
           Csequence (
             Cop (Cstore Word, [Cvar node_hole; Cvar new_node]),
             Cvar new_node)))))
 
-let use_override_profinfo =
-  Cmm.Cconst_symbol "caml_allocation_profiling_use_override_profinfo"
-
-let override_profinfo =
-  Cmm.Cconst_symbol "caml_allocation_profiling_override_profinfo"
-
-let profinfo_counter =
-  Cmm.Cconst_symbol "caml_allocation_profiling_profinfo"
-
-let code_for_allocation_point ~value's_header ~alloc_point_number ~node =
+let code_for_allocation_point ~value's_header ~node =
   let existing_profinfo = Ident.create "existing_profinfo" in
   let profinfo = Ident.create "profinfo" in
   let pc = Ident.create "pc" in
   let address_of_profinfo = Ident.create "address_of_profinfo" in
-  let offset_into_node =
-    ((2 * Arch.size_addr) * alloc_point_number)
-  in
+  let offset_into_node = Arch.size_addr * !index_within_node in
+  incr index_within_node;
   let open Cmm in
   let generate_new_profinfo =
     (* This will generate a static branch to a function that should usually
@@ -106,116 +96,119 @@ let code_for_allocation_point ~value's_header ~alloc_point_number ~node =
         (* [profinfo] is already shifted by [PROFINFO_SHIFT]. *)
         Cop (Cor, [Cvar profinfo; Cconst_natint value's_header]))))
 
-let code_for_direct_non_tail_call ~node ~num_instrumented_alloc_points ~callee
-      ~direct_call_point_index =
-  let offset_in_trie_node_in_words =
-    num_instrumented_alloc_points*2 + direct_call_point_index*2
-  in
-  let open Cmm in
-  let place_within_node = Ident.create "place_within_node" in
-  let callee_addr =
-    Cop (Cor, [Cop (Clsl, [Cconst_symbol callee; Cconst_int 2]); Cconst_int 3])
-  in
-  Clet (place_within_node,
-    begin if offset_in_trie_node_in_words = 0 then
-      node
-    else
-      Cop (Caddi, [
-        node;
-        Cconst_int (offset_in_trie_node_in_words * Arch.size_addr);
-      ])
-    end,
-    Csequence (
-      Cop (Cstore Word, [Cvar place_within_node; callee_addr]),
-      Cop (Calloc_profiling_load_node_hole_ptr, [
-        Cop (Caddi, [Cvar place_within_node; Cconst_int Arch.size_addr])
-      ])))
+type callee =
+  | Direct of string
+  | Indirect of Cmm.expression
 
-let code_for_direct_self_tail_call ~node ~num_instrumented_alloc_points
-      ~callee ~direct_call_point_index =
-  (* For tail calls, we write a pointer back to the current node into the
-     relevant entry of that same node, and then proceed as usual.  The
-     prologue of the function being tail called will then re-use the same
-     node. *)
-  let offset_in_trie_node_in_words =
-    num_instrumented_alloc_points*2 + direct_call_point_index*2
-  in
+let code_for_call ~node ~index_within_node ~callee ~is_tail =
   let open Cmm in
   let place_within_node = Ident.create "place_within_node" in
-  let node_hole = Ident.create "node_hole" in
-  let callee_addr =
-    Cop (Cor, [Cop (Clsl, [Cconst_symbol callee; Cconst_int 2]); Cconst_int 3])
-  in
   Clet (place_within_node,
-    begin if offset_in_trie_node_in_words = 0 then
+    begin if index_within_node = 0 then
       node
     else
       Cop (Caddi, [
         node;
-        Cconst_int (offset_in_trie_node_in_words * Arch.size_addr);
+        Cconst_int (index_within_node * Arch.size_addr);
       ])
     end,
-    Csequence (
-      Cop (Cstore Word, [Cvar place_within_node; callee_addr]),
-      Clet (node_hole,
-        Cop (Caddi, [Cvar place_within_node; Cconst_int Arch.size_addr]),
+    match callee with
+    | Direct callee ->
+      let callee_addr =
+        Cop (Cor, [Cop (Clsl, [Cconst_symbol callee; Cconst_int 2]);
+          Cconst_int 3])
+      in
+      if not is_tail then
         Csequence (
-          (* This next line is the important one for self tail calls. *)
-          Cop (Cstore Word, [Cvar node_hole; node]),
-          Cop (Calloc_profiling_load_node_hole_ptr, [Cvar node_hole])))))
+          Cop (Cstore Word, [Cvar place_within_node; callee_addr]),
+          Cop (Calloc_profiling_load_node_hole_ptr, [
+            Cop (Caddi, [Cvar place_within_node; Cconst_int Arch.size_addr])
+          ]))
+      else
+        Csequence (
+          Cop (Cstore Word, [Cvar place_within_node; callee_addr]),
+          Clet (node_hole,
+            Cop (Caddi, [Cvar place_within_node; Cconst_int Arch.size_addr]),
+            Csequence (
+              (* For tail calls, we write a pointer back to the current node
+                 into the relevant entry of that same node, and then proceed as
+                 usual.  The prologue of the function being tail called will
+                 then re-use the same node. *)
+              Cop (Cstore Word, [Cvar node_hole; node]),
+              Cop (Calloc_profiling_load_node_hole_ptr, [Cvar node_hole]))))
+    | Indirect callee ->
+      let node_hole_ptr = Ident.create "node_hole_ptr" in
+      Clet (node_hole_ptr,
+        Cop (Cextcall ("caml_allocation_profiling_indirect_node_hole_ptr",
+          [callee; Cvar place_within_node]))))
 
-let instrument_function_body expr ~node ~fun_name =
-  (* This only instruments allocation points; the remaining instrumentation
-     (prologues and call points) is generated by the code above, but called
-     from [Selectgen]. *)
-  let next_alloc_point_number = ref 0 in
-  let open Cmm in
-  let rec instrument_headers expr =
-    match expr with
-    | Cblockheader value's_header ->
-      let alloc_point_number = !next_alloc_point_number in
-      incr next_alloc_point_number;
-      code_for_allocation_point ~value's_header ~alloc_point_number ~node
-    | (Cconst_int _ | Cconst_natint _ | Cconst_float _ | Cconst_symbol _
-      | Cconst_pointer _ | Cconst_natpointer _ | Cvar _) -> expr
-    | Clet (id, e1, e2) ->
-      Clet (id, instrument_headers e1, instrument_headers e2)
-    | Cassign (id, e) ->
-      Cassign (id, instrument_headers e)
-    | Ctuple es ->
-      Ctuple (List.map instrument_headers es)
-    | Cop (op, es) ->
-      Cop (op, List.map instrument_headers es)
-    | Csequence (e1, e2) ->
-      Csequence (instrument_headers e1, instrument_headers e2)
-    | Cifthenelse (e1, e2, e3) ->
-      Cifthenelse (instrument_headers e1, instrument_headers e2,
-        instrument_headers e3)
-    | Cswitch (e, is, es) ->
-      Cswitch (instrument_headers e, is, Array.map instrument_headers es)
-    | Cloop e ->
-      Cloop (instrument_headers e)
-    | Ccatch (n, ids, e1, e2) ->
-      Ccatch (n, ids, instrument_headers e1, instrument_headers e2)
-    | Cexit (n, es) ->
-      Cexit (n, List.map instrument_headers es)
-    | Ctrywith (e1, id, e2) ->
-      Ctrywith (instrument_headers e1, id, instrument_headers e2)
-  in
-  let expr = instrument_headers expr in
-  !next_alloc_point_number, expr
+class instruction_selection = object (self)
+  inherit Selectgen.selector_generic as super
 
-let instrument_fundecl decl =
-  if not !Clflags.allocation_profiling then
-    decl
-  else
-    let node = Ident.create "alloc_profiling_node" in
-    let open Cmm in
-    let num_instrumented_alloc_points, body =
-      instrument_function_body decl.fun_body ~node ~fun_name:decl.fun_name
+  method private instrument_direct_call ~lbl ~is_tail =
+    let call_point_index =
+      match Hashtbl.find direct_calls lbl with
+      | index -> index
+      | exception Not_found ->
+        let index = !next_call_point_index in
+        incr next_call_point_index;
+        Hashtbl.add direct_calls lbl index;
+        index
     in
-    { decl with
-      fun_body = body;
-      fun_alloc_profiling_node = node;
-      fun_num_instrumented_alloc_points = num_instrumented_alloc_points;
-    }
+    let instrumentation =
+      Alloc_profiling_cmm.code_for_call
+        ~node:!alloc_profiling_node
+        ~callee:(Alloc_profiling_cmm.Direct lbl)
+        ~is_tail
+        ~call_point_index:!index_within_node
+    in
+    incr index_within_node;
+    ignore (self#emit_expr env instrumentation)
+
+  method private instrument_indirect_call ~callee ~is_tail =
+    let call_point_index =
+      let index = !next_call_point_index in
+      incr next_call_point_index;
+      index
+    in
+    let callee_ident = Ident.create "callee" in
+    let callee_expr = Cmm.Cvar callee_ident in
+    let instrumentation =
+      Alloc_profiling_cmm.code_for_call
+        ~node:!alloc_profiling_node
+        ~callee:(Alloc_profiling_cmm.Indirect callee_expr)
+        ~is_tail
+        ~call_point_index:!index_within_node
+    in
+    incr index_within_node;
+    let env = Tbl.add callee_ident callee env in
+    ignore (self#emit_expr env instrumentation)
+
+  method private maybe_instrument desc ~arg ~res =
+    match desc with
+    | Iop (Icall_imm lbl) ->
+      self#instrument_direct_call ~callee:(Direct lbl) ~is_tail:false
+    | Iop Icall_self#ind ->
+      self#instrument_indirect_call ~callee:(Indirect arg.(0)) ~is_tail:false
+    | Iop (Itaself#ilcall_imm lbl) ->
+      self#instrument_direct_call ~callee:(Direct lbl) ~is_tail:true
+    | Iop Itaself#ilcall_ind ->
+      self#instrument_indirect_call ~callee:(Indirect arg.(0)) ~is_tail:true
+    | Iop (Iextcall lbl) ->
+      self#instrument_direct_call ~callee:(Direct lbl) ~is_tail:false
+    | _ -> ()
+
+  method! emit_fundecl f =
+    if !Clflags.allocation_profiling then begin
+      reset ~alloc_profiling_node_ident:f.Cmm.fun_alloc_profiling_node
+    in
+    super#emit_fundecl f
+
+  method! insert_debug desc dbg arg res =
+    if !Clflags.allocation_profiling then maybe_instrument desc ~arg ~res;
+    super#insert_debug desc dbg arg res
+
+  method! insert desc arg res =
+    if !Clflags.allocation_profiling then maybe_instrument desc ~arg ~res;
+    super#insert desc dbg arg res
+end

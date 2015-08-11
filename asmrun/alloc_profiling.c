@@ -462,19 +462,22 @@ CAMLprim uintnat caml_alloc_profiling_generate_profinfo (uintnat pc,
 /* Layout of static nodes:
 
    OCaml GC header with tag zero
-   Two words for each allocation point:
-     PC value, shifted left by 2, with bottom bit then set
-     Profinfo value
-   Two words for each call point:
-     PC value, shifted left by 2, with bottom 2 bits then set
-     Pointer to callee's node, which will be:
-     - if direct OCaml non-tail, a static node;
-     - if direct OCaml self tail, a pointer to the current (static) node;
-     - if direct OCaml non-self tail, ...;
-     - if indirect OCaml non-tail, a dynamic node;
-     - if indirect OCaml tail, ...;
-     - if direct OCaml -> C, a dynamic node.
-     If the pointer is currently absent, the hole contains [Val_unit].
+   A sequence of:
+   - An allocation point (two words):
+     1. PC value, shifted left by 2, with bottom bit then set.  Bit 1 being
+        clear enables allocation points to be distinguished from call points.
+     2. Profinfo value
+   - A direct OCaml -> OCaml call point (two words):
+     1. PC value, shifted left by 2, with bits 0 and 1 then set
+     2. Pointer to callee's node, which will always be a static node.
+   - An indirect OCaml -> OCaml call point (one word):
+     1. Pointer to dynamic node.  Note that this dynamic node is really
+        part of the static node that points to it.  This pointer not having
+        its bottom bit set enables it to be distinguished from the other
+        cases.  The dynamic node will only contain CALL entries.
+   - A direct OCaml -> C call point (two words):
+     1. PC value, shifted left by 2, with bits 0 and 1 then set
+     2. Pointer to callee's node, which will always be a dynamic node.
 
    Layout of dynamic nodes, which consist of >= 1 part(s) in a linked list:
 
@@ -713,6 +716,50 @@ static c_node* allocate_c_node(void)
   return node;
 }
 
+CAMLprim value caml_allocation_profiling_indirect_node_hole_ptr
+      (void* callee, value* dynamic_node_hole_ptr)
+{
+  int found = 0;
+
+  printf("indirect node hole ptr for callee %p starting at %p contains %p\n",
+    callee, (void*) dynamic_node_hole_ptr, *(void**) dynamic_node_hole_ptr);
+  while (!found && *dynamic_node_hole_ptr != Val_unit) {
+    c_node* c_node = c_node_of_stored_pointer(*dynamic_node_hole_ptr);
+    assert(c_node != NULL);
+    switch (classify_c_node(c_node)) {
+      case CALL:
+        if (pc_inside_c_node_matches(c_node, callee)) {
+          found = 1;
+        }
+        else {
+          dynamic_node_hole_pointer = &c_node->next;
+        }
+        break;
+
+      case ALLOCATION:
+        fprintf(stderr, "Node at %p wrongly marked as ALLOCATION\n");
+        abort();
+
+      default:
+        assert(0);
+    }
+  }
+
+  if (!found) {
+    c_node* node;
+    assert(*dynamic_node_hole_pointer == Val_unit);
+    node = allocate_c_node();
+    node->pc = (((uintnat) pc) << 2) | 3;  /* always marked as CALL */
+    *dynamic_node_hole_pointer = stored_pointer_of_c_node(node);
+  }
+
+  assert(*dynamic_node_hole_pointer != Val_unit);
+  printf("indirect node hole ptr for callee %p starting at %p is %p\n",
+    callee, (void*) dynamic_node_hole_ptr,
+    (void*) &((*dynamic_node_hole_pointer)->data.callee_node));
+  return &((*dynamic_node_hole_pointer)->data.callee_node);
+}
+
 static c_node* find_trie_node_from_libunwind(void)
 {
   unw_cursor_t cur;
@@ -801,7 +848,7 @@ static c_node* find_trie_node_from_libunwind(void)
           node = c_node_of_stored_pointer(node->next);
         }
       }
-      if (!found && node == NULL) {
+      if (!found) {
         assert(prev != NULL);
         node = allocate_c_node();
         node->pc = (((uintnat) pc) << 2) | (frame > 0 ? 3 : 1);

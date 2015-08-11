@@ -169,13 +169,6 @@ let catch_regs = ref []
 (* Name of function being compiled *)
 let current_function_name = ref ""
 
-let alloc_profiling_node = ref (Cvar (Ident.create "dummy"))
-let alloc_profiling_node_ident = ref (Ident.create "dummy")
-let num_instrumented_alloc_points = ref 0
-let next_direct_call_point_index = ref 0
-let direct_non_tail_calls = Hashtbl.create 42
-let direct_tail_calls = Hashtbl.create 42
-
 (* The default instruction selection class *)
 
 class virtual selector_generic = object (self)
@@ -461,6 +454,47 @@ method insert_op_debug op dbg rs rd =
 method insert_op op rs rd =
   self#insert_op_debug op Debuginfo.none rs rd
 
+(* Instrumentation for allocation profiling. *)
+
+method private instrument_direct_call_for_allocation_profiling ~lbl =
+  if !Clflags.allocation_profiling then begin
+    let call_point_index =
+      match Hashtbl.find direct_calls lbl with
+      | index -> index
+      | exception Not_found ->
+        let index = !next_call_point_index in
+        incr next_call_point_index;
+        Hashtbl.add direct_calls lbl index;
+        index
+    in
+    let instrumentation =
+      Alloc_profiling_cmm.code_for_call
+        ~node:!alloc_profiling_node
+        ~callee:(Alloc_profiling_cmm.Direct lbl)
+        ~call_point_index
+    in
+    ignore (self#emit_expr env instrumentation)
+  end
+
+method private instrument_indirect_call_for_allocation_profiling ~callee =
+  if !Clflags.allocation_profiling then begin
+    let call_point_index =
+      let index = !next_call_point_index in
+      incr next_call_point_index;
+      index
+    in
+    let callee_ident = Ident.create "callee" in
+    let callee_expr = Cmm.Cvar callee_ident in
+    let instrumentation =
+      Alloc_profiling_cmm.code_for_call
+        ~node:!alloc_profiling_node
+        ~callee:(Alloc_profiling_cmm.Indirect callee_expr)
+        ~call_point_index
+    in
+    let env = Tbl.add callee_ident callee env in
+    ignore (self#emit_expr env instrumentation)
+  end
+
 (* Add the instructions for the given expression
    at the end of the self sequence *)
 
@@ -534,28 +568,6 @@ method emit_expr env exp =
           let ty = oper_result_type op in
           let (new_op, new_args) = self#select_operation op simple_args in
           let dbg = debuginfo_op op in
-          let instrument_direct_call_for_allocation_profiling ~lbl =
-            if !Clflags.allocation_profiling then begin
-              let direct_call_point_index =
-                match Hashtbl.find direct_non_tail_calls lbl with
-                | index -> index
-                | exception Not_found ->
-                  let index = !next_direct_call_point_index in
-                  incr next_direct_call_point_index;
-                  Hashtbl.add direct_non_tail_calls lbl index;
-                  index
-              in
-              let instrumentation =
-                Alloc_profiling_cmm.code_for_direct_non_tail_call
-                  ~node:!alloc_profiling_node
-                  ~num_instrumented_alloc_points:
-                    !num_instrumented_alloc_points
-                  ~callee:lbl
-                  ~direct_call_point_index
-              in
-              ignore (self#emit_expr env instrumentation)
-            end
-          in
           match new_op with
             Icall_ind ->
               let r1 = self#emit_tuple env new_args in
@@ -564,6 +576,8 @@ method emit_expr env exp =
               let (loc_arg, stack_ofs) = Proc.loc_arguments rarg in
               let loc_res = Proc.loc_results rd in
               self#insert_move_args rarg loc_arg stack_ofs;
+              self#instrument_indirect_call_for_allocation_profiling
+                ~callee:r1.(0);
               self#insert_debug (Iop Icall_ind) dbg
                           (Array.append [|r1.(0)|] loc_arg) loc_res;
               self#insert_move_results loc_res rd stack_ofs;
@@ -574,7 +588,7 @@ method emit_expr env exp =
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
               let loc_res = Proc.loc_results rd in
               self#insert_move_args r1 loc_arg stack_ofs;
-              instrument_direct_call_for_allocation_profiling ~lbl;
+              self#instrument_direct_call_for_allocation_profiling ~lbl;
               self#insert_debug (Iop(Icall_imm lbl)) dbg loc_arg loc_res;
               self#insert_move_results loc_res rd stack_ofs;
               Some rd
@@ -582,7 +596,7 @@ method emit_expr env exp =
               let (loc_arg, stack_ofs) =
                 self#emit_extcall_args env new_args in
               let rd = self#regs_for ty in
-              instrument_direct_call_for_allocation_profiling ~lbl;
+              self#instrument_direct_call_for_allocation_profiling ~lbl;
               let loc_res = self#insert_op_debug (Iextcall(lbl, alloc)) dbg
                                     loc_arg (Proc.loc_external_results rd) in
               self#insert_move_results loc_res rd stack_ofs;
@@ -803,12 +817,16 @@ method emit_tail env exp =
               let (loc_arg, stack_ofs) = Proc.loc_arguments rarg in
               if stack_ofs = 0 then begin
                 self#insert_moves rarg loc_arg;
+                self#instrument_indirect_call_for_allocation_profiling
+                  ~callee:r1.(0) ~is_tail:true;
                 self#insert (Iop Itailcall_ind)
                             (Array.append [|r1.(0)|] loc_arg) [||]
               end else begin
                 let rd = self#regs_for ty in
                 let loc_res = Proc.loc_results rd in
                 self#insert_move_args rarg loc_arg stack_ofs;
+                self#instrument_indirect_call_for_allocation_profiling
+                  ~callee:r1.(0) ~is_tail:false;
                 self#insert_debug (Iop Icall_ind) dbg
                             (Array.append [|r1.(0)|] loc_arg) loc_res;
                 self#insert(Iop(Istackoffset(-stack_ofs))) [||] [||];
@@ -817,43 +835,25 @@ method emit_tail env exp =
           | Icall_imm lbl ->
               let r1 = self#emit_tuple env new_args in
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
-              let maybe_instrument_for_allocation_profiling_tail () =
-                if !Clflags.allocation_profiling
-                  && lbl = !current_function_name then
-                begin
-                  let direct_call_point_index =
-                    match Hashtbl.find direct_tail_calls lbl with
-                    | index -> index
-                    | exception Not_found ->
-                      let index = !next_direct_call_point_index in
-                      incr next_direct_call_point_index;
-                      Hashtbl.add direct_tail_calls lbl index;
-                      index
-                  in
-                  let instrumentation =
-                    Alloc_profiling_cmm.code_for_direct_self_tail_call
-                      ~node:!alloc_profiling_node
-                      ~num_instrumented_alloc_points:
-                        !num_instrumented_alloc_points
-                      ~callee:lbl
-                      ~direct_call_point_index
-                  in
-                  ignore (self#emit_expr env instrumentation)
-                end
-              in
               if stack_ofs = 0 then begin
                 maybe_instrument_for_allocation_profiling_tail ();
                 self#insert_moves r1 loc_arg;
+                self#instrument_direct_call_for_allocation_profiling ~lbl
+                  ~is_tail:true;
                 self#insert (Iop(Itailcall_imm lbl)) loc_arg [||]
               end else if lbl = !current_function_name then begin
                 maybe_instrument_for_allocation_profiling_tail ();
                 let loc_arg' = Proc.loc_parameters r1 in
                 self#insert_moves r1 loc_arg';
+                self#instrument_direct_call_for_allocation_profiling ~lbl
+                  ~is_tail:true;
                 self#insert (Iop(Itailcall_imm lbl)) loc_arg' [||]
               end else begin
                 let rd = self#regs_for ty in
                 let loc_res = Proc.loc_results rd in
                 self#insert_move_args r1 loc_arg stack_ofs;
+                self#instrument_direct_call_for_allocation_profiling ~lbl
+                  ~is_tail:false;
                 self#insert_debug (Iop(Icall_imm lbl)) dbg loc_arg loc_res;
                 self#insert(Iop(Istackoffset(-stack_ofs))) [||] [||];
                 self#insert Ireturn loc_res [||]

@@ -120,7 +120,7 @@ let inline_ops =
 
 class selector = object (self)
 
-inherit Selectgen.selector_generic as super
+inherit Alloc_profiling.instruction_selection as super
 
 method is_immediate n = n <= 0x7FFFFFFF && n >= -0x80000000
 

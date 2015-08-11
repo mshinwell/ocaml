@@ -62,7 +62,6 @@ let compile_fundecl (ppf : formatter) fd_cmm =
   Proc.init ();
   Reg.reset();
   fd_cmm
-  ++ Alloc_profiling_cmm.instrument_fundecl
   ++ Selection.fundecl
   ++ pass_dump_if ppf dump_selection "After instruction selection"
 (*
