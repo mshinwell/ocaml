@@ -145,7 +145,9 @@ let code_for_call ~node ~index_within_node ~callee ~is_tail =
             Cconst_int 3])
         in
         Csequence (
-          Cop (Cstore Word, [Cvar place_within_node; callee_addr]),
+          Cop (Cstore Word, [Cvar place_within_node; call_site_addr]),
+          Cop (Cstore Word, [Cvar place_within_node + ...; callee_addr]),
+          (* XXX offsets wrong *)
           Cop (Calloc_profiling_load_node_hole_ptr, [
             Cop (Caddi, [Cvar place_within_node; Cconst_int Arch.size_addr])
           ]))

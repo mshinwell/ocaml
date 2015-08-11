@@ -412,23 +412,119 @@ CAMLprim value caml_allocation_profiling_profinfo_overflow (value v_unit)
   return Val_long(profinfo_overflow);
 }
 
-CAMLprim uintnat* caml_allocation_profiling_allocate_node (
-      int size_including_header, uintnat header,
-      void* pc_at_start_of_function)
+#define Node_pc(node) (Field(node, 0))
+#define Tail_link(node) (Field(node, 1))
+#define Encode_node_pc(pc) (((value) pc) | 1)
+#define Decode_node_pc(encoded_pc) ((void*) (encoded_pc & ~1))
+#define Is_ocaml_node(node) (Is_block(node) && Tag_val(node) == 0)
+#define Direct_pc_call_site(node,offset) (Field(node, offset))
+#define Direct_pc_callee(node,offset) (Field(node, offset + 1))
+#define Direct_callee_node(node,offset) (Field(node, offset + 2))
+#define Tail_num_fields 2
+#define Direct_num_fields 3
+
+static value allocate_uninitialized_ocaml_node(int size_including_header)
+{
+  void* node;
+  assert(size_including_header >= 3);
+  node = caml_stat_alloc(sizeof(uintnat) * size_including_header);
+  return Val_hp(node);
+}
+
+static value* find_tail_node(value node, void* callee)
+{
+  /* Search the tail chain within [node] (which corresponds to an invocation
+     of a caller of [callee]) to determine whether it contains a tail node
+     corresponding to [callee].  Returns any such node, or [Val_unit] if no
+     such node exists. */
+
+  value starting_node;
+  value pc;
+  value found = Val_unit;
+
+  starting_node = node;
+  pc = Encode_node_pc(callee);
+
+  do {
+    assert(Is_ocaml_node(node));
+    if (Node_pc(node) == pc) {
+      found = 1;
+    }
+    else {
+      node = Tail_link(node);
+    }
+  } while (found == Val_unit && starting_node != node);
+
+  return found;
+}
+
+CAMLprim value caml_allocation_profiling_allocate_node (
+      int size_including_header, int num_direct_tail_call_points,
+      void* pc, value* node_hole)
 {
   int word;
-  uintnat* node = (uintnat*) malloc(sizeof(uintnat) * size_including_header);
-  if (node == NULL) {
-    abort ();
+  int direct_tail_call_point;
+  value node;
+  value tail_chain_insertion_point = Val_unit;
+
+  node = *node_hole;
+  assert((node & 1) == 1);
+
+  if (node != Val_unit) {
+    value caller_node;
+    value tail_node;
+
+    /* The calling function was tail called.  Find whether there already
+       exists a node for it in the tail call chain within the caller's
+       node.  The caller's node must always be an OCaml node. */
+    caller_node = (value) (node & ~1);
+    tail_node = find_tail_node(caller_node, pc);
+    if (tail_node == Val_unit) {
+      /* A new node must be created and added to the tail call chain. */
+      tail_chain_insertion_point = caller_node;
+    }
+    else {
+      /* This tail calling sequence has happened before; just fill the hole
+         with the existing node and return. */
+      *node_hole = tail_node;
+      return;
+    }
   }
-  assert(size_including_header >= 3);
-  node[0] = header;
-  node[1] = (value) pc_at_start_of_function;
-  node[2] = (value) &node[1];
-  for (word = 3; word < size_including_header; word++) {
-    node[word] = Val_unit;
+
+  node = allocate_uninitialized_ocaml_node(size_including_header);
+  Hd_val(node) = header;
+  Node_pc(node) = Encode_node_pc(callee);
+  /* If the callee was tail called, then the tail link field will link this
+     new node into an existing tail chain.  Otherwise, it is initialized with
+     the empty tail chain, i.e. the one pointing directly at [node]. */
+  if (tail_chain_insertion_point == Val_unit) {
+    Tail_link(node) = node;
   }
-  return &node[1];
+  else {
+    Tail_link(node) = Tail_link(tail_chain_insertion_point);
+    Tail_link(tail_chain_insertion_point) = node;
+  }
+
+  /* Initialise callee node pointers for direct tail call points. */
+  field = Tail_num_fields;
+  while (num_direct_tail_call_points-- > 0) {
+    assert(field + (Direct_num_fields - 1) < size_including_header);
+
+    /* The call site PC and caller PC will be initialized by the caller. */
+    Direct_pc_call_site(node, field) = Val_unit;
+    Direct_pc_callee(node, field) = Val_unit;
+    /* All tail call chains initially point at the current node. */
+    assert ((node & 1) == 0);
+    Direct_callee_node(node, field) = (node | 1);
+    field += Direct_num_fields;
+  }
+
+  for (/* nothing */; field < size_including_header; field++) {
+    node[field] = Val_unit;
+  }
+
+  *node_hole = node;
+  return *node_hole;
 }
 
 static uintnat generate_profinfo(void)
@@ -494,6 +590,9 @@ CAMLprim uintnat caml_alloc_profiling_generate_profinfo (uintnat pc,
 
    All pointers between nodes point at the word immediately after the
    GC headers.
+   Any direct call entries for tail calls must come before any other call
+   point or allocation point words.  This is to make them easier to
+   initialize.
 
    Layout of dynamic nodes, which consist of >= 1 part(s) in a linked list:
 
@@ -786,46 +885,6 @@ CAMLprim value* caml_allocation_profiling_indirect_node_hole_ptr
     callee, (void*) dynamic_node_hole_ptr,
     (void*) &(c_node->data.callee_node));
   return &(c_node->data.callee_node);
-}
-
-CAMLprim uintnat caml_allocation_profiling_tail_node_hole_ptr
-      (void* callee, value node)
-{
-  int found;
-  value starting_node;
-  value pc;
-  uintnat result;
-
-  found = 0;
-  starting_node = node;
-  pc = (((value) callee) << 1) | 1;
-  do {
-    assert(Is_block(node));
-    assert(Tag_val(node) == 0);
-    assert(Wosize(node) >= 3);
-
-    assert(Field(node, 0) != Val_unit);
-    if (Field(node, 0) == (value) pc) {
-      found = 1;
-    }
-    else {
-      node = Field(node, 1);
-    }
-  } while (!found && starting_node != node);
-
-  result = (uintnat) &Field(node, 1);
-  assert(result & 1 == 0);
-
-  if (found) {
-    /* The callee has been tail-called from the calling context before, so
-       the node for the callee is already there, and nothing special needs
-       doing. */
-    return result;
-  }
-
-  /* Indicate to the callee that they need to make a new node and link
-     themselves into the tail call chain. */
-  return result | 1;
 }
 
 static c_node* find_trie_node_from_libunwind(void)
