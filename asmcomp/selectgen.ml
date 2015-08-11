@@ -45,7 +45,6 @@ let oper_result_type = function
   | Calloc_profiling_node_hole -> typ_int
   | Calloc_profiling_load_node_hole_ptr -> typ_void
   | Cprogram_counter -> typ_int
-  | Creturn_address -> typ_int
 
 (* Infer the size in bytes of the result of a simple expression *)
 
@@ -218,34 +217,6 @@ method virtual select_addressing :
 method select_store is_assign addr arg =
   (Istore(Word, addr, is_assign), arg)
 
-(*
-(* Counters used for inserting allocation profiling code *)
-
-module Call_type_table = struct
-  module T = struct
-    type t = Cmm.call_type
-    let compare = Pervasives.compare
-    let hash = Pervasives.hash
-  end
-
-  include Hashtbl.Make (T)
-
-  let find_default t key ~default =
-    try find key
-    with Not_found -> default
-end
-
-val mutable call_type_counters : int Call_type_hashtbl.t =
-  Call_type_table.create ()
-
-method increment_call_type_counter kind =
-  let current_count =
-    try Hashtbl.find call_type_counters kind
-    with Not_found -> 0
-  in
-  Hashtbl.replace call_type_counters kind (current_count + 1)
-*)
-
 (* call marking methods, documented in selectgen.mli *)
 
 method mark_call =
@@ -256,7 +227,7 @@ method mark_tailcall = ()
 method mark_c_tailcall = ()
 
 method mark_instr = function
-  | Iop (Icall_imm _ | Icall_ind | Iextcall _) ->
+  | Iop (Icall_ind | Icall_imm _ | Iextcall _) ->
       self#mark_call
   | Iop (Itailcall_ind | Itailcall_imm _) ->
       self#mark_tailcall
@@ -268,11 +239,10 @@ method mark_instr = function
     begin match raise_kind with
       | Lambda.Raise_notrace -> ()
       | Lambda.Raise_regular | Lambda.Raise_reraise ->
-        if !Clflags.debug then begin (* PR#6239 *)
-          (* caml_stash_backtrace; we #mark_call rather than
-             #mark_c_tailcall to get a good stack backtrace *)
+        if !Clflags.debug then (* PR#6239 *)
+        (* caml_stash_backtrace; we #mark_call rather than
+           #mark_c_tailcall to get a good stack backtrace *)
           self#mark_call
-        end
     end
   | Itrywith _ ->
     self#mark_call
@@ -324,7 +294,6 @@ method select_operation op args =
   | (Cintoffloat, _) -> (Iintoffloat, args)
   | (Ccheckbound _, _) -> self#select_arith Icheckbound args
   | (Cprogram_counter, _) -> (Iprogram_counter, args)
-  | (Creturn_address, _) -> (Ireturn_address, args)
   | (Calloc_profiling_node_hole, _) -> (Ialloc_profiling_node_hole, args)
   | (Calloc_profiling_load_node_hole_ptr, _) ->
     (Ialloc_profiling_load_node_hole_ptr, args)
@@ -454,7 +423,9 @@ method insert_op_debug op dbg rs rd =
 method insert_op op rs rd =
   self#insert_op_debug op Debuginfo.none rs rd
 
-(* Instrumentation for allocation profiling. *)
+method emit_blockheader n =
+  let r = self#regs_for typ_int in
+  Some(self#insert_op (Iconst_int n) [||] r)
 
 (* Add the instructions for the given expression
    at the end of the self sequence *)
@@ -480,8 +451,7 @@ method emit_expr env exp =
       let r = self#regs_for typ_addr in
       Some(self#insert_op (Iconst_int n) [||] r)
   | Cblockheader n ->
-      let r = self#regs_for typ_int in
-      Some(self#insert_op (Iconst_int n) [||] r)
+      self#emit_blockheader n
   | Cvar v ->
       begin try
         Some(Tbl.find v env)
@@ -790,8 +760,6 @@ method emit_tail env exp =
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
               if stack_ofs = 0 then begin
                 self#insert_moves r1 loc_arg;
-                self#instrument_direct_call_for_allocation_profiling ~lbl
-                  ~is_tail:true;
                 self#insert (Iop(Itailcall_imm lbl)) loc_arg [||]
               end else if lbl = !current_function_name then begin
                 let loc_arg' = Proc.loc_parameters r1 in

@@ -238,6 +238,11 @@ class instruction_selection = object (self)
     if !Clflags.allocation_profiling then maybe_instrument desc ~arg ~res;
     super#insert desc dbg arg res
 
+  method! emit_blockheader n =
+    if !Clflags.allocation_profiling then begin
+      code_for_allocation_point ~value's_header:n
+    end
+
   method! initial_env () =
     if !Clflags.allocation_profiling then
       Tbl.add !alloc_profiling_node_ident (self#regs_for typ_int) Tbl.empty
