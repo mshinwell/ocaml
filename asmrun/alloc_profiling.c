@@ -413,15 +413,19 @@ CAMLprim value caml_allocation_profiling_profinfo_overflow (value v_unit)
 }
 
 CAMLprim uintnat* caml_allocation_profiling_allocate_node (
-      int size_including_header, uintnat header)
+      int size_including_header, uintnat header,
+      void* pc_at_start_of_function)
 {
   int word;
   uintnat* node = (uintnat*) malloc(sizeof(uintnat) * size_including_header);
   if (node == NULL) {
     abort ();
   }
+  assert(size_including_header >= 3);
   node[0] = header;
-  for (word = 1; word < size_including_header; word++) {
+  node[1] = (value) pc_at_start_of_function;
+  node[2] = (value) &node[1];
+  for (word = 3; word < size_including_header; word++) {
     node[word] = Val_unit;
   }
   return &node[1];
@@ -463,7 +467,8 @@ CAMLprim uintnat caml_alloc_profiling_generate_profinfo (uintnat pc,
 
    OCaml GC header with tag zero
    Tail call words:
-   1. PC value at the start of the function corresponding to this node.
+   1. PC value at the start of the function corresponding to this node,
+      shifted left by 1, with bottom bit then set.
    2. Pointer forming a cyclic list through the nodes involved in any tail
       call chain.
    A sequence of:
@@ -781,6 +786,46 @@ CAMLprim value* caml_allocation_profiling_indirect_node_hole_ptr
     callee, (void*) dynamic_node_hole_ptr,
     (void*) &(c_node->data.callee_node));
   return &(c_node->data.callee_node);
+}
+
+CAMLprim uintnat caml_allocation_profiling_tail_node_hole_ptr
+      (void* callee, value node)
+{
+  int found;
+  value starting_node;
+  value pc;
+  uintnat result;
+
+  found = 0;
+  starting_node = node;
+  pc = (((value) callee) << 1) | 1;
+  do {
+    assert(Is_block(node));
+    assert(Tag_val(node) == 0);
+    assert(Wosize(node) >= 3);
+
+    assert(Field(node, 0) != Val_unit);
+    if (Field(node, 0) == (value) pc) {
+      found = 1;
+    }
+    else {
+      node = Field(node, 1);
+    }
+  } while (!found && starting_node != node);
+
+  result = (uintnat) &Field(node, 1);
+  assert(result & 1 == 0);
+
+  if (found) {
+    /* The callee has been tail-called from the calling context before, so
+       the node for the callee is already there, and nothing special needs
+       doing. */
+    return result;
+  }
+
+  /* Indicate to the callee that they need to make a new node and link
+     themselves into the tail call chain. */
+  return result | 1;
 }
 
 static c_node* find_trie_node_from_libunwind(void)

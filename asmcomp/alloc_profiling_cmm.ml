@@ -44,21 +44,35 @@ let code_to_allocate_trie_node () =
       false, Debuginfo.none),
     [Cconst_int (1 + !index_within_node);
      Cconst_natint header;
+     Cop (Cprogram_counter_at_start_of_function, []);
     ])
 
 let code_for_function_prologue () =
   let node_hole = Ident.create "node_hole" in
   let new_node = Ident.create "new_node" in
+  let node_hole' = Ident.create "node_hole'" in
+  let must_extend_tail_chain = Ident.create "must_extend_tail_chain" in
   let open Cmm in
   Clet (node_hole, Cop (Calloc_profiling_node_hole, []),
-    Clet (node, Cop (Cload Word, [Cvar node_hole]),
-      Cifthenelse (Cop (Ccmpi Cne, [Cvar node; Cconst_int 1]),
-        Cvar node,
-        Clet (new_node,
-          code_to_allocate_trie_node (),
-          Csequence (
-            Cop (Cstore Word, [Cvar node_hole; Cvar new_node]),
-            Cvar new_node)))))
+    Clet (must_extend_tail_chain, Cop (Cand, [Cvar node_hole; Cconst_int 1]),
+      Clet (node_hole', Cop (Cand, [Cvar node_hole; Cconst_int (lnot 1)]),
+        Clet (node, Cop (Cload Word, [Cvar node_hole']),
+          Cifthenelse (
+            Cop (Cor, [
+              must_extend_tail_chain,
+              Cop (Ccmpi Ceq, [Cvar node; Cconst_int 1])]),
+            Clet (new_node,
+              code_to_allocate_trie_node (),
+              Csequence (
+                Cifthenelse (must_extend_tail_chain,
+                  Clet (tail_chain_in_new_node,
+                    Cop (Cadda [Cvar new_node; Cconst_int Arch.size_addr]),
+                    Cop (Cstore Word, [Cvar tail_chain_in_new_node; node])),
+                  Ctuple []),
+                Csequence (
+                  Cop (Cstore Word, [Cvar node_hole; Cvar new_node])),
+                  Cvar new_node))
+            Cvar node)))))
 
 let code_for_allocation_point ~value's_header ~node =
   let existing_profinfo = Ident.create "existing_profinfo" in
@@ -104,49 +118,42 @@ type callee =
   | Direct of string
   | Indirect of Cmm.expression
 
-let code_for_call ~node ~index_within_node ~callee ~is_tail:_ =
-  let is_tail = false in
+let code_for_call ~node ~index_within_node ~callee ~is_tail =
   let open Cmm in
-  let place_within_node = Ident.create "place_within_node" in
-  let index_within_node = next_index_within_node () in
-  Clet (place_within_node,
-    begin if index_within_node = 0 then
-      node
-    else
-      Cop (Caddi, [
-        node;
-        Cconst_int (index_within_node * Arch.size_addr);
-      ])
-    end,
-    match callee with
-    | Direct callee ->
-      let callee_addr =
-        Cop (Cor, [Cop (Clsl, [Cconst_symbol callee; Cconst_int 2]);
-          Cconst_int 3])
-      in
-      if not is_tail then
+  if is_tail then
+    let node_hole_ptr = Ident.create "node_hole_ptr" in
+    Clet (node_hole_ptr,
+      Cop (Cextcall ("caml_allocation_profiling_tail_node_hole_ptr",
+        [callee; node])),
+      Cop (Calloc_profiling_load_node_hole_ptr, [Cvar node_hole_ptr]))
+  else
+    let place_within_node = Ident.create "place_within_node" in
+    let index_within_node = next_index_within_node () in
+    Clet (place_within_node,
+      begin if index_within_node = 0 then
+        node
+      else
+        Cop (Caddi, [
+          node;
+          Cconst_int (index_within_node * Arch.size_addr);
+        ])
+      end,
+      match callee with
+      | Direct callee ->
+        let callee_addr =
+          Cop (Cor, [Cop (Clsl, [Cconst_symbol callee; Cconst_int 2]);
+            Cconst_int 3])
+        in
         Csequence (
           Cop (Cstore Word, [Cvar place_within_node; callee_addr]),
           Cop (Calloc_profiling_load_node_hole_ptr, [
             Cop (Caddi, [Cvar place_within_node; Cconst_int Arch.size_addr])
           ]))
-      else
-        Csequence (
-          Cop (Cstore Word, [Cvar place_within_node; callee_addr]),
-          Clet (node_hole,
-            Cop (Caddi, [Cvar place_within_node; Cconst_int Arch.size_addr]),
-            Csequence (
-              (* For tail calls, we write a pointer back to the current node
-                 into the relevant entry of that same node, and then proceed as
-                 usual.  The prologue of the function being tail called will
-                 then re-use the same node. *)
-              Cop (Cstore Word, [Cvar node_hole; node]),
-              Cop (Calloc_profiling_load_node_hole_ptr, [Cvar node_hole]))))
-    | Indirect callee ->
-      let node_hole_ptr = Ident.create "node_hole_ptr" in
-      Clet (node_hole_ptr,
-        Cop (Cextcall ("caml_allocation_profiling_indirect_node_hole_ptr",
-          [callee; Cvar place_within_node]))))
+      | Indirect callee ->
+        let node_hole_ptr = Ident.create "node_hole_ptr" in
+        Clet (node_hole_ptr,
+          Cop (Cextcall ("caml_allocation_profiling_indirect_node_hole_ptr",
+            [callee; Cvar place_within_node]))))
 
 class instruction_selection = object (self)
   inherit Selectgen.selector_generic as super
