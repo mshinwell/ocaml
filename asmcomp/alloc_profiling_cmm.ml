@@ -31,18 +31,18 @@ let reset ~alloc_profiling_node_ident:ident =
   alloc_profiling_node_ident = ref ident;
   Hashtbl.clear direct_calls
 
-let code_to_allocate_trie_node ~max_index_within_node =
+let code_to_allocate_trie_node () =
   let header =
     Cmmgen.black_block_header Obj.first_non_constant_constructor_tag size
   in
   let open Cmm in
   Cop (Cextcall ("caml_allocation_profiling_allocate_node", [| Int |],
       false, Debuginfo.none),
-    [Cconst_int (2 + max_index_within_node);
+    [Cconst_int (1 + !index_within_node);
      Cconst_natint header;
     ])
 
-let code_for_function_prologue ~node ~max_index_within_node =
+let code_for_function_prologue () =
   let node_hole = Ident.create "node_hole" in
   let new_node = Ident.create "new_node" in
   let open Cmm in
@@ -51,7 +51,7 @@ let code_for_function_prologue ~node ~max_index_within_node =
       Cifthenelse (Cop (Ccmpi Cne, [Cvar node; Cconst_int 1]),
         Cvar node,
         Clet (new_node,
-          code_to_allocate_trie_node ~max_index_within_node,
+          code_to_allocate_trie_node (),
           Csequence (
             Cop (Cstore Word, [Cvar node_hole; Cvar new_node]),
             Cvar new_node)))))
@@ -200,39 +200,33 @@ class instruction_selection = object (self)
 
   method private emit_prologue f ~env_after_main_prologue
         ~last_insn_of_main_prologue =
-    if !Clflags.allocation_profiling then begin
-      let needs_prologue =
-        true
+    let needs_prologue =
+      true
+    in
+    if needs_prologue then begin
+      let prologue_cmm = code_for_function_prologue () in
+      (* Splice the allocation prologue after the main prologue but before the
+         function body.  Remember that [instr_seq] points at the last
+         instruction (the list is in reverse order). *)
+      let last_insn_of_body = instr_seq in
+      let first_insn_of_body = ref dummy_instr in
+      while not (instr_seq == last_insn_of_main_prologue) do
+        first_insn_of_body := instr_seq;
+        instr_seq <- instr_seq.next
+      done;
+      instr_seq <- last_insn_of_main_prologue;
+      let node_temp_reg =
+        match self#emit_expr env_after_main_prologue prologue_cmm with
+        | None ->
+          Misc.fatal_error "Alloc_profiling prologue instruction \
+              selection did not yield a destination register"
+        | Some node_temp_reg -> node_temp_reg
       in
-      if needs_prologue then begin
-        let prologue_cmm =
-          Alloc_profiling_cmm.code_for_function_prologue
-            ~num_instrumented_alloc_points:!num_instrumented_alloc_points
-            ~num_direct_call_points:!next_direct_call_point_index
-        in
-        (* Splice the allocation prologue after the main prologue but before the
-           function body.  Remember that [instr_seq] points at the last
-           instruction (the list is in reverse order). *)
-        let last_insn_of_body = instr_seq in
-        let first_insn_of_body = ref dummy_instr in
-        while not (instr_seq == last_insn_of_main_prologue) do
-          first_insn_of_body := instr_seq;
-          instr_seq <- instr_seq.next
-        done;
-        instr_seq <- last_insn_of_main_prologue;
-        let node_temp_reg =
-          match self#emit_expr env_after_main_prologue prologue_cmm with
-          | None ->
-            Misc.fatal_error "Alloc_profiling prologue instruction \
-                selection did not yield a destination register"
-          | Some node_temp_reg -> node_temp_reg
-        in
-        let node_reg = Tbl.find node env_after_main_prologue in
-        self#insert_moves node_temp_reg node_reg;
-        if not (!first_insn_of_body == dummy_instr) then begin
-          (!first_insn_of_body).next <- instr_seq;
-          instr_seq <- last_insn_of_body
-        end
+      let node_reg = Tbl.find node env_after_main_prologue in
+      self#insert_moves node_temp_reg node_reg;
+      if not (!first_insn_of_body == dummy_instr) then begin
+        (!first_insn_of_body).next <- instr_seq;
+        instr_seq <- last_insn_of_body
       end
     end
 

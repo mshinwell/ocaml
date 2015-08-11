@@ -537,8 +537,6 @@ method emit_expr env exp =
               let (loc_arg, stack_ofs) = Proc.loc_arguments rarg in
               let loc_res = Proc.loc_results rd in
               self#insert_move_args rarg loc_arg stack_ofs;
-              self#instrument_indirect_call_for_allocation_profiling
-                ~callee:r1.(0);
               self#insert_debug (Iop Icall_ind) dbg
                           (Array.append [|r1.(0)|] loc_arg) loc_res;
               self#insert_move_results loc_res rd stack_ofs;
@@ -549,7 +547,6 @@ method emit_expr env exp =
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
               let loc_res = Proc.loc_results rd in
               self#insert_move_args r1 loc_arg stack_ofs;
-              self#instrument_direct_call_for_allocation_profiling ~lbl;
               self#insert_debug (Iop(Icall_imm lbl)) dbg loc_arg loc_res;
               self#insert_move_results loc_res rd stack_ofs;
               Some rd
@@ -557,7 +554,6 @@ method emit_expr env exp =
               let (loc_arg, stack_ofs) =
                 self#emit_extcall_args env new_args in
               let rd = self#regs_for ty in
-              self#instrument_direct_call_for_allocation_profiling ~lbl;
               let loc_res = self#insert_op_debug (Iextcall(lbl, alloc)) dbg
                                     loc_arg (Proc.loc_external_results rd) in
               self#insert_move_results loc_res rd stack_ofs;
@@ -778,16 +774,12 @@ method emit_tail env exp =
               let (loc_arg, stack_ofs) = Proc.loc_arguments rarg in
               if stack_ofs = 0 then begin
                 self#insert_moves rarg loc_arg;
-                self#instrument_indirect_call_for_allocation_profiling
-                  ~callee:r1.(0) ~is_tail:true;
                 self#insert (Iop Itailcall_ind)
                             (Array.append [|r1.(0)|] loc_arg) [||]
               end else begin
                 let rd = self#regs_for ty in
                 let loc_res = Proc.loc_results rd in
                 self#insert_move_args rarg loc_arg stack_ofs;
-                self#instrument_indirect_call_for_allocation_profiling
-                  ~callee:r1.(0) ~is_tail:false;
                 self#insert_debug (Iop Icall_ind) dbg
                             (Array.append [|r1.(0)|] loc_arg) loc_res;
                 self#insert(Iop(Istackoffset(-stack_ofs))) [||] [||];
@@ -797,24 +789,18 @@ method emit_tail env exp =
               let r1 = self#emit_tuple env new_args in
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
               if stack_ofs = 0 then begin
-                maybe_instrument_for_allocation_profiling_tail ();
                 self#insert_moves r1 loc_arg;
                 self#instrument_direct_call_for_allocation_profiling ~lbl
                   ~is_tail:true;
                 self#insert (Iop(Itailcall_imm lbl)) loc_arg [||]
               end else if lbl = !current_function_name then begin
-                maybe_instrument_for_allocation_profiling_tail ();
                 let loc_arg' = Proc.loc_parameters r1 in
                 self#insert_moves r1 loc_arg';
-                self#instrument_direct_call_for_allocation_profiling ~lbl
-                  ~is_tail:true;
                 self#insert (Iop(Itailcall_imm lbl)) loc_arg' [||]
               end else begin
                 let rd = self#regs_for ty in
                 let loc_res = Proc.loc_results rd in
                 self#insert_move_args r1 loc_arg stack_ofs;
-                self#instrument_direct_call_for_allocation_profiling ~lbl
-                  ~is_tail:false;
                 self#insert_debug (Iop(Icall_imm lbl)) dbg loc_arg loc_res;
                 self#insert(Iop(Istackoffset(-stack_ofs))) [||] [||];
                 self#insert Ireturn loc_res [||]
