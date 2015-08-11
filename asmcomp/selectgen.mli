@@ -101,6 +101,9 @@ class virtual selector_generic : object
   method emit_expr :
     (Ident.t, Reg.t array) Tbl.t -> Cmm.expression -> Reg.t array option
   method emit_tail : (Ident.t, Reg.t array) Tbl.t -> Cmm.expression -> unit
+
+  (* Only for the use of [Alloc_profiling]. *)
+  val mutable instr_seq : Mach.instruction
 end
 
 val reset : unit -> unit

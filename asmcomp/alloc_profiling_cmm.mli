@@ -22,4 +22,4 @@
 
 (** Insertion of instrumentation code for allocation profiling. *)
 
-class instruction_selection : Selectgen.selector_generic
+class virtual instruction_selection : Selectgen.selector_generic

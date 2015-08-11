@@ -25,6 +25,10 @@ let alloc_profiling_node = ref (Cvar (Ident.create "dummy"))
 let alloc_profiling_node_ident = ref (Ident.create "dummy")
 let direct_calls = Hashtbl.create 42
 
+let next_index_within_node () =
+  incr index_within_node;
+  !index_within_node - 1
+
 let reset ~alloc_profiling_node_ident:ident =
   index_within_node := 0;
   alloc_profiling_node := Cvar ident;
@@ -61,8 +65,8 @@ let code_for_allocation_point ~value's_header ~node =
   let profinfo = Ident.create "profinfo" in
   let pc = Ident.create "pc" in
   let address_of_profinfo = Ident.create "address_of_profinfo" in
-  let offset_into_node = Arch.size_addr * !index_within_node in
-  incr index_within_node;
+  let index_within_node = next_index_within_node () in
+  let offset_into_node = Arch.size_addr * index_within_node in
   let open Cmm in
   let generate_new_profinfo =
     (* This will generate a static branch to a function that should usually
@@ -100,9 +104,11 @@ type callee =
   | Direct of string
   | Indirect of Cmm.expression
 
-let code_for_call ~node ~index_within_node ~callee ~is_tail =
+let code_for_call ~node ~index_within_node ~callee ~is_tail:_ =
+  let is_tail = false in
   let open Cmm in
   let place_within_node = Ident.create "place_within_node" in
+  let index_within_node = next_index_within_node () in
   Clet (place_within_node,
     begin if index_within_node = 0 then
       node
@@ -156,9 +162,9 @@ class instruction_selection = object (self)
         index
     in
     let instrumentation =
-      Alloc_profiling_cmm.code_for_call
+      code_for_call
         ~node:!alloc_profiling_node
-        ~callee:(Alloc_profiling_cmm.Direct lbl)
+        ~callee:(Direct lbl)
         ~is_tail
         ~call_point_index:!index_within_node
     in
@@ -174,9 +180,9 @@ class instruction_selection = object (self)
     let callee_ident = Ident.create "callee" in
     let callee_expr = Cmm.Cvar callee_ident in
     let instrumentation =
-      Alloc_profiling_cmm.code_for_call
+      code_for_call
         ~node:!alloc_profiling_node
-        ~callee:(Alloc_profiling_cmm.Indirect callee_expr)
+        ~callee:(Indirect callee_expr)
         ~is_tail
         ~call_point_index:!index_within_node
     in
@@ -188,15 +194,18 @@ class instruction_selection = object (self)
     match desc with
     | Iop (Icall_imm lbl) ->
       self#instrument_direct_call ~callee:(Direct lbl) ~is_tail:false
-    | Iop Icall_self#ind ->
+    | Iop Icall_ind ->
       self#instrument_indirect_call ~callee:(Indirect arg.(0)) ~is_tail:false
-    | Iop (Itaself#ilcall_imm lbl) ->
+    | Iop (Itailcall_imm lbl) ->
       self#instrument_direct_call ~callee:(Direct lbl) ~is_tail:true
-    | Iop Itaself#ilcall_ind ->
+    | Iop Itailcall_ind ->
       self#instrument_indirect_call ~callee:(Indirect arg.(0)) ~is_tail:true
     | Iop (Iextcall lbl) ->
       self#instrument_direct_call ~callee:(Direct lbl) ~is_tail:false
     | _ -> ()
+
+  method private instrument_allocation_point ~value's_header =
+
 
   method private emit_prologue f ~env_after_main_prologue
         ~last_insn_of_main_prologue =
@@ -239,26 +248,28 @@ class instruction_selection = object (self)
     super#insert desc dbg arg res
 
   method! emit_blockheader n =
-    if !Clflags.allocation_profiling then begin
-      code_for_allocation_point ~value's_header:n
-    end
+    if !Clflags.allocation_profiling then
+      self#instrument_allocation_point ~value's_header:n
+    else
+      super#emit_blockheader n
 
   method! initial_env () =
+    let env = super#initial_env () in
     if !Clflags.allocation_profiling then
-      Tbl.add !alloc_profiling_node_ident (self#regs_for typ_int) Tbl.empty
+      Tbl.add !alloc_profiling_node_ident (self#regs_for typ_int) env
     else
-      Tbl.empty
+      env
 
   method! emit_fundecl f =
     if !Clflags.allocation_profiling then begin
       reset ~alloc_profiling_node_ident:f.Cmm.fun_alloc_profiling_node
-    in
+    end;
     super#emit_fundecl f
 
   method! after_body f ~env_after_prologue ~last_insn_of_prologue =
     if !Clflags.allocation_profiling then begin
       self#emit_prologue f ~env_after_main_prologue:env_after_prologue
         ~last_insn_of_main_prologue:last_insn_of_prologue
-    else
-      ()
+    end;
+    super#after_body f ~env_after_prologue ~last_insn_of_prologue
 end
