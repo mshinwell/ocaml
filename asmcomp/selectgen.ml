@@ -534,6 +534,28 @@ method emit_expr env exp =
           let ty = oper_result_type op in
           let (new_op, new_args) = self#select_operation op simple_args in
           let dbg = debuginfo_op op in
+          let instrument_direct_call_for_allocation_profiling ~lbl =
+            if !Clflags.allocation_profiling then begin
+              let direct_call_point_index =
+                match Hashtbl.find direct_non_tail_calls lbl with
+                | index -> index
+                | exception Not_found ->
+                  let index = !next_direct_call_point_index in
+                  incr next_direct_call_point_index;
+                  Hashtbl.add direct_non_tail_calls lbl index;
+                  index
+              in
+              let instrumentation =
+                Alloc_profiling_cmm.code_for_direct_non_tail_call
+                  ~node:!alloc_profiling_node
+                  ~num_instrumented_alloc_points:
+                    !num_instrumented_alloc_points
+                  ~callee:lbl
+                  ~direct_call_point_index
+              in
+              ignore (self#emit_expr env instrumentation)
+            end
+          in
           match new_op with
             Icall_ind ->
               let r1 = self#emit_tuple env new_args in
@@ -552,26 +574,7 @@ method emit_expr env exp =
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
               let loc_res = Proc.loc_results rd in
               self#insert_move_args r1 loc_arg stack_ofs;
-              if !Clflags.allocation_profiling then begin
-                let direct_call_point_index =
-                  match Hashtbl.find direct_non_tail_calls lbl with
-                  | index -> index
-                  | exception Not_found ->
-                    let index = !next_direct_call_point_index in
-                    incr next_direct_call_point_index;
-                    Hashtbl.add direct_non_tail_calls lbl index;
-                    index
-                in
-                let instrumentation =
-                  Alloc_profiling_cmm.code_for_direct_non_tail_call
-                    ~node:!alloc_profiling_node
-                    ~num_instrumented_alloc_points:
-                      !num_instrumented_alloc_points
-                    ~callee:lbl
-                    ~direct_call_point_index
-                in
-                ignore (self#emit_expr env instrumentation)
-              end;
+              instrument_direct_call_for_allocation_profiling ~lbl;
               self#insert_debug (Iop(Icall_imm lbl)) dbg loc_arg loc_res;
               self#insert_move_results loc_res rd stack_ofs;
               Some rd
@@ -579,6 +582,7 @@ method emit_expr env exp =
               let (loc_arg, stack_ofs) =
                 self#emit_extcall_args env new_args in
               let rd = self#regs_for ty in
+              instrument_direct_call_for_allocation_profiling ~lbl;
               let loc_res = self#insert_op_debug (Iextcall(lbl, alloc)) dbg
                                     loc_arg (Proc.loc_external_results rd) in
               self#insert_move_results loc_res rd stack_ofs;

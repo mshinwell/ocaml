@@ -341,50 +341,6 @@ capture_backtrace(backtrace_entry* backtrace, int depth)
 #endif
 
 
-/*
-
-Upon entry to an OCaml function, a distinguished register holds the address of
-the node hole.  If we've been here before then the hole will contain a pointer
-to a trie node.  Otherwise, it will be NULL, and the callee must allocate a
-new trie node.
-
-The distinguished register is treated as containing immediates for the
-purposes of GC.
-
-Each OCaml callee will have knowledge, deduced at compile time, of any call
-points it contains.
-
-Trie nodes for OCaml functions hold:
-
-- (pc, profinfo) pairs for each allocation point in the function;
-- node holes for callees that are called directly in non-tail position;
-- node holes for callees that are called directly in tail position (self tail
-  calls are excluded);
-- node holes for callees that are called indirectly.  Some of these might be
-  in tail position.
-
-We could in the future exclude the pc from the allocation point section,
-but its presence makes decoding easier.
-
-The indirect callee section is actually (node hole, branch target) pairs
-and can be dynamically-extended; it lives at the end of the node.
-
-Identification of a node hole at a call site, to pass to the callee, is
-usually easy except in the case of an indirect call.  In this case we use
-linear search.
-
-The code sequence in the callee is something like:
-
-- create a new trie node if one doesn't exist and fill the node hole
-- change the distinguished register to hold the address of the current node
-- immediately prior to any call, change the distinguished register to point
-  at the node hole.  We will need to establish a convention as to what happens
-  to this register upon return.
-- at any allocation point, the code is straightforward (a new profinfo value
-  may need to be assigned).
-
-*/
-
 value caml_alloc_profiling_trie_root = Val_unit;
 value* caml_alloc_profiling_trie_node_ptr = &caml_alloc_profiling_trie_root;
 
@@ -503,6 +459,35 @@ CAMLprim uintnat caml_alloc_profiling_generate_profinfo (uintnat pc,
   return profinfo << PROFINFO_SHIFT;
 }
 
+/* Layout of static nodes:
+
+   OCaml GC header with tag zero
+   Two words for each allocation point:
+     PC value, shifted left by 2, with bottom bit then set
+     Profinfo value
+   Two words for each call point:
+     PC value, shifted left by 2, with bottom 2 bits then set
+     Pointer to callee's node, which will be:
+     - if direct OCaml non-tail, a static node;
+     - if direct OCaml self tail, a pointer to the current (static) node;
+     - if direct OCaml non-self tail, ...;
+     - if indirect OCaml non-tail, a dynamic node;
+     - if indirect OCaml tail, ...;
+     - if direct OCaml -> C, a dynamic node.
+     If the pointer is currently absent, the hole contains [Val_unit].
+
+   Layout of dynamic nodes, which consist of >= 1 part(s) in a linked list:
+
+   OCaml GC header with tag one
+   PC value, shifted left by 2, with bottom bit then set.  Bit 1 then
+   indicates:
+     - bit 1 set => this is a call point
+     - bit 1 clear => this is an allocation point
+   Pointer to callee's node (for a call point), or profinfo value.
+   Pointer to the next part of the current node in the linked list, or
+     [Val_unit] if this is the last part.
+*/
+
 typedef struct {
   uintnat gc_header;
   uintnat pc;           /* always has bit 0 set.  Bit 1 set => CALL. */
@@ -511,7 +496,7 @@ typedef struct {
     uintnat profinfo;   /* for ALLOCATION */
   } data;
   value next;           /* [Val_unit] for the end of the list */
-} c_node;
+} c_node; /* CR mshinwell: rename to dynamic_node */
 
 typedef enum {
   CALL,
@@ -847,12 +832,15 @@ uintnat caml_allocation_profiling_my_profinfo (void)
     profinfo = 0ull;
   }
   else if (caml_allocation_profiling_use_override_profinfo != Val_false) {
+/*
     profinfo = caml_allocation_profiling_override_profinfo;
-  }
-  else {
+*/
     c_node* node = find_trie_node_from_libunwind ();
     profinfo = generate_profinfo();
     node->data.profinfo = profinfo;
+  }
+  else {
+    profinfo = 0ull;
   }
 
   caml_allocation_profiling_debug(Val_unit);
