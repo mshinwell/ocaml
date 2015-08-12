@@ -619,6 +619,11 @@ CAMLprim uintnat caml_alloc_profiling_generate_profinfo (void* pc,
    indicates:
      - bit 1 set => this is a call point
      - bit 1 clear => this is an allocation point
+   The PC is either the PC of an allocation point or a *call site*, never the
+     address of a callee.  This means that more conflation between nodes may
+     occur than for OCaml parts of the trie.  This can be recovered afterwards
+     by checking which function every PC value inside a C node corresponds to,
+     and making more trie nodes if required.
    Pointer to callee's node (for a call point), or profinfo value.
    Pointer to the next part of the current node in the linked list, or
      [Val_unit] if this is the last part.
@@ -658,14 +663,13 @@ static c_node_type classify_c_node(c_node* node)
 
 static c_node* c_node_of_stored_pointer(value node_stored)
 {
-  return (node_stored == Val_unit) ? NULL
-    : (c_node*) (((uintnat*) node_stored) - 1);
+  return (node_stored == Val_unit) ? NULL : (c_node*) Hp_val(node_stored);
 }
 
 static value stored_pointer_to_c_node(c_node* node)
 {
   assert(node != NULL);
-  return (value) &((uintnat*) node)[1];
+  return Val_hp(node);
 }
 
 static void print_trie_node(value node)
