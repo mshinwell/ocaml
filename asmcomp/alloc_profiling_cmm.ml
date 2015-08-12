@@ -35,44 +35,23 @@ let reset ~alloc_profiling_node_ident:ident =
   alloc_profiling_node_ident = ref ident;
   Hashtbl.clear direct_calls
 
-let code_to_allocate_trie_node () =
-  let header =
-    Cmmgen.black_block_header Obj.first_non_constant_constructor_tag size
-  in
-  let open Cmm in
-  Cop (Cextcall ("caml_allocation_profiling_allocate_node", [| Int |],
-      false, Debuginfo.none),
-    [Cconst_int (1 + !index_within_node);
-     Cconst_natint header;
-     Cop (Cprogram_counter_at_start_of_function, []);
-    ])
-
 let code_for_function_prologue () =
   let node_hole = Ident.create "node_hole" in
   let new_node = Ident.create "new_node" in
-  let node_hole' = Ident.create "node_hole'" in
-  let must_extend_tail_chain = Ident.create "must_extend_tail_chain" in
+  let must_allocate_node = Ident.create "must_allocate_node" in
   let open Cmm in
   Clet (node_hole, Cop (Calloc_profiling_node_hole, []),
-    Clet (must_extend_tail_chain, Cop (Cand, [Cvar node_hole; Cconst_int 1]),
-      Clet (node_hole', Cop (Cand, [Cvar node_hole; Cconst_int (lnot 1)]),
-        Clet (node, Cop (Cload Word, [Cvar node_hole']),
-          Cifthenelse (
-            Cop (Cor, [
-              must_extend_tail_chain,
-              Cop (Ccmpi Ceq, [Cvar node; Cconst_int 1])]),
-            Clet (new_node,
-              code_to_allocate_trie_node (),
-              Csequence (
-                Cifthenelse (must_extend_tail_chain,
-                  Clet (tail_chain_in_new_node,
-                    Cop (Cadda [Cvar new_node; Cconst_int Arch.size_addr]),
-                    Cop (Cstore Word, [Cvar tail_chain_in_new_node; node])),
-                  Ctuple []),
-                Csequence (
-                  Cop (Cstore Word, [Cvar node_hole; Cvar new_node])),
-                  Cvar new_node))
-            Cvar node)))))
+    Clet (node, Cop (Cload Word, [Cvar node_hole]),
+      Clet (must_allocate_node, Cop (Cand, [Cvar node; Cconst_int 1]),
+        Cifthenelse (Cvar must_allocate_node,
+          Cop (Cextcall ("caml_allocation_profiling_allocate_node", [| Int |],
+              false, Debuginfo.none),
+            [Cconst_int (1 + !index_within_node);
+             Cconst_int !num_direct_tail_call_points;
+             Cop (Cprogram_counter, []);
+             Cvar node_hole;
+            ]),
+          Cvar node))))
 
 let code_for_allocation_point ~value's_header ~node =
   let existing_profinfo = Ident.create "existing_profinfo" in
