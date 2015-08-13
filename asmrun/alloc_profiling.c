@@ -299,48 +299,6 @@ caml_dump_heapgraph_from_ocaml(value node_output_file, value edge_output_file)
 
 #pragma GCC optimize ("-O3")
 
-#if 0
-
-#ifdef HAS_LIBUNWIND
-static int
-capture_backtrace(backtrace_entry* backtrace, int depth)
-{
-  /* Capture a full backtrace using libunwind. */
-
-  unw_cursor_t cur;
-  unw_context_t ctx;
-  int ret;
-
-  unw_getcontext(&ctx);
-  unw_init_local(&cur, &ctx);
-  /* CR mshinwell: need [unw_step] here I think */
-  if ((ret = unw_tdep_trace(&cur, (void**) backtrace, &depth)) < 0) {
-    depth = 0;
-    unw_getcontext(&ctx);
-    unw_init_local(&cur, &ctx);
-    while ((ret = unw_step(&cur)) > 0 && depth < MAX_BACKTRACE_DEPTH) {
-      unw_word_t ip;
-      unw_get_reg(&cur, UNW_REG_IP, &ip);
-      backtrace[depth++].return_address = (void*) ip;
-    }
-  }
-  return depth;
-}
-#else
-static int
-capture_backtrace(backtrace_entry* backtrace, int depth)
-{
-  /* In the absence of libunwind, try to just use our return address. */
-  if (depth > 0) {
-    backtrace[0].return_address = __builtin_return_address(0);
-    return backtrace[0].return_address == NULL ? 0 : 1;
-  }
-  return 0;
-}
-#endif
-#endif
-
-
 value caml_alloc_profiling_trie_root = Val_unit;
 value* caml_alloc_profiling_trie_node_ptr = &caml_alloc_profiling_trie_root;
 
@@ -479,7 +437,7 @@ CAMLprim value caml_allocation_profiling_allocate_node (
   int word;
   int direct_tail_call_point;
   value node;
-  value tail_chain_insertion_point = Val_unit;
+  value caller_node = Val_unit;
 
   node = *node_hole;
   /* The node hole should either contain [Val_unit], indicating that this
@@ -490,19 +448,13 @@ CAMLprim value caml_allocation_profiling_allocate_node (
   assert(Is_direct_tail_callee_node_encoded(node));
 
   if (node != Val_unit) {
-    value caller_node;
     value tail_node;
-
     /* The calling function was tail called.  Find whether there already
        exists a node for it in the tail call chain within the caller's
        node.  The caller's node must always be an OCaml node. */
     caller_node = Decode_direct_tail_callee_node(node);
     tail_node = find_tail_node(caller_node, pc);
-    if (tail_node == Val_unit) {
-      /* A new node must be created and added to the tail call chain. */
-      tail_chain_insertion_point = caller_node;
-    }
-    else {
+    if (tail_node != Val_unit) {
       /* This tail calling sequence has happened before; just fill the hole
          with the existing node and return. */
       *node_hole = tail_node;
@@ -517,12 +469,12 @@ CAMLprim value caml_allocation_profiling_allocate_node (
   /* If the callee was tail called, then the tail link field will link this
      new node into an existing tail chain.  Otherwise, it is initialized with
      the empty tail chain, i.e. the one pointing directly at [node]. */
-  if (tail_chain_insertion_point == Val_unit) {
+  if (caller_node == Val_unit) {
     Tail_link(node) = node;
   }
   else {
-    Tail_link(node) = Tail_link(tail_chain_insertion_point);
-    Tail_link(tail_chain_insertion_point) = node;
+    Tail_link(node) = Tail_link(caller_node);
+    Tail_link(caller_node) = node;
   }
 
   /* Initialise callee node pointers for direct tail call points. */
@@ -670,6 +622,31 @@ static value stored_pointer_to_c_node(c_node* node)
 {
   assert(node != NULL);
   return Val_hp(node);
+}
+
+static void print_node_header(value node)
+{
+
+}
+
+static void print_tail_chain(value node)
+{
+  value starting_node;
+
+  assert(Is_ocaml_node(node));
+  starting_node = node;
+
+  if (Tail_link(node) == node) {
+    printf("Tail chain is empty.\n");
+  }
+  else {
+    printf("Tail chain:\n");
+    do {
+      node = Tail_link(node);
+      printf("  Node %p (identifying PC=%p)\n", (void*) node,
+        Decode_node_pc(Node_pc(node)));
+    } while (node != starting_node);
+  }
 }
 
 static void print_trie_node(value node)
@@ -938,11 +915,6 @@ static c_node* find_trie_node_from_libunwind(void)
     }
   }
 
-  /* frames.contents[0] should be the current PC.
-     frames.contents[frames.size - 1] should be the PC in the most
-     recent non-OCaml frame.  This PC has already been written into
-     [*caml_alloc_profiling_trie_node_ptr], meaning that the loop below
-     starts at [frames.size - 2]. */
   node_hole = caml_alloc_profiling_trie_node_ptr;
   printf("*** find_trie_node_from_libunwind: starting at %p\n",
     (void*) *node_hole);
@@ -951,27 +923,18 @@ static c_node* find_trie_node_from_libunwind(void)
      since it is not possible for there to be a call point in an OCaml
      function that sometimes calls C and sometimes calls OCaml. */
 
-  for (frame = frames.size - 2; frame >= 0; frame--) {
+  for (frame = frames.size - 1; frame >= 0; frame--) {
     c_node_type expected_type;
     void* pc = frames.contents[frame];
     assert (pc != (void*) caml_last_return_address);
 
     expected_type = (frame > 0 ? CALL : ALLOCATION);
 
-    /* Invariant at this point: [node_hole] is an address in the frame at
-       index [frame + 1] (where we take the frame at index [frames.size]
-       to be the most recent OCaml frame).
-
-       The aim is to add a new child node, pointed at by [*node_hole],
-       corresponding to the frame at index [frame].  When [frame > 0] then
-       we are still in the call chain; when [frame == 0] we have reached the
-       allocation point.
-    */
-
     if (*node_hole == Val_unit) {
       node = allocate_c_node();
       printf("making new node %p\n", node);
-      node->pc = (((uintnat) pc) << 2) | (frame > 0 ? 3 : 1);
+      node->pc = (frame > 0 ? Encode_c_node_pc_for_call(pc)
+        : Encode_c_node_pc_for_alloc_point(pc));
       *node_hole = stored_pointer_to_c_node(node);
     }
     else {
@@ -1001,7 +964,8 @@ static c_node* find_trie_node_from_libunwind(void)
       if (!found) {
         assert(prev != NULL);
         node = allocate_c_node();
-        node->pc = (((uintnat) pc) << 2) | (frame > 0 ? 3 : 1);
+        node->pc = (frame > 0 ? Encode_c_node_pc_for_call(pc)
+          : Encode_c_node_pc_for_alloc_point(pc));
         prev->next = stored_pointer_to_c_node(node);
       }
     }
