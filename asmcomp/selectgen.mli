@@ -103,6 +103,30 @@ class virtual selector_generic : object
   method emit_tail : (Ident.t, Reg.t array) Tbl.t -> Cmm.expression -> unit
 
   (* Only for the use of [Alloc_profiling]. *)
+  method emit_blockheader
+     : (Ident.t, Reg.t array) Tbl.t
+    -> nativeint
+    -> Reg.t array option
+  method initial_env : unit -> (Ident.t, Reg.t array) Tbl.t
+  method after_body
+     : Cmm.fundecl
+    -> env_after_prologue:(Ident.t, Reg.t array) Tbl.t
+    -> last_insn_of_prologue:Mach.instruction
+    -> unit
+  method insert_env
+     : (Ident.t, Reg.t array) Tbl.t
+    -> Mach.instruction_desc
+    -> Reg.t array
+    -> Reg.t array
+    -> unit
+  method insert_debug_env
+     : (Ident.t, Reg.t array) Tbl.t
+    -> Mach.instruction_desc
+    -> Debuginfo.t
+    -> Reg.t array
+    -> Reg.t array
+    -> unit
+
   val mutable instr_seq : Mach.instruction
 end
 

@@ -21,7 +21,7 @@
 (***********************************************************************)
 
 let index_within_node = ref 2 (* Cf. [Node_num_header_words] in the runtime. *)
-let alloc_profiling_node = ref (Cvar (Ident.create "dummy"))
+let alloc_profiling_node = ref (Cmm.Cvar (Ident.create "dummy"))
 let alloc_profiling_node_ident = ref (Ident.create "dummy")
 let direct_tail_call_point_indexes = ref []
 
@@ -30,17 +30,18 @@ let something_was_instrumented () =
 
 let next_index_within_node ~words_needed =
   let index = !index_within_node in
-  index_within_node := !index_within_node + words_needed in
+  index_within_node := !index_within_node + words_needed;
   index
 
 let reset ~alloc_profiling_node_ident:ident =
   index_within_node := 2;
-  alloc_profiling_node := Cvar ident;
+  alloc_profiling_node := Cmm.Cvar ident;
   alloc_profiling_node_ident := ident;
   direct_tail_call_point_indexes := []
 
 let code_for_function_prologue () =
   let node_hole = Ident.create "node_hole" in
+  let node = Ident.create "node" in
   let new_node = Ident.create "new_node" in
   let must_allocate_node = Ident.create "must_allocate_node" in
   let open Cmm in
@@ -52,7 +53,7 @@ let code_for_function_prologue () =
     let body =
       List.fold_left (fun init_code index ->
           (* Cf. [Direct_callee_node] in the runtime. *)
-          let offset_in_bytes = (index + 2) * Arch.size_addr;
+          let offset_in_bytes = (index + 2) * Arch.size_addr in
           let place = Ident.create "tail_init" in
           Clet (place,
             Cop (Cadda, [Cvar new_node; Cconst_int offset_in_bytes]),
@@ -123,21 +124,21 @@ type callee =
   | Direct of string
   | Indirect of Cmm.expression
 
-let code_for_call ~node ~index_within_node ~callee ~is_tail =
+let code_for_call ~node ~callee ~is_tail =
   let words_needed =
     match callee with
-    | Direct -> 3  (* Cf. [Direct_num_fields in the runtime]. *)
-    | Indirect -> 2  (* Cf. [Indirect_num_fields in the runtime]. *)
+    | Direct _ -> 3  (* Cf. [Direct_num_fields in the runtime]. *)
+    | Indirect _ -> 2  (* Cf. [Indirect_num_fields in the runtime]. *)
   in
   let index_within_node = next_index_within_node ~words_needed in
   begin match callee with
     (* If this is a direct tail call point, we need to note down its index,
        so the correct initialization code can be emitted in the prologue. *)
-    | Direct when is_tail ->
+    | Direct _ when is_tail ->
       direct_tail_call_point_indexes :=
         index_within_node::!direct_tail_call_point_indexes
     | Direct _ | Indirect _ -> ()
-  end
+  end;
   let place_within_node = Ident.create "place_within_node" in
   let open Cmm in
   let encode_pc pc =
@@ -151,16 +152,21 @@ let code_for_call ~node ~index_within_node ~callee ~is_tail =
     within_node ~index:index_within_node,
     Csequence (
       (* This point in the generated code is deemed to be the "call site". *)
-      Cop (Cstore Word, [Cvar place_within_node; encode_pc Cprogram_counter]),
+      Cop (Cstore Word, [
+        Cvar place_within_node;
+        encode_pc (Cop (Cprogram_counter, []))]),
       match callee with
       | Direct callee ->
         let callee_slot = Ident.create "callee" in
         Clet (callee_slot,
           within_node ~index:(index_within_node + 1),
           Csequence (
-            Cop (Cstore Word, [Cvar callee_slot; encode_pc callee]),
+            Cop (Cstore Word, [
+              Cvar callee_slot;
+              encode_pc (Cconst_symbol callee);
+            ]),
             Cop (Calloc_profiling_load_node_hole_ptr,
-              within_node ~index:(index_within_node + 2))))
+              [within_node ~index:(index_within_node + 2)])))
       | Indirect callee ->
         let node_hole_ptr = Ident.create "node_hole_ptr" in
         let caller_node =
@@ -170,13 +176,14 @@ let code_for_call ~node ~index_within_node ~callee ~is_tail =
         let is_tail = if is_tail then Cconst_int 1 else Cconst_int 0 in
         Clet (node_hole_ptr,
           Cop (Cextcall ("caml_allocation_profiling_indirect_node_hole_ptr",
-            [callee; Cvar place_within_node; caller_node])),
-          Cop (Calloc_profiling_load_node_hole_ptr, [Cvar node_hole_ptr])))
+              [| Int |], false, Debuginfo.none),
+            [callee; Cvar place_within_node; caller_node]),
+          Cop (Calloc_profiling_load_node_hole_ptr, [Cvar node_hole_ptr]))))
 
 class instruction_selection = object (self)
   inherit Selectgen.selector_generic as super
 
-  method private instrument_direct_call ~lbl ~is_tail =
+  method private instrument_direct_call ~env ~lbl ~is_tail =
     let instrumentation =
       code_for_call
         ~node:!alloc_profiling_node
@@ -185,7 +192,7 @@ class instruction_selection = object (self)
     in
     ignore (self#emit_expr env instrumentation)
 
-  method private instrument_indirect_call ~callee ~is_tail =
+  method private instrument_indirect_call ~env ~callee ~is_tail =
     (* [callee] is a pseudoregister, so we have to bind it in the environment
        and reference the variable to which it is bound. *)
     let callee_ident = Ident.create "callee" in
@@ -199,27 +206,31 @@ class instruction_selection = object (self)
     in
     ignore (self#emit_expr env instrumentation)
 
-  method private maybe_instrument desc ~arg ~res =
+  method private maybe_instrument desc ~env ~arg ~res =
+    let module M = Mach in
     match desc with
-    | Iop (Icall_imm lbl) ->
-      self#instrument_direct_call ~callee:(Direct lbl) ~is_tail:false
-    | Iop Icall_ind ->
-      self#instrument_indirect_call ~callee:(Indirect arg.(0)) ~is_tail:false
-    | Iop (Itailcall_imm lbl) ->
-      self#instrument_direct_call ~callee:(Direct lbl) ~is_tail:true
-    | Iop Itailcall_ind ->
-      self#instrument_indirect_call ~callee:(Indirect arg.(0)) ~is_tail:true
-    | Iop (Iextcall lbl) ->
-      self#instrument_direct_call ~callee:(Direct lbl) ~is_tail:false
+    | M.Iop (M.Icall_imm lbl) ->
+      self#instrument_direct_call ~env ~lbl ~is_tail:false
+    | M.Iop M.Icall_ind ->
+      self#instrument_indirect_call ~env ~callee:arg.(0)
+        ~is_tail:false
+    | M.Iop (M.Itailcall_imm lbl) ->
+      self#instrument_direct_call ~env ~lbl ~is_tail:true
+    | M.Iop M.Itailcall_ind ->
+      self#instrument_indirect_call ~env ~callee:arg.(0)
+        ~is_tail:true
+    | M.Iop (M.Iextcall (lbl, _)) ->
+      self#instrument_direct_call ~env ~lbl ~is_tail:false
     | _ -> ()
 
-  method private instrument_allocation_point ~value's_header =
+  method private instrument_allocation_point ~env ~value's_header =
     let instrumentation =
-      code_for_allocation_point ~node:!alloc_profiling_node ~value's_header
+      code_for_allocation_point ~node:!alloc_profiling_node_ident
+        ~value's_header
     in
     ignore (self#emit_expr env instrumentation)
 
-  method private emit_prologue f ~env_after_main_prologue
+  method private emit_prologue f ~node ~env_after_main_prologue
         ~last_insn_of_main_prologue =
     (* We don't need the prologue unless we inserted some instrumentation.
        This corresponds to adding the prologue if the function contains one
@@ -230,10 +241,10 @@ class instruction_selection = object (self)
          function body.  Remember that [instr_seq] points at the last
          instruction (the list is in reverse order). *)
       let last_insn_of_body = instr_seq in
-      let first_insn_of_body = ref dummy_instr in
+      let first_insn_of_body = ref Mach.dummy_instr in
       while not (instr_seq == last_insn_of_main_prologue) do
         first_insn_of_body := instr_seq;
-        instr_seq <- instr_seq.next
+        instr_seq <- instr_seq.Mach.next
       done;
       instr_seq <- last_insn_of_main_prologue;
       let node_temp_reg =
@@ -245,25 +256,29 @@ class instruction_selection = object (self)
       in
       let node_reg = Tbl.find node env_after_main_prologue in
       self#insert_moves node_temp_reg node_reg;
-      if not (!first_insn_of_body == dummy_instr) then begin
-        (!first_insn_of_body).next <- instr_seq;
+      if not (!first_insn_of_body == Mach.dummy_instr) then begin
+        (!first_insn_of_body).Mach.next <- instr_seq;
         instr_seq <- last_insn_of_body
       end
     end
 
-  method! insert_debug desc dbg arg res =
-    if !Clflags.allocation_profiling then maybe_instrument desc ~arg ~res;
-    super#insert_debug desc dbg arg res
+  method! insert_debug_env env desc dbg arg res =
+    if !Clflags.allocation_profiling then begin
+      self#maybe_instrument desc ~env ~arg ~res
+    end;
+    super#insert_debug_env env desc dbg arg res
 
-  method! insert desc arg res =
-    if !Clflags.allocation_profiling then maybe_instrument desc ~arg ~res;
-    super#insert desc dbg arg res
+  method! insert_env env desc arg res =
+    if !Clflags.allocation_profiling then begin
+      self#maybe_instrument desc ~env ~arg ~res
+    end;
+    super#insert_env env desc dbg arg res
 
-  method! emit_blockheader n =
+  method! emit_blockheader env n =
     if !Clflags.allocation_profiling then
-      self#instrument_allocation_point ~value's_header:n
+      self#instrument_allocation_point ~env ~value's_header:n
     else
-      super#emit_blockheader n
+      super#emit_blockheader env n
 
   method! initial_env () =
     let env = super#initial_env () in
@@ -280,7 +295,8 @@ class instruction_selection = object (self)
 
   method! after_body f ~env_after_prologue ~last_insn_of_prologue =
     if !Clflags.allocation_profiling then begin
-      self#emit_prologue f ~env_after_main_prologue:env_after_prologue
+      self#emit_prologue f ~node:f.Cmm.fun_alloc_profiling_node
+        ~env_after_main_prologue:env_after_prologue
         ~last_insn_of_main_prologue:last_insn_of_prologue
     end;
     super#after_body f ~env_after_prologue ~last_insn_of_prologue

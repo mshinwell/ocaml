@@ -381,8 +381,14 @@ val mutable instr_seq = dummy_instr
 method insert_debug desc dbg arg res =
   instr_seq <- instr_cons_debug desc arg res dbg instr_seq
 
+method insert_debug_env _env desc dbg arg res =
+  self#insert_debug desc dbg arg res
+
 method insert desc arg res =
   instr_seq <- instr_cons desc arg res instr_seq
+
+method insert_env _env desc arg res =
+  self#insert desc arg res
 
 method extract =
   let rec extract res i =
@@ -423,7 +429,7 @@ method insert_op_debug op dbg rs rd =
 method insert_op op rs rd =
   self#insert_op_debug op Debuginfo.none rs rd
 
-method emit_blockheader n =
+method emit_blockheader _env n =
   let r = self#regs_for typ_int in
   Some(self#insert_op (Iconst_int n) [||] r)
 
@@ -451,7 +457,7 @@ method emit_expr env exp =
       let r = self#regs_for typ_addr in
       Some(self#insert_op (Iconst_int n) [||] r)
   | Cblockheader n ->
-      self#emit_blockheader n
+      self#emit_blockheader env n
   | Cvar v ->
       begin try
         Some(Tbl.find v env)
@@ -507,7 +513,7 @@ method emit_expr env exp =
               let (loc_arg, stack_ofs) = Proc.loc_arguments rarg in
               let loc_res = Proc.loc_results rd in
               self#insert_move_args rarg loc_arg stack_ofs;
-              self#insert_debug (Iop Icall_ind) dbg
+              self#insert_debug_env env (Iop Icall_ind) dbg
                           (Array.append [|r1.(0)|] loc_arg) loc_res;
               self#insert_move_results loc_res rd stack_ofs;
               Some rd
@@ -517,15 +523,17 @@ method emit_expr env exp =
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
               let loc_res = Proc.loc_results rd in
               self#insert_move_args r1 loc_arg stack_ofs;
-              self#insert_debug (Iop(Icall_imm lbl)) dbg loc_arg loc_res;
+              self#insert_debug_env env (Iop(Icall_imm lbl)) dbg loc_arg
+                loc_res;
               self#insert_move_results loc_res rd stack_ofs;
               Some rd
           | Iextcall(lbl, alloc) ->
               let (loc_arg, stack_ofs) =
                 self#emit_extcall_args env new_args in
               let rd = self#regs_for ty in
-              let loc_res = self#insert_op_debug (Iextcall(lbl, alloc)) dbg
-                                    loc_arg (Proc.loc_external_results rd) in
+              let loc_res =
+                self#insert_op_debug_env env (Iextcall(lbl, alloc)) dbg
+                  loc_arg (Proc.loc_external_results rd) in
               self#insert_move_results loc_res rd stack_ofs;
               Some rd
           | Ialloc _ ->
@@ -744,13 +752,13 @@ method emit_tail env exp =
               let (loc_arg, stack_ofs) = Proc.loc_arguments rarg in
               if stack_ofs = 0 then begin
                 self#insert_moves rarg loc_arg;
-                self#insert (Iop Itailcall_ind)
+                self#insert_env env (Iop Itailcall_ind)
                             (Array.append [|r1.(0)|] loc_arg) [||]
               end else begin
                 let rd = self#regs_for ty in
                 let loc_res = Proc.loc_results rd in
                 self#insert_move_args rarg loc_arg stack_ofs;
-                self#insert_debug (Iop Icall_ind) dbg
+                self#insert_debug_env env (Iop Icall_ind) dbg
                             (Array.append [|r1.(0)|] loc_arg) loc_res;
                 self#insert(Iop(Istackoffset(-stack_ofs))) [||] [||];
                 self#insert Ireturn loc_res [||]
@@ -760,16 +768,17 @@ method emit_tail env exp =
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
               if stack_ofs = 0 then begin
                 self#insert_moves r1 loc_arg;
-                self#insert (Iop(Itailcall_imm lbl)) loc_arg [||]
+                self#insert_env env (Iop(Itailcall_imm lbl)) loc_arg [||]
               end else if lbl = !current_function_name then begin
                 let loc_arg' = Proc.loc_parameters r1 in
                 self#insert_moves r1 loc_arg';
-                self#insert (Iop(Itailcall_imm lbl)) loc_arg' [||]
+                self#insert_env env (Iop(Itailcall_imm lbl)) loc_arg' [||]
               end else begin
                 let rd = self#regs_for ty in
                 let loc_res = Proc.loc_results rd in
                 self#insert_move_args r1 loc_arg stack_ofs;
-                self#insert_debug (Iop(Icall_imm lbl)) dbg loc_arg loc_res;
+                self#insert_debug_env env (Iop(Icall_imm lbl)) dbg loc_arg
+                  loc_res;
                 self#insert(Iop(Istackoffset(-stack_ofs))) [||] [||];
                 self#insert Ireturn loc_res [||]
               end
