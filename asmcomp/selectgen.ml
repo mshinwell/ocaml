@@ -426,6 +426,10 @@ method insert_op_debug op dbg rs rd =
   self#insert_debug (Iop op) dbg rs rd;
   rd
 
+method private insert_op_debug_env env op dbg rs rd =
+  self#insert_debug_env env (Iop op) dbg rs rd;
+  rd
+
 method insert_op op rs rd =
   self#insert_op_debug op Debuginfo.none rs rd
 
@@ -869,7 +873,7 @@ method emit_fundecl f =
   let env_after_prologue = env in
   let last_insn_of_prologue = instr_seq in
   self#emit_tail env f.Cmm.fun_body;
-  self#after_body f ~env_after_main_prologue ~last_insn_of_prologue;
+  self#after_body f ~env_after_prologue ~last_insn_of_prologue;
   let body = self#extract in
   instr_iter (fun instr -> self#mark_instr instr.Mach.desc) body;
   { fun_name = f.Cmm.fun_name;

@@ -89,7 +89,6 @@ and operation =
   | Calloc_profiling_node_hole
   | Calloc_profiling_load_node_hole_ptr
   | Cprogram_counter
-  | Creturn_address
 
 and expression =
     Cconst_int of int

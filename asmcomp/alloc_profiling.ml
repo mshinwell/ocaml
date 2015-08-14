@@ -173,14 +173,13 @@ let code_for_call ~node ~callee ~is_tail =
           if is_tail then node
           else Cconst_int 0  (* [Val_unit] *)
         in
-        let is_tail = if is_tail then Cconst_int 1 else Cconst_int 0 in
         Clet (node_hole_ptr,
           Cop (Cextcall ("caml_allocation_profiling_indirect_node_hole_ptr",
               [| Int |], false, Debuginfo.none),
             [callee; Cvar place_within_node; caller_node]),
           Cop (Calloc_profiling_load_node_hole_ptr, [Cvar node_hole_ptr]))))
 
-class instruction_selection = object (self)
+class virtual instruction_selection = object (self)
   inherit Selectgen.selector_generic as super
 
   method private instrument_direct_call ~env ~lbl ~is_tail =
@@ -196,8 +195,7 @@ class instruction_selection = object (self)
     (* [callee] is a pseudoregister, so we have to bind it in the environment
        and reference the variable to which it is bound. *)
     let callee_ident = Ident.create "callee" in
-    let callee_expr = Cmm.Cvar callee_ident in
-    let env = Tbl.add callee_ident callee env in
+    let env = Tbl.add callee_ident [| callee |] env in
     let instrumentation =
       code_for_call
         ~node:!alloc_profiling_node
@@ -228,7 +226,7 @@ class instruction_selection = object (self)
       code_for_allocation_point ~node:!alloc_profiling_node_ident
         ~value's_header
     in
-    ignore (self#emit_expr env instrumentation)
+    self#emit_expr env instrumentation
 
   method private emit_prologue f ~node ~env_after_main_prologue
         ~last_insn_of_main_prologue =
@@ -272,7 +270,7 @@ class instruction_selection = object (self)
     if !Clflags.allocation_profiling then begin
       self#maybe_instrument desc ~env ~arg ~res
     end;
-    super#insert_env env desc dbg arg res
+    super#insert_env env desc arg res
 
   method! emit_blockheader env n =
     if !Clflags.allocation_profiling then
@@ -283,7 +281,7 @@ class instruction_selection = object (self)
   method! initial_env () =
     let env = super#initial_env () in
     if !Clflags.allocation_profiling then
-      Tbl.add !alloc_profiling_node_ident (self#regs_for typ_int) env
+      Tbl.add !alloc_profiling_node_ident (self#regs_for Cmm.typ_int) env
     else
       env
 
