@@ -506,6 +506,37 @@ typedef enum {
 #define Encode_c_node_pc_for_alloc_point(pc) ((((value) pc) << 2) | 1)
 #define Decode_c_node_pc(pc) ((void*) ((pc) >> 2))
 
+typedef struct {
+  uintnat gc_header;
+  uintnat pc;           /* always has bit 0 set.  Bit 1 set => CALL. */
+  union {
+    value callee_node;  /* for CALL */
+    uintnat profinfo;   /* for ALLOCATION */
+  } data;
+  value next;           /* [Val_unit] for the end of the list */
+} c_node; /* CR mshinwell: rename to dynamic_node */
+
+static c_node_type classify_c_node(c_node* node)
+{
+  return (node->pc & 2) ? CALL : ALLOCATION;
+}
+
+static c_node* c_node_of_stored_pointer(value node_stored)
+{
+  return (node_stored == Val_unit) ? NULL : (c_node*) Hp_val(node_stored);
+}
+
+static value stored_pointer_to_c_node(c_node* node)
+{
+  assert(node != NULL);
+  return Val_hp(node);
+}
+
+static int pc_inside_c_node_matches(c_node* node, void* pc)
+{
+  return Decode_c_node_pc(node->pc) == pc;
+}
+
 static value allocate_uninitialized_ocaml_node(int size_including_header)
 {
   void* node;
@@ -606,37 +637,6 @@ CAMLprim value caml_allocation_profiling_allocate_node (
   return node;
 }
 
-typedef struct {
-  uintnat gc_header;
-  uintnat pc;           /* always has bit 0 set.  Bit 1 set => CALL. */
-  union {
-    value callee_node;  /* for CALL */
-    uintnat profinfo;   /* for ALLOCATION */
-  } data;
-  value next;           /* [Val_unit] for the end of the list */
-} c_node; /* CR mshinwell: rename to dynamic_node */
-
-static c_node_type classify_c_node(c_node* node)
-{
-  return (node->pc & 2) ? CALL : ALLOCATION;
-}
-
-static c_node* c_node_of_stored_pointer(value node_stored)
-{
-  return (node_stored == Val_unit) ? NULL : (c_node*) Hp_val(node_stored);
-}
-
-static value stored_pointer_to_c_node(c_node* node)
-{
-  assert(node != NULL);
-  return Val_hp(node);
-}
-
-static int pc_inside_c_node_matches(c_node* node, void* pc)
-{
-  return Decode_c_node_pc(node->pc) == pc;
-}
-
 static c_node* allocate_c_node(void)
 {
   c_node* node;
@@ -718,6 +718,14 @@ CAMLprim value* caml_allocation_profiling_indirect_node_hole_ptr
 
 static c_node* find_trie_node_from_libunwind(void)
 {
+#ifdef HAS_LIBUNWIND
+  /* Given that [caml_last_return_address] is the most recent call site in
+     OCaml code, and that we are now in C (or other) code called from that
+     site, obtain a backtrace using libunwind and graft the most recent
+     portion (everything back to but not including [caml_last_return_address])
+     onto the trie.  See the important comment below regarding the fact that
+     call site, and not callee, addresses are recorded during this process. */
+
   unw_cursor_t cur;
   unw_context_t ctx;
   int ret;
@@ -762,6 +770,11 @@ static c_node* find_trie_node_from_libunwind(void)
     if (*node_hole == Val_unit) {
       node = allocate_c_node();
       printf("making new node %p\n", node);
+      /* Note: for CALL nodes, the PC is the program counter at each call
+         site.  We do not store program counter addresses of the start of
+         callees, unlike for OCaml nodes.  This means that some trie nodes
+         will become conflated.  These can be split during post-processing by
+         working out which function each call site was in. */
       node->pc = (frame > 0 ? Encode_c_node_pc_for_call(pc)
         : Encode_c_node_pc_for_alloc_point(pc));
       *node_hole = stored_pointer_to_c_node(node);
@@ -812,6 +825,9 @@ static c_node* find_trie_node_from_libunwind(void)
   assert(c_node_of_stored_pointer(node->next) != node);
 
   return node;
+#else
+  return NULL;
+#endif
 }
 
 static uintnat generate_profinfo(void)
@@ -847,6 +863,10 @@ CAMLprim uintnat caml_alloc_profiling_generate_profinfo (void* pc,
 
 uintnat caml_allocation_profiling_my_profinfo (void)
 {
+  /* Return the profinfo value that should be written into a value's header
+     during an allocation from C.  This may necessitate extending the trie
+     with information obtained from libunwind. */
+
   uint64_t profinfo;
 
   if (!caml_allocation_profiling) {
@@ -874,6 +894,10 @@ extern value caml_output_value(value vchan, value v, value flags);
 
 CAMLprim value caml_allocation_profiling_marshal_trie (value v_channel)
 {
+  /* Marshal the entire trie to an [out_channel].  This can be done by
+     using the extern.c code as usual, since the trie looks like standard
+     OCaml values; but we must allow it to traverse outside the heap. */
+
   caml_extern_allow_out_of_heap = 1;
   caml_output_value(v_channel, caml_alloc_profiling_trie_root, Val_long(0));
   caml_extern_allow_out_of_heap = 0;
