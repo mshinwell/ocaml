@@ -20,10 +20,13 @@
 (*                                                                     *)
 (***********************************************************************)
 
-let index_within_node = ref 0
+let index_within_node = ref 2 (* Cf. [Node_num_header_words] in the runtime. *)
 let alloc_profiling_node = ref (Cvar (Ident.create "dummy"))
 let alloc_profiling_node_ident = ref (Ident.create "dummy")
 let direct_tail_call_point_indexes = ref []
+
+let something_was_instrumented () =
+  !index_within_node > 2
 
 let next_index_within_node ~words_needed =
   let index = !index_within_node in
@@ -31,7 +34,7 @@ let next_index_within_node ~words_needed =
   index
 
 let reset ~alloc_profiling_node_ident:ident =
-  index_within_node := 0;
+  index_within_node := 2;
   alloc_profiling_node := Cvar ident;
   alloc_profiling_node_ident := ident;
   direct_tail_call_point_indexes := []
@@ -84,7 +87,7 @@ let code_for_allocation_point ~value's_header ~node =
   let profinfo = Ident.create "profinfo" in
   let pc = Ident.create "pc" in
   let address_of_profinfo = Ident.create "address_of_profinfo" in
-  let index_within_node = next_index_within_node () in
+  let index_within_node = next_index_within_node ~words_needed:2 in
   let offset_into_node = Arch.size_addr * index_within_node in
   let open Cmm in
   let generate_new_profinfo =
@@ -92,8 +95,9 @@ let code_for_allocation_point ~value's_header ~node =
        be in the cache, which hopefully gives a good code size/performance
        balance. *)
     Clet (pc, Cop (Cor, [
+        (* Cf. [Encode_alloc_point_pc] in the runtime. *)
         Cop (Clsl, [Cop (Cprogram_counter, []); Cconst_int 2]);
-        Cconst_int 1]),
+          Cconst_int 1]),
       Cop (Cextcall ("caml_alloc_profiling_generate_profinfo", [| Int |],
           false, Debuginfo.none),
         [Cvar pc; Cvar address_of_profinfo]))
@@ -102,14 +106,10 @@ let code_for_allocation_point ~value's_header ~node =
      point with the current backtrace.  If so, use that value; if not,
      allocate a new one. *)
   Clet (address_of_profinfo,
-    begin if offset_into_node <> 0 then
-      Cop (Cadda, [
-        Cvar node;
-        Cconst_int offset_into_node;
-      ])
-    else
-      Cvar node
-    end,
+    Cop (Cadda, [
+      Cvar node;
+      Cconst_int offset_into_node;
+    ]),
     Clet (existing_profinfo, Cop (Cload Word, [Cvar address_of_profinfo]),
       Clet (profinfo,
         Cifthenelse (
@@ -214,10 +214,10 @@ class instruction_selection = object (self)
 
   method private emit_prologue f ~env_after_main_prologue
         ~last_insn_of_main_prologue =
-    let needs_prologue =
-      true
-    in
-    if needs_prologue then begin
+    (* We don't need the prologue unless we inserted some instrumentation.
+       This corresponds to adding the prologue if the function contains one
+       or more call or allocation points. *)
+    if something_was_instrumented () then begin
       let prologue_cmm = code_for_function_prologue () in
       (* Splice the allocation prologue after the main prologue but before the
          function body.  Remember that [instr_seq] points at the last
