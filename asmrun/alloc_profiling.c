@@ -375,6 +375,11 @@ CAMLprim value caml_allocation_profiling_profinfo_overflow (value v_unit)
 #define OCaml_node_tag 0
 #define C_node_tag 1
 
+/* The header words are:
+   1. The node program counter.
+   2. The tail link. */
+#define Node_num_header_words 2
+
 /* The "node program counter" at the start of an OCaml node. */
 #define Node_pc(node) (Field(node, 0))
 #define Encode_node_pc(pc) (((value) pc) | 1)
@@ -388,8 +393,7 @@ CAMLprim value caml_allocation_profiling_profinfo_overflow (value v_unit)
    1. [Val_unit] means "uninitialized", and further, that this is not a
       tail call point.  (Tail call points are pre-initialized, as in case 2.)
    2. If the bottom bit is set, and the value is not [Val_unit], this is a
-      tail call point.
-*/
+      tail call point. */
 #define Encode_tail_caller_node(node) ((node) | 1)
 #define Decode_tail_caller_node(node) ((node) & ~1)
 #define Is_tail_caller_node_encoded(node) (((node) & 1) == 1)
@@ -462,8 +466,7 @@ static value* find_tail_node(value node, void* callee)
 }
 
 CAMLprim value caml_allocation_profiling_allocate_node (
-      int size_including_header, int num_direct_tail_call_points,
-      void* pc, value* node_hole)
+      int size_including_header, void* pc, value* node_hole)
 {
   int word;
   int direct_tail_call_point;
@@ -521,8 +524,17 @@ CAMLprim value caml_allocation_profiling_allocate_node (
     field += Direct_num_fields;
   }
 
-  for (/* nothing */; field < size_including_header; field++) {
-    node[field] = Val_unit;
+  /* The callee node pointers for direct tail call points are
+     initialized from code emitted by the OCaml compiler.  This is done to
+     avoid having to pass this function a description of which nodes are
+     direct tail call points.  (We cannot just count them and put them at the
+     beginning of the node because we need the indexes of elements within the
+     node during instruction selection before we have found all call points.)
+  */
+
+  for (field = Node_num_header_words; field < size_including_header - 1;
+       field++) {
+    Field(node, field) = Val_unit;
   }
 
   *node_hole = node;

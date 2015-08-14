@@ -23,36 +23,60 @@
 let index_within_node = ref 0
 let alloc_profiling_node = ref (Cvar (Ident.create "dummy"))
 let alloc_profiling_node_ident = ref (Ident.create "dummy")
-let direct_calls = Hashtbl.create 42
-let num_direct_tail_call_points = ref 0
+let direct_tail_call_point_indexes = ref []
 
-let next_index_within_node () =
-  incr index_within_node;
-  !index_within_node - 1
+let next_index_within_node ~words_needed =
+  let index = !index_within_node in
+  index_within_node := !index_within_node + words_needed in
+  index
 
 let reset ~alloc_profiling_node_ident:ident =
   index_within_node := 0;
   alloc_profiling_node := Cvar ident;
-  alloc_profiling_node_ident = ref ident;
-  Hashtbl.clear direct_calls;
-  num_direct_tail_call_points := 0
+  alloc_profiling_node_ident := ident;
+  direct_tail_call_point_indexes := []
 
 let code_for_function_prologue () =
   let node_hole = Ident.create "node_hole" in
   let new_node = Ident.create "new_node" in
   let must_allocate_node = Ident.create "must_allocate_node" in
   let open Cmm in
+  let initialize_direct_call_points_and_return_node =
+    let new_node_encoded = Ident.create "new_node_encoded" in
+    (* The callee node pointers within direct call points must initially
+       point back at the start of the current node. *)
+    let indexes = !direct_tail_call_point_indexes in
+    let body =
+      List.fold_left (fun init_code index ->
+          (* Cf. [Direct_callee_node] in the runtime. *)
+          let offset_in_bytes = (index + 2) * Arch.size_addr;
+          let place = Ident.create "tail_init" in
+          Clet (place,
+            Cop (Cadda, [Cvar new_node; Cconst_int offset_in_bytes]),
+            Cop (Cstore Word, [Cvar place; Cvar new_node_encoded])))
+        (Cvar new_node)
+        indexes
+    in
+    match indexes with
+    | [] -> body
+    | _ ->
+      Clet (new_node_encoded,
+        (* Cf. [Encode_tail_caller_node] in the runtime. *)
+        Cop (Cor, [Cvar new_node; Cconst_int 1]),
+        body)
+  in
   Clet (node_hole, Cop (Calloc_profiling_node_hole, []),
     Clet (node, Cop (Cload Word, [Cvar node_hole]),
       Clet (must_allocate_node, Cop (Cand, [Cvar node; Cconst_int 1]),
         Cifthenelse (Cvar must_allocate_node,
-          Cop (Cextcall ("caml_allocation_profiling_allocate_node", [| Int |],
-              false, Debuginfo.none),
-            [Cconst_int (1 + !index_within_node);
-             Cconst_int !num_direct_tail_call_points;
-             Cop (Cprogram_counter, []);
-             Cvar node_hole;
-            ]),
+          Clet (new_node,
+            Cop (Cextcall ("caml_allocation_profiling_allocate_node",
+              [| Int |], false, Debuginfo.none),
+              [Cconst_int (1 + !index_within_node);
+               Cop (Cprogram_counter, []);
+               Cvar node_hole;
+              ]),
+            initialize_direct_call_points_and_return_node),
           Cvar node))))
 
 let code_for_allocation_point ~value's_header ~node =
@@ -99,13 +123,21 @@ type callee =
   | Direct of string
   | Indirect of Cmm.expression
 
-let code_for_call ~node ~index_within_node ~call_site ~callee ~is_tail =
+let code_for_call ~node ~index_within_node ~callee ~is_tail =
   let words_needed =
     match callee with
     | Direct -> 3  (* Cf. [Direct_num_fields in the runtime]. *)
     | Indirect -> 2  (* Cf. [Indirect_num_fields in the runtime]. *)
   in
   let index_within_node = next_index_within_node ~words_needed in
+  begin match callee with
+    (* If this is a direct tail call point, we need to note down its index,
+       so the correct initialization code can be emitted in the prologue. *)
+    | Direct when is_tail ->
+      direct_tail_call_point_indexes :=
+        index_within_node::!direct_tail_call_point_indexes
+    | Direct _ | Indirect _ -> ()
+  end
   let place_within_node = Ident.create "place_within_node" in
   let open Cmm in
   let encode_pc pc =
@@ -118,7 +150,8 @@ let code_for_call ~node ~index_within_node ~call_site ~callee ~is_tail =
   Clet (place_within_node,
     within_node ~index:index_within_node,
     Csequence (
-      Cop (Cstore Word, [Cvar place_within_node; encode_pc call_site]),
+      (* This point in the generated code is deemed to be the "call site". *)
+      Cop (Cstore Word, [Cvar place_within_node; encode_pc Cprogram_counter]),
       match callee with
       | Direct callee ->
         let callee_slot = Ident.create "callee" in
@@ -140,42 +173,26 @@ class instruction_selection = object (self)
   inherit Selectgen.selector_generic as super
 
   method private instrument_direct_call ~lbl ~is_tail =
-    let call_point_index =
-      match Hashtbl.find direct_calls lbl with
-      | index -> index
-      | exception Not_found ->
-        let index = !next_call_point_index in
-        incr next_call_point_index;
-        Hashtbl.add direct_calls lbl index;
-        index
-    in
     let instrumentation =
       code_for_call
         ~node:!alloc_profiling_node
         ~callee:(Direct lbl)
         ~is_tail
-        ~call_point_index:!index_within_node
     in
-    incr index_within_node;
     ignore (self#emit_expr env instrumentation)
 
   method private instrument_indirect_call ~callee ~is_tail =
-    let call_point_index =
-      let index = !next_call_point_index in
-      incr next_call_point_index;
-      index
-    in
+    (* [callee] is a pseudoregister, so we have to bind it in the environment
+       and reference the variable to which it is bound. *)
     let callee_ident = Ident.create "callee" in
     let callee_expr = Cmm.Cvar callee_ident in
+    let env = Tbl.add callee_ident callee env in
     let instrumentation =
       code_for_call
         ~node:!alloc_profiling_node
-        ~callee:(Indirect callee_expr)
+        ~callee:(Indirect (Cmm.Cvar callee_ident))
         ~is_tail
-        ~call_point_index:!index_within_node
     in
-    incr index_within_node;
-    let env = Tbl.add callee_ident callee env in
     ignore (self#emit_expr env instrumentation)
 
   method private maybe_instrument desc ~arg ~res =
