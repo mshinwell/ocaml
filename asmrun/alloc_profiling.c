@@ -370,30 +370,61 @@ CAMLprim value caml_allocation_profiling_profinfo_overflow (value v_unit)
   return Val_long(profinfo_overflow);
 }
 
+/* Classification of nodes (OCaml or C) with corresponding GC tags. */
+#define Is_ocaml_node(node) (Is_block(node) && Tag_val(node) == 0)
+#define OCaml_node_tag 0
+#define C_node_tag 1
+
+/* The "node program counter" at the start of an OCaml node. */
 #define Node_pc(node) (Field(node, 0))
-#define Tail_link(node) (Field(node, 1))
 #define Encode_node_pc(pc) (((value) pc) | 1)
 #define Decode_node_pc(encoded_pc) ((void*) (encoded_pc & ~1))
+
+/* The circular linked list of tail-called functions within OCaml nodes. */
+#define Tail_link(node) (Field(node, 1))
+
+/* The convention for pointers from OCaml nodes to other nodes.  There are
+   two special cases:
+   1. [Val_unit] means "uninitialized", and further, that this is not a
+      tail call point.  (Tail call points are pre-initialized, as in case 2.)
+   2. If the bottom bit is set, and the value is not [Val_unit], this is a
+      tail call point.
+*/
+#define Encode_tail_caller_node(node) ((node) | 1)
+#define Decode_tail_caller_node(node) ((node) & ~1)
+#define Is_tail_caller_node_encoded(node) (((node) & 1) == 1)
+
+/* Allocation points within OCaml nodes. */
 #define Encode_alloc_point_pc(pc) ((((value) pc) << 2) | 1)
 #define Decode_alloc_point_pc(pc) (((value) pc) >> 2)
 #define Encode_alloc_point_profinfo(profinfo) (Val_long(profinfo))
 #define Decode_alloc_point_profinfo(profinfo) (Long_val(profinfo))
-#define Is_ocaml_node(node) (Is_block(node) && Tag_val(node) == 0)
+#define Alloc_point_pc(node, offset) (Field(node, offset))
+#define Alloc_point_profinfo(node, offset) (Field(node, (offset) + 1))
+
+/* Direct call points (tail or non-tail) within OCaml nodes.
+   They hold the PC of the call site, the PC upon entry to the callee and
+   a pointer to the child node. */
+#define Direct_num_fields 3
 #define Direct_pc_call_site(node,offset) (Field(node, offset))
 #define Direct_pc_callee(node,offset) (Field(node, (offset) + 1))
 #define Direct_callee_node(node,offset) (Field(node, (offset) + 2))
-#define Alloc_point_pc(node, offset) (Field(node, offset))
-#define Alloc_point_profinfo(node, offset) (Field(node, (offset) + 1))
-#define Encode_direct_tail_callee_node(node) ((node) | 1)
-#define Decode_direct_tail_callee_node(node) ((node) & ~1)
-#define Is_direct_tail_callee_node_encoded(node) (((node) & 1) == 1)
+/* The following two are used for indirect call points too. */
+#define Encode_call_point_pc(pc) ((((value) pc) << 2) | 3)
+#define Decode_call_point_pc(pc) (((value) pc) >> 2)
+
+/* Indirect call points (tail or non-tail) within OCaml nodes.
+   They hold the PC of the call site and a linked list of (PC upon entry
+   to the callee, pointer to child node) pairs.  The linked list is encoded
+   using C nodes and should be thought of as part of the OCaml node itself. */
+#define Indirect_num_fields 2
+#define Indirect_pc_call_site(node,offset) (Field(node, offset))
+#define Indirect_pc_linked_list(node,offset) (Field(node, (offset) + 1))
+
+/* Encodings of the program counter value within a C node. */
 #define Encode_c_node_pc_for_call(pc) ((((value) pc) << 2) | 3)
 #define Encode_c_node_pc_for_alloc_point(pc) ((((value) pc) << 2) | 1)
 #define Decode_c_node_pc(pc) ((void*) ((pc) >> 2))
-#define Tail_num_fields 2
-#define Direct_num_fields 3
-#define OCaml_node_tag 0
-#define C_node_tag 1
 
 static value allocate_uninitialized_ocaml_node(int size_including_header)
 {
@@ -443,16 +474,16 @@ CAMLprim value caml_allocation_profiling_allocate_node (
   /* The node hole should either contain [Val_unit], indicating that this
      function was not tail called and we have not been to this point in the
      trie before; or it should contain a value encoded using
-     [Encoded_direct_tail_callee_node] that points at the node of a caller
+     [Encoded_tail_caller_node] that points at the node of a caller
      that tail called the current function. */
-  assert(Is_direct_tail_callee_node_encoded(node));
+  assert(Is_tail_caller_node_encoded(node));
 
   if (node != Val_unit) {
     value tail_node;
     /* The calling function was tail called.  Find whether there already
        exists a node for it in the tail call chain within the caller's
        node.  The caller's node must always be an OCaml node. */
-    caller_node = Decode_direct_tail_callee_node(node);
+    caller_node = Decode_tail_caller_node(node);
     tail_node = find_tail_node(caller_node, pc);
     if (tail_node != Val_unit) {
       /* This tail calling sequence has happened before; just fill the hole
@@ -486,7 +517,7 @@ CAMLprim value caml_allocation_profiling_allocate_node (
     Direct_pc_call_site(node, field) = Val_unit;
     Direct_pc_callee(node, field) = Val_unit;
     /* All tail call chains initially point at the current node. */
-    Direct_callee_node(node, field) = Encode_direct_tail_callee_node(node);
+    Direct_callee_node(node, field) = Encode_tail_caller_node(node);
     field += Direct_num_fields;
   }
 
@@ -844,15 +875,21 @@ static c_node* allocate_c_node(void)
 }
 
 CAMLprim value* caml_allocation_profiling_indirect_node_hole_ptr
-      (void* callee, value* dynamic_node_hole_ptr)
+      (void* callee, value* node_hole, int is_tail)
 {
+  /* Find the address of the node hole for an indirect call to [callee]. */
+
   c_node* c_node;
   int found = 0;
 
+  /* On entry, the node hole pointer is over the call site address slot,
+     so we must advance it to reach the linked list slot. */
+  node_hole++;
+
   printf("indirect node hole ptr for callee %p starting at %p contains %p\n",
-    callee, (void*) dynamic_node_hole_ptr, *(void**) dynamic_node_hole_ptr);
-  while (!found && *dynamic_node_hole_ptr != Val_unit) {
-    c_node = c_node_of_stored_pointer(*dynamic_node_hole_ptr);
+    callee, (void*) node_hole, *(void**) node_hole);
+  while (!found && *node_hole != Val_unit) {
+    c_node = c_node_of_stored_pointer(*node_hole);
     assert(c_node != NULL);
     switch (classify_c_node(c_node)) {
       case CALL:
@@ -860,7 +897,7 @@ CAMLprim value* caml_allocation_profiling_indirect_node_hole_ptr
           found = 1;
         }
         else {
-          dynamic_node_hole_ptr = &c_node->next;
+          node_hole = &c_node->next;
         }
         break;
 
@@ -874,15 +911,15 @@ CAMLprim value* caml_allocation_profiling_indirect_node_hole_ptr
   }
 
   if (!found) {
-    assert(*dynamic_node_hole_ptr == Val_unit);
+    assert(*node_hole == Val_unit);
     c_node = allocate_c_node();
     c_node->pc = Encode_c_node_pc_for_call(callee);
-    *dynamic_node_hole_ptr = stored_pointer_to_c_node(c_node);
+    *node_hole = stored_pointer_to_c_node(c_node);
   }
 
-  assert(*dynamic_node_hole_ptr != Val_unit);
+  assert(*node_hole != Val_unit);
   printf("indirect node hole ptr for callee %p starting at %p is %p\n",
-    callee, (void*) dynamic_node_hole_ptr,
+    callee, (void*) node_hole,
     (void*) &(c_node->data.callee_node));
   return &(c_node->data.callee_node);
 }

@@ -24,6 +24,7 @@ let index_within_node = ref 0
 let alloc_profiling_node = ref (Cvar (Ident.create "dummy"))
 let alloc_profiling_node_ident = ref (Ident.create "dummy")
 let direct_calls = Hashtbl.create 42
+let num_direct_tail_call_points = ref 0
 
 let next_index_within_node () =
   incr index_within_node;
@@ -33,7 +34,8 @@ let reset ~alloc_profiling_node_ident:ident =
   index_within_node := 0;
   alloc_profiling_node := Cvar ident;
   alloc_profiling_node_ident = ref ident;
-  Hashtbl.clear direct_calls
+  Hashtbl.clear direct_calls;
+  num_direct_tail_call_points := 0
 
 let code_for_function_prologue () =
   let node_hole = Ident.create "node_hole" in
@@ -97,44 +99,42 @@ type callee =
   | Direct of string
   | Indirect of Cmm.expression
 
-let code_for_call ~node ~index_within_node ~callee ~is_tail =
+let code_for_call ~node ~index_within_node ~call_site ~callee ~is_tail =
+  let words_needed =
+    match callee with
+    | Direct -> 3  (* Cf. [Direct_num_fields in the runtime]. *)
+    | Indirect -> 2  (* Cf. [Indirect_num_fields in the runtime]. *)
+  in
+  let index_within_node = next_index_within_node ~words_needed in
+  let place_within_node = Ident.create "place_within_node" in
   let open Cmm in
-  if is_tail then
-    let node_hole_ptr = Ident.create "node_hole_ptr" in
-    Clet (node_hole_ptr,
-      Cop (Cextcall ("caml_allocation_profiling_tail_node_hole_ptr",
-        [callee; node])),
-      Cop (Calloc_profiling_load_node_hole_ptr, [Cvar node_hole_ptr]))
-  else
-    let place_within_node = Ident.create "place_within_node" in
-    let index_within_node = next_index_within_node () in
-    Clet (place_within_node,
-      begin if index_within_node = 0 then
-        node
-      else
-        Cop (Caddi, [
-          node;
-          Cconst_int (index_within_node * Arch.size_addr);
-        ])
-      end,
+  let encode_pc pc =
+    (* Cf. [Encode_call_point_pc] in the runtime. *)
+    Cop (Cor, [Cop (Clsl, [pc; Cconst_int 2]); Cconst_int 3])
+  in
+  let within_node ~index =
+    Cop (Caddi, [node; Cconst_int (index * Arch.size_addr)])
+  in
+  Clet (place_within_node,
+    within_node ~index:index_within_node,
+    Csequence (
+      Cop (Cstore Word, [Cvar place_within_node; encode_pc call_site]),
       match callee with
       | Direct callee ->
-        let callee_addr =
-          Cop (Cor, [Cop (Clsl, [Cconst_symbol callee; Cconst_int 2]);
-            Cconst_int 3])
-        in
-        Csequence (
-          Cop (Cstore Word, [Cvar place_within_node; call_site_addr]),
-          Cop (Cstore Word, [Cvar place_within_node + ...; callee_addr]),
-          (* XXX offsets wrong *)
-          Cop (Calloc_profiling_load_node_hole_ptr, [
-            Cop (Caddi, [Cvar place_within_node; Cconst_int Arch.size_addr])
-          ]))
+        let callee_slot = Ident.create "callee" in
+        Clet (callee_slot,
+          within_node ~index:(index_within_node + 1),
+          Csequence (
+            Cop (Cstore Word, [Cvar callee_slot; encode_pc callee]),
+            Cop (Calloc_profiling_load_node_hole_ptr,
+              within_node ~index:(index_within_node + 2))))
       | Indirect callee ->
         let node_hole_ptr = Ident.create "node_hole_ptr" in
+        let is_tail = if is_tail then Cconst_int 1 else Cconst_int 0 in
         Clet (node_hole_ptr,
           Cop (Cextcall ("caml_allocation_profiling_indirect_node_hole_ptr",
-            [callee; Cvar place_within_node]))))
+            [callee; Cvar place_within_node; is_tail])),
+          Cop (Calloc_profiling_load_node_hole_ptr, [Cvar node_hole_ptr])))
 
 class instruction_selection = object (self)
   inherit Selectgen.selector_generic as super
