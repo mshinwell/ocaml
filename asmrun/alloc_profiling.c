@@ -370,6 +370,11 @@ CAMLprim value caml_allocation_profiling_profinfo_overflow (value v_unit)
   return Val_long(profinfo_overflow);
 }
 
+typedef enum {
+  CALL,
+  ALLOCATION
+} c_node_type;
+
 /* Layout of static nodes:
 
    OCaml GC header with tag zero
@@ -391,9 +396,9 @@ CAMLprim value caml_allocation_profiling_profinfo_overflow (value v_unit)
      1. Call site PC value, shifted left by 2, with bits 0 and 1 then set
      2. Pointer to dynamic node.  Note that this dynamic node is really
         part of the static node that points to it.  This pointer not having
-        its bottom bit set enables it to be distinguished from the other
-        cases.  The dynamic node will only contain CALL entries, pointing
-        at the callee(s).
+        its bottom bit set enables it to be distinguished from the second word
+        of a direct call point.  The dynamic node will only contain CALL
+        entries, pointing at the callee(s).
    - A direct OCaml -> C call point (three words):
      1. Call site PC value, shifted left by 2, with bits 0 and 1 then set
      2. Callee's PC value, shifted left by 2, with bit 0 set
@@ -445,7 +450,7 @@ CAMLprim value caml_allocation_profiling_profinfo_overflow (value v_unit)
 #define Node_num_header_words 2
 
 /* The "node program counter" at the start of an OCaml node. */
-#define Node_pc(node) (Field(node, 0))
+#define Node_pc(node) ((void*) (Field(node, 0)))
 #define Encode_node_pc(pc) (((value) pc) | 1)
 #define Decode_node_pc(encoded_pc) ((void*) (encoded_pc & ~1))
 
@@ -461,6 +466,13 @@ CAMLprim value caml_allocation_profiling_profinfo_overflow (value v_unit)
 #define Encode_tail_caller_node(node) ((node) | 1)
 #define Decode_tail_caller_node(node) ((node) & ~1)
 #define Is_tail_caller_node_encoded(node) (((node) & 1) == 1)
+
+/* Classification as to whether an encoded PC value at the start of a group
+   of words within a node is either:
+   (a) a direct or an indirect call point; or
+   (b) an allocation point. */
+#define Call_or_allocation_point(node, offset) \
+  (((Field(node, offset) & 3) == 1) ? ALLOCATION : CALL)
 
 /* Allocation points within OCaml nodes. */
 #define Encode_alloc_point_pc(pc) ((((value) pc) << 2) | 1)
@@ -632,11 +644,6 @@ typedef struct {
   value next;           /* [Val_unit] for the end of the list */
 } c_node; /* CR mshinwell: rename to dynamic_node */
 
-typedef enum {
-  CALL,
-  ALLOCATION
-} c_node_type;
-
 static c_node_type classify_c_node(c_node* node)
 {
   return (node->pc & 2) ? CALL : ALLOCATION;
@@ -651,11 +658,6 @@ static value stored_pointer_to_c_node(c_node* node)
 {
   assert(node != NULL);
   return Val_hp(node);
-}
-
-static void print_node_header(value node)
-{
-
 }
 
 static void print_tail_chain(value node)
@@ -678,6 +680,13 @@ static void print_tail_chain(value node)
   }
 }
 
+static void print_node_header(value node)
+{
+  printf("Node %p: tag %d, size %d, identifying PC=%p\n",
+    (void*) node, Tag_val(node), Wosize_val(node), Node_pc(node));
+  print_tail_chain(node);
+}
+
 static void print_trie_node(value node)
 {
   if (Color_val(node) != Caml_black) {
@@ -693,18 +702,70 @@ static void print_trie_node(value node)
 
     Hd_val(node) = Whitehd_hd(Hd_val(node));
 
-    printf("Node %p (%s) (size %d):\n", (void*) node,
-      Tag_val(node) == 0 ? "OCaml node" : "C node", (int) Wosize_val(node));
-    if (Tag_val(node) == 0) {
-      for (field = 0; field < Wosize_val(node); field++) {
+    print_node_header(node);
+
+    /* CR mshinwell: remove some of the hard-coded offsets below and use the
+       macros */
+
+    if (Is_ocaml_node(node)) {
+      for (field = Node_num_header_words; field < Wosize_val(node); field++) {
         value entry;
         int is_last;
 
         entry = Field(node, field);
 
+        /* Even though indirect call points have a different size from
+           direct call points and allocation points, it is still safe to just
+           skip until we don't see [Val_unit] any more. */
         if (entry == Val_unit) {
-          field++;
           continue;
+        }
+
+        /* We may now be in the middle of an uninitialized direct call point
+           for a tail call.  This can be detected by seeing if the pointer
+           is an encoded pointer to the current node. */
+        if (entry == Encode_tail_caller_node(node)) {
+          /* The pointer should be the third in a group of three words. */
+          assert (field >= Node_num_header_words + 2);
+          printf("(Reached uninitialized tail call point.)\n");
+          continue;
+        }
+
+        /* At this point we should have an encoded program counter value.
+           First distinguish between:
+           (a) a direct or an indirect call point;
+           (b) an allocation point.
+        */
+        switch (Call_or_allocation_point(node, field)) {
+          case CALL: {
+            /* Determine whether this is a direct or an indirect call
+               point by examining the second word in the group.  This will be
+               an immediate encoded PC value for a direct call point, but a
+               pointer for an indirect call point.  It should never be
+               [Val_unit] in either case. */
+            assert(field < Wosize_val(node) - 1);
+            assert(Field(node, field + 1) != Val_unit);
+            /* CR mshinwell: consider using a macro */
+            if (!Is_block(Field(node, field + 1))) {
+              /* This is an indirect call point. */
+
+            }
+            else {
+              /* This is a direct call point. */
+              assert(field < Wosize_val(node) - 2);
+
+            }
+            break;
+          }
+
+          case ALLOCATION: {
+            assert(field < Wosize_val(node) - 1);
+
+            break;
+          }
+
+          default:
+            assert(0);
         }
 
         is_last = (field == Wosize_val(node) - 1);
