@@ -387,7 +387,7 @@ typedef enum {
    - An allocation point (two words):
      1. PC value, shifted left by 2, with bottom bit then set.  Bit 1 being
         clear enables allocation points to be distinguished from call points.
-     2. Profinfo value
+     2. Profinfo value [that gets written into the value's header]
    - A direct OCaml -> OCaml call point (three words):
      1. Call site PC value, shifted left by 2, with bits 0 and 1 then set
      2. Callee's PC value, shifted left by 2, with bit 0 set
@@ -405,7 +405,7 @@ typedef enum {
      3. Pointer to callee's node, which will always be a dynamic node.
 
    All pointers between nodes point at the word immediately after the
-   GC headers.
+   GC headers, and everything is traversable using the normal OCaml rules.
    Any direct call entries for tail calls must come before any other call
    point or allocation point words.  This is to make them easier to
    initialize.
@@ -511,6 +511,9 @@ static value allocate_uninitialized_ocaml_node(int size_including_header)
   void* node;
   assert(size_including_header >= 3);
   node = caml_stat_alloc(sizeof(uintnat) * size_including_header);
+  /* We don't currently rely on [uintnat] alignment, but we do need some
+     alignment, so just be sure. */
+  assert (((uintnat) node) % sizeof(uintnat) == 0);
   return Val_hp(node);
 }
 
