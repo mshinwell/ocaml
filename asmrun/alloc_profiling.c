@@ -606,37 +606,6 @@ CAMLprim value caml_allocation_profiling_allocate_node (
   return node;
 }
 
-static uintnat generate_profinfo(void)
-{
-  uintnat profinfo;
-
-  if (caml_allocation_profiling_use_override_profinfo == Val_true) {
-    return caml_allocation_profiling_override_profinfo;
-  }
-
-  profinfo = caml_allocation_profiling_profinfo++;
-  if (caml_allocation_profiling_profinfo > PROFINFO_MASK) {
-    /* Profiling counter overflow. */
-    profinfo = profinfo_overflow;
-  }
-
-  return profinfo;
-}
-
-CAMLprim uintnat caml_alloc_profiling_generate_profinfo (void* pc,
-    value node, uintnat offset)
-{
-  uintnat profinfo = generate_profinfo();
-
-  assert(Alloc_point_pc(node, offset) == Val_unit);
-  assert(Alloc_point_profinfo(node, offset) == Val_unit);
-
-  Alloc_point_pc(node, offset) = Encode_alloc_point_pc(pc);
-  Alloc_point_profinfo(node, offset) = Encode_alloc_point_profinfo(profinfo);
-
-  return profinfo << PROFINFO_SHIFT;
-}
-
 typedef struct {
   uintnat gc_header;
   uintnat pc;           /* always has bit 0 set.  Bit 1 set => CALL. */
@@ -661,242 +630,6 @@ static value stored_pointer_to_c_node(c_node* node)
 {
   assert(node != NULL);
   return Val_hp(node);
-}
-
-static void print_tail_chain(value node)
-{
-  value starting_node;
-
-  assert(Is_ocaml_node(node));
-  starting_node = node;
-
-  if (Tail_link(node) == node) {
-    printf("Tail chain is empty.\n");
-  }
-  else {
-    printf("Tail chain:\n");
-    do {
-      node = Tail_link(node);
-      printf("  Node %p (identifying PC=%p)\n", (void*) node,
-        Decode_node_pc(Node_pc(node)));
-    } while (node != starting_node);
-  }
-}
-
-static void print_node_header(value node)
-{
-  printf("Node %p: tag %d, size %d, identifying PC=%p\n",
-    (void*) node, Tag_val(node), Wosize_val(node), Node_pc(node));
-  print_tail_chain(node);
-}
-
-static void print_trie_node(value node, int inside_indirect_list)
-{
-  if (Color_val(node) != Caml_black) {
-    printf("Node %p visited before\n", (void*) node);
-  }
-  else {
-    int field;
-    int alloc_point;
-    int direct_call_point;
-
-    alloc_point = 0;
-    direct_call_point = 0;
-
-    Hd_val(node) = Whitehd_hd(Hd_val(node));
-
-    print_node_header(node);
-
-    /* CR mshinwell: remove some of the hard-coded offsets below and use the
-       macros */
-
-    if (Is_ocaml_node(node)) {
-      for (field = Node_num_header_words; field < Wosize_val(node); field++) {
-        value entry;
-        int is_last;
-
-        entry = Field(node, field);
-
-        /* Even though indirect call points have a different size from
-           direct call points and allocation points, it is still safe to just
-           skip until we don't see [Val_unit] any more. */
-        if (entry == Val_unit) {
-          continue;
-        }
-
-        /* We may now be in the middle of an uninitialized direct call point
-           for a tail call.  This can be detected by seeing if the pointer
-           is an encoded pointer to the current node. */
-        if (entry == Encode_tail_caller_node(node)) {
-          /* The pointer should be the third in a group of three words. */
-          assert (field >= Node_num_header_words + 2);
-          printf("(Reached uninitialized tail call point.)\n");
-          continue;
-        }
-
-        /* At this point we should have an encoded program counter value.
-           First distinguish between:
-           (a) a direct or an indirect call point;
-           (b) an allocation point.
-        */
-        switch (Call_or_allocation_point(node, field)) {
-          case CALL: {
-            /* Determine whether this is a direct or an indirect call
-               point by examining the second word in the group.  This will be
-               an immediate encoded PC value for a direct call point, but a
-               pointer for an indirect call point.  It should never be
-               [Val_unit] in either case. */
-            value second_word;
-            assert(field < Wosize_val(node) - 1);
-            /* CR mshinwell: this assumes that the list coincides with
-               the callee slot... */
-            second_word = Indirect_pc_linked_list(node, field);
-            assert(second_word != Val_unit);
-            /* CR mshinwell: consider using a macro */
-            if (Is_block(list)) {
-              /* This is an indirect call point. */
-              int i = indirect_call_point;
-              printf("Indirect call point %d: %p calls...\n",
-                indirect_call_point,
-                Decode_call_point_pc(Indirect_pc_call_site(node, field)));
-              assert(!Is_ocaml_node(second_word));
-              print_trie_node(second_word, 1);
-              field++;
-              printf("Indirect call point %d ends.\n", i);
-            }
-            else {
-              /* This is a direct call point. */
-              value child;
-              int i = direct_call_point;
-              assert(field < Wosize_val(node) - 2);
-              child = Direct_callee_node(node, field);
-              printf("Direct call point %d: %p calls %p, child node=%p\n",
-                direct_call_point,
-                Decode_call_point_pc(Direct_pc_call_site(node, field)),
-                Decode_call_point_pc(Direct_pc_callee(node, field)),
-                (void*) child);
-              direct_call_point++;
-              if (child != Val_unit) {
-                print_trie_node(child, 0);
-              }
-              field += 2;
-              printf("Direct call point %d ends\n", i);
-            }
-            break;
-          }
-
-          case ALLOCATION: {
-            assert(field < Wosize_val(node) - 1);
-            printf("Allocation point: pc=%p, profinfo=%lld\n", alloc_point,
-              Decode_alloc_point_pc(Alloc_point_pc(node, field)),
-              Decode_alloc_point_profinfo(Alloc_point_profinfo(node, field)));
-            alloc_point++;
-            field++;
-            break;
-          }
-
-          default:
-            assert(0);
-        }
-      }
-    } else {
-      c_node* c_node = c_node_of_stored_pointer(node);
-      assert (c_node != NULL);
-      while (c_node != NULL) {
-        printf("(Debug: about to classify node %p)\n", (void*) c_node);
-        switch (classify_c_node(c_node)) {
-          case CALL:
-            printf("%s %p: child node=%p\n",
-              inside_indirect_node ? "..." : "Call site in non-OCaml code ",
-              (void*) (c_node->pc >> 2),
-              (void*) c_node->data.callee_node);
-            print_trie_node(c_node->data.callee_node, 0);
-            break;
-
-          case ALLOCATION:
-            printf("Allocation point in non-OCaml code at %p: profinfo=%lld\n",
-              (void*) (c_node->pc >> 2),
-              (unsigned long long) c_node->data.profinfo);
-            break;
-
-          default:
-            abort();
-        }
-        printf("(Debug: before 'about to classify node %p' with %p)\n",
-          (void*) (c_node_of_stored_pointer(c_node->next)),
-          (void*) c_node);
-        c_node = c_node_of_stored_pointer(c_node->next);
-      }
-    }
-    printf("End of node %p\n", (void*) node);
-  }
-}
-
-static void mark_trie_node_black(value node)
-{
-  int field;
-
-  if (Color_val(node) == Caml_black) {
-    return;
-  }
-  Hd_val(node) = Blackhd_hd(Hd_val(node));
-
-  if (Tag_val(node) == 0) {
-    for (field = 0; field < Wosize_val(node); field += 2) {
-      value entry;
-
-      entry = Field(node, field);
-
-      if (entry == Val_unit) {
-        continue;
-      }
-
-      switch (entry & 3) {
-        case 3: {
-          value child = Field(node, field + 1);
-          if (child != Val_unit) {
-            mark_trie_node_black(child);
-          }
-          break;
-        }
-
-        default:
-          break;
-      }
-    }
-  } else {
-    c_node* c_node = c_node_of_stored_pointer(node);
-    assert (c_node != NULL);
-    while (c_node != NULL) {
-      switch (classify_c_node(c_node)) {
-        case CALL:
-          mark_trie_node_black(c_node->data.callee_node);
-          break;
-
-        default:
-          break;
-      }
-      c_node = c_node_of_stored_pointer(c_node->next);
-    }
-  }
-}
-
-CAMLprim value caml_allocation_profiling_debug(value v_unit)
-{
-  value trie_node = caml_alloc_profiling_trie_root;
-
-  if (trie_node == Val_unit) {
-    printf("Allocation profiling trie is empty\n");
-  }
-  else {
-    print_trie_node(trie_node, 0);
-    mark_trie_node_black(trie_node);
-    printf("End of trie dump.\n");
-  }
-
-  fflush(stdout);
-
-  return Val_unit;
 }
 
 static int pc_inside_c_node_matches(c_node* node, void* pc)
@@ -1081,6 +814,37 @@ static c_node* find_trie_node_from_libunwind(void)
   return node;
 }
 
+static uintnat generate_profinfo(void)
+{
+  uintnat profinfo;
+
+  if (caml_allocation_profiling_use_override_profinfo == Val_true) {
+    return caml_allocation_profiling_override_profinfo;
+  }
+
+  profinfo = caml_allocation_profiling_profinfo++;
+  if (caml_allocation_profiling_profinfo > PROFINFO_MASK) {
+    /* Profiling counter overflow. */
+    profinfo = profinfo_overflow;
+  }
+
+  return profinfo;
+}
+
+CAMLprim uintnat caml_alloc_profiling_generate_profinfo (void* pc,
+    value node, uintnat offset)
+{
+  uintnat profinfo = generate_profinfo();
+
+  assert(Alloc_point_pc(node, offset) == Val_unit);
+  assert(Alloc_point_profinfo(node, offset) == Val_unit);
+
+  Alloc_point_pc(node, offset) = Encode_alloc_point_pc(pc);
+  Alloc_point_profinfo(node, offset) = Encode_alloc_point_profinfo(profinfo);
+
+  return profinfo << PROFINFO_SHIFT;
+}
+
 uintnat caml_allocation_profiling_my_profinfo (void)
 {
   uint64_t profinfo;
@@ -1113,6 +877,241 @@ CAMLprim value caml_allocation_profiling_marshal_trie (value v_channel)
   caml_extern_allow_out_of_heap = 1;
   caml_output_value(v_channel, caml_alloc_profiling_trie_root, Val_long(0));
   caml_extern_allow_out_of_heap = 0;
+
+  return Val_unit;
+}
+
+static void print_tail_chain(value node)
+{
+  value starting_node;
+
+  assert(Is_ocaml_node(node));
+  starting_node = node;
+
+  if (Tail_link(node) == node) {
+    printf("Tail chain is empty.\n");
+  }
+  else {
+    printf("Tail chain:\n");
+    do {
+      node = Tail_link(node);
+      printf("  Node %p (identifying PC=%p)\n", (void*) node,
+        Decode_node_pc(Node_pc(node)));
+    } while (node != starting_node);
+  }
+}
+
+static void print_node_header(value node)
+{
+  printf("Node %p: tag %d, size %d, identifying PC=%p\n",
+    (void*) node, Tag_val(node), Wosize_val(node), Node_pc(node));
+  print_tail_chain(node);
+}
+
+static void print_trie_node(value node, int inside_indirect_list)
+{
+  if (Color_val(node) != Caml_black) {
+    printf("Node %p visited before\n", (void*) node);
+  }
+  else {
+    int field;
+    int alloc_point;
+    int direct_call_point;
+
+    alloc_point = 0;
+    direct_call_point = 0;
+
+    Hd_val(node) = Whitehd_hd(Hd_val(node));
+
+    print_node_header(node);
+
+    /* CR mshinwell: remove some of the hard-coded offsets below and use the
+       macros */
+
+    if (Is_ocaml_node(node)) {
+      for (field = Node_num_header_words; field < Wosize_val(node); field++) {
+        value entry;
+        int is_last;
+
+        entry = Field(node, field);
+
+        /* Even though indirect call points have a different size from
+           direct call points and allocation points, it is still safe to just
+           skip until we don't see [Val_unit] any more. */
+        if (entry == Val_unit) {
+          continue;
+        }
+
+        /* We may now be in the middle of an uninitialized direct call point
+           for a tail call.  This can be detected by seeing if the pointer
+           is an encoded pointer to the current node. */
+        if (entry == Encode_tail_caller_node(node)) {
+          /* The pointer should be the third in a group of three words. */
+          assert (field >= Node_num_header_words + 2);
+          printf("(Reached uninitialized tail call point.)\n");
+          continue;
+        }
+
+        /* At this point we should have an encoded program counter value.
+           First distinguish between:
+           (a) a direct or an indirect call point;
+           (b) an allocation point.
+        */
+        switch (Call_or_allocation_point(node, field)) {
+          case CALL: {
+            /* Determine whether this is a direct or an indirect call
+               point by examining the second word in the group.  This will be
+               an immediate encoded PC value for a direct call point, but a
+               pointer for an indirect call point.  It should never be
+               [Val_unit] in either case. */
+            value second_word;
+            assert(field < Wosize_val(node) - 1);
+            /* CR mshinwell: this assumes that the list coincides with
+               the callee slot... */
+            second_word = Indirect_pc_linked_list(node, field);
+            assert(second_word != Val_unit);
+            /* CR mshinwell: consider using a macro */
+            if (Is_block(list)) {
+              /* This is an indirect call point. */
+              int i = indirect_call_point;
+              printf("Indirect call point %d: %p calls...\n",
+                indirect_call_point,
+                Decode_call_point_pc(Indirect_pc_call_site(node, field)));
+              assert(!Is_ocaml_node(second_word));
+              print_trie_node(second_word, 1);
+              field++;
+              printf("Indirect call point %d ends.\n", i);
+            }
+            else {
+              /* This is a direct call point. */
+              value child;
+              int i = direct_call_point;
+              assert(field < Wosize_val(node) - 2);
+              child = Direct_callee_node(node, field);
+              printf("Direct call point %d: %p calls %p, child node=%p\n",
+                direct_call_point,
+                Decode_call_point_pc(Direct_pc_call_site(node, field)),
+                Decode_call_point_pc(Direct_pc_callee(node, field)),
+                (void*) child);
+              direct_call_point++;
+              if (child != Val_unit) {
+                print_trie_node(child, 0);
+              }
+              field += 2;
+              printf("Direct call point %d ends\n", i);
+            }
+            break;
+          }
+
+          case ALLOCATION:
+            assert(field < Wosize_val(node) - 1);
+            printf("Allocation point: pc=%p, profinfo=%lld\n", alloc_point,
+              Decode_alloc_point_pc(Alloc_point_pc(node, field)),
+              Decode_alloc_point_profinfo(Alloc_point_profinfo(node, field)));
+            alloc_point++;
+            field++;
+            break;
+
+          default:
+            assert(0);
+        }
+      }
+    } else {
+      c_node* c_node = c_node_of_stored_pointer(node);
+      assert (c_node != NULL);
+      while (c_node != NULL) {
+        printf("(Debug: about to classify node %p)\n", (void*) c_node);
+        switch (classify_c_node(c_node)) {
+          case CALL:
+            printf("%s %p: child node=%p\n",
+              inside_indirect_node ? "..." : "Call site in non-OCaml code ",
+              (void*) (c_node->pc >> 2),
+              (void*) c_node->data.callee_node);
+            print_trie_node(c_node->data.callee_node, 0);
+            break;
+
+          case ALLOCATION:
+            printf("Allocation point in non-OCaml code at %p: profinfo=%lld\n",
+              (void*) (c_node->pc >> 2),
+              (unsigned long long) c_node->data.profinfo);
+            break;
+
+          default:
+            abort();
+        }
+        printf("(Debug: before 'about to classify node %p' with %p)\n",
+          (void*) (c_node_of_stored_pointer(c_node->next)),
+          (void*) c_node);
+        c_node = c_node_of_stored_pointer(c_node->next);
+      }
+    }
+    printf("End of node %p\n", (void*) node);
+  }
+}
+
+static void mark_trie_node_black(value node)
+{
+  int field;
+
+  if (Color_val(node) == Caml_black) {
+    return;
+  }
+  Hd_val(node) = Blackhd_hd(Hd_val(node));
+
+  if (Tag_val(node) == 0) {
+    for (field = 0; field < Wosize_val(node); field += 2) {
+      value entry;
+
+      entry = Field(node, field);
+
+      if (entry == Val_unit) {
+        continue;
+      }
+
+      switch (entry & 3) {
+        case 3: {
+          value child = Field(node, field + 1);
+          if (child != Val_unit) {
+            mark_trie_node_black(child);
+          }
+          break;
+        }
+
+        default:
+          break;
+      }
+    }
+  } else {
+    c_node* c_node = c_node_of_stored_pointer(node);
+    assert (c_node != NULL);
+    while (c_node != NULL) {
+      switch (classify_c_node(c_node)) {
+        case CALL:
+          mark_trie_node_black(c_node->data.callee_node);
+          break;
+
+        default:
+          break;
+      }
+      c_node = c_node_of_stored_pointer(c_node->next);
+    }
+  }
+}
+
+CAMLprim value caml_allocation_profiling_debug(value v_unit)
+{
+  value trie_node = caml_alloc_profiling_trie_root;
+
+  if (trie_node == Val_unit) {
+    printf("Allocation profiling trie is empty\n");
+  }
+  else {
+    print_trie_node(trie_node, 0);
+    mark_trie_node_black(trie_node);
+    printf("End of trie dump.\n");
+  }
+
+  fflush(stdout);
 
   return Val_unit;
 }
