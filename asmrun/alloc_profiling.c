@@ -873,9 +873,11 @@ static c_node* allocate_c_node(void)
 }
 
 CAMLprim value* caml_allocation_profiling_indirect_node_hole_ptr
-      (void* callee, value* node_hole, int is_tail)
+      (void* callee, value* node_hole, value caller_node)
 {
-  /* Find the address of the node hole for an indirect call to [callee]. */
+  /* Find the address of the node hole for an indirect call to [callee].
+     If [node] is not [Val_unit], it is a pointer to the (caller's) node,
+     and indicates that this is a tail call site. */
 
   c_node* c_node;
   int found = 0;
@@ -913,7 +915,13 @@ CAMLprim value* caml_allocation_profiling_indirect_node_hole_ptr
     c_node = allocate_c_node();
     c_node->pc = Encode_c_node_pc_for_call(callee);
 
-
+    if (caller_node != Val_unit) {
+      /* This is a tail call site.
+         Perform the initialization equivalent to that emitted by
+         [Alloc_profiling.code_for_function_prologue] for direct tail call
+         sites. */
+      c_node->data.callee_node = caller_node;
+    }
 
     *node_hole = stored_pointer_to_c_node(c_node);
   }

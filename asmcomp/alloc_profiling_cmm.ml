@@ -163,10 +163,14 @@ let code_for_call ~node ~index_within_node ~callee ~is_tail =
               within_node ~index:(index_within_node + 2))))
       | Indirect callee ->
         let node_hole_ptr = Ident.create "node_hole_ptr" in
+        let caller_node =
+          if is_tail then node
+          else Cconst_int 0  (* [Val_unit] *)
+        in
         let is_tail = if is_tail then Cconst_int 1 else Cconst_int 0 in
         Clet (node_hole_ptr,
           Cop (Cextcall ("caml_allocation_profiling_indirect_node_hole_ptr",
-            [callee; Cvar place_within_node; is_tail])),
+            [callee; Cvar place_within_node; caller_node])),
           Cop (Calloc_profiling_load_node_hole_ptr, [Cvar node_hole_ptr])))
 
 class instruction_selection = object (self)
