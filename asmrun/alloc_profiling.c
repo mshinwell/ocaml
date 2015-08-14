@@ -53,6 +53,8 @@
 #include "libunwind.h"
 #endif
 
+#pragma GCC optimize ("-O3")
+
 int caml_allocation_profiling = 1;
 
 void
@@ -297,8 +299,6 @@ caml_dump_heapgraph_from_ocaml(value node_output_file, value edge_output_file)
   return Val_unit;
 }
 
-#pragma GCC optimize ("-O3")
-
 value caml_alloc_profiling_trie_root = Val_unit;
 value* caml_alloc_profiling_trie_node_ptr = &caml_alloc_profiling_trie_root;
 
@@ -450,7 +450,7 @@ typedef enum {
 #define Node_num_header_words 2
 
 /* The "node program counter" at the start of an OCaml node. */
-#define Node_pc(node) ((void*) (Field(node, 0)))
+#define Node_pc(node) (Field(node, 0))
 #define Encode_node_pc(pc) (((value) pc) | 1)
 #define Decode_node_pc(encoded_pc) ((void*) (encoded_pc & ~1))
 
@@ -476,7 +476,7 @@ typedef enum {
 
 /* Allocation points within OCaml nodes. */
 #define Encode_alloc_point_pc(pc) ((((value) pc) << 2) | 1)
-#define Decode_alloc_point_pc(pc) (((value) pc) >> 2)
+#define Decode_alloc_point_pc(pc) ((void*) (((value) pc) >> 2))
 #define Encode_alloc_point_profinfo(profinfo) (Val_long(profinfo))
 #define Decode_alloc_point_profinfo(profinfo) (Long_val(profinfo))
 #define Alloc_point_pc(node, offset) (Field(node, offset))
@@ -491,7 +491,7 @@ typedef enum {
 #define Direct_callee_node(node,offset) (Field(node, (offset) + 2))
 /* The following two are used for indirect call points too. */
 #define Encode_call_point_pc(pc) ((((value) pc) << 2) | 3)
-#define Decode_call_point_pc(pc) (((value) pc) >> 2)
+#define Decode_call_point_pc(pc) ((void*) (((value) pc) >> 2))
 
 /* Indirect call points (tail or non-tail) within OCaml nodes.
    They hold the PC of the call site and a linked list of (PC upon entry
@@ -548,7 +548,7 @@ static value allocate_uninitialized_ocaml_node(int size_including_header)
   return Val_hp(node);
 }
 
-static value* find_tail_node(value node, void* callee)
+static value find_tail_node(value node, void* callee)
 {
   /* Search the tail chain within [node] (which corresponds to an invocation
      of a caller of [callee]) to determine whether it contains a tail node
@@ -578,8 +578,7 @@ static value* find_tail_node(value node, void* callee)
 CAMLprim value caml_allocation_profiling_allocate_node (
       int size_including_header, void* pc, value* node_hole)
 {
-  int word;
-  int direct_tail_call_point;
+  int field;
   value node;
   value caller_node = Val_unit;
 
@@ -602,14 +601,14 @@ CAMLprim value caml_allocation_profiling_allocate_node (
       /* This tail calling sequence has happened before; just fill the hole
          with the existing node and return. */
       *node_hole = tail_node;
-      return;
+      return tail_node;
     }
   }
 
   node = allocate_uninitialized_ocaml_node(size_including_header);
   Hd_val(node) =
     Make_header(size_including_header - 1, OCaml_node_tag, Caml_black);
-  Node_pc(node) = Encode_node_pc(callee);
+  Node_pc(node) = Encode_node_pc(pc);
   /* If the callee was tail called, then the tail link field will link this
      new node into an existing tail chain.  Otherwise, it is initialized with
      the empty tail chain, i.e. the one pointing directly at [node]. */
@@ -755,7 +754,7 @@ static c_node* find_trie_node_from_libunwind(void)
   node_hole = caml_alloc_profiling_trie_node_ptr;
   printf("*** find_trie_node_from_libunwind: starting at %p\n",
     (void*) *node_hole);
-  caml_allocation_profiling_debug(Val_unit);
+/*  caml_allocation_profiling_debug(Val_unit);*/
   /* Note that if [node_hole] is filled, then it must point to a C node,
      since it is not possible for there to be a call point in an OCaml
      function that sometimes calls C and sometimes calls OCaml. */
@@ -884,7 +883,7 @@ uintnat caml_allocation_profiling_my_profinfo (void)
     profinfo = 0ull;
   }
 
-  caml_allocation_profiling_debug(Val_unit);
+/*  caml_allocation_profiling_debug(Val_unit);*/
 
   return profinfo;
 }
@@ -928,11 +927,12 @@ static void print_tail_chain(value node)
 static void print_node_header(value node)
 {
   printf("Node %p: tag %d, size %d, identifying PC=%p\n",
-    (void*) node, Tag_val(node), Wosize_val(node), Node_pc(node));
+    (void*) node, Tag_val(node), (int) Wosize_val(node),
+    Decode_node_pc(Node_pc(node)));
   print_tail_chain(node);
 }
 
-static void print_trie_node(value node, int inside_indirect_list)
+static void print_trie_node(value node, int inside_indirect_node)
 {
   if (Color_val(node) != Caml_black) {
     printf("Node %p visited before\n", (void*) node);
@@ -941,9 +941,11 @@ static void print_trie_node(value node, int inside_indirect_list)
     int field;
     int alloc_point;
     int direct_call_point;
+    int indirect_call_point;
 
     alloc_point = 0;
     direct_call_point = 0;
+    indirect_call_point = 0;
 
     Hd_val(node) = Whitehd_hd(Hd_val(node));
 
@@ -955,7 +957,6 @@ static void print_trie_node(value node, int inside_indirect_list)
     if (Is_ocaml_node(node)) {
       for (field = Node_num_header_words; field < Wosize_val(node); field++) {
         value entry;
-        int is_last;
 
         entry = Field(node, field);
 
@@ -995,7 +996,7 @@ static void print_trie_node(value node, int inside_indirect_list)
             second_word = Indirect_pc_linked_list(node, field);
             assert(second_word != Val_unit);
             /* CR mshinwell: consider using a macro */
-            if (Is_block(list)) {
+            if (Is_block(second_word)) {
               /* This is an indirect call point. */
               int i = indirect_call_point;
               printf("Indirect call point %d: %p calls...\n",
@@ -1029,9 +1030,10 @@ static void print_trie_node(value node, int inside_indirect_list)
 
           case ALLOCATION:
             assert(field < Wosize_val(node) - 1);
-            printf("Allocation point: pc=%p, profinfo=%lld\n", alloc_point,
+            printf("Allocation point %d: pc=%p, profinfo=%lld\n", alloc_point,
               Decode_alloc_point_pc(Alloc_point_pc(node, field)),
-              Decode_alloc_point_profinfo(Alloc_point_profinfo(node, field)));
+              (unsigned long long)
+                Decode_alloc_point_profinfo(Alloc_point_profinfo(node, field)));
             alloc_point++;
             field++;
             break;

@@ -14,8 +14,7 @@
 include ../config/Makefile
 
 CC=$(NATIVECC)
-#FLAGS=-I../byterun -I/home/mark/dev/libunwind-install/include -DCAML_NAME_SPACE -DNATIVE_CODE
-FLAGS=-Werror -I../byterun -I/mnt/local/sda1/mshinwell/libunwind-install/include -DCAML_NAME_SPACE -DNATIVE_CODE \
+FLAGS=-Werror -I../byterun -I/home/mark/dev/libunwind-install/include -I/mnt/local/sda1/mshinwell/libunwind-install/include -DCAML_NAME_SPACE -DNATIVE_CODE \
       -DTARGET_$(ARCH) -DSYS_$(SYSTEM) $(IFLEXDIR)
 CFLAGS=$(FLAGS) -g -O $(NATIVECCCOMPOPTS)
 DFLAGS=$(FLAGS) -g -DDEBUG $(NATIVECCCOMPOPTS)
