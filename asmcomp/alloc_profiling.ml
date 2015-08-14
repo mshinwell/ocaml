@@ -57,7 +57,9 @@ let code_for_function_prologue () =
           let place = Ident.create "tail_init" in
           Clet (place,
             Cop (Cadda, [Cvar new_node; Cconst_int offset_in_bytes]),
-            Cop (Cstore Word, [Cvar place; Cvar new_node_encoded])))
+            Csequence (
+              Cop (Cstore Word, [Cvar place; Cvar new_node_encoded]),
+              init_code)))
         (Cvar new_node)
         indexes
     in
@@ -189,7 +191,9 @@ class virtual instruction_selection = object (self)
         ~callee:(Direct lbl)
         ~is_tail
     in
-    ignore (self#emit_expr env instrumentation)
+    match self#emit_expr env instrumentation with
+    | None -> ()
+    | Some _ -> assert false
 
   method private instrument_indirect_call ~env ~callee ~is_tail =
     (* [callee] is a pseudoregister, so we have to bind it in the environment
@@ -202,7 +206,9 @@ class virtual instruction_selection = object (self)
         ~callee:(Indirect (Cmm.Cvar callee_ident))
         ~is_tail
     in
-    ignore (self#emit_expr env instrumentation)
+    match self#emit_expr env instrumentation with
+    | None -> ()
+    | Some _ -> assert false
 
   method private maybe_instrument desc ~env ~arg ~res =
     let module M = Mach in
