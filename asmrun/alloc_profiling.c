@@ -853,9 +853,11 @@ CAMLprim uintnat caml_alloc_profiling_generate_profinfo (void* pc,
   uintnat offset;
   uintnat profinfo = generate_profinfo();
 
-  /* [node] isn't really a node; it points into the middle of one.  It's done
-     like this to avoid re-calculating the place in the node (which already
-     has to be done in the OCaml-generated code run before this function). */
+  /* [node] isn't really a node; it points into the middle of
+     one---specifically to the "profinfo" word of an allocation point pair of
+     words  It's done like this to avoid re-calculating the place in the node
+     (which already has to be done in the OCaml-generated code run before
+     this function). */
   node = (value) (((uintnat*) profinfo_words) - 1);
   offset = 0;
 
@@ -1092,8 +1094,8 @@ static void mark_trie_node_black(value node)
   }
   Hd_val(node) = Blackhd_hd(Hd_val(node));
 
-  if (Tag_val(node) == 0) {
-    for (field = 0; field < Wosize_val(node); field += 2) {
+  if (Is_ocaml_node(node)) {
+    for (field = Node_num_header_words; field < Wosize_val(node); field++) {
       value entry;
 
       entry = Field(node, field);
@@ -1102,17 +1104,36 @@ static void mark_trie_node_black(value node)
         continue;
       }
 
-      switch (entry & 3) {
-        case 3: {
-          value child = Field(node, field + 1);
-          if (child != Val_unit) {
-            mark_trie_node_black(child);
+      if (entry == Encode_tail_caller_node(node)) {
+        continue;
+      }
+
+      switch (Call_or_allocation_point(node, field)) {
+        case CALL: {
+          value second_word;
+          second_word = Indirect_pc_linked_list(node, field);
+          if (Is_block(second_word)) {
+            assert(!Is_ocaml_node(second_word));
+            mark_trie_node_black(second_word);
+            field++;
+          }
+          else {
+            value child;
+            child = Direct_callee_node(node, field);
+            if (child != Val_unit) {
+              mark_trie_node_black(child);
+            }
+            field += 2;
           }
           break;
         }
 
-        default:
+        case ALLOCATION:
+          field++;
           break;
+
+        default:
+          assert(0);
       }
     }
   } else {

@@ -45,7 +45,7 @@ let code_for_function_prologue () =
   let new_node = Ident.create "new_node" in
   let must_allocate_node = Ident.create "must_allocate_node" in
   let open Cmm in
-  let initialize_direct_call_points_and_return_node =
+  let initialize_direct_tail_call_points_and_return_node =
     let new_node_encoded = Ident.create "new_node_encoded" in
     (* The callee node pointers within direct call points must initially
        point back at the start of the current node. *)
@@ -53,7 +53,7 @@ let code_for_function_prologue () =
     let body =
       List.fold_left (fun init_code index ->
           (* Cf. [Direct_callee_node] in the runtime. *)
-          let offset_in_bytes = (index + 2) * Arch.size_addr in
+          let offset_in_bytes = index * Arch.size_addr in
           let place = Ident.create "tail_init" in
           Clet (place,
             Cop (Cadda, [Cvar new_node; Cconst_int offset_in_bytes]),
@@ -82,7 +82,7 @@ let code_for_function_prologue () =
                Cop (Cprogram_counter, []);
                Cvar node_hole;
               ]),
-            initialize_direct_call_points_and_return_node),
+            initialize_direct_tail_call_points_and_return_node),
           Cvar node))))
 
 let code_for_allocation_point ~value's_header ~node =
@@ -90,7 +90,10 @@ let code_for_allocation_point ~value's_header ~node =
   let profinfo = Ident.create "profinfo" in
   let pc = Ident.create "pc" in
   let address_of_profinfo = Ident.create "address_of_profinfo" in
-  let index_within_node = next_index_within_node ~words_needed:2 in
+  let index_within_node =
+    (* "1 +" to skip the slot for the PC of the allocation point. *)
+    1 + (next_index_within_node ~words_needed:2)
+  in
   let offset_into_node = Arch.size_addr * index_within_node in
   let open Cmm in
   let generate_new_profinfo =
@@ -136,6 +139,7 @@ let code_for_call ~node ~callee ~is_tail =
        so the correct initialization code can be emitted in the prologue. *)
     | Direct _ when is_tail ->
       direct_tail_call_point_indexes :=
+        (* "+2" to skip the call site and callee PC values. *)
         (index_within_node + 2)::!direct_tail_call_point_indexes
     | Direct _ | Indirect _ -> ()
   end;
