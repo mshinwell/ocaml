@@ -53,7 +53,7 @@
 #include "libunwind.h"
 #endif
 
-#pragma GCC optimize ("-O3")
+#pragma GCC optimize ("-O0")
 
 int caml_allocation_profiling = 1;
 
@@ -847,9 +847,17 @@ static uintnat generate_profinfo(void)
 }
 
 CAMLprim uintnat caml_alloc_profiling_generate_profinfo (void* pc,
-    value node, uintnat offset)
+    void* profinfo_words)
 {
+  value node;
+  uintnat offset;
   uintnat profinfo = generate_profinfo();
+
+  /* [node] isn't really a node; it points into the middle of one.  It's done
+     like this to avoid re-calculating the place in the node (which already
+     has to be done in the OCaml-generated code run before this function). */
+  node = (value) (((uintnat*) profinfo_words) - 1);
+  offset = 0;
 
   assert(Alloc_point_pc(node, offset) == Val_unit);
   assert(Alloc_point_profinfo(node, offset) == Val_unit);

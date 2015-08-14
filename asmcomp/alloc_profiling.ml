@@ -97,10 +97,8 @@ let code_for_allocation_point ~value's_header ~node =
     (* This will generate a static branch to a function that should usually
        be in the cache, which hopefully gives a good code size/performance
        balance. *)
-    Clet (pc, Cop (Cor, [
-        (* Cf. [Encode_alloc_point_pc] in the runtime. *)
-        Cop (Clsl, [Cop (Cprogram_counter, []); Cconst_int 2]);
-          Cconst_int 1]),
+    Clet (pc,
+      Cop (Cprogram_counter, []),
       Cop (Cextcall ("caml_alloc_profiling_generate_profinfo", [| Int |],
           false, Debuginfo.none),
         [Cvar pc; Cvar address_of_profinfo]))
@@ -138,7 +136,7 @@ let code_for_call ~node ~callee ~is_tail =
        so the correct initialization code can be emitted in the prologue. *)
     | Direct _ when is_tail ->
       direct_tail_call_point_indexes :=
-        index_within_node::!direct_tail_call_point_indexes
+        (index_within_node + 2)::!direct_tail_call_point_indexes
     | Direct _ | Indirect _ -> ()
   end;
   let place_within_node = Ident.create "place_within_node" in
