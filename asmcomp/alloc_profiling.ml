@@ -129,8 +129,8 @@ type callee =
 let code_for_call ~node ~callee ~is_tail =
   let words_needed =
     match callee with
-    | Direct _ -> 3  (* Cf. [Direct_num_fields in the runtime]. *)
-    | Indirect _ -> 2  (* Cf. [Indirect_num_fields in the runtime]. *)
+    | Direct _ -> 3  (* Cf. [Direct_num_fields] in the runtime. *)
+    | Indirect _ -> 2  (* Cf. [Indirect_num_fields] in the runtime. *)
   in
   let index_within_node = next_index_within_node ~words_needed in
   begin match callee with
@@ -183,6 +183,10 @@ let code_for_call ~node ~callee ~is_tail =
 
 class virtual instruction_selection = object (self)
   inherit Selectgen.selector_generic as super
+
+  (* [disable_instrumentation] ensures that we don't try to instrument the
+     instrumentation... *)
+  val mutable disable_instrumentation = false
 
   method private instrument_direct_call ~env ~lbl ~is_tail =
     let instrumentation =
@@ -251,6 +255,7 @@ class virtual instruction_selection = object (self)
         instr_seq <- instr_seq.Mach.next
       done;
       instr_seq <- last_insn_of_main_prologue;
+      disable_instrumentation <- true;
       let node_temp_reg =
         match self#emit_expr env_after_main_prologue prologue_cmm with
         | None ->
@@ -258,6 +263,7 @@ class virtual instruction_selection = object (self)
               selection did not yield a destination register"
         | Some node_temp_reg -> node_temp_reg
       in
+      disable_instrumentation <- false;
       let node_reg = Tbl.find node env_after_main_prologue in
       self#insert_moves node_temp_reg node_reg;
       if not (!first_insn_of_body == Mach.dummy_instr) then begin
@@ -266,23 +272,34 @@ class virtual instruction_selection = object (self)
       end
     end
 
+  method private can_instrument () =
+    !Clflags.allocation_profiling && not disable_instrumentation
+
   method! insert_debug_env env desc dbg arg res =
-    if !Clflags.allocation_profiling then begin
-      self#maybe_instrument desc ~env ~arg ~res
+    if self#can_instrument () then begin
+      disable_instrumentation <- true;
+      self#maybe_instrument desc ~env ~arg ~res;
+      disable_instrumentation <- false
     end;
     super#insert_debug_env env desc dbg arg res
 
   method! insert_env env desc arg res =
-    if !Clflags.allocation_profiling then begin
-      self#maybe_instrument desc ~env ~arg ~res
+    if self#can_instrument () then begin
+      disable_instrumentation <- true;
+      self#maybe_instrument desc ~env ~arg ~res;
+      disable_instrumentation <- false
     end;
     super#insert_env env desc arg res
 
   method! emit_blockheader env n =
-    if !Clflags.allocation_profiling then
-      self#instrument_allocation_point ~env ~value's_header:n
-    else
+    if self#can_instrument () then begin
+      disable_instrumentation <- true;
+      let result = self#instrument_allocation_point ~env ~value's_header:n in
+      disable_instrumentation <- false;
+      result
+    end else begin
       super#emit_blockheader env n
+    end
 
   method! initial_env () =
     let env = super#initial_env () in
@@ -293,6 +310,7 @@ class virtual instruction_selection = object (self)
 
   method! emit_fundecl f =
     if !Clflags.allocation_profiling then begin
+      disable_instrumentation <- false;
       reset ~alloc_profiling_node_ident:f.Cmm.fun_alloc_profiling_node
     end;
     super#emit_fundecl f
