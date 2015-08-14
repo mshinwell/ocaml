@@ -2,7 +2,7 @@
 (*                                                                     *)
 (*                               OCaml                                 *)
 (*                                                                     *)
-(*                 Mark Shinwell, Jane Street Europe                   *)
+(*          Mark Shinwell and Leo White, Jane Street Europe            *)
 (*                                                                     *)
 (*  Copyright 2015, Jane Street Group, LLC                             *)
 (*                                                                     *)
