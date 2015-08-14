@@ -2,7 +2,7 @@
 (*                                                                     *)
 (*                               OCaml                                 *)
 (*                                                                     *)
-(*                 Mark Shinwell, Jane Street Europe                   *)
+(*          Mark Shinwell and Leo White, Jane Street Europe            *)
 (*                                                                     *)
 (*  Copyright 2015, Jane Street Group, LLC                             *)
 (*                                                                     *)
@@ -210,7 +210,10 @@ class instruction_selection = object (self)
     | _ -> ()
 
   method private instrument_allocation_point ~value's_header =
-
+    let instrumentation =
+      code_for_allocation_point ~node:!alloc_profiling_node ~value's_header
+    in
+    ignore (self#emit_expr env instrumentation)
 
   method private emit_prologue f ~env_after_main_prologue
         ~last_insn_of_main_prologue =
