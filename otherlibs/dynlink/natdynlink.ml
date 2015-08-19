@@ -173,7 +173,7 @@ let loadunits filename handle units state =
 
   let defines = List.flatten (List.map (fun ui -> ui.dynu_defines) units) in
 
-  ndl_run handle "_shared_startup";
+  ndl_run filename handle "_shared_startup";
   List.iter (ndl_run handle) defines;
   { implems = new_implems; ifaces = new_ifaces }
 

@@ -20,6 +20,146 @@
 (*                                                                     *)
 (***********************************************************************)
 
+module Gc_stats : sig
+  type t
+
+  val minor_words : t -> int
+  val promoted_words : t -> int
+  val major_words : t -> int
+  val minor_collections : t -> int
+  val major_colections : t -> int
+  val heap_words : t -> int
+  val heap_chunks : t -> int
+  val compactions : t -> int
+  val top_heap_words : t -> int
+end = struct
+  type t = {
+    minor_words : int;
+    promoted_words : int;
+    major_words : int;
+    minor_collections : int;
+    major_colections : int;
+    heap_words : int;
+    heap_chunks : int;
+    compactions : int;
+    top_heap_words : int;
+  }
+
+  let minor_words t = t.minor_words
+  let promoted_words t = t.promoted_words
+  let major_words t = t.major_words
+  let minor_collections t = t.minor_collections
+  let major_colections t = t.major_collections
+  let heap_words t = t.heap_words
+  let heap_chunks t = t.heap_chunks
+  let compactions t = t.compactions
+  let top_heap_words t = t.top_heap_words
+end
+
+module Snapshot_entries : sig
+  type t
+
+  val length : t -> int
+
+  val num_blocks : t -> index:int -> int
+  val num_words_including_headers : t -> index:int -> int
+end = struct
+  type t = int array
+
+  let length t =
+    let length = Array.length t in
+    assert (length mod 2 = 0);
+    length / 2
+
+  let num_blocks t ~index =
+    if index < 0 || index >= length t then begin
+      invalid_arg "Allocation_profiling.Snapshot_entries.num_blocks"
+    end;
+    t.(index * 2)
+
+  let num_words_including_headers t ~index =
+    if index < 0 || index >= length t then begin
+      invalid_arg
+        "Allocation_profiling.Snapshot_entries.num_words_including_headers"
+    end;
+    t.(index*2 + 1)
+end
+
+module Snapshot : sig
+  type t
+
+  val gc_stats : t -> Gc_stats.t
+  val entries : t -> Snapshot_entries.t
+end = struct
+  type t = {
+    gc_stats : Gc_stats.t;
+    entries : Snapshot_entries.t;
+  }
+
+  let gc_stats t = t.gc_stats
+  let entries t = t.entries
+end
+
+module Program_counter : sig
+  type t
+end = struct
+
+end
+
+module Profinfo : sig
+  type t
+end = struct
+
+end
+
+module Trie : sig
+  type t
+  type node
+
+  module Allocation_point : sig
+    type t
+
+    val location : t -> Program_counter.t
+    val profinfo : t -> Profinfo.t
+  end = struct
+
+  end
+
+  module Call_point : sig
+    type t
+
+    val call_site : t -> Program_counter.t
+    val callee : t -> Program_counter.t option
+    val child_node : t -> node option
+
+    val is_tail : t -> bool
+    val is_indirect : t -> bool
+  end = struct
+
+  end
+
+  module Node : sig
+    type t = node
+
+    val node_identifier : t -> int
+    val tail_chain : t -> t list
+
+    val allocation_points : t -> Allocation_point.t list
+    val call_points : t -> Call_point.t list
+  end
+end = struct
+
+end
+
+module Profile : sig
+  type t
+
+  val snapshots : t -> Snapshot.t list
+  val trie : t -> Trie.t
+end = struct
+
+end
+
 (* CR mshinwell: must ensure -allocation-profiling does not appear as a
    compiler option if WITH_ALLOCATION_PROFILING was not set *)
 

@@ -23,5 +23,6 @@
 #include "caml/mlvalues.h"
 
 extern void caml_allocation_profiling_initialize(void);
-
 extern uintnat caml_allocation_profiling_my_profinfo(void);
+extern void caml_allocation_profiling_register_dynamic_library(
+  const char* filename, void* address_of_code_begin);

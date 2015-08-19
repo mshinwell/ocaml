@@ -57,27 +57,55 @@
 
 int caml_allocation_profiling = 1;
 
+/* All .cmxs files loaded using natdynlink.  This will be available on any
+   platform supporting natdynlink, which might not be the case for the
+   memory map information (used to resolve program counters in shared
+   libraries that were not compiled by ocamlopt). */
+static struct ext_table ocaml_dynamic_libraries;
 typedef struct {
-  double minor_words;
-  double promoted_words;
-  double major_words;
-  intnat minor_collections;
-  intnat major_colections;
-  intnat heap_words;
-  intnat heap_chunks;
-  intnat compactions;
-  intnat top_heap_words;
+  char* filename;
+  void* address_of_code_begin;
+} ocaml_dynamic_library;
+
+void caml_allocation_profiling_register_dynamic_library(
+  const char* filename, void* address_of_code_begin)
+{
+  ocaml_dynamic_library* lib;
+
+  lib = caml_stat_alloc(sizeof(ocaml_dynamic_library));
+  lib.filename = filename;
+  lib.address_of_code_begin = address_of_code_begin;
+
+  caml_ext_table_add(&ocaml_dynamic_libraries, lib);
+}
+
+typedef struct {
+  value header;
+  value minor_words;
+  value promoted_words;
+  value major_words;
+  value minor_collections;
+  value major_colections;
+  value heap_words;
+  value heap_chunks;
+  value compactions;
+  value top_heap_words;
 } gc_stats;
 
 typedef struct {
-  uintnat num_blocks;
-  uintnat num_words_including_headers;
+  value num_blocks;
+  value num_words_including_headers;
 } snapshot_entry;
 
 typedef struct {
   uintnat header;
-  gc_stats gc_stats;
   snapshot_entry entries[0];
+} snapshot_entries;
+
+typedef struct {
+  uintnat header;
+  gc_stats* gc_stats;
+  snapshot_entries* entries;
 } snapshot;
 
 static const uintnat profinfo_none = (uintnat) 0;
@@ -85,13 +113,15 @@ static const uintnat profinfo_overflow = (uintnat) 1;
 static const uintnat profinfo_lowest = (uintnat) 2;
 uintnat caml_allocation_profiling_profinfo = (uintnat) 2;
 
-static snapshot* take_heap_snapshot(void)
+static value take_heap_snapshot(void)
 {
   snapshot* snapshot;
   snapshot_entry* temp_entries;
   char* chunk;
   uintnat index;
   uintnat target_index;
+  uintnat size_in_bytes;
+  uintnat largest_profinfo;
   uintnat num_distinct_profinfos = 0;
 
   temp_entries = (snapshot_entry*) caml_stat_alloc(
@@ -105,6 +135,8 @@ static snapshot* take_heap_snapshot(void)
      minor heap is empty. */
   caml_minor_collection();
   caml_finish_major_cycle();
+
+  largest_profinfo = profinfo_lowest;
 
   while (chunk != NULL) {
     char* hp;
@@ -123,6 +155,9 @@ static snapshot* take_heap_snapshot(void)
           uint64_t profinfo = Profinfo_hd(hd);
 
           if (profinfo >= profinfo_lowest && profinfo <= PROFINFO_MASK) {
+            if (profinfo > largest_profinfo) {
+              largest_profinfo = profinfo;
+            }
             if (temp_entries[profinfo].num_blocks == 0) {
               num_distinct_profinfos++;
             }
@@ -142,23 +177,27 @@ static snapshot* take_heap_snapshot(void)
 
   /* CR mshinwell: consider mapping to a file to avoid using system swap
      space */
-  snapshot = (snapshot*) caml_stat_alloc(
-    sizeof(snapshot) + num_distinct_profinfos*sizeof(snapshot_entry));
+  size_in_bytes =
+    sizeof(snapshot) + num_distinct_profinfos*sizeof(snapshot_entry);
+  assert((size_in_bytes % sizeof(uintnat)) == 0);
+  snapshot = (snapshot*) caml_stat_alloc(size_in_bytes);
 
-  snapshot->header = Make_header(PROFINFO_MASK, 0, Caml_black);
-  snapshot->minor_words = caml_stat_minor_words;
-  snapshot->promoted_words = caml_stat_promoted_words;
+  snapshot->header =
+    Make_header(size_in_bytes / sizeof(uintnat), 0, Caml_black);
+  snapshot->minor_words = (uintnat) caml_stat_minor_words;
+  snapshot->promoted_words = (uintnat) caml_stat_promoted_words;
   snapshot->major_words =
-    caml_stat_major_words + (double) caml_allocated_words;
-  snapshot->minor_collections = caml_stat_minor_collections;
-  snapshot->major_colections = caml_stat_major_collections;
-  snapshot->heap_words = caml_stat_heap_size / sizeof(value);
-  snapshot->heap_chunks = caml_stat_heap_chunks;
-  snapshot->compactions = caml_stat_compactions;
-  snapshot->top_heap_words = caml_stat_top_heap_size / sizeof(value);
+    ((uintnat) caml_stat_major_words) + ((uintnat) caml_allocated_words);
+  snapshot->minor_collections = (uintnat) caml_stat_minor_collections;
+  snapshot->major_colections = (uintnat) caml_stat_major_collections;
+  snapshot->heap_words = (uintnat) caml_stat_heap_size / sizeof(value);
+  snapshot->heap_chunks = (uintnat) caml_stat_heap_chunks;
+  snapshot->compactions = (uintnat) caml_stat_compactions;
+  snapshot->top_heap_words =
+    (uintnat) caml_stat_top_heap_size / sizeof(value);
 
   target_index = 0;
-  for (index = 0; index <= PROFINFO_MASK; index++) {
+  for (index = 0; index <= largest_profinfo; index++) {
     assert(target_index < num_distinct_profinfos);
     if (temp_entries[index].num_blocks > 0) {
       memcpy(&snapshot->entries[target_index], &temp_entries[index],
@@ -167,117 +206,9 @@ static snapshot* take_heap_snapshot(void)
     }
   }
 
-  return snapshot;
+  return (value) (&snapshot->gc_stats);
 }
 
-
-
-void
-caml_dump_allocators_of_major_heap_blocks (const char* output_file,
-                                           int sample_strings)
-{
-  char* chunk;
-  FILE* fp;
-  uint64_t blue;
-  uint64_t accounted_for;
-  uint64_t unaccounted_for = 0ull;
-  uint64_t unaccounted_for_by_tag[256];
-  int tag;
-
-  blue = 0ull;
-  accounted_for = 0ull;
-
-  /* XXX make this traverse from roots, and not do a GC. */
-
-  for (tag = 0; tag < 256; tag++) {
-    unaccounted_for_by_tag[tag] = 0ull;
-  }
-
-  fp = fopen(output_file, "w");
-  if (fp == NULL) {
-    fprintf(stderr, "couldn't open file '%s' for heap block dump\n", output_file);
-    return;
-  }
-
-  /* To avoid having to traverse the minor heap, just empty it. */
-  caml_minor_collection();
-
-  /* Perform a full major collection so no white blocks remain. */
-  caml_finish_major_cycle();
-
-  chunk = caml_heap_start;
-
-  while (chunk != NULL) {
-    char* hp;
-    char* limit;
-
-    hp = chunk;
-    limit = chunk + Chunk_size (chunk);
-
-    while (hp < limit) {
-      header_t hd = Hd_hp (hp);
-      switch (Color_hd(hd)) {
-        case Caml_blue:
-          blue += Whsize_hd(hd);
-          break;
-
-        default: {
-          uint64_t profinfo = Profinfo_hd(hd);
-
-          if (profinfo != 0ull) {
-            uint64_t size_in_words_including_header;
-
-            size_in_words_including_header = Whsize_hd(hd);
-            accounted_for += Whsize_hd(hd);
-
-            fprintf(fp, "%p %lld\n", (void*) profinfo,
-                    (unsigned long long) size_in_words_including_header);
-          }
-          else {
-            unaccounted_for += Whsize_hd(hd);
-            unaccounted_for_by_tag[Tag_hd(hd)]++;
-            if (sample_strings > 0) {
-              fprintf(fp, "tag %d with no profiling info: %p (field0: %p)\n",
-                Tag_hd(hd), (void*) (Op_hp(hp)), (void*) *(Op_hp(hp)));
-              sample_strings--;
-            }
-          }
-          break;
-        }
-      }
-      hp += Bhsize_hd (hd);
-      Assert (hp <= limit);
-    }
-
-    chunk = Chunk_next (chunk);
-  }
-
-  fprintf(fp, "word size (incl headers) of non-blue blocks with profiling info: %lld\n", (unsigned long long) accounted_for);
-  fprintf(fp, "word size (incl headers) of non-blue blocks with no profiling info: %lld\n  by tag: ", (unsigned long long) unaccounted_for);
-  for (tag = 0; tag < 256; tag++) {
-    if (unaccounted_for_by_tag[tag] > 0) {
-      fprintf(fp, "tag(%d)=%lld ", tag, (unsigned long long) unaccounted_for_by_tag[tag]);
-    }
-  }
-  fprintf(fp, "\n");
-  fprintf(fp, "word size (incl headers) of blue blocks: %lld\n", (unsigned long long) blue);
-  fprintf(fp, "word size (incl headers) of all blocks: %lld\n", (unsigned long long) (blue + accounted_for + unaccounted_for));
-  fprintf(fp, "caml_stat_heap_size in words: %lld\n", (unsigned long long) caml_stat_heap_size / sizeof(value));
-
-  fclose(fp);
-}
-
-CAMLprim value
-caml_dump_allocators_of_major_heap_blocks_from_ocaml (value output_file,
-                                                      value sample_strings)
-{
-  assert(Is_block(output_file) && Tag_val(output_file) == String_tag);
-  caml_dump_allocators_of_major_heap_blocks(String_val(output_file),
-    Int_val(sample_strings));
-  return Val_unit;
-}
-
-/* XXX consider having this one not do a GC too */
 CAMLprim value
 caml_forget_where_values_were_allocated (value v_unit)
 {
@@ -422,7 +353,7 @@ uintnat caml_allocation_profiling_override_profinfo;
 
 void caml_allocation_profiling_initialize (void)
 {
-
+  caml_ext_table_init(&ocaml_dynamic_libraries, 42);
 }
 
 CAMLprim value caml_allocation_profiling_trie_is_initialized (value v_unit)
