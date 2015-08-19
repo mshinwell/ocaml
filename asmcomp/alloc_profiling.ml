@@ -44,11 +44,13 @@ let code_for_function_prologue () =
   let node = Ident.create "node" in
   let new_node = Ident.create "new_node" in
   let must_allocate_node = Ident.create "must_allocate_node" in
+  let is_new_node = Ident.create "is_new_node" in
   let open Cmm in
   let initialize_direct_tail_call_points_and_return_node =
     let new_node_encoded = Ident.create "new_node_encoded" in
-    (* The callee node pointers within direct call points must initially
-       point back at the start of the current node. *)
+    (* The callee node pointers within direct tail call points must initially
+       point back at the start of the current node and be marked as per
+       [Encode_tail_caller_node] in the runtime. *)
     let indexes = !direct_tail_call_point_indexes in
     let body =
       List.fold_left (fun init_code index ->
@@ -74,15 +76,18 @@ let code_for_function_prologue () =
   Clet (node_hole, Cop (Calloc_profiling_node_hole, []),
     Clet (node, Cop (Cload Word, [Cvar node_hole]),
       Clet (must_allocate_node, Cop (Cand, [Cvar node; Cconst_int 1]),
-        Cifthenelse (Cvar must_allocate_node,
-          Clet (new_node,
+        Cifthenelse (Cop (Ccmpi Ceq, [Cvar must_allocate_node; Cconst_int 1]),
+          Clet (is_new_node,
             Cop (Cextcall ("caml_allocation_profiling_allocate_node",
               [| Int |], false, Debuginfo.none),
               [Cconst_int (1 + !index_within_node);
                Cop (Cprogram_counter, []);
                Cvar node_hole;
               ]),
-            initialize_direct_tail_call_points_and_return_node),
+            Clet (new_node, Cop (Cload Word, [Cvar node_hole]),
+              Cifthenelse (Cop (Ccmpi Ceq, [Cvar is_new_node; Cconst_int 0]),
+                Cvar new_node,
+                initialize_direct_tail_call_points_and_return_node))),
           Cvar node))))
 
 let code_for_allocation_point ~value's_header ~node =

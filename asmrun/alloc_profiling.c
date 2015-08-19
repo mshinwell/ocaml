@@ -57,6 +57,121 @@
 
 int caml_allocation_profiling = 1;
 
+typedef struct {
+  double minor_words;
+  double promoted_words;
+  double major_words;
+  intnat minor_collections;
+  intnat major_colections;
+  intnat heap_words;
+  intnat heap_chunks;
+  intnat compactions;
+  intnat top_heap_words;
+} gc_stats;
+
+typedef struct {
+  uintnat num_blocks;
+  uintnat num_words_including_headers;
+} snapshot_entry;
+
+typedef struct {
+  uintnat header;
+  gc_stats gc_stats;
+  snapshot_entry entries[0];
+} snapshot;
+
+static const uintnat profinfo_none = (uintnat) 0;
+static const uintnat profinfo_overflow = (uintnat) 1;
+static const uintnat profinfo_lowest = (uintnat) 2;
+uintnat caml_allocation_profiling_profinfo = (uintnat) 2;
+
+static snapshot* take_heap_snapshot(void)
+{
+  snapshot* snapshot;
+  snapshot_entry* temp_entries;
+  char* chunk;
+  uintnat index;
+  uintnat target_index;
+  uintnat num_distinct_profinfos = 0;
+
+  temp_entries = (snapshot_entry*) caml_stat_alloc(
+    (PROFINFO_MASK + 1)*sizeof(snapshot_entry));
+  for (index = 0; index <= PROFINFO_MASK; index++) {
+    temp_entries[index].num_blocks = 0;
+    temp_entries[index].num_words_including_headers = 0;
+  }
+
+  /* Perform a full major collection so only live data remains and the
+     minor heap is empty. */
+  caml_minor_collection();
+  caml_finish_major_cycle();
+
+  while (chunk != NULL) {
+    char* hp;
+    char* limit;
+
+    hp = chunk;
+    limit = chunk + Chunk_size (chunk);
+
+    while (hp < limit) {
+      header_t hd = Hd_hp (hp);
+      switch (Color_hd(hd)) {
+        case Caml_blue:
+          break;
+
+        default: {
+          uint64_t profinfo = Profinfo_hd(hd);
+
+          if (profinfo >= profinfo_lowest && profinfo <= PROFINFO_MASK) {
+            if (temp_entries[profinfo].num_blocks == 0) {
+              num_distinct_profinfos++;
+            }
+            temp_entries[profinfo].num_blocks++;
+            temp_entries[profinfo].num_words_including_headers +=
+              Whsize_hd(hd);
+          }
+          break;
+        }
+      }
+      hp += Bhsize_hd (hd);
+      Assert (hp <= limit);
+    }
+
+    chunk = Chunk_next (chunk);
+  }
+
+  /* CR mshinwell: consider mapping to a file to avoid using system swap
+     space */
+  snapshot = (snapshot*) caml_stat_alloc(
+    sizeof(snapshot) + num_distinct_profinfos*sizeof(snapshot_entry));
+
+  snapshot->header = Make_header(PROFINFO_MASK, 0, Caml_black);
+  snapshot->minor_words = caml_stat_minor_words;
+  snapshot->promoted_words = caml_stat_promoted_words;
+  snapshot->major_words =
+    caml_stat_major_words + (double) caml_allocated_words;
+  snapshot->minor_collections = caml_stat_minor_collections;
+  snapshot->major_colections = caml_stat_major_collections;
+  snapshot->heap_words = caml_stat_heap_size / sizeof(value);
+  snapshot->heap_chunks = caml_stat_heap_chunks;
+  snapshot->compactions = caml_stat_compactions;
+  snapshot->top_heap_words = caml_stat_top_heap_size / sizeof(value);
+
+  target_index = 0;
+  for (index = 0; index <= PROFINFO_MASK; index++) {
+    assert(target_index < num_distinct_profinfos);
+    if (temp_entries[index].num_blocks > 0) {
+      memcpy(&snapshot->entries[target_index], &temp_entries[index],
+        sizeof(snapshot_entry));
+      target_index++;
+    }
+  }
+
+  return snapshot;
+}
+
+
+
 void
 caml_dump_allocators_of_major_heap_blocks (const char* output_file,
                                            int sample_strings)
@@ -304,11 +419,6 @@ value* caml_alloc_profiling_trie_node_ptr = &caml_alloc_profiling_trie_root;
 
 value caml_allocation_profiling_use_override_profinfo = Val_false;
 uintnat caml_allocation_profiling_override_profinfo;
-
-static const uintnat profinfo_none = (uintnat) 0;
-static const uintnat profinfo_overflow = (uintnat) 1;
-static const uintnat profinfo_lowest = (uintnat) 2;
-uintnat caml_allocation_profiling_profinfo = (uintnat) 2;
 
 void caml_allocation_profiling_initialize (void)
 {
@@ -559,18 +669,23 @@ static value find_tail_node(value node, void* callee)
   value pc;
   value found = Val_unit;
 
+  printf("find_tail_node with callee %p\n", callee);
   starting_node = node;
   pc = Encode_node_pc(callee);
 
   do {
     assert(Is_ocaml_node(node));
+    printf("find_tail_node comparing %p with %p\n",
+      (void*) Node_pc(node), (void*) pc);
     if (Node_pc(node) == pc) {
-      found = 1;
+      found = node;
     }
     else {
       node = Tail_link(node);
     }
   } while (found == Val_unit && starting_node != node);
+
+  printf("find_tail_node returns value pointer %p\n", (void*) found);
 
   return found;
 }
@@ -592,16 +707,16 @@ CAMLprim value caml_allocation_profiling_allocate_node (
 
   if (node != Val_unit) {
     value tail_node;
-    /* The calling function was tail called.  Find whether there already
-       exists a node for it in the tail call chain within the caller's
-       node.  The caller's node must always be an OCaml node. */
+    /* The callee was tail called.  Find whether there already exists a node
+       for it in the tail call chain within the caller's node.  The caller's
+       node must always be an OCaml node. */
     caller_node = Decode_tail_caller_node(node);
     tail_node = find_tail_node(caller_node, pc);
     if (tail_node != Val_unit) {
       /* This tail calling sequence has happened before; just fill the hole
          with the existing node and return. */
       *node_hole = tail_node;
-      return tail_node;
+      return 0;  /* indicates an existing node was returned */
     }
   }
 
@@ -633,7 +748,7 @@ CAMLprim value caml_allocation_profiling_allocate_node (
   }
 
   *node_hole = node;
-  return node;
+  return 1;  /* indicates a new node was created */
 }
 
 static c_node* allocate_c_node(void)
@@ -944,6 +1059,8 @@ static void print_node_header(value node)
 
 static void print_trie_node(value node, int inside_indirect_node)
 {
+  print_node_header(node);
+
   if (Color_val(node) != Caml_black) {
     printf("Node %p visited before\n", (void*) node);
   }
@@ -958,8 +1075,6 @@ static void print_trie_node(value node, int inside_indirect_node)
     indirect_call_point = 0;
 
     Hd_val(node) = Whitehd_hd(Hd_val(node));
-
-    print_node_header(node);
 
     /* CR mshinwell: remove some of the hard-coded offsets below and use the
        macros */
@@ -1023,11 +1138,27 @@ static void print_trie_node(value node, int inside_indirect_node)
               int i = direct_call_point;
               assert(field < Wosize_val(node) - 2);
               child = Direct_callee_node(node, field);
-              printf("Direct call point %d: %p calls %p, child node=%p\n",
+              /* Catch tail call points that have been wrongly initialized. */
+              if (child != Val_unit && ((child & 1) == 1)) {
+                printf("Direct call point %d (at %p): %p calls %p\n",
+                  direct_call_point,
+                  (void*) &Direct_pc_call_site(node, field),
+                  Decode_call_point_pc(Direct_pc_call_site(node, field)),
+                  Decode_call_point_pc(Direct_pc_callee(node, field)));
+                printf("This looks like a tail call point (child=%p) that\n",
+                  (void*) child);
+                printf("  has not been correctly initialized\n");
+                assert(0);
+              }
+              printf("Direct call point %d: %p calls %p, ",
                 direct_call_point,
                 Decode_call_point_pc(Direct_pc_call_site(node, field)),
-                Decode_call_point_pc(Direct_pc_callee(node, field)),
-                (void*) child);
+                Decode_call_point_pc(Direct_pc_callee(node, field)));
+              if (child == Val_unit) {
+                printf("callee was not instrumented\n");
+              } else {
+                printf("child node=%p\n", (void*) child);
+              }
               direct_call_point++;
               if (child != Val_unit) {
                 print_trie_node(child, 0);
