@@ -96,6 +96,8 @@ val unmarshal_trie : in_channel -> trie
 
 val debug : unit -> unit
 
+(* CR mshinwell: move these to [Gc] if dependencies permit *)
+
 module Return_address : sig
   type t = private Int64.t
 end

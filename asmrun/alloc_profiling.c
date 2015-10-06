@@ -190,7 +190,7 @@ static value take_heap_snapshot(void)
   snapshot->major_words =
     ((uintnat) caml_stat_major_words) + ((uintnat) caml_allocated_words);
   snapshot->minor_collections = (uintnat) caml_stat_minor_collections;
-  snapshot->major_colections = (uintnat) caml_stat_major_collections;
+  snapshot->major_collections = (uintnat) caml_stat_major_collections;
   snapshot->heap_words = (uintnat) caml_stat_heap_size / sizeof(value);
   snapshot->heap_chunks = (uintnat) caml_stat_heap_chunks;
   snapshot->compactions = (uintnat) caml_stat_compactions;
@@ -254,22 +254,12 @@ caml_allocation_profiling_get_frame_descriptor(value v_index)
 CAMLprim value
 caml_allocation_profiling_return_address_of_frame_descriptor(value v_descr)
 {
-  CAMLparam0();
-  CAMLlocal1(v_retaddr);
-  value v_result;
   frame_descr* descr;
 
   descr = Descrptr_val(v_descr);
-  if (descr == NULL) {
-    return Val_long(0 /* None */);
-  }
+  assert(descr != NULL);
 
-  v_retaddr = caml_copy_int64(descr->retaddr);
-
-  v_result = caml_alloc_small(1, 1 /* Some */);
-  Field(v_result, 0) = v_retaddr;
-
-  CAMLreturn(v_result);
+  return caml_copy_int64(descr->retaddr);
 }
 
 CAMLprim value

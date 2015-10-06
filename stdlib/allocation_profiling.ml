@@ -20,7 +20,6 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(*
 module Gc_stats : sig
   type t
 
@@ -28,7 +27,7 @@ module Gc_stats : sig
   val promoted_words : t -> int
   val major_words : t -> int
   val minor_collections : t -> int
-  val major_colections : t -> int
+  val major_collections : t -> int
   val heap_words : t -> int
   val heap_chunks : t -> int
   val compactions : t -> int
@@ -39,7 +38,7 @@ end = struct
     promoted_words : int;
     major_words : int;
     minor_collections : int;
-    major_colections : int;
+    major_collections : int;
     heap_words : int;
     heap_chunks : int;
     compactions : int;
@@ -50,13 +49,14 @@ end = struct
   let promoted_words t = t.promoted_words
   let major_words t = t.major_words
   let minor_collections t = t.minor_collections
-  let major_colections t = t.major_collections
+  let major_collections t = t.major_collections
   let heap_words t = t.heap_words
   let heap_chunks t = t.heap_chunks
   let compactions t = t.compactions
   let top_heap_words t = t.top_heap_words
 end
 
+(*
 module Snapshot_entries : sig
   type t
 
