@@ -150,7 +150,7 @@ CAMLprim value caml_natdynlink_run_toplevel(value filename, value symbol)
     Store_field(res, 0, v);
   } else {
     res = caml_alloc(1,0);
-    v = caml_natdynlink_run(handle, symbol);
+    v = caml_natdynlink_run(filename, handle, symbol);
     Store_field(res, 0, v);
   }
   CAMLreturn(res);

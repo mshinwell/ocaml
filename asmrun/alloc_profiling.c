@@ -41,6 +41,7 @@
 #include "caml/minor_gc.h"
 #include "caml/misc.h"
 #include "caml/mlvalues.h"
+#include "caml/roots.h"
 #include "caml/signals.h"
 #include "alloc_profiling.h"
 #include "stack.h"
@@ -207,6 +208,68 @@ static value take_heap_snapshot(void)
   }
 
   return (value) (&snapshot->gc_stats);
+}
+
+CAMLprim value
+caml_allocation_profiling_num_frame_descriptors(value unit)
+{
+  assert(unit == Val_unit);
+
+  if (caml_frame_descriptors == NULL) {
+    caml_init_frame_descriptors();
+  }
+
+  return Val_long(caml_frame_descriptors_mask + 1);
+}
+
+CAMLprim value
+caml_allocation_profiling_get_frame_descriptor(value v_index)
+{
+  uintnat index;
+  value v_result;
+  frame_descr* descr;
+
+  assert(!Is_block(v_index));
+  index = Long_val(v_index);
+  if (index > caml_frame_descriptors_mask) {
+    caml_failwith("caml_allocation_profiling_get_frametable: bad index");
+  }
+
+  if (caml_frame_descriptors == NULL) {
+    caml_init_frame_descriptors();
+  }
+  
+  descr = caml_frame_descriptors[index];
+
+  if (descr == NULL) {
+    return Val_long(0 /* None */);
+  }
+
+  v_result = caml_alloc_small(1, 1 /* Some */);
+  Field(v_result, 0) = Val_Descrptr(descr);
+
+  return v_result;
+}
+
+CAMLprim value
+caml_allocation_profiling_return_address_of_frame_descriptor(value v_descr)
+{
+  CAMLparam0();
+  CAMLlocal1(v_retaddr);
+  value v_result;
+  frame_descr* descr;
+
+  descr = Descrptr_val(v_descr);
+  if (descr == NULL) {
+    return Val_long(0 /* None */);
+  }
+
+  v_retaddr = caml_copy_int64(descr->retaddr);
+
+  v_result = caml_alloc_small(1, 1 /* Some */);
+  Field(v_result, 0) = v_retaddr;
+
+  CAMLreturn(v_result);
 }
 
 CAMLprim value

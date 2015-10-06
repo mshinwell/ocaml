@@ -95,3 +95,17 @@ type trie
 val unmarshal_trie : in_channel -> trie
 
 val debug : unit -> unit
+
+module Return_address : sig
+  type t = private Int64.t
+end
+
+module Frame_descriptor : sig
+  type t = private Printexc.Slot.t
+end
+
+module Frame_table : sig
+  type t = private (Return_address.t, Frame_descriptor.t) Hashtbl.t
+
+  val get : unit -> t
+end

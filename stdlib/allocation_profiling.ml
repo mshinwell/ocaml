@@ -20,6 +20,7 @@
 (*                                                                     *)
 (***********************************************************************)
 
+(*
 module Gc_stats : sig
   type t
 
@@ -159,6 +160,7 @@ module Profile : sig
 end = struct
 
 end
+*)
 
 (* CR mshinwell: must ensure -allocation-profiling does not appear as a
    compiler option if WITH_ALLOCATION_PROFILING was not set *)
@@ -268,3 +270,40 @@ let unmarshal_trie in_channel =
     Empty
   else
     Non_empty ((Obj.magic trie) : trie_node)
+
+module Return_address = struct
+  type t = Int64.t
+end
+
+module Frame_descriptor = struct
+  type t = Printexc.Slot.t
+end
+
+module Frame_table = struct
+  type t = (Return_address.t, Frame_descriptor.t) Hashtbl.t
+
+  external num_frame_descriptors : unit -> int
+    = "caml_allocation_profiling_num_frame_descriptors" "noalloc"
+
+  external get_frame_descriptor : int -> Printexc.raw_backtrace_slot option
+    = "caml_allocation_profiling_get_frame_descriptor"
+
+  external return_address_of_frame_descriptor
+     : Printexc.raw_backtrace_slot
+    -> Int64.t
+    = "caml_allocation_profiling_return_address_of_frame_descriptor"
+
+  let get () =
+    let num = num_frame_descriptors () in
+    let table = Hashtbl.create num in
+    for index = 0 to num - 1 do
+      match get_frame_descriptor index with
+      | None -> ()
+      | Some descr ->
+        let return_addr = return_address_of_frame_descriptor descr in
+        assert (not (Hashtbl.mem table return_addr));
+        Hashtbl.add table return_addr
+          (Printexc.convert_raw_backtrace_slot descr)
+    done;
+    table
+end

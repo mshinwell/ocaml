@@ -30,17 +30,6 @@ code_t * caml_backtrace_buffer = NULL;
 value caml_backtrace_last_exn = Val_unit;
 #define BACKTRACE_BUFFER_SIZE 1024
 
-/* In order to prevent the GC from walking through the debug information
-   (which have no headers), we transform frame_descr pointers into
-   31/63 bits ocaml integers by shifting them by 1 to the right. We do
-   not lose information as descr pointers are aligned.
-
-   In particular, we do not need to use [caml_initialize] when setting
-   an array element with such a value.
-*/
-#define Val_Descrptr(descr) Val_long((uintnat)descr>>1)
-#define Descrptr_Val(v) ((frame_descr *) (Long_val(v)<<1))
-
 /* Start or stop the backtrace machinery */
 
 CAMLprim value caml_record_backtrace(value vflag)
