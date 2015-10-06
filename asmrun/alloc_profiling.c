@@ -282,8 +282,7 @@ caml_forget_where_values_were_allocated (value v_unit)
 
     while (hp < limit) {
       header_t hd = Hd_hp (hp);
-      Hd_hp (hp) =
-        Make_header_with_profinfo (Wosize_hd(hd), Tag_hd(hd), Color_hd(hd), 0);
+      Hd_hp (hp) = Make_header (Wosize_hd(hd), Tag_hd(hd), Color_hd(hd));
       hp += Bhsize_hd (hd);
       Assert (hp <= limit);
     }
@@ -292,110 +291,6 @@ caml_forget_where_values_were_allocated (value v_unit)
   }
 
   return v_unit;
-}
-
-void
-caml_dump_heapgraph(const char* node_output_file, const char* edge_output_file)
-{
-  char* chunk;
-  FILE* node_fp;
-  FILE* edge_fp;
-
-  node_fp = fopen(node_output_file, "w");
-  if (node_fp == NULL) {
-    fprintf(stderr, "couldn't open file '%s' for heap graph dump\n", node_output_file);
-    return;
-  }
-
-  edge_fp = fopen(edge_output_file, "w");
-  if (edge_fp == NULL) {
-    fprintf(stderr, "couldn't open file '%s' for heap graph dump\n", edge_output_file);
-    return;
-  }
-
-  caml_minor_collection();
-  caml_finish_major_cycle();
-
-  chunk = caml_heap_start;
-
-  while (chunk != NULL) {
-    char* hp;
-    char* limit;
-
-    hp = chunk;
-    limit = chunk + Chunk_size (chunk);
-
-    while (hp < limit) {
-      header_t hd_parent = Hd_hp (hp);
-      switch (Color_hd(hd_parent)) {
-        case Caml_blue:
-          break;
-
-        default: {
-          uint64_t approx_instr_pointer_parent;
-
-/* All wrong now, needs fixing */
-          approx_instr_pointer_parent = Decode_profinfo_hd (hd_parent);
-
-          if (approx_instr_pointer_parent != 0ull) {
-            if (Tag_hd(hd_parent) < No_scan_tag) {
-              mlsize_t field;
-              value parent;
-
-              parent = Val_hp(hp);
-              assert(Is_block(parent));
-
-              for (field = 0; field < Wosize_val(parent); field++) {
-                value child;
-                child = Field(parent, field);
-
-                if (Is_block(child) && Is_in_value_area(child)) {
-                  uint64_t approx_instr_pointer_child;
-                  header_t hd_child;
-
-                  hd_child = Hd_val(child);
-                  approx_instr_pointer_child = Decode_profinfo_hd (hd_child);
-
-                  if (approx_instr_pointer_child != 0ull) {
-                    fprintf(edge_fp, "B %p,%d,%lld\n",
-                      (void*) approx_instr_pointer_parent,
-                      Tag_hd(hd_parent),
-                      (unsigned long long) Wosize_hd(hd_parent));
-                    fprintf(edge_fp, "B %p,%d,%lld\n",
-                      (void*) approx_instr_pointer_child,
-                      Tag_val(hd_child),
-                      (unsigned long long) Wosize_hd(hd_child));
-                    fprintf(edge_fp, "E %p,%p\n",
-                            (void*) approx_instr_pointer_parent,
-                            (void*) approx_instr_pointer_child);
-                  }
-                }
-              }
-            }
-          }
-          break;
-        }
-      }
-      hp += Bhsize_hd (hd_parent);
-      Assert (hp <= limit);
-    }
-
-    chunk = Chunk_next (chunk);
-  }
-
-  fclose(node_fp);
-  fclose(edge_fp);
-}
-
-CAMLprim value
-caml_dump_heapgraph_from_ocaml(value node_output_file, value edge_output_file)
-{
-  assert(Is_block(node_output_file) && Tag_val(node_output_file) == String_tag);
-  assert(Is_block(edge_output_file) && Tag_val(edge_output_file) == String_tag);
-
-  caml_dump_heapgraph(String_val(node_output_file), String_val(edge_output_file));
-
-  return Val_unit;
 }
 
 value caml_alloc_profiling_trie_root = Val_unit;
