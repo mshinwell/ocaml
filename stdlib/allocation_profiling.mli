@@ -136,57 +136,94 @@ module Trace : sig
   type ocaml_node
   type c_node
 
-  module Ocaml_node : sig
+  module OCaml_node : sig
+    (** A node corresponding to an invocation of a function written in
+        OCaml. *)
     type t = ocaml_node
 
     val (=) : t -> t -> bool
 
+    (** A unique identifier for the function corresponding to this node. *)
     val function_identifier : t -> Function_identifier.t
 
     (** This function traverses a circular list. *)
     val next_in_tail_call_chain : t -> t
 
     module Allocation_point : sig
+      (** A value of type [t] corresponds to an allocation point in OCaml
+          code. *)
       type t
 
+      (** The program counter at (or close to) the allocation site. *)
       val program_counter : t -> Program_counter.t
+
+      (** The annotation written into the headers of boxed values allocated
+          at the given allocation site. *)
       val annotation : t -> Annotation.t
     end
 
     module Direct_call_point_in_ocaml_code : sig
+      (** A value of type ['target t] corresponds to a direct (i.e. known
+          at compile time) call point in OCaml code.  ['target] is the type
+          of the node corresponding to the callee. *)
       type 'target t
 
+      (** The program counter at (or close to) the call site. *)
       val call_site : _ t -> Call_site.t
+
+      (** The address of the first instruction of the callee. *)
       val callee : _ t -> Function_entry_point.t
+
+      (** The node corresponding to the callee. *)
       val callee_node : 'target t -> 'target
     end
 
     module Indirect_call_point_in_ocaml_code : sig
+      (** A value of type [t] corresponds to an indirect call point in OCaml
+          code.  Each such value contains a list of callees to which the
+          call point has branched. *)
       type t
 
+      (** The program counter at (or close to) the call site. *)
       val call_site : t -> Call_site.t
 
       module Callee_iterator : sig
         type t
 
+        (** The address of the first instruction of the callee. *)
         val callee : t -> Function_entry_point.t
+
+        (** The node corresponding to the callee. *)
         val callee_node : t -> node
 
+        (** Move to the next callee to which this call point has branched.
+            [None] is returned when the end of the list is reached. *)
         val next : t -> t option
       end
 
+      (** The list of callees to which this indirect call point has
+          branched. *)
       val callees : t -> Callee_iterator.t
     end
 
     module Direct_ocaml_to_c_call_point : sig
+      (** A value of type [t] corresponds to a direct call point in OCaml
+          code that branches to non-OCaml ("external") code. *)
       type t
 
+      (** The program counter at (or close to) the call site. *)
       val call_site : t -> Call_site.t
+
+      (** The address of the first instruction of the callee. *)
       val callee : t -> Function_entry_point.t
+
+      (** The node corresponding to the callee. *)
       val callee_node : t -> c_node
     end
 
     module Field_iterator : sig
+      (** A value of type [t] enables iteration through the contents ("fields")
+          of an OCaml node. *)
       type t
 
       type direct_call_point =
@@ -206,9 +243,13 @@ module Trace : sig
   end
 
   module C_node : sig
+    (** A node corresponding to an invocation of a function written in C
+        (or any other language that is not OCaml). *)
     type t = c_node
 
     module Allocation_point : sig
+      (** A value of type [t] corresponds to an allocation point in non-OCaml
+          code. *)
       type t
 
       val program_counter : t -> Program_counter.t
@@ -216,6 +257,9 @@ module Trace : sig
     end
 
     module Call_point : sig
+      (** A value of type [t] corresponds to a call point from non-OCaml
+          code (to either non-OCaml code, or OCaml code via the usual
+          assembly veneer). *)
       type t
 
       (** N.B. The address of the callee (of type [Function_entry_point.t]) is
@@ -225,6 +269,8 @@ module Trace : sig
     end
 
     module Field_iterator : sig
+      (** A value of type [t] enables iteration through the contents ("fields")
+          of a C node. *)
       type t
 
       type classification = private
@@ -239,15 +285,18 @@ module Trace : sig
   end
 
   module Node : sig
+    (** Either an OCaml or a C node. *)
     type t = node
 
     type classification = private
-      | Static of Static_node.t
+      | OCaml of OCaml_node.t
       | C of C_node.t
 
     val classify : t -> classification
   end
 
+  (** Obtains the root of the graph for traversal.  [None] is returned if
+      the graph is empty. *)
   val root : t -> Node.t option
 end
 
