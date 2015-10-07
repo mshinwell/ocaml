@@ -64,7 +64,7 @@ int caml_allocation_profiling = 1;
    libraries that were not compiled by ocamlopt). */
 static struct ext_table ocaml_dynamic_libraries;
 typedef struct {
-  char* filename;
+  const char* filename;
   void* address_of_code_begin;
 } ocaml_dynamic_library;
 
@@ -74,19 +74,22 @@ void caml_allocation_profiling_register_dynamic_library(
   ocaml_dynamic_library* lib;
 
   lib = caml_stat_alloc(sizeof(ocaml_dynamic_library));
-  lib.filename = filename;
-  lib.address_of_code_begin = address_of_code_begin;
+  lib->filename = filename;
+  lib->address_of_code_begin = address_of_code_begin;
 
   caml_ext_table_add(&ocaml_dynamic_libraries, lib);
 }
 
+/* The following structures must match the type definitions in the
+   [Allocation_profiling] module. */
+
 typedef struct {
-  value header;
+  /* (GC header here.) */
   value minor_words;
   value promoted_words;
   value major_words;
   value minor_collections;
-  value major_colections;
+  value major_collections;
   value heap_words;
   value heap_chunks;
   value compactions;
@@ -99,14 +102,14 @@ typedef struct {
 } snapshot_entry;
 
 typedef struct {
-  uintnat header;
+  /* (GC header here.) */
   snapshot_entry entries[0];
 } snapshot_entries;
 
 typedef struct {
-  uintnat header;
-  gc_stats* gc_stats;
-  snapshot_entries* entries;
+  /* (GC header here.) */
+  value gc_stats;
+  value entries;
 } snapshot;
 
 static const uintnat profinfo_none = (uintnat) 0;
@@ -114,11 +117,37 @@ static const uintnat profinfo_overflow = (uintnat) 1;
 static const uintnat profinfo_lowest = (uintnat) 2;
 uintnat caml_allocation_profiling_profinfo = (uintnat) 2;
 
+static value take_gc_stats(void)
+{
+  gc_stats* stats;
+  mlsize_t size;
+
+  stats = caml_stat_alloc(sizeof(header_t) + sizeof(gc_stats));
+
+  Hd_val((value) stats) =
+    Make_header(sizeof(gc_stats) / sizeof(value), 0, Caml_black);
+
+  stats->minor_words = (uintnat) caml_stat_minor_words;
+  stats->promoted_words = (uintnat) caml_stat_promoted_words;
+  stats->major_words =
+    ((uintnat) caml_stat_major_words) + ((uintnat) caml_allocated_words);
+  stats->minor_collections = (uintnat) caml_stat_minor_collections;
+  stats->major_collections = (uintnat) caml_stat_major_collections;
+  stats->heap_words = (uintnat) caml_stat_heap_size / sizeof(value);
+  stats->heap_chunks = (uintnat) caml_stat_heap_chunks;
+  stats->compactions = (uintnat) caml_stat_compactions;
+  stats->top_heap_words = (uintnat) caml_stat_top_heap_size / sizeof(value);
+
+  return (value) stats;
+}
+
 static value take_heap_snapshot(void)
 {
   snapshot* snapshot;
   snapshot_entry* temp_entries;
   char* chunk;
+  value gc_stats;
+  value entries;
   uintnat index;
   uintnat target_index;
   uintnat size_in_bytes;
@@ -185,22 +214,14 @@ static value take_heap_snapshot(void)
 
   snapshot->header =
     Make_header(size_in_bytes / sizeof(uintnat), 0, Caml_black);
-  snapshot->minor_words = (uintnat) caml_stat_minor_words;
-  snapshot->promoted_words = (uintnat) caml_stat_promoted_words;
-  snapshot->major_words =
-    ((uintnat) caml_stat_major_words) + ((uintnat) caml_allocated_words);
-  snapshot->minor_collections = (uintnat) caml_stat_minor_collections;
-  snapshot->major_collections = (uintnat) caml_stat_major_collections;
-  snapshot->heap_words = (uintnat) caml_stat_heap_size / sizeof(value);
-  snapshot->heap_chunks = (uintnat) caml_stat_heap_chunks;
-  snapshot->compactions = (uintnat) caml_stat_compactions;
-  snapshot->top_heap_words =
-    (uintnat) caml_stat_top_heap_size / sizeof(value);
+
+  gc_stats = take_gc_stats();
 
   target_index = 0;
   for (index = 0; index <= largest_profinfo; index++) {
     assert(target_index < num_distinct_profinfos);
     if (temp_entries[index].num_blocks > 0) {
+      /* need to write the [profinfo] too */
       memcpy(&snapshot->entries[target_index], &temp_entries[index],
         sizeof(snapshot_entry));
       target_index++;
@@ -388,6 +409,7 @@ typedef enum {
         its bottom bit set enables it to be distinguished from the second word
         of a direct call point.  The dynamic node will only contain CALL
         entries, pointing at the callee(s).
+   XXX what about indirect OCaml -> C?  Same as indirect OCaml -> OCaml.
    - A direct OCaml -> C call point (three words):
      1. Call site PC value, shifted left by 2, with bits 0 and 1 then set
      2. Callee's PC value, shifted left by 2, with bit 0 set
@@ -406,6 +428,8 @@ typedef enum {
    indicates:
      - bit 1 set => this is a call point
      - bit 1 clear => this is an allocation point
+   XXX this next part is wrong for indirect dynamic nodes.  They have
+   the callee address.
    The PC is either the PC of an allocation point or a *call site*, never the
      address of a callee.  This means that more conflation between nodes may
      occur than for OCaml parts of the trie.  This can be recovered afterwards

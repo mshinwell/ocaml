@@ -56,7 +56,6 @@ end = struct
   let top_heap_words t = t.top_heap_words
 end
 
-(*
 module Snapshot_entries : sig
   type t
 
@@ -101,6 +100,7 @@ end = struct
   let entries t = t.entries
 end
 
+(*
 module Program_counter : sig
   type t
 end = struct
@@ -244,11 +244,6 @@ external trie_is_initialized : unit -> bool
 external get_trie_root : unit -> Obj.t
   = "caml_allocation_profiling_only_works_for_native_code"
     "caml_allocation_profiling_get_trie_root" "noalloc"
-
-(*
-let debug () =
-  Printf.printf "trie initialized? %b\n%!" (trie_is_initialized ())
-*)
 
 external debug : unit -> unit
   = "caml_allocation_profiling_only_works_for_native_code"

@@ -20,41 +20,56 @@
 (*                                                                     *)
 (***********************************************************************)
 
-(* Access to the allocation profiler from OCaml programs. *)
+(** Profiling of the allocation behaviour of OCaml programs.
+    For 64-bit targets only. *)
 
-(* [dump_allocators_of_major_heap_blocks] writes a file that may be
-   decoded using tools/allocation-profiling/decode-major-heap.sh
-   in order to show, for each block in the major heap, where it was
-   allocated.  For example:
-     decode-major-heap.sh profile-output-file executable-file
+module Gc_stats : sig
+  type t
 
-   This function performs a full major GC.
+  val minor_words : t -> int
+  val promoted_words : t -> int
+  val major_words : t -> int
+  val minor_collections : t -> int
+  val major_collections : t -> int
+  val heap_words : t -> int
+  val heap_chunks : t -> int
+  val compactions : t -> int
+  val top_heap_words : t -> int
+end
 
-   [dump_num_unaccounted_for] should be set to a positive number if it
-   is suspected that some values have not been correctly instrumented.
-   This will cause more detailed information to be printed about some
-   number of values (up to the specified limit) in the output file.
-*)
-val dump_allocators_of_major_heap_blocks
-   : ?dump_num_unaccounted_for:int
-  -> filename:string
-  -> unit
-  -> unit
+module Annotation : sig
+  (** An annotation written into a value's header.  These may be looked up
+      in a [Trie.t] (see below). *)
+  type t = private Int64.t
+end
 
-(* [dump_heapgraph] writes two files that may be decoded using
-   tools/allocation-profiling/decode-heapgraph.sh in order to show
-   the graph of values in the heap quotiented by the equivalence
-   relation that identifies two values iff they were allocated at
-   the same source location.  This enables judgements such as
-   "a lot of values were allocated at foo.ml line 36 and they were
-   pointed at by values allocated at bar.ml line 42".
-   Example script invocation:
-     decode-heapgraph.sh node-filename edge-filename executable-file
-   This function performs a full major GC.
-*)
-val dump_heapgraph : node_filename:string
-  -> edge_filename:string
-  -> unit
+module Heap_snapshot : sig
+  type t
+
+  module Entry : sig
+    (** A value of type [t] provides the total number of blocks (= boxed
+        values) and the total number of words occupied by such blocks
+        (including their headers) for some given profiling annotation in
+        the heap. *)
+    type t
+
+    val num_blocks : t -> int
+    val num_words_including_headers : t -> int
+  end
+
+  module Entries : sig
+    (** Numbers of blocks and words, as above, indexed by profiling
+        annotation. *)
+    type t = private (Annotation.t, Entry.t) Hashtbl.t
+  end
+
+  val gc_stats : t -> Gc_stats.t
+  val entries : t -> Snapshot_entries.t
+
+  (** Take a snapshot of the heap together with GC stats.  This function
+      performs a full major GC. *)
+  val take : unit -> t
+end
 
 (* [erase_profiling_annotations] erases allocation profiling
    information on all values.  This is useful at the start of some
@@ -85,18 +100,158 @@ val max_annotation_value : unit -> int
    to call after [annotate_values_with_given_integer]. *)
 val annotation_of_value : 'a -> int
 
-(*
-val dump_backtraces_to_file : filename:string -> unit
-*)
+module Program_counter : sig
+  type t = private Int64.t
+end
 
-val marshal_trie : out_channel -> unit
+module Function_entry_point : sig
+  type t = private Int64.t
+end
 
-type trie
-val unmarshal_trie : in_channel -> trie
+module Function_identifier : sig
+  (* CR mshinwell: check if this is actually [Function_entry_point.t] now *)
+  type t = private Int64.t
+end
 
-val debug : unit -> unit
+module Call_site : sig
+  type t = private Int64.t
+end
 
-(* CR mshinwell: move these to [Gc] if dependencies permit *)
+module Trace : sig
+  (** A value of type [t] holds the dynamic call structure of the program
+      (i.e. which functions have called which other functions) together with
+      information required to decode profiling annotations written into
+      values' headers. *)
+  type t
+
+  (** Marshal the trace to a channel.  (This function does not cause any
+      allocation.)  You must use this function rather than the functions
+      in the [Marshal] module. *)
+  val marshal_global : out_channel -> unit
+
+  (** Unmarshal a trace for examination. *)
+  val unmarshal : in_channel -> t
+
+  type node
+  type ocaml_node
+  type c_node
+
+  module Ocaml_node : sig
+    type t = ocaml_node
+
+    val (=) : t -> t -> bool
+
+    val function_identifier : t -> Function_identifier.t
+
+    (** This function traverses a circular list. *)
+    val next_in_tail_call_chain : t -> t
+
+    module Allocation_point : sig
+      type t
+
+      val program_counter : t -> Program_counter.t
+      val annotation : t -> Annotation.t
+    end
+
+    module Direct_call_point_in_ocaml_code : sig
+      type 'target t
+
+      val call_site : _ t -> Call_site.t
+      val callee : _ t -> Function_entry_point.t
+      val callee_node : 'target t -> 'target
+    end
+
+    module Indirect_call_point_in_ocaml_code : sig
+      type t
+
+      val call_site : t -> Call_site.t
+
+      module Callee_iterator : sig
+        type t
+
+        val callee : t -> Function_entry_point.t
+        val callee_node : t -> node
+
+        val next : t -> t option
+      end
+
+      val callees : t -> Callee_iterator.t
+    end
+
+    module Direct_ocaml_to_c_call_point : sig
+      type t
+
+      val call_site : t -> Call_site.t
+      val callee : t -> Function_entry_point.t
+      val callee_node : t -> c_node
+    end
+
+    module Field_iterator : sig
+      type t
+
+      type direct_call_point =
+        | To_ocaml of ocaml_node Direct_call_point_in_ocaml_code.t
+        | To_c of c_node Direct_call_point_in_ocaml_code.t
+
+      type classification =
+        | Allocation_point of Allocation_point.t
+        | Direct_call_point of direct_call_point
+        | Indirect_call_point of Indirect_call_point_in_ocaml_code.t
+
+      val classify : t -> classification
+      val next : t -> t option
+    end
+
+    val fields : t -> Field_iterator.t
+  end
+
+  module C_node : sig
+    type t = c_node
+
+    module Allocation_point : sig
+      type t
+
+      val program_counter : t -> Program_counter.t
+      val annotation : t -> Annotation.t
+    end
+
+    module Call_point : sig
+      type t
+
+      (** N.B. The address of the callee (of type [Function_entry_point.t]) is
+          not available.  It must be recovered during post-processing. *)
+      val call_site : t -> Call_site.t
+      val callee_node : t -> node
+    end
+
+    module Field_iterator : sig
+      type t
+
+      type classification = private
+        | Allocation_point of Allocation_point.t
+        | Call_point of Call_point.t
+
+      val classify : t -> classification
+      val next : t -> t option
+    end
+
+    val fields : t -> Field_iterator.t
+  end
+
+  module Node : sig
+    type t = node
+
+    type classification = private
+      | Static of Static_node.t
+      | C of C_node.t
+
+    val classify : t -> classification
+  end
+
+  val root : t -> Node.t option
+end
+
+(* CR-someday mshinwell: move some of these to [Gc] if dependencies permit? *)
 
 module Return_address : sig
   type t = private Int64.t
@@ -107,7 +262,12 @@ module Frame_descriptor : sig
 end
 
 module Frame_table : sig
+  (** A value of type [t] corresponds to the frame table of a running
+      OCaml program. *)
   type t = private (Return_address.t, Frame_descriptor.t) Hashtbl.t
 
+  (** Snapshot the frame table of the caller. *)
   val get : unit -> t
 end
+
+val debug : unit -> unit

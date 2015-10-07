@@ -44,16 +44,16 @@ extern void caml_shrink_heap (char *);              /* memory.c */
   XXX (see [caml_register_global_roots])
   XXX Should be able to fix it to only assume 2-byte alignment.
 */
-#define Make_ehd(s,t,c,p) (((s) << 10) | (t) << 2 | (c))
+#define Make_ehd(s,t,c) (((s) << 10) | (t) << 2 | (c))
 #ifdef WITH_ALLOCATION_PROFILING
 #define Make_ehd_p(s,t,c,p) (((s) << 10) | (t) << 2 | (c) | ((p) << 42))
-#else
-#define Make_ehd_p(s,t,c,p) (((s) << 10) | (t) << 2 | (c))
 #endif
 #define Whsize_ehd(h) Whsize_hd (h)
 #define Wosize_ehd(h) Wosize_hd (h)
 #define Tag_ehd(h) (((h) >> 2) & 0xFF)
+#ifdef WITH_ALLOCATION_PROFILING
 #define Profinfo_ehd(hd) Profinfo_hd(hd)
+#endif
 #define Ecolor(w) ((w) & 3)
 
 typedef uintnat word;
@@ -295,9 +295,12 @@ static void do_compaction (void)
             * (word *) q = (word) Val_hp (newadr);
             q = next;
           }
+#ifdef WITH_ALLOCATION_PROFILING
           *p = Make_header_with_profinfo (Wosize_whsize (sz), t, Caml_white,
             profinfo);
-
+#else
+          *p = Make_header (Wosize_whsize (sz), t, Caml_white);
+#endif
           if (infixes != NULL){
             /* Rebuild the infix headers and revert the infix pointers. */
             while (Ecolor ((word) infixes) != 3){
