@@ -550,36 +550,118 @@ static int pc_inside_c_node_matches(c_node* node, void* pc)
   return Decode_c_node_pc(node->pc) == pc;
 }
 
-CAMLprim value
-caml_allocation_profiling_node_num_header_words(value unit)
+CAMLprim value caml_allocation_profiling_node_num_header_words(value unit)
 {
   unit = unit;
   return Val_long(Node_num_header_words);
 }
 
-CAMLprim value
-caml_allocation_profiling_is_ocaml_node(value node)
+CAMLprim value caml_allocation_profiling_is_ocaml_node(value node)
 {
   return Val_bool(Is_ocaml_node(node));
 }
 
-CAMLprim value
-caml_allocation_profiling_ocaml_function_identifier(value node)
+CAMLprim value caml_allocation_profiling_ocaml_function_identifier(value node)
 {
   return caml_copy_int64(Decode_node_pc(Node_pc(node)));
 }
 
-CAMLprim value
-caml_allocation_profiling_ocaml_tail_chain(value node)
+CAMLprim value caml_allocation_profiling_ocaml_tail_chain(value node)
 {
   return Tail_link(node);
 }
 
-CAMLprim value
-caml_allocation_profiling_ocaml_node_next(value node, value offset)
+CAMLprim value caml_allocation_profiling_ocaml_classify_field(value node,
+      value offset)
 {
-  uintnat offset = Long_val(offset);
+  /* Note that [offset] should always point at an initialized call or
+     allocation point, by virtue of the behaviour of the function
+     [caml_allocation_profiling_ocaml_node_next], below. */
 
+  assert(Is_ocaml_node(node));
+  assert(field >= Node_num_header_words);
+  assert(field < Wosize_val(node));
+
+  assert(Field(node, field) != Val_unit);
+
+  switch (Call_or_allocation_point(node, field)) {
+    case CALL: {
+      value second_word;
+      assert(field < Wosize_val(node) - 1);
+      second_word = Indirect_pc_linked_list(node, field);
+      assert(second_word != Val_unit);
+      if (Is_block(second_word)) {
+        return Val_long(2);  /* indirect call point */
+      }
+      return Val_long(1);  /* direct call point */
+    }
+
+    case ALLOCATION:
+      assert(field < Wosize_val(node) - 1);
+      return Val_long(0);
+  }
+
+  assert(0);
+}
+
+CAMLprim value caml_allocation_profiling_ocaml_node_next(value node,
+      value offset)
+{
+  uintnat field = Long_val(offset);
+
+  assert(Is_ocaml_node(node));
+  assert(field >= Node_num_header_words);
+  assert(field < Wosize_val(node));
+
+  /* This code follows [print_trie_node], below. */
+  for (/* nothing */; field < Wosize_val(node); field++) {
+    value entry;
+
+    entry = Field(node, field);
+
+    if (entry == Val_unit) {
+      continue;
+    }
+
+    if (entry == Encode_tail_caller_node(node)) {
+      /* Uninitialized tail call point. */
+      assert (field >= Node_num_header_words + 2);
+      continue;
+    }
+
+    switch (Call_or_allocation_point(node, field)) {
+      case CALL: {
+        value second_word;
+        assert(field < Wosize_val(node) - 1);
+        second_word = Indirect_pc_linked_list(node, field);
+        assert(second_word != Val_unit);
+        if (Is_block(second_word)) {
+          /* This is an indirect call point. */
+          field++;
+        }
+        else {
+          /* This is a direct call point. */
+          assert(field < Wosize_val(node) - 2);
+          field += 2;
+        }
+        break;
+      }
+
+      case ALLOCATION:
+        assert(field < Wosize_val(node) - 1);
+        field++;
+        break;
+
+      default:
+        assert(0);
+    }
+  }
+
+  if (field < Wosize_val(node)) {
+    return Val_long(field);
+  }
+
+  return Val_long(-1);
 }
 
 CAMLprim value

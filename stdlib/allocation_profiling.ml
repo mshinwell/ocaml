@@ -276,7 +276,15 @@ module OCaml_node = struct
       | Direct_call_point of direct_call_point
       | Indirect_call_point of Indirect_call_point_in_ocaml_code.t
 
+    external classify : ocaml_node -> int
+      = "caml_allocation_profiling_ocaml_classify_field" "noalloc"
+
     let classify t =
+      match classify t with
+      | 0 -> Allocation_point t
+      | 1 -> Direct_call_point t
+      | 2 -> Indirect_call_point t
+      | 3 -> assert false
 
     external next : ocaml_node -> int -> int
       = "caml_allocation_profiling_ocaml_node_next" "noalloc"
@@ -288,9 +296,13 @@ module OCaml_node = struct
   end
 
   let fields t =
-    { node = t;
-      offset = node_num_header_words;
-    }
+    let start =
+      { node = t;
+        offset = node_num_header_words;
+      }
+    in
+    (* We need to skip to the first populated field. *)
+    Field_iterator.next start
 end
 
 module C_node = struct
