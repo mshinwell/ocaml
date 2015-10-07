@@ -285,12 +285,14 @@ module Trace : sig
   end
 
   module Node : sig
-    (** Either an OCaml or a C node. *)
+    (** Either an OCaml or a C node; or an indication that this is a branch
+        of the graph corresponding to uninstrumented code. *)
     type t = node
 
     type classification = private
       | OCaml of OCaml_node.t
       | C of C_node.t
+      | Uninstrumented
 
     val classify : t -> classification
   end
