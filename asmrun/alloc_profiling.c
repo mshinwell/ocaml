@@ -586,14 +586,22 @@ CAMLprim value caml_allocation_profiling_ocaml_classify_field(value node,
 
   switch (Call_or_allocation_point(node, field)) {
     case CALL: {
+      value callee_node;
       value second_word;
       assert(field < Wosize_val(node) - 1);
       second_word = Indirect_pc_linked_list(node, field);
       assert(second_word != Val_unit);
       if (Is_block(second_word)) {
-        return Val_long(2);  /* indirect call point */
+        return Val_long(4);  /* indirect call point */
       }
-      return Val_long(1);  /* direct call point */
+      callee_node = Direct_callee_node(node, field);
+      if (callee_node == Val_unit) {
+        return Val_long(1);  /* direct call point to uninstrumented code */
+      } else if (Is_ocaml_node(callee_node)) {
+        return Val_long(2);  /* direct call point to OCaml code */
+      } else {
+        return Val_long(3);  /* direct call point to non-OCaml code */
+      }
     }
 
     case ALLOCATION:
@@ -756,7 +764,7 @@ static value find_tail_node(value node, void* callee)
   return found;
 }
 
-CAMLprim value caml_allocation_profiling_allocate_node (
+CAMLprim value caml_allocation_profiling_allocate_node(
       int size_including_header, void* pc, value* node_hole)
 {
   int field;

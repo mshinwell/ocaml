@@ -215,6 +215,8 @@ module Trace : sig
       type direct_call_point =
         | To_ocaml of ocaml_node Direct_call_point_in_ocaml_code.t
         | To_c of c_node Direct_call_point_in_ocaml_code.t
+        (* CR mshinwell: once everything's finished, "uninstrumented" should
+           be able to go away. *)
         | To_uninstrumented of
             uninstrumented_node Direct_call_point_in_ocaml_code.t
 
@@ -256,6 +258,7 @@ module Trace : sig
       val callee_node : t -> node
     end
 
+    (* CR mshinwell: consider removing "_iterator" suffixes *)
     module Field_iterator : sig
       (** A value of type [t] enables iteration through the contents ("fields")
           of a C node. *)
@@ -280,7 +283,6 @@ module Trace : sig
     type classification = private
       | OCaml of OCaml_node.t
       | C of C_node.t
-      | Uninstrumented
 
     val classify : t -> classification
   end
@@ -288,25 +290,17 @@ module Trace : sig
   (** Obtains the root of the graph for traversal.  [None] is returned if
       the graph is empty. *)
   val root : t -> Node.t option
-end
 
-(* CR-someday mshinwell: move some of these to [Gc] if dependencies permit? *)
-
-module Return_address : sig
-  type t = private Int64.t
-end
-
-module Frame_descriptor : sig
-  type t = private Printexc.Slot.t
+  (** Dump the current trace to stdout. *)
+  val debug : unit -> unit
 end
 
 module Frame_table : sig
+  (* CR-someday mshinwell: move to [Gc] if dependencies permit? *)
   (** A value of type [t] corresponds to the frame table of a running
-      OCaml program. *)
-  type t = private (Return_address.t, Frame_descriptor.t) Hashtbl.t
+      OCaml program.  The table is indexed by return address. *)
+  type t = private (Program_counter.t, Printexc.Slot.t) Hashtbl.t
 
   (** Snapshot the frame table of the caller. *)
   val get : unit -> t
 end
-
-val debug : unit -> unit
