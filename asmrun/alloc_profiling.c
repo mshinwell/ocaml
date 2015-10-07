@@ -539,6 +539,12 @@ static c_node* c_node_of_stored_pointer(value node_stored)
   return (node_stored == Val_unit) ? NULL : (c_node*) Hp_val(node_stored);
 }
 
+static c_node* c_node_of_stored_pointer_not_null(value node_stored)
+{
+  assert(node_stored != Val_unit);
+  return (c_node*) Hp_val(node_stored);
+}
+
 static value stored_pointer_to_c_node(c_node* node)
 {
   assert(node != NULL);
@@ -672,53 +678,88 @@ CAMLprim value caml_allocation_profiling_ocaml_node_next(value node,
   return Val_long(-1);
 }
 
-CAMLprim value
-caml_allocation_profiling_ocaml_allocation_point_program_counter
-  (value node, value offset)
+CAMLprim value caml_allocation_profiling_ocaml_allocation_point_program_counter
+      (value node, value offset)
 {
   return caml_copy_int64(Alloc_point_pc(node, Long_val(offset)));
 }
 
-CAMLprim value
-caml_allocation_profiling_ocaml_allocation_point_annotation
-  (value node, value offset)
+CAMLprim value caml_allocation_profiling_ocaml_allocation_point_annotation
+      (value node, value offset)
 {
   return caml_copy_int64(Alloc_point_profinfo(node, Long_val(offset)));
 }
 
-CAMLprim value
-caml_allocation_profiling_ocaml_direct_call_point_call_site
-  (value node, value offset)
+CAMLprim value caml_allocation_profiling_ocaml_direct_call_point_call_site
+      (value node, value offset)
 {
   return caml_copy_int64(Direct_pc_call_site(node, Long_val(offset)));
 }
 
-CAMLprim value
-caml_allocation_profiling_ocaml_direct_call_point_callee
-  (value node, value offset)
+CAMLprim value caml_allocation_profiling_ocaml_direct_call_point_callee
+      (value node, value offset)
 {
   return caml_copy_int64(Direct_pc_callee(node, Long_val(offset)));
 }
 
-CAMLprim value
-caml_allocation_profiling_ocaml_direct_call_point_callee_node
-  (value node, value offset)
+CAMLprim value caml_allocation_profiling_ocaml_direct_call_point_callee_node
+      (value node, value offset)
 {
   return caml_copy_int64(Direct_callee_node(node, Long_val(offset)));
 }
 
-CAMLprim value
-caml_allocation_profiling_ocaml_indirect_call_point_call_site
-  (value node, value offset)
+CAMLprim value caml_allocation_profiling_ocaml_indirect_call_point_call_site
+      (value node, value offset)
 {
   return caml_copy_int64(Indirect_pc_call_site(node, offset));
 }
 
-CAMLprim value
-caml_allocation_profiling_ocaml_indirect_call_point_callees
-  (value node, value offset)
+CAMLprim value caml_allocation_profiling_ocaml_indirect_call_point_callees
+      (value node, value offset)
 {
   return Indirect_pc_linked_list(node, offset);
+}
+
+CAMLprim value caml_allocation_profiling_c_node_is_call(value node)
+{
+  assert(!Is_ocaml_node(node));
+  switch (classify_c_node(c_node_of_stored_pointer_not_null(node))) {
+    case CALL: return Val_true;
+    case ALLOCATION: return Val_false;
+  }
+  assert(0);
+}
+
+CAMLprim value caml_allocation_profiling_c_node_next(value node)
+{
+  assert(!Is_ocaml_node(node));
+  return c_node_of_stored_pointer_not_null(node)->next;
+}
+
+CAMLprim value caml_allocation_profiling_c_node_call_site(value node)
+{
+  c_node* c_node;
+  assert(!Is_ocaml_node(node));
+  c_node = c_node_of_stored_pointer_not_null(node);
+  return caml_copy_int64(Decode_c_node_pc(c_node->pc));
+}
+
+CAMLprim value caml_allocation_profiling_c_node_callee_node(value node)
+{
+  c_node* c_node;
+  assert(!Is_ocaml_node(node));
+  c_node = c_node_of_stored_pointer_not_null(node);
+  assert(classify_c_node(c_node) == CALL);
+  return c_node->data.callee_node;
+}
+
+CAMLprim value caml_allocation_profiling_c_node_profinfo(value node)
+{
+  c_node* c_node;
+  assert(!Is_ocaml_node(node));
+  c_node = c_node_of_stored_pointer_not_null(node);
+  assert(classify_c_node(c_node) == ALLOCATION);
+  return caml_copy_int64(Decode_c_node_pc(c_node->data.profinfo));
 }
 
 static value allocate_uninitialized_ocaml_node(int size_including_header)

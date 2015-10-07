@@ -262,7 +262,53 @@ module Trace = struct
   module C_node = struct
     type t = c_node
 
+    module Allocation_point = struct
+      type t = c_node
 
+      external program_counter : t -> Program_counter.t
+        (* This is not a mistake; the same C function works. *)
+        = "caml_allocation_profiling_c_node_call_site"
+
+      external annotation : t -> Annotation.t
+        = "caml_allocation_profiling_c_node_profinfo"
+    end
+
+    module Call_point = struct
+      type t = c_node
+
+      external call_site : t -> Program_counter.t
+        = "caml_allocation_profiling_c_node_call_site"
+
+      external callee_node : t -> node
+        = "caml_allocation_profiling_c_node_callee_node" "noalloc"
+    end
+
+    module Field_iterator = struct
+      type t = c_node
+
+      type classification =
+        | Allocation_point of Allocation_point.t
+        | Call_point of Call_point.t
+
+      external is_call : t -> bool
+        = "caml_allocation_profiling_c_node_is_call" "noalloc"
+
+      let classify t =
+        if is_call t then Call_point t
+        else Allocation_point t
+
+      external next : t -> t
+        = "caml_allocation_profiling_c_node_next" "noalloc"
+
+      let next t =
+        let next = next t in
+        if node_is_null t then None
+        else Some t
+    end
+
+    let fields t =
+      if node_is_null t then None
+      else Some t
   end
 
   module Node = struct
@@ -294,26 +340,9 @@ external annotation_of_value : 'a -> int
   = "caml_allocation_profiling_only_works_for_native_code"
     "caml_allocation_profiling_get_profinfo"
 
-external dump_allocators_of_major_heap_blocks
-   : filename:string
-  -> dump_num_unaccounted_for:int
-  -> unit
-  = "caml_allocation_profiling_only_works_for_native_code"
-    "caml_dump_allocators_of_major_heap_blocks_from_ocaml"
-
-let dump_allocators_of_major_heap_blocks ?(dump_num_unaccounted_for = 0)
-      ~filename () =
-  dump_allocators_of_major_heap_blocks ~filename ~dump_num_unaccounted_for
-
 external erase_profiling_annotations : unit -> unit
   = "caml_allocation_profiling_only_works_for_native_code"
     "caml_forget_where_values_were_allocated"
-
-external dump_heapgraph : node_filename:string
-  -> edge_filename:string
-  -> unit
-  = "caml_allocation_profiling_only_works_for_native_code"
-    "caml_dump_heapgraph_from_ocaml"
 
 external annotate_values_with_allocation_location : unit -> unit
   = "%identity" (*"caml_do_not_override_profinfo" "noalloc"*)
@@ -357,16 +386,8 @@ external get_profinfo : 'a -> profinfo
   = "caml_allocation_profiling_only_works_for_native_code"
     "caml_allocation_profiling_get_profinfo" "noalloc"
 
-module Return_address = struct
-  type t = Int64.t
-end
-
-module Frame_descriptor = struct
-  type t = Printexc.Slot.t
-end
-
 module Frame_table = struct
-  type t = (Return_address.t, Frame_descriptor.t) Hashtbl.t
+  type t = (Program_counter.t, Frame_descriptor.t) Hashtbl.t
 
   external num_frame_descriptors : unit -> int
     = "caml_allocation_profiling_num_frame_descriptors" "noalloc"
