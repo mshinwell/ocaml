@@ -162,6 +162,141 @@ end = struct
 end
 *)
 
+type node
+type ocaml_node
+type c_node
+
+let node_is_null (node : node) =
+  phys_equal () ((Obj.magic node) : unit)
+
+external node_num_header_words : unit -> int
+  = "caml_allocation_profiling_node_num_header_words" "noalloc"
+
+let num_header_words = node_num_header_words ()
+
+module OCaml_node = struct
+  type t = ocaml_node
+
+  let (=) = phys_equal
+
+  external function_identifier : t -> Function_identifier.t
+    = "caml_allocation_profiling_ocaml_function_identifier"
+
+  external next_in_tail_call_chain : t -> t
+    = "caml_allocation_profiling_ocaml_tail_chain" "noalloc"
+
+  type field_iterator = {
+    node : t;
+    offset : int;
+  }
+
+  module Allocation_point = struct
+    type t = field_iterator
+
+    external program_counter : ocaml_node -> int -> Program_counter.t
+      = "caml_allocation_profiling_ocaml_allocation_point_program_counter"
+
+    let program_counter t = program_counter t.node t.offset
+
+    external annotation : ocaml_node -> int -> Annotation.t
+      = "caml_allocation_profiling_ocaml_allocation_point_annotation"
+
+    let annotation t = annotation t.node t.offset
+  end
+
+  module Direct_call_point_in_ocaml_code = struct
+    type _ t = field_iterator
+
+    external call_site : ocaml_node -> int -> Program_counter.t
+      = "caml_allocation_profiling_ocaml_direct_call_point_call_site"
+
+    let call_site t = call_site t.node t.offset
+
+    external callee : ocaml_node -> int -> Function_entry_point.t
+      = "caml_allocation_profiling_ocaml_direct_call_point_callee"
+
+    let callee t = callee t.node t.offset
+
+    external callee_node : ocaml_node -> int -> 'target
+      = "caml_allocation_profiling_ocaml_direct_call_point_callee_node"
+
+    let callee_node (type target) (t : target t) : target =
+      callee_node t.node t.offset
+  end
+
+  module Indirect_call_point_in_ocaml_code = struct
+    type t = field_iterator
+
+    external call_site : ocaml_node -> int -> Program_counter.t
+      = "caml_allocation_profiling_ocaml_indirect_call_point_call_site"
+
+    let call_site t = call_site t.node t.offset
+
+    module Callee_iterator = struct
+      type t
+
+      let is_null = node_is_null
+
+      external callee : t -> Function_entry_point.t
+        = "caml_allocation_profiling_c_node_callee"
+
+      external callee_node : t -> node
+        = "caml_allocation_profiling_c_node_callee_node" "noalloc"
+
+      external next : t -> node
+        = "caml_allocation_profiling_c_node_next" "noalloc"
+
+      let next t =
+        let next = next t in
+        if node_is_null next then None
+        else Some next
+    end
+
+    external callees : ocaml_node -> int -> Callee_iterator.t
+      = "caml_allocation_profiling_ocaml_indirect_call_point_callees"
+        "noalloc"
+
+    let callees t =
+      let callees = callees t.node t.offset in
+      if Callee_iterator.is_null callees then None
+      else Some callees
+  end
+
+  module Field_iterator = struct
+    type t = field_iterator
+
+    type direct_call_point =
+      | To_ocaml of ocaml_node Direct_call_point_in_ocaml_code.t
+      | To_c of c_node Direct_call_point_in_ocaml_code.t
+      | To_uninstrumented of
+          uninstrumented_node Direct_call_point_in_ocaml_code.t
+
+    type classification =
+      | Allocation_point of Allocation_point.t
+      | Direct_call_point of direct_call_point
+      | Indirect_call_point of Indirect_call_point_in_ocaml_code.t
+
+    let classify t =
+
+    external next : ocaml_node -> int -> int
+      = "caml_allocation_profiling_ocaml_node_next" "noalloc"
+
+    let next t =
+      let offset = next t.node t.offset in
+      if offset < 0 then None
+      else Some { t with offset; }
+  end
+
+  let fields t =
+    { node = t;
+      offset = node_num_header_words;
+    }
+end
+
+module C_node = struct
+
+end
+
 (* CR mshinwell: must ensure -allocation-profiling does not appear as a
    compiler option if WITH_ALLOCATION_PROFILING was not set *)
 

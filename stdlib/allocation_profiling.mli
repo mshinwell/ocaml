@@ -135,6 +135,7 @@ module Trace : sig
   type node
   type ocaml_node
   type c_node
+  type uninstrumented_node
 
   module OCaml_node : sig
     (** A node corresponding to an invocation of a function written in
@@ -203,22 +204,7 @@ module Trace : sig
 
       (** The list of callees to which this indirect call point has
           branched. *)
-      val callees : t -> Callee_iterator.t
-    end
-
-    module Direct_ocaml_to_c_call_point : sig
-      (** A value of type [t] corresponds to a direct call point in OCaml
-          code that branches to non-OCaml ("external") code. *)
-      type t
-
-      (** The program counter at (or close to) the call site. *)
-      val call_site : t -> Call_site.t
-
-      (** The address of the first instruction of the callee. *)
-      val callee : t -> Function_entry_point.t
-
-      (** The node corresponding to the callee. *)
-      val callee_node : t -> c_node
+      val callees : t -> Callee_iterator.t option
     end
 
     module Field_iterator : sig
@@ -229,6 +215,8 @@ module Trace : sig
       type direct_call_point =
         | To_ocaml of ocaml_node Direct_call_point_in_ocaml_code.t
         | To_c of c_node Direct_call_point_in_ocaml_code.t
+        | To_uninstrumented of
+            uninstrumented_node Direct_call_point_in_ocaml_code.t
 
       type classification =
         | Allocation_point of Allocation_point.t
@@ -239,7 +227,7 @@ module Trace : sig
       val next : t -> t option
     end
 
-    val fields : t -> Field_iterator.t
+    val fields : t -> Field_iterator.t option
   end
 
   module C_node : sig
@@ -281,7 +269,7 @@ module Trace : sig
       val next : t -> t option
     end
 
-    val fields : t -> Field_iterator.t
+    val fields : t -> Field_iterator.t option
   end
 
   module Node : sig

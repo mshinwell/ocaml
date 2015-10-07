@@ -550,6 +550,87 @@ static int pc_inside_c_node_matches(c_node* node, void* pc)
   return Decode_c_node_pc(node->pc) == pc;
 }
 
+CAMLprim value
+caml_allocation_profiling_node_num_header_words(value unit)
+{
+  unit = unit;
+  return Val_long(Node_num_header_words);
+}
+
+CAMLprim value
+caml_allocation_profiling_is_ocaml_node(value node)
+{
+  return Val_bool(Is_ocaml_node(node));
+}
+
+CAMLprim value
+caml_allocation_profiling_ocaml_function_identifier(value node)
+{
+  return caml_copy_int64(Decode_node_pc(Node_pc(node)));
+}
+
+CAMLprim value
+caml_allocation_profiling_ocaml_tail_chain(value node)
+{
+  return Tail_link(node);
+}
+
+CAMLprim value
+caml_allocation_profiling_ocaml_node_next(value node, value offset)
+{
+  uintnat offset = Long_val(offset);
+
+}
+
+CAMLprim value
+caml_allocation_profiling_ocaml_allocation_point_program_counter
+  (value node, value offset)
+{
+  return caml_copy_int64(Alloc_point_pc(node, Long_val(offset)));
+}
+
+CAMLprim value
+caml_allocation_profiling_ocaml_allocation_point_annotation
+  (value node, value offset)
+{
+  return caml_copy_int64(Alloc_point_profinfo(node, Long_val(offset)));
+}
+
+CAMLprim value
+caml_allocation_profiling_ocaml_direct_call_point_call_site
+  (value node, value offset)
+{
+  return caml_copy_int64(Direct_pc_call_site(node, Long_val(offset)));
+}
+
+CAMLprim value
+caml_allocation_profiling_ocaml_direct_call_point_callee
+  (value node, value offset)
+{
+  return caml_copy_int64(Direct_pc_callee(node, Long_val(offset)));
+}
+
+CAMLprim value
+caml_allocation_profiling_ocaml_direct_call_point_callee_node
+  (value node, value offset)
+{
+  return caml_copy_int64(Direct_callee_node(node, Long_val(offset)));
+}
+
+CAMLprim value
+caml_allocation_profiling_ocaml_indirect_call_point_call_site
+  (value node, value offset)
+{
+  return caml_copy_int64(Indirect_pc_call_site(node, offset));
+}
+
+CAMLprim value
+caml_allocation_profiling_ocaml_indirect_call_point_callees
+  (value node, value offset)
+{
+  return Indirect_pc_linked_list(node, offset);
+}
+
 static value allocate_uninitialized_ocaml_node(int size_including_header)
 {
   void* node;
