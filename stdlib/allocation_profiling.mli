@@ -42,6 +42,11 @@ module Annotation : sig
       in a [Trace.t] (see below). *)
   type t
 
+  (* CR-someday mshinwell: consider using tag and size to increase the
+     available space of annotations.  Need to be careful of [Obj.truncate].
+     Could also randomise the tags on records.
+  *)
+
   val of_int : int -> t option
   val to_int : t -> int
 
