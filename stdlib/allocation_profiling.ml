@@ -79,11 +79,8 @@ module Snapshot = struct
     entries : raw_entries;
   }
 
-  external take : unit -> raw_snapshot
+  external take : out_channel -> unit
     = "caml_allocation_profiling_take_heap_snapshot"
-
-  external free_raw_snapshot : raw_snapshot -> unit
-    = "caml_allocation_profiling_free_heap_snapshot" "noalloc"
 
   module Entry = struct
     type t = {
@@ -107,8 +104,7 @@ module Snapshot = struct
   let gc_stats t = t.gc_stats
   let entries t = t.entries
 
-  let take () =
-    let raw_snapshot = take () in
+  let transform_raw_snapshot_to_table raw_snapshot =
     let num_entries = num_raw_entries raw_snapshot.entries in
     let entries = Hashtbl.create 42 in
     for entry = 0 to num_entries - 1 do
@@ -122,6 +118,12 @@ module Snapshot = struct
       Hashtbl.add entries annotation entry
     done;
     entries
+
+  let read in_channel : t =
+    let raw : raw_snapshot = Marshal.from_channel in_channel in
+    { gc_stats = raw.gc_stats;
+      entries = transform_raw_snapshot_to_table raw;
+    }
 end
 
 module Program_counter = struct

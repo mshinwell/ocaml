@@ -72,9 +72,12 @@ module Heap_snapshot : sig
   val gc_stats : t -> Gc_stats.t
   val entries : t -> Entries.t
 
-  (** Take a snapshot of the heap together with GC stats.  This function
-      performs a full major GC. *)
-  val take : unit -> t
+  (** Take a snapshot of the heap together with GC stats and marshal the
+      result to a file.  This function performs a full major GC. *)
+  val take : out_channel -> unit
+
+  (** Read a previously-written snapshot. *)
+  val read : in_channel -> t
 end
 
 (* [erase_profiling_annotations] erases allocation profiling

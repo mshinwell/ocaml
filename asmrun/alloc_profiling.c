@@ -118,15 +118,26 @@ static const uintnat profinfo_overflow = (uintnat) 1;
 static const uintnat profinfo_lowest = (uintnat) 2;
 uintnat caml_allocation_profiling_profinfo = (uintnat) 2;
 
+static value allocate_outside_heap(mlsize_t size_in_bytes)
+{
+  /* CR mshinwell: this function should live somewhere else */
+  header_t* block;
+  mlsize_t size_in_words;
+
+  assert(size_in_bytes % sizeof(value) == 0);
+  block = caml_stat_alloc(sizeof(header_t) + size_in_bytes);
+  *block = Make_header(size_in_bytes / sizeof(value), 0, Caml_black);
+  return (value) &block[1];
+}
+
 static value take_gc_stats(void)
 {
+  value v_stats;
   gc_stats* stats;
   mlsize_t size;
 
-  stats = caml_stat_alloc(sizeof(header_t) + sizeof(gc_stats));
-
-  Hd_val((value) stats) =
-    Make_header(sizeof(gc_stats) / sizeof(value), 0, Caml_black);
+  v_stats = allocate_outside_heap(sizeof(gc_stats));
+  stats = (gc_stats*) v_stats;
 
   stats->minor_words = (uintnat) caml_stat_minor_words;
   stats->promoted_words = (uintnat) caml_stat_promoted_words;
@@ -139,29 +150,22 @@ static value take_gc_stats(void)
   stats->compactions = (uintnat) caml_stat_compactions;
   stats->top_heap_words = (uintnat) caml_stat_top_heap_size / sizeof(value);
 
-  return (value) stats;
+  return v_stats;
 }
 
 CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
 {
+  value v_snapshot;
   snapshot* snapshot;
-  snapshot_entry* temp_entries;
+  value v_entries;
+  snapshot_entries* entries;
   char* chunk;
   value gc_stats;
   value entries;
   uintnat index;
   uintnat target_index;
   uintnat size_in_bytes;
-  uintnat largest_profinfo;
-  uintnat num_distinct_profinfos = 0;
 
-  temp_entries = (snapshot_entry*) caml_stat_alloc(
-    sizeof(header_t) + (PROFINFO_MASK + 1)*sizeof(snapshot_entry));
-  for (index = 0; index <= PROFINFO_MASK; index++) {
-    temp_entries[index].profinfo = 0;
-    temp_entries[index].num_blocks = 0;
-    temp_entries[index].num_words_including_headers = 0;
-  }
 
   /* Perform a full major collection so only live data remains and the
      minor heap is empty. */
@@ -187,14 +191,8 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
           uint64_t profinfo = Profinfo_hd(hd);
 
           if (profinfo >= profinfo_lowest && profinfo <= PROFINFO_MASK) {
-            if (profinfo > largest_profinfo) {
-              largest_profinfo = profinfo;
-            }
-            if (temp_entries[profinfo].num_blocks == 0) {
-              num_distinct_profinfos++;
-            }
-            temp_entries[profinfo].num_blocks++;
-            temp_entries[profinfo].num_words_including_headers +=
+            entries[profinfo].num_blocks++;
+            entries[profinfo].num_words_including_headers +=
               Whsize_hd(hd);
           }
           break;
@@ -207,9 +205,18 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
     chunk = Chunk_next (chunk);
   }
 
-  snapshot = (snapshot*) caml_stat_alloc(sizeof(header_t) + sizeof(snapshot));
-  *(Hp_val(snapshot)) =
-    Make_header(sizeof(snapshot) / sizeof(value), 0, Caml_black);
+  v_entries = allocate_outside_heap(
+    (PROFINFO_MASK + 1)*sizeof(snapshot_entry));
+  entries = (snapshot_entries*) v_entries;
+  for (index = 0; index <= PROFINFO_MASK; index++) {
+    entries[index].profinfo = Val_long(0);
+    entries[index].num_blocks = Val_long(0);
+    entries[index].num_words_including_headers = Val_long(0);
+  }
+
+  v_snapshot = allocate_outside_heap(sizeof(snapshot));
+  snapshot = (snapshot*) v_snapshot;
+
   snapshot->gc_stats = gc_stats;
   snapshot->entries = entries;
 
