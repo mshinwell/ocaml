@@ -56,54 +56,95 @@ end = struct
   let top_heap_words t = t.top_heap_words
 end
 
-module Snapshot_entries : sig
-  type t
-
-  val length : t -> int
-
-  val num_blocks : t -> index:int -> int
-  val num_words_including_headers : t -> index:int -> int
-end = struct
-  type t = int array
-
-  let length t =
-    let length = Array.length t in
-    assert (length mod 2 = 0);
-    length / 2
-
-  let num_blocks t ~index =
-    if index < 0 || index >= length t then begin
-      invalid_arg "Allocation_profiling.Snapshot_entries.num_blocks"
-    end;
-    t.(index * 2)
-
-  let num_words_including_headers t ~index =
-    if index < 0 || index >= length t then begin
-      invalid_arg
-        "Allocation_profiling.Snapshot_entries.num_words_including_headers"
-    end;
-    t.(index*2 + 1)
+module Annotation = struct
+  type t = int
 end
 
-module Snapshot : sig
+module Snapshot = struct
   type t
 
-  val gc_stats : t -> Gc_stats.t
-  val entries : t -> Snapshot_entries.t
-end = struct
+  type raw_entries = private int array  (* == "struct snapshot_entries" *)
+
+  let num_raw_entries entries =
+    let length = Array.length raw_entries in
+    assert (length mod 3 = 0);
+    length / 3
+
+  let raw_entry_annotation entries entry = entries.(entry)
+  let raw_entry_num_blocks entries entry = entries.(entry + 1)
+  let raw_entry_num_words entries entry = entries.(entry + 2)
+
+  type raw_snapshot = private {  (* == "struct snapshot" *)
+    gc_stats : Gc_stats.t;
+    entries : raw_entries;
+  }
+
+  external take : unit -> raw_snapshot
+    = "caml_allocation_profiling_take_heap_snapshot"
+
+  external free_raw_snapshot : raw_snapshot -> unit
+    = "caml_allocation_profiling_free_heap_snapshot" "noalloc"
+
+  module Entry = struct
+    type t = {
+      num_blocks : int;
+      num_words : int;
+    }
+
+    let num_blocks t = t.num_blocks
+    let num_words_including_headers t = t.num_words_including_headers
+  end
+
+  module Entries = struct
+    type t = (Annotation.t, Entry.t) Hashtbl.t
+  end
+
   type t = {
     gc_stats : Gc_stats.t;
-    entries : Snapshot_entries.t;
+    entries : Entries.t;
   }
 
   let gc_stats t = t.gc_stats
   let entries t = t.entries
+
+  let take () =
+    let raw_snapshot = take () in
+    let num_entries = num_raw_entries raw_snapshot.entries in
+    let entries = Hashtbl.create 42 in
+    for entry = 0 to num_entries - 1 do
+      let annotation = raw_entry_annotation entries entry in
+      let entry : Entry.t =
+        { num_blocks = raw_entry_num_blocks entries entry;
+          num_words = raw_entry_num_words entries entry;
+        }
+      in
+      assert (not (Hashtbl.mem entries annotation));
+      Hashtbl.add entries annotation entry
+    done;
+    entries
+end
+
+module Program_counter = struct
+  type t = Int64.t
+end
+
+module Function_entry_point = struct
+  type t = Int64.t
+end
+
+module Function_identifier = struct
+  type t = Int64.t
+end
+
+module Call_site = struct
+  type t = Int64.t
 end
 
 module Trace = struct
   type node
   type ocaml_node
   type c_node
+  type uninstrumented_node
 
   type t = node option
 
@@ -119,7 +160,10 @@ module Trace = struct
       Some ((Obj.magic trace) : node)
 
   let node_is_null (node : node) =
-    phys_equal () ((Obj.magic node) : unit)
+    ((Obj.magic node) : unit) == ()
+
+  let c_node_is_null (node : c_node) =
+    ((Obj.magic node) : unit) == ()
 
   external node_num_header_words : unit -> int
     = "caml_allocation_profiling_node_num_header_words" "noalloc"
@@ -129,7 +173,7 @@ module Trace = struct
   module OCaml_node = struct
     type t = ocaml_node
 
-    let (=) = phys_equal
+    let (=) = (==)
 
     external function_identifier : t -> Function_identifier.t
       = "caml_allocation_profiling_ocaml_function_identifier"
@@ -185,22 +229,22 @@ module Trace = struct
       let call_site t = call_site t.node t.offset
 
       module Callee_iterator = struct
-        type t
+        type t = c_node
 
-        let is_null = node_is_null
+        let is_null = c_node_is_null
 
         external callee : t -> Function_entry_point.t
           = "caml_allocation_profiling_c_node_callee"
 
-        external callee_node : t -> node
+        external callee_node : t -> c_node
           = "caml_allocation_profiling_c_node_callee_node" "noalloc"
 
-        external next : t -> node
+        external next : t -> c_node
           = "caml_allocation_profiling_c_node_next" "noalloc"
 
         let next t =
           let next = next t in
-          if node_is_null next then None
+          if c_node_is_null next then None
           else Some next
       end
 
@@ -232,7 +276,7 @@ module Trace = struct
         = "caml_allocation_profiling_ocaml_classify_field" "noalloc"
 
       let classify t =
-        match classify t with
+        match classify t.node with
         | 0 -> Allocation_point t
         | 1 -> Direct_call_point (To_uninstrumented t)
         | 2 -> Direct_call_point (To_ocaml t)
@@ -252,7 +296,7 @@ module Trace = struct
     let fields t =
       let start =
         { node = t;
-          offset = node_num_header_words;
+          offset = num_header_words;
         }
       in
       (* We need to skip to the first populated field. *)
@@ -302,7 +346,7 @@ module Trace = struct
 
       let next t =
         let next = next t in
-        if node_is_null t then None
+        if c_node_is_null t then None
         else Some t
     end
 
@@ -314,7 +358,7 @@ module Trace = struct
   module Node = struct
     type t = node
 
-    type classification = private
+    type classification =
       | OCaml of OCaml_node.t
       | C of C_node.t
 
@@ -322,8 +366,8 @@ module Trace = struct
       = "caml_allocation_profiling_is_ocaml_node" "noalloc"
 
     let classify t =
-      if is_ocaml_node t then OCaml t
-      else C t
+      if is_ocaml_node t then OCaml ((Obj.magic t) : ocaml_node)
+      else C ((Obj.magic t) : c_node)
   end
 
   let root t = t
@@ -386,6 +430,7 @@ external get_profinfo : 'a -> profinfo
   = "caml_allocation_profiling_only_works_for_native_code"
     "caml_allocation_profiling_get_profinfo" "noalloc"
 
+(*
 module Frame_table = struct
   type t = (Program_counter.t, Frame_descriptor.t) Hashtbl.t
 
@@ -414,3 +459,4 @@ module Frame_table = struct
     done;
     table
 end
+*)

@@ -39,8 +39,14 @@ end
 
 module Annotation : sig
   (** An annotation written into a value's header.  These may be looked up
-      in a [Trie.t] (see below). *)
-  type t = private Int64.t
+      in a [Trace.t] (see below). *)
+  type t
+
+  val of_int : int -> t option
+  val to_int : t -> int
+
+  val lowest_allowable : t
+  val highest_allowable : t
 end
 
 module Heap_snapshot : sig
@@ -64,7 +70,7 @@ module Heap_snapshot : sig
   end
 
   val gc_stats : t -> Gc_stats.t
-  val entries : t -> Snapshot_entries.t
+  val entries : t -> Entries.t
 
   (** Take a snapshot of the heap together with GC stats.  This function
       performs a full major GC. *)
@@ -91,14 +97,16 @@ val annotate_values_with_allocation_location : unit -> unit
    [annotate_values_with_given_integer], it is recommended to call
    [erase_profiling_annotations] first.
 *)
-val annotate_values_with_given_integer : int -> [ `Ok | `Out_of_range ]
+val annotate_values_with_given_integer : Annotation.t -> [ `Ok | `Out_of_range ]
 
 (* Returns the largest value that may be used for profiling annotations. *)
-val max_annotation_value : unit -> int
+val max_annotation_value : unit -> Annotation.t
 
 (* Returns the profiling annotation on a given value.  This is only sensible
    to call after [annotate_values_with_given_integer]. *)
-val annotation_of_value : 'a -> int
+val annotation_of_value : 'a -> Annotation.t
+
+(* CR mshinwell: rationalise this next part.  OCaml/C PC types. *)
 
 module Program_counter : sig
   type t = private Int64.t
@@ -295,6 +303,7 @@ module Trace : sig
   val debug : unit -> unit
 end
 
+(*
 module Frame_table : sig
   (* CR-someday mshinwell: move to [Gc] if dependencies permit? *)
   (** A value of type [t] corresponds to the frame table of a running
@@ -304,3 +313,4 @@ module Frame_table : sig
   (** Snapshot the frame table of the caller. *)
   val get : unit -> t
 end
+*)

@@ -97,6 +97,7 @@ typedef struct {
 } gc_stats;
 
 typedef struct {
+  value profinfo;
   value num_blocks;
   value num_words_including_headers;
 } snapshot_entry;
@@ -141,7 +142,7 @@ static value take_gc_stats(void)
   return (value) stats;
 }
 
-static value take_heap_snapshot(void)
+CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
 {
   snapshot* snapshot;
   snapshot_entry* temp_entries;
@@ -155,8 +156,9 @@ static value take_heap_snapshot(void)
   uintnat num_distinct_profinfos = 0;
 
   temp_entries = (snapshot_entry*) caml_stat_alloc(
-    (PROFINFO_MASK + 1)*sizeof(snapshot_entry));
+    sizeof(header_t) + (PROFINFO_MASK + 1)*sizeof(snapshot_entry));
   for (index = 0; index <= PROFINFO_MASK; index++) {
+    temp_entries[index].profinfo = 0;
     temp_entries[index].num_blocks = 0;
     temp_entries[index].num_words_including_headers = 0;
   }
@@ -205,30 +207,19 @@ static value take_heap_snapshot(void)
     chunk = Chunk_next (chunk);
   }
 
-  /* CR mshinwell: consider mapping to a file to avoid using system swap
-     space */
-  size_in_bytes =
-    sizeof(snapshot) + num_distinct_profinfos*sizeof(snapshot_entry);
-  assert((size_in_bytes % sizeof(uintnat)) == 0);
-  snapshot = (snapshot*) caml_stat_alloc(size_in_bytes);
+  snapshot = (snapshot*) caml_stat_alloc(sizeof(header_t) + sizeof(snapshot));
+  *(Hp_val(snapshot)) =
+    Make_header(sizeof(snapshot) / sizeof(value), 0, Caml_black);
+  snapshot->gc_stats = gc_stats;
+  snapshot->entries = entries;
 
-  snapshot->header =
-    Make_header(size_in_bytes / sizeof(uintnat), 0, Caml_black);
+  return snapshot;
+}
 
-  gc_stats = take_gc_stats();
-
-  target_index = 0;
-  for (index = 0; index <= largest_profinfo; index++) {
-    assert(target_index < num_distinct_profinfos);
-    if (temp_entries[index].num_blocks > 0) {
-      /* need to write the [profinfo] too */
-      memcpy(&snapshot->entries[target_index], &temp_entries[index],
-        sizeof(snapshot_entry));
-      target_index++;
-    }
-  }
-
-  return (value) (&snapshot->gc_stats);
+CAMLprim value caml_allocation_profiling_free_heap_snapshot(value snapshot)
+{
+  caml_stat_free(Hp_val(snapshot));
+  return Val_unit;
 }
 
 CAMLprim value
