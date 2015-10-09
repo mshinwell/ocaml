@@ -56,6 +56,39 @@ end = struct
   let top_heap_words t = t.top_heap_words
 end
 
+module Program_counter = struct
+  type t = Int64.t
+end
+
+module Frame_table = struct
+  type t = (Program_counter.t, Printexc.Slot.t) Hashtbl.t
+
+  external num_frame_descriptors : unit -> int
+    = "caml_allocation_profiling_num_frame_descriptors" "noalloc"
+
+  external get_frame_descriptor : int -> Printexc.raw_backtrace_slot option
+    = "caml_allocation_profiling_get_frame_descriptor"
+
+  external return_address_of_frame_descriptor
+     : Printexc.raw_backtrace_slot
+    -> Int64.t
+    = "caml_allocation_profiling_return_address_of_frame_descriptor"
+
+  let get () =
+    let num = num_frame_descriptors () in
+    let table = Hashtbl.create num in
+    for index = 0 to num - 1 do
+      match get_frame_descriptor index with
+      | None -> ()
+      | Some descr ->
+        let return_addr = return_address_of_frame_descriptor descr in
+        assert (not (Hashtbl.mem table return_addr));
+        Hashtbl.add table return_addr
+          (Printexc.convert_raw_backtrace_slot descr)
+    done;
+    table
+end
+
 module Annotation = struct
   type t = int
 end
@@ -95,12 +128,19 @@ module Heap_snapshot = struct
       let chn = open_out (t.pathname_prefix ^ pathname_suffix_trace) in
       Marshal.to_channel chn t.next_index [];
       Marshal.to_channel chn (Sys.time ()) [];
+      Marshal.to_channel chn (Frame_table.get ()) [];
       marshal_global_trace chn;
       close_out chn;
       t.closed <- true
   end
 
   type raw_entries = private int array  (* == "struct snapshot_entries" *)
+
+  type raw_snapshot = {
+    raw_timestamp : float;
+    raw_gc_stats : Gc_stats.t;
+    raw_entries : raw_entries;
+  }
 
   let num_raw_entries entries =
     let length = Array.length raw_entries in
@@ -111,12 +151,13 @@ module Heap_snapshot = struct
   let raw_entry_num_blocks entries entry = entries.(entry + 1)
   let raw_entry_num_words entries entry = entries.(entry + 2)
 
-
-  external take : out_channel -> unit
+  external take : unit -> raw_snapshot
     = "caml_allocation_profiling_take_heap_snapshot"
 
   let take writer =
-    Writer.use writer ~f:(fun out_channel -> take out_channel)
+    Writer.use writer ~f:(fun out_channel ->
+      let snapshot = take () in
+      Marshal.to_channel out_channel snapshot [])
 
   module Entry = struct
     type t = {
@@ -125,18 +166,12 @@ module Heap_snapshot = struct
     }
 
     let num_blocks t = t.num_blocks
-    let num_words_including_headers t = t.num_words_including_headers
+    let num_words_including_headers t = t.num_words
   end
 
   module Entries = struct
     type t = (Annotation.t, Entry.t) Hashtbl.t
   end
-
-  type raw_snapshot = {
-    raw_timestamp : float;
-    raw_gc_stats : Gc_stats.t;
-    raw_entries : raw_entries;
-  }
 
   type snapshot = {
     timestamp : float;
@@ -170,6 +205,7 @@ module Heap_snapshot = struct
     type t = {
       num_snapshots : int;
       time_of_writer_close : float;
+      frame_table : Frame_table.t;
       trace : Trace.t;
       snapshots : snapshot array;
     }
@@ -179,6 +215,7 @@ module Heap_snapshot = struct
       let chn = open_in (pathname_prefix ^ pathname_suffix_trace) in
       let num_snapshots : int = Marshal.from_channel chn in
       let time_of_writer_close : float = Marshal.from_channel chn in
+      let frame_table : Frame_table.t = Marshal.from_channel chn in
       let trace : Trace.t = Marshal.from_channel chn in
       close_in chn;
       let snapshots =
@@ -190,14 +227,16 @@ module Heap_snapshot = struct
       in
       { num_snapshots;
         time_of_writer_close;
+        frame_table;
         trace;
         snapshots;
       }
-  end
-end
 
-module Program_counter = struct
-  type t = Int64.t
+    let trace t = t.trace
+    let num_snapshots t = t.num_snapshots
+    let snapshot t ~index = t.snapshots.(index)
+    let time_of_writer_close t = t.time_of_writer_close
+  end
 end
 
 module Function_entry_point = struct
@@ -497,34 +536,3 @@ external profinfo_overflow : unit -> profinfo
 external get_profinfo : 'a -> profinfo
   = "caml_allocation_profiling_only_works_for_native_code"
     "caml_allocation_profiling_get_profinfo" "noalloc"
-
-(*
-module Frame_table = struct
-  type t = (Program_counter.t, Frame_descriptor.t) Hashtbl.t
-
-  external num_frame_descriptors : unit -> int
-    = "caml_allocation_profiling_num_frame_descriptors" "noalloc"
-
-  external get_frame_descriptor : int -> Printexc.raw_backtrace_slot option
-    = "caml_allocation_profiling_get_frame_descriptor"
-
-  external return_address_of_frame_descriptor
-     : Printexc.raw_backtrace_slot
-    -> Int64.t
-    = "caml_allocation_profiling_return_address_of_frame_descriptor"
-
-  let get () =
-    let num = num_frame_descriptors () in
-    let table = Hashtbl.create num in
-    for index = 0 to num - 1 do
-      match get_frame_descriptor index with
-      | None -> ()
-      | Some descr ->
-        let return_addr = return_address_of_frame_descriptor descr in
-        assert (not (Hashtbl.mem table return_addr));
-        Hashtbl.add table return_addr
-          (Printexc.convert_raw_backtrace_slot descr)
-    done;
-    table
-end
-*)

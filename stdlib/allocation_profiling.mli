@@ -89,6 +89,14 @@ module Program_counter : sig
   type t = private Int64.t
 end
 
+module Frame_table : sig
+  (* CR-someday mshinwell: move to [Gc] if dependencies permit? *)
+  (** A value of type [t] corresponds to the frame table of a running
+      OCaml program.  The table is indexed by return address. *)
+  (* XXX do these exactly match with the call site addresses? ... *)
+  type t = private (Program_counter.t, Printexc.Slot.t) Hashtbl.t
+end
+
 module Function_entry_point : sig
   type t = private Int64.t
 end
@@ -317,21 +325,10 @@ module Heap_snapshot : sig
 
     val read : pathname_prefix:string -> t
 
+    val time_of_writer_close : t -> float
     val trace : t -> Trace.t
-
+    val frame_table : t -> Frame_table.t
     val num_snapshots : t -> int
     val snapshot : t -> index:int -> heap_snapshot
   end
 end
-
-(*
-module Frame_table : sig
-  (* CR-someday mshinwell: move to [Gc] if dependencies permit? *)
-  (** A value of type [t] corresponds to the frame table of a running
-      OCaml program.  The table is indexed by return address. *)
-  type t = private (Program_counter.t, Printexc.Slot.t) Hashtbl.t
-
-  (** Snapshot the frame table of the caller. *)
-  val get : unit -> t
-end
-*)
