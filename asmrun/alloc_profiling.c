@@ -184,7 +184,7 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
   num_distinct_profinfos = 0;
 
   /* Scan the minor heap. */
-  ptr = caml_young_ptr + 1;  /* "+1" to get over the first value's header */
+  ptr = caml_young_ptr;
   assert(ptr >= (value*) caml_young_start);
   while (ptr < (value*) caml_young_end) {
     header_t hd;
@@ -253,11 +253,12 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
   for (index = 0; index <= PROFINFO_MASK; index++) {
     assert(target_index < num_distinct_profinfos);
     assert(raw_entries[index].num_blocks >= 0);
-    if (raw_entries[index].num_blocks == 0) {
+    if (raw_entries[index].num_blocks > 0) {
       entries[target_index].profinfo = index;
       entries[target_index].num_blocks = raw_entries[index].num_blocks;
       entries[target_index].num_words_including_headers
         = raw_entries[index].num_words_including_headers;
+      target_index++;
     }
   }
 
