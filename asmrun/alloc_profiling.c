@@ -109,6 +109,7 @@ typedef struct {
 
 typedef struct {
   /* (GC header here.) */
+  value time;  /* Cf. [Sys.time]. */
   value gc_stats;
   value entries;
 } snapshot;
@@ -165,15 +166,55 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
   uintnat index;
   uintnat target_index;
   uintnat size_in_bytes;
+  double time;
+  uintnat largest_profinfo_seen;
+  value* ptr;
+  /* Fixed size buffer to avoid needing a hash table: */
+  static raw_snapshot_entry* raw_entries = NULL;
 
+  time = caml_sys_time_as_double();
 
-  /* Perform a full major collection so only live data remains and the
-     minor heap is empty. */
-  caml_minor_collection();
-  caml_finish_major_cycle();
+  if (raw_entries == NULL) {
 
-  largest_profinfo = profinfo_lowest;
+  }
 
+  largest_profinfo_seen = profinfo_lowest;
+
+  /* Scan the minor heap. */
+  assert(ptr >= (value*) caml_young_start);
+  while (ptr < (value*) caml_young_end) {
+    intnat block_size_excl_header;
+    header_t hd;
+    value value_in_minor_heap;
+
+    ptr++;
+    value_in_minor_heap = (value) ptr;
+    assert(Is_young(value_in_minor_heap));
+    assert(Is_block(value_in_minor_heap));
+
+    hd = Hd_val(value_in_minor_heap);
+
+    if (hd != 0) {
+      /* The value has not been promoted, so count it.  (If it has been
+         promoted, the major heap pass below will see it.) */
+
+      uint64_t profinfo = Profinfo_hd(hd);
+
+      if (profinfo >= profinfo_lowest && profinfo <= PROFINFO_MASK) {
+        raw_entries[profinfo].num_blocks++;
+        raw_entries[profinfo].num_words_including_headers +=
+          Whsize_val(value_in_minor_heap);
+
+        if (profinfo > largest_profinfo_seen) {
+          largest_profinfo_seen = profinfo;
+        }
+      }
+    }
+
+    ptr += block_size_excl_header;
+  }
+
+  /* Scan the major heap. */
   while (chunk != NULL) {
     char* hp;
     char* limit;
@@ -217,6 +258,7 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
   v_snapshot = allocate_outside_heap(sizeof(snapshot));
   snapshot = (snapshot*) v_snapshot;
 
+  snapshot->time = time;
   snapshot->gc_stats = gc_stats;
   snapshot->entries = entries;
 

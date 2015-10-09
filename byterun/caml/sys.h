@@ -22,6 +22,7 @@ CAMLextern void caml_sys_error (value);
 CAMLextern void caml_sys_io_error (value);
 extern void caml_sys_init (char * exe_name, char ** argv);
 CAMLextern value caml_sys_exit (value);
+extern double caml_sys_time_as_double(void);
 
 extern char * caml_exe_name;
 

@@ -54,37 +54,6 @@ module Annotation : sig
   val highest_allowable : t
 end
 
-module Heap_snapshot : sig
-  type t
-
-  module Entry : sig
-    (** A value of type [t] provides the total number of blocks (= boxed
-        values) and the total number of words occupied by such blocks
-        (including their headers) for some given profiling annotation in
-        the heap. *)
-    type t
-
-    val num_blocks : t -> int
-    val num_words_including_headers : t -> int
-  end
-
-  module Entries : sig
-    (** Numbers of blocks and words, as above, indexed by profiling
-        annotation. *)
-    type t = private (Annotation.t, Entry.t) Hashtbl.t
-  end
-
-  val gc_stats : t -> Gc_stats.t
-  val entries : t -> Entries.t
-
-  (** Take a snapshot of the heap together with GC stats and marshal the
-      result to a file.  This function performs a full major GC. *)
-  val take : out_channel -> unit
-
-  (** Read a previously-written snapshot. *)
-  val read : in_channel -> t
-end
-
 (* [erase_profiling_annotations] erases allocation profiling
    information on all values.  This is useful at the start of some
    benchmarking period---for example to exclude allocations associated
@@ -139,14 +108,6 @@ module Trace : sig
       information required to decode profiling annotations written into
       values' headers. *)
   type t
-
-  (** Marshal the trace to a channel.  (This function does not cause any
-      allocation.)  You must use this function rather than the functions
-      in the [Marshal] module. *)
-  val marshal_global : out_channel -> unit
-
-  (** Unmarshal a trace for examination. *)
-  val unmarshal : in_channel -> t
 
   type node
   type ocaml_node
@@ -309,6 +270,57 @@ module Trace : sig
 
   (** Dump the current trace to stdout. *)
   val debug : unit -> unit
+end
+
+module Heap_snapshot : sig
+  type t
+  type heap_snapshot = t
+
+  module Writer : sig
+    type t
+
+    val create : pathname_prefix:string -> t
+    val save_trace_and_close : t -> unit
+  end
+
+  module Entry : sig
+    (** A value of type [t] provides the total number of blocks (= boxed
+        values) and the total number of words occupied by such blocks
+        (including their headers) for some given profiling annotation in
+        the heap. *)
+    type t
+
+    val num_blocks : t -> int
+    val num_words_including_headers : t -> int
+  end
+
+  module Entries : sig
+    (** Numbers of blocks and words, as above, indexed by profiling
+        annotation. *)
+    type t = private (Annotation.t, Entry.t) Hashtbl.t
+  end
+
+  (** The timestamp of a snapshot.  The units are as for [Sys.time]. *)
+  val timestamp : t -> float
+
+  val gc_stats : t -> Gc_stats.t
+  val entries : t -> Entries.t
+
+  (** Take a snapshot of the profiling annotations on the values in the minor
+      and major heaps, together with GC stats, and write the result to a file.
+      No allocation or GC is performed by this function. *)
+  val take : Heap_snapshot_writer.t -> unit
+
+  module Series : sig
+    type t
+
+    val read : pathname_prefix:string -> t
+
+    val trace : t -> Trace.t
+
+    val num_snapshots : t -> int
+    val snapshot : t -> index:int -> heap_snapshot
+  end
 end
 
 (*
