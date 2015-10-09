@@ -308,7 +308,8 @@ module Heap_snapshot : sig
 
   (** Take a snapshot of the profiling annotations on the values in the minor
       and major heaps, together with GC stats, and write the result to a file.
-      No allocation or GC is performed by this function. *)
+      This function performs only a very small amount of allocation.  It does
+      not explicitly trigger a GC. *)
   val take : Heap_snapshot_writer.t -> unit
 
   module Series : sig

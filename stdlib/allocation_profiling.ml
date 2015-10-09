@@ -60,8 +60,45 @@ module Annotation = struct
   type t = int
 end
 
-module Snapshot = struct
+module Heap_snapshot = struct
   type t
+
+  let pathname_suffix_trace = "trace"
+
+  module Writer = struct
+    type t = {
+      pathname_prefix : string;
+      trace_pathname : string;
+      mutable next_index : int;
+      mutable closed : bool;
+    }
+
+    let create ~pathname_prefix =
+      { pathname_prefix = pathname_prefix ^ ".";
+        next_index = 0;
+        closed = false;
+      }
+
+    let use t ~f =
+      if t.closed then failwith "Heap_snapshot.Writer: is closed";
+      let pathname = t.pathname_prefix ^ (string_of_int t.next_index) in
+      t.next_index <- t.next_index + 1;
+      let chn = open_out pathname in
+      f chn
+      close_out chn
+
+    external marshal_global_trace : out_channel -> unit
+      = "caml_allocation_profiling_only_works_for_native_code"
+        "caml_allocation_profiling_marshal_trie"
+
+    let close t =
+      let chn = open_out (t.pathname_prefix ^ pathname_suffix_trace) in
+      Marshal.to_channel chn t.next_index [];
+      Marshal.to_channel chn (Sys.time ()) [];
+      marshal_global_trace chn;
+      close_out chn;
+      t.closed <- true
+  end
 
   type raw_entries = private int array  (* == "struct snapshot_entries" *)
 
@@ -74,13 +111,12 @@ module Snapshot = struct
   let raw_entry_num_blocks entries entry = entries.(entry + 1)
   let raw_entry_num_words entries entry = entries.(entry + 2)
 
-  type raw_snapshot = private {  (* == "struct snapshot" *)
-    gc_stats : Gc_stats.t;
-    entries : raw_entries;
-  }
 
   external take : out_channel -> unit
     = "caml_allocation_profiling_take_heap_snapshot"
+
+  let take writer =
+    Writer.use writer ~f:(fun out_channel -> take out_channel)
 
   module Entry = struct
     type t = {
@@ -96,15 +132,23 @@ module Snapshot = struct
     type t = (Annotation.t, Entry.t) Hashtbl.t
   end
 
-  type t = {
+  type raw_snapshot = {
+    raw_timestamp : float;
+    raw_gc_stats : Gc_stats.t;
+    raw_entries : raw_entries;
+  }
+
+  type snapshot = {
+    timestamp : float;
     gc_stats : Gc_stats.t;
     entries : Entries.t;
   }
 
+  let timestamp t = t.timestamp
   let gc_stats t = t.gc_stats
   let entries t = t.entries
 
-  let transform_raw_snapshot_to_table raw_snapshot =
+  let transform_raw_snapshot raw_snapshot =
     let num_entries = num_raw_entries raw_snapshot.entries in
     let entries = Hashtbl.create 42 in
     for entry = 0 to num_entries - 1 do
@@ -117,13 +161,39 @@ module Snapshot = struct
       assert (not (Hashtbl.mem entries annotation));
       Hashtbl.add entries annotation entry
     done;
-    entries
-
-  let read in_channel : t =
-    let raw : raw_snapshot = Marshal.from_channel in_channel in
-    { gc_stats = raw.gc_stats;
-      entries = transform_raw_snapshot_to_table raw;
+    { timestamp = raw_snapshot.raw_timestamp;
+      gc_stats = raw_snapshot.raw_gc_stats;
+      entries;
     }
+
+  module Series = struct
+    type t = {
+      num_snapshots : int;
+      time_of_writer_close : float;
+      trace : Trace.t;
+      snapshots : snapshot array;
+    }
+
+    let read ~pathname_prefix =
+      let pathname_prefix = pathname_prefix ^ "." in
+      let chn = open_in (pathname_prefix ^ pathname_suffix_trace) in
+      let num_snapshots : int = Marshal.from_channel chn in
+      let time_of_writer_close : float = Marshal.from_channel chn in
+      let trace : Trace.t = Marshal.from_channel chn in
+      close_in chn;
+      let snapshots =
+        Array.init num_snapshots (fun index ->
+          let chn = open_in (pathname_prefix ^ (string_of_int index)) in
+          let raw : raw_snapshot = Marshal.from_channel chn in
+          close_in chn;
+          transform_raw_snapshot raw)
+      in
+      { num_snapshots;
+        time_of_writer_close;
+        trace;
+        snapshots;
+      }
+  end
 end
 
 module Program_counter = struct
@@ -149,10 +219,6 @@ module Trace = struct
   type uninstrumented_node
 
   type t = node option
-
-  external marshal_global : out_channel -> unit
-    = "caml_allocation_profiling_only_works_for_native_code"
-      "caml_allocation_profiling_marshal_trie"
 
   let unmarshal in_channel =
     let trace = Marshal.from_channel in_channel in

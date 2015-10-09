@@ -154,6 +154,11 @@ static value take_gc_stats(void)
   return v_stats;
 }
 
+typedef struct {
+  uintnat num_blocks;
+  uintnat num_words_including_headers;
+} raw_snapshot_entry;
+
 CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
 {
   value v_snapshot;
@@ -265,6 +270,7 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
   v_snapshot = allocate_outside_heap(sizeof(snapshot));
   snapshot = (snapshot*) v_snapshot;
 
+  /* XXX this float needs to be boxed */
   snapshot->time = time;
   snapshot->gc_stats = gc_stats;
   snapshot->entries = entries;
