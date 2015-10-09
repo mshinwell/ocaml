@@ -167,7 +167,8 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
   uintnat target_index;
   uintnat size_in_bytes;
   double time;
-  uintnat largest_profinfo_seen;
+  uintnat profinfo;
+  uintnat num_distinct_profinfos;
   value* ptr;
   /* Fixed size buffer to avoid needing a hash table: */
   static raw_snapshot_entry* raw_entries = NULL;
@@ -175,15 +176,17 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
   time = caml_sys_time_as_double();
 
   if (raw_entries == NULL) {
-
+    size_t size = (PROFINFO_MASK + 1) * sizeof(raw_snapshot_entry);
+    raw_entries = caml_stat_alloc(size);
+    memset(raw_entries, '\0', size);
   }
 
-  largest_profinfo_seen = profinfo_lowest;
+  num_distinct_profinfos = 0;
 
   /* Scan the minor heap. */
+  ptr = caml_young_ptr + 1;  /* "+1" to get over the first value's header */
   assert(ptr >= (value*) caml_young_start);
   while (ptr < (value*) caml_young_end) {
-    intnat block_size_excl_header;
     header_t hd;
     value value_in_minor_heap;
 
@@ -194,24 +197,23 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
 
     hd = Hd_val(value_in_minor_heap);
 
-    if (hd != 0) {
-      /* The value has not been promoted, so count it.  (If it has been
-         promoted, the major heap pass below will see it.) */
+    /* We do not expect the value to be promoted, since this function
+       should not be called during a minor collection. */
+    assert(hd != 0);
 
-      uint64_t profinfo = Profinfo_hd(hd);
+    profinfo = Profinfo_hd(hd);
 
-      if (profinfo >= profinfo_lowest && profinfo <= PROFINFO_MASK) {
-        raw_entries[profinfo].num_blocks++;
-        raw_entries[profinfo].num_words_including_headers +=
-          Whsize_val(value_in_minor_heap);
-
-        if (profinfo > largest_profinfo_seen) {
-          largest_profinfo_seen = profinfo;
-        }
+    if (profinfo >= profinfo_lowest && profinfo <= PROFINFO_MASK) {
+      assert (raw_entries[profinfo].num_blocks++ >= 0);
+      if (raw_entries[profinfo].num_blocks == 0) {
+        num_distinct_profinfos++;
       }
+      raw_entries[profinfo].num_blocks++;
+      raw_entries[profinfo].num_words_including_headers +=
+        Whsize_val(value_in_minor_heap);
     }
 
-    ptr += block_size_excl_header;
+    ptr += Wosize_val(value_in_minor_heap);
   }
 
   /* Scan the major heap. */
@@ -228,16 +230,14 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
         case Caml_blue:
           break;
 
-        default: {
-          uint64_t profinfo = Profinfo_hd(hd);
-
+        default:
+          profinfo = Profinfo_hd(hd);
           if (profinfo >= profinfo_lowest && profinfo <= PROFINFO_MASK) {
             entries[profinfo].num_blocks++;
             entries[profinfo].num_words_including_headers +=
               Whsize_hd(hd);
           }
           break;
-        }
       }
       hp += Bhsize_hd (hd);
       Assert (hp <= limit);
@@ -247,12 +247,18 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
   }
 
   v_entries = allocate_outside_heap(
-    (PROFINFO_MASK + 1)*sizeof(snapshot_entry));
+    num_distinct_profinfos*sizeof(snapshot_entry));
   entries = (snapshot_entries*) v_entries;
+  target_index = 0;
   for (index = 0; index <= PROFINFO_MASK; index++) {
-    entries[index].profinfo = Val_long(0);
-    entries[index].num_blocks = Val_long(0);
-    entries[index].num_words_including_headers = Val_long(0);
+    assert(target_index < num_distinct_profinfos);
+    assert(raw_entries[index].num_blocks >= 0);
+    if (raw_entries[index].num_blocks == 0) {
+      entries[target_index].profinfo = index;
+      entries[target_index].num_blocks = raw_entries[index].num_blocks;
+      entries[target_index].num_words_including_headers
+        = raw_entries[index].num_words_including_headers;
+    }
   }
 
   v_snapshot = allocate_outside_heap(sizeof(snapshot));
