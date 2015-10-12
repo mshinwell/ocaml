@@ -50,7 +50,8 @@
 
 #include "../config/s.h"
 
-#define HAS_LIBUNWIND
+/* not working yet... */
+#undef HAS_LIBUNWIND
 
 #ifdef HAS_LIBUNWIND
 #include "libunwind.h"

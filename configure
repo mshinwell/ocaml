@@ -31,6 +31,8 @@ mathlib='-lm'
 dllib=''
 x11_include_dir=''
 x11_lib_dir=''
+libunwind_include_dir=''
+libunwind_lib_dir=''
 graph_wanted=yes
 pthread_wanted=yes
 dl_defs=''
@@ -108,6 +110,10 @@ while : ; do
             manext=1;;
         esac
         shift;;
+    -libunwindinclude|--libunwindinclude)
+        libunwind_include_dir=$2; shift;;
+    -libunwindlib|--libunwindlib)
+        libunwind_lib_dir=$2; shift;;
     -host*|--host*)
         host_type=$2; shift;;
     -target*|--target*)
@@ -1370,12 +1376,6 @@ if sh ./hasgot nice; then
   echo "#define HAS_NICE" >> s.h
 fi
 
-# Whether libunwind is present (for allocation profiling)
-
-if sh ./hasgot -i libunwind.h; then
-  echo "#define HAS_LIBUNWIND" >> s.h
-fi
-
 # Determine if the debugger is supported
 
 if test -n "$with_debugger"; then
@@ -1697,6 +1697,28 @@ fi
 
 if $with_allocation_profiling; then
   echo "#define WITH_ALLOCATION_PROFILING" >> m.h
+
+  if test "$libunwind_include_dir" != ""; then
+    libunwind_include="-I$libunwind_include_dir"
+  else
+    libunwind_include=""
+  fi
+
+  if test "$libunwind_lib_dir" != ""; then
+    libunwind_lib="-L$libunwind_lib_dir"
+  else
+    libunwind_lib=""
+  fi
+
+  if sh ./hasgot -i libunwind.h -Xl $libunwind_lib -Xl -lunwind $libunwind_include; then
+    echo "#define HAS_LIBUNWIND" >> s.h
+    nativecccompopts="$libunwind_include $nativecccompopts"
+    bytecclibs="$libunwind_lib -lunwind"
+    nativecclibs="$libunwind_lib -lunwind"
+    has_libunwind=yes
+  else
+    has_libunwind=no
+  fi
 fi
 
 # Add Unix-style optimization flag
@@ -1721,7 +1743,7 @@ cclibs="$cclibs $mathlib"
 echo "BYTECC=$bytecc" >> Makefile
 echo "BYTECCCOMPOPTS=$bytecccompopts" >> Makefile
 echo "BYTECCLINKOPTS=$bytecclinkopts" >> Makefile
-echo "BYTECCLIBS=$cclibs $dllib $curseslibs $pthread_link" >> Makefile
+echo "BYTECCLIBS=$cclibs $bytecclibs $dllib $curseslibs $pthread_link" >> Makefile
 echo "BYTECCRPATH=$byteccrpath" >> Makefile
 echo "EXE=$exe" >> Makefile
 echo "SUPPORTS_SHARED_LIBRARIES=$shared_libraries_supported" >> Makefile
@@ -1744,7 +1766,7 @@ echo "NATIVECCCOMPOPTS=$nativecccompopts" >> Makefile
 echo "NATIVECCPROFOPTS=$nativeccprofopts" >> Makefile
 echo "NATIVECCLINKOPTS=$nativecclinkopts" >> Makefile
 echo "NATIVECCRPATH=$nativeccrpath" >> Makefile
-echo "NATIVECCLIBS=$cclibs $dllib" >> Makefile
+echo "NATIVECCLIBS=$cclibs $nativecclibs $dllib" >> Makefile
 echo "ASM=$as" >> Makefile
 echo "ASPP=$aspp" >> Makefile
 echo "ASPPPROFFLAGS=$asppprofflags" >> Makefile
@@ -1851,7 +1873,15 @@ else
   inf "        naked pointers forbidden.. no"
   fi
   if $with_allocation_profiling; then
-  inf "        allocation profiling...... yes"
+    inf "        allocation profiling...... yes (with libunwind? $has_libunwind)"
+    if test "$has_libunwind" = "yes"; then
+      if test "$libunwind_include_dir" != ""; then
+        inf "        libunwind include dir..... $libunwind_include_dir"
+      fi
+      if test "$libunwind_lib_dir" != ""; then
+        inf "        libunwind library dir..... $libunwind_lib_dir"
+      fi
+    fi
   else
   inf "        allocation profiling...... no"
   fi
