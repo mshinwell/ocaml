@@ -21,8 +21,11 @@
 (***********************************************************************)
 
 let index_within_node = ref 2 (* Cf. [Node_num_header_words] in the runtime. *)
-let alloc_profiling_node = ref (Cmm.Cvar (Ident.create "dummy"))
-let alloc_profiling_node_ident = ref (Ident.create "dummy")
+(* The [lazy]s are to ensure that we don't create [Ident.t]s at toplevel
+   when not using -allocation-profiling.  (This could cause stamps to differ
+   between bytecode and native .cmis when no .mli is present, e.g. arch.ml.) *)
+let alloc_profiling_node = ref (lazy (Cmm.Cvar (Ident.create "dummy")))
+let alloc_profiling_node_ident = ref (lazy (Ident.create "dummy"))
 let direct_tail_call_point_indexes = ref []
 
 let something_was_instrumented () =
@@ -35,8 +38,8 @@ let next_index_within_node ~words_needed =
 
 let reset ~alloc_profiling_node_ident:ident =
   index_within_node := 2;
-  alloc_profiling_node := Cmm.Cvar ident;
-  alloc_profiling_node_ident := ident;
+  alloc_profiling_node := lazy (Cmm.Cvar ident);
+  alloc_profiling_node_ident := lazy ident;
   direct_tail_call_point_indexes := []
 
 let code_for_function_prologue () =
@@ -198,7 +201,7 @@ class virtual instruction_selection = object (self)
   method private instrument_direct_call ~env ~lbl ~is_tail =
     let instrumentation =
       code_for_call
-        ~node:!alloc_profiling_node
+        ~node:(Lazy.force !alloc_profiling_node)
         ~callee:(Direct lbl)
         ~is_tail
     in
@@ -213,7 +216,7 @@ class virtual instruction_selection = object (self)
     let env = Tbl.add callee_ident [| callee |] env in
     let instrumentation =
       code_for_call
-        ~node:!alloc_profiling_node
+        ~node:(Lazy.force !alloc_profiling_node)
         ~callee:(Indirect (Cmm.Cvar callee_ident))
         ~is_tail
     in
@@ -240,7 +243,8 @@ class virtual instruction_selection = object (self)
 
   method private instrument_allocation_point ~env ~value's_header =
     let instrumentation =
-      code_for_allocation_point ~node:!alloc_profiling_node_ident
+      code_for_allocation_point
+        ~node:(Lazy.force !alloc_profiling_node_ident)
         ~value's_header
     in
     self#emit_expr env instrumentation
@@ -311,7 +315,8 @@ class virtual instruction_selection = object (self)
   method! initial_env () =
     let env = super#initial_env () in
     if !Clflags.allocation_profiling then
-      Tbl.add !alloc_profiling_node_ident (self#regs_for Cmm.typ_int) env
+      Tbl.add (Lazy.force !alloc_profiling_node_ident)
+        (self#regs_for Cmm.typ_int) env
     else
       env
 
