@@ -488,7 +488,8 @@ static void intern_rec(value *dest)
   intern_free_stack();
 }
 
-static void intern_alloc(mlsize_t whsize, mlsize_t num_objects)
+static void intern_alloc(mlsize_t whsize, mlsize_t num_objects,
+      int outside_heap)
 {
   mlsize_t wosize;
 
@@ -499,7 +500,7 @@ static void intern_alloc(mlsize_t whsize, mlsize_t num_objects)
     return;
   }
   wosize = Wosize_whsize(whsize);
-  if (wosize > Max_wosize) {
+  if (wosize > Max_wosize || outside_heap) {
     /* Round desired size up to next page */
     asize_t request =
       ((Bsize_wsize(whsize) + Page_size - 1) >> Page_log) << Page_log;
@@ -551,7 +552,7 @@ static void intern_add_to_heap(mlsize_t whsize)
   }
 }
 
-value caml_input_val(struct channel *chan)
+static value caml_input_val_core(struct channel *chan, int outside_heap)
 {
   uint32 magic;
   mlsize_t block_len, num_objects, whsize;
@@ -584,14 +585,21 @@ value caml_input_val(struct channel *chan)
   intern_input = (unsigned char *) block;
   intern_input_malloced = 1;
   intern_src = intern_input;
-  intern_alloc(whsize, num_objects);
+  intern_alloc(whsize, num_objects, outside_heap);
   /* Fill it in */
   intern_rec(&res);
-  intern_add_to_heap(whsize);
+  if (!outside_heap) {
+    intern_add_to_heap(whsize);
+  }
   /* Free everything */
   caml_stat_free(intern_input);
   if (intern_obj_table != NULL) caml_stat_free(intern_obj_table);
   return caml_check_urgent_gc(res);
+}
+
+value caml_input_val(struct channel* chan)
+{
+  return caml_input_val_core(chan, 0);
 }
 
 CAMLprim value caml_input_value(value vchan)
@@ -602,6 +610,18 @@ CAMLprim value caml_input_value(value vchan)
 
   Lock(chan);
   res = caml_input_val(chan);
+  Unlock(chan);
+  CAMLreturn (res);
+}
+
+CAMLprim value caml_input_value_to_outside_heap(value vchan)
+{
+  CAMLparam1 (vchan);
+  struct channel * chan = Channel(vchan);
+  CAMLlocal1 (res);
+
+  Lock(chan);
+  res = caml_input_val_core(chan, 1);
   Unlock(chan);
   CAMLreturn (res);
 }
@@ -623,7 +643,7 @@ CAMLexport value caml_input_val_from_string(value str, intnat ofs)
   intern_src += 4;  /* skip size_64 */
 #endif
   /* Allocate result */
-  intern_alloc(whsize, num_objects);
+  intern_alloc(whsize, num_objects, 0);
   intern_src = &Byte_u(str, ofs + 5*4); /* If a GC occurred */
   /* Fill it in */
   intern_rec(&obj);
@@ -652,7 +672,7 @@ static value input_val_from_block(void)
   intern_src += 4;  /* skip size_64 */
 #endif
   /* Allocate result */
-  intern_alloc(whsize, num_objects);
+  intern_alloc(whsize, num_objects, 0);
   /* Fill it in */
   intern_rec(&obj);
   intern_add_to_heap(whsize);

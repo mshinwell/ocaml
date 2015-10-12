@@ -127,8 +127,6 @@ module Trace : sig
         OCaml. *)
     type t = ocaml_node
 
-    val (=) : t -> t -> bool
-
     (** A unique identifier for the function corresponding to this node. *)
     val function_identifier : t -> Function_identifier.t
 
@@ -265,11 +263,16 @@ module Trace : sig
         of the graph corresponding to uninstrumented code. *)
     type t = node
 
+    val compare : t -> t -> int
+
     type classification = private
       | OCaml of OCaml_node.t
       | C of C_node.t
 
     val classify : t -> classification
+
+    val of_ocaml_node : OCaml_node.t -> t
+    val of_c_node : C_node.t -> t
   end
 
   (** Obtains the root of the graph for traversal.  [None] is returned if
@@ -323,6 +326,10 @@ module Heap_snapshot : sig
   module Series : sig
     type t
 
+    (** At present, the [Trace.t] associated with a [Series.t] cannot be
+        garbage collected or freed.  This should not be a problem, since
+        the intention is that a post-processor reads the trace and outputs
+        another format. *)
     val read : pathname_prefix:string -> t
 
     val time_of_writer_close : t -> float

@@ -36,6 +36,7 @@
 #include "caml/alloc.h"
 #include "caml/fail.h"
 #include "caml/gc.h"
+#include "caml/intext.h"
 #include "caml/major_gc.h"
 #include "caml/memory.h"
 #include "caml/minor_gc.h"
@@ -872,6 +873,21 @@ static value find_tail_node(value node, void* callee)
   return found;
 }
 
+CAMLprim value caml_allocation_profiling_compare_node(
+      value node1, value node2)
+{
+  assert(!Is_in_value_area(node1));
+  assert(!Is_in_value_area(node2));
+
+  if (node1 == node2) {
+    return 0;
+  }
+  if (node1 < node2) {
+    return -1;
+  }
+  return 1;
+}
+
 CAMLprim value caml_allocation_profiling_allocate_node(
       int size_including_header, void* pc, value* node_hole)
 {
@@ -1209,6 +1225,11 @@ CAMLprim value caml_allocation_profiling_marshal_trie (value v_channel)
   caml_extern_allow_out_of_heap = 0;
 
   return Val_unit;
+}
+
+CAMLprim value caml_allocation_profiling_unmarshal_trie (value v_channel)
+{
+  return caml_input_value_to_outside_heap(v_channel);
 }
 
 static void print_tail_chain(value node)

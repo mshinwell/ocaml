@@ -136,8 +136,14 @@ module Trace = struct
 
   type t = node option
 
+  (* This function unmarshals into malloc blocks, which mean that we
+     obtain a straightforward means of writing [compare] on [node]s. *)
+  external unmarshal : in_channel -> 'a
+    = "caml_allocation_profiling_only_works_for_native_code"
+      "caml_allocation_profiling_unmarshal_trie"
+
   let unmarshal in_channel =
-    let trace = Marshal.from_channel in_channel in
+    let trace = unmarshal in_channel in
     if trace = () then
       None
     else
@@ -157,8 +163,6 @@ module Trace = struct
 
   module OCaml_node = struct
     type t = ocaml_node
-
-    let (=) = (==)
 
     external function_identifier : t -> Function_identifier.t
       = "caml_allocation_profiling_only_works_for_native_code"
@@ -363,6 +367,10 @@ module Trace = struct
   module Node = struct
     type t = node
 
+    external compare : t -> t -> int
+      = "caml_allocation_profiling_only_works_for_native_code"
+        "caml_allocation_profiling_compare_node" "noalloc"
+
     type classification =
       | OCaml of OCaml_node.t
       | C of C_node.t
@@ -374,6 +382,9 @@ module Trace = struct
     let classify t =
       if is_ocaml_node t then OCaml ((Obj.magic t) : ocaml_node)
       else C ((Obj.magic t) : c_node)
+
+    let of_ocaml_node (node : ocaml_node) : t = Obj.magic node
+    let of_c_node (node : c_node) : t = Obj.magic node
   end
 
   let root t = t

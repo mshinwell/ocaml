@@ -99,6 +99,11 @@ CAMLextern intnat caml_output_value_to_block(value v, value flags,
 /* <private> */
 value caml_input_val (struct channel * chan);
   /* Read a structured value from the channel [chan]. */
+
+value caml_input_value_to_outside_heap (value channel);
+  /* As for [caml_input_value], but the value is unmarshalled into
+     malloc blocks that are not added to the heap.  Not for the
+     casual user. */
 /* </private> */
 
 CAMLextern value caml_input_val_from_string (value str, intnat ofs);
