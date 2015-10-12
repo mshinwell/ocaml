@@ -50,8 +50,8 @@ module Annotation : sig
   val of_int : int -> t option
   val to_int : t -> int
 
-  val lowest_allowable : t
-  val highest_allowable : t
+  val lowest_allowable : t Lazy.t
+  val highest_allowable : t Lazy.t
 end
 
 (* [erase_profiling_annotations] erases allocation profiling
@@ -318,7 +318,7 @@ module Heap_snapshot : sig
       and major heaps, together with GC stats, and write the result to a file.
       This function performs only a very small amount of allocation.  It does
       not explicitly trigger a GC. *)
-  val take : Heap_snapshot_writer.t -> unit
+  val take : Writer.t -> unit
 
   module Series : sig
     type t
