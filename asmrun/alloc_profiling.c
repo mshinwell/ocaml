@@ -1254,6 +1254,7 @@ static void print_tail_chain(value node)
 
 static void print_node_header(value node)
 {
+  /* CR mshinwell: Node_pc doesn't really make sense for C nodes */
   printf("Node %p: tag %d, size %d, identifying PC=%p\n",
     (void*) node, Tag_val(node), (int) Wosize_val(node),
     Decode_node_pc(Node_pc(node)));

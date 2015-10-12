@@ -86,7 +86,9 @@ val annotation_of_value : 'a -> Annotation.t
 (* CR mshinwell: rationalise this next part.  OCaml/C PC types. *)
 
 module Program_counter : sig
-  type t = private Int64.t
+  type t
+
+  val to_int64 : t -> Int64.t
 end
 
 module Frame_table : sig
@@ -103,7 +105,9 @@ end
 
 module Function_identifier : sig
   (* CR mshinwell: check if this is actually [Function_entry_point.t] now *)
-  type t = private Int64.t
+  type t
+
+  val to_int64 : t -> Int64.t
 end
 
 module Call_site : sig
@@ -273,14 +277,20 @@ module Trace : sig
 
     val of_ocaml_node : OCaml_node.t -> t
     val of_c_node : C_node.t -> t
+
+    module Set : Set.S with type t = t
+    module Map : Map.S with type t = t
   end
 
   (** Obtains the root of the graph for traversal.  [None] is returned if
       the graph is empty. *)
   val root : t -> Node.t option
 
-  (** Dump the current trace to stdout. *)
+  (** Dump the current trace to stdout (version written in C). *)
   val debug : unit -> unit
+
+  (** Dump an unmarshalled trace to stdout (version written in OCaml). *)
+  val debug_ocaml : t -> unit
 end
 
 module Heap_snapshot : sig

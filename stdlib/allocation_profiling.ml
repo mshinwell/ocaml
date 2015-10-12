@@ -58,6 +58,8 @@ end
 
 module Program_counter = struct
   type t = Int64.t
+
+  let to_int64 t = t
 end
 
 module Frame_table = struct
@@ -122,6 +124,8 @@ end
 
 module Function_identifier = struct
   type t = Int64.t
+
+  let to_int64 t = t
 end
 
 module Call_site = struct
@@ -365,11 +369,15 @@ module Trace = struct
   end
 
   module Node = struct
-    type t = node
+    module T = struct
+      type t = node
 
-    external compare : t -> t -> int
-      = "caml_allocation_profiling_only_works_for_native_code"
-        "caml_allocation_profiling_compare_node" "noalloc"
+      external compare : t -> t -> int
+        = "caml_allocation_profiling_only_works_for_native_code"
+          "caml_allocation_profiling_compare_node" "noalloc"
+    end
+
+    include T
 
     type classification =
       | OCaml of OCaml_node.t
@@ -385,6 +393,9 @@ module Trace = struct
 
     let of_ocaml_node (node : ocaml_node) : t = Obj.magic node
     let of_c_node (node : c_node) : t = Obj.magic node
+
+    module Map = Map.Make (T)
+    module Set = Set.Make (T)
   end
 
   let root t = t
@@ -392,6 +403,87 @@ module Trace = struct
   external debug : unit -> unit
     = "caml_allocation_profiling_only_works_for_native_code"
       "caml_allocation_profiling_debug" "noalloc"
+
+  let debug_ocaml t =
+    let next_id = ref 0 in
+    let visited = ref Node.Map.empty in
+    let rec print_node node =
+      match Map.find !visited node with
+      | id ->
+        Printf.printf "Node %Ld visited before.\n"
+      | exception Not_found ->
+        let id = !next_id in
+        incr next_id;
+        visited := Map.add !visited node id;
+        match Node.classify node with
+        | OCaml node ->
+          Printf.printf "Node %Ld (OCaml node):\n" id;
+          let module O = OCaml_node in
+          let fun_id = O.function_identifier node in
+          Printf.printf "Function identifier for node: %Lx\n"
+            (Function_identifier.to_int64 fun_id);
+          Printf.printf "Tail chain for node:\n";
+          let rec print_tail_chain node' =
+            if Node.compare node node' = 0 then ()
+            else begin
+              let id =
+                match Map.find !visited node' with
+                | id -> id
+                | exception Not_found ->
+                  let id = !next_id in
+                  incr next_id;
+                  visited := Map.add !visited node id;
+                  id
+              in
+              Printf.printf "  Node %Ld\n" id
+              print_tail_chain (O.next_in_tail_call_chain node')
+            end
+          in
+          print_tail_chain (O.next_in_tail_call_chain node);
+          let fields = O.fields node in
+          let rec iter_fields index = function
+            | None -> ()
+            | Some field ->
+              let module F = O.Field_iterator in
+              match F.classify field with
+              | F.Allocation_point alloc ->
+
+              | F.Direct_call_point direct ->
+
+              | F.Indirect_call_point indirect ->
+
+          in
+          iter_fields 0 (O.fields node);
+          Printf.printf "End of node %Ld.\n" id
+        | C node ->
+          Printf.printf "Node %Ld (C node):\n" id;
+          let rec iter_fields index = function
+            | None -> ()
+            | Some field ->
+              Printf.printf "Node %Ld field %d:\n" id index;
+              let module F = C_node.Field_iterator in
+              begin match F.classify field with
+              | F.Allocation_point alloc ->
+                let pc = C_node.Allocation_point.program_counter alloc in
+                let annot = C_node.Allocation_point.annotation alloc in
+                Printf.printf "Allocation point, pc=%Lx annot=%d\n"
+                  (Program_counter.to_int64 pc)
+                  (Annotation.to_int annot)
+              | F.Call_point call ->
+                let call_site = C_node.Call_point.call_site call in
+                let callee_node = C_node.Call_point.callee_node call in
+                Printf.printf "Call site, pc=%Lx.  Callee node is:\n";
+                print_node callee_node;
+                Printf.printf "End of call point\n"
+              end;
+              iter_fields (index + 1) (F.next field)
+          in
+          iter_fields 0 (C_node.fields node);
+          Printf.printf "End of node %L.\n" id
+    in
+    match root t with
+    | None -> Printf.printf "Trace is empty.\n"
+    | Some node -> print_node node
 end
 
 module Heap_snapshot = struct
