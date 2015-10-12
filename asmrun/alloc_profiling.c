@@ -43,6 +43,7 @@
 #include "caml/mlvalues.h"
 #include "caml/roots.h"
 #include "caml/signals.h"
+#include "caml/sys.h"
 #include "alloc_profiling.h"
 #include "stack.h"
 
@@ -119,23 +120,27 @@ static const uintnat profinfo_overflow = (uintnat) 1;
 static const uintnat profinfo_lowest = (uintnat) 2;
 uintnat caml_allocation_profiling_profinfo = (uintnat) 2;
 
-static value allocate_outside_heap(mlsize_t size_in_bytes)
+static value allocate_outside_heap_with_tag(mlsize_t size_in_bytes,
+      tag_t tag)
 {
   /* CR mshinwell: this function should live somewhere else */
   header_t* block;
-  mlsize_t size_in_words;
 
   assert(size_in_bytes % sizeof(value) == 0);
   block = caml_stat_alloc(sizeof(header_t) + size_in_bytes);
-  *block = Make_header(size_in_bytes / sizeof(value), 0, Caml_black);
+  *block = Make_header(size_in_bytes / sizeof(value), tag, Caml_black);
   return (value) &block[1];
+}
+
+static value allocate_outside_heap(mlsize_t size_in_bytes)
+{
+  return allocate_outside_heap_with_tag(size_in_bytes, 0);
 }
 
 static value take_gc_stats(void)
 {
   value v_stats;
   gc_stats* stats;
-  mlsize_t size;
 
   v_stats = allocate_outside_heap(sizeof(gc_stats));
   stats = (gc_stats*) v_stats;
@@ -162,15 +167,14 @@ typedef struct {
 CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
 {
   value v_snapshot;
-  snapshot* snapshot;
+  snapshot* heap_snapshot;
   value v_entries;
   snapshot_entries* entries;
   char* chunk;
   value gc_stats;
-  value entries;
   uintnat index;
   uintnat target_index;
-  uintnat size_in_bytes;
+  value v_time;
   double time;
   uintnat profinfo;
   uintnat num_distinct_profinfos;
@@ -179,6 +183,7 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
   static raw_snapshot_entry* raw_entries = NULL;
 
   time = caml_sys_time_as_double();
+  gc_stats = take_gc_stats();
 
   if (raw_entries == NULL) {
     size_t size = (PROFINFO_MASK + 1) * sizeof(raw_snapshot_entry);
@@ -189,7 +194,8 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
   num_distinct_profinfos = 0;
 
   /* Scan the minor heap. */
-  ptr = caml_young_ptr;
+  assert(((uintnat) caml_young_ptr) % sizeof(value) == 0);
+  ptr = (value*) caml_young_ptr;
   assert(ptr >= (value*) caml_young_start);
   while (ptr < (value*) caml_young_end) {
     header_t hd;
@@ -238,8 +244,8 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
         default:
           profinfo = Profinfo_hd(hd);
           if (profinfo >= profinfo_lowest && profinfo <= PROFINFO_MASK) {
-            entries[profinfo].num_blocks++;
-            entries[profinfo].num_words_including_headers +=
+            raw_entries[profinfo].num_blocks++;
+            raw_entries[profinfo].num_words_including_headers +=
               Whsize_hd(hd);
           }
           break;
@@ -259,23 +265,26 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
     assert(target_index < num_distinct_profinfos);
     assert(raw_entries[index].num_blocks >= 0);
     if (raw_entries[index].num_blocks > 0) {
-      entries[target_index].profinfo = index;
-      entries[target_index].num_blocks = raw_entries[index].num_blocks;
-      entries[target_index].num_words_including_headers
+      entries->entries[target_index].profinfo = index;
+      entries->entries[target_index].num_blocks
+        = raw_entries[index].num_blocks;
+      entries->entries[target_index].num_words_including_headers
         = raw_entries[index].num_words_including_headers;
       target_index++;
     }
   }
 
+  v_time = allocate_outside_heap_with_tag(sizeof(double), Double_tag);
+  Field(v_time, 0) = time;
+
   v_snapshot = allocate_outside_heap(sizeof(snapshot));
-  snapshot = (snapshot*) v_snapshot;
+  heap_snapshot = (snapshot*) v_snapshot;
 
-  /* XXX this float needs to be boxed */
-  snapshot->time = time;
-  snapshot->gc_stats = gc_stats;
-  snapshot->entries = entries;
+  heap_snapshot->time = v_time;
+  heap_snapshot->gc_stats = gc_stats;
+  heap_snapshot->entries = v_entries;
 
-  return snapshot;
+  return v_snapshot;
 }
 
 CAMLprim value caml_allocation_profiling_free_heap_snapshot(value snapshot)
@@ -330,7 +339,7 @@ caml_allocation_profiling_return_address_of_frame_descriptor(value v_descr)
 {
   frame_descr* descr;
 
-  descr = Descrptr_val(v_descr);
+  descr = Descrptr_Val(v_descr);
   assert(descr != NULL);
 
   return caml_copy_int64(descr->retaddr);
@@ -622,7 +631,7 @@ CAMLprim value caml_allocation_profiling_is_ocaml_node(value node)
 
 CAMLprim value caml_allocation_profiling_ocaml_function_identifier(value node)
 {
-  return caml_copy_int64(Decode_node_pc(Node_pc(node)));
+  return caml_copy_int64((uint64_t) Decode_node_pc(Node_pc(node)));
 }
 
 CAMLprim value caml_allocation_profiling_ocaml_tail_chain(value node)
@@ -636,6 +645,11 @@ CAMLprim value caml_allocation_profiling_ocaml_classify_field(value node,
   /* Note that [offset] should always point at an initialized call or
      allocation point, by virtue of the behaviour of the function
      [caml_allocation_profiling_ocaml_node_next], below. */
+
+  uintnat field;
+
+  assert(!Is_block(offset));
+  field = Long_val(offset);
 
   assert(Is_ocaml_node(node));
   assert(field >= Node_num_header_words);
@@ -794,7 +808,7 @@ CAMLprim value caml_allocation_profiling_c_node_call_site(value node)
   c_node* c_node;
   assert(!Is_ocaml_node(node));
   c_node = c_node_of_stored_pointer_not_null(node);
-  return caml_copy_int64(Decode_c_node_pc(c_node->pc));
+  return caml_copy_int64((uint64_t) Decode_c_node_pc(c_node->pc));
 }
 
 CAMLprim value caml_allocation_profiling_c_node_callee_node(value node)
@@ -812,7 +826,7 @@ CAMLprim value caml_allocation_profiling_c_node_profinfo(value node)
   assert(!Is_ocaml_node(node));
   c_node = c_node_of_stored_pointer_not_null(node);
   assert(classify_c_node(c_node) == ALLOCATION);
-  return caml_copy_int64(Decode_c_node_pc(c_node->data.profinfo));
+  return caml_copy_int64((uint64_t) Decode_c_node_pc(c_node->data.profinfo));
 }
 
 static value allocate_uninitialized_ocaml_node(int size_including_header)

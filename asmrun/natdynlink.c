@@ -24,8 +24,6 @@
 
 #ifdef WITH_ALLOCATION_PROFILING
 #include "alloc_profiling.h"
-    caml_allocation_profiling_register_dynamic_library(
-      strdup(String_val(filename)), sym);
 #endif
 
 #include <stdio.h>
