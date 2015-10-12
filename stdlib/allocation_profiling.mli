@@ -100,7 +100,9 @@ module Frame_table : sig
 end
 
 module Function_entry_point : sig
-  type t = private Int64.t
+  type t
+
+  val to_int64 : t -> Int64.t
 end
 
 module Function_identifier : sig
@@ -278,8 +280,8 @@ module Trace : sig
     val of_ocaml_node : OCaml_node.t -> t
     val of_c_node : C_node.t -> t
 
-    module Set : Set.S with type t = t
-    module Map : Map.S with type t = t
+    module Set : Set.S with type elt = t
+    module Map : Map.S with type key = t
   end
 
   (** Obtains the root of the graph for traversal.  [None] is returned if
