@@ -236,9 +236,11 @@ module Trace = struct
 
         let is_null = c_node_is_null
 
+        (* CR mshinwell: maybe rename ...c_node_call_site -> c_node_pc,
+           since it isn't a call site in this case. *)
         external callee : t -> Function_entry_point.t
           = "caml_allocation_profiling_only_works_for_native_code"
-            "caml_allocation_profiling_c_node_callee"
+            "caml_allocation_profiling_c_node_call_site"
 
         external callee_node : t -> node
           = "caml_allocation_profiling_only_works_for_native_code"
