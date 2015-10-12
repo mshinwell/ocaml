@@ -444,13 +444,12 @@ module Trace = struct
             end
           in
           print_tail_chain (O.next_in_tail_call_chain node);
-          let fields = O.fields node in
           let rec iter_fields index = function
             | None -> ()
             | Some field ->
               Printf.printf "Node %d field %d:\n" id index;
               let module F = O.Field_iterator in
-              match F.classify field with
+              begin match F.classify field with
               | F.Allocation_point alloc ->
                 let pc = O.Allocation_point.program_counter alloc in
                 let annot = O.Allocation_point.annotation alloc in
@@ -483,7 +482,6 @@ module Trace = struct
                 let module D = O.Direct_call_point_in_ocaml_code in
                 let call_site = D.call_site direct in
                 let callee = D.callee direct in
-                let callee_node = D.callee_node direct in
                 Printf.printf "Direct OCaml -> uninstrumented call point, \
                     pc=%Lx, callee=%Lx.\n"
                   (Program_counter.to_int64 call_site)
@@ -507,6 +505,8 @@ module Trace = struct
                     iter_callees (index + 1) (C.next callee_iterator)
                 in
                 iter_callees 0 callees
+              end;
+              iter_fields (index + 1) (F.next field)
           in
           iter_fields 0 (O.fields node);
           Printf.printf "End of node %d.\n" id
