@@ -310,9 +310,15 @@ let call_linker file_list startup_file output_name =
 
 let link ppf objfiles output_name =
   let stdlib =
-    if !Clflags.gprofile then "stdlib.p.cmxa" else "stdlib.cmxa" in
+    if !Clflags.gprofile then "stdlib.p.cmxa"
+    else if !Clflags.allocation_profiling then "stdlib.ap.cmxa"
+    else "stdlib.cmxa"
+  in
   let stdexit =
-    if !Clflags.gprofile then "std_exit.p.cmx" else "std_exit.cmx" in
+    if !Clflags.gprofile then "std_exit.p.cmx"
+    else if !Clflags.allocation_profiling then "std_exit.ap.cmx"
+    else "std_exit.cmx"
+  in
   let objfiles =
     if !Clflags.nopervasives then objfiles
     else if !Clflags.output_c_object then stdlib :: objfiles

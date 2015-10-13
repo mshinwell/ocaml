@@ -26,18 +26,12 @@
 
 #ifdef NATIVE_CODE
 #include "stack.h"
-#undef WITH_ALLOCATION_PROFILING
-#ifdef WITH_ALLOCATION_PROFILING
-#include "alloc_profiling.h"
-#endif
 #else
 #include "caml/stacks.h"
 #endif
 #include "caml/sys.h"
 #include "threads.h"
-
-#undef WITH_ALLOCATION_PROFILING
-
+ZZ
 /* Initial size of bytecode stack when a thread is created (4 Ko) */
 #define Thread_stack_size (Stack_size / 4)
 
@@ -77,12 +71,6 @@ struct caml_thread_struct {
   char * exception_pointer;     /* Saved value of caml_exception_pointer */
   struct caml__roots_block * local_roots; /* Saved value of local_roots */
   struct longjmp_buffer * exit_buf; /* For thread exit */
-#ifdef ALLOCATION_PROFILING
-  /* Backtrace stack for this thread: */
-  backtrace_table_entry* backtrace_stack_top;
-  backtrace_table_entry* backtrace_stack_bottom;
-  backtrace_table_entry* backtrace_stack_limit;
-#endif
 #else
   value * stack_low;            /* The execution stack for this thread */
   value * stack_high;
@@ -171,14 +159,6 @@ static void caml_thread_enter_blocking_section(void)
      of the current thread */
 #ifdef NATIVE_CODE
   curr_thread->bottom_of_stack = caml_bottom_of_stack;
-#ifdef WITH_ALLOCATION_PROFILING
-  curr_thread->backtrace_stack_top =
-    caml_allocation_profiling_top_of_backtrace_stack;
-  curr_thread->backtrace_stack_bottom =
-    caml_allocation_profiling_bottom_of_backtrace_stack;
-  curr_thread->backtrace_stack_limit =
-    caml_allocation_profiling_limit_of_backtrace_stack;
-#endif
   curr_thread->last_retaddr = caml_last_return_address;
   curr_thread->gc_regs = caml_gc_regs;
   curr_thread->exception_pointer = caml_exception_pointer;
@@ -209,14 +189,6 @@ static void caml_thread_leave_blocking_section(void)
   /* Restore the stack-related global variables */
 #ifdef NATIVE_CODE
   caml_bottom_of_stack= curr_thread->bottom_of_stack;
-#ifdef WITH_ALLOCATION_PROFILING
-  caml_allocation_profiling_top_of_backtrace_stack =
-    curr_thread->backtrace_stack_top;
-  caml_allocation_profiling_bottom_of_backtrace_stack =
-    curr_thread->backtrace_stack_bottom;
-  caml_allocation_profiling_limit_of_backtrace_stack =
-    curr_thread->backtrace_stack_limit;
-#endif
   caml_last_return_address = curr_thread->last_retaddr;
   caml_gc_regs = curr_thread->gc_regs;
   caml_exception_pointer = curr_thread->exception_pointer;
@@ -331,12 +303,6 @@ static caml_thread_t caml_thread_new_info(void)
   th->exception_pointer = NULL;
   th->local_roots = NULL;
   th->exit_buf = NULL;
-#ifdef WITH_ALLOCATION_PROFILING
-  /* Allocate backtrace stack */
-  caml_allocation_profiling_create_backtrace_stack
-    (&th->backtrace_stack_top, &th->backtrace_stack_bottom,
-     &th->backtrace_stack_limit);
-#endif
 #else
   /* Allocate the stacks */
   th->stack_low = (value *) caml_stat_alloc(Thread_stack_size);

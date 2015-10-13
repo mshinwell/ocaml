@@ -72,7 +72,7 @@ clean::
 clean::
 	rm -f camlheader target_camlheader camlheader_ur target_camlheaderd
 
-.SUFFIXES: .mli .ml .cmi .cmo .cmx .p.cmx
+.SUFFIXES: .mli .ml .cmi .cmo .cmx .p.cmx .ap.cmx
 
 .mli.cmi:
 	$(CAMLC) $(COMPFLAGS) `./Compflags $@` -c $<
@@ -86,19 +86,25 @@ clean::
 .ml.p.cmx:
 	$(CAMLOPT) -g $(OPTCOMPFLAGS) `./Compflags $@` -p -c -o $*.p.cmx $<
 
+.ml.ap.cmx:
+	$(CAMLOPT) -g $(OPTCOMPFLAGS) `./Compflags $@` -allocation-profiling -c -o $*.ap.cmx $<
+
 # Dependencies on the compiler
 $(OBJS) std_exit.cmo: $(COMPILER)
 $(OBJS:.cmo=.cmi) std_exit.cmi: $(COMPILER)
 $(OBJS:.cmo=.cmx) std_exit.cmx: $(OPTCOMPILER)
 $(OBJS:.cmo=.p.cmx) std_exit.p.cmx: $(OPTCOMPILER)
+$(OBJS:.cmo=.ap.cmx) std_exit.ap.cmx: $(OPTCOMPILER)
 
 # Dependencies on Pervasives (not tracked by ocamldep)
 $(OTHERS) std_exit.cmo: pervasives.cmi
 $(OTHERS:.cmo=.cmi) std_exit.cmi: pervasives.cmi
 $(OBJS:.cmo=.cmx) std_exit.cmx: pervasives.cmi
 $(OBJS:.cmo=.p.cmx) std_exit.p.cmx: pervasives.cmi
+$(OBJS:.cmo=.ap.cmx) std_exit.ap.cmx: pervasives.cmi
 $(OTHERS:.cmo=.cmx) std_exit.cmx: pervasives.cmx
 $(OTHERS:.cmo=.p.cmx) std_exit.p.cmx: pervasives.cmx
+$(OTHERS:.cmo=.ap.cmx) std_exit.ap.cmx: pervasives.cmx
 
 clean::
 	rm -f *.cm* *.$(O) *.$(A)
@@ -109,3 +115,4 @@ include .depend
 depend:
 	$(CAMLDEP) *.mli *.ml > .depend
 	$(CAMLDEP) *.ml | sed -e 's/\.cmx/.p.cmx/g' >>.depend
+	$(CAMLDEP) *.ml | sed -e 's/\.cmx/.ap.cmx/g' >>.depend

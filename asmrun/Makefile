@@ -14,11 +14,12 @@
 include ../config/Makefile
 
 CC=$(NATIVECC)
-FLAGS=-Werror -I../byterun -I/home/mark/dev/libunwind-install/include -I/mnt/local/sda1/mshinwell/libunwind-install/include -DCAML_NAME_SPACE -DNATIVE_CODE \
+FLAGS=-Werror -I../byterun -DCAML_NAME_SPACE -DNATIVE_CODE \
       -DTARGET_$(ARCH) -DSYS_$(SYSTEM) $(IFLEXDIR)
 CFLAGS=$(FLAGS) -g -O $(NATIVECCCOMPOPTS)
 DFLAGS=$(FLAGS) -g -DDEBUG $(NATIVECCCOMPOPTS)
 PFLAGS=$(FLAGS) -pg -O -DPROFILING $(NATIVECCPROFOPTS)
+APFLAGS=$(FLAGS) -g -O -DWITH_ALLOCATION_PROFILING $(NATIVECCCOMPOPTS)
 PICFLAGS=$(FLAGS) -O $(SHAREDCCCOMPOPTS) $(NATIVECCCOMPOPTS)
 
 COBJS=startup.o main.o fail.o roots.o globroots.o signals.o signals_asm.o \
@@ -33,9 +34,10 @@ ASMOBJS=$(ARCH).o
 OBJS=$(COBJS) $(ASMOBJS)
 DOBJS=$(COBJS:.o=.d.o) $(ASMOBJS)
 POBJS=$(COBJS:.o=.p.o) $(ASMOBJS:.o=.p.o)
+APOBJS=$(COBJS:.o=.ap.o) $(ASMOBJS:.o=.ap.o)
 PICOBJS=$(COBJS:.o=.pic.o) $(ASMOBJS:.o=.pic.o)
 
-all: libasmrun.a all-$(RUNTIMED) all-$(PROFILING) all-$(SHARED)
+all: libasmrun.a all-$(RUNTIMED) all-$(PROFILING) all-$(SHARED) all-allocprof-$(WITH_ALLOCATION_PROFILING)
 
 libasmrun.a: $(OBJS)
 	rm -f libasmrun.a
@@ -61,6 +63,15 @@ libasmrunp.a: $(POBJS)
 	rm -f libasmrunp.a
 	$(ARCMD) rc libasmrunp.a $(POBJS)
 	$(RANLIB) libasmrunp.a
+
+all-allocprof-false:
+
+all-allocprof-true: libasmrunap.a
+
+libasmrunap.a: $(POBJS)
+	rm -f libasmrunap.a
+	$(ARCMD) rc libasmrunap.a $(POBJS)
+	$(RANLIB) libasmrunap.a
 
 all-noshared:
 
@@ -100,6 +111,16 @@ install-prof:
 	cp libasmrunp.a $(INSTALL_LIBDIR)/libasmrunp.a
 	cd $(INSTALL_LIBDIR); $(RANLIB) libasmrunp.a
 .PHONY: install-prof
+
+install-allocprof-false:
+	rm -f $(INSTALL_LIBDIR)/libasmrunap.a
+	ln -s libasmrun.a $(INSTALL_LIBDIR)/libasmrunap.a
+.PHONY: install-allocprof-false
+
+install-allocprof-true:
+	cp libasmrunap.a $(INSTALL_LIBDIR)/libasmrunap.a
+	cd $(INSTALL_LIBDIR); $(RANLIB) libasmrunap.a
+.PHONY: install-allocprof-true
 
 install-noshared:
 .PHONY: install-noshared
@@ -212,6 +233,9 @@ clean::
 %.p.o: %.S
 	$(ASPP) -DSYS_$(SYSTEM) -DMODEL_$(MODEL) $(ASPPPROFFLAGS) -o $@ $<
 
+%.ap.o: %.S
+	$(ASPP) -DSYS_$(SYSTEM) -DMODEL_$(MODEL) $(ASPPPROFFLAGS) -o $@ $<
+
 %.pic.o: %.S
 	$(ASPP) -DSYS_$(SYSTEM) -DMODEL_$(MODEL) $(SHAREDCCCOMPOPTS) -o $@ $<
 
@@ -221,6 +245,9 @@ clean::
 %.p.o: %.c
 	$(CC) -c $(PFLAGS) -o $@ $<
 
+%.ap.o: %.c
+	$(CC) -c $(PFLAGS) -o $@ $<
+
 %.pic.o: %.c
 	$(CC) -c $(PICFLAGS) -o $@ $<
 
@@ -228,6 +255,9 @@ clean::
 	$(ASPP) -DSYS_$(SYSTEM) -o $@ $<
 
 %.p.o: %.s
+	$(ASPP) -DSYS_$(SYSTEM) $(ASPPPROFFLAGS) -o $@ $<
+
+%.ap.o: %.s
 	$(ASPP) -DSYS_$(SYSTEM) $(ASPPPROFFLAGS) -o $@ $<
 
 %.pic.o: %.s
@@ -240,5 +270,6 @@ depend: $(COBJS:.o=.c) ${LINKEDFILES}
 	$(CC) -MM $(FLAGS) *.c > .depend
 	$(CC) -MM $(FLAGS) -DDEBUG *.c | sed -e 's/\.o/.d.o/' >> .depend
 	$(CC) -MM $(FLAGS) -DPROFILING *.c | sed -e 's/\.o/.p.o/' >> .depend
+	$(CC) -MM $(FLAGS) -DPROFILING *.c | sed -e 's/\.o/.ap.o/' >> .depend
 
 include .depend

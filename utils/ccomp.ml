@@ -62,6 +62,7 @@ let compile_file name =
        (String.concat " " (List.rev !Clflags.all_ccopts))
        (quote_prefixed "-I" (List.rev !Clflags.include_dirs))
        (Clflags.std_include_flag "-I")
+       (if !Clflags.allocation_profiling then "-DWITH_ALLOCATION_PROFILING")
        (Filename.quote name))
 
 let create_archive archive file_list =

@@ -47,7 +47,6 @@ with_ocamldoc=ocamldoc
 with_ocamlbuild=ocamlbuild
 with_frame_pointers=false
 no_naked_pointers=false
-with_allocation_profiling=false
 TOOLPREF=""
 with_cfi=true
 
@@ -159,8 +158,6 @@ while : ; do
         with_frame_pointers=true;;
     -no-naked-pointers|--no-naked-pointers)
         no_naked_pointers=true;;
-    -with-allocation-profiling|--with-allocation-profiling)
-        with_allocation_profiling=true;;
     -no-cfi|--no-cfi)
         with_cfi=false;;
     *) if echo "$1" | grep -q -e '^--\?[a-zA-Z0-9-]\+='; then
@@ -1695,30 +1692,39 @@ if $no_naked_pointers; then
   echo "#define NO_NAKED_POINTERS" >> m.h
 fi
 
-if $with_allocation_profiling; then
-  echo "#define WITH_ALLOCATION_PROFILING" >> m.h
+if test "$libunwind_include_dir" != ""; then
+  libunwind_include="-I$libunwind_include_dir"
+else
+  libunwind_include=""
+fi
 
-  if test "$libunwind_include_dir" != ""; then
-    libunwind_include="-I$libunwind_include_dir"
-  else
-    libunwind_include=""
+if test "$libunwind_lib_dir" != ""; then
+  libunwind_lib="-L$libunwind_lib_dir"
+else
+  libunwind_lib=""
+fi
+
+if $arch64; then
+  echo "Allocation profiling will be available."
+  with_allocation_profiling=true
+  if [ "$libunwind_lib" != "" ]; then
+    libunwind_lib="-Xl $libunwind_lib"
   fi
-
-  if test "$libunwind_lib_dir" != ""; then
-    libunwind_lib="-L$libunwind_lib_dir"
-  else
-    libunwind_lib=""
-  fi
-
-  if sh ./hasgot -i libunwind.h -Xl $libunwind_lib -Xl -lunwind $libunwind_include; then
+  if sh ./hasgot -i libunwind.h $libunwind_lib -Xl -lunwind $libunwind_include; then
     echo "#define HAS_LIBUNWIND" >> s.h
     nativecccompopts="$libunwind_include $nativecccompopts"
     bytecclibs="$libunwind_lib -lunwind"
     nativecclibs="$libunwind_lib -lunwind"
     has_libunwind=yes
+    echo "libunwind support for allocation profiling will be available."
   else
     has_libunwind=no
+    echo "libunwind support for allocation profiling will not be available."
   fi
+else
+  echo "Allocation profiling is not available on 32-bit platforms."
+  with_allocation_profiling=false
+  has_libunwind=no
 fi
 
 # Add Unix-style optimization flag
@@ -1807,6 +1813,7 @@ echo "WITH_OCAMLDOC=${with_ocamldoc}" >>Makefile
 echo "WITH_OCAMLBUILD=${with_ocamlbuild}" >>Makefile
 echo "ASM_CFI_SUPPORTED=$asm_cfi_supported" >> Makefile
 echo "WITH_FRAME_POINTERS=$with_frame_pointers" >> Makefile
+echo "WITH_ALLOCATION_PROFILING=$with_allocation_profiling" >> Makefile
 echo "TARGET=$target" >> Makefile
 echo "HOST=$host" >> Makefile
 if [ "$ostype" = Cygwin ]; then
@@ -1873,17 +1880,18 @@ else
   inf "        naked pointers forbidden.. no"
   fi
   if $with_allocation_profiling; then
-    inf "        allocation profiling...... yes (with libunwind? $has_libunwind)"
-    if test "$has_libunwind" = "yes"; then
-      if test "$libunwind_include_dir" != ""; then
-        inf "        libunwind include dir..... $libunwind_include_dir"
-      fi
-      if test "$libunwind_lib_dir" != ""; then
-        inf "        libunwind library dir..... $libunwind_lib_dir"
-      fi
-    fi
+    inf "        allocation profiling...... yes"
   else
-  inf "        allocation profiling...... no"
+    inf "        allocation profiling...... no"
+  fi
+  inf "          ... with libunwind...... $has_libunwind"
+  if test "$has_libunwind" = "yes"; then
+    if test "$libunwind_include_dir" != ""; then
+      inf "        libunwind include dir..... $libunwind_include_dir"
+    fi
+    if test "$libunwind_lib_dir" != ""; then
+      inf "        libunwind library dir..... $libunwind_lib_dir"
+    fi
   fi
   inf "        native dynlink ........... $natdynlink"
   if test "$profiling" = "prof"; then
