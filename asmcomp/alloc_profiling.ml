@@ -224,6 +224,8 @@ class virtual instruction_selection = object (self)
     | None -> ()
     | Some _ -> assert false
 
+  method private maybe_instrument _desc ~env:_ ~arg:_ ~res:_ = ()
+(*
   method private maybe_instrument desc ~env ~arg ~res =
     let module M = Mach in
     match desc with
@@ -240,6 +242,26 @@ class virtual instruction_selection = object (self)
     | M.Iop (M.Iextcall (lbl, _)) ->
       self#instrument_direct_call ~env ~lbl ~is_tail:false
     | _ -> ()
+*)
+
+  method about_to_emit_call env desc arg =
+    if not !Clflags.allocation_profiling then ()
+    else
+      let module M = Mach in
+      match desc with
+      | M.Iop (M.Icall_imm lbl) ->
+        self#instrument_direct_call ~env ~lbl ~is_tail:false
+      | M.Iop M.Icall_ind ->
+        self#instrument_indirect_call ~env ~callee:arg.(0)
+          ~is_tail:false
+      | M.Iop (M.Itailcall_imm lbl) ->
+        self#instrument_direct_call ~env ~lbl ~is_tail:true
+      | M.Iop M.Itailcall_ind ->
+        self#instrument_indirect_call ~env ~callee:arg.(0)
+          ~is_tail:true
+      | M.Iop (M.Iextcall (lbl, _)) ->
+        self#instrument_direct_call ~env ~lbl ~is_tail:false
+      | _ -> ()
 
   method private instrument_allocation_point ~env ~value's_header =
     let instrumentation =

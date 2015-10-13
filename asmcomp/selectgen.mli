@@ -107,6 +107,11 @@ class virtual selector_generic : object
      : (Ident.t, Reg.t array) Tbl.t
     -> nativeint
     -> Reg.t array option
+  method about_to_emit_call
+     : (Ident.t, Reg.t array) Tbl.t
+    -> Mach.instruction_desc
+    -> Reg.t array
+    -> unit
   method initial_env : unit -> (Ident.t, Reg.t array) Tbl.t
   method after_body
      : Cmm.fundecl

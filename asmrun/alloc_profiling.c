@@ -921,7 +921,9 @@ CAMLprim value caml_allocation_profiling_allocate_node(
      function was not tail called and we have not been to this point in the
      trie before; or it should contain a value encoded using
      [Encoded_tail_caller_node] that points at the node of a caller
-     that tail called the current function. */
+     that tail called the current function.  (Such a value is necessary to
+     be able to find the start of the caller's node, and hence its tail
+     chain, so we as a tail-called callee can link ourselves in.) */
   assert(Is_tail_caller_node_encoded(node));
 
   if (node != Val_unit) {
@@ -985,6 +987,8 @@ static c_node* allocate_c_node(void)
   node->data.callee_node = Val_unit;
   node->next = Val_unit;
 
+printf("allocate_c_node returns %p\n", (void*) node);
+
   return node;
 }
 
@@ -992,8 +996,8 @@ CAMLprim value* caml_allocation_profiling_indirect_node_hole_ptr
       (void* callee, value* node_hole, value caller_node)
 {
   /* Find the address of the node hole for an indirect call to [callee].
-     If [node] is not [Val_unit], it is a pointer to the (caller's) node,
-     and indicates that this is a tail call site. */
+     If [caller_node] is not [Val_unit], it is a pointer to the caller's
+     node, and indicates that this is a tail call site. */
 
   c_node* c_node;
   int found = 0;
