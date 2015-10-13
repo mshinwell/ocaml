@@ -1010,6 +1010,7 @@ CAMLprim value* caml_allocation_profiling_indirect_node_hole_ptr
   printf("indirect node hole ptr for callee %p starting at %p contains %p\n",
     callee, (void*) node_hole, *(void**) node_hole);
   while (!found && *node_hole != Val_unit) {
+    assert(((uintnat) *node_hole) % sizeof(value) == 0);
     c_node = c_node_of_stored_pointer(*node_hole);
     assert(c_node != NULL);
     switch (classify_c_node(c_node)) {
@@ -1045,6 +1046,7 @@ CAMLprim value* caml_allocation_profiling_indirect_node_hole_ptr
     }
 
     *node_hole = stored_pointer_to_c_node(c_node);
+    assert(((uintnat) *node_hole) % sizeof(value) == 0);
   }
 
   assert(*node_hole != Val_unit);

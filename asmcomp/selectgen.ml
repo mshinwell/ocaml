@@ -521,7 +521,7 @@ method emit_expr env exp =
               let call = Iop Icall_ind in
               (* Calls to [about_to_emit_call], here and below, must be before
                  the moves into hard registers. *)
-              self#about_to_emit_call env call rarg;
+              self#about_to_emit_call env call [| r1.(0) |];
               self#insert_move_args rarg loc_arg stack_ofs;
               self#insert_debug_env env call dbg
                           (Array.append [|r1.(0)|] loc_arg) loc_res;
@@ -533,7 +533,7 @@ method emit_expr env exp =
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
               let loc_res = Proc.loc_results rd in
               let call = Iop (Icall_imm lbl) in
-              self#about_to_emit_call env call r1;
+              self#about_to_emit_call env call [| |];
               self#insert_move_args r1 loc_arg stack_ofs;
               self#insert_debug_env env call dbg loc_arg
                 loc_res;
@@ -764,7 +764,7 @@ method emit_tail env exp =
               let (loc_arg, stack_ofs) = Proc.loc_arguments rarg in
               if stack_ofs = 0 then begin
                 let call = Iop Itailcall_ind in
-                self#about_to_emit_call env call rarg;
+                self#about_to_emit_call env call [| r1.(0) |];
                 self#insert_moves rarg loc_arg;
                 self#insert_env env call
                             (Array.append [|r1.(0)|] loc_arg) [||]
@@ -772,7 +772,7 @@ method emit_tail env exp =
                 let rd = self#regs_for ty in
                 let loc_res = Proc.loc_results rd in
                 let call = Iop Icall_ind in
-                self#about_to_emit_call env call rarg;
+                self#about_to_emit_call env call [| r1.(0) |];
                 self#insert_move_args rarg loc_arg stack_ofs;
                 self#insert_debug_env env call dbg
                             (Array.append [|r1.(0)|] loc_arg) loc_res;
@@ -784,20 +784,20 @@ method emit_tail env exp =
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
               if stack_ofs = 0 then begin
                 let call = Iop (Itailcall_imm lbl) in
-                self#about_to_emit_call env call r1;
+                self#about_to_emit_call env call [| |];
                 self#insert_moves r1 loc_arg;
                 self#insert_env env call loc_arg [||]
               end else if lbl = !current_function_name then begin
                 let call = Iop (Itailcall_imm lbl) in
                 let loc_arg' = Proc.loc_parameters r1 in
-                self#about_to_emit_call env call r1;
+                self#about_to_emit_call env call [| |];
                 self#insert_moves r1 loc_arg';
                 self#insert_env env call loc_arg' [||]
               end else begin
                 let call = Iop (Icall_imm lbl) in
                 let rd = self#regs_for ty in
                 let loc_res = Proc.loc_results rd in
-                self#about_to_emit_call env call r1;
+                self#about_to_emit_call env call [| |];
                 self#insert_move_args r1 loc_arg stack_ofs;
                 self#insert_debug_env env call dbg loc_arg
                   loc_res;

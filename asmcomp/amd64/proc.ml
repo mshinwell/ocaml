@@ -271,7 +271,7 @@ let destroyed_at_c_call =
   else
     (* Unix: rbp, rbx, r12-r15 preserved *)
     Array.of_list(List.map phys_reg
-      [0;2;3;4;5;6;7;10;11;
+      [0;2;3;4;5;6;7;9;10;
        100;101;102;103;104;105;106;107;
        108;109;110;111;112;113;114;115])
 

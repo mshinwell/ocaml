@@ -61,7 +61,7 @@ let code_for_function_prologue () =
           let offset_in_bytes = index * Arch.size_addr in
           let place = Ident.create "tail_init" in
           Clet (place,
-            Cop (Cadda, [Cvar new_node; Cconst_int offset_in_bytes]),
+            Cop (Caddi, [Cvar new_node; Cconst_int offset_in_bytes]),
             Csequence (
               Cop (Cstore Word, [Cvar place; Cvar new_node_encoded]),
               init_code)))
@@ -118,14 +118,14 @@ let code_for_allocation_point ~value's_header ~node =
      point with the current backtrace.  If so, use that value; if not,
      allocate a new one. *)
   Clet (address_of_profinfo,
-    Cop (Cadda, [
+    Cop (Caddi, [
       Cvar node;
       Cconst_int offset_into_node;
     ]),
     Clet (existing_profinfo, Cop (Cload Word, [Cvar address_of_profinfo]),
       Clet (profinfo,
         Cifthenelse (
-          Cop (Ccmpa Cne, [Cvar existing_profinfo; Cconst_pointer 1]),
+          Cop (Ccmpi Cne, [Cvar existing_profinfo; Cconst_pointer 1]),
           Cvar existing_profinfo,
           generate_new_profinfo),
         (* [profinfo] is already shifted by [PROFINFO_SHIFT]. *)
@@ -183,7 +183,7 @@ let code_for_call ~node ~callee ~is_tail =
         let node_hole_ptr = Ident.create "node_hole_ptr" in
         let caller_node =
           if is_tail then node
-          else Cconst_int 0  (* [Val_unit] *)
+          else Cconst_int 1  (* [Val_unit] *)
         in
         Clet (node_hole_ptr,
           Cop (Cextcall ("caml_allocation_profiling_indirect_node_hole_ptr",
@@ -250,16 +250,21 @@ class virtual instruction_selection = object (self)
       let module M = Mach in
       match desc with
       | M.Iop (M.Icall_imm lbl) ->
+        assert (Array.length arg = 0);
         self#instrument_direct_call ~env ~lbl ~is_tail:false
       | M.Iop M.Icall_ind ->
+        assert (Array.length arg = 1);
         self#instrument_indirect_call ~env ~callee:arg.(0)
           ~is_tail:false
       | M.Iop (M.Itailcall_imm lbl) ->
+        assert (Array.length arg = 0);
         self#instrument_direct_call ~env ~lbl ~is_tail:true
       | M.Iop M.Itailcall_ind ->
+        assert (Array.length arg = 1);
         self#instrument_indirect_call ~env ~callee:arg.(0)
           ~is_tail:true
       | M.Iop (M.Iextcall (lbl, _)) ->
+        assert (Array.length arg = 0);
         self#instrument_direct_call ~env ~lbl ~is_tail:false
       | _ -> ()
 
