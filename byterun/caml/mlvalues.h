@@ -102,8 +102,10 @@ bits  63            42 41            10 9     8 7   0
 
 */
 
-#ifdef WITH_ALLOCATION_PROFILING
 #define Tag_hd(hd) ((tag_t) ((hd) & 0xFF))
+#ifndef WITH_ALLOCATION_PROFILING
+#define Wosize_hd(hd) ((mlsize_t) ((hd) >> 10))
+#else
 #define Wosize_hd(hd) (((mlsize_t) ((hd) >> 10)) & 0xffffffff)
 #define Profinfo_hd(hd) (((mlsize_t) ((hd) >> 42)) & 0x3fffff)
 #endif

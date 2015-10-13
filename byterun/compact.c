@@ -271,13 +271,17 @@ static void do_compaction (void)
           size_t sz;
           tag_t t;
           char *newadr;
+#ifdef WITH_ALLOCATION_PROFILING
           uintnat profinfo;
+#endif
           word *infixes = NULL;
 
           while (Ecolor (q) == 0) q = * (word *) q;
           sz = Whsize_ehd (q);
           t = Tag_ehd (q);
+#ifdef WITH_ALLOCATION_PROFILING
           profinfo = Profinfo_ehd (q);
+#endif
 
           if (t == Infix_tag){
             /* Get the original header of this block. */

@@ -31,7 +31,7 @@
 #endif
 #include "caml/sys.h"
 #include "threads.h"
-ZZ
+
 /* Initial size of bytecode stack when a thread is created (4 Ko) */
 #define Thread_stack_size (Stack_size / 4)
 
