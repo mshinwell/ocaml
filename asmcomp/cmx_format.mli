@@ -33,7 +33,9 @@ type unit_infos =
     mutable ui_curry_fun: int list;             (* Currying functions needed *)
     mutable ui_apply_fun: int list;             (* Apply functions needed *)
     mutable ui_send_fun: int list;              (* Send functions needed *)
-    mutable ui_force_link: bool }               (* Always linked *)
+    mutable ui_force_link: bool;                (* Always linked *)
+    mutable ui_allocation_profiling: bool; (* Built for allocation profiling *)
+  }
 
 (* Each .a library has a matching .cmxa file that provides the following
    infos on the library: *)
@@ -41,7 +43,9 @@ type unit_infos =
 type library_infos =
   { lib_units: (unit_infos * Digest.t) list;  (* List of unit infos w/ MD5s *)
     lib_ccobjs: string list;            (* C object files needed *)
-    lib_ccopts: string list }           (* Extra opts to C compiler *)
+    lib_ccopts: string list;            (* Extra opts to C compiler *)
+    lib_allocation_profiling: bool; (* Built for allocation profiling *)
+  }
 
 (* Each .cmxs dynamically-loaded plugin contains a symbol
    "caml_plugin_header" containing the following info

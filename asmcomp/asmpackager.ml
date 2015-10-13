@@ -23,6 +23,7 @@ type error =
   | Linking_error
   | Assembler_error of string
   | File_not_found of string
+  | Allocation_profiling_mismatch of string
 
 
 exception Error of error
@@ -47,6 +48,8 @@ let read_member_info pack_path file = (
       if info.ui_symbol <>
          (Compilenv.current_unit_infos()).ui_symbol ^ "__" ^ info.ui_name
       then raise(Error(Wrong_for_pack(file, pack_path)));
+      if info.ui_allocation_profiling <> !Clflags.allocation_profiling then
+        raise (Error (Allocation_profiling_mismatch file));
       Asmlink.check_consistency file info crc;
       Compilenv.cache_unit_info info;
       PM_impl info
@@ -143,6 +146,7 @@ let build_package_cmx members cmxfile =
           union(List.map (fun info -> info.ui_send_fun) units);
       ui_force_link =
           List.exists (fun info -> info.ui_force_link) units;
+      ui_allocation_profiling = !Clflags.allocation_profiling;
     } in
   Compilenv.write_unit_info pkg_infos cmxfile
 
@@ -205,6 +209,10 @@ let report_error ppf = function
       fprintf ppf "Error while assembling %s" file
   | Linking_error ->
       fprintf ppf "Error during partial linking"
+  | Allocation_profiling_mismatch file ->
+      fprintf ppf "All objects and packs must be built either \
+          with or without allocation profiling (an example file that \
+          does not satisfy this is %s)" file
 
 let () =
   Location.register_error_of_exn

@@ -85,6 +85,8 @@ type error =
     Not_a_unit_info of string
   | Corrupted_unit_info of string
   | Illegal_renaming of string * string * string
+  | Allocation_profiling_mismatch of string
+  | Lib_allocation_profiling_mismatch of string
 
 exception Error of error
 

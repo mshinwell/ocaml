@@ -21,6 +21,8 @@ type error =
     Not_a_unit_info of string
   | Corrupted_unit_info of string
   | Illegal_renaming of string * string * string
+  | Allocation_profiling_mismatch of string
+  | Lib_allocation_profiling_mismatch of string
 
 exception Error of error
 
@@ -62,7 +64,9 @@ let current_unit =
     ui_curry_fun = [];
     ui_apply_fun = [];
     ui_send_fun = [];
-    ui_force_link = false }
+    ui_force_link = false;
+    ui_allocation_profiling = !Clflags.allocation_profiling;
+  }
 
 let symbolname_for_pack pack name =
   match pack with
@@ -91,6 +95,7 @@ let reset ?packname name =
   current_unit.ui_apply_fun <- [];
   current_unit.ui_send_fun <- [];
   current_unit.ui_force_link <- false;
+  current_unit.ui_allocation_profiling <- !Clflags.allocation_profiling;
   Hashtbl.clear exported_constants;
   structured_constants := structured_constants_empty
 
@@ -125,6 +130,8 @@ let read_unit_info filename =
     end;
     let ui = (input_value ic : unit_infos) in
     let crc = Digest.input ic in
+    if ui.ui_allocation_profiling <> !Clflags.allocation_profiling then
+      raise (Error (Allocation_profiling_mismatch filename));
     close_in ic;
     (ui, crc)
   with End_of_file | Failure _ ->
@@ -138,6 +145,8 @@ let read_library_info filename =
     raise(Error(Not_a_unit_info filename));
   let infos = (input_value ic : library_infos) in
   close_in ic;
+  if infos.lib_allocation_profiling <> !Clflags.allocation_profiling then
+    raise (Error (Lib_allocation_profiling_mismatch filename));
   infos
 
 
@@ -292,6 +301,14 @@ let report_error ppf = function
       fprintf ppf "%a@ contains the description for unit\
                    @ %s when %s was expected"
         Location.print_filename filename name modname
+  | Allocation_profiling_mismatch filename ->
+      fprintf ppf "The object file %s was not compiled with the same \
+          allocation profiling setting as this invocation of the \
+          compiler." filename
+  | Lib_allocation_profiling_mismatch filename ->
+      fprintf ppf "The library file %s was not compiled with the same \
+          allocation profiling setting as this invocation of the \
+          compiler." filename
 
 let () =
   Location.register_error_of_exn
