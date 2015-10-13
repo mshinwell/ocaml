@@ -1276,11 +1276,12 @@ static void print_tail_chain(value node)
 
 static void print_node_header(value node)
 {
-  /* CR mshinwell: Node_pc doesn't really make sense for C nodes */
-  printf("Node %p: tag %d, size %d, identifying PC=%p\n",
-    (void*) node, Tag_val(node), (int) Wosize_val(node),
-    Decode_node_pc(Node_pc(node)));
-  print_tail_chain(node);
+  printf("Node %p: tag %d, size %d\n",
+    (void*) node, Tag_val(node), (int) Wosize_val(node));
+  if (Is_ocaml_node(node)) {
+    printf("Identifying PC=%p\n", Decode_node_pc(Node_pc(node)));
+    print_tail_chain(node);
+  }
 }
 
 static void print_trie_node(value node, int inside_indirect_node)
