@@ -608,7 +608,7 @@ typedef struct {
   uintnat pc;           /* always has bit 0 set.  Bit 1 set => CALL. */
   union {
     value callee_node;  /* for CALL */
-    uintnat profinfo;   /* for ALLOCATION */
+    value profinfo;   /* for ALLOCATION (encoded with [Val_long])*/
   } data;
   value next;           /* [Val_unit] for the end of the list */
 } c_node; /* CR mshinwell: rename to dynamic_node */
@@ -776,7 +776,7 @@ CAMLprim value caml_allocation_profiling_ocaml_allocation_point_program_counter
 CAMLprim value caml_allocation_profiling_ocaml_allocation_point_annotation
       (value node, value offset)
 {
-  return caml_copy_int64(Alloc_point_profinfo(node, Long_val(offset)));
+  return Alloc_point_profinfo(node, Long_val(offset));
 }
 
 CAMLprim value caml_allocation_profiling_ocaml_direct_call_point_call_site
@@ -848,7 +848,8 @@ CAMLprim value caml_allocation_profiling_c_node_profinfo(value node)
   assert(!Is_ocaml_node(node));
   c_node = c_node_of_stored_pointer_not_null(node);
   assert(classify_c_node(c_node) == ALLOCATION);
-  return caml_copy_int64((uint64_t) Decode_c_node_pc(c_node->data.profinfo));
+  assert(!Is_block(c_node->data.profinfo));
+  return c_node->data.profinfo;
 }
 
 static value allocate_uninitialized_ocaml_node(int size_including_header)
@@ -983,7 +984,7 @@ static c_node* allocate_c_node(void)
 
   assert((sizeof(c_node) % sizeof(uintnat)) == 0);
   node->gc_header =
-    Make_header(sizeof(c_node) / sizeof(uintnat), C_node_tag, Caml_black);
+    Make_header(sizeof(c_node)/sizeof(uintnat) - 1, C_node_tag, Caml_black);
   node->data.callee_node = Val_unit;
   node->next = Val_unit;
 
@@ -1276,11 +1277,19 @@ static void print_tail_chain(value node)
 
 static void print_node_header(value node)
 {
+  uintnat index;
+
   printf("Node %p: tag %d, size %d\n",
     (void*) node, Tag_val(node), (int) Wosize_val(node));
   if (Is_ocaml_node(node)) {
     printf("Identifying PC=%p\n", Decode_node_pc(Node_pc(node)));
     print_tail_chain(node);
+  }
+
+  /* Sanity check: there should never be actual NULL pointers in these
+     values.  [Val_unit] is used instead, so we can marshal. */
+  for (index = 0; index < Wosize_val(node); index++) {
+    assert(Field(node, index) != (value) 0);
   }
 }
 
@@ -1414,6 +1423,7 @@ static void print_trie_node(value node, int inside_indirect_node)
       c_node* c_node = c_node_of_stored_pointer(node);
       assert (c_node != NULL);
       while (c_node != NULL) {
+        assert(c_node->next != (value) 0);
         printf("(Debug: about to classify node %p)\n", (void*) c_node);
         switch (classify_c_node(c_node)) {
           case CALL:
@@ -1425,9 +1435,10 @@ static void print_trie_node(value node, int inside_indirect_node)
             break;
 
           case ALLOCATION:
+            assert(!Is_block(c_node->data.profinfo));
             printf("Allocation point in non-OCaml code at %p: profinfo=%lld\n",
               (void*) (c_node->pc >> 2),
-              (unsigned long long) c_node->data.profinfo);
+              (unsigned long long) Long_val(c_node->data.profinfo));
             break;
 
           default:

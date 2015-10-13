@@ -195,6 +195,7 @@ module Trace = struct
       external annotation : ocaml_node -> int -> Annotation.t
         = "caml_allocation_profiling_only_works_for_native_code"
           "caml_allocation_profiling_ocaml_allocation_point_annotation"
+          "noalloc"
 
       let annotation t = annotation t.node t.offset
     end
@@ -327,7 +328,7 @@ module Trace = struct
 
       external annotation : t -> Annotation.t
         = "caml_allocation_profiling_only_works_for_native_code"
-          "caml_allocation_profiling_c_node_profinfo"
+          "caml_allocation_profiling_c_node_profinfo" "noalloc"
     end
 
     module Call_point = struct
