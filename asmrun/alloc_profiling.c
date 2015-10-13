@@ -22,6 +22,8 @@
 
 /* Runtime support for allocation profiling. */
 
+#ifdef WITH_ALLOCATION_PROFILING
+
 #include <assert.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -1541,3 +1543,5 @@ CAMLprim value caml_allocation_profiling_debug(value v_unit)
 
   return Val_unit;
 }
+
+#endif
