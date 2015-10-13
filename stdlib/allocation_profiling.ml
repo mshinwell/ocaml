@@ -603,10 +603,19 @@ module Heap_snapshot = struct
     = "caml_allocation_profiling_only_works_for_native_code"
       "caml_allocation_profiling_take_heap_snapshot"
 
+  external marshal : out_channel -> raw_snapshot -> unit
+    = "caml_allocation_profiling_only_works_for_native_code"
+      "caml_allocation_profiling_marshal_heap_snapshot"
+
+  external free : raw_snapshot -> unit
+    = "caml_allocation_profiling_only_works_for_native_code"
+      "caml_allocation_profiling_free_heap_snapshot"
+
   let take writer =
     Writer.use writer ~f:(fun out_channel ->
       let snapshot = take () in
-      Marshal.to_channel out_channel snapshot [])
+      marshal out_channel snapshot;
+      free snapshot)
 
   module Entry = struct
     type t = {

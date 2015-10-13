@@ -147,16 +147,17 @@ static value take_gc_stats(void)
   v_stats = allocate_outside_heap(sizeof(gc_stats));
   stats = (gc_stats*) v_stats;
 
-  stats->minor_words = (uintnat) caml_stat_minor_words;
-  stats->promoted_words = (uintnat) caml_stat_promoted_words;
+  stats->minor_words = Val_long(caml_stat_minor_words);
+  stats->promoted_words = Val_long(caml_stat_promoted_words);
   stats->major_words =
-    ((uintnat) caml_stat_major_words) + ((uintnat) caml_allocated_words);
-  stats->minor_collections = (uintnat) caml_stat_minor_collections;
-  stats->major_collections = (uintnat) caml_stat_major_collections;
-  stats->heap_words = (uintnat) caml_stat_heap_size / sizeof(value);
-  stats->heap_chunks = (uintnat) caml_stat_heap_chunks;
-  stats->compactions = (uintnat) caml_stat_compactions;
-  stats->top_heap_words = (uintnat) caml_stat_top_heap_size / sizeof(value);
+    Val_long((uintnat) caml_stat_major_words)
+      + ((uintnat) caml_allocated_words);
+  stats->minor_collections = Val_long(caml_stat_minor_collections);
+  stats->major_collections = Val_long(caml_stat_major_collections);
+  stats->heap_words = Val_long(caml_stat_heap_size / sizeof(value));
+  stats->heap_chunks = Val_long(caml_stat_heap_chunks);
+  stats->compactions = Val_long(caml_stat_compactions);
+  stats->top_heap_words = Val_long(caml_stat_top_heap_size / sizeof(value));
 
   return v_stats;
 }
@@ -217,7 +218,7 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
     profinfo = Profinfo_hd(hd);
 
     if (profinfo >= profinfo_lowest && profinfo <= PROFINFO_MASK) {
-      assert (raw_entries[profinfo].num_blocks++ >= 0);
+      assert (raw_entries[profinfo].num_blocks >= 0);
       if (raw_entries[profinfo].num_blocks == 0) {
         num_distinct_profinfos++;
       }
@@ -230,6 +231,7 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
   }
 
   /* Scan the major heap. */
+  chunk = caml_heap_start;
   while (chunk != NULL) {
     char* hp;
     char* limit;
@@ -246,6 +248,10 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
         default:
           profinfo = Profinfo_hd(hd);
           if (profinfo >= profinfo_lowest && profinfo <= PROFINFO_MASK) {
+            assert (raw_entries[profinfo].num_blocks >= 0);
+            if (raw_entries[profinfo].num_blocks == 0) {
+              num_distinct_profinfos++;
+            }
             raw_entries[profinfo].num_blocks++;
             raw_entries[profinfo].num_words_including_headers +=
               Whsize_hd(hd);
@@ -264,14 +270,14 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
   entries = (snapshot_entries*) v_entries;
   target_index = 0;
   for (index = 0; index <= PROFINFO_MASK; index++) {
-    assert(target_index < num_distinct_profinfos);
     assert(raw_entries[index].num_blocks >= 0);
     if (raw_entries[index].num_blocks > 0) {
-      entries->entries[target_index].profinfo = index;
+      assert(target_index < num_distinct_profinfos);
+      entries->entries[target_index].profinfo = Val_long(index);
       entries->entries[target_index].num_blocks
-        = raw_entries[index].num_blocks;
+        = Val_long(raw_entries[index].num_blocks);
       entries->entries[target_index].num_words_including_headers
-        = raw_entries[index].num_words_including_headers;
+        = Val_long(raw_entries[index].num_words_including_headers);
       target_index++;
     }
   }
@@ -289,9 +295,23 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
   return v_snapshot;
 }
 
-CAMLprim value caml_allocation_profiling_free_heap_snapshot(value snapshot)
+CAMLprim value caml_allocation_profiling_free_heap_snapshot(value v_snapshot)
 {
-  caml_stat_free(Hp_val(snapshot));
+  snapshot* heap_snapshot = (snapshot*) v_snapshot;
+  caml_stat_free(Hp_val(heap_snapshot->time));
+  caml_stat_free(Hp_val(heap_snapshot->gc_stats));
+  caml_stat_free(Hp_val(heap_snapshot->entries));
+  caml_stat_free(Hp_val(v_snapshot));
+  return Val_unit;
+}
+
+CAMLprim value caml_allocation_profiling_marshal_heap_snapshot
+      (value v_channel, value v_snapshot)
+{
+  caml_extern_allow_out_of_heap = 1;
+  caml_output_value(v_channel, v_snapshot, Val_long(0));
+  caml_extern_allow_out_of_heap = 0;
+
   return Val_unit;
 }
 
@@ -1211,9 +1231,6 @@ uintnat caml_allocation_profiling_my_profinfo (void)
 
   return profinfo;
 }
-
-extern int caml_extern_allow_out_of_heap;
-extern value caml_output_value(value vchan, value v, value flags);
 
 CAMLprim value caml_allocation_profiling_marshal_trie (value v_channel)
 {

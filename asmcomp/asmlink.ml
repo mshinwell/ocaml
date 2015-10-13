@@ -281,9 +281,10 @@ let link_shared ppf objfiles output_name =
   call_linker_shared (startup_obj :: objfiles) output_name;
   remove_file startup_obj
 
-let libunwind () =
+let libunwind () = []
+(*
   if !Clflags.allocation_profiling then ["-L/home/mark/dev/libunwind-install/lib"; "-L/mnt/local/sda1/mshinwell/libunwind-install/lib"; "-lunwind"; "-lunwind-x86_64"] else []
-
+*)
 let call_linker file_list startup_file output_name =
   let main_dll = !Clflags.output_c_object
                  && Filename.check_suffix output_name Config.ext_dll
