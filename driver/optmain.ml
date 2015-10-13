@@ -81,6 +81,7 @@ module Options = Main_args.Make_optcomp_options (struct
   let _cc s = c_compiler := Some s
   let _cclib s = ccobjs := Misc.rev_split_words s @ !ccobjs
   let _ccopt s = first_ccopts := s :: !first_ccopts
+  let _cmx_suffix s = cmx_suffix := s
   let _compact = clear optimize_for_speed
   let _config () = show_config ()
   let _for_pack s = for_package := Some s

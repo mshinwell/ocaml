@@ -62,7 +62,7 @@ stdlib.p.cmxa: $(OBJS:.cmo=.p.cmx)
 	$(CAMLOPT) -a -o stdlib.p.cmxa $(OBJS:.cmo=.p.cmx)
 
 stdlib.ap.cmxa: $(OBJS:.cmo=.ap.cmx)
-	$(CAMLOPT) -a -o stdlib.ap.cmxa $(OBJS:.cmo=.ap.cmx)
+	$(CAMLOPT) -allocation-profiling -a -o stdlib.ap.cmxa $(OBJS:.cmo=.ap.cmx)
 
 camlheader target_camlheader camlheaderd target_camlheaderd camlheader_ur: \
   header.c ../config/Makefile

@@ -163,7 +163,7 @@ let get_global_info global_ident = (
       let (infos, crc) =
         try
           let filename =
-            find_in_path_uncap !load_path (modname ^ ".cmx") in
+            find_in_path_uncap !load_path (modname ^ !Clflags.cmx_suffix) in
           let (ui, crc) = read_unit_info filename in
           if ui.ui_name <> modname then
             raise(Error(Illegal_renaming(modname, ui.ui_name, filename)));

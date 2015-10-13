@@ -115,6 +115,7 @@ end;;
 
 module type Optcommon_options = sig
   val _allocation_profiling : unit -> unit
+  val _cmx_suffix : string -> unit
 
   val _compact : unit -> unit
   val _inline : int -> unit
