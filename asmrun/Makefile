@@ -27,14 +27,14 @@ COBJS=startup.o main.o fail.o roots.o globroots.o signals.o signals_asm.o \
   floats.o str.o array.o io.o extern.o intern.o hash.o sys.o parsing.o \
   gc_ctrl.o terminfo.o md5.o obj.o lexing.o printexc.o callback.o weak.o \
   compact.o finalise.o custom.o $(UNIX_OR_WIN32).o backtrace.o natdynlink.o\
-  debugger.o meta.o dynlink.o alloc_profiling.o
+  debugger.o meta.o dynlink.o
 
 ASMOBJS=$(ARCH).o
 
 OBJS=$(COBJS) $(ASMOBJS)
 DOBJS=$(COBJS:.o=.d.o) $(ASMOBJS)
 POBJS=$(COBJS:.o=.p.o) $(ASMOBJS:.o=.p.o)
-APOBJS=$(COBJS:.o=.ap.o) $(ASMOBJS:.o=.ap.o)
+APOBJS=$(COBJS:.o=.ap.o) alloc_profiling.ap.o $(ASMOBJS:.o=.ap.o)
 PICOBJS=$(COBJS:.o=.pic.o) $(ASMOBJS:.o=.pic.o)
 
 all: libasmrun.a all-$(RUNTIMED) all-$(PROFILING) all-$(SHARED) all-allocprof-$(WITH_ALLOCATION_PROFILING)
@@ -68,9 +68,9 @@ all-allocprof-false:
 
 all-allocprof-true: libasmrunap.a
 
-libasmrunap.a: $(POBJS)
+libasmrunap.a: $(APOBJS)
 	rm -f libasmrunap.a
-	$(ARCMD) rc libasmrunap.a $(POBJS)
+	$(ARCMD) rc libasmrunap.a $(APOBJS)
 	$(RANLIB) libasmrunap.a
 
 all-noshared:
@@ -234,7 +234,7 @@ clean::
 	$(ASPP) -DSYS_$(SYSTEM) -DMODEL_$(MODEL) $(ASPPPROFFLAGS) -o $@ $<
 
 %.ap.o: %.S
-	$(ASPP) -DSYS_$(SYSTEM) -DMODEL_$(MODEL) $(ASPPPROFFLAGS) -o $@ $<
+	$(ASPP) -DSYS_$(SYSTEM) -DMODEL_$(MODEL) -DWITH_ALLOCATION_PROFILING $(ASPPFLAGS) -o $@ $<
 
 %.pic.o: %.S
 	$(ASPP) -DSYS_$(SYSTEM) -DMODEL_$(MODEL) $(SHAREDCCCOMPOPTS) -o $@ $<
@@ -246,7 +246,7 @@ clean::
 	$(CC) -c $(PFLAGS) -o $@ $<
 
 %.ap.o: %.c
-	$(CC) -c $(PFLAGS) -o $@ $<
+	$(CC) -c $(APFLAGS) -o $@ $<
 
 %.pic.o: %.c
 	$(CC) -c $(PICFLAGS) -o $@ $<
@@ -258,7 +258,7 @@ clean::
 	$(ASPP) -DSYS_$(SYSTEM) $(ASPPPROFFLAGS) -o $@ $<
 
 %.ap.o: %.s
-	$(ASPP) -DSYS_$(SYSTEM) $(ASPPPROFFLAGS) -o $@ $<
+	$(ASPP) -DSYS_$(SYSTEM) -DWITH_ALLOCATION_PROFILING $(ASPPFLAGS) -o $@ $<
 
 %.pic.o: %.s
 	$(ASPP) -DSYS_$(SYSTEM) $(SHAREDCCCOMPOPTS) -o $@ $<
@@ -270,6 +270,6 @@ depend: $(COBJS:.o=.c) ${LINKEDFILES}
 	$(CC) -MM $(FLAGS) *.c > .depend
 	$(CC) -MM $(FLAGS) -DDEBUG *.c | sed -e 's/\.o/.d.o/' >> .depend
 	$(CC) -MM $(FLAGS) -DPROFILING *.c | sed -e 's/\.o/.p.o/' >> .depend
-	$(CC) -MM $(FLAGS) -DPROFILING *.c | sed -e 's/\.o/.ap.o/' >> .depend
+	$(CC) -MM $(FLAGS) -DWITH_ALLOCATION_PROFILING *.c | sed -e 's/\.o/.ap.o/' >> .depend
 
 include .depend

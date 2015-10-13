@@ -173,6 +173,12 @@ let main () =
                       compile_only; output_c_object]) > 1
     then
       fatal "Please specify at most one of -pack, -a, -shared, -c, -output-obj";
+    if Sys.word_size <> 64 && !Clflags.allocation_profiling then
+      fatal "-allocation-profiling may only be used on 64-bit platforms";
+    if !Clflags.allocation_profiling && !Clflags.runtime_variant <> "" then
+      fatal "-allocation-profiling and -runtime-variant are \
+          mutually exclusive";
+    if !Clflags.allocation_profiling then Clflags.runtime_variant := "ap";
     if !make_archive then begin
       if !cmxa_present then
         fatal "Option -a cannot be used with .cmxa input files.";
