@@ -87,7 +87,7 @@ libasmrun_shared.so: $(PICOBJS)
 
 INSTALL_LIBDIR=$(DESTDIR)$(LIBDIR)
 
-install: install-default install-$(RUNTIMED) install-$(PROFILING) install-$(SHARED)
+install: install-default install-$(RUNTIMED) install-$(PROFILING) install-$(SHARED) install-allocprof-$(WITH_ALLOCATION_PROFILING)
 
 install-default:
 	cp libasmrun.a $(INSTALL_LIBDIR)/libasmrun.a

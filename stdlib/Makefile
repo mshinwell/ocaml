@@ -28,7 +28,7 @@ allopt-allocprof-false:
 allopt-allocprof-true: stdlib.ap.cmxa std_exit.ap.cmx
 	rm -f std_exit.ap.cmi
 
-installopt: installopt-default installopt-$(PROFILING)
+installopt: installopt-default installopt-$(PROFILING) installopt-allocprof-$(WITH_ALLOCATION_PROFILING)
 
 installopt-default:
 	cp stdlib.cmxa stdlib.a std_exit.o *.cmx $(INSTALL_LIBDIR)
