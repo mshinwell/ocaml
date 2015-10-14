@@ -128,8 +128,9 @@ let read_unit_info filename =
     end;
     let ui = (input_value ic : unit_infos) in
     let crc = Digest.input ic in
+    let allocation_profiling = (input_value ic : bool) in
     close_in ic;
-    (ui, crc)
+    ({ ui with ui_allocation_profiling = allocation_profiling; }, crc)
   with End_of_file | Failure _ ->
     close_in ic;
     raise(Error(Corrupted_unit_info(filename)))
@@ -224,10 +225,13 @@ let need_send_fun n =
 let write_unit_info info filename =
   let oc = open_out_bin filename in
   output_string oc cmx_magic_number;
-  output_value oc info;
+  output_value oc { info with ui_allocation_profiling = false; };
   flush oc;
   let crc = Digest.file filename in
   Digest.output oc crc;
+  (* CR mshinwell: This is a bit of a hack.  However we need to exclude the
+     allocation profiling setting from the digest. *)
+  output_value oc !Clflags.allocation_profiling;
   close_out oc
 
 let save_unit_info filename =

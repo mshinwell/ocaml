@@ -383,7 +383,6 @@ uintnat caml_allocation_profiling_override_profinfo;
 
 void caml_allocation_profiling_initialize (void)
 {
-  caml_ext_table_init(&ocaml_dynamic_libraries, 42);
 }
 
 CAMLprim value caml_allocation_profiling_trie_is_initialized (value v_unit)
