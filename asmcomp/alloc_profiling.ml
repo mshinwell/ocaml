@@ -42,7 +42,7 @@ let reset ~alloc_profiling_node_ident:ident =
   alloc_profiling_node_ident := lazy ident;
   direct_tail_call_point_indexes := []
 
-let code_for_function_prologue () =
+let code_for_function_prologue ~function_name =
   let node_hole = Ident.create "node_hole" in
   let node = Ident.create "node" in
   let new_node = Ident.create "new_node" in
@@ -80,7 +80,7 @@ let code_for_function_prologue () =
   Clet (node_hole, Cop (Calloc_profiling_node_hole, []),
     Clet (node, Cop (Cload Word, [Cvar node_hole]),
       Clet (must_allocate_node, Cop (Cand, [Cvar node; Cconst_int 1]),
-        Clet (pc, Cop (Cprogram_counter, []),
+        Clet (pc, Cconst_symbol function_name,
         Cifthenelse (Cop (Ccmpi Ceq, [Cvar must_allocate_node; Cconst_int 1]),
           Clet (is_new_node,
             Cop (Cextcall ("caml_allocation_profiling_allocate_node",
@@ -295,7 +295,9 @@ class virtual instruction_selection = object (self)
        This corresponds to adding the prologue if the function contains one
        or more call or allocation points. *)
     if something_was_instrumented () then begin
-      let prologue_cmm = code_for_function_prologue () in
+      let prologue_cmm =
+        code_for_function_prologue ~function_name:f.Cmm.fun_name
+      in
       (* Splice the allocation prologue after the main prologue but before the
          function body.  Remember that [instr_seq] points at the last
          instruction (the list is in reverse order). *)

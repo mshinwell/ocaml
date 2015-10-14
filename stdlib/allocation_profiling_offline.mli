@@ -82,9 +82,8 @@ module Function_entry_point : sig
 end
 
 module Function_identifier : sig
-  (* CR mshinwell: check if this is actually [Function_entry_point.t] now *)
   type t
-
+  (* CR mshinwell: same as [Function_entry_point] now *)
   val to_int64 : t -> Int64.t
 end
 

@@ -482,7 +482,11 @@ CAMLprim value caml_allocation_profiling_check_node(
       value node, void* pc)
 {
   assert(Is_ocaml_node(node));
-  assert(Decode_node_pc(Node_pc(node)) == pc);
+  if (Decode_node_pc(Node_pc(node)) != pc) {
+    printf("check_node failure: OCaml node %p should have PC %p but has %p\n",
+      (void*) node, pc, Decode_node_pc(Node_pc(node)));
+    assert(0);
+  }
   return Val_unit;
 }
 
@@ -526,6 +530,7 @@ printf("tail calling sequence has not happened before\n");
   node = allocate_uninitialized_ocaml_node(size_including_header);
   Hd_val(node) =
     Make_header(size_including_header - 1, OCaml_node_tag, Caml_black);
+  assert((((uintnat) pc) % 1) == 0);
   Node_pc(node) = Encode_node_pc(pc);
   /* If the callee was tail called, then the tail link field will link this
      new node into an existing tail chain.  Otherwise, it is initialized with
@@ -865,6 +870,7 @@ static void print_node_header(value node)
   else {
     printf("Node %p: tag %d, size %d\n",
       (void*) node, Tag_val(node), (int) Wosize_val(node));
+    assert(Tag_val(node) == 0 || Tag_val(node) == 1);
     if (Is_ocaml_node(node)) {
       printf("Identifying PC=%p\n", Decode_node_pc(Node_pc(node)));
       print_tail_chain(node);
@@ -1007,7 +1013,12 @@ static void print_trie_node(value node, int inside_indirect_node)
               inside_indirect_node ? "..." : "Call site in non-OCaml code ",
               (void*) (c_node->pc >> 2),
               (void*) c_node->data.callee_node);
-            print_trie_node(c_node->data.callee_node, 0);
+            if (Is_tail_caller_node_encoded(c_node->data.callee_node)) {
+              printf("(Unused indirect tail point--uninstrumented callee)\n");
+            }
+            else {
+              print_trie_node(c_node->data.callee_node, 0);
+            }
             break;
 
           case ALLOCATION:
@@ -1033,6 +1044,10 @@ static void print_trie_node(value node, int inside_indirect_node)
 static void mark_trie_node_black(value node)
 {
   int field;
+
+  if (node == Val_unit) {
+    return;
+  }
 
   if (Color_val(node) == Caml_black) {
     return;
@@ -1087,7 +1102,9 @@ static void mark_trie_node_black(value node)
     while (c_node != NULL) {
       switch (caml_allocation_profiling_classify_c_node(c_node)) {
         case CALL:
-          mark_trie_node_black(c_node->data.callee_node);
+          if (!Is_tail_caller_node_encoded(c_node->data.callee_node)) {
+            mark_trie_node_black(c_node->data.callee_node);
+          }
           break;
 
         default:
@@ -1107,8 +1124,9 @@ CAMLprim value caml_allocation_profiling_debug(value v_unit)
   }
   else {
     print_trie_node(trie_node, 0);
+    printf("End of trie dump.  Marking trie black.\n");
     mark_trie_node_black(trie_node);
-    printf("End of trie dump.\n");
+    printf("Done.\n");
   }
 
   fflush(stdout);

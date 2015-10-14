@@ -217,6 +217,7 @@ module Trace = struct
           = "caml_allocation_profiling_only_works_for_native_code"
             "caml_allocation_profiling_c_node_call_site"
 
+        (* XXX this might return an unused tail call site *)
         external callee_node : t -> node
           = "caml_allocation_profiling_only_works_for_native_code"
             "caml_allocation_profiling_c_node_callee_node" "noalloc"
