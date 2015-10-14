@@ -119,7 +119,6 @@ typedef struct {
 
 static const uintnat profinfo_none = (uintnat) 0;
 static const uintnat profinfo_overflow = (uintnat) 1;
-static const uintnat profinfo_lowest = (uintnat) 2;
 uintnat caml_allocation_profiling_profinfo = (uintnat) 2;
 
 static value allocate_outside_heap_with_tag(mlsize_t size_in_bytes,
@@ -217,7 +216,7 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
 
     profinfo = Profinfo_hd(hd);
 
-    if (profinfo >= profinfo_lowest && profinfo <= PROFINFO_MASK) {
+    if (profinfo >= caml_profinfo_lowest && profinfo <= PROFINFO_MASK) {
       assert (raw_entries[profinfo].num_blocks >= 0);
       if (raw_entries[profinfo].num_blocks == 0) {
         num_distinct_profinfos++;
@@ -247,7 +246,7 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
 
         default:
           profinfo = Profinfo_hd(hd);
-          if (profinfo >= profinfo_lowest && profinfo <= PROFINFO_MASK) {
+          if (profinfo >= caml_profinfo_lowest && profinfo <= PROFINFO_MASK) {
             assert (raw_entries[profinfo].num_blocks >= 0);
             if (raw_entries[profinfo].num_blocks == 0) {
               num_distinct_profinfos++;
@@ -439,16 +438,6 @@ CAMLprim value caml_allocation_profiling_set_override_profinfo (value v_override
   return Val_true;
 }
 
-CAMLprim value caml_allocation_profiling_min_override_profinfo (value v_unit)
-{
-  return Val_long(profinfo_lowest);
-}
-
-CAMLprim value caml_allocation_profiling_max_override_profinfo (value v_unit)
-{
-  return Val_long(PROFINFO_MASK);
-}
-
 CAMLprim value caml_allocation_profiling_get_profinfo (value v)
 {
   return Val_long(Profinfo_val(v));
@@ -510,21 +499,6 @@ static value find_tail_node(value node, void* callee)
   printf("find_tail_node returns value pointer %p\n", (void*) found);
 
   return found;
-}
-
-CAMLprim value caml_allocation_profiling_compare_node(
-      value node1, value node2)
-{
-  assert(!Is_in_value_area(node1));
-  assert(!Is_in_value_area(node2));
-
-  if (node1 == node2) {
-    return 0;
-  }
-  if (node1 < node2) {
-    return -1;
-  }
-  return 1;
 }
 
 CAMLprim value caml_allocation_profiling_allocate_node(
@@ -864,11 +838,6 @@ CAMLprim value caml_allocation_profiling_marshal_trie (value v_channel)
   caml_extern_allow_out_of_heap = 0;
 
   return Val_unit;
-}
-
-CAMLprim value caml_allocation_profiling_unmarshal_trie (value v_channel)
-{
-  return caml_input_value_to_outside_heap(v_channel);
 }
 
 static void print_tail_chain(value node)

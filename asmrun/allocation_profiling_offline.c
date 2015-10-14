@@ -48,6 +48,8 @@
 
 #include "../config/s.h"
 
+const uintnat caml_profinfo_lowest = (uintnat) 2;
+
 c_node_type caml_allocation_profiling_classify_c_node(c_node* node)
 {
   return (node->pc & 2) ? CALL : ALLOCATION;
@@ -68,6 +70,36 @@ value caml_allocation_profiling_stored_pointer_to_c_node(c_node* node)
 {
   assert(node != NULL);
   return Val_hp(node);
+}
+
+CAMLprim value caml_allocation_profiling_compare_node(
+      value node1, value node2)
+{
+  assert(!Is_in_value_area(node1));
+  assert(!Is_in_value_area(node2));
+
+  if (node1 == node2) {
+    return 0;
+  }
+  if (node1 < node2) {
+    return -1;
+  }
+  return 1;
+}
+
+CAMLprim value caml_allocation_profiling_min_override_profinfo (value v_unit)
+{
+  return Val_long(caml_profinfo_lowest);
+}
+
+CAMLprim value caml_allocation_profiling_max_override_profinfo (value v_unit)
+{
+  return Val_long(PROFINFO_MASK);
+}
+
+CAMLprim value caml_allocation_profiling_unmarshal_trie (value v_channel)
+{
+  return caml_input_value_to_outside_heap(v_channel);
 }
 
 CAMLprim value caml_allocation_profiling_node_num_header_words(value unit)

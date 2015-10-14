@@ -1708,13 +1708,12 @@ if $arch64; then
   echo "Allocation profiling will be available."
   with_allocation_profiling=true
   if [ "$libunwind_lib" != "" ]; then
-    libunwind_lib="-Xl $libunwind_lib"
+    libunwind_lib_temp="-Xl $libunwind_lib"
+  else
+    libunwind_lib_temp=""
   fi
-  if sh ./hasgot -i libunwind.h $libunwind_lib -Xl -lunwind $libunwind_include; then
+  if sh ./hasgot -i libunwind.h $libunwind_lib_temp -Xl -lunwind $libunwind_include; then
     echo "#define HAS_LIBUNWIND" >> s.h
-    nativecccompopts="$libunwind_include $nativecccompopts"
-    bytecclibs="$libunwind_lib -lunwind"
-    nativecclibs="$libunwind_lib -lunwind"
     has_libunwind=yes
     echo "libunwind support for allocation profiling will be available."
   else
@@ -1814,6 +1813,8 @@ echo "WITH_OCAMLBUILD=${with_ocamlbuild}" >>Makefile
 echo "ASM_CFI_SUPPORTED=$asm_cfi_supported" >> Makefile
 echo "WITH_FRAME_POINTERS=$with_frame_pointers" >> Makefile
 echo "WITH_ALLOCATION_PROFILING=$with_allocation_profiling" >> Makefile
+echo "LIBUNWIND_INCLUDE_FLAGS=$libunwind_include" >> Makefile
+echo "LIBUNWIND_LINK_FLAG=$libunwind_lib" >> Makefile
 echo "TARGET=$target" >> Makefile
 echo "HOST=$host" >> Makefile
 if [ "$ostype" = Cygwin ]; then

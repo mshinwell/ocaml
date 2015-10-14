@@ -246,7 +246,7 @@ clean::
 	$(CC) -c $(PFLAGS) -o $@ $<
 
 %.ap.o: %.c
-	$(CC) -c $(APFLAGS) -o $@ $<
+	$(CC) $(LIBUNWIND_INCLUDE_FLAGS) -c $(APFLAGS) -o $@ $<
 
 %.pic.o: %.c
 	$(CC) -c $(PICFLAGS) -o $@ $<

@@ -49,6 +49,9 @@ val ar: string
 val cc_profile : string
         (* The command line option to the C compiler to enable profiling. *)
 
+val libunwind_flag : string
+        (* Flag required to link with libunwind (for allocation profiling). *)
+
 val load_path: string list ref
         (* Directories in the search path for .cmi and .cmo files *)
 
