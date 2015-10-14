@@ -76,22 +76,32 @@ let code_for_function_prologue () =
         Cop (Cor, [Cvar new_node; Cconst_int 1]),
         body)
   in
+  let pc = Ident.create "pc" in
   Clet (node_hole, Cop (Calloc_profiling_node_hole, []),
     Clet (node, Cop (Cload Word, [Cvar node_hole]),
       Clet (must_allocate_node, Cop (Cand, [Cvar node; Cconst_int 1]),
+        Clet (pc, Cop (Cprogram_counter, []),
         Cifthenelse (Cop (Ccmpi Ceq, [Cvar must_allocate_node; Cconst_int 1]),
           Clet (is_new_node,
             Cop (Cextcall ("caml_allocation_profiling_allocate_node",
               [| Int |], false, Debuginfo.none),
               [Cconst_int (1 + !index_within_node);
-               Cop (Cprogram_counter, []);
+               Cvar pc;
                Cvar node_hole;
               ]),
             Clet (new_node, Cop (Cload Word, [Cvar node_hole]),
               Cifthenelse (Cop (Ccmpi Ceq, [Cvar is_new_node; Cconst_int 0]),
                 Cvar new_node,
                 initialize_direct_tail_call_points_and_return_node))),
-          Cvar node))))
+          (* CR mshinwell: remove this Csequence and just have "Cvar node"
+             once debugged *)
+          Csequence (
+            Cop (Cextcall ("caml_allocation_profiling_check_node",
+              [| Int |], false, Debuginfo.none),
+              [Cvar node;
+               Cvar pc;
+              ]),
+            Cvar node))))))
 
 let code_for_allocation_point ~value's_header ~node =
   let existing_profinfo = Ident.create "existing_profinfo" in
@@ -244,8 +254,11 @@ class virtual instruction_selection = object (self)
     | _ -> ()
 *)
 
+  method private can_instrument () =
+    !Clflags.allocation_profiling && not disable_instrumentation
+
   method about_to_emit_call env desc arg =
-    if not !Clflags.allocation_profiling then ()
+    if not (self#can_instrument ()) then ()
     else
       let module M = Mach in
       match desc with
@@ -309,25 +322,6 @@ class virtual instruction_selection = object (self)
         instr_seq <- last_insn_of_body
       end
     end
-
-  method private can_instrument () =
-    !Clflags.allocation_profiling && not disable_instrumentation
-
-  method! insert_debug_env env desc dbg arg res =
-    if self#can_instrument () then begin
-      disable_instrumentation <- true;
-      self#maybe_instrument desc ~env ~arg ~res;
-      disable_instrumentation <- false
-    end;
-    super#insert_debug_env env desc dbg arg res
-
-  method! insert_env env desc arg res =
-    if self#can_instrument () then begin
-      disable_instrumentation <- true;
-      self#maybe_instrument desc ~env ~arg ~res;
-      disable_instrumentation <- false
-    end;
-    super#insert_env env desc arg res
 
   method! emit_blockheader env n =
     if self#can_instrument () then begin

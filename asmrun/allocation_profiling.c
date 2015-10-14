@@ -464,7 +464,7 @@ static value find_tail_node(value node, void* callee)
   do {
     assert(Is_ocaml_node(node));
     printf("find_tail_node comparing %p with %p\n",
-      (void*) Node_pc(node), (void*) pc);
+      (void*) Decode_node_pc(Node_pc(node)), (void*) callee);
     if (Node_pc(node) == pc) {
       found = node;
     }
@@ -476,6 +476,14 @@ static value find_tail_node(value node, void* callee)
   printf("find_tail_node returns value pointer %p\n", (void*) found);
 
   return found;
+}
+
+CAMLprim value caml_allocation_profiling_check_node(
+      value node, void* pc)
+{
+  assert(Is_ocaml_node(node));
+  assert(Decode_node_pc(Node_pc(node)) == pc);
+  return Val_unit;
 }
 
 CAMLprim value caml_allocation_profiling_allocate_node(
@@ -500,14 +508,19 @@ CAMLprim value caml_allocation_profiling_allocate_node(
     /* The callee was tail called.  Find whether there already exists a node
        for it in the tail call chain within the caller's node.  The caller's
        node must always be an OCaml node. */
+printf("allocating node for callee that was tail called.  Identifying PC of callee=%p.\n",pc);
     caller_node = Decode_tail_caller_node(node);
     tail_node = find_tail_node(caller_node, pc);
     if (tail_node != Val_unit) {
       /* This tail calling sequence has happened before; just fill the hole
          with the existing node and return. */
       *node_hole = tail_node;
+printf("tail calling sequence has happened before; node=%p\n",(void*)tail_node);
       return 0;  /* indicates an existing node was returned */
     }
+else {
+printf("tail calling sequence has not happened before\n");
+}
   }
 
   node = allocate_uninitialized_ocaml_node(size_including_header);
@@ -521,6 +534,7 @@ CAMLprim value caml_allocation_profiling_allocate_node(
     Tail_link(node) = node;
   }
   else {
+printf("doing tail link\n");
     Tail_link(node) = Tail_link(caller_node);
     Tail_link(caller_node) = node;
   }
@@ -571,6 +585,8 @@ CAMLprim value* caml_allocation_profiling_indirect_node_hole_ptr
   c_node* c_node;
   int found = 0;
 
+  printf("caml_allocation_profiling_indirect_node_hole_ptr: node hole=%p on entry\n",  (void*) node_hole);
+
   /* On entry, the node hole pointer is over the call site address slot,
      so we must advance it to reach the linked list slot. */
   node_hole++;
@@ -578,6 +594,7 @@ CAMLprim value* caml_allocation_profiling_indirect_node_hole_ptr
   printf("indirect node hole ptr for callee %p starting at %p contains %p\n",
     callee, (void*) node_hole, *(void**) node_hole);
   while (!found && *node_hole != Val_unit) {
+    printf("loop iteration; *node_hole=%p\n", *(void**) node_hole);
     assert(((uintnat) *node_hole) % sizeof(value) == 0);
     c_node = caml_allocation_profiling_c_node_of_stored_pointer(*node_hole);
     assert(c_node != NULL);
@@ -610,7 +627,8 @@ CAMLprim value* caml_allocation_profiling_indirect_node_hole_ptr
          Perform the initialization equivalent to that emitted by
          [Alloc_profiling.code_for_function_prologue] for direct tail call
          sites. */
-      c_node->data.callee_node = caller_node;
+
+      c_node->data.callee_node = Encode_tail_caller_node(caller_node);
     }
 
     *node_hole = caml_allocation_profiling_stored_pointer_to_c_node(c_node);
@@ -841,23 +859,31 @@ static void print_node_header(value node)
 {
   uintnat index;
 
-  printf("Node %p: tag %d, size %d\n",
-    (void*) node, Tag_val(node), (int) Wosize_val(node));
-  if (Is_ocaml_node(node)) {
-    printf("Identifying PC=%p\n", Decode_node_pc(Node_pc(node)));
-    print_tail_chain(node);
+  if (node == Val_unit) {
+    printf("(Uninitialized node)\n");
   }
+  else {
+    printf("Node %p: tag %d, size %d\n",
+      (void*) node, Tag_val(node), (int) Wosize_val(node));
+    if (Is_ocaml_node(node)) {
+      printf("Identifying PC=%p\n", Decode_node_pc(Node_pc(node)));
+      print_tail_chain(node);
+    }
 
-  /* Sanity check: there should never be actual NULL pointers in these
-     values.  [Val_unit] is used instead, so we can marshal. */
-  for (index = 0; index < Wosize_val(node); index++) {
-    assert(Field(node, index) != (value) 0);
+    /* Sanity check: there should never be actual NULL pointers in these
+       values.  [Val_unit] is used instead, so we can marshal. */
+    for (index = 0; index < Wosize_val(node); index++) {
+      assert(Field(node, index) != (value) 0);
+    }
   }
 }
 
 static void print_trie_node(value node, int inside_indirect_node)
 {
   print_node_header(node);
+  if (node == Val_unit) {
+    return;
+  }
 
   if (Color_val(node) != Caml_black) {
     printf("Node %p visited before\n", (void*) node);
@@ -936,18 +962,6 @@ static void print_trie_node(value node, int inside_indirect_node)
               int i = direct_call_point;
               assert(field < Wosize_val(node) - 2);
               child = Direct_callee_node(node, field);
-              /* Catch tail call points that have been wrongly initialized. */
-              if (child != Val_unit && ((child & 1) == 1)) {
-                printf("Direct call point %d (at %p): %p calls %p\n",
-                  direct_call_point,
-                  (void*) &Direct_pc_call_site(node, field),
-                  Decode_call_point_pc(Direct_pc_call_site(node, field)),
-                  Decode_call_point_pc(Direct_pc_callee(node, field)));
-                printf("This looks like a tail call point (child=%p) that\n",
-                  (void*) child);
-                printf("  has not been correctly initialized\n");
-                assert(0);
-              }
               printf("Direct call point %d: %p calls %p, ",
                 direct_call_point,
                 Decode_call_point_pc(Direct_pc_call_site(node, field)),
