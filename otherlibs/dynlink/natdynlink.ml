@@ -16,7 +16,7 @@
 type handle
 
 external ndl_open: string -> bool -> handle * bytes = "caml_natdynlink_open"
-external ndl_run: string -> handle -> string -> unit = "caml_natdynlink_run"
+external ndl_run: handle -> string -> unit = "caml_natdynlink_run"
 external ndl_getmap: unit -> bytes = "caml_natdynlink_getmap"
 external ndl_globals_inited: unit -> int = "caml_natdynlink_globals_inited"
 
@@ -173,8 +173,8 @@ let loadunits filename handle units state =
 
   let defines = List.flatten (List.map (fun ui -> ui.dynu_defines) units) in
 
-  ndl_run filename handle "_shared_startup";
-  List.iter (ndl_run filename handle) defines;
+  ndl_run handle "_shared_startup";
+  List.iter (ndl_run handle) defines;
   { implems = new_implems; ifaces = new_ifaces }
 
 let load priv filename =

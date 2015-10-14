@@ -22,10 +22,6 @@
 #include "caml/fail.h"
 #include "caml/signals.h"
 
-#ifdef WITH_ALLOCATION_PROFILING
-#include "allocation_profiling.h"
-#endif
-
 #include <stdio.h>
 #include <string.h>
 
@@ -79,9 +75,8 @@ CAMLprim value caml_natdynlink_open(value filename, value global)
   CAMLreturn(res);
 }
 
-CAMLprim value caml_natdynlink_run(value filename, void *handle, value symbol)
-{
-  CAMLparam2 (filename, symbol);
+CAMLprim value caml_natdynlink_run(void *handle, value symbol) {
+  CAMLparam1 (symbol);
   CAMLlocal1 (result);
   void *sym,*sym2;
   struct code_fragment * cf;
@@ -108,10 +103,6 @@ CAMLprim value caml_natdynlink_run(value filename, void *handle, value symbol)
   if (NULL != sym && NULL != sym2) {
     caml_page_table_add(In_code_area, sym, sym2);
     cf = caml_stat_alloc(sizeof(struct code_fragment));
-#ifdef WITH_ALLOCATION_PROFILING
-    caml_allocation_profiling_register_dynamic_library(
-      strdup(String_val(filename)), sym);
-#endif
     cf->code_start = (char *) sym;
     cf->code_end = (char *) sym2;
     cf->digest_computed = 0;
@@ -148,7 +139,7 @@ CAMLprim value caml_natdynlink_run_toplevel(value filename, value symbol)
     Store_field(res, 0, v);
   } else {
     res = caml_alloc(1,0);
-    v = caml_natdynlink_run(filename, handle, symbol);
+    v = caml_natdynlink_run(handle, symbol);
     Store_field(res, 0, v);
   }
   CAMLreturn(res);
