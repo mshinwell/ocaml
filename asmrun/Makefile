@@ -27,14 +27,14 @@ COBJS=startup.o main.o fail.o roots.o globroots.o signals.o signals_asm.o \
   floats.o str.o array.o io.o extern.o intern.o hash.o sys.o parsing.o \
   gc_ctrl.o terminfo.o md5.o obj.o lexing.o printexc.o callback.o weak.o \
   compact.o finalise.o custom.o $(UNIX_OR_WIN32).o backtrace.o natdynlink.o\
-  debugger.o meta.o dynlink.o
+  debugger.o meta.o dynlink.o allocation_profiling_offline.o
 
 ASMOBJS=$(ARCH).o
 
 OBJS=$(COBJS) $(ASMOBJS)
 DOBJS=$(COBJS:.o=.d.o) $(ASMOBJS)
 POBJS=$(COBJS:.o=.p.o) $(ASMOBJS:.o=.p.o)
-APOBJS=$(COBJS:.o=.ap.o) alloc_profiling.ap.o $(ASMOBJS:.o=.ap.o)
+APOBJS=$(COBJS:.o=.ap.o) allocation_profiling.ap.o $(ASMOBJS:.o=.ap.o)
 PICOBJS=$(COBJS:.o=.pic.o) $(ASMOBJS:.o=.pic.o)
 
 all: libasmrun.a all-$(RUNTIMED) all-$(PROFILING) all-$(SHARED) all-allocprof-$(WITH_ALLOCATION_PROFILING)

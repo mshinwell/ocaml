@@ -38,11 +38,7 @@ module Annotation : sig
      Could also randomise the tags on records.
   *)
 
-  val of_int : int -> t option
   val to_int : t -> int
-
-  val lowest_allowable : t Lazy.t
-  val highest_allowable : t Lazy.t
 end
 
 (* [erase_profiling_annotations] erases allocation profiling
@@ -67,14 +63,12 @@ val annotate_values_with_allocation_location : unit -> unit
 *)
 val annotate_values_with_given_integer : Annotation.t -> [ `Ok | `Out_of_range ]
 
-(* Returns the largest value that may be used for profiling annotations. *)
-val max_annotation_value : unit -> Annotation.t
-
 (* Returns the profiling annotation on a given value.  This is only sensible
    to call after [annotate_values_with_given_integer]. *)
 val annotation_of_value : 'a -> Annotation.t
 
 module Heap_snapshot : sig
+  (* CR mshinwell: consider "Series.create" or similar *)
   module Writer : sig
     type t
 
