@@ -461,7 +461,7 @@ CAMLexport value caml_alloc_shr (mlsize_t wosize, tag_t tag)
   return caml_alloc_shr_with_profinfo (wosize, tag, 0);
 }
 #else
-#include "alloc_profiling.h"
+#include "allocation_profiling.h"
 CAMLexport value caml_alloc_shr (mlsize_t wosize, tag_t tag)
 {
   return caml_alloc_shr_with_profinfo (wosize, tag,

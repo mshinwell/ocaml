@@ -62,6 +62,24 @@ module Program_counter = struct
   let to_int64 t = t
 end
 
+module Function_identifier = struct
+  type t = Int64.t
+
+  let to_int64 t = t
+end
+
+module Function_entry_point = struct
+  type t = Int64.t
+
+  let to_int64 t = t
+end
+
+module Call_site = struct
+  type t = Int64.t
+
+  let to_int64 t = t
+end
+
 module Frame_table = struct
   type t = (Program_counter.t, Printexc.Slot.t) Hashtbl.t
 end

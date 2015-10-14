@@ -61,8 +61,8 @@ installopt-allocprof-true:
 stdlib.p.cmxa: $(OBJS:.cmo=.p.cmx)
 	$(CAMLOPT) -a -o stdlib.p.cmxa $(OBJS:.cmo=.p.cmx)
 
-stdlib.ap.cmxa: $(OBJS:.cmo=.ap.cmx)
-	$(CAMLOPT) -allocation-profiling -a -o stdlib.ap.cmxa $(OBJS:.cmo=.ap.cmx)
+stdlib.ap.cmxa: $(OBJS:.cmo=.ap.cmx) allocation_profiling.ap.cmx
+	$(CAMLOPT) -allocation-profiling -a -o stdlib.ap.cmxa $(OBJS:.cmo=.ap.cmx) allocation_profiling.ap.cmx
 
 camlheader target_camlheader camlheaderd target_camlheaderd camlheader_ur: \
   header.c ../config/Makefile
