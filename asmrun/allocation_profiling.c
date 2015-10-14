@@ -61,28 +61,6 @@
 
 #pragma GCC optimize ("-O0")
 
-/* All .cmxs files loaded using natdynlink.  This will be available on any
-   platform supporting natdynlink, which might not be the case for the
-   memory map information (used to resolve program counters in shared
-   libraries that were not compiled by ocamlopt). */
-static struct ext_table ocaml_dynamic_libraries;
-typedef struct {
-  const char* filename;
-  void* address_of_code_begin;
-} ocaml_dynamic_library;
-
-void caml_allocation_profiling_register_dynamic_library(
-  const char* filename, void* address_of_code_begin)
-{
-  ocaml_dynamic_library* lib;
-
-  lib = caml_stat_alloc(sizeof(ocaml_dynamic_library));
-  lib->filename = filename;
-  lib->address_of_code_begin = address_of_code_begin;
-
-  caml_ext_table_add(&ocaml_dynamic_libraries, lib);
-}
-
 /* The following structures must match the type definitions in the
    [Allocation_profiling] module. */
 

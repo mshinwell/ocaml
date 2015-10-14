@@ -28,6 +28,7 @@ let () =
   | B x -> print_int x; print_newline ()
   end;
   let module A = Allocation_profiling in
+  let module O = Allocation_profiling_offline in
   let module H = A.Heap_snapshot in
   let pathname_prefix = "/tmp/heap_snapshot" in
   let writer = H.Writer.create ~pathname_prefix in
@@ -37,8 +38,9 @@ let () =
   Printf.printf "saving trace\n%!";
   H.Writer.save_trace_and_close writer;
   Printf.printf "done\n%!";
+  let module H = O.Heap_snapshot in
   let series = H.Series.read ~pathname_prefix in
   Printf.printf "read %d snapshot(s)\n" (H.Series.num_snapshots series);
   let trace = H.Series.trace series in
-  A.Trace.debug_ocaml trace;
+  O.Trace.debug_ocaml trace;
   Printf.printf "done"

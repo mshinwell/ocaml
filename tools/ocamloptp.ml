@@ -52,7 +52,6 @@ module Options = Main_args.Make_optcomp_options (struct
   let _cc s = option_with_arg "-cc" s
   let _cclib s = option_with_arg "-cclib" s
   let _ccopt s = option_with_arg "-ccopt" s
-  let _cmx_suffix s = option_with_arg "-cmx-suffix" s
   let _compact = option "-compact"
   let _config = option "-config"
   let _for_pack s = option_with_arg "-for-pack" s

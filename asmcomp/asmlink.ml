@@ -27,6 +27,7 @@ type error =
   | Linking_error
   | Multiple_definition of string * string * string
   | Missing_cmx of string * string
+  | Allocation_profiling_mismatch of string
 
 exception Error of error
 
@@ -78,7 +79,9 @@ let check_consistency file_name unit crc =
   implementations_defined :=
     (unit.ui_name, file_name) :: !implementations_defined;
   if unit.ui_symbol <> unit.ui_name then
-    cmx_required := unit.ui_name :: !cmx_required
+    cmx_required := unit.ui_name :: !cmx_required;
+  if unit.ui_allocation_profiling <> !Clflags.allocation_profiling then
+    raise (Error (Allocation_profiling_mismatch file_name))
 
 let extract_crc_interfaces () =
   Consistbl.extract !interfaces crc_interfaces
@@ -408,6 +411,11 @@ let report_error ppf = function
         Location.print_filename filename name
         Location.print_filename  filename
         name
+  | Allocation_profiling_mismatch filename ->
+      fprintf ppf
+        "@[<hov>The file %a@ was not compiled with the same setting of \
+            `-allocation-profiling' as this invocation of the compiler@]"
+        Location.print_filename filename
 
 let () =
   Location.register_error_of_exn

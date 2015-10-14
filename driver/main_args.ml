@@ -47,11 +47,6 @@ let mk_ccopt f =
   "<opt>  Pass option <opt> to the C compiler and linker"
 ;;
 
-let mk_cmx_suffix f =
-  "-cmx-suffix", Arg.String f,
-  "<name>  Use <name> instead of `.cmx' when finding .cmx files"
-;;
-
 let mk_compact f =
   "-compact", Arg.Unit f, " Optimize code size rather than speed"
 ;;
@@ -590,7 +585,6 @@ end;;
 
 module type Optcommon_options = sig
   val _allocation_profiling : unit -> unit
-  val _cmx_suffix : string -> unit
 
   val _compact : unit -> unit
   val _inline : int -> unit
@@ -791,7 +785,6 @@ struct
     mk_cc F._cc;
     mk_cclib F._cclib;
     mk_ccopt F._ccopt;
-    mk_cmx_suffix F._cmx_suffix;
     mk_compact F._compact;
     mk_config F._config;
     mk_dtypes F._annot;

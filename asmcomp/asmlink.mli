@@ -35,6 +35,7 @@ type error =
   | Linking_error
   | Multiple_definition of string * string * string
   | Missing_cmx of string * string
+  | Allocation_profiling_mismatch of string
 
 exception Error of error
 
