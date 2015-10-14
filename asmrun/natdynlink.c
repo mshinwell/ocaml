@@ -23,7 +23,7 @@
 #include "caml/signals.h"
 
 #ifdef WITH_ALLOCATION_PROFILING
-#include "alloc_profiling.h"
+#include "allocation_profiling.h"
 #endif
 
 #include <stdio.h>

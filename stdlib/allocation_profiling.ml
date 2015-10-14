@@ -20,15 +20,7 @@
 (*                                                                     *)
 (***********************************************************************)
 
-module Program_counter = struct
-  type t = Int64.t
-
-  let to_int64 t = t
-end
-
 module Frame_table = struct
-  type t = (Program_counter.t, Printexc.Slot.t) Hashtbl.t
-
   external num_frame_descriptors : unit -> int
     = "caml_allocation_profiling_only_works_for_native_code"
       "caml_allocation_profiling_num_frame_descriptors" "noalloc"

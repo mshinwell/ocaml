@@ -175,3 +175,10 @@ extern void caml_allocation_profiling_initialize(void);
 extern uintnat caml_allocation_profiling_my_profinfo(void);
 extern void caml_allocation_profiling_register_dynamic_library(
   const char* filename, void* address_of_code_begin);
+extern c_node_type caml_allocation_profiling_classify_c_node(c_node* node);
+extern c_node* caml_allocation_profiling_c_node_of_stored_pointer(
+  value node_stored);
+extern c_node* caml_allocation_profiling_c_node_of_stored_pointer_not_null(
+  value node_stored);
+extern value caml_allocation_profiling_stored_pointer_to_c_node(
+  c_node* node);

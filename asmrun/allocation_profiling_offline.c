@@ -48,6 +48,28 @@
 
 #include "../config/s.h"
 
+c_node_type caml_allocation_profiling_classify_c_node(c_node* node)
+{
+  return (node->pc & 2) ? CALL : ALLOCATION;
+}
+
+c_node* caml_allocation_profiling_c_node_of_stored_pointer(value node_stored)
+{
+  return (node_stored == Val_unit) ? NULL : (c_node*) Hp_val(node_stored);
+}
+
+c_node* caml_allocation_profiling_c_node_of_stored_pointer_not_null(value node_stored)
+{
+  assert(node_stored != Val_unit);
+  return (c_node*) Hp_val(node_stored);
+}
+
+value caml_allocation_profiling_stored_pointer_to_c_node(c_node* node)
+{
+  assert(node != NULL);
+  return Val_hp(node);
+}
+
 CAMLprim value caml_allocation_profiling_node_num_header_words(value unit)
 {
   unit = unit;
@@ -220,7 +242,7 @@ CAMLprim value caml_allocation_profiling_ocaml_indirect_call_point_callees
 CAMLprim value caml_allocation_profiling_c_node_is_call(value node)
 {
   assert(!Is_ocaml_node(node));
-  switch (classify_c_node(c_node_of_stored_pointer_not_null(node))) {
+  switch (caml_allocation_profiling_classify_c_node(caml_allocation_profiling_c_node_of_stored_pointer_not_null(node))) {
     case CALL: return Val_true;
     case ALLOCATION: return Val_false;
   }
@@ -230,14 +252,14 @@ CAMLprim value caml_allocation_profiling_c_node_is_call(value node)
 CAMLprim value caml_allocation_profiling_c_node_next(value node)
 {
   assert(!Is_ocaml_node(node));
-  return c_node_of_stored_pointer_not_null(node)->next;
+  return caml_allocation_profiling_c_node_of_stored_pointer_not_null(node)->next;
 }
 
 CAMLprim value caml_allocation_profiling_c_node_call_site(value node)
 {
   c_node* c_node;
   assert(!Is_ocaml_node(node));
-  c_node = c_node_of_stored_pointer_not_null(node);
+  c_node = caml_allocation_profiling_c_node_of_stored_pointer_not_null(node);
   return caml_copy_int64((uint64_t) Decode_c_node_pc(c_node->pc));
 }
 
@@ -245,8 +267,8 @@ CAMLprim value caml_allocation_profiling_c_node_callee_node(value node)
 {
   c_node* c_node;
   assert(!Is_ocaml_node(node));
-  c_node = c_node_of_stored_pointer_not_null(node);
-  assert(classify_c_node(c_node) == CALL);
+  c_node = caml_allocation_profiling_c_node_of_stored_pointer_not_null(node);
+  assert(caml_allocation_profiling_classify_c_node(c_node) == CALL);
   return c_node->data.callee_node;
 }
 
@@ -254,8 +276,8 @@ CAMLprim value caml_allocation_profiling_c_node_profinfo(value node)
 {
   c_node* c_node;
   assert(!Is_ocaml_node(node));
-  c_node = c_node_of_stored_pointer_not_null(node);
-  assert(classify_c_node(c_node) == ALLOCATION);
+  c_node = caml_allocation_profiling_c_node_of_stored_pointer_not_null(node);
+  assert(caml_allocation_profiling_classify_c_node(c_node) == ALLOCATION);
   assert(!Is_block(c_node->data.profinfo));
   return c_node->data.profinfo;
 }

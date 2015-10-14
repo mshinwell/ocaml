@@ -56,6 +56,16 @@ end = struct
   let top_heap_words t = t.top_heap_words
 end
 
+module Program_counter = struct
+  type t = Int64.t
+
+  let to_int64 t = t
+end
+
+module Frame_table = struct
+  type t = (Program_counter.t, Printexc.Slot.t) Hashtbl.t
+end
+
 module Annotation = struct
   type t = int
 

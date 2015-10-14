@@ -34,7 +34,7 @@
 #include "stack.h"
 #include "caml/sys.h"
 #ifdef WITH_ALLOCATION_PROFILING
-#include "alloc_profiling.h"
+#include "allocation_profiling.h"
 #endif
 #ifdef HAS_UI
 #include "caml/ui.h"

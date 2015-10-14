@@ -464,28 +464,6 @@ CAMLprim value caml_allocation_profiling_profinfo_overflow (value v_unit)
   return Val_long(profinfo_overflow);
 }
 
-static c_node_type classify_c_node(c_node* node)
-{
-  return (node->pc & 2) ? CALL : ALLOCATION;
-}
-
-static c_node* c_node_of_stored_pointer(value node_stored)
-{
-  return (node_stored == Val_unit) ? NULL : (c_node*) Hp_val(node_stored);
-}
-
-static c_node* c_node_of_stored_pointer_not_null(value node_stored)
-{
-  assert(node_stored != Val_unit);
-  return (c_node*) Hp_val(node_stored);
-}
-
-static value stored_pointer_to_c_node(c_node* node)
-{
-  assert(node != NULL);
-  return Val_hp(node);
-}
-
 static int pc_inside_c_node_matches(c_node* node, void* pc)
 {
   return Decode_c_node_pc(node->pc) == pc;
@@ -650,9 +628,9 @@ CAMLprim value* caml_allocation_profiling_indirect_node_hole_ptr
     callee, (void*) node_hole, *(void**) node_hole);
   while (!found && *node_hole != Val_unit) {
     assert(((uintnat) *node_hole) % sizeof(value) == 0);
-    c_node = c_node_of_stored_pointer(*node_hole);
+    c_node = caml_allocation_profiling_c_node_of_stored_pointer(*node_hole);
     assert(c_node != NULL);
-    switch (classify_c_node(c_node)) {
+    switch (caml_allocation_profiling_classify_c_node(c_node)) {
       case CALL:
         if (pc_inside_c_node_matches(c_node, callee)) {
           found = 1;
@@ -684,7 +662,7 @@ CAMLprim value* caml_allocation_profiling_indirect_node_hole_ptr
       c_node->data.callee_node = caller_node;
     }
 
-    *node_hole = stored_pointer_to_c_node(c_node);
+    *node_hole = caml_allocation_profiling_stored_pointer_to_c_node(c_node);
     assert(((uintnat) *node_hole) % sizeof(value) == 0);
   }
 
@@ -756,13 +734,13 @@ static c_node* find_trie_node_from_libunwind(void)
          working out which function each call site was in. */
       node->pc = (frame > 0 ? Encode_c_node_pc_for_call(pc)
         : Encode_c_node_pc_for_alloc_point(pc));
-      *node_hole = stored_pointer_to_c_node(node);
+      *node_hole = caml_allocation_profiling_stored_pointer_to_c_node(node);
     }
     else {
       c_node* prev;
       int found = 0;
 
-      node = c_node_of_stored_pointer(*node_hole);
+      node = caml_allocation_profiling_c_node_of_stored_pointer(*node_hole);
       printf("using existing node %p (size %lld)\n", (void*) node,
         (unsigned long long) Wosize_val(*node_hole));
       assert(node != NULL);
@@ -771,7 +749,7 @@ static c_node* find_trie_node_from_libunwind(void)
 
       while (!found && node != NULL) {
         printf("...linked list entry pc=%p: ", (void*) node->pc);
-        if (classify_c_node(node) == expected_type
+        if (caml_allocation_profiling_classify_c_node(node) == expected_type
             && pc_inside_c_node_matches(node, pc)) {
           printf("found\n");
           found = 1;
@@ -779,7 +757,7 @@ static c_node* find_trie_node_from_libunwind(void)
         else {
           printf("doesn't match\n");
           prev = node;
-          node = c_node_of_stored_pointer(node->next);
+          node = caml_allocation_profiling_c_node_of_stored_pointer(node->next);
         }
       }
       if (!found) {
@@ -787,21 +765,21 @@ static c_node* find_trie_node_from_libunwind(void)
         node = allocate_c_node();
         node->pc = (frame > 0 ? Encode_c_node_pc_for_call(pc)
           : Encode_c_node_pc_for_alloc_point(pc));
-        prev->next = stored_pointer_to_c_node(node);
+        prev->next = caml_allocation_profiling_stored_pointer_to_c_node(node);
       }
     }
 
     assert(node != NULL);
 
-    assert(classify_c_node(node) == expected_type);
+    assert(caml_allocation_profiling_classify_c_node(node) == expected_type);
     assert(pc_inside_c_node_matches(node, pc));
     node_hole = &node->data.callee_node;
 
     printf("find_trie_node, frame=%d, ra=%p\n", frame, pc);
   }
 
-  assert(classify_c_node(node) == ALLOCATION);
-  assert(c_node_of_stored_pointer(node->next) != node);
+  assert(caml_allocation_profiling_classify_c_node(node) == ALLOCATION);
+  assert(caml_allocation_profiling_c_node_of_stored_pointer(node->next) != node);
 
   return node;
 #else
@@ -1058,12 +1036,12 @@ static void print_trie_node(value node, int inside_indirect_node)
         }
       }
     } else {
-      c_node* c_node = c_node_of_stored_pointer(node);
+      c_node* c_node = caml_allocation_profiling_c_node_of_stored_pointer(node);
       assert (c_node != NULL);
       while (c_node != NULL) {
         assert(c_node->next != (value) 0);
         printf("(Debug: about to classify node %p)\n", (void*) c_node);
-        switch (classify_c_node(c_node)) {
+        switch (caml_allocation_profiling_classify_c_node(c_node)) {
           case CALL:
             printf("%s %p: child node=%p\n",
               inside_indirect_node ? "..." : "Call site in non-OCaml code ",
@@ -1083,9 +1061,9 @@ static void print_trie_node(value node, int inside_indirect_node)
             abort();
         }
         printf("(Debug: before 'about to classify node %p' with %p)\n",
-          (void*) (c_node_of_stored_pointer(c_node->next)),
+          (void*) (caml_allocation_profiling_c_node_of_stored_pointer(c_node->next)),
           (void*) c_node);
-        c_node = c_node_of_stored_pointer(c_node->next);
+        c_node = caml_allocation_profiling_c_node_of_stored_pointer(c_node->next);
       }
     }
     printf("End of node %p\n", (void*) node);
@@ -1144,10 +1122,10 @@ static void mark_trie_node_black(value node)
       }
     }
   } else {
-    c_node* c_node = c_node_of_stored_pointer(node);
+    c_node* c_node = caml_allocation_profiling_c_node_of_stored_pointer(node);
     assert (c_node != NULL);
     while (c_node != NULL) {
-      switch (classify_c_node(c_node)) {
+      switch (caml_allocation_profiling_classify_c_node(c_node)) {
         case CALL:
           mark_trie_node_black(c_node->data.callee_node);
           break;
@@ -1155,7 +1133,7 @@ static void mark_trie_node_black(value node)
         default:
           break;
       }
-      c_node = c_node_of_stored_pointer(c_node->next);
+      c_node = caml_allocation_profiling_c_node_of_stored_pointer(c_node->next);
     }
   }
 }

@@ -199,7 +199,7 @@ memory.o: memory.c ../byterun/caml/address_class.h ../byterun/caml/misc.h \
   ../byterun/caml/fail.h ../byterun/caml/freelist.h ../byterun/caml/gc.h \
   ../byterun/caml/gc_ctrl.h ../byterun/caml/major_gc.h \
   ../byterun/caml/memory.h ../byterun/caml/minor_gc.h \
-  ../byterun/caml/signals.h alloc_profiling.h
+  ../byterun/caml/signals.h allocation_profiling.h
 meta.o: meta.c ../byterun/caml/alloc.h ../byterun/caml/misc.h \
   ../byterun/caml/config.h ../byterun/caml/../../config/m.h \
   ../byterun/caml/../../config/s.h ../byterun/caml/mlvalues.h \
@@ -529,7 +529,7 @@ memory.d.o: memory.c ../byterun/caml/address_class.h ../byterun/caml/misc.h \
   ../byterun/caml/fail.h ../byterun/caml/freelist.h ../byterun/caml/gc.h \
   ../byterun/caml/gc_ctrl.h ../byterun/caml/major_gc.h \
   ../byterun/caml/memory.h ../byterun/caml/minor_gc.h \
-  ../byterun/caml/signals.h alloc_profiling.h
+  ../byterun/caml/signals.h allocation_profiling.h
 meta.d.o: meta.c ../byterun/caml/alloc.h ../byterun/caml/misc.h \
   ../byterun/caml/config.h ../byterun/caml/../../config/m.h \
   ../byterun/caml/../../config/s.h ../byterun/caml/mlvalues.h \
@@ -859,7 +859,7 @@ memory.p.o: memory.c ../byterun/caml/address_class.h ../byterun/caml/misc.h \
   ../byterun/caml/fail.h ../byterun/caml/freelist.h ../byterun/caml/gc.h \
   ../byterun/caml/gc_ctrl.h ../byterun/caml/major_gc.h \
   ../byterun/caml/memory.h ../byterun/caml/minor_gc.h \
-  ../byterun/caml/signals.h alloc_profiling.h
+  ../byterun/caml/signals.h allocation_profiling.h
 meta.p.o: meta.c ../byterun/caml/alloc.h ../byterun/caml/misc.h \
   ../byterun/caml/config.h ../byterun/caml/../../config/m.h \
   ../byterun/caml/../../config/s.h ../byterun/caml/mlvalues.h \
@@ -1198,7 +1198,7 @@ memory.ap.o: memory.c ../byterun/caml/address_class.h ../byterun/caml/misc.h \
   ../byterun/caml/fail.h ../byterun/caml/freelist.h ../byterun/caml/gc.h \
   ../byterun/caml/gc_ctrl.h ../byterun/caml/major_gc.h \
   ../byterun/caml/memory.h ../byterun/caml/minor_gc.h \
-  ../byterun/caml/signals.h alloc_profiling.h
+  ../byterun/caml/signals.h allocation_profiling.h
 meta.ap.o: meta.c ../byterun/caml/alloc.h ../byterun/caml/misc.h \
   ../byterun/caml/config.h ../byterun/caml/../../config/m.h \
   ../byterun/caml/../../config/s.h ../byterun/caml/mlvalues.h \
@@ -1233,7 +1233,7 @@ natdynlink.ap.o: natdynlink.c ../byterun/caml/misc.h \
   ../byterun/caml/gc_ctrl.h stack.h ../byterun/caml/callback.h \
   ../byterun/caml/alloc.h ../byterun/caml/intext.h ../byterun/caml/io.h \
   ../byterun/caml/osdeps.h ../byterun/caml/fail.h \
-  ../byterun/caml/signals.h alloc_profiling.h
+  ../byterun/caml/signals.h allocation_profiling.h
 obj.ap.o: obj.c ../byterun/caml/alloc.h ../byterun/caml/misc.h \
   ../byterun/caml/config.h ../byterun/caml/../../config/m.h \
   ../byterun/caml/../../config/s.h ../byterun/caml/mlvalues.h \
@@ -1293,7 +1293,7 @@ startup.ap.o: startup.c ../byterun/caml/callback.h \
   ../byterun/caml/major_gc.h ../byterun/caml/minor_gc.h \
   ../byterun/caml/address_class.h ../byterun/caml/osdeps.h \
   ../byterun/caml/printexc.h stack.h ../byterun/caml/sys.h \
-  alloc_profiling.h
+  allocation_profiling.h
 str.ap.o: str.c ../byterun/caml/alloc.h ../byterun/caml/misc.h \
   ../byterun/caml/config.h ../byterun/caml/../../config/m.h \
   ../byterun/caml/../../config/s.h ../byterun/caml/mlvalues.h \
