@@ -218,6 +218,8 @@ module Trace = struct
             "caml_allocation_profiling_c_node_call_site"
 
         (* XXX this might return an unused tail call site *)
+        (* is this possible now?  OCaml -> C is never tail, and
+           all other code should be instrumented *)
         external callee_node : t -> node
           = "caml_allocation_profiling_only_works_for_native_code"
             "caml_allocation_profiling_c_node_callee_node" "noalloc"
@@ -576,7 +578,8 @@ module Heap_snapshot = struct
         }
       in
       Printf.printf ">>>>>>>>> entry=%d annotation=%d blocks=%d words=%d\n%!"
-        entry annotation entry_record.num_blocks entry_record.num_words;
+        entry annotation entry_record.Entry.num_blocks
+        entry_record.Entry.num_words;
       assert (not (Hashtbl.mem entries annotation));
       Hashtbl.add entries annotation entry_record
     done;

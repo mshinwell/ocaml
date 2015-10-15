@@ -79,12 +79,12 @@ CAMLprim value caml_allocation_profiling_compare_node(
   assert(!Is_in_value_area(node2));
 
   if (node1 == node2) {
-    return 0;
+    return Val_long(0);
   }
   if (node1 < node2) {
-    return -1;
+    return Val_long(-1);
   }
-  return 1;
+  return Val_long(1);
 }
 
 CAMLprim value caml_allocation_profiling_min_override_profinfo (value v_unit)
