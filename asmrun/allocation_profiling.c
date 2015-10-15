@@ -647,6 +647,67 @@ CAMLprim value* caml_allocation_profiling_indirect_node_hole_ptr
   return &(c_node->data.callee_node);
 }
 
+void caml_allocation_profiling_c_to_ocaml(void* ocaml_entry_point,
+      void* identifying_pc_for_caml_start_program)
+{
+  /* Called in [caml_start_program] and [caml_callback*] when we are about
+     to cross from C into OCaml.  [ocaml_entry_point] is the branch target.
+     This situation is handled by ensuring the presence of a new OCaml node
+     for the callback veneer; the node contains a single indirect call point
+     which accumulates the [ocaml_entry_point]s. */
+
+  value node;
+
+  printf("c_to_ocaml for ocaml callee at %p, c_s_p identifying pc=%p\n",
+    ocaml_entry_point, identifying_pc_for_caml_start_program);
+  fflush(stdout);
+
+  /* CR mshinwell: need to invoke libunwind here to add the C portion of the
+     stack. */
+
+  if (*caml_alloc_profiling_trie_node_ptr == Val_unit) {
+    uintnat size_including_header;
+
+    size_including_header =
+      1 /* GC header */ + Node_num_header_words + 2 /* indirect call point */;
+
+    node = allocate_uninitialized_ocaml_node(size_including_header);
+    Hd_val(node) =
+      Make_header(size_including_header - 1, OCaml_node_tag, Caml_black);
+    assert((((uintnat) identifying_pc_for_caml_start_program) % 1) == 0);
+    Node_pc(node) = Encode_node_pc(identifying_pc_for_caml_start_program);
+    Tail_link(node) = node;
+    Indirect_pc_call_site(node, Node_num_header_words) =
+      Encode_call_point_pc(identifying_pc_for_caml_start_program);
+    Indirect_pc_linked_list(node, Node_num_header_words) = Val_unit;
+    *caml_alloc_profiling_trie_node_ptr = node;
+  }
+  else {
+    node = *caml_alloc_profiling_trie_node_ptr;
+    /* If there is a node here already, it should never be an initialized
+       (but as yet unused) tail call point, since calls from OCaml into C
+       are never tail calls (and no C -> C call is marked as tail). */
+    assert(!Is_tail_caller_node_encoded(node));
+  }
+
+  assert(Is_ocaml_node(node));
+  assert(Decode_node_pc(Node_pc(node))
+    == identifying_pc_for_caml_start_program);
+  assert(Wosize_val(node) == Node_num_header_words + 2);
+
+  /* Search the node to find the node hole corresponding to the indirect
+     call to the OCaml function. */
+  caml_alloc_profiling_trie_node_ptr =
+    caml_allocation_profiling_indirect_node_hole_ptr(
+      ocaml_entry_point,
+      &Indirect_pc_call_site(node, Node_num_header_words),
+      Val_unit);
+
+  printf("c_to_ocaml has moved the node ptr to %p\n",
+    (void*) caml_alloc_profiling_trie_node_ptr);
+  fflush(stdout);
+}
+
 static c_node* find_trie_node_from_libunwind(void)
 {
 #ifdef HAS_LIBUNWIND
@@ -1119,6 +1180,7 @@ CAMLprim value caml_allocation_profiling_debug(value v_unit)
 {
   value trie_node = caml_alloc_profiling_trie_root;
 
+  printf("---------------------------------------------------------------\n");
   if (trie_node == Val_unit) {
     printf("Allocation profiling trie is empty\n");
   }
@@ -1128,6 +1190,7 @@ CAMLprim value caml_allocation_profiling_debug(value v_unit)
     mark_trie_node_black(trie_node);
     printf("Done.\n");
   }
+  printf("---------------------------------------------------------------\n");
 
   fflush(stdout);
 

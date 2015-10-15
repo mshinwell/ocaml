@@ -488,14 +488,20 @@ LBL(caml_start_program):
         PUSH_VAR(caml_gc_regs)
         PUSH_VAR(caml_last_return_address)
         PUSH_VAR(caml_bottom_of_stack)
-#if 0
 #ifdef WITH_ALLOCATION_PROFILING
-    /* XXX: need to populate the trie using libunwind.
-       This function should update [caml_alloc_profiling_trie_node_ptr]
-       (which at the moment should be pointing at the node corresponding to
-       [caml_last_return_address], as per caml_c_call) */
+        /* Save arguments to caml_callback* */
+        pushq   %rax
+        pushq   %rbx
+        pushq   %rdi
+        pushq   %rsi
+        /* No need to push %r12: it's callee-save. */
+        movq    %r12, %rdi
+        LEA_VAR(caml_start_program, %rsi)
         call    GCALL(caml_allocation_profiling_c_to_ocaml)
-#endif
+        popq    %rsi
+        popq    %rdi
+        popq    %rbx
+        popq    %rax
 #endif
     /* Setup alloc ptr and exception ptr */
         LOAD_VAR(caml_young_ptr, %r15)
@@ -507,9 +513,6 @@ LBL(caml_start_program):
         CFI_ADJUST(16)
         movq    %rsp, %r14
 #ifdef WITH_ALLOCATION_PROFILING
-    /* Set up allocation profiling backtrace trie node hole pointer.
-       This effectively unwinds the trie to the state it was when our
-       calling C code was entered from OCaml via [caml_c_call]. */
         LOAD_VAR(caml_alloc_profiling_trie_node_ptr, %r13)
 #endif
     /* Call the OCaml code */
