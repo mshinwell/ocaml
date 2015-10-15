@@ -531,6 +531,10 @@ module Heap_snapshot = struct
     raw_timestamp : float;
     raw_gc_stats : Gc_stats.t;
     raw_entries : raw_entries;
+    num_blocks_in_minor_heap : int;
+    num_blocks_in_major_heap : int;
+    num_blocks_in_minor_heap_with_profinfo : int;
+    num_blocks_in_major_heap_with_profinfo : int;
   }
 
   let num_raw_entries (raw_entries : raw_entries) =
@@ -560,6 +564,10 @@ module Heap_snapshot = struct
     timestamp : float;
     gc_stats : Gc_stats.t;
     entries : Entries.t;
+    num_blocks_in_minor_heap : int;
+    num_blocks_in_major_heap : int;
+    num_blocks_in_minor_heap_with_profinfo : int;
+    num_blocks_in_major_heap_with_profinfo : int;
   }
 
   type heap_snapshot = t
@@ -567,6 +575,14 @@ module Heap_snapshot = struct
   let timestamp t = t.timestamp
   let gc_stats t = t.gc_stats
   let entries t = t.entries
+  let num_blocks_in_minor_heap t =
+    t.num_blocks_in_minor_heap
+  let num_blocks_in_major_heap t =
+    t.num_blocks_in_major_heap
+  let num_blocks_in_minor_heap_with_profinfo t =
+    t.num_blocks_in_minor_heap_with_profinfo
+  let num_blocks_in_major_heap_with_profinfo t =
+    t.num_blocks_in_major_heap_with_profinfo
 
   let transform_raw_snapshot raw_snapshot =
     let raw_entries = raw_snapshot.raw_entries in
@@ -594,6 +610,14 @@ module Heap_snapshot = struct
     { timestamp = raw_snapshot.raw_timestamp;
       gc_stats = raw_snapshot.raw_gc_stats;
       entries;
+      num_blocks_in_minor_heap
+        = raw_snapshot.num_blocks_in_minor_heap;
+      num_blocks_in_major_heap
+        = raw_snapshot.num_blocks_in_major_heap;
+      num_blocks_in_minor_heap_with_profinfo
+        = raw_snapshot.num_blocks_in_minor_heap_with_profinfo;
+      num_blocks_in_major_heap_with_profinfo
+        = raw_snapshot.num_blocks_in_major_heap_with_profinfo;
     }
 
   module Series = struct

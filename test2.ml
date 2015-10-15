@@ -42,5 +42,12 @@ let () =
   let series = H.Series.read ~pathname_prefix in
   Printf.printf "read %d snapshot(s)\n" (H.Series.num_snapshots series);
   let trace = H.Series.trace series in
+  let snapshot0 = H.Series.snapshot series ~index:0 in
+  Printf.printf "minor heap: %d blocks, %d instrumented\n%!"
+    (H.num_blocks_in_minor_heap snapshot0)
+    (H.num_blocks_in_minor_heap_with_profinfo snapshot0);
+  Printf.printf "major heap: %d blocks, %d instrumented\n%!"
+    (H.num_blocks_in_major_heap snapshot0)
+    (H.num_blocks_in_major_heap_with_profinfo snapshot0);
   O.Trace.debug_ocaml trace;
   Printf.printf "done"

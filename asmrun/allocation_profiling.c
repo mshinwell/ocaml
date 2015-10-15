@@ -97,6 +97,10 @@ typedef struct {
   value time;  /* Cf. [Sys.time]. */
   value gc_stats;
   value entries;
+  value num_blocks_in_minor_heap;
+  value num_blocks_in_major_heap;
+  value num_blocks_in_minor_heap_with_profinfo;
+  value num_blocks_in_major_heap_with_profinfo;
 } snapshot;
 
 static const uintnat profinfo_none = (uintnat) 0;
@@ -165,6 +169,10 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
   value* ptr;
   /* Fixed size buffer to avoid needing a hash table: */
   static raw_snapshot_entry* raw_entries = NULL;
+  uintnat num_blocks_in_minor_heap = 0;
+  uintnat num_blocks_in_minor_heap_with_profinfo = 0;
+  uintnat num_blocks_in_major_heap = 0;
+  uintnat num_blocks_in_major_heap_with_profinfo = 0;
 
   time = caml_sys_time_as_double();
   gc_stats = take_gc_stats();
@@ -198,7 +206,9 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
 
     profinfo = Profinfo_hd(hd);
 
+    num_blocks_in_minor_heap++;
     if (profinfo >= caml_profinfo_lowest && profinfo <= PROFINFO_MASK) {
+      num_blocks_in_minor_heap_with_profinfo++;
       assert (raw_entries[profinfo].num_blocks >= 0);
       if (raw_entries[profinfo].num_blocks == 0) {
         num_distinct_profinfos++;
@@ -228,7 +238,9 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
 
         default:
           profinfo = Profinfo_hd(hd);
+          num_blocks_in_major_heap++;
           if (profinfo >= caml_profinfo_lowest && profinfo <= PROFINFO_MASK) {
+            num_blocks_in_major_heap_with_profinfo++;
             assert (raw_entries[profinfo].num_blocks >= 0);
             if (raw_entries[profinfo].num_blocks == 0) {
               num_distinct_profinfos++;
@@ -272,6 +284,14 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
   heap_snapshot->time = v_time;
   heap_snapshot->gc_stats = gc_stats;
   heap_snapshot->entries = v_entries;
+  heap_snapshot->num_blocks_in_minor_heap =
+    Val_long(num_blocks_in_minor_heap);
+  heap_snapshot->num_blocks_in_major_heap =
+    Val_long(num_blocks_in_major_heap);
+  heap_snapshot->num_blocks_in_minor_heap_with_profinfo
+    = Val_long(num_blocks_in_minor_heap_with_profinfo);
+  heap_snapshot->num_blocks_in_major_heap_with_profinfo
+    = Val_long(num_blocks_in_major_heap_with_profinfo);
 
   return v_snapshot;
 }

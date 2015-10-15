@@ -182,6 +182,7 @@ CAMLprim value caml_allocation_profiling_ocaml_node_skip_uninitialized
     value entry;
 
     entry = Field(node, field);
+printf("node %p field %d=%p\n", (void*) node, (int)field, (void*)entry);
 
     if (entry == Val_unit) {
       continue;
@@ -189,10 +190,11 @@ CAMLprim value caml_allocation_profiling_ocaml_node_skip_uninitialized
 
     if (entry == Encode_tail_caller_node(node)) {
       /* Uninitialized tail call point. */
+printf("uninitialized tail call point\n");
       assert (field >= Node_num_header_words + 2);
       continue;
     }
-
+printf("field is ok\n");
     return Val_long(field);
   }
 
