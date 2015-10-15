@@ -32,7 +32,7 @@ let () =
   let module H = A.Heap_snapshot in
   let pathname_prefix = "/tmp/heap_snapshot" in
   let writer = H.Writer.create ~pathname_prefix in
-  A.Trace.debug ();
+(*  A.Trace.debug ();*)
   Printf.printf "taking snapshot\n%!";
   H.take writer;
   Printf.printf "saving trace\n%!";
@@ -49,5 +49,22 @@ let () =
   Printf.printf "major heap: %d blocks, %d instrumented\n%!"
     (H.num_blocks_in_major_heap snapshot0)
     (H.num_blocks_in_major_heap_with_profinfo snapshot0);
-  O.Trace.debug_ocaml trace;
+  let frame_table = H.Series.frame_table series in
+  let resolve_return_address loc =
+    match O.Frame_table.find_exn frame_table loc with
+    | exception Not_found -> None
+    | slot ->
+      match Printexc.Slot.location slot with
+      | None -> None
+      | Some loc ->
+        let loc =
+          Printf.sprintf "%s:%d(%d--%d)"
+            loc.Printexc.filename
+            loc.Printexc.line_number
+            loc.Printexc.start_char
+            loc.Printexc.end_char
+        in
+        Some loc
+  in
+  O.Trace.debug_ocaml trace ~resolve_return_address;
   Printf.printf "done"

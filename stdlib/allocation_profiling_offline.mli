@@ -72,7 +72,9 @@ module Frame_table : sig
   (** A value of type [t] corresponds to the frame table of a running
       OCaml program.  The table is indexed by return address. *)
   (* XXX do these exactly match with the call site addresses? ... *)
-  type t = private (Program_counter.t, Printexc.Slot.t) Hashtbl.t
+  type t
+
+  val find_exn : t -> Program_counter.t -> Printexc.Slot.t
 end
 
 module Function_entry_point : sig
@@ -264,7 +266,10 @@ module Trace : sig
   val root : t -> Node.t option
 
   (** Dump an unmarshalled trace to stdout (version written in OCaml). *)
-  val debug_ocaml : t -> unit
+  val debug_ocaml
+     : t
+    -> resolve_return_address:(Program_counter.t -> string option)
+    -> unit
 end
 
 module Heap_snapshot : sig

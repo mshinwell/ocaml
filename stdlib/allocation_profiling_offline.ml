@@ -82,6 +82,8 @@ end
 
 module Frame_table = struct
   type t = (Program_counter.t, Printexc.Slot.t) Hashtbl.t
+
+  let find_exn = Hashtbl.find
 end
 
 module Annotation = struct
@@ -385,11 +387,15 @@ module Trace = struct
 
   let root t = t
 
-  let debug_ocaml t =
+  let debug_ocaml t ~resolve_return_address =
     let next_id = ref 0 in
     let visited = ref Node.Map.empty in
     let print_backtrace backtrace =
-      String.concat "->" (List.map (Printf.sprintf "0x%Lx") backtrace)
+      String.concat "->" (List.map (fun return_address ->
+          match resolve_return_address return_address with
+          | None -> Printf.sprintf "0x%Lx" return_address
+          | Some loc -> loc)
+        backtrace)
     in
     let rec print_node node ~backtrace =
       match Node.Map.find node !visited with
