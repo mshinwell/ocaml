@@ -60,11 +60,18 @@ let code_for_function_prologue ~function_name =
           (* Cf. [Direct_callee_node] in the runtime. *)
           let offset_in_bytes = index * Arch.size_addr in
           let place = Ident.create "tail_init" in
+          let place_minus_one = Ident.create "tail_init_minus_one" in
           Clet (place,
             Cop (Caddi, [Cvar new_node; Cconst_int offset_in_bytes]),
-            Csequence (
-              Cop (Cstore Word, [Cvar place; Cvar new_node_encoded]),
-              init_code)))
+            Clet (place_minus_one,
+              Cop (Caddi,
+                [Cvar new_node;
+                Cconst_int (offset_in_bytes - Arch.size_addr)]),
+              Csequence (
+                Cop (Cstore Word, [Cvar place; Cvar new_node_encoded]),
+                Csequence (
+                  Cop (Cstore Word, [Cvar place_minus_one; Cconst_int 3]),
+                  init_code)))))
         (Cvar new_node)
         indexes
     in

@@ -1017,7 +1017,7 @@ static void print_trie_node(value node, int inside_indirect_node)
         /* Even though indirect call points have a different size from
            direct call points and allocation points, it is still safe to just
            skip until we don't see [Val_unit] any more. */
-        if (entry == Val_unit) {
+        if (entry == Val_unit || entry == (value) 3) {
           continue;
         }
 
@@ -1159,7 +1159,7 @@ static void mark_trie_node_black(value node)
 
       entry = Field(node, field);
 
-      if (entry == Val_unit) {
+      if (entry == Val_unit || entry == (value) 3) {
         continue;
       }
 
