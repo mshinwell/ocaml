@@ -594,7 +594,7 @@ bytecomp/typeopt.cmx : typing/types.cmx typing/typedtree.cmx \
     typing/predef.cmx typing/path.cmx bytecomp/lambda.cmx typing/ident.cmx \
     typing/env.cmx typing/ctype.cmx bytecomp/typeopt.cmi
 asmcomp/CSEgen.cmi : asmcomp/mach.cmi
-asmcomp/allocation_profiling.cmi : asmcomp/selectgen.cmi
+asmcomp/alloc_profiling.cmi : asmcomp/selectgen.cmi
 asmcomp/asmgen.cmi : bytecomp/lambda.cmi asmcomp/cmm.cmi
 asmcomp/asmlibrarian.cmi :
 asmcomp/asmlink.cmi : asmcomp/cmx_format.cmi
@@ -645,14 +645,14 @@ asmcomp/CSEgen.cmo : asmcomp/reg.cmi asmcomp/proc.cmi asmcomp/mach.cmi \
     asmcomp/CSEgen.cmi
 asmcomp/CSEgen.cmx : asmcomp/reg.cmx asmcomp/proc.cmx asmcomp/mach.cmx \
     asmcomp/CSEgen.cmi
-asmcomp/allocation_profiling.cmo : utils/tbl.cmi asmcomp/selectgen.cmi \
+asmcomp/alloc_profiling.cmo : utils/tbl.cmi asmcomp/selectgen.cmi \
     utils/misc.cmi asmcomp/mach.cmi typing/ident.cmi asmcomp/debuginfo.cmi \
     asmcomp/cmm.cmi utils/clflags.cmi asmcomp/arch.cmo \
-    asmcomp/allocation_profiling.cmi
-asmcomp/allocation_profiling.cmx : utils/tbl.cmx asmcomp/selectgen.cmx \
+    asmcomp/alloc_profiling.cmi
+asmcomp/alloc_profiling.cmx : utils/tbl.cmx asmcomp/selectgen.cmx \
     utils/misc.cmx asmcomp/mach.cmx typing/ident.cmx asmcomp/debuginfo.cmx \
     asmcomp/cmm.cmx utils/clflags.cmx asmcomp/arch.cmx \
-    asmcomp/allocation_profiling.cmi
+    asmcomp/alloc_profiling.cmi
 asmcomp/arch.cmo :
 asmcomp/arch.cmx :
 asmcomp/asmgen.cmo : bytecomp/translmod.cmi asmcomp/split.cmi \
@@ -862,10 +862,10 @@ asmcomp/selectgen.cmx : utils/tbl.cmx bytecomp/simplif.cmx asmcomp/reg.cmx \
     typing/ident.cmx asmcomp/debuginfo.cmx asmcomp/cmm.cmx utils/clflags.cmx \
     asmcomp/arch.cmx asmcomp/selectgen.cmi
 asmcomp/selection.cmo : asmcomp/proc.cmi asmcomp/mach.cmi asmcomp/cmm.cmi \
-    utils/clflags.cmi asmcomp/arch.cmo asmcomp/allocation_profiling.cmi \
+    utils/clflags.cmi asmcomp/arch.cmo asmcomp/alloc_profiling.cmi \
     asmcomp/selection.cmi
 asmcomp/selection.cmx : asmcomp/proc.cmx asmcomp/mach.cmx asmcomp/cmm.cmx \
-    utils/clflags.cmx asmcomp/arch.cmx asmcomp/allocation_profiling.cmx \
+    utils/clflags.cmx asmcomp/arch.cmx asmcomp/alloc_profiling.cmx \
     asmcomp/selection.cmi
 asmcomp/spill.cmo : asmcomp/reg.cmi asmcomp/proc.cmi utils/misc.cmi \
     asmcomp/mach.cmi asmcomp/spill.cmi

@@ -659,8 +659,8 @@ CAMLprim value* caml_allocation_profiling_indirect_node_hole_ptr
     if (caller_node != Val_unit) {
       /* This is a tail call site.
          Perform the initialization equivalent to that emitted by
-         [Allocation_profiling.code_for_function_prologue] for direct tail
-         call sites. */
+         [Alloc_profiling.code_for_function_prologue] for direct tail call
+         sites. */
 
       c_node->data.callee_node = Encode_tail_caller_node(caller_node);
     }
