@@ -169,8 +169,8 @@ CAMLprim value caml_allocation_profiling_ocaml_classify_field(value node,
   assert(0);
 }
 
-CAMLprim value caml_allocation_profiling_ocaml_node_next(value node,
-      value offset)
+CAMLprim value caml_allocation_profiling_ocaml_node_skip_uninitialized
+      (value node, value offset)
 {
   uintnat field = Long_val(offset);
 
@@ -178,7 +178,6 @@ CAMLprim value caml_allocation_profiling_ocaml_node_next(value node,
   assert(field >= Node_num_header_words);
   assert(field < Wosize_val(node));
 
-  /* This code follows [print_trie_node], below. */
   for (/* nothing */; field < Wosize_val(node); field++) {
     value entry;
 
@@ -194,36 +193,51 @@ CAMLprim value caml_allocation_profiling_ocaml_node_next(value node,
       continue;
     }
 
-    switch (Call_or_allocation_point(node, field)) {
-      case CALL: {
-        value second_word;
-        assert(field < Wosize_val(node) - 1);
-        second_word = Indirect_pc_linked_list(node, field);
-        assert(second_word != Val_unit);
-        if (Is_block(second_word)) {
-          /* This is an indirect call point. */
-          field++;
-        }
-        else {
-          /* This is a direct call point. */
-          assert(field < Wosize_val(node) - 2);
-          field += 2;
-        }
-        break;
-      }
+    return Val_long(field);
+  }
 
-      case ALLOCATION:
-        assert(field < Wosize_val(node) - 1);
+  return Val_long(-1);
+}
+
+CAMLprim value caml_allocation_profiling_ocaml_node_next(value node,
+      value offset)
+{
+  uintnat field = Long_val(offset);
+
+  assert(Is_ocaml_node(node));
+  assert(field >= Node_num_header_words);
+  assert(field < Wosize_val(node));
+
+  switch (Call_or_allocation_point(node, field)) {
+    case CALL: {
+      value second_word;
+      assert(field < Wosize_val(node) - 1);
+      second_word = Indirect_pc_linked_list(node, field);
+      assert(second_word != Val_unit);
+      if (Is_block(second_word)) {
+        /* This is an indirect call point. */
         field++;
-        break;
-
-      default:
-        assert(0);
+      }
+      else {
+        /* This is a direct call point. */
+        assert(field < Wosize_val(node) - 2);
+        field += 2;
+      }
+      break;
     }
+
+    case ALLOCATION:
+      assert(field < Wosize_val(node) - 1);
+      field++;
+      break;
+
+    default:
+      assert(0);
   }
 
   if (field < Wosize_val(node)) {
-    return Val_long(field);
+    return caml_allocation_profiling_ocaml_node_skip_uninitialized
+        (node, Val_long(field));
   }
 
   return Val_long(-1);
@@ -232,7 +246,8 @@ CAMLprim value caml_allocation_profiling_ocaml_node_next(value node,
 CAMLprim value caml_allocation_profiling_ocaml_allocation_point_program_counter
       (value node, value offset)
 {
-  return caml_copy_int64(Alloc_point_pc(node, Long_val(offset)));
+  return caml_copy_int64((int64) Decode_alloc_point_pc(
+    Alloc_point_pc(node, Long_val(offset))));
 }
 
 CAMLprim value caml_allocation_profiling_ocaml_allocation_point_annotation
@@ -244,31 +259,37 @@ CAMLprim value caml_allocation_profiling_ocaml_allocation_point_annotation
 CAMLprim value caml_allocation_profiling_ocaml_direct_call_point_call_site
       (value node, value offset)
 {
-  return caml_copy_int64(Direct_pc_call_site(node, Long_val(offset)));
+  return caml_copy_int64((int64) Decode_call_point_pc(
+      Direct_pc_call_site(node, Long_val(offset))));
 }
 
 CAMLprim value caml_allocation_profiling_ocaml_direct_call_point_callee
       (value node, value offset)
 {
-  return caml_copy_int64(Direct_pc_callee(node, Long_val(offset)));
+  return caml_copy_int64((int64) Decode_call_point_pc(
+      Direct_pc_callee(node, Long_val(offset))));
 }
 
 CAMLprim value caml_allocation_profiling_ocaml_direct_call_point_callee_node
       (value node, value offset)
 {
-  return caml_copy_int64(Direct_callee_node(node, Long_val(offset)));
+  return Direct_callee_node(node, Long_val(offset));
 }
 
 CAMLprim value caml_allocation_profiling_ocaml_indirect_call_point_call_site
       (value node, value offset)
 {
-  return caml_copy_int64(Indirect_pc_call_site(node, offset));
+  return caml_copy_int64((int64) Decode_call_point_pc(
+    Indirect_pc_call_site(node, Long_val(offset))));
 }
 
 CAMLprim value caml_allocation_profiling_ocaml_indirect_call_point_callees
       (value node, value offset)
 {
-  return Indirect_pc_linked_list(node, offset);
+  value callees = Indirect_pc_linked_list(node, Long_val(offset));
+  assert(Is_block(callees));
+  assert(!Is_ocaml_node(callees));
+  return callees;
 }
 
 CAMLprim value caml_allocation_profiling_c_node_is_call(value node)
@@ -290,6 +311,8 @@ CAMLprim value caml_allocation_profiling_c_node_next(value node)
 CAMLprim value caml_allocation_profiling_c_node_call_site(value node)
 {
   c_node* c_node;
+printf("c_node_call_site %p tag %d size %d\n",
+  (void*) node, Tag_val(node), (int)Wosize_val(node));
   assert(!Is_ocaml_node(node));
   c_node = caml_allocation_profiling_c_node_of_stored_pointer_not_null(node);
   return caml_copy_int64((uint64_t) Decode_c_node_pc(c_node->pc));

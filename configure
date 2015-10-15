@@ -1715,14 +1715,17 @@ if $arch64; then
   if sh ./hasgot -i libunwind.h $libunwind_lib_temp -Xl -lunwind $libunwind_include; then
     echo "#define HAS_LIBUNWIND" >> s.h
     has_libunwind=yes
+    libunwind_available=true
     echo "libunwind support for allocation profiling will be available."
   else
     has_libunwind=no
+    libunwind_available=false
     echo "libunwind support for allocation profiling will not be available."
   fi
 else
   echo "Allocation profiling is not available on 32-bit platforms."
   with_allocation_profiling=false
+  libunwind_available=false
   has_libunwind=no
 fi
 
@@ -1813,6 +1816,7 @@ echo "WITH_OCAMLBUILD=${with_ocamlbuild}" >>Makefile
 echo "ASM_CFI_SUPPORTED=$asm_cfi_supported" >> Makefile
 echo "WITH_FRAME_POINTERS=$with_frame_pointers" >> Makefile
 echo "WITH_ALLOCATION_PROFILING=$with_allocation_profiling" >> Makefile
+echo "LIBUNWIND_AVAILABLE=$libunwind_available" >> Makefile
 echo "LIBUNWIND_INCLUDE_FLAGS=$libunwind_include" >> Makefile
 echo "LIBUNWIND_LINK_FLAG=$libunwind_lib" >> Makefile
 echo "TARGET=$target" >> Makefile

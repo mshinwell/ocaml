@@ -49,6 +49,8 @@ val ar: string
 val cc_profile : string
         (* The command line option to the C compiler to enable profiling. *)
 
+val libunwind_available : bool
+        (* Whether the libunwind library is available *)
 val libunwind_flag : string
         (* Flag required to link with libunwind (for allocation profiling). *)
 

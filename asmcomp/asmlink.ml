@@ -292,6 +292,7 @@ let call_linker file_list startup_file output_name =
   let files = startup_file :: (List.rev file_list) in
   let libunwind =
     if not !Clflags.allocation_profiling then []
+    else if not Config.libunwind_available then []
     else [Config.libunwind_flag; "-lunwind"]
   in
   let files, c_lib =
