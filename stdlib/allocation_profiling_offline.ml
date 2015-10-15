@@ -410,7 +410,7 @@ module Trace = struct
                   let id = !next_id in
                   incr next_id;
                   visited :=
-                    Node.Map.add (Node.of_ocaml_node node) id !visited;
+                    Node.Map.add (Node.of_ocaml_node node') id !visited;
                   id
               in
               Printf.printf "  Node %d\n" id;
@@ -532,9 +532,9 @@ module Heap_snapshot = struct
     assert (length mod 3 = 0);
     length / 3
 
-  let raw_entry_annotation raw_entries entry = raw_entries.(entry)
-  let raw_entry_num_blocks raw_entries entry = raw_entries.(entry + 1)
-  let raw_entry_num_words raw_entries entry = raw_entries.(entry + 2)
+  let raw_entry_annotation raw_entries entry = raw_entries.(entry*3)
+  let raw_entry_num_blocks raw_entries entry = raw_entries.(entry*3 + 1)
+  let raw_entry_num_words raw_entries entry = raw_entries.(entry*3 + 2)
 
   module Entry = struct
     type t = {

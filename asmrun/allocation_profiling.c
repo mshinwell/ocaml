@@ -589,17 +589,22 @@ CAMLprim value* caml_allocation_profiling_indirect_node_hole_ptr
 
   c_node* c_node;
   int found = 0;
-
+/*
   printf("caml_allocation_profiling_indirect_node_hole_ptr: node hole=%p on entry\n",  (void*) node_hole);
+
+*/
 
   /* On entry, the node hole pointer is over the call site address slot,
      so we must advance it to reach the linked list slot. */
   node_hole++;
-
+/*
   printf("indirect node hole ptr for callee %p starting at %p contains %p\n",
     callee, (void*) node_hole, *(void**) node_hole);
+*/
   while (!found && *node_hole != Val_unit) {
+/*
     printf("loop iteration; *node_hole=%p\n", *(void**) node_hole);
+*/
     assert(((uintnat) *node_hole) % sizeof(value) == 0);
     c_node = caml_allocation_profiling_c_node_of_stored_pointer(*node_hole);
     assert(c_node != NULL);
@@ -641,9 +646,11 @@ CAMLprim value* caml_allocation_profiling_indirect_node_hole_ptr
   }
 
   assert(*node_hole != Val_unit);
+/*
   printf("indirect node hole ptr for callee %p starting at %p is %p\n",
     callee, (void*) node_hole,
     (void*) &(c_node->data.callee_node));
+*/
   return &(c_node->data.callee_node);
 }
 
