@@ -565,17 +565,20 @@ module Heap_snapshot = struct
   let transform_raw_snapshot raw_snapshot =
     let raw_entries = raw_snapshot.raw_entries in
     let num_entries = num_raw_entries raw_entries in
+    Printf.printf "transform_raw_snapshot: num_entries %d\n%!" num_entries;
     let entries = Hashtbl.create 42 in
     for entry = 0 to num_entries - 1 do
       let annotation = raw_entry_annotation raw_entries entry in
-      let entry : Entry.t =
+      let entry_record : Entry.t =
         { Entry.
           num_blocks = raw_entry_num_blocks raw_entries entry;
           num_words = raw_entry_num_words raw_entries entry;
         }
       in
+      Printf.printf ">>>>>>>>> entry=%d annotation=%d blocks=%d words=%d\n%!"
+        entry annotation entry_record.num_blocks entry_record.num_words;
       assert (not (Hashtbl.mem entries annotation));
-      Hashtbl.add entries annotation entry
+      Hashtbl.add entries annotation entry_record
     done;
     { timestamp = raw_snapshot.raw_timestamp;
       gc_stats = raw_snapshot.raw_gc_stats;
@@ -597,7 +600,7 @@ module Heap_snapshot = struct
       let num_snapshots : int = Marshal.from_channel chn in
       let time_of_writer_close : float = Marshal.from_channel chn in
       let frame_table : Frame_table.t = Marshal.from_channel chn in
-      let trace : Trace.t = Marshal.from_channel chn in
+      let trace = Trace.unmarshal chn in
       close_in chn;
       let snapshots =
         Array.init num_snapshots (fun index ->

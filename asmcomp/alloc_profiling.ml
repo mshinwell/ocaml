@@ -136,7 +136,9 @@ let code_for_allocation_point ~value's_header ~node =
       Clet (profinfo,
         Cifthenelse (
           Cop (Ccmpi Cne, [Cvar existing_profinfo; Cconst_pointer 1]),
-          Cvar existing_profinfo,
+          (* CR mshinwell: consider storing the profinfo shifted *)
+          (* CR mshinwell: name constant *)
+          Cop (Clsl, [Cvar existing_profinfo; Cconst_int 42]),
           generate_new_profinfo),
         (* [profinfo] is already shifted by [PROFINFO_SHIFT]. *)
         Cop (Cor, [Cvar profinfo; Cconst_natint value's_header]))))
@@ -233,26 +235,6 @@ class virtual instruction_selection = object (self)
     match self#emit_expr env instrumentation with
     | None -> ()
     | Some _ -> assert false
-
-  method private maybe_instrument _desc ~env:_ ~arg:_ ~res:_ = ()
-(*
-  method private maybe_instrument desc ~env ~arg ~res =
-    let module M = Mach in
-    match desc with
-    | M.Iop (M.Icall_imm lbl) ->
-      self#instrument_direct_call ~env ~lbl ~is_tail:false
-    | M.Iop M.Icall_ind ->
-      self#instrument_indirect_call ~env ~callee:arg.(0)
-        ~is_tail:false
-    | M.Iop (M.Itailcall_imm lbl) ->
-      self#instrument_direct_call ~env ~lbl ~is_tail:true
-    | M.Iop M.Itailcall_ind ->
-      self#instrument_indirect_call ~env ~callee:arg.(0)
-        ~is_tail:true
-    | M.Iop (M.Iextcall (lbl, _)) ->
-      self#instrument_direct_call ~env ~lbl ~is_tail:false
-    | _ -> ()
-*)
 
   method private can_instrument () =
     !Clflags.allocation_profiling && not disable_instrumentation

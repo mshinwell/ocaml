@@ -693,6 +693,7 @@ void caml_allocation_profiling_c_to_ocaml(void* ocaml_entry_point,
   assert(Is_ocaml_node(node));
   assert(Decode_node_pc(Node_pc(node))
     == identifying_pc_for_caml_start_program);
+  assert(Tail_link(node) == node);
   assert(Wosize_val(node) == Node_num_header_words + 2);
 
   /* Search the node to find the node hole corresponding to the indirect
@@ -702,6 +703,8 @@ void caml_allocation_profiling_c_to_ocaml(void* ocaml_entry_point,
       ocaml_entry_point,
       &Indirect_pc_call_site(node, Node_num_header_words),
       Val_unit);
+  assert(*caml_alloc_profiling_trie_node_ptr == Val_unit
+    || Is_ocaml_node(*caml_alloc_profiling_trie_node_ptr));
 
   printf("c_to_ocaml has moved the node ptr to %p\n",
     (void*) caml_alloc_profiling_trie_node_ptr);
@@ -859,6 +862,10 @@ CAMLprim uintnat caml_alloc_profiling_generate_profinfo (void* pc,
 
   Alloc_point_pc(node, offset) = Encode_alloc_point_pc(pc);
   Alloc_point_profinfo(node, offset) = Encode_alloc_point_profinfo(profinfo);
+
+  printf("*** generate_profinfo PC=%p returning 0x%llx\n", pc,
+    (unsigned long long) (profinfo << PROFINFO_SHIFT));
+  fflush(stdout);
 
   return profinfo << PROFINFO_SHIFT;
 }

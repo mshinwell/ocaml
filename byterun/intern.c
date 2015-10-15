@@ -506,7 +506,8 @@ static void intern_alloc(mlsize_t whsize, mlsize_t num_objects,
       ((Bsize_wsize(whsize) + Page_size - 1) >> Page_log) << Page_log;
     intern_extra_block = caml_alloc_for_heap(request);
     if (intern_extra_block == NULL) caml_raise_out_of_memory();
-    intern_color = caml_allocation_color(intern_extra_block);
+    intern_color =
+      outside_heap ? Caml_black : caml_allocation_color(intern_extra_block);
     intern_dest = (header_t *) intern_extra_block;
   } else {
     /* this is a specialised version of caml_alloc from alloc.c */

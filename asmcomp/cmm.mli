@@ -50,25 +50,6 @@ type memory_chunk =
   | Double                              (* 64-bit-aligned 64-bit float *)
   | Double_u                            (* word-aligned 64-bit float *)
 
-(*
-module Call_type : sig
-  type t =
-    | Direct_call  (* to an OCaml function that is not the current function *)
-    | External_direct_call
-    | Indirect_call
-    | Self_direct_tailcall
-    | Non_self_direct_tailcall
-    | Indirect_tailcall
-
-  val is_direct : t -> bool
-
-  module Table : sig
-    include Hashtbl.S with type key = t
-    val find_default : 'a t -> key -> default:'a -> 'a
-  end
-end
-*)
-
 and operation =
     Capply of machtype * Debuginfo.t
   | Cextcall of string * machtype * bool * Debuginfo.t
