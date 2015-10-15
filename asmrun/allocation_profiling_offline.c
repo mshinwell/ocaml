@@ -216,19 +216,19 @@ CAMLprim value caml_allocation_profiling_ocaml_node_next(value node,
       assert(second_word != Val_unit);
       if (Is_block(second_word)) {
         /* This is an indirect call point. */
-        field++;
+        field += 2;
       }
       else {
         /* This is a direct call point. */
         assert(field < Wosize_val(node) - 2);
-        field += 2;
+        field += 3;
       }
       break;
     }
 
     case ALLOCATION:
       assert(field < Wosize_val(node) - 1);
-      field++;
+      field += 2;
       break;
 
     default:
