@@ -388,7 +388,10 @@ module Trace = struct
   let debug_ocaml t =
     let next_id = ref 0 in
     let visited = ref Node.Map.empty in
-    let rec print_node node =
+    let print_backtrace backtrace =
+      String.concat "->" (List.map (Printf.sprintf "0x%Lx") backtrace)
+    in
+    let rec print_node node ~backtrace =
       match Node.Map.find node !visited with
       | id -> Printf.printf "Node %d visited before.\n%!" id
       | exception Not_found ->
@@ -432,9 +435,11 @@ module Trace = struct
               | F.Allocation_point alloc ->
                 let pc = O.Allocation_point.program_counter alloc in
                 let annot = O.Allocation_point.annotation alloc in
-                Printf.printf "Allocation point, pc=%Lx annot=%d\n%!"
+                Printf.printf "Allocation point, pc=%Lx annot=%d \
+                    backtrace=%s\n%!"
                   (Program_counter.to_int64 pc)
                   (Annotation.to_int annot)
+                  (print_backtrace (List.rev backtrace))
               | F.Direct_call_point (F.To_ocaml direct) ->
                 let module D = O.Direct_call_point_in_ocaml_code in
                 let call_site = D.call_site direct in
@@ -444,7 +449,8 @@ module Trace = struct
                     callee=%Lx.  Callee node is:\n%!"
                   (Program_counter.to_int64 call_site)
                   (Function_entry_point.to_int64 callee);
-                print_node (Node.of_ocaml_node callee_node);
+                print_node (Node.of_ocaml_node callee_node)
+                  ~backtrace:(call_site::backtrace);
                 Printf.printf "End of call point\n%!"
               | F.Direct_call_point (F.To_c direct) ->
                 let module D = O.Direct_call_point_in_ocaml_code in
@@ -455,7 +461,8 @@ module Trace = struct
                     callee=%Lx.  Callee node is:\n%!"
                   (Program_counter.to_int64 call_site)
                   (Function_entry_point.to_int64 callee);
-                print_node (Node.of_c_node callee_node);
+                print_node (Node.of_c_node callee_node)
+                  ~backtrace:(call_site::backtrace);
                 Printf.printf "End of call point\n%!"
               | F.Direct_call_point (F.To_uninstrumented direct) ->
                 let module D = O.Direct_call_point_in_ocaml_code in
@@ -481,7 +488,7 @@ module Trace = struct
                     Printf.printf "... callee=%Lx.  \
                         Callee node is:\n%!"
                       (Function_entry_point.to_int64 callee);
-                    print_node callee_node;
+                    print_node callee_node ~backtrace:(call_site::backtrace);
                     iter_callees (index + 1) (C.next callee_iterator)
                 in
                 iter_callees 0 callees
@@ -501,15 +508,17 @@ module Trace = struct
               | F.Allocation_point alloc ->
                 let pc = C_node.Allocation_point.program_counter alloc in
                 let annot = C_node.Allocation_point.annotation alloc in
-                Printf.printf "Allocation point, pc=%Lx annot=%d\n%!"
+                Printf.printf "Allocation point, pc=%Lx annot=%d, \
+                    backtrace=%s\n%!"
                   (Program_counter.to_int64 pc)
                   (Annotation.to_int annot)
+                  (print_backtrace (List.rev backtrace))
               | F.Call_point call ->
                 let call_site = C_node.Call_point.call_site call in
                 let callee_node = C_node.Call_point.callee_node call in
                 Printf.printf "Call point, pc=%Lx.  Callee node is:\n%!"
                   (Program_counter.to_int64 call_site);
-                print_node callee_node;
+                print_node callee_node ~backtrace:(call_site::backtrace);
                 Printf.printf "End of call point\n%!"
               end;
               iter_fields (index + 1) (F.next field)
@@ -519,7 +528,7 @@ module Trace = struct
     in
     match root t with
     | None -> Printf.printf "Trace is empty.\n%!"
-    | Some node -> print_node node
+    | Some node -> print_node node ~backtrace:[]
 end
 
 module Heap_snapshot = struct
