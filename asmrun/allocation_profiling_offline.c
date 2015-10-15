@@ -324,6 +324,7 @@ CAMLprim value caml_allocation_profiling_c_node_callee_node(value node)
   assert(!Is_ocaml_node(node));
   c_node = caml_allocation_profiling_c_node_of_stored_pointer_not_null(node);
   assert(caml_allocation_profiling_classify_c_node(c_node) == CALL);
+  /* XXX this might be a tail-inited point */
   return c_node->data.callee_node;
 }
 

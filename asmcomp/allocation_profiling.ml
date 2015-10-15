@@ -301,7 +301,7 @@ class virtual instruction_selection = object (self)
       let node_temp_reg =
         match self#emit_expr env_after_main_prologue prologue_cmm with
         | None ->
-          Misc.fatal_error "Alloc_profiling prologue instruction \
+          Misc.fatal_error "Allocation_profiling prologue instruction \
               selection did not yield a destination register"
         | Some node_temp_reg -> node_temp_reg
       in

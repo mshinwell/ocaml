@@ -84,7 +84,7 @@ class virtual selector_generic : object
      marking *)
 
   (* The following method is the entry point and should not be overridden
-     (except by [Alloc_profiling]). *)
+     (except by [Allocation_profiling]). *)
   method emit_fundecl : Cmm.fundecl -> Mach.fundecl
 
   (* The following methods should not be overridden.  They cannot be
@@ -102,7 +102,7 @@ class virtual selector_generic : object
     (Ident.t, Reg.t array) Tbl.t -> Cmm.expression -> Reg.t array option
   method emit_tail : (Ident.t, Reg.t array) Tbl.t -> Cmm.expression -> unit
 
-  (* Only for the use of [Alloc_profiling]. *)
+  (* Only for the use of [Allocation_profiling]. *)
   method emit_blockheader
      : (Ident.t, Reg.t array) Tbl.t
     -> nativeint
