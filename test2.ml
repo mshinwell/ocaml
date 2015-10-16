@@ -32,7 +32,7 @@ let () =
   let module H = A.Heap_snapshot in
   let pathname_prefix = "/tmp/heap_snapshot" in
   let writer = H.Writer.create ~pathname_prefix in
-(*  A.Trace.debug ();*)
+  A.Trace.debug ();
   Printf.printf "taking snapshot\n%!";
   H.take writer;
   Printf.printf "saving trace\n%!";
@@ -55,7 +55,8 @@ let () =
     | exception Not_found -> None
     | slot ->
       match Printexc.Slot.location slot with
-      | None -> None
+      | None ->
+        Some (Printf.sprintf "*0x%Lx" (O.Program_counter.to_int64 loc))
       | Some loc ->
         let loc =
           Printf.sprintf "%s:%d(%d--%d)"

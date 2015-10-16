@@ -416,22 +416,25 @@ let emit_instr fallthrough i =
         record_frame i.live i.dbg
     | Lop(Itailcall_ind) ->
         output_epilogue begin fun () ->
-        `	jmp	*{emit_reg i.arg.(0)}\n`
-        end;
-        if !Clflags.allocation_profiling then begin
-          record_frame i.live i.dbg;
+          `	jmp	*{emit_reg i.arg.(0)}\n`;
+          if !Clflags.allocation_profiling then begin
+            record_frame i.live i.dbg;
+          end
         end
     | Lop(Itailcall_imm s) ->
         if s = !function_name then
-          `	jmp	{emit_label !tailrec_entry_point}\n`
+          `	jmp	{emit_label !tailrec_entry_point}\n`;
+          if !Clflags.allocation_profiling then begin
+            record_frame i.live i.dbg;
+          end
         else begin
           output_epilogue begin fun () ->
-          `	{emit_jump s}\n`
+            `	{emit_jump s}\n`;
+            if !Clflags.allocation_profiling then begin
+              record_frame i.live i.dbg;
+            end
           end
         end;
-        if !Clflags.allocation_profiling then begin
-          record_frame i.live i.dbg;
-        end
     | Lop(Iextcall(s, alloc)) ->
         if alloc then begin
           `	{load_symbol_addr s}, %rax\n`;

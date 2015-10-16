@@ -1073,11 +1073,16 @@ static void print_trie_node(value node, int inside_indirect_node)
                 Decode_call_point_pc(Direct_pc_callee(node, field)));
               if (child == Val_unit) {
                 printf("callee was not instrumented\n");
+              } else if (Is_tail_caller_node_encoded(child)) {
+                /* XXX not sure this should happen, since it's always
+                   OCaml -> OCaml */
+                printf("tail-called callee was not instrumented\n");
               } else {
                 printf("child node=%p\n", (void*) child);
               }
               direct_call_point++;
-              if (child != Val_unit) {
+              if (child != Val_unit
+                  && !Is_tail_caller_node_encoded(child)) {
                 print_trie_node(child, 0);
               }
               field += 2;
