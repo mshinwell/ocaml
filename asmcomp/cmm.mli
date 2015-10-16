@@ -38,6 +38,9 @@ type comparison =
 val negate_comparison: comparison -> comparison
 val swap_comparison: comparison -> comparison
 
+type label = int
+val new_label: unit -> label
+
 type memory_chunk =
     Byte_unsigned
   | Byte_signed
@@ -70,6 +73,8 @@ and operation =
   | Calloc_profiling_node_hole
   | Calloc_profiling_load_node_hole_ptr
   | Cprogram_counter
+  | Clabel of label
+  | Caddress_of_label of label
 
 and expression =
     Cconst_int of int
@@ -121,3 +126,5 @@ type data_item =
 type phrase =
     Cfunction of fundecl
   | Cdata of data_item list
+
+val reset : unit -> unit

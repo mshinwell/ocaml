@@ -57,6 +57,8 @@ type operation =
   | Ialloc_profiling_load_node_hole_ptr
   | Iprogram_counter
   | Ireturn_address
+  | Ilabel of Cmm.label
+  | Iaddress_of_label of Cmm.label
 
 type instruction =
   { desc: instruction_desc;

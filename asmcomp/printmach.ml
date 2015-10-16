@@ -143,6 +143,8 @@ let operation op arg ppf res =
   | Ialloc_profiling_node_hole -> fprintf ppf "alloc_profiling_node_hole"
   | Iprogram_counter -> fprintf ppf "program_counter"
   | Ireturn_address -> fprintf ppf "return_address"
+  | Ilabel label -> fprintf ppf "label:%d" label
+  | Iaddress_of_label label -> fprintf ppf "label@%d" label
 
 let rec instr ppf i =
   if !print_live then begin

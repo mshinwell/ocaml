@@ -154,7 +154,7 @@ type callee =
   | Direct of string
   | Indirect of Cmm.expression
 
-let code_for_call ~node ~callee ~is_tail =
+let code_for_call ~node ~callee ~is_tail ~label =
   let words_needed =
     match callee with
     | Direct _ -> 3  (* Cf. [Direct_num_fields] in the runtime. *)
@@ -182,10 +182,13 @@ let code_for_call ~node ~callee ~is_tail =
   Clet (place_within_node,
     within_node ~index:index_within_node,
     Csequence (
-      (* This point in the generated code is deemed to be the "call site". *)
+      (* The "call site" address coincides with the return address
+         used for the frame descriptor.  (We insert frame descriptors
+         even in the case of tail calls when using allocation
+         profiling.) *)
       Cop (Cstore Word, [
         Cvar place_within_node;
-        encode_pc (Cop (Cprogram_counter, []))]),
+        encode_pc (Cop (Caddress_of_label label, []))]),
       match callee with
       | Direct callee ->
         let callee_slot = Ident.create "callee" in
@@ -217,18 +220,19 @@ class virtual instruction_selection = object (self)
      instrumentation... *)
   val mutable disable_instrumentation = false
 
-  method private instrument_direct_call ~env ~lbl ~is_tail =
+  method private instrument_direct_call ~env ~lbl ~is_tail ~label =
     let instrumentation =
       code_for_call
         ~node:(Lazy.force !alloc_profiling_node)
         ~callee:(Direct lbl)
         ~is_tail
+        ~label
     in
     match self#emit_expr env instrumentation with
     | None -> ()
     | Some _ -> assert false
 
-  method private instrument_indirect_call ~env ~callee ~is_tail =
+  method private instrument_indirect_call ~env ~callee ~is_tail ~label =
     (* [callee] is a pseudoregister, so we have to bind it in the environment
        and reference the variable to which it is bound. *)
     let callee_ident = Ident.create "callee" in
@@ -238,6 +242,7 @@ class virtual instruction_selection = object (self)
         ~node:(Lazy.force !alloc_profiling_node)
         ~callee:(Indirect (Cmm.Cvar callee_ident))
         ~is_tail
+        ~label
     in
     match self#emit_expr env instrumentation with
     | None -> ()
@@ -247,28 +252,38 @@ class virtual instruction_selection = object (self)
     !Clflags.allocation_profiling && not disable_instrumentation
 
   method about_to_emit_call env desc arg =
-    if not (self#can_instrument ()) then ()
+    if not (self#can_instrument ()) then None
     else
       let module M = Mach in
       match desc with
       | M.Iop (M.Icall_imm lbl) ->
         assert (Array.length arg = 0);
-        self#instrument_direct_call ~env ~lbl ~is_tail:false
+        let label = Cmm.new_label () in
+        self#instrument_direct_call ~env ~lbl ~is_tail:false ~label;
+        Some label
       | M.Iop M.Icall_ind ->
+        let label = Cmm.new_label () in
         assert (Array.length arg = 1);
         self#instrument_indirect_call ~env ~callee:arg.(0)
-          ~is_tail:false
+          ~is_tail:false ~label;
+        Some label
       | M.Iop (M.Itailcall_imm lbl) ->
+        let label = Cmm.new_label () in
         assert (Array.length arg = 0);
-        self#instrument_direct_call ~env ~lbl ~is_tail:true
+        self#instrument_direct_call ~env ~lbl ~is_tail:true ~label;
+        Some label
       | M.Iop M.Itailcall_ind ->
+        let label = Cmm.new_label () in
         assert (Array.length arg = 1);
         self#instrument_indirect_call ~env ~callee:arg.(0)
-          ~is_tail:true
+          ~is_tail:true ~label;
+        Some label
       | M.Iop (M.Iextcall (lbl, _)) ->
+        let label = Cmm.new_label () in
         assert (Array.length arg = 0);
-        self#instrument_direct_call ~env ~lbl ~is_tail:false
-      | _ -> ()
+        self#instrument_direct_call ~env ~lbl ~is_tail:false ~label;
+        Some label
+      | _ -> None
 
   method private instrument_allocation_point ~env ~value's_header =
     let instrumentation =

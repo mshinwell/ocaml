@@ -87,6 +87,8 @@ let operation = function
   | Calloc_profiling_load_node_hole_ptr -> "alloc_profiling_load_node_hole_ptr"
   | Calloc_profiling_node_hole -> "alloc_profiling_node_hole"
   | Cprogram_counter -> "program_counter"
+  | Clabel label -> "label:" ^ string_of_int label
+  | Caddress_of_label label -> "label@" ^ string_of_int label
 
 let rec expr ppf = function
   | Cconst_int n -> fprintf ppf "%i" n

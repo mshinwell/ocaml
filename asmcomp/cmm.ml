@@ -52,6 +52,12 @@ let swap_comparison = function
   | Clt -> Cgt | Cle -> Cge
   | Cgt -> Clt | Cge -> Cle
 
+type label = int
+
+let label_counter = ref 99
+
+let new_label() = incr label_counter; !label_counter
+
 type memory_chunk =
     Byte_unsigned
   | Byte_signed
@@ -84,6 +90,8 @@ and operation =
   | Calloc_profiling_node_hole
   | Calloc_profiling_load_node_hole_ptr
   | Cprogram_counter
+  | Clabel of label
+  | Caddress_of_label of label
 
 type expression =
     Cconst_int of int
@@ -135,3 +143,6 @@ type data_item =
 type phrase =
     Cfunction of fundecl
   | Cdata of data_item list
+
+let reset () =
+  label_counter := 99

@@ -45,6 +45,8 @@ let oper_result_type = function
   | Calloc_profiling_node_hole -> typ_int
   | Calloc_profiling_load_node_hole_ptr -> typ_void
   | Cprogram_counter -> typ_int
+  | Clabel _ -> typ_void
+  | Caddress_of_label _ -> typ_int
 
 (* Infer the size in bytes of the result of a simple expression *)
 
@@ -195,8 +197,8 @@ method is_simple_expr = function
       begin match op with
         (* The following may have side effects *)
       | Capply _ | Cextcall _ | Calloc | Cstore _ | Craise _ -> false
-        (* [Cprogram_counter] must never be moved *)
-      | Cprogram_counter -> false
+        (* [Cprogram_counter] and label operations must never be moved *)
+      | Cprogram_counter | Clabel _ | Caddress_of_label _ -> false
         (* The remaining operations are simple if their args are *)
       | _ ->
           List.for_all self#is_simple_expr args
@@ -297,6 +299,8 @@ method select_operation op args =
   | (Calloc_profiling_node_hole, _) -> (Ialloc_profiling_node_hole, args)
   | (Calloc_profiling_load_node_hole_ptr, _) ->
     (Ialloc_profiling_load_node_hole_ptr, args)
+  | (Clabel lbl, _) -> (Ilabel lbl, args)
+  | (Caddress_of_label lbl, _) -> (Iaddress_of_label lbl, args)
   | _ -> fatal_error "Selection.select_oper"
 
 method private select_arith_comm op = function
@@ -437,7 +441,7 @@ method emit_blockheader _env n =
   let r = self#regs_for typ_int in
   Some(self#insert_op (Iconst_int n) [||] r)
 
-method about_to_emit_call _env _insn _arg = ()
+method about_to_emit_call _env _insn _arg = None
 
 (* Add the instructions for the given expression
    at the end of the self sequence *)
@@ -521,10 +525,16 @@ method emit_expr env exp =
               let call = Iop Icall_ind in
               (* Calls to [about_to_emit_call], here and below, must be before
                  the moves into hard registers. *)
-              self#about_to_emit_call env call [| r1.(0) |];
+              let label = self#about_to_emit_call env call [| r1.(0) |] in
               self#insert_move_args rarg loc_arg stack_ofs;
               self#insert_debug_env env call dbg
                           (Array.append [|r1.(0)|] loc_arg) loc_res;
+              begin match label with
+              | None -> ()
+              | Some label ->
+                ignore (self#insert_op_debug (Ilabel label) dbg
+                  [| |] [| |])
+              end;
               self#insert_move_results loc_res rd stack_ofs;
               Some rd
           | Icall_imm lbl ->
@@ -533,21 +543,33 @@ method emit_expr env exp =
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
               let loc_res = Proc.loc_results rd in
               let call = Iop (Icall_imm lbl) in
-              self#about_to_emit_call env call [| |];
+              let label = self#about_to_emit_call env call [| |] in
               self#insert_move_args r1 loc_arg stack_ofs;
               self#insert_debug_env env call dbg loc_arg
                 loc_res;
+              begin match label with
+              | None -> ()
+              | Some label ->
+                ignore (self#insert_op_debug (Ilabel label) dbg
+                  [| |] [| |])
+              end;
               self#insert_move_results loc_res rd stack_ofs;
               Some rd
           | Iextcall(lbl, alloc) ->
               let call = Iextcall (lbl, alloc) in
-              self#about_to_emit_call env (Iop call) [| |];
+              let label = self#about_to_emit_call env (Iop call) [| |] in
               let (loc_arg, stack_ofs) =
                 self#emit_extcall_args env new_args in
               let rd = self#regs_for ty in
               let loc_res =
                 self#insert_op_debug_env env call dbg
                   loc_arg (Proc.loc_external_results rd) in
+              begin match label with
+              | None -> ()
+              | Some label ->
+                ignore (self#insert_op_debug (Ilabel label) dbg
+                  [| |] [| |])
+              end;
               self#insert_move_results loc_res rd stack_ofs;
               Some rd
           | Ialloc _ ->
@@ -766,7 +788,13 @@ method emit_tail env exp =
               let (loc_arg, stack_ofs) = Proc.loc_arguments rarg in
               if stack_ofs = 0 then begin
                 let call = Iop Itailcall_ind in
-                self#about_to_emit_call env call [| r1.(0) |];
+                let label = self#about_to_emit_call env call [| r1.(0) |] in
+                begin match label with
+                | None -> ()
+                | Some label ->
+                  ignore (self#insert_op_debug (Ilabel label) dbg
+                    [| |] [| |])
+                end;
                 self#insert_moves rarg loc_arg;
                 self#insert_env env call
                             (Array.append [|r1.(0)|] loc_arg) [||]
@@ -774,10 +802,16 @@ method emit_tail env exp =
                 let rd = self#regs_for ty in
                 let loc_res = Proc.loc_results rd in
                 let call = Iop Icall_ind in
-                self#about_to_emit_call env call [| r1.(0) |];
+                let label = self#about_to_emit_call env call [| r1.(0) |] in
                 self#insert_move_args rarg loc_arg stack_ofs;
                 self#insert_debug_env env call dbg
                             (Array.append [|r1.(0)|] loc_arg) loc_res;
+                begin match label with
+                | None -> ()
+                | Some label ->
+                  ignore (self#insert_op_debug (Ilabel label) dbg
+                    [| |] [| |])
+                end;
                 self#insert(Iop(Istackoffset(-stack_ofs))) [||] [||];
                 self#insert Ireturn loc_res [||]
               end
@@ -786,23 +820,41 @@ method emit_tail env exp =
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
               if stack_ofs = 0 then begin
                 let call = Iop (Itailcall_imm lbl) in
-                self#about_to_emit_call env call [| |];
+                let label = self#about_to_emit_call env call [| |] in
                 self#insert_moves r1 loc_arg;
-                self#insert_env env call loc_arg [||]
+                self#insert_env env call loc_arg [||];
+                begin match label with
+                | None -> ()
+                | Some label ->
+                  ignore (self#insert_op_debug (Ilabel label) dbg
+                    [| |] [| |])
+                end
               end else if lbl = !current_function_name then begin
                 let call = Iop (Itailcall_imm lbl) in
                 let loc_arg' = Proc.loc_parameters r1 in
-                self#about_to_emit_call env call [| |];
+                let label = self#about_to_emit_call env call [| |] in
                 self#insert_moves r1 loc_arg';
-                self#insert_env env call loc_arg' [||]
+                self#insert_env env call loc_arg' [||];
+                begin match label with
+                | None -> ()
+                | Some label ->
+                  ignore (self#insert_op_debug (Ilabel label) dbg
+                    [| |] [| |])
+                end
               end else begin
                 let call = Iop (Icall_imm lbl) in
                 let rd = self#regs_for ty in
                 let loc_res = Proc.loc_results rd in
-                self#about_to_emit_call env call [| |];
+                let label = self#about_to_emit_call env call [| |] in
                 self#insert_move_args r1 loc_arg stack_ofs;
                 self#insert_debug_env env call dbg loc_arg
                   loc_res;
+                begin match label with
+                | None -> ()
+                | Some label ->
+                  ignore (self#insert_op_debug (Ilabel label) dbg
+                    [| |] [| |])
+                end;
                 self#insert(Iop(Istackoffset(-stack_ofs))) [||] [||];
                 self#insert Ireturn loc_res [||]
               end
