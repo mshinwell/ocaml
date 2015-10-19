@@ -300,6 +300,9 @@ LBL(caml_call_gc):
     /* Save caml_young_ptr, caml_exception_pointer */
         STORE_VAR(%r15, caml_young_ptr)
         STORE_VAR(%r14, caml_exception_pointer)
+#ifdef WITH_ALLOCATION_PROFILING
+        STORE_VAR(%r13, caml_alloc_profiling_trie_node_ptr)
+#endif
     /* Save floating-point registers */
         subq    $(16*8), %rsp; CFI_ADJUST (16*8);
         movsd   %xmm0, 0*8(%rsp)

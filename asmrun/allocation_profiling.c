@@ -467,6 +467,7 @@ static value allocate_uninitialized_ocaml_node(int size_including_header)
   /* We don't currently rely on [uintnat] alignment, but we do need some
      alignment, so just be sure. */
   assert (((uintnat) node) % sizeof(uintnat) == 0);
+  debug_printf("allocate ocaml node: Val_hp=%p\n", (void*) Val_hp(node));
   return Val_hp(node);
 }
 

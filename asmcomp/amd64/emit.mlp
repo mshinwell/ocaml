@@ -422,12 +422,12 @@ let emit_instr fallthrough i =
           end
         end
     | Lop(Itailcall_imm s) ->
-        if s = !function_name then
+        if s = !function_name then begin
           `	jmp	{emit_label !tailrec_entry_point}\n`;
           if !Clflags.allocation_profiling then begin
-            record_frame i.live i.dbg;
+            record_frame i.live i.dbg
           end
-        else begin
+        end else begin
           output_epilogue begin fun () ->
             `	{emit_jump s}\n`;
             if !Clflags.allocation_profiling then begin
