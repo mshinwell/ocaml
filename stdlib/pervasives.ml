@@ -530,3 +530,9 @@ let exit retcode =
   sys_exit retcode
 
 let _ = register_named_value "Pervasives.do_at_exit" do_at_exit
+
+(* Control of optimization *)
+
+(*
+external black_box : 'a -> 'a = "%black_box"
+*)

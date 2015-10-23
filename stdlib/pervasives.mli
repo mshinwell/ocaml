@@ -1123,6 +1123,14 @@ val at_exit : (unit -> unit) -> unit
    The functions are called in 'last in, first out' order:
    the function most recently added with [at_exit] is called first. *)
 
+(** {6 Control of optimization} *)
+
+(*
+val black_box : 'a -> 'a
+*)
+(** Prevent the middle end of the compiler from optimizing the given
+    expression. *)
+
 (**/**)
 
 (* The following is for system use only. Do not call directly. *)

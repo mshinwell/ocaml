@@ -207,6 +207,7 @@ and named =
 and let_expr = private {
   var : Variable.t;
   defining_expr : named;
+  defining_expr_is_black_box : bool;
   body : t;
   (* These free variable caches are an important optimization. *)
   (* CR-someday mshinwell: we could consider having these be keys into some
@@ -396,10 +397,10 @@ val fold_lets
 val fold_lets_option
    : t
   -> init:'a
-  -> for_defining_expr:('a -> Variable.t -> named -> 'a * Variable.t * named)
+  -> for_defining_expr:('a -> Variable.t -> named -> is_black_box:bool -> 'a * Variable.t * named)
   -> for_last_body:('a -> t -> t * 'b)
   -> filter_defining_expr:('b -> Variable.t -> named -> Variable.Set.t ->
-                           'b * Variable.t * named option)
+                           is_black_box:bool -> 'b * Variable.t * named option)
   -> t * 'b
 
 (** Like [fold_lets], but just a map. *)
@@ -429,7 +430,12 @@ val iter_lets
 
 (** Creates a [Let] expression.  (This computes the free variables of the
     defining expression and the body.) *)
-val create_let : Variable.t -> named -> t -> t
+val create_let
+   : ?defining_expr_is_black_box:unit
+  -> Variable.t
+  -> named
+  -> t
+  -> t
 
 (** Apply the specified function [f] to the defining expression of the given
     [Let]-expression, returning a new [Let]. *)
@@ -462,7 +468,8 @@ module With_free_variables : sig
   (** Takes the time required to calculate the free variables of the given
       [named]. *)
   val create_let_reusing_body
-     : Variable.t
+     : ?defining_expr_is_black_box:unit
+    -> Variable.t
     -> named
     -> expr t
     -> expr

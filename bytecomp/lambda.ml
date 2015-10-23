@@ -127,6 +127,8 @@ type primitive =
   | Pbbswap of boxed_integer
   (* Integer to external pointer *)
   | Pint_as_pointer
+  (* Control of optimization *)
+  | Pblack_box
 
 and comparison =
     Ceq | Cneq | Clt | Cgt | Cle | Cge

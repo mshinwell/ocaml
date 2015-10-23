@@ -251,6 +251,7 @@ let primitive ppf = function
   | Pbswap16 -> fprintf ppf "bswap16"
   | Pbbswap(bi) -> print_boxed_integer "bswap" ppf bi
   | Pint_as_pointer -> fprintf ppf "int_as_pointer"
+  | Pblack_box -> fprintf ppf "black_box"
 
 let string_of_primitive = function
   | Pidentity -> "Pidentity"
@@ -347,6 +348,7 @@ let string_of_primitive = function
   | Pbswap16 -> "Pbswap16"
   | Pbbswap _ -> "Pbbswap"
   | Pint_as_pointer -> "Pint_as_pointer"
+  | Pblack_box -> "Pblack_box"
 
 let function_attribute ppf { inline } =
   match inline with

@@ -305,6 +305,10 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
     let symbol = t.symbol_for_global' id in
     imported_symbols := Symbol.Set.add symbol !imported_symbols;
     name_expr (Symbol symbol) ~name:"Pgetglobal"
+  | Lprim (Pblack_box, [arg]) ->
+    name_expr (Black_box (Expr (close t env arg))) ~name:"Pblack_box"
+  | Lprim (Pblack_box, _) ->
+    Misc.fatal_error "Pblack_box always takes exactly one argument"
   | Lprim (p, args) ->
     (* One of the important consequences of the ANF-like representation
        here is that we obtain names corresponding to the components of

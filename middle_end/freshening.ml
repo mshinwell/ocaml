@@ -169,6 +169,9 @@ let apply_mutable_variable t mut_var =
    try Mutable_variable.Map.find mut_var t.sb_mutable_var with
    | Not_found -> mut_var
 
+let apply_expr_toplevel t expr =
+  Flambda_utils.toplevel_substitution t.sb_var expr
+
 let rewrite_recursive_calls_with_symbols t
       (function_declarations : Flambda.function_declarations)
       ~make_closure_symbol =

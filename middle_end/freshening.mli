@@ -71,6 +71,10 @@ val apply_mutable_variable : t -> Mutable_variable.t -> Mutable_variable.t
 (** As for [apply_variable], but for static exception identifiers. *)
 val apply_static_exception : t -> Static_exception.t -> Static_exception.t
 
+(** Apply the given freshening throughout the toplevel of the given term
+    (i.e. everything except inside sets of closures). *)
+val apply_expr_toplevel : t -> Flambda.t -> Flambda.t
+
 (** Replace recursive accesses to the closures in the set through
     [Symbol] by the corresponding [Var]. This is used to recover
     the recursive call when importing code from another compilation unit.

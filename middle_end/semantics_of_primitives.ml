@@ -131,7 +131,8 @@ let for_primitive (prim : Lambda.primitive) =
   | Prevapply _
   | Pdirapply _
   | Psequand
-  | Psequor ->
+  | Psequor
+  | Pblack_box ->
     Misc.fatal_errorf "The primitive %a should have been eliminated by the \
         [Closure_conversion] pass."
       Printlambda.primitive prim

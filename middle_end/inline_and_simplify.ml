@@ -789,8 +789,27 @@ and simplify_direct env r (tree : Flambda.t) : Flambda.t * R.t =
   | Apply apply ->
     simplify_apply env r ~apply
   | Let _ ->
-    let for_defining_expr (env, r) var defining_expr =
-      let defining_expr, r = simplify_named env r defining_expr in
+    let for_defining_expr (env, r) var defining_expr ~is_black_box =
+      let defining_expr, r =
+        if not is_black_box then
+          simplify_named env r defining_expr
+        else begin
+          (* Nothing really to do here except to not forget to apply any
+             freshening required as a result of this term having been
+             inlined. *)
+          let defining_expr =
+            match
+              Freshening.apply_expr_toplevel (E.freshening env) (Expr named)
+            with
+            | Expr named -> Black_box named
+            | _ ->
+              (* The substitution should never change the structure of the
+                 term. *)
+              assert false
+          in
+          defining_expr, r
+        end
+      in
       let var, sb = Freshening.add_variable (E.freshening env) var in
       let env = E.set_freshening env sb in
       let env = E.add env var (R.approx r) in
@@ -799,8 +818,9 @@ and simplify_direct env r (tree : Flambda.t) : Flambda.t * R.t =
     let for_last_body (env, r) body =
       simplify env r body
     in
-    let filter_defining_expr r var defining_expr free_vars_of_body =
-      if Variable.Set.mem var free_vars_of_body then
+    let filter_defining_expr r var defining_expr free_vars_of_body
+          ~is_black_box =
+      if Variable.Set.mem var free_vars_of_body || is_black_box then
         r, var, Some defining_expr
       else if Effect_analysis.no_effects_named defining_expr then
         let r = R.map_benefit r (B.remove_code_named defining_expr) in

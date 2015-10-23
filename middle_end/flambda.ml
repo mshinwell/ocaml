@@ -92,6 +92,7 @@ and named =
 and let_expr = {
   var : Variable.t;
   defining_expr : named;
+  defining_expr_is_black_box : bool;
   body : t;
   free_vars_of_defining_expr : Variable.Set.t;
   free_vars_of_body : Variable.Set.t;
@@ -581,7 +582,7 @@ let used_variables_named ?ignore_uses_in_project_var named =
   variables_usage_named ?ignore_uses_in_project_var
     ~all_used_variables:true named
 
-let create_let var defining_expr body : t =
+let create_let ?defining_expr_is_black_box var defining_expr body : t =
   let defining_expr, free_vars_of_defining_expr =
     match defining_expr with
     | Expr (Let { var = var1; defining_expr; body = Var var2;
@@ -589,9 +590,15 @@ let create_let var defining_expr body : t =
       defining_expr, free_vars_of_defining_expr
     | _ -> defining_expr, free_variables_named defining_expr
   in
+  let defining_expr_is_black_box =
+    match defining_expr_is_black_box with
+    | None -> false
+    | Some () -> true
+  in
   Let {
     var;
     defining_expr;
+    defining_expr_is_black_box;
     body;
     free_vars_of_defining_expr;
     free_vars_of_body = free_variables body;
@@ -769,23 +776,28 @@ end
 
 let fold_lets_option
     t ~init
-    ~(for_defining_expr:('a -> Variable.t -> named -> 'a * Variable.t * named))
+    ~(for_defining_expr:('a -> Variable.t -> named -> for_black_box:bool 'a * Variable.t * named))
     ~for_last_body
     ~(filter_defining_expr:('b -> Variable.t -> named -> Variable.Set.t ->
-                            'b * Variable.t * named option)) =
+                            for_black_box:bool -> 'b * Variable.t * named option)) =
   let finish ~last_body ~acc ~rev_lets =
     let module W = With_free_variables in
     let acc, t =
-      List.fold_left (fun (acc, t) (var, defining_expr) ->
+      List.fold_left (fun (acc, t) (var, defining_expr, is_black_box) ->
           let free_vars_of_body = W.free_variables t in
           let acc, var, defining_expr =
             filter_defining_expr acc var defining_expr free_vars_of_body
+              ~is_black_box
           in
           match defining_expr with
           | None -> acc, t
           | Some defining_expr ->
             let let_expr =
-              W.create_let_reusing_body var defining_expr t
+              if is_black_box then
+                W.create_let_reusing_body ~is_black_box:()
+                  var defining_expr t
+              else
+                W.create_let_reusing_body var defining_expr t
             in
             acc, W.of_expr let_expr)
         (acc, W.of_expr last_body)
@@ -795,11 +807,14 @@ let fold_lets_option
   in
   let rec loop (t : t) ~acc ~rev_lets =
     match t with
-    | Let { var; defining_expr; body; _ } ->
+    | Let { var; defining_expr; body; defining_expr_is_black_box; _ } ->
       let acc, var, defining_expr =
         for_defining_expr acc var defining_expr
+          ~is_black_box:defining_expr_is_black_box
       in
-      let rev_lets = (var, defining_expr) :: rev_lets in
+      let rev_lets =
+        (var, defining_expr, defining_expr_is_black_box) :: rev_lets
+      in
       loop body ~acc ~rev_lets
     | t ->
       let last_body, acc = for_last_body acc t in
