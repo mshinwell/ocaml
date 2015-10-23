@@ -615,6 +615,7 @@ let map_defining_expr_of_let let_expr ~f =
   Let {
     var = let_expr.var;
     defining_expr;
+    defining_expr_is_black_box = let_expr.defining_expr_is_black_box;
     body = let_expr.body;
     free_vars_of_defining_expr;
     free_vars_of_body = let_expr.free_vars_of_body;
@@ -731,17 +732,25 @@ module With_free_variables = struct
       Let {
         var;
         defining_expr;
+        defining_expr_is_black_box = false;
         body;
         free_vars_of_defining_expr;
         free_vars_of_body = free_variables body;
       }
 
-  let create_let_reusing_body var defining_expr (t : expr t) =
+  let create_let_reusing_body ?defining_expr_is_black_box var defining_expr
+        (t : expr t) =
     match t with
     | Expr (body, free_vars_of_body) ->
+      let defining_expr_is_black_box =
+        match defining_expr_is_black_box with
+        | None -> false
+        | Some () -> true
+      in
       Let {
         var;
         defining_expr;
+        defining_expr_is_black_box;
         body;
         free_vars_of_defining_expr = free_variables_named defining_expr;
         free_vars_of_body;
@@ -754,6 +763,7 @@ module With_free_variables = struct
       Let {
         var;
         defining_expr;
+        defining_expr_is_black_box = false;
         body;
         free_vars_of_defining_expr;
         free_vars_of_body;
@@ -776,10 +786,10 @@ end
 
 let fold_lets_option
     t ~init
-    ~(for_defining_expr:('a -> Variable.t -> named -> for_black_box:bool 'a * Variable.t * named))
+    ~(for_defining_expr:('a -> Variable.t -> named -> is_black_box:bool -> 'a * Variable.t * named))
     ~for_last_body
     ~(filter_defining_expr:('b -> Variable.t -> named -> Variable.Set.t ->
-                            for_black_box:bool -> 'b * Variable.t * named option)) =
+                            is_black_box:bool -> 'b * Variable.t * named option)) =
   let finish ~last_body ~acc ~rev_lets =
     let module W = With_free_variables in
     let acc, t =
@@ -794,7 +804,7 @@ let fold_lets_option
           | Some defining_expr ->
             let let_expr =
               if is_black_box then
-                W.create_let_reusing_body ~is_black_box:()
+                W.create_let_reusing_body ~defining_expr_is_black_box:()
                   var defining_expr t
               else
                 W.create_let_reusing_body var defining_expr t

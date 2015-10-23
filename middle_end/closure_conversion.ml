@@ -306,7 +306,9 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
     imported_symbols := Symbol.Set.add symbol !imported_symbols;
     name_expr (Symbol symbol) ~name:"Pgetglobal"
   | Lprim (Pblack_box, [arg]) ->
-    name_expr (Black_box (Expr (close t env arg))) ~name:"Pblack_box"
+    let arg : Flambda.named = Expr (close t env arg) in
+    let var = Variable.create "black_box" in
+    Flambda.create_let ~defining_expr_is_black_box:() var arg (Var var)
   | Lprim (Pblack_box, _) ->
     Misc.fatal_error "Pblack_box always takes exactly one argument"
   | Lprim (p, args) ->

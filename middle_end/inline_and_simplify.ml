@@ -797,17 +797,18 @@ and simplify_direct env r (tree : Flambda.t) : Flambda.t * R.t =
           (* Nothing really to do here except to not forget to apply any
              freshening required as a result of this term having been
              inlined. *)
-          let defining_expr =
-            match
-              Freshening.apply_expr_toplevel (E.freshening env) (Expr named)
-            with
-            | Expr named -> Black_box named
-            | _ ->
-              (* The substitution should never change the structure of the
-                 term. *)
-              assert false
-          in
-          defining_expr, r
+          let var = Variable.create "black_box" in
+          (* CR-someday mshinwell: factor out, e.g. into
+             [Freshening.apply_named_toplevel]. *)
+          match
+            Freshening.apply_expr_toplevel (E.freshening env)
+              (Flambda.create_let var defining_expr (Var var))
+          with
+          | Let { defining_expr; _ } -> defining_expr, r
+          | _ ->
+            (* The substitution should never change the structure of the
+               term. *)
+            assert false
         end
       in
       let var, sb = Freshening.add_variable (E.freshening env) var in
