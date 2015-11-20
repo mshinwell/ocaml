@@ -111,6 +111,8 @@ Runtime system:
   compiling the run-time system and C stub code.  (Xavier Leroy)
 - GPR#262: Multiple GC roots per compilation unit (Pierre Chambart, Mark
   Shinwell, review by Damien Doligez)
+- Several changes to improve the worst-case GC pause time.
+  (Damien Doligez, with help from Leo White)
 
 Standard library:
 - PR#6017, PR#7034, GPR#267: More efficient ifprintf implementation
