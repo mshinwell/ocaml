@@ -53,7 +53,7 @@ endif
 
 INSTALL_LIBDIR=$(DESTDIR)$(LIBDIR)
 
-install: install-$(RUNTIMED)
+install::
 	cp stdlib.cma std_exit.cmo *.cmi *.cmt *.cmti *.mli *.ml \
 	  camlheader_ur \
 	  $(INSTALL_LIBDIR)

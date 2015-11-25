@@ -631,7 +631,7 @@ void caml_major_collection_slice (intnat howmuch)
     CAML_INSTR_TIME (tmr, mark_slice_name[caml_gc_subphase]);
     caml_gc_message (0x02, "!", 0);
     /*
-    remaining_p = remaining_work / (Wsize_bsize (caml_stat_heap_size) * 250
+    remaining_p = remaining_work / (Wsize_bsize (caml_stat_heap_wsz) * 250
                                     / (100 + caml_percent_free)
                                     + caml_incremental_roots_count);
     */
