@@ -84,7 +84,8 @@ let set_inline_attribute_on_all_apply body inline =
 let inline_by_copying_function_body ~env ~r ~function_decls ~lhs_of_application
       ~(inline_requested : Lambda.inline_attribute)
       ~closure_id_being_applied
-      ~(function_decl : Flambda.function_declaration) ~args ~simplify =
+      ~(function_decl : Flambda.function_declaration) ~args ~simplify
+      ~dry_run =
   let r = R.map_benefit r B.remove_call in
   let env =
     (* Don't allow the inlining level to inhibit inlining of stubs (e.g.
@@ -144,7 +145,7 @@ let inline_by_copying_function_body ~env ~r ~function_decls ~lhs_of_application
     E.note_entering_closure env ~closure_id:closure_id_being_applied
       ~where:Inline_by_copying_function_body
   in
-  simplify (E.activate_freshening env) r expr
+  simplify (if dry_run then env else E.activate_freshening env) r expr
 
 let inline_by_copying_function_declaration ~env ~r
     ~(function_decls : Flambda.function_declarations)

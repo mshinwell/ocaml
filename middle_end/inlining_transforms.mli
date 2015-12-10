@@ -69,6 +69,7 @@ val inline_by_copying_function_body
   -> function_decl:Flambda.function_declaration
   -> args:Variable.t list
   -> simplify:Inlining_decision_intf.simplify
+  -> dry_run:bool
   -> Flambda.t * Inline_and_simplify_aux.Result.t
 
 (** Inlining of recursive function(s) yields a copy of the functions'

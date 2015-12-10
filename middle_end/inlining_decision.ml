@@ -86,17 +86,25 @@ let inline_non_recursive env r ~function_decls ~lhs_of_application
   if known_to_have_no_benefit then begin
     no_simplification ()
   end else begin
+  let will_definitely_keep_inlined_version =
+    function_decl.stub || always_inline || only_use_of_function
+  in
   (* CR mshinwell: fix indentation once diff reviewed. *)
   let body, r_inlined =
     (* First we construct the code that would result from copying the body of
        the function, without doing any further inlining upon it, to the call
-       site. *)
+       site.  Unless we know for sure that we will keep the inlined version,
+       we do a "dry run" first, which doesn't freshen any variables within
+       the term.  (We will then re-compute the correct term for substitution
+       if we keep the inlined version.)  This on average appears to be a
+       win for speed. *)
     let r =
       R.set_inlining_threshold (R.reset_benefit r) Inlining_cost.Never_inline
     in
     Inlining_transforms.inline_by_copying_function_body ~env ~r
       ~function_decls ~lhs_of_application ~closure_id_being_applied
       ~inline_requested ~function_decl ~args ~simplify
+      ~dry_run:(not will_definitely_keep_inlined_version)
   in
   let keep_inlined_version =
     if function_decl.stub then begin
@@ -131,6 +139,18 @@ let inline_non_recursive env r ~function_decls ~lhs_of_application
     (* Inlining the body of the function was sufficiently beneficial that we
        will keep it, replacing the call site.  We continue by allowing
        further inlining within the inlined copy of the body. *)
+    let body, r_inlined =
+      if will_definitely_keep_inlined_version then
+        body, r_inlined
+      else
+        let r =
+          R.set_inlining_threshold (R.reset_benefit r) Inlining_cost.Never_inline
+        in
+        (* CR mshinwell: share code with above *)
+        Inlining_transforms.inline_by_copying_function_body ~env ~r
+          ~function_decls ~lhs_of_application ~closure_id_being_applied
+          ~inline_requested ~function_decl ~args ~simplify ~dry_run:false
+    in
     let r =
       (* The meaning of requesting inlining is that the user ensure
          that the function has a benefit of at least its size. It is not
@@ -167,12 +187,13 @@ let inline_non_recursive env r ~function_decls ~lhs_of_application
   end else begin
     (* Inlining the body of the function did not appear sufficiently
        beneficial; however, it may become so if we inline within the body
-       first.  We try that next. *)
+       first.  We try that next.  As above, we do a dry run first. *)
     let body, r_inlined =
       Inlining_transforms.inline_by_copying_function_body ~env
         ~r:(R.reset_benefit r)
         ~function_decls ~lhs_of_application ~closure_id_being_applied
         ~inline_requested ~function_decl ~args ~simplify
+        ~dry_run:true
     in
     let wsb =
       W.create ~original:(fst (no_simplification ()))
@@ -191,6 +212,14 @@ let inline_non_recursive env r ~function_decls ~lhs_of_application
     in
     made_decision decision;
     if keep_inlined_version then begin
+      let body, r_inlined =
+        (* CR mshinwell: share code with above *)
+        Inlining_transforms.inline_by_copying_function_body ~env
+          ~r:(R.reset_benefit r)
+          ~function_decls ~lhs_of_application ~closure_id_being_applied
+          ~inline_requested ~function_decl ~args ~simplify
+          ~dry_run:false
+      in
       body, R.map_benefit r_inlined (Inlining_cost.Benefit.(+) (R.benefit r))
     end
     else begin
@@ -228,6 +257,7 @@ let unroll_recursive env r ~max_level ~lhs_of_application
             ~r:(R.reset_benefit r) ~function_decls ~lhs_of_application
             ~inline_requested:Default_inline
             ~closure_id_being_applied ~function_decl ~args ~simplify
+            ~dry_run:false
         in
         tried_unrolling := true;
         let wsb =
