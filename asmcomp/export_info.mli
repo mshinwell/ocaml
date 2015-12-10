@@ -69,13 +69,14 @@ and approx =
   | Value_id of Export_id.t
   | Value_symbol of Symbol.t
 
-(** A structure that describes what a single compilation unit exports. *)
-type t = private {
+(** Invariant: the domains of all fields in a value of type [per_unit] contain
+    only identifiers from a single compilation unit. *)
+type per_unit = private {
   sets_of_closures : Flambda.function_declarations Set_of_closures_id.Map.t;
   (** Code of exported functions indexed by set of closures IDs. *)
   closures : Flambda.function_declarations Closure_id.Map.t;
   (** Code of exported functions indexed by closure IDs. *)
-  values : descr Export_id.Map.t Compilation_unit.Map.t;
+  values : descr Export_id.Map.t;
   (** Structure of exported values. *)
   globals : approx Ident.Map.t;
   (** Global variables provided by the unit: usually only the top-level
@@ -93,14 +94,32 @@ type t = private {
      indexed by set of closures ID. *)
 }
 
+(** A structure that describes what a single compilation unit exports.
+    A given compilation unit may describe not only itself, but also portions
+    of other compilation units.  This can reduce the necessity to load .cmx
+    files, thus increasing compilation speed. *)
+type t = private {
+  per_unit : per_unit Compilation_unit.Map.t;
+  (** Indexed by compilation unit, the main export information. *)
+}
+
 (** Export information for a compilation unit that exports nothing. *)
 val empty : t
 
-(** Create a new export information structure. *)
+val empty_for_current_compilation_unit : unit -> t
+
+val empty_per_unit : per_unit
+
+val merge_per_unit : per_unit -> per_unit -> per_unit
+
+(** Create a new export information structure.  The domains of the various
+    maps of this function may include identifiers from any compilation unit.
+    This function partitions them by compilation unit to form the value of
+    type [t]. *)
 val create
    : sets_of_closures:Flambda.function_declarations Set_of_closures_id.Map.t
   -> closures:Flambda.function_declarations Closure_id.Map.t
-  -> values:descr Export_id.Map.t Compilation_unit.Map.t
+  -> values:descr Export_id.Map.t
   -> globals:approx Ident.Map.t
   -> symbol_id:Export_id.t Symbol.Map.t
   -> offset_fun:int Closure_id.Map.t
@@ -125,23 +144,6 @@ val add_clambda_info
   -> constant_sets_of_closures:Set_of_closures_id.Set.t
   -> t
 
-(** Union of export information.  Verifies that there are no identifier
-    clashes. *)
-val merge : t -> t -> t
-
-(** Look up the description of an exported value given its export ID. *)
-val find_description
-   : t
-  -> Export_id.t
-  -> descr
-
-(** Partition a mapping from export IDs by compilation unit. *)
-val nest_eid_map
-   : 'a Export_id.Map.t
-  -> 'a Export_id.Map.t Compilation_unit.Map.t
-
 (**/**)
 (* Debug printing functions. *)
-val print_approx : Format.formatter -> t -> unit
-val print_offsets : Format.formatter -> t -> unit
 val print_all : Format.formatter -> t -> unit

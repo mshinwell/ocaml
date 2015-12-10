@@ -122,7 +122,9 @@ let make_package_object ppf members targetobj targetname coercion
 
 (* Make the .cmx file for the package *)
 
-let build_package_cmx members cmxfile =
+let build_package_cmx _members _cmxfile =
+  failwith "-pack not yet implemented"
+(*
   let unit_names =
     List.map (fun m -> m.pm_name) members in
   let filter lst =
@@ -152,10 +154,10 @@ let build_package_cmx members cmxfile =
       units in
   let ui = Compilenv.current_unit_infos() in
   let ui_export_info =
-    List.fold_left (fun acc info -> Export_info.merge acc info.ui_export_info)
-      (Export_info_for_pack.import_for_pack ~pack_units
-         ~pack:(Compilenv.current_unit ()) ui.ui_export_info)
-      units in
+    Export_info_for_pack.import_for_pack ~pack_units
+      ~pack:(Compilenv.current_unit ()) ui.ui_export_info
+      units
+  in
   Export_info_for_pack.clear_import_state ();
   let pkg_infos =
     { ui_name = ui.ui_name;
@@ -179,6 +181,7 @@ let build_package_cmx members cmxfile =
       ui_export_info;
     } in
   Compilenv.write_unit_info pkg_infos cmxfile
+*)
 
 (* Make the .cmx and the .o for the package *)
 

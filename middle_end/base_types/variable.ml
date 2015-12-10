@@ -119,3 +119,14 @@ let output_full chan t =
   Compilation_unit.output chan t.compilation_unit;
   output_string chan ".";
   output chan t
+
+let partition_map_by_compilation_unit t_map =
+  let add_map var datum map =
+    let unit = var.compilation_unit in
+    let internal_map =
+      try Compilation_unit.Map.find unit map
+      with Not_found -> Map.empty
+    in
+    Compilation_unit.Map.add unit (Map.add var datum internal_map) map
+  in
+  Map.fold add_map t_map Compilation_unit.Map.empty

@@ -126,10 +126,10 @@ let equal_descr (d1:descr) (d2:descr) : bool =
     | Value_set_of_closures _ ) ->
     false
 
-type t = {
+type per_unit = {
   sets_of_closures : Flambda.function_declarations Set_of_closures_id.Map.t;
   closures : Flambda.function_declarations Closure_id.Map.t;
-  values : descr Export_id.Map.t Compilation_unit.Map.t;
+  values : descr Export_id.Map.t;
   globals : approx Ident.Map.t;
   symbol_id : Export_id.t Symbol.Map.t;
   offset_fun : int Closure_id.Map.t;
@@ -138,10 +138,14 @@ type t = {
   invariant_params : Variable.Set.t Variable.Map.t Set_of_closures_id.Map.t;
 }
 
-let empty : t = {
+type t = {
+  per_unit : per_unit Compilation_unit.Map.t;
+}
+
+let empty_per_unit : per_unit = {
   sets_of_closures = Set_of_closures_id.Map.empty;
   closures = Closure_id.Map.empty;
-  values = Compilation_unit.Map.empty;
+  values = Export_id.Map.empty;
   globals = Ident.Map.empty;
   symbol_id = Symbol.Map.empty;
   offset_fun = Closure_id.Map.empty;
@@ -150,39 +154,43 @@ let empty : t = {
   invariant_params = Set_of_closures_id.Map.empty;
 }
 
-let create ~sets_of_closures ~closures ~values ~globals ~symbol_id
-      ~offset_fun ~offset_fv ~constant_sets_of_closures
-      ~invariant_params =
-  { sets_of_closures;
-    closures;
-    values;
-    globals;
-    symbol_id;
-    offset_fun;
-    offset_fv;
-    constant_sets_of_closures;
-    invariant_params;
-  }
+let empty = {
+  per_unit = Compilation_unit.Map.empty;
+}
 
-let add_clambda_info t ~offset_fun ~offset_fv ~constant_sets_of_closures =
-  assert (Closure_id.Map.cardinal t.offset_fun = 0);
-  assert (Var_within_closure.Map.cardinal t.offset_fv = 0);
-  assert (Set_of_closures_id.Set.cardinal t.constant_sets_of_closures = 0);
-  { t with offset_fun; offset_fv; constant_sets_of_closures; }
+let empty_for_current_compilation_unit () = {
+  per_unit =
+    Compilation_unit.Map.add (Compilation_unit.get_current_exn ())
+      empty_per_unit Compilation_unit.Map.empty;
+}
 
-let merge (t1 : t) (t2 : t) : t =
-  let eidmap_disjoint_union ?eq map1 map2 =
-    Compilation_unit.Map.merge (fun _id map1 map2 ->
-        match map1, map2 with
-        | None, None -> None
-        | None, Some map
-        | Some map, None -> Some map
-        | Some map1, Some map2 ->
-          Some (Export_id.Map.disjoint_union ?eq map1 map2))
-      map1 map2
-  in
+let inject_sets_of_closures sets_of_closures : per_unit =
+  { empty_per_unit with sets_of_closures; }
+
+let inject_closures closures : per_unit =
+  { empty_per_unit with closures; }
+
+let inject_values values : per_unit =
+  { empty_per_unit with values; }
+
+let inject_symbol_id symbol_id : per_unit =
+  { empty_per_unit with symbol_id; }
+
+let inject_offset_fun offset_fun : per_unit =
+  { empty_per_unit with offset_fun; }
+
+let inject_offset_fv offset_fv : per_unit =
+  { empty_per_unit with offset_fv; }
+
+let inject_constant_sets_of_closures constant_sets_of_closures : per_unit =
+  { empty_per_unit with constant_sets_of_closures; }
+
+let inject_invariant_params invariant_params : per_unit =
+  { empty_per_unit with invariant_params; }
+
+let merge_per_unit (t1 : per_unit) (t2 : per_unit) : per_unit =
   let int_eq (i : int) j = i = j in
-  { values = eidmap_disjoint_union ~eq:equal_descr t1.values t2.values;
+  { values = Export_id.Map.disjoint_union ~eq:equal_descr t1.values t2.values;
     globals = Ident.Map.disjoint_union t1.globals t2.globals;
     sets_of_closures =
       Set_of_closures_id.Map.disjoint_union t1.sets_of_closures
@@ -202,25 +210,102 @@ let merge (t1 : t) (t2 : t) : t =
         t1.invariant_params t2.invariant_params;
   }
 
-let find_value eid map =
-  let unit_map = Compilation_unit.Map.find (Export_id.unit eid) map in
-  Export_id.Map.find eid unit_map
+let merge_per_unit_map map1 map2 =
+  Compilation_unit.Map.merge (fun _compilation_unit per_unit1 per_unit2 ->
+      match per_unit1, per_unit2 with
+      | None, None -> None
+      | None, Some per_unit
+      | Some per_unit, None -> Some per_unit
+      | Some per_unit1, Some per_unit2 ->
+        Some (merge_per_unit per_unit1 per_unit2))
+    map1 map2
 
-let find_description (t : t) eid =
-  find_value eid t.values
-
-let nest_eid_map map =
-  let add_map eid v map =
-    let unit = Export_id.unit eid in
-    let m =
-      try Compilation_unit.Map.find unit map
-      with Not_found -> Export_id.Map.empty
-    in
-    Compilation_unit.Map.add unit (Export_id.Map.add eid v m) map
+let create ~sets_of_closures ~closures ~values ~globals ~symbol_id
+      ~offset_fun ~offset_fv ~constant_sets_of_closures
+      ~invariant_params : t =
+  (* Do the hard work of partitioning by compilation unit now, rather than
+     when we import, because in a large tree the number of imports may be
+     very large.  The representation, being partitioned by compilation
+     unit, also helps avoid enormous maps. *)
+  let sets_of_closures =
+    Set_of_closures_id.partition_map_by_compilation_unit sets_of_closures
+    |> Compilation_unit.Map.map inject_sets_of_closures
   in
-  Export_id.Map.fold add_map map Compilation_unit.Map.empty
+  let closures =
+    Closure_id.partition_map_by_compilation_unit closures
+    |> Compilation_unit.Map.map inject_closures
+  in
+  let values =
+    Export_id.partition_map_by_compilation_unit values
+    |> Compilation_unit.Map.map inject_values
+  in
+  let globals =
+    (* The elements of [globals] always pertain to the current compilation
+       unit. *)
+    Compilation_unit.Map.add
+      (Compilation_unit.get_current_exn ())
+      { empty_per_unit with globals; }
+      Compilation_unit.Map.empty
+  in
+  let symbol_id =
+    Symbol.partition_map_by_compilation_unit symbol_id
+    |> Compilation_unit.Map.map inject_symbol_id
+  in
+  let offset_fun =
+    Closure_id.partition_map_by_compilation_unit offset_fun
+    |> Compilation_unit.Map.map inject_offset_fun
+  in
+  let offset_fv =
+    Var_within_closure.partition_map_by_compilation_unit offset_fv
+    |> Compilation_unit.Map.map inject_offset_fv
+  in
+  let constant_sets_of_closures =
+    Set_of_closures_id.partition_set_by_compilation_unit
+      constant_sets_of_closures
+    |> Compilation_unit.Map.map inject_constant_sets_of_closures
+  in
+  let invariant_params =
+    Set_of_closures_id.partition_map_by_compilation_unit
+      invariant_params
+    |> Compilation_unit.Map.map inject_invariant_params
+  in
+  let per_unit =
+    List.fold_left merge_per_unit_map Compilation_unit.Map.empty
+      [sets_of_closures; closures; values; globals; symbol_id; offset_fun;
+        offset_fv; constant_sets_of_closures; invariant_params;
+      ]
+  in
+  { per_unit; }
 
-let print_approx ppf (t : t) =
+let add_clambda_info t ~offset_fun ~offset_fv ~constant_sets_of_closures =
+  Compilation_unit.Map.iter (fun _compilation_unit per_unit ->
+      assert (Closure_id.Map.cardinal per_unit.offset_fun = 0);
+      assert (Var_within_closure.Map.cardinal per_unit.offset_fv = 0);
+      assert (Set_of_closures_id.Set.cardinal per_unit.
+        constant_sets_of_closures = 0))
+    t.per_unit;
+  let offset_fun =
+    Closure_id.partition_map_by_compilation_unit offset_fun
+    |> Compilation_unit.Map.map inject_offset_fun
+  in
+  let offset_fv =
+    Var_within_closure.partition_map_by_compilation_unit offset_fv
+    |> Compilation_unit.Map.map inject_offset_fv
+  in
+  let constant_sets_of_closures =
+    Set_of_closures_id.partition_set_by_compilation_unit
+      constant_sets_of_closures
+    |> Compilation_unit.Map.map inject_constant_sets_of_closures
+  in
+  let per_unit =
+    List.fold_left merge_per_unit_map t.per_unit
+      [offset_fun; offset_fv; constant_sets_of_closures]
+  in
+  { per_unit; }
+
+(* CR mshinwell: resurrect printer and make it suitable for ocamlobjinfo *)
+(*
+let print_approx ppf (t : per_unit) =
   let values = t.values in
   let fprintf = Format.fprintf in
   let printed = ref Export_id.Set.empty in
@@ -235,7 +320,7 @@ let print_approx ppf (t : t) =
         fprintf ppf "(%a: _)" Export_id.print id
       else begin
         try
-          let descr = find_value id values in
+          let descr = Export_id.Map.find id values in
           printed := Export_id.Set.add id !printed;
           fprintf ppf "@[<hov 2>(%a:@ %a)@]" Export_id.print id print_descr descr
         with Not_found ->
@@ -311,9 +396,6 @@ let print_approx ppf (t : t) =
           print_approx approx)
       bound_vars
   in
-  let print_approxs id approx =
-    fprintf ppf "%a -> %a;@ " Ident.print id print_approx approx
-  in
   let rec print_recorded_symbols () =
     if not (Queue.is_empty symbols_to_print) then begin
       let sym = Queue.pop symbols_to_print in
@@ -327,27 +409,23 @@ let print_approx ppf (t : t) =
       print_recorded_symbols ();
     end
   in
-  fprintf ppf "@[<hov 2>Globals:@ ";
-  Ident.Map.iter print_approxs t.globals;
   fprintf ppf "@]@ @[<hov 2>Symbols:@ ";
   print_recorded_symbols ();
   fprintf ppf "@]"
 
-let print_offsets ppf (t : t) =
-  Format.fprintf ppf "@[<v 2>offset_fun:@ ";
-  Closure_id.Map.iter (fun cid off ->
-      Format.fprintf ppf "%a -> %i@ "
-        Closure_id.print cid off) t.offset_fun;
-  Format.fprintf ppf "@]@ @[<v 2>offset_fv:@ ";
-  Var_within_closure.Map.iter (fun vid off ->
-      Format.fprintf ppf "%a -> %i@ "
-        Var_within_closure.print vid off) t.offset_fv;
-  Format.fprintf ppf "@]@ "
+let print_approxs ppf id approx =
+  Format.fprintf ppf "%a -> %a;@ " Ident.print id print_approx approx
 
 let print_all ppf (t : t) =
   let fprintf = Format.fprintf in
-  fprintf ppf "approxs@ %a@.@."
-    print_approx t;
-  fprintf ppf "functions@ %a@.@."
-    (Set_of_closures_id.Map.print Flambda.print_function_declarations)
-    t.sets_of_closures
+  Compilation_unit.Map.iter (fun compilation_unit per_unit ->
+      fprintf ppf "approxs@ %a@.@."
+        print_approx per_unit;
+      fprintf ppf "functions@ %a@.@."
+        (Set_of_closures_id.Map.print Flambda.print_function_declarations)
+        per_unit.sets_of_closures)
+    t.per_unit;
+  fprintf ppf "@[<hov 2>Globals:@ ";
+  Ident.Map.iter print_approxs t.globals
+*)
+let print_all _ _ = failwith "Not implemented"

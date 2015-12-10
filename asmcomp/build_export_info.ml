@@ -89,32 +89,74 @@ end = struct
     }
 
   let extern_id_descr export_id =
-    let export = Compilenv.approx_env () in
-    try Some (Export_info.find_description export export_id)
-    with Not_found -> None
+    let compilation_unit = Export_id.get_compilation_unit export_id in
+    let export = Compilenv.approx_for_global compilation_unit in
+    match Export_id.Map.find export_id export.values with
+    | descr -> Some descr
+    | exception Not_found -> None
 
   let extern_symbol_descr sym =
-    if Compilenv.is_predefined_exception sym
-    then None
+    if Compilenv.is_predefined_exception sym then None
     else
       let export = Compilenv.approx_for_global (Symbol.compilation_unit sym) in
-      try
-        let id = Symbol.Map.find sym export.symbol_id in
-        let descr = Export_info.find_description export id in
-        Some descr
-      with
-      | Not_found -> None
+      match Symbol.Map.find sym export.symbol_id with
+      | exception Not_found -> None
+      | export_id ->
+        match Export_id.Map.find export_id export.values with
+        | descr -> Some descr
+        | exception Not_found -> None
 
   let get_id_descr t export_id =
     try Some (Export_id.Map.find export_id !(t.ex_table))
-    with Not_found -> extern_id_descr export_id
+    with Not_found ->
+      if Compilation_unit.equal (Export_id.get_compilation_unit export_id)
+        (Compilation_unit.get_current_exn ())
+      then begin
+        Misc.fatal_errorf "Build_export_info.get_id_descr: export ID %a \
+            is marked as coming from the current compilation unit, but \
+            does not occur in the environment's [ex_table]"
+          Export_id.print export_id
+      end;
+      extern_id_descr export_id
 
   let get_symbol_descr t sym =
-    try
-      let export_id = Symbol.Map.find sym t.sym in
-      Some (Export_id.Map.find export_id !(t.ex_table))
-    with
-    | Not_found -> extern_symbol_descr sym
+    match Symbol.Map.find sym t.sym with
+    | exception Not_found ->
+      if Compilation_unit.equal (Symbol.compilation_unit sym)
+        (Compilation_unit.get_current_exn ())
+      then begin
+        Misc.fatal_errorf "Build_export_info.get_symbol_descr: symbol %a \
+            is marked as coming from the current compilation unit, but does \
+            not occur in the environment's [sym] table"
+          Symbol.print sym
+      end;
+      extern_symbol_descr sym
+    | export_id ->
+      try Some (Export_id.Map.find export_id !(t.ex_table))
+      with Not_found ->
+        if Compilation_unit.equal (Export_id.get_compilation_unit export_id)
+          (Compilation_unit.get_current_exn ())
+        then begin
+          None
+          (* CR-soon mshinwell: We can't cause an error here because of
+             Let_rec_symbol constructions with a set of closures definition
+             and a project_closure definition.  Whilst the export ID for
+             the closure has been assigned prior to traversing its body,
+             it isn't mapped yet in [ex_table].  Maybe we need something
+             that keeps track of identifiers currently being defined,
+             so we can cause an error here if we go wrong.
+             (In the code before the patch to rework export info loading,
+             this case silently went into [extern_symbol_descr] and
+             returned [None].)
+          Misc.fatal_errorf "Build_export_info.get_symbol_descr: export ID %a \
+              (for symbol %a) is marked as coming from the current compilation \
+              unit, but does not occur in the environment's [ex_table]"
+            Export_id.print export_id
+            Symbol.print sym
+          *)
+        end else begin
+          extern_symbol_descr sym
+        end
 
   let get_descr t (approx : Export_info.approx) =
     match approx with
@@ -511,17 +553,19 @@ let build_export_info ~(backend : (module Backend_intf.S))
              ~backend function_decls)
         (Flambda_utils.all_sets_of_closures_map program)
     in
-    let unnested_values =
-      Env.Global.export_id_to_descr_map env
-    in
+    let values = Env.Global.export_id_to_descr_map env in
+    let symbol_id = Env.Global.symbol_to_export_id_map env in
     let invariant_params =
-      let export = Compilenv.approx_env () in
       Export_id.Map.fold (fun _eid (descr:Export_info.descr)
                            (invariant_params) ->
           match descr with
           | Value_closure { set_of_closures }
           | Value_set_of_closures set_of_closures ->
             let { Export_info.set_of_closures_id } = set_of_closures in
+            let compilation_unit =
+              Set_of_closures_id.get_compilation_unit set_of_closures_id
+            in
+            let export = Compilenv.approx_for_global compilation_unit in
             begin match
               Set_of_closures_id.Map.find set_of_closures_id
                 export.invariant_params
@@ -533,13 +577,9 @@ let build_export_info ~(backend : (module Backend_intf.S))
             end
           | _ ->
             invariant_params)
-        unnested_values invariant_params
+        values invariant_params
     in
-    let values =
-      Export_info.nest_eid_map unnested_values
-    in
-    Export_info.create ~values ~globals
-      ~symbol_id:(Env.Global.symbol_to_export_id_map env)
+    Export_info.create ~values ~globals ~symbol_id
       ~offset_fun:Closure_id.Map.empty
       ~offset_fv:Var_within_closure.Map.empty
       ~sets_of_closures ~closures

@@ -80,34 +80,22 @@ let compute (program:Flambda.program) =
   in
   r
 
-let compute_reexported_offsets program
-      ~current_unit_offset_fun ~current_unit_offset_fv
-      ~imported_units_offset_fun ~imported_units_offset_fv =
-  let offset_fun = ref current_unit_offset_fun in
-  let offset_fv = ref current_unit_offset_fv in
+let compute_reexported_offsets program ~get_fun_offset ~get_fv_offset =
+  let offset_fun = ref Closure_id.Map.empty in
+  let offset_fv = ref Var_within_closure.Map.empty in
   let used_closure_id closure_id =
-    match Closure_id.Map.find closure_id imported_units_offset_fun with
-    | offset ->
-      assert (not (Closure_id.Map.mem closure_id current_unit_offset_fun));
-      begin match Closure_id.Map.find closure_id !offset_fun with
-      | exception Not_found ->
-        offset_fun := Closure_id.Map.add closure_id offset !offset_fun
-      | offset' -> assert (offset = offset')
-      end
+    let offset = get_fun_offset closure_id in
+    match Closure_id.Map.find closure_id !offset_fun with
     | exception Not_found ->
-      assert (Closure_id.Map.mem closure_id current_unit_offset_fun)
+      offset_fun := Closure_id.Map.add closure_id offset !offset_fun
+    | offset' -> assert (offset = offset')
   in
   let used_var_within_closure var =
-    match Var_within_closure.Map.find var imported_units_offset_fv with
-    | offset ->
-      assert (not (Var_within_closure.Map.mem var current_unit_offset_fv));
-      begin match Var_within_closure.Map.find var !offset_fv with
-      | exception Not_found ->
-        offset_fv := Var_within_closure.Map.add var offset !offset_fv
-      | offset' -> assert (offset = offset')
-      end
+    let offset = get_fv_offset var in
+    match Var_within_closure.Map.find var !offset_fv with
     | exception Not_found ->
-      assert (Var_within_closure.Map.mem var current_unit_offset_fv)
+      offset_fv := Var_within_closure.Map.add var offset !offset_fv
+    | offset' -> assert (offset = offset')
   in
   Flambda_iterators.iter_named_of_program program
     ~f:(fun (named : Flambda.named) ->
@@ -120,8 +108,16 @@ let compute_reexported_offsets program
       | Project_var { closure_id; var; _ } ->
         used_closure_id closure_id;
         used_var_within_closure var
+      | Set_of_closures set_of_closures ->
+        (* Ensure that we still register offsets for variables bound by
+           closures even if they are only referenced "directly" (i.e. from
+           inside their own closure, using [Var]) rather than using
+           [Project_var]. *)
+        Variable.Map.iter (fun internal_var _external_var ->
+            used_var_within_closure (Var_within_closure.wrap internal_var))
+          set_of_closures.free_vars
       | Symbol _ | Const _ | Allocated_const _ | Read_mutable _
-      | Read_symbol_field _ | Set_of_closures _ | Prim _ | Expr _ -> ());
+      | Read_symbol_field _ | Prim _ | Expr _ -> ());
   Flambda_iterators.iter_constant_defining_values_on_program program
     ~f:(fun (const : Flambda.constant_defining_value) ->
       match const with

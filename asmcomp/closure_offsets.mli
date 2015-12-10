@@ -32,8 +32,6 @@ val compute : Flambda.program -> result
     describe arise, we always have access to the necessary closure offsets. *)
 val compute_reexported_offsets
    : Flambda.program
-  -> current_unit_offset_fun:int Closure_id.Map.t
-  -> current_unit_offset_fv:int Var_within_closure.Map.t
-  -> imported_units_offset_fun:int Closure_id.Map.t
-  -> imported_units_offset_fv:int Var_within_closure.Map.t
+  -> get_fun_offset:(Closure_id.t -> int)
+  -> get_fv_offset:(Var_within_closure.t -> int)
   -> int Closure_id.Map.t * int Var_within_closure.Map.t

@@ -36,3 +36,7 @@ val label : t -> Linkage_name.t
 val print_opt : Format.formatter -> t option -> unit
 
 val compare_lists : t list -> t list -> int
+
+val partition_map_by_compilation_unit
+   : 'a Map.t
+  -> 'a Map.t Compilation_unit.Map.t

@@ -22,3 +22,18 @@ end
 
 include T
 include Ext_types.Identifiable.Make (T)
+
+let get_compilation_unit t = unit t
+
+(* CR-soon mshinwell: code duplication with Set_of_closures and Variable *)
+let partition_map_by_compilation_unit t_map =
+  let add_map export_id datum map =
+    let unit = get_compilation_unit export_id in
+    let internal_map =
+      try Compilation_unit.Map.find unit map
+      with Not_found -> Map.empty
+    in
+    Compilation_unit.Map.add unit
+      (Map.add export_id datum internal_map) map
+  in
+  Map.fold add_map t_map Compilation_unit.Map.empty

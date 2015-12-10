@@ -186,6 +186,8 @@ let set_export_info (ulambda, prealloc, structured_constants, export) =
 
 let gen_implementation ?toplevel ~sourcefile ~backend ppf flam =
   Emit.begin_assembly ();
+  Compilenv.set_export_info
+    (Export_info.empty_for_current_compilation_unit ());
   Timings.(start (Flambda_backend sourcefile));
   prep_flambda_for_export ppf flam ~backend
   ++ Flambda_to_clambda.convert

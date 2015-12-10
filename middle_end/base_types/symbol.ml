@@ -61,3 +61,15 @@ let print_opt ppf = function
   | Some t -> print ppf t
 
 let compare_lists l1 l2 = Misc.compare_lists compare l1 l2
+
+let partition_map_by_compilation_unit t_map =
+  let add_map symbol datum map =
+    let unit = symbol.compilation_unit in
+    let internal_map =
+      try Compilation_unit.Map.find unit map
+      with Not_found -> Map.empty
+    in
+    Compilation_unit.Map.add unit
+      (Map.add symbol datum internal_map) map
+  in
+  Map.fold add_map t_map Compilation_unit.Map.empty

@@ -27,12 +27,13 @@ exception Error of error
 
 let global_infos_table =
   (Hashtbl.create 17 : (string, unit_infos option) Hashtbl.t)
-let export_infos_table =
-  (Hashtbl.create 10 : (string, Export_info.t) Hashtbl.t)
 
-let imported_sets_of_closures_table =
-  (Set_of_closures_id.Tbl.create 10
-   : Flambda.function_declarations Set_of_closures_id.Tbl.t)
+type self_cmx_state = Self_cmx_unknown | Self_cmx_absent
+type is_self = Self | Not_self of self_cmx_state
+
+let export_infos_table =
+  (Compilation_unit.Tbl.create 10
+    : (Export_info.per_unit * is_self) Compilation_unit.Tbl.t)
 
 module CstMap =
   Map.Make(struct
@@ -64,7 +65,6 @@ let structured_constants = ref structured_constants_empty
 let exported_constants = Hashtbl.create 17
 
 let current_unit_id = ref (Ident.create_persistent "___UNINITIALIZED___")
-let merged_environment = ref Export_info.empty
 
 let current_unit =
   { ui_name = "";
@@ -76,7 +76,8 @@ let current_unit =
     ui_apply_fun = [];
     ui_send_fun = [];
     ui_force_link = false;
-    ui_export_info = Export_info.empty }
+    ui_export_info = Export_info.empty;
+  }
 
 let symbolname_for_pack pack name =
   match pack with
@@ -105,7 +106,6 @@ let current_unit_linkage_name () =
 
 let reset ?packname name =
   Hashtbl.clear global_infos_table;
-  Set_of_closures_id.Tbl.clear imported_sets_of_closures_table;
   let symbol = symbolname_for_pack packname name in
   current_unit_id := unit_id_from_name name;
   current_unit.ui_name <- name;
@@ -120,8 +120,7 @@ let reset ?packname name =
   Hashtbl.clear exported_constants;
   structured_constants := structured_constants_empty;
   current_unit.ui_export_info <- Export_info.empty;
-  merged_environment := Export_info.empty;
-  Hashtbl.clear export_infos_table;
+  Compilation_unit.Tbl.clear export_infos_table;
   let compilation_unit =
     Compilation_unit.create
       !current_unit_id
@@ -246,17 +245,90 @@ let approx_for_global comp_unit =
      || Ident.is_predef_exn id
      || not (Ident.global id)
   then invalid_arg (Format.asprintf "approx_for_global %a" Ident.print id);
-  let modname = Ident.name id in
-  try Hashtbl.find export_infos_table modname with
-  | Not_found ->
-    let exported = match get_global_info id with
-      | None -> Export_info.empty
-      | Some ui -> ui.ui_export_info in
-    Hashtbl.add export_infos_table modname exported;
-    merged_environment := Export_info.merge !merged_environment exported;
-    exported
+  let existing =
+    try Some (Compilation_unit.Tbl.find export_infos_table comp_unit)
+    with Not_found -> None
+  in
+  match existing with
+  | Some (export_info, Self) ->
+    (* The .cmx file for the requested compilation unit has been loaded
+       previously. *)
+    export_info
+  | Some (export_info, Not_self Self_cmx_absent) ->
+    (* We may have possibly partial information about the requested compilation
+       unit that has been re-exported by another unit.  We have further
+       previously tried to load the .cmx for the requested compilation
+       unit itself, but failed. *)
+    export_info
+  | Some (_, Not_self Self_cmx_unknown)
+  | None ->
+    (* The .cmx file needs to be loaded, if available.  Such file may
+       contain export info structures for multiple compilation units, which
+       have to be merged into the central [export_infos_table]. *)
+    match get_global_info id with
+    | None ->
+      begin match existing with
+      | None ->
+        (* The .cmx is absent, and no other compilation unit has provided
+           re-exported information about the requested unit. *)
+        Compilation_unit.Tbl.replace export_infos_table comp_unit
+          (Export_info.empty_per_unit, Not_self Self_cmx_absent);
+        Export_info.empty_per_unit
+      | Some (export_info, _) ->
+        Compilation_unit.Tbl.replace export_infos_table comp_unit
+          (export_info, Not_self Self_cmx_absent);
+        export_info
+      end
+    | Some ui ->
+      let export_info_for_self = ref None in
+      Compilation_unit.Map.iter
+        (fun comp_unit' (export_info : Export_info.per_unit) ->
+          let is_self =
+            if Compilation_unit.equal comp_unit' comp_unit then begin
+              export_info_for_self := Some export_info;
+              true
+            end else begin
+              false
+            end
+          in
+          (* Export information for a module A that is contained in a.cmx,
+             rather than being re-exported through some other .cmx file(s),
+             overrides any existing information we know about A. *)
+          (* CR mshinwell: consider checking that any existing information
+             is consistent with the new, in that case. *)
+          if is_self then begin
+            Compilation_unit.Tbl.replace export_infos_table comp_unit'
+              (export_info, Self)
+          end else begin
+            match Compilation_unit.Tbl.find export_infos_table comp_unit' with
+            | exception Not_found ->
+              Compilation_unit.Tbl.add export_infos_table comp_unit'
+                (export_info, Not_self Self_cmx_unknown)
+            | _existing_info, Self ->
+              (* Never overwrite information loaded from the compilation
+                 unit's own .cmx file. *)
+              ()
+            | existing_info, Not_self self_cmx_state ->
+              Compilation_unit.Tbl.replace export_infos_table comp_unit'
+                (Export_info.merge_per_unit export_info existing_info,
+                  Not_self self_cmx_state)
+          end)
+        ui.ui_export_info.per_unit;
+      begin match !export_info_for_self with
+      | Some export_info -> export_info
+      | None ->
+        Misc.fatal_errorf "The .cmx file for %a does not contain \
+            export information for itself.  It contains information for the \
+            following compilation units: %a"
+          Compilation_unit.print comp_unit
+          Compilation_unit.Set.print
+            (Compilation_unit.Map.keys ui.ui_export_info.per_unit)
+      end
 
-let approx_env () = !merged_environment
+let fold_approx_for_global ~init ~f =
+  Compilation_unit.Tbl.fold (fun comp_unit (export_info, _self) acc ->
+      f comp_unit export_info acc)
+    export_infos_table init
 
 (* Record that a currying function or application function is needed *)
 

@@ -14,6 +14,10 @@
 module A = Simple_value_approx
 
 let import_set_of_closures =
+  let imported_sets_of_closures_table =
+    (Set_of_closures_id.Tbl.create 10
+     : Flambda.function_declarations Set_of_closures_id.Tbl.t)
+  in
   let import_function_declarations (clos : Flambda.function_declarations)
         : Flambda.function_declarations =
     (* CR mshinwell for pchambart: Do we still need to do this rewriting?
@@ -48,26 +52,32 @@ let import_set_of_closures =
     Flambda.update_function_declarations clos ~funs
   in
   let aux set_of_closures_id =
-    let ex_info = Compilenv.approx_env () in
+    let compilation_unit =
+      Set_of_closures_id.get_compilation_unit set_of_closures_id
+    in
+    let ex_info = Compilenv.approx_for_global compilation_unit in
     let function_declarations =
       try
         Set_of_closures_id.Map.find set_of_closures_id
           ex_info.sets_of_closures
       with Not_found ->
+        Misc.fatal_errorf "[functions] does not map set of closures ID %a."
+          Set_of_closures_id.print set_of_closures_id
+        (*
         Misc.fatal_errorf "[functions] does not map set of closures ID %a. \
             ex_info = %a"
           Set_of_closures_id.print set_of_closures_id
           Export_info.print_all ex_info
+        *)
     in
     import_function_declarations function_declarations
   in
-  Set_of_closures_id.Tbl.memoize Compilenv.imported_sets_of_closures_table aux
+  Set_of_closures_id.Tbl.memoize imported_sets_of_closures_table aux
 
 let rec import_ex ex =
-  ignore (Compilenv.approx_for_global (Export_id.unit ex));
-  let ex_info = Compilenv.approx_env () in
+  let ex_info = Compilenv.approx_for_global (Export_id.unit ex) in
   let import_value_set_of_closures ~set_of_closures_id ~bound_vars
-        ~(ex_info : Export_info.t) ~what : A.value_set_of_closures =
+        ~what : A.value_set_of_closures =
     let bound_vars = Var_within_closure.Map.map import_approx bound_vars in
     match
       Set_of_closures_id.Map.find set_of_closures_id ex_info.invariant_params
@@ -86,7 +96,7 @@ let rec import_ex ex =
         ~specialised_args:Variable.Map.empty
         ~freshening:Freshening.Project_var.empty
   in
-  match Export_info.find_description ex_info ex with
+  match Export_id.Map.find ex ex_info.values with
   | exception Not_found -> A.value_unknown Other
   | Value_int i -> A.value_int i
   | Value_char c -> A.value_char c
@@ -114,14 +124,14 @@ let rec import_ex ex =
         set_of_closures =
           { set_of_closures_id; bound_vars; aliased_symbol } } ->
     let value_set_of_closures =
-      import_value_set_of_closures ~set_of_closures_id ~bound_vars ~ex_info
+      import_value_set_of_closures ~set_of_closures_id ~bound_vars
         ~what:(Format.asprintf "Value_closure %a" Closure_id.print closure_id)
     in
     A.value_closure ?set_of_closures_symbol:aliased_symbol
       value_set_of_closures closure_id
   | Value_set_of_closures { set_of_closures_id; bound_vars; aliased_symbol } ->
     let value_set_of_closures =
-      import_value_set_of_closures ~set_of_closures_id ~bound_vars ~ex_info
+      import_value_set_of_closures ~set_of_closures_id ~bound_vars
         ~what:"Value_set_of_closures"
     in
     let approx = A.value_set_of_closures value_set_of_closures in

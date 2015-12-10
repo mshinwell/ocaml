@@ -12,7 +12,7 @@
 (**************************************************************************)
 
 let rename_id_state = Export_id.Tbl.create 100
-
+(*
 (* Rename export identifiers' compilation units to denote that they now
    live within a pack. *)
 let import_eid_for_pack units pack id =
@@ -108,13 +108,16 @@ let import_eidmap_for_pack units pack f map =
             (Export_id.Map.map f map))
         map)
       Export_id.Map.empty)
+*)
 
-let import_for_pack ~pack_units ~pack (exp : Export_info.t) =
+let import_for_pack ~pack_units:_ ~pack:_ (exp : Export_info.t) =
+  ignore exp;
+  failwith "-pack not supported"
+(*
   let import_sym = import_symbol_for_pack pack_units pack in
   let import_descr = import_descr_for_pack pack_units pack in
   let import_approx = import_approx_for_pack pack_units pack in
   let import_eid = import_eid_for_pack pack_units pack in
-  let import_eidmap f map = import_eidmap_for_pack pack_units pack f map in
   let sets_of_closures =
     Set_of_closures_id.Map.map
       (import_function_declarations_for_pack pack_units pack)
@@ -136,5 +139,6 @@ let import_for_pack ~pack_units ~pack (exp : Export_info.t) =
       (Symbol.Map.map import_eid exp.symbol_id))
     ~constant_sets_of_closures:exp.constant_sets_of_closures
     ~invariant_params:exp.invariant_params
+    *)
 
 let clear_import_state () = Export_id.Tbl.clear rename_id_state
