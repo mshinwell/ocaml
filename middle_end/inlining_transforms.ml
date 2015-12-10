@@ -97,9 +97,10 @@ let inline_by_copying_function_body ~env ~r ~function_decls ~lhs_of_application
      in the environment such that it will rewrite the body to use these new
      names. *)
   let freshened_params, freshening =
-    Freshening.add_variables' (E.freshening env) function_decl.params
+    if dry_run then function_decl.params, E.freshening env
+    else Freshening.add_variables' (E.freshening env) function_decl.params
   in
-  let env = E.set_freshening env freshening in
+  let env = if dry_run then env else E.set_freshening env freshening in
   let body =
     if function_decl.stub && inline_requested <> Lambda.Default_inline then
       (* When the function inlined function is a stub, the annotation
