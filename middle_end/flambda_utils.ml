@@ -449,24 +449,38 @@ let all_sets_of_closures program =
   let list = ref [] in
   Flambda_iterators.iter_on_set_of_closures_of_program program
     ~f:(fun ~constant:_ set_of_closures ->
-        list := set_of_closures :: !list);
+      list := set_of_closures :: !list);
   !list
 
-let all_sets_of_closures_map program =
+let some_function_decls_contain_always_inline
+      (function_decls : Flambda.function_declarations) =
+  Variable.Map.exists (fun _fun_var (decl : Flambda.function_declaration) ->
+      match decl.inline with
+      | Always_inline -> true
+      | Default_inline | Never_inline -> false)
+    function_decls.funs
+
+let all_sets_of_closures_map program ~only_always_inline =
   let r = ref Set_of_closures_id.Map.empty in
   Flambda_iterators.iter_on_set_of_closures_of_program program
-    ~f:(fun ~constant:_ set_of_closures ->
-      r := Set_of_closures_id.Map.add
-          set_of_closures.function_decls.set_of_closures_id
-          set_of_closures !r);
+    ~f:(fun ~constant:_ (set_of_closures : Flambda.set_of_closures) ->
+      if (not only_always_inline)
+        || some_function_decls_contain_always_inline
+            set_of_closures.function_decls
+      then begin
+        r := Set_of_closures_id.Map.add
+            set_of_closures.function_decls.set_of_closures_id
+            set_of_closures !r
+      end);
   !r
 
-let all_function_decls_indexed_by_set_of_closures_id program =
+let all_function_decls_indexed_by_set_of_closures_id program
+      ~only_always_inline =
   Set_of_closures_id.Map.map
     (fun { Flambda. function_decls; _ } -> function_decls)
-    (all_sets_of_closures_map program)
+    (all_sets_of_closures_map program ~only_always_inline)
 
-let all_function_decls_indexed_by_closure_id program =
+let all_function_decls_indexed_by_closure_id program ~only_always_inline =
   let aux_fun function_decls fun_var _ map =
     let closure_id = Closure_id.wrap fun_var in
     Closure_id.Map.add closure_id function_decls map
@@ -474,7 +488,8 @@ let all_function_decls_indexed_by_closure_id program =
   let aux _ ({ function_decls; _ } : Flambda.set_of_closures) map =
     Variable.Map.fold (aux_fun function_decls) function_decls.funs map
   in
-  Set_of_closures_id.Map.fold aux (all_sets_of_closures_map program)
+  Set_of_closures_id.Map.fold aux
+    (all_sets_of_closures_map program ~only_always_inline)
     Closure_id.Map.empty
 
 let make_variable_symbol var =

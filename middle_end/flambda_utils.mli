@@ -132,19 +132,26 @@ val all_lifted_constant_sets_of_closures
   -> Set_of_closures_id.Set.t
 
 (** All sets of closures in the given program (whether or not bound to a
-    symbol.) *)
-val all_sets_of_closures : Flambda.program -> Flambda.set_of_closures list
+    symbol.). *)
+val all_sets_of_closures
+   : Flambda.program
+  -> Flambda.set_of_closures list
 
+(** If [only_always_inline] then sets of closures where none of the function
+    declarations are [Always_inline] will be excluded. *)
 val all_sets_of_closures_map
    : Flambda.program
+  -> only_always_inline:bool
   -> Flambda.set_of_closures Set_of_closures_id.Map.t
 
 val all_function_decls_indexed_by_set_of_closures_id
    : Flambda.program
+  -> only_always_inline:bool
   -> Flambda.function_declarations Set_of_closures_id.Map.t
 
 val all_function_decls_indexed_by_closure_id
    : Flambda.program
+  -> only_always_inline:bool
   -> Flambda.function_declarations Closure_id.Map.t
 
 val make_variable_symbol : Variable.t -> Symbol.t
@@ -194,3 +201,7 @@ val closures_required_by_entry_point
 val all_functions_parameters : Flambda.function_declarations -> Variable.Set.t
 
 val all_free_symbols : Flambda.function_declarations -> Symbol.Set.t
+
+val some_function_decls_contain_always_inline
+   : Flambda.function_declarations
+  -> bool

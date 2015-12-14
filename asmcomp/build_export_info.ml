@@ -261,10 +261,17 @@ and descr_of_named (env : Env.t) (named : Flambda.named)
     Value_symbol (Compilenv.symbol_for_global' id)
   | Prim _ -> Value_unknown
   | Set_of_closures set ->
-    let descr : Export_info.descr =
-      Value_set_of_closures (describe_set_of_closures env set)
-    in
-    Value_id (Env.new_descr env descr)
+    if !Clflags.classic_heuristic
+      && not (Flambda_utils.some_function_decls_contain_always_inline
+        set.function_decls)
+    then begin
+      Value_unknown
+    end else begin
+      let descr : Export_info.descr =
+        Value_set_of_closures (describe_set_of_closures env set)
+      in
+      Value_id (Env.new_descr env descr)
+    end
   | Project_closure { set_of_closures; closure_id; } ->
     begin match Env.get_descr env (Env.find_approx env set_of_closures) with
     | Some (Value_set_of_closures set_of_closures) ->
@@ -281,6 +288,7 @@ and descr_of_named (env : Env.t) (named : Flambda.named)
       (* CR pchambart: This should be [assert false], but currently there are a
          few cases where this is less precise than inline_and_simplify.
          mshinwell: Can you elaborate? *)
+      (* We may also get here with -classic-heuristic. *)
       Value_unknown
     end
   | Move_within_set_of_closures { closure; start_from; move_to; } ->
@@ -390,13 +398,18 @@ let describe_constant_defining_value env export_id symbol
     in
     Env.record_descr env export_id (Value_block (tag, Array.of_list approxs))
   | Set_of_closures set_of_closures ->
-    let descr : Export_info.descr =
-      Value_set_of_closures
-        { (describe_set_of_closures env set_of_closures) with
-          aliased_symbol = Some symbol;
-        }
-    in
-    Env.record_descr env export_id descr
+    if not !Clflags.classic_heuristic
+      || Flambda_utils.some_function_decls_contain_always_inline
+        set_of_closures.function_decls
+    then begin
+      let descr : Export_info.descr =
+        Value_set_of_closures
+          { (describe_set_of_closures env set_of_closures) with
+            aliased_symbol = Some symbol;
+          }
+      in
+      Env.record_descr env export_id descr
+    end
   | Project_closure (sym, closure_id) ->
     begin match Env.get_symbol_descr env sym with
     | Some (Value_set_of_closures set_of_closures) ->
@@ -412,11 +425,13 @@ let describe_constant_defining_value env export_id symbol
       in
       Env.record_descr env export_id descr
     | None ->
-      Misc.fatal_errorf
-        "Cannot project symbol %a to closure_id %a.  \
-          No available export description@."
-        Symbol.print sym
-        Closure_id.print closure_id
+      if not !Clflags.classic_heuristic then begin
+        Misc.fatal_errorf
+          "Cannot project symbol %a to closure_id %a.  \
+            No available export description@."
+          Symbol.print sym
+          Closure_id.print closure_id
+      end
     | Some (Value_closure _) ->
       Misc.fatal_errorf
         "Cannot project symbol %a to closure_id %a.  \
@@ -497,18 +512,21 @@ let build_export_info ~(backend : (module Backend_intf.S))
       in
       Ident.Map.singleton (Compilenv.current_unit_id ()) root_approx
     in
+    let only_always_inline = !Clflags.classic_heuristic in
     let sets_of_closures =
       Flambda_utils.all_function_decls_indexed_by_set_of_closures_id program
+        ~only_always_inline
     in
     let closures =
       Flambda_utils.all_function_decls_indexed_by_closure_id program
+        ~only_always_inline
     in
     let invariant_params =
       Set_of_closures_id.Map.map
         (fun { Flambda. function_decls; _ } ->
            Invariant_params.invariant_params_in_recursion
              ~backend function_decls)
-        (Flambda_utils.all_sets_of_closures_map program)
+        (Flambda_utils.all_sets_of_closures_map program ~only_always_inline)
     in
     let unnested_values =
       Env.Global.export_id_to_descr_map env
@@ -520,6 +538,8 @@ let build_export_info ~(backend : (module Backend_intf.S))
           match descr with
           | Value_closure { set_of_closures }
           | Value_set_of_closures set_of_closures ->
+            (* CR-soon mshinwell: should probably check that this isn't
+               a set of closures that should be excluded (for classic mode) *)
             let { Export_info.set_of_closures_id } = set_of_closures in
             begin match
               Set_of_closures_id.Map.find set_of_closures_id
