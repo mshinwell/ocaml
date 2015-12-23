@@ -50,6 +50,7 @@ with_frame_pointers=false
 no_naked_pointers=false
 TOOLPREF=""
 with_cfi=true
+flambda=false
 
 # Try to turn internationalization off, can cause config.guess to malfunction!
 unset LANG
@@ -159,6 +160,8 @@ while : ; do
         no_naked_pointers=true;;
     -no-cfi|--no-cfi)
         with_cfi=false;;
+    -flambda)
+        flambda=true;;
     *) if echo "$1" | grep -q -e '^--\?[a-zA-Z0-9-]\+='; then
          err "configure expects arguments of the form '-prefix /foo/bar'," \
              "not '-prefix=/foo/bar' (note the '=')."
@@ -1779,6 +1782,7 @@ echo "HOST=$host" >> Makefile
 if [ "$ostype" = Cygwin ]; then
   echo "DIFF=diff -q --strip-trailing-cr" >>Makefile
 fi
+echo "FLAMBDA=$flambda" >> Makefile
 
 
 rm -f tst hasgot.c
@@ -1846,6 +1850,11 @@ else
   inf "        profiling with gprof ..... supported"
   else
   inf "        profiling with gprof ..... not supported"
+  fi
+  if test "$flambda" = "true"; then
+  inf "        using flambda middle-end . yes"
+  else
+  inf "        using flambda middle-end . no"
   fi
 fi
 

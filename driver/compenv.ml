@@ -93,9 +93,10 @@ let module_of_filename ppf inputfile outputprefix =
   name
 ;;
 
+type filename = string
 
 type readenv_position =
-  Before_args | Before_compile | Before_link
+  Before_args | Before_compile of filename | Before_link
 
 (* Syntax of OCAMLPARAM: (name=VALUE,)* _ (,name=VALUE)*
    where VALUE should not contain ',' *)
@@ -138,24 +139,30 @@ let setter ppf f name options s =
       (Warnings.Bad_env_variable ("OCAMLPARAM",
                                   Printf.sprintf "bad value for %s" name))
 
+let int_setter ppf name option s =
+  try
+    option := int_of_string s
+  with _ ->
+    Location.print_warning Location.none ppf
+      (Warnings.Bad_env_variable
+         ("OCAMLPARAM", Printf.sprintf "non-integer parameter for \"%s\"" name))
+
+let float_setter ppf name option s =
+  try
+    option := float_of_string s
+  with _ ->
+    Location.print_warning Location.none ppf
+      (Warnings.Bad_env_variable
+         ("OCAMLPARAM", Printf.sprintf "non-float parameter for \"%s\"" name))
+
 (* 'can-discard=' specifies which arguments can be discarded without warning
    because they are not understood by some versions of OCaml. *)
 let can_discard = ref []
 
-let read_OCAMLPARAM ppf position =
-  try
-    let s = Sys.getenv "OCAMLPARAM" in
-    let (before, after) =
-      try
-        parse_args s
-      with SyntaxError s ->
-         Location.print_warning Location.none ppf
-           (Warnings.Bad_env_variable ("OCAMLPARAM", s));
-         [],[]
-    in
-    let set name options s =  setter ppf (fun b -> b) name options s in
-    let clear name options s = setter ppf (fun b -> not b) name options s in
-    List.iter (fun (name, v) ->
+let read_one_param ppf position name v =
+  let set name options s =  setter ppf (fun b -> b) name options s in
+  let clear name options s = setter ppf (fun b -> not b) name options s in
+  (* Indentation made wrong to avoid too much problems with merges *)
       match name with
       | "g" -> set "g" [ Clflags.debug ] v
       | "p" -> set "p" [ Clflags.gprofile ] v
@@ -186,10 +193,13 @@ let read_OCAMLPARAM ppf position =
       | "nodynlink" -> clear "nodynlink" [ dlcode ] v
       | "short-paths" -> clear "short-paths" [ real_paths ] v
       | "trans-mod" -> set "trans-mod" [ transparent_modules ] v
+      | "opaque" -> set "opaque" [ opaque ] v
 
       | "pp" -> preprocessor := Some v
       | "runtime-variant" -> runtime_variant := v
       | "cc" -> c_compiler := Some v
+
+      | "clambda-checks" -> set "clambda-checks" [ clambda_checks ] v
 
       (* assembly sources *)
       |  "s" ->
@@ -205,13 +215,74 @@ let read_OCAMLPARAM ppf position =
       | "wwe" ->               Warnings.parse_options false v
 
       (* inlining *)
-      | "inline" -> begin try
-          inline_threshold := 8 * int_of_string v
-        with _ ->
-          Location.print_warning Location.none ppf
-            (Warnings.Bad_env_variable ("OCAMLPARAM",
-                                        "non-integer parameter for \"inline\""))
-        end
+      | "inline" ->
+        Float_arg_helper.parse v
+          "Bad syntax in OCAMLPARAM for 'inline'"
+          inline_threshold
+      | "inline-toplevel" ->
+        Int_arg_helper.parse v
+          "Bad syntax in OCAMLPARAM for 'inline-toplevel'"
+          inline_toplevel_threshold
+
+      | "rounds" -> int_setter ppf "rounds" simplify_rounds v
+      | "unroll" ->
+        Int_arg_helper.parse v "Bad syntax in OCAMLPARAM for 'unroll'"
+          unroll
+      | "inline-call-cost" ->
+        Int_arg_helper.parse v
+          "Bad syntax in OCAMLPARAM for 'inline-call-cost'"
+          inline_call_cost
+      | "inline-alloc-cost" ->
+        Int_arg_helper.parse v
+          "Bad syntax in OCAMLPARAM for 'inline-alloc-cost'"
+          inline_alloc_cost
+      | "inline-prim-cost" ->
+        Int_arg_helper.parse v
+          "Bad syntax in OCAMLPARAM for 'inline-prim-cost'"
+          inline_prim_cost
+      | "inline-branch-cost" ->
+        Int_arg_helper.parse v
+          "Bad syntax in OCAMLPARAM for 'inline-branch-cost'"
+          inline_branch_cost
+      | "inline-indirect-cost" ->
+        Int_arg_helper.parse v
+          "Bad syntax in OCAMLPARAM for 'inline-indirect-cost'"
+          inline_indirect_cost
+      | "inline-lifting-benefit" ->
+        Int_arg_helper.parse v
+          "Bad syntax in OCAMLPARAM for 'inline-lifting-benefit'"
+          inline_lifting_benefit
+      | "branch-inline-factor" ->
+        Float_arg_helper.parse v
+          "Bad syntax in OCAMLPARAM for 'branch-inline-factor'"
+          branch_inline_factor
+      | "max-inlining-depth" ->
+        Int_arg_helper.parse v
+          "Bad syntax in OCAMLPARAM for 'max-inlining-depth'"
+          max_inlining_depth
+
+      | "classic-heuristic" ->
+          set "classic-heuristic" [ classic_heuristic ] v
+      | "O2" ->
+          set "O2" [ o2 ] v
+      | "O3" ->
+          set "O3" [ o3 ] v
+      | "unbox-closures" ->
+          set "unbox-closures" [ unbox_closures ] v
+      | "remove-unused-arguments" ->
+          set "remove-unused-arguments" [ remove_unused_arguments ] v
+      | "no-inline-recursive-functions" ->
+          clear "no-inline-recursive-functions" [ inline_recursive_functions ] v
+
+      | "inlining-stats" ->
+          if !native_code then
+            set "inlining-stats" [ inlining_stats ] v
+
+      | "timings" -> set "timings" [ print_timings ] v
+      | "flambda-verbose" ->
+          set "flambda-verbose" [ dump_flambda_verbose ] v
+      | "flambda-invariants" ->
+          set "flambda-invariants" [ flambda_invariant_checks ] v
 
       (* color output *)
       | "color" ->
@@ -229,14 +300,14 @@ let read_OCAMLPARAM ppf position =
       | "I" -> begin
           match position with
           | Before_args -> first_include_dirs := v :: !first_include_dirs
-          | Before_link | Before_compile ->
+          | Before_link | Before_compile _ ->
             last_include_dirs := v :: !last_include_dirs
         end
 
       | "cclib" ->
         begin
           match position with
-          | Before_compile -> ()
+          | Before_compile _ -> ()
           | Before_link | Before_args ->
             ccobjs := Misc.rev_split_words v @ !ccobjs
         end
@@ -244,7 +315,7 @@ let read_OCAMLPARAM ppf position =
       | "ccopts" ->
         begin
           match position with
-          | Before_link | Before_compile ->
+          | Before_link | Before_compile _ ->
             last_ccopts := v :: !last_ccopts
           | Before_args ->
             first_ccopts := v :: !first_ccopts
@@ -253,7 +324,7 @@ let read_OCAMLPARAM ppf position =
       | "ppx" ->
         begin
           match position with
-          | Before_link | Before_compile ->
+          | Before_link | Before_compile _ ->
             last_ppx := v :: !last_ppx
           | Before_args ->
             first_ppx := v :: !first_ppx
@@ -264,7 +335,7 @@ let read_OCAMLPARAM ppf position =
         if not !native_code then
         begin
           match position with
-          | Before_link | Before_compile ->
+          | Before_link | Before_compile _ ->
             last_objfiles := v ::! last_objfiles
           | Before_args ->
             first_objfiles := v :: !first_objfiles
@@ -274,7 +345,7 @@ let read_OCAMLPARAM ppf position =
         if !native_code then
         begin
           match position with
-          | Before_link | Before_compile ->
+          | Before_link | Before_compile _ ->
             last_objfiles := v ::! last_objfiles
           | Before_args ->
             first_objfiles := v :: !first_objfiles
@@ -286,8 +357,6 @@ let read_OCAMLPARAM ppf position =
 
       | "can-discard" ->
         can_discard := v ::!can_discard
-
-      | "timings" -> set "timings" [ print_timings ] v
 
       | _ ->
         if not (List.mem name !can_discard) then begin

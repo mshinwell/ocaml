@@ -18,6 +18,15 @@ open Clflags
 open Misc
 open Cmm
 
+type lambda_program =
+  { code : Lambda.lambda;
+    main_module_block_size : int;
+  }
+
+type _ backend_kind =
+  | Lambda : lambda_program backend_kind
+  | Flambda : unit backend_kind
+
 type error = Assembler_error of string
 
 exception Error of error
@@ -35,8 +44,18 @@ let pass_dump_linear_if ppf flag message phrase =
   if !flag then fprintf ppf "*** %s@.%a@." message Printlinear.fundecl phrase;
   phrase
 
-let clambda_dump_if ppf ulambda =
-  if !dump_clambda then Printclambda.clambda ppf ulambda; ulambda
+let raw_clambda_dump_if ppf (ulambda, _, structured_constants) =
+  if !dump_rawclambda then
+    begin
+      Format.fprintf ppf "@.clambda:@.";
+      Printclambda.clambda ppf ulambda;
+      List.iter (fun ((symbol, _), cst) ->
+          Format.fprintf ppf "%a:@ %a@."
+            Symbol.print symbol
+            Printclambda.structured_constant cst)
+        structured_constants
+    end;
+  if !dump_cmm then Format.fprintf ppf "@.cmm:@."
 
 let rec regalloc ppf round fd =
   if round > 50 then
@@ -100,7 +119,7 @@ let compile_genfuns ppf f =
        | _ -> ())
     (Cmmgen.generic_functions true [Compilenv.current_unit_infos ()])
 
-let compile_unit ~sourcefile asm_filename keep_asm obj_filename gen =
+let compile_unit ~sourcefile _output_prefix asm_filename keep_asm obj_filename gen =
   let create_asm = keep_asm || not !Emitaux.binary_backend_available in
   Emitaux.create_asm_file := create_asm;
   try
@@ -124,22 +143,30 @@ let compile_unit ~sourcefile asm_filename keep_asm obj_filename gen =
     remove_file obj_filename;
     raise exn
 
-let gen_implementation ?toplevel ~sourcefile ppf (size, lam) =
+let set_export_info (ulambda, prealloc, structured_constants, export) =
+  Compilenv.set_export_info export;
+  (ulambda, prealloc, structured_constants)
+
+type clambda_and_constants =
+  Clambda.ulambda *
+  Clambda.preallocated_block list *
+  ((Symbol.t * bool (* exported *)) *
+   Clambda.ustructured_constant) list
+
+let end_gen_implementation ?toplevel ~sourcefile ppf
+    (clambda:clambda_and_constants) =
   Emit.begin_assembly ();
-  Timings.(time (Clambda sourcefile)) (Closure.intro size) lam
-  ++ clambda_dump_if ppf
-  ++ Timings.(time (Cmm sourcefile)) (Cmmgen.compunit size)
+  clambda
+  ++ Timings.(time (Cmm sourcefile)) Cmmgen.compunit_and_constants
   ++ Timings.(time (Compile_phrases sourcefile))
        (List.iter (compile_phrase ppf))
   ++ (fun () -> ());
   (match toplevel with None -> () | Some f -> compile_genfuns ppf f);
-
   (* We add explicit references to external primitive symbols.  This
      is to ensure that the object files that define these symbols,
      when part of a C library, won't be discarded by the linker.
      This is important if a module that uses such a symbol is later
      dynlinked. *)
-
   compile_phrase ppf
     (Cmmgen.reference_symbols
        (List.filter (fun s -> s <> "" && s.[0] <> '%')
@@ -147,14 +174,49 @@ let gen_implementation ?toplevel ~sourcefile ppf (size, lam) =
     );
   Emit.end_assembly ()
 
-let compile_implementation ?toplevel ~sourcefile prefixname ppf (size, lam) =
+let lambda_gen_implementation ?toplevel ~sourcefile ppf
+    (lambda:lambda_program) =
+  let clambda = Closure.intro lambda.main_module_block_size lambda.code in
+  let preallocated_block =
+    Clambda.{
+      symbol = Linkage_name.to_string (Compilenv.current_unit_linkage_name ());
+      tag = 0;
+      size = lambda.main_module_block_size;
+    }
+  in
+  let compilation_unit = Compilenv.current_unit () in
+  let constants =
+    let constants = Compilenv.structured_constants () in
+    Compilenv.clear_structured_constants ();
+    List.map (fun (name, exported, const) ->
+        (Symbol.unsafe_create compilation_unit
+           (Linkage_name.create name),
+         exported),
+        const)
+      constants
+  in
+  let clambda_and_constants =
+    clambda, [preallocated_block], constants
+  in
+  raw_clambda_dump_if ppf clambda_and_constants;
+  end_gen_implementation ?toplevel ~sourcefile ppf clambda_and_constants
+
+let gen_implementation (type t) ?toplevel ~sourcefile ~backend
+    (backend_kind: t backend_kind) ppf (code : t) =
+  match backend_kind with
+  | Flambda -> Misc.fatal_error "Flambda backend not yet available"
+  | Lambda -> lambda_gen_implementation ?toplevel ~sourcefile ppf code
+
+let compile_implementation (type t) ?toplevel ~sourcefile prefixname ~backend
+    (backend_kind: t backend_kind) ppf (code : t) =
   let asmfile =
     if !keep_asm_file || !Emitaux.binary_backend_available
     then prefixname ^ ext_asm
     else Filename.temp_file "camlasm" ext_asm
   in
-  compile_unit sourcefile asmfile !keep_asm_file (prefixname ^ ext_obj)
-    (fun () -> gen_implementation ?toplevel ~sourcefile ppf (size, lam))
+  compile_unit ~sourcefile prefixname asmfile !keep_asm_file (prefixname ^ ext_obj)
+    (fun () ->
+       gen_implementation ?toplevel ~sourcefile ~backend backend_kind ppf code)
 
 (* Error report *)
 

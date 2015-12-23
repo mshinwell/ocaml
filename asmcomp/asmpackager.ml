@@ -75,7 +75,8 @@ let check_units members =
 
 (* Make the .o file for the package *)
 
-let make_package_object ppf members targetobj targetname coercion =
+let make_package_object ppf members targetobj targetname coercion
+      ~backend =
   let objtemp =
     if !Clflags.keep_asm_file
     then chop_extension_if_any targetobj ^ ".pack" ^ Config.ext_obj
@@ -91,10 +92,19 @@ let make_package_object ppf members targetobj targetname coercion =
         | PM_intf -> None
         | PM_impl _ -> Some(Ident.create_persistent m.pm_name))
       members in
-  Asmgen.compile_implementation ~sourcefile:"pack"
-    (chop_extension_if_any objtemp) ppf
-    (Translmod.transl_store_package
-       components (Ident.create_persistent targetname) coercion);
+  let module_ident = Ident.create_persistent targetname in
+  let sourcefile = "pack" in
+  let prefixname = chop_extension_if_any objtemp in
+  if Config.flambda then begin
+    Misc.fatal_error "Flambda backend not available yet"
+  end else begin
+    let main_module_block_size, code =
+      Translmod.transl_store_package
+        components (Ident.create_persistent targetname) coercion in
+    Asmgen.compile_implementation ~sourcefile
+      prefixname ~backend Asmgen.Lambda ppf
+      Asmgen.{ code; main_module_block_size; }
+  end;
   let objfiles =
     List.map
       (fun m -> chop_extension_if_any m.pm_file ^ Config.ext_obj)
@@ -106,6 +116,18 @@ let make_package_object ppf members targetobj targetname coercion =
   if not ok then raise(Error Linking_error)
 
 (* Make the .cmx file for the package *)
+
+let get_export_info ui =
+  assert(Config.flambda);
+  match ui.ui_export_info with
+  | Clambda _ -> assert false
+  | Flambda info -> info
+
+let get_approx ui =
+  assert(not Config.flambda);
+  match ui.ui_export_info with
+  | Flambda _ -> assert false
+  | Clambda info -> info
 
 let build_package_cmx members cmxfile =
   let unit_names =
@@ -122,7 +144,27 @@ let build_package_cmx members cmxfile =
       (fun m accu ->
         match m.pm_kind with PM_intf -> accu | PM_impl info -> info :: accu)
       members [] in
+  let pack_units =
+    List.fold_left
+      (fun set info ->
+         let unit_id = Compilenv.unit_id_from_name info.ui_name in
+         Compilation_unit.Set.add
+           (Compilenv.unit_for_global unit_id) set)
+      Compilation_unit.Set.empty units in
+  let units =
+    if Config.flambda then
+      Misc.fatal_error "Flambda backend not available yet"
+    else
+      units
+  in
   let ui = Compilenv.current_unit_infos() in
+  let ui_export_info =
+    if Config.flambda then
+      Flambda ()
+    else
+      Clambda (get_approx ui)
+  in
+  Export_info_for_pack.clear_import_state ();
   let pkg_infos =
     { ui_name = ui.ui_name;
       ui_symbol = ui.ui_symbol;
@@ -134,7 +176,6 @@ let build_package_cmx members cmxfile =
           filter(Asmlink.extract_crc_interfaces());
       ui_imports_cmx =
           filter(Asmlink.extract_crc_implementations());
-      ui_approx = ui.ui_approx;
       ui_curry_fun =
           union(List.map (fun info -> info.ui_curry_fun) units);
       ui_apply_fun =
@@ -143,25 +184,26 @@ let build_package_cmx members cmxfile =
           union(List.map (fun info -> info.ui_send_fun) units);
       ui_force_link =
           List.exists (fun info -> info.ui_force_link) units;
+      ui_export_info;
     } in
   Compilenv.write_unit_info pkg_infos cmxfile
 
 (* Make the .cmx and the .o for the package *)
 
 let package_object_files ppf files targetcmx
-                         targetobj targetname coercion =
+                         targetobj targetname coercion ~backend =
   let pack_path =
     match !Clflags.for_package with
     | None -> targetname
     | Some p -> p ^ "." ^ targetname in
   let members = map_left_right (read_member_info pack_path) files in
   check_units members;
-  make_package_object ppf members targetobj targetname coercion;
+  make_package_object ppf members targetobj targetname coercion ~backend;
   build_package_cmx members targetcmx
 
 (* The entry point *)
 
-let package_files ppf initial_env files targetcmx =
+let package_files ppf initial_env files targetcmx ~backend =
   let files =
     List.map
       (fun f ->
@@ -181,6 +223,7 @@ let package_files ppf initial_env files targetcmx =
     let coercion =
       Typemod.package_units initial_env files targetcmi targetname in
     package_object_files ppf files targetcmx targetobj targetname coercion
+      ~backend
   with x ->
     remove_file targetcmx; remove_file targetobj;
     raise x

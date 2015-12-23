@@ -73,8 +73,10 @@ type t =
   | Misplaced_attribute of string           (* 53 *)
   | Duplicated_attribute of string          (* 54 *)
   | Inlining_impossible of string           (* 55 *)
-  | Unreachable_case                        (* 56 *)
-  | Ambiguous_pattern of string list        (* 57 *)
+  | Assignment_on_non_mutable_value         (* 56 *)
+  | Missing_symbol_information of string * string (* 57 *)
+  | Unreachable_case                        (* 58 *)
+  | Ambiguous_pattern of string list        (* 59 *)
 ;;
 
 (* If you remove a warning, leave a hole in the numbering.  NEVER change
@@ -139,12 +141,15 @@ let number = function
   | Misplaced_attribute _ -> 53
   | Duplicated_attribute _ -> 54
   | Inlining_impossible _ -> 55
-  | Unreachable_case -> 56
-  | Ambiguous_pattern _ -> 57
+  | Assignment_on_non_mutable_value -> 56
+  | Missing_symbol_information _ -> 57
+  | Unreachable_case -> 58
+  | Ambiguous_pattern _ -> 59
 ;;
 
-let last_warning_number = 57
+let last_warning_number = 59
 ;;
+
 (* Must be the max number returned by the [number] function. *)
 
 let letter = function
@@ -532,8 +537,10 @@ let descriptions =
    53, "Attribute cannot appear in this context";
    54, "Attribute used more than once on an expression";
    55, "Inlining impossible";
-   56, "Unreachable case in a pattern-matching (based on type information).";
-   57, "Ambiguous binding by pattern.";
+   56, "Assignment on non-mutable value";
+   57, "Missing symbol information (is a .cmx file missing?)";
+   58, "Unreachable case in a pattern-matching (based on type information).";
+   59, "Ambiguous binding by pattern.";
   ]
 ;;
 

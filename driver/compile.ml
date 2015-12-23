@@ -69,7 +69,7 @@ let implementation ppf sourcefile outputprefix =
       ++ Timings.(time (Typing sourcefile))
           (Typemod.type_implementation sourcefile outputprefix modulename env)
       ++ print_if ppf Clflags.dump_typedtree
-        Printtyped.implementation_with_coercion
+                  Printtyped.implementation_with_coercion
     in
     if !Clflags.print_types then begin
       Warnings.check_fatal ();

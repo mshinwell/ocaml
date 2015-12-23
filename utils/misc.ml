@@ -19,6 +19,13 @@ let fatal_error msg =
 
 let fatal_errorf fmt = Format.kasprintf fatal_error fmt
 
+let fatal_errorf fmt =
+  let (_ : string) = Format.flush_str_formatter () in
+  Format.kfprintf (fun ppf ->
+      fatal_error (Format.flush_str_formatter ()))
+    Format.str_formatter
+    fmt
+
 (* Exceptions *)
 
 let try_finally work cleanup =
@@ -72,6 +79,73 @@ let rec samelist pred l1 l2 =
   | (hd1 :: tl1, hd2 :: tl2) -> pred hd1 hd2 && samelist pred tl1 tl2
   | (_, _) -> false
 
+let sameoption pred o1 o2 =
+  match (o1, o2) with
+  | None, None -> true
+  | Some e1, Some e2 -> pred e1 e2
+  | _, _ -> false
+
+let rec map2_head f l1 l2 =
+  match l1, l2 with
+  | [], _ -> [], l2
+  | h::t, [] -> raise (Invalid_argument "map2_head")
+  | h1::t1, h2::t2 ->
+      let h = f h1 h2 in
+      let (t,rem) = map2_head f t1 t2 in
+      h::t, rem
+
+let rec some_if_all_elements_are_some = function
+  | [] -> Some []
+  | h::t ->
+      match some_if_all_elements_are_some t with
+      | None -> None
+      | Some t' -> match h with
+        | None -> None
+        | Some h' -> Some (h' :: t')
+
+let split_at n l =
+  let rec aux n acc l =
+    if n = 0
+    then List.rev acc, l
+    else
+      match l with
+      | [] -> raise (Invalid_argument "split_at")
+      | t::q ->
+          aux (n-1) (t::acc) q in
+  aux n [] l
+
+let uniq_sort compare l =
+  let l = List.sort compare l in
+  let rec aux = function
+    | [] -> []
+    | [_] as l -> l
+    | h1 :: ((h2 :: _) as t) ->
+        if compare h1 h2 = 0
+        then aux t
+        else h1 :: aux t
+  in
+  aux l
+
+let rec filter_map f l =
+  match l with
+  | [] -> []
+  | h :: t ->
+    match f h with
+    | None -> filter_map f t
+    | Some v -> v :: filter_map f t
+
+let rec compare_lists compare l1 l2 =
+  match l1, l2 with
+  | [], [] -> 0
+  | [], _::_ -> -1
+  | _::_, [] -> 1
+  | h1::t1, h2::t2 ->
+    let c = compare h1 h2 in
+    if c <> 0 then
+      c
+    else
+      compare_lists compare t1 t2
+
 (* Options *)
 
 let may f = function
@@ -81,6 +155,16 @@ let may f = function
 let may_map f = function
     Some x -> Some (f x)
   | None -> None
+
+let may_fold f a b =
+  match a with
+  | None -> b
+  | Some a -> f a b
+
+let may_default f a b =
+  match a with
+  | None -> b
+  | Some a -> f a
 
 (* File functions *)
 
@@ -126,7 +210,8 @@ let find_in_path_uncap path name =
 
 let remove_file filename =
   try
-    Sys.remove filename
+    if Sys.file_exists filename then
+      Sys.remove filename
   with Sys_error msg ->
     ()
 
@@ -237,18 +322,24 @@ let replace_substring ~before ~after str =
         List.rev (suffix :: acc)
   in String.concat after (search [] 0)
 
-let rev_split_words s =
+let rev_split_words ?separator s =
+  let is_separator c =
+    match separator with
+    | Some separator -> c = separator
+    | None ->
+      match c with
+      | ' ' | '\t' | '\r' | '\n' -> true
+      | _ -> false
+  in
   let rec split1 res i =
     if i >= String.length s then res else begin
-      match s.[i] with
-        ' ' | '\t' | '\r' | '\n' -> split1 res (i+1)
-      | _ -> split2 res i (i+1)
+      if is_separator s.[i] then split1 res (i+1)
+      else split2 res i (i+1)
     end
   and split2 res i j =
     if j >= String.length s then String.sub s i (j-i) :: res else begin
-      match s.[j] with
-        ' ' | '\t' | '\r' | '\n' -> split1 (String.sub s i (j-i) :: res) (j+1)
-      | _ -> split2 res i (j+1)
+      if is_separator s.[j] then split1 (String.sub s i (j-i) :: res) (j+1)
+      else split2 res i (j+1)
     end
   in split1 [] 0
 
@@ -434,6 +525,8 @@ module Color = struct
     | Bold
     | Reset
 
+  type setting = Auto | Always | Never
+
   let ansi_of_color = function
     | Black -> "0"
     | Red -> "1"
@@ -528,9 +621,9 @@ module Color = struct
         Format.set_mark_tags true;
         List.iter set_color_tag_handling formatter_l;
         color_enabled := (match o with
-          | Clflags.Always -> true
-          | Clflags.Auto -> should_enable_color ()
-          | Clflags.Never -> false
+          | Always -> true
+          | Auto -> should_enable_color ()
+          | Never -> false
         )
       );
       ()

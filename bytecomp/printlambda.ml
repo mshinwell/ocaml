@@ -110,11 +110,26 @@ let primitive ppf = function
   | Pmakeblock(tag, Immutable) -> fprintf ppf "makeblock %i" tag
   | Pmakeblock(tag, Mutable) -> fprintf ppf "makemutable %i" tag
   | Pfield n -> fprintf ppf "field %i" n
-  | Psetfield(n, ptr) ->
-      let instr = if ptr then "setfield_ptr " else "setfield_imm " in
-      fprintf ppf "%s%i" instr n
+  | Psetfield(n, ptr, init) ->
+      let instr =
+        match ptr with
+        | Pointer -> "ptr"
+        | Immediate -> "imm"
+      in
+      let init =
+        match init with
+        | Initialization -> "(init)"
+        | Assignment -> ""
+      in
+      fprintf ppf "setfield_%s%s %i" instr init n
   | Pfloatfield n -> fprintf ppf "floatfield %i" n
-  | Psetfloatfield n -> fprintf ppf "setfloatfield %i" n
+  | Psetfloatfield (n, init) ->
+      let init =
+        match init with
+        | Initialization -> "(init)"
+        | Assignment -> ""
+      in
+      fprintf ppf "setfloatfield%s %i" init n
   | Pduprecord (rep, size) -> fprintf ppf "duprecord %a %i" record_rep rep size
   | Plazyforce -> fprintf ppf "force"
   | Pccall p -> fprintf ppf "%s" p.prim_name
@@ -162,7 +177,10 @@ let primitive ppf = function
   | Pstringrefs -> fprintf ppf "string.get"
   | Pstringsets -> fprintf ppf "string.set"
   | Parraylength k -> fprintf ppf "array.length[%s]" (array_kind k)
-  | Pmakearray k -> fprintf ppf "makearray[%s]" (array_kind k)
+  | Pmakearray (k, Mutable) -> fprintf ppf "makearray[%s]" (array_kind k)
+  | Pmakearray (k, Immutable) -> fprintf ppf "makearray_imm[%s]" (array_kind k)
+  | Pduparray (k, Mutable) -> fprintf ppf "duparray[%s]" (array_kind k)
+  | Pduparray (k, Immutable) -> fprintf ppf "duparray_imm[%s]" (array_kind k)
   | Parrayrefu k -> fprintf ppf "array.unsafe_get[%s]" (array_kind k)
   | Parraysetu k -> fprintf ppf "array.unsafe_set[%s]" (array_kind k)
   | Parrayrefs k -> fprintf ppf "array.get[%s]" (array_kind k)

@@ -33,13 +33,16 @@ OCAMLBUILDNATIVE=$(WITH_OCAMLBUILD:=.native)
 
 OCAMLDOC_OPT=$(WITH_OCAMLDOC:=.opt)
 
-INCLUDES=-I utils -I parsing -I typing -I bytecomp -I asmcomp -I driver \
-	 -I toplevel
+INCLUDES=-I utils -I parsing -I typing -I bytecomp -I middle_end \
+         -I middle_end/base_types -I asmcomp -I driver -I toplevel
 
-UTILS=utils/config.cmo utils/clflags.cmo \
-  utils/misc.cmo utils/tbl.cmo utils/timings.cmo \
+UTILS=utils/config.cmo utils/timings.cmo utils/misc.cmo \
+  utils/identifiable.cmo utils/numbers.cmo \
+  utils/arg_helper.cmo utils/clflags.cmo \
+  utils/tbl.cmo \
   utils/terminfo.cmo utils/ccomp.cmo utils/warnings.cmo \
-  utils/consistbl.cmo
+  utils/consistbl.cmo \
+  utils/sort_connected_components.cmo
 
 PARSING=parsing/location.cmo parsing/longident.cmo \
   parsing/docstrings.cmo parsing/ast_helper.cmo \
@@ -102,8 +105,10 @@ ASMCOMP=\
   asmcomp/arch.cmo \
   asmcomp/cmm.cmo asmcomp/printcmm.cmo \
   asmcomp/reg.cmo asmcomp/mach.cmo asmcomp/proc.cmo \
-  asmcomp/clambda.cmo asmcomp/printclambda.cmo asmcomp/compilenv.cmo \
-  asmcomp/closure.cmo asmcomp/strmatch.cmo asmcomp/cmmgen.cmo \
+  asmcomp/clambda.cmo asmcomp/printclambda.cmo \
+  asmcomp/compilenv.cmo \
+  asmcomp/closure.cmo \
+  asmcomp/strmatch.cmo asmcomp/cmmgen.cmo \
   asmcomp/printmach.cmo asmcomp/selectgen.cmo asmcomp/selection.cmo \
   asmcomp/comballoc.cmo \
   asmcomp/CSEgen.cmo asmcomp/CSE.cmo \
@@ -120,6 +125,11 @@ ASMCOMP=\
   asmcomp/asmlink.cmo asmcomp/asmlibrarian.cmo asmcomp/asmpackager.cmo \
   driver/opterrors.cmo driver/optcompile.cmo
 
+MIDDLE_END=\
+  middle_end/base_types/linkage_name.cmo \
+  middle_end/base_types/compilation_unit.cmo \
+  middle_end/base_types/symbol.cmo
+
 TOPLEVEL=toplevel/genprintval.cmo toplevel/toploop.cmo \
   toplevel/trace.cmo toplevel/topdirs.cmo toplevel/topmain.cmo
 
@@ -134,3 +144,4 @@ TOPLEVELSTART=toplevel/topstart.cmo
 OPTTOPLEVELSTART=toplevel/opttopstart.cmo
 
 PERVASIVES=$(STDLIB_MODULES) outcometree topdirs toploop
+
