@@ -64,7 +64,7 @@ let do_transl modulename modul =
   in
   (id, size), lam
 
-let implementation ppf sourcefile outputprefix ~backend =
+let implementation ppf sourcefile outputprefix =
   Compmisc.init_path true;
   let modulename = module_of_filename ppf sourcefile outputprefix in
   Env.set_unit_name modulename;
@@ -85,39 +85,9 @@ let implementation ppf sourcefile outputprefix ~backend =
     in
     if not !Clflags.print_types then begin
       if Config.flambda then begin
-        if !Clflags.o3 then begin
-          Clflags.simplify_rounds := 3;
-          Clflags.use_inlining_arguments_set ~round:1 Clflags.o1_arguments;
-          Clflags.use_inlining_arguments_set ~round:2 Clflags.o2_arguments;
-          Clflags.use_inlining_arguments_set ~round:3 Clflags.o3_arguments
-        end
-        else if !Clflags.o2 then begin
-          Clflags.simplify_rounds := 2;
-          Clflags.use_inlining_arguments_set ~round:1 Clflags.o1_arguments;
-          Clflags.use_inlining_arguments_set ~round:2 Clflags.o2_arguments
-        end
-        else if !Clflags.classic_heuristic then begin
-          Clflags.use_inlining_arguments_set Clflags.classic_arguments
-        end;
-        (typedtree, coercion)
-        ++ Timings.(time (Timings.Transl sourcefile) do_transl modulename)
-        +++ print_if ppf Clflags.dump_rawlambda Printlambda.lambda
-        ++ Timings.time (Timings.Generate sourcefile) (fun lambda ->
-          lambda
-          +++ Simplif.simplify_lambda
-          +++ print_if ppf Clflags.dump_lambda Printlambda.lambda
-          ++ (fun ((module_ident, size), lam) ->
-              Middle_end.middle_end ppf ~sourcefile ~prefixname:outputprefix
-                ~size
-                ~module_ident
-                ~backend
-                ~module_initializer:lam)
-          ++ Asmgen.compile_implementation ~sourcefile outputprefix ~backend
-            Asmgen.Flambda ppf;
-          Compilenv.save_unit_info cmxfile)
+        Misc.fatal_error "Flambda not yet merged"
       end
       else begin
-        Clflags.use_inlining_arguments_set Clflags.classic_arguments;
         (typedtree, coercion)
         ++ Timings.(time (Transl sourcefile))
             (Translmod.transl_store_implementation modulename)
@@ -127,7 +97,7 @@ let implementation ppf sourcefile outputprefix ~backend =
               (size, Simplif.simplify_lambda lambda)
               +++ print_if ppf Clflags.dump_lambda Printlambda.lambda
               ++ (fun (main_module_block_size, code) -> Asmgen.{ code; main_module_block_size })
-              ++ Asmgen.compile_implementation ~sourcefile outputprefix ~backend Asmgen.Lambda ppf;
+              ++ Asmgen.compile_implementation ~sourcefile outputprefix Asmgen.Closure ppf;
               Compilenv.save_unit_info cmxfile)
       end
     end;

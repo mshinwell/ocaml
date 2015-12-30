@@ -38,11 +38,10 @@ INCLUDES=-I utils -I parsing -I typing -I bytecomp -I middle_end \
 
 UTILS=utils/config.cmo utils/timings.cmo utils/misc.cmo \
   utils/identifiable.cmo utils/numbers.cmo \
-  utils/arg_helper.cmo utils/clflags.cmo \
+  utils/clflags.cmo \
   utils/tbl.cmo \
   utils/terminfo.cmo utils/ccomp.cmo utils/warnings.cmo \
-  utils/consistbl.cmo \
-  utils/sort_connected_components.cmo
+  utils/consistbl.cmo
 
 PARSING=parsing/location.cmo parsing/longident.cmo \
   parsing/docstrings.cmo parsing/ast_helper.cmo \

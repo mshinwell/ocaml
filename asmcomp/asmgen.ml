@@ -24,7 +24,7 @@ type lambda_program =
   }
 
 type _ backend_kind =
-  | Lambda : lambda_program backend_kind
+  | Closure : lambda_program backend_kind
   | Flambda : unit backend_kind
 
 type error = Assembler_error of string
@@ -45,7 +45,7 @@ let pass_dump_linear_if ppf flag message phrase =
   phrase
 
 let raw_clambda_dump_if ppf (ulambda, _, structured_constants) =
-  if !dump_rawclambda then
+  if !dump_clambda then
     begin
       Format.fprintf ppf "@.clambda:@.";
       Printclambda.clambda ppf ulambda;
@@ -143,10 +143,6 @@ let compile_unit ~sourcefile _output_prefix asm_filename keep_asm obj_filename g
     remove_file obj_filename;
     raise exn
 
-let set_export_info (ulambda, prealloc, structured_constants, export) =
-  Compilenv.set_export_info export;
-  (ulambda, prealloc, structured_constants)
-
 type clambda_and_constants =
   Clambda.ulambda *
   Clambda.preallocated_block list *
@@ -154,7 +150,7 @@ type clambda_and_constants =
    Clambda.ustructured_constant) list
 
 let end_gen_implementation ?toplevel ~sourcefile ppf
-    (clambda:clambda_and_constants) =
+    (clambda : clambda_and_constants) =
   Emit.begin_assembly ();
   clambda
   ++ Timings.(time (Cmm sourcefile)) Cmmgen.compunit_and_constants
@@ -201,13 +197,13 @@ let lambda_gen_implementation ?toplevel ~sourcefile ppf
   raw_clambda_dump_if ppf clambda_and_constants;
   end_gen_implementation ?toplevel ~sourcefile ppf clambda_and_constants
 
-let gen_implementation (type t) ?toplevel ~sourcefile ~backend
+let gen_implementation (type t) ?toplevel ~sourcefile
     (backend_kind: t backend_kind) ppf (code : t) =
   match backend_kind with
   | Flambda -> Misc.fatal_error "Flambda backend not yet available"
-  | Lambda -> lambda_gen_implementation ?toplevel ~sourcefile ppf code
+  | Closure -> lambda_gen_implementation ?toplevel ~sourcefile ppf code
 
-let compile_implementation (type t) ?toplevel ~sourcefile prefixname ~backend
+let compile_implementation (type t) ?toplevel ~sourcefile prefixname
     (backend_kind: t backend_kind) ppf (code : t) =
   let asmfile =
     if !keep_asm_file || !Emitaux.binary_backend_available
@@ -216,7 +212,7 @@ let compile_implementation (type t) ?toplevel ~sourcefile prefixname ~backend
   in
   compile_unit ~sourcefile prefixname asmfile !keep_asm_file (prefixname ^ ext_obj)
     (fun () ->
-       gen_implementation ?toplevel ~sourcefile ~backend backend_kind ppf code)
+       gen_implementation ?toplevel ~sourcefile backend_kind ppf code)
 
 (* Error report *)
 

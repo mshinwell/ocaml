@@ -39,6 +39,9 @@ val split_last: 'a list -> 'a list * 'a
 val samelist: ('a -> 'a -> bool) -> 'a list -> 'a list -> bool
         (* Like [List.for_all2] but returns [false] if the two
            lists have different length. *)
+val compare_lists : ('a -> 'a -> int) -> 'a list -> 'a list -> int
+        (* compare_lists is the lexicographic order supported by the
+           provided order *)
 
 val may: ('a -> unit) -> 'a option -> unit
 val may_map: ('a -> 'b) -> 'a option -> 'b option
@@ -119,8 +122,9 @@ val replace_substring: before:string -> after:string -> string -> string
            occurences of [before] with [after] in [str] and returns
            the resulting string. *)
 
-val rev_split_words: string -> string list
-        (* [rev_split_words s] splits [s] in blank-separated words, and return
+val rev_split_words: ?separator:char -> string -> string list
+        (* [rev_split_words s] splits [s] in blank-separated words (or
+           [separator]-separated words if specified), and return
            the list of words in reverse order. *)
 
 val get_ref: 'a list ref -> 'a list
@@ -224,6 +228,8 @@ module Color : sig
     | Bold
     | Reset
 
+  type setting = Auto | Always | Never
+
   val ansi_of_style_l : style list -> string
   (* ANSI escape sequence for the given style *)
 
@@ -237,7 +243,7 @@ module Color : sig
   val get_styles: unit -> styles
   val set_styles: styles -> unit
 
-  val setup : Clflags.color_setting -> unit
+  val setup : setting -> unit
   (* [setup opt] will enable or disable color handling on standard formatters
      according to the value of color setting [opt].
      Only the first call to this function has an effect. *)

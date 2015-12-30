@@ -299,7 +299,6 @@ let primitives_table = create_hashtable 57 [
   "%bswap_int64", Pbbswap(Pint64);
   "%bswap_native", Pbbswap(Pnativeint);
   "%int_as_pointer", Pint_as_pointer;
-  "%opaque", Popaque;
 ]
 
 let prim_obj_dup =
@@ -446,8 +445,8 @@ let check_recursive_lambda idlist lam =
         let idlist' = add_letrec bindings idlist in
         List.for_all (fun (id, arg) -> check idlist' arg) bindings &&
         check_top idlist' body
-    | Lprim (Pmakearray (Pgenarray), args) -> false
-    | Lprim (Pmakearray Pfloatarray, args) ->
+    | Lprim (Pmakearray (Pgenarray, _), args) -> false
+    | Lprim (Pmakearray (Pfloatarray, _), args) ->
         List.for_all (check idlist) args
     | Lsequence (lam1, lam2) -> check idlist lam1 && check_top idlist lam2
     | Levent (lam, _) -> check_top idlist lam
@@ -466,8 +465,8 @@ let check_recursive_lambda idlist lam =
         check idlist' body
     | Lprim(Pmakeblock(tag, mut), args) ->
         List.for_all (check idlist) args
-    | Lprim (Pmakearray Pfloatarray, _) -> false
-    | Lprim(Pmakearray(_), args) ->
+    | Lprim (Pmakearray (Pfloatarray, _), _) -> false
+    | Lprim (Pmakearray _, args) ->
         List.for_all (check idlist) args
     | Lsequence (lam1, lam2) -> check idlist lam1 && check idlist lam2
     | Levent (lam, _) -> check idlist lam
@@ -840,9 +839,11 @@ and transl_exp0 e =
       let access =
         match lbl.lbl_repres with
           Record_regular
-        | Record_inlined _ -> Psetfield(lbl.lbl_pos, maybe_pointer newval)
-        | Record_float -> Psetfloatfield lbl.lbl_pos
-        | Record_extension -> Psetfield (lbl.lbl_pos + 1, maybe_pointer newval)
+        | Record_inlined _ ->
+          Psetfield(lbl.lbl_pos, maybe_pointer newval, Assignment)
+        | Record_float -> Psetfloatfield (lbl.lbl_pos, Assignment)
+        | Record_extension ->
+          Psetfield (lbl.lbl_pos + 1, maybe_pointer newval, Assignment)
       in
       Lprim(access, [transl_exp arg; transl_exp newval])
   | Texp_array expr_list ->
@@ -850,7 +851,10 @@ and transl_exp0 e =
       let ll = transl_list expr_list in
       begin try
         (* Deactivate constant optimization if array is small enough *)
-        if List.length ll <= 4 then raise Not_constant;
+        if List.length ll <= use_dup_for_constant_arrays_bigger_than
+        then begin
+          raise Not_constant
+        end;
         let cl = List.map extract_constant ll in
         let master =
           match kind with
@@ -862,7 +866,7 @@ and transl_exp0 e =
               raise Not_constant in             (* can this really happen? *)
         Lprim(Pccall prim_obj_dup, [master])
       with Not_constant ->
-        Lprim(Pmakearray kind, ll)
+        Lprim(Pmakearray (kind, Mutable), ll)
       end
   | Texp_ifthenelse(cond, ifso, Some ifnot) ->
       Lifthenelse(transl_exp cond,
@@ -1196,14 +1200,17 @@ and transl_record env all_labels repres lbl_expr_list opt_init_expr =
         | Record_regular -> Lconst(Const_block(0, cl))
         | Record_inlined tag -> Lconst(Const_block(tag, cl))
         | Record_float ->
-            Lconst(Const_float_array(List.map extract_float cl))
+            if !Clflags.native_code then
+              Lprim (Pmakearray (Pfloatarray, Immutable), ll)
+            else
+              Lconst(Const_float_array(List.map extract_float cl))
         | Record_extension ->
             raise Not_constant
       with Not_constant ->
         match repres with
           Record_regular -> Lprim(Pmakeblock(0, mut), ll)
         | Record_inlined tag -> Lprim(Pmakeblock(tag, mut), ll)
-        | Record_float -> Lprim(Pmakearray Pfloatarray, ll)
+        | Record_float -> Lprim(Pmakearray (Pfloatarray, mut), ll)
         | Record_extension ->
             let path =
               match all_labels.(0).lbl_res.desc with

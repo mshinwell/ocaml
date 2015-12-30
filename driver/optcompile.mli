@@ -20,7 +20,6 @@ val implementation
    : formatter
   -> string
   -> string
-  -> backend:(module Backend_intf.S)
   -> unit
 
 val c_file: string -> unit

@@ -18,14 +18,13 @@ type lambda_program =
   }
 
 type _ backend_kind =
-  | Lambda : lambda_program backend_kind
+  | Closure : lambda_program backend_kind
   | Flambda : unit backend_kind
 
 val compile_implementation :
     ?toplevel:(string -> bool) ->
     sourcefile:string ->
     string ->
-    backend:(module Backend_intf.S) ->
     'a backend_kind ->
     Format.formatter -> 'a -> unit
 

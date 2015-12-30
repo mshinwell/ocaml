@@ -700,9 +700,9 @@ let rec expr_size env = function
       expr_size env body
   | Uprim(Pmakeblock(tag, mut), args, _) ->
       RHS_block (List.length args)
-  | Uprim(Pmakearray(Paddrarray | Pintarray), args, _) ->
+  | Uprim(Pmakearray((Paddrarray | Pintarray), _), args, _) ->
       RHS_block (List.length args)
-  | Uprim(Pmakearray(Pfloatarray), args, _) ->
+  | Uprim(Pmakearray(Pfloatarray, _), args, _) ->
       RHS_floatblock (List.length args)
   | Uprim (Pduprecord ((Record_regular | Record_inlined _), sz), _, _) ->
       RHS_block sz
@@ -1515,9 +1515,9 @@ let rec transl env e =
           make_alloc tag (List.map (transl env) args)
       | (Pccall prim, args) ->
           transl_ccall env prim args dbg
-      | (Pmakearray kind, []) ->
+      | (Pmakearray (kind, _), []) ->
           transl_structured_constant (Uconst_block(0, []))
-      | (Pmakearray kind, args) ->
+      | (Pmakearray (kind, _), args) ->
           begin match kind with
             Pgenarray ->
               Cop(Cextcall("caml_make_array", typ_val, true, Debuginfo.none),
@@ -1722,7 +1722,7 @@ and transl_ccall env prim args dbg =
 and transl_prim_1 env p arg dbg =
   match p with
   (* Generic operations *)
-    Pidentity | Popaque ->
+    Pidentity ->
       transl env arg
   | Pignore ->
       return_unit(remove_unit (transl env arg))
@@ -2423,7 +2423,7 @@ and transl_letrec env bindings cont =
 (* Translate a function definition *)
 
 let transl_function f =
-  let body = Un_anf.apply f.body ~what:f.label in
+  let body = f.body in
   Cfunction {fun_name = f.label;
              fun_args = List.map (fun id -> (id, typ_val)) f.params;
              fun_body = transl empty_env body;

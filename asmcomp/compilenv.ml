@@ -27,12 +27,6 @@ exception Error of error
 
 let global_infos_table =
   (Hashtbl.create 17 : (string, unit_infos option) Hashtbl.t)
-let export_infos_table =
-  (Hashtbl.create 10 : (string, Export_info.t) Hashtbl.t)
-
-let imported_sets_of_closures_table =
-  (Set_of_closures_id.Tbl.create 10
-   : Flambda.function_declarations Set_of_closures_id.Tbl.t)
 
 let sourcefile = ref None
 
@@ -64,11 +58,10 @@ let structured_constants = ref structured_constants_empty
 let exported_constants = Hashtbl.create 17
 
 let current_unit_id = ref (Ident.create_persistent "___UNINITIALIZED___")
-let merged_environment = ref Export_info.empty
 
 let default_ui_export_info =
   if Config.flambda then
-    Cmx_format.Flambda Export_info.empty
+    Cmx_format.Flambda ()
   else
     Cmx_format.Clambda Value_unknown
 
@@ -111,7 +104,6 @@ let current_unit_linkage_name () =
 
 let reset ?packname ~source_provenance:file name =
   Hashtbl.clear global_infos_table;
-  Set_of_closures_id.Tbl.clear imported_sets_of_closures_table;
   let symbol = symbolname_for_pack packname name in
   current_unit_id := unit_id_from_name name;
   sourcefile := Some file;
@@ -127,8 +119,6 @@ let reset ?packname ~source_provenance:file name =
   Hashtbl.clear exported_constants;
   structured_constants := structured_constants_empty;
   current_unit.ui_export_info <- default_ui_export_info;
-  merged_environment := Export_info.empty;
-  Hashtbl.clear export_infos_table;
   let compilation_unit =
     Compilation_unit.create
       !current_unit_id
@@ -280,38 +270,6 @@ let symbol_for_global' id =
   else
     Symbol.unsafe_create (unit_for_global id) sym_label
 
-(* Exporting and importing cross module information *)
-
-let get_flambda_export_info ui =
-  assert(Config.flambda);
-  match ui.ui_export_info with
-  | Clambda _ -> assert false
-  | Flambda ei -> ei
-
-let set_export_info export_info =
-  assert(Config.flambda);
-  current_unit.ui_export_info <- Flambda export_info
-
-let approx_for_global comp_unit =
-  let id = Compilation_unit.get_persistent_ident comp_unit in
-  if (Compilation_unit.equal
-      predefined_exception_compilation_unit
-      comp_unit)
-     || Ident.is_predef_exn id
-     || not (Ident.global id)
-  then invalid_arg (Format.asprintf "approx_for_global %a" Ident.print id);
-  let modname = Ident.name id in
-  try Hashtbl.find export_infos_table modname with
-  | Not_found ->
-    let exported = match get_global_info id with
-      | None -> Export_info.empty
-      | Some ui -> get_flambda_export_info ui in
-    Hashtbl.add export_infos_table modname exported;
-    merged_environment := Export_info.merge !merged_environment exported;
-    exported
-
-let approx_env () = !merged_environment
-
 (* Record that a currying function or application function is needed *)
 
 let need_curry_fun n =
@@ -414,27 +372,6 @@ let structured_constants () =
 let new_const_symbol' ?name () =
   Symbol.unsafe_create (current_unit ())
     (Linkage_name.create (new_const_symbol ?name ()))
-
-let concat_symbol unitname id =
-  unitname ^ "__" ^ id
-
-let closure_symbol fv =
-  let compilation_unit = Closure_id.get_compilation_unit fv in
-  let unitname =
-    Linkage_name.to_string (Compilation_unit.get_linkage_name compilation_unit)
-  in
-  let linkage_name =
-    concat_symbol unitname ((Closure_id.unique_name fv) ^ "_closure")
-  in
-  Symbol.unsafe_create compilation_unit (Linkage_name.create linkage_name)
-
-let function_label fv =
-  let compilation_unit = Closure_id.get_compilation_unit fv in
-  let unitname =
-    Linkage_name.to_string
-      (Compilation_unit.get_linkage_name compilation_unit)
-  in
-  (concat_symbol unitname (Closure_id.unique_name fv))
 
 (* Error report *)
 

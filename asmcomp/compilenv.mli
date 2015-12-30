@@ -16,10 +16,6 @@
 
 open Cmx_format
 
-(* CR mshinwell: this is a bit ugly *)
-val imported_sets_of_closures_table
-  : Flambda.function_declarations Set_of_closures_id.Tbl.t
-
 val reset: ?packname:string -> source_provenance:Timings.source_provenance ->
         string -> unit
         (* Reset the environment and record the name of the unit being
@@ -72,13 +68,6 @@ val set_global_approx: Clambda.value_approximation -> unit
 val record_global_approx_toplevel: unit -> unit
         (* Record the current approximation for the current toplevel phrase *)
 
-val set_export_info: Export_info.t -> unit
-        (* Record the informations of the unit being compiled *)
-val approx_env: unit -> Export_info.t
-        (* Returns all the information loaded from extenal compilation units *)
-val approx_for_global: Compilation_unit.t -> Export_info.t
-        (* Loads the exported information declaring the compilation_unit *)
-
 val need_curry_fun: int -> unit
 val need_apply_fun: int -> unit
 val need_send_fun: int -> unit
@@ -87,11 +76,6 @@ val need_send_fun: int -> unit
 
 val new_const_symbol : ?name:string -> unit -> string
 val new_const_symbol' : ?name:string -> unit -> Symbol.t
-val closure_symbol : Closure_id.t -> Symbol.t
-        (* Symbol of a function if the function is
-           closed (statically allocated) *)
-val function_label : Closure_id.t -> string
-        (* linkage name of the code of a function *)
 
 val new_const_label : unit -> int
 
