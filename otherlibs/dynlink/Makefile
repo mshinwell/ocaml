@@ -26,7 +26,7 @@ OCAMLOPT  = $(CAMLRUN) $(ROOTDIR)/ocamlopt -nostdlib -I $(ROOTDIR)/stdlib
 INCLUDES=-I ../../utils -I ../../typing -I ../../bytecomp -I ../../asmcomp
 COMPFLAGS=-w +33..39 -warn-error A -bin-annot -g -safe-string \
           -I ../../stdlib $(INCLUDES)
-OPTCOMPFLAGS=$(COMPFLAGS) -O3
+OPTCOMPFLAGS=$(COMPFLAGS)
 
 OBJS=dynlinkaux.cmo dynlink.cmo
 
