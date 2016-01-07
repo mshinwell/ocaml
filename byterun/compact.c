@@ -151,7 +151,6 @@ static char *compact_allocate (mlsize_t size)
 
 static void do_compaction (void)
 {
-#if 0
   char *ch, *chend;
                                           Assert (caml_gc_phase == Phase_idle);
   caml_gc_message (0x10, "Compacting heap...\n", 0);
@@ -496,7 +495,6 @@ void caml_compact_heap (void)
     Assert (caml_stat_heap_wsz == Wsize_bsize (Chunk_size (chunk)));
     CAML_INSTR_TIME (tmr, "compact/recompact");
   }
-#endif
 }
 
 void caml_compact_heap_maybe (void)

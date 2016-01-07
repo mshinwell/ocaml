@@ -169,12 +169,14 @@ void caml_set_minor_heap_size (asize_t bsz)
   reset_table (&caml_ref_table);
   reset_table (&caml_weak_ref_table);
 
+#ifdef DEBUG
   {
     value *p;
     for (p = (value *) caml_young_start; p < (value *) caml_young_end; ++p){
       *p = Debug_free_minor;
     }
   }
+#endif
 }
 
 static value oldify_todo_list = 0;
@@ -300,6 +302,7 @@ extern void caml_record_lifetime_sample(header_t, int, uint64_t);
 static void
 collect_lifetime_samples(void)
 {
+#if 0
   /* For every value in the minor heap that has not been promoted, record a lifetime
      sample. */
 
@@ -355,6 +358,7 @@ collect_lifetime_samples(void)
       ptr += block_size_excl_header;
     }
   }
+#endif
 }
 
 /* Make sure the minor heap is empty by performing a minor collection

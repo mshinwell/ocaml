@@ -554,6 +554,15 @@ CAMLexport value caml_alloc_shr_with_profinfo (mlsize_t wosize, tag_t tag,
   return caml_alloc_shr_aux (wosize, tag, 1, 0);
 }
 
+CAMLexport value caml_alloc_shr (mlsize_t wosize, tag_t tag)
+{
+  if (caml_allocation_profiling) {
+    return caml_alloc_shr_aux (wosize, tag, 1, MY_PROFINFO);
+  }
+
+  return caml_alloc_shr_aux (wosize, tag, 1, 0);
+}
+
 /* Dependent memory is all memory blocks allocated out of the heap
    that depend on the GC (and finalizers) for deallocation.
    For the GC to take dependent memory into account when computing

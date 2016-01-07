@@ -82,7 +82,7 @@ void caml_parse_ocamlrunparam(void)
       case 'o': scanmult (opt, &caml_init_percent_free); break;
       case 'O': scanmult (opt, &caml_init_max_percent_free); break;
       case 'p': scanmult (opt, &p); caml_parser_trace = p; break;
-      case 't': caml_allocation_profiling = 0; caml_lifetime_tracking = 0; break;
+/*      case 't': caml_allocation_profiling = 0; caml_lifetime_tracking = 0; break;*/
       case 'L': caml_allocation_profiling = 1; caml_lifetime_tracking = 1; break;
       case 'I': scanmult (opt, &caml_lifetime_shift); break;
       case 'R': break; /*  see stdlib/hashtbl.mli */
