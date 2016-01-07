@@ -429,7 +429,7 @@ static void extern_rec(value v)
       if (tag < 16) {
         write(PREFIX_SMALL_BLOCK + tag);
       } else {
-        writecode32(CODE_BLOCK32, hd);
+        writecode32(CODE_BLOCK32, Hd_no_profinfo(hd));
       }
       goto next_item;
     }
@@ -538,6 +538,7 @@ static void extern_rec(value v)
     }
     default: {
       value field0;
+      header_t hd_erased = Hd_no_profinfo(hd);
       if (tag < 16 && sz < 8) {
         write(PREFIX_SMALL_BLOCK + tag + (sz << 4));
       } else {
@@ -545,12 +546,12 @@ static void extern_rec(value v)
         if (sz > 0x3FFFFF && (extern_flags & COMPAT_32))
           extern_failwith("output_value: array cannot be read back on "
                           "32-bit platform");
-        if (hd < (uintnat)1 << 32)
-          writecode32(CODE_BLOCK32, Whitehd_hd (hd));
+        if (hd_erased < ((uintnat)1 << 32))
+          writecode32(CODE_BLOCK32, Whitehd_hd (hd_erased));
         else
-          writecode64(CODE_BLOCK64, Whitehd_hd (hd));
+          writecode64(CODE_BLOCK64, Whitehd_hd (hd_erased));
 #else
-        writecode32(CODE_BLOCK32, Whitehd_hd (hd));
+        writecode32(CODE_BLOCK32, Whitehd_hd (hd_erased));
 #endif
       }
       size_32 += 1 + sz;

@@ -26,7 +26,9 @@ CAMLexport header_t caml_atom_table[256];
 void caml_init_atom_table(void)
 {
   int i;
-  for(i = 0; i < 256; i++) caml_atom_table[i] = Make_header(0, i, Caml_white);
+  for(i = 0; i < 256; i++) {
+    caml_atom_table[i] = Make_header_with_profinfo(0, i, Caml_white, MY_PROFINFO);
+  }
   if (caml_page_table_add(In_static_data,
                           caml_atom_table, caml_atom_table + 256) != 0) {
     caml_fatal_error("Fatal error: not enough memory for initial page table");
@@ -80,6 +82,9 @@ void caml_parse_ocamlrunparam(void)
       case 'o': scanmult (opt, &caml_init_percent_free); break;
       case 'O': scanmult (opt, &caml_init_max_percent_free); break;
       case 'p': scanmult (opt, &p); caml_parser_trace = p; break;
+      case 't': caml_allocation_profiling = 0; caml_lifetime_tracking = 0; break;
+      case 'L': caml_allocation_profiling = 1; caml_lifetime_tracking = 1; break;
+      case 'I': scanmult (opt, &caml_lifetime_shift); break;
       case 'R': break; /*  see stdlib/hashtbl.mli */
       case 's': scanmult (opt, &caml_init_minor_heap_wsz); break;
       case 't': scanmult (opt, &caml_trace_level); break;

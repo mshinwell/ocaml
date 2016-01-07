@@ -13,6 +13,8 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+
 #include "caml/address_class.h"
 #include "caml/config.h"
 #include "caml/fail.h"
@@ -372,7 +374,7 @@ static value *expand_heap (mlsize_t request)
   prev = hp = mem;
   /* FIXME find a way to do this with a call to caml_make_free_blocks */
   while (Wosize_whsize (remain) > Max_wosize){
-    Hd_hp (hp) = Make_header (Max_wosize, 0, Caml_blue);
+    Hd_hp (hp) = Make_header_with_profinfo (Max_wosize, 0, Caml_blue, MY_PROFINFO);
 #ifdef DEBUG
     caml_set_fields (Val_hp (hp), 0, Debug_free_major);
 #endif
@@ -382,7 +384,8 @@ static value *expand_heap (mlsize_t request)
     prev = hp;
   }
   if (remain > 1){
-    Hd_hp (hp) = Make_header (Wosize_whsize (remain), 0, Caml_blue);
+    Hd_hp (hp) = Make_header_with_profinfo
+      (Wosize_whsize (remain), 0, Caml_blue, MY_PROFINFO);
 #ifdef DEBUG
     caml_set_fields (Val_hp (hp), 0, Debug_free_major);
 #endif
@@ -390,7 +393,9 @@ static value *expand_heap (mlsize_t request)
     Field (Val_hp (hp), 0) = (value) NULL;
   }else{
     Field (Val_hp (prev), 0) = (value) NULL;
-    if (remain == 1) Hd_hp (hp) = Make_header (0, 0, Caml_white);
+    if (remain == 1) {
+      Hd_hp (hp) = Make_header_with_profinfo (0, 0, Caml_white, MY_PROFINFO);
+    }
   }
   Assert (Wosize_hp (mem) >= request);
   if (caml_add_to_heap ((char *) mem) != 0){
@@ -457,7 +462,7 @@ color_t caml_allocation_color (void *hp)
 }
 
 static inline value caml_alloc_shr_aux (mlsize_t wosize, tag_t tag,
-                                        int raise_oom)
+                                        int raise_oom, intnat profinfo)
 {
   header_t *hp;
   value *new_block;
@@ -488,14 +493,14 @@ static inline value caml_alloc_shr_aux (mlsize_t wosize, tag_t tag,
   /* Inline expansion of caml_allocation_color. */
   if (caml_gc_phase == Phase_mark
       || (caml_gc_phase == Phase_sweep && (addr)hp >= (addr)caml_gc_sweep_hp)){
-    Hd_hp (hp) = Make_header (wosize, tag, Caml_black);
+    Hd_hp (hp) = Make_header_with_profinfo (wosize, tag, Caml_black, profinfo);
   }else{
     Assert (caml_gc_phase == Phase_idle
             || (caml_gc_phase == Phase_sweep
                 && (addr)hp < (addr)caml_gc_sweep_hp));
-    Hd_hp (hp) = Make_header (wosize, tag, Caml_white);
+    Hd_hp (hp) = Make_header_with_profinfo (wosize, tag, Caml_white, profinfo);
   }
-  Assert (Hd_hp (hp) == Make_header (wosize, tag, caml_allocation_color (hp)));
+  Assert (Hd_hp (hp) == Make_header_with_profinfo (wosize, tag, caml_allocation_color (hp), profinfo));
   caml_allocated_words += Whsize_wosize (wosize);
   if (caml_allocated_words > caml_minor_heap_wsz){
     CAML_INSTR_INT ("request_major/alloc_shr@", 1);
@@ -509,17 +514,44 @@ static inline value caml_alloc_shr_aux (mlsize_t wosize, tag_t tag,
     }
   }
 #endif
+  if (caml_allocation_profiling) {
+    uint64_t caller_aligned;
+    uint64_t* count;
+    if (caml_allocation_trace_caller != NULL) {
+      caller_aligned = (uint64_t) caml_allocation_trace_caller;
+      caml_allocation_trace_caller = NULL;
+    }
+    else {
+      caller_aligned = (uint64_t) BUILTIN_RETURN_ADDRESS;
+    }
+    caller_aligned &= 0xfffffffffffffff8;
+    count =
+      (uint64_t*) (((uint64_t) caml_major_allocation_profiling_array)
+        + caller_aligned);
+    if (count < caml_major_allocation_profiling_array_end) {
+      *count = *count + Bhsize_wosize (wosize);
+    }
+  }
   return Val_hp (hp);
 }
 
 CAMLexport value caml_alloc_shr_no_raise (mlsize_t wosize, tag_t tag)
 {
-  return caml_alloc_shr_aux(wosize, tag, 0);
+  if (caml_allocation_profiling) {
+    return caml_alloc_shr_aux (wosize, tag, 0, MY_PROFINFO);
+  }
+
+  return caml_alloc_shr_aux (wosize, tag, 0, 0);
 }
 
-CAMLexport value caml_alloc_shr (mlsize_t wosize, tag_t tag)
+CAMLexport value caml_alloc_shr_with_profinfo (mlsize_t wosize, tag_t tag,
+                                               intnat profinfo)
 {
-  return caml_alloc_shr_aux(wosize, tag, 1);
+  if (caml_allocation_profiling) {
+    return caml_alloc_shr_aux (wosize, tag, 1, profinfo);
+  }
+
+  return caml_alloc_shr_aux (wosize, tag, 1, 0);
 }
 
 /* Dependent memory is all memory blocks allocated out of the heap
@@ -663,4 +695,62 @@ CAMLexport void * caml_stat_resize (void * blk, asize_t sz)
 
   if (result == NULL) caml_raise_out_of_memory ();
   return result;
+}
+
+extern void* caml_last_return_address;
+
+CAMLprim value caml_allocation_entry_point(value v_unit)
+{
+  if (caml_allocation_profiling && caml_allocation_trace_caller == NULL) {
+    caml_allocation_trace_caller = (void*) caml_last_return_address;
+  }
+  return v_unit;
+}
+
+CAMLprim value caml_dump_allocation_profiling_arrays(value v_output_file)
+{
+  if (caml_allocation_profiling) {
+    FILE* fp;
+    uint64_t i;
+    uint64_t limit =
+      (((uint64_t) caml_minor_allocation_profiling_array_end)
+        - ((uint64_t) caml_minor_allocation_profiling_array)) / sizeof(uint64_t);
+
+    fp = fopen(String_val(v_output_file), "w");
+    if (fp == NULL) {
+      fprintf(stderr, "couldn't open file '%s' for allocation tracing array dump\n",
+              String_val(v_output_file));
+      return Val_unit;
+    }
+
+    for (i = 0; i < limit; i++) {
+      void* code_ptr = (void*) (i * 8);
+      uint64_t count = caml_minor_allocation_profiling_array[i];
+      if (count != 0)
+        fprintf(fp, "minor,%p,%lld\n", code_ptr, (unsigned long long) count);
+    }
+    for (i = 0; i < limit; i++) {
+      void* code_ptr = (void*) (i * 8);
+      uint64_t count = caml_major_allocation_profiling_array[i];
+      if (count != 0)
+        fprintf(fp, "major,%p,%lld\n", code_ptr, (unsigned long long) count);
+    }
+    fclose(fp);
+  }
+  return Val_unit;
+}
+
+CAMLprim value caml_reset_allocation_profiling_arrays(value v_unit)
+{
+  if (caml_allocation_profiling) {
+    uint64_t i;
+    uint64_t limit =
+      (((uint64_t) caml_minor_allocation_profiling_array_end)
+        - ((uint64_t) caml_minor_allocation_profiling_array)) / sizeof(uint64_t);
+    for (i = 0; i < limit; i++) {
+      caml_minor_allocation_profiling_array[i] = 0;
+      caml_major_allocation_profiling_array[i] = 0;
+    }
+  }
+  return v_unit;
 }

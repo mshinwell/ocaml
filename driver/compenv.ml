@@ -201,6 +201,8 @@ let read_one_param ppf position name v =
 
       | "clambda-checks" -> set "clambda-checks" [ clambda_checks ] v
 
+      | "allocation-profiling" -> set "allocation-profiling" [Clflags.allocation_profiling] v
+
       (* assembly sources *)
       |  "s" ->
         set "s" [ Clflags.keep_asm_file ; Clflags.keep_startup_file ] v

@@ -16,7 +16,7 @@ include ../config/Makefile
 CC=$(NATIVECC)
 FLAGS=-I../byterun -DCAML_NAME_SPACE -DNATIVE_CODE \
       -DTARGET_$(ARCH) -DMODEL_$(MODEL) -DSYS_$(SYSTEM) $(IFLEXDIR)
-CFLAGS=$(FLAGS) $(NATIVECCCOMPOPTS)
+CFLAGS=$(FLAGS) -g -O $(NATIVECCCOMPOPTS)
 DFLAGS=$(FLAGS) -g -DDEBUG $(NATIVECCCOMPOPTS)
 IFLAGS=$(FLAGS) -DCAML_INSTR
 PFLAGS=$(FLAGS) -pg -DPROFILING $(NATIVECCPROFOPTS) $(NATIVECCCOMPOPTS)
@@ -29,7 +29,7 @@ COBJS=startup_aux.o startup.o \
   gc_ctrl.o terminfo.o md5.o obj.o lexing.o printexc.o callback.o weak.o \
   compact.o finalise.o custom.o $(UNIX_OR_WIN32).o backtrace_prim.o \
   backtrace.o \
-  natdynlink.o debugger.o meta.o dynlink.o clambda_checks.o
+  natdynlink.o debugger.o meta.o dynlink.o clambda_checks.o alloc_profiling.o
 
 ASMOBJS=$(ARCH).o
 

@@ -140,6 +140,8 @@ let std_include_dir () =
   if !no_std_include then [] else [Config.standard_library]
 ;;
 
+let allocation_profiling = ref true
+
 let shared = ref false (* -shared *)
 let dlcode = ref true (* not -nodynlink *)
 

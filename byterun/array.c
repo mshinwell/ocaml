@@ -176,14 +176,16 @@ CAMLprim value caml_make_vect(value len, value init)
     d = Double_val(init);
     wsize = size * Double_wosize;
     if (wsize > Max_wosize) caml_invalid_argument("Array.make");
-    res = caml_alloc(wsize, Double_array_tag);
+    ALLOCATION_ENTRY_POINT;
+    res = caml_alloc_with_profinfo(wsize, Double_array_tag, MY_PROFINFO);
     for (i = 0; i < size; i++) {
       Store_double_field(res, i, d);
     }
   } else {
     if (size > Max_wosize) caml_invalid_argument("Array.make");
+    ALLOCATION_ENTRY_POINT;
     if (size <= Max_young_wosize) {
-      res = caml_alloc_small(size, 0);
+      res = caml_alloc_small_with_profinfo(size, 0, MY_PROFINFO);
       for (i = 0; i < size; i++) Field(res, i) = init;
     }
     else if (Is_block(init) && Is_young(init)) {
@@ -192,12 +194,12 @@ CAMLprim value caml_make_vect(value len, value init)
       CAML_INSTR_INT ("force_minor/make_vect@", 1);
       caml_request_minor_gc ();
       caml_gc_dispatch ();
-      res = caml_alloc_shr(size, 0);
+      res = caml_alloc_shr_with_profinfo(size, 0, MY_PROFINFO);
       for (i = 0; i < size; i++) Field(res, i) = init;
       res = caml_check_urgent_gc (res);
     }
     else {
-      res = caml_alloc_shr(size, 0);
+      res = caml_alloc_shr_with_profinfo(size, 0, MY_PROFINFO);
       for (i = 0; i < size; i++) caml_initialize(&Field(res, i), init);
       res = caml_check_urgent_gc (res);
     }
@@ -223,9 +225,9 @@ CAMLprim value caml_make_array(value init)
     } else {
       wsize = size * Double_wosize;
       if (wsize <= Max_young_wosize) {
-        res = caml_alloc_small(wsize, Double_array_tag);
+        res = caml_alloc_small_with_profinfo(wsize, Double_array_tag, MY_PROFINFO);
       } else {
-        res = caml_alloc_shr(wsize, Double_array_tag);
+        res = caml_alloc_shr_with_profinfo(wsize, Double_array_tag, MY_PROFINFO);
         res = caml_check_urgent_gc(res);
       }
       for (i = 0; i < size; i++) {
@@ -316,7 +318,7 @@ static value caml_array_gather(intnat num_arrays,
     /* This is an array of floats.  We can use memcpy directly. */
     wsize = size * Double_wosize;
     if (wsize > Max_wosize) caml_invalid_argument("Array.concat");
-    res = caml_alloc(wsize, Double_array_tag);
+    res = caml_alloc_with_profinfo(wsize, Double_array_tag, MY_PROFINFO);
     for (i = 0, pos = 0; i < num_arrays; i++) {
       memcpy((double *)res + pos,
              (double *)arrays[i] + offsets[i],
@@ -332,7 +334,7 @@ static value caml_array_gather(intnat num_arrays,
   else if (size <= Max_young_wosize) {
     /* Array of values, small enough to fit in young generation.
        We can use memcpy directly. */
-    res = caml_alloc_small(size, 0);
+    res = caml_alloc_small_with_profinfo(size, 0, MY_PROFINFO);
     for (i = 0, pos = 0; i < num_arrays; i++) {
       memcpy(&Field(res, pos),
              &Field(arrays[i], offsets[i]),
@@ -343,7 +345,7 @@ static value caml_array_gather(intnat num_arrays,
   } else {
     /* Array of values, must be allocated in old generation and filled
        using caml_initialize. */
-    res = caml_alloc_shr(size, 0);
+    res = caml_alloc_shr_with_profinfo(size, 0, MY_PROFINFO);
     for (i = 0, pos = 0; i < num_arrays; i++) {
       for (src = &Field(arrays[i], offsets[i]), count = lengths[i];
            count > 0;
@@ -365,7 +367,11 @@ CAMLprim value caml_array_sub(value a, value ofs, value len)
   value arrays[1] = { a };
   intnat offsets[1] = { Long_val(ofs) };
   intnat lengths[1] = { Long_val(len) };
-  return caml_array_gather(1, arrays, offsets, lengths);
+  value ret;
+  ALLOCATION_ENTRY_POINT;
+  ret = caml_array_gather(1, arrays, offsets, lengths);
+  CLEAR_ALLOCATION_ENTRY_POINT;
+  return ret;
 }
 
 CAMLprim value caml_array_append(value a1, value a2)
@@ -373,7 +379,11 @@ CAMLprim value caml_array_append(value a1, value a2)
   value arrays[2] = { a1, a2 };
   intnat offsets[2] = { 0, 0 };
   intnat lengths[2] = { caml_array_length(a1), caml_array_length(a2) };
-  return caml_array_gather(2, arrays, offsets, lengths);
+  value ret;
+  ALLOCATION_ENTRY_POINT;
+  ret = caml_array_gather(2, arrays, offsets, lengths);
+  CLEAR_ALLOCATION_ENTRY_POINT;
+  return ret;
 }
 
 CAMLprim value caml_array_concat(value al)
@@ -413,7 +423,9 @@ CAMLprim value caml_array_concat(value al)
     lengths[i] = caml_array_length(Field(l, 0));
   }
   /* Do the concatenation */
+  ALLOCATION_ENTRY_POINT;
   res = caml_array_gather(n, arrays, offsets, lengths);
+  CLEAR_ALLOCATION_ENTRY_POINT;
   /* Free the extra storage if needed */
   if (n > STATIC_SIZE) {
     caml_stat_free(arrays);

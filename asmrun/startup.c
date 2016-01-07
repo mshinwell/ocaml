@@ -15,6 +15,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <unistd.h>
 #include "caml/callback.h"
 #include "caml/backtrace.h"
 #include "caml/custom.h"
@@ -39,6 +41,16 @@
 extern int caml_parser_trace;
 CAMLexport header_t caml_atom_table[256];
 char * caml_code_area_start, * caml_code_area_end;
+uintnat caml_lifetime_tracking = 0;
+/* Corresponds to measuring block lifetimes in units of 8Mb.  With the 22 bits of
+   allocation profiling information this should enable us to get a bit over 10^13 bytes
+   as the maximum lifetime. */
+/* was 22 = 8Mb
+   was 19 = 1Mb
+   now 16 = 128k
+*/
+uintnat caml_lifetime_shift = 16;
+uintnat caml_allocation_profiling = 1;
 
 /* Initialize the atom table and the static data and code area limits. */
 
@@ -93,6 +105,48 @@ extern void caml_install_invalid_parameter_handler();
 
 #endif
 
+size_t bytes_sufficient_for_code_section = 0;
+
+static void
+record_data_segment_limit(void)
+{
+  void* limit = sbrk(0);
+  if (limit != (void*) -1) {
+    bytes_sufficient_for_code_section = (uint64_t) limit;
+  }
+}
+
+uint64_t* caml_minor_allocation_profiling_array = NULL;
+uint64_t* caml_minor_allocation_profiling_array_end = NULL;
+uint64_t* caml_major_allocation_profiling_array = NULL;
+uint64_t* caml_major_allocation_profiling_array_end = NULL;
+void* caml_allocation_trace_caller = NULL;
+void (*__malloc_initialize_hook)(void) = record_data_segment_limit;
+
+static void
+initialize_allocation_profiling (void)
+{
+  if (caml_allocation_profiling && bytes_sufficient_for_code_section > 0) {
+    caml_minor_allocation_profiling_array =
+      (uint64_t*) calloc(bytes_sufficient_for_code_section, 1);
+    if (!caml_minor_allocation_profiling_array) abort();
+    caml_minor_allocation_profiling_array_end =
+      caml_minor_allocation_profiling_array +
+      (bytes_sufficient_for_code_section / sizeof(uint64_t));
+
+    caml_major_allocation_profiling_array =
+      (uint64_t*) calloc(bytes_sufficient_for_code_section, 1);
+    if (!caml_major_allocation_profiling_array) abort();
+    caml_major_allocation_profiling_array_end =
+      caml_major_allocation_profiling_array +
+      (bytes_sufficient_for_code_section / sizeof(uint64_t));
+  }
+  else {
+    caml_allocation_profiling = 0;
+  }
+}
+
+extern int ensure_alloc_profiling_dot_o_is_included;
 
 void caml_main(char **argv)
 {
@@ -102,6 +156,7 @@ void caml_main(char **argv)
   char tos;
 
   caml_init_frame_descriptors();
+  ensure_alloc_profiling_dot_o_is_included++;
   caml_init_ieee_floats();
 #ifdef _MSC_VER
   caml_install_invalid_parameter_handler();
@@ -112,6 +167,7 @@ void caml_main(char **argv)
   caml_verb_gc = 0x3F;
 #endif
   caml_parse_ocamlrunparam();
+  initialize_allocation_profiling();
 #ifdef DEBUG
   caml_gc_message (-1, "### OCaml runtime: debug mode ###\n", 0);
 #endif

@@ -251,6 +251,7 @@ install:
 installopt:
 	cd asmrun; $(MAKE) install
 	cp ocamlopt $(INSTALL_BINDIR)/ocamlopt$(EXE)
+	cp tools/allocation-profiling/*.sh $(BINDIR)/
 	cd stdlib; $(MAKE) installopt
 	cp middle_end/*.cmi middle_end/*.cmt middle_end/*.cmti $(INSTALL_COMPLIBDIR)
 	cp middle_end/base_types/*.cmi middle_end/base_types/*.cmt middle_end/base_types/*.cmti $(INSTALL_COMPLIBDIR)

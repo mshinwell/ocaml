@@ -45,9 +45,15 @@ extern void caml_shrink_heap (char *);              /* memory.c */
   XXX Should be able to fix it to only assume 2-byte alignment.
 */
 #define Make_ehd(s,t,c) (((s) << 10) | (t) << 2 | (c))
+#ifdef WITH_ALLOCATION_PROFILING
+#define Make_ehd_p(s,t,c,p) (((s) << 10) | (t) << 2 | (c) | ((p) << 42))
+#endif
 #define Whsize_ehd(h) Whsize_hd (h)
 #define Wosize_ehd(h) Wosize_hd (h)
 #define Tag_ehd(h) (((h) >> 2) & 0xFF)
+#ifdef WITH_ALLOCATION_PROFILING
+#define Profinfo_ehd(hd) Profinfo_hd(hd)
+#endif
 #define Ecolor(w) ((w) & 3)
 
 typedef uintnat word;
@@ -145,6 +151,7 @@ static char *compact_allocate (mlsize_t size)
 
 static void do_compaction (void)
 {
+#if 0
   char *ch, *chend;
                                           Assert (caml_gc_phase == Phase_idle);
   caml_gc_message (0x10, "Compacting heap...\n", 0);
@@ -169,7 +176,11 @@ static void do_compaction (void)
           Hd_hp (p) = Make_ehd (sz, String_tag, 3);
         }else{                                      Assert (Is_white_hd (hd));
           /* Live object.  Keep its tag. */
+#ifdef WITH_ALLOCATION_PROFILING
+          Hd_hp (p) = Make_ehd_p (sz, Tag_hd (hd), 3, Profinfo_hd (hd));
+#else
           Hd_hp (p) = Make_ehd (sz, Tag_hd (hd), 3);
+#endif
         }
         p += Whsize_wosize (sz);
       }
@@ -261,11 +272,17 @@ static void do_compaction (void)
           size_t sz;
           tag_t t;
           char *newadr;
+#ifdef WITH_ALLOCATION_PROFILING
+          uintnat profinfo;
+#endif
           word *infixes = NULL;
 
           while (Ecolor (q) == 0) q = * (word *) q;
           sz = Whsize_ehd (q);
           t = Tag_ehd (q);
+#ifdef WITH_ALLOCATION_PROFILING
+          profinfo = Profinfo_ehd (q);
+#endif
 
           if (t == Infix_tag){
             /* Get the original header of this block. */
@@ -283,8 +300,12 @@ static void do_compaction (void)
             * (word *) q = (word) Val_hp (newadr);
             q = next;
           }
+#ifdef WITH_ALLOCATION_PROFILING
+          *p = Make_header_with_profinfo (Wosize_whsize (sz), t, Caml_white,
+            profinfo);
+#else
           *p = Make_header (Wosize_whsize (sz), t, Caml_white);
-
+#endif
           if (infixes != NULL){
             /* Rebuild the infix headers and revert the infix pointers. */
             while (Ecolor ((word) infixes) != 3){
@@ -297,6 +318,9 @@ static void do_compaction (void)
                 * (word *) q = (word) Val_hp ((word *) newadr + (infixes - p));
                 q = next;
               }                    Assert (Ecolor (q) == 1 || Ecolor (q) == 3);
+              /* No need to preserve any profinfo value on the [Infix_tag]
+                 headers; the allocation profiling heap snapshot code doesn't
+                 look at them. */
               *infixes = Make_header (infixes - p, Infix_tag, Caml_white);
               infixes = (word *) q;
             }
@@ -472,6 +496,7 @@ void caml_compact_heap (void)
     Assert (caml_stat_heap_wsz == Wsize_bsize (Chunk_size (chunk)));
     CAML_INSTR_TIME (tmr, "compact/recompact");
   }
+#endif
 }
 
 void caml_compact_heap_maybe (void)

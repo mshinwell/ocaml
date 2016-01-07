@@ -509,7 +509,13 @@ let set_field ptr n newval init =
   Cop(Cstore (Word_val, init), [field_address ptr n; newval])
 
 let header ptr =
-  Cop(Cload Word_int, [Cop(Cadda, [ptr; Cconst_int(-size_int)])])
+  if !Clflags.allocation_profiling then
+    Cop(Cand,
+      [Cop (Cload Word_int, [Cop(Cadda, [ptr; Cconst_int(-size_int)])]);
+        Cconst_int 0x0000_00ff_ffff_ffff;
+      ])
+  else
+    Cop(Cload Word_int, [Cop(Cadda, [ptr; Cconst_int(-size_int)])])
 
 let tag_offset =
   if big_endian then -1 else -size_int
@@ -2466,6 +2472,8 @@ let rec emit_structured_constant (symb : (string * bool)) cst cont =
        are in no-naked-pointers mode.  See [caml_darken]. *)
     let black_header = Nativeint.logor white_header caml_black in
     Cint black_header :: cdefine_symbol symb @ cont
+    Cconst_blockheader_structured_constant black_header
+      :: cdefine_symbol symb @ cont
   in
   match cst with
   | Uconst_float s->
@@ -2550,19 +2558,20 @@ let emit_constant_closure ((_, global_symb) as symb) fundecls clos_vars cont =
           List.fold_right emit_constant clos_vars cont
       | f2 :: rem ->
           if f2.arity = 1 || f2.arity = 0 then
-            Cint(infix_header pos) ::
+            Cconst_blockheader_constant_closure(infix_header pos) ::
             (closure_symbol f2) @
             Csymbol_address f2.label ::
             Cint(Nativeint.of_int (f2.arity lsl 1 + 1)) ::
             emit_others (pos + 3) rem
           else
-            Cint(infix_header pos) ::
+            Cconst_blockheader_constant_closure(infix_header pos) ::
             (closure_symbol f2) @
             Csymbol_address(curry_function f2.arity) ::
             Cint(Nativeint.of_int (f2.arity lsl 1 + 1)) ::
             Csymbol_address f2.label ::
             emit_others (pos + 4) rem in
-      Cint(black_closure_header (fundecls_size fundecls
+      Cconst_blockheader_constant_closure
+         (black_closure_header (fundecls_size fundecls
                                  + List.length clos_vars)) ::
       cdefine_symbol symb @
       (closure_symbol f1) @
@@ -2636,7 +2645,7 @@ let preallocate_block { Clambda.symbol; tag; size } =
   in
   (* TODO: don't mark every symbol as global, only those reachable
      from exported info should *)
-  Cdata ([Cint(black_block_header tag size);
+  Cdata ([Cconst_blockheader_compilation_unit(black_block_header 0 size);
          Cglobal_symbol symbol;
          Cdefine_symbol symbol] @ space)
 
