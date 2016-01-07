@@ -2644,7 +2644,7 @@ let preallocate_block { Clambda.symbol; tag; size } =
   in
   (* TODO: don't mark every symbol as global, only those reachable
      from exported info should *)
-  Cdata ([Cconst_blockheader_compilation_unit(black_block_header 0 size);
+  Cdata ([Cconst_blockheader_compilation_unit(black_block_header tag size);
          Cglobal_symbol symbol;
          Cdefine_symbol symbol] @ space)
 
