@@ -102,10 +102,10 @@ extern void caml_init_signals (void);
 
 /* PR 4887: avoid crash box of windows runtime on some system calls */
 extern void caml_install_invalid_parameter_handler();
-
 #endif
-
+/*
 size_t bytes_sufficient_for_code_section = 0;
+
 
 static void
 record_data_segment_limit(void)
@@ -115,12 +115,14 @@ record_data_segment_limit(void)
     bytes_sufficient_for_code_section = (uint64_t) limit;
   }
 }
+*/
 
 uint64_t* caml_minor_allocation_profiling_array = NULL;
 uint64_t* caml_minor_allocation_profiling_array_end = NULL;
 uint64_t* caml_major_allocation_profiling_array = NULL;
 uint64_t* caml_major_allocation_profiling_array_end = NULL;
 void* caml_allocation_trace_caller = NULL;
+/*
 void (*__malloc_initialize_hook)(void) = record_data_segment_limit;
 
 static void
@@ -144,7 +146,8 @@ initialize_allocation_profiling (void)
   else {
     caml_allocation_profiling = 0;
   }
-}
+}*/
+
 
 extern int ensure_alloc_profiling_dot_o_is_included;
 
@@ -167,7 +170,7 @@ void caml_main(char **argv)
   caml_verb_gc = 0x3F;
 #endif
   caml_parse_ocamlrunparam();
-  initialize_allocation_profiling();
+/*  initialize_allocation_profiling();*/
 #ifdef DEBUG
   caml_gc_message (-1, "### OCaml runtime: debug mode ###\n", 0);
 #endif

@@ -147,24 +147,6 @@ extern void* caml_allocation_trace_caller;
     Restore_after_gc;                                                       \
     caml_young_ptr -= Whsize_wosize (wosize);                               \
   }                                                                         \
-  if (caml_allocation_profiling) {                                          \
-    uint64_t caller_aligned;                                                \
-    uint64_t* count;                                                        \
-    if (caml_allocation_trace_caller != NULL) {                             \
-      caller_aligned = (uint64_t) caml_allocation_trace_caller;             \
-      caml_allocation_trace_caller = NULL;                                  \
-    }                                                                       \
-    else {                                                                  \
-      caller_aligned = (uint64_t) BUILTIN_RETURN_ADDRESS;                   \
-    }                                                                       \
-    caller_aligned &= 0xfffffffffffffff8;                                   \
-    count =                                                                 \
-      (uint64_t*) (((uint64_t) caml_minor_allocation_profiling_array)       \
-        + caller_aligned);                                                  \
-    if (count < caml_minor_allocation_profiling_array_end) {                \
-      *count = *count + wosize + 1;                                         \
-    }                                                                       \
-  }                                                                         \
   Hd_hp (caml_young_ptr) =                                                  \
     Make_header_with_profinfo ((wosize), (tag), Caml_black, (profinfo));    \
   (result) = Val_hp (caml_young_ptr);                                       \

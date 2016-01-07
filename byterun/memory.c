@@ -514,24 +514,6 @@ static inline value caml_alloc_shr_aux (mlsize_t wosize, tag_t tag,
     }
   }
 #endif
-  if (caml_allocation_profiling) {
-    uint64_t caller_aligned;
-    uint64_t* count;
-    if (caml_allocation_trace_caller != NULL) {
-      caller_aligned = (uint64_t) caml_allocation_trace_caller;
-      caml_allocation_trace_caller = NULL;
-    }
-    else {
-      caller_aligned = (uint64_t) BUILTIN_RETURN_ADDRESS;
-    }
-    caller_aligned &= 0xfffffffffffffff8;
-    count =
-      (uint64_t*) (((uint64_t) caml_major_allocation_profiling_array)
-        + caller_aligned);
-    if (count < caml_major_allocation_profiling_array_end) {
-      *count = *count + Bhsize_wosize (wosize);
-    }
-  }
   return Val_hp (hp);
 }
 
