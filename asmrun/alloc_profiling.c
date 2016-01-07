@@ -43,6 +43,8 @@
 #include "caml/mlvalues.h"
 #include "caml/signals.h"
 
+extern value caml_gc_full_major(value);
+
 int ensure_alloc_profiling_dot_o_is_included = 42;
 
 /* Determine the byte offset of a given section in an ELF file. */
@@ -193,11 +195,8 @@ caml_dump_allocators_of_major_heap_blocks (const char* output_file,
     return;
   }
 
-  /* To avoid having to traverse the minor heap, just empty it. */
-  caml_minor_collection();
-
   /* Perform a full major collection so no white blocks remain. */
-  caml_finish_major_cycle();
+  caml_gc_full_major(Val_unit);
 
   chunk = caml_heap_start;
 
@@ -282,7 +281,7 @@ caml_dump_allocators_of_major_heap_blocks (const char* output_file,
     (unsigned long long) compilation_units);
   fprintf(fp, "word size (incl headers) of blue blocks: %lld\n", (unsigned long long) blue);
   fprintf(fp, "word size (incl headers) of all blocks: %lld\n", (unsigned long long) (blue + accounted_for + unaccounted_for));
-  fprintf(fp, "caml_stat_heap_size in words: %lld\n", (unsigned long long) caml_stat_heap_size / sizeof(value));
+  fprintf(fp, "caml_stat_heap_wsz in words: %lld\n", (unsigned long long) caml_stat_heap_wsz / sizeof(value));
 
   fclose(fp);
 }
@@ -330,7 +329,7 @@ caml_forget_where_values_were_allocated (value v_unit)
 
   assert(v_unit == Val_unit);
 
-  caml_minor_collection();
+  caml_gc_full_major(Val_unit);
 
   chunk = caml_heap_start;
 
@@ -373,8 +372,7 @@ caml_dump_heapgraph(const char* node_output_file, const char* edge_output_file)
     return;
   }
 
-  caml_minor_collection();
-  caml_finish_major_cycle();
+  caml_gc_full_major(Val_unit);
 
   chunk = caml_heap_start;
 

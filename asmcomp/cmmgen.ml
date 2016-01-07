@@ -2471,7 +2471,6 @@ let rec emit_structured_constant (symb : (string * bool)) cst cont =
     (* Headers for structured constants must be marked black in case we
        are in no-naked-pointers mode.  See [caml_darken]. *)
     let black_header = Nativeint.logor white_header caml_black in
-    Cint black_header :: cdefine_symbol symb @ cont
     Cconst_blockheader_structured_constant black_header
       :: cdefine_symbol symb @ cont
   in

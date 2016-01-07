@@ -74,6 +74,8 @@ module Heap_snapshot : sig
   val forget_where_values_were_allocated : unit -> unit
 end
 
+(*
+
 module Global : sig
   (* This module contains functions that provide access to global
      profiling information rather than working on current snapshots
@@ -178,4 +180,5 @@ val where_was_value_allocated_address_only : 'a
   -> [ `Not_boxed | `Unknown | `At_address of Int64.t ]
 (* [to_string t] produces a human-readable representation of [t]. *)
 val to_string : t -> string
+*)
 *)

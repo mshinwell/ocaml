@@ -20,6 +20,7 @@
 (*                                                                     *)
 (***********************************************************************)
 
+(*
 module Source_location = struct
   type t = {
     filename : string;
@@ -199,6 +200,7 @@ let to_string = function
       (Source_location.to_string below_loc)
       (Source_location.to_string above_loc)
       addr
+*)
 
 module Heap_snapshot = struct
   external dump_allocators_of_major_heap_blocks
@@ -222,7 +224,7 @@ module Heap_snapshot = struct
     = "caml_allocation_profiling_only_works_for_native_code"
       "caml_dump_heapgraph_from_ocaml"
 end
-
+(*
 module Global = struct
   external dump_allocations_by_address : filename:string -> unit
     = "caml_dump_allocation_profiling_arrays"
@@ -230,3 +232,4 @@ module Global = struct
   external reset_allocations_by_address : unit -> unit
     = "caml_reset_allocation_profiling_arrays"
 end
+*)
