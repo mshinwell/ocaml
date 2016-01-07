@@ -960,6 +960,7 @@ struct
   let list = [
     mk_a F._a;
     mk_absname F._absname;
+    mk_allocation_profiling F._allocation_profiling;
     mk_annot F._annot;
     mk_binannot F._binannot;
     mk_branch_inline_factor F._branch_inline_factor;

@@ -178,6 +178,16 @@ let emit_Llabel fallthrough lbl =
   if not fallthrough && !fastcode_flag then D.align 4;
   def_label lbl
 
+let load_label_addr s arg =
+  if !Clflags.dlcode then
+    if windows then begin
+      I.mov (sym (emit_label s)) arg
+    end else I.mov (mem64_rip QWORD (emit_label s ^ "@GOTPCREL")) arg
+  else if !Clflags.pic_code then
+    I.lea (mem64_rip NONE (emit_label s)) arg
+  else
+    I.mov (sym (emit_label s)) arg
+
 (* Output a pseudo-register *)
 
 let reg = function
@@ -461,13 +471,39 @@ let emit_instr fallthrough i =
         | _ -> I.mov (reg src) (reg dst)
         end
   | Lop(Iconst_int n | Iconst_blockheader n) ->
-      if n = 0n then begin
-        match i.res.(0).loc with
-        | Reg _ -> I.xor (res i 0) (res i 0)
-        | _     -> I.mov (int 0) (res i 0)
+      let profiling_info_label =
+        match i.desc with
+        | Lop(Iconst_int _) -> None
+        | Lop(Iconst_blockheader _) ->
+          if !Clflags.allocation_profiling then Some (new_label ()) else None
+        | _ -> assert false
+      in
+      begin match profiling_info_label with
+        | None -> ()
+        | Some label ->
+          D.align 16;
+          def_label label
+      end;
+      begin
+        if n = 0n then begin
+          match i.res.(0).loc with
+          | Reg _ -> I.xor (res i 0) (res i 0)
+          | _     -> I.mov (int 0) (res i 0)
+        end
+        else
+          I.mov (nat n) (res i 0)
+      end;
+      begin match profiling_info_label with
+      | None -> ()
+      | Some label ->
+        assert (n <= 0xffff_ffffn);
+        I.push r14;
+        load_label_addr label r14;
+        I.and_ (int 0x000000000ffffff0) r14;
+        I.sal (int 36) r14;
+        I.or_ r14 (res i 0);
+        I.pop r14
       end
-      else
-        I.mov (nat n) (res i 0)
   | Lop(Iconst_float f) ->
       begin match f with
       | 0x0000_0000_0000_0000L ->       (* +0.0 *)
@@ -854,10 +890,22 @@ let fundecl fundecl =
 
 (* Emission of data *)
 
+let add_profiling_info n info =
+  Nativeint.logor n (Nativeint.shift_left (Nativeint.of_int info) 40)
+
 let emit_item = function
   | Cglobal_symbol s -> D.global (emit_symbol s)
   | Cdefine_symbol s -> add_def_symbol s; _label (emit_symbol s)
   | Cdefine_label lbl -> _label (emit_data_label lbl)
+  | Cconst_blockheader_constant_closure n ->
+      let n = add_profiling_info n 2 in
+      D.qword (const_nat n)
+  | Cconst_blockheader_structured_constant n ->
+      let n = add_profiling_info n 3 in
+      D.qword (const_nat n)
+  | Cconst_blockheader_compilation_unit n ->
+      let n = add_profiling_info n 4 in
+      D.qword (const_nat n)
   | Cint8 n -> D.byte (const n)
   | Cint16 n -> D.word (const n)
   | Cint32 n -> D.long (const_nat n)
