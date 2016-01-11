@@ -30,6 +30,242 @@ type error = Assembler_error of string
 
 exception Error of error
 
+let max_use_index = 9 + Printlambda.num_primitives
+
+type what =
+  | Direct_apply
+  | Indirect_apply
+  | Send
+  | Switch
+  | String_switch
+  | Try_with
+  | Conditional_branch
+  | Unconditional_branch
+  | Const
+  | Var
+  | Prim of int
+
+let function_sizes = ref []
+
+let calculate_function_sizes flam ~backend ~prefixname:_ =
+  let results = ref [] in
+  let module Backend = (val backend : Backend_intf.S) in
+  Flambda_iterators.iter_on_set_of_closures_of_program flam
+    ~f:(fun ~constant:_ (set_of_closures : Flambda.set_of_closures) ->
+      Variable.Map.iter (fun fun_var
+            (function_decl : Flambda.function_declaration) ->
+          let closure_id = Closure_id.wrap fun_var in
+          let function_label = Compilenv.function_label closure_id in
+          let uses = Array.make (max_use_index + 1) 0 in
+          let use what =
+            let use_index =
+              match what with
+              | Direct_apply -> 0
+              | Indirect_apply -> 1
+              | Send -> 2
+              | Switch -> 3
+              | String_switch -> 4
+              | Try_with -> 5
+              | Const -> 6
+              | Conditional_branch -> 7
+              | Unconditional_branch -> 8
+              | Var -> 9
+              | Prim prim -> 10 + prim
+            in
+            uses.(use_index) <- uses.(use_index) + 1
+          in
+          let rec count (lam : Flambda.t) =
+            match lam with
+            | Var _ -> use Var
+            | Apply ({ func = _; args; kind = Direct _ }) ->
+              use Var;
+              List.iter (fun _arg -> use Var) args;
+              use Direct_apply
+            | Apply ({ func = _; args; kind = Indirect }) ->
+              use Var;
+              List.iter (fun _arg -> use Var) args;
+              use Indirect_apply
+            | Assign _ ->
+              use Var;
+              use Var
+            | Send { kind = _; meth = _; obj = _; args; dbg = _; } ->
+              use Var;
+              use Var;
+              List.iter (fun _arg -> use Var) args;
+              use Send
+            | Proved_unreachable -> ()
+            | Let { defining_expr; body; _ } ->
+              count_named defining_expr;
+              count body
+            | Let_mutable (_, _, body) ->
+              use Var;
+              count body
+            | Let_rec (bindings, body) ->
+              List.iter (fun (_, lam) -> count_named lam) bindings;
+              count body
+            | Switch (_, sw) ->
+              use Var;
+              use Switch;
+              List.iter (fun (_, lam) -> count lam; use Unconditional_branch)
+                sw.consts;
+              List.iter (fun (_, lam) -> count lam; use Unconditional_branch)
+                sw.blocks
+            | String_switch (_, sw, def) ->
+              use Var;
+              use String_switch;
+              List.iter (fun (_, lam) -> count lam; use Unconditional_branch)
+                sw;
+              Misc.may count def
+            | Static_raise _ -> use Unconditional_branch
+            | Static_catch (_, _, body, handler) ->
+              count body;
+              use Unconditional_branch;
+              count handler
+            | Try_with (body, _, handler) ->
+              use Try_with;
+              count body;
+              count handler
+            | If_then_else (_, ifso, ifnot) ->
+              use Var;
+              use Conditional_branch;
+              count ifso;
+              use Unconditional_branch;
+              count ifnot
+            | While (cond, body) ->
+              count cond;
+              use Conditional_branch;
+              count body;
+              use Unconditional_branch
+            | For { body; _ } ->
+              (* Load starting value *)
+              use Var;
+              (* Initialise loop counter, expected to be in a register. *)
+              use Var;
+              (* Top of loop (with counter contents already loaded) *)
+              (* Load finishing value *)
+              use Var;
+              (* Check condition *)
+              use (Prim (Printlambda.number_of_primitive (Pintcomp Cle)));
+              use Conditional_branch;
+              count body;
+              (* Increment counter contents (assume still loaded) *)
+              use (Prim (Printlambda.number_of_primitive Paddint));
+              (* Branch to top of loop *)
+              use Unconditional_branch
+          and count_named (named : Flambda.named) =
+            match named with
+            | Symbol _ -> use Const
+            | Read_mutable _ -> use Var
+            | Const _ -> use Const
+            | Allocated_const _ -> () (* should have been lifted *)
+            | Read_symbol_field _ ->
+              use Const;
+              use (Prim (Printlambda.number_of_primitive (Pfield 0)))
+            | Set_of_closures set_of_closures ->
+              (* This is always a non-constant set of closures by this stage. *)
+              Variable.Map.iter (fun _fun_var
+                    (function_decl : Flambda.function_declaration) ->
+                  use Const;  (* code pointer *)
+                  use Const;  (* arity *)
+                  if List.length function_decl.params > 1 then begin
+                    use Const  (* partial application code pointer *)
+                  end)
+                set_of_closures.function_decls.funs;
+              let env_size =
+                Variable.Map.cardinal set_of_closures.free_vars
+              in
+              for _var = 1 to env_size do
+                use Var
+              done;
+              use (Prim (Printlambda.number_of_primitive
+                (Pmakeblock (0, Immutable))))
+            | Project_closure _
+            | Project_var _ ->
+              use (Prim (Printlambda.number_of_primitive (Pfield 0)))
+            | Move_within_set_of_closures _ ->
+              use (Prim (Printlambda.number_of_primitive Paddint))
+            | Prim (prim, args, _) ->
+              List.iter (fun _arg -> use Var) args;
+              use (Prim (Printlambda.number_of_primitive prim))
+            | Expr expr -> count expr
+          in
+          count function_decl.body;
+          let string_of_symbol prefix s =
+            let spec = ref false in
+            for i = 0 to String.length s - 1 do
+              match String.unsafe_get s i with
+              | 'A'..'Z' | 'a'..'z' | '0'..'9' | '_' -> ()
+              | _ -> spec := true;
+            done;
+            if not !spec then if prefix = "" then s else prefix ^ s
+            else
+              let b = Buffer.create (String.length s + 10) in
+              Buffer.add_string b prefix;
+              String.iter
+                (function
+                  | ('A'..'Z' | 'a'..'z' | '0'..'9' | '_') as c ->
+                    Buffer.add_char b c
+                  | c -> Printf.bprintf b "$%02x" (Char.code c)
+                )
+                s;
+              Buffer.contents b
+          in
+          let function_label = string_of_symbol "" function_label in
+          let num_params = List.length function_decl.params in
+          results := (function_label, num_params, uses) :: !results)
+        set_of_closures.function_decls.funs);
+  !results
+
+let extract_sizes_from_object_file object_file ~output_prefix =
+  let function_sizes = !function_sizes in
+  match function_sizes with
+  | [] -> ()
+  | function_sizes ->
+    let temp_file = Printf.sprintf "%s.sizes-tmp" object_file in
+    let command =
+      Printf.sprintf "/bin/sh %s %s %s"
+        "/mnt/local/sda1/mshinwell/function_symbol_sizes.sh"
+        object_file
+        temp_file
+    in
+    let result = Sys.command command in
+    if result <> 0 then
+      Misc.remove_file temp_file
+    else begin
+      let finished = ref false in
+      let measured_sizes = ref [] in
+      let chan = open_in temp_file in
+      while not !finished do
+        match input_line chan with
+        | exception End_of_file -> finished := true
+        | line ->
+          let function_label, hex_size = Misc.cut_at line ' ' in
+          let size = int_of_string hex_size in
+          measured_sizes := (function_label, size) :: !measured_sizes
+      done;
+      close_in chan;
+      Misc.remove_file temp_file;
+      let measured_sizes = !measured_sizes in
+      let output_file = Printf.sprintf "%s.sizes" output_prefix in
+      let chan = open_out output_file in
+      List.iter (fun (function_label, num_params, uses) ->
+          try
+            let measured_size = List.assoc function_label measured_sizes in
+            Printf.fprintf chan "%s %d %d " function_label measured_size
+              num_params;
+            let num_uses = Array.length uses in
+            for use = 0 to num_uses - 1 do
+              Printf.fprintf chan "%d" uses.(use);
+              if use >= num_uses - 1 then
+                Printf.fprintf chan "\n%!"
+              else
+                Printf.fprintf chan " "
+            done
+          with Not_found -> ())
+        function_sizes;
+      close_out chan
+    end
+
 let liveness ppf phrase =
   Liveness.fundecl ppf phrase; phrase
 
@@ -123,6 +359,9 @@ let compile_phrase ppf p =
   | Cfunction fd -> compile_fundecl ppf fd
   | Cdata dl -> Emit.data dl
 
+(* CR mshinwell: add -d... option for this *)
+let dump_sizes =
+  try ignore (Sys.getenv "FUNCTION_SIZES"); true with Not_found -> false
 
 (* For the native toplevel: generates generic functions unless
    they are already available in the process *)
@@ -134,7 +373,7 @@ let compile_genfuns ppf f =
        | _ -> ())
     (Cmmgen.generic_functions true [Compilenv.current_unit_infos ()])
 
-let compile_unit ~source_provenance _output_prefix asm_filename keep_asm
+let compile_unit ~source_provenance output_prefix asm_filename keep_asm
       obj_filename gen =
   let create_asm = keep_asm || not !Emitaux.binary_backend_available in
   Emitaux.create_asm_file := create_asm;
@@ -154,6 +393,9 @@ let compile_unit ~source_provenance _output_prefix asm_filename keep_asm
     in
     if assemble_result <> 0
     then raise(Error(Assembler_error asm_filename));
+    if dump_sizes then begin
+      extract_sizes_from_object_file obj_filename ~output_prefix
+    end;
     if create_asm && not keep_asm then remove_file asm_filename
   with exn ->
     remove_file obj_filename;
@@ -190,8 +432,11 @@ let end_gen_implementation ?toplevel ~source_provenance ppf
     );
   Emit.end_assembly ()
 
-let flambda_gen_implementation ?toplevel ~source_provenance ~backend ppf
-    (program:Flambda.program) =
+let flambda_gen_implementation ?toplevel ~source_provenance ~backend
+    ~prefixname ppf (program:Flambda.program) =
+  if dump_sizes then begin
+    function_sizes := calculate_function_sizes program ~backend ~prefixname
+  end;
   let export = Build_export_info.build_export_info ~backend program in
   let (clambda, preallocated, constants) =
     Timings.time (Flambda_pass ("backend", source_provenance)) (fun () ->
@@ -241,10 +486,11 @@ let lambda_gen_implementation ?toplevel ~source_provenance ppf
   end_gen_implementation ?toplevel ~source_provenance ppf clambda_and_constants
 
 let gen_implementation (type t) ?toplevel ~source_provenance ~backend
-    (backend_kind: t backend_kind) ppf (code : t) =
+    (backend_kind: t backend_kind) ~prefixname ppf (code : t) =
   match backend_kind with
   | Flambda ->
-    flambda_gen_implementation ?toplevel ~source_provenance ~backend ppf code
+    flambda_gen_implementation ?toplevel ~source_provenance ~backend
+      ~prefixname ppf code
   | Lambda ->
     lambda_gen_implementation ?toplevel ~source_provenance ppf code
 
@@ -258,7 +504,7 @@ let compile_implementation (type t) ?toplevel ~source_provenance prefixname
   compile_unit ~source_provenance prefixname asmfile !keep_asm_file
       (prefixname ^ ext_obj) (fun () ->
         gen_implementation ?toplevel ~source_provenance ~backend backend_kind
-          ppf code)
+          ~prefixname ppf code)
 
 (* Error report *)
 

@@ -361,6 +361,122 @@ let string_of_primitive = function
   | Pint_as_pointer -> "Pint_as_pointer"
   | Popaque -> "Popaque"
 
+let number_of_primitive = function
+  | Pidentity -> 0
+  | Pignore -> 1
+  | Prevapply _ -> 2
+  | Pdirapply _ -> 3
+  | Ploc _ -> 4
+  | Pgetglobal _ -> 5
+  | Psetglobal _ -> 6
+  | Pmakeblock _ -> 7
+  | Pfield _ -> 8
+  | Psetfield (_, _, Initialization)
+  | Psetfield (_, Immediate, _) -> 9
+  | Pfloatfield _ -> 10
+  | Psetfloatfield _ -> 11
+  | Pduprecord _ -> 12
+  | Plazyforce -> 13
+  | Pccall { prim_alloc = true; _ } -> 14
+  | Pccall _ -> 15
+  | Praise _ -> 16
+  | Psequand -> 17
+  | Psequor -> 18
+  | Pnegint
+  | Paddint
+  | Psubint -> 21
+  | Pmulint -> 23
+  | Pdivint -> 24
+  | Pmodint -> 25
+  | Pnot
+  | Pandint
+  | Porint
+  | Pxorint -> 26
+  | Plslint
+  | Plsrint
+  | Pasrint -> 37
+  | Pintcomp _ -> 32
+  | Poffsetint _
+  | Poffsetref _ -> 34
+  | Pintoffloat -> 35
+  | Pfloatofint -> 36
+  | Pabsfloat -> 38
+  | Pnegfloat
+  | Paddfloat
+  | Psubfloat -> 40
+  | Pmulfloat -> 41
+  | Pdivfloat -> 42
+  | Pfloatcomp _ -> 43
+  | Pstringlength -> 44
+  | Pstringrefu -> 45
+  | Pstringsetu -> 46
+  | Pstringrefs -> 47
+  | Pstringsets -> 48
+  | Parraylength Pgenarray -> 49
+  | Parraylength Paddrarray -> 50
+  | Parraylength Pintarray -> 51
+  | Parraylength Pfloatarray -> 52
+  | Pmakearray _ -> 53
+  | Pduparray _ -> 54
+  | Parrayrefu Pgenarray -> 55
+  | Parrayrefu Paddrarray
+  | Parrayrefu Pintarray
+  | Parrayrefu Pfloatarray -> 58
+  | Parraysetu Pgenarray -> 59
+  | Parraysetu Paddrarray -> 60
+  | Parraysetu Pintarray
+  | Parraysetu Pfloatarray -> 62
+  | Parrayrefs Pgenarray -> 63
+  | Parrayrefs Paddrarray
+  | Parrayrefs Pintarray
+  | Parrayrefs Pfloatarray -> 66
+  | Parraysets Pgenarray -> 67
+  | Parraysets Paddrarray -> 68
+  | Parraysets Pintarray
+  | Parraysets Pfloatarray -> 70
+  | Pctconst _ -> 71
+  | Pisint -> 72
+  | Pisout -> 73
+  | Pbittest -> 74
+  | Pbintofint _ -> 75
+  | Pintofbint _ -> 76
+  | Pcvtbint _ -> 77
+  | Pnegbint _
+  | Paddbint _
+  | Psubbint _ -> 80
+  | Pmulbint _ -> 81
+  | Pdivbint _ -> 82
+  | Pmodbint _ -> 83
+  | Pandbint _
+  | Porbint _
+  | Pxorbint _ -> 86
+  | Plslbint _
+  | Plsrbint _
+  | Pasrbint _ -> 89
+  | Pbintcomp _ -> 90
+  | Pbigarrayref _ -> 91
+  | Pbigarrayset _ -> 92
+  | Pbigarraydim _ -> 93
+  | Pstring_load_16 _ -> 94
+  | Pstring_load_32 _ -> 95
+  | Pstring_load_64 _ -> 96
+  | Pstring_set_16 _ -> 97
+  | Pstring_set_32 _ -> 98
+  | Pstring_set_64 _ -> 99
+  | Pbigstring_load_16 _ -> 100
+  | Pbigstring_load_32 _ -> 101
+  | Pbigstring_load_64 _ -> 102
+  | Pbigstring_set_16 _ -> 103
+  | Pbigstring_set_32 _ -> 104
+  | Pbigstring_set_64 _ -> 105
+  | Pbswap16 -> 106
+  | Pbbswap _ -> 107
+  | Pint_as_pointer -> 21
+  | Popaque -> 0
+  | Psetfield (_, Pointer, Assignment) -> 110
+
+let num_primitives = 111
+
 let function_attribute ppf { inline; is_a_functor } =
   if is_a_functor then
     fprintf ppf "is_a_functor@ ";
