@@ -37,7 +37,8 @@ compile: tscanf2_io.cmo
 
 run:
 	@printf " ... testing with ocamlc"
-	@$(MYRUNTIME) ./master.byte "$(OCAMLRUN) `$(CYGPATH) ./slave.byte`" \
+	@$(MYRUNTIME) ./master.byte "$(OTOPDIR)/boot/ocamlrun$(EXE) \
+	                                     `$(CYGPATH) ./slave.byte`" \
 	             >result.byte 2>&1
 	@$(DIFF) reference result.byte >/dev/null \
 	&& if $(BYTECODE_ONLY); then : ; else \

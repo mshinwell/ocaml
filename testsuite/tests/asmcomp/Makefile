@@ -27,7 +27,7 @@ OTHEROBJS=\
 
 OBJS=parsecmmaux.cmo parsecmm.cmo lexcmm.cmo
 
-ADD_COMPFLAGS=$(INCLUDES) -w -40 -g
+ADD_COMPFLAGS=$(INCLUDES) -g
 
 default:
 	@if $(BYTECODE_ONLY) || [ -z "$(ASPP)" ]; then : ; else \
@@ -47,9 +47,7 @@ parsecmm.mli parsecmm.ml: parsecmm.mly
 lexcmm.ml: lexcmm.mll
 	@$(OCAMLLEX) -q lexcmm.mll
 
-MLCASES=rebinding optargs staticalloc unboxing unboxing_record bind_tuples \
-	local_exception is_static
-ARGS_is_static=is_in_static_data.o
+MLCASES=optargs staticalloc bind_tuples
 
 CASES=fib tak quicksort quicksort2 soli \
       arith checkbound tagged-fib tagged-integr tagged-quicksort tagged-tak
@@ -76,11 +74,8 @@ tests: $(CASES:=.o)
           $(MAKE) one_ml NAME=$$c; \
         done
 
-is_in_static_data.o: is_in_static_data.c
-	@$(OCAMLOPT) -c is_in_static_data.c
-
-one_ml: is_in_static_data.o
-	@$(OCAMLOPT) -o $(NAME).exe $(ARGS_$(NAME)) $(NAME).ml && \
+one_ml:
+	@$(OCAMLOPT) -o $(NAME).exe $(NAME).ml && \
 	./$(NAME).exe && echo " => passed" || echo " => failed"
 
 one:
