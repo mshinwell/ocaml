@@ -201,6 +201,12 @@ let to_string = function
       addr
 
 module Heap_snapshot = struct
+  external dump_allocators_of_minor_heap_blocks
+     : filename:string
+    -> unit
+    = "caml_allocation_profiling_only_works_for_native_code"
+      "caml_dump_allocators_of_minor_heap_blocks_from_ocaml"
+
   external dump_allocators_of_major_heap_blocks
      : filename:string
     -> dump_num_unaccounted_for:int
