@@ -163,6 +163,66 @@ static const uint64_t STRUCTURED_CONSTANT = 3ull << 4;
 static const uint64_t COMPILATION_UNIT = 4ull << 4;
 
 void
+caml_dump_allocators_of_minor_heap_blocks (const char* output_file)
+{
+  FILE* fp;
+  value* ptr;
+  uint64_t num_blocks_in_minor_heap = 0ull;
+  uint64_t num_blocks_in_minor_heap_with_profinfo = 0ull;
+
+  fp = fopen(output_file, "w");
+  if (fp == NULL) {
+    fprintf(stderr, "couldn't open file '%s' for heap block dump\n", output_file);
+    return;
+  }
+
+  assert(((uintnat) caml_young_ptr) % sizeof(value) == 0);
+  ptr = (value*) caml_young_ptr;
+  assert(ptr >= (value*) caml_young_start);
+  while (ptr < (value*) caml_young_end) {
+    header_t hd;
+    value value_in_minor_heap;
+    uint64_t approx_instr_pointer;
+
+    ptr++;
+    value_in_minor_heap = (value) ptr;
+    assert(Is_young(value_in_minor_heap));
+    assert(Is_block(value_in_minor_heap));
+
+    hd = Hd_val(value_in_minor_heap);
+
+    /* We do not expect the value to be promoted, since this function
+       should not be called during a minor collection. */
+    assert(hd != 0);
+
+    approx_instr_pointer = Decode_profinfo_hd(hd);
+    num_blocks_in_minor_heap++;
+    if (approx_instr_pointer != 0ull) {
+      num_blocks_in_minor_heap_with_profinfo++;
+      fprintf(fp, "%p %lld\n", (void*) approx_instr_pointer,
+              (unsigned long long) Whsize_val(value_in_minor_heap));
+    }
+
+    ptr += Wosize_val(value_in_minor_heap);
+  }
+
+  fprintf(fp, "num blocks in minor heap %lld\n",
+    (unsigned long long) num_blocks_in_minor_heap);
+  fprintf(fp, "num blocks in minor heap with profinfo %lld\n",
+    (unsigned long long) num_blocks_in_minor_heap_with_profinfo);
+
+  fclose(fp);
+}
+
+CAMLprim value
+caml_dump_allocators_of_minor_heap_blocks_from_ocaml (value output_file)
+{
+  assert(Is_block(output_file));
+  caml_dump_allocators_of_minor_heap_blocks(String_val(output_file));
+  return Val_unit;
+}
+
+void
 caml_dump_allocators_of_major_heap_blocks (const char* output_file,
                                            int sample_strings)
 {
@@ -193,11 +253,13 @@ caml_dump_allocators_of_major_heap_blocks (const char* output_file,
     return;
   }
 
+#if 0
   /* To avoid having to traverse the minor heap, just empty it. */
   caml_minor_collection();
 
   /* Perform a full major collection so no white blocks remain. */
   caml_finish_major_cycle();
+#endif
 
   chunk = caml_heap_start;
 
@@ -232,7 +294,6 @@ caml_dump_allocators_of_major_heap_blocks (const char* output_file,
             const char* colour;
 
             size_in_words_including_header = Whsize_hd(hd);
-            /* CR mshinwell: after recent changes, we'll only have white here */
             switch (Color_hd(hd)) {
               case Caml_black: colour = "b"; break;
               case Caml_gray: colour = "g"; break;
