@@ -30,6 +30,10 @@ module Heap_snapshot : sig
      accompanied by the usual associated slice of major collection.
   *)
 
+  val dump_allocators_of_minor_heap_blocks
+     : filename:string
+    -> unit
+
   (* [dump_allocators_of_major_heap_blocks] writes a file that may be
      decoded using tools/allocation-profiling/decode-major-heap.sh
      in order to show, for each block in the major heap, where it was
