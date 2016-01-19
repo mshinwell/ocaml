@@ -104,6 +104,13 @@ module type S =
         @since 3.12.0
      *)
 
+    val union: (key -> 'a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
+    (** [union f m1 m2] computes a map whose keys is the union of keys
+        of [m1] and of [m2].  When the same binding is defined in both
+        arguments, the function [f] is used to combine them.
+        @since 4.03.0
+    *)
+
     val compare: ('a -> 'a -> int) -> 'a t -> 'a t -> int
     (** Total ordering between maps.  The first argument is a total ordering
         used to compare data associated with equal keys in the two maps. *)
@@ -213,10 +220,6 @@ module type S =
     (** Same as {!Map.S.map}, but the function receives as arguments both the
        key and the associated value for each binding of the map. *)
 
-    val union: (key -> 'a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
-    (** [union f m1 m2] computes a map whose keys is the union of keys
-        of [m1] and of [m2].  When the same binding is defined in both
-        arguments, the function is used to combine them. *)
 
   end
 (** Output signature of the functor {!Map.Make}. *)

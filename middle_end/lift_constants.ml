@@ -9,7 +9,7 @@
 (*   Copyright 2014--2016 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
-(*   the GNU Library General Public License version 2.1, with the         *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
 (*   special exception on linking described in the file ../LICENSE.       *)
 (*                                                                        *)
 (**************************************************************************)
@@ -500,7 +500,8 @@ let constant_dependencies ~backend:_ (const:Flambda.constant_defining_value) =
   match const with
   | Allocated_const _ -> Symbol.Set.empty
   | Block (_, fields) ->
-    let symbol_fields = Misc.filter_map
+    let symbol_fields =
+      Misc.Stdlib.List.filter_map
         (function
           | (Symbol s:Flambda.constant_defining_value_block_field) -> Some s
           | Flambda.Const _ -> None)
@@ -551,7 +552,7 @@ let program_graph
       )
       effect_tbl graph_with_initialisation
   in
-  let module Symbol_SCC = Sort_connected_components.Make (Symbol) in
+  let module Symbol_SCC = Strongly_connected_components.Make (Symbol) in
   let components =
     Symbol_SCC.connected_components_sorted_from_roots_to_leaf
       graph
@@ -571,7 +572,7 @@ let add_definition_of_symbol constant_definitions
     assert(not (Symbol.Tbl.mem initialize_symbol_tbl sym));
     (sym, Symbol.Map.find sym constant_definitions)
   in
-  let module Symbol_SCC = Sort_connected_components.Make (Symbol) in
+  let module Symbol_SCC = Strongly_connected_components.Make (Symbol) in
   match component with
   | Symbol_SCC.Has_loop l ->
     let l = List.map symbol_declaration l in
@@ -817,8 +818,23 @@ let project_closure_map symbol_definition_map =
     symbol_definition_map
     Symbol.Map.empty
 
+let the_dead_constant_index = ref 0
+
 let lift_constants (program : Flambda.program) ~backend =
-  (* Format.eprintf "lift_constants input:@ %a\n" Flambda.print_program program; *)
+  let the_dead_constant =
+    let index = !the_dead_constant_index in
+    incr the_dead_constant_index;
+    let name = Printf.sprintf "the_dead_constant_%d" index in
+    Symbol.create (Compilation_unit.get_current_exn ())
+      (Linkage_name.create name)
+  in
+  let program_body : Flambda.program_body =
+    Let_symbol (the_dead_constant, Allocated_const (Nativeint 0n),
+      program.program_body)
+  in
+  let program : Flambda.program =
+    { program with program_body; }
+  in
   let inconstants =
     Inconstant_idents.inconstants_on_program program
       ~backend
@@ -829,18 +845,21 @@ let lift_constants (program : Flambda.program) ~backend =
   in
   let var_to_symbol_tbl, var_to_definition_tbl, let_symbol_to_definition_tbl,
       initialize_symbol_to_definition_tbl =
-    assign_symbols_and_collect_constant_definitions ~backend ~program ~inconstants
+    assign_symbols_and_collect_constant_definitions ~backend ~program
+      ~inconstants
   in
   let aliases =
     Alias_analysis.run var_to_definition_tbl
       initialize_symbol_to_definition_tbl
       let_symbol_to_definition_tbl
+      ~the_dead_constant
   in
   replace_definitions_in_initialize_symbol_and_effects
       (inconstants:Inconstant_idents.result)
       (aliases:Alias_analysis.allocation_point Variable.Map.t)
       (var_to_symbol_tbl:Symbol.t Variable.Tbl.t)
-      (var_to_definition_tbl:Alias_analysis.constant_defining_value Variable.Tbl.t)
+      (var_to_definition_tbl
+        : Alias_analysis.constant_defining_value Variable.Tbl.t)
       initialize_symbol_tbl
       effect_tbl;
   let symbol_definition_map =
@@ -848,7 +867,8 @@ let lift_constants (program : Flambda.program) ~backend =
       (inconstants:Inconstant_idents.result)
       (aliases:Alias_analysis.allocation_point Variable.Map.t)
       (var_to_symbol_tbl:Symbol.t Variable.Tbl.t)
-      (var_to_definition_tbl:Alias_analysis.constant_defining_value Variable.Tbl.t)
+      (var_to_definition_tbl
+        : Alias_analysis.constant_defining_value Variable.Tbl.t)
       (Symbol.Tbl.to_map symbol_definition_tbl)
   in
   let project_closure_map = project_closure_map symbol_definition_map in
@@ -857,7 +877,8 @@ let lift_constants (program : Flambda.program) ~backend =
       inconstants
       (aliases:Alias_analysis.allocation_point Variable.Map.t)
       (var_to_symbol_tbl:Symbol.t Variable.Tbl.t)
-      (var_to_definition_tbl:Alias_analysis.constant_defining_value Variable.Tbl.t)
+      (var_to_definition_tbl
+        : Alias_analysis.constant_defining_value Variable.Tbl.t)
       symbol_definition_map
       project_closure_map
       ~backend
@@ -866,7 +887,8 @@ let lift_constants (program : Flambda.program) ~backend =
     var_to_block_field
       (aliases:Alias_analysis.allocation_point Variable.Map.t)
       (var_to_symbol_tbl:Symbol.t Variable.Tbl.t)
-      (var_to_definition_tbl:Alias_analysis.constant_defining_value Variable.Tbl.t)
+      (var_to_definition_tbl
+        : Alias_analysis.constant_defining_value Variable.Tbl.t)
   in
   let translated_definitions =
     introduce_free_variables_in_sets_of_closures var_to_block_field_tbl
@@ -883,7 +905,7 @@ let lift_constants (program : Flambda.program) ~backend =
           Project_closure (s2, closure_id2) when
             Symbol.equal s1 s2 &&
             Closure_id.equal closure_id1 closure_id2 ->
-          c1
+          Some c1
         | Project_closure (s1, closure_id1),
           Project_closure (s2, closure_id2) ->
           Format.eprintf "not equal project closure@. s %a %a@. cid %a %a@."

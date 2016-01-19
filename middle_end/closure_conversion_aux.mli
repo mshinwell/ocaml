@@ -9,7 +9,7 @@
 (*   Copyright 2014--2016 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
-(*   the GNU Library General Public License version 2.1, with the         *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
 (*   special exception on linking described in the file ../LICENSE.       *)
 (*                                                                        *)
 (**************************************************************************)
@@ -92,3 +92,5 @@ module Function_decls : sig
      It also contains the globals bindings of the provided environment. *)
   val closure_env_without_parameters : Env.t -> t -> Env.t
 end
+
+val stub_hack_prim_name : string

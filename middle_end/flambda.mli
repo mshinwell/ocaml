@@ -9,7 +9,7 @@
 (*   Copyright 2014--2016 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
-(*   the GNU Library General Public License version 2.1, with the         *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
 (*   special exception on linking described in the file ../LICENSE.       *)
 (*                                                                        *)
 (**************************************************************************)
@@ -387,6 +387,7 @@ type program = {
 *)
 val free_variables
    : ?ignore_uses_as_callee:unit
+  -> ?ignore_uses_as_argument:unit
   -> ?ignore_uses_in_project_var:unit
   -> t
   -> Variable.Set.t
@@ -397,10 +398,10 @@ val free_variables_named
   -> named
   -> Variable.Set.t
 
-(** Compute _all_ variables occuring inside an expression.  (This is O(1)
-    for [Let]s). *)
+(** Compute _all_ variables occuring inside an expression. *)
 val used_variables
    : ?ignore_uses_as_callee:unit
+  -> ?ignore_uses_as_argument:unit
   -> ?ignore_uses_in_project_var:unit
   -> t
   -> Variable.Set.t

@@ -411,6 +411,7 @@ let new_structured_constant cst ~shared =
         strcst_all = (lbl, cst) :: strcst_all;
       };
     lbl
+
 let clear_structured_constants () =
   structured_constants := structured_constants_empty
 

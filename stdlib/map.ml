@@ -29,6 +29,7 @@ module type S =
     val remove: key -> 'a t -> 'a t
     val merge:
           (key -> 'a option -> 'b option -> 'c option) -> 'a t -> 'b t -> 'c t
+    val union: (key -> 'a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
     val compare: ('a -> 'a -> int) -> 'a t -> 'a t -> int
     val equal: ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
     val iter: (key -> 'a -> unit) -> 'a t -> unit
@@ -46,7 +47,6 @@ module type S =
     val find: key -> 'a t -> 'a
     val map: ('a -> 'b) -> 'a t -> 'b t
     val mapi: (key -> 'a -> 'b) -> 'a t -> 'b t
-    val union: (key -> 'a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
   end
 
 module Make(Ord: OrderedType) = struct
@@ -271,6 +271,23 @@ module Make(Ord: OrderedType) = struct
       | _ ->
           assert false
 
+    let rec union f s1 s2 =
+      match (s1, s2) with
+      | (Empty, s) | (s, Empty) -> s
+      | (Node (l1, v1, d1, r1, h1), Node (l2, v2, d2, r2, h2)) ->
+          if h1 >= h2 then
+            let (l2, d2, r2) = split v1 s2 in
+            let l = union f l1 l2 and r = union f r1 r2 in
+            match d2 with
+            | None -> join l v1 d1 r
+            | Some d2 -> concat_or_join l v1 (f v1 d1 d2) r
+          else
+            let (l1, d1, r1) = split v2 s1 in
+            let l = union f l1 l2 and r = union f r1 r2 in
+            match d1 with
+            | None -> join l v2 d2 r
+            | Some d1 -> concat_or_join l v2 (f v2 d1 d2) r
+
     let rec filter p = function
         Empty -> Empty
       | Node(l, v, d, r, _) as t ->
@@ -336,28 +353,5 @@ module Make(Ord: OrderedType) = struct
       bindings_aux [] s
 
     let choose = min_binding
-
-    let rec union f s1 s2 =
-      match (s1, s2) with
-      | (Empty, s) | (s, Empty) -> s
-      | (Node (l1, v1, d1, r1, h1), Node (l2, v2, d2, r2, h2)) ->
-          if h1 >= h2 then
-            let (l2, d2, r2) = split v1 s2 in
-            let l = union f l1 l2 and r = union f r1 r2 in
-            let d =
-              match d2 with
-              | None -> d1
-              | Some d2 -> f v1 d1 d2
-            in
-            join l v1 d r
-          else
-            let (l1, d1, r1) = split v2 s1 in
-            let l = union f l1 l2 and r = union f r1 r2 in
-            let d =
-              match d1 with
-              | None -> d2
-              | Some d1 -> f v2 d1 d2
-            in
-            join l v2 d r
 
 end

@@ -9,14 +9,14 @@
 (*   Copyright 2014--2016 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
-(*   the GNU Library General Public License version 2.1, with the         *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
 (*   special exception on linking described in the file ../LICENSE.       *)
 (*                                                                        *)
 (**************************************************************************)
 
 let in_function_declarations (function_decls : Flambda.function_declarations)
       ~backend =
-  let module VCC = Sort_connected_components.Make (Variable) in
+  let module VCC = Strongly_connected_components.Make (Variable) in
   let directed_graph =
     Flambda_utils.fun_vars_referenced_in_decls function_decls ~backend
   in

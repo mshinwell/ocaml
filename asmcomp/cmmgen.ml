@@ -2553,8 +2553,8 @@ let emit_constant_closure ((_, global_symb) as symb) fundecls clos_vars cont =
         List.fold_right emit_constant clos_vars cont
   | f1 :: remainder ->
       let rec emit_others pos = function
-        [] ->
-          List.fold_right emit_constant clos_vars cont
+          [] ->
+            List.fold_right emit_constant clos_vars cont
       | f2 :: rem ->
           if f2.arity = 1 || f2.arity = 0 then
             Cconst_blockheader_constant_closure(infix_header pos) ::
@@ -2595,11 +2595,30 @@ let emit_constants cont constants =
     constants;
   List.iter
     (fun (symb, fundecls, clos_vars) ->
-       c := Cdata (emit_constant_closure symb
-          fundecls clos_vars []) :: !c)
+        c := Cdata(emit_constant_closure symb fundecls clos_vars []) :: !c)
     !constant_closures;
   constant_closures := [];
   !c
+
+let emit_all_constants cont =
+  let constants =
+    List.map (fun (symb, global, const) -> (symb, global), const)
+      (Compilenv.structured_constants ())
+  in
+  Compilenv.clear_structured_constants ();
+  emit_constants cont constants
+
+let transl_all_functions_and_emit_all_constants cont =
+  let rec aux already_translated cont =
+    if Compilenv.structured_constants () = [] &&
+       Queue.is_empty functions
+    then cont
+    else
+      let cont, set = transl_all_functions already_translated cont in
+      let cont = emit_all_constants cont in
+      aux already_translated cont
+  in
+  aux StringSet.empty cont
 
 (* Build the table of GC roots for toplevel modules *)
 
@@ -2610,14 +2629,6 @@ let emit_module_roots_table ~symbols cont =
         List.map (fun s -> Csymbol_address s) symbols @
         [Cint 0n])
   :: cont
-
-let emit_all_constants cont =
-  let constants =
-    List.map (fun (symb, global, const) -> (symb, global), const)
-      (Compilenv.structured_constants ())
-  in
-  Compilenv.clear_structured_constants ();
-  emit_constants cont constants
 
 (* Build the NULL terminated array of gc roots *)
 
@@ -2662,20 +2673,11 @@ let compunit_and_constants (ulam, preallocated_blocks, constants) =
       constants
   in
   let c1' = emit_constants c1 structured_constants in
-  let rec aux set c1 =
-    if Compilenv.structured_constants () = [] &&
-       Queue.is_empty functions
-    then c1
-    else
-      let c2, set = transl_all_functions set c1 in
-      let c3 = emit_all_constants c2 in
-      aux set c3
-  in
   let preallocate_block_symbols =
     List.map (fun { Clambda.symbol } -> symbol)
       preallocated_blocks
   in
-  let c3 = aux StringSet.empty c1' in
+  let c3 = transl_all_functions_and_emit_all_constants c1' in
   let c4 =
     emit_gc_roots_table ~symbols:preallocate_block_symbols c3
   in

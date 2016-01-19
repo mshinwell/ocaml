@@ -9,7 +9,7 @@
 (*   Copyright 2014--2016 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
-(*   the GNU Library General Public License version 2.1, with the         *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
 (*   special exception on linking described in the file ../LICENSE.       *)
 (*                                                                        *)
 (**************************************************************************)
@@ -99,7 +99,7 @@ and lift_lets_named _var (named:Flambda.named) ~toplevel : Flambda.named =
   | Project_var _ | Prim _ | Set_of_closures _ ->
     named
 
-module Sort_lets = Sort_connected_components.Make(Variable)
+module Sort_lets = Strongly_connected_components.Make (Variable)
 
 let rebuild_let_rec (defs:(Variable.t * Flambda.named) list) body =
   let map = Variable.Map.of_list defs in

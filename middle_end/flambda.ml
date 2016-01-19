@@ -9,7 +9,7 @@
 (*   Copyright 2014--2016 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
-(*   the GNU Library General Public License version 2.1, with the         *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
 (*   special exception on linking described in the file ../LICENSE.       *)
 (*                                                                        *)
 (**************************************************************************)
@@ -479,8 +479,8 @@ let print_program ppf program =
     program.imported_symbols;
   print_program_body ppf program.program_body
 
-let rec variables_usage ?ignore_uses_as_callee ?ignore_uses_in_project_var
-    ~all_used_variables tree =
+let rec variables_usage ?ignore_uses_as_callee ?ignore_uses_as_argument
+    ?ignore_uses_in_project_var ~all_used_variables tree =
   match tree with
   | Var var -> Variable.Set.singleton var
   | _ ->
@@ -498,21 +498,23 @@ let rec variables_usage ?ignore_uses_as_callee ?ignore_uses_in_project_var
         | None -> free_variable func
         | Some () -> ()
         end;
-        List.iter free_variable args
+        begin match ignore_uses_as_argument with
+        | None -> List.iter free_variable args
+        | Some () -> ()
+        end
       | Let { var; free_vars_of_defining_expr; free_vars_of_body;
               defining_expr; body; _ } ->
         bound_variable var;
         if all_used_variables
            || ignore_uses_as_callee <> None
+           || ignore_uses_as_argument <> None
            || ignore_uses_in_project_var <> None then begin
           (* In these cases we can't benefit from the pre-computed free
              variable sets. *)
           free_variables
             (variables_usage_named ?ignore_uses_in_project_var ?ignore_uses_as_callee
-               ~all_used_variables defining_expr);
-          free_variables
-            (variables_usage ?ignore_uses_as_callee ?ignore_uses_in_project_var
-               ~all_used_variables body)
+                ?ignore_uses_as_argument ~all_used_variables defining_expr);
+          aux body
         end
         else begin
           free_variables free_vars_of_defining_expr;
@@ -575,7 +577,7 @@ let rec variables_usage ?ignore_uses_as_callee ?ignore_uses_in_project_var
       Variable.Set.diff !free !bound
 
 and variables_usage_named ?ignore_uses_in_project_var
-    ?ignore_uses_as_callee
+    ?ignore_uses_as_callee ?ignore_uses_as_argument
     ~all_used_variables named =
   let free = ref Variable.Set.empty in
   let free_variable fv = free := Variable.Set.add fv !free in
@@ -600,21 +602,25 @@ and variables_usage_named ?ignore_uses_in_project_var
     free_variable closure
   | Prim (_, args, _) -> List.iter free_variable args
   | Expr flam ->
-    free := Variable.Set.union (variables_usage ?ignore_uses_as_callee ~all_used_variables flam) !free
+    free := Variable.Set.union
+        (variables_usage ?ignore_uses_as_callee ?ignore_uses_as_argument
+           ~all_used_variables flam) !free
   end;
   !free
 
-let free_variables ?ignore_uses_as_callee ?ignore_uses_in_project_var tree =
-  variables_usage ?ignore_uses_as_callee ?ignore_uses_in_project_var
-    ~all_used_variables:false tree
+let free_variables ?ignore_uses_as_callee ?ignore_uses_as_argument
+    ?ignore_uses_in_project_var tree =
+  variables_usage ?ignore_uses_as_callee ?ignore_uses_as_argument
+    ?ignore_uses_in_project_var ~all_used_variables:false tree
 
 let free_variables_named ?ignore_uses_in_project_var named =
   variables_usage_named ?ignore_uses_in_project_var
     ~all_used_variables:false named
 
-let used_variables ?ignore_uses_as_callee ?ignore_uses_in_project_var tree =
-  variables_usage ?ignore_uses_as_callee ?ignore_uses_in_project_var
-    ~all_used_variables:true tree
+let used_variables ?ignore_uses_as_callee ?ignore_uses_as_argument
+    ?ignore_uses_in_project_var tree =
+  variables_usage ?ignore_uses_as_callee ?ignore_uses_as_argument
+    ?ignore_uses_in_project_var ~all_used_variables:true tree
 
 let used_variables_named ?ignore_uses_in_project_var named =
   variables_usage_named ?ignore_uses_in_project_var
@@ -1073,7 +1079,7 @@ module Constant_defining_value = struct
         let c = Tag.compare tag1 tag2 in
         if c <> 0 then c
         else
-          Misc.compare_lists compare_constant_defining_value_block_field
+          Misc.Stdlib.List.compare compare_constant_defining_value_block_field
             fields1 fields2
       | Set_of_closures set1, Set_of_closures set2 ->
         Set_of_closures_id.compare set1.function_decls.set_of_closures_id

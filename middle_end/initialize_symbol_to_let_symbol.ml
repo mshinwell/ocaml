@@ -9,7 +9,7 @@
 (*   Copyright 2014--2016 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
-(*   the GNU Library General Public License version 2.1, with the         *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
 (*   special exception on linking described in the file ../LICENSE.       *)
 (*                                                                        *)
 (**************************************************************************)
@@ -31,7 +31,9 @@ let rec loop (program : Flambda.program_body) : Flambda.program_body =
   match program with
   | Initialize_symbol (symbol, tag, fields, program) ->
     let constant_fields = List.map constant_field fields in
-    begin match Misc.some_if_all_elements_are_some constant_fields with
+    begin
+      match Misc.Stdlib.List.some_if_all_elements_are_some constant_fields
+    with
     | None ->
       Initialize_symbol (symbol, tag, fields, loop program)
     | Some fields ->

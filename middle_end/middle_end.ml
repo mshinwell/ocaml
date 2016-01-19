@@ -9,7 +9,7 @@
 (*   Copyright 2014--2016 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
-(*   the GNU Library General Public License version 2.1, with the         *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
 (*   special exception on linking described in the file ../LICENSE.       *)
 (*                                                                        *)
 (**************************************************************************)
@@ -125,6 +125,8 @@ let middle_end ppf ~source_provenance ~prefixname ~backend
         +-+ ("Inline_and_simplify noinline",
              Inline_and_simplify.run ~never_inline:true ~backend
               ~prefixname ~round)
+        +-+ ("Remove_unused_closure_vars 3",
+             Remove_unused_closure_vars.remove_unused_closure_variables)
         +-+ ("Initialize_symbol_to_let_symbol",
              Initialize_symbol_to_let_symbol.run)
         |> loop
