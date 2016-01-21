@@ -98,7 +98,7 @@ let print_cmt_infos cmt =
      | None -> ""
      | Some crc -> Digest.to_hex crc)
 
-let print_general_infos name crc defines cmi cmx =
+let print_general_infos name crc defines cmi import_cmx =
   printf "Name: %s\n" name;
   printf "CRC of implementation: %s\n" (Digest.to_hex crc);
   printf "Globals defined:\n";
@@ -106,15 +106,24 @@ let print_general_infos name crc defines cmi cmx =
   printf "Interfaces imported:\n";
   List.iter print_name_crc cmi;
   printf "Implementations imported:\n";
-  List.iter print_name_crc cmx
+  List.iter print_name_crc import_cmx
 
 open Cmx_format
 
 let print_cmx_infos (ui, crc) =
   print_general_infos
-    ui.ui_name crc ui.ui_defines ui.ui_imports_cmi ui.ui_imports_cmx;
+    ui.ui_name crc ui.ui_defines ui.ui_imports_cmi
+    ui.ui_imports_cmx;
   (* CR mshinwell: This should print the flambda export info.
      Unfortunately this needs some surgery in the Makefiles. *)
+  let cu = Compilation_unit.create (Ident.create_persistent ui.ui_name)
+    (Linkage_name.create "__dummy__") in
+  Compilation_unit.set_current cu;
+  printf "Implementation exported:\n";
+  begin match ui.ui_export_info with
+  | Clambda approx -> Format.printf " %a\n" Printclambda.approx approx
+  | Flambda export -> Format.printf " %a\n" Export_info.print_all export
+  end;
   let pr_funs _ fns =
     List.iter (fun arity -> printf " %d" arity) fns in
   printf "Currying functions:%a\n" pr_funs ui.ui_curry_fun;

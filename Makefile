@@ -662,7 +662,7 @@ clean::
 # Tools
 
 ocamltools: ocamlc ocamlyacc ocamllex asmcomp/cmx_format.cmi \
-            asmcomp/printclambda.cmo
+            compilerlibs/ocamloptcomp.cma
 	cd tools; $(MAKE) all
 
 ocamltoolsopt: ocamlopt

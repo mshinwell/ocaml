@@ -51,16 +51,16 @@ let import_set_of_closures =
     Flambda.update_function_declarations clos ~funs
   in
   let aux set_of_closures_id =
+    ignore (Compilenv.approx_for_global
+      (Set_of_closures_id.get_compilation_unit set_of_closures_id));
     let ex_info = Compilenv.approx_env () in
     let function_declarations =
       try
         Set_of_closures_id.Map.find set_of_closures_id
           ex_info.sets_of_closures
       with Not_found ->
-        Misc.fatal_errorf "[functions] does not map set of closures ID %a. \
-            ex_info = %a"
+        Misc.fatal_errorf "[functions] does not map set of closures ID %a."
           Set_of_closures_id.print set_of_closures_id
-          Export_info.print_all ex_info
     in
     import_function_declarations function_declarations
   in
