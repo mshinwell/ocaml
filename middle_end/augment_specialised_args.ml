@@ -21,8 +21,6 @@ type add_all_or_none_of_these_specialised_args =
   Flambda.named Variable.Map.t
 
 type what_to_specialise = {
-  new_function_body : Flambda.expr;
-  removed_free_vars : Variable.Set.t;
   new_specialised_args_indexed_by_new_outer_vars
     : add_all_or_none_of_these_specialised_args list;
   new_inner_to_new_outer_vars : Flambda.specialised_to Variable.Map.t;
@@ -294,7 +292,7 @@ module Make (T : S) = struct
           let rewritten_function_decl =
             Flambda.create_function_declaration
               ~params:all_params
-              ~body:what_to_specialise.new_function_body
+              ~body:function_decl.body
               ~stub:function_decl.stub
               ~dbg:function_decl.dbg
               ~inline:function_decl.inline
@@ -304,7 +302,6 @@ module Make (T : S) = struct
             new_fun_var, rewritten_function_decl, wrapper,
               new_specialised_args_indexed_by_new_outer_vars,
               new_inner_to_new_outer_vars,
-              what_to_specialise.removed_free_vars,
               params_renaming)
 
   let check_invariants ~(set_of_closures : Flambda.set_of_closures)
@@ -347,12 +344,11 @@ module Make (T : S) = struct
     | Some user_data ->
       let original_set_of_closures = set_of_closures in
       let funs, new_specialised_arg_defns_indexed_by_new_outer_vars,
-          specialised_args, _removed_free_vars, done_something =
+          specialised_args, done_something =
         Variable.Map.fold
           (fun fun_var function_decl
                 (funs, new_specialised_args_indexed_by_new_outer_vars,
-                 new_inner_to_new_outer_vars, removed_free_vars,
-                 done_something) ->
+                 new_inner_to_new_outer_vars, done_something) ->
             match
               rewrite_function_decl ~backend ~env ~set_of_closures ~fun_var
                 ~function_decl ~user_data
@@ -360,11 +356,11 @@ module Make (T : S) = struct
             | None ->
               let funs = Variable.Map.add fun_var function_decl funs in
               funs, new_specialised_args_indexed_by_new_outer_vars,
-                new_inner_to_new_outer_vars, removed_free_vars, done_something
+                new_inner_to_new_outer_vars, done_something
             | Some (
                 new_fun_var, rewritten_function_decl, wrapper,
                 new_specialised_args_indexed_by_new_outer_vars',
-                new_inner_to_new_outer_vars', removed_free_vars',
+                new_inner_to_new_outer_vars',
                 params_renaming) ->
               let funs =
                 assert (not (Variable.Map.mem new_fun_var funs));
@@ -432,16 +428,12 @@ module Make (T : S) = struct
                 Variable.Map.disjoint_union for_new_arguments
                   for_existing_arguments
               in
-              let removed_free_vars =
-                Variable.Set.union removed_free_vars removed_free_vars'
-              in
               funs, new_specialised_args_indexed_by_new_outer_vars,
-                new_inner_to_new_outer_vars, removed_free_vars, true)
+                new_inner_to_new_outer_vars, true)
           set_of_closures.function_decls.funs
           (Variable.Map.empty,
             Variable.Map.empty,
             set_of_closures.specialised_args,
-            Variable.Set.empty,
             false)
       in
       if not done_something then

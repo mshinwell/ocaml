@@ -116,13 +116,6 @@ module Transform = struct
           free_vars
           Variable.Map.empty
       in
-      let new_function_body = function_decl.body in
-(* This will be done by Remove_free_vars_equal_to_args
-        Flambda_utils.toplevel_substitution
-          existing_inner_free_vars_to_new_inner_vars
-          function_decl.body
-      in
-*)
       let new_specialised_args_indexed_by_new_outer_vars =
         Variable.Map.fold (fun inner_free_var
               (outer_free_var : Flambda.specialised_to)
@@ -151,10 +144,6 @@ module Transform = struct
           Variable.Map.empty
       in
       let what_to_specialise : ASA.what_to_specialise = {
-        new_function_body;
-        (* There are no removed free variables yet because they may
-           still be used in the wrapper. *)
-        removed_free_vars = Variable.Set.empty;
         (* One free variable maps to one specialised argument; there is no
            grouping, hence the singleton list. *)
         new_specialised_args_indexed_by_new_outer_vars =

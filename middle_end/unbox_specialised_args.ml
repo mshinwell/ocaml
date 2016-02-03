@@ -254,7 +254,7 @@ module Transform = struct
     else Some (collect_projections ~backend ~env ~set_of_closures)
 
   let what_to_specialise ~env:_ ~closure_id
-        ~(function_decl : Flambda.function_declaration) ~set_of_closures:_
+        ~function_decl:_ ~set_of_closures:_
         ~user_data:projections_by_function
         : ASA.what_to_specialise option =
     let fun_var = Closure_id.unwrap closure_id in
@@ -265,8 +265,6 @@ module Transform = struct
         (* All of the rewrites in the body will be taken care of by
            [Inline_and_simplify] upon detection of projection expressions
            and examination of the specialised argument map. *)
-        new_function_body = function_decl.body;
-        removed_free_vars = Variable.Set.empty;
         new_specialised_args_indexed_by_new_outer_vars =
           Variable.Map.data extracted.projection_defns_indexed_by_outer_vars;
         new_inner_to_new_outer_vars = extracted.new_inner_to_new_outer_vars;
