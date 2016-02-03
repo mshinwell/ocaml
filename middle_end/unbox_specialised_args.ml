@@ -209,8 +209,10 @@ module Transform = struct
                       false
                     else
                       match spec_to.projectee, spec_to'.projectee with
-                      | Some (_, projectee), Some (_, projectee') ->
-                        let equal = Projectee.equal projectee projectee' in
+                      | Some projectee, Some projectee' ->
+                        let equal =
+                          Projectee.Var_and_projectee.equal projectee projectee'
+                        in
                         if equal then begin
                           filter_outer_vars :=
                             Variable.Set.add spec_to.var !filter_outer_vars;

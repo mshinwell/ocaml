@@ -144,7 +144,6 @@ let from_function_decl ~which_variables ~env
     let used_new_inner_vars = Variable.Tbl.create 42 in
     (* CR mshinwell: use "iter" *)
     let _new_function_body =
-      let projectees_seen = Projectee.Tbl.create 42 in
       Flambda_iterators.map_toplevel_projections_to_expr_opt
         ~f:(fun (projection : Projection.t) ->
           match projection with
@@ -154,13 +153,8 @@ let from_function_decl ~which_variables ~env
             begin match VAP.Map.find vap collected with
             | exception Not_found -> None
             | Var_within_closure { new_inner_var; _ } ->
-              if Projectee.Tbl.mem projectees_seen projectee then
-                None
-              else begin
-                Projectee.Tbl.add projectees_seen projectee ();
                 Variable.Tbl.add used_new_inner_vars new_inner_var ();
                 None
-              end
             | _ -> assert false
             end
           | Project_closure _project_closure ->
@@ -173,13 +167,8 @@ let from_function_decl ~which_variables ~env
             begin match VAP.Map.find vap collected with
             | exception Not_found -> None
             | Closure { new_inner_var; _ } ->
-              if Projectee.Tbl.mem projectees_seen projectee then
-                None
-              else begin
-                Projectee.Tbl.add projectees_seen projectee ();
                 Variable.Tbl.add used_new_inner_vars new_inner_var ();
                 None
-              end
             | _ -> assert false
             end
           | Field (field_index, var) ->
@@ -188,13 +177,8 @@ let from_function_decl ~which_variables ~env
             begin match VAP.Map.find vap collected with
             | exception Not_found -> None
             | Field { new_inner_var; _ } ->
-              if Projectee.Tbl.mem projectees_seen projectee then
-                None
-              else begin
-                Projectee.Tbl.add projectees_seen projectee ();
                 Variable.Tbl.add used_new_inner_vars new_inner_var ();
                 None
-              end
             | _ -> assert false
             end)
         function_decl.body
