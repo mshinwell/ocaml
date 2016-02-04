@@ -275,7 +275,9 @@ module Benefit = struct
       (remove_code_helper_named b) lam;
     !b
 
-  let remove_projectee (_proj : Projectee.t) b =
+  let remove_projection (_proj : Projection.t) b =
+    (* They are all primitives for the moment.  The [Projection.t] argument
+       is here for future expansion. *)
     remove_prim b
 
   let print ppf b =

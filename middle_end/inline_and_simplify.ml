@@ -256,20 +256,33 @@ let simplify_project_closure env r ~(project_closure : Flambda.project_closure)
       A.freshen_and_check_closure_id value_set_of_closures
         project_closure.closure_id
     in
-    match reference_recursive_function_directly env closure_id with
-    | Some (flam, approx) -> flam, ret r approx
+    let projection : Projection.t =
+      Project_closure {
+        (* CR mshinwell: does [set_of_closures_var] need freshening? *)
+        set_of_closures = set_of_closures_var;
+        closure_id;
+      }
+    in
+    match E.find_projection env ~projection with
+    | Some var ->
+      simplify_free_variable_named env var ~f:(fun _env var var_approx ->
+        let r = R.map_benefit r (B.remove_projection projection) in
+        Expr (Var var), ret r var_approx)
     | None ->
-      let set_of_closures_var =
-        match set_of_closures_var with
-        | Some set_of_closures_var' when E.mem env set_of_closures_var' ->
-          set_of_closures_var
-        | Some _ | None -> None
-      in
-      let approx =
-        A.value_closure ?set_of_closures_var value_set_of_closures
-          closure_id
-      in
-      Project_closure { set_of_closures; closure_id; }, ret r approx
+      match reference_recursive_function_directly env closure_id with
+      | Some (flam, approx) -> flam, ret r approx
+      | None ->
+        let set_of_closures_var =
+          match set_of_closures_var with
+          | Some set_of_closures_var' when E.mem env set_of_closures_var' ->
+            set_of_closures_var
+          | Some _ | None -> None
+        in
+        let approx =
+          A.value_closure ?set_of_closures_var value_set_of_closures
+            closure_id
+        in
+        Project_closure { set_of_closures; closure_id; }, ret r approx
 
 (* Simplify an expression that, given one closure within some set of
    closures, returns another closure (possibly the same one) within the
@@ -281,59 +294,61 @@ let simplify_move_within_set_of_closures env r
     Freshening.apply_variable (E.freshening env)
       move_within_set_of_closures.closure
   in
-  let projection : Projection.t =
-    Move_within_set_of_closures
-      { move_within_set_of_closures with
-        closure 
-  in
-  match E.find_projection env ~projection:
-  | Some var ->
-    simplify_free_variable_named env var ~f:(fun _env var var_approx ->
-      let r = R.map_benefit r (B.remove_projectee projectee) in
-      Expr (Var var), ret r var_approx)
-  | None ->
-    let closure_approx = E.find_exn env closure in
-    match A.check_approx_for_closure_allowing_unresolved closure_approx with
-    | Wrong ->
-      Misc.fatal_errorf "Wrong approximation when moving within set of \
-          closures.  Approximation: %a  Term: %a"
-        A.print closure_approx
-        Flambda.print_move_within_set_of_closures move_within_set_of_closures
-    | Unresolved sym ->
+  let closure_approx = E.find_exn env closure in
+  match A.check_approx_for_closure_allowing_unresolved closure_approx with
+  | Wrong ->
+    Misc.fatal_errorf "Wrong approximation when moving within set of \
+        closures.  Approximation: %a  Term: %a"
+      A.print closure_approx
+      Flambda.print_move_within_set_of_closures move_within_set_of_closures
+  | Unresolved sym ->
+    Move_within_set_of_closures {
+        closure;
+        start_from = move_within_set_of_closures.start_from;
+        move_to = move_within_set_of_closures.move_to;
+      },
+      ret r (A.value_unresolved sym)
+  | Unknown ->
+    Move_within_set_of_closures {
+        closure;
+        start_from = move_within_set_of_closures.start_from;
+        move_to = move_within_set_of_closures.move_to;
+      },
+      ret r (A.value_unknown Other)
+  | Unknown_because_of_unresolved_symbol sym ->
+    (* For example: a move upon a (move upon a closure whose .cmx file
+       is missing). *)
+    Move_within_set_of_closures {
+        closure;
+        start_from = move_within_set_of_closures.start_from;
+        move_to = move_within_set_of_closures.move_to;
+      },
+      ret r (A.value_unknown (Unresolved_symbol sym))
+  | Ok (_value_closure, set_of_closures_var, set_of_closures_symbol,
+        value_set_of_closures) ->
+    let freshen =
+      (* CR mshinwell: potentially misleading name---not freshening with new
+         names, but with previously fresh names *)
+      A.freshen_and_check_closure_id value_set_of_closures
+    in
+    let move_to = freshen move_within_set_of_closures.move_to in
+    let start_from = freshen move_within_set_of_closures.start_from in
+    let projection : Projection.t =
       Move_within_set_of_closures {
-          closure;
-          start_from = move_within_set_of_closures.start_from;
-          move_to = move_within_set_of_closures.move_to;
-        },
-        ret r (A.value_unresolved sym)
-    | Unknown ->
-      Move_within_set_of_closures {
-          closure;
-          start_from = move_within_set_of_closures.start_from;
-          move_to = move_within_set_of_closures.move_to;
-        },
-        ret r (A.value_unknown Other)
-    | Unknown_because_of_unresolved_symbol sym ->
-      (* For example: a move upon a (move upon a closure whose .cmx file
-         is missing). *)
-      Move_within_set_of_closures {
-          closure;
-          start_from = move_within_set_of_closures.start_from;
-          move_to = move_within_set_of_closures.move_to;
-        },
-        ret r (A.value_unknown (Unresolved_symbol sym))
-    | Ok (_value_closure, set_of_closures_var, set_of_closures_symbol,
-          value_set_of_closures) ->
-      let freshen =
-        (* CR mshinwell: potentially misleading name---not freshening with new
-           names, but with previously fresh names *)
-        A.freshen_and_check_closure_id value_set_of_closures
-      in
-      let move_to = freshen move_within_set_of_closures.move_to in
+        closure;
+        start_from;
+        move_to;
+      }
+    in
+    match E.find_projection env ~projection with
+    | Some var ->
+      simplify_free_variable_named env var ~f:(fun _env var var_approx ->
+        let r = R.map_benefit r (B.remove_projection projection) in
+        Expr (Var var), ret r var_approx)
+    | None ->
       match reference_recursive_function_directly env move_to with
       | Some (flam, approx) -> flam, ret r approx
       | None ->
-        let start_from = freshen move_within_set_of_closures.start_from in
         if Closure_id.equal start_from move_to then
           (* Moving from one closure to itself is a no-op.  We can return an
              [Var] since we already have a variable bound to the closure. *)
@@ -442,38 +457,44 @@ let rec simplify_project_var env r ~(project_var : Flambda.project_var)
   let closure =
     Freshening.apply_variable (E.freshening env) project_var.closure
   in
-  let projectee : Projectee.t = Project_var project_var.var in
-  match E.find_projection env ~from:closure ~projectee with
-  | Some var ->
-    simplify_free_variable_named env var ~f:(fun _env var var_approx ->
-      let r = R.map_benefit r (B.remove_projectee projectee) in
-      Expr (Var var), ret r var_approx)
-  | None ->
-    let approx = E.find_exn env closure in
-    let closure =
-      match A.simplify_var_to_var_using_env approx
-              ~is_present_in_env:(fun var -> E.mem env var) with
-      | None -> closure
-      | Some var -> var
+  let approx = E.find_exn env closure in
+  let closure =
+    match A.simplify_var_to_var_using_env approx
+            ~is_present_in_env:(fun var -> E.mem env var) with
+    | None -> closure
+    | Some var -> var
+  in
+  match A.check_approx_for_closure_allowing_unresolved approx with
+  | Ok (value_closure, _set_of_closures_var, _set_of_closures_symbol,
+        value_set_of_closures) ->
+    let module F = Freshening.Project_var in
+    let freshening = value_set_of_closures.freshening in
+    let var = F.apply_var_within_closure freshening project_var.var in
+    let closure_id = F.apply_closure_id freshening project_var.closure_id in
+    let closure_id_in_approx = value_closure.closure_id in
+    if not (Closure_id.equal closure_id closure_id_in_approx) then begin
+      Misc.fatal_errorf "When simplifying [Project_var], the closure ID %a \
+          in the approximation of the set of closures did not match the \
+          closure ID %a in the [Project_var] term.  Approximation: %a@. \
+          Var-within-closure being projected: %a@."
+        Closure_id.print closure_id_in_approx
+        Closure_id.print closure_id
+        Simple_value_approx.print approx
+        Var_within_closure.print var
+    end;
+    let projection : Projection.t =
+      Project_var {
+        closure;
+        closure_id;
+        var;
+      }
     in
-    match A.check_approx_for_closure_allowing_unresolved approx with
-    | Ok (value_closure, _set_of_closures_var, _set_of_closures_symbol,
-          value_set_of_closures) ->
-      let module F = Freshening.Project_var in
-      let freshening = value_set_of_closures.freshening in
-      let var = F.apply_var_within_closure freshening project_var.var in
-      let closure_id = F.apply_closure_id freshening project_var.closure_id in
-      let closure_id_in_approx = value_closure.closure_id in
-      if not (Closure_id.equal closure_id closure_id_in_approx) then begin
-        Misc.fatal_errorf "When simplifying [Project_var], the closure ID %a \
-            in the approximation of the set of closures did not match the \
-            closure ID %a in the [Project_var] term.  Approximation: %a@. \
-            Var-within-closure being projected: %a@."
-          Closure_id.print closure_id_in_approx
-          Closure_id.print closure_id
-          Simple_value_approx.print approx
-          Var_within_closure.print var
-      end;
+    begin match E.find_projection env ~projection with
+    | Some var ->
+      simplify_free_variable_named env var ~f:(fun _env var var_approx ->
+        let r = R.map_benefit r (B.remove_projection projection) in
+        Expr (Var var), ret r var_approx)
+    | None ->
       let approx = A.approx_for_bound_var value_set_of_closures var in
       let expr : Flambda.named = Project_var { closure; closure_id; var; } in
       let unwrapped = Var_within_closure.unwrap var in
@@ -484,27 +505,28 @@ let rec simplify_project_var env r ~(project_var : Flambda.project_var)
           expr
       in
       simplify_named_using_approx_and_env env r expr approx
-    | Unresolved symbol ->
-      (* This value comes from a symbol for which we couldn't find any
-         approximation, telling us that names within the closure couldn't
-         have been renamed.  So we don't need to change the variable or
-         closure ID in the [Project_var] expression. *)
-      Project_var { project_var with closure },
-        ret r (A.value_unresolved symbol)
-    | Unknown ->
-      Project_var { project_var with closure },
-        ret r (A.value_unknown Other)
-    | Unknown_because_of_unresolved_symbol symbol ->
-      Project_var { project_var with closure },
-        ret r (A.value_unknown (Unresolved_symbol symbol))
-    | Wrong ->
-      (* We must have the correct approximation of the value to ensure
-         we take account of all freshenings. *)
-      Misc.fatal_errorf "[Project_var] from a value with wrong \
-          approximation: %a@.closure=%a@.approx of closure=%a@."
-        Flambda.print_project_var project_var
-        Variable.print closure
-        Simple_value_approx.print approx
+    end
+  | Unresolved symbol ->
+    (* This value comes from a symbol for which we couldn't find any
+       approximation, telling us that names within the closure couldn't
+       have been renamed.  So we don't need to change the variable or
+       closure ID in the [Project_var] expression. *)
+    Project_var { project_var with closure },
+      ret r (A.value_unresolved symbol)
+  | Unknown ->
+    Project_var { project_var with closure },
+      ret r (A.value_unknown Other)
+  | Unknown_because_of_unresolved_symbol symbol ->
+    Project_var { project_var with closure },
+      ret r (A.value_unknown (Unresolved_symbol symbol))
+  | Wrong ->
+    (* We must have the correct approximation of the value to ensure
+       we take account of all freshenings. *)
+    Misc.fatal_errorf "[Project_var] from a value with wrong \
+        approximation: %a@.closure=%a@.approx of closure=%a@."
+      Flambda.print_project_var project_var
+      Variable.print closure
+      Simple_value_approx.print approx
 
 (* Transforms closure definitions by applying [loop] on the code of every
    one of the set and on the expressions of the free variables.
@@ -1024,8 +1046,8 @@ and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
       | Pgetglobal _, _, _ ->
         Misc.fatal_error "Pgetglobal is forbidden in Inline_and_simplify"
       | Pfield field_index, [arg], [arg_approx] ->
-        let projectee : Projectee.t = Field field_index in
-        begin match E.find_projection env ~from:arg ~projectee with
+        let projection : Projection.t = Field (field_index, arg) in
+        begin match E.find_projection env ~projection with
         | Some var ->
           simplify_free_variable_named env var ~f:(fun _env var var_approx ->
             let r = R.map_benefit r (B.remove_projectee projectee) in
