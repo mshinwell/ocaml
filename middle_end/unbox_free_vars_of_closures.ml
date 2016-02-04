@@ -13,7 +13,7 @@
 (*   special exception on linking described in the file ../LICENSE.       *)
 (*                                                                        *)
 (**************************************************************************)
-(*
+
 let pass_name = "unbox-free-vars-of-closures"
 let () = Pass_wrapper.register ~pass_name
 
@@ -56,6 +56,7 @@ let run ~env ~(set_of_closures : Flambda.set_of_closures) =
               in
               (* CR mshinwell: share code with
                  Unbox_specialised_args to deal with the deduping *)
+(* XXX think about whether this is really needed *)
               let filter_outer_vars = ref Variable.Set.empty in
               let new_inner_to_new_outer_vars =
                 Variable.Map.filter (fun _var
@@ -145,11 +146,9 @@ let run ~env ~(set_of_closures : Flambda.set_of_closures) =
               ~name:"unbox_free_vars_of_closures")
         in
         Some expr
-*)
-let run ~env:_ ~set_of_closures = set_of_closures
-(*
+
+let run ~env ~set_of_closures =
   Pass_wrapper.with_dump ~pass_name ~input:set_of_closures
     ~print_input:Flambda.print_set_of_closures
     ~print_output:Flambda.print
     ~f:(fun () -> run ~env ~set_of_closures)
-*)

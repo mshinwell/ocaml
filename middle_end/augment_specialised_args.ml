@@ -51,17 +51,11 @@ module What_to_specialise = struct
     (* [definitions] is indexed by (fun_var, group) *)
     definitions : Definition.t list Variable.Pair.Map.t;
     set_of_closures : Flambda.set_of_closures;
-    existing_inner_to_outer_vars : Variable.t Variable.Map.t;
   }
 
-  let create ~set_of_closures ~existing_inner_to_outer_vars =
-    let existing_inner_to_outer_vars =
-      Variable.Map.map (fun (spec_to : Flambda.specialised_to) -> spec_to.var)
-        existing_inner_to_outer_vars;
-    in
+  let create ~set_of_closures =
     { definitions = [];
       set_of_closures;
-      existing_inner_to_outer_vars;
     }
 
   let new_specialised_arg t ~fun_var ~group ~definition =
@@ -231,6 +225,8 @@ module Processed_what_to_specialise = struct
             t.existing_definitions_of_specialised_args_indexed_by_fun_var
         with
         | exception Not_found -> false
+        (* XXX think about what happens if [projection] is
+           Existing_inner_free_var *)
         | projections -> Projection.Set.mem projection projections
       in
       if exists_already then true
@@ -495,6 +491,8 @@ module Make (T : S) = struct
       let new_specialised_args =
         Variable.Map.mapi (fun new_inner_var (definition : Definition.t)
                 : Flambda.specialised_to ->
+            assert (not (Variable.Map.mem new_inner_var
+              set_of_closures.specialised_args));
             match
               Variable.Map.find new_inner_var
                 for_one_function.new_inner_to_new_outer_vars
@@ -510,7 +508,7 @@ module Make (T : S) = struct
                 let projecting_from =
                   Projection.projecting_from projecting
                 in
-                assert (Variable.Set.mem projecting_from
+                assert (Variable.Map.mem projecting_from
                   set_of_closures.specialised_args);
                 assert (Variable.Set.mem projecting_from
                   (Variable.Set.of_list function_decl.params));
@@ -518,6 +516,10 @@ module Make (T : S) = struct
                   projection = Some projection;
                 })
           new_definitions_indexed_by_new_inner_vars
+      in
+      let specialised_args =
+        Variable.Map.disjoint_union rewritten_existing_specialised_args
+          new_specialised_args
       in
       let all_params =
         let new_params =
@@ -541,8 +543,8 @@ module Make (T : S) = struct
       in
       Some (funs, specialised_args)
 
-  let add_lifted_definitions_around_set_of_closures ~(what : P.t)
-        ~set_of_closures =
+  let add_lifted_definitions_around_set_of_closures
+        ~(what_to_specialise : P.t) ~set_of_closures =
     Variable.Map.fold (fun new_outer_var (definition : Definition.t)
               expr ->
         let named : Flambda.named =
@@ -576,95 +578,56 @@ module Make (T : S) = struct
 
   let rewrite_set_of_closures_core ~backend ~env
         ~(set_of_closures : Flambda.set_of_closures) =
-    match T.precondition ~backend ~env ~set_of_closures with
-    | None -> None
-    | Some user_data ->
-      let original_set_of_closures = set_of_closures in
-      let funs, specialised_args, done_something =
-        Variable.Map.fold
-          (fun fun_var function_decl
-                (funs, new_specialised_args_indexed_by_new_outer_vars,
-                 new_inner_to_new_outer_vars, done_something) ->
-            match
-              rewrite_function_decl ~backend ~env ~set_of_closures ~fun_var
-                ~function_decl ~user_data
-            with
-            | None ->
-              let funs = Variable.Map.add fun_var function_decl funs in
-              funs, new_specialised_args_indexed_by_new_outer_vars,
-                new_inner_to_new_outer_vars, done_something
-            | Some (
-                new_fun_var, rewritten_function_decl, wrapper,
-                new_specialised_args_indexed_by_new_outer_vars',
-                new_inner_to_new_outer_vars',
-                params_renaming) ->
-              let funs =
-                assert (not (Variable.Map.mem new_fun_var funs));
-                Variable.Map.add new_fun_var rewritten_function_decl
-                  (Variable.Map.add fun_var wrapper funs)
-              in
-              let new_specialised_args_indexed_by_new_outer_vars =
-                Variable.Map.union (fun _var _def1 def2 ->
-                    (* CR mshinwell: This should ensure [def1] and [def2]
-                       are the same.  Even better, change the interface
-                       to this module so we can express that we don't need
-                       to add a lifted definition since it's already there. *)
-                    Some def2)
-                  new_specialised_args_indexed_by_new_outer_vars
-                  new_specialised_args_indexed_by_new_outer_vars'
-              in
-              let new_inner_to_new_outer_vars =
-                (* This will form the augmentation to the existing
-                   specialised_args of the set of closures.  We must include
-                   not only the new arguments requested by [T] but also
-                   the parameters of the wrapper corresponding to the
-                   existing specialised args (irrespective of whether any
-                   particular specialised arg is being augmented or not). *)
-                let for_new_arguments =
-                  Variable.Map.disjoint_union new_inner_to_new_outer_vars
-                    new_inner_to_new_outer_vars'
-                in
-                let for_existing_arguments =
-                  (* now computed above *)
-                in
-                Variable.Map.disjoint_union for_new_arguments
-                  for_existing_arguments
-              in
-              funs, new_specialised_args_indexed_by_new_outer_vars,
-                new_inner_to_new_outer_vars, true)
-          set_of_closures.function_decls.funs
-          (Variable.Map.empty,
-            Variable.Map.empty,
-            set_of_closures.specialised_args,
-            false)
+    let what_to_specialise =
+      P.create ~env
+        ~what_to_specialise:(T.what_to_specialise ~env ~set_of_closures)
+    in
+    let original_set_of_closures = set_of_closures in
+    let funs, specialised_args, done_something =
+      Variable.Map.fold (fun fun_var (for_one_function : for_one_function)
+              (funs, specialised_args, done_something) ->
+          assert (Variable.equal fun_var for_one_function.fun_var);
+          match
+            rewrite_function_decl ~env ~set_of_closures ~for_one_function
+          with
+          | None ->
+            let funs = Variable.Map.add fun_var function_decl funs in
+            funs, specialised_args, done_something
+          | Some (funs', specialised_args') ->
+            let funs = Variable.Map.disjoint_union funs funs' in
+            let specialised_args =
+              Variable.Map.disjoint_union specialised_args specialised_args'
+            in
+            funs, specialised_args, true)
+        what_to_specialise.functions
+        Variable.Map.empty
+    in
+    if not done_something then
+      None
+    else
+      let function_decls =
+        Flambda.update_function_declarations set_of_closures.function_decls
+          ~funs
       in
-      if not done_something then
-        None
-      else
-        let function_decls =
-          Flambda.update_function_declarations set_of_closures.function_decls
-            ~funs
-        in
-        assert (Variable.Map.cardinal specialised_args
-          >= Variable.Map.cardinal original_set_of_closures.specialised_args);
-        let set_of_closures =
-          Flambda.create_set_of_closures
-            ~function_decls
-            ~free_vars:set_of_closures.free_vars
-            ~specialised_args
-        in
-        if !Clflags.flambda_invariant_checks then begin
-          check_invariants ~set_of_closures ~original_set_of_closures
-        end;
-        let expr =
-          add_lifted_definitions_around_set_of_closures ~what ~set_of_closures
-        in
-        Some expr
+      assert (Variable.Map.cardinal specialised_args
+        >= Variable.Map.cardinal original_set_of_closures.specialised_args);
+      let set_of_closures =
+        Flambda.create_set_of_closures
+          ~function_decls
+          ~free_vars:set_of_closures.free_vars
+          ~specialised_args
+      in
+      if !Clflags.flambda_invariant_checks then begin
+        check_invariants ~set_of_closures ~original_set_of_closures
+      end;
+      let expr =
+        add_lifted_definitions_around_set_of_closures ~what ~set_of_closures
+      in
+      Some expr
 
-  let rewrite_set_of_closures ~backend ~env ~set_of_closures =
+  let rewrite_set_of_closures ~env ~set_of_closures =
     Pass_wrapper.with_dump ~pass_name:T.pass_name ~input:set_of_closures
       ~print_input:Flambda.print_set_of_closures
       ~print_output:Flambda.print
-      ~f:(fun () ->
-        rewrite_set_of_closures_core ~backend ~env ~set_of_closures)
+      ~f:(fun () -> rewrite_set_of_closures_core ~env ~set_of_closures)
 end

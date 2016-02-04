@@ -27,7 +27,6 @@ module What_to_specialise : sig
 
   val create
      : set_of_closures:Flambda.set_of_closures
-    -> existing_inner_to_outer_vars:Flambda.specialised_to Variable.Map.t
     -> t
 
   val new_specialised_arg
@@ -41,11 +40,6 @@ end
 module type S = sig
   val pass_name : string
   val variable_suffix : string
-
-  val precondition
-     : env:Inline_and_simplify_aux.Env.t
-    -> set_of_closures:Flambda.set_of_closures
-    -> bool
 
   val what_to_specialise
      : env:Inline_and_simplify_aux.Env.t

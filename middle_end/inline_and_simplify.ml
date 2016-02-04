@@ -1007,21 +1007,19 @@ and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
       (* Do [Unbox_closures] next to try to decide which things are
          free variables and which things are specialised arguments before
          unboxing them. *)
-(*
       match
-        Unbox_closures.rewrite_set_of_closures ~backend ~env ~set_of_closures
+        Unbox_closures.rewrite_set_of_closures ~env ~set_of_closures
       with
       | Some expr ->
         simplify env r expr ~pass_name:"Unbox_closures"
       | None ->
-*)
         match Unbox_free_vars_of_closures.run ~env ~set_of_closures with
         | Some expr ->
           simplify env r expr ~pass_name:"Unbox_free_vars_of_closures"
         | None ->
           (* CR mshinwell: should maybe add one allocation for the stub *)
           match
-            Unbox_specialised_args.rewrite_set_of_closures ~backend ~env
+            Unbox_specialised_args.rewrite_set_of_closures ~env
               ~set_of_closures
           with
           | Some expr ->

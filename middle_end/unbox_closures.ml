@@ -13,146 +13,41 @@
 (*   special exception on linking described in the file ../LICENSE.       *)
 (*                                                                        *)
 (**************************************************************************)
-(*
+
 module ASA = Augment_specialised_args
+module W = ASA.What_to_specialise
 
 module Transform = struct
   let pass_name = "unbox-closures"
   let variable_suffix = "_unbox_closures"
 
-  type user_data = unit
+  let precondition ~(set_of_closures : Flambda.set_of_closures) =
+    !Clflags.unbox_closures
+      && not (Variable.Map.is_empty set_of_closures.free_vars)
+      && (Variable.Map.is_empty set_of_closures.specialised_args
+        || Flambda_utils.contains_stub set_of_closures.function_decls)
 
-  let precondition ~backend:_ ~env:_
+  let what_to_specialise ~env:_ 
         ~(set_of_closures : Flambda.set_of_closures) =
-    let is_ok =
-      !Clflags.unbox_closures
-        && not (Variable.Map.is_empty set_of_closures.free_vars)
-        && (Variable.Map.is_empty set_of_closures.specialised_args
-          || Flambda_utils.contains_stub set_of_closures.function_decls)
-    in
-    if not is_ok then None else Some ()
-
-  let what_to_specialise ~env:_ ~closure_id
-        ~(function_decl : Flambda.function_declaration)
-        ~(set_of_closures : Flambda.set_of_closures)
-        ~user_data:_
-        : ASA.what_to_specialise option =
-    let free_vars =
-      let bound_by_this_closure =
-        Flambda_utils.variables_bound_by_the_closure closure_id
-          set_of_closures.function_decls
-      in
-      let free_vars =
-        Variable.Map.filter (fun inner_free_var _outer_free_var ->
-            Variable.Set.mem inner_free_var bound_by_this_closure)
-          set_of_closures.free_vars
-      in
-      (* [Augment_specialised_args] cannot cope with duplicate definitions
-         at the moment. *)
-      Variable.Map.fold (fun inner_free_var
-                (outer_free_var : Flambda.specialised_to) free_vars ->
-          let already_there ~which_variables =
-            Variable.Map.exists (fun _var
-                      (outer_free_var' : Flambda.specialised_to) ->
-                Variable.equal outer_free_var.var outer_free_var'.var)
-              which_variables
-          in
-          if (not (already_there ~which_variables:free_vars))
-            && (not (already_there
-              ~which_variables:set_of_closures.specialised_args))
-          then
-            Variable.Map.add inner_free_var outer_free_var free_vars
-          else
-            free_vars)
-        free_vars
-        Variable.Map.empty
-    in
-    if function_decl.stub || Variable.Map.cardinal free_vars < 1 then
-      None
+    let what_to_specialise = W.create ~set_of_closures in
+    if not precondition ~set_of_closures then
+      what_to_specialise
     else
-      (* Just in case more than one inner free variable maps to the same
-         outer free variable, create fresh "new outer vars" at all times,
-         rather than putting the existing free variables as the "new outer
-         vars".
-         It might look like the existing free variables will become the
-         "new inner vars", but that cannot be the case: we need fresh new
-         inner vars because, until simplification has been completed and
-         the stub has been eliminated, we need one variable as an inner
-         free var and another (equal) variable as an inner specialised
-         argument.  (The former for the stub and the latter for the main
-         function.) *)
-      let existing_inner_free_vars_to_new_inner_vars =
-        Variable.Map.fold (fun inner_var _outer_var renaming ->
-            let new_inner_var =
-              Variable.rename inner_var ~append:variable_suffix
-            in
-            assert (not (Variable.Map.mem inner_var renaming));
-            Variable.Map.add inner_var new_inner_var renaming)
-          free_vars
-          Variable.Map.empty
-      in
-      let new_inner_to_new_outer_vars =
-        Variable.Map.fold (fun inner_var (outer_var : Flambda.specialised_to)
-                  new_inner_to_new_outer_vars ->
-            let new_inner_var =
-              match
-                Variable.Map.find inner_var
-                  existing_inner_free_vars_to_new_inner_vars
-              with
-              | exception Not_found -> assert false
-              | new_inner_var -> new_inner_var
-            in
-            let spec_to : Flambda.specialised_to =
-              let var =
-                Variable.rename outer_var.var ~append:variable_suffix
-              in
-              { var;
-                (* CR-someday mshinwell: consider preserving the projection
-                   relation, moving it to specialised_args *)
-                projectee = None;
-              }
-            in
-            Variable.Map.add new_inner_var spec_to new_inner_to_new_outer_vars)
-          free_vars
-          Variable.Map.empty
-      in
-      let new_specialised_args_indexed_by_new_outer_vars =
-        Variable.Map.fold (fun inner_free_var
-              (outer_free_var : Flambda.specialised_to)
-              new_specialised_args_indexed_by_new_outer_vars ->
-            let new_inner_var =
-              match
-                Variable.Map.find inner_free_var
-                  existing_inner_free_vars_to_new_inner_vars
-              with
-              | exception Not_found -> assert false
-              | new_inner_var -> new_inner_var
-            in
-            let new_outer_var =
-              match
-                Variable.Map.find new_inner_var new_inner_to_new_outer_vars
-              with
-              | exception Not_found -> assert false
-              | (spec_to : Flambda.specialised_to) -> spec_to.var
-            in
-            let defining_expr : Flambda.named =
-              Expr (Var outer_free_var.var)
-            in
-            Variable.Map.add new_outer_var defining_expr
-              new_specialised_args_indexed_by_new_outer_vars)
-          free_vars
-          Variable.Map.empty
-      in
-      let what_to_specialise : ASA.what_to_specialise = {
-        (* One free variable maps to one specialised argument; there is no
-           grouping, hence the singleton list. *)
-        new_specialised_args_indexed_by_new_outer_vars =
-          [new_specialised_args_indexed_by_new_outer_vars];
-        new_inner_to_new_outer_vars;
-      }
-      in
-      Some what_to_specialise
+      Variable.Map.fold (fun fun_var
+            (function_decl : Flambda.function_declaration)
+            what_to_specialise ->
+          if (not function_decl.stub) then begin
+            Variable.Set.fold (fun inner_free_var what_to_specialise ->
+                W.new_specialised_arg what_to_specialise
+                  ~fun_var ~group:inner_free_var
+                  ~definition:(Existing_inner_free_var inner_free_var))
+              function_decl.free_variables
+              what_to_specialise
+          end else begin
+            what_to_specialise
+          end)
+        set_of_closures.function_decls.funs
+        what_to_specialise
 end
 
 include ASA.Make (Transform)
-*)
