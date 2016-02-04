@@ -46,6 +46,8 @@ module Transform = struct
     Variable.Map.fold (fun fun_var extractions what_to_specialise ->
         List.fold_left (fun what_to_specialise
                   (extraction : Extract_projections.extraction) ->
+            assert (Variable.Map.mem extraction.being_projected_from
+                set_of_closures.specialised_args);
             let what_to_specialise =
               W.new_specialised_arg what_to_specialise
                 ~fun_var ~group:extraction.being_projected_from
@@ -65,18 +67,26 @@ module Transform = struct
                  functions. *)
               Variable.Pair.Set.fold (fun (target_fun_var, target_spec_arg)
                         what_to_specialise ->
-                  (* Rewrite the projection (that was in terms of a specialised
-                     arg of [fun_var]) to be in terms of the corresponding
-                     specialised arg of [target_fun_var].  (The outer vars
-                     referenced in the projection remain unchanged.) *)
-                  let definition =
-                    target_spec_arg, snd extraction.definition
-                  in
-                  W.new_specialised_arg what_to_specialise
-                    ~fun_var:target_fun_var
-                    ~group:extraction.being_projected_from
-                    ~definition:
-                      (Projection_from_existing_specialised_args definition))
+                  if Variable.equal fun_var target_fun_var
+                    || not (Variable.Map.mem target_spec_arg
+                        set_of_closures.specialised_args)
+                  then begin
+                    what_to_specialise
+                  end else begin
+                    (* Rewrite the projection (that was in terms of a
+                       specialised arg of [fun_var]) to be in terms of the
+                       corresponding specialised arg of [target_fun_var].
+                       (The outer vars referenced in the projection remain
+                       unchanged.) *)
+                    let definition =
+                      target_spec_arg, snd extraction.definition
+                    in
+                    W.new_specialised_arg what_to_specialise
+                      ~fun_var:target_fun_var
+                      ~group:extraction.being_projected_from
+                      ~definition:
+                        (Projection_from_existing_specialised_args definition)
+                  end)
                 flow
                 first_fun_var_and_group)
           what_to_specialise

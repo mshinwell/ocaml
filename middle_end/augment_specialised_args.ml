@@ -17,28 +17,40 @@
 module A = Simple_value_approx
 module E = Inline_and_simplify_aux.Env
 
+module Definition = struct
+  type t =
+    | Existing_outer_var of Variable.t
+    | Projection_from_existing_specialised_arg of Projectee.Var_and_projectee.t
+
+  include Identifiable.Make (struct
+    type nonrec t = t
+
+    let compare t1 t2 =
+      ...
+
+  end)
+end
+
 module What_to_specialise = struct
-  type entry = {
-    defining_expr_in_terms_of_existing_outer_vars : Projection.t;
-    projection : Projection.Var_and_projectee.t option;
+  type t = {
+    (* [definitions] is indexed by (fun_var, group) *)
+    definitions : Definition.t list Variable.Pair.Map.t;
+    set_of_closures : Flambda.set_of_closures;
   }
 
-  type t = entry list Variable.Pair.Map.t  (* indexed by (fun_var, group) *)
+  let create ~set_of_closures =
+    { definitions = [];
+      set_of_closures;
+    }
 
-  let new_specialised_arg t ~fun_var ~group =
-        ~defining_expr_in_terms_of_existing_outer_vars ~projection =
+  let new_specialised_arg t ~fun_var ~group ~definition =
     let key = fun_var, group in
-    let entries =
+    let definitions =
       match Variable.Pair.Map.find key t with
       | exception Not_found -> []
-      | entries -> entries
+      | definitions -> definitions
     in
-    let entry : entry =
-      { defining_expr_in_terms_of_existing_outer_vars;
-        projection;
-      }
-    in
-    Variable.Pair.Map.add (fun_var, group) (entry :: entries) t
+    Variable.Pair.Map.add (fun_var, group) (definition :: definitions) t
 end
 
 module type S = sig
@@ -58,11 +70,9 @@ end
 
 module Processed_what_to_specialise = struct
   type for_one_function = {
-    (* These defining expressions are still in terms of the original outer
-       vars (just like in the type [t]. *)
-    new_projection_defining_exprs_indexed_by_new_inner_vars
-      : Projection.t Variable.Map.t;
-    all_new_projections : Projectee.Var_and_projectee.Set.t;
+    new_projection_definitions_indexed_by_new_inner_vars
+      : Definition.t Variable.Map.t;
+    all_new_projections : Definition.Set.t;
     new_inner_to_new_outer_vars_indexed_by_group
       : Flambda.specialised_to Variable.Map.t Variable.Map.t;
     total_number_of_args : int;
@@ -84,12 +94,7 @@ module Processed_what_to_specialise = struct
     functions : for_one_function Variable.Map.t;
   }
 
-  let create ~set_of_closures =
-    { set_of_closures;
-      functions = Variable.Map.empty;
-    }
-
-  let really_add_new_specialised_arg t ~fun_var ~group
+  let really_add_new_specialised_arg t ~fun_var
         ~defining_expr_in_terms_of_existing_outer_vars ~projection
         ~for_one_function =
     (* We know here that a new specialised argument must be added.  This
@@ -152,16 +157,23 @@ module Processed_what_to_specialise = struct
       functions = Variable.Map.add fun_var for_one_function t.functions;
     }
 
-  let new_specialised_arg_one_function t ~fun_var ~group =
-        ~defining_expr_in_terms_of_existing_outer_vars ~projection =
+  let new_specialised_arg t ~fun_var ~definition =
     let for_one_function : for_one_function =
       match Variable.Map.find fun_var t.functions with
       | exception Not_found ->
-        { new_projection_defining_exprs_indexed_by_new_inner_vars =
-            Variable.Map.empty;
-          all_new_projections = Projectee.Var_and_projectee.Set.empty;
-          new_inner_to_new_outer_vars_indexed_by_group = Variable.Map.empty;
-        }
+        begin
+          match Variable.Map.find t.set_of_closures.function_decls.funs
+        with
+        | exception Not_found -> assert false
+        | (function_decl : Flambda.function_declaration) ->
+          { new_projection_defining_exprs_indexed_by_new_inner_vars =
+              Variable.Map.empty;
+            all_new_projections = Projectee.Var_and_projectee.Set.empty;
+            new_inner_to_new_outer_vars_indexed_by_group = Variable.Map.empty;
+            (* The "+ 1" is just in case there is a closure environment
+               parameter added later. *)
+            total_number_of_args = List.length function_decl.params + 1;
+          }
       | for_one_function -> for_one_function
     in
     (* Determine whether there already exists a specialised argument (either
@@ -185,33 +197,56 @@ module Processed_what_to_specialise = struct
     if exists_already then
       t
     else
-      new_specialised_arg t ~fun_var ~group
+      new_specialised_arg t ~fun_var
         ~defining_expr_in_terms_of_existing_outer_vars ~projection
 
-  let
-    (* - It is important to limit the number of arguments added: if arguments
+  let create ~env ~(what_to_specialise : W.t) =
+    let t : t =
+      {
+      }
+    in
+    (* It is important to limit the number of arguments added: if arguments
        end up being passed on the stack, tail call optimization will be
        disabled (see asmcomp/selectgen.ml).
-       - For each group of new specialised args provided by [T], either all or
+       
+       For each group of new specialised args provided by [T], either all or
        none of them will be added.  (This is to avoid the situation where we
-       add extra arguments but yet fail to eliminate an original one.) *)
+       add extra arguments but yet fail to eliminate an original one by
+       stopping part-way through the specialised args addition.) *)
     let by_group =
-      List.fold_left (fun by_group (fun_var_and_group : fun_var_and_group) ->
-          let fun_vars =
-            match Variable.Map.find fun_var_and_group.group by_group with
+      Variable.Pair.Map.fold (fun (fun_var, group) definition by_group ->
+          let fun_vars_and_definitions =
+            match Variable.Map.find group by_group with
             | exception Not_found -> []
-            | fun_vars -> fun_vars
+            | fun_vars_and_definitions -> fun_vars_and_definitions
           in
-          fun_var :: fun_vars)
+          Variable.Map.add group
+            ((fun_var, definition)::fun_vars_and_definitions)
+            by_group)
         Variable.Map.empty
-        fun_vars_and_groups
+        what_to_specialise.definitions
     in
-    Variable.Map.fold (fun t (fun_var_and_group : fun_var_and_group) ->
-        new_specialised_arg_one_function t
-          ~fun_var:fun_var_and_group.fun_var ~group:fun_var_and_group.group
-          ~defining_expr_in_terms_of_existing_outer_vars ~projection)
+    let module Backend = (val (E.backend env) : Backend_intf.S) in
+    Variable.Map.fold (fun _group fun_vars_and_definitions t ->
+        let original_t = t
+        let t =
+          List.fold_left (fun t (fun_var, definition) ->
+              new_specialised_arg t ~fun_var ~definition)
+            t
+            fun_vars_and_definitions
+        in
+        let some_function_has_too_many_args =
+          List.exists (fun (for_one_function : for_one_function) ->
+              t.total_number_of_args
+                > Backend.max_sensible_number_of_arguments)
+            t.functions
+        in
+        if some_function_has_too_many_args then
+          original_t  (* drop this group *)
+        else
+          t)
       t
-      fun_vars_and_groups
+      by_group
 end
 
 module P = Processed_what_to_specialise
