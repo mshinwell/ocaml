@@ -46,8 +46,7 @@ module Transform = struct
     Variable.Map.fold (fun fun_var extractions what_to_specialise ->
         List.fold_left (fun what_to_specialise (projection : Projection.t) ->
             let group = Projection.being_projected_from projection in
-            assert (Variable.Map.mem group.being_projected_from
-                set_of_closures.specialised_args);
+            assert (Variable.Map.mem group set_of_closures.specialised_args);
             let what_to_specialise =
               W.new_specialised_arg what_to_specialise ~fun_var ~group
                 ~definition:(Projection_from_existing_specialised_arg
@@ -72,9 +71,9 @@ module Transform = struct
                   then begin
                     what_to_specialise
                   end else begin
-                    (* Rewrite the projection (that was in terms of a
+                    (* Rewrite the projection (that was in terms of an inner
                        specialised arg of [fun_var]) to be in terms of the
-                       corresponding specialised arg of [target_fun_var].
+                       corresponding inner specialised arg of [target_fun_var].
                        (The outer vars referenced in the projection remain
                        unchanged.) *)
                     let projection =

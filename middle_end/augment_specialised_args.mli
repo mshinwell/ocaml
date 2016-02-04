@@ -18,20 +18,23 @@
 
 module Definition : sig
   type t =
-    | Existing_outer_var of Variable.t
+    | Existing_inner_free_var of Variable.t
     | Projection_from_existing_specialised_arg of Projection.t
 end
 
 module What_to_specialise : sig
   type t
 
-  val create : set_of_closures:Flambda.set_of_closures -> t
+  val create
+     : set_of_closures:Flambda.set_of_closures
+    -> existing_inner_to_outer_vars:Flambda.specialised_to Variable.Map.t
+    -> t
 
   val new_specialised_arg
      : t
     -> fun_var:Variable.t
     -> group:Variable.t
-    -> definition:Definition.t
+    -> definition:Definition.t  (* [projecting_from] "existing inner vars" *)
     -> t
 end
 

@@ -18,6 +18,8 @@
     variables or specialised args, for example, according to [which_variables]
     below) whose approximation says they are closures or blocks. *)
 
+(** The returned projections are [projecting_from] the existing "inner
+    vars". *)
 type result = Projection.t list
 
 (** [which_variables] maps inner variables to outer variables in the
