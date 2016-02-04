@@ -14,6 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(*
 (** A description of only what is being projected, not where it is
     being projected from. *)
 type t =
@@ -28,3 +29,4 @@ type var_and_projectee = Variable.t * t
 module Var_and_projectee : sig
   include Identifiable.S with type t = var_and_projectee
 end
+*)

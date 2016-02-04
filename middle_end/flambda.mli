@@ -61,30 +61,10 @@ type send = {
   dbg : Debuginfo.t;
 }
 
-(** The selection of one closure given a set of closures, required before
-    a function defined by said set of closures can be applied.  See more
-    detailed documentation below on [set_of_closures]. *)
-type project_closure = {
-  set_of_closures : Variable.t; (** must yield a set of closures *)
-  closure_id : Closure_id.t;
-}
-
-(** The selection of one closure given another closure in the same set of
-    closures.  See more detailed documentation below on [set_of_closures]. *)
-type move_within_set_of_closures = {
-  closure : Variable.t;  (** must yield a closure *)
-  start_from : Closure_id.t;
-  move_to : Closure_id.t;
-}
-
-(** The selection from a closure of a variable bound by said closure.
-    In other words, access to a function's environment.  Also see more
-    detailed documentation below on [set_of_closures]. *)
-type project_var = {
-  closure : Variable.t;  (** must yield a closure *)
-  closure_id : Closure_id.t;
-  var : Var_within_closure.t;
-}
+(** For details on these types, see projection.mli. *)
+type project_closure = Projection.project_closure
+type move_within_set_of_closures = Projection.move_within_set_of_closures
+type project_var = Projection.project_var
 
 (** See [free_vars] and [specialised_args], below. *)
 (* CR mshinwell: move to separate module and make [Identifiable].  (Or maybe
@@ -92,11 +72,13 @@ type project_var = {
    be good.) *)
 type specialised_to = {
   var : Variable.t;
-  (** [projectee], if set, must be another free variable or specialised
+  (** The [projecting_from] value (see projection.mli) of any [projection]
+      must be another free
+      variable or specialised
       argument (depending on whether this record type is involved in
       [free_vars] or [specialised_args] respectively) in the same
       set of closures. *)
-  projectee : Projectee.Var_and_projectee.t option;
+  projection : Projection.t option;
 }
 
 (** Flambda terms are partitioned in a pseudo-ANF manner; many terms are

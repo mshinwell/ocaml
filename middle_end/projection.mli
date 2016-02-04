@@ -16,10 +16,35 @@
 
 (** Representation of projections from closures and blocks. *)
 
+(** The selection of one closure given a set of closures, required before
+    a function defined by said set of closures can be applied.  See more
+    detailed documentation below on [set_of_closures]. *)
+type project_closure = {
+  set_of_closures : Variable.t; (** must yield a set of closures *)
+  closure_id : Closure_id.t;
+}
+
+(** The selection of one closure given another closure in the same set of
+    closures.  See more detailed documentation below on [set_of_closures]. *)
+type move_within_set_of_closures = {
+  closure : Variable.t;  (** must yield a closure *)
+  start_from : Closure_id.t;
+  move_to : Closure_id.t;
+}
+
+(** The selection from a closure of a variable bound by said closure.
+    In other words, access to a function's environment.  Also see more
+    detailed documentation below on [set_of_closures]. *)
+type project_var = {
+  closure : Variable.t;  (** must yield a closure *)
+  closure_id : Closure_id.t;
+  var : Var_within_closure.t;
+}
+
 type t =
-  | Project_var of Flambda.project_var
-  | Project_closure of Flambda.project_closure
-  | Move_within_set_of_closures of Flambda.move_within_set_of_closures
+  | Project_var of project_var
+  | Project_closure of project_closure
+  | Move_within_set_of_closures of move_within_set_of_closures
   | Field of int * Variable.t
 
 include Identifiable.S with type t := t
@@ -27,8 +52,6 @@ include Identifiable.S with type t := t
 val to_named : t
   -> map_projected_from:(Variable.t -> Variable.t)
   -> Flambda.named
-
-val to_projectee : t -> Projectee.t
 
 val projecting_from : t -> Variable.t
 

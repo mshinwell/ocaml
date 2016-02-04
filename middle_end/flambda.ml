@@ -44,26 +44,13 @@ type send = {
   dbg : Debuginfo.t;
 }
 
-type project_closure = {
-  set_of_closures : Variable.t;
-  closure_id : Closure_id.t;
-}
-
-type move_within_set_of_closures = {
-  closure : Variable.t;
-  start_from : Closure_id.t;
-  move_to : Closure_id.t;
-}
-
-type project_var = {
-  closure : Variable.t;
-  closure_id : Closure_id.t;
-  var : Var_within_closure.t;
-}
+type project_closure = Projection.project_closure
+type move_within_set_of_closures = Projection.move_within_set_of_closures
+type project_var = Projection.project_var
 
 type specialised_to = {
   var : Variable.t;
-  projectee : Projectee.Var_and_projectee.t option;
+  projection : Projection.t option;
 }
 
 type t =
@@ -173,11 +160,16 @@ module Int = Numbers.Int
 let print_specialised_to ppf (spec_to : specialised_to) =
   match spec_to.projectee with
   | None -> fprintf ppf "%a" Variable.print spec_to.var
-  | Some (projection, projectee) ->
-    fprintf ppf "%a(= %a from %a)"
+  | Some projection ->
+    fprintf ppf "%a(= %a)"
       Variable.print spec_to.var
-      Projectee.print projectee
-      Variable.print projection
+      Projection.print projection
+
+(* CR-soon mshinwell: delete uses of old names *)
+let print_project_var = Projection.print_project_var
+let print_move_within_set_of_closures =
+  Projection.print_move_within_set_of_closures
+let print_project_closure = Projection.print_project_closure
 
 (** CR-someday lwhite: use better name than this *)
 let rec lam ppf (flam : t) =
@@ -389,24 +381,6 @@ and print_set_of_closures ppf (set_of_closures : set_of_closures) =
       funs function_decls.funs
       vars free_vars
       spec specialised_args
-
-and print_project_closure ppf (project_closure : project_closure) =
-  fprintf ppf "@[<2>(project_closure@ %a@ from@ %a)@]"
-    Closure_id.print project_closure.closure_id
-    Variable.print project_closure.set_of_closures
-
-and print_move_within_set_of_closures ppf
-      (move_within_set_of_closures : move_within_set_of_closures) =
-  fprintf ppf "@[<2>(move_within_set_of_closures@ %a <-- %a@ (closure = %a))@]"
-    Closure_id.print move_within_set_of_closures.move_to
-    Closure_id.print move_within_set_of_closures.start_from
-    Variable.print move_within_set_of_closures.closure
-
-and print_project_var ppf (project_var : project_var) =
-  fprintf ppf "@[<2>(project_var@ %a@ from %a=%a)@]"
-    Var_within_closure.print project_var.var
-    Closure_id.print project_var.closure_id
-    Variable.print project_var.closure
 
 and print_const ppf (c : const) =
   match c with

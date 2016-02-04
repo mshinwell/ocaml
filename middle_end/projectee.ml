@@ -13,7 +13,7 @@
 (*   special exception on linking described in the file ../LICENSE.       *)
 (*                                                                        *)
 (**************************************************************************)
-
+(*
 type t =
   | Project_var of Var_within_closure.t
   | Closure of Closure_id.t
@@ -79,3 +79,4 @@ module Var_and_projectee = struct
     let output _ _ = failwith "Projectee.output: not yet implemented"
   end)
 end
+*)

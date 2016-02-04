@@ -106,17 +106,14 @@ module Processed_what_to_specialise = struct
   type t = {
     set_of_closures : Flambda.set_of_closures;
     existing_inner_to_outer_vars : Variable.Map.t Variable.Map.t;
-    existing_projections_via_specialised_args_indexed_by_fun_var
-      : Projectee.Var_and_projectee.Set.t Variable.Map.t;
-    new_lifted_projection_definitions
-      : Projection.t Variable.Map.t;
-    new_outer_vars_indexed_by_new_lifted_projection_definitions
-      : Variable.t Projection.Map.t;
+    existing_definitions_via_spec_args_indexed_by_fun_var
+      : Projection.Set.t Variable.Map.t;
+    new_definitions_indexed_by_new_outer_vars : Projection.t Variable.Map.t;
+    new_outer_vars_indexed_by_new_definitions : Variable.t Projection.Map.t;
     functions : for_one_function Variable.Map.t;
   }
 
-  let really_add_new_specialised_arg t ~fun_var
-        ~defining_expr_in_terms_of_existing_outer_vars ~projection
+  let really_add_new_specialised_arg t ~fun_var ~definition
         ~for_one_function =
     (* We know here that a new specialised argument must be added.  This
        needs a "new inner var" and a "new outer var".  However if there
@@ -126,27 +123,34 @@ module Processed_what_to_specialise = struct
        projection definitions. *)
     let new_outer_var, (t : t) =
       match
-        Projection.Map.find defining_expr_in_terms_of_existing_outer_vars
-          t.new_outer_vars_indexed_by_new_lifted_projection_defining_exprs
+        Definition.Map.find definition
+          t.new_outer_vars_indexed_by_new_definitions
       with
       | new_outer_var -> new_outer_var, t
       | exception Not_found ->
         (* We are adding a new lifted definition: generate a fresh
            "new outer var". *)
-        let new_outer_var = Variable.rename group ~suffix:"_new_outer" in
+        let new_outer_var =
+          Variable.rename group ~suffix:(T.pass_name ^ "_new_outer")
+        in
         { t with
-          new_outer_vars_indexed_by_new_lifted_projection_defining_exprs =
+          new_outer_vars_indexed_by_new_definitions =
             Variable.Map.add
-              defining_expr new_outer_var
-              t.new_outer_vars_indexed_by_new_lifted_projection_defining_exprs;
-          new_lifted_projection_definitions =
+              definition new_outer_var
+              t.new_outer_vars_indexed_by_new_definitions;
+          new_definitions_indexed_by_new_outer_vars =
             Variable.Map.add
               new_outer_var defining_expr
-              t.new_lifted_projection_definitions;
+              t.new_definitions_indexed_by_new_outer_vars;
         }
     in
-    let new_inner_var = Variable.rename group ~suffix:"_new_inner" in
-    let new_inner_to_new_outer_vars_indexed_by_group =
+    let new_inner_var =
+      Variable.rename group ~suffix:(T.pass_name ^ "_new_inner")
+    in
+    let new_inner_to_new_outer_vars =
+      Variable.Map.add new_inner_var new_outer_var
+        t.new_inner_to_new_outer_vars
+    in
       let for_this_group =
         match
           Variable.Map.find group
@@ -204,7 +208,7 @@ module Processed_what_to_specialise = struct
       let exists_already =
         match
           Variable.Map.find fun_var
-            t.existing_projections_via_specialised_args_indexed_by_fun_var
+            t.existing_definitions_of_specialised_args_indexed_by_fun_var
         with
         | exception Not_found -> false
         | projections ->
@@ -222,11 +226,28 @@ module Processed_what_to_specialise = struct
         ~defining_expr_in_terms_of_existing_outer_vars ~projection
 
   let create ~env ~(what_to_specialise : W.t) =
+    let existing_definitions_via_spec_args_indexed_by_fun_var =
+      Variable.Map.map (fun fun_var
+                (function_decl : Flambda.function_declaration) ->
+          Variable.Map.fold (fun inner_var
+                    (spec_to : Flambda.specialised_to) definitions ->
+              let definition : Definition.t =
+                match spec_to.projectee with
+                | None -> Existing_inner_var inner_var
+                | Some (projecting_from, projectee) ->
+                  Projection.create_from_projectee ~projectee
+                    ~projecting_from
+              in
+              Variable.Map.add definition definitions)
+            what_to_specialise.set_of_closures.specialised_args
+            Definition.Set.empty)
+        what_to_specialise.set_of_closures.function_decl.funs
+    in
     let t : t =
       { set_of_closures = what_to_specialise.set_of_closures;
         existing_inner_to_outer_vars =
           what_to_specialise.existing_inner_to_outer_vars;
-
+        existing_definitions_via_spec_args_indexed_by_fun_var;
       }
     in
     (* It is important to limit the number of arguments added: if arguments
