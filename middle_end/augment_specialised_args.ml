@@ -229,16 +229,19 @@ module Processed_what_to_specialise = struct
     let existing_definitions_via_spec_args_indexed_by_fun_var =
       Variable.Map.map (fun fun_var
                 (function_decl : Flambda.function_declaration) ->
+          let params = Variable.Set.of_list function_decl.params in
           Variable.Map.fold (fun inner_var
                     (spec_to : Flambda.specialised_to) definitions ->
-              let definition : Definition.t =
-                match spec_to.projectee with
-                | None -> Existing_inner_var inner_var
-                | Some (projecting_from, projectee) ->
-                  Projection.create_from_projectee ~projectee
-                    ~projecting_from
-              in
-              Variable.Map.add definition definitions)
+              if not (Variable.Set.mem inner_var params) then
+                definitions
+              else
+                let definition : Definition.t =
+                  match spec_to.projection with
+                  | None -> Existing_inner_var inner_var
+                  | Some projection ->
+                    Projection_from_existing_specialised_arg projection
+                in
+                Variable.Map.add definition definitions)
             what_to_specialise.set_of_closures.specialised_args
             Definition.Set.empty)
         what_to_specialise.set_of_closures.function_decl.funs

@@ -134,3 +134,6 @@ let map_projecting_from t ~f : t =
     in
     Move_within_set_of_closures move
   | Field (field_index, var) -> Field (field_index, f var)
+
+let freshen t ~freshening ~closure_freshening =
+

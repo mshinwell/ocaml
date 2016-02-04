@@ -23,7 +23,7 @@ module Env = struct
     approx : (scope * Simple_value_approx.t) Variable.Map.t;
     approx_mutable : Simple_value_approx.t Mutable_variable.Map.t;
     approx_sym : Simple_value_approx.t Symbol.Map.t;
-    projections : Variable.t Projectee.Var_and_projectee.Map.t;
+    projections : Variable.t Projection.Map.t;
     current_functions : Set_of_closures_id.Set.t;
     (* The functions currently being declared: used to avoid inlining
        recursively *)
@@ -46,7 +46,7 @@ module Env = struct
       approx = Variable.Map.empty;
       approx_mutable = Mutable_variable.Map.empty;
       approx_sym = Symbol.Map.empty;
-      projections = Projectee.Var_and_projectee.Map.empty;
+      projections = Projection.Map.t;
       current_functions = Set_of_closures_id.Set.empty;
       inlining_level = 0;
       inside_branch = 0;
@@ -64,7 +64,7 @@ module Env = struct
   let local env =
     { env with
       approx = Variable.Map.empty;
-      projections = Projectee.Var_and_projectee.Map.empty;
+      projections = Projection.Map.t;
       freshening = Freshening.empty_preserving_activation_state env.freshening;
     }
 
@@ -80,7 +80,7 @@ module Env = struct
     Format.fprintf ppf
       "Environment maps: %a@.Projections: %a@.Freshening: %a@."
       Variable.Set.print (Variable.Map.keys t.approx)
-      (Projectee.Var_and_projectee.Map.print Variable.print) t.projections
+      (Projection.Map.print Variable.print) t.projections
       Freshening.print t.freshening
 
   let mem t var = Variable.Map.mem var t.approx
@@ -143,25 +143,14 @@ module Env = struct
       Backend.import_symbol symbol
     | approx -> approx
 
-  let add_projection t ~from ~projectee ~projection =
-    if not (mem t from) then
-      Misc.fatal_errorf "Env.add_projection: projectee %a not in environment"
-        Variable.print from
-(*
-    else if not (mem t projection) then
-      Misc.fatal_errorf "Env.add_projection: projection %a not in environment"
-        Variable.print projection
-*)
-    else
-      { t with
-        projections =
-          Projectee.Var_and_projectee.Map.add (from, projectee)
-            projection t.projections;
-      }
+  let add_projection t ~projection ~bound_to =
+    { t with
+      projections =
+        Projection.Map.add projection bound_to t.projections;
+    }
 
-  let find_projection t ~from ~projectee =
-    let key = from, projectee in
-    match Projectee.Var_and_projectee.Map.find key t.projections with
+  let find_projection t ~projection =
+    match Projectee.Var_and_projectee.Map.find projection t.projections with
     | exception Not_found -> None
     | var -> Some var
 

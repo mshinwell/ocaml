@@ -83,21 +83,18 @@ module Env : sig
      the backend if not available in the environment. *)
   val find_or_load_symbol : t -> Symbol.t -> Simple_value_approx.t
 
-  (** Note that the given [projectee] applied to [from] is bound to the
-      given [projection] variable. *)
+  (** Note that the given [bound_to] holds the given [projection]. *)
   val add_projection
      : t
-    -> from:Variable.t
-    -> projectee:Projectee.t
-    -> projection:Variable.t
+    -> projection:Projection.t
+    -> bound_to:Projection.t
     -> t
 
   (** Determine if the environment knows about a variable that is bound
-      to the given [projectee] applied to [from]. *)
+      to the given [projection]. *)
   val find_projection
      : t
-    -> from:Variable.t
-    -> projectee:Projectee.t
+    -> projection:Projection.t
     -> Variable.t option
 
   (** Whether the environment has an approximation for the given variable. *)

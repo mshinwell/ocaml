@@ -147,3 +147,9 @@ val apply_function_decls_and_free_vars
 val does_not_freshen : t -> Variable.t list -> bool
 
 val print : Format.formatter -> t -> unit
+
+val freshen_projection
+   : Projection.t
+  -> freshening:Freshening.t
+  -> closure_freshening:Freshening.Project_var.t
+  -> t

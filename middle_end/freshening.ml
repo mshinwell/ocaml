@@ -327,12 +327,6 @@ module Project_var = struct
     try Var_within_closure.Map.find var_in_closure t.vars_within_closure
     with Not_found -> var_in_closure
 
-  let apply_projectee t (projectee : Projectee.t) : Projectee.t =
-    match projectee with
-    | Project_var var -> Project_var (apply_var_within_closure t var)
-    | Closure closure_id -> Closure (apply_closure_id t closure_id)
-    | Field _ -> projectee
-
   module Compose (T : Identifiable.S) = struct
     let compose ~earlier ~later =
       if (T.Map.equal T.equal) earlier later
@@ -349,13 +343,6 @@ module Project_var = struct
             end;
             match T.Map.find var later with
             | exception Not_found -> var
-(*
-              Misc.fatal_errorf "Freshening.Project_var.compose: later \
-                  substitution does not freshen everything in earlier \
-                  substitution.  earlier=%a later=%a"
-                (T.Map.print T.print) earlier
-                (T.Map.print T.print) later
-*)
             | var -> var)
           earlier
   end
@@ -379,22 +366,6 @@ let apply_function_decls_and_free_vars t fv func_decls =
   let func_decls, t, of_closures =
     I.func_decls_subst of_closures t func_decls
   in
-  let fv =
-    (* The rewriting applied to the domain of the free variables map
-       together with the rewriting applied to [Closure_id]s and
-       [Var_within_closure]s must be applied to the projection relation. *)
-    Variable.Map.map (fun ((spec_to : Flambda.specialised_to), data) ->
-        match spec_to.projectee with
-        | None -> spec_to, data
-        | Some (projection, projectee) ->
-          let projection = apply_variable t projection in
-          let projectee =
-            Project_var.apply_projectee of_closures projectee
-          in
-          let projectee = Some (projection, projectee) in
-          ({ spec_to with projectee; } : Flambda.specialised_to), data)
-      fv
-  in
   fv, func_decls, t, of_closures
 
 let does_not_freshen t vars =
@@ -402,3 +373,26 @@ let does_not_freshen t vars =
   | Inactive -> true
   | Active subst ->
     not (List.exists (fun var -> Variable.Map.mem var subst.sb_var) vars)
+
+let freshen_projection (projection : Projection.t) ~freshening
+      ~closure_freshening : Projection.t =
+  match projection with
+  | Project_var { closure; closure_id; var; } ->
+    Project_var {
+      closure = apply_variable freshening var;
+      closure_id = Project_var.apply_closure_id closure_freshening closure_id;
+      var = Project_var.apply_var_within_closure closure_freshening var;
+    }
+  | Project_closure { set_of_closures; closure_id; } ->
+    Project_closure {
+      set_of_closures = apply_variable freshening set_of_closures;
+      closure_id = Project_var.apply_closure_id closure_freshening closure_id;
+    }
+  | Move_within_set_of_closures { closure; start_from; move_to; } ->
+    Move_within_set_of_closures {
+      closure = apply_variable freshening closure;
+      start_from = Project_var.apply_closure_id closure_freshening start_from;
+      move_to = Project_var.apply_closure_id closure_freshening move_to;
+    }
+  | Field (field_index, var) ->
+    Field (field_index, apply_variable freshening var)

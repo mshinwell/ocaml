@@ -281,8 +281,12 @@ let simplify_move_within_set_of_closures env r
     Freshening.apply_variable (E.freshening env)
       move_within_set_of_closures.closure
   in
-  let projectee : Projectee.t = Closure move_within_set_of_closures.move_to in
-  match E.find_projection env ~from:closure ~projectee with
+  let projection : Projection.t =
+    Move_within_set_of_closures
+      { move_within_set_of_closures with
+        closure 
+  in
+  match E.find_projection env ~projection:
   | Some var ->
     simplify_free_variable_named env var ~f:(fun _env var var_approx ->
       let r = R.map_benefit r (B.remove_projectee projectee) in
@@ -635,22 +639,24 @@ and simplify_set_of_closures original_env r
     Variable.Map.map_keys (Freshening.apply_variable (E.freshening env))
       specialised_args
   in
-  let specialised_args =
-    (* The equivalent code for [free_vars] is in
-       [Freshening.apply_function_decls_and_free_vars]. *)
+  let freshen_projection_relation ~which_variables =
     Variable.Map.map (fun (spec_to : Flambda.specialised_to) ->
-        let projectee =
-          match spec_to.projectee with
+        let projection =
+          match spec_to.projection with
           | None -> None
-          | Some (from, projectee) ->
-            let from = Freshening.apply_variable (E.freshening env) from in
-            let projectee =
-              Freshening.Project_var.apply_projectee freshening projectee
-            in
-            Some (from, projectee)
+          | Some projection ->
+            Freshening.freshen projection
+              ~freshening:(E.freshening env)
+              ~closure_freshening:freshening
         in
-        { spec_to with projectee; })
-      specialised_args
+        { spec_to with projection; })
+      which_variables
+  in
+  let free_vars =
+    freshen_projection_relation ~which_variables:free_vars
+  in
+  let specialised_args =
+    freshen_projection_relation ~which_variables:specialised_args
   in
   let parameter_approximations =
     (* Approximations of parameters that are known to always hold the same
@@ -695,31 +701,24 @@ and simplify_set_of_closures original_env r
         ~parameter_approximations ~set_of_closures_env
     in
     (* Add definitions of known projections to the environment. *)
-    let closure_env =
+    let add_projections ~closure_env ~which_variables =
       Variable.Map.fold (fun inner_var (spec_arg : Flambda.specialised_to)
                 env ->
-          match spec_arg.projectee with
+          match spec_arg.projection with
           | None -> env
-          | Some (from, projectee) ->
+          | Some projection ->
             if Variable.Set.mem from function_decl.free_variables then
-              E.add_projection env ~from ~projectee ~projection:inner_var
+              E.add_projection env ~projection ~bound_to:inner_var
             else
               env)
-        specialised_args
+        which_variables
         closure_env
     in
     let closure_env =
-      Variable.Map.fold (fun inner_var ((free_var : Flambda.specialised_to), _)
-                env ->
-          match free_var.projectee with
-          | None -> env
-          | Some (from, projectee) ->
-            if Variable.Set.mem from function_decl.free_variables then
-              E.add_projection env ~from ~projectee ~projection:inner_var
-            else
-              env)
-        free_vars
-        closure_env
+      add_projections ~closure_env ~which_variables:specialised_args
+    in
+    let closure_env =
+      add_projections ~closure_env ~which_variables:free_vars
     in
     let body, r =
       E.enter_closure closure_env ~closure_id:(Closure_id.wrap fid)
