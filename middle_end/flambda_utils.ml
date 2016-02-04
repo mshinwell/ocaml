@@ -802,3 +802,11 @@ let clean_projections ~which_variables =
         else
           ({ spec_to with projectee = None; } : Flambda.specialised_to))
     which_variables
+
+let to_named (projection : Projection.t) : Flambda.named =
+  match projection with
+  | Project_var project_var -> Project_var project_var
+  | Project_closure project_closure -> Project_closure project_closure
+  | Move_within_set_of_closures move -> Move_within_set_of_closures move
+  | Field (field_index, var) ->
+    Prim (Pfield field_index, [var], Debuginfo.none)

@@ -402,7 +402,7 @@ module Make (T : S) = struct
               | Existing_inner_var existing_inner_var ->
                 Expr (Var existing_inner_var)
               | Projection_from_existing_specialised_arg projection ->
-                Projection.to_named projection
+                Flambda_utils.projection_to_named projection
             in
             Flambda.create_let new_inner_var_of_wrapper named wrapper_body)
       definitions_indexed_by_new_inner_vars
@@ -669,7 +669,7 @@ module Make (T : S) = struct
                   let projection =
                     Projection.map_projecting_from projection ~f:find_outer_var
                   in
-                  Projection.to_named projection
+                  Flambda_utils.projection_to_named projection
               in
               Flambda.create_let new_outer_var named expr)
             what.new_lifted_projection_defining_exprs_indexed_by_new_outer_vars

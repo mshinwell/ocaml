@@ -209,3 +209,5 @@ val contains_stub : Flambda.function_declarations -> bool
 val clean_projections
    : which_variables : Flambda.specialised_to Variable.Map.t
   -> Flambda.specialised_to Variable.Map.t
+
+val projection_to_named : Projection.t -> Flambda.named

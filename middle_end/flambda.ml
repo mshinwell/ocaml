@@ -1118,46 +1118,13 @@ let equal_specialised_to (spec_to1 : specialised_to)
       (spec_to2 : specialised_to) =
   Variable.equal spec_to1.var spec_to2.var
     && begin
-      match spec_to1.projectee, spec_to2.projectee with
+      match spec_to1.projection, spec_to2.projection with
       | None, None -> true
       | Some _, None | None, Some _ -> false
-      | Some (var1, proj1), Some (var2, proj2) ->
-        Variable.equal var1 var2
-          && Projectee.equal proj1 proj2
+      | Some proj1, Some proj2 -> Projection.equal proj1 proj2
     end
 
-let compare_project_var
-      ({ closure = closure1; closure_id = closure_id1; var = var1; }
-        : project_var)
-      ({ closure = closure2; closure_id = closure_id2; var = var2; }
-        : project_var) =
-  let c = Variable.compare closure1 closure2 in
-  if c <> 0 then c
-  else
-    let c = Closure_id.compare closure_id1 closure_id2 in
-    if c <> 0 then c
-    else
-      Var_within_closure.compare var1 var2
-
-let compare_move_within_set_of_closures
-      ({ closure = closure1; start_from = start_from1; move_to = move_to1; }
-        : move_within_set_of_closures)
-      ({ closure = closure2; start_from = start_from2; move_to = move_to2; }
-        : move_within_set_of_closures) =
-  let c = Variable.compare closure1 closure2 in
-  if c <> 0 then c
-  else
-    let c = Closure_id.compare start_from1 start_from2 in
-    if c <> 0 then c
-    else
-      Closure_id.compare move_to1 move_to2
-
-let compare_project_closure
-      ({ set_of_closures = set_of_closures1; closure_id = closure_id1; }
-        : project_closure)
-      ({ set_of_closures = set_of_closures2; closure_id = closure_id2; }
-        : project_closure) =
-  let c = Variable.compare set_of_closures1 set_of_closures2 in
-  if c <> 0 then c
-  else
-    Closure_id.compare closure_id1 closure_id2
+let compare_project_var = Projection.compare_project_var
+let compare_project_closure = Projection.compare_project_closure
+let compare_move_within_set_of_closures =
+  Projection.compare_move_within_set_of_closures

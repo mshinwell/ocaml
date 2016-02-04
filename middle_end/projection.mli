@@ -49,10 +49,8 @@ type t =
 
 include Identifiable.S with type t := t
 
-val to_named : t
-  -> map_projected_from:(Variable.t -> Variable.t)
-  -> Flambda.named
-
+(** Return which variable the given projection projects from. *)
 val projecting_from : t -> Variable.t
 
+(** Change the variable that the given projection projects from. *)
 val map_projecting_from : t -> f:(Variable.t -> Variable.t) -> t
