@@ -396,3 +396,14 @@ let freshen_projection (projection : Projection.t) ~freshening
     }
   | Field (field_index, var) ->
     Field (field_index, apply_variable freshening var)
+
+let freshen_projection_relation relation ~freshening ~closure_freshening =
+  Variable.Map.map (fun (spec_to : Flambda.specialised_to) ->
+      let projection =
+        match spec_to.projection with
+        | None -> None
+        | Some projection ->
+          freshen projection ~freshening ~closure_freshening:freshening
+      in
+      { spec_to with projection; })
+    which_variables

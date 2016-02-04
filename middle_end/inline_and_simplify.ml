@@ -593,20 +593,15 @@ and simplify_set_of_closures original_env r
           | None -> var
           | Some var -> var
         in
-        let projectee =
-          match external_var.projectee with
-          | None -> None
-          | Some (from, projectee) ->
-            let from = Freshening.apply_variable (E.freshening env) from in
-            Some (from, projectee)
-        in
         let approx = E.find_exn env var in
-        ({ var; projectee; } : Flambda.specialised_to), approx)
+        (* The projections are freshened below in one step, once we know
+           the closure freshening substitution. *)
+        let projection = external_var.projection in
+        ({ var; projection; } : Flambda.specialised_to), approx)
       set_of_closures.free_vars
   in
   let specialised_args =
-    Variable.Map.map (fun (spec_to : Flambda.specialised_to)
-              : Flambda.specialised_to ->
+    Variable.Map.map (fun (spec_to : Flambda.specialised_to) ->
         let external_var = spec_to.var in
         let var = Freshening.apply_variable (E.freshening env) external_var in
         let var =
@@ -617,14 +612,8 @@ and simplify_set_of_closures original_env r
           | None -> var
           | Some var -> var
         in
-        let projectee =
-          match spec_to.projectee with
-          | None -> None
-          | Some (from, projectee) ->
-            let from = Freshening.apply_variable (E.freshening env) from in
-            Some (from, projectee)
-        in
-        { var; projectee; })
+        let projection = external_var.projection in
+        ({ var; projection; } : Flambda.specialised_to))
       set_of_closures.specialised_args
   in
   let environment_before_cleaning = env in
@@ -635,28 +624,15 @@ and simplify_set_of_closures original_env r
       function_decls
   in
   let env = E.set_freshening env sb in
-  let specialised_args =
-    Variable.Map.map_keys (Freshening.apply_variable (E.freshening env))
-      specialised_args
-  in
-  let freshen_projection_relation ~which_variables =
-    Variable.Map.map (fun (spec_to : Flambda.specialised_to) ->
-        let projection =
-          match spec_to.projection with
-          | None -> None
-          | Some projection ->
-            Freshening.freshen projection
-              ~freshening:(E.freshening env)
-              ~closure_freshening:freshening
-        in
-        { spec_to with projection; })
-      which_variables
-  in
   let free_vars =
-    freshen_projection_relation ~which_variables:free_vars
+    Freshening.freshen_projection_relation ~which_variables:free_vars
+      ~freshening:(E.freshening env)
+      ~closure_freshening:freshening
   in
   let specialised_args =
-    freshen_projection_relation ~which_variables:specialised_args
+    Freshening.freshen_projection_relation ~which_variables:specialised_args
+      ~freshening:(E.freshening env)
+      ~closure_freshening:freshening
   in
   let parameter_approximations =
     (* Approximations of parameters that are known to always hold the same

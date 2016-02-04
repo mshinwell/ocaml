@@ -129,8 +129,6 @@ module Project_var : sig
     -> Var_within_closure.t
     -> Var_within_closure.t
 
-  val apply_projectee : t -> Projectee.t -> Projectee.t
-
   val print : Format.formatter -> t -> unit
 end
 
@@ -148,8 +146,11 @@ val does_not_freshen : t -> Variable.t list -> bool
 
 val print : Format.formatter -> t -> unit
 
-val freshen_projection
-   : Projection.t
+(** N.B. This does not freshen the domain of the supplied map, only the
+    range. *)
+(* CR-someday mshinwell: consider fixing that *)
+val freshen_projection_relation
+   : Flambda.specialised_to Variable.Map.t
   -> freshening:Freshening.t
   -> closure_freshening:Freshening.Project_var.t
   -> t
