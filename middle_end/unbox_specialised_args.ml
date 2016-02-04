@@ -36,9 +36,6 @@ module Transform = struct
     in
     (* CR-soon mshinwell: consider caching the Invariant_params *relation*
        as well as the "_in_recursion" map *)
-    (* CR-soon mshinwell: consider whether we should not unbox specialised
-       arguments when there remains a reference to the boxed version (same
-       for [Unbox_free_vars_of_closures]. *)
     let invariant_params_flow =
       Invariant_params.invariant_param_sources set_of_closures.function_decls
         ~backend:(Inline_and_simplify_aux.Env.backend env)
