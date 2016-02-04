@@ -19,8 +19,7 @@
     below) whose approximation says they are closures or blocks. *)
 
 type extraction = {
-  group : Variable.t;
-  defining_expr_in_terms_of_existing_outer_vars : Projection.t;
+  being_projected_from : Variable.t;
   projection : Projection.Var_and_projectee.t;
 }
 

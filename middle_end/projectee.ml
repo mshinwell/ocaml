@@ -50,7 +50,7 @@ include Identifiable.Make (struct
     | Field index ->
       Format.fprintf ppf "Field %d" index
 
-  let output _ _ = failwith "Projection.output: not yet implemented"
+  let output _ _ = failwith "Projectee.output: not yet implemented"
 end)
 
 type var_and_projectee = Variable.t * t

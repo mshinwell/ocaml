@@ -16,21 +16,22 @@
 
 (** Helper module for adding specialised arguments to sets of closures. *)
 
+module Definition : sig
+  type t =
+    | Existing_outer_var of Variable.t
+    | Projection_from_existing_specialised_arg of Projectee.Var_and_projectee.t
+end
+
 module What_to_specialise : sig
   type t
 
   val create : set_of_closures:Flambda.set_of_closures -> t
 
-  type fun_var_and_group = {
-    fun_var : Variable.t;
-    group : Variable.t;
-  }
-
   val new_specialised_arg
      : t
-    -> fun_vars_and_groups:fun_var_and_group list
-    -> defining_expr_in_terms_of_existing_outer_vars:Projection.t
-    -> projection:Projectee.Var_and_projectee.t
+    -> fun_var:Variable.t
+    -> group:Variable.t
+    -> definition:Definition.t
     -> t
 end
 

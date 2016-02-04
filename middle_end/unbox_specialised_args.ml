@@ -36,45 +36,52 @@ module Transform = struct
     in
     (* CR-soon mshinwell: consider caching the Invariant_params *relation*
        as well as the "_in_recursion" map *)
+    (* CR-soon mshinwell: consider whether we should not unbox specialised
+       arguments when there remains a reference to the boxed version (same
+       for [Unbox_free_vars_of_closures]. *)
     let invariant_params_flow =
       Invariant_params.invariant_param_sources set_of_closures.function_decls
         ~backend:(Inline_and_simplify_aux.Env.backend env)
     in
-    (* If for function [f] we would extract a projection expression [e]
-       from some specialised argument [x] of [f], and we know from
-       [Invariant_params] that a specialised argument [y] of another function
-       [g] flows to [x], then add [e] with [y] substituted for [x]
-       throughout as a newly-specialised argument for [g].  This should help
-       reduce the number of simplification rounds required for
-       mutually-recursive functions. *)
-    Variable.Map.fold (fun fun_var
-              (extraction : Extract_projections.extraction)
-              what_to_specialise ->
-        let first_fun_var_and_group : W.fun_var_and_group list =
-          [{ fun_var;
-             group = extraction.group;
-          }]
-        in
-        let fun_vars_and_groups =
-          match Variable.Map.find extraction.group invariant_params_flow with
-          | exception Not_found -> first_fun_var_and_group
-          | flow ->
-            Variable.Pair.Set.fold (fun (fun_var, group) fun_vars_and_groups ->
-                let fun_var_and_group : W.fun_var_and_group =
-                { fun_var;
-                    group;
-                  }
-                in
-                fun_var_and_group :: fun_vars_and_groups)
-              flow
-              first_fun_var_and_group
-        in
-        W.new_specialised_arg what_to_specialise
-          ~fun_vars_and_groups
-          ~defining_expr_in_terms_of_existing_outer_vars:
-            extraction.defining_expr_in_terms_of_existing_outer_vars
-          ~projection:extraction.projection)
-      ~extract_projections_result_by_function
+    Variable.Map.fold (fun fun_var extractions what_to_specialise ->
+        List.fold_left (fun what_to_specialise
+                  (extraction : Extract_projections.extraction) ->
+            let what_to_specialise =
+              W.new_specialised_arg what_to_specialise
+                ~fun_var ~group:extraction.being_projected_from
+                ~definition:(Projection_from_existing_specialised_arg
+                    extraction.definition)
+            in
+            match Variable.Map.find extraction.group invariant_params_flow with
+            | exception Not_found ->
+            | flow ->
+              (* If for function [f] we would extract a projection expression
+                 [e] from some specialised argument [x] of [f], and we know
+                 from [Invariant_params] that a specialised argument [y] of
+                 another function [g] flows to [x], we will add add [e] with
+                 [y] substituted for [x] throughout as a newly-specialised
+                 argument for [g].  This should help reduce the number of
+                 simplification rounds required for mutually-recursive
+                 functions. *)
+              Variable.Pair.Set.fold (fun (target_fun_var, target_spec_arg)
+                        what_to_specialise ->
+                  (* Rewrite the projection (that was in terms of a specialised
+                     arg of [fun_var]) to be in terms of the corresponding
+                     specialised arg of [target_fun_var].  (The outer vars
+                     referenced in the projection remain unchanged.) *)
+                  let definition =
+                    target_spec_arg, snd extraction.definition
+                  in
+                  W.new_specialised_arg what_to_specialise
+                    ~fun_var:target_fun_var
+                    ~group:extraction.being_projected_from
+                    ~definition:
+                      (Projection_from_existing_specialised_args definition))
+                flow
+                first_fun_var_and_group)
+          what_to_specialise
+          extractions)
+      ~projections_by_function
       (W.create ~set_of_closures)
 end
 
