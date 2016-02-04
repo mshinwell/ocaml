@@ -21,3 +21,5 @@ type t =
   | Project_closure of Flambda.project_closure
   | Move_within_set_of_closures of Flambda.move_within_set_of_closures
   | Field of int * Variable.t
+
+include Identifiable.S with type t := t

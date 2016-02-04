@@ -14,29 +14,17 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Identify variables used in function bodies (free variables or
-    specialised args, for example, according to [which_variables] below)
-    whose approximation says they are closures or blocks.  Assign "new inner"
-    and "new outer" variables with the "new outer" variables carrying the
-    relevant information about the projection (cf. [Flambda.specialised_to]).
-    Return a map structured as follows:
-    - at the top level, indexed by the existing "inner var" being projected
-      from;
-    - at the second level, indexed by the existing "outer var" being
-      projected from, the defining expressions of the projections.  The
-      defining expressions are in terms of the existing outer vars.
-    The top level of the map is present for the special logic in
-    [Augment_specialised_args], a client of this module, which deals with
-    adding specialised arguments in groups.  See that module for more details.
-*)
-type projection_defns = Flambda.named Variable.Map.t Variable.Map.t
+(** Identify projections from variables used in function bodies (free
+    variables or specialised args, for example, according to [which_variables]
+    below) whose approximation says they are closures or blocks. *)
 
-type result = {
-  (* CR mshinwell: this is a misnomer now.  It is indexed by the
-     variables being projected from, then the (existing) outer vars. *)
-  projection_defns_indexed_by_outer_vars : projection_defns;
-  new_inner_to_new_outer_vars : Flambda.specialised_to Variable.Map.t;
+type extraction = {
+  group : Variable.t;
+  defining_expr_in_terms_of_existing_outer_vars : Projection.t;
+  projection : Projection.Var_and_projectee.t;
 }
+
+type result = extraction list
 
 (** [which_variables] maps inner variables to outer variables in the
     manner of [free_vars] and [specialised_args] in

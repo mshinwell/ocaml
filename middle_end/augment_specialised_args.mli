@@ -16,18 +16,23 @@
 
 (** Helper module for adding specialised arguments to sets of closures. *)
 
-(** This maps from the new "outer vars" to the expressions to which the
-    new specialised arguments are being specialised.  If these expressions
-    reference existing specialised arguments then they must do so using
-    the corresponding "outer vars", not the "inner vars". *)
-type add_all_or_none_of_these_specialised_args =
-  Flambda.named Variable.Map.t
+module What_to_specialise : sig
+  type t
 
-type what_to_specialise = {
-  new_specialised_args_indexed_by_new_outer_vars
-    : add_all_or_none_of_these_specialised_args list;
-  new_inner_to_new_outer_vars : Flambda.specialised_to Variable.Map.t;
-}
+  val create : set_of_closures:Flambda.set_of_closures -> t
+
+  type fun_var_and_group = {
+    fun_var : Variable.t;
+    group : Variable.t;
+  }
+
+  val new_specialised_arg
+     : t
+    -> fun_vars_and_groups:fun_var_and_group list
+    -> defining_expr_in_terms_of_existing_outer_vars:Projection.t
+    -> projection:Projectee.Var_and_projectee.t
+    -> t
+end
 
 module type S = sig
   val pass_name : string
@@ -47,7 +52,8 @@ module type S = sig
     -> function_decl:Flambda.function_declaration
     -> set_of_closures:Flambda.set_of_closures
     -> user_data:user_data
-    -> what_to_specialise option
+    -> what_to_specialise:What_to_specialise.t
+    -> What_to_specialise.t
 end
 
 module Make (T : S) : sig
