@@ -646,38 +646,34 @@ module Make (T : S) = struct
         in
         check_invariants ~set_of_closures ~original_set_of_closures;
         let expr =
+          (* Add the lifted definitions around the rewritten set of
+             closures. *)
           Variable.Map.fold (fun new_outer_var (definition : Definition.t)
                     expr ->
               let named : Flambda.named =
                 match definition with
                 | Existing_outer_var existing_outer_var ->
                   Expr (Var existing_outer_var)
-                | Projection_from_existing_specialised_arg
-                    (spec_arg, projectee) ->
+                | Projection_from_existing_specialised_arg projection ->
                   (* The lifted definition must be in terms of outer variables,
                      not inner variables. *)
-                  match
-                    Variable.Map.find spec_args existing_specialised_args
-                  with
-                  | exception Not_found -> assert false
-                  | outer_var ->
-                    match projectee with
-                    | Project_var var_within_closure ->
-                      Project_var {
-                        closure = outer_var;
-                        closure_id = ...;
-                        var = var_within_closure;
-                      }
-                    | Closure closure_id ->
-                      (* We leave [Inline_and_simplify] to turn this into a
-                         [Project_closure], if such can be done. *)
-                      Move_within_set_of_closures {
-                        closure = outer_var;
-                        start_from = ...;
-                        move_to = closure_id;
-                      }
-                    | Field field_index ->
-                      Prim (Pfield field_index, [outer_var], Debuginfo.none)
+                  let rewrite_inner_var inner_var =
+                    match
+                      Variable.Map.find inner_var existing_specialised_args
+                    with
+                    | outer_var -> outer_var
+                    | exception Not_found ->
+                      Misc.fatal_errorf "rewrite_inner_var: expected %a \
+                          to be an existing specialised argument, but it is \
+                          not.  (The projection was: %a)"
+                        Variable.print inner_var
+                        Projection.print projection
+                  in
+                  let projection =
+                    Projection.map_projecting_from projection
+                      ~f:rewrite_inner_var
+                  in
+                  Projection.to_named projection
               in
               Flambda.create_let new_outer_var named expr)
             what.new_lifted_projection_defining_exprs_indexed_by_new_outer_vars

@@ -18,12 +18,7 @@
     variables or specialised args, for example, according to [which_variables]
     below) whose approximation says they are closures or blocks. *)
 
-type extraction = {
-  being_projected_from : Variable.t;
-  projection : Projection.Var_and_projectee.t;
-}
-
-type result = extraction list
+type result = Projection.t list
 
 (** [which_variables] maps inner variables to outer variables in the
     manner of [free_vars] and [specialised_args] in

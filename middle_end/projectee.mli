@@ -27,6 +27,4 @@ type var_and_projectee = Variable.t * t
 
 module Var_and_projectee : sig
   include Identifiable.S with type t = var_and_projectee
-
-  val to_named : t -> Flambda.named
 end

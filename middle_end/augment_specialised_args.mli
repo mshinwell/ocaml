@@ -19,7 +19,7 @@
 module Definition : sig
   type t =
     | Existing_outer_var of Variable.t
-    | Projection_from_existing_specialised_arg of Projectee.Var_and_projectee.t
+    | Projection_from_existing_specialised_arg of Projection.t
 end
 
 module What_to_specialise : sig

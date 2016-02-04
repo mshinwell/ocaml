@@ -44,17 +44,16 @@ module Transform = struct
         ~backend:(Inline_and_simplify_aux.Env.backend env)
     in
     Variable.Map.fold (fun fun_var extractions what_to_specialise ->
-        List.fold_left (fun what_to_specialise
-                  (extraction : Extract_projections.extraction) ->
-            assert (Variable.Map.mem extraction.being_projected_from
+        List.fold_left (fun what_to_specialise (projection : Projection.t) ->
+            let group = Projection.being_projected_from projection in
+            assert (Variable.Map.mem group.being_projected_from
                 set_of_closures.specialised_args);
             let what_to_specialise =
-              W.new_specialised_arg what_to_specialise
-                ~fun_var ~group:extraction.being_projected_from
+              W.new_specialised_arg what_to_specialise ~fun_var ~group
                 ~definition:(Projection_from_existing_specialised_arg
-                    extraction.definition)
+                    projection)
             in
-            match Variable.Map.find extraction.group invariant_params_flow with
+            match Variable.Map.find group invariant_params_flow with
             | exception Not_found ->
             | flow ->
               (* If for function [f] we would extract a projection expression
@@ -78,14 +77,15 @@ module Transform = struct
                        corresponding specialised arg of [target_fun_var].
                        (The outer vars referenced in the projection remain
                        unchanged.) *)
-                    let definition =
-                      target_spec_arg, snd extraction.definition
+                    let projection =
+                      Projection.map_projecting_from projection ~f:(fun var ->
+                          assert (Variable.equal var group);
+                          target_spec_arg)
                     in
                     W.new_specialised_arg what_to_specialise
-                      ~fun_var:target_fun_var
-                      ~group:extraction.being_projected_from
+                      ~fun_var:target_fun_var ~group
                       ~definition:
-                        (Projection_from_existing_specialised_args definition)
+                        (Projection_from_existing_specialised_arg projection)
                   end)
                 flow
                 first_fun_var_and_group)

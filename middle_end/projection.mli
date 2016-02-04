@@ -24,4 +24,12 @@ type t =
 
 include Identifiable.S with type t := t
 
-val to_named : t -> Flambda.named
+val to_named : t
+  -> map_projected_from:(Variable.t -> Variable.t)
+  -> Flambda.named
+
+val to_projectee : t -> Projectee.t
+
+val projecting_from : t -> Variable.t
+
+val map_projecting_from : t -> f:(Variable.t -> Variable.t) -> t
