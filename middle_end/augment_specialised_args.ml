@@ -418,76 +418,38 @@ module Make (T : S) = struct
   let rewrite_function_decl ~env ~backend ~fun_var ~set_of_closures
       ~(function_decl : Flambda.function_declaration)
       ~(for_one_function : for_one_function) =
-    if function_decl.stub then
+    let num_definitions =
+      Variable.Map.cardinal for_one_function.
+        new_projection_definitions_indexed_by_new_inner_vars
+    in
+    if function_decl.stub || num_definitions < 1 then
       None
     else
-      let closure_id = Closure_id.wrap fun_var in
-      let (_ : int), new_specialised_args_indexed_by_new_outer_vars =
-        let module Backend = (val backend : Backend_intf.S) in
-        let max_args = Backend.max_sensible_number_of_arguments in
-        List.fold_left (fun (num_params, new_spec_args) add_all_or_none ->
-            let num_new_args =
-              (* CR mshinwell: For [Unbox_specialised_args] this doesn't
-                 take into account the fact that we expect to delete the
-                 specialised argument(s) being unboxed (although we might
-                 not be able to, so this is currently conservative). *)
-              Variable.Map.cardinal add_all_or_none
-            in
-            let new_num_params = num_params + num_new_args in
-            (* CR mshinwell: consider sorting the groups in some way,
-               maybe by decreasing total benefit. *)
-            if new_num_params > max_args then
-              num_params, new_spec_args
-            else
-              try
-                let new_spec_args =
-                  Variable.Map.disjoint_union new_spec_args add_all_or_none
-                in
-                new_num_params, new_spec_args
-              with _exn ->
-                Misc.fatal_error "Augment_specialised_args: groups of \
-                    new specialised args overlap")
-          (List.length function_decl.params, Variable.Map.empty)
-          what_to_specialise.new_specialised_args_indexed_by_new_outer_vars
+      let new_fun_var, wrapper, params_renaming =
+        create_wrapper ~fun_var ~set_of_closures ~function_decl
+          ~for_one_function
       in
-      if Variable.Map.cardinal
-          new_specialised_args_indexed_by_new_outer_vars < 1
-      then
-        None
-      else
-        let new_inner_to_new_outer_vars =
-          Variable.Map.filter (fun _new_inner_var
-                    (new_outer_var : Flambda.specialised_to) ->
-              Variable.Map.mem new_outer_var.var
-                new_specialised_args_indexed_by_new_outer_vars)
-            what_to_specialise.new_inner_to_new_outer_vars
+      let all_params =
+        let new_params =
+          Variable.Set.elements (Variable.Map.keys
+            new_inner_to_new_outer_vars)
         in
-        let new_fun_var, wrapper, params_renaming =
-          create_wrapper ~fun_var ~set_of_closures ~function_decl
-            ~new_specialised_args_indexed_by_new_outer_vars
-            ~new_inner_to_new_outer_vars
-        in
-        let all_params =
-          let new_params =
-            Variable.Set.elements (Variable.Map.keys
-              new_inner_to_new_outer_vars)
-          in
-          function_decl.params @ new_params
-        in
-        let rewritten_function_decl =
-          Flambda.create_function_declaration
-            ~params:all_params
-            ~body:function_decl.body
-            ~stub:function_decl.stub
-            ~dbg:function_decl.dbg
-            ~inline:function_decl.inline
-            ~is_a_functor:function_decl.is_a_functor
-        in
-        Some (
-          new_fun_var, rewritten_function_decl, wrapper,
-            new_specialised_args_indexed_by_new_outer_vars,
-            new_inner_to_new_outer_vars,
-            params_renaming)
+        function_decl.params @ new_params
+      in
+      let rewritten_function_decl =
+        Flambda.create_function_declaration
+          ~params:all_params
+          ~body:function_decl.body
+          ~stub:function_decl.stub
+          ~dbg:function_decl.dbg
+          ~inline:function_decl.inline
+          ~is_a_functor:function_decl.is_a_functor
+      in
+      Some (
+        new_fun_var, rewritten_function_decl, wrapper,
+          new_specialised_args_indexed_by_new_outer_vars,
+          new_inner_to_new_outer_vars,
+          params_renaming)
 
   let check_invariants ~(set_of_closures : Flambda.set_of_closures)
         ~original_set_of_closures =
