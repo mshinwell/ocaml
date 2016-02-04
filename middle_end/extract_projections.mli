@@ -18,17 +18,15 @@
     variables or specialised args, for example, according to [which_variables]
     below) whose approximation says they are closures or blocks. *)
 
-(** The returned projections are [projecting_from] the existing "inner
-    vars". *)
-type result = Projection.t list
+(** [which_variables] maps (existing) inner variables to (existing) outer
+    variables in the manner of [free_vars] and [specialised_args] in
+    [Flambda.set_of_closures].
 
-(** [which_variables] maps inner variables to outer variables in the
-    manner of [free_vars] and [specialised_args] in
-    [Flambda.set_of_closures]. *)
+    The returned projections are [projecting_from] (cf. projection.mli)
+    the "existing inner vars".
+*)
 val from_function_decl
    : which_variables:Flambda.specialised_to Variable.Map.t
   -> env:Inline_and_simplify_aux.Env.t
   -> function_decl:Flambda.function_declaration
-  -> result option
-
-val print_result : Format.formatter -> result -> unit
+  -> Projection.t list

@@ -172,7 +172,7 @@ module Processed_what_to_specialise = struct
             for_one_function.
               new_projection_defining_exprs_indexed_by_new_inner_vars;
         all_new_projections =
-          Projectee.Var_and_projectee.Set.add projection
+          Projection.Set.add projection
             for_one_function.all_new_projections;
         new_inner_to_new_outer_vars_indexed_by_group;
         total_number_of_args = for_one_function.total_number_of_args + 1;
@@ -193,7 +193,7 @@ module Processed_what_to_specialise = struct
         | (function_decl : Flambda.function_declaration) ->
           { new_projection_defining_exprs_indexed_by_new_inner_vars =
               Variable.Map.empty;
-            all_new_projections = Projectee.Var_and_projectee.Set.empty;
+            all_new_projections = Projection.Set.empty;
             new_inner_to_new_outer_vars_indexed_by_group = Variable.Map.empty;
             (* The "+ 1" is just in case there is a closure environment
                parameter added later. *)
@@ -211,13 +211,10 @@ module Processed_what_to_specialise = struct
             t.existing_definitions_of_specialised_args_indexed_by_fun_var
         with
         | exception Not_found -> false
-        | projections ->
-          Projectee.Var_and_projectee.Set.mem projection projections
+        | projections -> Projection.Set.mem projection projections
       in
       if exists_already then true
-      else
-        Projectee.Var_and_projectee.Set.mem projection
-          for_one_function.all_new_projections
+      else Projection.Set.mem projection for_one_function.all_new_projections
     in
     if exists_already then
       t
@@ -256,7 +253,6 @@ module Processed_what_to_specialise = struct
     (* It is important to limit the number of arguments added: if arguments
        end up being passed on the stack, tail call optimization will be
        disabled (see asmcomp/selectgen.ml).
-       
        For each group of new specialised args provided by [T], either all or
        none of them will be added.  (This is to avoid the situation where we
        add extra arguments but yet fail to eliminate an original one by

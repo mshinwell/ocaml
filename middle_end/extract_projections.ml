@@ -17,13 +17,6 @@
 module A = Simple_value_approx
 module E = Inline_and_simplify_aux.Env
 
-type projection_defns = Flambda.named Variable.Map.t Variable.Map.t
-
-type result = {
-  projection_defns_indexed_by_outer_vars : projection_defns;
-  new_inner_to_new_outer_vars : Flambda.specialised_to Variable.Map.t;
-}
-
 type extracted_var_within_closure = {
   new_inner_var : Variable.t;
   closure_id : Closure_id.t;
@@ -194,10 +187,3 @@ let from_function_decl ~which_variables ~env
         }
       in
       Some result
-
-let print_result ppf result =
-  Format.fprintf ppf "{ projection_defns=%a new_inner_to_new_outer_vars=%a }"
-    (Variable.Map.print (Variable.Map.print Flambda.print_named))
-    result.projection_defns_indexed_by_outer_vars
-    (Variable.Map.print Flambda.print_specialised_to)
-    result.new_inner_to_new_outer_vars
