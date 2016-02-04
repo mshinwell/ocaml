@@ -19,3 +19,11 @@ type t =
   | Project_closure of Flambda.project_closure
   | Move_within_set_of_closures of Flambda.move_within_set_of_closures
   | Field of int * Variable.t
+
+let to_named t : Flambda.named =
+  match t with
+  | Project_var project_var -> Project_var project_var
+  | Project_closure project_closure -> Project_closure project_closure
+  | Move_within_set_of_closures move -> Move_within_set_of_closures move
+  | Field (field_index, var) ->
+    Prim (Pfield field_index, [var], Debuginfo.none)

@@ -624,3 +624,12 @@ val equal_specialised_to
    : specialised_to
   -> specialised_to
   -> bool
+
+val compare_project_var : project_var -> project_var -> int
+
+val compare_move_within_set_of_closures
+   : move_within_set_of_closures
+  -> move_within_set_of_closures
+  -> int
+
+val compare_project_closure : project_closure -> project_closure -> int

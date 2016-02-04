@@ -1151,3 +1151,39 @@ let equal_specialised_to (spec_to1 : specialised_to)
         Variable.equal var1 var2
           && Projectee.equal proj1 proj2
     end
+
+let compare_project_var
+      ({ closure = closure1; closure_id = closure_id1; var = var1; }
+        : project_var)
+      ({ closure = closure2; closure_id = closure_id2; var = var2; }
+        : project_var) =
+  let c = Variable.compare closure1 closure2 in
+  if c <> 0 then c
+  else
+    let c = Closure_id.compare closure_id1 closure_id2 in
+    if c <> 0 then c
+    else
+      Var_within_closure.compare var1 var2
+
+let compare_move_within_set_of_closures
+      ({ closure = closure1; start_from = start_from1; move_to = move_to1; }
+        : move_within_set_of_closures)
+      ({ closure = closure2; start_from = start_from2; move_to = move_to2; }
+        : move_within_set_of_closures) =
+  let c = Variable.compare closure1 closure2 in
+  if c <> 0 then c
+  else
+    let c = Closure_id.compare start_from1 start_from2 in
+    if c <> 0 then c
+    else
+      Closure_id.compare move_to1 move_to2
+
+let compare_project_closure
+      ({ set_of_closures = set_of_closures1; closure_id = closure_id1; }
+        : project_closure)
+      ({ set_of_closures = set_of_closures2; closure_id = closure_id2; }
+        : project_closure) =
+  let c = Variable.compare set_of_closures1 set_of_closures2 in
+  if c <> 0 then c
+  else
+    Closure_id.compare closure_id1 closure_id2

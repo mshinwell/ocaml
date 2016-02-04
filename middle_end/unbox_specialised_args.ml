@@ -21,12 +21,11 @@ module Transform = struct
   let pass_name = "unbox-specialised-args"
   let variable_suffix = "_unbox_spec_args"
 
-  let precondition ~backend ~env ~(set_of_closures : Flambda.set_of_closures) =
+  let precondition ~env ~(set_of_closures : Flambda.set_of_closures) =
     (* !Clflags.unbox_specialised_args *) true
       && not (Variable.Map.is_empty set_of_closures.specialised_args)
 
-  let what_to_specialise ~backend ~env
-        ~(set_of_closures : Flambda.set_of_closures) =
+  let what_to_specialise ~env ~(set_of_closures : Flambda.set_of_closures) =
     let projections_by_function =
       Variable.Map.filter_map set_of_closures.function_decls.funs
         ~f:(fun _fun_var (function_decl : Flambda.function_declaration) ->
@@ -39,7 +38,7 @@ module Transform = struct
        as well as the "_in_recursion" map *)
     let invariant_params_flow =
       Invariant_params.invariant_param_sources set_of_closures.function_decls
-        ~backend
+        ~backend:(Inline_and_simplify_aux.Env.backend env)
     in
     (* If for function [f] we would extract a projection expression [e]
        from some specialised argument [x] of [f], and we know from
@@ -62,7 +61,7 @@ module Transform = struct
           | flow ->
             Variable.Pair.Set.fold (fun (fun_var, group) fun_vars_and_groups ->
                 let fun_var_and_group : W.fun_var_and_group =
-                  { fun_var;
+                { fun_var;
                     group;
                   }
                 in

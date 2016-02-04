@@ -23,3 +23,5 @@ type t =
   | Field of int * Variable.t
 
 include Identifiable.S with type t := t
+
+val to_named : t -> Flambda.named

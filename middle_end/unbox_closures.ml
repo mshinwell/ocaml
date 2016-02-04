@@ -13,7 +13,7 @@
 (*   special exception on linking described in the file ../LICENSE.       *)
 (*                                                                        *)
 (**************************************************************************)
-
+(*
 module ASA = Augment_specialised_args
 
 module Transform = struct
@@ -155,3 +155,4 @@ module Transform = struct
 end
 
 include ASA.Make (Transform)
+*)

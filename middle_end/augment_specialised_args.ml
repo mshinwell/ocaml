@@ -157,27 +157,21 @@ module What_to_specialise = struct
       fun_vars_and_groups
 end
 
-
+module W = What_to_specialise
 
 module type S = sig
   val pass_name : string
   val variable_suffix : string
 
-  type user_data
-
   val precondition
-     : backend:(module Backend_intf.S)
-    -> env:Inline_and_simplify_aux.Env.t
+     : env:Inline_and_simplify_aux.Env.t
     -> set_of_closures:Flambda.set_of_closures
-    -> user_data option
+    -> bool
 
   val what_to_specialise
      : env:Inline_and_simplify_aux.Env.t
-    -> closure_id:Closure_id.t
-    -> function_decl:Flambda.function_declaration
     -> set_of_closures:Flambda.set_of_closures
-    -> user_data:user_data
-    -> what_to_specialise option
+    -> What_to_specialise.t
 end
 
 module Make (T : S) = struct
@@ -349,98 +343,6 @@ module Make (T : S) = struct
         ~is_a_functor:false
     in
     new_fun_var, new_function_decl, params_renaming
-
-  let dedup ~(function_decl : Flambda.function_declaration)
-        ~what_to_specialise =
-    (* We remove new specialised args which are known, by virtue of any
-       associated projection information, to be equal to either:
-       (a) another existing specialised arg of the same function;
-       (b) another new specialised arg.
-    *)
-    Variable.Map.mapi (fun fun_var (result : Extract_projections.result)
-              : Extract_projections.result ->
-        let params_of_this_function =
-          match
-            Variable.Map.find fun_var set_of_closures.function_decls.funs
-          with
-          | exception Not_found -> assert false
-          | (function_decl : Flambda.function_declaration) ->
-            Variable.Set.of_list function_decl.params
-        in
-        let filter_outer_vars = ref Variable.Set.empty in
-        let new_inner_to_new_outer_vars =
-          Variable.Map.filter (fun _var (spec_to : Flambda.specialised_to) ->
-              let already_present =
-                Variable.Map.exists (fun inner_var
-                          (spec_to' : Flambda.specialised_to) ->
-                    if not (Variable.Set.mem inner_var
-                        params_of_this_function)
-                    then
-                      false
-                    else
-                      match spec_to.projectee, spec_to'.projectee with
-                      | Some projectee, Some projectee' ->
-                        let equal =
-                          Projectee.Var_and_projectee.equal projectee projectee'
-                        in
-                        if equal then begin
-                          filter_outer_vars :=
-                            Variable.Set.add spec_to.var !filter_outer_vars;
-                          true
-                        end else begin
-                          false
-                        end
-                      | Some _, None
-                      | None, Some _
-                      | None, None -> false)
-                  set_of_closures.specialised_args
-              in
-              not already_present)
-            result.new_inner_to_new_outer_vars
-        in
-        let projection_defns =
-          Variable.Map.filter_map
-            result.projection_defns_indexed_by_outer_vars
-            ~f:(fun _projecting_from indexed_by_outer_vars ->
-              let indexed_by_outer_vars =
-                Variable.Map.filter (fun outer_var _defn ->
-                    not (Variable.Set.mem outer_var !filter_outer_vars))
-                  indexed_by_outer_vars
-              in
-              if Variable.Map.cardinal indexed_by_outer_vars < 1 then
-                None
-              else
-                Some indexed_by_outer_vars)
-        in
-        { projection_defns_indexed_by_outer_vars = projection_defns;
-          new_inner_to_new_outer_vars;
-        })
-
-  type collected_new_specialised_args = {
-    lifted_projection_definitions_indexed_by_new
-    new_specialised_args_indexed_by_new_outer_vars
-      : add_all_or_none_of_these_specialised_args list;
-    new_inner_to_new_outer_vars : Flambda.specialised_to Variable.Map.t;
-  }
-
-  let collect_new_specialised_args_for_function_decl ~env ~backend ~fun_var
-      ~set_of_closures ~(function_decl : Flambda.function_declaration)
-      ~user_data =
-    if function_decl.stub then
-      None
-    else
-      let closure_id = Closure_id.wrap fun_var in
-      let what_to_specialise =
-        T.what_to_specialise ~env ~closure_id ~function_decl ~set_of_closures
-          ~user_data
-      in
-      match what_to_specialise with
-      | None -> None
-      | Some what_to_specialise -> dedup ~function_decl ~what_to_specialise
-
-  let collect_new_specialised_args_for_set_of_closures ~env ~backend
-      ~set_of_closures ~user_data =
-
 
   let rewrite_function_decl ~env ~backend ~fun_var ~set_of_closures
       ~(function_decl : Flambda.function_declaration) ~user_data =
@@ -683,9 +585,10 @@ module Make (T : S) = struct
         in
         check_invariants ~set_of_closures ~original_set_of_closures;
         let expr =
-          Variable.Map.fold (fun new_outer_var spec_arg_defn expr ->
-              Flambda.create_let new_outer_var spec_arg_defn expr)
-            new_specialised_arg_defns_indexed_by_new_outer_vars
+          Variable.Map.fold (fun new_outer_var definition expr ->
+              let named = Projection.to_named definition in
+              Flambda.create_let new_outer_var named expr)
+            what.new_lifted_projection_defining_exprs_indexed_by_new_outer_vars
             (Flambda_utils.name_expr (Set_of_closures set_of_closures)
               ~name:T.pass_name)
         in
