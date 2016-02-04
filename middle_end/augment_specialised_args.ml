@@ -19,7 +19,7 @@ module E = Inline_and_simplify_aux.Env
 
 module Definition = struct
   type t =
-    | Existing_inner_var of Variable.t
+    | Existing_inner_free_var of Variable.t
     | Projection_from_existing_specialised_arg of Projection.t
 
   include Identifiable.Make (struct
@@ -27,13 +27,13 @@ module Definition = struct
 
     let compare t1 t2 =
       match t1, t2 with
-      | Existing_inner_var var1, Existing_inner_var var2 ->
+      | Existing_inner_free_var var1, Existing_inner_free_var var2 ->
         Variable.compare var1 var2
       | Projection_from_existing_specialised_arg proj1,
           Projection_from_existing_specialised_arg proj2 ->
         Projection.compare proj1 proj2
-      | Existing_inner_var, _ -> -1
-      | _, Existing_inner_var -> 1
+      | Existing_inner_free_var, _ -> -1
+      | _, Existing_inner_free_var -> 1
 
     let equal t1 t2 =
       (compare t1 t2) = 0
@@ -91,6 +91,8 @@ end
 
 module Processed_what_to_specialise = struct
   type for_one_function = {
+    fun_var : Variable.t;
+    function_decl : Flambda.function_declaration;
     new_definitions_indexed_by_new_inner_vars : Definition.t Variable.Map.t;
     all_new_projections : Definition.Set.t;
     new_inner_to_new_outer_vars : Variable.Map.t Variable.Map.t;
@@ -125,6 +127,27 @@ module Processed_what_to_specialise = struct
       | exception Not_found ->
         (* We are adding a new lifted definition: generate a fresh
            "new outer var". *)
+        (* XXX unless it is Existing_inner_free_var
+              match definition with
+              | Existing_free_inner_var existing_inner_var ->
+                let existing_outer_var =
+                  match
+                    Variable.Map.find existing_inner_var
+                      set_of_closures.free_vars
+                  with
+                  | exception Not_found ->
+                    Misc.fatal_errorf "Existing_free_inner_var %a \
+                        is not an inner free variable of %a in %a"
+                      Variable.print existing_inner_var
+                      Variable.print fun_var
+                      Flambda.print_set_of_closures set_of_closures
+                  | existing_outer_var -> existing_outer_var
+                in
+                { var = existing_outer_var;
+                  projection = None;
+                }
+              | Projection_from_existing_specialised_arg projection ->
+*)
         let new_outer_var =
           Variable.rename group ~suffix:(T.pass_name ^ "_new_outer")
         in
@@ -186,10 +209,12 @@ module Processed_what_to_specialise = struct
         with
         | exception Not_found -> assert false
         | (function_decl : Flambda.function_declaration) ->
-          { new_projection_defining_exprs_indexed_by_new_inner_vars =
+          { fun_var;
+            function_decl;
+            new_projection_definitions_indexed_by_new_inner_vars =
               Variable.Map.empty;
             all_new_projections = Projection.Set.empty;
-            new_inner_to_new_outer_vars_indexed_by_group = Variable.Map.empty;
+            new_inner_to_new_outer_vars = Variable.Map.empty;
             (* The "+ 1" is just in case there is a closure environment
                parameter added later. *)
             total_number_of_args = List.length function_decl.params + 1;
@@ -229,7 +254,7 @@ module Processed_what_to_specialise = struct
               else
                 let definition : Definition.t =
                   match spec_to.projection with
-                  | None -> Existing_inner_var inner_var
+                  | None -> Existing_inner_free_var inner_var
                   | Some projection ->
                     Projection_from_existing_specialised_arg projection
                 in
@@ -344,9 +369,9 @@ module Make (T : S) = struct
     in
     new_fun_var, params_renaming, renamed_params
 
-  let create_wrapper ~fun_var ~(set_of_closures : Flambda.set_of_closures)
-      ~(function_decl : Flambda.function_declaration)
-      ~(for_one_function : P.for_one_function) =
+  let create_wrapper (t : t) ~(for_one_function : P.for_one_function) =
+    let set_of_closures = t.set_of_closures in
+    let function_decl = for_one_function.function_decl in
     (* To avoid increasing the free variables of the wrapper, for
        general cleanliness, we restate the definitions of the
        newly-specialised arguments in the wrapper itself in terms of the
@@ -413,7 +438,7 @@ module Make (T : S) = struct
           | new_inner_var_of_wrapper ->
             let named : Flambda.named =
               match definition with
-              | Existing_inner_var existing_inner_var ->
+              | Existing_inner_free_var existing_inner_var ->
                 Expr (Var existing_inner_var)
               | Projection_from_existing_specialised_arg projection ->
                 Flambda_utils.projection_to_named projection
@@ -450,12 +475,12 @@ module Make (T : S) = struct
         ~inline:Default_inline
         ~is_a_functor:false
     in
-    new_fun_var, new_function_decl, params_renaming,
-      rewritten_existing_specialised_args
+    new_fun_var, new_function_decl, rewritten_existing_specialised_args
 
-  let rewrite_function_decl ~env ~backend ~fun_var ~set_of_closures
-      ~(function_decl : Flambda.function_declaration)
+  let rewrite_function_decl ~env ~backend ~fun_var
       ~(for_one_function : for_one_function) =
+    let set_of_closures = t.set_of_closures in
+    let function_decl = for_one_function.function_decl in
     let num_definitions =
       Variable.Map.cardinal for_one_function.
         new_definitions_indexed_by_new_inner_vars
@@ -463,9 +488,36 @@ module Make (T : S) = struct
     if function_decl.stub || num_definitions < 1 then
       None
     else
-      let new_fun_var, wrapper, params_renaming, rewritten_existing_spec_args =
+      let new_fun_var, wrapper, rewritten_existing_specialised_args =
         create_wrapper ~fun_var ~set_of_closures ~function_decl
           ~for_one_function
+      in
+      let new_specialised_args =
+        Variable.Map.mapi (fun new_inner_var (definition : Definition.t)
+                : Flambda.specialised_to ->
+            match
+              Variable.Map.find new_inner_var
+                for_one_function.new_inner_to_new_outer_vars
+            with
+            | exception Not_found -> assert false
+            | new_outer_var ->
+              match definition with
+              | Existing_free_inner_var _ ->
+                { var = new_outer_var;
+                  projection = None;
+                }
+              | Projection_from_existing_specialised_arg projection ->
+                let projecting_from =
+                  Projection.projecting_from projecting
+                in
+                assert (Variable.Set.mem projecting_from
+                  set_of_closures.specialised_args);
+                assert (Variable.Set.mem projecting_from
+                  (Variable.Set.of_list function_decl.params));
+                { var = new_outer_var;
+                  projection = Some projection;
+                })
+          new_definitions_indexed_by_new_inner_vars
       in
       let all_params =
         let new_params =
@@ -483,8 +535,11 @@ module Make (T : S) = struct
           ~inline:function_decl.inline
           ~is_a_functor:function_decl.is_a_functor
       in
-      Some (new_fun_var, rewritten_function_decl, wrapper,
-        params_renaming, rewritten_existing_spec_args)
+      let funs =
+        Variable.Map.add new_fun_var rewritten_function_decl
+          (Variable.Map.add fun_var wrapper Variable.Map.empty)
+      in
+      Some (funs, specialised_args)
 
   let add_lifted_definitions_around_set_of_closures ~(what : P.t)
         ~set_of_closures =
@@ -506,7 +561,7 @@ module Make (T : S) = struct
                 Projection.print projection
           in
           match definition with
-          | Existing_inner_var existing_inner_var ->
+          | Existing_inner_free_var existing_inner_var ->
             Expr (Var find_outer_var existing_inner_var)
           | Projection_from_existing_specialised_arg projection ->
             let projection =
@@ -521,14 +576,11 @@ module Make (T : S) = struct
 
   let rewrite_set_of_closures_core ~backend ~env
         ~(set_of_closures : Flambda.set_of_closures) =
-    (* XXX this just needs to be a simple fold now that disjoint-unions
-       everything together. *)
     match T.precondition ~backend ~env ~set_of_closures with
     | None -> None
     | Some user_data ->
       let original_set_of_closures = set_of_closures in
-      let funs, new_specialised_arg_defns_indexed_by_new_outer_vars,
-          specialised_args, done_something =
+      let funs, specialised_args, done_something =
         Variable.Map.fold
           (fun fun_var function_decl
                 (funs, new_specialised_args_indexed_by_new_outer_vars,
@@ -589,20 +641,21 @@ module Make (T : S) = struct
       if not done_something then
         None
       else
-        let existing_specialised_args = set_of_closures.specialised_args in
         let function_decls =
           Flambda.update_function_declarations set_of_closures.function_decls
             ~funs
         in
         assert (Variable.Map.cardinal specialised_args
-          >= Variable.Map.cardinal set_of_closures.specialised_args);
+          >= Variable.Map.cardinal original_set_of_closures.specialised_args);
         let set_of_closures =
           Flambda.create_set_of_closures
             ~function_decls
             ~free_vars:set_of_closures.free_vars
             ~specialised_args
         in
-        check_invariants ~set_of_closures ~original_set_of_closures;
+        if !Clflags.flambda_invariant_checks then begin
+          check_invariants ~set_of_closures ~original_set_of_closures
+        end;
         let expr =
           add_lifted_definitions_around_set_of_closures ~what ~set_of_closures
         in
