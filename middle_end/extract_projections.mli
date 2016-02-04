@@ -16,7 +16,8 @@
 
 (** Identify projections from variables used in function bodies (free
     variables or specialised args, for example, according to [which_variables]
-    below) whose approximation says they are closures or blocks. *)
+    below).  Projections from variables that are also used boxed are not
+    returned. *)
 
 (** [which_variables] maps (existing) inner variables to (existing) outer
     variables in the manner of [free_vars] and [specialised_args] in
@@ -27,6 +28,5 @@
 *)
 val from_function_decl
    : which_variables:Flambda.specialised_to Variable.Map.t
-  -> env:Inline_and_simplify_aux.Env.t
   -> function_decl:Flambda.function_declaration
   -> Projection.t list

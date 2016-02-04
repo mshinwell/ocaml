@@ -563,36 +563,6 @@ let map_project_var_to_expr_opt tree ~f =
           as named -> named)
     tree
 
-let map_toplevel_projections_to_expr_opt tree
-      ~(f : Projection.t -> Flambda.t option) =
-  map_toplevel_named (function
-      | (Project_var project_var) as named ->
-        begin match f (Project_var project_var) with
-        | None -> named
-        | Some expr -> Expr expr
-        end
-      | (Project_closure project_closure) as named ->
-        begin match f (Project_closure project_closure) with
-        | None -> named
-        | Some expr -> Expr expr
-        end
-      | (Move_within_set_of_closures move_within_set_of_closures) as named ->
-        begin match
-          f (Move_within_set_of_closures move_within_set_of_closures)
-        with
-        | None -> named
-        | Some expr -> Expr expr
-        end
-      | (Prim (Pfield i, [v], _dbg)) as named ->
-        begin match f (Field (i, v)) with
-        | None -> named
-        | Some expr -> Expr expr
-        end
-      | (Symbol _ | Const _ | Allocated_const _ | Set_of_closures _ | Prim _
-        | Expr _ | Read_mutable _ | Read_symbol_field _)
-          as named -> named)
-    tree
-
 let map_project_var_to_named_opt tree ~f =
   map_named (function
       | (Project_var project_var) as named ->
