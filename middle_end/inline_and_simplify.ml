@@ -1003,6 +1003,11 @@ and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
          Note that this function only composes with [first_freshening] owing
          to the structure of the code below (this new [simplify] is always
          in tail position). *)
+      (* CR-someday mshinwell: It was mooted that maybe we could try
+         structurally-typed closures (i.e. where we would never rename the
+         closure elements), or something else, to try to remove
+         the "closure freshening" thing in the approximation which is hard
+         to deal with. *)
       let expr, r = simplify (E.set_never_inline env) r expr in
       let approx = R.approx r in
       let value_set_of_closures =
