@@ -774,12 +774,6 @@ and simplify_set_of_closures original_env r
     Variable.Map.fold simplify_function function_decls.funs
       (Variable.Map.empty, Variable.Set.empty, r)
   in
-(*
-  let specialised_args =
-    Variable.Map.filter (fun id _ -> Variable.Set.mem id used_params)
-      specialised_args
-  in
-*)
   let function_decls =
     Flambda.update_function_declarations function_decls ~funs
   in
