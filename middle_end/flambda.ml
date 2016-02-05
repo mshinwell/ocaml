@@ -158,7 +158,7 @@ let fprintf = Format.fprintf
 module Int = Numbers.Int
 
 let print_specialised_to ppf (spec_to : specialised_to) =
-  match spec_to.projectee with
+  match spec_to.projection with
   | None -> fprintf ppf "%a" Variable.print spec_to.var
   | Some projection ->
     fprintf ppf "%a(= %a)"

@@ -41,6 +41,28 @@ type project_var = {
   var : Var_within_closure.t;
 }
 
+val print_project_closure
+   : Format.formatter
+  -> project_closure
+  -> unit
+
+val print_move_within_set_of_closures
+   : Format.formatter
+  -> move_within_set_of_closures
+  -> unit
+
+val print_project_var
+   : Format.formatter
+  -> project_var
+  -> unit
+
+val compare_project_var : project_var -> project_var -> int
+val compare_project_closure : project_closure -> project_closure -> int
+val compare_move_within_set_of_closures
+   : move_within_set_of_closures
+  -> move_within_set_of_closures
+  -> int
+
 type t =
   | Project_var of project_var
   | Project_closure of project_closure

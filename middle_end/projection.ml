@@ -70,19 +70,20 @@ let compare_project_closure
     Closure_id.compare closure_id1 closure_id2
 
 let print_project_closure ppf (project_closure : project_closure) =
-  fprintf ppf "@[<2>(project_closure@ %a@ from@ %a)@]"
+  Format.fprintf ppf "@[<2>(project_closure@ %a@ from@ %a)@]"
     Closure_id.print project_closure.closure_id
     Variable.print project_closure.set_of_closures
 
 let print_move_within_set_of_closures ppf
       (move_within_set_of_closures : move_within_set_of_closures) =
-  fprintf ppf "@[<2>(move_within_set_of_closures@ %a <-- %a@ (closure = %a))@]"
+  Format.fprintf ppf
+    "@[<2>(move_within_set_of_closures@ %a <-- %a@ (closure = %a))@]"
     Closure_id.print move_within_set_of_closures.move_to
     Closure_id.print move_within_set_of_closures.start_from
     Variable.print move_within_set_of_closures.closure
 
 let print_project_var ppf (project_var : project_var) =
-  fprintf ppf "@[<2>(project_var@ %a@ from %a=%a)@]"
+  Format.fprintf ppf "@[<2>(project_var@ %a@ from %a=%a)@]"
     Var_within_closure.print project_var.var
     Closure_id.print project_var.closure_id
     Variable.print project_var.closure
@@ -110,7 +111,7 @@ include Identifiable.Make (struct
       else Variable.compare var1 var2
     | Project_var _, _ -> -1
     | _, Project_var _ -> 1
-    | Project_closure _, -1
+    | Project_closure _, _ -> -1
     | _, Project_closure _ -> 1
     | Move_within_set_of_closures _, _ -> -1
     | _, Move_within_set_of_closures _ -> -1
@@ -128,14 +129,14 @@ include Identifiable.Make (struct
     | Move_within_set_of_closures (move_within_set_of_closures) ->
       print_move_within_set_of_closures ppf move_within_set_of_closures
     | Field (field_index, var) ->
-      fprintf ppf "Field %d of %a" field_index Variable.print var
+      Format.fprintf ppf "Field %d of %a" field_index Variable.print var
 
   let output _ _ = failwith "Projection.output: not yet implemented"
 end)
 
 let projecting_from t =
   match t with
-  | Project_var { var; _ } -> var
+  | Project_var { closure; _ } -> closure
   | Project_closure { set_of_closures; _ } -> set_of_closures
   | Move_within_set_of_closures { closure; _ } -> closure
   | Field (_, var) -> var

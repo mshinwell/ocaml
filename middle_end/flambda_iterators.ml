@@ -811,7 +811,7 @@ let map_all_immutable_let_and_let_rec_bindings (expr : Flambda.t)
       ~(f : Variable.t -> Flambda.named -> Flambda.named) : Flambda.t =
   map_named_with_id f expr
 
-let fold_function_decls_including_stubs
+let fold_function_decls_ignoring_stubs
       (set_of_closures : Flambda.set_of_closures) ~init ~f =
   Variable.Map.fold (fun fun_var function_decl acc ->
       f ~fun_var ~function_decl acc)

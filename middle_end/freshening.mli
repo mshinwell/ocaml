@@ -151,6 +151,6 @@ val print : Format.formatter -> t -> unit
 (* CR-someday mshinwell: consider fixing that *)
 val freshen_projection_relation
    : Flambda.specialised_to Variable.Map.t
-  -> freshening:Freshening.t
-  -> closure_freshening:Freshening.Project_var.t
+  -> freshening:t
+  -> closure_freshening:Project_var.t
   -> t
