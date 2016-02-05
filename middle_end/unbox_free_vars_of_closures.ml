@@ -115,7 +115,7 @@ let run ~(set_of_closures : Flambda.set_of_closures) =
             ~specialised_args:set_of_closures.specialised_args
         in
         let expr =
-          add_lifted_definitions_around_set_of_closures ~set_of_closures
+          add_lifted_projections_around_set_of_closures ~set_of_closures
             ~existing_inner_to_outer_vars:set_of_closures.free_vars
             ~definitions_indexed_by_new_outer_vars ~pass_name
         in

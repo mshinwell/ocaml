@@ -120,30 +120,29 @@ module Processed_what_to_specialise = struct
       | new_outer_var -> new_outer_var, t
       | exception Not_found ->
         (* We are adding a new lifted definition: generate a fresh
-           "new outer var". *)
-        (* XXX unless it is Existing_inner_free_var
-              match definition with
-              | Existing_free_inner_var existing_inner_var ->
-                let existing_outer_var =
-                  match
-                    Variable.Map.find existing_inner_var
-                      set_of_closures.free_vars
-                  with
-                  | exception Not_found ->
-                    Misc.fatal_errorf "Existing_free_inner_var %a \
-                        is not an inner free variable of %a in %a"
-                      Variable.print existing_inner_var
-                      Variable.print fun_var
-                      Flambda.print_set_of_closures set_of_closures
-                  | existing_outer_var -> existing_outer_var
-                in
-                { var = existing_outer_var;
-                  projection = None;
-                }
-              | Projection_from_existing_specialised_arg projection ->
-*)
+           "new outer var", unless the definition refers to an existing
+           inner free variable in which case we can use the corresponding
+           existing outer free variable (which by virtue of our deduplication
+           is not known to be equal to any outer specialised argument
+           variable). *)
         let new_outer_var =
-          Variable.rename group ~suffix:(T.pass_name ^ "_new_outer")
+          match definition with
+          | Existing_free_inner_var existing_inner_var ->
+            begin match
+              Variable.Map.find existing_inner_var
+                set_of_closures.free_vars
+            with
+            | exception Not_found ->
+              Misc.fatal_errorf "really_add_new_specialised_arg: \
+                  Existing_free_inner_var %a is not an inner free variable \
+                  of %a in %a"
+                Variable.print existing_inner_var
+                Variable.print fun_var
+                Flambda.print_set_of_closures set_of_closures
+            | existing_outer_var -> existing_outer_var
+            end
+          | Projection_from_existing_specialised_arg _projection ->
+            Variable.rename group ~suffix:(T.pass_name ^ "_new_outer")
         in
         { t with
           new_outer_vars_indexed_by_new_definitions =
@@ -226,8 +225,6 @@ module Processed_what_to_specialise = struct
           t.existing_definitions_of_specialised_args_indexed_by_fun_var
       with
       | exception Not_found -> false
-      (* XXX think about what happens if [projection] is
-         Existing_inner_free_var *)
       | projections -> Projection.Set.mem projection projections
     in
     if exists_already then
@@ -586,7 +583,7 @@ module Make (T : S) = struct
         check_invariants ~set_of_closures ~original_set_of_closures
       end;
       let expr =
-        add_lifted_definitions_around_set_of_closures ~set_of_closures
+        add_lifted_projections_around_set_of_closures ~set_of_closures
           ~existing_inner_to_outer_vars:set_of_closures.specialised_args
           ~definitions_indexed_by_new_outer_vars:
             what.new_lifted_projection_defining_exprs_indexed_by_new_outer_vars

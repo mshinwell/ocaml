@@ -811,7 +811,7 @@ let to_named (projection : Projection.t) : Flambda.named =
   | Field (field_index, var) ->
     Prim (Pfield field_index, [var], Debuginfo.none)
 
-let add_lifted_definitions_around_set_of_closures
+let add_lifted_projections_around_set_of_closures
       ~set_of_closures ~existing_inner_to_outer_vars
       ~definitions_indexed_by_new_outer_vars ~pass_name =
   Variable.Map.fold (fun new_outer_var (definition : Definition.t)
