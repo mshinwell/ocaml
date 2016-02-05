@@ -574,15 +574,15 @@ module Make (T : S) = struct
       in
       Some (funs, specialised_args)
 
-let add_lifted_projections_around_set_of_closures
-      ~(set_of_closures : Flambda.set_of_closures)
-      ~new_lifted_defns_indexed_by_new_outer_vars =
-  Variable.Map.fold (fun new_outer_var (projection : Projection.t) expr ->
-      let named = Flambda_utils.projection_to_named projection in
-      Flambda.create_let new_outer_var named expr)
-    new_lifted_defns_indexed_by_new_outer_vars
-    (Flambda_utils.name_expr (Set_of_closures set_of_closures)
-      ~name:("set_of_closures" ^ T.variable_suffix))
+  let add_lifted_projections_around_set_of_closures
+        ~(set_of_closures : Flambda.set_of_closures)
+        ~new_lifted_defns_indexed_by_new_outer_vars =
+    Variable.Map.fold (fun new_outer_var (projection : Projection.t) expr ->
+        let named = Flambda_utils.projection_to_named projection in
+        Flambda.create_let new_outer_var named expr)
+      new_lifted_defns_indexed_by_new_outer_vars
+      (Flambda_utils.name_expr (Set_of_closures set_of_closures)
+        ~name:("set_of_closures" ^ T.variable_suffix))
 
   let rewrite_set_of_closures_core ~env
         ~(set_of_closures : Flambda.set_of_closures) =
