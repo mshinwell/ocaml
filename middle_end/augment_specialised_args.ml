@@ -215,22 +215,20 @@ module Processed_what_to_specialise = struct
           }
       | for_one_function -> for_one_function
     in
-    (* Determine whether there already exists a specialised argument (either
-       an existing one or a newly-added one) that is known to be equal to
-       the one proposed to this function.  If so, we use that instead. *)
+    (* Determine whether there already exists an existing specialised argument
+       that is known to be equal to the one proposed to this function.  If so,
+       use that instead.  (Note that we also desire to dedup against any
+       new specialised arguments added to the current function; but that
+       happens automatically since [Extract_projections] returns a set.) *)
     let exists_already =
-      let exists_already =
-        match
-          Variable.Map.find fun_var
-            t.existing_definitions_of_specialised_args_indexed_by_fun_var
-        with
-        | exception Not_found -> false
-        (* XXX think about what happens if [projection] is
-           Existing_inner_free_var *)
-        | projections -> Projection.Set.mem projection projections
-      in
-      if exists_already then true
-      else Projection.Set.mem projection for_one_function.all_new_projections
+      match
+        Variable.Map.find fun_var
+          t.existing_definitions_of_specialised_args_indexed_by_fun_var
+      with
+      | exception Not_found -> false
+      (* XXX think about what happens if [projection] is
+         Existing_inner_free_var *)
+      | projections -> Projection.Set.mem projection projections
     in
     if exists_already then
       t
@@ -543,39 +541,6 @@ module Make (T : S) = struct
       in
       Some (funs, specialised_args)
 
-  let add_lifted_definitions_around_set_of_closures
-        ~(what_to_specialise : P.t) ~set_of_closures =
-    Variable.Map.fold (fun new_outer_var (definition : Definition.t)
-              expr ->
-        let named : Flambda.named =
-          (* The lifted definition must be in terms of outer variables,
-             not inner variables. *)
-          let find_outer_var inner_var =
-            match
-              Variable.Map.find inner_var existing_inner_to_outer_vars
-            with
-            | outer_var -> outer_var
-            | exception Not_found ->
-              Misc.fatal_errorf "find_outer_var: expected %a \
-                  to be in [existing_inner_to_outer_vars], but it is \
-                  not.  (The projection was: %a)"
-                Variable.print inner_var
-                Projection.print projection
-          in
-          match definition with
-          | Existing_inner_free_var existing_inner_var ->
-            Expr (Var find_outer_var existing_inner_var)
-          | Projection_from_existing_specialised_arg projection ->
-            let projection =
-              Projection.map_projecting_from projection ~f:find_outer_var
-            in
-            Flambda_utils.projection_to_named projection
-        in
-        Flambda.create_let new_outer_var named expr)
-      what.new_lifted_projection_defining_exprs_indexed_by_new_outer_vars
-      (Flambda_utils.name_expr (Set_of_closures set_of_closures)
-        ~name:T.pass_name)
-
   let rewrite_set_of_closures_core ~backend ~env
         ~(set_of_closures : Flambda.set_of_closures) =
     let what_to_specialise =
@@ -621,7 +586,11 @@ module Make (T : S) = struct
         check_invariants ~set_of_closures ~original_set_of_closures
       end;
       let expr =
-        add_lifted_definitions_around_set_of_closures ~what ~set_of_closures
+        add_lifted_definitions_around_set_of_closures ~set_of_closures
+          ~existing_inner_to_outer_vars:set_of_closures.specialised_args
+          ~definitions_indexed_by_new_outer_vars:
+            what.new_lifted_projection_defining_exprs_indexed_by_new_outer_vars
+          ~pass_name:T.pass_name
       in
       Some expr
 

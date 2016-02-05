@@ -214,3 +214,12 @@ val map_all_immutable_let_and_let_rec_bindings
    : Flambda.t
   -> f:(Variable.t -> Flambda.named -> Flambda.named)
   -> Flambda.t
+
+val fold_function_decls_ignoring_stubs
+   : Flambda.set_of_closures
+  -> init:'a
+  -> f:(fun_var:Variable.t
+    -> function_decl:Flambda.function_declaration
+    -> 'a
+    -> 'a)
+  -> 'a

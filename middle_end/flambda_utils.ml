@@ -810,3 +810,36 @@ let to_named (projection : Projection.t) : Flambda.named =
   | Move_within_set_of_closures move -> Move_within_set_of_closures move
   | Field (field_index, var) ->
     Prim (Pfield field_index, [var], Debuginfo.none)
+
+let add_lifted_definitions_around_set_of_closures
+      ~set_of_closures ~existing_inner_to_outer_vars
+      ~definitions_indexed_by_new_outer_vars ~pass_name =
+  Variable.Map.fold (fun new_outer_var (definition : Definition.t)
+            expr ->
+      let named : Flambda.named =
+        (* The lifted definition must be in terms of outer variables,
+           not inner variables. *)
+        let find_outer_var inner_var =
+          match
+            Variable.Map.find inner_var existing_inner_to_outer_vars
+          with
+          | outer_var -> outer_var
+          | exception Not_found ->
+            Misc.fatal_errorf "find_outer_var: expected %a \
+                to be in [existing_inner_to_outer_vars], but it is \
+                not.  (The projection was: %a)"
+              Variable.print inner_var
+              Projection.print projection
+        in
+        match definition with
+        | Existing_inner_free_var existing_inner_var ->
+          Expr (Var find_outer_var existing_inner_var)
+        | Projection_from_existing_specialised_arg projection ->
+          let projection =
+            Projection.map_projecting_from projection ~f:find_outer_var
+          in
+          Flambda_utils.projection_to_named projection
+      in
+      Flambda.create_let new_outer_var named expr)
+    definitions_indexed_by_new_outer_vars
+    (Flambda_utils.name_expr (Set_of_closures set_of_closures) ~name:pass_name)

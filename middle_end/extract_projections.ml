@@ -27,7 +27,7 @@
 
 let from_function_decl ~which_variables
       ~(function_decl : Flambda.function_declaration) =
-  let projections : Projection.t list = ref [] in
+  let projections = ref Projection.Set.empty in
   let used_which_variables = ref Variable.Set.empty in
   let for_expr (expr : Flambda.expr) =
     match expr with
@@ -40,13 +40,17 @@ let from_function_decl ~which_variables
   let for_named (named : Flambda.named) =
     match named with
     | Project_var project_var ->
-      projections := (Project_var project_var) :: !projections
+      projections :=
+        Projection.Set.add (Project_var project_var) !projections
     | Project_closure project_closure ->
-      projections := (Project_closure project_closure) :: !projections
+      projections :=
+        Projection.Set.add (Project_closure project_closure) !projections
     | Move_within_set_of_closures move ->
-      projections := (Move_within_set_of_closures move) :: !projections
+      projections :=
+        Projection.Set.add (Move_within_set_of_closures move) !projections
     | Prim (Pfield field_index, [var], _dbg) ->
-      projections := (Field (field_index, var)) :: !projections
+      projections :=
+        Projection.Set.add (Field (field_index, var)) !projections
     | _ -> ()
   in
   Flambda_iterators.iter for_expr for_named function_decl.body;
@@ -57,7 +61,7 @@ let from_function_decl ~which_variables
      about this based on the uses in the body, but given we are not doing
      that yet, it seems safest in performance terms not to (e.g.) unbox a
      specialised argument whose boxed version is used. *)
-  List.filter (fun projection ->
+  Projection.Set.filter (fun projection ->
       let projecting_from = Projection.projecting_from projection in
       not (Variable.Set.mem projecting_from used_which_variables))
     projections

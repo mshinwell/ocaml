@@ -29,4 +29,4 @@
 val from_function_decl
    : which_variables:Flambda.specialised_to Variable.Map.t
   -> function_decl:Flambda.function_declaration
-  -> Projection.t list
+  -> Projection.Set.t

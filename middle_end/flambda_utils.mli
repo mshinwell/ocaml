@@ -211,3 +211,10 @@ val clean_projections
   -> Flambda.specialised_to Variable.Map.t
 
 val projection_to_named : Projection.t -> Flambda.named
+
+val add_lifted_definitions_around_set_of_closures
+   : set_of_closures:Flambda.set_of_closures
+  -> existing_inner_to_outer_vars:Flambda.specialised_to Variable.Map.t
+  -> definitions_indexed_by_new_outer_vars:Projection.t Variable.Map.t
+  -> pass_name:string
+  -> Flambda.expr

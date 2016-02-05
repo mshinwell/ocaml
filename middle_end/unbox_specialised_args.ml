@@ -50,7 +50,7 @@ module Transform = struct
                     projection)
             in
             match Variable.Map.find group invariant_params_flow with
-            | exception Not_found ->
+            | exception Not_found -> what_to_specialise
             | flow ->
               (* If for function [f] we would extract a projection expression
                  [e] from some specialised argument [x] of [f], and we know
@@ -75,8 +75,8 @@ module Transform = struct
                        unchanged.) *)
                     let projection =
                       Projection.map_projecting_from projection ~f:(fun var ->
-                          assert (Variable.equal var group);
-                          target_spec_arg)
+                        assert (Variable.equal var group);
+                        target_spec_arg)
                     in
                     W.new_specialised_arg what_to_specialise
                       ~fun_var:target_fun_var ~group
