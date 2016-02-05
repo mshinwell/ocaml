@@ -29,6 +29,9 @@ module R = Inline_and_simplify_aux.Result
     to always hold a particular constant.
 *)
 
+(* CR mshinwell: make sure "simplify_var_to_var_using_approx" is always
+   used where necessary *)
+
 let ret = R.set_approx
 
 type simplify_variable_result =
@@ -227,6 +230,14 @@ let simplify_project_closure env r ~(project_closure : Flambda.project_closure)
       project_closure.set_of_closures
   in
   let set_of_closures_approx = E.find_exn env set_of_closures in
+  let set_of_closures =
+    match
+      A.simplify_var_to_var_using_env set_of_closures_approx
+        ~is_present_in_env:(fun var -> E.mem env var)
+    with
+    | None -> set_of_closures
+    | Some var -> var
+  in
   match A.check_approx_for_set_of_closures set_of_closures_approx with
   | Wrong ->
     Misc.fatal_errorf "Wrong approximation when projecting closure: %a"
@@ -303,6 +314,14 @@ let simplify_move_within_set_of_closures env r
       move_within_set_of_closures.closure
   in
   let closure_approx = E.find_exn env closure in
+  let closure =
+    match
+      A.simplify_var_to_var_using_env closure_approx
+        ~is_present_in_env:(fun var -> E.mem env var)
+    with
+    | None -> closure
+    | Some var -> var
+  in
   match A.check_approx_for_closure_allowing_unresolved closure_approx with
   | Wrong ->
     Misc.fatal_errorf "Wrong approximation when moving within set of \
@@ -467,8 +486,10 @@ let rec simplify_project_var env r ~(project_var : Flambda.project_var)
   in
   let approx = E.find_exn env closure in
   let closure =
-    match A.simplify_var_to_var_using_env approx
-            ~is_present_in_env:(fun var -> E.mem env var) with
+    match
+      A.simplify_var_to_var_using_env approx
+        ~is_present_in_env:(fun var -> E.mem env var)
+    with
     | None -> closure
     | Some var -> var
   in
