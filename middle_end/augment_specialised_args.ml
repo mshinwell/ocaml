@@ -70,7 +70,7 @@ end
 
 module type S = sig
   val pass_name : string
-  val variable_suffix : string
+  val variable_append : string
 
   val precondition
      : env:Inline_and_simplify_aux.Env.t
@@ -142,7 +142,7 @@ module Processed_what_to_specialise = struct
             | existing_outer_var -> existing_outer_var
             end
           | Projection_from_existing_specialised_arg _projection ->
-            Variable.rename group ~suffix:(T.pass_name ^ "_new_outer")
+            Variable.rename group ~append:(T.pass_name ^ "_new_outer")
         in
         { t with
           new_outer_vars_indexed_by_new_definitions =
@@ -156,7 +156,7 @@ module Processed_what_to_specialise = struct
         }
     in
     let new_inner_var =
-      Variable.rename group ~suffix:(T.pass_name ^ "_new_inner")
+      Variable.rename group ~append:(T.pass_name ^ "_new_inner")
     in
     let new_inner_to_new_outer_vars =
       Variable.Map.add new_inner_var new_outer_var
@@ -348,11 +348,11 @@ module Make (T : S) = struct
 
   let rename_function_parameters ~fun_var
         ~(function_decl : Flambda.function_declaration) =
-    let new_fun_var = Variable.rename fun_var ~append:T.variable_suffix in
+    let new_fun_var = Variable.rename fun_var ~append:T.variable_append in
     let params_renaming =
       Variable.Map.of_list
         (List.map (fun param ->
-            let new_param = Variable.rename param ~append:T.variable_suffix in
+            let new_param = Variable.rename param ~append:T.variable_append in
             param, new_param)
           function_decl.params)
     in
@@ -387,7 +387,7 @@ module Make (T : S) = struct
     in
     let new_inner_vars_to_spec_args_bound_in_the_wrapper_renaming =
       Variable.Map.mapi (fun new_inner_var _ ->
-          Variable.rename new_inner_var ~suffix:T.pass_name)
+          Variable.rename new_inner_var ~append:T.pass_name)
         for_one_function.new_definitions_indexed_by_new_outer_vars
     in
     let spec_args_bound_in_the_wrapper =

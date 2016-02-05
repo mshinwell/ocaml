@@ -31,7 +31,7 @@ let add_lifted_projections_around_set_of_closures
           match
             Variable.Map.find inner_var existing_inner_to_outer_vars
           with
-          | outer_var -> outer_var
+          | (outer_var : Flambda.specialised_to) -> outer_var.var
           | exception Not_found ->
             Misc.fatal_errorf "(UFV) find_outer_var: expected %a \
                 to be in [existing_inner_to_outer_vars], but it is \
@@ -46,7 +46,8 @@ let add_lifted_projections_around_set_of_closures
       in
       Flambda.create_let new_outer_var named expr)
     definitions_indexed_by_new_outer_vars
-    (Flambda_utils.name_expr (Set_of_closures set_of_closures) ~pass_name)
+    (Flambda_utils.name_expr (Set_of_closures set_of_closures)
+      ~name:pass_name)
 
 let run ~(set_of_closures : Flambda.set_of_closures) =
   if !Clflags.classic_inlining then
@@ -66,7 +67,7 @@ let run ~(set_of_closures : Flambda.set_of_closures) =
       Flambda_iterators.fold_function_decls_ignoring_stubs set_of_closures
         ~init:(Variable.Map.empty, all_existing_definitions,
           set_of_closures.free_vars, false)
-        ~f:(fun ~fun_var ~function_decl result ->
+        ~f:(fun ~fun_var:_ ~function_decl result ->
           let extracted =
             Extract_projections.from_function_decl ~function_decl
               ~which_variables:set_of_closures.free_vars
@@ -74,7 +75,7 @@ let run ~(set_of_closures : Flambda.set_of_closures) =
           Projection.Set.fold (fun projection
                 ((definitions_indexed_by_new_outer_vars,
                   all_existing_definitions_including_added_ones,
-                  additional_free_vars, done_something) as result) ->
+                  additional_free_vars, _done_something) as result) ->
               (* Don't add a new free variable if there already exists a
                  free variable with the desired projection.  We need to
                  dedup not only across the existing free variables but
@@ -93,14 +94,14 @@ let run ~(set_of_closures : Flambda.set_of_closures) =
                 let projecting_from = Projection.projecting_from projection in
                 let new_inner_var =
                   Variable.rename projecting_from
-                    ~suffix:(pass_name ^ "_new_inner")
+                    ~append:(pass_name ^ "_new_inner")
                 in
                 let new_outer_var =
                   Variable.rename projecting_from
-                    ~suffix:(pass_name ^ "_new_outer")
+                    ~append:(pass_name ^ "_new_outer")
                 in
                 let definitions_indexed_by_new_outer_vars =
-                  Variable.Map.add new_inner_var definition
+                  Variable.Map.add new_inner_var projection
                     definitions_indexed_by_new_outer_vars
                 in
                 let all_existing_definitions_including_added_ones =
@@ -121,7 +122,8 @@ let run ~(set_of_closures : Flambda.set_of_closures) =
                   additional_free_vars,
                   true
               end)
-            extracted)
+            extracted
+            result)
     in
     if not done_something then
       None
@@ -148,7 +150,7 @@ let run ~(set_of_closures : Flambda.set_of_closures) =
         let expr =
           add_lifted_projections_around_set_of_closures ~set_of_closures
             ~existing_inner_to_outer_vars:set_of_closures.free_vars
-            ~definitions_indexed_by_new_outer_vars ~pass_name
+            ~definitions_indexed_by_new_outer_vars
         in
         Some expr
 
