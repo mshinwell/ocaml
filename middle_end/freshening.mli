@@ -153,4 +153,10 @@ val freshen_projection_relation
    : Flambda.specialised_to Variable.Map.t
   -> freshening:t
   -> closure_freshening:Project_var.t
-  -> t
+  -> Flambda.specialised_to Variable.Map.t
+
+val freshen_projection_relation'
+   : (Flambda.specialised_to * 'a) Variable.Map.t
+  -> freshening:t
+  -> closure_freshening:Project_var.t
+  -> (Flambda.specialised_to * 'a) Variable.Map.t

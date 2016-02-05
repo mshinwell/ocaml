@@ -52,22 +52,23 @@ let make_stub unused var (fun_decl : Flambda.function_declaration)
     List.fold_left (fun additional_specialised_args (original_arg,arg) ->
         match Variable.Map.find original_arg specialised_args with
         | exception Not_found -> additional_specialised_args
-        | outer_var ->
+        | (outer_var : Flambda.specialised_to) ->
           (* CR-soon mshinwell: share with Augment_specialised_args *)
           let outer_var : Flambda.specialised_to =
-            match outer_var.Flambda.projectee with
+            match outer_var.projection with
             | None -> outer_var
-            | Some (projection, projectee) ->
+            | Some projection ->
               let projection =
-                match Variable.Map.find projection args_renaming with
-                | exception Not_found ->
-                  (* Must always be a parameter of this
-                     [function_decl]. *)
-                  assert false
-                | wrapper_arg -> wrapper_arg
+                Projection.map_projecting_from projection ~f:(fun var ->
+                  match Variable.Map.find var args_renaming with
+                  | exception Not_found ->
+                    (* Must always be a parameter of this
+                       [function_decl]. *)
+                    assert false
+                  | wrapper_arg -> wrapper_arg)
               in
               { outer_var with
-                projectee = Some (projection, projectee);
+                projection = Some projection;
               }
           in
           Variable.Map.add arg outer_var additional_specialised_args)

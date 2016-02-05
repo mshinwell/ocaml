@@ -46,7 +46,7 @@ module Env = struct
       approx = Variable.Map.empty;
       approx_mutable = Mutable_variable.Map.empty;
       approx_sym = Symbol.Map.empty;
-      projections = Projection.Map.t;
+      projections = Projection.Map.empty;
       current_functions = Set_of_closures_id.Set.empty;
       inlining_level = 0;
       inside_branch = 0;
@@ -64,7 +64,7 @@ module Env = struct
   let local env =
     { env with
       approx = Variable.Map.empty;
-      projections = Projection.Map.t;
+      projections = Projection.Map.empty;
       freshening = Freshening.empty_preserving_activation_state env.freshening;
     }
 
@@ -150,7 +150,7 @@ module Env = struct
     }
 
   let find_projection t ~projection =
-    match Projectee.Var_and_projectee.Map.find projection t.projections with
+    match Projection.Map.find projection t.projections with
     | exception Not_found -> None
     | var -> Some var
 

@@ -87,7 +87,7 @@ module Env : sig
   val add_projection
      : t
     -> projection:Projection.t
-    -> bound_to:Projection.t
+    -> bound_to:Variable.t
     -> t
 
   (** Determine if the environment knows about a variable that is bound

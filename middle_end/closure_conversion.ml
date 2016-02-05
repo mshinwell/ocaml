@@ -565,7 +565,7 @@ and close_functions t external_env function_declarations : Flambda.named =
           in
           let external_var : Flambda.specialised_to =
             { var = Env.find_var external_env var;
-              projectee = None;
+              projection = None;
             }
           in
           Variable.Map.add internal_var external_var map)

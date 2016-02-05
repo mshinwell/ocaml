@@ -27,6 +27,7 @@
 
 let from_function_decl ~which_variables
       ~(function_decl : Flambda.function_declaration) =
+  let which_variables = Variable.Map.keys which_variables in
   let projections = ref Projection.Set.empty in
   let used_which_variables = ref Variable.Set.empty in
   let for_expr (expr : Flambda.expr) =

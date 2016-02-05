@@ -256,15 +256,23 @@ let simplify_project_closure env r ~(project_closure : Flambda.project_closure)
       A.freshen_and_check_closure_id value_set_of_closures
         project_closure.closure_id
     in
-    let projection : Projection.t =
-      Project_closure {
-        (* CR mshinwell: does [set_of_closures_var] need freshening? *)
-        set_of_closures = set_of_closures_var;
-        closure_id;
-      }
+    let projecting_from =
+      match set_of_closures_var with
+      | None -> None
+      | Some set_of_closures_var ->
+        let projection : Projection.t =
+          Project_closure {
+            (* CR mshinwell: does [set_of_closures_var] need freshening? *)
+            set_of_closures = set_of_closures_var;
+            closure_id;
+          }
+        in
+        match E.find_projection env ~projection with
+        | None -> None
+        | Some var -> Some (var, projection)
     in
-    match E.find_projection env ~projection with
-    | Some var ->
+    match projecting_from with
+    | Some (var, projection) ->
       simplify_free_variable_named env var ~f:(fun _env var var_approx ->
         let r = R.map_benefit r (B.remove_projection projection) in
         Expr (Var var), ret r var_approx)
@@ -634,7 +642,7 @@ and simplify_set_of_closures original_env r
           | None -> var
           | Some var -> var
         in
-        let projection = external_var.projection in
+        let projection = spec_to.projection in
         ({ var; projection; } : Flambda.specialised_to))
       set_of_closures.specialised_args
   in
@@ -647,12 +655,12 @@ and simplify_set_of_closures original_env r
   in
   let env = E.set_freshening env sb in
   let free_vars =
-    Freshening.freshen_projection_relation ~which_variables:free_vars
+    Freshening.freshen_projection_relation' free_vars
       ~freshening:(E.freshening env)
       ~closure_freshening:freshening
   in
   let specialised_args =
-    Freshening.freshen_projection_relation ~which_variables:specialised_args
+    Freshening.freshen_projection_relation specialised_args
       ~freshening:(E.freshening env)
       ~closure_freshening:freshening
   in
@@ -705,6 +713,7 @@ and simplify_set_of_closures original_env r
           match spec_arg.projection with
           | None -> env
           | Some projection ->
+            let from = Projection.projecting_from projection in
             if Variable.Set.mem from function_decl.free_variables then
               E.add_projection env ~projection ~bound_to:inner_var
             else

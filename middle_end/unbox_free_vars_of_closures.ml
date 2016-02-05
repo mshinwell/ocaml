@@ -17,6 +17,37 @@
 let pass_name = "unbox-free-vars-of-closures"
 let () = Pass_wrapper.register ~pass_name
 
+(* CR-someday mshinwell: Nearly but not quite the same as something that
+   Augment_specialised_args uses. *)
+let add_lifted_projections_around_set_of_closures
+      ~set_of_closures ~existing_inner_to_outer_vars
+      ~definitions_indexed_by_new_outer_vars =
+  Variable.Map.fold (fun new_outer_var (projection : Projection.t)
+            expr ->
+      let named : Flambda.named =
+        (* The lifted projection must be in terms of outer variables,
+           not inner variables. *)
+        let find_outer_var inner_var =
+          match
+            Variable.Map.find inner_var existing_inner_to_outer_vars
+          with
+          | outer_var -> outer_var
+          | exception Not_found ->
+            Misc.fatal_errorf "(UFV) find_outer_var: expected %a \
+                to be in [existing_inner_to_outer_vars], but it is \
+                not.  (The projection was: %a)"
+              Variable.print inner_var
+              Projection.print projection
+        in
+        let projection =
+          Projection.map_projecting_from projection ~f:find_outer_var
+        in
+        Flambda_utils.projection_to_named projection
+      in
+      Flambda.create_let new_outer_var named expr)
+    definitions_indexed_by_new_outer_vars
+    (Flambda_utils.name_expr (Set_of_closures set_of_closures) ~pass_name)
+
 let run ~(set_of_closures : Flambda.set_of_closures) =
   if !Clflags.classic_inlining then
     None

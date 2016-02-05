@@ -379,7 +379,7 @@ let freshen_projection (projection : Projection.t) ~freshening
   match projection with
   | Project_var { closure; closure_id; var; } ->
     Project_var {
-      closure = apply_variable freshening var;
+      closure = apply_variable freshening closure;
       closure_id = Project_var.apply_closure_id closure_freshening closure_id;
       var = Project_var.apply_var_within_closure closure_freshening var;
     }
@@ -403,7 +403,18 @@ let freshen_projection_relation relation ~freshening ~closure_freshening =
         match spec_to.projection with
         | None -> None
         | Some projection ->
-          freshen projection ~freshening ~closure_freshening:freshening
+          Some (freshen_projection projection ~freshening ~closure_freshening)
       in
       { spec_to with projection; })
-    which_variables
+    relation
+
+let freshen_projection_relation' relation ~freshening ~closure_freshening =
+  Variable.Map.map (fun ((spec_to : Flambda.specialised_to), data) ->
+      let projection =
+        match spec_to.projection with
+        | None -> None
+        | Some projection ->
+          Some (freshen_projection projection ~freshening ~closure_freshening)
+      in
+      { spec_to with projection; }, data)
+    relation
