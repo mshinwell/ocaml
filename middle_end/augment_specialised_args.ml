@@ -592,23 +592,28 @@ let add_lifted_projections_around_set_of_closures
     in
     let original_set_of_closures = set_of_closures in
     let funs, specialised_args, done_something =
-      Variable.Map.fold (fun fun_var (for_one_function : P.for_one_function)
-              (funs, specialised_args, done_something) ->
-          assert (Variable.equal fun_var for_one_function.fun_var);
-          match
-            rewrite_function_decl what_to_specialise ~for_one_function
-          with
-          | None ->
-            let function_decl = for_one_function.function_decl in
+      Variable.Map.fold (fun fun_var function_decl
+                (funs, specialised_args, done_something) ->
+          match Variable.Map.find fun_var what_to_specialise.functions with
+          | exception Not_found ->
             let funs = Variable.Map.add fun_var function_decl funs in
             funs, specialised_args, done_something
-          | Some (funs', specialised_args') ->
-            let funs = Variable.Map.disjoint_union funs funs' in
-            let specialised_args =
-              Variable.Map.disjoint_union specialised_args specialised_args'
-            in
-            funs, specialised_args, true)
-        what_to_specialise.functions
+          | (for_one_function : P.for_one_function) ->
+            assert (Variable.equal fun_var for_one_function.fun_var);
+            match
+              rewrite_function_decl what_to_specialise ~for_one_function
+            with
+            | None ->
+              let function_decl = for_one_function.function_decl in
+              let funs = Variable.Map.add fun_var function_decl funs in
+              funs, specialised_args, done_something
+            | Some (funs', specialised_args') ->
+              let funs = Variable.Map.disjoint_union funs funs' in
+              let specialised_args =
+                Variable.Map.disjoint_union specialised_args specialised_args'
+              in
+              funs, specialised_args, true)
+        set_of_closures.function_decls.funs
         (Variable.Map.empty, set_of_closures.specialised_args, false)
     in
     if not done_something then
