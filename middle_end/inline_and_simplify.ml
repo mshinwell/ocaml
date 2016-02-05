@@ -1001,8 +1001,8 @@ and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
          of simplification, the [Freshening.Project_var] substitutions arising
          from each call to [simplify_set_of_closures] must be composed.
          Note that this function only composes with [first_freshening] owing
-         to the structure of the code below. *)
-     (* let env = E.set_freshening env Freshening.empty in *)
+         to the structure of the code below (this new [simplify] is always
+         in tail position). *)
       let expr, r = simplify (E.set_never_inline env) r expr in
       let approx = R.approx r in
       let value_set_of_closures =
