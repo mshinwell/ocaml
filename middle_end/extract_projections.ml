@@ -30,13 +30,38 @@ let from_function_decl ~which_variables
   let which_variables = Variable.Map.keys which_variables in
   let projections = ref Projection.Set.empty in
   let used_which_variables = ref Variable.Set.empty in
+  let check_free_variable var =
+    if Variable.Set.mem var which_variables then begin
+      used_which_variables := Variable.Set.add var !used_which_variables
+    end
+  in
   let for_expr (expr : Flambda.expr) =
     match expr with
-    | Var var ->
-      if Variable.Set.mem var which_variables then begin
-        used_which_variables := Variable.Set.add var !used_which_variables
-      end
-    | _ -> ()
+    | Var var
+    | Let_mutable (_, var, _) ->
+      check_free_variable var
+    (* CR-soon mshinwell: We don't handle [Apply] for the moment to
+       avoid disabling unboxing optimizations whenever we see a recursive
+       call.  We should improve this analysis.  Leo says this can be
+       done by a similar thing to the unused argument analysis. *)
+    | Apply _ -> ()
+    | Send { meth; obj; args; _ } ->
+      check_free_variable meth;
+      check_free_variable obj;
+      List.iter check_free_variable args
+    | Assign { new_value; _ } ->
+      check_free_variable new_value
+    | If_then_else (var, _, _)
+    | Switch (var, _)
+    | String_switch (var, _, _) ->
+      check_free_variable var
+    | Static_raise (_, args) ->
+      List.iter check_free_variable args
+    | For { from_value; to_value; _ } ->
+      check_free_variable from_value;
+      check_free_variable to_value
+    | Let _ | Let_rec _ | Static_catch _ | While _ | Try_with _
+    | Proved_unreachable -> ()
   in
   let for_named (named : Flambda.named) =
     match named with
@@ -57,7 +82,20 @@ let from_function_decl ~which_variables
         when Variable.Set.mem var which_variables ->
       projections :=
         Projection.Set.add (Field (field_index, var)) !projections
-    | _ -> ()
+    | Set_of_closures set_of_closures ->
+      let iter_specialised ~which_variables =
+        Variable.Map.iter (fun _ (spec_to : Flambda.specialised_to) ->
+            check_free_variable spec_to.var)
+          which_variables
+      in
+      iter_specialised ~which_variables:set_of_closures.free_vars;
+      iter_specialised ~which_variables:set_of_closures.specialised_args
+    | Prim (_, vars, _) ->
+      List.iter check_free_variable vars
+    | Symbol _ | Const _ | Allocated_const _ | Read_mutable _
+    | Read_symbol_field _ | Project_var _ | Project_closure _
+    | Move_within_set_of_closures _
+    | Expr _ -> ()
   in
   Flambda_iterators.iter for_expr for_named function_decl.body;
   let projections = !projections in
