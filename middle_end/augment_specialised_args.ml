@@ -107,10 +107,29 @@ module Processed_what_to_specialise = struct
     set_of_closures : Flambda.set_of_closures;
     existing_definitions_via_spec_args_indexed_by_fun_var
       : Definition.Set.t Variable.Map.t;
-    new_definitions_indexed_by_new_outer_vars : Definition.t Variable.Map.t;
-    new_outer_vars_indexed_by_new_definitions : Variable.t Definition.Map.t;
+    (* The following two maps' definitions have already been rewritten
+       into their lifted form (i.e. they reference outer rather than inner
+       variables). *)
+    new_lifted_defns_indexed_by_new_outer_vars : Projection.t Variable.Map.t;
+    new_outer_vars_indexed_by_new_lifted_defns : Variable.t Projection.Map.t;
     functions : for_one_function Variable.Map.t;
   }
+
+  let lift_projection t ~(projection : Projection.t) =
+    (* The lifted definition must be in terms of outer variables,
+       not inner variables. *)
+    let find_outer_var inner_var =
+      match Variable.Map.find inner_var t.set_of_closures.specialised_args with
+      | (outer_var : Flambda.specialised_to) -> outer_var.var
+      | exception Not_found ->
+        Misc.fatal_errorf "find_outer_var: expected %a \
+            to be in [specialised_args], but it is \
+            not.  The projection was: %a.  Set of closures: %a"
+          Variable.print inner_var
+          Projection.print projection
+          Flambda.print_set_of_closures t.set_of_closures
+    in
+    Projection.map_projecting_from projection ~f:find_outer_var
 
   let really_add_new_specialised_arg t ~group ~(definition : Definition.t)
         ~(for_one_function : for_one_function) =
@@ -120,52 +139,61 @@ module Processed_what_to_specialise = struct
        is already a lifted projection being introduced around the set
        of closures (corresponding to another new specialised argument),
        we should re-use its "new outer var" to avoid duplication of
-       projection definitions. *)
-    let new_outer_var, (t : t) =
-      match
-        Definition.Map.find definition
-          t.new_outer_vars_indexed_by_new_definitions
-      with
-      | new_outer_var -> new_outer_var, t
-      | exception Not_found ->
-        (* We are adding a new lifted definition: generate a fresh
-           "new outer var", unless the definition refers to an existing
-           inner free variable in which case we can use the corresponding
-           existing outer free variable (which by virtue of our deduplication
-           is not known to be equal to any outer specialised argument
-           variable). *)
-        let new_outer_var =
-          match definition with
-          | Existing_inner_free_var existing_inner_var ->
-            begin match
-              Variable.Map.find existing_inner_var
-                t.set_of_closures.free_vars
-            with
-            | exception Not_found ->
-              Misc.fatal_errorf "really_add_new_specialised_arg: \
-                  Existing_inner_free_var %a is not an inner free variable \
-                  of %a in %a"
-                Variable.print existing_inner_var
-                Variable.print fun_var
-                Flambda.print_set_of_closures t.set_of_closures
-            | existing_outer_var -> existing_outer_var.var
-            end
-          | Projection_from_existing_specialised_arg _projection ->
+       projection definitions.  Likewise if the definition is just
+       [Existing_inner_free_var], in in which case we can use the
+       corresponding existing outer free variable. *)
+    let new_outer_var, t =
+      let existing_outer_var =
+        match definition with
+        | Existing_inner_free_var _ -> None
+        | Projection_from_existing_specialised_arg projection ->
+          match
+            Projection.Map.find projection
+              t.new_outer_vars_indexed_by_new_lifted_defns
+          with
+          | new_outer_var -> Some new_outer_var
+          | exception Not_found -> None
+      in
+      match existing_outer_var with
+      | Some existing_outer_var -> existing_outer_var, t
+      | None ->
+        match definition with
+        | Existing_inner_free_var existing_inner_var ->
+          begin match
+            Variable.Map.find existing_inner_var
+              t.set_of_closures.free_vars
+          with
+          | exception Not_found ->
+            Misc.fatal_errorf "really_add_new_specialised_arg: \
+                Existing_inner_free_var %a is not an inner free variable \
+                of %a in %a"
+              Variable.print existing_inner_var
+              Variable.print fun_var
+              Flambda.print_set_of_closures t.set_of_closures
+          | existing_outer_var -> existing_outer_var.var, t
+          end
+        | Projection_from_existing_specialised_arg projection ->
+          let new_outer_var =
             Variable.rename group ~append:(t.variable_suffix ^ "_new_outer")
-        in
-        let t =
-          { t with
-            new_outer_vars_indexed_by_new_definitions =
-              Definition.Map.add
-                definition new_outer_var
-                t.new_outer_vars_indexed_by_new_definitions;
-            new_definitions_indexed_by_new_outer_vars =
-              Variable.Map.add
-                new_outer_var definition
-                t.new_definitions_indexed_by_new_outer_vars;
-          }
-        in
-        new_outer_var, t
+          in
+          let projection = lift_projection t ~projection in
+          let new_outer_vars_indexed_by_new_lifted_defns =
+            Projection.Map.add
+              projection new_outer_var
+              t.new_outer_vars_indexed_by_new_lifted_defns
+          in
+          let new_lifted_defns_indexed_by_new_outer_vars =
+            Variable.Map.add
+              new_outer_var projection
+              t.new_lifted_defns_indexed_by_new_outer_vars
+          in
+          let t =
+            { t with
+              new_outer_vars_indexed_by_new_lifted_defns;
+              new_lifted_defns_indexed_by_new_outer_vars;
+            }
+          in
+          new_outer_var, t
     in
     let new_inner_var =
       Variable.rename group ~append:(t.variable_suffix ^ "_new_inner")
@@ -261,8 +289,8 @@ module Processed_what_to_specialise = struct
       { variable_suffix;
         set_of_closures = what_to_specialise.set_of_closures;
         existing_definitions_via_spec_args_indexed_by_fun_var;
-        new_definitions_indexed_by_new_outer_vars = Variable.Map.empty;
-        new_outer_vars_indexed_by_new_definitions = Definition.Map.empty;
+        new_lifted_defns_indexed_by_new_outer_vars = Variable.Map.empty;
+        new_outer_vars_indexed_by_new_lifted_defns = Projection.Map.empty;
         functions = Variable.Map.empty;
       }
     in
@@ -393,7 +421,7 @@ module Make (T : S) = struct
     in
     let new_inner_vars_to_spec_args_bound_in_the_wrapper_renaming =
       Variable.Map.mapi (fun new_inner_var _ ->
-          Variable.rename new_inner_var ~append:T.variable_suffix)
+          Variable.rename new_inner_var)
         for_one_function.new_definitions_indexed_by_new_inner_vars
     in
     let spec_args_bound_in_the_wrapper =
@@ -547,37 +575,13 @@ module Make (T : S) = struct
 
 let add_lifted_projections_around_set_of_closures
       ~(set_of_closures : Flambda.set_of_closures)
-      ~definitions_indexed_by_new_outer_vars
-      ~specialised_args =
-  Variable.Map.fold (fun new_outer_var (definition : Definition.t)
-            expr ->
-      let named : Flambda.named =
-        (* The lifted definition must be in terms of outer variables,
-           not inner variables. *)
-        let find_outer_var inner_var =
-          match Variable.Map.find inner_var specialised_args with
-          | (outer_var : Flambda.specialised_to) -> outer_var.var
-          | exception Not_found ->
-            Misc.fatal_errorf "find_outer_var: expected %a \
-                to be in [specialised_args], but it is \
-                not.  The projection was: %a.  Set of closures: %a"
-              Variable.print inner_var
-              Definition.print definition
-              Flambda.print_set_of_closures set_of_closures
-        in
-        match definition with
-        | Existing_inner_free_var existing_inner_var ->
-          Expr (Var (find_outer_var existing_inner_var))
-        | Projection_from_existing_specialised_arg projection ->
-          let projection =
-            Projection.map_projecting_from projection ~f:find_outer_var
-          in
-          Flambda_utils.projection_to_named projection
-      in
+      ~new_lifted_defns_indexed_by_new_outer_vars =
+  Variable.Map.fold (fun new_outer_var (projection : Projection.t) expr ->
+      let named = Flambda_utils.projection_to_named projection in
       Flambda.create_let new_outer_var named expr)
-    definitions_indexed_by_new_outer_vars
+    new_lifted_defns_indexed_by_new_outer_vars
     (Flambda_utils.name_expr (Set_of_closures set_of_closures)
-      ~name:T.variable_suffix)
+      ~name:("set_of_closures" ^ T.variable_suffix))
 
   let rewrite_set_of_closures_core ~env
         ~(set_of_closures : Flambda.set_of_closures) =
@@ -627,9 +631,8 @@ let add_lifted_projections_around_set_of_closures
       end;
       let expr =
         add_lifted_projections_around_set_of_closures ~set_of_closures
-          ~definitions_indexed_by_new_outer_vars:
-            what_to_specialise.new_definitions_indexed_by_new_outer_vars
-          ~specialised_args
+          ~new_lifted_defns_indexed_by_new_outer_vars:
+            what_to_specialise.new_lifted_defns_indexed_by_new_outer_vars
       in
       Some expr
 
