@@ -707,9 +707,9 @@ and simplify_set_of_closures original_env r
         ~parameter_approximations ~set_of_closures_env
     in
     (* Add definitions of known projections to the environment. *)
-    let add_projections ~closure_env ~which_variables =
-      Variable.Map.fold (fun inner_var (spec_arg : Flambda.specialised_to)
-                env ->
+    let add_projections ~closure_env ~which_variables ~map =
+      Variable.Map.fold (fun inner_var spec_arg env ->
+          let (spec_arg : Flambda.specialised_to) = map spec_arg in
           match spec_arg.projection with
           | None -> env
           | Some projection ->
@@ -723,9 +723,11 @@ and simplify_set_of_closures original_env r
     in
     let closure_env =
       add_projections ~closure_env ~which_variables:specialised_args
+        ~map:(fun spec_to -> spec_to)
     in
     let closure_env =
       add_projections ~closure_env ~which_variables:free_vars
+        ~map:(fun (spec_to, _approx) -> spec_to)
     in
     let body, r =
       E.enter_closure closure_env ~closure_id:(Closure_id.wrap fid)
@@ -1057,7 +1059,7 @@ and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
         begin match E.find_projection env ~projection with
         | Some var ->
           simplify_free_variable_named env var ~f:(fun _env var var_approx ->
-            let r = R.map_benefit r (B.remove_projectee projectee) in
+            let r = R.map_benefit r (B.remove_projection projection) in
             Expr (Var var), ret r var_approx)
         | None ->
           begin match A.get_field arg_approx ~field_index with

@@ -37,7 +37,6 @@
 *)
 
 val rewrite_set_of_closures
-   : backend:(module Backend_intf.S)
-  -> env:Inline_and_simplify_aux.Env.t
+   : env:Inline_and_simplify_aux.Env.t
   -> set_of_closures:Flambda.set_of_closures
   -> Flambda.expr option

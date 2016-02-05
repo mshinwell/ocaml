@@ -249,7 +249,7 @@ let inline_by_copying_function_declaration ~env ~r
         ~f:(fun ~acc:(map, for_lets) ~var:internal_var ~expr ->
           let from_closure : Flambda.specialised_to =
             { var = new_var "from_closure";
-              projectee = None;
+              projection = None;
             }
           in
           Variable.Map.add internal_var from_closure map,
@@ -279,7 +279,7 @@ let inline_by_copying_function_declaration ~env ~r
             (* New specialised argument being introduced. *)
             let spec_to : Flambda.specialised_to =
               { var;
-                projectee = None;
+                projection = None;
               }
             in
             Some spec_to
