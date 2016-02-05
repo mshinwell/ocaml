@@ -1054,12 +1054,19 @@ and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
           | Some expr ->
             simplify env r expr ~pass_name:"Unbox_specialised_args"
           | None ->
-            let set_of_closures =
+            match
               Remove_unused_arguments.
                   separate_unused_arguments_in_set_of_closures
                 set_of_closures ~backend
-            in
-            Set_of_closures set_of_closures, r
+            with
+            | Some set_of_closures ->
+              let expr =
+                Flambda_utils.name_expr (Set_of_closures set_of_closures)
+                  ~name:"remove_unused_arguments"
+              in
+              simplify env r expr ~pass_name:"Remove_unused_arguments"
+            | None ->
+              Set_of_closures set_of_closures, r
     end
   | Project_closure project_closure ->
     simplify_project_closure env r ~project_closure

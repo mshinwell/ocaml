@@ -184,20 +184,20 @@ let separate_unused_arguments_in_set_of_closures set_of_closures ~backend =
        set_of_closures.Flambda.function_decls
        ~backend
   in
-    match separate_unused_arguments
-            ~only_specialised ~backend ~set_of_closures with
-    | None ->
-      if dump then
-        Format.eprintf "No change for Remove_unused_arguments:@ %a@.@."
-          Flambda.print_set_of_closures set_of_closures;
-      set_of_closures
-    | Some result ->
-      if dump then
-        Format.eprintf "Before Remove_unused_arguments:@ %a@.@.\
-                        After Remove_unused_arguments:@ %a@.@."
-          Flambda.print_set_of_closures set_of_closures
-          Flambda.print_set_of_closures result;
-      result
+  match separate_unused_arguments
+          ~only_specialised ~backend ~set_of_closures with
+  | None ->
+    if dump then
+      Format.eprintf "No change for Remove_unused_arguments:@ %a@.@."
+        Flambda.print_set_of_closures set_of_closures;
+    None
+  | Some result ->
+    if dump then
+      Format.eprintf "Before Remove_unused_arguments:@ %a@.@.\
+                      After Remove_unused_arguments:@ %a@.@."
+        Flambda.print_set_of_closures set_of_closures
+        Flambda.print_set_of_closures result;
+    Some result
 
 let separate_unused_arguments_in_closures_expr tree ~backend =
   let aux_named (named : Flambda.named) : Flambda.named =
