@@ -39,6 +39,7 @@ end
 
 module type S = sig
   val pass_name : string
+  val variable_suffix : string
 
   val what_to_specialise
      : env:Inline_and_simplify_aux.Env.t

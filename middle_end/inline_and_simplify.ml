@@ -660,6 +660,10 @@ and simplify_set_of_closures original_env r
       ~closure_freshening:freshening
   in
   let specialised_args =
+    let specialised_args =
+      Variable.Map.map_keys (Freshening.apply_variable (E.freshening env))
+        specialised_args
+    in
     Freshening.freshen_projection_relation specialised_args
       ~freshening:(E.freshening env)
       ~closure_freshening:freshening
@@ -766,15 +770,16 @@ and simplify_set_of_closures original_env r
     Variable.Map.add fid function_decl funs,
       Variable.Set.union used_params used_params', r
   in
-  let funs, used_params, r =
+  let funs, _used_params, r =
     Variable.Map.fold simplify_function function_decls.funs
       (Variable.Map.empty, Variable.Set.empty, r)
   in
+(*
   let specialised_args =
-    (* Remove any specialised arguments whose parameters are unused. *)
     Variable.Map.filter (fun id _ -> Variable.Set.mem id used_params)
       specialised_args
   in
+*)
   let function_decls =
     Flambda.update_function_declarations function_decls ~funs
   in

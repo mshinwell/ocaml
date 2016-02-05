@@ -83,6 +83,7 @@ module W = What_to_specialise
 
 module type S = sig
   val pass_name : string
+  val variable_suffix : string
 
   val what_to_specialise
      : env:Inline_and_simplify_aux.Env.t
@@ -102,7 +103,7 @@ module Processed_what_to_specialise = struct
   }
 
   type t = {
-    pass_name : string;
+    variable_suffix : string;
     set_of_closures : Flambda.set_of_closures;
     existing_definitions_via_spec_args_indexed_by_fun_var
       : Definition.Set.t Variable.Map.t;
@@ -150,7 +151,7 @@ module Processed_what_to_specialise = struct
             | existing_outer_var -> existing_outer_var.var
             end
           | Projection_from_existing_specialised_arg _projection ->
-            Variable.rename group ~append:(t.pass_name ^ "_new_outer")
+            Variable.rename group ~append:(t.variable_suffix ^ "_new_outer")
         in
         let t =
           { t with
@@ -167,7 +168,7 @@ module Processed_what_to_specialise = struct
         new_outer_var, t
     in
     let new_inner_var =
-      Variable.rename group ~append:(t.pass_name ^ "_new_inner")
+      Variable.rename group ~append:(t.variable_suffix ^ "_new_inner")
     in
     let new_inner_to_new_outer_vars =
       Variable.Map.add new_inner_var new_outer_var
@@ -200,8 +201,8 @@ module Processed_what_to_specialise = struct
         | (function_decl : Flambda.function_declaration) ->
           let params = Variable.Set.of_list function_decl.params in
           let existing_specialised_args =
-            Variable.Map.filter (fun _ (spec_to : Flambda.specialised_to) ->
-                Variable.Set.mem spec_to.var params)
+            Variable.Map.filter (fun inner_var _spec_to ->
+                Variable.Set.mem inner_var params)
               t.set_of_closures.specialised_args
           in
           { fun_var;
@@ -233,7 +234,7 @@ module Processed_what_to_specialise = struct
     if exists_already then t
     else really_add_new_specialised_arg t ~group ~definition ~for_one_function
 
-  let create ~env ~(what_to_specialise : W.t) ~pass_name =
+  let create ~env ~(what_to_specialise : W.t) ~variable_suffix =
     let existing_definitions_via_spec_args_indexed_by_fun_var =
       Variable.Map.map (fun (function_decl : Flambda.function_declaration) ->
           if function_decl.stub then
@@ -257,7 +258,7 @@ module Processed_what_to_specialise = struct
           what_to_specialise.set_of_closures.function_decls.funs
     in
     let t : t =
-      { pass_name;
+      { variable_suffix;
         set_of_closures = what_to_specialise.set_of_closures;
         existing_definitions_via_spec_args_indexed_by_fun_var;
         new_definitions_indexed_by_new_outer_vars = Variable.Map.empty;
@@ -353,11 +354,11 @@ module Make (T : S) = struct
 
   let rename_function_and_parameters ~fun_var
         ~(function_decl : Flambda.function_declaration) =
-    let new_fun_var = Variable.rename fun_var ~append:T.pass_name in
+    let new_fun_var = Variable.rename fun_var ~append:T.variable_suffix in
     let params_renaming =
       Variable.Map.of_list
         (List.map (fun param ->
-            let new_param = Variable.rename param ~append:T.pass_name in
+            let new_param = Variable.rename param ~append:T.variable_suffix in
             param, new_param)
           function_decl.params)
     in
@@ -392,7 +393,7 @@ module Make (T : S) = struct
     in
     let new_inner_vars_to_spec_args_bound_in_the_wrapper_renaming =
       Variable.Map.mapi (fun new_inner_var _ ->
-          Variable.rename new_inner_var ~append:T.pass_name)
+          Variable.rename new_inner_var ~append:T.variable_suffix)
         for_one_function.new_definitions_indexed_by_new_inner_vars
     in
     let spec_args_bound_in_the_wrapper =
@@ -546,17 +547,16 @@ module Make (T : S) = struct
 
 let add_lifted_projections_around_set_of_closures
       ~(set_of_closures : Flambda.set_of_closures)
-      ~definitions_indexed_by_new_outer_vars =
+      ~definitions_indexed_by_new_outer_vars
+      ~specialised_args =
   Variable.Map.fold (fun new_outer_var (definition : Definition.t)
             expr ->
       let named : Flambda.named =
         (* The lifted definition must be in terms of outer variables,
            not inner variables. *)
         let find_outer_var inner_var =
-          match
-            Variable.Map.find inner_var set_of_closures.specialised_args
-          with
-          | outer_var -> outer_var.var
+          match Variable.Map.find inner_var specialised_args with
+          | (outer_var : Flambda.specialised_to) -> outer_var.var
           | exception Not_found ->
             Misc.fatal_errorf "find_outer_var: expected %a \
                 to be in [specialised_args], but it is \
@@ -577,12 +577,12 @@ let add_lifted_projections_around_set_of_closures
       Flambda.create_let new_outer_var named expr)
     definitions_indexed_by_new_outer_vars
     (Flambda_utils.name_expr (Set_of_closures set_of_closures)
-      ~name:T.pass_name)
+      ~name:T.variable_suffix)
 
   let rewrite_set_of_closures_core ~env
         ~(set_of_closures : Flambda.set_of_closures) =
     let what_to_specialise =
-      P.create ~env ~pass_name:T.pass_name
+      P.create ~env ~variable_suffix:T.variable_suffix
         ~what_to_specialise:(T.what_to_specialise ~env ~set_of_closures)
     in
     let original_set_of_closures = set_of_closures in
@@ -604,7 +604,7 @@ let add_lifted_projections_around_set_of_closures
             in
             funs, specialised_args, true)
         what_to_specialise.functions
-        (Variable.Map.empty, Variable.Map.empty, false)
+        (Variable.Map.empty, set_of_closures.specialised_args, false)
     in
     if not done_something then
       None
@@ -629,6 +629,7 @@ let add_lifted_projections_around_set_of_closures
         add_lifted_projections_around_set_of_closures ~set_of_closures
           ~definitions_indexed_by_new_outer_vars:
             what_to_specialise.new_definitions_indexed_by_new_outer_vars
+          ~specialised_args
       in
       Some expr
 

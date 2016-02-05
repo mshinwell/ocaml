@@ -40,16 +40,21 @@ let from_function_decl ~which_variables
   in
   let for_named (named : Flambda.named) =
     match named with
-    | Project_var project_var ->
+    | Project_var project_var
+        when Variable.Set.mem project_var.closure which_variables ->
       projections :=
         Projection.Set.add (Project_var project_var) !projections
-    | Project_closure project_closure ->
+    | Project_closure project_closure
+        when Variable.Set.mem project_closure.set_of_closures
+          which_variables ->
       projections :=
         Projection.Set.add (Project_closure project_closure) !projections
-    | Move_within_set_of_closures move ->
+    | Move_within_set_of_closures move
+        when Variable.Set.mem move.closure which_variables ->
       projections :=
         Projection.Set.add (Move_within_set_of_closures move) !projections
-    | Prim (Pfield field_index, [var], _dbg) ->
+    | Prim (Pfield field_index, [var], _dbg)
+        when Variable.Set.mem var which_variables ->
       projections :=
         Projection.Set.add (Field (field_index, var)) !projections
     | _ -> ()
