@@ -342,5 +342,4 @@ let inline_by_copying_function_declaration ~env ~r
       in
       E.note_entering_specialised env ~closure_ids
     in
-Format.eprintf "Specialised function being simplified:@ %a\n%!" Flambda.print expr;
     Some (simplify (E.activate_freshening env) r expr)
