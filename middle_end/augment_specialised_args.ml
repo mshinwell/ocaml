@@ -162,6 +162,7 @@ module Processed_what_to_specialise = struct
       Variable.Map.add new_inner_var new_outer_var
         t.new_inner_to_new_outer_vars
     in
+    let new_inner_to_new_outer_vars_indexed_by_group =
       let for_this_group =
         match
           Variable.Map.find group
@@ -212,6 +213,7 @@ module Processed_what_to_specialise = struct
                parameter added later. *)
             total_number_of_args = List.length function_decl.params + 1;
           }
+        end
       | for_one_function -> for_one_function
     in
     (* Determine whether there already exists an existing specialised argument
@@ -283,7 +285,7 @@ module Processed_what_to_specialise = struct
     in
     let module Backend = (val (E.backend env) : Backend_intf.S) in
     Variable.Map.fold (fun _group fun_vars_and_definitions t ->
-        let original_t = t
+        let original_t = t in
         let t =
           (* Try adding all specialised args in the current group. *)
           List.fold_left (fun t (fun_var, definition) ->

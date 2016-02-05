@@ -833,7 +833,7 @@ let add_lifted_projections_around_set_of_closures
         in
         match definition with
         | Existing_inner_free_var existing_inner_var ->
-          Expr (Var find_outer_var existing_inner_var)
+          Expr (Var (find_outer_var existing_inner_var))
         | Projection_from_existing_specialised_arg projection ->
           let projection =
             Projection.map_projecting_from projection ~f:find_outer_var
