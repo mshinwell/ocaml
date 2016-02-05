@@ -1145,7 +1145,8 @@ middle_end/closure_conversion.cmi : bytecomp/lambda.cmi typing/ident.cmi \
     middle_end/flambda.cmi middle_end/backend_intf.cmi
 middle_end/effect_analysis.cmi : middle_end/flambda.cmi
 middle_end/extract_projections.cmi : middle_end/base_types/variable.cmi \
-    middle_end/projection.cmi middle_end/flambda.cmi
+    middle_end/projection.cmi middle_end/inline_and_simplify_aux.cmi \
+    middle_end/flambda.cmi
 middle_end/find_recursive_functions.cmi : middle_end/base_types/variable.cmi \
     middle_end/flambda.cmi middle_end/backend_intf.cmi
 middle_end/flambda_invariants.cmi : middle_end/flambda.cmi
@@ -1327,11 +1328,17 @@ middle_end/effect_analysis.cmx : middle_end/semantics_of_primitives.cmx \
     utils/misc.cmx bytecomp/lambda.cmx middle_end/flambda.cmx \
     middle_end/effect_analysis.cmi
 middle_end/extract_projections.cmo : middle_end/base_types/variable.cmi \
-    middle_end/projection.cmi middle_end/flambda_iterators.cmi \
-    middle_end/flambda.cmi middle_end/extract_projections.cmi
+    middle_end/base_types/var_within_closure.cmi \
+    middle_end/simple_value_approx.cmi middle_end/projection.cmi \
+    middle_end/inline_and_simplify_aux.cmi middle_end/freshening.cmi \
+    middle_end/flambda_iterators.cmi middle_end/flambda.cmi \
+    middle_end/base_types/closure_id.cmi middle_end/extract_projections.cmi
 middle_end/extract_projections.cmx : middle_end/base_types/variable.cmx \
-    middle_end/projection.cmx middle_end/flambda_iterators.cmx \
-    middle_end/flambda.cmx middle_end/extract_projections.cmi
+    middle_end/base_types/var_within_closure.cmx \
+    middle_end/simple_value_approx.cmx middle_end/projection.cmx \
+    middle_end/inline_and_simplify_aux.cmx middle_end/freshening.cmx \
+    middle_end/flambda_iterators.cmx middle_end/flambda.cmx \
+    middle_end/base_types/closure_id.cmx middle_end/extract_projections.cmi
 middle_end/find_recursive_functions.cmo : middle_end/base_types/variable.cmi \
     utils/strongly_connected_components.cmi middle_end/flambda_utils.cmi \
     middle_end/flambda.cmi middle_end/find_recursive_functions.cmi
@@ -1754,12 +1761,14 @@ middle_end/simplify_primitives.cmx : middle_end/base_types/tag.cmx \
     parsing/asttypes.cmi middle_end/simplify_primitives.cmi
 middle_end/unbox_closures.cmo : middle_end/base_types/variable.cmi \
     middle_end/flambda_utils.cmi middle_end/flambda_iterators.cmi \
-    middle_end/flambda.cmi utils/clflags.cmi \
-    middle_end/augment_specialised_args.cmi middle_end/unbox_closures.cmi
+    middle_end/flambda.cmi middle_end/base_types/closure_id.cmi \
+    utils/clflags.cmi middle_end/augment_specialised_args.cmi \
+    middle_end/unbox_closures.cmi
 middle_end/unbox_closures.cmx : middle_end/base_types/variable.cmx \
     middle_end/flambda_utils.cmx middle_end/flambda_iterators.cmx \
-    middle_end/flambda.cmx utils/clflags.cmx \
-    middle_end/augment_specialised_args.cmx middle_end/unbox_closures.cmi
+    middle_end/flambda.cmx middle_end/base_types/closure_id.cmx \
+    utils/clflags.cmx middle_end/augment_specialised_args.cmx \
+    middle_end/unbox_closures.cmi
 middle_end/unbox_free_vars_of_closures.cmo : \
     middle_end/base_types/variable.cmi middle_end/projection.cmi \
     middle_end/pass_wrapper.cmi utils/misc.cmi middle_end/flambda_utils.cmi \
