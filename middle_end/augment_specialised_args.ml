@@ -147,6 +147,7 @@ module Processed_what_to_specialise = struct
         match definition with
         | Existing_inner_free_var _ -> None
         | Projection_from_existing_specialised_arg projection ->
+          let projection = lift_projection t ~projection in
           match
             Projection.Map.find projection
               t.new_outer_vars_indexed_by_new_lifted_defns
