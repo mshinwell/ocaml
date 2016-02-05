@@ -35,7 +35,8 @@ module Transform = struct
           ~f:(fun _fun_var (function_decl : Flambda.function_declaration) ->
               if function_decl.stub then None
               else
-                Some (Extract_projections.from_function_decl ~function_decl
+                Some (Extract_projections.from_function_decl ~env
+                  ~function_decl
                   ~which_variables:set_of_closures.specialised_args))
       in
       (* CR-soon mshinwell: consider caching the Invariant_params *relation*

@@ -375,6 +375,8 @@ type checked_approx_for_closure =
 (** Try to prove that a value with the given approximation may be used as a
     closure.  Values coming from external compilation units with unresolved
     approximations are not permitted. *)
+(* CR-someday mshinwell: naming is inconsistent: this is as "strict"
+   as "strict_check_approx_for_set_of_closures" *)
 val check_approx_for_closure : t -> checked_approx_for_closure
 
 type checked_approx_for_closure_allowing_unresolved =

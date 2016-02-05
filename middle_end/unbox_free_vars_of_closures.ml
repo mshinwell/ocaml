@@ -50,7 +50,7 @@ let add_lifted_projections_around_set_of_closures
     (Flambda_utils.name_expr (Set_of_closures set_of_closures)
       ~name:pass_name)
 
-let run ~(set_of_closures : Flambda.set_of_closures) =
+let run ~env ~(set_of_closures : Flambda.set_of_closures) =
   if !Clflags.classic_inlining then
     None
   else
@@ -70,7 +70,7 @@ let run ~(set_of_closures : Flambda.set_of_closures) =
           set_of_closures.free_vars, false)
         ~f:(fun ~fun_var:_ ~function_decl result ->
           let extracted =
-            Extract_projections.from_function_decl ~function_decl
+            Extract_projections.from_function_decl ~env ~function_decl
               ~which_variables:set_of_closures.free_vars
           in
           Projection.Set.fold (fun projection
@@ -155,8 +155,8 @@ let run ~(set_of_closures : Flambda.set_of_closures) =
         in
         Some expr
 
-let run ~env:_ ~set_of_closures =
+let run ~env ~set_of_closures =
   Pass_wrapper.with_dump ~pass_name ~input:set_of_closures
     ~print_input:Flambda.print_set_of_closures
     ~print_output:Flambda.print
-    ~f:(fun () -> run ~set_of_closures)
+    ~f:(fun () -> run ~env ~set_of_closures)

@@ -27,6 +27,7 @@
     the "existing inner vars".
 *)
 val from_function_decl
-   : which_variables:Flambda.specialised_to Variable.Map.t
+   : env:Inline_and_simplify_aux.Env.t
+  -> which_variables:Flambda.specialised_to Variable.Map.t
   -> function_decl:Flambda.function_declaration
   -> Projection.Set.t
