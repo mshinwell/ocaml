@@ -243,13 +243,35 @@ let specialise env r ~lhs_of_application
       ~(value_set_of_closures : Simple_value_approx.value_set_of_closures)
       ~args ~args_approxs ~dbg ~simplify ~original ~recursive
       ~(inline_requested : Lambda.inline_attribute) =
+  let bound_vars =
+    let closures_required =
+      Flambda_utils.closures_required_by_entry_point
+        ~entry_point:closure_id_being_applied
+        ~backend:(E.backend env)
+        function_decls
+    in
+    let bound_vars_required =
+      Variable.Set.fold (fun fun_var bound_vars_required ->
+            let bound_vars =
+              Flambda_utils.variables_bound_by_the_closure
+                (Closure_id.wrap fun_var)
+                function_decls
+            in
+            Variable.Set.union bound_vars bound_vars_required)
+        closures_required
+        Variable.Set.empty
+    in
+    Var_within_closure.Map.filter (fun var _approx ->
+        Variable.Set.mem (Var_within_closure.unwrap var) bound_vars_required)
+      value_set_of_closures.bound_vars
+  in
   let try_specialising =
-    (* Try specialising if the function is:
-       - recursive
-       - closed
-       - has useful approximations for some invariant parameters *)
+    (* Try specialising if the function:
+       - is recursive; and
+       - is closed (it and all other members of the set of closures on which
+         it depends); and
+       - has useful approximations for some invariant parameters. *)
     let invariant_params = value_set_of_closures.invariant_params in
-    let bound_vars = value_set_of_closures.bound_vars in
     if !Clflags.classic_inlining then
       Dont_try_it S.Not_specialised.Classic_mode
     else if not (Var_within_closure.Map.is_empty bound_vars) then

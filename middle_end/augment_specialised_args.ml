@@ -177,7 +177,7 @@ module Processed_what_to_specialise = struct
           end
         | Projection_from_existing_specialised_arg projection ->
           let new_outer_var =
-            Variable.rename group ~append:(t.variable_suffix ^ "_new_outer")
+            Variable.rename group ~append:t.variable_suffix
           in
           let projection = lift_projection t ~projection in
           let new_outer_vars_indexed_by_new_lifted_defns =
@@ -199,7 +199,7 @@ module Processed_what_to_specialise = struct
           new_outer_var, t
     in
     let new_inner_var =
-      Variable.rename group ~append:(t.variable_suffix ^ "_new_inner")
+      Variable.rename group ~append:t.variable_suffix
     in
     let new_inner_to_new_outer_vars =
       Variable.Map.add new_inner_var new_outer_var

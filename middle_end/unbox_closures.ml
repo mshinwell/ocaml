@@ -21,7 +21,7 @@ module W = ASA.What_to_specialise
 
 module Transform = struct
   let pass_name = "unbox-closures"
-  let variable_suffix = "_unbox_closures"
+  let variable_suffix = ""
 
   let precondition ~(set_of_closures : Flambda.set_of_closures) =
     !Clflags.unbox_closures

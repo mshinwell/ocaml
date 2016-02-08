@@ -18,7 +18,7 @@
 
 let pass_name = "unbox-free-vars-of-closures"
 let () = Pass_wrapper.register ~pass_name
-let variable_suffix = "_unbox_fvs_of_closures"
+let variable_suffix = ""
 
 (* CR-someday mshinwell: Nearly but not quite the same as something that
    Augment_specialised_args uses. *)
@@ -97,11 +97,11 @@ let run ~env ~(set_of_closures : Flambda.set_of_closures) =
                 let projecting_from = Projection.projecting_from projection in
                 let new_inner_var =
                   Variable.rename projecting_from
-                    ~append:(variable_suffix ^ "_new_inner")
+                    ~append:variable_suffix
                 in
                 let new_outer_var =
                   Variable.rename projecting_from
-                    ~append:(variable_suffix ^ "_new_outer")
+                    ~append:variable_suffix
                 in
                 let definitions_indexed_by_new_inner_vars =
                   Variable.Map.add new_inner_var projection
