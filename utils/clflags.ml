@@ -163,7 +163,7 @@ let default_inline_call_cost = 5
 let default_inline_alloc_cost = 3
 let default_inline_prim_cost = 3
 let default_inline_branch_cost = 3
-let default_inline_indirect_cost = 2
+let default_inline_indirect_cost = 4
 let default_branch_inline_factor = 0.1
 let default_inline_lifting_benefit = 1300
 
