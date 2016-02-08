@@ -14,26 +14,20 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+(** Identify projections from variables used in function bodies (free
+    variables or specialised args, for example, according to [which_variables]
+    below).  Projections from variables that are also used boxed are not
+    returned. *)
 
-(** Introduce a stub function to avoid depending on unused arguments.
+(** [which_variables] maps (existing) inner variables to (existing) outer
+    variables in the manner of [free_vars] and [specialised_args] in
+    [Flambda.set_of_closures].
 
-    For instance, it turns
-      [let rec fact n unused =
-         if n = 0 then 1
-         else n * fact (n-1) unused]
-    into
-      [let rec fact' n =
-         if n = 0 then 1
-         else n * fact' (n-1)
-       and fact n unused = fact' n]
+    The returned projections are [projecting_from] (cf. projection.mli)
+    the "existing inner vars".
 *)
-val separate_unused_arguments_in_closures
-   : Flambda.program
-  -> backend:(module Backend_intf.S)
-  -> Flambda.program
-
-val separate_unused_arguments_in_set_of_closures
-   : Flambda.set_of_closures
-  -> backend:(module Backend_intf.S)
-  -> Flambda.set_of_closures option
+val from_function_decl
+   : env:Inline_and_simplify_aux.Env.t
+  -> which_variables:Flambda.specialised_to Variable.Map.t
+  -> function_decl:Flambda.function_declaration
+  -> Projection.Set.t

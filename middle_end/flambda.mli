@@ -63,29 +63,24 @@ type send = {
   dbg : Debuginfo.t;
 }
 
-(** The selection of one closure given a set of closures, required before
-    a function defined by said set of closures can be applied.  See more
-    detailed documentation below on [set_of_closures]. *)
-type project_closure = {
-  set_of_closures : Variable.t; (** must yield a set of closures *)
-  closure_id : Closure_id.t;
-}
+(** For details on these types, see projection.mli. *)
+type project_closure = Projection.project_closure
+type move_within_set_of_closures = Projection.move_within_set_of_closures
+type project_var = Projection.project_var
 
-(** The selection of one closure given another closure in the same set of
-    closures.  See more detailed documentation below on [set_of_closures]. *)
-type move_within_set_of_closures = {
-  closure : Variable.t;  (** must yield a closure *)
-  start_from : Closure_id.t;
-  move_to : Closure_id.t;
-}
-
-(** The selection from a closure of a variable bound by said closure.
-    In other words, access to a function's environment.  Also see more
-    detailed documentation below on [set_of_closures]. *)
-type project_var = {
-  closure : Variable.t;  (** must yield a closure *)
-  closure_id : Closure_id.t;
-  var : Var_within_closure.t;
+(** See [free_vars] and [specialised_args], below. *)
+(* CR mshinwell: move to separate module and make [Identifiable].  (Or maybe
+   nearly Identifiable; having a special map that enforces invariants might
+   be good.) *)
+type specialised_to = {
+  var : Variable.t;
+  (** The [projecting_from] value (see projection.mli) of any [projection]
+      must be another free
+      variable or specialised
+      argument (depending on whether this record type is involved in
+      [free_vars] or [specialised_args] respectively) in the same
+      set of closures. *)
+  projection : Projection.t option;
 }
 
 (** Flambda terms are partitioned in a pseudo-ANF manner; many terms are
@@ -207,12 +202,15 @@ and set_of_closures = private {
         Variable.Map.map (Env.find_approx env) set.free_vars
       in
      in [Build_export_info]. *)
-  free_vars : Variable.t Variable.Map.t;
+  (* CR-soon mshinwell: I'd like to arrange these maps so that it's impossible
+     to put invalid projection information into them (in particular, so that
+     we enforce that the relation stays within the domain of the map). *)
+  free_vars : specialised_to Variable.Map.t;
   (** Mapping from all variables free in the body of the [function_decls] to
       variables in scope at the definition point of the [set_of_closures].
       The domain of this map is sometimes known as the "variables bound by
       the closure". *)
-  specialised_args : Variable.t Variable.Map.t;
+  specialised_args : specialised_to Variable.Map.t;
   (** Parameters known to always alias some variable in the scope of the set
       of closures declaration.  These are the only parameters that may,
       during [Inline_and_simplify], have non-unknown approximations.
@@ -537,8 +535,8 @@ val update_function_declarations
     and [specialised_args] are reasonable. *)
 val create_set_of_closures
    : function_decls:function_declarations
-  -> free_vars:Variable.t Variable.Map.t
-  -> specialised_args:Variable.t Variable.Map.t
+  -> free_vars:specialised_to Variable.Map.t
+  -> specialised_args:specialised_to Variable.Map.t
   -> set_of_closures
 
 (** Given a function declaration, find which of its parameters (if any)
@@ -600,3 +598,22 @@ val print_set_of_closures
    : Format.formatter
   -> set_of_closures
   -> unit
+
+val print_specialised_to
+   : Format.formatter
+  -> specialised_to
+  -> unit
+
+val equal_specialised_to
+   : specialised_to
+  -> specialised_to
+  -> bool
+
+val compare_project_var : project_var -> project_var -> int
+
+val compare_move_within_set_of_closures
+   : move_within_set_of_closures
+  -> move_within_set_of_closures
+  -> int
+
+val compare_project_closure : project_closure -> project_closure -> int

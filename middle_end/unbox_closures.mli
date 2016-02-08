@@ -16,17 +16,10 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-val introduce_specialised_args_for_free_vars
-   : backend:(module Backend_intf.S)
-  -> Flambda.set_of_closures
-  -> Flambda.set_of_closures
+(** Turn free variables of closures into specialised arguments.
+    The aim is to cause the closure to become closed. *)
 
-val replace_free_vars_by_equal_specialised_args
-   : Flambda.set_of_closures
-  -> Flambda.set_of_closures
-
-val rewrite_function_declaration
-   : free_vars:Variable.Map.key Variable.Map.t
-  -> function_decl:Flambda.function_declaration
-  -> specialised_args:Variable.Map.key Variable.Map.t
-  -> Flambda.function_declaration
+val rewrite_set_of_closures
+   : env:Inline_and_simplify_aux.Env.t
+  -> set_of_closures:Flambda.set_of_closures
+  -> Flambda.expr option

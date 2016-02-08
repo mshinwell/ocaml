@@ -14,26 +14,42 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+(** Helper module for adding specialised arguments to sets of closures. *)
 
-(** Introduce a stub function to avoid depending on unused arguments.
+module Definition : sig
+  type t =
+    | Existing_inner_free_var of Variable.t
+    | Projection_from_existing_specialised_arg of Projection.t
+end
 
-    For instance, it turns
-      [let rec fact n unused =
-         if n = 0 then 1
-         else n * fact (n-1) unused]
-    into
-      [let rec fact' n =
-         if n = 0 then 1
-         else n * fact' (n-1)
-       and fact n unused = fact' n]
-*)
-val separate_unused_arguments_in_closures
-   : Flambda.program
-  -> backend:(module Backend_intf.S)
-  -> Flambda.program
+module What_to_specialise : sig
+  type t
 
-val separate_unused_arguments_in_set_of_closures
-   : Flambda.set_of_closures
-  -> backend:(module Backend_intf.S)
-  -> Flambda.set_of_closures option
+  val create
+     : set_of_closures:Flambda.set_of_closures
+    -> t
+
+  val new_specialised_arg
+     : t
+    -> fun_var:Variable.t
+    -> group:Variable.t
+    -> definition:Definition.t  (* [projecting_from] "existing inner vars" *)
+    -> t
+end
+
+module type S = sig
+  val pass_name : string
+  val variable_suffix : string
+
+  val what_to_specialise
+     : env:Inline_and_simplify_aux.Env.t
+    -> set_of_closures:Flambda.set_of_closures
+    -> What_to_specialise.t
+end
+
+module Make (T : S) : sig
+  val rewrite_set_of_closures
+     : env:Inline_and_simplify_aux.Env.t
+    -> set_of_closures:Flambda.set_of_closures
+    -> Flambda.expr option
+end

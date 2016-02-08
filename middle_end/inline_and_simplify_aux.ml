@@ -25,6 +25,7 @@ module Env = struct
     approx : (scope * Simple_value_approx.t) Variable.Map.t;
     approx_mutable : Simple_value_approx.t Mutable_variable.Map.t;
     approx_sym : Simple_value_approx.t Symbol.Map.t;
+    projections : Variable.t Projection.Map.t;
     current_functions : Set_of_closures_id.Set.t;
     (* The functions currently being declared: used to avoid inlining
        recursively *)
@@ -47,6 +48,7 @@ module Env = struct
       approx = Variable.Map.empty;
       approx_mutable = Mutable_variable.Map.empty;
       approx_sym = Symbol.Map.empty;
+      projections = Projection.Map.empty;
       current_functions = Set_of_closures_id.Set.empty;
       inlining_level = 0;
       inside_branch = 0;
@@ -64,6 +66,7 @@ module Env = struct
   let local env =
     { env with
       approx = Variable.Map.empty;
+      projections = Projection.Map.empty;
       freshening = Freshening.empty_preserving_activation_state env.freshening;
     }
 
@@ -76,9 +79,11 @@ module Env = struct
     { env with inlining_level = env.inlining_level + 1 }
 
   let print ppf t =
-    Format.fprintf ppf "Environment maps: %a@.Freshening: %a@."
-        Variable.Set.print (Variable.Map.keys t.approx)
-        Freshening.print t.freshening
+    Format.fprintf ppf
+      "Environment maps: %a@.Projections: %a@.Freshening: %a@."
+      Variable.Set.print (Variable.Map.keys t.approx)
+      (Projection.Map.print Variable.print) t.projections
+      Freshening.print t.freshening
 
   let mem t var = Variable.Map.mem var t.approx
 
@@ -140,6 +145,17 @@ module Env = struct
       Backend.import_symbol symbol
     | approx -> approx
 
+  let add_projection t ~projection ~bound_to =
+    { t with
+      projections =
+        Projection.Map.add projection bound_to t.projections;
+    }
+
+  let find_projection t ~projection =
+    match Projection.Map.find projection t.projections with
+    | exception Not_found -> None
+    | var -> Some var
+
   let does_not_bind t vars =
     not (List.exists (mem t) vars)
 
@@ -172,7 +188,7 @@ module Env = struct
       really_import_approx_with_scope t
         (Variable.Map.find id t.approx)
     with Not_found ->
-      Misc.fatal_errorf "Inlining_env.find_with_scope_exn: Unbound variable \
+      Misc.fatal_errorf "Env.find_with_scope_exn: Unbound variable \
           %a@.%s@. Environment: %a@."
         Variable.print id
         (Printexc.raw_backtrace_to_string (Printexc.get_callstack max_int))

@@ -63,6 +63,8 @@ exception Vars_in_function_body_not_bound_by_closure_or_params of
   Variable.Set.t * Flambda.set_of_closures * Variable.t
 exception Function_decls_have_overlapping_parameters of Variable.Set.t
 exception Specialised_arg_that_is_not_a_parameter of Variable.t
+exception Projection_must_be_a_free_var of Projection.t
+exception Projection_must_be_a_specialised_arg of Projection.t
 exception Free_variables_set_is_lying of
   Variable.t * Variable.Set.t * Variable.Set.t * Flambda.function_declaration
 exception Set_of_closures_free_vars_map_has_wrong_range of Variable.Set.t
@@ -256,12 +258,13 @@ let variable_and_symbol_invariants (program : Flambda.program) =
       ignore_set_of_closures_id set_of_closures_id;
       let functions_in_closure = Variable.Map.keys funs in
       let variables_in_closure =
-        Variable.Map.fold (fun var var_in_closure variables_in_closure ->
+        Variable.Map.fold (fun var (var_in_closure : Flambda.specialised_to)
+                  variables_in_closure ->
             (* [var] may occur in the body, but will effectively be renamed
                to [var_in_closure], so the latter is what we check to make
                sure it's bound. *)
             ignore_variable var;
-            check_variable_is_bound env var_in_closure;
+            check_variable_is_bound env var_in_closure.var;
             Variable.Set.add var variables_in_closure)
           free_vars Variable.Set.empty
       in
@@ -353,11 +356,34 @@ let variable_and_symbol_invariants (program : Flambda.program) =
       (* Check that every "specialised arg" is a parameter of one of the
          functions being declared, and that the variable to which the
          parameter is being specialised is bound. *)
-      Variable.Map.iter (fun being_specialised specialised_to ->
+      (* CR mshinwell: also check [projectee]---must always be another
+         specialised arg in the same set of closures *)
+      Variable.Map.iter (fun _inner_var
+                (specialised_to : Flambda.specialised_to) ->
+          check_variable_is_bound env specialised_to.var;
+          match specialised_to.projection with
+          | None -> ()
+          | Some projection ->
+            let projecting_from = Projection.projecting_from projection in
+            if not (Variable.Map.mem projecting_from free_vars)
+            then begin
+              raise (Projection_must_be_a_free_var projection)
+            end)
+        free_vars;
+      Variable.Map.iter (fun being_specialised
+                (specialised_to : Flambda.specialised_to) ->
           if not (Variable.Set.mem being_specialised all_params) then begin
             raise (Specialised_arg_that_is_not_a_parameter being_specialised)
           end;
-          check_variable_is_bound env specialised_to)
+          check_variable_is_bound env specialised_to.var;
+          match specialised_to.projection with
+          | None -> ()
+          | Some projection ->
+            let projecting_from = Projection.projecting_from projection in
+            if not (Variable.Map.mem projecting_from specialised_args)
+            then begin
+              raise (Projection_must_be_a_specialised_arg projection)
+            end)
         specialised_args
   in
   let loop_constant_defining_value env (const : Flambda.constant_defining_value) =
@@ -667,6 +693,15 @@ let check_exn ?(kind=Normal) ?(cmxfile=false) (flam:Flambda.program) =
           parameter of any of the function(s) in the corresponding \
           declaration(s): %a"
         Variable.print var
+    | Projection_must_be_a_free_var var ->
+      Format.eprintf ">> Projection %a in [free_vars] from a variable that is \
+          not a (inner) free variable of the set of closures"
+        Projection.print var
+    | Projection_must_be_a_specialised_arg var ->
+      Format.eprintf ">> Projection %a in [specialised_args] from a variable \
+          that is not a (inner) specialised argument variable of the set of \
+          closures"
+        Projection.print var
     | Free_variables_set_is_lying (var, claimed, calculated, function_decl) ->
       Format.eprintf ">> Function declaration whose [free_variables] set (%a) \
           is not a superset of the result of [Flambda.free_variables] \

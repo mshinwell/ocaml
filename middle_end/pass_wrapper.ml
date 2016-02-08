@@ -14,26 +14,21 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+let register ~pass_name =
+  Clflags.all_passes := pass_name :: !Clflags.all_passes
 
-(** Introduce a stub function to avoid depending on unused arguments.
-
-    For instance, it turns
-      [let rec fact n unused =
-         if n = 0 then 1
-         else n * fact (n-1) unused]
-    into
-      [let rec fact' n =
-         if n = 0 then 1
-         else n * fact' (n-1)
-       and fact n unused = fact' n]
-*)
-val separate_unused_arguments_in_closures
-   : Flambda.program
-  -> backend:(module Backend_intf.S)
-  -> Flambda.program
-
-val separate_unused_arguments_in_set_of_closures
-   : Flambda.set_of_closures
-  -> backend:(module Backend_intf.S)
-  -> Flambda.set_of_closures option
+let with_dump ~pass_name ~f ~input ~print_input ~print_output =
+  let dump = Clflags.dumped_pass pass_name in
+  if dump then begin
+    Format.eprintf "Before %s:@ %a@.@." pass_name print_input input
+  end;
+  let result = f () in
+  match result with
+  | None ->
+    if dump then Format.eprintf "%s: no-op.\n\n%!" pass_name;
+    None
+  | Some result ->
+    if dump then begin
+      Format.eprintf "After %s:@ %a@.@." pass_name print_output result
+    end;
+    Some result
