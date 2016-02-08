@@ -94,12 +94,12 @@ let copy_of_function's_body_with_freshened_params env
   if E.does_not_bind env params
     && E.does_not_freshen env params
   then
-    env, params, function_decl.body
+    params, function_decl.body
   else
     let freshened_params = List.map (fun var -> Variable.rename var) params in
     let subst = Variable.Map.of_list (List.combine params freshened_params) in
     let body = Flambda_utils.toplevel_substitution subst function_decl.body in
-    env, freshened_params, body
+    freshened_params, body
 
 (* CR mshinwell: Add a note somewhere to explain why "bound by the closure"
    does not include the function identifiers for other functions in the same
@@ -109,20 +109,16 @@ let copy_of_function's_body_with_freshened_params env
     closed.  That is to say, we bind the free variables of the body
     (= "variables bound by the closure"), and any function identifiers
     introduced by the corresponding set of closures. *)
-let inline_by_copying_function_body ~env ~r ~function_decls ~lhs_of_application
+let inline_by_copying_function_body ~env ~r
+      ~(function_decls : Flambda.function_declarations)
+      ~lhs_of_application
       ~(inline_requested : Lambda.inline_attribute)
       ~closure_id_being_applied
       ~(function_decl : Flambda.function_declaration) ~args ~simplify =
   assert (E.mem env lhs_of_application);
   assert (List.for_all (E.mem env) args);
   let r = R.map_benefit r B.remove_call in
-  let env =
-    (* Don't allow the inlining level to inhibit inlining of stubs (e.g.
-       wrappers created by [Unbox_closures]). *)
-    if function_decl.stub then env
-    else E.inlining_level_up env
-  in
-  let env, freshened_params, body =
+  let freshened_params, body =
     copy_of_function's_body_with_freshened_params env ~function_decl
   in
   let body =
@@ -156,22 +152,30 @@ let inline_by_copying_function_body ~env ~r ~function_decls ~lhs_of_application
   *)
   let expr =
     Variable.Map.fold (fun another_closure_in_the_same_set _ expr ->
+      let used =
+        Variable.Set.mem another_closure_in_the_same_set
+           function_decl.free_variables
+      in
+      if used then
         Flambda.create_let another_closure_in_the_same_set
           (Move_within_set_of_closures {
             closure = lhs_of_application;
             start_from = closure_id_being_applied;
             move_to = Closure_id.wrap another_closure_in_the_same_set;
           })
-          expr)
-      function_decls.Flambda.funs
+          expr
+      else expr)
+      function_decls.funs
       bindings_for_vars_bound_by_closure_and_params_to_args
   in
-  let env = E.note_entering_inlined env in
-  simplify (E.activate_freshening env) r expr
+  let env = E.activate_freshening (E.set_never_inline env) in
+  simplify env r expr
 
 let inline_by_copying_function_declaration ~env ~r
     ~(function_decls : Flambda.function_declarations)
-    ~lhs_of_application ~closure_id_being_applied
+    ~lhs_of_application
+    ~(inline_requested : Lambda.inline_attribute)
+    ~closure_id_being_applied
     ~(function_decl : Flambda.function_declaration)
     ~args ~args_approxs ~(invariant_params:Variable.Set.t Variable.Map.t lazy_t)
     ~(specialised_args : Flambda.specialised_to Variable.Map.t)
@@ -235,10 +239,6 @@ let inline_by_copying_function_declaration ~env ~r
        approximations, rather than on all invariant arguments.) *)
     None
   else
-    let env =
-      if function_decl.stub then env
-      else E.inlining_level_up env
-    in
     let set_of_closures_var = new_var "dup_set_of_closures" in
     (* The free variable map for the duplicated declaration(s) maps the
        "internal" names used within the function bodies to fresh names,
@@ -326,7 +326,7 @@ let inline_by_copying_function_declaration ~env ~r
               args;
               kind = Direct closure_id_being_applied;
               dbg;
-              inline = function_decl.inline;
+              inline = inline_requested;
             }))
       in
       Flambda_utils.bind ~bindings:free_vars_for_lets ~body
@@ -336,12 +336,6 @@ let inline_by_copying_function_declaration ~env ~r
     let expr : Flambda.t =
       Flambda_utils.bind ~body:duplicated_application ~bindings:args_decl
     in
-    let env =
-      let closure_ids =
-        Closure_id.Set.of_list (
-          List.map Closure_id.wrap
-            (Variable.Set.elements (Variable.Map.keys function_decls.funs)))
-      in
-      E.note_entering_specialised env ~closure_ids
-    in
-    Some (simplify (E.activate_freshening env) r expr)
+    let env = E.activate_freshening (E.set_never_inline env) in
+    Some (simplify env r expr)
+

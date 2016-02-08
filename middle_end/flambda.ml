@@ -102,6 +102,7 @@ and set_of_closures = {
 
 and function_declarations = {
   set_of_closures_id : Set_of_closures_id.t;
+  set_of_closures_origin : Set_of_closures_origin.t;
   funs : function_declaration Variable.Map.t;
 }
 
@@ -972,15 +973,25 @@ let create_function_declaration ~params ~body ~stub ~dbg
     is_a_functor;
   }
 
-let create_function_declarations ~set_of_closures_id ~funs =
+let create_function_declarations ~funs =
+  let compilation_unit = Compilation_unit.get_current_exn () in
+  let set_of_closures_id = Set_of_closures_id.create compilation_unit in
+  let set_of_closures_origin =
+    Set_of_closures_origin.create set_of_closures_id
+  in
   { set_of_closures_id;
+    set_of_closures_origin;
     funs;
   }
 
-let update_function_declarations _function_decls ~funs =
-  create_function_declarations ~funs
-    ~set_of_closures_id:
-      (Set_of_closures_id.create (Compilation_unit.get_current_exn ()))
+let update_function_declarations function_decls ~funs =
+  let compilation_unit = Compilation_unit.get_current_exn () in
+  let set_of_closures_id = Set_of_closures_id.create compilation_unit in
+  let set_of_closures_origin = function_decls.set_of_closures_origin in
+  { set_of_closures_id;
+    set_of_closures_origin;
+    funs;
+  }
 
 let create_set_of_closures ~function_decls ~free_vars ~specialised_args =
   if !Clflags.flambda_invariant_checks then begin

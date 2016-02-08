@@ -260,6 +260,10 @@ and function_declarations = private {
   (** An identifier (unique across all Flambda trees currently in memory)
       of the set of closures associated with this set of function
       declarations. *)
+  set_of_closures_origin : Set_of_closures_origin.t;
+  (** An identifier of the original set of closures on which this set of function
+      declarations is based. Used to prevent different specialisations of the
+      same functions from being inlined/specialised within each other. *)
   funs : function_declaration Variable.Map.t;
   (** The function(s) defined by the set of function declarations.  The
       keys of this map are often referred to in the code as "fun_var"s. *)
@@ -520,12 +524,11 @@ val create_function_declaration
 
 (** Create a set of function declarations given the individual declarations. *)
 val create_function_declarations
-   : set_of_closures_id:Set_of_closures_id.t
-  -> funs:function_declaration Variable.Map.t
+   : funs:function_declaration Variable.Map.t
   -> function_declarations
 
-(** Convenience function to replace the [funs] member of a set of
-    function declarations. *)
+(** Create a set of function declarations based on another set of function
+    declarations. *)
 val update_function_declarations
    : function_declarations
   -> funs:function_declaration Variable.Map.t

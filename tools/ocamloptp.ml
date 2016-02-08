@@ -89,7 +89,6 @@ module Options = Main_args.Make_optcomp_options (struct
   let _noassert = option "-noassert"
   let _noautolink = option "-noautolink"
   let _nodynlink = option "-nodynlink"
-  let _no_inline_recursive_functions = option "-no-inline-recursive-functions"
   let _nolabels = option "-nolabels"
   let _nostdlib = option "-nostdlib"
   let _o s = option_with_arg "-o" s

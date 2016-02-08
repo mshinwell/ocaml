@@ -342,7 +342,6 @@ let make_closure_declaration ~id ~body ~params : Flambda.t =
   let set_of_closures =
     let function_decls =
       Flambda.create_function_declarations
-        ~set_of_closures_id:(Set_of_closures_id.create compilation_unit)
         ~funs:(Variable.Map.singleton id function_declaration)
     in
     Flambda.create_set_of_closures ~function_decls ~free_vars

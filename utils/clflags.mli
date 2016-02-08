@@ -187,7 +187,6 @@ val unbox_closures : bool ref
 val clambda_checks : bool ref
 val default_max_inlining_depth : int
 val max_inlining_depth : Int_arg_helper.parsed ref
-val inline_recursive_functions : bool ref
 val remove_unused_arguments : bool ref
 val dump_flambda_verbose : bool ref
 val classic_inlining : bool ref

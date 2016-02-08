@@ -291,11 +291,6 @@ let mk_noinit f =
   "-noinit", Arg.Unit f,
   " Do not load any init file"
 
-let mk_no_inline_recursive_functions f =
-  "-no-inline-recursive-functions", Arg.Unit f,
-  " Do not duplicate and specialise declarations of recursive functions"
-;;
-
 let mk_nolabels f =
   "-nolabels", Arg.Unit f, " Ignore non-optional labels in types"
 ;;
@@ -751,7 +746,6 @@ module type Optcommon_options = sig
   val _inline_lifting_benefit : string -> unit
   val _unbox_closures : unit -> unit
   val _branch_inline_factor : string -> unit
-  val _no_inline_recursive_functions : unit -> unit
   val _remove_unused_arguments : unit -> unit
   val _o2 : unit -> unit
   val _o3 : unit -> unit
@@ -994,7 +988,6 @@ struct
     mk_noassert F._noassert;
     mk_noautolink_opt F._noautolink;
     mk_nodynlink F._nodynlink;
-    mk_no_inline_recursive_functions F._no_inline_recursive_functions;
     mk_nolabels F._nolabels;
     mk_nostdlib F._nostdlib;
     mk_o F._o;
@@ -1090,7 +1083,6 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_no_app_funct F._no_app_funct;
     mk_noassert F._noassert;
     mk_noinit F._noinit;
-    mk_no_inline_recursive_functions F._no_inline_recursive_functions;
     mk_nolabels F._nolabels;
     mk_noprompt F._noprompt;
     mk_nopromptcont F._nopromptcont;

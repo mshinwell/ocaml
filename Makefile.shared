@@ -139,6 +139,7 @@ MIDDLE_END=\
   middle_end/base_types/mutable_variable.cmo \
   middle_end/base_types/id_types.cmo \
   middle_end/base_types/set_of_closures_id.cmo \
+  middle_end/base_types/set_of_closures_origin.cmo \
   middle_end/base_types/closure_element.cmo \
   middle_end/base_types/closure_id.cmo \
   middle_end/base_types/var_within_closure.cmo \

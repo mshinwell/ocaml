@@ -700,7 +700,7 @@ and simplify_set_of_closures original_env r
         specialised_args)
   in
   let env =
-    E.enter_set_of_closures_declaration function_decls.set_of_closures_id env
+    E.enter_set_of_closures_declaration function_decls.set_of_closures_origin env
   in
   (* we use the previous closure for evaluating the functions *)
   let internal_value_set_of_closures =
@@ -958,6 +958,7 @@ and simplify_over_application env r ~args ~args_approxs ~function_decls
       (Apply { func = func_var; args = remaining_args; kind = Indirect; dbg;
         inline = inline_requested; })
   in
+  let expr = Lift_code.lift_lets_expr expr ~toplevel:true in
   expr, ret r (A.value_unknown Other)
 (* CR mshinwell for lwhite: This causes camlp4 to fail to build with -O3.
    Can you see what's going on?  This pass gets stuck in an infinite loop.
@@ -993,7 +994,7 @@ and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
       let approx = A.augment_with_symbol_field approx symbol field_index in
       simplify_named_using_approx_and_env env r tree approx
     end
-  | Set_of_closures set_of_closures ->
+  | Set_of_closures set_of_closures -> begin
     let backend = E.backend env in
     let set_of_closures, r, first_freshening =
       simplify_set_of_closures env r set_of_closures
@@ -1028,24 +1029,21 @@ and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
       in
       Expr expr, (ret r (A.value_set_of_closures value_set_of_closures))
     in
-    if E.never_inline env then
-      Set_of_closures set_of_closures, r
-    else begin
-      (* This does the actual substitutions of free variables
-         for specialised args introduced by [Unbox_closures].
-         (Apart from simplifying the [Unbox_closures] output, this also
-         prevents applying [Unbox_closures] over and over.) *)
-      let set_of_closures =
-        match Remove_free_vars_equal_to_args.run set_of_closures with
-        | None -> set_of_closures
-        | Some set_of_closures -> set_of_closures
-      in
-      (* Do [Unbox_closures] next to try to decide which things are
-         free variables and which things are specialised arguments before
-         unboxing them. *)
-      match
-        Unbox_closures.rewrite_set_of_closures ~env ~set_of_closures
-      with
+    (* This does the actual substitutions of specialised args introduced
+       by [Unbox_closures] for free variables.  (Apart from simplifying
+       the [Unbox_closures] output, this also prevents applying
+       [Unbox_closures] over and over.) *)
+    let set_of_closures =
+      match Remove_free_vars_equal_to_args.run set_of_closures with
+      | None -> set_of_closures
+      | Some set_of_closures -> set_of_closures
+    in
+    (* Do [Unbox_closures] next to try to decide which things are
+       free variables and which things are specialised arguments before
+       unboxing them. *)
+    match
+      Unbox_closures.rewrite_set_of_closures ~env ~set_of_closures
+    with
       | Some expr ->
         simplify env r expr ~pass_name:"Unbox_closures"
       | None ->
@@ -1628,18 +1626,12 @@ let add_predef_exns_to_environment ~env ~backend =
     Predef.all_predef_exns
 
 let run ~never_inline ~backend ~prefixname ~round program =
-  let r =
-    let r = R.create () in
-    if never_inline then
-      R.set_inlining_threshold r (Some Inlining_cost.Threshold.Never_inline)
-    else
-      r
-  in
+  let r = R.create () in
   let stats = !Clflags.inlining_stats in
   if never_inline then Clflags.inlining_stats := false;
   let initial_env =
     add_predef_exns_to_environment
-      ~env:(E.create ~never_inline:false ~backend ~round)
+      ~env:(E.create ~never_inline ~backend ~round)
       ~backend
   in
   let result, r = simplify_program initial_env r program in

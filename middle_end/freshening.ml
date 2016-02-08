@@ -313,12 +313,7 @@ module Project_var = struct
             let funs = Variable.Map.add id func_decl funs in
             funs, subst)
           func_decls.funs (Variable.Map.empty, subst) in
-      let current_unit = Compilation_unit.get_current_exn () in
-      let function_decls =
-        Flambda.create_function_declarations
-          ~set_of_closures_id:(Set_of_closures_id.create current_unit)
-          ~funs
-      in
+      let function_decls = Flambda.update_function_declarations func_decls ~funs in
       function_decls, Active subst, t
 
   let apply_closure_id t closure_id =

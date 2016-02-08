@@ -26,35 +26,36 @@ module Env = struct
     approx_mutable : Simple_value_approx.t Mutable_variable.Map.t;
     approx_sym : Simple_value_approx.t Symbol.Map.t;
     projections : Variable.t Projection.Map.t;
-    current_functions : Set_of_closures_id.Set.t;
+    current_functions : Set_of_closures_origin.Set.t;
     (* The functions currently being declared: used to avoid inlining
        recursively *)
     inlining_level : int;
-    inside_branch : int;
     (* Number of times "inline" has been called recursively *)
+    inside_branch : int;
     freshening : Freshening.t;
     never_inline : bool ;
-    possible_unrolls : int;
+    never_inline_inside_closures : bool;
+    never_inline_outside_closures : bool;
+    unroll_counts : int Set_of_closures_origin.Map.t;
     closure_depth : int;
     inlining_stats_closure_stack : Inlining_stats.Closure_stack.t;
   }
 
   let create ~never_inline ~backend ~round =
-    let possible_unrolls =
-      Clflags.Int_arg_helper.get ~key:round !Clflags.unroll
-    in
     { backend;
       round;
       approx = Variable.Map.empty;
       approx_mutable = Mutable_variable.Map.empty;
       approx_sym = Symbol.Map.empty;
       projections = Projection.Map.empty;
-      current_functions = Set_of_closures_id.Set.empty;
+      current_functions = Set_of_closures_origin.Set.empty;
       inlining_level = 0;
       inside_branch = 0;
       freshening = Freshening.empty;
       never_inline;
-      possible_unrolls;
+      never_inline_inside_closures = false;
+      never_inline_outside_closures = false;
+      unroll_counts = Set_of_closures_origin.Map.empty;
       closure_depth = 0;
       inlining_stats_closure_stack =
         Inlining_stats.Closure_stack.create ();
@@ -217,13 +218,13 @@ module Env = struct
   let activate_freshening t =
     { t with freshening = Freshening.activate t.freshening }
 
-  let enter_set_of_closures_declaration ident t =
+  let enter_set_of_closures_declaration origin t =
     { t with
       current_functions =
-        Set_of_closures_id.Set.add ident t.current_functions; }
+        Set_of_closures_origin.Set.add origin t.current_functions; }
 
-  let inside_set_of_closures_declaration closure_id t =
-    Set_of_closures_id.Set.mem closure_id t.current_functions
+  let inside_set_of_closures_declaration origin t =
+    Set_of_closures_origin.Set.mem origin t.current_functions
 
   let at_toplevel t =
     t.closure_depth = 0
@@ -248,53 +249,94 @@ module Env = struct
     }
 
   let set_never_inline t =
-    { t with never_inline = true }
+    if t.never_inline then t
+    else { t with never_inline = true }
 
-  let unrolling_allowed t =
-    t.possible_unrolls > 0
+  let set_never_inline_inside_closures t =
+    if t.never_inline_inside_closures then t
+    else { t with never_inline_inside_closures = true }
 
-  let inside_unrolled_function t =
-    { t with possible_unrolls = t.possible_unrolls - 1 }
+  let unset_never_inline_inside_closures t =
+    if t.never_inline_inside_closures then
+      { t with never_inline_inside_closures = false }
+    else t
+
+  let set_never_inline_outside_closures t =
+    if t.never_inline_outside_closures then t
+    else { t with never_inline_outside_closures = true }
+
+  let unset_never_inline_outside_closures t =
+    if t.never_inline_outside_closures then
+      { t with never_inline_outside_closures = false }
+    else t
+
+  let unrolling_allowed t origin =
+    let unroll_count =
+      try
+        Set_of_closures_origin.Map.find origin t.unroll_counts
+      with Not_found ->
+        Clflags.Int_arg_helper.get ~key:t.round !Clflags.unroll
+    in
+    unroll_count > 0
+
+  let inside_unrolled_function t origin =
+    let unroll_count =
+      try
+        Set_of_closures_origin.Map.find origin t.unroll_counts
+      with Not_found ->
+        Clflags.Int_arg_helper.get ~key:t.round !Clflags.unroll
+    in
+    let unroll_counts =
+      Set_of_closures_origin.Map.add origin (unroll_count - 1) t.unroll_counts
+    in
+    { t with unroll_counts }
 
   let inlining_level t = t.inlining_level
   let freshening t = t.freshening
-  let never_inline t = t.never_inline
+  let never_inline t = t.never_inline || t.never_inline_outside_closures
 
-  (* CR-soon mshinwell: this is a bit contorted (see use in
-     inlining_decision.ml) *)
   let note_entering_closure t ~closure_id ~debuginfo =
-    { t with
-      inlining_stats_closure_stack =
-        Inlining_stats.Closure_stack.note_entering_closure
-          t.inlining_stats_closure_stack ~closure_id ~debuginfo;
-    }
+    if t.never_inline then t
+    else
+      { t with
+        inlining_stats_closure_stack =
+          Inlining_stats.Closure_stack.note_entering_closure
+            t.inlining_stats_closure_stack ~closure_id ~debuginfo;
+      }
 
   let note_entering_call t ~closure_id ~debuginfo =
-    { t with
-      inlining_stats_closure_stack =
-        Inlining_stats.Closure_stack.note_entering_call
-          t.inlining_stats_closure_stack ~closure_id ~debuginfo;
-    }
+    if t.never_inline then t
+    else
+      { t with
+        inlining_stats_closure_stack =
+          Inlining_stats.Closure_stack.note_entering_call
+            t.inlining_stats_closure_stack ~closure_id ~debuginfo;
+      }
 
   let note_entering_inlined t =
-    { t with
-      inlining_stats_closure_stack =
-        Inlining_stats.Closure_stack.note_entering_inlined
-          t.inlining_stats_closure_stack;
-    }
+    if t.never_inline then t
+    else
+      { t with
+        inlining_stats_closure_stack =
+          Inlining_stats.Closure_stack.note_entering_inlined
+            t.inlining_stats_closure_stack;
+      }
 
   let note_entering_specialised t ~closure_ids =
-    { t with
-      inlining_stats_closure_stack =
-        Inlining_stats.Closure_stack.note_entering_specialised
-          t.inlining_stats_closure_stack ~closure_ids;
-    }
+    if t.never_inline then t
+    else
+      { t with
+        inlining_stats_closure_stack =
+          Inlining_stats.Closure_stack.note_entering_specialised
+            t.inlining_stats_closure_stack ~closure_ids;
+      }
 
   let enter_closure t ~closure_id ~inline_inside ~debuginfo ~f =
     let t =
-      if inline_inside then t
+      if inline_inside && not t.never_inline_inside_closures then t
       else set_never_inline t
     in
+    let t = unset_never_inline_outside_closures t in
     f (note_entering_closure t ~closure_id ~debuginfo)
 
   let record_decision t decision =
