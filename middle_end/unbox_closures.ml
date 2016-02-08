@@ -25,6 +25,7 @@ module Transform = struct
 
   let precondition ~(set_of_closures : Flambda.set_of_closures) =
     !Clflags.unbox_closures
+      (* CR mshinwell: think about these conditions some more *)
       && not (Variable.Map.is_empty set_of_closures.free_vars)
       && (Variable.Map.is_empty set_of_closures.specialised_args
         || Flambda_utils.contains_stub set_of_closures.function_decls)

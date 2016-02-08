@@ -309,6 +309,16 @@ let mk_nostdlib f =
   " Do not add default directory to the list of include directories"
 ;;
 
+let mk_no_unbox_free_vars_of_closures f =
+  "-no-unbox-free-vars-of-closures", Arg.Unit f,
+  " Do not unbox variables that will appear inside function closures"
+;;
+
+let mk_no_unbox_specialised_args f =
+  "-no-unbox-specialised-args", Arg.Unit f,
+  " Do not unbox arguments to which functions have been specialised"
+;;
+
 let mk_o f =
   "-o", Arg.String f, "<file>  Set output file name to <file>"
 ;;
@@ -358,7 +368,7 @@ let mk_rectypes f =
 
 let mk_remove_unused_arguments f =
   "-remove-unused-arguments", Arg.Unit f,
-  " Remove unused function arguments (experimental)"
+  " Remove unused function arguments"
 ;;
 
 let mk_runtime_variant f =
@@ -402,7 +412,7 @@ let mk_dtimings f =
 
 let mk_unbox_closures f =
   "-unbox-closures", Arg.Unit f,
-  " Unbox closures into function arguments (experimental)"
+  " Pass free variables via specialised arguments rather than closures"
 ;;
 
 let mk_unsafe f =
@@ -747,6 +757,8 @@ module type Optcommon_options = sig
   val _unbox_closures : unit -> unit
   val _branch_inline_factor : string -> unit
   val _remove_unused_arguments : unit -> unit
+  val _no_unbox_free_vars_of_closures : unit -> unit
+  val _no_unbox_specialised_args : unit -> unit
   val _o2 : unit -> unit
   val _o3 : unit -> unit
 
@@ -990,6 +1002,8 @@ struct
     mk_nodynlink F._nodynlink;
     mk_nolabels F._nolabels;
     mk_nostdlib F._nostdlib;
+    mk_no_unbox_free_vars_of_closures F._no_unbox_free_vars_of_closures;
+    mk_no_unbox_specialised_args F._no_unbox_specialised_args;
     mk_o F._o;
     mk_o2 F._o2;
     mk_o3 F._o3;
@@ -1087,6 +1101,8 @@ module Make_opttop_options (F : Opttop_options) = struct
     mk_noprompt F._noprompt;
     mk_nopromptcont F._nopromptcont;
     mk_nostdlib F._nostdlib;
+    mk_no_unbox_free_vars_of_closures F._no_unbox_free_vars_of_closures;
+    mk_no_unbox_specialised_args F._no_unbox_specialised_args;
     mk_o2 F._o2;
     mk_o3 F._o3;
     mk_open F._open;

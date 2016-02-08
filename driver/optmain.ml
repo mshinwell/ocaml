@@ -156,6 +156,8 @@ module Options = Main_args.Make_optcomp_options (struct
   let _nodynlink = clear dlcode
   let _nolabels = set classic
   let _nostdlib = set no_std_include
+  let _no_unbox_free_vars_of_closures = clear unbox_free_vars_of_closures
+  let _no_unbox_specialised_args = clear unbox_specialised_args
   let _o s = output_name := Some s
   (* CR mshinwell: should stop e.g. -O2 -classic-inlining
      lgesbert: could be done in main() below, like for -pack and -c, but that

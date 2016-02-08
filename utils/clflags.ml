@@ -181,6 +181,8 @@ let inline_lifting_benefit =
 
 let print_timings = ref false          (* -timings *)
 
+let unbox_specialised_args = ref true
+let unbox_free_vars_of_closures = ref true
 let unbox_closures = ref false          (* -unbox-closures *)
 let remove_unused_arguments = ref false (* -remove-unused-arguments *)
 

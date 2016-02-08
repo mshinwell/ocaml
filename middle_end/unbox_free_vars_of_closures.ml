@@ -53,7 +53,7 @@ let add_lifted_projections_around_set_of_closures
       ~name:pass_name)
 
 let run ~env ~(set_of_closures : Flambda.set_of_closures) =
-  if !Clflags.classic_inlining then
+  if not !Clflags.unbox_free_vars_of_closures then
     None
   else
     let definitions_indexed_by_new_inner_vars, _, free_vars, done_something =
