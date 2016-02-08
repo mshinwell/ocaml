@@ -14,6 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+
 (* CR-someday mshinwell: Move these three types into their own modules. *)
 
 type project_closure = {

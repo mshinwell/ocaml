@@ -14,6 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+
 let register ~pass_name =
   Clflags.all_passes := pass_name :: !Clflags.all_passes
 

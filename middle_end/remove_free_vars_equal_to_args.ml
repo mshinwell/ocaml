@@ -14,6 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+
 let pass_name = "remove-free-vars-equal-to-args"
 let () = Pass_wrapper.register ~pass_name
 
