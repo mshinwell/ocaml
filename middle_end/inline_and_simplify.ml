@@ -1044,11 +1044,13 @@ and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
     match
       Unbox_closures.rewrite_set_of_closures ~env ~set_of_closures
     with
-      | Some expr ->
+      | Some (expr, benefit) ->
+        let r = R.add_benefit r benefit in
         simplify env r expr ~pass_name:"Unbox_closures"
       | None ->
         match Unbox_free_vars_of_closures.run ~env ~set_of_closures with
-        | Some expr ->
+        | Some (expr, benefit) ->
+          let r = R.add_benefit r benefit in
           simplify env r expr ~pass_name:"Unbox_free_vars_of_closures"
         | None ->
           (* CR mshinwell: should maybe add one allocation for the stub *)
@@ -1056,7 +1058,8 @@ and simplify_named env r (tree : Flambda.named) : Flambda.named * R.t =
             Unbox_specialised_args.rewrite_set_of_closures ~env
               ~set_of_closures
           with
-          | Some expr ->
+          | Some (expr, benefit) ->
+            let r = R.add_benefit r benefit in
             simplify env r expr ~pass_name:"Unbox_specialised_args"
           | None ->
             match

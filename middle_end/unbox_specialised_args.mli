@@ -39,4 +39,4 @@
 val rewrite_set_of_closures
    : env:Inline_and_simplify_aux.Env.t
   -> set_of_closures:Flambda.set_of_closures
-  -> Flambda.expr option
+  -> (Flambda.expr * Inlining_cost.Benefit.t) option

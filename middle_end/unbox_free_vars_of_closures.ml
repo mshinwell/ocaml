@@ -16,6 +16,8 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+module B = Inlining_cost.Benefit
+
 let pass_name = "unbox-free-vars-of-closures"
 let () = Pass_wrapper.register ~pass_name
 let variable_suffix = ""
@@ -23,10 +25,14 @@ let variable_suffix = ""
 (* CR-someday mshinwell: Nearly but not quite the same as something that
    Augment_specialised_args uses. *)
 let add_lifted_projections_around_set_of_closures
-      ~set_of_closures ~existing_inner_to_outer_vars
+      ~set_of_closures ~existing_inner_to_outer_vars ~benefit
       ~definitions_indexed_by_new_inner_vars =
+  let body =
+    Flambda_utils.name_expr (Set_of_closures set_of_closures)
+      ~name:pass_name
+  in
   Variable.Map.fold (fun new_inner_var (projection : Projection.t)
-            expr ->
+            (expr, benefit) ->
       let find_outer_var inner_var =
         match
           Variable.Map.find inner_var existing_inner_to_outer_vars
@@ -39,6 +45,7 @@ let add_lifted_projections_around_set_of_closures
             Variable.print inner_var
             Projection.print projection
       in
+      let benefit = B.add_projection projection benefit in
       let named : Flambda.named =
         (* The lifted projection must be in terms of outer variables,
            not inner variables. *)
@@ -47,10 +54,12 @@ let add_lifted_projections_around_set_of_closures
         in
         Flambda_utils.projection_to_named projection
       in
-      Flambda.create_let (find_outer_var new_inner_var) named expr)
+      let expr =
+        Flambda.create_let (find_outer_var new_inner_var) named expr
+      in
+      (expr, benefit))
     definitions_indexed_by_new_inner_vars
-    (Flambda_utils.name_expr (Set_of_closures set_of_closures)
-      ~name:pass_name)
+    (body, benefit)
 
 let run ~env ~(set_of_closures : Flambda.set_of_closures) =
   if not !Clflags.unbox_free_vars_of_closures then
@@ -150,15 +159,16 @@ let run ~env ~(set_of_closures : Flambda.set_of_closures) =
             ~free_vars
             ~specialised_args:set_of_closures.specialised_args
         in
-        let expr =
+        let expr, benefit =
           add_lifted_projections_around_set_of_closures ~set_of_closures
+            ~benefit:B.zero
             ~existing_inner_to_outer_vars:set_of_closures.free_vars
             ~definitions_indexed_by_new_inner_vars
         in
-        Some expr
+        Some (expr, benefit)
 
 let run ~env ~set_of_closures =
   Pass_wrapper.with_dump ~pass_name ~input:set_of_closures
     ~print_input:Flambda.print_set_of_closures
-    ~print_output:Flambda.print
+    ~print_output:(fun ppf (expr, _) -> Flambda.print ppf expr)
     ~f:(fun () -> run ~env ~set_of_closures)

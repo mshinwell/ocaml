@@ -278,6 +278,10 @@ module Result : sig
     -> (Inlining_cost.Benefit.t -> Inlining_cost.Benefit.t)
     -> t
 
+  (** Add some benefit to the inlining benefit stored within the
+      given result structure. *)
+  val add_benefit : t -> Inlining_cost.Benefit.t -> t
+
   (** Set the benefit of inlining the subexpression corresponding to the
       given result structure to zero. *)
   val reset_benefit : t -> t

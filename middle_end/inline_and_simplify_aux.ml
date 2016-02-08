@@ -408,6 +408,9 @@ module Result = struct
   let map_benefit t f =
     { t with benefit = f t.benefit }
 
+  let add_benefit t b =
+    { t with benefit = Inlining_cost.Benefit.(+) t.benefit b }
+
   let benefit t = t.benefit
 
   let reset_benefit t =
