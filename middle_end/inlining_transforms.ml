@@ -117,7 +117,10 @@ let inline_by_copying_function_body ~env ~r
       ~(function_decl : Flambda.function_declaration) ~args ~simplify =
   assert (E.mem env lhs_of_application);
   assert (List.for_all (E.mem env) args);
-  let r = R.map_benefit r B.remove_call in
+  let r =
+    if function_decl.stub then r
+    else R.map_benefit r B.remove_call
+  in
   let freshened_params, body =
     copy_of_function's_body_with_freshened_params env ~function_decl
   in
