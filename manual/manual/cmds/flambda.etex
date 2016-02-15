@@ -1,0 +1,238 @@
+\chapter{Optimisation with Flambda}
+\pdfchapterfold{-9}{Optimisation with Flambda}
+%HEVEA\cutname{flambda.html}
+
+\section{Overview}
+
+{\em Flambda} is the term used to describe a series of new optimisation
+passes introduced with OCaml 4.03.  These passes form a new
+``middle-end'' of the native code compiler: they come after parsing and type
+inference, but before the lower-level backend passes that ultimately lead
+to machine code.
+
+To use the Flambda optimisers it is necessary to pass the {\tt -flambda}
+option to the OCaml {\tt configure} script.
+
+\section{Command-line flags}
+
+The Flambda optimisers provide a variety of command-line flags that may
+be used to control their behaviour.
+
+\section{Terminology}
+
+The following terminology is used in this chapter of the manual.
+
+\begin{itemize}
+\item[Constant] Something (typically an expression) the value of which is
+known by the compiler at compile time.  Constantness may be explicit from
+the source code or inferred by the Flambda optimisers.
+\item[Constant closure] A closure that has no dependency on its environment
+of definition.
+\item[Direct call site] A place in a program's code where a function is
+called and it is known at compile time which function it will always be.
+\item[Indirect call site] A place in a program's code where a function is
+called but is not known to be a {\em direct call site}.
+\item[Program] A collection of {\em symbol bindings}.
+\item[Symbol binding] Analogous to a {\em let}-expression but working at the
+level of symbols defined in the object file.  The address of a symbol is
+fixed, but it may be bound to both constant and non-constant expressions.
+\item[Toplevel] An expression in the current program
+\end{itemize}
+
+\section{Code transformations}
+
+\subsection{Lifting of constants}
+
+Expressions found to be constant will be lifted to symbol bindings when
+they evaluate to boxed values.  Such constants may be straightforward numeric
+constants, such as the floating-point number {\tt 42.0}, or more complicated
+values such as constant closures.
+
+Lifting of constants to toplevel reduces allocation at runtime.
+
+\subsection{Lifting of toplevel let bindings}
+
+Toplevel {\tt let}-expressions may be lifted to symbol bindings to ensure
+that the corresponding bound variables are not captured by closures.  If the
+defining expression of a given binding is found to be constant, it is bound
+as such; otherwise, the symbol is bound to a (statically-allocated)
+{\em preallocated block} containing one field.  At runtime, the defining
+expression will be evaluated and the first field of the block filled with
+the resulting value.  This causes one extra indirection but ensures, by
+virtue of the symbol's address being known at compile time, that uses of the
+value are not captured by closures.
+
+\subsection{Unboxing of closure variables}
+
+This transformation is enabled by default.  It may be disabled using the
+{\tt -no-unbox-free-vars-of-closures} flag.
+
+Variables that appear in closure environments may themselves be boxed
+values.  As such, they may be split into further closure variables, each
+of which corresponds to some projection from the original closure variable(s).
+This transformation is called {\em unboxing of closure variables} or
+{\em unboxing of free variables of closures}.  It is only applied when
+reasonable certainty that there are no uses of the boxed free variable itself
+within the corresponding function bodies.
+% CR mshinwell: Actually, we probably don't check this carefully enough.
+% It needs a global analysis in case there is an out-of-scope projection.
+
+\paragraph{Example:} In the following code, the compiler observes that
+the closure returned from the function {\tt f} has a free variable {\tt pair}
+that may be split into two separate variables.
+\begin{verbatim}
+let f x0 x1 =
+  let pair = x0, x1 in
+  Printf.printf "foo\n";
+  fun y ->
+    fst pair + snd pair + y
+\end{verbatim}
+After some simplification one obtains:
+\begin{verbatim}
+let f x0 x1 =
+  let pair_0 = x0 in
+  let pair_1 = x1 in
+  Printf.printf "foo\n";
+  fun y ->
+    pair_0 + pair_1 + y
+\end{verbatim}
+and then:
+\begin{verbatim}
+let f x0 x1 =
+  Printf.printf "foo\n";
+  fun y ->
+    x0 + x1 + y
+\end{verbatim}
+The allocation of the pair has been eliminated.
+
+This transformation does not operate if it would cause the closure to
+contain more than twice as many closure variables as it did beforehand.
+
+\subsection{Unboxing of specialised arguments}
+
+This transformation is enabled by default.  It may be disabled using the
+{\tt -no-unbox-specialised-args} flag.
+
+It may become the case during compilation that one or more invariant arguments
+to a function become specialised to a particular value.  When such values are
+boxed the corresponding specialised arguments may be split into more
+specialised arguments corresponding to the projections out of the boxed
+value that occur within the function body.  This transformation is called
+{\em unboxing of specialised arguments}.  It is only applied when there is
+reasonable certainty that the boxed argument itself is unused within the
+function.
+
+If the function in question is involved in a recursive group then unboxing
+of specialised arguments may be immediately replicated across the group
+based on the dataflow between invariant arguments.
+
+\paragraph{Example:} In the following code, having inlined {\tt loop}
+into {\tt f}, the compiler observes {\tt env}
+being invariant and always the pair formed by adding {\tt 42} and {\tt 43}
+to the argument {\tt x} of the function {\tt f}.
+\begin{verbatim}
+let rec loop inv xs =
+  match xs with
+  | [] -> fst inv + snd inv
+  | x::xs -> x + loop2 xs inv
+and loop2 ys inv =
+  match ys with
+  | [] -> 4
+  | y::ys -> y - loop inv ys
+
+let f x =
+  Printf.printf "%d\n" (loop (x + 42, x + 43) [1;2;3])
+\end{verbatim}
+Since the functions have sufficiently few arguments, more specialised
+arguments will be added.  After some simplification one obtains:
+\begin{verbatim}
+let f x =
+  let rec loop' xs inv_0 inv_1 =
+    match xs with
+    | [] -> inv_0 + inv_1
+    | x::xs -> x + loop2' xs inv_0 inv_1
+  and loop2' ys inv_0 inv_1 =
+    match ys with
+    | [] -> 4
+    | y::ys -> y - loop' ys inv_0 inv_1
+  in
+  Printf.printf "%d\n" (loop' (x + 42) (x + 43) [1;2;3])
+\end{verbatim}
+The allocation of the pair within {\tt f} has been removed.  Since the
+two closures for {\tt loop'} and {\tt loop2'} are constant they will be
+lifted to toplevel with no runtime allocation penalty.
+
+The transformation to unbox specialised arguments never introduces extra
+allocation.
+
+The transformation will not unbox arguments if it would result in the
+original function having sufficiently many arguments so as to inhibit
+tail-call optimisation.
+
+The transformation is implemented by creating a wrapper function that
+accepts the original arguments.  Meanwhile, the original function is renamed
+and extra arguments are added corresponding to the unboxed specialised
+arguments; this is called from the wrapper.  The wrapper will then be inlined
+at direct call sites.
+
+\subsection{Unboxing of closures}
+
+This transformation is {\em not} enabled by default.  It may be enabled
+using the {\tt -unbox-closures} flag.
+
+The transformation replaces closure variables by specialised arguments.
+The aim is to cause more closures to become closed, in particular in
+difficult situations where unboxing of specialised arguments and/or
+closure variables is not sufficient.
+
+\paragraph{Simple example:} In the following code,
+\begin{verbatim}
+let f x =
+  let g y =
+    x + y
+  in
+  (g [@inlined never]) 42
+\end{verbatim}
+Unboxing of the closure 
+
+The transformation is implemented by adding a new wrapper function in the
+manner of that used when unboxing specialised arguments.  The closure
+variables are still free in the wrapper, but the intention is that when
+the wrapper is inlined at direct call sites, the relevant values are
+passed directly to the main function via the new specialised arguments.
+
+\paragraph{Harder example:} In the following code, there are two closure
+variables that would typically cause a closure allocation.  One is called
+{\tt fv} and occurs inside the function {\tt map2}; the other is called
+{\tt z} and occurs inside the function {\tt g}.  Owing to the fact that
+this toy (yet sophisticated) example uses a small function passed as the
+first argument of {\tt map2}, we add an attribute to ensure that the
+allocation cannot be removed without unboxing of closures.
+\begin{verbatim}
+let bar c =
+  let rec g zs fv =
+    match zs with
+    | [] -> []
+    | z::zs ->
+      let rec map2 f = function
+        | [] -> []
+        | a::l -> let r = fv + ((f [@inlined never]) a) in r :: map2 f l
+      in
+      (map2 (fun y -> z + y) [z; 2; 3; 4]) @ g zs fv
+  in
+  Printf.printf "%d" (List.length (g [1;2;3;4] c))
+\end{verbatim}
+The resulting code passes the free variables via function arguments in
+order to eliminate all closure allocation in this example (aside from any
+that may be performed inside {\tt printf}).
+
+\section{Compilation of statically-allocated modules}
+
+Compilation of modules that are able to be statically allocated (for example,
+the module corresponding to an entire compilation unit, as opposed to a first
+class module dependent on values computed at runtime) initially follows the
+strategy used for bytecode.  A sequence of {\tt let}-bindings, which may be
+interspersed with arbitrary effects, surrounds a record creation that becomes
+the module block.  The Flambda-specific transformation follows: these bindings
+are lifted to toplevel symbols, as described above.
+
