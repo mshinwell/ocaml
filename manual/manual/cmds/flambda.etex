@@ -370,16 +370,48 @@ that the code size along the hot path is kept smaller, such as to increase
 locality.
 
 The inliner is directed using attributes.
-For non-recursive functions the following are supported:
+For non-recursive functions (and one-step unrolling of recursive functions,
+although {\tt [\@unroll]} is more clear for this purpose)
+the following are supported:
 \begin{options}
 \item[{\machine{\@\@inline always}} or {\machine{\@\@inline never}}] Attached
 to a declaration of a function or functor, these direct the inliner to either
-always or never inline, irrespective of the size/benefit calculation.
+always or never inline, irrespective of the size/benefit calculation.  (If
+the function is recursive then the body is substituted and no special
+action is taken for the recursive call site(s).)
 \item[{\machine{\@inlined always}} or {\machine{\@inlined never}}] Attached
 to a function application, these direct the inliner likewise.  These
 attributes at call sites override any other attribute that may be present
 on the corresponding declaration.
 \end{options}
+
+For recursive functions the relevant attributes are:
+\begin{options}
+\item[{\machine{\@\@specialise}}] Attached to a declaration of a function
+or functor, this directs the inliner to always specialise the function so
+long as it has appropriate contextual knowledge, irrespective of the
+size/benefit calculation.
+\item[{\machine{\@specialised}}] Attached to a function application, this
+directs the inliner likewise.  This attribute at a call site overrides any
+other attribute that may be present on the corresponding declaration.
+\item[{\machine{\@unrolled }}$n$] This attribute is attached to a function
+application and takes an integer argument.  Each time the inliner sees
+the attribute it behaves as follows:
+\begin{itemize}
+\item If $n$ is zero or less, nothing happens.
+\item Otherwise the function being called is substituted at the call site
+with its body having been rewritten such that 
+any recursive calls to that function {\em or
+any others in the same mutually-recursive group} are annotated with the
+attribute {\tt unrolled(}$n - 1${\tt )}.  Inlining may continue on that body.
+\end{itemize}
+As such, $n$ behaves as the ``maximum depth of unrolling''.
+\end{options}
+
+A compiler warning will be emitted if it was found impossible to obey an
+annotation from an {\tt [\@inlined]} or {\tt [\@specialised]}
+attribute.
+
 \paragraph{Example showing correct placement of attributes}
 \begin{verbatim}
 module F (M : sig type t end) = struct
@@ -393,27 +425,6 @@ end [@@inline never]
 
 module X = F [@inlined] (struct type t = int end)
 \end{verbatim}
-
-For recursive functions the relevant attributes are:
-\begin{options}
-\item[{\machine{\@\@specialise}}] Attached to a declaration of a function
-or functor, this directs the inliner to always specialise the function so
-long as it has appropriate contextual knowledge, irrespective of the
-size/benefit calculation.
-\item[{\machine{\@specialised}}] Attached to a function application, this
-directs the inliner likewise.  This attribute at a call site overrides any
-other attribute that may be present on the corresponding declaration.
-\item[{\machine{\@unrolled }}$n$] Attached to a function application, this
-directs the inliner to unroll the function body at least $n$ times.  If the
-function in question is part of a mutually-recursive group, each call
-discovered to {\em any} of the functions in the group will decrement the
-counter.
-% CR mshinwell: need to explain this better
-\end{options}
-
-A compiler warning will be emitted if it was found impossible to obey an
-annotation from an {\tt [\@inlined]} or {\tt [\@specialise]}
-attribute.
 
 \section{Other code transformations}
 
