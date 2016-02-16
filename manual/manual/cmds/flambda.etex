@@ -25,13 +25,25 @@ are given in the sections that follow.
 Commonly-used options:
 \begin{options}
 \item[\machine{-Oclassic}] Make inlining decisions at the point of
-definition of a function rather than at the call site(s).  This produces
-smaller {\tt .cmx} files and shorter compilation times.
-\item[\machine{-O2}] Perform more optimistation than usual.  Compilation
+definition of a function rather than at the call site(s).  This mirrors
+the behaviour of OCaml compilers not using Flambda.  It produces
+smaller {\tt .cmx} files, shorter compilation times and code that probably
+runs rather slower.
+\item[\machine{-O2}] Perform more optimisation than usual.  Compilation
 times may be lengthened.
 \item[\machine{-O3}] Perform even more optimisation than usual, possibly
 including unrolling of recursive functions.  Compilation times may be
 significantly lengthened.
+\item[\machine{-inlining-report}] Emit {\tt .inlining} files (one per
+round of optimisation) showing all of the inliner's decisions.
+\end{options}
+
+Less commonly-used options:
+\begin{options}
+\item[\machine{-remove-unused-arguments}] Remove unused function arguments
+even when the argument is not specialised.
+\item[\machine{-unbox-closures}] Pass free variables via specialised arguments
+rather than closures.
 \end{options}
 
 Advanced options:
@@ -51,18 +63,22 @@ performance penalties associated with various operations.
 search for inlining opportunities.
 \item[\machine{-inline-max-unroll}] The maximum number of times a given
 function may be unrolled per round of optimisation.
-\item[\machine{-inlining-report}] Emit {\tt .inlining} files (one per
-round of optimisation) showing all of the inliner's decisions.
 \item[\machine{-no-unbox-free-vars-of-closures}] %
 Do not unbox closure variables.
 \item[\machine{-no-unbox-specialised-args}] %
 Do not unbox arguments to which functions have been specialised.
-\item[\machine{-remove-unused-arguments}] Remove unused function arguments
-even when the argument is not specialised.
 \item[\machine{-rounds}] How many rounds of optimisation to perform.
-\item[\machine{-unbox-closures}] Pass free variables via specialised arguments
-rather than closures.
 \end{options}
+
+\paragraph{Notes}
+\begin{itemize}
+\item Flambda-specific flags are silently accepted even when the
+{\tt -flambda} option was not provided.  This is intended to make it more
+straightforward to run benchmarks with and without the Flambda optimisers
+in effect.
+\item Some of the Flambda flags may be subject to change in future
+releases.
+\end{itemize}
 
 \subsection{Specification of optimisation parameters by round}
 
@@ -119,10 +135,290 @@ enclosed within any function declaration.
 {\tt let} expression, pattern-matching construction, or similar.
 \end{itemize}
 
-\section{Code transformations}
+\section{Inlining}
 
-This section details the various code transformations performed by the
-Flambda passes.  Transformations are permanently enabled unless noted
+Flambda provides significantly enhanced inlining capabilities relative to
+previous versions of the compiler.  Unlike such previous versions, all
+functions are eligible for inlining.
+
+\subsection{When inlining is performed}
+
+Inlining is performed together with all of the other Flambda optimisation
+passes, that is to say, after closure conversion.  This has three particular
+advantages over a potentially more straightforward implementation prior to
+closure conversion:
+\begin{itemize}
+\item It permits higher-order inlining, for example when a non-inlinable
+function always returns the same function yet with different environments
+of definition.  Not all such cases are supported yet, but it is intended
+that they will be.
+\item It is easier to integrate with cross-module optimisation, since
+imported information about other modules is already in the correct
+intermediate language.
+\item It becomes more straightforward to control which variables end up
+in which closures, helping to avoid closure bloat.
+\end{itemize}
+
+\subsection{Classic inlining heuristic}
+
+In {\tt -Oclassic} mode the behaviour of Flambda mimics previous versions
+of the compiler.  At the definition site of a function, the body of the
+function is measured.  It will then be marked as eligible for inlining
+(and hence inlined at every direct call site) if:
+\begin{itemize}
+\item the measured size is smaller than that of a
+function call plus the argument of the {\tt -inline} command-line flag; and
+\item the function does not contain a definition of (another) function; and
+\item the function is not recursive.
+\end{itemize}
+
+Without {\tt -Oclassic} then:
+\begin{itemize}
+\item the inlining decision is made at the {\bf call site};
+\item local functions do not prevent their parents from being inlined;
+\item recursive functions can be handled, by {\em specialisation} (see
+below);
+\item functions that are only discovered after an initial pass of inlining
+may themselves be eligible for inlining.
+\end{itemize}
+
+Making the inlining decision at the call site helps in situations where
+the context is important.  For example:
+\begin{verbatim}
+let f b x =
+  if b then
+    x
+  else
+    big expression
+
+let g x = f true x
+\end{verbatim}
+In this case, we would like to inline {\tt f} into {\tt g}, because a
+conditional jump can be eliminated and the code size should reduce.  If the
+inlining decision has been made after the declaration of {\tt f} without
+seeing the use, its size would have probably made it ineligible for
+inlining; but at the call site, its final size can be known.  Further,
+this function should probably not be inlined systematically: if {\tt b}
+is unknown, or indeed {\tt false}, there is little benefit to trade off
+against a large increase in code size.  In the existing non-Flambda inliner
+this isn't a great problem because chains of inlining were cut off farly
+quickly.  However it has led to excessive use of excessively large inlining
+parameters such as {\tt -inline 10000}.
+
+The remainder of this section discusses the various strategies available
+in the normal Flambda mode.
+
+\subsection{Assessment of inlining benefit}
+
+The various inlining strategies described below involve a {\em search}
+coupled with exploratory applications of an inlining strategy at call
+sites.  (The search
+procedure is described fully in the next subsection.)
+After having performed each exploratory inlining a decision is made as to
+whether to keep the resulting inlined version of the code.  Inlining typically
+results in an increase in code size, which if left unchecked, may not only
+lead to excessively large executables and compilation times but also
+a decrease in performance due to cache effects.  As such, the
+Flambda inliner trades off the change in code size against
+the expected runtime performance benefit, with the benefit being computed
+based on the number of operations that the compiler observes may be removed
+as a result of inlining.  For example in the previous example:
+\begin{verbatim}
+let f b x =
+  if b then
+    x
+  else
+    big expression
+
+let g x = f true x
+\end{verbatim}
+it would be observed that inlining of {\tt f} would remove:
+\begin{itemize}
+\item one direct call;
+\item one conditional branch.
+\end{itemize}
+
+Formally, an estimate of runtime performance benefit is computed by summing
+the cost of the operations that are known to be removed as a result of the
+inlining and subsequent simplification of the inlined body.
+The individual costs for the various kinds of operations may be adjusted
+using the various {\tt -inline-...-cost} flags:
+\begin{options}
+\item[\machine{-inline-alloc-cost}] The cost of an allocation.
+\item[\machine{-inline-branch-cost}] The cost of a branch.
+\item[\machine{-inline-call-cost}] The cost of a direct function call.
+\item[\machine{-inline-indirect-cost}] The cost of an indirect function call.
+\item[\machine{-inline-prim-cost}] The cost of a {\em primitive}.  Primitives
+encompass operations including arithmetic and memory access.
+\end{options}
+
+The change in code size is also estimated: morally speaking it should be the
+change in machine code size, but since that is not available to the inliner,
+an approximation is used.
+
+If the benefit exceeds the increase in code size then the inlined version of
+the function will be kept.
+
+\subsection{Inlining search procedure}
+
+...
+
+It should be noted that in certain circumstances, to keep compilation times
+under control, the search may be automatically cut off based on information
+known to the inliner.  For example, certain larger non-recursive functions
+may never be considered for inlining if it is known that the contextual
+information available to the inliner would be insufficient for the inlining
+to be beneficial.
+
+\subsection{Inlining of non-recursive functions}
+
+A non-recursive function is straightforward to inline: a copy of the
+function body is taken and inserted at the call site.
+
+\subsection{Inlining of functors}
+
+There is nothing particular about functors that inhibits inlining compared
+to normal functions.  To the inliner, these both look the same, except
+that functors are marked as such.
+
+Applications of functors at toplevel will be given
+an additional benefit (which may be controlled by the
+{\tt -inline-lifting-benefit} flag) to bias inlining in such situations
+towards keeping the inlined version.
+
+Applications of functors not at toplevel, for example in a local module
+inside some other expression, are treated by the inliner identically to
+normal function calls.
+
+\subsection{Specialisation of recursive functions}
+
+The inliner may discover a call site to a recursive function where
+something is known about the arguments: for example, they may be equal to
+some other variables currently in scope.  In this situation it may be
+beneficial to {\em specialise} the function to those arguments.  This is
+done by copying the declaration of the function (and any others involved
+in any same mutually-recursive declaration) and noting the extra information
+about the arguments.  The arguments augmented by this information are known
+as {\em specialised arguments}.  In order to try to ensure that specialisation
+is not performed uselessly, arguments are only specialised if it can be shown
+that they are {\em invariant}: in other words, during the execution of the
+recursive function(s) themselves, the arguments never change.
+
+\paragraph{Example: the well-known {\tt List.iter} function}
+This function might be written like so:
+\begin{verbatim}
+let rec iter f l =
+  match l with
+  | [] -> ()
+  | h :: t ->
+    f h;
+    iter f t
+\end{verbatim}
+and used like this:
+\begin{verbatim}
+let do_iter f =
+  iter f [1; 2; 3]
+\end{verbatim}
+...
+(an example here f and g swap between two functions)
+...
+\paragraph{Aside on invariant parameters.} ...
+\begin{verbatim}
+let rec iter_swap f g l =
+  match l with
+  | [] -> ()
+  | 0 :: t ->
+    iter_swap g f l
+  | h :: t ->
+    f h;
+    iter_swap f g t
+\end{verbatim}
+
+It should be noted that the {\em unboxing of closures} pass (see below)
+can introduce specialised arguments on non-recursive functions.  (No other
+place in the compiler currently does this.)
+
+\subsection{Unrolling of recursive functions}
+
+If {\tt -O3} optimisation level is selected and/or the {\tt -inline-max-unroll}
+flag is passed with an argument greater than zero, the compiler will
+consider recursive functions as eligible for unrolling (analogous to
+loop peeling).
+
+Unrolling of a recursive function consists of applying the transformation for
+inlining non-recursive functions at the recursive call site(s) of the
+function.
+
+\subsection{Inlining reports}
+
+If the {\tt -inlining-report} option is provided to the compiler then a file
+will be emitted corresponding to each round of optimisation.  The files
+are named {\tt basename.}{\em round}{\tt.inlining.org} with {\em round} a
+zero-based integer.  Inside the files, which are formatted as ``org mode'',
+will be found English prose describing the decisions that the inliner took.
+
+\subsection{Directing the inliner}
+
+Should the inliner prove recalcitrant and refuse to inline a particular
+function, or if the observed inlining decisions are not to the programmer's
+satisfaction for some other reason, inlining behaviour can be dictated by the
+programmer directly in the source code.
+One example where this might be appropriate is when the programmer,
+but not the compiler, knows that a particular function call is on a cold
+code path.  It might be desirable to prevent inlining of the function so
+that the code size along the hot path is kept smaller, such as to increase
+locality.
+
+The inliner is directed using attributes.
+For non-recursive functions the following are supported:
+\begin{options}
+\item[{\machine{\@\@inline always}} or {\machine{\@\@inline never}}] Attached
+to a declaration of a function or functor, these direct the inliner to either
+always or never inline, irrespective of the size/benefit calculation.
+\item[{\machine{\@inlined always}} or {\machine{\@inlined never}}] Attached
+to a function application, these direct the inliner likewise.  These
+attributes at call sites override any other attribute that may be present
+on the corresponding declaration.
+\end{options}
+\paragraph{Example showing correct placement of attributes}
+\begin{verbatim}
+module F (M : sig type t end) = struct
+  let bar x =
+    x * 3
+  [@@inline never]
+
+  let foo x =
+    (bar [@inlined]) (42 + x)
+end [@@inline never]
+
+module X = F [@inlined] (struct type t = int end)
+\end{verbatim}
+
+For recursive functions the relevant attributes are:
+\begin{options}
+\item[{\machine{\@\@specialise}}] Attached to a declaration of a function
+or functor, this directs the inliner to always specialise the function so
+long as it has appropriate contextual knowledge, irrespective of the
+size/benefit calculation.
+\item[{\machine{\@specialised}}] Attached to a function application, this
+directs the inliner likewise.  This attribute at a call site overrides any
+other attribute that may be present on the corresponding declaration.
+\item[{\machine{\@unrolled }}$n$] Attached to a function application, this
+directs the inliner to unroll the function body at least $n$ times.  If the
+function in question is part of a mutually-recursive group, each call
+discovered to {\em any} of the functions in the group will decrement the
+counter.
+% CR mshinwell: need to explain this better
+\end{options}
+
+A compiler warning will be emitted if it was found impossible to obey an
+annotation from an {\tt [\@inlined]} or {\tt [\@specialise]}
+attribute.
+
+\section{Other code transformations}
+
+This section details the various remaining code transformations performed by
+the Flambda passes.  Transformations are permanently enabled unless noted
 otherwise.
 
 \subsection{Simplification}
@@ -149,11 +445,10 @@ The simplification pass removes unused {\tt let} bindings so long as
 their corresponding defining expressions have no side-effect.  (See
 the section ``Treatment of effects'' for more details.)
 
-\subsection{Inlining of non-recursive functions}
-
-\subsection{Specialisation of functions}
-
-\subsection{Unrolling of recursive functions}
+The propagation performed by the simplification pass is also important for
+discovering which functions flow to indirect call sites.  This can enable
+the transformation of such call sites into direct call sites, which makes
+them eligible for an inlining transformation.
 
 \subsection{Lifting of constants}
 
@@ -167,7 +462,33 @@ Lifting of constants to toplevel reduces allocation at runtime.
 % CR mshinwell: check exactly what happens here, e.g. across units
 Sharing of constants...
 
-Handling of float arrays...
+\paragraph{Notes about float arrays} %
+The following rules apply specifically to constant float arrays:
+\begin{itemize}
+\item Float arrays at the toplevel are mutable and never shared.  (That
+is to say, for each
+such definition there is a distinct symbol in the data section of the object
+file pointing at the array.)
+\item Float arrays not at toplevel are mutable and are created each time the
+expression is evaluated.  This can be thought of as an operation that takes
+an immutable array (which in the source code has no associated name; let
+us call it the {\em initialising array}) and
+duplicates it into a fresh mutable array.
+\begin{itemize}
+\item If the array is of size four or less, the expression will create a
+fresh block and write the values into it one by one.  There is no reference
+to the initialising array as a whole.
+
+\item Otherwise, the initialising array is lifted out and subject to the
+normal constant sharing procedure;
+creation of the array consists of bulk copying the initialising array
+into a fresh value on the OCaml heap.
+\end{itemize}
+\end{itemize}
+
+\subsection{Transformation of non-escaping references into mutable variables}
+
+
 
 \subsection{Removal of unused arguments}
 
@@ -204,6 +525,25 @@ location within the code due to inlining.)
 This transformation is analogous to the removal of {\tt let}-expressions
 whose defining expressions have no effects.  It operates instead on symbol
 bindings, removing those that have no effects.
+
+\subsection{Lifting of toplevel let bindings}
+
+Toplevel {\tt let}-expressions may be lifted to symbol bindings to ensure
+that the corresponding bound variables are not captured by closures.  If the
+defining expression of a given binding is found to be constant, it is bound
+as such; otherwise, the symbol is bound to a (statically-allocated)
+{\em preallocated block} containing one field.  At runtime, the defining
+expression will be evaluated and the first field of the block filled with
+the resulting value.  This causes one extra indirection but ensures, by
+virtue of the symbol's address being known at compile time, that uses of the
+value are not captured by closures.
+
+\section{Unboxing transformations}
+
+The transformations in this section relate to the splitting apart of
+{\em boxed} (that is to say, non-immediate) values.  They are largely
+intended to reduce allocation, which tends to result in a runtime
+performance profile with lower variance and smaller tails.
 
 \subsection{Unboxing of closure variables}
 
@@ -374,18 +714,6 @@ let bar c =
 The resulting code passes the free variables via function arguments in
 order to eliminate all closure allocation in this example (aside from any
 that may be performed inside {\tt printf}).
-
-\subsection{Lifting of toplevel let bindings}
-
-Toplevel {\tt let}-expressions may be lifted to symbol bindings to ensure
-that the corresponding bound variables are not captured by closures.  If the
-defining expression of a given binding is found to be constant, it is bound
-as such; otherwise, the symbol is bound to a (statically-allocated)
-{\em preallocated block} containing one field.  At runtime, the defining
-expression will be evaluated and the first field of the block filled with
-the resulting value.  This causes one extra indirection but ensures, by
-virtue of the symbol's address being known at compile time, that uses of the
-value are not captured by closures.
 
 \section{Treatment of effects}
 
