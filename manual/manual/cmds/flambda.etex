@@ -10,36 +10,150 @@ passes introduced with OCaml 4.03.  These passes form a new
 inference, but before the lower-level backend passes that ultimately lead
 to machine code.
 
+Flambda aims to make it easier to write idiomatic OCaml code without
+incurring performance penalties.
+
 To use the Flambda optimisers it is necessary to pass the {\tt -flambda}
 option to the OCaml {\tt configure} script.
 
 \section{Command-line flags}
 
 The Flambda optimisers provide a variety of command-line flags that may
-be used to control their behaviour.
+be used to control their behaviour.  Detailed descriptions of each flag
+are given in the sections that follow.
+
+Commonly-used options:
+\begin{options}
+\item[\machine{-Oclassic}] Make inlining decisions at the point of
+definition of a function rather than at the call site(s).  This produces
+smaller {\tt .cmx} files and shorter compilation times.
+\item[\machine{-O2}] Perform more optimistation than usual.  Compilation
+times may be lengthened.
+\item[\machine{-O3}] Perform even more optimisation than usual, possibly
+including unrolling of recursive functions.  Compilation times may be
+significantly lengthened.
+\end{options}
+
+Advanced options:
+\begin{options}
+\item[\machine{-inline}] Controls the aggressiveness of the search for
+inlining opportunities.
+\item[\machine{-inline-branch-factor},
+  \machine{-inline-alloc-cost},
+  \machine{-inline-branch-cost},
+  \machine{-inline-call-cost},
+  \machine{-inline-indirect-cost},
+  \machine{-inline-prim-cost}] Controls how the inliner assesses the runtime
+performance penalties associated with various operations.
+\item[\machine{-inline-lifting-benefit},
+  \machine{-inline-toplevel}] Controls inlining at toplevel.
+\item[\machine{-inline-max-depth}] A hard limit on the depth of the
+search for inlining opportunities.
+\item[\machine{-inline-max-unroll}] The maximum number of times a given
+function may be unrolled per round of optimisation.
+\item[\machine{-inlining-report}] Emit {\tt .inlining} files (one per
+round of optimisation) showing all of the inliner's decisions.
+\item[\machine{-no-unbox-free-vars-of-closures}] %
+Do not unbox closure variables.
+\item[\machine{-no-unbox-specialised-args}] %
+Do not unbox arguments to which functions have been specialised.
+\item[\machine{-remove-unused-arguments}] Remove unused function arguments
+even when the argument is not specialised.
+\item[\machine{-rounds}] How many rounds of optimisation to perform.
+\item[\machine{-unbox-closures}] Pass free variables via specialised arguments
+rather than closures.
+\end{options}
+
+\subsection{Specification of optimisation parameters by round}
+
+Flambda operates in {\em rounds}: one round consists of a certain sequence
+of transformations that may then be repeated in order to achieve more
+satisfactory results.  The number of rounds can be set manually using the
+{\tt -rounds} parameter.  For high optimisation this parameter might be set
+at 3 or 4.
+
+Command-line flags that may apply per round, for example those with
+{\tt "-cost"} in the name, accept arguments of the form:
+\begin{center}
+{\em n}{\tt\ |\ }{\em round}{\tt =}{\em n}[{\tt,}...]
+\end{center}
+In other words, one may specify the value(s) to use for some or all rounds.
+If no {\em round} is given then the value will apply to all rounds.
+
+The flags {\tt -Oclassic}, {\tt -O2} and {\tt -O3} are applied before all
+other flags, meaning that certain parameters may be overridden without
+having to specify every parameter usually invoked by the given optimisation
+level.
 
 \section{Terminology}
 
 The following terminology is used in this chapter of the manual.
 
 \begin{itemize}
-\item[Constant] Something (typically an expression) the value of which is
-known by the compiler at compile time.  Constantness may be explicit from
+\item[{\bf Closure variable}]  A member of the environment held within the
+closure of a given function.
+\item[{\bf Constant}]  Something (typically an expression) the value of which
+is known by the compiler at compile time.  Constantness may be explicit from
 the source code or inferred by the Flambda optimisers.
-\item[Constant closure] A closure that has no dependency on its environment
-of definition.
-\item[Direct call site] A place in a program's code where a function is
+\item[{\bf Constant closure}]  ... (careful)
+\item[{\bf Defining expression}]  The expression {\tt e} in %
+{\tt let x = e in e'}.
+\item[{\bf Direct call site}]  A place in a program's code where a function is
 called and it is known at compile time which function it will always be.
-\item[Indirect call site] A place in a program's code where a function is
-called but is not known to be a {\em direct call site}.
-\item[Program] A collection of {\em symbol bindings}.
-\item[Symbol binding] Analogous to a {\em let}-expression but working at the
-level of symbols defined in the object file.  The address of a symbol is
+\item[{\bf Indirect call site}]  A place in a program's code where a function
+is called but is not known to be a {\em direct call site}.
+\item[{\bf Program}]  A collection of {\em symbol bindings}.
+\item[{\bf Specialised argument}]  An argument to a function about which
+something is known (for example that it holds the same value as some other
+variable outside the function).
+\item[{\bf Symbol}]  A name referencing a particular place in an object file
+or executable image.  At that particular place will be some constant value.
+Symbols may be examined using operating system-specific tools (for
+example {\tt objdump} on Linux).
+\item[{\bf Symbol binding}]  Analogous to a {\em let}-expression but working
+at the level of symbols defined in the object file.  The address of a symbol is
 fixed, but it may be bound to both constant and non-constant expressions.
-\item[Toplevel] An expression in the current program
+\item[{\bf Toplevel}]  An expression in the current program which is not
+enclosed within any function declaration.
+\item[{\bf Variable}]  A named entity to which some OCaml value is bound by a
+{\tt let} expression, pattern-matching construction, or similar.
 \end{itemize}
 
 \section{Code transformations}
+
+This section details the various code transformations performed by the
+Flambda passes.  Transformations are permanently enabled unless noted
+otherwise.
+
+\subsection{Simplification}
+
+The {\em simplification} transformation propagates information about which
+variables hold what values at runtime.  Certain relationships between
+variables and symbols are also tracked: for example, some variable may be
+known to always hold the same value as some other variable; or perhaps
+some variable may be known to always hold the value pointed to by some
+symbol.
+
+This propagation can help to eliminate allocations in cases such as:
+\begin{verbatim}
+let f x y =
+  ...
+  let p = x, y in
+  ...
+  ... (fst p) ... (snd p) ...
+\end{verbatim}
+The projections from {\tt p} may be replaced by uses of the variables
+{\tt x} and {\tt y}, potentially meaning that {\tt p} becomes unused.
+
+The simplification pass removes unused {\tt let} bindings so long as
+their corresponding defining expressions have no side-effect.  (See
+the section ``Treatment of effects'' for more details.)
+
+\subsection{Inlining of non-recursive functions}
+
+\subsection{Specialisation of functions}
+
+\subsection{Unrolling of recursive functions}
 
 \subsection{Lifting of constants}
 
@@ -50,17 +164,46 @@ values such as constant closures.
 
 Lifting of constants to toplevel reduces allocation at runtime.
 
-\subsection{Lifting of toplevel let bindings}
+% CR mshinwell: check exactly what happens here, e.g. across units
+Sharing of constants...
 
-Toplevel {\tt let}-expressions may be lifted to symbol bindings to ensure
-that the corresponding bound variables are not captured by closures.  If the
-defining expression of a given binding is found to be constant, it is bound
-as such; otherwise, the symbol is bound to a (statically-allocated)
-{\em preallocated block} containing one field.  At runtime, the defining
-expression will be evaluated and the first field of the block filled with
-the resulting value.  This causes one extra indirection but ensures, by
-virtue of the symbol's address being known at compile time, that uses of the
-value are not captured by closures.
+Handling of float arrays...
+
+\subsection{Removal of unused arguments}
+
+This transformation is only enabled by default for specialised arguments.
+It may be enabled for all arguments using the {\tt -remove-unused-arguments}
+flag.
+
+The pass analyses functions to determine which arguments are unused.
+Removal is effected by creating a wrapper function, which will be inlined
+at every direct call site, that accepts the original arguments and then
+discards the unused ones before calling the original function.  As a
+consequence, this transformation may be detrimental if the original
+function is usually indirectly called, since such calls will now bounce
+through the wrapper.
+
+\subsection{Substitution of closure variables for specialised arguments}
+
+This transformation discovers closure variables that are known to be
+equal to specialised arguments.  Such closure variables are replaced by
+the specialised arguments; the closure variables may then be removed by
+the ``removal of unused closure variables'' pass (see below).
+
+\subsection{Removal of unused closure variables}
+
+This transformation performs an analysis across
+the whole compilation unit to determine whether there exist closure variables
+that are never used.  Such closure variables are then eliminated.  (Note that
+this has to be a whole-unit analysis because a projection of a closure
+variable from some particular closure may have propagated to an arbitrary
+location within the code due to inlining.)
+
+\subsection{Removal of unused program constructs}
+
+This transformation is analogous to the removal of {\tt let}-expressions
+whose defining expressions have no effects.  It operates instead on symbol
+bindings, removing those that have no effects.
 
 \subsection{Unboxing of closure variables}
 
@@ -115,8 +258,8 @@ This transformation is enabled by default.  It may be disabled using the
 
 It may become the case during compilation that one or more invariant arguments
 to a function become specialised to a particular value.  When such values are
-boxed the corresponding specialised arguments may be split into more
-specialised arguments corresponding to the projections out of the boxed
+themselves boxed the corresponding specialised arguments may be split into
+more specialised arguments corresponding to the projections out of the boxed
 value that occur within the function body.  This transformation is called
 {\em unboxing of specialised arguments}.  It is only applied when there is
 reasonable certainty that the boxed argument itself is unused within the
@@ -185,7 +328,10 @@ The aim is to cause more closures to become closed, in particular in
 difficult situations where unboxing of specialised arguments and/or
 closure variables is not sufficient.
 
-\paragraph{Simple example:} In the following code,
+\paragraph{Simple example:} In the following code (which might typically
+occur when {\tt g} is too large to inline) the value of {\tt x} would usually
+be communicated to the application of the {\tt +} function via the closure
+of {\tt g}.
 \begin{verbatim}
 let f x =
   let g y =
@@ -193,7 +339,10 @@ let f x =
   in
   (g [@inlined never]) 42
 \end{verbatim}
-Unboxing of the closure 
+Unboxing of the closure causes the value for {\tt x} inside {\tt g} to
+be passed as an argument to {\tt g} rather than through its closure.  This
+means that the closure of {\tt g} becomes constant and may be lifted to
+toplevel, eliminating the runtime allocation.
 
 The transformation is implemented by adding a new wrapper function in the
 manner of that used when unboxing specialised arguments.  The closure
@@ -202,12 +351,12 @@ the wrapper is inlined at direct call sites, the relevant values are
 passed directly to the main function via the new specialised arguments.
 
 \paragraph{Harder example:} In the following code, there are two closure
-variables that would typically cause a closure allocation.  One is called
+variables that would typically cause closure allocations.  One is called
 {\tt fv} and occurs inside the function {\tt map2}; the other is called
-{\tt z} and occurs inside the function {\tt g}.  Owing to the fact that
-this toy (yet sophisticated) example uses a small function passed as the
-first argument of {\tt map2}, we add an attribute to ensure that the
-allocation cannot be removed without unboxing of closures.
+{\tt z} and occurs inside the function {\tt g}.
+In this toy (yet sophisticated) example we again use an attribute to
+simulate the typical situation where the first argument of {\tt map2} is
+too large to inline.
 \begin{verbatim}
 let bar c =
   let rec g zs fv =
@@ -226,6 +375,73 @@ The resulting code passes the free variables via function arguments in
 order to eliminate all closure allocation in this example (aside from any
 that may be performed inside {\tt printf}).
 
+\subsection{Lifting of toplevel let bindings}
+
+Toplevel {\tt let}-expressions may be lifted to symbol bindings to ensure
+that the corresponding bound variables are not captured by closures.  If the
+defining expression of a given binding is found to be constant, it is bound
+as such; otherwise, the symbol is bound to a (statically-allocated)
+{\em preallocated block} containing one field.  At runtime, the defining
+expression will be evaluated and the first field of the block filled with
+the resulting value.  This causes one extra indirection but ensures, by
+virtue of the symbol's address being known at compile time, that uses of the
+value are not captured by closures.
+
+\section{Treatment of effects}
+
+The Flambda optimisers classify expressions in order to determine whether
+an expression:
+\begin{itemize}
+\item does not need to be evaluated at all; and/or
+\item may be duplicated.
+\end{itemize}
+
+This is done by forming judgements on the {\em effects} and the {\em coeffects}
+that might be performed were the expression to be executed.  Effects talk
+about how the expression might affect the world; coeffects talk about how
+the world might affect the expression.
+
+Effects are classified as follows:
+\begin{itemize}
+\item[{\bf No effects:}] The expression does not change the observable state
+of the world.  For example, it must not write to any mutable storage,
+call arbitrary external functions or change control flow (e.g. by raising
+an exception).  Note that allocation is {\em not} classed as having
+``no effects'' (see below).
+\begin{itemize}
+\item It is assumed in the compiler that expressions with no
+effects, whose results are not used, may be eliminated.  (This typically
+happens where the expression in question is the defining expression of a
+{\tt let}; in such cases the {\tt let}-expression will be
+eliminated.) It is further
+assumed that such expressions with no effects may be
+duplicated (and thus possibly executed more than once).
+\item (Exceptions arising from allocation points, for example "out of memory" or
+exceptions propagated from finalizers or signal handlers, are treated as
+``effects out of the ether'' and thus ignored for our determination here
+of effectfulness.  The same goes for floating point operations that may
+cause hardware traps on some platforms.)
+\end{itemize}
+\item[{\bf Only generative effects:}] The expression does not change the
+observable state of the world save for possibly affecting the state of
+the garbage collector by performing an allocation.  Expressions
+that only have generative effects and whose results are unused
+may be eliminated by the compiler.  However, unlike expressions with
+``no effects'', such expressions will never be eligible for duplication.
+\item[{\bf Arbitrary effects:}] All other expressions.
+\end{itemize}
+
+There is a single classification for coeffects:
+\begin{itemize}
+\item[{\bf No coeffects:}] The expression does not observe the effects (in
+the sense described above) of other expressions.  For example, it must not
+read from any mutable storage or call arbitrary external functions.
+\end{itemize}
+
+It is assumed in the compiler that, subject to data dependencies,
+expressions with neither effects nor coeffects may be reordered with
+respect to other expressions.
+
 \section{Compilation of statically-allocated modules}
 
 Compilation of modules that are able to be statically allocated (for example,
@@ -235,4 +451,3 @@ strategy used for bytecode.  A sequence of {\tt let}-bindings, which may be
 interspersed with arbitrary effects, surrounds a record creation that becomes
 the module block.  The Flambda-specific transformation follows: these bindings
 are lifted to toplevel symbols, as described above.
-
