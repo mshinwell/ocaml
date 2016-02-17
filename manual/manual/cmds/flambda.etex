@@ -14,7 +14,8 @@ Flambda aims to make it easier to write idiomatic OCaml code without
 incurring performance penalties.
 
 To use the Flambda optimisers it is necessary to pass the {\tt -flambda}
-option to the OCaml {\tt configure} script.
+option to the OCaml {\tt configure} script.  Code compiled with Flambda
+cannot be linked into the same program as code compiled without Flambda.
 
 \section{Command-line flags}
 
@@ -73,7 +74,8 @@ Do not unbox arguments to which functions have been specialised.
 \paragraph{Notes}
 \begin{itemize}
 \item Flambda-specific flags are silently accepted even when the
-{\tt -flambda} option was not provided.  This is intended to make it more
+{\tt -flambda} option was not provided to the {\tt configure} script.
+This is intended to make it more
 straightforward to run benchmarks with and without the Flambda optimisers
 in effect.
 \item Some of the Flambda flags may be subject to change in future
@@ -106,6 +108,18 @@ level.
 The following terminology is used in this chapter of the manual.
 
 \begin{itemize}
+\item[{\bf Closure}] The runtime representation of a function.  This
+includes pointers to the code of the function
+together with the values of any variables
+that the function references from its environment of definition.
+The values of such variables are required because the function may be
+invoked from a place where the original bindings of such variables are
+no longer in scope.  The set of such variables in a given closure is
+sometimes known as the {\em environment}.  A group of possibly
+mutually-recursive functions defined using {\em let rec} all share a
+single closure.  (Note to developers: in the Flambda source code a
+{\em closure} always corresponds to a single function; a
+{\em set of closures} refers to a group of such.)
 \item[{\bf Closure variable}]  A member of the environment held within the
 closure of a given function.
 \item[{\bf Constant}]  Something (typically an expression) the value of which
@@ -189,7 +203,7 @@ let f b x =
   if b then
     x
   else
-    big expression
+    ... big expression ...
 
 let g x = f true x
 \end{verbatim}
@@ -228,7 +242,7 @@ let f b x =
   if b then
     x
   else
-    big expression
+    ... big expression ...
 
 let g x = f true x
 \end{verbatim}
@@ -273,7 +287,8 @@ to be beneficial.
 \subsection{Inlining of non-recursive functions}
 
 A non-recursive function is straightforward to inline: a copy of the
-function body is taken and inserted at the call site.
+function body is taken and inserted at the call site, with the parameters
+bound appropriately.
 
 \subsection{Inlining of functors}
 
@@ -426,9 +441,9 @@ end [@@inline never]
 module X = F [@inlined] (struct type t = int end)
 \end{verbatim}
 
-\section{Other code transformations}
+\section{Code transformations}
 
-This section details the various remaining code transformations performed by
+This section details the general code transformations performed by
 the Flambda passes.  Transformations are permanently enabled unless noted
 otherwise.
 
@@ -452,10 +467,6 @@ let f x y =
 The projections from {\tt p} may be replaced by uses of the variables
 {\tt x} and {\tt y}, potentially meaning that {\tt p} becomes unused.
 
-The simplification pass removes unused {\tt let} bindings so long as
-their corresponding defining expressions have no side-effect.  (See
-the section ``Treatment of effects'' for more details.)
-
 The propagation performed by the simplification pass is also important for
 discovering which functions flow to indirect call sites.  This can enable
 the transformation of such call sites into direct call sites, which makes
@@ -470,8 +481,9 @@ values such as constant closures.
 
 Lifting of constants to toplevel reduces allocation at runtime.
 
-% CR mshinwell: check exactly what happens here, e.g. across units
-Sharing of constants...
+The compiler aims to share constants lifted to toplevel such that there
+are no duplicate definitions.  However if {\tt .cmx} files are hidden
+from the compiler then maximal sharing may not be possible.
 
 \paragraph{Notes about float arrays} %
 The following rules apply specifically to constant float arrays:
@@ -497,46 +509,6 @@ into a fresh value on the OCaml heap.
 \end{itemize}
 \end{itemize}
 
-\subsection{Transformation of non-escaping references into mutable variables}
-
-
-
-\subsection{Removal of unused arguments}
-
-This transformation is only enabled by default for specialised arguments.
-It may be enabled for all arguments using the {\tt -remove-unused-arguments}
-flag.
-
-The pass analyses functions to determine which arguments are unused.
-Removal is effected by creating a wrapper function, which will be inlined
-at every direct call site, that accepts the original arguments and then
-discards the unused ones before calling the original function.  As a
-consequence, this transformation may be detrimental if the original
-function is usually indirectly called, since such calls will now bounce
-through the wrapper.
-
-\subsection{Substitution of closure variables for specialised arguments}
-
-This transformation discovers closure variables that are known to be
-equal to specialised arguments.  Such closure variables are replaced by
-the specialised arguments; the closure variables may then be removed by
-the ``removal of unused closure variables'' pass (see below).
-
-\subsection{Removal of unused closure variables}
-
-This transformation performs an analysis across
-the whole compilation unit to determine whether there exist closure variables
-that are never used.  Such closure variables are then eliminated.  (Note that
-this has to be a whole-unit analysis because a projection of a closure
-variable from some particular closure may have propagated to an arbitrary
-location within the code due to inlining.)
-
-\subsection{Removal of unused program constructs}
-
-This transformation is analogous to the removal of {\tt let}-expressions
-whose defining expressions have no effects.  It operates instead on symbol
-bindings, removing those that have no effects.
-
 \subsection{Lifting of toplevel let bindings}
 
 Toplevel {\tt let}-expressions may be lifted to symbol bindings to ensure
@@ -548,6 +520,16 @@ expression will be evaluated and the first field of the block filled with
 the resulting value.  This causes one extra indirection but ensures, by
 virtue of the symbol's address being known at compile time, that uses of the
 value are not captured by closures.
+
+\subsection{Transformation of non-escaping references into mutable variables}
+
+
+\subsection{Substitution of closure variables for specialised arguments}
+
+This transformation discovers closure variables that are known to be
+equal to specialised arguments.  Such closure variables are replaced by
+the specialised arguments; the closure variables may then be removed by
+the ``removal of unused closure variables'' pass (see below).
 
 \section{Unboxing transformations}
 
@@ -726,6 +708,44 @@ The resulting code passes the free variables via function arguments in
 order to eliminate all closure allocation in this example (aside from any
 that may be performed inside {\tt printf}).
 
+\section{Transformations that remove unused code and values}
+
+\subsection{Removal of redundant let expressions}
+
+The simplification pass removes unused {\tt let} bindings so long as
+their corresponding defining expressions have ``no effects''.  See
+the section ``Treatment of effects'' below for the precise definition of
+this term.
+
+\subsection{Removal of redundant program constructs}
+
+This transformation is analogous to the removal of {\tt let}-expressions
+whose defining expressions have no effects.  It operates instead on symbol
+bindings, removing those that have no effects.
+
+\subsection{Removal of unused arguments}
+
+This transformation is only enabled by default for specialised arguments.
+It may be enabled for all arguments using the {\tt -remove-unused-arguments}
+flag.
+
+The pass analyses functions to determine which arguments are unused.
+Removal is effected by creating a wrapper function, which will be inlined
+at every direct call site, that accepts the original arguments and then
+discards the unused ones before calling the original function.  As a
+consequence, this transformation may be detrimental if the original
+function is usually indirectly called, since such calls will now bounce
+through the wrapper.
+
+\subsection{Removal of unused closure variables}
+
+This transformation performs an analysis across
+the whole compilation unit to determine whether there exist closure variables
+that are never used.  Such closure variables are then eliminated.  (Note that
+this has to be a whole-unit analysis because a projection of a closure
+variable from some particular closure may have propagated to an arbitrary
+location within the code due to inlining.)
+
 \section{Treatment of effects}
 
 The Flambda optimisers classify expressions in order to determine whether
@@ -755,7 +775,8 @@ happens where the expression in question is the defining expression of a
 eliminated.) It is further
 assumed that such expressions with no effects may be
 duplicated (and thus possibly executed more than once).
-\item (Exceptions arising from allocation points, for example "out of memory" or
+\item (Exceptions arising from allocation points, for example
+``out of memory'' or
 exceptions propagated from finalizers or signal handlers, are treated as
 ``effects out of the ether'' and thus ignored for our determination here
 of effectfulness.  The same goes for floating point operations that may
