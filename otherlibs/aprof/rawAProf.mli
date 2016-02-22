@@ -4,19 +4,10 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013--2015, Jane Street Group, LLC                       *)
-(*                                                                     *)
-(*  Licensed under the Apache License, Version 2.0 (the "License");    *)
-(*  you may not use this file except in compliance with the License.   *)
-(*  You may obtain a copy of the License at                            *)
-(*                                                                     *)
-(*      http://www.apache.org/licenses/LICENSE-2.0                     *)
-(*                                                                     *)
-(*  Unless required by applicable law or agreed to in writing,         *)
-(*  software distributed under the License is distributed on an        *)
-(*  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,       *)
-(*  either express or implied.  See the License for the specific       *)
-(*  language governing permissions and limitations under the License.  *)
+(*  Copyright 2016 Institut National de Recherche en Informatique et   *)
+(*  en Automatique.  All rights reserved.  This file is distributed    *)
+(*  under the terms of the GNU Library General Public License, with    *)
+(*  the special exception on linking described in file ../LICENSE.     *)
 (*                                                                     *)
 (***********************************************************************)
 
@@ -59,12 +50,19 @@ module Annotation : sig
   val highest_allowable : t Lazy.t
 end
 
-(* CR mshinwell: rationalise this next part.  OCaml/C PC types. *)
-
 module Program_counter : sig
-  type t
+  module OCaml : sig
+    type t
 
-  val to_int64 : t -> Int64.t
+    val to_int64 : t -> Int64.t
+  end
+
+  module Foreign : sig
+    type t
+
+    val to_int64 : t -> Int64.t
+  end
+
 end
 
 module Frame_table : sig
@@ -74,7 +72,7 @@ module Frame_table : sig
   (* XXX do these exactly match with the call site addresses? ... *)
   type t
 
-  val find_exn : t -> Program_counter.t -> Printexc.Slot.t
+  val find_exn : t -> Program_counter.OCaml.t -> Printexc.Slot.t
 end
 
 module Function_entry_point : sig
@@ -89,10 +87,6 @@ module Function_identifier : sig
   val to_int64 : t -> Int64.t
 end
 
-module Call_site : sig
-  type t = private Int64.t
-end
-
 module Trace : sig
   (** A value of type [t] holds the dynamic call structure of the program
       (i.e. which functions have called which other functions) together with
@@ -102,19 +96,10 @@ module Trace : sig
 
   type node
   type ocaml_node
-  type c_node
+  type foreign_node
   type uninstrumented_node
 
-  module OCaml_node : sig
-    (** A node corresponding to an invocation of a function written in
-        OCaml. *)
-    type t = ocaml_node
-
-    (** A unique identifier for the function corresponding to this node. *)
-    val function_identifier : t -> Function_identifier.t
-
-    (** This function traverses a circular list. *)
-    val next_in_tail_call_chain : t -> t
+  module OCaml : sig
 
     module Allocation_point : sig
       (** A value of type [t] corresponds to an allocation point in OCaml
@@ -122,21 +107,21 @@ module Trace : sig
       type t
 
       (** The program counter at (or close to) the allocation site. *)
-      val program_counter : t -> Program_counter.t
+      val program_counter : t -> Program_counter.OCaml.t
 
       (** The annotation written into the headers of boxed values allocated
           at the given allocation site. *)
       val annotation : t -> Annotation.t
     end
 
-    module Direct_call_point_in_ocaml_code : sig
+    module Direct_call_point : sig
       (** A value of type ['target t] corresponds to a direct (i.e. known
           at compile time) call point in OCaml code.  ['target] is the type
           of the node corresponding to the callee. *)
       type 'target t
 
       (** The program counter at (or close to) the call site. *)
-      val call_site : _ t -> Call_site.t
+      val call_site : _ t -> Program_counter.OCaml.t
 
       (** The address of the first instruction of the callee. *)
       val callee : _ t -> Function_entry_point.t
@@ -145,16 +130,16 @@ module Trace : sig
       val callee_node : 'target t -> 'target
     end
 
-    module Indirect_call_point_in_ocaml_code : sig
+    module Indirect_call_point : sig
       (** A value of type [t] corresponds to an indirect call point in OCaml
           code.  Each such value contains a list of callees to which the
           call point has branched. *)
       type t
 
       (** The program counter at (or close to) the call site. *)
-      val call_site : t -> Call_site.t
+      val call_site : t -> Program_counter.OCaml.t
 
-      module Callee_iterator : sig
+      module Callee : sig
         type t
 
         (** The address of the first instruction of the callee. *)
@@ -170,45 +155,58 @@ module Trace : sig
 
       (** The list of callees to which this indirect call point has
           branched. *)
-      val callees : t -> Callee_iterator.t option
+      val callees : t -> Callee.t option
     end
 
-    module Field_iterator : sig
-      (** A value of type [t] enables iteration through the contents ("fields")
-          of an OCaml node. *)
+    module Field : sig
+      (** A value of type [t] enables iteration through the contents
+          ("fields") of an OCaml node. *)
       type t
 
       type direct_call_point =
-        | To_ocaml of ocaml_node Direct_call_point_in_ocaml_code.t
-        | To_c of c_node Direct_call_point_in_ocaml_code.t
+        | To_ocaml of ocaml_node Direct_call_point.t
+        | To_foreign of foreign_node Direct_call_point.t
         (* CR mshinwell: once everything's finished, "uninstrumented" should
            be able to go away. *)
         | To_uninstrumented of
-            uninstrumented_node Direct_call_point_in_ocaml_code.t
+            uninstrumented_node Direct_call_point.t
 
       type classification =
-        | Allocation_point of Allocation_point.t
-        | Direct_call_point of direct_call_point
-        | Indirect_call_point of Indirect_call_point_in_ocaml_code.t
+        | Allocation of Allocation_point.t
+        | Direct_call of direct_call_point
+        | Indirect_call of Indirect_call_point.t
 
       val classify : t -> classification
       val next : t -> t option
     end
 
-    val fields : t -> Field_iterator.t option
+    module Node : sig
+      (** A node corresponding to an invocation of a function written in
+          OCaml. *)
+      type t = ocaml_node
+
+      val compare : t -> t -> int
+
+      (** A unique identifier for the function corresponding to this node. *)
+      val function_identifier : t -> Function_identifier.t
+
+      (** This function traverses a circular list. *)
+      val next_in_tail_call_chain : t -> t
+
+      val fields : t -> Field.t option
+
+    end
+
   end
 
-  module C_node : sig
-    (** A node corresponding to an invocation of a function written in C
-        (or any other language that is not OCaml). *)
-    type t = c_node
+  module Foreign : sig
 
     module Allocation_point : sig
       (** A value of type [t] corresponds to an allocation point in non-OCaml
           code. *)
       type t
 
-      val program_counter : t -> Program_counter.t
+      val program_counter : t -> Program_counter.Foreign.t
       val annotation : t -> Annotation.t
     end
 
@@ -220,42 +218,51 @@ module Trace : sig
 
       (** N.B. The address of the callee (of type [Function_entry_point.t]) is
           not available.  It must be recovered during post-processing. *)
-      val call_site : t -> Call_site.t
+      val call_site : t -> Program_counter.Foreign.t
       val callee_node : t -> node
     end
 
-    (* CR mshinwell: consider removing "_iterator" suffixes *)
-    module Field_iterator : sig
+    module Field : sig
       (** A value of type [t] enables iteration through the contents ("fields")
           of a C node. *)
       type t
 
       type classification = private
-        | Allocation_point of Allocation_point.t
-        | Call_point of Call_point.t
+        | Allocation of Allocation_point.t
+        | Call of Call_point.t
 
       val classify : t -> classification
       val next : t -> t option
     end
 
-    val fields : t -> Field_iterator.t option
+    module Node : sig
+      (** A node corresponding to an invocation of a function written in C
+          (or any other language that is not OCaml). *)
+      type t = foreign_node
+
+      val compare : t -> t -> int
+
+      val fields : t -> Field.t option
+
+    end
+
   end
 
   module Node : sig
-    (** Either an OCaml or a C node; or an indication that this is a branch
+    (** Either an OCaml or a foreign node; or an indication that this is a branch
         of the graph corresponding to uninstrumented code. *)
     type t = node
 
     val compare : t -> t -> int
 
     type classification = private
-      | OCaml of OCaml_node.t
-      | C of C_node.t
+      | OCaml of OCaml.Node.t
+      | Foreign of Foreign.Node.t
 
     val classify : t -> classification
 
-    val of_ocaml_node : OCaml_node.t -> t
-    val of_c_node : C_node.t -> t
+    val of_ocaml_node : OCaml.Node.t -> t
+    val of_foreign_node : Foreign.Node.t -> t
 
     module Set : Set.S with type elt = t
     module Map : Map.S with type key = t
@@ -265,32 +272,31 @@ module Trace : sig
       the graph is empty. *)
   val root : t -> Node.t option
 
+(*
   (** Dump an unmarshalled trace to stdout (version written in OCaml). *)
   val debug_ocaml
      : t
-    -> resolve_return_address:(Program_counter.t -> string option)
+    -> resolve_return_address:(Program_counter.OCaml.t -> string option)
     -> unit
+*)
 end
 
 module Heap_snapshot : sig
   type t
   type heap_snapshot = t
 
-  module Entry : sig
-    (** A value of type [t] provides the total number of blocks (= boxed
+  module Entries : sig
+    (** An immutable array of the total number of blocks (= boxed
         values) and the total number of words occupied by such blocks
-        (including their headers) for some given profiling annotation in
+        (including their headers) for each profiling annotation in
         the heap. *)
     type t
 
-    val num_blocks : t -> int
-    val num_words_including_headers : t -> int
-  end
+    val length : t -> int
+    val annotation : t -> int -> Annotation.t
+    val num_blocks : t -> int -> int
+    val num_words_including_headers : t -> int -> int
 
-  module Entries : sig
-    (** Numbers of blocks and words, as above, indexed by profiling
-        annotation. *)
-    type t = private (Annotation.t, Entry.t) Hashtbl.t
   end
 
   (** The timestamp of a snapshot.  The units are as for [Sys.time]. *)

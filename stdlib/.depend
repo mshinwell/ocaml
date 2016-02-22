@@ -1,6 +1,4 @@
 allocation_profiling.cmi :
-allocation_profiling_offline.cmi : set.cmi printexc.cmi map.cmi lazy.cmi \
-    int64.cmi hashtbl.cmi
 arg.cmi :
 array.cmi :
 arrayLabels.cmi :
@@ -54,12 +52,6 @@ allocation_profiling.cmo : sys.cmi printexc.cmi marshal.cmi int64.cmi \
     hashtbl.cmi allocation_profiling.cmi
 allocation_profiling.cmx : sys.cmx printexc.cmx marshal.cmx int64.cmx \
     hashtbl.cmx allocation_profiling.cmi
-allocation_profiling_offline.cmo : set.cmi printf.cmi printexc.cmi obj.cmi \
-    marshal.cmi map.cmi lazy.cmi int64.cmi hashtbl.cmi array.cmi \
-    allocation_profiling_offline.cmi
-allocation_profiling_offline.cmx : set.cmx printf.cmx printexc.cmx obj.cmx \
-    marshal.cmx map.cmx lazy.cmx int64.cmx hashtbl.cmx array.cmx \
-    allocation_profiling_offline.cmi
 arg.cmo : sys.cmi string.cmi printf.cmi list.cmi buffer.cmi array.cmi \
     arg.cmi
 arg.cmx : sys.cmx string.cmx printf.cmx list.cmx buffer.cmx array.cmx \
@@ -190,12 +182,6 @@ allocation_profiling.cmo : sys.cmi printexc.cmi marshal.cmi int64.cmi \
     hashtbl.cmi allocation_profiling.cmi
 allocation_profiling.p.cmx : sys.p.cmx printexc.p.cmx marshal.p.cmx int64.p.cmx \
     hashtbl.p.cmx allocation_profiling.cmi
-allocation_profiling_offline.cmo : set.cmi printf.cmi printexc.cmi obj.cmi \
-    marshal.cmi map.cmi lazy.cmi int64.cmi hashtbl.cmi array.cmi \
-    allocation_profiling_offline.cmi
-allocation_profiling_offline.p.cmx : set.p.cmx printf.p.cmx printexc.p.cmx obj.p.cmx \
-    marshal.p.cmx map.p.cmx lazy.p.cmx int64.p.cmx hashtbl.p.cmx array.p.cmx \
-    allocation_profiling_offline.cmi
 arg.cmo : sys.cmi string.cmi printf.cmi list.cmi buffer.cmi array.cmi \
     arg.cmi
 arg.p.cmx : sys.p.cmx string.p.cmx printf.p.cmx list.p.cmx buffer.p.cmx array.p.cmx \
@@ -326,12 +312,6 @@ allocation_profiling.cmo : sys.cmi printexc.cmi marshal.cmi int64.cmi \
     hashtbl.cmi allocation_profiling.cmi
 allocation_profiling.ap.cmx : sys.ap.cmx printexc.ap.cmx marshal.ap.cmx int64.ap.cmx \
     hashtbl.ap.cmx allocation_profiling.cmi
-allocation_profiling_offline.cmo : set.cmi printf.cmi printexc.cmi obj.cmi \
-    marshal.cmi map.cmi lazy.cmi int64.cmi hashtbl.cmi array.cmi \
-    allocation_profiling_offline.cmi
-allocation_profiling_offline.ap.cmx : set.ap.cmx printf.ap.cmx printexc.ap.cmx obj.ap.cmx \
-    marshal.ap.cmx map.ap.cmx lazy.ap.cmx int64.ap.cmx hashtbl.ap.cmx array.ap.cmx \
-    allocation_profiling_offline.cmi
 arg.cmo : sys.cmi string.cmi printf.cmi list.cmi buffer.cmi array.cmi \
     arg.cmi
 arg.ap.cmx : sys.ap.cmx string.ap.cmx printf.ap.cmx list.ap.cmx buffer.ap.cmx array.ap.cmx \

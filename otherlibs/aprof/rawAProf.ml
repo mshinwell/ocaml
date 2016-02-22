@@ -4,19 +4,10 @@
 (*                                                                     *)
 (*                 Mark Shinwell, Jane Street Europe                   *)
 (*                                                                     *)
-(*  Copyright 2013--2015, Jane Street Group, LLC                       *)
-(*                                                                     *)
-(*  Licensed under the Apache License, Version 2.0 (the "License");    *)
-(*  you may not use this file except in compliance with the License.   *)
-(*  You may obtain a copy of the License at                            *)
-(*                                                                     *)
-(*      http://www.apache.org/licenses/LICENSE-2.0                     *)
-(*                                                                     *)
-(*  Unless required by applicable law or agreed to in writing,         *)
-(*  software distributed under the License is distributed on an        *)
-(*  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,       *)
-(*  either express or implied.  See the License for the specific       *)
-(*  language governing permissions and limitations under the License.  *)
+(*  Copyright 2016 Institut National de Recherche en Informatique et   *)
+(*  en Automatique.  All rights reserved.  This file is distributed    *)
+(*  under the terms of the GNU Library General Public License, with    *)
+(*  the special exception on linking described in file ../LICENSE.     *)
 (*                                                                     *)
 (***********************************************************************)
 
@@ -57,9 +48,17 @@ end = struct
 end
 
 module Program_counter = struct
-  type t = Int64.t
+  module OCaml = struct
+    type t = Int64.t
 
-  let to_int64 t = t
+    let to_int64 t = t
+  end
+
+  module Foreign = struct
+    type t = Int64.t
+
+    let to_int64 t = t
+  end
 end
 
 module Function_identifier = struct
@@ -74,14 +73,8 @@ module Function_entry_point = struct
   let to_int64 t = t
 end
 
-module Call_site = struct
-  type t = Int64.t
-
-  let to_int64 t = t
-end
-
 module Frame_table = struct
-  type t = (Program_counter.t, Printexc.Slot.t) Hashtbl.t
+  type t = (Program_counter.OCaml.t, Printexc.Slot.t) Hashtbl.t
 
   let find_exn = Hashtbl.find
 end
@@ -113,7 +106,7 @@ end
 module Trace = struct
   type node
   type ocaml_node
-  type c_node
+  type foreign_node
   type uninstrumented_node
 
   type t = node option
@@ -134,7 +127,7 @@ module Trace = struct
   let node_is_null (node : node) =
     ((Obj.magic node) : unit) == ()
 
-  let c_node_is_null (node : c_node) =
+  let foreign_node_is_null (node : foreign_node) =
     ((Obj.magic node) : unit) == ()
 
   external node_num_header_words : unit -> int
@@ -143,26 +136,17 @@ module Trace = struct
 
   let num_header_words = lazy (node_num_header_words ())
 
-  module OCaml_node = struct
-    type t = ocaml_node
-
-    external function_identifier : t -> Function_identifier.t
-      = "caml_allocation_profiling_only_works_for_native_code"
-        "caml_allocation_profiling_ocaml_function_identifier"
-
-    external next_in_tail_call_chain : t -> t
-      = "caml_allocation_profiling_only_works_for_native_code"
-        "caml_allocation_profiling_ocaml_tail_chain" "noalloc"
+  module OCaml = struct
 
     type field_iterator = {
-      node : t;
+      node : ocaml_node;
       offset : int;
     }
 
     module Allocation_point = struct
       type t = field_iterator
 
-      external program_counter : ocaml_node -> int -> Program_counter.t
+      external program_counter : ocaml_node -> int -> Program_counter.OCaml.t
         = "caml_allocation_profiling_only_works_for_native_code"
           "caml_allocation_profiling_ocaml_allocation_point_program_counter"
 
@@ -176,10 +160,10 @@ module Trace = struct
       let annotation t = annotation t.node t.offset
     end
 
-    module Direct_call_point_in_ocaml_code = struct
+    module Direct_call_point = struct
       type _ t = field_iterator
 
-      external call_site : ocaml_node -> int -> Program_counter.t
+      external call_site : ocaml_node -> int -> Program_counter.OCaml.t
         = "caml_allocation_profiling_only_works_for_native_code"
           "caml_allocation_profiling_ocaml_direct_call_point_call_site"
 
@@ -199,19 +183,19 @@ module Trace = struct
         callee_node t.node t.offset
     end
 
-    module Indirect_call_point_in_ocaml_code = struct
+    module Indirect_call_point = struct
       type t = field_iterator
 
-      external call_site : ocaml_node -> int -> Program_counter.t
+      external call_site : ocaml_node -> int -> Program_counter.OCaml.t
         = "caml_allocation_profiling_only_works_for_native_code"
           "caml_allocation_profiling_ocaml_indirect_call_point_call_site"
 
       let call_site t = call_site t.node t.offset
 
-      module Callee_iterator = struct
-        type t = c_node
+      module Callee = struct
+        type t = foreign_node
 
-        let is_null = c_node_is_null
+        let is_null = foreign_node_is_null
 
         (* CR mshinwell: maybe rename ...c_node_call_site -> c_node_pc,
            since it isn't a call site in this case. *)
@@ -226,40 +210,40 @@ module Trace = struct
           = "caml_allocation_profiling_only_works_for_native_code"
             "caml_allocation_profiling_c_node_callee_node" "noalloc"
 
-        external next : t -> c_node
+        external next : t -> foreign_node
           = "caml_allocation_profiling_only_works_for_native_code"
             "caml_allocation_profiling_c_node_next" "noalloc"
 
         let next t =
           let next = next t in
-          if c_node_is_null next then None
+          if foreign_node_is_null next then None
           else Some next
       end
 
-      external callees : ocaml_node -> int -> Callee_iterator.t
+      external callees : ocaml_node -> int -> Callee.t
         = "caml_allocation_profiling_only_works_for_native_code"
           "caml_allocation_profiling_ocaml_indirect_call_point_callees"
           "noalloc"
 
       let callees t =
         let callees = callees t.node t.offset in
-        if Callee_iterator.is_null callees then None
+        if Callee.is_null callees then None
         else Some callees
     end
 
-    module Field_iterator = struct
+    module Field = struct
       type t = field_iterator
 
       type direct_call_point =
-        | To_ocaml of ocaml_node Direct_call_point_in_ocaml_code.t
-        | To_c of c_node Direct_call_point_in_ocaml_code.t
+        | To_ocaml of ocaml_node Direct_call_point.t
+        | To_foreign of foreign_node Direct_call_point.t
         | To_uninstrumented of
-            uninstrumented_node Direct_call_point_in_ocaml_code.t
+            uninstrumented_node Direct_call_point.t
 
       type classification =
-        | Allocation_point of Allocation_point.t
-        | Direct_call_point of direct_call_point
-        | Indirect_call_point of Indirect_call_point_in_ocaml_code.t
+        | Allocation of Allocation_point.t
+        | Direct_call of direct_call_point
+        | Indirect_call of Indirect_call_point.t
 
       external classify : ocaml_node -> int -> int
         = "caml_allocation_profiling_only_works_for_native_code"
@@ -267,11 +251,11 @@ module Trace = struct
 
       let classify t =
         match classify t.node t.offset with
-        | 0 -> Allocation_point t
-        | 1 -> Direct_call_point (To_uninstrumented t)
-        | 2 -> Direct_call_point (To_ocaml t)
-        | 3 -> Direct_call_point (To_c t)
-        | 4 -> Indirect_call_point t
+        | 0 -> Allocation t
+        | 1 -> Direct_call (To_uninstrumented t)
+        | 2 -> Direct_call (To_ocaml t)
+        | 3 -> Direct_call (To_foreign t)
+        | 4 -> Indirect_call t
         | _ -> assert false
 
       external skip_uninitialized : ocaml_node -> int -> int
@@ -289,21 +273,51 @@ module Trace = struct
         else Some { t with offset; }
     end
 
-    let fields t =
-      let offset =
-        Field_iterator.skip_uninitialized t (Lazy.force num_header_words)
-      in
-      if offset < 0 then None
-      else Some { node = t; offset; }
+    module Node = struct
+      type t = ocaml_node
+
+      external function_identifier : t -> Function_identifier.t
+        = "caml_allocation_profiling_only_works_for_native_code"
+          "caml_allocation_profiling_ocaml_function_identifier"
+
+      external next_in_tail_call_chain : t -> t
+        = "caml_allocation_profiling_only_works_for_native_code"
+          "caml_allocation_profiling_ocaml_tail_chain" "noalloc"
+
+      external compare : t -> t -> int
+        = "caml_allocation_profiling_only_works_for_native_code"
+          "caml_allocation_profiling_compare_node" "noalloc"
+
+      let fields t =
+        let offset =
+          Field.skip_uninitialized t (Lazy.force num_header_words)
+        in
+        if offset < 0 then None
+        else Some { node = t; offset; }
+
+    end
+
   end
 
-  module C_node = struct
-    type t = c_node
+  module Foreign = struct
+
+    module Node = struct
+      type t = foreign_node
+
+      external compare : t -> t -> int
+        = "caml_allocation_profiling_only_works_for_native_code"
+          "caml_allocation_profiling_compare_node" "noalloc"
+
+      let fields t =
+        if foreign_node_is_null t then None
+        else Some t
+
+    end
 
     module Allocation_point = struct
-      type t = c_node
+      type t = foreign_node
 
-      external program_counter : t -> Program_counter.t
+      external program_counter : t -> Program_counter.Foreign.t
         (* This is not a mistake; the same C function works. *)
         = "caml_allocation_profiling_only_works_for_native_code"
           "caml_allocation_profiling_c_node_call_site"
@@ -311,12 +325,13 @@ module Trace = struct
       external annotation : t -> Annotation.t
         = "caml_allocation_profiling_only_works_for_native_code"
           "caml_allocation_profiling_c_node_profinfo" "noalloc"
+
     end
 
     module Call_point = struct
-      type t = c_node
+      type t = foreign_node
 
-      external call_site : t -> Program_counter.t
+      external call_site : t -> Program_counter.Foreign.t
         = "caml_allocation_profiling_only_works_for_native_code"
           "caml_allocation_profiling_c_node_call_site"
 
@@ -325,20 +340,20 @@ module Trace = struct
           "caml_allocation_profiling_c_node_callee_node" "noalloc"
     end
 
-    module Field_iterator = struct
-      type t = c_node
+    module Field = struct
+      type t = foreign_node
 
       type classification =
-        | Allocation_point of Allocation_point.t
-        | Call_point of Call_point.t
+        | Allocation of Allocation_point.t
+        | Call of Call_point.t
 
       external is_call : t -> bool
         = "caml_allocation_profiling_only_works_for_native_code"
           "caml_allocation_profiling_c_node_is_call" "noalloc"
 
       let classify t =
-        if is_call t then Call_point t
-        else Allocation_point t
+        if is_call t then Call t
+        else Allocation t
 
       external next : t -> t
         = "caml_allocation_profiling_only_works_for_native_code"
@@ -346,13 +361,10 @@ module Trace = struct
 
       let next t =
         let next = next t in
-        if c_node_is_null next then None
+        if foreign_node_is_null next then None
         else Some next
     end
 
-    let fields t =
-      if c_node_is_null t then None
-      else Some t
   end
 
   module Node = struct
@@ -367,19 +379,20 @@ module Trace = struct
     include T
 
     type classification =
-      | OCaml of OCaml_node.t
-      | C of C_node.t
+      | OCaml of OCaml.Node.t
+      | Foreign of Foreign.Node.t
 
+    (* CR lwhite: These functions should work in bytecode *)
     external is_ocaml_node : t -> bool
       = "caml_allocation_profiling_only_works_for_native_code"
         "caml_allocation_profiling_is_ocaml_node" "noalloc"
 
     let classify t =
       if is_ocaml_node t then OCaml ((Obj.magic t) : ocaml_node)
-      else C ((Obj.magic t) : c_node)
+      else Foreign ((Obj.magic t) : foreign_node)
 
     let of_ocaml_node (node : ocaml_node) : t = Obj.magic node
-    let of_c_node (node : c_node) : t = Obj.magic node
+    let of_foreign_node (node : foreign_node) : t = Obj.magic node
 
     module Map = Map.Make (T)
     module Set = Set.Make (T)
@@ -387,6 +400,7 @@ module Trace = struct
 
   let root t = t
 
+(*
   let debug_ocaml t ~resolve_return_address =
     let next_id = ref 0 in
     let visited = ref Node.Map.empty in
@@ -535,44 +549,23 @@ module Trace = struct
     match root t with
     | None -> Printf.printf "Trace is empty.\n%!"
     | Some node -> print_node node ~backtrace:[]
+*)
 end
 
 module Heap_snapshot = struct
-  let pathname_suffix_trace = "trace"
-
-  type raw_entries = int array  (* == "struct snapshot_entries" *)
-
-  type raw_snapshot = {
-    raw_timestamp : float;
-    raw_gc_stats : Gc_stats.t;
-    raw_entries : raw_entries;
-    num_blocks_in_minor_heap : int;
-    num_blocks_in_major_heap : int;
-    num_blocks_in_minor_heap_with_profinfo : int;
-    num_blocks_in_major_heap_with_profinfo : int;
-  }
-
-  let num_raw_entries (raw_entries : raw_entries) =
-    let length = Array.length raw_entries in
-    assert (length mod 3 = 0);
-    length / 3
-
-  let raw_entry_annotation raw_entries entry = raw_entries.(entry*3)
-  let raw_entry_num_blocks raw_entries entry = raw_entries.(entry*3 + 1)
-  let raw_entry_num_words raw_entries entry = raw_entries.(entry*3 + 2)
-
-  module Entry = struct
-    type t = {
-      num_blocks : int;
-      num_words : int;
-    }
-
-    let num_blocks t = t.num_blocks
-    let num_words_including_headers t = t.num_words
-  end
 
   module Entries = struct
-    type t = (Annotation.t, Entry.t) Hashtbl.t
+    type t = int array  (* == "struct snapshot_entries" *)
+
+    let length t =
+      let length = Array.length t in
+      assert (length mod 3 = 0);
+      length / 3
+
+    let annotation t idx = t.(idx*3)
+    let num_blocks t idx = t.(idx*3 + 1)
+    let num_words_including_headers t idx = t.(idx*3 + 2)
+
   end
 
   type t = {
@@ -599,42 +592,6 @@ module Heap_snapshot = struct
   let num_blocks_in_major_heap_with_profinfo t =
     t.num_blocks_in_major_heap_with_profinfo
 
-  let transform_raw_snapshot raw_snapshot =
-    let raw_entries = raw_snapshot.raw_entries in
-    let num_entries = num_raw_entries raw_entries in
-(*
-    Printf.printf "transform_raw_snapshot: num_entries %d\n%!" num_entries;
-*)
-    let entries = Hashtbl.create 42 in
-    for entry = 0 to num_entries - 1 do
-      let annotation = raw_entry_annotation raw_entries entry in
-      let entry_record : Entry.t =
-        { Entry.
-          num_blocks = raw_entry_num_blocks raw_entries entry;
-          num_words = raw_entry_num_words raw_entries entry;
-        }
-      in
-(*
-      Printf.printf ">>>>>>>>> entry=%d annotation=%d blocks=%d words=%d\n%!"
-        entry annotation entry_record.Entry.num_blocks
-        entry_record.Entry.num_words;
-*)
-      assert (not (Hashtbl.mem entries annotation));
-      Hashtbl.add entries annotation entry_record
-    done;
-    { timestamp = raw_snapshot.raw_timestamp;
-      gc_stats = raw_snapshot.raw_gc_stats;
-      entries;
-      num_blocks_in_minor_heap
-        = raw_snapshot.num_blocks_in_minor_heap;
-      num_blocks_in_major_heap
-        = raw_snapshot.num_blocks_in_major_heap;
-      num_blocks_in_minor_heap_with_profinfo
-        = raw_snapshot.num_blocks_in_minor_heap_with_profinfo;
-      num_blocks_in_major_heap_with_profinfo
-        = raw_snapshot.num_blocks_in_major_heap_with_profinfo;
-    }
-
   module Series = struct
     type t = {
       num_snapshots : int;
@@ -643,6 +600,8 @@ module Heap_snapshot = struct
       trace : Trace.t;
       snapshots : heap_snapshot array;
     }
+
+    let pathname_suffix_trace = "trace"
 
     let read ~pathname_prefix =
       let pathname_prefix = pathname_prefix ^ "." in
@@ -655,9 +614,9 @@ module Heap_snapshot = struct
       let snapshots =
         Array.init num_snapshots (fun index ->
           let chn = open_in (pathname_prefix ^ (string_of_int index)) in
-          let raw : raw_snapshot = Marshal.from_channel chn in
+          let snapshot = Marshal.from_channel chn in
           close_in chn;
-          transform_raw_snapshot raw)
+          snapshot)
       in
       { num_snapshots;
         time_of_writer_close;

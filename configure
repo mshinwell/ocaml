@@ -1081,7 +1081,7 @@ echo "UNIX_OR_WIN32=$unix_or_win32" >> Makefile
 echo "UNIXLIB=$unixlib" >> Makefile
 echo "GRAPHLIB=$graphlib" >> Makefile
 
-otherlibraries="$unixlib str num dynlink bigarray"
+otherlibraries="$unixlib str num dynlink bigarray aprof"
 
 # For the Unix library
 

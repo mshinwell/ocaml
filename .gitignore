@@ -464,6 +464,26 @@
 /otherlibs/*.cm*
 /otherlibs/*.o
 
+# /otherlibs/aprof/
+/otherlibs/aprof/*.o
+/otherlibs/aprof/*.a
+/otherlibs/aprof/*.so
+/otherlibs/aprof/*.obj
+/otherlibs/aprof/*.lib
+/otherlibs/aprof/*.dll
+/otherlibs/aprof/*.cm[ioxat]
+/otherlibs/aprof/*.cmx[as]
+/otherlibs/aprof/*.cmti
+/otherlibs/aprof/*.annot
+/otherlibs/aprof/*.result
+/otherlibs/aprof/*.byte
+/otherlibs/aprof/*.native
+/otherlibs/aprof/program
+/otherlibs/aprof/*.exe
+/otherlibs/aprof/.depend
+/otherlibs/aprof/.depend.nt
+/otherlibs/aprof/.DS_Store
+
 # /otherlibs/bigarray/
 /otherlibs/bigarray/*.o
 /otherlibs/bigarray/*.a

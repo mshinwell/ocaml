@@ -1,0 +1,18 @@
+aProf.cmi :
+camlinternalAProf.cmi :
+aProf.cmo : aProf.cmi
+aProf.cmx : aProf.cmi
+camlinternalAProf.cmo : camlinternalAProf.cmi
+camlinternalAProf.cmx : camlinternalAProf.cmi
+aProf.cmi :
+camlinternalAProf.cmi :
+aProf.cmo : camlinternalAProf.cmi aProf.cmi
+aProf.cmx : camlinternalAProf.cmx aProf.cmi
+camlinternalAProf.cmo : camlinternalAProf.cmi
+camlinternalAProf.cmx : camlinternalAProf.cmi
+aProf.cmi :
+rawAProf.cmi :
+aProf.cmo : aProf.cmi
+aProf.cmx : aProf.cmi
+rawAProf.cmo : rawAProf.cmi
+rawAProf.cmx : rawAProf.cmi
