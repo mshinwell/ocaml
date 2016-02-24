@@ -16,6 +16,10 @@ incurring performance penalties.
 To use the Flambda optimisers it is necessary to pass the {\tt -flambda}
 option to the OCaml {\tt configure} script.  Code compiled with Flambda
 cannot be linked into the same program as code compiled without Flambda.
+Attempting to do this will result in a compiler error.
+
+Consult the {\em Glossary} at the end of this chapter for definitions of
+technical terms used below.
 
 \section{Command-line flags}
 
@@ -25,16 +29,16 @@ are given in the sections that follow.
 
 Commonly-used options:
 \begin{options}
-\item[\machine{-Oclassic}] Make inlining decisions at the point of
-definition of a function rather than at the call site(s).  This mirrors
-the behaviour of OCaml compilers not using Flambda.  It produces
-smaller {\tt .cmx} files, shorter compilation times and code that probably
-runs rather slower.
 \item[\machine{-O2}] Perform more optimisation than usual.  Compilation
 times may be lengthened.
 \item[\machine{-O3}] Perform even more optimisation than usual, possibly
 including unrolling of recursive functions.  Compilation times may be
 significantly lengthened.
+\item[\machine{-Oclassic}] Make inlining decisions at the point of
+definition of a function rather than at the call site(s).  This mirrors
+the behaviour of OCaml compilers not using Flambda.  It produces
+smaller {\tt .cmx} files, shorter compilation times and code that probably
+runs rather slower.
 \item[\machine{-inlining-report}] Emit {\tt .inlining} files (one per
 round of optimisation) showing all of the inliner's decisions.
 \end{options}
@@ -69,6 +73,8 @@ Do not unbox closure variables.
 \item[\machine{-no-unbox-specialised-args}] %
 Do not unbox arguments to which functions have been specialised.
 \item[\machine{-rounds}] How many rounds of optimisation to perform.
+\item[\machine{-unbox-closures-factor}] Scaling factor for benefit
+calculation when using {\tt -unbox-closures}.
 \end{options}
 
 \paragraph{Notes}
@@ -87,8 +93,10 @@ releases.
 Flambda operates in {\em rounds}: one round consists of a certain sequence
 of transformations that may then be repeated in order to achieve more
 satisfactory results.  The number of rounds can be set manually using the
-{\tt -rounds} parameter.  For high optimisation this parameter might be set
-at 3 or 4.
+{\tt -rounds} parameter (although this is not necessary when using
+predefined optimisation levels such as with {\tt -O2} and {\tt -O3};
+see below).
+For high optimisation the number of rounds might be set at 3 or 4.
 
 Command-line flags that may apply per round, for example those with
 {\tt "-cost"} in the name, accept arguments of the form:
@@ -102,52 +110,6 @@ The flags {\tt -Oclassic}, {\tt -O2} and {\tt -O3} are applied before all
 other flags, meaning that certain parameters may be overridden without
 having to specify every parameter usually invoked by the given optimisation
 level.
-
-\section{Terminology}
-
-The following terminology is used in this chapter of the manual.
-
-\begin{itemize}
-\item[{\bf Closure}] The runtime representation of a function.  This
-includes pointers to the code of the function
-together with the values of any variables
-that the function references from its environment of definition.
-The values of such variables are required because the function may be
-invoked from a place where the original bindings of such variables are
-no longer in scope.  The set of such variables in a given closure is
-sometimes known as the {\em environment}.  A group of possibly
-mutually-recursive functions defined using {\em let rec} all share a
-single closure.  (Note to developers: in the Flambda source code a
-{\em closure} always corresponds to a single function; a
-{\em set of closures} refers to a group of such.)
-\item[{\bf Closure variable}]  A member of the environment held within the
-closure of a given function.
-\item[{\bf Constant}]  Something (typically an expression) the value of which
-is known by the compiler at compile time.  Constantness may be explicit from
-the source code or inferred by the Flambda optimisers.
-\item[{\bf Constant closure}]  ... (careful)
-\item[{\bf Defining expression}]  The expression {\tt e} in %
-{\tt let x = e in e'}.
-\item[{\bf Direct call site}]  A place in a program's code where a function is
-called and it is known at compile time which function it will always be.
-\item[{\bf Indirect call site}]  A place in a program's code where a function
-is called but is not known to be a {\em direct call site}.
-\item[{\bf Program}]  A collection of {\em symbol bindings}.
-\item[{\bf Specialised argument}]  An argument to a function about which
-something is known (for example that it holds the same value as some other
-variable outside the function).
-\item[{\bf Symbol}]  A name referencing a particular place in an object file
-or executable image.  At that particular place will be some constant value.
-Symbols may be examined using operating system-specific tools (for
-example {\tt objdump} on Linux).
-\item[{\bf Symbol binding}]  Analogous to a {\em let}-expression but working
-at the level of symbols defined in the object file.  The address of a symbol is
-fixed, but it may be bound to both constant and non-constant expressions.
-\item[{\bf Toplevel}]  An expression in the current program which is not
-enclosed within any function declaration.
-\item[{\bf Variable}]  A named entity to which some OCaml value is bound by a
-{\tt let} expression, pattern-matching construction, or similar.
-\end{itemize}
 
 \section{Inlining}
 
@@ -165,7 +127,7 @@ closure conversion:
 \item It permits higher-order inlining, for example when a non-inlinable
 function always returns the same function yet with different environments
 of definition.  Not all such cases are supported yet, but it is intended
-that they will be.
+that such support will be improved in future.
 \item It is easier to integrate with cross-module optimisation, since
 imported information about other modules is already in the correct
 intermediate language.
@@ -180,13 +142,14 @@ of the compiler.  At the definition site of a function, the body of the
 function is measured.  It will then be marked as eligible for inlining
 (and hence inlined at every direct call site) if:
 \begin{itemize}
-\item the measured size is smaller than that of a
+\item the measured size (in unspecified units) is smaller than that of a
 function call plus the argument of the {\tt -inline} command-line flag; and
 \item the function does not contain a definition of (another) function; and
 \item the function is not recursive.
 \end{itemize}
 
-Without {\tt -Oclassic} then:
+This contrasts to the normal Flambda mode, that is to say
+without {\tt -Oclassic}, where:
 \begin{itemize}
 \item the inlining decision is made at the {\bf call site};
 \item local functions do not prevent their parents from being inlined;
@@ -216,7 +179,7 @@ this function should probably not be inlined systematically: if {\tt b}
 is unknown, or indeed {\tt false}, there is little benefit to trade off
 against a large increase in code size.  In the existing non-Flambda inliner
 this isn't a great problem because chains of inlining were cut off farly
-quickly.  However it has led to excessive use of excessively large inlining
+quickly.  However it has led to excessive use of overly-large inlining
 parameters such as {\tt -inline 10000}.
 
 The remainder of this section discusses the various strategies available
@@ -225,14 +188,16 @@ in the normal Flambda mode.
 \subsection{Assessment of inlining benefit}
 
 The various inlining strategies described below involve a {\em search}
-coupled with exploratory applications of an inlining strategy at call
-sites.  (The search
-procedure is described fully in the next subsection.)
+that performs exploratory applications of an inlining strategy at call
+sites.  (The search procedure is described fully in the next subsection.)
 After having performed each exploratory inlining a decision is made as to
-whether to keep the resulting inlined version of the code.  Inlining typically
+whether to keep the resulting inlined version of the code.
+
+
+Inlining typically
 results in an increase in code size, which if left unchecked, may not only
-lead to excessively large executables and compilation times but also
-a decrease in performance due to cache effects.  As such, the
+lead to grossly large executables and excessive compilation times but also
+a decrease in performance due to worse locality.  As such, the
 Flambda inliner trades off the change in code size against
 the expected runtime performance benefit, with the benefit being computed
 based on the number of operations that the compiler observes may be removed
@@ -270,12 +235,47 @@ The change in code size is also estimated: morally speaking it should be the
 change in machine code size, but since that is not available to the inliner,
 an approximation is used.
 
+new strategy for this section:
+- determine the benefit without inlining inside the function
+- if good enough, inline it
+- if not, speculatively inline inside the function, then re-evaluate,
+including the benefit gained from any internal inlinings.  (inlining thresh
+and depth discussion only for this part).
+
+
 If the benefit exceeds the increase in code size then the inlined version of
 the function will be kept.
 
 \subsection{Inlining search procedure}
 
-...
+The inliner traverses the program looking for direct call sites.  At each
+such call site inlining will be attempted unless the search
+is cut off by one of three things:
+\begin{itemize}
+\item the {\em inlining threshold} (as set initially by {\tt -inline}
+or {\tt -inline-toplevel}) having been exhausted; or
+\item the {\em inlining depth} has reached the maximum (as set by
+{\tt -inline-max-depth); or
+\item the call is to a recursive function and the unrolling depth for
+that function has reached the maximum (as set by
+{\tt -inline-max-unroll}).
+\item the direct call in question is a call to the function containing
+that call.
+\end{itemize}
+
+When attempting to inline a function, the search procedure recurses into the
+body of that function; the inliner does not yet know whether the function
+will actually be inlined.  As such, the inlining decisions taken on the
+body may be seen as {\em speculative}; further, they are constrained by
+the inlining threshold and inlining depth to keep the search procedure
+operating in a reasonable time.  The inlining threshold is reduced, when
+speculating, by the size of an inlined function; the depth is increased
+by one every time the inliner recurses into another function.
+
+
+
+
+
 
 It should be noted that in certain circumstances, to keep compilation times
 under control, the search may be automatically cut off based on information
@@ -284,11 +284,12 @@ may never be considered for inlining if it is known that the contextual
 information available to the inliner would be insufficient for the inlining
 to be beneficial.
 
-\subsection{Inlining of non-recursive functions}
+\subsection{Inlining of functions}
 
-A non-recursive function is straightforward to inline: a copy of the
-function body is taken and inserted at the call site, with the parameters
-bound appropriately.
+Inlining of a function proceeds by taking a copy of the body and inserting
+it at the call site, with the parameters bound appropriately.  (This happens
+for both non-recursive and recursive functions; however, for recursive
+functions the behaviour is restricted by the unrolling depth.)
 
 \subsection{Inlining of functors}
 
@@ -348,6 +349,14 @@ let rec iter_swap f g l =
     f h;
     iter_swap f g t
 \end{verbatim}
+
+Unless overridden by an attribute (see below), specialisation of a function
+will not be attempted if:
+\begin{itemize}
+\item the compiler is in {\tt -Oclassic} mode;
+\item the function is not obviously recursive;
+\item the function is not closed.
+\end{itemize}
 
 It should be noted that the {\em unboxing of closures} pass (see below)
 can introduce specialised arguments on non-recursive functions.  (No other
@@ -409,6 +418,8 @@ size/benefit calculation.
 \item[{\machine{\@specialised}}] Attached to a function application, this
 directs the inliner likewise.  This attribute at a call site overrides any
 other attribute that may be present on the corresponding declaration.
+(Note that the function will still only be specialised if there exist
+one or more invariant parameters whose values are known.)
 \item[{\machine{\@unrolled }}$n$] This attribute is attached to a function
 application and takes an integer argument.  Each time the inliner sees
 the attribute it behaves as follows:
@@ -449,14 +460,18 @@ otherwise.
 
 \subsection{Simplification}
 
-The {\em simplification} transformation propagates information about which
+The {\em simplification} transformation propagates information (known as
+{\em approximations}) about which
 variables hold what values at runtime.  Certain relationships between
 variables and symbols are also tracked: for example, some variable may be
 known to always hold the same value as some other variable; or perhaps
 some variable may be known to always hold the value pointed to by some
 symbol.
 
-This propagation can help to eliminate allocations in cases such as:
+The propagated information
+effectively forms a kind of type system on Flambda terms.
+
+The propagation can help to eliminate allocations in cases such as:
 \begin{verbatim}
 let f x y =
   ...
@@ -514,15 +529,28 @@ into a fresh value on the OCaml heap.
 Toplevel {\tt let}-expressions may be lifted to symbol bindings to ensure
 that the corresponding bound variables are not captured by closures.  If the
 defining expression of a given binding is found to be constant, it is bound
-as such; otherwise, the symbol is bound to a (statically-allocated)
+as such (the technical term is a {\em let-symbol} binding).
+
+Otherwise, the symbol is bound to a (statically-allocated)
 {\em preallocated block} containing one field.  At runtime, the defining
 expression will be evaluated and the first field of the block filled with
-the resulting value.  This causes one extra indirection but ensures, by
+the resulting value.  This {\em initialise-symbol} binding
+causes one extra indirection but ensures, by
 virtue of the symbol's address being known at compile time, that uses of the
 value are not captured by closures.
 
+It should be noted that the blocks corresponding to initialise-symbol
+bindings are kept alive forever, by virtue of them occurring in a static
+table of GC roots within the object file.  This extended lifetime of
+expressions may on occasion be surprising.
+
 \subsection{Transformation of non-escaping references into mutable variables}
 
+Flambda performs a simple analysis analogous to that performed elsewhere
+in the compiler that can transform {\tt ref}s into mutable variables
+that may then be held in registers (or on the stack as appropriate) rather
+than being allocated on the OCaml heap.  This only happens so long as the
+reference concerned can be shown to not escape from its defining scope.
 
 \subsection{Substitution of closure variables for specialised arguments}
 
@@ -648,8 +676,16 @@ tail-call optimisation.
 The transformation is implemented by creating a wrapper function that
 accepts the original arguments.  Meanwhile, the original function is renamed
 and extra arguments are added corresponding to the unboxed specialised
-arguments; this is called from the wrapper.  The wrapper will then be inlined
-at direct call sites.
+arguments; this new function
+is called from the wrapper.  The wrapper will then be inlined
+at direct call sites.  Indeed, all call sites will be direct unless
+{\tt -unbox-closures} is being used, since they will have been generated
+by the compiler when originally specialising the function.  (In the case
+of {\tt -unbox-closures} other functions may appear with specialised
+arguments; in this case there may be indirect calls and these will incur
+a small penalty owing to having to bounce through the wrapper.  The technique
+of {\em direct call surrogates} used for {\tt -unbox-closures} is not
+used by the transformation to unbox specialised arguments.)
 
 \subsection{Unboxing of closures}
 
@@ -657,9 +693,12 @@ This transformation is {\em not} enabled by default.  It may be enabled
 using the {\tt -unbox-closures} flag.
 
 The transformation replaces closure variables by specialised arguments.
-The aim is to cause more closures to become closed, in particular in
-difficult situations where unboxing of specialised arguments and/or
-closure variables is not sufficient.
+The aim is to cause more closures to become closed.  It is particularly
+applicable, as a means of reducing allocation, where the function concerned
+cannot be inlined or specialised.  For example, some non-recursive function
+might be too large to inline; or some recursive function might offer
+no opportunities for specialisation perhaps because its only argument is
+one of type {\tt unit}.
 
 \paragraph{Simple example:} In the following code (which might typically
 occur when {\tt g} is too large to inline) the value of {\tt x} would usually
@@ -683,26 +722,47 @@ variables are still free in the wrapper, but the intention is that when
 the wrapper is inlined at direct call sites, the relevant values are
 passed directly to the main function via the new specialised arguments.
 
+Adding such a wrapper will penalise indirect calls to the function
+(which might exist in arbitrary places; remember that this transformation
+is not for example applied only on functions the compiler has produced
+as a result of specialisation) since such calls will bounce through
+the wrapper.  To
+mitigate this, if a function is small enough when weighed up against
+the number of free variables being removed, it will be duplicated by the
+transformation to obtain two versions: the original (used for indirect calls,
+since we can do no better) and the wrapper/rewritten function pair as
+described in the previous paragraph.  The wrapper/rewritten function pair
+will only be used at direct call sites of the function.  (The wrapper in
+this case is known as a {\em direct call surrogate}, since
+it takes the place of another function---the unchanged version used for
+indirect calls---at direct call sites.)
+
+The {\tt -unbox-closures-factor} command line flag, which takes an
+integer, may be used to adjust the point at which a function is deemed
+large enough to be ineligible for duplication.  The benefit of
+duplication is scaled by the integer before being evaluated against the
+size.
+
 \paragraph{Harder example:} In the following code, there are two closure
 variables that would typically cause closure allocations.  One is called
-{\tt fv} and occurs inside the function {\tt map2}; the other is called
-{\tt z} and occurs inside the function {\tt g}.
+{\tt fv} and occurs inside the function {\tt baz}; the other is called
+{\tt z} and occurs inside the function {\tt bar}.
 In this toy (yet sophisticated) example we again use an attribute to
-simulate the typical situation where the first argument of {\tt map2} is
+simulate the typical situation where the first argument of {\tt baz} is
 too large to inline.
 \begin{verbatim}
-let bar c =
-  let rec g zs fv =
+let foo c =
+  let rec bar zs fv =
     match zs with
     | [] -> []
     | z::zs ->
-      let rec map2 f = function
+      let rec baz f = function
         | [] -> []
-        | a::l -> let r = fv + ((f [@inlined never]) a) in r :: map2 f l
+        | a::l -> let r = fv + ((f [@inlined never]) a) in r :: baz f l
       in
-      (map2 (fun y -> z + y) [z; 2; 3; 4]) @ g zs fv
+      (map2 (fun y -> z + y) [z; 2; 3; 4]) @ bar zs fv
   in
-  Printf.printf "%d" (List.length (g [1;2;3;4] c))
+  Printf.printf "%d" (List.length (bar [1;2;3;4] c))
 \end{verbatim}
 The resulting code passes the free variables via function arguments in
 order to eliminate all closure allocation in this example (aside from any
@@ -735,7 +795,9 @@ at every direct call site, that accepts the original arguments and then
 discards the unused ones before calling the original function.  As a
 consequence, this transformation may be detrimental if the original
 function is usually indirectly called, since such calls will now bounce
-through the wrapper.
+through the wrapper.  (The technique of {\em direct call surrogates} used
+to reduce this penalty during unboxing of closure variables (see above)
+does not yet apply to the pass that removes unused arguments.)
 
 \subsection{Removal of unused closure variables}
 
@@ -811,3 +873,55 @@ strategy used for bytecode.  A sequence of {\tt let}-bindings, which may be
 interspersed with arbitrary effects, surrounds a record creation that becomes
 the module block.  The Flambda-specific transformation follows: these bindings
 are lifted to toplevel symbols, as described above.
+
+\section{Glossary}
+
+The following terminology is used in this chapter of the manual.
+
+\begin{itemize}
+\item[{\bf Closed function}] A function whose body has no free variables
+except its parameters and any to which are bound other functions within
+the same (possibly mutually-recursive) declaration.
+\item[{\bf Closure}] The runtime representation of a function.  This
+includes pointers to the code of the function
+together with the values of any variables
+that the function references from its environment of definition.
+The values of such variables are required because the function may be
+invoked from a place where the original bindings of such variables are
+no longer in scope.  The set of such variables in a given closure is
+sometimes known as the {\em environment}.  A group of possibly
+mutually-recursive functions defined using {\em let rec} all share a
+single closure.  (Note to developers: in the Flambda source code a
+{\em closure} always corresponds to a single function; a
+{\em set of closures} refers to a group of such.)
+\item[{\bf Closure variable}]  A member of the environment held within the
+closure of a given function.
+\item[{\bf Constant}]  Some entity (typically an expression) the value of which
+is known by the compiler at compile time.  Constantness may be explicit from
+the source code or inferred by the Flambda optimisers.
+\item[{\bf Constant closure}] A closure that is statically allocated in an
+object file.  It is almost always the case that the environment portion of
+such a closure is empty.
+\item[{\bf Defining expression}]  The expression {\tt e} in %
+{\tt let x = e in e'}.
+\item[{\bf Direct call site}]  A place in a program's code where a function is
+called and it is known at compile time which function it will always be.
+\item[{\bf Indirect call site}]  A place in a program's code where a function
+is called but is not known to be a {\em direct call site}.
+\item[{\bf Program}]  A collection of {\em symbol bindings}.
+\item[{\bf Specialised argument}]  An argument to a function that is known
+to always hold a particular value at runtime.  These are introduced by the
+inliner when specialising recursive functions; and the {\tt unbox-closures}
+pass.
+\item[{\bf Symbol}]  A name referencing a particular place in an object file
+or executable image.  At that particular place will be some constant value.
+Symbols may be examined using operating system-specific tools (for
+example {\tt objdump} on Linux).
+\item[{\bf Symbol binding}]  Analogous to a {\em let}-expression but working
+at the level of symbols defined in the object file.  The address of a symbol is
+fixed, but it may be bound to both constant and non-constant expressions.
+\item[{\bf Toplevel}]  An expression in the current program which is not
+enclosed within any function declaration.
+\item[{\bf Variable}]  A named entity to which some OCaml value is bound by a
+{\tt let} expression, pattern-matching construction, or similar.
+\end{itemize}
