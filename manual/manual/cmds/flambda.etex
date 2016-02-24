@@ -241,7 +241,9 @@ new strategy for this section:
 - if not, speculatively inline inside the function, then re-evaluate,
 including the benefit gained from any internal inlinings.  (inlining thresh
 and depth discussion only for this part).
-
+...and say, if the function is recursive, then the unrolling depth is
+incremented too.  (This depth basically affects whether a call site is considered
+or not.)
 
 If the benefit exceeds the increase in code size then the inlined version of
 the function will be kept.
@@ -306,6 +308,7 @@ Applications of functors not at toplevel, for example in a local module
 inside some other expression, are treated by the inliner identically to
 normal function calls.
 
+% Make this a \section?
 \subsection{Specialisation of recursive functions}
 
 The inliner may discover a call site to a recursive function where
