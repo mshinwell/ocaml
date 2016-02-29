@@ -51,7 +51,7 @@
          native code, or [caml_young_trigger].
 */
 
-struct generic_table CAML_TABLE_STRUCT(char);
+struct generic_table CAML_TABLE_STRUCT(void*);
 
 asize_t caml_minor_heap_wsz;
 static void *caml_young_base = NULL;
