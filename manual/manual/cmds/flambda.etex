@@ -137,7 +137,7 @@ Flambda provides significantly enhanced inlining capabilities relative to
 previous versions of the compiler.  Unlike such previous versions, all
 functions are eligible for inlining.
 
-\subsection{When inlining is performed}
+\subsubsection{When inlining is performed}
 
 Inlining is performed together with all of the other Flambda optimisation
 passes, that is to say, after closure conversion.  This has three particular
@@ -234,15 +234,9 @@ if {\tt -O3} optimisation level is selected and/or the
 {\tt -inline-max-unroll}
 flag is passed with an argument greater than zero.)
 
-It should be noted that in certain circumstances, to keep compilation times
-under control, the search for inlining opportunities may be automatically cut
-off based on information
-known to the inliner.  For example, certain larger non-recursive functions
-may never be considered for inlining if it is known that the contextual
-information available to the inliner would be insufficient for the inlining
-to be beneficial.
+\subsection{Handling of specific language constructs}
 
-\subsection{Inlining of functors}
+\subsubsection{Functors}
 
 There is nothing particular about functors that inhibits inlining compared
 to normal functions.  To the inliner, these both look the same, except
@@ -256,16 +250,25 @@ Applications of functors not at toplevel, for example in a local module
 inside some other expression, are treated by the inliner identically to
 normal function calls.
 
-\subsection{Inlining of calls via first class modules}
+\subsubsection{First-class modules}
 
 Despite appearances, first class modules behave similarly to functors
 for the purposes of inlining (a first class module is effectively a
 record of functions, just like the result of a functor application).
-As such, functions inside first class modules may be eligible for inlining.
+As such, calls to functions inside first class modules may be eligible for
+inlining.
 
-\subsection{Inlining of method calls}
+\subsubsection{Objects}
 
 Method calls to objects are not at present inlined by Flambda.
+
+\subsection{Inlining reports}
+
+If the {\tt -inlining-report} option is provided to the compiler then a file
+will be emitted corresponding to each round of optimisation.  The files
+are named {\tt basename.}{\em round}{\tt.inlining.org} with {\em round} a
+zero-based integer.  Inside the files, which are formatted as ``org mode'',
+will be found English prose describing the decisions that the inliner took.
 
 \subsection{Assessment of inlining benefit}
 
@@ -332,7 +335,7 @@ flags:
 \begin{itemize}
 \item {\tt -inline};
 \item {\tt -inline-max-depth};
-\item {\tt -inline-max-unroll};
+\item {\tt -inline-max-unroll}.
 \end{itemize}
 {\bf Note in particular} that {\tt -inline} does not have the meaning that
 it has in the previous compiler or in {\tt -Oclassic} mode.  In both of those
@@ -347,27 +350,19 @@ threshold is reduced by the code size of the function being inlined.
 If the threshold becomes exhausted, at or below zero, no further speculation
 will be performed.
 
-Meanwhile, the inlining depth starts at zero
+The inlining depth starts at zero
 and is increased by one every time the inliner
-descends into another function; it is decreased by one every time the
+descends into another function.  It is then decreased by one every time the
 inliner leaves such function.  If the depth exceeds the value set by
 {\tt -inline-max-depth} then speculation stops.  This parameter is intended
-as a general backstop, in particular where there might be non-monotonic
-decreases in the inlining threshold, to avoid inlining getting out of hand.
+as a general backstop for situations where the inlining
+threshold does not control the search sufficiently.
 
 The unrolling depth applies to calls within the same mutually-recursive
 group of functions.  Each time an inlining of such a call is performed
 the depth is incremented by one when examining the resulting body.  If the
 depth reaches the limit set by {\tt -inline-max-unroll} then speculation
 stops.
-
-\subsection{Inlining reports}
-
-If the {\tt -inlining-report} option is provided to the compiler then a file
-will be emitted corresponding to each round of optimisation.  The files
-are named {\tt basename.}{\em round}{\tt.inlining.org} with {\em round} a
-zero-based integer.  Inside the files, which are formatted as ``org mode'',
-will be found English prose describing the decisions that the inliner took.
 
 \section{Specialisation}
 
