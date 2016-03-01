@@ -113,6 +113,26 @@ level.
 
 \section{Inlining}
 
+{\em Inlining} refers to the copying of the code of a function to a
+place where the function is called.
+The code of the function will be surrounded by bindings of its parameters
+to the corresponding arguments.
+
+When a recursive call to a function (within the definition of that function
+or another in the same mutually-recursive group) is inlined, the procedure is
+also known as {\em unrolling}.  This is somewhat akin to loop peeling.
+
+The aims of inlining are:
+\begin{itemize}
+\item to reduce the runtime overhead caused by function calls (including
+setting up for such calls and returning afterwards); and
+\item to reduce instruction cache misses by expressing frequently-taken
+paths through the program using fewer machine instructions.
+\end{itemize}
+These goals are often reached not just by inlining itself but also by
+other optimisations that the compiler is able to perform as a result of
+inlining.
+
 Flambda provides significantly enhanced inlining capabilities relative to
 previous versions of the compiler.  Unlike such previous versions, all
 functions are eligible for inlining.
@@ -185,14 +205,69 @@ parameters such as {\tt -inline 10000}.
 The remainder of this section discusses the various strategies available
 in the normal Flambda mode.
 
+\subsection{Overview of ``Flambda'' inlining heuristics}
+
+When not in {\tt -Oclassic} mode the compiler examines direct call sites
+to determine whether to inline the function being called.  At each
+call site the following procedure is followed:
+\begin{itemize}
+\item Determine whether it is clear that inlining would be beneficial.
+(The exact assessment of {\em benefit} is described below.)  If so, the
+function is inlined.
+\item If inlining the function is not clearly beneficial, then inlining
+will be performed {\em speculatively} inside the function itself.  The
+search for speculative inlining possibilities is controlled by two
+parameters: the {\em inlining threshold} and the {\em inlining depth}.
+(These are described in more detail below.)
+\begin{itemize}
+\item If such speculation shows that performing some inlining inside the
+function would be beneficial, then such inlining is performed and the
+resulting function inlined at the original call site.
+\item Otherwise, nothing happens.
+\end{itemize}
+\end{itemize}
+Inlining within recursive functions of calls to other
+functions in the same mutually-recursive group is kept in check by
+an {\em unrolling depth}, described below.  This ensures that functions are
+not unrolled to excess.  (Unrolling is only enabled
+if {\tt -O3} optimisation level is selected and/or the
+{\tt -inline-max-unroll}
+flag is passed with an argument greater than zero.)
+
+It should be noted that in certain circumstances, to keep compilation times
+under control, the search for inlining opportunities may be automatically cut
+off based on information
+known to the inliner.  For example, certain larger non-recursive functions
+may never be considered for inlining if it is known that the contextual
+information available to the inliner would be insufficient for the inlining
+to be beneficial.
+
+\subsection{Inlining of functors}
+
+There is nothing particular about functors that inhibits inlining compared
+to normal functions.  To the inliner, these both look the same, except
+that functors are marked as such.
+
+Applications of functors at toplevel are biased in favour of inlining.
+(This bias may be adjusted:
+see the documentation for {\tt -inline-lifting-benefit} below.)
+
+Applications of functors not at toplevel, for example in a local module
+inside some other expression, are treated by the inliner identically to
+normal function calls.
+
+\subsection{Inlining of calls via first class modules}
+
+Despite appearances, first class modules behave similarly to functors
+for the purposes of inlining (a first class module is effectively a
+record of functions, just like the result of a functor application).
+As such, functions inside first class modules may be eligible for inlining.
+
+\subsection{Inlining of method calls}
+
+Method calls to objects are not at present inlined by Flambda.
+
 \subsection{Assessment of inlining benefit}
-
-The various inlining strategies described below involve a {\em search}
-that performs exploratory applications of an inlining strategy at call
-sites.  (The search procedure is described fully in the next subsection.)
-After having performed each exploratory inlining a decision is made as to
-whether to keep the resulting inlined version of the code.
-
 
 Inlining typically
 results in an increase in code size, which if left unchecked, may not only
@@ -235,81 +310,66 @@ The change in code size is also estimated: morally speaking it should be the
 change in machine code size, but since that is not available to the inliner,
 an approximation is used.
 
-new strategy for this section:
-- determine the benefit without inlining inside the function
-- if good enough, inline it
-- if not, speculatively inline inside the function, then re-evaluate,
-including the benefit gained from any internal inlinings.  (inlining thresh
-and depth discussion only for this part).
-...and say, if the function is recursive, then the unrolling depth is
-incremented too.  (This depth basically affects whether a call site is considered
-or not.)
-
 If the benefit exceeds the increase in code size then the inlined version of
 the function will be kept.
-
-\subsection{Inlining search procedure}
-
-The inliner traverses the program looking for direct call sites.  At each
-such call site inlining will be attempted unless the search
-is cut off by one of three things:
-\begin{itemize}
-\item the {\em inlining threshold} (as set initially by {\tt -inline}
-or {\tt -inline-toplevel}) having been exhausted; or
-\item the {\em inlining depth} has reached the maximum (as set by
-{\tt -inline-max-depth); or
-\item the call is to a recursive function and the unrolling depth for
-that function has reached the maximum (as set by
-{\tt -inline-max-unroll}).
-\item the direct call in question is a call to the function containing
-that call.
-\end{itemize}
-
-When attempting to inline a function, the search procedure recurses into the
-body of that function; the inliner does not yet know whether the function
-will actually be inlined.  As such, the inlining decisions taken on the
-body may be seen as {\em speculative}; further, they are constrained by
-the inlining threshold and inlining depth to keep the search procedure
-operating in a reasonable time.  The inlining threshold is reduced, when
-speculating, by the size of an inlined function; the depth is increased
-by one every time the inliner recurses into another function.
-
-
-
-
-
-
-It should be noted that in certain circumstances, to keep compilation times
-under control, the search may be automatically cut off based on information
-known to the inliner.  For example, certain larger non-recursive functions
-may never be considered for inlining if it is known that the contextual
-information available to the inliner would be insufficient for the inlining
-to be beneficial.
-
-\subsection{Inlining of functions}
-
-Inlining of a function proceeds by taking a copy of the body and inserting
-it at the call site, with the parameters bound appropriately.  (This happens
-for both non-recursive and recursive functions; however, for recursive
-functions the behaviour is restricted by the unrolling depth.)
-
-\subsection{Inlining of functors}
-
-There is nothing particular about functors that inhibits inlining compared
-to normal functions.  To the inliner, these both look the same, except
-that functors are marked as such.
 
 Applications of functors at toplevel will be given
 an additional benefit (which may be controlled by the
 {\tt -inline-lifting-benefit} flag) to bias inlining in such situations
 towards keeping the inlined version.
 
-Applications of functors not at toplevel, for example in a local module
-inside some other expression, are treated by the inliner identically to
-normal function calls.
+\subsection{Control of speculation}
 
-% Make this a \section?
-\subsection{Specialisation of recursive functions}
+As described above, there are three parameters that restrict the search
+for inlining opportunities during speculation:
+\begin{itemize}
+\item the {\em inlining threshold};
+\item the {\em inlining depth};
+\item the {\em unrolling depth}.
+\end{itemize}
+These parameters are ultimately bounded by the corresponding command-line
+flags:
+\begin{itemize}
+\item {\tt -inline};
+\item {\tt -inline-max-depth};
+\item {\tt -inline-max-unroll};
+\end{itemize}
+{\bf Note in particular} that {\tt -inline} does not have the meaning that
+it has in the previous compiler or in {\tt -Oclassic} mode.  In both of those
+situations {\tt -inline} was effectively some kind of basic assessment of
+inlining benefit.  However in Flambda inlining mode it corresponds to a
+constraint on the search; the assessment of benefit is independent, as
+described above.
+
+When speculation starts the inlining threshold starts at the value set
+by {\tt -inline}.  Upon making a speculative inlining decision the
+threshold is reduced by the code size of the function being inlined.
+If the threshold becomes exhausted, at or below zero, no further speculation
+will be performed.
+
+Meanwhile, the inlining depth starts at zero
+and is increased by one every time the inliner
+descends into another function; it is decreased by one every time the
+inliner leaves such function.  If the depth exceeds the value set by
+{\tt -inline-max-depth} then speculation stops.  This parameter is intended
+as a general backstop, in particular where there might be non-monotonic
+decreases in the inlining threshold, to avoid inlining getting out of hand.
+
+The unrolling depth applies to calls within the same mutually-recursive
+group of functions.  Each time an inlining of such a call is performed
+the depth is incremented by one when examining the resulting body.  If the
+depth reaches the limit set by {\tt -inline-max-unroll} then speculation
+stops.
+
+\subsection{Inlining reports}
+
+If the {\tt -inlining-report} option is provided to the compiler then a file
+will be emitted corresponding to each round of optimisation.  The files
+are named {\tt basename.}{\em round}{\tt.inlining.org} with {\em round} a
+zero-based integer.  Inside the files, which are formatted as ``org mode'',
+will be found English prose describing the decisions that the inliner took.
+
+\section{Specialisation}
 
 The inliner may discover a call site to a recursive function where
 something is known about the arguments: for example, they may be equal to
@@ -364,11 +424,6 @@ will not be attempted if:
 It should be noted that the {\em unboxing of closures} pass (see below)
 can introduce specialised arguments on non-recursive functions.  (No other
 place in the compiler currently does this.)
-
-\subsection{Unrolling of recursive functions}
-
-If {\tt -O3} optimisation level is selected and/or the {\tt -inline-max-unroll}
-flag is passed with an argument greater than zero, the compiler will
 consider recursive functions as eligible for unrolling (analogous to
 loop peeling).
 
@@ -376,15 +431,7 @@ Unrolling of a recursive function consists of applying the transformation for
 inlining non-recursive functions at the recursive call site(s) of the
 function.
 
-\subsection{Inlining reports}
-
-If the {\tt -inlining-report} option is provided to the compiler then a file
-will be emitted corresponding to each round of optimisation.  The files
-are named {\tt basename.}{\em round}{\tt.inlining.org} with {\em round} a
-zero-based integer.  Inside the files, which are formatted as ``org mode'',
-will be found English prose describing the decisions that the inliner took.
-
-\subsection{Directing the inliner}
+\section{Manual control of inlining and specialisation}
 
 Should the inliner prove recalcitrant and refuse to inline a particular
 function, or if the observed inlining decisions are not to the programmer's
@@ -458,7 +505,9 @@ module X = F [@inlined] (struct type t = int end)
 \section{Code transformations}
 
 This section details the general code transformations performed by
-the Flambda passes.  Transformations are permanently enabled unless noted
+the Flambda passes which are for the most part not
+specifically related to inlining or
+specialisation.  Transformations are permanently enabled unless noted
 otherwise.
 
 \subsection{Simplification}
