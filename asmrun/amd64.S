@@ -284,9 +284,9 @@ LBL(caml_call_gc):
 #else
         pushq   %rbp; CFI_ADJUST(8);
 #endif
+        pushq   %r13; CFI_ADJUST (8);
         pushq   %r11; CFI_ADJUST (8);
         pushq   %r10; CFI_ADJUST (8);
-        pushq   %r13; CFI_ADJUST (8);
         pushq   %r12; CFI_ADJUST (8);
         pushq   %r9; CFI_ADJUST (8);
         pushq   %r8; CFI_ADJUST (8);
@@ -355,9 +355,9 @@ LBL(caml_call_gc):
         popq    %r8; CFI_ADJUST(-8)
         popq    %r9; CFI_ADJUST(-8)
         popq    %r12; CFI_ADJUST(-8)
-        popq    %r13; CFI_ADJUST(-8)
         popq    %r10; CFI_ADJUST(-8)
         popq    %r11; CFI_ADJUST(-8)
+        popq    %r13; CFI_ADJUST(-8)
 #ifdef WITH_FRAME_POINTERS
         LEAVE_FUNCTION
 #else
