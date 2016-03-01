@@ -14,7 +14,9 @@ Flambda aims to make it easier to write idiomatic OCaml code without
 incurring performance penalties.
 
 To use the Flambda optimisers it is necessary to pass the {\tt -flambda}
-option to the OCaml {\tt configure} script.  Code compiled with Flambda
+option to the OCaml {\tt configure} script.  (There is no support for a
+single compiler that can operate in both Flambda and non-Flambda modes.)
+Code compiled with Flambda
 cannot be linked into the same program as code compiled without Flambda.
 Attempting to do this will result in a compiler error.
 
@@ -25,7 +27,9 @@ technical terms used below.
 
 The Flambda optimisers provide a variety of command-line flags that may
 be used to control their behaviour.  Detailed descriptions of each flag
-are given in the sections that follow.
+are given in the sections that follow.  Default values for flags that
+accept arguments may be seen
+by invoking the {\tt ocamlopt} compiler with {\tt -help}.
 
 Commonly-used options:
 \begin{options}
@@ -48,26 +52,34 @@ Less commonly-used options:
 \item[\machine{-remove-unused-arguments}] Remove unused function arguments
 even when the argument is not specialised.
 \item[\machine{-unbox-closures}] Pass free variables via specialised arguments
-rather than closures.
+rather than closures (an optimisation for reducing allocation).
 \end{options}
 
 Advanced options:
 \begin{options}
-\item[\machine{-inline}] Controls the aggressiveness of the search for
-inlining opportunities.
+\item[\machine{-inline}] When not in {\tt -Oclassic} mode, limits the total
+size of functions considered for inlining during any speculative inlining
+search.  (See the sections below for full details.)  Note that in such
+mode this parameter does
+{\bf not} control the assessment as to whether any particular function may
+be inlined.  (Raising it to excessive amounts will not necessarily cause
+more functions to be inlined.)
+When in {\tt -Oclassic} mode, {\tt -inline} behaves as in
+previous versions of the compiler: it is the maximum size of function to
+be considered for inlining.
 \item[\machine{-inline-branch-factor},
   \machine{-inline-alloc-cost},
   \machine{-inline-branch-cost},
-  \machine{-inline-call-cost},
-  \machine{-inline-indirect-cost},
-  \machine{-inline-prim-cost}] Controls how the inliner assesses the runtime
+  \machine{-inline-call-cost}] Controls how the inliner assesses the runtime
 performance penalties associated with various operations.
+\item[\machine{-inline-indirect-cost},
+  \machine{-inline-prim-cost}] Likewise.
 \item[\machine{-inline-lifting-benefit},
   \machine{-inline-toplevel}] Controls inlining at toplevel.
-\item[\machine{-inline-max-depth}] A hard limit on the depth of the
-search for inlining opportunities.
-\item[\machine{-inline-max-unroll}] The maximum number of times a given
-function may be unrolled per round of optimisation.
+\item[\machine{-inline-max-depth}] The maximum depth of any
+speculative inlining search.
+\item[\machine{-inline-max-unroll}] The maximum depth of any unrolling of
+recursive functions during any speculative inlining search.
 \item[\machine{-no-unbox-free-vars-of-closures}] %
 Do not unbox closure variables.
 \item[\machine{-no-unbox-specialised-args}] %
@@ -79,6 +91,14 @@ calculation when using {\tt -unbox-closures}.
 
 \paragraph{Notes}
 \begin{itemize}
+\item The set of command line flags relating to optimisation should typically
+be specified to be the same across an entire project.  Flambda does not
+currently record the requested flags in the {\tt .cmx} files.  As such,
+inlining of functions from previously-compiled units will subject their code
+to the optimisation parameters of the unit currently being compiled, rather
+than those specified when they were previously compiled.  It is hoped to
+rectify this deficiency in the future.
+
 \item Flambda-specific flags are silently accepted even when the
 {\tt -flambda} option was not provided to the {\tt configure} script.
 This is intended to make it more
@@ -94,8 +114,7 @@ Flambda operates in {\em rounds}: one round consists of a certain sequence
 of transformations that may then be repeated in order to achieve more
 satisfactory results.  The number of rounds can be set manually using the
 {\tt -rounds} parameter (although this is not necessary when using
-predefined optimisation levels such as with {\tt -O2} and {\tt -O3};
-see below).
+predefined optimisation levels such as with {\tt -O2} and {\tt -O3}).
 For high optimisation the number of rounds might be set at 3 or 4.
 
 Command-line flags that may apply per round, for example those with
@@ -104,6 +123,7 @@ Command-line flags that may apply per round, for example those with
 {\em n}{\tt\ |\ }{\em round}{\tt =}{\em n}[{\tt,}...]
 \end{center}
 In other words, one may specify the value(s) to use for some or all rounds.
+The integer {\em round} is zero-based, zero being the first round.
 If no {\em round} is given then the value will apply to all rounds.
 
 The flags {\tt -Oclassic}, {\tt -O2} and {\tt -O3} are applied before all
@@ -211,7 +231,8 @@ When not in {\tt -Oclassic} mode the compiler examines direct call sites
 to determine whether to inline the function being called.  At each
 call site the following procedure is followed:
 \begin{itemize}
-\item Determine whether it is clear that inlining would be beneficial.
+\item Determine whether it is clear that inlining would be beneficial
+without, for the moment, doing any inlining within the function itself.
 (The exact assessment of {\em benefit} is described below.)  If so, the
 function is inlined.
 \item If inlining the function is not clearly beneficial, then inlining
@@ -265,8 +286,10 @@ Method calls to objects are not at present inlined by Flambda.
 \subsection{Inlining reports}
 
 If the {\tt -inlining-report} option is provided to the compiler then a file
-will be emitted corresponding to each round of optimisation.  The files
-are named {\tt basename.}{\em round}{\tt.inlining.org} with {\em round} a
+will be emitted corresponding to each round of optimisation.  For the
+OCaml source file {\em basename}{\tt .ml} the files
+are named {\em basename}{\tt .}{\em round}{\tt.inlining.org},
+with {\em round} a
 zero-based integer.  Inside the files, which are formatted as ``org mode'',
 will be found English prose describing the decisions that the inliner took.
 
@@ -279,7 +302,9 @@ a decrease in performance due to worse locality.  As such, the
 Flambda inliner trades off the change in code size against
 the expected runtime performance benefit, with the benefit being computed
 based on the number of operations that the compiler observes may be removed
-as a result of inlining.  For example in the previous example:
+as a result of inlining.
+
+For example given the following code:
 \begin{verbatim}
 let f b x =
   if b then
@@ -378,6 +403,22 @@ is not performed uselessly, arguments are only specialised if it can be shown
 that they are {\em invariant}: in other words, during the execution of the
 recursive function(s) themselves, the arguments never change.
 
+Unless overridden by an attribute (see below), specialisation of a function
+will not be attempted if:
+\begin{itemize}
+\item the compiler is in {\tt -Oclassic} mode;
+\item the function is not obviously recursive;
+\item the function is not closed.
+\end{itemize}
+
+The compiler can prove invariance of function arguments across multiple
+functions within a recursive group (although this has some limitations,
+as shown by the example below).
+
+It should be noted that the {\em unboxing of closures} pass (see below)
+can introduce specialised arguments on non-recursive functions.  (No other
+place in the compiler currently does this.)
+
 \paragraph{Example: the well-known {\tt List.iter} function}
 This function might be written like so:
 \begin{verbatim}
@@ -390,13 +431,30 @@ let rec iter f l =
 \end{verbatim}
 and used like this:
 \begin{verbatim}
-let do_iter f =
-  iter f [1; 2; 3]
+let do_iter foo =
+  iter foo [1; 2; 3]
 \end{verbatim}
-...
-(an example here f and g swap between two functions)
-...
-\paragraph{Aside on invariant parameters.} ...
+The argument {\tt f} to {\tt iter} is invariant so the function may be
+specialised:
+\begin{verbatim}
+let do_iter foo =
+  let rec iter' f l =
+    match l with
+    | [] -> ()
+    | h :: t ->
+      f h;
+      iter' f t
+  in
+  iter' foo [1; 2; 3]
+\end{verbatim}
+The compiler notes down that for the function {\tt iter'}, the argument
+{\tt f} is specialised to {\tt foo}.  In particular, this will enable it
+to transform the call {\tt f h} within the body of {\tt iter'} into a
+call to {\tt foo}.  (In turn, if something becomes known about {\tt foo},
+the call might be transformed into a direct call.)
+
+\paragraph{Aside on invariant parameters.} The compiler cannot currently
+detect invariance in cases such as the following.
 \begin{verbatim}
 let rec iter_swap f g l =
   match l with
@@ -408,23 +466,14 @@ let rec iter_swap f g l =
     iter_swap f g t
 \end{verbatim}
 
-Unless overridden by an attribute (see below), specialisation of a function
-will not be attempted if:
-\begin{itemize}
-\item the compiler is in {\tt -Oclassic} mode;
-\item the function is not obviously recursive;
-\item the function is not closed.
-\end{itemize}
+\subsection{Assessment of specialisation benefit}
 
-It should be noted that the {\em unboxing of closures} pass (see below)
-can introduce specialised arguments on non-recursive functions.  (No other
-place in the compiler currently does this.)
-consider recursive functions as eligible for unrolling (analogous to
-loop peeling).
-
-Unrolling of a recursive function consists of applying the transformation for
-inlining non-recursive functions at the recursive call site(s) of the
-function.
+The benefit of specialisation is assessed in a similar way as for inlining.
+Specialised argument information may mean that the body of the function
+being specialised can be simplified: the removed operations are accumulated
+into a benefit.  This, together with the size of the duplicated (specialised)
+function declaration, is then assessed against the size of the call to the
+original function.
 
 \section{Manual control of inlining and specialisation}
 
@@ -435,7 +484,7 @@ programmer directly in the source code.
 One example where this might be appropriate is when the programmer,
 but not the compiler, knows that a particular function call is on a cold
 code path.  It might be desirable to prevent inlining of the function so
-that the code size along the hot path is kept smaller, such as to increase
+that the code size along the hot path is kept smaller, so as to increase
 locality.
 
 The inliner is directed using attributes.
@@ -444,12 +493,13 @@ although {\tt [\@unroll]} is more clear for this purpose)
 the following are supported:
 \begin{options}
 \item[{\machine{\@\@inline always}} or {\machine{\@\@inline never}}] Attached
-to a declaration of a function or functor, these direct the inliner to either
+to a {\em declaration} of a function or functor, these direct the inliner to
+either
 always or never inline, irrespective of the size/benefit calculation.  (If
 the function is recursive then the body is substituted and no special
 action is taken for the recursive call site(s).)
 \item[{\machine{\@inlined always}} or {\machine{\@inlined never}}] Attached
-to a function application, these direct the inliner likewise.  These
+to a function {\em application}, these direct the inliner likewise.  These
 attributes at call sites override any other attribute that may be present
 on the corresponding declaration.
 \end{options}
@@ -497,18 +547,10 @@ end [@@inline never]
 module X = F [@inlined] (struct type t = int end)
 \end{verbatim}
 
-\section{Code transformations}
+\section{Simplification}
 
-This section details the general code transformations performed by
-the Flambda passes which are for the most part not
-specifically related to inlining or
-specialisation.  Transformations are permanently enabled unless noted
-otherwise.
-
-\subsection{Simplification}
-
-The {\em simplification} transformation propagates information (known as
-{\em approximations}) about which
+Simplification, which is run in conjunction with inlining,
+propagates information (known as {\em approximations}) about which
 variables hold what values at runtime.  Certain relationships between
 variables and symbols are also tracked: for example, some variable may be
 known to always hold the same value as some other variable; or perhaps
@@ -533,6 +575,8 @@ The propagation performed by the simplification pass is also important for
 discovering which functions flow to indirect call sites.  This can enable
 the transformation of such call sites into direct call sites, which makes
 them eligible for an inlining transformation.
+
+\section{Code motion transformations}
 
 \subsection{Lifting of constants}
 
@@ -591,21 +635,6 @@ bindings are kept alive forever, by virtue of them occurring in a static
 table of GC roots within the object file.  This extended lifetime of
 expressions may on occasion be surprising.
 
-\subsection{Transformation of non-escaping references into mutable variables}
-
-Flambda performs a simple analysis analogous to that performed elsewhere
-in the compiler that can transform {\tt ref}s into mutable variables
-that may then be held in registers (or on the stack as appropriate) rather
-than being allocated on the OCaml heap.  This only happens so long as the
-reference concerned can be shown to not escape from its defining scope.
-
-\subsection{Substitution of closure variables for specialised arguments}
-
-This transformation discovers closure variables that are known to be
-equal to specialised arguments.  Such closure variables are replaced by
-the specialised arguments; the closure variables may then be removed by
-the ``removal of unused closure variables'' pass (see below).
-
 \section{Unboxing transformations}
 
 The transformations in this section relate to the splitting apart of
@@ -615,8 +644,8 @@ performance profile with lower variance and smaller tails.
 
 \subsection{Unboxing of closure variables}
 
-This transformation is enabled by default.  It may be disabled using the
-{\tt -no-unbox-free-vars-of-closures} flag.
+This transformation is enabled unless
+{\tt -no-unbox-free-vars-of-closures} is provided.
 
 Variables that appear in closure environments may themselves be boxed
 values.  As such, they may be split into further closure variables, each
@@ -629,8 +658,8 @@ within the corresponding function bodies.
 % It needs a global analysis in case there is an out-of-scope projection.
 
 \paragraph{Example:} In the following code, the compiler observes that
-the closure returned from the function {\tt f} has a free variable {\tt pair}
-that may be split into two separate variables.
+the closure returned from the function {\tt f} contains a variable {\tt pair}
+(free in the body of {\tt f}) that may be split into two separate variables.
 \begin{verbatim}
 let f x0 x1 =
   let pair = x0, x1 in
@@ -661,8 +690,8 @@ contain more than twice as many closure variables as it did beforehand.
 
 \subsection{Unboxing of specialised arguments}
 
-This transformation is enabled by default.  It may be disabled using the
-{\tt -no-unbox-specialised-args} flag.
+This transformation is enabled unless
+{\tt -no-unbox-specialised-args} is provided.
 
 It may become the case during compilation that one or more invariant arguments
 to a function become specialised to a particular value.  When such values are
@@ -677,8 +706,8 @@ If the function in question is involved in a recursive group then unboxing
 of specialised arguments may be immediately replicated across the group
 based on the dataflow between invariant arguments.
 
-\paragraph{Example:} In the following code, having inlined {\tt loop}
-into {\tt f}, the compiler observes {\tt env}
+\paragraph{Example:} Having been given the following code, the compiler
+will inline {\tt loop} into {\tt f}, and then observe {\tt env}
 being invariant and always the pair formed by adding {\tt 42} and {\tt 43}
 to the argument {\tt x} of the function {\tt f}.
 \begin{verbatim}
@@ -692,7 +721,7 @@ and loop2 ys inv =
   | y::ys -> y - loop inv ys
 
 let f x =
-  Printf.printf "%d\n" (loop (x + 42, x + 43) [1;2;3])
+  Printf.printf "%d\n" (loop (x + 42, x + 43) [1; 2; 3])
 \end{verbatim}
 Since the functions have sufficiently few arguments, more specialised
 arguments will be added.  After some simplification one obtains:
@@ -707,11 +736,13 @@ let f x =
     | [] -> 4
     | y::ys -> y - loop' ys inv_0 inv_1
   in
-  Printf.printf "%d\n" (loop' (x + 42) (x + 43) [1;2;3])
+  Printf.printf "%d\n" (loop' (x + 42) (x + 43) [1; 2; 3])
 \end{verbatim}
-The allocation of the pair within {\tt f} has been removed.  Since the
-two closures for {\tt loop'} and {\tt loop2'} are constant they will be
-lifted to toplevel with no runtime allocation penalty.
+The allocation of the pair within {\tt f} has been removed.  (Since the
+two closures for {\tt loop'} and {\tt loop2'} are constant they will also be
+lifted to toplevel with no runtime allocation penalty.  This
+would also happen without having run the transformation to unbox
+specialise arguments.)
 
 The transformation to unbox specialised arguments never introduces extra
 allocation.
@@ -809,13 +840,14 @@ let foo c =
       in
       (map2 (fun y -> z + y) [z; 2; 3; 4]) @ bar zs fv
   in
-  Printf.printf "%d" (List.length (bar [1;2;3;4] c))
+  Printf.printf "%d" (List.length (bar [1; 2; 3; 4] c))
 \end{verbatim}
-The resulting code passes the free variables via function arguments in
+The code resulting from applying {\tt -O3 -unbox-closures} to this code
+passes the free variables via function arguments in
 order to eliminate all closure allocation in this example (aside from any
-that may be performed inside {\tt printf}).
+that might be performed inside {\tt printf}).
 
-\section{Transformations that remove unused code and values}
+\section{Removal of unused code and values}
 
 \subsection{Removal of redundant let expressions}
 
@@ -855,6 +887,23 @@ this has to be a whole-unit analysis because a projection of a closure
 variable from some particular closure may have propagated to an arbitrary
 location within the code due to inlining.)
 
+\section{Other code transformations}
+
+\subsection{Transformation of non-escaping references into mutable variables}
+
+Flambda performs a simple analysis analogous to that performed elsewhere
+in the compiler that can transform {\tt ref}s into mutable variables
+that may then be held in registers (or on the stack as appropriate) rather
+than being allocated on the OCaml heap.  This only happens so long as the
+reference concerned can be shown to not escape from its defining scope.
+
+\subsection{Substitution of closure variables for specialised arguments}
+
+This transformation discovers closure variables that are known to be
+equal to specialised arguments.  Such closure variables are replaced by
+the specialised arguments; the closure variables may then be removed by
+the ``removal of unused closure variables'' pass (see below).
+
 \section{Treatment of effects}
 
 The Flambda optimisers classify expressions in order to determine whether
@@ -870,7 +919,7 @@ about how the expression might affect the world; coeffects talk about how
 the world might affect the expression.
 
 Effects are classified as follows:
-\begin{itemize}
+\begin{options}
 \item[{\bf No effects:}] The expression does not change the observable state
 of the world.  For example, it must not write to any mutable storage,
 call arbitrary external functions or change control flow (e.g. by raising
@@ -898,14 +947,14 @@ that only have generative effects and whose results are unused
 may be eliminated by the compiler.  However, unlike expressions with
 ``no effects'', such expressions will never be eligible for duplication.
 \item[{\bf Arbitrary effects:}] All other expressions.
-\end{itemize}
+\end{options}
 
 There is a single classification for coeffects:
-\begin{itemize}
+\begin{options}
 \item[{\bf No coeffects:}] The expression does not observe the effects (in
 the sense described above) of other expressions.  For example, it must not
 read from any mutable storage or call arbitrary external functions.
-\end{itemize}
+\end{options}
 
 It is assumed in the compiler that, subject to data dependencies,
 expressions with neither effects nor coeffects may be reordered with
@@ -921,11 +970,68 @@ interspersed with arbitrary effects, surrounds a record creation that becomes
 the module block.  The Flambda-specific transformation follows: these bindings
 are lifted to toplevel symbols, as described above.
 
+\section{Inhibition of optimisation}
+
+Especially when writing benchmarking suites that run non-side-effecting
+algorithms in loops, it may be found that the optimiser entirely
+elides the code being benchmarked.  This behaviour can be prevented by
+using the {\tt Sys.opaque\_identity} function (which indeed behaves as a
+normal OCaml function and does not possess any ``magic'' semantics).  The
+documentation of the {\tt Sys} module should be consulted for further details.
+
+\section{Use of unsafe operations}
+
+The behaviour of the Flambda simplification pass means that certain unsafe
+operations, which may without Flambda or when using previous versions of
+the compiler be safe, must not be used.  This specifically refers to
+functions found in the {\tt Obj} module.
+
+In particular, it is forbidden to write to any value (for example using
+{\tt Obj.set\_field}) that is not mutable.  (Values returned from C stubs
+are always treated as mutable.)  The compiler will emit warning 59 if it
+detects such a write---but it cannot warn in all cases.  Here is an example
+of code that will trigger the warning:
+\begin{verbatim}
+let f x =
+  let a = 42, x in
+  (Obj.magic a : int ref) := 1;
+  fst a
+\end{verbatim}
+The reason this is unsafe is because the simplification pass believes that
+{\tt fst a} holds the value {\tt 42}; and indeed it must, unless type
+soundness has been broken via unsafe operations.
+
+If it must be the case that code has to be written that triggers warning 59,
+but the code is known to actually be correct (for some definition of
+correct), then {\tt Sys.opaque\_identity} may be used to wrap the value
+before unsafe operations are performed upon it.  Great care must be taken
+when doing this to ensure that the opacity is added at the correct place.
+For example this code will return the integer {\tt 1}:
+\begin{verbatim}
+let f x =
+  let a = Sys.opaque_identity (42, x) in
+  (Obj.magic a : int ref) := 1;
+  fst a
+\end{verbatim}
+However the following code will still return {\tt 42}:
+\begin{verbatim}
+let f x =
+  let a = 42, x in
+  Sys.opaque_identity (Obj.magic a : int ref) := 1;
+  fst a
+\end{verbatim}
+
+High levels of inlining performed by Flambda may expose bugs in code
+thought previously to be correct.  Take care, for example, not
+to add type annotations that claim some mutable value is always immediate
+if it might be possible for an unsafe operation to update it to a boxed
+value.
+
 \section{Glossary}
 
 The following terminology is used in this chapter of the manual.
 
-\begin{itemize}
+\begin{options}
 \item[{\bf Closed function}] A function whose body has no free variables
 except its parameters and any to which are bound other functions within
 the same (possibly mutually-recursive) declaration.
@@ -955,7 +1061,8 @@ such a closure is empty.
 called and it is known at compile time which function it will always be.
 \item[{\bf Indirect call site}]  A place in a program's code where a function
 is called but is not known to be a {\em direct call site}.
-\item[{\bf Program}]  A collection of {\em symbol bindings}.
+\item[{\bf Program}]  A collection of {\em symbol bindings} forming the
+definition of a single compilation unit (i.e. {\tt .cmx} file).
 \item[{\bf Specialised argument}]  An argument to a function that is known
 to always hold a particular value at runtime.  These are introduced by the
 inliner when specialising recursive functions; and the {\tt unbox-closures}
@@ -964,11 +1071,11 @@ pass.
 or executable image.  At that particular place will be some constant value.
 Symbols may be examined using operating system-specific tools (for
 example {\tt objdump} on Linux).
-\item[{\bf Symbol binding}]  Analogous to a {\em let}-expression but working
+\item[{\bf Symbol binding}]  Analogous to a {\tt let}-expression but working
 at the level of symbols defined in the object file.  The address of a symbol is
 fixed, but it may be bound to both constant and non-constant expressions.
 \item[{\bf Toplevel}]  An expression in the current program which is not
 enclosed within any function declaration.
 \item[{\bf Variable}]  A named entity to which some OCaml value is bound by a
 {\tt let} expression, pattern-matching construction, or similar.
-\end{itemize}
+\end{options}
