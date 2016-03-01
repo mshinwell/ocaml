@@ -46,9 +46,9 @@ let masm =
     r8          6
     r9          7
     r12         8
-    r13         9
-    r10         10
-    r11         11
+    r10         9
+    r11         10
+    r13         11
     rbp         12
     r14         trap pointer
     r15         allocation pointer
@@ -183,7 +183,8 @@ let outgoing ofs = Outgoing ofs
 let not_supported ofs = fatal_error "Proc.loc_results: cannot call"
 
 let max_int_args_in_regs () =
-  if !Clflags.allocation_profiling then 9 else 10
+  (* CR lwhite: this should really be 10 when allocation profiling is off *)
+  (*if !Clflags.allocation_profiling then*) 9 (*else 10*)
 
 let loc_arguments arg =
   calling_conventions 0 ((max_int_args_in_regs ()) - 1) 100 109 outgoing arg
@@ -307,7 +308,7 @@ let destroyed_at_raise = all_phys_regs
 
 let safe_register_pressure instr =
   let extra =
-    (if fp then 1 else 0) + (if !Clflags.allocation_profiling then 2 else 0)
+    (if fp then 1 else 0) + (if !Clflags.allocation_profiling then 1 else 0)
   in
   match instr with
   | Iextcall(_,_) -> if win64 then 8 - extra else 0
