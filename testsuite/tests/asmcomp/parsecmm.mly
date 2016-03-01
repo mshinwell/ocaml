@@ -41,6 +41,8 @@ let access_array base numelt size =
   | _ -> Cop(Cadda, [base;
                      Cop(Clsl, [numelt; Cconst_int(Misc.log2 size)])])
 
+let dummy_ident = Ident.create "dummy"
+
 %}
 
 %token ABSF
@@ -148,7 +150,8 @@ fundecl:
     LPAREN FUNCTION STRING LPAREN params RPAREN sequence RPAREN
       { List.iter (fun (id, ty) -> unbind_ident id) $5;
         {fun_name = $3; fun_args = $5; fun_body = $7; fun_fast = true;
-         fun_dbg = Debuginfo.none} }
+         fun_dbg = Debuginfo.none; fun_alloc_profiling_node = dummy_ident;
+         fun_num_instrumented_alloc_points = 0;} }
 ;
 params:
     oneparam params     { $1 :: $2 }

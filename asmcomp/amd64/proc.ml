@@ -19,7 +19,6 @@ open Reg
 open Mach
 
 let fp = Config.with_frame_pointers
-let allocation_profiling = true (* !Clflags.allocation_profiling*)
 
 (* Which ABI to use *)
 
@@ -78,13 +77,13 @@ let masm =
 
 let int_reg_name =
   match Config.ccomp_type with
+  (* %r11 comes before %r13 since the latter is reserved for allocation
+     profiling and there must be a contiguous block of registers available
+     for allocation prior to that one. *)
   | "msvc" ->
       [| "rax"; "rbx"; "rdi"; "rsi"; "rdx"; "rcx"; "r8"; "r9";
-         "r12"; "r13"; "r10"; "r11"; "rbp" |]
+         "r12"; "r10"; "r11"; "r13"; "rbp" |]
   | _ ->
-      (* %r11 comes before %r13 since the latter is reserved for allocation
-         profiling and there must be a contiguous block of registers available
-         for allocation prior to that one. *)
       [| "%rax"; "%rbx"; "%rdi"; "%rsi"; "%rdx"; "%rcx"; "%r8"; "%r9";
          "%r12"; "%r10"; "%r11"; "%r13"; "%rbp" |]
 
@@ -183,14 +182,14 @@ let incoming ofs = Incoming ofs
 let outgoing ofs = Outgoing ofs
 let not_supported ofs = fatal_error "Proc.loc_results: cannot call"
 
-let max_int_args_in_regs =
-  if allocation_profiling then 9 else 10
+let max_int_args_in_regs () =
+  if !Clflags.allocation_profiling then 9 else 10
 
 let loc_arguments arg =
-  calling_conventions 0 (max_int_args_in_regs - 1) 100 109 outgoing arg
+  calling_conventions 0 ((max_int_args_in_regs ()) - 1) 100 109 outgoing arg
 let loc_parameters arg =
   let (loc, ofs) =
-    calling_conventions 0 (max_int_args_in_regs - 1) 100 109 incoming arg
+    calling_conventions 0 ((max_int_args_in_regs ()) - 1) 100 109 incoming arg
   in
   loc
 let loc_results res =
@@ -255,7 +254,7 @@ let loc_alloc_profiling_node = r13
 (* Volatile registers: none, except when allocation profiling *)
 
 let regs_are_volatile rs =
-  if not allocation_profiling then false
+  if not !Clflags.allocation_profiling then false
   else
     List.exists (fun reg -> reg.loc = loc_alloc_profiling_node.loc)
       (Array.to_list rs)
@@ -294,7 +293,7 @@ let destroyed_at_oper = function
           []
       end @
         begin
-          if allocation_profiling then
+          if !Clflags.allocation_profiling then
             [r13]
           else
             []
@@ -308,7 +307,7 @@ let destroyed_at_raise = all_phys_regs
 
 let safe_register_pressure instr =
   let extra =
-    (if fp then 1 else 0) + (if allocation_profiling then 2 else 0)
+    (if fp then 1 else 0) + (if !Clflags.allocation_profiling then 2 else 0)
   in
   match instr with
   | Iextcall(_,_) -> if win64 then 8 - extra else 0
@@ -325,7 +324,7 @@ let max_register_pressure instr =
   in
   let int_pressure =
     int_pressure - (if fp then 1 else 0)
-      - (if allocation_profiling then 1 else 0)
+      - (if !Clflags.allocation_profiling then 1 else 0)
   in
   [| int_pressure; float_pressure |]
 
@@ -360,4 +359,4 @@ let assemble_file infile outfile =
 let init () =
     num_available_registers.(0)
       <- 13 - (if fp then 1 else 0)
-        - (if allocation_profiling then 1 else 0)
+        - (if !Clflags.allocation_profiling then 1 else 0)

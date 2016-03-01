@@ -62,10 +62,12 @@ let rec deadcode i =
       let (s, _) = deadcode i.next in
       ({i with desc = Itrywith(body', handler'); next = s}, i.live)
 
-let fundecl f = f
-(* CR mshinwell: find out why this is deleting moves to %r13 even
+let fundecl f =
+  (* CR mshinwell: find out why this is deleting moves to %r13 even
    though [regs_are_volatile] should return [true] for this... *)
-(*
-  let (new_body, _) = deadcode f.fun_body in
-  {f with fun_body = new_body}
-*)
+  if !Clflags.allocation_profiling then f
+  else begin
+    let (new_body, _) = deadcode f.fun_body in
+    {f with fun_body = new_body}
+  end
+

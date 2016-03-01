@@ -479,16 +479,12 @@ let set_field ptr n newval =
   Cop(Cstore Word, [field_address ptr n; newval])
 
 let header ptr =
-(*
   if !Clflags.allocation_profiling then
-*)
     Cop(Cand, [Cop (Cload Word, [Cop(Cadda, [ptr; Cconst_int(-size_int)])]);
                Cconst_int 0x0000_03ff_ffff_ffff;
               ])
-(*
   else
     Cop(Cload Word, [Cop(Cadda, [ptr; Cconst_int(-size_int)])])
-*)
 
 let tag_offset =
   if big_endian then -1 else -size_int
