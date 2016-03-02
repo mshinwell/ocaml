@@ -126,16 +126,20 @@ module Snapshot = struct
   let entries { entries } = entries
 
   let rec fold_ocaml_indirect_calls ?executable ~frame_table
-            f backtrace acc callee =
+            visited f backtrace acc callee =
     let node = Trace.OCaml.Indirect_call_point.Callee.callee_node callee in
-    let acc = fold_node ?executable ~frame_table f backtrace acc node in
+    let acc =
+      fold_node ?executable ~frame_table visited f backtrace acc node
+    in
     let next = Trace.OCaml.Indirect_call_point.Callee.next callee in
     match next with
     | None -> acc
     | Some callee ->
-      fold_ocaml_indirect_calls ?executable ~frame_table f backtrace acc callee
+      fold_ocaml_indirect_calls ?executable ~frame_table
+        visited f backtrace acc callee
 
-  and fold_ocaml_fields ?executable ~frame_table f backtrace acc field =
+  and fold_ocaml_fields ?executable ~frame_table
+        visited f backtrace acc field =
     let acc =
       match Trace.OCaml.Field.classify field with
       | Trace.OCaml.Field.Allocation alloc ->
@@ -147,13 +151,16 @@ module Snapshot = struct
         let site = Trace.OCaml.Direct_call_point.call_site call in
         let loc = Location.create_ocaml ?executable ~frame_table site in
         let node = Trace.OCaml.Direct_call_point.callee_node call in
-        fold_ocaml_node ?executable ~frame_table f (loc :: backtrace) acc node
+        fold_ocaml_node ?executable ~frame_table
+          visited f (loc :: backtrace) acc node
       | Trace.OCaml.Field.Direct_call (Trace.OCaml.Field.To_foreign call) ->
         let site = Trace.OCaml.Direct_call_point.call_site call in
         let loc = Location.create_ocaml ?executable ~frame_table site in
         let node = Trace.OCaml.Direct_call_point.callee_node call in
-        fold_foreign_node ?executable ~frame_table f (loc :: backtrace) acc node
-      | Trace.OCaml.Field.Direct_call (Trace.OCaml.Field.To_uninstrumented _) ->
+        fold_foreign_node ?executable ~frame_table
+          visited f (loc :: backtrace) acc node
+      | Trace.OCaml.Field.Direct_call
+          (Trace.OCaml.Field.To_uninstrumented _) ->
         acc
       | Trace.OCaml.Field.Indirect_call call ->
         let site = Trace.OCaml.Indirect_call_point.call_site call in
@@ -163,41 +170,35 @@ module Snapshot = struct
         | None -> acc
         | Some callee ->
           fold_ocaml_indirect_calls ?executable ~frame_table
-            f (loc :: backtrace) acc callee
+            visited f (loc :: backtrace) acc callee
     in
     match Trace.OCaml.Field.next field with
     | None -> acc
     | Some field ->
-      fold_ocaml_fields ?executable ~frame_table f backtrace acc field
+      fold_ocaml_fields ?executable ~frame_table
+        visited f backtrace acc field
 
-  and fold_ocaml_tail_calls ?executable ~frame_table
-        f origin backtrace acc node =
-    if Trace.OCaml.Node.compare origin node = 0 then acc
+  and fold_ocaml_node ?executable ~frame_table visited f backtrace acc node =
+    if Trace.Node.Set.mem (Trace.Node.of_ocaml_node node) !visited then acc
     else begin
+      visited := Trace.Node.Set.add (Trace.Node.of_ocaml_node node) !visited;
+      let acc =
+         fold_ocaml_node
+           ?executable ~frame_table visited f backtrace acc
+           (Trace.OCaml.Node.next_in_tail_call_chain node)
+      in
       let acc =
         match Trace.OCaml.Node.fields node with
         | None -> acc
-        | Some field ->
-          fold_ocaml_fields ?executable ~frame_table f backtrace acc field
+        | Some fields ->
+          fold_ocaml_fields
+            ?executable ~frame_table visited f backtrace acc fields
       in
-      fold_ocaml_tail_calls ?executable ~frame_table f origin backtrace acc
-        (Trace.OCaml.Node.next_in_tail_call_chain node)
+      acc
     end
 
-  and fold_ocaml_node ?executable ~frame_table f backtrace acc node =
-    let acc =
-      match Trace.OCaml.Node.fields node with
-      | None -> acc
-      | Some fields ->
-        fold_ocaml_fields ?executable ~frame_table f backtrace acc fields
-    in
-    let acc =
-       fold_ocaml_tail_calls ?executable ~frame_table f node backtrace acc
-        (Trace.OCaml.Node.next_in_tail_call_chain node)
-    in
-    acc
-
-  and fold_foreign_fields ?executable ~frame_table f backtrace acc field =
+  and fold_foreign_fields ?executable ~frame_table
+        visited f backtrace acc field =
     let acc =
       match Trace.Foreign.Field.classify field with
       | Trace.Foreign.Field.Allocation alloc ->
@@ -209,25 +210,28 @@ module Snapshot = struct
         let site = Trace.Foreign.Call_point.call_site call in
         let loc = Location.create_foreign ?executable site in
         let node = Trace.Foreign.Call_point.callee_node call in
-        fold_node ?executable ~frame_table f (loc :: backtrace) acc node
+        fold_node ?executable ~frame_table
+          visited f (loc :: backtrace) acc node
     in
     match Trace.Foreign.Field.next field with
     | None -> acc
     | Some field ->
-      fold_foreign_fields ?executable ~frame_table f backtrace acc field
+      fold_foreign_fields ?executable ~frame_table
+        visited f backtrace acc field
 
-  and fold_foreign_node ?executable ~frame_table f backtrace acc node =
+  and fold_foreign_node ?executable ~frame_table visited f backtrace acc node =
     match Trace.Foreign.Node.fields node with
     | None -> acc
     | Some field ->
-      fold_foreign_fields ?executable ~frame_table f backtrace acc field
+      fold_foreign_fields ?executable ~frame_table
+        visited f backtrace acc field
 
-  and fold_node ?executable ~frame_table f backtrace acc node =
+  and fold_node ?executable ~frame_table visited f backtrace acc node =
     match Trace.Node.classify node with
     | Trace.Node.OCaml node ->
-      fold_ocaml_node ?executable ~frame_table f backtrace acc node
+      fold_ocaml_node ?executable ~frame_table visited f backtrace acc node
     | Trace.Node.Foreign node ->
-      fold_foreign_node ?executable ~frame_table f backtrace acc node
+      fold_foreign_node ?executable ~frame_table visited f backtrace acc node
 
   let allocation_table ~snapshot =
     let entries = Heap_snapshot.entries snapshot in
@@ -252,7 +256,8 @@ module Snapshot = struct
       match Trace.root trace with
       | None -> Entries.empty
       | Some node ->
-        fold_node ?executable ~frame_table
+        let visited = ref Trace.Node.Set.empty in
+        fold_node ?executable ~frame_table visited
           (fun backtrace alloc acc ->
              match Hashtbl.find allocs alloc with
              | (blocks, words) ->
@@ -280,7 +285,7 @@ module Series = struct
 
   type t = Snapshot.t list
 
-  let create ?executable ~profile =
+  let create ?executable profile =
     let series = Heap_snapshot.Series.read ~pathname_prefix:profile in
     let trace = Heap_snapshot.Series.trace series in
     let frame_table = Heap_snapshot.Series.frame_table series in
@@ -293,7 +298,7 @@ module Series = struct
           loop (snapshot :: acc) (n - 1)
         end
       in
-      loop [] length
+      loop [] (length - 1)
     in
       List.map
         (fun snapshot ->

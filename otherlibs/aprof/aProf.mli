@@ -101,6 +101,6 @@ module Series : sig
 
   type t = Snapshot.t list
 
-  val create : ?executable:string -> profile:string -> t
+  val create : ?executable:string -> string -> t
 
 end
