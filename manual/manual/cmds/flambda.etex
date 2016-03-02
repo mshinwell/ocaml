@@ -342,10 +342,21 @@ an approximation is used.
 If the benefit exceeds the increase in code size then the inlined version of
 the function will be kept.
 
+Flambda does not currently track which code paths may be hot or cold.
+However as the inliner proceeds under branches it estimates the
+probability of the current code path being cold as
+$(\frac{1}{1 + factor})^{depth}$, where $factor$ is set by
+{\tt -inline-branch-factor} and $depth$ is the nesting depth of branches
+at the current point.
+
 Applications of functors at toplevel will be given
 an additional benefit (which may be controlled by the
 {\tt -inline-lifting-benefit} flag) to bias inlining in such situations
 towards keeping the inlined version.
+
+XXX Missing:
+inline-toplevel
+inline-branch-factor
 
 \subsection{Control of speculation}
 
@@ -389,10 +400,6 @@ group of functions.  Each time an inlining of such a call is performed
 the depth is incremented by one when examining the resulting body.  If the
 depth reaches the limit set by {\tt -inline-max-unroll} then speculation
 stops.
-
-XXX Missing:
-inline-toplevel
-inline-branch-factor
 
 \section{Specialisation}
 
@@ -443,7 +450,7 @@ The argument {\tt f} to {\tt iter} is invariant so the function may be
 specialised:
 \begin{verbatim}
 let do_iter foo =
-  let rec iter' f l =
+  let rec iter' f l =  (* compiler knows: f holds the same value as foo *)
     match l with
     | [] -> ()
     | h :: t ->
@@ -565,23 +572,34 @@ either
 always or never inline, irrespective of the size/benefit calculation.  (If
 the function is recursive then the body is substituted and no special
 action is taken for the recursive call site(s).)
+{\machine{\@\@inline}} with no argument is equivalent to
+{\machine{\@\@inline always}}.
 \item[{\machine{\@inlined always}} or {\machine{\@inlined never}}] Attached
 to a function {\em application}, these direct the inliner likewise.  These
 attributes at call sites override any other attribute that may be present
 on the corresponding declaration.
+{\machine{\@inlined}} with no argument is equivalent to
+{\machine{\@inlined always}}.
 \end{options}
 
 For recursive functions the relevant attributes are:
 \begin{options}
-\item[{\machine{\@\@specialise}}] Attached to a declaration of a function
-or functor, this directs the inliner to always specialise the function so
+\item[{\machine{\@\@specialise always}} or {\machine{\@\@specialise never}}]%
+Attached to a declaration of a function
+or functor, this directs the inliner to either always or never
+specialise the function so
 long as it has appropriate contextual knowledge, irrespective of the
 size/benefit calculation.
-\item[{\machine{\@specialised}}] Attached to a function application, this
+{\machine{\@\@specialise}} with no argument is equivalent to
+{\machine{\@\@specialise always}}.
+\item[{\machine{\@specialised always}} or {\machine{\@specialised never}}]%
+Attached to a function application, this
 directs the inliner likewise.  This attribute at a call site overrides any
 other attribute that may be present on the corresponding declaration.
 (Note that the function will still only be specialised if there exist
 one or more invariant parameters whose values are known.)
+{\machine{\@specialised}} with no argument is equivalent to
+{\machine{\@specialised always}}.
 \item[{\machine{\@unrolled }}$n$] This attribute is attached to a function
 application and takes an integer argument.  Each time the inliner sees
 the attribute it behaves as follows:
@@ -624,9 +642,6 @@ known to always hold the same value as some other variable; or perhaps
 some variable may be known to always hold the value pointed to by some
 symbol.
 
-The propagated information
-effectively forms a kind of type system on Flambda terms.
-
 The propagation can help to eliminate allocations in cases such as:
 \begin{verbatim}
 let f x y =
@@ -647,7 +662,9 @@ them eligible for an inlining transformation.
 
 \subsection{Lifting of constants}
 
-Expressions found to be constant will be lifted to symbol bindings when
+Expressions found to be constant will be lifted to symbol
+bindings---that is to say, they will be statically allocated in the
+object file---when
 they evaluate to boxed values.  Such constants may be straightforward numeric
 constants, such as the floating-point number {\tt 42.0}, or more complicated
 values such as constant closures.
