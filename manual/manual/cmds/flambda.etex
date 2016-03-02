@@ -67,6 +67,8 @@ more functions to be inlined.)
 When in {\tt -Oclassic} mode, {\tt -inline} behaves as in
 previous versions of the compiler: it is the maximum size of function to
 be considered for inlining.
+\item[\machine{-inline-toplevel}] The equivalent of {\tt -inline} but used
+when speculative inlining starts at toplevel.
 \item[\machine{-inline-branch-factor},
   \machine{-inline-alloc-cost},
   \machine{-inline-branch-cost},
@@ -74,8 +76,8 @@ be considered for inlining.
 performance penalties associated with various operations.
 \item[\machine{-inline-indirect-cost},
   \machine{-inline-prim-cost}] Likewise.
-\item[\machine{-inline-lifting-benefit},
-  \machine{-inline-toplevel}] Controls inlining at toplevel.
+\item[\machine{-inline-lifting-benefit}] Controls inlining of functors
+at toplevel.
 \item[\machine{-inline-max-depth}] The maximum depth of any
 speculative inlining search.
 \item[\machine{-inline-max-unroll}] The maximum depth of any unrolling of
@@ -319,7 +321,8 @@ it would be observed that inlining of {\tt f} would remove:
 \item one conditional branch.
 \end{itemize}
 
-Formally, an estimate of runtime performance benefit is computed by summing
+Formally, an estimate of runtime performance benefit is computed by
+first summing
 the cost of the operations that are known to be removed as a result of the
 inlining and subsequent simplification of the inlined body.
 The individual costs for the various kinds of operations may be adjusted
@@ -335,19 +338,23 @@ encompass operations including arithmetic and memory access.
 (Default values are described in the {\em Default settings of parameters}
 section below.)
 
+The initial benefit value is then scaled by a factor that attempts to
+compensate for the fact that the current point in the code, if under some
+number of conditional branches, may be cold.  (Flambda does not currently
+compute hot and cold paths.)  The factor---the estimated probability that
+the inliner is on a code cold path---is calculated as
+$(\frac{1}{1 + f})^{d}$, where $f$ is set by
+{\tt -inline-branch-factor} and $d$ is the nesting depth of branches
+at the current point.
+
+The resulting benefit value is known as the {\em evaluated benefit}.
+
 The change in code size is also estimated: morally speaking it should be the
 change in machine code size, but since that is not available to the inliner,
 an approximation is used.
 
-If the benefit exceeds the increase in code size then the inlined version of
-the function will be kept.
-
-Flambda does not currently track which code paths may be hot or cold.
-However as the inliner proceeds under branches it estimates the
-probability of the current code path being cold as
-$(\frac{1}{1 + factor})^{depth}$, where $factor$ is set by
-{\tt -inline-branch-factor} and $depth$ is the nesting depth of branches
-at the current point.
+If the evaluated benefit exceeds the increase in code size then the inlined
+version of the function will be kept.
 
 Applications of functors at toplevel will be given
 an additional benefit (which may be controlled by the
@@ -363,8 +370,8 @@ for inlining opportunities during speculation:
 \item the {\em inlining depth};
 \item the {\em unrolling depth}.
 \end{itemize}
-These parameters are ultimately bounded by the corresponding command-line
-flags:
+These parameters are ultimately bounded by the arguments provided to
+the corresponding command-line flags (or their default values):
 \begin{itemize}
 \item {\tt -inline} (or, if the call site that triggered speculation is
 at toplevel, {\tt -inline-toplevel});
@@ -448,7 +455,8 @@ The argument {\tt f} to {\tt iter} is invariant so the function may be
 specialised:
 \begin{verbatim}
 let do_iter foo =
-  let rec iter' f l =  (* compiler knows: f holds the same value as foo *)
+  let rec iter' f l =
+    (* The compiler knows: f holds the same value as foo throughout iter'. *)
     match l with
     | [] -> ()
     | h :: t ->
@@ -561,7 +569,7 @@ locality.
 
 The inliner is directed using attributes.
 For non-recursive functions (and one-step unrolling of recursive functions,
-although {\tt [\@unroll]} is more clear for this purpose)
+although {\tt \@unroll} is more clear for this purpose)
 the following are supported:
 \begin{options}
 \item[{\machine{\@\@inline always}} or {\machine{\@\@inline never}}] Attached
@@ -613,8 +621,7 @@ As such, $n$ behaves as the ``maximum depth of unrolling''.
 \end{options}
 
 A compiler warning will be emitted if it was found impossible to obey an
-annotation from an {\tt [\@inlined]} or {\tt [\@specialised]}
-attribute.
+annotation from an {\tt \@inlined} or {\tt \@specialised} attribute.
 
 \paragraph{Example showing correct placement of attributes}
 \begin{verbatim}
