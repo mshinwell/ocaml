@@ -27,9 +27,7 @@ technical terms used below.
 
 The Flambda optimisers provide a variety of command-line flags that may
 be used to control their behaviour.  Detailed descriptions of each flag
-are given in the sections that follow.  Default values for flags that
-accept arguments may be seen
-by invoking the {\tt ocamlopt} compiler with {\tt -help}.
+are given in the sections that follow.
 
 Commonly-used options:
 \begin{options}
@@ -40,7 +38,9 @@ including unrolling of recursive functions.  Compilation times may be
 significantly lengthened.
 \item[\machine{-Oclassic}] Make inlining decisions at the point of
 definition of a function rather than at the call site(s).  This mirrors
-the behaviour of OCaml compilers not using Flambda.  It produces
+the behaviour of OCaml compilers not using Flambda.  Compared to compilation
+using the new Flambda inlining heuristics (for example at {\tt -O2}) it
+produces
 smaller {\tt .cmx} files, shorter compilation times and code that probably
 runs rather slower.
 \item[\machine{-inlining-report}] Emit {\tt .inlining} files (one per
@@ -154,8 +154,7 @@ other optimisations that the compiler is able to perform as a result of
 inlining.
 
 Flambda provides significantly enhanced inlining capabilities relative to
-previous versions of the compiler.  Unlike such previous versions, all
-functions are eligible for inlining.
+previous versions of the compiler.
 
 \subsubsection{When inlining is performed}
 
@@ -333,6 +332,8 @@ using the various {\tt -inline-...-cost} flags:
 \item[\machine{-inline-prim-cost}] The cost of a {\em primitive}.  Primitives
 encompass operations including arithmetic and memory access.
 \end{options}
+(Default values are described in the {\em Default settings of parameters}
+section below.)
 
 The change in code size is also estimated: morally speaking it should be the
 change in machine code size, but since that is not available to the inliner,
@@ -388,6 +389,10 @@ group of functions.  Each time an inlining of such a call is performed
 the depth is incremented by one when examining the resulting body.  If the
 depth reaches the limit set by {\tt -inline-max-unroll} then speculation
 stops.
+
+XXX Missing:
+inline-toplevel
+inline-branch-factor
 
 \section{Specialisation}
 
@@ -474,6 +479,68 @@ being specialised can be simplified: the removed operations are accumulated
 into a benefit.  This, together with the size of the duplicated (specialised)
 function declaration, is then assessed against the size of the call to the
 original function.
+
+\section{Default settings of parameters}
+
+The default settings (when not using {\tt -Oclassic}) are for one
+round of optimisation using the following parameters.
+
+\begin{tableau}{|l|l|}{Parameter}{Setting}
+\entree{{\tt -inline}}{10}
+\entree{{\tt -inline-branch-factor}}{0.1}
+\entree{{\tt -inline-alloc-cost}}{7}
+\entree{{\tt -inline-branch-cost}}{5}
+\entree{{\tt -inline-call-cost}}{5}
+\entree{{\tt -inline-indirect-cost}}{4}
+\entree{{\tt -inline-prim-cost}}{3}
+\entree{{\tt -inline-lifting-benefit}}{1300}
+\entree{{\tt -inline-toplevel}}{160}
+\entree{{\tt -inline-max-depth}}{1}
+\entree{{\tt -inline-max-unroll}}{0}
+\entree{{\tt -unbox-closures-factor}}{10}
+\end{tableau}
+
+\subsection{Settings at -O2 optimisation level}
+
+When {\tt -O2} is specified two rounds of optimisation are performed.
+The first round uses the default parameters (see above).  The second uses
+the following parameters.
+
+\begin{tableau}{|l|l|}{Parameter}{Setting}
+\entree{{\tt -inline}}{25}
+\entree{{\tt -inline-branch-factor}}{Same as default}
+\entree{{\tt -inline-alloc-cost}}{Double the default}
+\entree{{\tt -inline-branch-cost}}{Double the default}
+\entree{{\tt -inline-call-cost}}{Double the default}
+\entree{{\tt -inline-indirect-cost}}{Double the default}
+\entree{{\tt -inline-prim-cost}}{Double the default}
+\entree{{\tt -inline-lifting-benefit}}{Same as default}
+\entree{{\tt -inline-toplevel}}{400}
+\entree{{\tt -inline-max-depth}}{2}
+\entree{{\tt -inline-max-unroll}}{Same as default}
+\entree{{\tt -unbox-closures-factor}}{Same as default}
+\end{tableau}
+
+\subsection{Settings at -O3 optimisation level}
+
+When {\tt -O3} is specified three rounds of optimisation are performed.
+The first two rounds are as for {\tt -O2}.  The third round uses
+the following parameters.
+
+\begin{tableau}{|l|l|}{Parameter}{Setting}
+\entree{{\tt -inline}}{50}
+\entree{{\tt -inline-branch-factor}}{Same as default}
+\entree{{\tt -inline-alloc-cost}}{Triple the default}
+\entree{{\tt -inline-branch-cost}}{Triple the default}
+\entree{{\tt -inline-call-cost}}{Triple the default}
+\entree{{\tt -inline-indirect-cost}}{Triple the default}
+\entree{{\tt -inline-prim-cost}}{Triple the default}
+\entree{{\tt -inline-lifting-benefit}}{Same as default}
+\entree{{\tt -inline-toplevel}}{800}
+\entree{{\tt -inline-max-depth}}{3}
+\entree{{\tt -inline-max-unroll}}{1}
+\entree{{\tt -unbox-closures-factor}}{Same as default}
+\end{tableau}
 
 \section{Manual control of inlining and specialisation}
 
@@ -576,7 +643,7 @@ discovering which functions flow to indirect call sites.  This can enable
 the transformation of such call sites into direct call sites, which makes
 them eligible for an inlining transformation.
 
-\section{Code motion transformations}
+\section{Other code motion transformations}
 
 \subsection{Lifting of constants}
 
@@ -652,6 +719,7 @@ values.  As such, they may be split into further closure variables, each
 of which corresponds to some projection from the original closure variable(s).
 This transformation is called {\em unboxing of closure variables} or
 {\em unboxing of free variables of closures}.  It is only applied when
+there is
 reasonable certainty that there are no uses of the boxed free variable itself
 within the corresponding function bodies.
 % CR mshinwell: Actually, we probably don't check this carefully enough.
