@@ -354,10 +354,6 @@ an additional benefit (which may be controlled by the
 {\tt -inline-lifting-benefit} flag) to bias inlining in such situations
 towards keeping the inlined version.
 
-XXX Missing:
-inline-toplevel
-inline-branch-factor
-
 \subsection{Control of speculation}
 
 As described above, there are three parameters that restrict the search
@@ -370,7 +366,8 @@ for inlining opportunities during speculation:
 These parameters are ultimately bounded by the corresponding command-line
 flags:
 \begin{itemize}
-\item {\tt -inline};
+\item {\tt -inline} (or, if the call site that triggered speculation is
+at toplevel, {\tt -inline-toplevel});
 \item {\tt -inline-max-depth};
 \item {\tt -inline-max-unroll}.
 \end{itemize}
@@ -382,7 +379,8 @@ constraint on the search; the assessment of benefit is independent, as
 described above.
 
 When speculation starts the inlining threshold starts at the value set
-by {\tt -inline}.  Upon making a speculative inlining decision the
+by {\tt -inline} (or {\tt -inline-toplevel} if appropriate, see above).
+Upon making a speculative inlining decision the
 threshold is reduced by the code size of the function being inlined.
 If the threshold becomes exhausted, at or below zero, no further speculation
 will be performed.
