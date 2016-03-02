@@ -121,6 +121,7 @@ static value allocate_outside_heap_with_tag(mlsize_t size_in_bytes,
 
 static value allocate_outside_heap(mlsize_t size_in_bytes)
 {
+  assert(size_in_bytes > 0);
   return allocate_outside_heap_with_tag(size_in_bytes, 0);
 }
 
@@ -135,8 +136,8 @@ static value take_gc_stats(void)
   stats->minor_words = Val_long(caml_stat_minor_words);
   stats->promoted_words = Val_long(caml_stat_promoted_words);
   stats->major_words =
-    Val_long((uintnat) caml_stat_major_words)
-      + ((uintnat) caml_allocated_words);
+    Val_long(((uintnat) caml_stat_major_words)
+             + ((uintnat) caml_allocated_words));
   stats->minor_collections = Val_long(caml_stat_minor_collections);
   stats->major_collections = Val_long(caml_stat_major_collections);
   stats->heap_words = Val_long(caml_stat_heap_size / sizeof(value));
@@ -258,21 +259,25 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
     chunk = Chunk_next (chunk);
   }
 
-  v_entries = allocate_outside_heap(
-    num_distinct_profinfos*sizeof(snapshot_entry));
-  entries = (snapshot_entries*) v_entries;
-  target_index = 0;
-  for (index = 0; index <= PROFINFO_MASK; index++) {
-    assert(raw_entries[index].num_blocks >= 0);
-    if (raw_entries[index].num_blocks > 0) {
-      assert(target_index < num_distinct_profinfos);
-      entries->entries[target_index].profinfo = Val_long(index);
-      entries->entries[target_index].num_blocks
-        = Val_long(raw_entries[index].num_blocks);
-      entries->entries[target_index].num_words_including_headers
-        = Val_long(raw_entries[index].num_words_including_headers);
-      target_index++;
+  if(num_distinct_profinfos > 0) {
+    v_entries = allocate_outside_heap(
+      num_distinct_profinfos*sizeof(snapshot_entry));
+    entries = (snapshot_entries*) v_entries;
+    target_index = 0;
+    for (index = caml_profinfo_lowest; index <= PROFINFO_MASK; index++) {
+      assert(raw_entries[index].num_blocks >= 0);
+      if (raw_entries[index].num_blocks > 0) {
+        assert(target_index < num_distinct_profinfos);
+        entries->entries[target_index].profinfo = Val_long(index);
+        entries->entries[target_index].num_blocks
+          = Val_long(raw_entries[index].num_blocks);
+        entries->entries[target_index].num_words_including_headers
+          = Val_long(raw_entries[index].num_words_including_headers);
+        target_index++;
+      }
     }
+  } else {
+    v_entries = Atom(0);
   }
 
   v_time = allocate_outside_heap_with_tag(sizeof(double), Double_tag);
@@ -301,7 +306,9 @@ CAMLprim value caml_allocation_profiling_free_heap_snapshot(value v_snapshot)
   snapshot* heap_snapshot = (snapshot*) v_snapshot;
   caml_stat_free(Hp_val(heap_snapshot->time));
   caml_stat_free(Hp_val(heap_snapshot->gc_stats));
-  caml_stat_free(Hp_val(heap_snapshot->entries));
+  if (Wosize_val(heap_snapshot->entries) > 0) {
+    caml_stat_free(Hp_val(heap_snapshot->entries));
+  }
   caml_stat_free(Hp_val(v_snapshot));
   return Val_unit;
 }
