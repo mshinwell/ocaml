@@ -4,11 +4,8 @@
 
 \section{Overview}
 
-{\em Flambda} is the term used to describe a series of new optimisation
-passes introduced with OCaml 4.03.  These passes form a new
-``middle-end'' of the native code compiler: they come after parsing and type
-inference, but before the lower-level backend passes that ultimately lead
-to machine code.
+{\em Flambda} is the term used to describe a series of optimisation passes
+provided by the native code compilers as of OCaml 4.03.
 
 Flambda aims to make it easier to write idiomatic OCaml code without
 incurring performance penalties.
@@ -19,6 +16,14 @@ single compiler that can operate in both Flambda and non-Flambda modes.)
 Code compiled with Flambda
 cannot be linked into the same program as code compiled without Flambda.
 Attempting to do this will result in a compiler error.
+
+Flambda provides full optimisation across different compilation units,
+so long as the {\tt .cmx} files for the dependencies of the unit currently
+being compiled are available.  (A compilation unit corresponds to a
+single {\tt .ml} source file.)
+
+Optimisation with Flambda is not currently supported when generating
+bytecode.
 
 Consult the {\em Glossary} at the end of this chapter for definitions of
 technical terms used below.
@@ -42,7 +47,9 @@ the behaviour of OCaml compilers not using Flambda.  Compared to compilation
 using the new Flambda inlining heuristics (for example at {\tt -O2}) it
 produces
 smaller {\tt .cmx} files, shorter compilation times and code that probably
-runs rather slower.
+runs rather slower.  When using {\tt -Oclassic}, only the following options
+described in this section are relevant: {\tt -inlining-report} and
+{\tt -inline}.
 \item[\machine{-inlining-report}] Emit {\tt .inlining} files (one per
 round of optimisation) showing all of the inliner's decisions.
 \end{options}
@@ -57,18 +64,23 @@ rather than closures (an optimisation for reducing allocation).
 
 Advanced options:
 \begin{options}
-\item[\machine{-inline}] When not in {\tt -Oclassic} mode, limits the total
+\item[\machine{-inline}] The behaviour depends on whether {\tt -Oclassic}
+is used.
+\begin{itemize}
+\item When not in {\tt -Oclassic} mode, {\tt -inline} limits the total
 size of functions considered for inlining during any speculative inlining
-search.  (See the sections below for full details.)  Note that in such
-mode this parameter does
+search.  (See the sections below for full details.)  Note that 
+this parameter does
 {\bf not} control the assessment as to whether any particular function may
-be inlined.  (Raising it to excessive amounts will not necessarily cause
-more functions to be inlined.)
-When in {\tt -Oclassic} mode, {\tt -inline} behaves as in
+be inlined.  Raising it to excessive amounts will not necessarily cause
+more functions to be inlined.
+\item When in {\tt -Oclassic} mode, {\tt -inline} behaves as in
 previous versions of the compiler: it is the maximum size of function to
 be considered for inlining.
+\end{itemize}
 \item[\machine{-inline-toplevel}] The equivalent of {\tt -inline} but used
-when speculative inlining starts at toplevel.
+when speculative inlining starts at toplevel.  (Not used in
+{\tt -Oclassic} mode.)
 \item[\machine{-inline-branch-factor},
   \machine{-inline-alloc-cost},
   \machine{-inline-branch-cost},
@@ -158,7 +170,7 @@ inlining.
 Flambda provides significantly enhanced inlining capabilities relative to
 previous versions of the compiler.
 
-\subsubsection{When inlining is performed}
+\subsubsection{Aside: when inlining is performed}
 
 Inlining is performed together with all of the other Flambda optimisation
 passes, that is to say, after closure conversion.  This has three particular
