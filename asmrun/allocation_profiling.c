@@ -278,8 +278,9 @@ CAMLprim value caml_allocation_profiling_take_heap_snapshot(void)
     v_entries = Atom(0);
   }
 
+  assert(sizeof(double) == sizeof(value));
   v_time = allocate_outside_heap_with_tag(sizeof(double), Double_tag);
-  Field(v_time, 0) = time;
+  Double_field(v_time, 0) = time;
 
   v_snapshot = allocate_outside_heap(sizeof(snapshot));
   heap_snapshot = (snapshot*) v_snapshot;
