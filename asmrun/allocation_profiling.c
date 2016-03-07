@@ -61,9 +61,12 @@
 
 #pragma GCC optimize ("-O0")
 
+#if 0
 static void debug_printf(const char* format, ...)
 {
 }
+#endif
+#define debug_printf printf
 
 /* The following structures must match the type definitions in the
    [Allocation_profiling] module. */

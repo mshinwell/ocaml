@@ -103,7 +103,9 @@ let add_ccobjs origin l =
 
 let runtime_lib () =
   let libname =
-    if !Clflags.gprofile
+    if !Clflags.allocation_profiling
+    then "libasmrunap" ^ ext_lib
+    else if !Clflags.gprofile
     then "libasmrunp" ^ ext_lib
     else "libasmrun" ^ !Clflags.runtime_variant ^ ext_lib in
   try

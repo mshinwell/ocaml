@@ -29,7 +29,10 @@ let rec deadcode i =
       && not (Proc.regs_are_volatile i.arg)    (* no stack-like hard reg *)
       && not (Proc.regs_are_volatile i.res)    (*            is involved *)
       then begin
-        assert (Array.length i.res > 0);  (* sanity check *)
+        if not (Array.length i.res > 0) then begin  (* sanity check *)
+          Format.eprintf "No results for instr: on@ %a\n%!" Printmach.instr i; 
+          assert false
+        end;
         (s, before)
       end else begin
         ({i with next = s}, Reg.add_set_array i.live i.arg)
@@ -63,11 +66,6 @@ let rec deadcode i =
       ({i with desc = Itrywith(body', handler'); next = s}, i.live)
 
 let fundecl f =
-  (* CR mshinwell: find out why this is deleting moves to %r13 even
-   though [regs_are_volatile] should return [true] for this... *)
-  if !Clflags.allocation_profiling then f
-  else begin
-    let (new_body, _) = deadcode f.fun_body in
-    {f with fun_body = new_body}
-  end
+  let (new_body, _) = deadcode f.fun_body in
+  {f with fun_body = new_body}
 

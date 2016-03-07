@@ -71,6 +71,9 @@ struct caml_thread_struct {
   char * exception_pointer;     /* Saved value of caml_exception_pointer */
   struct caml__roots_block * local_roots; /* Saved value of local_roots */
   struct longjmp_buffer * exit_buf; /* For thread exit */
+#ifdef WITH_ALLOCATION_PROFILING
+  void* alloc_profiling_trie_node_ptr;
+#endif
 #else
   value * stack_low;            /* The execution stack for this thread */
   value * stack_high;
@@ -163,6 +166,10 @@ static void caml_thread_enter_blocking_section(void)
   curr_thread->gc_regs = caml_gc_regs;
   curr_thread->exception_pointer = caml_exception_pointer;
   curr_thread->local_roots = local_roots;
+#ifdef WITH_ALLOCATION_PROFILING
+  curr_thread->alloc_profiling_trie_node_ptr
+    = caml_allocation_profiling_trie_node_ptr;
+#endif
 #else
   curr_thread->stack_low = stack_low;
   curr_thread->stack_high = stack_high;
@@ -193,6 +200,10 @@ static void caml_thread_leave_blocking_section(void)
   caml_gc_regs = curr_thread->gc_regs;
   caml_exception_pointer = curr_thread->exception_pointer;
   local_roots = curr_thread->local_roots;
+#ifdef WITH_ALLOCATION_PROFILING
+  caml_allocation_profiling_trie_node_ptr
+    = curr_thread->alloc_profiling_trie_node_ptr;
+#endif
 #else
   stack_low = curr_thread->stack_low;
   stack_high = curr_thread->stack_high;
@@ -303,6 +314,10 @@ static caml_thread_t caml_thread_new_info(void)
   th->exception_pointer = NULL;
   th->local_roots = NULL;
   th->exit_buf = NULL;
+#ifdef WITH_ALLOCATION_PROFILING
+  th->allocation_profiling_trie_node_ptr =
+    caml_allocation_profiling_trie_node_ptr;
+#endif
 #else
   /* Allocate the stacks */
   th->stack_low = (value *) caml_stat_alloc(Thread_stack_size);

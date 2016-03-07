@@ -57,6 +57,7 @@ type operation =
   | Ialloc_profiling_load_node_hole_ptr
   | Iprogram_counter
   | Ireturn_address
+  (* CR mshinwell: Move [Ilabel] into [instruction_desc]. *)
   | Ilabel of Cmm.label
   | Iaddress_of_label of Cmm.label
 

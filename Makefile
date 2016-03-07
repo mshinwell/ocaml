@@ -670,6 +670,7 @@ alldepend::
 
 runtimeopt: makeruntimeopt
 	cp asmrun/libasmrun.a stdlib/libasmrun.a
+	if test -f asmrun/libasmrunap.a; then cp asmrun/libasmrunap.a stdlib/libasmrunap.a; fi
 
 makeruntimeopt:
 	cd asmrun; $(MAKE) all

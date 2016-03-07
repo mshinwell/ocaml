@@ -600,9 +600,10 @@ let emit_instr fallthrough i =
     | Lop Ialloc_profiling_load_node_hole_ptr ->
         Misc.fatal_error "Ialloc_profiling_load_node_hole_ptr should have \
             been expanded by Selectgen"
-    | Lop Iprogram_counter ->
+    | Lop (Iprogram_counter (*, dbg *) ) ->
         let label = new_label () in
         `{emit_label label}:\n`;
+        `{record_frame i.live Debuginfo.none}\n`;
         `	{load_label_addr label}, {emit_reg i.res.(0)}\n`
     | Lop Ireturn_address ->
         let n = frame_size () - 8 in
