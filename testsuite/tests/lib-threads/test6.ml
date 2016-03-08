@@ -17,7 +17,7 @@ let ch = (new_channel() : string channel)
 let rec f tag msg =
   select [
     send ch msg;
-    wrap (receive ch) (fun _x -> () print_string(tag ^ ": " ^ x); print_newline())
+    wrap (receive ch) (fun _x -> print_string(tag ^ ": " ^ x); print_newline())
   ];
   f tag msg
 
