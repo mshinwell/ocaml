@@ -39,7 +39,7 @@ run:
 	  DIFF="$(DIFF)" sh $$f.checker \
 	  && echo " => passed" || echo " => failed"; \
 	  fn=`basename $$f bytecode`native; \
-	  if $(BYTECODE_ONLY) || [ ! -f "$${fn}$(EXE)" ] ; then : ; else \
+	  if $(BYTECODE_ONLY) || $(WITH_ALLOCATION_PROFILING) || [ ! -f "$${fn}$(EXE)" ] ; then : ; else \
 	    printf " ... testing '$$fn':"; \
 	    ./$${fn}$(EXE) >$$fn.result 2>&1 || true; \
 	    DIFF="$(DIFF)" sh $$fn.checker \
