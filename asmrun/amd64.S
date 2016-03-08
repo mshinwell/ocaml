@@ -267,6 +267,10 @@ G(caml_system__code_begin):
 
 /* Allocation */
 
+/* [caml_call_gc] does not need its own allocation profiling node since it
+   currently doesn't create any trie nodes except if it invokes finalisers,
+   which are handled separately. */
+
 FUNCTION(G(caml_call_gc))
         CFI_STARTPROC
         RECORD_STACK_FRAME(0)

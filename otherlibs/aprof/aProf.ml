@@ -287,7 +287,16 @@ module Series = struct
 
   let create ?executable profile =
     let series = Heap_snapshot.Series.read ~pathname_prefix:profile in
-    let trace = Heap_snapshot.Series.trace series in
+    let trace =
+      (* CR mshinwell: fix thread handling! *)
+      match
+        Heap_snapshot.Series.trace series
+          ~kind:Heap_snapshot.Series.Normal
+          ~thread_index:0
+      with
+      | None -> failwith "No threads"
+      | Some trace -> trace
+    in
     let frame_table = Heap_snapshot.Series.frame_table series in
     let length = Heap_snapshot.Series.num_snapshots series in
     let snapshots =

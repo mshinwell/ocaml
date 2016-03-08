@@ -18,6 +18,9 @@
 #include "caml/mlvalues.h"
 #include "caml/roots.h"
 #include "caml/signals.h"
+#if defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING)
+#include "../asmrun/allocation_profiling.h"
+#endif
 
 struct final {
   value fun;
@@ -141,7 +144,9 @@ void caml_final_do_calls (void)
       f = to_do_hd->item[to_do_hd->size];
       running_finalisation_function = 1;
 #if defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING)
-      /* We record the finaliser's execution separately. */
+      /* We record the finaliser's execution separately.
+         (The code of [caml_callback_exn] will do the hard work of finding
+         the correct place in the trie.) */
       saved_alloc_profiling_trie_node_ptr
         = caml_alloc_profiling_trie_node_ptr;
       caml_alloc_profiling_trie_node_ptr

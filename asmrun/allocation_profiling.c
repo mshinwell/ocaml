@@ -407,7 +407,7 @@ caml_forget_where_values_were_allocated (value v_unit)
 static value caml_alloc_profiling_trie_root = Val_unit;
 value* caml_alloc_profiling_trie_node_ptr = &caml_alloc_profiling_trie_root;
 
-static value caml_alloc_profiling_finaliser_trie_root = Val_unit;
+static value caml_alloc_profiling_finaliser_trie_root_main_thread = Val_unit;
 value* caml_alloc_profiling_finaliser_trie_root
   = &caml_alloc_profiling_finaliser_trie_root_main_thread;
 
@@ -941,7 +941,11 @@ uintnat caml_allocation_profiling_my_profinfo (void)
   return profinfo;
 }
 
-typedef struct {
+/* List of tries corresponding to threads that have been created. */
+
+/* CR-soon mshinwell: just include the main trie in this list. */
+
+typedef struct per_thread {
   value* trie_node_root;
   value* finaliser_trie_node_root;
   struct per_thread* next;
@@ -966,6 +970,8 @@ void caml_allocation_profiling_register_thread(
   thr->trie_node_root = trie_node_root;
   thr->finaliser_trie_node_root = finaliser_trie_node_root;
 
+  /* CR mshinwell: record thread ID (and for the main thread too) */
+
   num_per_threads++;
 }
 
@@ -976,17 +982,24 @@ CAMLprim value caml_allocation_profiling_marshal_trie (value v_channel)
      extern.c code as usual, since the trie looks like standard OCaml values;
      but we must allow it to traverse outside the heap. */
 
+  int num_marshalled = 0;
   per_thread* thr = per_threads;
 
-  caml_output_value(v_channel, Val_long(num_per_threads));
+  caml_output_value(v_channel, Val_long(num_per_threads), Val_long(0));
+
   caml_extern_allow_out_of_heap = 1;
   caml_output_value(v_channel, caml_alloc_profiling_trie_root, Val_long(0));
+  caml_output_value(v_channel,
+    caml_alloc_profiling_finaliser_trie_root_main_thread, Val_long(0));
   while (thr != NULL) {
-    caml_output_value(v_channel, thr->trie_node_root, Val_long(0));
-    caml_output_value(v_channel, thr->finalizer_trie_node_root, Val_long(0));
+    caml_output_value(v_channel, *(thr->trie_node_root), Val_long(0));
+    caml_output_value(v_channel, *(thr->finaliser_trie_node_root),
+      Val_long(0));
     thr = thr->next;
+    num_marshalled++;
   }
   caml_extern_allow_out_of_heap = 0;
+  assert(num_marshalled == num_per_threads);
 
   return Val_unit;
 }

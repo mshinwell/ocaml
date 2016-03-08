@@ -319,7 +319,11 @@ module Heap_snapshot : sig
     val read : pathname_prefix:string -> t
 
     val time_of_writer_close : t -> float
-    val trace : t -> Trace.t
+    val num_threads : t -> int
+
+    type trace_kind = Normal | Finaliser
+    val trace : t -> kind:trace_kind -> thread_index:int -> Trace.t option
+
     val frame_table : t -> Frame_table.t
     val num_snapshots : t -> int
     val snapshot : t -> index:int -> heap_snapshot

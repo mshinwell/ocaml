@@ -597,7 +597,8 @@ module Heap_snapshot = struct
       num_snapshots : int;
       time_of_writer_close : float;
       frame_table : Frame_table.t;
-      trace : Trace.t;
+      traces_by_thread : Trace.t array;
+      finaliser_traces_by_thread : Trace.t array;
       snapshots : heap_snapshot array;
     }
 
@@ -609,7 +610,17 @@ module Heap_snapshot = struct
       let num_snapshots : int = Marshal.from_channel chn in
       let time_of_writer_close : float = Marshal.from_channel chn in
       let frame_table : Frame_table.t = Marshal.from_channel chn in
-      let trace = Trace.unmarshal chn in
+      let num_threads : int = Marshal.from_channel chn in
+      let traces_by_thread = Array.init num_threads (fun _ -> None) in
+      let finaliser_traces_by_thread =
+        Array.init num_threads (fun _ -> None)
+      in
+      for thread = 0 to num_threads - 1 do
+        let trace : Trace.t = Trace.unmarshal chn in
+        let finaliser_trace : Trace.t = Trace.unmarshal chn in
+        traces_by_thread.(thread) <- trace;
+        finaliser_traces_by_thread.(thread) <- finaliser_trace
+      done;
       close_in chn;
       let snapshots =
         Array.init num_snapshots (fun index ->
@@ -621,11 +632,22 @@ module Heap_snapshot = struct
       { num_snapshots;
         time_of_writer_close;
         frame_table;
-        trace;
+        traces_by_thread;
+        finaliser_traces_by_thread;
         snapshots;
       }
 
-    let trace t = t.trace
+    type trace_kind = Normal | Finaliser
+
+    let num_threads t = Array.length t.traces_by_thread
+
+    let trace t ~kind ~thread_index =
+      if thread_index < 0 || thread_index >= num_threads t then None
+      else
+        match kind with
+        | Normal -> Some t.traces_by_thread.(thread_index)
+        | Finaliser -> Some t.finaliser_traces_by_thread.(thread_index)
+
     let num_snapshots t = t.num_snapshots
     let snapshot t ~index = t.snapshots.(index)
     let frame_table t = t.frame_table
