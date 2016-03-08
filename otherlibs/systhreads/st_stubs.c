@@ -32,6 +32,10 @@
 #include "caml/sys.h"
 #include "threads.h"
 
+#if defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING)
+#include "../../asmrun/allocation_profiling.h"
+#endif
+
 /* Initial size of bytecode stack when a thread is created (4 Ko) */
 #define Thread_stack_size (Stack_size / 4)
 
@@ -71,8 +75,11 @@ struct caml_thread_struct {
   char * exception_pointer;     /* Saved value of caml_exception_pointer */
   struct caml__roots_block * local_roots; /* Saved value of local_roots */
   struct longjmp_buffer * exit_buf; /* For thread exit */
-#ifdef WITH_ALLOCATION_PROFILING
-  void* alloc_profiling_trie_node_ptr;
+#if defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING)
+  value internal_alloc_profiling_trie_root;
+  value internal_alloc_profiling_finaliser_trie_root;
+  value* alloc_profiling_trie_node_ptr;
+  value* alloc_profiling_finaliser_trie_root;
 #endif
 #else
   value * stack_low;            /* The execution stack for this thread */
@@ -168,7 +175,9 @@ static void caml_thread_enter_blocking_section(void)
   curr_thread->local_roots = local_roots;
 #ifdef WITH_ALLOCATION_PROFILING
   curr_thread->alloc_profiling_trie_node_ptr
-    = caml_allocation_profiling_trie_node_ptr;
+    = caml_alloc_profiling_trie_node_ptr;
+  curr_thread->alloc_profiling_finaliser_trie_root
+    = caml_alloc_profiling_finaliser_trie_root;
 #endif
 #else
   curr_thread->stack_low = stack_low;
@@ -201,8 +210,10 @@ static void caml_thread_leave_blocking_section(void)
   caml_exception_pointer = curr_thread->exception_pointer;
   local_roots = curr_thread->local_roots;
 #ifdef WITH_ALLOCATION_PROFILING
-  caml_allocation_profiling_trie_node_ptr
+  caml_alloc_profiling_trie_node_ptr
     = curr_thread->alloc_profiling_trie_node_ptr;
+  caml_alloc_profiling_finaliser_trie_root
+    = curr_thread->alloc_profiling_finaliser_trie_root;
 #endif
 #else
   stack_low = curr_thread->stack_low;
@@ -315,8 +326,23 @@ static caml_thread_t caml_thread_new_info(void)
   th->local_roots = NULL;
   th->exit_buf = NULL;
 #ifdef WITH_ALLOCATION_PROFILING
-  th->allocation_profiling_trie_node_ptr =
-    caml_allocation_profiling_trie_node_ptr;
+  th->internal_alloc_profiling_trie_root = (value*) malloc(sizeof(value));
+  if (th->internal_alloc_profiling_trie_root == NULL) {
+    return NULL;
+  }
+  *(th->internal_alloc_profiling_trie_root) = Val_unit;
+  th->alloc_profiling_trie_node_ptr = &th->internal_alloc_profiling_trie_root;
+  th->internal_alloc_profiling_finaliser_trie_root
+    = (value*) malloc(sizeof(value));
+  if (th->internal_alloc_profiling_finaliser_trie_root == NULL) {
+    return NULL;
+  }
+  *(th->internal_alloc_profiling_finaliser_trie_root) = Val_unit;
+  th->alloc_profiling_finaliser_trie_root
+    = &th->internal_alloc_profiling_finaliser_trie_root;
+  caml_allocation_profiling_register_thread(
+    th->alloc_profiling_trie_node_ptr,
+    th->alloc_profiling_finaliser_trie_root);
 #endif
 #else
   /* Allocate the stacks */
@@ -368,6 +394,8 @@ static void caml_thread_remove_info(caml_thread_t th)
   stat_free(th->stack_low);
 #endif
   if (th->backtrace_buffer != NULL) free(th->backtrace_buffer);
+  /* CR mshinwell: consider what to do about the profiling trace.  Could
+     perhaps have a hook to save a snapshot on thread termination. */
   stat_free(th);
 }
 

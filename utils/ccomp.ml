@@ -51,7 +51,7 @@ let quote_optfile = function
 let compile_file name =
   command
     (Printf.sprintf
-       "%s -c %s %s %s %s %s %s"
+       "%s -c %s %s %s %s %s"
        (match !Clflags.c_compiler with
         | Some cc -> cc
         | None ->
@@ -62,7 +62,6 @@ let compile_file name =
        (String.concat " " (List.rev !Clflags.all_ccopts))
        (quote_prefixed "-I" (List.rev !Clflags.include_dirs))
        (Clflags.std_include_flag "-I")
-       (if !Clflags.allocation_profiling then "-DWITH_ALLOCATION_PROFILING" else "")
        (Filename.quote name))
 
 let create_archive archive file_list =

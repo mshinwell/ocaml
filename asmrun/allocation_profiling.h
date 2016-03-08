@@ -171,6 +171,9 @@ typedef struct {
   value next;           /* [Val_unit] for the end of the list */
 } c_node; /* CR mshinwell: rename to dynamic_node */
 
+extern value* caml_alloc_profiling_trie_node_ptr;
+extern value* caml_alloc_profiling_finaliser_trie_root;
+
 extern const uintnat caml_profinfo_lowest;
 extern void caml_allocation_profiling_initialize(void);
 extern uintnat caml_allocation_profiling_my_profinfo(void);
@@ -185,3 +188,5 @@ extern value caml_allocation_profiling_stored_pointer_to_c_node(
   c_node* node);
 extern value caml_allocation_profiling_min_override_profinfo (value v_unit);
 extern value caml_allocation_profiling_max_override_profinfo (value v_unit);
+extern void caml_allocation_profiling_register_thread(
+  value* trie_node_root, value* finaliser_trie_node_root);

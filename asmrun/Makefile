@@ -19,7 +19,6 @@ FLAGS=-Werror -I../byterun -DCAML_NAME_SPACE -DNATIVE_CODE \
 CFLAGS=$(FLAGS) -g -O $(NATIVECCCOMPOPTS)
 DFLAGS=$(FLAGS) -g -DDEBUG $(NATIVECCCOMPOPTS)
 PFLAGS=$(FLAGS) -pg -O -DPROFILING $(NATIVECCPROFOPTS)
-APFLAGS=$(FLAGS) -g -O -DWITH_ALLOCATION_PROFILING $(NATIVECCCOMPOPTS)
 PICFLAGS=$(FLAGS) -O $(SHAREDCCCOMPOPTS) $(NATIVECCCOMPOPTS)
 
 COBJS=startup.o main.o fail.o roots.o globroots.o signals.o signals_asm.o \
@@ -27,17 +26,16 @@ COBJS=startup.o main.o fail.o roots.o globroots.o signals.o signals_asm.o \
   floats.o str.o array.o io.o extern.o intern.o hash.o sys.o parsing.o \
   gc_ctrl.o terminfo.o md5.o obj.o lexing.o printexc.o callback.o weak.o \
   compact.o finalise.o custom.o $(UNIX_OR_WIN32).o backtrace.o natdynlink.o\
-  debugger.o meta.o dynlink.o allocation_profiling_offline.o
+  debugger.o meta.o dynlink.o allocation_profiling.o allocation_profiling_offline.o
 
 ASMOBJS=$(ARCH).o
 
 OBJS=$(COBJS) $(ASMOBJS)
 DOBJS=$(COBJS:.o=.d.o) $(ASMOBJS)
 POBJS=$(COBJS:.o=.p.o) $(ASMOBJS:.o=.p.o)
-APOBJS=$(COBJS:.o=.ap.o) allocation_profiling.ap.o $(ASMOBJS:.o=.ap.o)
 PICOBJS=$(COBJS:.o=.pic.o) $(ASMOBJS:.o=.pic.o)
 
-all: libasmrun.a all-$(RUNTIMED) all-$(PROFILING) all-$(SHARED) all-allocprof-$(WITH_ALLOCATION_PROFILING)
+all: libasmrun.a all-$(RUNTIMED) all-$(PROFILING) all-$(SHARED)
 
 libasmrun.a: $(OBJS)
 	rm -f libasmrun.a
@@ -64,15 +62,6 @@ libasmrunp.a: $(POBJS)
 	$(ARCMD) rc libasmrunp.a $(POBJS)
 	$(RANLIB) libasmrunp.a
 
-all-allocprof-false:
-
-all-allocprof-true: libasmrunap.a
-
-libasmrunap.a: $(APOBJS)
-	rm -f libasmrunap.a
-	$(ARCMD) rc libasmrunap.a $(APOBJS)
-	$(RANLIB) libasmrunap.a
-
 all-noshared:
 
 all-shared: libasmrun_pic.a libasmrun_shared.so
@@ -87,7 +76,7 @@ libasmrun_shared.so: $(PICOBJS)
 
 INSTALL_LIBDIR=$(DESTDIR)$(LIBDIR)
 
-install: install-default install-$(RUNTIMED) install-$(PROFILING) install-$(SHARED) install-allocprof-$(WITH_ALLOCATION_PROFILING)
+install: install-default install-$(RUNTIMED) install-$(PROFILING) install-$(SHARED)
 
 install-default:
 	cp libasmrun.a $(INSTALL_LIBDIR)/libasmrun.a
@@ -111,16 +100,6 @@ install-prof:
 	cp libasmrunp.a $(INSTALL_LIBDIR)/libasmrunp.a
 	cd $(INSTALL_LIBDIR); $(RANLIB) libasmrunp.a
 .PHONY: install-prof
-
-install-allocprof-false:
-	rm -f $(INSTALL_LIBDIR)/libasmrunap.a
-	ln -s libasmrun.a $(INSTALL_LIBDIR)/libasmrunap.a
-.PHONY: install-allocprof-false
-
-install-allocprof-true:
-	cp libasmrunap.a $(INSTALL_LIBDIR)/libasmrunap.a
-	cd $(INSTALL_LIBDIR); $(RANLIB) libasmrunap.a
-.PHONY: install-allocprof-true
 
 install-noshared:
 .PHONY: install-noshared
@@ -233,9 +212,6 @@ clean::
 %.p.o: %.S
 	$(ASPP) -DSYS_$(SYSTEM) -DMODEL_$(MODEL) $(ASPPPROFFLAGS) -o $@ $<
 
-%.ap.o: %.S
-	$(ASPP) -DSYS_$(SYSTEM) -DMODEL_$(MODEL) -DWITH_ALLOCATION_PROFILING $(ASPPFLAGS) -o $@ $<
-
 %.pic.o: %.S
 	$(ASPP) -DSYS_$(SYSTEM) -DMODEL_$(MODEL) $(SHAREDCCCOMPOPTS) -o $@ $<
 
@@ -245,9 +221,6 @@ clean::
 %.p.o: %.c
 	$(CC) -c $(PFLAGS) -o $@ $<
 
-%.ap.o: %.c
-	$(CC) $(LIBUNWIND_INCLUDE_FLAGS) -c $(APFLAGS) -o $@ $<
-
 %.pic.o: %.c
 	$(CC) -c $(PICFLAGS) -o $@ $<
 
@@ -256,9 +229,6 @@ clean::
 
 %.p.o: %.s
 	$(ASPP) -DSYS_$(SYSTEM) $(ASPPPROFFLAGS) -o $@ $<
-
-%.ap.o: %.s
-	$(ASPP) -DSYS_$(SYSTEM) -DWITH_ALLOCATION_PROFILING $(ASPPFLAGS) -o $@ $<
 
 %.pic.o: %.s
 	$(ASPP) -DSYS_$(SYSTEM) $(SHAREDCCCOMPOPTS) -o $@ $<
@@ -270,6 +240,5 @@ depend: $(COBJS:.o=.c) ${LINKEDFILES}
 	$(CC) -MM $(FLAGS) *.c > .depend
 	$(CC) -MM $(FLAGS) -DDEBUG *.c | sed -e 's/\.o/.d.o/' >> .depend
 	$(CC) -MM $(FLAGS) -DPROFILING *.c | sed -e 's/\.o/.p.o/' >> .depend
-	$(CC) -MM $(FLAGS) -DWITH_ALLOCATION_PROFILING *.c | sed -e 's/\.o/.ap.o/' >> .depend
 
 include .depend

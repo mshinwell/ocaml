@@ -134,7 +134,7 @@ void caml_oldify_one (value v, value *p)
         value field0;
 
         sz = Wosize_hd (hd);
-#ifndef WITH_ALLOCATION_PROFILING
+#if !(defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING))
         result = caml_alloc_shr (sz, tag);
 #else
         result = caml_alloc_shr_with_profinfo (sz, tag, Profinfo_hd(hd));
@@ -155,7 +155,7 @@ void caml_oldify_one (value v, value *p)
         }
       }else if (tag >= No_scan_tag){
         sz = Wosize_hd (hd);
-#ifndef WITH_ALLOCATION_PROFILING
+#if !(defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING))
         result = caml_alloc_shr (sz, tag);
 #else
         result = caml_alloc_shr_with_profinfo (sz, tag, Profinfo_hd(hd));
@@ -188,7 +188,7 @@ void caml_oldify_one (value v, value *p)
         if (!vv || ft == Forward_tag || ft == Lazy_tag || ft == Double_tag){
           /* Do not short-circuit the pointer.  Copy as a normal block. */
           Assert (Wosize_hd (hd) == 1);
-#ifndef WITH_ALLOCATION_PROFILING
+#if !(defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING))
         result = caml_alloc_shr (1, Forward_tag);
 #else
         result = caml_alloc_shr_with_profinfo (1, Forward_tag,

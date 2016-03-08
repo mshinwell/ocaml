@@ -472,6 +472,7 @@ utils/config.ml: utils/config.mlp config/Makefile
 	    -e 's|%%ASM%%|$(ASM)|' \
 	    -e 's|%%ASM_CFI_SUPPORTED%%|$(ASM_CFI_SUPPORTED)|' \
 	    -e 's|%%WITH_FRAME_POINTERS%%|$(WITH_FRAME_POINTERS)|' \
+	    -e 's|%%WITH_ALLOCATION_PROFILING%%|$(WITH_ALLOCATION_PROFILING)|' \
 	    -e 's|%%LIBUNWIND_AVAILABLE%%|$(LIBUNWIND_AVAILABLE)|' \
 	    -e 's|%%LIBUNWIND_LINK_FLAG%%|$(LIBUNWIND_LINK_FLAG)|' \
 	    -e 's|%%MKDLL%%|$(MKDLL)|' \
@@ -670,7 +671,6 @@ alldepend::
 
 runtimeopt: makeruntimeopt
 	cp asmrun/libasmrun.a stdlib/libasmrun.a
-	if test -f asmrun/libasmrunap.a; then cp asmrun/libasmrunap.a stdlib/libasmrunap.a; fi
 
 makeruntimeopt:
 	cd asmrun; $(MAKE) all

@@ -19,6 +19,7 @@ open Reg
 open Mach
 
 let fp = Config.with_frame_pointers
+let with_allocation_profiling = Config.with_allocation_profiling
 
 (* Which ABI to use *)
 
@@ -184,7 +185,7 @@ let not_supported ofs = fatal_error "Proc.loc_results: cannot call"
 
 let max_int_args_in_regs () =
   (* CR lwhite: this should really be 10 when allocation profiling is off *)
-  (*if !Clflags.allocation_profiling then*) 9 (*else 10*)
+  (*if with_allocation_profiling then*) 9 (*else 10*)
 
 let loc_arguments arg =
   calling_conventions 0 ((max_int_args_in_regs ()) - 1) 100 109 outgoing arg
@@ -255,7 +256,7 @@ let loc_alloc_profiling_node = r13
 (* Volatile registers: none, except when allocation profiling *)
 
 let regs_are_volatile rs =
-  if not !Clflags.allocation_profiling then false
+  if not with_allocation_profiling then false
   else
     List.exists (fun reg -> reg.loc = loc_alloc_profiling_node.loc)
       (Array.to_list rs)
@@ -294,7 +295,7 @@ let destroyed_at_oper = function
           []
       end @
         begin
-          if !Clflags.allocation_profiling then
+          if with_allocation_profiling then
             [r13]
           else
             []
@@ -308,7 +309,7 @@ let destroyed_at_raise = all_phys_regs
 
 let safe_register_pressure instr =
   let extra =
-    (if fp then 1 else 0) + (if !Clflags.allocation_profiling then 1 else 0)
+    (if fp then 1 else 0) + (if with_allocation_profiling then 1 else 0)
   in
   match instr with
   | Iextcall(_,_) -> if win64 then 8 - extra else 0
@@ -325,7 +326,7 @@ let max_register_pressure instr =
   in
   let int_pressure =
     int_pressure - (if fp then 1 else 0)
-      - (if !Clflags.allocation_profiling then 1 else 0)
+      - (if with_allocation_profiling then 2 else 0)  (* see below *)
   in
   [| int_pressure; float_pressure |]
 
@@ -359,6 +360,6 @@ let assemble_file infile outfile =
                    Filename.quote outfile ^ " " ^ Filename.quote infile)
 
 let init () =
-    num_available_registers.(0)
-      <- 13 - (if fp then 1 else 0)
-        - (if !Clflags.allocation_profiling then 1 else 0)
+  num_available_registers.(0)
+    <- 13 - (if fp then 1 else 0)
+      - (if with_allocation_profiling then 2 else 0) (* avoid %r13 and %rbp *)

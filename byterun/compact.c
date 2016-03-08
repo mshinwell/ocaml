@@ -45,13 +45,13 @@ extern void caml_shrink_heap (char *);              /* memory.c */
   XXX Should be able to fix it to only assume 2-byte alignment.
 */
 #define Make_ehd(s,t,c) (((s) << 10) | (t) << 2 | (c))
-#ifdef WITH_ALLOCATION_PROFILING
+#if defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING)
 #define Make_ehd_p(s,t,c,p) (((s) << 10) | (t) << 2 | (c) | ((p) << 42))
 #endif
 #define Whsize_ehd(h) Whsize_hd (h)
 #define Wosize_ehd(h) Wosize_hd (h)
 #define Tag_ehd(h) (((h) >> 2) & 0xFF)
-#ifdef WITH_ALLOCATION_PROFILING
+#if defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING)
 #define Profinfo_ehd(hd) Profinfo_hd(hd)
 #endif
 #define Ecolor(w) ((w) & 3)
@@ -175,7 +175,7 @@ static void do_compaction (void)
           Hd_hp (p) = Make_ehd (sz, String_tag, 3);
         }else{                                      Assert (Is_white_hd (hd));
           /* Live object.  Keep its tag. */
-#ifdef WITH_ALLOCATION_PROFILING
+#if defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING)
           Hd_hp (p) = Make_ehd_p (sz, Tag_hd (hd), 3, Profinfo_hd (hd));
 #else
           Hd_hp (p) = Make_ehd (sz, Tag_hd (hd), 3);
@@ -271,7 +271,7 @@ static void do_compaction (void)
           size_t sz;
           tag_t t;
           char *newadr;
-#ifdef WITH_ALLOCATION_PROFILING
+#if defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING)
           uintnat profinfo;
 #endif
           word *infixes = NULL;
@@ -279,7 +279,7 @@ static void do_compaction (void)
           while (Ecolor (q) == 0) q = * (word *) q;
           sz = Whsize_ehd (q);
           t = Tag_ehd (q);
-#ifdef WITH_ALLOCATION_PROFILING
+#if defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING)
           profinfo = Profinfo_ehd (q);
 #endif
 
@@ -299,7 +299,7 @@ static void do_compaction (void)
             * (word *) q = (word) Val_hp (newadr);
             q = next;
           }
-#ifdef WITH_ALLOCATION_PROFILING
+#if defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING)
           *p = Make_header_with_profinfo (Wosize_whsize (sz), t, Caml_white,
             profinfo);
 #else

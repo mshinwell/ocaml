@@ -455,7 +455,7 @@ CAMLexport value caml_alloc_shr_with_profinfo (mlsize_t wosize, tag_t tag,
   return Val_hp (hp);
 }
 
-#ifndef WITH_ALLOCATION_PROFILING
+#if !(defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING))
 CAMLexport value caml_alloc_shr (mlsize_t wosize, tag_t tag)
 {
   return caml_alloc_shr_with_profinfo (wosize, tag, 0);

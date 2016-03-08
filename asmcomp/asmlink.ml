@@ -103,9 +103,7 @@ let add_ccobjs origin l =
 
 let runtime_lib () =
   let libname =
-    if !Clflags.allocation_profiling
-    then "libasmrunap" ^ ext_lib
-    else if !Clflags.gprofile
+    if !Clflags.gprofile
     then "libasmrunp" ^ ext_lib
     else "libasmrun" ^ !Clflags.runtime_variant ^ ext_lib in
   try
@@ -317,12 +315,10 @@ let call_linker file_list startup_file output_name =
 let link ppf objfiles output_name =
   let stdlib =
     if !Clflags.gprofile then "stdlib.p.cmxa"
-    else if !Clflags.allocation_profiling then "stdlib.ap.cmxa"
     else "stdlib.cmxa"
   in
   let stdexit =
     if !Clflags.gprofile then "std_exit.p.cmx"
-    else if !Clflags.allocation_profiling then "std_exit.ap.cmx"
     else "std_exit.cmx"
   in
   let objfiles =

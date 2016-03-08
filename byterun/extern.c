@@ -411,7 +411,7 @@ static void extern_rec(value v)
       if (tag < 16) {
         Write(PREFIX_SMALL_BLOCK + tag);
       } else {
-#ifndef WITH_ALLOCATION_PROFILING
+#if !(defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING))
         writecode32(CODE_BLOCK32, hd);
 #else
         writecode32(CODE_BLOCK32, Hd_no_profinfo(hd));
@@ -510,7 +510,7 @@ static void extern_rec(value v)
     }
     default: {
       value field0;
-#ifndef WITH_ALLOCATION_PROFILING
+#if !(defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING))
       header_t hd_erased = hd;
 #else
       header_t hd_erased = Hd_no_profinfo(hd);

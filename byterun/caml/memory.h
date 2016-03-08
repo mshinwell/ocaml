@@ -68,7 +68,7 @@ color_t caml_allocation_color (void *hp);
 #define DEBUG_clear(result, wosize)
 #endif
 
-#ifdef WITH_ALLOCATION_PROFILING
+#if defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING)
 
 #define Decode_profinfo_hd(hd) \
   (((uint64_t) (Profinfo_hd (hd))) << 4)
@@ -81,7 +81,7 @@ extern uintnat caml_allocation_profiling_my_profinfo(void);
 
 #endif
 
-#ifndef WITH_ALLOCATION_PROFILING
+#if !(defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING))
 #define Alloc_small(result, wosize, tag) do {                               \
                                                 CAMLassert ((wosize) >= 1); \
                                           CAMLassert ((tag_t) (tag) < 256); \

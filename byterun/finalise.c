@@ -121,6 +121,7 @@ void caml_final_do_calls (void)
 {
   struct final f;
   value res;
+  void* saved_alloc_profiling_trie_node_ptr;
 
   if (running_finalisation_function) return;
 
@@ -139,7 +140,18 @@ void caml_final_do_calls (void)
       -- to_do_hd->size;
       f = to_do_hd->item[to_do_hd->size];
       running_finalisation_function = 1;
+#if defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING)
+      /* We record the finaliser's execution separately. */
+      saved_alloc_profiling_trie_node_ptr
+        = caml_alloc_profiling_trie_node_ptr;
+      caml_alloc_profiling_trie_node_ptr
+        = caml_alloc_profiling_finaliser_trie_root;
+#endif
       res = caml_callback_exn (f.fun, f.val + f.offset);
+#if defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING)
+      caml_alloc_profiling_trie_node_ptr
+        = saved_alloc_profiling_trie_node_ptr;
+#endif
       running_finalisation_function = 0;
       if (Is_exception_result (res)) caml_raise (Extract_exception (res));
     }

@@ -80,6 +80,8 @@ let asm = "%%ASM%%"
 let asm_cfi_supported = %%ASM_CFI_SUPPORTED%%
 let with_frame_pointers = %%WITH_FRAME_POINTERS%%
 
+let with_allocation_profiling = %%WITH_ALLOCATION_PROFILING%%
+
 let libunwind_available = %%LIBUNWIND_AVAILABLE%%
 let libunwind_flag = "%%LIBUNWIND_LINK_FLAG%%"
 

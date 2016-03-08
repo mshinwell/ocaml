@@ -30,7 +30,7 @@ OBJS=parsecmmaux.cmo parsecmm.cmo lexcmm.cmo
 ADD_COMPFLAGS=$(INCLUDES) -g
 
 default:
-	@if $(BYTECODE_ONLY) || [ -z "$(ASPP)" ]; then : ; else \
+	@if $(BYTECODE_ONLY) || [ -z "$(ASPP)" ] || $(WITH_ALLOCATION_PROFILING); then : ; else \
 	  $(MAKE) all; \
 	fi
 

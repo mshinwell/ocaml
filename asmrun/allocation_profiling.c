@@ -22,8 +22,6 @@
 
 /* Runtime support for allocation profiling. */
 
-#ifdef WITH_ALLOCATION_PROFILING
-
 #include <assert.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -50,7 +48,7 @@
 #include "allocation_profiling.h"
 #include "stack.h"
 
-#include "../config/s.h"
+#ifdef WITH_ALLOCATION_PROFILING
 
 /* not working yet... */
 #undef HAS_LIBUNWIND
@@ -61,12 +59,9 @@
 
 #pragma GCC optimize ("-O0")
 
-#if 0
 static void debug_printf(const char* format, ...)
 {
 }
-#endif
-#define debug_printf printf
 
 /* The following structures must match the type definitions in the
    [Allocation_profiling] module. */
@@ -409,8 +404,12 @@ caml_forget_where_values_were_allocated (value v_unit)
   return v_unit;
 }
 
-value caml_alloc_profiling_trie_root = Val_unit;
+static value caml_alloc_profiling_trie_root = Val_unit;
 value* caml_alloc_profiling_trie_node_ptr = &caml_alloc_profiling_trie_root;
+
+static value caml_alloc_profiling_finaliser_trie_root = Val_unit;
+value* caml_alloc_profiling_finaliser_trie_root
+  = &caml_alloc_profiling_finaliser_trie_root_main_thread;
 
 value caml_allocation_profiling_use_override_profinfo = Val_false;
 uintnat caml_allocation_profiling_override_profinfo;
@@ -733,6 +732,11 @@ void caml_allocation_profiling_c_to_ocaml(void* ocaml_entry_point,
   }
 
   assert(Is_ocaml_node(node));
+  if (Decode_node_pc(Node_pc(node)) != identifying_pc_for_caml_start_program) {
+    printf("Indirect node for C -> OCaml has wrong PC %p (expected %p)\n",
+      Decode_node_pc(Node_pc(node)),
+      identifying_pc_for_caml_start_program);
+  }
   assert(Decode_node_pc(Node_pc(node))
     == identifying_pc_for_caml_start_program);
   assert(Tail_link(node) == node);
@@ -937,14 +941,51 @@ uintnat caml_allocation_profiling_my_profinfo (void)
   return profinfo;
 }
 
+typedef struct {
+  value* trie_node_root;
+  value* finaliser_trie_node_root;
+  struct per_thread* next;
+} per_thread;
+
+static per_thread* per_threads = NULL;
+static int num_per_threads = 0;
+
+void caml_allocation_profiling_register_thread(
+  value* trie_node_root, value* finaliser_trie_node_root)
+{
+  per_thread* thr;
+
+  thr = (per_thread*) malloc(sizeof(per_thread));
+  if (thr == NULL) {
+    fprintf(stderr, "Out of memory while registering thread for profiling\n");
+    abort();
+  }
+  thr->next = per_threads;
+  per_threads = thr;
+
+  thr->trie_node_root = trie_node_root;
+  thr->finaliser_trie_node_root = finaliser_trie_node_root;
+
+  num_per_threads++;
+}
+
 CAMLprim value caml_allocation_profiling_marshal_trie (value v_channel)
 {
-  /* Marshal the entire trie to an [out_channel].  This can be done by
-     using the extern.c code as usual, since the trie looks like standard
-     OCaml values; but we must allow it to traverse outside the heap. */
+  /* Marshal both the main and finaliser tries, for all threads that have
+     been created, to an [out_channel].  This can be done by using the
+     extern.c code as usual, since the trie looks like standard OCaml values;
+     but we must allow it to traverse outside the heap. */
 
+  per_thread* thr = per_threads;
+
+  caml_output_value(v_channel, Val_long(num_per_threads));
   caml_extern_allow_out_of_heap = 1;
   caml_output_value(v_channel, caml_alloc_profiling_trie_root, Val_long(0));
+  while (thr != NULL) {
+    caml_output_value(v_channel, thr->trie_node_root, Val_long(0));
+    caml_output_value(v_channel, thr->finalizer_trie_node_root, Val_long(0));
+    thr = thr->next;
+  }
   caml_extern_allow_out_of_heap = 0;
 
   return Val_unit;

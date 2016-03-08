@@ -16,19 +16,13 @@ include Makefile.shared
 allopt:
 	$(MAKE) stdlib.cmxa std_exit.cmx
 	$(MAKE) allopt-$(PROFILING)
-	$(MAKE) allopt-allocprof-$(WITH_ALLOCATION_PROFILING)
 
 allopt-noprof:
 
 allopt-prof: stdlib.p.cmxa std_exit.p.cmx
 	rm -f std_exit.p.cmi
 
-allopt-allocprof-false:
-
-allopt-allocprof-true: stdlib.ap.cmxa std_exit.ap.cmx
-	rm -f std_exit.ap.cmi
-
-installopt: installopt-default installopt-$(PROFILING) installopt-allocprof-$(WITH_ALLOCATION_PROFILING)
+installopt: installopt-default installopt-$(PROFILING)
 
 installopt-default:
 	cp stdlib.cmxa stdlib.a std_exit.o *.cmx $(INSTALL_LIBDIR)
@@ -48,21 +42,9 @@ installopt-prof:
 	cp stdlib.p.cmxa stdlib.p.a std_exit.p.cmx std_exit.p.o $(INSTALL_LIBDIR)
 	cd $(INSTALL_LIBDIR); $(RANLIB) stdlib.p.a
 
-installopt-allocprof-false:
-	rm -f $(INSTALL_LIBDIR)/stdlib.ap.cmxa
-	rm -f $(INSTALL_LIBDIR)/stdlib.ap.a
-	rm -f $(INSTALL_LIBDIR)/std_exit.ap.cmx
-	rm -f $(INSTALL_LIBDIR)/std_exit.ap.o
-
-installopt-allocprof-true:
-	cp stdlib.ap.cmxa stdlib.ap.a std_exit.ap.cmx std_exit.ap.o $(INSTALL_LIBDIR)
-	cd $(INSTALL_LIBDIR); $(RANLIB) stdlib.ap.a
 
 stdlib.p.cmxa: $(OBJS:.cmo=.p.cmx)
 	$(CAMLOPT) -a -o stdlib.p.cmxa $(OBJS:.cmo=.p.cmx)
-
-stdlib.ap.cmxa: $(OBJS:.cmo=.ap.cmx) allocation_profiling.ap.cmx
-	$(CAMLOPT) -allocation-profiling -a -o stdlib.ap.cmxa $(OBJS:.cmo=.ap.cmx) allocation_profiling.ap.cmx
 
 camlheader target_camlheader camlheaderd target_camlheaderd camlheader_ur: \
   header.c ../config/Makefile

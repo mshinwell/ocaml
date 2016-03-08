@@ -158,6 +158,8 @@ while : ; do
         with_frame_pointers=true;;
     -no-naked-pointers|--no-naked-pointers)
         no_naked_pointers=true;;
+    -with-allocation-profiling|--with-allocation-profiling)
+        with_allocation_profiling=true;;
     -no-cfi|--no-cfi)
         with_cfi=false;;
     *) if echo "$1" | grep -q -e '^--\?[a-zA-Z0-9-]\+='; then
@@ -200,6 +202,9 @@ esac
 cd config/auto-aux
 rm -f s.h m.h Makefile
 touch s.h m.h Makefile
+
+echo "#ifndef __OCAML_M_H" >> m.h
+echo "#define __OCAML_M_H" >> m.h
 
 # Write options to Makefile
 
@@ -1704,30 +1709,34 @@ else
   libunwind_lib=""
 fi
 
-if $arch64; then
-  echo "Allocation profiling will be available."
-  with_allocation_profiling=true
-  if [ "$libunwind_lib" != "" ]; then
-    libunwind_lib_temp="-Xl $libunwind_lib"
+if $with_allocation_profiling; then
+  if $arch64; then
+    echo "Allocation profiling will be available."
+    echo "#define WITH_ALLOCATION_PROFILING" >> m.h
+    if [ "$libunwind_lib" != "" ]; then
+      libunwind_lib_temp="-Xl $libunwind_lib"
+    else
+      libunwind_lib_temp=""
+    fi
+    if sh ./hasgot -i libunwind.h $libunwind_lib_temp -Xl -lunwind $libunwind_include; then
+      echo "#define HAS_LIBUNWIND" >> s.h
+      has_libunwind=yes
+      libunwind_available=true
+      echo "libunwind support for allocation profiling will be available."
+    else
+      has_libunwind=no
+      libunwind_available=false
+      echo "libunwind support for allocation profiling will not be available."
+    fi
   else
-    libunwind_lib_temp=""
-  fi
-  if sh ./hasgot -i libunwind.h $libunwind_lib_temp -Xl -lunwind $libunwind_include; then
-    echo "#define HAS_LIBUNWIND" >> s.h
-    has_libunwind=yes
-    libunwind_available=true
-    echo "libunwind support for allocation profiling will be available."
-  else
-    has_libunwind=no
+    echo "Allocation profiling is not available on 32-bit platforms."
+    with_allocation_profiling=false
     libunwind_available=false
-    echo "libunwind support for allocation profiling will not be available."
+    has_libunwind=no
   fi
-else
-  echo "Allocation profiling is not available on 32-bit platforms."
-  with_allocation_profiling=false
-  libunwind_available=false
-  has_libunwind=no
 fi
+
+echo "#endif" >> m.h
 
 # Add Unix-style optimization flag
 bytecccompopts="-O $bytecccompopts"
