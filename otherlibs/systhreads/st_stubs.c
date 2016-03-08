@@ -326,18 +326,9 @@ static caml_thread_t caml_thread_new_info(void)
   th->local_roots = NULL;
   th->exit_buf = NULL;
 #ifdef WITH_ALLOCATION_PROFILING
-  th->internal_alloc_profiling_trie_root = (value*) malloc(sizeof(value));
-  if (th->internal_alloc_profiling_trie_root == NULL) {
-    return NULL;
-  }
-  *(th->internal_alloc_profiling_trie_root) = Val_unit;
+  th->internal_alloc_profiling_trie_root = Val_unit;
   th->alloc_profiling_trie_node_ptr = &th->internal_alloc_profiling_trie_root;
-  th->internal_alloc_profiling_finaliser_trie_root
-    = (value*) malloc(sizeof(value));
-  if (th->internal_alloc_profiling_finaliser_trie_root == NULL) {
-    return NULL;
-  }
-  *(th->internal_alloc_profiling_finaliser_trie_root) = Val_unit;
+  th->internal_alloc_profiling_finaliser_trie_root = Val_unit;
   th->alloc_profiling_finaliser_trie_root
     = &th->internal_alloc_profiling_finaliser_trie_root;
   caml_allocation_profiling_register_thread(
