@@ -985,7 +985,7 @@ CAMLprim value caml_allocation_profiling_marshal_trie (value v_channel)
   int num_marshalled = 0;
   per_thread* thr = per_threads;
 
-  caml_output_value(v_channel, Val_long(num_per_threads), Val_long(0));
+  caml_output_value(v_channel, Val_long(num_per_threads + 1), Val_long(0));
 
   caml_extern_allow_out_of_heap = 1;
   caml_output_value(v_channel, caml_alloc_profiling_trie_root, Val_long(0));
