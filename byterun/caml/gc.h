@@ -43,7 +43,7 @@
                     + (tag_t) (tag)))                                         \
       )
 
-#if defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING)
+#ifdef WITH_ALLOCATION_PROFILING
 extern uintnat caml_allocation_profiling_my_profinfo(void);
 #define Make_header_with_profinfo(wosize, tag, color, profinfo)               \
       (Make_header(wosize, tag, color)                                        \

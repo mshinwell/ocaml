@@ -68,7 +68,11 @@ color_t caml_allocation_color (void *hp);
 #define DEBUG_clear(result, wosize)
 #endif
 
-#if defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING)
+/* CR mshinwell: Since e.g. Bigarray stubs aren't built with NATIVE_CODE,
+   we cannot guard some of these sections with NATIVE_CODE as well as
+   WITH_ALLOCATION_PROFILING, which is a pity.  We should think about this */
+
+#ifdef WITH_ALLOCATION_PROFILING
 
 #define Decode_profinfo_hd(hd) \
   (((uint64_t) (Profinfo_hd (hd))) << 4)
@@ -81,7 +85,7 @@ extern uintnat caml_allocation_profiling_my_profinfo(void);
 
 #endif
 
-#if !(defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING))
+#ifndef WITH_ALLOCATION_PROFILING
 #define Alloc_small(result, wosize, tag) do {                               \
                                                 CAMLassert ((wosize) >= 1); \
                                           CAMLassert ((tag_t) (tag) < 256); \

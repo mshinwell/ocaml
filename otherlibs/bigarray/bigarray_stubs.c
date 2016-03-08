@@ -22,6 +22,7 @@
 #include "caml/hash.h"
 #include "caml/memory.h"
 #include "caml/mlvalues.h"
+#include "../../config/m.h"
 
 #define int8 caml_ba_int8
 #define uint8 caml_ba_uint8

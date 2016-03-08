@@ -103,7 +103,7 @@ bits  63            42 41            10 9     8 7   0
 */
 
 #define Tag_hd(hd) ((tag_t) ((hd) & 0xFF))
-#if !(defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING))
+#ifndef WITH_ALLOCATION_PROFILING
 #define Wosize_hd(hd) ((mlsize_t) ((hd) >> 10))
 #else
 #define Wosize_hd(hd) (((mlsize_t) ((hd) >> 10)) & 0xffffffff)
@@ -124,7 +124,7 @@ bits  63            42 41            10 9     8 7   0
 
 #define Num_tags (1 << 8)
 #ifdef ARCH_SIXTYFOUR
-#if defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING)
+#ifdef WITH_ALLOCATION_PROFILING
 #define Max_wosize (((intnat)1 << 32) - 1)
 #else
 #define Max_wosize (((intnat)1 << 54) - 1)

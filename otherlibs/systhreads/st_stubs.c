@@ -386,8 +386,11 @@ static void caml_thread_remove_info(caml_thread_t th)
 #endif
   if (th->backtrace_buffer != NULL) free(th->backtrace_buffer);
   /* CR mshinwell: consider what to do about the profiling trace.  Could
-     perhaps have a hook to save a snapshot on thread termination. */
+     perhaps have a hook to save a snapshot on thread termination.
+     For the moment we can't even free [th], since it contains the trie
+     roots.
   stat_free(th);
+  */
 }
 
 /* Reinitialize the thread machinery after a fork() (PR#4577) */

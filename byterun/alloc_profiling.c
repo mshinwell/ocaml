@@ -31,3 +31,8 @@ CAMLprim value caml_allocation_profiling_only_works_for_native_code(value foo, .
   caml_failwith("allocation profiling only works for native code");
   assert(0);  /* unreachable */
 }
+
+uintnat caml_allocation_profiling_my_profinfo (void)
+{
+  return 0;
+}
