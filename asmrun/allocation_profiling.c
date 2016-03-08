@@ -1306,4 +1306,77 @@ CAMLprim value caml_allocation_profiling_debug(value v_unit)
   return Val_unit;
 }
 
+#else
+
+CAMLprim value caml_allocation_profiling_take_heap_snapshot()
+{
+  caml_failwith("allocation profiling not enabled");
+  assert(0);  /* unreachable */
+}
+
+CAMLprim value caml_allocation_profiling_marshal_heap_snapshot()
+{
+  caml_failwith("allocation profiling not enabled");
+  assert(0);  /* unreachable */
+}
+
+CAMLprim value caml_allocation_profiling_free_heap_snapshot()
+{
+  caml_failwith("allocation profiling not enabled");
+  assert(0);  /* unreachable */
+}
+
+CAMLprim value caml_allocation_profiling_get_profinfo()
+{
+  caml_failwith("allocation profiling not enabled");
+  assert(0);  /* unreachable */
+}
+
+CAMLprim value caml_allocation_profiling_profinfo_none()
+{
+  caml_failwith("allocation profiling not enabled");
+  assert(0);  /* unreachable */
+}
+
+CAMLprim value caml_allocation_profiling_debug()
+{
+  caml_failwith("allocation profiling not enabled");
+  assert(0);  /* unreachable */
+}
+
+CAMLprim value
+caml_forget_where_values_were_allocated ()
+{
+  caml_failwith("allocation profiling not enabled");
+  assert(0);  /* unreachable */
+}
+
+CAMLprim value
+caml_allocation_profiling_num_frame_descriptors ()
+{
+  caml_failwith("allocation profiling not enabled");
+  assert(0);  /* unreachable */
+}
+
+CAMLprim value
+caml_allocation_profiling_get_frame_descriptor ()
+{
+  caml_failwith("allocation profiling not enabled");
+  assert(0);  /* unreachable */
+}
+
+CAMLprim value
+caml_allocation_profiling_return_address_of_frame_descriptor ()
+{
+  caml_failwith("allocation profiling not enabled");
+  assert(0);  /* unreachable */
+}
+
+CAMLprim value
+caml_allocation_profiling_marshal_trie ()
+{
+  caml_failwith("allocation profiling not enabled");
+  assert(0);  /* unreachable */
+}
+
 #endif

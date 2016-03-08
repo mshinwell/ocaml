@@ -124,7 +124,9 @@ void caml_final_do_calls (void)
 {
   struct final f;
   value res;
+#if defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING)
   void* saved_alloc_profiling_trie_node_ptr;
+#endif
 
   if (running_finalisation_function) return;
 

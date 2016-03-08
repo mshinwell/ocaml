@@ -33,6 +33,7 @@ x11_include_dir=''
 x11_lib_dir=''
 libunwind_include_dir=''
 libunwind_lib_dir=''
+libunwind_available=false
 graph_wanted=yes
 pthread_wanted=yes
 dl_defs=''
@@ -46,6 +47,7 @@ with_debugger=ocamldebugger
 with_ocamldoc=ocamldoc
 with_ocamlbuild=ocamlbuild
 with_frame_pointers=false
+with_allocation_profiling=false
 no_naked_pointers=false
 TOOLPREF=""
 with_cfi=true
@@ -1895,10 +1897,10 @@ else
   fi
   if $with_allocation_profiling; then
     inf "        allocation profiling...... yes"
+    inf "          ... with libunwind...... $has_libunwind"
   else
     inf "        allocation profiling...... no"
   fi
-  inf "          ... with libunwind...... $has_libunwind"
   if test "$has_libunwind" = "yes"; then
     if test "$libunwind_include_dir" != ""; then
       inf "        libunwind include dir..... $libunwind_include_dir"
