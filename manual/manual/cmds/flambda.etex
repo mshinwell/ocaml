@@ -85,7 +85,9 @@ when speculative inlining starts at toplevel.  (Not used in
   \machine{-inline-alloc-cost},
   \machine{-inline-branch-cost},
   \machine{-inline-call-cost}] Controls how the inliner assesses the runtime
-performance penalties associated with various operations.
+  performance penalties associated with various operations.
+% -inline-branch-factor should maybe not be shown in the same set
+% it does not behave in the same way as the others
 \item[\machine{-inline-indirect-cost},
   \machine{-inline-prim-cost}] Likewise.
 \item[\machine{-inline-lifting-benefit}] Controls inlining of functors
@@ -139,6 +141,7 @@ Command-line flags that may apply per round, for example those with
 In other words, one may specify the value(s) to use for some or all rounds.
 The integer {\em round} is zero-based, zero being the first round.
 If no {\em round} is given then the value will apply to all rounds.
+% 'apply to all rounds' for which no more precise option is specified
 
 The flags {\tt -Oclassic}, {\tt -O2} and {\tt -O3} are applied before all
 other flags, meaning that certain parameters may be overridden without
@@ -156,10 +159,36 @@ When a recursive call to a function (within the definition of that function
 or another in the same mutually-recursive group) is inlined, the procedure is
 also known as {\em unrolling}.  This is somewhat akin to loop peeling.
 
+%% Unrolling might not be understood really correctly from the description
+%% Maybe an example might help:
+
+%% let rec fact x =
+%%   if x = 0 then
+%%     1
+%%   else
+%%     x * fact (x - 1)
+%% let n = fact 4
+
+%% Unrolled once:
+
+%% let n =
+%%   if 4 = 0 then
+%%     1
+%%   else
+%%     4 * fact (4 - 1)
+
+%% Hence:
+
+%% let n = 4 * fact 3
+
+%% A specific section for unrolling might be worth (telling when this is
+%% benefitial)
+
 The aims of inlining are:
 \begin{itemize}
 \item to reduce the runtime overhead caused by function calls (including
 setting up for such calls and returning afterwards); and
+% We should probably mention 'including allocations'
 \item to reduce instruction cache misses by expressing frequently-taken
 paths through the program using fewer machine instructions.
 \end{itemize}
@@ -186,6 +215,8 @@ imported information about other modules is already in the correct
 intermediate language.
 \item It becomes more straightforward to control which variables end up
 in which closures, helping to avoid closure bloat.
+% Maybe: It allows to optimize closure allocations without having to
+% rely on guesses on the closure representation
 \end{itemize}
 
 \subsection{Classic inlining heuristic}
@@ -194,10 +225,29 @@ In {\tt -Oclassic} mode the behaviour of Flambda mimics previous versions
 of the compiler.  At the definition site of a function, the body of the
 function is measured.  It will then be marked as eligible for inlining
 (and hence inlined at every direct call site) if:
+% Do we want to document the differences with previous version ?  For
+% instance functors can be inlined, lifting happens on flambda, It is
+% subject to some other flambda transformations like dead code
+% elimination
 \begin{itemize}
 \item the measured size (in unspecified units) is smaller than that of a
 function call plus the argument of the {\tt -inline} command-line flag; and
 \item the function does not contain a definition of (another) function; and
+% No this only applies to Closure. Oclassic allows that:
+% -dflambda for this example shows that f has no problem being inlined
+
+%% module M1 : sig
+%%   val i : int
+%% end = struct
+%%   let f a =
+%%     let x = a + 30 in (* Force buildind a second closure *)
+%%     let g y = x + y in
+%%     Sys.opaque_identity g
+%%   let h = f 3
+%%   let i = h 4
+%% end
+
+
 \item the function is not recursive.
 \end{itemize}
 
@@ -206,10 +256,27 @@ without {\tt -Oclassic}, where:
 \begin{itemize}
 \item the inlining decision is made at the {\bf call site};
 \item local functions do not prevent their parents from being inlined;
+% Same as above
 \item recursive functions can be handled, by {\em specialisation} (see
 below);
 \item functions that are only discovered after an initial pass of inlining
 may themselves be eligible for inlining.
+% No this is also only a limitation of closure
+
+%% module M2 : sig
+%%   val i : int
+%% end = struct
+%%   let f x =
+%%     let g y = x + y in
+%%     g
+%%   let h = f 3
+%%   let i = h 4 (* h is correctly discovered to be g *)
+%% end
+
+% I don't know if we want to force Oclassic to be this close to Closure
+% but achieving it would require some more code to prevent this from
+% happening
+
 \end{itemize}
 
 Making the inlining decision at the call site helps in situations where
@@ -291,6 +358,13 @@ for the purposes of inlining (a first class module is effectively a
 record of functions, just like the result of a functor application).
 As such, calls to functions inside first class modules may be eligible for
 inlining.
+%% Not really. The functor annotation is not propagated for them, so
+%% they won't use the lifting benefit
+
+%% Also first class module are closer to modules than functors:
+
+%% first class module behave similarly to modules for the purposes of
+%% inlining and functions that manipulate this are akin to functors ...
 
 \subsubsection{Objects}
 
