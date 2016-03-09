@@ -311,8 +311,10 @@ CAMLprim value caml_allocation_profiling_c_node_next(value node)
 CAMLprim value caml_allocation_profiling_c_node_call_site(value node)
 {
   c_node* c_node;
+/*
 printf("c_node_call_site %p tag %d size %d\n",
   (void*) node, Tag_val(node), (int)Wosize_val(node));
+*/
   assert(!Is_ocaml_node(node));
   c_node = caml_allocation_profiling_c_node_of_stored_pointer_not_null(node);
   return caml_copy_int64((uint64_t) Decode_c_node_pc(c_node->pc));
