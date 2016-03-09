@@ -827,8 +827,10 @@ static void graft_c_backtrace_onto_trie(void)
      [caml_last_return_address], and leave the node hole pointer at
      the correct place for attachment of a [caml_start_program] node. */
 
+#ifdef HAS_LIBUNWIND
   caml_alloc_profiling_trie_node_ptr
     = (value*) find_trie_node_from_libunwind(0);
+#endif
 }
 
 void caml_allocation_profiling_c_to_ocaml(void* ocaml_entry_point,

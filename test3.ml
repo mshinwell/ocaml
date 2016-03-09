@@ -35,12 +35,18 @@ let () =
   A.Trace.debug ();
   Printf.printf "taking snapshot\n%!";
   H.take writer;
+(*
   Printf.printf "saving trace\n%!";
+*)
   H.Writer.save_trace_and_close writer;
+(*
   Printf.printf "done\n%!";
+*)
   let module H = RawAProf.Heap_snapshot in
   let series = H.Series.read ~pathname_prefix in
+(*
   Printf.printf "read %d snapshot(s)\n" (H.Series.num_snapshots series);
+*)
   let trace =
     match
       H.Series.trace series
@@ -50,13 +56,15 @@ let () =
     | None -> failwith "No trace"
     | Some trace -> trace
   in
-  let snapshot0 = H.Series.snapshot series ~index:0 in
+  let _snapshot0 = H.Series.snapshot series ~index:0 in
+(*
   Printf.printf "minor heap: %d blocks, %d instrumented\n%!"
     (H.num_blocks_in_minor_heap snapshot0)
     (H.num_blocks_in_minor_heap_with_profinfo snapshot0);
   Printf.printf "major heap: %d blocks, %d instrumented\n%!"
     (H.num_blocks_in_major_heap snapshot0)
     (H.num_blocks_in_major_heap_with_profinfo snapshot0);
+*)
   let frame_table = H.Series.frame_table series in
   let resolve_return_address loc =
     match RawAProf.Frame_table.find_exn frame_table loc with
@@ -77,4 +85,7 @@ let () =
         Some loc
   in
   RawAProf.Trace.debug_ocaml trace ~resolve_return_address;
-  Printf.printf "done"
+  Printf.printf "JSON:\n%!";
+  let chn = open_out "/dev/stdout" in
+  RawAProf.Trace.to_json trace chn;
+  close_out chn
