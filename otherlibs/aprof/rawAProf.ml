@@ -400,7 +400,6 @@ module Trace = struct
 
   let root t = t
 
-(*
   let debug_ocaml t ~resolve_return_address =
     let next_id = ref 0 in
     let visited = ref Node.Map.empty in
@@ -421,7 +420,7 @@ module Trace = struct
         match Node.classify node with
         | Node.OCaml node ->
           Printf.printf "Node %d (OCaml node):\n%!" id;
-          let module O = OCaml_node in
+          let module O = OCaml.Node in
           let fun_id = O.function_identifier node in
           Printf.printf "Function identifier for node: %Lx\n%!"
             (Function_identifier.to_int64 fun_id);
@@ -450,59 +449,59 @@ module Trace = struct
             | None -> ()
             | Some field ->
               Printf.printf "Node %d field %d:\n%!" id index;
-              let module F = O.Field_iterator in
+              let module F = OCaml.Field in
               begin match F.classify field with
-              | F.Allocation_point alloc ->
-                let pc = O.Allocation_point.program_counter alloc in
-                let annot = O.Allocation_point.annotation alloc in
+              | F.Allocation alloc ->
+                let pc = OCaml.Allocation_point.program_counter alloc in
+                let annot = OCaml.Allocation_point.annotation alloc in
                 Printf.printf "Allocation point, pc=%Lx annot=%d \
                     backtrace=%s\n%!"
-                  (Program_counter.to_int64 pc)
+                  (Program_counter.OCaml.to_int64 pc)
                   (Annotation.to_int annot)
                   (print_backtrace (List.rev backtrace))
-              | F.Direct_call_point (F.To_ocaml direct) ->
-                let module D = O.Direct_call_point_in_ocaml_code in
+              | F.Direct_call (F.To_ocaml direct) ->
+                let module D = OCaml.Direct_call_point in
                 let call_site = D.call_site direct in
                 let callee = D.callee direct in
                 let callee_node = D.callee_node direct in
                 Printf.printf "Direct OCaml -> OCaml call point, pc=%Lx, \
                     callee=%Lx.  Callee node is:\n%!"
-                  (Program_counter.to_int64 call_site)
+                  (Program_counter.OCaml.to_int64 call_site)
                   (Function_entry_point.to_int64 callee);
                 print_node (Node.of_ocaml_node callee_node)
                   ~backtrace:(call_site::backtrace);
                 Printf.printf "End of call point\n%!"
-              | F.Direct_call_point (F.To_c direct) ->
-                let module D = O.Direct_call_point_in_ocaml_code in
+              | F.Direct_call (F.To_foreign direct) ->
+                let module D = OCaml.Direct_call_point in
                 let call_site = D.call_site direct in
                 let callee = D.callee direct in
                 let callee_node = D.callee_node direct in
                 Printf.printf "Direct OCaml -> C call point, pc=%Lx, \
                     callee=%Lx.  Callee node is:\n%!"
-                  (Program_counter.to_int64 call_site)
+                  (Program_counter.OCaml.to_int64 call_site)
                   (Function_entry_point.to_int64 callee);
-                print_node (Node.of_c_node callee_node)
+                print_node (Node.of_foreign_node callee_node)
                   ~backtrace:(call_site::backtrace);
                 Printf.printf "End of call point\n%!"
-              | F.Direct_call_point (F.To_uninstrumented direct) ->
-                let module D = O.Direct_call_point_in_ocaml_code in
+              | F.Direct_call (F.To_uninstrumented direct) ->
+                let module D = OCaml.Direct_call_point in
                 let call_site = D.call_site direct in
                 let callee = D.callee direct in
                 Printf.printf "Direct OCaml -> uninstrumented call point, \
                     pc=%Lx, callee=%Lx.\n%!"
-                  (Program_counter.to_int64 call_site)
+                  (Program_counter.OCaml.to_int64 call_site)
                   (Function_entry_point.to_int64 callee)
-              | F.Indirect_call_point indirect ->
-                let module I = O.Indirect_call_point_in_ocaml_code in
+              | F.Indirect_call indirect ->
+                let module I = OCaml.Indirect_call_point in
                 let call_site = I.call_site indirect in
                 Printf.printf "Indirect call point in OCaml code, pc=%Lx:\n%!"
-                  (Program_counter.to_int64 call_site);
+                  (Program_counter.OCaml.to_int64 call_site);
                 let callees = I.callees indirect in
                 let rec iter_callees index = function
                   | None ->
                     Printf.printf "End of callees for indirect call point.\n%!"
                   | Some callee_iterator ->
-                    let module C = I.Callee_iterator in
+                    let module C = I.Callee in
                     let callee = C.callee callee_iterator in
                     let callee_node = C.callee_node callee_iterator in
                     Printf.printf "... callee=%Lx.  \
@@ -517,39 +516,38 @@ module Trace = struct
           in
           iter_fields 0 (O.fields node);
           Printf.printf "End of node %d.\n%!" id
-        | Node.C node ->
+        | Node.Foreign node ->
           Printf.printf "Node %d (C node):\n%!" id;
           let rec iter_fields index = function
             | None -> ()
             | Some field ->
               Printf.printf "Node %d field %d:\n%!" id index;
-              let module F = C_node.Field_iterator in
+              let module F = Foreign.Field in
               begin match F.classify field with
-              | F.Allocation_point alloc ->
-                let pc = C_node.Allocation_point.program_counter alloc in
-                let annot = C_node.Allocation_point.annotation alloc in
+              | F.Allocation alloc ->
+                let pc = Foreign.Allocation_point.program_counter alloc in
+                let annot = Foreign.Allocation_point.annotation alloc in
                 Printf.printf "Allocation point, pc=%Lx annot=%d, \
                     backtrace=%s\n%!"
-                  (Program_counter.to_int64 pc)
+                  (Program_counter.Foreign.to_int64 pc)
                   (Annotation.to_int annot)
                   (print_backtrace (List.rev backtrace))
-              | F.Call_point call ->
-                let call_site = C_node.Call_point.call_site call in
-                let callee_node = C_node.Call_point.callee_node call in
+              | F.Call call ->
+                let call_site = Foreign.Call_point.call_site call in
+                let callee_node = Foreign.Call_point.callee_node call in
                 Printf.printf "Call point, pc=%Lx.  Callee node is:\n%!"
-                  (Program_counter.to_int64 call_site);
+                  (Program_counter.Foreign.to_int64 call_site);
                 print_node callee_node ~backtrace:(call_site::backtrace);
                 Printf.printf "End of call point\n%!"
               end;
               iter_fields (index + 1) (F.next field)
           in
-          iter_fields 0 (C_node.fields node);
+          iter_fields 0 (Foreign.Node.fields node);
           Printf.printf "End of node %d.\n%!" id
     in
     match root t with
     | None -> Printf.printf "Trace is empty.\n%!"
     | Some node -> print_node node ~backtrace:[]
-*)
 end
 
 module Heap_snapshot = struct
