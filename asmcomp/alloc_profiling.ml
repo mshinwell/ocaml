@@ -102,7 +102,7 @@ let code_for_function_prologue ~function_name =
               ]),
             Cvar node))))))
 
-let code_for_allocation_point ~value's_header ~node =
+let code_for_allocation_point ~value's_header ~node ~dbg =
   let existing_profinfo = Ident.create "existing_profinfo" in
   let profinfo = Ident.create "profinfo" in
   let pc = Ident.create "pc" in
@@ -118,7 +118,7 @@ let code_for_allocation_point ~value's_header ~node =
        be in the cache, which hopefully gives a good code size/performance
        balance. *)
     Clet (pc,
-      Cop (Cprogram_counter, []),
+      Cop (Cprogram_counter dbg, []),
       Cop (Cextcall ("caml_alloc_profiling_generate_profinfo", [| Int |],
           false, Debuginfo.none),
         [Cvar pc; Cvar address_of_profinfo]))
@@ -277,11 +277,11 @@ class virtual instruction_selection = object (self)
         Some label
       | _ -> None
 
-  method private instrument_allocation_point ~env ~value's_header =
+  method private instrument_allocation_point ~env ~value's_header ~dbg =
     let instrumentation =
       code_for_allocation_point
         ~node:(Lazy.force !alloc_profiling_node_ident)
-        ~value's_header
+        ~value's_header ~dbg
     in
     self#emit_expr env instrumentation
 
@@ -321,14 +321,14 @@ class virtual instruction_selection = object (self)
       end
     end
 
-  method! emit_blockheader env n =
+  method! emit_blockheader env n dbg =
     if self#can_instrument () then begin
       disable_instrumentation <- true;
-      let result = self#instrument_allocation_point ~env ~value's_header:n in
+      let result = self#instrument_allocation_point ~env ~value's_header:n ~dbg in
       disable_instrumentation <- false;
       result
     end else begin
-      super#emit_blockheader env n
+      super#emit_blockheader env n dbg
     end
 
   method! initial_env () =

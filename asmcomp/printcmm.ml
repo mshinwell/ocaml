@@ -86,7 +86,7 @@ let operation = function
   | Ccheckbound d -> "checkbound" ^ Debuginfo.to_string d
   | Calloc_profiling_load_node_hole_ptr -> "alloc_profiling_load_node_hole_ptr"
   | Calloc_profiling_node_hole -> "alloc_profiling_node_hole"
-  | Cprogram_counter -> "program_counter"
+  | Cprogram_counter d -> "program_counter" ^ Debuginfo.to_string d
   | Clabel label -> "label:" ^ string_of_int label
   | Caddress_of_label label -> "label@" ^ string_of_int label
 
@@ -94,8 +94,9 @@ let rec expr ppf = function
   | Cconst_int n -> fprintf ppf "%i" n
   | Cconst_natint n ->
     fprintf ppf "%s" (Nativeint.to_string n)
-  | Cblockheader n ->
-    fprintf ppf "block-hdr(%s)" (Nativeint.to_string n)
+  | Cblockheader(n, d) ->
+    fprintf ppf "block-hdr(%s)%s"
+      (Nativeint.to_string n) (Debuginfo.to_string d)
   | Cconst_float n -> fprintf ppf "%F" n
   | Cconst_symbol s -> fprintf ppf "\"%s\"" s
   | Cconst_pointer n -> fprintf ppf "%ia" n

@@ -106,6 +106,7 @@ class virtual selector_generic : object
   method emit_blockheader
      : (Ident.t, Reg.t array) Tbl.t
     -> nativeint
+    -> Debuginfo.t
     -> Reg.t array option
   method about_to_emit_call
      : (Ident.t, Reg.t array) Tbl.t

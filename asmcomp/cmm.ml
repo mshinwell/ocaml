@@ -89,7 +89,7 @@ and operation =
   | Ccheckbound of Debuginfo.t
   | Calloc_profiling_node_hole
   | Calloc_profiling_load_node_hole_ptr
-  | Cprogram_counter
+  | Cprogram_counter of Debuginfo.t
   | Clabel of label
   | Caddress_of_label of label
 
@@ -100,7 +100,7 @@ type expression =
   | Cconst_symbol of string
   | Cconst_pointer of int
   | Cconst_natpointer of nativeint
-  | Cblockheader of nativeint
+  | Cblockheader of nativeint * Debuginfo.t
   | Cvar of Ident.t
   | Clet of Ident.t * expression * expression
   | Cassign of Ident.t * expression

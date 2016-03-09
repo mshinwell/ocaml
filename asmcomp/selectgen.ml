@@ -44,7 +44,7 @@ let oper_result_type = function
   | Ccheckbound _ -> typ_void
   | Calloc_profiling_node_hole -> typ_int
   | Calloc_profiling_load_node_hole_ptr -> typ_void
-  | Cprogram_counter -> typ_int
+  | Cprogram_counter _ -> typ_int
   | Clabel _ -> typ_void
   | Caddress_of_label _ -> typ_int
 
@@ -162,6 +162,7 @@ let debuginfo_op = function
   | Cextcall(_, _, _, dbg) -> dbg
   | Craise (_, dbg) -> dbg
   | Ccheckbound dbg -> dbg
+  | Cprogram_counter dbg -> dbg
   | _ -> Debuginfo.none
 
 (* Registers for catch constructs *)
@@ -198,7 +199,7 @@ method is_simple_expr = function
         (* The following may have side effects *)
       | Capply _ | Cextcall _ | Calloc | Cstore _ | Craise _ -> false
         (* [Cprogram_counter] and label operations must never be moved *)
-      | Cprogram_counter | Clabel _ | Caddress_of_label _ -> false
+      | Cprogram_counter _ | Clabel _ | Caddress_of_label _ -> false
         (* The remaining operations are simple if their args are *)
       | _ ->
           List.for_all self#is_simple_expr args
@@ -295,7 +296,7 @@ method select_operation op args =
   | (Cfloatofint, _) -> (Ifloatofint, args)
   | (Cintoffloat, _) -> (Iintoffloat, args)
   | (Ccheckbound _, _) -> self#select_arith Icheckbound args
-  | (Cprogram_counter, _) -> (Iprogram_counter, args)
+  | (Cprogram_counter _, _) -> (Iprogram_counter, args)
   | (Calloc_profiling_node_hole, _) -> (Ialloc_profiling_node_hole, args)
   | (Calloc_profiling_load_node_hole_ptr, _) ->
     (Ialloc_profiling_load_node_hole_ptr, args)
@@ -437,7 +438,7 @@ method private insert_op_debug_env env op dbg rs rd =
 method insert_op op rs rd =
   self#insert_op_debug op Debuginfo.none rs rd
 
-method emit_blockheader _env n =
+method emit_blockheader _env n _dbg =
   let r = self#regs_for typ_int in
   Some(self#insert_op (Iconst_int n) [||] r)
 
@@ -466,8 +467,8 @@ method emit_expr env exp =
   | Cconst_natpointer n ->
       let r = self#regs_for typ_addr in
       Some(self#insert_op (Iconst_int n) [||] r)
-  | Cblockheader n ->
-      self#emit_blockheader env n
+  | Cblockheader(n, dbg) ->
+      self#emit_blockheader env n dbg
   | Cvar v ->
       begin try
         Some(Tbl.find v env)

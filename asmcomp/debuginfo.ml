@@ -54,3 +54,4 @@ let from_location kind loc =
 
 let from_call ev = from_location Dinfo_call ev.Lambda.lev_loc
 let from_raise ev = from_location Dinfo_raise ev.Lambda.lev_loc
+let from_other loc = from_location Dinfo_call loc
