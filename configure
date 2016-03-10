@@ -111,6 +111,12 @@ while : ; do
             manext=1;;
         esac
         shift;;
+    -libunwinddir|--libunwinddir)
+        libunwind_include_dir=$2/include;
+        libunwind_lib_dir=$2/lib;
+        shift;;
+    -libunwindlib|--libunwindlib)
+        libunwind_lib_dir=$2; shift;;
     -libunwindinclude|--libunwindinclude)
         libunwind_include_dir=$2; shift;;
     -libunwindlib|--libunwindlib)

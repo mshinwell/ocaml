@@ -272,13 +272,13 @@ module Trace : sig
       the graph is empty. *)
   val root : t -> Node.t option
 
-(*
+  val to_json : t -> out_channel -> unit
+
   (** Dump an unmarshalled trace to stdout (version written in OCaml). *)
   val debug_ocaml
      : t
     -> resolve_return_address:(Program_counter.OCaml.t -> string option)
     -> unit
-*)
 end
 
 module Heap_snapshot : sig

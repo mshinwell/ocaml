@@ -311,8 +311,6 @@ CAMLprim value caml_allocation_profiling_c_node_next(value node)
 CAMLprim value caml_allocation_profiling_c_node_call_site(value node)
 {
   c_node* c_node;
-printf("c_node_call_site %p tag %d size %d\n",
-  (void*) node, Tag_val(node), (int)Wosize_val(node));
   assert(!Is_ocaml_node(node));
   c_node = caml_allocation_profiling_c_node_of_stored_pointer_not_null(node);
   return caml_copy_int64((uint64_t) Decode_c_node_pc(c_node->pc));
@@ -324,7 +322,12 @@ CAMLprim value caml_allocation_profiling_c_node_callee_node(value node)
   assert(!Is_ocaml_node(node));
   c_node = caml_allocation_profiling_c_node_of_stored_pointer_not_null(node);
   assert(caml_allocation_profiling_classify_c_node(c_node) == CALL);
-  /* XXX this might be a tail-inited point */
+  /* This might be an uninitialised tail call point: for example if an OCaml
+     callee was indirectly called but the callee wasn't instrumented (e.g. a
+     leaf function that doesn't allocate). */
+  if (Is_tail_caller_node_encoded(c_node->data.callee_node)) {
+    return Val_unit;
+  }
   return c_node->data.callee_node;
 }
 

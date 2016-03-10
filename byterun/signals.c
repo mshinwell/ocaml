@@ -147,7 +147,7 @@ void caml_execute_signal(int signal_number, int in_signal_handler)
   sigprocmask(SIG_BLOCK, &sigs, &sigs);
 #endif
 #if defined(NATIVE_CODE) && defined(WITH_ALLOCATION_PROFILING)
-  /* We record the signal handlers's execution separately, in the same
+  /* We record the signal handler's execution separately, in the same
      trie used for finalisers. */
   saved_alloc_profiling_trie_node_ptr
     = caml_alloc_profiling_trie_node_ptr;
