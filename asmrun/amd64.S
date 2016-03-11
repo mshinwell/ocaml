@@ -67,10 +67,14 @@
 #define CFI_STARTPROC .cfi_startproc
 #define CFI_ENDPROC .cfi_endproc
 #define CFI_ADJUST(n) .cfi_adjust_cfa_offset n
+#define CFI_OFFSET(r, n) .cfi_offset r, n
+#define CFI_SAME_VALUE(r) .cfi_same_value r
 #else
 #define CFI_STARTPROC
 #define CFI_ENDPROC
 #define CFI_ADJUST(n)
+#define CFI_OFFSET(r, n)
+#define CFI_SAME_VALUE(r)
 #endif
 
 #ifdef WITH_FRAME_POINTERS
@@ -185,7 +189,8 @@
 
 #define PUSH_CALLEE_SAVE_REGS \
         pushq   %rbx; CFI_ADJUST (8); CFI_OFFSET(rbx, -16); \
-        pushq   %rbp; CFI_ADJUST (8); CFI_OFFSET(rbp, -24); /* Allows debugger to walk the stack */ \
+        pushq   %rbp; CFI_ADJUST (8); CFI_OFFSET(rbp, -24); \
+                      /* Allows debugger to walk the stack */ \
         pushq   %rsi; CFI_ADJUST (8); CFI_OFFSET(rsi, -32); \
         pushq   %rdi; CFI_ADJUST (8); CFI_OFFSET(rdi, -40); \
         pushq   %r12; CFI_ADJUST (8); CFI_OFFSET(r12, -48); \
@@ -432,6 +437,7 @@ LBL(caml_allocN):
         addq    $8, %rsp; CFI_ADJUST (-8)  /* drop desired size */
         ret
 LBL(103):
+        CFI_ADJUST(8)
         RECORD_STACK_FRAME(8)
 #ifdef WITH_FRAME_POINTERS
         /* Do we need 16-byte alignment here ? */
@@ -517,7 +523,6 @@ LBL(caml_start_program):
         lea     LBL(108)(%rip), %r13
         pushq   %r13; CFI_ADJUST(8)
         pushq   %r14; CFI_ADJUST(8)
-        CFI_ADJUST(16)
         movq    %rsp, %r14
 #ifdef WITH_ALLOCATION_PROFILING
         LOAD_VAR(caml_alloc_profiling_trie_node_ptr, %r13)
@@ -528,7 +533,6 @@ LBL(107):
     /* Pop the exception handler */
         popq    %r14; CFI_ADJUST(-8)
         popq    %r12; CFI_ADJUST(-8)   /* dummy register */
-        CFI_ADJUST(-16)
 LBL(109):
     /* Update alloc ptr and exception ptr */
         STORE_VAR(%r15,caml_young_ptr)
