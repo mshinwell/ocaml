@@ -272,7 +272,11 @@ module Trace : sig
       the graph is empty. *)
   val root : t -> Node.t option
 
-  val to_json : t -> out_channel -> unit
+  val to_json
+     : t
+    -> out_channel
+    -> resolve_address:(?long:unit -> Program_counter.OCaml.t -> string)
+    -> unit
 
   (** Dump an unmarshalled trace to stdout (version written in OCaml). *)
   val debug_ocaml

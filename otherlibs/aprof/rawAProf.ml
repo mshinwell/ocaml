@@ -555,12 +555,14 @@ module Trace = struct
     | None -> Printf.printf "Trace is empty.\n%!"
     | Some node -> print_node node ~backtrace:[]
 
-  let to_json t channel =
+  let to_json t channel
+      ~(resolve_address : ?long:unit -> Program_counter.OCaml.t -> string) =
     output_string channel "{\n";
     output_string channel "\"nodes\":[\n";
     let seen_a_node = ref false in
     let next_id = ref 0 in
     let visited = ref Node.Map.empty in
+    let allocation_nodes = true in
     let rec print_node node =
       match Node.Map.find node !visited with
       | id -> ()
@@ -569,30 +571,42 @@ module Trace = struct
         incr next_id;
         visited := Node.Map.add node id !visited;
         if !seen_a_node then begin
-          (* Apparently JSON doesn't allow trailing commas. *)
+          (* Trailing commas are not allowed. *)
           Printf.fprintf channel ",\n"
         end;
+        let first_node = (!seen_a_node = false) in
         seen_a_node := true;
         match Node.classify node with
         | Node.OCaml node ->
           let module O = OCaml.Node in
           let fun_id = O.function_identifier node in
-          Printf.fprintf channel "{\"name\":\"%Lx\",\"group\":1}%!"
-            (Function_identifier.to_int64 fun_id);
+          Printf.fprintf channel "{\"name\":\"%Lx\",\"colour\":%d}%!"
+            (Function_identifier.to_int64 fun_id)
+            (if first_node then 17 else 2);
           let rec iter_fields = function
             | None -> ()
             | Some field ->
               let module F = OCaml.Field in
               begin match F.classify field with
-              | F.Allocation _alloc -> ()
+              | F.Allocation alloc ->
+                if allocation_nodes then begin
+                  let pc = OCaml.Allocation_point.program_counter alloc in
+                  Printf.fprintf channel ",\n{\"name\":\"%s\",\"colour\":3}%!"
+                    (resolve_address ~long:() pc);
+                  incr next_id
+                end
               | F.Direct_call (F.To_ocaml direct) ->
                 let module D = OCaml.Direct_call_point in
                 let callee_node = D.callee_node direct in
                 print_node (Node.of_ocaml_node callee_node)
-              | F.Direct_call (F.To_foreign direct) ->
+              | F.Direct_call (F.To_foreign _direct) -> ()
+                (* CR mshinwell: fix this once C instrumentation happens.
+                   Still need to be careful of the case where the C function
+                   doesn't fill in the pointer...
                 let module D = OCaml.Direct_call_point in
                 let callee_node = D.callee_node direct in
                 print_node (Node.of_foreign_node callee_node)
+                *)
               | F.Direct_call (F.To_uninstrumented _direct) -> ()
               | F.Indirect_call indirect ->
                 let module I = OCaml.Indirect_call_point in
@@ -633,13 +647,13 @@ module Trace = struct
             in
             iter_fields "C, calls: " (Foreign.Node.fields node)
           in
-          Printf.fprintf channel "{\"name\":\"%s\",\"group\":1}%!" name;
+          Printf.fprintf channel "{\"name\":\"%s\",\"colour\":0}%!" name;
           let rec iter_fields = function
             | None -> ()
             | Some field ->
               let module F = Foreign.Field in
               begin match F.classify field with
-              | F.Allocation _alloc -> ()
+              | F.Allocation _alloc -> ()  (* CR mshinwell: emit a node *)
               | F.Call call ->
                 let callee_node = Foreign.Call_point.callee_node call in
                 if not (node_is_null callee_node) then begin
@@ -656,6 +670,7 @@ module Trace = struct
     end;
     seen_a_node := false;
     next_id := 0;
+    let link_id = ref 0 in
     visited := Node.Map.empty;
     output_string channel "],\n";
     output_string channel "\"links\":[\n";
@@ -670,13 +685,17 @@ module Trace = struct
           (* Apparently JSON doesn't allow trailing commas. *)
           Printf.fprintf channel ",\n"
         end;
-        seen_a_node := true;
+        let direct_colour = 5 in
+        let indirect_colour = 14 in
         begin match come_from with
         | None -> ()
-        | Some come_from ->
+        | Some (come_from, colour, label) ->
           Printf.fprintf channel
-            "{\"source\":%d,\"target\":%d,\"value\":1}%!"
-            come_from id
+            "{\"source\":%d,\"target\":%d,\"value\":10,\"colour\":%d,\
+              \"label\":\"%s\",\"id\":%d}%!"
+            come_from id colour label !link_id;
+          incr link_id;
+          seen_a_node := true
         end;
         match Node.classify node with
         | Node.OCaml node ->
@@ -686,28 +705,45 @@ module Trace = struct
             | Some field ->
               let module F = OCaml.Field in
               begin match F.classify field with
-              | F.Allocation _alloc -> ()
+              | F.Allocation alloc ->
+                if allocation_nodes then begin
+                  Printf.fprintf channel
+                    ",\n{\"source\":%d,\"target\":%d,\"value\":1,\
+                      \"colour\":3,\"id\":%d}%!"
+                    id !next_id !link_id;
+                  incr link_id;
+                  incr next_id
+                end
               | F.Direct_call (F.To_ocaml direct) ->
                 let module D = OCaml.Direct_call_point in
                 let callee_node = D.callee_node direct in
+                let call_site = D.call_site direct in
+                let label = resolve_address call_site in
                 print_node (Node.of_ocaml_node callee_node)
-                  ~come_from:id
-              | F.Direct_call (F.To_foreign direct) ->
+                  ~come_from:(id, direct_colour, label)
+              | F.Direct_call (F.To_foreign _direct) -> ()
+(*
                 let module D = OCaml.Direct_call_point in
                 let callee_node = D.callee_node direct in
+                let call_site = D.call_site direct in
+                let label = resolve_address call_site in
                 print_node (Node.of_foreign_node callee_node)
-                  ~come_from:id
+                  ~come_from:(id, direct_colour, label)
+*)
               | F.Direct_call (F.To_uninstrumented _direct) -> ()
               | F.Indirect_call indirect ->
                 let module I = OCaml.Indirect_call_point in
                 let callees = I.callees indirect in
+                let call_site = I.call_site indirect in
+                let label = resolve_address call_site in
                 let rec iter_callees = function
                   | None -> ()
                   | Some callee_iterator ->
                     let module C = I.Callee in
                     let callee_node = C.callee_node callee_iterator in
                     if not (node_is_null callee_node) then begin
-                      print_node callee_node ~come_from:id
+                      print_node callee_node
+                        ~come_from:(id, indirect_colour, label)
                     end;
                     iter_callees (C.next callee_iterator)
                 in
@@ -726,7 +762,7 @@ module Trace = struct
               | F.Call call ->
                 let callee_node = Foreign.Call_point.callee_node call in
                 if not (node_is_null callee_node) then begin
-                  print_node callee_node ~come_from:id
+                  print_node callee_node ~come_from:(id, direct_colour, "")
                 end
               end;
               iter_fields (F.next field)
@@ -737,7 +773,7 @@ module Trace = struct
     | None -> ()
     | Some node -> print_node node
     end;
-    output_string channel "],\n";
+    output_string channel "]\n";
     output_string channel "}"
 end
 

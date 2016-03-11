@@ -50,18 +50,18 @@
 
 #ifdef WITH_ALLOCATION_PROFILING
 
-/* not working yet... */
-#undef HAS_LIBUNWIND
-
 #ifdef HAS_LIBUNWIND
 #include "libunwind.h"
 #endif
 
 #pragma GCC optimize ("-O0")
 
+#if 0
 static void debug_printf(const char* format, ...)
 {
 }
+#endif
+#define debug_printf printf
 
 /* The following structures must match the type definitions in the
    [Allocation_profiling] module. */
@@ -730,6 +730,7 @@ static void* find_trie_node_from_libunwind(int for_allocation)
     }
     else {
       caml_ext_table_add(&frames, (void*) ip);
+printf("pc=%p\n", (void*)ip);
     }
   }
 
@@ -741,13 +742,18 @@ static void* find_trie_node_from_libunwind(int for_allocation)
      since it is not possible for there to be a call point in an OCaml
      function that sometimes calls C and sometimes calls OCaml. */
 
-  /* If not recording an allocation, we need to stop one frame short. */
-  innermost_frame = for_allocation ? 0 : 1;
+  /* If not recording an allocation, we need to stop one frame short,
+     and also ignore any [caml_start_program] frame.  In both cases we need
+     to ignore the frame for this function (find_trie_node_from_libunwind).
+  */
+  innermost_frame = for_allocation ? 1 : 2;
 
   for (frame = frames.size - 1; frame >= innermost_frame; frame--) {
     c_node_type expected_type;
     void* pc = frames.contents[frame];
     assert (pc != (void*) caml_last_return_address);
+
+    debug_printf("frames.contents[%d]=%p\n", frame, pc);
 
     expected_type = (frame > 0 ? CALL : ALLOCATION);
 
@@ -811,6 +817,9 @@ static void* find_trie_node_from_libunwind(int for_allocation)
       != node);
   }
 
+  debug_printf("find_trie_node_from_libunwind returns %p\n",
+    for_allocation ? (void*) node : (void*) node_hole);
+
   return for_allocation ? (void*) node : (void*) node_hole;
 #else
   return NULL;
@@ -822,6 +831,8 @@ static c_node* graft_backtrace_onto_trie_for_allocation(void)
   return (c_node*) find_trie_node_from_libunwind(1);
 }
 
+extern uintnat caml_initial_last_return_address; /* asmrun/roots.c */
+
 static void graft_c_backtrace_onto_trie(void)
 {
   /* Update the trie with the current backtrace, as far back as
@@ -829,8 +840,23 @@ static void graft_c_backtrace_onto_trie(void)
      the correct place for attachment of a [caml_start_program] node. */
 
 #ifdef HAS_LIBUNWIND
-  caml_alloc_profiling_trie_node_ptr
-    = (value*) find_trie_node_from_libunwind(0);
+  /* If we haven't actually started the OCaml program yet, then we are in
+     the very first call to [caml_start_program], and we shouldn't add
+     anything to the trie.  For some reason the backtrace back past this
+     point seems bad on x86-64 (without frame pointers), e.g:
+      #2  0x00000000004bf580 in caml_start_program ()
+      #3  0x00007fffffffdb98 in ?? ()  <-- libunwind stops here
+      #4  0x00000000006e5dc0 in caml_globals_map ()
+      #5  0x00000000006e5dc8 in caml_data_segments ()
+      #6  0x00007fffffffdf4e in ?? ()
+      #7  0x00000000004bfaf5 in caml_main (argv=0x7fffffffdb98) at startup.c:199
+      #8  0x00000000004abec0 in main (argc=<value optimized out>,
+        argv=<value optimized out>) at main.c:54
+  */
+  if (caml_last_return_address != caml_initial_last_return_address) {
+    caml_alloc_profiling_trie_node_ptr
+      = (value*) find_trie_node_from_libunwind(0);
+  }
 #endif
 }
 

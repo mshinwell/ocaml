@@ -291,9 +291,10 @@ let call_linker file_list startup_file output_name =
   in
   let files = startup_file :: (List.rev file_list) in
   let libunwind =
-    if not !Clflags.allocation_profiling then []
+    if not Config.with_allocation_profiling then []
     else if not Config.libunwind_available then []
-    else [Config.libunwind_flag; "-lunwind"]
+    (* CR mshinwell: library name is dependent on target arch *)
+    else [Config.libunwind_flag; "-lunwind"; "-lunwind-x86_64"]
   in
   let files, c_lib =
     if (not !Clflags.output_c_object) || main_dll || main_obj_runtime then

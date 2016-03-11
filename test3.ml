@@ -9,6 +9,14 @@ let rec f x =
 and g _x =
   f (-1)
 
+let called_from_c i =
+  i, i
+
+let () =
+  Callback.register "called_from_c" called_from_c
+
+external call_c : int -> int * int = "test3_stub"
+
 let () =
   Printf.printf "start\n";
   begin match f 9 with
@@ -27,18 +35,22 @@ let () =
   | A (s, i) -> print_string s; print_int i; print_newline ()
   | B x -> print_int x; print_newline ()
   end;
+  let pair = call_c 42 in
+  Printf.printf "pair is %d, %d\n%!" (fst pair) (snd pair);
   let module A = Allocation_profiling in
   let module O = AProf in
   let module H = A.Heap_snapshot in
   let pathname_prefix = "/tmp/heap_snapshot" in
   let writer = H.Writer.create ~pathname_prefix in
-  A.Trace.debug ();
-  Printf.printf "taking snapshot\n%!";
+(*  A.Trace.debug ();*)
+(*  Printf.printf "taking snapshot\n%!";*)
   H.take writer;
 (*
   Printf.printf "saving trace\n%!";
 *)
-  H.Writer.save_trace_and_close writer;
+  H.Writer.save_trace_and_close writer
+
+(*
 (*
   Printf.printf "done\n%!";
 *)
@@ -66,26 +78,38 @@ let () =
     (H.num_blocks_in_major_heap_with_profinfo snapshot0);
 *)
   let frame_table = H.Series.frame_table series in
-  let resolve_return_address loc =
+  let resolve_return_address ?long loc =
     match RawAProf.Frame_table.find_exn frame_table loc with
     | exception Not_found -> None
     | slot ->
       match Printexc.Slot.location slot with
       | None ->
-        Some (Printf.sprintf "*0x%Lx"
+        Some (Printf.sprintf "0x%Lx"
           (RawAProf.Program_counter.OCaml.to_int64 loc))
       | Some loc ->
         let loc =
-          Printf.sprintf "%s:%d(%d--%d)"
+          match long with
+          | None ->
             loc.Printexc.filename
-            loc.Printexc.line_number
-            loc.Printexc.start_char
-            loc.Printexc.end_char
+          | Some () ->
+            Printf.sprintf "%s:%d(%d--%d)"
+              loc.Printexc.filename
+              loc.Printexc.line_number
+              loc.Printexc.start_char
+              loc.Printexc.end_char
         in
         Some loc
   in
+(*
   RawAProf.Trace.debug_ocaml trace ~resolve_return_address;
   Printf.printf "JSON:\n%!";
-  let chn = open_out "/dev/stdout" in
-  RawAProf.Trace.to_json trace chn;
+*)
+  let chn = open_out "/dev/stderr" in
+  let resolve_address ?long loc =
+    match resolve_return_address ?long loc with
+    | None -> Printf.sprintf "0x%Lx" (RawAProf.Program_counter.OCaml.to_int64 loc)
+    | Some addr -> addr
+  in
+  RawAProf.Trace.to_json trace chn ~resolve_address;
   close_out chn
+*)
