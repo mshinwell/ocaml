@@ -742,11 +742,13 @@ printf("pc=%p\n", (void*)ip);
      since it is not possible for there to be a call point in an OCaml
      function that sometimes calls C and sometimes calls OCaml. */
 
-  /* If not recording an allocation, we need to stop one frame short,
-     and also ignore any [caml_start_program] frame.  In both cases we need
-     to ignore the frame for this function (find_trie_node_from_libunwind).
-  */
-  innermost_frame = for_allocation ? 1 : 2;
+  /* We always need to ignore the frames for:
+      #0  find_trie_node_from_libunwind
+      #1  graft_c_backtrace_onto_trie () at allocation_profiling.c:842
+      #2  caml_allocation_profiling_c_to_ocaml
+     Further, if this is not an allocation point, we should not create the
+     node for the current C function that triggered us (i.e. frame #3). */
+  innermost_frame = for_allocation ? 2 : 3;
 
   for (frame = frames.size - 1; frame >= innermost_frame; frame--) {
     c_node_type expected_type;
@@ -831,8 +833,6 @@ static c_node* graft_backtrace_onto_trie_for_allocation(void)
   return (c_node*) find_trie_node_from_libunwind(1);
 }
 
-extern uintnat caml_initial_last_return_address; /* asmrun/roots.c */
-
 static void graft_c_backtrace_onto_trie(void)
 {
   /* Update the trie with the current backtrace, as far back as
@@ -840,23 +840,8 @@ static void graft_c_backtrace_onto_trie(void)
      the correct place for attachment of a [caml_start_program] node. */
 
 #ifdef HAS_LIBUNWIND
-  /* If we haven't actually started the OCaml program yet, then we are in
-     the very first call to [caml_start_program], and we shouldn't add
-     anything to the trie.  For some reason the backtrace back past this
-     point seems bad on x86-64 (without frame pointers), e.g:
-      #2  0x00000000004bf580 in caml_start_program ()
-      #3  0x00007fffffffdb98 in ?? ()  <-- libunwind stops here
-      #4  0x00000000006e5dc0 in caml_globals_map ()
-      #5  0x00000000006e5dc8 in caml_data_segments ()
-      #6  0x00007fffffffdf4e in ?? ()
-      #7  0x00000000004bfaf5 in caml_main (argv=0x7fffffffdb98) at startup.c:199
-      #8  0x00000000004abec0 in main (argc=<value optimized out>,
-        argv=<value optimized out>) at main.c:54
-  */
-  if (caml_last_return_address != caml_initial_last_return_address) {
-    caml_alloc_profiling_trie_node_ptr
-      = (value*) find_trie_node_from_libunwind(0);
-  }
+  caml_alloc_profiling_trie_node_ptr
+    = (value*) find_trie_node_from_libunwind(0);
 #endif
 }
 

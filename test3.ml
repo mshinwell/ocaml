@@ -48,9 +48,7 @@ let () =
 (*
   Printf.printf "saving trace\n%!";
 *)
-  H.Writer.save_trace_and_close writer
-
-(*
+  H.Writer.save_trace_and_close writer;
 (*
   Printf.printf "done\n%!";
 *)
@@ -112,4 +110,3 @@ let () =
   in
   RawAProf.Trace.to_json trace chn ~resolve_address;
   close_out chn
-*)

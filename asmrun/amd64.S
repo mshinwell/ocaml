@@ -503,18 +503,18 @@ LBL(caml_start_program):
         PUSH_VAR(caml_bottom_of_stack)
 #ifdef WITH_ALLOCATION_PROFILING
         /* Save arguments to caml_callback* */
-        pushq   %rax
-        pushq   %rbx
-        pushq   %rdi
-        pushq   %rsi
+        pushq   %rax; CFI_ADJUST (8)
+        pushq   %rbx; CFI_ADJUST (8)
+        pushq   %rdi; CFI_ADJUST (8)
+        pushq   %rsi; CFI_ADJUST (8)
         /* No need to push %r12: it's callee-save. */
         movq    %r12, %rdi
         LEA_VAR(caml_start_program, %rsi)
         call    GCALL(caml_allocation_profiling_c_to_ocaml)
-        popq    %rsi
-        popq    %rdi
-        popq    %rbx
-        popq    %rax
+        popq    %rsi; CFI_ADJUST (-8)
+        popq    %rdi; CFI_ADJUST (-8)
+        popq    %rbx; CFI_ADJUST (-8)
+        popq    %rax; CFI_ADJUST (-8)
 #endif
     /* Setup alloc ptr and exception ptr */
         LOAD_VAR(caml_young_ptr, %r15)

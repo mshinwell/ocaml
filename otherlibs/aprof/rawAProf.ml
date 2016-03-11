@@ -685,6 +685,7 @@ module Trace = struct
           (* Apparently JSON doesn't allow trailing commas. *)
           Printf.fprintf channel ",\n"
         end;
+        let c_colour = 16 in
         let direct_colour = 5 in
         let indirect_colour = 14 in
         begin match come_from with
@@ -762,7 +763,7 @@ module Trace = struct
               | F.Call call ->
                 let callee_node = Foreign.Call_point.callee_node call in
                 if not (node_is_null callee_node) then begin
-                  print_node callee_node ~come_from:(id, direct_colour, "")
+                  print_node callee_node ~come_from:(id, c_colour, "")
                 end
               end;
               iter_fields (F.next field)
