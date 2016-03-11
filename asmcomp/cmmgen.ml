@@ -855,11 +855,13 @@ let box_number bn arg =
 
 type env = {
   unboxed_ids : (Ident.t * boxed_number) Ident.tbl;
+  bound_to_symbols : Ident.Set.t;
 }
 
 let empty_env =
   {
     unboxed_ids =Ident.empty;
+    bound_to_symbols = Ident.Set.empty;
   }
 
 let is_unboxed_id id env =
@@ -867,7 +869,7 @@ let is_unboxed_id id env =
   with Not_found -> None
 
 let add_unboxed_id id unboxed_id bn env =
-  {
+  { env with
     unboxed_ids = Ident.add id (unboxed_id, bn) env.unboxed_ids;
   }
 
@@ -1427,6 +1429,14 @@ let strmatch_compile =
       end) in
   S.compile
 
+
+let transl_constant_closure fundecls =
+  let lbl = Compilenv.new_const_symbol() in
+  constant_closures :=
+    ((lbl, Not_global), fundecls, []) :: !constant_closures;
+  List.iter (fun f -> Queue.add f functions) fundecls;
+  Cconst_symbol lbl
+
 let rec transl env e =
   match e with
     Uvar id ->
@@ -1437,35 +1447,41 @@ let rec transl env e =
   | Uconst sc ->
       transl_constant sc
   | Uclosure(fundecls, []) ->
-      let lbl = Compilenv.new_const_symbol() in
-      constant_closures :=
-        ((lbl, Not_global), fundecls, []) :: !constant_closures;
-      List.iter (fun f -> Queue.add f functions) fundecls;
-      Cconst_symbol lbl
+      transl_constant_closure fundecls
   | Uclosure(fundecls, clos_vars) ->
-      let block_size =
-        fundecls_size fundecls + List.length clos_vars in
-      let rec transl_fundecls pos = function
-          [] ->
-            List.map (transl env) clos_vars
-        | f :: rem ->
-            Queue.add f functions;
-            let header =
-              if pos = 0
-              then alloc_closure_header block_size
-              else alloc_infix_header pos in
-            if f.arity = 1 || f.arity = 0 then
-              header ::
-              Cconst_symbol f.label ::
-              int_const f.arity ::
-              transl_fundecls (pos + 3) rem
-            else
-              header ::
-              Cconst_symbol(curry_function f.arity) ::
-              int_const f.arity ::
-              Cconst_symbol f.label ::
-              transl_fundecls (pos + 4) rem in
-      Cop(Calloc, transl_fundecls 0 fundecls)
+      let is_constant =
+        List.for_all (fun clos_var ->
+            match clos_var with
+            | Uvar id -> Ident.Set.mem id env.bound_to_symbols
+            | _ -> false)
+          clos_vars
+      in
+      if is_constant then
+        transl_constant_closure fundecls
+      else
+        let block_size =
+          fundecls_size fundecls + List.length clos_vars in
+        let rec transl_fundecls pos = function
+            [] ->
+              List.map (transl env) clos_vars
+          | f :: rem ->
+              Queue.add f functions;
+              let header =
+                if pos = 0
+                then alloc_closure_header block_size
+                else alloc_infix_header pos in
+              if f.arity = 1 || f.arity = 0 then
+                header ::
+                Cconst_symbol f.label ::
+                int_const f.arity ::
+                transl_fundecls (pos + 3) rem
+              else
+                header ::
+                Cconst_symbol(curry_function f.arity) ::
+                int_const f.arity ::
+                Cconst_symbol f.label ::
+                transl_fundecls (pos + 4) rem in
+        Cop(Calloc, transl_fundecls 0 fundecls)
   | Uoffset(arg, offset) ->
       (* produces a valid Caml value, pointing just after an infix header *)
       let ptr = transl env arg in
@@ -2278,8 +2294,18 @@ and transl_unbox_number env bn arg =
 
 and transl_let env id exp body =
   match is_unboxed_number env exp with
-  |  No_unboxing ->
-      Clet(id, transl env exp, transl env body)
+  | No_unboxing ->
+      let exp = transl env exp in
+      let env =
+        match exp with
+        | Cconst_symbol _ ->
+          { env with
+            bound_to_symbols = Ident.Set.add id env.bound_to_symbols;
+          }
+        | _ ->
+          env
+      in
+      Clet(id, exp, transl env body)
   | No_result ->
       (* the let-bound expression never returns a value, we can ignore
          the body *)
