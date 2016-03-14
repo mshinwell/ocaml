@@ -675,8 +675,23 @@ module Trace = struct
     output_string channel "],\n";
     output_string channel "\"links\":[\n";
     let rec print_node ?come_from node =
+      let check_come_from ~id ~comma =
+        begin match come_from with
+        | None -> ()
+        | Some (come_from, colour, label) ->
+          if comma && !seen_a_node then begin
+            Printf.fprintf channel ",\n"
+          end;
+          Printf.fprintf channel
+            "{\"source\":%d,\"target\":%d,\"value\":10,\"colour\":%d,\
+              \"label\":\"%s\",\"id\":%d}%!"
+            come_from id colour label !link_id;
+          incr link_id;
+          seen_a_node := true
+        end
+      in
       match Node.Map.find node !visited with
-      | id -> ()
+      | id -> check_come_from ~id ~comma:true
       | exception Not_found ->
         let id = !next_id in
         incr next_id;
@@ -689,16 +704,7 @@ module Trace = struct
         let direct_colour = 5 in
         let external_colour = 9 in
         let indirect_colour = 14 in
-        begin match come_from with
-        | None -> ()
-        | Some (come_from, colour, label) ->
-          Printf.fprintf channel
-            "{\"source\":%d,\"target\":%d,\"value\":10,\"colour\":%d,\
-              \"label\":\"%s\",\"id\":%d}%!"
-            come_from id colour label !link_id;
-          incr link_id;
-          seen_a_node := true
-        end;
+        check_come_from ~id ~comma:false;
         match Node.classify node with
         | Node.OCaml node ->
           let module O = OCaml.Node in

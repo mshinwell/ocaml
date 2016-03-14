@@ -1,14 +1,5 @@
 type t = A of string * int | B of int
 
-let rec f x =
-  if x = 0 then f 47
-  else if x = 1 then g x
-  else if x < 42 then A ("foo", x + 3)
-  else B (x * 2)
-
-and g _x =
-  f (-1)
-
 let called_from_c i =
   i, i
 
@@ -16,6 +7,22 @@ let () =
   Callback.register "called_from_c" called_from_c
 
 external call_c : int -> int * int = "test3_stub"
+
+let rec f x =
+  if x = 0 then f 47
+  else if x = 1 then g x
+  else if x < 42 then A ("foo", x + 3)
+  else B (x * 2)
+
+and g x =
+  let pair = x, x in
+  ignore (call_c (fst pair));
+  h (-1)
+
+and h x =
+  let pair = x, x in
+  ignore (call_c (fst pair));
+  f x
 
 let () =
   Printf.printf "start\n";
