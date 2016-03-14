@@ -35,6 +35,9 @@ let () =
   | A (s, i) -> print_string s; print_int i; print_newline ()
   | B x -> print_int x; print_newline ()
   end;
+  for _x = 1 to 100 do
+    ignore (call_c 42)
+  done;
   let pair = call_c 42 in
   Printf.printf "pair is %d, %d\n%!" (fst pair) (snd pair);
   let module A = Allocation_profiling in
