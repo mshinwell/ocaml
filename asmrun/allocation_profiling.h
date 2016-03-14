@@ -95,9 +95,10 @@ typedef enum {
 */
 
 /* Classification of nodes (OCaml or C) with corresponding GC tags. */
-#define Is_ocaml_node(node) (Is_block(node) && Tag_val(node) == 0)
 #define OCaml_node_tag 0
 #define C_node_tag 1
+#define Is_ocaml_node(node) (Is_block(node) && Tag_val(node) == OCaml_node_tag)
+#define Is_c_node(node) (Is_block(node) && Tag_val(node) == C_node_tag)
 
 /* The header words are:
    1. The node program counter.
@@ -184,7 +185,7 @@ extern c_node* caml_allocation_profiling_c_node_of_stored_pointer(
   value node_stored);
 extern c_node* caml_allocation_profiling_c_node_of_stored_pointer_not_null(
   value node_stored);
-extern value caml_allocation_profiling_stored_pointer_to_c_node(
+extern value caml_allocation_profiling_stored_pointer_of_c_node(
   c_node* node);
 extern value caml_allocation_profiling_min_override_profinfo (value v_unit);
 extern value caml_allocation_profiling_max_override_profinfo (value v_unit);

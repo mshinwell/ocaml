@@ -57,19 +57,24 @@ c_node_type caml_allocation_profiling_classify_c_node(c_node* node)
 
 c_node* caml_allocation_profiling_c_node_of_stored_pointer(value node_stored)
 {
+  assert(node_stored == Val_unit || Is_c_node(node_stored));
   return (node_stored == Val_unit) ? NULL : (c_node*) Hp_val(node_stored);
 }
 
-c_node* caml_allocation_profiling_c_node_of_stored_pointer_not_null(value node_stored)
+c_node* caml_allocation_profiling_c_node_of_stored_pointer_not_null(
+      value node_stored)
 {
-  assert(node_stored != Val_unit);
+  assert(Is_c_node(node_stored));
   return (c_node*) Hp_val(node_stored);
 }
 
-value caml_allocation_profiling_stored_pointer_to_c_node(c_node* node)
+value caml_allocation_profiling_stored_pointer_of_c_node(c_node* c_node)
 {
-  assert(node != NULL);
-  return Val_hp(node);
+  value node;
+  assert(c_node != NULL);
+  node = Val_hp(c_node);
+  assert(Is_c_node(node));
+  return node;
 }
 
 CAMLprim value caml_allocation_profiling_compare_node(
@@ -110,16 +115,23 @@ CAMLprim value caml_allocation_profiling_node_num_header_words(value unit)
 
 CAMLprim value caml_allocation_profiling_is_ocaml_node(value node)
 {
+  if (!(Is_ocaml_node(node) || Is_c_node(node))) {
+    printf("is_ocaml_node: (value) node = %p has the wrong tag\n",
+      (void*) node);
+  }
+  assert(Is_ocaml_node(node) || Is_c_node(node));
   return Val_bool(Is_ocaml_node(node));
 }
 
 CAMLprim value caml_allocation_profiling_ocaml_function_identifier(value node)
 {
+  assert(Is_ocaml_node(node));
   return caml_copy_int64((uint64_t) Decode_node_pc(Node_pc(node)));
 }
 
 CAMLprim value caml_allocation_profiling_ocaml_tail_chain(value node)
 {
+  assert(Is_ocaml_node(node));
   return Tail_link(node);
 }
 
@@ -288,14 +300,17 @@ CAMLprim value caml_allocation_profiling_ocaml_indirect_call_point_callees
 {
   value callees = Indirect_pc_linked_list(node, Long_val(offset));
   assert(Is_block(callees));
-  assert(!Is_ocaml_node(callees));
+  assert(Is_c_node(callees));
   return callees;
 }
 
 CAMLprim value caml_allocation_profiling_c_node_is_call(value node)
 {
-  assert(!Is_ocaml_node(node));
-  switch (caml_allocation_profiling_classify_c_node(caml_allocation_profiling_c_node_of_stored_pointer_not_null(node))) {
+  c_node* c_node;
+  assert(node != (value) NULL);
+  assert(Is_c_node(node));
+  c_node = caml_allocation_profiling_c_node_of_stored_pointer_not_null(node);
+  switch (caml_allocation_profiling_classify_c_node(c_node)) {
     case CALL: return Val_true;
     case ALLOCATION: return Val_false;
   }
@@ -304,14 +319,19 @@ CAMLprim value caml_allocation_profiling_c_node_is_call(value node)
 
 CAMLprim value caml_allocation_profiling_c_node_next(value node)
 {
-  assert(!Is_ocaml_node(node));
-  return caml_allocation_profiling_c_node_of_stored_pointer_not_null(node)->next;
+  c_node* c_node;
+  assert(node != (value) NULL);
+  assert(Is_c_node(node));
+  c_node = caml_allocation_profiling_c_node_of_stored_pointer_not_null(node);
+  assert(c_node->next == Val_unit || Is_c_node(c_node->next));
+  return c_node->next;
 }
 
 CAMLprim value caml_allocation_profiling_c_node_call_site(value node)
 {
   c_node* c_node;
-  assert(!Is_ocaml_node(node));
+  assert(node != (value) NULL);
+  assert(Is_c_node(node));
   c_node = caml_allocation_profiling_c_node_of_stored_pointer_not_null(node);
   return caml_copy_int64((uint64_t) Decode_c_node_pc(c_node->pc));
 }
@@ -319,7 +339,8 @@ CAMLprim value caml_allocation_profiling_c_node_call_site(value node)
 CAMLprim value caml_allocation_profiling_c_node_callee_node(value node)
 {
   c_node* c_node;
-  assert(!Is_ocaml_node(node));
+  assert(node != (value) NULL);
+  assert(Is_c_node(node));
   c_node = caml_allocation_profiling_c_node_of_stored_pointer_not_null(node);
   assert(caml_allocation_profiling_classify_c_node(c_node) == CALL);
   /* This might be an uninitialised tail call point: for example if an OCaml
@@ -334,7 +355,8 @@ CAMLprim value caml_allocation_profiling_c_node_callee_node(value node)
 CAMLprim value caml_allocation_profiling_c_node_profinfo(value node)
 {
   c_node* c_node;
-  assert(!Is_ocaml_node(node));
+  assert(node != (value) NULL);
+  assert(Is_c_node(node));
   c_node = caml_allocation_profiling_c_node_of_stored_pointer_not_null(node);
   assert(caml_allocation_profiling_classify_c_node(c_node) == ALLOCATION);
   assert(!Is_block(c_node->data.profinfo));

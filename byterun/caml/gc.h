@@ -50,8 +50,8 @@ extern uintnat caml_allocation_profiling_my_profinfo(void);
         | ((((intnat) profinfo) & PROFINFO_MASK) << PROFINFO_SHIFT)           \
       )
 #define Make_header_with_my_profinfo(wosize, tag, color)                      \
-      (Make_header(wosize, tag, color)                                        \
-        | caml_allocation_profiling_my_profinfo()                             \
+      (Make_header_with_profinfo(wosize, tag, color,                          \
+        caml_allocation_profiling_my_profinfo())                              \
       )
 #else
 #define Make_header_with_my_profinfo Make_header

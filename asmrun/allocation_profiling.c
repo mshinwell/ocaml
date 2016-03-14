@@ -56,12 +56,11 @@
 
 #pragma GCC optimize ("-O0")
 
-#if 0
 static void debug_printf(const char* format, ...)
 {
 }
-#endif
-#define debug_printf printf
+
+extern value caml_allocation_profiling_debug(value);
 
 /* The following structures must match the type definitions in the
    [Allocation_profiling] module. */
@@ -592,6 +591,7 @@ debug_printf("doing tail link\n");
   }
 
   *node_hole = node;
+
   return 1;  /* indicates a new node was created */
 }
 
@@ -676,7 +676,7 @@ CAMLprim value* caml_allocation_profiling_indirect_node_hole_ptr
       c_node->data.callee_node = Encode_tail_caller_node(caller_node);
     }
 
-    *node_hole = caml_allocation_profiling_stored_pointer_to_c_node(c_node);
+    *node_hole = caml_allocation_profiling_stored_pointer_of_c_node(c_node);
     assert(((uintnat) *node_hole) % sizeof(value) == 0);
   }
 
@@ -730,14 +730,13 @@ static void* find_trie_node_from_libunwind(int for_allocation)
     }
     else {
       caml_ext_table_add(&frames, (void*) ip);
-printf("pc=%p\n", (void*)ip);
+      debug_printf("pc=%p\n", (void*)ip);
     }
   }
 
   node_hole = caml_alloc_profiling_trie_node_ptr;
   debug_printf("*** find_trie_node_from_libunwind: starting at %p\n",
     (void*) *node_hole);
-/*  caml_allocation_profiling_debug(Val_unit);*/
   /* Note that if [node_hole] is filled, then it must point to a C node,
      since it is not possible for there to be a call point in an OCaml
      function that sometimes calls C and sometimes calls OCaml. */
@@ -757,7 +756,12 @@ printf("pc=%p\n", (void*)ip);
 
     debug_printf("frames.contents[%d]=%p\n", frame, pc);
 
-    expected_type = (frame > 0 ? CALL : ALLOCATION);
+    if (!for_allocation) {
+      expected_type = CALL;
+    }
+    else {
+      expected_type = (frame > innermost_frame ? CALL : ALLOCATION);
+    }
 
     if (*node_hole == Val_unit) {
       node = allocate_c_node();
@@ -767,9 +771,9 @@ printf("pc=%p\n", (void*)ip);
          callees, unlike for OCaml nodes.  This means that some trie nodes
          will become conflated.  These can be split during post-processing by
          working out which function each call site was in. */
-      node->pc = (frame > 0 ? Encode_c_node_pc_for_call(pc)
+      node->pc = (expected_type == CALL ? Encode_c_node_pc_for_call(pc)
         : Encode_c_node_pc_for_alloc_point(pc));
-      *node_hole = caml_allocation_profiling_stored_pointer_to_c_node(node);
+      *node_hole = caml_allocation_profiling_stored_pointer_of_c_node(node);
     }
     else {
       c_node* prev;
@@ -792,15 +796,16 @@ printf("pc=%p\n", (void*)ip);
         else {
           debug_printf("doesn't match\n");
           prev = node;
-          node = caml_allocation_profiling_c_node_of_stored_pointer(node->next);
+          node =
+            caml_allocation_profiling_c_node_of_stored_pointer(node->next);
         }
       }
       if (!found) {
         assert(prev != NULL);
         node = allocate_c_node();
-        node->pc = (frame > 0 ? Encode_c_node_pc_for_call(pc)
+        node->pc = (expected_type == CALL ? Encode_c_node_pc_for_call(pc)
           : Encode_c_node_pc_for_alloc_point(pc));
-        prev->next = caml_allocation_profiling_stored_pointer_to_c_node(node);
+        prev->next = caml_allocation_profiling_stored_pointer_of_c_node(node);
       }
     }
 
@@ -818,6 +823,8 @@ printf("pc=%p\n", (void*)ip);
     assert(caml_allocation_profiling_c_node_of_stored_pointer(node->next)
       != node);
   }
+
+  assert(node->next != (value) NULL);
 
   debug_printf("find_trie_node_from_libunwind returns %p\n",
     for_allocation ? (void*) node : (void*) node_hole);
@@ -952,7 +959,7 @@ CAMLprim uintnat caml_alloc_profiling_generate_profinfo (void* pc,
   Alloc_point_profinfo(node, offset) = Encode_alloc_point_profinfo(profinfo);
 
   debug_printf("*** generate_profinfo PC=%p returning 0x%llx\n", pc,
-    (unsigned long long) (profinfo << PROFINFO_SHIFT));
+    (unsigned long long) profinfo);
   fflush(stdout);
 
   return profinfo << PROFINFO_SHIFT;
@@ -964,23 +971,17 @@ uintnat caml_allocation_profiling_my_profinfo (void)
      during an allocation from C.  This may necessitate extending the trie
      with information obtained from libunwind. */
 
+  c_node* node;
   uint64_t profinfo;
 
-  if (caml_allocation_profiling_use_override_profinfo != Val_false) {
-/*
-    profinfo = caml_allocation_profiling_override_profinfo;
-*/
-    c_node* node = graft_backtrace_onto_trie_for_allocation ();
-    profinfo = generate_profinfo();
-    node->data.profinfo = profinfo;
-  }
-  else {
-    profinfo = 0ull;
+  node = graft_backtrace_onto_trie_for_allocation ();
+  profinfo = generate_profinfo();
+  if (node != NULL) {
+    node->data.profinfo = Val_long(profinfo);
   }
 
-/*  caml_allocation_profiling_debug(Val_unit);*/
-
-  return profinfo;
+  assert(profinfo <= PROFINFO_MASK);
+  return profinfo;  /* N.B. not shifted by PROFINFO_SHIFT */
 }
 
 /* List of tries corresponding to threads that have been created. */

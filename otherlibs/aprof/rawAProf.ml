@@ -599,14 +599,10 @@ module Trace = struct
                 let module D = OCaml.Direct_call_point in
                 let callee_node = D.callee_node direct in
                 print_node (Node.of_ocaml_node callee_node)
-              | F.Direct_call (F.To_foreign _direct) -> ()
-                (* CR mshinwell: fix this once C instrumentation happens.
-                   Still need to be careful of the case where the C function
-                   doesn't fill in the pointer...
+              | F.Direct_call (F.To_foreign direct) ->
                 let module D = OCaml.Direct_call_point in
                 let callee_node = D.callee_node direct in
                 print_node (Node.of_foreign_node callee_node)
-                *)
               | F.Direct_call (F.To_uninstrumented _direct) -> ()
               | F.Indirect_call indirect ->
                 let module I = OCaml.Indirect_call_point in
@@ -653,7 +649,11 @@ module Trace = struct
             | Some field ->
               let module F = Foreign.Field in
               begin match F.classify field with
-              | F.Allocation _alloc -> ()  (* CR mshinwell: emit a node *)
+              | F.Allocation _alloc ->
+                if allocation_nodes then begin
+                  Printf.fprintf channel ",\n{\"name\":\"C\",\"colour\":3}%!";
+                  incr next_id
+                end
               | F.Call call ->
                 let callee_node = Foreign.Call_point.callee_node call in
                 if not (node_is_null callee_node) then begin
@@ -687,6 +687,7 @@ module Trace = struct
         end;
         let c_colour = 16 in
         let direct_colour = 5 in
+        let external_colour = 9 in
         let indirect_colour = 14 in
         begin match come_from with
         | None -> ()
@@ -722,15 +723,13 @@ module Trace = struct
                 let label = resolve_address call_site in
                 print_node (Node.of_ocaml_node callee_node)
                   ~come_from:(id, direct_colour, label)
-              | F.Direct_call (F.To_foreign _direct) -> ()
-(*
+              | F.Direct_call (F.To_foreign direct) ->
                 let module D = OCaml.Direct_call_point in
                 let callee_node = D.callee_node direct in
                 let call_site = D.call_site direct in
                 let label = resolve_address call_site in
                 print_node (Node.of_foreign_node callee_node)
-                  ~come_from:(id, direct_colour, label)
-*)
+                  ~come_from:(id, external_colour, label)
               | F.Direct_call (F.To_uninstrumented _direct) -> ()
               | F.Indirect_call indirect ->
                 let module I = OCaml.Indirect_call_point in
@@ -759,7 +758,15 @@ module Trace = struct
             | Some field ->
               let module F = Foreign.Field in
               begin match F.classify field with
-              | F.Allocation _alloc -> ()
+              | F.Allocation _alloc ->
+                if allocation_nodes then begin
+                  Printf.fprintf channel
+                    ",\n{\"source\":%d,\"target\":%d,\"value\":1,\
+                      \"colour\":3,\"id\":%d}%!"
+                    id !next_id !link_id;
+                  incr link_id;
+                  incr next_id
+                end
               | F.Call call ->
                 let callee_node = Foreign.Call_point.callee_node call in
                 if not (node_is_null callee_node) then begin
