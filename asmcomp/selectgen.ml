@@ -21,7 +21,23 @@ open Cmm
 open Reg
 open Mach
 
-type environment = (Ident.t, Reg.t array) Tbl.t
+type environment =
+  { var : (Ident.t, Reg.t array) Tbl.t;
+    exn : (int, Reg.t array list) Tbl.t }
+
+let env_add id v env =
+  { env with var = Tbl.add id v env.var }
+
+let env_add_exn id v env =
+  { env with exn = Tbl.add id v env.exn }
+
+let env_find id env =
+  Tbl.find id env.var
+
+let env_find_exn id env =
+  Tbl.find id env.exn
+
+let env_empty = { var = Tbl.empty; exn = Tbl.empty }
 
 (* Infer the type of the result of an operation *)
 
@@ -49,7 +65,7 @@ let oper_result_type = function
 
 (* Infer the size in bytes of the result of a simple expression *)
 
-let size_expr env exp =
+let size_expr (env:environment) exp =
   let rec size localenv = function
       Cconst_int _ | Cconst_natint _
     | Cconst_blockheader _ -> Arch.size_int
@@ -61,7 +77,7 @@ let size_expr env exp =
           Tbl.find id localenv
         with Not_found ->
         try
-          let regs = Tbl.find id env in
+          let regs = env_find id env in
           size_machtype (Array.map (fun r -> r.typ) regs)
         with Not_found ->
           fatal_error("Selection.size_expr: unbound var " ^
@@ -162,9 +178,6 @@ let debuginfo_op = function
   | Craise (_, dbg) -> dbg
   | Ccheckbound dbg -> dbg
   | _ -> Debuginfo.none
-
-(* Registers for catch constructs *)
-let catch_regs = ref []
 
 (* Name of function being compiled *)
 let current_function_name = ref ""
@@ -444,7 +457,7 @@ method insert_op op rs rd =
 (* Add the instructions for the given expression
    at the end of the self sequence *)
 
-method emit_expr env exp =
+method emit_expr (env:environment) exp =
   match exp with
     Cconst_int n ->
       let r = self#regs_for typ_int in
@@ -469,7 +482,7 @@ method emit_expr env exp =
       Some(self#insert_op (Iconst_int n) [||] r)
   | Cvar v ->
       begin try
-        Some(Tbl.find v env)
+        Some(env_find v env)
       with Not_found ->
         fatal_error("Selection.emit_expr: unbound var " ^ Ident.unique_name v)
       end
@@ -481,7 +494,7 @@ method emit_expr env exp =
   | Cassign(v, e1) ->
       let rv =
         try
-          Tbl.find v env
+          env_find v env
         with Not_found ->
           fatal_error ("Selection.emit_expr: unbound var " ^ Ident.name v) in
       begin match self#emit_expr env e1 with
@@ -585,41 +598,63 @@ method emit_expr env exp =
       let (_rarg, sbody) = self#emit_sequence env ebody in
       self#insert (Iloop(sbody#extract)) [||] [||];
       Some [||]
-  | Ccatch(nfail, ids, e1, e2) ->
-      let rs =
-        List.map
-          (fun id ->
-            let r = self#regs_for typ_val in name_regs id r; r)
-          ids in
-      catch_regs := (nfail, Array.concat rs) :: !catch_regs ;
-      let (r1, s1) = self#emit_sequence env e1 in
-      catch_regs := List.tl !catch_regs ;
-      let new_env =
-        List.fold_left
-        (fun env (id,r) -> Tbl.add id r env)
-        env (List.combine ids rs) in
-      let (r2, s2) = self#emit_sequence new_env e2 in
-      let r = join r1 s1 r2 s2 in
-      self#insert (Icatch(nfail, s1#extract, s2#extract)) [||] [||];
+  | Ccatch([], e1) ->
+      self#emit_expr env e1
+  | Ccatch(handlers, e1) ->
+      let handlers =
+        List.map (fun (nfail, ids, e2) ->
+            let rs =
+              List.map
+                (fun id -> let r = self#regs_for typ_val in name_regs id r; r)
+                ids in
+            (nfail, ids, rs, e2))
+          handlers in
+      let env =
+        List.fold_left (fun env (nfail, _ids, rs, _e2) ->
+            env_add_exn nfail rs env)
+          env handlers in
+      let (r_body, s_body) = self#emit_sequence env e1 in
+      let aux (nfail, ids, rs, e2) =
+        assert(List.length ids = List.length rs);
+        let new_env =
+          List.fold_left
+            (fun env (id,r) -> env_add id r env)
+            env (List.combine ids rs) in
+        let (r, s) = self#emit_sequence new_env e2 in
+        (nfail, (r, s))
+      in
+      let l = List.map aux handlers in
+      let a = Array.of_list ((r_body,s_body) :: List.map snd l) in
+      let r = join_array a in
+      let aux2 (nfail, (_r, s)) = (nfail, s#extract) in
+      self#insert (Icatch(List.map aux2 l, s_body#extract)) [||] [||];
       r
   | Cexit (nfail,args) ->
       begin match self#emit_parts_list env args with
         None -> None
       | Some (simple_list, ext_env) ->
           let src = self#emit_tuple ext_env simple_list in
-          let dest =
-            try List.assoc nfail !catch_regs
+          let dest_args =
+            try env_find_exn nfail env
             with Not_found ->
-              Misc.fatal_error
-                ("Selectgen.emit_expr, on exit("^string_of_int nfail^")") in
-          self#insert_moves src dest ;
+              fatal_error ("Selection.emit_expr: unboun label "^
+                           string_of_int nfail)
+          in
+          (* Intermediate registers to handle cases where some
+             registers from src are present in dest *)
+          let tmp_regs = Reg.createv_like src in
+          (* Ccatch registers are created with type Val. They must not
+             contain out of heap pointers *)
+          Array.iter (fun reg -> assert(reg.typ <> Addr)) src;
+          self#insert_moves src tmp_regs ;
+          self#insert_moves tmp_regs (Array.concat dest_args) ;
           self#insert (Iexit nfail) [||] [||];
           None
       end
   | Ctrywith(e1, v, e2) ->
       let (r1, s1) = self#emit_sequence env e1 in
       let rv = self#regs_for typ_val in
-      let (r2, s2) = self#emit_sequence (Tbl.add v rv env) e2 in
+      let (r2, s2) = self#emit_sequence (env_add v rv env) e2 in
       let r = join r1 s1 r2 s2 in
       self#insert
         (Itrywith(s1#extract,
@@ -628,23 +663,23 @@ method emit_expr env exp =
         [||] [||];
       r
 
-method private emit_sequence env exp =
+method private emit_sequence (env:environment) exp =
   let s = {< instr_seq = dummy_instr >} in
   let r = s#emit_expr env exp in
   (r, s)
 
-method private bind_let env v r1 =
+method private bind_let (env:environment) v r1 =
   if all_regs_anonymous r1 then begin
     name_regs v r1;
-    Tbl.add v r1 env
+    env_add v r1 env
   end else begin
     let rv = Reg.createv_like r1 in
     name_regs v rv;
     self#insert_moves r1 rv;
-    Tbl.add v rv env
+    env_add v rv env
   end
 
-method private emit_parts env exp =
+method private emit_parts (env:environment) exp =
   if self#is_simple_expr exp then
     Some (exp, env)
   else begin
@@ -658,17 +693,17 @@ method private emit_parts env exp =
           let id = Ident.create "bind" in
           if all_regs_anonymous r then
             (* r is an anonymous, unshared register; use it directly *)
-            Some (Cvar id, Tbl.add id r env)
+            Some (Cvar id, env_add id r env)
           else begin
             (* Introduce a fresh temp to hold the result *)
             let tmp = Reg.createv_like r in
             self#insert_moves r tmp;
-            Some (Cvar id, Tbl.add id tmp env)
+            Some (Cvar id, env_add id tmp env)
           end
         end
   end
 
-method private emit_parts_list env exp_list =
+method private emit_parts_list (env:environment) exp_list : (_ * environment) option =
   match exp_list with
     [] -> Some ([], env)
   | exp :: rem ->
@@ -735,7 +770,7 @@ method emit_stores env data regs_addr =
 
 (* Same, but in tail position *)
 
-method private emit_return env exp =
+method private emit_return (env:environment) exp =
   match self#emit_expr env exp with
     None -> ()
   | Some r ->
@@ -743,7 +778,7 @@ method private emit_return env exp =
       self#insert_moves r loc;
       self#insert Ireturn loc [||]
 
-method emit_tail env exp =
+method emit_tail (env:environment) exp =
   match exp with
     Clet(v, e1, e2) ->
       begin match self#emit_expr env e1 with
@@ -815,27 +850,35 @@ method emit_tail env exp =
             (Iswitch(index, Array.map (self#emit_tail_sequence env) ecases))
             rsel [||]
       end
-  | Ccatch(nfail, ids, e1, e2) ->
-       let rs =
-        List.map
-          (fun id ->
-            let r = self#regs_for typ_val in
-            name_regs id r  ;
-            r)
-          ids in
-      catch_regs := (nfail, Array.concat rs) :: !catch_regs ;
-      let s1 = self#emit_tail_sequence env e1 in
-      catch_regs := List.tl !catch_regs ;
-      let new_env =
-        List.fold_left
-        (fun env (id,r) -> Tbl.add id r env)
-        env (List.combine ids rs) in
-      let s2 = self#emit_tail_sequence new_env e2 in
-      self#insert (Icatch(nfail, s1, s2)) [||] [||]
+  | Ccatch([], e1) ->
+      self#emit_tail env e1
+  | Ccatch(handlers, e1) ->
+      let handlers =
+        List.map (fun (nfail, ids, e2) ->
+            let rs =
+              List.map
+                (fun id -> let r = self#regs_for typ_val in name_regs id r; r)
+                ids in
+            (nfail, ids, rs, e2))
+          handlers in
+      let env =
+        List.fold_left (fun env (nfail, _ids, rs, _e2) ->
+            env_add_exn nfail rs env)
+          env handlers in
+      let s_body = self#emit_tail_sequence env e1 in
+      let aux (nfail, ids, rs, e2) =
+        assert(List.length ids = List.length rs);
+        let new_env =
+          List.fold_left
+            (fun env (id,r) -> env_add id r env)
+            env (List.combine ids rs) in
+        nfail, self#emit_tail_sequence new_env e2
+      in
+      self#insert (Icatch(List.map aux handlers, s_body)) [||] [||]
   | Ctrywith(e1, v, e2) ->
       let (opt_r1, s1) = self#emit_sequence env e1 in
       let rv = self#regs_for typ_val in
-      let s2 = self#emit_tail_sequence (Tbl.add v rv env) e2 in
+      let s2 = self#emit_tail_sequence (env_add v rv env) e2 in
       self#insert
         (Itrywith(s1#extract,
                   instr_cons (Iop Imove) [|Proc.loc_exn_bucket|] rv s2))
@@ -868,8 +911,8 @@ method emit_fundecl f =
   let loc_arg = Proc.loc_parameters rarg in
   let env =
     List.fold_right2
-      (fun (id, _ty) r env -> Tbl.add id r env)
-      f.Cmm.fun_args rargs Tbl.empty in
+      (fun (id, _ty) r env -> env_add id r env)
+      f.Cmm.fun_args rargs env_empty in
   self#insert_moves loc_arg rarg;
   self#emit_tail env f.Cmm.fun_body;
   let body = self#extract in
@@ -897,5 +940,4 @@ let _ =
   Simplif.is_tail_native_heuristic := is_tail_call
 
 let reset () =
-  catch_regs := [];
   current_function_name := ""

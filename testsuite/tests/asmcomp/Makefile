@@ -16,6 +16,7 @@
 BASEDIR=../..
 
 INCLUDES=\
+  -I $(OTOPDIR)/parsing \
   -I $(OTOPDIR)/utils \
   -I $(OTOPDIR)/typing \
   -I $(OTOPDIR)/bytecomp \
@@ -38,6 +39,8 @@ all:
 	@$(MAKE) arch codegen
 	@$(MAKE) tests
 
+main.cmo: parsecmm.cmo
+
 codegen: parsecmm.ml lexcmm.ml $(OBJS:.cmo=.cmi) $(OBJS) main.cmo
 	@$(OCAMLC) $(LINKFLAGS) -o codegen $(OTHEROBJS) $(OBJS) main.cmo
 
@@ -53,7 +56,8 @@ MLCASES_FLAMBDA=is_static_flambda
 ARGS_is_static_flambda=-I $(OTOPDIR)/byterun is_in_static_data.c
 
 CASES=fib tak quicksort quicksort2 soli \
-      arith checkbound tagged-fib tagged-integr tagged-quicksort tagged-tak
+      arith checkbound tagged-fib tagged-integr tagged-quicksort tagged-tak \
+      catch-try catch-rec even-odd pgcd
 ARGS_fib=-DINT_INT -DFUN=fib main.c
 ARGS_tak=-DUNIT_INT -DFUN=takmain main.c
 ARGS_quicksort=-DSORT -DFUN=quicksort main.c
@@ -66,6 +70,10 @@ ARGS_tagged-fib=-DINT_INT -DFUN=fib main.c
 ARGS_tagged-integr=-DINT_FLOAT -DFUN=test main.c
 ARGS_tagged-quicksort=-DSORT -DFUN=quicksort main.c
 ARGS_tagged-tak=-DUNIT_INT -DFUN=takmain main.c
+ARGS_catch-try=-DINT_INT -DFUN=catch_exit main.c
+ARGS_catch-rec=-DINT_INT -DFUN=catch_fact main.c
+ARGS_even-odd=-DINT_INT -DFUN=is_even main.c
+ARGS_pgcd=-DINT_INT -DFUN=pgcd_30030 main.c
 
 skips:
 	@for c in $(CASES) $(MLCASES); do \

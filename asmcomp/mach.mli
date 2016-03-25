@@ -73,7 +73,7 @@ and instruction_desc =
   | Iifthenelse of test * instruction * instruction
   | Iswitch of int array * instruction array
   | Iloop of instruction
-  | Icatch of int * instruction * instruction
+  | Icatch of (int * instruction) list * instruction
   | Iexit of int
   | Itrywith of instruction * instruction
   | Iraise of Lambda.raise_kind
@@ -94,3 +94,5 @@ val instr_cons_debug:
       instruction_desc -> Reg.t array -> Reg.t array -> Debuginfo.t ->
         instruction -> instruction
 val instr_iter: (instruction -> unit) -> instruction -> unit
+
+val recursive_handlers: instruction -> Numbers.Int.Set.t
