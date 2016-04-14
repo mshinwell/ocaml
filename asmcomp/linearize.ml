@@ -18,11 +18,7 @@
 open Reg
 open Mach
 
-type label = int
-
-let label_counter = ref 99
-
-let new_label() = incr label_counter; !label_counter
+type label = Cmm.label
 
 type instruction =
   { mutable desc: instruction_desc;
@@ -56,7 +52,9 @@ type fundecl =
   { fun_name: string;
     fun_body: instruction;
     fun_fast: bool;
-    fun_dbg : Debuginfo.t }
+    fun_dbg : Debuginfo.t;
+    fun_spacetime_shape : Mach.spacetime_shape option;
+  }
 
 (* Invert a test *)
 
@@ -113,7 +111,7 @@ let get_label n = match n.desc with
     Lbranch lbl -> (lbl, n)
   | Llabel lbl -> (lbl, n)
   | Lend -> (-1, n)
-  | _ -> let lbl = new_label() in (lbl, cons_instr (Llabel lbl) n)
+  | _ -> let lbl = Cmm.new_label() in (lbl, cons_instr (Llabel lbl) n)
 
 (* Check the fallthrough label *)
 let check_label n = match n.desc with
@@ -133,6 +131,8 @@ let rec discard_dead_code n =
    as this may cause a stack imbalance later during assembler generation. *)
   | Lpoptrap | Lpushtrap -> n
   | Lop(Istackoffset _) -> n
+  (* Do not discard explicit labels used for profiling. *)
+  | Lop (Ilabel _) -> n
   | _ -> discard_dead_code n.next
 
 (*
@@ -181,7 +181,10 @@ let rec linear i n =
   match i.Mach.desc with
     Iend -> n
   | Iop(Itailcall_ind | Itailcall_imm _ as op) ->
-      copy_instr (Lop op) i (discard_dead_code n)
+      if not Config.spacetime then
+        copy_instr (Lop op) i (discard_dead_code n)
+      else
+        copy_instr (Lop op) i (linear i.Mach.next n)
   | Iop(Imove | Ireload | Ispill)
     when i.Mach.arg.(0).loc = i.Mach.res.(0).loc ->
       linear i.Mach.next n
@@ -248,7 +251,7 @@ let rec linear i n =
       end else
         copy_instr (Lswitch(Array.map (fun n -> lbl_cases.(n)) index)) i !n2
   | Iloop body ->
-      let lbl_head = new_label() in
+      let lbl_head = Cmm.new_label() in
       let n1 = linear i.Mach.next n in
       let n2 = linear body (cons_instr (Lbranch lbl_head) n1) in
       cons_instr (Llabel lbl_head) n2
@@ -267,6 +270,7 @@ let rec linear i n =
          only to inform the later pass about this stack offset
          (corresponding to N traps).
        *)
+      (* CR mshinwell: needs fixing for Spacetime profiling *)
       let rec loop i tt =
         if t = tt then i
         else loop (cons_instr Lpushtrap i) (tt - 1)
@@ -280,21 +284,23 @@ let rec linear i n =
   | Itrywith(body, handler) ->
       let (lbl_join, n1) = get_label (linear i.Mach.next n) in
       incr try_depth;
+      assert (i.Mach.arg = [| |] || Config.spacetime);
       let (lbl_body, n2) =
-        get_label (cons_instr Lpushtrap
+        get_label (instr_cons Lpushtrap i.Mach.arg [| |]
                     (linear body (cons_instr Lpoptrap n1))) in
       decr try_depth;
-      cons_instr (Lsetuptrap lbl_body)
+      instr_cons (Lsetuptrap lbl_body) i.Mach.arg [| |]
         (linear handler (add_branch lbl_join n2))
   | Iraise k ->
       copy_instr (Lraise k) i (discard_dead_code n)
 
 let reset () =
-  label_counter := 99;
   exit_label := []
 
 let fundecl f =
   { fun_name = f.Mach.fun_name;
     fun_body = linear f.Mach.fun_body end_instr;
     fun_fast = f.Mach.fun_fast;
-    fun_dbg  = f.Mach.fun_dbg }
+    fun_dbg  = f.Mach.fun_dbg;
+    fun_spacetime_shape = f.Mach.fun_spacetime_shape;
+  }

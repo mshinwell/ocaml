@@ -221,27 +221,27 @@ class cse_generic = object (self)
 method class_of_operation op =
   match op with
   | Imove | Ispill | Ireload -> assert false   (* treated specially *)
-  | Iconst_int _ | Iconst_float _ | Iconst_symbol _
-  | Iconst_blockheader _ -> Op_pure
+  | Iconst_int _ | Iconst_float _ | Iconst_symbol _ -> Op_pure
   | Icall_ind | Icall_imm _ | Itailcall_ind | Itailcall_imm _
   | Iextcall _ -> assert false                 (* treated specially *)
   | Istackoffset _ -> Op_other
   | Iload(_,_) -> Op_load
   | Istore(_,_,asg) -> Op_store asg
   | Ialloc _ -> assert false                   (* treated specially *)
-  | Iintop(Icheckbound) -> Op_checkbound
+  | Iintop(Icheckbound _) -> Op_checkbound
   | Iintop _ -> Op_pure
-  | Iintop_imm(Icheckbound, _) -> Op_checkbound
+  | Iintop_imm(Icheckbound _, _) -> Op_checkbound
   | Iintop_imm(_, _) -> Op_pure
   | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
   | Ifloatofint | Iintoffloat -> Op_pure
   | Ispecific _ -> Op_other
+  | Ilabel _ -> Op_other
 
 (* Operations that are so cheap that it isn't worth factoring them. *)
 
 method is_cheap_operation op =
   match op with
-  | Iconst_int _ | Iconst_blockheader _ -> true
+  | Iconst_int _ -> true
   | _ -> false
 
 (* Forget all equations involving memory loads.  Performed after a
