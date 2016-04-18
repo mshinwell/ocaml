@@ -21,6 +21,15 @@ open Lambda
 
 type function_label = string
 
+type usymbol_provenance = {
+  module_path : Path.t;
+}
+
+type ulet_provenance = {
+  module_path : Path.t;
+  location : Location.t;
+}
+
 type ustructured_constant =
   | Uconst_float of float
   | Uconst_int32 of int32
@@ -36,6 +45,9 @@ and uconstant =
   | Uconst_int of int
   | Uconst_ptr of int
 
+and uphantom_defining_expr =
+  | Uphantom_const of uconstant
+
 and ulambda =
     Uvar of Ident.t
   | Uconst of uconstant
@@ -43,8 +55,9 @@ and ulambda =
   | Ugeneric_apply of ulambda * ulambda list * Debuginfo.t
   | Uclosure of ufunction list * ulambda list
   | Uoffset of ulambda * int
-  | Ulet of mutable_flag * value_kind * Ident.t * ulambda * ulambda
-  | Uletrec of (Ident.t * ulambda) list * ulambda
+  | Ulet of mutable_flag * value_kind * ulet_provenance option * Ident.t
+      * ulambda * ulambda
+  | Uletrec of (ulet_provenance option * Ident.t * ulambda) list * ulambda
   | Uprim of primitive * ulambda list * Debuginfo.t
   | Uswitch of ulambda * ulambda_switch
   | Ustringswitch of ulambda * (string * ulambda) list * ulambda option
@@ -58,6 +71,8 @@ and ulambda =
   | Uassign of Ident.t * ulambda
   | Usend of meth_kind * ulambda * ulambda * ulambda list * Debuginfo.t
   | Uunreachable
+  | Uphantom_let of ulet_provenance * Ident.t * uphantom_defining_expr
+      * ulambda
 
 and ufunction = {
   label  : function_label;
@@ -65,6 +80,10 @@ and ufunction = {
   params : Ident.t list;
   body   : ulambda;
   dbg    : Debuginfo.t;
+  human_name : string;
+  env_var : Ident.t option;
+  closure_layout : Ident.t list;
+  module_path : Path.t option;
 }
 
 and ulambda_switch =
@@ -109,5 +128,14 @@ type preallocated_block = {
 type preallocated_constant = {
   symbol : string;
   exported : bool;
+  provenance : usymbol_provenance option;
   definition : ustructured_constant;
 }
+
+(* CR mshinwell: need to deal with DWARF for imported symbols. *)
+
+(* CR mshinwell: for fishing out values from closures, we need:
+  - identifier by which the environment entry is known in the code
+  - offset in the closure
+  - identifier corresponding to "env"
+*)

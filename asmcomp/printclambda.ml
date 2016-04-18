@@ -32,6 +32,15 @@ let value_kind =
   | Pboxedintval Pint32 -> ":int32"
   | Pboxedintval Pint64 -> ":int64"
 
+let let_provenance ppf (provenance : Clambda.ulet_provenance) =
+  fprintf ppf "(from %a, %a)"
+    Printtyp.path provenance.module_path
+    Location.print_loc provenance.location
+
+let let_provenance_opt ppf = function
+  | None -> ()
+  | Some provenance -> let_provenance ppf provenance
+
 let rec structured_constant ppf = function
   | Uconst_float x -> fprintf ppf "%F" x
   | Uconst_int32 x -> fprintf ppf "%ldl" x
@@ -68,6 +77,9 @@ and uconstant ppf = function
   | Uconst_int i -> fprintf ppf "%i" i
   | Uconst_ptr i -> fprintf ppf "%ia" i
 
+and phantom_defining_expr ppf = function
+  | Uphantom_const const -> uconstant ppf const
+
 and lam ppf = function
   | Uvar id ->
       Ident.print ppf id
@@ -92,24 +104,27 @@ and lam ppf = function
         List.iter (fprintf ppf "@ %a" lam) in
       fprintf ppf "@[<2>(closure@ %a %a)@]" funs clos lams fv
   | Uoffset(l,i) -> fprintf ppf "@[<2>(offset %a %d)@]" lam l i
-  | Ulet(mut, kind, id, arg, body) ->
+  | Ulet(mut, kind, provenance, id, arg, body) ->
       let rec letbody ul = match ul with
-        | Ulet(mut, kind, id, arg, body) ->
-            fprintf ppf "@ @[<2>%a%s%s@ %a@]"
-              Ident.print id (mutable_flag mut) (value_kind kind) lam arg;
+        | Ulet(mut, kind, provenance, id, arg, body) ->
+            fprintf ppf "@ @[<2>%a%s%s%a@ %a@]"
+              Ident.print id (mutable_flag mut) (value_kind kind)
+                let_provenance_opt provenance lam arg;
             letbody body
         | _ -> ul in
-      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a%s%s@ %a@]"
-        Ident.print id (mutable_flag mut) (value_kind kind) lam arg;
+      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a%s%s%a@ %a@]"
+        Ident.print id (mutable_flag mut) (value_kind kind)
+          let_provenance_opt provenance lam arg;
       let expr = letbody body in
       fprintf ppf ")@]@ %a)@]" lam expr
   | Uletrec(id_arg_list, body) ->
       let bindings ppf id_arg_list =
         let spc = ref false in
         List.iter
-          (fun (id, l) ->
+          (fun (provenance, id, l) ->
             if !spc then fprintf ppf "@ " else spc := true;
-            fprintf ppf "@[<2>%a@ %a@]" Ident.print id lam l)
+            fprintf ppf "@[<2>%a%a@ %a@]" Ident.print id
+              let_provenance_opt provenance lam l)
           id_arg_list in
       fprintf ppf
         "@[<2>(letrec@ (@[<hv 1>%a@])@ %a)@]" bindings id_arg_list lam body
@@ -191,6 +206,19 @@ and lam ppf = function
       fprintf ppf "@[<2>(send%s@ %a@ %a%a)@]" kind lam obj lam met args largs
   | Uunreachable ->
       fprintf ppf "unreachable"
+  | Uphantom_let (provenance, id, defining_expr, body) ->
+      let rec letbody ul = match ul with
+        | Uphantom_let (provenance, id, defining_expr, body) ->
+            fprintf ppf "@ @[<2>%a%a@ %a@]"
+              Ident.print id let_provenance provenance
+              phantom_defining_expr defining_expr;
+            letbody body
+        | _ -> ul in
+      fprintf ppf "@[<2>(phantom_let@ @[<hv 1>(@[<2>%a%a@ %a@]"
+        Ident.print id let_provenance provenance
+        phantom_defining_expr defining_expr;
+      let expr = letbody body in
+      fprintf ppf ")@]@ %a)@]" lam expr
 
 and sequence ppf ulam = match ulam with
   | Usequence(l1, l2) ->

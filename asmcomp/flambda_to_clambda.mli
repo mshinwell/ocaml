@@ -19,7 +19,9 @@
 type result = {
   expr : Clambda.ulambda;
   preallocated_blocks : Clambda.preallocated_block list;
-  structured_constants : Clambda.ustructured_constant Symbol.Map.t;
+  structured_constants :
+    (Clambda.ustructured_constant * (Clambda.usymbol_provenance option))
+      Symbol.Map.t;
   exported : Export_info.t;
 }
 

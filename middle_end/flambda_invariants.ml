@@ -87,6 +87,9 @@ exception Unbound_closure_ids of Closure_id.Set.t
 exception Unbound_vars_within_closures of Var_within_closure.Set.t
 exception Move_to_a_closure_not_in_the_free_variables
   of Variable.t * Variable.Set.t
+(*
+exception Illegal_defining_expr_for_let_state of Flambda.named
+*)
 
 exception Flambda_invariants_failed
 
@@ -155,9 +158,19 @@ let variable_and_symbol_invariants (program : Flambda.program) =
   let rec loop env (flam : Flambda.t) =
     match flam with
     (* Expressions that can bind [Variable.t]s: *)
-    | Let { var; defining_expr; body; _ } ->
+    | Let { var; defining_expr; body; state; _ } ->
       loop_named env defining_expr;
-      loop (add_binding_occurrence env var) body
+      loop (add_binding_occurrence env var) body;
+      (* To avoid another traversal, we do this simple check on [state]
+         here. *)
+      begin match state with
+      | Normal -> ()
+      | Keep_for_debugger | Only_for_debugger ->
+        match defining_expr with
+        | Const _ | Symbol _ -> ()
+        | _ -> ()
+(* XXX raise (Illegal_defining_expr_for_let_state defining_expr) *)
+      end
     | Let_mutable { var = mut_var; initial_value = var;
                     body; contents_kind } ->
       ignore_value_kind contents_kind;
@@ -423,19 +436,19 @@ let variable_and_symbol_invariants (program : Flambda.program) =
     match program with
     | Let_rec_symbol (defs, program) ->
       let env =
-        List.fold_left (fun env (symbol, _) ->
+        List.fold_left (fun env (symbol, _, _) ->
             add_binding_occurrence_of_symbol env symbol)
           env defs
       in
-      List.iter (fun (_, def) ->
+      List.iter (fun (_, _, def) ->
           loop_constant_defining_value env def)
         defs;
       loop_program_body env program
-    | Let_symbol (symbol, def, program) ->
+    | Let_symbol (symbol, _provenance, def, program) ->
       loop_constant_defining_value env def;
       let env = add_binding_occurrence_of_symbol env symbol in
       loop_program_body env program
-    | Initialize_symbol (symbol, _tag, fields, program) ->
+    | Initialize_symbol (symbol, _provenance, _tag, fields, program) ->
       List.iter (loop env) fields;
       let env = add_binding_occurrence_of_symbol env symbol in
       loop_program_body env program
@@ -691,11 +704,13 @@ let check_exn ?(kind=Normal) ?(cmxfile=false) (flam:Flambda.program) =
        miscompilations *)
     (* every_move_within_set_of_closures_is_to_a_function_in_the_free_vars
         flam; *)
-    Flambda_iterators.iter_exprs_at_toplevel_of_program flam ~f:(fun flam ->
-      primitive_invariants flam ~no_access_to_global_module_identifiers:cmxfile;
-      every_static_exception_is_caught flam;
-      every_static_exception_is_caught_at_a_single_position flam;
-      every_declared_closure_is_from_current_compilation_unit flam)
+    Flambda_iterators.iter_exprs_at_toplevel_of_program flam
+      ~f:(fun flam ~under_lifted_set_of_closures:_ ->
+        primitive_invariants flam
+          ~no_access_to_global_module_identifiers:cmxfile;
+        every_static_exception_is_caught flam;
+        every_static_exception_is_caught_at_a_single_position flam;
+        every_declared_closure_is_from_current_compilation_unit flam)
   with exn -> begin
   (* CR-someday split printing code into its own function *)
     begin match exn with
@@ -818,6 +833,11 @@ let check_exn ?(kind=Normal) ?(cmxfile=false) (flam:Flambda.program) =
         to closures that are not parts of its free variables: %a"
           Variable.print start_from
           Variable.Set.print move_to
+(*
+    | Illegal_defining_expr_for_let_state named ->
+      Format.eprintf ">> Illegal defining expression %a for let_state"
+        Flambda.print_named named
+*)
     | exn -> raise exn
     end;
     Format.eprintf "\n@?";

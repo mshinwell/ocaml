@@ -40,6 +40,7 @@ type compiler_pass =
   | Spill of source_provenance
   | Split of source_provenance
   | Regalloc of source_provenance
+  | Available_regs of source_provenance
   | Linearize of source_provenance
   | Scheduling of source_provenance
   | Emit of source_provenance
@@ -126,6 +127,7 @@ let pass_name = function
   | Spill k -> Printf.sprintf "spill(%s)" (kind_name k)
   | Split k -> Printf.sprintf "split(%s)" (kind_name k)
   | Regalloc k -> Printf.sprintf "regalloc(%s)" (kind_name k)
+  | Available_regs k -> Printf.sprintf "available_regs(%s)" (kind_name k)
   | Linearize k -> Printf.sprintf "linearize(%s)" (kind_name k)
   | Scheduling k -> Printf.sprintf "scheduling(%s)" (kind_name k)
   | Emit k -> Printf.sprintf "emit(%s)" (kind_name k)

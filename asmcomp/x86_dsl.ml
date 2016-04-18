@@ -98,9 +98,11 @@ module D = struct
   let qword cst = directive (Quad cst)
   let setvar (x, y) = directive (Set (x, y))
   let size name cst = directive (Size (name, cst))
+  let sleb128 cst = directive (Sleb128 cst)
   let space n = directive (Space n)
   let text () = section [ ".text" ] None []
   let type_ name typ = directive (Type (name, typ))
+  let uleb128 cst = directive (Uleb128 cst)
   let word cst = directive (Word cst)
 end
 

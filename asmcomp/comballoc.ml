@@ -55,7 +55,8 @@ let rec combine i allocstate =
       let newnext = combine_restart i.next in
       (instr_cons_debug i.desc i.arg i.res i.dbg newnext,
        allocated_size allocstate)
-  | Iop _ ->
+  | Iop _
+  | Iphantom_let_start _ | Iphantom_let_end _ ->
       let (newnext, sz) = combine i.next allocstate in
       (instr_cons_debug i.desc i.arg i.res i.dbg newnext, sz)
   | Iifthenelse(test, ifso, ifnot) ->

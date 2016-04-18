@@ -17,7 +17,8 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 type ('a, 'b) kind =
-  | Initialisation of (Symbol.t * Tag.t * Flambda.t list)
+  | Initialisation of
+      (Symbol.t * Flambda.symbol_provenance option * Tag.t * Flambda.t list)
   | Effect of 'b
 
 let should_copy (named:Flambda.named) =
@@ -26,9 +27,10 @@ let should_copy (named:Flambda.named) =
   | _ -> false
 
 type extracted =
-  | Expr of Variable.t * Flambda.t
-  | Exprs of Variable.t list * Flambda.t
+  | Expr of Variable.t * Flambda.t * Flambda.symbol_provenance option
+  | Exprs of Variable.t list * Flambda.t * Flambda.symbol_provenance option
   | Block of Variable.t * Tag.t * Variable.t list
+      * Flambda.symbol_provenance option
 
 type accumulated = {
   copied_lets : (Variable.t * Flambda.named) list;
@@ -76,7 +78,7 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
         ~substitution
         ~copied_lets:((var, named)::copied_lets)
         ~extracted_lets
-  | Let { var; defining_expr = named; body; _ } ->
+  | Let { var; defining_expr = named; body; provenance; _ } ->
     let extracted =
       let renamed = Variable.rename var in
       match named with
@@ -88,13 +90,37 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
               with Not_found -> v)
             args
         in
-        Block (var, tag, args)
+        let provenance =
+          match provenance with
+          | None -> None
+          | Some provenance ->
+            let provenance : Flambda.symbol_provenance =
+              { names = [Variable.base_name var];
+                module_path = provenance.module_path;
+                location = provenance.location;
+              }
+            in
+            Some provenance
+        in
+        Block (var, tag, args, provenance)
       | named ->
+        let symbol_provenance : Flambda.symbol_provenance option =
+          match provenance with
+          | None -> None
+          | Some provenance ->
+            let provenance : Flambda.symbol_provenance =
+              { names = [Variable.base_name var];
+                module_path = provenance.module_path;
+                location = provenance.location;
+              }
+            in
+            Some provenance
+        in
         let expr =
           Flambda_utils.toplevel_substitution substitution
-            (Flambda.create_let renamed named (Var renamed))
+            (Flambda.create_let renamed named (Var renamed) ?provenance)
         in
-        Expr (var, expr)
+        Expr (var, expr, symbol_provenance)
     in
     accumulate body
       ~substitution
@@ -107,7 +133,7 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
       Flambda_utils.toplevel_substitution def_substitution
         (Let_rec ([renamed, named], Var renamed))
     in
-    let extracted = Expr (var, expr) in
+    let extracted = Expr (var, expr, None) in
     accumulate body
       ~substitution
       ~copied_lets
@@ -129,7 +155,7 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
                              List.map fst renamed_defs,
                              Debuginfo.none))))
       in
-      Exprs (List.map fst defs, expr)
+      Exprs (List.map fst defs, expr, None)
     in
     accumulate body
       ~substitution
@@ -171,9 +197,10 @@ let rebuild (used_variables:Variable.Set.t) (accumulated:accumulated) =
   let accumulated_extracted_lets =
     List.map (fun decl ->
         match decl with
-        | Block (var, _, _) | Expr (var, _) ->
+        | Block (var, _, _, _)
+        | Expr (var, _, _) ->
           Flambda_utils.make_variable_symbol var, decl
-        | Exprs (vars, _) ->
+        | Exprs (vars, _, _) ->
           Flambda_utils.make_variables_symbol vars, decl)
       accumulated.extracted_lets
   in
@@ -191,11 +218,11 @@ let rebuild (used_variables:Variable.Set.t) (accumulated:accumulated) =
          field of the field 0 of the symbol. *)
     List.fold_left (fun map (symbol, decl) ->
         match decl with
-        | Block (var, _tag, _fields) ->
+        | Block (var, _tag, _fields, _provenance) ->
           Variable.Map.add var (symbol, []) map
-        | Expr (var, _expr) ->
+        | Expr (var, _expr, _provenance) ->
           Variable.Map.add var (symbol, [0]) map
-        | Exprs (vars, _expr) ->
+        | Exprs (vars, _expr, _provenance) ->
           let map, _ =
             List.fold_left (fun (map, field) var ->
                 Variable.Map.add var (symbol, [field; 0]) map,
@@ -208,7 +235,7 @@ let rebuild (used_variables:Variable.Set.t) (accumulated:accumulated) =
   let extracted =
     List.map (fun (symbol, decl) ->
         match decl with
-        | Expr (var, decl) ->
+        | Expr (var, decl, provenance) ->
           let expr =
             rebuild_expr ~extracted_definitions ~copied_definitions
               ~substitute:true decl
@@ -216,24 +243,25 @@ let rebuild (used_variables:Variable.Set.t) (accumulated:accumulated) =
           if Variable.Set.mem var used_variables then
             Initialisation
               (symbol,
+               provenance,
                Tag.create_exn 0,
                [expr])
           else
             Effect expr
-        | Exprs (_vars, decl) ->
+        | Exprs (_vars, decl, provenance) ->
           let expr =
             rebuild_expr ~extracted_definitions ~copied_definitions
               ~substitute:true decl
           in
-          Initialisation (symbol, Tag.create_exn 0, [expr])
-        | Block (_var, tag, fields) ->
+          Initialisation (symbol, provenance, Tag.create_exn 0, [expr])
+        | Block (_var, tag, fields, provenance) ->
           let fields =
             List.map (fun var ->
                 rebuild_expr ~extracted_definitions ~copied_definitions
                   ~substitute:true (Var var))
               fields
           in
-          Initialisation (symbol, tag, fields))
+          Initialisation (symbol, provenance, tag, fields))
       accumulated_extracted_lets
   in
   let terminator =
@@ -258,8 +286,8 @@ let introduce_symbols expr =
 let add_extracted introduced program =
   List.fold_right (fun extracted program ->
       match extracted with
-      | Initialisation (symbol, tag, def) ->
-        Flambda.Initialize_symbol (symbol, tag, def, program)
+      | Initialisation (symbol, provenance, tag, def) ->
+        Flambda.Initialize_symbol (symbol, provenance, tag, def, program)
       | Effect effect ->
         Flambda.Effect (effect, program))
     introduced program
@@ -267,26 +295,27 @@ let add_extracted introduced program =
 let rec split_program (program : Flambda.program_body) : Flambda.program_body =
   match program with
   | End s -> End s
-  | Let_symbol (s, def, program) ->
-    Let_symbol (s, def, split_program program)
+  | Let_symbol (s, provenance, def, program) ->
+    Let_symbol (s, provenance, def, split_program program)
   | Let_rec_symbol (defs, program) ->
     Let_rec_symbol (defs, split_program program)
   | Effect (expr, program) ->
     let program = split_program program in
     let introduced, expr = introduce_symbols expr in
     add_extracted introduced (Flambda.Effect (expr, program))
-  | Initialize_symbol (symbol, tag, ((_::_::_) as fields), program) ->
+  | Initialize_symbol (symbol, provenance, tag, ((_::_::_) as fields),
+      program) ->
     (* CR-someday pchambart: currently the only initialize_symbol with more
        than 1 field is the module block. This could evolve, in that case
        this pattern should be handled properly. *)
-    Initialize_symbol (symbol, tag, fields, split_program program)
-  | Initialize_symbol (sym, tag, [], program) ->
-    Let_symbol (sym, Block (tag, []), split_program program)
-  | Initialize_symbol (symbol, tag, [field], program) ->
+    Initialize_symbol (symbol, provenance, tag, fields, split_program program)
+  | Initialize_symbol (sym, provenance, tag, [], program) ->
+    Let_symbol (sym, provenance, Block (tag, []), split_program program)
+  | Initialize_symbol (symbol, provenance, tag, [field], program) ->
     let program = split_program program in
     let introduced, field = introduce_symbols field in
     add_extracted introduced
-      (Flambda.Initialize_symbol (symbol, tag, [field], program))
+      (Flambda.Initialize_symbol (symbol, provenance, tag, [field], program))
 
 let lift ~backend:_ (program : Flambda.program) =
   { program with

@@ -43,7 +43,7 @@ let spill_reg r =
   with Not_found ->
     let spill_r = Reg.create r.typ in
     spill_r.spill <- true;
-    if not (Reg.anonymous r) then spill_r.raw_name <- r.raw_name;
+    if not (Reg.is_temporary r) then spill_r.raw_name <- r.raw_name;
     spill_env := Reg.Map.add r spill_r !spill_env;
     spill_r
 
@@ -248,6 +248,9 @@ let rec reload i before =
        finally)
   | Iraise _ ->
       (add_reloads (Reg.inter_set_array before i.arg) i, Reg.Set.empty)
+  | Iphantom_let_start _ | Iphantom_let_end _ ->
+      let (new_next, before) = reload i.next before in
+      (instr_cons i.desc i.arg i.res new_next, before)
 
 (* Second pass: add spill instructions based on what we've decided to reload.
    That is, any register that may be reloaded in the future must be spilled
@@ -299,7 +302,8 @@ let rec spill i finally =
       let before =
         match i.desc with
           Iop Icall_ind | Iop(Icall_imm _) | Iop(Iextcall _)
-        | Iop(Iintop Icheckbound) | Iop(Iintop_imm(Icheckbound, _)) ->
+        | Iop(Iintop Icheckbound) | Iop(Iintop_imm(Icheckbound, _))
+        | Iop(Ialloc _) ->
             Reg.Set.union before1 !spill_at_raise
         | _ ->
             before1 in
@@ -389,6 +393,9 @@ let rec spill i finally =
        before_body)
   | Iraise _ ->
       (i, !spill_at_raise)
+  | Iphantom_let_start _ | Iphantom_let_end _ ->
+      let (new_next, finally) = spill i.next finally in
+      (instr_cons i.desc i.arg i.res new_next, finally)
 
 (* Entry point *)
 
@@ -412,4 +419,9 @@ let fundecl f =
     fun_args = f.fun_args;
     fun_body = new_body;
     fun_fast = f.fun_fast;
-    fun_dbg  = f.fun_dbg }
+    fun_dbg  = f.fun_dbg;
+    fun_human_name = f.fun_human_name;
+    fun_env_var = f.fun_env_var;
+    fun_closure_layout = f.fun_closure_layout;
+    fun_module_path = f.fun_module_path;
+  }

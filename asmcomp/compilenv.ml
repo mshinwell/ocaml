@@ -410,6 +410,8 @@ let structured_constants () =
        {
          Clambda.symbol;
          exported = Hashtbl.mem exported_constants symbol;
+         (* CR mshinwell: fix provenance *)
+         provenance = None;
          definition;
        })
     (!structured_constants).strcst_all

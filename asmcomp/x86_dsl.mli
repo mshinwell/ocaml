@@ -89,9 +89,11 @@ module D : sig
   val section: string list -> string option -> string list -> unit
   val setvar: string * constant -> unit
   val size: string -> constant -> unit
+  val sleb128: constant -> unit
   val space: int -> unit
   val text: unit -> unit
   val type_: string -> string -> unit
+  val uleb128: constant -> unit
   val word: constant -> unit
 end
 

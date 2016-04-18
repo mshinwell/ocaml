@@ -16,13 +16,13 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-let name_expr (named : Flambda.named) ~name : Flambda.t =
+let name_expr ?provenance (named : Flambda.named) ~name : Flambda.t =
   let var =
     Variable.create
       ~current_compilation_unit:(Compilation_unit.get_current_exn ())
       name
   in
-  Flambda.create_let var named (Var var)
+  Flambda.create_let var named (Var var) ?provenance
 
 let find_declaration cf ({ funs } : Flambda.function_declarations) =
   Variable.Map.find (Closure_id.unwrap cf) funs
@@ -389,12 +389,14 @@ let bind ~bindings ~body =
 let all_lifted_constants (program : Flambda.program) =
   let rec loop (program : Flambda.program_body) =
     match program with
-    | Let_symbol (symbol, decl, program) -> (symbol, decl) :: (loop program)
+    | Let_symbol (symbol, _provenance, decl, program) ->
+      (symbol, decl) :: (loop program)
     | Let_rec_symbol (decls, program) ->
-      List.fold_left (fun l (symbol, decl) -> (symbol, decl) :: l)
+      List.fold_left (fun l (symbol, _provenance, decl) ->
+          (symbol, decl) :: l)
         (loop program)
         decls
-    | Initialize_symbol (_, _, _, program)
+    | Initialize_symbol (_, _, _, _, program)
     | Effect (_, program) -> loop program
     | End _ -> []
   in
@@ -406,10 +408,10 @@ let all_lifted_constants_as_map program =
 let initialize_symbols (program : Flambda.program) =
   let rec loop (program : Flambda.program_body) =
     match program with
-    | Initialize_symbol (symbol, tag, fields, program) ->
+    | Initialize_symbol (symbol, _provenance, tag, fields, program) ->
       (symbol, tag, fields) :: (loop program)
     | Effect (_, program)
-    | Let_symbol (_, _, program)
+    | Let_symbol (_, _, _, program)
     | Let_rec_symbol (_, program) -> loop program
     | End _ -> []
   in
@@ -438,9 +440,9 @@ let root_symbol (program : Flambda.program) =
   let rec loop (program : Flambda.program_body) =
     match program with
     | Effect (_, program)
-    | Let_symbol (_, _, program)
+    | Let_symbol (_, _,  _, program)
     | Let_rec_symbol (_, program)
-    | Initialize_symbol (_, _, _, program) -> loop program
+    | Initialize_symbol (_, _, _, _, program) -> loop program
     | End root ->
       root
   in

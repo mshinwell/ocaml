@@ -40,6 +40,17 @@ val loc_external_arguments: Reg.t array array -> Reg.t array array * int
 val loc_external_results: Reg.t array -> Reg.t array
 val loc_exn_bucket: Reg.t
 
+(** Return the register number, as per the DWARF definition for the current
+    target, for the given [Reg.t].
+    An exception will be raised if the [Reg.t]:
+    - has location [Unknown] or [Stack]; or
+    - has location [Reg n] with [n] not being a hard register.
+*)
+val dwarf_register_number : Reg.t -> int
+
+(** The DWARF register number for the stack pointer. *)
+val stack_ptr_dwarf_register_number : int
+
 (* The maximum number of arguments of an OCaml to OCaml function call for
    which it is guaranteed there will be no arguments passed on the stack.
    (Above this limit, tail call optimization may be disabled.)

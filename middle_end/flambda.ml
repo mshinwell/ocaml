@@ -56,6 +56,16 @@ type specialised_to = {
   projection : Projection.t option;
 }
 
+type let_provenance = {
+  module_path : Path.t;
+  location : Location.t;
+}
+
+type let_state =
+  | Normal
+  | Keep_for_debugger
+  | Only_for_debugger
+
 type t =
   | Var of Variable.t
   | Let of let_expr
@@ -93,6 +103,8 @@ and let_expr = {
   body : t;
   free_vars_of_defining_expr : Variable.Set.t;
   free_vars_of_body : Variable.Set.t;
+  provenance : let_provenance option;
+  state : let_state;
 }
 
 and let_mutable = {
@@ -155,10 +167,20 @@ and constant_defining_value_block_field =
 
 type expr = t
 
+type symbol_provenance = {
+  names : string list;
+  module_path : Path.t;
+  location : Location.t;
+}
+
 type program_body =
-  | Let_symbol of Symbol.t * constant_defining_value * program_body
-  | Let_rec_symbol of (Symbol.t * constant_defining_value) list * program_body
-  | Initialize_symbol of Symbol.t * Tag.t * t list * program_body
+  | Let_symbol of Symbol.t * symbol_provenance option
+      * constant_defining_value * program_body
+  | Let_rec_symbol of
+      (Symbol.t * symbol_provenance option
+        * constant_defining_value) list * program_body
+  | Initialize_symbol of
+      Symbol.t * symbol_provenance option * Tag.t * t list * program_body
   | Effect of t * program_body
   | End of Symbol.t
 
@@ -183,6 +205,21 @@ let print_project_var = Projection.print_project_var
 let print_move_within_set_of_closures =
   Projection.print_move_within_set_of_closures
 let print_project_closure = Projection.print_project_closure
+
+let print_let_provenance ppf (provenance : let_provenance) =
+  fprintf ppf "<path `%a', %a>"
+    Printtyp.path provenance.module_path
+    Location.print_compact provenance.location
+
+let print_let_provenance_opt ppf = function
+  | None -> ()
+  | Some let_provenance -> print_let_provenance ppf let_provenance
+
+let print_let_state ppf (state : let_state) =
+  match state with
+  | Normal -> ()
+  | Keep_for_debugger -> fprintf ppf "<keep>"
+  | Only_for_debugger -> fprintf ppf "<debug_only>"
 
 (** CR-someday lwhite: use better name than this *)
 let rec lam ppf (flam : t) =
@@ -223,16 +260,22 @@ let rec lam ppf (flam : t) =
       print_args args
   | Proved_unreachable ->
       fprintf ppf "unreachable"
-  | Let { var = id; defining_expr = arg; body; _ } ->
+  | Let { var = id; defining_expr = arg; body; provenance; state; _ } ->
       let rec letbody (ul : t) =
         match ul with
-        | Let { var = id; defining_expr = arg; body; _ } ->
-            fprintf ppf "@ @[<2>%a@ %a@]" Variable.print id print_named arg;
-            letbody body
+        | Let { var = id; defining_expr = arg; body; provenance; state; _ } ->
+          fprintf ppf "@ @[<2>%a%a%a@ %a@]" Variable.print id
+            print_let_provenance_opt provenance
+            print_let_state state
+            print_named arg;
+          letbody body
         | _ -> ul
       in
-      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a@ %a@]"
-        Variable.print id print_named arg;
+      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a%a%a@ %a@]"
+        Variable.print id
+        print_let_provenance_opt provenance
+        print_let_state state
+        print_named arg;
       let expr = letbody body in
       fprintf ppf ")@]@ %a)@]" lam expr
   | Let_mutable { var = mut_var; initial_value = var; body; contents_kind } ->
@@ -454,19 +497,32 @@ let print_constant_defining_value ppf (const : constant_defining_value) =
     fprintf ppf "(Project_closure (%a, %a))" Symbol.print set_of_closures
       Closure_id.print closure_id
 
+let print_symbol_provenance ppf (provenance : symbol_provenance) =
+  fprintf ppf "<from `%a' path %a at %a>"
+    (Format.pp_print_list (fun ppf name -> fprintf ppf "%s" name))
+    provenance.names
+    Printtyp.path provenance.module_path
+    Location.print_compact provenance.location
+
+let print_symbol_provenance_opt ppf = function
+  | None -> ()
+  | Some symbol_provenance -> print_symbol_provenance ppf symbol_provenance
+
 let rec print_program_body ppf (program : program_body) =
   match program with
-  | Let_symbol (symbol, constant_defining_value, body) ->
+  | Let_symbol (symbol, provenance, constant_defining_value, body) ->
     let rec letbody (ul : program_body) =
       match ul with
-      | Let_symbol (symbol, constant_defining_value, body) ->
-        fprintf ppf "@ @[<2>(%a@ %a)@]" Symbol.print symbol
+      | Let_symbol (symbol, provenance, constant_defining_value, body) ->
+        fprintf ppf "@ @[<2>(%a%a@ %a)@]" Symbol.print symbol
+          print_symbol_provenance_opt provenance
           print_constant_defining_value constant_defining_value;
         letbody body
       | _ -> ul
     in
-    fprintf ppf "@[<2>let_symbol@ @[<hv 1>(@[<2>%a@ %a@])@]@ "
+    fprintf ppf "@[<2>let_symbol@ @[<hv 1>(@[<2>%a%a@ %a@])@]@ "
       Symbol.print symbol
+      print_symbol_provenance_opt provenance
       print_constant_defining_value constant_defining_value;
     let program = letbody body in
     fprintf ppf "@]@.";
@@ -475,19 +531,21 @@ let rec print_program_body ppf (program : program_body) =
     let bindings ppf id_arg_list =
       let spc = ref false in
       List.iter
-        (fun (symbol, constant_defining_value) ->
+        (fun (symbol, provenance, constant_defining_value) ->
            if !spc then fprintf ppf "@ " else spc := true;
-           fprintf ppf "@[<2>%a@ %a@]"
+           fprintf ppf "@[<2>%a%a@ %a@]"
              Symbol.print symbol
+             print_symbol_provenance_opt provenance
              print_constant_defining_value constant_defining_value)
         id_arg_list in
     fprintf ppf
       "@[<2>let_rec_symbol@ (@[<hv 1>%a@])@]@."
       bindings defs;
     print_program_body ppf program
-  | Initialize_symbol (symbol, tag, fields, program) ->
-    fprintf ppf "@[<2>initialize_symbol@ @[<hv 1>(@[<2>%a@ %a@ %a@])@]@]@."
+  | Initialize_symbol (symbol, provenance, tag, fields, program) ->
+    fprintf ppf "@[<2>initialize_symbol@ @[<hv 1>(@[<2>%a%a@ %a@ %a@])@]@]@."
       Symbol.print symbol
+      print_symbol_provenance_opt provenance
       Tag.print tag
       (Format.pp_print_list lam) fields;
     print_program_body ppf program
@@ -660,7 +718,7 @@ let used_variables_named ?ignore_uses_in_project_var named =
   variables_usage_named ?ignore_uses_in_project_var
     ~all_used_variables:true named
 
-let create_let var defining_expr body : t =
+let create_let ?provenance ?state var defining_expr body : t =
   begin match !Clflags.dump_flambda_let with
   | None -> ()
   | Some stamp ->
@@ -676,12 +734,19 @@ let create_let var defining_expr body : t =
       defining_expr, free_vars_of_defining_expr
     | _ -> defining_expr, free_variables_named defining_expr
   in
+  let state : let_state =
+    match state with
+    | None -> Normal
+    | Some state -> state
+  in
   Let {
     var;
     defining_expr;
     body;
     free_vars_of_defining_expr;
     free_vars_of_body = free_variables body;
+    provenance;
+    state;
   }
 
 let map_defining_expr_of_let let_expr ~f =
@@ -698,6 +763,8 @@ let map_defining_expr_of_let let_expr ~f =
       body = let_expr.body;
       free_vars_of_defining_expr;
       free_vars_of_body = let_expr.free_vars_of_body;
+      provenance = let_expr.provenance;
+      state = let_expr.state;
     }
 
 let iter_lets t ~for_defining_expr ~for_last_body ~for_each_let =
@@ -715,30 +782,54 @@ let iter_lets t ~for_defining_expr ~for_last_body ~for_each_let =
 let map_lets t ~for_defining_expr ~for_last_body ~after_rebuild =
   let rec loop (t : t) ~rev_lets =
     match t with
-    | Let { var; defining_expr; body; _ } ->
-      let new_defining_expr =
+    | Let { var; defining_expr; body; provenance; state; _ } ->
+      let new_defining_expr, new_state =
         for_defining_expr var defining_expr
       in
       let original =
-        if new_defining_expr == defining_expr then
+        if new_defining_expr == defining_expr && new_state = None then
           Some t
         else
           None
       in
-      let rev_lets = (var, new_defining_expr, original) :: rev_lets in
+      let state =
+        match new_state with
+        | None -> state
+        (* CR mshinwell: maybe [for_defining_expr] should be passed the
+           provenance instead? Not sure *)
+        | Some Normal -> Normal
+        | Some Keep_for_debugger ->
+          begin match provenance with
+          | None -> state
+          | Some _ ->
+            begin match state with
+            | Only_for_debugger -> Only_for_debugger
+            | Normal | Keep_for_debugger -> state
+            end
+          end
+        | Some Only_for_debugger ->
+          begin match provenance with
+          | None -> state
+          | Some _ -> Only_for_debugger
+          end
+      in
+      let rev_lets =
+        (var, new_defining_expr, provenance, state, original) :: rev_lets
+      in
       loop body ~rev_lets
     | t ->
       let last_body = for_last_body t in
       (* As soon as we see a change, we have to rebuild that [Let] and every
          outer one. *)
       let seen_change = ref (not (last_body == t)) in
-      List.fold_left (fun t (var, defining_expr, original) ->
+      List.fold_left (fun t
+              (var, defining_expr, provenance, state, original) ->
           let let_expr =
             match original with
             | Some original when not !seen_change -> original
             | Some _ | None ->
               seen_change := true;
-              create_let var defining_expr t
+              create_let var defining_expr t ~state ?provenance
           in
           let new_let = after_rebuild let_expr in
           if not (new_let == let_expr) then begin
@@ -825,26 +916,42 @@ module With_free_variables = struct
   let of_named named =
     Named (named, free_variables_named named)
 
-  let create_let_reusing_defining_expr var (t : named t) body =
+  let create_let_reusing_defining_expr ?provenance ?state var (t : named t)
+        body =
     match t with
     | Named (defining_expr, free_vars_of_defining_expr) ->
+      let state =
+        match state with
+        | None -> Normal
+        | Some state -> state
+      in
       Let {
         var;
         defining_expr;
         body;
         free_vars_of_defining_expr;
         free_vars_of_body = free_variables body;
+        provenance;
+        state;
       }
 
-  let create_let_reusing_body var defining_expr (t : expr t) =
+  let create_let_reusing_body ?provenance ?state var defining_expr
+        (t : expr t) =
     match t with
     | Expr (body, free_vars_of_body) ->
+      let state =
+        match state with
+        | None -> Normal
+        | Some state -> state
+      in
       Let {
         var;
         defining_expr;
         body;
         free_vars_of_defining_expr = free_variables_named defining_expr;
         free_vars_of_body;
+        provenance;
+        state;
       }
 
   let create_let_reusing_both var (t1 : named t) (t2 : expr t) =
@@ -857,6 +964,8 @@ module With_free_variables = struct
         body;
         free_vars_of_defining_expr;
         free_vars_of_body;
+        provenance = None;
+        state = Normal;
       }
 
   let expr (t : expr t) =
@@ -883,16 +992,34 @@ let fold_lets_option
   let finish ~last_body ~acc ~rev_lets =
     let module W = With_free_variables in
     let acc, t =
-      List.fold_left (fun (acc, t) (var, defining_expr) ->
+      List.fold_left (fun (acc, t)
+              (var, defining_expr, provenance, state) ->
           let free_vars_of_body = W.free_variables t in
-          let acc, var, defining_expr =
+          let acc, var, new_defining_expr =
             filter_defining_expr acc var defining_expr free_vars_of_body
           in
-          match defining_expr with
+          let defining_expr_and_state =
+            match new_defining_expr, state with
+            | Some defining_expr, state -> Some (defining_expr, state)
+            | None, Normal ->
+              if (not !Clflags.debug) || provenance = None then None
+              else begin
+                match defining_expr with
+                | Expr (Var _) | Symbol _ | Const _
+                | Prim (Pmakeblock _, _, _) ->
+                  Some (defining_expr, Only_for_debugger)
+                | _ -> None
+              end
+            | None, (Keep_for_debugger | Only_for_debugger) ->
+              if !Clflags.debug && provenance <> None then
+                Some (defining_expr, Only_for_debugger)
+              else None
+          in
+          match defining_expr_and_state with
           | None -> acc, t
-          | Some defining_expr ->
+          | Some (defining_expr, state) ->
             let let_expr =
-              W.create_let_reusing_body var defining_expr t
+              W.create_let_reusing_body var defining_expr t ?provenance ~state
             in
             acc, W.of_expr let_expr)
         (acc, W.of_expr last_body)
@@ -902,11 +1029,11 @@ let fold_lets_option
   in
   let rec loop (t : t) ~acc ~rev_lets =
     match t with
-    | Let { var; defining_expr; body; _ } ->
+    | Let { var; defining_expr; body; provenance; state; _ } ->
       let acc, var, defining_expr =
         for_defining_expr acc var defining_expr
       in
-      let rev_lets = (var, defining_expr) :: rev_lets in
+      let rev_lets = (var, defining_expr, provenance, state) :: rev_lets in
       loop body ~acc ~rev_lets
     | t ->
       let last_body, acc = for_last_body acc t in
@@ -961,15 +1088,15 @@ let free_symbols_program (program : program) =
   let symbols = ref Symbol.Set.empty in
   let rec loop (program : program_body) =
     match program with
-    | Let_symbol (_, const, program) ->
+    | Let_symbol (_, _, const, program) ->
       free_symbols_allocated_constant_helper symbols const;
       loop program
     | Let_rec_symbol (defs, program) ->
-      List.iter (fun (_, const) ->
+      List.iter (fun (_, _, const) ->
           free_symbols_allocated_constant_helper symbols const)
         defs;
       loop program
-    | Initialize_symbol (_, _, fields, program) ->
+    | Initialize_symbol (_, _, _, fields, program) ->
       List.iter (fun field ->
           symbols := Symbol.Set.union !symbols (free_symbols field))
         fields;

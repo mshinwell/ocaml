@@ -290,7 +290,9 @@ let print_line b = function
   | Private_extern s -> bprintf b "\t.private_extern %s" s
   | Set (arg1, arg2) -> bprintf b "\t.set %s, %a" arg1 cst arg2
   | Size (s, c) -> bprintf b "\t.size %s,%a" s cst c
+  | Sleb128 c -> bprintf b "\t.sleb128 %a" cst c
   | Type (s, typ) -> bprintf b "\t.type %s,%s" s typ
+  | Uleb128 c -> bprintf b "\t.uleb128 %a" cst c
 
   (* masm only *)
   | External _

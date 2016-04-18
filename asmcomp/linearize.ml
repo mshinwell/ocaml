@@ -1,17 +1,14 @@
-(**************************************************************************)
-(*                                                                        *)
-(*                                 OCaml                                  *)
-(*                                                                        *)
-(*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
-(*                                                                        *)
-(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
-(*     en Automatique.                                                    *)
-(*                                                                        *)
-(*   All rights reserved.  This file is distributed under the terms of    *)
-(*   the GNU Lesser General Public License version 2.1, with the          *)
-(*   special exception on linking described in the file LICENSE.          *)
-(*                                                                        *)
-(**************************************************************************)
+(***********************************************************************)
+(*                                                                     *)
+(*                                OCaml                                *)
+(*                                                                     *)
+(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
+(*                                                                     *)
+(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
+(*  en Automatique.  All rights reserved.  This file is distributed    *)
+(*  under the terms of the Q Public License version 1.0.               *)
+(*                                                                     *)
+(***********************************************************************)
 
 (* Transformation of Mach code into a list of pseudo-instructions. *)
 
@@ -30,10 +27,13 @@ type instruction =
     arg: Reg.t array;
     res: Reg.t array;
     dbg: Debuginfo.t;
-    live: Reg.Set.t }
+    live: Reg.Set.t;
+    available_before: Reg.Set.t;
+  }
 
 and instruction_desc =
-    Lend
+  | Lprologue
+  | Lend
   | Lop of operation
   | Lreloadretaddr
   | Lreturn
@@ -46,17 +46,43 @@ and instruction_desc =
   | Lpushtrap
   | Lpoptrap
   | Lraise of Lambda.raise_kind
+  | Lavailable_subrange of int option ref
 
 let has_fallthrough = function
   | Lreturn | Lbranch _ | Lswitch _ | Lraise _
   | Lop Itailcall_ind | Lop (Itailcall_imm _) -> false
   | _ -> true
 
+(* Ranges of phantom let expressions, used for emitting debugging
+   information. *)
+
+type phantom_let_range =
+  { starting_label : label;
+    ending_label : label;
+    ident : Ident.t;
+    provenance : Clambda.ulet_provenance;
+    defining_expr : Clambda.uphantom_defining_expr;
+  }
+
+(* Indexed by the numeric identifiers on [Iphantom_let_start] and
+   [Iphantom_let_end]. *)
+let phantom_let_ranges_by_number = ref Numbers.Int.Map.empty
+(* Indexed by phantom identifiers. *)
+let phantom_let_ranges = ref (Ident.empty : phantom_let_range Ident.tbl)
+
+(* Function declarations *)
+
 type fundecl =
   { fun_name: string;
     fun_body: instruction;
     fun_fast: bool;
-    fun_dbg : Debuginfo.t }
+    fun_dbg : Debuginfo.t;
+    fun_human_name : string;
+    fun_env_var : Ident.t option;
+    fun_closure_layout : Ident.t list;
+    fun_module_path : Path.t option;
+    fun_phantom_let_ranges : phantom_let_range Ident.tbl
+  }
 
 (* Invert a test *)
 
@@ -81,27 +107,31 @@ let rec end_instr =
     arg = [||];
     res = [||];
     dbg = Debuginfo.none;
-    live = Reg.Set.empty }
+    live = Reg.Set.empty;
+    available_before = Reg.Set.empty; }
 
-(* Cons an instruction (live, debug empty) *)
+(* Cons an instruction (live, available_before, debug empty) *)
 
 let instr_cons d a r n =
   { desc = d; next = n; arg = a; res = r;
-    dbg = Debuginfo.none; live = Reg.Set.empty }
+    dbg = Debuginfo.none; live = Reg.Set.empty;
+    available_before = Reg.Set.empty; }
 
-(* Cons a simple instruction (arg, res, live empty) *)
+(* Cons a simple instruction (arg, res, live, available_before empty) *)
 
 let cons_instr d n =
   { desc = d; next = n; arg = [||]; res = [||];
-    dbg = Debuginfo.none; live = Reg.Set.empty }
+    dbg = Debuginfo.none; live = Reg.Set.empty;
+    available_before = Reg.Set.empty; }
 
-(* Build an instruction with arg, res, dbg, live taken from
+(* Build an instruction with arg, res, dbg, live, available_before taken from
    the given Mach.instruction *)
 
 let copy_instr d i n =
   { desc = d; next = n;
     arg = i.Mach.arg; res = i.Mach.res;
-    dbg = i.Mach.dbg; live = i.Mach.live }
+    dbg = i.Mach.dbg; live = i.Mach.live;
+    available_before = i.Mach.available_before; }
 
 (*
    Label the beginning of the given instruction sequence.
@@ -129,6 +159,7 @@ let rec discard_dead_code n =
   match n.desc with
     Lend -> n
   | Llabel _ -> n
+  | Lavailable_subrange _ -> n
 (* Do not discard Lpoptrap/Lpushtrap or Istackoffset instructions,
    as this may cause a stack imbalance later during assembler generation. *)
   | Lpoptrap | Lpushtrap -> n
@@ -288,13 +319,59 @@ let rec linear i n =
         (linear handler (add_branch lbl_join n2))
   | Iraise k ->
       copy_instr (Lraise k) i (discard_dead_code n)
+  | Iphantom_let_start (num, ident, provenance, defining_expr) ->
+      let starting_label = new_label () in
+      assert (not (Numbers.Int.Map.mem num !phantom_let_ranges_by_number));
+      phantom_let_ranges_by_number :=
+        Numbers.Int.Map.add num
+          (starting_label, ident, provenance, defining_expr)
+          !phantom_let_ranges_by_number;
+      cons_instr (Llabel starting_label) (linear i.Mach.next n)
+  | Iphantom_let_end num ->
+      begin match Numbers.Int.Map.find num !phantom_let_ranges_by_number with
+      | (starting_label, ident, provenance, defining_expr) ->
+          let ending_label = new_label () in
+          let phantom_let_range =
+            { starting_label;
+              ending_label;
+              ident;
+              provenance;
+              defining_expr;
+            }
+          in
+          assert (not (Ident.mem ident !phantom_let_ranges));
+          phantom_let_ranges :=
+            Ident.add ident phantom_let_range !phantom_let_ranges;
+          cons_instr (Llabel ending_label) (linear i.Mach.next n)
+      | exception Not_found -> assert false
+      end
 
 let reset () =
   label_counter := 99;
-  exit_label := []
+  exit_label := [];
+  phantom_let_ranges := Ident.empty;
+  phantom_let_ranges_by_number := Numbers.Int.Map.empty
+
+let add_prologue first_insn =
+  { desc = Lprologue;
+    next = first_insn;
+    arg = [| |];
+    res = [| |];
+    dbg = first_insn.dbg;
+    live = first_insn.live;
+    available_before = first_insn.available_before;
+  }
 
 let fundecl f =
+  let fun_body = add_prologue (linear f.Mach.fun_body end_instr) in
+  let fun_phantom_let_ranges = !phantom_let_ranges in
   { fun_name = f.Mach.fun_name;
-    fun_body = linear f.Mach.fun_body end_instr;
+    fun_body;
     fun_fast = f.Mach.fun_fast;
-    fun_dbg  = f.Mach.fun_dbg }
+    fun_dbg  = f.Mach.fun_dbg;
+    fun_human_name = f.Mach.fun_human_name;
+    fun_env_var = f.Mach.fun_env_var;
+    fun_closure_layout = f.Mach.fun_closure_layout;
+    fun_module_path = f.Mach.fun_module_path;
+    fun_phantom_let_ranges;
+  }

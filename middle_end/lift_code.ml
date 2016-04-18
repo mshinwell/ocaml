@@ -21,28 +21,24 @@ module C = Inlining_cost
 
 type lifter = Flambda.program -> Flambda.program
 
-let rebuild_let
-    (defs : (Variable.t * Flambda.named Flambda.With_free_variables.t) list)
-    (body : Flambda.t) =
+let rebuild_let defs body =
   let module W = Flambda.With_free_variables in
-  List.fold_left (fun body (var, def) ->
-      W.create_let_reusing_defining_expr var def body)
+  List.fold_left (fun body (var, def, provenance, state) ->
+      W.create_let_reusing_defining_expr var def body ?provenance ~state)
     body defs
 
-let rec extract_lets
-    (acc:(Variable.t * Flambda.named Flambda.With_free_variables.t) list)
-    (let_expr:Flambda.let_expr) :
-  (Variable.t * Flambda.named Flambda.With_free_variables.t) list *
-  Flambda.t Flambda.With_free_variables.t =
+let rec extract_lets acc (let_expr:Flambda.let_expr)  =
   let module W = Flambda.With_free_variables in
   match let_expr with
-  | { var = v1; defining_expr = Expr (Let let2); _ } ->
+  | { var = v1; defining_expr = Expr (Let let2); provenance; state; } ->
     let acc, body2 = extract_lets acc let2 in
-    let acc = (v1, W.expr body2) :: acc in
+    let acc = (v1, W.expr body2, provenance, state) :: acc in
     let body = W.of_body_of_let let_expr in
     extract acc body
-  | { var = v; _ } ->
-    let acc = (v, W.of_defining_expr_of_let let_expr) :: acc in
+  | { var = v; provenance; state; _ } ->
+    let acc =
+      (v, W.of_defining_expr_of_let let_expr, provenance, state) :: acc
+    in
     let body = W.of_body_of_let let_expr in
     extract acc body
 
@@ -70,23 +66,26 @@ let rec lift_lets_expr (expr:Flambda.t) ~toplevel : Flambda.t =
       (lift_lets_named ~toplevel)
       e
 
-and lift_lets_named_with_free_variables
-    ((var, named):Variable.t * Flambda.named Flambda.With_free_variables.t)
-      ~toplevel : Variable.t * Flambda.named Flambda.With_free_variables.t =
+(* CR mshinwell: check provenance stuff *)
+
+and lift_lets_named_with_free_variables (var, named, provenance, state)
+      ~toplevel : Variable.t * Flambda.named Flambda.With_free_variables.t
+        * Flambda.let_provenance option * Flambda.let_state =
   let module W = Flambda.With_free_variables in
-  match W.contents named with
+  match W.contents (named : Flambda.named W.t) with
   | Expr e ->
-    var, W.expr (W.of_expr (lift_lets_expr e ~toplevel))
+    var, W.expr (W.of_expr (lift_lets_expr e ~toplevel)), provenance, state
   | Set_of_closures set when not toplevel ->
     var,
     W.of_named
       (Set_of_closures
          (Flambda_iterators.map_function_bodies
-            ~f:(lift_lets_expr ~toplevel) set))
+            ~f:(lift_lets_expr ~toplevel) set)),
+    provenance, state
   | Symbol _ | Const _ | Allocated_const _ | Read_mutable _
   | Read_symbol_field (_, _) | Project_closure _ | Move_within_set_of_closures _
   | Project_var _ | Prim _ | Set_of_closures _ ->
-    var, named
+    var, named, provenance, state
 
 and lift_lets_named _var (named:Flambda.named) ~toplevel : Flambda.named =
   let module W = Flambda.With_free_variables in

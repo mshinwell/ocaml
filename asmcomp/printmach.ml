@@ -21,7 +21,7 @@ open Reg
 open Mach
 
 let reg ppf r =
-  if not (Reg.anonymous r) then
+  if not (Reg.is_temporary r) then
     fprintf ppf "%s" (Reg.name r)
   else
     fprintf ppf "%s"
@@ -189,6 +189,14 @@ let rec instr ppf i =
              instr body instr handler
   | Iraise k ->
       fprintf ppf "%s %a" (Lambda.raise_kind k) reg i.arg.(0)
+  | Iphantom_let_start (label, ident, provenance, defining_expr) ->
+      fprintf ppf "phantom_let_start %d = %a %a %a"
+        label
+        Ident.print ident
+        Printclambda.let_provenance provenance
+        Printclambda.phantom_defining_expr defining_expr
+  | Iphantom_let_end label ->
+      fprintf ppf "phantom_let_end %d" label
   end;
   if not (Debuginfo.is_none i.dbg) then
     fprintf ppf "%s" (Debuginfo.to_string i.dbg);

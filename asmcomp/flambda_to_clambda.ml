@@ -249,15 +249,63 @@ let erase_empty_debuginfo (dbg : Debuginfo.t) =
 let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
   match flam with
   | Var var -> subst_var env var
-  | Let { var; defining_expr; body; _ } ->
+  | Let { var; defining_expr; body; state; provenance; _ } ->
     (* TODO: synthesize proper value_kind *)
     let id, env_body = Env.add_fresh_ident env var in
-    Ulet (Immutable, Pgenval, id, to_clambda_named t env var defining_expr,
-      to_clambda t env_body body)
+    begin match state with
+    | Normal | Keep_for_debugger ->
+      let provenance =
+        match provenance with
+        | None -> None
+        | Some provenance ->
+          let provenance : Clambda.ulet_provenance =
+            { module_path = provenance.module_path;
+              location = provenance.location;
+            }
+          in
+          Some provenance
+      in
+      Ulet (Immutable, Pgenval, provenance, id,
+        to_clambda_named t env var defining_expr,
+        to_clambda t env_body body)
+    | Only_for_debugger ->
+      match provenance with
+      | None -> to_clambda t env body
+      | Some provenance ->
+        let provenance : Clambda.ulet_provenance =
+          { module_path = provenance.module_path;
+            location = provenance.location;
+          }
+        in
+        let defining_expr =
+          match defining_expr with
+          | Const (Const_pointer n) ->
+            Some (Clambda.Uphantom_const (Uconst_ptr n))
+          | Const (Int n) -> Some (Clambda.Uphantom_const (Uconst_int n))
+          | Const (Char c) ->
+            Some (Clambda.Uphantom_const (Uconst_int (Char.code c)))
+          | Symbol symbol ->
+            Some (Clambda.Uphantom_const (to_clambda_symbol' env symbol))
+          (* CR mshinwell: fill in these cases. *)
+          | Expr (Var _)
+          | Prim (Pmakeblock _, _, _) -> None
+          | _ ->
+            Misc.fatal_errorf "Flambda_to_clambda.to_clambda: illegal \
+                defining expression for [Let] marked as \
+                [Only_for_debugger]: %a"
+              Flambda.print flam
+        in
+        match defining_expr with
+        | None -> to_clambda t env body
+        | Some defining_expr ->
+          (* CR mshinwell: maybe "id" should actually just be a string *)
+          Uphantom_let (provenance, id, defining_expr,
+            to_clambda t env body)
+    end
   | Let_mutable { var = mut_var; initial_value = var; body; contents_kind } ->
     let id, env_body = Env.add_fresh_mutable_ident env mut_var in
     let def = subst_var env var in
-    Ulet (Mutable, contents_kind, id, def, to_clambda t env_body body)
+    Ulet (Mutable, contents_kind, None, id, def, to_clambda t env_body body)
   | Let_rec (defs, body) ->
     let env, defs =
       List.fold_right (fun (var, def) (env, defs) ->
@@ -266,7 +314,9 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
         defs (env, [])
     in
     let defs =
-      List.map (fun (id, var, def) -> id, to_clambda_named t env var def) defs
+      List.map (fun (id, var, def) ->
+          None, id, to_clambda_named t env var def)
+        defs
     in
     Uletrec (defs, to_clambda t env body)
   | Apply { func; args; kind = Direct direct_func; dbg = dbg } ->
@@ -490,6 +540,10 @@ and to_clambda_set_of_closures t env
     let fun_offset =
       Closure_id.Map.find closure_id t.current_unit.fun_offset_table
     in
+    let closure_offsets = ref [] in
+    let note_closure_offset ~var ~pos =
+      closure_offsets := (var, pos) :: !closure_offsets
+    in
     let env =
       (* Inside the body of the function, we cannot access variables
          declared outside, so start with a suitably clean environment.
@@ -498,19 +552,20 @@ and to_clambda_set_of_closures t env
       let env = Env.keep_only_symbols env in
       (* Add the Clambda expressions for the free variables of the function
          to the environment. *)
-      let add_env_free_variable id _ env =
+      let add_env_free_variable var _ env =
         let var_offset =
           try
             Var_within_closure.Map.find
-              (Var_within_closure.wrap id) t.current_unit.fv_offset_table
+              (Var_within_closure.wrap var) t.current_unit.fv_offset_table
           with Not_found ->
             Misc.fatal_errorf "Clambda.to_clambda_set_of_closures: offset for \
                 free variable %a is unknown.  Set of closures: %a"
-              Variable.print id
+              Variable.print var
               Flambda.print_set_of_closures set_of_closures
         in
         let pos = var_offset - fun_offset in
-        Env.add_subst env id
+        note_closure_offset ~var ~pos;
+        Env.add_subst env var
           (Uprim (Pfield pos, [Clambda.Uvar env_var], Debuginfo.none))
       in
       let env = Variable.Map.fold add_env_free_variable free_vars env in
@@ -534,11 +589,24 @@ and to_clambda_set_of_closures t env
           env, id :: params)
         function_decl.params (env, [])
     in
+    let closure_layout =
+      let closure_offsets =
+        List.sort (fun (_var, pos) (_var', pos') ->
+            Pervasives.compare pos pos')
+          !closure_offsets
+      in
+      List.map (fun (var, _pos) -> Ident.create (Variable.base_name var))
+        closure_offsets
+    in
     { label = Compilenv.function_label closure_id;
       arity = Flambda_utils.function_arity function_decl;
       params = params @ [env_var];
       body = to_clambda t env_body function_decl.body;
       dbg = function_decl.dbg;
+      human_name = Closure_id.base_name closure_id;
+      env_var = Some env_var;
+      closure_layout;
+      module_path = None;
     }
   in
   let funs = List.map to_clambda_function all_functions in
@@ -549,11 +617,12 @@ and to_clambda_set_of_closures t env
   in
   Uclosure (funs, List.map snd free_vars)
 
-and to_clambda_closed_set_of_closures t env symbol
+and to_clambda_closed_set_of_closures t env symbol ~module_path
       ({ function_decls; } : Flambda.set_of_closures)
       : Clambda.ustructured_constant =
   let functions = Variable.Map.bindings function_decls.funs in
-  let to_clambda_function (id, (function_decl : Flambda.function_declaration))
+  let to_clambda_function (closure_id,
+        (function_decl : Flambda.function_declaration))
         : Clambda.ufunction =
     (* All that we need in the environment, for translating one closure from
        a closed set of closures, is the substitutions for variables bound to
@@ -573,11 +642,16 @@ and to_clambda_closed_set_of_closures t env symbol
           env, id :: params)
         function_decl.params (env, [])
     in
-    { label = Compilenv.function_label (Closure_id.wrap id);
+    let closure_id = Closure_id.wrap closure_id in
+    { label = Compilenv.function_label closure_id;
       arity = Flambda_utils.function_arity function_decl;
       params;
       body = to_clambda t env_body function_decl.body;
       dbg = function_decl.dbg;
+      human_name = Closure_id.base_name closure_id;
+      env_var = None;
+      closure_layout = [];
+      module_path;
     }
   in
   let ufunct = List.map to_clambda_function functions in
@@ -603,25 +677,45 @@ let to_clambda_initialize_symbol t env symbol fields : Clambda.ulambda =
       (build_setfield h) t
 
 let accumulate_structured_constants t env symbol
+      (provenance : Flambda.symbol_provenance option)
       (c : Flambda.constant_defining_value) acc =
+  let provenance =
+    match provenance with
+    | None -> None
+    | Some provenance ->
+      let provenance' : Clambda.usymbol_provenance =
+        { module_path = provenance.module_path;
+        }
+      in
+      Some provenance'
+  in
   match c with
   | Allocated_const c ->
-    Symbol.Map.add symbol (to_clambda_allocated_constant c) acc
+    Symbol.Map.add symbol (to_clambda_allocated_constant c, provenance) acc
   | Block (tag, fields) ->
     let fields = List.map (to_clambda_const env) fields in
-    Symbol.Map.add symbol (Clambda.Uconst_block (Tag.to_int tag, fields)) acc
+    Symbol.Map.add symbol
+      (Clambda.Uconst_block (Tag.to_int tag, fields), provenance)
+      acc
   | Set_of_closures set_of_closures ->
-    let to_clambda_set_of_closures =
-      to_clambda_closed_set_of_closures t env symbol set_of_closures
+    let set_of_closures =
+      let module_path =
+        match provenance with
+        | None -> None
+        | Some provenance -> Some provenance.module_path
+      in
+      to_clambda_closed_set_of_closures t env symbol
+        ~module_path set_of_closures
     in
-    Symbol.Map.add symbol to_clambda_set_of_closures acc
+    Symbol.Map.add symbol (set_of_closures, provenance) acc
   | Project_closure _ -> acc
 
 let to_clambda_program t env constants (program : Flambda.program) =
   let rec loop env constants (program : Flambda.program_body)
-        : Clambda.ulambda * Clambda.ustructured_constant Symbol.Map.t =
+        : Clambda.ulambda * (Clambda.ustructured_constant
+            * (Clambda.usymbol_provenance option)) Symbol.Map.t =
     match program with
-    | Let_symbol (symbol, alloc, program) ->
+    | Let_symbol (symbol, provenance, alloc, program) ->
       (* Useful only for unboxing. Since floats and boxed integers will
          never be part of a Let_rec_symbol, handling only the Let_symbol
          is sufficient. *)
@@ -631,17 +725,19 @@ let to_clambda_program t env constants (program : Flambda.program) =
         | _ -> env
       in
       let constants =
-        accumulate_structured_constants t env symbol alloc constants
+        accumulate_structured_constants t env symbol provenance alloc
+          constants
       in
       loop env constants program
     | Let_rec_symbol (defs, program) ->
       let constants =
-        List.fold_left (fun constants (symbol, alloc) ->
-            accumulate_structured_constants t env symbol alloc constants)
+        List.fold_left (fun constants (symbol, provenance, alloc) ->
+            accumulate_structured_constants t env symbol provenance alloc
+              constants)
           constants defs
       in
       loop env constants program
-    | Initialize_symbol (symbol, _tag, fields, program) ->
+    | Initialize_symbol (symbol, _provenance, _tag, fields, program) ->
       (* The tag is ignored here: It is used separately to generate the
          preallocated block. Only the initialisation code is generated
          here. *)
@@ -660,7 +756,9 @@ let to_clambda_program t env constants (program : Flambda.program) =
 type result = {
   expr : Clambda.ulambda;
   preallocated_blocks : Clambda.preallocated_block list;
-  structured_constants : Clambda.ustructured_constant Symbol.Map.t;
+  structured_constants :
+    (Clambda.ustructured_constant * (Clambda.usymbol_provenance option))
+      Symbol.Map.t;
   exported : Export_info.t;
 }
 

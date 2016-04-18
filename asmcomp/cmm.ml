@@ -148,6 +148,8 @@ type expression =
   | Cconst_blockheader of nativeint
   | Cvar of Ident.t
   | Clet of Ident.t * expression * expression
+  | Cphantom_let of Ident.t * Clambda.ulet_provenance
+      * Clambda.uphantom_defining_expr * expression
   | Cassign of Ident.t * expression
   | Ctuple of expression list
   | Cop of operation * expression list
@@ -164,7 +166,12 @@ type fundecl =
     fun_args: (Ident.t * machtype) list;
     fun_body: expression;
     fun_fast: bool;
-    fun_dbg : Debuginfo.t; }
+    fun_dbg : Debuginfo.t;
+    fun_human_name : string;
+    fun_env_var : Ident.t option;
+    fun_closure_layout : Ident.t list;
+    fun_module_path : Path.t option;
+  }
 
 type data_item =
     Cdefine_symbol of string

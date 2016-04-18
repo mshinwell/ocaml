@@ -45,7 +45,7 @@ let let_rec_dep defs dep =
       dep l
   in
   let defs_deps =
-    List.map (fun (sym, def) -> sym, constant_dependencies def) defs
+    List.map (fun (sym, _, def) -> sym, constant_dependencies def) defs
   in
   let rec fixpoint dep =
     let new_dep = add_deps defs_deps dep in
@@ -57,21 +57,21 @@ let let_rec_dep defs dep =
 let rec loop (program : Flambda.program_body)
       : Flambda.program_body * Symbol.Set.t =
   match program with
-  | Let_symbol (sym, def, program) ->
+  | Let_symbol (sym, provenance, def, program) ->
     let program, dep = loop program in
     if Symbol.Set.mem sym dep then
-      Let_symbol (sym, def, program),
-      Symbol.Set.union dep (constant_dependencies def)
+      Let_symbol (sym, provenance, def, program),
+        Symbol.Set.union dep (constant_dependencies def)
     else
       program, dep
   | Let_rec_symbol (defs, program) ->
     let program, dep = loop program in
     let dep = let_rec_dep defs dep in
     let defs =
-      List.filter (fun (sym, _) -> Symbol.Set.mem sym dep) defs
+      List.filter (fun (sym, _, _) -> Symbol.Set.mem sym dep) defs
     in
     Let_rec_symbol (defs, program), dep
-  | Initialize_symbol (sym, tag, fields, program) ->
+  | Initialize_symbol (sym, provenance, tag, fields, program) ->
     let program, dep = loop program in
     if Symbol.Set.mem sym dep then
       let dep =
@@ -79,7 +79,7 @@ let rec loop (program : Flambda.program_body)
             Symbol.Set.union dep (dependency field))
           dep fields
       in
-      Initialize_symbol (sym, tag, fields, program), dep
+      Initialize_symbol (sym, provenance, tag, fields, program), dep
     else begin
       List.fold_left
         (fun (program, dep) field ->

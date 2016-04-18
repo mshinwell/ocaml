@@ -443,13 +443,13 @@ let describe_constant_defining_value env export_id symbol
 let describe_program (env : Env.Global.t) (program : Flambda.program) =
   let rec loop env (program : Flambda.program_body) =
     match program with
-    | Let_symbol (symbol, constant_defining_value, program) ->
+    | Let_symbol (symbol, _provenance, constant_defining_value, program) ->
       let id, env = Env.Global.new_symbol env symbol in
       describe_constant_defining_value env id symbol constant_defining_value;
       loop env program
     | Let_rec_symbol (defs, program) ->
       let env, defs =
-        List.fold_left (fun (env, defs) (symbol, def) ->
+        List.fold_left (fun (env, defs) (symbol, _provenance, def) ->
             let id, env = Env.Global.new_symbol env symbol in
             env, ((id, symbol, def) :: defs))
           (env, []) defs
@@ -469,7 +469,7 @@ let describe_program (env : Env.Global.t) (program : Flambda.program) =
           describe_constant_defining_value env id symbol def)
         project_closures;
       loop env program
-    | Initialize_symbol (symbol, tag, fields, program) ->
+    | Initialize_symbol (symbol, _provenance, tag, fields, program) ->
       let id =
         let env =
           (* Assignments of variables to export IDs are local to each

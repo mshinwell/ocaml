@@ -1,17 +1,14 @@
-(**************************************************************************)
-(*                                                                        *)
-(*                                 OCaml                                  *)
-(*                                                                        *)
-(*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
-(*                                                                        *)
-(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
-(*     en Automatique.                                                    *)
-(*                                                                        *)
-(*   All rights reserved.  This file is distributed under the terms of    *)
-(*   the GNU Lesser General Public License version 2.1, with the          *)
-(*   special exception on linking described in the file LICENSE.          *)
-(*                                                                        *)
-(**************************************************************************)
+(***********************************************************************)
+(*                                                                     *)
+(*                                OCaml                                *)
+(*                                                                     *)
+(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
+(*                                                                     *)
+(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
+(*  en Automatique.  All rights reserved.  This file is distributed    *)
+(*  under the terms of the Q Public License version 1.0.               *)
+(*                                                                     *)
+(***********************************************************************)
 
 (* Transformation of Mach code into a list of pseudo-instructions. *)
 
@@ -24,10 +21,16 @@ type instruction =
     arg: Reg.t array;
     res: Reg.t array;
     dbg: Debuginfo.t;
-    live: Reg.Set.t }
+    live: Reg.Set.t;
+    available_before: Reg.Set.t;
+  }
 
 and instruction_desc =
-    Lend
+  | Lprologue
+  (** [Lprologue] enables instructions (specifically, labels) to be inserted
+      before the function prologue.  This is used for emission of DWARF
+      information. *)
+  | Lend
   | Lop of Mach.operation
   | Lreloadretaddr
   | Lreturn
@@ -40,6 +43,14 @@ and instruction_desc =
   | Lpushtrap
   | Lpoptrap
   | Lraise of Lambda.raise_kind
+  | Lavailable_subrange of int option ref
+  (** [Lavailable_subrange] denotes the start of an available subrange (cf.
+      available_ranges.mli).  The associated register is stored in [arg.(0)] of
+      the instruction.  The optional integer must be filled in by the assembly
+      emitter in the case where that register is assigned to the stack; the
+      integer denotes the byte offset from the stack pointer of the register's
+      slot at the start of the subrange (and hence at all points during, since
+      the stack pointer may not change during a subrange). *)
 
 val has_fallthrough :  instruction_desc -> bool
 val end_instr: instruction
@@ -47,11 +58,25 @@ val instr_cons:
   instruction_desc -> Reg.t array -> Reg.t array -> instruction -> instruction
 val invert_test: Mach.test -> Mach.test
 
+type phantom_let_range =
+  { starting_label : label;
+    ending_label : label;
+    ident : Ident.t;
+    provenance : Clambda.ulet_provenance;
+    defining_expr : Clambda.uphantom_defining_expr;
+  }
+
 type fundecl =
   { fun_name: string;
     fun_body: instruction;
     fun_fast: bool;
-    fun_dbg : Debuginfo.t }
+    fun_dbg : Debuginfo.t;
+    fun_human_name : string;
+    fun_env_var : Ident.t option;
+    fun_closure_layout : Ident.t list;
+    fun_module_path : Path.t option;
+    fun_phantom_let_ranges : phantom_let_range Ident.tbl
+  }
 
 val reset : unit -> unit
 val fundecl: Mach.fundecl -> fundecl

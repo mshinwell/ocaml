@@ -695,7 +695,7 @@ let rec expr_size env = function
       begin try Ident.find_same id env with Not_found -> RHS_nonrec end
   | Uclosure(fundecls, clos_vars) ->
       RHS_block (fundecls_size fundecls + List.length clos_vars)
-  | Ulet(_str, _kind, id, exp, body) ->
+  | Ulet(_str, _kind, _provenance, id, exp, body) ->
       expr_size (Ident.add id (expr_size env exp) env) body
   | Uletrec(_bindings, body) ->
       expr_size env body
@@ -1403,7 +1403,7 @@ let rec is_unboxed_number ~strict env e =
         | Praise _ -> No_result
         | _ -> No_unboxing
       end
-  | Ulet (_, _, _, _, e) | Uletrec (_, e) | Usequence (_, e) ->
+  | Ulet (_, _, _, _, _, e) | Uletrec (_, e) | Usequence (_, e) ->
       is_unboxed_number ~strict env e
   | Uswitch (_, switch) ->
       let k = Array.fold_left join No_result switch.us_actions_consts in
@@ -1507,8 +1507,10 @@ let rec transl env e =
               (List.map (transl env) args) dbg
         | _ ->
             bind "met" (lookup_tag obj (transl env met)) (call_met obj args))
-  | Ulet(str, kind, id, exp, body) ->
+  | Ulet(str, kind, _provenance, id, exp, body) ->
       transl_let env str kind id exp body
+  | Uphantom_let (provenance, ident, defining_expr, body) ->
+      Cphantom_let (ident, provenance, defining_expr, transl env body)
   | Uletrec(bindings, body) ->
       transl_letrec env bindings (transl env body)
 
@@ -2440,7 +2442,9 @@ and transl_switch env arg index cases = match Array.length cases with
 
 and transl_letrec env bindings cont =
   let bsz =
-    List.map (fun (id, exp) -> (id, exp, expr_size Ident.empty exp)) bindings in
+    List.map (fun (_, id, exp) -> (id, exp, expr_size Ident.empty exp))
+      bindings
+  in
   let op_alloc prim sz =
     Cop(Cextcall(prim, typ_val, true, Debuginfo.none), [int_const sz]) in
   let rec init_blocks = function
@@ -2481,7 +2485,11 @@ let transl_function f =
              fun_args = List.map (fun id -> (id, typ_val)) f.params;
              fun_body = transl empty_env body;
              fun_fast = !Clflags.optimize_for_speed;
-             fun_dbg  = f.dbg; }
+             fun_dbg  = f.dbg;
+             fun_human_name = f.human_name;
+             fun_env_var = f.env_var;
+             fun_closure_layout = f.closure_layout;
+             fun_module_path = f.module_path}
 
 (* Translate all function definitions *)
 
@@ -2633,7 +2641,7 @@ let emit_constant_closure ((_, global_symb) as symb) fundecls clos_vars cont =
 let emit_constants cont (constants:Clambda.preallocated_constant list) =
   let c = ref cont in
   List.iter
-    (fun { symbol = lbl; exported; definition = cst } ->
+    (fun { symbol = lbl; exported; provenance = _; definition = cst } ->
        let global = if exported then Global else Not_global in
        let cst = emit_structured_constant (lbl, global) cst [] in
          c:= Cdata(cst):: !c)
@@ -2705,12 +2713,17 @@ let emit_preallocated_blocks preallocated_blocks cont =
 
 (* Translate a compilation unit *)
 
-let compunit (ulam, preallocated_blocks, constants) =
+let compunit ~unit_name (ulam, preallocated_blocks, constants) =
   let init_code = transl empty_env ulam in
+  let module_path = Path.Pident unit_name in
   let c1 = [Cfunction {fun_name = Compilenv.make_symbol (Some "entry");
                        fun_args = [];
                        fun_body = init_code; fun_fast = false;
-                       fun_dbg  = Debuginfo.none }] in
+                       fun_dbg  = Debuginfo.none;
+                       fun_human_name = "entry";
+                       fun_env_var = None;
+                       fun_closure_layout = [];
+                       fun_module_path = Some module_path }] in
   let c2 = emit_constants c1 constants in
   let c3 = transl_all_functions_and_emit_all_constants c2 in
   emit_preallocated_blocks preallocated_blocks c3
@@ -2801,6 +2814,10 @@ let apply_function_body arity =
        get_field (Cvar clos) 2 :: List.map (fun s -> Cvar s) all_args),
    app_fun clos 0))
 
+(* CR-soon mshinwell: this path should really be empty *)
+let startup_path =
+  Some (Path.Pident (Ident.create_persistent "_Ocaml_startup"))
+
 let send_function arity =
   let (args, clos', body) = apply_function_body (1+arity) in
   let cache = Ident.create "cache"
@@ -2832,22 +2849,34 @@ let send_function arity =
   let fun_args =
     [obj, typ_val; tag, typ_int; cache, typ_val]
     @ List.map (fun id -> (id, typ_val)) (List.tl args) in
+  let fun_name = "caml_send" ^ string_of_int arity in
   Cfunction
-   {fun_name = "caml_send" ^ string_of_int arity;
+   {fun_name;
     fun_args = fun_args;
     fun_body = body;
     fun_fast = true;
-    fun_dbg  = Debuginfo.none }
+    fun_dbg  = Debuginfo.none;
+    fun_human_name = fun_name;
+    fun_env_var = None;
+    fun_closure_layout = [];
+    fun_module_path = startup_path;
+   }
 
 let apply_function arity =
   let (args, clos, body) = apply_function_body arity in
   let all_args = args @ [clos] in
+  let fun_name = "caml_apply" ^ string_of_int arity in
   Cfunction
-   {fun_name = "caml_apply" ^ string_of_int arity;
+   {fun_name;
     fun_args = List.map (fun id -> (id, typ_val)) all_args;
     fun_body = body;
     fun_fast = true;
-    fun_dbg  = Debuginfo.none }
+    fun_dbg  = Debuginfo.none;
+    fun_human_name = fun_name;
+    fun_env_var = None;
+    fun_closure_layout = [];
+    fun_module_path = startup_path;
+   }
 
 (* Generate tuplifying functions:
       (defun caml_tuplifyN (arg clos)
@@ -2860,14 +2889,20 @@ let tuplify_function arity =
     if i >= arity
     then []
     else get_field (Cvar arg) i :: access_components(i+1) in
+  let fun_name = "caml_tuplify" ^ string_of_int arity in
   Cfunction
-   {fun_name = "caml_tuplify" ^ string_of_int arity;
+   {fun_name;
     fun_args = [arg, typ_val; clos, typ_val];
     fun_body =
       Cop(Capply(typ_val, Debuginfo.none),
           get_field (Cvar clos) 2 :: access_components 0 @ [Cvar clos]);
     fun_fast = true;
-    fun_dbg  = Debuginfo.none }
+    fun_dbg  = Debuginfo.none;
+    fun_human_name = fun_name;
+    fun_env_var = None;
+    fun_closure_layout = [];
+    fun_module_path = startup_path;
+   }
 
 (* Generate currying functions:
       (defun caml_curryN (arg clos)
@@ -2920,13 +2955,20 @@ let final_curry_function arity =
                get_field (Cvar clos) 4,
                curry_fun (get_field (Cvar clos) 3 :: args) newclos (n-1))
     end in
+  let fun_name =
+    "caml_curry" ^ string_of_int arity ^ "_" ^ string_of_int (arity-1)
+  in
   Cfunction
-   {fun_name = "caml_curry" ^ string_of_int arity ^
-               "_" ^ string_of_int (arity-1);
+   {fun_name;
     fun_args = [last_arg, typ_val; last_clos, typ_val];
     fun_body = curry_fun [] last_clos (arity-1);
     fun_fast = true;
-    fun_dbg  = Debuginfo.none }
+    fun_dbg  = Debuginfo.none;
+    fun_human_name = fun_name;
+    fun_env_var = None;
+    fun_closure_layout = [];
+    fun_module_path = startup_path;
+   }
 
 let rec intermediate_curry_functions arity num =
   if num = arity - 1 then
@@ -2952,7 +2994,12 @@ let rec intermediate_curry_functions arity num =
                       Cconst_symbol(name1 ^ "_" ^ string_of_int (num+1));
                       int_const 1; Cvar arg; Cvar clos]);
       fun_fast = true;
-      fun_dbg  = Debuginfo.none }
+      fun_dbg  = Debuginfo.none;
+      fun_human_name = name2;
+      fun_env_var = None;
+      fun_closure_layout = [];
+      fun_module_path = startup_path;
+     }
     ::
       (if arity <= max_arity_optimized && arity - num > 2 then
           let rec iter i =
@@ -2972,14 +3019,20 @@ let rec intermediate_curry_functions arity num =
                    get_field (Cvar clos) 4,
                    iter (i-1) (get_field (Cvar clos) 3 :: args) newclos)
           in
+          let fun_name = name1 ^ "_" ^ string_of_int (num+1) ^ "_app" in
           let cf =
             Cfunction
-              {fun_name = name1 ^ "_" ^ string_of_int (num+1) ^ "_app";
+              {fun_name;
                fun_args = direct_args @ [clos, typ_val];
                fun_body = iter (num+1)
                   (List.map (fun (arg,_) -> Cvar arg) direct_args) clos;
                fun_fast = true;
-               fun_dbg = Debuginfo.none }
+               fun_dbg  = Debuginfo.none;
+               fun_human_name = fun_name;
+               fun_env_var = None;
+               fun_closure_layout = [];
+               fun_module_path = startup_path;
+              }
           in
           cf :: intermediate_curry_functions arity (num+1)
        else
@@ -3038,7 +3091,12 @@ let entry_point namelist =
              fun_args = [];
              fun_body = body;
              fun_fast = false;
-             fun_dbg  = Debuginfo.none }
+             fun_dbg  = Debuginfo.none;
+             fun_human_name = "caml_program";
+             fun_env_var = None;
+             fun_closure_layout = [];
+             fun_module_path = startup_path;
+            }
 
 (* Generate the table of globals *)
 

@@ -121,13 +121,20 @@ method private reload i =
   | Itrywith(body, handler) ->
       instr_cons (Itrywith(self#reload body, self#reload handler)) [||] [||]
         (self#reload i.next)
+  | Iphantom_let_start _ | Iphantom_let_end _ ->
+      {i with next = self#reload i.next}
 
 method fundecl f =
   redo_regalloc <- false;
   let new_body = self#reload f.fun_body in
   ({fun_name = f.fun_name; fun_args = f.fun_args;
     fun_body = new_body; fun_fast = f.fun_fast;
-    fun_dbg  = f.fun_dbg},
+    fun_dbg  = f.fun_dbg;
+    fun_env_var = f.fun_env_var;
+    fun_human_name = f.fun_human_name;
+    fun_closure_layout = f.fun_closure_layout;
+    fun_module_path = f.fun_module_path;
+   },
    redo_regalloc)
 
 end

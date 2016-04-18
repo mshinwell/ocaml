@@ -118,6 +118,25 @@ let rec expr ppf = function
      fprintf ppf
       "@[<2>(let@ @[<2>%a@ %a@]@ %a)@]"
       Ident.print id expr def sequence body
+  | Cphantom_let(id, provenance, def, (Cphantom_let(_, _, _, _) as body)) ->
+      let print_binding id provenance ppf def =
+        fprintf ppf "@[<2>%a(%a)@ %a@]" Ident.print id
+          Printclambda.let_provenance provenance
+          Printclambda.phantom_defining_expr def
+      in
+      let rec in_part ppf = function
+        | Cphantom_let(id, provenance, def, body) ->
+            fprintf ppf "@ %a" (print_binding id provenance) def;
+            in_part ppf body
+        | exp -> exp in
+      fprintf ppf "@[<2>(let@ @[<1>(%a" (print_binding id provenance) def;
+      let exp = in_part ppf body in
+      fprintf ppf ")@]@ %a)@]" sequence exp
+  | Cphantom_let(id, provenance, def, body) ->
+     fprintf ppf
+      "@[<2>(let@ @[<2>%a(%a)@ %a@]@ %a)@]"
+      Ident.print id Printclambda.let_provenance provenance
+      Printclambda.phantom_defining_expr def sequence body
   | Cassign(id, exp) ->
       fprintf ppf "@[<2>(assign @[<2>%a@ %a@])@]" Ident.print id expr exp
   | Ctuple el ->

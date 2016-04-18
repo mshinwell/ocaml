@@ -65,6 +65,11 @@ let instr ppf i =
       fprintf ppf "pop trap"
   | Lraise k ->
       fprintf ppf "%s %a" (Lambda.raise_kind k) reg i.arg.(0)
+  | Lprologue ->
+      fprintf ppf "prologue"
+  | Lavailable_subrange _ ->
+      (* CR mshinwell: add more detail *)
+      fprintf ppf "available subrange"
   end;
   if not (Debuginfo.is_none i.dbg) then
     fprintf ppf " %s" (Debuginfo.to_string i.dbg)

@@ -47,7 +47,7 @@ let flambda_raw_clambda_dump_if ppf
     begin
       Format.fprintf ppf "@.clambda (before Un_anf):@.";
       Printclambda.clambda ppf ulambda;
-      Symbol.Map.iter (fun sym cst ->
+      Symbol.Map.iter (fun sym (cst, _provenance) ->
           Format.fprintf ppf "%a:@ %a@."
             Symbol.print sym
             Printclambda.structured_constant cst)
@@ -91,9 +91,33 @@ let rec regalloc ppf round fd =
     Reg.reinit(); Liveness.fundecl ppf newfd; regalloc ppf (round + 1) newfd
   end else newfd
 
+let available_ranges _ppf fundecl =
+  if not !Clflags.debug then fundecl
+  else begin
+    (* CR mshinwell: add -d... *)
+(*     dump_if ppf dump_regalloc "After register allocation" fd; *)
+    Available_regs.fundecl fundecl
+  end
+
+let emit ppf fundecl ~dwarf =
+  let available_ranges, fundecl =
+    Available_ranges.create ~fundecl
+      ~phantom_ranges:fundecl.Linearize.fun_phantom_let_ranges
+  in
+  if !Clflags.dump_linear then begin
+    Format.fprintf ppf "*** %s@.%a@." "Available subranges"
+      Printlinear.fundecl fundecl
+  end;
+  let emit_info = Emit.fundecl fundecl in
+  match dwarf with
+  | None -> ()
+  | Some dwarf ->
+    Dwarf.dwarf_for_function_definition dwarf ~fundecl
+      ~available_ranges ~emit_info
+
 let (++) x f = f x
 
-let compile_fundecl (ppf : formatter) fd_cmm =
+let compile_fundecl (ppf : formatter) ~dwarf fd_cmm =
   Proc.init ();
   Reg.reset();
   let build = Compilenv.current_build () in
@@ -114,26 +138,27 @@ let compile_fundecl (ppf : formatter) fd_cmm =
   ++ pass_dump_if ppf dump_split "After live range splitting"
   ++ Timings.(accumulate_time (Liveness build)) (liveness ppf)
   ++ Timings.(accumulate_time (Regalloc build)) (regalloc ppf 1)
+  ++ Timings.(accumulate_time (Available_regs build)) (available_ranges ppf)
   ++ Timings.(accumulate_time (Linearize build)) Linearize.fundecl
   ++ pass_dump_linear_if ppf dump_linear "Linearized code"
   ++ Timings.(accumulate_time (Scheduling build)) Scheduling.fundecl
   ++ pass_dump_linear_if ppf dump_scheduling "After instruction scheduling"
-  ++ Timings.(accumulate_time (Emit build)) Emit.fundecl
+  ++ Timings.(accumulate_time (Emit build)) (emit ppf ~dwarf)
 
-let compile_phrase ppf p =
+let compile_phrase ppf ~dwarf p =
   if !dump_cmm then fprintf ppf "%a@." Printcmm.phrase p;
   match p with
-  | Cfunction fd -> compile_fundecl ppf fd
+  | Cfunction fd -> compile_fundecl ppf ~dwarf fd
   | Cdata dl -> Emit.data dl
 
 
 (* For the native toplevel: generates generic functions unless
    they are already available in the process *)
-let compile_genfuns ppf f =
+let compile_genfuns ppf ~dwarf f =
   List.iter
     (function
        | (Cfunction {fun_name = name}) as ph when f name ->
-           compile_phrase ppf ph
+           compile_phrase ppf ~dwarf ph
        | _ -> ())
     (Cmmgen.generic_functions true [Compilenv.current_unit_infos ()])
 
@@ -169,12 +194,25 @@ let set_export_info (ulambda, prealloc, structured_constants, export) =
 let end_gen_implementation ?toplevel ~source_provenance ppf
     (clambda:clambda_and_constants) =
   Emit.begin_assembly ();
+  let dwarf =
+    if not !Clflags.debug then None
+    else Some (Dwarf.create ~source_provenance)
+  in
+  let unit_name =
+    (* CR mshinwell: find out how to fix this properly *)
+    try
+      Compilation_unit.get_persistent_ident
+        (Compilation_unit.get_current_exn ())
+    with _exn ->
+      Ident.create_persistent "(unknown)"
+  in
   clambda
-  ++ Timings.(time (Cmm source_provenance)) Cmmgen.compunit
+  ++ Timings.(time (Cmm source_provenance))
+       (Cmmgen.compunit ~unit_name)
   ++ Timings.(time (Compile_phrases source_provenance))
-       (List.iter (compile_phrase ppf))
+       (List.iter (compile_phrase ~dwarf ppf))
   ++ (fun () -> ());
-  (match toplevel with None -> () | Some f -> compile_genfuns ppf f);
+  (match toplevel with None -> () | Some f -> compile_genfuns ppf ~dwarf f);
 
   (* We add explicit references to external primitive symbols.  This
      is to ensure that the object files that define these symbols,
@@ -182,12 +220,16 @@ let end_gen_implementation ?toplevel ~source_provenance ppf
      This is important if a module that uses such a symbol is later
      dynlinked. *)
 
-  compile_phrase ppf
+  compile_phrase ppf ~dwarf
     (Cmmgen.reference_symbols
        (List.filter (fun s -> s <> "" && s.[0] <> '%')
           (List.map Primitive.native_name !Translmod.primitive_declarations))
     );
-  Emit.end_assembly ()
+  Emit.end_assembly ~before_code_generation:(fun asm ->
+    begin match dwarf with
+    | None -> ()
+    | Some dwarf -> Dwarf.emit dwarf asm
+    end)
 
 let flambda_gen_implementation ?toplevel ~source_provenance ~backend ppf
     (program:Flambda.program) =
@@ -206,9 +248,10 @@ let flambda_gen_implementation ?toplevel ~source_provenance ~backend ppf
       ++ set_export_info) ()
   in
   let constants =
-    List.map (fun (symbol, definition) ->
+    List.map (fun (symbol, (definition, provenance)) ->
         { Clambda.symbol = Linkage_name.to_string (Symbol.label symbol);
           exported = true;
+          provenance;
           definition })
       (Symbol.Map.bindings constants)
   in

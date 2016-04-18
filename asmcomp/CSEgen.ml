@@ -358,6 +358,9 @@ method private cse n i =
       {i with desc = Itrywith(self#cse n body,
                               self#cse empty_numbering handler);
               next = self#cse empty_numbering i.next}
+  (* Phantom lets are effectively invisible to CSE. *)
+  | Iphantom_let_start _ | Iphantom_let_end _ ->
+      { i with next = self#cse n i.next; }
 
 method fundecl f =
   {f with fun_body = self#cse empty_numbering f.fun_body}

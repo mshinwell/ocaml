@@ -64,6 +64,8 @@ let rec deadcode i =
       let (handler', _) = deadcode handler in
       let (s, _) = deadcode i.next in
       ({i with desc = Itrywith(body', handler'); next = s}, i.live)
+  | Iphantom_let_start _ | Iphantom_let_end _ ->
+      deadcode i.next
 
 let fundecl f =
   let (new_body, _) = deadcode f.fun_body in

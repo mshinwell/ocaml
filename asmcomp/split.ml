@@ -190,6 +190,10 @@ let rec rename i sub =
   | Iraise k ->
       (instr_cons_debug (Iraise k) (subst_regs i.arg sub) [||] i.dbg i.next,
        None)
+  | Iphantom_let_start _ | Iphantom_let_end _ ->
+      let (new_next, sub_next) = rename i.next sub in
+      (instr_cons i.desc [||] [||] new_next,
+       sub_next)
 
 (* Second pass: replace registers by their final representatives *)
 
@@ -214,4 +218,9 @@ let fundecl f =
     fun_args = new_args;
     fun_body = new_body;
     fun_fast = f.fun_fast;
-    fun_dbg  = f.fun_dbg }
+    fun_dbg  = f.fun_dbg;
+    fun_human_name = f.fun_human_name;
+    fun_env_var = f.fun_env_var;
+    fun_closure_layout = f.fun_closure_layout;
+    fun_module_path = f.fun_module_path;
+  }

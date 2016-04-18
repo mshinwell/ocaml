@@ -15,8 +15,8 @@
 
 (* Translation from closed lambda to C-- *)
 
-val compunit:
-    Clambda.ulambda
+val compunit : unit_name:Ident.t
+  -> Clambda.ulambda
     * Clambda.preallocated_block list
     * Clambda.preallocated_constant list
   -> Cmm.phrase list

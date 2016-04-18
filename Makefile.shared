@@ -40,7 +40,8 @@ OCAMLBUILDNATIVE=$(WITH_OCAMLBUILD:=.native)
 OCAMLDOC_OPT=$(WITH_OCAMLDOC:=.opt)
 
 INCLUDES=-I utils -I parsing -I typing -I bytecomp -I middle_end \
-        -I middle_end/base_types -I asmcomp -I driver -I toplevel
+        -I middle_end/base_types -I asmcomp -I asmcomp/dwarf_high \
+        -I asmcomp/dwarf_low -I driver -I toplevel
 
 UTILS=utils/config.cmo utils/misc.cmo \
   utils/identifiable.cmo utils/numbers.cmo utils/arg_helper.cmo \
@@ -105,12 +106,48 @@ ifeq ($(ARCH),amd64)
 ARCH_SPECIFIC_ASMCOMP=$(INTEL_ASM)
 endif
 
+DWARF_LOW=\
+  asmcomp/dwarf_low/std_internal.cmo \
+  asmcomp/dwarf_low/dwarf_format.cmo \
+  asmcomp/dwarf_low/int8.cmo \
+  asmcomp/dwarf_low/int16.cmo \
+  asmcomp/dwarf_low/dwarf_format_int.cmo \
+  asmcomp/dwarf_low/target_addr.cmo \
+  asmcomp/dwarf_low/dwarf_value.cmo \
+  asmcomp/dwarf_low/dwarf_version.cmo \
+  asmcomp/dwarf_low/initial_length.cmo \
+  asmcomp/dwarf_low/child_determination.cmo \
+  asmcomp/dwarf_low/dwarf_tag.cmo \
+  asmcomp/dwarf_low/operator.cmo \
+  asmcomp/dwarf_low/simple_location_expression.cmo \
+  asmcomp/dwarf_low/single_location_description.cmo \
+  asmcomp/dwarf_low/dwarf_attributes.cmo \
+  asmcomp/dwarf_low/encoding_attribute.cmo \
+  asmcomp/dwarf_low/dwarf_attribute_values.cmo \
+  asmcomp/dwarf_low/abbreviation_code.cmo \
+  asmcomp/dwarf_low/abbreviations_table_entry.cmo \
+  asmcomp/dwarf_low/abbreviations_table.cmo \
+  asmcomp/dwarf_low/debugging_information_entry.cmo \
+  asmcomp/dwarf_low/aranges_table.cmo \
+  asmcomp/dwarf_low/location_expression.cmo \
+  asmcomp/dwarf_low/location_list_entry.cmo \
+  asmcomp/dwarf_low/location_list.cmo \
+  asmcomp/dwarf_low/debug_info_section.cmo \
+  asmcomp/dwarf_low/debug_loc_table.cmo \
+  asmcomp/dwarf_low/pubnames_table.cmo
+
+DWARF_HIGH=\
+  asmcomp/dwarf_high/proto_die.cmo \
+  asmcomp/dwarf_high/dwarf_attribute_helpers.cmo \
+  asmcomp/dwarf_high/assign_abbrevs.cmo \
+  asmcomp/dwarf_high/dwarf_world.cmo
+
 ASMCOMP=\
   $(ARCH_SPECIFIC_ASMCOMP) \
   asmcomp/arch.cmo \
+  asmcomp/clambda.cmo asmcomp/printclambda.cmo \
   asmcomp/cmm.cmo asmcomp/printcmm.cmo \
   asmcomp/reg.cmo asmcomp/mach.cmo asmcomp/proc.cmo \
-  asmcomp/clambda.cmo asmcomp/printclambda.cmo \
   asmcomp/export_info.cmo \
   asmcomp/export_info_for_pack.cmo \
   asmcomp/compilenv.cmo \
@@ -130,10 +167,16 @@ ASMCOMP=\
   asmcomp/reloadgen.cmo asmcomp/reload.cmo \
   asmcomp/deadcode.cmo \
   asmcomp/printlinear.cmo asmcomp/linearize.cmo \
+  asmcomp/available_regs.cmo asmcomp/available_ranges.cmo \
   asmcomp/schedgen.cmo asmcomp/scheduling.cmo \
   asmcomp/branch_relaxation_intf.cmo \
   asmcomp/branch_relaxation.cmo \
-  asmcomp/emitaux.cmo asmcomp/emit.cmo asmcomp/asmgen.cmo \
+  $(DWARF_LOW) \
+  asmcomp/asm_directives_x86.cmo \
+  asmcomp/emitaux.cmo asmcomp/emit.cmo \
+  $(DWARF_HIGH) \
+  asmcomp/name_laundry.cmo asmcomp/dwarf.cmo \
+  asmcomp/asmgen.cmo \
   asmcomp/asmlink.cmo asmcomp/asmlibrarian.cmo asmcomp/asmpackager.cmo \
   driver/opterrors.cmo driver/optcompile.cmo
 

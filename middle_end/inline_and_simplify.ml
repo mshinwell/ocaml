@@ -1450,7 +1450,7 @@ let constant_defining_value_approx
 let define_let_rec_symbol_approx env defs =
   (* First declare an empty version of the symbols *)
   let env =
-    List.fold_left (fun env (symbol, _) ->
+    List.fold_left (fun env (symbol, _, _) ->
         E.add_symbol env symbol (A.value_unresolved symbol))
       env defs
   in
@@ -1459,7 +1459,7 @@ let define_let_rec_symbol_approx env defs =
       env
     else
       let env =
-        List.fold_left (fun env (symbol, constant_defining_value) ->
+        List.fold_left (fun env (symbol, _, constant_defining_value) ->
             let approx =
               constant_defining_value_approx env constant_defining_value
             in
@@ -1530,26 +1530,26 @@ let rec simplify_program_body env r (program : Flambda.program_body)
   | Let_rec_symbol (defs, program) ->
     let env = define_let_rec_symbol_approx env defs in
     let env, r, defs =
-      List.fold_left (fun (env, r, defs) (symbol, def) ->
+      List.fold_left (fun (env, r, defs) (symbol, provenance, def) ->
           let r, def, approx =
             simplify_constant_defining_value env r symbol def
           in
           let approx = A.augment_with_symbol approx symbol in
           let env = E.redefine_symbol env symbol approx in
-          (env, r, (symbol, def) :: defs))
+          (env, r, (symbol, provenance, def) :: defs))
         (env, r, []) defs
     in
     let program, r = simplify_program_body env r program in
     Let_rec_symbol (defs, program), r
-  | Let_symbol (symbol, constant_defining_value, program) ->
+  | Let_symbol (symbol, provenance, constant_defining_value, program) ->
     let r, constant_defining_value, approx =
       simplify_constant_defining_value env r symbol constant_defining_value
     in
     let approx = A.augment_with_symbol approx symbol in
     let env = E.add_symbol env symbol approx in
     let program, r = simplify_program_body env r program in
-    Let_symbol (symbol, constant_defining_value, program), r
-  | Initialize_symbol (symbol, tag, fields, program) ->
+    Let_symbol (symbol, provenance, constant_defining_value, program), r
+  | Initialize_symbol (symbol, provenance, tag, fields, program) ->
     let fields, approxs, r = simplify_list env r fields in
     let approx =
       A.augment_with_symbol (A.value_block tag (Array.of_list approxs)) symbol
@@ -1557,7 +1557,7 @@ let rec simplify_program_body env r (program : Flambda.program_body)
     let module Backend = (val (E.backend env) : Backend_intf.S) in
     let env = E.add_symbol env symbol approx in
     let program, r = simplify_program_body env r program in
-    Initialize_symbol (symbol, tag, fields, program), r
+    Initialize_symbol (symbol, provenance, tag, fields, program), r
   | Effect (expr, program) ->
     let expr, r = simplify env r expr in
     let program, r = simplify_program_body env r program in

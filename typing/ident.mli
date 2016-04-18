@@ -60,6 +60,7 @@ type 'a tbl
 
 val empty: 'a tbl
 val add: t -> 'a -> 'a tbl -> 'a tbl
+val mem: t -> 'a tbl -> bool
 val find_same: t -> 'a tbl -> 'a
 val find_name: string -> 'a tbl -> 'a
 val find_all: string -> 'a tbl -> 'a list

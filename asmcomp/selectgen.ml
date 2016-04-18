@@ -87,23 +87,25 @@ let swap_intcomp = function
 
 (* Naming of registers *)
 
-let all_regs_anonymous rv =
+let all_regs_are_temporaries rv =
   try
     for i = 0 to Array.length rv - 1 do
-      if not (Reg.anonymous rv.(i)) then raise Exit
+      if not (Reg.is_temporary rv.(i)) then raise Exit
     done;
     true
   with Exit ->
     false
 
 let name_regs id rv =
-  if Array.length rv = 1 then
-    rv.(0).raw_name <- Raw_name.create_from_ident id
-  else
+  if Array.length rv = 1 then begin
+    rv.(0).raw_name <- Reg.Raw_name.create_ident id;
+    rv.(0).part <- None
+  end else begin
     for i = 0 to Array.length rv - 1 do
-      rv.(i).raw_name <- Raw_name.create_from_ident id;
+      rv.(i).raw_name <- Reg.Raw_name.create_ident id;
       rv.(i).part <- Some i
     done
+  end
 
 (* "Join" two instruction sequences, making sure they return their results
    in the same registers. *)
@@ -117,12 +119,17 @@ let join opt_r1 seq1 opt_r2 seq2 =
       assert (l1 = Array.length r2);
       let r = Array.make l1 Reg.dummy in
       for i = 0 to l1-1 do
-        if Reg.anonymous r1.(i)
+        (* If either of the registers is a temporary then we can reuse it
+           for the joined result, since we know that it is not mapped to by
+           the environment, and thus a move into it cannot disturb any later
+           computation.
+        *)
+        if Reg.is_temporary r1.(i)
           && Cmm.ge_component r1.(i).typ r2.(i).typ
         then begin
           r.(i) <- r1.(i);
           seq2#insert_move r2.(i) r1.(i)
-        end else if Reg.anonymous r2.(i)
+        end else if Reg.is_temporary r2.(i)
           && Cmm.ge_component r2.(i).typ r1.(i).typ
         then begin
           r.(i) <- r2.(i);
@@ -173,6 +180,9 @@ let catch_regs = ref []
 
 (* Name of function being compiled *)
 let current_function_name = ref ""
+
+(* Next label to use for phantom let ranges *)
+let phantom_let_number = ref 0
 
 (* The default instruction selection class *)
 
@@ -483,6 +493,15 @@ method emit_expr env exp =
         None -> None
       | Some r1 -> self#emit_expr (self#bind_let env v r1) e2
       end
+  | Cphantom_let (ident, provenance, defining_expr, body) ->
+      let number = !phantom_let_number in
+      incr phantom_let_number;
+      self#insert
+        (Iphantom_let_start (number, ident, provenance, defining_expr))
+        [| |] [| |];
+      let result = self#emit_expr env body in
+      self#insert (Iphantom_let_end number) [| |] [| |];
+      result
   | Cassign(v, e1) ->
       let rv =
         try
@@ -639,7 +658,7 @@ method private emit_sequence env exp =
   (r, s)
 
 method private bind_let env v r1 =
-  if all_regs_anonymous r1 then begin
+  if all_regs_are_temporaries r1 then begin
     name_regs v r1;
     Tbl.add v r1 env
   end else begin
@@ -661,8 +680,8 @@ method private emit_parts env exp =
         else begin
           (* The normal case *)
           let id = Ident.create "bind" in
-          if all_regs_anonymous r then
-            (* r is an anonymous, unshared register; use it directly *)
+          if all_regs_are_temporaries r then
+            (* r is a temporary, unshared register; use it directly *)
             Some (Cvar id, Tbl.add id r env)
           else begin
             (* Introduce a fresh temp to hold the result *)
@@ -755,6 +774,14 @@ method emit_tail env exp =
         None -> ()
       | Some r1 -> self#emit_tail (self#bind_let env v r1) e2
       end
+  | Cphantom_let (ident, provenance, defining_expr, body) ->
+      let number = !phantom_let_number in
+      incr phantom_let_number;
+      self#insert
+        (Iphantom_let_start (number, ident, provenance, defining_expr))
+        [| |] [| |];
+      self#emit_tail env body;
+      self#insert (Iphantom_let_end number) [| |] [| |]
   | Cop(Capply(ty, dbg) as op, args) ->
       begin match self#emit_parts_list env args with
         None -> ()
@@ -870,7 +897,45 @@ method emit_fundecl f =
       (fun (id, ty) -> let r = self#regs_for ty in name_regs id r; r)
       f.Cmm.fun_args in
   let rarg = Array.concat rargs in
-  let loc_arg = Proc.loc_parameters rarg in
+  (* [parts] corresponds elementwise to [rarg] and identifies, for each
+     register in [rarg], which part of a value split across multiple registers
+     it corresponds to.  [None] is used to indicate that a value fits within
+     a single register. *)
+  let parts =
+    let parts_array arr =
+      if Array.length arr <= 1 then
+        [| None |]
+      else
+        Array.init (Array.length arr) (fun index -> Some index)
+    in
+    Array.concat (List.map parts_array rargs)
+  in
+  let loc_arg =
+    let loc_arg = Proc.loc_parameters rarg in
+    assert (Array.length rarg = Array.length loc_arg);
+    (* [loc_arg] corresponds elementwise to [rargs]; it identifies in which
+       "hard" pseudoregisters (hard registers or stack slots) the arguments to
+       the function will be found.  We duplicate each [Reg.t] value in
+       [loc_arg] such that we can annotate it with the name of the identifier
+       contained within the register for this function and the part of the
+       value it corresponds to (see above).  Note however that the stamps on
+       the duplicated [Reg.t] values are the *same* as the registers in
+       [loc_arg].  This is important, since some of those have fixed
+       assignments, such as hard registers. *)
+    Array.init (Array.length loc_arg) (fun index ->
+      let reg =
+        Reg.identical_except_in_name loc_arg.(index) ~from:rarg.(index)
+      in
+      reg.Reg.is_parameter <- Some index;
+      (* CR mshinwell: I think this index could be wrong in the presence of
+         "env" parameters. *)
+      rarg.(index).Reg.is_parameter <- Some index;
+      begin match parts.(index) with
+      | None -> ()
+      | Some part -> reg.part <- Some part
+      end;
+      reg)
+  in
   let env =
     List.fold_right2
       (fun (id, _ty) r env -> Tbl.add id r env)
@@ -883,7 +948,12 @@ method emit_fundecl f =
     fun_args = loc_arg;
     fun_body = body;
     fun_fast = f.Cmm.fun_fast;
-    fun_dbg  = f.Cmm.fun_dbg }
+    fun_dbg  = f.Cmm.fun_dbg;
+    fun_human_name = f.Cmm.fun_human_name;
+    fun_env_var = f.Cmm.fun_env_var;
+    fun_closure_layout = f.Cmm.fun_closure_layout;
+    fun_module_path = f.Cmm.fun_module_path;
+  }
 
 end
 
@@ -903,4 +973,5 @@ let _ =
 
 let reset () =
   catch_regs := [];
-  current_function_name := ""
+  current_function_name := "";
+  phantom_let_number := 0

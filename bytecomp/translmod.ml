@@ -480,12 +480,30 @@ and transl_structure fields cc rootpath final_env = function
           let id = mb.mb_id in
           let body, size =
             transl_structure (id :: fields) cc rootpath final_env rem in
+          let rootpath_inside_module = field_path rootpath id in
           let module_body =
-            transl_module Tcoerce_none (field_path rootpath id) mb.mb_expr
+            transl_module Tcoerce_none rootpath_inside_module mb.mb_expr
           in
           let module_body =
             Translattribute.add_inline_attribute module_body mb.mb_loc
                                                  mb.mb_attributes
+          in
+          let module_body =
+            let path =
+              match rootpath_inside_module with
+              | Some path -> path
+              (* CR mshinwell: work out what this should say *)
+              | None ->
+                match rootpath with
+                | Some path -> path
+                | None -> Pident (Ident.create_persistent "Unknown")
+            in
+            Levent (module_body, {
+              lev_loc = mb.mb_loc;
+              lev_kind = Lev_module_definition path;
+              lev_repr = None;
+              lev_env = Env.summary Env.empty;
+            })
           in
           Llet(pure_module mb.mb_expr, Pgenval, id,
                module_body,

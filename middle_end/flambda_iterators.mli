@@ -99,15 +99,19 @@ val iter_all_immutable_let_and_let_rec_bindings
    : Flambda.t
   -> f:(Variable.t -> Flambda.named -> unit)
   -> unit
-
+(* CR mshinwell: these now miss "debug_only" lets *)
 val iter_all_toplevel_immutable_let_and_let_rec_bindings
    : Flambda.t
-  -> f:(Variable.t -> Flambda.named -> unit)
+  -> f:(Variable.t
+    -> Flambda.named
+    -> provenance:Flambda.let_provenance option
+    -> unit)
   -> unit
 
+(* CR mshinwell: wrong name?  Not really "toplevel" *)
 val iter_exprs_at_toplevel_of_program
    : Flambda.program
-  -> f:(Flambda.t -> unit)
+  -> f:(Flambda.t -> under_lifted_set_of_closures:bool -> unit)
   -> unit
 
 val iter_named_of_program
@@ -214,7 +218,9 @@ val map_named_of_program
 
 val map_all_immutable_let_and_let_rec_bindings
    : Flambda.t
-  -> f:(Variable.t -> Flambda.named -> Flambda.named)
+  -> f:(Variable.t
+      -> Flambda.named
+      -> Flambda.named * Flambda.let_state option)
   -> Flambda.t
 
 val fold_function_decls_ignoring_stubs

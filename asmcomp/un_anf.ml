@@ -35,12 +35,14 @@ let ignore_function_label (_ : Clambda.function_label) = ()
 let ignore_debuginfo (_ : Debuginfo.t) = ()
 let ignore_int (_ : int) = ()
 let ignore_ident (_ : Ident.t) = ()
+let ignore_ident_option (_ : Ident.t option) = ()
 let ignore_primitive (_ : Lambda.primitive) = ()
 let ignore_string (_ : string) = ()
 let ignore_int_array (_ : int array) = ()
 let ignore_ident_list (_ : Ident.t list) = ()
 let ignore_direction_flag (_ : Asttypes.direction_flag) = ()
 let ignore_meth_kind (_ : Lambda.meth_kind) = ()
+let ignore_path_option (_ : Path.t option) = ()
 
 (* CR-soon mshinwell: check we aren't traversing function bodies more than
    once (need to analyse exactly what the calls are from Cmmgen into this
@@ -86,7 +88,8 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
       ignore_debuginfo dbg
     | Uclosure (functions, captured_variables) ->
       List.iter loop captured_variables;
-      List.iter (fun ({ Clambda. label; arity; params; body; dbg } as clos) ->
+      List.iter (fun ({ Clambda. label; arity; params; body; dbg;
+            human_name; env_var; closure_layout; module_path; } as clos) ->
           (match closure_environment_ident clos with
            | None -> ()
            | Some env_var ->
@@ -96,16 +99,22 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
           ignore_int arity;
           ignore_ident_list params;
           loop body;
-          ignore_debuginfo dbg)
+          ignore_debuginfo dbg;
+          ignore_string human_name;
+          ignore_ident_option env_var;
+          ignore_ident_list closure_layout;
+          ignore_path_option module_path)
         functions
     | Uoffset (expr, offset) ->
       loop expr;
       ignore_int offset
-    | Ulet (_let_kind, _value_kind, _ident, def, body) ->
+    | Ulet (_let_kind, _value_kind, _provenance, _ident, def, body) ->
       loop def;
       loop body
+    | Uphantom_let (_provenance, _ident, _defining_expr, body) ->
+      loop body
     | Uletrec (defs, body) ->
-      List.iter (fun (ident, def) ->
+      List.iter (fun (_provenance, ident, def) ->
           ignore_ident ident;
           loop def)
         defs;
@@ -253,20 +262,25 @@ let let_bound_vars_that_can_be_moved ident_info (clam : Clambda.ulambda) =
     | Uclosure (functions, captured_variables) ->
       ignore_ulambda_list captured_variables;
       (* Start a new let stack for speed. *)
-      List.iter (fun { Clambda. label; arity; params; body; dbg; } ->
+      List.iter (fun { Clambda. label; arity; params; body; dbg;
+              human_name; env_var; closure_layout; module_path; } ->
           ignore_function_label label;
           ignore_int arity;
           ignore_ident_list params;
           let_stack := [];
           loop body;
           let_stack := [];
-          ignore_debuginfo dbg)
+          ignore_debuginfo dbg;
+          ignore_string human_name;
+          ignore_ident_option env_var;
+          ignore_ident_list closure_layout;
+          ignore_path_option module_path)
         functions
     | Uoffset (expr, offset) ->
       (* [expr] should usually be a variable. *)
       examine_argument_list [expr];
       ignore_int offset
-    | Ulet (_let_kind, _value_kind, ident, def, body) ->
+    | Ulet (_let_kind, _value_kind, _provenance, ident, def, body) ->
       begin match def with
       | Uconst _ ->
         (* The defining expression is obviously constant, so we don't
@@ -286,11 +300,13 @@ let let_bound_vars_that_can_be_moved ident_info (clam : Clambda.ulambda) =
         end;
         loop body
       end
+    | Uphantom_let (_provenance, _id, _defining_expr, body) ->
+      loop body
     | Uletrec (defs, body) ->
       (* Evaluation order for [defs] is not defined, and this case
          probably isn't important for [Cmmgen] anyway. *)
       let_stack := [];
-      List.iter (fun (ident, def) ->
+      List.iter (fun (_provenance, ident, def) ->
           ignore_ident ident;
           loop def;
           let_stack := [])
@@ -428,18 +444,21 @@ let rec substitute_let_moveable is_let_moveable env (clam : Clambda.ulambda)
   | Uoffset (clam, n) ->
     let clam = substitute_let_moveable is_let_moveable env clam in
     Uoffset (clam, n)
-  | Ulet (let_kind, value_kind, id, def, body) ->
+  | Ulet (let_kind, value_kind, provenance, id, def, body) ->
     let def = substitute_let_moveable is_let_moveable env def in
     if Ident.Set.mem id is_let_moveable then
       let env = Ident.Map.add id def env in
       substitute_let_moveable is_let_moveable env body
     else
-      Ulet (let_kind, value_kind,
+      Ulet (let_kind, value_kind, provenance,
             id, def, substitute_let_moveable is_let_moveable env body)
+  | Uphantom_let (provenance, ident, defining_expr, body) ->
+    let body = substitute_let_moveable is_let_moveable env body in
+    Uphantom_let (provenance, ident, defining_expr, body)
   | Uletrec (defs, body) ->
     let defs =
-      List.map (fun (id, def) ->
-          id, substitute_let_moveable is_let_moveable env def)
+      List.map (fun (provenance, id, def) ->
+          provenance, id, substitute_let_moveable is_let_moveable env def)
         defs
     in
     let body = substitute_let_moveable is_let_moveable env body in
@@ -607,16 +626,18 @@ let rec un_anf_and_moveable ident_info env (clam : Clambda.ulambda)
         functions
     in
     let variables_bound_by_the_closure, moveable =
-      un_anf_list_and_moveable ident_info env variables_bound_by_the_closure
+      un_anf_list_and_moveable ident_info env
+        variables_bound_by_the_closure
     in
     Uclosure (functions, variables_bound_by_the_closure),
       both_moveable moveable Moveable_not_into_loops
   | Uoffset (clam, n) ->
     let clam, moveable = un_anf_and_moveable ident_info env clam in
     Uoffset (clam, n), moveable
-  | Ulet (_let_kind, _value_kind, id, def, Uvar id') when Ident.same id id' ->
+  | Ulet (_let_kind, _value_kind, _provenance, id, def, Uvar id')
+      when Ident.same id id' ->
     un_anf_and_moveable ident_info env def
-  | Ulet (let_kind, value_kind, id, def, body) ->
+  | Ulet (let_kind, value_kind, provenance, id, def, body) ->
     let def, def_moveable = un_anf_and_moveable ident_info env def in
     let is_linear = Ident.Set.mem id ident_info.linear in
     let is_used = Ident.Set.mem id ident_info.used in
@@ -646,12 +667,17 @@ let rec un_anf_and_moveable ident_info env (clam : Clambda.ulambda)
         (* Moveable but not used linearly. *)
     | Fixed, _, _ ->
       let body, body_moveable = un_anf_and_moveable ident_info env body in
-      Ulet (let_kind, value_kind, id, def, body),
-      both_moveable def_moveable body_moveable
+      Ulet (let_kind, value_kind, provenance, id, def, body),
+        both_moveable def_moveable body_moveable
     end
+  | Uphantom_let (provenance, ident, defining_expr, body) ->
+    let body = un_anf ident_info env body in
+    Uphantom_let (provenance, ident, defining_expr, body), Fixed
   | Uletrec (defs, body) ->
     let defs =
-      List.map (fun (id, def) -> id, un_anf ident_info env def) defs
+      List.map (fun (provenance, id, def) ->
+          provenance, id, un_anf ident_info env def)
+        defs
     in
     let body = un_anf ident_info env body in
     Uletrec (defs, body), Fixed

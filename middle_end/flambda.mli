@@ -87,6 +87,24 @@ type specialised_to = {
       either the [free_vars] or the [specialised_args]. *)
 }
 
+type let_provenance = {
+  module_path : Path.t;
+  location : Location.t;
+}
+
+type let_state =
+  | Normal
+  | Keep_for_debugger
+    (** A let-expression that should be kept even if the bound variable
+        becomes unused.  Only [Symbol] and [Const] may form the defining
+        expression of such a let (this is checked by [Flambda_invariants]).
+        These lets are used to emit debugging information. *)
+  | Only_for_debugger
+    (** A let-expression that was in state [Keep_for_debugger] but has been
+        shown to be unused.  This will turn into a [Uphantom_let] in
+        Clambda.  (The same restrictions on defining expressions as for
+        [Keep_to_debugger] apply.) *)
+
 (** Flambda terms are partitioned in a pseudo-ANF manner; many terms are
     required to be [let]-bound.  This in particular ensures there is always
     a variable name for an expression that may be lifted out (for example
@@ -97,6 +115,7 @@ type t =
   | Var of Variable.t
   | Let of let_expr
   | Let_mutable of let_mutable
+  (* CR mshinwell: provenance for Let_rec and Let_mutable *)
   | Let_rec of (Variable.t * named) list * t
   (** CR-someday lwhite: give Let_rec the same fields as Let. *)
   | Apply of apply
@@ -177,6 +196,16 @@ and let_expr = private {
   free_vars_of_body : Variable.Set.t;
   (** A cache of the free variables of the body of the [let].  This is an
       important optimization. *)
+  provenance : let_provenance option;
+  (** The module path at which the variable was defined in the source code,
+      if applicable, together with its location of definition.
+      This should be [None] for compiler-generated [Let]s that are not to
+      appear in the debugger.
+      [Let]s with [provenance] set to [Some] should never be removed even if
+      they are redundant. *)
+  state : let_state;
+  (** Used to identify [Let]s that may only be needed for emission of
+      debugging information.  See documentation on [let_state], above. *)
 }
 
 and let_mutable = {
@@ -372,14 +401,36 @@ module Constant_defining_value :
 
 type expr = t
 
+type symbol_provenance = {
+  names : string list;
+  module_path : Path.t;
+  location : Location.t;
+}
+
 (** A "program" is the contents of one compilation unit.  It describes the
     various values that are assigned to symbols (and in some cases fields of
     such symbols) in the object file.  As such, it is closely related to
-    the compilation of toplevel modules. *)
+    the compilation of toplevel modules.
+
+    The "symbol_provenance" fields are used only for bindings that were
+    originally toplevel (in the sense that they were eligible for lifting
+    by [Lift_let_to_initialize_symbol]).  They are not used for bindings
+    that correspond to [Let]s lifted by [Lift_constants].  In those cases,
+    to preserve scoping information, the provenance information is stored
+    on the original let bindings (which are held in place by virtue of
+    their state transitioning to [Only_for_debugger]).
+
+    We handle the toplevel bindings differently in terms of provenance to
+    match up with the typical user's expectation that such values are somehow
+    global (and not accessed through closures).
+*)
 type program_body =
-  | Let_symbol of Symbol.t * constant_defining_value * program_body
+  | Let_symbol of Symbol.t * symbol_provenance option
+        * constant_defining_value * program_body
   (** Define the given symbol to have the given constant value. *)
-  | Let_rec_symbol of (Symbol.t * constant_defining_value) list * program_body
+  | Let_rec_symbol of
+      (Symbol.t * symbol_provenance option * constant_defining_value) list
+        * program_body
   (** As for [Let_symbol], but recursive.  This is needed to treat examples
       like this, where a constant set of closures is lifted to toplevel:
 
@@ -398,7 +449,8 @@ type program_body =
       approximation of the set of closures to be present in order to
       correctly simplify the [Project_closure] construction.  (See
       [Inline_and_simplify.simplify_project_closure] for that part.) *)
-  | Initialize_symbol of Symbol.t * Tag.t * t list * program_body
+  | Initialize_symbol of Symbol.t * symbol_provenance option
+        * Tag.t * t list * program_body
   (** Define the given symbol as a constant block of the given size and
       tag; but with a possibly non-constant initializer.  The initializer
       will be executed at most once (from the entry point of the compilation
@@ -457,7 +509,13 @@ val free_symbols_program : program -> Symbol.Set.t
 (** Used to avoid exceeding the stack limit when handling expressions with
     multiple consecutive nested [Let]-expressions.  This saves rewriting large
     simplification functions in CPS.  This function provides for the
-    rewriting or elimination of expressions during the fold. *)
+    rewriting or elimination of expressions during the fold.
+
+    If [filter_defining_expr] requests deletion of a let that is marked as
+    [Keep_for_debugger] (or indeed [Only_for_debugger]), then the state of
+    that let is set to [Only_for_debugger] and the let is not deleted, so
+    long as debugging information is being generated.
+*)
 val fold_lets_option
    : t
   -> init:'a
@@ -472,7 +530,7 @@ val fold_lets_option
 (** Like [fold_lets_option], but just a map. *)
 val map_lets
    : t
-  -> for_defining_expr:(Variable.t -> named -> named)
+  -> for_defining_expr:(Variable.t -> named -> named * (let_state option))
   -> for_last_body:(t -> t)
   -> after_rebuild:(t -> t)
   -> t
@@ -487,7 +545,13 @@ val iter_lets
 
 (** Creates a [Let] expression.  (This computes the free variables of the
     defining expression and the body.) *)
-val create_let : Variable.t -> named -> t -> t
+val create_let
+   : ?provenance:let_provenance
+  -> ?state:let_state
+  -> Variable.t
+  -> named
+  -> t
+  -> t
 
 (** Apply the specified function [f] to the defining expression of the given
     [Let]-expression, returning a new [Let]. *)
@@ -514,7 +578,9 @@ module With_free_variables : sig
   (** Takes the time required to calculate the free variables of the given
       [expr]. *)
   val create_let_reusing_defining_expr
-     : Variable.t
+     : ?provenance:let_provenance
+    -> ?state:let_state
+    -> Variable.t
     -> named t
     -> expr
     -> expr
@@ -522,7 +588,9 @@ module With_free_variables : sig
   (** Takes the time required to calculate the free variables of the given
       [named]. *)
   val create_let_reusing_body
-     : Variable.t
+     : ?provenance:let_provenance
+    -> ?state:let_state
+    -> Variable.t
     -> named
     -> expr t
     -> expr

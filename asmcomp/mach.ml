@@ -34,6 +34,8 @@ type test =
   | Ioddtest
   | Ieventest
 
+type phantom_let_label = int
+
 type operation =
     Imove
   | Ispill
@@ -63,7 +65,9 @@ type instruction =
     arg: Reg.t array;
     res: Reg.t array;
     dbg: Debuginfo.t;
-    mutable live: Reg.Set.t }
+    mutable live: Reg.Set.t;
+    mutable available_before: Reg.Set.t;
+  }
 
 and instruction_desc =
     Iend
@@ -76,13 +80,21 @@ and instruction_desc =
   | Iexit of int
   | Itrywith of instruction * instruction
   | Iraise of Lambda.raise_kind
+  | Iphantom_let_start of phantom_let_label * Ident.t * Clambda.ulet_provenance
+      * Clambda.uphantom_defining_expr
+  | Iphantom_let_end of phantom_let_label
 
 type fundecl =
   { fun_name: string;
     fun_args: Reg.t array;
     fun_body: instruction;
     fun_fast: bool;
-    fun_dbg : Debuginfo.t }
+    fun_dbg : Debuginfo.t;
+    fun_human_name : string;
+    fun_env_var : Ident.t option;
+    fun_closure_layout : Ident.t list;
+    fun_module_path : Path.t option;
+  }
 
 let rec dummy_instr =
   { desc = Iend;
@@ -90,7 +102,9 @@ let rec dummy_instr =
     arg = [||];
     res = [||];
     dbg = Debuginfo.none;
-    live = Reg.Set.empty }
+    live = Reg.Set.empty;
+    available_before = Reg.Set.empty;
+  }
 
 let end_instr () =
   { desc = Iend;
@@ -98,14 +112,20 @@ let end_instr () =
     arg = [||];
     res = [||];
     dbg = Debuginfo.none;
-    live = Reg.Set.empty }
+    live = Reg.Set.empty;
+    available_before = Reg.Set.empty;
+  }
 
 let instr_cons d a r n =
   { desc = d; next = n; arg = a; res = r;
-    dbg = Debuginfo.none; live = Reg.Set.empty }
+    dbg = Debuginfo.none; live = Reg.Set.empty;
+    available_before = Reg.Set.empty;
+  }
 
 let instr_cons_debug d a r dbg n =
-  { desc = d; next = n; arg = a; res = r; dbg = dbg; live = Reg.Set.empty }
+  { desc = d; next = n; arg = a; res = r; dbg = dbg; live = Reg.Set.empty;
+    available_before = Reg.Set.empty;
+  }
 
 let rec instr_iter f i =
   match i.desc with

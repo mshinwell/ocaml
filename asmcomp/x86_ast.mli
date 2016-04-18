@@ -214,6 +214,8 @@ type asm_line =
   | Private_extern of string
   | Set of string * constant
   | Size of string * constant
+  | Sleb128 of constant
   | Type of string * string
+  | Uleb128 of constant
 
 type asm_program = asm_line list

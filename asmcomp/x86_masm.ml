@@ -245,7 +245,10 @@ let print_line b = function
   | Private_extern _
   | Set _
   | Size _
+  | Sleb128 _
   | Type _
+  (* CR mshinwell: think about what to do with this re. DWARF emission *)
+  | Uleb128 _
     -> assert false
 
 let generate_asm oc lines =

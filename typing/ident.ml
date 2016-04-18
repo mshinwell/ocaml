@@ -163,6 +163,11 @@ let rec find_same id = function
       else
         find_same id (if c < 0 then l else r)
 
+let mem id tbl =
+  match find_same id tbl with
+  | exception Not_found -> false
+  | _ -> true
+
 let rec find_name name = function
     Empty ->
       raise Not_found

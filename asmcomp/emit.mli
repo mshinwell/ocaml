@@ -15,7 +15,15 @@
 
 (* Generation of assembly code *)
 
-val fundecl: Linearize.fundecl -> unit
+type fundecl_result = {
+  end_of_function_label : Linearize.label;
+}
+
+val fundecl: Linearize.fundecl -> fundecl_result
 val data: Cmm.data_item list -> unit
+
 val begin_assembly: unit -> unit
-val end_assembly: unit -> unit
+
+val end_assembly
+   : before_code_generation:((module Asm_directives.S) -> unit)
+  -> unit

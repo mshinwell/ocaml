@@ -29,7 +29,7 @@ val compile_implementation_clambda :
     Format.formatter -> Lambda.program -> unit
 
 val compile_phrase :
-    Format.formatter -> Cmm.phrase -> unit
+    Format.formatter -> dwarf:Dwarf.t option -> Cmm.phrase -> unit
 
 type error = Assembler_error of string
 exception Error of error

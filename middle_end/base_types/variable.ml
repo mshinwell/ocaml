@@ -99,6 +99,9 @@ let in_compilation_unit t cu =
 
 let get_compilation_unit t = t.compilation_unit
 
+let base_name t =
+  t.name
+
 let unique_name t =
   t.name ^ "_" ^ (string_of_int t.name_stamp)
 
