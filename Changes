@@ -108,8 +108,8 @@ Compilers:
 
 * PR#4231, PR#5461: warning 31 is now fatal by default
   (Warning 31: A module is linked twice in the same executable.)
-  This is an interim solution; double-linking of modules has dangerous semantics,
-  eg. exception constructors end up with two distinct declarations.
+  This is an interim solution; double-linking of modules has dangerous
+  semantics, eg. exception constructors end up with two distinct declarations.
   (Alain Frisch)
 
 - PR#4800: better compilation of tuple assignment
@@ -190,6 +190,9 @@ Compilers:
 
 - PR#7168: Exceeding stack limit in bytecode can lead to a crash.
   (Jacques-Henri Jourdan)
+
+- PR#7232: Strange Pprintast output with ppx_deriving
+  (Damien Doligez, report by Anton Bachin)
 
 - GPR#17: some cmm optimizations of integer operations with constants
   (Stephen Dolan, review by Pierre Chambart)
