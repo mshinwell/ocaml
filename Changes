@@ -108,8 +108,8 @@ Compilers:
 
 * PR#4231, PR#5461: warning 31 is now fatal by default
   (Warning 31: A module is linked twice in the same executable.)
-  This is an interim solution; double-linking of modules has dangerous semantics,
-  eg. exception constructors end up with two distinct declarations.
+  This is an interim solution; double-linking of modules has dangerous
+  semantics, eg. exception constructors end up with two distinct declarations.
   (Alain Frisch)
 
 - PR#4800: better compilation of tuple assignment
@@ -191,6 +191,9 @@ Compilers:
 - PR#7168: Exceeding stack limit in bytecode can lead to a crash.
   (Jacques-Henri Jourdan)
 
+- PR#7232: Strange Pprintast output with ppx_deriving
+  (Damien Doligez, report by Anton Bachin)
+
 - GPR#17: some cmm optimizations of integer operations with constants
   (Stephen Dolan, review by Pierre Chambart)
 
@@ -264,10 +267,10 @@ Compilers:
 - GPR#455: provide more debugging information to Js_of_ocaml
   (Jérôme Vouillon)
 
-- GPR#514: Added several command-line flags to explicitly enable
+- GPR#514, GPR#554: Added several command-line flags to explicitly enable
   settings that are currently the default:
-  `-no-keep-docs`, `-no-keep-locs`, `-no-principal`,
-  `-no-rectypes`, `-no-strict-formats`
+  `-alias-deps`, `-app-funct`, `-no-keep-docs`, `-no-keep-locs`,
+  `-no-principal`, `-no-rectypes`, `-no-strict-formats`
   (Demi Obenour)
 
 - GPR#545: use reraise to preserve backtrace on
@@ -569,8 +572,18 @@ Manual:
 - PR#6676: ongoing simplification of the "Language Extensions" section
   (Alain Frisch, John Whitington)
 
+- PR#6898: Update win32 support documentation of the Unix library
+  (Damien Doligez, report by Daniel Bünzli)
+
 - PR#7092, GPR#379: Add missing documentation for new 4.03 features
   (Florian Angeletti)
+
+- PR#7094, GPR#468, GPR#551: add new section 8.5 to document warnings
+  The general idea is to document warnings that may require explanations.
+  Currently documented warnings are:
+  - 52: Fragile constant pattern.
+  - 57: Ambiguous or-pattern variables under guard
+  (Florian Angeletti and Gabriel Scherer)
 
 - PR#7109, GPR#380: Fix bigarray documentation layout
   (Florian Angeletti, Leo White)
@@ -832,6 +845,12 @@ Bug fixes:
 - PR#7222: Escaped existential type
   (Jacques Garrigue, report by Florian Angeletti)
 
+- PR#7230: Scrutinee discarded in match with only refutation cases
+  (Jacques Garrigue, report by Jeremy Yallop)
+
+- PR#7234: Compatibility check wrong for abstract type constructors
+  (Jacques Garrigue, report by Stephen Dolan)
+
 - GPR#205: Clear caml_backtrace_last_exn before registering as root
   (report and fix by Frederic Bour)
 
@@ -1005,6 +1024,11 @@ Features wishes:
 - GPR#451: an optional 'parallel' target in testsuite/Makefile using the
   GNU parallel tool to run tests in parallel.
   (Gabriel Scherer)
+
+- GPR#555: ensure that register typing constraints are respected at
+  join points in the control flow graph
+  (Mark Shinwell, debugging & test case by Arseniy Alekseyev and Leo White,
+    code review by Xavier Leroy)
 
 Build system:
 =============
