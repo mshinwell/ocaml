@@ -481,7 +481,6 @@ static void add_unit_to_shape_table(uint64_t *unit_table, value *list)
     Field(new_list_element, 1) = *list;
     *list = new_list_element;
 
-    Assert(*table_for_one_function == 0);
     ptr++;
   }
 }
