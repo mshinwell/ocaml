@@ -434,7 +434,7 @@ let message = function
       Printf.sprintf
         "the argument of this constructor should not be matched against a\n\
          constant pattern; the actual value of the argument could change\n\
-         in the future"
+         in the future."
   | Unreachable_case ->
       "this match case is unreachable.\n\
        Consider replacing it with a refutation case '<pat> -> .'"
@@ -455,8 +455,8 @@ let message = function
         | _::_ ->
             "variables " ^ String.concat "," vars in
       Printf.sprintf
-        "Ambiguous guarded pattern, %s may match different or-pattern \
-          arguments"
+        "Ambiguous or-pattern variables under guard;\n\
+         %s may match different arguments. (See manual section 8.5)"
         msg
   | No_cmx_file name ->
       Printf.sprintf
@@ -562,7 +562,7 @@ let descriptions =
    54, "Attribute used more than once on an expression";
    55, "Inlining impossible";
    56, "Unreachable case in a pattern-matching (based on type information).";
-   57, "Ambiguous binding by pattern.";
+   57, "Ambiguous or-pattern variables under guard";
    58, "Missing cmx file";
    59, "Assignment to non-mutable value";
   ]
