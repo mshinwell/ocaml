@@ -15,13 +15,25 @@
 let die_name_from_function_name fun_name =
   "camlDIE__" ^ fun_name
 
-let base_type_die_name_for_ident ~ident_name ~is_parameter ~output_path =
-  Printf.sprintf "__ocaml%s %s%s"
-    output_path
+(* CR-soon mshinwell: remove is_parameter if not needed *)
+let base_type_die_name_for_ident ~ident_name ~is_parameter:_ ~output_path =
+  assert (try ignore (String.index ident_name ' '); false
+      with Not_found -> true);
+  Printf.sprintf "__ocaml %s %s"
     ident_name
-    (match is_parameter with
-    | None -> ""
-    | Some index -> Printf.sprintf "-%d" index)
+    output_path
+
+type split_base_type_die_name_result = {
+  ident_name : string;
+  output_path : string;
+}
+
+let split_base_type_die_name name =
+  match Misc.Stdlib.String.split name ~on:' ' with
+  | "__ocaml"::ident_name::output_path ->
+    let output_path = String.concat " " output_path in
+    Some { ident_name; output_path; }
+  | _ -> None
 
 let fun_name_to_symbol fun_name =
   (* This is disgusting, see CR in the .mli *)
