@@ -138,8 +138,10 @@ let offset_into_section_label ~section ~label:upper
     match X86_proc.system with
     | S_macosx ->
       let temp = new_temp_var () in
-      D.setvar (temp,
-        ConstSub (ConstLabel upper, ConstLabel lower));
+      (* Direct assignment, not ".set": the value of the expression cannot
+         be computed until the operands have been relocated. *)
+      D.direct_assignment temp
+        (ConstSub (ConstLabel upper, ConstLabel lower));
       ConstLabel temp
     | _ ->
       ConstLabel upper
@@ -159,8 +161,8 @@ let offset_into_section_symbol ~section ~symbol
     match X86_proc.system with
     | S_macosx ->
       let temp = new_temp_var () in
-      D.setvar (temp,
-        ConstSub (ConstLabel (escape_symbol upper), ConstLabel lower));
+      D.direct_assignment temp
+        (ConstSub (ConstLabel (escape_symbol upper), ConstLabel lower));
       ConstLabel temp
     | _ ->
       ConstLabel (escape_symbol upper)

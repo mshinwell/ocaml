@@ -217,5 +217,7 @@ type asm_line =
   | Sleb128 of constant
   | Type of string * string
   | Uleb128 of constant
+  (* Mac OS X only: *)
+  | Direct_assignment of string * constant
 
 type asm_program = asm_line list

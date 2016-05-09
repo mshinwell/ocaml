@@ -250,6 +250,7 @@ let print_line b = function
   (* CR mshinwell: think about what to do with this re. DWARF emission *)
   | Uleb128 _
     -> assert false
+  | Direct_assignment _ -> assert false
 
 let generate_asm oc lines =
   let b = Buffer.create 10000 in
