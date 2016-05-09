@@ -126,6 +126,23 @@ let default_debuginfo ?(inner_debuginfo = Debuginfo.none) env_debuginfo =
   | None -> inner_debuginfo
   | Some debuginfo -> debuginfo
 
+let add_path_except_compilation_unit env name =
+  match Env.current_module_path env with
+  | Pident _ -> name
+  | path -> (Path.name path) ^ "." ^ name
+
+(* For the moment try not mangling.
+  let path_except_compilation_unit =
+
+  in
+  let separator = "__" in
+  let mangled = String.concat separator path_except_compilation_unit in
+  match path_except_compilation_unit with
+  | [] -> name
+  | [_] -> mangled ^ name
+  | _ -> mangled ^ separator ^ name
+*)
+
 let rec close_const t env (const : Lambda.structured_constant)
       : Flambda.named * string =
   match const with
@@ -209,7 +226,15 @@ and close t ?debuginfo env (lam : Lambda.lambda) : Flambda.t =
         Format.asprintf "anon-fn[%a]" Location.print_compact location
       | None -> "anon-fn"
     in
-    let closure_bound_var = Variable.create name in
+    let closure_bound_var =
+      (* CR mshinwell: We need to work out how to do this properly.
+         Ideally Compilenv.function_label would have the module path
+         to hand. *)
+      if not !Clflags.debug then
+        Variable.create name
+      else
+        Variable.create (add_path_except_compilation_unit env name)
+    in
     (* CR-soon mshinwell: some of this is now very similar to the let rec case
        below *)
     let set_of_closures_var = Variable.create ("set_of_closures_" ^ name) in

@@ -26,6 +26,16 @@ val base_type_die_name_for_ident
   -> output_path:string
   -> string
 
+type split_base_type_die_name_result = {
+  ident_name : string;
+  output_path : string;
+}
+
+(** The inverse of [base_type_die_name_for_ident]. *)
+val split_base_type_die_name
+   : string
+  -> split_base_type_die_name_result option
+
 (** Take a [fun_name], as found in e.g. [Linearize.fundecl], and turn it
     into a [Symbol], *)
 (* CR-soon mshinwell: we should use [Symbol] everywhere to avoid this
