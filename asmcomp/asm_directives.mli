@@ -28,7 +28,7 @@ module type S = sig
 
   (** Emit subsequent directives to the given section, which must already
       have been declared.  (There is no check for such declaration.) *)
-  val switch_to_section : section_name:string -> unit
+  val switch_to_section : section_name:string -> is_dwarf:bool -> unit
 
   (** Emit a machine-width reference to the given symbol. *)
   val symbol : Symbol.t -> unit

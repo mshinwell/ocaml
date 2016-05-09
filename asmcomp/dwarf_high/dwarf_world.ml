@@ -41,7 +41,7 @@ let emit ~compilation_unit_proto_die ~start_of_code_symbol
   in
   let module A = (val asm : Asm_directives.S) in
   A.reset ();
-  A.switch_to_section ~section_name:"text";
+  A.switch_to_section ~section_name:"text" ~is_dwarf:true;
   A.section_declaration ~section_name:"debug_info" ~is_dwarf:true;
   A.label_declaration ~label_name:debug_info_label;
   (* These labels may seem strange, but they are necessary so that
@@ -55,15 +55,15 @@ let emit ~compilation_unit_proto_die ~start_of_code_symbol
   A.section_declaration ~section_name:"debug_str" ~is_dwarf:true;
   A.section_declaration ~section_name:"debug_line" ~is_dwarf:true;
   A.label_declaration ~label_name:debug_line_label;
-  A.switch_to_section ~section_name:"debug_info";
+  A.switch_to_section ~section_name:"debug_info" ~is_dwarf:true;
   Debug_info_section.emit debug_info asm;
-  A.switch_to_section ~section_name:"debug_abbrev";
+  A.switch_to_section ~section_name:"debug_abbrev" ~is_dwarf:true;
   Abbreviations_table.emit assigned_abbrevs.abbrev_table asm;
-  A.switch_to_section ~section_name:"debug_aranges";
+  A.switch_to_section ~section_name:"debug_aranges" ~is_dwarf:true;
   Aranges_table.emit aranges_table asm;
-  A.switch_to_section ~section_name:"debug_loc";
+  A.switch_to_section ~section_name:"debug_loc" ~is_dwarf:true;
   Debug_loc_table.emit debug_loc_table asm;
-  A.switch_to_section ~section_name:"debug_line";
-  A.switch_to_section ~section_name:"debug_str";
+  A.switch_to_section ~section_name:"debug_line" ~is_dwarf:true;
+  A.switch_to_section ~section_name:"debug_str" ~is_dwarf:true;
   A.emit_cached_strings ();
   A.reset ()

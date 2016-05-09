@@ -23,9 +23,10 @@ let section_declaration ~section_name ~is_dwarf =
   match X86_proc.system with
   | S_macosx ->
     if is_dwarf then
+      let section_name = "__" ^ section_name in
       D.section ["__DWARF"; section_name] None ["regular"; "debug"]
     else
-      D.section ["." ^ section_name] (Some "") ["%progbits"]
+      D.section [section_name] (Some "") []
   | S_gnu
   | S_cygwin
   | S_solaris
@@ -39,10 +40,9 @@ let section_declaration ~section_name ~is_dwarf =
   | S_mingw64
   | S_unknown -> D.section ["." ^ section_name] (Some "") ["%progbits"]
 
-let switch_to_section ~section_name =
+let switch_to_section ~section_name ~is_dwarf =
   match X86_proc.system with
-  (* CR mshinwell: next line may be wrong *)
-  | S_macosx -> section_declaration ~section_name ~is_dwarf:false
+  | S_macosx -> section_declaration ~section_name ~is_dwarf
   | S_gnu
   | S_cygwin
   | S_solaris
@@ -109,14 +109,26 @@ let between_symbol_and_label_offset ~upper ~lower ~offset_upper =
     ConstAdd (ConstLabel upper, Const (Int64.of_int offset_upper)),
     ConstLabel (escape_symbol lower)))
 
-let offset_into_section_label ~base:_ ~label:upper
+let temp_var_counter = ref 0
+let new_temp_var () =
+  let id = !temp_var_counter in
+  incr temp_var_counter;
+  Printf.sprintf "L$set$%d" id
+
+(* XXX the base cannot be ".debug_foo" on the mac *)
+
+let offset_into_section_label ~base ~label:upper
       ~(width : Asm_directives.width) =
   let upper = string_of_label upper in
   let expr : X86_ast.constant =
-    ConstLabel upper
-(*
-    ConstSub (ConstLabel upper, ConstLabel base)
-*)
+    match X86_proc.system with
+    | S_macosx ->
+      let temp = new_temp_var () in
+      D.setvar (temp,
+        ConstSub (ConstLabel upper, ConstLabel base));
+      ConstLabel temp
+    | _ ->
+      ConstLabel upper
   in
   match width with
   (* CR mshinwell: make sure this behaves properly on 32-bit platforms.
@@ -125,14 +137,18 @@ let offset_into_section_label ~base:_ ~label:upper
   | Thirty_two -> D.long expr
   | Sixty_four -> D.qword expr
 
-let offset_into_section_symbol ~base:_ ~symbol
+let offset_into_section_symbol ~base ~symbol
       ~(width : Asm_directives.width) =
   let upper = Linkage_name.to_string (Symbol.label symbol) in
   let expr : X86_ast.constant =
-    ConstLabel (escape_symbol upper)
-(*
-    ConstSub (ConstLabel (escape_symbol upper), ConstLabel base)
-*)
+    match X86_proc.system with
+    | S_macosx ->
+      let temp = new_temp_var () in
+      D.setvar (temp,
+        ConstSub (ConstLabel (escape_symbol upper), ConstLabel base));
+      ConstLabel temp
+    | _ ->
+      ConstLabel (escape_symbol upper)
   in
   match width with
   (* CR mshinwell: make sure this behaves properly on 32-bit platforms.
@@ -140,22 +156,14 @@ let offset_into_section_symbol ~base:_ ~symbol
   | Thirty_two -> D.long expr
   | Sixty_four -> D.qword expr
 
-(* These suffice for GAS, but I think we need the above for the Mac.
-let offset_into_section_64_label ~base:_ ~label:upper =
-  let upper = string_of_label upper in
-  D.qword (ConstLabel upper)
-
-let offset_into_section_64_symbol ~base:_ ~symbol =
-  let upper = Linkage_name.to_string (Symbol.label symbol) in
-  D.qword (ConstLabel (escape_symbol upper))
-*)
-
 let int8 i =
   D.byte (X.const (Int8.to_int i))
 
 (* CR mshinwell: check these are the correct directives for both 64 and 32
    (same for the symbol case above). *)
 
+(* CR mshinwell: Apple's doc says that ".word" is i386-specific.  Should
+   maybe use ".short" instead everywhere.  Needs X86_dsl fixing *)
 let int16 i =
   D.word (X.const (Int16.to_int i))
 
