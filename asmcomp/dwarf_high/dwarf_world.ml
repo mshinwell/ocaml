@@ -15,14 +15,18 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 let emit ~compilation_unit_proto_die ~start_of_code_symbol
-      ~end_of_code_symbol ~debug_loc_table ~debug_line_label asm =
+      ~end_of_code_symbol ~debug_loc_table asm =
   (* CR-soon mshinwell: the [compilation_unit_die] member of the record
      returned from [Assign_abbrevs.run] is now unused *)
   let assigned_abbrevs =
     Assign_abbrevs.run ~proto_die_root:compilation_unit_proto_die
   in
-  let debug_abbrev_label = Linearize.new_label () in
-  let debug_info_label = Linearize.new_label () in
+  let debug_abbrev_label =
+    Asm_directives.label_for_section (Dwarf Debug_abbrev)
+  in
+  let debug_info_label =
+    Asm_directives.label_for_section (Dwarf Debug_info)
+  in
   let debug_info =
     Debug_info_section.create ~dies:assigned_abbrevs.dies
       ~debug_abbrev_label
@@ -41,29 +45,15 @@ let emit ~compilation_unit_proto_die ~start_of_code_symbol
   in
   let module A = (val asm : Asm_directives.S) in
   A.reset ();
-  A.switch_to_section ~section_name:"text";
-  A.section_declaration ~section_name:"debug_info" ~is_dwarf:true;
-  A.label_declaration ~label_name:debug_info_label;
-  (* These labels may seem strange, but they are necessary so that
-     references (DW_FORM_ref_addr / DW_FORM_sec_offset) to places that are
-     currently at the start of these sections get relocated correctly when
-     those places become not at the start (e.g. during linking). *)
-  A.section_declaration ~section_name:"debug_abbrev" ~is_dwarf:true;
-  A.label_declaration ~label_name:debug_abbrev_label;
-  A.section_declaration ~section_name:"debug_aranges" ~is_dwarf:true;
-  A.section_declaration ~section_name:"debug_loc" ~is_dwarf:true;
-  A.section_declaration ~section_name:"debug_str" ~is_dwarf:true;
-  A.section_declaration ~section_name:"debug_line" ~is_dwarf:true;
-  A.label_declaration ~label_name:debug_line_label;
-  A.switch_to_section ~section_name:"debug_info";
+  A.switch_to_section (Dwarf Debug_info);
   Debug_info_section.emit debug_info asm;
-  A.switch_to_section ~section_name:"debug_abbrev";
+  A.switch_to_section (Dwarf Debug_abbrev);
   Abbreviations_table.emit assigned_abbrevs.abbrev_table asm;
-  A.switch_to_section ~section_name:"debug_aranges";
+  A.switch_to_section (Dwarf Debug_aranges);
   Aranges_table.emit aranges_table asm;
-  A.switch_to_section ~section_name:"debug_loc";
+  A.switch_to_section (Dwarf Debug_loc);
   Debug_loc_table.emit debug_loc_table asm;
-  A.switch_to_section ~section_name:"debug_line";
-  A.switch_to_section ~section_name:"debug_str";
+  A.switch_to_section (Dwarf Debug_line);
+  A.switch_to_section (Dwarf Debug_str);
   A.emit_cached_strings ();
   A.reset ()

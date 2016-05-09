@@ -100,7 +100,7 @@ let emit t asm =
   | Indirect_string s ->
     (* "Indirect" strings are collected together into ".debug_str". *)
     let label = A.cache_string s in
-    A.offset_into_section_label ~base:".debug_str" ~label
+    A.offset_into_section_label ~section:(Dwarf Debug_str) ~label
       ~width:(width_for_ref_addr_or_sec_offset ())
   | Absolute_code_address addr -> Target_addr.emit addr asm
   | Code_address_from_label label -> A.label label
@@ -113,20 +113,20 @@ let emit t asm =
     A.symbol_plus_offset symbol
       ~offset_in_bytes:(Target_addr.to_int64 offset_in_bytes)
   | Offset_into_debug_line label ->
-    A.offset_into_section_label ~base:".debug_line" ~label
+    A.offset_into_section_label ~section:(Dwarf Debug_line) ~label
       ~width:(width_for_ref_addr_or_sec_offset ())
   | Offset_into_debug_line_from_symbol symbol ->
-    A.offset_into_section_symbol ~base:".debug_line" ~symbol
+    A.offset_into_section_symbol ~section:(Dwarf Debug_line) ~symbol
       ~width:(width_for_ref_addr_or_sec_offset ())
   | Offset_into_debug_info label ->
-    A.offset_into_section_label ~base:".debug_info" ~label
+    A.offset_into_section_label ~section:(Dwarf Debug_info) ~label
       ~width:(width_for_ref_addr_or_sec_offset ())
   | Offset_into_debug_info_from_symbol symbol ->
-    A.offset_into_section_symbol ~base:".debug_info" ~symbol
+    A.offset_into_section_symbol ~section:(Dwarf Debug_info) ~symbol
       ~width:(width_for_ref_addr_or_sec_offset ())
   | Offset_into_debug_loc label ->
-    A.offset_into_section_label ~base:".debug_loc" ~label
+    A.offset_into_section_label ~section:(Dwarf Debug_loc) ~label
       ~width:(width_for_ref_addr_or_sec_offset ())
   | Offset_into_debug_abbrev label ->
-    A.offset_into_section_label ~base:".debug_abbrev" ~label
+    A.offset_into_section_label ~section:(Dwarf Debug_abbrev) ~label
       ~width:(width_for_ref_addr_or_sec_offset ())

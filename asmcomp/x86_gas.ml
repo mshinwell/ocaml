@@ -299,6 +299,10 @@ let print_line b = function
   | Mode386
   | Model _
     -> assert false
+  (* Mac OS X only *)
+  | Direct_assignment (var, const) ->
+    assert (system = S_macosx);
+    bprintf b "%s = %a" var cst const
 
 let generate_asm oc lines =
   let b = Buffer.create 10000 in

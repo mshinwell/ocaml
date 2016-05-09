@@ -20,6 +20,5 @@ val emit
   -> start_of_code_symbol:Symbol.t
   -> end_of_code_symbol:Symbol.t
   -> debug_loc_table:Debug_loc_table.t
-  -> debug_line_label:Linearize.label
   -> (module Asm_directives.S)
   -> unit

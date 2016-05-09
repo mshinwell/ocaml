@@ -21,14 +21,32 @@ type width =
   | Thirty_two
   | Sixty_four
 
-module type S = sig
-  (** Declare the existence of a section with the given name.
-      If the section is a DWARF section, [is_dwarf] must be [true]. *)
-  val section_declaration : section_name:string -> is_dwarf:bool -> unit
+type dwarf_section =
+  | Debug_info
+  | Debug_abbrev
+  | Debug_aranges
+  | Debug_loc
+  | Debug_str
+  | Debug_line
 
-  (** Emit subsequent directives to the given section, which must already
-      have been declared.  (There is no check for such declaration.) *)
-  val switch_to_section : section_name:string -> unit
+type section =
+  | Dwarf of dwarf_section
+
+(** Retrieve the label that [switch_to_section] (below) will put at the start
+    of the given section.  This function may be called before
+    [switch_to_section] for the section concerned. *)
+val label_for_section : section -> Linearize.label
+
+module type S = sig
+  (** Emit subsequent directives to the given section.  If this function
+      has not been called before on the particular section, a label
+      declaration will be emitted after declaring the section.
+      Such labels may seem strange, but they are necessary so that
+      references (e.g. DW_FORM_ref_addr / DW_FORM_sec_offset when emitting
+      DWARF) to places that are currently at the start of these sections
+      get relocated correctly when those places become not at the start
+      (e.g. during linking). *)
+  val switch_to_section : section -> unit
 
   (** Emit a machine-width reference to the given symbol. *)
   val symbol : Symbol.t -> unit
@@ -104,7 +122,7 @@ module type S = sig
       address of [base] from the address of [label].  [width] specifies the
       size of the integer. *)
   val offset_into_section_label
-     : base:string  (* section name *)
+     : section:section
     -> label:Linearize.label
     -> width:width
     -> unit
@@ -112,7 +130,7 @@ module type S = sig
   (** As for [offset_into_section_label], but using a symbol instead of
       a label as one end of the measurement. *)
   val offset_into_section_symbol
-     : base:string  (* section name *)
+     : section:section
     -> symbol:Symbol.t
     -> width:width
     -> unit

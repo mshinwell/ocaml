@@ -22,7 +22,6 @@ module DAH = Dwarf_attribute_helpers
 type t = {
   compilation_unit_proto_die : Proto_die.t;
   debug_loc_table : Debug_loc_table.t;
-  debug_line_label : Linearize.label;
   start_of_code_symbol : Symbol.t;
   end_of_code_symbol : Symbol.t;
   output_path : string;
@@ -32,7 +31,6 @@ type t = {
 let () = Dwarf_format.set Sixty_four
 
 let create ~(source_provenance : Timings.source_provenance) =
-  let debug_line_label = Linearize.new_label () in
   let output_path, directory =
     match source_provenance with
     | File path ->
@@ -53,6 +51,7 @@ let create ~(source_provenance : Timings.source_provenance) =
     Symbol.create (Compilation_unit.get_current_exn ())
       (Linkage_name.create "code_end")
   in
+  let debug_line_label = Asm_directives.label_for_section (Dwarf Debug_line) in
   let compilation_unit_proto_die =
     let attribute_values =
       let producer_name = Printf.sprintf "ocamlopt %s" Sys.ocaml_version in
@@ -71,7 +70,6 @@ let create ~(source_provenance : Timings.source_provenance) =
   let debug_loc_table = Debug_loc_table.create () in
   { compilation_unit_proto_die;
     debug_loc_table;
-    debug_line_label;
     start_of_code_symbol;
     end_of_code_symbol;
     output_path;
@@ -325,5 +323,4 @@ let emit t asm =
     ~start_of_code_symbol:t.start_of_code_symbol
     ~end_of_code_symbol:t.end_of_code_symbol
     ~debug_loc_table:t.debug_loc_table
-    ~debug_line_label:t.debug_line_label
     asm
