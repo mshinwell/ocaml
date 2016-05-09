@@ -263,8 +263,9 @@ and close t ?debuginfo env (lam : Lambda.lambda) : Flambda.t =
       }
     in
     Flambda.create_let set_of_closures_var set_of_closures
-      (name_expr (Project_closure (project_closure)) ~provenance
+      (name_expr (Project_closure (project_closure))
         ~name:("project_closure_" ^ name))
+      ~provenance
   | Lapply { ap_func; ap_args; ap_loc; ap_should_be_tailcall = _;
         ap_inlined; ap_specialised; } ->
     Lift_code.lifting_helper (close_list t env ap_args)
@@ -687,8 +688,9 @@ and close_let_bound_expression t ?let_rec_ident let_bound_var env
       }
     in
     Expr (Flambda.create_let set_of_closures_var set_of_closures
-      (name_expr (Project_closure (project_closure)) ~provenance
-        ~name:(Variable.base_name let_bound_var)))
+      (name_expr (Project_closure (project_closure))
+        ~name:(Variable.base_name let_bound_var))
+      ~provenance)
   | lam -> Expr (close t env lam)
 
 let lambda_to_flambda ~backend ~module_ident ~size ~filename lam

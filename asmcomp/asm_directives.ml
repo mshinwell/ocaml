@@ -42,6 +42,7 @@ let label_for_section = function
   | Dwarf Debug_line -> debug_line_label
 
 module type S = sig
+  val init : unit -> unit
   val switch_to_section : section -> unit
   val symbol : Symbol.t -> unit
   val define_symbol : Symbol.t -> unit

@@ -38,6 +38,9 @@ type section =
 val label_for_section : section -> Linearize.label
 
 module type S = sig
+  (** To be called by the emitter at the very start of code generation. *)
+  val init : unit -> unit
+
   (** Emit subsequent directives to the given section.  If this function
       has not been called before on the particular section, a label
       declaration will be emitted after declaring the section.

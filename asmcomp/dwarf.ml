@@ -28,7 +28,10 @@ type t = {
   mutable emitted : bool;
 }
 
-let () = Dwarf_format.set Sixty_four
+(* CR mshinwell: We need to figure out how to set this.
+   Note that on OS X 10.11 (El Capitan), dwarfdump doesn't seem to be able
+   to read our 64-bit DWARF output. *)
+let () = Dwarf_format.set Thirty_two
 
 let create ~(source_provenance : Timings.source_provenance) =
   let output_path, directory =

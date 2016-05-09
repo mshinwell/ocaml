@@ -904,6 +904,7 @@ let data l =
 
 let begin_assembly() =
   X86_proc.reset_asm_code ();
+  Asm_directives_x86.init ();
   reset_debug_info();                   (* PR#5603 *)
   reset_imp_table();
   float_constants := [];

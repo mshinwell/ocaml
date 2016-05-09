@@ -44,7 +44,6 @@ let emit ~compilation_unit_proto_die ~start_of_code_symbol
       ~debug_info
   in
   let module A = (val asm : Asm_directives.S) in
-  A.reset ();
   A.switch_to_section (Dwarf Debug_info);
   Debug_info_section.emit debug_info asm;
   A.switch_to_section (Dwarf Debug_abbrev);
@@ -55,5 +54,4 @@ let emit ~compilation_unit_proto_die ~start_of_code_symbol
   Debug_loc_table.emit debug_loc_table asm;
   A.switch_to_section (Dwarf Debug_line);
   A.switch_to_section (Dwarf Debug_str);
-  A.emit_cached_strings ();
-  A.reset ()
+  A.emit_cached_strings ()

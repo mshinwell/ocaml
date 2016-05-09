@@ -93,6 +93,25 @@ let switch_to_section (section : Asm_directives.section) =
     label_declaration ~label_name:(Asm_directives.label_for_section section)
   end
 
+let cached_strings = ref ([] : (string * Linearize.label) list)
+
+let reset () =
+  cached_strings := [];
+  sections_seen := []
+
+let init () =
+  reset ();
+  match X86_proc.system with
+  | S_macosx -> ()
+  | _ ->
+    (* Forward label references are illegal in gas. *)
+    switch_to_section (Dwarf Debug_info);
+    switch_to_section (Dwarf Debug_abbrev);
+    switch_to_section (Dwarf Debug_aranges);
+    switch_to_section (Dwarf Debug_loc);
+    switch_to_section (Dwarf Debug_str);
+    switch_to_section (Dwarf Debug_line)
+
 let symbol_prefix = if X86_proc.system = X86_proc.S_macosx then "_" else ""
 
 let escape_symbol s = X86_proc.string_of_symbol symbol_prefix s
@@ -202,8 +221,6 @@ let sleb128 i =
 let string str =
   D.bytes str
 
-let cached_strings = ref ([] : (string * Linearize.label) list)
-
 let cache_string str =
   match List.assoc str !cached_strings with
   | label -> label
@@ -219,101 +236,3 @@ let emit_cached_strings () =
       int8 Int8.zero)
     !cached_strings;
   cached_strings := []
-
-let reset () =
-  cached_strings := []
-
-(*
-    begin match Emitter.target emitter with
-    | `Other ->
-      Emitter.emit_offset_into_section emitter
-        (`Label label) ".debug_str"
-    | `MacOS_X -> assert false
-    (*
-      let count = !set_counter in
-      let name = Printf.sprintf "Ldwarf_value%d" count in
-      incr set_counter;
-      Emitter.emit_string emitter name;
-      Emitter.emit_string emitter " = ";
-      Emitter.emit_label emitter label;
-      Emitter.emit_string emitter "-";
-      Emitter.emit_label emitter
-        (Section_names.starting_label Section_names.debug_str);
-      Emitter.emit_string emitter "\n";
-      emit (Offset_from_var name) asm
-    *)
-    end
-*)
-
-(*
-  | Absolute_offset o ->
-    (* CR mshinwell: share with initial_length.ml *)
-    if Int64.compare o 0xfffffff0L >= 0 then begin
-      failwith "Absolute offset is too large for 32-bit DWARF"
-    end;
-    emit_directive_for_offset asm;
-    Emitter.emit_string emitter (sprintf "0x%Lx\n" o);
-  | Offset_from_label (label, section) ->
-  | Reference_from_label label ->
-    emit_directive_for_offset asm;
-    Emitter.emit_label emitter label;
-    Emitter.emit_string emitter "\n"
-  | Code_address_from_label_diff (s2, s1) ->
-    let count = !set_counter in
-    let name = Printf.sprintf "Ldwarf_value%d" count in
-    incr set_counter;
-    begin match Emitter.target emitter with
-    | `Other -> emit_directive_for_nativeint asm
-    | `MacOS_X ->
-      Emitter.emit_string emitter name;
-      Emitter.emit_string emitter " = "
-    end;
-    begin match s2 with
-    | `Symbol s2 -> Emitter.emit_symbol emitter s2
-    | `Symbol_plus_offset_in_bytes (s2, offset) ->
-      Emitter.emit_symbol emitter s2;
-      Emitter.emit_string emitter " + ";
-      Emitter.emit_string emitter (Printf.sprintf "%d" offset)
-    | `Label s2 -> Emitter.emit_label emitter s2
-    end;
-    begin match Emitter.target emitter with
-    | `Other -> Emitter.emit_string emitter " - "
-    | `MacOS_X -> Emitter.emit_string emitter "-"
-    end;
-    begin match s1 with
-    | `Symbol s1 -> Emitter.emit_symbol emitter s1
-    | `Label s1 -> Emitter.emit_label emitter s1
-    end;
-    Emitter.emit_string emitter "\n";
-    begin match Emitter.target emitter with
-    | `Other -> ()
-    | `MacOS_X ->
-      emit_as_native_int (`String name) asm
-    end
-  | Code_address_from_label_diff_minus_8 (s2, s1) ->
-    (* XXX fix this nonsense *)
-    let count = !set_counter in
-    let name = Printf.sprintf "Ldwarf_value%d" count in
-    incr set_counter;
-    begin match Emitter.target emitter with
-    | `Other -> emit_directive_for_nativeint asm
-    | `MacOS_X ->
-      Emitter.emit_string emitter name;
-      Emitter.emit_string emitter " = "
-    end;
-    begin match s2 with
-    | `Symbol s2 -> Emitter.emit_symbol emitter s2
-    | `Label s2 -> Emitter.emit_label emitter s2
-    end;
-    begin match Emitter.target emitter with
-    | `Other -> Emitter.emit_string emitter " - 1 - "
-    | `MacOS_X -> Emitter.emit_string emitter "-1-"
-    end;
-    Emitter.emit_symbol emitter s1;
-    Emitter.emit_string emitter "\n";
-    begin match Emitter.target emitter with
-    | `Other -> ()
-    | `MacOS_X ->
-      emit_as_native_int (`String name) asm
-    end
-*)
