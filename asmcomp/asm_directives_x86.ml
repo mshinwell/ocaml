@@ -128,7 +128,7 @@ let temp_var_counter = ref 0
 let new_temp_var () =
   let id = !temp_var_counter in
   incr temp_var_counter;
-  Printf.sprintf "L$temp$%d" id
+  Printf.sprintf "Ltemp%d" id
 
 let offset_into_section_label ~section ~label:upper
       ~(width : Asm_directives.width) =
