@@ -82,17 +82,47 @@ let augment_availability_at_raise avail =
    referencing, by name, when debugging.)
 *)
 let rec available_regs instr ~avail_before =
+  if not (avail_before == all_regs) then begin
+    (* A register should not be an input to an instruction unless it is
+       available. *)
+    assert (R.Set.subset (instr_arg instr) avail_before);
+    (* Every register that is live across an instruction should also be
+       available before the instruction. *)
+    assert (R.Set.subset (instr_live instr) avail_before)
+  end;
+  let avail_before =
+    (* If this instruction might expand into multiple machine instructions
+       and clobber registers during that code sequence, make sure any
+       such clobbered registers are marked as "unavailable before". *)
+    (* CR-someday mshinwell: We could maybe try to improve on this in the
+       future, so e.g. when stopped immediately before an allocation,
+       registers aren't marked unavailable when not yet clobbered by the
+       allocation code.
+       Should we be using "available across" instead of "available before"?
+       It's not clear that actually solves the problem. *)
+    if avail_before == all_regs then
+      all_regs
+    else
+      let open Mach in
+      match instr.M.desc with
+      | Iop (Ialloc _) ->
+        let made_unavailable =
+          R.Set.fold (fun reg acc ->
+              let made_unavailable =
+                R.Set.filter (regs_have_same_location reg) avail_before
+              in
+              R.Set.union made_unavailable acc)
+            (R.set_of_array (Proc.destroyed_at_oper instr.M.desc))
+            (* ~init:*)R.Set.empty
+        in
+        R.Set.diff avail_before made_unavailable
+      | _ -> avail_before
+  in
   instr.M.available_before <- avail_before;
   let avail_after =
     if avail_before == all_regs then
       all_regs  (* This instruction is unreachable. *)
     else begin
-      (* A register should not be an input to an instruction unless it is
-         available. *)
-      assert (R.Set.subset (instr_arg instr) avail_before);
-      (* Every register that is live across an instruction should also be
-         available before the instruction. *)
-      assert (R.Set.subset (instr_live instr) avail_before);
       let open Mach in
       match instr.desc with
       | Iend -> avail_before
@@ -138,13 +168,18 @@ let rec available_regs instr ~avail_before =
              2. being clobbered by the instruction writing out results.  The
                 special case for moves above keeps the following code
                 straightforward. *)
+          let unavailable_if_in_same_reg_as =
+            R.Set.union (R.set_of_array (Proc.destroyed_at_oper instr.desc))
+              results
+          in
           R.Set.fold (fun reg acc ->
-            let made_unavailable =
-              R.Set.filter (regs_have_same_location reg) candidate_avail_after
-            in
-            R.Set.union made_unavailable acc)
-            results
-            (* ~init:*)(R.set_of_array (Proc.destroyed_at_oper instr.desc))
+              let made_unavailable =
+                R.Set.filter (regs_have_same_location reg)
+                  candidate_avail_after
+              in
+              R.Set.union made_unavailable acc)
+            unavailable_if_in_same_reg_as
+            (* ~init:*)R.Set.empty
         in
         R.Set.union results (R.Set.diff candidate_avail_after made_unavailable)
       | Iifthenelse (_, ifso, ifnot) -> join [ifso; ifnot] ~avail_before

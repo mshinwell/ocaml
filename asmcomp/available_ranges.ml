@@ -296,12 +296,12 @@ let births_and_deaths ~insn ~prev_insn =
   in
   let births =
     match prev_insn with
-    | None -> (available_before insn)
+    | None -> available_before insn
     | Some prev_insn ->
       if not adjusts_sp then
         Reg.Set.diff (available_before insn) (available_before prev_insn)
       else
-        (available_before insn)
+        available_before insn
   in
   let deaths =
     match prev_insn with
@@ -310,7 +310,7 @@ let births_and_deaths ~insn ~prev_insn =
       if not adjusts_sp then
         Reg.Set.diff (available_before prev_insn) (available_before insn)
       else
-        (available_before prev_insn)
+        available_before prev_insn
   in
   births, deaths
 
