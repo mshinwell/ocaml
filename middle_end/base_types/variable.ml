@@ -21,6 +21,7 @@ type t = {
   name : string;
   name_stamp : int;
   (** [name_stamp]s are unique within any given compilation unit. *)
+  original_ident : Ident.t option;
 }
 
 include Identifiable.Make (struct
@@ -61,7 +62,7 @@ end)
 
 let previous_name_stamp = ref (-1)
 
-let create ?current_compilation_unit name =
+let create ?original_ident ?current_compilation_unit name =
   let compilation_unit =
     match current_compilation_unit with
     | Some compilation_unit -> compilation_unit
@@ -74,10 +75,14 @@ let create ?current_compilation_unit name =
   { compilation_unit;
     name;
     name_stamp;
+    original_ident;
   }
 
-let create_with_same_name_as_ident ident = create (Ident.name ident)
+(* CR mshinwell: rename this function *)
+let create_with_same_name_as_ident ident =
+  create ~original_ident:ident (Ident.name ident)
 
+(* CR mshinwell: check where this is needed now we have [original_ident] *)
 let clambda_name t =
   (Compilation_unit.string_for_printing t.compilation_unit) ^ "_" ^ t.name
 
@@ -104,6 +109,17 @@ let base_name t =
 
 let unique_name t =
   t.name ^ "_" ^ (string_of_int t.name_stamp)
+
+let original_ident t = t.original_ident
+(* CR mshinwell: [Mutable_variable] has this.  What's going on?
+   I think it needs to preserve the original.
+  { t.ident with
+    name =
+      Format.asprintf "%a_%s"
+        Compilation_unit.print t.compilation_unit
+        t.ident.name;
+  }
+*)
 
 let print_list ppf ts =
   List.iter (fun t -> Format.fprintf ppf "@ %a" print t) ts

@@ -155,9 +155,13 @@ end = struct
 
   let ident_for_var_exn t id = Variable.Map.find id t.var
 
+  (* CR-soon mshinwell: potentially misleading function name *)
   let add_fresh_ident t var =
-    (* CR-someday mshinwell: Add [Variable.unique_name] *)
-    let id = Ident.create (Variable.base_name var) in
+    let id =
+      match Variable.original_ident var with
+      | Some ident -> ident
+      | None -> Ident.create (Variable.base_name var)
+    in
     id, { t with var = Variable.Map.add var id t.var }
 
   let ident_for_mutable_var_exn t mut_var =
