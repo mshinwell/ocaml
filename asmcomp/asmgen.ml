@@ -91,7 +91,7 @@ let rec regalloc ppf round fd =
     Reg.reinit(); Liveness.fundecl ppf newfd; regalloc ppf (round + 1) newfd
   end else newfd
 
-let available_ranges _ppf fundecl =
+let available_regs _ppf fundecl =
   if not !Clflags.debug then fundecl
   else begin
     (* CR mshinwell: add -d... *)
@@ -109,7 +109,8 @@ let emit ppf fundecl ~dwarf =
     Available_ranges.rewrite_labels available_ranges ~env:label_rewriting
   in
   if !Clflags.dump_linear then begin
-    Format.fprintf ppf "*** %s@.%a@." "Available subranges"
+    Format.fprintf ppf
+      "*** %s@.%a@." "Available subranges after coalescing of labels"
       Printlinear.fundecl fundecl
   end;
   let emit_info = Emit.fundecl fundecl in
@@ -143,7 +144,7 @@ let compile_fundecl (ppf : formatter) ~dwarf fd_cmm =
   ++ pass_dump_if ppf dump_split "After live range splitting"
   ++ Timings.(accumulate_time (Liveness build)) (liveness ppf)
   ++ Timings.(accumulate_time (Regalloc build)) (regalloc ppf 1)
-  ++ Timings.(accumulate_time (Available_regs build)) (available_ranges ppf)
+  ++ Timings.(accumulate_time (Available_regs build)) (available_regs ppf)
   ++ pass_dump_if ppf dump_live "Available regs"
   ++ Timings.(accumulate_time (Linearize build)) Linearize.fundecl
   ++ pass_dump_linear_if ppf dump_linear "Linearized code"
