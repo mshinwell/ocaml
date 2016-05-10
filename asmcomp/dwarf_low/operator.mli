@@ -16,12 +16,15 @@ type t
 
 include Emittable.S with type t := t
 
+(** Note this is not an indirection through the symbol.  It just evaluates
+    to the address of the symbol + the offset. *)
 val at_offset_from_symbol
    : base:string
   -> symbol:Symbol.t
   -> offset_in_bytes:Target_addr.t
   -> t
 
+(** Again, this does not dereference the symbol. *)
 val at_symbol : Symbol.t -> t
 
 val register : reg_number:int -> t
@@ -35,5 +38,6 @@ val frame_base_register : offset_in_bytes:Target_addr.t -> t
 
 type implicit_value =
   | Int of int
+  | Symbol of { symbol : Symbol.t; offset_in_bytes : Target_addr.t; }
 
 val implicit : implicit_value -> t
