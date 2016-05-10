@@ -193,13 +193,13 @@ let rec instr ppf i =
   | Iraise k ->
       fprintf ppf "%s %a" (Lambda.raise_kind k) reg i.arg.(0)
   | Iphantom_let_start (label, ident, provenance, defining_expr) ->
-      fprintf ppf "phantom_let_start %d = %a %a %a"
+      fprintf ppf "@[phantom_let_start %d = %a %a@ %a@]"
         label
         Ident.print ident
         Printclambda.let_provenance provenance
         Printclambda.phantom_defining_expr defining_expr
   | Iphantom_let_end label ->
-      fprintf ppf "phantom_let_end %d" label
+      fprintf ppf "@[phantom_let_end %d@]" label
   end;
   if not (Debuginfo.is_none i.dbg) then
     fprintf ppf "%s" (Debuginfo.to_string i.dbg);

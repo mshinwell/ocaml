@@ -810,8 +810,7 @@ asmcomp/available_ranges.cmx : middle_end/base_types/symbol.cmx \
     asmcomp/linearize.cmx typing/ident.cmx bytecomp/debuginfo.cmx \
     asmcomp/clambda.cmx asmcomp/available_ranges.cmi
 asmcomp/available_ranges.cmi : middle_end/base_types/symbol.cmi \
-    asmcomp/reg.cmi asmcomp/linearize.cmi typing/ident.cmi \
-    asmcomp/clambda.cmi
+    asmcomp/reg.cmi asmcomp/linearize.cmi typing/ident.cmi
 asmcomp/available_regs.cmo : asmcomp/reg.cmi asmcomp/proc.cmi \
     asmcomp/mach.cmi asmcomp/available_regs.cmi
 asmcomp/available_regs.cmx : asmcomp/reg.cmx asmcomp/proc.cmx \
@@ -1508,7 +1507,8 @@ asmcomp/dwarf_low/location_expression.cmx : \
     asmcomp/dwarf_low/location_expression.cmi
 asmcomp/dwarf_low/location_expression.cmi : \
     asmcomp/dwarf_low/target_addr.cmi middle_end/base_types/symbol.cmi \
-    asmcomp/reg.cmi asmcomp/dwarf_low/emittable.cmi
+    asmcomp/reg.cmi asmcomp/dwarf_low/operator.cmi \
+    asmcomp/dwarf_low/emittable.cmi
 asmcomp/dwarf_low/location_list.cmo : asmcomp/dwarf_low/target_addr.cmi \
     asmcomp/dwarf_low/std_internal.cmo \
     asmcomp/dwarf_low/location_list_entry.cmi asmcomp/linearize.cmi \
@@ -1538,10 +1538,12 @@ asmcomp/dwarf_low/location_list_entry.cmi : middle_end/base_types/symbol.cmi \
     asmcomp/dwarf_low/location_expression.cmi asmcomp/linearize.cmi \
     asmcomp/dwarf_low/emittable.cmi
 asmcomp/dwarf_low/operator.cmo : asmcomp/dwarf_low/target_addr.cmi \
-    asmcomp/dwarf_low/int8.cmi asmcomp/dwarf_low/dwarf_value.cmi \
+    utils/misc.cmi asmcomp/dwarf_low/int8.cmi \
+    asmcomp/dwarf_low/dwarf_value.cmi asmcomp/arch.cmo \
     asmcomp/dwarf_low/operator.cmi
 asmcomp/dwarf_low/operator.cmx : asmcomp/dwarf_low/target_addr.cmx \
-    asmcomp/dwarf_low/int8.cmx asmcomp/dwarf_low/dwarf_value.cmx \
+    utils/misc.cmx asmcomp/dwarf_low/int8.cmx \
+    asmcomp/dwarf_low/dwarf_value.cmx asmcomp/arch.cmx \
     asmcomp/dwarf_low/operator.cmi
 asmcomp/dwarf_low/operator.cmi : asmcomp/dwarf_low/target_addr.cmi \
     middle_end/base_types/symbol.cmi asmcomp/dwarf_low/emittable.cmi
@@ -1561,7 +1563,7 @@ asmcomp/dwarf_low/simple_location_expression.cmx : \
     asmcomp/dwarf_low/simple_location_expression.cmi
 asmcomp/dwarf_low/simple_location_expression.cmi : \
     asmcomp/dwarf_low/target_addr.cmi middle_end/base_types/symbol.cmi \
-    asmcomp/dwarf_low/emittable.cmi
+    asmcomp/dwarf_low/operator.cmi asmcomp/dwarf_low/emittable.cmi
 asmcomp/dwarf_low/single_location_description.cmo : \
     asmcomp/dwarf_low/simple_location_expression.cmi \
     asmcomp/dwarf_low/single_location_description.cmi

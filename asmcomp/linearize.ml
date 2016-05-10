@@ -222,7 +222,9 @@ let rec linear i n =
   | Iop op ->
       copy_instr (Lop op) i (linear i.Mach.next n)
   | Ireturn ->
-      let n1 = copy_instr Lreturn i (discard_dead_code n) in
+      let n1 =
+        copy_instr Lreturn i (discard_dead_code (linear i.Mach.next n))
+      in
       if !Proc.contains_calls
       then cons_instr Lreloadretaddr n1
       else n1
@@ -345,10 +347,6 @@ let rec linear i n =
           assert (not (Ident.mem ident !phantom_let_ranges));
           phantom_let_ranges :=
             Ident.add ident phantom_let_range !phantom_let_ranges;
-(*
-Format.eprintf "Phantom range for %s: L%d -> L%d\n%!"
-  (Ident.unique_name ident) starting_label ending_label;
-*)
           copy_instr (Llabel ending_label) i (linear i.Mach.next n)
       | exception Not_found -> assert false
       end

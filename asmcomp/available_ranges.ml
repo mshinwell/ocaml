@@ -436,6 +436,7 @@ let create ~fundecl ~phantom_ranges =
     process_instruction t ~first_insn ~insn:first_insn ~prev_insn:None
       ~open_subrange_start_insns:Reg.Map.empty
   in
+(*
   Printf.printf "Available ranges for function: %s\n%!" fundecl.L.fun_name;
   fold t ~init:()
     ~f:(fun () ~ident ~is_unique ~range ->
@@ -446,4 +447,5 @@ let create ~fundecl ~phantom_ranges =
             Printf.printf "    Label range: %d -> %d\n%!"
               (Available_subrange.start_pos available_subrange)    
               (Available_subrange.end_pos available_subrange)));
+*)
   t, { fundecl with L.fun_body = first_insn; }
