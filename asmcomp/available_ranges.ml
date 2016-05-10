@@ -29,8 +29,7 @@ type phantom_defining_expr =
 
 let rewrite_label env label =
   match Numbers.Int.Map.find label env with
-  | exception Not_found ->
-    Misc.fatal_errorf "Available_ranges: label %d not defined" label
+  | exception Not_found -> label
   | label -> label
 
 module Available_subrange : sig

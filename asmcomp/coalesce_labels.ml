@@ -20,17 +20,12 @@ module Option = Misc.Stdlib.Option
 
 let rewrite_label env label =
   match Int.Map.find label env with
-  | exception Not_found ->
-    Misc.fatal_errorf "Coalesce_labels: label %d undefined" label
+  | exception Not_found -> label
   | label -> label
 
-let rewrite_or_add_label env label =
-  match Int.Map.find label env with
-  | exception Not_found ->
-    let new_label = Linearize.new_label () in
-    let env = Int.Map.add label new_label env in
-    env, new_label
-  | label -> env, label
+(* Since there may be both forward references and labels that require
+   coalescing (possibly where one of a group to be coalesced was forward
+   referenced), we do this in two passes. *)
 
 let rec coalesce env (insn : L.instruction) ~last_insn_was_label =
   if insn == L.end_instr then
@@ -38,62 +33,20 @@ let rec coalesce env (insn : L.instruction) ~last_insn_was_label =
   else
     let env, desc, this_insn_is_label =
       match insn.desc with
-      | Lprologue
-      | Lend
-      | Lop _
-      | Lreloadretaddr
-      | Lreturn
-      | Lpushtrap
-      | Lpoptrap
-      | Lraise _
-      | Lavailable_subrange _ -> env, Some insn.desc, None
       | Llabel label ->
         begin match last_insn_was_label with
         | Some existing_label ->
+          (* This label immediately follows another, so delete it.
+             References to it will be rewritten to the previous label. *)
           let env = Int.Map.add label existing_label env in
           env, None, last_insn_was_label
         | None ->
-          let env, new_label =
-            match Int.Map.find label env with
-            | exception Not_found ->
-              let new_label = Linearize.new_label () in
-              let env = Int.Map.add label new_label env in
-              env, new_label
-            | label_used_prior_to_decl -> env, label_used_prior_to_decl
-          in
-          env, Some (L.Llabel new_label), Some new_label
+          env, Some insn.desc, Some label
         end
-      | Lbranch label ->
-        let env, label = rewrite_or_add_label env label in
-        env, Some (L.Lbranch label), None
-      | Lcondbranch (test, label) ->
-        let env, label = rewrite_or_add_label env label in
-        env, Some (L.Lcondbranch (test, label)), None
-      | Lcondbranch3 (label1_opt, label2_opt, label3_opt) ->
-        let rewrite_opt env label_opt =
-          match label_opt with
-          | None -> env, None
-          | Some label ->
-            let env, label = rewrite_or_add_label env label in
-            env, Some label
-        in
-        let env, label1_opt = rewrite_opt env label1_opt in
-        let env, label2_opt = rewrite_opt env label2_opt in
-        let env, label3_opt = rewrite_opt env label3_opt in
-        env, Some (L.Lcondbranch3 (label1_opt, label2_opt, label3_opt)),
-          None
-      | Lswitch labels ->
-        let env, labels =
-          Array.fold_left (fun (env, labels) label ->
-              let env, label = rewrite_or_add_label env label in
-              env, label::labels)
-            (env, [])
-            labels
-        in
-        env, Some (L.Lswitch (Array.of_list (List.rev labels))), None
-      | Lsetuptrap label ->
-        let env, label = rewrite_or_add_label env label in
-        env, Some (L.Lsetuptrap label), None
+      | Lprologue | Lend | Lop _ | Lreloadretaddr | Lreturn | Lpushtrap
+      | Lpoptrap | Lraise _ | Lavailable_subrange _ | Lbranch _
+      | Lcondbranch _ | Lcondbranch3 _ | Lswitch _ | Lsetuptrap _ ->
+        env, Some insn.desc, None
     in
     let env, next =
       coalesce env insn.next ~last_insn_was_label:this_insn_is_label
@@ -109,12 +62,44 @@ let rec coalesce env (insn : L.instruction) ~last_insn_was_label =
     in
     env, insn
 
+let rec renumber env (insn : L.instruction) =
+  if insn == L.end_instr then
+    insn
+  else
+    let desc : L.instruction_desc =
+      match insn.desc with
+      | Lprologue
+      | Lend
+      | Lop _
+      | Lreloadretaddr
+      | Lreturn
+      | Lpushtrap
+      | Lpoptrap
+      | Lraise _
+      | Lavailable_subrange _ -> insn.desc
+      | Llabel label -> Llabel (rewrite_label env label)
+      | Lbranch label -> Lbranch (rewrite_label env label)
+      | Lcondbranch (test, label) ->
+        Lcondbranch (test, rewrite_label env label)
+      | Lcondbranch3 (label1_opt, label2_opt, label3_opt) ->
+        Lcondbranch3 (
+          Option.map (rewrite_label env) label1_opt,
+          Option.map (rewrite_label env) label2_opt,
+          Option.map (rewrite_label env) label3_opt)
+      | Lswitch labels ->
+        Lswitch (Array.map (rewrite_label env) labels)
+      | Lsetuptrap label -> Lsetuptrap (rewrite_label env label)
+    in
+    let next = renumber env insn.next in
+    { insn with L. desc; next; }
+
 let fundecl (decl : L.fundecl) : int Int.Map.t * L.fundecl =
   if not !Clflags.debug then Int.Map.empty, decl
   else begin
     let env, fun_body =
       coalesce Int.Map.empty decl.fun_body ~last_insn_was_label:None
     in
+    let fun_body = renumber env fun_body in
     let fun_phantom_let_ranges =
       Ident.fold_all (fun ident (range : L.phantom_let_range) ranges ->
           let range =
