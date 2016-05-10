@@ -109,6 +109,10 @@ let create_type_proto_die ~parent ~ident ~output_path ~is_parameter =
       DAH.create_byte_size_exn ~byte_size:Arch.size_addr;
     ]
 
+(* CR mshinwell: consider renaming [offset_location_in_words].
+   - When [None], the value is in the given register.
+   - When [Some], the value is in the memory location whose address is the
+     contents of the given register plus the offset. *)
 let location_list_entry ~fundecl ~available_subrange
       ~offset_location_in_words =
   let location_expression =
@@ -118,10 +122,14 @@ let location_list_entry ~fundecl ~available_subrange
       begin match reg.Reg.loc with
       | Reg.Unknown -> assert false  (* probably a bug in available_regs.ml *)
       | Reg.Reg _ ->
-        let offset_in_bytes =
-          Target_addr.of_int (Arch.size_addr * offset_location_in_words)
-        in
-        Some (LE.at_offset_from_register ~reg ~offset_in_bytes)
+        begin match offset_location_in_words with
+        | None -> Some (LE.in_register ~reg)
+        | Some offset_location_in_words ->
+          let offset_in_bytes =
+            Target_addr.of_int (Arch.size_addr * offset_location_in_words)
+          in
+          Some (LE.at_offset_from_register ~reg ~offset_in_bytes)
+        end
       | Reg.Stack _ ->
         match Available_subrange.offset_from_stack_ptr available_subrange with
         | None -> assert false  (* emit.mlp should have set the offset *)
@@ -130,7 +138,7 @@ let location_list_entry ~fundecl ~available_subrange
           Some (LE.at_offset_from_stack_pointer ~offset_in_bytes)
       end
     | Symbol (symbol, _defining_expr) ->
-      assert (offset_location_in_words = 0);
+      assert (offset_location_in_words = None);
       Some (LE.at_symbol symbol)
   in
   match location_expression with
@@ -255,7 +263,7 @@ let dwarf_for_local_variables_and_parameters t ~function_proto_die
     ?exclude:fundecl.fun_env_var
     ~f:(fun () -> dwarf_for_identifier t ~fundecl
       ~function_proto_die ~lexical_block_cache
-      ~offset_location_in_words:0)
+      ~offset_location_in_words:None)
 
 let dwarf_for_free_variables t ~function_proto_die ~lexical_block_cache
       ~available_ranges ~(fundecl : Linearize.fundecl) =
@@ -271,7 +279,7 @@ let dwarf_for_free_variables t ~function_proto_die ~lexical_block_cache
       List.iteri (fun index closure_var ->
           dwarf_for_identifier t ~fundecl ~function_proto_die
             ~lexical_block_cache ~ident:closure_var ~is_unique:true
-            ~range:env_var_range ~offset_location_in_words:index)
+            ~range:env_var_range ~offset_location_in_words:(Some index))
         fundecl.fun_closure_layout
 
 let dwarf_for_function_definition t ~(fundecl:Linearize.fundecl)
