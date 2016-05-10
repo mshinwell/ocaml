@@ -21,8 +21,16 @@ module Option = Misc.Stdlib.Option
 let rewrite_label env label =
   match Int.Map.find label env with
   | exception Not_found ->
-    Misc.fatal_errorf "Coalesce_labels: label %d not defined" label
+    Misc.fatal_errorf "Coalesce_labels: label %d undefined" label
   | label -> label
+
+let rewrite_or_add_label env label =
+  match Int.Map.find label env with
+  | exception Not_found ->
+    let new_label = Linearize.new_label () in
+    let env = Int.Map.add label new_label env in
+    env, new_label
+  | label -> env, label
 
 let rec coalesce env (insn : L.instruction) ~last_insn_was_label =
   if insn == L.end_instr then
@@ -45,23 +53,47 @@ let rec coalesce env (insn : L.instruction) ~last_insn_was_label =
           let env = Int.Map.add label existing_label env in
           env, None, last_insn_was_label
         | None ->
-          let new_label = Linearize.new_label () in
-          let env = Int.Map.add label new_label env in
+          let env, new_label =
+            match Int.Map.find label env with
+            | exception Not_found ->
+              let new_label = Linearize.new_label () in
+              let env = Int.Map.add label new_label env in
+              env, new_label
+            | label_used_prior_to_decl -> env, label_used_prior_to_decl
+          in
           env, Some (L.Llabel new_label), Some new_label
         end
       | Lbranch label ->
-        env, Some (L.Lbranch (rewrite_label env label)), None
+        let env, label = rewrite_or_add_label env label in
+        env, Some (L.Lbranch label), None
       | Lcondbranch (test, label) ->
-        env, Some (L.Lcondbranch (test, rewrite_label env label)), None
+        let env, label = rewrite_or_add_label env label in
+        env, Some (L.Lcondbranch (test, label)), None
       | Lcondbranch3 (label1_opt, label2_opt, label3_opt) ->
-        env, Some (L.Lcondbranch3 (
-          Option.map (rewrite_label env) label1_opt,
-          Option.map (rewrite_label env) label2_opt,
-          Option.map (rewrite_label env) label3_opt)), None
+        let rewrite_opt env label_opt =
+          match label_opt with
+          | None -> env, None
+          | Some label ->
+            let env, label = rewrite_or_add_label env label in
+            env, Some label
+        in
+        let env, label1_opt = rewrite_opt env label1_opt in
+        let env, label2_opt = rewrite_opt env label2_opt in
+        let env, label3_opt = rewrite_opt env label3_opt in
+        env, Some (L.Lcondbranch3 (label1_opt, label2_opt, label3_opt)),
+          None
       | Lswitch labels ->
-        env, Some (L.Lswitch (Array.map (rewrite_label env) labels)), None
+        let env, labels =
+          Array.fold_left (fun (env, labels) label ->
+              let env, label = rewrite_or_add_label env label in
+              env, label::labels)
+            (env, [])
+            labels
+        in
+        env, Some (L.Lswitch (Array.of_list (List.rev labels))), None
       | Lsetuptrap label ->
-        env, Some (L.Lsetuptrap (rewrite_label env label)), None
+        let env, label = rewrite_or_add_label env label in
+        env, Some (L.Lsetuptrap label), None
     in
     let env, next =
       coalesce env insn.next ~last_insn_was_label:this_insn_is_label
