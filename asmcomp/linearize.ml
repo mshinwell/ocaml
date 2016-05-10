@@ -345,13 +345,20 @@ let rec linear i n =
           assert (not (Ident.mem ident !phantom_let_ranges));
           phantom_let_ranges :=
             Ident.add ident phantom_let_range !phantom_let_ranges;
+Format.eprintf "Phantom range for %s: L%d -> L%d\n%!"
+  (Ident.unique_name ident) starting_label ending_label;
           cons_instr (Llabel ending_label) (linear i.Mach.next n)
       | exception Not_found -> assert false
       end
 
+(* CR-soon mshinwell: this is misleading---never called.
+   It also cannot be called between functions or you end up with
+   duplicate labels. *)
 let reset () =
   label_counter := 99;
-  exit_label := [];
+  exit_label := []
+
+let reset_between_functions () =
   phantom_let_ranges := Ident.empty;
   phantom_let_ranges_by_number := Numbers.Int.Map.empty
 

@@ -120,6 +120,7 @@ let (++) x f = f x
 let compile_fundecl (ppf : formatter) ~dwarf fd_cmm =
   Proc.init ();
   Reg.reset();
+  Linearize.reset_between_functions ();
   let build = Compilenv.current_build () in
   fd_cmm
   ++ Timings.(accumulate_time (Selection build)) Selection.fundecl
@@ -139,6 +140,7 @@ let compile_fundecl (ppf : formatter) ~dwarf fd_cmm =
   ++ Timings.(accumulate_time (Liveness build)) (liveness ppf)
   ++ Timings.(accumulate_time (Regalloc build)) (regalloc ppf 1)
   ++ Timings.(accumulate_time (Available_regs build)) (available_ranges ppf)
+  ++ pass_dump_if ppf dump_live "Available regs"
   ++ Timings.(accumulate_time (Linearize build)) Linearize.fundecl
   ++ pass_dump_linear_if ppf dump_linear "Linearized code"
   ++ Timings.(accumulate_time (Scheduling build)) Scheduling.fundecl

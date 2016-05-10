@@ -149,7 +149,10 @@ let operation op arg ppf res =
 
 let rec instr ppf i =
   if !print_live then begin
-    fprintf ppf "@[<1>{%a" regsetaddr i.live;
+    fprintf ppf "@[<1>La={%a" regsetaddr i.live;
+    if Array.length i.arg > 0 then fprintf ppf "@ +@ %a" regs i.arg;
+    fprintf ppf "}@]@,";
+    fprintf ppf "@[<1>Ab={%a" regsetaddr i.available_before;
     if Array.length i.arg > 0 then fprintf ppf "@ +@ %a" regs i.arg;
     fprintf ppf "}@]@,";
   end;

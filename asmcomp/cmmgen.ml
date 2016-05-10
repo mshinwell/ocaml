@@ -2720,7 +2720,7 @@ let compunit ~unit_name (ulam, preallocated_blocks, constants) =
                        fun_args = [];
                        fun_body = init_code; fun_fast = false;
                        fun_dbg  = Debuginfo.none;
-                       fun_human_name = "entry";
+                       fun_human_name = "";
                        fun_env_var = None;
                        fun_closure_layout = [];
                        fun_module_path = Some module_path }] in

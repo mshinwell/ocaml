@@ -91,15 +91,15 @@ let create ~(source_provenance : Timings.source_provenance) =
    in the main gdb code to pass parameter indexes to the printing function.
    It is arguably more robust, too.
 *)
-let create_type_proto_die ~parent ~ident ~output_path ~is_parameter =
-  let ident_name =
+let create_type_proto_die ~parent ~ident ~output_path ~is_parameter:_ =
+  let ident =
+    (* CR mshinwell: delete if not needed *)
     match ident with
-    | `Ident ident -> Ident.unique_name ident
-    | `Unique_name name -> name
+    | `Ident ident -> ident
+    | `Unique_name name -> Ident.create_persistent name
   in
   let name =
-    Name_laundry.base_type_die_name_for_ident ~ident_name ~is_parameter
-      ~output_path
+    Name_laundry.base_type_die_name_for_ident ~ident ~output_path
   in
   Proto_die.create ~parent
     ~tag:Dwarf_tag.Base_type
@@ -163,7 +163,7 @@ let location_list_entry ~fundecl ~available_subrange
     Some entry
 
 let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
-      ~ident ~is_unique ~range ~offset_location_in_words =
+      ~ident ~is_unique:_ ~range ~offset_location_in_words =
   let (start_pos, end_pos) as cache_key = Available_range.extremities range in
   let parent_proto_die =
     match Available_range.is_parameter range with
@@ -230,9 +230,12 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
   in
   (* If the unstamped name of [ident] is unambiguous within the function,
      then use it; otherwise, emit the stamped name. *)
-  let name_for_ident =
+  (* CR mshinwell: this needs much more careful thought *)
+  let name_for_ident = Ident.name ident in
+(*
     if is_unique then Ident.name ident else Ident.unique_name ident
   in
+*)
   let tag =
     match Available_range.is_parameter range with
     | Some _index -> Dwarf_tag.Formal_parameter
@@ -295,9 +298,24 @@ let dwarf_for_function_definition t ~(fundecl:Linearize.fundecl)
   in
   let function_name =
     match fundecl.fun_module_path with
-    | None -> fundecl.fun_human_name
+    | None ->
+      begin match fundecl.fun_human_name with
+      | "" -> "anon"
+      | name -> name
+      end
     | Some path ->
-      (Printtyp.string_of_path path) ^ "." ^ fundecl.fun_human_name
+      let path = Printtyp.string_of_path path in
+      (* CR-soon mshinwell: remove hack *)
+      match path with
+      | "_Ocaml_startup" ->
+        begin match fundecl.fun_human_name with
+        | "" -> "anon"
+        | name -> name
+        end
+      | _ ->
+        match fundecl.fun_human_name with
+        | "" -> path
+        | name -> path ^ "." ^ name
   in
   let is_visible_externally =
     (* Not strictly accurate---should probably depend on the .mli, but

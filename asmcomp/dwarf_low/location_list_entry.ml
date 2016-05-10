@@ -51,7 +51,11 @@ module Location_list_entry = struct
     Dwarf_value.Code_address_from_label_symbol_diff
       { upper = t.ending_address_label;
         lower = t.start_of_code_symbol;
-        offset_upper = -1;
+        (* It seems as if this should be "-1", but actually not.
+           DWARF-4 spec p.30 (point 2):
+           "...the first address past the end of the address range over
+            which the location is valid." *)
+        offset_upper = 0;
       }
 
   let size t =

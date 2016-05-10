@@ -82,4 +82,5 @@ type fundecl =
   }
 
 val reset : unit -> unit
+val reset_between_functions : unit -> unit
 val fundecl: Mach.fundecl -> fundecl

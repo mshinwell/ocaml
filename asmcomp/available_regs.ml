@@ -160,7 +160,6 @@ let rec available_regs instr ~avail_before =
               (R.Set.filter R.holds_non_pointer avail_before)
           | _ -> avail_before
         in
-        let results = instr_res instr in
         let made_unavailable =
           (* Registers are made unavailable (possibly in addition to the
              above) by:
@@ -170,7 +169,7 @@ let rec available_regs instr ~avail_before =
                 straightforward. *)
           let unavailable_if_in_same_reg_as =
             R.Set.union (R.set_of_array (Proc.destroyed_at_oper instr.desc))
-              results
+              (R.set_of_array instr.res)  (* N.B. instr.res, not "results" *)
           in
           R.Set.fold (fun reg acc ->
               let made_unavailable =
@@ -181,6 +180,15 @@ let rec available_regs instr ~avail_before =
             unavailable_if_in_same_reg_as
             (* ~init:*)R.Set.empty
         in
+(*
+Format.eprintf "%s: %a: results %a CAA %a made_unavailable %a\n%!"
+  !fun_name
+  (Printmach.operation op instr.arg) instr.res
+  Printmach.regset (R.set_of_array instr.res)
+  Printmach.regset candidate_avail_after
+  Printmach.regset made_unavailable;
+*)
+        let results = instr_res instr in
         R.Set.union results (R.Set.diff candidate_avail_after made_unavailable)
       | Iifthenelse (_, ifso, ifnot) -> join [ifso; ifnot] ~avail_before
       | Iswitch (_, cases) -> join (Array.to_list cases) ~avail_before

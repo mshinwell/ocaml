@@ -12,27 +12,29 @@
 (*                                                                        *)
 (**************************************************************************)
 
+[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+
 let die_name_from_function_name fun_name =
   "camlDIE__" ^ fun_name
 
-(* CR-soon mshinwell: remove is_parameter if not needed *)
-let base_type_die_name_for_ident ~ident_name ~is_parameter:_ ~output_path =
+let base_type_die_name_for_ident ~(ident : Ident.t) ~output_path =
+  let ident_name = Ident.name ident in
   assert (try ignore (String.index ident_name ' '); false
       with Not_found -> true);
-  Printf.sprintf "__ocaml %s %s"
-    ident_name
-    output_path
+  Printf.sprintf "__ocaml %s %d %s" ident_name ident.stamp output_path
 
 type split_base_type_die_name_result = {
   ident_name : string;
+  ident_stamp : int;
   output_path : string;
 }
 
 let split_base_type_die_name name =
   match Misc.Stdlib.String.split name ~on:' ' with
-  | "__ocaml"::ident_name::output_path ->
+  | "__ocaml"::ident_name::ident_stamp::output_path ->
     let output_path = String.concat " " output_path in
-    Some { ident_name; output_path; }
+    let ident_stamp = int_of_string ident_stamp in
+    Some { ident_name; ident_stamp; output_path; }
   | _ -> None
 
 let fun_name_to_symbol fun_name =

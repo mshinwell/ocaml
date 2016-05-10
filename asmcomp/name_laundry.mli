@@ -21,13 +21,13 @@ val die_name_from_function_name : string -> string
 (** The name of the DWARF debugging information entry corresponding to the
     type of some identifier. *)
 val base_type_die_name_for_ident
-   : ident_name:string
-  -> is_parameter:int option
+   : ident:Ident.t
   -> output_path:string
   -> string
 
 type split_base_type_die_name_result = {
   ident_name : string;
+  ident_stamp : int;
   output_path : string;
 }
 
