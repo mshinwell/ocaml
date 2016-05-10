@@ -104,6 +104,10 @@ let emit ppf fundecl ~dwarf =
     Available_ranges.create ~fundecl
       ~phantom_ranges:fundecl.Linearize.fun_phantom_let_ranges
   in
+  let label_rewriting, fundecl = Coalesce_labels.fundecl fundecl in
+  let available_ranges =
+    Available_ranges.rewrite_labels available_ranges ~env:label_rewriting
+  in
   if !Clflags.dump_linear then begin
     Format.fprintf ppf "*** %s@.%a@." "Available subranges"
       Printlinear.fundecl fundecl

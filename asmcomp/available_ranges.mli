@@ -101,3 +101,5 @@ val fold
      a list of, say, local variables in a debugger.) *)
   -> f:('a -> ident:Ident.t -> is_unique:bool -> range:Available_range.t -> 'a)
   -> 'a
+
+val rewrite_labels : t -> env:int Numbers.Int.Map.t -> t

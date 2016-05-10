@@ -61,6 +61,8 @@ let implicit imp =
   let buf =
     match imp with
     | Int i ->
+      (* The buffer must contain the integer as an OCaml value. *)
+      let i = (i lsl 1) lor 1 in
       begin match Arch.size_int with
       | 4 ->
         let buf = Bytes.create 4 in

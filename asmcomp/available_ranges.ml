@@ -27,6 +27,12 @@ type phantom_defining_expr =
   | Symbol of Symbol.t
   | Int of int
 
+let rewrite_label env label =
+  match Numbers.Int.Map.find label env with
+  | exception Not_found ->
+    Misc.fatal_errorf "Available_ranges: label %d not defined" label
+  | label -> label
+
 module Available_subrange : sig
   type t
 
@@ -53,6 +59,8 @@ module Available_subrange : sig
   val location : t -> location
   val offset_from_stack_ptr : t -> int option
   val ident : t -> Ident.t
+
+  val rewrite_labels : t -> env:int Numbers.Int.Map.t -> t
 end = struct
   type start_insn_or_symbol =
     | Start_insn of L.instruction
@@ -115,6 +123,12 @@ end = struct
       | None -> assert false  (* most likely a bug in available_regs.ml *)
       end
     | Phantom (ident, _, _) -> ident
+
+  let rewrite_labels t ~env =
+    { t with
+      start_pos = rewrite_label env t.start_pos;
+      end_pos = rewrite_label env t.end_pos;
+    }
 end
 
 module Available_range : sig
@@ -144,6 +158,8 @@ module Available_range : sig
     -> init:'a
     -> f:('a -> available_subrange:Available_subrange.t -> 'a)
     -> 'a
+
+  val rewrite_labels : t -> env:int Numbers.Int.Map.t -> t
 end = struct
   type t = {
     mutable subranges : Available_subrange.t list;
@@ -214,6 +230,16 @@ end = struct
     List.fold_left (fun acc available_subrange -> f acc ~available_subrange)
       init
       t.subranges
+
+  let rewrite_labels t ~env =
+    let subranges =
+      List.map (fun subrange ->
+          Available_subrange.rewrite_labels subrange ~env)
+        t.subranges
+    in
+    let min_pos = Misc.Stdlib.Option.map (rewrite_label env) t.min_pos in
+    let max_pos = Misc.Stdlib.Option.map (rewrite_label env) t.max_pos in
+    { subranges; min_pos; max_pos; }
 end
 
 type t = {
@@ -449,3 +475,14 @@ let create ~fundecl ~phantom_ranges =
               (Available_subrange.end_pos available_subrange)));
 *)
   t, { fundecl with L.fun_body = first_insn; }
+
+let rewrite_labels t ~env =
+  let ranges =
+    Ident.fold_all (fun ident range ranges ->
+        let range = Available_range.rewrite_labels range ~env in
+        Ident.add ident range ranges)
+      t.ranges
+      Ident.empty
+  in
+  { ranges;
+  }

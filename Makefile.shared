@@ -167,7 +167,7 @@ ASMCOMP=\
   asmcomp/reloadgen.cmo asmcomp/reload.cmo \
   asmcomp/deadcode.cmo \
   asmcomp/printlinear.cmo asmcomp/linearize.cmo \
-  asmcomp/name_laundry.cmo \
+  asmcomp/coalesce_labels.cmo asmcomp/name_laundry.cmo \
   asmcomp/available_regs.cmo asmcomp/available_ranges.cmo \
   asmcomp/schedgen.cmo asmcomp/scheduling.cmo \
   asmcomp/branch_relaxation_intf.cmo \
