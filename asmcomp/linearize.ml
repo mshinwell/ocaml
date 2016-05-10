@@ -329,7 +329,7 @@ let rec linear i n =
         Numbers.Int.Map.add num
           (starting_label, ident, provenance, defining_expr)
           !phantom_let_ranges_by_number;
-      cons_instr (Llabel starting_label) (linear i.Mach.next n)
+      copy_instr (Llabel starting_label) i (linear i.Mach.next n)
   | Iphantom_let_end num ->
       begin match Numbers.Int.Map.find num !phantom_let_ranges_by_number with
       | (starting_label, ident, provenance, defining_expr) ->
@@ -345,9 +345,11 @@ let rec linear i n =
           assert (not (Ident.mem ident !phantom_let_ranges));
           phantom_let_ranges :=
             Ident.add ident phantom_let_range !phantom_let_ranges;
+(*
 Format.eprintf "Phantom range for %s: L%d -> L%d\n%!"
   (Ident.unique_name ident) starting_label ending_label;
-          cons_instr (Llabel ending_label) (linear i.Mach.next n)
+*)
+          copy_instr (Llabel ending_label) i (linear i.Mach.next n)
       | exception Not_found -> assert false
       end
 

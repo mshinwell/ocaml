@@ -406,11 +406,9 @@ let create ~fundecl ~phantom_ranges =
         let symbol =
           match range.defining_expr with
           | Uphantom_const (Uconst_ref (symbol, _defining_expr)) ->
-            let symbol =
-              Symbol.create (Compilation_unit.get_current_exn ())
-                (Linkage_name.create symbol)
-            in
-            Some symbol
+            (* It's not actually a "fun_name", but the mangling is the same.
+               This should go away if we switch to [Symbol.t] everywhere. *)
+            Some (Name_laundry.fun_name_to_symbol symbol)
           | Uphantom_const _ -> None
         in
         match symbol with
@@ -445,15 +443,8 @@ let create ~fundecl ~phantom_ranges =
           (Ident.unique_name ident) (if is_unique then "yes" else "no");
         Available_range.fold range ~init:()
           ~f:(fun () ~available_subrange ->
-            Printf.printf "    Label range: %d -> %d  Register: %s %s (is param? %s)\n%!"
+            Printf.printf "    Label range: %d -> %d\n%!"
               (Available_subrange.start_pos available_subrange)    
-              (Available_subrange.end_pos available_subrange)
-              (Reg.name (Available_subrange.reg available_subrange))
-              (begin match (Available_subrange.reg available_subrange).Reg.loc with
-               | Reg.Unknown -> "unknown"
-               | Reg.Reg n -> Printf.sprintf "r%d" n
-               | Reg.Stack _ -> "stack" end)
-              (if (Available_subrange.reg available_subrange)
-                .Reg.is_parameter then "yes" else "no")));
+              (Available_subrange.end_pos available_subrange)));
 *)
   t, { fundecl with L.fun_body = first_insn; }

@@ -167,6 +167,7 @@ ASMCOMP=\
   asmcomp/reloadgen.cmo asmcomp/reload.cmo \
   asmcomp/deadcode.cmo \
   asmcomp/printlinear.cmo asmcomp/linearize.cmo \
+  asmcomp/name_laundry.cmo \
   asmcomp/available_regs.cmo asmcomp/available_ranges.cmo \
   asmcomp/schedgen.cmo asmcomp/scheduling.cmo \
   asmcomp/branch_relaxation_intf.cmo \
@@ -176,7 +177,7 @@ ASMCOMP=\
   asmcomp/asm_directives_x86.cmo \
   asmcomp/emitaux.cmo asmcomp/emit.cmo \
   $(DWARF_HIGH) \
-  asmcomp/name_laundry.cmo asmcomp/dwarf.cmo \
+  asmcomp/dwarf.cmo \
   asmcomp/asmgen.cmo \
   asmcomp/asmlink.cmo asmcomp/asmlibrarian.cmo asmcomp/asmpackager.cmo \
   driver/opterrors.cmo driver/optcompile.cmo

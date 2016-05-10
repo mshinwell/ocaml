@@ -57,7 +57,14 @@ let fun_name_to_symbol fun_name =
             String.sub fun_name (underscore + 2)
               ((String.length fun_name) - (underscore + 2))
           in
+          assert (String.length compilation_unit >= 5);
           let compilation_unit =
+(*
+            let compilation_unit =
+              String.sub compilation_unit 4
+                (String.length compilation_unit - 4)
+            in
+*)
             let ident = Ident.create_persistent compilation_unit in
             let linkage_name = Linkage_name.create compilation_unit in
             Compilation_unit.create ident linkage_name

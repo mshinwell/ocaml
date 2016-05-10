@@ -32,7 +32,7 @@ let reg_is_interesting reg =
     | None -> false
     | Some _ident -> true
 
-let instr_arg i = R.Set.filter reg_is_interesting (R.set_of_array i.M.arg)
+let _instr_arg i = R.Set.filter reg_is_interesting (R.set_of_array i.M.arg)
 let instr_res i = R.Set.filter reg_is_interesting (R.set_of_array i.M.res)
 let instr_live i = R.Set.filter reg_is_interesting i.M.live
 
@@ -83,12 +83,15 @@ let augment_availability_at_raise avail =
 *)
 let rec available_regs instr ~avail_before =
   if not (avail_before == all_regs) then begin
+    ()
+(*
     (* A register should not be an input to an instruction unless it is
        available. *)
     assert (R.Set.subset (instr_arg instr) avail_before);
     (* Every register that is live across an instruction should also be
        available before the instruction. *)
     assert (R.Set.subset (instr_live instr) avail_before)
+*)
   end;
   let avail_before =
     (* If this instruction might expand into multiple machine instructions
@@ -132,13 +135,18 @@ let rec available_regs instr ~avail_before =
       | Iop (Imove | Ispill | Ireload)
           when begin match instr.arg, instr.res with
           | [| arg |], [| res |] ->
-            (* We need both [arg] and [res] to be named with identifiers.
-               However, this is implied by them satisfying
-               [reg_is_interesting]. *)
-            reg_is_interesting arg && reg_is_interesting res
+            (* We need both [arg] and [res] to be named with identifiers,
+               or for there to be a move from a named register to an
+               immutable one with both registers being at the same location. *)
+            (reg_is_interesting arg && reg_is_interesting res)
+              (* CR mshinwell: should check [part] I suppose too *)
+              || (reg_is_interesting arg && Reg.is_temporary res
+                  && arg.loc = res.loc)
           | _ -> false
           end ->
-        R.Set.diff (R.Set.union avail_before (R.set_of_array instr.res))
+        (* CR mshinwell: this next bit should use "regs_have_same_location"
+           as below, no (for the destroyed_at_oper bit) *)
+        R.Set.diff (R.Set.union avail_before (instr_res instr))
           (R.set_of_array
             (Proc.destroyed_at_oper instr.desc))  (* just in case *)
       | Iop op ->
