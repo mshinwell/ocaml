@@ -12,7 +12,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* Single operators only for the moment.  There are other cases (p23-24) *)
+(* Single operators only for the moment.  There are other cases
+   (DWARF-4 spec pp.23--24). *)
 type t = Operator.t
 
 let at_offset_from_symbol ~base ~symbol ~offset_in_bytes =
@@ -29,6 +30,9 @@ let register_based_addressing ~reg_number ~offset_in_bytes =
 
 let frame_base_register ~offset_in_bytes =
   Operator.frame_base_register ~offset_in_bytes
+
+let implicit imp =
+  Operator.implicit imp
 
 let size t =
   Operator.size t

@@ -23,12 +23,16 @@ module L = Linearize
     0004174b 000000000043418e 0000000000434193 (DW_OP_bregx: 5 (rdi) 0)
 *)
 
+type phantom_defining_expr =
+  | Symbol of Symbol.t
+  | Int of int
+
 module Available_subrange : sig
   type t
 
   type location =
     | Reg of Reg.t
-    | Symbol of Symbol.t * Clambda.uphantom_defining_expr
+    | Phantom of phantom_defining_expr
 
   val create
      : start_insn:L.instruction  (* must be [Lavailable_subrange] *)
@@ -37,10 +41,9 @@ module Available_subrange : sig
     -> t
 
   val create_phantom
-     : symbol:Symbol.t
-    -> ident:Ident.t
+     : ident:Ident.t
     -> provenance:Clambda.ulet_provenance
-    -> defining_expr:Clambda.uphantom_defining_expr
+    -> defining_expr:phantom_defining_expr
     -> start_pos:Linearize.label
     -> end_pos:Linearize.label
     -> t
@@ -53,8 +56,7 @@ module Available_subrange : sig
 end = struct
   type start_insn_or_symbol =
     | Start_insn of L.instruction
-    | Symbol of Symbol.t * Ident.t * Clambda.ulet_provenance
-        * Clambda.uphantom_defining_expr
+    | Phantom of Ident.t * Clambda.ulet_provenance * phantom_defining_expr
 
   type t = {
     (* CR-soon mshinwell: find a better name for [start_insn] *)
@@ -67,7 +69,7 @@ end = struct
 
   type location =
     | Reg of Reg.t
-    | Symbol of Symbol.t * Clambda.uphantom_defining_expr
+    | Phantom of phantom_defining_expr
 
   let create ~start_insn ~start_pos ~end_pos =
     match start_insn.L.desc with
@@ -78,9 +80,8 @@ end = struct
       }
     | _ -> failwith "Available_subrange.create"
 
-  let create_phantom ~symbol ~ident ~provenance ~defining_expr ~start_pos
-        ~end_pos =
-    { start_insn = Symbol (symbol, ident, provenance, defining_expr);
+  let create_phantom ~ident ~provenance ~defining_expr ~start_pos ~end_pos =
+    { start_insn = Phantom (ident, provenance, defining_expr);
       start_pos;
       end_pos;
     }
@@ -93,8 +94,8 @@ end = struct
     | Start_insn insn ->
       assert (Array.length insn.L.arg = 1);
       Reg (insn.L.arg.(0))
-    | Symbol (symbol, _ident, _provenance, defining_expr) ->
-      Symbol (symbol, defining_expr)
+    | Phantom (_ident, _provenance, defining_expr) ->
+      Phantom defining_expr
 
   let offset_from_stack_ptr t =
     match t.start_insn with
@@ -103,7 +104,7 @@ end = struct
       | L.Lavailable_subrange offset -> !offset
       | _ -> assert false
       end
-    | Symbol _ -> None
+    | Phantom _ -> None
 
   let ident t =
     match t.start_insn with
@@ -113,7 +114,7 @@ end = struct
       | Some ident -> ident
       | None -> assert false  (* most likely a bug in available_regs.ml *)
       end
-    | Symbol (_, ident, _, _) -> ident
+    | Phantom (ident, _, _) -> ident
 end
 
 module Available_range : sig
@@ -122,10 +123,9 @@ module Available_range : sig
   val create : unit -> t
 
   val create_phantom
-     : symbol:Symbol.t
-    -> ident:Ident.t
+     : ident:Ident.t
     -> provenance:Clambda.ulet_provenance
-    -> defining_expr:Clambda.uphantom_defining_expr
+    -> defining_expr:phantom_defining_expr
     -> range_start:Linearize.label
     -> range_end:Linearize.label
     -> t
@@ -153,11 +153,11 @@ end = struct
 
   let create () = { subranges = []; min_pos = None; max_pos = None; } 
 
-  let create_phantom ~symbol ~ident ~provenance ~defining_expr ~range_start
+  let create_phantom ~ident ~provenance ~defining_expr ~range_start
         ~range_end =
     let subrange =
-      Available_subrange.create_phantom ~symbol ~ident ~provenance
-        ~defining_expr ~start_pos:range_start ~end_pos:range_end
+      Available_subrange.create_phantom ~defining_expr ~ident ~provenance
+        ~start_pos:range_start ~end_pos:range_end
     in
     { subranges = [subrange];
       min_pos = Some range_start;
@@ -198,7 +198,7 @@ end = struct
     | subrange::_ ->
       match Available_subrange.location subrange with
       | Reg reg -> reg.Reg.is_parameter
-      | Symbol _ -> None
+      | Phantom _ -> None
 
   let extremities t =
     match t.min_pos, t.max_pos with
@@ -403,22 +403,23 @@ let create ~fundecl ~phantom_ranges =
         (* CR mshinwell: Not quite right.  The symbol is actually in the
            defining expression, so it probably shouldn't be an argument to
            [Available_range.create_phantom]. *)
-        let symbol =
+        let defining_expr : phantom_defining_expr option =
           match range.defining_expr with
           | Uphantom_const (Uconst_ref (symbol, _defining_expr)) ->
             (* It's not actually a "fun_name", but the mangling is the same.
                This should go away if we switch to [Symbol.t] everywhere. *)
-            Some (Name_laundry.fun_name_to_symbol symbol)
+            Some (Symbol (Name_laundry.fun_name_to_symbol symbol))
+          | Uphantom_const (Uconst_int i) ->
+            Some (Int i)
           | Uphantom_const _ -> None
         in
-        match symbol with
+        match defining_expr with
         | None -> ranges
-        | Some symbol ->
+        | Some defining_expr ->
           let range =
-            Available_range.create_phantom ~symbol
-              ~ident
+            Available_range.create_phantom ~ident
               ~provenance:range.provenance
-              ~defining_expr:range.defining_expr
+              ~defining_expr
               ~range_start:range.starting_label
               ~range_end:range.ending_label
           in
@@ -435,7 +436,6 @@ let create ~fundecl ~phantom_ranges =
     process_instruction t ~first_insn ~insn:first_insn ~prev_insn:None
       ~open_subrange_start_insns:Reg.Map.empty
   in
-(*
   Printf.printf "Available ranges for function: %s\n%!" fundecl.L.fun_name;
   fold t ~init:()
     ~f:(fun () ~ident ~is_unique ~range ->
@@ -446,5 +446,4 @@ let create ~fundecl ~phantom_ranges =
             Printf.printf "    Label range: %d -> %d\n%!"
               (Available_subrange.start_pos available_subrange)    
               (Available_subrange.end_pos available_subrange)));
-*)
   t, { fundecl with L.fun_body = first_insn; }

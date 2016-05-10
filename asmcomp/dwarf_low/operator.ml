@@ -12,12 +12,15 @@
 (*                                                                        *)
 (**************************************************************************)
 
+[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+
 type t =
   | DW_op_addr of Dwarf_value.t
   | DW_op_regx of Dwarf_value.t
   | DW_op_fbreg of Dwarf_value.t
   | DW_op_bregx of
       { register : Dwarf_value.t; offset_in_bytes : Dwarf_value.t; }
+  | DW_op_implicit_value of bytes
 
 let at_offset_from_symbol ~base:_ ~symbol ~offset_in_bytes =
   let value =
@@ -45,12 +48,41 @@ let frame_base_register ~offset_in_bytes =
   in
   DW_op_fbreg offset_in_bytes
 
+type implicit_value =
+  | Int of int
+
+external caml_string_set32 : bytes -> index:int -> Int32.t -> unit
+  = "%caml_string_set32"
+
+external caml_string_set64 : bytes -> index:int -> Int64.t -> unit
+  = "%caml_string_set64"
+
+let implicit imp =
+  let buf =
+    match imp with
+    | Int i ->
+      begin match Arch.size_int with
+      | 4 ->
+        let buf = Bytes.create 4 in
+        caml_string_set32 buf ~index:0 (Int32.of_int i);
+        buf
+      | 8 ->
+        let buf = Bytes.create 8 in
+        caml_string_set64 buf ~index:0 (Int64.of_int i);
+        buf
+      | n ->
+        Misc.fatal_errorf "Dwarf_low.Operator: bad Arch.size_int = %d" n
+      end
+  in
+  DW_op_implicit_value buf
+
 (* DWARF-4 spec section 7.7.1. *)
 let opcode = function
   | DW_op_addr _ -> 0x03
   | DW_op_regx _ -> 0x90
   | DW_op_fbreg _ -> 0x91
   | DW_op_bregx _ -> 0x92
+  | DW_op_implicit_value _ -> 0x9e
 
 let size t =
   let opcode_size = Int64.of_int 1 in
@@ -62,6 +94,9 @@ let size t =
     | DW_op_bregx { register; offset_in_bytes; } ->
       Int64.add (Dwarf_value.size register)
         (Dwarf_value.size offset_in_bytes)
+    | DW_op_implicit_value buf ->
+      let buf_len = Int64.of_int (Bytes.length buf) in
+      Int64.add (Dwarf_value.size (Sleb128 buf_len)) buf_len
   in
   Int64.add opcode_size args_size
 
@@ -74,3 +109,6 @@ let emit t asm =
   | DW_op_bregx { register; offset_in_bytes; } ->
     Dwarf_value.emit register asm;
     Dwarf_value.emit offset_in_bytes asm
+  | DW_op_implicit_value buf ->
+    Dwarf_value.emit (Sleb128 (Int64.of_int (Bytes.length buf))) asm;
+    Dwarf_value.emit (String (Bytes.to_string buf)) asm

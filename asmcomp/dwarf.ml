@@ -137,9 +137,12 @@ let location_list_entry ~fundecl ~available_subrange
           let offset_in_bytes = Target_addr.of_int offset_in_bytes in
           Some (LE.at_offset_from_stack_pointer ~offset_in_bytes)
       end
-    | Symbol (symbol, _defining_expr) ->
+    | Phantom (Symbol symbol) ->
       assert (offset_location_in_words = None);
       Some (LE.at_symbol symbol)
+    | Phantom (Int i) ->
+      assert (offset_location_in_words = None);
+      Some (LE.implicit (Int i))
   in
   match location_expression with
   | None -> None

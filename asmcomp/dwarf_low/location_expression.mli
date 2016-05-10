@@ -28,3 +28,5 @@ val at_computed_offset_from_stack_pointer
   -> t
 
 val at_symbol : Symbol.t -> t
+
+val implicit : Operator.implicit_value -> t

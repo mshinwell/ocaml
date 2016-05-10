@@ -51,6 +51,8 @@ let at_computed_offset_from_stack_pointer ~offset_in_bytes =
 
 let at_symbol symbol = Immediate (SLE.at_symbol symbol)
 
+let implicit imp = Immediate (SLE.implicit imp)
+
 let sle t =
   match t with
   | Immediate sle -> sle

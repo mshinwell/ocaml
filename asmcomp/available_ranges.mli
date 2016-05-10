@@ -39,12 +39,16 @@
    coincide, since the relevant value is expected to be permanently accessible.
 *)
 
+type phantom_defining_expr =
+  | Symbol of Symbol.t
+  | Int of int
+
 module Available_subrange : sig
   type t
 
   type location =
     | Reg of Reg.t
-    | Symbol of Symbol.t * Clambda.uphantom_defining_expr
+    | Phantom of phantom_defining_expr
 
   val start_pos : t -> Linearize.label
   val end_pos : t -> Linearize.label

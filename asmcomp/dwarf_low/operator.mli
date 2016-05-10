@@ -32,3 +32,8 @@ val register_based_addressing
   -> t
 
 val frame_base_register : offset_in_bytes:Target_addr.t -> t
+
+type implicit_value =
+  | Int of int
+
+val implicit : implicit_value -> t

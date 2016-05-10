@@ -104,7 +104,8 @@ module type S = sig
   (** Emit a 64-bit integer in signed LEB128 variable-length encoding. *)
   val sleb128 : Int64.t -> unit
 
-  (** Emit a string (directly into the current section). *)
+  (** Emit a string (directly into the current section).  This function
+      does not write a terminating null. *)
   val string : string -> unit
 
   (** Cache a string for later emission.  The returned label may be used to
@@ -116,7 +117,7 @@ module type S = sig
 
   (** Emit the sequence of:
         label definition:
-          <string>
+          <string><null terminator>
       pairs as per previous calls to [cache_string].  This function clears
       the cache. *)
   val emit_cached_strings : unit -> unit
