@@ -446,12 +446,23 @@ let rec substitute_let_moveable is_let_moveable env (clam : Clambda.ulambda)
     Uoffset (clam, n)
   | Ulet (let_kind, value_kind, provenance, id, def, body) ->
     let def = substitute_let_moveable is_let_moveable env def in
-    if Ident.Set.mem id is_let_moveable then
+    if Ident.Set.mem id is_let_moveable then begin
       let env = Ident.Map.add id def env in
-      substitute_let_moveable is_let_moveable env body
-    else
+      let body = substitute_let_moveable is_let_moveable env body in
+      (* If we are about to delete a [let] that binds a constant and we
+         are in debug mode, keep it only for the debugger. *)
+      match !Clflags.debug, provenance with
+      | false, _
+      | true, None -> body
+      | true, Some provenance ->
+        match def with
+        | Uconst const ->
+          Uphantom_let (provenance, id, Uphantom_const const, body)
+        | _ -> body
+    end else begin
       Ulet (let_kind, value_kind, provenance,
             id, def, substitute_let_moveable is_let_moveable env body)
+    end
   | Uphantom_let (provenance, ident, defining_expr, body) ->
     let body = substitute_let_moveable is_let_moveable env body in
     Uphantom_let (provenance, ident, defining_expr, body)
@@ -641,10 +652,25 @@ let rec un_anf_and_moveable ident_info env (clam : Clambda.ulambda)
     let def, def_moveable = un_anf_and_moveable ident_info env def in
     let is_linear = Ident.Set.mem id ident_info.linear in
     let is_used = Ident.Set.mem id ident_info.used in
+    let maybe_for_debugger (body, moveable) : Clambda.ulambda * moveable =
+      (* CR-soon mshinwell: consider sharing with the let-moveable code,
+         above. *)
+      match !Clflags.debug, provenance with
+      | false, _
+      | true, None -> body, moveable
+      | true, Some provenance ->
+        match def with
+        | Uconst const ->
+          Uphantom_let (provenance, id, Uphantom_const const, body),
+            moveable
+        | _ -> body, moveable
+    in
     begin match def_moveable, is_linear, is_used with
     | (Moveable | Moveable_not_into_loops), _, false ->
-      (* A moveable expression that is never used may be eliminated. *)
-      un_anf_and_moveable ident_info env body
+      (* A moveable expression that is never used may be eliminated.
+         However, if in debug mode and the defining expression is
+         appropriate, keep the let for the debugger. *)
+      maybe_for_debugger (un_anf_and_moveable ident_info env body)
     | Moveable, true, true ->
       (* A moveable expression bound to a linear [Ident.t] may replace the
          single occurrence of the identifier. *)
@@ -657,7 +683,7 @@ let rec un_anf_and_moveable ident_info env (clam : Clambda.ulambda)
         in
         Ident.Map.add id (def_moveable, def) env
       in
-      un_anf_and_moveable ident_info env body
+      maybe_for_debugger (un_anf_and_moveable ident_info env body)
     | Moveable_not_into_loops, true, true
         (* We can't delete the [let] binding in this case because we don't
            know whether the variable was substituted for its definition
