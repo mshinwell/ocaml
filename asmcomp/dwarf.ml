@@ -165,11 +165,17 @@ let location_list_entry ~fundecl ~available_subrange
     in
     Some entry
 
-let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
-      ~ident ~is_unique:_ ~range ~offset_location_in_words =
+let dwarf_for_identifier ?force_is_parameter t ~fundecl ~function_proto_die
+      ~lexical_block_cache ~ident ~is_unique:_ ~range
+      ~offset_location_in_words =
+  let is_parameter =
+    match force_is_parameter with
+    | Some is_parameter -> is_parameter
+    | None -> Available_range.is_parameter range
+  in
   let (start_pos, end_pos) as cache_key = Available_range.extremities range in
   let parent_proto_die =
-    match Available_range.is_parameter range with
+    match is_parameter with
     | Some _index ->
       (* Parameters need to be children of the function in question. *)
       function_proto_die
@@ -229,7 +235,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
   let type_proto_die =
     create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
       ~ident:(`Ident ident) ~output_path:t.output_path
-      ~is_parameter:(Available_range.is_parameter range)
+      ~is_parameter
   in
   (* If the unstamped name of [ident] is unambiguous within the function,
      then use it; otherwise, emit the stamped name. *)
@@ -240,7 +246,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
   in
 *)
   let tag =
-    match Available_range.is_parameter range with
+    match is_parameter with
     | Some _index -> Dwarf_tag.Formal_parameter
     | None -> Dwarf_tag.Variable
   in
@@ -253,7 +259,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die ~lexical_block_cache
         location_list_attribute_value;
       ]
   in
-  begin match Available_range.is_parameter range with
+  begin match is_parameter with
   | None -> ()
   | Some index ->
     (* Ensure that parameters appear in the correct order in the debugger. *)
@@ -283,9 +289,16 @@ let dwarf_for_free_variables t ~function_proto_die ~lexical_block_cache
       (* Whenever the environment parameter is available, make everything
          in the closure available too. *)
       List.iteri (fun index closure_var ->
+          let offset_location_in_words =
+            if fundecl.fun_arity - 1 (* ignore env parameter *) < 2 then
+              Some (2 + index)
+            else
+              Some (3 + index)
+          in
           dwarf_for_identifier t ~fundecl ~function_proto_die
             ~lexical_block_cache ~ident:closure_var ~is_unique:true
-            ~range:env_var_range ~offset_location_in_words:(Some index))
+            ~range:env_var_range ~offset_location_in_words
+            ~force_is_parameter:None)
         fundecl.fun_closure_layout
 
 let dwarf_for_function_definition t ~(fundecl:Linearize.fundecl)

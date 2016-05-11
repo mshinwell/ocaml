@@ -30,6 +30,11 @@ type t = {
   mutable imported_symbols : Symbol.Set.t;
 }
 
+(* CR mshinwell: things to do:
+  - decide on naming of nested functions.  At the moment no module path.
+  Should they be qualified by the whole enclosing "closure path"?
+*)
+
 let add_default_argument_wrappers lam =
   (* CR-someday mshinwell: Temporary hack to mark default argument wrappers
      as stubs.  Other possibilities:

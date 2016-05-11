@@ -83,6 +83,7 @@ type fundecl =
     fun_human_name : string;
     fun_env_var : Ident.t option;
     fun_closure_layout : Ident.t list;
+    fun_arity : int;
     fun_module_path : Path.t option;
     fun_phantom_let_ranges : phantom_let_range Ident.tbl
   }
@@ -381,6 +382,7 @@ let fundecl f =
     fun_dbg  = f.Mach.fun_dbg;
     fun_human_name = f.Mach.fun_human_name;
     fun_env_var = f.Mach.fun_env_var;
+    fun_arity = Array.length f.Mach.fun_args;
     fun_closure_layout = f.Mach.fun_closure_layout;
     fun_module_path = f.Mach.fun_module_path;
     fun_phantom_let_ranges;

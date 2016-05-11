@@ -77,6 +77,7 @@ type fundecl =
     fun_human_name : string;
     fun_env_var : Ident.t option;
     fun_closure_layout : Ident.t list;
+    fun_arity : int;
     fun_module_path : Path.t option;
     fun_phantom_let_ranges : phantom_let_range Ident.tbl
   }
