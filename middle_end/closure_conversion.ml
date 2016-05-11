@@ -314,6 +314,16 @@ and close t ?debuginfo env (lam : Lambda.lambda) : Flambda.t =
           | _ -> None)
         defs
     in
+    let provenance : Flambda.let_provenance =
+      let location =
+        match !location with
+        | None -> Location.none
+        | Some location -> location
+      in
+      { module_path = Env.current_module_path env;
+        location;
+      }
+    in
     begin match
       Misc.Stdlib.List.some_if_all_elements_are_some function_declarations
     with
@@ -349,7 +359,6 @@ and close t ?debuginfo env (lam : Lambda.lambda) : Flambda.t =
             (* Inside the body of the [let], each function is referred to by
                a [Project_closure] expression, which projects from the set of
                closures. *)
-            (* XXX needs provenance info *)
             (Flambda.create_let let_bound_var
               (Project_closure {
                 set_of_closures = set_of_closures_var;
@@ -359,6 +368,7 @@ and close t ?debuginfo env (lam : Lambda.lambda) : Flambda.t =
           (close t env body) function_declarations
       in
       Flambda.create_let set_of_closures_var set_of_closures body
+        ~provenance
     | None ->
       (* If the condition above is not satisfied, we build a [Let_rec]
          expression; any functions bound by it will have their own
@@ -368,17 +378,6 @@ and close t ?debuginfo env (lam : Lambda.lambda) : Flambda.t =
             let var = Env.find_var env id in
             var, close_let_bound_expression t ~let_rec_ident:id var env def)
           defs
-      in
-      let provenance : Flambda.let_provenance =
-        (* CR mshinwell: consider what to do about optionness *)
-        let location =
-          match !location with
-          | None -> Location.none
-          | Some location -> location
-        in
-        { module_path = Env.current_module_path env;
-          location;
-        }
       in
       Let_rec {
         vars_and_defining_exprs = defs;

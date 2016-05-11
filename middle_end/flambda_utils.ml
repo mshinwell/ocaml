@@ -616,7 +616,7 @@ let substitute_read_symbol_field_for_variables
       let fresh = Variable.rename v in
       bind v fresh (Var fresh)
     | Var _ -> expr
-    | Let ({ var = v; defining_expr = named; _ } as let_expr) ->
+    | Let ({ var = v; defining_expr = named; provenance; _ } as let_expr) ->
       let to_substitute =
         Variable.Set.filter
           (fun v -> Variable.Map.mem v substitution)
@@ -634,6 +634,7 @@ let substitute_read_symbol_field_for_variables
         let expr =
           let module W = Flambda.With_free_variables in
           W.create_let_reusing_body v named (W.of_body_of_let let_expr)
+            ?provenance
         in
         Variable.Map.fold (fun to_substitute fresh expr ->
             bind to_substitute fresh expr)

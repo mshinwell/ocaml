@@ -139,7 +139,19 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
           provenance;
         })
     in
-    let extracted = Expr (var, expr, None) in
+    let symbol_provenance : Flambda.symbol_provenance option =
+      match provenance with
+      | None -> None
+      | Some provenance ->
+        let provenance : Flambda.symbol_provenance =
+          { names = [Variable.base_name var];
+            module_path = provenance.module_path;
+            location = provenance.location;
+          }
+        in
+        Some provenance
+    in
+    let extracted = Expr (var, expr, symbol_provenance) in
     accumulate body
       ~substitution
       ~copied_lets
@@ -165,7 +177,23 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
             provenance;
           })
       in
-      Exprs (List.map fst defs, expr, None)
+      let symbol_provenance : Flambda.symbol_provenance option =
+        match provenance with
+        | None -> None
+        | Some provenance ->
+          let names =
+            List.map (fun (var, _defining_expr) -> Variable.base_name var)
+              defs
+          in
+          let provenance : Flambda.symbol_provenance =
+            { names;
+              module_path = provenance.module_path;
+              location = provenance.location;
+            }
+          in
+          Some provenance
+      in
+      Exprs (List.map fst defs, expr, symbol_provenance)
     in
     accumulate body
       ~substitution
@@ -199,6 +227,7 @@ let rebuild_expr
   in
   Variable.Map.fold (fun var declaration body ->
       let definition = Variable.Map.find var copied_definitions in
+      (* CR mshinwell: this should presumably have provenance info *)
       Flambda.create_let declaration definition body)
     substitution expr_with_read_symbols
 

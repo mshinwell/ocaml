@@ -731,8 +731,11 @@ let create_let ?provenance ?state var defining_expr body : t =
   | None -> ()
   | Some stamp ->
     Variable.debug_when_stamp_matches var ~stamp ~f:(fun () ->
-      Printf.eprintf "Creation of [Let] with stamp %d:\n%s\n%!"
+      Format.eprintf "Creation of [Let] with stamp %d (provenance %a, \
+          defining_expr %a):\n%s\n%!"
         stamp
+        print_let_provenance_opt provenance
+        print_named defining_expr
         (Printexc.raw_backtrace_to_string (Printexc.get_callstack max_int)))
   end;
   let defining_expr, free_vars_of_defining_expr =
