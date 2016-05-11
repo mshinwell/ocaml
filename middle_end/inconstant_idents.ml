@@ -231,10 +231,10 @@ module Inconstants (P:Param) (Backend:Backend_intf.S) = struct
          trickier than eliminating that earlier. *)
       mark_var var curr;
       mark_loop ~toplevel curr body
-    | Let_mutable { initial_value = var; body } ->
+    | Let_mutable { initial_value = var; body; _ } ->
       mark_var var curr;
       mark_loop ~toplevel curr body
-    | Let_rec(defs, body) ->
+    | Let_rec { vars_and_defining_exprs = defs; body; _ } ->
       List.iter (fun (var, def) ->
           mark_named ~toplevel [Var var] def;
           (* adds 'var in NC => curr in NC' same remark as let case *)

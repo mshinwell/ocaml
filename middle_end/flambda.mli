@@ -115,9 +115,9 @@ type t =
   | Var of Variable.t
   | Let of let_expr
   | Let_mutable of let_mutable
-  (* CR mshinwell: provenance for Let_rec and Let_mutable *)
-  | Let_rec of (Variable.t * named) list * t
-  (** CR-someday lwhite: give Let_rec the same fields as Let. *)
+  (* XCR mshinwell: provenance for Let_rec and Let_mutable *)
+  | Let_rec of let_rec
+  (** XCR-someday lwhite: give Let_rec the same fields as Let. *)
   | Apply of apply
   | Send of send
   | Assign of assign
@@ -213,6 +213,15 @@ and let_mutable = {
   initial_value : Variable.t;
   contents_kind : Lambda.value_kind;
   body : t;
+  provenance : let_provenance option;
+  (** As for [provenance] in the type [let_expr], above. *)
+}
+
+and let_rec = {
+  vars_and_defining_exprs : (Variable.t * named) list;
+  body : t;
+  provenance : let_provenance option;
+  (** As for [provenance] in the type [let_expr], above. *)
 }
 
 (** The representation of a set of function declarations (possibly mutually

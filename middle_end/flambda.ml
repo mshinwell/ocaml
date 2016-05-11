@@ -70,7 +70,7 @@ type t =
   | Var of Variable.t
   | Let of let_expr
   | Let_mutable of let_mutable
-  | Let_rec of (Variable.t * named) list * t
+  | Let_rec of let_rec
   | Apply of apply
   | Send of send
   | Assign of assign
@@ -112,6 +112,14 @@ and let_mutable = {
   initial_value : Variable.t;
   contents_kind : Lambda.value_kind;
   body : t;
+  provenance : let_provenance option;
+}
+
+and let_rec = {
+  vars_and_defining_exprs : (Variable.t * named) list;
+  body : t;
+  provenance : let_provenance option;
+  (** As for [provenance] in the type [let_expr], above. *)
 }
 
 and set_of_closures = {
@@ -289,7 +297,7 @@ let rec lam ppf (flam : t) =
       Mutable_variable.print mut_var
       Variable.print var
       lam body
-  | Let_rec(id_arg_list, body) ->
+  | Let_rec { vars_and_defining_exprs = id_arg_list; body; } ->
       let bindings ppf id_arg_list =
         let spc = ref false in
         List.iter
@@ -606,7 +614,7 @@ let rec variables_usage ?ignore_uses_as_callee ?ignore_uses_as_argument
       | Let_mutable { initial_value = var; body; _ } ->
         free_variable var;
         aux body
-      | Let_rec (bindings, body) ->
+      | Let_rec { vars_and_defining_exprs = bindings; body; _ } ->
         List.iter (fun (var, defining_expr) ->
             bound_variable var;
             free_variables
@@ -862,7 +870,7 @@ let iter_general ~toplevel f f_named maybe_named =
       | Let _ -> assert false
       | Let_mutable { body; _ } ->
         aux body
-      | Let_rec (defs, body) ->
+      | Let_rec { vars_and_defining_exprs = defs; body; _ } ->
         List.iter (fun (_,l) -> aux_named l) defs;
         aux body
       | Try_with (f1,_,f2)

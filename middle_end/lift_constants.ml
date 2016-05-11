@@ -19,8 +19,8 @@
 (* CR-someday mshinwell: move to Flambda_utils *)
 let rec tail_variable : Flambda.t -> Variable.t option = function
   | Var v -> Some v
-  | Let_rec (_, e)
-  | Let_mutable { body = e }
+  | Let_rec { body = e; _ }
+  | Let_mutable { body = e; _ }
   | Let { body = e; _ } -> tail_variable e
   | _ -> None
 

@@ -49,7 +49,7 @@ let variables_not_used_as_local_reference (tree:Flambda.t) =
     | Let { defining_expr; body; _ } ->
       loop_named defining_expr;
       loop body
-    | Let_rec (defs, body) ->
+    | Let_rec { vars_and_defining_exprs = defs; body; _ } ->
       List.iter (fun (_var, named) -> loop_named named) defs;
       loop body
     | Var v ->
@@ -133,7 +133,8 @@ let eliminate_ref_of_expr flam =
       match flam with
       | Let { var;
               defining_expr = Prim(Pmakeblock(0, Asttypes.Mutable, shape), l, _);
-              body }
+              body;
+              provenance; }
         when convertible_variable var ->
         let shape = match shape with
           | None -> List.map (fun _ -> Lambda.Pgenval) l
@@ -145,10 +146,13 @@ let eliminate_ref_of_expr flam =
               | None -> assert false
               | Some (field_var, _) ->
                 field+1,
-                (Let_mutable { var = field_var;
-                               initial_value = init;
-                               body;
-                               contents_kind = kind } : Flambda.t))
+                (Let_mutable {
+                  var = field_var;
+                  initial_value = init;
+                  body;
+                  contents_kind = kind;
+                  provenance;
+                } : Flambda.t))
             (0,body) l shape in
         expr
       | Let _ | Let_mutable _

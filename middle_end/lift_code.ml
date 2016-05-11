@@ -102,7 +102,8 @@ and lift_lets_named _var (named:Flambda.named) ~toplevel : Flambda.named =
 
 module Sort_lets = Strongly_connected_components.Make (Variable)
 
-let rebuild_let_rec (defs:(Variable.t * Flambda.named) list) body =
+let rebuild_let_rec (defs:(Variable.t * Flambda.named) list) body
+      ~provenance =
   let map = Variable.Map.of_list defs in
   let graph =
     Variable.Map.map
@@ -117,20 +118,25 @@ let rebuild_let_rec (defs:(Variable.t * Flambda.named) list) body =
   Array.fold_left (fun body (component:Sort_lets.component) ->
       match component with
       | No_loop v ->
-          let def = Variable.Map.find v map in
-          Flambda.create_let v def body
+        let def = Variable.Map.find v map in
+        Flambda.create_let v def body ?provenance
       | Has_loop l ->
-          Flambda.Let_rec
-            (List.map (fun v -> v, Variable.Map.find v map) l,
-             body))
+        let vars_and_defining_exprs =
+          List.map (fun v -> v, Variable.Map.find v map) l
+        in
+        Flambda.Let_rec {
+          vars_and_defining_exprs;
+          body;
+          provenance;
+        })
     body components
 
 let lift_let_rec program =
   Flambda_iterators.map_exprs_at_toplevel_of_program program
     ~f:(Flambda_iterators.map_expr
           (fun expr -> match expr with
-             | Let_rec (defs, body) ->
-                 rebuild_let_rec defs body
+             | Let_rec { vars_and_defining_exprs; body; provenance; } ->
+               rebuild_let_rec vars_and_defining_exprs body ~provenance
              | expr -> expr))
 
 let lift_lets program =

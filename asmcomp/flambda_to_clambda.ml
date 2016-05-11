@@ -158,6 +158,8 @@ end = struct
   (* CR-soon mshinwell: potentially misleading function name *)
   let add_fresh_ident t var =
     let id =
+      (* CR mshinwell: Variables without [original_ident] should probably
+         not appear in DWARF.  Maybe we should tag [Ident.t]s or something *)
       match Variable.original_ident var with
       | Some ident -> ident
       | None -> Ident.create (Variable.base_name var)
@@ -251,6 +253,17 @@ let erase_empty_debuginfo (dbg : Debuginfo.t) =
   else
     dbg
 
+let to_clambda_let_provenance (provenance : Flambda.let_provenance option) =
+  match provenance with
+  | None -> None
+  | Some provenance ->
+    let provenance : Clambda.ulet_provenance =
+      { module_path = provenance.module_path;
+        location = provenance.location;
+      }
+    in
+    Some provenance
+
 let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
   match flam with
   | Var var -> subst_var env var
@@ -259,17 +272,7 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
     let id, env_body = Env.add_fresh_ident env var in
     begin match state with
     | Normal | Keep_for_debugger ->
-      let provenance =
-        match provenance with
-        | None -> None
-        | Some provenance ->
-          let provenance : Clambda.ulet_provenance =
-            { module_path = provenance.module_path;
-              location = provenance.location;
-            }
-          in
-          Some provenance
-      in
+      let provenance = to_clambda_let_provenance provenance in
       Ulet (Immutable, Pgenval, provenance, id,
         to_clambda_named t env var defining_expr,
         to_clambda t env_body body)
@@ -307,20 +310,27 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
           Uphantom_let (provenance, id, defining_expr,
             to_clambda t env body)
     end
-  | Let_mutable { var = mut_var; initial_value = var; body; contents_kind } ->
+  | Let_mutable { var = mut_var; initial_value = var; body; contents_kind;
+        provenance; } ->
     let id, env_body = Env.add_fresh_mutable_ident env mut_var in
     let def = subst_var env var in
-    Ulet (Mutable, contents_kind, None, id, def, to_clambda t env_body body)
-  | Let_rec (defs, body) ->
+    let provenance = to_clambda_let_provenance provenance in
+    Ulet (Mutable, contents_kind, provenance, id, def,
+      to_clambda t env_body body)
+  | Let_rec { vars_and_defining_exprs = defs; body; provenance; } ->
     let env, defs =
       List.fold_right (fun (var, def) (env, defs) ->
           let id, env = Env.add_fresh_ident env var in
           env, (id, var, def) :: defs)
         defs (env, [])
     in
+    let provenance = to_clambda_let_provenance provenance in
     let defs =
       List.map (fun (id, var, def) ->
-          None, id, to_clambda_named t env var def)
+          (* CR-someday mshinwell: consider different provenance for each
+             of the bindings.  This doesn't matter for the module path, but
+             does for the locations. *)
+          provenance, id, to_clambda_named t env var def)
         defs
     in
     Uletrec (defs, to_clambda t env body)

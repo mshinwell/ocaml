@@ -25,7 +25,7 @@ let apply_on_subexpressions f f_named (flam : Flambda.t) =
     f body
   | Let_mutable { body; _ } ->
     f body
-  | Let_rec (defs, body) ->
+  | Let_rec { vars_and_defining_exprs = defs; body; _ } ->
     List.iter (fun (_,l) -> f_named l) defs;
     f body
   | Switch (_, sw) ->
@@ -77,14 +77,14 @@ let map_subexpressions f f_named (tree:Flambda.t) : Flambda.t =
   match tree with
   | Var _ | Apply _ | Assign _ | Send _ | Proved_unreachable
   | Static_raise _ -> tree
-  | Let { var; defining_expr; body; _ } ->
+  | Let { var; defining_expr; body; provenance; _ } ->
     let new_named = f_named var defining_expr in
     let new_body = f body in
     if new_named == defining_expr && new_body == body then
       tree
     else
-      Flambda.create_let var new_named new_body
-  | Let_rec (defs, body) ->
+      Flambda.create_let var new_named new_body ?provenance
+  | Let_rec { vars_and_defining_exprs = defs; body; provenance; } ->
     let new_defs =
       list_map_sharing (map_snd_sharing f_named) defs
     in
@@ -92,7 +92,11 @@ let map_subexpressions f f_named (tree:Flambda.t) : Flambda.t =
     if new_defs == defs && new_body == body then
       tree
     else
-      Let_rec (new_defs, new_body)
+      Let_rec {
+        vars_and_defining_exprs = new_defs;
+        body = new_body;
+        provenance;
+      }
   | Let_mutable mutable_let ->
     let new_body = f mutable_let.body in
     if new_body == mutable_let.body then
@@ -178,7 +182,7 @@ let iter_named_toplevel f f_named named =
 let iter_all_immutable_let_and_let_rec_bindings t ~f =
   iter_expr (function
       | Let { var; defining_expr; _ } -> f var defining_expr
-      | Let_rec (defs, _) ->
+      | Let_rec { vars_and_defining_exprs = defs; _ } ->
         List.iter (fun (var, named) -> f var named) defs
       | _ -> ())
     t
@@ -188,7 +192,7 @@ let iter_all_toplevel_immutable_let_and_let_rec_bindings t ~f =
     (function
       | Let { var; defining_expr; provenance; _ } ->
         f var defining_expr ~provenance
-      | Let_rec (defs, _) ->
+      | Let_rec { vars_and_defining_exprs = defs; _ } ->
         List.iter (fun (var, named) -> f var named ~provenance:None) defs
       | _ -> ())
     (fun _ -> ())
@@ -304,7 +308,7 @@ let map_general ~toplevel f f_named tree =
             tree
           else
             Let_mutable { mutable_let with body = new_body }
-        | Let_rec (defs, body) ->
+        | Let_rec { vars_and_defining_exprs = defs; body; provenance; } ->
           let done_something = ref false in
           let defs =
             List.map (fun (id, lam) ->
@@ -319,7 +323,7 @@ let map_general ~toplevel f f_named tree =
           if not !done_something then
             tree
           else
-            Let_rec (defs, body)
+            Let_rec { vars_and_defining_exprs = defs; body; provenance; }
         | Switch (arg, sw) ->
           let done_something = ref false in
           let sw =

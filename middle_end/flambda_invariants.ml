@@ -51,6 +51,7 @@ let ignore_tag (_ : Tag.t) = ()
 let ignore_inline_attribute (_ : Lambda.inline_attribute) = ()
 let ignore_specialise_attribute (_ : Lambda.specialise_attribute) = ()
 let ignore_value_kind (_ : Lambda.value_kind) = ()
+let ignore_let_provenance_option (_ : Flambda.let_provenance option) = ()
 
 exception Binding_occurrence_not_from_current_compilation_unit of Variable.t
 exception Mutable_binding_occurrence_not_from_current_compilation_unit of
@@ -158,9 +159,10 @@ let variable_and_symbol_invariants (program : Flambda.program) =
   let rec loop env (flam : Flambda.t) =
     match flam with
     (* Expressions that can bind [Variable.t]s: *)
-    | Let { var; defining_expr; body; state; _ } ->
+    | Let { var; defining_expr; body; state; provenance; _ } ->
       loop_named env defining_expr;
       loop (add_binding_occurrence env var) body;
+      ignore_let_provenance_option provenance;
       (* To avoid another traversal, we do this simple check on [state]
          here. *)
       begin match state with
@@ -169,14 +171,15 @@ let variable_and_symbol_invariants (program : Flambda.program) =
         match defining_expr with
         | Const _ | Symbol _ -> ()
         | _ -> ()
-(* XXX raise (Illegal_defining_expr_for_let_state defining_expr) *)
+(* CR mshinwell: raise (Illegal_defining_expr_for_let_state defining_expr) *)
       end
     | Let_mutable { var = mut_var; initial_value = var;
-                    body; contents_kind } ->
+                    body; contents_kind; provenance; } ->
       ignore_value_kind contents_kind;
       check_variable_is_bound env var;
+      ignore_let_provenance_option provenance;
       loop (add_mutable_binding_occurrence env mut_var) body
-    | Let_rec (defs, body) ->
+    | Let_rec { vars_and_defining_exprs = defs; body; provenance; } ->
       let env =
         List.fold_left (fun env (var, def) ->
             will_traverse_named_expression_later def;
@@ -186,6 +189,7 @@ let variable_and_symbol_invariants (program : Flambda.program) =
       List.iter (fun (var, def) ->
         already_added_bound_variable_to_env var;
         loop_named env def) defs;
+      ignore_let_provenance_option provenance;
       loop env body
     | For { bound_var; from_value; to_value; direction; body; } ->
       ignore_direction_flag direction;

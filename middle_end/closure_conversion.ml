@@ -199,7 +199,7 @@ and close t ?debuginfo env (lam : Lambda.lambda) : Flambda.t =
       close_let_bound_expression t var env defining_expr
     in
     let body = close t (Env.add_mutable_var env id mut_var) body in
-    let _provenance : Flambda.let_provenance =
+    let provenance : Flambda.let_provenance =
       { module_path = Env.current_module_path env;
         location = Location.none;
       }
@@ -210,8 +210,7 @@ and close t ?debuginfo env (lam : Lambda.lambda) : Flambda.t =
            initial_value = var;
            body;
            contents_kind = block_kind;
-(* CR mshinwell: add this field *)
-(*           provenance; *)
+           provenance = Some provenance;
          })
   | Lfunction { kind; params; body; attr; } ->
     let location =
@@ -292,6 +291,7 @@ and close t ?debuginfo env (lam : Lambda.lambda) : Flambda.t =
           Env.add_var env id (Variable.create_with_same_name_as_ident id))
         defs env
     in
+    let location = ref None in
     let function_declarations =
       (* Identify any bindings in the [let rec] that are functions.  These
          will be named after the corresponding identifier in the [let rec]. *)
@@ -306,6 +306,10 @@ and close t ?debuginfo env (lam : Lambda.lambda) : Flambda.t =
                 ~inline:attr.inline ~specialise:attr.specialise
                 ~is_a_functor:attr.is_a_functor
             in
+            begin match !location, body with
+            | None, Levent (_, { lev_loc }) -> location := Some lev_loc
+            | _, _ -> ()
+            end;
             Some function_declaration
           | _ -> None)
         defs
@@ -365,7 +369,22 @@ and close t ?debuginfo env (lam : Lambda.lambda) : Flambda.t =
             var, close_let_bound_expression t ~let_rec_ident:id var env def)
           defs
       in
-      Let_rec (defs, close t env body)
+      let provenance : Flambda.let_provenance =
+        (* CR mshinwell: consider what to do about optionness *)
+        let location =
+          match !location with
+          | None -> Location.none
+          | Some location -> location
+        in
+        { module_path = Env.current_module_path env;
+          location;
+        }
+      in
+      Let_rec {
+        vars_and_defining_exprs = defs;
+        body = close t env body;
+        provenance = Some provenance;
+      }
     end
   | Lsend (kind, meth, obj, args, loc) ->
     let meth_var = Variable.create "meth" in

@@ -102,7 +102,8 @@ let rec same (l1 : Flambda.t) (l2 : Flambda.t) =
       && ck1 = ck2
       && same b1 b2
   | Let_mutable _, _ | _, Let_mutable _ -> false
-  | Let_rec (bl1, a1), Let_rec (bl2, a2) ->
+  | Let_rec { vars_and_defining_exprs = bl1; body = a1; },
+    Let_rec { vars_and_defining_exprs = bl2; body = a2; } ->
     Misc.Stdlib.List.equal samebinding bl1 bl2 && same a1 a2
   | Let_rec _, _ | _, Let_rec _ -> false
   | Switch (a1, s1), Switch (a2, s2) ->
@@ -644,7 +645,7 @@ let substitute_read_symbol_field_for_variables
         (Let_mutable { let_mutable with initial_value = fresh })
     | Let_mutable _ ->
       expr
-    | Let_rec (defs, body) ->
+    | Let_rec { vars_and_defining_exprs = defs; body; provenance; } ->
       let free_variables_of_defs =
         List.fold_left (fun set (_, named) ->
             Variable.Set.union set (Flambda.free_variables_named named))
@@ -667,7 +668,11 @@ let substitute_read_symbol_field_for_variables
             defs
         in
         let expr =
-          Flambda.Let_rec (defs, body)
+          Flambda.Let_rec {
+            vars_and_defining_exprs = defs;
+            body;
+            provenance;
+          }
         in
         Variable.Map.fold (fun to_substitute fresh expr ->
             bind to_substitute fresh expr)

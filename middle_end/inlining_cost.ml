@@ -86,7 +86,7 @@ let lambda_smaller' lam ~than:threshold =
       lambda_named_size defining_expr;
       lambda_size body
     | Let_mutable { body } -> lambda_size body
-    | Let_rec (bindings, body) ->
+    | Let_rec { vars_and_defining_exprs = bindings; body; _ } ->
       List.iter (fun (_, lam) -> lambda_named_size lam) bindings;
       lambda_size body
     | Switch (_, sw) ->

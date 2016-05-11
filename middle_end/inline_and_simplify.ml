@@ -1108,7 +1108,8 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
       ~for_defining_expr
       ~for_last_body
       ~filter_defining_expr
-  | Let_mutable { var = mut_var; initial_value = var; body; contents_kind } ->
+  | Let_mutable { var = mut_var; initial_value = var; body; contents_kind;
+        provenance; } ->
     (* CR-someday mshinwell: add the dead let elimination, as above. *)
     simplify_free_variable env var ~f:(fun env var _var_approx ->
       let mut_var, sb =
@@ -1122,9 +1123,11 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
         { var = mut_var;
           initial_value = var;
           body;
-          contents_kind },
+          contents_kind;
+          provenance;
+        },
       r)
-  | Let_rec (defs, body) ->
+  | Let_rec { vars_and_defining_exprs = defs; body; provenance; _ } ->
     let defs, sb = Freshening.add_variables (E.freshening env) defs in
     let env = E.set_freshening env sb in
     let def_env =
@@ -1141,7 +1144,7 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
         defs ([], env, r)
     in
     let body, r = simplify body_env r body in
-    Let_rec (defs, body), r
+    Let_rec { vars_and_defining_exprs = defs; body; provenance; }, r
   | Static_raise (i, args) ->
     let i = Freshening.apply_static_exception (E.freshening env) i in
     simplify_free_variables env args ~f:(fun _env args _args_approxs ->
