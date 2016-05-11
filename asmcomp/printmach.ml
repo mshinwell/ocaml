@@ -27,6 +27,7 @@ let reg ppf r =
     fprintf ppf "%s"
       (match r.typ with Val -> "V" | Addr -> "A" | Int -> "I" | Float -> "F");
   fprintf ppf "/%i" r.stamp;
+  if r.is_parameter <> None then fprintf ppf "[P]";
   begin match r.loc with
   | Unknown -> ()
   | Reg r ->

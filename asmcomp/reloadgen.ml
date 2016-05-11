@@ -44,6 +44,7 @@ method makereg r =
       let newr = Reg.clone r in
       (* Strongly discourage spilling this register *)
       newr.spill_cost <- 100000;
+      newr.is_parameter <- r.is_parameter;
       newr
 
 method private makeregs rv =
