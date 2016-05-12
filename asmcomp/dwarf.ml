@@ -50,7 +50,6 @@ let create ~(source_provenance : Timings.source_provenance) =
     | Startup -> "*startup*", ""
     | Toplevel -> "*toplevel*", ""
   in
-Printf.printf "OP=%s dir=%s\n%!" output_path directory;
   let start_of_code_symbol =
     Symbol.create (Compilation_unit.get_current_exn ())
       (Linkage_name.create "code_begin")
