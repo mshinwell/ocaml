@@ -35,17 +35,22 @@ let () = Dwarf_format.set Thirty_two
 
 let create ~(source_provenance : Timings.source_provenance) =
   let output_path, directory =
+    (* CR mshinwell: this should use the path as per "-o". *)
     match source_provenance with
     | File path ->
       if Filename.is_relative path then
+        (* N.B. Relative---but may still contain directories,
+           e.g. "foo/bar.ml". *)
         let dir = Sys.getcwd () in
-        Filename.concat dir path, dir
+        Filename.concat dir path,
+          Filename.concat dir (Filename.dirname path)
       else
         path, Filename.dirname path
     | Pack pack_name -> Printf.sprintf "*pack(%s)*" pack_name, ""
     | Startup -> "*startup*", ""
     | Toplevel -> "*toplevel*", ""
   in
+Printf.printf "OP=%s dir=%s\n%!" output_path directory;
   let start_of_code_symbol =
     Symbol.create (Compilation_unit.get_current_exn ())
       (Linkage_name.create "code_begin")
