@@ -141,15 +141,19 @@ let inline_by_copying_function_body ~env ~r
       body
   in
   let bindings_for_params_to_args =
-    (* Bind the function's parameters to the arguments from the call site. *)
+    (* Bind the function's parameters to the arguments from the call site.
+       The generated [Let]s are marked as [Keep_for_debugger] to help
+       emission of debugging information for inlined functions' arguments. *)
     let args = List.map (fun arg -> Flambda.Expr (Var arg)) args in
     Flambda_utils.bind ~body ~bindings:(List.combine freshened_params args)
+      ~state:Keep_for_debugger ()
   in
   (* Add bindings for the variables bound by the closure. *)
   let bindings_for_vars_bound_by_closure_and_params_to_args =
     fold_over_projections_of_vars_bound_by_closure ~closure_id_being_applied
       ~lhs_of_application ~function_decls ~init:bindings_for_params_to_args
-      ~f:(fun ~acc:body ~var ~expr -> Flambda.create_let var expr body)
+      ~f:(fun ~acc:body ~var ~expr ->
+        Flambda.create_let var expr body ~state:Keep_for_debugger)
   in
   (* Add bindings for variables corresponding to the functions introduced by
      the whole set of closures.  Each such variable will be bound to a closure;
@@ -369,12 +373,12 @@ let inline_by_copying_function_declaration ~env ~r
               specialise = Default_specialise;
             }))
       in
-      Flambda_utils.bind ~bindings:free_vars_for_lets ~body
+      Flambda_utils.bind ~bindings:free_vars_for_lets ~body ()
     in
     (* Now bind the variables that will hold the arguments from the original
        application. *)
     let expr : Flambda.t =
-      Flambda_utils.bind ~body:duplicated_application ~bindings:args_decl
+      Flambda_utils.bind ~body:duplicated_application ~bindings:args_decl ()
     in
     let env = E.activate_freshening (E.set_never_inline env) in
     Some (simplify env r expr)

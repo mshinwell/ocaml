@@ -131,6 +131,9 @@ module Env : sig
   val allocated_const_for_symbol : t -> Symbol.t -> Allocated_const.t option
 
   val keep_only_symbols : t -> t
+
+  val entering_closure : t -> Closure_id.t -> t
+  val closure_stack : t -> Closure_id.t list
 end = struct
   type t =
     { subst : Clambda.ulambda Variable.Map.t;
@@ -138,6 +141,7 @@ end = struct
       mutable_var : Ident.t Mutable_variable.Map.t;
       toplevel : bool;
       allocated_constant_for_symbol : Allocated_const.t Symbol.Map.t;
+      closure_stack : Closure_id.t list;
     }
 
   let empty =
@@ -146,6 +150,7 @@ end = struct
       mutable_var = Mutable_variable.Map.empty;
       toplevel = false;
       allocated_constant_for_symbol = Symbol.Map.empty;
+      closure_stack = [];
     }
 
   let add_subst t id subst =
@@ -188,7 +193,13 @@ end = struct
   let keep_only_symbols t =
     { empty with
       allocated_constant_for_symbol = t.allocated_constant_for_symbol;
+      closure_stack = t.closure_stack;
     }
+
+  let entering_closure t closure_id =
+    { t with closure_stack = closure_id :: t.closure_stack; }
+
+  let closure_stack t = List.rev t.closure_stack
 end
 
 let subst_var env var : Clambda.ulambda =
@@ -613,6 +624,20 @@ and to_clambda_set_of_closures t env
       List.map (fun (var, _pos) -> Ident.create (Variable.base_name var))
         closure_offsets
     in
+    let env_body = Env.entering_closure env_body closure_id in
+    let module_path =
+      (* CR-soon mshinwell: this isn't a real module path, so maybe rename
+         the field.  Perhaps it should have a different type, in fact *)
+      let comp_unit =
+        Compilation_unit.get_persistent_ident
+          (Compilation_unit.get_current_exn ())
+      in
+      List.fold_left (fun module_path closure_id : Path.t ->
+          let base_name = Closure_id.base_name closure_id in
+          Pdot (module_path, base_name, 0))
+        (Path.Pident comp_unit)
+        (Env.closure_stack env)
+    in
     { label = Compilenv.function_label closure_id;
       arity = Flambda_utils.function_arity function_decl;
       params = params @ [env_var];
@@ -621,7 +646,7 @@ and to_clambda_set_of_closures t env
       human_name = Closure_id.base_name closure_id;
       env_var = Some env_var;
       closure_layout;
-      module_path = None;
+      module_path = Some module_path;
     }
   in
   let funs = List.map to_clambda_function all_functions in
@@ -658,6 +683,7 @@ and to_clambda_closed_set_of_closures t env symbol ~module_path
         function_decl.params (env, [])
     in
     let closure_id = Closure_id.wrap closure_id in
+    let env_body = Env.entering_closure env_body closure_id in
     { label = Compilenv.function_label closure_id;
       arity = Flambda_utils.function_arity function_decl;
       params;
