@@ -79,7 +79,7 @@ type fundecl =
     fun_closure_layout : Ident.t list;
     fun_arity : int;
     fun_module_path : Path.t option;
-    fun_phantom_let_ranges : phantom_let_range Ident.tbl
+    fun_phantom_let_ranges : (Ident.t * phantom_let_range) list;
   }
 
 val reset : unit -> unit
