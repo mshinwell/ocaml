@@ -103,10 +103,7 @@ let rename ?current_compilation_unit ?append t =
     | None -> t.name
     | Some s -> t.name ^ s
   in
-(* XXX this is wrong, due to behaviour of Flambda_to_clambda.  It will
-cause the identifiers to be coalesced.
-*)
-  create ?original_ident:t.original_ident ~current_compilation_unit name
+  create ~current_compilation_unit name
 
 let in_compilation_unit t cu =
   Compilation_unit.equal cu t.compilation_unit
