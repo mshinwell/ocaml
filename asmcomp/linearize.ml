@@ -70,10 +70,8 @@ type phantom_let_range =
 (* Indexed by the numeric identifiers on [Iphantom_let_start] and
    [Iphantom_let_end]. *)
 let phantom_let_ranges_by_number = ref Numbers.Int.Map.empty
-(* Indexed by phantom identifiers.
-   Note that there may be more than one range for a given identifier, for
-   example if a phantom let was duplicated by the inliner. *)
-let phantom_let_ranges = ref []
+(* Indexed by phantom identifiers. *)
+let phantom_let_ranges = ref (Ident.empty : phantom_let_range Ident.tbl)
 
 (* Function declarations *)
 
@@ -87,7 +85,7 @@ type fundecl =
     fun_closure_layout : Ident.t list;
     fun_arity : int;
     fun_module_path : Path.t option;
-    fun_phantom_let_ranges : (Ident.t * phantom_let_range) list;
+    fun_phantom_let_ranges : phantom_let_range Ident.tbl
   }
 
 (* Invert a test *)
@@ -347,8 +345,9 @@ let rec linear i n =
               defining_expr;
             }
           in
+          assert (not (Ident.mem ident !phantom_let_ranges));
           phantom_let_ranges :=
-            (ident, phantom_let_range) :: !phantom_let_ranges;
+            Ident.add ident phantom_let_range !phantom_let_ranges;
           copy_instr (Llabel ending_label) i (linear i.Mach.next n)
       | exception Not_found -> assert false
       end
@@ -361,7 +360,7 @@ let reset () =
   exit_label := []
 
 let reset_between_functions () =
-  phantom_let_ranges := [];
+  phantom_let_ranges := Ident.empty;
   phantom_let_ranges_by_number := Numbers.Int.Map.empty
 
 let add_prologue first_insn =

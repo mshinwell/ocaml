@@ -35,15 +35,8 @@
 
    An "available range" is then a set of available subranges that do not
    overlap in code space, again for a single identifier (normal or phantom)
-   and function.
-*)
-
-(*
-
-The multiple range thing for phantom identifiers needs thinking about more
-carefully.  For a start, what happens for normal identifiers?  We may need
-to keep track of renamings separately.
-
+   and function.  For phantom identifiers, available ranges and subranges
+   coincide, since the relevant value is expected to be permanently accessible.
 *)
 
 type phantom_defining_expr =
@@ -92,7 +85,7 @@ type t
    instruction, even, which is why a new declaration is returned. *)
 val create
    : fundecl:Linearize.fundecl
-  -> phantom_ranges:(Ident.t * Linearize.phantom_let_range) list
+  -> phantom_ranges:Linearize.phantom_let_range Ident.tbl
   -> t * Linearize.fundecl
 
 val find : t -> ident:Ident.t -> Available_range.t option

@@ -477,11 +477,11 @@ let create ~fundecl ~phantom_ranges =
 
 let rewrite_labels t ~env =
   let ranges =
-    List.fold_left (fun (ident, range) ranges ->
+    Ident.fold_all (fun ident range ranges ->
         let range = Available_range.rewrite_labels range ~env in
-        (ident, range) :: ranges)
+        Ident.add ident range ranges)
       t.ranges
-      []
+      Ident.empty
   in
   { ranges;
   }

@@ -51,14 +51,8 @@ include Identifiable.Make (struct
     if Compilation_unit.equal t.compilation_unit
         (Compilation_unit.get_current_exn ())
     then begin
-      (* CR mshinwell: add another "-d" flag for this or something? *)
-      match t.original_ident with
-      | None ->
-        Format.fprintf ppf "%s/%d"
-          t.name t.name_stamp
-      | Some original_ident ->
-        Format.fprintf ppf "%s(\"%s\")/%d"
-          t.name (Ident.unique_name original_ident) t.name_stamp
+      Format.fprintf ppf "%s/%d"
+        t.name t.name_stamp
     end else begin
       Format.fprintf ppf "%a.%s/%d"
         Compilation_unit.print t.compilation_unit
