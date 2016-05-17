@@ -95,4 +95,6 @@ val instr_cons_debug:
         instruction -> instruction
 val instr_iter: (instruction -> unit) -> instruction -> unit
 
+(* CR mshinwell: change Icatch to have a record, then simplify this
+   function *)
 val recursive_handlers: instruction -> Numbers.Int.Set.t
