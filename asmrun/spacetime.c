@@ -87,6 +87,10 @@ static value caml_spacetime_finaliser_trie_root_main_thread = Val_unit;
 value* caml_spacetime_finaliser_trie_root
   = &caml_spacetime_finaliser_trie_root_main_thread;
 
+/* CR-someday mshinwell: think about thread safety of the manipulation of
+   this list for multicore */
+allocation_point* all_allocation_points = NULL;
+
 static const uintnat chunk_size = 1024 * 1024;
 
 static void reinitialise_free_node_block(void)
@@ -114,6 +118,7 @@ void caml_spacetime_initialize(void)
     if(interval != 0) {
       int fd;
       double time;
+      /* CR mshinwell: the filename must vary! */
       fd = open("spacetime", O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0666);
       if (fd == -1) caml_sys_error(caml_copy_string("spacetime"));
       snapshot_channel = caml_open_descriptor_out(fd);
@@ -379,6 +384,7 @@ CAMLprim value caml_spacetime_allocate_node(
 static c_node* allocate_c_node(void)
 {
   c_node* node;
+  size_t index;
 
   node = (c_node*) start_of_free_node_block;
   if (end_of_free_node_block - start_of_free_node_block < sizeof(c_node)) {
@@ -390,6 +396,12 @@ static c_node* allocate_c_node(void)
   start_of_free_node_block += sizeof(c_node);
 
   Assert((sizeof(c_node) % sizeof(uintnat)) == 0);
+
+  /* CR mshinwell: remove this and pad the structure properly */
+  for (index = 0; index < sizeof(c_node) / sizeof(value); index++) {
+    ((value*) node)[index] = Val_unit;
+  }
+
   node->gc_header =
     Make_header(sizeof(c_node)/sizeof(uintnat) - 1, C_node_tag, Caml_black);
   node->data.callee_node = Val_unit;
@@ -623,13 +635,31 @@ static NOINLINE void* find_trie_node_from_libunwind(int for_allocation,
       node->pc = (expected_type == CALL ? Encode_c_node_pc_for_call(pc)
         : Encode_c_node_pc_for_alloc_point(pc));
       *node_hole = caml_spacetime_stored_pointer_of_c_node(node);
-      if(expected_type == ALLOCATION) {
+      if (expected_type == ALLOCATION) {
         caml_spacetime_profinfo++;
         if (caml_spacetime_profinfo > PROFINFO_MASK) {
           /* Profiling counter overflow. */
           caml_spacetime_profinfo = PROFINFO_MASK;
         }
-        node->data.profinfo = Val_long(caml_spacetime_profinfo);
+        node->data.allocation.profinfo =
+          Make_header_with_profinfo(
+            /* "-1" because [c_node] has the GC header as its first
+               element. */
+            offsetof(c_node, data.allocation.count)/sizeof(value) - 1,
+            Infix_tag,
+            Caml_black,
+            caml_spacetime_profinfo);
+        node->data.allocation.count = Val_long(0);
+
+        /* Add the new allocation point into the linked list of all allocation
+           points. */
+        if (all_allocation_points != NULL) {
+          node->data.allocation.next =
+            (value) &all_allocation_points->count;
+        } else {
+          node->data.allocation.next = Val_unit;
+        }
+        all_allocation_points = &node->data.allocation;
       }
     }
     else {
@@ -672,6 +702,8 @@ static NOINLINE void* find_trie_node_from_libunwind(int for_allocation,
   if (for_allocation) {
     Assert(caml_spacetime_classify_c_node(node) == ALLOCATION);
     Assert(caml_spacetime_c_node_of_stored_pointer(node->next) != node);
+    node->data.allocation.count =
+      Val_long(Long_val(node->data.allocation.count) + 1);
   }
 
   Assert(node->next != (value) NULL);
@@ -752,7 +784,8 @@ void caml_spacetime_c_to_ocaml(void* ocaml_entry_point,
 extern void caml_garbage_collection(void);  /* signals_asm.c */
 extern void caml_array_bound_error(void);  /* fail.c */
 
-CAMLprim uintnat caml_spacetime_generate_profinfo (void* profinfo_words)
+CAMLprim uintnat caml_spacetime_generate_profinfo (void* profinfo_words,
+                                                   uintnat index_within_node)
 {
   /* Called from code that creates a value's header inside an OCaml
      function. */
@@ -767,6 +800,9 @@ CAMLprim uintnat caml_spacetime_generate_profinfo (void* profinfo_words)
   }
   profinfo = caml_spacetime_profinfo;
 
+  /* CR-someday mshinwell: we could always use the [struct allocation_point]
+     overlay instead of the macros now. */
+
   /* [node] isn't really a node; it points into the middle of
      one---specifically to the "profinfo" word of an allocation point.
      It's done like this to avoid re-calculating the place in the node
@@ -776,10 +812,27 @@ CAMLprim uintnat caml_spacetime_generate_profinfo (void* profinfo_words)
   Assert(Alloc_point_profinfo(node, 0) == Val_unit);
 
   /* The profinfo value is stored shifted to reduce the number of
-     instructions required on the OCaml side. */
-  profinfo = Encode_alloc_point_profinfo(profinfo << PROFINFO_SHIFT);
+     instructions required on the OCaml side.  It also enables us to use
+     [Infix_tag] to obtain valid value pointers into the middle of nodes,
+     which is used for the linked list of all allocation points. */
+  profinfo = Make_header_with_profinfo(
+    index_within_node, Infix_tag, Caml_black, profinfo);
 
+  Assert(!Is_block(profinfo));
   Alloc_point_profinfo(node, 0) = profinfo;
+  /* The count is set to zero by the initialisation when the node was
+     created (see above). */
+  Assert(Alloc_point_count(node, 0) == Val_long(0));
+
+  /* Add the new allocation point into the linked list of all allocation
+     points. */
+  if (all_allocation_points != NULL) {
+    Alloc_point_next_ptr(node, 0) = (value) &all_allocation_points->count;
+  }
+  else {
+    Assert(Alloc_point_next_ptr(node, 0) == Val_unit);
+  }
+  all_allocation_points = (allocation_point*) node;
 
   return profinfo;
 }
@@ -795,7 +848,7 @@ uintnat caml_spacetime_my_profinfo (struct ext_table** cached_frames)
 
   node = find_trie_node_from_libunwind(1, cached_frames);
   if (node != NULL) {
-    profinfo = node->data.profinfo;
+    profinfo = ((uintnat) (node->data.allocation.profinfo)) >> PROFINFO_SHIFT;
   }
 
   return profinfo;  /* N.B. not shifted by PROFINFO_SHIFT */

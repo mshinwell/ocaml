@@ -76,6 +76,7 @@ typedef struct {
   value entries;
   value words_scanned;
   value words_scanned_with_profinfo;
+  value total_allocations;
 } snapshot;
 
 typedef struct {
@@ -123,6 +124,34 @@ static value take_gc_stats(void)
   return v_stats;
 }
 
+static value get_total_allocations(void)
+{
+  value v_total_allocations = Val_unit;
+  allocation_point* total = all_allocation_points;
+
+  while (total != NULL) {
+    value v_total;
+    v_total = allocate_outside_heap_with_tag(3 * sizeof(value), 0);
+
+    /* [v_total] is of type [Raw_spacetime_lib.total_allocations]. */
+    Field(v_total, 0) = Val_long(Profinfo_hd(total->profinfo));
+    Field(v_total, 1) = Val_long(total->count);
+    Field(v_total, 2) = v_total_allocations;
+    v_total_allocations = v_total;
+
+    assert (total->next == Val_unit
+      || (Is_block(total->next) && Tag_val(total->next) == Infix_tag));
+    if (total->next == Val_unit) {
+      total = NULL;
+    }
+    else {
+      total = (allocation_point*) Hp_val(total->next);
+    }
+  }
+
+  return v_total_allocations;
+}
+
 static value take_snapshot(void)
 {
   value v_snapshot;
@@ -142,6 +171,7 @@ static value take_snapshot(void)
   static raw_snapshot_entry* raw_entries = NULL;
   uintnat words_scanned = 0;
   uintnat words_scanned_with_profinfo = 0;
+  value v_total_allocations;
 
   time = caml_sys_time_unboxed(Val_unit);
   gc_stats = take_gc_stats();
@@ -264,6 +294,8 @@ static value take_snapshot(void)
   v_snapshot = allocate_outside_heap(sizeof(snapshot));
   heap_snapshot = (snapshot*) v_snapshot;
 
+  v_total_allocations = get_total_allocations();
+
   heap_snapshot->time = v_time;
   heap_snapshot->gc_stats = gc_stats;
   heap_snapshot->entries = v_entries;
@@ -271,6 +303,7 @@ static value take_snapshot(void)
     = Val_long(words_scanned);
   heap_snapshot->words_scanned_with_profinfo
     = Val_long(words_scanned_with_profinfo);
+  heap_snapshot->total_allocations = v_total_allocations;
 
   return v_snapshot;
 }
@@ -278,6 +311,7 @@ static value take_snapshot(void)
 void caml_spacetime_save_snapshot (struct channel *chan)
 {
   value v_snapshot;
+  value v_total_allocations;
   snapshot* heap_snapshot;
 
   v_snapshot = take_snapshot();
@@ -294,6 +328,13 @@ void caml_spacetime_save_snapshot (struct channel *chan)
   if (Wosize_val(heap_snapshot->entries) > 0) {
     caml_stat_free(Hp_val(heap_snapshot->entries));
   }
+  v_total_allocations = heap_snapshot->total_allocations;
+  while (v_total_allocations != Val_unit) {
+    value next = Field(v_total_allocations, 2);
+    caml_stat_free(Hp_val(v_total_allocations));
+    v_total_allocations = next;
+  }
+
   caml_stat_free(Hp_val(v_snapshot));
 }
 
@@ -377,7 +418,6 @@ value caml_spacetime_frame_table(void)
 {
   /* Flatten the frame table into a single associative list. */
 
-  uintnat i;
   value list = Val_long(0);  /* the empty list */
 
   if(!caml_debug_info_available()) {
@@ -388,7 +428,7 @@ value caml_spacetime_frame_table(void)
     caml_init_frame_descriptors();
   }
 
-  for(i = 0; i <= caml_frame_descriptors_mask; i++) {
+  for(uintnat i = 0; i <= caml_frame_descriptors_mask; i++) {
     frame_descr* descr = caml_frame_descriptors[i];
     if (descr != NULL) {
       value location, return_address, pair, new_list_element;

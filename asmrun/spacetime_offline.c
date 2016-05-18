@@ -125,7 +125,15 @@ CAMLprim value caml_spacetime_ocaml_allocation_point_annotation
 {
   uintnat profinfo_shifted;
   profinfo_shifted = (uintnat) Alloc_point_profinfo(node, Long_val(offset));
-  return Val_long(profinfo_shifted >> PROFINFO_SHIFT);
+  return Val_long(Profinfo_hd(profinfo_shifted));
+}
+
+CAMLprim value caml_spacetime_ocaml_allocation_point_count
+      (value node, value offset)
+{
+  value count = Alloc_point_count(node, Long_val(offset));
+  Assert(!Is_block(count));
+  return count;
 }
 
 CAMLprim value caml_spacetime_ocaml_direct_call_point_callee_node
@@ -200,7 +208,17 @@ CAMLprim value caml_spacetime_c_node_profinfo(value node)
   Assert(Is_c_node(node));
   c_node = caml_spacetime_offline_c_node_of_stored_pointer_not_null(node);
   Assert(caml_spacetime_offline_classify_c_node(c_node) == ALLOCATION);
-  Assert(!Is_block(c_node->data.profinfo));
-  return c_node->data.profinfo;
+  Assert(!Is_block(c_node->data.allocation.profinfo));
+  return Val_long(Profinfo_hd(c_node->data.allocation.profinfo));
 }
 
+CAMLprim value caml_spacetime_c_node_allocation_count(value node)
+{
+  c_node* c_node;
+  Assert(node != (value) NULL);
+  Assert(Is_c_node(node));
+  c_node = caml_spacetime_offline_c_node_of_stored_pointer_not_null(node);
+  Assert(caml_spacetime_offline_classify_c_node(c_node) == ALLOCATION);
+  Assert(!Is_block(c_node->data.allocation.count));
+  return c_node->data.allocation.count;
+}

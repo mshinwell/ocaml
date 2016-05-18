@@ -112,6 +112,9 @@ module Trace : sig
       (** The annotation written into the headers of boxed values allocated
           at the given allocation site. *)
       val annotation : t -> Annotation.t
+
+      (** How many times the allocation point has been hit. *)
+      val count : t -> int
     end
 
     module Direct_call_point : sig
@@ -206,6 +209,7 @@ module Trace : sig
 
       val program_counter : t -> Program_counter.Foreign.t
       val annotation : t -> Annotation.t
+      val count : t -> int
     end
 
     module Call_point : sig
@@ -310,6 +314,15 @@ module Heap_snapshot : sig
   val entries : t -> Entries.t
   val words_scanned : t -> int
   val words_scanned_with_profinfo : t -> int
+
+  module Total_allocation : sig
+    type t
+
+    val annotation : t -> Annotation.t
+    val count : t -> int
+    val next : t -> t option
+  end
+  val total_allocations : t -> Total_allocation.t option
 
   module Series : sig
     type t

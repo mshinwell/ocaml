@@ -29,7 +29,14 @@ let something_was_instrumented () =
 
 let next_index_within_node ~part_of_shape ~label =
   let index = !index_within_node in
-  incr index_within_node;
+  begin match part_of_shape with
+  | Mach.Direct_call_point _ | Mach.Indirect_call_point ->
+    incr index_within_node
+  | Mach.Allocation_point ->
+    incr index_within_node;
+    incr index_within_node;
+    incr index_within_node
+  end;
   reverse_shape := (part_of_shape, label) :: !reverse_shape;
   index
 
@@ -97,6 +104,7 @@ let code_for_function_prologue ~function_name ~node_hole =
 
 let code_for_blockheader ~value's_header ~node ~dbg =
   let existing_profinfo = Ident.create "existing_profinfo" in
+  let existing_count = Ident.create "existing_count" in
   let profinfo = Ident.create "profinfo" in
   let address_of_profinfo = Ident.create "address_of_profinfo" in
   let label = Cmm.new_label () in
@@ -111,7 +119,8 @@ let code_for_blockheader ~value's_header ~node ~dbg =
        balance. *)
     Cop (Cextcall ("caml_spacetime_generate_profinfo", [| Int |],
         false, dbg),
-      [Cvar address_of_profinfo])
+      [Cvar address_of_profinfo;
+       Cconst_int (index_within_node + 1)])
   in
   (* Check if we have already allocated a profinfo value for this allocation
      point with the current backtrace.  If so, use that value; if not,
@@ -127,14 +136,32 @@ let code_for_blockheader ~value's_header ~node ~dbg =
           Cop (Ccmpi Cne, [Cvar existing_profinfo; Cconst_int 1 (* () *)]),
           Cvar existing_profinfo,
           generate_new_profinfo),
-        (* [profinfo] is already shifted by [PROFINFO_SHIFT].
-           It also has the bottom bit set!  To avoid generating more code,
-           we can adjust [value's_header] using a trick.  The effect is to
-           "or" in the profinfo value to the higher bits, whilst preserving
-           all remaining bits. *)
-        let value's_header = Nativeint.logxor value's_header 1n in
-        Csequence (Cop (Clabel label, []),
-          Cop (Cxor, [Cvar profinfo; Cconst_natint value's_header])))))
+        Clet (existing_count,
+          Cop (Cload Word_int, [
+            Cop (Caddi,
+              [Cvar address_of_profinfo; Cconst_int Arch.size_addr])
+          ]),
+          Csequence (Cop (Clabel label, []),
+            Csequence (
+              Cop (Cstore (Word_int, Lambda.Assignment),
+                [Cop (Caddi,
+                  [Cvar address_of_profinfo; Cconst_int Arch.size_addr]);
+                 (* N.B. "2" not "1", since it's an OCaml integer. *)
+                 Cop (Caddi, [Cvar existing_count; Cconst_int 2]);
+                ]),
+              (* [profinfo] looks like a black [Infix_tag] header.  Instead of
+                 having to mask [profinfo] before ORing it with the desired
+                 header, we can use an XOR trick, to keep code size down. *)
+              let value's_header =
+                Nativeint.logxor value's_header
+                  (Nativeint.logor
+                    ((Nativeint.logor (Nativeint.of_int Obj.infix_tag)
+                      (Nativeint.shift_left 3n (* <- Caml_black *) 8)))
+                    (Nativeint.shift_left
+                      (* The following is the [Infix_offset_val], in words. *)
+                      (Nativeint.of_int (index_within_node + 1)) 10))
+              in
+              Cop (Cxor, [Cvar profinfo; Cconst_natint value's_header])))))))
 
 type callee =
   | Direct of string
@@ -174,7 +201,7 @@ let code_for_call ~node ~callee ~is_tail ~label =
        (hard) node hole pointer register immediately before the call.
        (That move is inserted in [Selectgen].) *)
     match callee with
-    | Direct callee -> Cvar place_within_node
+    | Direct _callee -> Cvar place_within_node
     | Indirect callee ->
       let caller_node =
         if is_tail then node
@@ -222,7 +249,7 @@ class virtual instruction_selection = object (self)
   method private can_instrument () =
     Config.spacetime && not disable_instrumentation
 
-  method about_to_emit_call env desc arg =
+  method! about_to_emit_call env desc arg =
     if not (self#can_instrument ()) then None
     else
       let module M = Mach in
@@ -352,7 +379,7 @@ class virtual instruction_selection = object (self)
       super#select_allocation_args env
     end
 
-  method select_checkbound () =
+  method! select_checkbound () =
     (* This follows [select_allocation], above. *)
     if self#can_instrument () then begin
       let label = Cmm.new_label () in
@@ -370,7 +397,7 @@ class virtual instruction_selection = object (self)
       super#select_checkbound ()
     end
 
-  method select_checkbound_extra_args () =
+  method! select_checkbound_extra_args () =
     if self#can_instrument () then begin
       (* This follows [select_allocation_args], above. *)
       [Cmm.Cvar (Lazy.force !spacetime_node_ident)]

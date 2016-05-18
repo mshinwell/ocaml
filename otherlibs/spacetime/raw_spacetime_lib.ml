@@ -102,8 +102,8 @@ module Shape_table = struct
 
   let part_of_shape_size = function
     | Direct_call _
-    | Indirect_call _
-    | Allocation_point _ -> 1
+    | Indirect_call _ -> 1
+    | Allocation_point _ -> 3
 
   type raw = (Int64.t * (part_of_shape list)) list
 
@@ -180,6 +180,13 @@ module Trace = struct
           "noalloc"
 
       let annotation t = annotation t.node t.offset
+
+      external count : ocaml_node -> int -> int
+        = "caml_spacetime_only_works_for_native_code"
+          "caml_spacetime_ocaml_allocation_point_count"
+          "noalloc"
+
+      let count t = count t.node t.offset
     end
 
     module Direct_call_point = struct
@@ -383,6 +390,10 @@ module Trace = struct
       external annotation : t -> Annotation.t
         = "caml_spacetime_only_works_for_native_code"
           "caml_spacetime_c_node_profinfo" "noalloc"
+
+      external count : t -> int
+        = "caml_spacetime_only_works_for_native_code"
+          "caml_spacetime_c_node_allocation_count" "noalloc"
     end
 
     module Call_point = struct
@@ -865,8 +876,18 @@ module Heap_snapshot = struct
     let annotation t idx = t.(idx*3)
     let num_blocks t idx = t.(idx*3 + 1)
     let num_words_including_headers t idx = t.(idx*3 + 2)
-
   end
+
+  type total_allocations =
+    | End
+    | Total of {
+        annotation : Annotation.t;
+        count : int;
+        next : total_allocations;
+      }
+
+  let (_ : total_allocations) =  (* suppress compiler warning *)
+    Total { annotation = 0; count = 0; next = End; }
 
   type t = {
     timestamp : float;
@@ -874,6 +895,7 @@ module Heap_snapshot = struct
     entries : Entries.t;
     words_scanned : int;
     words_scanned_with_profinfo : int;
+    total_allocations : total_allocations;
   }
 
   type heap_snapshot = t
@@ -883,6 +905,28 @@ module Heap_snapshot = struct
   let entries t = t.entries
   let words_scanned t = t.words_scanned
   let words_scanned_with_profinfo t = t.words_scanned_with_profinfo
+
+  module Total_allocation = struct
+    type t = total_allocations  (* [End] is forbidden *)
+
+    let annotation = function
+      | End -> assert false
+      | Total { annotation; _ } -> annotation
+
+    let count = function
+      | End -> assert false
+      | Total { count; _ } -> count
+
+    let next = function
+      | End -> assert false
+      | Total { next = End; _ } -> None
+      | Total { next; _ } -> Some next
+  end
+
+  let total_allocations t =
+    match t.total_allocations with
+    | End -> None
+    | (Total _) as totals -> Some totals
 
   module Series = struct
     type t = {
