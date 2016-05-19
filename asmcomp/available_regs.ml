@@ -84,6 +84,9 @@ let augment_availability_at_raise avail =
 let rec available_regs instr ~avail_before =
   if not (avail_before == all_regs) then begin
     ()
+(* CR mshinwell: investigate these assertions.  It seems like we're breaking
+   the first one due to the special case below.  The second one should still
+   hold though I think *)
 (*
     (* A register should not be an input to an instruction unless it is
        available. *)
