@@ -12,17 +12,28 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(* CR pchambart: I'm still not convinced by the name of the pass.
+   unclobered_regs maybe ? *)
+
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 module List = ListLabels
 module M = Mach
 module R = Reg
 
+(* CR pchambart is this only needed for debugging ? *)
 let fun_name = ref ""
 
+(* CR pchambart I'm not certain that exits numbers cannot be nested:
+   every other pass uses a list for that I assume *)
 let avail_at_exit_table = Hashtbl.create 42
+(* CR pchambart: None here is in some way the same thing as all_regs *)
 let avail_at_raise = ref None
 
+(* CR pchambart: not 'interessting' but contain source level relevant value.
+   This may be easier to just filter later (when printing ?).
+   Keeping those in gdb might help debug the code generation such
+   as corrupted values due to unregistered roots. *)
 let reg_is_interesting reg =
   (* CR-soon mshinwell: handle values split across multiple registers (and
      below) *)
@@ -38,6 +49,9 @@ let instr_live i = R.Set.filter reg_is_interesting i.M.live
 
 (* A special sentinel value meaning "all registers available"---used when a
    point in the code is unreachable. *)
+(* CR-pchambart it does not really convey the fact that it's
+   unreachable. Having a sum type to represent that may be cleaner.
+   I don't think this allocation cost would really matter *)
 let all_regs = R.set_of_array [| R.dummy |]
 
 (* Intersection, taking into account the special meaning of [all_regs]. *)
@@ -84,6 +98,8 @@ let augment_availability_at_raise avail =
 let rec available_regs instr ~avail_before =
   if not (avail_before == all_regs) then begin
     ()
+    (* CR pchambart: The difference between live and avail_before is
+       probably due to the 'interesting' filter. *)
 (*
     (* A register should not be an input to an instruction unless it is
        available. *)
@@ -120,10 +136,11 @@ let rec available_regs instr ~avail_before =
        non-spilled values immeidately prior to the call) and use the
        "after call" range across the whole call instruction. *)
     (* CR-soon mshinwell: we should try to experiment more with this *)
+    (* CR pchambart: This test should probably surround everything,
+       especialy in the case where it is changed to a sum type. *)
     if avail_before == all_regs then
       all_regs
     else
-      let open Mach in
       match instr.M.desc with
       | Iop (Ialloc _)
       | Iop Icall_ind | Iop (Icall_imm _) | Iop (Iextcall _) ->
@@ -139,6 +156,8 @@ let rec available_regs instr ~avail_before =
         R.Set.diff avail_before made_unavailable
       | _ -> avail_before
   in
+  (* CR pchambart: Given how it's used I would rename it to
+     available_across rather than available_before. *)
   instr.M.available_before <- avail_before;
   let avail_after =
     if avail_before == all_regs then
@@ -220,8 +239,17 @@ Format.eprintf "%s: %a: results %a CAA %a made_unavailable %a\n%!"
       | Iswitch (_, cases) -> join (Array.to_list cases) ~avail_before
       | Iloop body ->
         let avail_after = ref avail_before in
+        (* This should probably be instr.available_before to do a
+           single loop in case of nested Iloop.  *)
         begin try
           while true do
+            (* CR pchambart: I don't see any situations where a second
+               round would remove more registers from the set. Hence
+               I'm not convinced that there are situations where a
+               fixpoint is required. But this is necessary for marking
+               each instruction in the loop with its real
+               available_before. An assertion should check that never
+               more than 2 rounds are required.  *)
             let avail_after' =
               inter !avail_after
                 (available_regs body ~avail_before:!avail_after)
@@ -284,6 +312,8 @@ and join branches ~avail_before =
   end
 
 let fundecl f =
+  (* CR pchambart: this should be cleaned by the Icatch instruction.
+     It should be replaced by an assertion *)
   Hashtbl.clear avail_at_exit_table;
   avail_at_raise := None;
   fun_name := f.M.fun_name;
