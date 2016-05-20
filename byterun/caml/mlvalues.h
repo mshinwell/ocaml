@@ -110,6 +110,7 @@ bits  63            38 37            10 9     8 7   0
 #define PROFINFO_SHIFT 38
 #define PROFINFO_MASK 0x3ffffff
 #define PROFINFO_MASK_ull 0x3ffffffull
+#define Profinfo_hd(hd) (((mlsize_t) ((hd) >> PROFINFO_SHIFT)) & PROFINFO_MASK)
 
 #define Tag_hd(hd) ((tag_t) ((hd) & 0xFF))
 #ifndef WITH_SPACETIME
@@ -117,7 +118,6 @@ bits  63            38 37            10 9     8 7   0
 #else
 #define Hd_no_profinfo(hd) ((hd) & ~(PROFINFO_MASK_ull << PROFINFO_SHIFT))
 #define Wosize_hd(hd) ((mlsize_t) ((Hd_no_profinfo(hd)) >> 10))
-#define Profinfo_hd(hd) (((mlsize_t) ((hd) >> PROFINFO_SHIFT)) & PROFINFO_MASK)
 #endif
 
 #define Hd_val(val) (((header_t *) (val)) [-1])        /* Also an l-value. */

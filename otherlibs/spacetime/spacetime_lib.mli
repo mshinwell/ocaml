@@ -56,6 +56,7 @@ module Entry : sig
   val backtrace : t -> Backtrace.t
   val blocks : t -> int
   val words : t -> int
+  val allocations : t -> int
 
   val compare : t -> t -> int
   val hash : t -> int

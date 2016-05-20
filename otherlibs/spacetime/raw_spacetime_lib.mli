@@ -315,7 +315,7 @@ module Heap_snapshot : sig
   val words_scanned : t -> int
   val words_scanned_with_profinfo : t -> int
 
-  module Total_allocation : sig
+  module Allocations : sig
     type t
 
     val annotation : t -> Annotation.t
@@ -324,7 +324,7 @@ module Heap_snapshot : sig
   end
   (** Total allocations across *all threads*. *)
   (* CR-someday mshinwell: change the relevant variables to be thread-local *)
-  val total_allocations : t -> Total_allocation.t option
+  val allocations : t -> Allocations.t option
 
   module Series : sig
     type t

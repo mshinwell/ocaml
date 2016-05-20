@@ -878,16 +878,16 @@ module Heap_snapshot = struct
     let num_words_including_headers t idx = t.(idx*3 + 2)
   end
 
-  type total_allocations =
+  type allocations =
     | End
-    | Total of {
+    | Alloc of {
         annotation : Annotation.t;
         count : int;
-        next : total_allocations;
+        next : allocations;
       }
 
-  let (_ : total_allocations) =  (* suppress compiler warning *)
-    Total { annotation = 0; count = 0; next = End; }
+  let (_ : allocations) =  (* suppress compiler warning *)
+    Alloc { annotation = 0; count = 0; next = End; }
 
   type t = {
     timestamp : float;
@@ -895,7 +895,7 @@ module Heap_snapshot = struct
     entries : Entries.t;
     words_scanned : int;
     words_scanned_with_profinfo : int;
-    total_allocations : total_allocations;
+    allocations : allocations;
   }
 
   type heap_snapshot = t
@@ -906,27 +906,27 @@ module Heap_snapshot = struct
   let words_scanned t = t.words_scanned
   let words_scanned_with_profinfo t = t.words_scanned_with_profinfo
 
-  module Total_allocation = struct
-    type t = total_allocations  (* [End] is forbidden *)
+  module Allocations = struct
+    type t = allocations  (* [End] is forbidden *)
 
     let annotation = function
       | End -> assert false
-      | Total { annotation; _ } -> annotation
+      | Alloc { annotation; _ } -> annotation
 
     let num_words_including_headers = function
       | End -> assert false
-      | Total { count; _ } -> count
+      | Alloc { count; _ } -> count
 
     let next = function
       | End -> assert false
-      | Total { next = End; _ } -> None
-      | Total { next; _ } -> Some next
+      | Alloc { next = End; _ } -> None
+      | Alloc { next; _ } -> Some next
   end
 
-  let total_allocations t =
-    match t.total_allocations with
+  let allocations t =
+    match t.allocations with
     | End -> None
-    | (Total _) as totals -> Some totals
+    | (Alloc _) as allocs -> Some allocs
 
   module Series = struct
     type t = {

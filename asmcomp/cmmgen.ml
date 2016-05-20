@@ -851,6 +851,20 @@ type boxed_number =
   | Boxed_float of Debuginfo.t
   | Boxed_integer of boxed_integer * Debuginfo.t
 
+let equal_unboxed_integer ui1 ui2 =
+  match ui1, ui2 with
+  | Pnativeint, Pnativeint -> true
+  | Pint32, Pint32 -> true
+  | Pint64, Pint64 -> true
+  | _, _ -> false
+
+let equal_boxed_number bn1 bn2 =
+  match bn1, bn2 with
+  | Boxed_float _, Boxed_float _ -> true
+  | Boxed_integer(ui1, _), Boxed_integer(ui2, _) ->
+    equal_unboxed_integer ui1 ui2
+  | _, _ -> false
+
 let box_number bn arg =
   match bn with
   | Boxed_float dbg -> box_float dbg arg
@@ -1340,7 +1354,7 @@ let rec is_unboxed_number env e =
      resulting unboxed_number_kind *)
   let join k1 e =
     match k1, is_unboxed_number env e with
-    | Boxed b1, Boxed b2 when b1 = b2 -> Boxed b1
+    | Boxed b1, Boxed b2 when equal_boxed_number b1 b2 -> Boxed b1
     | No_result, k | k, No_result ->
         k (* if a branch never returns, it is safe to unbox it *)
     | _, _ -> No_unboxing
