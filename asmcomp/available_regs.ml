@@ -157,6 +157,7 @@ let rec available_regs instr ~avail_before =
             (* ~init:*)R.Set.empty
         in
         R.Set.diff avail_before made_unavailable
+      (* CR mshinwell: should have a hook for Ispecific cases *)
       | _ -> avail_before
   in
   (* CR pchambart: Given how it's used I would rename it to
