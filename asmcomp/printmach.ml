@@ -21,6 +21,7 @@ open Reg
 open Mach
 
 let reg_shared_core ppf shared =
+  fprintf ppf "/%i" shared.stamp;
   begin match shared.loc with
   | Unknown -> ()
   | Reg r ->
@@ -41,7 +42,6 @@ let reg_shared ppf shared =
   fprintf ppf "%s"
     (match shared.typ with
     | Val -> "V" | Addr -> "A" | Int -> "I" | Float -> "F");
-  fprintf ppf "/%i" shared.stamp;
   reg_shared_core ppf shared
 
 let reg ppf r =
