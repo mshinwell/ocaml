@@ -117,6 +117,19 @@ let name t =
     | None -> with_spilled
     | Some part -> with_spilled ^ "#" ^ string_of_int part
 
+let identical_except_in_name r ~take_name_from =
+  match take_name_from.raw_name with
+  | Raw_name.Anon -> r
+  | Raw_name.R | Raw_name.Ident _ ->
+    { r with raw_name = take_name_from.raw_name; }
+
+let identical_except_in_namev rs ~take_names_from =
+  if Array.length rs <> Array.length take_names_from then
+    failwith "Reg.identical_except_in_namev with different length arrays";
+  Array.init (Array.length rs) (fun index ->
+    identical_except_in_name rs.(index)
+      ~take_name_from:take_names_from.(index))
+
 let first_virtual_reg_stamp = ref (-1)
 
 let reset() =

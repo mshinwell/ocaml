@@ -52,6 +52,18 @@ val at_location: Cmm.machtype_component -> location -> t
 
 val anonymous : t -> bool
 
+(** [identical_except_in_namev t ~take_names_from] takes registers and names
+    elementwise from [t] and [take_names_from] respectively and returns a new
+    array containing copies of the registers with the new names (save that if
+    a particular register in [take_names_from] is anonymous, its name is not
+    transferred).  The registers' stamps are not changed.  This is used for
+    naming values of type [t] representing the hard registers and stack slots
+    of procedure call conventions; see selectgen.ml. *)
+val identical_except_in_namev : t array -> take_names_from:t array -> t array
+
+(* Like [identical_except_in_namev] except just for one register. *)
+val identical_except_in_name : t -> take_name_from:t -> t
+
 (* Name for printing *)
 val name : t -> string
 

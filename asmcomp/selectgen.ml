@@ -105,6 +105,40 @@ let name_regs id rv =
       rv.(i).part <- Some i
     done
 
+(* We shadow [Proc] to force correct naming of hard registers. *)
+module Proc = struct
+  let loc_parameters params =
+    Reg.identical_except_in_namev (Proc.loc_parameters params)
+      ~take_names_from:params
+
+  let loc_arguments args =
+    let args', stack_offset = Proc.loc_arguments args in
+    let regs = Reg.identical_except_in_namev args' ~take_names_from:args in
+    regs, stack_offset
+
+  let loc_results res =
+    Reg.identical_except_in_namev (Proc.loc_results res)
+      ~take_names_from:res
+
+  let loc_external_arguments args =
+    let args', stack_offset =
+      Proc.loc_external_arguments (Array.of_list args)
+    in
+    let args = Array.concat args in
+    let regs =
+      Reg.identical_except_in_namev (Array.concat (Array.to_list args'))
+        ~take_names_from:args
+    in
+    regs, stack_offset
+
+  let loc_external_results res =
+    Reg.identical_except_in_namev (Proc.loc_external_results res)
+      ~take_names_from:res
+
+  let contains_calls = Proc.contains_calls
+  let loc_exn_bucket = Proc.loc_exn_bucket
+end
+
 (* "Join" two instruction sequences, making sure they return their results
    in the same registers. *)
 
@@ -704,14 +738,14 @@ method private emit_tuple env exp_list =
 method emit_extcall_args env args =
   let args = self#emit_tuple_not_flattened env args in
   let arg_hard_regs, stack_ofs =
-    Proc.loc_external_arguments (Array.of_list args)
+    Proc.loc_external_arguments args
   in
-  (* Flattening [args] and [arg_hard_regs] causes parts of values split
+  let args = Array.concat args in
+  (* Flattening [args] and [arg_hard_regs] (the latter done by
+     [loc_external_arguments], above) causes parts of values split
      across multiple registers to line up correctly, by virtue of the
      semantics of [split_int64_for_32bit_target] in cmmgen.ml, and the
      required semantics of [loc_external_arguments] (see proc.mli). *)
-  let args = Array.concat args in
-  let arg_hard_regs = Array.concat (Array.to_list arg_hard_regs) in
   self#insert_move_args args arg_hard_regs stack_ofs;
   arg_hard_regs, stack_ofs
 
