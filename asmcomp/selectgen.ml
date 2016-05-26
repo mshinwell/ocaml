@@ -62,7 +62,7 @@ let size_expr env exp =
         with Not_found ->
         try
           let regs = Tbl.find id env in
-          size_machtype (Array.map (fun r -> r.typ) regs)
+          size_machtype (Array.map (fun r -> r.shared.typ) regs)
         with Not_found ->
           fatal_error("Selection.size_expr: unbound var " ^
                       Ident.unique_name id)
@@ -71,7 +71,7 @@ let size_expr env exp =
         List.fold_right (fun e sz -> size localenv e + sz) el 0
     | Cop(op, _) ->
         size_machtype(oper_result_type op)
-    | Clet(id, arg, body) ->
+    | Clet(_mut, id, arg, body) ->
         size (Tbl.add id (size localenv arg) localenv) body
     | Csequence(_e1, e2) ->
         size localenv e2
@@ -87,10 +87,10 @@ let swap_intcomp = function
 
 (* Naming of registers *)
 
-let all_regs_anonymous rv =
+let all_regs_immutable rv =
   try
     for i = 0 to Array.length rv - 1 do
-      if not (Reg.anonymous rv.(i)) then raise Exit
+      if not (Reg.immutable rv.(i)) then raise Exit
     done;
     true
   with Exit ->
@@ -98,11 +98,11 @@ let all_regs_anonymous rv =
 
 let name_regs id rv =
   if Array.length rv = 1 then
-    rv.(0).raw_name <- Raw_name.create_from_ident id
+    rv.(0).name <- Some id
   else
     for i = 0 to Array.length rv - 1 do
-      rv.(i).raw_name <- Raw_name.create_from_ident id;
-      rv.(i).part <- Some i
+      rv.(i).name <- Some id;
+      rv.(i).shared.part <- Some i
     done
 
 (* We shadow [Proc] to force correct naming of hard registers. *)
@@ -150,22 +150,31 @@ let join opt_r1 seq1 opt_r2 seq2 =
       let l1 = Array.length r1 in
       assert (l1 = Array.length r2);
       let r = Array.make l1 Reg.dummy in
+      (* What's going on with names here?
+         1. We make sure that if we're going to reuse a temporary register
+            from one branch for the output register, then we don't change
+            any name that the register might have already in that branch.
+            This is done using [Reg.anonymise], which introduces sharing.
+         2. We make sure that names from the branches don't propagate into
+            the result register. *)
       for i = 0 to l1-1 do
-        if Reg.anonymous r1.(i)
-          && Cmm.ge_component r1.(i).typ r2.(i).typ
+        if Reg.immutable r1.(i)
+          && Cmm.ge_component r1.(i).shared.typ r2.(i).shared.typ
         then begin
-          r.(i) <- r1.(i);
-          seq2#insert_move r2.(i) r1.(i)
-        end else if Reg.anonymous r2.(i)
-          && Cmm.ge_component r2.(i).typ r1.(i).typ
+          let r1 = Reg.anonymise r1.(i) in
+          r.(i) <- r1;
+          seq2#insert_move_no_name_propagation r2.(i) r1
+        end else if Reg.immutable r2.(i)
+          && Cmm.ge_component r2.(i).shared.typ r1.(i).shared.typ
         then begin
-          r.(i) <- r2.(i);
-          seq1#insert_move r1.(i) r2.(i)
+          let r2 = Reg.anonymise r2.(i) in
+          r.(i) <- r2;
+          seq1#insert_move_no_name_propagation r1.(i) r2
         end else begin
-          let typ = Cmm.lub_component r1.(i).typ r2.(i).typ in
+          let typ = Cmm.lub_component r1.(i).shared.typ r2.(i).shared.typ in
           r.(i) <- Reg.create typ;
-          seq1#insert_move r1.(i) r.(i);
-          seq2#insert_move r2.(i) r.(i)
+          seq1#insert_move_no_name_propagation r1.(i) r.(i);
+          seq2#insert_move_no_name_propagation r2.(i) r.(i)
         end
       done;
       Some r
@@ -184,7 +193,7 @@ let join_array rs =
       let size_res = Array.length template in
       let res = Array.make size_res Reg.dummy in
       for i = 0 to size_res - 1 do
-        res.(i) <- Reg.create template.(i).typ
+        res.(i) <- Reg.create template.(i).shared.typ
       done;
       for i = 0 to Array.length rs - 1 do
         let (r, s) = rs.(i) in
@@ -229,7 +238,8 @@ method is_simple_expr = function
   | Cconst_natpointer _ -> true
   | Cvar _ -> true
   | Ctuple el -> List.for_all self#is_simple_expr el
-  | Clet(_id, arg, body) -> self#is_simple_expr arg && self#is_simple_expr body
+  | Clet(_mut, _id, arg, body) ->
+    self#is_simple_expr arg && self#is_simple_expr body
   | Csequence(e1, e2) -> self#is_simple_expr e1 && self#is_simple_expr e2
   | Cop(op, args) ->
       begin match op with
@@ -432,9 +442,39 @@ method extract =
 
 (* Insert a sequence of moves from one pseudoreg set to another. *)
 
-method insert_move src dst =
-  if src.stamp <> dst.stamp then
+method insert_move_no_name_propagation src dst =
+  if src.shared.stamp <> dst.shared.stamp then begin
     self#insert (Iop Imove) [|src|] [|dst|]
+  end;
+
+method insert_move src dst =
+  self#insert_move_no_name_propagation src dst;
+  match src.shared.mutability, dst.shared.mutability with
+  | Immutable, Immutable ->
+    if not (Reg.anonymous src) then begin
+      dst.name <- src.name
+    end
+  | Mutable, Immutable ->
+    (* This case, "snapshotting" a mutable variable to an immutable one, can
+       only result in sound name propagation if the mutable variable is
+       known not to be assigned to over the available range of the immutable
+       one.  For the moment we do not perform any analysis to judge this.
+       However there is an easy case: when the immutable variable clobbers
+       the mutable one, in which case the former may take the latter's
+       name.
+       (Aside: at the top of functions, hard registers preallocated by [Proc]
+       are snapshotted into immutable registers.  It is not possible for the
+       preallocated ones to be used further down the function, just by virtue
+       of how this module works, so we do not need to worry about them.) *)
+    if dst.shared.loc = src.shared.loc then begin
+      dst.name <- src.name
+    end
+  | Immutable, Mutable ->
+    (* We treat this always as assignment rather than initialisation.  Code
+       elsewhere in this module propagates names upon initialisation of
+       mutables. *)
+    ()
+  | Mutable, Mutable -> ()
 
 method insert_moves src dst =
   for i = 0 to min (Array.length src) (Array.length dst) - 1 do
@@ -446,10 +486,10 @@ method insert_moves src dst =
    something of type [Val] (PR#6501). *)
 
 method adjust_type src dst =
-  let ts = src.typ and td = dst.typ in
+  let ts = src.shared.typ and td = dst.shared.typ in
   if ts <> td then
     match ts, td with
-    | Val, Int -> dst.typ <- Val
+    | Val, Int -> dst.shared.typ <- Val
     | Int, Val -> ()
     | _, _ -> fatal_error("Selection.adjust_type: bad assignment to "
                                                            ^ Reg.name dst)
@@ -512,10 +552,10 @@ method emit_expr env exp =
       with Not_found ->
         fatal_error("Selection.emit_expr: unbound var " ^ Ident.unique_name v)
       end
-  | Clet(v, e1, e2) ->
+  | Clet(mut, v, e1, e2) ->
       begin match self#emit_expr env e1 with
         None -> None
-      | Some r1 -> self#emit_expr (self#bind_let env v r1) e2
+      | Some r1 -> self#emit_expr (self#bind_let env mut v r1) e2
       end
   | Cassign(v, e1) ->
       let rv =
@@ -672,14 +712,14 @@ method private emit_sequence env exp =
   let r = s#emit_expr env exp in
   (r, s)
 
-method private bind_let env v r1 =
+method private bind_let env mut v r1 =
 (*
-  if all_regs_anonymous r1 then begin
+  if all_regs_immutable r1 then begin
     name_regs v r1;
     Tbl.add v r1 env
   end else begin
 *)
-    let rv = Reg.createv_like r1 in
+    let rv = Reg.createv_like r1 ~mutability:mut in
     name_regs v rv;
     self#insert_moves r1 rv;
     Tbl.add v rv env
@@ -699,7 +739,7 @@ method private emit_parts env exp =
         else begin
           (* The normal case *)
           let id = Ident.create "bind" in
-          if all_regs_anonymous r then
+          if all_regs_immutable r then
             (* r is an anonymous, unshared register; use it directly *)
             Some (Cvar id, Tbl.add id r env)
           else begin
@@ -766,10 +806,12 @@ method emit_stores env data regs_addr =
             Istore(_, _, _) ->
               for i = 0 to Array.length regs - 1 do
                 let r = regs.(i) in
-                let kind = if r.typ = Float then Double_u else Word_val in
+                let kind =
+                  if r.shared.typ = Float then Double_u else Word_val
+                in
                 self#insert (Iop(Istore(kind, !a, false)))
                             (Array.append [|r|] regs_addr) [||];
-                a := Arch.offset_addressing !a (size_component r.typ)
+                a := Arch.offset_addressing !a (size_component r.shared.typ)
               done
           | _ ->
               self#insert (Iop op) (Array.append regs regs_addr) [||];
@@ -788,10 +830,10 @@ method private emit_return env exp =
 
 method emit_tail env exp =
   match exp with
-    Clet(v, e1, e2) ->
+    Clet(mut, v, e1, e2) ->
       begin match self#emit_expr env e1 with
         None -> ()
-      | Some r1 -> self#emit_tail (self#bind_let env v r1) e2
+      | Some r1 -> self#emit_tail (self#bind_let env mut v r1) e2
       end
   | Cop(Capply(ty, dbg) as op, args) ->
       begin match self#emit_parts_list env args with
@@ -931,7 +973,7 @@ end
 *)
 
 let is_tail_call nargs =
-  assert (Reg.dummy.typ = Int);
+  assert (Reg.dummy.shared.typ = Int);
   let args = Array.make (nargs + 1) Reg.dummy in
   let (_loc_arg, stack_ofs) = Proc.loc_arguments args in
   stack_ofs = 0

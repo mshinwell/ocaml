@@ -183,7 +183,7 @@ let rec linear i n =
   | Iop(Itailcall_ind | Itailcall_imm _ as op) ->
       copy_instr (Lop op) i (discard_dead_code n)
   | Iop(Imove | Ireload | Ispill)
-    when i.Mach.arg.(0).loc = i.Mach.res.(0).loc ->
+    when i.Mach.arg.(0).shared.loc = i.Mach.res.(0).shared.loc ->
       linear i.Mach.next n
   | Iop op ->
       copy_instr (Lop op) i (linear i.Mach.next n)

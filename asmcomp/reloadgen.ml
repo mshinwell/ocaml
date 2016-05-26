@@ -20,7 +20,7 @@ open Reg
 open Mach
 
 let insert_move src dst next =
-  if src.loc = dst.loc
+  if src.shared.loc = dst.shared.loc
   then next
   else instr_cons (Iop Imove) [|src|] [|dst|] next
 
@@ -36,14 +36,14 @@ class reload_generic = object (self)
 val mutable redo_regalloc = false
 
 method makereg r =
-  match r.loc with
+  match r.shared.loc with
     Unknown -> fatal_error "Reload.makereg"
   | Reg _ -> r
   | Stack _ ->
       redo_regalloc <- true;
       let newr = Reg.clone r in
       (* Strongly discourage spilling this register *)
-      newr.spill_cost <- 100000;
+      newr.shared.spill_cost <- 100000;
       newr
 
 method private makeregs rv =
@@ -64,7 +64,7 @@ method reload_operation op arg res =
      stack-to-stack moves *)
   match op with
     Imove | Ireload | Ispill ->
-      begin match arg.(0), res.(0) with
+      begin match arg.(0).shared, res.(0).shared with
         {loc = Stack s1}, {loc = Stack s2} when s1 <> s2 ->
           ([| self#makereg arg.(0) |], res)
       | _ ->

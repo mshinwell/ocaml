@@ -41,9 +41,9 @@ let spill_reg r =
   try
     Reg.Map.find r !spill_env
   with Not_found ->
-    let spill_r = Reg.create r.typ in
-    spill_r.spill <- true;
-    if not (Reg.anonymous r) then spill_r.raw_name <- r.raw_name;
+    let spill_r = Reg.create r.shared.typ in
+    spill_r.shared.spill <- true;
+    if Reg.immutable r then spill_r.name <- r.name;
     spill_env := Reg.Map.add r spill_r !spill_env;
     spill_r
 
@@ -71,7 +71,7 @@ let add_superpressure_regs op live_regs res_regs spilled =
   Reg.Set.iter
     (fun r ->
       if Reg.Set.mem r spilled then () else begin
-        match r.loc with
+        match r.shared.loc with
           Stack _ -> ()
         | _ -> let c = Proc.register_class r in
                pressure.(c) <- pressure.(c) + 1
@@ -91,7 +91,7 @@ let add_superpressure_regs op live_regs res_regs spilled =
         (fun r ->
           if Proc.register_class r = cl &&
              not (Reg.Set.mem r spilled) &&
-             r.loc = Unknown
+             r.shared.loc = Unknown
           then begin
             try
               let d = Reg.Map.find r !use_date in

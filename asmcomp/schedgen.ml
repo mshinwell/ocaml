@@ -70,7 +70,7 @@ let add_edge_after son ancestor = add_edge ancestor son 0
 
 let add_RAW_dependencies node arg =
   try
-    let ancestor = Hashtbl.find code_results arg.loc in
+    let ancestor = Hashtbl.find code_results arg.shared.loc in
     add_edge ancestor node ancestor.delay
   with Not_found ->
     ()
@@ -79,7 +79,7 @@ let add_RAW_dependencies node arg =
    defined by node [node] (WAR dependencies). *)
 
 let add_WAR_dependencies node res =
-  let ancestors = Hashtbl.find_all code_uses res.loc in
+  let ancestors = Hashtbl.find_all code_uses res.shared.loc in
   List.iter (add_edge_after node) ancestors
 
 (* Add edges from all instructions that have already defined a pseudoregister
@@ -87,7 +87,7 @@ let add_WAR_dependencies node res =
 
 let add_WAW_dependencies node res =
   try
-    let ancestor = Hashtbl.find code_results res.loc in
+    let ancestor = Hashtbl.find code_results res.shared.loc in
     add_edge ancestor node 0
   with Not_found ->
     ()
@@ -99,9 +99,9 @@ let add_WAW_dependencies node res =
 let is_critical critical_outputs results =
   try
     for i = 0 to Array.length results - 1 do
-      let r = results.(i).loc in
+      let r = results.(i).shared.loc in
       for j = 0 to Array.length critical_outputs - 1 do
-        if critical_outputs.(j).loc = r then raise Exit
+        if critical_outputs.(j).shared.loc = r then raise Exit
       done
     done;
     false
@@ -296,13 +296,13 @@ method private add_instruction ready_queue instr =
   end;
   (* Remember the registers used and produced by this instruction *)
   for i = 0 to Array.length instr.res - 1 do
-    Hashtbl.add code_results instr.res.(i).loc node
+    Hashtbl.add code_results instr.res.(i).shared.loc node
   done;
   for i = 0 to Array.length destroyed - 1 do
-    Hashtbl.add code_results destroyed.(i).loc node  (* PR#5731 *)
+    Hashtbl.add code_results destroyed.(i).shared.loc node  (* PR#5731 *)
   done;
   for i = 0 to Array.length instr.arg - 1 do
-    Hashtbl.add code_uses instr.arg.(i).loc node
+    Hashtbl.add code_uses instr.arg.(i).shared.loc node
   done;
   (* If this is a root instruction (all arguments already computed),
      add it to the ready queue *)

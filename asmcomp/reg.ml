@@ -15,35 +15,19 @@
 
 open Cmm
 
-module Raw_name = struct
-  type t =
-    | Anon
-    | R
-    | Ident of Ident.t
-
-  let create_from_ident ident = Ident ident
-
-  let to_string t =
-    match t with
-    | Anon -> None
-    | R -> Some "R"
-    | Ident ident ->
-      let name = Ident.name ident in
-      if String.length name <= 0 then None else Some name
-end
-
-type t =
-  { mutable raw_name: Raw_name.t;
-    stamp: int;
-    mutable typ: Cmm.machtype_component;
-    mutable loc: location;
-    mutable spill: bool;
-    mutable part: int option;
-    mutable interf: t list;
-    mutable prefer: (t * int) list;
-    mutable degree: int;
-    mutable spill_cost: int;
-    mutable visited: bool }
+type shared = {
+  mutability : Cmm.mutability;
+  stamp: int;
+  mutable typ: Cmm.machtype_component;
+  mutable loc: location;
+  mutable spill: bool;
+  mutable part: int option;
+  mutable interf: shared list;
+  mutable prefer: (shared * int) list;
+  mutable degree: int;
+  mutable spill_cost: int;
+  mutable visited: bool;
+}
 
 and location =
     Unknown
@@ -55,24 +39,35 @@ and stack_location =
   | Incoming of int
   | Outgoing of int
 
+type t = {
+  mutable name : Ident.t option;
+  shared : shared;
+}
+
 type reg = t
 
 let dummy =
-  { raw_name = Raw_name.Anon; stamp = 0; typ = Int; loc = Unknown;
-    spill = false; interf = []; prefer = []; degree = 0; spill_cost = 0;
-    visited = false; part = None;
+  let shared =
+    { mutability = Cmm.Immutable;
+      stamp = 0; typ = Int; loc = Unknown;
+      spill = false; interf = []; prefer = []; degree = 0; spill_cost = 0;
+      visited = false; part = None;
+    }
+  in
+  { name = None;
+    shared;
   }
 
 let currstamp = ref 0
-let reg_list = ref([] : t list)
+let reg_list = ref([] : shared list)
 
-let create ty =
-  let r = { raw_name = Raw_name.Anon; stamp = !currstamp; typ = ty;
+let create ?(mutability = Cmm.Immutable) ty =
+  let shared = { mutability; stamp = !currstamp; typ = ty;
             loc = Unknown; spill = false; interf = []; prefer = []; degree = 0;
             spill_cost = 0; visited = false; part = None; } in
-  reg_list := r :: !reg_list;
+  reg_list := shared :: !reg_list;
   incr currstamp;
-  r
+  { name = None; shared; }
 
 let createv tyv =
   let n = Array.length tyv in
@@ -80,48 +75,60 @@ let createv tyv =
   for i = 0 to n-1 do rv.(i) <- create tyv.(i) done;
   rv
 
-let createv_like rv =
+let createv_like ?mutability rv =
   let n = Array.length rv in
   let rv' = Array.make n dummy in
-  for i = 0 to n-1 do rv'.(i) <- create rv.(i).typ done;
+  for i = 0 to n-1 do rv'.(i) <- create ?mutability rv.(i).shared.typ done;
   rv'
 
 let clone r =
-  let nr = create r.typ in
-  nr.raw_name <- r.raw_name;
+  let nr = create r.shared.typ in
+  nr.name <- r.name;
   nr
 
+(* The name of registers created in [Proc]. *)
+let proc_reg_name = Ident.create "R"
+
 let at_location ty loc =
-  let r = { raw_name = Raw_name.R; stamp = !currstamp; typ = ty; loc;
+  (* CR mshinwell: check mutability *)
+  let shared = { mutability = Cmm.Mutable;
+            stamp = !currstamp; typ = ty; loc;
             spill = false; interf = []; prefer = []; degree = 0;
             spill_cost = 0; visited = false; part = None; } in
   incr currstamp;
-  r
+  { name = Some proc_reg_name; shared; }
 
-let anonymous t =
-  match Raw_name.to_string t.raw_name with
-  | None -> true
-  | Some _raw_name -> false
+let immutable t =
+  match t.shared.mutability with
+  | Immutable -> true
+  | Mutable -> false
 
 let name t =
-  match Raw_name.to_string t.raw_name with
+  match t.name with
   | None -> ""
-  | Some raw_name ->
+  | Some ident ->
+    let name = Ident.name ident in
     let with_spilled =
-      if t.spill then
-        "spilled-" ^ raw_name
+      if t.shared.spill then
+        "spilled-" ^ name
       else
-        raw_name
+        name
     in
-    match t.part with
+    match t.shared.part with
     | None -> with_spilled
     | Some part -> with_spilled ^ "#" ^ string_of_int part
 
+let anonymous t =
+  match t.name with
+  | None -> true
+  | Some _ident -> false
+
+let anonymise t = { t with name = None; }
+
 let identical_except_in_name r ~take_name_from =
-  match take_name_from.raw_name with
-  | Raw_name.Anon -> r
-  | Raw_name.R | Raw_name.Ident _ ->
-    { r with raw_name = take_name_from.raw_name; }
+  match take_name_from.name with
+  | None -> r
+  | Some name -> { r with name = Some name; }
 
 let identical_except_in_namev rs ~take_names_from =
   if Array.length rs <> Array.length take_names_from then
@@ -144,15 +151,15 @@ let reset() =
 let all_registers() = !reg_list
 let num_registers() = !currstamp
 
-let reinit_reg r =
-  r.loc <- Unknown;
-  r.interf <- [];
-  r.prefer <- [];
-  r.degree <- 0;
+let reinit_reg shared =
+  shared.loc <- Unknown;
+  shared.interf <- [];
+  shared.prefer <- [];
+  shared.degree <- 0;
   (* Preserve the very high spill costs introduced by the reloading pass *)
-  if r.spill_cost >= 100000
-  then r.spill_cost <- 100000
-  else r.spill_cost <- 0
+  if shared.spill_cost >= 100000
+  then shared.spill_cost <- 100000
+  else shared.spill_cost <- 0
 
 let reinit() =
   List.iter reinit_reg !reg_list
@@ -160,7 +167,7 @@ let reinit() =
 module RegOrder =
   struct
     type t = reg
-    let compare r1 r2 = r1.stamp - r2.stamp
+    let compare r1 r2 = r1.shared.stamp - r2.shared.stamp
   end
 
 module Set = Set.Make(RegOrder)
