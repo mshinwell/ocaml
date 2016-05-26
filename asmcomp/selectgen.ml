@@ -720,8 +720,8 @@ method private bind_let env mut v r1 =
   end else begin
 *)
     let rv = Reg.createv_like r1 ~mutability:mut in
-    name_regs v rv;
     self#insert_moves r1 rv;
+    name_regs v rv;
     Tbl.add v rv env
 (*
   end
