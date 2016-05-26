@@ -673,15 +673,19 @@ method private emit_sequence env exp =
   (r, s)
 
 method private bind_let env v r1 =
+(*
   if all_regs_anonymous r1 then begin
     name_regs v r1;
     Tbl.add v r1 env
   end else begin
+*)
     let rv = Reg.createv_like r1 in
     name_regs v rv;
     self#insert_moves r1 rv;
     Tbl.add v rv env
+(*
   end
+*)
 
 method private emit_parts env exp =
   if self#is_simple_expr exp then
