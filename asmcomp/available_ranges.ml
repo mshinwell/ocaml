@@ -117,7 +117,7 @@ end = struct
     match t.start_insn with
     | Start_insn insn ->
       let reg = insn.L.arg.(0) in
-      begin match Reg.Raw_name.to_ident reg.Reg.raw_name with
+      begin match reg.Reg.name with
       | Some ident -> ident
       | None -> assert false  (* most likely a bug in available_regs.ml *)
       end
@@ -212,7 +212,7 @@ end = struct
     | [] -> assert false
     | subrange::_ ->
       match Available_subrange.location subrange with
-      | Reg reg -> reg.Reg.is_parameter
+      | Reg reg -> reg.Reg.shared.Reg.is_parameter
       | Phantom _ -> None
 
   let extremities t =
@@ -281,10 +281,10 @@ let available_before insn =
   let available_before, _idents_seen =
     Reg.Set.fold (fun reg ((available_before, idents_seen) as acc) ->
       (* CR-soon mshinwell: handle values split across multiple registers *)
-      if reg.Reg.part <> None then
+      if reg.Reg.shared.Reg.part <> None then
         acc
       else
-        match Reg.Raw_name.to_ident reg.Reg.raw_name with
+        match reg.Reg.name with
         | None -> acc  (* ignore registers without proper names *)
         | Some ident ->
           try

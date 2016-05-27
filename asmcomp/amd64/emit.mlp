@@ -718,7 +718,7 @@ let emit_instr fallthrough i =
       assert (!byte_offset_from_sp = None);
       assert (Array.length i.arg = 1);
       let reg = i.arg.(0) in
-      begin match reg.loc with
+      begin match reg.shared.loc with
       | Unknown | Reg _ -> ()
       | Stack loc ->
         byte_offset_from_sp := Some (slot_offset loc (register_class reg))

@@ -22,6 +22,7 @@ type shared = {
   mutable loc: location;
   mutable spill: bool;
   mutable part: int option;
+  mutable is_parameter: int option;
   mutable interf: shared list;
   mutable prefer: (shared * int) list;
   mutable degree: int;
@@ -48,7 +49,7 @@ type reg = t
 
 let dummy =
   let shared =
-    { mutability = Cmm.Immutable;
+    { mutability = Cmm.Immutable; is_parameter = None;
       stamp = 0; typ = Int; loc = Unknown;
       spill = false; interf = []; prefer = []; degree = 0; spill_cost = 0;
       visited = false; part = None;
@@ -62,7 +63,7 @@ let currstamp = ref 0
 let reg_list = ref([] : shared list)
 
 let create ?(mutability = Cmm.Immutable) ty =
-  let shared = { mutability; stamp = !currstamp; typ = ty;
+  let shared = { mutability; stamp = !currstamp; typ = ty; is_parameter = None;
             loc = Unknown; spill = false; interf = []; prefer = []; degree = 0;
             spill_cost = 0; visited = false; part = None; } in
   reg_list := shared :: !reg_list;
@@ -93,7 +94,7 @@ let proc_reg_name = Ident.create "R"
 
 let at_location ty loc =
   (* CR mshinwell: check mutability *)
-  let shared = { mutability = Cmm.Mutable;
+  let shared = { mutability = Cmm.Mutable; is_parameter = None;
             stamp = !currstamp; typ = ty; loc;
             spill = false; interf = []; prefer = []; degree = 0;
             spill_cost = 0; visited = false; part = None; } in
@@ -226,7 +227,7 @@ let set_of_array v =
          in add_all 0
 
 let holds_pointer t =
-  match t.typ with
+  match t.shared.typ with
   | Addr | Val -> true
   | Int | Float -> false
 

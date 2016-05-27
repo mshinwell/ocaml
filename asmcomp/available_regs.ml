@@ -37,11 +37,8 @@ let avail_at_raise = ref None
 let reg_is_interesting reg =
   (* CR-soon mshinwell: handle values split across multiple registers (and
      below) *)
-  if reg.R.part <> None then false
-  else
-    match R.Raw_name.to_ident reg.R.raw_name with
-    | None -> false
-    | Some _ident -> true
+  if reg.R.shared.part <> None then false
+  else reg.R.name <> None
 
 let _instr_arg i = R.Set.filter reg_is_interesting (R.set_of_array i.M.arg)
 let instr_res i = R.Set.filter reg_is_interesting (R.set_of_array i.M.res)
@@ -64,7 +61,7 @@ let regs_have_same_location reg1 reg2 =
   (* We need to check the register classes too: two locations both saying
      "stack offset N" might actually be different physical locations, for
      example if one is of class "Int" and another "Float" on amd64. *)
-  reg1.R.loc = reg2.R.loc
+  reg1.R.shared.R.loc = reg2.R.shared.R.loc
     && Proc.register_class reg1 = Proc.register_class reg2
 
 let operation_can_raise = function
@@ -172,6 +169,7 @@ let rec available_regs instr ~avail_before =
       | Ireturn | Iop Itailcall_ind | Iop (Itailcall_imm _) -> all_regs
       (* Detect initializing moves between named registers, including when
          either the source or destination is a spill slot or reload target. *)
+(*
       | Iop (Imove | Ispill | Ireload)
           when begin match instr.arg, instr.res with
           | [| arg |], [| res |] ->
@@ -180,7 +178,7 @@ let rec available_regs instr ~avail_before =
                immutable one with both registers being at the same location. *)
             (reg_is_interesting arg && reg_is_interesting res)
               (* CR mshinwell: should check [part] I suppose too *)
-              || (reg_is_interesting arg && Reg.is_temporary res
+              || (reg_is_interesting arg && Reg.is_immutable res
                   && arg.loc = res.loc)
           | _ -> false
           end ->
@@ -189,6 +187,7 @@ let rec available_regs instr ~avail_before =
         R.Set.diff (R.Set.union avail_before (instr_res instr))
           (R.set_of_array
             (Proc.destroyed_at_oper instr.desc))  (* just in case *)
+*)
       | Iop op ->
         if operation_can_raise op then begin
           augment_availability_at_raise avail_before
@@ -205,6 +204,7 @@ let rec available_regs instr ~avail_before =
                below.
             *)
             R.Set.union (instr_live instr)
+              (* CR mshinwell: deal with this "holds_non_pointer" thing *)
               (R.Set.filter R.holds_non_pointer avail_before)
           | _ -> avail_before
         in
@@ -293,7 +293,9 @@ Format.eprintf "%s: %a: results %a CAA %a made_unavailable %a\n%!"
           | Some avail -> avail
         in
         avail_at_raise := saved_avail_at_raise;
+(*
         assert (not (reg_is_interesting Proc.loc_exn_bucket));
+*)
         inter after_body
           (available_regs handler ~avail_before:avail_before_handler)
       | Iraise _ ->

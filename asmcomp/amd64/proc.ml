@@ -121,14 +121,14 @@ let () =
 
 let dwarf_register_number reg =
   let reg_number, dwarf_numbers =
-    match reg.loc with
+    match reg.shared.loc with
     | Unknown | Stack _ ->
       Misc.fatal_errorf "Proc.dwarf_register_number: [Reg.t] does not \
           have a [Reg] location: %s"
         (Reg.name reg)
     | Reg n ->
       let num_hard_regs, dwarf_numbers =
-        match reg.typ with
+        match reg.shared.typ with
         | Val | Addr | Int ->
           Array.length int_reg_name, int_dwarf_reg_numbers
         | Float ->

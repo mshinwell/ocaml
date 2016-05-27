@@ -22,6 +22,7 @@ type shared =
     mutable loc: location;              (* Actual location *)
     mutable spill: bool;                (* "true" to force stack allocation  *)
     mutable part: int option;           (* Zero-based index of part of value *)
+    mutable is_parameter: int option;   (* Which parameter this reg is for *)
     mutable interf: shared list;         (* Other regs live simultaneously *)
     mutable prefer: (shared * int) list; (* Preferences for other regs *)
     mutable degree: int;                 (* Number of other regs live sim. *)

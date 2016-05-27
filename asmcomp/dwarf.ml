@@ -123,7 +123,7 @@ let location_list_entry ~fundecl ~available_subrange
     let module LE = Location_expression in
     match Available_subrange.location available_subrange with
     | Reg reg ->
-      begin match reg.Reg.loc with
+      begin match reg.Reg.shared.Reg.loc with
       | Reg.Unknown -> assert false  (* probably a bug in available_regs.ml *)
       | Reg.Reg _ ->
         begin match offset_location_in_words with
