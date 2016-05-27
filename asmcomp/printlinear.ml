@@ -47,14 +47,15 @@ let instr ppf i =
         match Available_ranges.classify_label ranges lbl with
         | None -> ()
         | Some (start_or_end, subrange) ->
-          let start_or_end =
+          let start_or_end, until =
             match start_or_end with
-            | Available_ranges.Start -> "available"
-            | Available_ranges.End -> "unavailable"
+            | Available_ranges.Start { end_pos; } ->
+              "available", Printf.sprintf " until L%d" end_pos
+            | Available_ranges.End -> "unavailable", ""
           in
           let ident = Available_ranges.Available_subrange.ident subrange in
-          fprintf ppf " (%a now %s)"
-            Ident.print ident start_or_end
+          fprintf ppf " (%a now %s%s)"
+            Ident.print ident start_or_end until
       end
   | Lbranch lbl ->
       fprintf ppf "goto %a" label lbl

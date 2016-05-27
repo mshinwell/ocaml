@@ -90,7 +90,9 @@ val create
 
 val find : t -> ident:Ident.t -> Available_range.t option
 
-type label_classification = Start | End
+type label_classification =
+  | Start of { end_pos : Linearize.label; }
+  | End
 
 val classify_label
    : t

@@ -475,7 +475,9 @@ let create ~fundecl ~phantom_ranges =
 *)
   t, { fundecl with L.fun_body = first_insn; }
 
-type label_classification = Start | End
+type label_classification =
+  | Start of { end_pos : Linearize.label; }
+  | End
 
 exception Found_label of label_classification * Available_subrange.t
 
@@ -484,7 +486,8 @@ let classify_label t label =
     Ident.iter (fun _ident range ->
         Available_range.iter range ~f:(fun ~available_subrange:subrange ->
           if Available_subrange.start_pos subrange = label then
-            raise (Found_label (Start, subrange))
+            let end_pos = Available_subrange.end_pos subrange in
+            raise (Found_label (Start { end_pos; }, subrange))
           else if Available_subrange.end_pos subrange = label then
             raise (Found_label (End, subrange))))
       t.ranges;
