@@ -177,6 +177,23 @@ module RegOrder =
     let compare r1 r2 = r1.shared.stamp - r2.shared.stamp
   end
 
+module RegOrder_distinguishing_names =
+  struct
+    type t = reg
+    let compare r1 r2 =
+      let c =
+        match r1.name, r2.name with
+        | None, None -> 0
+        | None, Some _ -> -1
+        | Some _, None -> 1
+        | Some name1, Some name2 -> Ident.compare name1 name2
+      in
+      if c <> 0 then c
+      else RegOrder.compare r1 r2
+  end
+
+module Set_distinguishing_names = Set.Make(RegOrder_distinguishing_names)
+module Map_distinguishing_names = Map.Make(RegOrder_distinguishing_names)
 module Set = Set.Make(RegOrder)
 module Map = Map.Make(RegOrder)
 

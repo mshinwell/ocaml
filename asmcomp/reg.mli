@@ -98,6 +98,9 @@ val holds_non_pointer : t -> bool
 
 val assigned_to_stack : t -> bool
 
+module Set_distinguishing_names: Set.S with type elt = t
+module Map_distinguishing_names: Map.S with type key = t
+
 module Set: Set.S with type elt = t
 module Map: Map.S with type key = t
 

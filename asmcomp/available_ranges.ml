@@ -15,6 +15,8 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 module L = Linearize
+module RM = Reg.Map_distinguishing_names
+module RS = Reg.Set_distinguishing_names
 
 (* CR mshinwell: We're getting ranges that should be concatenated in the
    output.  For example:
@@ -283,6 +285,10 @@ let add_subrange t ~subrange =
   in
   Available_range.add_subrange range ~subrange
 
+(* CR mshinwell: improve efficiency *)
+let available_before (insn : L.instruction) =
+  RS.of_list (Reg.Set.elements insn.available_before)
+
 (* Imagine that the program counter is exactly at the start of [insn]; it has
    not yet been executed.  This function calculates which available subranges
    are to start at that point, and which are to stop.  [prev_insn] is the
@@ -306,26 +312,28 @@ let births_and_deaths ~(insn : L.instruction)
   in
   let births =
     match prev_insn with
-    | None -> insn.available_before
+    | None -> (available_before insn)
     | Some prev_insn ->
       if not adjusts_sp then
-        Reg.Set.diff insn.available_before prev_insn.available_before
+        RS.diff (available_before insn) (available_before prev_insn)
       else
-        insn.available_before
+        (available_before insn)
   in
   let deaths =
     match prev_insn with
-    | None -> Reg.Set.empty
+    | None -> RS.empty
     | Some prev_insn ->
       if not adjusts_sp then
-        Reg.Set.diff prev_insn.available_before insn.available_before
+        RS.diff (available_before prev_insn) (available_before insn)
       else
-        prev_insn.available_before
+        (available_before prev_insn)
   in
   births, deaths
 
 let rec process_instruction t ~first_insn ~insn ~prev_insn
       ~open_subrange_start_insns =
+(* XXX this should maybe skip instructions that might not have any
+   availability info.  Or maybe better, ensure everything has. *)
   let births, deaths = births_and_deaths ~insn ~prev_insn in
   let first_insn = ref first_insn in
   let prev_insn = ref prev_insn in
@@ -349,9 +357,9 @@ let rec process_instruction t ~first_insn ~insn ~prev_insn
      [births] and [deaths]; and we would like the register to have an open
      subrange from this point.  It follows that we should process deaths
      before births. *)
-  Reg.Set.fold (fun reg () ->
+  RS.fold (fun reg () ->
       let start_pos, start_insn =
-        try Reg.Map.find reg open_subrange_start_insns
+        try RM.find reg open_subrange_start_insns
         with Not_found -> assert false
       in
       let end_pos = Lazy.force label in
@@ -361,6 +369,16 @@ let rec process_instruction t ~first_insn ~insn ~prev_insn
       add_subrange t ~subrange)
     deaths
     ();
+(* XXX it looks like [deaths] doesn't contain everything it should so
+   some ranges are never closed  (should be fixed now)
+Format.eprintf "births {%a} deaths {%a} insn=%s\n%!" Printmach.regset births
+  Printmach.regset deaths
+  (match insn.L.desc with
+  | Llabel _ -> "label"
+  | Lavailable_subrange _ -> "ASR"
+  | Lop _ -> "op"
+  | _ -> "other");
+*)
   let label_insn =
     lazy ({ L.
       desc = L.Llabel (Lazy.force label);
@@ -374,10 +392,10 @@ let rec process_instruction t ~first_insn ~insn ~prev_insn
   in
   let open_subrange_start_insns =
     let open_subrange_start_insns =
-      (Reg.Map.filter (fun reg _start_insn -> not (Reg.Set.mem reg deaths))
+      (RM.filter (fun reg _start_insn -> not (RS.mem reg deaths))
         open_subrange_start_insns)
     in
-    Reg.Set.fold (fun reg open_subrange_start_insns ->
+    RS.fold (fun reg open_subrange_start_insns ->
         (* We only need [Lavailable_subrange] in the case where the register
            is assigned to the stack.  (It enables us to determine what the
            stack offset will be at that point.) *)
@@ -400,7 +418,7 @@ let rec process_instruction t ~first_insn ~insn ~prev_insn
             new_insn
           end
         in
-        Reg.Map.add reg (Lazy.force label, new_insn) open_subrange_start_insns)
+        RM.add reg (Lazy.force label, new_insn) open_subrange_start_insns)
       births
       open_subrange_start_insns
   in
@@ -454,7 +472,7 @@ let create ~fundecl ~phantom_ranges =
   let first_insn =
     let first_insn = fundecl.L.fun_body in
     process_instruction t ~first_insn ~insn:first_insn ~prev_insn:None
-      ~open_subrange_start_insns:Reg.Map.empty
+      ~open_subrange_start_insns:RM.empty
   in
   t, { fundecl with L.fun_body = first_insn; }
 
@@ -490,3 +508,10 @@ let rewrite_labels t ~env =
   in
   { ranges;
   }
+
+(* XXX next thing to track down:
+
+  L112: (R/1002 now unavail.) (x/1201 now unavail.) (x/1201 now avail. until L113 in x/0[%rax][mut]) (fun/1241 now unavail.) (fun/1241 now avail. until L113 in fun/1[%rbx][mut])
+
+- why is the hard reg taking precedence over the spilled one?
+*)
