@@ -742,7 +742,8 @@ asmcomp/asmgen.cmo : asmcomp/un_anf.cmi bytecomp/translmod.cmi \
     asmcomp/coloring.cmi asmcomp/coalesce_labels.cmi asmcomp/cmmgen.cmi \
     asmcomp/cmm.cmi asmcomp/closure.cmi utils/clflags.cmi asmcomp/clambda.cmi \
     asmcomp/CSE.cmo asmcomp/build_export_info.cmi asmcomp/available_regs.cmi \
-    asmcomp/available_ranges.cmi asmcomp/asmgen.cmi
+    asmcomp/available_ranges.cmi asmcomp/available_filtering.cmi \
+    asmcomp/asmgen.cmi
 asmcomp/asmgen.cmx : asmcomp/un_anf.cmx bytecomp/translmod.cmx \
     utils/timings.cmx middle_end/base_types/symbol.cmx asmcomp/split.cmx \
     asmcomp/spill.cmx asmcomp/selection.cmx asmcomp/scheduling.cmx \
@@ -758,7 +759,8 @@ asmcomp/asmgen.cmx : asmcomp/un_anf.cmx bytecomp/translmod.cmx \
     asmcomp/coloring.cmx asmcomp/coalesce_labels.cmx asmcomp/cmmgen.cmx \
     asmcomp/cmm.cmx asmcomp/closure.cmx utils/clflags.cmx asmcomp/clambda.cmx \
     asmcomp/CSE.cmx asmcomp/build_export_info.cmx asmcomp/available_regs.cmx \
-    asmcomp/available_ranges.cmx asmcomp/asmgen.cmi
+    asmcomp/available_ranges.cmx asmcomp/available_filtering.cmx \
+    asmcomp/asmgen.cmi
 asmcomp/asmgen.cmi : utils/timings.cmi bytecomp/lambda.cmi \
     middle_end/flambda.cmi asmcomp/dwarf.cmi asmcomp/cmm.cmi \
     middle_end/backend_intf.cmi
@@ -801,6 +803,11 @@ asmcomp/asmpackager.cmx : typing/typemod.cmx bytecomp/translmod.cmx \
     utils/clflags.cmx utils/ccomp.cmx asmcomp/asmlink.cmx asmcomp/asmgen.cmx \
     asmcomp/asmpackager.cmi
 asmcomp/asmpackager.cmi : typing/env.cmi middle_end/backend_intf.cmi
+asmcomp/available_filtering.cmo : asmcomp/reg.cmi asmcomp/linearize.cmi \
+    typing/ident.cmi asmcomp/available_filtering.cmi
+asmcomp/available_filtering.cmx : asmcomp/reg.cmx asmcomp/linearize.cmx \
+    typing/ident.cmx asmcomp/available_filtering.cmi
+asmcomp/available_filtering.cmi : asmcomp/linearize.cmi
 asmcomp/available_ranges.cmo : middle_end/base_types/symbol.cmi \
     asmcomp/reg.cmi utils/numbers.cmi asmcomp/name_laundry.cmi utils/misc.cmi \
     asmcomp/mach.cmi asmcomp/linearize.cmi typing/ident.cmi \
@@ -1147,13 +1154,15 @@ asmcomp/printcmm.cmx : asmcomp/printclambda.cmx bytecomp/lambda.cmx \
     typing/ident.cmx bytecomp/debuginfo.cmx asmcomp/cmm.cmx \
     asmcomp/printcmm.cmi
 asmcomp/printcmm.cmi : asmcomp/cmm.cmi
-asmcomp/printlinear.cmo : asmcomp/printmach.cmi typing/path.cmi \
-    asmcomp/mach.cmi asmcomp/linearize.cmi bytecomp/lambda.cmi \
-    typing/ident.cmi bytecomp/debuginfo.cmi asmcomp/available_ranges.cmi \
+asmcomp/printlinear.cmo : middle_end/base_types/symbol.cmi \
+    asmcomp/printmach.cmi typing/path.cmi asmcomp/mach.cmi \
+    asmcomp/linearize.cmi bytecomp/lambda.cmi typing/ident.cmi \
+    bytecomp/debuginfo.cmi asmcomp/available_ranges.cmi \
     asmcomp/printlinear.cmi
-asmcomp/printlinear.cmx : asmcomp/printmach.cmx typing/path.cmx \
-    asmcomp/mach.cmx asmcomp/linearize.cmx bytecomp/lambda.cmx \
-    typing/ident.cmx bytecomp/debuginfo.cmx asmcomp/available_ranges.cmx \
+asmcomp/printlinear.cmx : middle_end/base_types/symbol.cmx \
+    asmcomp/printmach.cmx typing/path.cmx asmcomp/mach.cmx \
+    asmcomp/linearize.cmx bytecomp/lambda.cmx typing/ident.cmx \
+    bytecomp/debuginfo.cmx asmcomp/available_ranges.cmx \
     asmcomp/printlinear.cmi
 asmcomp/printlinear.cmi : asmcomp/linearize.cmi asmcomp/available_ranges.cmi
 asmcomp/printmach.cmo : asmcomp/reg.cmi asmcomp/proc.cmi \

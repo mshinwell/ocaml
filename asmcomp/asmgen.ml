@@ -102,6 +102,12 @@ let available_regs _ppf fundecl =
   end
 
 let emit ppf fundecl ~dwarf =
+  let fundecl =
+    if !Clflags.debug then
+      Available_filtering.fundecl fundecl
+    else
+      fundecl
+  in
   let available_ranges, fundecl =
     Available_ranges.create ~fundecl
       ~phantom_ranges:fundecl.Linearize.fun_phantom_let_ranges

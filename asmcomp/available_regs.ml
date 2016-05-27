@@ -33,12 +33,14 @@ let avail_at_raise = ref None
 (* CR pchambart: not 'interessting' but contain source level relevant value.
    This may be easier to just filter later (when printing ?).
    Keeping those in gdb might help debug the code generation such
-   as corrupted values due to unregistered roots. *)
+   as corrupted values due to unregistered roots.
+   mshinwell: filtering on name now moved to [Available_filtering].  Still
+   need to think about "part".
+*)
 let reg_is_interesting reg =
   (* CR-soon mshinwell: handle values split across multiple registers (and
      below) *)
-  if reg.R.shared.part <> None then false
-  else reg.R.name <> None
+  reg.R.shared.part = None
 
 let _instr_arg i = R.Set.filter reg_is_interesting (R.set_of_array i.M.arg)
 let instr_res i = R.Set.filter reg_is_interesting (R.set_of_array i.M.res)
@@ -168,27 +170,6 @@ let rec available_regs (instr : M.instruction) ~avail_before =
       match instr.desc with
       | Iend -> avail_before
       | Ireturn | Iop Itailcall_ind | Iop (Itailcall_imm _) -> all_regs
-      (* Detect initializing moves between named registers, including when
-         either the source or destination is a spill slot or reload target. *)
-(*
-      | Iop (Imove | Ispill | Ireload)
-          when begin match instr.arg, instr.res with
-          | [| arg |], [| res |] ->
-            (* We need both [arg] and [res] to be named with identifiers,
-               or for there to be a move from a named register to an
-               immutable one with both registers being at the same location. *)
-            (reg_is_interesting arg && reg_is_interesting res)
-              (* CR mshinwell: should check [part] I suppose too *)
-              || (reg_is_interesting arg && Reg.is_immutable res
-                  && arg.loc = res.loc)
-          | _ -> false
-          end ->
-        (* CR mshinwell: this next bit should use "regs_have_same_location"
-           as below, no (for the destroyed_at_oper bit) *)
-        R.Set.diff (R.Set.union avail_before (instr_res instr))
-          (R.set_of_array
-            (Proc.destroyed_at_oper instr.desc))  (* just in case *)
-*)
       | Iop op ->
         if operation_can_raise op then begin
           augment_availability_at_raise avail_before

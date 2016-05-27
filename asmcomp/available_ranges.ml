@@ -277,40 +277,12 @@ let add_subrange t ~subrange =
   in
   Available_range.add_subrange range ~subrange
 
-let available_before insn =
-  let regs_by_ident = Ident.Tbl.create 42 in
-  (* CR-soon mshinwell: handle values split across multiple registers *)
-  Reg.Set.iter (fun (reg : Reg.t) ->
-      match reg.name with
-      | None -> ()  (* ignore registers without proper names *)
-      | Some name ->
-        match Ident.Tbl.find regs_by_ident name with
-        | exception Not_found -> Ident.Tbl.add regs_by_ident name reg
-        | (reg' : Reg.t) ->
-          (* We prefer registers that are assigned to the stack to
-             preserve availability across function calls.  Other than
-             that, any register is as good as any other register; likewise
-             for stack slots. *)
-          match reg.shared.loc, reg'.shared.loc with
-          | Reg _, Stack _
-          | Reg _, Reg _
-          | Stack _, Stack _
-          | _, Unknown
-          | Unknown, _ -> ()
-          | Stack _, Reg _ ->
-            Ident.Tbl.remove regs_by_ident name;
-            Ident.Tbl.add regs_by_ident name reg')
-    insn.L.available_before;
-  Ident.Tbl.fold (fun _ident reg available_before ->
-      Reg.Set.add reg available_before)
-    regs_by_ident
-    Reg.Set.empty
-
 (* Imagine that the program counter is exactly at the start of [insn]; it has
    not yet been executed.  This function calculates which available subranges
    are to start at that point, and which are to stop.  [prev_insn] is the
    instruction immediately prior to [insn], if such exists. *)
-let births_and_deaths ~insn ~prev_insn =
+let births_and_deaths ~(insn : L.instruction)
+      ~(prev_insn : L.instruction option) =
   (* Available subranges must not cross points at which the stack pointer
      changes.  (This is because we assign a single stack offset for each
      available subrange, cf. [Lavailable_subrange].)  Thus, if the previous
@@ -322,26 +294,27 @@ let births_and_deaths ~insn ~prev_insn =
     | None -> false
     | Some prev_insn ->
       match prev_insn.L.desc with
+      (* CR mshinwell: should this have a hook into [Proc]? *)
       | L.Lop (Mach.Istackoffset _) -> true
       | _ -> false
   in
   let births =
     match prev_insn with
-    | None -> available_before insn
+    | None -> insn.available_before
     | Some prev_insn ->
       if not adjusts_sp then
-        Reg.Set.diff (available_before insn) (available_before prev_insn)
+        Reg.Set.diff insn.available_before prev_insn.available_before
       else
-        available_before insn
+        insn.available_before
   in
   let deaths =
     match prev_insn with
     | None -> Reg.Set.empty
     | Some prev_insn ->
       if not adjusts_sp then
-        Reg.Set.diff (available_before prev_insn) (available_before insn)
+        Reg.Set.diff prev_insn.available_before insn.available_before
       else
-        available_before prev_insn
+        prev_insn.available_before
   in
   births, deaths
 
