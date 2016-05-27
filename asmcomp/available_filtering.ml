@@ -44,12 +44,13 @@ let canonical_available_before insn =
     regs_by_ident
     Reg.Set.empty
 
-let rec filter (insn : L.instruction) =
+let rec filter_inplace (insn : L.instruction) =
   match insn.desc with
-  | Lend -> insn
+  | Lend -> ()
   | _ ->
     insn.available_before <- canonical_available_before insn;
-    filter insn.next
+    filter_inplace insn.next
 
 let fundecl (decl : L.fundecl) =
-  { decl with fun_body = filter decl.fun_body; }
+  filter_inplace decl.fun_body;
+  decl
