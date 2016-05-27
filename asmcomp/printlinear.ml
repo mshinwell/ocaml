@@ -85,7 +85,11 @@ let instr ppf i =
   | Lprologue ->
       fprintf ppf "prologue"
   | Lavailable_subrange _ ->
-      fprintf ppf "start of available subrange for %a" reg i.arg.(0)
+      fprintf ppf "start of available subrange for reg %a" reg i.arg.(0);
+      begin match i.arg.(0).Reg.name with
+      | None -> ()
+      | Some name -> fprintf ppf " holding `%a'" Ident.print name
+      end
   end;
   if not (Debuginfo.is_none i.dbg) then
     fprintf ppf " %s" (Debuginfo.to_string i.dbg)
