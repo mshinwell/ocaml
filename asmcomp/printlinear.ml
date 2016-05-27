@@ -49,12 +49,12 @@ let instr ppf i =
         | Some (start_or_end, subrange) ->
           let start_or_end =
             match start_or_end with
-            | Available_ranges.Start -> "start"
-            | Available_ranges.End -> "end"
+            | Available_ranges.Start -> "available"
+            | Available_ranges.End -> "unavailable"
           in
           let ident = Available_ranges.Available_subrange.ident subrange in
-          fprintf ppf " (%s of available range for `%a')"
-            start_or_end Ident.print ident
+          fprintf ppf " (`%a' becomes %s)"
+            Ident.print ident start_or_end
       end
   | Lbranch lbl ->
       fprintf ppf "goto %a" label lbl
