@@ -67,7 +67,9 @@ let create ?(mutability = Cmm.Immutable) ty =
             spill_cost = 0; visited = false; part = None; } in
   reg_list := shared :: !reg_list;
   incr currstamp;
-  { name = None; shared; }
+  { name = None;
+    shared;
+  }
 
 let createv tyv =
   let n = Array.length tyv in
@@ -96,7 +98,9 @@ let at_location ty loc =
             spill = false; interf = []; prefer = []; degree = 0;
             spill_cost = 0; visited = false; part = None; } in
   incr currstamp;
-  { name = Some proc_reg_name; shared; }
+  { name = Some proc_reg_name;
+    shared;
+  }
 
 let immutable t =
   match t.shared.mutability with
@@ -124,6 +128,8 @@ let anonymous t =
   | Some _ident -> false
 
 let anonymise t = { t with name = None; }
+
+let rename t name = { t with name; }
 
 let identical_except_in_name r ~take_name_from =
   match take_name_from.name with

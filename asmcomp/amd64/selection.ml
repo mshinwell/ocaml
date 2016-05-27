@@ -248,6 +248,7 @@ method! insert_op_debug op dbg rs rd =
     self#insert_moves rs rsrc;
     let rdst = Array.map Reg.anonymise rdst in
     self#insert_debug (Iop op) dbg rsrc rdst;
+    let rd = Array.map Reg.anonymise rd in
     self#insert_moves rdst rd;
     rd
   with Use_default ->

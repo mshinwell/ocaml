@@ -73,6 +73,11 @@ val anonymous : t -> bool
     allocator assigns it a location), so does the new register. *)
 val anonymise : t -> t
 
+(** [rename t] creates a new register with the given name that (in the
+    same way as for [anonymise], above) shares the underlying properties
+    of [t]. *)
+val rename : t -> Ident.t option -> t
+
 (** [identical_except_in_namev t ~take_names_from] takes registers and names
     elementwise from [t] and [take_names_from] respectively and returns a new
     array containing copies of the registers with the new names (save that if

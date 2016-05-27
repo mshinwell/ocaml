@@ -713,15 +713,10 @@ method private emit_sequence env exp =
   (r, s)
 
 method private bind_let env mut v r1 =
-  if all_regs_immutable r1 then begin
-    name_regs v r1;
-    Tbl.add v r1 env
-  end else begin
-    let rv = Reg.createv_like r1 ~mutability:mut in
-    self#insert_moves r1 rv;
-    name_regs v rv;
-    Tbl.add v rv env
-  end
+  let rv = Reg.createv_like r1 ~mutability:mut in
+  self#insert_moves r1 rv;
+  name_regs v rv;
+  Tbl.add v rv env
 
 method private emit_parts env exp =
   if self#is_simple_expr exp then
