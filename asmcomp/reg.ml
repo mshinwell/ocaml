@@ -15,86 +15,19 @@
 
 open Cmm
 
-module Raw_name : sig
-  type t
-
-  val create_temporary : unit -> t
-  val create_procedure_call_convention : unit -> t
-  val create_ident : Ident.t -> t
-
-  val to_string : t -> string option
-  val is_temporary : t -> bool
-  val is_procedure_call_convention : t -> bool
-  val is_ident : t -> bool
-  val to_ident : t -> Ident.t option
-  val to_ident_exn : t -> Ident.t
-
-  val (=) : t -> t -> bool
-end = struct
-  type t =
-    | Temporary
-    | Procedure_call_convention
-    | Ident of Ident.t
-
-  (* The reader may wonder why we don't allow multiple identifier names to
-     be associated with a given register.  The reason is that for situations
-     where this might arise, e.g.:
-
-        let x = y in
-        ...
-
-     we will always emit a move at the moment, since it is assumed [y] might
-     be mutable (in the [Cassign] sense).  See [bind_let] in selectgen.ml.
-  *)
-
-  let create_temporary () = Temporary
-  let create_procedure_call_convention () = Procedure_call_convention
-  let create_ident ident = Ident ident
-
-  let to_string t =
-    match t with
-    | Temporary -> None
-    | Procedure_call_convention -> Some "R"
-    | Ident ident ->
-      let name = Ident.name ident in
-      if String.length name <= 0 then None else Some name
-
-  let is_temporary = function
-    | Temporary -> true
-    | Procedure_call_convention | Ident _ -> false
-
-  let is_procedure_call_convention = function
-    | Temporary | Ident _ -> false
-    | Procedure_call_convention -> true
-
-  let is_ident = function
-    | Ident _ -> true
-    | Temporary | Procedure_call_convention -> false
-
-  let to_ident = function
-    | Ident ident -> Some ident
-    | Temporary | Procedure_call_convention -> None
-
-  let to_ident_exn = function
-    | Ident ident -> ident
-    | Temporary | Procedure_call_convention -> failwith "Reg.to_ident_exn"
-
-  let (=) = Pervasives.(=)
-end
-
-type t =
-  { mutable raw_name: Raw_name.t;
-    stamp: int;
-    mutable typ: Cmm.machtype_component;
-    mutable loc: location;
-    mutable spill: bool;
-    mutable part: int option;
-    mutable is_parameter: int option;
-    mutable interf: t list;
-    mutable prefer: (t * int) list;
-    mutable degree: int;
-    mutable spill_cost: int;
-    mutable visited: bool }
+type shared = {
+  mutability : Cmm.mutability;
+  stamp: int;
+  mutable typ: Cmm.machtype_component;
+  mutable loc: location;
+  mutable spill: bool;
+  mutable part: int option;
+  mutable interf: shared list;
+  mutable prefer: (shared * int) list;
+  mutable degree: int;
+  mutable spill_cost: int;
+  mutable visited: bool;
+}
 
 and location =
     Unknown
@@ -106,26 +39,37 @@ and stack_location =
   | Incoming of int
   | Outgoing of int
 
+type t = {
+  mutable name : Ident.t option;
+  shared : shared;
+}
+
 type reg = t
 
 let dummy =
-  { raw_name = Raw_name.create_temporary ();
-    stamp = 0; typ = Int; loc = Unknown;
-    spill = false; interf = []; prefer = []; degree = 0; spill_cost = 0;
-    visited = false; part = None; is_parameter = None; }
+  let shared =
+    { mutability = Cmm.Immutable;
+      stamp = 0; typ = Int; loc = Unknown;
+      spill = false; interf = []; prefer = []; degree = 0; spill_cost = 0;
+      visited = false; part = None;
+    }
+  in
+  { name = None;
+    shared;
+  }
 
 let currstamp = ref 0
-let reg_list = ref([] : t list)
+let reg_list = ref([] : shared list)
 
-let create ty =
-  let r = { raw_name = Raw_name.create_temporary ();
-            stamp = !currstamp; typ = ty;
+let create ?(mutability = Cmm.Immutable) ty =
+  let shared = { mutability; stamp = !currstamp; typ = ty;
             loc = Unknown; spill = false; interf = []; prefer = []; degree = 0;
-            spill_cost = 0; visited = false; part = None;
-            is_parameter = None; } in
-  reg_list := r :: !reg_list;
+            spill_cost = 0; visited = false; part = None; } in
+  reg_list := shared :: !reg_list;
   incr currstamp;
-  r
+  { name = None;
+    shared;
+  }
 
 let createv tyv =
   let n = Array.length tyv in
@@ -133,60 +77,71 @@ let createv tyv =
   for i = 0 to n-1 do rv.(i) <- create tyv.(i) done;
   rv
 
-let createv_like rv =
+let createv_like ?mutability rv =
   let n = Array.length rv in
   let rv' = Array.make n dummy in
-  for i = 0 to n-1 do rv'.(i) <- create rv.(i).typ done;
+  for i = 0 to n-1 do rv'.(i) <- create ?mutability rv.(i).shared.typ done;
   rv'
 
 let clone r =
-  let nr = create r.typ in
-  nr.raw_name <- r.raw_name;
+  let nr = create r.shared.typ in
+  nr.name <- r.name;
   nr
 
+(* The name of registers created in [Proc]. *)
+let proc_reg_name = Ident.create "R"
+
 let at_location ty loc =
-  let r = { raw_name = Raw_name.create_procedure_call_convention ();
+  (* CR mshinwell: check mutability *)
+  let shared = { mutability = Cmm.Mutable;
             stamp = !currstamp; typ = ty; loc;
             spill = false; interf = []; prefer = []; degree = 0;
-            spill_cost = 0; visited = false; part = None;
-            is_parameter = None; } in
+            spill_cost = 0; visited = false; part = None; } in
   incr currstamp;
-  r
+  { name = Some proc_reg_name;
+    shared;
+  }
 
-let identical_except_in_name r ~from =
-  { r with raw_name = from.raw_name; }
-
-let identical_except_in_namev rs ~from =
-  if Array.length rs <> Array.length from then
-    failwith "Reg.identical_except_in_namev with different length arrays";
-  Array.init (Array.length rs)
-    (fun index -> identical_except_in_name rs.(index) ~from:from.(index))
+let immutable t =
+  match t.shared.mutability with
+  | Immutable -> true
+  | Mutable -> false
 
 let name t =
-  let raw_name =
-    match Raw_name.to_string t.raw_name with
-    | Some raw_name -> raw_name
-    | None ->
-      match t.typ with
-      | Addr -> "A"
-      | Val -> "V"
-      | Int -> "I"
-      | Float -> "F"
-  in
-  let with_spilled =
-    if t.spill then
-      "spilled-" ^ raw_name
-    else
-      raw_name
-  in
-  match t.part with
-  | None -> with_spilled
-  | Some part -> with_spilled ^ "#" ^ string_of_int part
+  match t.name with
+  | None -> ""
+  | Some ident ->
+    let name = Ident.name ident in
+    let with_spilled =
+      if t.shared.spill then
+        "spilled-" ^ name
+      else
+        name
+    in
+    match t.shared.part with
+    | None -> with_spilled
+    | Some part -> with_spilled ^ "#" ^ string_of_int part
 
-let is_temporary t = Raw_name.is_temporary t.raw_name
-let is_ident t = Raw_name.is_ident t.raw_name
-let is_procedure_call_convention t =
-  Raw_name.is_procedure_call_convention t.raw_name
+let anonymous t =
+  match t.name with
+  | None -> true
+  | Some _ident -> false
+
+let anonymise t = { t with name = None; }
+
+let rename t name = { t with name; }
+
+let identical_except_in_name r ~take_name_from =
+  match take_name_from.name with
+  | None -> r
+  | Some name -> { r with name = Some name; }
+
+let identical_except_in_namev rs ~take_names_from =
+  if Array.length rs <> Array.length take_names_from then
+    failwith "Reg.identical_except_in_namev with different length arrays";
+  Array.init (Array.length rs) (fun index ->
+    identical_except_in_name rs.(index)
+      ~take_name_from:take_names_from.(index))
 
 let first_virtual_reg_stamp = ref (-1)
 
@@ -202,15 +157,15 @@ let reset() =
 let all_registers() = !reg_list
 let num_registers() = !currstamp
 
-let reinit_reg r =
-  r.loc <- Unknown;
-  r.interf <- [];
-  r.prefer <- [];
-  r.degree <- 0;
+let reinit_reg shared =
+  shared.loc <- Unknown;
+  shared.interf <- [];
+  shared.prefer <- [];
+  shared.degree <- 0;
   (* Preserve the very high spill costs introduced by the reloading pass *)
-  if r.spill_cost >= 100000
-  then r.spill_cost <- 100000
-  else r.spill_cost <- 0
+  if shared.spill_cost >= 100000
+  then shared.spill_cost <- 100000
+  else shared.spill_cost <- 0
 
 let reinit() =
   List.iter reinit_reg !reg_list
@@ -218,7 +173,7 @@ let reinit() =
 module RegOrder =
   struct
     type t = reg
-    let compare r1 r2 = r1.stamp - r2.stamp
+    let compare r1 r2 = r1.shared.stamp - r2.shared.stamp
   end
 
 module Set = Set.Make(RegOrder)

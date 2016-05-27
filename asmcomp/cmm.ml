@@ -89,6 +89,10 @@ let size_machtype mty =
   done;
   !size
 
+type mutability =
+  | Mutable
+  | Immutable
+
 type comparison =
     Ceq
   | Cne
@@ -147,7 +151,7 @@ type expression =
   | Cconst_natpointer of nativeint
   | Cconst_blockheader of nativeint
   | Cvar of Ident.t
-  | Clet of Ident.t * expression * expression
+  | Clet of mutability * Ident.t * expression * expression
   | Cphantom_let of Ident.t * Clambda.ulet_provenance
       * Clambda.uphantom_defining_expr * expression
   | Cassign of Ident.t * expression

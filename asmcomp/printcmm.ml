@@ -103,18 +103,18 @@ let rec expr ppf = function
   | Cconst_pointer n -> fprintf ppf "%ia" n
   | Cconst_natpointer n -> fprintf ppf "%sa" (Nativeint.to_string n)
   | Cvar id -> Ident.print ppf id
-  | Clet(id, def, (Clet(_, _, _) as body)) ->
+  | Clet(_mut, id, def, (Clet(_, _, _, _) as body)) ->
       let print_binding id ppf def =
         fprintf ppf "@[<2>%a@ %a@]" Ident.print id expr def in
       let rec in_part ppf = function
-        | Clet(id, def, body) ->
+        | Clet(_, id, def, body) ->
             fprintf ppf "@ %a" (print_binding id) def;
             in_part ppf body
         | exp -> exp in
       fprintf ppf "@[<2>(let@ @[<1>(%a" (print_binding id) def;
       let exp = in_part ppf body in
       fprintf ppf ")@]@ %a)@]" sequence exp
-  | Clet(id, def, body) ->
+  | Clet(_, id, def, body) ->
      fprintf ppf
       "@[<2>(let@ @[<2>%a@ %a@]@ %a)@]"
       Ident.print id expr def sequence body

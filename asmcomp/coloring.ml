@@ -17,7 +17,7 @@
 
 module OrderedRegSet =
   Set.Make(struct
-    type t = Reg.t
+    type t = Reg.shared
     let compare r1 r2 =
       let open Reg in
       let c1 = r1.spill_cost and d1 = r1.degree in
@@ -46,16 +46,16 @@ let allocate_registers() =
   (* Preallocate the spilled registers in the stack.
      Split the remaining registers into constrained and unconstrained. *)
   let remove_reg reg =
-    let cl = Proc.register_class reg in
+    let cl = Proc.register_class_shared reg in
     if reg.spill then begin
       (* Preallocate the registers in the stack *)
       let nslots = Proc.num_stack_slots.(cl) in
       let conflict = Array.make nslots false in
       List.iter
-        (fun r ->
-          match r.loc with
+        (fun shared ->
+          match shared.loc with
             Stack(Local n) ->
-              if Proc.register_class r = cl then conflict.(n) <- true
+              if Proc.register_class_shared shared = cl then conflict.(n) <- true
           | _ -> ())
         reg.interf;
       let slot = ref 0 in
@@ -69,7 +69,7 @@ let allocate_registers() =
     end in
 
   (* Iterate over all registers preferred by the given register (transitive) *)
-  let iter_preferred f reg =
+  let iter_preferred f (reg : Reg.shared) =
     let rec walk r w =
       if not r.visited then begin
         f r w;
@@ -90,8 +90,8 @@ let allocate_registers() =
   let start_register = Array.make Proc.num_register_classes 0 in
 
   (* Assign a location to a register, the best we can. *)
-  let assign_location reg =
-    let cl = Proc.register_class reg in
+  let assign_location (reg : Reg.shared) =
+    let cl = Proc.register_class_shared reg in
     let first_reg = Proc.first_available_register.(cl) in
     let num_regs = Proc.num_available_registers.(cl) in
     let score = Array.make num_regs 0 in

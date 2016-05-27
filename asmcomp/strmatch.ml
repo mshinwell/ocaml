@@ -73,11 +73,11 @@ module Make(I:I) = struct
   let mk_let_cell id str ind body =
     let cell =
       Cop(Cload Word_int,[Cop(Cadda,[str;Cconst_int(Arch.size_int*ind)])]) in
-    Clet(id, cell, body)
+    Clet(Immutable, id, cell, body)
 
   let mk_let_size id str body =
     let size = I.string_block_length str in
-    Clet(id, size, body)
+    Clet(Immutable, id, size, body)
 
   let mk_cmp_gen cmp_op id nat ifso ifnot =
     let test = Cop (Ccmpi cmp_op, [ Cvar id; Cconst_natpointer nat ]) in

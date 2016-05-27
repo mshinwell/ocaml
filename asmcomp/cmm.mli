@@ -21,6 +21,10 @@ type machtype_component =
   | Int
   | Float
 
+type mutability =
+  | Mutable
+  | Immutable
+
 (* - [Val] denotes a valid OCaml value: either a pointer to the beginning
      of a heap block, an infix pointer if it is preceded by the correct
      infix header, or a 2n+1 encoded integer.
@@ -124,7 +128,7 @@ type expression =
   | Cconst_natpointer of nativeint
   | Cconst_blockheader of nativeint
   | Cvar of Ident.t
-  | Clet of Ident.t * expression * expression
+  | Clet of mutability * Ident.t * expression * expression
   | Cphantom_let of Ident.t * Clambda.ulet_provenance
       * Clambda.uphantom_defining_expr * expression
   | Cassign of Ident.t * expression

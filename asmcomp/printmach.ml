@@ -20,15 +20,10 @@ open Cmm
 open Reg
 open Mach
 
-let reg ppf r =
-  if not (Reg.is_temporary r) then
-    fprintf ppf "%s" (Reg.name r)
-  else
-    fprintf ppf "%s"
-      (match r.typ with Val -> "V" | Addr -> "A" | Int -> "I" | Float -> "F");
-  fprintf ppf "/%i" r.stamp;
-  if r.is_parameter <> None then fprintf ppf "[P]";
-  begin match r.loc with
+let reg_shared_core ppf shared =
+  fprintf ppf "/%i" shared.stamp;
+  if shared.is_parameter <> None then fprintf ppf "[P]";
+  begin match shared.loc with
   | Unknown -> ()
   | Reg r ->
       fprintf ppf "[%s]" (Proc.register_name r)
@@ -38,7 +33,27 @@ let reg ppf r =
       fprintf ppf "[si%i]" s
   | Stack(Outgoing s) ->
       fprintf ppf "[so%i]" s
+  end;
+  begin match shared.mutability with
+  | Immutable -> ()
+  | Mutable -> fprintf ppf "[mut]"
   end
+
+let reg_shared ppf shared =
+  fprintf ppf "%s"
+    (match shared.typ with
+    | Val -> "V" | Addr -> "A" | Int -> "I" | Float -> "F");
+  reg_shared_core ppf shared
+
+let reg ppf r =
+  if not (Reg.anonymous r) then begin
+    fprintf ppf "%s" (Reg.name r)
+  end else begin
+    fprintf ppf "%s"
+      (match r.shared.typ with
+      | Val -> "V" | Addr -> "A" | Int -> "I" | Float -> "F")
+  end;
+  reg_shared_core ppf r.shared
 
 let regs ppf v =
   match Array.length v with
@@ -61,7 +76,7 @@ let regsetaddr ppf s =
     (fun r ->
       if !first then begin first := false; fprintf ppf "%a" reg r end
       else fprintf ppf "@ %a" reg r;
-      match r.typ with
+      match r.shared.typ with
       | Val -> fprintf ppf "*"
       | Addr -> fprintf ppf "!"
       | _ -> ())
@@ -224,9 +239,9 @@ let phase msg ppf f =
 let interference ppf r =
   let interf ppf =
    List.iter
-    (fun r -> fprintf ppf "@ %a" reg r)
+    (fun shared -> fprintf ppf "@ %a" reg_shared shared)
     r.interf in
-  fprintf ppf "@[<2>%a:%t@]@." reg r interf
+  fprintf ppf "@[<2>%a:%t@]@." reg_shared r interf
 
 let interferences ppf () =
   fprintf ppf "*** Interferences@.";
@@ -235,9 +250,9 @@ let interferences ppf () =
 let preference ppf r =
   let prefs ppf =
     List.iter
-      (fun (r, w) -> fprintf ppf "@ %a weight %i" reg r w)
+      (fun (shared, w) -> fprintf ppf "@ %a weight %i" reg_shared shared w)
       r.prefer in
-  fprintf ppf "@[<2>%a: %t@]@." reg r prefs
+  fprintf ppf "@[<2>%a: %t@]@." reg_shared r prefs
 
 let preferences ppf () =
   fprintf ppf "*** Preferences@.";
