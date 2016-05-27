@@ -119,31 +119,13 @@ let rec available_regs (instr : M.instruction) ~avail_before =
        allocation code.
        Should we be using "available across" instead of "available before"?
        It's not clear that actually solves the problem. *)
-    (* Also: at call instructions, the ideal situation is:
-       - immediately prior to the call, we should be using availability at
-         that point, so that things not spilled across the call are still
-         visible;
-       - when in the callee, we should be using availability as immediately
-         after the call (i.e. spilled things are visible);
-       - when we return from the callee, likewise.
-       Unfortunately if the first range is stopped and the second range
-       started immediately after the call, then when in the callee, gdb
-       uses the availability before the call (which means values are likely
-       to be printed as garbage).  If the first range is stopped one byte
-       short of the end of the call and the second range started immediately
-       after the call, spilled values appear to be unavailable in the callee.
-       So for the moment we compromise on the first point (availability of
-       non-spilled values immeidately prior to the call) and use the
-       "after call" range across the whole call instruction. *)
-    (* CR-soon mshinwell: we should try to experiment more with this *)
     (* CR pchambart: This test should probably surround everything,
        especialy in the case where it is changed to a sum type. *)
     if avail_before == all_regs then
       all_regs
     else
       match instr.M.desc with
-      | Iop (Ialloc _)
-      | Iop Icall_ind | Iop (Icall_imm _) | Iop (Iextcall _) ->
+      | Iop (Ialloc _) ->
         let made_unavailable =
           R.Set.fold (fun reg acc ->
               let made_unavailable =

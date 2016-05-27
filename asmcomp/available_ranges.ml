@@ -278,27 +278,33 @@ let add_subrange t ~subrange =
   Available_range.add_subrange range ~subrange
 
 let available_before insn =
-  let available_before, _idents_seen =
-    Reg.Set.fold (fun reg ((available_before, idents_seen) as acc) ->
-      (* CR-soon mshinwell: handle values split across multiple registers *)
-      if reg.Reg.shared.Reg.part <> None then
-        acc
-      else
-        match reg.Reg.name with
-        | None -> acc  (* ignore registers without proper names *)
-        | Some ident ->
-          try
-            let () = Ident.find_same ident idents_seen in
-            (* We don't need more than one reg location for a given name. *)
-            acc
-          with Not_found -> begin
-            let available_before = Reg.Set.add reg available_before in
-            let idents_seen = Ident.add ident () idents_seen in
-            available_before, idents_seen
-          end)
-      insn.L.available_before (Reg.Set.empty, Ident.empty)
-  in
-  available_before
+  let regs_by_ident = Ident.Tbl.create 42 in
+  (* CR-soon mshinwell: handle values split across multiple registers *)
+  Reg.Set.iter (fun (reg : Reg.t) ->
+      match reg.name with
+      | None -> ()  (* ignore registers without proper names *)
+      | Some name ->
+        match Ident.Tbl.find regs_by_ident name with
+        | exception Not_found -> Ident.Tbl.add regs_by_ident name reg
+        | (reg' : Reg.t) ->
+          (* We prefer registers that are assigned to the stack to
+             preserve availability across function calls.  Other than
+             that, any register is as good as any other register; likewise
+             for stack slots. *)
+          match reg.shared.loc, reg'.shared.loc with
+          | Reg _, Stack _
+          | Reg _, Reg _
+          | Stack _, Stack _
+          | _, Unknown
+          | Unknown, _ -> ()
+          | Stack _, Reg _ ->
+            Ident.Tbl.remove regs_by_ident name;
+            Ident.Tbl.add regs_by_ident name reg')
+    insn.L.available_before;
+  Ident.Tbl.fold (fun _ident reg available_before ->
+      Reg.Set.add reg available_before)
+    regs_by_ident
+    Reg.Set.empty
 
 (* Imagine that the program counter is exactly at the start of [insn]; it has
    not yet been executed.  This function calculates which available subranges
