@@ -40,7 +40,8 @@ module Available_subrange : sig
     | Phantom of phantom_defining_expr
 
   val create
-     : start_insn:L.instruction  (* must be [Lavailable_subrange] *)
+     : reg:Reg.t
+    -> start_insn:L.instruction
     -> start_pos:L.label
     -> end_pos:L.label
     -> t
@@ -62,7 +63,7 @@ module Available_subrange : sig
   val rewrite_labels : t -> env:int Numbers.Int.Map.t -> t
 end = struct
   type start_insn_or_symbol =
-    | Start_insn of L.instruction
+    | Start_insn of Reg.t * L.instruction
     | Phantom of Ident.t * Clambda.ulet_provenance * phantom_defining_expr
 
   type t = {
@@ -78,10 +79,16 @@ end = struct
     | Reg of Reg.t
     | Phantom of phantom_defining_expr
 
-  let create ~start_insn ~start_pos ~end_pos =
+  let create ~reg ~start_insn ~start_pos ~end_pos =
     match start_insn.L.desc with
-    | L.Lavailable_subrange _ ->
-      { start_insn = Start_insn start_insn;
+    | L.Lavailable_subrange _ | L.Llabel _ ->
+      begin match start_insn.L.desc with
+      | L.Lavailable_subrange _ ->
+        assert (Array.length start_insn.L.arg = 1);
+        assert (reg == start_insn.L.arg.(0))
+      | _ -> ()
+      end;
+      { start_insn = Start_insn (reg, start_insn);
         start_pos;
         end_pos;
       }
@@ -98,25 +105,24 @@ end = struct
 
   let location t : location =
     match t.start_insn with
-    | Start_insn insn ->
-      assert (Array.length insn.L.arg = 1);
-      Reg (insn.L.arg.(0))
-    | Phantom (_ident, _provenance, defining_expr) ->
-      Phantom defining_expr
+    | Start_insn (reg, _insn) -> Reg reg
+    | Phantom (_ident, _provenance, defining_expr) -> Phantom defining_expr
 
   let offset_from_stack_ptr t =
     match t.start_insn with
-    | Start_insn insn ->
+    | Start_insn (reg, insn) ->
       begin match insn.L.desc with
       | L.Lavailable_subrange offset -> !offset
+      | L.Llabel _ ->
+        assert (not (Reg.assigned_to_stack reg));
+        None
       | _ -> assert false
       end
     | Phantom _ -> None
 
   let ident t =
     match t.start_insn with
-    | Start_insn insn ->
-      let reg = insn.L.arg.(0) in
+    | Start_insn (reg, _insn) ->
       begin match reg.Reg.name with
       | Some ident -> ident
       | None -> assert false  (* most likely a bug in available_regs.ml *)
@@ -350,46 +356,56 @@ let rec process_instruction t ~first_insn ~insn ~prev_insn
       in
       let end_pos = Lazy.force label in
       let subrange =
-        Available_subrange.create ~start_pos ~start_insn ~end_pos
+        Available_subrange.create ~reg ~start_pos ~start_insn ~end_pos
       in
       add_subrange t ~subrange)
     deaths
     ();
+  let label_insn =
+    lazy ({ L.
+      desc = L.Llabel (Lazy.force label);
+      next = insn;
+      arg = [| |];
+      res = [| |];
+      dbg = Debuginfo.none;
+      live = Reg.Set.empty;
+      available_before = Reg.Set.empty;
+    })
+  in
   let open_subrange_start_insns =
     let open_subrange_start_insns =
       (Reg.Map.filter (fun reg _start_insn -> not (Reg.Set.mem reg deaths))
         open_subrange_start_insns)
     in
     Reg.Set.fold (fun reg open_subrange_start_insns ->
+        (* We only need [Lavailable_subrange] in the case where the register
+           is assigned to the stack.  (It enables us to determine what the
+           stack offset will be at that point.) *)
         let new_insn =
-          { L.
-            desc = L.Lavailable_subrange (ref None);
-            next = insn;
-            arg = [| reg |];
-            res = [| |];
-            dbg = Debuginfo.none;
-            live = Reg.Set.empty;
-            available_before = Reg.Set.empty;
-          }
+          if not (Reg.assigned_to_stack reg) then begin
+            Lazy.force label_insn
+          end else begin
+            let new_insn =
+              { L.
+                desc = L.Lavailable_subrange (ref None);
+                next = insn;
+                arg = [| reg |];
+                res = [| |];
+                dbg = Debuginfo.none;
+                live = Reg.Set.empty;
+                available_before = Reg.Set.empty;
+              }
+            in
+            insert_insn ~new_insn;
+            new_insn
+          end
         in
-        insert_insn ~new_insn;
         Reg.Map.add reg (Lazy.force label, new_insn) open_subrange_start_insns)
       births
       open_subrange_start_insns
   in
   begin if Lazy.is_val label then
-    let new_insn =
-      { L.
-        desc = L.Llabel (Lazy.force label);
-        next = insn;
-        arg = [| |];
-        res = [| |];
-        dbg = Debuginfo.none;
-        live = Reg.Set.empty;
-        available_before = Reg.Set.empty;
-      }
-    in
-    insert_insn ~new_insn
+    insert_insn ~new_insn:(Lazy.force label_insn)
   end;
   let first_insn = !first_insn in
   match insn.L.desc with
@@ -461,22 +477,20 @@ type label_classification =
     }
   | End
 
-exception Found_label of label_classification * Available_subrange.t
-
 let classify_label t label =
-  try
-    Ident.iter (fun _ident range ->
-        Available_range.iter range ~f:(fun ~available_subrange:subrange ->
+  Ident.fold_all (fun _ident range result ->
+      Available_range.fold range ~init:result
+        ~f:(fun result ~available_subrange:subrange ->
           if Available_subrange.start_pos subrange = label then
             let location = Available_subrange.location subrange in
             let end_pos = Available_subrange.end_pos subrange in
-            raise (Found_label (Start { end_pos; location; }, subrange))
+            (Start { end_pos; location; }, subrange) :: result
           else if Available_subrange.end_pos subrange = label then
-            raise (Found_label (End, subrange))))
-      t.ranges;
-    None
-  with Found_label (start_or_end, subrange) ->
-    Some (start_or_end, subrange)
+            (End, subrange) :: result
+          else
+            result))
+    t.ranges
+    []
 
 let rewrite_labels t ~env =
   let ranges =

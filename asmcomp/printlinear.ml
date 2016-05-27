@@ -44,33 +44,32 @@ let instr ppf i =
       begin match !available_ranges with
       | None -> ()
       | Some ranges ->
-        match Available_ranges.classify_label ranges lbl with
-        | None -> ()
-        | Some (start_or_end, subrange) ->
-          let start_or_end' =
-            match start_or_end with
-            | Available_ranges.Start _ -> "available"
-            | Available_ranges.End -> "unavailable"
-          in
-          let ident = Available_ranges.Available_subrange.ident subrange in
-          fprintf ppf " (%a now %s"
-            Ident.print ident start_or_end';
-          begin match start_or_end with
-          | Available_ranges.Start { end_pos; location; } ->
-            fprintf ppf " until L%d" end_pos;
-            begin match location with
-            | Available_ranges.Available_subrange.Reg r ->
-              fprintf ppf " in %a" reg r
-            | Available_ranges.Available_subrange.Phantom
-                (Available_ranges.Symbol symbol) ->
-              fprintf ppf " with known value %a" Symbol.print symbol
-            | Available_ranges.Available_subrange.Phantom
-                (Available_ranges.Int i) ->
-              fprintf ppf " with known value %d" i
-            end
-          | Available_ranges.End -> ()
-          end;
-          fprintf ppf ")"
+        List.iter (fun (start_or_end, subrange) ->
+            let start_or_end' =
+              match start_or_end with
+              | Available_ranges.Start _ -> "avail."
+              | Available_ranges.End -> "unavail."
+            in
+            let ident = Available_ranges.Available_subrange.ident subrange in
+            fprintf ppf " (%a now %s"
+              Ident.print ident start_or_end';
+            begin match start_or_end with
+            | Available_ranges.Start { end_pos; location; } ->
+              fprintf ppf " until L%d" end_pos;
+              begin match location with
+              | Available_ranges.Available_subrange.Reg r ->
+                fprintf ppf " in %a" reg r
+              | Available_ranges.Available_subrange.Phantom
+                  (Available_ranges.Symbol symbol) ->
+                fprintf ppf " with known value %a" Symbol.print symbol
+              | Available_ranges.Available_subrange.Phantom
+                  (Available_ranges.Int i) ->
+                fprintf ppf " with known value %d" i
+              end
+            | Available_ranges.End -> ()
+            end;
+            fprintf ppf ")")
+          (Available_ranges.classify_label ranges lbl)
       end
   | Lbranch lbl ->
       fprintf ppf "goto %a" label lbl
@@ -101,7 +100,7 @@ let instr ppf i =
   | Lprologue ->
       fprintf ppf "prologue"
   | Lavailable_subrange _ ->
-      fprintf ppf "start of availability for reg %a" reg i.arg.(0)
+      fprintf ppf "availability stack offset capture for reg %a" reg i.arg.(0)
   end;
   if not (Debuginfo.is_none i.dbg) then
     fprintf ppf " %s" (Debuginfo.to_string i.dbg)

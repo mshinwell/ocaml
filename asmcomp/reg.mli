@@ -96,6 +96,8 @@ val name : t -> string
 val holds_pointer : t -> bool
 val holds_non_pointer : t -> bool
 
+val assigned_to_stack : t -> bool
+
 module Set: Set.S with type elt = t
 module Map: Map.S with type key = t
 

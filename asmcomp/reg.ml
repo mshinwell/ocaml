@@ -232,3 +232,8 @@ let holds_pointer t =
   | Int | Float -> false
 
 let holds_non_pointer t = not (holds_pointer t)
+
+let assigned_to_stack t =
+  match t.shared.loc with
+  | Stack _ -> true
+  | Reg _ | Unknown -> false

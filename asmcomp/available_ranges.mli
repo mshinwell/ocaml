@@ -100,7 +100,7 @@ type label_classification =
 val classify_label
    : t
   -> Linearize.label
-  -> (label_classification * Available_subrange.t) option
+  -> (label_classification * Available_subrange.t) list
 
 val fold
    : ?exclude:Ident.t
