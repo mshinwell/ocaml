@@ -47,15 +47,30 @@ let instr ppf i =
         match Available_ranges.classify_label ranges lbl with
         | None -> ()
         | Some (start_or_end, subrange) ->
-          let start_or_end, until =
+          let start_or_end' =
             match start_or_end with
-            | Available_ranges.Start { end_pos; } ->
-              "available", Printf.sprintf " until L%d" end_pos
-            | Available_ranges.End -> "unavailable", ""
+            | Available_ranges.Start _ -> "available"
+            | Available_ranges.End -> "unavailable"
           in
           let ident = Available_ranges.Available_subrange.ident subrange in
-          fprintf ppf " (%a now %s%s)"
-            Ident.print ident start_or_end until
+          fprintf ppf " (%a now %s"
+            Ident.print ident start_or_end';
+          begin match start_or_end with
+          | Available_ranges.Start { end_pos; location; } ->
+            fprintf ppf " until L%d" end_pos;
+            begin match location with
+            | Available_ranges.Available_subrange.Reg r ->
+              fprintf ppf " in %a" reg r
+            | Available_ranges.Available_subrange.Phantom
+                (Available_ranges.Symbol symbol) ->
+              fprintf ppf " with known value %a" Symbol.print symbol
+            | Available_ranges.Available_subrange.Phantom
+                (Available_ranges.Int i) ->
+              fprintf ppf " with known value %d" i
+            end
+          | Available_ranges.End -> ()
+          end;
+          fprintf ppf ")"
       end
   | Lbranch lbl ->
       fprintf ppf "goto %a" label lbl
@@ -85,12 +100,15 @@ let instr ppf i =
       fprintf ppf "%s %a" (Lambda.raise_kind k) reg i.arg.(0)
   | Lprologue ->
       fprintf ppf "prologue"
-  | Lavailable_subrange _ ->
+  | Lavailable_subrange _ -> ()
+(* Can be enabled for debugging, but not generally useful, since the
+   Llabel case emits available range information.
       fprintf ppf "start of availability for reg %a" reg i.arg.(0);
       begin match i.arg.(0).Reg.name with
       | None -> ()
       | Some name -> fprintf ppf " holding %a" Ident.print name
       end
+*)
   end;
   if not (Debuginfo.is_none i.dbg) then
     fprintf ppf " %s" (Debuginfo.to_string i.dbg)
