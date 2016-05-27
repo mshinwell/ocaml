@@ -100,15 +100,8 @@ let instr ppf i =
       fprintf ppf "%s %a" (Lambda.raise_kind k) reg i.arg.(0)
   | Lprologue ->
       fprintf ppf "prologue"
-  | Lavailable_subrange _ -> ()
-(* Can be enabled for debugging, but not generally useful, since the
-   Llabel case emits available range information.
-      fprintf ppf "start of availability for reg %a" reg i.arg.(0);
-      begin match i.arg.(0).Reg.name with
-      | None -> ()
-      | Some name -> fprintf ppf " holding %a" Ident.print name
-      end
-*)
+  | Lavailable_subrange _ ->
+      fprintf ppf "start of availability for reg %a" reg i.arg.(0)
   end;
   if not (Debuginfo.is_none i.dbg) then
     fprintf ppf " %s" (Debuginfo.to_string i.dbg)
