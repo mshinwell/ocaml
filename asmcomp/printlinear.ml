@@ -53,7 +53,7 @@ let instr ppf i =
             | Available_ranges.End -> "unavailable"
           in
           let ident = Available_ranges.Available_subrange.ident subrange in
-          fprintf ppf " (`%a' becomes %s)"
+          fprintf ppf " (%a now %s)"
             Ident.print ident start_or_end
       end
   | Lbranch lbl ->
@@ -85,10 +85,10 @@ let instr ppf i =
   | Lprologue ->
       fprintf ppf "prologue"
   | Lavailable_subrange _ ->
-      fprintf ppf "start of available subrange for reg %a" reg i.arg.(0);
+      fprintf ppf "start of availability for reg %a" reg i.arg.(0);
       begin match i.arg.(0).Reg.name with
       | None -> ()
-      | Some name -> fprintf ppf " holding `%a'" Ident.print name
+      | Some name -> fprintf ppf " holding %a" Ident.print name
       end
   end;
   if not (Debuginfo.is_none i.dbg) then
