@@ -475,6 +475,23 @@ let create ~fundecl ~phantom_ranges =
 *)
   t, { fundecl with L.fun_body = first_insn; }
 
+type label_classification = Start | End
+
+exception Found_label of label_classification * Available_subrange.t
+
+let classify_label t label =
+  try
+    Ident.iter (fun _ident range ->
+        Available_range.iter range ~f:(fun ~available_subrange:subrange ->
+          if Available_subrange.start_pos subrange = label then
+            raise (Found_label (Start, subrange))
+          else if Available_subrange.end_pos subrange = label then
+            raise (Found_label (End, subrange))))
+      t.ranges;
+    None
+  with Found_label (start_or_end, subrange) ->
+    Some (start_or_end, subrange)
+
 let rewrite_labels t ~env =
   let ranges =
     Ident.fold_all (fun ident range ranges ->

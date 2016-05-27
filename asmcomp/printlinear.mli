@@ -20,3 +20,9 @@ open Linearize
 
 val instr: formatter -> instruction -> unit
 val fundecl: formatter -> fundecl -> unit
+
+val fundecl_with_available_ranges
+   : Available_ranges.t
+  -> formatter
+  -> fundecl
+  -> unit

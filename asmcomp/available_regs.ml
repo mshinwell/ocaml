@@ -92,7 +92,7 @@ let augment_availability_at_raise avail =
    (The rationale is that these are the registers we may be interested in
    referencing, by name, when debugging.)
 *)
-let rec available_regs instr ~avail_before =
+let rec available_regs (instr : M.instruction) ~avail_before =
   if not (avail_before == all_regs) then begin
     ()
 (* CR mshinwell: investigate these assertions.  It seems like we're breaking
@@ -155,6 +155,25 @@ let rec available_regs instr ~avail_before =
         in
         R.Set.diff avail_before made_unavailable
       | _ -> avail_before
+  in
+  let avail_before =
+    (* Watch out for no-op moves that change the name of a register. *)
+    match instr.desc with
+    | Iop Imove ->
+      begin match instr.arg, instr.res with
+      | [| arg |], [| res |] ->
+        if reg_is_interesting res
+          && arg.shared.loc = res.shared.loc
+          && Reg.immutable arg
+          && Reg.immutable res
+        then begin
+          R.Set.add res avail_before
+        end else begin
+          avail_before
+        end
+      | _ -> avail_before
+      end
+    | _ -> avail_before
   in
   (* CR pchambart: Given how it's used I would rename it to
      available_across rather than available_before. *)

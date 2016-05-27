@@ -1051,24 +1051,28 @@ asmcomp/flambda_to_clambda.cmo : middle_end/base_types/variable.cmi \
     middle_end/base_types/tag.cmi middle_end/base_types/symbol.cmi \
     middle_end/base_types/static_exception.cmi \
     middle_end/base_types/set_of_closures_id.cmi typing/primitive.cmi \
-    utils/numbers.cmi middle_end/base_types/mutable_variable.cmi \
-    utils/misc.cmi middle_end/base_types/linkage_name.cmi typing/ident.cmi \
+    typing/path.cmi utils/numbers.cmi \
+    middle_end/base_types/mutable_variable.cmi utils/misc.cmi \
+    middle_end/base_types/linkage_name.cmi typing/ident.cmi \
     middle_end/flambda_utils.cmi middle_end/flambda.cmi \
     asmcomp/export_info.cmi bytecomp/debuginfo.cmi asmcomp/compilenv.cmi \
-    asmcomp/closure_offsets.cmi middle_end/base_types/closure_id.cmi \
-    utils/clflags.cmi asmcomp/clambda.cmi middle_end/allocated_const.cmi \
+    middle_end/base_types/compilation_unit.cmi asmcomp/closure_offsets.cmi \
+    middle_end/base_types/closure_id.cmi utils/clflags.cmi \
+    asmcomp/clambda.cmi middle_end/allocated_const.cmi \
     asmcomp/flambda_to_clambda.cmi
 asmcomp/flambda_to_clambda.cmx : middle_end/base_types/variable.cmx \
     middle_end/base_types/var_within_closure.cmx \
     middle_end/base_types/tag.cmx middle_end/base_types/symbol.cmx \
     middle_end/base_types/static_exception.cmx \
     middle_end/base_types/set_of_closures_id.cmx typing/primitive.cmx \
-    utils/numbers.cmx middle_end/base_types/mutable_variable.cmx \
-    utils/misc.cmx middle_end/base_types/linkage_name.cmx typing/ident.cmx \
+    typing/path.cmx utils/numbers.cmx \
+    middle_end/base_types/mutable_variable.cmx utils/misc.cmx \
+    middle_end/base_types/linkage_name.cmx typing/ident.cmx \
     middle_end/flambda_utils.cmx middle_end/flambda.cmx \
     asmcomp/export_info.cmx bytecomp/debuginfo.cmx asmcomp/compilenv.cmx \
-    asmcomp/closure_offsets.cmx middle_end/base_types/closure_id.cmx \
-    utils/clflags.cmx asmcomp/clambda.cmx middle_end/allocated_const.cmx \
+    middle_end/base_types/compilation_unit.cmx asmcomp/closure_offsets.cmx \
+    middle_end/base_types/closure_id.cmx utils/clflags.cmx \
+    asmcomp/clambda.cmx middle_end/allocated_const.cmx \
     asmcomp/flambda_to_clambda.cmi
 asmcomp/flambda_to_clambda.cmi : middle_end/base_types/symbol.cmi \
     middle_end/flambda.cmi asmcomp/export_info.cmi asmcomp/clambda.cmi
@@ -1145,11 +1149,13 @@ asmcomp/printcmm.cmx : asmcomp/printclambda.cmx bytecomp/lambda.cmx \
 asmcomp/printcmm.cmi : asmcomp/cmm.cmi
 asmcomp/printlinear.cmo : asmcomp/printmach.cmi typing/path.cmi \
     asmcomp/mach.cmi asmcomp/linearize.cmi bytecomp/lambda.cmi \
-    bytecomp/debuginfo.cmi asmcomp/printlinear.cmi
+    typing/ident.cmi bytecomp/debuginfo.cmi asmcomp/available_ranges.cmi \
+    asmcomp/printlinear.cmi
 asmcomp/printlinear.cmx : asmcomp/printmach.cmx typing/path.cmx \
     asmcomp/mach.cmx asmcomp/linearize.cmx bytecomp/lambda.cmx \
-    bytecomp/debuginfo.cmx asmcomp/printlinear.cmi
-asmcomp/printlinear.cmi : asmcomp/linearize.cmi
+    typing/ident.cmx bytecomp/debuginfo.cmx asmcomp/available_ranges.cmx \
+    asmcomp/printlinear.cmi
+asmcomp/printlinear.cmi : asmcomp/linearize.cmi asmcomp/available_ranges.cmi
 asmcomp/printmach.cmo : asmcomp/reg.cmi asmcomp/proc.cmi \
     asmcomp/printcmm.cmi asmcomp/printclambda.cmi asmcomp/mach.cmi \
     bytecomp/lambda.cmi typing/ident.cmi bytecomp/debuginfo.cmi \
@@ -1199,12 +1205,12 @@ asmcomp/selectgen.cmx : utils/tbl.cmx bytecomp/simplif.cmx asmcomp/reg.cmx \
     asmcomp/arch.cmx asmcomp/selectgen.cmi
 asmcomp/selectgen.cmi : utils/tbl.cmi asmcomp/reg.cmi asmcomp/mach.cmi \
     typing/ident.cmi bytecomp/debuginfo.cmi asmcomp/cmm.cmi asmcomp/arch.cmo
-asmcomp/selection.cmo : asmcomp/selectgen.cmi asmcomp/proc.cmi \
-    asmcomp/mach.cmi asmcomp/cmm.cmi utils/clflags.cmi asmcomp/arch.cmo \
-    asmcomp/selection.cmi
-asmcomp/selection.cmx : asmcomp/selectgen.cmx asmcomp/proc.cmx \
-    asmcomp/mach.cmx asmcomp/cmm.cmx utils/clflags.cmx asmcomp/arch.cmx \
-    asmcomp/selection.cmi
+asmcomp/selection.cmo : asmcomp/selectgen.cmi asmcomp/reg.cmi \
+    asmcomp/proc.cmi asmcomp/mach.cmi asmcomp/cmm.cmi utils/clflags.cmi \
+    asmcomp/arch.cmo asmcomp/selection.cmi
+asmcomp/selection.cmx : asmcomp/selectgen.cmx asmcomp/reg.cmx \
+    asmcomp/proc.cmx asmcomp/mach.cmx asmcomp/cmm.cmx utils/clflags.cmx \
+    asmcomp/arch.cmx asmcomp/selection.cmi
 asmcomp/selection.cmi : asmcomp/mach.cmi asmcomp/cmm.cmi
 asmcomp/spill.cmo : asmcomp/reg.cmi asmcomp/proc.cmi utils/misc.cmi \
     asmcomp/mach.cmi asmcomp/spill.cmi
@@ -1545,13 +1551,13 @@ asmcomp/dwarf_low/location_list_entry.cmi : middle_end/base_types/symbol.cmi \
     asmcomp/dwarf_low/location_expression.cmi asmcomp/linearize.cmi \
     asmcomp/dwarf_low/emittable.cmi
 asmcomp/dwarf_low/operator.cmo : asmcomp/dwarf_low/target_addr.cmi \
-    utils/misc.cmi asmcomp/dwarf_low/int8.cmi \
-    asmcomp/dwarf_low/dwarf_value.cmi asmcomp/arch.cmo \
-    asmcomp/dwarf_low/operator.cmi
+    middle_end/base_types/symbol.cmi utils/misc.cmi \
+    asmcomp/dwarf_low/int8.cmi asmcomp/dwarf_low/dwarf_value.cmi \
+    asmcomp/arch.cmo asmcomp/dwarf_low/operator.cmi
 asmcomp/dwarf_low/operator.cmx : asmcomp/dwarf_low/target_addr.cmx \
-    utils/misc.cmx asmcomp/dwarf_low/int8.cmx \
-    asmcomp/dwarf_low/dwarf_value.cmx asmcomp/arch.cmx \
-    asmcomp/dwarf_low/operator.cmi
+    middle_end/base_types/symbol.cmx utils/misc.cmx \
+    asmcomp/dwarf_low/int8.cmx asmcomp/dwarf_low/dwarf_value.cmx \
+    asmcomp/arch.cmx asmcomp/dwarf_low/operator.cmi
 asmcomp/dwarf_low/operator.cmi : asmcomp/dwarf_low/target_addr.cmi \
     middle_end/base_types/symbol.cmi asmcomp/dwarf_low/emittable.cmi
 asmcomp/dwarf_low/pubnames_table.cmo : \
@@ -2319,8 +2325,6 @@ middle_end/base_types/export_id.cmx : utils/identifiable.cmx \
     middle_end/base_types/export_id.cmi
 middle_end/base_types/export_id.cmi : utils/identifiable.cmi \
     middle_end/base_types/compilation_unit.cmi
-middle_end/base_types/fully_qualified_id.cmo :
-middle_end/base_types/fully_qualified_id.cmx :
 middle_end/base_types/id_types.cmo : utils/identifiable.cmi \
     middle_end/base_types/id_types.cmi
 middle_end/base_types/id_types.cmx : utils/identifiable.cmx \
@@ -2339,8 +2343,6 @@ middle_end/base_types/mutable_variable.cmx : utils/identifiable.cmx \
     middle_end/base_types/mutable_variable.cmi
 middle_end/base_types/mutable_variable.cmi : utils/identifiable.cmi \
     typing/ident.cmi middle_end/base_types/compilation_unit.cmi
-middle_end/base_types/name_for_debugger.cmo :
-middle_end/base_types/name_for_debugger.cmx :
 middle_end/base_types/set_of_closures_id.cmo : utils/identifiable.cmi \
     middle_end/base_types/id_types.cmi \
     middle_end/base_types/compilation_unit.cmi \
