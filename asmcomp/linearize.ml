@@ -219,6 +219,12 @@ let rec linear i n =
       copy_instr (Lop op) i (discard_dead_code n)
   | Iop(Imove | Ireload | Ispill)
     when i.Mach.arg.(0).shared.loc = i.Mach.res.(0).shared.loc ->
+      (* The move may represent only a change in register naming: we
+         preserve this by ensuring the target of the deleted move is
+         in the available-before set of [i.Mach.next]. *)
+Format.eprintf "Augmenting with: %a\n%!" Printmach.reg i.Mach.res.(0);
+      i.Mach.next.Mach.available_before
+        <- Reg.Set.add i.Mach.res.(0) i.Mach.next.Mach.available_before;
       linear i.Mach.next n
   | Iop op ->
       copy_instr (Lop op) i (linear i.Mach.next n)

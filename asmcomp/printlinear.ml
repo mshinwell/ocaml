@@ -31,7 +31,10 @@ let instr ppf i =
   | Lop op ->
       begin match op with
       | Ialloc _ | Icall_ind | Icall_imm _ | Iextcall(_, _) ->
-          fprintf ppf "@[<1>{%a}@]@," regsetaddr i.live
+          fprintf ppf "@[<1>LA={%a}@]@," regsetaddr i.live;
+          if !Clflags.debug then begin
+            fprintf ppf "@[<1>AB={%a}@]@," regsetaddr i.available_before
+          end
       | _ -> ()
       end;
       operation op i.arg ppf i.res
