@@ -41,10 +41,8 @@ let spill_reg r =
   try
     Reg.Map.find r !spill_env
   with Not_found ->
-    let spill_r = Reg.create r.shared.typ in
+    let spill_r = Reg.clone r in
     spill_r.shared.spill <- true;
-    spill_r.shared.is_parameter <- r.shared.is_parameter;
-    if Reg.immutable r then spill_r.name <- r.name;
     spill_env := Reg.Map.add r spill_r !spill_env;
     spill_r
 
@@ -422,7 +420,5 @@ let fundecl f =
     fun_fast = f.fun_fast;
     fun_dbg  = f.fun_dbg;
     fun_human_name = f.fun_human_name;
-    fun_env_var = f.fun_env_var;
-    fun_closure_layout = f.fun_closure_layout;
     fun_module_path = f.fun_module_path;
   }

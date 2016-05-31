@@ -48,13 +48,12 @@ let instr ppf i =
       begin match !available_ranges with
       | None -> ()
       | Some ranges ->
-        List.iter (fun (start_or_end, subrange) ->
+        List.iter (fun (start_or_end, ident, _subrange) ->
             let start_or_end' =
               match start_or_end with
               | Available_ranges.Start _ -> "avail."
               | Available_ranges.End -> "unavail."
             in
-            let ident = Available_ranges.Available_subrange.ident subrange in
             fprintf ppf " (%a now %s"
               Ident.print ident start_or_end';
             begin match start_or_end with
@@ -67,8 +66,18 @@ let instr ppf i =
                   (Available_ranges.Symbol symbol) ->
                 fprintf ppf " with known value %a" Symbol.print symbol
               | Available_ranges.Available_subrange.Phantom
+                  (Available_ranges.Read_symbol_field { symbol; field; }) ->
+                fprintf ppf " with known value %a.(%d)" Symbol.print symbol
+                  field
+              | Available_ranges.Available_subrange.Phantom
                   (Available_ranges.Int i) ->
                 fprintf ppf " with known value %d" i
+              | Available_ranges.Available_subrange.Read_field _ ->
+                (* CR mshinwell: fixme *)
+                fprintf ppf " from <Read_field _>"
+              | Available_ranges.Available_subrange.Offset_pointer _ ->
+                (* CR mshinwell: fixme *)
+                fprintf ppf " from <Offset_pointer _>"
               end
             | Available_ranges.End -> ()
             end;
@@ -103,8 +112,8 @@ let instr ppf i =
       fprintf ppf "%s %a" (Lambda.raise_kind k) reg i.arg.(0)
   | Lprologue ->
       fprintf ppf "prologue"
-  | Lavailable_subrange _ ->
-      fprintf ppf "availability stack offset capture for reg %a" reg i.arg.(0)
+  | Lcapture_stack_offset _ ->
+      fprintf ppf "stack offset capture for reg %a" reg i.arg.(0)
   end;
   if not (Debuginfo.is_none i.dbg) then
     fprintf ppf " %s" (Debuginfo.to_string i.dbg)

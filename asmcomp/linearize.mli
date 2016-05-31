@@ -46,11 +46,11 @@ and instruction_desc =
   | Lpushtrap
   | Lpoptrap
   | Lraise of Lambda.raise_kind
-  | Lavailable_subrange of int option ref
+  | Lcapture_stack_offset of int option ref
   (* CR mshinwell: make integer non-optional and update comment *)
-  (** [Lavailable_subrange] denotes the start of an available subrange (cf.
+  (** [Lcapture_stack_offset] denotes the start of an available subrange (cf.
       available_ranges.mli).  The associated register is stored in [arg.(0)] of
-      the instruction.  [Lavailable_subrange] only needs to be present when
+      the instruction.  [Lcapture_stack_offset] only needs to be present when
       that register is assigned to the stack.
       The optional integer must be filled in by the assembly
       emitter in the case where that register is assigned to the stack; the
@@ -61,7 +61,8 @@ and instruction_desc =
 val has_fallthrough :  instruction_desc -> bool
 val end_instr: instruction
 val instr_cons:
-  instruction_desc -> Reg.t array -> Reg.t array -> instruction -> instruction
+  instruction_desc -> Reg.t array -> Reg.t array -> instruction
+    -> available_before:Reg.Set.t -> instruction
 val invert_test: Mach.test -> Mach.test
 
 type phantom_let_range =
@@ -69,7 +70,7 @@ type phantom_let_range =
     ending_label : label;
     ident : Ident.t;
     provenance : Clambda.ulet_provenance;
-    defining_expr : Clambda.uphantom_defining_expr;
+    defining_expr : Mach.phantom_defining_expr;
   }
 
 type fundecl =
@@ -78,8 +79,6 @@ type fundecl =
     fun_fast: bool;
     fun_dbg : Debuginfo.t;
     fun_human_name : string;
-    fun_env_var : Ident.t option;
-    fun_closure_layout : Ident.t list;
     fun_arity : int;
     fun_module_path : Path.t option;
     fun_phantom_let_ranges : phantom_let_range Ident.tbl

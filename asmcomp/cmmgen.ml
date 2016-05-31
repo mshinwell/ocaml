@@ -1509,8 +1509,8 @@ let rec transl env e =
             bind "met" (lookup_tag obj (transl env met)) (call_met obj args))
   | Ulet(str, kind, _provenance, id, exp, body) ->
       transl_let env str kind id exp body
-  | Uphantom_let (provenance, ident, defining_expr, body) ->
-      Cphantom_let (ident, provenance, defining_expr, transl env body)
+  | Uphantom_let (ident, provenance_and_defining_expr, body) ->
+      Cphantom_let (ident, provenance_and_defining_expr, transl env body)
   | Uletrec(bindings, body) ->
       transl_letrec env bindings (transl env body)
 
@@ -2493,8 +2493,6 @@ let transl_function f =
              fun_fast = !Clflags.optimize_for_speed;
              fun_dbg  = f.dbg;
              fun_human_name = f.human_name;
-             fun_env_var = f.env_var;
-             fun_closure_layout = f.closure_layout;
              fun_module_path = f.module_path}
 
 (* Translate all function definitions *)
@@ -2727,8 +2725,6 @@ let compunit ~unit_name (ulam, preallocated_blocks, constants) =
                        fun_body = init_code; fun_fast = false;
                        fun_dbg  = Debuginfo.none;
                        fun_human_name = "";
-                       fun_env_var = None;
-                       fun_closure_layout = [];
                        fun_module_path = Some module_path }] in
   let c2 = emit_constants c1 constants in
   let c3 = transl_all_functions_and_emit_all_constants c2 in
@@ -2863,8 +2859,6 @@ let send_function arity =
     fun_fast = true;
     fun_dbg  = Debuginfo.none;
     fun_human_name = fun_name;
-    fun_env_var = None;
-    fun_closure_layout = [];
     fun_module_path = startup_path;
    }
 
@@ -2879,8 +2873,6 @@ let apply_function arity =
     fun_fast = true;
     fun_dbg  = Debuginfo.none;
     fun_human_name = fun_name;
-    fun_env_var = None;
-    fun_closure_layout = [];
     fun_module_path = startup_path;
    }
 
@@ -2905,8 +2897,6 @@ let tuplify_function arity =
     fun_fast = true;
     fun_dbg  = Debuginfo.none;
     fun_human_name = fun_name;
-    fun_env_var = None;
-    fun_closure_layout = [];
     fun_module_path = startup_path;
    }
 
@@ -2971,8 +2961,6 @@ let final_curry_function arity =
     fun_fast = true;
     fun_dbg  = Debuginfo.none;
     fun_human_name = fun_name;
-    fun_env_var = None;
-    fun_closure_layout = [];
     fun_module_path = startup_path;
    }
 
@@ -3002,8 +2990,6 @@ let rec intermediate_curry_functions arity num =
       fun_fast = true;
       fun_dbg  = Debuginfo.none;
       fun_human_name = name2;
-      fun_env_var = None;
-      fun_closure_layout = [];
       fun_module_path = startup_path;
      }
     ::
@@ -3035,8 +3021,6 @@ let rec intermediate_curry_functions arity num =
                fun_fast = true;
                fun_dbg  = Debuginfo.none;
                fun_human_name = fun_name;
-               fun_env_var = None;
-               fun_closure_layout = [];
                fun_module_path = startup_path;
               }
           in
@@ -3099,8 +3083,6 @@ let entry_point namelist =
              fun_fast = false;
              fun_dbg  = Debuginfo.none;
              fun_human_name = "caml_program";
-             fun_env_var = None;
-             fun_closure_layout = [];
              fun_module_path = startup_path;
             }
 

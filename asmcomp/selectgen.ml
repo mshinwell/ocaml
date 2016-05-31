@@ -98,18 +98,28 @@ let all_regs_immutable rv =
 
 let name_regs id rv =
   if Array.length rv = 1 then
-    rv.(0).name <- Some id
+    Reg.set_name rv.(0) (Some id)
   else
     for i = 0 to Array.length rv - 1 do
-      rv.(i).name <- Some id;
+      Reg.set_name rv.(i) (Some id);
       rv.(i).shared.part <- Some i
     done
+
+let set_name_propagation ~src ~dest =
+  Array.iter2 (fun src dest -> src.propagate_name_to <- Some dest)
+    src dest
 
 (* We shadow [Proc] to force correct naming of hard registers. *)
 module Proc = struct
   let loc_parameters params =
-    Reg.identical_except_in_namev (Proc.loc_parameters params)
-      ~take_names_from:params
+    let params =
+      Reg.identical_except_in_namev (Proc.loc_parameters params)
+        ~take_names_from:params
+    in
+    Array.iteri (fun index reg ->
+        reg.shared.is_parameter <- Some index)
+      params;
+    params
 
   let loc_arguments args =
     let args', stack_offset = Proc.loc_arguments args in
@@ -150,6 +160,7 @@ let join opt_r1 seq1 opt_r2 seq2 =
       let l1 = Array.length r1 in
       assert (l1 = Array.length r2);
       let r = Array.make l1 Reg.dummy in
+      (* CR mshinwell: could consider [propagate_name_to] here *)
       (* What's going on with names here?
          1. We make sure that if we're going to reuse a temporary register
             from one branch for the output register, then we don't change
@@ -446,7 +457,7 @@ method extract =
 (* Insert a sequence of moves from one pseudoreg set to another. *)
 
 method insert_move_no_name_propagation src dst =
-  if src.shared.stamp <> dst.shared.stamp then begin
+  if src.shared.stamp <> dst.shared.stamp || src.name <> dst.name then begin
     self#insert (Iop Imove) [|src|] [|dst|]
   end;
 
@@ -454,6 +465,7 @@ method insert_move src dst =
   self#insert_move_no_name_propagation src dst;
   match src.shared.mutability, dst.shared.mutability with
   | Immutable, Immutable ->
+    (* CR mshinwell: does this conditional really make sense? *)
     if not (Reg.anonymous src) then begin
       dst.name <- src.name
     end
@@ -484,11 +496,17 @@ method insert_moves src dst =
     self#insert_move src.(i) dst.(i)
   done
 
+method insert_moves_no_name_propagation src dst =
+  for i = 0 to min (Array.length src) (Array.length dst) - 1 do
+    self#insert_move_no_name_propagation src.(i) dst.(i)
+  done
+
 (* Adjust the types of destination pseudoregs for a [Cassign] assignment.
    The type inferred at [let] binding might be [Int] while we assign
    something of type [Val] (PR#6501). *)
 
 method adjust_type src dst =
+  assert (not (Reg.immutable dst));
   let ts = src.shared.typ and td = dst.shared.typ in
   if ts <> td then
     match ts, td with
@@ -517,6 +535,8 @@ method insert_move_results loc res stacksize =
    instructions, or instructions using dedicated registers. *)
 
 method insert_op_debug op dbg rs rd =
+  (* Prevent back-propagation of names across the operation. *)
+  let rd = Array.map Reg.anonymise rd in
   self#insert_debug (Iop op) dbg rs rd;
   rd
 
@@ -560,21 +580,43 @@ method emit_expr env exp =
         None -> None
       | Some r1 -> self#emit_expr (self#bind_let env mut v r1) e2
       end
-  | Cphantom_let (ident, provenance, defining_expr, body) ->
+  | Cphantom_let (ident, provenance_and_defining_expr, body) ->
       let number = !phantom_let_number in
       incr phantom_let_number;
-      self#insert
-        (Iphantom_let_start (number, ident, provenance, defining_expr))
-        [| |] [| |];
-      let result = self#emit_expr env body in
-      self#insert (Iphantom_let_end number) [| |] [| |];
-      result
+      let provenance_and_defining_expr =
+        match provenance_and_defining_expr with
+        | None -> None
+        | Some (provenance, defining_expr) ->
+          let defining_expr =
+            match defining_expr with
+            | Clambda.Uphantom_const const -> Iphantom_const const
+            | Clambda.Uphantom_var var -> Iphantom_var var
+            | Clambda.Uphantom_read_var_field (var, field) ->
+              Iphantom_read_var_field (var, field)
+            | Clambda.Uphantom_read_symbol_field (sym, field) ->
+              Iphantom_read_symbol_field (sym, field)
+            | Clambda.Uphantom_offset_var_field (var, offset) ->
+              Iphantom_offset_var (var, offset)
+          in
+          Some (provenance, defining_expr)
+      in
+      begin match provenance_and_defining_expr with
+      | None -> self#emit_expr env body
+      | Some (provenance, defining_expr) ->
+        self#insert
+          (Iphantom_let_start (number, ident, provenance, defining_expr))
+          [| |] [| |];
+        let result = self#emit_expr env body in
+        self#insert (Iphantom_let_end number) [| |] [| |];
+        result
+      end
   | Cassign(v, e1) ->
       let rv =
         try
           Tbl.find v env
         with Not_found ->
           fatal_error ("Selection.emit_expr: unbound var " ^ Ident.name v) in
+      assert (Array.for_all (fun reg -> not (Reg.immutable reg)) rv);
       begin match self#emit_expr env e1 with
         None -> None
       | Some r1 -> self#adjust_types r1 rv; self#insert_moves r1 rv; Some [||]
@@ -616,6 +658,7 @@ method emit_expr env exp =
               self#insert_debug (Iop Icall_ind) dbg
                           (Array.append [|r1.(0)|] loc_arg) loc_res;
               self#insert_move_results loc_res rd stack_ofs;
+              set_name_propagation ~src:rd ~dest:loc_res;
               Some rd
           | Icall_imm lbl ->
               let r1 = self#emit_tuple env new_args in
@@ -625,6 +668,7 @@ method emit_expr env exp =
               self#insert_move_args r1 loc_arg stack_ofs;
               self#insert_debug (Iop(Icall_imm lbl)) dbg loc_arg loc_res;
               self#insert_move_results loc_res rd stack_ofs;
+              set_name_propagation ~src:rd ~dest:loc_res;
               Some rd
           | Iextcall(lbl, alloc) ->
               let (loc_arg, stack_ofs) = self#emit_extcall_args env new_args in
@@ -632,6 +676,7 @@ method emit_expr env exp =
               let loc_res = self#insert_op_debug (Iextcall(lbl, alloc)) dbg
                                     loc_arg (Proc.loc_external_results rd) in
               self#insert_move_results loc_res rd stack_ofs;
+              set_name_propagation ~src:rd ~dest:loc_res;
               Some rd
           | Ialloc _ ->
               let rd = self#regs_for typ_val in
@@ -725,10 +770,26 @@ method private emit_sequence env exp =
   (r, s)
 
 method private bind_let env mut v r1 =
-  let rv = Reg.createv_like r1 ~mutability:mut in
-  self#insert_moves r1 rv;
-  name_regs v rv;
-  Tbl.add v rv env
+  let use_new_regs () =
+    let rv = Reg.createv_like r1 ~mutability:mut in
+    self#insert_moves r1 rv;
+    name_regs v rv;
+    Tbl.add v rv env
+  in
+  (* We check [mut] to avoid retrospectively changing registers from
+     [Immutable] to [Mutable]. *)
+  match mut with
+  | Immutable ->
+    if all_regs_immutable r1 then begin
+      (* Note that this naming may back-propagate, but will not do so
+         across a name-changing operation (at which point it might be wrong,
+         e.g. for a 2-address arithmetic instruction). *)
+      name_regs v r1;
+      Tbl.add v r1 env
+    end else begin
+      use_new_regs ()
+    end
+  | Mutable -> use_new_regs ()
 
 method private emit_parts env exp =
   if self#is_simple_expr exp then
@@ -742,10 +803,14 @@ method private emit_parts env exp =
         else begin
           (* The normal case *)
           let id = Ident.create "bind" in
-          if all_regs_immutable r then
-            (* r is a temporary, unshared register; use it directly *)
+          if all_regs_immutable r then begin
+            (* r is a temporary, unshared register; use it directly.
+               Back-propagation of names is similar to [bind_let]. *)
+            if Array.for_all Reg.anonymous r then begin
+              name_regs id r
+            end;
             Some (Cvar id, Tbl.add id r env)
-          else begin
+          end else begin
             (* Introduce a fresh temp to hold the result *)
             let tmp = Reg.createv_like r in
             self#insert_moves r tmp;
@@ -838,14 +903,36 @@ method emit_tail env exp =
         None -> ()
       | Some r1 -> self#emit_tail (self#bind_let env mut v r1) e2
       end
-  | Cphantom_let (ident, provenance, defining_expr, body) ->
+  | Cphantom_let (ident, provenance_and_defining_expr, body) ->
+      (* CR mshinwell: share code with above *)
       let number = !phantom_let_number in
       incr phantom_let_number;
-      self#insert
-        (Iphantom_let_start (number, ident, provenance, defining_expr))
-        [| |] [| |];
-      self#emit_tail env body;
-      self#insert (Iphantom_let_end number) [| |] [| |]
+      let provenance_and_defining_expr =
+        match provenance_and_defining_expr with
+        | None -> None
+        | Some (provenance, defining_expr) ->
+          let defining_expr =
+            match defining_expr with
+            | Clambda.Uphantom_const const -> Iphantom_const const
+            | Clambda.Uphantom_var var -> Iphantom_var var
+            | Clambda.Uphantom_read_var_field (var, field) ->
+              Iphantom_read_var_field (var, field)
+            | Clambda.Uphantom_read_symbol_field (sym, field) ->
+              Iphantom_read_symbol_field (sym, field)
+            | Clambda.Uphantom_offset_var_field (var, offset) ->
+              Iphantom_offset_var (var, offset)
+          in
+          Some (provenance, defining_expr)
+      in
+      begin match provenance_and_defining_expr with
+      | None -> self#emit_tail env body
+      | Some (provenance, defining_expr) ->
+        self#insert
+          (Iphantom_let_start (number, ident, provenance, defining_expr))
+          [| |] [| |];
+        self#emit_tail env body;
+        self#insert (Iphantom_let_end number) [| |] [| |]
+      end
   | Cop(Capply(ty, dbg) as op, args) ->
       begin match self#emit_parts_list env args with
         None -> ()
@@ -991,8 +1078,6 @@ method emit_fundecl f =
     fun_fast = f.Cmm.fun_fast;
     fun_dbg  = f.Cmm.fun_dbg;
     fun_human_name = f.Cmm.fun_human_name;
-    fun_env_var = f.Cmm.fun_env_var;
-    fun_closure_layout = f.Cmm.fun_closure_layout;
     fun_module_path = f.Cmm.fun_module_path;
   }
 

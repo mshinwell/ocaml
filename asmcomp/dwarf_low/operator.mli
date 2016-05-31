@@ -16,28 +16,14 @@ type t
 
 include Emittable.S with type t := t
 
-(** Note this is not an indirection through the symbol.  It just evaluates
-    to the address of the symbol + the offset. *)
-val at_offset_from_symbol
-   : base:string
-  -> symbol:Symbol.t
-  -> offset_in_bytes:Target_addr.t
-  -> t
+val contents_of_register : reg_number:int -> t
+val contents_of_stack_slot : offset_in_bytes:int -> t list
+val value_of_symbol : Symbol.t -> t
+val signed_int_const : Int64.t -> t
+val add_unsigned_const : Int64.t -> t
+val deref : unit -> t
+val stack_value : unit -> t
 
-(** Again, this does not dereference the symbol. *)
-val at_symbol : Symbol.t -> t
+val optimize_sequence : t list -> t list
 
-val register : reg_number:int -> t
-
-val register_based_addressing
-   : reg_number:int
-  -> offset_in_bytes:Target_addr.t
-  -> t
-
-val frame_base_register : offset_in_bytes:Target_addr.t -> t
-
-type implicit_value =
-  | Int of int
-  | Symbol of { symbol : Symbol.t; offset_in_bytes : Target_addr.t; }
-
-val implicit : implicit_value -> t
+val print : Format.formatter -> t -> unit

@@ -42,7 +42,9 @@ and stack_location =
 
 type t = {
   mutable name : Ident.t option;
+  mutable propagate_name_to : t option;
   shared : shared;
+  dummy : (unit -> unit);
 }
 
 type reg = t
@@ -56,20 +58,25 @@ let dummy =
     }
   in
   { name = None;
+    propagate_name_to = None;
     shared;
+    dummy = (fun () -> ());
   }
 
 let currstamp = ref 0
 let reg_list = ref([] : shared list)
 
 let create ?(mutability = Cmm.Immutable) ty =
-  let shared = { mutability; stamp = !currstamp; typ = ty; is_parameter = None;
-            loc = Unknown; spill = false; interf = []; prefer = []; degree = 0;
-            spill_cost = 0; visited = false; part = None; } in
+  let shared =
+    { mutability; stamp = !currstamp; typ = ty; is_parameter = None;
+      loc = Unknown; spill = false; interf = []; prefer = []; degree = 0;
+      spill_cost = 0; visited = false; part = None; } in
   reg_list := shared :: !reg_list;
   incr currstamp;
   { name = None;
+    propagate_name_to = None;
     shared;
+    dummy = (fun () -> ());
   }
 
 let createv tyv =
@@ -85,22 +92,24 @@ let createv_like ?mutability rv =
   rv'
 
 let clone r =
-  let nr = create r.shared.typ in
+  let nr = create r.shared.typ ~mutability:r.shared.mutability in
   nr.name <- r.name;
+  nr.shared.is_parameter <- r.shared.is_parameter;
   nr
 
 (* The name of registers created in [Proc]. *)
-let proc_reg_name = Ident.create "R"
+let proc_reg_name = Ident.create_persistent "R"
 
 let at_location ty loc =
-  (* CR mshinwell: check mutability *)
-  let shared = { mutability = Cmm.Mutable; is_parameter = None;
+  let shared = { mutability = Cmm.Immutable; is_parameter = None;
             stamp = !currstamp; typ = ty; loc;
             spill = false; interf = []; prefer = []; degree = 0;
             spill_cost = 0; visited = false; part = None; } in
   incr currstamp;
   { name = Some proc_reg_name;
+    propagate_name_to = None;
     shared;
+    dummy = (fun () -> ());
   }
 
 let immutable t =
@@ -112,7 +121,7 @@ let name t =
   match t.name with
   | None -> ""
   | Some ident ->
-    let name = Ident.name ident in
+    let name = Ident.unique_name ident in
     let with_spilled =
       if t.shared.spill then
         "spilled-" ^ name
@@ -128,14 +137,53 @@ let anonymous t =
   | None -> true
   | Some _ident -> false
 
-let anonymise t = { t with name = None; }
+let anonymise t =
+  if not (immutable t) then begin
+    Misc.fatal_error "Reg.rename: attempt to rename mutable register"
+  end;
+  { t with
+    name = None;
+    propagate_name_to = None;
+  }
 
-let rename t name = { t with name; }
+let rename t name =
+  if not (immutable t) then begin
+    Misc.fatal_error "Reg.rename: attempt to rename mutable register"
+  end;
+  { t with
+    name;
+    propagate_name_to = None;
+  }
+
+let renamev ts name = Array.map (fun t -> rename t name) ts
+
+let set_name t name =
+  t.name <- name;
+  match t.propagate_name_to with
+  | None -> ()
+  | Some t' -> t'.name <- name
 
 let identical_except_in_name r ~take_name_from =
-  match take_name_from.name with
-  | None -> r
-  | Some name -> { r with name = Some name; }
+  let shared = {
+    mutability = r.shared.mutability;
+    stamp = r.shared.stamp;
+    typ = r.shared.typ;
+    loc = r.shared.loc;
+    spill = r.shared.spill;
+    part = r.shared.part;
+    is_parameter = r.shared.is_parameter;
+    interf = r.shared.interf;
+    prefer = r.shared.prefer;
+    degree = r.shared.degree;
+    spill_cost = r.shared.spill_cost;
+    visited = r.shared.visited;
+  }
+  in
+  { name = take_name_from.name;
+    propagate_name_to = None;
+    shared;
+    dummy = (fun () -> ());
+  }
 
 let identical_except_in_namev rs ~take_names_from =
   if Array.length rs <> Array.length take_names_from then

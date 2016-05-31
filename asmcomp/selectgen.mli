@@ -101,6 +101,7 @@ class virtual selector_generic : object
   method insert_move_args : Reg.t array -> Reg.t array -> int -> unit
   method insert_move_results : Reg.t array -> Reg.t array -> int -> unit
   method insert_moves : Reg.t array -> Reg.t array -> unit
+  method insert_moves_no_name_propagation : Reg.t array -> Reg.t array -> unit
   method adjust_type : Reg.t -> Reg.t -> unit
   method adjust_types : Reg.t array -> Reg.t array -> unit
   method emit_expr :

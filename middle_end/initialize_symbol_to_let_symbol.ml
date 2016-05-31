@@ -19,11 +19,11 @@
 let constant_field (expr:Flambda.t)
   : Flambda.constant_defining_value_block_field option =
   match expr with
-  | Let { var; defining_expr = Const c; body = Var var' ; _ } ->
+  | Let { var; defining_expr = Normal (Const c); body = Var var' ; _ } ->
     assert(Variable.equal var var');
     (* This must be true since var is the only variable in scope *)
     Some (Flambda.Const c)
-  | Let { var; defining_expr = Symbol s; body = Var var' ; _ } ->
+  | Let { var; defining_expr = Normal (Symbol s); body = Var var' ; _ } ->
     assert(Variable.equal var var');
     Some (Flambda.Symbol s)
   | _ ->

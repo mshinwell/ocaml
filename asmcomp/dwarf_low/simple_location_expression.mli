@@ -19,25 +19,18 @@ type t
 
 include Emittable.S with type t := t
 
-(* The address of [symbol + offset_in_bytes] relative to the symbol [base]. *)
-(* CR mshinwell: delete "base" argument *)
-val at_offset_from_symbol
-   : base:string
-  -> symbol:Symbol.t
-  -> offset_in_bytes:Target_addr.t
-  -> t
+module type S = sig
+  type t
 
-val at_symbol : Symbol.t -> t
+  val const_symbol : Symbol.t -> t
+  val const_int : Int64.t -> t
+  (* CR-soon mshinwell: consider a new type to identify whose register
+     numbering is in use here *)
+  val in_register : reg_number:int -> t
+  val in_stack_slot : offset_in_words:int -> t
+  val read_symbol_field : symbol:Symbol.t -> field:int -> t
+  val read_field : t -> field:int -> t
+  val offset_pointer : t -> offset_in_words:int -> t
+end
 
-(* CR-soon mshinwell: consider a new type to identify whose register
-   numbering is in use here *)
-val in_register : reg_number:int -> t
-
-val register_based_addressing
-   : reg_number:int
-  -> offset_in_bytes:Target_addr.t
-  -> t
-
-val frame_base_register : offset_in_bytes:Target_addr.t -> t
-
-val implicit : Operator.implicit_value -> t
+include S with type t := t

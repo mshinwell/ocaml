@@ -14,52 +14,16 @@
 
 module SLE = Simple_location_expression
 
-type t =
-  | Immediate of SLE.t  (* will do for the moment *)
-  | Computed of (unit -> SLE.t)
+(* We do not currently need composite location descriptions. *)
+type t = SLE.t
 
-let in_register ~reg =
-  let reg_number = Proc.dwarf_register_number reg in
-  let sle = SLE.in_register ~reg_number in
-  Immediate sle
+let const_symbol = SLE.const_symbol
+let const_int = SLE.const_int
+let in_register = SLE.in_register
+let in_stack_slot = SLE.in_stack_slot
+let read_symbol_field = SLE.read_symbol_field
+let read_field = SLE.read_field
+let offset_pointer = SLE.offset_pointer
 
-let at_offset_from_register ~reg ~offset_in_bytes =
-  let reg_number = Proc.dwarf_register_number reg in
-  let sle =
-    SLE.register_based_addressing ~reg_number ~offset_in_bytes
-  in
-  Immediate sle
-
-let at_offset_from_frame_pointer ~offset_in_bytes =
-  Immediate (SLE.frame_base_register ~offset_in_bytes)
-
-let at_offset_from_stack_pointer ~offset_in_bytes =
-  let sle =
-    SLE.register_based_addressing
-      ~reg_number:Proc.stack_ptr_dwarf_register_number
-      ~offset_in_bytes
-  in
-  Immediate sle
-
-let at_computed_offset_from_stack_pointer ~offset_in_bytes =
-  let sle () =
-    SLE.register_based_addressing
-      ~reg_number:Proc.stack_ptr_dwarf_register_number
-      ~offset_in_bytes:(offset_in_bytes ())
-  in
-  Computed sle
-
-let at_symbol symbol = Immediate (SLE.at_symbol symbol)
-
-let implicit imp = Immediate (SLE.implicit imp)
-
-let sle t =
-  match t with
-  | Immediate sle -> sle
-  | Computed sle -> sle ()
-
-let size t =
-  SLE.size (sle t)
-
-let emit t asm =
-  SLE.emit (sle t) asm
+let size = SLE.size
+let emit = SLE.emit

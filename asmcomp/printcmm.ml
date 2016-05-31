@@ -114,29 +114,46 @@ let rec expr ppf = function
       fprintf ppf "@[<2>(let@ @[<1>(%a" (print_binding id) def;
       let exp = in_part ppf body in
       fprintf ppf ")@]@ %a)@]" sequence exp
-  | Clet(_, id, def, body) ->
+  | Clet(mut, id, def, body) ->
+     let mut =
+       match mut with
+       | Immutable -> ""
+       | Mutable -> "*"
+     in
      fprintf ppf
-      "@[<2>(let@ @[<2>%a@ %a@]@ %a)@]"
-      Ident.print id expr def sequence body
-  | Cphantom_let(id, provenance, def, (Cphantom_let(_, _, _, _) as body)) ->
-      let print_binding id provenance ppf def =
-        fprintf ppf "@[<2>%a(%a)@ %a@]" Ident.print id
-          Printclambda.let_provenance provenance
-          Printclambda.phantom_defining_expr def
+      "@[<2>(let%s@ @[<2>%a@ %a@]@ %a)@]"
+      mut Ident.print id expr def sequence body
+  | Cphantom_let(id, provenance_and_def, (Cphantom_let(_, _, _) as body)) ->
+      let print_binding id ppf provenance_and_def =
+        match provenance_and_def with
+        | Some (provenance, def) ->
+          fprintf ppf "@[<2>%a(%a)@ %a@]" Ident.print id
+            Printclambda.let_provenance provenance
+            Printclambda.phantom_defining_expr def
+        | None ->
+          fprintf ppf "@[<2>(%a)@ DEAD@]" Ident.print id
       in
       let rec in_part ppf = function
-        | Cphantom_let(id, provenance, def, body) ->
-            fprintf ppf "@ %a" (print_binding id provenance) def;
+        | Cphantom_let(id, provenance_and_def, body) ->
+            fprintf ppf "@ %a" (print_binding id) provenance_and_def;
             in_part ppf body
         | exp -> exp in
-      fprintf ppf "@[<2>(let@ @[<1>(%a" (print_binding id provenance) def;
+      fprintf ppf "@[<2>(let?@ @[<1>(%a" (print_binding id) provenance_and_def;
       let exp = in_part ppf body in
       fprintf ppf ")@]@ %a)@]" sequence exp
-  | Cphantom_let(id, provenance, def, body) ->
-     fprintf ppf
-      "@[<2>(let@ @[<2>%a(%a)@ %a@]@ %a)@]"
-      Ident.print id Printclambda.let_provenance provenance
-      Printclambda.phantom_defining_expr def sequence body
+  | Cphantom_let(id, provenance_and_def, body) ->
+    begin match provenance_and_def with
+    | Some (provenance, def) ->
+      fprintf ppf
+        "@[<2>(let?@ @[<2>%a(%a)@ %a@]@ %a)@]"
+        Ident.print id Printclambda.let_provenance provenance
+        Printclambda.phantom_defining_expr def sequence body
+    | None ->
+      fprintf ppf
+        "@[<2>(let?@ @[<2>%a@ DEAD@]@ %a)@]"
+        Ident.print id
+        sequence body
+    end
   | Cassign(id, exp) ->
       fprintf ppf "@[<2>(assign @[<2>%a@ %a@])@]" Ident.print id expr exp
   | Ctuple el ->

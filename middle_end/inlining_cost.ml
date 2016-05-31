@@ -83,7 +83,10 @@ let lambda_smaller' lam ~than:threshold =
     | Send _ -> size := !size + 8
     | Proved_unreachable -> ()
     | Let { defining_expr; body; _ } ->
-      lambda_named_size defining_expr;
+      begin match defining_expr with
+      | Normal defining_expr -> lambda_named_size defining_expr
+      | Phantom _ -> ()
+      end;
       lambda_size body
     | Let_mutable { body } -> lambda_size body
     | Let_rec { vars_and_defining_exprs = bindings; body; _ } ->

@@ -73,10 +73,8 @@ let fold_over_projections_of_vars_bound_by_closure ~closure_id_being_applied
     init
 
 let set_inline_attribute_on_all_apply body inline specialise =
-  Flambda_iterators.map_toplevel_expr (function
-      | Apply apply -> Apply { apply with inline; specialise }
-      | expr -> expr)
-    body
+  Flambda_iterators.map_toplevel_apply body ~f:(fun (apply : Flambda.apply) ->
+    { apply with inline; specialise })
 
 (** Assign fresh names for a function's parameters and rewrite the body to
     use these new names. *)
@@ -146,14 +144,12 @@ let inline_by_copying_function_body ~env ~r
        emission of debugging information for inlined functions' arguments. *)
     let args = List.map (fun arg -> Flambda.Expr (Var arg)) args in
     Flambda_utils.bind ~body ~bindings:(List.combine freshened_params args)
-      ~state:Keep_for_debugger ()
   in
   (* Add bindings for the variables bound by the closure. *)
   let bindings_for_vars_bound_by_closure_and_params_to_args =
     fold_over_projections_of_vars_bound_by_closure ~closure_id_being_applied
       ~lhs_of_application ~function_decls ~init:bindings_for_params_to_args
-      ~f:(fun ~acc:body ~var ~expr ->
-        Flambda.create_let var expr body ~state:Keep_for_debugger)
+      ~f:(fun ~acc:body ~var ~expr -> Flambda.create_let var expr body)
   in
   (* Add bindings for variables corresponding to the functions introduced by
      the whole set of closures.  Each such variable will be bound to a closure;
@@ -162,11 +158,15 @@ let inline_by_copying_function_body ~env ~r
   *)
   let expr =
     Variable.Map.fold (fun another_closure_in_the_same_set _ expr ->
-      let used =
-        Variable.Set.mem another_closure_in_the_same_set
-           function_decl.free_variables
+      let used_normal =
+        Free_names.is_free_variable function_decl.free_names
+          another_closure_in_the_same_set
       in
-      if used then
+      let used_phantom =
+        Free_names.is_free_phantom_variable function_decl.free_names
+          another_closure_in_the_same_set
+      in
+      if used_normal then
         Flambda.create_let another_closure_in_the_same_set
           (Move_within_set_of_closures {
             closure = lhs_of_application;
@@ -174,7 +174,13 @@ let inline_by_copying_function_body ~env ~r
             move_to = Closure_id.wrap another_closure_in_the_same_set;
           })
           expr
-      else expr)
+      else if !Clflags.debug && used_phantom then
+        (* CR-soon mshinwell: This could be improved. *)
+        Flambda.create_let' another_closure_in_the_same_set
+          (Phantom Dead)
+          expr
+      else
+        expr)
       function_decls.funs
       bindings_for_vars_bound_by_closure_and_params_to_args
   in
@@ -374,12 +380,12 @@ let inline_by_copying_function_declaration ~env ~r
               specialise = Default_specialise;
             }))
       in
-      Flambda_utils.bind ~bindings:free_vars_for_lets ~body ()
+      Flambda_utils.bind ~bindings:free_vars_for_lets ~body
     in
     (* Now bind the variables that will hold the arguments from the original
        application. *)
     let expr : Flambda.t =
-      Flambda_utils.bind ~body:duplicated_application ~bindings:args_decl ()
+      Flambda_utils.bind ~body:duplicated_application ~bindings:args_decl
     in
     let env = E.activate_freshening (E.set_never_inline env) in
     Some (simplify env r expr)

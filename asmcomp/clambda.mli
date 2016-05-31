@@ -47,6 +47,20 @@ and uconstant =
 
 and uphantom_defining_expr =
   | Uphantom_const of uconstant
+  (** The phantom-let-bound variable is a constant. *)
+  | Uphantom_var of Ident.t
+  (** The phantom-let-bound variable is an alias for another variable. *)
+  | Uphantom_read_var_field of Ident.t * int
+  (** The phantom-let-bound-variable's value is found by adding the given
+      number of words to the pointer contained in the given identifier, then
+      dereferencing. *)
+  (* CR mshinwell: delete "field" from "offset_var_field" *)
+  | Uphantom_offset_var_field of Ident.t * int
+  (** The phantom-let-bound-variable's value is defined by adding the given
+      number of words to the pointer contained in the given identifier. *)
+  | Uphantom_read_symbol_field of uconstant * int
+  (** As for [Uphantom_read_var_field], but with the pointer specified by
+      a symbol. *)
 
 and ulambda =
     Uvar of Ident.t
@@ -71,7 +85,7 @@ and ulambda =
   | Uassign of Ident.t * ulambda
   | Usend of meth_kind * ulambda * ulambda * ulambda list * Debuginfo.t
   | Uunreachable
-  | Uphantom_let of ulet_provenance * Ident.t * uphantom_defining_expr
+  | Uphantom_let of Ident.t * (ulet_provenance * uphantom_defining_expr) option
       * ulambda
 
 and ufunction = {
@@ -81,8 +95,6 @@ and ufunction = {
   body   : ulambda;
   dbg    : Debuginfo.t;
   human_name : string;
-  env_var : Ident.t option;
-  closure_layout : Ident.t list;
   module_path : Path.t option;
 }
 

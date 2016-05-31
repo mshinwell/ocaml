@@ -47,6 +47,10 @@ and uconstant =
 
 and uphantom_defining_expr =
   | Uphantom_const of uconstant
+  | Uphantom_var of Ident.t
+  | Uphantom_read_var_field of Ident.t * int
+  | Uphantom_offset_var_field of Ident.t * int
+  | Uphantom_read_symbol_field of uconstant * int
 
 and ulambda =
     Uvar of Ident.t
@@ -71,7 +75,7 @@ and ulambda =
   | Uassign of Ident.t * ulambda
   | Usend of meth_kind * ulambda * ulambda * ulambda list * Debuginfo.t
   | Uunreachable
-  | Uphantom_let of ulet_provenance * Ident.t * uphantom_defining_expr
+  | Uphantom_let of Ident.t * (ulet_provenance * uphantom_defining_expr) option
       * ulambda
 
 and ufunction = {
@@ -81,8 +85,6 @@ and ufunction = {
   body   : ulambda;
   dbg    : Debuginfo.t;
   human_name : string;
-  env_var : Ident.t option;
-  closure_layout : Ident.t list;
   module_path : Path.t option;
 }
 

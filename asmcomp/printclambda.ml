@@ -79,6 +79,13 @@ and uconstant ppf = function
 
 and phantom_defining_expr ppf = function
   | Uphantom_const const -> uconstant ppf const
+  | Uphantom_var var -> Ident.print ppf var
+  | Uphantom_read_var_field (var, offset) ->
+    Format.fprintf ppf "%a[%d]" Ident.print var offset
+  | Uphantom_offset_var_field (var, offset) ->
+    Format.fprintf ppf "%a+(%d)" Ident.print var offset
+  | Uphantom_read_symbol_field (sym, offset) ->
+    Format.fprintf ppf "%a[%d]" uconstant sym offset
 
 and lam ppf = function
   | Uvar id ->
@@ -206,17 +213,30 @@ and lam ppf = function
       fprintf ppf "@[<2>(send%s@ %a@ %a%a)@]" kind lam obj lam met args largs
   | Uunreachable ->
       fprintf ppf "unreachable"
-  | Uphantom_let (provenance, id, defining_expr, body) ->
+  | Uphantom_let (id, provenance_and_defining_expr, body) ->
       let rec letbody ul = match ul with
-        | Uphantom_let (provenance, id, defining_expr, body) ->
-            fprintf ppf "@ @[<2>%a%a@ %a@]"
-              Ident.print id let_provenance provenance
-              phantom_defining_expr defining_expr;
-            letbody body
+        | Uphantom_let (id, provenance_and_defining_expr, body) ->
+            begin match provenance_and_defining_expr with
+            | Some (provenance, defining_expr) ->
+                fprintf ppf "@ @[<2>%a%a@ %a@]"
+                  Ident.print id let_provenance provenance
+                  phantom_defining_expr defining_expr;
+                letbody body
+            | None ->
+                fprintf ppf "@ @[<2>%a@ DEAD@]"
+                  Ident.print id;
+                letbody body
+            end
         | _ -> ul in
-      fprintf ppf "@[<2>(phantom_let@ @[<hv 1>(@[<2>%a%a@ %a@]"
-        Ident.print id let_provenance provenance
-        phantom_defining_expr defining_expr;
+      begin match provenance_and_defining_expr with
+      | Some (provenance, defining_expr) ->
+          fprintf ppf "@[<2>(phantom_let@ @[<hv 1>(@[<2>%a%a@ %a@]"
+            Ident.print id let_provenance provenance
+            phantom_defining_expr defining_expr
+      | None ->
+          fprintf ppf "@[<2>(phantom_let@ @[<hv 1>(@[<2>%a@ DEAD@]"
+            Ident.print id
+      end;
       let expr = letbody body in
       fprintf ppf ")@]@ %a)@]" lam expr
 

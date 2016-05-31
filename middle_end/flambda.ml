@@ -61,11 +61,6 @@ type let_provenance = {
   location : Location.t;
 }
 
-type let_state =
-  | Normal
-  | Keep_for_debugger
-  | Only_for_debugger
-
 type t =
   | Var of Variable.t
   | Let of let_expr
@@ -99,13 +94,25 @@ and named =
 
 and let_expr = {
   var : Variable.t;
-  defining_expr : named;
+  defining_expr : defining_expr_of_let;
   body : t;
-  free_vars_of_defining_expr : Variable.Set.t;
-  free_vars_of_body : Variable.Set.t;
+  free_names_of_defining_expr : Free_names.t;
+  free_names_of_body : Free_names.t;
   provenance : let_provenance option;
-  state : let_state;
 }
+
+and defining_expr_of_let =
+  | Normal of named
+  | Phantom of defining_expr_of_phantom_let
+
+and defining_expr_of_phantom_let =
+  | Const of const
+  | Symbol of Symbol.t
+  | Var of Variable.t
+  | Read_mutable of Mutable_variable.t
+  | Read_symbol_field of Symbol.t * int
+  | Read_var_field of Variable.t * int
+  | Dead
 
 and let_mutable = {
   var : Mutable_variable.t;
@@ -138,8 +145,7 @@ and function_declarations = {
 and function_declaration = {
   params : Variable.t list;
   body : t;
-  free_variables : Variable.Set.t;
-  free_symbols : Symbol.Set.t;
+  free_names : Free_names.t;
   stub : bool;
   dbg : Debuginfo.t;
   inline : Lambda.inline_attribute;
@@ -223,12 +229,6 @@ let print_let_provenance_opt ppf = function
   | None -> ()
   | Some let_provenance -> print_let_provenance ppf let_provenance
 
-let print_let_state ppf (state : let_state) =
-  match state with
-  | Normal -> ()
-  | Keep_for_debugger -> fprintf ppf "<keep>"
-  | Only_for_debugger -> fprintf ppf "<debug_only>"
-
 (** CR-someday lwhite: use better name than this *)
 let rec lam ppf (flam : t) =
   match flam with
@@ -269,22 +269,20 @@ let rec lam ppf (flam : t) =
       print_args args
   | Proved_unreachable ->
       fprintf ppf "unreachable"
-  | Let { var = id; defining_expr = arg; body; provenance; state; _ } ->
+  | Let { var = id; defining_expr = arg; body; provenance; _ } ->
       let rec letbody (ul : t) =
         match ul with
-        | Let { var = id; defining_expr = arg; body; provenance; state; _ } ->
-          fprintf ppf "@ @[<2>%a%a%a@ %a@]" Variable.print id
+        | Let { var = id; defining_expr = arg; body; provenance; _ } ->
+          fprintf ppf "@ @[<2>%a%a@ %a@]" Variable.print id
             print_let_provenance_opt provenance
-            print_let_state state
-            print_named arg;
+            print_defining_expr_of_let arg;
           letbody body
         | _ -> ul
       in
-      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a%a%a@ %a@]"
+      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a%a@ %a@]"
         Variable.print id
         print_let_provenance_opt provenance
-        print_let_state state
-        print_named arg;
+        print_defining_expr_of_let arg;
       let expr = letbody body in
       fprintf ppf ")@]@ %a)@]" lam expr
   | Let_mutable { var = mut_var; initial_value = var; body; contents_kind } ->
@@ -379,6 +377,7 @@ let rec lam ppf (flam : t) =
       (match direction with
         Asttypes.Upto -> "to" | Asttypes.Downto -> "downto")
       Variable.print to_value lam body
+
 and print_named ppf (named : named) =
   match named with
   | Symbol (symbol) -> Symbol.print ppf symbol
@@ -401,7 +400,22 @@ and print_named ppf (named : named) =
       Variable.print_list args
   | Expr expr ->
     fprintf ppf "*%a" lam expr
-    (* lam ppf expr *)
+
+and print_defining_expr_of_let ppf (expr : defining_expr_of_let) =
+  match expr with
+  | Normal named -> print_named ppf named
+  | Phantom defining_expr ->
+    fprintf ppf "<phantom:>";
+    match defining_expr with
+    | Const const -> print_named ppf (Const const)
+    | Symbol sym -> print_named ppf (Symbol sym)
+    | Var var -> print_named ppf (Expr (Var var))
+    | Read_mutable mut_var -> print_named ppf (Read_mutable mut_var)
+    | Read_symbol_field (sym, field) ->
+      print_named ppf (Read_symbol_field (sym, field))
+    | Read_var_field (var, field) ->
+      print_named ppf (Prim (Pfield field, [var], Debuginfo.none))
+    | Dead -> fprintf ppf "DEAD"
 
 and print_function_declaration ppf var (f : function_declaration) =
   let idents ppf =
@@ -571,15 +585,14 @@ let print_program ppf program =
     program.imported_symbols;
   print_program_body ppf program.program_body
 
-let rec variables_usage ?ignore_uses_as_callee ?ignore_uses_as_argument
-    ?ignore_uses_in_project_var ~all_used_variables tree =
+let rec free_names_expr ?ignore_uses_in_project_var ?ignore_uses_as_callee
+      ?ignore_uses_as_argument ~free_names tree =
+  let module FN = Free_names.Mutable in
+  let free_variable = FN.free_variable free_names in
   match tree with
-  | Var var -> Variable.Set.singleton var
+  | Var var -> free_variable var
   | _ ->
-    let free = ref Variable.Set.empty in
     let bound = ref Variable.Set.empty in
-    let free_variables ids = free := Variable.Set.union ids !free in
-    let free_variable fv = free := Variable.Set.add fv !free in
     let bound_variable id = bound := Variable.Set.add id !bound in
     (* N.B. This function assumes that all bound identifiers are distinct. *)
     let rec aux (flam : t) : unit =
@@ -594,24 +607,26 @@ let rec variables_usage ?ignore_uses_as_callee ?ignore_uses_as_argument
         | None -> List.iter free_variable args
         | Some () -> ()
         end
-      | Let { var; free_vars_of_defining_expr; free_vars_of_body;
+      | Let { var; free_names_of_defining_expr; free_names_of_body;
               defining_expr; body; _ } ->
         bound_variable var;
-        if all_used_variables
-           || ignore_uses_as_callee <> None
+        if ignore_uses_as_callee <> None
            || ignore_uses_as_argument <> None
            || ignore_uses_in_project_var <> None
         then begin
           (* In these cases we can't benefit from the pre-computed free
              variable sets. *)
-          free_variables
-            (variables_usage_named ?ignore_uses_in_project_var
-                ?ignore_uses_as_callee ?ignore_uses_as_argument
-                ~all_used_variables defining_expr);
+          begin match defining_expr with
+          | Normal defining_expr ->
+            free_names_named ?ignore_uses_in_project_var
+              ?ignore_uses_as_callee ?ignore_uses_as_argument
+              ~free_names defining_expr
+          | Phantom phantom -> free_names_phantom ~free_names phantom
+          end;
           aux body
         end else begin
-          free_variables free_vars_of_defining_expr;
-          free_variables free_vars_of_body
+          FN.union free_names free_names_of_defining_expr;
+          FN.union free_names free_names_of_body
         end
       | Let_mutable { initial_value = var; body; _ } ->
         free_variable var;
@@ -619,9 +634,8 @@ let rec variables_usage ?ignore_uses_as_callee ?ignore_uses_as_argument
       | Let_rec { vars_and_defining_exprs = bindings; body; _ } ->
         List.iter (fun (var, defining_expr) ->
             bound_variable var;
-            free_variables
-              (variables_usage_named ?ignore_uses_in_project_var
-                 ~all_used_variables defining_expr))
+            free_names_named ?ignore_uses_in_project_var
+              ~free_names defining_expr)
           bindings;
         aux body
       | Switch (scrutinee, switch) ->
@@ -664,23 +678,31 @@ let rec variables_usage ?ignore_uses_as_callee ?ignore_uses_as_argument
       | Proved_unreachable -> ()
     in
     aux tree;
-    if all_used_variables then
-      !free
-    else
-      Variable.Set.diff !free !bound
+    FN.bound_variables free_names !bound
 
-and variables_usage_named ?ignore_uses_in_project_var
-    ?ignore_uses_as_callee ?ignore_uses_as_argument
-    ~all_used_variables named =
-  let free = ref Variable.Set.empty in
-  let free_variable fv = free := Variable.Set.add fv !free in
+and free_names_phantom ~free_names (phantom : defining_expr_of_phantom_let) =
+  let module FN = Free_names.Mutable in
+  match phantom with
+  | Const _ | Read_mutable _ | Dead -> ()
+  | Var var | Read_var_field (var, _) ->
+    FN.free_phantom_variable free_names var
+  | Symbol sym | Read_symbol_field (sym, _) ->
+    FN.free_phantom_symbol free_names sym
+
+and free_names_named ?ignore_uses_in_project_var
+    ?ignore_uses_as_callee ?ignore_uses_as_argument ~free_names named =
+  let module FN = Free_names.Mutable in
+  let free_variable = FN.free_variable free_names in
+  let free_symbol = FN.free_symbol free_names in
   begin match named with
-  | Symbol _ | Const _ | Allocated_const _ | Read_mutable _
-  | Read_symbol_field _ -> ()
-  | Set_of_closures { free_vars; specialised_args; _ } ->
+  | Symbol sym -> free_symbol sym
+  | Const _ | Allocated_const _ | Read_mutable _ -> ()
+  | Read_symbol_field (sym, _field) -> free_symbol sym
+  | Set_of_closures { free_vars; specialised_args; function_decls; _ } ->
     (* Sets of closures are, well, closed---except for the free variable and
        specialised argument lists, which may identify variables currently in
-       scope outside of the closure. *)
+       scope outside of the closure.  We must however count free symbols
+       within the set of closures. *)
     Variable.Map.iter (fun _ (renamed_to : specialised_to) ->
         (* We don't need to do anything with [renamed_to.projectee.var], if
            it is present, since it would only be another free variable
@@ -692,7 +714,10 @@ and variables_usage_named ?ignore_uses_in_project_var
            it is present, since it would only be another specialised arg
            in the same set of closures. *)
         free_variable spec_to.var)
-      specialised_args
+      specialised_args;
+    Variable.Map.iter (fun _ (function_decl : function_declaration) ->
+        FN.union_free_symbols_only free_names function_decl.free_names)
+      function_decls.funs
   | Project_closure { set_of_closures; closure_id = _ } ->
     free_variable set_of_closures
   | Project_var { closure; closure_id = _; var = _ } ->
@@ -704,31 +729,97 @@ and variables_usage_named ?ignore_uses_in_project_var
     free_variable closure
   | Prim (_, args, _) -> List.iter free_variable args
   | Expr flam ->
-    free := Variable.Set.union
-        (variables_usage ?ignore_uses_as_callee ?ignore_uses_as_argument
-           ~all_used_variables flam) !free
+    free_names_expr ?ignore_uses_in_project_var ?ignore_uses_as_callee
+      ?ignore_uses_as_argument ~free_names flam
+  end
+
+and free_names_allocated_constant ~free_names
+      (const : constant_defining_value) =
+  let module FN = Free_names.Mutable in
+  match const with
+  | Allocated_const _ -> ()
+  | Block (_, fields) ->
+    List.iter
+      (function
+        | (Symbol s : constant_defining_value_block_field) ->
+          FN.free_symbol free_names s
+        | (Const _ : constant_defining_value_block_field) -> ())
+      fields
+  | Set_of_closures set_of_closures ->
+    free_names_named ~free_names (Set_of_closures set_of_closures)
+  | Project_closure (s, _) -> FN.free_symbol free_names s
+
+and free_names_program ~free_names (program : program) =
+  let module FN = Free_names.Mutable in
+  let rec loop (program : program_body) =
+    match program with
+    | Let_symbol (_, _, const, program) ->
+      free_names_allocated_constant ~free_names const;
+      loop program
+    | Let_rec_symbol (defs, program) ->
+      List.iter (fun (_, _, const) ->
+          free_names_allocated_constant ~free_names const)
+        defs;
+      loop program
+    | Initialize_symbol (_, _, _, fields, program) ->
+      List.iter (fun field ->
+          free_names_expr ?ignore_uses_in_project_var:None
+            ?ignore_uses_as_callee:None ?ignore_uses_as_argument:None
+            ~free_names field)
+        fields;
+      loop program
+    | Effect (expr, program) ->
+      free_names_expr ?ignore_uses_in_project_var:None
+        ?ignore_uses_as_callee:None ?ignore_uses_as_argument:None
+        ~free_names expr;
+      loop program
+    | End symbol -> FN.free_symbol free_names symbol
+  in
+  (* Note that there is no need to count the [imported_symbols]. *)
+  loop program.program_body
+(*
+let free_symbols expr =
+  let free_names = Free_names.Mutable.create () in
+  free_names_expr ~free_names expr;
+  Free_names.Mutable.freeze free_names
+
+let free_symbols_named named =
+  let free_names = Free_names.Mutable.create () in
+  free_names_named ~free_names named;
+  Free_names.Mutable.freeze free_names
+
+let free_symbols_program program =
+  let free_names = Free_names.Mutable.create () in
+  free_names_program ~free_names program;
+  Free_names.Mutable.freeze free_names
+*)
+
+let free_names_defining_expr_of_let defining_expr_of_let =
+  let free_names = Free_names.Mutable.create () in
+  begin match defining_expr_of_let with
+  | Normal defining_expr -> free_names_named ~free_names defining_expr
+  | Phantom phantom -> free_names_phantom ~free_names phantom
   end;
-  !free
+  Free_names.Mutable.freeze free_names
 
-let free_variables ?ignore_uses_as_callee ?ignore_uses_as_argument
-    ?ignore_uses_in_project_var tree =
-  variables_usage ?ignore_uses_as_callee ?ignore_uses_as_argument
-    ?ignore_uses_in_project_var ~all_used_variables:false tree
+let free_names_expr ?ignore_uses_as_callee ?ignore_uses_as_argument
+    ?ignore_uses_in_project_var expr =
+  let free_names = Free_names.Mutable.create () in
+  free_names_expr ?ignore_uses_as_callee ?ignore_uses_as_argument
+    ?ignore_uses_in_project_var ~free_names expr;
+  Free_names.Mutable.freeze free_names
 
-let free_variables_named ?ignore_uses_in_project_var named =
-  variables_usage_named ?ignore_uses_in_project_var
-    ~all_used_variables:false named
+let free_names_named ?ignore_uses_in_project_var named =
+  let free_names = Free_names.Mutable.create () in
+  free_names_named ?ignore_uses_in_project_var ~free_names named;
+  Free_names.Mutable.freeze free_names
 
-let used_variables ?ignore_uses_as_callee ?ignore_uses_as_argument
-    ?ignore_uses_in_project_var tree =
-  variables_usage ?ignore_uses_as_callee ?ignore_uses_as_argument
-    ?ignore_uses_in_project_var ~all_used_variables:true tree
+let free_names_program program =
+  let free_names = Free_names.Mutable.create () in
+  free_names_program ~free_names program;
+  Free_names.Mutable.freeze free_names
 
-let used_variables_named ?ignore_uses_in_project_var named =
-  variables_usage_named ?ignore_uses_in_project_var
-    ~all_used_variables:true named
-
-let create_let ?provenance ?state var defining_expr body : t =
+let create_let' ?provenance var defining_expr body : t =
   begin match !Clflags.dump_flambda_let with
   | None -> ()
   | Some stamp ->
@@ -737,47 +828,41 @@ let create_let ?provenance ?state var defining_expr body : t =
           defining_expr %a):\n%s\n%!"
         stamp
         print_let_provenance_opt provenance
-        print_named defining_expr
+        print_defining_expr_of_let defining_expr
         (Printexc.raw_backtrace_to_string (Printexc.get_callstack max_int)))
   end;
-  let defining_expr, free_vars_of_defining_expr =
+  let defining_expr, free_names_of_defining_expr =
     match defining_expr with
-    | Expr (Let { var = var1; defining_expr; body = Var var2;
-          free_vars_of_defining_expr; _ }) when Variable.equal var1 var2 ->
-      defining_expr, free_vars_of_defining_expr
-    | _ -> defining_expr, free_variables_named defining_expr
-  in
-  let state : let_state =
-    match state with
-    | None -> Normal
-    | Some state -> state
+    | Normal (Expr (Let { var = var1; defining_expr; body = Var var2;
+          free_names_of_defining_expr; _ })) when Variable.equal var1 var2 ->
+      defining_expr, free_names_of_defining_expr
+    | _ -> defining_expr, free_names_defining_expr_of_let defining_expr
   in
   Let {
     var;
     defining_expr;
     body;
-    free_vars_of_defining_expr;
-    free_vars_of_body = free_variables body;
+    free_names_of_defining_expr;
+    free_names_of_body = free_names_expr body;
     provenance;
-    state;
   }
+
+let create_let ?provenance var defining_expr body : t =
+  create_let' ?provenance var (Normal defining_expr) body
 
 let map_defining_expr_of_let let_expr ~f =
   let defining_expr = f let_expr.defining_expr in
   if defining_expr == let_expr.defining_expr then
     Let let_expr
   else
-    let free_vars_of_defining_expr =
-      free_variables_named defining_expr
-    in
     Let {
       var = let_expr.var;
       defining_expr;
       body = let_expr.body;
-      free_vars_of_defining_expr;
-      free_vars_of_body = let_expr.free_vars_of_body;
+      free_names_of_defining_expr =
+        free_names_defining_expr_of_let defining_expr;
+      free_names_of_body = let_expr.free_names_of_body;
       provenance = let_expr.provenance;
-      state = let_expr.state;
     }
 
 let iter_lets t ~for_defining_expr ~for_last_body ~for_each_let =
@@ -795,39 +880,16 @@ let iter_lets t ~for_defining_expr ~for_last_body ~for_each_let =
 let map_lets t ~for_defining_expr ~for_last_body ~after_rebuild =
   let rec loop (t : t) ~rev_lets =
     match t with
-    | Let { var; defining_expr; body; provenance; state; _ } ->
-      let new_defining_expr, new_state =
-        for_defining_expr var defining_expr
-      in
+    | Let { var; defining_expr; body; provenance; _ } ->
+      let new_defining_expr = for_defining_expr var defining_expr in
       let original =
-        if new_defining_expr == defining_expr && new_state = None then
+        if new_defining_expr == defining_expr then
           Some t
         else
           None
       in
-      let state =
-        match new_state with
-        | None -> state
-        (* CR mshinwell: maybe [for_defining_expr] should be passed the
-           provenance instead? Not sure *)
-        | Some Normal -> Normal
-        | Some Keep_for_debugger ->
-          begin match provenance with
-          | None -> state
-          | Some _ ->
-            begin match state with
-            | Only_for_debugger -> Only_for_debugger
-            | Normal | Keep_for_debugger -> state
-            end
-          end
-        | Some Only_for_debugger ->
-          begin match provenance with
-          | None -> state
-          | Some _ -> Only_for_debugger
-          end
-      in
       let rev_lets =
-        (var, new_defining_expr, provenance, state, original) :: rev_lets
+        (var, new_defining_expr, provenance, original) :: rev_lets
       in
       loop body ~rev_lets
     | t ->
@@ -836,13 +898,13 @@ let map_lets t ~for_defining_expr ~for_last_body ~after_rebuild =
          outer one. *)
       let seen_change = ref (not (last_body == t)) in
       List.fold_left (fun t
-              (var, defining_expr, provenance, state, original) ->
+              (var, defining_expr, provenance, original) ->
           let let_expr =
             match original with
             | Some original when not !seen_change -> original
             | Some _ | None ->
               seen_change := true;
-              create_let var defining_expr t ~state ?provenance
+              create_let' var defining_expr t ?provenance
           in
           let new_let = after_rebuild let_expr in
           if not (new_let == let_expr) then begin
@@ -864,7 +926,10 @@ let iter_general ~toplevel f f_named maybe_named =
     match t with
     | Let _ ->
       iter_lets t
-        ~for_defining_expr:(fun _var named -> aux_named named)
+        ~for_defining_expr:(fun _var defining_expr ->
+          match defining_expr with
+          | Normal named -> aux_named named
+          | Phantom _ -> ())
         ~for_last_body:aux
         ~for_each_let:f
     | _ ->
@@ -876,7 +941,7 @@ let iter_general ~toplevel f f_named maybe_named =
       | Let_mutable { body; _ } ->
         aux body
       | Let_rec { vars_and_defining_exprs = defs; body; _ } ->
-        List.iter (fun (_,l) -> aux_named l) defs;
+        List.iter (fun (_, l) -> aux_named l) defs;
         aux body
       | Try_with (f1,_,f2)
       | While (f1,f2)
@@ -912,127 +977,102 @@ let iter_general ~toplevel f f_named maybe_named =
   | Is_expr expr -> aux expr
   | Is_named named -> aux_named named
 
+(* CR-soon mshinwell: rename to [With_free_names] *)
 module With_free_variables = struct
   type 'a t =
-    | Expr : expr * Variable.Set.t -> expr t
-    | Named : named * Variable.Set.t -> named t
+    | Expr : expr * Free_names.t -> expr t
+    | Named : defining_expr_of_let * Free_names.t -> defining_expr_of_let t
 
   let of_defining_expr_of_let let_expr =
-    Named (let_expr.defining_expr, let_expr.free_vars_of_defining_expr)
+    Named (let_expr.defining_expr, let_expr.free_names_of_defining_expr)
 
   let of_body_of_let let_expr =
-    Expr (let_expr.body, let_expr.free_vars_of_body)
+    Expr (let_expr.body, let_expr.free_names_of_body)
 
   let of_expr expr =
-    Expr (expr, free_variables expr)
+    Expr (expr, free_names_expr expr)
 
   let of_named named =
-    Named (named, free_variables_named named)
+    Named (named, free_names_defining_expr_of_let named)
 
-  let create_let_reusing_defining_expr ?provenance ?state var (t : named t)
-        body =
+  let create_let_reusing_defining_expr ?provenance var
+        (t : defining_expr_of_let t) body =
     match t with
-    | Named (defining_expr, free_vars_of_defining_expr) ->
-      let state =
-        match state with
-        | None -> Normal
-        | Some state -> state
+    | Named (defining_expr, free_names_of_defining_expr) ->
+      Let {
+        var;
+        defining_expr;
+        body;
+        free_names_of_defining_expr;
+        free_names_of_body = free_names_expr body;
+        provenance;
+      }
+
+  let create_let_reusing_body ?provenance var defining_expr (t : expr t) =
+    match t with
+    | Expr (body, free_names_of_body) ->
+      let free_names_of_defining_expr =
+        free_names_defining_expr_of_let defining_expr
       in
       Let {
         var;
         defining_expr;
         body;
-        free_vars_of_defining_expr;
-        free_vars_of_body = free_variables body;
+        free_names_of_defining_expr;
+        free_names_of_body;
         provenance;
-        state;
       }
 
-  let create_let_reusing_body ?provenance ?state var defining_expr
-        (t : expr t) =
-    match t with
-    | Expr (body, free_vars_of_body) ->
-      let state =
-        match state with
-        | None -> Normal
-        | Some state -> state
-      in
-      Let {
-        var;
-        defining_expr;
-        body;
-        free_vars_of_defining_expr = free_variables_named defining_expr;
-        free_vars_of_body;
-        provenance;
-        state;
-      }
-
-  let create_let_reusing_both var (t1 : named t) (t2 : expr t) =
+  let create_let_reusing_both var (t1 : defining_expr_of_let t)
+        (t2 : expr t) =
     match t1, t2 with
-    | Named (defining_expr, free_vars_of_defining_expr),
-        Expr (body, free_vars_of_body) ->
+    | Named (defining_expr, free_names_of_defining_expr),
+        Expr (body, free_names_of_body) ->
       Let {
         var;
         defining_expr;
         body;
-        free_vars_of_defining_expr;
-        free_vars_of_body;
+        free_names_of_defining_expr;
+        free_names_of_body;
         provenance = None;
-        state = Normal;
       }
 
   let expr (t : expr t) =
     match t with
-    | Expr (expr, free_vars) -> Named (Expr expr, free_vars)
+    | Expr (expr, free_vars) -> Named (Normal (Expr expr), free_vars)
 
   let contents (type a) (t : a t) : a =
     match t with
     | Expr (expr, _) -> expr
     | Named (named, _) -> named
 
-  let free_variables (type a) (t : a t) =
+  let free_names (type a) (t : a t) =
     match t with
-    | Expr (_, free_vars) -> free_vars
-    | Named (_, free_vars) -> free_vars
+    | Expr (_, free_names) -> free_names
+    | Named (_, free_names) -> free_names
 end
 
 let fold_lets_option
     t ~init
-    ~(for_defining_expr:('a -> Variable.t -> named -> 'a * Variable.t * named))
+    ~(for_defining_expr:('a -> Variable.t -> defining_expr_of_let
+      -> 'a * Variable.t * defining_expr_of_let))
     ~for_last_body
-    ~(filter_defining_expr:('b -> Variable.t -> named -> Variable.Set.t ->
-                            'b * Variable.t * named option)) =
+    ~(filter_defining_expr:('b -> Variable.t -> defining_expr_of_let
+      -> Free_names.t -> 'b * Variable.t * defining_expr_of_let)) =
   let finish ~last_body ~acc ~rev_lets =
     let module W = With_free_variables in
     let acc, t =
       List.fold_left (fun (acc, t)
-              (var, defining_expr, provenance, state) ->
-          let free_vars_of_body = W.free_variables t in
-          let acc, var, new_defining_expr =
-            filter_defining_expr acc var defining_expr free_vars_of_body
+              (var, defining_expr, provenance) ->
+          let free_names_of_body = W.free_names t in
+          let acc, var, defining_expr =
+            filter_defining_expr acc var defining_expr free_names_of_body
           in
-          let defining_expr_and_state =
-            match new_defining_expr, state with
-            | Some defining_expr, state -> Some (defining_expr, state)
-            | None, Normal ->
-              if (not !Clflags.debug) || provenance = None then None
-              else begin
-                match defining_expr with
-                | Expr (Var _) | Symbol _ | Const _
-                | Prim (Pmakeblock _, _, _) ->
-                  Some (defining_expr, Only_for_debugger)
-                | _ -> None
-              end
-            | None, (Keep_for_debugger | Only_for_debugger) ->
-              if !Clflags.debug && provenance <> None then
-                Some (defining_expr, Only_for_debugger)
-              else None
-          in
-          match defining_expr_and_state with
-          | None -> acc, t
-          | Some (defining_expr, state) ->
+          match defining_expr with
+          | Phantom _ when not !Clflags.debug -> acc, t
+          | defining_expr ->
             let let_expr =
-              W.create_let_reusing_body var defining_expr t ?provenance ~state
+              W.create_let_reusing_body var defining_expr t ?provenance
             in
             acc, W.of_expr let_expr)
         (acc, W.of_expr last_body)
@@ -1042,86 +1082,17 @@ let fold_lets_option
   in
   let rec loop (t : t) ~acc ~rev_lets =
     match t with
-    | Let { var; defining_expr; body; provenance; state; _ } ->
+    | Let { var; defining_expr; body; provenance; _ } ->
       let acc, var, defining_expr =
         for_defining_expr acc var defining_expr
       in
-      let rev_lets = (var, defining_expr, provenance, state) :: rev_lets in
+      let rev_lets = (var, defining_expr, provenance) :: rev_lets in
       loop body ~acc ~rev_lets
     | t ->
       let last_body, acc = for_last_body acc t in
       finish ~last_body ~acc ~rev_lets
   in
   loop t ~acc:init ~rev_lets:[]
-
-let free_symbols_helper symbols (named : named) =
-  match named with
-  | Symbol symbol
-  | Read_symbol_field (symbol, _) -> symbols := Symbol.Set.add symbol !symbols
-  | Set_of_closures set_of_closures ->
-    Variable.Map.iter (fun _ (function_decl : function_declaration) ->
-        symbols := Symbol.Set.union function_decl.free_symbols !symbols)
-      set_of_closures.function_decls.funs
-  | _ -> ()
-
-let free_symbols expr =
-  let symbols = ref Symbol.Set.empty in
-  iter_general ~toplevel:true
-    (fun (_ : t) -> ())
-    (fun (named : named) -> free_symbols_helper symbols named)
-    (Is_expr expr);
-  !symbols
-
-let free_symbols_named named =
-  let symbols = ref Symbol.Set.empty in
-  iter_general ~toplevel:true
-    (fun (_ : t) -> ())
-    (fun (named : named) -> free_symbols_helper symbols named)
-    (Is_named named);
-  !symbols
-
-let free_symbols_allocated_constant_helper symbols
-      (const : constant_defining_value) =
-  match const with
-  | Allocated_const _ -> ()
-  | Block (_, fields) ->
-    List.iter
-      (function
-        | (Symbol s : constant_defining_value_block_field) ->
-          symbols := Symbol.Set.add s !symbols
-        | (Const _ : constant_defining_value_block_field) -> ())
-      fields
-  | Set_of_closures set_of_closures ->
-    symbols := Symbol.Set.union !symbols
-      (free_symbols_named (Set_of_closures set_of_closures))
-  | Project_closure (s, _) ->
-    symbols := Symbol.Set.add s !symbols
-
-let free_symbols_program (program : program) =
-  let symbols = ref Symbol.Set.empty in
-  let rec loop (program : program_body) =
-    match program with
-    | Let_symbol (_, _, const, program) ->
-      free_symbols_allocated_constant_helper symbols const;
-      loop program
-    | Let_rec_symbol (defs, program) ->
-      List.iter (fun (_, _, const) ->
-          free_symbols_allocated_constant_helper symbols const)
-        defs;
-      loop program
-    | Initialize_symbol (_, _, _, fields, program) ->
-      List.iter (fun field ->
-          symbols := Symbol.Set.union !symbols (free_symbols field))
-        fields;
-      loop program
-    | Effect (expr, program) ->
-      symbols := Symbol.Set.union !symbols (free_symbols expr);
-      loop program
-    | End symbol -> symbols := Symbol.Set.add symbol !symbols
-  in
-  (* Note that there is no need to count the [imported_symbols]. *)
-  loop program.program_body;
-  !symbols
 
 let create_function_declaration ~params ~body ~stub ~dbg
       ~(inline : Lambda.inline_attribute)
@@ -1145,8 +1116,7 @@ let create_function_declaration ~params ~body ~stub ~dbg
   end;
   { params;
     body;
-    free_variables = free_variables body;
-    free_symbols = free_symbols body;
+    free_names = free_names_expr body;
     stub;
     dbg;
     inline;
@@ -1181,7 +1151,8 @@ let create_set_of_closures ~function_decls ~free_vars ~specialised_args
     let expected_free_vars =
       Variable.Map.fold (fun _fun_var function_decl expected_free_vars ->
           let free_vars =
-            Variable.Set.diff function_decl.free_variables
+            Variable.Set.diff
+              (Free_names.free_variables function_decl.free_names)
               (Variable.Set.union (Variable.Set.of_list function_decl.params)
                 all_fun_vars)
           in
@@ -1239,7 +1210,7 @@ let create_set_of_closures ~function_decls ~free_vars ~specialised_args
 
 let used_params function_decl =
   Variable.Set.filter
-    (fun param -> Variable.Set.mem param function_decl.free_variables)
+    (fun param -> Free_names.is_free_variable function_decl.free_names param)
     (Variable.Set.of_list function_decl.params)
 
 let compare_const (c1:const) (c2:const) =
@@ -1324,3 +1295,5 @@ let compare_project_var = Projection.compare_project_var
 let compare_project_closure = Projection.compare_project_closure
 let compare_move_within_set_of_closures =
   Projection.compare_move_within_set_of_closures
+
+let ident_stamp_before_flambda = ref 0

@@ -43,7 +43,7 @@ let rec coalesce env (insn : L.instruction) ~last_insn_was_label =
         | None ->
           env, Some insn.desc, Some label
         end
-      | Lavailable_subrange _ ->
+      | Lcapture_stack_offset _ ->
         (* This is effectively a label, and doesn't generate any code.
            As such, allow labels to be coalesced even if it is in the
            middle. *)
@@ -81,7 +81,7 @@ let rec renumber env (insn : L.instruction) =
       | Lpushtrap
       | Lpoptrap
       | Lraise _
-      | Lavailable_subrange _ -> insn.desc
+      | Lcapture_stack_offset _ -> insn.desc
       | Llabel label -> Llabel (rewrite_label env label)
       | Lbranch label -> Lbranch (rewrite_label env label)
       | Lcondbranch (test, label) ->

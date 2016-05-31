@@ -24,7 +24,7 @@ CAMLYACC ?= boot/ocamlyacc
 include stdlib/StdlibModules
 
 CAMLC=$(CAMLRUN) boot/ocamlc -g -nostdlib -I boot -use-prims byterun/primitives
-CAMLOPT=$(CAMLRUN) ./ocamlopt -g -nostdlib -I stdlib -I otherlibs/dynlink
+CAMLOPT=$(CAMLRUN) ./ocamlopt -g -S -nostdlib -I stdlib -I otherlibs/dynlink
 COMPFLAGS=-strict-sequence -principal -absname -w +a-4-9-41-42-44-45-48 -warn-error A \
           -bin-annot -safe-string -strict-formats $(INCLUDES)
 LINKFLAGS=
@@ -201,6 +201,7 @@ MIDDLE_END=\
   middle_end/semantics_of_primitives.cmo \
   middle_end/allocated_const.cmo \
   middle_end/projection.cmo \
+  middle_end/free_names.cmo \
   middle_end/flambda.cmo \
   middle_end/flambda_iterators.cmo \
   middle_end/flambda_utils.cmo \

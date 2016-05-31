@@ -59,6 +59,7 @@ let inter regs1 regs2 =
   else if regs2 == all_regs then regs1
   else R.Set.inter regs1 regs2
 
+(* CR mshinwell: move to [Reg].  Do we need to use this elsewhere? *)
 let regs_have_same_location reg1 reg2 =
   (* We need to check the register classes too: two locations both saying
      "stack offset N" might actually be different physical locations, for

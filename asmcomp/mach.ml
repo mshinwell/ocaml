@@ -34,6 +34,13 @@ type test =
   | Ioddtest
   | Ieventest
 
+type phantom_defining_expr =
+  | Iphantom_const of Clambda.uconstant
+  | Iphantom_var of Ident.t
+  | Iphantom_read_var_field of Ident.t * int
+  | Iphantom_read_symbol_field of Clambda.uconstant * int
+  | Iphantom_offset_var of Ident.t * int
+
 type phantom_let_label = int
 
 type operation =
@@ -80,8 +87,8 @@ and instruction_desc =
   | Iexit of int
   | Itrywith of instruction * instruction
   | Iraise of Lambda.raise_kind
-  | Iphantom_let_start of phantom_let_label * Ident.t * Clambda.ulet_provenance
-      * Clambda.uphantom_defining_expr
+  | Iphantom_let_start of phantom_let_label * Ident.t
+      * Clambda.ulet_provenance * phantom_defining_expr
   | Iphantom_let_end of phantom_let_label
 
 type fundecl =
@@ -91,8 +98,6 @@ type fundecl =
     fun_fast: bool;
     fun_dbg : Debuginfo.t;
     fun_human_name : string;
-    fun_env_var : Ident.t option;
-    fun_closure_layout : Ident.t list;
     fun_module_path : Path.t option;
   }
 

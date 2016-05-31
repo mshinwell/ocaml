@@ -255,7 +255,21 @@ let assemble_file infile outfile =
 
 let asm_code = ref []
 
-let directive dir = asm_code := dir :: !asm_code
+let copy_of_asm_code = ref []
+let recording = ref false
+
+let start_recording_directives () =
+  recording := true;
+  copy_of_asm_code := []
+
+let finish_recording_directives () =
+  recording := false;
+  List.rev !copy_of_asm_code
+
+let directive dir =
+  asm_code := dir :: !asm_code;
+  if !recording then copy_of_asm_code := dir :: !copy_of_asm_code
+
 let emit ins = directive (Ins ins)
 
 let reset_asm_code () = asm_code := []

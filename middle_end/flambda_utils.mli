@@ -87,10 +87,8 @@ val toplevel_substitution_named
     [Immutable] [Let] expressions the given [(var, expr)] pairs around the
     body. *)
 val bind
-   : ?state:Flambda.let_state
-  -> bindings:(Variable.t * Flambda.named) list
+   : bindings:(Variable.t * Flambda.named) list
   -> body:Flambda.t
-  -> unit
   -> Flambda.t
 
 val name_expr
@@ -220,3 +218,9 @@ val clean_projections
   -> Flambda.specialised_to Variable.Map.t
 
 val projection_to_named : Projection.t -> Flambda.named
+
+(** Turn a [named], intended to be the defining expression of a [Let],
+    into a phantom let defining expression. *)
+val phantomize_defining_expr
+   : Flambda.named
+  -> Flambda.defining_expr_of_phantom_let

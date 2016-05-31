@@ -21,7 +21,10 @@ let apply_on_subexpressions f f_named (flam : Flambda.t) =
   | Var _ | Apply _ | Assign _ | Send _ | Proved_unreachable
   | Static_raise _ -> ()
   | Let { defining_expr; body; _ } ->
-    f_named defining_expr;
+    begin match defining_expr with
+    | Normal defining_expr -> f_named defining_expr
+    | Phantom _ -> ()
+    end;
     f body
   | Let_mutable { body; _ } ->
     f body
@@ -78,12 +81,16 @@ let map_subexpressions f f_named (tree:Flambda.t) : Flambda.t =
   | Var _ | Apply _ | Assign _ | Send _ | Proved_unreachable
   | Static_raise _ -> tree
   | Let { var; defining_expr; body; provenance; _ } ->
-    let new_named = f_named var defining_expr in
+    let new_named : Flambda.defining_expr_of_let =
+      match defining_expr with
+      | Normal defining_expr -> Normal (f_named var defining_expr)
+      | Phantom _ -> defining_expr
+    in
     let new_body = f body in
     if new_named == defining_expr && new_body == body then
       tree
     else
-      Flambda.create_let var new_named new_body ?provenance
+      Flambda.create_let' var new_named new_body ?provenance
   | Let_rec { vars_and_defining_exprs = defs; body; provenance; } ->
     let new_defs =
       list_map_sharing (map_snd_sharing f_named) defs
@@ -181,7 +188,11 @@ let iter_named_toplevel f f_named named =
 
 let iter_all_immutable_let_and_let_rec_bindings t ~f =
   iter_expr (function
-      | Let { var; defining_expr; _ } -> f var defining_expr
+      | Let { var; defining_expr; _ } ->
+        begin match defining_expr with
+        | Normal defining_expr -> f var defining_expr
+        | Phantom _ -> ()
+        end
       | Let_rec { vars_and_defining_exprs = defs; _ } ->
         List.iter (fun (var, named) -> f var named) defs
       | _ -> ())
@@ -191,7 +202,10 @@ let iter_all_toplevel_immutable_let_and_let_rec_bindings t ~f =
   iter_general ~toplevel:true
     (function
       | Let { var; defining_expr; provenance; _ } ->
-        f var defining_expr ~provenance
+        begin match defining_expr with
+        | Normal defining_expr -> f var defining_expr ~provenance
+        | Phantom _ -> ()
+        end
       | Let_rec { vars_and_defining_exprs = defs; _ } ->
         List.iter (fun (var, named) -> f var named ~provenance:None) defs
       | _ -> ())
@@ -290,12 +304,12 @@ let iter_constant_defining_values_on_program (program : Flambda.program) ~f =
   in
   loop program.program_body
 
-let map_general ~toplevel f f_named tree =
+let map_general ~toplevel f f_named f_phantom tree =
   let rec aux (tree : Flambda.t) =
     match tree with
     | Let _ ->
-      Flambda.map_lets tree ~for_defining_expr:aux_named ~for_last_body:aux
-        ~after_rebuild:f
+      Flambda.map_lets tree ~for_defining_expr:aux_defining_expr
+        ~for_last_body:aux ~after_rebuild:f
     | _ ->
       let exp : Flambda.t =
         match tree with
@@ -312,8 +326,7 @@ let map_general ~toplevel f f_named tree =
           let done_something = ref false in
           let defs =
             List.map (fun (id, lam) ->
-                let named, _let_state =
-                  (* CR mshinwell: discarding let state *)
+                let named =
                   aux_named_done_something id lam done_something
                 in
                 id, named)
@@ -453,11 +466,22 @@ let map_general ~toplevel f f_named tree =
     in
     f_named id named
   and aux_named_done_something id named done_something =
-    let new_named, new_let_state = aux_named id named in
-    if (not (new_named == named)) || new_let_state <> None then begin
+    let new_named = aux_named id named in
+    if (not (new_named == named)) then begin
       done_something := true
     end;
-    new_named, new_let_state
+    new_named
+  and aux_defining_expr id (defining_expr : Flambda.defining_expr_of_let)
+        : Flambda.defining_expr_of_let =
+    match defining_expr with
+    | Normal named ->
+      let new_named = aux_named id named in
+      if new_named == named then defining_expr
+      else Normal new_named
+    | Phantom phantom ->
+      let new_phantom = f_phantom phantom in
+      if new_phantom == phantom then defining_expr
+      else Phantom new_phantom
   in
   aux tree
 
@@ -471,20 +495,23 @@ let iter_apply_on_program program ~f =
         expr)
 
 let map f f_named tree =
-  map_general ~toplevel:false f (fun _ n -> f_named n, None) tree
+  map_general ~toplevel:false f (fun _ n -> f_named n)
+    (fun phantom -> phantom) tree
 let map_expr f tree = map f (fun named -> named) tree
 let map_named f_named tree = map (fun expr -> expr) f_named tree
+let map_named' f_named f_phantom tree =
+  map_general ~toplevel:false (fun expr -> expr) (fun _ n -> f_named n)
+    f_phantom tree
 let map_named_with_id f_named tree =
-  map_general ~toplevel:false (fun expr -> expr) f_named tree
-let map_toplevel f f_named tree =
-  map_general ~toplevel:true f (fun _ n -> f_named n, None) tree
-let map_toplevel_expr f_expr tree =
-  map_toplevel f_expr (fun named -> named) tree
+  map_general ~toplevel:false (fun expr -> expr) f_named
+    (fun phantom -> phantom) tree
+let map_toplevel f f_named f_phantom tree =
+  map_general ~toplevel:true f (fun _ n -> f_named n) f_phantom tree
 let map_toplevel_named f_named tree =
-  map_toplevel (fun tree -> tree) f_named tree
+  map_toplevel (fun tree -> tree) f_named (fun phantom -> phantom) tree
 
 let map_symbols tree ~f =
-  map_named (function
+  map_named' (function
       | (Symbol sym) as named ->
         let new_sym = f sym in
         if new_sym == sym then
@@ -500,6 +527,15 @@ let map_symbols tree ~f =
       | (Const _ | Allocated_const _ | Set_of_closures _ | Read_mutable _
       | Project_closure _ | Move_within_set_of_closures _ | Project_var _
       | Prim _ | Expr _) as named -> named)
+    (function
+      | (Symbol sym) as phantom ->
+        let new_sym = f sym in
+        if new_sym == sym then
+          phantom
+        else
+          Symbol new_sym
+      | (Const _ | Var _ | Read_mutable _ | Read_symbol_field _
+        | Read_var_field _ | Dead) as phantom -> phantom)
     tree
 
 let map_symbols_on_set_of_closures
@@ -533,6 +569,29 @@ let map_symbols_on_set_of_closures
     Flambda.create_set_of_closures ~function_decls ~free_vars
       ~specialised_args ~direct_call_surrogates
 
+let map_toplevel_symbols_to_vars expr ~f =
+  map_toplevel (fun expr -> expr) (fun named ->
+      match named with
+      | Symbol sym ->
+        begin match f sym with
+        | None -> named
+        | Some var -> Expr (Var var)
+        end
+      | Set_of_closures _ | Const _ | Allocated_const _ | Read_mutable _
+      | Read_symbol_field _ | Project_closure _
+      | Move_within_set_of_closures _ | Project_var _ | Prim _ | Expr _ ->
+        named)
+    (fun phantom ->
+      match phantom with
+      | Symbol sym ->
+        begin match f sym with
+        | None -> phantom
+        | Some var -> Var var
+        end
+      | Const _ | Var _ | Read_mutable _ | Read_symbol_field _
+      | Read_var_field _ | Dead -> phantom)
+    expr
+
 let map_toplevel_sets_of_closures tree ~f =
   map_toplevel_named (function
       | (Set_of_closures set_of_closures) as named ->
@@ -557,6 +616,19 @@ let map_apply tree ~f =
           Apply new_apply
       | expr -> expr)
     (fun named -> named)
+    tree
+
+let map_toplevel_apply tree ~f =
+  map_toplevel (function
+      | (Apply apply) as expr ->
+        let new_apply = f apply in
+        if new_apply == apply then
+          expr
+        else
+          Apply new_apply
+      | expr -> expr)
+    (fun named -> named)
+    (fun phantom -> phantom)
     tree
 
 let map_sets_of_closures tree ~f =
@@ -838,13 +910,11 @@ let map_exprs_at_toplevel_of_program (program : Flambda.program)
 
 let map_named_of_program (program : Flambda.program)
       ~(f : Variable.t -> Flambda.named -> Flambda.named) : Flambda.program =
-  let f var named = (f var named), None in
   map_exprs_at_toplevel_of_program program
       ~f:(fun expr -> map_named_with_id f expr)
 
 let map_all_immutable_let_and_let_rec_bindings (expr : Flambda.t)
-      ~(f : Variable.t -> Flambda.named -> Flambda.named
-        * (Flambda.let_state option)) : Flambda.t =
+      ~(f : Variable.t -> Flambda.named -> Flambda.named) : Flambda.t =
   map_named_with_id f expr
 
 let fold_function_decls_ignoring_stubs

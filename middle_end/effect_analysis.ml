@@ -26,7 +26,12 @@ let rec no_effects (flam : Flambda.t) =
   match flam with
   | Var _ -> true
   | Let { defining_expr; body; _ } ->
-    no_effects_named defining_expr && no_effects body
+    let no_effects_defining_expr =
+      match defining_expr with
+      | Normal defining_expr -> no_effects_named defining_expr
+      | Phantom _ -> true
+    in
+    no_effects_defining_expr && no_effects body
   | Let_mutable { body } -> no_effects body
   | Let_rec { vars_and_defining_exprs = defs; body; _ } ->
     no_effects body

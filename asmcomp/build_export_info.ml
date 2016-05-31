@@ -203,9 +203,11 @@ let descr_of_allocated_constant (c : Allocated_const.t) : Export_info.descr =
 let rec approx_of_expr (env : Env.t) (flam : Flambda.t) : Export_info.approx =
   match flam with
   | Var var -> Env.find_approx env var
-  | Let { var; defining_expr; body; _ } ->
+  | Let { var; defining_expr = Normal defining_expr; body; _ } ->
     let approx = descr_of_named env defining_expr in
     let env = Env.add_approx env var approx in
+    approx_of_expr env body
+  | Let { defining_expr = Phantom _; body; _ } ->
     approx_of_expr env body
   | Let_mutable { body } ->
     approx_of_expr env body

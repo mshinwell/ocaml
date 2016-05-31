@@ -35,7 +35,6 @@ let ignore_function_label (_ : Clambda.function_label) = ()
 let ignore_debuginfo (_ : Debuginfo.t) = ()
 let ignore_int (_ : int) = ()
 let ignore_ident (_ : Ident.t) = ()
-let ignore_ident_option (_ : Ident.t option) = ()
 let ignore_primitive (_ : Lambda.primitive) = ()
 let ignore_string (_ : string) = ()
 let ignore_int_array (_ : int array) = ()
@@ -89,7 +88,7 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
     | Uclosure (functions, captured_variables) ->
       List.iter loop captured_variables;
       List.iter (fun ({ Clambda. label; arity; params; body; dbg;
-            human_name; env_var; closure_layout; module_path; } as clos) ->
+            human_name; module_path; } as clos) ->
           (match closure_environment_ident clos with
            | None -> ()
            | Some env_var ->
@@ -101,8 +100,6 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
           loop body;
           ignore_debuginfo dbg;
           ignore_string human_name;
-          ignore_ident_option env_var;
-          ignore_ident_list closure_layout;
           ignore_path_option module_path)
         functions
     | Uoffset (expr, offset) ->
@@ -111,7 +108,20 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
     | Ulet (_let_kind, _value_kind, _provenance, _ident, def, body) ->
       loop def;
       loop body
-    | Uphantom_let (_provenance, _ident, _defining_expr, body) ->
+    | Uphantom_let (_ident, provenance_and_defining_expr, body) ->
+      begin match provenance_and_defining_expr with
+      | None -> ()
+      | Some (_provenance, defining_expr) ->
+        match defining_expr with
+        | Uphantom_const _
+        | Uphantom_read_symbol_field _ -> ()
+        | Uphantom_var ident | Uphantom_read_var_field (ident, _)
+        | Uphantom_offset_var_field (ident, _) ->
+          (* Phantom let "alias" bindings like this may cause the generated
+             code to be different, by virtue of pattern matches in [Cmmgen]
+             behaving differently. *)
+          loop (Uvar ident)
+      end;
       loop body
     | Uletrec (defs, body) ->
       List.iter (fun (_provenance, ident, def) ->
@@ -263,7 +273,7 @@ let let_bound_vars_that_can_be_moved ident_info (clam : Clambda.ulambda) =
       ignore_ulambda_list captured_variables;
       (* Start a new let stack for speed. *)
       List.iter (fun { Clambda. label; arity; params; body; dbg;
-              human_name; env_var; closure_layout; module_path; } ->
+              human_name; module_path; } ->
           ignore_function_label label;
           ignore_int arity;
           ignore_ident_list params;
@@ -272,8 +282,6 @@ let let_bound_vars_that_can_be_moved ident_info (clam : Clambda.ulambda) =
           let_stack := [];
           ignore_debuginfo dbg;
           ignore_string human_name;
-          ignore_ident_option env_var;
-          ignore_ident_list closure_layout;
           ignore_path_option module_path)
         functions
     | Uoffset (expr, offset) ->
@@ -300,7 +308,7 @@ let let_bound_vars_that_can_be_moved ident_info (clam : Clambda.ulambda) =
         end;
         loop body
       end
-    | Uphantom_let (_provenance, _id, _defining_expr, body) ->
+    | Uphantom_let (_id, _provenance_and_defining_expr, body) ->
       loop body
     | Uletrec (defs, body) ->
       (* Evaluation order for [defs] is not defined, and this case
@@ -457,15 +465,15 @@ let rec substitute_let_moveable is_let_moveable env (clam : Clambda.ulambda)
       | true, Some provenance ->
         match def with
         | Uconst const ->
-          Uphantom_let (provenance, id, Uphantom_const const, body)
+          Uphantom_let (id, Some (provenance, Uphantom_const const), body)
         | _ -> body
     end else begin
       Ulet (let_kind, value_kind, provenance,
             id, def, substitute_let_moveable is_let_moveable env body)
     end
-  | Uphantom_let (provenance, ident, defining_expr, body) ->
+  | Uphantom_let (ident, provenance_and_defining_expr, body) ->
     let body = substitute_let_moveable is_let_moveable env body in
-    Uphantom_let (provenance, ident, defining_expr, body)
+    Uphantom_let (ident, provenance_and_defining_expr, body)
   | Uletrec (defs, body) ->
     let defs =
       List.map (fun (provenance, id, def) ->
@@ -661,7 +669,7 @@ let rec un_anf_and_moveable ident_info env (clam : Clambda.ulambda)
       | true, Some provenance ->
         match def with
         | Uconst const ->
-          Uphantom_let (provenance, id, Uphantom_const const, body),
+          Uphantom_let (id, Some (provenance, Uphantom_const const), body),
             moveable
         | _ -> body, moveable
     in
@@ -696,9 +704,9 @@ let rec un_anf_and_moveable ident_info env (clam : Clambda.ulambda)
       Ulet (let_kind, value_kind, provenance, id, def, body),
         both_moveable def_moveable body_moveable
     end
-  | Uphantom_let (provenance, ident, defining_expr, body) ->
+  | Uphantom_let (ident, provenance_and_defining_expr, body) ->
     let body = un_anf ident_info env body in
-    Uphantom_let (provenance, ident, defining_expr, body), Fixed
+    Uphantom_let (ident, provenance_and_defining_expr, body), Fixed
   | Uletrec (defs, body) ->
     let defs =
       List.map (fun (provenance, id, def) ->

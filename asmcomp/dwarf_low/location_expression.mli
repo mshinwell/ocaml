@@ -15,18 +15,4 @@
 type t
 
 include Emittable.S with type t := t
-
-(** Constraints on [reg] are the same as for [Proc.dwarf_register_number]. *)
-val in_register : reg:Reg.t -> t
-val at_offset_from_register: reg:Reg.t -> offset_in_bytes:Target_addr.t -> t
-
-val at_offset_from_stack_pointer : offset_in_bytes:Target_addr.t -> t
-val at_offset_from_frame_pointer : offset_in_bytes:Target_addr.t -> t
-
-val at_computed_offset_from_stack_pointer
-   : offset_in_bytes:(unit -> Target_addr.t)
-  -> t
-
-val at_symbol : Symbol.t -> t
-
-val implicit : Operator.implicit_value -> t
+include Simple_location_expression.S with type t := t

@@ -16,12 +16,17 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-let dependency (expr:Flambda.t) = Flambda.free_symbols expr
+let dependency (expr : Flambda.t) =
+  (* In debug mode, we are willing to keep more stuff around in static
+     data than in non-debug mode.  As such, this says "all_free_symbols"
+     not "free_symbols". *)
+  Free_names.all_free_symbols (Flambda.free_names_expr expr)
 
 (* CR-soon pchambart: copied from lift_constant.  Needs remerging *)
 let constant_dependencies (const:Flambda.constant_defining_value) =
   let closure_dependencies (set_of_closures:Flambda.set_of_closures) =
-    Flambda.free_symbols_named (Set_of_closures set_of_closures)
+    Free_names.all_free_symbols
+      (Flambda.free_names_named (Set_of_closures set_of_closures))
   in
   match const with
   | Allocated_const _ -> Symbol.Set.empty
@@ -103,6 +108,9 @@ let rec loop (program : Flambda.program_body)
   | End symbol -> program, Symbol.Set.singleton symbol
 
 let remove_unused_program_constructs (program : Flambda.program) =
-  { program with
-    program_body = fst (loop program.program_body);
-  }
+  (* CR-soon mshinwell: improve the operation of this in debug mode *)
+  if !Clflags.debug then program
+  else
+    { program with Flambda.
+      program_body = fst (loop program.program_body);
+    }

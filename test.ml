@@ -9,3 +9,7 @@ let f x =
   in
   let sheep = cow * 47 in
   (string_of_int sheep), cow
+
+let () =
+  let a, b = f 45 in
+  Printf.printf "%s %d\n" a b

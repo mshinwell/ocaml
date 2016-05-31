@@ -118,7 +118,12 @@ module Env : sig
 
   val empty : t
 
-  val add_subst : t -> Variable.t -> Clambda.ulambda -> t
+  (** The [Ident.t] returned (and added to the returned environment) by
+      [add_subst] is only present so that phantom lets corresponding to
+      variables in closures (and "fun_var"s) may be resolved.  For all
+      normal occurrences of such variables, the substitution returned by
+      [find_subst_exn] will be put into the Clambda, not the [Ident.t]. *)
+  val add_subst : t -> Variable.t -> Clambda.ulambda -> Ident.t * t
   val find_subst_exn : t -> Variable.t -> Clambda.ulambda
 
   val add_fresh_ident : t -> Variable.t -> Ident.t * t
@@ -153,11 +158,6 @@ end = struct
       closure_stack = [];
     }
 
-  let add_subst t id subst =
-    { t with subst = Variable.Map.add id subst t.subst }
-
-  let find_subst_exn t id = Variable.Map.find id t.subst
-
   let ident_for_var_exn t id = Variable.Map.find id t.var
 
   (* CR-soon mshinwell: potentially misleading function name *)
@@ -170,6 +170,12 @@ end = struct
       | None -> Ident.create (Variable.base_name var)
     in
     id, { t with var = Variable.Map.add var id t.var }
+
+  let add_subst t var subst =
+    let subst = Variable.Map.add var subst t.subst in
+    add_fresh_ident { t with subst; } var
+
+  let find_subst_exn t id = Variable.Map.find id t.subst
 
   let ident_for_mutable_var_exn t mut_var =
     Mutable_variable.Map.find mut_var t.mutable_var
@@ -278,18 +284,23 @@ let to_clambda_let_provenance (provenance : Flambda.let_provenance option) =
 let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
   match flam with
   | Var var -> subst_var env var
-  | Let { var; defining_expr; body; state; provenance; _ } ->
+  | Let { var; defining_expr; body; provenance; _ } ->
     (* TODO: synthesize proper value_kind *)
     let id, env_body = Env.add_fresh_ident env var in
-    begin match state with
-    | Normal | Keep_for_debugger ->
+    begin match defining_expr with
+    | Normal defining_expr ->
       let provenance = to_clambda_let_provenance provenance in
       Ulet (Immutable, Pgenval, provenance, id,
         to_clambda_named t env var defining_expr,
         to_clambda t env_body body)
-    | Only_for_debugger ->
+    | Phantom defining_expr ->
       match provenance with
-      | None -> to_clambda t env body
+      | None ->
+        (* Ignore phantom lets without suitable provenance info.  (We're
+           only interested in ones that correspond to source-level [let]s.)
+           However don't just delete them---that might cause subsequent
+           unbound variables. *)
+        Uphantom_let (id, None, to_clambda t env_body body)
       | Some provenance ->
         let provenance : Clambda.ulet_provenance =
           { module_path = provenance.module_path;
@@ -305,21 +316,41 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
             Some (Clambda.Uphantom_const (Uconst_int (Char.code c)))
           | Symbol symbol ->
             Some (Clambda.Uphantom_const (to_clambda_symbol' env symbol))
-          (* CR mshinwell: fill in these cases. *)
-          | Expr (Var _)
-          | Prim (Pmakeblock _, _, _) -> None
-          | _ ->
-            Misc.fatal_errorf "Flambda_to_clambda.to_clambda: illegal \
-                defining expression for [Let] marked as \
-                [Only_for_debugger]: %a"
-              Flambda.print flam
+          | Var var ->
+            begin match Env.ident_for_var_exn env var with
+            | id -> Some (Clambda.Uphantom_var id)  (* An alias. *)
+            | exception Not_found ->
+              Misc.fatal_errorf "Flambda_to_clambda.to_clambda: defining \
+                  expression of `alias' phantom let references unbound \
+                  variable %a"
+                Variable.print var
+            end
+          | Read_mutable mut_var ->
+            (* There's no need to check [Env.find_subst_exn] here; we
+               never substitute for a mutable.  Also, at present, we don't
+               have phantom mutable lets (so the [Ident.t] corresponding to
+               [mut_var] should always be present). *)
+            let id = Env.ident_for_mutable_var_exn env mut_var in
+            Some (Clambda.Uphantom_var id)
+          | Read_symbol_field (symbol, field) ->
+            let symbol = to_clambda_symbol' env symbol in
+            Some (Clambda.Uphantom_read_symbol_field (symbol, field))
+          | Read_var_field (var, field) ->
+            begin match Env.ident_for_var_exn env var with
+            | id -> Some (Clambda.Uphantom_read_var_field (id, field))
+            | exception Not_found ->
+              Misc.fatal_errorf "Flambda_to_clambda.to_clambda: defining \
+                  expression of `var field' phantom let references unbound \
+                  variable %a"
+                Variable.print var
+            end
+          | Dead -> None
         in
         match defining_expr with
-        | None -> to_clambda t env body
+        | None -> Uphantom_let (id, None, to_clambda t env_body body)
         | Some defining_expr ->
-          (* CR mshinwell: maybe "id" should actually just be a string *)
-          Uphantom_let (provenance, id, defining_expr,
-            to_clambda t env body)
+          Uphantom_let (id, Some (provenance, defining_expr),
+            to_clambda t env_body body)
     end
   | Let_mutable { var = mut_var; initial_value = var; body; contents_kind;
         provenance; } ->
@@ -570,61 +601,6 @@ and to_clambda_set_of_closures t env
     let note_closure_offset ~var ~pos =
       closure_offsets := (var, pos) :: !closure_offsets
     in
-    let env =
-      (* Inside the body of the function, we cannot access variables
-         declared outside, so start with a suitably clean environment.
-         Note that we must not forget the information about which allocated
-         constants contain which unboxed values. *)
-      let env = Env.keep_only_symbols env in
-      (* Add the Clambda expressions for the free variables of the function
-         to the environment. *)
-      let add_env_free_variable var _ env =
-        let var_offset =
-          try
-            Var_within_closure.Map.find
-              (Var_within_closure.wrap var) t.current_unit.fv_offset_table
-          with Not_found ->
-            Misc.fatal_errorf "Clambda.to_clambda_set_of_closures: offset for \
-                free variable %a is unknown.  Set of closures: %a"
-              Variable.print var
-              Flambda.print_set_of_closures set_of_closures
-        in
-        let pos = var_offset - fun_offset in
-        note_closure_offset ~var ~pos;
-        Env.add_subst env var
-          (Uprim (Pfield pos, [Clambda.Uvar env_var], Debuginfo.none))
-      in
-      let env = Variable.Map.fold add_env_free_variable free_vars env in
-      (* Add the Clambda expressions for all functions defined in the current
-         set of closures to the environment.  The various functions may be
-         retrieved by moving within the runtime closure, starting from the
-         current function's closure. *)
-      let add_env_function pos env (id, _) =
-        let offset =
-          Closure_id.Map.find (Closure_id.wrap id)
-            t.current_unit.fun_offset_table
-        in
-        let exp : Clambda.ulambda = Uoffset (Uvar env_var, offset - pos) in
-        Env.add_subst env id exp
-      in
-      List.fold_left (add_env_function fun_offset) env all_functions
-    in
-    let env_body, params =
-      List.fold_right (fun var (env, params) ->
-          let id, env = Env.add_fresh_ident env var in
-          env, id :: params)
-        function_decl.params (env, [])
-    in
-    let closure_layout =
-      let closure_offsets =
-        List.sort (fun (_var, pos) (_var', pos') ->
-            Pervasives.compare pos pos')
-          !closure_offsets
-      in
-      List.map (fun (var, _pos) -> Ident.create (Variable.base_name var))
-        closure_offsets
-    in
-    let env_body = Env.entering_closure env_body closure_id in
     let module_path =
       (* CR-soon mshinwell: this isn't a real module path, so maybe rename
          the field.  Perhaps it should have a different type, in fact *)
@@ -638,14 +614,89 @@ and to_clambda_set_of_closures t env
         (Path.Pident comp_unit)
         (Env.closure_stack env)
     in
+    let provenance : Clambda.ulet_provenance =
+      let location = Debuginfo.to_location function_decl.dbg in
+      { module_path; location; }
+    in
+    let env, phantom_bindings =
+      (* Inside the body of the function, we cannot access variables
+         declared outside, so start with a suitably clean environment.
+         Note that we must not forget the information about which allocated
+         constants contain which unboxed values. *)
+      let env = Env.keep_only_symbols env in
+      (* Add the Clambda expressions for the free variables of the function
+         to the environment; also insert phantom lets around the body of
+         the function for the same (to enable reading of free variables in
+         the debugger). *)
+      let add_env_free_variable var _ (env, phantom_bindings) =
+        let var_offset =
+          try
+            Var_within_closure.Map.find
+              (Var_within_closure.wrap var) t.current_unit.fv_offset_table
+          with Not_found ->
+            Misc.fatal_errorf "Clambda.to_clambda_set_of_closures: offset for \
+                free variable %a is unknown.  Set of closures: %a"
+              Variable.print var
+              Flambda.print_set_of_closures set_of_closures
+        in
+        let pos = var_offset - fun_offset in
+        note_closure_offset ~var ~pos;
+        let id, env =
+          Env.add_subst env var
+            (Uprim (Pfield pos, [Clambda.Uvar env_var], Debuginfo.none))
+        in
+        let phantom_bindings =
+          (id, Clambda.Uphantom_read_var_field (env_var, pos))
+            :: phantom_bindings
+        in
+        env, phantom_bindings
+      in
+      let env, phantom_bindings =
+        Variable.Map.fold add_env_free_variable free_vars (env, [])
+      in
+      (* Add the Clambda expressions for all functions defined in the current
+         set of closures to the environment.  The various functions may be
+         retrieved by moving within the runtime closure, starting from the
+         current function's closure.  Phantom lets are again inserted. *)
+      let add_env_function pos (env, phantom_bindings) (id, _) =
+        let offset =
+          Closure_id.Map.find (Closure_id.wrap id)
+            t.current_unit.fun_offset_table
+        in
+        let field = offset - pos in
+        let exp : Clambda.ulambda = Uoffset (Uvar env_var, field) in
+        let id, env = Env.add_subst env id exp in
+        let phantom_bindings =
+          (* CR-soon mshinwell: this phantom let should not be added if the
+             function isn't recursive *)
+          (id, Clambda.Uphantom_offset_var_field (env_var, pos))
+            :: phantom_bindings
+        in
+        env, phantom_bindings
+      in
+      List.fold_left (add_env_function fun_offset) (env, phantom_bindings)
+        all_functions
+    in
+    let env_body, params =
+      List.fold_right (fun var (env, params) ->
+          let id, env = Env.add_fresh_ident env var in
+          env, id :: params)
+        function_decl.params (env, [])
+    in
+    let env_body = Env.entering_closure env_body closure_id in
+    let body = to_clambda t env_body function_decl.body in
+    let body =
+      List.fold_left (fun body (id, phantom) : Clambda.ulambda ->
+          Uphantom_let (id, Some (provenance, phantom), body))
+        body
+        phantom_bindings
+    in
     { label = Compilenv.function_label closure_id;
       arity = Flambda_utils.function_arity function_decl;
       params = params @ [env_var];
-      body = to_clambda t env_body function_decl.body;
+      body;
       dbg = function_decl.dbg;
       human_name = Closure_id.base_name closure_id;
-      env_var = Some env_var;
-      closure_layout;
       module_path = Some module_path;
     }
   in
@@ -664,16 +715,28 @@ and to_clambda_closed_set_of_closures t env symbol ~module_path
   let to_clambda_function (closure_id,
         (function_decl : Flambda.function_declaration))
         : Clambda.ufunction =
+    let provenance : Clambda.ulet_provenance =
+      let location = Debuginfo.to_location function_decl.dbg in
+      { module_path; location; }
+    in
     (* All that we need in the environment, for translating one closure from
        a closed set of closures, is the substitutions for variables bound to
        the various closures in the set.  Such closures will always be
-       referenced via symbols. *)
-    let env =
-      List.fold_left (fun env (var, _) ->
+       referenced via symbols.  Phantom lets are also inserted so that the
+       various closures may be found in the debugger. *)
+    let env, phantom_bindings =
+      List.fold_left (fun (env, phantom_bindings) (var, _) ->
           let closure_id = Closure_id.wrap var in
           let symbol = Compilenv.closure_symbol closure_id in
-          Env.add_subst env var (to_clambda_symbol env symbol))
-        (Env.keep_only_symbols env)
+          let id, env =
+            Env.add_subst env var (to_clambda_symbol env symbol)
+          in
+          let phantom_bindings =
+            let symbol = to_clambda_symbol' env symbol in
+            (id, Clambda.Uphantom_const symbol) :: phantom_bindings
+          in
+          env, phantom_bindings)
+        (Env.keep_only_symbols env, [])
         functions
     in
     let env_body, params =
@@ -684,15 +747,20 @@ and to_clambda_closed_set_of_closures t env symbol ~module_path
     in
     let closure_id = Closure_id.wrap closure_id in
     let env_body = Env.entering_closure env_body closure_id in
+    let body = to_clambda t env_body function_decl.body in
+    let body =
+      List.fold_left (fun body (id, phantom) : Clambda.ulambda ->
+          Uphantom_let (id, Some (provenance, phantom), body))
+        body
+        phantom_bindings
+    in
     { label = Compilenv.function_label closure_id;
       arity = Flambda_utils.function_arity function_decl;
       params;
-      body = to_clambda t env_body function_decl.body;
+      body;
       dbg = function_decl.dbg;
       human_name = Closure_id.base_name closure_id;
-      env_var = None;
-      closure_layout = [];
-      module_path;
+      module_path = Some module_path;
     }
   in
   let ufunct = List.map to_clambda_function functions in
@@ -742,8 +810,9 @@ let accumulate_structured_constants t env symbol
     let set_of_closures =
       let module_path =
         match provenance with
-        | None -> None
-        | Some provenance -> Some provenance.module_path
+        (* CR mshinwell: can we eliminate this option? *)
+        | None -> Path.Pident (Ident.create "<unknown>")
+        | Some provenance -> provenance.module_path
       in
       to_clambda_closed_set_of_closures t env symbol
         ~module_path set_of_closures

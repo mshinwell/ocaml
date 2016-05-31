@@ -40,8 +40,9 @@
 *)
 
 type phantom_defining_expr =
-  | Symbol of Symbol.t
   | Int of int
+  | Symbol of Symbol.t
+  | Read_symbol_field of { symbol : Symbol.t; field : int; }
 
 module Available_subrange : sig
   type t
@@ -49,16 +50,17 @@ module Available_subrange : sig
   type location =
     | Reg of Reg.t
     | Phantom of phantom_defining_expr
+    | Read_field of { address : location; field : int; }
+    | Offset_pointer of { address : location; offset_in_words : int; }
 
   val start_pos : t -> Linearize.label
   val end_pos : t -> Linearize.label
 
   val location : t -> location
-  val ident : t -> Ident.t
 
-  (* [offset_from_stack_ptr] returns [Some] only when [location] is [Reg] and
-     the contained register is assigned to the stack. *)
-  val offset_from_stack_ptr : t -> int option
+  (** [offset_from_stack_ptr_in_bytes] returns [Some] only when [location]
+      is [Reg] and the contained register is assigned to the stack. *)
+  val offset_from_stack_ptr_in_bytes : t -> int option
 end
 
 module Available_range : sig
@@ -100,11 +102,10 @@ type label_classification =
 val classify_label
    : t
   -> Linearize.label
-  -> (label_classification * Available_subrange.t) list
+  -> (label_classification * Ident.t * Available_subrange.t) list
 
 val fold
-   : ?exclude:Ident.t
-  -> t
+   : t
   -> init:'a
   (* XXX fix [is_unique] stuff *)
   (* [is_unique] is [true] if there is no other value identifier with the

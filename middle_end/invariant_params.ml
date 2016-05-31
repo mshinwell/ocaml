@@ -241,13 +241,17 @@ let analyse_functions ~backend ~param_to_param
       Flambda_iterators.iter (check_expr ~caller)
         (fun (_ : Flambda.named) -> ())
         decl.body;
+      let free_variables =
+        Free_names.free_variables
+          (Flambda.free_names_expr ~ignore_uses_as_callee:()
+             ~ignore_uses_as_argument:() decl.body)
+      in
       Variable.Set.iter
         (fun var -> escaping_function var; used_variable var)
         (* CR-soon mshinwell: we should avoid recomputing this, cache in
            [function_declaration].  See also comment on
            [only_via_symbols] in [Flambda_utils]. *)
-        (Flambda.free_variables ~ignore_uses_as_callee:()
-           ~ignore_uses_as_argument:() decl.body))
+        free_variables)
     decls.funs;
   Variable.Map.iter
     (fun func_var ({ params } : Flambda.function_declaration) ->

@@ -224,12 +224,14 @@ module Inconstants (P:Param) (Backend:Backend_intf.S) = struct
   *)
   let rec mark_loop ~toplevel (curr : dep list) (flam : Flambda.t) =
     match flam with
-    | Let { var; defining_expr = lam; body; _ } ->
+    | Let { var; defining_expr = Normal lam; body; _ } ->
       mark_named ~toplevel [Var var] lam;
       (* adds 'var in NC => curr in NC'
          This is not really necessary, but compiling this correctly is
          trickier than eliminating that earlier. *)
       mark_var var curr;
+      mark_loop ~toplevel curr body
+    | Let { defining_expr = Phantom _; body; _ } ->
       mark_loop ~toplevel curr body
     | Let_mutable { initial_value = var; body; _ } ->
       mark_var var curr;

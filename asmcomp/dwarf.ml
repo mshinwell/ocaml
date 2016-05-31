@@ -113,65 +113,68 @@ let create_type_proto_die ~parent ~ident ~output_path ~is_parameter:_ =
       DAH.create_byte_size_exn ~byte_size:Arch.size_addr;
     ]
 
-(* CR mshinwell: consider renaming [offset_location_in_words].
-   - When [None], the value is in the given register.
-   - When [Some], the value is in the memory location whose address is the
-     contents of the given register plus the offset. *)
-let location_list_entry ~fundecl ~available_subrange
-      ~offset_location_in_words =
-  let location_expression =
+let location_list_entry ~fundecl ~available_subrange =
+  let rec location_expression ~(location : Available_subrange.location) =
     let module LE = Location_expression in
-    match Available_subrange.location available_subrange with
+    match location with
     | Reg reg ->
       begin match reg.Reg.shared.Reg.loc with
       | Reg.Unknown -> assert false  (* probably a bug in available_regs.ml *)
       | Reg.Reg _ ->
-        begin match offset_location_in_words with
-        | None -> Some (LE.in_register ~reg)
-        | Some offset_location_in_words ->
-          let offset_in_bytes =
-            Target_addr.of_int (Arch.size_addr * offset_location_in_words)
-          in
-          Some (LE.at_offset_from_register ~reg ~offset_in_bytes)
-        end
+        let reg_number = Proc.dwarf_register_number reg in
+        LE.in_register ~reg_number
       | Reg.Stack _ ->
-        match Available_subrange.offset_from_stack_ptr available_subrange with
-        | None -> assert false  (* emit.mlp should have set the offset *)
+        match
+          Available_subrange.offset_from_stack_ptr_in_bytes available_subrange
+        with
+        | None ->  (* emit.mlp should have set the offset *)
+          Misc.fatal_errorf "Register %a assigned to stack but without \
+              stack offset annotation"
+            Printmach.reg reg
         | Some offset_in_bytes ->
-          let offset_in_bytes = Target_addr.of_int offset_in_bytes in
-          Some (LE.at_offset_from_stack_pointer ~offset_in_bytes)
+          if offset_in_bytes mod Arch.size_addr <> 0 then begin
+            Misc.fatal_errorf "Dwarf.location_list_entry: misaligned stack \
+                slot at offset %d (reg %a)"
+              offset_in_bytes
+              Printmach.reg reg
+          end;
+          (* CR-soon mshinwell: use [offset_in_bytes] instead *)
+          LE.in_stack_slot ~offset_in_words:(offset_in_bytes / Arch.size_addr)
       end
-    | Phantom (Symbol symbol) ->
-      assert (offset_location_in_words = None);
-      Some (LE.at_symbol symbol)
-    | Phantom (Int i) ->
-      assert (offset_location_in_words = None);
-      Some (LE.implicit (Int i))
+    | Phantom (Symbol symbol) -> LE.const_symbol symbol
+    | Phantom (Read_symbol_field { symbol; field; }) ->
+      LE.read_symbol_field ~symbol ~field
+    | Phantom (Int i) -> LE.const_int (Int64.of_int i)
+    | Read_field { address; field; } ->
+      LE.read_field (location_expression ~location:address) ~field
+    | Offset_pointer { address; offset_in_words; } ->
+      LE.offset_pointer (location_expression ~location:address)
+        ~offset_in_words
   in
-  match location_expression with
-  | None -> None
-  | Some location_expression ->
-    let start_of_code_symbol =
-      Name_laundry.fun_name_to_symbol fundecl.Linearize.fun_name
-    in
-    let first_address_when_in_scope =
-      Available_subrange.start_pos available_subrange
-    in
-    let first_address_when_not_in_scope =
-      Available_subrange.end_pos available_subrange
-    in
-    let entry =
-      Location_list_entry.create_location_list_entry
-        ~start_of_code_symbol
-        ~first_address_when_in_scope
-        ~first_address_when_not_in_scope
-        ~location_expression
-    in
-    Some entry
+  let location_expression =
+    location_expression
+      ~location:(Available_subrange.location available_subrange)
+  in
+  let start_of_code_symbol =
+    Name_laundry.fun_name_to_symbol fundecl.Linearize.fun_name
+  in
+  let first_address_when_in_scope =
+    Available_subrange.start_pos available_subrange
+  in
+  let first_address_when_not_in_scope =
+    Available_subrange.end_pos available_subrange
+  in
+  let entry =
+    Location_list_entry.create_location_list_entry
+      ~start_of_code_symbol
+      ~first_address_when_in_scope
+      ~first_address_when_not_in_scope
+      ~location_expression
+  in
+  Some entry
 
 let dwarf_for_identifier ?force_is_parameter t ~fundecl ~function_proto_die
-      ~lexical_block_cache ~ident ~is_unique:_ ~range
-      ~offset_location_in_words =
+      ~lexical_block_cache ~ident ~is_unique:_ ~range =
   let is_parameter =
     match force_is_parameter with
     | Some is_parameter -> is_parameter
@@ -224,7 +227,6 @@ let dwarf_for_identifier ?force_is_parameter t ~fundecl ~function_proto_die
         ~f:(fun location_list_entries ~available_subrange ->
           let location_list_entry =
             location_list_entry ~fundecl ~available_subrange
-              ~offset_location_in_words
           in
           match location_list_entry with
           | None -> location_list_entries
@@ -270,40 +272,25 @@ let dwarf_for_identifier ?force_is_parameter t ~fundecl ~function_proto_die
     Proto_die.set_sort_priority proto_die index
   end
 
-let dwarf_for_local_variables_and_parameters t ~function_proto_die
+let dwarf_for_identifier ?force_is_parameter t ~fundecl ~function_proto_die
+      ~lexical_block_cache ~(ident : Ident.t) ~is_unique ~range =
+(*  if ident.stamp <= !Flambda.ident_stamp_before_flambda then *)begin
+    dwarf_for_identifier ?force_is_parameter t ~fundecl ~function_proto_die
+      ~lexical_block_cache ~ident ~is_unique ~range
+  end
+
+(* This function covers local variables, parameters, variables in closures
+   and other "fun_var"s in the current mutually-recursive set.  (The last
+   two cases are handled by the explicit addition of phantom lets way back
+   in [Flambda_to_clambda].) *)
+let dwarf_for_variables_and_parameters t ~function_proto_die
       ~lexical_block_cache ~available_ranges
       ~(fundecl : Linearize.fundecl) =
   (* This includes normal variables as well as those bound by phantom lets. *)
   Available_ranges.fold available_ranges
     ~init:()
-    ?exclude:fundecl.fun_env_var
     ~f:(fun () -> dwarf_for_identifier t ~fundecl
-      ~function_proto_die ~lexical_block_cache
-      ~offset_location_in_words:None)
-
-let dwarf_for_free_variables t ~function_proto_die ~lexical_block_cache
-      ~available_ranges ~(fundecl : Linearize.fundecl) =
-  match fundecl.fun_env_var with
-  | None -> ()
-  | Some fun_env_var ->
-    let module A = Available_ranges in
-    match A.find available_ranges ~ident:fun_env_var with
-    | None -> ()
-    | Some env_var_range ->
-      (* Whenever the environment parameter is available, make everything
-         in the closure available too. *)
-      List.iteri (fun index closure_var ->
-          let offset_location_in_words =
-            if fundecl.fun_arity - 1 (* ignore env parameter *) < 2 then
-              Some (2 + index)
-            else
-              Some (3 + index)
-          in
-          dwarf_for_identifier t ~fundecl ~function_proto_die
-            ~lexical_block_cache ~ident:closure_var ~is_unique:true
-            ~range:env_var_range ~offset_location_in_words
-            ~force_is_parameter:None)
-        fundecl.fun_closure_layout
+      ~function_proto_die ~lexical_block_cache)
 
 let dwarf_for_function_definition t ~(fundecl:Linearize.fundecl)
       ~available_ranges ~(emit_info : Emit.fundecl_result) =
@@ -360,10 +347,8 @@ let dwarf_for_function_definition t ~(fundecl:Linearize.fundecl)
       ]
   in
   let lexical_block_cache = Hashtbl.create 42 in
-  dwarf_for_local_variables_and_parameters t ~function_proto_die
-    ~lexical_block_cache ~available_ranges ~fundecl;
-  dwarf_for_free_variables t ~function_proto_die ~available_ranges
-    ~lexical_block_cache ~fundecl
+  dwarf_for_variables_and_parameters t ~function_proto_die
+    ~lexical_block_cache ~available_ranges ~fundecl
 
 let emit t asm =
   assert (not t.emitted);

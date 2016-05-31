@@ -245,10 +245,9 @@ let translate_set_of_closures
     (var_to_definition_tbl:
       Alias_analysis.constant_defining_value Variable.Tbl.t)
     (set_of_closures : Flambda.set_of_closures) =
-  let f var (named : Flambda.named)
-        : Flambda.named * (Flambda.let_state option) =
+  let f var (named : Flambda.named) : Flambda.named =
     if Inconstant_idents.variable var inconstants then
-      named, None
+      named
     else
       let resolved =
         resolve_variable
@@ -258,8 +257,8 @@ let translate_set_of_closures
           var
       in
       match resolved with
-      | Symbol s -> Symbol s, Some Flambda.Keep_for_debugger
-      | Const c -> Const c, Some Flambda.Keep_for_debugger
+      | Symbol s -> Symbol s
+      | Const c -> Const c
   in
   Flambda_iterators.map_function_bodies set_of_closures
     ~f:(Flambda_iterators.map_all_immutable_let_and_let_rec_bindings ~f)
@@ -591,7 +590,8 @@ let constant_dependencies ~backend:_
     in
     Symbol.Set.of_list symbol_fields
   | Set_of_closures set_of_closures ->
-    Flambda.free_symbols_named (Set_of_closures set_of_closures)
+    Free_names.all_free_symbols
+      (Flambda.free_names_named (Set_of_closures set_of_closures))
   | Project_closure (s, _) ->
     Symbol.Set.singleton s
 
@@ -600,7 +600,9 @@ let program_graph ~backend imported_symbols symbol_to_constant
       (Flambda.symbol_provenance option * Tag.t * Flambda.t list
         * Symbol.t option) Symbol.Tbl.t)
     (effect_tbl : (Flambda.t * Symbol.t option) Symbol.Tbl.t) =
-  let expression_symbol_dependencies expr = Flambda.free_symbols expr in
+  let expression_symbol_dependencies expr =
+    Free_names.all_free_symbols (Flambda.free_names_expr expr)
+  in
   let graph_with_only_constant_parts =
     Symbol.Map.map (fun (const, _provenance) ->
         Symbol.Set.diff (constant_dependencies ~backend const)
@@ -720,7 +722,10 @@ let introduce_free_variables_in_set_of_closures
           (fun (func_decl : Flambda.function_declaration) ->
              let variables_to_bind =
                (* Closures from the same set must not be bound. *)
-               Variable.Set.diff func_decl.free_variables
+               let free_variables =
+                 Free_names.all_free_variables func_decl.free_names
+               in
+               Variable.Set.diff free_variables
                  (Variable.Map.keys function_decls.funs)
              in
              let body, subst =
@@ -893,10 +898,9 @@ let replace_definitions_in_initialize_symbol_and_effects
     (effect_tbl : (Flambda.t * Symbol.t option) Symbol.Tbl.t) =
   let rewrite_expr expr =
     Flambda_iterators.map_all_immutable_let_and_let_rec_bindings expr
-      ~f:(fun var (named : Flambda.named)
-          : (Flambda.named * (Flambda.let_state option)) ->
+      ~f:(fun var (named : Flambda.named) : Flambda.named ->
         if Inconstant_idents.variable var inconstants then
-          named, None
+          named
         else
           let resolved =
             resolve_variable
@@ -906,8 +910,8 @@ let replace_definitions_in_initialize_symbol_and_effects
               var
           in
           match resolved with
-          | Symbol s -> Symbol s, Some Flambda.Keep_for_debugger
-          | Const c -> Const c, Some Flambda.Keep_for_debugger)
+          | Symbol s -> Symbol s
+          | Const c -> Const c)
   in
   (* This is safe because we only [replace] the current key during
      iteration (cf. https://github.com/ocaml/ocaml/pull/337) *)
