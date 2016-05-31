@@ -2,10 +2,9 @@
 (*                                                                        *)
 (*                                 OCaml                                  *)
 (*                                                                        *)
-(*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
+(*                  Mark Shinwell, Jane Street Europe                     *)
 (*                                                                        *)
-(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
-(*     en Automatique.                                                    *)
+(*   Copyright 2016 Jane Street Group LLC                                 *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -13,16 +12,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* Pretty-printing of linearized machine code *)
+(** Filter [available_before] sets down to those registers which are going
+    to be used for finding values of variables in the debugger. *)
 
-open Format
-open Linearize
-
-val instr: formatter -> instruction -> unit
-val fundecl: formatter -> fundecl -> unit
-
-val fundecl_with_available_ranges
-   : Available_ranges.t
-  -> formatter
-  -> fundecl
-  -> unit
+val fundecl : Linearize.fundecl -> Linearize.fundecl

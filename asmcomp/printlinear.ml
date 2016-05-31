@@ -23,13 +23,19 @@ open Linearize
 let label ppf l =
   Format.fprintf ppf "L%i" l
 
+let available_ranges = ref None
+
 let instr ppf i =
   begin match i.desc with
   | Lend -> ()
   | Lop op ->
       begin match op with
+      | Imove (* CR mshinwell: remove *)
       | Ialloc _ | Icall_ind | Icall_imm _ | Iextcall(_, _) ->
-          fprintf ppf "@[<1>{%a}@]@," regsetaddr i.live
+          fprintf ppf "@[<1>LA={%a}@]@," regsetaddr i.live;
+          if !Clflags.debug then begin
+            fprintf ppf "@[<1>AB={%a}@]@," regsetaddr i.available_before
+          end
       | _ -> ()
       end;
       operation op i.arg ppf i.res
@@ -38,7 +44,37 @@ let instr ppf i =
   | Lreturn ->
       fprintf ppf "return %a" regs i.arg
   | Llabel lbl ->
-      fprintf ppf "%a:" label lbl
+      fprintf ppf "%a:" label lbl;
+      begin match !available_ranges with
+      | None -> ()
+      | Some ranges ->
+        List.iter (fun (start_or_end, subrange) ->
+            let start_or_end' =
+              match start_or_end with
+              | Available_ranges.Start _ -> "avail."
+              | Available_ranges.End -> "unavail."
+            in
+            let ident = Available_ranges.Available_subrange.ident subrange in
+            fprintf ppf " (%a now %s"
+              Ident.print ident start_or_end';
+            begin match start_or_end with
+            | Available_ranges.Start { end_pos; location; } ->
+              fprintf ppf " until L%d" end_pos;
+              begin match location with
+              | Available_ranges.Available_subrange.Reg r ->
+                fprintf ppf " in %a" reg r
+              | Available_ranges.Available_subrange.Phantom
+                  (Available_ranges.Symbol symbol) ->
+                fprintf ppf " with known value %a" Symbol.print symbol
+              | Available_ranges.Available_subrange.Phantom
+                  (Available_ranges.Int i) ->
+                fprintf ppf " with known value %d" i
+              end
+            | Available_ranges.End -> ()
+            end;
+            fprintf ppf ")")
+          (Available_ranges.classify_label ranges lbl)
+      end
   | Lbranch lbl ->
       fprintf ppf "goto %a" label lbl
   | Lcondbranch(tst, lbl) ->
@@ -68,8 +104,7 @@ let instr ppf i =
   | Lprologue ->
       fprintf ppf "prologue"
   | Lavailable_subrange _ ->
-      (* CR mshinwell: add more detail *)
-      fprintf ppf "available subrange"
+      fprintf ppf "availability stack offset capture for reg %a" reg i.arg.(0)
   end;
   if not (Debuginfo.is_none i.dbg) then
     fprintf ppf " %s" (Debuginfo.to_string i.dbg)
@@ -91,3 +126,8 @@ let fundecl ppf f =
     | Some path -> "(" ^ Path.name path ^ ")"
   in
   fprintf ppf "@[<v 2>%s%s:%s@,%a@]" path f.fun_name dbg all_instr f.fun_body
+
+let fundecl_with_available_ranges ranges ppf f =
+  available_ranges := Some ranges;
+  fundecl ppf f;
+  available_ranges := None

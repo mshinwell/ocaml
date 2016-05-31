@@ -33,19 +33,18 @@ let avail_at_raise = ref None
 (* CR pchambart: not 'interessting' but contain source level relevant value.
    This may be easier to just filter later (when printing ?).
    Keeping those in gdb might help debug the code generation such
-   as corrupted values due to unregistered roots. *)
+   as corrupted values due to unregistered roots.
+   mshinwell: filtering on name now moved to [Available_filtering].  Still
+   need to think about "part".
+*)
 let reg_is_interesting reg =
   (* CR-soon mshinwell: handle values split across multiple registers (and
      below) *)
-  if reg.R.part <> None then false
-  else
-    match R.Raw_name.to_ident reg.R.raw_name with
-    | None -> false
-    | Some _ident -> true
+  reg.R.shared.part = None
 
 let _instr_arg i = R.Set.filter reg_is_interesting (R.set_of_array i.M.arg)
 let instr_res i = R.Set.filter reg_is_interesting (R.set_of_array i.M.res)
-let instr_live i = R.Set.filter reg_is_interesting i.M.live
+(*let instr_live i = R.Set.filter reg_is_interesting i.M.live*)
 
 (* A special sentinel value meaning "all registers available"---used when a
    point in the code is unreachable. *)
@@ -64,7 +63,7 @@ let regs_have_same_location reg1 reg2 =
   (* We need to check the register classes too: two locations both saying
      "stack offset N" might actually be different physical locations, for
      example if one is of class "Int" and another "Float" on amd64. *)
-  reg1.R.loc = reg2.R.loc
+  reg1.R.shared.R.loc = reg2.R.shared.R.loc
     && Proc.register_class reg1 = Proc.register_class reg2
 
 let operation_can_raise = function
@@ -95,7 +94,7 @@ let augment_availability_at_raise avail =
    (The rationale is that these are the registers we may be interested in
    referencing, by name, when debugging.)
 *)
-let rec available_regs instr ~avail_before =
+let rec available_regs (instr : M.instruction) ~avail_before =
   if not (avail_before == all_regs) then begin
     ()
 (* CR mshinwell: investigate these assertions.  It seems like we're breaking
@@ -122,31 +121,13 @@ let rec available_regs instr ~avail_before =
        allocation code.
        Should we be using "available across" instead of "available before"?
        It's not clear that actually solves the problem. *)
-    (* Also: at call instructions, the ideal situation is:
-       - immediately prior to the call, we should be using availability at
-         that point, so that things not spilled across the call are still
-         visible;
-       - when in the callee, we should be using availability as immediately
-         after the call (i.e. spilled things are visible);
-       - when we return from the callee, likewise.
-       Unfortunately if the first range is stopped and the second range
-       started immediately after the call, then when in the callee, gdb
-       uses the availability before the call (which means values are likely
-       to be printed as garbage).  If the first range is stopped one byte
-       short of the end of the call and the second range started immediately
-       after the call, spilled values appear to be unavailable in the callee.
-       So for the moment we compromise on the first point (availability of
-       non-spilled values immeidately prior to the call) and use the
-       "after call" range across the whole call instruction. *)
-    (* CR-soon mshinwell: we should try to experiment more with this *)
     (* CR pchambart: This test should probably surround everything,
        especialy in the case where it is changed to a sum type. *)
     if avail_before == all_regs then
       all_regs
     else
       match instr.M.desc with
-      | Iop (Ialloc _)
-      | Iop Icall_ind | Iop (Icall_imm _) | Iop (Iextcall _) ->
+      | Iop (Ialloc _) ->
         let made_unavailable =
           R.Set.fold (fun reg acc ->
               let made_unavailable =
@@ -160,6 +141,25 @@ let rec available_regs instr ~avail_before =
       (* CR mshinwell: should have a hook for Ispecific cases *)
       | _ -> avail_before
   in
+  let avail_before =
+    (* Watch out for no-op moves that change the name of a register. *)
+    match instr.desc with
+    | Iop Imove ->
+      begin match instr.arg, instr.res with
+      | [| arg |], [| res |] ->
+        if reg_is_interesting res
+          && arg.shared.loc = res.shared.loc
+          && Reg.immutable arg
+          && Reg.immutable res
+        then begin
+          R.Set.add res avail_before
+        end else begin
+          avail_before
+        end
+      | _ -> avail_before
+      end
+    | _ -> avail_before
+  in
   (* CR pchambart: Given how it's used I would rename it to
      available_across rather than available_before. *)
   instr.M.available_before <- avail_before;
@@ -171,25 +171,6 @@ let rec available_regs instr ~avail_before =
       match instr.desc with
       | Iend -> avail_before
       | Ireturn | Iop Itailcall_ind | Iop (Itailcall_imm _) -> all_regs
-      (* Detect initializing moves between named registers, including when
-         either the source or destination is a spill slot or reload target. *)
-      | Iop (Imove | Ispill | Ireload)
-          when begin match instr.arg, instr.res with
-          | [| arg |], [| res |] ->
-            (* We need both [arg] and [res] to be named with identifiers,
-               or for there to be a move from a named register to an
-               immutable one with both registers being at the same location. *)
-            (reg_is_interesting arg && reg_is_interesting res)
-              (* CR mshinwell: should check [part] I suppose too *)
-              || (reg_is_interesting arg && Reg.is_temporary res
-                  && arg.loc = res.loc)
-          | _ -> false
-          end ->
-        (* CR mshinwell: this next bit should use "regs_have_same_location"
-           as below, no (for the destroyed_at_oper bit) *)
-        R.Set.diff (R.Set.union avail_before (instr_res instr))
-          (R.set_of_array
-            (Proc.destroyed_at_oper instr.desc))  (* just in case *)
       | Iop op ->
         if operation_can_raise op then begin
           augment_availability_at_raise avail_before
@@ -200,12 +181,18 @@ let rec available_regs instr ~avail_before =
             (* Registers become unavailable across a call unless either:
                (a) they hold immediates and are not destroyed by the relevant
                    calling convention; or
-               (b) they are live across the call.
+               (b) they are on the stack.
                The "not destroyed by the relevant calling convention" part is
                handled by the removal of registers in [destroyed_at_oper],
                below.
             *)
-            R.Set.union (instr_live instr)
+            (* CR mshinwell: still need to deal with the case where a
+               variable is not spilled but is available just before the
+               call.  However these don't need to be visible from a callee,
+               so not extending their range to the end of the call insn
+               should do it. *)
+            R.Set.union (R.Set.filter R.assigned_to_stack avail_before)
+              (* CR mshinwell: deal with this "holds_non_pointer" thing *)
               (R.Set.filter R.holds_non_pointer avail_before)
           | _ -> avail_before
         in
@@ -294,7 +281,9 @@ Format.eprintf "%s: %a: results %a CAA %a made_unavailable %a\n%!"
           | Some avail -> avail
         in
         avail_at_raise := saved_avail_at_raise;
+(*
         assert (not (reg_is_interesting Proc.loc_exn_bucket));
+*)
         inter after_body
           (available_regs handler ~avail_before:avail_before_handler)
       | Iraise _ ->

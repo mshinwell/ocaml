@@ -43,8 +43,13 @@ let rec coalesce env (insn : L.instruction) ~last_insn_was_label =
         | None ->
           env, Some insn.desc, Some label
         end
+      | Lavailable_subrange _ ->
+        (* This is effectively a label, and doesn't generate any code.
+           As such, allow labels to be coalesced even if it is in the
+           middle. *)
+        env, Some insn.desc, last_insn_was_label
       | Lprologue | Lend | Lop _ | Lreloadretaddr | Lreturn | Lpushtrap
-      | Lpoptrap | Lraise _ | Lavailable_subrange _ | Lbranch _
+      | Lpoptrap | Lraise _ | Lbranch _
       | Lcondbranch _ | Lcondbranch3 _ | Lswitch _ | Lsetuptrap _ ->
         env, Some insn.desc, None
     in

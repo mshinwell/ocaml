@@ -39,18 +39,22 @@ let build_graph fundecl =
   (* Record an interference between two registers *)
   let add_interf ri rj =
     if Proc.register_class ri = Proc.register_class rj then begin
-      let i = ri.stamp and j = rj.stamp in
+      let i = ri.shared.stamp and j = rj.shared.stamp in
       if i <> j then begin
         let p = if i < j then (i, j) else (j, i) in
         if not(IntPairSet.mem p !mat) then begin
           mat := IntPairSet.add p !mat;
-          if ri.loc = Unknown then begin
-            ri.interf <- rj :: ri.interf;
-            if not rj.spill then ri.degree <- ri.degree + 1
+          if ri.shared.loc = Unknown then begin
+            ri.shared.interf <- rj.shared :: ri.shared.interf;
+            if not rj.shared.spill then begin
+              ri.shared.degree <- ri.shared.degree + 1
+            end
           end;
-          if rj.loc = Unknown then begin
-            rj.interf <- ri :: rj.interf;
-            if not ri.spill then rj.degree <- rj.degree + 1
+          if rj.shared.loc = Unknown then begin
+            rj.shared.interf <- ri.shared :: rj.shared.interf;
+            if not ri.shared.spill then begin
+              rj.shared.degree <- rj.shared.degree + 1
+            end
           end
         end
       end
@@ -77,7 +81,10 @@ let build_graph fundecl =
      do not add an interference between them if the source is still live
      afterwards. *)
   let add_interf_move src dst s =
-    Reg.Set.iter (fun r -> if r.stamp <> src.stamp then add_interf dst r) s in
+    Reg.Set.iter (fun r ->
+        if r.shared.stamp <> src.shared.stamp then add_interf dst r)
+      s
+  in
 
   (* Compute interferences *)
 
@@ -125,13 +132,13 @@ let build_graph fundecl =
 
   let add_pref weight r1 r2 =
     if weight > 0 then begin
-      let i = r1.stamp and j = r2.stamp in
+      let i = r1.shared.stamp and j = r2.shared.stamp in
       if i <> j
-      && r1.loc = Unknown
+      && r1.shared.loc = Unknown
       && Proc.register_class r1 = Proc.register_class r2
       && (let p = if i < j then (i, j) else (j, i) in
           not (IntPairSet.mem p !mat))
-      then r1.prefer <- (r2, weight) :: r1.prefer
+      then r1.shared.prefer <- (r2.shared, weight) :: r1.shared.prefer
     end in
 
   (* Add a mutual preference between two regs *)
@@ -142,7 +149,7 @@ let build_graph fundecl =
 
   let add_spill_cost cost arg =
     for i = 0 to Array.length arg - 1 do
-      let r = arg.(i) in r.spill_cost <- r.spill_cost + cost
+      let r = arg.(i) in r.shared.spill_cost <- r.shared.spill_cost + cost
     done in
 
   (* Compute preferences and spill costs *)

@@ -187,18 +187,20 @@ let emit_Llabel fallthrough lbl =
 
 (* Output a pseudo-register *)
 
-let reg = function
+let reg r =
+  match r.shared with
   | { loc = Reg.Reg r } -> register_name r
   | { loc = Stack s; typ = Float } as r ->
-      let ofs = slot_offset s (register_class r) in
+      let ofs = slot_offset s (register_class_shared r) in
       mem64 REAL8 ofs RSP
   | { loc = Stack s } as r ->
-      let ofs = slot_offset s (register_class r) in
+      let ofs = slot_offset s (register_class_shared r) in
       mem64 QWORD ofs RSP
   | { loc = Unknown } ->
       assert false
 
-let reg64 = function
+let reg64 r =
+  match r.shared with
   | { loc = Reg.Reg r } -> int_reg_name.(r)
   | _ -> assert false
 
@@ -214,7 +216,7 @@ let reg_low_16_name = Array.map (fun r -> Reg16 r) int_reg_name
 let reg_low_32_name = Array.map (fun r -> Reg32 r) int_reg_name
 
 let emit_subreg tbl typ r =
-  match r.loc with
+  match r.shared.loc with
   | Reg.Reg r when r < 13 -> tbl.(r)
   | Stack s -> mem64 typ (slot_offset s (register_class r)) RSP
   | _ -> assert false
@@ -251,12 +253,13 @@ let record_frame_label live dbg =
   let lbl = new_label() in
   let live_offset = ref [] in
   Reg.Set.iter
-    (function
+    (fun r ->
+      match r.shared with
       | {typ = Val; loc = Reg r} ->
           live_offset := ((r lsl 1) + 1) :: !live_offset
-      | {typ = Val; loc = Stack s} as reg ->
-          live_offset := slot_offset s (register_class reg) :: !live_offset
-      | {typ = Addr} as r ->
+      | {typ = Val; loc = Stack s} ->
+          live_offset := slot_offset s (register_class r) :: !live_offset
+      | {typ = Addr} ->
           Misc.fatal_error ("bad GC root " ^ Reg.name r)
       | _ -> ()
     )
@@ -360,7 +363,7 @@ let cond = function
 (* Output an = 0 or <> 0 test. *)
 
 let output_test_zero arg =
-  match arg.loc with
+  match arg.shared.loc with
   | Reg.Reg _ -> I.test (reg arg) (reg arg)
   | _  -> I.cmp (int 0) (reg arg)
 
@@ -491,15 +494,15 @@ let emit_instr fallthrough i =
     def_label !tailrec_entry_point
   | Lop(Imove | Ispill | Ireload) ->
       let src = i.arg.(0) and dst = i.res.(0) in
-      if src.loc <> dst.loc then
-        begin match src.typ, src.loc, dst.loc with
+      if src.shared.loc <> dst.shared.loc then
+        begin match src.shared.typ, src.shared.loc, dst.shared.loc with
         | Float, Reg.Reg _, Reg.Reg _ -> I.movapd (reg src) (reg dst)
         | Float, _, _ -> I.movsd (reg src) (reg dst)
         | _ -> I.mov (reg src) (reg dst)
         end
   | Lop(Iconst_int n | Iconst_blockheader n) ->
       if n = 0n then begin
-        match i.res.(0).loc with
+        match i.res.(0).shared.loc with
         | Reg _ -> I.xor (res i 0) (res i 0)
         | _     -> I.mov (int 0) (res i 0)
       end
@@ -658,7 +661,7 @@ let emit_instr fallthrough i =
   | Lop(Iintop op) ->
       (* We have i.arg.(0) = i.res.(0) *)
       instr_for_intop op (arg i 1) (res i 0)
-  | Lop(Iintop_imm(Iadd, n)) when i.arg.(0).loc <> i.res.(0).loc ->
+  | Lop(Iintop_imm(Iadd, n)) when i.arg.(0).shared.loc <> i.res.(0).shared.loc ->
       I.lea (mem64 NONE n (arg64 i 0)) (res i 0)
   | Lop(Iintop_imm(Iadd, 1) | Iintop_imm(Isub, -1)) ->
       I.inc (res i 0)
@@ -715,7 +718,7 @@ let emit_instr fallthrough i =
       assert (!byte_offset_from_sp = None);
       assert (Array.length i.arg = 1);
       let reg = i.arg.(0) in
-      begin match reg.loc with
+      begin match reg.shared.loc with
       | Unknown | Reg _ -> ()
       | Stack loc ->
         byte_offset_from_sp := Some (slot_offset loc (register_class reg))
@@ -772,7 +775,7 @@ let emit_instr fallthrough i =
          can still be assigned to one of these two registers, so
          we must be careful not to clobber it before use. *)
       let (tmp1, tmp2) =
-        if i.arg.(0).loc = Reg 0 (* rax *)
+        if i.arg.(0).shared.loc = Reg 0 (* rax *)
         then (phys_reg 4 (*rdx*), phys_reg 0 (*rax*))
         else (phys_reg 0 (*rax*), phys_reg 4 (*rdx*)) in
 

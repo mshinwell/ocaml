@@ -25,7 +25,7 @@ type instruction =
     res: Reg.t array;
     dbg: Debuginfo.t;
     live: Reg.Set.t;
-    available_before: Reg.Set.t;
+    mutable available_before: Reg.Set.t;
   }
 
 and instruction_desc =
@@ -47,9 +47,12 @@ and instruction_desc =
   | Lpoptrap
   | Lraise of Lambda.raise_kind
   | Lavailable_subrange of int option ref
+  (* CR mshinwell: make integer non-optional and update comment *)
   (** [Lavailable_subrange] denotes the start of an available subrange (cf.
       available_ranges.mli).  The associated register is stored in [arg.(0)] of
-      the instruction.  The optional integer must be filled in by the assembly
+      the instruction.  [Lavailable_subrange] only needs to be present when
+      that register is assigned to the stack.
+      The optional integer must be filled in by the assembly
       emitter in the case where that register is assigned to the stack; the
       integer denotes the byte offset from the stack pointer of the register's
       slot at the start of the subrange (and hence at all points during, since

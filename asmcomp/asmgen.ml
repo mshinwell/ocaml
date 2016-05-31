@@ -96,10 +96,18 @@ let available_regs _ppf fundecl =
   else begin
     (* CR mshinwell: add -d... *)
 (*     dump_if ppf dump_regalloc "After register allocation" fd; *)
+(* CR mshinwell: don't do Available_regs except with -g.  It seems we still
+   get some available sets even without -g, though the pass doesn't run *)
     Available_regs.fundecl fundecl
   end
 
 let emit ppf fundecl ~dwarf =
+  let fundecl =
+    if !Clflags.debug then
+      Available_filtering.fundecl fundecl
+    else
+      fundecl
+  in
   let available_ranges, fundecl =
     Available_ranges.create ~fundecl
       ~phantom_ranges:fundecl.Linearize.fun_phantom_let_ranges
@@ -111,7 +119,7 @@ let emit ppf fundecl ~dwarf =
   if !Clflags.dump_linear then begin
     Format.fprintf ppf
       "*** %s@.%a@." "Available subranges after coalescing of labels"
-      Printlinear.fundecl fundecl
+      (Printlinear.fundecl_with_available_ranges available_ranges) fundecl
   end;
   let emit_info = Emit.fundecl fundecl in
   match dwarf with

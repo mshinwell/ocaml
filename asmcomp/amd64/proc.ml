@@ -96,10 +96,12 @@ let float_reg_name =
 
 let num_register_classes = 2
 
-let register_class r =
-  match r.typ with
+let register_class_shared shared =
+  match shared.typ with
   | Val | Int | Addr -> 0
   | Float -> 1
+
+let register_class r = register_class_shared r.shared
 
 let num_available_registers = [| 13; 16 |]
 
@@ -119,14 +121,14 @@ let () =
 
 let dwarf_register_number reg =
   let reg_number, dwarf_numbers =
-    match reg.loc with
+    match reg.shared.loc with
     | Unknown | Stack _ ->
       Misc.fatal_errorf "Proc.dwarf_register_number: [Reg.t] does not \
           have a [Reg] location: %s"
         (Reg.name reg)
     | Reg n ->
       let num_hard_regs, dwarf_numbers =
-        match reg.typ with
+        match reg.shared.typ with
         | Val | Addr | Int ->
           Array.length int_reg_name, int_dwarf_reg_numbers
         | Float ->
@@ -192,7 +194,7 @@ let calling_conventions first_int last_int first_float last_float make_stack
   let float = ref first_float in
   let ofs = ref 0 in
   for i = 0 to Array.length arg - 1 do
-    match arg.(i).typ with
+    match arg.(i).shared.typ with
     | Val | Int | Addr as ty ->
         if !int <= last_int then begin
           loc.(i) <- phys_reg !int;
@@ -252,7 +254,7 @@ let win64_loc_external_arguments arg =
   let reg = ref 0
   and ofs = ref 32 in
   for i = 0 to Array.length arg - 1 do
-    match arg.(i).typ with
+    match arg.(i).shared.typ with
     | Val | Int | Addr as ty ->
         if !reg < 4 then begin
           loc.(i) <- phys_reg win64_int_external_arguments.(!reg);

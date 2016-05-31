@@ -15,6 +15,8 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 module L = Linearize
+module RM = Reg.Map_distinguishing_names
+module RS = Reg.Set_distinguishing_names
 
 (* CR mshinwell: We're getting ranges that should be concatenated in the
    output.  For example:
@@ -40,7 +42,8 @@ module Available_subrange : sig
     | Phantom of phantom_defining_expr
 
   val create
-     : start_insn:L.instruction  (* must be [Lavailable_subrange] *)
+     : reg:Reg.t
+    -> start_insn:L.instruction
     -> start_pos:L.label
     -> end_pos:L.label
     -> t
@@ -62,7 +65,7 @@ module Available_subrange : sig
   val rewrite_labels : t -> env:int Numbers.Int.Map.t -> t
 end = struct
   type start_insn_or_symbol =
-    | Start_insn of L.instruction
+    | Start_insn of Reg.t * L.instruction
     | Phantom of Ident.t * Clambda.ulet_provenance * phantom_defining_expr
 
   type t = {
@@ -78,10 +81,16 @@ end = struct
     | Reg of Reg.t
     | Phantom of phantom_defining_expr
 
-  let create ~start_insn ~start_pos ~end_pos =
+  let create ~reg ~start_insn ~start_pos ~end_pos =
     match start_insn.L.desc with
-    | L.Lavailable_subrange _ ->
-      { start_insn = Start_insn start_insn;
+    | L.Lavailable_subrange _ | L.Llabel _ ->
+      begin match start_insn.L.desc with
+      | L.Lavailable_subrange _ ->
+        assert (Array.length start_insn.L.arg = 1);
+        assert (reg == start_insn.L.arg.(0))
+      | _ -> ()
+      end;
+      { start_insn = Start_insn (reg, start_insn);
         start_pos;
         end_pos;
       }
@@ -98,26 +107,25 @@ end = struct
 
   let location t : location =
     match t.start_insn with
-    | Start_insn insn ->
-      assert (Array.length insn.L.arg = 1);
-      Reg (insn.L.arg.(0))
-    | Phantom (_ident, _provenance, defining_expr) ->
-      Phantom defining_expr
+    | Start_insn (reg, _insn) -> Reg reg
+    | Phantom (_ident, _provenance, defining_expr) -> Phantom defining_expr
 
   let offset_from_stack_ptr t =
     match t.start_insn with
-    | Start_insn insn ->
+    | Start_insn (reg, insn) ->
       begin match insn.L.desc with
       | L.Lavailable_subrange offset -> !offset
+      | L.Llabel _ ->
+        assert (not (Reg.assigned_to_stack reg));
+        None
       | _ -> assert false
       end
     | Phantom _ -> None
 
   let ident t =
     match t.start_insn with
-    | Start_insn insn ->
-      let reg = insn.L.arg.(0) in
-      begin match Reg.Raw_name.to_ident reg.Reg.raw_name with
+    | Start_insn (reg, _insn) ->
+      begin match reg.Reg.name with
       | Some ident -> ident
       | None -> assert false  (* most likely a bug in available_regs.ml *)
       end
@@ -212,7 +220,7 @@ end = struct
     | [] -> assert false
     | subrange::_ ->
       match Available_subrange.location subrange with
-      | Reg reg -> reg.Reg.is_parameter
+      | Reg reg -> reg.Reg.shared.Reg.is_parameter
       | Phantom _ -> None
 
   let extremities t =
@@ -277,34 +285,16 @@ let add_subrange t ~subrange =
   in
   Available_range.add_subrange range ~subrange
 
-let available_before insn =
-  let available_before, _idents_seen =
-    Reg.Set.fold (fun reg ((available_before, idents_seen) as acc) ->
-      (* CR-soon mshinwell: handle values split across multiple registers *)
-      if reg.Reg.part <> None then
-        acc
-      else
-        match Reg.Raw_name.to_ident reg.Reg.raw_name with
-        | None -> acc  (* ignore registers without proper names *)
-        | Some ident ->
-          try
-            let () = Ident.find_same ident idents_seen in
-            (* We don't need more than one reg location for a given name. *)
-            acc
-          with Not_found -> begin
-            let available_before = Reg.Set.add reg available_before in
-            let idents_seen = Ident.add ident () idents_seen in
-            available_before, idents_seen
-          end)
-      insn.L.available_before (Reg.Set.empty, Ident.empty)
-  in
-  available_before
+(* CR mshinwell: improve efficiency *)
+let available_before (insn : L.instruction) =
+  RS.of_list (Reg.Set.elements insn.available_before)
 
 (* Imagine that the program counter is exactly at the start of [insn]; it has
    not yet been executed.  This function calculates which available subranges
    are to start at that point, and which are to stop.  [prev_insn] is the
    instruction immediately prior to [insn], if such exists. *)
-let births_and_deaths ~insn ~prev_insn =
+let births_and_deaths ~(insn : L.instruction)
+      ~(prev_insn : L.instruction option) =
   (* Available subranges must not cross points at which the stack pointer
      changes.  (This is because we assign a single stack offset for each
      available subrange, cf. [Lavailable_subrange].)  Thus, if the previous
@@ -316,31 +306,34 @@ let births_and_deaths ~insn ~prev_insn =
     | None -> false
     | Some prev_insn ->
       match prev_insn.L.desc with
+      (* CR mshinwell: should this have a hook into [Proc]? *)
       | L.Lop (Mach.Istackoffset _) -> true
       | _ -> false
   in
   let births =
     match prev_insn with
-    | None -> available_before insn
+    | None -> (available_before insn)
     | Some prev_insn ->
       if not adjusts_sp then
-        Reg.Set.diff (available_before insn) (available_before prev_insn)
+        RS.diff (available_before insn) (available_before prev_insn)
       else
-        available_before insn
+        (available_before insn)
   in
   let deaths =
     match prev_insn with
-    | None -> Reg.Set.empty
+    | None -> RS.empty
     | Some prev_insn ->
       if not adjusts_sp then
-        Reg.Set.diff (available_before prev_insn) (available_before insn)
+        RS.diff (available_before prev_insn) (available_before insn)
       else
-        available_before prev_insn
+        (available_before prev_insn)
   in
   births, deaths
 
 let rec process_instruction t ~first_insn ~insn ~prev_insn
       ~open_subrange_start_insns =
+(* XXX this should maybe skip instructions that might not have any
+   availability info.  Or maybe better, ensure everything has. *)
   let births, deaths = births_and_deaths ~insn ~prev_insn in
   let first_insn = ref first_insn in
   let prev_insn = ref prev_insn in
@@ -364,53 +357,73 @@ let rec process_instruction t ~first_insn ~insn ~prev_insn
      [births] and [deaths]; and we would like the register to have an open
      subrange from this point.  It follows that we should process deaths
      before births. *)
-  Reg.Set.fold (fun reg () ->
+  RS.fold (fun reg () ->
       let start_pos, start_insn =
-        try Reg.Map.find reg open_subrange_start_insns
+        try RM.find reg open_subrange_start_insns
         with Not_found -> assert false
       in
       let end_pos = Lazy.force label in
       let subrange =
-        Available_subrange.create ~start_pos ~start_insn ~end_pos
+        Available_subrange.create ~reg ~start_pos ~start_insn ~end_pos
       in
       add_subrange t ~subrange)
     deaths
     ();
+(* XXX it looks like [deaths] doesn't contain everything it should so
+   some ranges are never closed  (should be fixed now)
+Format.eprintf "births {%a} deaths {%a} insn=%s\n%!" Printmach.regset births
+  Printmach.regset deaths
+  (match insn.L.desc with
+  | Llabel _ -> "label"
+  | Lavailable_subrange _ -> "ASR"
+  | Lop _ -> "op"
+  | _ -> "other");
+*)
+  let label_insn =
+    lazy ({ L.
+      desc = L.Llabel (Lazy.force label);
+      next = insn;
+      arg = [| |];
+      res = [| |];
+      dbg = Debuginfo.none;
+      live = Reg.Set.empty;
+      available_before = Reg.Set.empty;
+    })
+  in
   let open_subrange_start_insns =
     let open_subrange_start_insns =
-      (Reg.Map.filter (fun reg _start_insn -> not (Reg.Set.mem reg deaths))
+      (RM.filter (fun reg _start_insn -> not (RS.mem reg deaths))
         open_subrange_start_insns)
     in
-    Reg.Set.fold (fun reg open_subrange_start_insns ->
+    RS.fold (fun reg open_subrange_start_insns ->
+        (* We only need [Lavailable_subrange] in the case where the register
+           is assigned to the stack.  (It enables us to determine what the
+           stack offset will be at that point.) *)
         let new_insn =
-          { L.
-            desc = L.Lavailable_subrange (ref None);
-            next = insn;
-            arg = [| reg |];
-            res = [| |];
-            dbg = Debuginfo.none;
-            live = Reg.Set.empty;
-            available_before = Reg.Set.empty;
-          }
+          if not (Reg.assigned_to_stack reg) then begin
+            Lazy.force label_insn
+          end else begin
+            let new_insn =
+              { L.
+                desc = L.Lavailable_subrange (ref None);
+                next = insn;
+                arg = [| reg |];
+                res = [| |];
+                dbg = Debuginfo.none;
+                live = Reg.Set.empty;
+                available_before = Reg.Set.empty;
+              }
+            in
+            insert_insn ~new_insn;
+            new_insn
+          end
         in
-        insert_insn ~new_insn;
-        Reg.Map.add reg (Lazy.force label, new_insn) open_subrange_start_insns)
+        RM.add reg (Lazy.force label, new_insn) open_subrange_start_insns)
       births
       open_subrange_start_insns
   in
   begin if Lazy.is_val label then
-    let new_insn =
-      { L.
-        desc = L.Llabel (Lazy.force label);
-        next = insn;
-        arg = [| |];
-        res = [| |];
-        dbg = Debuginfo.none;
-        live = Reg.Set.empty;
-        available_before = Reg.Set.empty;
-      }
-    in
-    insert_insn ~new_insn
+    insert_insn ~new_insn:(Lazy.force label_insn)
   end;
   let first_insn = !first_insn in
   match insn.L.desc with
@@ -459,21 +472,31 @@ let create ~fundecl ~phantom_ranges =
   let first_insn =
     let first_insn = fundecl.L.fun_body in
     process_instruction t ~first_insn ~insn:first_insn ~prev_insn:None
-      ~open_subrange_start_insns:Reg.Map.empty
+      ~open_subrange_start_insns:RM.empty
   in
-(*
-  Printf.printf "Available ranges for function: %s\n%!" fundecl.L.fun_name;
-  fold t ~init:()
-    ~f:(fun () ~ident ~is_unique ~range ->
-        Printf.printf "  Identifier: %s (is unique? %s)\n%!"
-          (Ident.unique_name ident) (if is_unique then "yes" else "no");
-        Available_range.fold range ~init:()
-          ~f:(fun () ~available_subrange ->
-            Printf.printf "    Label range: %d -> %d\n%!"
-              (Available_subrange.start_pos available_subrange)    
-              (Available_subrange.end_pos available_subrange)));
-*)
   t, { fundecl with L.fun_body = first_insn; }
+
+type label_classification =
+  | Start of {
+      end_pos : Linearize.label;
+      location : Available_subrange.location;
+    }
+  | End
+
+let classify_label t label =
+  Ident.fold_all (fun _ident range result ->
+      Available_range.fold range ~init:result
+        ~f:(fun result ~available_subrange:subrange ->
+          if Available_subrange.start_pos subrange = label then
+            let location = Available_subrange.location subrange in
+            let end_pos = Available_subrange.end_pos subrange in
+            (Start { end_pos; location; }, subrange) :: result
+          else if Available_subrange.end_pos subrange = label then
+            (End, subrange) :: result
+          else
+            result))
+    t.ranges
+    []
 
 let rewrite_labels t ~env =
   let ranges =
@@ -485,3 +508,10 @@ let rewrite_labels t ~env =
   in
   { ranges;
   }
+
+(* XXX next thing to track down:
+
+  L112: (R/1002 now unavail.) (x/1201 now unavail.) (x/1201 now avail. until L113 in x/0[%rax][mut]) (fun/1241 now unavail.) (fun/1241 now avail. until L113 in fun/1[%rbx][mut])
+
+- why is the hard reg taking precedence over the spilled one?
+*)
