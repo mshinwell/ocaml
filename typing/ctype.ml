@@ -1117,10 +1117,10 @@ let instance_constructor ?in_pattern cstr =
             {desc = Tvar (Some name)} -> "$" ^ cstr.cstr_name ^ "_'" ^ name
           | _ -> "$" ^ cstr.cstr_name
         in
-        let (id, new_env) =
-          Env.enter_type (get_new_abstract_name name) decl !env in
+        let path = Path.Pident (Ident.create (get_new_abstract_name name)) in
+        let new_env = Env.add_local_type path decl !env in
         env := new_env;
-        let to_unify = newty (Tconstr (Path.Pident id,[],ref Mnil)) in
+        let to_unify = newty (Tconstr (path,[],ref Mnil)) in
         let tv = copy existential in
         assert (is_Tvar tv);
         link_type tv to_unify
@@ -1885,9 +1885,9 @@ let reify env t =
   let create_fresh_constr lev name =
     let decl = new_declaration (Some (newtype_level, newtype_level)) None in
     let name = match name with Some s -> "$'"^s | _ -> "$" in
-    let name = get_new_abstract_name name in
-    let (id, new_env) = Env.enter_type name decl !env in
-    let t = newty2 lev (Tconstr (Path.Pident id,[],ref Mnil))  in
+    let path = Path.Pident (Ident.create (get_new_abstract_name name)) in
+    let new_env = Env.add_local_type path decl !env in
+    let t = newty2 lev (Tconstr (path,[],ref Mnil))  in
     env := new_env;
     t
   in
@@ -3647,16 +3647,17 @@ let rec filter_visited = function
 let memq_warn t visited =
   if List.memq t visited then (warn := true; true) else false
 
-let rec lid_of_path ?(sharp="") = function
+let rec lid_of_path ?(hash="") = function
     Path.Pident id ->
-      Longident.Lident (sharp ^ Ident.name id)
+      Longident.Lident (hash ^ Ident.name id)
   | Path.Pdot (p1, s, _) ->
-      Longident.Ldot (lid_of_path p1, sharp ^ s)
+      Longident.Ldot (lid_of_path p1, hash ^ s)
   | Path.Papply (p1, p2) ->
-      Longident.Lapply (lid_of_path ~sharp p1, lid_of_path p2)
+      Longident.Lapply (lid_of_path ~hash p1, lid_of_path p2)
 
 let find_cltype_for_path env p =
-  let _path, cl_abbr = Env.lookup_type (lid_of_path ~sharp:"#" p) env in
+  let _path, cl_abbr = Env.lookup_type (lid_of_path ~hash:"#" p) env in
+
   match cl_abbr.type_manifest with
     Some ty ->
       begin match (repr ty).desc with

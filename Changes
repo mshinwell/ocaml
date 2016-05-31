@@ -5,6 +5,10 @@ OCaml 4.04.0:
 
 ### Language features:
 
+- GPR#187, GPR#578: Local opening of modules in a pattern.
+  Syntax: "M.(p)", "M.[p]","M.[| p |]", "M.{p}"
+  (Florian Angeletti, Jacques Garrigue, review by Alain Frisch)
+
 - GPR#301: local exception declarations "let exception ... in"
   (Alain Frisch)
 
@@ -12,6 +16,11 @@ OCaml 4.04.0:
 
 - PR#7023, GPR#336: Better unboxing strategy
   (Alain Frisch, Pierre Chambart)
+- PR#7200, GPR#539: Improve, fix, and add test for parsing/pprintast.ml
+  (Runhang Li, David Sheets, Alain Frisch)
+
+- GPR#580: Optimize immutable float records
+  (Pierre Chambart, review by Marc Shinwell)
 
 ### Language tooling and user interface
 
@@ -23,6 +32,11 @@ OCaml 4.04.0:
 
 - GPR#452: Make the output of ocamldep more stable
   (Alain Frisch)
+- MPR#7248: have ocamldep interpret -open arguments in left-to-right order
+  (Gabriel Scherer, report by Anton Bachin)
+
+- Add the -no-version option to the toplevel
+  (Sébastien Hinderer)
 
 ### Standard library:
 
@@ -46,6 +60,12 @@ OCaml 4.04.0:
 - PR#6820, GPR#560: Add Obj.reachable_words to compute the
   "transitive" heap size of a value
   (Alain Frisch, review by Marc Shinwell and Damien Doligez)
+
+### Manual:
+
+- PR#7245, GPR#565: clarification to the wording and documentation
+  of Warning 52 (fragile constant pattern)
+  (Gabriel Scherer, William, Adrien Nader, Jacques Garrigue)
 
 ### Build system:
 
@@ -78,8 +98,8 @@ OCaml 4.04.0:
 - PR#7243: warn users against using WinZip to unpack the source archive
   (Damien Doligez, report by Shayne Fletcher)
 
-OCaml 4.03.0:
--------------
+OCaml 4.03.0 (25 Apr 2016):
+---------------------------
 
 (Changes that can break existing programs are marked with a "*")
 

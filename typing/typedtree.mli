@@ -56,6 +56,7 @@ and pat_extra =
                            where [disjunction] is a [Tpat_or _] representing the
                            branches of [tconst].
          *)
+  | Tpat_open of Path.t * Longident.t loc * Env.t
   | Tpat_unpack
         (** (module P)     { pat_desc  = Tpat_var "P"
                            ; pat_extra = (Tpat_unpack, _, _) :: ... }
@@ -614,7 +615,7 @@ and 'a class_infos =
     ci_id_class: Ident.t;
     ci_id_class_type : Ident.t;
     ci_id_object : Ident.t;
-    ci_id_typesharp : Ident.t;
+    ci_id_typehash : Ident.t;
     ci_expr: 'a;
     ci_decl: Types.class_declaration;
     ci_type_decl : Types.class_type_declaration;

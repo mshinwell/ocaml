@@ -64,11 +64,9 @@ let occurs_var var u =
     | Ugeneric_apply(funct, args, _) -> occurs funct || List.exists occurs args
     | Uclosure(_fundecls, clos) -> List.exists occurs clos
     | Uoffset(u, _ofs) -> occurs u
-    | Ulet(_str, _kind, _provenance, _id, def, body) ->
-        occurs def || occurs body
+    | Ulet(_str, _kind, _prov, _id, def, body) -> occurs def || occurs body
     | Uletrec(decls, body) ->
-        List.exists (fun (_provenance, _id, u) -> occurs u) decls
-          || occurs body
+        List.exists (fun (_prov, _id, u) -> occurs u) decls || occurs body
     | Uprim(_p, args, _) -> List.exists occurs args
     | Uswitch(arg, s) ->
         occurs arg ||
@@ -89,7 +87,7 @@ let occurs_var var u =
     | Usend(_, met, obj, args, _) ->
         occurs met || occurs obj || List.exists occurs args
     | Uunreachable -> false
-    | Uphantom_let (_provenance, _ident, _defining_expr, body) -> occurs body
+    | Uphantom_let (_, _, _, body) -> occurs body
   and occurs_array a =
     try
       for i = 0 to Array.length a - 1 do
@@ -153,7 +151,7 @@ let lambda_smaller lam threshold =
         raise Exit (* inlining would duplicate function definitions *)
     | Uoffset(lam, _ofs) ->
         incr size; lambda_size lam
-    | Ulet(_str, _kind, _provenance, _id, lam, body) ->
+    | Ulet(_str, _kind, _prov, _id, lam, body) ->
         lambda_size lam; lambda_size body
     | Uletrec _ ->
         raise Exit (* usually too large *)
@@ -512,17 +510,24 @@ let find_action idxs acts tag =
     (* Can this happen? *)
     None
 
+let subst_debuginfo loc dbg =
+  if !Clflags.debug then
+    Debuginfo.inline loc dbg
+  else
+    dbg
 
-let rec substitute fpc sb ulam =
+let rec substitute loc fpc sb ulam =
   match ulam with
     Uvar v ->
       begin try Tbl.find v sb with Not_found -> ulam end
   | Uconst _ -> ulam
   | Udirect_apply(lbl, args, dbg) ->
-      Udirect_apply(lbl, List.map (substitute fpc sb) args, dbg)
+      let dbg = subst_debuginfo loc dbg in
+      Udirect_apply(lbl, List.map (substitute loc fpc sb) args, dbg)
   | Ugeneric_apply(fn, args, dbg) ->
-      Ugeneric_apply(substitute fpc sb fn,
-                     List.map (substitute fpc sb) args, dbg)
+      let dbg = subst_debuginfo loc dbg in
+      Ugeneric_apply(substitute loc fpc sb fn,
+                     List.map (substitute loc fpc sb) args, dbg)
   | Uclosure(defs, env) ->
       (* Question: should we rename function labels as well?  Otherwise,
          there is a risk that function labels are not globally unique.
@@ -532,36 +537,35 @@ let rec substitute fpc sb ulam =
          - When we substitute offsets for idents bound by let rec
            in [close], case [Lletrec], we discard the original
            let rec body and use only the substituted term. *)
-      Uclosure(defs, List.map (substitute fpc sb) env)
-  | Uoffset(u, ofs) -> Uoffset(substitute fpc sb u, ofs)
-  | Ulet(str, kind, provenance, id, u1, u2) ->
+      Uclosure(defs, List.map (substitute loc fpc sb) env)
+  | Uoffset(u, ofs) -> Uoffset(substitute loc fpc sb u, ofs)
+  | Ulet(str, kind, prov, id, u1, u2) ->
       let id' = Ident.rename id in
-      Ulet(str, kind, provenance, id', substitute fpc sb u1,
-           substitute fpc (Tbl.add id (Uvar id') sb) u2)
+      Ulet(str, kind, prov, id', substitute loc fpc sb u1,
+           substitute loc fpc (Tbl.add id (Uvar id') sb) u2)
   | Uletrec(bindings, body) ->
       let bindings1 =
-        List.map (fun (provenance, id, rhs) ->
-            (provenance, id, Ident.rename id, rhs))
+        List.map (fun (prov, id, rhs) ->
+            (prov, id, Ident.rename id, rhs))
           bindings
       in
       let sb' =
         List.fold_right
-          (fun (_provenance, id, id', _) s -> Tbl.add id (Uvar id') s)
+          (fun (_prov, id, id', _) s -> Tbl.add id (Uvar id') s)
           bindings1 sb in
       Uletrec(
-        List.map
-           (fun (provenance, _id, id', rhs) ->
-             (provenance, id', substitute fpc sb' rhs))
+        List.map (fun (prov, _id, id', rhs) ->
+            (prov, id', substitute loc fpc sb' rhs))
            bindings1,
-        substitute fpc sb' body)
+        substitute loc fpc sb' body)
   | Uprim(p, args, dbg) ->
-      let sargs =
-        List.map (substitute fpc sb) args in
+      let sargs = List.map (substitute loc fpc sb) args in
+      let dbg = subst_debuginfo loc dbg in
       let (res, _) =
         simplif_prim fpc p (sargs, List.map approx_ulam sargs) dbg in
       res
   | Uswitch(arg, sw) ->
-      let sarg = substitute fpc sb arg in
+      let sarg = substitute loc fpc sb arg in
       let action =
         (* Unfortunately, we cannot easily deal with the
            case of a constructed block (makeblock) bound to a local
@@ -577,23 +581,23 @@ let rec substitute fpc sb ulam =
         | _ -> None
       in
       begin match action with
-      | Some u -> substitute fpc sb u
+      | Some u -> substitute loc fpc sb u
       | None ->
           Uswitch(sarg,
                   { sw with
                     us_actions_consts =
-                      Array.map (substitute fpc sb) sw.us_actions_consts;
+                      Array.map (substitute loc fpc sb) sw.us_actions_consts;
                     us_actions_blocks =
-                      Array.map (substitute fpc sb) sw.us_actions_blocks;
+                      Array.map (substitute loc fpc sb) sw.us_actions_blocks;
                   })
       end
   | Ustringswitch(arg,sw,d) ->
       Ustringswitch
-        (substitute fpc sb arg,
-         List.map (fun (s,act) -> s,substitute fpc sb act) sw,
-         Misc.may_map (substitute fpc sb) d)
+        (substitute loc fpc sb arg,
+         List.map (fun (s,act) -> s,substitute loc fpc sb act) sw,
+         Misc.may_map (substitute loc fpc sb) d)
   | Ustaticfail (nfail, args) ->
-      Ustaticfail (nfail, List.map (substitute fpc sb) args)
+      Ustaticfail (nfail, List.map (substitute loc fpc sb) args)
   | Ucatch(nfail, ids, u1, u2) ->
       let ids' = List.map Ident.rename ids in
       let sb' =
@@ -601,42 +605,43 @@ let rec substitute fpc sb ulam =
           (fun id id' s -> Tbl.add id (Uvar id') s)
           ids ids' sb
       in
-      Ucatch(nfail, ids', substitute fpc sb u1, substitute fpc sb' u2)
+      Ucatch(nfail, ids', substitute loc fpc sb u1, substitute loc fpc sb' u2)
   | Utrywith(u1, id, u2) ->
       let id' = Ident.rename id in
-      Utrywith(substitute fpc sb u1, id',
-               substitute fpc (Tbl.add id (Uvar id') sb) u2)
+      Utrywith(substitute loc fpc sb u1, id',
+               substitute loc fpc (Tbl.add id (Uvar id') sb) u2)
   | Uifthenelse(u1, u2, u3) ->
-      begin match substitute fpc sb u1 with
+      begin match substitute loc fpc sb u1 with
         Uconst (Uconst_ptr n) ->
-          if n <> 0 then substitute fpc sb u2 else substitute fpc sb u3
+          if n <> 0 then substitute loc fpc sb u2 else substitute loc fpc sb u3
       | Uprim(Pmakeblock _, _, _) ->
-          substitute fpc sb u2
+          substitute loc fpc sb u2
       | su1 ->
-          Uifthenelse(su1, substitute fpc sb u2, substitute fpc sb u3)
+          Uifthenelse(su1, substitute loc fpc sb u2, substitute loc fpc sb u3)
       end
   | Usequence(u1, u2) ->
-      Usequence(substitute fpc sb u1, substitute fpc sb u2)
+      Usequence(substitute loc fpc sb u1, substitute loc fpc sb u2)
   | Uwhile(u1, u2) ->
-      Uwhile(substitute fpc sb u1, substitute fpc sb u2)
+      Uwhile(substitute loc fpc sb u1, substitute loc fpc sb u2)
   | Ufor(id, u1, u2, dir, u3) ->
       let id' = Ident.rename id in
-      Ufor(id', substitute fpc sb u1, substitute fpc sb u2, dir,
-           substitute fpc (Tbl.add id (Uvar id') sb) u3)
+      Ufor(id', substitute loc fpc sb u1, substitute loc fpc sb u2, dir,
+           substitute loc fpc (Tbl.add id (Uvar id') sb) u3)
   | Uassign(id, u) ->
       let id' =
         try
           match Tbl.find id sb with Uvar i -> i | _ -> assert false
         with Not_found ->
           id in
-      Uassign(id', substitute fpc sb u)
+      Uassign(id', substitute loc fpc sb u)
   | Usend(k, u1, u2, ul, dbg) ->
-      Usend(k, substitute fpc sb u1, substitute fpc sb u2,
-            List.map (substitute fpc sb) ul, dbg)
+      let dbg = subst_debuginfo loc dbg in
+      Usend(k, substitute loc fpc sb u1, substitute loc fpc sb u2,
+            List.map (substitute loc fpc sb) ul, dbg)
   | Uunreachable ->
       Uunreachable
-  | Uphantom_let (provenance, ident, defining_expr, body) ->
-      Uphantom_let (provenance, ident, defining_expr, substitute fpc sb body)
+  | Uphantom_let (prov, id, defining_expr, body) ->
+      Uphantom_let (prov, id, defining_expr, substitute loc fpc sb body)
 
 (* Perform an inline expansion *)
 
@@ -648,12 +653,12 @@ let no_effects = function
   | Uclosure _ -> true
   | u -> is_simple_argument u
 
-let rec bind_params_rec fpc subst params args body =
+let rec bind_params_rec loc fpc subst params args body =
   match (params, args) with
-    ([], []) -> substitute fpc subst body
+    ([], []) -> substitute loc fpc subst body
   | (p1 :: pl, a1 :: al) ->
       if is_simple_argument a1 then
-        bind_params_rec fpc (Tbl.add p1 a1 subst) pl al body
+        bind_params_rec loc fpc (Tbl.add p1 a1 subst) pl al body
       else begin
         let p1' = Ident.rename p1 in
         let u1, u2 =
@@ -664,7 +669,7 @@ let rec bind_params_rec fpc subst params args body =
               a1, Uvar p1'
         in
         let body' =
-          bind_params_rec fpc (Tbl.add p1 u2 subst) pl al body in
+          bind_params_rec loc fpc (Tbl.add p1 u2 subst) pl al body in
         if occurs_var p1 body then
           Ulet(Immutable, Pgenval, None, p1', u1, body')
         else if no_effects a1 then body'
@@ -672,10 +677,10 @@ let rec bind_params_rec fpc subst params args body =
       end
   | (_, _) -> assert false
 
-let bind_params fpc params args body =
+let bind_params loc fpc params args body =
   (* Reverse parameters and arguments to preserve right-to-left
      evaluation order (PR#2910). *)
-  bind_params_rec fpc Tbl.empty (List.rev params) (List.rev args) body
+  bind_params_rec loc fpc Tbl.empty (List.rev params) (List.rev args) body
 
 (* Check if a lambda term is ``pure'',
    that is without side-effects *and* not containing function definitions *)
@@ -706,7 +711,7 @@ let direct_apply fundesc funct ufunct uargs ~loc ~attribute =
           "Function information unavailable";
         Udirect_apply(fundesc.fun_label, app_args, Debuginfo.none)
     | Some(params, body), _  ->
-        bind_params fundesc.fun_float_const_prop params app_args body
+        bind_params loc fundesc.fun_float_const_prop params app_args body
   in
   (* If ufunct can contain side-effects or function definitions,
      we must make sure that it is evaluated exactly once.
@@ -761,23 +766,28 @@ let excessive_function_nesting_depth = 5
 (* Decorate clambda term with debug information *)
 
 let rec add_debug_info ev u =
+  let put_dinfo dinfo ev =
+    if Debuginfo.is_none dinfo then
+      Debuginfo.from_call ev
+    else dinfo
+  in
   match ev.lev_kind with
   | Lev_after _ ->
       begin match u with
-      | Udirect_apply(lbl, args, _dinfo) ->
-          Udirect_apply(lbl, args, Debuginfo.from_call ev)
-      | Ugeneric_apply(Udirect_apply(lbl, args1, _dinfo1),
-                       args2, _dinfo2) ->
-          Ugeneric_apply(Udirect_apply(lbl, args1, Debuginfo.from_call ev),
-                         args2, Debuginfo.from_call ev)
-      | Ugeneric_apply(fn, args, _dinfo) ->
-          Ugeneric_apply(fn, args, Debuginfo.from_call ev)
-      | Uprim(Praise k, args, _dinfo) ->
-          Uprim(Praise k, args, Debuginfo.from_call ev)
-      | Uprim(p, args, _dinfo) ->
-          Uprim(p, args, Debuginfo.from_call ev)
-      | Usend(kind, u1, u2, args, _dinfo) ->
-          Usend(kind, u1, u2, args, Debuginfo.from_call ev)
+      | Udirect_apply(lbl, args, dinfo) ->
+          Udirect_apply(lbl, args, put_dinfo dinfo ev)
+      | Ugeneric_apply(Udirect_apply(lbl, args1, dinfo1),
+                       args2, dinfo2) ->
+          Ugeneric_apply(Udirect_apply(lbl, args1, put_dinfo dinfo1 ev),
+                         args2, put_dinfo dinfo2 ev)
+      | Ugeneric_apply(fn, args, dinfo) ->
+          Ugeneric_apply(fn, args, put_dinfo dinfo ev)
+      | Uprim(Praise k, args, dinfo) ->
+          Uprim(Praise k, args, put_dinfo dinfo ev)
+      | Uprim(p, args, dinfo) ->
+          Uprim(p, args, put_dinfo dinfo ev)
+      | Usend(kind, u1, u2, args, dinfo) ->
+          Usend(kind, u1, u2, args, put_dinfo dinfo ev)
       | Usequence(u1, u2) ->
           Usequence(u1, add_debug_info ev u2)
       | _ -> u
@@ -847,11 +857,13 @@ let rec close fenv cenv = function
         ((ufunct, Value_closure(fundesc, approx_res)),
          [Uprim(Pmakeblock _, uargs, _)])
         when List.length uargs = - fundesc.fun_arity ->
-          let app = direct_apply ~loc ~attribute fundesc funct ufunct uargs in
+          let app =
+            direct_apply ~loc ~attribute fundesc funct ufunct uargs in
           (app, strengthen_approx app approx_res)
       | ((ufunct, Value_closure(fundesc, approx_res)), uargs)
         when nargs = fundesc.fun_arity ->
-          let app = direct_apply ~loc ~attribute fundesc funct ufunct uargs in
+          let app =
+            direct_apply ~loc ~attribute fundesc funct ufunct uargs in
           (app, strengthen_approx app approx_res)
 
       | ((_ufunct, Value_closure(fundesc, _approx_res)), uargs)
@@ -892,8 +904,9 @@ let rec close fenv cenv = function
         when fundesc.fun_arity > 0 && nargs > fundesc.fun_arity ->
           let (first_args, rem_args) = split_list fundesc.fun_arity uargs in
           warning_if_forced_inline ~loc ~attribute "Over-application";
-          (Ugeneric_apply(direct_apply ~loc ~attribute fundesc funct ufunct
-                          first_args, rem_args, Debuginfo.none),
+          (Ugeneric_apply(direct_apply ~loc ~attribute
+                            fundesc funct ufunct first_args,
+                          rem_args, Debuginfo.none),
            Value_unknown)
       | ((ufunct, _), uargs) ->
           warning_if_forced_inline ~loc ~attribute "Unknown function";
@@ -935,8 +948,8 @@ let rec close fenv cenv = function
             (fun (id, pos, _approx) sb ->
               Tbl.add id (Uoffset(Uvar clos_ident, pos)) sb)
             infos Tbl.empty in
-        (Ulet(Immutable, Pgenval, None,
-              clos_ident, clos, substitute !Clflags.float_const_prop sb ubody),
+        (Ulet(Immutable, Pgenval, None, clos_ident, clos,
+              substitute Location.none !Clflags.float_const_prop sb ubody),
          approx)
       end else begin
         (* General case: recursive definition of values *)
@@ -1227,8 +1240,7 @@ and close_functions fenv cenv fun_defs =
      with offsets and approximations. *)
   let (clos, infos) = List.split clos_info_list in
   let fv = if !useless_env then [] else fv in
-  let closure_elts = List.map (close_var fenv cenv) fv in
-  (Uclosure(clos, closure_elts), infos)
+  (Uclosure(clos, List.map (close_var fenv cenv) fv), infos)
 
 (* Same, for one non-recursive function *)
 
@@ -1322,7 +1334,7 @@ let collect_exported_structured_constants a =
         List.iter (fun f -> ulam f.body) fl;
         List.iter ulam ul
     | Uoffset(u, _) -> ulam u
-    | Ulet (_str, _kind, _provenance, _, u1, u2) -> ulam u1; ulam u2
+    | Ulet (_str, _kind, _prov, _, u1, u2) -> ulam u1; ulam u2
     | Uletrec (l, u) -> List.iter (fun (_, _, u) -> ulam u) l; ulam u
     | Uprim (_, ul, _) -> List.iter ulam ul
     | Uswitch (u, sl) ->
@@ -1342,8 +1354,8 @@ let collect_exported_structured_constants a =
     | Ufor (_, u1, u2, _, u3) -> ulam u1; ulam u2; ulam u3
     | Uassign (_, u) -> ulam u
     | Usend (_, u1, u2, ul, _) -> ulam u1; ulam u2; List.iter ulam ul
-    | Uunreachable -> ()
     | Uphantom_let (_, _, _, body) -> ulam body
+    | Uunreachable -> ()
   in
   approx a
 

@@ -38,6 +38,7 @@ type pattern =
 and pat_extra =
   | Tpat_constraint of core_type
   | Tpat_type of Path.t * Longident.t loc
+  | Tpat_open of Path.t * Longident.t loc * Env.t
   | Tpat_unpack
 
 and pattern_desc =
@@ -506,7 +507,7 @@ and 'a class_infos =
     ci_id_class: Ident.t;
     ci_id_class_type: Ident.t;
     ci_id_object: Ident.t;
-    ci_id_typesharp: Ident.t;
+    ci_id_typehash: Ident.t;
     ci_expr: 'a;
     ci_decl: Types.class_declaration;
     ci_type_decl: Types.class_type_declaration;

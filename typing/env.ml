@@ -104,6 +104,7 @@ end  = struct
 
 end
 
+module PathMap = Map.Make(Path)
 
 type summary =
     Env_empty
@@ -116,6 +117,7 @@ type summary =
   | Env_cltype of summary * Ident.t * class_type_declaration
   | Env_open of summary * Path.t
   | Env_functor_arg of summary * Ident.t
+  | Env_constraints of summary * type_declaration PathMap.t
 
 module EnvTbl =
   struct
@@ -178,7 +180,7 @@ type t = {
   cltypes: (Path.t * class_type_declaration) EnvTbl.t;
   functor_args: unit Ident.tbl;
   summary: summary;
-  local_constraints: bool;
+  local_constraints: type_declaration PathMap.t;
   gadt_instances: (int * TypeSet.t ref) list;
   flags: int;
 }
@@ -216,6 +218,12 @@ and functor_components = {
   fcomp_subst_cache: (Path.t, module_type) Hashtbl.t
 }
 
+let copy_local ~from env =
+  { env with
+    local_constraints = from.local_constraints;
+    gadt_instances = from.gadt_instances;
+    flags = from.flags }
+
 let same_constr = ref (fun _ _ _ -> assert false)
 
 (* Helper to decide whether to report an identifier shadowing
@@ -251,7 +259,7 @@ let empty = {
   modules = EnvTbl.empty; modtypes = EnvTbl.empty;
   components = EnvTbl.empty; classes = EnvTbl.empty;
   cltypes = EnvTbl.empty;
-  summary = Env_empty; local_constraints = false; gadt_instances = [];
+  summary = Env_empty; local_constraints = PathMap.empty; gadt_instances = [];
   flags = 0;
   functor_args = Ident.empty;
  }
@@ -581,7 +589,9 @@ let type_of_cstr path = function
 
 let find_type_full path env =
   match Path.constructor_typath path with
-  | Regular p -> find_type_full p env
+  | Regular p ->
+      (try (PathMap.find p env.local_constraints, ([], []))
+       with Not_found -> find_type_full p env)
   | Cstr (ty_path, s) ->
       let (_, (cstrs, _)) =
         try find_type_full ty_path env
@@ -909,7 +919,7 @@ let lookup_all_simple proj1 proj2 shadow ?loc lid env =
   | Lapply _ ->
       raise Not_found
 
-let has_local_constraints env = env.local_constraints
+let has_local_constraints env = not (PathMap.is_empty env.local_constraints)
 
 let cstr_shadow cstr1 cstr2 =
   match cstr1.cstr_tag, cstr2.cstr_tag with
@@ -1671,15 +1681,18 @@ and add_cltype id ty env =
 let add_module ?arg id mty env =
   add_module_declaration ?arg id (md mty) env
 
+let add_local_type path info env =
+  { env with
+    local_constraints = PathMap.add path info env.local_constraints }
+
 let add_local_constraint id info elv env =
   match info with
     {type_manifest = Some _; type_newtype_level = Some (lv, _)} ->
       (* elv is the expansion level, lv is the definition level *)
-      let env =
-        add_type ~check:false
-          id {info with type_newtype_level = Some (lv, elv)} env in
-      { env with local_constraints = true }
+      let info = {info with type_newtype_level = Some (lv, elv)} in
+      add_local_type (Pident id) info env
   | _ -> assert false
+
 
 (* Insertion of bindings by name *)
 
@@ -1962,7 +1975,9 @@ let (initial_safe_string, initial_unsafe_string) =
 
 (* Return the environment summary *)
 
-let summary env = env.summary
+let summary env =
+  if PathMap.is_empty env.local_constraints then env.summary
+  else Env_constraints (env.summary, env.local_constraints)
 
 let last_env = ref empty
 let last_reduced_env = ref empty
