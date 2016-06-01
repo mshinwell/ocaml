@@ -40,6 +40,10 @@ val emit: instruction -> unit
 val directive: asm_line -> unit
 val reset_asm_code: unit -> unit
 
+(** Buffering of assembly code, for debugging the compiler *)
+val start_recording_directives : unit -> unit
+val finish_recording_directives : unit -> asm_line list
+
 (** Code emission *)
 
 val generate_code: (X86_ast.asm_line list -> unit) option -> unit
