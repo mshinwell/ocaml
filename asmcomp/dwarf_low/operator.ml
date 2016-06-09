@@ -527,7 +527,7 @@ let size t =
   Int64.add opcode_size args_size
 
 let emit t asm =
-  Dwarf_value.emit (Dwarf_value.Int8 (Int8.of_int_exn (opcode t))) asm;
+  Dwarf_value.emit (Dwarf_value.Int8 (Numbers.Int8.of_int_exn (opcode t))) asm;
   match t with
   | DW_op_addr sym -> Dwarf_value.emit (Code_address_from_symbol sym) asm
   | DW_op_regx { reg_number ; } ->

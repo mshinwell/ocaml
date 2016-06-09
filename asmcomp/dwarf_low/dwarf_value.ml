@@ -18,6 +18,9 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+module Int8 = Numbers.Int8
+module Int16 = Numbers.Int16
+
 type t =
   | Flag_true
   | Bool of bool

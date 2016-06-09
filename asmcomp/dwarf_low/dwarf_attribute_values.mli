@@ -19,8 +19,8 @@ module Value : sig
 
   val flag_true : Dwarf_attributes.Form.flag_present t
   val bool : bool -> Dwarf_attributes.Form.data1 t
-  val int8 : Int8.t -> Dwarf_attributes.Form.data1 t
-  val int16 : Int16.t -> Dwarf_attributes.Form.data2 t
+  val int8 : Numbers.Int8.t -> Dwarf_attributes.Form.data1 t
+  val int16 : Numbers.Int16.t -> Dwarf_attributes.Form.data2 t
   val int32 : Int32.t -> Dwarf_attributes.Form.data4 t
   val int64 : Int64.t -> Dwarf_attributes.Form.data8 t
   val string : string -> Dwarf_attributes.Form.string t

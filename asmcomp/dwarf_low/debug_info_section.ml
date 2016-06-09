@@ -33,7 +33,7 @@ let debug_abbrev_offset t =
 
 (* CR-someday mshinwell: fix for cross compilation *)
 let address_width_in_bytes_on_target =
-  Dwarf_value.Int8 (Int8.of_int_exn Arch.size_addr)
+  Dwarf_value.Int8 (Numbers.Int8.of_int_exn Arch.size_addr)
 
 let size_without_first_word t =
   let (+) = Int64.add in

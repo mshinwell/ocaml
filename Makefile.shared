@@ -108,8 +108,6 @@ endif
 
 DWARF_LOW=\
   asmcomp/dwarf_low/dwarf_format.cmo \
-  asmcomp/dwarf_low/int8.cmo \
-  asmcomp/dwarf_low/int16.cmo \
   asmcomp/dwarf_low/dwarf_format_int.cmo \
   asmcomp/dwarf_low/target_addr.cmo \
   asmcomp/dwarf_low/dwarf_value.cmo \

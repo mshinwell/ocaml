@@ -84,10 +84,10 @@ module type S = sig
   val label_declaration : label_name:Linearize.label -> unit
 
   (** Emit an 8-bit integer (not padded). *)
-  val int8 : Int8.t -> unit
+  val int8 : Numbers.Int8.t -> unit
 
   (** Emit a 16-bit integer (not padded). *)
-  val int16 : Int16.t -> unit
+  val int16 : Numbers.Int16.t -> unit
 
   (** Emit a 32-bit integer (not padded). *)
   val int32 : Int32.t -> unit

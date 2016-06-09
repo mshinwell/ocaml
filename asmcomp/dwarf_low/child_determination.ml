@@ -23,4 +23,5 @@ let encode = function
 let size _t = Int64.of_int 1
 
 let emit t asm =
-  Dwarf_value.emit (Dwarf_value.Int8 (Int8.of_int_exn (encode t))) asm
+  Dwarf_value.emit (Dwarf_value.Int8 (
+    Numbers.Int8.of_int_exn (encode t))) asm

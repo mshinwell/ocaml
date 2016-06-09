@@ -82,7 +82,7 @@ let create_import ~proto_die = reference_proto_die A.Import proto_die
 
 let create_byte_size_exn ~byte_size =
   let spec = AS.create A.Byte_size F.Data1 in
-  AV.create spec (V.int8 (Int8.of_int_exn byte_size))
+  AV.create spec (V.int8 (Numbers.Int8.of_int_exn byte_size))
 
 let create_linkage_name ~linkage_name =
   let spec = AS.create A.Linkage_name F.Strp in

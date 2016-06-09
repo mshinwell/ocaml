@@ -17,7 +17,7 @@
     the DIE structures themselves.
 *)
 
-type user = private Int16.t
+type user = private Numbers.Int16.t
 
 (** We omit the "DW_TAG_" prefix. *)
 type t =

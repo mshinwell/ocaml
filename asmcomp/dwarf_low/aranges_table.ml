@@ -14,6 +14,9 @@
 
 (* DWARF-4 standard section 6.1.2. *)
 
+module Int8 = Numbers.Int8
+module Int16 = Numbers.Int16
+
 type t = {
   size : Int64.t;
   values : Dwarf_value.t list;

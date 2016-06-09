@@ -23,4 +23,4 @@ let encode = function
 let size _t = 1
 
 let as_dwarf_value t =
-  Dwarf_value.Int8 (Int8.of_int_exn (encode t))
+  Dwarf_value.Int8 (Numbers.Int8.of_int_exn (encode t))

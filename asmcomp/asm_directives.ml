@@ -11,6 +11,10 @@
 (*   special exception on linking described in the file LICENSE.          *)
 (*                                                                        *)
 (**************************************************************************)
+
+module Int8 = Numbers.Int8
+module Int16 = Numbers.Int16
+
 type width =
   | Thirty_two
   | Sixty_four
@@ -55,8 +59,8 @@ module type S = sig
   val symbol_plus_offset : Symbol.t -> offset_in_bytes:Int64.t -> unit
   val label : Linearize.label -> unit
   val label_declaration : label_name:Linearize.label -> unit
-  val int8 : Int8.t -> unit
-  val int16 : Int16.t -> unit
+  val int8 : Numbers.Int8.t -> unit
+  val int16 : Numbers.Int16.t -> unit
   val int32 : Int32.t -> unit
   val int64 : Int64.t -> unit
   val nativeint : Nativeint.t -> unit

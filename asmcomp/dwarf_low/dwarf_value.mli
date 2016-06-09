@@ -19,8 +19,8 @@
 type t =
   | Flag_true
   | Bool of bool
-  | Int8 of Int8.t
-  | Int16 of Int16.t
+  | Int8 of Numbers.Int8.t
+  | Int16 of Numbers.Int16.t
   | Int32 of Int32.t
   | Int64 of Int64.t
   | Uleb128 of Int64.t

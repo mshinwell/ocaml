@@ -39,7 +39,7 @@ module Location_list_entry = struct
     let size = Location_expression.size t.expr in
     (* CR-someday mshinwell: maybe this size should be unsigned? *)
     assert (Int64.compare size 0xFFFFL < 0);
-    Int16.of_int64_exn size
+    Numbers.Int16.of_int64_exn size
 
   let beginning_value t =
     Dwarf_value.Code_address_from_label_symbol_diff

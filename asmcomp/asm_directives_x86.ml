@@ -19,6 +19,9 @@
 module D = X86_dsl.D
 module X = X86_dsl
 
+module Int8 = Numbers.Int8
+module Int16 = Numbers.Int16
+
 let string_of_label label_name =
   match X86_proc.system with
   | S_macosx | S_win64 -> "L" ^ string_of_int label_name
