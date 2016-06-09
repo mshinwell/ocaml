@@ -12,6 +12,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module Operator = Dwarf_operator
+
 module type S = sig
   type t
 

@@ -233,7 +233,8 @@ let signed_int_const i = DW_op_consts i
 
 let add_unsigned_const i =
   if Int64.compare i 0L < 0 then begin
-    Misc.fatal_error "Operator.add_unsigned_const only takes integers >= 0"
+    Misc.fatal_error "Dwarf_operator.add_unsigned_const only takes \
+      integers >= 0"
   end;
   DW_op_plus_uconst i
 
@@ -616,7 +617,7 @@ let emit t asm =
         caml_string_set64 buf ~index:0 i;
         buf
       | n ->
-        Misc.fatal_errorf "Dwarf_low.Operator: bad Arch.size_int = %d" n
+        Misc.fatal_errorf "Dwarf_operator: bad Arch.size_int = %d" n
     in
     Dwarf_value.emit (Sleb128 (Int64.of_int (Bytes.length buf))) asm;
     Dwarf_value.emit (String (Bytes.to_string buf)) asm
