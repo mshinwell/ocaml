@@ -133,8 +133,7 @@ DWARF_LOW=\
   asmcomp/dwarf_low/location_list_entry.cmo \
   asmcomp/dwarf_low/location_list.cmo \
   asmcomp/dwarf_low/debug_info_section.cmo \
-  asmcomp/dwarf_low/debug_loc_table.cmo \
-  asmcomp/dwarf_low/pubnames_table.cmo
+  asmcomp/dwarf_low/debug_loc_table.cmo
 
 DWARF_HIGH=\
   asmcomp/dwarf_high/proto_die.cmo \

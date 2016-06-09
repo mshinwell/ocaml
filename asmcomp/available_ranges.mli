@@ -20,11 +20,11 @@
 
    An available subrange may instead be associated with a phantom identifier.
    Phantom identifiers correspond to identifiers that once bound computations
-   that have now been lifted to toplevel and whose values must be obtained by
-   reading the contents of a symbol.  (In the future phantom identifiers are
-   likely to be extended to also describe relations between other identifiers,
-   to enable the reconstruction of values in the debugger given some of all of
-   their sub-parts.)
+   that have now been lifted to toplevel and whose values are given by
+   symbols or some sequence of indirections through a symbol.  (In the future
+   phantom identifiers may be extended to also describe relations between
+   other identifiers, enabling the reconstruction of (possibly partial)
+   values in the debugger given some of all of their sub-parts.)
 
    Available subranges associated with normal value identifiers are computed
    by this pass based on the information from the dataflow analysis in

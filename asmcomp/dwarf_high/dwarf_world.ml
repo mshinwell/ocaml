@@ -36,13 +36,6 @@ let emit ~compilation_unit_proto_die ~start_of_code_symbol
       ~end_of_code_symbol:end_of_code_symbol
       ~debug_info_label
   in
-  let _pubnames_table =
-    Pubnames_table.create
-      (* CR mshinwell: decide what to do about Pubnames_table (it does
-         nothing at the moment) *)
-      ~externally_visible_functions:[]
-      ~debug_info
-  in
   let module A = (val asm : Asm_directives.S) in
   A.switch_to_section (Dwarf Debug_info);
   Debug_info_section.emit debug_info asm;

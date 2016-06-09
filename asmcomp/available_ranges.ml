@@ -14,6 +14,9 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+(* CR-soon mshinwell: Generalize this pass into a generic range-determining
+   algorithm. *)
+
 module L = Linearize
 
 (* By the time this pass has run, register stamps are irrelevant; indeed,
@@ -23,14 +26,6 @@ module L = Linearize
    location. *)
 module RM = Reg.Map_distinguishing_names_and_locations
 module RS = Reg.Set_distinguishing_names_and_locations
-
-(* CR mshinwell: We're getting ranges that should be concatenated in the
-   output.  For example:
-    00041726 ffffffffffffffff 0000000000433ce0 (base address)
-    00041736 0000000000434113 000000000043418d (DW_OP_bregx: 5 (rdi) 0)
-    0004174b 000000000043418e 0000000000434193 (DW_OP_bregx: 5 (rdi) 0)
-   (may be fixed now)
-*)
 
 type phantom_defining_expr =
   | Int of int
@@ -436,6 +431,17 @@ let rec process_instruction t ~first_insn ~(insn : L.instruction) ~prev_insn
            in the debugger as available when standing on the call instruction
            but unavailable when we are in the callee (and move to the previous
            frame). *)
+        (* CR-someday mshinwell: I wonder if this should be more
+           conservative for Iextcall.  If the C callee is compiled with
+           debug info then it should describe where any callee-save
+           registers have been saved, so when we step back to the OCaml frame
+           in the debugger, the unwinding procedure should get register
+           values correct.  (I think.)  However if it weren't compiled with
+           debug info, this wouldn't happen, and when looking back up into
+           the OCaml frame I suspect registers would be wrong.  This may
+           not be a great problem once libmonda is hardened, although it
+           is possible for this to be subtle and misleading (e.g. an integer
+           value being 1 instead of 2 or something.) *)
         match !prev_insn with
         | None -> None
         | Some prev_insn ->
