@@ -440,7 +440,15 @@ let rec process_instruction t ~first_insn ~(insn : L.instruction) ~prev_insn
         | None -> None
         | Some prev_insn ->
           match prev_insn.L.desc with
-          | Lop (Icall_ind | Icall_imm _ | Iextcall _) -> Some (-1)
+          | Lop ((Icall_ind | Icall_imm _ | Iextcall _) as op) ->
+            let destroyed_locations =
+              Array.map (fun (reg : Reg.t) -> reg.shared.loc)
+                (Proc.destroyed_at_oper (Mach.Iop op))
+            in
+            if Array.mem reg.shared.loc destroyed_locations then
+              Some (-1)
+            else
+              None
           | _ -> None
       in
       let subrange =
