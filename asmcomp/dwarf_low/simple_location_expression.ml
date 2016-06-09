@@ -15,7 +15,6 @@
 module type S = sig
   type t
 
-  val no_location : t
   val const_symbol : Symbol.t -> t
   val const_int : Int64.t -> t
   val in_register : reg_number:int -> t
@@ -26,7 +25,6 @@ module type S = sig
 end
 
 type t =
-  | No_location
   | Const_symbol of Symbol.t
   | Const_int of Int64.t
   | In_register of int
@@ -34,7 +32,6 @@ type t =
   | Offset_pointer of { block : t; offset_in_words : int; }
   | Read_field of { block : t; field : int; }
 
-let no_location = No_location
 let const_symbol symbol = Const_symbol symbol
 let const_int i = Const_int i
 let in_register ~reg_number = In_register reg_number
@@ -51,7 +48,6 @@ let rec compile_to_yield_value t =
      contains the value (which may sometimes not exist, e.g. in the [Symbol]
      case). *)
   match t with
-  | No_location -> []  (* DWARF-4 spec section 2.6.1.1.4 *)
   | Const_symbol symbol -> [Operator.value_of_symbol symbol]
   | Const_int i -> [Operator.signed_int_const i]
   | In_register reg_number -> [Operator.contents_of_register ~reg_number]

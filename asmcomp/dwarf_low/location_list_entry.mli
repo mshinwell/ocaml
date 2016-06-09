@@ -25,5 +25,3 @@ val create_location_list_entry : start_of_code_symbol:Symbol.t
 val create_base_address_selection_entry : base_address_symbol:Symbol.t -> t
 
 val compare_ascending_vma : t -> t -> int
-
-val scope : t -> (Symbol.t * Linearize.label * Linearize.label) option

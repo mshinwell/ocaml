@@ -21,8 +21,7 @@ type t = {
 
 (* It isn't exactly clear what the sorting requirement is, but we sort
    within a location list by increasing virtual memory address on the
-   start addresses of the entries.  This also means that we can fill the
-   "holes" in the location lists and keep objdump quiet. *)
+   start addresses of the entries. *)
 let sort entries =
   List.sort entries ~cmp:Location_list_entry.compare_ascending_vma
 
@@ -53,34 +52,7 @@ let compare_increasing_vma t1 t2 =
 let emit t asm =
   let module A = (val asm : Asm_directives.S) in
   A.label_declaration ~label_name:t.name;
-  ignore ((List.fold t.entries ~init:None ~f:(fun prev_entry entry ->
-    (* If the previous entry's end-of-scope label is not the same as the
-       current entry's start-of-scope label, insert a "no location" entry, so
-       objdump doesn't complain about holes in .debug_loc.
-       This relies on the entries being in order with base address selection
-       entries first (see location_list_entry.ml). *)
-    begin match prev_entry with
-    | None -> ()
-    | Some prev_entry ->
-      match Location_list_entry.scope prev_entry with
-      | None -> ()
-      | Some (_, _, prev_end) ->
-        match Location_list_entry.scope entry with
-        | None -> ()
-        | Some (start_of_code_symbol, cur_start, _) ->
-          if prev_end = cur_start then ()
-          else
-            let entry =
-              Location_list_entry.create_location_list_entry
-                ~start_of_code_symbol
-                ~first_address_when_in_scope:prev_end
-                ~first_address_when_not_in_scope:cur_start
-                ~location_expression:Location_expression.no_location
-            in
-            Location_list_entry.emit entry asm
-    end;
-    Location_list_entry.emit entry asm;
-    Some entry)) : Location_list_entry.t option);
+  List.iter t.entries ~f:(fun entry -> Location_list_entry.emit entry asm);
   (* DWARF-4 spec, section 2.6.2. *)
   Dwarf_value.emit end_marker asm;
   Dwarf_value.emit end_marker asm

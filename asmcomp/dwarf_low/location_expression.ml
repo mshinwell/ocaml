@@ -17,7 +17,6 @@ module SLE = Simple_location_expression
 (* We do not currently need composite location descriptions. *)
 type t = SLE.t
 
-let no_location = SLE.no_location
 let const_symbol = SLE.const_symbol
 let const_int = SLE.const_int
 let in_register = SLE.in_register
