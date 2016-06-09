@@ -15,8 +15,14 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 module L = Linearize
-module RM = Reg.Map_distinguishing_names
-module RS = Reg.Set_distinguishing_names
+
+(* By the time this pass has run, register stamps are irrelevant; indeed,
+   there may be multiple registers with different stamps assigned to the
+   same location.  As such, we quotient register sets by the equivalence
+   relation that identifies two registers iff they have the same name and
+   location. *)
+module RM = Reg.Map_distinguishing_names_and_locations
+module RS = Reg.Set_distinguishing_names_and_locations
 
 (* CR mshinwell: We're getting ranges that should be concatenated in the
    output.  For example:
@@ -92,14 +98,16 @@ end = struct
     | Read_field of { address : location; field : int; }
     | Offset_pointer of { address : location; offset_in_words : int; }
 
-  let create ~reg ~start_insn ~start_pos ~end_pos =
-    assert (reg.Reg.name <> None);
-    match start_insn.L.desc with
+  let create ~(reg : Reg.t) ~(start_insn : Linearize.instruction)
+        ~start_pos ~end_pos =
+    assert (reg.name <> None);
+    match start_insn.desc with
     | L.Lcapture_stack_offset _ | L.Llabel _ ->
-      begin match start_insn.L.desc with
+      begin match start_insn.desc with
       | L.Lcapture_stack_offset _ ->
-        assert (Array.length start_insn.L.arg = 1);
-        assert (reg == start_insn.L.arg.(0))
+        assert (Array.length start_insn.arg = 1);
+        assert (reg.name = start_insn.arg.(0).Reg.name);
+        assert (reg.shared.loc = start_insn.arg.(0).Reg.shared.loc)
       | _ -> ()
       end;
       { start_insn = Start_insn (reg, start_insn);
@@ -400,10 +408,7 @@ let rec process_instruction t ~first_insn ~(insn : L.instruction) ~prev_insn
      subrange from this point.  It follows that we should process deaths
      before births. *)
   RS.fold (fun (reg : Reg.t) () ->
-if reg.Reg.name = None then begin
-  Format.eprintf "IGNORING REG %a\n%!" Printmach.reg reg;
-  assert false
-end else
+      assert (reg.Reg.name <> None);  (* cf. [Available_filtering] *)
       let start_pos, start_insn =
         try RM.find reg open_subrange_start_insns
         with Not_found -> assert false

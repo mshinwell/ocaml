@@ -225,7 +225,7 @@ module RegOrder =
     let compare r1 r2 = r1.shared.stamp - r2.shared.stamp
   end
 
-module RegOrder_distinguishing_names =
+module RegOrder_distinguishing_names_and_locations =
   struct
     type t = reg
     let compare r1 r2 =
@@ -237,11 +237,15 @@ module RegOrder_distinguishing_names =
         | Some name1, Some name2 -> Ident.compare name1 name2
       in
       if c <> 0 then c
-      else RegOrder.compare r1 r2
+      else Pervasives.compare r1.shared.loc r2.shared.loc
   end
 
-module Set_distinguishing_names = Set.Make(RegOrder_distinguishing_names)
-module Map_distinguishing_names = Map.Make(RegOrder_distinguishing_names)
+module Set_distinguishing_names_and_locations =
+  Set.Make (RegOrder_distinguishing_names_and_locations)
+
+module Map_distinguishing_names_and_locations =
+  Map.Make (RegOrder_distinguishing_names_and_locations)
+
 module Set = Set.Make(RegOrder)
 module Map = Map.Make(RegOrder)
 
