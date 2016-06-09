@@ -90,6 +90,8 @@ type t =
   | DW_op_deref
   | DW_op_plus_uconst of Int64.t
   | DW_op_consts of Int64.t
+  | DW_op_call_frame_cfa
+  | DW_op_minus
   | DW_op_implicit_value of implicit_value
   | DW_op_stack_value
 
@@ -201,6 +203,8 @@ let print ppf t =
   | DW_op_deref -> fprintf ppf "DW_op_deref"
   | DW_op_plus_uconst i -> fprintf ppf "DW_op_plus_uconst %Ld" i
   | DW_op_consts i -> fprintf ppf "DW_op_consts %Ld" i
+  | DW_op_call_frame_cfa -> fprintf ppf "DW_op_call_frame_cfa"
+  | DW_op_minus -> fprintf ppf "DW_op_minus"
   | DW_op_implicit_value (Int i) ->
     fprintf ppf "DW_op_implicit_value %Ld" i
   | DW_op_implicit_value (Symbol symbol) ->
@@ -213,17 +217,15 @@ let contents_of_register ~reg_number =
 let _ = DW_op_fbreg { offset_in_bytes = 0L; }  (* silence compiler warning *)
 
 let contents_of_stack_slot ~offset_in_bytes =
-  let offset_in_bytes = Int64.of_int offset_in_bytes in
-  (* Using bregx rather than fbreg avoids the need for DW_AT_frame_base. *)
-  [DW_op_bregx {
-    reg_number = Proc.stack_ptr_dwarf_register_number;
-    offset_in_bytes;
-  };
-  DW_op_deref;
+  let offset_in_bytes = Int64.of_int offset_in_bytes in [
+    (* Note that this isn't target-dependent.  The target dependent part
+       is the thing (typically in emit.mlp) that fills in the offsets in
+       [Lcapture_stack_offset] instructions. *)
+    DW_op_call_frame_cfa;
+    DW_op_consts offset_in_bytes;
+    DW_op_minus;
+    DW_op_deref;
   ]
-(*
-  [DW_op_fbreg { offset_in_bytes; }; DW_op_deref]
-*)
 
 let value_of_symbol symbol = DW_op_addr symbol
 
@@ -359,6 +361,7 @@ let opcode = function
   | DW_op_addr _ -> 0x03
   | DW_op_deref -> 0x06
   | DW_op_consts _ -> 0x11
+  | DW_op_minus -> 0x1c
   | DW_op_plus_uconst _ -> 0x23
   | DW_op_reg0 -> 0x50
   | DW_op_reg1 -> 0x51
@@ -427,6 +430,7 @@ let opcode = function
   | DW_op_regx _ -> 0x90
   | DW_op_fbreg _ -> 0x91
   | DW_op_bregx _ -> 0x92
+  | DW_op_call_frame_cfa -> 0x9c
   | DW_op_implicit_value _ -> 0x9e
   | DW_op_stack_value -> 0x9f
 
@@ -513,9 +517,11 @@ let size t =
     | DW_op_implicit_value (Symbol _) ->
       let size_addr = Int64.of_int Arch.size_addr in
       Int64.add (Dwarf_value.size (Sleb128 size_addr)) size_addr
-    | DW_op_deref -> 0L
     | DW_op_plus_uconst const -> Dwarf_value.size (Uleb128 const)
     | DW_op_consts const -> Dwarf_value.size (Sleb128 const)
+    | DW_op_deref
+    | DW_op_minus
+    | DW_op_call_frame_cfa
     | DW_op_stack_value -> 0L
   in
   Int64.add opcode_size args_size
@@ -617,7 +623,9 @@ let emit t asm =
   | DW_op_implicit_value (Symbol symbol) ->
     Dwarf_value.emit (Sleb128 (Int64.of_int Arch.size_addr)) asm;
     Dwarf_value.emit (Code_address_from_symbol symbol) asm
-  | DW_op_deref -> ()
   | DW_op_plus_uconst const -> Dwarf_value.emit (Uleb128 const) asm
   | DW_op_consts const -> Dwarf_value.emit (Sleb128 const) asm
+  | DW_op_deref
+  | DW_op_minus
+  | DW_op_call_frame_cfa
   | DW_op_stack_value -> ()

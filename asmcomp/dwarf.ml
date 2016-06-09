@@ -124,6 +124,7 @@ let location_list_entry ~fundecl ~available_subrange =
         let reg_number = Proc.dwarf_register_number reg in
         LE.in_register ~reg_number
       | Reg.Stack _ ->
+        (* CR mshinwell: rename [Lcapture_stack_offset] *)
         match
           Available_subrange.offset_from_stack_ptr_in_bytes available_subrange
         with
@@ -131,15 +132,16 @@ let location_list_entry ~fundecl ~available_subrange =
           Misc.fatal_errorf "Register %a assigned to stack but without \
               stack offset annotation"
             Printmach.reg reg
-        | Some offset_in_bytes ->
-          if offset_in_bytes mod Arch.size_addr <> 0 then begin
+        | Some offset_in_bytes_from_cfa ->
+          if offset_in_bytes_from_cfa mod Arch.size_addr <> 0 then begin
             Misc.fatal_errorf "Dwarf.location_list_entry: misaligned stack \
                 slot at offset %d (reg %a)"
-              offset_in_bytes
+              offset_in_bytes_from_cfa
               Printmach.reg reg
           end;
           (* CR-soon mshinwell: use [offset_in_bytes] instead *)
-          LE.in_stack_slot ~offset_in_words:(offset_in_bytes / Arch.size_addr)
+          LE.in_stack_slot
+            ~offset_in_words:(offset_in_bytes_from_cfa / Arch.size_addr)
       end
     | Phantom (Symbol symbol) -> LE.const_symbol symbol
     | Phantom (Read_symbol_field { symbol; field; }) ->

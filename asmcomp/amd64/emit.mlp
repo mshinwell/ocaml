@@ -714,14 +714,15 @@ let emit_instr fallthrough i =
       end
   | Llabel lbl ->
       emit_Llabel fallthrough lbl
-  | Lcapture_stack_offset byte_offset_from_sp ->
-      assert (!byte_offset_from_sp = None);
+  | Lcapture_stack_offset byte_offset_from_cfa ->
+      assert (!byte_offset_from_cfa = None);
       assert (Array.length i.arg = 1);
       let reg = i.arg.(0) in
       begin match reg.shared.loc with
       | Unknown | Reg _ -> ()
       | Stack loc ->
-        byte_offset_from_sp := Some (slot_offset loc (register_class reg))
+        byte_offset_from_cfa :=
+          Some (frame_size () - (slot_offset loc (register_class reg)))
       end
   | Lbranch lbl ->
       I.jmp (label lbl)
