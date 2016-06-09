@@ -14,5 +14,5 @@
 
 type t
 
-include Emittable.S with type t := t
+include Dwarf_emittable.S with type t := t
 include Simple_location_expression.S with type t := t

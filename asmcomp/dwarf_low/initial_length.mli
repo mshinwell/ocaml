@@ -18,4 +18,4 @@ type t
 
 val create : Int64.t -> t
 
-include Emittable.S with type t := t
+include Dwarf_emittable.S with type t := t

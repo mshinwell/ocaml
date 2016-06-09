@@ -16,7 +16,7 @@
 
 type t
 
-include Emittable.S with type t := t
+include Dwarf_emittable.S with type t := t
 
 val create : abbreviation_code:Abbreviation_code.t
   -> tag:Dwarf_tag.t

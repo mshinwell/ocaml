@@ -26,4 +26,4 @@ type t
 val zero : unit -> t
 val to_int64 : t -> Int64.t
 
-include Emittable.S with type t := t
+include Dwarf_emittable.S with type t := t

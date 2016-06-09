@@ -36,4 +36,4 @@ type t =
   | UTF
   | User of user
 
-include Emittable with type t := t
+include Dwarf_emittable with type t := t

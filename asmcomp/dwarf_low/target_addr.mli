@@ -14,7 +14,7 @@
 
 include module type of Nativeint
 
-include Emittable.S with type t := t
+include Dwarf_emittable.S with type t := t
 
 val of_int : int -> t
 val to_int64 : t -> Int64.t

@@ -15,6 +15,6 @@
 (* DWARF-4 spec section 2.6 (top of page 26). *)
 type t
 
-include Emittable.S with type t := t
+include Dwarf_emittable.S with type t := t
 
 val of_simple_location_description : Simple_location_expression.t -> t

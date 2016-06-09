@@ -14,7 +14,7 @@
 
 type t
 
-include Emittable.S with type t := t
+include Dwarf_emittable.S with type t := t
 
 val create_location_list_entry : start_of_code_symbol:Symbol.t
   -> first_address_when_in_scope:Linearize.label

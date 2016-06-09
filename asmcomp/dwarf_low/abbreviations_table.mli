@@ -14,7 +14,7 @@
 
 type t
 
-include Emittable.S with type t := t
+include Dwarf_emittable.S with type t := t
 
 val create : unit -> t
 

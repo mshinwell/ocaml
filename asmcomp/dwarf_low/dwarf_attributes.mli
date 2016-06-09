@@ -217,7 +217,7 @@ module Attribute_specification : sig
     type t
 
     include Identifiable.S with type t := t
-    include Emittable.S with type t := t
+    include Dwarf_emittable.S with type t := t
   end
 
   val seal : _ t -> Sealed.t

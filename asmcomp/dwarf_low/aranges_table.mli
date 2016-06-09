@@ -18,7 +18,7 @@
 
 type t
 
-include Emittable.S with type t := t
+include Dwarf_emittable.S with type t := t
 
 val create : start_of_code_symbol:Symbol.t
   -> end_of_code_symbol:Symbol.t

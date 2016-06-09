@@ -83,6 +83,6 @@ type t =
   | Template_alias
   | User of user
 
-include Emittable.S with type t := t
+include Dwarf_emittable.S with type t := t
 
 val child_determination : t -> Child_determination.t

@@ -14,7 +14,7 @@
 
 type t
 
-include Emittable.S with type t := t
+include Dwarf_emittable.S with type t := t
 
 val create
    : location_list_entries:Location_list_entry.t list

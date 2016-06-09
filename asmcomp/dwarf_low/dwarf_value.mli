@@ -54,4 +54,4 @@ type t =
   | Offset_into_debug_loc of Linearize.label
   | Offset_into_debug_abbrev of Linearize.label
 
-include Emittable.S with type t := t
+include Dwarf_emittable.S with type t := t

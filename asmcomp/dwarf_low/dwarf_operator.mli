@@ -14,7 +14,7 @@
 
 type t
 
-include Emittable.S with type t := t
+include Dwarf_emittable.S with type t := t
 
 val contents_of_register : reg_number:int -> t
 val contents_of_stack_slot : offset_in_bytes:int -> t list

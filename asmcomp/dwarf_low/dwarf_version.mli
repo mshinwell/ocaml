@@ -14,7 +14,7 @@
 
 type t
 
-include Emittable.S with type t := t
+include Dwarf_emittable.S with type t := t
 
 (* Versions of the DWARF standard. *)
 val two : t

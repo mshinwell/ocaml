@@ -14,7 +14,7 @@
 
 type t
 
-include Emittable.S with type t := t
+include Dwarf_emittable.S with type t := t
 
 (** If [name] is provided, then a global symbol will be created at the
     same place as [label]. *)

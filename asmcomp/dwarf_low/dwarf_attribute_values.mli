@@ -66,5 +66,5 @@ module Attribute_value : sig
 
   val attribute_spec : t -> Dwarf_attributes.Attribute_specification.Sealed.t
 
-  include Emittable.S with type t := t
+  include Dwarf_emittable.S with type t := t
 end
