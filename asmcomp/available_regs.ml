@@ -187,11 +187,12 @@ let rec available_regs (instr : M.instruction) ~avail_before =
                handled by the removal of registers in [destroyed_at_oper],
                below.
             *)
-            (* CR mshinwell: still need to deal with the case where a
+            (* XCR mshinwell: still need to deal with the case where a
                variable is not spilled but is available just before the
                call.  However these don't need to be visible from a callee,
                so not extending their range to the end of the call insn
-               should do it. *)
+               should do it.
+               mshinwell: fixed in Available_ranges, need a comment here tho *)
             R.Set.union (R.Set.filter R.assigned_to_stack avail_before)
               (* CR mshinwell: deal with this "holds_non_pointer" thing *)
               (R.Set.filter R.holds_non_pointer avail_before)

@@ -56,6 +56,7 @@ module Available_subrange : sig
     -> start_insn:L.instruction
     -> start_pos:L.label
     -> end_pos:L.label
+    -> end_pos_offset:int option
     -> t
 
   val create_phantom
@@ -70,6 +71,7 @@ module Available_subrange : sig
 
   val start_pos : t -> L.label
   val end_pos : t -> L.label
+  val end_pos_offset : t -> int option
   val location : t -> location
   val offset_from_stack_ptr_in_bytes : t -> int option
 
@@ -90,6 +92,7 @@ end = struct
     (* CR mshinwell: we need to check exactly what happens with function
        epilogues, including returns in the middle of functions. *)
     end_pos : L.label;
+    end_pos_offset : int option;
   }
 
   type location =
@@ -99,7 +102,7 @@ end = struct
     | Offset_pointer of { address : location; offset_in_words : int; }
 
   let create ~(reg : Reg.t) ~(start_insn : Linearize.instruction)
-        ~start_pos ~end_pos =
+        ~start_pos ~end_pos ~end_pos_offset =
     assert (reg.name <> None);
     match start_insn.desc with
     | L.Lcapture_stack_offset _ | L.Llabel _ ->
@@ -113,6 +116,7 @@ end = struct
       { start_insn = Start_insn (reg, start_insn);
         start_pos;
         end_pos;
+        end_pos_offset;
       }
     | _ -> failwith "Available_subrange.create"
 
@@ -120,12 +124,14 @@ end = struct
     { start_insn = Phantom (provenance, defining_expr);
       start_pos;
       end_pos;
+      end_pos_offset = None;
     }
 
   let create_read_field t ~field =
     { start_insn = Read_field { address = t.start_insn; field; };
       start_pos = t.start_pos;
       end_pos = t.end_pos;
+      end_pos_offset = t.end_pos_offset;
     }
 
   let create_offset_pointer t ~offset_in_words =
@@ -133,10 +139,12 @@ end = struct
         Offset_pointer { address = t.start_insn; offset_in_words; };
       start_pos = t.start_pos;
       end_pos = t.end_pos;
+      end_pos_offset = t.end_pos_offset;
     }
 
   let start_pos t = t.start_pos
   let end_pos t = t.end_pos
+  let end_pos_offset t = t.end_pos_offset
 
   let location t : location =
     let rec convert_location (start_insn : start_insn_or_symbol) =
@@ -247,15 +255,14 @@ end = struct
   let add_subrange t ~subrange =
     let start_pos = Available_subrange.start_pos subrange in
     let end_pos = Available_subrange.end_pos subrange in
-    (* CR-someday mshinwell: consider if there is a way of addressing the
-       label ordering problem *)
     (* This is dubious, but should be correct by virtue of the way label
        counters are allocated (see linearize.ml) and the fact that, below,
        we go through the code from lowest (code) address to highest.  As
        such the label with the highest integer value should be the one with
        the highest address, and vice-versa.  (Note that we also exploit the
        ordering when constructing location lists, to ensure that they are
-       sorted in increasing program counter order by start address.) *)
+       sorted in increasing program counter order by start address.
+       However by that stage [Coalesce_labels] has run.) *)
     assert (compare start_pos end_pos <= 0);
     begin
       match t.min_pos with
@@ -287,6 +294,7 @@ end = struct
       | Phantom _ | Read_field _ | Offset_pointer _ -> None
 
   let extremities t =
+    (* We ignore any [end_pos_offsets] here; should be ok. *)
     match t.min_pos, t.max_pos with
     | Some min, Some max -> min, max
     | Some _, None | None, Some _ -> assert false
@@ -420,8 +428,24 @@ let rec process_instruction t ~first_insn ~(insn : L.instruction) ~prev_insn
         with Not_found -> assert false
       in
       let end_pos = Lazy.force label in
+      let end_pos_offset =
+        (* If the range is for a register destroyed by a call (which for
+           calls to OCaml functions means any non-spilled register) and which
+           ends immediately after a call instruction, move the end of the
+           range back very slightly.  The effect is that the register is seen
+           in the debugger as available when standing on the call instruction
+           but unavailable when we are in the callee (and move to the previous
+           frame). *)
+        match !prev_insn with
+        | None -> None
+        | Some prev_insn ->
+          match prev_insn.L.desc with
+          | Lop (Icall_ind | Icall_imm _ | Iextcall _) -> Some (-1)
+          | _ -> None
+      in
       let subrange =
         Available_subrange.create ~reg ~start_pos ~start_insn ~end_pos
+          ~end_pos_offset
       in
       let ident =
         match reg.name with

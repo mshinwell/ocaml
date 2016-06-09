@@ -21,16 +21,19 @@ module Location_list_entry = struct
     start_of_code_symbol : Symbol.t;
     beginning_address_label : Linearize.label;
     ending_address_label : Linearize.label;
+    ending_address_offset : int option;
     expr : Location_expression.t;
   }
 
   let create ~start_of_code_symbol
              ~first_address_when_in_scope
              ~first_address_when_not_in_scope
+             ~first_address_when_not_in_scope_offset
              ~location_expression =
     { start_of_code_symbol;
       beginning_address_label = first_address_when_in_scope;
       ending_address_label = first_address_when_not_in_scope;
+      ending_address_offset = first_address_when_not_in_scope_offset;
       expr = location_expression;
     }
 
@@ -48,14 +51,20 @@ module Location_list_entry = struct
       }
 
   let ending_value t =
-    Dwarf_value.Code_address_from_label_symbol_diff
-      { upper = t.ending_address_label;
-        lower = t.start_of_code_symbol;
+    let offset_upper =
+      match t.ending_address_offset with
+      | None ->
         (* It seems as if this should be "-1", but actually not.
            DWARF-4 spec p.30 (point 2):
            "...the first address past the end of the address range over
             which the location is valid." *)
-        offset_upper = 0;
+        0
+      | Some offset -> offset
+    in
+    Dwarf_value.Code_address_from_label_symbol_diff
+      { upper = t.ending_address_label;
+        lower = t.start_of_code_symbol;
+        offset_upper;
       }
 
   let size t =
@@ -100,11 +109,13 @@ type t =
 let create_location_list_entry ~start_of_code_symbol
                                ~first_address_when_in_scope
                                ~first_address_when_not_in_scope
+                               ~first_address_when_not_in_scope_offset
                                ~location_expression =
   Location_list_entry (
     Location_list_entry.create ~start_of_code_symbol
       ~first_address_when_in_scope
       ~first_address_when_not_in_scope
+      ~first_address_when_not_in_scope_offset
       ~location_expression)
 
 let create_base_address_selection_entry ~base_address_symbol =

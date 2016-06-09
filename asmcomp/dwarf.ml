@@ -164,11 +164,15 @@ let location_list_entry ~fundecl ~available_subrange =
   let first_address_when_not_in_scope =
     Available_subrange.end_pos available_subrange
   in
+  let first_address_when_not_in_scope_offset =
+    Available_subrange.end_pos_offset available_subrange
+  in
   let entry =
     Location_list_entry.create_location_list_entry
       ~start_of_code_symbol
       ~first_address_when_in_scope
       ~first_address_when_not_in_scope
+      ~first_address_when_not_in_scope_offset
       ~location_expression
   in
   Some entry

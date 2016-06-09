@@ -55,6 +55,7 @@ module Available_subrange : sig
 
   val start_pos : t -> Linearize.label
   val end_pos : t -> Linearize.label
+  val end_pos_offset : t -> int option
 
   val location : t -> location
 
