@@ -173,13 +173,9 @@ let location_list_entry ~fundecl ~available_subrange =
   in
   Some entry
 
-let dwarf_for_identifier ?force_is_parameter t ~fundecl ~function_proto_die
+let dwarf_for_identifier t ~fundecl ~function_proto_die
       ~lexical_block_cache ~ident ~is_unique:_ ~range =
-  let is_parameter =
-    match force_is_parameter with
-    | Some is_parameter -> is_parameter
-    | None -> Available_range.is_parameter range
-  in
+  let is_parameter = Available_range.is_parameter range in
   let (start_pos, end_pos) as cache_key = Available_range.extremities range in
   let parent_proto_die =
     match is_parameter with
@@ -272,10 +268,10 @@ let dwarf_for_identifier ?force_is_parameter t ~fundecl ~function_proto_die
     Proto_die.set_sort_priority proto_die index
   end
 
-let dwarf_for_identifier ?force_is_parameter t ~fundecl ~function_proto_die
+let dwarf_for_identifier t ~fundecl ~function_proto_die
       ~lexical_block_cache ~(ident : Ident.t) ~is_unique ~range =
 (*  if ident.stamp <= !Flambda.ident_stamp_before_flambda then *)begin
-    dwarf_for_identifier ?force_is_parameter t ~fundecl ~function_proto_die
+    dwarf_for_identifier t ~fundecl ~function_proto_die
       ~lexical_block_cache ~ident ~is_unique ~range
   end
 

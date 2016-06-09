@@ -273,9 +273,15 @@ end = struct
     t.subranges <- subrange::t.subranges
 
   let is_parameter t =
-    match t.subranges with
+    (* Look at the first subrange, since a later subrange for the same
+       variable might not be marked as a parameter. *)
+    match List.rev t.subranges with
     | [] -> assert false
     | subrange::_ ->
+      (* CR-soon mshinwell: Phantom ones could in theory be parameters too
+         (e.g. a specialised arg maybe?), although I'm not sure that can
+         happen at the moment since Flambda always marks removed arguments
+         with Dead phantom lets. *)
       match Available_subrange.location subrange with
       | Reg reg -> reg.Reg.shared.Reg.is_parameter
       | Phantom _ | Read_field _ | Offset_pointer _ -> None
