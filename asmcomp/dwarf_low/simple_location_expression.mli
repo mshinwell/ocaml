@@ -22,6 +22,8 @@ include Emittable.S with type t := t
 module type S = sig
   type t
 
+  val no_location : t
+
   val const_symbol : Symbol.t -> t
   val const_int : Int64.t -> t
   (* CR-soon mshinwell: consider a new type to identify whose register

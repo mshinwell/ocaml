@@ -124,6 +124,13 @@ let emit t asm =
   | Base_address_selection_entry entry ->
     Base_address_selection_entry.emit entry asm
 
+let scope t =
+  match t with
+  | Location_list_entry entry ->
+    Some (entry.start_of_code_symbol, entry.beginning_address_label,
+      entry.ending_address_label)
+  | Base_address_selection_entry _ -> None
+
 let compare_ascending_vma t1 t2 =
   (* This relies on a certain ordering on labels.  See available_ranges.mli. *)
   match t1, t2 with

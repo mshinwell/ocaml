@@ -1,24 +1,16 @@
-(***********************************************************************)
-(*                                                                     *)
-(*                               OCaml                                 *)
-(*                                                                     *)
-(*                 Mark Shinwell, Jane Street Europe                   *)
-(*                                                                     *)
-(*  Copyright 2013--2014, Jane Street Holding                          *)
-(*                                                                     *)
-(*  Licensed under the Apache License, Version 2.0 (the "License");    *)
-(*  you may not use this file except in compliance with the License.   *)
-(*  You may obtain a copy of the License at                            *)
-(*                                                                     *)
-(*      http://www.apache.org/licenses/LICENSE-2.0                     *)
-(*                                                                     *)
-(*  Unless required by applicable law or agreed to in writing,         *)
-(*  software distributed under the License is distributed on an        *)
-(*  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,       *)
-(*  either express or implied.  See the License for the specific       *)
-(*  language governing permissions and limitations under the License.  *)
-(*                                                                     *)
-(***********************************************************************)
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                  Mark Shinwell, Jane Street Europe                     *)
+(*                                                                        *)
+(*   Copyright 2014--2016 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
 
 open Std_internal
 
@@ -29,7 +21,8 @@ type t = {
 
 (* It isn't exactly clear what the sorting requirement is, but we sort
    within a location list by increasing virtual memory address on the
-   start addresses of the entries. *)
+   start addresses of the entries.  This also means that we can fill the
+   "holes" in the location lists and keep objdump quiet. *)
 let sort entries =
   List.sort entries ~cmp:Location_list_entry.compare_ascending_vma
 
@@ -60,7 +53,34 @@ let compare_increasing_vma t1 t2 =
 let emit t asm =
   let module A = (val asm : Asm_directives.S) in
   A.label_declaration ~label_name:t.name;
-  List.iter t.entries ~f:(fun entry -> Location_list_entry.emit entry asm);
+  ignore ((List.fold t.entries ~init:None ~f:(fun prev_entry entry ->
+    (* If the previous entry's end-of-scope label is not the same as the
+       current entry's start-of-scope label, insert a "no location" entry, so
+       objdump doesn't complain about holes in .debug_loc.
+       This relies on the entries being in order with base address selection
+       entries first (see location_list_entry.ml). *)
+    begin match prev_entry with
+    | None -> ()
+    | Some prev_entry ->
+      match Location_list_entry.scope prev_entry with
+      | None -> ()
+      | Some (_, _, prev_end) ->
+        match Location_list_entry.scope entry with
+        | None -> ()
+        | Some (start_of_code_symbol, cur_start, _) ->
+          if prev_end = cur_start then ()
+          else
+            let entry =
+              Location_list_entry.create_location_list_entry
+                ~start_of_code_symbol
+                ~first_address_when_in_scope:prev_end
+                ~first_address_when_not_in_scope:cur_start
+                ~location_expression:Location_expression.no_location
+            in
+            Location_list_entry.emit entry asm
+    end;
+    Location_list_entry.emit entry asm;
+    Some entry)) : Location_list_entry.t option);
   (* DWARF-4 spec, section 2.6.2. *)
   Dwarf_value.emit end_marker asm;
   Dwarf_value.emit end_marker asm
