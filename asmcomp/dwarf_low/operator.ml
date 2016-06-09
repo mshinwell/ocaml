@@ -21,6 +21,38 @@ type implicit_value =
 type t =
   | DW_op_addr of Symbol.t
   | DW_op_regx of { reg_number : int; }
+  | DW_op_reg0
+  | DW_op_reg1
+  | DW_op_reg2
+  | DW_op_reg3
+  | DW_op_reg4
+  | DW_op_reg5
+  | DW_op_reg6
+  | DW_op_reg7
+  | DW_op_reg8
+  | DW_op_reg9
+  | DW_op_reg10
+  | DW_op_reg11
+  | DW_op_reg12
+  | DW_op_reg13
+  | DW_op_reg14
+  | DW_op_reg15
+  | DW_op_reg16
+  | DW_op_reg17
+  | DW_op_reg18
+  | DW_op_reg19
+  | DW_op_reg20
+  | DW_op_reg21
+  | DW_op_reg22
+  | DW_op_reg23
+  | DW_op_reg24
+  | DW_op_reg25
+  | DW_op_reg26
+  | DW_op_reg27
+  | DW_op_reg28
+  | DW_op_reg29
+  | DW_op_reg30
+  | DW_op_reg31
   | DW_op_fbreg of { offset_in_bytes : Int64.t; }
   | DW_op_breg0 of { offset_in_bytes : Int64.t; }
   | DW_op_breg1 of { offset_in_bytes : Int64.t; }
@@ -66,6 +98,38 @@ let print ppf t =
   match t with
   | DW_op_addr sym -> fprintf ppf "DW_op_addr %a" Symbol.print sym
   | DW_op_regx { reg_number; } -> fprintf ppf "DW_op_regx %d" reg_number
+  | DW_op_reg0 -> fprintf ppf "DW_op_reg0"
+  | DW_op_reg1 -> fprintf ppf "DW_op_reg1"
+  | DW_op_reg2 -> fprintf ppf "DW_op_reg2"
+  | DW_op_reg3 -> fprintf ppf "DW_op_reg3"
+  | DW_op_reg4 -> fprintf ppf "DW_op_reg4"
+  | DW_op_reg5 -> fprintf ppf "DW_op_reg5"
+  | DW_op_reg6 -> fprintf ppf "DW_op_reg6"
+  | DW_op_reg7 -> fprintf ppf "DW_op_reg7"
+  | DW_op_reg8 -> fprintf ppf "DW_op_reg8"
+  | DW_op_reg9 -> fprintf ppf "DW_op_reg9"
+  | DW_op_reg10 -> fprintf ppf "DW_op_reg10"
+  | DW_op_reg11 -> fprintf ppf "DW_op_reg11"
+  | DW_op_reg12 -> fprintf ppf "DW_op_reg12"
+  | DW_op_reg13 -> fprintf ppf "DW_op_reg13"
+  | DW_op_reg14 -> fprintf ppf "DW_op_reg14"
+  | DW_op_reg15 -> fprintf ppf "DW_op_reg15"
+  | DW_op_reg16 -> fprintf ppf "DW_op_reg16"
+  | DW_op_reg17 -> fprintf ppf "DW_op_reg17"
+  | DW_op_reg18 -> fprintf ppf "DW_op_reg18"
+  | DW_op_reg19 -> fprintf ppf "DW_op_reg19"
+  | DW_op_reg20 -> fprintf ppf "DW_op_reg20"
+  | DW_op_reg21 -> fprintf ppf "DW_op_reg21"
+  | DW_op_reg22 -> fprintf ppf "DW_op_reg22"
+  | DW_op_reg23 -> fprintf ppf "DW_op_reg23"
+  | DW_op_reg24 -> fprintf ppf "DW_op_reg24"
+  | DW_op_reg25 -> fprintf ppf "DW_op_reg25"
+  | DW_op_reg26 -> fprintf ppf "DW_op_reg26"
+  | DW_op_reg27 -> fprintf ppf "DW_op_reg27"
+  | DW_op_reg28 -> fprintf ppf "DW_op_reg28"
+  | DW_op_reg29 -> fprintf ppf "DW_op_reg29"
+  | DW_op_reg30 -> fprintf ppf "DW_op_reg30"
+  | DW_op_reg31 -> fprintf ppf "DW_op_reg31"
   | DW_op_fbreg { offset_in_bytes; } ->
     fprintf ppf "DW_op_fbreg 0x%Lx" offset_in_bytes
   | DW_op_breg0 { offset_in_bytes; } ->
@@ -154,7 +218,9 @@ let contents_of_stack_slot ~offset_in_bytes =
   [DW_op_bregx {
     reg_number = Proc.stack_ptr_dwarf_register_number;
     offset_in_bytes;
-  }]
+  };
+  DW_op_deref;
+  ]
 (*
   [DW_op_fbreg { offset_in_bytes; }; DW_op_deref]
 *)
@@ -206,6 +272,42 @@ let optimize_sequence ts =
     | t::ts -> t :: (optimize ts)
   in
   List.map (function
+      | (DW_op_regx { reg_number = reg; }) as op ->
+        begin match reg with
+        | 0 -> DW_op_reg0
+        | 1 -> DW_op_reg1
+        | 2 -> DW_op_reg2
+        | 3 -> DW_op_reg3
+        | 4 -> DW_op_reg4
+        | 5 -> DW_op_reg5
+        | 6 -> DW_op_reg6
+        | 7 -> DW_op_reg7
+        | 8 -> DW_op_reg8
+        | 9 -> DW_op_reg9
+        | 10 -> DW_op_reg10
+        | 11 -> DW_op_reg11
+        | 12 -> DW_op_reg12
+        | 13 -> DW_op_reg13
+        | 14 -> DW_op_reg14
+        | 15 -> DW_op_reg15
+        | 16 -> DW_op_reg16
+        | 17 -> DW_op_reg17
+        | 18 -> DW_op_reg18
+        | 19 -> DW_op_reg19
+        | 20 -> DW_op_reg20
+        | 21 -> DW_op_reg21
+        | 22 -> DW_op_reg22
+        | 23 -> DW_op_reg23
+        | 24 -> DW_op_reg24
+        | 25 -> DW_op_reg25
+        | 26 -> DW_op_reg26
+        | 27 -> DW_op_reg27
+        | 28 -> DW_op_reg28
+        | 29 -> DW_op_reg29
+        | 30 -> DW_op_reg30
+        | 31 -> DW_op_reg31
+        | _ -> op
+        end
       | (DW_op_bregx { reg_number = reg; offset_in_bytes; }) as op ->
         begin match reg with
         | 0 -> DW_op_breg0 { offset_in_bytes; }
@@ -258,6 +360,38 @@ let opcode = function
   | DW_op_deref -> 0x06
   | DW_op_consts _ -> 0x11
   | DW_op_plus_uconst _ -> 0x23
+  | DW_op_reg0 -> 0x50
+  | DW_op_reg1 -> 0x51
+  | DW_op_reg2 -> 0x52
+  | DW_op_reg3 -> 0x53
+  | DW_op_reg4 -> 0x54
+  | DW_op_reg5 -> 0x55
+  | DW_op_reg6 -> 0x56
+  | DW_op_reg7 -> 0x57
+  | DW_op_reg8 -> 0x58
+  | DW_op_reg9 -> 0x59
+  | DW_op_reg10 -> 0x5a
+  | DW_op_reg11 -> 0x5b
+  | DW_op_reg12 -> 0x5c
+  | DW_op_reg13 -> 0x5d
+  | DW_op_reg14 -> 0x5e
+  | DW_op_reg15 -> 0x5f
+  | DW_op_reg16 -> 0x60
+  | DW_op_reg17 -> 0x61
+  | DW_op_reg18 -> 0x62
+  | DW_op_reg19 -> 0x63
+  | DW_op_reg20 -> 0x64
+  | DW_op_reg21 -> 0x65
+  | DW_op_reg22 -> 0x66
+  | DW_op_reg23 -> 0x67
+  | DW_op_reg24 -> 0x68
+  | DW_op_reg25 -> 0x69
+  | DW_op_reg26 -> 0x6a
+  | DW_op_reg27 -> 0x6b
+  | DW_op_reg28 -> 0x6c
+  | DW_op_reg29 -> 0x6d
+  | DW_op_reg30 -> 0x6e
+  | DW_op_reg31 -> 0x6f
   | DW_op_breg0 _ -> 0x70
   | DW_op_breg1 _ -> 0x71
   | DW_op_breg2 _ -> 0x72
@@ -303,6 +437,38 @@ let size t =
     | DW_op_addr _addr -> Int64.of_int Arch.size_addr
     | DW_op_regx { reg_number; } ->
       Dwarf_value.size (Uleb128 (Int64.of_int reg_number))
+    | DW_op_reg0
+    | DW_op_reg1
+    | DW_op_reg2
+    | DW_op_reg3
+    | DW_op_reg4
+    | DW_op_reg5
+    | DW_op_reg6
+    | DW_op_reg7
+    | DW_op_reg8
+    | DW_op_reg9
+    | DW_op_reg10
+    | DW_op_reg11
+    | DW_op_reg12
+    | DW_op_reg13
+    | DW_op_reg14
+    | DW_op_reg15
+    | DW_op_reg16
+    | DW_op_reg17
+    | DW_op_reg18
+    | DW_op_reg19
+    | DW_op_reg20
+    | DW_op_reg21
+    | DW_op_reg22
+    | DW_op_reg23
+    | DW_op_reg24
+    | DW_op_reg25
+    | DW_op_reg26
+    | DW_op_reg27
+    | DW_op_reg28
+    | DW_op_reg29
+    | DW_op_reg30
+    | DW_op_reg31 -> 0L
     | DW_op_fbreg { offset_in_bytes; } ->
       Dwarf_value.size (Sleb128 offset_in_bytes)
     | DW_op_bregx { reg_number; offset_in_bytes; } ->
@@ -360,6 +526,38 @@ let emit t asm =
   | DW_op_addr sym -> Dwarf_value.emit (Code_address_from_symbol sym) asm
   | DW_op_regx { reg_number ; } ->
     Dwarf_value.emit (Uleb128 (Int64.of_int reg_number)) asm
+  | DW_op_reg0
+  | DW_op_reg1
+  | DW_op_reg2
+  | DW_op_reg3
+  | DW_op_reg4
+  | DW_op_reg5
+  | DW_op_reg6
+  | DW_op_reg7
+  | DW_op_reg8
+  | DW_op_reg9
+  | DW_op_reg10
+  | DW_op_reg11
+  | DW_op_reg12
+  | DW_op_reg13
+  | DW_op_reg14
+  | DW_op_reg15
+  | DW_op_reg16
+  | DW_op_reg17
+  | DW_op_reg18
+  | DW_op_reg19
+  | DW_op_reg20
+  | DW_op_reg21
+  | DW_op_reg22
+  | DW_op_reg23
+  | DW_op_reg24
+  | DW_op_reg25
+  | DW_op_reg26
+  | DW_op_reg27
+  | DW_op_reg28
+  | DW_op_reg29
+  | DW_op_reg30
+  | DW_op_reg31 -> ()
   | DW_op_fbreg { offset_in_bytes; } ->
     Dwarf_value.emit (Sleb128 offset_in_bytes) asm
   | DW_op_bregx { reg_number; offset_in_bytes; } ->
