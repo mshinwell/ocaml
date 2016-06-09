@@ -107,7 +107,6 @@ ARCH_SPECIFIC_ASMCOMP=$(INTEL_ASM)
 endif
 
 DWARF_LOW=\
-  asmcomp/dwarf_low/std_internal.cmo \
   asmcomp/dwarf_low/dwarf_format.cmo \
   asmcomp/dwarf_low/int8.cmo \
   asmcomp/dwarf_low/int16.cmo \

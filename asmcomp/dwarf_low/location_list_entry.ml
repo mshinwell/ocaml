@@ -14,8 +14,6 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-open Std_internal
-
 module Location_list_entry = struct
   type t = {
     start_of_code_symbol : Symbol.t;
@@ -94,12 +92,13 @@ module Base_address_selection_entry = struct
     ]
 
   let size t =
-    List.fold (to_dwarf_values t)
-      ~init:Int64.zero
-      ~f:(fun acc v -> Int64.add acc (Dwarf_value.size v))
+    List.fold_left (fun acc v -> Int64.add acc (Dwarf_value.size v))
+      Int64.zero
+      (to_dwarf_values t)
 
   let emit t asm =
-    List.iter (to_dwarf_values t) ~f:(fun v -> Dwarf_value.emit v asm)
+    List.iter (fun v -> Dwarf_value.emit v asm)
+      (to_dwarf_values t)
 end
 
 type t =

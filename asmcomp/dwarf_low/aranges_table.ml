@@ -12,8 +12,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Std_internal
-
 (* DWARF-4 standard section 6.1.2. *)
 
 type t = {
@@ -41,9 +39,9 @@ let create ~start_of_code_symbol ~end_of_code_symbol
   ]
   in
   let size =
-    List.fold_left values
-      ~init:Int64.zero
-      ~f:(fun size value -> Int64.add size (V.size value))
+    List.fold_left (fun size value -> Int64.add size (V.size value))
+      Int64.zero
+      values
   in
   { size; values; }
 
@@ -51,4 +49,4 @@ let size t = t.size
 
 let emit t asm =
   Initial_length.emit (Initial_length.create t.size) asm;
-  List.iter t.values ~f:(fun v -> Dwarf_value.emit v asm)
+  List.iter (fun v -> Dwarf_value.emit v asm) t.values

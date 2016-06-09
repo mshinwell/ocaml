@@ -12,8 +12,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Std_internal
-
 module Attribute_value = Dwarf_attribute_values.Attribute_value
 
 type t = {
@@ -54,13 +52,13 @@ let emit t asm =
     A.label_declaration ~label_name:t.label
   end;
   Abbreviation_code.emit t.abbreviation_code asm;
-  List.iter t.attribute_values ~f:(fun av -> Attribute_value.emit av asm)
+  List.iter (fun av -> Attribute_value.emit av asm) t.attribute_values
 
 let size t =
-  List.fold_left t.attribute_values
-    ~init:(Abbreviation_code.size t.abbreviation_code)
-    ~f:(fun size attribute_value ->
-          Int64.add size (Attribute_value.size attribute_value))
+  List.fold_left (fun size attribute_value ->
+      Int64.add size (Attribute_value.size attribute_value))
+    (Abbreviation_code.size t.abbreviation_code)
+    t.attribute_values
 
 let label t = t.label
 let abbreviation_code t = t.abbreviation_code

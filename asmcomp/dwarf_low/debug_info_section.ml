@@ -12,8 +12,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Std_internal
-
 module DIE = Debugging_information_entry
 
 type t = {
@@ -40,9 +38,9 @@ let address_width_in_bytes_on_target =
 let size_without_first_word t =
   let (+) = Int64.add in
   let total_die_size =
-    List.fold_left t.dies
-      ~init:Int64.zero
-      ~f:(fun size die -> size + DIE.size die)
+    List.fold_left (fun size die -> size + DIE.size die)
+      Int64.zero
+      t.dies
   in
   Dwarf_version.size dwarf_version
     + Dwarf_value.size (debug_abbrev_offset t)
@@ -61,4 +59,4 @@ let emit t asm =
   Dwarf_version.emit dwarf_version asm;
   Dwarf_value.emit (debug_abbrev_offset t) asm;
   Dwarf_value.emit address_width_in_bytes_on_target asm;
-  List.iter t.dies ~f:(fun die -> DIE.emit die asm)
+  List.iter (fun die -> DIE.emit die asm) t.dies
