@@ -688,6 +688,8 @@ let compute_variance env visited vari ty =
                     null [May_pos; May_neg; May_weak]
                 in
                 let v = inter vari upper in
+                (* cf PR#7269:
+                   if List.length tyl > 1 then upper else inter vari upper *)
                 List.iter (compute_variance_rec v) tyl
             | _ -> ())
           row.row_fields;

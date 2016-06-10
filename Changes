@@ -40,6 +40,10 @@ OCaml 4.04.0:
 
 ### Standard library:
 
+- GPR#589: Add a non-allocating function to recover the number of
+  allocated minor words.
+  (Pierre Chambart, review by Damien Doligez and Gabriel Scherer)
+
 - GPR#427: Obj.is_block is now an inlined OCaml function instead of a
   C external.  This should be faster.
   (Demi Obenour)
@@ -69,6 +73,10 @@ OCaml 4.04.0:
 
 ### Build system:
 
+- GPR#512: Installed `ocamlc`, `ocamlopt`, and `ocamllex` are now the
+  native-code versions of the tools, if those versions were built.
+  (Demi Obenour)
+
 - GPR#324: Compiler developpers only: Adding new primitives to the
   standard runtime doesn't require anymore to run `make bootstrap`
   (François Bobot)
@@ -85,6 +93,10 @@ OCaml 4.04.0:
 ### Bug fixes:
 
 - PR#7112: Aliased arguments ignored for equality of module types
+- PR#7260: GADT + subtyping compile time crash
+  (Jacques Garrigue, report by Nicolas Ojeda Bar)
+- PR#7269: Segfault from conjunctive constraints in GADT
+  (Jacques Garrigue, report by Stephen Dolan)
 
 ### Other libraries:
 
