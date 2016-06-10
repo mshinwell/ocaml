@@ -28,10 +28,9 @@ let remove_params unused (fun_decl: Flambda.function_declaration) =
     List.partition (fun v -> Variable.Set.mem v unused) fun_decl.params
   in
   let unused_params =
-    (* An occurrence of a variable on the RHS of a phantom let does not
-       count as a use for the purposes of this pass. *)
     List.filter (fun var ->
-        Free_names.is_free_variable fun_decl.free_names var)
+        Variable.Set.mem var
+          (Free_names.all_free_variables fun_decl.free_names))
       unused_params
   in
   let body =
