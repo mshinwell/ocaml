@@ -45,7 +45,7 @@ module Location_list_entry = struct
     Dwarf_value.Code_address_from_label_symbol_diff
       { upper = t.beginning_address_label;
         lower = t.start_of_code_symbol;
-        offset_upper = 0;
+        offset_upper = Target_system.Address.zero ();
       }
 
   let ending_value t =
@@ -56,8 +56,8 @@ module Location_list_entry = struct
            DWARF-4 spec p.30 (point 2):
            "...the first address past the end of the address range over
             which the location is valid." *)
-        0
-      | Some offset -> offset
+        Target_system.Address.zero ()
+      | Some offset -> Target_system.Address.of_int_exn offset
     in
     Dwarf_value.Code_address_from_label_symbol_diff
       { upper = t.ending_address_label;
@@ -87,7 +87,7 @@ module Base_address_selection_entry = struct
   let create ~base_address_symbol = base_address_symbol
 
   let to_dwarf_values t =
-    [Dwarf_value.Absolute_code_address Target_addr.highest;
+    [Dwarf_value.Absolute_code_address (Target_system.Address.highest ());
      Dwarf_value.Code_address_from_symbol t;
     ]
 

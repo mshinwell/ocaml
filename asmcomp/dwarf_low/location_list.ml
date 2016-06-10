@@ -30,7 +30,8 @@ let create ~location_list_entries =
 
 let label t = t.name
 
-let end_marker = Dwarf_value.Absolute_code_address Target_addr.zero
+let end_marker () =
+  Dwarf_value.Absolute_code_address (Target_system.Address.zero ())
 
 let size t =
   let (+) = Int64.add in
@@ -39,6 +40,7 @@ let size t =
       Int64.zero
       t.entries
   in
+  let end_marker = end_marker () in
   body_size + Dwarf_value.size end_marker + Dwarf_value.size end_marker
 
 let compare_increasing_vma t1 t2 =
@@ -52,5 +54,6 @@ let emit t asm =
   A.label_declaration ~label_name:t.name;
   List.iter (fun entry -> Location_list_entry.emit entry asm) t.entries;
   (* DWARF-4 spec, section 2.6.2. *)
+  let end_marker = end_marker () in
   Dwarf_value.emit end_marker asm;
   Dwarf_value.emit end_marker asm

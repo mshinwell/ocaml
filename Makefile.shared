@@ -43,7 +43,7 @@ INCLUDES=-I utils -I parsing -I typing -I bytecomp -I middle_end \
         -I middle_end/base_types -I asmcomp -I asmcomp/dwarf_high \
         -I asmcomp/dwarf_low -I driver -I toplevel
 
-UTILS=utils/config.cmo utils/misc.cmo \
+UTILS=utils/config.cmo utils/misc.cmo utils/target_system.cmo \
   utils/identifiable.cmo utils/numbers.cmo utils/arg_helper.cmo \
   utils/clflags.cmo utils/tbl.cmo utils/timings.cmo \
   utils/terminfo.cmo utils/ccomp.cmo utils/warnings.cmo \
@@ -109,7 +109,6 @@ endif
 DWARF_LOW=\
   asmcomp/dwarf_low/dwarf_format.cmo \
   asmcomp/dwarf_low/dwarf_format_int.cmo \
-  asmcomp/dwarf_low/target_addr.cmo \
   asmcomp/dwarf_low/dwarf_value.cmo \
   asmcomp/dwarf_low/dwarf_version.cmo \
   asmcomp/dwarf_low/initial_length.cmo \

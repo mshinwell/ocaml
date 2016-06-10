@@ -32,13 +32,15 @@ type t =
   | Sleb128 of Int64.t
   | String of string
   | Indirect_string of string
-  | Absolute_code_address of Target_addr.t
+  | Absolute_code_address of Target_system.Address.t
   | Code_address_from_label of Linearize.label
   | Code_address_from_symbol of Symbol.t
   | Code_address_from_label_symbol_diff of
-      { upper : Linearize.label; lower : Symbol.t; offset_upper : int; }
+      { upper : Linearize.label; lower : Symbol.t;
+        offset_upper : Target_system.Address.t;
+      }
   | Code_address_from_symbol_diff of { upper : Symbol.t; lower : Symbol.t; }
-  | Code_address_from_symbol_plus_bytes of Symbol.t * Target_addr.t
+  | Code_address_from_symbol_plus_bytes of Symbol.t * Target_system.Address.t
   | Offset_into_debug_info of Linearize.label
   | Offset_into_debug_info_from_symbol of Symbol.t
   | Offset_into_debug_line of Linearize.label
@@ -71,7 +73,11 @@ let size t =
   | Code_address_from_symbol _ 
   | Code_address_from_label_symbol_diff _
   | Code_address_from_symbol_diff _
-  | Code_address_from_symbol_plus_bytes _ -> Target_addr.size Target_addr.zero
+  | Code_address_from_symbol_plus_bytes _ ->
+    begin match Target_system.Address.word_size () with
+    | Four -> 4L
+    | Eight -> 8L
+    end
   | String str -> Int64.of_int (String.length str + 1)
   | Indirect_string _
   | Offset_into_debug_line _
@@ -105,7 +111,7 @@ let emit t asm =
     let label = A.cache_string s in
     A.offset_into_section_label ~section:(Dwarf Debug_str) ~label
       ~width:(width_for_ref_addr_or_sec_offset ())
-  | Absolute_code_address addr -> Target_addr.emit addr asm
+  | Absolute_code_address addr -> A.target_address addr
   | Code_address_from_label label -> A.label label
   | Code_address_from_symbol symbol -> A.symbol symbol
   | Code_address_from_label_symbol_diff { upper; lower; offset_upper; } ->
@@ -113,8 +119,7 @@ let emit t asm =
   | Code_address_from_symbol_diff { upper; lower; } ->
     A.between_symbols ~upper ~lower
   | Code_address_from_symbol_plus_bytes (symbol, offset_in_bytes) ->
-    A.symbol_plus_offset symbol
-      ~offset_in_bytes:(Target_addr.to_int64 offset_in_bytes)
+    A.symbol_plus_offset symbol ~offset_in_bytes
   | Offset_into_debug_line label ->
     A.offset_into_section_label ~section:(Dwarf Debug_line) ~label
       ~width:(width_for_ref_addr_or_sec_offset ())

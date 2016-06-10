@@ -31,6 +31,9 @@ utils/strongly_connected_components.cmo : utils/numbers.cmi utils/misc.cmi \
 utils/strongly_connected_components.cmx : utils/numbers.cmx utils/misc.cmx \
     utils/identifiable.cmx utils/strongly_connected_components.cmi
 utils/strongly_connected_components.cmi : utils/identifiable.cmi
+utils/target_system.cmo : utils/misc.cmi utils/target_system.cmi
+utils/target_system.cmx : utils/misc.cmx utils/target_system.cmi
+utils/target_system.cmi :
 utils/tbl.cmo : utils/tbl.cmi
 utils/tbl.cmx : utils/tbl.cmi
 utils/tbl.cmi :
@@ -703,12 +706,14 @@ asmcomp/CSEgen.cmx : asmcomp/reg.cmx asmcomp/proc.cmx asmcomp/mach.cmx \
 asmcomp/CSEgen.cmi : asmcomp/mach.cmi
 asmcomp/arch.cmo : utils/clflags.cmi
 asmcomp/arch.cmx : utils/clflags.cmx
-asmcomp/asm_directives.cmo : middle_end/base_types/symbol.cmi \
-    utils/numbers.cmi asmcomp/linearize.cmi asmcomp/asm_directives.cmi
-asmcomp/asm_directives.cmx : middle_end/base_types/symbol.cmx \
-    utils/numbers.cmx asmcomp/linearize.cmx asmcomp/asm_directives.cmi
-asmcomp/asm_directives.cmi : middle_end/base_types/symbol.cmi \
-    utils/numbers.cmi asmcomp/linearize.cmi
+asmcomp/asm_directives.cmo : utils/target_system.cmi \
+    middle_end/base_types/symbol.cmi utils/numbers.cmi asmcomp/linearize.cmi \
+    asmcomp/asm_directives.cmi
+asmcomp/asm_directives.cmx : utils/target_system.cmx \
+    middle_end/base_types/symbol.cmx utils/numbers.cmx asmcomp/linearize.cmx \
+    asmcomp/asm_directives.cmi
+asmcomp/asm_directives.cmi : utils/target_system.cmi \
+    middle_end/base_types/symbol.cmi utils/numbers.cmi asmcomp/linearize.cmi
 asmcomp/asm_directives_textual.cmo : asmcomp/asm_directives_textual.cmi
 asmcomp/asm_directives_textual.cmx : asmcomp/asm_directives_textual.cmi
 asmcomp/asm_directives_textual.cmi : asmcomp/asm_directives.cmi
@@ -1371,11 +1376,11 @@ asmcomp/dwarf_low/abbreviations_table_entry.cmi : \
     asmcomp/dwarf_low/dwarf_attributes.cmi \
     asmcomp/dwarf_low/child_determination.cmi \
     asmcomp/dwarf_low/abbreviation_code.cmi
-asmcomp/dwarf_low/aranges_table.cmo : asmcomp/dwarf_low/target_addr.cmi \
+asmcomp/dwarf_low/aranges_table.cmo : utils/target_system.cmi \
     utils/numbers.cmi asmcomp/dwarf_low/initial_length.cmi \
     asmcomp/dwarf_low/dwarf_value.cmi asmcomp/arch.cmo \
     asmcomp/dwarf_low/aranges_table.cmi
-asmcomp/dwarf_low/aranges_table.cmx : asmcomp/dwarf_low/target_addr.cmx \
+asmcomp/dwarf_low/aranges_table.cmx : utils/target_system.cmx \
     utils/numbers.cmx asmcomp/dwarf_low/initial_length.cmx \
     asmcomp/dwarf_low/dwarf_value.cmx asmcomp/arch.cmx \
     asmcomp/dwarf_low/aranges_table.cmi
@@ -1484,15 +1489,15 @@ asmcomp/dwarf_low/dwarf_tag.cmx : utils/numbers.cmx \
 asmcomp/dwarf_low/dwarf_tag.cmi : utils/numbers.cmi \
     asmcomp/dwarf_low/dwarf_emittable.cmi \
     asmcomp/dwarf_low/child_determination.cmi
-asmcomp/dwarf_low/dwarf_value.cmo : asmcomp/dwarf_low/target_addr.cmi \
+asmcomp/dwarf_low/dwarf_value.cmo : utils/target_system.cmi \
     middle_end/base_types/symbol.cmi utils/numbers.cmi asmcomp/linearize.cmi \
     asmcomp/dwarf_low/dwarf_format_int.cmi asmcomp/dwarf_low/dwarf_format.cmi \
     asmcomp/asm_directives.cmi asmcomp/dwarf_low/dwarf_value.cmi
-asmcomp/dwarf_low/dwarf_value.cmx : asmcomp/dwarf_low/target_addr.cmx \
+asmcomp/dwarf_low/dwarf_value.cmx : utils/target_system.cmx \
     middle_end/base_types/symbol.cmx utils/numbers.cmx asmcomp/linearize.cmx \
     asmcomp/dwarf_low/dwarf_format_int.cmx asmcomp/dwarf_low/dwarf_format.cmx \
     asmcomp/asm_directives.cmx asmcomp/dwarf_low/dwarf_value.cmi
-asmcomp/dwarf_low/dwarf_value.cmi : asmcomp/dwarf_low/target_addr.cmi \
+asmcomp/dwarf_low/dwarf_value.cmi : utils/target_system.cmi \
     middle_end/base_types/symbol.cmi utils/numbers.cmi asmcomp/linearize.cmi \
     asmcomp/dwarf_low/dwarf_emittable.cmi
 asmcomp/dwarf_low/dwarf_version.cmo : utils/numbers.cmi \
@@ -1523,27 +1528,27 @@ asmcomp/dwarf_low/location_expression.cmx : \
 asmcomp/dwarf_low/location_expression.cmi : \
     asmcomp/dwarf_low/simple_location_expression.cmi \
     asmcomp/dwarf_low/dwarf_emittable.cmi
-asmcomp/dwarf_low/location_list.cmo : asmcomp/dwarf_low/target_addr.cmi \
+asmcomp/dwarf_low/location_list.cmo : utils/target_system.cmi \
     asmcomp/dwarf_low/location_list_entry.cmi asmcomp/linearize.cmi \
     asmcomp/dwarf_low/dwarf_value.cmi asmcomp/asm_directives.cmi \
     asmcomp/dwarf_low/location_list.cmi
-asmcomp/dwarf_low/location_list.cmx : asmcomp/dwarf_low/target_addr.cmx \
+asmcomp/dwarf_low/location_list.cmx : utils/target_system.cmx \
     asmcomp/dwarf_low/location_list_entry.cmx asmcomp/linearize.cmx \
     asmcomp/dwarf_low/dwarf_value.cmx asmcomp/asm_directives.cmx \
     asmcomp/dwarf_low/location_list.cmi
 asmcomp/dwarf_low/location_list.cmi : \
     asmcomp/dwarf_low/location_list_entry.cmi asmcomp/linearize.cmi \
     asmcomp/dwarf_low/dwarf_emittable.cmi
-asmcomp/dwarf_low/location_list_entry.cmo : \
-    asmcomp/dwarf_low/target_addr.cmi middle_end/base_types/symbol.cmi \
-    utils/numbers.cmi asmcomp/dwarf_low/location_expression.cmi \
-    asmcomp/linearize.cmi asmcomp/dwarf_low/dwarf_value.cmi \
-    asmcomp/asm_directives.cmi asmcomp/dwarf_low/location_list_entry.cmi
-asmcomp/dwarf_low/location_list_entry.cmx : \
-    asmcomp/dwarf_low/target_addr.cmx middle_end/base_types/symbol.cmx \
-    utils/numbers.cmx asmcomp/dwarf_low/location_expression.cmx \
-    asmcomp/linearize.cmx asmcomp/dwarf_low/dwarf_value.cmx \
-    asmcomp/asm_directives.cmx asmcomp/dwarf_low/location_list_entry.cmi
+asmcomp/dwarf_low/location_list_entry.cmo : utils/target_system.cmi \
+    middle_end/base_types/symbol.cmi utils/numbers.cmi \
+    asmcomp/dwarf_low/location_expression.cmi asmcomp/linearize.cmi \
+    asmcomp/dwarf_low/dwarf_value.cmi asmcomp/asm_directives.cmi \
+    asmcomp/dwarf_low/location_list_entry.cmi
+asmcomp/dwarf_low/location_list_entry.cmx : utils/target_system.cmx \
+    middle_end/base_types/symbol.cmx utils/numbers.cmx \
+    asmcomp/dwarf_low/location_expression.cmx asmcomp/linearize.cmx \
+    asmcomp/dwarf_low/dwarf_value.cmx asmcomp/asm_directives.cmx \
+    asmcomp/dwarf_low/location_list_entry.cmi
 asmcomp/dwarf_low/location_list_entry.cmi : middle_end/base_types/symbol.cmi \
     asmcomp/dwarf_low/location_expression.cmi asmcomp/linearize.cmi \
     asmcomp/dwarf_low/dwarf_emittable.cmi
@@ -1564,14 +1569,6 @@ asmcomp/dwarf_low/single_location_description.cmx : \
 asmcomp/dwarf_low/single_location_description.cmi : \
     asmcomp/dwarf_low/simple_location_expression.cmi \
     asmcomp/dwarf_low/dwarf_emittable.cmi
-asmcomp/dwarf_low/target_addr.cmo : asmcomp/asm_directives.cmi \
-    asmcomp/arch.cmo asmcomp/dwarf_low/target_addr.cmi
-asmcomp/dwarf_low/target_addr.cmx : asmcomp/asm_directives.cmx \
-    asmcomp/arch.cmx asmcomp/dwarf_low/target_addr.cmi
-asmcomp/dwarf_low/target_addr.cmi : asmcomp/dwarf_low/dwarf_emittable.cmi
-asmcomp/dwarf_low/target_int.cmo : asmcomp/dwarf_low/target_int.cmi
-asmcomp/dwarf_low/target_int.cmx : asmcomp/dwarf_low/target_int.cmi
-asmcomp/dwarf_low/target_int.cmi :
 middle_end/alias_analysis.cmo : middle_end/base_types/variable.cmi \
     middle_end/base_types/var_within_closure.cmi \
     middle_end/base_types/tag.cmi middle_end/base_types/symbol.cmi \

@@ -125,6 +125,7 @@ let symbol sym =
 
 let symbol_plus_offset sym ~offset_in_bytes =
   let sym = Linkage_name.to_string (Symbol.label sym) in
+  let offset_in_bytes = Target_system.Address.to_int64 offset_in_bytes in
   D.qword (ConstAdd (ConstLabel (escape_symbol sym), Const offset_in_bytes))
 
 let between_symbols ~upper ~lower =
@@ -142,8 +143,9 @@ let define_symbol sym =
 let between_symbol_and_label_offset ~upper ~lower ~offset_upper =
   let upper = string_of_label upper in
   let lower = Linkage_name.to_string (Symbol.label lower) in
+  let offset_upper = Target_system.Address.to_int64 offset_upper in
   D.qword (ConstSub (
-    ConstAdd (ConstLabel upper, Const (Int64.of_int offset_upper)),
+    ConstAdd (ConstLabel upper, Const offset_upper),
     ConstLabel (escape_symbol lower)))
 
 let temp_var_counter = ref 0
@@ -212,8 +214,10 @@ let int32 i =
 let int64 i =
   D.qword (Const i)
 
-let nativeint n =
-  D.qword (X.const_nat n)
+let target_address (addr : Target_system.Address.t) =
+  match addr with
+  | Int32 i -> int32 i
+  | Int64 i -> int64 i
 
 let uleb128 i =
   D.uleb128 (Const i)

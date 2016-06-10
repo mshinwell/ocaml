@@ -68,14 +68,15 @@ module type S = sig
   val between_symbol_and_label_offset
      : upper:Linearize.label
     -> lower:Symbol.t
-    -> offset_upper:int
+    -> offset_upper:Target_system.Address.t
     -> unit
 
   (** Emit a machine-width reference to the address formed by adding the
       given byte offset to the address of the given symbol. *)
-  (* CR mshinwell: Int64.t doesn't really seem correct.  Also related to
-     the fact that we currently use Nativeint in Target_addr *)
-  val symbol_plus_offset : Symbol.t -> offset_in_bytes:Int64.t -> unit
+  val symbol_plus_offset
+     : Symbol.t
+    -> offset_in_bytes:Target_system.Address.t
+    -> unit
 
   (** Emit a machine-width reference to the given label. *)
   val label : Linearize.label -> unit
@@ -95,8 +96,9 @@ module type S = sig
   (** Emit a 64-bit integer. *)
   val int64 : Int64.t -> unit
 
-  (** Emit a machine-width integer. *)
-  val nativeint : Nativeint.t -> unit
+  (** Emit an integer whose width is that of an address on the target
+      machine. *)
+  val target_address : Target_system.Address.t -> unit
 
   (** Emit a 64-bit integer in unsigned LEB128 variable-length encoding. *)
   val uleb128 : Int64.t -> unit
