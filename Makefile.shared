@@ -40,8 +40,9 @@ OCAMLBUILDNATIVE=$(WITH_OCAMLBUILD:=.native)
 OCAMLDOC_OPT=$(WITH_OCAMLDOC:=.opt)
 
 INCLUDES=-I utils -I parsing -I typing -I bytecomp -I middle_end \
-        -I middle_end/base_types -I asmcomp -I asmcomp/dwarf_high \
-        -I asmcomp/dwarf_low -I driver -I toplevel
+        -I middle_end/base_types -I asmcomp -I asmcomp/debug \
+        -I supportlibs/dwarf_high -I supportlibs/dwarf_low \
+        -I driver -I toplevel
 
 UTILS=utils/config.cmo utils/misc.cmo utils/target_system.cmo \
   utils/identifiable.cmo utils/numbers.cmo utils/arg_helper.cmo \
@@ -107,35 +108,35 @@ ARCH_SPECIFIC_ASMCOMP=$(INTEL_ASM)
 endif
 
 DWARF_LOW=\
-  asmcomp/dwarf_low/dwarf_format.cmo \
-  asmcomp/dwarf_low/dwarf_format_int.cmo \
-  asmcomp/dwarf_low/dwarf_value.cmo \
-  asmcomp/dwarf_low/dwarf_version.cmo \
-  asmcomp/dwarf_low/initial_length.cmo \
-  asmcomp/dwarf_low/child_determination.cmo \
-  asmcomp/dwarf_low/dwarf_tag.cmo \
-  asmcomp/dwarf_low/dwarf_operator.cmo \
-  asmcomp/dwarf_low/simple_location_expression.cmo \
-  asmcomp/dwarf_low/single_location_description.cmo \
-  asmcomp/dwarf_low/dwarf_attributes.cmo \
-  asmcomp/dwarf_low/encoding_attribute.cmo \
-  asmcomp/dwarf_low/dwarf_attribute_values.cmo \
-  asmcomp/dwarf_low/abbreviation_code.cmo \
-  asmcomp/dwarf_low/abbreviations_table_entry.cmo \
-  asmcomp/dwarf_low/abbreviations_table.cmo \
-  asmcomp/dwarf_low/debugging_information_entry.cmo \
-  asmcomp/dwarf_low/aranges_table.cmo \
-  asmcomp/dwarf_low/location_expression.cmo \
-  asmcomp/dwarf_low/location_list_entry.cmo \
-  asmcomp/dwarf_low/location_list.cmo \
-  asmcomp/dwarf_low/debug_info_section.cmo \
-  asmcomp/dwarf_low/debug_loc_table.cmo
+  supportlibs/dwarf_low/dwarf_format.cmo \
+  supportlibs/dwarf_low/dwarf_format_int.cmo \
+  supportlibs/dwarf_low/dwarf_value.cmo \
+  supportlibs/dwarf_low/dwarf_version.cmo \
+  supportlibs/dwarf_low/initial_length.cmo \
+  supportlibs/dwarf_low/child_determination.cmo \
+  supportlibs/dwarf_low/dwarf_tag.cmo \
+  supportlibs/dwarf_low/dwarf_operator.cmo \
+  supportlibs/dwarf_low/simple_location_expression.cmo \
+  supportlibs/dwarf_low/single_location_description.cmo \
+  supportlibs/dwarf_low/dwarf_attributes.cmo \
+  supportlibs/dwarf_low/encoding_attribute.cmo \
+  supportlibs/dwarf_low/dwarf_attribute_values.cmo \
+  supportlibs/dwarf_low/abbreviation_code.cmo \
+  supportlibs/dwarf_low/abbreviations_table_entry.cmo \
+  supportlibs/dwarf_low/abbreviations_table.cmo \
+  supportlibs/dwarf_low/debugging_information_entry.cmo \
+  supportlibs/dwarf_low/aranges_table.cmo \
+  supportlibs/dwarf_low/location_expression.cmo \
+  supportlibs/dwarf_low/location_list_entry.cmo \
+  supportlibs/dwarf_low/location_list.cmo \
+  supportlibs/dwarf_low/debug_info_section.cmo \
+  supportlibs/dwarf_low/debug_loc_table.cmo
 
 DWARF_HIGH=\
-  asmcomp/dwarf_high/proto_die.cmo \
-  asmcomp/dwarf_high/dwarf_attribute_helpers.cmo \
-  asmcomp/dwarf_high/assign_abbrevs.cmo \
-  asmcomp/dwarf_high/dwarf_world.cmo
+  supportlibs/dwarf_high/proto_die.cmo \
+  supportlibs/dwarf_high/dwarf_attribute_helpers.cmo \
+  supportlibs/dwarf_high/assign_abbrevs.cmo \
+  supportlibs/dwarf_high/dwarf_world.cmo
 
 ASMCOMP=\
   $(ARCH_SPECIFIC_ASMCOMP) \
@@ -161,9 +162,10 @@ ASMCOMP=\
   asmcomp/interf.cmo asmcomp/coloring.cmo \
   asmcomp/reloadgen.cmo asmcomp/reload.cmo \
   asmcomp/deadcode.cmo asmcomp/linearize.cmo \
-  asmcomp/coalesce_labels.cmo asmcomp/name_laundry.cmo \
-  asmcomp/available_regs.cmo asmcomp/available_filtering.cmo \
-  asmcomp/available_ranges.cmo asmcomp/printlinear.cmo \
+  asmcomp/debug/coalesce_labels.cmo asmcomp/debug/name_laundry.cmo \
+  asmcomp/debug/available_regs.cmo asmcomp/debug/available_filtering.cmo \
+  asmcomp/debug/available_ranges.cmo \
+  asmcomp/printlinear.cmo \
   asmcomp/schedgen.cmo asmcomp/scheduling.cmo \
   asmcomp/branch_relaxation_intf.cmo \
   asmcomp/branch_relaxation.cmo \
@@ -172,7 +174,7 @@ ASMCOMP=\
   asmcomp/asm_directives_x86.cmo \
   asmcomp/emitaux.cmo asmcomp/emit.cmo \
   $(DWARF_HIGH) \
-  asmcomp/dwarf.cmo \
+  asmcomp/debug/dwarf.cmo \
   asmcomp/asmgen.cmo \
   asmcomp/asmlink.cmo asmcomp/asmlibrarian.cmo asmcomp/asmpackager.cmo \
   driver/opterrors.cmo driver/optcompile.cmo
