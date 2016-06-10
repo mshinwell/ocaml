@@ -490,10 +490,6 @@ and to_clambda_set_of_closures t env
     let fun_offset =
       Closure_id.Map.find closure_id t.current_unit.fun_offset_table
     in
-    let closure_offsets = ref [] in
-    let note_closure_offset ~var ~pos =
-      closure_offsets := (var, pos) :: !closure_offsets
-    in
     let env =
       (* Inside the body of the function, we cannot access variables
          declared outside, so start with a suitably clean environment.
@@ -514,7 +510,6 @@ and to_clambda_set_of_closures t env
               Flambda.print_set_of_closures set_of_closures
         in
         let pos = var_offset - fun_offset in
-        note_closure_offset ~var:id ~pos;
         Env.add_subst env id
           (Uprim (Pfield pos, [Clambda.Uvar env_var], Debuginfo.none))
       in
@@ -538,15 +533,6 @@ and to_clambda_set_of_closures t env
           let id, env = Env.add_fresh_ident env var in
           env, id :: params)
         function_decl.params (env, [])
-    in
-    let _closure_layout =
-      let closure_offsets =
-        List.sort (fun (_var, pos) (_var', pos') ->
-            Pervasives.compare pos pos')
-          !closure_offsets
-      in
-      List.map (fun (_var, _pos) -> Ident.create "foo")
-        closure_offsets
     in
     { label = Compilenv.function_label closure_id;
       arity = Flambda_utils.function_arity function_decl;
