@@ -1398,8 +1398,10 @@ let partial_pred ~lev ?mode ?explode env expected_ty constrs labels p =
   try
     reset_pattern None true;
     let typed_p =
-      type_pat ~allow_existentials:true ~lev
-        ~constrs ~labels ?mode ?explode env p expected_ty
+      Ctype.with_passive_variants
+        (type_pat ~allow_existentials:true ~lev
+           ~constrs ~labels ?mode ?explode env p)
+        expected_ty
     in
     set_state state env;
     (* types are invalidated but we don't need them here *)
@@ -2454,7 +2456,8 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
                 end_def ();
                 let tv = newvar () in
                 let gen = generalizable tv.level arg.exp_type in
-                unify_var env tv arg.exp_type;
+                (try unify_var env tv arg.exp_type with Unify trace ->
+                  raise(Error(arg.exp_loc, env, Expr_type_clash trace)));
                 gen
               end else true
             in
