@@ -137,7 +137,8 @@ parsing/pprintast.cmo : parsing/parsetree.cmi utils/misc.cmi \
 parsing/pprintast.cmx : parsing/parsetree.cmi utils/misc.cmx \
     parsing/longident.cmx parsing/location.cmx parsing/asttypes.cmi \
     parsing/pprintast.cmi
-parsing/pprintast.cmi : parsing/parsetree.cmi
+parsing/pprintast.cmi : parsing/parsetree.cmi parsing/longident.cmi \
+    parsing/asttypes.cmi
 parsing/printast.cmo : parsing/parsetree.cmi utils/misc.cmi \
     parsing/longident.cmi parsing/location.cmi parsing/asttypes.cmi \
     parsing/printast.cmi
@@ -1458,7 +1459,7 @@ middle_end/inline_and_simplify_aux.cmo : middle_end/base_types/variable.cmi \
     middle_end/projection.cmi utils/numbers.cmi \
     middle_end/base_types/mutable_variable.cmi utils/misc.cmi \
     middle_end/inlining_stats.cmi middle_end/inlining_cost.cmi \
-    middle_end/freshening.cmi middle_end/flambda.cmi bytecomp/debuginfo.cmi \
+    middle_end/freshening.cmi middle_end/flambda.cmi \
     middle_end/base_types/compilation_unit.cmi \
     middle_end/base_types/closure_id.cmi utils/clflags.cmi \
     middle_end/backend_intf.cmi middle_end/inline_and_simplify_aux.cmi
@@ -1471,7 +1472,7 @@ middle_end/inline_and_simplify_aux.cmx : middle_end/base_types/variable.cmx \
     middle_end/projection.cmx utils/numbers.cmx \
     middle_end/base_types/mutable_variable.cmx utils/misc.cmx \
     middle_end/inlining_stats.cmx middle_end/inlining_cost.cmx \
-    middle_end/freshening.cmx middle_end/flambda.cmx bytecomp/debuginfo.cmx \
+    middle_end/freshening.cmx middle_end/flambda.cmx \
     middle_end/base_types/compilation_unit.cmx \
     middle_end/base_types/closure_id.cmx utils/clflags.cmx \
     middle_end/backend_intf.cmi middle_end/inline_and_simplify_aux.cmi
@@ -1867,8 +1868,6 @@ middle_end/base_types/export_id.cmx : utils/identifiable.cmx \
     middle_end/base_types/export_id.cmi
 middle_end/base_types/export_id.cmi : utils/identifiable.cmi \
     middle_end/base_types/compilation_unit.cmi
-middle_end/base_types/fully_qualified_id.cmo :
-middle_end/base_types/fully_qualified_id.cmx :
 middle_end/base_types/id_types.cmo : utils/identifiable.cmi \
     middle_end/base_types/id_types.cmi
 middle_end/base_types/id_types.cmx : utils/identifiable.cmx \
@@ -1887,8 +1886,6 @@ middle_end/base_types/mutable_variable.cmx : utils/identifiable.cmx \
     middle_end/base_types/mutable_variable.cmi
 middle_end/base_types/mutable_variable.cmi : utils/identifiable.cmi \
     typing/ident.cmi middle_end/base_types/compilation_unit.cmi
-middle_end/base_types/name_for_debugger.cmo :
-middle_end/base_types/name_for_debugger.cmx :
 middle_end/base_types/set_of_closures_id.cmo : utils/identifiable.cmi \
     middle_end/base_types/id_types.cmi \
     middle_end/base_types/compilation_unit.cmi \
