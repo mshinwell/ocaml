@@ -22,6 +22,8 @@ type label = int
 
 let label_counter = ref 99
 
+let phantom_let_labels = ref Numbers.Int.Set.empty
+
 let new_label() = incr label_counter; !label_counter
 
 type instruction =
@@ -161,20 +163,38 @@ let check_label n = match n.desc with
   | Llabel lbl -> lbl
   | _ -> -1
 
-(* Discard all instructions up to the next label.
+(* Discard all instructions, with the exception of certain ones for managing
+   available ranges (for debug info generation) up to the next label.
    This function is to be called before adding a non-terminating
    instruction. *)
 
-let rec discard_dead_code n =
-  match n.desc with
-    Lend -> n
-  | Llabel _ -> n
-  | Lcapture_stack_offset _ -> n
-(* Do not discard Lpoptrap/Lpushtrap or Istackoffset instructions,
-   as this may cause a stack imbalance later during assembler generation. *)
-  | Lpoptrap | Lpushtrap -> n
-  | Lop(Istackoffset _) -> n
-  | _ -> discard_dead_code n.next
+let discard_dead_code ?map_last_non_dead_insn n =
+  let rec discard n ~insns_to_keep_rev =
+    match n.desc with
+    | Lend
+    (* Do not discard Lpoptrap/Lpushtrap or Istackoffset instructions,
+       as this may cause a stack imbalance later during assembler generation. *)
+    | Lpoptrap | Lpushtrap
+    | Lop (Istackoffset _) -> n, insns_to_keep_rev
+    | Llabel lbl when not (Numbers.Int.Set.mem lbl !phantom_let_labels) ->
+      n, insns_to_keep_rev
+    | Llabel _ | Lcapture_stack_offset _ ->
+      discard n.next ~insns_to_keep_rev:(n :: insns_to_keep_rev)
+    | _ -> discard n.next ~insns_to_keep_rev
+  in
+  let first_non_dead_insn, insns_to_keep_rev =
+    discard n ~insns_to_keep_rev:[]
+  in
+  let first_non_dead_insn =
+    match map_last_non_dead_insn with
+    | None -> first_non_dead_insn
+    | Some f -> f first_non_dead_insn
+  in
+  List.fold_left (fun output insn ->
+      insn.next <- output;
+      insn)
+    first_non_dead_insn
+    insns_to_keep_rev
 
 (*
    Add a branch in front of a continuation.
@@ -185,10 +205,10 @@ let rec discard_dead_code n =
 
 let add_branch lbl n ~available_before =
   if lbl >= 0 then
-    let n1 = discard_dead_code n in
-    match n1.desc with
-    | Llabel lbl1 when lbl1 = lbl -> n1
-    | _ -> cons_instr (Lbranch lbl) n1 ~available_before
+    discard_dead_code n ~map_last_non_dead_insn:(fun n1 ->
+      match n1.desc with
+      | Llabel lbl1 when lbl1 = lbl -> n1
+      | _ -> cons_instr (Lbranch lbl) n1 ~available_before)
   else
     discard_dead_code n
 
@@ -354,6 +374,8 @@ let rec linear i n =
       copy_instr (Lraise k) i (discard_dead_code n)
   | Iphantom_let_start (num, ident, provenance, defining_expr) ->
       let starting_label = new_label () in
+      phantom_let_labels :=
+        Numbers.Int.Set.add starting_label !phantom_let_labels;
       assert (not (Numbers.Int.Map.mem num !phantom_let_ranges_by_number));
       phantom_let_ranges_by_number :=
         Numbers.Int.Map.add num
@@ -374,6 +396,8 @@ let rec linear i n =
           in
 (*
           assert (not (Ident.mem ident !phantom_let_ranges));*)
+          phantom_let_labels :=
+            Numbers.Int.Set.add ending_label !phantom_let_labels;
           phantom_let_ranges :=
             Ident.add ident phantom_let_range !phantom_let_ranges;
           copy_instr (Llabel ending_label) i (linear i.Mach.next n)
@@ -389,7 +413,8 @@ let reset () =
 
 let reset_between_functions () =
   phantom_let_ranges := Ident.empty;
-  phantom_let_ranges_by_number := Numbers.Int.Map.empty
+  phantom_let_ranges_by_number := Numbers.Int.Map.empty;
+  phantom_let_labels := Numbers.Int.Set.empty
 
 let add_prologue first_insn =
   { desc = Lprologue;

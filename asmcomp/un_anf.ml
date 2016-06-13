@@ -453,6 +453,8 @@ let rec substitute_let_moveable is_let_moveable env (clam : Clambda.ulambda)
         match def with
         | Uconst const ->
           Uphantom_let (id, Some (provenance, Uphantom_const const), body)
+        | Uvar var ->
+          Uphantom_let (id, Some (provenance, Uphantom_var var), body)
         | _ ->
           Uphantom_let (id, None, body)
     end else begin
@@ -658,6 +660,9 @@ let rec un_anf_and_moveable ident_info env (clam : Clambda.ulambda)
         match def with
         | Uconst const ->
           Uphantom_let (id, Some (provenance, Uphantom_const const), body),
+            moveable
+        | Uvar var ->
+          Uphantom_let (id, Some (provenance, Uphantom_var var), body),
             moveable
         | _ -> Uphantom_let (id, None, body), moveable
     in

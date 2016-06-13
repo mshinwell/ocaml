@@ -94,6 +94,8 @@ let createv_like ?mutability rv =
 let clone r =
   let nr = create r.shared.typ ~mutability:r.shared.mutability in
   nr.name <- r.name;
+  (* CR mshinwell: It doesn't look like this is taking effect.  Also, are
+     reloads going through here? *)
   nr.shared.is_parameter <- r.shared.is_parameter;
   nr
 
