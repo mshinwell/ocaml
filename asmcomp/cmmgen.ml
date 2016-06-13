@@ -224,8 +224,59 @@ let untag_int = function
   | Cop(Cor, [c; Cconst_int 1]) -> Cop(Casr, [c; Cconst_int 1])
   | c -> Cop(Casr, [c; Cconst_int 1])
 
+let rec strip_phantom_lets ulam =
+  match ulam with
+  | Uphantom_let (_, _, body) -> strip_phantom_lets body
+  | _ -> ulam
+
+let rec preserve_phantom_lets ulam f =
+  match ulam with
+  | Uphantom_let (id, defining_expr, body) ->
+    Cphantom_let (id, defining_expr, preserve_phantom_lets body f)
+  | _ -> f ulam
+
+let preserve_phantom_lets_list ulams f =
+  let rec preserve ulams cmms_rev =
+    match ulams with
+    | [] -> f (List.rev cmms_rev)
+    | ulam::ulams ->
+      preserve_phantom_lets ulam (fun cmm -> preserve ulams (cmm::cmms_rev))
+  in
+  preserve ulams []
+
+let rec strip_phantom_lets_cmm cmm =
+  match cmm with
+  | Cphantom_let (_, _, body) -> strip_phantom_lets_cmm body
+  | _ -> cmm
+
+let rec preserve_phantom_lets_cmm cmm f =
+  match cmm with
+  | Cphantom_let (id, defining_expr, body) ->
+    Cphantom_let (id, defining_expr, preserve_phantom_lets_cmm body f)
+  | _ -> f cmm
+
+let preserve_phantom_lets_cmm2 cmm1 cmm2 f =
+  preserve_phantom_lets_cmm cmm1 (fun cmm1 ->
+    preserve_phantom_lets_cmm cmm2 (fun cmm2 ->
+      f cmm1 cmm2))
+
+let extract_and_strip_phantom_lets ulam =
+  let rec extract ulam extracted =
+    match ulam with
+    | Uphantom_let (id, defining_expr, body) -> 
+      extract body ((id, defining_expr) :: extracted)
+    | _ -> extracted, ulam
+  in
+  extract ulam []
+
+let add_phantom_lets ulam phantom_lets =
+  List.fold_left (fun ulam (id, defining_expr) ->
+      Uphantom_let (id, defining_expr, ulam))
+    ulam
+    phantom_lets
+
 let if_then_else (cond, ifso, ifnot) =
-  match cond with
+  match strip_phantom_lets_cmm cond with
   | Cconst_int 0 -> ifnot
   | Cconst_int 1 -> ifso
   | _ ->
@@ -321,99 +372,102 @@ let validate d m p =
 *)
 
 let rec div_int c1 c2 dbg =
-  match (c1, c2) with
-    (c1, Cconst_int 0) ->
-      Csequence(c1, Cop(Craise (Raise_regular, dbg),
-                        [Cconst_symbol "caml_exn_Division_by_zero"]))
-  | (c1, Cconst_int 1) ->
-      c1
-  | (Cconst_int 0 as c1, c2) ->
-      Csequence(c2, c1)
-  | (Cconst_int n1, Cconst_int n2) ->
-      Cconst_int (n1 / n2)
-  | (c1, Cconst_int n) when n <> min_int ->
-      let l = Misc.log2 n in
-      if n = 1 lsl l then
-        (* Algorithm:
-              t = shift-right-signed(c1, l - 1)
-              t = shift-right(t, W - l)
-              t = c1 + t
-              res = shift-right-signed(c1 + t, l)
-        *)
-        Cop(Casr, [bind "dividend" c1 (fun c1 ->
-                     let t = asr_int c1 (Cconst_int (l - 1)) in
-                     let t = lsr_int t (Cconst_int (Nativeint.size - l)) in
-                     add_int c1 t);
-                   Cconst_int l])
-      else if n < 0 then
-        sub_int (Cconst_int 0) (div_int c1 (Cconst_int (-n)) dbg)
-      else begin
-        let (m, p) = divimm_parameters (Nativeint.of_int n) in
-        (* Algorithm:
-              t = multiply-high-signed(c1, m)
-              if m < 0, t = t + c1
-              if p > 0, t = shift-right-signed(t, p)
-              res = t + sign-bit(c1)
-        *)
-        bind "dividend" c1 (fun c1 ->
-          let t = Cop(Cmulhi, [c1; Cconst_natint m]) in
-          let t = if m < 0n then Cop(Caddi, [t; c1]) else t in
-          let t = if p > 0 then Cop(Casr, [t; Cconst_int p]) else t in
-          add_int t (lsr_int c1 (Cconst_int (Nativeint.size - 1))))
-      end
-  | (c1, c2) when !Clflags.fast ->
-      Cop(Cdivi, [c1; c2])
-  | (c1, c2) ->
-      bind "divisor" c2 (fun c2 ->
-        Cifthenelse(c2,
-                    Cop(Cdivi, [c1; c2]),
-                    Cop(Craise (Raise_regular, dbg),
-                        [Cconst_symbol "caml_exn_Division_by_zero"])))
+  preserve_phantom_lets_cmm2 c1 c2 (fun c1 c2 ->
+    match c1, c2 with
+    | (c1, Cconst_int 0) ->
+        Csequence(c1, Cop(Craise (Raise_regular, dbg),
+                          [Cconst_symbol "caml_exn_Division_by_zero"]))
+    | (c1, Cconst_int 1) ->
+        c1
+    | (Cconst_int 0 as c1, c2) ->
+        Csequence(c2, c1)
+    | (Cconst_int n1, Cconst_int n2) ->
+        Cconst_int (n1 / n2)
+    | (c1, Cconst_int n) when n <> min_int ->
+        let l = Misc.log2 n in
+        if n = 1 lsl l then
+          (* Algorithm:
+                t = shift-right-signed(c1, l - 1)
+                t = shift-right(t, W - l)
+                t = c1 + t
+                res = shift-right-signed(c1 + t, l)
+          *)
+          Cop(Casr, [bind "dividend" c1 (fun c1 ->
+                       let t = asr_int c1 (Cconst_int (l - 1)) in
+                       let t = lsr_int t (Cconst_int (Nativeint.size - l)) in
+                       add_int c1 t);
+                     Cconst_int l])
+        else if n < 0 then
+          sub_int (Cconst_int 0) (div_int c1 (Cconst_int (-n)) dbg)
+        else begin
+          let (m, p) = divimm_parameters (Nativeint.of_int n) in
+          (* Algorithm:
+                t = multiply-high-signed(c1, m)
+                if m < 0, t = t + c1
+                if p > 0, t = shift-right-signed(t, p)
+                res = t + sign-bit(c1)
+          *)
+          bind "dividend" c1 (fun c1 ->
+            let t = Cop(Cmulhi, [c1; Cconst_natint m]) in
+            let t = if m < 0n then Cop(Caddi, [t; c1]) else t in
+            let t = if p > 0 then Cop(Casr, [t; Cconst_int p]) else t in
+            add_int t (lsr_int c1 (Cconst_int (Nativeint.size - 1))))
+        end
+    | (c1, c2) when !Clflags.fast ->
+        Cop(Cdivi, [c1; c2])
+    | (c1, c2) ->
+        bind "divisor" c2 (fun c2 ->
+          Cifthenelse(c2,
+                      Cop(Cdivi, [c1; c2]),
+                      Cop(Craise (Raise_regular, dbg),
+                          [Cconst_symbol "caml_exn_Division_by_zero"]))))
 
 let mod_int c1 c2 dbg =
-  match (c1, c2) with
-    (c1, Cconst_int 0) ->
-      Csequence(c1, Cop(Craise (Raise_regular, dbg),
-                        [Cconst_symbol "caml_exn_Division_by_zero"]))
-  | (c1, Cconst_int (1 | (-1))) ->
-      Csequence(c1, Cconst_int 0)
-  | (Cconst_int 0, c2) ->
-      Csequence(c2, Cconst_int 0)
-  | (Cconst_int n1, Cconst_int n2) ->
-      Cconst_int (n1 mod n2)
-  | (c1, (Cconst_int n as c2)) when n <> min_int ->
-      let l = Misc.log2 n in
-      if n = 1 lsl l then
-        (* Algorithm:
-              t = shift-right-signed(c1, l - 1)
-              t = shift-right(t, W - l)
-              t = c1 + t
-              t = bit-and(t, -n)
-              res = c1 - t
-         *)
-        bind "dividend" c1 (fun c1 ->
-          let t = asr_int c1 (Cconst_int (l - 1)) in
-          let t = lsr_int t (Cconst_int (Nativeint.size - l)) in
-          let t = add_int c1 t in
-          let t = Cop(Cand, [t; Cconst_int (-n)]) in
-          sub_int c1 t)
-      else
-        bind "dividend" c1 (fun c1 ->
-          sub_int c1 (mul_int (div_int c1 c2 dbg) c2))
-  | (c1, c2) when !Clflags.fast ->
-      Cop(Cmodi, [c1; c2])
-  | (c1, c2) ->
-      bind "divisor" c2 (fun c2 ->
-        Cifthenelse(c2,
-                    Cop(Cmodi, [c1; c2]),
-                    Cop(Craise (Raise_regular, dbg),
-                        [Cconst_symbol "caml_exn_Division_by_zero"])))
+  preserve_phantom_lets_cmm2 c1 c2 (fun c1 c2 ->
+    match c1, c2 with
+    | (c1, Cconst_int 0) ->
+        Csequence(c1, Cop(Craise (Raise_regular, dbg),
+                          [Cconst_symbol "caml_exn_Division_by_zero"]))
+    | (c1, Cconst_int (1 | (-1))) ->
+        Csequence(c1, Cconst_int 0)
+    | (Cconst_int 0, c2) ->
+        Csequence(c2, Cconst_int 0)
+    | (Cconst_int n1, Cconst_int n2) ->
+        Cconst_int (n1 mod n2)
+    | (c1, (Cconst_int n as c2)) when n <> min_int ->
+        let l = Misc.log2 n in
+        if n = 1 lsl l then
+          (* Algorithm:
+                t = shift-right-signed(c1, l - 1)
+                t = shift-right(t, W - l)
+                t = c1 + t
+                t = bit-and(t, -n)
+                res = c1 - t
+           *)
+          bind "dividend" c1 (fun c1 ->
+            let t = asr_int c1 (Cconst_int (l - 1)) in
+            let t = lsr_int t (Cconst_int (Nativeint.size - l)) in
+            let t = add_int c1 t in
+            let t = Cop(Cand, [t; Cconst_int (-n)]) in
+            sub_int c1 t)
+        else
+          bind "dividend" c1 (fun c1 ->
+            sub_int c1 (mul_int (div_int c1 c2 dbg) c2))
+    | (c1, c2) when !Clflags.fast ->
+        Cop(Cmodi, [c1; c2])
+    | (c1, c2) ->
+        bind "divisor" c2 (fun c2 ->
+          Cifthenelse(c2,
+                      Cop(Cmodi, [c1; c2]),
+                      Cop(Craise (Raise_regular, dbg),
+                          [Cconst_symbol "caml_exn_Division_by_zero"]))))
 
 (* Division or modulo on boxed integers.  The overflow case min_int / -1
    can occur, in which case we force x / -1 = -x and x mod -1 = 0. (PR#5513). *)
 
-let is_different_from x = function
-    Cconst_int n -> n <> x
+let is_different_from x ulam =
+  match strip_phantom_lets_cmm ulam with
+  | Cconst_int n -> n <> x
   | Cconst_natint n -> n <> Nativeint.of_int x
   | _ -> false
 
@@ -435,29 +489,35 @@ let safe_mod_bi =
 
 (* Bool *)
 
-let test_bool = function
-    Cop(Caddi, [Cop(Clsl, [c; Cconst_int 1]); Cconst_int 1]) -> c
-  | Cconst_int n ->
-      if n = 1 then
-        Cconst_int 0
-      else
-        Cconst_int 1
-  | c -> Cop(Ccmpi Cne, [c; Cconst_int 1])
+let test_bool cmm =
+  preserve_phantom_lets_cmm cmm (fun cmm ->
+    match cmm with
+    (* The following pattern is generated by this module and should not
+       contain phantom lets. *)
+    | Cop(Caddi, [Cop(Clsl, [c; Cconst_int 1]); Cconst_int 1]) -> c
+    | Cconst_int n ->
+        if n = 1 then
+          Cconst_int 0
+        else
+          Cconst_int 1
+    | c -> Cop(Ccmpi Cne, [c; Cconst_int 1]))
 
 (* Float *)
 
 let box_float c = Cop(Calloc, [alloc_float_header; c])
 
-let rec unbox_float = function
-    Cop(Calloc, [_header; c]) -> c
-  | Clet(mut, id, exp, body) -> Clet(mut, id, exp, unbox_float body)
-  | Cifthenelse(cond, e1, e2) ->
-      Cifthenelse(cond, unbox_float e1, unbox_float e2)
-  | Csequence(e1, e2) -> Csequence(e1, unbox_float e2)
-  | Cswitch(e, tbl, el) -> Cswitch(e, tbl, Array.map unbox_float el)
-  | Ccatch(n, ids, e1, e2) -> Ccatch(n, ids, unbox_float e1, unbox_float e2)
-  | Ctrywith(e1, id, e2) -> Ctrywith(unbox_float e1, id, unbox_float e2)
-  | c -> Cop(Cload Double_u, [c])
+let rec unbox_float cmm =
+  preserve_phantom_lets_cmm cmm (fun cmm ->
+    match cmm with
+    | Cop(Calloc, [_header; c]) -> c
+    | Clet(mut, id, exp, body) -> Clet(mut, id, exp, unbox_float body)
+    | Cifthenelse(cond, e1, e2) ->
+        Cifthenelse(cond, unbox_float e1, unbox_float e2)
+    | Csequence(e1, e2) -> Csequence(e1, unbox_float e2)
+    | Cswitch(e, tbl, el) -> Cswitch(e, tbl, Array.map unbox_float el)
+    | Ccatch(n, ids, e1, e2) -> Ccatch(n, ids, unbox_float e1, unbox_float e2)
+    | Ctrywith(e1, id, e2) -> Ctrywith(unbox_float e1, id, unbox_float e2)
+    | c -> Cop(Cload Double_u, [c]))
 
 (* Complex *)
 
@@ -472,28 +532,33 @@ let complex_im c = Cop(Cload Double_u,
 
 let return_unit c = Csequence(c, Cconst_pointer 1)
 
-let rec remove_unit = function
-    Cconst_pointer 1 -> Ctuple []
-  | Csequence(c, Cconst_pointer 1) -> c
-  | Csequence(c1, c2) ->
-      Csequence(c1, remove_unit c2)
-  | Cifthenelse(cond, ifso, ifnot) ->
-      Cifthenelse(cond, remove_unit ifso, remove_unit ifnot)
-  | Cswitch(sel, index, cases) ->
-      Cswitch(sel, index, Array.map remove_unit cases)
-  | Ccatch(io, ids, body, handler) ->
-      Ccatch(io, ids, remove_unit body, remove_unit handler)
-  | Ctrywith(body, exn, handler) ->
-      Ctrywith(remove_unit body, exn, remove_unit handler)
-  | Clet(mut, id, c1, c2) ->
-      Clet(mut, id, c1, remove_unit c2)
-  | Cop(Capply (_mty, dbg), args) ->
-      Cop(Capply (typ_void, dbg), args)
-  | Cop(Cextcall(proc, _mty, alloc, dbg), args) ->
-      Cop(Cextcall(proc, typ_void, alloc, dbg), args)
-  | Cexit (_,_) as c -> c
-  | Ctuple [] as c -> c
-  | c -> Csequence(c, Ctuple [])
+let rec remove_unit cmm =
+  preserve_phantom_lets_cmm cmm (fun cmm ->
+    match cmm with
+    | Cconst_pointer 1 -> Ctuple []
+    | Csequence(c1, c2) ->
+        let c2 = remove_unit c2 in
+        begin match strip_phantom_lets_cmm c2 with
+        | Ctuple [] -> c1
+        | _ -> Csequence(c1, c2)
+        end
+    | Cifthenelse(cond, ifso, ifnot) ->
+        Cifthenelse(cond, remove_unit ifso, remove_unit ifnot)
+    | Cswitch(sel, index, cases) ->
+        Cswitch(sel, index, Array.map remove_unit cases)
+    | Ccatch(io, ids, body, handler) ->
+        Ccatch(io, ids, remove_unit body, remove_unit handler)
+    | Ctrywith(body, exn, handler) ->
+        Ctrywith(remove_unit body, exn, remove_unit handler)
+    | Clet(mut, id, c1, c2) ->
+        Clet(mut, id, c1, remove_unit c2)
+    | Cop(Capply (_mty, dbg), args) ->
+        Cop(Capply (typ_void, dbg), args)
+    | Cop(Cextcall(proc, _mty, alloc, dbg), args) ->
+        Cop(Cextcall(proc, typ_void, alloc, dbg), args)
+    | Cexit (_,_) as c -> c
+    | Ctuple [] as c -> c
+    | c -> Csequence(c, Ctuple []))
 
 (* Access to block fields *)
 
@@ -560,22 +625,23 @@ let array_indexing ?typ log2size ptr ofs =
     | None | Some Addr -> Cadda
     | Some Int -> Caddi
     | _ -> assert false in
-  match ofs with
-    Cconst_int n ->
-      let i = n asr 1 in
-      if i = 0 then ptr else Cop(add, [ptr; Cconst_int(i lsl log2size)])
-  | Cop(Caddi, [Cop(Clsl, [c; Cconst_int 1]); Cconst_int 1]) ->
-      Cop(add, [ptr; lsl_const c log2size])
-  | Cop(Caddi, [c; Cconst_int n]) when log2size = 0 ->
-      Cop(add, [Cop(add, [ptr; untag_int c]); Cconst_int (n asr 1)])
-  | Cop(Caddi, [c; Cconst_int n]) ->
-      Cop(add, [Cop(add, [ptr; lsl_const c (log2size - 1)]);
-                   Cconst_int((n-1) lsl (log2size - 1))])
-  | _ when log2size = 0 ->
-      Cop(add, [ptr; untag_int ofs])
-  | _ ->
-      Cop(add, [Cop(add, [ptr; lsl_const ofs (log2size - 1)]);
-                   Cconst_int((-1) lsl (log2size - 1))])
+  preserve_phantom_lets_cmm ofs (fun ofs ->
+    match ofs with
+    | Cconst_int n ->
+        let i = n asr 1 in
+        if i = 0 then ptr else Cop(add, [ptr; Cconst_int(i lsl log2size)])
+    | Cop(Caddi, [Cop(Clsl, [c; Cconst_int 1]); Cconst_int 1]) ->
+        Cop(add, [ptr; lsl_const c log2size])
+    | Cop(Caddi, [c; Cconst_int n]) when log2size = 0 ->
+        Cop(add, [Cop(add, [ptr; untag_int c]); Cconst_int (n asr 1)])
+    | Cop(Caddi, [c; Cconst_int n]) ->
+        Cop(add, [Cop(add, [ptr; lsl_const c (log2size - 1)]);
+                     Cconst_int((n-1) lsl (log2size - 1))])
+    | _ when log2size = 0 ->
+        Cop(add, [ptr; untag_int ofs])
+    | _ ->
+        Cop(add, [Cop(add, [ptr; lsl_const ofs (log2size - 1)]);
+                     Cconst_int((-1) lsl (log2size - 1))]))
 
 let addr_array_ref arr ofs =
   Cop(Cload Word_val, [array_indexing log2_size_addr arr ofs])
@@ -717,6 +783,7 @@ let rec expr_size env = function
       expr_size env closure
   | Usequence(_exp, exp') ->
       expr_size env exp'
+  | Uphantom_let (_, _, body) -> expr_size env body
   | _ -> RHS_nonrec
 
 (* Record application and currying functions *)
@@ -785,7 +852,7 @@ let alloc_header_boxed_int bi =
 
 let box_int bi arg =
   match arg with
-    Cconst_int n ->
+  | Cconst_int n ->
       transl_structured_constant (box_int_constant bi (Nativeint.of_int n))
   | Cconst_natint n ->
       transl_structured_constant (box_int_constant bi n)
@@ -806,30 +873,39 @@ let split_int64_for_32bit_target arg =
             Cop (Cload Thirtytwo_unsigned, [second])])
 
 let rec unbox_int bi arg =
-  match arg with
-    Cop(Calloc, [_hdr; _ops; Cop(Clsl, [contents; Cconst_int 32])])
-    when bi = Pint32 && size_int = 8 && big_endian ->
-      (* Force sign-extension of low 32 bits *)
-      Cop(Casr, [Cop(Clsl, [contents; Cconst_int 32]); Cconst_int 32])
-  | Cop(Calloc, [_hdr; _ops; contents])
-    when bi = Pint32 && size_int = 8 && not big_endian ->
-      (* Force sign-extension of low 32 bits *)
-      Cop(Casr, [Cop(Clsl, [contents; Cconst_int 32]); Cconst_int 32])
-  | Cop(Calloc, [_hdr; _ops; contents]) ->
-      contents
-  | Clet(mut, id, exp, body) -> Clet(mut, id, exp, unbox_int bi body)
-  | Cifthenelse(cond, e1, e2) ->
-      Cifthenelse(cond, unbox_int bi e1, unbox_int bi e2)
-  | Csequence(e1, e2) -> Csequence(e1, unbox_int bi e2)
-  | Cswitch(e, tbl, el) -> Cswitch(e, tbl, Array.map (unbox_int bi) el)
-  | Ccatch(n, ids, e1, e2) -> Ccatch(n, ids, unbox_int bi e1, unbox_int bi e2)
-  | Ctrywith(e1, id, e2) -> Ctrywith(unbox_int bi e1, id, unbox_int bi e2)
-  | _ ->
-      if size_int = 4 && bi = Pint64 then
-        split_int64_for_32bit_target arg
-      else
-        Cop(Cload(if bi = Pint32 then Thirtytwo_signed else Word_int),
-            [Cop(Cadda, [arg; Cconst_int size_addr])])
+  preserve_phantom_lets_cmm arg (fun arg ->
+    match arg with
+    | Cop(Calloc, [_hdr; _ops; arg]) ->
+        begin match strip_phantom_lets_cmm arg with
+        | Cop (Clsl, [contents; shift_by_32])
+            when bi = Pint32 && size_int = 8 && big_endian
+              &&
+                begin match strip_phantom_lets_cmm shift_by_32 with
+                | Cconst_int 32 -> true
+                | _ -> false
+                end ->
+          (* Force sign-extension of low 32 bits *)
+          Cop(Casr, [Cop(Clsl, [contents; Cconst_int 32]); Cconst_int 32])
+        | contents
+            when bi = Pint32 && size_int = 8 && not big_endian ->
+          (* Force sign-extension of low 32 bits *)
+          Cop(Casr, [Cop(Clsl, [contents; Cconst_int 32]); Cconst_int 32])
+        | contents -> contents
+        end
+    | Clet(mut, id, exp, body) -> Clet(mut, id, exp, unbox_int bi body)
+    | Cifthenelse(cond, e1, e2) ->
+        Cifthenelse(cond, unbox_int bi e1, unbox_int bi e2)
+    | Csequence(e1, e2) -> Csequence(e1, unbox_int bi e2)
+    | Cswitch(e, tbl, el) -> Cswitch(e, tbl, Array.map (unbox_int bi) el)
+    | Ccatch(n, ids, e1, e2) ->
+        Ccatch(n, ids, unbox_int bi e1, unbox_int bi e2)
+    | Ctrywith(e1, id, e2) -> Ctrywith(unbox_int bi e1, id, unbox_int bi e2)
+    | _ ->
+        if size_int = 4 && bi = Pint64 then
+          split_int64_for_32bit_target arg
+        else
+          Cop(Cload(if bi = Pint32 then Thirtytwo_signed else Word_int),
+              [Cop(Cadda, [arg; Cconst_int size_addr])]))
 
 let make_unsigned_int bi arg =
   if bi = Pint32 && size_int = 8
@@ -1230,7 +1306,8 @@ struct
   let make_switch arg cases actions = Cswitch (arg,cases,actions)
   let bind arg body = bind "switcher" arg body
 
-  let make_catch handler = match handler with
+  (* CR mshinwell: This should preserve phantom lets. *)
+  let make_catch handler = match strip_phantom_lets_cmm handler with
   | Cexit (i,[]) -> i,fun e -> e
   | _ ->
       let i = next_raise_count () in
@@ -1240,7 +1317,7 @@ struct
       Printf.eprintf "%s\n" (Format.flush_str_formatter ()) ;
 *)
       i,
-      (fun body -> match body with
+      (fun body -> match strip_phantom_lets_cmm body with
       | Cexit (j,_) ->
           if i=j then handler
           else body
@@ -1403,7 +1480,8 @@ let rec is_unboxed_number ~strict env e =
         | Praise _ -> No_result
         | _ -> No_unboxing
       end
-  | Ulet (_, _, _, _, _, e) | Uletrec (_, e) | Usequence (_, e) ->
+  | Ulet (_, _, _, _, _, e) | Uletrec (_, e) | Usequence (_, e)
+  | Uphantom_let (_, _, e) ->
       is_unboxed_number ~strict env e
   | Uswitch (_, switch) ->
       let k = Array.fold_left join No_result switch.us_actions_consts in
@@ -1525,24 +1603,28 @@ let rec transl env e =
           make_alloc tag (List.map (transl env) args)
       | (Pccall prim, args) ->
           transl_ccall env prim args dbg
-      | (Pduparray (kind, _), [Uprim (Pmakearray (kind', _), args, _dbg)]) ->
-          (* We arrive here in two cases:
-             1. When using Closure, all the time.
-             2. When using Flambda, if a float array longer than
-             [Translcore.use_dup_for_constant_arrays_bigger_than] turns out
-             to be non-constant.
-             If for some reason Flambda fails to lift a constant array we
-             could in theory also end up here.
-             Note that [kind] above is unconstrained, but with the current
-             state of [Translcore], we will in fact only get here with
-             [Pfloatarray]s. *)
-          assert (kind = kind');
-          transl_make_array env kind args
-      | (Pduparray _, [arg]) ->
-          let prim_obj_dup =
-            Primitive.simple ~name:"caml_obj_dup" ~arity:1 ~alloc:true
-          in
-          transl_ccall env prim_obj_dup [arg] dbg
+      | (Pduparray (kind, _), args) ->
+          preserve_phantom_lets_list args (fun args ->
+            match args with
+            | [Uprim (Pmakearray (kind', _), args, _dbg)] ->
+                (* We arrive here in two cases:
+                   1. When using Closure, all the time.
+                   2. When using Flambda, if a float array longer than
+                   [Translcore.use_dup_for_constant_arrays_bigger_than] turns
+                   out to be non-constant.
+                   If for some reason Flambda fails to lift a constant array
+                   we could in theory also end up here.
+                   Note that [kind] above is unconstrained, but with the
+                   current state of [Translcore], we will in fact only get
+                   here with [Pfloatarray]s. *)
+                assert (kind = kind');
+                transl_make_array env kind args
+            | [arg] ->
+                let prim_obj_dup =
+                  Primitive.simple ~name:"caml_obj_dup" ~arity:1 ~alloc:true
+                in
+                transl_ccall env prim_obj_dup [arg] dbg
+            | _ -> fatal_error "Cmmgen.transl:prim (Pduparray)")
       | (Pmakearray _, []) ->
           transl_structured_constant (Uconst_block(0, []))
       | (Pmakearray (kind, _), args) -> transl_make_array env kind args
@@ -1619,39 +1701,48 @@ let rec transl env e =
       Ccatch(nfail, ids, transl env body, transl env handler)
   | Utrywith(body, exn, handler) ->
       Ctrywith(transl env body, exn, transl env handler)
-  | Uifthenelse(Uprim(Pnot, [arg], _), ifso, ifnot) ->
-      transl env (Uifthenelse(arg, ifnot, ifso))
-  | Uifthenelse(cond, ifso, Ustaticfail (nfail, [])) ->
-      exit_if_false env cond (transl env ifso) nfail
-  | Uifthenelse(cond, Ustaticfail (nfail, []), ifnot) ->
-      exit_if_true env cond nfail (transl env ifnot)
-  | Uifthenelse(Uprim(Psequand, _, _) as cond, ifso, ifnot) ->
-      let raise_num = next_raise_count () in
-      make_catch
-        raise_num
-        (exit_if_false env cond (transl env ifso) raise_num)
-        (transl env ifnot)
-  | Uifthenelse(Uprim(Psequor, _, _) as cond, ifso, ifnot) ->
-      let raise_num = next_raise_count () in
-      make_catch
-        raise_num
-        (exit_if_true env cond raise_num (transl env ifnot))
-        (transl env ifso)
-  | Uifthenelse (Uifthenelse (cond, condso, condnot), ifso, ifnot) ->
-      let num_true = next_raise_count () in
-      make_catch
-        num_true
-        (make_catch2
-           (fun shared_false ->
-             if_then_else
-               (test_bool (transl env cond),
-                exit_if_true env condso num_true shared_false,
-                exit_if_true env condnot num_true shared_false))
-           (transl env ifnot))
-        (transl env ifso)
-  | Uifthenelse(cond, ifso, ifnot) ->
-      if_then_else(test_bool(transl env cond), transl env ifso,
-        transl env ifnot)
+  | Uifthenelse (cond', ifso', ifnot') ->
+      let cond_phantom, cond = extract_and_strip_phantom_lets cond' in
+      let ifso = strip_phantom_lets ifso' in
+      let ifnot = strip_phantom_lets ifnot' in
+      begin match cond, ifso, ifnot with
+      | Uprim(Pnot, [arg], _), _ifso, _ifnot ->
+          let arg = add_phantom_lets arg cond_phantom in
+          transl env (Uifthenelse(arg, ifnot', ifso'))
+      | _cond, _ifso, Ustaticfail (nfail, []) ->
+          (* Phantom lets from [ifnot] are discarded. *)
+          exit_if_false env cond' (transl env ifso') nfail
+      | _cond, Ustaticfail (nfail, []), _ifnot ->
+          (* Phantom lets from [ifso] are discarded. *)
+          exit_if_true env cond' nfail (transl env ifnot')
+      | Uprim(Psequand, _, _), _ifso, _ifnot ->
+          let raise_num = next_raise_count () in
+          make_catch
+            raise_num
+            (exit_if_false env cond' (transl env ifso') raise_num)
+            (transl env ifnot')
+      | Uprim(Psequor, _, _), _ifso, _ifnot ->
+          let raise_num = next_raise_count () in
+          make_catch
+            raise_num
+            (exit_if_true env cond' raise_num (transl env ifnot'))
+            (transl env ifso')
+      | Uifthenelse (cond, condso, condnot), _ifso, _ifnot ->
+          let num_true = next_raise_count () in
+          make_catch
+            num_true
+            (make_catch2
+               (fun shared_false ->
+                 if_then_else
+                   (test_bool (transl env cond),
+                    exit_if_true env condso num_true shared_false,
+                    exit_if_true env condnot num_true shared_false))
+               (transl env ifnot'))
+            (transl env ifso')
+      | _cond, _ifso, _ifnot ->
+          if_then_else(test_bool(transl env cond'), transl env ifso',
+            transl env ifnot')
+      end
   | Usequence(exp1, exp2) ->
       Csequence(remove_unit(transl env exp1), transl env exp2)
   | Uwhile(cond, body) ->
@@ -1891,10 +1982,12 @@ and transl_prim_2 env p arg1 arg2 dbg =
           rather than
             (+ ( * 200 (>>s a 1)) 15)
         *)
-       match transl env arg1, transl env arg2 with
-         | Cconst_int _ as c1, c2 ->
-             incr_int (mul_int (untag_int c1) (decr_int c2))
-         | c1, c2 -> incr_int (mul_int (decr_int c1) (untag_int c2))
+       preserve_phantom_lets_cmm2 (transl env arg1) (transl env arg2)
+         (fun arg1 arg2 ->
+           match arg1, arg2 with
+             | Cconst_int _ as c1, c2 ->
+                 incr_int (mul_int (untag_int c1) (decr_int c2))
+             | c1, c2 -> incr_int (mul_int (decr_int c1) (untag_int c2)))
      end
   | Pdivint ->
       tag_int(div_int (untag_int(transl env arg1))
@@ -2259,27 +2352,34 @@ and transl_prim_3 env p arg1 arg2 arg3 dbg =
   | prim ->
       fatal_errorf "Cmmgen.transl_prim_3: %a" Printlambda.primitive prim
 
-and transl_unbox_float env = function
-    Uconst(Uconst_ref(_, Some (Uconst_float f))) -> Cconst_float f
-  | exp -> unbox_float(transl env exp)
+and transl_unbox_float env ulam =
+  preserve_phantom_lets ulam (fun ulam ->
+    match ulam with
+    | Uconst(Uconst_ref(_, Some (Uconst_float f))) -> Cconst_float f
+    | exp -> unbox_float(transl env exp))
 
-and transl_unbox_int env bi = function
-    Uconst(Uconst_ref(_, Some (Uconst_int32 n))) ->
-      Cconst_natint (Nativeint.of_int32 n)
-  | Uconst(Uconst_ref(_, Some (Uconst_nativeint n))) ->
-      Cconst_natint n
-  | Uconst(Uconst_ref(_, Some (Uconst_int64 n))) ->
-      if size_int = 8 then
-        Cconst_natint (Int64.to_nativeint n)
-      else begin
-        let low = Int64.to_nativeint n in
-        let high = Int64.to_nativeint (Int64.shift_right_logical n 32) in
-        if big_endian then Ctuple [Cconst_natint high; Cconst_natint low]
-        else Ctuple [Cconst_natint low; Cconst_natint high]
-      end
-  | Uprim(Pbintofint bi',[Uconst(Uconst_int i)],_) when bi = bi' ->
-      Cconst_int i
-  | exp -> unbox_int bi (transl env exp)
+and transl_unbox_int env bi ulam =
+  preserve_phantom_lets ulam (fun ulam ->
+    match ulam with
+    | Uconst(Uconst_ref(_, Some (Uconst_int32 n))) ->
+        Cconst_natint (Nativeint.of_int32 n)
+    | Uconst(Uconst_ref(_, Some (Uconst_nativeint n))) ->
+        Cconst_natint n
+    | Uconst(Uconst_ref(_, Some (Uconst_int64 n))) ->
+        if size_int = 8 then
+          Cconst_natint (Int64.to_nativeint n)
+        else begin
+          let low = Int64.to_nativeint n in
+          let high = Int64.to_nativeint (Int64.shift_right_logical n 32) in
+          if big_endian then Ctuple [Cconst_natint high; Cconst_natint low]
+          else Ctuple [Cconst_natint low; Cconst_natint high]
+        end
+    | Uprim(Pbintofint bi', [arg], _) when bi = bi' ->
+        preserve_phantom_lets arg (fun arg ->
+          match arg with
+          | Uconst (Uconst_int i) -> Cconst_int i
+          | _ -> unbox_int bi (transl env ulam))
+    | exp -> unbox_int bi (transl env exp))
 
 and transl_unbox_number env bn arg =
   match bn with
@@ -2330,30 +2430,32 @@ and transl_let env mutability kind id exp body =
       Clet(mutability, unboxed_id, transl_unbox_number env boxed_number exp,
            transl (add_unboxed_id id unboxed_id boxed_number env) body)
 
-and make_catch ncatch body handler = match body with
-| Cexit (nexit,[]) when nexit=ncatch -> handler
-| _ ->  Ccatch (ncatch, [], body, handler)
+(* CR mshinwell: think about phantom lets again for these two *)
+and make_catch ncatch body handler =
+  preserve_phantom_lets_cmm body (fun body ->
+    match body with
+    | Cexit (nexit,[]) when nexit=ncatch -> handler
+    | _ ->  Ccatch (ncatch, [], body, handler))
 
-and make_catch2 mk_body handler = match handler with
-| Cexit (_,[])|Ctuple []|Cconst_int _|Cconst_pointer _ ->
-    mk_body handler
-| _ ->
-    let nfail = next_raise_count () in
-    make_catch
-      nfail
-      (mk_body (Cexit (nfail,[])))
-      handler
+and make_catch2 mk_body handler =
+  preserve_phantom_lets_cmm handler (fun handler ->
+    match handler with
+    | Cexit (_,[])|Ctuple []|Cconst_int _|Cconst_pointer _ ->
+        mk_body handler
+    | _ ->
+        let nfail = next_raise_count () in
+        make_catch
+          nfail
+          (mk_body (Cexit (nfail,[])))
+          handler)
 
 and exit_if_true env cond nfail otherwise =
-  match cond with
-  | Uconst (Uconst_ptr 0) -> otherwise
-  | Uconst (Uconst_ptr 1) -> Cexit (nfail,[])
-  | Uifthenelse (arg1, Uconst (Uconst_ptr 1), arg2)
-  | Uprim(Psequor, [arg1; arg2], _) ->
+  preserve_phantom_lets cond (fun cond ->
+    let sequor_case arg1 arg2 =
       exit_if_true env arg1 nfail (exit_if_true env arg2 nfail otherwise)
-  | Uifthenelse (_, _, Uconst (Uconst_ptr 0))
-  | Uprim(Psequand, _, _) ->
-      begin match otherwise with
+    in
+    let sequand_case () =
+      match otherwise with
       | Cexit (raise_num,[]) ->
           exit_if_false env cond (Cexit (nfail,[])) raise_num
       | _ ->
@@ -2362,30 +2464,45 @@ and exit_if_true env cond nfail otherwise =
             raise_num
             (exit_if_false env cond (Cexit (nfail,[])) raise_num)
             otherwise
-      end
-  | Uprim(Pnot, [arg], _) ->
-      exit_if_false env arg otherwise nfail
-  | Uifthenelse (cond, ifso, ifnot) ->
-      make_catch2
-        (fun shared ->
-          if_then_else
-            (test_bool (transl env cond),
-             exit_if_true env ifso nfail shared,
-             exit_if_true env ifnot nfail shared))
-        otherwise
-  | _ ->
-      if_then_else(test_bool(transl env cond), Cexit (nfail, []), otherwise)
+    in
+    match cond with
+    | Uconst (Uconst_ptr 0) -> otherwise
+    | Uconst (Uconst_ptr 1) -> Cexit (nfail,[])
+    | Uifthenelse (arg1, ifso, arg2)
+        when
+          begin match strip_phantom_lets ifso with
+          | Uconst (Uconst_ptr 1) -> true
+          | _ -> false
+          end ->
+        sequor_case arg1 arg2
+    | Uprim(Psequor, [arg1; arg2], _) ->
+        sequor_case arg1 arg2
+    | Uifthenelse (_, _, ifnot)
+        when
+          begin match strip_phantom_lets ifnot with
+          | Uconst (Uconst_ptr 0) -> true
+          | _ -> false
+          end ->
+        sequand_case ()
+    | Uprim(Psequand, _, _) ->
+        sequand_case ()
+    | Uprim(Pnot, [arg], _) ->
+        exit_if_false env arg otherwise nfail
+    | Uifthenelse (cond, ifso, ifnot) ->
+        make_catch2
+          (fun shared ->
+            if_then_else
+              (test_bool (transl env cond),
+               exit_if_true env ifso nfail shared,
+               exit_if_true env ifnot nfail shared))
+          otherwise
+    | _ ->
+        if_then_else(test_bool(transl env cond), Cexit (nfail, []), otherwise))
 
 and exit_if_false env cond otherwise nfail =
-  match cond with
-  | Uconst (Uconst_ptr 0) -> Cexit (nfail,[])
-  | Uconst (Uconst_ptr 1) -> otherwise
-  | Uifthenelse (arg1, arg2, Uconst (Uconst_ptr 0))
-  | Uprim(Psequand, [arg1; arg2], _) ->
-      exit_if_false env arg1 (exit_if_false env arg2 otherwise nfail) nfail
-  | Uifthenelse (_, Uconst (Uconst_ptr 1), _)
-  | Uprim(Psequor, _, _) ->
-      begin match otherwise with
+  preserve_phantom_lets cond (fun cond ->
+    let sequor_case () =
+      match otherwise with
       | Cexit (raise_num,[]) ->
           exit_if_true env cond raise_num (Cexit (nfail,[]))
       | _ ->
@@ -2394,19 +2511,40 @@ and exit_if_false env cond otherwise nfail =
             raise_num
             (exit_if_true env cond raise_num (Cexit (nfail,[])))
             otherwise
-      end
-  | Uprim(Pnot, [arg], _) ->
-      exit_if_true env arg nfail otherwise
-  | Uifthenelse (cond, ifso, ifnot) ->
-      make_catch2
-        (fun shared ->
-          if_then_else
-            (test_bool (transl env cond),
-             exit_if_false env ifso shared nfail,
-             exit_if_false env ifnot shared nfail))
-        otherwise
-  | _ ->
-      if_then_else(test_bool(transl env cond), otherwise, Cexit (nfail, []))
+    in
+    let sequand_case arg1 arg2 =
+      exit_if_false env arg1 (exit_if_false env arg2 otherwise nfail) nfail
+    in
+    match cond with
+    | Uconst (Uconst_ptr 0) -> Cexit (nfail,[])
+    | Uconst (Uconst_ptr 1) -> otherwise
+    | Uifthenelse (arg1, arg2, ifnot)
+        when
+          begin match strip_phantom_lets ifnot with
+          | Uconst (Uconst_ptr 0) -> true
+          | _ -> false
+          end ->
+        sequand_case arg1 arg2
+    | Uprim(Psequand, [arg1; arg2], _) -> sequand_case arg1 arg2
+    | Uifthenelse (_, ifso, _) when
+          begin match strip_phantom_lets ifso with
+          | Uconst (Uconst_ptr 1) -> true
+          | _ -> false
+          end ->
+        sequor_case ()
+    | Uprim(Psequor, _, _) -> sequor_case ()
+    | Uprim(Pnot, [arg], _) ->
+        exit_if_true env arg nfail otherwise
+    | Uifthenelse (cond, ifso, ifnot) ->
+        make_catch2
+          (fun shared ->
+            if_then_else
+              (test_bool (transl env cond),
+               exit_if_false env ifso shared nfail,
+               exit_if_false env ifnot shared nfail))
+          otherwise
+    | _ ->
+        if_then_else(test_bool(transl env cond), otherwise, Cexit (nfail, [])))
 
 and transl_switch env arg index cases = match Array.length cases with
 | 0 -> fatal_error "Cmmgen.transl_switch"
