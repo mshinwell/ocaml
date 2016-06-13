@@ -280,9 +280,22 @@ and inside_arm = ref false
 and inside_catch = ref false
 
 let add_spills regset i =
-  Reg.Set.fold
-    (fun r i -> instr_cons (Iop Ispill) [|r|] [|spill_reg r|] i)
-    regset i
+  let compare_reg r1 r2 =
+    let open Reg in
+    let c =
+      match r1.name, r2.name with
+      | None, None -> 0
+      | None, Some _ -> -1
+      | Some _, None -> 1
+      | Some name1, Some name2 -> Ident.compare name1 name2
+    in
+    if c <> 0 then c
+    else Pervasives.compare r1.shared.stamp r2.shared.stamp
+  in
+  let regset = List.sort compare_reg (Reg.Set.elements regset) in
+  List.fold_left
+    (fun i r -> instr_cons (Iop Ispill) [|r|] [|spill_reg r|] i)
+    i regset
 
 let rec spill i finally =
   match i.desc with
