@@ -108,20 +108,7 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
     | Ulet (_let_kind, _value_kind, _provenance, _ident, def, body) ->
       loop def;
       loop body
-    | Uphantom_let (_ident, provenance_and_defining_expr, body) ->
-      begin match provenance_and_defining_expr with
-      | None -> ()
-      | Some (_provenance, defining_expr) ->
-        match defining_expr with
-        | Uphantom_const _
-        | Uphantom_read_symbol_field _ -> ()
-        | Uphantom_var ident | Uphantom_read_var_field (ident, _)
-        | Uphantom_offset_var_field (ident, _) ->
-          (* Phantom let "alias" bindings like this may cause the generated
-             code to be different, by virtue of pattern matches in [Cmmgen]
-             behaving differently. *)
-          loop (Uvar ident)
-      end;
+    | Uphantom_let (_ident, _provenance_and_defining_expr, body) ->
       loop body
     | Uletrec (defs, body) ->
       List.iter (fun (_provenance, ident, def) ->
@@ -457,16 +444,17 @@ let rec substitute_let_moveable is_let_moveable env (clam : Clambda.ulambda)
     if Ident.Set.mem id is_let_moveable then begin
       let env = Ident.Map.add id def env in
       let body = substitute_let_moveable is_let_moveable env body in
-      (* If we are about to delete a [let] that binds a constant and we
-         are in debug mode, keep it only for the debugger. *)
+      (* If we are about to delete a [let] in debug mode, keep it for the
+         debugger. *)
       match !Clflags.debug, provenance with
-      | false, _
-      | true, None -> body
+      | false, _ -> body
+      | true, None -> Uphantom_let (id, None, body)
       | true, Some provenance ->
         match def with
         | Uconst const ->
           Uphantom_let (id, Some (provenance, Uphantom_const const), body)
-        | _ -> body
+        | _ ->
+          Uphantom_let (id, None, body)
     end else begin
       Ulet (let_kind, value_kind, provenance,
             id, def, substitute_let_moveable is_let_moveable env body)
@@ -664,14 +652,14 @@ let rec un_anf_and_moveable ident_info env (clam : Clambda.ulambda)
       (* CR-soon mshinwell: consider sharing with the let-moveable code,
          above. *)
       match !Clflags.debug, provenance with
-      | false, _
-      | true, None -> body, moveable
+      | false, _ -> body, moveable
+      | true, None -> Uphantom_let (id, None, body), moveable
       | true, Some provenance ->
         match def with
         | Uconst const ->
           Uphantom_let (id, Some (provenance, Uphantom_const const), body),
             moveable
-        | _ -> body, moveable
+        | _ -> Uphantom_let (id, None, body), moveable
     in
     begin match def_moveable, is_linear, is_used with
     | (Moveable | Moveable_not_into_loops), _, false ->
@@ -705,8 +693,8 @@ let rec un_anf_and_moveable ident_info env (clam : Clambda.ulambda)
         both_moveable def_moveable body_moveable
     end
   | Uphantom_let (ident, provenance_and_defining_expr, body) ->
-    let body = un_anf ident_info env body in
-    Uphantom_let (ident, provenance_and_defining_expr, body), Fixed
+    let body, body_moveable = un_anf_and_moveable ident_info env body in
+    Uphantom_let (ident, provenance_and_defining_expr, body), body_moveable
   | Uletrec (defs, body) ->
     let defs =
       List.map (fun (provenance, id, def) ->
