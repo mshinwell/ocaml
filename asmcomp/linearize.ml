@@ -149,8 +149,15 @@ let copy_instr d i n =
    - If the sequence is the end, (tail call position), just do nothing
 *)
 
-let get_label n = match n.desc with
-    Lbranch lbl -> (lbl, n)
+let rec skip_phantom_let_labels insn =
+  match insn.desc with
+  | Llabel lbl when Numbers.Int.Set.mem lbl !phantom_let_labels ->
+    skip_phantom_let_labels insn.next
+  | _ -> insn
+
+let get_label n =
+  match (skip_phantom_let_labels n).desc with
+  | Lbranch lbl -> (lbl, n)
   | Llabel lbl -> (lbl, n)
   | Lend -> (-1, n)
   | _ ->
