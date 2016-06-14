@@ -76,6 +76,7 @@ module Make (T : Branch_relaxation_intf.S) = struct
           (* CR mshinwell: [available_before] needs fixing properly
              (same below).  Although maybe it's too late now *)
           arg [||] next ~available_before:Reg.Set.empty
+            ~available_before:Ident.Map.empty
     in
     let rec fixup did_fix pc instr =
       match instr.desc with

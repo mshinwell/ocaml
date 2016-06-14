@@ -26,6 +26,7 @@ type instruction =
     dbg: Debuginfo.t;
     live: Reg.Set.t;
     mutable available_before: Reg.Set.t;
+    mutable phantom_available_before: Ident.Set.t;
   }
 
 and instruction_desc =
@@ -65,14 +66,6 @@ val instr_cons:
     -> available_before:Reg.Set.t -> instruction
 val invert_test: Mach.test -> Mach.test
 
-type phantom_let_range =
-  { starting_label : label;
-    ending_label : label;
-    ident : Ident.t;
-    provenance : Clambda.ulet_provenance;
-    defining_expr : Mach.phantom_defining_expr;
-  }
-
 type fundecl =
   { fun_name: string;
     fun_body: instruction;
@@ -81,9 +74,9 @@ type fundecl =
     fun_human_name : string;
     fun_arity : int;
     fun_module_path : Path.t option;
-    fun_phantom_let_ranges : phantom_let_range Ident.tbl
+    fun_phantom_lets :
+      (Clambda.ulet_provenance * phantom_defining_expr) Ident.Map.t;
   }
 
 val reset : unit -> unit
-val reset_between_functions : unit -> unit
 val fundecl: Mach.fundecl -> fundecl

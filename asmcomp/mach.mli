@@ -41,8 +41,6 @@ type phantom_defining_expr =
   | Iphantom_read_symbol_field of Clambda.uconstant * int
   | Iphantom_offset_var of Ident.t * int
 
-type phantom_let_label = int
-
 type operation =
     Imove
   | Ispill
@@ -73,6 +71,7 @@ type instruction =
     arg: Reg.t array;
     res: Reg.t array;
     dbg: Debuginfo.t;
+    phantom_available_before: Ident.Set.t;
     mutable live: Reg.Set.t;
     mutable available_before: Reg.Set.t;
   }
@@ -88,9 +87,6 @@ and instruction_desc =
   | Iexit of int
   | Itrywith of instruction * instruction
   | Iraise of Lambda.raise_kind
-  | Iphantom_let_start of phantom_let_label * Ident.t
-      * Clambda.ulet_provenance * phantom_defining_expr
-  | Iphantom_let_end of phantom_let_label
 
 type fundecl =
   { fun_name: string;
@@ -100,14 +96,16 @@ type fundecl =
     fun_dbg : Debuginfo.t;
     fun_human_name : string;
     fun_module_path : Path.t option;
+    fun_phantom_lets :
+      (Clambda.ulet_provenance * phantom_defining_expr) Ident.Map.t;
   }
 
 val dummy_instr: instruction
 val end_instr: unit -> instruction
 val instr_cons:
-      instruction_desc -> Reg.t array -> Reg.t array -> instruction ->
-        instruction
+      instruction_desc -> Reg.t array -> Reg.t array ->
+        phantom_available_before:Ident.Set.t -> instruction -> instruction
 val instr_cons_debug:
       instruction_desc -> Reg.t array -> Reg.t array -> Debuginfo.t ->
-        instruction -> instruction
+        phantom_available_before:Ident.Set.t -> instruction -> instruction
 val instr_iter: (instruction -> unit) -> instruction -> unit

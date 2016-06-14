@@ -21,7 +21,10 @@ open Cmm
 open Reg
 open Mach
 
-type environment = (Ident.t, Reg.t array) Tbl.t
+type environment = {
+  idents : (Ident.t, Reg.t array) Tbl.t;
+  phantom_idents : Ident.Set.t;
+}
 
 (* Infer the type of the result of an operation *)
 
@@ -152,7 +155,7 @@ end
 (* "Join" two instruction sequences, making sure they return their results
    in the same registers. *)
 
-let join opt_r1 seq1 opt_r2 seq2 =
+let join env opt_r1 seq1 opt_r2 seq2 =
   match (opt_r1, opt_r2) with
     (None, _) -> opt_r2
   | (_, None) -> opt_r1
@@ -174,25 +177,25 @@ let join opt_r1 seq1 opt_r2 seq2 =
         then begin
           let r1 = Reg.anonymise r1.(i) in
           r.(i) <- r1;
-          seq2#insert_move_no_name_propagation r2.(i) r1
+          seq2#insert_move_no_name_propagation env r2.(i) r1
         end else if Reg.immutable r2.(i)
           && Cmm.ge_component r2.(i).shared.typ r1.(i).shared.typ
         then begin
           let r2 = Reg.anonymise r2.(i) in
           r.(i) <- r2;
-          seq1#insert_move_no_name_propagation r1.(i) r2
+          seq1#insert_move_no_name_propagation env r1.(i) r2
         end else begin
           let typ = Cmm.lub_component r1.(i).shared.typ r2.(i).shared.typ in
           r.(i) <- Reg.create typ;
-          seq1#insert_move_no_name_propagation r1.(i) r.(i);
-          seq2#insert_move_no_name_propagation r2.(i) r.(i)
+          seq1#insert_move_no_name_propagation env r1.(i) r.(i);
+          seq2#insert_move_no_name_propagation env r2.(i) r.(i)
         end
       done;
       Some r
 
 (* Same, for N branches *)
 
-let join_array rs =
+let join_array env rs =
   let some_res = ref None in
   for i = 0 to Array.length rs - 1 do
     let (r, _) = rs.(i) in
@@ -210,7 +213,7 @@ let join_array rs =
         let (r, s) = rs.(i) in
         match r with
           None -> ()
-        | Some r -> s#insert_moves r res
+        | Some r -> s#insert_moves env r res
       done;
       Some res
 
@@ -228,8 +231,8 @@ let catch_regs = ref []
 (* Name of function being compiled *)
 let current_function_name = ref ""
 
-(* Next label to use for phantom let ranges *)
-let phantom_let_number = ref 0
+(* All phantom lets seen in the current function *)
+let phantom_lets = Ident.Tbl.empty
 
 (* The default instruction selection class *)
 
@@ -430,6 +433,25 @@ method select_condition = function
   | arg ->
       (Itruetest, arg)
 
+method private env_for_phantom_let ~ident ~provenance_and_defining_expr =
+  match provenance_and_defining_expr with
+  | None -> env
+  | Some (provenance, defining_expr) ->
+    let defining_expr =
+      match defining_expr with
+      | Clambda.Uphantom_const const -> Iphantom_const const
+      | Clambda.Uphantom_var var -> Iphantom_var var
+      | Clambda.Uphantom_read_var_field (var, field) ->
+        Iphantom_read_var_field (var, field)
+      | Clambda.Uphantom_read_symbol_field (sym, field) ->
+        Iphantom_read_symbol_field (sym, field)
+      | Clambda.Uphantom_offset_var_field (var, offset) ->
+        Iphantom_offset_var (var, offset)
+    in
+    Ident.Tbl.add ident (provenance, defining_expr) phantom_lets;
+    let phantom_idents = Ident.Set.add ident env.phantom_idents in
+    { env with phantom_idents; }
+
 (* Return an array of fresh registers of the given type.
    Normally implemented as Reg.createv, but some
    ports (e.g. Arm) can override this definition to store float values
@@ -441,11 +463,11 @@ method regs_for tys = Reg.createv tys
 
 val mutable instr_seq = dummy_instr
 
-method insert_debug desc dbg arg res =
-  instr_seq <- instr_cons_debug desc arg res dbg instr_seq
+method insert_debug env desc dbg arg res =
+  instr_seq <- instr_cons_debug desc arg res dbg env.phantom_idents instr_seq
 
-method insert desc arg res =
-  instr_seq <- instr_cons desc arg res instr_seq
+method insert env desc arg res =
+  instr_seq <- instr_cons desc arg res env.phantom_idents instr_seq
 
 method extract =
   let rec extract res i =
@@ -456,13 +478,13 @@ method extract =
 
 (* Insert a sequence of moves from one pseudoreg set to another. *)
 
-method insert_move_no_name_propagation src dst =
+method insert_move_no_name_propagation env src dst =
   if src.shared.stamp <> dst.shared.stamp || src.name <> dst.name then begin
-    self#insert (Iop Imove) [|src|] [|dst|]
+    self#insert env (Iop Imove) [|src|] [|dst|]
   end;
 
-method insert_move src dst =
-  self#insert_move_no_name_propagation src dst;
+method insert_move env src dst =
+  self#insert_move_no_name_propagation env src dst;
   match src.shared.mutability, dst.shared.mutability with
   | Immutable, Immutable ->
     (* CR mshinwell: does this conditional really make sense? *)
@@ -491,14 +513,14 @@ method insert_move src dst =
     ()
   | Mutable, Mutable -> ()
 
-method insert_moves src dst =
+method insert_moves env src dst =
   for i = 0 to min (Array.length src) (Array.length dst) - 1 do
-    self#insert_move src.(i) dst.(i)
+    self#insert_move env src.(i) dst.(i)
   done
 
-method insert_moves_no_name_propagation src dst =
+method insert_moves_no_name_propagation env src dst =
   for i = 0 to min (Array.length src) (Array.length dst) - 1 do
-    self#insert_move_no_name_propagation src.(i) dst.(i)
+    self#insert_move_no_name_propagation env src.(i) dst.(i)
   done
 
 (* Adjust the types of destination pseudoregs for a [Cassign] assignment.
@@ -522,26 +544,26 @@ method adjust_types src dst =
 
 (* Insert moves and stack offsets for function arguments and results *)
 
-method insert_move_args arg loc stacksize =
+method insert_move_args env arg loc stacksize =
   if stacksize <> 0 then self#insert (Iop(Istackoffset stacksize)) [||] [||];
-  self#insert_moves arg loc
+  self#insert_moves env arg loc
 
-method insert_move_results loc res stacksize =
+method insert_move_results env loc res stacksize =
   if stacksize <> 0 then self#insert(Iop(Istackoffset(-stacksize))) [||] [||];
-  self#insert_moves loc res
+  self#insert_moves env loc res
 
 (* Add an Iop opcode. Can be overridden by processor description
    to insert moves before and after the operation, i.e. for two-address
    instructions, or instructions using dedicated registers. *)
 
-method insert_op_debug op dbg rs rd =
+method insert_op_debug env op dbg rs rd =
   (* Prevent back-propagation of names across the operation. *)
   let rd = Array.map Reg.anonymise rd in
-  self#insert_debug (Iop op) dbg rs rd;
+  self#insert_debug env (Iop op) dbg rs rd;
   rd
 
-method insert_op op rs rd =
-  self#insert_op_debug op Debuginfo.none rs rd
+method insert_op env op rs rd =
+  self#insert_op_debug env op Debuginfo.none rs rd
 
 (* Add the instructions for the given expression
    at the end of the self sequence *)
@@ -550,28 +572,28 @@ method emit_expr env exp =
   match exp with
     Cconst_int n ->
       let r = self#regs_for typ_int in
-      Some(self#insert_op (Iconst_int(Nativeint.of_int n)) [||] r)
+      Some(self#insert_op env (Iconst_int(Nativeint.of_int n)) [||] r)
   | Cconst_natint n ->
       let r = self#regs_for typ_int in
-      Some(self#insert_op (Iconst_int n) [||] r)
+      Some(self#insert_op env (Iconst_int n) [||] r)
   | Cconst_blockheader n ->
       let r = self#regs_for typ_int in
-      Some(self#insert_op (Iconst_blockheader n) [||] r)
+      Some(self#insert_op env (Iconst_blockheader n) [||] r)
   | Cconst_float n ->
       let r = self#regs_for typ_float in
-      Some(self#insert_op (Iconst_float (Int64.bits_of_float n)) [||] r)
+      Some(self#insert_op env (Iconst_float (Int64.bits_of_float n)) [||] r)
   | Cconst_symbol n ->
       let r = self#regs_for typ_val in
-      Some(self#insert_op (Iconst_symbol n) [||] r)
+      Some(self#insert_op env (Iconst_symbol n) [||] r)
   | Cconst_pointer n ->
       let r = self#regs_for typ_val in  (* integer as Caml value *)
-      Some(self#insert_op (Iconst_int(Nativeint.of_int n)) [||] r)
+      Some(self#insert_op env (Iconst_int(Nativeint.of_int n)) [||] r)
   | Cconst_natpointer n ->
       let r = self#regs_for typ_val in  (* integer as Caml value *)
-      Some(self#insert_op (Iconst_int n) [||] r)
+      Some(self#insert_op env (Iconst_int n) [||] r)
   | Cvar v ->
       begin try
-        Some(Tbl.find v env)
+        Some(Tbl.find v env.idents)
       with Not_found ->
         fatal_error("Selection.emit_expr: unbound var " ^ Ident.unique_name v)
       end
@@ -581,35 +603,10 @@ method emit_expr env exp =
       | Some r1 -> self#emit_expr (self#bind_let env mut v r1) e2
       end
   | Cphantom_let (ident, provenance_and_defining_expr, body) ->
-      let number = !phantom_let_number in
-      incr phantom_let_number;
-      let provenance_and_defining_expr =
-        match provenance_and_defining_expr with
-        | None -> None
-        | Some (provenance, defining_expr) ->
-          let defining_expr =
-            match defining_expr with
-            | Clambda.Uphantom_const const -> Iphantom_const const
-            | Clambda.Uphantom_var var -> Iphantom_var var
-            | Clambda.Uphantom_read_var_field (var, field) ->
-              Iphantom_read_var_field (var, field)
-            | Clambda.Uphantom_read_symbol_field (sym, field) ->
-              Iphantom_read_symbol_field (sym, field)
-            | Clambda.Uphantom_offset_var_field (var, offset) ->
-              Iphantom_offset_var (var, offset)
-          in
-          Some (provenance, defining_expr)
+      let env =
+        self#env_for_phantom_let ~ident ~provenance_and_defining_expr
       in
-      begin match provenance_and_defining_expr with
-      | None -> self#emit_expr env body
-      | Some (provenance, defining_expr) ->
-        self#insert
-          (Iphantom_let_start (number, ident, provenance, defining_expr))
-          [| |] [| |];
-        let result = self#emit_expr env body in
-        self#insert (Iphantom_let_end number) [| |] [| |];
-        result
-      end
+      self#emit_expr env body
   | Cassign(v, e1) ->
       let rv =
         try
@@ -619,7 +616,8 @@ method emit_expr env exp =
       assert (Array.for_all (fun reg -> not (Reg.immutable reg)) rv);
       begin match self#emit_expr env e1 with
         None -> None
-      | Some r1 -> self#adjust_types r1 rv; self#insert_moves r1 rv; Some [||]
+      | Some r1 ->
+        self#adjust_types r1 rv; self#insert_moves env r1 rv; Some [||]
       end
   | Ctuple [] ->
       Some [||]
@@ -634,8 +632,8 @@ method emit_expr env exp =
         None -> None
       | Some r1 ->
           let rd = [|Proc.loc_exn_bucket|] in
-          self#insert (Iop Imove) r1 rd;
-          self#insert_debug (Iraise k) dbg rd [||];
+          self#insert env (Iop Imove) r1 rd;
+          self#insert_debug env (Iraise k) dbg rd [||];
           None
       end
   | Cop(Ccmpf _, _) ->
@@ -654,10 +652,10 @@ method emit_expr env exp =
               let rd = self#regs_for ty in
               let (loc_arg, stack_ofs) = Proc.loc_arguments rarg in
               let loc_res = Proc.loc_results rd in
-              self#insert_move_args rarg loc_arg stack_ofs;
-              self#insert_debug (Iop Icall_ind) dbg
+              self#insert_move_args env rarg loc_arg stack_ofs;
+              self#insert_debug env (Iop Icall_ind) dbg
                           (Array.append [|r1.(0)|] loc_arg) loc_res;
-              self#insert_move_results loc_res rd stack_ofs;
+              self#insert_move_results env loc_res rd stack_ofs;
               set_name_propagation ~src:rd ~dest:loc_res;
               Some rd
           | Icall_imm lbl ->
@@ -665,29 +663,29 @@ method emit_expr env exp =
               let rd = self#regs_for ty in
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
               let loc_res = Proc.loc_results rd in
-              self#insert_move_args r1 loc_arg stack_ofs;
-              self#insert_debug (Iop(Icall_imm lbl)) dbg loc_arg loc_res;
-              self#insert_move_results loc_res rd stack_ofs;
+              self#insert_move_args env r1 loc_arg stack_ofs;
+              self#insert_debug env (Iop(Icall_imm lbl)) dbg loc_arg loc_res;
+              self#insert_move_results env loc_res rd stack_ofs;
               set_name_propagation ~src:rd ~dest:loc_res;
               Some rd
           | Iextcall(lbl, alloc) ->
               let (loc_arg, stack_ofs) = self#emit_extcall_args env new_args in
               let rd = self#regs_for ty in
-              let loc_res = self#insert_op_debug (Iextcall(lbl, alloc)) dbg
+              let loc_res = self#insert_op_debug env (Iextcall(lbl, alloc)) dbg
                                     loc_arg (Proc.loc_external_results rd) in
-              self#insert_move_results loc_res rd stack_ofs;
+              self#insert_move_results env loc_res rd stack_ofs;
               set_name_propagation ~src:rd ~dest:loc_res;
               Some rd
           | Ialloc _ ->
               let rd = self#regs_for typ_val in
               let size = size_expr env (Ctuple new_args) in
-              self#insert (Iop(Ialloc size)) [||] rd;
+              self#insert env (Iop(Ialloc size)) [||] rd;
               self#emit_stores env new_args rd;
               Some rd
           | op ->
               let r1 = self#emit_tuple env new_args in
               let rd = self#regs_for ty in
-              Some (self#insert_op_debug op dbg r1 rd)
+              Some (self#insert_op_debug env op dbg r1 rd)
       end
   | Csequence(e1, e2) ->
       begin match self#emit_expr env e1 with
@@ -702,7 +700,7 @@ method emit_expr env exp =
           let (rif, sif) = self#emit_sequence env eif in
           let (relse, selse) = self#emit_sequence env eelse in
           let r = join rif sif relse selse in
-          self#insert (Iifthenelse(cond, sif#extract, selse#extract))
+          self#insert env (Iifthenelse(cond, sif#extract, selse#extract))
                       rarg [||];
           r
       end
@@ -712,14 +710,14 @@ method emit_expr env exp =
       | Some rsel ->
           let rscases = Array.map (self#emit_sequence env) ecases in
           let r = join_array rscases in
-          self#insert (Iswitch(index,
+          self#insert env (Iswitch(index,
                                Array.map (fun (_, s) -> s#extract) rscases))
                       rsel [||];
           r
       end
   | Cloop(ebody) ->
       let (_rarg, sbody) = self#emit_sequence env ebody in
-      self#insert (Iloop(sbody#extract)) [||] [||];
+      self#insert env (Iloop(sbody#extract)) [||] [||];
       Some [||]
   | Ccatch(nfail, ids, e1, e2) ->
       let rs =
@@ -736,7 +734,7 @@ method emit_expr env exp =
         env (List.combine ids rs) in
       let (r2, s2) = self#emit_sequence new_env e2 in
       let r = join r1 s1 r2 s2 in
-      self#insert (Icatch(nfail, s1#extract, s2#extract)) [||] [||];
+      self#insert env (Icatch(nfail, s1#extract, s2#extract)) [||] [||];
       r
   | Cexit (nfail,args) ->
       begin match self#emit_parts_list env args with
@@ -748,8 +746,8 @@ method emit_expr env exp =
             with Not_found ->
               Misc.fatal_error
                 ("Selectgen.emit_expr, on exit("^string_of_int nfail^")") in
-          self#insert_moves src dest ;
-          self#insert (Iexit nfail) [||] [||];
+          self#insert_moves env src dest ;
+          self#insert env (Iexit nfail) [||] [||];
           None
       end
   | Ctrywith(e1, v, e2) ->
@@ -757,10 +755,11 @@ method emit_expr env exp =
       let rv = self#regs_for typ_val in
       let (r2, s2) = self#emit_sequence (Tbl.add v rv env) e2 in
       let r = join r1 s1 r2 s2 in
-      self#insert
+      let s2 = s2#extract in
+      self#insert env
         (Itrywith(s1#extract,
                   instr_cons (Iop Imove) [|Proc.loc_exn_bucket|] rv
-                             (s2#extract)))
+                    ~phantom_available_before:s2.phantom_available_before s2))
         [||] [||];
       r
 
@@ -772,7 +771,7 @@ method private emit_sequence env exp =
 method private bind_let env mut v r1 =
   let use_new_regs () =
     let rv = Reg.createv_like r1 ~mutability:mut in
-    self#insert_moves r1 rv;
+    self#insert_moves env r1 rv;
     name_regs v rv;
     Tbl.add v rv env
   in
@@ -813,7 +812,7 @@ method private emit_parts env exp =
           end else begin
             (* Introduce a fresh temp to hold the result *)
             let tmp = Reg.createv_like r in
-            self#insert_moves r tmp;
+            self#insert_moves env r tmp;
             Some (Cvar id, Tbl.add id tmp env)
           end
         end
@@ -858,7 +857,7 @@ method emit_extcall_args env args =
      across multiple registers to line up correctly, by virtue of the
      semantics of [split_int64_for_32bit_target] in cmmgen.ml, and the
      required semantics of [loc_external_arguments] (see proc.mli). *)
-  self#insert_move_args args arg_hard_regs stack_ofs;
+  self#insert_move_args env args arg_hard_regs stack_ofs;
   arg_hard_regs, stack_ofs
 
 method emit_stores env data regs_addr =
@@ -877,12 +876,12 @@ method emit_stores env data regs_addr =
                 let kind =
                   if r.shared.typ = Float then Double_u else Word_val
                 in
-                self#insert (Iop(Istore(kind, !a, false)))
+                self#insert env (Iop(Istore(kind, !a, false)))
                             (Array.append [|r|] regs_addr) [||];
                 a := Arch.offset_addressing !a (size_component r.shared.typ)
               done
           | _ ->
-              self#insert (Iop op) (Array.append regs regs_addr) [||];
+              self#insert env (Iop op) (Array.append regs regs_addr) [||];
               a := Arch.offset_addressing !a (size_expr env e))
     data
 
@@ -893,8 +892,8 @@ method private emit_return env exp =
     None -> ()
   | Some r ->
       let loc = Proc.loc_results r in
-      self#insert_moves r loc;
-      self#insert Ireturn loc [||]
+      self#insert_moves env r loc;
+      self#insert env Ireturn loc [||]
 
 method emit_tail env exp =
   match exp with
@@ -904,35 +903,10 @@ method emit_tail env exp =
       | Some r1 -> self#emit_tail (self#bind_let env mut v r1) e2
       end
   | Cphantom_let (ident, provenance_and_defining_expr, body) ->
-      (* CR mshinwell: share code with above *)
-      let number = !phantom_let_number in
-      incr phantom_let_number;
-      let provenance_and_defining_expr =
-        match provenance_and_defining_expr with
-        | None -> None
-        | Some (provenance, defining_expr) ->
-          let defining_expr =
-            match defining_expr with
-            | Clambda.Uphantom_const const -> Iphantom_const const
-            | Clambda.Uphantom_var var -> Iphantom_var var
-            | Clambda.Uphantom_read_var_field (var, field) ->
-              Iphantom_read_var_field (var, field)
-            | Clambda.Uphantom_read_symbol_field (sym, field) ->
-              Iphantom_read_symbol_field (sym, field)
-            | Clambda.Uphantom_offset_var_field (var, offset) ->
-              Iphantom_offset_var (var, offset)
-          in
-          Some (provenance, defining_expr)
+      let env =
+        self#env_for_phantom_let ~ident ~provenance_and_defining_expr
       in
-      begin match provenance_and_defining_expr with
-      | None -> self#emit_tail env body
-      | Some (provenance, defining_expr) ->
-        self#insert
-          (Iphantom_let_start (number, ident, provenance, defining_expr))
-          [| |] [| |];
-        self#emit_tail env body;
-        self#insert (Iphantom_let_end number) [| |] [| |]
-      end
+      self#emit_tail env body
   | Cop(Capply(ty, dbg) as op, args) ->
       begin match self#emit_parts_list env args with
         None -> ()
@@ -944,35 +918,35 @@ method emit_tail env exp =
               let rarg = Array.sub r1 1 (Array.length r1 - 1) in
               let (loc_arg, stack_ofs) = Proc.loc_arguments rarg in
               if stack_ofs = 0 then begin
-                self#insert_moves rarg loc_arg;
-                self#insert (Iop Itailcall_ind)
+                self#insert_moves env rarg loc_arg;
+                self#insert env (Iop Itailcall_ind)
                             (Array.append [|r1.(0)|] loc_arg) [||]
               end else begin
                 let rd = self#regs_for ty in
                 let loc_res = Proc.loc_results rd in
-                self#insert_move_args rarg loc_arg stack_ofs;
-                self#insert_debug (Iop Icall_ind) dbg
+                self#insert_move_args env rarg loc_arg stack_ofs;
+                self#insert_debug env (Iop Icall_ind) dbg
                             (Array.append [|r1.(0)|] loc_arg) loc_res;
-                self#insert(Iop(Istackoffset(-stack_ofs))) [||] [||];
-                self#insert Ireturn loc_res [||]
+                self#insert env(Iop(Istackoffset(-stack_ofs))) [||] [||];
+                self#insert env Ireturn loc_res [||]
               end
           | Icall_imm lbl ->
               let r1 = self#emit_tuple env new_args in
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
               if stack_ofs = 0 then begin
-                self#insert_moves r1 loc_arg;
-                self#insert (Iop(Itailcall_imm lbl)) loc_arg [||]
+                self#insert_moves env r1 loc_arg;
+                self#insert env (Iop(Itailcall_imm lbl)) loc_arg [||]
               end else if lbl = !current_function_name then begin
                 let loc_arg' = Proc.loc_parameters r1 in
-                self#insert_moves r1 loc_arg';
-                self#insert (Iop(Itailcall_imm lbl)) loc_arg' [||]
+                self#insert_moves env r1 loc_arg';
+                self#insert env (Iop(Itailcall_imm lbl)) loc_arg' [||]
               end else begin
                 let rd = self#regs_for ty in
                 let loc_res = Proc.loc_results rd in
-                self#insert_move_args r1 loc_arg stack_ofs;
-                self#insert_debug (Iop(Icall_imm lbl)) dbg loc_arg loc_res;
-                self#insert(Iop(Istackoffset(-stack_ofs))) [||] [||];
-                self#insert Ireturn loc_res [||]
+                self#insert_move_args env r1 loc_arg stack_ofs;
+                self#insert_debug env (Iop(Icall_imm lbl)) dbg loc_arg loc_res;
+                self#insert env(Iop(Istackoffset(-stack_ofs))) [||] [||];
+                self#insert env Ireturn loc_res [||]
               end
           | _ -> fatal_error "Selection.emit_tail"
       end
@@ -986,7 +960,7 @@ method emit_tail env exp =
       begin match self#emit_expr env earg with
         None -> ()
       | Some rarg ->
-          self#insert (Iifthenelse(cond, self#emit_tail_sequence env eif,
+          self#insert env (Iifthenelse(cond, self#emit_tail_sequence env eif,
                                          self#emit_tail_sequence env eelse))
                       rarg [||]
       end
@@ -1014,7 +988,7 @@ method emit_tail env exp =
         (fun env (id,r) -> Tbl.add id r env)
         env (List.combine ids rs) in
       let s2 = self#emit_tail_sequence new_env e2 in
-      self#insert (Icatch(nfail, s1, s2)) [||] [||]
+      self#insert env (Icatch(nfail, s1, s2)) [||] [||]
   | Ctrywith(e1, v, e2) ->
       let (opt_r1, s1) = self#emit_sequence env e1 in
       let rv = self#regs_for typ_val in
@@ -1027,8 +1001,8 @@ method emit_tail env exp =
         None -> ()
       | Some r1 ->
           let loc = Proc.loc_results r1 in
-          self#insert_moves r1 loc;
-          self#insert Ireturn loc [||]
+          self#insert_moves env r1 loc;
+          self#insert env Ireturn loc [||]
       end
   | _ ->
       self#emit_return env exp
@@ -1068,7 +1042,7 @@ method emit_fundecl f =
     List.fold_right2
       (fun (id, _ty) r env -> Tbl.add id r env)
       f.Cmm.fun_args rargs Tbl.empty in
-  self#insert_moves loc_arg rarg;
+  self#insert_moves env loc_arg rarg;
   self#emit_tail env f.Cmm.fun_body;
   let body = self#extract in
   instr_iter (fun instr -> self#mark_instr instr.Mach.desc) body;
@@ -1079,6 +1053,7 @@ method emit_fundecl f =
     fun_dbg  = f.Cmm.fun_dbg;
     fun_human_name = f.Cmm.fun_human_name;
     fun_module_path = f.Cmm.fun_module_path;
+    fun_phantom_lets = Ident.Tbl.to_map phantom_lets;
   }
 
 end
@@ -1100,4 +1075,4 @@ let _ =
 let reset () =
   catch_regs := [];
   current_function_name := "";
-  phantom_let_number := 0
+  Ident.Tbl.clear phantom_lets
