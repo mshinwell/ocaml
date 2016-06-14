@@ -207,7 +207,7 @@ let is_next_catch n = match !exit_label with
 
 let local_exit k =
   match find_exit_label_try_depth k with
-  | _, _, depth -> depth = !try_depth
+  | _, _, _, depth -> depth = !try_depth
 
 (* Linearize an instruction [i]: add it in front of the continuation [n] *)
 
@@ -224,9 +224,6 @@ let rec linear i n =
          in the available-before set of [i.Mach.next]. *)
       i.Mach.next.Mach.available_before
         <- Reg.Set.add i.Mach.res.(0) i.Mach.next.Mach.available_before;
-      i.Mach.next.Mach.phantom_available_before
-        <- Reg.Set.add i.Mach.res.(0)
-          i.Mach.next.Mach.phantom_available_before;
       (* Make sure we don't lose [is_parameter]. *)
       i.Mach.res.(0).shared.is_parameter <- i.Mach.arg.(0).shared.is_parameter;
       linear i.Mach.next n
@@ -234,7 +231,7 @@ let rec linear i n =
       copy_instr (Lop op) i (linear i.Mach.next n)
   | Ireturn ->
       let n1 =
-        copy_instr Lreturn i (discard_dead_code (linear i.Mach.next n))
+        copy_instr Lreturn i (discard_dead_code n)
       in
       if !Proc.contains_calls
       then cons_instr_same_avail Lreloadretaddr n1
@@ -248,16 +245,16 @@ let rec linear i n =
           copy_instr (Lcondbranch(invert_test test, lbl)) i (linear ifso n1)
       | Iexit nfail1, Iexit nfail2, _
             when is_next_catch nfail1 && local_exit nfail2 ->
-          let lbl2, _ = find_exit_label nfail2 in
+          let lbl2, _, _ = find_exit_label nfail2 in
           copy_instr
             (Lcondbranch (invert_test test, lbl2)) i (linear ifso n1)
       | Iexit nfail, _, _ when local_exit nfail ->
           let n2 = linear ifnot n1
-          and lbl, _ = find_exit_label nfail in
+          and lbl, _, _ = find_exit_label nfail in
           copy_instr (Lcondbranch(test, lbl)) i n2
       | _,  Iexit nfail, _ when local_exit nfail ->
           let n2 = linear ifso n1 in
-          let lbl, _ = find_exit_label nfail in
+          let lbl, _, _ = find_exit_label nfail in
           copy_instr (Lcondbranch(invert_test test, lbl)) i n2
       | Iend, _, _ ->
           let (lbl_end, n2) = get_label n1 in
@@ -271,9 +268,7 @@ let rec linear i n =
           let (lbl_end, n2) = get_label n1 in
           let (lbl_else, nelse) = get_label (linear ifnot n2) in
           copy_instr (Lcondbranch(invert_test test, lbl_else)) i
-            (linear ifso (add_branch lbl_end nelse
-              ~available_before:n2.available_before
-              ~phantom_available_before:n2.phantom_available_before))
+            (linear ifso (add_branch lbl_end nelse))
       end
   | Iswitch(index, cases) ->
       let lbl_cases = Array.make (Array.length cases) 0 in
@@ -281,9 +276,7 @@ let rec linear i n =
       let n2 = ref (discard_dead_code n1) in
       for i = Array.length cases - 1 downto 0 do
         let (lbl_case, ncase) =
-          get_label (linear cases.(i)
-            (add_branch lbl_end !n2 ~available_before:n1.available_before
-              ~phantom_available_before:n1.phantom_available_before))
+                get_label(linear cases.(i) (add_branch lbl_end !n2))
         in
         lbl_cases.(i) <- lbl_case;
         n2 := discard_dead_code ncase
@@ -312,16 +305,16 @@ let rec linear i n =
       let (lbl_end, n1) = get_label(linear i.Mach.next n) in
       let (lbl_handler, n2) = get_label(linear handler n1) in
       let avail = n2.available_before in
-      exit_label := (io, (lbl_handler, avail, !try_depth)) :: !exit_label ;
+      let phantom_avail = n2.phantom_available_before in
+      exit_label :=
+        (io, (lbl_handler, avail, phantom_avail, !try_depth)) :: !exit_label ;
       let n3 =
-        linear body (add_branch lbl_end n2
-          ~available_before:n1.available_before
-          ~phantom_available_before:n1.phantom_available_before)
+        linear body (add_branch lbl_end n2)
       in
       exit_label := List.tl !exit_label;
       n3
   | Iexit nfail ->
-      let lbl, available_before, phantom_available_before, t =
+      let lbl, _available_before, _phantom_available_before, t =
         find_exit_label_try_depth nfail
       in
       (* We need to re-insert dummy pushtrap (which won't be executed),
@@ -339,8 +332,7 @@ let rec linear i n =
         if t = tt then i
         else loop (cons_instr_same_avail Lpoptrap i) (tt - 1)
       in
-      loop (add_branch lbl n1 ~available_before ~phantom_available_before)
-        !try_depth
+      loop (add_branch lbl n1) !try_depth
   | Itrywith(body, handler) ->
       let (lbl_join, n1) = get_label (linear i.Mach.next n) in
       incr try_depth;
@@ -349,9 +341,7 @@ let rec linear i n =
                     (linear body (cons_instr_same_avail Lpoptrap n1))) in
       decr try_depth;
       cons_instr_same_avail (Lsetuptrap lbl_body)
-        (linear handler (add_branch lbl_join n2
-          ~available_before:n1.available_before
-          ~phantom_available_before:n1.phantom_available_before))
+        (linear handler (add_branch lbl_join n2))
   | Iraise k ->
       copy_instr (Lraise k) i (discard_dead_code n)
 

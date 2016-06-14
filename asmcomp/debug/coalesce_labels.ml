@@ -105,22 +105,9 @@ let fundecl (decl : L.fundecl) : int Int.Map.t * L.fundecl =
       coalesce Int.Map.empty decl.fun_body ~last_insn_was_label:None
     in
     let fun_body = renumber env fun_body in
-    let fun_phantom_let_ranges =
-      Ident.fold_all (fun ident (range : L.phantom_let_range) ranges ->
-          let range =
-            { range with
-              starting_label = rewrite_label env range.starting_label;
-              ending_label = rewrite_label env range.ending_label;
-            }
-          in
-          Ident.add ident range ranges)
-        decl.fun_phantom_let_ranges
-        Ident.empty
-    in
     let decl =
       { decl with
         fun_body;
-        fun_phantom_let_ranges;
       }
     in
     env, decl
