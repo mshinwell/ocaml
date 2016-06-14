@@ -59,23 +59,21 @@ let instr ppf i =
             begin match start_or_end with
             | Available_ranges.Start { end_pos; location; } ->
               fprintf ppf " until L%d" end_pos;
+              let module AS = Available_ranges.Available_subrange in
               begin match location with
-              | Available_ranges.Available_subrange.Reg r ->
+              | AS.Reg (r, _) ->
                 fprintf ppf " in %a" reg r
-              | Available_ranges.Available_subrange.Phantom
-                  (Available_ranges.Symbol symbol) ->
+              | AS.Phantom (_, AS.Const_symbol symbol) ->
                 fprintf ppf " with known value %a" Symbol.print symbol
-              | Available_ranges.Available_subrange.Phantom
-                  (Available_ranges.Read_symbol_field { symbol; field; }) ->
+              | AS.Phantom (_, AS.Read_symbol_field { symbol; field; }) ->
                 fprintf ppf " with known value %a.(%d)" Symbol.print symbol
                   field
-              | Available_ranges.Available_subrange.Phantom
-                  (Available_ranges.Int i) ->
+              | AS.Phantom (_, AS.Const_int i) ->
                 fprintf ppf " with known value %d" i
-              | Available_ranges.Available_subrange.Read_field _ ->
+              | AS.Phantom (_, AS.Read_field _) ->
                 (* CR mshinwell: fixme *)
                 fprintf ppf " from <Read_field _>"
-              | Available_ranges.Available_subrange.Offset_pointer _ ->
+              | AS.Phantom (_, AS.Offset_pointer _) ->
                 (* CR mshinwell: fixme *)
                 fprintf ppf " from <Offset_pointer _>"
               end

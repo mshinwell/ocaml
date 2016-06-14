@@ -64,7 +64,7 @@ let size_expr env exp =
           Tbl.find id localenv
         with Not_found ->
         try
-          let regs = Tbl.find id env in
+          let regs = Tbl.find id env.idents in
           size_machtype (Array.map (fun r -> r.shared.typ) regs)
         with Not_found ->
           fatal_error("Selection.size_expr: unbound var " ^
@@ -453,10 +453,12 @@ method regs_for tys = Reg.createv tys
 val mutable instr_seq = dummy_instr
 
 method insert_debug env desc dbg arg res =
-  instr_seq <- instr_cons_debug desc arg res dbg env.phantom_idents instr_seq
+  instr_seq <- instr_cons_debug desc arg res dbg
+    ~phantom_available_before:env.phantom_idents instr_seq
 
 method insert env desc arg res =
-  instr_seq <- instr_cons desc arg res env.phantom_idents instr_seq
+  instr_seq <- instr_cons desc arg res
+    ~phantom_available_before:env.phantom_idents instr_seq
 
 method extract =
   let rec extract res i =
@@ -534,11 +536,15 @@ method adjust_types src dst =
 (* Insert moves and stack offsets for function arguments and results *)
 
 method insert_move_args env arg loc stacksize =
-  if stacksize <> 0 then self#insert (Iop(Istackoffset stacksize)) [||] [||];
+  if stacksize <> 0 then begin
+    self#insert env (Iop(Istackoffset stacksize)) [||] [||]
+  end;
   self#insert_moves env arg loc
 
 method insert_move_results env loc res stacksize =
-  if stacksize <> 0 then self#insert(Iop(Istackoffset(-stacksize))) [||] [||];
+  if stacksize <> 0 then begin
+    self#insert env (Iop(Istackoffset(-stacksize))) [||] [||]
+  end;
   self#insert_moves env loc res
 
 (* Add an Iop opcode. Can be overridden by processor description
@@ -593,13 +599,13 @@ method emit_expr env exp =
       end
   | Cphantom_let (ident, provenance_and_defining_expr, body) ->
       let env =
-        self#env_for_phantom_let ~ident ~provenance_and_defining_expr
+        self#env_for_phantom_let env ~ident ~provenance_and_defining_expr
       in
       self#emit_expr env body
   | Cassign(v, e1) ->
       let rv =
         try
-          Tbl.find v env
+          Tbl.find v env.idents
         with Not_found ->
           fatal_error ("Selection.emit_expr: unbound var " ^ Ident.name v) in
       assert (Array.for_all (fun reg -> not (Reg.immutable reg)) rv);
@@ -688,7 +694,7 @@ method emit_expr env exp =
       | Some rarg ->
           let (rif, sif) = self#emit_sequence env eif in
           let (relse, selse) = self#emit_sequence env eelse in
-          let r = join rif sif relse selse in
+          let r = join env rif sif relse selse in
           self#insert env (Iifthenelse(cond, sif#extract, selse#extract))
                       rarg [||];
           r
@@ -698,7 +704,7 @@ method emit_expr env exp =
         None -> None
       | Some rsel ->
           let rscases = Array.map (self#emit_sequence env) ecases in
-          let r = join_array rscases in
+          let r = join_array env rscases in
           self#insert env (Iswitch(index,
                                Array.map (fun (_, s) -> s#extract) rscases))
                       rsel [||];
@@ -717,12 +723,13 @@ method emit_expr env exp =
       catch_regs := (nfail, Array.concat rs) :: !catch_regs ;
       let (r1, s1) = self#emit_sequence env e1 in
       catch_regs := List.tl !catch_regs ;
-      let new_env =
+      let new_env_idents =
         List.fold_left
-        (fun env (id,r) -> Tbl.add id r env)
-        env (List.combine ids rs) in
+        (fun idents (id,r) -> Tbl.add id r idents)
+        env.idents (List.combine ids rs) in
+      let new_env = { env with idents = new_env_idents; } in
       let (r2, s2) = self#emit_sequence new_env e2 in
-      let r = join r1 s1 r2 s2 in
+      let r = join env r1 s1 r2 s2 in
       self#insert env (Icatch(nfail, s1#extract, s2#extract)) [||] [||];
       r
   | Cexit (nfail,args) ->
@@ -742,8 +749,11 @@ method emit_expr env exp =
   | Ctrywith(e1, v, e2) ->
       let (r1, s1) = self#emit_sequence env e1 in
       let rv = self#regs_for typ_val in
-      let (r2, s2) = self#emit_sequence (Tbl.add v rv env) e2 in
-      let r = join r1 s1 r2 s2 in
+      let (r2, s2) =
+        let env = { env with idents = Tbl.add v rv env.idents; } in
+        self#emit_sequence env e2
+      in
+      let r = join env r1 s1 r2 s2 in
       let s2 = s2#extract in
       self#insert env
         (Itrywith(s1#extract,
@@ -762,7 +772,7 @@ method private bind_let env mut v r1 =
     let rv = Reg.createv_like r1 ~mutability:mut in
     self#insert_moves env r1 rv;
     name_regs v rv;
-    Tbl.add v rv env
+    { env with idents = Tbl.add v rv env.idents; }
   in
   (* We check [mut] to avoid retrospectively changing registers from
      [Immutable] to [Mutable]. *)
@@ -773,7 +783,7 @@ method private bind_let env mut v r1 =
          across a name-changing operation (at which point it might be wrong,
          e.g. for a 2-address arithmetic instruction). *)
       name_regs v r1;
-      Tbl.add v r1 env
+      { env with idents = Tbl.add v r1 env.idents; }
     end else begin
       use_new_regs ()
     end
@@ -797,12 +807,12 @@ method private emit_parts env exp =
             if Array.for_all Reg.anonymous r then begin
               name_regs id r
             end;
-            Some (Cvar id, Tbl.add id r env)
+            Some (Cvar id, { env with idents = Tbl.add id r env.idents; })
           end else begin
             (* Introduce a fresh temp to hold the result *)
             let tmp = Reg.createv_like r in
             self#insert_moves env r tmp;
-            Some (Cvar id, Tbl.add id tmp env)
+            Some (Cvar id, { env with idents = Tbl.add id tmp env.idents; })
           end
         end
   end
@@ -893,7 +903,7 @@ method emit_tail env exp =
       end
   | Cphantom_let (ident, provenance_and_defining_expr, body) ->
       let env =
-        self#env_for_phantom_let ~ident ~provenance_and_defining_expr
+        self#env_for_phantom_let env ~ident ~provenance_and_defining_expr
       in
       self#emit_tail env body
   | Cop(Capply(ty, dbg) as op, args) ->
@@ -957,7 +967,7 @@ method emit_tail env exp =
       begin match self#emit_expr env esel with
         None -> ()
       | Some rsel ->
-          self#insert
+          self#insert env
             (Iswitch(index, Array.map (self#emit_tail_sequence env) ecases))
             rsel [||]
       end
@@ -974,17 +984,21 @@ method emit_tail env exp =
       catch_regs := List.tl !catch_regs ;
       let new_env =
         List.fold_left
-        (fun env (id,r) -> Tbl.add id r env)
+        (fun env (id,r) -> { env with idents = Tbl.add id r env.idents; })
         env (List.combine ids rs) in
       let s2 = self#emit_tail_sequence new_env e2 in
       self#insert env (Icatch(nfail, s1, s2)) [||] [||]
   | Ctrywith(e1, v, e2) ->
       let (opt_r1, s1) = self#emit_sequence env e1 in
       let rv = self#regs_for typ_val in
-      let s2 = self#emit_tail_sequence (Tbl.add v rv env) e2 in
-      self#insert
+      let s2 =
+        let env = { env with idents = Tbl.add v rv env.idents; } in
+        self#emit_tail_sequence env e2
+      in
+      self#insert env
         (Itrywith(s1#extract,
-                  instr_cons (Iop Imove) [|Proc.loc_exn_bucket|] rv s2))
+                  instr_cons (Iop Imove) [|Proc.loc_exn_bucket|] rv s2
+                    ~phantom_available_before:s2.phantom_available_before))
         [||] [||];
       begin match opt_r1 with
         None -> ()
@@ -1028,15 +1042,20 @@ method emit_fundecl f =
 *)
   let loc_arg = Proc.loc_parameters rarg in
   let env =
+    let empty = {
+      idents = Tbl.empty;
+      phantom_idents = Ident.Set.empty;
+    }
+    in
     List.fold_right2
-      (fun (id, _ty) r env -> Tbl.add id r env)
-      f.Cmm.fun_args rargs Tbl.empty in
+      (fun (id, _ty) r env -> { env with idents = Tbl.add id r env.idents; })
+      f.Cmm.fun_args rargs empty in
   self#insert_moves env loc_arg rarg;
   self#emit_tail env f.Cmm.fun_body;
   let body = self#extract in
   instr_iter (fun instr -> self#mark_instr instr.Mach.desc) body;
   let fun_phantom_lets =
-    Resolve_phantom_ranges.run (Ident.Tbl.to_map phantom_lets)
+    Resolve_phantom_lets.run (Ident.Tbl.to_map phantom_lets)
   in
   { fun_name = f.Cmm.fun_name;
     fun_args = loc_arg;

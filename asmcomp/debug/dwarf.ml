@@ -114,7 +114,7 @@ let create_type_proto_die ~parent ~ident ~output_path ~is_parameter:_ =
     ]
 
 let location_list_entry ~fundecl ~available_subrange =
-  let rec location_expression ~(location : Available_subrange.location) =
+  let rec location_expression ~(location : unit Available_subrange.location) =
     let module LE = Location_expression in
     match location with
     | Reg (reg, ()) ->
@@ -143,13 +143,14 @@ let location_list_entry ~fundecl ~available_subrange =
           LE.in_stack_slot
             ~offset_in_words:(offset_in_bytes_from_cfa / Arch.size_addr)
       end
-    | Phantom (Const_int i) -> LE.const_int (Int64.of_int i)
-    | Phantom (Const_symbol symbol) -> LE.const_symbol symbol
-    | Phantom (Read_symbol_field { symbol; field; }) ->
+    (* CR mshinwell: don't ignore provenance *)
+    | Phantom (_, Const_int i) -> LE.const_int (Int64.of_int i)
+    | Phantom (_, Const_symbol symbol) -> LE.const_symbol symbol
+    | Phantom (_, Read_symbol_field { symbol; field; }) ->
       LE.read_symbol_field ~symbol ~field
-    | Read_field { address; field; } ->
+    | Phantom (_, Read_field { address; field; }) ->
       LE.read_field (location_expression ~location:address) ~field
-    | Offset_pointer { address; offset_in_words; } ->
+    | Phantom (_, Offset_pointer { address; offset_in_words; }) ->
       LE.offset_pointer (location_expression ~location:address)
         ~offset_in_words
   in

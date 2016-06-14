@@ -26,9 +26,9 @@ module Available_subrange : sig
 
   type 'a location =
     | Reg of Reg.t * 'a
-    | Phantom of phantom
+    | Phantom of Clambda.uphantom_defining_expr * 'a phantom
 
-  and phantom =
+  and 'a phantom =
     | Const_int of int
     | Const_symbol of Symbol.t
     | Read_symbol_field of { symbol : Symbol.t; field : int; }
@@ -63,9 +63,9 @@ module Available_subrange : sig
 end = struct
   type 'a location =
     | Reg of Reg.t * 'a
-    | Phantom of Clambda.uphantom_defining_expr * phantom
+    | Phantom of Clambda.uphantom_defining_expr * 'a phantom
 
-  and phantom =
+  and 'a phantom =
     | Const_int of int
     | Const_symbol of Symbol.t
     | Read_symbol_field of { symbol : Symbol.t; field : int; }
@@ -144,7 +144,7 @@ end = struct
           None
         | _ -> assert false
         end
-      | Phantom phantom ->
+      | Phantom (_, phantom) ->
         match phantom with
         | Const_int _ | Const_symbol _ | Read_symbol_field _ -> None
         | Read_field { address; _ } | Offset_pointer { address; _ } ->

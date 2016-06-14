@@ -104,7 +104,6 @@ let available_regs _ppf fundecl =
 let emit ppf fundecl ~dwarf =
   let available_ranges, fundecl =
     Available_ranges.create ~fundecl:(Available_filtering.fundecl fundecl)
-      ~phantom_ranges:fundecl.Linearize.fun_phantom_let_ranges
   in
 (*
   if !Clflags.dump_linear then begin
@@ -134,7 +133,6 @@ let (++) x f = f x
 let compile_fundecl (ppf : formatter) ~dwarf fd_cmm =
   Proc.init ();
   Reg.reset();
-  Linearize.reset_between_functions ();
   let build = Compilenv.current_build () in
   fd_cmm
   ++ Timings.(accumulate_time (Selection build)) Selection.fundecl

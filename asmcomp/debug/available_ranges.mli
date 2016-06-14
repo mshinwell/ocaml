@@ -43,9 +43,9 @@ module Available_subrange : sig
 
   type 'a location =
     | Reg of Reg.t * 'a
-    | Phantom of Clambda.uphantom_defining_expr * phantom
+    | Phantom of Clambda.uphantom_defining_expr * 'a phantom
 
-  and phantom =
+  and 'a phantom =
     | Const_int of int
     | Const_symbol of Symbol.t
     | Read_symbol_field of { symbol : Symbol.t; field : int; }
@@ -94,7 +94,7 @@ val find : t -> ident:Ident.t -> Available_range.t option
 type label_classification =
   | Start of {
       end_pos : Linearize.label;
-      location : Available_subrange.location;
+      location : unit Available_subrange.location;
     }
   | End
 
