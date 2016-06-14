@@ -1046,6 +1046,9 @@ method emit_fundecl f =
   self#emit_tail env f.Cmm.fun_body;
   let body = self#extract in
   instr_iter (fun instr -> self#mark_instr instr.Mach.desc) body;
+  let fun_phantom_lets =
+    Resolve_phantom_ranges.run (Ident.Tbl.to_map phantom_lets)
+  in
   { fun_name = f.Cmm.fun_name;
     fun_args = loc_arg;
     fun_body = body;
@@ -1053,7 +1056,7 @@ method emit_fundecl f =
     fun_dbg  = f.Cmm.fun_dbg;
     fun_human_name = f.Cmm.fun_human_name;
     fun_module_path = f.Cmm.fun_module_path;
-    fun_phantom_lets = Ident.Tbl.to_map phantom_lets;
+    fun_phantom_lets;
   }
 
 end

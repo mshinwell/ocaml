@@ -14,18 +14,7 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-(* CR-soon mshinwell: Generalize this pass into a generic range-determining
-   algorithm. *)
-
 module L = Linearize
-
-(* By the time this pass has run, register stamps are irrelevant; indeed,
-   there may be multiple registers with different stamps assigned to the
-   same location.  As such, we quotient register sets by the equivalence
-   relation that identifies two registers iff they have the same name and
-   location. *)
-module RM = Reg.Map_distinguishing_names_and_locations
-module RS = Reg.Set_distinguishing_names_and_locations
 
 type phantom_defining_expr =
   | Int of int
@@ -346,184 +335,246 @@ let add_subrange t ~ident ~subrange =
   in
   Available_range.add_subrange range ~subrange
 
-(* CR mshinwell: improve efficiency *)
-let available_before (insn : L.instruction) =
-  RS.of_list (Reg.Set.elements insn.available_before)
+module Make (S : sig
+  module Key : sig
+    type t
 
-(* Imagine that the program counter is exactly at the start of [insn]; it has
-   not yet been executed.  This function calculates which available subranges
-   are to start at that point, and which are to stop.  [prev_insn] is the
-   instruction immediately prior to [insn], if such exists. *)
-let births_and_deaths ~(insn : L.instruction)
-      ~(prev_insn : L.instruction option) =
-  (* Available subranges must not cross points at which the stack pointer
-     changes.  (This is because we assign a single stack offset for each
-     available subrange, cf. [Lcapture_stack_offset].)  Thus, if the previous
-     instruction adjusted the stack pointer, then as soon as the program
-     counter reaches the first address immediately after that instruction
-     we must "restart" all continuing available subranges. *)
-  let adjusts_sp =
-    match prev_insn with
-    | None -> false
+    module Map : Map.S with type t := t
+    module Set : Set.S with type t := t
+
+    val assert_valid : t -> unit
+    val needs_stack_offset_capture : t -> Reg.t option
+  end
+
+  val available_before : L.instruction -> Key.Set.t
+
+  val end_pos_offset
+     : prev_insn:L.instruction option
+    -> key:Key.t
+    -> int option
+end) = struct
+  module KM = S.Key.Map
+  module KS = S.Key.Set
+
+  (* Imagine that the program counter is exactly at the start of [insn]; it has
+     not yet been executed.  This function calculates which available subranges
+     are to start at that point, and which are to stop.  [prev_insn] is the
+     instruction immediately prior to [insn], if such exists. *)
+  let births_and_deaths ~(insn : L.instruction)
+        ~(prev_insn : L.instruction option) =
+    (* Available subranges may cross points at which the stack pointer
+       changes, since we reference the stack slots as an offset from the CFA,
+       not from the stack pointer. *)
+    let births =
+      match prev_insn with
+      | None -> S.available_before insn
+      | Some prev_insn ->
+        KS.diff (S.available_before insn) (S.available_before prev_insn)
+    in
+    let deaths =
+      match prev_insn with
+      | None -> KS.empty
+      | Some prev_insn ->
+        KS.diff (S.available_before prev_insn) (S.available_before insn)
+    in
+    births, deaths
+
+  let rec process_instruction t ~first_insn ~(insn : L.instruction) ~prev_insn
+        ~open_subrange_start_insns =
+    let births, deaths = births_and_deaths ~insn ~prev_insn in
+    let first_insn = ref first_insn in
+    let prev_insn = ref prev_insn in
+    let insert_insn ~new_insn =
+      assert (new_insn.L.next == insn);
+      (* (Note that by virtue of [Lprologue], we can insert labels prior
+         to the first assembly instruction of the function.) *)
+      begin match !prev_insn with
+      | None -> first_insn := new_insn
+      | Some prev_insn ->
+        assert (prev_insn.L.next == insn);
+        prev_insn.L.next <- new_insn
+      end;
+      prev_insn := Some new_insn
+    in
+    (* Note that we can't reuse an existing label in the code since we rely
+       on the ordering of range-related labels. *)
+    let label = lazy (L.new_label ()) in
+    KS.fold (fun (key : Key.t) () ->
+        S.Key.assert_valid key;
+        let start_pos, start_insn =
+          try KM.find key open_subrange_start_insns
+          with Not_found -> assert false
+        in
+        let end_pos = Lazy.force label in
+        let end_pos_offset = S.end_pos_offset ~prev_insn ~key in
+        let subrange =
+          S.create_subrange ~key ~start_pos ~start_insn ~end_pos
+            ~end_pos_offset
+        in
+        let ident =
+          match reg.name with
+          | Some name -> name
+          | None -> assert false
+        in
+        add_subrange t ~ident ~subrange)
+      deaths
+      ();
+    let label_insn =
+      lazy ({ L.
+        desc = L.Llabel (Lazy.force label);
+        next = insn;
+        arg = [| |];
+        res = [| |];
+        dbg = Debuginfo.none;
+        live = Reg.Set.empty;
+        available_before = insn.available_before;
+        phantom_available_before = insn.phantom_available_before;
+      })
+    in
+    let open_subrange_start_insns =
+      let open_subrange_start_insns =
+        (KM.filter (fun reg _start_insn -> not (KS.mem reg deaths))
+          open_subrange_start_insns)
+      in
+      KS.fold (fun key open_subrange_start_insns ->
+          (* We only need [Lcapture_stack_offset] in the case where the register
+             is assigned to the stack.  (It enables us to determine what the
+             stack offset will be at that point.) *)
+          let new_insn =
+            match S.Key.needs_stack_offset_capture key with
+            | None -> Lazy.force label_insn
+            | Some reg ->
+              let new_insn =
+                { L.
+                  desc = L.Lcapture_stack_offset (ref None);
+                  next = insn;
+                  arg = [| reg |];
+                  res = [| |];
+                  dbg = Debuginfo.none;
+                  live = Reg.Set.empty;
+                  available_before = insn.available_before;
+                  phantom_available_before = insn.phantom_available_before;
+                }
+              in
+              insert_insn ~new_insn;
+              new_insn
+          in
+          KM.add key (Lazy.force label, new_insn) open_subrange_start_insns)
+        births
+        open_subrange_start_insns
+    in
+    begin if Lazy.is_val label then
+      insert_insn ~new_insn:(Lazy.force label_insn)
+    end;
+    let first_insn = !first_insn in
+    match insn.L.desc with
+    | L.Lend -> first_insn
+    | L.Lprologue | L.Lop _ | L.Lreloadretaddr | L.Lreturn | L.Llabel _
+    | L.Lbranch _ | L.Lcondbranch _ | L.Lcondbranch3 _ | L.Lswitch _
+    | L.Lsetuptrap _ | L.Lpushtrap | L.Lpoptrap | L.Lraise _
+    | L.Lcapture_stack_offset _ ->
+      process_instruction t ~first_insn ~insn:insn.L.next ~prev_insn:(Some insn)
+        ~open_subrange_start_insns
+end
+
+module Make_ranges = Make (struct
+  (* By the time this pass has run, register stamps are irrelevant; indeed,
+     there may be multiple registers with different stamps assigned to the
+     same location.  As such, we quotient register sets by the equivalence
+     relation that identifies two registers iff they have the same name and
+     location. *)
+  module Key = struct
+    type t = Reg.t
+
+    let assert_valid (t : t) =
+        assert (t.name <> None);  (* cf. [Available_filtering] *)
+
+    module Map = Reg.Map_distinguishing_names_and_locations
+    module Set = Reg.Set_distinguishing_names_and_locations
+
+    let needs_stack_offset_capture t =
+      if Reg.assigned_to_stack t then Some t else None
+  end
+
+  (* CR mshinwell: improve efficiency *)
+  let available_before (insn : L.instruction) =
+    Key.Set.of_list (Reg.Set.elements insn.available_before)
+
+  let end_pos_offset ~prev_insn ~key:reg =
+    (* If the range is for a register destroyed by a call (which for
+       calls to OCaml functions means any non-spilled register) and which
+       ends immediately after a call instruction, move the end of the
+       range back very slightly.  The effect is that the register is seen
+       in the debugger as available when standing on the call instruction
+       but unavailable when we are in the callee (and move to the previous
+       frame). *)
+    (* CR-someday mshinwell: I wonder if this should be more
+       conservative for Iextcall.  If the C callee is compiled with
+       debug info then it should describe where any callee-save
+       registers have been saved, so when we step back to the OCaml frame
+       in the debugger, the unwinding procedure should get register
+       values correct.  (I think.)  However if it weren't compiled with
+       debug info, this wouldn't happen, and when looking back up into
+       the OCaml frame I suspect registers would be wrong.  This may
+       not be a great problem once libmonda is hardened, although it
+       is possible for this to be subtle and misleading (e.g. an integer
+       value being 1 instead of 2 or something.) *)
+    match !prev_insn with
+    | None -> None
     | Some prev_insn ->
       match prev_insn.L.desc with
-      (* CR mshinwell: should this have a hook into [Proc]? *)
-      | L.Lop (Mach.Istackoffset _) -> true
-      | _ -> false
-  in
-  let births =
-    match prev_insn with
-    | None -> (available_before insn)
-    | Some prev_insn ->
-      if not adjusts_sp then
-        RS.diff (available_before insn) (available_before prev_insn)
-      else
-        (available_before insn)
-  in
-  let deaths =
-    match prev_insn with
-    | None -> RS.empty
-    | Some prev_insn ->
-      if not adjusts_sp then
-        RS.diff (available_before prev_insn) (available_before insn)
-      else
-        (available_before prev_insn)
-  in
-  births, deaths
-
-let rec process_instruction t ~first_insn ~(insn : L.instruction) ~prev_insn
-      ~open_subrange_start_insns =
-  let births, deaths = births_and_deaths ~insn ~prev_insn in
-  let first_insn = ref first_insn in
-  let prev_insn = ref prev_insn in
-  let insert_insn ~new_insn =
-    assert (new_insn.L.next == insn);
-    (* (Note that by virtue of [Lprologue], we can insert labels prior
-       to the first assembly instruction of the function.) *)
-    begin match !prev_insn with
-    | None -> first_insn := new_insn
-    | Some prev_insn ->
-      assert (prev_insn.L.next == insn);
-      prev_insn.L.next <- new_insn
-    end;
-    prev_insn := Some new_insn
-  in
-  (* Note that we can't reuse an existing label in the code since we rely
-     on the ordering of range-related labels. *)
-  let label = lazy (L.new_label ()) in
-  (* As a result of the code above to restart subranges where a stack
-     adjustment is involved, we may have a register occurring in both
-     [births] and [deaths]; and we would like the register to have an open
-     subrange from this point.  It follows that we should process deaths
-     before births. *)
-  RS.fold (fun (reg : Reg.t) () ->
-      assert (reg.Reg.name <> None);  (* cf. [Available_filtering] *)
-      let start_pos, start_insn =
-        try RM.find reg open_subrange_start_insns
-        with Not_found -> assert false
-      in
-      let end_pos = Lazy.force label in
-      let end_pos_offset =
-        (* If the range is for a register destroyed by a call (which for
-           calls to OCaml functions means any non-spilled register) and which
-           ends immediately after a call instruction, move the end of the
-           range back very slightly.  The effect is that the register is seen
-           in the debugger as available when standing on the call instruction
-           but unavailable when we are in the callee (and move to the previous
-           frame). *)
-        (* CR-someday mshinwell: I wonder if this should be more
-           conservative for Iextcall.  If the C callee is compiled with
-           debug info then it should describe where any callee-save
-           registers have been saved, so when we step back to the OCaml frame
-           in the debugger, the unwinding procedure should get register
-           values correct.  (I think.)  However if it weren't compiled with
-           debug info, this wouldn't happen, and when looking back up into
-           the OCaml frame I suspect registers would be wrong.  This may
-           not be a great problem once libmonda is hardened, although it
-           is possible for this to be subtle and misleading (e.g. an integer
-           value being 1 instead of 2 or something.) *)
-        match !prev_insn with
-        | None -> None
-        | Some prev_insn ->
-          match prev_insn.L.desc with
-          | Lop ((Icall_ind | Icall_imm _ | Iextcall _) as op) ->
-            let destroyed_locations =
-              Array.map (fun (reg : Reg.t) -> reg.shared.loc)
-                (Proc.destroyed_at_oper (Mach.Iop op))
-            in
-            if Array.mem reg.shared.loc destroyed_locations then
-              Some (-1)
-            else
-              None
-          | _ -> None
-      in
-      let subrange =
-        Available_subrange.create ~reg ~start_pos ~start_insn ~end_pos
-          ~end_pos_offset
-      in
-      let ident =
-        match reg.name with
-        | Some name -> name
-        | None -> assert false
-      in
-      add_subrange t ~ident ~subrange)
-    deaths
-    ();
-  let label_insn =
-    lazy ({ L.
-      desc = L.Llabel (Lazy.force label);
-      next = insn;
-      arg = [| |];
-      res = [| |];
-      dbg = Debuginfo.none;
-      live = Reg.Set.empty;
-      available_before = insn.available_before;
-    })
-  in
-  let open_subrange_start_insns =
-    let open_subrange_start_insns =
-      (RM.filter (fun reg _start_insn -> not (RS.mem reg deaths))
-        open_subrange_start_insns)
-    in
-    RS.fold (fun reg open_subrange_start_insns ->
-        (* We only need [Lcapture_stack_offset] in the case where the register
-           is assigned to the stack.  (It enables us to determine what the
-           stack offset will be at that point.) *)
-        let new_insn =
-          if not (Reg.assigned_to_stack reg) then begin
-            Lazy.force label_insn
-          end else begin
-            let new_insn =
-              { L.
-                desc = L.Lcapture_stack_offset (ref None);
-                next = insn;
-                arg = [| reg |];
-                res = [| |];
-                dbg = Debuginfo.none;
-                live = Reg.Set.empty;
-                available_before = insn.available_before;
-              }
-            in
-            insert_insn ~new_insn;
-            new_insn
-          end
+      | Lop ((Icall_ind | Icall_imm _ | Iextcall _) as op) ->
+        let destroyed_locations =
+          Array.map (fun (reg : Reg.t) -> reg.shared.loc)
+            (Proc.destroyed_at_oper (Mach.Iop op))
         in
-        RM.add reg (Lazy.force label, new_insn) open_subrange_start_insns)
-      births
-      open_subrange_start_insns
-  in
-  begin if Lazy.is_val label then
-    insert_insn ~new_insn:(Lazy.force label_insn)
-  end;
-  let first_insn = !first_insn in
-  match insn.L.desc with
-  | L.Lend -> first_insn
-  | L.Lprologue | L.Lop _ | L.Lreloadretaddr | L.Lreturn | L.Llabel _
-  | L.Lbranch _ | L.Lcondbranch _ | L.Lcondbranch3 _ | L.Lswitch _
-  | L.Lsetuptrap _ | L.Lpushtrap | L.Lpoptrap | L.Lraise _
-  | L.Lcapture_stack_offset _ ->
-    process_instruction t ~first_insn ~insn:insn.L.next ~prev_insn:(Some insn)
-      ~open_subrange_start_insns
+        if Array.mem reg.Reg.shared.loc destroyed_locations then
+          Some (-1)
+        else
+          None
+      | _ -> None
+
+  let create_subrange ~fundecl:_ ~key ~start_pos ~start_insn ~end_pos
+        ~end_pos_offset =
+    Available_subrange.create ~reg:key ~start_pos ~start_insn ~end_pos
+      ~end_pos_offset
+end)
+
+module Make_phantom_ranges = Make (struct
+  module Key = struct
+    include Ident
+
+    let assert_valid _t = ()
+  end
+
+  let available_before (insn : L.instruction) =
+    insn.phantom_available_before
+
+  let end_pos_offset ~prev_insn:_ ~key:_ = None
+
+  let needs_stack_offset_capture _ = None
+
+  let create_subrange ~fundecl ~key ~start_pos ~start_insn:_ ~end_pos
+        ~end_pos_offset:_ =
+    let provenance, defining_expr =
+      match Ident.Map.find key fundecl.phantom_lets with
+      | provenance_and_defining_expr -> provenance_and_defining_expr
+      | exception Not_found ->
+        Misc.fatal_errorf "Available_ranges.Make_phantom_ranges: cannot \
+            find phantom-let range definition for %a"
+          Ident.print key
+    in
+    let simple defining_expr =
+      Available_range.create_phantom ~provenance ~defining_expr
+        ~range_start:start_pos ~range_end:end_pos
+    in
+    match defining_expr with
+    | Iphantom_const_int i -> simple (Int i)
+    | Iphantom_const_symbol symbol -> simple (Symbol symbol)
+    | Iphantom_read_symbol_field (symbol, field) ->
+      simple (Read_symbol_field { symbol; field; })
+    | Iphantom_
+end)
 
 let create ~fundecl ~phantom_ranges =
   (* Calculate ranges for non-phantom identifiers. *)
@@ -544,11 +595,6 @@ let create ~fundecl ~phantom_ranges =
       | exception Not_found -> None
       | (range : Linearize.phantom_let_range) ->
         let create_new_range ~defining_expr =
-          let range =
-            Available_range.create_phantom ~provenance:range.provenance
-              ~defining_expr
-              ~range_start:range.starting_label
-              ~range_end:range.ending_label
           in
           Ident.Tbl.add t.ranges target_ident range;
           Some range
