@@ -35,21 +35,20 @@
 
    An "available range" is then a set of available subranges that do not
    overlap in code space, again for a single identifier (normal or phantom)
-   and function.  For phantom identifiers, available ranges and subranges
-   coincide, since the relevant value is expected to be permanently accessible.
+   and function.
 *)
-
-type phantom_defining_expr =
-  | Int of int
-  | Symbol of Symbol.t
-  | Read_symbol_field of { symbol : Symbol.t; field : int; }
 
 module Available_subrange : sig
   type t
 
-  type location =
-    | Reg of Reg.t
-    | Phantom of phantom_defining_expr
+  type 'a location =
+    | Reg of Reg.t * 'a
+    | Phantom of Clambda.uphantom_defining_expr * phantom
+
+  and phantom =
+    | Const_int of int
+    | Const_symbol of Symbol.t
+    | Read_symbol_field of { symbol : Symbol.t; field : int; }
     | Read_field of { address : location; field : int; }
     | Offset_pointer of { address : location; offset_in_words : int; }
 
@@ -57,7 +56,7 @@ module Available_subrange : sig
   val end_pos : t -> Linearize.label
   val end_pos_offset : t -> int option
 
-  val location : t -> location
+  val location : t -> unit location
 
   (** [offset_from_stack_ptr_in_bytes] returns [Some] only when [location]
       is [Reg] and the contained register is assigned to the stack. *)
@@ -88,7 +87,6 @@ type t
    instruction, even, which is why a new declaration is returned. *)
 val create
    : fundecl:Linearize.fundecl
-  -> phantom_ranges:Linearize.phantom_let_range Ident.tbl
   -> t * Linearize.fundecl
 
 val find : t -> ident:Ident.t -> Available_range.t option

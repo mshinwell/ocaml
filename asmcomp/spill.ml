@@ -119,8 +119,10 @@ let destroyed_at_fork = ref ([] : (instruction * Reg.Set.t) list)
    what is destroyed at pressure points. *)
 
 let add_reloads regset i =
-  Reg.Set.fold
-    (fun r i -> instr_cons (Iop Ireload) [|spill_reg r|] [|r|] i)
+  let phantom_available_before = i.phantom_available_before in
+  Reg.Set.fold (fun r i ->
+      instr_cons (Iop Ireload) [|spill_reg r|] [|r|]
+        ~phantom_available_before i)
     regset i
 
 let reload_at_exit = ref []
@@ -145,7 +147,9 @@ let rec reload i before =
       (* All regs live across must be spilled *)
       let (new_next, finally) = reload i.next i.live in
       (add_reloads (Reg.inter_set_array before i.arg)
-                   (instr_cons_debug i.desc i.arg i.res i.dbg new_next),
+                   (instr_cons_debug i.desc i.arg i.res i.dbg
+                     ~phantom_available_before:i.phantom_available_before
+                     new_next),
        finally)
   | Iop op ->
       let new_before =
@@ -158,7 +162,9 @@ let rec reload i before =
         Reg.diff_set_array (Reg.diff_set_array new_before i.arg) i.res in
       let (new_next, finally) = reload i.next after in
       (add_reloads (Reg.inter_set_array new_before i.arg)
-                   (instr_cons_debug i.desc i.arg i.res i.dbg new_next),
+                   (instr_cons_debug i.desc i.arg i.res i.dbg
+                      ~phantom_available_before:i.phantom_available_before
+                      new_next),
        finally)
   | Iifthenelse(test, ifso, ifnot) ->
       let at_fork = Reg.diff_set_array before i.arg in
@@ -172,7 +178,8 @@ let rec reload i before =
         reload i.next (Reg.Set.union after_ifso after_ifnot) in
       let new_i =
         instr_cons (Iifthenelse(test, new_ifso, new_ifnot))
-        i.arg i.res new_next in
+          i.arg i.res ~phantom_available_before:i.phantom_available_before
+          new_next in
       destroyed_at_fork := (new_i, at_fork) :: !destroyed_at_fork;
       (add_reloads (Reg.inter_set_array before i.arg) new_i,
        finally)
@@ -194,7 +201,10 @@ let rec reload i before =
       let (new_next, finally) = reload i.next !after_cases in
       (add_reloads (Reg.inter_set_array before i.arg)
                    (instr_cons (Iswitch(index, new_cases))
-                               i.arg i.res new_next),
+                               i.arg i.res
+                               ~phantom_available_before:
+                                 i.phantom_available_before
+                               new_next),
        finally)
   | Iloop(body) ->
       let date_start = !current_date in
@@ -216,7 +226,8 @@ let rec reload i before =
       with Exit -> ()
       end;
       let (new_next, finally) = reload i.next Reg.Set.empty in
-      (instr_cons (Iloop(!final_body)) i.arg i.res new_next,
+      (instr_cons (Iloop(!final_body)) i.arg i.res
+         ~phantom_available_before:i.phantom_available_before new_next,
        finally)
   | Icatch(nfail, body, handler) ->
       let new_set = ref Reg.Set.empty in
@@ -227,7 +238,8 @@ let rec reload i before =
       let (new_handler, after_handler) = reload handler at_exit in
       let (new_next, finally) =
         reload i.next (Reg.Set.union after_body after_handler) in
-      (instr_cons (Icatch(nfail, new_body, new_handler)) i.arg i.res new_next,
+      (instr_cons (Icatch(nfail, new_body, new_handler)) i.arg i.res
+         ~phantom_available_before:i.phantom_available_before new_next,
        finally)
   | Iexit nfail ->
       let set = find_reload_at_exit nfail in
@@ -243,13 +255,11 @@ let rec reload i before =
       let (new_handler, after_handler) = reload handler before_handler in
       let (new_next, finally) =
         reload i.next (Reg.Set.union after_body after_handler) in
-      (instr_cons (Itrywith(new_body, new_handler)) i.arg i.res new_next,
+      (instr_cons (Itrywith(new_body, new_handler)) i.arg i.res
+         ~phantom_available_before:i.phantom_available_before new_next,
        finally)
   | Iraise _ ->
       (add_reloads (Reg.inter_set_array before i.arg) i, Reg.Set.empty)
-  | Iphantom_let_start _ | Iphantom_let_end _ ->
-      let (new_next, before) = reload i.next before in
-      (instr_cons i.desc i.arg i.res new_next, before)
 
 (* Second pass: add spill instructions based on what we've decided to reload.
    That is, any register that may be reloaded in the future must be spilled
@@ -293,8 +303,10 @@ let add_spills regset i =
     else Pervasives.compare r1.shared.stamp r2.shared.stamp
   in
   let regset = List.sort compare_reg (Reg.Set.elements regset) in
-  List.fold_left
-    (fun i r -> instr_cons (Iop Ispill) [|r|] [|spill_reg r|] i)
+  let phantom_available_before = i.phantom_available_before in
+  List.fold_left (fun i r ->
+      instr_cons (Iop Ispill) [|r|] [|spill_reg r|]
+        ~phantom_available_before i)
     i regset
 
 let rec spill i finally =
@@ -306,7 +318,8 @@ let rec spill i finally =
   | Iop Ireload ->
       let (new_next, after) = spill i.next finally in
       let before1 = Reg.diff_set_array after i.res in
-      (instr_cons i.desc i.arg i.res new_next,
+      (instr_cons i.desc i.arg i.res
+         ~phantom_available_before:i.phantom_available_before new_next,
        Reg.add_set_array before1 i.res)
   | Iop _ ->
       let (new_next, after) = spill i.next finally in
@@ -320,7 +333,8 @@ let rec spill i finally =
         | _ ->
             before1 in
       (instr_cons_debug i.desc i.arg i.res i.dbg
-                  (add_spills (Reg.inter_set_array after i.res) new_next),
+         ~phantom_available_before:i.phantom_available_before
+         (add_spills (Reg.inter_set_array after i.res) new_next),
        before)
   | Iifthenelse(test, ifso, ifnot) ->
       let (new_next, at_join) = spill i.next finally in
@@ -330,7 +344,9 @@ let rec spill i finally =
         !inside_loop || !inside_arm
       then
         (instr_cons (Iifthenelse(test, new_ifso, new_ifnot))
-                     i.arg i.res new_next,
+                     i.arg i.res
+                     ~phantom_available_before:i.phantom_available_before
+                     new_next,
          Reg.Set.union before_ifso before_ifnot)
       else begin
         let destroyed = List.assq i !destroyed_at_fork in
@@ -341,7 +357,9 @@ let rec spill i finally =
         (instr_cons
             (Iifthenelse(test, add_spills spill_ifso_branch new_ifso,
                                add_spills spill_ifnot_branch new_ifnot))
-            i.arg i.res new_next,
+            i.arg i.res
+            ~phantom_available_before:i.phantom_available_before
+            new_next,
          Reg.Set.diff (Reg.Set.diff (Reg.Set.union before_ifso before_ifnot)
                                     spill_ifso_branch)
                        spill_ifnot_branch)
@@ -359,7 +377,8 @@ let rec spill i finally =
             new_c)
           cases in
       inside_arm := saved_inside_arm ;
-      (instr_cons (Iswitch(index, new_cases)) i.arg i.res new_next,
+      (instr_cons (Iswitch(index, new_cases)) i.arg i.res
+         ~phantom_available_before:i.phantom_available_before new_next,
        !before)
   | Iloop(body) ->
       let (new_next, _) = spill i.next finally in
@@ -379,7 +398,8 @@ let rec spill i finally =
       with Exit -> ()
       end;
       inside_loop := saved_inside_loop;
-      (instr_cons (Iloop(!final_body)) i.arg i.res new_next,
+      (instr_cons (Iloop(!final_body)) i.arg i.res
+         ~phantom_available_before:i.phantom_available_before new_next,
        !at_head)
   | Icatch(nfail, body, handler) ->
       let (new_next, at_join) = spill i.next finally in
@@ -390,7 +410,8 @@ let rec spill i finally =
       let (new_body, before) = spill body at_join in
       spill_at_exit := List.tl !spill_at_exit;
       inside_catch := saved_inside_catch ;
-      (instr_cons (Icatch(nfail, new_body, new_handler)) i.arg i.res new_next,
+      (instr_cons (Icatch(nfail, new_body, new_handler)) i.arg i.res
+         ~phantom_available_before:i.phantom_available_before new_next,
        before)
   | Iexit nfail ->
       (i, find_spill_at_exit nfail)
@@ -401,13 +422,16 @@ let rec spill i finally =
       spill_at_raise := before_handler;
       let (new_body, before_body) = spill body at_join in
       spill_at_raise := saved_spill_at_raise;
-      (instr_cons (Itrywith(new_body, new_handler)) i.arg i.res new_next,
+      (instr_cons (Itrywith(new_body, new_handler)) i.arg i.res
+         ~phantom_available_before:i.phantom_available_before new_next,
        before_body)
   | Iraise _ ->
       (i, !spill_at_raise)
   | Iphantom_let_start _ | Iphantom_let_end _ ->
       let (new_next, finally) = spill i.next finally in
-      (instr_cons i.desc i.arg i.res new_next, finally)
+      (instr_cons i.desc i.arg i.res
+        ~phantom_available_before:i.phantom_available_before
+        new_next, finally)
 
 (* Entry point *)
 
