@@ -26,14 +26,14 @@ module Available_subrange : sig
 
   type 'a location =
     | Reg of Reg.t * 'a
-    | Phantom of Clambda.uphantom_defining_expr * 'a phantom
+    | Phantom of Clambda.ulet_provenance * 'a phantom
 
   and 'a phantom =
     | Const_int of int
     | Const_symbol of Symbol.t
     | Read_symbol_field of { symbol : Symbol.t; field : int; }
-    | Read_field of { address : location; field : int; }
-    | Offset_pointer of { address : location; offset_in_words : int; }
+    | Read_field of { address : 'a location; field : int; }
+    | Offset_pointer of { address : 'a location; offset_in_words : int; }
 
   val create
      : reg:Reg.t
@@ -45,25 +45,22 @@ module Available_subrange : sig
 
   val create_phantom
      : provenance:Clambda.ulet_provenance
-    -> defining_expr:phantom_defining_expr
+    -> defining_expr:L.instruction phantom
     -> start_pos:Linearize.label
     -> end_pos:Linearize.label
     -> t
 
-  val create_read_field : t -> field:int -> t
-  val create_offset_pointer : t -> offset_in_words:int -> t
-
   val start_pos : t -> L.label
   val end_pos : t -> L.label
   val end_pos_offset : t -> int option
-  val location : t -> location
+  val location : t -> unit location
   val offset_from_stack_ptr_in_bytes : t -> int option
 
   val rewrite_labels : t -> env:int Numbers.Int.Map.t -> t
 end = struct
   type 'a location =
     | Reg of Reg.t * 'a
-    | Phantom of Clambda.uphantom_defining_expr * 'a phantom
+    | Phantom of Clambda.ulet_provenance * 'a phantom
 
   and 'a phantom =
     | Const_int of int
@@ -114,14 +111,14 @@ end = struct
   let end_pos t = t.end_pos
   let end_pos_offset t = t.end_pos_offset
 
-  let location t : location =
+  let location t : unit location =
     let rec convert_location (start_insn : start_insn_or_phantom)
           : unit location =
       match start_insn with
-      | Reg (reg, _insn) -> Reg reg
+      | Reg (reg, _insn) -> Reg (reg, ())
       | Phantom (provenance, defining_expr) ->
         Phantom (provenance, convert_phantom defining_expr)
-    and convert_phantom (phantom : phantom) : phantom =
+    and convert_phantom (phantom : _ phantom) : unit phantom =
       match phantom with
       | Read_field { address; field; } ->
         let address = convert_location address in
@@ -129,14 +126,17 @@ end = struct
       | Offset_pointer { address; offset_in_words; } ->
         let address = convert_location address in
         Offset_pointer { address; offset_in_words; }
-      | Const_int _ | Const_symbol _ | Read_symbol_field _ -> phantom
+      | Const_int i -> Const_int i
+      | Const_symbol symbol -> Const_symbol symbol
+      | Read_symbol_field { symbol; field; } ->
+        Read_symbol_field { symbol; field; }
     in
     convert_location t.start_insn
 
   let offset_from_stack_ptr_in_bytes t =
     let rec offset (start_insn : start_insn_or_phantom) =
       match start_insn with
-      | Start_insn (reg, insn) ->
+      | Reg (reg, insn) ->
         begin match insn.L.desc with
         | L.Lcapture_stack_offset offset -> !offset
         | L.Llabel _ ->
@@ -164,6 +164,12 @@ module Available_range : sig
 
   val create : unit -> t
 
+  val create_from_existing
+     : t
+     -> location_map:(L.instruction Available_subrange.location
+        -> L.instruction Available_subrange.location)
+     -> t
+
   val is_parameter : t -> int option
   val add_subrange : t -> subrange:Available_subrange.t -> unit
   val extremities : t -> L.label * L.label
@@ -188,34 +194,6 @@ end = struct
   }
 
   let create () = { subranges = []; min_pos = None; max_pos = None; } 
-
-  let create_phantom ~provenance ~defining_expr ~range_start
-        ~range_end =
-    let subrange =
-      Available_subrange.create_phantom ~defining_expr ~provenance
-        ~start_pos:range_start ~end_pos:range_end
-    in
-    { subranges = [subrange];
-      min_pos = Some range_start;
-      max_pos = Some range_end;
-    }
-
-  let create_read_field t ~field =
-    let subranges =
-      List.map (fun subrange ->
-          Available_subrange.create_read_field subrange ~field)
-        t.subranges
-    in
-    { t with subranges; }
-
-  let create_offset_pointer t ~offset_in_words =
-    let subranges =
-      List.map (fun subrange ->
-          Available_subrange.create_offset_pointer subrange
-            ~offset_in_words)
-        t.subranges
-    in
-    { t with subranges; }
 
   let add_subrange t ~subrange =
     let start_pos = Available_subrange.start_pos subrange in
@@ -255,8 +233,8 @@ end = struct
          happen at the moment since Flambda always marks removed arguments
          with Dead phantom lets. *)
       match Available_subrange.location subrange with
-      | Reg reg -> reg.Reg.shared.Reg.is_parameter
-      | Phantom _ | Read_field _ | Offset_pointer _ -> None
+      | Reg (reg, _) -> reg.Reg.shared.Reg.is_parameter
+      | Phantom _ -> None
 
   let extremities t =
     (* We ignore any [end_pos_offsets] here; should be ok. *)
@@ -320,14 +298,23 @@ module Make (S : sig
   module Key : sig
     type t
 
-    module Map : Map.S with type t := t
-    module Set : Set.S with type t := t
+    module Map : Map.S with type key := t
+    module Set : Set.S with type elt := t
 
     val assert_valid : t -> unit
     val needs_stack_offset_capture : t -> Reg.t option
   end
 
   val available_before : L.instruction -> Key.Set.t
+
+  val create_subrange
+     : fundecl:L.fundecl
+    -> key:Key.t
+    -> start_pos:L.label
+    -> start_insn:L.instruction
+    -> end_pos:L.label
+    -> end_pos_offset:int option
+    -> (Available_subrange.t * Ident.t) option
 
   val end_pos_offset
      : prev_insn:L.instruction option
@@ -360,8 +347,8 @@ end) = struct
     in
     births, deaths
 
-  let rec process_instruction t ~first_insn ~(insn : L.instruction) ~prev_insn
-        ~open_subrange_start_insns =
+  let rec process_instruction t ~fundecl ~first_insn ~(insn : L.instruction)
+        ~prev_insn ~open_subrange_start_insns =
     let births, deaths = births_and_deaths ~insn ~prev_insn in
     let first_insn = ref first_insn in
     let prev_insn = ref prev_insn in
@@ -380,24 +367,20 @@ end) = struct
     (* Note that we can't reuse an existing label in the code since we rely
        on the ordering of range-related labels. *)
     let label = lazy (L.new_label ()) in
-    KS.fold (fun (key : Key.t) () ->
+    KS.fold (fun (key : S.Key.t) () ->
         S.Key.assert_valid key;
         let start_pos, start_insn =
           try KM.find key open_subrange_start_insns
           with Not_found -> assert false
         in
         let end_pos = Lazy.force label in
-        let end_pos_offset = S.end_pos_offset ~prev_insn ~key in
-        let subrange =
-          S.create_subrange ~key ~start_pos ~start_insn ~end_pos
+        let end_pos_offset = S.end_pos_offset ~prev_insn:!prev_insn ~key in
+        match
+          S.create_subrange ~fundecl ~key ~start_pos ~start_insn ~end_pos
             ~end_pos_offset
-        in
-        let ident =
-          match reg.name with
-          | Some name -> name
-          | None -> assert false
-        in
-        add_subrange t ~ident ~subrange)
+        with
+        | None -> ()
+        | Some (subrange, ident) -> add_subrange t ~ident ~subrange)
       deaths
       ();
     let label_insn =
@@ -454,8 +437,8 @@ end) = struct
     | L.Lbranch _ | L.Lcondbranch _ | L.Lcondbranch3 _ | L.Lswitch _
     | L.Lsetuptrap _ | L.Lpushtrap | L.Lpoptrap | L.Lraise _
     | L.Lcapture_stack_offset _ ->
-      process_instruction t ~first_insn ~insn:insn.L.next ~prev_insn:(Some insn)
-        ~open_subrange_start_insns
+      process_instruction t ~fundecl ~first_insn ~insn:insn.L.next
+        ~prev_insn:(Some insn) ~open_subrange_start_insns
 end
 
 module Make_ranges = Make (struct
@@ -500,7 +483,7 @@ module Make_ranges = Make (struct
        not be a great problem once libmonda is hardened, although it
        is possible for this to be subtle and misleading (e.g. an integer
        value being 1 instead of 2 or something.) *)
-    match !prev_insn with
+    match prev_insn with
     | None -> None
     | Some prev_insn ->
       match prev_insn.L.desc with
@@ -515,10 +498,18 @@ module Make_ranges = Make (struct
           None
       | _ -> None
 
-  let create_subrange ~fundecl:_ ~key ~start_pos ~start_insn ~end_pos
+  let create_subrange ~fundecl:_ ~key:reg ~start_pos ~start_insn ~end_pos
         ~end_pos_offset =
-    Available_subrange.create ~reg:key ~start_pos ~start_insn ~end_pos
-      ~end_pos_offset
+    let subrange =
+      Available_subrange.create ~reg ~start_pos ~start_insn ~end_pos
+        ~end_pos_offset
+    in
+    let ident =
+      match reg.Reg.name with
+      | Some name -> name
+      | None -> assert false
+    in
+    subrange, ident
 end)
 
 module Make_phantom_ranges = Make (struct
@@ -535,30 +526,63 @@ module Make_phantom_ranges = Make (struct
 
   let needs_stack_offset_capture _ = None
 
-  let create_subrange ~fundecl ~key ~start_pos ~start_insn ~end_pos
-        ~end_pos_offset =
+  let create_subrange ~fundecl ~key ~start_pos ~start_insn:_ ~end_pos
+        ~end_pos_offset:_ =
     let provenance, defining_expr =
-      match Ident.Map.find key fundecl.phantom_lets with
+      match Ident.Map.find key fundecl.L.fun_phantom_lets with
       | provenance_and_defining_expr -> provenance_and_defining_expr
       | exception Not_found ->
         Misc.fatal_errorf "Available_ranges.Make_phantom_ranges: cannot \
             find phantom-let range definition for %a"
           Ident.print key
     in
-    Available_subrange.create_phantom ~provenance ~defining_expr
-      ~start_pos ~start_insn ~end_pos ~end_pos_offset
+    let rec convert_defining_expr =
+      match defining_expr with
+      | Iphantom_const_int i -> Some (Const_int i)
+      | Iphantom_const_symbol symbol -> Some (Const_symbol symbol)
+      | Iphantom_var id ->
+        (* Below, we calculate non-phantom ranges before phantom ranges;
+           further, [id] must be a non-phantom identifier.  As such, there
+           should probably always be a range for [id], but this cannot be
+           guaranteed as it might just never be available...  However if there
+           is a range, it should be a [Reg] one. *)
+        (* CR mshinwell: think about non-[Reg] cases *)
+        begin match Ident.Tbl.find t.ranges id with
+        | exception Not_found -> None
+        | range -> Some range
+        end
+      | Iphantom_read_var_field of (defining_expr, field) ->
+        begin match convert_defining_expr defining_expr with
+        | None -> None
+        | Some address ->
+          Some (Read_field { address; field; })
+        end
+      | Iphantom_read_symbol_field (symbol, field) ->
+        Some (Read_symbol_field { symbol; field; })
+      | Iphantom_offset_var (defining_expr, field) ->
+        begin match convert_defining_expr defining_expr with
+        | None -> None
+        | Some address -> Some (Offset_pointer { address; field; })
+        end
+    in
+    let defining_expr = convert_defining_expr defining_expr in
+    let subrange =
+      Available_subrange.create_phantom ~provenance ~defining_expr
+        ~start_pos ~end_pos
+    in
+    subrange, key
 end)
 
 let create ~fundecl ~phantom_ranges =
   let t = { ranges = Ident.Tbl.create 42; } in
   let first_insn =
     let first_insn = fundecl.L.fun_body in
-    Make_ranges.process_instruction t ~first_insn ~insn:first_insn
+    Make_ranges.process_instruction t ~fundecl ~first_insn ~insn:first_insn
       ~prev_insn:None ~open_subrange_start_insns:RM.empty
   in
   let first_insn =
-    Make_phantom_ranges.process_instruction t ~first_insn ~insn:first_insn
-      ~prev_insn:None ~open_subrange_start_insns:RM.empty
+    Make_phantom_ranges.process_instruction t ~fundecl ~first_insn
+      ~insn:first_insn ~prev_insn:None ~open_subrange_start_insns:RM.empty
   in
   t, { fundecl with L.fun_body = first_insn; }
 

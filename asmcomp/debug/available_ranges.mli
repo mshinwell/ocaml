@@ -43,7 +43,7 @@ module Available_subrange : sig
 
   type 'a location =
     | Reg of Reg.t * 'a
-    | Phantom of Clambda.uphantom_defining_expr * 'a phantom
+    | Phantom of Clambda.ulet_provenance * 'a phantom
 
   and 'a phantom =
     | Const_int of int
