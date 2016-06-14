@@ -50,6 +50,11 @@ module Available_subrange : sig
     -> end_pos:Linearize.label
     -> t
 
+  val create_from_existing
+     : t
+    -> location_map:(L.instruction location -> L.instruction location)
+    -> t
+
   val start_pos : t -> L.label
   val end_pos : t -> L.label
   val end_pos_offset : t -> int option
@@ -106,6 +111,9 @@ end = struct
       end_pos;
       end_pos_offset = None;
     }
+
+  let create_from_existing t ~location_map =
+    { t with start_insn = location_map t.start_insn; }
 
   let start_pos t = t.start_pos
   let end_pos t = t.end_pos
@@ -194,6 +202,14 @@ end = struct
   }
 
   let create () = { subranges = []; min_pos = None; max_pos = None; } 
+
+  let create_from_existing t ~location_map =
+    let subranges =
+      List.map (fun subrange ->
+          Available_subrange.create_from_existing subrange ~location_map)
+        t.subranges
+    in
+    { t with subranges; }
 
   let add_subrange t ~subrange =
     let start_pos = Available_subrange.start_pos subrange in
@@ -509,7 +525,7 @@ module Make_ranges = Make (struct
       | Some name -> name
       | None -> assert false
     in
-    subrange, ident
+    Some (subrange, ident)
 end)
 
 module Make_phantom_ranges = Make (struct
@@ -517,14 +533,13 @@ module Make_phantom_ranges = Make (struct
     include Ident
 
     let assert_valid _t = ()
+    let needs_stack_offset_capture _ = None
   end
 
   let available_before (insn : L.instruction) =
     insn.phantom_available_before
 
   let end_pos_offset ~prev_insn:_ ~key:_ = None
-
-  let needs_stack_offset_capture _ = None
 
   let create_subrange ~fundecl ~key ~start_pos ~start_insn:_ ~end_pos
         ~end_pos_offset:_ =
@@ -536,57 +551,91 @@ module Make_phantom_ranges = Make (struct
             find phantom-let range definition for %a"
           Ident.print key
     in
-    let rec convert_defining_expr =
-      match defining_expr with
-      | Iphantom_const_int i -> Some (Const_int i)
-      | Iphantom_const_symbol symbol -> Some (Const_symbol symbol)
-      | Iphantom_var id ->
-        (* Below, we calculate non-phantom ranges before phantom ranges;
-           further, [id] must be a non-phantom identifier.  As such, there
-           should probably always be a range for [id], but this cannot be
-           guaranteed as it might just never be available...  However if there
-           is a range, it should be a [Reg] one. *)
-        (* CR mshinwell: think about non-[Reg] cases *)
-        begin match Ident.Tbl.find t.ranges id with
-        | exception Not_found -> None
-        | range -> Some range
-        end
-      | Iphantom_read_var_field of (defining_expr, field) ->
-        begin match convert_defining_expr defining_expr with
-        | None -> None
-        | Some address ->
-          Some (Read_field { address; field; })
-        end
+    let convert_defining_expr defining_expr =
+      let module AS = Available_subrange in
+      match (defining_expr : Mach.phantom_defining_expr) with
+      | Iphantom_const_int i -> Some (AS.Const_int i)
+      | Iphantom_const_symbol symbol -> Some (AS.Const_symbol symbol)
       | Iphantom_read_symbol_field (symbol, field) ->
-        Some (Read_symbol_field { symbol; field; })
-      | Iphantom_offset_var (defining_expr, field) ->
-        begin match convert_defining_expr defining_expr with
-        | None -> None
-        | Some address -> Some (Offset_pointer { address; field; })
-        end
+        Some (AS.Read_symbol_field { symbol; field; })
+      | Iphantom_var _
+      | Iphantom_read_var_field _
+      | Iphantom_offset_var _ -> None
+        (* CR-someday mshinwell: To do this properly, we'd have to intersect
+           the ranges.  For the moment we treat these cases separately (see
+           below). *)
     in
     let defining_expr = convert_defining_expr defining_expr in
-    let subrange =
-      Available_subrange.create_phantom ~provenance ~defining_expr
-        ~start_pos ~end_pos
-    in
-    subrange, key
+    match defining_expr with
+    | None -> None
+    | Some defining_expr ->
+      let subrange =
+        Available_subrange.create_phantom ~provenance ~defining_expr
+          ~start_pos ~end_pos
+      in
+      Some (subrange, key)
 end)
 
-let create ~fundecl ~phantom_ranges =
+let create ~fundecl =
   let t = { ranges = Ident.Tbl.create 42; } in
   let first_insn =
     let first_insn = fundecl.L.fun_body in
     Make_ranges.process_instruction t ~fundecl ~first_insn ~insn:first_insn
-      ~prev_insn:None ~open_subrange_start_insns:RM.empty
+      ~prev_insn:None
+      ~open_subrange_start_insns:
+        Reg.Map_distinguishing_names_and_locations.empty
   in
   let first_insn =
     Make_phantom_ranges.process_instruction t ~fundecl ~first_insn
-      ~insn:first_insn ~prev_insn:None ~open_subrange_start_insns:RM.empty
+      ~insn:first_insn ~prev_insn:None
+      ~open_subrange_start_insns:Ident.Map.empty
   in
+  (* (See CR-someday above.)  For the moment, ranges that are derived from
+     others are treated naively: we just make them available iff the
+     variables they ultimately derive from are available. *)
+  Ident.Map.iter (fun ident (provenance, defining_expr) ->
+      let rec resolve_range provenance defining_expr =
+        match (defining_expr : Mach.phantom_defining_expr) with
+        | Iphantom_const_int _
+        | Iphantom_const_symbol _
+        | Iphantom_read_symbol_field _ -> None
+        | Iphantom_var var ->
+          begin match Ident.Tbl.find t.ranges var with
+          | exception Not_found -> None
+          | range -> Some range
+          end
+        | Iphantom_read_var_field (defining_expr, field) ->
+          begin match resolve_range provenance defining_expr with
+          | None -> None
+          | Some range ->
+            let range =
+              Available_range.create_from_existing range
+                ~location_map:(fun address ->
+                  Phantom (provenance, Read_field { address; field; }))
+            in
+            Some range
+          end
+        | Iphantom_offset_var (defining_expr, offset_in_words) ->
+          begin match resolve_range provenance defining_expr with
+          | None -> None
+          | Some range ->
+            let range =
+              Available_range.create_from_existing range
+                ~location_map:(fun address ->
+                  Phantom (provenance,
+                    Offset_pointer { address; offset_in_words; }))
+            in
+            Some range
+          end
+      in
+      match resolve_range provenance defining_expr with
+      | None -> ()
+      | Some range ->
+        Ident.Tbl.add t.ranges ident range)
+    fundecl.L.fun_phantom_lets;
   t, { fundecl with L.fun_body = first_insn; }
 
-let create ~fundecl ~phantom_ranges =
+let create ~fundecl =
   if not !Clflags.debug then
     let t =
       { ranges = Ident.Tbl.create 1;
@@ -594,12 +643,12 @@ let create ~fundecl ~phantom_ranges =
     in
     t, fundecl
   else
-    create ~fundecl ~phantom_ranges
+    create ~fundecl
 
 type label_classification =
   | Start of {
       end_pos : Linearize.label;
-      location : Available_subrange.location;
+      location : unit Available_subrange.location;
     }
   | End
 
