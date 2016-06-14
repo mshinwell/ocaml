@@ -393,7 +393,7 @@ method schedule_fundecl f =
       fun_human_name = f.fun_human_name;
       fun_arity = f.fun_arity;
       fun_module_path = f.fun_module_path;
-      fun_phantom_let_ranges = f.fun_phantom_let_ranges;
+      fun_phantom_lets = f.fun_phantom_lets;
     }
   end else
     f

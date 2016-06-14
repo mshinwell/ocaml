@@ -68,7 +68,7 @@ type fundecl =
     fun_arity : int;
     fun_module_path : Path.t option;
     fun_phantom_lets :
-      (Clambda.ulet_provenance * phantom_defining_expr) Ident.Map.t;
+      (Clambda.ulet_provenance * Mach.phantom_defining_expr) Ident.Map.t;
   }
 
 (* Invert a test *)
@@ -143,7 +143,7 @@ let get_label n = match n.desc with
     Lbranch lbl -> (lbl, n)
   | Llabel lbl -> (lbl, n)
   | Lend -> (-1, n)
-  | _ -> let lbl = new_label() in (lbl, cons_instr (Llabel lbl) n)
+  | _ -> let lbl = new_label() in (lbl, cons_instr_same_avail (Llabel lbl) n)
 
 (* Check the fallthrough label *)
 let check_label n = match n.desc with
@@ -177,7 +177,7 @@ let add_branch lbl n =
     let n1 = discard_dead_code n in
     match n1.desc with
     | Llabel lbl1 when lbl1 = lbl -> n1
-    | _ -> cons_instr (Lbranch lbl) n1
+    | _ -> cons_instr_same_avail (Lbranch lbl) n1
   else
     discard_dead_code n
 

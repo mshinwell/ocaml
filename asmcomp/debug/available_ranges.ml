@@ -69,8 +69,8 @@ end = struct
     | Const_int of int
     | Const_symbol of Symbol.t
     | Read_symbol_field of { symbol : Symbol.t; field : int; }
-    | Read_field of { address : location; field : int; }
-    | Offset_pointer of { address : location; offset_in_words : int; }
+    | Read_field of { address : 'a location; field : int; }
+    | Offset_pointer of { address : 'a location; offset_in_words : int; }
 
   type start_insn_or_phantom = L.instruction location
 

@@ -63,7 +63,8 @@ val has_fallthrough :  instruction_desc -> bool
 val end_instr: instruction
 val instr_cons:
   instruction_desc -> Reg.t array -> Reg.t array -> instruction
-    -> available_before:Reg.Set.t -> instruction
+    -> available_before:Reg.Set.t -> phantom_available_before:Ident.Set.t
+    -> instruction
 val invert_test: Mach.test -> Mach.test
 
 type fundecl =
@@ -75,7 +76,7 @@ type fundecl =
     fun_arity : int;
     fun_module_path : Path.t option;
     fun_phantom_lets :
-      (Clambda.ulet_provenance * phantom_defining_expr) Ident.Map.t;
+      (Clambda.ulet_provenance * Mach.phantom_defining_expr) Ident.Map.t;
   }
 
 val reset : unit -> unit

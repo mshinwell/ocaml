@@ -49,8 +49,8 @@ module Available_subrange : sig
     | Const_int of int
     | Const_symbol of Symbol.t
     | Read_symbol_field of { symbol : Symbol.t; field : int; }
-    | Read_field of { address : location; field : int; }
-    | Offset_pointer of { address : location; offset_in_words : int; }
+    | Read_field of { address : 'a location; field : int; }
+    | Offset_pointer of { address : 'a location; offset_in_words : int; }
 
   val start_pos : t -> Linearize.label
   val end_pos : t -> Linearize.label

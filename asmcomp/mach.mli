@@ -104,6 +104,7 @@ type fundecl =
 
 val dummy_instr: instruction
 val end_instr: unit -> instruction
+(* CR mshinwell: make [phantom_available_before] optional *)
 val instr_cons:
       instruction_desc -> Reg.t array -> Reg.t array ->
         phantom_available_before:Ident.Set.t -> instruction -> instruction
