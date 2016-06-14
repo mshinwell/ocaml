@@ -291,8 +291,6 @@ Format.eprintf "%s: %a: results %a CAA %a made_unavailable %a\n%!"
       | Iraise _ ->
         augment_availability_at_raise avail_before;
         all_regs
-      | Iphantom_let_start _ | Iphantom_let_end _ ->
-        avail_before
     end
   in
   match instr.M.desc with

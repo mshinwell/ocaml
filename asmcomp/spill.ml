@@ -427,11 +427,6 @@ let rec spill i finally =
        before_body)
   | Iraise _ ->
       (i, !spill_at_raise)
-  | Iphantom_let_start _ | Iphantom_let_end _ ->
-      let (new_next, finally) = spill i.next finally in
-      (instr_cons i.desc i.arg i.res
-        ~phantom_available_before:i.phantom_available_before
-        new_next, finally)
 
 (* Entry point *)
 
@@ -458,4 +453,5 @@ let fundecl f =
     fun_dbg  = f.fun_dbg;
     fun_human_name = f.fun_human_name;
     fun_module_path = f.fun_module_path;
+    fun_phantom_lets = f.fun_phantom_lets;
   }

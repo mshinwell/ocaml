@@ -232,7 +232,7 @@ let catch_regs = ref []
 let current_function_name = ref ""
 
 (* All phantom lets seen in the current function *)
-let phantom_lets = Ident.Tbl.empty
+let phantom_lets = Ident.Tbl.create 42
 
 (* The default instruction selection class *)
 
@@ -433,22 +433,11 @@ method select_condition = function
   | arg ->
       (Itruetest, arg)
 
-method private env_for_phantom_let ~ident ~provenance_and_defining_expr =
+method private env_for_phantom_let env ~ident ~provenance_and_defining_expr =
   match provenance_and_defining_expr with
   | None -> env
-  | Some (provenance, defining_expr) ->
-    let defining_expr =
-      match defining_expr with
-      | Clambda.Uphantom_const const -> Iphantom_const const
-      | Clambda.Uphantom_var var -> Iphantom_var var
-      | Clambda.Uphantom_read_var_field (var, field) ->
-        Iphantom_read_var_field (var, field)
-      | Clambda.Uphantom_read_symbol_field (sym, field) ->
-        Iphantom_read_symbol_field (sym, field)
-      | Clambda.Uphantom_offset_var_field (var, offset) ->
-        Iphantom_offset_var (var, offset)
-    in
-    Ident.Tbl.add ident (provenance, defining_expr) phantom_lets;
+  | Some provenance_and_defining_expr ->
+    Ident.Tbl.add phantom_lets ident provenance_and_defining_expr;
     let phantom_idents = Ident.Set.add ident env.phantom_idents in
     { env with phantom_idents; }
 

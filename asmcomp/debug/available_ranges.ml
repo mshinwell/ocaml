@@ -121,7 +121,6 @@ end = struct
       | Reg (reg, _insn) -> Reg reg
       | Phantom (provenance, defining_expr) ->
         Phantom (provenance, convert_phantom defining_expr)
-    in
     and convert_phantom (phantom : phantom) : phantom =
       match phantom with
       | Read_field { address; field; } ->

@@ -163,15 +163,16 @@ let operation op arg ppf res =
   | Ispecific op ->
       Arch.print_specific_operation reg op ppf arg
 
-let phantom_defining_expr ppf = function
-  | Iphantom_const const -> Printclambda.uconstant ppf const
+let rec _phantom_defining_expr ppf = function
+  | Iphantom_const_int i -> fprintf ppf "0x%x" i
+  | Iphantom_const_symbol sym -> fprintf ppf "%a" Symbol.print sym
   | Iphantom_var ident -> fprintf ppf "%a" Ident.print ident
-  | Iphantom_read_var_field (ident, field) ->
-    fprintf ppf "%a[%d]" Ident.print ident field
+  | Iphantom_read_var_field (expr, field) ->
+    fprintf ppf "%a[%d]" _phantom_defining_expr expr field
   | Iphantom_read_symbol_field (sym, field) ->
-    fprintf ppf "%a[%d]" Printclambda.uconstant sym field
-  | Iphantom_offset_var (ident, offset) ->
-    fprintf ppf "%a+(%d)" Ident.print ident offset
+    fprintf ppf "%a[%d]" Symbol.print sym field
+  | Iphantom_offset_var (expr, offset) ->
+    fprintf ppf "%a+(%d)" _phantom_defining_expr expr offset
 
 let rec instr ppf i =
   if !print_live then begin
@@ -218,14 +219,6 @@ let rec instr ppf i =
              instr body instr handler
   | Iraise k ->
       fprintf ppf "%s %a" (Lambda.raise_kind k) reg i.arg.(0)
-  | Iphantom_let_start (label, ident, provenance, defining_expr) ->
-      fprintf ppf "@[phantom_let_start(%d): %a = %a (from %a)@]"
-        label
-        Ident.print ident
-        phantom_defining_expr defining_expr
-        Printclambda.let_provenance provenance
-  | Iphantom_let_end label ->
-      fprintf ppf "@[phantom_let_end(%d)@]" label
   end;
   if not (Debuginfo.is_none i.dbg) then
     fprintf ppf "%s" (Debuginfo.to_string i.dbg);

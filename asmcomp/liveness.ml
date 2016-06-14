@@ -123,10 +123,6 @@ let rec live i finally =
   | Iraise _ ->
       i.live <- !live_at_raise;
       Reg.add_set_array !live_at_raise i.arg
-  | Iphantom_let_start _ | Iphantom_let_end _ ->
-      let after = live i.next finally in
-      i.live <- after;
-      after
 
 let reset () =
   live_at_raise := Reg.Set.empty;

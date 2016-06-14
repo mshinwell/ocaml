@@ -154,7 +154,7 @@ ASMCOMP=\
   asmcomp/un_anf.cmo \
   asmcomp/strmatch.cmo asmcomp/cmmgen.cmo \
   asmcomp/printmach.cmo asmcomp/debug/name_laundry.cmo \
-  asmcomp/debug/resolve_phantom_ranges.cmo \
+  asmcomp/debug/resolve_phantom_lets.cmo \
   asmcomp/selectgen.cmo asmcomp/selection.cmo \
   asmcomp/comballoc.cmo \
   asmcomp/CSEgen.cmo asmcomp/CSE.cmo \

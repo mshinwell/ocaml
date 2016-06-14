@@ -57,10 +57,9 @@ let rec combine i allocstate =
         Itailcall_ind | Itailcall_imm _) ->
       let newnext = combine_restart i.next in
       (instr_cons_debug i.desc i.arg i.res i.dbg
-         ~phantom_available_before:i.phantom_available-before newnext,
+         ~phantom_available_before:i.phantom_available_before newnext,
        allocated_size allocstate)
-  | Iop _
-  | Iphantom_let_start _ | Iphantom_let_end _ ->
+  | Iop _ ->
       let (newnext, sz) = combine i.next allocstate in
       (instr_cons_debug i.desc i.arg i.res i.dbg
          ~phantom_available_before:i.phantom_available_before newnext, sz)

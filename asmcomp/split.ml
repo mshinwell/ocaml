@@ -186,7 +186,7 @@ let rec rename i sub =
       let (new_next, sub_next) =
         rename i.next (merge_substs sub_body sub_handler i.next) in
       (instr_cons (Icatch(nfail, new_body, new_handler)) [||] [||]
-         ~phantom_available_before:i.phantom_available_before new_next,
+         ~phantom_available_before:i.phantom_available_before
          new_next,
        sub_next)
   | Iexit nfail ->
@@ -199,13 +199,13 @@ let rec rename i sub =
       let (new_next, sub_next) =
         rename i.next (merge_substs sub_body sub_handler i.next) in
       (instr_cons (Itrywith(new_body, new_handler)) [||] [||]
-         ~phantom_available_before:i.phantom_available_before new_next,
+         ~phantom_available_before:i.phantom_available_before
          new_next,
        sub_next)
   | Iraise k ->
-      (instr_cons_debug (Iraise k) (subst_regs i.arg sub) [||]
-         ~phantom_available_before:i.phantom_available_before new_next,
-         i.dbg i.next,
+      (instr_cons_debug (Iraise k) (subst_regs i.arg sub) [||] i.dbg
+         ~phantom_available_before:i.phantom_available_before
+         i.next,
        None)
 
 (* Second pass: replace registers by their final representatives *)
@@ -234,4 +234,5 @@ let fundecl f =
     fun_dbg  = f.fun_dbg;
     fun_human_name = f.fun_human_name;
     fun_module_path = f.fun_module_path;
+    fun_phantom_lets = f.fun_phantom_lets;
   }

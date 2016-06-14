@@ -201,12 +201,17 @@ let kill_addr_regs n =
 
 (* Prepend a set of moves before [i] to assign [srcs] to [dsts].  *)
 
-let insert_single_move i src dst = instr_cons (Iop Imove) [|src|] [|dst|] i
+let insert_single_move i src dst =
+  instr_cons (Iop Imove) [|src|] [|dst|]
+    ~phantom_available_before:i.phantom_available_before i
 
 let insert_move srcs dsts i =
   match Array.length srcs with
   | 0 -> i
-  | 1 -> instr_cons (Iop Imove) srcs dsts i
+  | 1 ->
+    instr_cons (Iop Imove) srcs dsts
+      ~phantom_available_before:i.phantom_available_before
+      i
   | _ -> (* Parallel move: first copy srcs into tmps one by one,
             then copy tmps into dsts one by one *)
          let tmps = Reg.createv_like srcs in
@@ -358,9 +363,6 @@ method private cse n i =
       {i with desc = Itrywith(self#cse n body,
                               self#cse empty_numbering handler);
               next = self#cse empty_numbering i.next}
-  (* Phantom lets are effectively invisible to CSE. *)
-  | Iphantom_let_start _ | Iphantom_let_end _ ->
-      { i with next = self#cse n i.next; }
 
 method fundecl f =
   {f with fun_body = self#cse empty_numbering f.fun_body}

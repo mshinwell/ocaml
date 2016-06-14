@@ -19,16 +19,16 @@ open Misc
 open Reg
 open Mach
 
-let insert_move src dst next =
+let insert_move src dst next ~phantom_available_before =
   if src.shared.loc = dst.shared.loc
   then next
-  else instr_cons (Iop Imove) [|src|] [|dst|] next
+  else instr_cons (Iop Imove) [|src|] [|dst|] ~phantom_available_before next
 
-let insert_moves src dst next =
+let insert_moves src dst next ~phantom_available_before =
   let rec insmoves i =
     if i >= Array.length src
     then next
-    else insert_move src.(i) dst.(i) (insmoves (i+1))
+    else insert_move src.(i) dst.(i) (insmoves (i+1)) ~phantom_available_before
   in insmoves 0
 
 class reload_generic = object (self)
@@ -87,42 +87,54 @@ method private reload i =
       let newarg = self#makereg1 i.arg in
       insert_moves i.arg newarg
         {i with arg = newarg}
+        ~phantom_available_before:i.phantom_available_before
   | Iop(Icall_imm _ | Iextcall _) ->
       {i with next = self#reload i.next}
   | Iop(Icall_ind) ->
       let newarg = self#makereg1 i.arg in
       insert_moves i.arg newarg
         {i with arg = newarg; next = self#reload i.next}
+        ~phantom_available_before:i.phantom_available_before
   | Iop op ->
       let (newarg, newres) = self#reload_operation op i.arg i.res in
       insert_moves i.arg newarg
         {i with arg = newarg; res = newres; next =
           (insert_moves newres i.res
-            (self#reload i.next))}
+            (self#reload i.next)
+            ~phantom_available_before:i.phantom_available_before)}
+        ~phantom_available_before:i.phantom_available_before
   | Iifthenelse(tst, ifso, ifnot) ->
       let newarg = self#reload_test tst i.arg in
       insert_moves i.arg newarg
         (instr_cons
           (Iifthenelse(tst, self#reload ifso, self#reload ifnot)) newarg [||]
+          ~phantom_available_before:i.phantom_available_before
           (self#reload i.next))
+        ~phantom_available_before:i.phantom_available_before
   | Iswitch(index, cases) ->
       let newarg = self#makeregs i.arg in
       insert_moves i.arg newarg
         (instr_cons (Iswitch(index, Array.map (self#reload) cases)) newarg [||]
+          ~phantom_available_before:i.phantom_available_before
           (self#reload i.next))
+        ~phantom_available_before:i.phantom_available_before
   | Iloop body ->
-      instr_cons (Iloop(self#reload body)) [||] [||] (self#reload i.next)
+      instr_cons (Iloop(self#reload body)) [||] [||]
+        ~phantom_available_before:i.phantom_available_before
+        (self#reload i.next)
   | Icatch(nfail, body, handler) ->
       instr_cons
         (Icatch(nfail, self#reload body, self#reload handler)) [||] [||]
+        ~phantom_available_before:i.phantom_available_before
         (self#reload i.next)
-  | Iexit i ->
-      instr_cons (Iexit i) [||] [||] dummy_instr
+  | Iexit lbl ->
+      instr_cons (Iexit lbl) [||] [||]
+        ~phantom_available_before:i.phantom_available_before
+        dummy_instr
   | Itrywith(body, handler) ->
       instr_cons (Itrywith(self#reload body, self#reload handler)) [||] [||]
+        ~phantom_available_before:i.phantom_available_before
         (self#reload i.next)
-  | Iphantom_let_start _ | Iphantom_let_end _ ->
-      {i with next = self#reload i.next}
 
 method fundecl f =
   redo_regalloc <- false;
@@ -132,6 +144,7 @@ method fundecl f =
     fun_dbg  = f.fun_dbg;
     fun_human_name = f.fun_human_name;
     fun_module_path = f.fun_module_path;
+    fun_phantom_lets = f.fun_phantom_lets;
    },
    redo_regalloc)
 

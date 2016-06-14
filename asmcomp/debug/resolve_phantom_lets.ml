@@ -16,7 +16,8 @@
 
 let run phantom_lets =
   let output = Ident.Tbl.create 42 in
-  let rec resolve_phantom_let target_ident =
+  let rec resolve_phantom_let target_ident
+        : Mach.phantom_defining_expr option =
     match Ident.Tbl.find output target_ident with
     | (_provenance, defining_expr) -> Some defining_expr
     | exception Not_found ->
@@ -33,16 +34,17 @@ let run phantom_lets =
           (* It's not actually a "fun_name", but the mangling is the same.
              This should go away if we switch to [Symbol.t] everywhere. *)
           let symbol = Name_laundry.fun_name_to_symbol symbol in
-          resolves_to (Iphantom_const_symbol symbol)
+          resolves_to (Mach.Iphantom_const_symbol symbol)
         | Uphantom_read_symbol_field (
             Uconst_ref (symbol, _defining_expr), field) ->
           let symbol = Name_laundry.fun_name_to_symbol symbol in
-          resolves_to (Iphantom_read_symbol_field (symbol, field))
+          resolves_to (Mach.Iphantom_read_symbol_field (symbol, field))
         | Uphantom_read_symbol_field _ ->
           Misc.fatal_errorf "Resolve_phantom_ranges: unknown Clambda constant \
             pattern for Uphantom_read_symbol_field"
         | Uphantom_const (Uconst_int i)
-        | Uphantom_const (Uconst_ptr i) -> resolves_to (Iphantom_const_int i)
+        | Uphantom_const (Uconst_ptr i) ->
+          resolves_to (Mach.Iphantom_const_int i)
         | Uphantom_var defining_ident ->
           begin match resolve_phantom_let defining_ident with
           | Some defining_expr -> Some defining_expr
@@ -50,22 +52,24 @@ let run phantom_lets =
             (* In this case we assume that [defining_ident] is a non-phantom
                identifier.  An error will be produced later in the compiler's
                pipeline if that is found not to be the case. *)
-            Iphantom_var defining_ident
+            Some (Mach.Iphantom_var defining_ident)
           end
-        | Iphantom_read_var_field (defining_ident, field) ->
+        | Uphantom_read_var_field (defining_ident, field) ->
           begin match resolve_phantom_let defining_ident with
           | None -> None
           | Some defining_expr ->
-            resolves_to (Iphantom_read_var_field (defining_expr, field))
+            resolves_to (Mach.Iphantom_read_var_field (defining_expr, field))
           end
-        | Iphantom_offset_var (defining_ident, offset_in_words) ->
+        | Uphantom_offset_var_field (defining_ident, offset_in_words) ->
           begin match resolve_phantom_let defining_ident with
           | None -> None
           | Some defining_expr ->
-            resolves_to (Iphantom_offset_var (defining_expr, offset_in_words))
+            resolves_to
+              (Mach.Iphantom_offset_var (defining_expr, offset_in_words))
           end
   in
   Ident.Map.iter (fun target_ident _provenance_and_defining_expr ->
-      ignore (resolve_phantom_let target_ident))
-    ranges;
+      ignore ((resolve_phantom_let target_ident)
+        : Mach.phantom_defining_expr option))
+    phantom_lets;
   Ident.Tbl.to_map output
