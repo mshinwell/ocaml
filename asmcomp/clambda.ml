@@ -75,8 +75,8 @@ and ulambda =
   | Uassign of Ident.t * ulambda
   | Usend of meth_kind * ulambda * ulambda * ulambda list * Debuginfo.t
   | Uunreachable
-  | Uphantom_let of Ident.t * (ulet_provenance * uphantom_defining_expr) option
-      * ulambda
+  | Uphantom_let of Ident.t * ulet_provenance option
+      * uphantom_defining_expr option * ulambda
 
 and ufunction = {
   label  : function_label;

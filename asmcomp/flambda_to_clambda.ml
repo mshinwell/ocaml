@@ -294,63 +294,58 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
         to_clambda_named t env var defining_expr,
         to_clambda t env_body body)
     | Phantom defining_expr ->
-      match provenance with
-      | None ->
-        (* Ignore phantom lets without suitable provenance info.  (We're
-           only interested in ones that correspond to source-level [let]s.)
-           However don't just delete them---that might cause subsequent
-           unbound variables. *)
-        Uphantom_let (id, None, to_clambda t env_body body)
-      | Some provenance ->
-        let provenance : Clambda.ulet_provenance =
-          { module_path = provenance.module_path;
-            location = provenance.location;
-          }
-        in
-        let defining_expr =
-          match defining_expr with
-          | Const (Const_pointer n) ->
-            Some (Clambda.Uphantom_const (Uconst_ptr n))
-          | Const (Int n) -> Some (Clambda.Uphantom_const (Uconst_int n))
-          | Const (Char c) ->
-            Some (Clambda.Uphantom_const (Uconst_int (Char.code c)))
-          | Symbol symbol ->
-            Some (Clambda.Uphantom_const (to_clambda_symbol' env symbol))
-          | Var var ->
-            begin match Env.ident_for_var_exn env var with
-            | id -> Some (Clambda.Uphantom_var id)  (* An alias. *)
-            | exception Not_found ->
-              Misc.fatal_errorf "Flambda_to_clambda.to_clambda: defining \
-                  expression of `alias' phantom let references unbound \
-                  variable %a"
-                Variable.print var
-            end
-          | Read_mutable mut_var ->
-            (* There's no need to check [Env.find_subst_exn] here; we
-               never substitute for a mutable.  Also, at present, we don't
-               have phantom mutable lets (so the [Ident.t] corresponding to
-               [mut_var] should always be present). *)
-            let id = Env.ident_for_mutable_var_exn env mut_var in
-            Some (Clambda.Uphantom_var id)
-          | Read_symbol_field (symbol, field) ->
-            let symbol = to_clambda_symbol' env symbol in
-            Some (Clambda.Uphantom_read_symbol_field (symbol, field))
-          | Read_var_field (var, field) ->
-            begin match Env.ident_for_var_exn env var with
-            | id -> Some (Clambda.Uphantom_read_var_field (id, field))
-            | exception Not_found ->
-              Misc.fatal_errorf "Flambda_to_clambda.to_clambda: defining \
-                  expression of `var field' phantom let references unbound \
-                  variable %a"
-                Variable.print var
-            end
-          | Dead -> None
-        in
+      let provenance =
+        match provenance with
+        | None -> None
+        | Some provenance ->
+          let provenance : Clambda.ulet_provenance =
+            { module_path = provenance.module_path;
+              location = provenance.location;
+            }
+          in
+          Some provenance
+      in
+      let defining_expr =
         match defining_expr with
-        | None -> Uphantom_let (id, None, to_clambda t env_body body)
-        | Some defining_expr ->
-          Uphantom_let (id, Some (provenance, defining_expr),
-            to_clambda t env_body body)
+        | Const (Const_pointer n) ->
+          Some (Clambda.Uphantom_const (Uconst_ptr n))
+        | Const (Int n) -> Some (Clambda.Uphantom_const (Uconst_int n))
+        | Const (Char c) ->
+          Some (Clambda.Uphantom_const (Uconst_int (Char.code c)))
+        | Symbol symbol ->
+          Some (Clambda.Uphantom_const (to_clambda_symbol' env symbol))
+        | Var var ->
+          begin match Env.ident_for_var_exn env var with
+          | id -> Some (Clambda.Uphantom_var id)  (* An alias. *)
+          | exception Not_found ->
+            Misc.fatal_errorf "Flambda_to_clambda.to_clambda: defining \
+                expression of `alias' phantom let references unbound \
+                variable %a"
+              Variable.print var
+          end
+        | Read_mutable mut_var ->
+          (* There's no need to check [Env.find_subst_exn] here; we
+             never substitute for a mutable.  Also, at present, we don't
+             have phantom mutable lets (so the [Ident.t] corresponding to
+             [mut_var] should always be present). *)
+          let id = Env.ident_for_mutable_var_exn env mut_var in
+          Some (Clambda.Uphantom_var id)
+        | Read_symbol_field (symbol, field) ->
+          let symbol = to_clambda_symbol' env symbol in
+          Some (Clambda.Uphantom_read_symbol_field (symbol, field))
+        | Read_var_field (var, field) ->
+          begin match Env.ident_for_var_exn env var with
+          | id -> Some (Clambda.Uphantom_read_var_field (id, field))
+          | exception Not_found ->
+            Misc.fatal_errorf "Flambda_to_clambda.to_clambda: defining \
+                expression of `var field' phantom let references unbound \
+                variable %a"
+              Variable.print var
+          end
+        | Dead -> None
+      in
+      Uphantom_let (id, provenance, defining_expr,
+        to_clambda t env_body body)
     end
   | Let_mutable { var = mut_var; initial_value = var; body; contents_kind;
         provenance; } ->
@@ -687,7 +682,7 @@ and to_clambda_set_of_closures t env
     let body = to_clambda t env_body function_decl.body in
     let body =
       List.fold_left (fun body (id, phantom) : Clambda.ulambda ->
-          Uphantom_let (id, Some (provenance, phantom), body))
+          Uphantom_let (id, Some provenance, Some phantom, body))
         body
         phantom_bindings
     in
@@ -750,7 +745,7 @@ and to_clambda_closed_set_of_closures t env symbol ~module_path
     let body = to_clambda t env_body function_decl.body in
     let body =
       List.fold_left (fun body (id, phantom) : Clambda.ulambda ->
-          Uphantom_let (id, Some (provenance, phantom), body))
+          Uphantom_let (id, Some provenance, Some phantom, body))
         body
         phantom_bindings
     in

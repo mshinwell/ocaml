@@ -433,13 +433,10 @@ method select_condition = function
   | arg ->
       (Itruetest, arg)
 
-method private env_for_phantom_let env ~ident ~provenance_and_defining_expr =
-  match provenance_and_defining_expr with
-  | None -> env
-  | Some provenance_and_defining_expr ->
-    Ident.Tbl.add phantom_lets ident provenance_and_defining_expr;
-    let phantom_idents = Ident.Set.add ident env.phantom_idents in
-    { env with phantom_idents; }
+method private env_for_phantom_let env ~ident ~provenance ~defining_expr =
+  Ident.Tbl.add phantom_lets ident (provenance, defining_expr);
+  let phantom_idents = Ident.Set.add ident env.phantom_idents in
+  { env with phantom_idents; }
 
 (* Return an array of fresh registers of the given type.
    Normally implemented as Reg.createv, but some
@@ -597,9 +594,9 @@ method emit_expr env exp =
         None -> None
       | Some r1 -> self#emit_expr (self#bind_let env mut v r1) e2
       end
-  | Cphantom_let (ident, provenance_and_defining_expr, body) ->
+  | Cphantom_let (ident, provenance, defining_expr, body) ->
       let env =
-        self#env_for_phantom_let env ~ident ~provenance_and_defining_expr
+        self#env_for_phantom_let env ~ident ~provenance ~defining_expr
       in
       self#emit_expr env body
   | Cassign(v, e1) ->
@@ -901,9 +898,9 @@ method emit_tail env exp =
         None -> ()
       | Some r1 -> self#emit_tail (self#bind_let env mut v r1) e2
       end
-  | Cphantom_let (ident, provenance_and_defining_expr, body) ->
+  | Cphantom_let (ident, provenance, defining_expr, body) ->
       let env =
-        self#env_for_phantom_let env ~ident ~provenance_and_defining_expr
+        self#env_for_phantom_let env ~ident ~provenance ~defining_expr
       in
       self#emit_tail env body
   | Cop(Capply(ty, dbg) as op, args) ->

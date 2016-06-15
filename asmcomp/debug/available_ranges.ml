@@ -547,8 +547,9 @@ module Make_phantom_ranges = Make (struct
       match Ident.Map.find key fundecl.L.fun_phantom_lets with
       | provenance_and_defining_expr -> provenance_and_defining_expr
       | exception Not_found ->
-        Misc.fatal_errorf "Available_ranges.Make_phantom_ranges: cannot \
+        Misc.fatal_errorf "Available_ranges.Make_phantom_ranges: %s: cannot \
             find phantom-let range definition for %a"
+          fundecl.L.fun_name
           Ident.print key
     in
     let convert_defining_expr defining_expr =

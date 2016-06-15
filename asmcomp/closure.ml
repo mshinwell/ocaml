@@ -87,7 +87,7 @@ let occurs_var var u =
     | Usend(_, met, obj, args, _) ->
         occurs met || occurs obj || List.exists occurs args
     | Uunreachable -> false
-    | Uphantom_let (_, _, body) -> occurs body
+    | Uphantom_let (_, _, _, body) -> occurs body
   and occurs_array a =
     try
       for i = 0 to Array.length a - 1 do
@@ -193,7 +193,7 @@ let lambda_smaller lam threshold =
         size := !size + 8;
         lambda_size met; lambda_size obj; lambda_list_size args
     | Uunreachable -> ()
-    | Uphantom_let (_, _, body) -> lambda_size body
+    | Uphantom_let (_, _, _, body) -> lambda_size body
   and lambda_list_size l = List.iter lambda_size l
   and lambda_array_size a = Array.iter lambda_size a in
   try
@@ -640,8 +640,8 @@ let rec substitute loc fpc sb ulam =
             List.map (substitute loc fpc sb) ul, dbg)
   | Uunreachable ->
       Uunreachable
-  | Uphantom_let (id, provenance_and_defining_expr, body) ->
-      Uphantom_let (id, provenance_and_defining_expr,
+  | Uphantom_let (id, provenance, defining_expr, body) ->
+      Uphantom_let (id, provenance, defining_expr,
         substitute loc fpc sb body)
 
 (* Perform an inline expansion *)
@@ -1353,7 +1353,7 @@ let collect_exported_structured_constants a =
     | Ufor (_, u1, u2, _, u3) -> ulam u1; ulam u2; ulam u3
     | Uassign (_, u) -> ulam u
     | Usend (_, u1, u2, ul, _) -> ulam u1; ulam u2; List.iter ulam ul
-    | Uphantom_let (_, _, body) -> ulam body
+    | Uphantom_let (_, _, _, body) -> ulam body
     | Uunreachable -> ()
   in
   approx a

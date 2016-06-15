@@ -87,6 +87,10 @@ and phantom_defining_expr ppf = function
   | Uphantom_read_symbol_field (sym, offset) ->
     Format.fprintf ppf "%a[%d]" uconstant sym offset
 
+and phantom_defining_expr_opt ppf = function
+  | None -> Format.fprintf ppf "DEAD"
+  | Some expr -> phantom_defining_expr ppf expr
+
 and lam ppf = function
   | Uvar id ->
       Ident.print ppf id
@@ -213,30 +217,17 @@ and lam ppf = function
       fprintf ppf "@[<2>(send%s@ %a@ %a%a)@]" kind lam obj lam met args largs
   | Uunreachable ->
       fprintf ppf "unreachable"
-  | Uphantom_let (id, provenance_and_defining_expr, body) ->
+  | Uphantom_let (id, provenance, defining_expr, body) ->
       let rec letbody ul = match ul with
-        | Uphantom_let (id, provenance_and_defining_expr, body) ->
-            begin match provenance_and_defining_expr with
-            | Some (provenance, defining_expr) ->
-                fprintf ppf "@ @[<2>%a%a@ %a@]"
-                  Ident.print id let_provenance provenance
-                  phantom_defining_expr defining_expr;
-                letbody body
-            | None ->
-                fprintf ppf "@ @[<2>%a@ DEAD@]"
-                  Ident.print id;
-                letbody body
-            end
+        | Uphantom_let (id, provenance, defining_expr, body) ->
+            fprintf ppf "@ @[<2>%a%a@ %a@]"
+              Ident.print id let_provenance_opt provenance
+              phantom_defining_expr_opt defining_expr;
+            letbody body
         | _ -> ul in
-      begin match provenance_and_defining_expr with
-      | Some (provenance, defining_expr) ->
-          fprintf ppf "@[<2>(phantom_let@ @[<hv 1>(@[<2>%a%a@ %a@]"
-            Ident.print id let_provenance provenance
-            phantom_defining_expr defining_expr
-      | None ->
-          fprintf ppf "@[<2>(phantom_let@ @[<hv 1>(@[<2>%a@ DEAD@]"
-            Ident.print id
-      end;
+      fprintf ppf "@[<2>(phantom_let@ @[<hv 1>(@[<2>%a%a@ %a@]"
+        Ident.print id let_provenance_opt provenance
+        phantom_defining_expr_opt defining_expr;
       let expr = letbody body in
       fprintf ppf ")@]@ %a)@]" lam expr
 

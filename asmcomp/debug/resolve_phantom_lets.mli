@@ -16,5 +16,6 @@
     expressions of phantom lets. *)
 
 val run
-   : (Clambda.ulet_provenance * Clambda.uphantom_defining_expr) Ident.Map.t
+   : (Clambda.ulet_provenance option
+        * Clambda.uphantom_defining_expr option) Ident.Map.t
   -> (Clambda.ulet_provenance * Mach.phantom_defining_expr) Ident.Map.t

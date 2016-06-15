@@ -108,7 +108,7 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
     | Ulet (_let_kind, _value_kind, _provenance, _ident, def, body) ->
       loop def;
       loop body
-    | Uphantom_let (_ident, _provenance_and_defining_expr, body) ->
+    | Uphantom_let (_ident, _provenance, _defining_expr, body) ->
       loop body
     | Uletrec (defs, body) ->
       List.iter (fun (_provenance, ident, def) ->
@@ -295,7 +295,7 @@ let let_bound_vars_that_can_be_moved ident_info (clam : Clambda.ulambda) =
         end;
         loop body
       end
-    | Uphantom_let (_id, _provenance_and_defining_expr, body) ->
+    | Uphantom_let (_id, _provenance, _defining_expr, body) ->
       loop body
     | Uletrec (defs, body) ->
       (* Evaluation order for [defs] is not defined, and this case
@@ -446,24 +446,24 @@ let rec substitute_let_moveable is_let_moveable env (clam : Clambda.ulambda)
       let body = substitute_let_moveable is_let_moveable env body in
       (* If we are about to delete a [let] in debug mode, keep it for the
          debugger. *)
-      match !Clflags.debug, provenance with
-      | false, _ -> body
-      | true, None -> Uphantom_let (id, None, body)
-      | true, Some provenance ->
+      if not !Clflags.debug then
+        body
+      else
         match def with
         | Uconst const ->
-          Uphantom_let (id, Some (provenance, Uphantom_const const), body)
+          Uphantom_let (id, provenance, Some (Clambda.Uphantom_const const),
+            body)
         | Uvar var ->
-          Uphantom_let (id, Some (provenance, Uphantom_var var), body)
+          Uphantom_let (id, provenance, Some (Clambda.Uphantom_var var), body)
         | _ ->
-          Uphantom_let (id, None, body)
+          Uphantom_let (id, provenance, None, body)
     end else begin
       Ulet (let_kind, value_kind, provenance,
             id, def, substitute_let_moveable is_let_moveable env body)
     end
-  | Uphantom_let (ident, provenance_and_defining_expr, body) ->
+  | Uphantom_let (ident, provenance, defining_expr, body) ->
     let body = substitute_let_moveable is_let_moveable env body in
-    Uphantom_let (ident, provenance_and_defining_expr, body)
+    Uphantom_let (ident, provenance, defining_expr, body)
   | Uletrec (defs, body) ->
     let defs =
       List.map (fun (provenance, id, def) ->
@@ -653,18 +653,19 @@ let rec un_anf_and_moveable ident_info env (clam : Clambda.ulambda)
     let maybe_for_debugger (body, moveable) : Clambda.ulambda * moveable =
       (* CR-soon mshinwell: consider sharing with the let-moveable code,
          above. *)
-      match !Clflags.debug, provenance with
-      | false, _ -> body, moveable
-      | true, None -> Uphantom_let (id, None, body), moveable
-      | true, Some provenance ->
+      if not !Clflags.debug then
+        body, moveable
+      else
         match def with
         | Uconst const ->
-          Uphantom_let (id, Some (provenance, Uphantom_const const), body),
-            moveable
+          Uphantom_let (id, provenance, Some (Clambda.Uphantom_const const),
+            body), moveable
         | Uvar var ->
-          Uphantom_let (id, Some (provenance, Uphantom_var var), body),
+          Uphantom_let (id, provenance, Some (Clambda.Uphantom_var var), body),
             moveable
-        | _ -> Uphantom_let (id, None, body), moveable
+        | _ ->
+          Uphantom_let (id, provenance, None, body),
+            moveable
     in
     begin match def_moveable, is_linear, is_used with
     | (Moveable | Moveable_not_into_loops), _, false ->
@@ -697,9 +698,9 @@ let rec un_anf_and_moveable ident_info env (clam : Clambda.ulambda)
       Ulet (let_kind, value_kind, provenance, id, def, body),
         both_moveable def_moveable body_moveable
     end
-  | Uphantom_let (ident, provenance_and_defining_expr, body) ->
+  | Uphantom_let (ident, provenance, defining_expr, body) ->
     let body, body_moveable = un_anf_and_moveable ident_info env body in
-    Uphantom_let (ident, provenance_and_defining_expr, body), body_moveable
+    Uphantom_let (ident, provenance, defining_expr, body), body_moveable
   | Uletrec (defs, body) ->
     let defs =
       List.map (fun (provenance, id, def) ->

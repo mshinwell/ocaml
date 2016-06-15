@@ -226,13 +226,13 @@ let untag_int = function
 
 let rec strip_phantom_lets ulam =
   match ulam with
-  | Uphantom_let (_, _, body) -> strip_phantom_lets body
+  | Uphantom_let (_, _, _, body) -> strip_phantom_lets body
   | _ -> ulam
 
 let rec preserve_phantom_lets ulam f =
   match ulam with
-  | Uphantom_let (id, defining_expr, body) ->
-    Cphantom_let (id, defining_expr, preserve_phantom_lets body f)
+  | Uphantom_let (id, provenance, defining_expr, body) ->
+    Cphantom_let (id, provenance, defining_expr, preserve_phantom_lets body f)
   | _ -> f ulam
 
 let preserve_phantom_lets_list ulams f =
@@ -246,13 +246,14 @@ let preserve_phantom_lets_list ulams f =
 
 let rec strip_phantom_lets_cmm cmm =
   match cmm with
-  | Cphantom_let (_, _, body) -> strip_phantom_lets_cmm body
+  | Cphantom_let (_, _, _, body) -> strip_phantom_lets_cmm body
   | _ -> cmm
 
 let rec preserve_phantom_lets_cmm cmm f =
   match cmm with
-  | Cphantom_let (id, defining_expr, body) ->
-    Cphantom_let (id, defining_expr, preserve_phantom_lets_cmm body f)
+  | Cphantom_let (id, provenance, defining_expr, body) ->
+    Cphantom_let (id, provenance, defining_expr,
+      preserve_phantom_lets_cmm body f)
   | _ -> f cmm
 
 let preserve_phantom_lets_cmm2 cmm1 cmm2 f =
@@ -263,15 +264,15 @@ let preserve_phantom_lets_cmm2 cmm1 cmm2 f =
 let extract_and_strip_phantom_lets ulam =
   let rec extract ulam extracted =
     match ulam with
-    | Uphantom_let (id, defining_expr, body) -> 
-      extract body ((id, defining_expr) :: extracted)
+    | Uphantom_let (id, provenance, defining_expr, body) -> 
+      extract body ((id, provenance, defining_expr) :: extracted)
     | _ -> extracted, ulam
   in
   extract ulam []
 
 let add_phantom_lets ulam phantom_lets =
-  List.fold_left (fun ulam (id, defining_expr) ->
-      Uphantom_let (id, defining_expr, ulam))
+  List.fold_left (fun ulam (id, provenance, defining_expr) ->
+      Uphantom_let (id, provenance, defining_expr, ulam))
     ulam
     phantom_lets
 
@@ -783,7 +784,7 @@ let rec expr_size env = function
       expr_size env closure
   | Usequence(_exp, exp') ->
       expr_size env exp'
-  | Uphantom_let (_, _, body) -> expr_size env body
+  | Uphantom_let (_, _, _, body) -> expr_size env body
   | _ -> RHS_nonrec
 
 (* Record application and currying functions *)
@@ -1481,7 +1482,7 @@ let rec is_unboxed_number ~strict env e =
         | _ -> No_unboxing
       end
   | Ulet (_, _, _, _, _, e) | Uletrec (_, e) | Usequence (_, e)
-  | Uphantom_let (_, _, e) ->
+  | Uphantom_let (_, _, _, e) ->
       is_unboxed_number ~strict env e
   | Uswitch (_, switch) ->
       let k = Array.fold_left join No_result switch.us_actions_consts in
@@ -1587,8 +1588,8 @@ let rec transl env e =
             bind "met" (lookup_tag obj (transl env met)) (call_met obj args))
   | Ulet(str, kind, _provenance, id, exp, body) ->
       transl_let env str kind id exp body
-  | Uphantom_let (ident, provenance_and_defining_expr, body) ->
-      Cphantom_let (ident, provenance_and_defining_expr, transl env body)
+  | Uphantom_let (ident, provenance, defining_expr, body) ->
+      Cphantom_let (ident, provenance, defining_expr, transl env body)
   | Uletrec(bindings, body) ->
       transl_letrec env bindings (transl env body)
 

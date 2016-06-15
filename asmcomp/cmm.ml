@@ -152,9 +152,8 @@ type expression =
   | Cconst_blockheader of nativeint
   | Cvar of Ident.t
   | Clet of mutability * Ident.t * expression * expression
-  | Cphantom_let of Ident.t
-      * (Clambda.ulet_provenance * Clambda.uphantom_defining_expr) option
-      * expression
+  | Cphantom_let of Ident.t * Clambda.ulet_provenance option
+      * Clambda.uphantom_defining_expr option * expression
   | Cassign of Ident.t * expression
   | Ctuple of expression list
   | Cop of operation * expression list
