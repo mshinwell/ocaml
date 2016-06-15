@@ -40,8 +40,8 @@ let run phantom_lets =
           let symbol = Name_laundry.fun_name_to_symbol symbol in
           resolves_to (Mach.Iphantom_read_symbol_field (symbol, field))
         | Uphantom_read_symbol_field _ ->
-          Misc.fatal_errorf "Resolve_phantom_ranges: unknown Clambda constant \
-            pattern for Uphantom_read_symbol_field"
+          Misc.fatal_errorf "Resolve_phantom_ranges: unknown Clambda \
+            constant pattern for Uphantom_read_symbol_field"
         | Uphantom_const (Uconst_int i)
         | Uphantom_const (Uconst_ptr i) ->
           resolves_to (Mach.Iphantom_const_int i)
