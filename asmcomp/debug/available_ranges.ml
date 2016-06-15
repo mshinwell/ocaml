@@ -543,41 +543,37 @@ module Make_phantom_ranges = Make (struct
 
   let create_subrange ~fundecl ~key ~start_pos ~start_insn:_ ~end_pos
         ~end_pos_offset:_ =
-    let provenance, defining_expr =
-      match Ident.Map.find key fundecl.L.fun_phantom_lets with
-      | provenance_and_defining_expr -> provenance_and_defining_expr
-      | exception Not_found ->
-        Misc.fatal_errorf "Available_ranges.Make_phantom_ranges: %s: cannot \
-            find phantom-let range definition for %a"
-          fundecl.L.fun_name
-          Ident.print key
-    in
-    let convert_defining_expr defining_expr =
-      let module AS = Available_subrange in
-      match (defining_expr : Mach.phantom_defining_expr) with
-      | Iphantom_const_int i -> Some (AS.Const_int i)
-      | Iphantom_const_symbol symbol -> Some (AS.Const_symbol symbol)
-      | Iphantom_read_symbol_field (symbol, field) ->
-        Some (AS.Read_symbol_field { symbol; field; })
-      | Iphantom_var _
-      | Iphantom_read_var_field _
-      | Iphantom_offset_var _ -> None
-        (* CR-someday mshinwell: To do this properly, we'd have to intersect
-           the ranges.  For the moment we treat these cases separately (see
-           below). *)
-    in
-    let defining_expr = convert_defining_expr defining_expr in
-    match provenance with
-    | None -> None
-    | Some provenance ->
-      match defining_expr with
+    match Ident.Map.find key fundecl.L.fun_phantom_lets with
+    | exception Not_found ->
+      (* The range was filtered by [Resolve_phantom_lets]. *)
+      None
+    | provenance, defining_expr ->
+      let convert_defining_expr defining_expr =
+        let module AS = Available_subrange in
+        match (defining_expr : Mach.phantom_defining_expr) with
+        | Iphantom_const_int i -> Some (AS.Const_int i)
+        | Iphantom_const_symbol symbol -> Some (AS.Const_symbol symbol)
+        | Iphantom_read_symbol_field (symbol, field) ->
+          Some (AS.Read_symbol_field { symbol; field; })
+        | Iphantom_var _
+        | Iphantom_read_var_field _
+        | Iphantom_offset_var _ -> None
+          (* CR-someday mshinwell: To do this properly, we'd have to intersect
+             the ranges.  For the moment we treat these cases separately (see
+             below). *)
+      in
+      let defining_expr = convert_defining_expr defining_expr in
+      match provenance with
       | None -> None
-      | Some defining_expr ->
-        let subrange =
-          Available_subrange.create_phantom ~provenance ~defining_expr
-            ~start_pos ~end_pos
-        in
-        Some (subrange, key)
+      | Some provenance ->
+        match defining_expr with
+        | None -> None
+        | Some defining_expr ->
+          let subrange =
+            Available_subrange.create_phantom ~provenance ~defining_expr
+              ~start_pos ~end_pos
+          in
+          Some (subrange, key)
 end)
 
 let create ~fundecl =
