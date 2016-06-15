@@ -13,9 +13,11 @@
 (**************************************************************************)
 
 (** Resolve transitive references to identifiers in the defining
-    expressions of phantom lets. *)
+    expressions of phantom lets.  Filter out phantom lets that will not
+    be required due to inadequate provenance information or missing
+    defining expressions. *)
 
 val run
    : (Clambda.ulet_provenance option
         * Clambda.uphantom_defining_expr option) Ident.Map.t
-  -> (Clambda.ulet_provenance * Mach.phantom_defining_expr) Ident.Map.t
+  -> (Clambda.ulet_provenance * Cmm.phantom_defining_expr) Ident.Map.t

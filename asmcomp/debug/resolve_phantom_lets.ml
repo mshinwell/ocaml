@@ -90,9 +90,4 @@ let run phantom_lets =
   Ident.Map.iter (fun target_ident _provenance_and_defining_expr ->
       ignore ((resolve_phantom_let target_ident) : resolution))
     phantom_lets;
-  let output = Ident.Tbl.to_map output in
-  Ident.Map.filter_map output ~f:(fun _ (provenance_opt, defining_expr) ->
-      (* We can now delete phantom lets with no provenance info. *)
-      match provenance_opt with
-      | None -> None
-      | Some provenance -> Some (provenance, defining_expr))
+  Ident.Tbl.to_map output

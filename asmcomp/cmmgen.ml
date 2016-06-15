@@ -3303,3 +3303,8 @@ let plugin_header units =
     } in
   global_data "caml_plugin_header"
     { dynu_magic = Config.cmxs_magic_number; dynu_units = List.map mk units }
+
+(* At the start of cmmgen, run resolve_phantom_lets
+Then when encountering a phantom_let in cmmgen, see if it's in the list
+of resolved ones.  If not, delete it.  If it is and it ultimately
+references a variable, make sure it's bound. *)
