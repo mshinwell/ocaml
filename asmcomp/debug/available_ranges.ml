@@ -348,18 +348,44 @@ end) = struct
         ~(prev_insn : L.instruction option) =
     (* Available subranges are allowed to cross points at which the stack
        pointer changes, since we reference the stack slots as an offset from
-       the CFA, not from the stack pointer. *)
-    let births =
+       the CFA, not from the stack pointer.
+
+       We avoid generating ranges that overlap, since this confuses lldb.
+       This pass may generate ranges that are the same as other ranges,
+       but those are deduped in [Dwarf].
+    *)
+    let proto_births =
       match prev_insn with
       | None -> S.available_before insn
       | Some prev_insn ->
         KS.diff (S.available_before insn) (S.available_before prev_insn)
     in
-    let deaths =
+    let proto_deaths =
       match prev_insn with
       | None -> KS.empty
       | Some prev_insn ->
         KS.diff (S.available_before prev_insn) (S.available_before insn)
+    in
+    let restart_ranges =
+      KS.cardinal proto_births <> 0 || KS.cardinal proto_deaths <> 0
+    in
+    let births =
+      match prev_insn with
+      | None -> S.available_before insn
+      | Some _prev_insn ->
+        if not restart_ranges then
+          proto_births
+        else
+          S.available_before insn
+    in
+    let deaths =
+      match prev_insn with
+      | None -> KS.empty
+      | Some prev_insn ->
+        if not restart_ranges then
+          proto_deaths
+        else
+          S.available_before prev_insn
     in
     births, deaths
 
@@ -383,6 +409,10 @@ end) = struct
     (* Note that we can't reuse an existing label in the code since we rely
        on the ordering of range-related labels. *)
     let label = lazy (L.new_label ()) in
+    (* As a result of the code above to restart subranges, we may have
+       a register occurring in both [births] and [deaths]; and we would
+       like the register to have an open subrange from this point.  It
+       follows that we should process deaths before births. *)
     KS.fold (fun (key : S.Key.t) () ->
         S.Key.assert_valid key;
         let start_pos, start_insn =
