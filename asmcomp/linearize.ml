@@ -68,7 +68,8 @@ type fundecl =
     fun_arity : int;
     fun_module_path : Path.t option;
     fun_phantom_lets :
-      (Clambda.ulet_provenance * Mach.phantom_defining_expr) Ident.Map.t;
+      (Clambda.ulet_provenance option * Mach.phantom_defining_expr)
+        Ident.Map.t;
   }
 
 (* Invert a test *)

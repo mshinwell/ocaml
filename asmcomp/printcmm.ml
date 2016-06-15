@@ -53,17 +53,6 @@ let chunk = function
   | Double -> "float64"
   | Double_u -> "float64u"
 
-let rec phantom_defining_expr ppf = function
-  | Cphantom_const_int i -> fprintf ppf "0x%x" i
-  | Cphantom_const_symbol sym -> fprintf ppf "%a" Symbol.print sym
-  | Cphantom_var ident -> fprintf ppf "%a" Ident.print ident
-  | Cphantom_read_var_field (expr, field) ->
-    fprintf ppf "%a[%d]" phantom_defining_expr expr field
-  | Cphantom_read_symbol_field (sym, field) ->
-    fprintf ppf "%a[%d]" Symbol.print sym field
-  | Cphantom_offset_var (expr, offset) ->
-    fprintf ppf "%a+(%d)" phantom_defining_expr expr offset
-
 let operation = function
   | Capply(_ty, d) -> "app" ^ Debuginfo.to_string d
   | Cextcall(lbl, _ty, _alloc, d) ->
@@ -137,8 +126,8 @@ let rec expr ppf = function
   | Cphantom_let(id, provenance, def, (Cphantom_let(_, _, _, _) as body)) ->
       let print_binding id provenance ppf def =
         fprintf ppf "@[<2>%a(%a)@ %a@]" Ident.print id
-          Printclambda.let_provenance provenance
-          phantom_defining_expr def
+          Printclambda.let_provenance_opt provenance
+          Printclambda.phantom_defining_expr_opt def
       in
       let rec in_part ppf = function
         | Cphantom_let(id, provenance, def, body) ->
@@ -151,8 +140,8 @@ let rec expr ppf = function
   | Cphantom_let(id, provenance, def, body) ->
     fprintf ppf
       "@[<2>(let?@ @[<2>%a(%a)@ %a@]@ %a)@]"
-      Ident.print id Printclambda.let_provenance provenance
-      phantom_defining_expr def sequence body
+      Ident.print id Printclambda.let_provenance_opt provenance
+      Printclambda.phantom_defining_expr_opt def sequence body
   | Cassign(id, exp) ->
       fprintf ppf "@[<2>(assign @[<2>%a@ %a@])@]" Ident.print id expr exp
   | Ctuple el ->

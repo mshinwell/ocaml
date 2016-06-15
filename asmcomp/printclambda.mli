@@ -21,3 +21,6 @@ val approx: formatter -> value_approximation -> unit
 val uconstant: formatter -> uconstant -> unit
 val structured_constant: formatter -> ustructured_constant -> unit
 val let_provenance: formatter -> ulet_provenance -> unit
+val let_provenance_opt: formatter -> ulet_provenance option -> unit
+val phantom_defining_expr_opt: formatter
+  -> uphantom_defining_expr option -> unit

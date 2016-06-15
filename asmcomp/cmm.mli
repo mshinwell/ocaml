@@ -100,15 +100,6 @@ type memory_chunk =
   | Double                             (* 64-bit-aligned 64-bit float *)
   | Double_u                           (* word-aligned 64-bit float *)
 
-type phantom_defining_expr =
-  | Cphantom_const_int of int
-  | Cphantom_const_symbol of Symbol.t
-  | Cphantom_var of Ident.t  (** Must not be a phantom identifier. *)
-  | Cphantom_read_var_field of phantom_defining_expr * int
-  (* CR-soon mshinwell: delete "var" from "read_var_field" *)
-  | Cphantom_read_symbol_field of Symbol.t * int
-  | Cphantom_offset_var of phantom_defining_expr * int
-
 type operation =
     Capply of machtype * Debuginfo.t
   | Cextcall of string * machtype * bool * Debuginfo.t
@@ -138,8 +129,8 @@ type expression =
   | Cconst_blockheader of nativeint
   | Cvar of Ident.t
   | Clet of mutability * Ident.t * expression * expression
-  | Cphantom_let of Ident.t * Clambda.ulet_provenance
-      * phantom_defining_expr * expression
+  | Cphantom_let of Ident.t * Clambda.ulet_provenance option
+      * Clambda.uphantom_defining_expr option * expression
   | Cassign of Ident.t * expression
   | Ctuple of expression list
   | Cop of operation * expression list

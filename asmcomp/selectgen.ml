@@ -434,6 +434,10 @@ method select_condition = function
       (Itruetest, arg)
 
 method private env_for_phantom_let env ~ident ~provenance ~defining_expr =
+  (* Information about phantom lets is split at this stage:
+     1. The phantom identifiers in scope are recorded in the environment
+        and subsequently tagged onto Mach instructions.
+     2. The defining expressions are recorded separately. *)
   Ident.Tbl.add phantom_lets ident (provenance, defining_expr);
   let phantom_idents = Ident.Set.add ident env.phantom_idents in
   { env with phantom_idents; }

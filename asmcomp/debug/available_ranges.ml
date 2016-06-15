@@ -567,14 +567,17 @@ module Make_phantom_ranges = Make (struct
            below). *)
     in
     let defining_expr = convert_defining_expr defining_expr in
-    match defining_expr with
+    match provenance with
     | None -> None
-    | Some defining_expr ->
-      let subrange =
-        Available_subrange.create_phantom ~provenance ~defining_expr
-          ~start_pos ~end_pos
-      in
-      Some (subrange, key)
+    | Some provenance ->
+      match defining_expr with
+      | None -> None
+      | Some defining_expr ->
+        let subrange =
+          Available_subrange.create_phantom ~provenance ~defining_expr
+            ~start_pos ~end_pos
+        in
+        Some (subrange, key)
 end)
 
 let create ~fundecl =
@@ -629,10 +632,13 @@ let create ~fundecl =
             Some range
           end
       in
-      match resolve_range provenance defining_expr with
+      match provenance with
       | None -> ()
-      | Some range ->
-        Ident.Tbl.add t.ranges ident range)
+      | Some provenance ->
+        match resolve_range provenance defining_expr with
+        | None -> ()
+        | Some range ->
+          Ident.Tbl.add t.ranges ident range)
     fundecl.L.fun_phantom_lets;
   t, { fundecl with L.fun_body = first_insn; }
 

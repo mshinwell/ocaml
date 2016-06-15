@@ -34,6 +34,15 @@ type test =
   | Ioddtest
   | Ieventest
 
+type phantom_defining_expr =
+  | Iphantom_const_int of int
+  | Iphantom_const_symbol of Symbol.t
+  | Iphantom_var of Ident.t  (** Must not be a phantom identifier. *)
+  | Iphantom_read_var_field of phantom_defining_expr * int
+  (* CR-soon mshinwell: delete "var" from "read_var_field" *)
+  | Iphantom_read_symbol_field of Symbol.t * int
+  | Iphantom_offset_var of phantom_defining_expr * int
+
 type operation =
     Imove
   | Ispill
@@ -51,7 +60,6 @@ type operation =
   | Iload of Cmm.memory_chunk * Arch.addressing_mode
   | Istore of Cmm.memory_chunk * Arch.addressing_mode * bool
   | Ialloc of int
-    next: instruction;
   | Iintop of integer_operation
   | Iintop_imm of integer_operation * int
   | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
@@ -60,6 +68,7 @@ type operation =
 
 type instruction =
   { desc: instruction_desc;
+    next: instruction;
     arg: Reg.t array;
     res: Reg.t array;
     dbg: Debuginfo.t;
@@ -89,7 +98,8 @@ type fundecl =
     fun_human_name : string;
     fun_module_path : Path.t option;
     fun_phantom_lets :
-      (Clambda.ulet_provenance * Cmm.phantom_defining_expr) Ident.Map.t;
+      (Clambda.ulet_provenance option * phantom_defining_expr)
+        Ident.Map.t;
   }
 
 let rec dummy_instr =

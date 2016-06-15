@@ -76,7 +76,8 @@ let run phantom_lets =
               Mach.Iphantom_var defining_ident, field))
           | Never -> Never
           end
-        | Some (Uphantom_offset_var_field (defining_ident, offset_in_words)) ->
+        | Some (Uphantom_offset_var_field (defining_ident,
+            offset_in_words)) ->
           begin match resolve_phantom_let defining_ident with
           | Now defining_expr ->
             resolves_to
