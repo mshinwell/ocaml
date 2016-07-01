@@ -49,7 +49,7 @@ CAMLprim value caml_natdynlink_globals_inited(value unit)
 CAMLprim value caml_natdynlink_open(value filename, value global)
 {
   CAMLparam1 (filename);
-  CAMLlocal1 (v_handle);
+  CAMLlocal2 (v_handle, v_sym);
   value res;
   void *sym;
   void *handle;
@@ -73,9 +73,11 @@ CAMLprim value caml_natdynlink_open(value filename, value global)
   v_handle = caml_alloc_small(1, Abstract_tag);
   Field(v_handle, 0) = (value) handle;
 
+  v_sym = caml_copy_string(sym);
+
   res = caml_alloc_small(2, 0);
   Field(res, 0) = v_handle;
-  Field(res, 1) = (value) sym;
+  Field(res, 1) = v_sym;
   CAMLreturn(res);
 }
 
@@ -154,9 +156,9 @@ CAMLprim value caml_natdynlink_run_toplevel(value filename, value symbol)
 CAMLprim value caml_natdynlink_loadsym(value symbol)
 {
   CAMLparam1 (symbol);
-  CAMLlocal1 (sym);
+  void* sym;
 
-  sym = (value) caml_globalsym(String_val(symbol));
+  sym = caml_globalsym(String_val(symbol));
   if (!sym) caml_failwith(String_val(symbol));
-  CAMLreturn(sym);
+  CAMLreturn(caml_copy_string(sym));
 }
