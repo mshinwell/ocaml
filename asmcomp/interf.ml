@@ -90,9 +90,9 @@ let build_graph fundecl =
     | Iop(Imove | Ispill | Ireload) ->
         add_interf_move i.arg.(0) i.res.(0) i.live;
         interf i.next
-    | Iop(Itailcall_ind) -> ()
-    | Iop(Itailcall_imm lbl) -> ()
-    | Iop op ->
+    | Iop(Itailcall_ind _) -> ()
+    | Iop(Itailcall_imm _) -> ()
+    | Iop _ ->
         add_interf_set i.res i.live;
         add_interf_self i.res;
         interf i.next
@@ -162,9 +162,9 @@ let build_graph fundecl =
     | Iop(Ireload) ->
         add_pref (weight / 4) i.res.(0) i.arg.(0);
         prefer weight i.next
-    | Iop(Itailcall_ind) -> ()
-    | Iop(Itailcall_imm lbl) -> ()
-    | Iop op ->
+    | Iop(Itailcall_ind _) -> ()
+    | Iop(Itailcall_imm _) -> ()
+    | Iop _ ->
         prefer weight i.next
     | Iifthenelse(tst, ifso, ifnot) ->
         prefer (weight / 2) ifso;

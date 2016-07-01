@@ -54,8 +54,8 @@ let chunk = function
   | Double_u -> "float64u"
 
 let operation = function
-  | Capply(ty, d) -> "app" ^ Debuginfo.to_string d
-  | Cextcall(lbl, ty, alloc, d) ->
+  | Capply(_ty, d) -> "app" ^ Debuginfo.to_string d
+  | Cextcall(lbl, _ty, _alloc, d, _) ->
       Printf.sprintf "extcall \"%s\"%s" lbl (Debuginfo.to_string d)
   | Cload c -> Printf.sprintf "load %s" (chunk c)
   | Calloc d -> "alloc" ^ Debuginfo.to_string d
@@ -137,7 +137,7 @@ let rec expr ppf = function
       List.iter (fun e -> fprintf ppf "@ %a" expr e) el;
       begin match op with
       | Capply (mty, _) -> fprintf ppf "@ %a" machtype mty
-      | Cextcall(_, mty, _, _) -> fprintf ppf "@ %a" machtype mty
+      | Cextcall(_, mty, _, _, _) -> fprintf ppf "@ %a" machtype mty
       | _ -> ()
       end;
       fprintf ppf ")@]"
