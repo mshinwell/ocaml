@@ -25,10 +25,10 @@
 #include <stdio.h>
 #include <string.h>
 
-static void *getsym(void *handle, char *module, char *name){
+static void *getsym(value handle, char *module, char *name){
   char *fullname = caml_strconcat(3, "caml", module, name);
   void *sym;
-  sym = caml_dlsym (handle, fullname);
+  sym = caml_dlsym ((void*) Field(handle, 0), fullname);
   /*  printf("%s => %lx\n", fullname, (uintnat) sym); */
   caml_stat_free(fullname);
   return sym;
@@ -49,7 +49,8 @@ CAMLprim value caml_natdynlink_globals_inited(value unit)
 CAMLprim value caml_natdynlink_open(value filename, value global)
 {
   CAMLparam1 (filename);
-  CAMLlocal1 (res);
+  CAMLlocal1 (v_handle);
+  value res;
   void *sym;
   void *handle;
   char *p;
@@ -69,13 +70,16 @@ CAMLprim value caml_natdynlink_open(value filename, value global)
   if (NULL == sym)
     CAMLreturn(caml_copy_string("not an OCaml plugin"));
 
-  res = caml_alloc_tuple(2);
-  Field(res, 0) = (value) handle;
-  Field(res, 1) = (value) (sym);
+  v_handle = caml_alloc_small(1, Abstract_tag);
+  Field(v_handle, 0) = (value) handle;
+
+  res = caml_alloc_small(2, 0);
+  Field(res, 0) = v_handle;
+  Field(res, 1) = (value) sym;
   CAMLreturn(res);
 }
 
-CAMLprim value caml_natdynlink_run(void *handle, value symbol) {
+CAMLprim value caml_natdynlink_run(value handle, value symbol) {
   CAMLparam1 (symbol);
   CAMLlocal1 (result);
   void *sym,*sym2;
@@ -121,8 +125,8 @@ CAMLprim value caml_natdynlink_run(void *handle, value symbol) {
 CAMLprim value caml_natdynlink_run_toplevel(value filename, value symbol)
 {
   CAMLparam2 (filename, symbol);
-  CAMLlocal2 (res, v);
-  void *handle;
+  CAMLlocal3 (res, v, v_handle);
+  void* handle;
   char *p;
 
   /* TODO: dlclose in case of error... */
@@ -138,8 +142,10 @@ CAMLprim value caml_natdynlink_run_toplevel(value filename, value symbol)
     v = caml_copy_string(caml_dlerror());
     Store_field(res, 0, v);
   } else {
+    v_handle = caml_alloc_small(1, Abstract_tag);
+    Field(v_handle, 0) = (value) handle;
     res = caml_alloc(1,0);
-    v = caml_natdynlink_run(handle, symbol);
+    v = caml_natdynlink_run(v_handle, symbol);
     Store_field(res, 0, v);
   }
   CAMLreturn(res);
