@@ -37,7 +37,7 @@ byte:
 	    (OCAMLRUNPARAM=$$OCAMLRUNPARAM,b=1 \
               $(OCAMLRUN) $(EXECNAME) $$arg || true) \
 	         >$$F.$$arg.byte.result 2>&1; \
-	    $(DIFF) $$F.$$arg.reference $$F.$$arg.byte.result >/dev/null \
+	    $(DIFF) $$F.$$arg.byte.reference $$F.$$arg.byte.result >/dev/null \
 	    && echo " => passed" || echo " => failed"; \
 	  done; \
 	done
@@ -49,7 +49,7 @@ byte:
 	  (OCAMLRUNPARAM=$$OCAMLRUNPARAM,b=1 \
             $(OCAMLRUN) $(EXECNAME) $$arg || true) \
 	       >$$F.byte.result 2>&1; \
-	  $(DIFF) $$F.reference $$F.byte.result >/dev/null \
+	  $(DIFF) $$F.byte.reference $$F.byte.result >/dev/null \
 	  && echo " => passed" || echo " => failed"; \
 	done
 
@@ -77,7 +77,7 @@ native:
 	    (OCAMLRUNPARAM=$$OCAMLRUNPARAM,b=1 \
               ./$(EXECNAME) $$arg || true) \
 	         >$$F.$$arg.native.result 2>&1; \
-	    $(DIFF) $$F.$$arg.reference $$F.$$arg.native.result >/dev/null \
+	    $(DIFF) $$F.$$arg.native.reference $$F.$$arg.native.result >/dev/null \
 	    && echo " => passed" || echo " => failed"; \
 	  done; \
 	done
@@ -89,7 +89,7 @@ native:
 	  (OCAMLRUNPARAM=$$OCAMLRUNPARAM,b=1 \
             ./$(EXECNAME) $$arg || true) \
 	       >$$F.native.result 2>&1; \
-	  $(DIFF) $$F.reference $$F.native.result >/dev/null \
+	  $(DIFF) $$F.native.reference $$F.native.result >/dev/null \
 	  && echo " => passed" || echo " => failed"; \
 	done;
 	@for file in $(OTHERFILESNOINLINING) $(OTHERFILESNOINLINING_NATIVE); \
@@ -101,7 +101,7 @@ native:
 	  (OCAMLRUNPARAM=$$OCAMLRUNPARAM,b=1 \
             ./$(EXECNAME) $$arg || true) \
 	       >$$F.native.result 2>&1; \
-	  $(DIFF) $$F.reference $$F.native.result >/dev/null \
+	  $(DIFF) $$F.native.reference $$F.native.result >/dev/null \
 	  && echo " => passed" || echo " => failed"; \
 	done
 

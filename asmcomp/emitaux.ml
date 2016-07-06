@@ -15,8 +15,6 @@
 
 (* Common functions for emitting assembly code *)
 
-open Debuginfo
-
 let output_channel = ref stdout
 
 let emit_string s = output_string !output_channel s
@@ -111,6 +109,7 @@ type frame_descr =
   { fd_lbl: int;                        (* Return address *)
     fd_frame_size: int;                 (* Size of stack frame *)
     fd_live_offset: int list;           (* Offsets/regs of live addresses *)
+    fd_raise: bool;                     (* Is frame for a raise? *)
     fd_debuginfo: Debuginfo.t }         (* Location, if any *)
 
 let frame_descriptors = ref([] : frame_descr list)
@@ -147,7 +146,7 @@ let emit_frames a =
       let line = min 0xFFFFF d.dinfo_line
       and char_start = min 0xFF d.dinfo_char_start
       and char_end = min 0x3FF d.dinfo_char_end
-      and kind = match d.dinfo_kind with Dinfo_call -> 0 | Dinfo_raise -> 1 in
+      and kind = if fd.fd_raise then 1 else 0 in
       let info =
         Int64.add (Int64.shift_left (Int64.of_int line) 44) (
         Int64.add (Int64.shift_left (Int64.of_int char_start) 36) (
@@ -225,23 +224,23 @@ let reset_debug_info () =
    display .loc for every instruction. *)
 let emit_debug_info_gen dbg file_emitter loc_emitter =
   if is_cfi_enabled () &&
-    (!Clflags.debug || Config.with_frame_pointers)
-     && dbg.Debuginfo.dinfo_line > 0 (* PR#6243 *)
-  then begin
-    let { Debuginfo.
-          dinfo_line = line;
-          dinfo_char_start = col;
-          dinfo_file = file_name;
-        } = dbg in
-    let file_num =
-      try List.assoc file_name !file_pos_nums
-      with Not_found ->
-        let file_num = !file_pos_num_cnt in
-        incr file_pos_num_cnt;
-        file_emitter ~file_num ~file_name;
-        file_pos_nums := (file_name,file_num) :: !file_pos_nums;
-        file_num in
-    loc_emitter ~file_num ~line ~col;
+    (!Clflags.debug || Config.with_frame_pointers) then begin
+    match List.rev dbg with
+    | [] -> ()
+    | { Debuginfo.dinfo_line = line;
+        dinfo_char_start = col;
+        dinfo_file = file_name; } :: _ ->
+      if line > 0 then begin (* PR#6243 *)
+        let file_num =
+          try List.assoc file_name !file_pos_nums
+          with Not_found ->
+            let file_num = !file_pos_num_cnt in
+            incr file_pos_num_cnt;
+            file_emitter ~file_num ~file_name;
+            file_pos_nums := (file_name,file_num) :: !file_pos_nums;
+            file_num in
+        loc_emitter ~file_num ~line ~col;
+      end
   end
 
 let emit_debug_info dbg =
