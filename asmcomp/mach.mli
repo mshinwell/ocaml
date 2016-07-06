@@ -15,6 +15,12 @@
 
 (* Representation of machine code by sequences of pseudoinstructions *)
 
+(** N.B. Backends vary in their treatment of call gc and checkbound
+    points.  If the positioning of any labels associated with these is
+    important for some new feature in the compiler, the relevant backends'
+    behaviour should be checked. *)
+type label = Cmm.label
+
 type integer_comparison =
     Isigned of Cmm.comparison
   | Iunsigned of Cmm.comparison
@@ -23,7 +29,7 @@ type integer_operation =
     Iadd | Isub | Imul | Imulh | Idiv | Imod
   | Iand | Ior | Ixor | Ilsl | Ilsr | Iasr
   | Icomp of integer_comparison
-  | Icheckbound of { label_after_error : Cmm.label option; }
+  | Icheckbound of { label_after_error : label option; }
 
 type test =
     Itruetest
@@ -53,7 +59,7 @@ type operation =
   | Iload of Cmm.memory_chunk * Arch.addressing_mode
   | Istore of Cmm.memory_chunk * Arch.addressing_mode * bool
                                  (* false = initialization, true = assignment *)
-  | Ialloc of { words : int; label_after_call_gc : Cmm.label option; }
+  | Ialloc of { words : int; label_after_call_gc : label option; }
   | Iintop of integer_operation
   | Iintop_imm of integer_operation * int
   | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
