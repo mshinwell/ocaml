@@ -53,13 +53,13 @@ let as_cset = function
 %token <Syntax.location> Taction
 %token Trule Tparse Tparse_shortest Tand Tequal Tend Tor Tunderscore Teof
        Tlbracket Trbracket Trefill
-%token Tstar Tmaybe Tplus Tlparen Trparen Tcaret Tdash Tlet Tas Thash
+%token Tstar Tmaybe Tplus Tlparen Trparen Tcaret Tdash Tlet Tas Tsharp
 
 %right Tas
 %left Tor
 %nonassoc CONCAT
 %nonassoc Tmaybe Tstar Tplus
-%left Thash
+%left Tsharp
 %nonassoc Tident Tchar Tstring Tunderscore Teof Tlbracket Tlparen
 
 %start lexer_definition
@@ -145,7 +145,7 @@ regexp:
         { Alternative(Epsilon, $1) }
   | regexp Tplus
         { Sequence(Repetition (remove_as $1), $1) }
-  | regexp Thash regexp
+  | regexp Tsharp regexp
         {
           let s1 = as_cset $1
           and s2 = as_cset $3 in

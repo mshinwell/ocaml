@@ -3670,16 +3670,16 @@ let rec filter_visited = function
 let memq_warn t visited =
   if List.memq t visited then (warn := true; true) else false
 
-let rec lid_of_path ?(hash="") = function
+let rec lid_of_path ?(sharp="") = function
     Path.Pident id ->
-      Longident.Lident (hash ^ Ident.name id)
+      Longident.Lident (sharp ^ Ident.name id)
   | Path.Pdot (p1, s, _) ->
-      Longident.Ldot (lid_of_path p1, hash ^ s)
+      Longident.Ldot (lid_of_path p1, sharp ^ s)
   | Path.Papply (p1, p2) ->
-      Longident.Lapply (lid_of_path ~hash p1, lid_of_path p2)
+      Longident.Lapply (lid_of_path ~sharp p1, lid_of_path p2)
 
 let find_cltype_for_path env p =
-  let cl_path = Env.lookup_type (lid_of_path ~hash:"#" p) env in
+  let cl_path = Env.lookup_type (lid_of_path ~sharp:"#" p) env in
   let cl_abbr = Env.find_type cl_path env in
 
   match cl_abbr.type_manifest with

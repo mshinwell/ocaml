@@ -451,7 +451,7 @@ rule token = parse
             update_loc lexbuf name line_num true 0;
             token lexbuf
       }
-  | "#"  { HASH }
+  | "#"  { SHARP }
   | "&"  { AMPERSAND }
   | "&&" { AMPERAMPER }
   | "`"  { BACKQUOTE }
@@ -515,7 +515,7 @@ rule token = parse
   | ['*' '/' '%'] symbolchar *
             { INFIXOP3(Lexing.lexeme lexbuf) }
   | '#' (symbolchar | '#') +
-            { HASHOP(Lexing.lexeme lexbuf) }
+            { SHARPOP(Lexing.lexeme lexbuf) }
   | eof { EOF }
   | _
       { raise (Error(Illegal_character (Lexing.lexeme_char lexbuf 0),
@@ -675,7 +675,7 @@ and quoted_string delim = parse
       { store_string_char(Lexing.lexeme_char lexbuf 0);
         quoted_string delim lexbuf }
 
-and skip_hash_bang = parse
+and skip_sharp_bang = parse
   | "#!" [^ '\n']* '\n' [^ '\n']* "\n!#\n"
        { update_loc lexbuf None 3 false 0 }
   | "#!" [^ '\n']* '\n'

@@ -78,7 +78,7 @@ and lexeme =    (* Read a lexeme *)
   | "."
       { DOT }
   | "#"
-      { HASH }
+      { SHARP }
   | "@"
       { AT }
   | "$"
