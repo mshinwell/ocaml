@@ -34,6 +34,9 @@
 #include "stack.h"
 #include "caml/startup_aux.h"
 #include "caml/sys.h"
+#ifdef WITH_SPACETIME
+#include "spacetime.h"
+#endif
 #ifdef HAS_UI
 #include "caml/ui.h"
 #endif
@@ -95,7 +98,6 @@ extern void caml_install_invalid_parameter_handler();
 
 #endif
 
-
 void caml_main(char **argv)
 {
   char * exe_name;
@@ -103,6 +105,9 @@ void caml_main(char **argv)
   value res;
   char tos;
 
+#ifdef WITH_SPACETIME
+  caml_spacetime_initialize();
+#endif
   caml_init_frame_descriptors();
   caml_init_ieee_floats();
 #ifdef _MSC_VER
