@@ -132,6 +132,14 @@ let add_path_except_compilation_unit env name =
   | Pident _ -> name
   | path -> (Path.name path) ^ "." ^ name
 
+let name_expr_with_bound_name bound_name named ~name =
+  match bound_name with
+  | None ->
+      name_expr named ~name
+  | Some bound_name ->
+  let var = Variable.rename bound_name in
+  Flambda.create_let var named (Var var)
+
 let rec close_const t env (const : Lambda.structured_constant)
       : Flambda.named * string =
   match const with
@@ -154,7 +162,8 @@ let rec close_const t env (const : Lambda.structured_constant)
   | Const_block _ ->
     Expr (close t env (eliminate_const_block const)), "const_block"
 
-and close t env (lam : Lambda.lambda) : Flambda.t =
+and close t ?(bound_name:Variable.t option) env (lam : Lambda.lambda)
+      : Flambda.t =
   match lam with
   | Lvar id ->
     begin match Env.find_var_exn env id with
@@ -175,7 +184,7 @@ and close t env (lam : Lambda.lambda) : Flambda.t =
     let defining_expr =
       close_let_bound_expression t var env defining_expr
     in
-    let body = close t (Env.add_var env id var) body in
+    let body = close t (Env.add_var env id var) ?bound_name body in
     let provenance : Flambda.let_provenance =
       { module_path = Env.current_module_path env;
         (* CR mshinwell: think about how we could get this.  Same below. *)
@@ -189,7 +198,7 @@ and close t env (lam : Lambda.lambda) : Flambda.t =
     let defining_expr =
       close_let_bound_expression t var env defining_expr
     in
-    let body = close t (Env.add_mutable_var env id mut_var) body in
+    let body = close t (Env.add_mutable_var env id mut_var) ?bound_name body in
     let provenance : Flambda.let_provenance =
       { module_path = Env.current_module_path env;
         location = Location.none;
@@ -340,7 +349,7 @@ and close t env (lam : Lambda.lambda) : Flambda.t =
                 closure_id = Closure_id.wrap closure_bound_var;
               })
               body))
-          (close t env body) function_declarations
+          (close t env ?bound_name body) function_declarations
       in
       Flambda.create_let set_of_closures_var set_of_closures body
         ~provenance
@@ -356,7 +365,7 @@ and close t env (lam : Lambda.lambda) : Flambda.t =
       in
       Let_rec {
         vars_and_defining_exprs = defs;
-        body = close t env body;
+        body = close t env ?bound_name body;
         provenance = Some provenance;
       }
     end
@@ -401,7 +410,7 @@ and close t env (lam : Lambda.lambda) : Flambda.t =
                      are suitable. I had to add a new one for a similar
                      case in the array data types work.
                      mshinwell: deferred CR *)
-                  name_expr ~name:"result"
+                  name_expr_with_bound_name bound_name ~name:"result"
                     (Prim (prim, [numerator; denominator], dbg))))))))
   | Lprim ((Pdivint | Pmodint), _, _) when not !Clflags.fast ->
     Misc.fatal_error "Pdivint / Pmodint must have exactly two arguments"
@@ -475,7 +484,7 @@ and close t env (lam : Lambda.lambda) : Flambda.t =
       ~evaluation_order:`Right_to_left
       ~name:(name ^ "_arg")
       ~create_body:(fun args ->
-        name_expr (Prim (p, args, dbg))
+        name_expr_with_bound_name bound_name (Prim (p, args, dbg))
           ~name)
   | Lswitch (arg, sw) ->
     let scrutinee = Variable.create "switch" in
@@ -592,7 +601,8 @@ and close_functions t external_env function_declarations : Flambda.named =
     in
     let params = List.map (Env.find_var closure_env) params in
     let closure_bound_var = Function_decl.closure_bound_var decl in
-    let body = close t closure_env body in
+    let bound_name = Variable.rename ~append:"_return" closure_bound_var in
+    let body = close t ~bound_name closure_env body in
     let fun_decl =
       Flambda.create_function_declaration ~params ~body ~stub ~dbg
         ~inline:(Function_decl.inline decl)
@@ -671,9 +681,9 @@ and close_let_bound_expression t ?let_rec_ident let_bound_var env
     in
     Expr (Flambda.create_let set_of_closures_var set_of_closures
       (name_expr (Project_closure (project_closure))
-        ~name:(Variable.base_name let_bound_var))
+        ~name:(Variable.unique_name let_bound_var))
       ~provenance)
-  | lam -> Expr (close t env lam)
+  | lam -> Expr (close t env ~bound_name:let_bound_var lam)
 
 let lambda_to_flambda ~backend ~module_ident ~size ~filename lam
       : Flambda.program =
@@ -716,7 +726,7 @@ let lambda_to_flambda ~backend ~module_ident ~size ~filename lam
       (* CR mshinwell: add provenance info *)
       None,
       Tag.create_exn 0,
-      [close t Env.empty lam],
+      [close t ~bound_name:(Variable.create "toplevel_module") Env.empty lam],
       Initialize_symbol (
         module_symbol,
         None,
