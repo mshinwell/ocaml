@@ -22,8 +22,8 @@ type t =
     mutable typ: Cmm.machtype_component;(* Type of contents *)
     mutable loc: location;              (* Actual location *)
     mutable spill: bool;                (* "true" to force stack allocation  *)
-    mutable interf: shared list;         (* Other regs live simultaneously *)
-    mutable prefer: (shared * int) list; (* Preferences for other regs *)
+    mutable interf: t list;              (* Other regs live simultaneously *)
+    mutable prefer: (t * int) list;      (* Preferences for other regs *)
     mutable degree: int;                 (* Number of other regs live sim. *)
     mutable spill_cost: int;             (* Estimate of spilling cost *)
     mutable visited: bool }              (* For graph walks *)
@@ -67,7 +67,7 @@ val disjoint_set_array: Set.t -> t array -> bool
 val set_of_array: t array -> Set.t
 
 val reset: unit -> unit
-val all_registers: unit -> shared list
+val all_registers: unit -> t list
 val num_registers: unit -> int
 val reinit: unit -> unit
 

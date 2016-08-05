@@ -65,7 +65,7 @@ let size_expr env exp =
         with Not_found ->
         try
           let regs = Tbl.find id env.idents in
-          size_machtype (Array.map (fun r -> r.shared.typ) regs)
+          size_machtype (Array.map (fun r -> r.typ) regs)
         with Not_found ->
           fatal_error("Selection.size_expr: unbound var " ^
                       Ident.unique_name id)
@@ -105,7 +105,7 @@ let name_regs id rv =
   else
     for i = 0 to Array.length rv - 1 do
       Reg.set_name rv.(i) (Some id);
-      rv.(i).shared.part <- Some i
+      rv.(i).part <- Some i
     done
 
 let set_name_propagation ~src ~dest =
@@ -120,7 +120,7 @@ module Proc = struct
         ~take_names_from:params
     in
     Array.iteri (fun index reg ->
-        reg.shared.is_parameter <- Some index)
+        reg.is_parameter <- Some index)
       params;
     params
 
@@ -173,19 +173,19 @@ let join env opt_r1 seq1 opt_r2 seq2 =
             the result register. *)
       for i = 0 to l1-1 do
         if Reg.immutable r1.(i)
-          && Cmm.ge_component r1.(i).shared.typ r2.(i).shared.typ
+          && Cmm.ge_component r1.(i).typ r2.(i).typ
         then begin
           let r1 = Reg.anonymise r1.(i) in
           r.(i) <- r1;
           seq2#insert_move_no_name_propagation env r2.(i) r1
         end else if Reg.immutable r2.(i)
-          && Cmm.ge_component r2.(i).shared.typ r1.(i).shared.typ
+          && Cmm.ge_component r2.(i).typ r1.(i).typ
         then begin
           let r2 = Reg.anonymise r2.(i) in
           r.(i) <- r2;
           seq1#insert_move_no_name_propagation env r1.(i) r2
         end else begin
-          let typ = Cmm.lub_component r1.(i).shared.typ r2.(i).shared.typ in
+          let typ = Cmm.lub_component r1.(i).typ r2.(i).typ in
           r.(i) <- Reg.create typ;
           seq1#insert_move_no_name_propagation env r1.(i) r.(i);
           seq2#insert_move_no_name_propagation env r2.(i) r.(i)
@@ -207,7 +207,7 @@ let join_array env rs =
       let size_res = Array.length template in
       let res = Array.make size_res Reg.dummy in
       for i = 0 to size_res - 1 do
-        res.(i) <- Reg.create template.(i).shared.typ
+        res.(i) <- Reg.create template.(i).typ
       done;
       for i = 0 to Array.length rs - 1 do
         let (r, s) = rs.(i) in
@@ -471,13 +471,13 @@ method extract =
 (* Insert a sequence of moves from one pseudoreg set to another. *)
 
 method insert_move_no_name_propagation env src dst =
-  if src.shared.stamp <> dst.shared.stamp || src.name <> dst.name then begin
+  if src.stamp <> dst.stamp || src.name <> dst.name then begin
     self#insert env (Iop Imove) [|src|] [|dst|]
   end;
 
 method insert_move env src dst =
   self#insert_move_no_name_propagation env src dst;
-  match src.shared.mutability, dst.shared.mutability with
+  match src.mutability, dst.mutability with
   | Immutable, Immutable ->
     (* CR mshinwell: does this conditional really make sense? *)
     if not (Reg.anonymous src) then begin
@@ -495,7 +495,7 @@ method insert_move env src dst =
        are snapshotted into immutable registers.  It is not possible for the
        preallocated ones to be used further down the function, just by virtue
        of how this module works, so we do not need to worry about them.) *)
-    if dst.shared.loc = src.shared.loc then begin
+    if dst.loc = src.loc then begin
       dst.name <- src.name
     end
   | Immutable, Mutable ->
@@ -521,10 +521,10 @@ method insert_moves_no_name_propagation env src dst =
 
 method adjust_type src dst =
   assert (not (Reg.immutable dst));
-  let ts = src.shared.typ and td = dst.shared.typ in
+  let ts = src.typ and td = dst.typ in
   if ts <> td then
     match ts, td with
-    | Val, Int -> dst.shared.typ <- Val
+    | Val, Int -> dst.typ <- Val
     | Int, Val -> ()
     | _, _ -> fatal_error("Selection.adjust_type: bad assignment to "
                                                            ^ Reg.name dst)
@@ -874,11 +874,11 @@ method emit_stores env data regs_addr =
               for i = 0 to Array.length regs - 1 do
                 let r = regs.(i) in
                 let kind =
-                  if r.shared.typ = Float then Double_u else Word_val
+                  if r.typ = Float then Double_u else Word_val
                 in
                 self#insert env (Iop(Istore(kind, !a, false)))
                             (Array.append [|r|] regs_addr) [||];
-                a := Arch.offset_addressing !a (size_component r.shared.typ)
+                a := Arch.offset_addressing !a (size_component r.typ)
               done
           | _ ->
               self#insert env (Iop op) (Array.append regs regs_addr) [||];
@@ -1076,7 +1076,7 @@ end
 *)
 
 let is_tail_call nargs =
-  assert (Reg.dummy.shared.typ = Int);
+  assert (Reg.dummy.typ = Int);
   let args = Array.make (nargs + 1) Reg.dummy in
   let (_loc_arg, stack_ofs) = Proc.loc_arguments args in
   stack_ofs = 0

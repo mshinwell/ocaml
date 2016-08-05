@@ -42,7 +42,7 @@ let spill_reg r =
     Reg.Map.find r !spill_env
   with Not_found ->
     let spill_r = Reg.clone r in
-    spill_r.shared.spill <- true;
+    spill_r.spill <- true;
     spill_env := Reg.Map.add r spill_r !spill_env;
     spill_r
 
@@ -70,7 +70,7 @@ let add_superpressure_regs op live_regs res_regs spilled =
   Reg.Set.iter
     (fun r ->
       if Reg.Set.mem r spilled then () else begin
-        match r.shared.loc with
+        match r.loc with
           Stack _ -> ()
         | _ -> let c = Proc.register_class r in
                pressure.(c) <- pressure.(c) + 1
@@ -90,7 +90,7 @@ let add_superpressure_regs op live_regs res_regs spilled =
         (fun r ->
           if Proc.register_class r = cl &&
              not (Reg.Set.mem r spilled) &&
-             r.shared.loc = Unknown
+             r.loc = Unknown
           then begin
             try
               let d = Reg.Map.find r !use_date in
@@ -300,7 +300,7 @@ let add_spills regset i =
       | Some name1, Some name2 -> Ident.compare name1 name2
     in
     if c <> 0 then c
-    else Pervasives.compare r1.shared.stamp r2.shared.stamp
+    else Pervasives.compare r1.stamp r2.stamp
   in
   let regset = List.sort compare_reg (Reg.Set.elements regset) in
   let phantom_available_before = i.phantom_available_before in

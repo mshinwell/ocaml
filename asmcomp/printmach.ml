@@ -18,7 +18,6 @@
 open Format
 open Cmm
 open Reg
-
 open Mach
 
 let reg_shared_core ppf shared =
@@ -121,18 +120,6 @@ let test tst ppf arg =
 
 let print_live = ref false
 
-(* CR mshinwell: deal with this *)
-let rec _phantom_defining_expr ppf = function
-  | Iphantom_const_int i -> fprintf ppf "0x%x" i
-  | Iphantom_const_symbol sym -> fprintf ppf "%a" Symbol.print sym
-  | Iphantom_var ident -> fprintf ppf "%a" Ident.print ident
-  | Iphantom_read_var_field (expr, field) ->
-    fprintf ppf "%a[%d]" _phantom_defining_expr expr field
-  | Iphantom_read_symbol_field (sym, field) ->
-    fprintf ppf "%a[%d]" Symbol.print sym field
-  | Iphantom_offset_var (expr, offset) ->
-    fprintf ppf "%a+(%d)" _phantom_defining_expr expr offset
-
 let operation op arg ppf res =
   if Array.length res > 0 then fprintf ppf "%a := " regs res;
   match op with
@@ -175,6 +162,18 @@ let operation op arg ppf res =
   | Iintoffloat -> fprintf ppf "intoffloat %a" reg arg.(0)
   | Ispecific op ->
       Arch.print_specific_operation reg op ppf arg
+
+(* CR mshinwell: deal with this *)
+let rec _phantom_defining_expr ppf = function
+  | Iphantom_const_int i -> fprintf ppf "0x%x" i
+  | Iphantom_const_symbol sym -> fprintf ppf "%a" Symbol.print sym
+  | Iphantom_var ident -> fprintf ppf "%a" Ident.print ident
+  | Iphantom_read_var_field (expr, field) ->
+    fprintf ppf "%a[%d]" _phantom_defining_expr expr field
+  | Iphantom_read_symbol_field (sym, field) ->
+    fprintf ppf "%a[%d]" Symbol.print sym field
+  | Iphantom_offset_var (expr, offset) ->
+    fprintf ppf "%a+(%d)" _phantom_defining_expr expr offset
 
 let rec instr ppf i =
   if !print_live then begin

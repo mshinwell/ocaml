@@ -23,8 +23,8 @@ type t = {
   mutable spill: bool;
   mutable part: int option;
   mutable is_parameter: int option;
-  mutable interf: shared list;
-  mutable prefer: (shared * int) list;
+  mutable interf: t list;
+  mutable prefer: (t * int) list;
   mutable degree: int;
   mutable spill_cost: int;
   mutable visited: bool;
@@ -43,34 +43,21 @@ and stack_location =
 type reg = t
 
 let dummy =
-  let shared =
-    { mutability = Cmm.Immutable; is_parameter = None;
-      stamp = 0; typ = Int; loc = Unknown;
-      spill = false; interf = []; prefer = []; degree = 0; spill_cost = 0;
-      visited = false; part = None;
-    }
-  in
-  { name = None;
-    propagate_name_to = None;
-    shared;
-    dummy = (fun () -> ());
+  { name = "R"; mutability = Cmm.Immutable; stamp = 0; typ = Int; loc = Unknown;
+    spill = false; interf = []; prefer = []; degree = 0; spill_cost = 0;
+    visited = false;
   }
 
 let currstamp = ref 0
-let reg_list = ref([] : shared list)
+let reg_list = ref([] : t list)
 
 let create ?(mutability = Cmm.Immutable) ty =
-  let shared =
-    { mutability; stamp = !currstamp; typ = ty; is_parameter = None;
-      loc = Unknown; spill = false; interf = []; prefer = []; degree = 0;
-      spill_cost = 0; visited = false; part = None; } in
-  reg_list := shared :: !reg_list;
+  let r = { name = "R"; mutability; stamp = !currstamp; typ = ty;
+            loc = Unknown; spill = false; interf = []; prefer = []; degree = 0;
+            spill_cost = 0; visited = false; } in
+  reg_list :=.:: !reg_list;
   incr currstamp;
-  { name = None;
-    propagate_name_to = None;
-    shared;
-    dummy = (fun () -> ());
-  }
+  r
 
 let createv tyv =
   let n = Array.length tyv in
@@ -81,51 +68,38 @@ let createv tyv =
 let createv_like ?mutability rv =
   let n = Array.length rv in
   let rv' = Array.make n dummy in
-  for i = 0 to n-1 do rv'.(i) <- create ?mutability rv.(i).shared.typ done;
+  for i = 0 to n-1 do rv'.(i) <- create ?mutability rv.(i).typ done;
   rv'
 
 let clone r =
-  let nr = create r.shared.typ ~mutability:r.shared.mutability in
+  let nr = create r.typ ~mutability:r.mutability in
   nr.name <- r.name;
-  (* CR mshinwell: It doesn't look like this is taking effect.  Also, are
-     reloads going through here? *)
-  nr.shared.is_parameter <- r.shared.is_parameter;
   nr
 
-(* The name of registers created in [Proc]. *)
-let proc_reg_name = Ident.create_persistent "R"
-
 let at_location ty loc =
-  let shared = { mutability = Cmm.Immutable; is_parameter = None;
-            stamp = !currstamp; typ = ty; loc;
-            spill = false; interf = []; prefer = []; degree = 0;
+  let r = { name = "R"; mutability = Cmm.Immutable; stamp = !currstamp;
+            typ = ty; loc; spill = false; interf = []; prefer = []; degree = 0;
             spill_cost = 0; visited = false; part = None; } in
   incr currstamp;
-  { name = Some proc_reg_name;
-    propagate_name_to = None;
-    shared;
-    dummy = (fun () -> ());
-  }
+  r
 
 let immutable t =
-  match t.shared.mutability with
+  match t.mutability with
   | Immutable -> true
   | Mutable -> false
 
 let name t =
-  match t.name with
-  | None -> ""
-  | Some ident ->
-    let name = Ident.unique_name ident in
-    let with_spilled =
-      if t.shared.spill then
-        "spilled-" ^ name
-      else
-        name
-    in
-    match t.shared.part with
-    | None -> with_spilled
-    | Some part -> with_spilled ^ "#" ^ string_of_int part
+  let name = t.name in
+  if t.spill then
+    "spilled-" ^ name
+  else
+    name
+(* XXX
+  in
+  match t.part with
+  | None -> with_spilled
+  | Some part -> with_spilled ^ "#" ^ string_of_int part
+*)
 
 let first_virtual_reg_stamp = ref (-1)
 
@@ -141,15 +115,15 @@ let reset() =
 let all_registers() = !reg_list
 let num_registers() = !currstamp
 
-let reinit_reg shared =
-  shared.loc <- Unknown;
-  shared.interf <- [];
-  shared.prefer <- [];
-  shared.degree <- 0;
+let reinit_reg r =
+  r.loc <- Unknown;
+  r.interf <- [];
+  r.prefer <- [];
+  r.degree <- 0;
   (* Preserve the very high spill costs introduced by the reloading pass *)
-  if shared.spill_cost >= 100000
-  then shared.spill_cost <- 100000
-  else shared.spill_cost <- 0
+  if r.spill_cost >= 100000
+  then r.spill_cost <- 100000
+  else r.spill_cost <- 0
 
 let reinit() =
   List.iter reinit_reg !reg_list
@@ -157,7 +131,7 @@ let reinit() =
 module RegOrder =
   struct
     type t = reg
-    let compare r1 r2 = r1.shared.stamp - r2.shared.stamp
+    let compare r1 r2 = r1.stamp - r2.stamp
   end
 
 module Set = Set.Make(RegOrder)
@@ -213,7 +187,7 @@ let at_same_location reg1 reg2 =
   (* We need to check the register classes too: two locations both saying
      "stack offset N" might actually be different physical locations, for
      example if one is of class "Int" and another "Float" on amd64. *)
-  reg1.shared.loc = reg2.shared.loc
+  reg1.loc = reg2.loc
     && Proc.register_class reg1 = Proc.register_class reg2
 
 module With_debug_info = struct

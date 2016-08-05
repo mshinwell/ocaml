@@ -197,7 +197,7 @@ let remove_load_numbering n =
 
 let kill_addr_regs n =
   { n with num_reg =
-    Reg.Map.filter (fun r _n -> r.Reg.shared.Reg.typ <> Cmm.Addr) n.num_reg }
+    Reg.Map.filter (fun r _n -> r.Reg.typ <> Cmm.Addr) n.num_reg }
 
 (* Prepend a set of moves before [i] to assign [srcs] to [dsts].  *)
 

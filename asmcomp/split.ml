@@ -58,7 +58,7 @@ let repres_regs rv =
 let identify r1 r2 =
   let repres1 = repres_reg r1 in
   let repres2 = repres_reg r2 in
-  if repres1.shared.stamp = repres2.shared.stamp then () else begin
+  if repres1.stamp = repres2.stamp then () else begin
     equiv_classes := Reg.Map.add repres1 repres2 !equiv_classes
   end
 
@@ -130,7 +130,7 @@ let rec rename i sub =
         ~phantom_available_before:i.phantom_available_before
         i.next,
        None)
-  | Iop Ireload when i.res.(0).shared.loc = Unknown ->
+  | Iop Ireload when i.res.(0).loc = Unknown ->
       begin match sub with
         None -> rename i.next sub
       | Some s ->
