@@ -15,7 +15,6 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 module L = Linearize
-module RD = Reg.With_debug_info
 
 let rewrite_label env label =
   match Numbers.Int.Map.find label env with
@@ -486,9 +485,15 @@ end) = struct
     | L.Lcapture_stack_offset _ ->
       process_instruction t ~fundecl ~first_insn ~insn:insn.L.next
         ~prev_insn:(Some insn) ~open_subrange_start_insns
+
+  let rec process_instructions t ~fundecl ~first_insn =
+    process_instructions t ~fundecl ~first_insn ~insn:first_insn
+      ~prev_insn:None ~open_subrange_start_insns:KM.empty
 end
 
 module Make_ranges = Make (struct
+  module RD = Reg.With_debug_info
+
   (* By the time this pass has run, register stamps are irrelevant; indeed,
      there may be multiple registers with different stamps assigned to the
      same location.  As such, we quotient register sets by the equivalence
@@ -509,7 +514,9 @@ module Make_ranges = Make (struct
 
   (* CR mshinwell: improve efficiency *)
   let available_before (insn : L.instruction) =
-    Key.Set.of_list (RD.Set.elements insn.available_before)
+    match insn.available_before with
+    | Unreachable -> Key.Set.empty
+    | Ok available_before -> Key.Set.of_list (RD.Set.elements available_before)
 
   let end_pos_offset ~prev_insn ~key:reg =
     (* If the range is for a register destroyed by a call (which for
@@ -548,8 +555,8 @@ module Make_ranges = Make (struct
   let create_subrange ~fundecl:_ ~key:reg ~start_pos ~start_insn ~end_pos
         ~end_pos_offset =
     let subrange =
-      Available_subrange.create ~reg ~start_pos ~start_insn ~end_pos
-        ~end_pos_offset
+      Available_subrange.create ~reg:(RD.reg reg) ~start_pos ~start_insn
+        ~end_pos ~end_pos_offset
     in
     let ident = RD.holds_value_of reg in
     Some (subrange, ident)
@@ -607,15 +614,10 @@ let create ~fundecl =
   let t = { ranges = Ident.Tbl.create 42; } in
   let first_insn =
     let first_insn = fundecl.L.fun_body in
-    Make_ranges.process_instruction t ~fundecl ~first_insn ~insn:first_insn
-      ~prev_insn:None
-      ~open_subrange_start_insns:
-        RD.Map_distinguishing_names_and_locations.empty
+    Make_ranges.process_instructions t ~fundecl ~first_insn
   in
   let first_insn =
-    Make_phantom_ranges.process_instruction t ~fundecl ~first_insn
-      ~insn:first_insn ~prev_insn:None
-      ~open_subrange_start_insns:Ident.Map.empty
+    Make_phantom_ranges.process_instructions t ~fundecl ~first_insn
   in
   (* (See CR-someday above.)  For the moment, ranges that are derived from
      others are treated naively: we just make them available iff the
