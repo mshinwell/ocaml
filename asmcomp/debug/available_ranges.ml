@@ -504,7 +504,7 @@ module Make_ranges = Make (struct
     module Set = RD.Set_distinguishing_names_and_locations
 
     let needs_stack_offset_capture t =
-      if RD.assigned_to_stack t then Some t else None
+      if RD.assigned_to_stack t then Some (RD.reg t) else None
   end
 
   (* CR mshinwell: improve efficiency *)

@@ -72,6 +72,20 @@ val num_registers: unit -> int
 val reinit: unit -> unit
 
 module With_debug_info : sig
+  module Debug_info : sig
+    type t
+
+    val holds_value_of : Ident.t -> t
+    (** The identifier that the register holds (part of) the value of. *)
+
+    val part_of_value : t -> int
+    val num_parts_of_value : t -> int
+
+    val which_parameter : t -> int option
+    (** If the register corresponds to a function parameter, the value returned
+        is the zero-based index of said parameter; otherwise it is [None]. *)
+  end
+
   type t
   (** A register equipped with information used for generating debugging
       information. *)
@@ -86,16 +100,7 @@ module With_debug_info : sig
 
   val reg : t -> Reg.t
   val location : t -> location
-
-  val holds_value_of : Ident.t -> t
-  (** The identifier that the register holds (part of) the value of. *)
-
-  val part_of_value : t -> int
-  val num_parts_of_value : t -> int
-
-  val which_parameter : t -> int option
-  (** If the register corresponds to a function parameter, the value returned
-      is the zero-based index of said parameter; otherwise it is [None]. *)
+  val debug_info : t -> Debug_info.t option
 
   val at_same_location : t -> reg -> bool
   (** [at_same_location t reg] holds iff the register [t] corresponds to

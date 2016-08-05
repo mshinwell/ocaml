@@ -127,66 +127,6 @@ let name t =
     | None -> with_spilled
     | Some part -> with_spilled ^ "#" ^ string_of_int part
 
-let anonymous t =
-  match t.name with
-  | None -> true
-  | Some _ident -> false
-
-let anonymise t =
-  if not (immutable t) then begin
-    Misc.fatal_error "Reg.rename: attempt to rename mutable register"
-  end;
-  { t with
-    name = None;
-    propagate_name_to = None;
-  }
-
-let rename t name =
-  if not (immutable t) then begin
-    Misc.fatal_error "Reg.rename: attempt to rename mutable register"
-  end;
-  { t with
-    name;
-    propagate_name_to = None;
-  }
-
-let renamev ts name = Array.map (fun t -> rename t name) ts
-
-let set_name t name =
-  t.name <- name;
-  match t.propagate_name_to with
-  | None -> ()
-  | Some t' -> t'.name <- name
-
-let identical_except_in_name r ~take_name_from =
-  let shared = {
-    mutability = r.shared.mutability;
-    stamp = r.shared.stamp;
-    typ = r.shared.typ;
-    loc = r.shared.loc;
-    spill = r.shared.spill;
-    part = r.shared.part;
-    is_parameter = r.shared.is_parameter;
-    interf = r.shared.interf;
-    prefer = r.shared.prefer;
-    degree = r.shared.degree;
-    spill_cost = r.shared.spill_cost;
-    visited = r.shared.visited;
-  }
-  in
-  { name = take_name_from.name;
-    propagate_name_to = None;
-    shared;
-    dummy = (fun () -> ());
-  }
-
-let identical_except_in_namev rs ~take_names_from =
-  if Array.length rs <> Array.length take_names_from then
-    failwith "Reg.identical_except_in_namev with different length arrays";
-  Array.init (Array.length rs) (fun index ->
-    identical_except_in_name rs.(index)
-      ~take_name_from:take_names_from.(index))
-
 let first_virtual_reg_stamp = ref (-1)
 
 let reset() =
@@ -277,17 +217,32 @@ let at_same_location reg1 reg2 =
     && Proc.register_class reg1 = Proc.register_class reg2
 
 module With_debug_info = struct
-  module T = struct
-    type debug_info = {
+  module Debug_info = struct
+    type t = {
       holds_value_of : Ident.t;
       part_of_value : int;
       num_parts_of_value : int;
       which_parameter : int option;
     }
 
+    let compare t1 t2 =
+      let c = Ident.compare t1.holds_value_of t2.holds_value_of in
+      if c <> 0 then c
+      else
+        Pervasives.compare
+          (t1.part_of_value, t1.num_parts_of_value, t1.which_parameter)
+          (t2.part_of_value, t2.num_parts_of_value, t2.which_parameter)
+
+    let holds_value_of t = t.holds_value_of
+    let part_of_value t = t.part_of_value
+    let num_parts_of_value t = t.num_parts_of_value
+    let which_parameter t = t.which_parameter
+  end
+
+  module T = struct
     type t = {
       reg : reg;
-      debug_info : debug_info option;
+      debug_info : Debug_info.t option;
     }
 
     let compare t1 t2 =
@@ -298,13 +253,7 @@ module With_debug_info = struct
         | None, None -> 0
         | None, Some _ -> -1
         | Some _, None -> 1
-        | Some di1, Some di2 ->
-          let c = Ident.compare di1.holds_value_of di2.holds_value_of in
-          if c <> 0 then c
-          else
-            Pervasives.compare
-              (di1.part_of_value, di1.num_parts_of_value, di1.which_parameter)
-              (di2.part_of_value, di2.num_parts_of_value, di2.which_parameter)
+        | Some di1, Some di2 -> Debug_info.compare di1 di2
   end
 
   include T
@@ -314,7 +263,7 @@ module With_debug_info = struct
     assert (num_parts_of_value >= 1);
     assert (part_of_value >= 0 && part_of_value < num_parts_of_value);
     assert (match which_parameter with None -> true | Some index -> index >= 0);
-    let debug_info =
+    let debug_info : Debug_info.t =
       { holds_value_of;
         part_of_value;
         num_parts_of_value;
@@ -332,11 +281,6 @@ module With_debug_info = struct
 
   let reg t = t.reg
   let location t = t.reg.loc
-
-  let holds_value_of t = t.holds_value_of
-  let part_of_value t = t.part_of_value
-  let num_parts_of_value t = t.num_parts_of_value
-  let which_parameter t = t.which_parameter
 
   let holds_pointer t =
     match t.reg.typ with
