@@ -15,7 +15,7 @@
 
 open Cmm
 
-type shared = {
+type t = {
   mutability : Cmm.mutability;
   stamp: int;
   mutable typ: Cmm.machtype_component;
@@ -39,13 +39,6 @@ and stack_location =
     Local of int
   | Incoming of int
   | Outgoing of int
-
-type t = {
-  mutable name : Ident.t option;
-  mutable propagate_name_to : t option;
-  shared : shared;
-  dummy : (unit -> unit);
-}
 
 type reg = t
 
@@ -227,27 +220,6 @@ module RegOrder =
     let compare r1 r2 = r1.shared.stamp - r2.shared.stamp
   end
 
-module RegOrder_distinguishing_names_and_locations =
-  struct
-    type t = reg
-    let compare r1 r2 =
-      let c =
-        match r1.name, r2.name with
-        | None, None -> 0
-        | None, Some _ -> -1
-        | Some _, None -> 1
-        | Some name1, Some name2 -> Ident.compare name1 name2
-      in
-      if c <> 0 then c
-      else Pervasives.compare r1.shared.loc r2.shared.loc
-  end
-
-module Set_distinguishing_names_and_locations =
-  Set.Make (RegOrder_distinguishing_names_and_locations)
-
-module Map_distinguishing_names_and_locations =
-  Map.Make (RegOrder_distinguishing_names_and_locations)
-
 module Set = Set.Make(RegOrder)
 module Map = Map.Make(RegOrder)
 
@@ -297,14 +269,117 @@ let set_of_array v =
            if i >= n then Set.empty else Set.add v.(i) (add_all(i+1))
          in add_all 0
 
-let holds_pointer t =
-  match t.shared.typ with
-  | Addr | Val -> true
-  | Int | Float -> false
+let at_same_location reg1 reg2 =
+  (* We need to check the register classes too: two locations both saying
+     "stack offset N" might actually be different physical locations, for
+     example if one is of class "Int" and another "Float" on amd64. *)
+  reg1.shared.loc = reg2.shared.loc
+    && Proc.register_class reg1 = Proc.register_class reg2
 
-let holds_non_pointer t = not (holds_pointer t)
+module With_debug_info = struct
+  module T = struct
+    type debug_info = {
+      holds_value_of : Ident.t;
+      part_of_value : int;
+      num_parts_of_value : int;
+      which_parameter : int option;
+    }
 
-let assigned_to_stack t =
-  match t.shared.loc with
-  | Stack _ -> true
-  | Reg _ | Unknown -> false
+    type t = {
+      reg : reg;
+      debug_info : debug_info option;
+    }
+
+    let compare t1 t2 =
+      let c = RegOrder.compare t1.reg t2.reg in
+      if c <> 0 then c
+      else
+        match t1.debug_info, t2.debug_info with
+        | None, None -> 0
+        | None, Some _ -> -1
+        | Some _, None -> 1
+        | Some di1, Some di2 ->
+          let c = Ident.compare di1.holds_value_of di2.holds_value_of in
+          if c <> 0 then c
+          else
+            Pervasives.compare
+              (di1.part_of_value, di1.num_parts_of_value, di1.which_parameter)
+              (di2.part_of_value, di2.num_parts_of_value, di2.which_parameter)
+  end
+
+  include T
+
+  let create ~reg ~holds_value_of ~part_of_value ~num_parts_of_value
+        ~which_parameter =
+    assert (num_parts_of_value >= 1);
+    assert (part_of_value >= 0 && part_of_value < num_parts_of_value);
+    assert (match which_parameter with None -> true | Some index -> index >= 0);
+    let debug_info =
+      { holds_value_of;
+        part_of_value;
+        num_parts_of_value;
+        which_parameter;
+      }
+    in
+    { reg;
+      debug_info = Some debug_info;
+    }
+
+  let create_without_debug_info ~reg =
+    { reg;
+      debug_info = None;
+    }
+
+  let reg t = t.reg
+  let location t = t.reg.loc
+
+  let holds_value_of t = t.holds_value_of
+  let part_of_value t = t.part_of_value
+  let num_parts_of_value t = t.num_parts_of_value
+  let which_parameter t = t.which_parameter
+
+  let holds_pointer t =
+    match t.reg.typ with
+    | Addr | Val -> true
+    | Int | Float -> false
+
+  let holds_non_pointer t = not (holds_pointer t)
+
+  let assigned_to_stack t =
+    match t.reg.loc with
+    | Stack _ -> true
+    | Reg _ | Unknown -> false
+
+  module Set = struct
+    include Set.Make (T)
+
+    let forget_debug_info t =
+      map (fun t -> reg t) t
+
+    let without_debug_info regs =
+      Set.map (fun reg -> create_without_debug_info ~reg) regs
+
+    let made_unavailable_by_clobber t ~regs_clobbered =
+      Set.fold (fun reg acc ->
+          let made_unavailable =
+            filter (fun reg' -> at_same_location reg' reg)
+              avail_before
+          in
+          union made_unavailable acc)
+        (set_of_array regs_clobbered)
+        (* ~init:*)empty
+  end
+
+  module Set_distinguishing_names_and_locations = struct
+    module T = struct
+      type t = t
+
+      let compare t1 t2 =
+        let c = Ident.compare t1.holds_value_of t2.holds_value_of in
+        if c <> 0 then c
+        else Pervasives.compare t1.reg.loc t2.reg.loc
+    end
+
+    include Set.Make (T)
+  end
+end

@@ -15,14 +15,13 @@
 
 (* Pseudo-registers *)
 
-type shared =
-  { mutability : Cmm.mutability;        (* Whether contents are mutable *)
+type t =
+  { mutable name: string;               (* Name (for printing) *)
+    mutability : Cmm.mutability;        (* Whether contents are mutable *)
     stamp: int;                         (* Unique stamp *)
     mutable typ: Cmm.machtype_component;(* Type of contents *)
     mutable loc: location;              (* Actual location *)
     mutable spill: bool;                (* "true" to force stack allocation  *)
-    mutable part: int option;           (* Zero-based index of part of value *)
-    mutable is_parameter: int option;   (* Which function parameter it is *)
     mutable interf: shared list;         (* Other regs live simultaneously *)
     mutable prefer: (shared * int) list; (* Preferences for other regs *)
     mutable degree: int;                 (* Number of other regs live sim. *)
@@ -39,24 +38,7 @@ and stack_location =
   | Incoming of int
   | Outgoing of int
 
-type t = {
-  mutable name : Ident.t option;
-  (** [name] specifies any identifier corresponding to this register in the
-      source code of the program being compiled. *)
-  mutable propagate_name_to : t option;
-  (** Another register to which the name of this register should be
-      propagated if it is changed.  This is kind of distasteful, but
-      probably the least painful solution to ensure correct naming of
-      hard registers used for the return values from function calls.  (There
-      is an intermediate move which otherwise inhibits name propagation.) *)
-  shared : shared;
-  (** Multiple values of type [t]---so long as they are [Immutable]---may
-      share the same underlying data, with the exception of the name.  This
-      enables us to have fast update of registers' properties (such as
-      locations by the register allocator) and also fine-grained tracking of
-      names. *)
-  dummy : (unit -> unit);
-}
+type reg = t
 
 val dummy: t
 val create: ?mutability:Cmm.mutability -> Cmm.machtype_component -> t
@@ -64,7 +46,7 @@ val createv: Cmm.machtype -> t array
 val createv_like: ?mutability:Cmm.mutability -> t array -> t array
 
 (** Create a fresh register with the following properties taken from the
-    given register: [typ], [mutability], [is_parameter] and [name]. *)
+    given register: [typ], [mutability] and [name]. *)
 val clone: t -> t
 
 val at_location: Cmm.machtype_component -> location -> t
@@ -72,54 +54,8 @@ val at_location: Cmm.machtype_component -> location -> t
 (** Whether the register might hold the value of a mutable Cmm variable. *)
 val immutable : t -> bool
 
-(** Change the name of a register, respecting [propagate_name_to].
-    Note that doing this "back propagates" names through the code. *)
-val set_name : t -> Ident.t option -> unit
-
-(** Whether we have a name for the register that corresponds to a name in
-    the source text of the program being compiled.
-
-    Beware: In previous versions of the compiler, [anonymous] was instead a
-    property relating to whether the register held the value of a mutable
-    Cmm variable.
-*)
-val anonymous : t -> bool
-
-(** [anonymise t] creates a new register with no name that shares the
-    underlying properties of [t].  When [t] changes (e.g. the register
-    allocator assigns it a location), so does the new register.
-    This function will raise an exception if [t] is [Mutable]. *)
-val anonymise : t -> t
-
-(** [rename t] creates a new register with the given name that (in the
-    same way as for [anonymise], above) shares the underlying properties
-    of [t].  It also raises an exception if [t] is [Mutable]. *)
-val rename : t -> Ident.t option -> t
-
-(** Like [rename], but for an array of registers. *)
-val renamev : t array -> Ident.t option -> t array
-
-(* CR mshinwell: consider improving names *)
-(** [identical_except_in_namev t ~take_names_from] takes registers and names
-    elementwise from [t] and [take_names_from] respectively and returns a new
-    array containing *copies* of the registers with the new names (which may
-    be "None").  Note that the [shared] portion is copied as well, not
-    shared! *)
-val identical_except_in_namev : t array -> take_names_from:t array -> t array
-
-(* Like [identical_except_in_namev] except just for one register. *)
-val identical_except_in_name : t -> take_name_from:t -> t
-
 (* Name for printing *)
 val name : t -> string
-
-val holds_pointer : t -> bool
-val holds_non_pointer : t -> bool
-
-val assigned_to_stack : t -> bool
-
-module Set_distinguishing_names_and_locations : Set.S with type elt = t
-module Map_distinguishing_names_and_locations : Map.S with type key = t
 
 module Set: Set.S with type elt = t
 module Map: Map.S with type key = t
@@ -134,3 +70,59 @@ val reset: unit -> unit
 val all_registers: unit -> shared list
 val num_registers: unit -> int
 val reinit: unit -> unit
+
+module With_debug_info : sig
+  type t
+  (** A register equipped with information used for generating debugging
+      information. *)
+
+  val create
+     : reg:Reg.t
+    -> holds_value_of:Ident.t
+    -> part_of_value:int
+    -> num_parts_of_value:int
+    -> which_parameter:int option
+    -> t
+
+  val reg : t -> Reg.t
+  val location : t -> location
+
+  val holds_value_of : Ident.t -> t
+  (** The identifier that the register holds (part of) the value of. *)
+
+  val part_of_value : t -> int
+  val num_parts_of_value : t -> int
+
+  val which_parameter : t -> int option
+  (** If the register corresponds to a function parameter, the value returned
+      is the zero-based index of said parameter; otherwise it is [None]. *)
+
+  val at_same_location : t -> reg -> bool
+  (** [at_same_location t reg] holds iff the register [t] corresponds to
+      the same (physical or pseudoregister) location as the register [reg],
+      which is not equipped with debugging information. *)
+
+  val holds_pointer : t -> bool
+  val holds_non_pointer : t -> bool
+
+  val assigned_to_stack : t -> bool
+  (** [assigned_to_stack t] holds iff the location of [t] is a hard stack
+      slot. *)
+
+  val clear_debug_info : t -> t
+
+  module Set : sig
+    include Set.S with type elt = t
+
+    val mem_reg : t -> reg -> bool
+
+    val forget_debug_info : t -> Set.t
+
+    val without_debug_info : Set.t -> t
+
+    val made_unavailable_by_clobber : t -> regs_clobbered:Set.t -> t
+    (** [made_unavailable_by_clobber t ~regs_clobbered] returns the largest
+        subset of [t] whose locations do not overlap with any registers in
+        [regs_clobbered].  (Think of [t] as a set of available registers.) *)
+  end
+end

@@ -12,7 +12,17 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Filter availability sets down to those registers which are going
-    to be used for finding values of variables in the debugger. *)
+(** Register availability sets. *)
 
-val fundecl : Linearize.fundecl -> Linearize.fundecl
+type t =
+  | Ok of Reg.With_debug_info.Set.t
+  | Unreachable
+
+val inter : t -> t -> t
+(** Intersection of availabilities. *)
+
+val canonicalise : t -> t
+(** Return a subset of the given availability set which contains no registers
+    that are not associated with debug info (and holding values of
+    non-persistent identifiers); and where no two registers share the same
+    location. *)

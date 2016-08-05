@@ -66,6 +66,12 @@ type operation =
   | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
   | Ifloatofint | Iintoffloat
   | Ispecific of Arch.specific_operation
+  | Iname_for_debugger of { ident : Ident.t; which_parameter : int option; }
+    (** [Iname_for_debugger] has the following semantics:
+        (a) The argument register(s) is/are deemed to contain the value of the
+            given identifier.
+        (b) Any information about other [Reg.t]s that have been previously
+            deemed to hold the value of that identifier is forgotten. *)
 
 type instruction =
   { desc: instruction_desc;
@@ -75,7 +81,7 @@ type instruction =
     dbg: Debuginfo.t;
     phantom_available_before: Ident.Set.t;
     mutable live: Reg.Set.t;
-    mutable available_before: Reg.Set.t;
+    mutable available_before: availability;
   }
 
 and instruction_desc =

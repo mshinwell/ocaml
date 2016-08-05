@@ -65,6 +65,7 @@ type operation =
   | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
   | Ifloatofint | Iintoffloat
   | Ispecific of Arch.specific_operation
+  | Iname_for_debugger of Ident.t
 
 type instruction =
   { desc: instruction_desc;
@@ -74,7 +75,7 @@ type instruction =
     dbg: Debuginfo.t;
     phantom_available_before : Ident.Set.t;
     mutable live: Reg.Set.t;
-    mutable available_before: Reg.Set.t;
+    mutable available_before: Reg_availability.t;
   }
 
 and instruction_desc =

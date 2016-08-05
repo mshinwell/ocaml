@@ -12,14 +12,17 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* CR pchambart: I'm still not convinced by the name of the pass.
-   unclobered_regs maybe ? *)
+(* XCR pchambart: I'm still not convinced by the name of the pass.
+   unclobered_regs maybe ?
+   mshinwell: I think it's the usual name.  It matches what's used in
+   CompCert for something similar IIUC.
+*)
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-module List = ListLabels
 module M = Mach
 module R = Reg
+module RD = Reg_with_debug_info
 
 (* CR pchambart is this only needed for debugging ? *)
 let fun_name = ref ""
@@ -30,47 +33,23 @@ let avail_at_exit_table = Hashtbl.create 42
 (* CR pchambart: None here is in some way the same thing as all_regs *)
 let avail_at_raise = ref None
 
-(* CR pchambart: not 'interessting' but contain source level relevant value.
+(* XCR pchambart: not 'interessting' but contain source level relevant value.
    This may be easier to just filter later (when printing ?).
    Keeping those in gdb might help debug the code generation such
    as corrupted values due to unregistered roots.
-   mshinwell: filtering on name now moved to [Available_filtering].  Still
-   need to think about "part".
+   mshinwell: filtering on name now moved to [Available_filtering]
+   (although maybe that's still too early?).
 *)
-let reg_is_interesting reg =
-  (* CR-soon mshinwell: handle values split across multiple registers (and
-     below) *)
-  reg.R.shared.part = None
 
-let _instr_arg i = R.Set.filter reg_is_interesting (R.set_of_array i.M.arg)
-let instr_res i = R.Set.filter reg_is_interesting (R.set_of_array i.M.res)
-(*let instr_live i = R.Set.filter reg_is_interesting i.M.live*)
-
-(* A special sentinel value meaning "all registers available"---used when a
-   point in the code is unreachable. *)
-(* CR-pchambart it does not really convey the fact that it's
+(* XCR-pchambart it does not really convey the fact that it's
    unreachable. Having a sum type to represent that may be cleaner.
    I don't think this allocation cost would really matter *)
-let all_regs = R.set_of_array [| R.dummy |]
 
-(* Intersection, taking into account the special meaning of [all_regs]. *)
-let inter regs1 regs2 =
-  if regs1 == all_regs then regs2
-  else if regs2 == all_regs then regs1
-  else R.Set.inter regs1 regs2
-
-(* CR mshinwell: move to [Reg].  Do we need to use this elsewhere? *)
-let regs_have_same_location reg1 reg2 =
-  (* We need to check the register classes too: two locations both saying
-     "stack offset N" might actually be different physical locations, for
-     example if one is of class "Int" and another "Float" on amd64. *)
-  reg1.R.shared.R.loc = reg2.R.shared.R.loc
-    && Proc.register_class reg1 = Proc.register_class reg2
-
-let operation_can_raise = function
-  | M.Icall_ind | M.Icall_imm _ | M.Iextcall _
-  | M.Iintop M.Icheckbound | M.Iintop_imm (M.Icheckbound, _)
-  | M.Ialloc _ -> true
+let operation_can_raise (op : Mach.operation) =
+  match op with
+  | Icall_ind | Icall_imm _ | Iextcall _
+  | Iintop Icheckbound | Iintop_imm (Icheckbound, _)
+  | Ialloc _ -> true
   | _ -> false
 
 let augment_availability_at_raise avail =
@@ -90,28 +69,9 @@ let augment_availability_at_raise avail =
    from the previous instruction are also available at this point.
 
    The [available_before] field of each instruction is updated by this
-   function to the subset of the [avail_before] argument consisting of those
-   registers that are tagged with identifier names.
-   (The rationale is that these are the registers we may be interested in
-   referencing, by name, when debugging.)
+   function.
 *)
 let rec available_regs (instr : M.instruction) ~avail_before =
-  if not (avail_before == all_regs) then begin
-    ()
-(* CR mshinwell: investigate these assertions.  It seems like we're breaking
-   the first one due to the special case below.  The second one should still
-   hold though I think *)
-    (* CR pchambart: The difference between live and avail_before is
-       probably due to the 'interesting' filter. *)
-(*
-    (* A register should not be an input to an instruction unless it is
-       available. *)
-    assert (R.Set.subset (instr_arg instr) avail_before);
-    (* Every register that is live across an instruction should also be
-       available before the instruction. *)
-    assert (R.Set.subset (instr_live instr) avail_before)
-*)
-  end;
   let avail_before =
     (* If this instruction might expand into multiple machine instructions
        and clobber registers during that code sequence, make sure any
@@ -122,61 +82,71 @@ let rec available_regs (instr : M.instruction) ~avail_before =
        allocation code.
        Should we be using "available across" instead of "available before"?
        It's not clear that actually solves the problem. *)
-    (* CR pchambart: This test should probably surround everything,
+    (* XCR pchambart: This test should probably surround everything,
        especialy in the case where it is changed to a sum type. *)
-    if avail_before == all_regs then
-      all_regs
-    else
-      match instr.M.desc with
+    match avail_before with
+    | Unreachable -> Unreachable
+    | Ok avail_before ->
+      (* Every register that is live across an instruction should also be
+          available before the instruction.  (We cannot assert that a register
+          should not be an input to an instruction unless it is available due
+          to the special case (about multiple instructions) below.) *)
+      (* XCR pchambart: The difference between live and avail_before is
+        probably due to the 'interesting' filter. *)
+      assert (R.Set.subset (instr_live instr)
+        (RD.Set.forget_debug_info avail_before));
+      match instr.desc with
       | Iop (Ialloc _) ->
         let made_unavailable =
-          R.Set.fold (fun reg acc ->
-              let made_unavailable =
-                R.Set.filter (regs_have_same_location reg) avail_before
-              in
-              R.Set.union made_unavailable acc)
-            (R.set_of_array (Proc.destroyed_at_oper instr.M.desc))
-            (* ~init:*)R.Set.empty
+          RD.Set.made_unavailable_by_clobber avail_before
+            ~regs_clobbered:(Proc.destroyed_at_oper instr.desc)
         in
-        R.Set.diff avail_before made_unavailable
+        RD.Set.diff avail_before made_unavailable
       (* CR mshinwell: should have a hook for Ispecific cases *)
-      | _ -> avail_before
-  in
-  let avail_before =
-    (* Watch out for no-op moves that change the name of a register. *)
-    match instr.desc with
-    | Iop Imove ->
-      begin match instr.arg, instr.res with
-      | [| arg |], [| res |] ->
-        if reg_is_interesting res
-          && arg.shared.loc = res.shared.loc
-          && Reg.immutable arg
-          && Reg.immutable res
-        then begin
-          R.Set.add res avail_before
-        end else begin
-          avail_before
-        end
-      | _ -> avail_before
-      end
-    | _ -> avail_before
+      | _ -> Ok avail_before
   in
   (* CR pchambart: Given how it's used I would rename it to
      available_across rather than available_before. *)
-  instr.M.available_before <- avail_before;
+  instr.available <- avail_before;
   let avail_after =
-    if avail_before == all_regs then
-      all_regs  (* This instruction is unreachable. *)
-    else begin
-      let open Mach in
+    match avail_before with
+    | Unreachable -> Unreachable
+    | Ok avail_before ->
       match instr.desc with
-      | Iend -> avail_before
-      | Ireturn | Iop Itailcall_ind | Iop (Itailcall_imm _) -> all_regs
+      | Iend -> Ok avail_before
+      | Ireturn | Iop Itailcall_ind | Iop (Itailcall_imm _) ->
+        Unreachable
+      | Iop (Iname_for_debugger { ident; which_parameter; }) ->
+        (* First forget about any existing debug info to do with [ident]. *)
+        let forgetting_ident =
+          RD.Set.map (fun reg ->
+              if RD.holds_value_of reg ident then RD.clear_debug_info reg
+              else reg)
+            avail_before
+        in
+        let avail_after = ref forgetting_ident in
+        let num_parts_of_value = Array.length instr.arg in
+        (* Add debug info about [ident], but only for registers that are known
+           to be available. *)
+        for part_of_value = 0 to num_parts_of_value - 1 do
+          let reg = instr.arg.(part_of_value) in
+          if RD.Set.mem_reg forgetting_ident reg then begin
+            let reg =
+              RD.create ~reg
+                ~holds_value_of:ident
+                ~part_of_value
+                ~num_parts_of_value
+                ~which_parameter
+            in
+            avail_after := RD.Set.add reg !avail_after
+          end
+        done;
+        !avail_after
       | Iop op ->
         if operation_can_raise op then begin
           augment_availability_at_raise avail_before
         end;
-        let candidate_avail_after =
+        let avail_after =
           match op with
           | Icall_ind | Icall_imm _ | Iextcall _ ->
             (* Registers become unavailable across a call unless either:
@@ -193,9 +163,9 @@ let rec available_regs (instr : M.instruction) ~avail_before =
                so not extending their range to the end of the call insn
                should do it.
                mshinwell: fixed in Available_ranges, need a comment here tho *)
-            R.Set.union (R.Set.filter R.assigned_to_stack avail_before)
+            RD.Set.union (RD.Set.filter RD.assigned_to_stack avail_before)
               (* CR mshinwell: deal with this "holds_non_pointer" thing *)
-              (R.Set.filter R.holds_non_pointer avail_before)
+              (RD.Set.filter RD.holds_non_pointer avail_before)
           | _ -> avail_before
         in
         let made_unavailable =
@@ -205,34 +175,18 @@ let rec available_regs (instr : M.instruction) ~avail_before =
              2. being clobbered by the instruction writing out results.  The
                 special case for moves above keeps the following code
                 straightforward. *)
-          let unavailable_if_in_same_reg_as =
+          let regs_clobbered =
             R.Set.union (R.set_of_array (Proc.destroyed_at_oper instr.desc))
-              (R.set_of_array instr.res)  (* N.B. instr.res, not "results" *)
+              (R.set_of_array instr.res)
           in
-          R.Set.fold (fun reg acc ->
-              let made_unavailable =
-                R.Set.filter (regs_have_same_location reg)
-                  candidate_avail_after
-              in
-              R.Set.union made_unavailable acc)
-            unavailable_if_in_same_reg_as
-            (* ~init:*)R.Set.empty
+          RD.Set.made_unavailable_by_clobber avail_after ~regs_clobbered
         in
-(*
-Format.eprintf "%s: %a: results %a CAA %a made_unavailable %a\n%!"
-  !fun_name
-  (Printmach.operation op instr.arg) instr.res
-  Printmach.regset (R.set_of_array instr.res)
-  Printmach.regset candidate_avail_after
-  Printmach.regset made_unavailable;
-*)
-        let results = instr_res instr in
-        R.Set.union results (R.Set.diff candidate_avail_after made_unavailable)
+        RD.Set.union (RD.Set.without_debug_info instr.res) avail_after
       | Iifthenelse (_, ifso, ifnot) -> join [ifso; ifnot] ~avail_before
       | Iswitch (_, cases) -> join (Array.to_list cases) ~avail_before
       | Iloop body ->
         let avail_after = ref avail_before in
-        (* This should probably be instr.available_before to do a
+        (* CR pchambart: This should probably be instr.available_before to do a
            single loop in case of nested Iloop.  *)
         begin try
           while true do
@@ -247,7 +201,7 @@ Format.eprintf "%s: %a: results %a CAA %a made_unavailable %a\n%!"
               inter !avail_after
                 (available_regs body ~avail_before:!avail_after)
             in
-            if R.Set.equal !avail_after avail_after' then raise Exit;
+            if RD.Set.equal !avail_after avail_after' then raise Exit;
             avail_after := avail_after'
           done
         with Exit -> ()
@@ -272,47 +226,44 @@ Format.eprintf "%s: %a: results %a CAA %a made_unavailable %a\n%!"
         with Not_found ->
           Hashtbl.add avail_at_exit_table nfail avail_before
         end;
-        all_regs
+        Unreachable
       | Itrywith (body, handler) ->
         let saved_avail_at_raise = !avail_at_raise in
         avail_at_raise := None;
         let after_body = available_regs body ~avail_before in
         let avail_before_handler =
           match !avail_at_raise with
-          | None -> all_regs  (* The handler is unreachable. *)
+          | None -> Unreachable
           | Some avail -> avail
         in
         avail_at_raise := saved_avail_at_raise;
-(*
-        assert (not (reg_is_interesting Proc.loc_exn_bucket));
-*)
         inter after_body
           (available_regs handler ~avail_before:avail_before_handler)
       | Iraise _ ->
         augment_availability_at_raise avail_before;
-        all_regs
+        Unreachable
     end
   in
-  match instr.M.desc with
-  | M.Iend -> avail_after
-  | _ -> available_regs instr.M.next ~avail_before:avail_after
+  match instr.desc with
+  | Iend -> avail_after
+  | _ -> available_regs instr.next ~avail_before:avail_after
 
 and join branches ~avail_before =
-  let avails = List.map branches ~f:(available_regs ~avail_before) in
+  let avails = List.map (available_regs ~avail_before) branches in
   begin match avails with
   | [] -> avail_before
-  | avail::avails -> List.fold_left avails ~init:avail ~f:inter
+  | avail::avails -> List.fold_left avails avail inter
   end
 
-let fundecl f =
-  (* CR pchambart: this should be cleaned by the Icatch instruction.
+let fundecl (f : Mach.fundecl) =
+  (* XCR pchambart: this should be cleaned by the Icatch instruction.
      It should be replaced by an assertion *)
-  Hashtbl.clear avail_at_exit_table;
+  assert (Hashtbl.length avail_at_exit_table = 0);
   avail_at_raise := None;
-  fun_name := f.M.fun_name;
-  let fun_args = R.set_of_array f.M.fun_args in
-  let first_instr_arg = R.set_of_array f.M.fun_body.M.arg in
+  fun_name := f.fun_name;
+  let fun_args = R.set_of_array f.fun_args in
+  let first_instr_arg = R.set_of_array f.fun_body.arg in
   assert (R.Set.subset first_instr_arg fun_args);
-  let avail_before = R.Set.filter reg_is_interesting fun_args in
-  ignore ((available_regs f.M.fun_body ~avail_before) : R.Set.t);
+  let avail_before = RD.Set.without_debug_info fun_args in
+  ignore ((available_regs f.fun_body ~avail_before) : RD.Set.t);
   f

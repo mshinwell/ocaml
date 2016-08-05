@@ -15,6 +15,7 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 module L = Linearize
+module RD = Reg.With_debug_info
 
 let rewrite_label env label =
   match Numbers.Int.Map.find label env with
@@ -494,21 +495,21 @@ module Make_ranges = Make (struct
      relation that identifies two registers iff they have the same name and
      location. *)
   module Key = struct
-    type t = Reg.t
+    type t = RD.t
 
     let assert_valid (t : t) =
-        assert (t.name <> None);  (* cf. [Available_filtering] *)
+      assert (t.name <> None);  (* cf. [Available_filtering] *)
 
-    module Map = Reg.Map_distinguishing_names_and_locations
-    module Set = Reg.Set_distinguishing_names_and_locations
+    module Map = RD.Map_distinguishing_names_and_locations
+    module Set = RD.Set_distinguishing_names_and_locations
 
     let needs_stack_offset_capture t =
-      if Reg.assigned_to_stack t then Some t else None
+      if RD.assigned_to_stack t then Some t else None
   end
 
   (* CR mshinwell: improve efficiency *)
   let available_before (insn : L.instruction) =
-    Key.Set.of_list (Reg.Set.elements insn.available_before)
+    Key.Set.of_list (RD.Set.elements insn.available_before)
 
   let end_pos_offset ~prev_insn ~key:reg =
     (* If the range is for a register destroyed by a call (which for
@@ -535,10 +536,10 @@ module Make_ranges = Make (struct
       match prev_insn.L.desc with
       | Lop ((Icall_ind | Icall_imm _ | Iextcall _) as op) ->
         let destroyed_locations =
-          Array.map (fun (reg : Reg.t) -> reg.shared.loc)
+          Array.map (fun (reg : Reg.t) -> reg.loc)
             (Proc.destroyed_at_oper (Mach.Iop op))
         in
-        if Array.mem reg.Reg.shared.loc destroyed_locations then
+        if Array.mem (RD.location reg) destroyed_locations then
           Some (-1)
         else
           None
@@ -550,11 +551,7 @@ module Make_ranges = Make (struct
       Available_subrange.create ~reg ~start_pos ~start_insn ~end_pos
         ~end_pos_offset
     in
-    let ident =
-      match reg.Reg.name with
-      | Some name -> name
-      | None -> assert false
-    in
+    let ident = RD.holds_value_of reg in
     Some (subrange, ident)
 end)
 
@@ -613,7 +610,7 @@ let create ~fundecl =
     Make_ranges.process_instruction t ~fundecl ~first_insn ~insn:first_insn
       ~prev_insn:None
       ~open_subrange_start_insns:
-        Reg.Map_distinguishing_names_and_locations.empty
+        RD.Map_distinguishing_names_and_locations.empty
   in
   let first_insn =
     Make_phantom_ranges.process_instruction t ~fundecl ~first_insn
