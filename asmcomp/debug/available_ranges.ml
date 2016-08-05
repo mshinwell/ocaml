@@ -59,6 +59,7 @@ module Available_subrange : sig
   val end_pos : t -> L.label
   val end_pos_offset : t -> int option
   val location : t -> unit location
+  val is_parameter : t -> int option
   val offset_from_stack_ptr_in_bytes : t -> int option
 
   val rewrite_labels : t -> env:int Numbers.Int.Map.t -> t
@@ -74,7 +75,8 @@ end = struct
     | Read_field of { address : 'a location; field : int; }
     | Offset_pointer of { address : 'a location; offset_in_words : int; }
 
-  type start_insn_or_phantom = L.instruction location
+  (* XXX Improve this "int option" (for [is_parameter]) *)
+  type start_insn_or_phantom = (L.instruction * (int option)) location
 
   type t = {
     (* CR-soon mshinwell: find a better name for [start_insn] *)
@@ -86,7 +88,7 @@ end = struct
     end_pos_offset : int option;
   }
 
-  let create ~(reg : Reg.t) ~(start_insn : Linearize.instruction)
+  let create ~(reg : Reg.t) ~is_parameter ~(start_insn : Linearize.instruction)
         ~start_pos ~end_pos ~end_pos_offset =
     assert (reg.name <> None);
     match start_insn.desc with
@@ -98,7 +100,7 @@ end = struct
         assert (reg.shared.loc = start_insn.arg.(0).Reg.shared.loc)
       | _ -> ()
       end;
-      { start_insn = Reg (reg, start_insn);
+      { start_insn = Reg (reg, (start_insn, is_parameter));
         start_pos;
         end_pos;
         end_pos_offset;
@@ -140,6 +142,15 @@ end = struct
         Read_symbol_field { symbol; field; }
     in
     convert_location t.start_insn
+
+  let is_parameter t =
+    match t.start_insn with
+    | Reg (reg, (_start_insn, is_parameter)) -> is_parameter
+      (* CR-soon mshinwell: Phantom ones could in theory be parameters too
+         (e.g. a specialised arg maybe?), although I'm not sure that can
+         happen at the moment since Flambda always marks removed arguments
+         with Dead phantom lets. *)
+    | Phantom _ -> None
 
   let offset_from_stack_ptr_in_bytes t =
     let rec offset (start_insn : start_insn_or_phantom) =
@@ -243,14 +254,7 @@ end = struct
        variable might not be marked as a parameter. *)
     match List.rev t.subranges with
     | [] -> assert false
-    | subrange::_ ->
-      (* CR-soon mshinwell: Phantom ones could in theory be parameters too
-         (e.g. a specialised arg maybe?), although I'm not sure that can
-         happen at the moment since Flambda always marks removed arguments
-         with Dead phantom lets. *)
-      match Available_subrange.location subrange with
-      | Reg (reg, _) -> reg.Reg.shared.Reg.is_parameter
-      | Phantom _ -> None
+    | subrange::_ -> Available_subrange.is_parameter subrange
 
   let extremities t =
     (* We ignore any [end_pos_offsets] here; should be ok. *)
@@ -554,12 +558,17 @@ module Make_ranges = Make (struct
 
   let create_subrange ~fundecl:_ ~key:reg ~start_pos ~start_insn ~end_pos
         ~end_pos_offset =
-    let subrange =
-      Available_subrange.create ~reg:(RD.reg reg) ~start_pos ~start_insn
-        ~end_pos ~end_pos_offset
-    in
-    let ident = RD.holds_value_of reg in
-    Some (subrange, ident)
+    match RD.debug_info reg with
+    | None -> None
+    | Some debug_info ->
+      let subrange =
+        Available_subrange.create ~reg:(RD.reg reg)
+          ~is_parameter:(RD.Debug_info.is_parameter debug_info)
+          ~start_pos ~start_insn
+          ~end_pos ~end_pos_offset
+      in
+      let ident = RD.holds_value_of reg in
+      Some (subrange, ident)
 end)
 
 module Make_phantom_ranges = Make (struct
