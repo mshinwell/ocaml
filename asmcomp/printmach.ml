@@ -46,7 +46,7 @@ let reg_shared ppf shared =
 
 let reg ppf r =
   let name = Reg.name r in
-  if r <> "" then begin
+  if name <> "" then begin
     fprintf ppf "%s" (Reg.name r)
   end else begin
     fprintf ppf "%s"
