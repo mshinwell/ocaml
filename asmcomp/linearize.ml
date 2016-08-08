@@ -31,7 +31,7 @@ type instruction =
     res: Reg.t array;
     dbg: Debuginfo.t;
     live: Reg.Set.t;
-    mutable available_before: Reg.Set.t;
+    mutable available_before: Reg_availability.t;
     mutable phantom_available_before: Ident.Set.t;
   }
 
