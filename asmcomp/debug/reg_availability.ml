@@ -27,6 +27,12 @@ let inter regs1 regs2 =
   | Ok avail1, Ok avail2 ->
     Ok (RD.Set.inter avail1 avail2)
 
+let equal t1 t2 =
+  match t1, t2 with
+  | Unreachable, Unreachable -> true
+  | Unreachable, Ok _ | Ok _, Unreachable -> false
+  | Ok regs1, Ok regs2 -> RD.Set.equal regs1 regs2
+
 let canonicalise availability =
   match availability with
   | Unreachable -> Unreachable
