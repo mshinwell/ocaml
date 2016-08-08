@@ -24,8 +24,8 @@ module M = Mach
 module R = Reg
 module RD = Reg_with_debug_info
 
-(* CR pchambart is this only needed for debugging ? *)
-let fun_name = ref ""
+(* XCR pchambart is this only needed for debugging ?
+   mshinwell: yes, removed *)
 
 (* CR pchambart I'm not certain that exits numbers cannot be nested:
    every other pass uses a list for that I assume *)
@@ -107,7 +107,7 @@ let rec available_regs (instr : M.instruction) ~avail_before =
   in
   (* CR pchambart: Given how it's used I would rename it to
      available_across rather than available_before. *)
-  instr.available <- avail_before;
+  instr.available_before <- avail_before;
   let avail_after =
     match avail_before with
     | Unreachable -> Unreachable
@@ -242,7 +242,6 @@ let rec available_regs (instr : M.instruction) ~avail_before =
       | Iraise _ ->
         augment_availability_at_raise avail_before;
         Unreachable
-    end
   in
   match instr.desc with
   | Iend -> avail_after
@@ -260,7 +259,6 @@ let fundecl (f : Mach.fundecl) =
      It should be replaced by an assertion *)
   assert (Hashtbl.length avail_at_exit_table = 0);
   avail_at_raise := None;
-  fun_name := f.fun_name;
   let fun_args = R.set_of_array f.fun_args in
   let first_instr_arg = R.set_of_array f.fun_body.arg in
   assert (R.Set.subset first_instr_arg fun_args);

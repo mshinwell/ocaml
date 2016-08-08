@@ -38,8 +38,6 @@ and stack_location =
   | Incoming of int
   | Outgoing of int
 
-type reg = t
-
 val dummy: t
 val create: ?mutability:Cmm.mutability -> Cmm.machtype_component -> t
 val createv: Cmm.machtype -> t array
@@ -53,6 +51,8 @@ val at_location: Cmm.machtype_component -> location -> t
 
 (** Whether the register might hold the value of a mutable Cmm variable. *)
 val immutable : t -> bool
+
+val all_immutable : t list -> bool
 
 (* Name for printing *)
 val name : t -> string
@@ -70,64 +70,3 @@ val reset: unit -> unit
 val all_registers: unit -> t list
 val num_registers: unit -> int
 val reinit: unit -> unit
-
-module With_debug_info : sig
-  module Debug_info : sig
-    type t
-
-    val holds_value_of : Ident.t -> t
-    (** The identifier that the register holds (part of) the value of. *)
-
-    val part_of_value : t -> int
-    val num_parts_of_value : t -> int
-
-    val which_parameter : t -> int option
-    (** If the register corresponds to a function parameter, the value returned
-        is the zero-based index of said parameter; otherwise it is [None]. *)
-  end
-
-  type t
-  (** A register equipped with information used for generating debugging
-      information. *)
-
-  val create
-     : reg:Reg.t
-    -> holds_value_of:Ident.t
-    -> part_of_value:int
-    -> num_parts_of_value:int
-    -> which_parameter:int option
-    -> t
-
-  val reg : t -> Reg.t
-  val location : t -> location
-  val debug_info : t -> Debug_info.t option
-
-  val at_same_location : t -> reg -> bool
-  (** [at_same_location t reg] holds iff the register [t] corresponds to
-      the same (physical or pseudoregister) location as the register [reg],
-      which is not equipped with debugging information. *)
-
-  val holds_pointer : t -> bool
-  val holds_non_pointer : t -> bool
-
-  val assigned_to_stack : t -> bool
-  (** [assigned_to_stack t] holds iff the location of [t] is a hard stack
-      slot. *)
-
-  val clear_debug_info : t -> t
-
-  module Set : sig
-    include Set.S with type elt = t
-
-    val mem_reg : t -> reg -> bool
-
-    val forget_debug_info : t -> Set.t
-
-    val without_debug_info : Set.t -> t
-
-    val made_unavailable_by_clobber : t -> regs_clobbered:Set.t -> t
-    (** [made_unavailable_by_clobber t ~regs_clobbered] returns the largest
-        subset of [t] whose locations do not overlap with any registers in
-        [regs_clobbered].  (Think of [t] as a set of available registers.) *)
-  end
-end

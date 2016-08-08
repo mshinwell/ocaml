@@ -25,6 +25,8 @@ type mutability =
   | Mutable
   | Immutable
 
+val join_mutability : mutability -> mutability -> mutability
+
 (* - [Val] denotes a valid OCaml value: either a pointer to the beginning
      of a heap block, an infix pointer if it is preceded by the correct
      infix header, or a 2n+1 encoded integer.

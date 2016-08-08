@@ -613,6 +613,10 @@ method emit_expr env exp =
       begin match self#emit_expr env e1 with
         None -> None
       | Some r1 ->
+        let naming_op =
+          Iname_for_debugger { ident = v; which_parameter = None; }
+        in
+        self#insert_op env naming_op r1 [| |];
         self#adjust_types r1 rv; self#insert_moves env r1 rv; Some [||]
       end
   | Ctuple [] ->
@@ -768,27 +772,39 @@ method private emit_sequence env exp =
   let r = s#emit_expr env exp in
   (r, s)
 
-method private bind_let env mut v r1 =
-  let use_new_regs () =
-    let rv = Reg.createv_like r1 ~mutability:mut in
-    self#insert_moves env r1 rv;
-    name_regs v rv;
-    { env with idents = Tbl.add v rv env.idents; }
+method private bind_let env binding_mutable ident r1 =
+  let existing_regs_mutable =
+    if Reg.all_immutable r1 then Immutable else Mutable
   in
-  (* We check [mut] to avoid retrospectively changing registers from
-     [Immutable] to [Mutable]. *)
-  match mut with
-  | Immutable ->
-    if all_regs_immutable r1 then begin
-      (* Note that this naming may back-propagate, but will not do so
-         across a name-changing operation (at which point it might be wrong,
-         e.g. for a 2-address arithmetic instruction). *)
+  let result =
+    match Cmm.join_mutability existing_regs_mutable binding_mutable with
+    | Immutable ->
+      name_regs ident r1;
+      { env with idents = Tbl.add ident r1 env.idents; }
+    | Mutable ->
+      let rv = Reg.createv_like r1 in
+      name_regs ident rv;
+      self#insert_moves r1 rv;
+      { env with idents = Tbl.add ident rv env.idents; }
+  in
+  let naming_op = Iname_for_debugger { ident; which_parameter = None; } in
+  self#insert_op env naming_op rv [| |];
+  result
+
+
+(*
+method private bind_let env mut v r1 =
+  let result =
+    if Reg.all_immutable r1 then begin
       name_regs v r1;
-      { env with idents = Tbl.add v r1 env.idents; }
+      Tbl.add v r1 env
     end else begin
-      use_new_regs ()
+      let rv = Reg.createv_like r1 in
+      name_regs v rv;
+      self#insert_moves r1 rv;
+      Tbl.add v rv env
     end
-  | Mutable -> use_new_regs ()
+*)
 
 method private emit_parts env exp =
   if self#is_simple_expr exp then
@@ -802,12 +818,8 @@ method private emit_parts env exp =
         else begin
           (* The normal case *)
           let id = Ident.create "bind" in
-          if all_regs_immutable r then begin
-            (* r is a temporary, unshared register; use it directly.
-               Back-propagation of names is similar to [bind_let]. *)
-            if Array.for_all Reg.anonymous r then begin
-              name_regs id r
-            end;
+          if Reg.all_immutable r then begin
+            name_regs id r;
             Some (Cvar id, { env with idents = Tbl.add id r env.idents; })
           end else begin
             (* Introduce a fresh temp to hold the result *)
@@ -1022,25 +1034,17 @@ method emit_fundecl f =
   Proc.contains_calls := false;
   current_function_name := f.Cmm.fun_name;
   let rargs =
-    List.map
-      (fun (id, ty) -> let r = self#regs_for ty in name_regs id r; r)
-      f.Cmm.fun_args in
-  let rarg = Array.concat rargs in
-(* CR mshinwell: decide what to do with this
-  (* [parts] corresponds elementwise to [rarg] and identifies, for each
-     register in [rarg], which part of a value split across multiple registers
-     it corresponds to.  [None] is used to indicate that a value fits within
-     a single register. *)
-  let parts =
-    let parts_array arr =
-      if Array.length arr <= 1 then
-        [| None |]
-      else
-        Array.init (Array.length arr) (fun index -> Some index)
-    in
-    Array.concat (List.map parts_array rargs)
+    List.mapi (fun (param_index, ident, ty) ->
+        let r = self#regs_for ty in
+        name_regs ident r;
+        let naming_op =
+          Iname_for_debugger { ident; which_parameter = Some param_index; }
+        in
+        self#insert_op env naming_op r [| |];
+        r)
+      f.Cmm.fun_args
   in
-*)
+  let rarg = Array.concat rargs in
   let loc_arg = Proc.loc_parameters rarg in
   let env =
     let empty = {
