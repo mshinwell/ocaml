@@ -74,7 +74,7 @@ let clone r =
   nr
 
 let at_location ty loc =
-  let r = { name = "R"; mutability = Cmm.Immutable; stamp = !currstamp;
+  let r = { name = "R"; mutability = Cmm.Mutable; stamp = !currstamp;
             typ = ty; loc; spill = false; interf = []; prefer = []; degree = 0;
             spill_cost = 0; visited = false; } in
   incr currstamp;

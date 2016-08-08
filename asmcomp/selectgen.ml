@@ -674,7 +674,7 @@ method private bind_let env binding_mutable ident r1 =
       name_regs ident r1;
       { env with idents = Tbl.add ident r1 env.idents; }
     | Mutable ->
-      let rv = Reg.createv_like r1 in
+      let rv = Reg.createv_like ~mutability:Mutable r1 in
       name_regs ident rv;
       self#insert_moves env r1 rv;
       { env with idents = Tbl.add ident rv env.idents; }

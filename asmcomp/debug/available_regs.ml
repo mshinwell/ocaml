@@ -167,13 +167,20 @@ Format.eprintf "available_regs on entry: AB=%a instr=%a\n%!"
         (* We split the calculation of registers that become unavailable after
            a call into two parts.  First: anything that the target marks as
            destroyed by the operation, combined with any registers that will
-           be clobbered by the operation writing out its results. *)
+           be clobbered by the operation writing out its results.  There is
+           one special case to match up with [Liveness]: a no-op move. *)
         let made_unavailable_1 =
-          let regs_clobbered =
-            Array.append (Proc.destroyed_at_oper instr.desc) instr.res
-          in
-          RD.Set.made_unavailable_by_clobber avail_before ~regs_clobbered
-            ~register_class:Proc.register_class
+          match op with
+          | Imove
+            when instr.arg.(0).Reg.loc = instr.res.(0).Reg.loc
+              && Proc.register_class instr.arg.(0)
+                = Proc.register_class instr.res.(0) -> RD.Set.empty
+          | _ ->
+            let regs_clobbered =
+              Array.append (Proc.destroyed_at_oper instr.desc) instr.res
+            in
+            RD.Set.made_unavailable_by_clobber avail_before ~regs_clobbered
+              ~register_class:Proc.register_class
         in
         (* Second: the case of OCaml to OCaml function calls.  In this case,
            registers always become unavailable unless:
@@ -203,6 +210,9 @@ Format.eprintf "available_regs on entry: AB=%a instr=%a\n%!"
         let made_unavailable =
           RD.Set.union made_unavailable_1 made_unavailable_2
         in
+        (* Subtract out the registers made unavailable; then add in the
+           registers that are made *available* -- namely the results of the
+           operation. *)
         Ok (RD.Set.union
           (RD.Set.without_debug_info (Reg.set_of_array instr.res))
           (RD.Set.diff avail_before made_unavailable))
