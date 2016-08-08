@@ -73,9 +73,10 @@ module Make (T : Branch_relaxation_intf.S) = struct
       | None -> next
       | Some l ->
         instr_cons (Lcondbranch (Iinttest_imm (Isigned Cmm.Ceq, n), l))
-          (* CR mshinwell: [available_before] needs fixing properly
-             (same below).  Although maybe it's too late now *)
-          arg [||] ~available_before:Reg.Set.empty
+          arg [||]
+          (* [available_before] currently doesn't matter: the available range
+             calculation has already been done by the time we get here. *)
+          ~available_before:(Reg_availability.Ok Reg_with_debug_info.Set.empty)
           ~phantom_available_before:Ident.Set.empty next
     in
     let rec fixup did_fix pc instr =
@@ -105,10 +106,12 @@ module Make (T : Branch_relaxation_intf.S) = struct
             let lbl2 = new_label() in
             let cont =
               instr_cons (Lbranch lbl) [||] [||]
-                  ~available_before:Reg.Set.empty
+                  ~available_before:
+                    (Reg_availability.Ok Reg_with_debug_info.Set.empty)
                   ~phantom_available_before:Ident.Set.empty
                 (instr_cons (Llabel lbl2) [||] [||] instr.next
-                  ~available_before:Reg.Set.empty
+                  ~available_before:
+                    (Reg_availability.Ok Reg_with_debug_info.Set.empty)
                   ~phantom_available_before:Ident.Set.empty)
             in
             instr.desc <- Lcondbranch (invert_test test, lbl2);

@@ -27,5 +27,5 @@ val canonicalise : t -> t
     non-persistent identifiers); and where no two registers share the same
     location. *)
 
-val print : Format.formatter -> t -> t
+val print : Format.formatter -> t -> unit
 (** For debugging purposes only. *)
