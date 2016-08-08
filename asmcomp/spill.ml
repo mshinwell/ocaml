@@ -290,6 +290,7 @@ and inside_arm = ref false
 and inside_catch = ref false
 
 let add_spills regset i =
+(*
   let compare_reg r1 r2 =
     let open Reg in
     let c =
@@ -303,6 +304,8 @@ let add_spills regset i =
     else Pervasives.compare r1.stamp r2.stamp
   in
   let regset = List.sort compare_reg (Reg.Set.elements regset) in
+*)
+  let regset = Reg.Set.elements regset in
   let phantom_available_before = i.phantom_available_before in
   List.fold_left (fun i r ->
       instr_cons (Iop Ispill) [|r|] [|spill_reg r|]

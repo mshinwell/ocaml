@@ -20,9 +20,14 @@ open Cmm
 open Reg
 open Mach
 
-let reg_shared_core ppf shared =
-  fprintf ppf "/%i" shared.stamp;
-  begin match shared.loc with
+let reg ppf r =
+  if Reg.name r <> "" then
+    fprintf ppf "%s" (Reg.name r)
+  else
+    fprintf ppf "%s"
+      (match r.typ with Val -> "V" | Addr -> "A" | Int -> "I" | Float -> "F");
+  fprintf ppf "/%i" r.stamp;
+  begin match r.loc with
   | Unknown -> ()
   | Reg r ->
       fprintf ppf "[%s]" (Proc.register_name r)
@@ -32,28 +37,7 @@ let reg_shared_core ppf shared =
       fprintf ppf "[si%i]" s
   | Stack(Outgoing s) ->
       fprintf ppf "[so%i]" s
-  end;
-  begin match shared.mutability with
-  | Immutable -> ()
-  | Mutable -> fprintf ppf "[mut]"
   end
-
-let reg_shared ppf shared =
-  fprintf ppf "%s"
-    (match shared.typ with
-    | Val -> "V" | Addr -> "A" | Int -> "I" | Float -> "F");
-  reg_shared_core ppf shared
-
-let reg ppf r =
-  let name = Reg.name r in
-  if name <> "" then begin
-    fprintf ppf "%s" (Reg.name r)
-  end else begin
-    fprintf ppf "%s"
-      (match r.shared.typ with
-      | Val -> "V" | Addr -> "A" | Int -> "I" | Float -> "F")
-  end;
-  reg_shared_core ppf r.shared
 
 let regs ppf v =
   match Array.length v with
@@ -76,7 +60,7 @@ let regsetaddr ppf s =
     (fun r ->
       if !first then begin first := false; fprintf ppf "%a" reg r end
       else fprintf ppf "@ %a" reg r;
-      match r.shared.typ with
+      match r.typ with
       | Val -> fprintf ppf "*"
       | Addr -> fprintf ppf "!"
       | _ -> ())
@@ -126,16 +110,16 @@ let operation op arg ppf res =
   | Imove -> regs ppf arg
   | Ispill -> fprintf ppf "%a (spill)" regs arg
   | Ireload -> fprintf ppf "%a (reload)" regs arg
-  | Iconst_int n
-  | Iconst_blockheader n -> fprintf ppf "%s" (Nativeint.to_string n)
+  | Iconst_blockheader n -> fprintf ppf "%s(hdr)" (Nativeint.to_string n)
+  | Iconst_int n -> fprintf ppf "%s" (Nativeint.to_string n)
   | Iconst_float f -> fprintf ppf "%F" (Int64.float_of_bits f)
   | Iconst_symbol s -> fprintf ppf "\"%s\"" s
   | Icall_ind -> fprintf ppf "call %a" regs arg
-  | Icall_imm lbl -> fprintf ppf "call \"%s\" %a" lbl regs arg
+  | Icall_imm func -> fprintf ppf "call \"%s\" %a" func regs arg
   | Itailcall_ind -> fprintf ppf "tailcall %a" regs arg
-  | Itailcall_imm lbl -> fprintf ppf "tailcall \"%s\" %a" lbl regs arg
-  | Iextcall(lbl, alloc) ->
-      fprintf ppf "extcall \"%s\" %a%s" lbl regs arg
+  | Itailcall_imm func -> fprintf ppf "tailcall \"%s\" %a" func regs arg
+  | Iextcall (func, alloc) ->
+      fprintf ppf "extcall \"%s\" %a%s" func regs arg
       (if alloc then "" else " (noalloc)")
   | Istackoffset n ->
       fprintf ppf "offset stack %i" n
@@ -149,7 +133,8 @@ let operation op arg ppf res =
        (Array.sub arg 1 (Array.length arg - 1))
        reg arg.(0)
        (if is_assign then "(assign)" else "(init)")
-  | Ialloc n -> fprintf ppf "alloc %i" n
+  | Ialloc n ->
+    fprintf ppf "alloc %i" n
   | Iintop(op) -> fprintf ppf "%a%s%a" reg arg.(0) (intop op) reg arg.(1)
   | Iintop_imm(op, n) -> fprintf ppf "%a%s%i" reg arg.(0) (intop op) n
   | Inegf -> fprintf ppf "-f %a" reg arg.(0)
@@ -160,27 +145,18 @@ let operation op arg ppf res =
   | Idivf -> fprintf ppf "%a /f %a" reg arg.(0) reg arg.(1)
   | Ifloatofint -> fprintf ppf "floatofint %a" reg arg.(0)
   | Iintoffloat -> fprintf ppf "intoffloat %a" reg arg.(0)
+  | Iname_for_debugger { ident; which_parameter; } ->
+    fprintf ppf "name_for_debugger %a%s"
+      Ident.print ident
+      (match which_parameter with
+        | None -> ""
+        | Some index -> sprintf " [P%d]" index)
   | Ispecific op ->
       Arch.print_specific_operation reg op ppf arg
 
-(* CR mshinwell: deal with this *)
-let rec _phantom_defining_expr ppf = function
-  | Iphantom_const_int i -> fprintf ppf "0x%x" i
-  | Iphantom_const_symbol sym -> fprintf ppf "%a" Symbol.print sym
-  | Iphantom_var ident -> fprintf ppf "%a" Ident.print ident
-  | Iphantom_read_var_field (expr, field) ->
-    fprintf ppf "%a[%d]" _phantom_defining_expr expr field
-  | Iphantom_read_symbol_field (sym, field) ->
-    fprintf ppf "%a[%d]" Symbol.print sym field
-  | Iphantom_offset_var (expr, offset) ->
-    fprintf ppf "%a+(%d)" _phantom_defining_expr expr offset
-
 let rec instr ppf i =
   if !print_live then begin
-    fprintf ppf "@[<1>La={%a" regsetaddr i.live;
-    if Array.length i.arg > 0 then fprintf ppf "@ +@ %a" regs i.arg;
-    fprintf ppf "}@]@,";
-    fprintf ppf "@[<1>Ab={%a" regsetaddr i.available_before;
+    fprintf ppf "@[<1>{%a" regsetaddr i.live;
     if Array.length i.arg > 0 then fprintf ppf "@ +@ %a" regs i.arg;
     fprintf ppf "}@]@,";
   end;
@@ -243,9 +219,9 @@ let phase msg ppf f =
 let interference ppf r =
   let interf ppf =
    List.iter
-    (fun shared -> fprintf ppf "@ %a" reg_shared shared)
+    (fun r -> fprintf ppf "@ %a" reg r)
     r.interf in
-  fprintf ppf "@[<2>%a:%t@]@." reg_shared r interf
+  fprintf ppf "@[<2>%a:%t@]@." reg r interf
 
 let interferences ppf () =
   fprintf ppf "*** Interferences@.";
@@ -254,9 +230,9 @@ let interferences ppf () =
 let preference ppf r =
   let prefs ppf =
     List.iter
-      (fun (shared, w) -> fprintf ppf "@ %a weight %i" reg_shared shared w)
+      (fun (r, w) -> fprintf ppf "@ %a weight %i" reg r w)
       r.prefer in
-  fprintf ppf "@[<2>%a: %t@]@." reg_shared r prefs
+  fprintf ppf "@[<2>%a: %t@]@." reg r prefs
 
 let preferences ppf () =
   fprintf ppf "*** Preferences@.";
