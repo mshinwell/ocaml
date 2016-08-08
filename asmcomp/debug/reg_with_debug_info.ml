@@ -34,6 +34,16 @@ module Debug_info = struct
   let part_of_value t = t.part_of_value
   let num_parts_of_value t = t.num_parts_of_value
   let which_parameter t = t.which_parameter
+
+  let print ppf t =
+    Format.fprintf ppf "%a" Ident.print t.holds_value_of;
+    if not (t.part_of_value = 0 && t.num_parts_of_value = 1) then begin
+      Format.fprintf ppf "(%d/%d)" t.part_of_value t.num_parts_of_value
+    end;
+    begin match t.which_parameter with
+    | None -> ()
+    | Some index -> Format.fprintf ppf "[P%d]" index
+    end
 end
 
 module T = struct
@@ -156,3 +166,9 @@ module Set = struct
   let mem_reg t (reg : Reg.t) =
     exists (fun t -> t.reg.stamp = reg.stamp) t
 end
+
+let print ppf t =
+  match t.debug_info with
+  | None -> Format.fprintf ppf "%a" Printmach.reg t.reg
+  | Some debug_info ->
+    Format.fprintf ppf "%a(%a)" Printmach.reg t.reg Debug_info.print debug_info

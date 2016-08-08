@@ -26,3 +26,6 @@ val canonicalise : t -> t
     that are not associated with debug info (and holding values of
     non-persistent identifiers); and where no two registers share the same
     location. *)
+
+val print : Format.formatter -> t -> t
+(** For debugging purposes only. *)

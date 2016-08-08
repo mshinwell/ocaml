@@ -34,7 +34,8 @@ let instr ppf i =
       | Ialloc _ | Icall_ind | Icall_imm _ | Iextcall(_, _) ->
           fprintf ppf "@[<1>LA={%a}@]@," regsetaddr i.live;
           if !Clflags.debug then begin
-            fprintf ppf "@[<1>AB={%a}@]@," regsetaddr i.available_before;
+            fprintf ppf "@[<1>AB=%a@]@,"
+              Reg_availability.print i.available_before;
             let phantom = Ident.Set.elements i.phantom_available_before in
             fprintf ppf "@[<1>PAB={%a}@]@,"
               (Format.pp_print_list Ident.print) phantom

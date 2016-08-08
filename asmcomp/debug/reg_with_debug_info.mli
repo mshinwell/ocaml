@@ -79,3 +79,5 @@ module Set : sig
       registers.)
       [register_class] should always be [Proc.register_class]. *)
 end
+
+val print : Format.formatter -> t -> unit
