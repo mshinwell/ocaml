@@ -70,6 +70,8 @@ module Set : sig
 
   val mem_reg : t -> Reg.t -> bool
 
+  val filter_reg : t -> Reg.t -> t
+
   val forget_debug_info : t -> Reg.Set.t
 
   val without_debug_info : Reg.Set.t -> t

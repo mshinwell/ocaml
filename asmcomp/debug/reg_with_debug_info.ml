@@ -167,6 +167,9 @@ module Set = struct
 
   let mem_reg t (reg : Reg.t) =
     exists (fun t -> t.reg.stamp = reg.stamp) t
+
+  let filter_reg t (reg : Reg.t) =
+    filter (fun t -> t.reg.stamp <> reg.stamp) t
 end
 
 let print ~print_reg ppf t =

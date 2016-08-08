@@ -931,19 +931,31 @@ method emit_fundecl f =
     phantom_idents = Ident.Set.empty;
   }
   in
+  let num_regs_per_arg = Array.make (List.length f.Cmm.fun_args) 0 in
   let rargs =
-    List.mapi (fun param_index (ident, ty) ->
+    List.mapi (fun arg_index (ident, ty) ->
         let r = self#regs_for ty in
         name_regs ident r;
-        let naming_op =
-          Iname_for_debugger { ident; which_parameter = Some param_index; }
-        in
-        self#insert_debug empty_env (Iop naming_op) Debuginfo.none r [| |];
+        num_regs_per_arg.(arg_index) <- Array.length r;
         r)
       f.Cmm.fun_args
   in
   let rarg = Array.concat rargs in
   let loc_arg = Proc.loc_parameters rarg in
+  let loc_arg_index = ref 0 in
+  List.iteri (fun param_index (ident, _ty) ->
+      let naming_op =
+        Iname_for_debugger { ident; which_parameter = Some param_index; }
+      in
+      let num_regs_for_arg = num_regs_per_arg.(param_index) in
+      let hard_regs_for_arg =
+        Array.init num_regs_for_arg (fun index ->
+          loc_arg.(!loc_arg_index + index))
+      in
+      loc_arg_index := !loc_arg_index + num_regs_for_arg;
+      self#insert_debug empty_env (Iop naming_op) Debuginfo.none
+        hard_regs_for_arg [| |])
+    f.Cmm.fun_args;
   let env =
     List.fold_right2
       (fun (id, _ty) r env -> { env with idents = Tbl.add id r env.idents; })

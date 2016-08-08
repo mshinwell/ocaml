@@ -146,11 +146,12 @@ let operation op arg ppf res =
   | Ifloatofint -> fprintf ppf "floatofint %a" reg arg.(0)
   | Iintoffloat -> fprintf ppf "intoffloat %a" reg arg.(0)
   | Iname_for_debugger { ident; which_parameter; } ->
-    fprintf ppf "name_for_debugger %a%s"
+    fprintf ppf "name_for_debugger %a%s=%a"
       Ident.print ident
       (match which_parameter with
         | None -> ""
-        | Some index -> sprintf " [P%d]" index)
+        | Some index -> sprintf "[P%d]" index)
+      reg arg.(0)
   | Ispecific op ->
       Arch.print_specific_operation reg op ppf arg
 

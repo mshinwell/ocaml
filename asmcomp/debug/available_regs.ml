@@ -73,6 +73,11 @@ let augment_availability_at_raise avail =
 *)
 let rec available_regs (instr : M.instruction)
       ~(avail_before : Reg_availability.t) : Reg_availability.t =
+
+Format.eprintf "available_regs on entry: AB=%a instr=%a\n%!"
+  (Reg_availability.print ~print_reg:Printmach.reg) avail_before
+  Printmach.instr ({ instr with Mach.next = Mach.dummy_instr; });
+
   let avail_before : Reg_availability.t =
     (* If this instruction might expand into multiple machine instructions
        and clobber registers during that code sequence, make sure any
@@ -94,7 +99,15 @@ let rec available_regs (instr : M.instruction)
           to the special case (about multiple instructions) below.) *)
       (* XCR pchambart: The difference between live and avail_before is
          probably due to the 'interesting' filter. *)
-      assert (R.Set.subset instr.live (RD.Set.forget_debug_info avail_before));
+      if not (R.Set.subset instr.live (RD.Set.forget_debug_info avail_before))
+      then begin
+        Misc.fatal_errorf "Live registers not a subset of available registers: \
+            live={%a} avail_before=%a insn=%a"
+          Printmach.regset instr.live
+          (Reg_availability.print ~print_reg:Printmach.reg)
+          (Reg_availability.Ok avail_before)
+          Printmach.instr ({ instr with Mach. next = Mach.end_instr (); })
+      end;
       match instr.desc with
       | Iop (Ialloc _) ->
         let made_unavailable =
@@ -136,14 +149,14 @@ let rec available_regs (instr : M.instruction)
         for part_of_value = 0 to num_parts_of_value - 1 do
           let reg = instr.arg.(part_of_value) in
           if RD.Set.mem_reg forgetting_ident reg then begin
-            let reg =
+            let regd =
               RD.create ~reg
                 ~holds_value_of:ident
                 ~part_of_value
                 ~num_parts_of_value
                 ~which_parameter
             in
-            avail_after := RD.Set.add reg !avail_after
+            avail_after := RD.Set.add regd (RD.Set.filter_reg !avail_after reg)
           end
         done;
         Ok !avail_after
@@ -151,46 +164,48 @@ let rec available_regs (instr : M.instruction)
         if operation_can_raise op then begin
           augment_availability_at_raise (Reg_availability.Ok avail_before)
         end;
-        let avail_after =
-          match op with
-          | Icall_ind | Icall_imm _ | Iextcall _ ->
-            (* Registers become unavailable across a call unless either:
-               (a) they hold immediates and are not destroyed by the relevant
-                   calling convention; or
-               (b) they are on the stack.
-               The "not destroyed by the relevant calling convention" part is
-               handled by the removal of registers in [destroyed_at_oper],
-               below.
-            *)
-            (* XCR mshinwell: still need to deal with the case where a
-               variable is not spilled but is available just before the
-               call.  However these don't need to be visible from a callee,
-               so not extending their range to the end of the call insn
-               should do it.
-               mshinwell: fixed in Available_ranges, need a comment here tho *)
-            RD.Set.union (RD.Set.filter RD.assigned_to_stack avail_before)
-              (* CR mshinwell: deal with this "holds_non_pointer" thing *)
-              (RD.Set.filter RD.holds_non_pointer avail_before)
-          | _ -> avail_before
-        in
-        let avail_after =
-          (* Registers are made unavailable (possibly in addition to the
-             above) by:
-             1. the operation being marked as one that destroys them;
-             2. being clobbered by the instruction writing out results.  The
-                special case for moves above keeps the following code
-                straightforward. *)
+        (* We split the calculation of registers that become unavailable after
+           a call into two parts.  First: anything that the target marks as
+           destroyed by the operation, combined with any registers that will
+           be clobbered by the operation writing out its results. *)
+        let made_unavailable_1 =
           let regs_clobbered =
             Array.append (Proc.destroyed_at_oper instr.desc) instr.res
           in
-          RD.Set.made_unavailable_by_clobber avail_after ~regs_clobbered
+          RD.Set.made_unavailable_by_clobber avail_before ~regs_clobbered
             ~register_class:Proc.register_class
         in
-        let avail_after =
-          RD.Set.union (RD.Set.without_debug_info (Reg.set_of_array instr.res))
-            avail_after
+        (* Second: the case of OCaml to OCaml function calls.  In this case,
+           registers always become unavailable unless:
+           (a) they are "live across" the call; and/or
+           (b) they hold immediates and are assigned to the stack. *)
+        let made_unavailable_2 =
+          (* XCR mshinwell: still need to deal with the case where a
+             variable is not spilled but is available just before the
+             call.  However these don't need to be visible from a callee,
+             so not extending their range to the end of the call insn
+             should do it.
+             mshinwell: fixed in Available_ranges, need a comment here tho *)
+          match op with
+          | Icall_ind | Icall_imm _ ->
+            RD.Set.filter (fun reg ->
+                let holds_immediate = RD.holds_non_pointer reg in
+                let on_stack = RD.assigned_to_stack reg in
+                let live_across = Reg.Set.mem (RD.reg reg) instr.live in
+                let remains_available =
+                  live_across
+                    || (holds_immediate && on_stack)
+                in
+                not remains_available)
+              avail_before
+          | _ -> RD.Set.empty
         in
-        Ok avail_after
+        let made_unavailable =
+          RD.Set.union made_unavailable_1 made_unavailable_2
+        in
+        Ok (RD.Set.union
+          (RD.Set.without_debug_info (Reg.set_of_array instr.res))
+          (RD.Set.diff avail_before made_unavailable))
       | Iifthenelse (_, ifso, ifnot) -> join [ifso; ifnot] ~avail_before
       | Iswitch (_, cases) -> join (Array.to_list cases) ~avail_before
       | Iloop body ->
