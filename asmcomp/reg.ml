@@ -16,13 +16,12 @@
 open Cmm
 
 type t = {
+  mutable name : string;
   mutability : Cmm.mutability;
   stamp: int;
   mutable typ: Cmm.machtype_component;
   mutable loc: location;
   mutable spill: bool;
-  mutable part: int option;
-  mutable is_parameter: int option;
   mutable interf: t list;
   mutable prefer: (t * int) list;
   mutable degree: int;
@@ -77,7 +76,7 @@ let clone r =
 let at_location ty loc =
   let r = { name = "R"; mutability = Cmm.Immutable; stamp = !currstamp;
             typ = ty; loc; spill = false; interf = []; prefer = []; degree = 0;
-            spill_cost = 0; visited = false; part = None; } in
+            spill_cost = 0; visited = false; } in
   incr currstamp;
   r
 
@@ -126,9 +125,16 @@ let reinit_reg r =
 let reinit() =
   List.iter reinit_reg !reg_list
 
+let all_immutable rs =
+  List.for_all (fun t ->
+      match t.mutability with
+      | Immutable -> true
+      | Mutable -> false)
+    rs
+
 module RegOrder =
   struct
-    type t = reg
+    type nonrec t = t
     let compare r1 r2 = r1.stamp - r2.stamp
   end
 
@@ -180,10 +186,3 @@ let set_of_array v =
   | n -> let rec add_all i =
            if i >= n then Set.empty else Set.add v.(i) (add_all(i+1))
          in add_all 0
-
-let at_same_location reg1 reg2 =
-  (* We need to check the register classes too: two locations both saying
-     "stack offset N" might actually be different physical locations, for
-     example if one is of class "Int" and another "Float" on amd64. *)
-  reg1.loc = reg2.loc
-    && Proc.register_class reg1 = Proc.register_class reg2

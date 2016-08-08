@@ -12,7 +12,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module RD = Reg.With_debug_info
+module RD = Reg_with_debug_info
 
 type t =
   | Ok of RD.Set.t

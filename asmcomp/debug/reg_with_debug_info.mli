@@ -18,7 +18,7 @@
 module Debug_info : sig
   type t
 
-  val holds_value_of : Ident.t -> t
+  val holds_value_of : t -> Ident.t
   (** The identifier that the register holds (part of) the value of. *)
 
   val part_of_value : t -> int
@@ -40,13 +40,15 @@ val create
   -> t
 
 val reg : t -> Reg.t
-val location : t -> location
+val location : t -> Reg.location
 val debug_info : t -> Debug_info.t option
 
-val at_same_location : t -> Reg.t -> bool
+val at_same_location : t -> Reg.t -> register_class:(Reg.t -> int) -> bool
 (** [at_same_location t reg] holds iff the register [t] corresponds to
     the same (physical or pseudoregister) location as the register [reg],
-    which is not equipped with debugging information. *)
+    which is not equipped with debugging information.
+    [register_class] should be [Proc.register_class].
+*)
 
 val holds_pointer : t -> bool
 val holds_non_pointer : t -> bool
@@ -62,12 +64,18 @@ module Set : sig
 
   val mem_reg : t -> Reg.t -> bool
 
-  val forget_debug_info : t -> Set.t
+  val forget_debug_info : t -> Reg.Set.t
 
-  val without_debug_info : Set.t -> t
+  val without_debug_info : Reg.Set.t -> t
 
-  val made_unavailable_by_clobber : t -> regs_clobbered:Set.t -> t
-  (** [made_unavailable_by_clobber t ~regs_clobbered] returns the largest
-      subset of [t] whose locations do not overlap with any registers in
-      [regs_clobbered].  (Think of [t] as a set of available registers.) *)
+  val made_unavailable_by_clobber
+     : t
+    -> regs_clobbered:Reg.t array
+    -> register_class:(Reg.t -> int)
+    -> t
+  (** [made_unavailable_by_clobber t ~regs_clobbered ~register_class] returns
+      the largest subset of [t] whose locations do not overlap with any
+      registers in [regs_clobbered].  (Think of [t] as a set of available
+      registers.)
+      [register_class] should always be [Proc.register_class]. *)
 end

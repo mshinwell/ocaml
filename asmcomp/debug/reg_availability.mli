@@ -15,7 +15,7 @@
 (** Register availability sets. *)
 
 type t =
-  | Ok of Reg.With_debug_info.Set.t
+  | Ok of Reg_with_debug_info.Set.t
   | Unreachable
 
 val inter : t -> t -> t

@@ -93,6 +93,13 @@ type mutability =
   | Mutable
   | Immutable
 
+let join_mutability mut1 mut2 =
+  match mut1, mut2 with
+  | Mutable, Mutable
+  | Mutable, Immutable
+  | Immutable, Mutable -> Mutable
+  | Immutable, Immutable -> Immutable
+
 type comparison =
     Ceq
   | Cne

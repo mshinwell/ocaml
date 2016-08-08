@@ -496,7 +496,7 @@ end) = struct
 end
 
 module Make_ranges = Make (struct
-  module RD = Reg.With_debug_info
+  module RD = Reg_with_debug_info
 
   (* By the time this pass has run, register stamps are irrelevant; indeed,
      there may be multiple registers with different stamps assigned to the

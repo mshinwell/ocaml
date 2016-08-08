@@ -81,7 +81,7 @@ type instruction =
     dbg: Debuginfo.t;
     phantom_available_before: Ident.Set.t;
     mutable live: Reg.Set.t;
-    mutable available_before: availability;
+    mutable available_before: Reg_availability.t;
   }
 
 and instruction_desc =

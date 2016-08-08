@@ -100,6 +100,7 @@ let rec available_regs (instr : M.instruction) ~avail_before =
         let made_unavailable =
           RD.Set.made_unavailable_by_clobber avail_before
             ~regs_clobbered:(Proc.destroyed_at_oper instr.desc)
+            ~register_class:Proc.register_class
         in
         RD.Set.diff avail_before made_unavailable
       (* CR mshinwell: should have a hook for Ispecific cases *)
@@ -180,6 +181,7 @@ let rec available_regs (instr : M.instruction) ~avail_before =
               (R.set_of_array instr.res)
           in
           RD.Set.made_unavailable_by_clobber avail_after ~regs_clobbered
+            ~register_class:Proc.register_class
         in
         RD.Set.union (RD.Set.without_debug_info instr.res) avail_after
       | Iifthenelse (_, ifso, ifnot) -> join [ifso; ifnot] ~avail_before

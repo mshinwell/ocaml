@@ -12,6 +12,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+
 module Debug_info = struct
   type t = {
     holds_value_of : Ident.t;
@@ -42,7 +44,7 @@ module T = struct
 
   module Order = struct
     type t = Reg.t
-    let compare r1 r2 = r1.stamp - r2.stamp
+    let compare (t1 : t) (t2 : t) = t1.stamp - t2.stamp
   end
 
   let compare t1 t2 =
@@ -94,35 +96,63 @@ let assigned_to_stack t =
   | Stack _ -> true
   | Reg _ | Unknown -> false
 
+let regs_at_same_location (reg1 : Reg.t) (reg2 : Reg.t) ~register_class =
+  (* We need to check the register classes too: two locations both saying
+     "stack offset N" might actually be different physical locations, for
+     example if one is of class "Int" and another "Float" on amd64.
+     [register_class] will be [Proc.register_class], but cannot be here,
+     due to a circular dependency. *)
+  reg1.loc = reg2.loc
+    && register_class reg1 = register_class reg2
+
+let at_same_location t (reg : Reg.t) ~register_class =
+  regs_at_same_location t.reg reg ~register_class
+
+let debug_info t = t.debug_info
+
+let clear_debug_info t =
+  { t with debug_info = None; }
+
+module Set_distinguishing_names_and_locations = struct
+  module T = struct
+    type nonrec t = t
+
+    let compare t1 t2 =
+      match t1.debug_info, t2.debug_info with
+      | None, None -> 0
+      | None, Some _ -> -1
+      | Some _, None -> 1
+      | Some di1, Some di2 ->
+        let c = Ident.compare di1.holds_value_of di2.holds_value_of in
+        if c <> 0 then c
+        else Pervasives.compare t1.reg.loc t2.reg.loc
+  end
+
+  include Set.Make (T)
+end
+
 module Set = struct
   include Set.Make (T)
 
   let forget_debug_info t =
-    map (fun t -> reg t) t
+    fold (fun t acc -> Reg.Set.add (reg t) acc) t Reg.Set.empty
 
   let without_debug_info regs =
-    Set.map (fun reg -> create_without_debug_info ~reg) regs
+    Reg.Set.fold (fun reg acc -> add (create_without_debug_info ~reg) acc)
+      regs
+      empty
 
-  let made_unavailable_by_clobber t ~regs_clobbered =
-    Set.fold (fun reg acc ->
+  let made_unavailable_by_clobber t ~regs_clobbered ~register_class =
+    Reg.Set.fold (fun reg acc ->
         let made_unavailable =
-          filter (fun reg' -> at_same_location reg' reg)
-            avail_before
+          filter (fun reg' ->
+              regs_at_same_location reg'.reg reg ~register_class)
+            t
         in
         union made_unavailable acc)
-      (set_of_array regs_clobbered)
+      (Reg.set_of_array regs_clobbered)
       (* ~init:*)empty
-end
 
-module Set_distinguishing_names_and_locations = struct
-  module T = struct
-    type t = t
-
-    let compare t1 t2 =
-      let c = Ident.compare t1.holds_value_of t2.holds_value_of in
-      if c <> 0 then c
-      else Pervasives.compare t1.reg.loc t2.reg.loc
-  end
-
-  include Set.Make (T)
+  let mem_reg t (reg : Reg.t) =
+    exists (fun t -> t.reg.stamp = reg.stamp) t
 end
