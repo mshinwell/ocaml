@@ -190,10 +190,10 @@ let emit_Llabel fallthrough lbl =
 let reg = function
   | { loc = Reg.Reg r } -> register_name r
   | { loc = Stack s; typ = Float } as r ->
-      let ofs = slot_offset s (register_class_shared r) in
+      let ofs = slot_offset s (register_class r) in
       mem64 REAL8 ofs RSP
   | { loc = Stack s } as r ->
-      let ofs = slot_offset s (register_class_shared r) in
+      let ofs = slot_offset s (register_class r) in
       mem64 QWORD ofs RSP
   | { loc = Unknown } ->
       assert false
@@ -251,7 +251,8 @@ let record_frame_label live dbg =
   let lbl = new_label() in
   let live_offset = ref [] in
   Reg.Set.iter
-    (function
+    (fun r ->
+      match r with
       | {typ = Val; loc = Reg r} ->
           live_offset := ((r lsl 1) + 1) :: !live_offset
       | {typ = Val; loc = Stack s} ->

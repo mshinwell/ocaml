@@ -65,7 +65,7 @@ type operation =
   | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
   | Ifloatofint | Iintoffloat
   | Ispecific of Arch.specific_operation
-  | Iname_for_debugger of Ident.t
+  | Iname_for_debugger of { ident : Ident.t; which_parameter : int option; }
 
 type instruction =
   { desc: instruction_desc;
@@ -110,7 +110,7 @@ let rec dummy_instr =
     res = [||];
     dbg = Debuginfo.none;
     live = Reg.Set.empty;
-    available_before = Reg.Set.empty;
+    available_before = Reg_availability.Ok Reg_with_debug_info.Set.empty;
     phantom_available_before = Ident.Set.empty;
   }
 
@@ -121,20 +121,20 @@ let end_instr () =
     res = [||];
     dbg = Debuginfo.none;
     live = Reg.Set.empty;
-    available_before = Reg.Set.empty;
+    available_before = Reg_availability.Ok Reg_with_debug_info.Set.empty;
     phantom_available_before = Ident.Set.empty;
   }
 
 let instr_cons d a r ~phantom_available_before n =
   { desc = d; next = n; arg = a; res = r;
     dbg = Debuginfo.none; live = Reg.Set.empty;
-    available_before = Reg.Set.empty;
+    available_before = Reg_availability.Ok Reg_with_debug_info.Set.empty;
     phantom_available_before;
   }
 
 let instr_cons_debug d a r dbg ~phantom_available_before n =
   { desc = d; next = n; arg = a; res = r; dbg = dbg; live = Reg.Set.empty;
-    available_before = Reg.Set.empty;
+    available_before = Reg_availability.Ok Reg_with_debug_info.Set.empty;
     phantom_available_before;
   }
 
