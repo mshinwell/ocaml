@@ -123,23 +123,25 @@ let debug_info t = t.debug_info
 let clear_debug_info t =
   { t with debug_info = None; }
 
-module Set_distinguishing_names_and_locations = struct
-  module T = struct
-    type nonrec t = t
+module Order_distinguishing_names_and_locations = struct
+  type nonrec t = t
 
-    let compare t1 t2 =
-      match t1.debug_info, t2.debug_info with
-      | None, None -> 0
-      | None, Some _ -> -1
-      | Some _, None -> 1
-      | Some di1, Some di2 ->
-        let c = Ident.compare di1.holds_value_of di2.holds_value_of in
-        if c <> 0 then c
-        else Pervasives.compare t1.reg.loc t2.reg.loc
-  end
-
-  include Set.Make (T)
+  let compare t1 t2 =
+    match t1.debug_info, t2.debug_info with
+    | None, None -> 0
+    | None, Some _ -> -1
+    | Some _, None -> 1
+    | Some di1, Some di2 ->
+      let c = Ident.compare di1.holds_value_of di2.holds_value_of in
+      if c <> 0 then c
+      else Pervasives.compare t1.reg.loc t2.reg.loc
 end
+
+module Set_distinguishing_names_and_locations =
+  Set.Make (Order_distinguishing_names_and_locations)
+
+module Map_distinguishing_names_and_locations =
+  Map.Make (Order_distinguishing_names_and_locations)
 
 module Set = struct
   include Set.Make (T)
@@ -167,8 +169,8 @@ module Set = struct
     exists (fun t -> t.reg.stamp = reg.stamp) t
 end
 
-let print ppf t =
+let print ~print_reg ppf t =
   match t.debug_info with
-  | None -> Format.fprintf ppf "%a" Printmach.reg t.reg
+  | None -> Format.fprintf ppf "%a" print_reg t.reg
   | Some debug_info ->
-    Format.fprintf ppf "%a(%a)" Printmach.reg t.reg Debug_info.print debug_info
+    Format.fprintf ppf "%a(%a)" print_reg t.reg Debug_info.print debug_info

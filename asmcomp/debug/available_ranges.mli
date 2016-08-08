@@ -38,12 +38,16 @@
    and function.
 *)
 
+type is_parameter =
+  | Local
+  | Parameter of { index : int; }
+
 module Available_subrange : sig
   type t
 
   type 'a location =
-    | Reg of Reg.t * 'a
-    | Phantom of Clambda.ulet_provenance * 'a phantom
+    | Reg of Reg.t * is_parameter * 'a
+    | Phantom of Clambda.ulet_provenance * is_parameter * 'a phantom
 
   and 'a phantom =
     | Const_int of int
@@ -66,7 +70,7 @@ end
 module Available_range : sig
   type t
 
-  val is_parameter : t -> int option  (* viz. reg.mli. *)
+  val is_parameter : t -> is_parameter
   val extremities : t -> Linearize.label * Linearize.label
 
   val iter

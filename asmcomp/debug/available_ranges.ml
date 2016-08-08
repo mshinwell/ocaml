@@ -21,12 +21,17 @@ let rewrite_label env label =
   | exception Not_found -> label
   | label -> label
 
+(* CR-soon mshinwell: pull this type forward so other passes can use it *)
+type is_parameter =
+  | Local
+  | Parameter of { index : int; }
+
 module Available_subrange : sig
   type t
 
   type 'a location =
-    | Reg of Reg.t * 'a
-    | Phantom of Clambda.ulet_provenance * 'a phantom
+    | Reg of Reg.t * is_parameter * 'a
+    | Phantom of Clambda.ulet_provenance * is_parameter * 'a phantom
 
   and 'a phantom =
     | Const_int of int
@@ -37,6 +42,7 @@ module Available_subrange : sig
 
   val create
      : reg:Reg.t
+    -> is_parameter:int option
     -> start_insn:L.instruction
     -> start_pos:L.label
     -> end_pos:L.label
@@ -59,14 +65,14 @@ module Available_subrange : sig
   val end_pos : t -> L.label
   val end_pos_offset : t -> int option
   val location : t -> unit location
-  val is_parameter : t -> int option
+  val is_parameter : t -> is_parameter
   val offset_from_stack_ptr_in_bytes : t -> int option
 
   val rewrite_labels : t -> env:int Numbers.Int.Map.t -> t
 end = struct
   type 'a location =
-    | Reg of Reg.t * 'a
-    | Phantom of Clambda.ulet_provenance * 'a phantom
+    | Reg of Reg.t * is_parameter * 'a
+    | Phantom of Clambda.ulet_provenance * is_parameter * 'a phantom
 
   and 'a phantom =
     | Const_int of int
@@ -75,8 +81,7 @@ end = struct
     | Read_field of { address : 'a location; field : int; }
     | Offset_pointer of { address : 'a location; offset_in_words : int; }
 
-  (* XXX Improve this "int option" (for [is_parameter]) *)
-  type start_insn_or_phantom = (L.instruction * (int option)) location
+  type start_insn_or_phantom = L.instruction location
 
   type t = {
     (* CR-soon mshinwell: find a better name for [start_insn] *)
@@ -90,17 +95,22 @@ end = struct
 
   let create ~(reg : Reg.t) ~is_parameter ~(start_insn : Linearize.instruction)
         ~start_pos ~end_pos ~end_pos_offset =
-    assert (reg.name <> None);
     match start_insn.desc with
     | L.Lcapture_stack_offset _ | L.Llabel _ ->
       begin match start_insn.desc with
       | L.Lcapture_stack_offset _ ->
         assert (Array.length start_insn.arg = 1);
+        (* CR mshinwell: review assertions, maybe less useful now *)
         assert (reg.name = start_insn.arg.(0).Reg.name);
-        assert (reg.shared.loc = start_insn.arg.(0).Reg.shared.loc)
+        assert (reg.loc = start_insn.arg.(0).Reg.loc)
       | _ -> ()
       end;
-      { start_insn = Reg (reg, (start_insn, is_parameter));
+      let is_parameter =
+        match is_parameter with
+        | None -> Local
+        | Some index -> Parameter { index; }
+      in
+      { start_insn = Reg (reg, is_parameter, start_insn);
         start_pos;
         end_pos;
         end_pos_offset;
@@ -108,7 +118,9 @@ end = struct
     | _ -> failwith "Available_subrange.create"
 
   let create_phantom ~provenance ~defining_expr ~start_pos ~end_pos =
-    { start_insn = Phantom (provenance, defining_expr);
+    (* CR-someday mshinwell: when inlining a function, mark [Let]s binding
+       function parameters so that they turn into "parameter" phantom lets. *)
+    { start_insn = Phantom (provenance, Local, defining_expr);
       start_pos;
       end_pos;
       end_pos_offset = None;
@@ -125,9 +137,9 @@ end = struct
     let rec convert_location (start_insn : start_insn_or_phantom)
           : unit location =
       match start_insn with
-      | Reg (reg, _insn) -> Reg (reg, ())
-      | Phantom (provenance, defining_expr) ->
-        Phantom (provenance, convert_phantom defining_expr)
+      | Reg (reg, is_parameter, _insn) -> Reg (reg, is_parameter, ())
+      | Phantom (provenance, is_parameter, defining_expr) ->
+        Phantom (provenance, is_parameter, convert_phantom defining_expr)
     and convert_phantom (phantom : _ phantom) : unit phantom =
       match phantom with
       | Read_field { address; field; } ->
@@ -145,25 +157,22 @@ end = struct
 
   let is_parameter t =
     match t.start_insn with
-    | Reg (reg, (_start_insn, is_parameter)) -> is_parameter
-      (* CR-soon mshinwell: Phantom ones could in theory be parameters too
-         (e.g. a specialised arg maybe?), although I'm not sure that can
-         happen at the moment since Flambda always marks removed arguments
-         with Dead phantom lets. *)
-    | Phantom _ -> None
+    | Reg (_reg, is_parameter, _start_insn) -> is_parameter
+    | Phantom (_provenance, is_parameter, _defining_expr) -> is_parameter
 
   let offset_from_stack_ptr_in_bytes t =
     let rec offset (start_insn : start_insn_or_phantom) =
       match start_insn with
-      | Reg (reg, insn) ->
+      | Reg (_reg, _, insn) ->
         begin match insn.L.desc with
         | L.Lcapture_stack_offset offset -> !offset
         | L.Llabel _ ->
-          assert (not (Reg.assigned_to_stack reg));
+(* CR mshinwell: resurrect assertion *)
+(*          assert (not (Reg.assigned_to_stack reg)); *)
           None
         | _ -> assert false
         end
-      | Phantom (_, phantom) ->
+      | Phantom (_, _, phantom) ->
         match phantom with
         | Const_int _ | Const_symbol _ | Read_symbol_field _ -> None
         | Read_field { address; _ } | Offset_pointer { address; _ } ->
@@ -189,7 +198,7 @@ module Available_range : sig
         -> L.instruction Available_subrange.location)
      -> t
 
-  val is_parameter : t -> int option
+  val is_parameter : t -> is_parameter
   val add_subrange : t -> subrange:Available_subrange.t -> unit
   val extremities : t -> L.label * L.label
 
@@ -490,8 +499,8 @@ end) = struct
       process_instruction t ~fundecl ~first_insn ~insn:insn.L.next
         ~prev_insn:(Some insn) ~open_subrange_start_insns
 
-  let rec process_instructions t ~fundecl ~first_insn =
-    process_instructions t ~fundecl ~first_insn ~insn:first_insn
+  let process_instructions t ~fundecl ~first_insn =
+    process_instruction t ~fundecl ~first_insn ~insn:first_insn
       ~prev_insn:None ~open_subrange_start_insns:KM.empty
 end
 
@@ -506,8 +515,9 @@ module Make_ranges = Make (struct
   module Key = struct
     type t = RD.t
 
-    let assert_valid (t : t) =
-      assert (t.name <> None);  (* cf. [Available_filtering] *)
+    (* CR mshinwell: check this *)
+    let assert_valid (_t : t) = ()
+     (*  assert (t.name <> None);  (* cf. [Available_filtering] *) *)
 
     module Map = RD.Map_distinguishing_names_and_locations
     module Set = RD.Set_distinguishing_names_and_locations
@@ -563,11 +573,11 @@ module Make_ranges = Make (struct
     | Some debug_info ->
       let subrange =
         Available_subrange.create ~reg:(RD.reg reg)
-          ~is_parameter:(RD.Debug_info.is_parameter debug_info)
+          ~is_parameter:(RD.Debug_info.which_parameter debug_info)
           ~start_pos ~start_insn
           ~end_pos ~end_pos_offset
       in
-      let ident = RD.holds_value_of reg in
+      let ident = RD.Debug_info.holds_value_of debug_info in
       Some (subrange, ident)
 end)
 
@@ -649,7 +659,7 @@ let create ~fundecl =
             let range =
               Available_range.create_from_existing range
                 ~location_map:(fun address ->
-                  Phantom (provenance, Read_field { address; field; }))
+                  Phantom (provenance, Local, Read_field { address; field; }))
             in
             Some range
           end
@@ -660,7 +670,7 @@ let create ~fundecl =
             let range =
               Available_range.create_from_existing range
                 ~location_map:(fun address ->
-                  Phantom (provenance,
+                  Phantom (provenance, Local,
                     Offset_pointer { address; offset_in_words; }))
             in
             Some range

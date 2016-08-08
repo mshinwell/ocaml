@@ -117,7 +117,7 @@ let location_list_entry ~fundecl ~available_subrange =
   let rec location_expression ~(location : unit Available_subrange.location) =
     let module LE = Location_expression in
     match location with
-    | Reg (reg, ()) ->
+    | Reg (reg, _, ()) ->
       begin match reg.Reg.loc with
       | Reg.Unknown -> assert false  (* probably a bug in available_regs.ml *)
       | Reg.Reg _ ->
@@ -144,13 +144,13 @@ let location_list_entry ~fundecl ~available_subrange =
             ~offset_in_words:(offset_in_bytes_from_cfa / Arch.size_addr)
       end
     (* CR mshinwell: don't ignore provenance *)
-    | Phantom (_, Const_int i) -> LE.const_int (Int64.of_int i)
-    | Phantom (_, Const_symbol symbol) -> LE.const_symbol symbol
-    | Phantom (_, Read_symbol_field { symbol; field; }) ->
+    | Phantom (_, _, Const_int i) -> LE.const_int (Int64.of_int i)
+    | Phantom (_, _, Const_symbol symbol) -> LE.const_symbol symbol
+    | Phantom (_, _, Read_symbol_field { symbol; field; }) ->
       LE.read_symbol_field ~symbol ~field
-    | Phantom (_, Read_field { address; field; }) ->
+    | Phantom (_, _, Read_field { address; field; }) ->
       LE.read_field (location_expression ~location:address) ~field
-    | Phantom (_, Offset_pointer { address; offset_in_words; }) ->
+    | Phantom (_, _, Offset_pointer { address; offset_in_words; }) ->
       LE.offset_pointer (location_expression ~location:address)
         ~offset_in_words
   in
@@ -186,10 +186,10 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
   let (start_pos, end_pos) as cache_key = Available_range.extremities range in
   let parent_proto_die =
     match is_parameter with
-    | Some _index ->
+    | Parameter _index ->
       (* Parameters need to be children of the function in question. *)
       function_proto_die
-    | None ->
+    | Local ->
       (* Local variables need to be children of "lexical blocks", which in turn
          are children of the function.  We use a cache to avoid creating more
          than one proto-DIE for any given lexical block position and size. *)
@@ -256,8 +256,8 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
 *)
   let tag =
     match is_parameter with
-    | Some _index -> Dwarf_tag.Formal_parameter
-    | None -> Dwarf_tag.Variable
+    | Parameter _index -> Dwarf_tag.Formal_parameter
+    | Local -> Dwarf_tag.Variable
   in
   let proto_die =
     Proto_die.create ~parent:(Some parent_proto_die)
@@ -269,8 +269,8 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
       ]
   in
   begin match is_parameter with
-  | None -> ()
-  | Some index ->
+  | Local -> ()
+  | Parameter { index; } ->
     (* Ensure that parameters appear in the correct order in the debugger. *)
     Proto_die.set_sort_priority proto_die index
   end

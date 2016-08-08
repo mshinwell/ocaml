@@ -59,6 +59,12 @@ val assigned_to_stack : t -> bool
 
 val clear_debug_info : t -> t
 
+module Set_distinguishing_names_and_locations
+  : Set.S with type elt = t
+
+module Map_distinguishing_names_and_locations
+  : Map.S with type key = t
+
 module Set : sig
   include Set.S with type elt = t
 
@@ -80,4 +86,8 @@ module Set : sig
       [register_class] should always be [Proc.register_class]. *)
 end
 
-val print : Format.formatter -> t -> unit
+val print
+   : print_reg:(Format.formatter -> Reg.t -> unit)
+  -> Format.formatter
+  -> t
+  -> unit

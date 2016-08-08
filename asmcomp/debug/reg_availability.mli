@@ -29,5 +29,9 @@ val canonicalise : t -> t
 
 val equal : t -> t -> bool
 
-val print : Format.formatter -> t -> unit
+val print
+   : print_reg:(Format.formatter -> Reg.t -> unit)
+  -> Format.formatter
+  -> t
+  -> unit
 (** For debugging purposes only. *)

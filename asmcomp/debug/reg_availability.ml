@@ -73,9 +73,9 @@ let canonicalise availability =
     in
     Ok result
 
-let print ppf = function
+let print ~print_reg ppf = function
   | Unreachable -> Format.fprintf ppf "<unreachable>"
   | Ok availability ->
     Format.fprintf ppf "{%a}"
-      (Format.pp_print_list Reg_with_debug_info.print)
+      (Format.pp_print_list (Reg_with_debug_info.print ~print_reg))
       (RD.Set.elements availability)

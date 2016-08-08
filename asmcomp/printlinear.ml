@@ -35,7 +35,8 @@ let instr ppf i =
           fprintf ppf "@[<1>LA={%a}@]@," regsetaddr i.live;
           if !Clflags.debug then begin
             fprintf ppf "@[<1>AB=%a@]@,"
-              Reg_availability.print i.available_before;
+              (Reg_availability.print ~print_reg:Printmach.reg)
+              i.available_before;
             let phantom = Ident.Set.elements i.phantom_available_before in
             fprintf ppf "@[<1>PAB={%a}@]@,"
               (Format.pp_print_list Ident.print) phantom
@@ -65,19 +66,19 @@ let instr ppf i =
               fprintf ppf " until L%d" end_pos;
               let module AS = Available_ranges.Available_subrange in
               begin match location with
-              | AS.Reg (r, _) ->
+              | AS.Reg (r, _, _) ->
                 fprintf ppf " in %a" reg r
-              | AS.Phantom (_, AS.Const_symbol symbol) ->
+              | AS.Phantom (_, _, AS.Const_symbol symbol) ->
                 fprintf ppf " with known value %a" Symbol.print symbol
-              | AS.Phantom (_, AS.Read_symbol_field { symbol; field; }) ->
+              | AS.Phantom (_, _, AS.Read_symbol_field { symbol; field; }) ->
                 fprintf ppf " with known value %a.(%d)" Symbol.print symbol
                   field
-              | AS.Phantom (_, AS.Const_int i) ->
+              | AS.Phantom (_, _, AS.Const_int i) ->
                 fprintf ppf " with known value %d" i
-              | AS.Phantom (_, AS.Read_field _) ->
+              | AS.Phantom (_, _, AS.Read_field _) ->
                 (* CR mshinwell: fixme *)
                 fprintf ppf " from <Read_field _>"
-              | AS.Phantom (_, AS.Offset_pointer _) ->
+              | AS.Phantom (_, _, AS.Offset_pointer _) ->
                 (* CR mshinwell: fixme *)
                 fprintf ppf " from <Offset_pointer _>"
               end
