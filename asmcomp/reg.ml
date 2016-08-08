@@ -126,7 +126,7 @@ let reinit() =
   List.iter reinit_reg !reg_list
 
 let all_immutable rs =
-  List.for_all (fun t ->
+  Array.for_all (fun t ->
       match t.mutability with
       | Immutable -> true
       | Mutable -> false)

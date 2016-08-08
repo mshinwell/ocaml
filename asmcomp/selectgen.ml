@@ -90,67 +90,10 @@ let swap_intcomp = function
 
 (* Naming of registers *)
 
-let all_regs_immutable rv =
-  try
-    for i = 0 to Array.length rv - 1 do
-      if not (Reg.immutable rv.(i)) then raise Exit
-    done;
-    true
-  with Exit ->
-    false
-
 let name_regs id rv =
-  if Array.length rv = 1 then
-    Reg.set_name rv.(0) (Some id)
-  else
-    for i = 0 to Array.length rv - 1 do
-      Reg.set_name rv.(i) (Some id);
-      rv.(i).part <- Some i
-    done
-
-let set_name_propagation ~src ~dest =
-  Array.iter2 (fun src dest -> src.propagate_name_to <- Some dest)
-    src dest
-
-(* We shadow [Proc] to force correct naming of hard registers. *)
-module Proc = struct
-  let loc_parameters params =
-    let params =
-      Reg.identical_except_in_namev (Proc.loc_parameters params)
-        ~take_names_from:params
-    in
-    Array.iteri (fun index reg ->
-        reg.is_parameter <- Some index)
-      params;
-    params
-
-  let loc_arguments args =
-    let args', stack_offset = Proc.loc_arguments args in
-    let regs = Reg.identical_except_in_namev args' ~take_names_from:args in
-    regs, stack_offset
-
-  let loc_results res =
-    Reg.identical_except_in_namev (Proc.loc_results res)
-      ~take_names_from:res
-
-  let loc_external_arguments args =
-    let args', stack_offset =
-      Proc.loc_external_arguments (Array.of_list args)
-    in
-    let args = Array.concat args in
-    let regs =
-      Reg.identical_except_in_namev (Array.concat (Array.to_list args'))
-        ~take_names_from:args
-    in
-    regs, stack_offset
-
-  let loc_external_results res =
-    Reg.identical_except_in_namev (Proc.loc_external_results res)
-      ~take_names_from:res
-
-  let contains_calls = Proc.contains_calls
-  let loc_exn_bucket = Proc.loc_exn_bucket
-end
+  for i = 0 to Array.length rv - 1 do
+    rv.(i).name <- Ident.unique_name id
+  done
 
 (* "Join" two instruction sequences, making sure they return their results
    in the same registers. *)
@@ -163,32 +106,22 @@ let join env opt_r1 seq1 opt_r2 seq2 =
       let l1 = Array.length r1 in
       assert (l1 = Array.length r2);
       let r = Array.make l1 Reg.dummy in
-      (* CR mshinwell: could consider [propagate_name_to] here *)
-      (* What's going on with names here?
-         1. We make sure that if we're going to reuse a temporary register
-            from one branch for the output register, then we don't change
-            any name that the register might have already in that branch.
-            This is done using [Reg.anonymise], which introduces sharing.
-         2. We make sure that names from the branches don't propagate into
-            the result register. *)
       for i = 0 to l1-1 do
         if Reg.immutable r1.(i)
           && Cmm.ge_component r1.(i).typ r2.(i).typ
         then begin
-          let r1 = Reg.anonymise r1.(i) in
-          r.(i) <- r1;
-          seq2#insert_move_no_name_propagation env r2.(i) r1
+          r.(i) <- r1.(i);
+          seq2#insert_move env r2.(i) r1.(i)
         end else if Reg.immutable r2.(i)
           && Cmm.ge_component r2.(i).typ r1.(i).typ
         then begin
-          let r2 = Reg.anonymise r2.(i) in
-          r.(i) <- r2;
-          seq1#insert_move_no_name_propagation env r1.(i) r2
+          r.(i) <- r2.(i);
+          seq1#insert_move env r1.(i) r2.(i)
         end else begin
           let typ = Cmm.lub_component r1.(i).typ r2.(i).typ in
           r.(i) <- Reg.create typ;
-          seq1#insert_move_no_name_propagation env r1.(i) r.(i);
-          seq2#insert_move_no_name_propagation env r2.(i) r.(i)
+          seq1#insert_move env r1.(i) r.(i);
+          seq2#insert_move env r2.(i) r.(i)
         end
       done;
       Some r
@@ -470,49 +403,13 @@ method extract =
 
 (* Insert a sequence of moves from one pseudoreg set to another. *)
 
-method insert_move_no_name_propagation env src dst =
-  if src.stamp <> dst.stamp || src.name <> dst.name then begin
-    self#insert env (Iop Imove) [|src|] [|dst|]
-  end;
-
 method insert_move env src dst =
-  self#insert_move_no_name_propagation env src dst;
-  match src.mutability, dst.mutability with
-  | Immutable, Immutable ->
-    (* CR mshinwell: does this conditional really make sense? *)
-    if not (Reg.anonymous src) then begin
-      dst.name <- src.name
-    end
-  | Mutable, Immutable ->
-    (* This case, "snapshotting" a mutable variable to an immutable one, can
-       only result in sound name propagation if the mutable variable is
-       known not to be assigned to over the available range of the immutable
-       one.  For the moment we do not perform any analysis to judge this.
-       However there is an easy case: when the immutable variable clobbers
-       the mutable one, in which case the former may take the latter's
-       name.
-       (Aside: at the top of functions, hard registers preallocated by [Proc]
-       are snapshotted into immutable registers.  It is not possible for the
-       preallocated ones to be used further down the function, just by virtue
-       of how this module works, so we do not need to worry about them.) *)
-    if dst.loc = src.loc then begin
-      dst.name <- src.name
-    end
-  | Immutable, Mutable ->
-    (* We treat this always as assignment rather than initialisation.  Code
-       elsewhere in this module propagates names upon initialisation of
-       mutables. *)
-    ()
-  | Mutable, Mutable -> ()
+  if src.stamp <> dst.stamp then
+    self#insert env (Iop Imove) [|src|] [|dst|]
 
 method insert_moves env src dst =
   for i = 0 to min (Array.length src) (Array.length dst) - 1 do
     self#insert_move env src.(i) dst.(i)
-  done
-
-method insert_moves_no_name_propagation env src dst =
-  for i = 0 to min (Array.length src) (Array.length dst) - 1 do
-    self#insert_move_no_name_propagation env src.(i) dst.(i)
   done
 
 (* Adjust the types of destination pseudoregs for a [Cassign] assignment.
@@ -553,8 +450,6 @@ method insert_move_results env loc res stacksize =
    instructions, or instructions using dedicated registers. *)
 
 method insert_op_debug env op dbg rs rd =
-  (* Prevent back-propagation of names across the operation. *)
-  let rd = Array.map Reg.anonymise rd in
   self#insert_debug env (Iop op) dbg rs rd;
   rd
 
@@ -616,7 +511,7 @@ method emit_expr env exp =
         let naming_op =
           Iname_for_debugger { ident = v; which_parameter = None; }
         in
-        self#insert_op env naming_op r1 [| |];
+        self#insert_debug env (Iop naming_op) Debuginfo.none r1 [| |];
         self#adjust_types r1 rv; self#insert_moves env r1 rv; Some [||]
       end
   | Ctuple [] ->
@@ -656,7 +551,6 @@ method emit_expr env exp =
               self#insert_debug env (Iop Icall_ind) dbg
                           (Array.append [|r1.(0)|] loc_arg) loc_res;
               self#insert_move_results env loc_res rd stack_ofs;
-              set_name_propagation ~src:rd ~dest:loc_res;
               Some rd
           | Icall_imm lbl ->
               let r1 = self#emit_tuple env new_args in
@@ -666,7 +560,6 @@ method emit_expr env exp =
               self#insert_move_args env r1 loc_arg stack_ofs;
               self#insert_debug env (Iop(Icall_imm lbl)) dbg loc_arg loc_res;
               self#insert_move_results env loc_res rd stack_ofs;
-              set_name_propagation ~src:rd ~dest:loc_res;
               Some rd
           | Iextcall(lbl, alloc) ->
               let (loc_arg, stack_ofs) = self#emit_extcall_args env new_args in
@@ -674,7 +567,6 @@ method emit_expr env exp =
               let loc_res = self#insert_op_debug env (Iextcall(lbl, alloc)) dbg
                                     loc_arg (Proc.loc_external_results rd) in
               self#insert_move_results env loc_res rd stack_ofs;
-              set_name_propagation ~src:rd ~dest:loc_res;
               Some rd
           | Ialloc _ ->
               let rd = self#regs_for typ_val in
@@ -784,11 +676,11 @@ method private bind_let env binding_mutable ident r1 =
     | Mutable ->
       let rv = Reg.createv_like r1 in
       name_regs ident rv;
-      self#insert_moves r1 rv;
+      self#insert_moves env r1 rv;
       { env with idents = Tbl.add ident rv env.idents; }
   in
   let naming_op = Iname_for_debugger { ident; which_parameter = None; } in
-  self#insert_op env naming_op rv [| |];
+  self#insert_debug env (Iop naming_op) Debuginfo.none r1 [| |];
   result
 
 
@@ -861,14 +753,15 @@ method private emit_tuple env exp_list =
 method emit_extcall_args env args =
   let args = self#emit_tuple_not_flattened env args in
   let arg_hard_regs, stack_ofs =
-    Proc.loc_external_arguments args
+    Proc.loc_external_arguments (Array.of_list args)
   in
-  let args = Array.concat args in
   (* Flattening [args] and [arg_hard_regs] (the latter done by
      [loc_external_arguments], above) causes parts of values split
      across multiple registers to line up correctly, by virtue of the
      semantics of [split_int64_for_32bit_target] in cmmgen.ml, and the
      required semantics of [loc_external_arguments] (see proc.mli). *)
+  let args = Array.concat args in
+  let arg_hard_regs = Array.concat (Array.to_list arg_hard_regs) in
   self#insert_move_args env args arg_hard_regs stack_ofs;
   arg_hard_regs, stack_ofs
 
@@ -1033,28 +926,28 @@ method private emit_tail_sequence env exp =
 method emit_fundecl f =
   Proc.contains_calls := false;
   current_function_name := f.Cmm.fun_name;
+  let empty_env = {
+    idents = Tbl.empty;
+    phantom_idents = Ident.Set.empty;
+  }
+  in
   let rargs =
-    List.mapi (fun (param_index, ident, ty) ->
+    List.mapi (fun param_index (ident, ty) ->
         let r = self#regs_for ty in
         name_regs ident r;
         let naming_op =
           Iname_for_debugger { ident; which_parameter = Some param_index; }
         in
-        self#insert_op env naming_op r [| |];
+        self#insert_debug empty_env (Iop naming_op) Debuginfo.none r [| |];
         r)
       f.Cmm.fun_args
   in
   let rarg = Array.concat rargs in
   let loc_arg = Proc.loc_parameters rarg in
   let env =
-    let empty = {
-      idents = Tbl.empty;
-      phantom_idents = Ident.Set.empty;
-    }
-    in
     List.fold_right2
       (fun (id, _ty) r env -> { env with idents = Tbl.add id r env.idents; })
-      f.Cmm.fun_args rargs empty in
+      f.Cmm.fun_args rargs empty_env in
   self#insert_moves env loc_arg rarg;
   self#emit_tail env f.Cmm.fun_body;
   let body = self#extract in

@@ -101,15 +101,11 @@ class virtual selector_generic : object
   method insert_debug : environment -> Mach.instruction_desc -> Debuginfo.t
     -> Reg.t array -> Reg.t array -> unit
   method insert_move : environment -> Reg.t -> Reg.t -> unit
-  method insert_move_no_name_propagation : environment -> Reg.t -> Reg.t
-    -> unit
   method insert_move_args : environment -> Reg.t array -> Reg.t array -> int
     -> unit
   method insert_move_results : environment -> Reg.t array -> Reg.t array
     -> int -> unit
   method insert_moves : environment -> Reg.t array -> Reg.t array -> unit
-  method insert_moves_no_name_propagation : environment -> Reg.t array
-    -> Reg.t array -> unit
   method adjust_type : Reg.t -> Reg.t -> unit
   method adjust_types : Reg.t array -> Reg.t array -> unit
   method emit_expr :

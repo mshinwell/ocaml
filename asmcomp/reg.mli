@@ -52,7 +52,7 @@ val at_location: Cmm.machtype_component -> location -> t
 (** Whether the register might hold the value of a mutable Cmm variable. *)
 val immutable : t -> bool
 
-val all_immutable : t list -> bool
+val all_immutable : t array -> bool
 
 (* Name for printing *)
 val name : t -> string
