@@ -246,7 +246,6 @@ method! insert_op_debug env op dbg rs rd =
   try
     let (rsrc, rdst) = pseudoregs_for_operation op rs rd in
     self#insert_moves env rs rsrc;
-    let rdst = Array.map Reg.anonymise rdst in
     self#insert_debug env (Iop op) dbg rsrc rdst;
     self#insert_moves env rdst rd;
     rd

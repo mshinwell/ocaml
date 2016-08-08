@@ -56,7 +56,7 @@ open Mach
 *)
 
 let stackp r =
-  match r.shared.loc with
+  match r.loc with
     Stack _ -> true
   | _ -> false
 
@@ -71,7 +71,7 @@ method! reload_operation op arg res =
       if stackp arg.(0) && stackp arg.(1)
       then ([|arg.(0); self#makereg arg.(1)|], res)
       else (arg, res)
-  | Iintop_imm(Iadd, _) when arg.(0).shared.loc <> res.(0).shared.loc ->
+  | Iintop_imm(Iadd, _) when arg.(0).loc <> res.(0).loc ->
       (* This add will be turned into a lea; args and results must be
          in registers *)
       super#reload_operation op arg res

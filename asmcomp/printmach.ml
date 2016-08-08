@@ -22,7 +22,6 @@ open Mach
 
 let reg_shared_core ppf shared =
   fprintf ppf "/%i" shared.stamp;
-  if shared.is_parameter <> None then fprintf ppf "[P]";
   begin match shared.loc with
   | Unknown -> ()
   | Reg r ->
@@ -46,7 +45,8 @@ let reg_shared ppf shared =
   reg_shared_core ppf shared
 
 let reg ppf r =
-  if not (Reg.anonymous r) then begin
+  let name = Reg.name r in
+  if r <> "" then begin
     fprintf ppf "%s" (Reg.name r)
   end else begin
     fprintf ppf "%s"

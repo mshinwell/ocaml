@@ -42,12 +42,12 @@ let canonicalise availability =
             | exception Not_found -> Ident.Tbl.add regs_by_ident name reg
             | (reg' : RD.t) ->
               (* We prefer registers that are assigned to the stack to
-                preserve availability across function calls.  Other than
-                that, any register is as good as any other register; likewise
-                for stack slots. *)
+                 preserve availability across function calls.  Other than
+                 that, any register is as good as any other register; likewise
+                 for stack slots. *)
               (* CR mshinwell: think about this again.  Does it matter what's
-                chosen here?  May be better to choose "Reg" as the dwarf is
-                probably smaller *)
+                 chosen here?  May only be the DWARF size that it affects
+                 ("reg" probably smaller, but fewer "stack" operators) *)
               match RD.location reg, RD.location reg' with
               | Reg _, Stack _
               | Reg _, Reg _
