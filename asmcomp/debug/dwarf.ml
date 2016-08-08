@@ -118,7 +118,7 @@ let location_list_entry ~fundecl ~available_subrange =
     let module LE = Location_expression in
     match location with
     | Reg (reg, ()) ->
-      begin match reg.Reg.shared.Reg.loc with
+      begin match reg.Reg.loc with
       | Reg.Unknown -> assert false  (* probably a bug in available_regs.ml *)
       | Reg.Reg _ ->
         let reg_number = Proc.dwarf_register_number reg in
