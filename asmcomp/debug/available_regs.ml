@@ -55,7 +55,7 @@ let operation_can_raise (op : Mach.operation) =
 let augment_availability_at_raise avail =
   match !avail_at_raise with
   | None -> avail_at_raise := Some avail
-  | Some avail' -> avail_at_raise := Some (inter avail avail')
+  | Some avail' -> avail_at_raise := Some (Reg_availability.inter avail avail')
 
 (* [available_regs ~instr ~avail_before] calculates, given the registers
    "available before" an instruction [instr], the registers that are available
@@ -71,8 +71,9 @@ let augment_availability_at_raise avail =
    The [available_before] field of each instruction is updated by this
    function.
 *)
-let rec available_regs (instr : M.instruction) ~avail_before =
-  let avail_before =
+let rec available_regs (instr : M.instruction)
+      ~(avail_before : Reg_availability.t) =
+  let avail_before : Reg_availability.t =
     (* If this instruction might expand into multiple machine instructions
        and clobber registers during that code sequence, make sure any
        such clobbered registers are marked as "unavailable before". *)
@@ -92,9 +93,8 @@ let rec available_regs (instr : M.instruction) ~avail_before =
           should not be an input to an instruction unless it is available due
           to the special case (about multiple instructions) below.) *)
       (* XCR pchambart: The difference between live and avail_before is
-        probably due to the 'interesting' filter. *)
-      assert (R.Set.subset (instr_live instr)
-        (RD.Set.forget_debug_info avail_before));
+         probably due to the 'interesting' filter. *)
+      assert (R.Set.subset instr.live (RD.Set.forget_debug_info avail_before));
       match instr.desc with
       | Iop (Ialloc _) ->
         let made_unavailable =
@@ -102,14 +102,14 @@ let rec available_regs (instr : M.instruction) ~avail_before =
             ~regs_clobbered:(Proc.destroyed_at_oper instr.desc)
             ~register_class:Proc.register_class
         in
-        RD.Set.diff avail_before made_unavailable
+        Ok (RD.Set.diff avail_before made_unavailable)
       (* CR mshinwell: should have a hook for Ispecific cases *)
       | _ -> Ok avail_before
   in
   (* CR pchambart: Given how it's used I would rename it to
      available_across rather than available_before. *)
   instr.available_before <- avail_before;
-  let avail_after =
+  let avail_after : Reg_availability.t =
     match avail_before with
     | Unreachable -> Unreachable
     | Ok avail_before ->
@@ -121,8 +121,12 @@ let rec available_regs (instr : M.instruction) ~avail_before =
         (* First forget about any existing debug info to do with [ident]. *)
         let forgetting_ident =
           RD.Set.map (fun reg ->
-              if RD.holds_value_of reg ident then RD.clear_debug_info reg
-              else reg)
+              match RD.debug_info reg with
+              | None -> reg
+              | Some debug_info ->
+                if Ident.same (RD.Debug_info.holds_value_of debug_info) ident
+                then RD.clear_debug_info reg
+                else reg)
             avail_before
         in
         let avail_after = ref forgetting_ident in
@@ -142,10 +146,10 @@ let rec available_regs (instr : M.instruction) ~avail_before =
             avail_after := RD.Set.add reg !avail_after
           end
         done;
-        !avail_after
+        Ok !avail_after
       | Iop op ->
         if operation_can_raise op then begin
-          augment_availability_at_raise avail_before
+          augment_availability_at_raise (Reg_availability.Ok avail_before)
         end;
         let avail_after =
           match op with
@@ -177,13 +181,13 @@ let rec available_regs (instr : M.instruction) ~avail_before =
                 special case for moves above keeps the following code
                 straightforward. *)
           let regs_clobbered =
-            R.Set.union (R.set_of_array (Proc.destroyed_at_oper instr.desc))
-              (R.set_of_array instr.res)
+            Array.append (Proc.destroyed_at_oper instr.desc) instr.res
           in
           RD.Set.made_unavailable_by_clobber avail_after ~regs_clobbered
             ~register_class:Proc.register_class
         in
-        RD.Set.union (RD.Set.without_debug_info instr.res) avail_after
+        RD.Set.union (RD.Set.without_debug_info (Reg.set_of_array instr.res))
+          avail_after
       | Iifthenelse (_, ifso, ifnot) -> join [ifso; ifnot] ~avail_before
       | Iswitch (_, cases) -> join (Array.to_list cases) ~avail_before
       | Iloop body ->
