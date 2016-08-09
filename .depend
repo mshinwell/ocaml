@@ -804,11 +804,13 @@ asmcomp/asmpackager.cmx : typing/typemod.cmx bytecomp/translmod.cmx \
     utils/clflags.cmx utils/ccomp.cmx asmcomp/asmlink.cmx asmcomp/asmgen.cmx \
     asmcomp/asmpackager.cmi
 asmcomp/asmpackager.cmi : typing/env.cmi middle_end/backend_intf.cmi
-asmcomp/branch_relaxation.cmo : asmcomp/reg.cmi utils/misc.cmi \
-    asmcomp/mach.cmi asmcomp/linearize.cmi typing/ident.cmi asmcomp/cmm.cmi \
+asmcomp/branch_relaxation.cmo : asmcomp/debug/reg_with_debug_info.cmi \
+    asmcomp/debug/reg_availability.cmi utils/misc.cmi asmcomp/mach.cmi \
+    asmcomp/linearize.cmi typing/ident.cmi asmcomp/cmm.cmi \
     asmcomp/branch_relaxation_intf.cmo asmcomp/branch_relaxation.cmi
-asmcomp/branch_relaxation.cmx : asmcomp/reg.cmx utils/misc.cmx \
-    asmcomp/mach.cmx asmcomp/linearize.cmx typing/ident.cmx asmcomp/cmm.cmx \
+asmcomp/branch_relaxation.cmx : asmcomp/debug/reg_with_debug_info.cmx \
+    asmcomp/debug/reg_availability.cmx utils/misc.cmx asmcomp/mach.cmx \
+    asmcomp/linearize.cmx typing/ident.cmx asmcomp/cmm.cmx \
     asmcomp/branch_relaxation_intf.cmx asmcomp/branch_relaxation.cmi
 asmcomp/branch_relaxation.cmi : asmcomp/linearize.cmi \
     asmcomp/branch_relaxation_intf.cmo
@@ -1110,14 +1112,14 @@ asmcomp/printlinear.cmx : middle_end/base_types/symbol.cmx \
     asmcomp/debug/available_ranges.cmx asmcomp/printlinear.cmi
 asmcomp/printlinear.cmi : asmcomp/linearize.cmi \
     asmcomp/debug/available_ranges.cmi
-asmcomp/printmach.cmo : asmcomp/reg.cmi asmcomp/proc.cmi \
-    asmcomp/printcmm.cmi asmcomp/mach.cmi bytecomp/lambda.cmi \
-    typing/ident.cmi bytecomp/debuginfo.cmi asmcomp/cmm.cmi asmcomp/arch.cmo \
-    asmcomp/printmach.cmi
-asmcomp/printmach.cmx : asmcomp/reg.cmx asmcomp/proc.cmx \
-    asmcomp/printcmm.cmx asmcomp/mach.cmx bytecomp/lambda.cmx \
-    typing/ident.cmx bytecomp/debuginfo.cmx asmcomp/cmm.cmx asmcomp/arch.cmx \
-    asmcomp/printmach.cmi
+asmcomp/printmach.cmo : asmcomp/debug/reg_availability.cmi asmcomp/reg.cmi \
+    asmcomp/proc.cmi asmcomp/printcmm.cmi asmcomp/mach.cmi \
+    bytecomp/lambda.cmi typing/ident.cmi bytecomp/debuginfo.cmi \
+    asmcomp/cmm.cmi asmcomp/arch.cmo asmcomp/printmach.cmi
+asmcomp/printmach.cmx : asmcomp/debug/reg_availability.cmx asmcomp/reg.cmx \
+    asmcomp/proc.cmx asmcomp/printcmm.cmx asmcomp/mach.cmx \
+    bytecomp/lambda.cmx typing/ident.cmx bytecomp/debuginfo.cmx \
+    asmcomp/cmm.cmx asmcomp/arch.cmx asmcomp/printmach.cmi
 asmcomp/printmach.cmi : asmcomp/reg.cmi asmcomp/mach.cmi
 asmcomp/proc.cmo : asmcomp/x86_proc.cmi asmcomp/reg.cmi utils/misc.cmi \
     asmcomp/mach.cmi utils/config.cmi asmcomp/cmm.cmi asmcomp/arch.cmo \
@@ -1236,10 +1238,12 @@ asmcomp/debug/available_ranges.cmi : middle_end/base_types/symbol.cmi \
     asmcomp/reg.cmi utils/numbers.cmi asmcomp/linearize.cmi typing/ident.cmi \
     asmcomp/clambda.cmi
 asmcomp/debug/available_regs.cmo : asmcomp/debug/reg_with_debug_info.cmi \
-    asmcomp/reg.cmi asmcomp/proc.cmi asmcomp/mach.cmi \
+    asmcomp/debug/reg_availability.cmi asmcomp/reg.cmi asmcomp/proc.cmi \
+    asmcomp/printmach.cmi utils/misc.cmi asmcomp/mach.cmi typing/ident.cmi \
     asmcomp/debug/available_regs.cmi
 asmcomp/debug/available_regs.cmx : asmcomp/debug/reg_with_debug_info.cmx \
-    asmcomp/reg.cmx asmcomp/proc.cmx asmcomp/mach.cmx \
+    asmcomp/debug/reg_availability.cmx asmcomp/reg.cmx asmcomp/proc.cmx \
+    asmcomp/printmach.cmx utils/misc.cmx asmcomp/mach.cmx typing/ident.cmx \
     asmcomp/debug/available_regs.cmi
 asmcomp/debug/available_regs.cmi : asmcomp/mach.cmi
 asmcomp/debug/coalesce_labels.cmo : utils/numbers.cmi utils/misc.cmi \
@@ -1294,12 +1298,11 @@ asmcomp/debug/reg_availability.cmo : asmcomp/debug/reg_with_debug_info.cmi \
     typing/ident.cmi asmcomp/debug/reg_availability.cmi
 asmcomp/debug/reg_availability.cmx : asmcomp/debug/reg_with_debug_info.cmx \
     typing/ident.cmx asmcomp/debug/reg_availability.cmi
-asmcomp/debug/reg_availability.cmi : asmcomp/debug/reg_with_debug_info.cmi
-asmcomp/debug/reg_with_debug_info.cmo : asmcomp/reg.cmi \
-    asmcomp/printmach.cmi typing/ident.cmi \
+asmcomp/debug/reg_availability.cmi : asmcomp/debug/reg_with_debug_info.cmi \
+    asmcomp/reg.cmi
+asmcomp/debug/reg_with_debug_info.cmo : asmcomp/reg.cmi typing/ident.cmi \
     asmcomp/debug/reg_with_debug_info.cmi
-asmcomp/debug/reg_with_debug_info.cmx : asmcomp/reg.cmx \
-    asmcomp/printmach.cmx typing/ident.cmx \
+asmcomp/debug/reg_with_debug_info.cmx : asmcomp/reg.cmx typing/ident.cmx \
     asmcomp/debug/reg_with_debug_info.cmi
 asmcomp/debug/reg_with_debug_info.cmi : asmcomp/reg.cmi typing/ident.cmi
 asmcomp/debug/resolve_phantom_lets.cmo : asmcomp/debug/name_laundry.cmi \

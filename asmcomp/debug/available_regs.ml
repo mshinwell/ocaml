@@ -105,10 +105,12 @@ Format.eprintf "available_regs on entry: AB=%a instr=%a\n%!"
       if not (R.Set.subset instr.live (RD.Set.forget_debug_info avail_before))
       then begin
         Misc.fatal_errorf "Live registers not a subset of available registers: \
-            live={%a} avail_before=%a insn=%a"
+            live={%a} avail_before=%a missing={%a} insn=%a"
           Printmach.regset instr.live
           (Reg_availability.print ~print_reg:Printmach.reg)
           (Reg_availability.Ok avail_before)
+          Printmach.regset (R.Set.diff instr.live
+            (RD.Set.forget_debug_info avail_before))
           Printmach.instr ({ instr with Mach. next = Mach.end_instr (); })
 (*
 fail := true;
@@ -166,7 +168,7 @@ fail := true;
           end
         done;
         Ok !avail_after
-      | Iop Imove ->
+      | Iop (Imove | Ireload | Ispill) ->
         (* Moves are special: they can cause us to learn that a particular
            hard register holds the (equal) values of multiple
            pseudoregisters. *)
