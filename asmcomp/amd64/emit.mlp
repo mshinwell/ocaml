@@ -251,13 +251,12 @@ let record_frame_label live dbg =
   let lbl = new_label() in
   let live_offset = ref [] in
   Reg.Set.iter
-    (fun r ->
-      match r with
+    (function
       | {typ = Val; loc = Reg r} ->
           live_offset := ((r lsl 1) + 1) :: !live_offset
-      | {typ = Val; loc = Stack s} ->
-          live_offset := slot_offset s (register_class r) :: !live_offset
-      | {typ = Addr} ->
+      | {typ = Val; loc = Stack s} as reg ->
+          live_offset := slot_offset s (register_class reg) :: !live_offset
+      | {typ = Addr} as r ->
           Misc.fatal_error ("bad GC root " ^ Reg.name r)
       | _ -> ()
     )
