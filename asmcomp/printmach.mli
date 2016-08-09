@@ -30,3 +30,4 @@ val interferences: formatter -> unit -> unit
 val preferences: formatter -> unit -> unit
 
 val print_live: bool ref
+val print_availability: bool ref

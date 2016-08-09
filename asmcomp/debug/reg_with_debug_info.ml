@@ -22,7 +22,7 @@ module Debug_info = struct
     which_parameter : int option;
   }
 
-  let compare t1 t2 =
+  let _compare t1 t2 =
     let c = Ident.compare t1.holds_value_of t2.holds_value_of in
     if c <> 0 then c
     else
@@ -59,6 +59,8 @@ module T = struct
 
   let compare t1 t2 =
     let c = Order.compare t1.reg t2.reg in
+    c
+(*
     if c <> 0 then c
     else
       match t1.debug_info, t2.debug_info with
@@ -66,6 +68,7 @@ module T = struct
       | None, Some _ -> -1
       | Some _, None -> 1
       | Some di1, Some di2 -> Debug_info.compare di1 di2
+*)
 end
 
 include T

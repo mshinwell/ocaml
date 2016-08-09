@@ -71,13 +71,16 @@ let augment_availability_at_raise avail =
    The [available_before] field of each instruction is updated by this
    function.
 *)
+(*
+let fail = ref false
+*)
 let rec available_regs (instr : M.instruction)
       ~(avail_before : Reg_availability.t) : Reg_availability.t =
-
+(*
 Format.eprintf "available_regs on entry: AB=%a instr=%a\n%!"
   (Reg_availability.print ~print_reg:Printmach.reg) avail_before
   Printmach.instr ({ instr with Mach.next = Mach.dummy_instr; });
-
+*)
   let avail_before : Reg_availability.t =
     (* If this instruction might expand into multiple machine instructions
        and clobber registers during that code sequence, make sure any
@@ -94,9 +97,9 @@ Format.eprintf "available_regs on entry: AB=%a instr=%a\n%!"
     | Unreachable -> Unreachable
     | Ok avail_before ->
       (* Every register that is live across an instruction should also be
-          available before the instruction.  (We cannot assert that a register
-          should not be an input to an instruction unless it is available due
-          to the special case (about multiple instructions) below.) *)
+         available before the instruction.  (We cannot assert that a register
+         should not be an input to an instruction unless it is available due
+         to the special case below.) *)
       (* XCR pchambart: The difference between live and avail_before is
          probably due to the 'interesting' filter. *)
       if not (R.Set.subset instr.live (RD.Set.forget_debug_info avail_before))
@@ -107,6 +110,9 @@ Format.eprintf "available_regs on entry: AB=%a instr=%a\n%!"
           (Reg_availability.print ~print_reg:Printmach.reg)
           (Reg_availability.Ok avail_before)
           Printmach.instr ({ instr with Mach. next = Mach.end_instr (); })
+(*
+fail := true;
+*)
       end;
       match instr.desc with
       | Iop (Ialloc _) ->
@@ -160,6 +166,12 @@ Format.eprintf "available_regs on entry: AB=%a instr=%a\n%!"
           end
         done;
         Ok !avail_after
+      | Iop Imove ->
+        (* Moves are special: they can cause us to learn that a particular
+           hard register holds the (equal) values of multiple
+           pseudoregisters. *)
+        Ok (RD.Set.union avail_before
+          (RD.Set.without_debug_info (Reg.set_of_array instr.res)))
       | Iop op ->
         if operation_can_raise op then begin
           augment_availability_at_raise (Reg_availability.Ok avail_before)
@@ -167,15 +179,8 @@ Format.eprintf "available_regs on entry: AB=%a instr=%a\n%!"
         (* We split the calculation of registers that become unavailable after
            a call into two parts.  First: anything that the target marks as
            destroyed by the operation, combined with any registers that will
-           be clobbered by the operation writing out its results.  There is
-           one special case to match up with [Liveness]: a no-op move. *)
+           be clobbered by the operation writing out its results. *)
         let made_unavailable_1 =
-          match op with
-          | Imove
-            when instr.arg.(0).Reg.loc = instr.res.(0).Reg.loc
-              && Proc.register_class instr.arg.(0)
-                = Proc.register_class instr.res.(0) -> RD.Set.empty
-          | _ ->
             let regs_clobbered =
               Array.append (Proc.destroyed_at_oper instr.desc) instr.res
             in
@@ -251,18 +256,33 @@ Format.eprintf "available_regs on entry: AB=%a instr=%a\n%!"
         with
         | None -> avail_after_body  (* The handler is unreachable. *)
         | Some avail_at_exit ->
+(*
+Format.eprintf "nfail %d avail_at_exit=%a\n%!" nfail
+  (Reg_availability.print ~print_reg:Printmach.reg) avail_at_exit;
+*)
           Hashtbl.remove avail_at_exit_table nfail;
           Reg_availability.inter avail_after_body
             (available_regs handler ~avail_before:avail_at_exit)
         end
       | Iexit nfail ->
         let avail_before = Reg_availability.Ok avail_before in
-        begin try
-          Hashtbl.replace avail_at_exit_table nfail
-            (Reg_availability.inter (Hashtbl.find avail_at_exit_table nfail)
-              avail_before)
-        with Not_found ->
+(*
+Format.eprintf "EXIT nfail %d avail=%a\n%!" nfail
+  (Reg_availability.print ~print_reg:Printmach.reg) avail_before;
+*)
+        begin match Hashtbl.find avail_at_exit_table nfail with
+        | exception Not_found ->
           Hashtbl.add avail_at_exit_table nfail avail_before
+        | avail_at_exit ->
+(*
+Format.eprintf "***** INTER nfail %d at_exit=%a AB=%a result=%a\n%!" nfail
+  (Reg_availability.print ~print_reg:Printmach.reg) avail_at_exit
+  (Reg_availability.print ~print_reg:Printmach.reg) avail_before
+  (Reg_availability.print ~print_reg:Printmach.reg)
+            (Reg_availability.inter avail_at_exit avail_before);
+*)
+          Hashtbl.replace avail_at_exit_table nfail
+            (Reg_availability.inter avail_at_exit avail_before)
         end;
         Unreachable
       | Itrywith (body, handler) ->
@@ -296,15 +316,25 @@ and join branches ~avail_before =
   end
 
 let fundecl (f : Mach.fundecl) =
+(*
+Printmach.print_live := true;
+Format.eprintf "Available_regs:\n%a%!"
+  Printmach.fundecl f;
+*)
   (* XCR pchambart: this should be cleaned by the Icatch instruction.
      It should be replaced by an assertion *)
   assert (Hashtbl.length avail_at_exit_table = 0);
   avail_at_raise := None;
   let fun_args = R.set_of_array f.fun_args in
-  let first_instr_arg = R.set_of_array f.fun_body.arg in
-  assert (R.Set.subset first_instr_arg fun_args);
   let avail_before =
     Reg_availability.Ok (RD.Set.without_debug_info fun_args)
   in
   ignore ((available_regs f.fun_body ~avail_before) : Reg_availability.t);
+(*
+Printmach.print_availability := true;
+Format.eprintf "Available_regs AFTERWARDS:\n%a%!"
+  Printmach.fundecl f;
+Printmach.print_availability := false;
+if !fail then Misc.fatal_error "failure";
+*)
   f
