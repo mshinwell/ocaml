@@ -713,7 +713,6 @@ method private emit_parts env exp =
           (* The normal case *)
           let id = Ident.create "bind" in
           if Reg.all_immutable r then begin
-            name_regs id r;
             Some (Cvar id, { env with idents = Tbl.add id r env.idents; })
           end else begin
             (* Introduce a fresh (immutable) temp to hold the result *)
