@@ -119,10 +119,7 @@ let join env opt_r1 seq1 opt_r2 seq2 =
           seq1#insert_move env r1.(i) r2.(i)
         end else begin
           let typ = Cmm.lub_component r1.(i).typ r2.(i).typ in
-          let mutability =
-            Cmm.join_mutability r1.(i).mutability r2.(i).mutability
-          in
-          r.(i) <- Reg.create typ ~mutability;
+          r.(i) <- Reg.create typ;
           seq1#insert_move env r1.(i) r.(i);
           seq2#insert_move env r2.(i) r.(i)
         end
@@ -139,14 +136,10 @@ let join_array env rs =
     | None -> ()
     | Some r ->
       match !some_res with
-      | None ->
-        some_res := Some (r, Array.map (fun r -> r.typ, r.mutability) r)
+      | None -> some_res := Some (r, Array.map (fun r -> r.typ) r)
       | Some (r', types) ->
         let types =
-          Array.map2 (fun r (typ, mutability) ->
-            let typ = Cmm.lub_component r.typ typ in
-            let mutability = Cmm.join_mutability r.mutability mutability in
-            typ, mutability) r types
+          Array.map2 (fun r typ -> Cmm.lub_component r.typ typ) r types
         in
         some_res := Some (r', types)
   done;
@@ -156,8 +149,7 @@ let join_array env rs =
       let size_res = Array.length template in
       let res = Array.make size_res Reg.dummy in
       for i = 0 to size_res - 1 do
-        let typ, mutability = types.(i) in
-        res.(i) <- Reg.create typ ~mutability
+        res.(i) <- Reg.create types.(i)
       done;
       for i = 0 to Array.length rs - 1 do
         let (r, s) = rs.(i) in
