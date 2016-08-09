@@ -94,6 +94,7 @@ let rec regalloc ppf round fd =
 let available_regs _ppf fundecl =
   if not !Clflags.debug then fundecl
   else begin
+    Printmach.print_availability := true;
     (* CR mshinwell: add -d... *)
 (*     dump_if ppf dump_regalloc "After register allocation" fd; *)
 (* CR mshinwell: don't do Available_regs except with -g.  It seems we still

@@ -119,7 +119,10 @@ let join env opt_r1 seq1 opt_r2 seq2 =
           seq1#insert_move env r1.(i) r2.(i)
         end else begin
           let typ = Cmm.lub_component r1.(i).typ r2.(i).typ in
-          r.(i) <- Reg.create typ;
+          let mutability =
+            Cmm.join_mutability r1.(i).mutability r2.(i).mutability
+          in
+          r.(i) <- Reg.create typ ~mutability;
           seq1#insert_move env r1.(i) r.(i);
           seq2#insert_move env r2.(i) r.(i)
         end
@@ -132,15 +135,29 @@ let join_array env rs =
   let some_res = ref None in
   for i = 0 to Array.length rs - 1 do
     let (r, _) = rs.(i) in
-    if r <> None then some_res := r
+    match r with
+    | None -> ()
+    | Some r ->
+      match !some_res with
+      | None ->
+        some_res := Some (r, Array.map (fun r -> r.typ, r.mutability) r)
+      | Some (r', types) ->
+        let types =
+          Array.map2 (fun r (typ, mutability) ->
+            let typ = Cmm.lub_component r.typ typ in
+            let mutability = Cmm.join_mutability r.mutability mutability in
+            typ, mutability) r types
+        in
+        some_res := Some (r', types)
   done;
   match !some_res with
     None -> None
-  | Some template ->
+  | Some (template, types) ->
       let size_res = Array.length template in
       let res = Array.make size_res Reg.dummy in
       for i = 0 to size_res - 1 do
-        res.(i) <- Reg.create template.(i).typ
+        let typ, mutability = types.(i) in
+        res.(i) <- Reg.create typ ~mutability
       done;
       for i = 0 to Array.length rs - 1 do
         let (r, s) = rs.(i) in
@@ -674,7 +691,7 @@ method private bind_let env binding_mutable ident r1 =
       name_regs ident r1;
       { env with idents = Tbl.add ident r1 env.idents; }
     | Mutable ->
-      let rv = Reg.createv_like ~mutability:Mutable r1 in
+      let rv = Reg.createv_like ~mutability:binding_mutable r1 in
       name_regs ident rv;
       self#insert_moves env r1 rv;
       { env with idents = Tbl.add ident rv env.idents; }
@@ -682,21 +699,6 @@ method private bind_let env binding_mutable ident r1 =
   let naming_op = Iname_for_debugger { ident; which_parameter = None; } in
   self#insert_debug env (Iop naming_op) Debuginfo.none r1 [| |];
   result
-
-
-(*
-method private bind_let env mut v r1 =
-  let result =
-    if Reg.all_immutable r1 then begin
-      name_regs v r1;
-      Tbl.add v r1 env
-    end else begin
-      let rv = Reg.createv_like r1 in
-      name_regs v rv;
-      self#insert_moves r1 rv;
-      Tbl.add v rv env
-    end
-*)
 
 method private emit_parts env exp =
   if self#is_simple_expr exp then
@@ -714,7 +716,7 @@ method private emit_parts env exp =
             name_regs id r;
             Some (Cvar id, { env with idents = Tbl.add id r env.idents; })
           end else begin
-            (* Introduce a fresh temp to hold the result *)
+            (* Introduce a fresh (immutable) temp to hold the result *)
             let tmp = Reg.createv_like r in
             self#insert_moves env r tmp;
             Some (Cvar id, { env with idents = Tbl.add id tmp env.idents; })

@@ -73,6 +73,8 @@ end
 
 include T
 
+type reg_with_debug_info = t
+
 let create ~reg ~holds_value_of ~part_of_value ~num_parts_of_value
       ~which_parameter =
   assert (num_parts_of_value >= 1);
@@ -92,6 +94,11 @@ let create ~reg ~holds_value_of ~part_of_value ~num_parts_of_value
 let create_without_debug_info ~reg =
   { reg;
     debug_info = None;
+  }
+
+let create_copying_debug_info ~reg ~debug_info_from =
+  { reg;
+    debug_info = debug_info_from.debug_info;
   }
 
 let reg t = t.reg
@@ -149,6 +156,9 @@ module Map_distinguishing_names_and_locations =
 module Set = struct
   include Set.Make (T)
 
+  let of_array elts =
+    of_list (Array.to_list elts)
+
   let forget_debug_info t =
     fold (fun t acc -> Reg.Set.add (reg t) acc) t Reg.Set.empty
 
@@ -173,6 +183,13 @@ module Set = struct
 
   let filter_reg t (reg : Reg.t) =
     filter (fun t -> t.reg.stamp <> reg.stamp) t
+
+  (* CR mshinwell: Well, it looks like we should have used a map. *)
+  let find_reg_exn t (reg : Reg.t) =
+    match elements (filter (fun t -> t.reg.stamp = reg.stamp) t) with
+    | [] -> raise Not_found
+    | [reg] -> reg
+    | _ -> assert false
 end
 
 let print ~print_reg ppf t =

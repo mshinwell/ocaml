@@ -171,9 +171,20 @@ fail := true;
       | Iop (Imove | Ireload | Ispill) ->
         (* Moves are special: they can cause us to learn that a particular
            hard register holds the (equal) values of multiple
-           pseudoregisters. *)
-        Ok (RD.Set.union avail_before
-          (RD.Set.without_debug_info (Reg.set_of_array instr.res)))
+           pseudoregisters.  They also enable us to propagate names. *)
+        let results =
+          assert (Array.length instr.arg = Array.length instr.res);
+          Array.mapi (fun index result_reg ->
+              let arg_reg = instr.arg.(index) in
+              match RD.Set.find_reg_exn avail_before arg_reg with
+              | exception Not_found ->
+                RD.create_without_debug_info ~reg:result_reg
+              | arg_reg ->
+                RD.create_copying_debug_info ~reg:result_reg
+                  ~debug_info_from:arg_reg)
+            instr.res
+        in
+        Ok (RD.Set.union avail_before (RD.Set.of_array results))
       | Iop op ->
         if operation_can_raise op then begin
           augment_availability_at_raise (Reg_availability.Ok avail_before)

@@ -31,6 +31,8 @@ end
 
 type t
 
+type reg_with_debug_info = t
+
 val create
    : reg:Reg.t
   -> holds_value_of:Ident.t
@@ -38,6 +40,10 @@ val create
   -> num_parts_of_value:int
   -> which_parameter:int option
   -> t
+
+val create_without_debug_info : reg:Reg.t -> t
+
+val create_copying_debug_info : reg:Reg.t -> debug_info_from:t -> t
 
 val reg : t -> Reg.t
 val location : t -> Reg.location
@@ -68,7 +74,11 @@ module Map_distinguishing_names_and_locations
 module Set : sig
   include Set.S with type elt = t
 
+  val of_array : reg_with_debug_info array -> t
+
   val mem_reg : t -> Reg.t -> bool
+
+  val find_reg_exn : t -> Reg.t -> reg_with_debug_info
 
   val filter_reg : t -> Reg.t -> t
 
