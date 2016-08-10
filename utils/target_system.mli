@@ -24,7 +24,8 @@ module Address : sig
     | Int64 of Int64.t
 
   val zero : unit -> t
-  val highest : unit -> t
+
+  val all_ones : unit -> t
 
   type word_size = Four | Eight
   val word_size : unit -> word_size

@@ -87,7 +87,7 @@ module Base_address_selection_entry = struct
   let create ~base_address_symbol = base_address_symbol
 
   let to_dwarf_values t =
-    [Dwarf_value.Absolute_code_address (Target_system.Address.highest ());
+    [Dwarf_value.Absolute_code_address (Target_system.Address.all_ones ());
      Dwarf_value.Code_address_from_symbol t;
     ]
 

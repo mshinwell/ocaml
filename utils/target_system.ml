@@ -16,10 +16,10 @@ module Address = struct
     | Four -> Int32 Int32.zero
     | Eight -> Int64 Int64.zero
 
-  let highest () =
+  let all_ones () =
     match word_size () with
-    | Four -> Int32 Int32.max_int
-    | Eight -> Int64 Int64.max_int
+    | Four -> Int32 Int32.minus_one
+    | Eight -> Int64 Int64.minus_one
 
   let thirty_two_bit_bounds =
     Int64.of_int32 Int32.min_int,
