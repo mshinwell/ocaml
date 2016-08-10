@@ -511,7 +511,7 @@ method emit_expr env exp =
   | Clet(v, e1, e2) ->
       begin match self#emit_expr env e1 with
         None -> None
-      | Some r1 -> self#emit_expr (self#bind_let env mut v r1) e2
+      | Some r1 -> self#emit_expr (self#bind_let env v r1) e2
       end
   | Cphantom_let (ident, provenance, defining_expr, body) ->
       let env =

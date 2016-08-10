@@ -511,7 +511,7 @@ let rec unbox_float cmm =
   preserve_phantom_lets_cmm cmm (fun cmm ->
     match cmm with
     | Cop(Calloc, [_header; c]) -> c
-    | Clet(mut, id, exp, body) -> Clet(mut, id, exp, unbox_float body)
+    | Clet(id, exp, body) -> Clet(id, exp, unbox_float body)
     | Cifthenelse(cond, e1, e2) ->
         Cifthenelse(cond, unbox_float e1, unbox_float e2)
     | Csequence(e1, e2) -> Csequence(e1, unbox_float e2)
@@ -551,8 +551,8 @@ let rec remove_unit cmm =
         Ccatch(io, ids, remove_unit body, remove_unit handler)
     | Ctrywith(body, exn, handler) ->
         Ctrywith(remove_unit body, exn, remove_unit handler)
-    | Clet(mut, id, c1, c2) ->
-        Clet(mut, id, c1, remove_unit c2)
+    | Clet(id, c1, c2) ->
+        Clet(id, c1, remove_unit c2)
     | Cop(Capply (_mty, dbg), args) ->
         Cop(Capply (typ_void, dbg), args)
     | Cop(Cextcall(proc, _mty, alloc, dbg), args) ->
@@ -893,7 +893,7 @@ let rec unbox_int bi arg =
           Cop(Casr, [Cop(Clsl, [contents; Cconst_int 32]); Cconst_int 32])
         | contents -> contents
         end
-    | Clet(mut, id, exp, body) -> Clet(mut, id, exp, unbox_int bi body)
+    | Clet(id, exp, body) -> Clet(id, exp, unbox_int bi body)
     | Cifthenelse(cond, e1, e2) ->
         Cifthenelse(cond, unbox_int bi e1, unbox_int bi e2)
     | Csequence(e1, e2) -> Csequence(e1, unbox_int bi e2)
