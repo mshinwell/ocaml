@@ -524,7 +524,6 @@ method emit_expr env exp =
           Tbl.find v env.idents
         with Not_found ->
           fatal_error ("Selection.emit_expr: unbound var " ^ Ident.name v) in
-      assert (Array.for_all (fun reg -> not (Reg.immutable reg)) rv);
       begin match self#emit_expr env e1 with
         None -> None
       | Some r1 ->
@@ -714,12 +713,14 @@ method private emit_parts env exp =
           let id = Ident.create "bind" in
           if all_regs_anonymous r then
             (* r is an anonymous, unshared register; use it directly *)
-            Some (Cvar id, Tbl.add id r env)
+            Some (Cvar id,
+              { env with idents = Tbl.add id r env.idents; })
           else begin
             (* Introduce a fresh temp to hold the result *)
             let tmp = Reg.createv_like r in
-            self#insert_moves r tmp;
-            Some (Cvar id, Tbl.add id tmp env)
+            self#insert_moves env r tmp;
+            Some (Cvar id,
+              { env with idents = Tbl.add id tmp env.idents; })
           end
         end
   end
@@ -804,7 +805,7 @@ method emit_tail env exp =
     Clet(v, e1, e2) ->
       begin match self#emit_expr env e1 with
         None -> ()
-      | Some r1 -> self#emit_tail (self#bind_let env mut v r1) e2
+      | Some r1 -> self#emit_tail (self#bind_let env v r1) e2
       end
   | Cphantom_let (ident, provenance, defining_expr, body) ->
       let env =

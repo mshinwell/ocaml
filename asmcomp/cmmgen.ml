@@ -2421,14 +2421,14 @@ and transl_let env mutability kind id exp body =
   in
   match unboxing with
   | No_unboxing | Boxed (_, true) ->
-      Clet(mutability, id, transl env exp, transl env body)
+      Clet(id, transl env exp, transl env body)
   | No_result ->
       (* the let-bound expression never returns a value, we can ignore
          the body *)
       transl env exp
   | Boxed (boxed_number, _false) ->
       let unboxed_id = Ident.create (Ident.name id) in
-      Clet(mutability, unboxed_id, transl_unbox_number env boxed_number exp,
+      Clet(unboxed_id, transl_unbox_number env boxed_number exp,
            transl (add_unboxed_id id unboxed_id boxed_number env) body)
 
 (* CR mshinwell: think about phantom lets again for these two *)

@@ -18,6 +18,8 @@
 module Debug_info : sig
   type t
 
+  val compare : t -> t -> int
+
   val holds_value_of : t -> Ident.t
   (** The identifier that the register holds (part of) the value of. *)
 
@@ -40,6 +42,8 @@ val create
   -> num_parts_of_value:int
   -> which_parameter:int option
   -> t
+
+val create_with_debug_info : reg:Reg.t -> debug_info:Debug_info.t option -> t
 
 val create_without_debug_info : reg:Reg.t -> t
 

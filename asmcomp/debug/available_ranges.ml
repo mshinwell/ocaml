@@ -101,7 +101,7 @@ end = struct
       | L.Lcapture_stack_offset _ ->
         assert (Array.length start_insn.arg = 1);
         (* CR mshinwell: review assertions, maybe less useful now *)
-        assert (reg.name = start_insn.arg.(0).Reg.name);
+        (*assert (reg.name = start_insn.arg.(0).Reg.name);*)
         assert (reg.loc = start_insn.arg.(0).Reg.loc)
       | _ -> ()
       end;

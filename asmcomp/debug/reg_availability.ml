@@ -25,7 +25,39 @@ let inter regs1 regs2 =
   | Unreachable, _ -> regs2
   | _, Unreachable -> regs1
   | Ok avail1, Ok avail2 ->
-    Ok (RD.Set.inter avail1 avail2)
+    let result =
+      RD.Set.fold (fun reg1 result ->
+          match RD.Set.find_reg_exn avail2 (RD.reg reg1) with
+          | exception Not_found -> result
+          | reg2 ->
+            let debug_info1 = RD.debug_info reg1 in
+            let debug_info2 = RD.debug_info reg2 in
+            let debug_info =
+              match debug_info1, debug_info2 with
+              | None, None -> None
+              (* Example for this next case: the value of a mutable variable x
+                 is copied into another variable y; then there is a conditional
+                 where on one branch x is assigned and on the other branch it
+                 is not.  This means that on the former branch we have
+                 forgotten about y holding the value of x; but we have not on
+                 the latter.  At the join point we must have forgotten the
+                 information. *)
+              | None, Some _ | Some _, None -> None
+              | Some debug_info1, Some debug_info2 ->
+                if RD.Debug_info.compare debug_info1 debug_info2 = 0 then
+                  Some debug_info1
+                else
+                  None
+            in
+            let reg =
+              RD.create_with_debug_info ~reg:(RD.reg reg1)
+                ~debug_info
+            in
+            RD.Set.add reg result)
+        avail1
+        RD.Set.empty
+    in
+    Ok result
 
 let equal t1 t2 =
   match t1, t2 with

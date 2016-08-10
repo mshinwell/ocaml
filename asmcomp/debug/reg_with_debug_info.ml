@@ -22,7 +22,7 @@ module Debug_info = struct
     which_parameter : int option;
   }
 
-  let _compare t1 t2 =
+  let compare t1 t2 =
     let c = Ident.compare t1.holds_value_of t2.holds_value_of in
     if c <> 0 then c
     else
@@ -89,6 +89,11 @@ let create ~reg ~holds_value_of ~part_of_value ~num_parts_of_value
   in
   { reg;
     debug_info = Some debug_info;
+  }
+
+let create_with_debug_info ~reg ~debug_info =
+  { reg;
+    debug_info;
   }
 
 let create_without_debug_info ~reg =
