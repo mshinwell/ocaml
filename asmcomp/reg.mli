@@ -15,18 +15,23 @@
 
 (* Pseudo-registers *)
 
+module Raw_name : sig
+  type t
+  val create_from_ident : Ident.t -> t
+end
+
 type t =
-  { mutable name: string;               (* Name (for printing) *)
-    mutability : Cmm.mutability;        (* Whether contents are mutable *)
+  { mutable raw_name: Raw_name.t;       (* Name *)
     stamp: int;                         (* Unique stamp *)
     mutable typ: Cmm.machtype_component;(* Type of contents *)
     mutable loc: location;              (* Actual location *)
     mutable spill: bool;                (* "true" to force stack allocation  *)
-    mutable interf: t list;              (* Other regs live simultaneously *)
-    mutable prefer: (t * int) list;      (* Preferences for other regs *)
-    mutable degree: int;                 (* Number of other regs live sim. *)
-    mutable spill_cost: int;             (* Estimate of spilling cost *)
-    mutable visited: bool }              (* For graph walks *)
+    mutable part: int option;           (* Zero-based index of part of value *)
+    mutable interf: t list;             (* Other regs live simultaneously *)
+    mutable prefer: (t * int) list;     (* Preferences for other regs *)
+    mutable degree: int;                (* Number of other regs live sim. *)
+    mutable spill_cost: int;            (* Estimate of spilling cost *)
+    mutable visited: bool }             (* For graph walks *)
 
 and location =
     Unknown
@@ -39,20 +44,13 @@ and stack_location =
   | Outgoing of int
 
 val dummy: t
-val create: ?mutability:Cmm.mutability -> Cmm.machtype_component -> t
+val create: Cmm.machtype_component -> t
 val createv: Cmm.machtype -> t array
-val createv_like: ?mutability:Cmm.mutability -> t array -> t array
-
-(** Create a fresh register with the following properties taken from the
-    given register: [typ], [mutability] and [name]. *)
+val createv_like: t array -> t array
 val clone: t -> t
-
 val at_location: Cmm.machtype_component -> location -> t
 
-(** Whether the register might hold the value of a mutable Cmm variable. *)
-val immutable : t -> bool
-
-val all_immutable : t array -> bool
+val anonymous : t -> bool
 
 (* Name for printing *)
 val name : t -> string

@@ -74,7 +74,7 @@ let size_expr env exp =
         List.fold_right (fun e sz -> size localenv e + sz) el 0
     | Cop(op, _) ->
         size_machtype(oper_result_type op)
-    | Clet(_mut, id, arg, body) ->
+    | Clet(id, arg, body) ->
         size (Tbl.add id (size localenv arg) localenv) body
     | Csequence(_e1, e2) ->
         size localenv e2
@@ -90,10 +90,23 @@ let swap_intcomp = function
 
 (* Naming of registers *)
 
+let all_regs_anonymous rv =
+  try
+    for i = 0 to Array.length rv - 1 do
+      if not (Reg.anonymous rv.(i)) then raise Exit
+    done;
+    true
+  with Exit ->
+    false
+
 let name_regs id rv =
-  for i = 0 to Array.length rv - 1 do
-    rv.(i).name <- Ident.unique_name id
-  done
+  if Array.length rv = 1 then
+    rv.(0).raw_name <- Raw_name.create_from_ident id
+  else
+    for i = 0 to Array.length rv - 1 do
+      rv.(i).raw_name <- Raw_name.create_from_ident id;
+      rv.(i).part <- Some i
+    done
 
 (* "Join" two instruction sequences, making sure they return their results
    in the same registers. *)
@@ -107,12 +120,12 @@ let join env opt_r1 seq1 opt_r2 seq2 =
       assert (l1 = Array.length r2);
       let r = Array.make l1 Reg.dummy in
       for i = 0 to l1-1 do
-        if Reg.immutable r1.(i)
+        if Reg.anonymous r1.(i)
           && Cmm.ge_component r1.(i).typ r2.(i).typ
         then begin
           r.(i) <- r1.(i);
           seq2#insert_move env r2.(i) r1.(i)
-        end else if Reg.immutable r2.(i)
+        end else if Reg.anonymous r2.(i)
           && Cmm.ge_component r2.(i).typ r1.(i).typ
         then begin
           r.(i) <- r2.(i);
@@ -197,8 +210,7 @@ method is_simple_expr = function
   | Cconst_natpointer _ -> true
   | Cvar _ -> true
   | Ctuple el -> List.for_all self#is_simple_expr el
-  | Clet(_mut, _id, arg, body) ->
-    self#is_simple_expr arg && self#is_simple_expr body
+  | Clet(_id, arg, body) -> self#is_simple_expr arg && self#is_simple_expr body
   | Csequence(e1, e2) -> self#is_simple_expr e1 && self#is_simple_expr e2
   | Cop(op, args) ->
       begin match op with
@@ -426,7 +438,6 @@ method insert_moves env src dst =
    something of type [Val] (PR#6501). *)
 
 method adjust_type src dst =
-  assert (not (Reg.immutable dst));
   let ts = src.typ and td = dst.typ in
   if ts <> td then
     match ts, td with
@@ -497,7 +508,7 @@ method emit_expr env exp =
       with Not_found ->
         fatal_error("Selection.emit_expr: unbound var " ^ Ident.unique_name v)
       end
-  | Clet(mut, v, e1, e2) ->
+  | Clet(v, e1, e2) ->
       begin match self#emit_expr env e1 with
         None -> None
       | Some r1 -> self#emit_expr (self#bind_let env mut v r1) e2
@@ -673,20 +684,17 @@ method private emit_sequence env exp =
   let r = s#emit_expr env exp in
   (r, s)
 
-method private bind_let env binding_mutable ident r1 =
-  let existing_regs_mutable =
-    if Reg.all_immutable r1 then Immutable else Mutable
-  in
+method private bind_let env ident r1 =
   let result =
-    match Cmm.join_mutability existing_regs_mutable binding_mutable with
-    | Immutable ->
+    if all_regs_anonymous r1 then begin
       name_regs ident r1;
       { env with idents = Tbl.add ident r1 env.idents; }
-    | Mutable ->
-      let rv = Reg.createv_like ~mutability:binding_mutable r1 in
+    end else begin
+      let rv = Reg.createv_like r1 in
       name_regs ident rv;
       self#insert_moves env r1 rv;
       { env with idents = Tbl.add ident rv env.idents; }
+    end
   in
   let naming_op = Iname_for_debugger { ident; which_parameter = None; } in
   self#insert_debug env (Iop naming_op) Debuginfo.none r1 [| |];
@@ -704,13 +712,14 @@ method private emit_parts env exp =
         else begin
           (* The normal case *)
           let id = Ident.create "bind" in
-          if Reg.all_immutable r then begin
-            Some (Cvar id, { env with idents = Tbl.add id r env.idents; })
-          end else begin
-            (* Introduce a fresh (immutable) temp to hold the result *)
+          if all_regs_anonymous r then
+            (* r is an anonymous, unshared register; use it directly *)
+            Some (Cvar id, Tbl.add id r env)
+          else begin
+            (* Introduce a fresh temp to hold the result *)
             let tmp = Reg.createv_like r in
-            self#insert_moves env r tmp;
-            Some (Cvar id, { env with idents = Tbl.add id tmp env.idents; })
+            self#insert_moves r tmp;
+            Some (Cvar id, Tbl.add id tmp env)
           end
         end
   end
@@ -748,8 +757,7 @@ method emit_extcall_args env args =
   let arg_hard_regs, stack_ofs =
     Proc.loc_external_arguments (Array.of_list args)
   in
-  (* Flattening [args] and [arg_hard_regs] (the latter done by
-     [loc_external_arguments], above) causes parts of values split
+  (* Flattening [args] and [arg_hard_regs] causes parts of values split
      across multiple registers to line up correctly, by virtue of the
      semantics of [split_int64_for_32bit_target] in cmmgen.ml, and the
      required semantics of [loc_external_arguments] (see proc.mli). *)
@@ -771,9 +779,7 @@ method emit_stores env data regs_addr =
             Istore(_, _, _) ->
               for i = 0 to Array.length regs - 1 do
                 let r = regs.(i) in
-                let kind =
-                  if r.typ = Float then Double_u else Word_val
-                in
+                let kind = if r.typ = Float then Double_u else Word_val in
                 self#insert env (Iop(Istore(kind, !a, false)))
                             (Array.append [|r|] regs_addr) [||];
                 a := Arch.offset_addressing !a (size_component r.typ)
@@ -795,7 +801,7 @@ method private emit_return env exp =
 
 method emit_tail env exp =
   match exp with
-    Clet(mut, v, e1, e2) ->
+    Clet(v, e1, e2) ->
       begin match self#emit_expr env e1 with
         None -> ()
       | Some r1 -> self#emit_tail (self#bind_let env mut v r1) e2
