@@ -418,37 +418,24 @@ value caml_spacetime_frame_table(void)
     if (descr != NULL) {
       value location, return_address, pair, new_list_element, location_list;
       struct caml_loc_info li;
-      debuginfo dbg;
       if (descr->frame_size != 0xffff) {
-        dbg = caml_debuginfo_extract(descr);
-        if (dbg != NULL) {
-          location_list = Val_unit;
-          while (dbg != NULL) {
-            value list_element;
+        caml_extract_location_info(descr, &li);
+        location = allocate_loc_outside_heap(li);
+        location_list =
+          allocate_outside_heap_with_tag(2 * sizeof(value), 0 /* (::) */);
+        Field(location_list, 0) = location;
+        Field(location_list, 1) = Val_unit;
 
-            caml_debuginfo_location(dbg, &li);
-            location = allocate_loc_outside_heap(li);
+        return_address = allocate_int64_outside_heap(descr->retaddr);
+        pair = allocate_outside_heap_with_tag(2 * sizeof(value), 0);
+        Field(pair, 0) = return_address;
+        Field(pair, 1) = location_list;
 
-            list_element =
-              allocate_outside_heap_with_tag(2 * sizeof(value), 0 /* (::) */);
-            Field(list_element, 0) = location;
-            Field(list_element, 1) = location_list;
-            location_list = list_element;
-
-            dbg = caml_debuginfo_next(dbg);
-          }
-
-          return_address = allocate_int64_outside_heap(descr->retaddr);
-          pair = allocate_outside_heap_with_tag(2 * sizeof(value), 0);
-          Field(pair, 0) = return_address;
-          Field(pair, 1) = location_list;
-
-          new_list_element =
-            allocate_outside_heap_with_tag(2 * sizeof(value), 0 /* (::) */);
-          Field(new_list_element, 0) = pair;
-          Field(new_list_element, 1) = list;
-          list = new_list_element;
-        }
+        new_list_element =
+          allocate_outside_heap_with_tag(2 * sizeof(value), 0 /* (::) */);
+        Field(new_list_element, 0) = pair;
+        Field(new_list_element, 1) = list;
+        list = new_list_element;
       }
     }
   }
