@@ -103,26 +103,21 @@ let rec expr ppf = function
   | Cconst_pointer n -> fprintf ppf "%ia" n
   | Cconst_natpointer n -> fprintf ppf "%sa" (Nativeint.to_string n)
   | Cvar id -> Ident.print ppf id
-  | Clet(_mut, id, def, (Clet(_, _, _, _) as body)) ->
+  | Clet(id, def, (Clet(_, _, _) as body)) ->
       let print_binding id ppf def =
         fprintf ppf "@[<2>%a@ %a@]" Ident.print id expr def in
       let rec in_part ppf = function
-        | Clet(_, id, def, body) ->
+        | Clet(id, def, body) ->
             fprintf ppf "@ %a" (print_binding id) def;
             in_part ppf body
         | exp -> exp in
       fprintf ppf "@[<2>(let@ @[<1>(%a" (print_binding id) def;
       let exp = in_part ppf body in
       fprintf ppf ")@]@ %a)@]" sequence exp
-  | Clet(mut, id, def, body) ->
-     let mut =
-       match mut with
-       | Immutable -> ""
-       | Mutable -> "*"
-     in
+  | Clet(id, def, body) ->
      fprintf ppf
-      "@[<2>(let%s@ @[<2>%a@ %a@]@ %a)@]"
-      mut Ident.print id expr def sequence body
+      "@[<2>(let@ @[<2>%a@ %a@]@ %a)@]"
+      Ident.print id expr def sequence body
   | Cphantom_let(id, provenance, def, (Cphantom_let(_, _, _, _) as body)) ->
       let print_binding id provenance ppf def =
         fprintf ppf "@[<2>%a(%a)@ %a@]" Ident.print id
