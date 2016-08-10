@@ -834,10 +834,7 @@ let rec emit_all fallthrough i =
 
 (* Emission of a function declaration *)
 
-let debug_dsl = true
-
 let fundecl fundecl =
-  if debug_dsl then X86_proc.start_recording_directives ();
   function_name := fundecl.fun_name;
   fastcode_flag := fundecl.fun_fast;
   tailrec_entry_point := new_label();
@@ -880,15 +877,7 @@ let fundecl fundecl =
             ConstLabel (emit_symbol fundecl.fun_name)))
   | _ -> ()
   end;
-  if debug_dsl then begin
-    let asm = X86_proc.finish_recording_directives () in
-    let path = Printf.sprintf "/tmp/dsl.%s" (emit_symbol fundecl.fun_name) in
-    let chan = open_out_bin path in
-    Marshal.to_channel chan asm [];
-    close_out chan
-  end;
-  { end_of_function_label;
-  }
+  { end_of_function_label; }
 
 (* Emission of data *)
 
