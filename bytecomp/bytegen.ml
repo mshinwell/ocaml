@@ -153,7 +153,7 @@ let rec size_of_lambda = function
       | Record_float -> RHS_floatblock size
       | Record_extension -> RHS_block (size + 1)
       end
-  | Llet(_str, _k, _id, _arg, body) -> size_of_lambda body
+  | Llet(_str, _id, _arg, body) -> size_of_lambda body
   | Lletrec(_bindings, body) -> size_of_lambda body
   | Lprim(Pmakeblock _, args, _) -> RHS_block (List.length args)
   | Lprim (Pmakearray ((Paddrarray|Pintarray), _), args, _) ->

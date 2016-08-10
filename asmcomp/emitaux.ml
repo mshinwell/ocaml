@@ -143,9 +143,9 @@ let emit_frames a =
     a.efa_align Arch.size_addr;
     if not (Debuginfo.is_none fd.fd_debuginfo) then begin
       let d = fd.fd_debuginfo in
-      let line = min 0xFFFFF d.dinfo_line
-      and char_start = min 0xFF d.dinfo_char_start
-      and char_end = min 0x3FF d.dinfo_char_end
+      let line = min 0xFFFFF d.Debuginfo.dinfo_line
+      and char_start = min 0xFF d.Debuginfo.dinfo_char_start
+      and char_end = min 0x3FF d.Debuginfo.dinfo_char_end
       and kind = if fd.fd_raise then 1 else 0 in
       let info =
         Int64.add (Int64.shift_left (Int64.of_int line) 44) (
@@ -153,7 +153,7 @@ let emit_frames a =
         Int64.add (Int64.shift_left (Int64.of_int char_end) 26)
                   (Int64.of_int kind))) in
       a.efa_label_rel
-        (label_filename d.dinfo_file)
+        (label_filename d.Debuginfo.dinfo_file)
         (Int64.to_int32 info);
       a.efa_32 (Int64.to_int32 (Int64.shift_right info 32))
     end in
@@ -225,22 +225,24 @@ let reset_debug_info () =
 let emit_debug_info_gen dbg file_emitter loc_emitter =
   if is_cfi_enabled () &&
     (!Clflags.debug || Config.with_frame_pointers) then begin
-    match List.rev dbg with
-    | [] -> ()
-    | { Debuginfo.dinfo_line = line;
-        dinfo_char_start = col;
-        dinfo_file = file_name; } :: _ ->
-      if line > 0 then begin (* PR#6243 *)
-        let file_num =
-          try List.assoc file_name !file_pos_nums
-          with Not_found ->
-            let file_num = !file_pos_num_cnt in
-            incr file_pos_num_cnt;
-            file_emitter ~file_num ~file_name;
-            file_pos_nums := (file_name,file_num) :: !file_pos_nums;
-            file_num in
-        loc_emitter ~file_num ~line ~col;
+    if Debuginfo.is_none dbg then ()
+    else begin
+      let { Debuginfo.dinfo_line = line;
+            dinfo_char_start = col;
+            dinfo_file = file_name; } = dbg
+      in
+        if line > 0 then begin (* PR#6243 *)
+          let file_num =
+            try List.assoc file_name !file_pos_nums
+            with Not_found ->
+              let file_num = !file_pos_num_cnt in
+              incr file_pos_num_cnt;
+              file_emitter ~file_num ~file_name;
+              file_pos_nums := (file_name,file_num) :: !file_pos_nums;
+              file_num in
+          loc_emitter ~file_num ~line ~col;
       end
+    end
   end
 
 let emit_debug_info dbg =

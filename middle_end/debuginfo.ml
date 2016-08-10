@@ -24,7 +24,6 @@ type t = {
 }
 
 let none = {
-  dinfo_kind = Dinfo_call;
   dinfo_file = "";
   dinfo_line = 0;
   dinfo_char_start = 0;

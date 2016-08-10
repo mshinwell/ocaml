@@ -1512,7 +1512,7 @@ let inline_lazy_force_cond arg loc =
   let tag = Ident.create "tag" in
   let force_fun = Lazy.force code_force_lazy_block in
   Llet(Strict, idarg, arg,
-       Llet(Alias, Pgenval, tag, Lprim(Pccall prim_obj_tag, [varg], loc),
+       Llet(Alias, tag, Lprim(Pccall prim_obj_tag, [varg], loc),
             Lifthenelse(
               (* if (tag == Obj.forward_tag) then varg.(0) else ... *)
               Lprim(Pintcomp Ceq,

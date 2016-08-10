@@ -1525,7 +1525,7 @@ let rec transl env e =
           Cconst_symbol (Ident.name id)
       | (Pmakeblock(tag, mut), []) ->
           assert false
-      | (Pmakeblock(tag, _mut, _kind), args) ->
+      | (Pmakeblock(tag, _mut), args) ->
           make_alloc dbg tag (List.map (transl env) args)
       | (Pccall prim, args) ->
           transl_ccall env prim args dbg

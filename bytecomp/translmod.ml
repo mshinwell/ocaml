@@ -62,7 +62,9 @@ let transl_extension_constructor env path ext =
     Text_decl(args, ret) ->
       Lprim (Pmakeblock (Obj.object_tag, Immutable),
         [Lconst (Const_base (Const_string (name, None)));
-         Lprim (prim_fresh_oo_id, [Lconst (Const_base (Const_int 0))])])
+         Lprim (prim_fresh_oo_id, [Lconst (Const_base (Const_int 0))],
+                ext.ext_loc)],
+             ext.ext_loc)
   | Text_rebind(path, lid) ->
       transl_path ~loc:ext.ext_loc env path
 

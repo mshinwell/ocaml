@@ -40,8 +40,6 @@ type test =
   | Ioddtest
   | Ieventest
 
-type label = Cmm.label
-
 type operation =
     Imove
   | Ispill
