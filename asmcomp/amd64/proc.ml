@@ -352,6 +352,7 @@ let op_is_pure = function
   | Iintop(Icheckbound) | Iintop_imm(Icheckbound, _) -> false
   | Ispecific(Ilea _) -> true
   | Ispecific _ -> false
+  | Iname_for_debugger _ -> false
   | _ -> true
 
 (* Layout of the stack frame *)

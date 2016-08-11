@@ -220,6 +220,10 @@ let rec linear i n =
   | Iop(Imove | Ireload | Ispill)
     when i.Mach.arg.(0).loc = i.Mach.res.(0).loc ->
       linear i.Mach.next n
+  | Iop (Iname_for_debugger _) ->
+      (* These aren't needed any more, so to simplify matters, just drop
+         them. *)
+      linear i.Mach.next n
   | Iop op ->
       copy_instr (Lop op) i (linear i.Mach.next n)
   | Ireturn ->
@@ -346,15 +350,25 @@ let reset () =
   exit_label := []
 
 let add_prologue first_insn =
-  { desc = Lprologue;
-    next = first_insn;
-    arg = [| |];
-    res = [| |];
-    dbg = first_insn.dbg;
-    live = first_insn.live;
-    available_before = first_insn.available_before;
-    phantom_available_before = first_insn.phantom_available_before;
-  }
+  (* The prologue needs to come after any [Iname_for_debugger] operations that
+     refer to parameters.  (Such operations always come in a contiguous
+     block, cf. [Selectgen].) *)
+  let rec skip_naming_ops insn =
+    match insn.desc with
+    | Lop (Iname_for_debugger _) ->
+      { insn with next = skip_naming_ops insn.next; }
+    | _ ->
+      { desc = Lprologue;
+        next = insn;
+        arg = [| |];
+        res = [| |];
+        dbg = insn.dbg;
+        live = insn.live;
+        available_before = insn.available_before;
+        phantom_available_before = insn.phantom_available_before;
+      }
+  in
+  skip_naming_ops first_insn
 
 let fundecl f =
   let fun_body = add_prologue (linear f.Mach.fun_body end_instr) in

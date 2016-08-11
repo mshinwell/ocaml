@@ -12,7 +12,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* CR mshinwell: check headers and warning attributes for all files *)
+(* CR mshinwell: check warning attributes for all files *)
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 type t =
