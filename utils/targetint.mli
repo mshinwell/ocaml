@@ -125,7 +125,11 @@ val shift_right_logical : t -> int -> t
 
 val of_int : int -> t
 (** Convert the given integer (type [int]) to a target integer
-   (type [t]). *)
+   (type [t]), module the target word size. *)
+
+val of_int_exn : int -> t
+(** Convert the given integer (type [int]) to a target integer
+   (type [t]).  Raises a fatal error if the conversion is not exact. *)
 
 val to_int : t -> int
 (** Convert the given target integer (type [t]) to an

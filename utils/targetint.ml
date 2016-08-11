@@ -38,6 +38,7 @@ module type S = sig
   val shift_right : t -> int -> t
   val shift_right_logical : t -> int -> t
   val of_int : int -> t
+  val of_int_exn : int -> t
   val to_int : t -> int
   val of_float : float -> t
   val to_float : t -> float
@@ -53,6 +54,18 @@ end
 
 module Int32 = struct
   include Int32
+  let of_int_exn =
+    match Sys.word_size with
+    | 32 ->
+        Int32.of_int
+    | 64 ->
+        fun n ->
+          if n < Int32.(to_int min_int) || n > Int32.(to_int max_int) then
+            Misc.fatal_errorf "Targetint.of_int_exn: 0x%x out of range" n
+          else
+            Int32.of_int n
+    | _ ->
+        assert false
   let size = 32
   let of_int32 x = x
   let to_int32 x = x
@@ -62,6 +75,7 @@ end
 
 module Int64 = struct
   include Int64
+  let of_int_exn = Int64.of_int
   let size = 64
   let of_int32 = Int64.of_int32
   let to_int32 = Int64.to_int32
