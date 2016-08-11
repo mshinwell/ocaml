@@ -77,8 +77,6 @@ module Int64 = struct
   include Int64
   let of_int_exn = Int64.of_int
   let size = 64
-  let of_int32 = Int64.of_int32
-  let to_int32 = Int64.to_int32
   let of_int64 x = x
   let to_int64 x = x
 end
