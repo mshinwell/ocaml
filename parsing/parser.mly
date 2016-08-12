@@ -1307,6 +1307,10 @@ seq_expr:
   | expr        %prec below_SEMI  { $1 }
   | expr SEMI                     { reloc_exp $1 }
   | expr SEMI seq_expr            { mkexp(Pexp_sequence($1, $3)) }
+  | expr SEMI PERCENT attr_id seq_expr
+      { let seq = mkexp(Pexp_sequence ($1, $5)) in
+        let payload = PStr [mkstrexp seq []] in
+        mkexp (Pexp_extension ($4, payload)) }
 ;
 labeled_simple_pattern:
     QUESTION LPAREN label_let_pattern opt_default RPAREN
@@ -1358,15 +1362,8 @@ expr:
       { expr_of_let_bindings $1 $3 }
   | LET MODULE ext_attributes UIDENT module_binding_body IN seq_expr
       { mkexp_attrs (Pexp_letmodule(mkrhs $4 4, $5, $7)) $3 }
-  | LET EXCEPTION ext_attributes constr_ident generalized_constructor_arguments
-    attributes IN seq_expr
-      { let args, res = $5 in
-        let ex =
-          Te.decl (mkrhs $4 4) ~args ?res ~attrs:$6
-            ~loc:(symbol_rloc())
-        in
-        mkexp_attrs (Pexp_letexception(ex, $8)) $3
-      }
+  | LET EXCEPTION ext_attributes let_exception_declaration IN seq_expr
+      { mkexp_attrs (Pexp_letexception($4, $6)) $3 }
   | LET OPEN override_flag ext_attributes mod_longident IN seq_expr
       { mkexp_attrs (Pexp_open($3, mkrhs $5 5, $7)) $4 }
   | FUNCTION ext_attributes opt_bar match_cases
@@ -1751,12 +1748,6 @@ pattern:
       { expecting 3 "pattern" }
   | EXCEPTION ext_attributes pattern %prec prec_constr_appl
       { mkpat_attrs (Ppat_exception $3) $2}
-  | mod_longident DOT LPAREN pattern RPAREN
-    { mkpat @@ Ppat_open (mkrhs $1 1, $4)}
-  | mod_longident DOT LPAREN pattern error
-    {unclosed "(" 3 ")" 5  }
-  | mod_longident DOT LPAREN error
-    { expecting 4 "pattern" }
   | pattern attribute
       { Pat.attr $1 $2 }
   | pattern_gen { $1 }
@@ -1816,6 +1807,9 @@ simple_pattern_not_ident:
       { $1 }
   | mod_longident DOT simple_delimited_pattern
       { mkpat @@ Ppat_open(mkrhs $1 1, $3) }
+  | mod_longident DOT LBRACKET RBRACKET
+    { mkpat @@ Ppat_open(mkrhs $1 1, mkpat @@
+               Ppat_construct ( mkrhs (Lident "[]") 4, None)) }
   | mod_longident DOT LPAREN RPAREN
       { mkpat @@ Ppat_open( mkrhs $1 1, mkpat @@
                  Ppat_construct ( mkrhs (Lident "()") 4, None) ) }
@@ -1847,17 +1841,14 @@ simple_pattern_not_ident:
   | extension
       { mkpat(Ppat_extension $1) }
 ;
+
 simple_delimited_pattern:
   | LBRACE lbl_pattern_list RBRACE
     { let (fields, closed) = $2 in mkpat(Ppat_record(fields, closed)) }
   | LBRACE lbl_pattern_list error
     { unclosed "{" 1 "}" 3 }
-  | LBRACE lbl_pattern_list error
-    { unclosed "{" 1 "}" 3 }
   | LBRACKET pattern_semi_list opt_semi RBRACKET
     { reloc_pat (mktailpat (rhs_loc 4) (List.rev $2)) }
-  | LBRACKET RBRACKET
-    { mkpat @@ Ppat_construct ( mkrhs (Lident "[]") 1, None) }
   | LBRACKET pattern_semi_list opt_semi error
     { unclosed "[" 1 "]" 4 }
   | LBRACKETBAR pattern_semi_list opt_semi BARRBRACKET
@@ -2055,6 +2046,11 @@ sig_exception_declaration:
           Te.decl (mkrhs $3 3) ~args ?res ~attrs:(attrs @ $5 @ $6)
             ~loc:(symbol_rloc()) ~docs:(symbol_docs ())
         , ext }
+;
+let_exception_declaration:
+    constr_ident generalized_constructor_arguments attributes
+      { let args, res = $2 in
+        Te.decl (mkrhs $1 1) ~args ?res ~attrs:$3 ~loc:(symbol_rloc()) }
 ;
 generalized_constructor_arguments:
     /*empty*/                     { (Pcstr_tuple [],None) }

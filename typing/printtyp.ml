@@ -336,7 +336,7 @@ let is_unambiguous path env =
       (* also allow repeatedly defining and opening (for toplevel) *)
       let id = lid_of_path p in
       List.for_all (fun p -> lid_of_path p = id) rem &&
-      Path.same p (fst (Env.lookup_type id env))
+      Path.same p (Env.lookup_type id env)
 
 let rec get_best_path r =
   match !r with
@@ -856,13 +856,14 @@ let rec tree_of_type_decl id decl =
         Public
   in
   let immediate =
-    List.exists (fun (loc, _) -> loc.txt = "immediate") decl.type_attributes
+    Builtin_attributes.immediate decl.type_attributes
   in
     { otype_name = name;
       otype_params = args;
       otype_type = ty;
       otype_private = priv;
       otype_immediate = immediate;
+      otype_unboxed = decl.type_unboxed.unboxed;
       otype_cstrs = constraints }
 
 and tree_of_constructor_arguments = function
@@ -1157,6 +1158,7 @@ let dummy =
     type_newtype_level = None; type_loc = Location.none;
     type_attributes = [];
     type_immediate = false;
+    type_unboxed = { unboxed = false; default = false };
   }
 
 let hide_rec_items = function
@@ -1189,7 +1191,7 @@ let rec tree_of_modtype ?(ellipsis=false) = function
       in
       Omty_functor (Ident.name param,
                     may_map (tree_of_modtype ~ellipsis:false) ty_arg, res)
-  | Mty_alias p ->
+  | Mty_alias(_, p) ->
       Omty_alias (tree_of_path p)
 
 and tree_of_signature sg =

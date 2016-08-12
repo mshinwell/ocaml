@@ -303,7 +303,7 @@ and set_of_closures = private {
       [let rec f a b c = f a 1 2 in], [a] -> [x] would still be a valid
       specialised argument because all recursive calls maintain the invariant.
 
-      This information is used for optimisation purposes, if such a binding is
+      This information is used for optimization purposes, if such a binding is
       known, it is possible to specialise the body of the function according
       to its parameter. This is usually introduced when specialising a
       recursive function, for instance.

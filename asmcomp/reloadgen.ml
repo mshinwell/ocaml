@@ -83,14 +83,14 @@ method private reload i =
        However, something needs to be done for the function pointer in
        indirect calls. *)
     Iend | Ireturn | Iop(Itailcall_imm _) | Iraise _ -> i
-  | Iop(Itailcall_ind) ->
+  | Iop(Itailcall_ind _) ->
       let newarg = self#makereg1 i.arg in
       insert_moves i.arg newarg
         {i with arg = newarg}
         ~phantom_available_before:i.phantom_available_before
   | Iop(Icall_imm _ | Iextcall _) ->
       {i with next = self#reload i.next}
-  | Iop(Icall_ind) ->
+  | Iop(Icall_ind _) ->
       let newarg = self#makereg1 i.arg in
       insert_moves i.arg newarg
         {i with arg = newarg; next = self#reload i.next}
@@ -145,7 +145,8 @@ method fundecl f =
     fun_human_name = f.fun_human_name;
     fun_module_path = f.fun_module_path;
     fun_phantom_lets = f.fun_phantom_lets;
+    fun_dbg  = f.fun_dbg;
+    fun_spacetime_shape = f.fun_spacetime_shape;
    },
    redo_regalloc)
-
 end

@@ -17,14 +17,14 @@
 
 external length : string -> int = "%string_length"
 external get : string -> int -> char = "%string_safe_get"
-external set : bytes -> int -> char -> unit = "%string_safe_set"
-external create : int -> bytes = "caml_create_string"
+external set : bytes -> int -> char -> unit = "%bytes_safe_set"
+external create : int -> bytes = "caml_create_bytes"
 external unsafe_get : string -> int -> char = "%string_unsafe_get"
-external unsafe_set : bytes -> int -> char -> unit = "%string_unsafe_set"
+external unsafe_set : bytes -> int -> char -> unit = "%bytes_unsafe_set"
 external unsafe_blit : string -> int ->  bytes -> int -> int -> unit
                      = "caml_blit_string" [@@noalloc]
 external unsafe_fill : bytes -> int -> int -> char -> unit
-                     = "caml_fill_string" [@@noalloc]
+                     = "caml_fill_bytes" [@@noalloc]
 
 module B = Bytes
 
@@ -126,6 +126,17 @@ type t = string
 
 let compare (x: t) (y: t) = Pervasives.compare x y
 external equal : string -> string -> bool = "caml_string_equal"
+
+let split_on_char sep s =
+  let r = ref [] in
+  let j = ref (length s) in
+  for i = length s - 1 downto 0 do
+    if unsafe_get s i = sep then begin
+      r := sub s (i + 1) (!j - i - 1) :: !r;
+      j := i
+    end
+  done;
+  sub s 0 !j :: !r
 
 (* Deprecated functions implemented via other deprecated functions *)
 [@@@ocaml.warning "-3"]

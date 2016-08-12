@@ -511,19 +511,15 @@ and to_clambda_named t env var (named : Flambda.named) : Clambda.ulambda =
       [check_field (check_closure ulam (Expr (Var closure))) pos (Some named)],
       Debuginfo.none)
   | Prim (Pfield index, [block], dbg) ->
-    let dbg = erase_empty_debuginfo dbg in
     Uprim (Pfield index, [check_field (subst_var env block) index None], dbg)
   | Prim (Psetfield (index, maybe_ptr, init), [block; new_value], dbg) ->
-    let dbg = erase_empty_debuginfo dbg in
     Uprim (Psetfield (index, maybe_ptr, init), [
         check_field (subst_var env block) index None;
         subst_var env new_value;
       ], dbg)
   | Prim (Popaque, args, dbg) ->
-    let dbg = erase_empty_debuginfo dbg in
     Uprim (Pidentity, subst_vars env args, dbg)
   | Prim (p, args, dbg) ->
-    let dbg = erase_empty_debuginfo dbg in
     Uprim (p, subst_vars env args, dbg)
   | Expr expr -> to_clambda t env expr
 

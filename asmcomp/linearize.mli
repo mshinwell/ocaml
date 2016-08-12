@@ -15,8 +15,7 @@
 
 (* Transformation of Mach code into a list of pseudo-instructions. *)
 
-type label = int
-val new_label: unit -> label
+type label = Cmm.label
 
 type instruction =
   { mutable desc: instruction_desc;
@@ -46,7 +45,7 @@ and instruction_desc =
   | Lsetuptrap of label
   | Lpushtrap
   | Lpoptrap
-  | Lraise of Lambda.raise_kind
+  | Lraise of Cmm.raise_kind
   | Lcapture_stack_offset of int option ref
   (* CR mshinwell: make integer non-optional and update comment *)
   (** [Lcapture_stack_offset] denotes the start of an available subrange (cf.
@@ -79,7 +78,7 @@ type fundecl =
     fun_phantom_lets :
       (Clambda.ulet_provenance option * Mach.phantom_defining_expr)
         Ident.Map.t;
+    fun_spacetime_shape : Mach.spacetime_shape option;
   }
 
-val reset : unit -> unit
 val fundecl: Mach.fundecl -> fundecl

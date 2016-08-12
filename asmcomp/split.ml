@@ -125,10 +125,10 @@ let rec rename i sub =
   match i.desc with
     Iend ->
       (i, sub)
-  | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) ->
-      (instr_cons i.desc (subst_regs i.arg sub) [||]
+  | Ireturn | Iop(Itailcall_ind _) | Iop(Itailcall_imm _) ->
+      (instr_cons_debug i.desc (subst_regs i.arg sub) [||]
         ~phantom_available_before:i.phantom_available_before
-        i.next,
+        i.dbg i.next,
        None)
   | Iop Ireload when i.res.(0).loc = Unknown ->
       begin match sub with
@@ -235,4 +235,5 @@ let fundecl f =
     fun_human_name = f.fun_human_name;
     fun_module_path = f.fun_module_path;
     fun_phantom_lets = f.fun_phantom_lets;
+    fun_spacetime_shape = f.fun_spacetime_shape;
   }

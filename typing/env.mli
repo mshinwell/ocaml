@@ -107,7 +107,10 @@ val lookup_all_labels:
   ?loc:Location.t ->
   Longident.t -> t -> (label_description * (unit -> unit)) list
 val lookup_type:
-  ?loc:Location.t -> Longident.t -> t -> Path.t * type_declaration
+  ?loc:Location.t -> Longident.t -> t -> Path.t
+  (* Since 4.04, this function no longer returns [type_description].
+     To obtain it, you should either call [Env.find_type], or replace
+     it by [Typetexp.find_type] *)
 val lookup_module:
   load:bool -> ?loc:Location.t -> Longident.t -> t -> Path.t
 val lookup_modtype:
@@ -133,11 +136,12 @@ val add_value:
 val add_type: check:bool -> Ident.t -> type_declaration -> t -> t
 val add_extension: check:bool -> Ident.t -> extension_constructor -> t -> t
 val add_module: ?arg:bool -> Ident.t -> module_type -> t -> t
-val add_module_declaration: ?arg:bool -> Ident.t -> module_declaration -> t -> t
+val add_module_declaration: ?arg:bool -> check:bool -> Ident.t ->
+  module_declaration -> t -> t
 val add_modtype: Ident.t -> modtype_declaration -> t -> t
 val add_class: Ident.t -> class_declaration -> t -> t
 val add_cltype: Ident.t -> class_type_declaration -> t -> t
-val add_local_constraint: Ident.t -> type_declaration -> int -> t -> t
+val add_local_constraint: Path.t -> type_declaration -> int -> t -> t
 val add_local_type: Path.t -> type_declaration -> t -> t
 
 (* Insertion of all fields of a signature. *)
@@ -225,6 +229,7 @@ type error =
   | Illegal_renaming of string * string * string
   | Inconsistent_import of string * string * string
   | Need_recursive_types of string * string
+  | Depend_on_unsafe_string_unit of string * string
   | Missing_module of Location.t * Path.t * Path.t
   | Illegal_value_name of Location.t * string
 
@@ -236,6 +241,7 @@ val report_error: formatter -> error -> unit
 
 
 val mark_value_used: t -> string -> value_description -> unit
+val mark_module_used: t -> string -> Location.t -> unit
 val mark_type_used: t -> string -> type_declaration -> unit
 
 type constructor_usage = Positive | Pattern | Privatize
@@ -262,7 +268,8 @@ val check_modtype_inclusion:
 (* Forward declaration to break mutual recursion with Typecore. *)
 val add_delayed_check_forward: ((unit -> unit) -> unit) ref
 (* Forward declaration to break mutual recursion with Mtype. *)
-val strengthen: (t -> module_type -> Path.t -> module_type) ref
+val strengthen:
+    (aliasable:bool -> t -> module_type -> Path.t -> module_type) ref
 (* Forward declaration to break mutual recursion with Ctype. *)
 val same_constr: (t -> type_expr -> type_expr -> bool) ref
 
@@ -299,3 +306,14 @@ val fold_cltypes:
 (** Utilities *)
 val scrape_alias: t -> module_type -> module_type
 val check_value_name: string -> Location.t -> unit
+
+module Persistent_signature : sig
+  type t =
+    { filename : string; (** Name of the file containing the signature. *)
+      cmi : Cmi_format.cmi_infos }
+
+  (** Function used to load a persistent signature. The default is to look for
+      the .cmi file in the load path. This function can be overridden to load
+      it from memory, for instance to build a self-contained toplevel. *)
+  val load : (unit_name:string -> t option) ref
+end

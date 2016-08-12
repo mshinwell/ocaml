@@ -106,10 +106,11 @@ module Function_decls = struct
       inline : Lambda.inline_attribute;
       specialise : Lambda.specialise_attribute;
       is_a_functor : bool;
+      loc : Location.t;
     }
 
     let create ~let_rec_ident ~closure_bound_var ~kind ~params ~body ~inline
-        ~specialise ~is_a_functor =
+        ~specialise ~is_a_functor ~loc =
       let let_rec_ident =
         match let_rec_ident with
         | None -> Ident.create "unnamed_function"
@@ -124,6 +125,7 @@ module Function_decls = struct
         inline;
         specialise;
         is_a_functor;
+        loc;
       }
 
     let let_rec_ident t = t.let_rec_ident
@@ -135,10 +137,11 @@ module Function_decls = struct
     let inline t = t.inline
     let specialise t = t.specialise
     let is_a_functor t = t.is_a_functor
+    let loc t = t.loc
 
     let primitive_wrapper t =
       match t.body with
-      | Lprim (Pccall { Primitive. prim_name; }, [body])
+      | Lprim (Pccall { Primitive. prim_name; }, [body], _)
         when prim_name = stub_hack_prim_name -> Some body
       | _ -> None
   end

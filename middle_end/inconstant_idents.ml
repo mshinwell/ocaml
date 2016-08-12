@@ -49,7 +49,7 @@
 
 (* CR-someday lwhite: I think this pass could be combined with
    alias_analysis and other parts of lift_constants into a single
-   type-based anaylsis which infers a "type" for each variable that is
+   type-based analysis which infers a "type" for each variable that is
    either an allocated_constant expression or "not constant".  Recursion
    would be handled with unification variables. *)
 
@@ -216,7 +216,7 @@ module Inconstants (P:Param) (Backend:Backend_intf.S) = struct
 
   (* First loop: iterates on the tree to mark dependencies.
 
-     curr is the variables or closures to wich we add constraints like
+     curr is the variables or closures to which we add constraints like
      '... in NC => curr in NC' or 'curr in NC'
 
      It can be empty when no constraint can be added like in the toplevel
@@ -338,7 +338,8 @@ module Inconstants (P:Param) (Backend:Backend_intf.S) = struct
        makeblock(Mutable) can be a 'constant' if it is allocated at
        toplevel: if this expression is evaluated only once.
     *)
-    | Prim (Lambda.Pmakeblock (_tag, Asttypes.Immutable, _value_kind), args, _dbg) ->
+    | Prim (Lambda.Pmakeblock (_tag, Asttypes.Immutable, _value_kind), args,
+            _dbg) ->
       mark_vars args curr
 (*  (* CR-someday pchambart: If global mutables are allowed: *)
     | Prim(Lambda.Pmakeblock(_tag, Asttypes.Mutable), args, _dbg, _)

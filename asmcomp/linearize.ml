@@ -18,11 +18,7 @@
 open Reg
 open Mach
 
-type label = int
-
-let label_counter = ref 99
-
-let new_label() = incr label_counter; !label_counter
+type label = Cmm.label
 
 type instruction =
   { mutable desc: instruction_desc;
@@ -49,12 +45,12 @@ and instruction_desc =
   | Lsetuptrap of label
   | Lpushtrap
   | Lpoptrap
-  | Lraise of Lambda.raise_kind
+  | Lraise of Cmm.raise_kind
   | Lcapture_stack_offset of int option ref
 
 let has_fallthrough = function
   | Lreturn | Lbranch _ | Lswitch _ | Lraise _
-  | Lop Itailcall_ind | Lop (Itailcall_imm _) -> false
+  | Lop Itailcall_ind _ | Lop (Itailcall_imm _) -> false
   | _ -> true
 
 (* Function declarations *)
@@ -70,6 +66,7 @@ type fundecl =
     fun_phantom_lets :
       (Clambda.ulet_provenance option * Mach.phantom_defining_expr)
         Ident.Map.t;
+    fun_spacetime_shape : Mach.spacetime_shape option;
   }
 
 (* Invert a test *)
@@ -116,6 +113,13 @@ let cons_instr d n ~available_before ~phantom_available_before =
     available_before; phantom_available_before;
   }
 
+(* Like [instr_cons], but takes availability information from the given
+   instruction. *)
+
+let instr_cons_same_avail d a r n =
+  instr_cons d a r n ~available_before:n.available_before
+    ~phantom_available_before:n.phantom_available_before
+
 (* Like [cons_instr], but takes availability information from the given
    instruction. *)
 
@@ -144,7 +148,8 @@ let get_label n = match n.desc with
     Lbranch lbl -> (lbl, n)
   | Llabel lbl -> (lbl, n)
   | Lend -> (-1, n)
-  | _ -> let lbl = new_label() in (lbl, cons_instr_same_avail (Llabel lbl) n)
+  | _ ->
+    let lbl = Cmm.new_label() in (lbl, cons_instr_same_avail (Llabel lbl) n)
 
 (* Check the fallthrough label *)
 let check_label n = match n.desc with
@@ -215,8 +220,11 @@ let local_exit k =
 let rec linear i n =
   match i.Mach.desc with
     Iend -> n
-  | Iop(Itailcall_ind | Itailcall_imm _ as op) ->
-      copy_instr (Lop op) i (discard_dead_code n)
+  | Iop(Itailcall_ind _ | Itailcall_imm _ as op) ->
+      if not Config.spacetime then
+        copy_instr (Lop op) i (discard_dead_code n)
+      else
+        copy_instr (Lop op) i (linear i.Mach.next n)
   | Iop(Imove | Ireload | Ispill)
     when i.Mach.arg.(0).loc = i.Mach.res.(0).loc ->
       linear i.Mach.next n
@@ -290,7 +298,7 @@ let rec linear i n =
       end else
         copy_instr (Lswitch(Array.map (fun n -> lbl_cases.(n)) index)) i !n2
   | Iloop body ->
-      let lbl_head = new_label() in
+      let lbl_head = Cmm.new_label() in
       let n1 = linear i.Mach.next n in
       let n2 =
         linear body (cons_instr (Lbranch lbl_head) n1
@@ -333,21 +341,15 @@ let rec linear i n =
   | Itrywith(body, handler) ->
       let (lbl_join, n1) = get_label (linear i.Mach.next n) in
       incr try_depth;
+      assert (i.Mach.arg = [| |] || Config.spacetime);
       let (lbl_body, n2) =
-        get_label (cons_instr_same_avail Lpushtrap
+        get_label (instr_cons_same_avail Lpushtrap i.Mach.arg [| |]
                     (linear body (cons_instr_same_avail Lpoptrap n1))) in
       decr try_depth;
-      cons_instr_same_avail (Lsetuptrap lbl_body)
+      instr_cons_same_avail (Lsetuptrap lbl_body) i.Mach.arg [| |]
         (linear handler (add_branch lbl_join n2))
   | Iraise k ->
       copy_instr (Lraise k) i (discard_dead_code n)
-
-(* CR-soon mshinwell: this is misleading---never called.
-   It also cannot be called between functions or you end up with
-   duplicate labels. *)
-let reset () =
-  label_counter := 99;
-  exit_label := []
 
 let add_prologue first_insn =
   (* The prologue needs to come after any [Iname_for_debugger] operations that
@@ -380,4 +382,5 @@ let fundecl f =
     fun_arity = Array.length f.Mach.fun_args;
     fun_module_path = f.Mach.fun_module_path;
     fun_phantom_lets = f.Mach.fun_phantom_lets;
+    fun_spacetime_shape = f.Mach.fun_spacetime_shape;
   }

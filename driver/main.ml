@@ -53,20 +53,27 @@ let process_file ppf name =
 
 let usage = "Usage: ocamlc <options> <files>\nOptions are:"
 
+(* Error messages to standard error formatter *)
 let ppf = Format.err_formatter
 
-(* Error messages to standard error formatter *)
+let process_thunks = ref []
+let schedule fn =
+  process_thunks := fn :: !process_thunks
+
 let anonymous filename =
-  readenv ppf (Before_compile filename);
-  process_file ppf filename;;
+  schedule (fun () ->
+    readenv ppf (Before_compile filename);
+    process_file ppf filename)
 
 let impl filename =
-  readenv ppf (Before_compile filename);
-  process_implementation_file ppf filename;;
+  schedule (fun () ->
+    readenv ppf (Before_compile filename);
+    process_implementation_file ppf filename)
 
 let intf filename =
-  readenv ppf (Before_compile filename);
-  process_interface_file ppf filename;;
+  schedule (fun () ->
+    readenv ppf (Before_compile filename);
+    process_interface_file ppf filename)
 
 let show_config () =
   Config.print_config stdout;
@@ -82,13 +89,13 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _binannot = set binary_annotations
   let _c = set compile_only
   let _cc s = c_compiler := Some s
-  let _cclib s = ccobjs := Misc.rev_split_words s @ !ccobjs
+  let _cclib s = schedule (fun () -> ccobjs := Misc.rev_split_words s @ !ccobjs)
   let _ccopt s = first_ccopts := s :: !first_ccopts
   let _compat_32 = set bytecode_compatible_32
   let _config = show_config
   let _custom = set custom_runtime
   let _no_check_prims = set no_check_prims
-  let _dllib s = dllibs := Misc.rev_split_words s @ !dllibs
+  let _dllib s = schedule (fun () -> dllibs := Misc.rev_split_words s @ !dllibs)
   let _dllpath s = dllpaths := !dllpaths @ [s]
   let _for_pack s = for_package := Some s
   let _g = set debug
@@ -124,6 +131,7 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _pack = set make_package
   let _pp s = preprocessor := Some s
   let _ppx s = first_ppx := s :: !first_ppx
+  let _plugin p = Compplugin.load p
   let _principal = set principal
   let _no_principal = unset principal
   let _rectypes = set recursive_types
@@ -137,6 +145,8 @@ module Options = Main_args.Make_bytecomp_options (struct
   let _no_strict_formats = unset strict_formats
   let _thread = set use_threads
   let _vmthread = set use_vmthreads
+  let _unboxed_types = set unboxed_types
+  let _no_unboxed_types = unset unboxed_types
   let _unsafe = set fast
   let _unsafe_string = set unsafe_string
   let _use_prims s = use_prims := s
@@ -169,6 +179,16 @@ let main () =
   try
     readenv ppf Before_args;
     Arg.parse Options.list anonymous usage;
+    if !output_name <> None && !compile_only &&
+          List.length !process_thunks > 1 then
+      fatal "Options -c -o are incompatible with compiling multiple files";
+    let final_output_name = !output_name in
+    if !output_name <> None && not !compile_only then
+      (* We're invoked like: ocamlc -o foo bar.c baz.ml.
+         Make sure the intermediate products don't clash with the final one. *)
+      output_name := None;
+    List.iter (fun f -> f ()) (List.rev !process_thunks);
+    output_name := final_output_name;
     readenv ppf Before_link;
     if
       List.length (List.filter (fun x -> !x)
@@ -182,14 +202,15 @@ let main () =
     if !make_archive then begin
       Compmisc.init_path false;
 
-      Bytelibrarian.create_archive ppf  (Compenv.get_objfiles ())
+      Bytelibrarian.create_archive ppf
+                                   (Compenv.get_objfiles ~with_ocamlparam:false)
                                    (extract_output !output_name);
       Warnings.check_fatal ();
     end
     else if !make_package then begin
       Compmisc.init_path false;
       let extracted_output = extract_output !output_name in
-      let revd = get_objfiles () in
+      let revd = get_objfiles ~with_ocamlparam:false in
       Bytepackager.package_files ppf (Compmisc.initial_env ())
         revd (extracted_output);
       Warnings.check_fatal ();
@@ -212,7 +233,7 @@ let main () =
           default_output !output_name
       in
       Compmisc.init_path false;
-      Bytelink.link ppf (get_objfiles ()) target;
+      Bytelink.link ppf (get_objfiles ~with_ocamlparam:true) target;
       Warnings.check_fatal ();
     end;
   with x ->

@@ -140,10 +140,10 @@ let rec reload i before =
   match i.desc with
     Iend ->
       (i, before)
-  | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) ->
+  | Ireturn | Iop(Itailcall_ind _) | Iop(Itailcall_imm _) ->
       (add_reloads (Reg.inter_set_array before i.arg) i,
        Reg.Set.empty)
-  | Iop(Icall_ind | Icall_imm _ | Iextcall(_, true)) ->
+  | Iop(Icall_ind _ | Icall_imm _ | Iextcall { alloc = true; }) ->
       (* All regs live across must be spilled *)
       let (new_next, finally) = reload i.next i.live in
       (add_reloads (Reg.inter_set_array before i.arg)
@@ -316,7 +316,7 @@ let rec spill i finally =
   match i.desc with
     Iend ->
       (i, finally)
-  | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) ->
+  | Ireturn | Iop(Itailcall_ind _) | Iop(Itailcall_imm _) ->
       (i, Reg.Set.empty)
   | Iop Ireload ->
       let (new_next, after) = spill i.next finally in
@@ -329,8 +329,8 @@ let rec spill i finally =
       let before1 = Reg.diff_set_array after i.res in
       let before =
         match i.desc with
-          Iop Icall_ind | Iop(Icall_imm _) | Iop(Iextcall _)
-        | Iop(Iintop Icheckbound) | Iop(Iintop_imm(Icheckbound, _))
+          Iop Icall_ind _ | Iop(Icall_imm _) | Iop(Iextcall _)
+        | Iop(Iintop (Icheckbound _)) | Iop(Iintop_imm((Icheckbound _), _))
         | Iop(Ialloc _) ->
             Reg.Set.union before1 !spill_at_raise
         | _ ->
@@ -457,4 +457,5 @@ let fundecl f =
     fun_human_name = f.fun_human_name;
     fun_module_path = f.fun_module_path;
     fun_phantom_lets = f.fun_phantom_lets;
+    fun_spacetime_shape = f.fun_spacetime_shape;
   }

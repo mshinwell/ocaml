@@ -137,6 +137,13 @@ let get_type_path ty tenv =
 open Format
 ;;
 
+let pretty_record_elision_mark ppf = function
+  | [] -> () (* should not happen, empty record pattern *)
+  | (_, lbl, _) :: q ->
+      (* we assume that there is no label repetitions here *)
+      if Array.length lbl.lbl_all > 1 + List.length q then
+        fprintf ppf ";@ _@ "
+
 let is_cons = function
 | {cstr_name = "::"} -> true
 | _ -> false
@@ -187,12 +194,13 @@ let rec pretty_val ppf v =
   | Tpat_variant (l, Some w, _) ->
       fprintf ppf "@[<2>`%s@ %a@]" l pretty_arg w
   | Tpat_record (lvs,_) ->
-      fprintf ppf "@[{%a}@]"
-        pretty_lvals
-        (List.filter
-           (function
-             | (_,_,{pat_desc=Tpat_any}) -> false (* do not show lbl=_ *)
-             | _ -> true) lvs)
+      let filtered_lvs = List.filter
+          (function
+            | (_,_,{pat_desc=Tpat_any}) -> false (* do not show lbl=_ *)
+            | _ -> true) lvs in
+      fprintf ppf "@[{%a%a}@]"
+        pretty_lvals filtered_lvs
+        pretty_record_elision_mark filtered_lvs
   | Tpat_array vs ->
       fprintf ppf "@[[| %a |]@]" (pretty_vals " ;") vs
   | Tpat_lazy v ->
@@ -1840,7 +1848,8 @@ let extendable_path path =
     Path.same path Predef.path_option)
 
 let rec collect_paths_from_pat r p = match p.pat_desc with
-| Tpat_construct(_, {cstr_tag=(Cstr_constant _|Cstr_block _)},ps) ->
+| Tpat_construct(_, {cstr_tag=(Cstr_constant _|Cstr_block _|Cstr_unboxed)},ps)
+  ->
     let path =  get_type_path p.pat_type p.pat_env in
     List.fold_left
       collect_paths_from_pat

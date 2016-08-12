@@ -16,7 +16,6 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-module A = Simple_value_approx
 module B = Inlining_cost.Benefit
 module E = Inline_and_simplify_aux.Env
 module R = Inline_and_simplify_aux.Result
@@ -185,7 +184,7 @@ let inline_by_copying_function_body ~env ~r
       bindings_for_vars_bound_by_closure_and_params_to_args
   in
   let env = E.activate_freshening (E.set_never_inline env) in
-  let env = E.inline_debuginfo ~dbg env in
+  let env = E.set_inline_debuginfo ~dbg env in
   simplify env r expr
 
 let inline_by_copying_function_declaration ~env ~r
@@ -208,7 +207,7 @@ let inline_by_copying_function_declaration ~env ~r
   in
   (* Arguments of functions that are not directly called but are
      aliased to arguments of a directly called one may need to be
-     marked as specialiased. *)
+     marked as specialised. *)
   let specialisable_args_with_aliases =
     Variable.Map.fold (fun arg outside_var map ->
         match Variable.Map.find arg (Lazy.force invariant_params) with

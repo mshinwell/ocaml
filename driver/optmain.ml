@@ -73,20 +73,26 @@ let process_file ppf name =
 
 let usage = "Usage: ocamlopt <options> <files>\nOptions are:"
 
+(* Error messages to standard error formatter *)
 let ppf = Format.err_formatter
 
-(* Error messages to standard error formatter *)
+let process_thunks = ref []
+let schedule fn =
+  process_thunks := fn :: !process_thunks
+
 let anonymous filename =
-  readenv ppf (Before_compile filename);
-  process_file ppf filename;;
+  schedule (fun () ->
+    readenv ppf (Before_compile filename);
+    process_file ppf filename)
 
 let impl filename =
-  readenv ppf (Before_compile filename);
-  process_implementation_file ppf filename;;
+  schedule (fun () ->
+    readenv ppf (Before_compile filename);
+    process_implementation_file ppf filename)
 
 let intf filename =
-  readenv ppf (Before_compile filename);
-  process_interface_file ppf filename;;
+  schedule (fun () ->
+    readenv ppf (Before_compile filename); process_interface_file ppf filename)
 
 let show_config () =
   Config.print_config stdout;
@@ -103,7 +109,7 @@ module Options = Main_args.Make_optcomp_options (struct
   let _binannot = set binary_annotations
   let _c = set compile_only
   let _cc s = c_compiler := Some s
-  let _cclib s = ccobjs := Misc.rev_split_words s @ !ccobjs
+  let _cclib s = schedule (fun () -> ccobjs := Misc.rev_split_words s @ !ccobjs)
   let _ccopt s = first_ccopts := s :: !first_ccopts
   let _clambda_checks () = clambda_checks := true
   let _compact = clear optimize_for_speed
@@ -205,6 +211,7 @@ module Options = Main_args.Make_optcomp_options (struct
     set output_c_object (); set output_complete_object ()
   let _p = set gprofile
   let _pack = set make_package
+  let _plugin p = Compplugin.load p
   let _pp s = preprocessor := Some s
   let _ppx s = first_ppx := s :: !first_ppx
   let _principal = set principal
@@ -224,6 +231,8 @@ module Options = Main_args.Make_optcomp_options (struct
   let _thread = set use_threads
   let _unbox_closures = set unbox_closures
   let _unbox_closures_factor f = unbox_closures_factor := f
+  let _unboxed_types = set unboxed_types
+  let _no_unboxed_types = clear unboxed_types
   let _unsafe = set fast
   let _unsafe_string = set unsafe_string
   let _v () = print_version_and_library "native-code compiler"
@@ -281,6 +290,16 @@ let main () =
   try
     readenv ppf Before_args;
     Arg.parse (Arch.command_line_options @ Options.list) anonymous usage;
+    if !output_name <> None && !compile_only &&
+          List.length !process_thunks > 1 then
+      fatal "Options -c -o are incompatible with compiling multiple files";
+    let final_output_name = !output_name in
+    if !output_name <> None && not !compile_only then
+      (* We're invoked like: ocamlopt -o foo bar.c baz.ml.
+         Make sure the intermediate products don't clash with the final one. *)
+      output_name := None;
+    List.iter (fun f -> f ()) (List.rev !process_thunks);
+    output_name := final_output_name;
     readenv ppf Before_link;
     if
       List.length (List.filter (fun x -> !x)
@@ -293,20 +312,20 @@ let main () =
         fatal "Option -a cannot be used with .cmxa input files.";
       Compmisc.init_path true;
       let target = extract_output !output_name in
-      Asmlibrarian.create_archive (get_objfiles ()) target;
+      Asmlibrarian.create_archive (get_objfiles ~with_ocamlparam:false) target;
       Warnings.check_fatal ();
     end
     else if !make_package then begin
       Compmisc.init_path true;
       let target = extract_output !output_name in
       Asmpackager.package_files ppf (Compmisc.initial_env ())
-        (get_objfiles ()) target ~backend;
+        (get_objfiles ~with_ocamlparam:false) target ~backend;
       Warnings.check_fatal ();
     end
     else if !shared then begin
       Compmisc.init_path true;
       let target = extract_output !output_name in
-      Asmlink.link_shared ppf (get_objfiles ()) target;
+      Asmlink.link_shared ppf (get_objfiles ~with_ocamlparam:false) target;
       Warnings.check_fatal ();
     end
     else if not !compile_only && !objfiles <> [] then begin
@@ -326,7 +345,7 @@ let main () =
           default_output !output_name
       in
       Compmisc.init_path true;
-      Asmlink.link ppf (get_objfiles ()) target;
+      Asmlink.link ppf (get_objfiles ~with_ocamlparam:true) target;
       Warnings.check_fatal ();
     end;
   with x ->
