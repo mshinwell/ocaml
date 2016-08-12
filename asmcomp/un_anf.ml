@@ -51,7 +51,7 @@ let closure_environment_ident (ufunction:Clambda.ufunction) =
   (* The argument after the arity is the environment *)
   if List.length ufunction.params = ufunction.arity + 1 then
     let env_var = List.nth ufunction.params ufunction.arity in
-    assert(Ident.name env_var = "env");
+    assert(Ident.name env_var = "*closure_env*");
     Some env_var
   else
     (* closed function, no environment *)

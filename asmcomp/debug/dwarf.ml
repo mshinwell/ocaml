@@ -277,6 +277,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
 
 let dwarf_for_identifier t ~fundecl ~function_proto_die
       ~lexical_block_cache ~(ident : Ident.t) ~is_unique ~range =
+  if Ident.name ident <> "*closure_env*" then
 (*  if ident.stamp <= !Flambda.ident_stamp_before_flambda then *)begin
     dwarf_for_identifier t ~fundecl ~function_proto_die
       ~lexical_block_cache ~ident ~is_unique ~range

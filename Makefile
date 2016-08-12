@@ -264,6 +264,12 @@ installopt:
 	cp middle_end/base_types/*.cmi middle_end/base_types/*.cmt \
 		middle_end/base_types/*.cmti $(INSTALL_COMPLIBDIR)
 	cp asmcomp/*.cmi asmcomp/*.cmt asmcomp/*.cmti $(INSTALL_COMPLIBDIR)
+	cp asmcomp/debug/*.cmi asmcomp/debug/*.cmt asmcomp/debug/*.cmti \
+    $(INSTALL_COMPLIBDIR)
+	cp supportlibs/dwarf_low/*.cmi supportlibs/dwarf_low/*.cmt \
+    supportlibs/dwarf_low/*.cmti $(INSTALL_COMPLIBDIR)
+	cp supportlibs/dwarf_high/*.cmi supportlibs/dwarf_high/*.cmt \
+    supportlibs/dwarf_high/*.cmti $(INSTALL_COMPLIBDIR)
 	cp compilerlibs/ocamloptcomp.cma $(OPTSTART) $(INSTALL_COMPLIBDIR)
 	if test -n "$(WITH_OCAMLDOC)"; then (cd ocamldoc; $(MAKE) installopt); \
 		else :; fi
@@ -282,7 +288,9 @@ installoptopt:
 	   ln -sf ocamlopt.opt$(EXE) ocamlopt$(EXE); \
 	   ln -sf ocamllex.opt$(EXE) ocamllex$(EXE)
 	cp utils/*.cmx parsing/*.cmx typing/*.cmx bytecomp/*.cmx \
-           driver/*.cmx asmcomp/*.cmx $(INSTALL_COMPLIBDIR)
+           driver/*.cmx asmcomp/*.cmx asmcomp/debug/*.cmx \
+           supportlibs/dwarf_low/*.cmx \
+           supportlibs/dwarf_high/*.cmx $(INSTALL_COMPLIBDIR)
 	cp compilerlibs/ocamlcommon.cmxa compilerlibs/ocamlcommon.a \
 	   compilerlibs/ocamlbytecomp.cmxa compilerlibs/ocamlbytecomp.a \
 	   compilerlibs/ocamloptcomp.cmxa compilerlibs/ocamloptcomp.a \
