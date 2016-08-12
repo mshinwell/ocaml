@@ -47,8 +47,8 @@ let avail_at_raise = ref None
 
 let operation_can_raise (op : Mach.operation) =
   match op with
-  | Icall_ind | Icall_imm _ | Iextcall _
-  | Iintop Icheckbound | Iintop_imm (Icheckbound, _)
+  | Icall_ind _ | Icall_imm _ | Iextcall _
+  | Iintop (Icheckbound _) | Iintop_imm (Icheckbound _, _)
   | Ialloc _ -> true
   | _ -> false
 
@@ -136,7 +136,7 @@ fail := true;
     | Ok avail_before ->
       match instr.desc with
       | Iend -> Ok avail_before
-      | Ireturn | Iop Itailcall_ind | Iop (Itailcall_imm _) ->
+      | Ireturn | Iop (Itailcall_ind _) | Iop (Itailcall_imm _) ->
         Unreachable
       | Iop (Iname_for_debugger { ident; which_parameter; }) ->
         (* First forget about any existing debug info to do with [ident]. *)
@@ -212,7 +212,7 @@ fail := true;
              should do it.
              mshinwell: fixed in Available_ranges, need a comment here tho *)
           match op with
-          | Icall_ind | Icall_imm _ ->
+          | Icall_ind _ | Icall_imm _ ->
             RD.Set.filter (fun reg ->
                 let holds_immediate = RD.holds_non_pointer reg in
                 let on_stack = RD.assigned_to_stack reg in

@@ -12,9 +12,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-module Int8 = Numbers.Int8
-module Int16 = Numbers.Int16
-
 type width =
   | Thirty_two
   | Sixty_four
@@ -30,12 +27,12 @@ type dwarf_section =
 type section =
   | Dwarf of dwarf_section
 
-let debug_info_label = Linearize.new_label ()
-let debug_abbrev_label = Linearize.new_label ()
-let debug_aranges_label = Linearize.new_label ()
-let debug_loc_label = Linearize.new_label ()
-let debug_str_label = Linearize.new_label ()
-let debug_line_label = Linearize.new_label ()
+let debug_info_label = Cmm.new_label ()
+let debug_abbrev_label = Cmm.new_label ()
+let debug_aranges_label = Cmm.new_label ()
+let debug_loc_label = Cmm.new_label ()
+let debug_str_label = Cmm.new_label ()
+let debug_line_label = Cmm.new_label ()
 
 let label_for_section = function
   | Dwarf Debug_info -> debug_info_label

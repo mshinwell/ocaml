@@ -12,6 +12,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+
 let node_num_header_words = 2 (* [Node_num_header_words] in the runtime. *)
 let index_within_node = ref node_num_header_words
 (* The [lazy]s are to ensure that we don't create [Ident.t]s at toplevel
@@ -240,12 +242,16 @@ class virtual instruction_selection = object (self)
     | None -> assert false
     | Some reg -> Some reg
 
-  method private instrument_indirect_call ~env ~callee ~is_tail
-        ~label_after =
+  method private instrument_indirect_call ~(env : Selectgen.environment)
+        ~callee ~is_tail ~label_after =
     (* [callee] is a pseudoregister, so we have to bind it in the environment
        and reference the variable to which it is bound. *)
     let callee_ident = Ident.create "callee" in
-    let env = Tbl.add callee_ident [| callee |] env in
+    let env =
+      { env with
+        idents = Tbl.add callee_ident [| callee |] env.idents;
+      }
+    in
     let instrumentation =
       code_for_call
         ~node:(Lazy.force !spacetime_node)
@@ -293,7 +299,7 @@ class virtual instruction_selection = object (self)
     in
     self#emit_expr env instrumentation
 
-  method private emit_prologue f ~node_hole ~env =
+  method private emit_prologue f ~node_hole ~(env : Selectgen.environment) =
     (* We don't need the prologue unless we inserted some instrumentation.
        This corresponds to adding the prologue if the function contains one
        or more call or allocation points. *)
@@ -311,8 +317,8 @@ class virtual instruction_selection = object (self)
       in
       disable_instrumentation <- false;
       let node = Lazy.force !spacetime_node_ident in
-      let node_reg = Tbl.find node env in
-      self#insert_moves node_temp_reg node_reg
+      let node_reg = Tbl.find node env.idents in
+      self#insert_moves env node_temp_reg node_reg
     end
 
   method! emit_blockheader env n dbg =
@@ -345,9 +351,9 @@ class virtual instruction_selection = object (self)
       super#select_allocation words
     end
 
-  method! select_allocation_args env =
+  method! select_allocation_args (env : Selectgen.environment) =
     if self#can_instrument () then begin
-      let regs = Tbl.find (Lazy.force !spacetime_node_ident) env in
+      let regs = Tbl.find (Lazy.force !spacetime_node_ident) env.idents in
       match regs with
       | [| reg |] -> [| reg |]
       | _ -> failwith "Expected one register only for spacetime_node_ident"
@@ -384,8 +390,10 @@ class virtual instruction_selection = object (self)
   method! initial_env () =
     let env = super#initial_env () in
     if Config.spacetime then
-      Tbl.add (Lazy.force !spacetime_node_ident)
-        (self#regs_for Cmm.typ_int) env
+      { env with
+        idents = Tbl.add (Lazy.force !spacetime_node_ident)
+          (self#regs_for Cmm.typ_int) env.idents;
+      }
     else
       env
 
@@ -397,9 +405,11 @@ class virtual instruction_selection = object (self)
     end;
     super#emit_fundecl f
 
-  method! insert_prologue f ~loc_arg ~rarg ~spacetime_node_hole ~env =
+  method! insert_prologue f ~loc_arg ~rarg ~num_regs_per_arg
+        ~spacetime_node_hole ~env =
     let fun_spacetime_shape =
-      super#insert_prologue f ~loc_arg ~rarg ~spacetime_node_hole ~env
+      super#insert_prologue f ~loc_arg ~rarg ~num_regs_per_arg
+        ~spacetime_node_hole ~env
     in
     (* CR-soon mshinwell: add check to make sure the node size doesn't exceed
        the chunk size of the allocator *)
@@ -410,7 +420,7 @@ class virtual instruction_selection = object (self)
         | None -> assert false
         | Some (node_hole, reg) -> node_hole, reg
       in
-      self#insert_moves [| Proc.loc_spacetime_node_hole |] node_hole_reg;
+      self#insert_moves env [| Proc.loc_spacetime_node_hole |] node_hole_reg;
       self#emit_prologue f ~node_hole ~env;
       match !reverse_shape with
       | [] -> None

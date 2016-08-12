@@ -232,7 +232,7 @@ let cache_string str =
   match List.assoc str !cached_strings with
   | label -> label
   | exception Not_found ->
-    let label = Linearize.new_label () in
+    let label = Cmm.new_label () in
     cached_strings := (str, label) :: !cached_strings;
     label
 

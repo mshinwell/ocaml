@@ -946,7 +946,7 @@ let fundecl fundecl =
   emit_all true fundecl.fun_body;
   List.iter emit_call_gc !call_gc_sites;
   emit_call_bound_errors ();
-  let end_of_function_label = Linearize.new_label () in
+  let end_of_function_label = Cmm.new_label () in
   _label (emit_label end_of_function_label);
   if frame_required() then begin
     let n = frame_size() - 8 - (if fp then 8 else 0) in

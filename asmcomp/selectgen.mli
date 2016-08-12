@@ -133,8 +133,9 @@ class virtual selector_generic : object
      : Cmm.fundecl
     -> loc_arg:Reg.t array
     -> rarg:Reg.t array
+    -> num_regs_per_arg:int array
     -> spacetime_node_hole:(Ident.t * Reg.t array) option
-    -> env:(Ident.t, Reg.t array) Tbl.t
+    -> env:environment
     -> Mach.spacetime_shape option
 
   val mutable instr_seq : Mach.instruction

@@ -55,7 +55,7 @@ let rec combine i allocstate =
             (instr_cons_debug (Iop(Ialloc { words = newsz; spacetime_index = 0;
                 label_after_call_gc = None; }))
               i.arg i.res
-              ~phantom_available_before:i.phantom_available_before newnext, ofs)
+              ~phantom_available_before:i.phantom_available_before
               i.dbg newnext, ofs)
           end
       end

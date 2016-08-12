@@ -31,7 +31,7 @@ let instr ppf i =
   | Lop op ->
       begin match op with
       | Imove (* CR mshinwell: remove *)
-      | Ialloc _ | Icall_ind | Icall_imm _ | Iextcall _ ->
+      | Ialloc _ | Icall_ind _ | Icall_imm _ | Iextcall _ ->
           fprintf ppf "@[<1>LA={%a}@]@," regsetaddr i.live;
           if !Clflags.debug then begin
             fprintf ppf "@[<1>AB=%a@]@,"

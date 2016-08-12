@@ -893,7 +893,7 @@ let split_int64_for_32bit_target arg =
 let rec unbox_int bi arg =
   preserve_phantom_lets_cmm arg (fun arg ->
   match arg with
-  | Cop(Calloc, [_hdr; _ops; arg]) ->
+  | Cop(Calloc _, [_hdr; _ops; arg]) ->
       begin match strip_phantom_lets_cmm arg with
       | Cop (Clsl, [contents; shift_by_32])
           when bi = Pint32 && size_int = 8 && big_endian
@@ -1640,7 +1640,7 @@ let rec transl env e =
       | (Pduparray (kind, _), args) ->
           preserve_phantom_lets_list args (fun args ->
             match args with
-            | [Uprim (Pmakearray (kind', _), args, _dbg)] ->
+            | [Uprim (Pmakearray (kind', _), args, dbg)] ->
                 (* We arrive here in two cases:
                    1. When using Closure, all the time.
                    2. When using Flambda, if a float array longer than
@@ -1652,7 +1652,7 @@ let rec transl env e =
                    current state of [Translcore], we will in fact only get
                    here with [Pfloatarray]s. *)
                 assert (kind = kind');
-                transl_make_array env kind args
+                transl_make_array dbg env kind args
             | [arg] ->
                 let prim_obj_dup =
                   Primitive.simple ~name:"caml_obj_dup" ~arity:1 ~alloc:true

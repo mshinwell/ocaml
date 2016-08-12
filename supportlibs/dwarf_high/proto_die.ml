@@ -79,7 +79,7 @@ let create ~parent ~tag ~attribute_values =
       children = [];
       tag;
       attribute_values;
-      label = Linearize.new_label ();
+      label = Cmm.new_label ();
       name = None;
       sort_priority = -1;
     }

@@ -37,7 +37,7 @@ let create ~emit_string ~emit_symbol ~emit_label ~emit_label_declaration
 let cache_string t s =
   try List.assoc s t.strings
   with Not_found -> begin
-    let label = Linearize.new_label () in
+    let label = Cmm.new_label () in
     t.strings <- (s, label)::t.strings;
     label
   end

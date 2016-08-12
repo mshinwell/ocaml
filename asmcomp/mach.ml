@@ -203,7 +203,8 @@ let spacetime_node_hole_pointer_is_live_before insn =
     | Imove | Ispill | Ireload | Iconst_int _ | Iconst_float _
     | Iconst_symbol _ | Istackoffset _ | Iload _ | Istore _
     | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
-    | Ifloatofint | Iintoffloat -> false
+    | Ifloatofint | Iintoffloat
+    | Iname_for_debugger _ -> false
     end
   | Iend | Ireturn | Iifthenelse _ | Iswitch _ | Iloop _ | Icatch _
   | Iexit _ | Itrywith _ | Iraise _ -> false

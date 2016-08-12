@@ -205,11 +205,8 @@ and close t env (lam : Lambda.lambda) : Flambda.t =
          })
   | Lfunction { kind; params; body; attr; loc = location; } ->
     let name =
-      (* Name anonymous functions by their source location, if known. *)
-      match location with
-      | Some location ->
-        Format.asprintf "anon-fn[%a]" Location.print_compact location
-      | None -> "anon-fn"
+      (* Name anonymous functions by their source location. *)
+      Format.asprintf "anon-fn[%a]" Location.print_compact location
     in
     let closure_bound_var =
       (* CR mshinwell: We need to work out how to do this properly.
@@ -227,7 +224,7 @@ and close t env (lam : Lambda.lambda) : Flambda.t =
       let decl =
         Function_decl.create ~let_rec_ident:None ~closure_bound_var ~kind
           ~params ~body ~inline:attr.inline ~specialise:attr.specialise
-          ~is_a_functor:attr.is_a_functor ~loc
+          ~is_a_functor:attr.is_a_functor ~loc:location
       in
       close_functions t env (Function_decls.create [decl])
     in
@@ -237,12 +234,6 @@ and close t env (lam : Lambda.lambda) : Flambda.t =
       }
     in
     let provenance : Flambda.let_provenance =
-      (* CR mshinwell: consider what to do about optionness *)
-      let location =
-        match location with
-        | None -> Location.none
-        | Some location -> location
-      in
       { module_path = Env.current_module_path env;
         location;
       }
@@ -553,7 +544,7 @@ and close t env (lam : Lambda.lambda) : Flambda.t =
       (Assign { being_assigned; new_value = new_value_var; })
   | Levent (lam, ev) ->
     begin match ev.lev_kind with
-    | Lev_after _ -> close t env ~debuginfo:(Debuginfo.from_call ev) lam
+    | Lev_after _ -> close t env lam
     | Lev_module_definition path ->
       let env = Env.entering_module_definition env ~path in
       close t env lam

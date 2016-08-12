@@ -30,7 +30,7 @@ type split_base_type_die_name_result = {
 }
 
 let split_base_type_die_name name =
-  match Misc.Stdlib.String.split name ~on:' ' with
+  match String.split_on_char ' ' name with
   | "__ocaml"::ident_name::ident_stamp::output_path ->
     let output_path = String.concat " " output_path in
     let ident_stamp = int_of_string ident_stamp in

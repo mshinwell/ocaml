@@ -13,6 +13,7 @@
 (**************************************************************************)
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "-60"]  (* CR mshinwell: remove once warning fixed *)
 
 module L = Linearize
 
@@ -421,7 +422,7 @@ end) = struct
     in
     (* Note that we can't reuse an existing label in the code since we rely
        on the ordering of range-related labels. *)
-    let label = lazy (L.new_label ()) in
+    let label = lazy (Cmm.new_label ()) in
     (* As a result of the code above to restart subranges, we may have
        a register occurring in both [births] and [deaths]; and we would
        like the register to have an open subrange from this point.  It
@@ -555,7 +556,7 @@ module Make_ranges = Make (struct
     | None -> None
     | Some prev_insn ->
       match prev_insn.L.desc with
-      | Lop ((Icall_ind | Icall_imm _ | Iextcall _) as op) ->
+      | Lop ((Icall_ind _ | Icall_imm _ | Iextcall _) as op) ->
         let destroyed_locations =
           Array.map (fun (reg : Reg.t) -> reg.loc)
             (Proc.destroyed_at_oper (Mach.Iop op))

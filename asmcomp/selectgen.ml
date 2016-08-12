@@ -501,18 +501,18 @@ method insert_op_debug env op dbg rs rd =
 method insert_op env op rs rd =
   self#insert_op_debug env op Debuginfo.none rs rd
 
-method emit_blockheader _env n _dbg =
+method emit_blockheader env n _dbg =
   let r = self#regs_for typ_int in
-  Some(self#insert_op (Iconst_int n) [||] r)
+  Some(self#insert_op env (Iconst_int n) [||] r)
 
 method about_to_emit_call _env _insn _arg = None
 
 (* Prior to a function call, update the Spacetime node hole pointer hard
    register. *)
 
-method private maybe_emit_spacetime_move ~spacetime_reg =
+method private maybe_emit_spacetime_move env ~spacetime_reg =
   Misc.Stdlib.Option.iter (fun reg ->
-      self#insert_moves reg [| Proc.loc_spacetime_node_hole |])
+      self#insert_moves env reg [| Proc.loc_spacetime_node_hole |])
     spacetime_reg
 
 (* Add the instructions for the given expression
@@ -631,7 +631,7 @@ method emit_expr env exp =
                 self#about_to_emit_call env (Iop new_op) [| |]
               in
               let (loc_arg, stack_ofs) = self#emit_extcall_args env new_args in
-              self#maybe_emit_spacetime_move ~spacetime_reg;
+              self#maybe_emit_spacetime_move env ~spacetime_reg;
               let rd = self#regs_for ty in
               let loc_res =
                 self#insert_op_debug env new_op dbg
@@ -928,8 +928,8 @@ method emit_tail env exp =
                 self#insert_move_args env r1 loc_arg stack_ofs;
                 self#maybe_emit_spacetime_move env ~spacetime_reg;
                 self#insert_debug env (Iop new_op) dbg loc_arg loc_res;
-                self#insert(Iop(Istackoffset(-stack_ofs))) [||] [||];
-                self#insert Ireturn loc_res [||]
+                self#insert env (Iop(Istackoffset(-stack_ofs))) [||] [||];
+                self#insert env Ireturn loc_res [||]
               end
           | _ -> fatal_error "Selection.emit_tail"
       end
@@ -1001,7 +1001,8 @@ method private emit_tail_sequence env exp =
 
 (* Insertion of the function prologue *)
 
-method insert_prologue _f ~loc_arg ~rarg ~spacetime_node_hole:_ ~env =
+method insert_prologue f ~loc_arg ~rarg ~num_regs_per_arg
+      ~spacetime_node_hole:_ ~env =
   let loc_arg_index = ref 0 in
   List.iteri (fun param_index (ident, _ty) ->
       let naming_op =
@@ -1047,21 +1048,24 @@ method emit_fundecl f =
      together is then simply prepended to the body. *)
   let env =
     List.fold_right2
-      (fun (id, _ty) r env -> Tbl.add id r env)
+      (fun (id, _ty) r env ->
+         { env with idents = Tbl.add id r env.idents; })
       f.Cmm.fun_args rargs (self#initial_env ()) in
   let spacetime_node_hole, env =
     if not Config.spacetime then None, env
     else begin
       let reg = self#regs_for typ_int in
       let node_hole = Ident.create "spacetime_node_hole" in
-      Some (node_hole, reg), Tbl.add node_hole reg env
+      Some (node_hole, reg),
+        { env with idents = Tbl.add node_hole reg env.idents; }
     end
   in
   self#emit_tail env f.Cmm.fun_body;
   let body = self#extract in
   instr_seq <- dummy_instr;
   let fun_spacetime_shape =
-    self#insert_prologue f ~loc_arg ~rarg ~spacetime_node_hole ~env
+    self#insert_prologue f ~loc_arg ~rarg ~num_regs_per_arg
+      ~spacetime_node_hole ~env
   in
   let body = self#extract_core ~end_instr:body in
   instr_iter (fun instr -> self#mark_instr instr.Mach.desc) body;
