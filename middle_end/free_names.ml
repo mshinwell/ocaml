@@ -91,5 +91,10 @@ module Mutable = struct
     t.free_phantom_variables
       <- Variable.Set.diff t.free_phantom_variables bound_vars
 
-  let freeze t = t
+  let freeze t =
+    { free_variables = t.free_variables;
+      free_phantom_variables = t.free_phantom_variables;
+      free_symbols = t.free_symbols;
+      free_phantom_symbols = t.free_phantom_symbols;
+    }
 end

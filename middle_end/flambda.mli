@@ -356,8 +356,6 @@ and function_declarations = private {
 and function_declaration = private {
   params : Variable.t list;
   body : t;
-  (* CR-soon mshinwell: inconsistent naming free_variables/free_vars here and
-     above *)
   free_names : Free_names.t;
   (** All variables and symbols free in the *body* of the function.  For
       example, a variable that is bound as one of the function's parameters
@@ -427,6 +425,9 @@ type expr = t
 
 type symbol_provenance = {
   names : string list;
+  (** The names of the variables bound by the [let]-bindings in the source
+      code that were lifted to symbols.  (See [Lift_let_to_initialize_symbol].)
+  *)
   module_path : Path.t;
   location : Location.t;
 }
