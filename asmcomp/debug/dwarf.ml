@@ -187,9 +187,8 @@ let location_list_entry ~fundecl ~available_subrange =
   Some entry
 
 let dwarf_for_identifier t ~fundecl ~function_proto_die
-      ~lexical_block_cache ~ident ~is_unique:_ ~range =
+      ~lexical_block_proto_die ~ident ~is_unique:_ ~range =
   let is_parameter = Available_range.is_parameter range in
-  let (start_pos, end_pos) as cache_key = Available_range.extremities range in
   let parent_proto_die =
     match is_parameter with
     | Parameter _index ->
@@ -197,21 +196,9 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
       function_proto_die
     | Local ->
       (* Local variables need to be children of "lexical blocks", which in turn
-         are children of the function.  We use a cache to avoid creating more
-         than one proto-DIE for any given lexical block position and size. *)
-      try Hashtbl.find lexical_block_cache cache_key
-      with Not_found -> begin
-        let lexical_block_proto_die =
-          Proto_die.create ~parent:(Some function_proto_die)
-            ~tag:Dwarf_tag.Lexical_block
-            ~attribute_values:[
-              DAH.create_low_pc ~address_label:start_pos;
-              DAH.create_high_pc ~address_label:end_pos;
-            ]
-        in
-        Hashtbl.add lexical_block_cache cache_key lexical_block_proto_die;
-        lexical_block_proto_die
-      end
+         are children of the function.  We create a single lexical block per
+         function to avoid the debugger getting confused. *)
+      lexical_block_proto_die
   in
   (* Build a location list that identifies where the value of [ident] may be
      found at runtime, indexed by program counter range, and insert the list
@@ -282,7 +269,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
   end
 
 let dwarf_for_identifier t ~fundecl ~function_proto_die
-      ~lexical_block_cache ~(ident : Ident.t) ~is_unique ~range =
+      ~lexical_block_proto_die ~(ident : Ident.t) ~is_unique ~range =
   if Ident.name ident <> "*closure_env*" then begin
     let ident =
       (* Map back to the identifier that actually occurred in the source code,
@@ -293,7 +280,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
       | ident -> ident
     in
     dwarf_for_identifier t ~fundecl ~function_proto_die
-      ~lexical_block_cache ~ident ~is_unique ~range
+      ~lexical_block_proto_die ~ident ~is_unique ~range
   end
 
 (* This function covers local variables, parameters, variables in closures
@@ -301,13 +288,13 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
    two cases are handled by the explicit addition of phantom lets way back
    in [Flambda_to_clambda].) *)
 let dwarf_for_variables_and_parameters t ~function_proto_die
-      ~lexical_block_cache ~available_ranges
+      ~lexical_block_proto_die ~available_ranges
       ~(fundecl : Linearize.fundecl) =
   (* This includes normal variables as well as those bound by phantom lets. *)
   Available_ranges.fold available_ranges
     ~init:()
     ~f:(fun () -> dwarf_for_identifier t ~fundecl
-      ~function_proto_die ~lexical_block_cache)
+      ~function_proto_die ~lexical_block_proto_die)
 
 let dwarf_for_function_definition t ~(fundecl:Linearize.fundecl)
       ~available_ranges ~(emit_info : Emit.fundecl_result) =
@@ -363,9 +350,18 @@ let dwarf_for_function_definition t ~(fundecl:Linearize.fundecl)
         DAH.create_type ~proto_die:type_proto_die;
       ]
   in
-  let lexical_block_cache = Hashtbl.create 42 in
+  let lexical_block_proto_die =
+    (* CR-someday mshinwell: Consider trying to improve this so that we don't
+       have all locals visible at once. *)
+    Proto_die.create ~parent:(Some function_proto_die)
+      ~tag:Dwarf_tag.Lexical_block
+      ~attribute_values:[
+        start_of_function;
+        end_of_function;
+      ]
+  in
   dwarf_for_variables_and_parameters t ~function_proto_die
-    ~lexical_block_cache ~available_ranges ~fundecl
+    ~lexical_block_proto_die ~available_ranges ~fundecl
 
 let emit t asm =
   assert (not t.emitted);
