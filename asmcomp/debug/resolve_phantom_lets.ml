@@ -56,7 +56,10 @@ let run phantom_lets =
       | Some (Uphantom_const (Uconst_ptr i)) ->
         resolves_to (Mach.Iphantom_const_int i)
       | Some (Uphantom_var defining_ident) ->
-        resolve_variable ~defining_ident
+        begin match resolve_variable ~defining_ident with
+        | None -> None
+        | Some defining_expr -> resolves_to defining_expr
+        end
       | Some (Uphantom_read_var_field (defining_ident, field)) ->
         begin match resolve_variable ~defining_ident with
         | None -> None

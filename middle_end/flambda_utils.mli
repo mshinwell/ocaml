@@ -87,8 +87,10 @@ val toplevel_substitution_named
     [Immutable] [Let] expressions the given [(var, expr)] pairs around the
     body. *)
 val bind
-   : bindings:(Variable.t * Flambda.named) list
+   : ?provenance:Flambda.let_provenance
+  -> bindings:(Variable.t * Flambda.named) list
   -> body:Flambda.t
+  -> unit
   -> Flambda.t
 
 val name_expr

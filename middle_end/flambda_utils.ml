@@ -433,9 +433,9 @@ let make_closure_declaration ~id ~body ~params ~stub : Flambda.t =
     (Flambda.create_let project_closure_var project_closure
       (Var (project_closure_var)))
 
-let bind ~bindings ~body =
+let bind ?provenance ~bindings ~body () =
   List.fold_left (fun expr (var, var_def) ->
-      Flambda.create_let var var_def expr)
+      Flambda.create_let ?provenance var var_def expr)
     body bindings
 
 let all_lifted_constants (program : Flambda.program) =

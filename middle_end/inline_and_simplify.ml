@@ -840,6 +840,7 @@ and simplify_partial_application env r ~lhs_of_application
       ~bindings:(List.map (fun (var, arg) ->
           var, Flambda.Expr (Var arg)) applied_args)
       ~body:wrapper_accepting_remaining_args
+      ()
   in
   simplify env r with_known_args
 

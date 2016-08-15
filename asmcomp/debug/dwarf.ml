@@ -146,7 +146,10 @@ let location_list_entry ~fundecl ~available_subrange =
           LE.in_stack_slot
             ~offset_in_words:(offset_in_bytes_from_cfa / Arch.size_addr)
       end
-    (* CR mshinwell: don't ignore provenance *)
+    (* CR mshinwell: don't ignore provenance
+       Follow-up: Is it really needed?  For example, Inlining_transforms is
+       using dummy module paths for function parameters, etc.
+     *)
     | Phantom (_, _, Const_int i) -> LE.const_int (Int64.of_int i)
     | Phantom (_, _, Const_symbol symbol) -> LE.const_symbol symbol
     | Phantom (_, _, Read_symbol_field { symbol; field; }) ->

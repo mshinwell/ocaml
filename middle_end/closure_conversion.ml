@@ -111,6 +111,7 @@ let tupled_function_call_stub original_params unboxed_version
         pos + 1, Flambda.create_let param lam body)
       (0, call) params
   in
+  (* CR-soon mshinwell: This should not use [Debuginfo.none] *)
   Flambda.create_function_declaration ~params:[tuple_param]
     ~body ~stub:true ~dbg:Debuginfo.none ~inline:Default_inline
     ~specialise:Default_specialise ~is_a_functor:false
