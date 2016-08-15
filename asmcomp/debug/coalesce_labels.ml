@@ -43,11 +43,13 @@ let rec coalesce env (insn : L.instruction) ~last_insn_was_label =
         | None ->
           env, Some insn.desc, Some label
         end
-      | Lcapture_stack_offset _ ->
+      (* CR mshinwell: Figure out why the following leaves gaps in location
+         lists... sometimes *)
+      | Lcapture_stack_offset _ (*->
         (* This is effectively a label, and doesn't generate any code.
            As such, allow labels to be coalesced even if it is in the
            middle. *)
-        env, Some insn.desc, last_insn_was_label
+        env, Some insn.desc, last_insn_was_label *)
       | Lprologue | Lend | Lop _ | Lreloadretaddr | Lreturn | Lpushtrap
       | Lpoptrap | Lraise _ | Lbranch _
       | Lcondbranch _ | Lcondbranch3 _ | Lswitch _ | Lsetuptrap _ ->

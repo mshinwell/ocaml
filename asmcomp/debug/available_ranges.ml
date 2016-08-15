@@ -103,6 +103,8 @@ end = struct
         assert (Array.length start_insn.arg = 1);
         (* CR mshinwell: review assertions, maybe less useful now *)
         (*assert (reg.name = start_insn.arg.(0).Reg.name);*)
+        (* CR mshinwell: Why bother storing the start instruction when it's
+           a label? *)
         assert (reg.loc = start_insn.arg.(0).Reg.loc)
       | _ -> ()
       end;
@@ -424,7 +426,8 @@ end) = struct
     in
     (* Note that we can't reuse an existing label in the code since we rely
        on the ordering of range-related labels. *)
-    let label = lazy (Cmm.new_label ()) in
+    let label = Cmm.new_label () in
+    let used_label = ref false in
     (* As a result of the code above to restart subranges, we may have
        a register occurring in both [births] and [deaths]; and we would
        like the register to have an open subrange from this point.  It
@@ -435,7 +438,8 @@ end) = struct
           try KM.find key open_subrange_start_insns
           with Not_found -> assert false
         in
-        let end_pos = Lazy.force label in
+        let end_pos = label in
+        used_label := true;
         let end_pos_offset = S.end_pos_offset ~prev_insn:!prev_insn ~key in
         match
           S.create_subrange ~fundecl ~key ~start_pos ~start_insn ~end_pos
@@ -446,8 +450,8 @@ end) = struct
       deaths
       ();
     let label_insn =
-      lazy ({ L.
-        desc = L.Llabel (Lazy.force label);
+      { L.
+        desc = L.Llabel label;
         next = insn;
         arg = [| |];
         res = [| |];
@@ -455,7 +459,7 @@ end) = struct
         live = Reg.Set.empty;
         available_before = insn.available_before;
         phantom_available_before = insn.phantom_available_before;
-      })
+      }
     in
     let open_subrange_start_insns =
       let open_subrange_start_insns =
@@ -468,7 +472,7 @@ end) = struct
              stack offset will be at that point.) *)
           let new_insn =
             match S.Key.needs_stack_offset_capture key with
-            | None -> Lazy.force label_insn
+            | None -> label_insn
             | Some reg ->
               let new_insn =
                 { L.
@@ -485,12 +489,13 @@ end) = struct
               insert_insn ~new_insn;
               new_insn
           in
-          KM.add key (Lazy.force label, new_insn) open_subrange_start_insns)
+          used_label := true;
+          KM.add key (label, new_insn) open_subrange_start_insns)
         births
         open_subrange_start_insns
     in
-    begin if Lazy.is_val label then
-      insert_insn ~new_insn:(Lazy.force label_insn)
+    begin if !used_label then
+      insert_insn ~new_insn:label_insn
     end;
     let first_insn = !first_insn in
     match insn.L.desc with

@@ -106,13 +106,11 @@ let emit ppf fundecl ~dwarf =
   let available_ranges, fundecl =
     Available_ranges.create ~fundecl:(Available_filtering.fundecl fundecl)
   in
-(*
   if !Clflags.dump_linear then begin
     Format.fprintf ppf
       "*** %s@.%a@." "Available subranges before coalescing of labels"
       (Printlinear.fundecl_with_available_ranges available_ranges) fundecl
   end;
-*)
   let label_rewriting, fundecl = Coalesce_labels.fundecl fundecl in
   let available_ranges =
     Available_ranges.rewrite_labels available_ranges ~env:label_rewriting
