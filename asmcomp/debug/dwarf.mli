@@ -18,6 +18,11 @@ type t
 
 val create
    : source_provenance:Timings.source_provenance
+  -> idents_to_original_idents:Ident.t Ident.tbl
+     (** [idents_to_original_idents] gives the mapping from identifiers
+         mentioned in the Linearize code (e.g. in register availability sets)
+         back to identifiers that occurred in the source code.  (Note that this
+         mapping might not be injective due to inlining.) *)
   -> t
 
 val dwarf_for_function_definition

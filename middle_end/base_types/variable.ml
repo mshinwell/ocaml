@@ -97,7 +97,7 @@ let rename ?current_compilation_unit ?append t =
     | None -> t.name
     | Some s -> t.name ^ s
   in
-  create ~current_compilation_unit name
+  create ?original_ident:t.original_ident ~current_compilation_unit name
 
 let in_compilation_unit t cu =
   Compilation_unit.equal cu t.compilation_unit

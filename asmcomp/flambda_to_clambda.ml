@@ -113,6 +113,8 @@ let check_field ulam pos named_opt : Clambda.ulambda =
         Clambda.Uconst (Uconst_ref (str_const, None))],
       Debuginfo.none)
 
+let idents_to_original_idents = ref Ident.empty
+
 module Env : sig
   type t
 
@@ -162,13 +164,15 @@ end = struct
 
   (* CR-soon mshinwell: potentially misleading function name *)
   let add_fresh_ident t var =
-    let id =
-      (* CR mshinwell: Variables without [original_ident] should probably
-         not appear in DWARF.  Maybe we should tag [Ident.t]s or something *)
-      match Variable.original_ident var with
-      | Some ident -> ident
-      | None -> Ident.create (Variable.base_name var)
-    in
+    let id = Ident.create (Variable.base_name var) in
+    (* CR-soon mshinwell: Variables without [original_ident] should probably
+        not appear in DWARF.  Maybe we should tag [Ident.t]s or something *)
+    begin match Variable.original_ident var with
+    | Some original_ident ->
+      idents_to_original_idents :=
+        Ident.add id original_ident !idents_to_original_idents
+    | None -> ()
+    end;
     id, { t with var = Variable.Map.add var id t.var }
 
   let add_subst t var subst =
@@ -181,6 +185,7 @@ end = struct
     Mutable_variable.Map.find mut_var t.mutable_var
 
   let add_fresh_mutable_ident t mut_var =
+    (* CR-soon mshinwell: do the same as in [add_fresh_ident], above. *)
     let id = Mutable_variable.unique_ident mut_var in
     let mutable_var = Mutable_variable.Map.add mut_var id t.mutable_var in
     id, { t with mutable_var; }
@@ -847,9 +852,14 @@ type result = {
     (Clambda.ustructured_constant * (Clambda.usymbol_provenance option))
       Symbol.Map.t;
   exported : Export_info.t;
+  idents_to_original_idents : Ident.t Ident.tbl;
 }
 
 let convert (program, exported) : result =
+  (* CR-soon mshinwell: Restructure the functions above so there is a value
+     threaded through, like in [Inline_and_simplify], following the
+     evaluation order.  Then remove the "ref". *)
+  idents_to_original_idents := Ident.empty;
   let current_unit =
     let offsets = Closure_offsets.compute program in
     { fun_offset_table = offsets.function_offsets;
@@ -894,4 +904,6 @@ let convert (program, exported) : result =
       ~offset_fv
       ~constant_sets_of_closures:current_unit.constant_sets_of_closures
   in
-  { expr; preallocated_blocks; structured_constants; exported; }
+  { expr; preallocated_blocks; structured_constants; exported;
+    idents_to_original_idents = !idents_to_original_idents;
+  }

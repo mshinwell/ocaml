@@ -23,6 +23,7 @@ type result = {
     (Clambda.ustructured_constant * (Clambda.usymbol_provenance option))
       Symbol.Map.t;
   exported : Export_info.t;
+  idents_to_original_idents : Ident.t Ident.tbl;
 }
 
 (** Convert an Flambda program, with associated proto-export information,

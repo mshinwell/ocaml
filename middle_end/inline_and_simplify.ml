@@ -1126,8 +1126,13 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
           r, var, defining_expr'
         else if Effect_analysis.no_effects_named defining_expr then
           let r = R.map_benefit r (B.remove_code_named defining_expr) in
-          (* The [Let] is redundant; turn it into a phantom let.  If we
-             are not generating debugging information it will be deleted. *)
+          (* The [Let] is redundant; turn it into a phantom let.  It will then
+             be deleted if:
+             (a) we are not in debug mode; or
+             (b) it binds a variable that:
+                 (i) is not referenced by subsequent phantom let; and
+                 (ii) does not correspond to a variable in the user's source
+                      code. *)
           let defining_expr =
             Flambda_utils.phantomize_defining_expr defining_expr
           in

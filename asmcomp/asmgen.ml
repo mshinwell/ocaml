@@ -134,6 +134,7 @@ let (++) x f = f x
 let compile_fundecl (ppf : formatter) ~dwarf fd_cmm =
   Proc.init ();
   Reg.reset();
+  Selectgen.reset ();
   let build = Compilenv.current_build () in
   fd_cmm
   ++ Timings.(accumulate_time (Selection build)) Selection.fundecl
@@ -202,16 +203,17 @@ let compile_unit ~source_provenance _output_prefix asm_filename keep_asm
     remove_file obj_filename;
     raise exn
 
-let set_export_info (ulambda, prealloc, structured_constants, export) =
+let set_export_info (ulambda, prealloc, structured_constants, export,
+      idents_to_original_idents) =
   Compilenv.set_export_info export;
-  (ulambda, prealloc, structured_constants)
+  (ulambda, prealloc, structured_constants, idents_to_original_idents)
 
 let end_gen_implementation ?toplevel ~source_provenance ppf
-    (clambda:clambda_and_constants) =
+    ~idents_to_original_idents (clambda:clambda_and_constants) =
   Emit.begin_assembly ();
   let dwarf =
     if not !Clflags.debug then None
-    else Some (Dwarf.create ~source_provenance)
+    else Some (Dwarf.create ~source_provenance ~idents_to_original_idents)
   in
   let unit_name =
     (* CR mshinwell: find out how to fix this properly *)
@@ -249,17 +251,17 @@ let end_gen_implementation ?toplevel ~source_provenance ppf
 let flambda_gen_implementation ?toplevel ~source_provenance ~backend ppf
     (program:Flambda.program) =
   let export = Build_export_info.build_export_info ~backend program in
-  let (clambda, preallocated, constants) =
+  let (clambda, preallocated, constants, idents_to_original_idents) =
     Timings.time (Flambda_pass ("backend", source_provenance)) (fun () ->
       (program, export)
       ++ Flambda_to_clambda.convert
       ++ flambda_raw_clambda_dump_if ppf
       ++ (fun { Flambda_to_clambda. expr; preallocated_blocks;
-                structured_constants; exported; } ->
+                structured_constants; exported; idents_to_original_idents; } ->
              (* "init_code" following the name used in
                 [Cmmgen.compunit_and_constants]. *)
            Un_anf.apply expr ~what:"init_code", preallocated_blocks,
-           structured_constants, exported)
+           structured_constants, exported, idents_to_original_idents)
       ++ set_export_info) ()
   in
   let constants =
@@ -271,6 +273,7 @@ let flambda_gen_implementation ?toplevel ~source_provenance ~backend ppf
       (Symbol.Map.bindings constants)
   in
   end_gen_implementation ?toplevel ~source_provenance ppf
+    ~idents_to_original_idents
     (clambda, preallocated, constants)
 
 let lambda_gen_implementation ?toplevel ~source_provenance ppf
@@ -288,7 +291,9 @@ let lambda_gen_implementation ?toplevel ~source_provenance ppf
     clambda, [preallocated_block], []
   in
   raw_clambda_dump_if ppf clambda_and_constants;
-  end_gen_implementation ?toplevel ~source_provenance ppf clambda_and_constants
+  end_gen_implementation ?toplevel ~source_provenance ppf
+    ~idents_to_original_idents:Ident.empty
+    clambda_and_constants
 
 let compile_implementation_gen ?toplevel ~source_provenance prefixname
     ~required_globals ppf gen_implementation program =

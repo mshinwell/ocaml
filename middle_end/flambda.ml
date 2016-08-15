@@ -1070,6 +1070,13 @@ let fold_lets_option
           in
           match defining_expr with
           | Phantom _ when not !Clflags.debug -> acc, t
+          (* For the next case, see comment in
+             [Inline_and_simplify.filter_defining_expr]. *)
+          | Phantom _
+              when Variable.original_ident var = None
+                && (not (Variable.Set.mem var
+                  (Free_names.free_phantom_variables free_names_of_body))) ->
+            acc, t
           | defining_expr ->
             let let_expr =
               W.create_let_reusing_body var defining_expr t ?provenance

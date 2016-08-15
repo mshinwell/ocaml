@@ -25,6 +25,7 @@ type t = {
   start_of_code_symbol : Symbol.t;
   end_of_code_symbol : Symbol.t;
   output_path : string;
+  idents_to_original_idents : Ident.t Ident.tbl;
   mutable emitted : bool;
 }
 
@@ -33,7 +34,8 @@ type t = {
    to read our 64-bit DWARF output. *)
 let () = Dwarf_format.set Thirty_two
 
-let create ~(source_provenance : Timings.source_provenance) =
+let create ~(source_provenance : Timings.source_provenance)
+      ~idents_to_original_idents =
   let output_path, directory =
     (* CR mshinwell: this should use the path as per "-o". *)
     match source_provenance with
@@ -80,6 +82,7 @@ let create ~(source_provenance : Timings.source_provenance) =
     start_of_code_symbol;
     end_of_code_symbol;
     output_path;
+    idents_to_original_idents;
     emitted = false;
   }
 
@@ -277,8 +280,15 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
 
 let dwarf_for_identifier t ~fundecl ~function_proto_die
       ~lexical_block_cache ~(ident : Ident.t) ~is_unique ~range =
-  if Ident.name ident <> "*closure_env*" then
-(*  if ident.stamp <= !Flambda.ident_stamp_before_flambda then *)begin
+  if Ident.name ident <> "*closure_env*" then begin
+    let ident =
+      (* Map back to the identifier that actually occurred in the source code,
+         if such exists, so that the stamp matches up with that in the .cmt
+         file. *)
+      match Ident.find_same ident t.idents_to_original_idents with
+      | exception Not_found -> ident
+      | ident -> ident
+    in
     dwarf_for_identifier t ~fundecl ~function_proto_die
       ~lexical_block_cache ~ident ~is_unique ~range
   end
