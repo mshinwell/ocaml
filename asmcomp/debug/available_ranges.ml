@@ -119,8 +119,10 @@ end = struct
     | _ -> failwith "Available_subrange.create"
 
   let create_phantom ~provenance ~defining_expr ~start_pos ~end_pos =
-    (* CR-someday mshinwell: when inlining a function, mark [Let]s binding
-       function parameters so that they turn into "parameter" phantom lets. *)
+    (* CR-someday mshinwell: Presumably the "Local" only changes to indicate a
+       parameter when we can represent the inlined frames properly in DWARF.
+       (Otherwise the function into which an inlining occurs ends up having
+       more parameters than it should in the debugger.) *)
     { start_insn = Phantom (provenance, Local, defining_expr);
       start_pos;
       end_pos;
@@ -642,6 +644,9 @@ let create ~fundecl =
   (* (See CR-someday above.)  For the moment, ranges that are derived from
      others are treated naively: we just make them available iff the
      variables they ultimately derive from are available. *)
+  (* Note that the following procedure never introduces ranges that start or
+     stop at different places from existing ranges.  As such, we do not disturb
+     the non-overlapping property required by lldb. *)
   Ident.Map.iter (fun ident (provenance, defining_expr) ->
       let rec resolve_range provenance defining_expr =
         match (defining_expr : Mach.phantom_defining_expr) with
@@ -651,7 +656,20 @@ let create ~fundecl =
         | Iphantom_var var ->
           begin match Ident.Tbl.find t.ranges var with
           | exception Not_found -> None
-          | range -> Some range
+          | range ->
+            let range =
+              Available_range.create_from_existing range
+                ~location_map:(fun (start_insn
+                    : L.instruction Available_subrange.location) ->
+                  (* CR-someday mshinwell: See CR above about marking phantoms
+                     as parameters *)
+                  match start_insn with
+                  | Reg (reg, _is_parameter, insn) ->
+                    Reg (reg, Local, insn)
+                  | Phantom (provenance, _is_parameter, phantom) ->
+                    Phantom (provenance, Local, phantom))
+            in
+            Some range
           end
         | Iphantom_read_var_field (defining_expr, field) ->
           begin match resolve_range provenance defining_expr with
