@@ -104,13 +104,16 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
           match provenance with
           | None -> None
           | Some provenance ->
-            let provenance : Flambda.symbol_provenance =
-              { names = [Variable.base_name var];
-                module_path = provenance.module_path;
-                location = provenance.location;
-              }
-            in
-            Some provenance
+            match Variable.original_ident var with
+            | None -> None
+            | Some original_ident ->
+              let provenance : Flambda.symbol_provenance =
+                { original_idents = [original_ident];
+                  module_path = provenance.module_path;
+                  location = provenance.location;
+                }
+              in
+              Some provenance
         in
         Block (var, tag, args, provenance)
       | named ->
@@ -118,13 +121,16 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
           match provenance with
           | None -> None
           | Some provenance ->
-            let provenance : Flambda.symbol_provenance =
-              { names = [Variable.base_name var];
-                module_path = provenance.module_path;
-                location = provenance.location;
-              }
-            in
-            Some provenance
+            match Variable.original_ident var with
+            | None -> None
+            | Some original_ident ->
+              let provenance : Flambda.symbol_provenance =
+                { original_idents = [original_ident];
+                  module_path = provenance.module_path;
+                  location = provenance.location;
+                }
+              in
+              Some provenance
         in
         let expr =
           Flambda_utils.toplevel_substitution substitution
@@ -151,13 +157,16 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
       match provenance with
       | None -> None
       | Some provenance ->
-        let provenance : Flambda.symbol_provenance =
-          { names = [Variable.base_name var];
-            module_path = provenance.module_path;
-            location = provenance.location;
-          }
-        in
-        Some provenance
+        match Variable.original_ident var with
+        | None -> None
+        | Some original_ident ->
+          let provenance : Flambda.symbol_provenance =
+            { original_idents = [original_ident];
+              module_path = provenance.module_path;
+              location = provenance.location;
+            }
+          in
+          Some provenance
     in
     let extracted = Expr (var, expr, symbol_provenance) in
     accumulate body
@@ -189,17 +198,21 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
         match provenance with
         | None -> None
         | Some provenance ->
-          let names =
-            List.map (fun (var, _defining_expr) -> Variable.base_name var)
+          let original_idents =
+            Misc.Stdlib.List.filter_map (fun (var, _defining_expr) ->
+                Variable.original_ident var)
               defs
           in
-          let provenance : Flambda.symbol_provenance =
-            { names;
-              module_path = provenance.module_path;
-              location = provenance.location;
-            }
-          in
-          Some provenance
+          match original_idents with
+          | [] -> None
+          | original_idents ->
+            let provenance : Flambda.symbol_provenance =
+              { original_idents;
+                module_path = provenance.module_path;
+                location = provenance.location;
+              }
+            in
+            Some provenance
       in
       Exprs (List.map fst defs, expr, symbol_provenance)
     in

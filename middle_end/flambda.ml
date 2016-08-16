@@ -182,7 +182,7 @@ and constant_defining_value_block_field =
 type expr = t
 
 type symbol_provenance = {
-  names : string list;
+  original_idents : Ident.t list;
   module_path : Path.t;
   location : Location.t;
 }
@@ -522,9 +522,9 @@ let print_constant_defining_value ppf (const : constant_defining_value) =
       Closure_id.print closure_id
 
 let print_symbol_provenance ppf (provenance : symbol_provenance) =
-  fprintf ppf "<from `%a' path %a at %a>"
-    (Format.pp_print_list (fun ppf name -> fprintf ppf "%s" name))
-    provenance.names
+  fprintf ppf "<%a.%a at %a>"
+    (Format.pp_print_list (fun ppf id -> fprintf ppf "%a" Ident.print id))
+    provenance.original_idents
     Printtyp.path provenance.module_path
     Location.print_compact provenance.location
 

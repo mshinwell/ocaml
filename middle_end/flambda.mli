@@ -429,10 +429,7 @@ module Constant_defining_value :
 type expr = t
 
 type symbol_provenance = {
-  names : string list;
-  (** The names of the variables bound by the [let]-bindings in the source
-      code that were lifted to symbols.  (See [Lift_let_to_initialize_symbol].)
-  *)
+  original_idents : Ident.t list;
   module_path : Path.t;
   location : Location.t;
 }

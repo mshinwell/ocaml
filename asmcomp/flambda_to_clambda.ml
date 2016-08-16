@@ -775,7 +775,8 @@ let accumulate_structured_constants t env symbol
     | None -> None
     | Some provenance ->
       let provenance' : Clambda.usymbol_provenance =
-        { module_path = provenance.module_path;
+        { original_idents = provenance.original_idents;
+          module_path = provenance.module_path;
         }
       in
       Some provenance'

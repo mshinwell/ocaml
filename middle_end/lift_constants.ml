@@ -57,21 +57,24 @@ let assign_symbols_and_collect_constant_definitions
       let record_definition definition =
         (* Provenance information is not recorded for constants lifted out of
            functions.  The variables originally bound to such constants are
-           instead tracked using [Only_for_debugger] let bindings.  It is done
-           this way to avoid losing the scope information. *)
+           instead tracked using phantom let bindings.  It is done this way
+           to avoid losing the scope information. *)
         let provenance =
           if not toplevel then None
           else
             match provenance with
             | None -> None
             | Some (provenance : Flambda.let_provenance) ->
-              let provenance : Flambda.symbol_provenance =
-                { names = [Variable.base_name var];
-                  module_path = provenance.module_path;
-                  location = provenance.location;
-                }
-              in
-              Some provenance
+              match Variable.original_ident var with
+              | None -> None
+              | Some original_ident ->
+                let provenance : Flambda.symbol_provenance =
+                  { original_idents = [original_ident];
+                    module_path = provenance.module_path;
+                    location = provenance.location;
+                  }
+                in
+                Some provenance
         in
         Variable.Tbl.add var_to_definition_tbl var (definition, provenance)
       in

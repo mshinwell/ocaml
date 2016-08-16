@@ -22,6 +22,7 @@ open Lambda
 type function_label = string
 
 type usymbol_provenance = {
+  original_idents : Ident.t list;
   module_path : Path.t;
 }
 
