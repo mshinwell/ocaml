@@ -1020,6 +1020,24 @@ method insert_prologue f ~loc_arg ~rarg ~num_regs_per_arg
   self#insert_moves env loc_arg rarg;
   None
 
+(* Extract phantom lets that occur at the start of the Cmm expression so they
+   can be added to the environment at the very top of the function.  We do
+   this to avoid the following situation:
+     prologue
+     moves of hard argument regs into other regs
+     phantom let availability starts
+   which causes variables to be only available some small number of instructions
+   into the function.  (A particular case where this is a nuisance is where
+   the phantom lets correspond to other functions in the same mutually
+   recursive set.) *)
+
+method private extract_phantom_lets expr =
+  match expr with
+  | Cphantom_let (ident, provenance, defining_expr, expr) ->
+    let phantom_lets, expr = self#extract_phantom_lets expr in
+    (ident, provenance, defining_expr) :: phantom_lets, expr
+  | _ -> [], expr
+
 (* Sequentialization of a function definition *)
 
 method initial_env () =
@@ -1060,7 +1078,14 @@ method emit_fundecl f =
         { env with idents = Tbl.add node_hole reg env.idents; }
     end
   in
-  self#emit_tail env f.Cmm.fun_body;
+  let phantom_lets_at_top, body = self#extract_phantom_lets f.Cmm.fun_body in
+  let env =
+    List.fold_left (fun env (ident, provenance, defining_expr) ->
+        self#env_for_phantom_let env ~ident ~provenance ~defining_expr)
+      env
+      phantom_lets_at_top
+  in
+  self#emit_tail env body;
   let body = self#extract in
   instr_seq <- dummy_instr;
   let fun_spacetime_shape =

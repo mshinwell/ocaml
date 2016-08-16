@@ -271,16 +271,14 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
 let dwarf_for_identifier t ~fundecl ~function_proto_die
       ~lexical_block_proto_die ~(ident : Ident.t) ~is_unique ~range =
   if Ident.name ident <> "*closure_env*" then begin
-    let ident =
-      (* Map back to the identifier that actually occurred in the source code,
-         if such exists, so that the stamp matches up with that in the .cmt
-         file. *)
-      match Ident.find_same ident t.idents_to_original_idents with
-      | exception Not_found -> ident
-      | ident -> ident
-    in
-    dwarf_for_identifier t ~fundecl ~function_proto_die
-      ~lexical_block_proto_die ~ident ~is_unique ~range
+    (* Map back to the identifier that actually occurred in the source code,
+        so that the stamp matches up with that in the .cmt file.  Identifiers
+        not in the source code are suppressed. *)
+    match Ident.find_same ident t.idents_to_original_idents with
+    | exception Not_found -> ()
+    | ident ->
+      dwarf_for_identifier t ~fundecl ~function_proto_die
+        ~lexical_block_proto_die ~ident ~is_unique ~range
   end
 
 (* This function covers local variables, parameters, variables in closures

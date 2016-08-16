@@ -166,7 +166,7 @@ end = struct
   let add_fresh_ident t var =
     let id = Ident.create (Variable.base_name var) in
     (* CR-soon mshinwell: Variables without [original_ident] should probably
-        not appear in DWARF.  Maybe we should tag [Ident.t]s or something *)
+       not appear in DWARF.  Maybe we should tag [Ident.t]s or something *)
     begin match Variable.original_ident var with
     | Some original_ident ->
       idents_to_original_idents :=
