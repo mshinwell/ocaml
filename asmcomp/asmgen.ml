@@ -211,7 +211,14 @@ let end_gen_implementation ?toplevel ~source_provenance ppf
   Emit.begin_assembly ();
   let dwarf =
     if not !Clflags.debug then None
-    else Some (Dwarf.create ~source_provenance ~idents_to_original_idents)
+    else begin
+      let dwarf =
+        Dwarf.create ~source_provenance ~idents_to_original_idents
+      in
+      let _, _, toplevel_constants = clambda in
+      Dwarf.dwarf_for_toplevel_constants dwarf toplevel_constants;
+      dwarf
+    end
   in
   let unit_name =
     (* CR mshinwell: find out how to fix this properly *)

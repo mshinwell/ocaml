@@ -25,6 +25,11 @@ val create
          mapping might not be injective due to inlining.) *)
   -> t
 
+val dwarf_for_toplevel_constants
+   : t
+  -> Clambda.preallocated_constant list
+  -> unit
+
 val dwarf_for_function_definition
    : t
   -> fundecl:Linearize.fundecl

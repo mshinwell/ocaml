@@ -100,7 +100,6 @@ let create ~(source_provenance : Timings.source_provenance)
 *)
 let create_type_proto_die ~parent ~ident ~output_path ~is_parameter:_ =
   let ident =
-    (* CR mshinwell: delete if not needed *)
     match ident with
     | `Ident ident -> ident
     | `Unique_name name -> Ident.create_persistent name
@@ -360,6 +359,32 @@ let dwarf_for_function_definition t ~(fundecl:Linearize.fundecl)
   in
   dwarf_for_variables_and_parameters t ~function_proto_die
     ~lexical_block_proto_die ~available_ranges ~fundecl
+
+let dwarf_for_toplevel_constant ~idents ~module_path ~symbol =
+  (* Give each identifier the same definition for the moment. *)
+  List.iter (fun ident ->
+    let type_proto_die =
+      create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
+        ~ident:(`Ident ident)
+        ~output_path:t.output_path
+        ~is_parameter:None
+    in
+
+    idents
+
+let dwarf_for_toplevel_constants t constants =
+  List.iter (fun (constant : Clambda.preallocated_constant) ->
+      match constant.provenance with
+      | None -> ()
+      | Some provenance ->
+        let symbol =
+          Symbol.unsafe_create (Compilation_unit.get_current_exn ())
+            (Linkage_name.create constant.symbol)
+        in
+        dwarf_for_toplevel_constant ~idents:provenance.original_idents
+          ~module_path:provenance.module_path
+          ~symbol)
+    constants
 
 let emit t asm =
   assert (not t.emitted);
