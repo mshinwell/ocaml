@@ -29,6 +29,7 @@ module type S = sig
   val in_register : reg_number:int -> t
   val in_stack_slot : offset_in_words:int -> t
   val read_symbol_field : symbol:Symbol.t -> field:int -> t
+  val read_symbol_field_yielding_rvalue : symbol:Symbol.t -> field:int -> t
   val read_field : t -> field:int -> t
   val offset_pointer : t -> offset_in_words:int -> t
 end

@@ -215,8 +215,9 @@ let end_gen_implementation ?toplevel ~source_provenance ppf
       let dwarf =
         Dwarf.create ~source_provenance ~idents_to_original_idents
       in
-      let _, _, toplevel_constants = clambda in
+      let _, toplevel_inconstants, toplevel_constants = clambda in
       Dwarf.dwarf_for_toplevel_constants dwarf toplevel_constants;
+      Dwarf.dwarf_for_toplevel_inconstants dwarf toplevel_inconstants;
       Some dwarf
     end
   in
@@ -290,6 +291,7 @@ let lambda_gen_implementation ?toplevel ~source_provenance ppf
       exported = true;
       tag = 0;
       size = lambda.main_module_block_size;
+      provenance = None;
     }
   in
   let clambda_and_constants =

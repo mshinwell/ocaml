@@ -217,7 +217,7 @@ and defining_expr_of_phantom_let =
   (* CR mshinwell: Change [Inline_and_simplify] to track deleted phantom
      let-bound variables, and then delete dead phantom lets; then remove
      this case.  Also try to filter out phantom lets on compiler-generated
-     names, to reduce the number of them.  We don't to lose information
+     names, to reduce the number of them.  We don't want to lose information
      though if possible (constants?)  Needs thought *)
   (** "Dead" is used for phantom lets formed from let-expressions with
       ineligible defining expressions.  Another option would be to remove

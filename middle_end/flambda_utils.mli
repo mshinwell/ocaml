@@ -103,7 +103,7 @@ val compare_const : Flambda.const -> Flambda.const -> int
 
 val initialize_symbols
    : Flambda.program
-  -> (Symbol.t * Tag.t * Flambda.t list) list
+  -> (Symbol.t * Flambda.symbol_provenance option * Tag.t * Flambda.t list) list
 
 val imported_symbols : Flambda.program -> Symbol.Set.t
 

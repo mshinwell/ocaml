@@ -121,6 +121,7 @@ type preallocated_block = {
   exported : bool;
   tag : int;
   size : int;
+  provenance : usymbol_provenance option;
 }
 
 type preallocated_constant = {

@@ -25,9 +25,16 @@ val create
          mapping might not be injective due to inlining.) *)
   -> t
 
+(** For dealing with "Let_symbol" bindings. *)
 val dwarf_for_toplevel_constants
    : t
   -> Clambda.preallocated_constant list
+  -> unit
+
+(** For dealing with "Initialize_symbol" bindings. *)
+val dwarf_for_toplevel_inconstants
+   : t
+  -> Clambda.preallocated_block list
   -> unit
 
 val dwarf_for_function_definition

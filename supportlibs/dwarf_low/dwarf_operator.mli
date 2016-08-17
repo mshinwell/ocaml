@@ -22,6 +22,7 @@ val value_of_symbol : Symbol.t -> t
 val signed_int_const : Int64.t -> t
 val add_unsigned_const : Int64.t -> t
 val deref : unit -> t
+val deref_do_not_optimize : unit -> t
 val stack_value : unit -> t
 
 val optimize_sequence : t list -> t list

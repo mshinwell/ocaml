@@ -880,12 +880,24 @@ let convert (program, exported) : result =
   in
   let t = { current_unit; imported_units; } in
   let preallocated_blocks =
-    List.map (fun (symbol, tag, fields) ->
+    List.map (fun (symbol, provenance, tag, fields) ->
+        let provenance =
+          match provenance with
+          | None -> None
+          | Some (provenance : Flambda.symbol_provenance) ->
+            let provenance' : Clambda.usymbol_provenance =
+              { original_idents = provenance.original_idents;
+                module_path = provenance.module_path;
+              }
+            in
+            Some provenance'
+        in
         { Clambda.
           symbol = Linkage_name.to_string (Symbol.label symbol);
           exported = true;
           tag = Tag.to_int tag;
           size = List.length fields;
+          provenance;
         })
       (Flambda_utils.initialize_symbols program)
   in

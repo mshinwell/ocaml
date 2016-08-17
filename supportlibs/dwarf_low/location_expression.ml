@@ -22,6 +22,7 @@ let const_int = SLE.const_int
 let in_register = SLE.in_register
 let in_stack_slot = SLE.in_stack_slot
 let read_symbol_field = SLE.read_symbol_field
+let read_symbol_field_yielding_rvalue = SLE.read_symbol_field_yielding_rvalue
 let read_field = SLE.read_field
 let offset_pointer = SLE.offset_pointer
 

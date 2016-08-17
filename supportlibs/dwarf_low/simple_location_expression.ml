@@ -22,6 +22,7 @@ module type S = sig
   val in_register : reg_number:int -> t
   val in_stack_slot : offset_in_words:int -> t
   val read_symbol_field : symbol:Symbol.t -> field:int -> t
+  val read_symbol_field_yielding_rvalue : symbol:Symbol.t -> field:int -> t
   val read_field : t -> field:int -> t
   val offset_pointer : t -> offset_in_words:int -> t
 end
@@ -33,6 +34,7 @@ type t =
   | In_stack_slot of { offset_in_words : int; }
   | Offset_pointer of { block : t; offset_in_words : int; }
   | Read_field of { block : t; field : int; }
+  | Read_symbol_field_yielding_rvalue of { block : t; field : int; }
 
 let const_symbol symbol = Const_symbol symbol
 let const_int i = Const_int i
@@ -40,6 +42,8 @@ let in_register ~reg_number = In_register reg_number
 let in_stack_slot ~offset_in_words = In_stack_slot { offset_in_words; }
 let read_symbol_field ~symbol ~field =
   Read_field { block = Const_symbol symbol; field; }
+let read_symbol_field_yielding_rvalue ~symbol ~field =
+  Read_symbol_field_yielding_rvalue { block = Const_symbol symbol; field; }
 let offset_pointer t ~offset_in_words =
   Offset_pointer { block = t; offset_in_words; }
 let read_field t ~field = Read_field { block = t; field; }
@@ -64,6 +68,11 @@ let rec compile_to_yield_value t =
     (compile_to_yield_value block) @ [
       Operator.add_unsigned_const (Int64.of_int (Arch.size_addr * field));
       Operator.deref ();
+    ]
+  | Read_symbol_field_yielding_rvalue { block; field; } ->
+    (compile_to_yield_value block) @ [
+      Operator.add_unsigned_const (Int64.of_int (Arch.size_addr * field));
+      Operator.deref_do_not_optimize ();
     ]
 
 let compile t =

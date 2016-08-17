@@ -87,7 +87,7 @@ type t =
   | DW_op_breg30 of { offset_in_bytes : Int64.t; }
   | DW_op_breg31 of { offset_in_bytes : Int64.t; }
   | DW_op_bregx of { reg_number : int; offset_in_bytes : Int64.t; }
-  | DW_op_deref
+  | DW_op_deref of { optimize : bool; }
   | DW_op_plus_uconst of Int64.t
   | DW_op_consts of Int64.t
   | DW_op_call_frame_cfa
@@ -200,7 +200,7 @@ let print ppf t =
     fprintf ppf "DW_op_breg31 0x%Lx" offset_in_bytes
   | DW_op_bregx { reg_number; offset_in_bytes; } ->
     fprintf ppf "DW_op_bregx %d 0x%Lx" reg_number offset_in_bytes
-  | DW_op_deref -> fprintf ppf "DW_op_deref"
+  | DW_op_deref { optimize; } -> fprintf ppf "DW_op_deref %b" optimize
   | DW_op_plus_uconst i -> fprintf ppf "DW_op_plus_uconst %Ld" i
   | DW_op_consts i -> fprintf ppf "DW_op_consts %Ld" i
   | DW_op_call_frame_cfa -> fprintf ppf "DW_op_call_frame_cfa"
@@ -224,7 +224,7 @@ let contents_of_stack_slot ~offset_in_bytes =
     DW_op_call_frame_cfa;
     DW_op_consts offset_in_bytes;
     DW_op_minus;
-    DW_op_deref;
+    DW_op_deref { optimize = true; };
   ]
 
 let value_of_symbol symbol = DW_op_addr symbol
@@ -238,7 +238,9 @@ let add_unsigned_const i =
   end;
   DW_op_plus_uconst i
 
-let deref () = DW_op_deref
+let deref () = DW_op_deref { optimize = true; }
+
+let deref_do_not_optimize () = DW_op_deref { optimize = false; }
 
 let stack_value () = DW_op_stack_value
 
@@ -249,7 +251,7 @@ let optimize_sequence ts =
     | DW_op_bregx { reg_number; offset_in_bytes = 0L; }
         :: DW_op_stack_value :: [] ->
       [DW_op_regx { reg_number; }]
-    | DW_op_deref :: DW_op_stack_value :: [] -> []
+    | DW_op_deref { optimize = true; } :: DW_op_stack_value :: [] -> []
     | (DW_op_bregx { reg_number; offset_in_bytes = 0L; })
         :: (DW_op_plus_uconst offset_in_bytes)
         :: ts ->
@@ -360,7 +362,7 @@ external caml_string_set64 : bytes -> index:int -> Int64.t -> unit
 (* DWARF-4 spec section 7.7.1. *)
 let opcode = function
   | DW_op_addr _ -> 0x03
-  | DW_op_deref -> 0x06
+  | DW_op_deref _ -> 0x06
   | DW_op_consts _ -> 0x11
   | DW_op_minus -> 0x1c
   | DW_op_plus_uconst _ -> 0x23
@@ -520,7 +522,7 @@ let size t =
       Int64.add (Dwarf_value.size (Sleb128 size_addr)) size_addr
     | DW_op_plus_uconst const -> Dwarf_value.size (Uleb128 const)
     | DW_op_consts const -> Dwarf_value.size (Sleb128 const)
-    | DW_op_deref
+    | DW_op_deref _
     | DW_op_minus
     | DW_op_call_frame_cfa
     | DW_op_stack_value -> 0L
@@ -626,7 +628,7 @@ let emit t asm =
     Dwarf_value.emit (Code_address_from_symbol symbol) asm
   | DW_op_plus_uconst const -> Dwarf_value.emit (Uleb128 const) asm
   | DW_op_consts const -> Dwarf_value.emit (Sleb128 const) asm
-  | DW_op_deref
+  | DW_op_deref _
   | DW_op_minus
   | DW_op_call_frame_cfa
   | DW_op_stack_value -> ()

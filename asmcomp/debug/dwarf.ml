@@ -405,6 +405,67 @@ let dwarf_for_toplevel_constants t constants =
             ~symbol)
     constants
 
+let dwarf_for_toplevel_inconstant t ~idents ~module_path ~symbol =
+  (* As above, give each identifier the same definition for the moment. *)
+  List.iter (fun ident ->
+    let name =
+      let path = Printtyp.string_of_path module_path in
+      let name = Ident.name ident in
+      path ^ "." ^ name
+    in
+    let type_proto_die =
+      create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
+        ~ident:(`Ident ident)
+        ~output_path:t.output_path
+        ~is_parameter:None
+    in
+    (* Toplevel inconstant "preallocated blocks" contain the thing of interest
+       in field 0 (once it has been initialised).  We describe them using a
+       single location description rather than a location list, since they
+       should be accessible at all times independent of the current value of
+       the PC. *)
+    let single_location_description =
+      let module LE = Location_expression in
+      Single_location_description.of_simple_location_description (
+        (* We emit DWARF to describe an rvalue, rather than an lvalue, since
+           we manually read these values ourselves in libmonda (whereas for
+           e.g. a local variable bound to a read-symbol-field, the debugger
+           will do a final dereference after determining the lvalue from the
+           DWARF).  We cannot currently detect in libmonda whether or not a
+           reference to a toplevel module component "M.foo" is a constant
+           (represented as an rvalue in the DWARF, just the symbol's address)
+           or an inconstant---so we must be consistent as far as l/rvalue-ness
+           goes between the two. *)
+        (* CR-soon mshinwell: Actually this isn't the case.  We could use
+           SYMBOL_CLASS to distinguish them.  However maybe we'd better not
+           in case this doesn't work well with non-gdb. *)
+        Simple_location_expression.read_symbol_field_yielding_rvalue
+          ~symbol ~field:0)
+    in
+    Proto_die.create_ignore ~parent:(Some t.compilation_unit_proto_die)
+      ~tag:Dwarf_tag.Variable
+      ~attribute_values:[
+        DAH.create_name name;
+        DAH.create_type ~proto_die:type_proto_die;
+        DAH.create_single_location_description single_location_description;
+        DAH.create_external ~is_visible_externally:true;  (* see above *)
+      ])
+    idents
+
+let dwarf_for_toplevel_inconstants t inconstants =
+  List.iter (fun (inconstant : Clambda.preallocated_block) ->
+      match inconstant.provenance with
+      | None -> ()
+      | Some provenance ->
+        let symbol =
+          Symbol.unsafe_create (Compilation_unit.get_current_exn ())
+            (Linkage_name.create inconstant.symbol)
+        in
+        dwarf_for_toplevel_inconstant t ~idents:provenance.original_idents
+          ~module_path:provenance.module_path
+          ~symbol)
+    inconstants
+
 let emit t asm =
   assert (not t.emitted);
   t.emitted <- true;
