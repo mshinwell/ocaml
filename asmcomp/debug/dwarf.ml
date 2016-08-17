@@ -407,6 +407,7 @@ let dwarf_for_toplevel_constants t constants =
 
 let dwarf_for_toplevel_inconstant t ~idents ~module_path ~symbol =
   (* As above, give each identifier the same definition for the moment. *)
+  (* CR mshinwell: Check about multi-field preallocated blocks *)
   List.iter (fun ident ->
     let name =
       let path = Printtyp.string_of_path module_path in
