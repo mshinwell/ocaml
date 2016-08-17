@@ -82,3 +82,7 @@ val create_sibling
 val create_single_location_description
    : Single_location_description.t
   -> Dwarf_attribute_values.Attribute_value.t
+
+val create_const_value_from_symbol
+   : symbol:Symbol.t
+  -> Dwarf_attribute_values.Attribute_value.t

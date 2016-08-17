@@ -1,6 +1,9 @@
 S ./asmcomp
 B ./asmcomp
 
+S ./asmcomp/debug
+B ./asmcomp/debug
+
 S ./middle_end
 B ./middle_end
 
@@ -42,6 +45,12 @@ B ./otherlibs/unix
 
 S ./parsing
 B ./parsing
+
+S ./supportlibs/dwarf_low
+B ./supportlibs/dwarf_low
+
+S ./supportlibs/dwarf_high
+B ./supportlibs/dwarf_high
 
 S ./stdlib
 B ./stdlib

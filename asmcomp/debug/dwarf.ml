@@ -360,16 +360,30 @@ let dwarf_for_function_definition t ~(fundecl:Linearize.fundecl)
   dwarf_for_variables_and_parameters t ~function_proto_die
     ~lexical_block_proto_die ~available_ranges ~fundecl
 
-let dwarf_for_toplevel_constant ~idents ~module_path ~symbol =
+let dwarf_for_toplevel_constant t ~idents ~module_path ~symbol =
   (* Give each identifier the same definition for the moment. *)
   List.iter (fun ident ->
+    let name =
+      let path = Printtyp.string_of_path module_path in
+      let name = Ident.name ident in
+      path ^ "." ^ name
+    in
     let type_proto_die =
       create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
         ~ident:(`Ident ident)
         ~output_path:t.output_path
         ~is_parameter:None
     in
-
+    Proto_die.create_ignore ~parent:(Some t.compilation_unit_proto_die)
+      ~tag:Dwarf_tag.Constant
+      ~attribute_values:[
+        DAH.create_name name;
+        DAH.create_type ~proto_die:type_proto_die;
+        DAH.create_const_value_from_symbol ~symbol;
+        (* Mark everything as "external" so gdb puts the constants in its
+           list of "global symbols". *)
+        DAH.create_external ~is_visible_externally:true;
+      ])
     idents
 
 let dwarf_for_toplevel_constants t constants =
@@ -377,13 +391,18 @@ let dwarf_for_toplevel_constants t constants =
       match constant.provenance with
       | None -> ()
       | Some provenance ->
-        let symbol =
-          Symbol.unsafe_create (Compilation_unit.get_current_exn ())
-            (Linkage_name.create constant.symbol)
-        in
-        dwarf_for_toplevel_constant ~idents:provenance.original_idents
-          ~module_path:provenance.module_path
-          ~symbol)
+        (* Function declarations are emitted separately.  There's no more
+           information that we require in a toplevel constant closure. *)
+        match constant.definition with
+        | Uconst_closure _ -> ()
+        | _ ->
+          let symbol =
+            Symbol.unsafe_create (Compilation_unit.get_current_exn ())
+              (Linkage_name.create constant.symbol)
+          in
+          dwarf_for_toplevel_constant t ~idents:provenance.original_idents
+            ~module_path:provenance.module_path
+            ~symbol)
     constants
 
 let emit t asm =

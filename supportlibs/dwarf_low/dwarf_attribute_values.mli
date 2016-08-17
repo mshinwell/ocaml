@@ -28,6 +28,9 @@ module Value : sig
   val code_address_from_label : Linearize.label -> Dwarf_attributes.Form.addr t
   val code_address_from_symbol : Symbol.t -> Dwarf_attributes.Form.addr t
 
+  val symbol_32 : Symbol.t -> Dwarf_attributes.Form.data4 t
+  val symbol_64 : Symbol.t -> Dwarf_attributes.Form.data8 t
+
   val offset_into_debug_line
      : Linearize.label
     -> Dwarf_attributes.Form.sec_offset t

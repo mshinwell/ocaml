@@ -48,6 +48,12 @@ module Value = struct
   let location_description sld = Location_description sld
   let encoding_attribute attr =
     Dwarf_value (Encoding_attribute.as_dwarf_value attr)
+
+  let symbol_32 sym =
+    Dwarf_value (V.Code_address_from_symbol sym)
+
+  let symbol_64 sym =
+    Dwarf_value (V.Code_address_from_symbol sym)
 end
 
 module Attribute_value = struct

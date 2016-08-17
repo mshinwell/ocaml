@@ -146,9 +146,3 @@ type preallocated_constant = {
 }
 
 (* CR mshinwell: need to deal with DWARF for imported symbols. *)
-
-(* CR mshinwell: for fishing out values from closures, we need:
-  - identifier by which the environment entry is known in the code
-  - offset in the closure
-  - identifier corresponding to "env"
-*)

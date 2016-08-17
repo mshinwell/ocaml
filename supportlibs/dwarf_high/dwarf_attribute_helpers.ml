@@ -87,3 +87,12 @@ let create_byte_size_exn ~byte_size =
 let create_linkage_name ~linkage_name =
   let spec = AS.create A.Linkage_name F.Strp in
   AV.create spec (V.indirect_string (Linkage_name.to_string linkage_name))
+
+let create_const_value_from_symbol ~symbol =
+  match Target_system.Address.word_size () with
+  | Target_system.Address.Four ->
+    let spec = AS.create A.Const_value F.Data4 in
+    AV.create spec (V.symbol_32 symbol)
+  | Target_system.Address.Eight ->
+    let spec = AS.create A.Const_value F.Data8 in
+    AV.create spec (V.symbol_64 symbol)

@@ -217,7 +217,7 @@ let end_gen_implementation ?toplevel ~source_provenance ppf
       in
       let _, _, toplevel_constants = clambda in
       Dwarf.dwarf_for_toplevel_constants dwarf toplevel_constants;
-      dwarf
+      Some dwarf
     end
   in
   let unit_name =
