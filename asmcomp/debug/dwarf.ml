@@ -118,7 +118,20 @@ let create_type_proto_die ~parent ~ident ~output_path ~is_parameter:_ =
       DAH.create_byte_size_exn ~byte_size:Arch.size_addr;
     ]
 
-let location_list_entry ~parent ~fundecl ~available_subrange =
+let location_of_identifier t ~ident ~proto_dies_for_idents =
+  (* We may need to reference the locations of other values in order to
+     describe the location of some particular value.  This is done by using
+     the "call" functionality of DWARF location descriptions.
+     (DWARF-4 specification section 2.5.1.5, page 24.)  This avoids any need
+     to transitively resolve phantom lets (to constants, symbols or
+     non-phantom variables) in the compiler. *)
+  match Ident.find ident t.proto_dies_for_idents with
+  | exception Not_found ->
+    Misc.fatal_errorf "No proto-DIE found for identifier %a" Ident.print ident
+  | die_label -> LE.call ~die_label
+
+let location_list_entry t ~parent ~fundecl ~available_subrange
+      ~proto_dies_for_idents =
   let rec location_expression ~(location : unit Available_subrange.location) =
     let module LE = Location_expression in
     match location with
@@ -152,6 +165,11 @@ let location_list_entry ~parent ~fundecl ~available_subrange =
        Follow-up: Is it really needed?  For example, Inlining_transforms is
        using dummy module paths for function parameters, etc.
      *)
+
+(* XXX problem: we need the location list information for the derived
+   phantom lets, which probably means we need to do the transitive thing.
+   What happens for blocks? *)
+
     | Phantom (_, _, Const_int i) -> LE.const_int (Int64.of_int i)
     | Phantom (_, _, Const_symbol symbol) -> LE.const_symbol symbol
     | Phantom (_, _, Read_symbol_field { symbol; field; }) ->
@@ -163,16 +181,17 @@ let location_list_entry ~parent ~fundecl ~available_subrange =
         ~offset_in_words
     | Phantom (_, _, Block { tag; fields; }) ->
       (* A phantom block construction: instead of the block existing in the
-         target program's memory, it is going to be described in DWARF.  It
-         will be "pointed at" by implicit pointers. *)
+         target program's address space, it is going to be conjured up in the
+         *debugger's* address space using instructions described in DWARF.
+         References between such blocks do not use normal pointers in the
+         target's address space---instead they use "implicit pointers"
+         (requires GNU DWARF extensions prior to DWARF-5). *)
       (* CR mshinwell: use a cache to dedup the CLDs *)
       let header =
         Nativeint.to_int64 (Cmmgen.black_block_header tag (List.length fields))
       in
       let fields =
-        List.map (fun ident ->
-            LE.location_of_identifier ~linkage_name:(Ident.unique_name ident) 
-          fields
+        List.map (fun ident -> location_of_identifier t ~ident) fields
       in
       let composite_location_description =
         Composite_location_description.pieces_of_simple_location_descriptions
@@ -217,7 +236,8 @@ let location_list_entry ~parent ~fundecl ~available_subrange =
   Some entry
 
 let dwarf_for_identifier t ~fundecl ~function_proto_die
-      ~lexical_block_proto_die ~ident ~is_unique:_ ~range =
+      ~lexical_block_proto_die ~proto_dies_for_idents
+      ~ident ~is_unique:_ ~range =
   let is_parameter = Available_range.is_parameter range in
   let parent_proto_die =
     match is_parameter with
@@ -253,6 +273,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
         ~f:(fun location_list_entries ~available_subrange ->
           let location_list_entry =
             location_list_entry ~fundecl ~available_subrange
+              ~proto_dies_for_idents
           in
           match location_list_entry with
           | None -> location_list_entries
@@ -282,8 +303,16 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
     | Parameter _index -> Dwarf_tag.Formal_parameter
     | Local -> Dwarf_tag.Variable
   in
+  let reference =
+    match Ident.Tbl.find proto_dies_for_idents ident with
+    | exception Not_found ->
+      Misc.fatal_errorf "Proto-DIE reference for %a not assigned"
+        Ident.print ident
+    | reference -> reference
+  in
   let proto_die =
-    Proto_die.create ~parent:(Some parent_proto_die)
+    Proto_die.create ~reference
+      ~parent:(Some parent_proto_die)
       ~tag
       ~attribute_values:[
         DAH.create_name name_for_ident;
@@ -291,6 +320,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
         DAH.create_type ~proto_die:type_proto_die;
         location_list_attribute_value;
       ]
+      ()
   in
   begin match is_parameter with
   | Local -> ()
@@ -320,6 +350,7 @@ let dwarf_for_variables_and_parameters t ~function_proto_die
       ~lexical_block_proto_die ~available_ranges
       ~(fundecl : Linearize.fundecl) =
   (* This includes normal variables as well as those bound by phantom lets. *)
+  let 
   Available_ranges.fold available_ranges
     ~init:()
     ~f:(fun () -> dwarf_for_identifier t ~fundecl
@@ -378,6 +409,7 @@ let dwarf_for_function_definition t ~(fundecl:Linearize.fundecl)
         end_of_function;
         DAH.create_type ~proto_die:type_proto_die;
       ]
+      ()
   in
   let lexical_block_proto_die =
     (* CR-someday mshinwell: Consider trying to improve this so that we don't
@@ -388,6 +420,7 @@ let dwarf_for_function_definition t ~(fundecl:Linearize.fundecl)
         start_of_function;
         end_of_function;
       ]
+      ()
   in
   dwarf_for_variables_and_parameters t ~function_proto_die
     ~lexical_block_proto_die ~available_ranges ~fundecl
@@ -415,7 +448,8 @@ let dwarf_for_toplevel_constant t ~idents ~module_path ~symbol =
         (* Mark everything as "external" so gdb puts the constants in its
            list of "global symbols". *)
         DAH.create_external ~is_visible_externally:true;
-      ])
+      ]
+      ())
     idents
 
 let dwarf_for_toplevel_constants t constants =

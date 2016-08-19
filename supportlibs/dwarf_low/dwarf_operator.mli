@@ -26,6 +26,8 @@ val deref_do_not_optimize : unit -> t
 val stack_value : unit -> t
 val piece : size_in_bytes:int -> t
 
+val call : die_label:Cmm.label -> t
+
 val implicit_pointer : offset_in_bytes:int
   -> die_label:Cmm.label
   -> dwarf_version:Dwarf_version.t
