@@ -23,4 +23,6 @@ val create
   -> debug_abbrev_label:Linearize.label
   -> t
 
+val dwarf_version : Dwarf_version.t
+
 include Dwarf_emittable.S with type t := t

@@ -112,6 +112,7 @@ and defining_expr_of_phantom_let =
   | Read_mutable of Mutable_variable.t
   | Read_symbol_field of Symbol.t * int
   | Read_var_field of Variable.t * int
+  | Block of { tag : Tag.t; fields : Variable.t list; }
   | Dead
 
 and let_mutable = {
@@ -415,6 +416,8 @@ and print_defining_expr_of_let ppf (expr : defining_expr_of_let) =
       print_named ppf (Read_symbol_field (sym, field))
     | Read_var_field (var, field) ->
       print_named ppf (Prim (Pfield field, [var], Debuginfo.none))
+    | Block of { tag; fields; } ->
+      fprintf ppf "[%d: %a]" tag (Format.pp_print_list Variable.print) fields
     | Dead -> fprintf ppf "DEAD"
 
 and print_function_declaration ppf var (f : function_declaration) =

@@ -331,6 +331,19 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
                 variable %a"
               Variable.print var
           end
+        | Block { tag; fields; } ->
+          let fields =
+            List.map (fun var ->
+                match Env.ident_for_var_exn env var with
+                | id -> id
+                | exception Not_found ->
+                  Misc.fatal_errorf "Flambda_to_clambda.to_clambda: defining \
+                      expression of `Block' phantom let references unbound \
+                      variable %a"
+                    Variable.print var)
+              fields
+          in
+          Some (Clambda.Uphantom_block { Tag.to_int tag; fields; })
         | Dead -> None
       in
       Uphantom_let (id, provenance, defining_expr,

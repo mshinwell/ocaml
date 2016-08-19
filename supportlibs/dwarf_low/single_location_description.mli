@@ -18,3 +18,4 @@ type t
 include Dwarf_emittable.S with type t := t
 
 val of_simple_location_description : Simple_location_expression.t -> t
+val of_composite_location_description : Composite_location_description.t -> t

@@ -62,6 +62,7 @@ and uphantom_defining_expr =
   | Uphantom_read_symbol_field of uconstant * int
   (** As for [Uphantom_read_var_field], but with the pointer specified by
       a symbol. *)
+  | Uphantom_block of { tag : int; fields : Ident.t list; }
 
 and ulambda =
     Uvar of Ident.t

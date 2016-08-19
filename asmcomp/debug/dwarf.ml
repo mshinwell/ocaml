@@ -34,6 +34,9 @@ type t = {
    to read our 64-bit DWARF output. *)
 let () = Dwarf_format.set Thirty_two
 
+(* CR mshinwell: Remove setting from [Debug_info_section]. *)
+let dwarf_version = Dwarf_version.Four
+
 let create ~(source_provenance : Timings.source_provenance)
       ~idents_to_original_idents =
   let output_path, directory =
@@ -115,7 +118,7 @@ let create_type_proto_die ~parent ~ident ~output_path ~is_parameter:_ =
       DAH.create_byte_size_exn ~byte_size:Arch.size_addr;
     ]
 
-let location_list_entry ~fundecl ~available_subrange =
+let location_list_entry ~parent ~fundecl ~available_subrange =
   let rec location_expression ~(location : unit Available_subrange.location) =
     let module LE = Location_expression in
     match location with
@@ -158,6 +161,34 @@ let location_list_entry ~fundecl ~available_subrange =
     | Phantom (_, _, Offset_pointer { address; offset_in_words; }) ->
       LE.offset_pointer (location_expression ~location:address)
         ~offset_in_words
+    | Phantom (_, _, Block { tag; fields; }) ->
+      (* A phantom block construction: instead of the block existing in the
+         target program's memory, it is going to be described in DWARF.  It
+         will be "pointed at" by implicit pointers. *)
+      (* CR mshinwell: use a cache to dedup the CLDs *)
+      let header =
+        Nativeint.to_int64 (Cmmgen.black_block_header tag (List.length fields))
+      in
+      let fields =
+        List.map (fun ident ->
+            LE.location_of_identifier ~linkage_name:(Ident.unique_name ident) 
+          fields
+      in
+      let composite_location_description =
+        Composite_location_description.pieces_of_simple_location_descriptions
+          (header :: fields)
+      in
+      let proto_die =
+        Proto_die.create ~parent
+          ~tag:Dwarf_tag.Variable
+          ~attribute_values:[
+            DAH.create_composite_location_description
+              composite_location_description;
+          ]
+      in
+      LE.implicit_pointer ~offset_in_bytes:Arch.size_addr
+        ~die_label:(Proto_die.reference proto_die)
+        ~dwarf_version
   in
   let location_expression =
     location_expression
@@ -256,6 +287,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
       ~tag
       ~attribute_values:[
         DAH.create_name name_for_ident;
+        DAH.create_name ~linkage_name:(Ident.unique_name ident);
         DAH.create_type ~proto_die:type_proto_die;
         location_list_attribute_value;
       ]
@@ -418,25 +450,24 @@ let dwarf_for_toplevel_inconstant t ~ident ~module_path ~symbol =
       ~is_parameter:None
   in
   (* Toplevel inconstant "preallocated blocks" contain the thing of interest
-      in field 0 (once it has been initialised).  We describe them using a
-      single location description rather than a location list, since they
-      should be accessible at all times independent of the current value of
-      the PC. *)
+     in field 0 (once it has been initialised).  We describe them using a
+     single location description rather than a location list, since they
+     should be accessible at all times independent of the current value of
+     the PC. *)
   let single_location_description =
-    let module LE = Location_expression in
     Single_location_description.of_simple_location_description (
       (* We emit DWARF to describe an rvalue, rather than an lvalue, since
-          we manually read these values ourselves in libmonda (whereas for
-          e.g. a local variable bound to a read-symbol-field, the debugger
-          will do a final dereference after determining the lvalue from the
-          DWARF).  We cannot currently detect in libmonda whether or not a
-          reference to a toplevel module component "M.foo" is a constant
-          (represented as an rvalue in the DWARF, just the symbol's address)
-          or an inconstant---so we must be consistent as far as l/rvalue-ness
-          goes between the two. *)
+         we manually read these values ourselves in libmonda (whereas for
+         e.g. a local variable bound to a read-symbol-field, the debugger
+         will do a final dereference after determining the lvalue from the
+         DWARF).  We cannot currently detect in libmonda whether or not a
+         reference to a toplevel module component "M.foo" is a constant
+         (represented as an rvalue in the DWARF, just the symbol's address)
+         or an inconstant---so we must be consistent as far as l/rvalue-ness
+         goes between the two. *)
       (* CR-soon mshinwell: Actually this isn't the case.  We could use
-          SYMBOL_CLASS to distinguish them.  However maybe we'd better not
-          in case this doesn't work well with non-gdb. *)
+         SYMBOL_CLASS to distinguish them.  However maybe we'd better not
+         in case this doesn't work well with non-gdb. *)
       Simple_location_expression.read_symbol_field_yielding_rvalue
         ~symbol ~field:0)
   in

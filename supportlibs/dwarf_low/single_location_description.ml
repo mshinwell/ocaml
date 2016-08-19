@@ -14,14 +14,16 @@
 
 type t =
   | Simple of Simple_location_expression.t
-  (* CR-someday mshinwell: | Composite of ...  (DWARF-4 spec 2.6.1). *)
-
-(* class exprloc *)
+  | Composite of Composite_location_description.t
 
 let of_simple_location_description sle = Simple sle
 
+let of_composite_location_description cle = Composite cle
+
 let size = function
   | Simple sle -> Simple_location_expression.size sle
+  | Composite cle -> Composite_location_expression.size cle
 
 let emit = function
   | Simple sle -> Simple_location_expression.emit sle
+  | Composite cle -> Composite_location_expression.emit cle

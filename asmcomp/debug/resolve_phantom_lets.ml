@@ -74,6 +74,13 @@ let run phantom_lets =
           resolves_to (
             Mach.Iphantom_offset_var (defining_expr, offset_in_words))
         end
+      | Some (Uphantom_block { tag; fields; }) ->
+        let fields =
+          List.map (fun field -> resolve_variable ~defining_ident:field)
+            fields
+        in
+        resolves_to (Mach.Iphantom_block { tag; fields; })
+
   and resolve_variable ~defining_ident : Mach.phantom_defining_expr option =
     (* [defining_ident] is a variable that occurs within the definition of
        some phantom let.  Find out whether this identifier is actually bound

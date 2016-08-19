@@ -213,6 +213,7 @@ and defining_expr_of_phantom_let =
   | Read_mutable of Mutable_variable.t
   | Read_symbol_field of Symbol.t * int
   | Read_var_field of Variable.t * int
+  | Block of { tag : Tag.t; fields : Variable.t list; }
   | Dead
   (* CR mshinwell: Change [Inline_and_simplify] to track deleted phantom
      let-bound variables, and then delete dead phantom lets; then remove
