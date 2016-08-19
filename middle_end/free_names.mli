@@ -29,6 +29,8 @@ val free_phantom_variables : t -> Variable.Set.t
 val all_free_variables : t -> Variable.Set.t
 
 val free_symbols : t -> Symbol.Set.t
+(* CR mshinwell: clarify whether a symbol in free_phantom_symbols may occur
+   in free_symbols *)
 val free_phantom_symbols : t -> Symbol.Set.t
 
 (** Both the normal and phantom free symbols in the set. *)

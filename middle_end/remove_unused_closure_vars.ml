@@ -68,9 +68,14 @@ let remove_unused_closure_variables ~remove_direct_call_surrogates program =
           in
           let free_vars_of_kept_funs =
             Variable.Map.fold (fun _ { Flambda. free_names } acc ->
-                (* An occurrence of a variable on the RHS of a phantom let
-                   is not counted as a use for the purposes of this pass. *)
-                let free_variables = Free_names.free_variables free_names in
+                let free_variables =
+                  if (not !Clflags.debug)
+                    || (not !Clflags.debug_can_change_code)
+                  then
+                    Free_names.free_variables free_names
+                  else
+                    Free_names.all_free_variables free_names
+                in
                 Variable.Set.union free_variables acc)
               new_needed_funs
               free_vars_of_kept_funs

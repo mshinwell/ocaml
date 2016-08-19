@@ -309,8 +309,12 @@ let beta_reduce params body args =
 
 let simplify_lets lam =
 
-  (* Disable optimisations for bytecode compilation with -g flag *)
-  let optimize = !Clflags.native_code || not !Clflags.debug in
+  (* Disable optimisations for bytecode compilation with -g flag
+     and for flambda compilation with -g *)
+  let optimize =
+    (!Clflags.native_code || not !Clflags.debug)
+      && (not (!Clflags.native_code && Config.flambda && !Clflags.debug))
+  in
 
   (* First pass: count the occurrences of all let-bound identifiers *)
 

@@ -505,6 +505,9 @@ let map_named' f_named f_phantom tree =
 let map_named_with_id f_named tree =
   map_general ~toplevel:false (fun expr -> expr) f_named
     (fun phantom -> phantom) tree
+let map_phantom f_phantom tree =
+  map_general ~toplevel:false (fun expr -> expr) (fun _id named -> named)
+    f_phantom tree
 let map_toplevel f f_named f_phantom tree =
   map_general ~toplevel:true f (fun _ n -> f_named n) f_phantom tree
 let map_toplevel_named f_named tree =
@@ -912,6 +915,10 @@ let map_named_of_program (program : Flambda.program)
       ~(f : Variable.t -> Flambda.named -> Flambda.named) : Flambda.program =
   map_exprs_at_toplevel_of_program program
       ~f:(fun expr -> map_named_with_id f expr)
+
+let map_phantom_of_program (program : Flambda.program) ~f : Flambda.program =
+  map_exprs_at_toplevel_of_program program
+      ~f:(fun expr -> map_phantom f expr)
 
 let map_all_immutable_let_and_let_rec_bindings (expr : Flambda.t)
       ~(f : Variable.t -> Flambda.named -> Flambda.named) : Flambda.t =

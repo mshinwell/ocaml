@@ -16,16 +16,19 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+let free_symbols () =
+  if (not !Clflags.debug) || (not !Clflags.debug_can_increase_static_data) then
+    Free_names.free_symbols
+  else
+    Free_names.all_free_symbols
+
 let dependency (expr : Flambda.t) =
-  (* In debug mode, we are willing to keep more stuff around in static
-     data than in non-debug mode.  As such, this says "all_free_symbols"
-     not "free_symbols". *)
-  Free_names.all_free_symbols (Flambda.free_names_expr expr)
+  (free_symbols ()) (Flambda.free_names_expr expr)
 
 (* CR-soon pchambart: copied from lift_constant.  Needs remerging *)
 let constant_dependencies (const:Flambda.constant_defining_value) =
   let closure_dependencies (set_of_closures:Flambda.set_of_closures) =
-    Free_names.all_free_symbols
+    (free_symbols ())
       (Flambda.free_names_named (Set_of_closures set_of_closures))
   in
   match const with
@@ -107,10 +110,36 @@ let rec loop (program : Flambda.program_body)
     end
   | End symbol -> program, Symbol.Set.singleton symbol
 
+let remove_symbol_references_in_phantom_lets ~(program : Flambda.program)
+      ~symbols =
+  Flambda_iterators.map_phantom_of_program program
+    ~f:(fun (phantom : Flambda.defining_expr_of_phantom_let) ->
+      match phantom with
+      | Symbol symbol when Symbol.Set.mem symbol symbols -> Dead
+      | Symbol _
+      | Const _
+      | Var _
+      | Read_mutable _
+      | Read_symbol_field _
+      | Read_var_field _
+      | Dead -> phantom)
+
 let remove_unused_program_constructs (program : Flambda.program) =
-  (* CR-soon mshinwell: improve the operation of this in debug mode *)
-  if !Clflags.debug then program
-  else
+  let program =
     { program with Flambda.
       program_body = fst (loop program.program_body);
     }
+  in
+  if !Clflags.debug && (not !Clflags.debug_can_increase_static_data) then begin
+    (* In this case, we may have phantom lets referring to symbols that are
+       never referred to via normal lets.  These need to be marked as dead,
+       since we have now deleted the corresponding symbol definitions. *)
+    let symbols =
+      let free_names = Flambda.free_names_program program in
+      Symbol.Set.diff (Free_names.all_free_symbols free_names)
+        (Free_names.free_symbols free_names)
+    in
+    remove_symbol_references_in_phantom_lets ~program ~symbols
+  end else begin
+    program
+  end

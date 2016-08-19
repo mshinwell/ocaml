@@ -74,6 +74,8 @@ val no_std_include : bool ref
 val print_types : bool ref
 val make_archive : bool ref
 val debug : bool ref
+val debug_can_increase_static_data : bool ref
+val debug_can_change_code : bool ref
 val fast : bool ref
 val link_everything : bool ref
 val custom_runtime : bool ref
