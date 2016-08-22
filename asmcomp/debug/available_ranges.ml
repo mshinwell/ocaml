@@ -32,14 +32,16 @@ module Available_subrange : sig
 
   type 'a location =
     | Reg of Reg.t * is_parameter * 'a
-    | Phantom of Clambda.ulet_provenance * is_parameter * 'a phantom
+    | Phantom of Clambda.ulet_provenance * is_parameter
+        * Mach.phantom_defining_expr
 
-  and 'a phantom =
+  and phantom =
     | Const_int of int
     | Const_symbol of Symbol.t
     | Read_symbol_field of { symbol : Symbol.t; field : int; }
-    | Read_field of { address : 'a location; field : int; }
-    | Offset_pointer of { address : 'a location; offset_in_words : int; }
+    | Var of Ident.t
+    | Read_field of { address : Ident.t; field : int; }
+    | Offset_pointer of { address : Ident.t; offset_in_words : int; }
 
   val create
      : reg:Reg.t
@@ -52,7 +54,7 @@ module Available_subrange : sig
 
   val create_phantom
      : provenance:Clambda.ulet_provenance
-    -> defining_expr:L.instruction phantom
+    -> defining_expr:Mach.phantom_defining_expr
     -> start_pos:Linearize.label
     -> end_pos:Linearize.label
     -> t
@@ -73,14 +75,8 @@ module Available_subrange : sig
 end = struct
   type 'a location =
     | Reg of Reg.t * is_parameter * 'a
-    | Phantom of Clambda.ulet_provenance * is_parameter * 'a phantom
-
-  and 'a phantom =
-    | Const_int of int
-    | Const_symbol of Symbol.t
-    | Read_symbol_field of { symbol : Symbol.t; field : int; }
-    | Read_field of { address : 'a location; field : int; }
-    | Offset_pointer of { address : 'a location; offset_in_words : int; }
+    | Phantom of Clambda.ulet_provenance * is_parameter
+        * Mach.phantom_defining_expr
 
   type start_insn_or_phantom = L.instruction location
 
@@ -139,24 +135,11 @@ end = struct
   let end_pos_offset t = t.end_pos_offset
 
   let location t : unit location =
-    let rec convert_location (start_insn : start_insn_or_phantom)
-          : unit location =
+    let convert_location (start_insn : start_insn_or_phantom) : unit location =
       match start_insn with
       | Reg (reg, is_parameter, _insn) -> Reg (reg, is_parameter, ())
       | Phantom (provenance, is_parameter, defining_expr) ->
-        Phantom (provenance, is_parameter, convert_phantom defining_expr)
-    and convert_phantom (phantom : _ phantom) : unit phantom =
-      match phantom with
-      | Read_field { address; field; } ->
-        let address = convert_location address in
-        Read_field { address; field; }
-      | Offset_pointer { address; offset_in_words; } ->
-        let address = convert_location address in
-        Offset_pointer { address; offset_in_words; }
-      | Const_int i -> Const_int i
-      | Const_symbol symbol -> Const_symbol symbol
-      | Read_symbol_field { symbol; field; } ->
-        Read_symbol_field { symbol; field; }
+        Phantom (provenance, is_parameter, defining_expr)
     in
     convert_location t.start_insn
 
@@ -177,11 +160,7 @@ end = struct
           None
         | _ -> assert false
         end
-      | Phantom (_, _, phantom) ->
-        match phantom with
-        | Const_int _ | Const_symbol _ | Read_symbol_field _ -> None
-        | Read_field { address; _ } | Offset_pointer { address; _ } ->
-          offset address
+      | Phantom _ -> None
     in
     offset t.start_insn
 
@@ -605,31 +584,23 @@ module Make_phantom_ranges = Make (struct
   let create_subrange ~fundecl ~key ~start_pos ~start_insn:_ ~end_pos
         ~end_pos_offset:_ =
     match Ident.Map.find key fundecl.L.fun_phantom_lets with
-    | exception Not_found ->
-      (* The range was filtered by [Resolve_phantom_lets]. *)
-      None
+    | exception Not_found -> None
     | provenance, defining_expr ->
-      let convert_defining_expr defining_expr =
-        let module AS = Available_subrange in
-        match (defining_expr : Mach.phantom_defining_expr) with
-        | Iphantom_const_int i -> Some (AS.Const_int i)
-        | Iphantom_const_symbol symbol -> Some (AS.Const_symbol symbol)
-        | Iphantom_read_symbol_field (symbol, field) ->
-          Some (AS.Read_symbol_field { symbol; field; })
-        | Iphantom_var _
-        | Iphantom_read_var_field _
-        | Iphantom_offset_var _ -> None
-          (* CR-someday mshinwell: To do this properly, we'd have to intersect
-             the ranges.  For the moment we treat these cases separately (see
-             below). *)
-      in
-      let defining_expr = convert_defining_expr defining_expr in
       match provenance with
       | None -> None
       | Some provenance ->
         match defining_expr with
         | None -> None
         | Some defining_expr ->
+          (** Ranges for phantom identifiers are emitted as contiguous blocks
+              which are designed to approximately indicate their scope.
+              Some such phantom identifiers' values may ultimately be derived
+              from the values of normal identifiers (e.g. "Read_var_field") and
+              thus will be unavailable when those normal identifiers are
+              unavailable.  This effective intersecting of available ranges
+              is handled automatically in the debugger since we emit DWARF that
+              explains properly how the phantom identifiers relate to other
+              (normal or phantom) ones. *)
           let subrange =
             Available_subrange.create_phantom ~provenance ~defining_expr
               ~start_pos ~end_pos
@@ -646,68 +617,6 @@ let create ~fundecl =
   let first_insn =
     Make_phantom_ranges.process_instructions t ~fundecl ~first_insn
   in
-  (* (See CR-someday above.)  For the moment, ranges that are derived from
-     others are treated naively: we just make them available iff the
-     variables they ultimately derive from are available. *)
-  (* Note that the following procedure never introduces ranges that start or
-     stop at different places from existing ranges.  As such, we do not disturb
-     the non-overlapping property required by lldb. *)
-  Ident.Map.iter (fun ident (provenance, defining_expr) ->
-      let rec resolve_range provenance defining_expr =
-        match (defining_expr : Mach.phantom_defining_expr) with
-        | Iphantom_const_int _
-        | Iphantom_const_symbol _
-        | Iphantom_read_symbol_field _ -> None
-        | Iphantom_var var ->
-          begin match Ident.Tbl.find t.ranges var with
-          | exception Not_found -> None
-          | range ->
-            let range =
-              Available_range.create_from_existing range
-                ~location_map:(fun (start_insn
-                    : L.instruction Available_subrange.location) ->
-                  (* CR-someday mshinwell: See CR above about marking phantoms
-                     as parameters *)
-                  match start_insn with
-                  | Reg (reg, _is_parameter, insn) ->
-                    Reg (reg, Local, insn)
-                  | Phantom (provenance, _is_parameter, phantom) ->
-                    Phantom (provenance, Local, phantom))
-            in
-            Some range
-          end
-        | Iphantom_read_var_field (defining_expr, field) ->
-          begin match resolve_range provenance defining_expr with
-          | None -> None
-          | Some range ->
-            let range =
-              Available_range.create_from_existing range
-                ~location_map:(fun address ->
-                  Phantom (provenance, Local, Read_field { address; field; }))
-            in
-            Some range
-          end
-        | Iphantom_offset_var (defining_expr, offset_in_words) ->
-          begin match resolve_range provenance defining_expr with
-          | None -> None
-          | Some range ->
-            let range =
-              Available_range.create_from_existing range
-                ~location_map:(fun address ->
-                  Phantom (provenance, Local,
-                    Offset_pointer { address; offset_in_words; }))
-            in
-            Some range
-          end
-      in
-      match provenance with
-      | None -> ()
-      | Some provenance ->
-        match resolve_range provenance defining_expr with
-        | None -> ()
-        | Some range ->
-          Ident.Tbl.add t.ranges ident range)
-    fundecl.L.fun_phantom_lets;
   t, { fundecl with L.fun_body = first_insn; }
 
 let create ~fundecl =

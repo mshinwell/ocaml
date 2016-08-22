@@ -48,10 +48,11 @@ type phantom_defining_expr =
   | Iphantom_const_int of int
   | Iphantom_const_symbol of Symbol.t
   | Iphantom_var of Ident.t  (** Must not be a phantom identifier. *)
-  | Iphantom_read_var_field of phantom_defining_expr * int
+  | Iphantom_read_var_field of Ident.t * int
   (* CR-soon mshinwell: delete "var" from "read_var_field" *)
   | Iphantom_read_symbol_field of Symbol.t * int
-  | Iphantom_offset_var of phantom_defining_expr * int
+  | Iphantom_offset_var of Ident.t * int
+  | Iphantom_block of { tag : int; fields : Ident.t list; }
 
 type operation =
     Imove

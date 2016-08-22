@@ -999,6 +999,55 @@ method private emit_tail_sequence env exp =
   s#emit_tail env exp;
   s#extract
 
+(* Lowering of phantom lets' defining expressions *)
+
+method private lower_phantom_let
+      ((provenance, defining_expr)
+        : (Clambda.ulet_provenance option
+          * Clambda.uphantom_defining_expr option)) =
+  match defining_expr with
+  | None ->
+    (* The defining expression of this phantom let is never
+        going to be available, perhaps because it was some expression
+        that is not currently supported. *)
+    None
+  | Some defining_expr ->
+    let defining_expr =
+      match defining_expr with
+      | Uphantom_const (Uconst_ref (symbol, _defining_expr)) ->
+        (* It's not actually a "fun_name", but the mangling is the same.
+            This should go away if we switch to [Symbol.t] everywhere. *)
+        let symbol = Name_laundry.fun_name_to_symbol symbol in
+        Mach.Iphantom_const_symbol symbol
+      | Uphantom_read_symbol_field (
+          Uconst_ref (symbol, _defining_expr), field) ->
+        let symbol = Name_laundry.fun_name_to_symbol symbol in
+        Mach.Iphantom_read_symbol_field (symbol, field)
+      | Uphantom_read_symbol_field _ ->
+        Misc.fatal_errorf "Selectgen.lower_phantom_let: unknown Clambda \
+          constant pattern for Uphantom_read_symbol_field"
+      | Uphantom_const (Uconst_int i) | Uphantom_const (Uconst_ptr i) ->
+        Mach.Iphantom_const_int i
+      | Uphantom_var defining_ident ->
+        Mach.Iphantom_var defining_ident
+      | Uphantom_read_var_field (defining_ident, field) ->
+        Mach.Iphantom_read_var_field (defining_expr, field)
+      | Uphantom_offset_var_field (defining_ident, offset_in_words) ->
+        Mach.Iphantom_offset_var (defining_expr, offset_in_words)
+      | Uphantom_block { tag; fields; } ->
+        Mach.Iphantom_block { tag; fields; }
+    in
+    Some defining_expr
+
+method private lower_phantom_lets () =
+  Ident.Tbl.fold (fun ident provenance_and_defining_expr phantom_lets ->
+      match self#lower_phantom_let provenance_and_defining_expr with
+      | None -> phantom_lets
+      | Some provenance_and_defining_expr ->
+        Ident.Map.add ident provenance_and_defining_expr phantom_lets)
+    phantom_lets
+    Ident.Map.empty
+
 (* Insertion of the function prologue *)
 
 method insert_prologue f ~loc_arg ~rarg ~num_regs_per_arg
@@ -1094,9 +1143,7 @@ method emit_fundecl f =
   in
   let body = self#extract_core ~end_instr:body in
   instr_iter (fun instr -> self#mark_instr instr.Mach.desc) body;
-  let fun_phantom_lets =
-    Resolve_phantom_lets.run (Ident.Tbl.to_map phantom_lets)
-  in
+  let fun_phantom_lets = self#lower_phantom_lets () in
   { fun_name = f.Cmm.fun_name;
     fun_args = loc_arg;
     fun_body = body;
