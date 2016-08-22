@@ -222,6 +222,11 @@ and same_defining_expr_of_phantom_let
   | Read_var_field (var1, field1), Read_var_field (var2, field2) ->
     Variable.equal var1 var2 && field1 = field2
   | Read_var_field _, _ | _, Read_var_field _ -> false
+  | Block { tag = tag1; fields = fields1; },
+      Block { tag = tag2; fields = fields2; } ->
+    Tag.equal tag1 tag2
+      && Misc.Stdlib.List.equal Variable.equal fields1 fields2
+  | Block _, _ | _, Block _ -> false
   | Dead, Dead -> true
 
 and sameclosure (c1 : Flambda.function_declaration)
@@ -347,6 +352,8 @@ let toplevel_substitution sb tree =
     match expr with
     | Var var -> Var (sb var)
     | Read_var_field (var, field) -> Read_var_field (sb var, field)
+    | Block { tag; fields; } ->
+      Block { tag; fields = List.map sb fields; }
     | Const _ | Symbol _ | Read_mutable _ | Read_symbol_field _
     | Dead -> expr
   in
@@ -695,6 +702,15 @@ let substitute_read_symbol_field_for_variables
             | var -> Phantom (Read_var_field (var, field))
             | exception Not_found -> defining_expr
             end
+          | Phantom (Block { tag; fields; }) ->
+            let fields =
+              List.map (fun var ->
+                  match Variable.Map.find var bindings with
+                  | var -> var
+                  | exception Not_found -> var)
+                fields
+            in
+            Phantom (Block { tag; fields; })
           | Phantom (Const _)
           | Phantom (Symbol _)
           | Phantom (Read_mutable _)
@@ -936,6 +952,9 @@ let phantomize_defining_expr (named : Flambda.named)
   | Read_mutable mut_var -> Read_mutable mut_var
   | Read_symbol_field (symbol, field) -> Read_symbol_field (symbol, field)
   | Prim (Pfield field, [var], _dbg) -> Read_var_field (var, field)
+  | Prim (Pmakeblock (tag, Immutable, _kind), fields, _dbg) ->
+    Block { tag = Tag.create_exn tag; fields; }
+  (* CR mshinwell: we need to add a closure case here *)
   | Expr Proved_unreachable ->
     (* Used for a removed argument (cf. [Remove_unused_arguments]) *)
     Dead

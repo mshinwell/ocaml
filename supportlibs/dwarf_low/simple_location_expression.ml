@@ -25,7 +25,12 @@ module type S = sig
   val read_symbol_field_yielding_rvalue : symbol:Symbol.t -> field:int -> t
   val read_field : t -> field:int -> t
   val offset_pointer : t -> offset_in_words:int -> t
-  val location_from_another_die : t -> die_label:Cmm.label -> t
+  val location_from_another_die : die_label:Cmm.label -> t
+  val implicit_pointer
+     : offset_in_bytes:int
+    -> die_label:Cmm.label
+    -> dwarf_version:Dwarf_version.t
+    -> t
 end
 
 type t =
@@ -37,6 +42,8 @@ type t =
   | Read_field of { block : t; field : int; }
   | Read_symbol_field_yielding_rvalue of { block : t; field : int; }
   | Location_from_another_die of { die_label : Cmm.label; }
+  | Implicit_pointer of { offset_in_bytes : int; die_label : Cmm.label;
+      dwarf_version : Dwarf_version.t; }
 
 let const_symbol symbol = Const_symbol symbol
 let const_int i = Const_int i
@@ -51,6 +58,8 @@ let offset_pointer t ~offset_in_words =
 let read_field t ~field = Read_field { block = t; field; }
 let location_from_another_die ~die_label =
   Location_from_another_die { die_label; }
+let implicit_pointer ~offset_in_bytes ~die_label ~dwarf_version =
+  Implicit_pointer { offset_in_bytes; die_label; dwarf_version; }
 
 let rec compile_to_yield_value t =
   (* We first compile the expression to a DWARF expression that always yields
@@ -81,6 +90,8 @@ let rec compile_to_yield_value t =
       Operator.deref_do_not_optimize ();
     ]
   | Location_from_another_die { die_label; } -> [Operator.call ~die_label]
+  | Implicit_pointer { offset_in_bytes; die_label; dwarf_version; } ->
+    [Operator.implicit_pointer ~offset_in_bytes ~die_label ~dwarf_version]
 
 let compile t =
   let sequence = (compile_to_yield_value t) @ [Operator.stack_value ()] in

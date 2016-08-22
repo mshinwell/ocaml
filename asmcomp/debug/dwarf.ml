@@ -35,7 +35,7 @@ type t = {
 let () = Dwarf_format.set Thirty_two
 
 (* CR mshinwell: Remove setting from [Debug_info_section]. *)
-let dwarf_version = Dwarf_version.Four
+let dwarf_version = Dwarf_version.four
 
 let create ~(source_provenance : Timings.source_provenance)
       ~idents_to_original_idents =
@@ -78,6 +78,7 @@ let create ~(source_provenance : Timings.source_provenance)
     Proto_die.create ~parent:None
       ~tag:Dwarf_tag.Compile_unit
       ~attribute_values
+      ()
   in
   let debug_loc_table = Debug_loc_table.create () in
   { compilation_unit_proto_die;
@@ -117,30 +118,33 @@ let create_type_proto_die ~parent ~ident ~output_path ~is_parameter:_ =
       DAH.create_encoding ~encoding:Encoding_attribute.signed;
       DAH.create_byte_size_exn ~byte_size:Arch.size_addr;
     ]
+    ()
 
-let location_of_identifier t ~ident ~proto_dies_for_idents =
+let location_of_identifier _t ~ident ~proto_dies_for_idents =
   (* We may need to reference the locations of other values in order to
      describe the location of some particular value.  This is done by using
      the "call" functionality of DWARF location descriptions.
      (DWARF-4 specification section 2.5.1.5, page 24.)  This avoids any need
      to transitively resolve phantom lets (to constants, symbols or
      non-phantom variables) in the compiler. *)
-  match Ident.find ident t.proto_dies_for_idents with
+  match Ident.Tbl.find proto_dies_for_idents ident with
   | exception Not_found ->
     Misc.fatal_errorf "No proto-DIE found for identifier %a" Ident.print ident
-  | die_label -> LE.call ~die_label
+  | die_label ->
+    Simple_location_expression.location_from_another_die ~die_label
 
 let location_list_entry t ~parent ~fundecl ~available_subrange
-      ~proto_dies_for_idents =
-  let rec location_expression ~(location : unit Available_subrange.location) =
-    let module LE = Location_expression in
+      ~proto_dies_for_idents : Location_list_entry.t =
+  let simple_location_description
+        ~(location : unit Available_subrange.location) =
+    let module SLD = Simple_location_expression in
     match location with
     | Reg (reg, _, ()) ->
       begin match reg.Reg.loc with
       | Reg.Unknown -> assert false  (* probably a bug in available_regs.ml *)
       | Reg.Reg _ ->
         let reg_number = Proc.dwarf_register_number reg in
-        LE.in_register ~reg_number
+        SLD.in_register ~reg_number
       | Reg.Stack _ ->
         (* CR mshinwell: rename [Lcapture_stack_offset] *)
         match
@@ -158,28 +162,26 @@ let location_list_entry t ~parent ~fundecl ~available_subrange
               Printmach.reg reg
           end;
           (* CR-soon mshinwell: use [offset_in_bytes] instead *)
-          LE.in_stack_slot
+          SLD.in_stack_slot
             ~offset_in_words:(offset_in_bytes_from_cfa / Arch.size_addr)
       end
     (* CR mshinwell: don't ignore provenance
        Follow-up: Is it really needed?  For example, Inlining_transforms is
        using dummy module paths for function parameters, etc.
      *)
-
-(* XXX problem: we need the location list information for the derived
-   phantom lets, which probably means we need to do the transitive thing.
-   What happens for blocks? *)
-
-    | Phantom (_, _, Const_int i) -> LE.const_int (Int64.of_int i)
-    | Phantom (_, _, Const_symbol symbol) -> LE.const_symbol symbol
-    | Phantom (_, _, Read_symbol_field { symbol; field; }) ->
-      LE.read_symbol_field ~symbol ~field
-    | Phantom (_, _, Read_field { address; field; }) ->
-      LE.read_field (location_expression ~location:address) ~field
-    | Phantom (_, _, Offset_pointer { address; offset_in_words; }) ->
-      LE.offset_pointer (location_expression ~location:address)
-        ~offset_in_words
-    | Phantom (_, _, Block { tag; fields; }) ->
+    | Phantom (_, _, Iphantom_const_int i) -> SLD.const_int (Int64.of_int i)
+    | Phantom (_, _, Iphantom_const_symbol symbol) -> SLD.const_symbol symbol
+    | Phantom (_, _, Iphantom_read_symbol_field (symbol, field)) ->
+      SLD.read_symbol_field ~symbol ~field
+    | Phantom (_, _, Iphantom_var ident) ->
+      location_of_identifier t ~ident ~proto_dies_for_idents
+    | Phantom (_, _, Iphantom_read_var_field (ident, field)) ->
+      let location = location_of_identifier t ~ident ~proto_dies_for_idents in
+      SLD.read_field location ~field
+    | Phantom (_, _, Iphantom_offset_var (ident, offset_in_words)) ->
+      let location = location_of_identifier t ~ident ~proto_dies_for_idents in
+      SLD.offset_pointer location ~offset_in_words
+    | Phantom (_, _, Iphantom_block { tag; fields; }) ->
       (* A phantom block construction: instead of the block existing in the
          target program's address space, it is going to be conjured up in the
          *debugger's* address space using instructions described in DWARF.
@@ -188,14 +190,20 @@ let location_list_entry t ~parent ~fundecl ~available_subrange
          (requires GNU DWARF extensions prior to DWARF-5). *)
       (* CR mshinwell: use a cache to dedup the CLDs *)
       let header =
-        Nativeint.to_int64 (Cmmgen.black_block_header tag (List.length fields))
+        Simple_location_expression.const_int (
+          Int64.of_nativeint (
+            Cmmgen.black_block_header tag (List.length fields)))
       in
+      let header_size = Arch.size_addr in
+      let field_size = Arch.size_addr in
       let fields =
-        List.map (fun ident -> location_of_identifier t ~ident) fields
+        List.map (fun ident ->
+            location_of_identifier t ~ident ~proto_dies_for_idents, field_size)
+          fields
       in
       let composite_location_description =
         Composite_location_description.pieces_of_simple_location_descriptions
-          (header :: fields)
+          ((header, header_size) :: fields)
       in
       let proto_die =
         Proto_die.create ~parent
@@ -204,14 +212,18 @@ let location_list_entry t ~parent ~fundecl ~available_subrange
             DAH.create_composite_location_description
               composite_location_description;
           ]
+          ()
       in
-      LE.implicit_pointer ~offset_in_bytes:Arch.size_addr
+      (* [offset_in_bytes] is set so that the implicit pointer points just
+         after the value's header, just like in the heap (how cool is that)? *)
+      SLD.implicit_pointer ~offset_in_bytes:Arch.size_addr
         ~die_label:(Proto_die.reference proto_die)
         ~dwarf_version
   in
-  let location_expression =
-    location_expression
-      ~location:(Available_subrange.location available_subrange)
+  let single_location_description =
+    Single_location_description.of_simple_location_description (
+      simple_location_description
+        ~location:(Available_subrange.location available_subrange))
   in
   let start_of_code_symbol =
     Name_laundry.fun_name_to_symbol fundecl.Linearize.fun_name
@@ -225,21 +237,18 @@ let location_list_entry t ~parent ~fundecl ~available_subrange
   let first_address_when_not_in_scope_offset =
     Available_subrange.end_pos_offset available_subrange
   in
-  let entry =
-    Location_list_entry.create_location_list_entry
-      ~start_of_code_symbol
-      ~first_address_when_in_scope
-      ~first_address_when_not_in_scope
-      ~first_address_when_not_in_scope_offset
-      ~location_expression
-  in
-  Some entry
+  Location_list_entry.create_location_list_entry
+    ~start_of_code_symbol
+    ~first_address_when_in_scope
+    ~first_address_when_not_in_scope
+    ~first_address_when_not_in_scope_offset
+    ~single_location_description
 
 let dwarf_for_identifier t ~fundecl ~function_proto_die
       ~lexical_block_proto_die ~proto_dies_for_idents
       ~ident ~is_unique:_ ~range =
   let is_parameter = Available_range.is_parameter range in
-  let parent_proto_die =
+  let parent_proto_die : Proto_die.t =
     match is_parameter with
     | Parameter _index ->
       (* Parameters need to be children of the function in question. *)
@@ -272,12 +281,10 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
         ~init:[]
         ~f:(fun location_list_entries ~available_subrange ->
           let location_list_entry =
-            location_list_entry ~fundecl ~available_subrange
-              ~proto_dies_for_idents
+            location_list_entry t ~parent:(Some function_proto_die) ~fundecl
+              ~available_subrange ~proto_dies_for_idents
           in
-          match location_list_entry with
-          | None -> location_list_entries
-          | Some entry -> entry::location_list_entries)
+          location_list_entry::location_list_entries)
     in
     let location_list_entries =
       base_address_selection_entry :: location_list_entries
@@ -316,7 +323,6 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
       ~tag
       ~attribute_values:[
         DAH.create_name name_for_ident;
-        DAH.create_name ~linkage_name:(Ident.unique_name ident);
         DAH.create_type ~proto_die:type_proto_die;
         location_list_attribute_value;
       ]
@@ -330,7 +336,8 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
   end
 
 let dwarf_for_identifier t ~fundecl ~function_proto_die
-      ~lexical_block_proto_die ~(ident : Ident.t) ~is_unique ~range =
+      ~lexical_block_proto_die ~proto_dies_for_idents
+      ~(ident : Ident.t) ~is_unique ~range =
   if Ident.name ident <> "*closure_env*" then begin
     (* Map back to the identifier that actually occurred in the source code,
         so that the stamp matches up with that in the .cmt file.  Identifiers
@@ -339,7 +346,8 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
     | exception Not_found -> ()
     | ident ->
       dwarf_for_identifier t ~fundecl ~function_proto_die
-        ~lexical_block_proto_die ~ident ~is_unique ~range
+        ~lexical_block_proto_die ~proto_dies_for_idents
+        ~ident ~is_unique ~range
   end
 
 (* This function covers local variables, parameters, variables in closures
@@ -350,11 +358,16 @@ let dwarf_for_variables_and_parameters t ~function_proto_die
       ~lexical_block_proto_die ~available_ranges
       ~(fundecl : Linearize.fundecl) =
   (* This includes normal variables as well as those bound by phantom lets. *)
-  let 
+  let proto_dies_for_idents = Ident.Tbl.create 42 in
+  Available_ranges.fold available_ranges
+    ~init:()
+    ~f:(fun () ~ident ~is_unique:_ ~range:_ ->
+      let reference = Proto_die.create_reference () in
+      Ident.Tbl.add proto_dies_for_idents ident reference);
   Available_ranges.fold available_ranges
     ~init:()
     ~f:(fun () -> dwarf_for_identifier t ~fundecl
-      ~function_proto_die ~lexical_block_proto_die)
+      ~function_proto_die ~lexical_block_proto_die ~proto_dies_for_idents)
 
 let dwarf_for_function_definition t ~(fundecl:Linearize.fundecl)
       ~available_ranges ~(emit_info : Emit.fundecl_result) =
@@ -428,28 +441,27 @@ let dwarf_for_function_definition t ~(fundecl:Linearize.fundecl)
 let dwarf_for_toplevel_constant t ~idents ~module_path ~symbol =
   (* Give each identifier the same definition for the moment. *)
   List.iter (fun ident ->
-    let name =
-      let path = Printtyp.string_of_path module_path in
-      let name = Ident.name ident in
-      path ^ "." ^ name
-    in
-    let type_proto_die =
-      create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
-        ~ident:(`Ident ident)
-        ~output_path:t.output_path
-        ~is_parameter:None
-    in
-    Proto_die.create_ignore ~parent:(Some t.compilation_unit_proto_die)
-      ~tag:Dwarf_tag.Constant
-      ~attribute_values:[
-        DAH.create_name name;
-        DAH.create_type ~proto_die:type_proto_die;
-        DAH.create_const_value_from_symbol ~symbol;
-        (* Mark everything as "external" so gdb puts the constants in its
-           list of "global symbols". *)
-        DAH.create_external ~is_visible_externally:true;
-      ]
-      ())
+      let name =
+        let path = Printtyp.string_of_path module_path in
+        let name = Ident.name ident in
+        path ^ "." ^ name
+      in
+      let type_proto_die =
+        create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
+          ~ident:(`Ident ident)
+          ~output_path:t.output_path
+          ~is_parameter:None
+      in
+      Proto_die.create_ignore ~parent:(Some t.compilation_unit_proto_die)
+        ~tag:Dwarf_tag.Constant
+        ~attribute_values:[
+          DAH.create_name name;
+          DAH.create_type ~proto_die:type_proto_die;
+          DAH.create_const_value_from_symbol ~symbol;
+          (* Mark everything as "external" so gdb puts the constants in its
+            list of "global symbols". *)
+          DAH.create_external ~is_visible_externally:true;
+        ])
     idents
 
 let dwarf_for_toplevel_constants t constants =

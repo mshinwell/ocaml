@@ -187,6 +187,9 @@ let eliminate_ref_of_expr flam =
               else expr
             | Phantom (Read_var_field (var, _field)) ->
               if convertible_variable var then Phantom Dead
+              else expr
+            | Phantom (Block { tag = _; fields; }) ->
+              if List.exists convertible_variable fields then Phantom Dead
               else expr)
       | Let_mutable _ | Assign _ | Var _ | Apply _
       | Let_rec _ | Switch _ | String_switch _

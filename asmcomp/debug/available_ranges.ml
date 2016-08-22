@@ -35,14 +35,6 @@ module Available_subrange : sig
     | Phantom of Clambda.ulet_provenance * is_parameter
         * Mach.phantom_defining_expr
 
-  and phantom =
-    | Const_int of int
-    | Const_symbol of Symbol.t
-    | Read_symbol_field of { symbol : Symbol.t; field : int; }
-    | Var of Ident.t
-    | Read_field of { address : Ident.t; field : int; }
-    | Offset_pointer of { address : Ident.t; offset_in_words : int; }
-
   val create
      : reg:Reg.t
     -> is_parameter:int option
@@ -57,11 +49,6 @@ module Available_subrange : sig
     -> defining_expr:Mach.phantom_defining_expr
     -> start_pos:Linearize.label
     -> end_pos:Linearize.label
-    -> t
-
-  val create_from_existing
-     : t
-    -> location_map:(L.instruction location -> L.instruction location)
     -> t
 
   val start_pos : t -> L.label
@@ -127,9 +114,6 @@ end = struct
       end_pos_offset = None;
     }
 
-  let create_from_existing t ~location_map =
-    { t with start_insn = location_map t.start_insn; }
-
   let start_pos t = t.start_pos
   let end_pos t = t.end_pos
   let end_pos_offset t = t.end_pos_offset
@@ -149,7 +133,7 @@ end = struct
     | Phantom (_provenance, is_parameter, _defining_expr) -> is_parameter
 
   let offset_from_stack_ptr_in_bytes t =
-    let rec offset (start_insn : start_insn_or_phantom) =
+    let offset (start_insn : start_insn_or_phantom) =
       match start_insn with
       | Reg (_reg, _, insn) ->
         begin match insn.L.desc with
@@ -176,12 +160,6 @@ module Available_range : sig
 
   val create : unit -> t
 
-  val create_from_existing
-     : t
-     -> location_map:(L.instruction Available_subrange.location
-        -> L.instruction Available_subrange.location)
-     -> t
-
   val is_parameter : t -> is_parameter
   val add_subrange : t -> subrange:Available_subrange.t -> unit
   val extremities : t -> L.label * L.label
@@ -206,14 +184,6 @@ end = struct
   }
 
   let create () = { subranges = []; min_pos = None; max_pos = None; } 
-
-  let create_from_existing t ~location_map =
-    let subranges =
-      List.map (fun subrange ->
-          Available_subrange.create_from_existing subrange ~location_map)
-        t.subranges
-    in
-    { t with subranges; }
 
   let add_subrange t ~subrange =
     let start_pos = Available_subrange.start_pos subrange in
@@ -589,23 +559,20 @@ module Make_phantom_ranges = Make (struct
       match provenance with
       | None -> None
       | Some provenance ->
-        match defining_expr with
-        | None -> None
-        | Some defining_expr ->
-          (** Ranges for phantom identifiers are emitted as contiguous blocks
-              which are designed to approximately indicate their scope.
-              Some such phantom identifiers' values may ultimately be derived
-              from the values of normal identifiers (e.g. "Read_var_field") and
-              thus will be unavailable when those normal identifiers are
-              unavailable.  This effective intersecting of available ranges
-              is handled automatically in the debugger since we emit DWARF that
-              explains properly how the phantom identifiers relate to other
-              (normal or phantom) ones. *)
-          let subrange =
-            Available_subrange.create_phantom ~provenance ~defining_expr
-              ~start_pos ~end_pos
-          in
-          Some (subrange, key)
+        (* Ranges for phantom identifiers are emitted as contiguous blocks
+            which are designed to approximately indicate their scope.
+            Some such phantom identifiers' values may ultimately be derived
+            from the values of normal identifiers (e.g. "Read_var_field") and
+            thus will be unavailable when those normal identifiers are
+            unavailable.  This effective intersecting of available ranges
+            is handled automatically in the debugger since we emit DWARF that
+            explains properly how the phantom identifiers relate to other
+            (normal or phantom) ones. *)
+        let subrange =
+          Available_subrange.create_phantom ~provenance ~defining_expr
+            ~start_pos ~end_pos
+        in
+        Some (subrange, key)
 end)
 
 let create ~fundecl =

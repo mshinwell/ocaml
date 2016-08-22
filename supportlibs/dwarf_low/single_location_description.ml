@@ -22,8 +22,8 @@ let of_composite_location_description cle = Composite cle
 
 let size = function
   | Simple sle -> Simple_location_expression.size sle
-  | Composite cle -> Composite_location_expression.size cle
+  | Composite cle -> Composite_location_description.size cle
 
 let emit = function
   | Simple sle -> Simple_location_expression.emit sle
-  | Composite cle -> Composite_location_expression.emit cle
+  | Composite cle -> Composite_location_description.emit cle

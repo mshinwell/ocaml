@@ -52,6 +52,7 @@ and uphantom_defining_expr =
   | Uphantom_read_var_field of Ident.t * int
   | Uphantom_offset_var_field of Ident.t * int
   | Uphantom_read_symbol_field of uconstant * int
+  | Uphantom_block of { tag : int; fields : Ident.t list; }
 
 and ulambda =
     Uvar of Ident.t
@@ -78,7 +79,6 @@ and ulambda =
   | Uunreachable
   | Uphantom_let of Ident.t * ulet_provenance option
       * uphantom_defining_expr option * ulambda
-  | Uphantom_block of { tag : int; fields : Ident.t list; }
 
 and ufunction = {
   label  : function_label;

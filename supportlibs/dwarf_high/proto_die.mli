@@ -26,7 +26,8 @@
 type t
 
 (** For creation of proto-DIEs in a group, with references between them. *)
-type reference
+(* CR mshinwell: remove type equality *)
+type reference = Cmm.label
 val create_reference : unit -> reference
 
 (* It is an error for [parent] to be [None] unless the [tag] is that for

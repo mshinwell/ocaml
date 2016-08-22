@@ -343,7 +343,7 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
                     Variable.print var)
               fields
           in
-          Some (Clambda.Uphantom_block { Tag.to_int tag; fields; })
+          Some (Clambda.Uphantom_block { tag = Tag.to_int tag; fields; })
         | Dead -> None
       in
       Uphantom_let (id, provenance, defining_expr,

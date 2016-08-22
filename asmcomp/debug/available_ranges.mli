@@ -47,14 +47,8 @@ module Available_subrange : sig
 
   type 'a location =
     | Reg of Reg.t * is_parameter * 'a
-    | Phantom of Clambda.ulet_provenance * is_parameter * 'a phantom
-
-  and 'a phantom =
-    | Const_int of int
-    | Const_symbol of Symbol.t
-    | Read_symbol_field of { symbol : Symbol.t; field : int; }
-    | Read_field of { address : 'a location; field : int; }
-    | Offset_pointer of { address : 'a location; offset_in_words : int; }
+    | Phantom of Clambda.ulet_provenance * is_parameter
+        * Mach.phantom_defining_expr
 
   val start_pos : t -> Linearize.label
   val end_pos : t -> Linearize.label

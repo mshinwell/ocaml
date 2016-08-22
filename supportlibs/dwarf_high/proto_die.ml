@@ -99,7 +99,7 @@ let create ?reference ~parent ~tag ~attribute_values () =
   t
 
 let create_ignore ~parent ~tag ~attribute_values =
-  let (_ : t) = create ~parent ~tag ~attribute_values in
+  let (_ : t) = create ~parent ~tag ~attribute_values () in
   ()
 
 let set_name t name = t.name <- Some name

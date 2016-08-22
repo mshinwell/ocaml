@@ -416,8 +416,9 @@ and print_defining_expr_of_let ppf (expr : defining_expr_of_let) =
       print_named ppf (Read_symbol_field (sym, field))
     | Read_var_field (var, field) ->
       print_named ppf (Prim (Pfield field, [var], Debuginfo.none))
-    | Block of { tag; fields; } ->
-      fprintf ppf "[%d: %a]" tag (Format.pp_print_list Variable.print) fields
+    | Block { tag; fields; } ->
+      fprintf ppf "[%a: %a]" Tag.print tag
+        (Format.pp_print_list Variable.print) fields
     | Dead -> fprintf ppf "DEAD"
 
 and print_function_declaration ppf var (f : function_declaration) =
@@ -691,6 +692,8 @@ and free_names_phantom ~free_names (phantom : defining_expr_of_phantom_let) =
     FN.free_phantom_variable free_names var
   | Symbol sym | Read_symbol_field (sym, _) ->
     FN.free_phantom_symbol free_names sym
+  | Block { tag = _; fields; } ->
+    List.iter (fun field -> FN.free_phantom_variable free_names field) fields
 
 and free_names_named ?ignore_uses_in_project_var
     ?ignore_uses_as_callee ?ignore_uses_as_argument ~free_names named =

@@ -32,7 +32,12 @@ module type S = sig
   val read_symbol_field_yielding_rvalue : symbol:Symbol.t -> field:int -> t
   val read_field : t -> field:int -> t
   val offset_pointer : t -> offset_in_words:int -> t
-  val location_from_another_die : t -> die_label:Cmm.label -> t
+  val location_from_another_die : die_label:Cmm.label -> t
+  val implicit_pointer
+     : offset_in_bytes:int
+    -> die_label:Cmm.label
+    -> dwarf_version:Dwarf_version.t
+    -> t
 end
 
 include S with type t := t

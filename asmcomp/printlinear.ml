@@ -68,19 +68,9 @@ let instr ppf i =
               begin match location with
               | AS.Reg (r, _, _) ->
                 fprintf ppf " in %a" reg r
-              | AS.Phantom (_, _, AS.Const_symbol symbol) ->
-                fprintf ppf " with known value %a" Symbol.print symbol
-              | AS.Phantom (_, _, AS.Read_symbol_field { symbol; field; }) ->
-                fprintf ppf " with known value %a.(%d)" Symbol.print symbol
-                  field
-              | AS.Phantom (_, _, AS.Const_int i) ->
-                fprintf ppf " with known value %d" i
-              | AS.Phantom (_, _, AS.Read_field _) ->
-                (* CR mshinwell: fixme *)
-                fprintf ppf " from <Read_field _>"
-              | AS.Phantom (_, _, AS.Offset_pointer _) ->
-                (* CR mshinwell: fixme *)
-                fprintf ppf " from <Offset_pointer _>"
+              | AS.Phantom (_, _, _defining_expr) ->
+                (* CR mshinwell: Print the phantom definition *)
+                fprintf ppf " with known value <...>"
               end
             | Available_ranges.End -> ()
             end;

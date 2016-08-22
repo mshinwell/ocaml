@@ -1013,31 +1013,32 @@ method private lower_phantom_let
     None
   | Some defining_expr ->
     let defining_expr =
+      let module C = Clambda in
       match defining_expr with
-      | Uphantom_const (Uconst_ref (symbol, _defining_expr)) ->
+      | C.Uphantom_const (C.Uconst_ref (symbol, _defining_expr)) ->
         (* It's not actually a "fun_name", but the mangling is the same.
             This should go away if we switch to [Symbol.t] everywhere. *)
         let symbol = Name_laundry.fun_name_to_symbol symbol in
         Mach.Iphantom_const_symbol symbol
-      | Uphantom_read_symbol_field (
-          Uconst_ref (symbol, _defining_expr), field) ->
+      | C.Uphantom_read_symbol_field (
+          C.Uconst_ref (symbol, _defining_expr), field) ->
         let symbol = Name_laundry.fun_name_to_symbol symbol in
         Mach.Iphantom_read_symbol_field (symbol, field)
-      | Uphantom_read_symbol_field _ ->
+      | C.Uphantom_read_symbol_field _ ->
         Misc.fatal_errorf "Selectgen.lower_phantom_let: unknown Clambda \
           constant pattern for Uphantom_read_symbol_field"
-      | Uphantom_const (Uconst_int i) | Uphantom_const (Uconst_ptr i) ->
+      | C.Uphantom_const (C.Uconst_int i) | C.Uphantom_const (C.Uconst_ptr i) ->
         Mach.Iphantom_const_int i
-      | Uphantom_var defining_ident ->
+      | C.Uphantom_var defining_ident ->
         Mach.Iphantom_var defining_ident
-      | Uphantom_read_var_field (defining_ident, field) ->
-        Mach.Iphantom_read_var_field (defining_expr, field)
-      | Uphantom_offset_var_field (defining_ident, offset_in_words) ->
-        Mach.Iphantom_offset_var (defining_expr, offset_in_words)
-      | Uphantom_block { tag; fields; } ->
+      | C.Uphantom_read_var_field (defining_ident, field) ->
+        Mach.Iphantom_read_var_field (defining_ident, field)
+      | C.Uphantom_offset_var_field (defining_ident, offset_in_words) ->
+        Mach.Iphantom_offset_var (defining_ident, offset_in_words)
+      | C.Uphantom_block { tag; fields; } ->
         Mach.Iphantom_block { tag; fields; }
     in
-    Some defining_expr
+    Some (provenance, defining_expr)
 
 method private lower_phantom_lets () =
   Ident.Tbl.fold (fun ident provenance_and_defining_expr phantom_lets ->

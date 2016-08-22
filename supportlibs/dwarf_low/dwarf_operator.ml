@@ -260,9 +260,9 @@ let deref_do_not_optimize () = DW_op_deref { optimize = false; }
 let stack_value () = DW_op_stack_value
 
 let implicit_pointer ~offset_in_bytes ~die_label ~dwarf_version =
-  if Dwarf_version.compare dwarf_version 4 < 0 then
+  if Dwarf_version.compare dwarf_version Dwarf_version.four < 0 then
     Misc.fatal_error "DWARF implicit pointers not supported at this version"
-  else if Dwarf_version.compare dwarf_version 4 = 0 then
+  else if Dwarf_version.compare dwarf_version Dwarf_version.four = 0 then
     DW_op_GNU_implicit_pointer { offset_in_bytes; label = die_label; }
   else
     DW_op_implicit_pointer { offset_in_bytes; label = die_label; }
@@ -307,6 +307,9 @@ let optimize_sequence ts =
     | ((DW_op_implicit_pointer _) as implicit_pointer)
         :: DW_op_stack_value :: ts ->
       implicit_pointer :: (optimize ts)
+    | ((DW_op_call_ref _) as call)
+        :: DW_op_stack_value :: ts ->
+      call :: (optimize ts)
     | t::ts -> t :: (optimize ts)
   in
   List.map (function
@@ -466,13 +469,13 @@ let opcode = function
   | DW_op_regx _ -> 0x90
   | DW_op_fbreg _ -> 0x91
   | DW_op_bregx _ -> 0x92
-  | DW_op_piece -> 0x93
-  | DW_op_call_ref -> 0x9a
+  | DW_op_piece _ -> 0x93
+  | DW_op_call_ref _ -> 0x9a
   | DW_op_call_frame_cfa -> 0x9c
   | DW_op_implicit_value _ -> 0x9e
   | DW_op_stack_value -> 0x9f
-  | DW_op_GNU_implicit_pointer -> 0xf2
-  | DW_op_implicit_pointer -> 0xa0
+  | DW_op_GNU_implicit_pointer _ -> 0xf2
+  | DW_op_implicit_pointer _ -> 0xa0
 
 let size t =
   let opcode_size = Int64.of_int 1 in
@@ -566,9 +569,9 @@ let size t =
     | DW_op_GNU_implicit_pointer { offset_in_bytes; label; }
     | DW_op_implicit_pointer { offset_in_bytes; label; } ->
       Int64.add (Dwarf_value.size (Offset_into_debug_info label))
-        (Dwarf_value.size (Sleb128 offset_in_bytes))
+        (Dwarf_value.size (Sleb128 (Int64.of_int offset_in_bytes)))
     | DW_op_piece { size_in_bytes; } ->
-      Dwarf_value.size (Uleb128 size_in_bytes)
+      Dwarf_value.size (Uleb128 (Int64.of_int size_in_bytes))
     | DW_op_call_ref { label; } ->
       Dwarf_value.size (Offset_into_debug_info label)
   in
@@ -680,8 +683,8 @@ let emit t asm =
   | DW_op_GNU_implicit_pointer { offset_in_bytes; label; }
   | DW_op_implicit_pointer { offset_in_bytes; label; } ->
     Dwarf_value.emit (Offset_into_debug_info label) asm;
-    Dwarf_value.emit (Sleb128 offset_in_bytes) asm
+    Dwarf_value.emit (Sleb128 (Int64.of_int offset_in_bytes)) asm
   | DW_op_piece { size_in_bytes; } ->
-    Dwarf_value.emit (Uleb128 size_in_bytes) asm
+    Dwarf_value.emit (Uleb128 (Int64.of_int size_in_bytes)) asm
   | DW_op_call_ref { label; } ->
     Dwarf_value.emit (Offset_into_debug_info label) asm

@@ -1422,6 +1422,11 @@ and simplify_defining_expr_of_phantom_let env r
     | Var var -> Var (Freshening.apply_variable freshening var)
     | Read_var_field (var, field) ->
       Read_var_field (Freshening.apply_variable freshening var, field)
+    | Block { tag; fields; } ->
+      let fields =
+        List.map (fun var -> Freshening.apply_variable freshening var) fields
+      in
+      Block { tag; fields; }
     | Dead -> Dead
   in
   simplified, ret r (A.value_unknown Other)

@@ -178,6 +178,8 @@ let variable_and_symbol_invariants (program : Flambda.program) =
       | Read_var_field (var, field) ->
         check_variable_is_bound env var;
         if field < 0 then raise (Illegal_field_index field)
+      | Block { tag = _; fields; } ->
+        List.iter (check_variable_is_bound env) fields
       | Dead -> ()
       end;
       (* CR-soon mshinwell: this should distinguish normal and phantom

@@ -51,8 +51,12 @@ module Value : sig
      : Linearize.label
     -> Dwarf_attributes.Form.sec_offset t
 
-  val location_description
+  val single_location_description
      : Single_location_description.t
+    -> Dwarf_attributes.Form.exprloc t
+
+  val composite_location_description
+     : Composite_location_description.t
     -> Dwarf_attributes.Form.exprloc t
 
   val encoding_attribute

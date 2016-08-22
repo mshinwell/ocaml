@@ -538,7 +538,7 @@ let map_symbols tree ~f =
         else
           Symbol new_sym
       | (Const _ | Var _ | Read_mutable _ | Read_symbol_field _
-        | Read_var_field _ | Dead) as phantom -> phantom)
+        | Read_var_field _ | Block _ | Dead) as phantom -> phantom)
     tree
 
 let map_symbols_on_set_of_closures
@@ -592,7 +592,7 @@ let map_toplevel_symbols_to_vars expr ~f =
         | Some var -> Var var
         end
       | Const _ | Var _ | Read_mutable _ | Read_symbol_field _
-      | Read_var_field _ | Dead -> phantom)
+      | Read_var_field _ | Block _ | Dead -> phantom)
     expr
 
 let map_toplevel_sets_of_closures tree ~f =

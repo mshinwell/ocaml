@@ -122,6 +122,7 @@ let remove_symbol_references_in_phantom_lets ~(program : Flambda.program)
       | Read_mutable _
       | Read_symbol_field _
       | Read_var_field _
+      | Block _
       | Dead -> phantom)
 
 let remove_unused_program_constructs (program : Flambda.program) =
