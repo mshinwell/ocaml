@@ -135,6 +135,11 @@ let between_symbols ~upper ~lower =
     ConstLabel (escape_symbol upper),
     ConstLabel (escape_symbol lower)))
 
+let between_labels_32bit ~upper ~lower =
+  D.long (ConstSub (
+    ConstLabel (string_of_label upper),
+    ConstLabel (string_of_label lower)))
+
 let define_symbol sym =
   let name = Linkage_name.to_string (Symbol.label sym) in
   D.qword (ConstLabel (escape_symbol name));

@@ -33,7 +33,10 @@ module type S = sig
   val read_symbol_field_yielding_rvalue : symbol:Symbol.t -> field:int -> t
   val read_field : t -> field:int -> t
   val offset_pointer : t -> offset_in_words:int -> t
-  val location_from_another_die : die_label:Cmm.label -> t
+  val location_from_another_die
+     : die_label:Cmm.label
+    -> compilation_unit_header_label:Linearize.label
+    -> t
   val implicit_pointer
      : offset_in_bytes:int
     -> die_label:Cmm.label

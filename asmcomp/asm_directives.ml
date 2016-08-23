@@ -48,6 +48,7 @@ module type S = sig
   val symbol : Symbol.t -> unit
   val define_symbol : Symbol.t -> unit
   val between_symbols : upper:Symbol.t -> lower:Symbol.t -> unit
+  val between_labels_32bit : upper:Cmm.label -> lower:Cmm.label -> unit
   val between_symbol_and_label_offset
      : upper:Linearize.label
     -> lower:Symbol.t

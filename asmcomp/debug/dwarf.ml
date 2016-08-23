@@ -20,6 +20,7 @@ module DAH = Dwarf_attribute_helpers
 
 (* DWARF-related state for a single compilation unit. *)
 type t = {
+  compilation_unit_header_label : Linearize.label;
   compilation_unit_proto_die : Proto_die.t;
   debug_loc_table : Debug_loc_table.t;
   start_of_code_symbol : Symbol.t;
@@ -82,6 +83,7 @@ let create ~(source_provenance : Timings.source_provenance)
   in
   let debug_loc_table = Debug_loc_table.create () in
   { compilation_unit_proto_die;
+    compilation_unit_header_label = Cmm.new_label ();
     debug_loc_table;
     start_of_code_symbol;
     end_of_code_symbol;
@@ -120,7 +122,7 @@ let create_type_proto_die ~parent ~ident ~output_path ~is_parameter:_ =
     ]
     ()
 
-let location_of_identifier _t ~ident ~proto_dies_for_idents =
+let location_of_identifier t ~ident ~proto_dies_for_idents =
   (* We may need to reference the locations of other values in order to
      describe the location of some particular value.  This is done by using
      the "call" functionality of DWARF location descriptions.
@@ -136,7 +138,8 @@ let location_of_identifier _t ~ident ~proto_dies_for_idents =
        [Available_regs], and the name never appears on any available range. *)
     None
   | die_label ->
-    Some (Simple_location_expression.location_from_another_die ~die_label)
+    Some (Simple_location_expression.location_from_another_die ~die_label
+      ~compilation_unit_header_label:t.compilation_unit_header_label)
 
 let location_list_entry t ~parent ~fundecl ~available_subrange
       ~proto_dies_for_idents : Location_list_entry.t =
@@ -596,5 +599,6 @@ let emit t asm =
   Dwarf_world.emit ~compilation_unit_proto_die:t.compilation_unit_proto_die
     ~start_of_code_symbol:t.start_of_code_symbol
     ~end_of_code_symbol:t.end_of_code_symbol
+    ~compilation_unit_header_label:t.compilation_unit_header_label
     ~debug_loc_table:t.debug_loc_table
     asm

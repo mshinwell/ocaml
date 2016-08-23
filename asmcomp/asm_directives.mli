@@ -62,6 +62,14 @@ module type S = sig
       lower address should be the second argument (just like subtraction). *)
   val between_symbols : upper:Symbol.t -> lower:Symbol.t -> unit
 
+  (** Emit a 32-bit number giving the displacement between the two given
+      labels.  To obtain a positive result the symbol at the lower address
+      should be the second argument (just like subtraction).
+      The arguments are not relocated before the subtraction: in other words,
+      the displacement in the linked executable will equal the displacement
+      in the unlinked object file. *)
+  val between_labels_32bit : upper:Cmm.label -> lower:Cmm.label -> unit
+
   (** Emit a machine-width reference giving the displacement between the
       lower symbol and the sum of the address of the upper label plus
       [offset_upper]. *)
@@ -126,7 +134,9 @@ module type S = sig
 
   (** Emit an integer giving the distance obtained by subtracting the
       address of [base] from the address of [label].  [width] specifies the
-      size of the integer. *)
+      size of the integer.  The subtraction is performed after relocation: in
+      other words, the displacement in the linked executable may differ from
+      the displacement in the object file. *)
   val offset_into_section_label
      : section:section
     -> label:Linearize.label

@@ -45,19 +45,17 @@ type t =
      information from them concatenated inside each of the various
      sections).
 
-     With the exception of [Offset_into_debug_info_32bit], which is
-     like DW_FORM_ref4:
      - Offsets into .debug_info are of DW_FORM_ref_addr.
      - Offsets into any other section are of DW_FORM_sec_offset.
      (DWARF-4 spec p.142.)  However the widths are the same in both cases,
      corresponding to the DWARF format.
   *)
   | Offset_into_debug_info of Linearize.label
-  | Offset_into_debug_info_32bit of Linearize.label
   | Offset_into_debug_info_from_symbol of Symbol.t
   | Offset_into_debug_line of Linearize.label
   | Offset_into_debug_line_from_symbol of Symbol.t
   | Offset_into_debug_loc of Linearize.label
   | Offset_into_debug_abbrev of Linearize.label
+  | Distance_between_labels_32bit of { upper : Cmm.label; lower : Cmm.label; }
 
 include Dwarf_emittable.S with type t := t

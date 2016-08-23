@@ -98,8 +98,9 @@ type t =
   | DW_op_implicit_pointer of { offset_in_bytes : int; label : Cmm.label; }
   | DW_op_piece of { size_in_bytes : int; }
   (* CR-someday mshinwell: Should probably use DW_op_call_ref, but gdb doesn't
-     currently support it. *)
-  | DW_op_call4 of { label : Cmm.label; }
+     currently support it.  This would remove the "header label" nonsense. *)
+  | DW_op_call4 of { label : Cmm.label;
+      compilation_unit_header_label : Cmm.label; }
 
 let print ppf t =
   let fprintf = Format.fprintf in
@@ -224,7 +225,7 @@ let print ppf t =
       label
   | DW_op_piece { size_in_bytes; } ->
     fprintf ppf "DW_op_piece %d" size_in_bytes
-  | DW_op_call4 { label; } ->
+  | DW_op_call4 { label; _ } ->
     fprintf ppf "DW_op_call4 %d" label
 
 let contents_of_register ~reg_number =
@@ -270,7 +271,8 @@ let implicit_pointer ~offset_in_bytes ~die_label ~dwarf_version =
 
 let piece ~size_in_bytes = DW_op_piece { size_in_bytes; }
 
-let call ~die_label = DW_op_call4 { label = die_label; }
+let call ~die_label ~compilation_unit_header_label =
+  DW_op_call4 { label = die_label; compilation_unit_header_label; }
 
 let optimize_sequence ts =
   let rec optimize ts =
@@ -573,8 +575,10 @@ let size t =
         (Dwarf_value.size (Sleb128 (Int64.of_int offset_in_bytes)))
     | DW_op_piece { size_in_bytes; } ->
       Dwarf_value.size (Uleb128 (Int64.of_int size_in_bytes))
-    | DW_op_call4 { label; } ->
-      Dwarf_value.size (Offset_into_debug_info_32bit label)
+    | DW_op_call4 { label; compilation_unit_header_label } ->
+      Dwarf_value.size (
+        Distance_between_labels_32bit
+          { upper = label; lower = compilation_unit_header_label; })
   in
   Int64.add opcode_size args_size
 
@@ -687,5 +691,7 @@ let emit t asm =
     Dwarf_value.emit (Sleb128 (Int64.of_int offset_in_bytes)) asm
   | DW_op_piece { size_in_bytes; } ->
     Dwarf_value.emit (Uleb128 (Int64.of_int size_in_bytes)) asm
-  | DW_op_call4 { label; } ->
-    Dwarf_value.emit (Offset_into_debug_info_32bit label) asm
+  | DW_op_call4 { label; compilation_unit_header_label; } ->
+    Dwarf_value.emit (
+        Distance_between_labels_32bit
+          { upper = label; lower = compilation_unit_header_label; }) asm

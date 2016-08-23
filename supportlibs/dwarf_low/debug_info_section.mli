@@ -21,6 +21,7 @@ type t
 val create
    : dies:Debugging_information_entry.t list
   -> debug_abbrev_label:Linearize.label
+  -> compilation_unit_header_label:Linearize.label
   -> t
 
 val dwarf_version : Dwarf_version.t
