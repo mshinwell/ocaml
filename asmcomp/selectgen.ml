@@ -412,14 +412,76 @@ method select_condition = function
   | arg ->
       (Itruetest, arg)
 
+(* Lowering of phantom lets *)
+
+method private lower_phantom_let
+      ~(provenance : Clambda.ulet_provenance option)
+      ~(defining_expr : Clambda.uphantom_defining_expr option) =
+  match defining_expr with
+  | None ->
+    (* The defining expression of this phantom let is never
+        going to be available, perhaps because it was some expression
+        that is not currently supported. *)
+    None
+  | Some defining_expr ->
+    let defining_expr =
+      let module C = Clambda in
+      match defining_expr with
+      | C.Uphantom_const (C.Uconst_ref (symbol, _defining_expr)) ->
+        (* It's not actually a "fun_name", but the mangling is the same.
+            This should go away if we switch to [Symbol.t] everywhere. *)
+        let symbol = Name_laundry.fun_name_to_symbol symbol in
+        Some (Mach.Iphantom_const_symbol symbol)
+      | C.Uphantom_read_symbol_field (
+          C.Uconst_ref (symbol, _defining_expr), field) ->
+        let symbol = Name_laundry.fun_name_to_symbol symbol in
+        Some (Mach.Iphantom_read_symbol_field (symbol, field))
+      | C.Uphantom_read_symbol_field _ ->
+        Misc.fatal_errorf "Selectgen.lower_phantom_let: unknown Clambda \
+          constant pattern for Uphantom_read_symbol_field"
+      | C.Uphantom_const (C.Uconst_int i) | C.Uphantom_const (C.Uconst_ptr i) ->
+        Some (Mach.Iphantom_const_int i)
+      | C.Uphantom_var defining_ident ->
+        if Ident.Set.mem defining_ident !dead_phantom_lets then
+          None
+        else
+          Some (Mach.Iphantom_var defining_ident)
+      | C.Uphantom_read_var_field (defining_ident, field) ->
+        if Ident.Set.mem defining_ident !dead_phantom_lets then
+          None
+        else
+          Some (Mach.Iphantom_read_var_field (defining_ident, field))
+      | C.Uphantom_offset_var_field (defining_ident, offset_in_words) ->
+        if Ident.Set.mem defining_ident !dead_phantom_lets then
+          None
+        else
+          Some (Mach.Iphantom_offset_var (defining_ident, offset_in_words))
+      | C.Uphantom_block { tag; fields; } ->
+        let fields =
+          List.map (fun field ->
+              if Ident.Set.mem field !dead_phantom_lets then None
+              else Some field)
+            fields
+        in
+        Some (Mach.Iphantom_block { tag; fields; })
+    in
+    match defining_expr with
+    | None -> None
+    | Some defining_expr -> Some (provenance, defining_expr)
+
 method private env_for_phantom_let env ~ident ~provenance ~defining_expr =
   (* Information about phantom lets is split at this stage:
      1. The phantom identifiers in scope are recorded in the environment
         and subsequently tagged onto Mach instructions.
      2. The defining expressions are recorded separately. *)
-  Ident.Tbl.add phantom_lets ident (provenance, defining_expr);
-  let phantom_idents = Ident.Set.add ident env.phantom_idents in
-  { env with phantom_idents; }
+  match self#lower_phantom_let ~provenance ~defining_expr with
+  | None ->
+    dead_phantom_lets := Ident.Set.add ident !dead_phantom_lets;
+    env
+  | Some (provenance, defining_expr) ->
+    Ident.Tbl.add phantom_lets ident (provenance, defining_expr);
+    let phantom_idents = Ident.Set.add ident env.phantom_idents in
+    { env with phantom_idents; }
 
 (* Return an array of fresh registers of the given type.
    Normally implemented as Reg.createv, but some
@@ -1002,75 +1064,6 @@ method private emit_tail_sequence env exp =
   s#emit_tail env exp;
   s#extract
 
-(* Lowering of phantom lets' defining expressions *)
-
-method private lower_phantom_let
-      ((provenance, defining_expr)
-        : (Clambda.ulet_provenance option
-          * Clambda.uphantom_defining_expr option)) =
-  match defining_expr with
-  | None ->
-    (* The defining expression of this phantom let is never
-        going to be available, perhaps because it was some expression
-        that is not currently supported. *)
-    None
-  | Some defining_expr ->
-    let defining_expr =
-      let module C = Clambda in
-      match defining_expr with
-      | C.Uphantom_const (C.Uconst_ref (symbol, _defining_expr)) ->
-        (* It's not actually a "fun_name", but the mangling is the same.
-            This should go away if we switch to [Symbol.t] everywhere. *)
-        let symbol = Name_laundry.fun_name_to_symbol symbol in
-        Some (Mach.Iphantom_const_symbol symbol)
-      | C.Uphantom_read_symbol_field (
-          C.Uconst_ref (symbol, _defining_expr), field) ->
-        let symbol = Name_laundry.fun_name_to_symbol symbol in
-        Some (Mach.Iphantom_read_symbol_field (symbol, field))
-      | C.Uphantom_read_symbol_field _ ->
-        Misc.fatal_errorf "Selectgen.lower_phantom_let: unknown Clambda \
-          constant pattern for Uphantom_read_symbol_field"
-      | C.Uphantom_const (C.Uconst_int i) | C.Uphantom_const (C.Uconst_ptr i) ->
-        Some (Mach.Iphantom_const_int i)
-      | C.Uphantom_var defining_ident ->
-        if Ident.Set.mem defining_ident !dead_phantom_lets then
-          None
-        else
-          Some (Mach.Iphantom_var defining_ident)
-      | C.Uphantom_read_var_field (defining_ident, field) ->
-        if Ident.Set.mem defining_ident !dead_phantom_lets then
-          None
-        else
-          Some (Mach.Iphantom_read_var_field (defining_ident, field))
-      | C.Uphantom_offset_var_field (defining_ident, offset_in_words) ->
-        if Ident.Set.mem defining_ident !dead_phantom_lets then
-          None
-        else
-          Some (Mach.Iphantom_offset_var (defining_ident, offset_in_words))
-      | C.Uphantom_block { tag; fields; } ->
-        let fields =
-          List.map (fun field ->
-              if Ident.Set.mem field !dead_phantom_lets then None
-              else Some field)
-            fields
-        in
-        Some (Mach.Iphantom_block { tag; fields; })
-    in
-    match defining_expr with
-    | None -> None
-    | Some defining_expr -> Some (provenance, defining_expr)
-
-method private lower_phantom_lets () =
-  Ident.Tbl.fold (fun ident provenance_and_defining_expr phantom_lets ->
-      match self#lower_phantom_let provenance_and_defining_expr with
-      | None ->
-        dead_phantom_lets := Ident.Set.add ident !dead_phantom_lets;
-        phantom_lets
-      | Some provenance_and_defining_expr ->
-        Ident.Map.add ident provenance_and_defining_expr phantom_lets)
-    phantom_lets
-    Ident.Map.empty
-
 (* Insertion of the function prologue *)
 
 method insert_prologue f ~loc_arg ~rarg ~num_regs_per_arg
@@ -1166,7 +1159,7 @@ method emit_fundecl f =
   in
   let body = self#extract_core ~end_instr:body in
   instr_iter (fun instr -> self#mark_instr instr.Mach.desc) body;
-  let fun_phantom_lets = self#lower_phantom_lets () in
+  let fun_phantom_lets = Ident.Tbl.to_map phantom_lets in
   { fun_name = f.Cmm.fun_name;
     fun_args = loc_arg;
     fun_body = body;
