@@ -198,7 +198,15 @@ let location_list_entry t ~parent ~fundecl ~available_subrange
       let field_size = Arch.size_addr in
       let fields =
         List.map (fun ident ->
-            location_of_identifier t ~ident ~proto_dies_for_idents, field_size)
+            let simple_location_description =
+              match ident with
+              | None ->
+                (* This element of the block isn't accessible. *)
+                Simple_location_expression.empty
+              | Some ident ->
+                location_of_identifier t ~ident ~proto_dies_for_idents
+             in
+             simple_location_description, field_size)
           fields
       in
       let composite_location_description =

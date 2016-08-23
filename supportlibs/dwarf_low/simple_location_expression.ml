@@ -17,6 +17,7 @@ module Operator = Dwarf_operator
 module type S = sig
   type t
 
+  val empty : t
   val const_symbol : Symbol.t -> t
   val const_int : Int64.t -> t
   val in_register : reg_number:int -> t
@@ -34,6 +35,7 @@ module type S = sig
 end
 
 type t =
+  | Empty
   | Const_symbol of Symbol.t
   | Const_int of Int64.t
   | In_register of int
@@ -45,6 +47,7 @@ type t =
   | Implicit_pointer of { offset_in_bytes : int; die_label : Cmm.label;
       dwarf_version : Dwarf_version.t; }
 
+let empty = Empty
 let const_symbol symbol = Const_symbol symbol
 let const_int i = Const_int i
 let in_register ~reg_number = In_register reg_number
@@ -69,6 +72,7 @@ let rec compile_to_yield_value t =
   (* CR mshinwell: return a flag saying if we've actually formed an
      lvalue? *)
   match t with
+  | Empty -> []
   | Const_symbol symbol -> [Operator.value_of_symbol symbol]
   | Const_int i -> [Operator.signed_int_const i]
   | In_register reg_number -> [Operator.contents_of_register ~reg_number]

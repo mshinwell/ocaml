@@ -44,7 +44,7 @@ type phantom_defining_expr =
   | Iphantom_read_var_field of Ident.t * int
   | Iphantom_read_symbol_field of Symbol.t * int
   | Iphantom_offset_var of Ident.t * int
-  | Iphantom_block of { tag : int; fields : Ident.t list; }
+  | Iphantom_block of { tag : int; fields : Ident.t option list; }
 
 type operation =
     Imove

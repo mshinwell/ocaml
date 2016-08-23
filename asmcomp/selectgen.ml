@@ -190,6 +190,9 @@ let current_function_name = ref ""
 (* All phantom lets seen in the current function *)
 let phantom_lets = Ident.Tbl.create 42
 
+(* Phantom lets that have been deleted by this pass *)
+let dead_phantom_lets = ref Ident.Set.empty
+
 (* The default instruction selection class *)
 
 class virtual selector_generic = object (self)
@@ -1019,31 +1022,50 @@ method private lower_phantom_let
         (* It's not actually a "fun_name", but the mangling is the same.
             This should go away if we switch to [Symbol.t] everywhere. *)
         let symbol = Name_laundry.fun_name_to_symbol symbol in
-        Mach.Iphantom_const_symbol symbol
+        Some (Mach.Iphantom_const_symbol symbol)
       | C.Uphantom_read_symbol_field (
           C.Uconst_ref (symbol, _defining_expr), field) ->
         let symbol = Name_laundry.fun_name_to_symbol symbol in
-        Mach.Iphantom_read_symbol_field (symbol, field)
+        Some (Mach.Iphantom_read_symbol_field (symbol, field))
       | C.Uphantom_read_symbol_field _ ->
         Misc.fatal_errorf "Selectgen.lower_phantom_let: unknown Clambda \
           constant pattern for Uphantom_read_symbol_field"
       | C.Uphantom_const (C.Uconst_int i) | C.Uphantom_const (C.Uconst_ptr i) ->
-        Mach.Iphantom_const_int i
+        Some (Mach.Iphantom_const_int i)
       | C.Uphantom_var defining_ident ->
-        Mach.Iphantom_var defining_ident
+        if Ident.Set.mem defining_ident !dead_phantom_lets then
+          None
+        else
+          Some (Mach.Iphantom_var defining_ident)
       | C.Uphantom_read_var_field (defining_ident, field) ->
-        Mach.Iphantom_read_var_field (defining_ident, field)
+        if Ident.Set.mem defining_ident !dead_phantom_lets then
+          None
+        else
+          Some (Mach.Iphantom_read_var_field (defining_ident, field))
       | C.Uphantom_offset_var_field (defining_ident, offset_in_words) ->
-        Mach.Iphantom_offset_var (defining_ident, offset_in_words)
+        if Ident.Set.mem defining_ident !dead_phantom_lets then
+          None
+        else
+          Some (Mach.Iphantom_offset_var (defining_ident, offset_in_words))
       | C.Uphantom_block { tag; fields; } ->
-        Mach.Iphantom_block { tag; fields; }
+        let fields =
+          List.map (fun field ->
+              if Ident.Set.mem field !dead_phantom_lets then None
+              else Some field)
+            fields
+        in
+        Some (Mach.Iphantom_block { tag; fields; })
     in
-    Some (provenance, defining_expr)
+    match defining_expr with
+    | None -> None
+    | Some defining_expr -> Some (provenance, defining_expr)
 
 method private lower_phantom_lets () =
   Ident.Tbl.fold (fun ident provenance_and_defining_expr phantom_lets ->
       match self#lower_phantom_let provenance_and_defining_expr with
-      | None -> phantom_lets
+      | None ->
+        dead_phantom_lets := Ident.Set.add ident !dead_phantom_lets;
+        phantom_lets
       | Some provenance_and_defining_expr ->
         Ident.Map.add ident provenance_and_defining_expr phantom_lets)
     phantom_lets
@@ -1175,4 +1197,5 @@ let _ =
 let reset () =
   catch_regs := [];
   current_function_name := "";
-  Ident.Tbl.clear phantom_lets
+  Ident.Tbl.clear phantom_lets;
+  dead_phantom_lets := Ident.Set.empty
