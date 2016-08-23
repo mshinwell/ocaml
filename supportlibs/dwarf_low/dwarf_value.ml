@@ -42,6 +42,7 @@ type t =
   | Code_address_from_symbol_diff of { upper : Symbol.t; lower : Symbol.t; }
   | Code_address_from_symbol_plus_bytes of Symbol.t * Target_system.Address.t
   | Offset_into_debug_info of Linearize.label
+  | Offset_into_debug_info_32bit of Linearize.label
   | Offset_into_debug_info_from_symbol of Symbol.t
   | Offset_into_debug_line of Linearize.label
   | Offset_into_debug_line_from_symbol of Symbol.t
@@ -79,6 +80,7 @@ let size t =
     | Eight -> 8L
     end
   | String str -> Int64.of_int (String.length str + 1)
+  | Offset_into_debug_info_32bit _ -> 4L
   | Indirect_string _
   | Offset_into_debug_line _
   | Offset_into_debug_line_from_symbol _
@@ -129,6 +131,10 @@ let emit t asm =
   | Offset_into_debug_info label ->
     A.offset_into_section_label ~section:(Dwarf Debug_info) ~label
       ~width:(width_for_ref_addr_or_sec_offset ())
+  | Offset_into_debug_info_32bit label ->
+    (* CR-someday mshinwell: This should be checked for overflow *)
+    A.offset_into_section_label ~section:(Dwarf Debug_info) ~label
+      ~width:Thirty_two
   | Offset_into_debug_info_from_symbol symbol ->
     A.offset_into_section_symbol ~section:(Dwarf Debug_info) ~symbol
       ~width:(width_for_ref_addr_or_sec_offset ())

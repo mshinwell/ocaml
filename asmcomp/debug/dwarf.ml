@@ -246,7 +246,8 @@ let location_list_entry t ~parent ~fundecl ~available_subrange
 
 let dwarf_for_identifier t ~fundecl ~function_proto_die
       ~lexical_block_proto_die ~proto_dies_for_idents
-      ~ident ~is_unique:_ ~range =
+      ~(ident : Ident.t) ~(ident_for_type : Ident.t option) ~is_unique:_
+      ~range =
   let is_parameter = Available_range.is_parameter range in
   let parent_proto_die : Proto_die.t =
     match is_parameter with
@@ -292,19 +293,27 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
     let location_list = Location_list.create ~location_list_entries in
     Debug_loc_table.insert t.debug_loc_table ~location_list
   in
-  let type_proto_die =
-    create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
-      ~ident:(`Ident ident) ~output_path:t.output_path
-      ~is_parameter
+  let type_and_name_attributes =
+    match ident_for_type with
+    | None -> []
+    | Some ident_for_type ->
+      let type_proto_die =
+        create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
+          ~ident:(`Ident ident_for_type) ~output_path:t.output_path
+          ~is_parameter
+      in
+      (* If the unstamped name of [ident] is unambiguous within the function,
+        then use it; otherwise, emit the stamped name. *)
+      (* CR mshinwell: this needs much more careful thought *)
+      let name_for_ident = Ident.name ident_for_type in
+      (*
+          if is_unique then Ident.name ident else Ident.unique_name ident
+        in
+      *)
+      [DAH.create_name name_for_ident;
+       DAH.create_type ~proto_die:type_proto_die;
+      ]
   in
-  (* If the unstamped name of [ident] is unambiguous within the function,
-     then use it; otherwise, emit the stamped name. *)
-  (* CR mshinwell: this needs much more careful thought *)
-  let name_for_ident = Ident.name ident in
-(*
-    if is_unique then Ident.name ident else Ident.unique_name ident
-  in
-*)
   let tag =
     match is_parameter with
     | Parameter _index -> Dwarf_tag.Formal_parameter
@@ -321,11 +330,9 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
     Proto_die.create ~reference
       ~parent:(Some parent_proto_die)
       ~tag
-      ~attribute_values:[
-        DAH.create_name name_for_ident;
-        DAH.create_type ~proto_die:type_proto_die;
+      ~attribute_values:(type_and_name_attributes @ [
         location_list_attribute_value;
-      ]
+      ])
       ()
   in
   begin match is_parameter with
@@ -335,39 +342,50 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
     Proto_die.set_sort_priority proto_die index
   end
 
-let dwarf_for_identifier t ~fundecl ~function_proto_die
-      ~lexical_block_proto_die ~proto_dies_for_idents
-      ~(ident : Ident.t) ~is_unique ~range =
-  if Ident.name ident <> "*closure_env*" then begin
-    (* Map back to the identifier that actually occurred in the source code,
-        so that the stamp matches up with that in the .cmt file.  Identifiers
-        not in the source code are suppressed. *)
-    match Ident.find_same ident t.idents_to_original_idents with
-    | exception Not_found -> ()
-    | ident ->
-      dwarf_for_identifier t ~fundecl ~function_proto_die
-        ~lexical_block_proto_die ~proto_dies_for_idents
-        ~ident ~is_unique ~range
-  end
-
 (* This function covers local variables, parameters, variables in closures
    and other "fun_var"s in the current mutually-recursive set.  (The last
    two cases are handled by the explicit addition of phantom lets way back
-   in [Flambda_to_clambda].) *)
+   in [Flambda_to_clambda].)  Phantom identifiers are also covered. *)
+let iterate_over_variable_like_things t ~available_ranges ~f =
+  Available_ranges.fold available_ranges
+    ~init:()
+    ~f:(fun () ~ident ~is_unique ~range ->
+      (* There are two identifiers in play here:
+          1. [ident] is the "real" identifier that is used to
+            cross-reference between DIEs;
+          2. [ident_for_type], if it is [Some], is the corresponding
+            identifier with the stamp as it was in the typed tree.  This is
+            the one used for lookup in .cmt files.
+          We cannot conflate these since the multiple [idents] that might
+          be associated with a given [ident_for_type] (due to inlining) may
+          not all have the same value. *)
+      let ident_for_type =
+        if Ident.name ident = "*closure_env*" then
+          None
+        else
+        match Ident.find_same ident t.idents_to_original_idents with
+        | exception Not_found ->
+          (* In this case the variable won't be given a name in the DWARF,
+              so as not to appear in the debugger; but we still need to emit
+              a DIE for it, as it may be referenced as part of some chain of
+              phantom lets. *)
+          None
+        | ident -> Some ident
+      in
+      f ~ident ~ident_for_type ~is_unique ~range)
+
 let dwarf_for_variables_and_parameters t ~function_proto_die
       ~lexical_block_proto_die ~available_ranges
       ~(fundecl : Linearize.fundecl) =
-  (* This includes normal variables as well as those bound by phantom lets. *)
   let proto_dies_for_idents = Ident.Tbl.create 42 in
-  Available_ranges.fold available_ranges
-    ~init:()
-    ~f:(fun () ~ident ~is_unique:_ ~range:_ ->
+  iterate_over_variable_like_things t ~available_ranges
+    ~f:(fun ~ident ~ident_for_type:_ ~is_unique:_ ~range:_ ->
       let reference = Proto_die.create_reference () in
+      assert (not (Ident.Tbl.mem proto_dies_for_idents ident));
       Ident.Tbl.add proto_dies_for_idents ident reference);
-  Available_ranges.fold available_ranges
-    ~init:()
-    ~f:(fun () -> dwarf_for_identifier t ~fundecl
-      ~function_proto_die ~lexical_block_proto_die ~proto_dies_for_idents)
+  iterate_over_variable_like_things t ~available_ranges
+    ~f:(dwarf_for_identifier t ~fundecl ~function_proto_die
+      ~lexical_block_proto_die ~proto_dies_for_idents)
 
 let dwarf_for_function_definition t ~(fundecl:Linearize.fundecl)
       ~available_ranges ~(emit_info : Emit.fundecl_result) =
@@ -528,6 +546,8 @@ let dwarf_for_toplevel_inconstant t ~ident ~module_path ~symbol =
 
 let dwarf_for_toplevel_inconstants t inconstants =
   List.iter (fun (inconstant : Clambda.preallocated_block) ->
+      (* CR mshinwell: Should we be discarding toplevel things that don't have
+         provenance?  Maybe not -- think. *)
       match inconstant.provenance with
       | None -> ()
       | Some provenance ->

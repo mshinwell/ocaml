@@ -97,8 +97,9 @@ type t =
   | DW_op_GNU_implicit_pointer of { offset_in_bytes : int; label : Cmm.label; }
   | DW_op_implicit_pointer of { offset_in_bytes : int; label : Cmm.label; }
   | DW_op_piece of { size_in_bytes : int; }
-  (* CR-someday mshinwell: optimize DW_OP_call_ref to DW_op_call{2,4} *)
-  | DW_op_call_ref of { label : Cmm.label; }
+  (* CR-someday mshinwell: Should probably use DW_op_call_ref, but gdb doesn't
+     currently support it. *)
+  | DW_op_call4 of { label : Cmm.label; }
 
 let print ppf t =
   let fprintf = Format.fprintf in
@@ -223,8 +224,8 @@ let print ppf t =
       label
   | DW_op_piece { size_in_bytes; } ->
     fprintf ppf "DW_op_piece %d" size_in_bytes
-  | DW_op_call_ref { label; } ->
-    fprintf ppf "DW_op_call_ref %d" label
+  | DW_op_call4 { label; } ->
+    fprintf ppf "DW_op_call4 %d" label
 
 let contents_of_register ~reg_number =
   DW_op_bregx { reg_number; offset_in_bytes = 0L; }
@@ -269,7 +270,7 @@ let implicit_pointer ~offset_in_bytes ~die_label ~dwarf_version =
 
 let piece ~size_in_bytes = DW_op_piece { size_in_bytes; }
 
-let call ~die_label = DW_op_call_ref { label = die_label; }
+let call ~die_label = DW_op_call4 { label = die_label; }
 
 let optimize_sequence ts =
   let rec optimize ts =
@@ -307,7 +308,7 @@ let optimize_sequence ts =
     | ((DW_op_implicit_pointer _) as implicit_pointer)
         :: DW_op_stack_value :: ts ->
       implicit_pointer :: (optimize ts)
-    | ((DW_op_call_ref _) as call)
+    | ((DW_op_call4 _) as call)
         :: DW_op_stack_value :: ts ->
       call :: (optimize ts)
     | t::ts -> t :: (optimize ts)
@@ -470,7 +471,7 @@ let opcode = function
   | DW_op_fbreg _ -> 0x91
   | DW_op_bregx _ -> 0x92
   | DW_op_piece _ -> 0x93
-  | DW_op_call_ref _ -> 0x9a
+  | DW_op_call4 _ -> 0x99
   | DW_op_call_frame_cfa -> 0x9c
   | DW_op_implicit_value _ -> 0x9e
   | DW_op_stack_value -> 0x9f
@@ -572,8 +573,8 @@ let size t =
         (Dwarf_value.size (Sleb128 (Int64.of_int offset_in_bytes)))
     | DW_op_piece { size_in_bytes; } ->
       Dwarf_value.size (Uleb128 (Int64.of_int size_in_bytes))
-    | DW_op_call_ref { label; } ->
-      Dwarf_value.size (Offset_into_debug_info label)
+    | DW_op_call4 { label; } ->
+      Dwarf_value.size (Offset_into_debug_info_32bit label)
   in
   Int64.add opcode_size args_size
 
@@ -686,5 +687,5 @@ let emit t asm =
     Dwarf_value.emit (Sleb128 (Int64.of_int offset_in_bytes)) asm
   | DW_op_piece { size_in_bytes; } ->
     Dwarf_value.emit (Uleb128 (Int64.of_int size_in_bytes)) asm
-  | DW_op_call_ref { label; } ->
-    Dwarf_value.emit (Offset_into_debug_info label) asm
+  | DW_op_call4 { label; } ->
+    Dwarf_value.emit (Offset_into_debug_info_32bit label) asm

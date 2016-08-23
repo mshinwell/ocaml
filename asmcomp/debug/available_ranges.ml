@@ -32,7 +32,7 @@ module Available_subrange : sig
 
   type 'a location =
     | Reg of Reg.t * is_parameter * 'a
-    | Phantom of Clambda.ulet_provenance * is_parameter
+    | Phantom of Clambda.ulet_provenance option * is_parameter
         * Mach.phantom_defining_expr
 
   val create
@@ -45,7 +45,7 @@ module Available_subrange : sig
     -> t
 
   val create_phantom
-     : provenance:Clambda.ulet_provenance
+     : provenance:Clambda.ulet_provenance option
     -> defining_expr:Mach.phantom_defining_expr
     -> start_pos:Linearize.label
     -> end_pos:Linearize.label
@@ -62,7 +62,7 @@ module Available_subrange : sig
 end = struct
   type 'a location =
     | Reg of Reg.t * is_parameter * 'a
-    | Phantom of Clambda.ulet_provenance * is_parameter
+    | Phantom of Clambda.ulet_provenance option * is_parameter
         * Mach.phantom_defining_expr
 
   type start_insn_or_phantom = L.instruction location
@@ -556,23 +556,20 @@ module Make_phantom_ranges = Make (struct
     match Ident.Map.find key fundecl.L.fun_phantom_lets with
     | exception Not_found -> None
     | provenance, defining_expr ->
-      match provenance with
-      | None -> None
-      | Some provenance ->
-        (* Ranges for phantom identifiers are emitted as contiguous blocks
-            which are designed to approximately indicate their scope.
-            Some such phantom identifiers' values may ultimately be derived
-            from the values of normal identifiers (e.g. "Read_var_field") and
-            thus will be unavailable when those normal identifiers are
-            unavailable.  This effective intersecting of available ranges
-            is handled automatically in the debugger since we emit DWARF that
-            explains properly how the phantom identifiers relate to other
-            (normal or phantom) ones. *)
-        let subrange =
-          Available_subrange.create_phantom ~provenance ~defining_expr
-            ~start_pos ~end_pos
-        in
-        Some (subrange, key)
+      (* Ranges for phantom identifiers are emitted as contiguous blocks
+          which are designed to approximately indicate their scope.
+          Some such phantom identifiers' values may ultimately be derived
+          from the values of normal identifiers (e.g. "Read_var_field") and
+          thus will be unavailable when those normal identifiers are
+          unavailable.  This effective intersecting of available ranges
+          is handled automatically in the debugger since we emit DWARF that
+          explains properly how the phantom identifiers relate to other
+          (normal or phantom) ones. *)
+      let subrange =
+        Available_subrange.create_phantom ~provenance ~defining_expr
+          ~start_pos ~end_pos
+      in
+      Some (subrange, key)
 end)
 
 let create ~fundecl =

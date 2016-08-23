@@ -47,7 +47,7 @@ module Available_subrange : sig
 
   type 'a location =
     | Reg of Reg.t * is_parameter * 'a
-    | Phantom of Clambda.ulet_provenance * is_parameter
+    | Phantom of Clambda.ulet_provenance option * is_parameter
         * Mach.phantom_defining_expr
 
   val start_pos : t -> Linearize.label
