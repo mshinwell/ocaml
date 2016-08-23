@@ -129,9 +129,14 @@ let location_of_identifier _t ~ident ~proto_dies_for_idents =
      non-phantom variables) in the compiler. *)
   match Ident.Tbl.find proto_dies_for_idents ident with
   | exception Not_found ->
-    Misc.fatal_errorf "No proto-DIE found for identifier %a" Ident.print ident
+    (* This can unfortunately happen despite best efforts in [Selectgen].
+       One example: a "name for debugger" on a register assigned to %rax
+       immediately before an allocation on x86-64 (which clobbers %rax).
+       The register is explicitly removed from the availability sets by
+       [Available_regs], and the name never appears on any available range. *)
+    None
   | die_label ->
-    Simple_location_expression.location_from_another_die ~die_label
+    Some (Simple_location_expression.location_from_another_die ~die_label)
 
 let location_list_entry t ~parent ~fundecl ~available_subrange
       ~proto_dies_for_idents : Location_list_entry.t =
@@ -174,13 +179,20 @@ let location_list_entry t ~parent ~fundecl ~available_subrange
     | Phantom (_, _, Iphantom_read_symbol_field (symbol, field)) ->
       SLD.read_symbol_field ~symbol ~field
     | Phantom (_, _, Iphantom_var ident) ->
-      location_of_identifier t ~ident ~proto_dies_for_idents
+      begin match location_of_identifier t ~ident ~proto_dies_for_idents with
+      | None -> SLD.empty
+      | Some location -> location
+      end
     | Phantom (_, _, Iphantom_read_var_field (ident, field)) ->
-      let location = location_of_identifier t ~ident ~proto_dies_for_idents in
-      SLD.read_field location ~field
+      begin match location_of_identifier t ~ident ~proto_dies_for_idents with
+      | None -> SLD.empty
+      | Some location -> SLD.read_field location ~field
+      end
     | Phantom (_, _, Iphantom_offset_var (ident, offset_in_words)) ->
-      let location = location_of_identifier t ~ident ~proto_dies_for_idents in
-      SLD.offset_pointer location ~offset_in_words
+      begin match location_of_identifier t ~ident ~proto_dies_for_idents with
+      | None -> SLD.empty
+      | Some location -> SLD.offset_pointer location ~offset_in_words
+      end
     | Phantom (_, _, Iphantom_block { tag; fields; }) ->
       (* A phantom block construction: instead of the block existing in the
          target program's address space, it is going to be conjured up in the
@@ -204,7 +216,11 @@ let location_list_entry t ~parent ~fundecl ~available_subrange
                 (* This element of the block isn't accessible. *)
                 Simple_location_expression.empty
               | Some ident ->
-                location_of_identifier t ~ident ~proto_dies_for_idents
+                match
+                  location_of_identifier t ~ident ~proto_dies_for_idents
+                with
+                | None -> Simple_location_expression.empty
+                | Some location -> location
              in
              simple_location_description, field_size)
           fields

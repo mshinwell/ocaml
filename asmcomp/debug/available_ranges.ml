@@ -554,7 +554,11 @@ module Make_phantom_ranges = Make (struct
   let create_subrange ~fundecl ~key ~start_pos ~start_insn:_ ~end_pos
         ~end_pos_offset:_ =
     match Ident.Map.find key fundecl.L.fun_phantom_lets with
-    | exception Not_found -> None
+    | exception Not_found ->
+      Misc.fatal_errorf "Available_ranges.Make_phantom_ranges: phantom \
+          identifier occurs in [phantom_available_before] but not in \
+          [fun_phantom_lets]: %a"
+        Key.print key
     | provenance, defining_expr ->
       (* Ranges for phantom identifiers are emitted as contiguous blocks
           which are designed to approximately indicate their scope.
