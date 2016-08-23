@@ -307,7 +307,8 @@ let optimize_sequence ts =
     (* CR mshinwell: This is falling apart in the same way as for
        "deref_do_not_optimize".  Think some more.  The answer is probably to
        fix Simple_location_expression not to generate this crap *)
-    | ((DW_op_implicit_pointer _) as implicit_pointer)
+    | (((DW_op_implicit_pointer _)
+         | DW_op_GNU_implicit_pointer _) as implicit_pointer)
         :: DW_op_stack_value :: ts ->
       implicit_pointer :: (optimize ts)
     | ((DW_op_call4 _) as call)

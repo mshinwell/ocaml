@@ -22,6 +22,7 @@ module DAH = Dwarf_attribute_helpers
 type t = {
   compilation_unit_header_label : Linearize.label;
   compilation_unit_proto_die : Proto_die.t;
+  value_type_proto_die : Proto_die.t;
   debug_loc_table : Debug_loc_table.t;
   start_of_code_symbol : Symbol.t;
   end_of_code_symbol : Symbol.t;
@@ -81,9 +82,20 @@ let create ~(source_provenance : Timings.source_provenance)
       ~attribute_values
       ()
   in
+  let value_type_proto_die =
+    Proto_die.create ~parent:(Some compilation_unit_proto_die)
+      ~tag:Dwarf_tag.Base_type
+      ~attribute_values:[
+        DAH.create_name "<value>";
+        DAH.create_encoding ~encoding:Encoding_attribute.signed;
+        DAH.create_byte_size_exn ~byte_size:Arch.size_addr;
+      ]
+      ()
+  in
   let debug_loc_table = Debug_loc_table.create () in
   { compilation_unit_proto_die;
     compilation_unit_header_label = Cmm.new_label ();
+    value_type_proto_die;
     debug_loc_table;
     start_of_code_symbol;
     end_of_code_symbol;
@@ -104,7 +116,8 @@ let create ~(source_provenance : Timings.source_provenance)
    in the main gdb code to pass parameter indexes to the printing function.
    It is arguably more robust, too.
 *)
-let create_type_proto_die ~parent ~ident ~output_path ~is_parameter:_ =
+let create_type_proto_die t ~parent ~ident ~output_path ~is_parameter:_
+      ~array_type =
   let ident =
     match ident with
     | `Ident ident -> ident
@@ -113,14 +126,25 @@ let create_type_proto_die ~parent ~ident ~output_path ~is_parameter:_ =
   let name =
     Name_laundry.base_type_die_name_for_ident ~ident ~output_path
   in
-  Proto_die.create ~parent
-    ~tag:Dwarf_tag.Base_type
-    ~attribute_values:[
-      DAH.create_name name;
-      DAH.create_encoding ~encoding:Encoding_attribute.signed;
-      DAH.create_byte_size_exn ~byte_size:Arch.size_addr;
-    ]
-    ()
+  if array_type then
+    (* We mark many types as arrays so that GDB doesn't just print
+      "<synthetic pointer>" when we use implicit pointers. *)
+    Proto_die.create ~parent
+      ~tag:Dwarf_tag.Array_type
+      ~attribute_values:[
+        DAH.create_name name;
+        DAH.create_type ~proto_die:t.value_type_proto_die;
+      ]
+      ()
+  else
+    Proto_die.create ~parent
+      ~tag:Dwarf_tag.Base_type
+      ~attribute_values:[
+        DAH.create_name name;
+        DAH.create_encoding ~encoding:Encoding_attribute.signed;
+        DAH.create_byte_size_exn ~byte_size:Arch.size_addr;
+      ]
+      ()
 
 let location_of_identifier t ~ident ~proto_dies_for_idents =
   (* We may need to reference the locations of other values in order to
@@ -325,9 +349,9 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
     | None -> []
     | Some ident_for_type ->
       let type_proto_die =
-        create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
+        create_type_proto_die t ~parent:(Some t.compilation_unit_proto_die)
           ~ident:(`Ident ident_for_type) ~output_path:t.output_path
-          ~is_parameter
+          ~is_parameter ~array_type:true
       in
       (* If the unstamped name of [ident] is unambiguous within the function,
         then use it; otherwise, emit the stamped name. *)
@@ -452,10 +476,12 @@ let dwarf_for_function_definition t ~(fundecl:Linearize.fundecl)
     fundecl.fun_module_path <> None
   in
   let type_proto_die =
-    create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
+    create_type_proto_die t
+      ~parent:(Some t.compilation_unit_proto_die)
       ~ident:(`Unique_name fundecl.fun_name)
       ~output_path:t.output_path
       ~is_parameter:None
+      ~array_type:false
   in
   let function_proto_die =
     Proto_die.create ~parent:(Some t.compilation_unit_proto_die)
@@ -465,7 +491,7 @@ let dwarf_for_function_definition t ~(fundecl:Linearize.fundecl)
         DAH.create_external ~is_visible_externally;
         start_of_function;
         end_of_function;
-        DAH.create_type ~proto_die:type_proto_die;
+        DAH.create_type ~proto_die:type_proto_die
       ]
       ()
   in
@@ -492,10 +518,12 @@ let dwarf_for_toplevel_constant t ~idents ~module_path ~symbol =
         path ^ "." ^ name
       in
       let type_proto_die =
-        create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
+        create_type_proto_die t
+          ~parent:(Some t.compilation_unit_proto_die)
           ~ident:(`Ident ident)
           ~output_path:t.output_path
           ~is_parameter:None
+          ~array_type:true
       in
       Proto_die.create_ignore ~parent:(Some t.compilation_unit_proto_die)
         ~tag:Dwarf_tag.Constant
@@ -535,10 +563,12 @@ let dwarf_for_toplevel_inconstant t ~ident ~module_path ~symbol =
     path ^ "." ^ name
   in
   let type_proto_die =
-    create_type_proto_die ~parent:(Some t.compilation_unit_proto_die)
+    create_type_proto_die t
+      ~parent:(Some t.compilation_unit_proto_die)
       ~ident:(`Ident ident)
       ~output_path:t.output_path
       ~is_parameter:None
+      ~array_type:true
   in
   (* Toplevel inconstant "preallocated blocks" contain the thing of interest
      in field 0 (once it has been initialised).  We describe them using a
