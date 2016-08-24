@@ -265,6 +265,17 @@ let inline_by_copying_function_declaration ~env ~r
           Variable.Map.add internal_var from_closure map,
             (from_closure.var, expr)::for_lets)
     in
+    let free_vars, free_vars_for_lets, original_var =
+      let var = Variable.create "closure" in
+      let original_closure =
+        Flambda.Expr (Var lhs_of_application)
+      in
+      let internal_var =
+        Variable.create "original_closure"
+      in
+      Variable.Map.add internal_var { Flambda.var; projection = None } free_vars,
+      (var, original_closure) :: free_vars_for_lets, internal_var
+    in
     let required_functions =
       Flambda_utils.closures_required_by_entry_point ~backend:(E.backend env)
         ~entry_point:closure_id_being_applied
@@ -288,12 +299,15 @@ let inline_by_copying_function_declaration ~env ~r
         direct_call_surrogates
         Variable.Map.empty
     in
-    let function_decls =
-      Flambda.update_function_declarations ~funs function_decls
-    in
+
     let all_functions_parameters =
+      let function_decls =
+        Flambda.update_function_declarations ~funs function_decls
+      in
       Flambda_utils.all_functions_parameters function_decls
     in
+
+    let ignore_print _ppf _ = () in
     let specialisable_args =
       Variable.Map.merge (fun param v1 v2 ->
           match v1, v2 with
@@ -330,7 +344,8 @@ let inline_by_copying_function_declaration ~env ~r
                   (Variable.Map.print Variable.print)
                     specialisable_args_with_aliases
                   Flambda.print_function_declarations original_function_decls
-                  Flambda.print_function_declarations function_decls
+                  ignore_print function_decls
+                  (* Flambda.print_function_declarations function_decls *)
                   (Variable.Map.print Flambda.print_specialised_to)
                     specialised_args
               | argument_from_the_current_application ->
@@ -339,6 +354,71 @@ let inline_by_copying_function_declaration ~env ~r
               None)
         specialisable_args_with_aliases specialised_args
     in
+
+    (* A deplacer plus haut *)
+    let funs =
+      let closure_id_being_applied_var = Closure_id.unwrap closure_id_being_applied in
+      let the_one = Variable.Map.find closure_id_being_applied_var funs in
+      let subst = Variable.Map.singleton closure_id_being_applied_var original_var in
+      let body_substituted =
+        Flambda_utils.toplevel_substitution subst the_one.body
+      in
+      let specialised_params =
+        List.map (fun arg ->
+            if Variable.Map.mem arg specialisable_args
+            then Some arg
+            else None)
+          the_one.params
+      in
+      let body =
+        Flambda_iterators.map_toplevel_expr (fun (expr:Flambda.t) : Flambda.t ->
+            match expr with
+            | Apply apply -> begin
+                let specialisable_call closure_id =
+                  Closure_id.equal closure_id closure_id_being_applied &&
+                  List.length apply.args = List.length the_one.params &&
+                  List.for_all2 (fun arg param ->
+                      match arg with
+                      | None -> true
+                      | Some arg ->
+                          Variable.equal arg param)
+                    specialised_params
+                    apply.args
+                in
+                Format.printf "rewrite apply@ %a@."
+                  Flambda.print expr;
+                match apply.kind with
+                | Direct closure when specialisable_call closure ->
+                    let apply =
+                      Flambda.Apply
+                        { apply with func = closure_id_being_applied_var;
+                                     kind = Direct closure_id_being_applied } in
+                    Format.printf "to@ %a@."
+                      Flambda.print apply;
+                    apply
+                | Direct _ | Indirect ->
+                    expr
+              end
+            | _ ->
+                expr)
+          body_substituted
+      in
+      let the_one =
+        Flambda.create_function_declaration
+          ~params:the_one.params
+          ~stub:the_one.stub
+          ~dbg:the_one.dbg
+          ~inline:the_one.inline
+          ~specialise:the_one.specialise
+          ~is_a_functor:the_one.is_a_functor
+          ~body
+      in
+      Variable.Map.add closure_id_being_applied_var the_one funs
+    in
+    let function_decls =
+      Flambda.update_function_declarations ~funs function_decls
+    in
+
     let set_of_closures =
       (* This is the new set of closures, with more precise specialisation
          information than the one being copied. *)
