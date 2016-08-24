@@ -117,7 +117,7 @@ let create ~(source_provenance : Timings.source_provenance)
    It is arguably more robust, too.
 *)
 let create_type_proto_die t ~parent ~ident ~output_path ~is_parameter:_
-      ~array_type =
+      ~array_type:_ =
   let ident =
     match ident with
     | `Ident ident -> ident
@@ -126,17 +126,28 @@ let create_type_proto_die t ~parent ~ident ~output_path ~is_parameter:_
   let name =
     Name_laundry.base_type_die_name_for_ident ~ident ~output_path
   in
-  if array_type then
+  (* CR mshinwell: tidy up once decision made *)
+  let array_type = false in
+  if array_type then begin
     (* We mark many types as arrays so that GDB doesn't just print
       "<synthetic pointer>" when we use implicit pointers. *)
-    Proto_die.create ~parent
-      ~tag:Dwarf_tag.Array_type
+    let array_type =
+      Proto_die.create ~parent
+        ~tag:Dwarf_tag.Array_type
+        ~attribute_values:[
+          DAH.create_name name;
+          DAH.create_type ~proto_die:t.value_type_proto_die;
+        ]
+        ()
+    in
+    (* If [array_type] doesn't have a child DIE, GDB won't set the name of
+       the array type... *)
+    Proto_die.create_ignore ~parent:(Some array_type)
+      ~tag:Dwarf_tag.Subrange_type
       ~attribute_values:[
-        DAH.create_name name;
-        DAH.create_type ~proto_die:t.value_type_proto_die;
-      ]
-      ()
-  else
+      ];
+    array_type
+  end else begin
     Proto_die.create ~parent
       ~tag:Dwarf_tag.Base_type
       ~attribute_values:[
@@ -145,6 +156,7 @@ let create_type_proto_die t ~parent ~ident ~output_path ~is_parameter:_
         DAH.create_byte_size_exn ~byte_size:Arch.size_addr;
       ]
       ()
+  end
 
 let location_of_identifier t ~ident ~proto_dies_for_idents =
   (* We may need to reference the locations of other values in order to
@@ -206,6 +218,10 @@ let location_list_entry t ~parent ~fundecl ~available_subrange
     | Phantom (_, _, Iphantom_read_symbol_field (symbol, field)) ->
       SLD.read_symbol_field ~symbol ~field
     | Phantom (_, _, Iphantom_var ident) ->
+      (* CR mshinwell: What happens if [ident] isn't available at some point
+         just due to the location list?  Should we push zero on the stack
+         first?  Or can we detect the stack is empty?  Or does gdb just abort
+         evaluation of the whole thing if the location list doesn't match? *)
       begin match location_of_identifier t ~ident ~proto_dies_for_idents with
       | None -> SLD.empty
       | Some location -> location
@@ -265,8 +281,8 @@ let location_list_entry t ~parent ~fundecl ~available_subrange
           ]
           ()
       in
-      (* [offset_in_bytes] is set so that the implicit pointer points just
-         after the value's header, just like in the heap (how cool is that)? *)
+      (* Implicit pointers point after the header, just like for values in the
+         OCaml heap (how cool is that)? *)
       SLD.implicit_pointer ~offset_in_bytes:Arch.size_addr
         ~die_label:(Proto_die.reference proto_die)
         ~dwarf_version

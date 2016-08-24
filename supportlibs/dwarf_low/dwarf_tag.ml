@@ -165,8 +165,8 @@ let child_determination t : Child_determination.t =
   match t with
   | Compile_unit
   | Lexical_block
-  | Subprogram -> Yes
-  | Array_type
+  | Subprogram
+  | Array_type -> Yes
   | Class_type
   | Entry_point
   | Enumeration_type
