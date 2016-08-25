@@ -187,6 +187,17 @@ let inline_by_copying_function_declaration ~env ~r
     ~(invariant_params:Variable.Set.t Variable.Map.t lazy_t)
     ~(specialised_args : Flambda.specialised_to Variable.Map.t)
     ~direct_call_surrogates ~dbg ~simplify =
+
+  let function_decls =
+    let make_closure_symbol =
+      let module Backend = (val (E.backend env) : Backend_intf.S) in
+      Backend.closure_symbol
+    in
+    Freshening.rewrite_recursive_calls_with_symbols
+      (Freshening.activate Freshening.empty)
+      ~make_closure_symbol
+      function_decls
+  in
   let original_function_decls = function_decls in
   let specialised_args_set = Variable.Map.keys specialised_args in
   let worth_specialising_args, specialisable_args, args, args_decl =
@@ -265,6 +276,9 @@ let inline_by_copying_function_declaration ~env ~r
           Variable.Map.add internal_var from_closure map,
             (from_closure.var, expr)::for_lets)
     in
+
+    (*
+    (* À retirer *)
     let free_vars, free_vars_for_lets, original_var =
       let var = Variable.create "closure" in
       let original_closure =
@@ -276,6 +290,8 @@ let inline_by_copying_function_declaration ~env ~r
       Variable.Map.add internal_var { Flambda.var; projection = None } free_vars,
       (var, original_closure) :: free_vars_for_lets, internal_var
     in
+*)
+
     let required_functions =
       Flambda_utils.closures_required_by_entry_point ~backend:(E.backend env)
         ~entry_point:closure_id_being_applied
@@ -286,6 +302,26 @@ let inline_by_copying_function_declaration ~env ~r
           Variable.Set.mem func required_functions)
         function_decls.funs
     in
+
+    let free_vars, free_vars_for_lets, original_vars =
+      Variable.Map.fold (fun fun_var _fun_decl (free_vars, free_vars_for_lets, original_vars) ->
+          let var = Variable.create "closure" in
+          let original_closure : Flambda.named =
+            Move_within_set_of_closures
+              { closure = lhs_of_application;
+                start_from = closure_id_being_applied;
+                move_to = Closure_id.wrap fun_var }
+          in
+          let internal_var =
+            Variable.rename ~append:"_original" fun_var
+          in
+          Variable.Map.add internal_var { Flambda.var; projection = None } free_vars,
+          (var, original_closure) :: free_vars_for_lets,
+          Variable.Map.add fun_var internal_var original_vars)
+        funs
+        (free_vars, free_vars_for_lets, Variable.Map.empty)
+    in
+
     let direct_call_surrogates =
       Closure_id.Map.fold (fun existing surrogate surrogates ->
           let existing = Closure_id.unwrap existing in
@@ -355,8 +391,118 @@ let inline_by_copying_function_declaration ~env ~r
         specialisable_args_with_aliases specialised_args
     in
 
-    (* A deplacer plus haut *)
+    let functions_specialised_params =
+      let specialised_arg_aliasing =
+        Variable.Map.transpose_keys_and_data_set
+          (Variable.Map.map (fun ({ var }:Flambda.specialised_to) -> var)
+             specialisable_args)
+      in
+      Format.printf "rev map %a@ %a@."
+        (Variable.Map.print Variable.Set.print)
+        specialised_arg_aliasing
+        (Variable.Map.print Flambda.print_specialised_to)
+        specialisable_args;
+      Variable.Map.map (fun ({ params }:Flambda.function_declaration) ->
+        List.map (fun arg ->
+              match Variable.Map.find arg specialisable_args with
+              | exception Not_found ->
+                None
+              | { var } ->
+                Some (Variable.Map.find var specialised_arg_aliasing))
+              (* if Variable.Map.mem arg specialisable_args *)
+              (* then Some arg *)
+              (* else None) *)
+          params)
+        funs
+    in
+
+    let substitution =
+      original_vars
+    in
+
+    Format.printf "substitution@ %a@."
+      (Variable.Map.print Variable.print) substitution;
+
+    let rewrite_function (fun_decl:Flambda.function_declaration) =
+      let body_substituted =
+        Flambda_utils.toplevel_substitution substitution fun_decl.body
+      in
+      let body =
+        Flambda_iterators.map_toplevel_expr (fun (expr:Flambda.t) : Flambda.t ->
+            match expr with
+            | Apply apply -> begin
+                match apply.kind with
+                | Indirect ->
+                    expr
+                | Direct closure_id -> begin
+                    Format.printf "rewrite apply@ %a@."
+                      Flambda.print expr;
+                    let closure_var = Closure_id.unwrap closure_id in
+                    match Variable.Map.find closure_var functions_specialised_params with
+                    | exception Not_found ->
+                        Format.printf "no fun@.";
+                        expr
+                    | specialised_params ->
+                        let eq_len =
+                          List.length apply.args = List.length specialised_params
+                        in
+                        if
+                          List.length apply.args = List.length specialised_params &&
+                          List.for_all2 (fun arg param ->
+                              match arg with
+                              | None -> true
+                              | Some args ->
+                                  if Variable.Set.mem param args then
+                                    Format.printf "eq param %a %a@."
+                                      Variable.print param
+                                      Variable.Set.print args
+                                  else
+                                    Format.printf "diff param %a %a@."
+                                      Variable.print param
+                                      Variable.Set.print args;
+                                  Variable.Set.mem param args)
+                            specialised_params
+                            apply.args
+                        then
+                          let apply =
+                            Flambda.Apply
+                              { apply with func = closure_var;
+                                           kind = Direct closure_id }
+                          in
+                          Format.printf "to@ %a@."
+                            Flambda.print apply;
+                          apply
+                        else
+                          let () =
+                            Format.printf "no const eq_len %b@."
+                              eq_len
+                          in
+                          expr
+                  end
+              end
+            | _ -> expr)
+          body_substituted
+      in
+      Flambda.create_function_declaration
+        ~params:fun_decl.params
+        ~stub:fun_decl.stub
+        ~dbg:fun_decl.dbg
+        ~inline:fun_decl.inline
+        ~specialise:fun_decl.specialise
+        ~is_a_functor:fun_decl.is_a_functor
+        ~body
+    in
+
     let funs =
+      Variable.Map.map rewrite_function funs
+    in
+
+(*
+    let funs =
+      (* Rewrite the closure being applied such that the all the
+         recursive calls are replaced by calls to the original
+         closure. Then we look for every direct call to see if it is a
+         specialisable recursion *)
       let closure_id_being_applied_var = Closure_id.unwrap closure_id_being_applied in
       let the_one = Variable.Map.find closure_id_being_applied_var funs in
       let subst = Variable.Map.singleton closure_id_being_applied_var original_var in
@@ -415,6 +561,7 @@ let inline_by_copying_function_declaration ~env ~r
       in
       Variable.Map.add closure_id_being_applied_var the_one funs
     in
+*)
     let function_decls =
       Flambda.update_function_declarations ~funs function_decls
     in
@@ -457,4 +604,10 @@ let inline_by_copying_function_declaration ~env ~r
       Flambda_utils.bind ~body:duplicated_application ~bindings:args_decl
     in
     let env = E.activate_freshening (E.set_never_inline env) in
-    Some (simplify env r expr)
+
+    let (expr', _) as res = simplify env r expr in
+    Format.printf "specialise@ %a@ to@ %a@."
+      Flambda.print expr
+      Flambda.print expr';
+    (* Some (simplify env r expr) *)
+    Some res
