@@ -189,6 +189,8 @@ let inline_by_copying_function_declaration ~env ~r
     ~direct_call_surrogates ~dbg ~simplify =
 
   let function_decls =
+    (* Rewrite the recursive uses of the closure symbol to simplify
+       the following substitutions *)
     let make_closure_symbol =
       let module Backend = (val (E.backend env) : Backend_intf.S) in
       Backend.closure_symbol
@@ -277,21 +279,6 @@ let inline_by_copying_function_declaration ~env ~r
             (from_closure.var, expr)::for_lets)
     in
 
-    (*
-    (* À retirer *)
-    let free_vars, free_vars_for_lets, original_var =
-      let var = Variable.create "closure" in
-      let original_closure =
-        Flambda.Expr (Var lhs_of_application)
-      in
-      let internal_var =
-        Variable.create "original_closure"
-      in
-      Variable.Map.add internal_var { Flambda.var; projection = None } free_vars,
-      (var, original_closure) :: free_vars_for_lets, internal_var
-    in
-*)
-
     let required_functions =
       Flambda_utils.closures_required_by_entry_point ~backend:(E.backend env)
         ~entry_point:closure_id_being_applied
@@ -304,6 +291,8 @@ let inline_by_copying_function_declaration ~env ~r
     in
 
     let free_vars, free_vars_for_lets, original_vars =
+      (* Bind all the closures from the original set as free variables
+         in the set. *)
       Variable.Map.fold (fun fun_var _fun_decl (free_vars, free_vars_for_lets, original_vars) ->
           let var = Variable.create "closure" in
           let original_closure : Flambda.named =
@@ -343,7 +332,6 @@ let inline_by_copying_function_declaration ~env ~r
       Flambda_utils.all_functions_parameters function_decls
     in
 
-    let ignore_print _ppf _ = () in
     let specialisable_args =
       Variable.Map.merge (fun param v1 v2 ->
           match v1, v2 with
@@ -380,8 +368,8 @@ let inline_by_copying_function_declaration ~env ~r
                   (Variable.Map.print Variable.print)
                     specialisable_args_with_aliases
                   Flambda.print_function_declarations original_function_decls
-                  ignore_print function_decls
-                  (* Flambda.print_function_declarations function_decls *)
+                  Flambda.print_function_declarations
+                  (Flambda.update_function_declarations ~funs function_decls)
                   (Variable.Map.print Flambda.print_specialised_to)
                     specialised_args
               | argument_from_the_current_application ->
@@ -392,95 +380,110 @@ let inline_by_copying_function_declaration ~env ~r
     in
 
     let functions_specialised_params =
+      (* For each functions, this is the list of the specialised
+         arguments, and the set of arguments (including other functions)
+         aliased to it. *)
       let specialised_arg_aliasing =
         Variable.Map.transpose_keys_and_data_set
           (Variable.Map.map (fun ({ var }:Flambda.specialised_to) -> var)
              specialisable_args)
       in
-      Format.printf "rev map %a@ %a@."
-        (Variable.Map.print Variable.Set.print)
-        specialised_arg_aliasing
-        (Variable.Map.print Flambda.print_specialised_to)
-        specialisable_args;
       Variable.Map.map (fun ({ params }:Flambda.function_declaration) ->
         List.map (fun arg ->
               match Variable.Map.find arg specialisable_args with
               | exception Not_found ->
-                None
+                `Not_specialised
               | { var } ->
-                Some (Variable.Map.find var specialised_arg_aliasing))
-              (* if Variable.Map.mem arg specialisable_args *)
-              (* then Some arg *)
-              (* else None) *)
+                `Specialised_and_aliased_to
+                  (Variable.Map.find var specialised_arg_aliasing))
           params)
         funs
     in
 
-    let substitution =
-      original_vars
-    in
-
-    Format.printf "substitution@ %a@."
-      (Variable.Map.print Variable.print) substitution;
-
     let rewrite_function (fun_decl:Flambda.function_declaration) =
+      (* First rewrite every use of the currently defined closures
+         to the original closure (bound as free variable).
+
+         Then for each call if this is preserving the specialised
+         arguments then replace it by a recursive call.
+
+         In a function like List.map:
+
+         {[
+           let rec specialised_map f l =
+             match l with
+             | [] -> []
+             | h :: t ->
+                 f h :: specialised_map f t
+         ]} ( with [f] a specialised argument )
+
+         The first step turns it into:
+
+         {[
+           let map_original = map in
+           let rec specialised_map f l =
+             match l with
+             | [] -> []
+             | h :: t ->
+                 f h :: map_original f t
+         ]}
+
+         then the second recognize the call to map_original as a call
+         preserving the specialised arguments (here [f]). So it is
+         replaced by [specialised_map f t].
+
+         In the case of map this is not obviously interesting to
+         handle it that way, but this allows to handle situations
+         where there are recursive calls that are not preserving the
+         arguments. In that case the first pass turn it into a correct
+         code, and the second one optimize the benefitial recursive
+         calls.
+      *)
       let body_substituted =
-        Flambda_utils.toplevel_substitution substitution fun_decl.body
+        Flambda_utils.toplevel_substitution original_vars fun_decl.body
       in
       let body =
         Flambda_iterators.map_toplevel_expr (fun (expr:Flambda.t) : Flambda.t ->
-            match expr with
-            | Apply apply -> begin
-                match apply.kind with
-                | Indirect ->
+          match expr with
+          | Apply apply -> begin
+              match apply.kind with
+              | Indirect ->
+                expr
+              | Direct closure_id -> begin
+                  (* We recognize the potential recursive calls using the
+                     closure id rather than [apply.func] because those can be
+                     aliases to the function (through a symbol for instance)
+                     and not directly the closure variable. *)
+                  let closure_var = Closure_id.unwrap closure_id in
+                  match Variable.Map.find closure_var functions_specialised_params with
+                  | exception Not_found ->
                     expr
-                | Direct closure_id -> begin
-                    Format.printf "rewrite apply@ %a@."
-                      Flambda.print expr;
-                    let closure_var = Closure_id.unwrap closure_id in
-                    match Variable.Map.find closure_var functions_specialised_params with
-                    | exception Not_found ->
-                        Format.printf "no fun@.";
-                        expr
-                    | specialised_params ->
-                        let eq_len =
-                          List.length apply.args = List.length specialised_params
-                        in
-                        if
-                          List.length apply.args = List.length specialised_params &&
-                          List.for_all2 (fun arg param ->
-                              match arg with
-                              | None -> true
-                              | Some args ->
-                                  if Variable.Set.mem param args then
-                                    Format.printf "eq param %a %a@."
-                                      Variable.print param
-                                      Variable.Set.print args
-                                  else
-                                    Format.printf "diff param %a %a@."
-                                      Variable.print param
-                                      Variable.Set.print args;
-                                  Variable.Set.mem param args)
-                            specialised_params
-                            apply.args
-                        then
-                          let apply =
-                            Flambda.Apply
-                              { apply with func = closure_var;
-                                           kind = Direct closure_id }
-                          in
-                          Format.printf "to@ %a@."
-                            Flambda.print apply;
-                          apply
-                        else
-                          let () =
-                            Format.printf "no const eq_len %b@."
-                              eq_len
-                          in
-                          expr
-                  end
-              end
-            | _ -> expr)
+                  | specialised_params ->
+                    (* This is a call to one of the functions from the
+                       set being specialised *)
+                    let apply_is_preserving_specialised_args =
+                      List.length apply.args = List.length specialised_params &&
+                      List.for_all2 (fun arg param ->
+                        match arg with
+                        | `Not_specialised -> true
+                        | `Specialised_and_aliased_to args ->
+                          (* This is using one of the aliases of param. This
+                             is not necessarilly the exact same variable as
+                             the original parameter when the set contains some
+                             multiply recursive functions. *)
+                          Variable.Set.mem param args)
+                        specialised_params
+                        apply.args
+                    in
+                    if apply_is_preserving_specialised_args then
+                      Flambda.Apply
+                        { apply with func = closure_var;
+                                     kind = Direct closure_id }
+                    else
+                      expr
+                end
+            end
+          | _ -> expr)
           body_substituted
       in
       Flambda.create_function_declaration
@@ -497,71 +500,6 @@ let inline_by_copying_function_declaration ~env ~r
       Variable.Map.map rewrite_function funs
     in
 
-(*
-    let funs =
-      (* Rewrite the closure being applied such that the all the
-         recursive calls are replaced by calls to the original
-         closure. Then we look for every direct call to see if it is a
-         specialisable recursion *)
-      let closure_id_being_applied_var = Closure_id.unwrap closure_id_being_applied in
-      let the_one = Variable.Map.find closure_id_being_applied_var funs in
-      let subst = Variable.Map.singleton closure_id_being_applied_var original_var in
-      let body_substituted =
-        Flambda_utils.toplevel_substitution subst the_one.body
-      in
-      let specialised_params =
-        List.map (fun arg ->
-            if Variable.Map.mem arg specialisable_args
-            then Some arg
-            else None)
-          the_one.params
-      in
-      let body =
-        Flambda_iterators.map_toplevel_expr (fun (expr:Flambda.t) : Flambda.t ->
-            match expr with
-            | Apply apply -> begin
-                let specialisable_call closure_id =
-                  Closure_id.equal closure_id closure_id_being_applied &&
-                  List.length apply.args = List.length the_one.params &&
-                  List.for_all2 (fun arg param ->
-                      match arg with
-                      | None -> true
-                      | Some arg ->
-                          Variable.equal arg param)
-                    specialised_params
-                    apply.args
-                in
-                Format.printf "rewrite apply@ %a@."
-                  Flambda.print expr;
-                match apply.kind with
-                | Direct closure when specialisable_call closure ->
-                    let apply =
-                      Flambda.Apply
-                        { apply with func = closure_id_being_applied_var;
-                                     kind = Direct closure_id_being_applied } in
-                    Format.printf "to@ %a@."
-                      Flambda.print apply;
-                    apply
-                | Direct _ | Indirect ->
-                    expr
-              end
-            | _ ->
-                expr)
-          body_substituted
-      in
-      let the_one =
-        Flambda.create_function_declaration
-          ~params:the_one.params
-          ~stub:the_one.stub
-          ~dbg:the_one.dbg
-          ~inline:the_one.inline
-          ~specialise:the_one.specialise
-          ~is_a_functor:the_one.is_a_functor
-          ~body
-      in
-      Variable.Map.add closure_id_being_applied_var the_one funs
-    in
-*)
     let function_decls =
       Flambda.update_function_declarations ~funs function_decls
     in
@@ -604,10 +542,4 @@ let inline_by_copying_function_declaration ~env ~r
       Flambda_utils.bind ~body:duplicated_application ~bindings:args_decl
     in
     let env = E.activate_freshening (E.set_never_inline env) in
-
-    let (expr', _) as res = simplify env r expr in
-    Format.printf "specialise@ %a@ to@ %a@."
-      Flambda.print expr
-      Flambda.print expr';
-    (* Some (simplify env r expr) *)
-    Some res
+    Some (simplify env r expr)
