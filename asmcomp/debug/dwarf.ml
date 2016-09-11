@@ -370,7 +370,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
           ~is_parameter ~array_type:true
       in
       (* If the unstamped name of [ident] is unambiguous within the function,
-        then use it; otherwise, emit the stamped name. *)
+         then use it; otherwise, emit the stamped name. *)
       (* CR mshinwell: this needs much more careful thought *)
       let name_for_ident = Ident.name ident_for_type in
       (*
@@ -418,14 +418,14 @@ let iterate_over_variable_like_things t ~available_ranges ~f =
     ~init:()
     ~f:(fun () ~ident ~is_unique ~range ->
       (* There are two identifiers in play here:
-          1. [ident] is the "real" identifier that is used to
-            cross-reference between DIEs;
-          2. [ident_for_type], if it is [Some], is the corresponding
-            identifier with the stamp as it was in the typed tree.  This is
-            the one used for lookup in .cmt files.
-          We cannot conflate these since the multiple [idents] that might
-          be associated with a given [ident_for_type] (due to inlining) may
-          not all have the same value. *)
+         1. [ident] is the "real" identifier that is used to
+           cross-reference between DIEs;
+         2. [ident_for_type], if it is [Some], is the corresponding
+           identifier with the stamp as it was in the typed tree.  This is
+           the one used for lookup in .cmt files.
+         We cannot conflate these since the multiple [idents] that might
+         be associated with a given [ident_for_type] (due to inlining) may
+         not all have the same value. *)
       let ident_for_type =
         if Ident.name ident = "*closure_env*" then
           None
@@ -433,9 +433,9 @@ let iterate_over_variable_like_things t ~available_ranges ~f =
         match Ident.find_same ident t.idents_to_original_idents with
         | exception Not_found ->
           (* In this case the variable won't be given a name in the DWARF,
-              so as not to appear in the debugger; but we still need to emit
-              a DIE for it, as it may be referenced as part of some chain of
-              phantom lets. *)
+             so as not to appear in the debugger; but we still need to emit
+             a DIE for it, as it may be referenced as part of some chain of
+             phantom lets. *)
           None
         | ident -> Some ident
       in
