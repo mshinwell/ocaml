@@ -174,14 +174,14 @@ let location_of_identifier t ~ident ~proto_dies_for_idents =
        [Available_regs], and the name never appears on any available range. *)
     None
   | die_label ->
-    Some (Simple_location_expression.location_from_another_die ~die_label
+    Some (Simple_location_description.location_from_another_die ~die_label
       ~compilation_unit_header_label:t.compilation_unit_header_label)
 
 let location_list_entry t ~parent ~fundecl ~available_subrange
       ~proto_dies_for_idents : Location_list_entry.t =
   let simple_location_description
         ~(location : unit Available_subrange.location) =
-    let module SLD = Simple_location_expression in
+    let module SLD = Simple_location_description in
     match location with
     | Reg (reg, _, ()) ->
       begin match reg.Reg.loc with
@@ -245,7 +245,7 @@ let location_list_entry t ~parent ~fundecl ~available_subrange
          (requires GNU DWARF extensions prior to DWARF-5). *)
       (* CR mshinwell: use a cache to dedup the CLDs *)
       let header =
-        Simple_location_expression.const_int (
+        Simple_location_description.const_int (
           Int64.of_nativeint (
             Cmmgen.black_block_header tag (List.length fields)))
       in
@@ -257,12 +257,12 @@ let location_list_entry t ~parent ~fundecl ~available_subrange
               match ident with
               | None ->
                 (* This element of the block isn't accessible. *)
-                Simple_location_expression.empty
+                Simple_location_description.empty
               | Some ident ->
                 match
                   location_of_identifier t ~ident ~proto_dies_for_idents
                 with
-                | None -> Simple_location_expression.empty
+                | None -> Simple_location_description.empty
                 | Some location -> location
              in
              simple_location_description, field_size)
@@ -605,7 +605,7 @@ let dwarf_for_toplevel_inconstant t ~ident ~module_path ~symbol =
       (* CR-soon mshinwell: Actually this isn't the case.  We could use
          SYMBOL_CLASS to distinguish them.  However maybe we'd better not
          in case this doesn't work well with non-gdb. *)
-      Simple_location_expression.read_symbol_field_yielding_rvalue
+      Simple_location_description.read_symbol_field_yielding_rvalue
         ~symbol ~field:0)
   in
   Proto_die.create_ignore ~parent:(Some t.compilation_unit_proto_die)

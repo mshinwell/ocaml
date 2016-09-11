@@ -116,7 +116,7 @@ DWARF_LOW=\
   supportlibs/dwarf_low/child_determination.cmo \
   supportlibs/dwarf_low/dwarf_tag.cmo \
   supportlibs/dwarf_low/dwarf_operator.cmo \
-  supportlibs/dwarf_low/simple_location_expression.cmo \
+  supportlibs/dwarf_low/simple_location_description.cmo \
   supportlibs/dwarf_low/composite_location_description.cmo \
   supportlibs/dwarf_low/single_location_description.cmo \
   supportlibs/dwarf_low/dwarf_attributes.cmo \
