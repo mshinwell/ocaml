@@ -12,9 +12,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* CR-soon mshinwell: Shouldn't this module be called
-   [Simple_location_description]?  (DWARF-4 spec 2.6.1) *)
-
 type t
 
 include Dwarf_emittable.S with type t := t
