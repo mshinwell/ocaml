@@ -660,8 +660,6 @@ let emit t asm =
   | DW_op_breg31 { offset_in_bytes; } ->
     Dwarf_value.emit (Sleb128 offset_in_bytes) asm
   | DW_op_implicit_value (Int i) ->
-    (* The buffer must contain the integer as an OCaml value. *)
-    let i = Int64.logor (Int64.shift_left i 1) 1L in
     let buf =
       match Arch.size_int with
       | 4 ->

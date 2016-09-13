@@ -88,9 +88,18 @@ let create_type_from_reference ~proto_die_reference:label =
   let spec = AS.create A.Type F.Ref_addr in
   AV.create spec (V.offset_into_debug_info label)
 
+(* CR-soon mshinwell: remove "_exn" prefix. *)
 let create_byte_size_exn ~byte_size =
-  let spec = AS.create A.Byte_size F.Data1 in
-  AV.create spec (V.int8 (Numbers.Int8.of_int_exn byte_size))
+  let spec = AS.create A.Byte_size F.Data8 in
+  AV.create spec (V.int64 (Int64.of_int byte_size))
+
+let create_bit_size bit_size =
+  let spec = AS.create A.Bit_size F.Data8 in
+  AV.create spec (V.int64 bit_size)
+
+let create_data_member_location ~byte_offset =
+  let spec = AS.create A.Data_member_location F.Data8 in
+  AV.create spec (V.int64 byte_offset)
 
 let create_linkage_name ~linkage_name =
   let spec = AS.create A.Linkage_name F.Strp in

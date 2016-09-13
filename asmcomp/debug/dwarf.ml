@@ -220,6 +220,8 @@ let construct_type_of_value_description t ~parent ~ident ~output_path
           ~tag:Dwarf_tag.Structure_type
           ~attribute_values:[
             DAH.create_name "<block>";
+            DAH.create_byte_size_exn
+              ~byte_size:((1 + List.length fields) * Arch.size_addr);
           ]
           ()
       in
@@ -240,11 +242,18 @@ let construct_type_of_value_description t ~parent ~ident ~output_path
               DAH.create_type_from_reference
                 ~proto_die_reference:type_die_reference;
           in
-          Proto_die.create_ignore ~parent:(Some struct_type_die)
-            ~tag:Dwarf_tag.Member
-            ~attribute_values:(type_attribute :: [
-              DAH.create_name name
-            ]))
+          let field_proto_die =
+            Proto_die.create ~parent:(Some struct_type_die)
+              ~tag:Dwarf_tag.Member
+              ~attribute_values:(type_attribute :: [
+                DAH.create_name name;
+                DAH.create_bit_size (Int64.of_int (Arch.size_addr * 8));
+                DAH.create_data_member_location
+                  ~byte_offset:(Int64.of_int (index * Arch.size_addr));
+              ])
+              ()
+          in
+          Proto_die.set_sort_priority field_proto_die index)
         (None :: fields);  (* "None" is for the GC header. *)
       let _pointer_to_struct_type_die : Proto_die.t =
         Proto_die.create ~reference ~parent
@@ -354,7 +363,7 @@ let construct_value_description t ~parent ~fundecl
            (requires GNU DWARF extensions prior to DWARF-5). *)
         (* CR mshinwell: use a cache to dedup the CLDs *)
         let header =
-          Simple_location_description.const_int (
+          Simple_location_description.const_int_not_ocaml_encoded (
             Int64.of_nativeint (
               Cmmgen.black_block_header tag (List.length fields)))
         in

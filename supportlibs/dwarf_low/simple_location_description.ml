@@ -20,6 +20,7 @@ module type S = sig
   val empty : t
   val const_symbol : Symbol.t -> t
   val const_int : Int64.t -> t
+  val const_int_not_ocaml_encoded : Int64.t -> t
   val in_register : reg_number:int -> t
   val in_stack_slot : offset_in_words:int -> t
   val read_symbol_field : symbol:Symbol.t -> field:int -> t
@@ -53,7 +54,10 @@ type t =
 
 let empty = Empty
 let const_symbol symbol = Const_symbol symbol
-let const_int i = Const_int i
+let const_int i =
+  let i = Int64.logor (Int64.shift_left i 1) 1L in
+  Const_int i
+let const_int_not_ocaml_encoded i = Const_int i
 let in_register ~reg_number = In_register reg_number
 let in_stack_slot ~offset_in_words = In_stack_slot { offset_in_words; }
 let read_symbol_field ~symbol ~field =
