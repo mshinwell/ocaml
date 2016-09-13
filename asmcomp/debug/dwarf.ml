@@ -208,7 +208,7 @@ let construct_type_of_value_description _t ~parent ~ident ~output_path
       in
       let field_type_dies =
         List.iteri (fun index field ->
-            let name = string_of_int index in
+            let name = string_of_int (index - 1) in
             let type_attribute =
               match field with
               | None -> DAH.create_type t.value_type_proto_die
@@ -229,7 +229,7 @@ let construct_type_of_value_description _t ~parent ~ident ~output_path
               ~attribute_values:(type_attribute :: [
                 DAH.create_name name;
               ]))
-          fields
+          (None :: fields)  (* "None" is for the GC header. *)
       in
       let pointer_to_struct_type_die =
         Proto_die.create ~parent
@@ -311,9 +311,9 @@ let construct_value_description t ~parent ~fundecl
         SLD.read_symbol_field ~symbol ~field
       | Iphantom_var ident ->
         (* CR mshinwell: What happens if [ident] isn't available at some point
-          just due to the location list?  Should we push zero on the stack
-          first?  Or can we detect the stack is empty?  Or does gdb just abort
-          evaluation of the whole thing if the location list doesn't match? *)
+           just due to the location list?  Should we push zero on the stack
+           first?  Or can we detect the stack is empty?  Or does gdb just abort
+           evaluation of the whole thing if the location list doesn't match? *)
         begin match location_of_identifier t ~ident ~proto_dies_for_idents with
         | None -> SLD.empty
         | Some location -> location
@@ -330,11 +330,11 @@ let construct_value_description t ~parent ~fundecl
         end
       | Iphantom_block { tag; fields; } ->
         (* A phantom block construction: instead of the block existing in the
-          target program's address space, it is going to be conjured up in the
-          *debugger's* address space using instructions described in DWARF.
-          References between such blocks do not use normal pointers in the
-          target's address space---instead they use "implicit pointers"
-          (requires GNU DWARF extensions prior to DWARF-5). *)
+           target program's address space, it is going to be conjured up in the
+           *debugger's* address space using instructions described in DWARF.
+           References between such blocks do not use normal pointers in the
+           target's address space---instead they use "implicit pointers"
+           (requires GNU DWARF extensions prior to DWARF-5). *)
         (* CR mshinwell: use a cache to dedup the CLDs *)
         let header =
           Simple_location_description.const_int (

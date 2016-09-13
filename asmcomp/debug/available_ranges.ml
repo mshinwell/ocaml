@@ -106,7 +106,7 @@ end = struct
   let location t : unit location =
     let convert_location (start_insn : start_insn_or_phantom) : unit location =
       match start_insn with
-      | Reg (reg, _insn) -> Reg (reg, is_parameter)
+      | Reg (reg, _insn) -> Reg (reg, ())
       | Phantom -> Phantom
     in
     convert_location t.start_insn
@@ -172,7 +172,10 @@ end = struct
     is_parameter : is_parameter;
   }
 
-  let create () = { subranges = []; min_pos = None; max_pos = None; }
+  let create ~type_info ~is_parameter =
+    { subranges = []; min_pos = None; max_pos = None;
+      type_info; is_parameter;
+    }
 
   let type_info t = t.type_info
   let is_parameter t = t.is_parameter
@@ -204,13 +207,6 @@ end = struct
     end;
     t.subranges <- subrange::t.subranges
 
-  let is_parameter t =
-    (* Look at the first subrange, since a later subrange for the same
-       variable might not be marked as a parameter. *)
-    match List.rev t.subranges with
-    | [] -> assert false
-    | subrange::_ -> Available_subrange.is_parameter subrange
-
   let extremities t =
     (* We ignore any [end_pos_offsets] here; should be ok. *)
     match t.min_pos, t.max_pos with
@@ -235,7 +231,10 @@ end = struct
     in
     let min_pos = Misc.Stdlib.Option.map (rewrite_label env) t.min_pos in
     let max_pos = Misc.Stdlib.Option.map (rewrite_label env) t.max_pos in
-    { subranges; min_pos; max_pos; }
+    { subranges; min_pos; max_pos;
+      type_info = t.type_info;
+      is_parameter = t.is_parameter;
+    }
 end
 
 type t = {
@@ -271,11 +270,11 @@ module Make (S : sig
 
   val available_before : L.instruction -> Key.Set.t
 
-  val create_range
+  val range_info
      : fundecl:L.fundecl
     -> key:Key.t
     -> start_insn:L.instruction
-    -> (type_info * is_parameter) option
+    -> (Ident.t * type_info * is_parameter) option
 
   val create_subrange
      : fundecl:L.fundecl
@@ -284,7 +283,7 @@ module Make (S : sig
     -> start_insn:L.instruction
     -> end_pos:L.label
     -> end_pos_offset:int option
-    -> (Available_subrange.t * Ident.t) option
+    -> Available_subrange.t
 
   val end_pos_offset
      : prev_insn:L.instruction option
@@ -377,27 +376,22 @@ end) = struct
         let end_pos = label in
         used_label := true;
         let end_pos_offset = S.end_pos_offset ~prev_insn:!prev_insn ~key in
-        let range =
-          match Ident.Tbl.find t.ranges ident with
-          | range -> Some range
-          | exception Not_found ->
-            match S.create_range ~fundecl ~key ~start_insn with
-            | None -> None
-            | Some (type_info, is_parameter) ->
+        match S.range_info ~fundecl ~key ~start_insn with
+        | None -> ()
+        | Some (ident, type_info, is_parameter) ->
+          let range =
+            match Ident.Tbl.find t.ranges ident with
+            | range -> range
+            | exception Not_found ->
               let range = Available_range.create ~type_info ~is_parameter in
               Ident.Tbl.add t.ranges ident range;
-              Some range
-        in
-        match range with
-        | None -> ()
-        | Some range ->
-          match
+              range
+          in
+          let subrange =
             S.create_subrange ~fundecl ~key ~start_pos ~start_insn ~end_pos
               ~end_pos_offset
-          with
-          | None -> ()
-          | Some (subrange, ident) ->
-            Available_range.add_subrange range ~subrange)
+          in
+          Available_range.add_subrange range ~subrange)
       deaths
       ();
     let label_insn =
@@ -525,25 +519,23 @@ module Make_ranges = Make (struct
           None
       | _ -> None
 
-  let create_range ~fundecl:_ ~key:reg ~start_insn =
+  let range_info ~fundecl:_ ~key:reg ~start_insn:_ =
     match RD.debug_info reg with
     | None -> None
     | Some debug_info ->
-      let is_parameter = RD.Debug_info.which_parameter debug_info in
-      Some (From_cmt_file, is_parameter)
+      let is_parameter =
+        match RD.Debug_info.which_parameter debug_info with
+        | None -> Local
+        | Some index -> Parameter { index; }
+      in
+      let ident = RD.Debug_info.holds_value_of debug_info in
+      Some (ident, From_cmt_file, is_parameter)
 
   let create_subrange ~fundecl:_ ~key:reg ~start_pos ~start_insn ~end_pos
         ~end_pos_offset =
-    match RD.debug_info reg with
-    | None -> None
-    | Some debug_info ->
-      let subrange =
-        Available_subrange.create ~reg:(RD.reg reg)
-          ~start_pos ~start_insn
-          ~end_pos ~end_pos_offset
-      in
-      let ident = RD.Debug_info.holds_value_of debug_info in
-      Some (subrange, ident)
+    Available_subrange.create ~reg:(RD.reg reg)
+      ~start_pos ~start_insn
+      ~end_pos ~end_pos_offset
 end)
 
 module Make_phantom_ranges = Make (struct
@@ -558,7 +550,7 @@ module Make_phantom_ranges = Make (struct
 
   let end_pos_offset ~prev_insn:_ ~key:_ = None
 
-  let create_range ~fundecl ~key ~start_insn:_ =
+  let range_info ~fundecl ~key ~start_insn:_ =
     match Ident.Map.find key fundecl.L.fun_phantom_lets with
     | exception Not_found ->
       Misc.fatal_errorf "Available_ranges.Make_phantom_ranges.create_range: \
@@ -571,7 +563,7 @@ module Make_phantom_ranges = Make (struct
          (Otherwise the function into which an inlining occurs ends up having
          more parameters than it should in the debugger.)
       *)
-      Some (Phantom (provenance, defining_expr), Local)
+      Some (key, Phantom (provenance, defining_expr), Local)
 
   let create_subrange ~fundecl:_ ~key:_ ~start_pos ~start_insn:_ ~end_pos
         ~end_pos_offset:_ =
