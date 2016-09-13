@@ -66,9 +66,9 @@ let instr ppf i =
               fprintf ppf " until L%d" end_pos;
               let module AS = Available_ranges.Available_subrange in
               begin match location with
-              | AS.Reg (r, _, _) ->
+              | AS.Reg (r, _) ->
                 fprintf ppf " in %a" reg r
-              | AS.Phantom (_, _, _defining_expr) ->
+              | AS.Phantom ->
                 (* CR mshinwell: Print the phantom definition *)
                 fprintf ppf " with known value <...>"
               end
