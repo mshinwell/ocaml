@@ -148,7 +148,7 @@ let type_die_reference_for_ident ~ident ~proto_dies_for_idents =
 *)
 let construct_type_of_value_description t ~parent ~ident ~output_path
       ~(type_info : Available_ranges.type_info)
-      ~proto_dies_for_idents =
+      ~proto_dies_for_idents ~reference =
   (* CR-soon mshinwell: share code with [normal_type_for_ident], above *)
   let ident =
     match ident with
@@ -159,8 +159,10 @@ let construct_type_of_value_description t ~parent ~ident ~output_path
     Name_laundry.base_type_die_name_for_ident ~ident ~output_path
   in
   let normal_case () =
-    let proto_die =
-      Proto_die.create ~parent
+    (* CR-soon mshinwell: add [reference] to [Proto_die.create_ignore] *)
+    let _proto_die : Proto_die.t =
+      Proto_die.create ~reference
+        ~parent
         ~tag:Dwarf_tag.Base_type
         ~attribute_values:[
           DAH.create_name name;
@@ -169,7 +171,7 @@ let construct_type_of_value_description t ~parent ~ident ~output_path
         ]
         ()
     in
-    Proto_die.reference proto_die
+    ()
   in
   match type_info with
   | From_cmt_file -> normal_case ()
@@ -179,7 +181,20 @@ let construct_type_of_value_description t ~parent ~ident ~output_path
     | Iphantom_const_symbol _
     | Iphantom_read_symbol_field _ -> normal_case ()
     | Iphantom_var ident ->
-      type_die_reference_for_ident ~ident ~proto_dies_for_idents
+      let target_type =
+        type_die_reference_for_ident ~ident ~proto_dies_for_idents
+      in
+      let _proto_die : Proto_die.t =
+        Proto_die.create ~reference
+          ~parent
+          ~tag:Dwarf_tag.Typedef
+          ~attribute_values:[
+            DAH.create_name name;
+            DAH.create_type_from_reference ~proto_die_reference:target_type;
+          ]
+          ()
+      in
+      ()
     | Iphantom_read_var_field (_ident, _field) ->
       (* We cannot dereference an implicit pointer when evaluating a DWARF
          location expression, which means we must restrict ourselves to 
@@ -215,10 +230,10 @@ let construct_type_of_value_description t ~parent ~ident ~output_path
             | None -> DAH.create_type ~proto_die:t.value_type_proto_die
             | Some ident ->
               (* It's ok if [ident] is a phantom identifier, since we will
-                  be building a composite location expression to describe the
-                  structure, and implicit pointers are permitted there.  (That
-                  is to say, the problem for [Iphantom_read_var_field] above
-                  does not exist here). *)
+                 be building a composite location expression to describe the
+                 structure, and implicit pointers are permitted there.  (That
+                 is to say, the problem for [Iphantom_read_var_field] above
+                 does not exist here). *)
               let type_die_reference =
                 type_die_reference_for_ident ~ident ~proto_dies_for_idents
               in
@@ -231,8 +246,8 @@ let construct_type_of_value_description t ~parent ~ident ~output_path
               DAH.create_name name
             ]))
         (None :: fields);  (* "None" is for the GC header. *)
-      let pointer_to_struct_type_die =
-        Proto_die.create ~parent
+      let _pointer_to_struct_type_die : Proto_die.t =
+        Proto_die.create ~reference ~parent
           ~tag:Dwarf_tag.Pointer_type
           ~attribute_values:[
             DAH.create_name name;
@@ -240,7 +255,7 @@ let construct_type_of_value_description t ~parent ~ident ~output_path
           ]
           ()
       in
-      Proto_die.reference pointer_to_struct_type_die
+      ()
 
 let location_of_identifier t ~ident ~proto_dies_for_idents =
   (* We may need to reference the locations of other values in order to
@@ -455,26 +470,40 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
     Debug_loc_table.insert t.debug_loc_table ~location_list
   in
   let type_and_name_attributes =
-    match ident_for_type with
-    | None -> []
-    | Some ident_for_type ->
-      let type_proto_die =
-        construct_type_of_value_description t
-          ~parent:(Some t.compilation_unit_proto_die)
-          ~ident:(`Ident ident_for_type) ~output_path:t.output_path
-          ~type_info ~proto_dies_for_idents
-      in
-      (* If the unstamped name of [ident] is unambiguous within the function,
-         then use it; otherwise, emit the stamped name. *)
-      (* CR mshinwell: this needs much more careful thought *)
-      let name_for_ident = Ident.name ident_for_type in
-      (*
-          if is_unique then Ident.name ident else Ident.unique_name ident
-        in
-      *)
-      [DAH.create_name name_for_ident;
-       DAH.create_type_from_reference ~proto_die_reference:type_proto_die;
-      ]
+    let reference =
+      match Ident.Tbl.find proto_dies_for_idents ident with
+      | exception Not_found ->
+        Misc.fatal_errorf "Proto-DIE reference for %a not assigned"
+          Ident.print ident
+      | { type_die; _ } -> type_die
+    in
+    let ident, name_for_ident =
+      match ident_for_type with
+      | None ->
+        let name = "Foo.bar" in  (* CR-soon mshinwell: fix Name_laundry *)
+        `Ident (Ident.create_persistent name), None
+      | Some ident_for_type ->
+        (* If the unstamped name of [ident] is unambiguous within the function,
+           then use it; otherwise, emit the stamped name. *)
+        `Ident ident_for_type, Some (Ident.name ident_for_type)
+    in
+    construct_type_of_value_description t
+      ~parent:(Some t.compilation_unit_proto_die)
+      ~ident ~output_path:t.output_path
+      ~type_info ~proto_dies_for_idents
+      ~reference;
+    (* CR mshinwell: this needs much more careful thought *)
+    (*
+      if is_unique then Ident.name ident else Ident.unique_name ident
+    *)
+    let name_for_ident =
+      match name_for_ident with
+      | None -> []
+      | Some name -> [DAH.create_name name]
+    in
+    name_for_ident @ [
+      DAH.create_type_from_reference ~proto_die_reference:reference;
+    ]
   in
   let tag =
     match is_parameter with
@@ -514,10 +543,10 @@ let iterate_over_variable_like_things t ~available_ranges ~f =
     ~f:(fun () ~ident ~is_unique ~range ->
       (* There are two identifiers in play here:
          1. [ident] is the "real" identifier that is used to
-           cross-reference between DIEs;
+            cross-reference between DIEs;
          2. [ident_for_type], if it is [Some], is the corresponding
-           identifier with the stamp as it was in the typed tree.  This is
-           the one used for lookup in .cmt files.
+            identifier with the stamp as it was in the typed tree.  This is
+            the one used for lookup in .cmt files.
          We cannot conflate these since the multiple [idents] that might
          be associated with a given [ident_for_type] (due to inlining) may
          not all have the same value. *)
