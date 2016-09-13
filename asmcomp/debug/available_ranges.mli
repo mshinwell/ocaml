@@ -38,17 +38,12 @@
    and function.
 *)
 
-type is_parameter =
-  | Local
-  | Parameter of { index : int; }
-
 module Available_subrange : sig
   type t
 
   type 'a location =
-    | Reg of Reg.t * is_parameter * 'a
-    | Phantom of Clambda.ulet_provenance option * is_parameter
-        * Mach.phantom_defining_expr
+    | Reg of Reg.t * 'a
+    | Phantom
 
   val start_pos : t -> Linearize.label
   val end_pos : t -> Linearize.label
@@ -61,9 +56,18 @@ module Available_subrange : sig
   val offset_from_stack_ptr_in_bytes : t -> int option
 end
 
+type type_info =
+  | From_cmt_file
+  | Phantom of Clambda.ulet_provenance option * Mach.phantom_defining_expr
+
+type is_parameter =
+  | Local
+  | Parameter of { index : int; }
+
 module Available_range : sig
   type t
 
+  val type_info : t -> type_info
   val is_parameter : t -> is_parameter
   val extremities : t -> Linearize.label * Linearize.label
 

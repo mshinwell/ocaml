@@ -84,6 +84,10 @@ let create_type ~proto_die = reference_proto_die A.Type proto_die
 let create_sibling ~proto_die = reference_proto_die A.Sibling proto_die
 let create_import ~proto_die = reference_proto_die A.Import proto_die
 
+let create_type_from_reference ~proto_die_reference:label =
+  let spec = AS.create A.Type F.Ref_addr in
+  AV.create spec (V.offset_into_debug_info label)
+
 let create_byte_size_exn ~byte_size =
   let spec = AS.create A.Byte_size F.Data1 in
   AV.create spec (V.int8 (Numbers.Int8.of_int_exn byte_size))

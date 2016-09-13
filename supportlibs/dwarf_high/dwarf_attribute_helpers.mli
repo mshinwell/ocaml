@@ -59,6 +59,10 @@ val create_type
    : proto_die:Proto_die.t
   -> Dwarf_attribute_values.Attribute_value.t
 
+val create_type_from_reference
+   : proto_die_reference:Proto_die.reference
+  -> Dwarf_attribute_values.Attribute_value.t
+
 val create_import
    : proto_die:Proto_die.t
   -> Dwarf_attribute_values.Attribute_value.t

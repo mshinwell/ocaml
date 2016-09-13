@@ -31,13 +31,11 @@ module Available_subrange : sig
   type t
 
   type 'a location =
-    | Reg of Reg.t * is_parameter * 'a
-    | Phantom of Clambda.ulet_provenance option * is_parameter
-        * Mach.phantom_defining_expr
+    | Reg of Reg.t * 'a
+    | Phantom
 
   val create
      : reg:Reg.t
-    -> is_parameter:int option
     -> start_insn:L.instruction
     -> start_pos:L.label
     -> end_pos:L.label
@@ -45,9 +43,7 @@ module Available_subrange : sig
     -> t
 
   val create_phantom
-     : provenance:Clambda.ulet_provenance option
-    -> defining_expr:Mach.phantom_defining_expr
-    -> start_pos:Linearize.label
+     : start_pos:Linearize.label
     -> end_pos:Linearize.label
     -> t
 
@@ -55,15 +51,13 @@ module Available_subrange : sig
   val end_pos : t -> L.label
   val end_pos_offset : t -> int option
   val location : t -> unit location
-  val is_parameter : t -> is_parameter
   val offset_from_stack_ptr_in_bytes : t -> int option
 
   val rewrite_labels : t -> env:int Numbers.Int.Map.t -> t
 end = struct
   type 'a location =
-    | Reg of Reg.t * is_parameter * 'a
-    | Phantom of Clambda.ulet_provenance option * is_parameter
-        * Mach.phantom_defining_expr
+    | Reg of Reg.t * 'a
+    | Phantom
 
   type start_insn_or_phantom = L.instruction location
 
@@ -77,7 +71,7 @@ end = struct
     end_pos_offset : int option;
   }
 
-  let create ~(reg : Reg.t) ~is_parameter ~(start_insn : Linearize.instruction)
+  let create ~(reg : Reg.t) ~(start_insn : Linearize.instruction)
         ~start_pos ~end_pos ~end_pos_offset =
     match start_insn.desc with
     | L.Lcapture_stack_offset _ | L.Llabel _ ->
@@ -91,24 +85,15 @@ end = struct
         assert (reg.loc = start_insn.arg.(0).Reg.loc)
       | _ -> ()
       end;
-      let is_parameter =
-        match is_parameter with
-        | None -> Local
-        | Some index -> Parameter { index; }
-      in
-      { start_insn = Reg (reg, is_parameter, start_insn);
+      { start_insn = Reg (reg, start_insn);
         start_pos;
         end_pos;
         end_pos_offset;
       }
     | _ -> failwith "Available_subrange.create"
 
-  let create_phantom ~provenance ~defining_expr ~start_pos ~end_pos =
-    (* CR-someday mshinwell: Presumably the "Local" only changes to indicate a
-       parameter when we can represent the inlined frames properly in DWARF.
-       (Otherwise the function into which an inlining occurs ends up having
-       more parameters than it should in the debugger.) *)
-    { start_insn = Phantom (provenance, Local, defining_expr);
+  let create_phantom ~start_pos ~end_pos =
+    { start_insn = Phantom;
       start_pos;
       end_pos;
       end_pos_offset = None;
@@ -121,21 +106,15 @@ end = struct
   let location t : unit location =
     let convert_location (start_insn : start_insn_or_phantom) : unit location =
       match start_insn with
-      | Reg (reg, is_parameter, _insn) -> Reg (reg, is_parameter, ())
-      | Phantom (provenance, is_parameter, defining_expr) ->
-        Phantom (provenance, is_parameter, defining_expr)
+      | Reg (reg, _insn) -> Reg (reg, is_parameter)
+      | Phantom -> Phantom
     in
     convert_location t.start_insn
-
-  let is_parameter t =
-    match t.start_insn with
-    | Reg (_reg, is_parameter, _start_insn) -> is_parameter
-    | Phantom (_provenance, is_parameter, _defining_expr) -> is_parameter
 
   let offset_from_stack_ptr_in_bytes t =
     let offset (start_insn : start_insn_or_phantom) =
       match start_insn with
-      | Reg (_reg, _, insn) ->
+      | Reg (_reg, insn) ->
         begin match insn.L.desc with
         | L.Lcapture_stack_offset offset -> !offset
         | L.Llabel _ ->
@@ -144,7 +123,7 @@ end = struct
           None
         | _ -> assert false
         end
-      | Phantom _ -> None
+      | Phantom -> None
     in
     offset t.start_insn
 
@@ -155,11 +134,19 @@ end = struct
     }
 end
 
+type type_info =
+  | From_cmt_file
+  | Phantom of Clambda.ulet_provenance option * Mach.phantom_defining_expr
+
 module Available_range : sig
   type t
 
-  val create : unit -> t
+  val create
+     : type_info:type_info
+    -> is_parameter:is_parameter
+    -> t
 
+  val type_info : t -> type_info
   val is_parameter : t -> is_parameter
   val add_subrange : t -> subrange:Available_subrange.t -> unit
   val extremities : t -> L.label * L.label
@@ -181,9 +168,14 @@ end = struct
     mutable subranges : Available_subrange.t list;
     mutable min_pos : L.label option;
     mutable max_pos : L.label option;
+    type_info : type_info;
+    is_parameter : is_parameter;
   }
 
-  let create () = { subranges = []; min_pos = None; max_pos = None; } 
+  let create () = { subranges = []; min_pos = None; max_pos = None; }
+
+  let type_info t = t.type_info
+  let is_parameter t = t.is_parameter
 
   let add_subrange t ~subrange =
     let start_pos = Available_subrange.start_pos subrange in
@@ -266,17 +258,6 @@ let fold t ~init ~f =
     t.ranges
     init
 
-let add_subrange t ~ident ~subrange =
-  let range =
-    try Ident.Tbl.find t.ranges ident
-    with Not_found -> begin
-      let range = Available_range.create () in
-      Ident.Tbl.add t.ranges ident range;
-      range
-    end
-  in
-  Available_range.add_subrange range ~subrange
-
 module Make (S : sig
   module Key : sig
     type t
@@ -289,6 +270,12 @@ module Make (S : sig
   end
 
   val available_before : L.instruction -> Key.Set.t
+
+  val create_range
+     : fundecl:L.fundecl
+    -> key:Key.t
+    -> start_insn:L.instruction
+    -> (type_info * is_parameter) option
 
   val create_subrange
      : fundecl:L.fundecl
@@ -390,12 +377,27 @@ end) = struct
         let end_pos = label in
         used_label := true;
         let end_pos_offset = S.end_pos_offset ~prev_insn:!prev_insn ~key in
-        match
-          S.create_subrange ~fundecl ~key ~start_pos ~start_insn ~end_pos
-            ~end_pos_offset
-        with
+        let range =
+          match Ident.Tbl.find t.ranges ident with
+          | range -> Some range
+          | exception Not_found ->
+            match S.create_range ~fundecl ~key ~start_insn with
+            | None -> None
+            | Some (type_info, is_parameter) ->
+              let range = Available_range.create ~type_info ~is_parameter in
+              Ident.Tbl.add t.ranges ident range;
+              Some range
+        in
+        match range with
         | None -> ()
-        | Some (subrange, ident) -> add_subrange t ~ident ~subrange)
+        | Some range ->
+          match
+            S.create_subrange ~fundecl ~key ~start_pos ~start_insn ~end_pos
+              ~end_pos_offset
+          with
+          | None -> ()
+          | Some (subrange, ident) ->
+            Available_range.add_subrange range ~subrange)
       deaths
       ();
     let label_insn =
@@ -523,6 +525,13 @@ module Make_ranges = Make (struct
           None
       | _ -> None
 
+  let create_range ~fundecl:_ ~key:reg ~start_insn =
+    match RD.debug_info reg with
+    | None -> None
+    | Some debug_info ->
+      let is_parameter = RD.Debug_info.which_parameter debug_info in
+      Some (From_cmt_file, is_parameter)
+
   let create_subrange ~fundecl:_ ~key:reg ~start_pos ~start_insn ~end_pos
         ~end_pos_offset =
     match RD.debug_info reg with
@@ -530,7 +539,6 @@ module Make_ranges = Make (struct
     | Some debug_info ->
       let subrange =
         Available_subrange.create ~reg:(RD.reg reg)
-          ~is_parameter:(RD.Debug_info.which_parameter debug_info)
           ~start_pos ~start_insn
           ~end_pos ~end_pos_offset
       in
@@ -546,34 +554,37 @@ module Make_phantom_ranges = Make (struct
     let needs_stack_offset_capture _ = None
   end
 
-  let available_before (insn : L.instruction) =
-    insn.phantom_available_before
+  let available_before (insn : L.instruction) = insn.phantom_available_before
 
   let end_pos_offset ~prev_insn:_ ~key:_ = None
 
-  let create_subrange ~fundecl ~key ~start_pos ~start_insn:_ ~end_pos
-        ~end_pos_offset:_ =
+  let create_range ~fundecl ~key ~start_insn:_ =
     match Ident.Map.find key fundecl.L.fun_phantom_lets with
     | exception Not_found ->
-      Misc.fatal_errorf "Available_ranges.Make_phantom_ranges: phantom \
-          identifier occurs in [phantom_available_before] but not in \
+      Misc.fatal_errorf "Available_ranges.Make_phantom_ranges.create_range: \
+          phantom identifier occurs in [phantom_available_before] but not in \
           [fun_phantom_lets]: %a"
         Key.print key
     | provenance, defining_expr ->
-      (* Ranges for phantom identifiers are emitted as contiguous blocks
-          which are designed to approximately indicate their scope.
-          Some such phantom identifiers' values may ultimately be derived
-          from the values of normal identifiers (e.g. "Read_var_field") and
-          thus will be unavailable when those normal identifiers are
-          unavailable.  This effective intersecting of available ranges
-          is handled automatically in the debugger since we emit DWARF that
-          explains properly how the phantom identifiers relate to other
-          (normal or phantom) ones. *)
-      let subrange =
-        Available_subrange.create_phantom ~provenance ~defining_expr
-          ~start_pos ~end_pos
-      in
-      Some (subrange, key)
+      (* CR-someday mshinwell: Presumably the "Local" only changes to indicate
+         a parameter when we can represent the inlined frames properly in DWARF.
+         (Otherwise the function into which an inlining occurs ends up having
+         more parameters than it should in the debugger.)
+      *)
+      Some (Phantom (provenance, defining_expr), Local)
+
+  let create_subrange ~fundecl:_ ~key:_ ~start_pos ~start_insn:_ ~end_pos
+        ~end_pos_offset:_ =
+    (* Ranges for phantom identifiers are emitted as contiguous blocks
+        which are designed to approximately indicate their scope.
+        Some such phantom identifiers' values may ultimately be derived
+        from the values of normal identifiers (e.g. "Read_var_field") and
+        thus will be unavailable when those normal identifiers are
+        unavailable.  This effective intersecting of available ranges
+        is handled automatically in the debugger since we emit DWARF that
+        explains properly how the phantom identifiers relate to other
+        (normal or phantom) ones. *)
+    Available_subrange.create_phantom ~start_pos ~end_pos
 end)
 
 let create ~fundecl =

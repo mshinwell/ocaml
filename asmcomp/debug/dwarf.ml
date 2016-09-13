@@ -31,6 +31,11 @@ type t = {
   mutable emitted : bool;
 }
 
+type proto_dies_for_ident = {
+  value_die : Proto_die.reference;
+  type_die : Proto_die.reference;
+}
+
 (* CR mshinwell: We need to figure out how to set this.
    Note that on OS X 10.11 (El Capitan), dwarfdump doesn't seem to be able
    to read our 64-bit DWARF output. *)
@@ -104,6 +109,31 @@ let create ~(source_provenance : Timings.source_provenance)
     emitted = false;
   }
 
+let normal_type_for_ident _t ~parent ~ident ~output_path =
+  let ident =
+    match ident with
+    | `Ident ident -> ident
+    | `Unique_name name -> Ident.create_persistent name
+  in
+  let name =
+    Name_laundry.base_type_die_name_for_ident ~ident ~output_path
+  in
+  Proto_die.create ~parent
+    ~tag:Dwarf_tag.Base_type
+    ~attribute_values:[
+      DAH.create_name name;
+      DAH.create_encoding ~encoding:Encoding_attribute.signed;
+      DAH.create_byte_size_exn ~byte_size:Arch.size_addr;
+    ]
+    ()
+
+let type_die_reference_for_ident ~ident ~proto_dies_for_idents =
+  match Ident.Tbl.find proto_dies_for_ident ident with
+  | exception Not_found ->
+    Misc.fatal_errorf "Proto-DIE reference for %a not assigned"
+      Ident.print ident
+  | reference -> reference.type_die
+
 (* Build a new DWARF type for [ident].  Each identifier has its
    own type, which is basically its stamped name, and is nothing to do with
    its inferred OCaml type.  The inferred type may be recovered by the
@@ -116,8 +146,9 @@ let create ~(source_provenance : Timings.source_provenance)
    in the main gdb code to pass parameter indexes to the printing function.
    It is arguably more robust, too.
 *)
-let create_type_proto_die t ~parent ~ident ~output_path ~is_parameter:_
-      ~array_type:_ =
+let construct_type_of_value_description _t ~parent ~ident ~output_path
+      ~(type_info : Available_ranges.type_info) =
+  (* CR-soon mshinwell: share code with [normal_type_for_ident], above *)
   let ident =
     match ident with
     | `Ident ident -> ident
@@ -126,37 +157,89 @@ let create_type_proto_die t ~parent ~ident ~output_path ~is_parameter:_
   let name =
     Name_laundry.base_type_die_name_for_ident ~ident ~output_path
   in
-  (* CR mshinwell: tidy up once decision made *)
-  let array_type = false in
-  if array_type then begin
-    (* We mark many types as arrays so that GDB doesn't just print
-      "<synthetic pointer>" when we use implicit pointers. *)
-    let array_type =
+  let normal_case () =
+    let proto_die =
       Proto_die.create ~parent
-        ~tag:Dwarf_tag.Array_type
+        ~tag:Dwarf_tag.Base_type
         ~attribute_values:[
           DAH.create_name name;
-          DAH.create_type ~proto_die:t.value_type_proto_die;
+          DAH.create_encoding ~encoding:Encoding_attribute.signed;
+          DAH.create_byte_size_exn ~byte_size:Arch.size_addr;
         ]
         ()
     in
-    (* If [array_type] doesn't have a child DIE, GDB won't set the name of
-       the array type... *)
-    Proto_die.create_ignore ~parent:(Some array_type)
-      ~tag:Dwarf_tag.Subrange_type
-      ~attribute_values:[
-      ];
-    array_type
-  end else begin
-    Proto_die.create ~parent
-      ~tag:Dwarf_tag.Base_type
-      ~attribute_values:[
-        DAH.create_name name;
-        DAH.create_encoding ~encoding:Encoding_attribute.signed;
-        DAH.create_byte_size_exn ~byte_size:Arch.size_addr;
-      ]
-      ()
-  end
+    Proto_die.reference proto_die
+  in
+  match type_info with
+  | From_cmt_file -> normal_case ()
+  | Phantom (_provenance, defining_expr) ->
+    match defining_expr with
+    | Iphantom_const_int _
+    | Iphantom_const_symbol _
+    | Iphantom_read_symbol_field _ -> normal_case ()
+    | Iphantom_var ident ->
+      type_die_reference_for_ident ~ident ~proto_dies_for_idents
+    | Iphantom_read_var_field (ident, field) ->
+      (* We cannot dereference an implicit pointer when evaluating a DWARF
+         location expression, which means we must restrict ourselves to 
+         projections from non-phantom identifiers.  This is ensured at the
+         moment by the commented-out code in [Flambda_utils] and the fact that
+         [Flambda_to_clambda] only generates [Uphantom_read_var_field] on
+         the (non-phantom) environment parameter. *)
+      normal_case ()
+    | Iphantom_offset_var (ident, offset_in_words) ->
+      (* The same applies here as for [Iphantom_read_var_field] above, but we
+         never generate this for phantom identifiers at present (it is only
+         used for offsetting a closure environment variable). *)
+      normal_case ()
+    | Iphantom_block { tag; fields; } ->
+      (* The block will be described as a composite location expression
+         pointed at by an implicit pointer.  The corresponding type is
+         a pointer type whose target type is a structure type; the members of
+         the structure correspond to the fields of the block (plus the
+         header).  We don't use DWARF array types as we need to describe a
+         different type for each field. *)
+      let struct_type_die =
+        Proto_die.create ~parent
+          ~tag:Dwarf_tag.Structure_type
+          ~attribute_values:[
+            DAH.create_name "<block>";
+          ];
+      in
+      let field_type_dies =
+        List.iteri (fun index field ->
+            let name = string_of_int index in
+            let type_attribute =
+              match field with
+              | None -> DAH.create_type t.value_type_proto_die
+              | Some ident ->
+                (* It's ok if [ident] is a phantom identifier, since we will
+                   be building a composite location expression to describe the
+                   structure, and implicit pointers are permitted there.  (That
+                   is to say, the problem for [Iphantom_read_var_field] above
+                   does not exist here). *)
+                let type_die_reference =
+                  type_die_reference_for_ident ~ident ~proto_dies_for_idents
+                in
+                DAH.create_type_from_reference
+                  ~proto_die_reference:type_die_reference;
+            in
+            Proto_die.create ~parent:(Some struct_die)
+              ~tag:Dwarf_tag.member
+              ~attribute_values:(type_attribute :: [
+                DAH.create_name name;
+              ]))
+          fields
+      in
+      let pointer_to_struct_type_die =
+        Proto_die.create ~parent
+          ~tag:Dwarf_tag.Pointer_type
+          ~attribute_values:[
+            DAH.create_name name;
+            DAH.create_type ~proto_die:struct_type_die;
+          ];
+      in
+      Proto_die.reference pointer_to_struct_type_die
 
 let location_of_identifier t ~ident ~proto_dies_for_idents =
   (* We may need to reference the locations of other values in order to
@@ -177,13 +260,14 @@ let location_of_identifier t ~ident ~proto_dies_for_idents =
     Some (Simple_location_description.location_from_another_die ~die_label
       ~compilation_unit_header_label:t.compilation_unit_header_label)
 
-let location_list_entry t ~parent ~fundecl ~available_subrange
+let construct_value_description t ~parent ~fundecl
+      ~(type_info : Available_ranges.type_info) ~available_subrange
       ~proto_dies_for_idents : Location_list_entry.t =
   let simple_location_description
         ~(location : unit Available_subrange.location) =
     let module SLD = Simple_location_description in
     match location with
-    | Reg (reg, _, ()) ->
+    | Reg (reg, ()) ->
       begin match reg.Reg.loc with
       | Reg.Unknown -> assert false  (* probably a bug in available_regs.ml *)
       | Reg.Reg _ ->
@@ -209,83 +293,89 @@ let location_list_entry t ~parent ~fundecl ~available_subrange
           SLD.in_stack_slot
             ~offset_in_words:(offset_in_bytes_from_cfa / Arch.size_addr)
       end
-    (* CR mshinwell: don't ignore provenance
-       Follow-up: Is it really needed?  For example, Inlining_transforms is
-       using dummy module paths for function parameters, etc.
-     *)
-    | Phantom (_, _, Iphantom_const_int i) -> SLD.const_int (Int64.of_int i)
-    | Phantom (_, _, Iphantom_const_symbol symbol) -> SLD.const_symbol symbol
-    | Phantom (_, _, Iphantom_read_symbol_field (symbol, field)) ->
-      SLD.read_symbol_field ~symbol ~field
-    | Phantom (_, _, Iphantom_var ident) ->
-      (* CR mshinwell: What happens if [ident] isn't available at some point
-         just due to the location list?  Should we push zero on the stack
-         first?  Or can we detect the stack is empty?  Or does gdb just abort
-         evaluation of the whole thing if the location list doesn't match? *)
-      begin match location_of_identifier t ~ident ~proto_dies_for_idents with
-      | None -> SLD.empty
-      | Some location -> location
-      end
-    | Phantom (_, _, Iphantom_read_var_field (ident, field)) ->
-      begin match location_of_identifier t ~ident ~proto_dies_for_idents with
-      | None -> SLD.empty
-      | Some location -> SLD.read_field location ~field
-      end
-    | Phantom (_, _, Iphantom_offset_var (ident, offset_in_words)) ->
-      begin match location_of_identifier t ~ident ~proto_dies_for_idents with
-      | None -> SLD.empty
-      | Some location -> SLD.offset_pointer location ~offset_in_words
-      end
-    | Phantom (_, _, Iphantom_block { tag; fields; }) ->
-      (* A phantom block construction: instead of the block existing in the
-         target program's address space, it is going to be conjured up in the
-         *debugger's* address space using instructions described in DWARF.
-         References between such blocks do not use normal pointers in the
-         target's address space---instead they use "implicit pointers"
-         (requires GNU DWARF extensions prior to DWARF-5). *)
-      (* CR mshinwell: use a cache to dedup the CLDs *)
-      let header =
-        Simple_location_description.const_int (
-          Int64.of_nativeint (
-            Cmmgen.black_block_header tag (List.length fields)))
+    | Phantom ->
+      let defining_expr =
+        match type_info with
+        | From_cmt_file _ -> assert false
+        | Phantom (_provenance, defining_expr) ->
+          (* CR mshinwell: don't ignore provenance
+             Follow-up: Is it really needed?  For example, Inlining_transforms
+             is using dummy module paths for function parameters, etc.
+          *)
+          defining_expr
       in
-      let header_size = Arch.size_addr in
-      let field_size = Arch.size_addr in
-      let fields =
-        List.map (fun ident ->
-            let simple_location_description =
-              match ident with
-              | None ->
-                (* This element of the block isn't accessible. *)
-                Simple_location_description.empty
-              | Some ident ->
-                match
-                  location_of_identifier t ~ident ~proto_dies_for_idents
-                with
-                | None -> Simple_location_description.empty
-                | Some location -> location
-             in
-             simple_location_description, field_size)
-          fields
-      in
-      let composite_location_description =
-        Composite_location_description.pieces_of_simple_location_descriptions
-          ((header, header_size) :: fields)
-      in
-      let proto_die =
-        Proto_die.create ~parent
-          ~tag:Dwarf_tag.Variable
-          ~attribute_values:[
-            DAH.create_composite_location_description
-              composite_location_description;
-          ]
-          ()
-      in
-      (* Implicit pointers point after the header, just like for values in the
-         OCaml heap (how cool is that)? *)
-      SLD.implicit_pointer ~offset_in_bytes:Arch.size_addr
-        ~die_label:(Proto_die.reference proto_die)
-        ~dwarf_version
+      match defining_expr with
+      | Iphantom_const_int i -> SLD.const_int (Int64.of_int i)
+      | Iphantom_const_symbol symbol -> SLD.const_symbol symbol
+      | Iphantom_read_symbol_field (symbol, field) ->
+        SLD.read_symbol_field ~symbol ~field
+      | Iphantom_var ident ->
+        (* CR mshinwell: What happens if [ident] isn't available at some point
+          just due to the location list?  Should we push zero on the stack
+          first?  Or can we detect the stack is empty?  Or does gdb just abort
+          evaluation of the whole thing if the location list doesn't match? *)
+        begin match location_of_identifier t ~ident ~proto_dies_for_idents with
+        | None -> SLD.empty
+        | Some location -> location
+        end
+      | Iphantom_read_var_field (ident, field) ->
+        begin match location_of_identifier t ~ident ~proto_dies_for_idents with
+        | None -> SLD.empty
+        | Some location -> SLD.read_field location ~field
+        end
+      | Iphantom_offset_var (ident, offset_in_words) ->
+        begin match location_of_identifier t ~ident ~proto_dies_for_idents with
+        | None -> SLD.empty
+        | Some location -> SLD.offset_pointer location ~offset_in_words
+        end
+      | Iphantom_block { tag; fields; } ->
+        (* A phantom block construction: instead of the block existing in the
+          target program's address space, it is going to be conjured up in the
+          *debugger's* address space using instructions described in DWARF.
+          References between such blocks do not use normal pointers in the
+          target's address space---instead they use "implicit pointers"
+          (requires GNU DWARF extensions prior to DWARF-5). *)
+        (* CR mshinwell: use a cache to dedup the CLDs *)
+        let header =
+          Simple_location_description.const_int (
+            Int64.of_nativeint (
+              Cmmgen.black_block_header tag (List.length fields)))
+        in
+        let header_size = Arch.size_addr in
+        let field_size = Arch.size_addr in
+        let fields =
+          List.map (fun ident ->
+              let simple_location_description =
+                match ident with
+                | None ->
+                  (* This element of the block isn't accessible. *)
+                  Simple_location_description.empty
+                | Some ident ->
+                  match
+                    location_of_identifier t ~ident ~proto_dies_for_idents
+                  with
+                  | None -> Simple_location_description.empty
+                  | Some location -> location
+              in
+              simple_location_description, field_size)
+            fields
+        in
+        let composite_location_description =
+          Composite_location_description.pieces_of_simple_location_descriptions
+            ((header, header_size) :: fields)
+        in
+        let proto_die =
+          Proto_die.create ~parent
+            ~tag:Dwarf_tag.Variable
+            ~attribute_values:[
+              DAH.create_composite_location_description
+                composite_location_description;
+            ]
+            ()
+        in
+        SLD.implicit_pointer ~offset_in_bytes:0
+          ~die_label:(Proto_die.reference proto_die)
+          ~dwarf_version
   in
   let single_location_description =
     Single_location_description.of_simple_location_description (
@@ -349,8 +439,8 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
         ~init:[]
         ~f:(fun location_list_entries ~available_subrange ->
           let location_list_entry =
-            location_list_entry t ~parent:(Some function_proto_die) ~fundecl
-              ~available_subrange ~proto_dies_for_idents
+            create_value_description t ~parent:(Some function_proto_die)
+              ~fundecl ~available_subrange ~proto_dies_for_idents
           in
           location_list_entry::location_list_entries)
     in
@@ -365,9 +455,10 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
     | None -> []
     | Some ident_for_type ->
       let type_proto_die =
-        create_type_proto_die t ~parent:(Some t.compilation_unit_proto_die)
+        create_type_of_value_description t
+          ~parent:(Some t.compilation_unit_proto_die)
           ~ident:(`Ident ident_for_type) ~output_path:t.output_path
-          ~is_parameter ~array_type:true
+          ~type_info
       in
       (* If the unstamped name of [ident] is unambiguous within the function,
          then use it; otherwise, emit the stamped name. *)
@@ -447,9 +538,10 @@ let dwarf_for_variables_and_parameters t ~function_proto_die
   let proto_dies_for_idents = Ident.Tbl.create 42 in
   iterate_over_variable_like_things t ~available_ranges
     ~f:(fun ~ident ~ident_for_type:_ ~is_unique:_ ~range:_ ->
-      let reference = Proto_die.create_reference () in
+      let value_die = Proto_die.create_reference () in
+      let type_die = Proto_die.create_reference () in
       assert (not (Ident.Tbl.mem proto_dies_for_idents ident));
-      Ident.Tbl.add proto_dies_for_idents ident reference);
+      Ident.Tbl.add proto_dies_for_idents ident { value_die; type_die; });
   iterate_over_variable_like_things t ~available_ranges
     ~f:(dwarf_for_identifier t ~fundecl ~function_proto_die
       ~lexical_block_proto_die ~proto_dies_for_idents)
@@ -492,12 +584,10 @@ let dwarf_for_function_definition t ~(fundecl:Linearize.fundecl)
     fundecl.fun_module_path <> None
   in
   let type_proto_die =
-    create_type_proto_die t
+    normal_type_for_ident t
       ~parent:(Some t.compilation_unit_proto_die)
       ~ident:(`Unique_name fundecl.fun_name)
       ~output_path:t.output_path
-      ~is_parameter:None
-      ~array_type:false
   in
   let function_proto_die =
     Proto_die.create ~parent:(Some t.compilation_unit_proto_die)
@@ -534,12 +624,10 @@ let dwarf_for_toplevel_constant t ~idents ~module_path ~symbol =
         path ^ "." ^ name
       in
       let type_proto_die =
-        create_type_proto_die t
+        normal_type_for_ident t
           ~parent:(Some t.compilation_unit_proto_die)
           ~ident:(`Ident ident)
           ~output_path:t.output_path
-          ~is_parameter:None
-          ~array_type:true
       in
       Proto_die.create_ignore ~parent:(Some t.compilation_unit_proto_die)
         ~tag:Dwarf_tag.Constant
@@ -579,12 +667,10 @@ let dwarf_for_toplevel_inconstant t ~ident ~module_path ~symbol =
     path ^ "." ^ name
   in
   let type_proto_die =
-    create_type_proto_die t
+    normal_type_for_ident t
       ~parent:(Some t.compilation_unit_proto_die)
-      ~ident:(`Ident ident)
+      ~name:(`Ident ident)
       ~output_path:t.output_path
-      ~is_parameter:None
-      ~array_type:true
   in
   (* Toplevel inconstant "preallocated blocks" contain the thing of interest
      in field 0 (once it has been initialised).  We describe them using a

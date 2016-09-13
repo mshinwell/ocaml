@@ -715,7 +715,8 @@ asmcomp/asm_directives.cmx : utils/target_system.cmx \
     middle_end/base_types/symbol.cmx utils/numbers.cmx asmcomp/linearize.cmx \
     asmcomp/cmm.cmx asmcomp/asm_directives.cmi
 asmcomp/asm_directives.cmi : utils/target_system.cmi \
-    middle_end/base_types/symbol.cmi utils/numbers.cmi asmcomp/linearize.cmi
+    middle_end/base_types/symbol.cmi utils/numbers.cmi asmcomp/linearize.cmi \
+    asmcomp/cmm.cmi
 asmcomp/asm_directives_textual.cmo : asmcomp/asm_directives_textual.cmi
 asmcomp/asm_directives_textual.cmx : asmcomp/asm_directives_textual.cmi
 asmcomp/asm_directives_textual.cmi : asmcomp/asm_directives.cmi
@@ -1268,7 +1269,7 @@ asmcomp/debug/coalesce_labels.cmx : utils/numbers.cmx utils/misc.cmx \
 asmcomp/debug/coalesce_labels.cmi : utils/numbers.cmi asmcomp/linearize.cmi
 asmcomp/debug/dwarf.cmo : utils/timings.cmi middle_end/base_types/symbol.cmi \
     supportlibs/dwarf_low/single_location_description.cmi \
-    supportlibs/dwarf_low/simple_location_expression.cmi asmcomp/reg.cmi \
+    supportlibs/dwarf_low/simple_location_description.cmi asmcomp/reg.cmi \
     supportlibs/dwarf_high/proto_die.cmi asmcomp/proc.cmi typing/printtyp.cmi \
     asmcomp/printmach.cmi asmcomp/debug/name_laundry.cmi utils/misc.cmi \
     supportlibs/dwarf_low/location_list_entry.cmi \
@@ -1283,11 +1284,11 @@ asmcomp/debug/dwarf.cmo : utils/timings.cmi middle_end/base_types/symbol.cmi \
     supportlibs/dwarf_low/debug_loc_table.cmi \
     supportlibs/dwarf_low/composite_location_description.cmi \
     middle_end/base_types/compilation_unit.cmi asmcomp/cmmgen.cmi \
-    asmcomp/clambda.cmi asmcomp/debug/available_ranges.cmi \
+    asmcomp/cmm.cmi asmcomp/clambda.cmi asmcomp/debug/available_ranges.cmi \
     asmcomp/asm_directives.cmi asmcomp/arch.cmo asmcomp/debug/dwarf.cmi
 asmcomp/debug/dwarf.cmx : utils/timings.cmx middle_end/base_types/symbol.cmx \
     supportlibs/dwarf_low/single_location_description.cmx \
-    supportlibs/dwarf_low/simple_location_expression.cmx asmcomp/reg.cmx \
+    supportlibs/dwarf_low/simple_location_description.cmx asmcomp/reg.cmx \
     supportlibs/dwarf_high/proto_die.cmx asmcomp/proc.cmx typing/printtyp.cmx \
     asmcomp/printmach.cmx asmcomp/debug/name_laundry.cmx utils/misc.cmx \
     supportlibs/dwarf_low/location_list_entry.cmx \
@@ -1302,7 +1303,7 @@ asmcomp/debug/dwarf.cmx : utils/timings.cmx middle_end/base_types/symbol.cmx \
     supportlibs/dwarf_low/debug_loc_table.cmx \
     supportlibs/dwarf_low/composite_location_description.cmx \
     middle_end/base_types/compilation_unit.cmx asmcomp/cmmgen.cmx \
-    asmcomp/clambda.cmx asmcomp/debug/available_ranges.cmx \
+    asmcomp/cmm.cmx asmcomp/clambda.cmx asmcomp/debug/available_ranges.cmx \
     asmcomp/asm_directives.cmx asmcomp/arch.cmx asmcomp/debug/dwarf.cmi
 asmcomp/debug/dwarf.cmi : utils/timings.cmi asmcomp/linearize.cmi \
     typing/ident.cmi asmcomp/emit.cmi asmcomp/clambda.cmi \
@@ -1384,7 +1385,8 @@ supportlibs/dwarf_high/dwarf_world.cmx : \
     supportlibs/dwarf_high/dwarf_world.cmi
 supportlibs/dwarf_high/dwarf_world.cmi : middle_end/base_types/symbol.cmi \
     supportlibs/dwarf_high/proto_die.cmi \
-    supportlibs/dwarf_low/debug_loc_table.cmi asmcomp/asm_directives.cmi
+    supportlibs/dwarf_low/debug_loc_table.cmi asmcomp/cmm.cmi \
+    asmcomp/asm_directives.cmi
 supportlibs/dwarf_high/proto_die.cmo : middle_end/base_types/symbol.cmi \
     supportlibs/dwarf_low/dwarf_tag.cmi \
     supportlibs/dwarf_low/dwarf_attributes.cmi \
@@ -1399,7 +1401,7 @@ supportlibs/dwarf_high/proto_die.cmx : middle_end/base_types/symbol.cmx \
     supportlibs/dwarf_high/proto_die.cmi
 supportlibs/dwarf_high/proto_die.cmi : middle_end/base_types/symbol.cmi \
     asmcomp/linearize.cmi supportlibs/dwarf_low/dwarf_tag.cmi \
-    supportlibs/dwarf_low/dwarf_attribute_values.cmi \
+    supportlibs/dwarf_low/dwarf_attribute_values.cmi asmcomp/cmm.cmi \
     supportlibs/dwarf_low/child_determination.cmi
 supportlibs/dwarf_low/abbreviation_code.cmo : \
     supportlibs/dwarf_low/dwarf_value.cmi \
@@ -1470,27 +1472,29 @@ supportlibs/dwarf_low/child_determination.cmx : utils/numbers.cmx \
 supportlibs/dwarf_low/child_determination.cmi : \
     supportlibs/dwarf_low/dwarf_emittable.cmi
 supportlibs/dwarf_low/composite_location_description.cmo : \
-    supportlibs/dwarf_low/simple_location_expression.cmi \
+    supportlibs/dwarf_low/simple_location_description.cmi \
     supportlibs/dwarf_low/dwarf_operator.cmi \
     supportlibs/dwarf_low/composite_location_description.cmi
 supportlibs/dwarf_low/composite_location_description.cmx : \
-    supportlibs/dwarf_low/simple_location_expression.cmx \
+    supportlibs/dwarf_low/simple_location_description.cmx \
     supportlibs/dwarf_low/dwarf_operator.cmx \
     supportlibs/dwarf_low/composite_location_description.cmi
 supportlibs/dwarf_low/composite_location_description.cmi : \
-    supportlibs/dwarf_low/simple_location_expression.cmi \
+    supportlibs/dwarf_low/simple_location_description.cmi \
     supportlibs/dwarf_low/dwarf_emittable.cmi
 supportlibs/dwarf_low/debug_info_section.cmo : utils/numbers.cmi \
     asmcomp/linearize.cmi supportlibs/dwarf_low/initial_length.cmi \
     supportlibs/dwarf_low/dwarf_version.cmi \
     supportlibs/dwarf_low/dwarf_value.cmi \
-    supportlibs/dwarf_low/debugging_information_entry.cmi asmcomp/arch.cmo \
+    supportlibs/dwarf_low/debugging_information_entry.cmi \
+    asmcomp/asm_directives.cmi asmcomp/arch.cmo \
     supportlibs/dwarf_low/debug_info_section.cmi
 supportlibs/dwarf_low/debug_info_section.cmx : utils/numbers.cmx \
     asmcomp/linearize.cmx supportlibs/dwarf_low/initial_length.cmx \
     supportlibs/dwarf_low/dwarf_version.cmx \
     supportlibs/dwarf_low/dwarf_value.cmx \
-    supportlibs/dwarf_low/debugging_information_entry.cmx asmcomp/arch.cmx \
+    supportlibs/dwarf_low/debugging_information_entry.cmx \
+    asmcomp/asm_directives.cmx asmcomp/arch.cmx \
     supportlibs/dwarf_low/debug_info_section.cmi
 supportlibs/dwarf_low/debug_info_section.cmi : asmcomp/linearize.cmi \
     supportlibs/dwarf_low/dwarf_version.cmi \
@@ -1595,16 +1599,16 @@ supportlibs/dwarf_low/dwarf_tag.cmi : utils/numbers.cmi \
 supportlibs/dwarf_low/dwarf_value.cmo : utils/target_system.cmi \
     middle_end/base_types/symbol.cmi utils/numbers.cmi asmcomp/linearize.cmi \
     supportlibs/dwarf_low/dwarf_format_int.cmi \
-    supportlibs/dwarf_low/dwarf_format.cmi asmcomp/asm_directives.cmi \
-    supportlibs/dwarf_low/dwarf_value.cmi
+    supportlibs/dwarf_low/dwarf_format.cmi asmcomp/cmm.cmi \
+    asmcomp/asm_directives.cmi supportlibs/dwarf_low/dwarf_value.cmi
 supportlibs/dwarf_low/dwarf_value.cmx : utils/target_system.cmx \
     middle_end/base_types/symbol.cmx utils/numbers.cmx asmcomp/linearize.cmx \
     supportlibs/dwarf_low/dwarf_format_int.cmx \
-    supportlibs/dwarf_low/dwarf_format.cmx asmcomp/asm_directives.cmx \
-    supportlibs/dwarf_low/dwarf_value.cmi
+    supportlibs/dwarf_low/dwarf_format.cmx asmcomp/cmm.cmx \
+    asmcomp/asm_directives.cmx supportlibs/dwarf_low/dwarf_value.cmi
 supportlibs/dwarf_low/dwarf_value.cmi : utils/target_system.cmi \
     middle_end/base_types/symbol.cmi utils/numbers.cmi asmcomp/linearize.cmi \
-    supportlibs/dwarf_low/dwarf_emittable.cmi
+    supportlibs/dwarf_low/dwarf_emittable.cmi asmcomp/cmm.cmi
 supportlibs/dwarf_low/dwarf_version.cmo : utils/numbers.cmi \
     supportlibs/dwarf_low/dwarf_value.cmi \
     supportlibs/dwarf_low/dwarf_version.cmi
@@ -1656,27 +1660,30 @@ supportlibs/dwarf_low/location_list_entry.cmi : \
     middle_end/base_types/symbol.cmi \
     supportlibs/dwarf_low/single_location_description.cmi \
     asmcomp/linearize.cmi supportlibs/dwarf_low/dwarf_emittable.cmi
-supportlibs/dwarf_low/simple_location_expression.cmo : \
-    middle_end/base_types/symbol.cmi supportlibs/dwarf_low/dwarf_version.cmi \
+supportlibs/dwarf_low/simple_location_description.cmo : \
+    middle_end/base_types/symbol.cmi asmcomp/linearize.cmi \
+    supportlibs/dwarf_low/dwarf_version.cmi \
     supportlibs/dwarf_low/dwarf_operator.cmi asmcomp/cmm.cmi asmcomp/arch.cmo \
-    supportlibs/dwarf_low/simple_location_expression.cmi
-supportlibs/dwarf_low/simple_location_expression.cmx : \
-    middle_end/base_types/symbol.cmx supportlibs/dwarf_low/dwarf_version.cmx \
+    supportlibs/dwarf_low/simple_location_description.cmi
+supportlibs/dwarf_low/simple_location_description.cmx : \
+    middle_end/base_types/symbol.cmx asmcomp/linearize.cmx \
+    supportlibs/dwarf_low/dwarf_version.cmx \
     supportlibs/dwarf_low/dwarf_operator.cmx asmcomp/cmm.cmx asmcomp/arch.cmx \
-    supportlibs/dwarf_low/simple_location_expression.cmi
-supportlibs/dwarf_low/simple_location_expression.cmi : \
-    middle_end/base_types/symbol.cmi \
+    supportlibs/dwarf_low/simple_location_description.cmi
+supportlibs/dwarf_low/simple_location_description.cmi : \
+    middle_end/base_types/symbol.cmi asmcomp/linearize.cmi \
+    supportlibs/dwarf_low/dwarf_version.cmi \
     supportlibs/dwarf_low/dwarf_emittable.cmi asmcomp/cmm.cmi
 supportlibs/dwarf_low/single_location_description.cmo : \
-    supportlibs/dwarf_low/simple_location_expression.cmi \
+    supportlibs/dwarf_low/simple_location_description.cmi \
     supportlibs/dwarf_low/composite_location_description.cmi \
     supportlibs/dwarf_low/single_location_description.cmi
 supportlibs/dwarf_low/single_location_description.cmx : \
-    supportlibs/dwarf_low/simple_location_expression.cmx \
+    supportlibs/dwarf_low/simple_location_description.cmx \
     supportlibs/dwarf_low/composite_location_description.cmx \
     supportlibs/dwarf_low/single_location_description.cmi
 supportlibs/dwarf_low/single_location_description.cmi : \
-    supportlibs/dwarf_low/simple_location_expression.cmi \
+    supportlibs/dwarf_low/simple_location_description.cmi \
     supportlibs/dwarf_low/dwarf_emittable.cmi \
     supportlibs/dwarf_low/composite_location_description.cmi
 middle_end/alias_analysis.cmo : middle_end/base_types/variable.cmi \
