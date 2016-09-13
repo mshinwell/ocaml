@@ -128,7 +128,7 @@ let normal_type_for_ident _t ~parent ~ident ~output_path =
     ()
 
 let type_die_reference_for_ident ~ident ~proto_dies_for_idents =
-  match Ident.Tbl.find proto_dies_for_ident ident with
+  match Ident.Tbl.find proto_dies_for_idents ident with
   | exception Not_found ->
     Misc.fatal_errorf "Proto-DIE reference for %a not assigned"
       Ident.print ident
@@ -146,8 +146,9 @@ let type_die_reference_for_ident ~ident ~proto_dies_for_idents =
    in the main gdb code to pass parameter indexes to the printing function.
    It is arguably more robust, too.
 *)
-let construct_type_of_value_description _t ~parent ~ident ~output_path
-      ~(type_info : Available_ranges.type_info) =
+let construct_type_of_value_description t ~parent ~ident ~output_path
+      ~(type_info : Available_ranges.type_info)
+      ~proto_dies_for_idents =
   (* CR-soon mshinwell: share code with [normal_type_for_ident], above *)
   let ident =
     match ident with
@@ -179,7 +180,7 @@ let construct_type_of_value_description _t ~parent ~ident ~output_path
     | Iphantom_read_symbol_field _ -> normal_case ()
     | Iphantom_var ident ->
       type_die_reference_for_ident ~ident ~proto_dies_for_idents
-    | Iphantom_read_var_field (ident, field) ->
+    | Iphantom_read_var_field (_ident, _field) ->
       (* We cannot dereference an implicit pointer when evaluating a DWARF
          location expression, which means we must restrict ourselves to 
          projections from non-phantom identifiers.  This is ensured at the
@@ -187,12 +188,12 @@ let construct_type_of_value_description _t ~parent ~ident ~output_path
          [Flambda_to_clambda] only generates [Uphantom_read_var_field] on
          the (non-phantom) environment parameter. *)
       normal_case ()
-    | Iphantom_offset_var (ident, offset_in_words) ->
+    | Iphantom_offset_var (_ident, _offset_in_words) ->
       (* The same applies here as for [Iphantom_read_var_field] above, but we
          never generate this for phantom identifiers at present (it is only
          used for offsetting a closure environment variable). *)
       normal_case ()
-    | Iphantom_block { tag; fields; } ->
+    | Iphantom_block { tag = _; fields; } ->
       (* The block will be described as a composite location expression
          pointed at by an implicit pointer.  The corresponding type is
          a pointer type whose target type is a structure type; the members of
@@ -204,40 +205,40 @@ let construct_type_of_value_description _t ~parent ~ident ~output_path
           ~tag:Dwarf_tag.Structure_type
           ~attribute_values:[
             DAH.create_name "<block>";
-          ];
+          ]
+          ()
       in
-      let field_type_dies =
-        List.iteri (fun index field ->
-            let name = string_of_int (index - 1) in
-            let type_attribute =
-              match field with
-              | None -> DAH.create_type t.value_type_proto_die
-              | Some ident ->
-                (* It's ok if [ident] is a phantom identifier, since we will
-                   be building a composite location expression to describe the
-                   structure, and implicit pointers are permitted there.  (That
-                   is to say, the problem for [Iphantom_read_var_field] above
-                   does not exist here). *)
-                let type_die_reference =
-                  type_die_reference_for_ident ~ident ~proto_dies_for_idents
-                in
-                DAH.create_type_from_reference
-                  ~proto_die_reference:type_die_reference;
-            in
-            Proto_die.create ~parent:(Some struct_die)
-              ~tag:Dwarf_tag.member
-              ~attribute_values:(type_attribute :: [
-                DAH.create_name name;
-              ]))
-          (None :: fields)  (* "None" is for the GC header. *)
-      in
+      List.iteri (fun index field ->
+          let name = string_of_int (index - 1) in
+          let type_attribute =
+            match field with
+            | None -> DAH.create_type ~proto_die:t.value_type_proto_die
+            | Some ident ->
+              (* It's ok if [ident] is a phantom identifier, since we will
+                  be building a composite location expression to describe the
+                  structure, and implicit pointers are permitted there.  (That
+                  is to say, the problem for [Iphantom_read_var_field] above
+                  does not exist here). *)
+              let type_die_reference =
+                type_die_reference_for_ident ~ident ~proto_dies_for_idents
+              in
+              DAH.create_type_from_reference
+                ~proto_die_reference:type_die_reference;
+          in
+          Proto_die.create_ignore ~parent:(Some struct_type_die)
+            ~tag:Dwarf_tag.Member
+            ~attribute_values:(type_attribute :: [
+              DAH.create_name name
+            ]))
+        (None :: fields);  (* "None" is for the GC header. *)
       let pointer_to_struct_type_die =
         Proto_die.create ~parent
           ~tag:Dwarf_tag.Pointer_type
           ~attribute_values:[
             DAH.create_name name;
             DAH.create_type ~proto_die:struct_type_die;
-          ];
+          ]
+          ()
       in
       Proto_die.reference pointer_to_struct_type_die
 
@@ -256,8 +257,9 @@ let location_of_identifier t ~ident ~proto_dies_for_idents =
        The register is explicitly removed from the availability sets by
        [Available_regs], and the name never appears on any available range. *)
     None
-  | die_label ->
-    Some (Simple_location_description.location_from_another_die ~die_label
+  | { value_die; _; } ->
+    Some (Simple_location_description.location_from_another_die
+      ~die_label:value_die
       ~compilation_unit_header_label:t.compilation_unit_header_label)
 
 let construct_value_description t ~parent ~fundecl
@@ -296,7 +298,7 @@ let construct_value_description t ~parent ~fundecl
     | Phantom ->
       let defining_expr =
         match type_info with
-        | From_cmt_file _ -> assert false
+        | From_cmt_file -> assert false
         | Phantom (_provenance, defining_expr) ->
           (* CR mshinwell: don't ignore provenance
              Follow-up: Is it really needed?  For example, Inlining_transforms
@@ -405,6 +407,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
       ~lexical_block_proto_die ~proto_dies_for_idents
       ~(ident : Ident.t) ~(ident_for_type : Ident.t option) ~is_unique:_
       ~range =
+  let type_info = Available_range.type_info range in
   let is_parameter = Available_range.is_parameter range in
   let parent_proto_die : Proto_die.t =
     match is_parameter with
@@ -439,8 +442,9 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
         ~init:[]
         ~f:(fun location_list_entries ~available_subrange ->
           let location_list_entry =
-            create_value_description t ~parent:(Some function_proto_die)
+            construct_value_description t ~parent:(Some function_proto_die)
               ~fundecl ~available_subrange ~proto_dies_for_idents
+              ~type_info
           in
           location_list_entry::location_list_entries)
     in
@@ -455,10 +459,10 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
     | None -> []
     | Some ident_for_type ->
       let type_proto_die =
-        create_type_of_value_description t
+        construct_type_of_value_description t
           ~parent:(Some t.compilation_unit_proto_die)
           ~ident:(`Ident ident_for_type) ~output_path:t.output_path
-          ~type_info
+          ~type_info ~proto_dies_for_idents
       in
       (* If the unstamped name of [ident] is unambiguous within the function,
          then use it; otherwise, emit the stamped name. *)
@@ -469,7 +473,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
         in
       *)
       [DAH.create_name name_for_ident;
-       DAH.create_type ~proto_die:type_proto_die;
+       DAH.create_type_from_reference ~proto_die_reference:type_proto_die;
       ]
   in
   let tag =
@@ -482,7 +486,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
     | exception Not_found ->
       Misc.fatal_errorf "Proto-DIE reference for %a not assigned"
         Ident.print ident
-    | reference -> reference
+    | { value_die; _ } -> value_die
   in
   let proto_die =
     Proto_die.create ~reference
@@ -669,7 +673,7 @@ let dwarf_for_toplevel_inconstant t ~ident ~module_path ~symbol =
   let type_proto_die =
     normal_type_for_ident t
       ~parent:(Some t.compilation_unit_proto_die)
-      ~name:(`Ident ident)
+      ~ident:(`Ident ident)
       ~output_path:t.output_path
   in
   (* Toplevel inconstant "preallocated blocks" contain the thing of interest
