@@ -297,13 +297,16 @@ let rec lam ppf (flam : t) =
       Mutable_variable.print mut_var
       Variable.print var
       lam body
-  | Let_rec { vars_and_defining_exprs = id_arg_list; body; } ->
+  | Let_rec { vars_and_defining_exprs = id_arg_list; body; provenance; } ->
       let bindings ppf id_arg_list =
         let spc = ref false in
         List.iter
           (fun (id, l) ->
              if !spc then fprintf ppf "@ " else spc := true;
-             fprintf ppf "@[<2>%a@ %a@]" Variable.print id print_named l)
+             fprintf ppf "@[<2>%a%a@ %a@]"
+                print_let_provenance_opt provenance
+                Variable.print id
+                print_named l)
           id_arg_list in
       fprintf ppf
         "@[<2>(letrec@ (@[<hv 1>%a@])@ %a)@]" bindings id_arg_list lam body

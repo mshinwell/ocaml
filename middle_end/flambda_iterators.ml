@@ -206,8 +206,8 @@ let iter_all_toplevel_immutable_let_and_let_rec_bindings t ~f =
         | Normal defining_expr -> f var defining_expr ~provenance
         | Phantom _ -> ()
         end
-      | Let_rec { vars_and_defining_exprs = defs; _ } ->
-        List.iter (fun (var, named) -> f var named ~provenance:None) defs
+      | Let_rec { vars_and_defining_exprs = defs; provenance; _ } ->
+        List.iter (fun (var, named) -> f var named ~provenance) defs
       | _ -> ())
     (fun _ -> ())
     (Is_expr t)

@@ -291,9 +291,9 @@ and close t ?(bound_name:(Variable.t * Flambda.let_provenance) option) env
                 ~inline:attr.inline ~specialise:attr.specialise
                 ~is_a_functor:attr.is_a_functor ~loc
             in
-            begin match !location, body with
-            | None, Levent (_, { lev_loc }) -> location := Some lev_loc
-            | _, _ -> ()
+            begin match !location with
+            | None -> location := Some loc
+            | _ -> ()
             end;
             Some function_declaration
           | _ -> None)

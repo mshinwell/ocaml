@@ -65,16 +65,18 @@ let assign_symbols_and_collect_constant_definitions
             match provenance with
             | None -> None
             | Some (provenance : Flambda.let_provenance) ->
-              match Variable.original_ident var with
-              | None -> None
-              | Some original_ident ->
-                let provenance : Flambda.symbol_provenance =
-                  { original_idents = [original_ident];
-                    module_path = provenance.module_path;
-                    location = provenance.location;
-                  }
-                in
-                Some provenance
+              let original_idents =
+                match Variable.original_ident var with
+                | None -> []
+                | Some original_ident -> [original_ident]
+              in
+              let provenance : Flambda.symbol_provenance =
+                { original_idents;
+                  module_path = provenance.module_path;
+                  location = provenance.location;
+                }
+              in
+              Some provenance
         in
         Variable.Tbl.add var_to_definition_tbl var (definition, provenance)
       in
