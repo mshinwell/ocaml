@@ -169,9 +169,32 @@ fail := true;
         done;
         Ok !avail_after
       | Iop (Imove | Ireload | Ispill) ->
-        (* Moves are special: they can cause us to learn that a particular
-           hard register holds the (equal) values of multiple
-           pseudoregisters.  They also enable us to propagate names. *)
+        (* Moves are special: they enable us to propagate names.
+           No-op moves need to be handled specially---in this case, we may
+           learn that a given hard register holds the value of multiple
+           pseudoregisters (all of which have the same value).  This makes us
+           match up properly with [Liveness]. *)
+        let move_to_same_location =
+          let move_to_same_location = ref true in
+          for i = 0 to Array.length instr.arg - 1 do
+            let arg = instr.arg.(i) in
+            let res = instr.res.(i) in
+            (* Note that the register classes must be the same, so we don't
+                need to check that. *)
+            if arg.loc <> res.loc then begin
+              move_to_same_location := false
+            end
+          done;
+          !move_to_same_location
+        in
+        let made_unavailable =
+          if move_to_same_location then
+            RD.Set.empty
+          else
+            RD.Set.made_unavailable_by_clobber avail_before
+              ~regs_clobbered:instr.res
+              ~register_class:Proc.register_class
+        in
         let results =
           assert (Array.length instr.arg = Array.length instr.res);
           Array.mapi (fun index result_reg ->
@@ -184,7 +207,8 @@ fail := true;
                   ~debug_info_from:arg_reg)
             instr.res
         in
-        Ok (RD.Set.union avail_before (RD.Set.of_array results))
+        Ok (RD.Set.union (RD.Set.diff avail_before made_unavailable)
+          (RD.Set.of_array results))
       | Iop op ->
         if operation_can_raise op then begin
           augment_availability_at_raise (Reg_availability.Ok avail_before)
