@@ -109,6 +109,13 @@ let create ~(source_provenance : Timings.source_provenance)
     emitted = false;
   }
 
+let proto_dies_for_identifier ~ident ~proto_dies_for_idents =
+  match Ident.Tbl.find proto_dies_for_idents ident with
+  | exception Not_found ->
+    Misc.fatal_errorf "Proto-DIE reference for %a not assigned"
+      Ident.print ident
+  | result -> result
+
 let normal_type_for_ident _t ~parent ~ident ~output_path =
   let ident =
     match ident with
@@ -128,11 +135,7 @@ let normal_type_for_ident _t ~parent ~ident ~output_path =
     ()
 
 let type_die_reference_for_ident ~ident ~proto_dies_for_idents =
-  match Ident.Tbl.find proto_dies_for_idents ident with
-  | exception Not_found ->
-    Misc.fatal_errorf "Proto-DIE reference for %a not assigned"
-      Ident.print ident
-  | reference -> reference.type_die
+  (proto_dies_for_identifier ~ident ~proto_dies_for_idents).type_die
 
 (* Build a new DWARF type for [ident].  Each identifier has its
    own type, which is basically its stamped name, and is nothing to do with
@@ -177,10 +180,11 @@ let construct_type_of_value_description t ~parent ~ident ~output_path
   | From_cmt_file -> normal_case ()
   | Phantom (_provenance, defining_expr) ->
     match defining_expr with
-    | Iphantom_const_int _
-    | Iphantom_const_symbol _
-    | Iphantom_read_symbol_field _ -> normal_case ()
-    | Iphantom_var ident ->
+    | None -> normal_case ()
+    | Some (Iphantom_const_int _)
+    | Some (Iphantom_const_symbol _)
+    | Some (Iphantom_read_symbol_field _) -> normal_case ()
+    | Some (Iphantom_var ident) ->
       let target_type =
         type_die_reference_for_ident ~ident ~proto_dies_for_idents
       in
@@ -195,7 +199,7 @@ let construct_type_of_value_description t ~parent ~ident ~output_path
           ()
       in
       ()
-    | Iphantom_read_var_field (_ident, _field) ->
+    | Some (Iphantom_read_var_field (_ident, _field)) ->
       (* We cannot dereference an implicit pointer when evaluating a DWARF
          location expression, which means we must restrict ourselves to 
          projections from non-phantom identifiers.  This is ensured at the
@@ -203,12 +207,12 @@ let construct_type_of_value_description t ~parent ~ident ~output_path
          [Flambda_to_clambda] only generates [Uphantom_read_var_field] on
          the (non-phantom) environment parameter. *)
       normal_case ()
-    | Iphantom_offset_var (_ident, _offset_in_words) ->
+    | Some (Iphantom_offset_var (_ident, _offset_in_words)) ->
       (* The same applies here as for [Iphantom_read_var_field] above, but we
          never generate this for phantom identifiers at present (it is only
          used for offsetting a closure environment variable). *)
       normal_case ()
-    | Iphantom_block { tag = _; fields; } ->
+    | Some (Iphantom_block { tag = _; fields; }) ->
       (* The block will be described as a composite location expression
          pointed at by an implicit pointer.  The corresponding type is
          a pointer type whose target type is a structure type; the members of
@@ -273,18 +277,11 @@ let location_of_identifier t ~ident ~proto_dies_for_idents =
      (DWARF-4 specification section 2.5.1.5, page 24.)  This avoids any need
      to transitively resolve phantom lets (to constants, symbols or
      non-phantom variables) in the compiler. *)
-  match Ident.Tbl.find proto_dies_for_idents ident with
-  | exception Not_found ->
-    (* This can unfortunately happen despite best efforts in [Selectgen].
-       One example: a "name for debugger" on a register assigned to %rax
-       immediately before an allocation on x86-64 (which clobbers %rax).
-       The register is explicitly removed from the availability sets by
-       [Available_regs], and the name never appears on any available range. *)
-    None
+  match proto_dies_for_identifier ~ident ~proto_dies_for_idents with
   | { value_die; _; } ->
-    Some (Simple_location_description.location_from_another_die
+    Simple_location_description.location_from_another_die
       ~die_label:value_die
-      ~compilation_unit_header_label:t.compilation_unit_header_label)
+      ~compilation_unit_header_label:t.compilation_unit_header_label
 
 let construct_value_description t ~parent ~fundecl
       ~(type_info : Available_ranges.type_info) ~available_subrange
@@ -328,7 +325,13 @@ let construct_value_description t ~parent ~fundecl
              Follow-up: Is it really needed?  For example, Inlining_transforms
              is using dummy module paths for function parameters, etc.
           *)
-          defining_expr
+          match defining_expr with
+          | Some defining_expr -> defining_expr
+          | None ->
+            (* There should never be any available subranges for a phantom
+               identifier without a definition (see the bottom of
+               available_ranges.ml for an explanation as to why these occur). *)
+            assert false
       in
       match defining_expr with
       | Iphantom_const_int i -> SLD.const_int (Int64.of_int i)
@@ -339,21 +342,16 @@ let construct_value_description t ~parent ~fundecl
         (* CR mshinwell: What happens if [ident] isn't available at some point
            just due to the location list?  Should we push zero on the stack
            first?  Or can we detect the stack is empty?  Or does gdb just abort
-           evaluation of the whole thing if the location list doesn't match? *)
-        begin match location_of_identifier t ~ident ~proto_dies_for_idents with
-        | None -> SLD.empty
-        | Some location -> location
-        end
+           evaluation of the whole thing if the location list doesn't match?
+           mshinwell: The answer seems to be that you get an error saying
+           that you tried to pop something from an empty stack. *)
+        location_of_identifier t ~ident ~proto_dies_for_idents
       | Iphantom_read_var_field (ident, field) ->
-        begin match location_of_identifier t ~ident ~proto_dies_for_idents with
-        | None -> SLD.empty
-        | Some location -> SLD.read_field location ~field
-        end
+        let location = location_of_identifier t ~ident ~proto_dies_for_idents in
+        SLD.read_field location ~field
       | Iphantom_offset_var (ident, offset_in_words) ->
-        begin match location_of_identifier t ~ident ~proto_dies_for_idents with
-        | None -> SLD.empty
-        | Some location -> SLD.offset_pointer location ~offset_in_words
-        end
+        let location = location_of_identifier t ~ident ~proto_dies_for_idents in
+        SLD.offset_pointer location ~offset_in_words
       | Iphantom_block { tag; fields; } ->
         (* A phantom block construction: instead of the block existing in the
            target program's address space, it is going to be conjured up in the
@@ -377,11 +375,7 @@ let construct_value_description t ~parent ~fundecl
                   (* This element of the block isn't accessible. *)
                   Simple_location_description.empty
                 | Some ident ->
-                  match
-                    location_of_identifier t ~ident ~proto_dies_for_idents
-                  with
-                  | None -> Simple_location_description.empty
-                  | Some location -> location
+                  location_of_identifier t ~ident ~proto_dies_for_idents
               in
               simple_location_description, field_size)
             fields
@@ -480,11 +474,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
   in
   let type_and_name_attributes =
     let reference =
-      match Ident.Tbl.find proto_dies_for_idents ident with
-      | exception Not_found ->
-        Misc.fatal_errorf "Proto-DIE reference for %a not assigned"
-          Ident.print ident
-      | { type_die; _ } -> type_die
+      type_die_reference_for_ident ~ident ~proto_dies_for_idents
     in
     let ident, name_for_ident =
       match ident_for_type with
@@ -520,11 +510,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
     | Local -> Dwarf_tag.Variable
   in
   let reference =
-    match Ident.Tbl.find proto_dies_for_idents ident with
-    | exception Not_found ->
-      Misc.fatal_errorf "Proto-DIE reference for %a not assigned"
-        Ident.print ident
-    | { value_die; _ } -> value_die
+    (proto_dies_for_identifier ~ident ~proto_dies_for_idents).value_die
   in
   let proto_die =
     Proto_die.create ~reference

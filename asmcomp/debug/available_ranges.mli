@@ -58,7 +58,8 @@ end
 
 type type_info =
   | From_cmt_file
-  | Phantom of Clambda.ulet_provenance option * Mach.phantom_defining_expr
+  | Phantom of
+      Clambda.ulet_provenance option * Mach.phantom_defining_expr option
 
 type is_parameter =
   | Local

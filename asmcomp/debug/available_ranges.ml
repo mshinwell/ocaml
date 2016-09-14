@@ -136,7 +136,8 @@ end
 
 type type_info =
   | From_cmt_file
-  | Phantom of Clambda.ulet_provenance option * Mach.phantom_defining_expr
+  | Phantom of
+      Clambda.ulet_provenance option * Mach.phantom_defining_expr option
 
 module Available_range : sig
   type t
@@ -563,7 +564,7 @@ module Make_phantom_ranges = Make (struct
          (Otherwise the function into which an inlining occurs ends up having
          more parameters than it should in the debugger.)
       *)
-      Some (key, Phantom (provenance, defining_expr), Local)
+      Some (key, Phantom (provenance, Some defining_expr), Local)
 
   let create_subrange ~fundecl:_ ~key:_ ~start_pos ~start_insn:_ ~end_pos
         ~end_pos_offset:_ =
@@ -588,6 +589,47 @@ let create ~fundecl =
   let first_insn =
     Make_phantom_ranges.process_instructions t ~fundecl ~first_insn
   in
+  (* It is unfortunately the case that identifiers can be named in the defining
+     expressions of phantom ranges without actually having any available range
+     themselves.  This might be caused by, for example, a "name for debugger"
+     operation on a register assigned to %rax immediately before an allocation
+     on x86-64 (which clobbers %rax).  The register is explicitly removed from
+     the availability sets by [Available_regs], and the name never appears on
+     any available range.
+     To prevent this situation from causing problems later on, we add empty
+     ranges for any such identifiers.  We assume such identifiers are local
+     variables. *)
+  let identifiers_without_ranges =
+    fold t ~init:[] ~f:(fun acc ~ident:_ ~is_unique:_ ~range ->
+      match Available_range.type_info range with
+      | From_cmt_file -> acc
+      | Phantom (_, defining_expr) ->
+        let idents =
+          match defining_expr with
+          | None -> []
+          | Some defining_expr ->
+            match defining_expr with
+            | Iphantom_const_int _
+            | Iphantom_const_symbol _
+            | Iphantom_read_symbol_field _ -> []
+            | Iphantom_var ident
+            | Iphantom_read_var_field (ident, _)
+            | Iphantom_offset_var (ident, _) -> [ident]
+            | Iphantom_block { fields; _ } ->
+              Misc.Stdlib.List.filter_map (fun field -> field) fields
+        in
+        let without_ranges =
+          List.filter (fun ident -> not (Ident.Tbl.mem t.ranges ident)) idents
+        in
+        acc @ without_ranges)
+  in
+  List.iter (fun ident ->
+      let range =
+        Available_range.create ~type_info:(Phantom (None, None))
+          ~is_parameter:Local
+      in
+      Ident.Tbl.add t.ranges ident range)
+    identifiers_without_ranges;
   t, { fundecl with L.fun_body = first_insn; }
 
 let create ~fundecl =
