@@ -250,9 +250,8 @@ let iter_exprs_at_toplevel_of_program (program : Flambda.program) ~f =
       loop program
     | Let_symbol (_, _, _, program) ->
       loop program
-    | Initialize_symbol (_, _, fields, program) ->
-      List.iter (fun (field, _provenance) ->
-          f field ~under_lifted_set_of_closures:false)
+    | Initialize_symbol (_, _, _, fields, program) ->
+      List.iter (fun field -> f field ~under_lifted_set_of_closures:false)
         fields;
       loop program
     | Effect (expr, program) ->
@@ -287,10 +286,8 @@ let iter_on_set_of_closures_of_program (program : Flambda.program) ~f =
       loop program
     | Let_symbol (_, _, _, program) ->
       loop program
-    | Initialize_symbol (_, _, fields, program) ->
-      List.iter (fun (field, _provenance) ->
-          iter_on_sets_of_closures (f ~constant:false) field)
-        fields;
+    | Initialize_symbol (_, _, _, fields, program) ->
+      List.iter (iter_on_sets_of_closures (f ~constant:false)) fields;
       loop program
     | Effect (expr, program) ->
       iter_on_sets_of_closures (f ~constant:false) expr;
@@ -308,7 +305,7 @@ let iter_constant_defining_values_on_program (program : Flambda.program) ~f =
     | Let_rec_symbol (defs, program) ->
       List.iter (fun (_, _, const) -> f const) defs;
       loop program
-    | Initialize_symbol (_, _, _, program) ->
+    | Initialize_symbol (_, _, _, _, program) ->
       loop program
     | Effect (_, program) ->
       loop program
@@ -793,22 +790,22 @@ let map_sets_of_closures_of_program (program : Flambda.program)
         program
       else
         Let_rec_symbol (defs, loop program')
-    | Initialize_symbol (symbol, tag, fields, program') ->
+    | Initialize_symbol (symbol, provenance, tag, fields, program') ->
       let done_something = ref false in
       let fields =
-        List.map (fun (field, provenance) ->
+        List.map (fun field ->
             let new_field = map_sets_of_closures field ~f in
             if not (new_field == field) then begin
               done_something := true
             end;
-            new_field, provenance)
+            new_field)
           fields
       in
       let new_program' = loop program' in
       if new_program' == program' && not !done_something then
         program
       else
-        Initialize_symbol (symbol, tag, fields, new_program')
+        Initialize_symbol (symbol, provenance, tag, fields, new_program')
     | Effect (expr, program') ->
       let new_expr = map_sets_of_closures expr ~f in
       let new_program' = loop program' in
@@ -894,22 +891,22 @@ let map_exprs_at_toplevel_of_program (program : Flambda.program)
         program
       else
         Let_rec_symbol (defs, new_program')
-    | Initialize_symbol (symbol, tag, fields, program') ->
+    | Initialize_symbol (symbol, provenance, tag, fields, program') ->
       let done_something = ref false in
       let fields =
-        List.map (fun (field, provenance) ->
+        List.map (fun field ->
             let new_field = f field in
             if not (new_field == field) then begin
               done_something := true
             end;
-            new_field, provenance)
+            new_field)
           fields
       in
       let new_program' = loop program' in
       if new_program' == program' && not !done_something then
         program
       else
-        Initialize_symbol (symbol, tag, fields, new_program')
+        Initialize_symbol (symbol, provenance, tag, fields, new_program')
     | Effect (expr, program') ->
       let new_expr = f expr in
       let new_program' = loop program' in

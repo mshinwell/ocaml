@@ -758,22 +758,19 @@ let lambda_to_flambda ~backend ~module_ident ~size ~filename lam
       location = Location.none;
     }
   in
-  let toplevel_module =
-    close t ~bound_name:(Variable.create "toplevel_module", provenance)
-      Env.empty lam
-  in
-  let fields =
-    List.map (fun field -> field, None) (Array.to_list fields)
-  in
   let module_initializer : Flambda.program_body =
     Initialize_symbol (
       block_symbol,
+      (* CR mshinwell: add provenance info *)
+      None,
       Tag.create_exn 0,
-      [toplevel_module, None],
+      [close t ~bound_name:(Variable.create "toplevel_module", provenance)
+        Env.empty lam],
       Initialize_symbol (
         module_symbol,
+        None,
         Tag.create_exn 0,
-        fields,
+        Array.to_list fields,
         End module_symbol))
   in
   { imported_symbols = t.imported_symbols;

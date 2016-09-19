@@ -171,9 +171,9 @@ let assign_symbols_and_collect_constant_definitions
         decls;
       collect_let_and_initialize_symbols program
     | Effect (_, program) -> collect_let_and_initialize_symbols program
-    | Initialize_symbol (symbol, _tag, fields, program) ->
+    | Initialize_symbol (symbol, _provenance, _tag, fields, program) ->
       collect_let_and_initialize_symbols program;
-      let fields = List.map (fun (field, _) -> tail_variable field) fields in
+      let fields = List.map tail_variable fields in
       Symbol.Tbl.replace initialize_symbol_to_definition_tbl symbol fields
     | End _ -> ()
   in

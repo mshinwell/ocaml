@@ -456,7 +456,7 @@ let all_lifted_constants (program : Flambda.program) =
           (symbol, decl) :: l)
         (loop program)
         decls
-    | Initialize_symbol (_, _, _, program)
+    | Initialize_symbol (_, _, _, _, program)
     | Effect (_, program) -> loop program
     | End _ -> []
   in
@@ -468,8 +468,8 @@ let all_lifted_constants_as_map program =
 let initialize_symbols (program : Flambda.program) =
   let rec loop (program : Flambda.program_body) =
     match program with
-    | Initialize_symbol (symbol, tag, fields, program) ->
-      (symbol, tag, fields) :: (loop program)
+    | Initialize_symbol (symbol, provenance, tag, fields, program) ->
+      (symbol, provenance, tag, fields) :: (loop program)
     | Effect (_, program)
     | Let_symbol (_, _, _, program)
     | Let_rec_symbol (_, program) -> loop program
@@ -489,7 +489,7 @@ let needed_import_symbols (program : Flambda.program) =
       (Symbol.Set.of_list
          (List.map fst (all_lifted_constants program)))
       (Symbol.Set.of_list
-         (List.map (fun (s, _, _) -> s) (initialize_symbols program)))
+         (List.map (fun (s, _, _, _) -> s) (initialize_symbols program)))
   in
   Symbol.Set.diff dependencies defined_symbol
 
@@ -504,7 +504,7 @@ let root_symbol (program : Flambda.program) =
     | Effect (_, program)
     | Let_symbol (_, _,  _, program)
     | Let_rec_symbol (_, program)
-    | Initialize_symbol (_, _, _, program) -> loop program
+    | Initialize_symbol (_, _, _, _, program) -> loop program
     | End root ->
       root
   in

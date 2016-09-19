@@ -32,23 +32,14 @@ let constant_field ((expr : Flambda.t), provenance)
 
 let rec loop (program : Flambda.program_body) : Flambda.program_body =
   match program with
-  | Initialize_symbol (symbol, tag, fields, program) ->
-    let constant_fields =
-      List.map constant_field fields
-    in
+  | Initialize_symbol (symbol, provenance, tag, fields, program) ->
+    let constant_fields = List.map constant_field fields in
     begin
       match Misc.Stdlib.List.some_if_all_elements_are_some constant_fields
     with
     | None ->
-      Initialize_symbol (symbol, tag, fields, loop program)
+      Initialize_symbol (symbol, provenance, tag, fields, loop program)
     | Some fields ->
-      let fields, provenances = List.split fields in
-      (* For the moment just pick the provenance info from the first field. *)
-      let provenance =
-        match provenances with
-        | provenance::_ -> provenance
-        | [] -> Misc.fatal_error "Initialize_symbol with no fields"
-      in
       Let_symbol (symbol, provenance, Block (tag, fields), loop program)
     end
   | Let_symbol (symbol, provenance, const, program) ->

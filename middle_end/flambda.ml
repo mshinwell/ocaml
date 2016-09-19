@@ -192,8 +192,8 @@ type program_body =
   | Let_rec_symbol of
       (Symbol.t * symbol_provenance option
         * constant_defining_value) list * program_body
-  | Initialize_symbol of Symbol.t * symbol_provenance option
-      * Tag.t * t list * program_body
+  | Initialize_symbol of
+      Symbol.t * symbol_provenance option * Tag.t * t list * program_body
   | Effect of t * program_body
   | End of Symbol.t
 
@@ -570,15 +570,12 @@ let rec print_program_body ppf (program : program_body) =
       "@[<2>let_rec_symbol@ (@[<hv 1>%a@])@]@."
       bindings defs;
     print_program_body ppf program
-  | Initialize_symbol (symbol, tag, fields, program) ->
-    fprintf ppf "@[<2>initialize_symbol@ @[<hv 1>(@[<2>%a@ %a@ %a@])@]@]@."
+  | Initialize_symbol (symbol, provenance, tag, fields, program) ->
+    fprintf ppf "@[<2>initialize_symbol@ @[<hv 1>(@[<2>%a%a@ %a@ %a@])@]@]@."
       Symbol.print symbol
+      print_symbol_provenance_opt provenance
       Tag.print tag
-      (Format.pp_print_list (fun ppf (expr, provenance) ->
-          fprintf ppf "%a%a"
-            print_symbol_provenance_opt provenance
-            lam expr)
-        ) fields;
+      (Format.pp_print_list lam) fields;
     print_program_body ppf program
   | Effect (expr, program) ->
     fprintf ppf "@[effect @[<hv 1>%a@]@]@."
@@ -770,8 +767,8 @@ and free_names_program ~free_names (program : program) =
           free_names_allocated_constant ~free_names const)
         defs;
       loop program
-    | Initialize_symbol (_, _, fields, program) ->
-      List.iter (fun (field, _provenance) ->
+    | Initialize_symbol (_, _, _, fields, program) ->
+      List.iter (fun field ->
           free_names_expr ?ignore_uses_in_project_var:None
             ?ignore_uses_as_callee:None ?ignore_uses_as_argument:None
             ~free_names field)

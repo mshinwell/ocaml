@@ -18,7 +18,7 @@
 
 type ('a, 'b) kind =
   | Initialisation of
-      (Symbol.t * Tag.t * (Flambda.t * Flambda.symbol_provenance option) list)
+      (Symbol.t * Flambda.symbol_provenance option * Tag.t * Flambda.t list)
 
 let should_copy (defining_expr : Flambda.defining_expr_of_let) =
   match defining_expr with
@@ -32,8 +32,8 @@ let should_copy (defining_expr : Flambda.defining_expr_of_let) =
 type extracted =
   | Expr of Variable.t * Flambda.t * Flambda.symbol_provenance option
   | Exprs of Variable.t list * Flambda.t * Flambda.symbol_provenance option
-  | Block of Variable.t * Tag.t
-      * (Variable.t * Flambda.symbol_provenance option) list
+  | Block of Variable.t * Tag.t * Variable.t list
+      * Flambda.symbol_provenance option
 
 type accumulated = {
   copied_lets :
@@ -98,30 +98,27 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
       | Prim (Pmakeblock (tag, Asttypes.Immutable, _value_kind), args, _dbg) ->
         let tag = Tag.create_exn tag in
         let args =
-          List.map (fun var ->
-              let provenance =
-                match provenance with
-                | None -> None
-                | Some provenance ->
-                  match Variable.original_ident var with
-                  | None -> None
-                  | Some original_ident ->
-                    let provenance : Flambda.symbol_provenance =
-                      { original_ident;
-                        module_path = provenance.module_path;
-                        location = provenance.location;
-                      }
-                    in
-                    Some provenance
-              in
-              let var =
-                try Variable.Map.find var substitution
-                with Not_found -> var
-              in
-              var, provenance)
+          List.map (fun v ->
+              try Variable.Map.find v substitution
+              with Not_found -> v)
             args
         in
-        Block (var, tag, args)
+        let provenance =
+          match provenance with
+          | None -> None
+          | Some provenance ->
+            match Variable.original_ident var with
+            | None -> None
+            | Some original_ident ->
+              let provenance : Flambda.symbol_provenance =
+                { original_idents = [original_ident];
+                  module_path = provenance.module_path;
+                  location = provenance.location;
+                }
+              in
+              Some provenance
+        in
+        Block (var, tag, args, provenance)
       | named ->
         let symbol_provenance : Flambda.symbol_provenance option =
           match provenance with
@@ -253,23 +250,17 @@ let rebuild_expr
       expr_with_read_symbols
   in
   Variable.Map.fold (fun var declaration body ->
-      let definition, provenance = Variable.Map.find var copied_definitions in
-      Flambda.create_let' declaration definition body ?provenance)
+      let definition = Variable.Map.find var copied_definitions in
+      (* CR mshinwell: this should presumably have provenance info *)
+      Flambda.create_let' declaration definition body)
     substitution expr_with_read_symbols
 
 let rebuild (accumulated : accumulated) =
-  let copied_definitions =
-    (* CR-soon mshinwell: add Variable.Map.of_list_<foo>
-         : (Variable.t * 'b * 'c) list -> ('b * 'c) Variable.Map.t *)
-    Variable.Map.of_list
-      (List.map (fun (var, defining_expr, provenance) ->
-          var, (defining_expr, provenance))
-        accumulated.copied_lets)
-  in
+  let copied_definitions = Variable.Map.of_list accumulated.copied_lets in
   let accumulated_extracted_lets =
     List.map (fun decl ->
         match decl with
-        | Block (var, _, _)
+        | Block (var, _, _, _)
         | Expr (var, _, _) ->
           Flambda_utils.make_variable_symbol var, decl
         | Exprs (vars, _, _) ->
@@ -290,7 +281,7 @@ let rebuild (accumulated : accumulated) =
          field of the field 0 of the symbol. *)
     List.fold_left (fun map (symbol, decl) ->
         match decl with
-        | Block (var, _tag, _fields) ->
+        | Block (var, _tag, _fields, _provenance) ->
           Variable.Map.add var (symbol, []) map
         | Expr (var, _expr, _provenance) ->
           Variable.Map.add var (symbol, [0]) map
@@ -317,25 +308,23 @@ let rebuild (accumulated : accumulated) =
              the [symbol] is not referenced. *)
           Initialisation
             (symbol,
+             provenance,
              Tag.create_exn 0,
-             [expr, provenance])
+             [expr])
         | Exprs (_vars, decl, provenance) ->
           let expr =
             rebuild_expr ~extracted_definitions ~copied_definitions
               ~substitute:true decl
           in
-          Initialisation (symbol, Tag.create_exn 0, [expr, provenance])
-        | Block (_var, tag, fields) ->
+          Initialisation (symbol, provenance, Tag.create_exn 0, [expr])
+        | Block (_var, tag, fields, provenance) ->
           let fields =
-            List.map (fun (var, provenance) ->
-                let field =
-                  rebuild_expr ~extracted_definitions ~copied_definitions
-                    ~substitute:true (Var var)
-                in
-                field, provenance)
+            List.map (fun var ->
+                rebuild_expr ~extracted_definitions ~copied_definitions
+                  ~substitute:true (Var var))
               fields
           in
-          Initialisation (symbol, tag, fields))
+          Initialisation (symbol, provenance, tag, fields))
       accumulated_extracted_lets
   in
   let terminator =
@@ -358,8 +347,8 @@ let introduce_symbols expr =
 let add_extracted introduced program =
   List.fold_right (fun extracted program ->
       match extracted with
-      | Initialisation (symbol, tag, def) ->
-        Flambda.Initialize_symbol (symbol, tag, def, program)
+      | Initialisation (symbol, provenance, tag, def) ->
+        Flambda.Initialize_symbol (symbol, provenance, tag, def, program)
       (* | Effect effect ->
         Flambda.Effect (effect, program) *))
     introduced program
@@ -375,20 +364,19 @@ let rec split_program (program : Flambda.program_body) : Flambda.program_body =
     let program = split_program program in
     let introduced, expr = introduce_symbols expr in
     add_extracted introduced (Flambda.Effect (expr, program))
-  | Initialize_symbol (symbol, tag, ((_::_::_) as fields), program) ->
+  | Initialize_symbol (symbol, provenance, tag, ((_::_::_) as fields),
+      program) ->
     (* CR-someday pchambart: currently the only initialize_symbol with more
        than 1 field is the module block. This could evolve, in that case
        this pattern should be handled properly. *)
-    Initialize_symbol (symbol, tag, fields, split_program program)
-  | Initialize_symbol (sym, tag, [], program) ->
-    (* CR mshinwell: how does this case arise? *)
-    Let_symbol (sym, None, Block (tag, []), split_program program)
-  | Initialize_symbol (symbol, tag, [field, provenance], program) ->
+    Initialize_symbol (symbol, provenance, tag, fields, split_program program)
+  | Initialize_symbol (sym, provenance, tag, [], program) ->
+    Let_symbol (sym, provenance, Block (tag, []), split_program program)
+  | Initialize_symbol (symbol, provenance, tag, [field], program) ->
     let program = split_program program in
     let introduced, field = introduce_symbols field in
     add_extracted introduced
-      (Flambda.Initialize_symbol
-        (symbol, tag, [field, provenance], program))
+      (Flambda.Initialize_symbol (symbol, provenance, tag, [field], program))
 
 let lift ~backend:_ (program : Flambda.program) =
   { program with
