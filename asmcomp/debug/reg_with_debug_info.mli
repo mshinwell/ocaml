@@ -41,6 +41,7 @@ val create
   -> part_of_value:int
   -> num_parts_of_value:int
   -> which_parameter:int option
+  -> provenance:Clambda.ulet_provenance option
   -> t
 
 val create_with_debug_info : reg:Reg.t -> debug_info:Debug_info.t option -> t
@@ -52,6 +53,7 @@ val create_copying_debug_info : reg:Reg.t -> debug_info_from:t -> t
 val reg : t -> Reg.t
 val location : t -> Reg.location
 val debug_info : t -> Debug_info.t option
+val provenance : t -> Clambda.ulet_provenance option
 
 val at_same_location : t -> Reg.t -> register_class:(Reg.t -> int) -> bool
 (** [at_same_location t reg] holds iff the register [t] corresponds to

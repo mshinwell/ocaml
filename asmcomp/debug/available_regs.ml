@@ -138,7 +138,7 @@ fail := true;
       | Iend -> Ok avail_before
       | Ireturn | Iop (Itailcall_ind _) | Iop (Itailcall_imm _) ->
         Unreachable
-      | Iop (Iname_for_debugger { ident; which_parameter; }) ->
+      | Iop (Iname_for_debugger { ident; which_parameter; provenance; }) ->
         (* First forget about any existing debug info to do with [ident]. *)
         let forgetting_ident =
           RD.Set.map (fun reg ->
@@ -163,6 +163,7 @@ fail := true;
                 ~part_of_value
                 ~num_parts_of_value
                 ~which_parameter
+                ~provenance
             in
             avail_after := RD.Set.add regd (RD.Set.filter_reg !avail_after reg)
           end

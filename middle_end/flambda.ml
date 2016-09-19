@@ -124,10 +124,8 @@ and let_mutable = {
 }
 
 and let_rec = {
-  vars_and_defining_exprs : (Variable.t * named) list;
+  vars_and_defining_exprs : (Variable.t * named * let_provenance option) list;
   body : t;
-  provenance : let_provenance option;
-  (** As for [provenance] in the type [let_expr], above. *)
 }
 
 and set_of_closures = {
@@ -183,9 +181,9 @@ and constant_defining_value_block_field =
 type expr = t
 
 type symbol_provenance = {
-  original_idents : Ident.t list;
   module_path : Path.t;
   location : Location.t;
+  original_ident : Ident.t;
 }
 
 type program_body =
@@ -194,8 +192,8 @@ type program_body =
   | Let_rec_symbol of
       (Symbol.t * symbol_provenance option
         * constant_defining_value) list * program_body
-  | Initialize_symbol of
-      Symbol.t * symbol_provenance option * Tag.t * t list * program_body
+  | Initialize_symbol of Symbol.t * symbol_provenance option
+      * Tag.t * t list * program_body
   | Effect of t * program_body
   | End of Symbol.t
 
@@ -297,11 +295,11 @@ let rec lam ppf (flam : t) =
       Mutable_variable.print mut_var
       Variable.print var
       lam body
-  | Let_rec { vars_and_defining_exprs = id_arg_list; body; provenance; } ->
+  | Let_rec { vars_and_defining_exprs = id_arg_list; body; } ->
       let bindings ppf id_arg_list =
         let spc = ref false in
         List.iter
-          (fun (id, l) ->
+          (fun (id, l, provenance) ->
              if !spc then fprintf ppf "@ " else spc := true;
              fprintf ppf "@[<2>%a%a@ %a@]"
                 print_let_provenance_opt provenance
@@ -530,8 +528,7 @@ let print_constant_defining_value ppf (const : constant_defining_value) =
 
 let print_symbol_provenance ppf (provenance : symbol_provenance) =
   fprintf ppf "<%a.%a at %a>"
-    (Format.pp_print_list (fun ppf id -> fprintf ppf "%a" Ident.print id))
-    provenance.original_idents
+    Ident.print provenance.original_ident
     Printtyp.path provenance.module_path
     Location.print_compact provenance.location
 
@@ -573,12 +570,15 @@ let rec print_program_body ppf (program : program_body) =
       "@[<2>let_rec_symbol@ (@[<hv 1>%a@])@]@."
       bindings defs;
     print_program_body ppf program
-  | Initialize_symbol (symbol, provenance, tag, fields, program) ->
-    fprintf ppf "@[<2>initialize_symbol@ @[<hv 1>(@[<2>%a%a@ %a@ %a@])@]@]@."
+  | Initialize_symbol (symbol, tag, fields, program) ->
+    fprintf ppf "@[<2>initialize_symbol@ @[<hv 1>(@[<2>%a@ %a@ %a@])@]@]@."
       Symbol.print symbol
-      print_symbol_provenance_opt provenance
       Tag.print tag
-      (Format.pp_print_list lam) fields;
+      (Format.pp_print_list (fun ppf (expr, provenance) ->
+          fprintf ppf "%a%a"
+            print_symbol_provenance_opt provenance
+            lam expr)
+        ) fields;
     print_program_body ppf program
   | Effect (expr, program) ->
     fprintf ppf "@[effect @[<hv 1>%a@]@]@."
@@ -638,8 +638,8 @@ let rec free_names_expr ?ignore_uses_in_project_var ?ignore_uses_as_callee
       | Let_mutable { initial_value = var; body; _ } ->
         free_variable var;
         aux body
-      | Let_rec { vars_and_defining_exprs = bindings; body; _ } ->
-        List.iter (fun (var, defining_expr) ->
+      | Let_rec { vars_and_defining_exprs = bindings; body; } ->
+        List.iter (fun (var, defining_expr, _provenance) ->
             bound_variable var;
             free_names_named ?ignore_uses_in_project_var
               ~free_names defining_expr)
@@ -770,8 +770,8 @@ and free_names_program ~free_names (program : program) =
           free_names_allocated_constant ~free_names const)
         defs;
       loop program
-    | Initialize_symbol (_, _, _, fields, program) ->
-      List.iter (fun field ->
+    | Initialize_symbol (_, _, fields, program) ->
+      List.iter (fun (field, _provenance) ->
           free_names_expr ?ignore_uses_in_project_var:None
             ?ignore_uses_as_callee:None ?ignore_uses_as_argument:None
             ~free_names field)
@@ -949,8 +949,8 @@ let iter_general ~toplevel f f_named maybe_named =
       | Let _ -> assert false
       | Let_mutable { body; _ } ->
         aux body
-      | Let_rec { vars_and_defining_exprs = defs; body; _ } ->
-        List.iter (fun (_, l) -> aux_named l) defs;
+      | Let_rec { vars_and_defining_exprs = defs; body; } ->
+        List.iter (fun (_, l, _) -> aux_named l) defs;
         aux body
       | Try_with (f1,_,f2)
       | While (f1,f2)

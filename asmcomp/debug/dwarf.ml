@@ -177,7 +177,7 @@ let construct_type_of_value_description t ~parent ~ident ~output_path
     ()
   in
   match type_info with
-  | From_cmt_file -> normal_case ()
+  | From_cmt_file _ -> normal_case ()
   | Phantom (_provenance, defining_expr) ->
     match defining_expr with
     | None -> normal_case ()
@@ -319,7 +319,7 @@ let construct_value_description t ~parent ~fundecl
     | Phantom ->
       let defining_expr =
         match type_info with
-        | From_cmt_file -> assert false
+        | From_cmt_file _ -> assert false
         | Phantom (_provenance, defining_expr) ->
           (* CR mshinwell: don't ignore provenance
              Follow-up: Is it really needed?  For example, Inlining_transforms
@@ -479,22 +479,44 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
     let ident, name_for_ident =
       match ident_for_type with
       | None ->
-        let name = "Foo.bar" in  (* CR-soon mshinwell: fix Name_laundry *)
+        let name = "Foo.bar" in  (* CR mshinwell: fix Name_laundry *)
         `Ident (Ident.create_persistent name), None
       | Some ident_for_type ->
-        (* If the unstamped name of [ident] is unambiguous within the function,
-           then use it; otherwise, emit the stamped name. *)
-        `Ident ident_for_type, Some (Ident.name ident_for_type)
+        let ident = `Ident ident_for_type in
+        match is_parameter with
+        | Local ->
+          (* If the unstamped name of [ident]is unambiguous within the function,
+             then use it; otherwise, equip the name with the location of its
+             definition. *)
+          if is_unique then
+            ident, Some (Ident.name ident_for_type)
+          else
+            let provenance =
+              match type_info with
+              | From_cmt_file provenance
+              | Phantom (provenance, _) -> provenance
+            in
+            (* CR-soon mshinwell: Try to remove this option *)
+            begin match provenance with
+            | None -> ident, Some (Ident.name ident_for_type)
+            | Some provenance ->
+              let name =
+                Format.sprintf "%s(%a)"
+                  (Ident.name ident_for_type)
+                  Location.print_compact provenance.location
+              in
+              ident, Some name
+            end
+        | Parameter _ ->
+          (* Parameters for a given function have unique names, so are never
+             equipped with locations. *)
+          ident, Some (Ident.name ident_for_type)
     in
     construct_type_of_value_description t
       ~parent:(Some t.compilation_unit_proto_die)
       ~ident ~output_path:t.output_path
       ~type_info ~proto_dies_for_idents
       ~reference;
-    (* CR mshinwell: this needs much more careful thought *)
-    (*
-      if is_unique then Ident.name ident else Ident.unique_name ident
-    *)
     let name_for_ident =
       match name_for_ident with
       | None -> []
@@ -546,17 +568,23 @@ let iterate_over_variable_like_things t ~available_ranges ~f =
          be associated with a given [ident_for_type] (due to inlining) may
          not all have the same value. *)
       let ident_for_type =
-        if Ident.name ident = "*closure_env*" then
+        if Ident.name ident = "*closure_env*" then begin
           None
-        else
-        match Ident.find_same ident t.idents_to_original_idents with
-        | exception Not_found ->
-          (* In this case the variable won't be given a name in the DWARF,
-             so as not to appear in the debugger; but we still need to emit
-             a DIE for it, as it may be referenced as part of some chain of
-             phantom lets. *)
-          None
-        | ident -> Some ident
+        end else begin
+          let provenance =
+            match Available_range.type_info range with
+            | From_cmt_file provenance
+            | Phantom (provenance, _) -> provenance
+          in
+          match provenance with
+          | None ->
+            (* In this case the variable won't be given a name in the DWARF,
+              so as not to appear in the debugger; but we still need to emit
+              a DIE for it, as it may be referenced as part of some chain of
+              phantom lets. *)
+            None
+          | Some provenance -> Some provenance.original_ident
+        end
       in
       f ~ident ~ident_for_type ~is_unique ~range)
 

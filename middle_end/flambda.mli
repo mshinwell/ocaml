@@ -235,10 +235,9 @@ and let_mutable = {
 }
 
 and let_rec = {
-  vars_and_defining_exprs : (Variable.t * named) list;
+  vars_and_defining_exprs : (Variable.t * named * let_provenance option) list;
+  (** [provenance] is as for [provenance] in the type [let_expr], above. *)
   body : t;
-  provenance : let_provenance option;
-  (** As for [provenance] in the type [let_expr], above. *)
 }
 
 (** The representation of a set of function declarations (possibly mutually
@@ -430,9 +429,9 @@ module Constant_defining_value :
 type expr = t
 
 type symbol_provenance = {
-  original_idents : Ident.t list;
   module_path : Path.t;
   location : Location.t;
+  original_ident : Ident.t;
 }
 
 (** A "program" is the contents of one compilation unit.  It describes the
@@ -478,7 +477,7 @@ type program_body =
       correctly simplify the [Project_closure] construction.  (See
       [Inline_and_simplify.simplify_project_closure] for that part.) *)
   | Initialize_symbol of Symbol.t * symbol_provenance option
-        * Tag.t * t list * program_body
+      * Tag.t * t list * program_body
   (** Define the given symbol as a constant block of the given size and
       tag; but with a possibly non-constant initializer.  The initializer
       will be executed at most once (from the entry point of the compilation

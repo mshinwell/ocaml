@@ -57,7 +57,7 @@ module Available_subrange : sig
 end
 
 type type_info =
-  | From_cmt_file
+  | From_cmt_file of Clambda.ulet_provenance option
   | Phantom of
       Clambda.ulet_provenance option * Mach.phantom_defining_expr option
 

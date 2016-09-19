@@ -113,8 +113,6 @@ let check_field ulam pos named_opt : Clambda.ulambda =
         Clambda.Uconst (Uconst_ref (str_const, None))],
       Debuginfo.none)
 
-let idents_to_original_idents = ref Ident.empty
-
 module Env : sig
   type t
 
@@ -165,14 +163,6 @@ end = struct
   (* CR-soon mshinwell: potentially misleading function name *)
   let add_fresh_ident t var =
     let id = Ident.create (Variable.base_name var) in
-    (* CR-soon mshinwell: Variables without [original_ident] should probably
-       not appear in DWARF.  Maybe we should tag [Ident.t]s or something *)
-    begin match Variable.original_ident var with
-    | Some original_ident ->
-      idents_to_original_idents :=
-        Ident.add id original_ident !idents_to_original_idents
-    | None -> ()
-    end;
     id, { t with var = Variable.Map.add var id t.var }
 
   let add_subst t var subst =
@@ -259,13 +249,14 @@ let to_clambda_const env (const : Flambda.constant_defining_value_block_field)
   | Const (Char c) -> Uconst_int (Char.code c)
   | Const (Const_pointer i) -> Uconst_ptr i
 
-let to_clambda_let_provenance (provenance : Flambda.let_provenance option) =
+let to_clambda_let_provenance var (provenance : Flambda.let_provenance option) =
   match provenance with
   | None -> None
   | Some provenance ->
     let provenance : Clambda.ulet_provenance =
       { module_path = provenance.module_path;
         location = provenance.location;
+        original_ident = Variable.original_ident var;
       }
     in
     Some provenance
@@ -278,7 +269,7 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
     let id, env_body = Env.add_fresh_ident env var in
     begin match defining_expr with
     | Normal defining_expr ->
-      let provenance = to_clambda_let_provenance provenance in
+      let provenance = to_clambda_let_provenance var provenance in
       Ulet (Immutable, Pgenval, provenance, id,
         to_clambda_named t env var defining_expr,
         to_clambda t env_body body)
@@ -353,22 +344,19 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
         provenance; } ->
     let id, env_body = Env.add_fresh_mutable_ident env mut_var in
     let def = subst_var env var in
-    let provenance = to_clambda_let_provenance provenance in
+    let provenance = to_clambda_let_provenance var provenance in
     Ulet (Mutable, contents_kind, provenance, id, def,
       to_clambda t env_body body)
-  | Let_rec { vars_and_defining_exprs = defs; body; provenance; } ->
+  | Let_rec { vars_and_defining_exprs = defs; body; } ->
     let env, defs =
-      List.fold_right (fun (var, def) (env, defs) ->
+      List.fold_right (fun (var, def, provenance) (env, defs) ->
           let id, env = Env.add_fresh_ident env var in
-          env, (id, var, def) :: defs)
+          env, (id, var, def, provenance) :: defs)
         defs (env, [])
     in
     let provenance = to_clambda_let_provenance provenance in
     let defs =
-      List.map (fun (id, var, def) ->
-          (* CR-someday mshinwell: consider different provenance for each
-             of the bindings.  This doesn't matter for the module path, but
-             does for the locations. *)
+      List.map (fun (id, var, def, provenance) ->
           provenance, id, to_clambda_named t env var def)
         defs
     in
@@ -866,14 +854,12 @@ type result = {
     (Clambda.ustructured_constant * (Clambda.usymbol_provenance option))
       Symbol.Map.t;
   exported : Export_info.t;
-  idents_to_original_idents : Ident.t Ident.tbl;
 }
 
 let convert (program, exported) : result =
-  (* CR-soon mshinwell: Restructure the functions above so there is a value
+  (* CR-someday mshinwell: Restructure the functions above so there is a value
      threaded through, like in [Inline_and_simplify], following the
-     evaluation order.  Then remove the "ref". *)
-  idents_to_original_idents := Ident.empty;
+     evaluation order. *)
   let current_unit =
     let offsets = Closure_offsets.compute program in
     { fun_offset_table = offsets.function_offsets;
@@ -931,5 +917,4 @@ let convert (program, exported) : result =
       ~constant_sets_of_closures:current_unit.constant_sets_of_closures
   in
   { expr; preallocated_blocks; structured_constants; exported;
-    idents_to_original_idents = !idents_to_original_idents;
   }

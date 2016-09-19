@@ -65,18 +65,16 @@ let assign_symbols_and_collect_constant_definitions
             match provenance with
             | None -> None
             | Some (provenance : Flambda.let_provenance) ->
-              let original_idents =
-                match Variable.original_ident var with
-                | None -> []
-                | Some original_ident -> [original_ident]
-              in
-              let provenance : Flambda.symbol_provenance =
-                { original_idents;
-                  module_path = provenance.module_path;
-                  location = provenance.location;
-                }
-              in
-              Some provenance
+              match Variable.original_ident var with
+              | None -> None
+              | Some original_ident ->
+                let provenance : Flambda.symbol_provenance =
+                  { original_ident;
+                    module_path = provenance.module_path;
+                    location = provenance.location;
+                  }
+                in
+                Some provenance
         in
         Variable.Tbl.add var_to_definition_tbl var (definition, provenance)
       in
@@ -173,9 +171,9 @@ let assign_symbols_and_collect_constant_definitions
         decls;
       collect_let_and_initialize_symbols program
     | Effect (_, program) -> collect_let_and_initialize_symbols program
-    | Initialize_symbol (symbol, _provenance, _tag, fields, program) ->
+    | Initialize_symbol (symbol, _tag, fields, program) ->
       collect_let_and_initialize_symbols program;
-      let fields = List.map tail_variable fields in
+      let fields = List.map (fun (field, _) -> tail_variable field) fields in
       Symbol.Tbl.replace initialize_symbol_to_definition_tbl symbol fields
     | End _ -> ()
   in

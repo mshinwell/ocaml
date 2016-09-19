@@ -105,12 +105,13 @@ and lift_lets_named _var (named:Flambda.named) ~toplevel : Flambda.named =
 
 module Sort_lets = Strongly_connected_components.Make (Variable)
 
-let rebuild_let_rec (defs:(Variable.t * Flambda.named) list) body
-      ~provenance =
+let rebuild_let_rec (defs
+        : (Variable.t * (Flambda.named * Flambda.let_provenance option)) list)
+      body =
   let map = Variable.Map.of_list defs in
   let graph =
     Variable.Map.map
-      (fun named ->
+      (fun (named, _provenance) ->
         (* CR-soon mshinwell: we should think about this more so we don't
            prevent removal of non-recursive bindings from "let rec"
            when in debug mode. *)
@@ -129,16 +130,18 @@ let rebuild_let_rec (defs:(Variable.t * Flambda.named) list) body
   Array.fold_left (fun body (component:Sort_lets.component) ->
       match component with
       | No_loop v ->
-        let def = Variable.Map.find v map in
+        let def, provenance = Variable.Map.find v map in
         Flambda.create_let v def body ?provenance
       | Has_loop l ->
         let vars_and_defining_exprs =
-          List.map (fun v -> v, Variable.Map.find v map) l
+          List.map (fun v ->
+              let def, provenance = Variable.Map.find v map in
+              v, def, provenance)
+            l
         in
         Flambda.Let_rec {
           vars_and_defining_exprs;
           body;
-          provenance;
         })
     body components
 
@@ -146,8 +149,13 @@ let lift_let_rec program =
   Flambda_iterators.map_exprs_at_toplevel_of_program program
     ~f:(Flambda_iterators.map_expr
           (fun expr -> match expr with
-             | Let_rec { vars_and_defining_exprs; body; provenance; } ->
-               rebuild_let_rec vars_and_defining_exprs body ~provenance
+             | Let_rec { vars_and_defining_exprs; body; } ->
+               let vars_and_defining_exprs =
+                 List.map (fun (var, defining_expr, provenance) ->
+                     var, (defining_expr, provenance))
+                   vars_and_defining_exprs
+               in
+               rebuild_let_rec vars_and_defining_exprs body
              | expr -> expr))
 
 let lift_lets program =

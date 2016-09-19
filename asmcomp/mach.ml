@@ -68,7 +68,8 @@ type operation =
   | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
   | Ifloatofint | Iintoffloat
   | Ispecific of Arch.specific_operation
-  | Iname_for_debugger of { ident : Ident.t; which_parameter : int option; }
+  | Iname_for_debugger of { ident : Ident.t; which_parameter : int option;
+      provenance : Clambda.ulet_provenance option; }
 
 type instruction =
   { desc: instruction_desc;

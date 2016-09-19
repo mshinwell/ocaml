@@ -236,8 +236,8 @@ module Inconstants (P:Param) (Backend:Backend_intf.S) = struct
     | Let_mutable { initial_value = var; body; _ } ->
       mark_var var curr;
       mark_loop ~toplevel curr body
-    | Let_rec { vars_and_defining_exprs = defs; body; _ } ->
-      List.iter (fun (var, def) ->
+    | Let_rec { vars_and_defining_exprs = defs; body; } ->
+      List.iter (fun (var, def, _provenance) ->
           mark_named ~toplevel [Var var] def;
           (* adds 'var in NC => curr in NC' same remark as let case *)
           mark_var var curr)
@@ -449,8 +449,8 @@ module Inconstants (P:Param) (Backend:Backend_intf.S) = struct
     let rec loop (program : Flambda.program_body) =
       match program with
       | End _ -> ()
-      | Initialize_symbol (symbol, _provenance, _tag, fields,program) ->
-        List.iteri (fun i field ->
+      | Initialize_symbol (symbol, _tag, fields,program) ->
+        List.iteri (fun i (field, _provenance) ->
             mark_loop ~toplevel:true
               [Symbol symbol; Symbol_field (symbol,i)] field)
           fields;

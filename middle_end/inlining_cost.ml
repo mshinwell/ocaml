@@ -91,8 +91,8 @@ let lambda_smaller' lam ~than:threshold =
       end;
       lambda_size body
     | Let_mutable { body } -> lambda_size body
-    | Let_rec { vars_and_defining_exprs = bindings; body; _ } ->
-      List.iter (fun (_, lam) -> lambda_named_size lam) bindings;
+    | Let_rec { vars_and_defining_exprs = bindings; body; } ->
+      List.iter (fun (_, lam, _) -> lambda_named_size lam) bindings;
       lambda_size body
     | Switch (_, sw) ->
       let aux = function _::_::_ -> size := !size + 5 | _ -> () in

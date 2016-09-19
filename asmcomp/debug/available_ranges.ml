@@ -135,7 +135,7 @@ end = struct
 end
 
 type type_info =
-  | From_cmt_file
+  | From_cmt_file of Clambda.ulet_provenance option
   | Phantom of
       Clambda.ulet_provenance option * Mach.phantom_defining_expr option
 
@@ -530,7 +530,7 @@ module Make_ranges = Make (struct
         | Some index -> Parameter { index; }
       in
       let ident = RD.Debug_info.holds_value_of debug_info in
-      Some (ident, From_cmt_file, is_parameter)
+      Some (ident, From_cmt_file (RD.provenance reg), is_parameter)
 
   let create_subrange ~fundecl:_ ~key:reg ~start_pos ~start_insn ~end_pos
         ~end_pos_offset =
@@ -602,7 +602,7 @@ let create ~fundecl =
   let identifiers_without_ranges =
     fold t ~init:[] ~f:(fun acc ~ident:_ ~is_unique:_ ~range ->
       match Available_range.type_info range with
-      | From_cmt_file -> acc
+      | From_cmt_file _ -> acc
       | Phantom (_, defining_expr) ->
         let idents =
           match defining_expr with

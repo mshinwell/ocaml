@@ -33,9 +33,9 @@ let rec no_effects (flam : Flambda.t) =
     in
     no_effects_defining_expr && no_effects body
   | Let_mutable { body } -> no_effects body
-  | Let_rec { vars_and_defining_exprs = defs; body; _ } ->
+  | Let_rec { vars_and_defining_exprs = defs; body; } ->
     no_effects body
-      && List.for_all (fun (_, def) -> no_effects_named def) defs
+      && List.for_all (fun (_, def, _) -> no_effects_named def) defs
   | If_then_else (_, ifso, ifnot) -> no_effects ifso && no_effects ifnot
   | Switch (_, sw) ->
     let aux (_, flam) = no_effects flam in

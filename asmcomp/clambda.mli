@@ -29,6 +29,7 @@ type usymbol_provenance = {
 type ulet_provenance = {
   module_path : Path.t;
   location : Location.t;
+  original_ident : Ident.t;
 }
 
 type ustructured_constant =

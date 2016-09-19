@@ -74,7 +74,7 @@ let size_expr env exp =
         List.fold_right (fun e sz -> size localenv e + sz) el 0
     | Cop(op, _) ->
         size_machtype(oper_result_type op)
-    | Clet(id, arg, body) ->
+    | Clet(id, _, arg, body) ->
         size (Tbl.add id (size localenv arg) localenv) body
     | Csequence(_e1, e2) ->
         size localenv e2
@@ -214,7 +214,8 @@ method is_simple_expr = function
   | Cblockheader _ -> true
   | Cvar _ -> true
   | Ctuple el -> List.for_all self#is_simple_expr el
-  | Clet(_id, arg, body) -> self#is_simple_expr arg && self#is_simple_expr body
+  | Clet(_id, _, arg, body) ->
+      self#is_simple_expr arg && self#is_simple_expr body
   | Csequence(e1, e2) -> self#is_simple_expr e1 && self#is_simple_expr e2
   | Cop(op, args) ->
       begin match op with
@@ -611,10 +612,10 @@ method emit_expr env exp =
       with Not_found ->
         fatal_error("Selection.emit_expr: unbound var " ^ Ident.unique_name v)
       end
-  | Clet(v, e1, e2) ->
+  | Clet(v, provenance, e1, e2) ->
       begin match self#emit_expr env e1 with
         None -> None
-      | Some r1 -> self#emit_expr (self#bind_let env v r1) e2
+      | Some r1 -> self#emit_expr (self#bind_let env v r1 ~provenance) e2
       end
   | Cphantom_let (ident, provenance, defining_expr, body) ->
       let env =
@@ -803,7 +804,7 @@ method private emit_sequence env exp =
   let r = s#emit_expr env exp in
   (r, s)
 
-method private bind_let env ident r1 =
+method private bind_let env ident r1 ~provenance =
   let result =
     if all_regs_anonymous r1 then begin
       name_regs ident r1;
@@ -815,7 +816,9 @@ method private bind_let env ident r1 =
       { env with idents = Tbl.add ident rv env.idents; }
     end
   in
-  let naming_op = Iname_for_debugger { ident; which_parameter = None; } in
+  let naming_op =
+    Iname_for_debugger { ident; which_parameter = None; provenance; }
+  in
   self#insert_debug env (Iop naming_op) Debuginfo.none r1 [| |];
   result
 
@@ -922,10 +925,10 @@ method private emit_return env exp =
 
 method emit_tail env exp =
   match exp with
-    Clet(v, e1, e2) ->
+    Clet(v, provenance, e1, e2) ->
       begin match self#emit_expr env e1 with
         None -> ()
-      | Some r1 -> self#emit_tail (self#bind_let env v r1) e2
+      | Some r1 -> self#emit_tail (self#bind_let env v r1 ~provenance) e2
       end
   | Cphantom_let (ident, provenance, defining_expr, body) ->
       let env =

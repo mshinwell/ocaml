@@ -253,7 +253,8 @@ and same_move_within_set_of_closures (m1 : Flambda.move_within_set_of_closures)
     && Closure_id.equal m1.start_from m2.start_from
     && Closure_id.equal m1.move_to m2.move_to
 
-and samebinding (v1, n1) (v2, n2) =
+and samebinding (v1, n1, _provenance1) (v2, n2, _provenance2) =
+  (* Provenance can be ignored here. *)
   Variable.equal v1 v2 && same_named n1 n2
 
 and sameswitch (fs1 : Flambda.switch) (fs2 : Flambda.switch) =
@@ -455,7 +456,7 @@ let all_lifted_constants (program : Flambda.program) =
           (symbol, decl) :: l)
         (loop program)
         decls
-    | Initialize_symbol (_, _, _, _, program)
+    | Initialize_symbol (_, _, _, program)
     | Effect (_, program) -> loop program
     | End _ -> []
   in
@@ -467,8 +468,8 @@ let all_lifted_constants_as_map program =
 let initialize_symbols (program : Flambda.program) =
   let rec loop (program : Flambda.program_body) =
     match program with
-    | Initialize_symbol (symbol, provenance, tag, fields, program) ->
-      (symbol, provenance, tag, fields) :: (loop program)
+    | Initialize_symbol (symbol, tag, fields, program) ->
+      (symbol, tag, fields) :: (loop program)
     | Effect (_, program)
     | Let_symbol (_, _, _, program)
     | Let_rec_symbol (_, program) -> loop program
@@ -488,7 +489,7 @@ let needed_import_symbols (program : Flambda.program) =
       (Symbol.Set.of_list
          (List.map fst (all_lifted_constants program)))
       (Symbol.Set.of_list
-         (List.map (fun (s, _, _, _) -> s) (initialize_symbols program)))
+         (List.map (fun (s, _, _) -> s) (initialize_symbols program)))
   in
   Symbol.Set.diff dependencies defined_symbol
 
@@ -503,7 +504,7 @@ let root_symbol (program : Flambda.program) =
     | Effect (_, program)
     | Let_symbol (_, _,  _, program)
     | Let_rec_symbol (_, program)
-    | Initialize_symbol (_, _, _, _, program) -> loop program
+    | Initialize_symbol (_, _, _, program) -> loop program
     | End root ->
       root
   in
@@ -735,9 +736,9 @@ let substitute_read_symbol_field_for_variables
         (Let_mutable { let_mutable with initial_value = fresh })
     | Let_mutable _ ->
       expr
-    | Let_rec { vars_and_defining_exprs = defs; body; provenance; } ->
+    | Let_rec { vars_and_defining_exprs = defs; body; } ->
       let free_variables_of_defs =
-        List.fold_left (fun set (_, named) ->
+        List.fold_left (fun set (_, named, _) ->
             let free_variables =
               Free_names.all_free_variables (Flambda.free_names_named named)
             in
@@ -756,15 +757,14 @@ let substitute_read_symbol_field_for_variables
           Variable.Map.of_set (fun var -> Variable.rename var) to_substitute
         in
         let defs =
-          List.map (fun (var, named) ->
-              var, substitute_named bindings named)
+          List.map (fun (var, named, provenance) ->
+              var, substitute_named bindings named, provenance)
             defs
         in
         let expr =
           Flambda.Let_rec {
             vars_and_defining_exprs = defs;
             body;
-            provenance;
           }
         in
         Variable.Map.fold (fun to_substitute fresh expr ->

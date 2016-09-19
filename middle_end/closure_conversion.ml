@@ -352,6 +352,8 @@ and close t ?(bound_name:(Variable.t * Flambda.let_provenance) option) env
               body))
           (close t env ?bound_name body) function_declarations
       in
+      (* CR-soon mshinwell: The provenance information should be more
+         accurate in this case. *)
       Flambda.create_let set_of_closures_var set_of_closures body
         ~provenance
     | None ->
@@ -361,13 +363,25 @@ and close t ?(bound_name:(Variable.t * Flambda.let_provenance) option) env
       let defs =
         List.map (fun (id, def) ->
             let var = Env.find_var env id in
-            var, close_let_bound_expression t ~let_rec_ident:id var env def)
+            let provenance =
+              (* CR-soon mshinwell: fix provenance for non-functions *)
+              match def with
+              | Lambda.Lfunction { loc; _ } ->
+                let provenance  : Flambda.let_provenance =
+                  { module_path = Env.current_module_path env;
+                    location = loc;
+                  }
+                in
+                Some provenance
+              | _ -> None
+            in
+            var, close_let_bound_expression t ~let_rec_ident:id var env def,
+              provenance)
           defs
       in
       Let_rec {
         vars_and_defining_exprs = defs;
         body = close t env ?bound_name body;
-        provenance = Some provenance;
       }
     end
   | Lsend (kind, meth, obj, args, loc) ->
@@ -744,19 +758,22 @@ let lambda_to_flambda ~backend ~module_ident ~size ~filename lam
       location = Location.none;
     }
   in
+  let toplevel_module =
+    close t ~bound_name:(Variable.create "toplevel_module", provenance)
+      Env.empty lam
+  in
+  let fields =
+    List.map (fun field -> field, None) (Array.to_list fields)
+  in
   let module_initializer : Flambda.program_body =
     Initialize_symbol (
       block_symbol,
-      (* CR mshinwell: add provenance info *)
-      None,
       Tag.create_exn 0,
-      [close t ~bound_name:(Variable.create "toplevel_module", provenance)
-        Env.empty lam],
+      [toplevel_module, None],
       Initialize_symbol (
         module_symbol,
-        None,
         Tag.create_exn 0,
-        Array.to_list fields,
+        fields,
         End module_symbol))
   in
   { imported_symbols = t.imported_symbols;
