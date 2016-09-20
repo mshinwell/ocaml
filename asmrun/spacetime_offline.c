@@ -187,6 +187,15 @@ CAMLprim value caml_spacetime_c_node_call_site(value node)
   return caml_copy_int64((uint64_t) Decode_c_node_pc(c_node->pc));
 }
 
+CAMLprim value caml_spacetime_c_node_annotation_of_closure(value node)
+{
+  c_node* c_node;
+  Assert(node != (value) NULL);
+  Assert(Is_c_node(node));
+  c_node = caml_spacetime_offline_c_node_of_stored_pointer_not_null(node);
+  return c_node->data.call.profinfo;
+}
+
 CAMLprim value caml_spacetime_c_node_callee_node(value node)
 {
   c_node* c_node;
@@ -197,10 +206,10 @@ CAMLprim value caml_spacetime_c_node_callee_node(value node)
   /* This might be an uninitialised tail call point: for example if an OCaml
      callee was indirectly called but the callee wasn't instrumented (e.g. a
      leaf function that doesn't allocate). */
-  if (Is_tail_caller_node_encoded(c_node->data.callee_node)) {
+  if (Is_tail_caller_node_encoded(c_node->data.call.callee_node)) {
     return Val_unit;
   }
-  return c_node->data.callee_node;
+  return c_node->data.call.callee_node;
 }
 
 CAMLprim value caml_spacetime_c_node_profinfo(value node)

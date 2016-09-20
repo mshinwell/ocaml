@@ -175,7 +175,7 @@ let code_for_blockheader ~value's_header ~node ~dbg =
 
 type callee =
   | Direct of string
-  | Indirect of Cmm.expression
+  | Indirect of { callee : Cmm.expression; closure : Cmm.expression; }
 
 let code_for_call ~node ~callee ~is_tail ~label =
   (* We treat self recursive calls as tail calls to avoid blow-ups in the
@@ -212,14 +212,14 @@ let code_for_call ~node ~callee ~is_tail ~label =
        (That move is inserted in [Selectgen].) *)
     match callee with
     | Direct _callee -> Cvar place_within_node
-    | Indirect callee ->
+    | Indirect { callee; closure; } ->
       let caller_node =
         if is_tail then node
         else Cconst_int 1  (* [Val_unit] *)
       in
       Cop (Cextcall ("caml_spacetime_indirect_node_hole_ptr",
           [| Int |], false, Debuginfo.none, None),
-        [callee; Cvar place_within_node; caller_node]))
+        [callee; closure; Cvar place_within_node; caller_node]))
 
 class virtual instruction_selection = object (self)
   inherit Selectgen.selector_generic as super
@@ -240,16 +240,26 @@ class virtual instruction_selection = object (self)
     | None -> assert false
     | Some reg -> Some reg
 
-  method private instrument_indirect_call ~env ~callee ~is_tail
+  method private instrument_indirect_call ~env ~arg ~is_tail
         ~label_after =
-    (* [callee] is a pseudoregister, so we have to bind it in the environment
-       and reference the variable to which it is bound. *)
+    assert (Array.length arg >= 2);
+    (* CR mshinwell: check this is ok for arguments across multiple regs.
+       Presumably that should never happen for the environment pointer. *)
+    let callee = arg.(0) in
+    let closure = arg.(Array.length arg - 1) in
+    (* [callee] and [closure] are pseudoregisters, so we have to bind them in
+       the environment and reference the variable to which it is bound. *)
     let callee_ident = Ident.create "callee" in
     let env = Tbl.add callee_ident [| callee |] env in
+    let closure_ident = Ident.create "closure" in
+    let env = Tbl.add closure_ident [| closure |] env in
     let instrumentation =
       code_for_call
         ~node:(Lazy.force !spacetime_node)
-        ~callee:(Indirect (Cmm.Cvar callee_ident))
+        ~callee:(Indirect
+          { callee = Cmm.Cvar callee_ident;
+            closure = Cmm.Cvar closure_ident;
+          })
         ~is_tail
         ~label:label_after
     in
@@ -269,15 +279,15 @@ class virtual instruction_selection = object (self)
         assert (Array.length arg = 0);
         self#instrument_direct_call ~env ~func ~is_tail:false ~label_after
       | M.Iop (M.Icall_ind { label_after; }) ->
-        assert (Array.length arg = 1);
-        self#instrument_indirect_call ~env ~callee:arg.(0)
+        assert (Array.length arg >= 2);  (* callee and closure pointer *)
+        self#instrument_indirect_call ~env ~arg
           ~is_tail:false ~label_after
       | M.Iop (M.Itailcall_imm { func; label_after; }) ->
         assert (Array.length arg = 0);
         self#instrument_direct_call ~env ~func ~is_tail:true ~label_after
       | M.Iop (M.Itailcall_ind { label_after; }) ->
-        assert (Array.length arg = 1);
-        self#instrument_indirect_call ~env ~callee:arg.(0)
+        assert (Array.length arg >= 2);
+        self#instrument_indirect_call ~env ~arg
           ~is_tail:true ~label_after
       | M.Iop (M.Iextcall { func; alloc = true; label_after; }) ->
         (* N.B. No need to instrument "noalloc" external calls. *)

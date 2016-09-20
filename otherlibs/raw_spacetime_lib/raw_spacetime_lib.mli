@@ -151,6 +151,9 @@ module Trace : sig
         (** The address of the first instruction of the callee. *)
         val callee : t -> Function_entry_point.t
 
+        (** The annotation of the closure being applied. *)
+        val annotation_of_closure : t -> Annotation.t
+
         (** The node corresponding to the callee. *)
         val callee_node : t -> node
 

@@ -557,7 +557,8 @@ static c_node* allocate_c_node(void)
 
   node->gc_header =
     Make_header(sizeof(c_node)/sizeof(uintnat) - 1, C_node_tag, Caml_black);
-  node->data.callee_node = Val_unit;
+  node->data.call.callee_node = Val_unit;
+  node->data.call.profinfo = Val_unit;
   node->next = Val_unit;
 
   return node;
@@ -566,15 +567,16 @@ static c_node* allocate_c_node(void)
 /* Since a given indirect call site either always yields tail calls or
    always yields non-tail calls, the output of
    [caml_spacetime_indirect_node_hole_ptr] is uniquely determined by its
-   first two arguments (the callee and the node hole).  We cache these
-   to increase performance of recursive functions containing an indirect
+   first three arguments (the callee, closure and the node hole).  We cache
+   these to increase performance of recursive functions containing an indirect
    call (e.g. [List.map] when not inlined). */
 static void* last_indirect_node_hole_ptr_callee;
+static uintnat last_indirect_node_hole_ptr_closure_profinfo;
 static value* last_indirect_node_hole_ptr_node_hole;
 static value* last_indirect_node_hole_ptr_result;
 
 CAMLprim value* caml_spacetime_indirect_node_hole_ptr
-      (void* callee, value* node_hole, value caller_node)
+      (void* callee, value closure, value* node_hole, value caller_node)
 {
   /* Find the address of the node hole for an indirect call to [callee].
      If [caller_node] is not [Val_unit], it is a pointer to the caller's
@@ -582,16 +584,34 @@ CAMLprim value* caml_spacetime_indirect_node_hole_ptr
 
   c_node* c_node;
   value encoded_callee;
+  uintnat closure_profinfo;
+  value val_closure_profinfo;
+
+  /* Find the profinfo for the closure being applied. */
+  if (!Is_block(closure)) {  /* for the C -> OCaml transition: see below. */
+    closure_profinfo = Long_val(closure);
+  }
+  else {
+    Assert(Is_block(closure));
+    if (Tag_val(closure) == Infix_tag) {
+      closure -= Infix_offset_val(closure);
+    }
+    Assert(Tag_val(closure) == Infix_tag);
+    closure_profinfo = Profinfo_val(closure);
+  }
 
   if (callee == last_indirect_node_hole_ptr_callee
+      && closure_profinfo == last_indirect_node_hole_ptr_closure_profinfo
       && node_hole == last_indirect_node_hole_ptr_node_hole) {
     return last_indirect_node_hole_ptr_result;
   }
 
   last_indirect_node_hole_ptr_callee = callee;
+  last_indirect_node_hole_ptr_closure_profinfo = closure_profinfo;
   last_indirect_node_hole_ptr_node_hole = node_hole;
 
   encoded_callee = Encode_c_node_pc_for_call(callee);
+  val_closure_profinfo = Val_long(closure_profinfo);
 
   while (*node_hole != Val_unit) {
     Assert(((uintnat) *node_hole) % sizeof(value) == 0);
@@ -601,8 +621,9 @@ CAMLprim value* caml_spacetime_indirect_node_hole_ptr
     Assert(c_node != NULL);
     Assert(caml_spacetime_classify_c_node(c_node) == CALL);
 
-    if (c_node->pc == encoded_callee) {
-      last_indirect_node_hole_ptr_result = &(c_node->data.callee_node);
+    if (c_node->pc == encoded_callee
+          && c_node->data.call.profinfo == val_closure_profinfo) {
+      last_indirect_node_hole_ptr_result = &(c_node->data.call.callee_node);
       return last_indirect_node_hole_ptr_result;
     }
     else {
@@ -612,13 +633,14 @@ CAMLprim value* caml_spacetime_indirect_node_hole_ptr
 
   c_node = allocate_c_node();
   c_node->pc = encoded_callee;
+  c_node->data.call.profinfo = val_closure_profinfo;
 
   if (caller_node != Val_unit) {
     /* This is a tail call site.
        Perform the initialization equivalent to that emitted by
        [Spacetime.code_for_function_prologue] for direct tail call
        sites. */
-    c_node->data.callee_node = Encode_tail_caller_node(caller_node);
+    c_node->data.call.callee_node = Encode_tail_caller_node(caller_node);
   }
 
   *node_hole = caml_spacetime_stored_pointer_of_c_node(c_node);
@@ -626,7 +648,7 @@ CAMLprim value* caml_spacetime_indirect_node_hole_ptr
   Assert(((uintnat) *node_hole) % sizeof(value) == 0);
   Assert(*node_hole != Val_unit);
 
-  last_indirect_node_hole_ptr_result = &(c_node->data.callee_node);
+  last_indirect_node_hole_ptr_result = &(c_node->data.call.callee_node);
 
   return last_indirect_node_hole_ptr_result;
 }
@@ -834,7 +856,7 @@ static NOINLINE void* find_trie_node_from_libunwind(int for_allocation,
 
     Assert(caml_spacetime_classify_c_node(node) == expected_type);
     Assert(pc_inside_c_node_matches(node, pc));
-    node_hole = &node->data.callee_node;
+    node_hole = &node->data.call.callee_node;
   }
 
   if (must_initialise_node_for_allocation) {
@@ -937,10 +959,14 @@ void caml_spacetime_c_to_ocaml(void* ocaml_entry_point,
   Assert(Wosize_val(node) == Node_num_header_words + Indirect_num_fields);
 
   /* Search the node to find the node hole corresponding to the indirect
-     call to the OCaml function. */
+     call to the OCaml function.  For the moment we do not distinguish between
+     applications of different closures, to save churn in asmrun/amd64.S
+     (there is not a consistent register holding the closure between the
+     various [caml_callback*] variants). */
   caml_spacetime_trie_node_ptr =
     caml_spacetime_indirect_node_hole_ptr(
       ocaml_entry_point,
+      Val_long(0),
       &Indirect_pc_linked_list(node, Node_num_header_words),
       Val_unit);
   Assert(*caml_spacetime_trie_node_ptr == Val_unit

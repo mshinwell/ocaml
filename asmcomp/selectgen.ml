@@ -574,7 +574,7 @@ method emit_expr env exp =
               let (loc_arg, stack_ofs) = Proc.loc_arguments rarg in
               let loc_res = Proc.loc_results rd in
               let spacetime_reg =
-                self#about_to_emit_call env (Iop new_op) [| r1.(0) |]
+                self#about_to_emit_call env (Iop new_op) r1
               in
               self#insert_move_args rarg loc_arg stack_ofs;
               self#maybe_emit_spacetime_move ~spacetime_reg;
@@ -832,7 +832,7 @@ method emit_tail env exp =
               if stack_ofs = 0 then begin
                 let call = Iop (Itailcall_ind { label_after; }) in
                 let spacetime_reg =
-                  self#about_to_emit_call env call [| r1.(0) |]
+                  self#about_to_emit_call env call r1
                 in
                 self#insert_moves rarg loc_arg;
                 self#maybe_emit_spacetime_move ~spacetime_reg;
@@ -842,7 +842,7 @@ method emit_tail env exp =
                 let rd = self#regs_for ty in
                 let loc_res = Proc.loc_results rd in
                 let spacetime_reg =
-                  self#about_to_emit_call env (Iop new_op) [| r1.(0) |]
+                  self#about_to_emit_call env (Iop new_op) r1
                 in
                 self#insert_move_args rarg loc_arg stack_ofs;
                 self#maybe_emit_spacetime_move ~spacetime_reg;

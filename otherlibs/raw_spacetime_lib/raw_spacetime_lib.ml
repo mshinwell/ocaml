@@ -232,6 +232,10 @@ module Trace = struct
           = "caml_spacetime_only_works_for_native_code"
             "caml_spacetime_c_node_call_site"
 
+        external annotation_of_closure : t -> Annotation.t
+          = "caml_spacetime_only_works_for_native_code"
+            "caml_spacetime_c_node_annotation_of_closure"
+
         (* This can return a node satisfying "is_null" in the case of an
            uninitialised tail call point.  See the comment in the C code. *)
         external callee_node : t -> node

@@ -136,7 +136,10 @@ typedef struct {
   uintnat gc_header;
   uintnat pc;           /* see above for encodings */
   union {
-    value callee_node;  /* for CALL */
+    struct {
+      value callee_node;
+      value profinfo;
+    } call;  /* for CALL */
     allocation_point allocation;  /* for ALLOCATION */
   } data;
   value next;           /* [Val_unit] for the end of the list */
