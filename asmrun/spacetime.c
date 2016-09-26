@@ -660,9 +660,6 @@ static value maybe_resize_hashtable(value table)
       }
     }
 
-    printf("resized table, old %p new %p\n", (void*) table, (void*) new_table);
-    fflush(stdout);
-
     return new_table;
   }
 
