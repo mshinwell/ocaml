@@ -563,15 +563,106 @@ static c_node* allocate_c_node(void)
   return node;
 }
 
-/* Since a given indirect call site either always yields tail calls or
-   always yields non-tail calls, the output of
-   [caml_spacetime_indirect_node_hole_ptr] is uniquely determined by its
-   first two arguments (the callee and the node hole).  We cache these
-   to increase performance of recursive functions containing an indirect
-   call (e.g. [List.map] when not inlined). */
-static void* last_indirect_node_hole_ptr_callee;
-static value* last_indirect_node_hole_ptr_node_hole;
-static value* last_indirect_node_hole_ptr_result;
+#define Max_entries(size) (ceil(0.65 * size))
+
+#define Hashtable_index(hashtable, index) (((value*) hashtable)[index])
+#define Hashtable_max_entries(hashtable) \
+  (Long_val(Hashtable_index(hashtable, 0)))
+#define Hashtable_num_entries(hashtable) \
+  (Long_val(Hashtable_index(hashtable, 1)))
+#define Hashtable_size(hashtable) \
+  (Wosize_val((value) hashtable) - 2)
+#define Hashtable_index_of_callee(hashtable, callee) \
+  ((((uintnat) callee) % Hashtable_size(table)) + 2)
+
+static value allocate_hashtable(int initial_size)
+{
+  value table;
+  uintnat index;
+  size_t size_in_bytes_including_header;
+
+  size_in_bytes_including_header = (3 + initial_size) * sizeof(value);
+
+  table = (value) (start_of_free_node_block + sizeof(value));
+  if (end_of_free_node_block - start_of_free_node_block
+        < size_in_bytes_including_header) {
+    reinitialise_free_node_block();
+    table = (value) (start_of_free_node_block + sizeof(value));
+    Assert(end_of_free_node_block - start_of_free_node_block
+            >= size_in_bytes_including_header);
+  }
+  start_of_free_node_block += size_in_bytes_including_header;
+
+  for (index = 0; index < initial_size; index++) {
+    ((value*) table)[index + 2] = Val_unit;
+  }
+
+  ((value*) table)[-1] =
+    Make_header(initial_size, Hashtable_node_tag, Caml_black);
+  ((value*) table)[0] = Val_long(Max_entries(initial_size));
+  ((value*) table)[1] = Val_long(0);
+
+  return table;
+}
+
+typedef struct hashtable_entry {
+  value callee;
+  value callee_node;
+  struct hashtable_entry* next;
+} hashtable_entry;
+
+static hashtable_entry* allocate_hashtable_entry(void)
+{
+  hashtable_entry* entry;
+  size_t size_in_bytes_including_header;
+
+  size_in_bytes_including_header = sizeof(hashtable_entry) + sizeof(value);
+  entry = (hashtable_entry*) (start_of_free_node_block + sizeof(value));
+  
+  if (end_of_free_node_block - start_of_free_node_block
+      < size_in_bytes_including_header) {
+    reinitialise_free_node_block();
+    entry = (hashtable_entry*) (start_of_free_node_block + sizeof(value));
+    Assert(end_of_free_node_block - start_of_free_node_block
+           >= size_in_bytes_including_header);
+    ((value*) entry)[-1] =
+      Make_header(sizeof(hashtable_entry) / sizeof(value), 0, Caml_black);
+  }
+
+  return entry;
+}
+
+static value maybe_resize_hashtable(value table)
+{
+  if (Hashtable_num_entries(table) >= Hashtable_max_entries(table)) {
+    value new_table;
+    uintnat index;
+    uintnat new_size = Hashtable_size(table) * 2;
+
+    new_table = allocate_hashtable(new_size);
+
+    for (index = 0; index < Hashtable_size(table); index++) {
+      hashtable_entry* entry;
+      entry = (hashtable_entry*) Hashtable_index(table, index + 2);
+      while (entry != NULL) {
+        uintnat index;
+        hashtable_entry* next_entry = entry->next;
+
+        index = Hashtable_index_of_callee(new_table, entry->callee);
+        entry->next = (hashtable_entry*) Hashtable_index(new_table, index);
+        Hashtable_index(new_table, index) = (value) entry;
+
+        entry = next_entry;
+      }
+    }
+
+    free((void*) &((value*) table)[-1]);
+
+    return new_table;
+  }
+
+  return table;
+}
 
 CAMLprim value* caml_spacetime_indirect_node_hole_ptr
       (void* callee, value* node_hole, value caller_node)
@@ -580,55 +671,53 @@ CAMLprim value* caml_spacetime_indirect_node_hole_ptr
      If [caller_node] is not [Val_unit], it is a pointer to the caller's
      node, and indicates that this is a tail call site. */
 
-  c_node* c_node;
+  value table;
+  hashtable_entry* entry;
   value encoded_callee;
-
-  if (callee == last_indirect_node_hole_ptr_callee
-      && node_hole == last_indirect_node_hole_ptr_node_hole) {
-    return last_indirect_node_hole_ptr_result;
-  }
-
-  last_indirect_node_hole_ptr_callee = callee;
-  last_indirect_node_hole_ptr_node_hole = node_hole;
+  uintnat index;
 
   encoded_callee = Encode_c_node_pc_for_call(callee);
 
-  while (*node_hole != Val_unit) {
-    Assert(((uintnat) *node_hole) % sizeof(value) == 0);
+  if (*node_hole == Val_unit) {
+    table = allocate_hashtable(3);
+    *node_hole = table;
+  }
+  else {
+    table = *node_hole;
+  }
 
-    c_node = caml_spacetime_c_node_of_stored_pointer_not_null(*node_hole);
+  index = Hashtable_index_of_callee(table, callee);
 
-    Assert(c_node != NULL);
-    Assert(caml_spacetime_classify_c_node(c_node) == CALL);
-
-    if (c_node->pc == encoded_callee) {
-      last_indirect_node_hole_ptr_result = &(c_node->data.callee_node);
-      return last_indirect_node_hole_ptr_result;
-    }
-    else {
-      node_hole = &c_node->next;
+  if (Hashtable_index(table, index) != Val_unit) {
+    entry = (hashtable_entry*) Hashtable_index(table, index);
+    while (entry != NULL) {
+      if (entry->callee == encoded_callee) {
+        return &(entry->callee_node);
+      }
+      entry = entry->next;
     }
   }
 
-  c_node = allocate_c_node();
-  c_node->pc = encoded_callee;
+  table = maybe_resize_hashtable(table);
+  index = Hashtable_index_of_callee(table, callee);
+
+  entry = allocate_hashtable_entry();
+  entry->callee = encoded_callee;
+  entry->next = (hashtable_entry*) Hashtable_index(table, index);
+  Hashtable_index(table, index) = (value) entry;
 
   if (caller_node != Val_unit) {
     /* This is a tail call site.
        Perform the initialization equivalent to that emitted by
        [Spacetime.code_for_function_prologue] for direct tail call
        sites. */
-    c_node->data.callee_node = Encode_tail_caller_node(caller_node);
+    entry->callee_node = Encode_tail_caller_node(caller_node);
+  }
+  else {
+    entry->callee_node = Val_unit;
   }
 
-  *node_hole = caml_spacetime_stored_pointer_of_c_node(c_node);
-
-  Assert(((uintnat) *node_hole) % sizeof(value) == 0);
-  Assert(*node_hole != Val_unit);
-
-  last_indirect_node_hole_ptr_result = &(c_node->data.callee_node);
-
-  return last_indirect_node_hole_ptr_result;
+  return &entry->callee_node;
 }
 
 /* Some notes on why caml_call_gc doesn't need a distinguished node.

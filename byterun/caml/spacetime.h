@@ -52,9 +52,10 @@ typedef enum {
    - Otherwise the node should be used as normal.
 */
 
-/* Classification of nodes (OCaml or C) with corresponding GC tags. */
+/* Classification of nodes with corresponding GC tags. */
 #define OCaml_node_tag 0
 #define C_node_tag 1
+#define Hashtable_node_tag 2
 #define Is_ocaml_node(node) (Is_block(node) && Tag_val(node) == OCaml_node_tag)
 #define Is_c_node(node) (Is_block(node) && Tag_val(node) == C_node_tag)
 
