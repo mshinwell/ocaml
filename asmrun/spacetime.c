@@ -677,30 +677,36 @@ CAMLprim value* caml_spacetime_indirect_node_hole_ptr
   hashtable_entry* entry;
   value encoded_callee;
   uintnat index;
+  int is_new_table;
 
   encoded_callee = Encode_c_node_pc_for_call(callee);
 
   if (*node_hole == Val_unit) {
     table = allocate_hashtable(3);
     *node_hole = table;
+    is_new_table = 1;
   }
   else {
     table = *node_hole;
+    is_new_table = 0;
   }
 
-  index = Hashtable_index_of_callee(table, callee);
+  if (!is_new_table) {
+    index = Hashtable_index_of_callee(table, callee);
 
-  if (Hashtable_index(table, index) != Val_unit) {
-    entry = (hashtable_entry*) Hashtable_index(table, index);
-    while (entry != (hashtable_entry*) Val_unit) {
-      if (entry->callee == encoded_callee) {
-        return &(entry->callee_node);
+    if (Hashtable_index(table, index) != Val_unit) {
+      entry = (hashtable_entry*) Hashtable_index(table, index);
+      while (entry != (hashtable_entry*) Val_unit) {
+        if (entry->callee == encoded_callee) {
+          return &(entry->callee_node);
+        }
+        entry = entry->next;
       }
-      entry = entry->next;
     }
+
+    table = maybe_resize_hashtable(table);
   }
 
-  table = maybe_resize_hashtable(table);
   index = Hashtable_index_of_callee(table, callee);
 
   entry = allocate_hashtable_entry();
