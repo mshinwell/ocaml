@@ -666,6 +666,16 @@ static value maybe_resize_hashtable(value table)
   return table;
 }
 
+/* Since a given indirect call site either always yields tail calls or
+   always yields non-tail calls, the output of
+   [caml_spacetime_indirect_node_hole_ptr] is uniquely determined by its
+   first two arguments (the callee and the node hole).  We cache these
+   to increase performance of recursive functions containing an indirect
+   call (e.g. [List.map] when not inlined). */
+static void* last_indirect_node_hole_ptr_callee;
+static value* last_indirect_node_hole_ptr_node_hole;
+static value* last_indirect_node_hole_ptr_result;
+
 CAMLprim value* caml_spacetime_indirect_node_hole_ptr
       (void* callee, value* node_hole, value caller_node)
 {
@@ -679,10 +689,17 @@ CAMLprim value* caml_spacetime_indirect_node_hole_ptr
   uintnat index;
   int is_new_table;
 
+  if (callee == last_indirect_node_hole_ptr_callee
+       && node_hole == last_indirect_node_hole_ptr_node_hole) {
+    return last_indirect_node_hole_ptr_result;
+  }
+  last_indirect_node_hole_ptr_callee = callee;
+  last_indirect_node_hole_ptr_node_hole = node_hole;
+
   encoded_callee = Encode_c_node_pc_for_call(callee);
 
   if (*node_hole == Val_unit) {
-    table = allocate_hashtable(3);
+    table = allocate_hashtable(17);
     *node_hole = table;
     is_new_table = 1;
   }
@@ -693,15 +710,14 @@ CAMLprim value* caml_spacetime_indirect_node_hole_ptr
 
   if (!is_new_table) {
     index = Hashtable_index_of_callee(table, callee);
+    entry = (hashtable_entry*) Hashtable_index(table, index);
 
-    if (Hashtable_index(table, index) != Val_unit) {
-      entry = (hashtable_entry*) Hashtable_index(table, index);
-      while (entry != (hashtable_entry*) Val_unit) {
-        if (entry->callee == encoded_callee) {
-          return &(entry->callee_node);
-        }
-        entry = entry->next;
+    while (entry != (hashtable_entry*) Val_unit) {
+      if (entry->callee == encoded_callee) {
+        last_indirect_node_hole_ptr_result = &(entry->callee_node);
+        return last_indirect_node_hole_ptr_result;
       }
+      entry = entry->next;
     }
 
     table = maybe_resize_hashtable(table);
@@ -726,7 +742,8 @@ CAMLprim value* caml_spacetime_indirect_node_hole_ptr
     entry->callee_node = Val_unit;
   }
 
-  return &(entry->callee_node);
+  last_indirect_node_hole_ptr_result = &(entry->callee_node);
+  return last_indirect_node_hole_ptr_result;
 }
 
 /* Some notes on why caml_call_gc doesn't need a distinguished node.
