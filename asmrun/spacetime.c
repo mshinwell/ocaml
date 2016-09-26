@@ -565,15 +565,17 @@ static c_node* allocate_c_node(void)
 
 #define Max_entries(size) (ceil(0.65 * size))
 
-#define Hashtable_index(hashtable, index) (((value*) hashtable)[index])
-#define Hashtable_max_entries(hashtable) \
-  (Long_val(Hashtable_index(hashtable, 0)))
-#define Hashtable_num_entries(hashtable) \
-  (Long_val(Hashtable_index(hashtable, 1)))
-#define Hashtable_size(hashtable) \
-  (Wosize_val((value) hashtable) - 2)
-#define Hashtable_index_of_callee(hashtable, callee) \
+#define Hashtable_index(table, index) (((value*) table)[index])
+#define Hashtable_max_entries(table) \
+  (Long_val(Hashtable_index(table, 0)))
+#define Hashtable_num_entries(table) \
+  (Long_val(Hashtable_index(table, 1)))
+#define Hashtable_size(table) \
+  (Wosize_val(table) - 2)
+#define Hashtable_index_of_callee(table, callee) \
   ((((uintnat) callee) % Hashtable_size(table)) + 2)
+#define Hashtable_incr_entry_count(table) \
+  ((value*) table)[1] = Val_long(Long_val(((value*) table)[1]) + 1)
 
 static value allocate_hashtable(int initial_size)
 {
@@ -598,7 +600,7 @@ static value allocate_hashtable(int initial_size)
   }
 
   ((value*) table)[-1] =
-    Make_header(initial_size, Hashtable_node_tag, Caml_black);
+    Make_header(initial_size + 2, Hashtable_node_tag, Caml_black);
   ((value*) table)[0] = Val_long(Max_entries(initial_size));
   ((value*) table)[1] = Val_long(0);
 
@@ -628,6 +630,7 @@ static hashtable_entry* allocate_hashtable_entry(void)
     ((value*) entry)[-1] =
       Make_header(sizeof(hashtable_entry) / sizeof(value), 0, Caml_black);
   }
+  start_of_free_node_block += size_in_bytes_including_header;
 
   return entry;
 }
@@ -644,19 +647,21 @@ static value maybe_resize_hashtable(value table)
     for (index = 0; index < Hashtable_size(table); index++) {
       hashtable_entry* entry;
       entry = (hashtable_entry*) Hashtable_index(table, index + 2);
-      while (entry != NULL) {
+      while (entry != (hashtable_entry*) Val_unit) {
         uintnat index;
         hashtable_entry* next_entry = entry->next;
 
         index = Hashtable_index_of_callee(new_table, entry->callee);
         entry->next = (hashtable_entry*) Hashtable_index(new_table, index);
         Hashtable_index(new_table, index) = (value) entry;
+        Hashtable_incr_entry_count(table);
 
         entry = next_entry;
       }
     }
 
-    free((void*) &((value*) table)[-1]);
+    printf("resized table, old %p new %p\n", (void*) table, (void*) new_table);
+    fflush(stdout);
 
     return new_table;
   }
@@ -690,7 +695,7 @@ CAMLprim value* caml_spacetime_indirect_node_hole_ptr
 
   if (Hashtable_index(table, index) != Val_unit) {
     entry = (hashtable_entry*) Hashtable_index(table, index);
-    while (entry != NULL) {
+    while (entry != (hashtable_entry*) Val_unit) {
       if (entry->callee == encoded_callee) {
         return &(entry->callee_node);
       }
@@ -705,6 +710,7 @@ CAMLprim value* caml_spacetime_indirect_node_hole_ptr
   entry->callee = encoded_callee;
   entry->next = (hashtable_entry*) Hashtable_index(table, index);
   Hashtable_index(table, index) = (value) entry;
+  Hashtable_incr_entry_count(table);
 
   if (caller_node != Val_unit) {
     /* This is a tail call site.
@@ -717,7 +723,7 @@ CAMLprim value* caml_spacetime_indirect_node_hole_ptr
     entry->callee_node = Val_unit;
   }
 
-  return &entry->callee_node;
+  return &(entry->callee_node);
 }
 
 /* Some notes on why caml_call_gc doesn't need a distinguished node.
