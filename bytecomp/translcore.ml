@@ -640,7 +640,8 @@ let rec push_defaults loc bindings cases partial =
 let event_before exp lam = match lam with
 | Lstaticraise (_,_) -> lam
 | _ ->
-  if !Clflags.debug && not !Clflags.native_code
+  (* CR mshinwell: talk to Leo.  (We need the locations for let bindings) *)
+  if !Clflags.debug  (* && not !Clflags.native_code *)
   then Levent(lam, {lev_loc = exp.exp_loc;
                     lev_kind = Lev_before;
                     lev_repr = None;

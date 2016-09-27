@@ -87,7 +87,9 @@ and phantom_defining_expr ppf = function
   | Uphantom_read_symbol_field (sym, offset) ->
     Format.fprintf ppf "%a[%d]" uconstant sym offset
   | Uphantom_block { tag; fields; } ->
-    Format.fprintf ppf "[%d: %a]" tag (Format.pp_print_list Ident.print) fields
+    Format.fprintf ppf "[%d: " tag;
+    List.iter (fun field -> Format.fprintf ppf "%a; " Ident.print field) fields;
+    Format.fprintf ppf "]"
 
 and phantom_defining_expr_opt ppf = function
   | None -> Format.fprintf ppf "DEAD"

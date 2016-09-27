@@ -502,7 +502,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
                   Location.print_compact provenance.location
               in
               let name =
-                Format.sprintf "%s(%s)"
+                Format.sprintf "%s[%s]"
                   (Ident.name ident_for_type)
                   location
               in

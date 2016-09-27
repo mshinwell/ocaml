@@ -137,9 +137,11 @@ let name_expr_with_bound_name bound_name named ~name =
   match bound_name with
   | None ->
     name_expr named ~name
-  | Some (bound_name, provenance) ->
+  | Some (bound_name, _provenance) ->
     let var = Variable.rename bound_name in
-    Flambda.create_let var named (Var var) ~provenance
+    (* CR mshinwell: fix up properly.  We don't want provenance on these
+       variables---instead it will appear on the encoding let-bound one. *)
+    Flambda.create_let var named (Var var) ?provenance:None
 
 let rec close_const t ?bound_name env (const : Lambda.structured_constant)
       : Flambda.named * string =
@@ -185,11 +187,15 @@ and close t ?(bound_name:(Variable.t * Flambda.let_provenance) option) env
     let defining_expr =
       close_let_bound_expression t var env defining_expr
     in
+    let location =
+      match body with
+      | Levent (_, { lev_loc = location; _ }) -> location
+      | _ -> Location.none
+    in
     let body = close t (Env.add_var env id var) ?bound_name body in
     let provenance : Flambda.let_provenance =
       { module_path = Env.current_module_path env;
-        (* CR mshinwell: think about how we could get this.  Same below. *)
-        location = Location.none;
+        location;
       }
     in
     Flambda.create_let var defining_expr body ~provenance
@@ -199,10 +205,15 @@ and close t ?(bound_name:(Variable.t * Flambda.let_provenance) option) env
     let defining_expr =
       close_let_bound_expression t var env defining_expr
     in
+    let location =
+      match body with
+      | Levent (_, { lev_loc = location; _ }) -> location
+      | _ -> Location.none
+    in
     let body = close t (Env.add_mutable_var env id mut_var) ?bound_name body in
     let provenance : Flambda.let_provenance =
       { module_path = Env.current_module_path env;
-        location = Location.none;
+        location;
       }
     in
     Flambda.create_let var defining_expr

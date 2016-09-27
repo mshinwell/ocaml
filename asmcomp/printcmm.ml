@@ -112,7 +112,7 @@ let rec expr ppf = function
   | Cvar id -> Ident.print ppf id
   | Clet(id, provenance, def, (Clet(_, _, _, _) as body)) ->
       let print_binding id provenance ppf def =
-        fprintf ppf "@[<2>%a(%a)@ %a@]" Ident.print id
+        fprintf ppf "@[<2>%a%a@ %a@]" Ident.print id
           Printclambda.let_provenance_opt provenance expr def in
       let rec in_part ppf = function
         | Clet(id, provenance, def, body) ->
@@ -124,12 +124,12 @@ let rec expr ppf = function
       fprintf ppf ")@]@ %a)@]" sequence exp
   | Clet(id, provenance, def, body) ->
      fprintf ppf
-      "@[<2>(let@ @[<2>%a(%a)@ %a@]@ %a)@]"
+      "@[<2>(let@ @[<2>%a%a@ %a@]@ %a)@]"
       Ident.print id Printclambda.let_provenance_opt provenance
         expr def sequence body
   | Cphantom_let(id, provenance, def, (Cphantom_let(_, _, _, _) as body)) ->
       let print_binding id provenance ppf def =
-        fprintf ppf "@[<2>%a(%a)@ %a@]" Ident.print id
+        fprintf ppf "@[<2>%a%a@ %a@]" Ident.print id
           Printclambda.let_provenance_opt provenance
           Printclambda.phantom_defining_expr_opt def
       in

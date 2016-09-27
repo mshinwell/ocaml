@@ -56,21 +56,21 @@ let instr ppf i =
         List.iter (fun (start_or_end, ident, _subrange) ->
             let start_or_end' =
               match start_or_end with
-              | Available_ranges.Start _ -> "avail."
-              | Available_ranges.End -> "unavail."
+              | Available_ranges.Start _ -> "+"
+              | Available_ranges.End -> "-"
             in
-            fprintf ppf " (%a now %s"
-              Ident.print ident start_or_end';
+            fprintf ppf " ([%s]%a"
+              start_or_end' Ident.print ident;
             begin match start_or_end with
             | Available_ranges.Start { end_pos; location; } ->
-              fprintf ppf " until L%d" end_pos;
+              fprintf ppf "->L%d" end_pos;
               let module AS = Available_ranges.Available_subrange in
               begin match location with
               | AS.Reg (r, _) ->
-                fprintf ppf " in %a" reg r
+                fprintf ppf "@%a" reg r
               | AS.Phantom ->
                 (* CR mshinwell: Print the phantom definition *)
-                fprintf ppf " with known value <...>"
+                fprintf ppf "=<...>"
               end
             | Available_ranges.End -> ()
             end;

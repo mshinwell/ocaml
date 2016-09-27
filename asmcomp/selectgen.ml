@@ -1075,8 +1075,17 @@ method insert_prologue f ~loc_arg ~rarg ~num_regs_per_arg
       ~spacetime_node_hole:_ ~env =
   let loc_arg_index = ref 0 in
   List.iteri (fun param_index (ident, _ty) ->
+      let provenance : Clambda.ulet_provenance =
+        (* CR mshinwell: The location information isn't used here.  Should
+           be optional? *)
+        { Clambda.
+          location = Location.none;
+          module_path = Path.Pident (Ident.create_persistent "foo");
+          original_ident = ident;
+        }
+      in
       let naming_op =
-        Iname_for_debugger { ident; provenance = None;
+        Iname_for_debugger { ident; provenance = Some provenance;
           which_parameter = Some param_index; }
       in
       let num_regs_for_arg = num_regs_per_arg.(param_index) in

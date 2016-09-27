@@ -139,6 +139,12 @@ type type_info =
   | Phantom of
       Clambda.ulet_provenance option * Mach.phantom_defining_expr option
 
+let type_info_has_provenance = function
+  | From_cmt_file None -> false
+  | From_cmt_file (Some _) -> true
+  | Phantom (None, _) -> false
+  | Phantom (Some _, _) -> true
+
 module Available_range : sig
   type t
 
@@ -249,11 +255,17 @@ let find t ~ident =
 
 let fold t ~init ~f =
   Ident.Tbl.fold (fun ident range acc ->
-      let is_unique = true in
-(* CR mshinwell: fix this
-        List.length (Ident.find_all (Ident.name ident) t.ranges) <= 1
+      (* CR-soon mshinwell: improve efficiency *)
+      let with_same_name =
+        List.filter (fun (ident', range') ->
+            let has_provenance =
+              type_info_has_provenance (Available_range.type_info range')
+            in
+            has_provenance
+              && Ident.name ident = Ident.name ident')
+          (Ident.Tbl.to_list t.ranges)
       in
-*)
+      let is_unique = List.length with_same_name <= 1 in
       f acc ~ident ~is_unique ~range)
     t.ranges
     init
