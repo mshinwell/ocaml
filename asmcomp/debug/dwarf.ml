@@ -27,7 +27,6 @@ type t = {
   start_of_code_symbol : Symbol.t;
   end_of_code_symbol : Symbol.t;
   output_path : string;
-  idents_to_original_idents : Ident.t Ident.tbl;
   mutable emitted : bool;
 }
 
@@ -44,8 +43,7 @@ let () = Dwarf_format.set Thirty_two
 (* CR mshinwell: Remove setting from [Debug_info_section]. *)
 let dwarf_version = Dwarf_version.four
 
-let create ~(source_provenance : Timings.source_provenance)
-      ~idents_to_original_idents =
+let create ~(source_provenance : Timings.source_provenance) =
   let output_path, directory =
     (* CR mshinwell: this should use the path as per "-o". *)
     match source_provenance with
@@ -105,7 +103,6 @@ let create ~(source_provenance : Timings.source_provenance)
     start_of_code_symbol;
     end_of_code_symbol;
     output_path;
-    idents_to_original_idents;
     emitted = false;
   }
 
@@ -423,7 +420,7 @@ let construct_value_description t ~parent ~fundecl
 
 let dwarf_for_identifier t ~fundecl ~function_proto_die
       ~lexical_block_proto_die ~proto_dies_for_idents
-      ~(ident : Ident.t) ~(ident_for_type : Ident.t option) ~is_unique:_
+      ~(ident : Ident.t) ~(ident_for_type : Ident.t option) ~is_unique
       ~range =
   let type_info = Available_range.type_info range in
   let is_parameter = Available_range.is_parameter range in
@@ -500,10 +497,14 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
             begin match provenance with
             | None -> ident, Some (Ident.name ident_for_type)
             | Some provenance ->
-              let name =
-                Format.sprintf "%s(%a)"
-                  (Ident.name ident_for_type)
+              let location =
+                Format.asprintf "%a"
                   Location.print_compact provenance.location
+              in
+              let name =
+                Format.sprintf "%s(%s)"
+                  (Ident.name ident_for_type)
+                  location
               in
               ident, Some name
             end
@@ -554,7 +555,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
    and other "fun_var"s in the current mutually-recursive set.  (The last
    two cases are handled by the explicit addition of phantom lets way back
    in [Flambda_to_clambda].)  Phantom identifiers are also covered. *)
-let iterate_over_variable_like_things t ~available_ranges ~f =
+let iterate_over_variable_like_things _t ~available_ranges ~f =
   Available_ranges.fold available_ranges
     ~init:()
     ~f:(fun () ~ident ~is_unique ~range ->

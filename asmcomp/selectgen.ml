@@ -632,7 +632,9 @@ method emit_expr env exp =
         None -> None
       | Some r1 ->
         let naming_op =
-          Iname_for_debugger { ident = v; which_parameter = None; }
+          (* CR mshinwell: the provenance shouldn't be None. *)
+          Iname_for_debugger { ident = v; provenance = None;
+            which_parameter = None; }
         in
         self#insert_debug env (Iop naming_op) Debuginfo.none r1 [| |];
         self#adjust_types r1 rv; self#insert_moves env r1 rv; Some [||]
@@ -1074,7 +1076,8 @@ method insert_prologue f ~loc_arg ~rarg ~num_regs_per_arg
   let loc_arg_index = ref 0 in
   List.iteri (fun param_index (ident, _ty) ->
       let naming_op =
-        Iname_for_debugger { ident; which_parameter = Some param_index; }
+        Iname_for_debugger { ident; provenance = None;
+          which_parameter = Some param_index; }
       in
       let num_regs_for_arg = num_regs_per_arg.(param_index) in
       let hard_regs_for_arg =

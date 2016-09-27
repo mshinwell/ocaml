@@ -29,6 +29,8 @@ module Debug_info : sig
   val which_parameter : t -> int option
   (** If the register corresponds to a function parameter, the value returned
       is the zero-based index of said parameter; otherwise it is [None]. *)
+
+  val provenance : t -> Clambda.ulet_provenance option
 end
 
 type t
@@ -53,7 +55,6 @@ val create_copying_debug_info : reg:Reg.t -> debug_info_from:t -> t
 val reg : t -> Reg.t
 val location : t -> Reg.location
 val debug_info : t -> Debug_info.t option
-val provenance : t -> Clambda.ulet_provenance option
 
 val at_same_location : t -> Reg.t -> register_class:(Reg.t -> int) -> bool
 (** [at_same_location t reg] holds iff the register [t] corresponds to

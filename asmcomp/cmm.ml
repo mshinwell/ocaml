@@ -159,7 +159,7 @@ type expression =
   | Cconst_natpointer of nativeint
   | Cblockheader of nativeint * Debuginfo.t
   | Cvar of Ident.t
-  | Clet of Ident.t * expression * expression
+  | Clet of Ident.t * Clambda.ulet_provenance option * expression * expression
   | Cphantom_let of Ident.t * Clambda.ulet_provenance option
       * Clambda.uphantom_defining_expr option * expression
   | Cassign of Ident.t * expression

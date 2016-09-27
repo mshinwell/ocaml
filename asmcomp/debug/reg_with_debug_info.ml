@@ -20,6 +20,7 @@ module Debug_info = struct
     part_of_value : int;
     num_parts_of_value : int;
     which_parameter : int option;
+    provenance : Clambda.ulet_provenance option;
   }
 
   let compare t1 t2 =
@@ -34,6 +35,7 @@ module Debug_info = struct
   let part_of_value t = t.part_of_value
   let num_parts_of_value t = t.num_parts_of_value
   let which_parameter t = t.which_parameter
+  let provenance t = t.provenance
 
   let print ppf t =
     Format.fprintf ppf "%a" Ident.print t.holds_value_of;
@@ -76,7 +78,7 @@ include T
 type reg_with_debug_info = t
 
 let create ~reg ~holds_value_of ~part_of_value ~num_parts_of_value
-      ~which_parameter =
+      ~which_parameter ~provenance =
   assert (num_parts_of_value >= 1);
   assert (part_of_value >= 0 && part_of_value < num_parts_of_value);
   assert (match which_parameter with None -> true | Some index -> index >= 0);
@@ -85,6 +87,7 @@ let create ~reg ~holds_value_of ~part_of_value ~num_parts_of_value
       part_of_value;
       num_parts_of_value;
       which_parameter;
+      provenance;
     }
   in
   { reg;

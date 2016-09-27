@@ -530,7 +530,8 @@ module Make_ranges = Make (struct
         | Some index -> Parameter { index; }
       in
       let ident = RD.Debug_info.holds_value_of debug_info in
-      Some (ident, From_cmt_file (RD.provenance reg), is_parameter)
+      Some (ident, From_cmt_file (RD.Debug_info.provenance debug_info),
+        is_parameter)
 
   let create_subrange ~fundecl:_ ~key:reg ~start_pos ~start_insn ~end_pos
         ~end_pos_offset =

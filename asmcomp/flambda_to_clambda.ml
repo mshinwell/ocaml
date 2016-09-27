@@ -253,13 +253,16 @@ let to_clambda_let_provenance var (provenance : Flambda.let_provenance option) =
   match provenance with
   | None -> None
   | Some provenance ->
-    let provenance : Clambda.ulet_provenance =
-      { module_path = provenance.module_path;
-        location = provenance.location;
-        original_ident = Variable.original_ident var;
-      }
-    in
-    Some provenance
+    match Variable.original_ident var with
+    | None -> None
+    | Some original_ident ->
+      let provenance : Clambda.ulet_provenance =
+        { module_path = provenance.module_path;
+          location = provenance.location;
+          original_ident;
+        }
+      in
+      Some provenance
 
 let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
   match flam with
@@ -267,24 +270,13 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
   | Let { var; defining_expr; body; provenance; _ } ->
     (* TODO: synthesize proper value_kind *)
     let id, env_body = Env.add_fresh_ident env var in
+    let provenance = to_clambda_let_provenance var provenance in
     begin match defining_expr with
     | Normal defining_expr ->
-      let provenance = to_clambda_let_provenance var provenance in
       Ulet (Immutable, Pgenval, provenance, id,
         to_clambda_named t env var defining_expr,
         to_clambda t env_body body)
     | Phantom defining_expr ->
-      let provenance =
-        match provenance with
-        | None -> None
-        | Some provenance ->
-          let provenance : Clambda.ulet_provenance =
-            { module_path = provenance.module_path;
-              location = provenance.location;
-            }
-          in
-          Some provenance
-      in
       let defining_expr =
         match defining_expr with
         | Const (Const_pointer n) ->
@@ -351,10 +343,10 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
     let env, defs =
       List.fold_right (fun (var, def, provenance) (env, defs) ->
           let id, env = Env.add_fresh_ident env var in
+          let provenance = to_clambda_let_provenance var provenance in
           env, (id, var, def, provenance) :: defs)
         defs (env, [])
     in
-    let provenance = to_clambda_let_provenance provenance in
     let defs =
       List.map (fun (id, var, def, provenance) ->
           provenance, id, to_clambda_named t env var def)
@@ -597,10 +589,6 @@ and to_clambda_set_of_closures t env
         (Path.Pident comp_unit)
         (Env.closure_stack env)
     in
-    let provenance : Clambda.ulet_provenance =
-      let location = Debuginfo.to_location function_decl.dbg in
-      { module_path; location; }
-    in
     let env, phantom_bindings =
       (* Inside the body of the function, we cannot access variables
          declared outside, so start with a suitably clean environment.
@@ -629,7 +617,8 @@ and to_clambda_set_of_closures t env
             (Uprim (Pfield pos, [Clambda.Uvar env_var], Debuginfo.none))
         in
         let phantom_bindings =
-          (id, Clambda.Uphantom_read_var_field (env_var, pos))
+          (id, Variable.original_ident var,
+              Clambda.Uphantom_read_var_field (env_var, pos))
             :: phantom_bindings
         in
         env, phantom_bindings
@@ -641,18 +630,19 @@ and to_clambda_set_of_closures t env
          set of closures to the environment.  The various functions may be
          retrieved by moving within the runtime closure, starting from the
          current function's closure.  Phantom lets are again inserted. *)
-      let add_env_function pos (env, phantom_bindings) (id, _) =
+      let add_env_function pos (env, phantom_bindings) (var, _) =
         let offset =
-          Closure_id.Map.find (Closure_id.wrap id)
+          Closure_id.Map.find (Closure_id.wrap var)
             t.current_unit.fun_offset_table
         in
         let field = offset - pos in
         let exp : Clambda.ulambda = Uoffset (Uvar env_var, field) in
-        let id, env = Env.add_subst env id exp in
+        let id, env = Env.add_subst env var exp in
         let phantom_bindings =
           (* CR-soon mshinwell: this phantom let should not be added if the
              function isn't recursive *)
-          (id, Clambda.Uphantom_offset_var_field (env_var, pos))
+          (id, Variable.original_ident var,
+              Clambda.Uphantom_offset_var_field (env_var, pos))
             :: phantom_bindings
         in
         env, phantom_bindings
@@ -669,8 +659,21 @@ and to_clambda_set_of_closures t env
     let env_body = Env.entering_closure env_body closure_id in
     let body = to_clambda t env_body function_decl.body in
     let body =
-      List.fold_left (fun body (id, phantom) : Clambda.ulambda ->
-          Uphantom_let (id, Some provenance, Some phantom, body))
+      List.fold_left (fun body (id, original_id, phantom) : Clambda.ulambda ->
+          let provenance =
+            let location = Debuginfo.to_location function_decl.dbg in
+            match original_id with
+            | None -> None
+            | Some original_ident ->
+              let provenance : Clambda.ulet_provenance =
+                { module_path;
+                  location;
+                  original_ident;
+                }
+              in
+              Some provenance
+          in
+          Uphantom_let (id, provenance, Some phantom, body))
         body
         phantom_bindings
     in
@@ -698,10 +701,6 @@ and to_clambda_closed_set_of_closures t env symbol ~module_path
   let to_clambda_function (closure_id,
         (function_decl : Flambda.function_declaration))
         : Clambda.ufunction =
-    let provenance : Clambda.ulet_provenance =
-      let location = Debuginfo.to_location function_decl.dbg in
-      { module_path; location; }
-    in
     (* All that we need in the environment, for translating one closure from
        a closed set of closures, is the substitutions for variables bound to
        the various closures in the set.  Such closures will always be
@@ -716,7 +715,8 @@ and to_clambda_closed_set_of_closures t env symbol ~module_path
           in
           let phantom_bindings =
             let symbol = to_clambda_symbol' env symbol in
-            (id, Clambda.Uphantom_const symbol) :: phantom_bindings
+            (id, Variable.original_ident var,
+              Clambda.Uphantom_const symbol) :: phantom_bindings
           in
           env, phantom_bindings)
         (Env.keep_only_symbols env, [])
@@ -732,8 +732,21 @@ and to_clambda_closed_set_of_closures t env symbol ~module_path
     let env_body = Env.entering_closure env_body closure_id in
     let body = to_clambda t env_body function_decl.body in
     let body =
-      List.fold_left (fun body (id, phantom) : Clambda.ulambda ->
-          Uphantom_let (id, Some provenance, Some phantom, body))
+      List.fold_left (fun body (id, original_id, phantom) : Clambda.ulambda ->
+          let provenance =
+            match original_id with
+            | None -> None
+            | Some original_ident ->
+              let location = Debuginfo.to_location function_decl.dbg in
+              let provenance : Clambda.ulet_provenance =
+                { module_path;
+                  location;
+                  original_ident;
+                }
+              in
+              Some provenance
+          in
+          Uphantom_let (id, provenance, Some phantom, body))
         body
         phantom_bindings
     in
@@ -776,7 +789,8 @@ let accumulate_structured_constants t env symbol
     | None -> None
     | Some provenance ->
       let provenance' : Clambda.usymbol_provenance =
-        { original_idents = provenance.original_idents;
+        (* CR mshinwell: remove the list on [original_idents]? *)
+        { original_idents = [provenance.original_ident];
           module_path = provenance.module_path;
         }
       in
@@ -885,7 +899,7 @@ let convert (program, exported) : result =
           | None -> None
           | Some (provenance : Flambda.symbol_provenance) ->
             let provenance' : Clambda.usymbol_provenance =
-              { original_idents = provenance.original_idents;
+              { original_idents = [provenance.original_ident];
                 module_path = provenance.module_path;
               }
             in

@@ -201,20 +201,17 @@ let compile_unit ~source_provenance _output_prefix asm_filename keep_asm
     remove_file obj_filename;
     raise exn
 
-let set_export_info (ulambda, prealloc, structured_constants, export,
-      idents_to_original_idents) =
+let set_export_info (ulambda, prealloc, structured_constants, export) =
   Compilenv.set_export_info export;
-  (ulambda, prealloc, structured_constants, idents_to_original_idents)
+  (ulambda, prealloc, structured_constants)
 
 let end_gen_implementation ?toplevel ~source_provenance ppf
-    ~idents_to_original_idents (clambda:clambda_and_constants) =
+      (clambda:clambda_and_constants) =
   Emit.begin_assembly ();
   let dwarf =
     if not !Clflags.debug then None
     else begin
-      let dwarf =
-        Dwarf.create ~source_provenance ~idents_to_original_idents
-      in
+      let dwarf = Dwarf.create ~source_provenance in
       let _, toplevel_inconstants, toplevel_constants = clambda in
       Dwarf.dwarf_for_toplevel_constants dwarf toplevel_constants;
       Dwarf.dwarf_for_toplevel_inconstants dwarf toplevel_inconstants;
@@ -257,17 +254,17 @@ let end_gen_implementation ?toplevel ~source_provenance ppf
 let flambda_gen_implementation ?toplevel ~source_provenance ~backend ppf
     (program:Flambda.program) =
   let export = Build_export_info.build_export_info ~backend program in
-  let (clambda, preallocated, constants, idents_to_original_idents) =
+  let (clambda, preallocated, constants) =
     Timings.time (Flambda_pass ("backend", source_provenance)) (fun () ->
       (program, export)
       ++ Flambda_to_clambda.convert
       ++ flambda_raw_clambda_dump_if ppf
       ++ (fun { Flambda_to_clambda. expr; preallocated_blocks;
-                structured_constants; exported; idents_to_original_idents; } ->
+                structured_constants; exported; } ->
              (* "init_code" following the name used in
                 [Cmmgen.compunit_and_constants]. *)
            Un_anf.apply expr ~what:"init_code", preallocated_blocks,
-           structured_constants, exported, idents_to_original_idents)
+           structured_constants, exported)
       ++ set_export_info) ()
   in
   let constants =
@@ -279,7 +276,6 @@ let flambda_gen_implementation ?toplevel ~source_provenance ~backend ppf
       (Symbol.Map.bindings constants)
   in
   end_gen_implementation ?toplevel ~source_provenance ppf
-    ~idents_to_original_idents
     (clambda, preallocated, constants)
 
 let lambda_gen_implementation ?toplevel ~source_provenance ppf
@@ -299,7 +295,6 @@ let lambda_gen_implementation ?toplevel ~source_provenance ppf
   in
   raw_clambda_dump_if ppf clambda_and_constants;
   end_gen_implementation ?toplevel ~source_provenance ppf
-    ~idents_to_original_idents:Ident.empty
     clambda_and_constants
 
 let compile_implementation_gen ?toplevel ~source_provenance prefixname

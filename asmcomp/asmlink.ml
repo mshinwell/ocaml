@@ -207,8 +207,7 @@ let make_startup_file ppf units_list =
   Compilation_unit.set_current (Lazy.force Compilation_unit.startup);
   let dwarf =
     if not !Clflags.debug then None
-    else Some (Dwarf.create ~source_provenance:Timings.Startup
-      ~idents_to_original_idents:Ident.empty)
+    else Some (Dwarf.create ~source_provenance:Timings.Startup)
   in
   let compile_phrase p = Asmgen.compile_phrase ppf ~dwarf p in
   Location.input_name := "caml_startup"; (* set name of "current" input *)
@@ -254,8 +253,7 @@ let make_shared_startup_file ppf units =
   Compilation_unit.set_current (Lazy.force Compilation_unit.startup);
   let dwarf =
     if not !Clflags.debug then None
-    else Some (Dwarf.create ~source_provenance:Timings.Startup
-      ~idents_to_original_idents:Ident.empty)
+    else Some (Dwarf.create ~source_provenance:Timings.Startup)
   in
   let compile_phrase p = Asmgen.compile_phrase ppf ~dwarf p in
   Location.input_name := "caml_startup";
