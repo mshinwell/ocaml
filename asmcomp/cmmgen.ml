@@ -2673,6 +2673,7 @@ let transl_function f =
   in
   Cfunction {fun_name = f.label;
              fun_args = List.map (fun id -> (id, typ_val)) f.params;
+             fun_original_params = f.original_params;
              fun_body = transl empty_env body;
              fun_fast = !Clflags.optimize_for_speed;
              fun_dbg  = f.dbg;
@@ -2917,6 +2918,7 @@ let compunit ~unit_name (ulam, preallocated_blocks, constants) =
   let module_path = Path.Pident unit_name in
   let c1 = [Cfunction {fun_name = Compilenv.make_symbol (Some "entry");
                        fun_args = [];
+                       fun_original_params = [];
                        fun_body = init_code; fun_fast = false;
                        fun_dbg  = Debuginfo.none;
                        fun_human_name = "";
@@ -3050,6 +3052,7 @@ let send_function arity =
   Cfunction
    {fun_name;
     fun_args = fun_args;
+    fun_original_params = [None; None; None];
     fun_body = body;
     fun_fast = true;
     fun_dbg  = Debuginfo.none;
@@ -3064,6 +3067,7 @@ let apply_function arity =
   Cfunction
    {fun_name;
     fun_args = List.map (fun id -> (id, typ_val)) all_args;
+    fun_original_params = List.map (fun _ -> None) all_args;
     fun_body = body;
     fun_fast = true;
     fun_dbg  = Debuginfo.none;
@@ -3086,6 +3090,7 @@ let tuplify_function arity =
   Cfunction
    {fun_name;
     fun_args = [arg, typ_val; clos, typ_val];
+    fun_original_params = [None; None];
     fun_body =
       Cop(Capply(typ_val, Debuginfo.none),
           get_field (Cvar clos) 2 :: access_components 0 @ [Cvar clos]);
@@ -3152,6 +3157,7 @@ let final_curry_function arity =
   Cfunction
    {fun_name;
     fun_args = [last_arg, typ_val; last_clos, typ_val];
+    fun_original_params = [None; None];
     fun_body = curry_fun [] last_clos (arity-1);
     fun_fast = true;
     fun_dbg  = Debuginfo.none;
@@ -3169,6 +3175,7 @@ let rec intermediate_curry_functions arity num =
     Cfunction
      {fun_name = name2;
       fun_args = [arg, typ_val; clos, typ_val];
+      fun_original_params = [None; None];
       fun_body =
          if arity - num > 2 && arity <= max_arity_optimized then
            Cop(Calloc Debuginfo.none,
@@ -3207,10 +3214,12 @@ let rec intermediate_curry_functions arity num =
                    iter (i-1) (get_field (Cvar clos) 3 :: args) newclos)
           in
           let fun_name = name1 ^ "_" ^ string_of_int (num+1) ^ "_app" in
+          let fun_args = direct_args @ [clos, typ_val] in
           let cf =
             Cfunction
               {fun_name;
-               fun_args = direct_args @ [clos, typ_val];
+               fun_args;
+               fun_original_params = List.map (fun _ -> None) fun_args;
                fun_body = iter (num+1)
                   (List.map (fun (arg,_) -> Cvar arg) direct_args) clos;
                fun_fast = true;
@@ -3274,6 +3283,7 @@ let entry_point namelist =
       namelist (Cconst_int 1) in
   Cfunction {fun_name = "caml_program";
              fun_args = [];
+             fun_original_params = [];
              fun_body = body;
              fun_fast = false;
              fun_dbg  = Debuginfo.none;

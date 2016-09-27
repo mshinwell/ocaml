@@ -1074,18 +1074,25 @@ method private emit_tail_sequence env exp =
 method insert_prologue f ~loc_arg ~rarg ~num_regs_per_arg
       ~spacetime_node_hole:_ ~env =
   let loc_arg_index = ref 0 in
-  List.iteri (fun param_index (ident, _ty) ->
-      let provenance : Clambda.ulet_provenance =
+  assert (List.length f.Cmm.fun_args = List.length f.Cmm.fun_original_params);
+  List.iteri (fun param_index ((ident, _ty), original_ident) ->
+      let provenance =
         (* CR mshinwell: The location information isn't used here.  Should
            be optional? *)
-        { Clambda.
-          location = Location.none;
-          module_path = Path.Pident (Ident.create_persistent "foo");
-          original_ident = ident;
-        }
+        match original_ident with
+        | None -> None
+        | Some original_ident ->
+          let provenance =
+            { Clambda.
+              location = Location.none;
+              module_path = Path.Pident (Ident.create_persistent "foo");
+              original_ident;
+            }
+          in
+          Some provenance
       in
       let naming_op =
-        Iname_for_debugger { ident; provenance = Some provenance;
+        Iname_for_debugger { ident; provenance;
           which_parameter = Some param_index; }
       in
       let num_regs_for_arg = num_regs_per_arg.(param_index) in
@@ -1096,7 +1103,7 @@ method insert_prologue f ~loc_arg ~rarg ~num_regs_per_arg
       loc_arg_index := !loc_arg_index + num_regs_for_arg;
       self#insert_debug env (Iop naming_op) Debuginfo.none
         hard_regs_for_arg [| |])
-    f.Cmm.fun_args;
+    (List.combine f.Cmm.fun_args f.Cmm.fun_original_params);
   self#insert_moves env loc_arg rarg;
   None
 

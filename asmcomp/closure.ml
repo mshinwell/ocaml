@@ -1165,6 +1165,7 @@ and close_functions fenv cenv fun_defs =
         label  = fundesc.fun_label;
         arity  = fundesc.fun_arity;
         params = fun_params;
+        original_params = List.map (fun param -> Some param) fun_params;
         body   = ubody;
         dbg;
         human_name = fundesc.fun_label;

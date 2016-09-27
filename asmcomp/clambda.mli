@@ -95,6 +95,7 @@ and ufunction = {
   label  : function_label;
   arity  : int;
   params : Ident.t list;
+  original_params : Ident.t option list;
   body   : ulambda;
   dbg    : Debuginfo.t;
   human_name : string;

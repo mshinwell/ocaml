@@ -39,6 +39,7 @@ let ignore_primitive (_ : Lambda.primitive) = ()
 let ignore_string (_ : string) = ()
 let ignore_int_array (_ : int array) = ()
 let ignore_ident_list (_ : Ident.t list) = ()
+let ignore_ident_option_list (_ : Ident.t option list) = ()
 let ignore_direction_flag (_ : Asttypes.direction_flag) = ()
 let ignore_meth_kind (_ : Lambda.meth_kind) = ()
 let ignore_path_option (_ : Path.t option) = ()
@@ -87,8 +88,8 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
       ignore_debuginfo dbg
     | Uclosure (functions, captured_variables) ->
       List.iter loop captured_variables;
-      List.iter (fun ({ Clambda. label; arity; params; body; dbg;
-            human_name; module_path; } as clos) ->
+      List.iter (fun ({ Clambda. label; arity; params; original_params; body;
+            dbg; human_name; module_path; } as clos) ->
           (match closure_environment_ident clos with
            | None -> ()
            | Some env_var ->
@@ -97,6 +98,7 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
           ignore_function_label label;
           ignore_int arity;
           ignore_ident_list params;
+          ignore_ident_option_list original_params;
           loop body;
           ignore_debuginfo dbg;
           ignore_string human_name;
@@ -259,11 +261,12 @@ let let_bound_vars_that_can_be_moved ident_info (clam : Clambda.ulambda) =
     | Uclosure (functions, captured_variables) ->
       ignore_ulambda_list captured_variables;
       (* Start a new let stack for speed. *)
-      List.iter (fun { Clambda. label; arity; params; body; dbg;
-              human_name; module_path; } ->
+      List.iter (fun { Clambda. label; arity; params; original_params; body;
+              dbg; human_name; module_path; } ->
           ignore_function_label label;
           ignore_int arity;
           ignore_ident_list params;
+          ignore_ident_option_list original_params;
           let_stack := [];
           loop body;
           let_stack := [];

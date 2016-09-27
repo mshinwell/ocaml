@@ -656,6 +656,9 @@ and to_clambda_set_of_closures t env
           env, id :: params)
         function_decl.params (env, [])
     in
+    let original_params =
+      List.map (fun var -> Variable.original_ident var) function_decl.params
+    in
     let env_body = Env.entering_closure env_body closure_id in
     let body = to_clambda t env_body function_decl.body in
     let body =
@@ -680,6 +683,7 @@ and to_clambda_set_of_closures t env
     { label = Compilenv.function_label closure_id;
       arity = Flambda_utils.function_arity function_decl;
       params = params @ [env_var];
+      original_params = original_params @ [None];
       body;
       dbg = function_decl.dbg;
       human_name = Closure_id.base_name closure_id;
@@ -728,6 +732,9 @@ and to_clambda_closed_set_of_closures t env symbol ~module_path
           env, id :: params)
         function_decl.params (env, [])
     in
+    let original_params =
+      List.map (fun var -> Variable.original_ident var) function_decl.params
+    in
     let closure_id = Closure_id.wrap closure_id in
     let env_body = Env.entering_closure env_body closure_id in
     let body = to_clambda t env_body function_decl.body in
@@ -753,6 +760,7 @@ and to_clambda_closed_set_of_closures t env symbol ~module_path
     { label = Compilenv.function_label closure_id;
       arity = Flambda_utils.function_arity function_decl;
       params;
+      original_params;
       body;
       dbg = function_decl.dbg;
       human_name = Closure_id.base_name closure_id;

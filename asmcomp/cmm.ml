@@ -176,6 +176,7 @@ type expression =
 type fundecl =
   { fun_name: string;
     fun_args: (Ident.t * machtype) list;
+    fun_original_params : Ident.t option list;
     fun_body: expression;
     fun_fast: bool;
     fun_dbg : Debuginfo.t;
