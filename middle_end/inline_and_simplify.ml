@@ -1169,24 +1169,26 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
           provenance;
         },
       r)
-  | Let_rec { vars_and_defining_exprs = defs; body; provenance; _ } ->
-    let defs, sb = Freshening.add_variables (E.freshening env) defs in
+  | Let_rec { vars_and_defining_exprs = defs; body; } ->
+    let defs, sb =
+      Freshening.add_variables3 (E.freshening env) defs
+    in
     let env = E.set_freshening env sb in
     let def_env =
-      List.fold_left (fun env_acc (id, _lam) ->
+      List.fold_left (fun env_acc (id, _lam, _provenance) ->
           E.add env_acc id (A.value_unknown Other))
         env defs
     in
     let defs, body_env, r =
-      List.fold_right (fun (id, lam) (defs, env_acc, r) ->
+      List.fold_right (fun (id, lam, provenance) (defs, env_acc, r) ->
           let lam, r = simplify_named def_env r lam in
-          let defs = (id, lam) :: defs in
+          let defs = (id, lam, provenance) :: defs in
           let env_acc = E.add env_acc id (R.approx r) in
           defs, env_acc, r)
         defs ([], env, r)
     in
     let body, r = simplify body_env r body in
-    Let_rec { vars_and_defining_exprs = defs; body; provenance; }, r
+    Let_rec { vars_and_defining_exprs = defs; body; }, r
   | Static_raise (i, args) ->
     let i = Freshening.apply_static_exception (E.freshening env) i in
     simplify_free_variables env args ~f:(fun _env args _args_approxs ->

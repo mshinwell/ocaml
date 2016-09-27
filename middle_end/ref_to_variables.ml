@@ -59,7 +59,7 @@ let variables_not_used_as_local_reference (tree:Flambda.t) =
       end;
       loop body
     | Let_rec { vars_and_defining_exprs = defs; body; _ } ->
-      List.iter (fun (_var, named) -> loop_named named) defs;
+      List.iter (fun (_var, named, _provenance) -> loop_named named) defs;
       loop body
     | Var v ->
       set := Variable.Set.add v !set

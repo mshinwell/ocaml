@@ -193,17 +193,18 @@ let variable_and_symbol_invariants (program : Flambda.program) =
       check_variable_is_bound env var;
       ignore_let_provenance_option provenance;
       loop (add_mutable_binding_occurrence env mut_var) body
-    | Let_rec { vars_and_defining_exprs = defs; body; provenance; } ->
+    | Let_rec { vars_and_defining_exprs = defs; body; } ->
       let env =
-        List.fold_left (fun env (var, def) ->
+        List.fold_left (fun env (var, def, provenance) ->
+            ignore_let_provenance_option provenance;
             will_traverse_named_expression_later def;
             add_binding_occurrence env var)
           env defs
       in
-      List.iter (fun (var, def) ->
+      List.iter (fun (var, def, provenance) ->
+        ignore_let_provenance_option provenance;
         already_added_bound_variable_to_env var;
         loop_named env def) defs;
-      ignore_let_provenance_option provenance;
       loop env body
     | For { bound_var; from_value; to_value; direction; body; } ->
       ignore_direction_flag direction;

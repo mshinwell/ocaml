@@ -37,8 +37,8 @@ type extracted =
 
 type accumulated = {
   copied_lets :
-    (Variable.t * Flambda.defining_expr_of_let
-      * Flambda.let_provenance option) list;
+    (Variable.t * (Flambda.defining_expr_of_let
+      * Flambda.let_provenance option)) list;
   extracted_lets : extracted list;
   terminator : Flambda.expr;
 }
@@ -83,13 +83,13 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
     when should_copy named ->
       accumulate body
         ~substitution
-        ~copied_lets:((var, named, provenance)::copied_lets)
+        ~copied_lets:((var, (named, provenance))::copied_lets)
         ~extracted_lets
   | Let_rec { vars_and_defining_exprs = [var, named, provenance]; body; _ }
     when should_copy (Normal named) ->
       accumulate body
         ~substitution
-        ~copied_lets:((var, Flambda.Normal named, provenance)::copied_lets)
+        ~copied_lets:((var, (Flambda.Normal named, provenance))::copied_lets)
         ~extracted_lets
   | Let { var; defining_expr = Normal named; body; provenance; _ } ->
     let extracted =
@@ -111,7 +111,7 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
             | None -> None
             | Some original_ident ->
               let provenance : Flambda.symbol_provenance =
-                { original_idents = [original_ident];
+                { original_ident;
                   module_path = provenance.module_path;
                   location = provenance.location;
                 }
@@ -250,9 +250,8 @@ let rebuild_expr
       expr_with_read_symbols
   in
   Variable.Map.fold (fun var declaration body ->
-      let definition = Variable.Map.find var copied_definitions in
-      (* CR mshinwell: this should presumably have provenance info *)
-      Flambda.create_let' declaration definition body)
+      let definition, provenance = Variable.Map.find var copied_definitions in
+      Flambda.create_let' ?provenance declaration definition body)
     substitution expr_with_read_symbols
 
 let rebuild (accumulated : accumulated) =
