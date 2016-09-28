@@ -453,6 +453,7 @@ let map_general ~toplevel f f_named f_phantom tree =
                     ~inline:func_decl.inline
                     ~specialise:func_decl.specialise
                     ~is_a_functor:func_decl.is_a_functor
+                    ~module_path:func_decl.module_path
                 end)
               function_decls.funs
           in
@@ -569,7 +570,8 @@ let map_symbols_on_set_of_closures
           ~dbg:func_decl.dbg
           ~inline:func_decl.inline
           ~specialise:func_decl.specialise
-          ~is_a_functor:func_decl.is_a_functor)
+          ~is_a_functor:func_decl.is_a_functor
+          ~module_path:func_decl.module_path)
       function_decls.funs
   in
   if not !done_something then
@@ -699,6 +701,7 @@ let map_function_bodies (set_of_closures : Flambda.set_of_closures) ~f =
             ~inline:function_decl.inline
             ~specialise:function_decl.specialise
             ~is_a_functor:function_decl.is_a_functor
+            ~module_path:function_decl.module_path
         end)
       set_of_closures.function_decls.funs
   in
@@ -735,6 +738,7 @@ let map_sets_of_closures_of_program (program : Flambda.program)
                   ~inline:function_decl.inline
                   ~specialise:function_decl.specialise
                   ~is_a_functor:function_decl.is_a_functor
+                  ~module_path:function_decl.module_path
               end)
             set_of_closures.function_decls.funs
         in
@@ -838,6 +842,7 @@ let map_exprs_at_toplevel_of_program (program : Flambda.program)
                 ~inline:function_decl.inline
                 ~specialise:function_decl.specialise
                 ~is_a_functor:function_decl.is_a_functor
+                ~module_path:function_decl.module_path
             end)
           set_of_closures.function_decls.funs
       in

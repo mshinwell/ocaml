@@ -541,6 +541,7 @@ module Make (T : S) = struct
         ~inline:Default_inline
         ~specialise:Default_specialise
         ~is_a_functor:false
+        ~module_path:function_decl.module_path
     in
     new_fun_var, new_function_decl, rewritten_existing_specialised_args,
       benefit
@@ -622,6 +623,7 @@ module Make (T : S) = struct
           ~inline:function_decl.inline
           ~specialise:function_decl.specialise
           ~is_a_functor:function_decl.is_a_functor
+          ~module_path:function_decl.module_path
       in
       let funs, direct_call_surrogates =
         if for_one_function.make_direct_call_surrogates then

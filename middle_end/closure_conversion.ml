@@ -85,7 +85,7 @@ let add_default_argument_wrappers lam =
 (** Generate a wrapper ("stub") function that accepts a tuple argument and
     calls another function with arguments extracted in the obvious
     manner from the tuple. *)
-let tupled_function_call_stub original_params unboxed_version
+let tupled_function_call_stub env original_params unboxed_version
       : Flambda.function_declaration =
   let tuple_param =
     Variable.rename ~append:"tupled_stub_param" unboxed_version
@@ -115,6 +115,7 @@ let tupled_function_call_stub original_params unboxed_version
   Flambda.create_function_declaration ~params:[tuple_param]
     ~body ~stub:true ~dbg:Debuginfo.none ~inline:Default_inline
     ~specialise:Default_specialise ~is_a_functor:false
+    ~module_path:(Env.current_module_path env)
 
 let rec eliminate_const_block (const : Lambda.structured_constant)
       : Lambda.lambda =
@@ -627,8 +628,9 @@ and close_functions t external_env function_declarations : Flambda.named =
     in
     let params = List.map (Env.find_var closure_env) params in
     let closure_bound_var = Function_decl.closure_bound_var decl in
+    let module_path = Env.current_module_path closure_env in
     let provenance : Flambda.let_provenance =
-      { module_path = Env.current_module_path closure_env;
+      { module_path;
         location = loc;
       }
     in
@@ -639,13 +641,14 @@ and close_functions t external_env function_declarations : Flambda.named =
         ~inline:(Function_decl.inline decl)
         ~specialise:(Function_decl.specialise decl)
         ~is_a_functor:(Function_decl.is_a_functor decl)
+        ~module_path
     in
     match Function_decl.kind decl with
     | Curried -> Variable.Map.add closure_bound_var fun_decl map
     | Tupled ->
       let unboxed_version = Variable.rename closure_bound_var in
       let generic_function_stub =
-        tupled_function_call_stub params unboxed_version
+        tupled_function_call_stub closure_env params unboxed_version
       in
       Variable.Map.add unboxed_version fun_decl
         (Variable.Map.add closure_bound_var generic_function_stub map)

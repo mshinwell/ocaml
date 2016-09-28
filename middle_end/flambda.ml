@@ -150,6 +150,7 @@ and function_declaration = {
   inline : Lambda.inline_attribute;
   specialise : Lambda.specialise_attribute;
   is_a_functor : bool;
+  module_path : Path.t;
 }
 
 and switch = {
@@ -1109,7 +1110,7 @@ let fold_lets_option
 
 let create_function_declaration ~params ~body ~stub ~dbg
       ~(inline : Lambda.inline_attribute)
-      ~(specialise : Lambda.specialise_attribute) ~is_a_functor
+      ~(specialise : Lambda.specialise_attribute) ~is_a_functor ~module_path
       : function_declaration =
   begin match stub, inline with
   | true, (Never_inline | Default_inline)
@@ -1135,6 +1136,7 @@ let create_function_declaration ~params ~body ~stub ~dbg
     inline;
     specialise;
     is_a_functor;
+    module_path;
   }
 
 let create_function_declarations ~funs =

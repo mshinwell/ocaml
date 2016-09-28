@@ -698,7 +698,7 @@ and to_clambda_set_of_closures t env
   in
   Uclosure (funs, List.map snd free_vars)
 
-and to_clambda_closed_set_of_closures t env symbol ~module_path
+and to_clambda_closed_set_of_closures t env symbol
       ({ function_decls; } : Flambda.set_of_closures)
       : Clambda.ustructured_constant =
   let functions = Variable.Map.bindings function_decls.funs in
@@ -746,7 +746,7 @@ and to_clambda_closed_set_of_closures t env symbol ~module_path
             | Some original_ident ->
               let location = Debuginfo.to_location function_decl.dbg in
               let provenance : Clambda.ulet_provenance =
-                { module_path;
+                { module_path = function_decl.module_path;
                   location;
                   original_ident;
                 }
@@ -764,7 +764,14 @@ and to_clambda_closed_set_of_closures t env symbol ~module_path
       body;
       dbg = function_decl.dbg;
       human_name = Closure_id.base_name closure_id;
-      module_path = Some module_path;
+      (* We use this rather than the symbol provenance information available in
+         e.g. [accumulate_structured_constants], below, because in the case
+         of a set of closures formed from a "let rec" declaration there is no
+         [original_ident] corresponding to the [Let]-bound identifier for the
+         set of closures.  This in turn means that such sets of closures have
+         no associated symbol provenance information (by virtue of the
+         behaviour of [Lift_let_to_initialize_symbol]). *)
+      module_path = Some function_decl.module_path;
     }
   in
   let ufunct = List.map to_clambda_function functions in
@@ -814,14 +821,7 @@ let accumulate_structured_constants t env symbol
       acc
   | Set_of_closures set_of_closures ->
     let set_of_closures =
-      let module_path =
-        match provenance with
-        (* CR mshinwell: can we eliminate this option? *)
-        | None -> Path.Pident (Ident.create "<unknown>")
-        | Some provenance -> provenance.module_path
-      in
-      to_clambda_closed_set_of_closures t env symbol
-        ~module_path set_of_closures
+      to_clambda_closed_set_of_closures t env symbol set_of_closures
     in
     Symbol.Map.add symbol (set_of_closures, provenance) acc
   | Project_closure _ -> acc

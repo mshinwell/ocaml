@@ -373,7 +373,7 @@ let toplevel_substitution_named sb named =
     end
   | _ -> assert false
 
-let make_closure_declaration ~id ~body ~params ~stub : Flambda.t =
+let make_closure_declaration ~id ~body ~params ~stub ~module_path : Flambda.t =
   let free_variables =
     (* We must rename the phantom free vars as well as the normal ones,
        e.g. when inlining. *)
@@ -397,6 +397,7 @@ let make_closure_declaration ~id ~body ~params ~stub : Flambda.t =
     Flambda.create_function_declaration ~params:(List.map subst params)
       ~body ~stub ~dbg:Debuginfo.none ~inline:Default_inline
       ~specialise:Default_specialise ~is_a_functor:false
+      ~module_path
   in
   assert (Variable.Set.equal (Variable.Set.map subst free_variables)
     (Free_names.all_free_variables function_declaration.free_names));

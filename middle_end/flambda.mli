@@ -381,6 +381,8 @@ and function_declaration = private {
   (** Specialising requirements from the source code. *)
   is_a_functor : bool;
   (** Whether the function is known definitively to be a functor. *)
+  module_path : Path.t;
+  (** The module path under which the function is defined. *)
 }
 
 (** Equivalent to the similar type in [Lambda]. *)
@@ -660,6 +662,7 @@ val create_function_declaration
   -> inline:Lambda.inline_attribute
   -> specialise:Lambda.specialise_attribute
   -> is_a_functor:bool
+  -> module_path:Path.t
   -> function_declaration
 
 (** Create a set of function declarations given the individual declarations. *)

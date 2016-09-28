@@ -749,6 +749,7 @@ let introduce_free_variables_in_set_of_closures
                  ~inline:func_decl.inline
                  ~specialise:func_decl.specialise
                  ~is_a_functor:func_decl.is_a_functor
+                 ~module_path:func_decl.module_path
              end)
           function_decls.funs)
   in

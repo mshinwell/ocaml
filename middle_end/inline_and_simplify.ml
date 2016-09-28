@@ -627,6 +627,7 @@ and simplify_set_of_closures original_env r
         ~body ~stub:function_decl.stub ~dbg:function_decl.dbg
         ~inline ~specialise:function_decl.specialise
         ~is_a_functor:function_decl.is_a_functor
+        ~module_path:function_decl.module_path
     in
     let used_params' = Flambda.used_params function_decl in
     Variable.Map.add fun_var function_decl funs,
@@ -779,7 +780,8 @@ and simplify_full_application env r ~function_decls ~lhs_of_application
     ~inline_requested ~specialise_requested
 
 and simplify_partial_application env r ~lhs_of_application
-      ~closure_id_being_applied ~function_decl ~args ~dbg
+      ~closure_id_being_applied
+      ~(function_decl : Flambda.function_declaration) ~args ~dbg
       ~inline_requested ~specialise_requested =
   let arity = Flambda_utils.function_arity function_decl in
   assert (arity > List.length args);
@@ -837,6 +839,7 @@ and simplify_partial_application env r ~lhs_of_application
       ~body
       ~params:remaining_args
       ~stub:true
+      ~module_path:function_decl.module_path
   in
   let with_known_args =
     Flambda_utils.bind
@@ -1485,6 +1488,7 @@ and duplicate_function ~env ~(set_of_closures : Flambda.set_of_closures)
       ~body ~stub:function_decl.stub ~dbg:function_decl.dbg
       ~inline:function_decl.inline ~specialise:function_decl.specialise
       ~is_a_functor:function_decl.is_a_functor
+      ~module_path:function_decl.module_path
   in
   function_decl, specialised_args
 

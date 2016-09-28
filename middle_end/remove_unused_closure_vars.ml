@@ -140,7 +140,8 @@ let remove_unused_closure_variables ~remove_direct_call_surrogates program =
               ~dbg:decl.dbg
               ~inline:decl.inline
               ~specialise:decl.specialise
-              ~is_a_functor:decl.is_a_functor)
+              ~is_a_functor:decl.is_a_functor
+              ~module_path:decl.module_path)
           funs
       in
       let function_decls =

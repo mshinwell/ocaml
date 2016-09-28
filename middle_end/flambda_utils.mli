@@ -71,6 +71,7 @@ val make_closure_declaration
   -> body:Flambda.t
   -> params:Variable.t list
   -> stub:bool
+  -> module_path:Path.t
   -> Flambda.t
 
 val toplevel_substitution
