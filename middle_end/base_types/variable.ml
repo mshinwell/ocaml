@@ -47,16 +47,21 @@ include Identifiable.Make (struct
 
   let hash t = t.name_stamp lxor (Compilation_unit.hash t.compilation_unit)
 
+  let print_original_ident ppf t =
+    match t.original_ident with
+    | None -> ()
+    | Some ident -> Format.fprintf ppf "[=%a]" Ident.print ident
+
   let print ppf t =
     if Compilation_unit.equal t.compilation_unit
         (Compilation_unit.get_current_exn ())
     then begin
-      Format.fprintf ppf "%s/%d"
-        t.name t.name_stamp
+      Format.fprintf ppf "%s/%d%a"
+        t.name t.name_stamp print_original_ident t
     end else begin
-      Format.fprintf ppf "%a.%s/%d"
+      Format.fprintf ppf "%a.%s/%d%a"
         Compilation_unit.print t.compilation_unit
-        t.name t.name_stamp
+        t.name t.name_stamp print_original_ident t
     end
 end)
 

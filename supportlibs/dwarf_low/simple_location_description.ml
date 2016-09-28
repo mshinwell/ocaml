@@ -23,6 +23,8 @@ module type S = sig
   val const_int_not_ocaml_encoded : Int64.t -> t
   val in_register : reg_number:int -> t
   val in_stack_slot : offset_in_words:int -> t
+  val in_register_yielding_stack_value : reg_number:int -> t
+  val in_stack_slot_yielding_stack_value : offset_in_words:int -> t
   val read_symbol_field : symbol:Symbol.t -> field:int -> t
   val read_symbol_field_yielding_rvalue : symbol:Symbol.t -> field:int -> t
   val read_field : t -> field:int -> t
@@ -38,48 +40,59 @@ module type S = sig
     -> t
 end
 
-type t =
+type description =
   | Empty
   | Const_symbol of Symbol.t
   | Const_int of Int64.t
   | In_register of int
   | In_stack_slot of { offset_in_words : int; }
-  | Offset_pointer of { block : t; offset_in_words : int; }
-  | Read_field of { block : t; field : int; }
-  | Read_symbol_field_yielding_rvalue of { block : t; field : int; }
+  | Offset_pointer of { block : description; offset_in_words : int; }
+  | Read_field of { block : description; field : int; }
+  | Read_symbol_field_yielding_rvalue of { block : description; field : int; }
   | Location_from_another_die of { die_label : Cmm.label;
       compilation_unit_header_label : Cmm.label; }
   | Implicit_pointer of { offset_in_bytes : int; die_label : Cmm.label;
       dwarf_version : Dwarf_version.t; }
 
-let empty = Empty
-let const_symbol symbol = Const_symbol symbol
+(* Iff the boolean is [false] we must add [DW_op_stack_value] to the end
+   of the calculation. *)
+type t = bool * description
+
+let empty = false, Empty
+let const_symbol symbol = false, Const_symbol symbol
 let const_int i =
   let i = Int64.logor (Int64.shift_left i 1) 1L in
-  Const_int i
-let const_int_not_ocaml_encoded i = Const_int i
-let in_register ~reg_number = In_register reg_number
-let in_stack_slot ~offset_in_words = In_stack_slot { offset_in_words; }
+  false, Const_int i
+let const_int_not_ocaml_encoded i = false, Const_int i
+let in_register ~reg_number = false, In_register reg_number
+let in_stack_slot ~offset_in_words = false, In_stack_slot { offset_in_words; }
+let in_register_yielding_stack_value ~reg_number =
+  true, In_register reg_number
+let in_stack_slot_yielding_stack_value ~offset_in_words =
+  true, In_stack_slot { offset_in_words; }
 let read_symbol_field ~symbol ~field =
-  Read_field { block = Const_symbol symbol; field; }
+  false, Read_field { block = Const_symbol symbol; field; }
 let read_symbol_field_yielding_rvalue ~symbol ~field =
-  Read_symbol_field_yielding_rvalue { block = Const_symbol symbol; field; }
-let offset_pointer t ~offset_in_words =
-  Offset_pointer { block = t; offset_in_words; }
-let read_field t ~field = Read_field { block = t; field; }
+  false,
+    Read_symbol_field_yielding_rvalue { block = Const_symbol symbol; field; }
+let offset_pointer (_, block) ~offset_in_words =
+  false, Offset_pointer { block; offset_in_words; }
+let read_field (_, block) ~field =
+  false, Read_field { block; field; }
 let location_from_another_die ~die_label ~compilation_unit_header_label =
-  Location_from_another_die { die_label; compilation_unit_header_label; }
+  false, Location_from_another_die { die_label; compilation_unit_header_label; }
 let implicit_pointer ~offset_in_bytes ~die_label ~dwarf_version =
-  Implicit_pointer { offset_in_bytes; die_label; dwarf_version; }
+  false, Implicit_pointer { offset_in_bytes; die_label; dwarf_version; }
 
-let rec compile_to_yield_value t =
+let rec compile_to_yield_value desc =
   (* We first compile the expression to a DWARF expression that always yields
      the *value* of the corresponding variable rather than to a location that
      contains the value (which may sometimes not exist, e.g. in the [Symbol]
      case). *)
   (* CR mshinwell: return a flag saying if we've actually formed an
-     lvalue? *)
-  match t with
+     lvalue?  (Also tidy this up in the light of recent developments.)
+     Look at the read_field case above when doing this. *)
+  match desc with
   | Empty -> []
   | Const_symbol symbol -> [Operator.value_of_symbol symbol]
   | Const_int i -> [Operator.signed_int_const i]
@@ -106,8 +119,14 @@ let rec compile_to_yield_value t =
   | Implicit_pointer { offset_in_bytes; die_label; dwarf_version; } ->
     [Operator.implicit_pointer ~offset_in_bytes ~die_label ~dwarf_version]
 
-let compile t =
-  let sequence = (compile_to_yield_value t) @ [Operator.stack_value ()] in
+let compile (need_stack_value_op, desc) =
+  let sequence =
+    let compiled = compile_to_yield_value desc in
+    if need_stack_value_op then
+      compiled @ [Operator.stack_value ()]
+    else
+      compiled
+  in
 (*
   Format.eprintf "SLE.compile non-optimized: %a\n"
     (Format.pp_print_list Operator.print) sequence;

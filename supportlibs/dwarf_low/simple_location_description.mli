@@ -27,6 +27,8 @@ module type S = sig
      numbering is in use here *)
   val in_register : reg_number:int -> t
   val in_stack_slot : offset_in_words:int -> t
+  val in_register_yielding_stack_value : reg_number:int -> t
+  val in_stack_slot_yielding_stack_value : offset_in_words:int -> t
   val read_symbol_field : symbol:Symbol.t -> field:int -> t
   val read_symbol_field_yielding_rvalue : symbol:Symbol.t -> field:int -> t
   val read_field : t -> field:int -> t

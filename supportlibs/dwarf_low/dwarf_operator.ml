@@ -12,6 +12,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(* CR-soon mshinwell: Consider splitting the operators so that the "terminators"
+   are separate.  This may help reduce confusion.  The terminators would be
+   operators such as DW_op_regx, DW_op_stack_value and the implicit stuff
+   which cannot form a sub-part of some larger computation. *)
+
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 type implicit_value =

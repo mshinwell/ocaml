@@ -953,11 +953,11 @@ let phantomize_defining_expr (named : Flambda.named)
   | Read_mutable mut_var -> Read_mutable mut_var
   | Read_symbol_field (symbol, field) -> Read_symbol_field (symbol, field)
   (* CR-soon mshinwell: Fix [Inline_and_simplify] to properly simplify
-      phantom let defining expressions based on approximations.  Then we
-      can reinstate this.  (It cannot be reinstated at present since it might
-      cause us to have Read_var_field projecting from phantom identifiers,
-      which would translate to trying to DW_OP_deref an implicit pointer,
-      which gdb cannot cope with.) *)
+     phantom let defining expressions based on approximations.  Then we
+     can reinstate this.  (It cannot be reinstated at present since it might
+     cause us to have Read_var_field projecting from phantom identifiers,
+     which would translate to trying to DW_OP_deref an implicit pointer,
+     which gdb cannot cope with.) *)
 (*  | Prim (Pfield field, [var], _dbg) -> Read_var_field (var, field) *)
   | Prim (Pmakeblock (tag, Immutable, _kind), fields, _dbg) ->
     Block { tag = Tag.create_exn tag; fields; }

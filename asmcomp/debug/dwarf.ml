@@ -32,6 +32,7 @@ type t = {
 
 type proto_dies_for_ident = {
   value_die : Proto_die.reference;
+  value_die_yielding_stack_value : Proto_die.reference;
   type_die : Proto_die.reference;
 }
 
@@ -280,11 +281,24 @@ let location_of_identifier t ~ident ~proto_dies_for_idents =
       ~die_label:value_die
       ~compilation_unit_header_label:t.compilation_unit_header_label
 
+let location_of_identifier_yielding_stack_value t ~ident
+      ~proto_dies_for_idents =
+  match proto_dies_for_identifier ~ident ~proto_dies_for_idents with
+  | { value_die_yielding_stack_value; _; } ->
+    Simple_location_description.location_from_another_die
+      ~die_label:value_die_yielding_stack_value
+      ~compilation_unit_header_label:t.compilation_unit_header_label
+
+type description =
+  | Simple of Simple_location_description.t
+  | Composite of Composite_location_description.t
+
 let construct_value_description t ~parent ~fundecl
       ~(type_info : Available_ranges.type_info) ~available_subrange
-      ~proto_dies_for_idents : Location_list_entry.t =
-  let simple_location_description
-        ~(location : unit Available_subrange.location) =
+      ~proto_dies_for_idents ~must_yield_value_on_dwarf_stack
+      : Location_list_entry.t =
+  let location_description
+        ~(location : unit Available_subrange.location) : description =
     let module SLD = Simple_location_description in
     match location with
     | Reg (reg, ()) ->
@@ -292,7 +306,10 @@ let construct_value_description t ~parent ~fundecl
       | Reg.Unknown -> assert false  (* probably a bug in available_regs.ml *)
       | Reg.Reg _ ->
         let reg_number = Proc.dwarf_register_number reg in
-        SLD.in_register ~reg_number
+        if not must_yield_value_on_dwarf_stack then
+          Simple (SLD.in_register ~reg_number)
+        else
+          Simple (SLD.in_register_yielding_stack_value ~reg_number)
       | Reg.Stack _ ->
         (* CR mshinwell: rename [Lcapture_stack_offset] *)
         match
@@ -310,10 +327,14 @@ let construct_value_description t ~parent ~fundecl
               Printmach.reg reg
           end;
           (* CR-soon mshinwell: use [offset_in_bytes] instead *)
-          SLD.in_stack_slot
-            ~offset_in_words:(offset_in_bytes_from_cfa / Arch.size_addr)
+          let offset_in_words = offset_in_bytes_from_cfa / Arch.size_addr in
+          if not must_yield_value_on_dwarf_stack then
+            Simple (SLD.in_stack_slot ~offset_in_words)
+          else
+            Simple (SLD.in_stack_slot_yielding_stack_value ~offset_in_words)
       end
     | Phantom ->
+      assert (not must_yield_value_on_dwarf_stack);  (* See comments below. *)
       let defining_expr =
         match type_info with
         | From_cmt_file _ -> assert false
@@ -331,24 +352,72 @@ let construct_value_description t ~parent ~fundecl
             assert false
       in
       match defining_expr with
-      | Iphantom_const_int i -> SLD.const_int (Int64.of_int i)
-      | Iphantom_const_symbol symbol -> SLD.const_symbol symbol
+      | Iphantom_const_int i -> Simple (SLD.const_int (Int64.of_int i))
+      | Iphantom_const_symbol symbol -> Simple (SLD.const_symbol symbol)
       | Iphantom_read_symbol_field (symbol, field) ->
-        SLD.read_symbol_field ~symbol ~field
+        Simple (SLD.read_symbol_field ~symbol ~field)
       | Iphantom_var ident ->
-        (* CR mshinwell: What happens if [ident] isn't available at some point
+        (* mshinwell: What happens if [ident] isn't available at some point
            just due to the location list?  Should we push zero on the stack
            first?  Or can we detect the stack is empty?  Or does gdb just abort
            evaluation of the whole thing if the location list doesn't match?
            mshinwell: The answer seems to be that you get an error saying
-           that you tried to pop something from an empty stack. *)
-        location_of_identifier t ~ident ~proto_dies_for_idents
+           that you tried to pop something from an empty stack.  What we do
+           now is to wrap the location description in a composite location
+           description (with only one piece), which then causes gdb to
+           correctly detect unavailability. *)
+        (* CR-someday mshinwell: consider DWARF extension to avoid this?
+           The problem is worse for the read-field/read-var cases below,
+           since I think the (e.g.) dereferencing needs to be inside the piece
+           delimiters, exposing us to an error.  At the moment this should just
+           get caught by the exception handler in libmonda, but even still, a
+           better solution would be desirable. *)
+        let location =
+          location_of_identifier t ~ident ~proto_dies_for_idents
+        in
+        let composite =
+          Composite_location_description.pieces_of_simple_location_descriptions
+            [(location, Arch.size_addr)]
+        in
+        Composite composite
       | Iphantom_read_var_field (ident, field) ->
-        let location = location_of_identifier t ~ident ~proto_dies_for_idents in
-        SLD.read_field location ~field
+        (* Reminder: see CR in flambda_utils.ml regarding these constructions *)
+        let location =
+          (* We need to use a location expression that when evaluated will
+             yield the runtime value of [ident] *actually on the DWARF stack*.
+             This is necessary so that we can apply other stack operations,
+             such as arithmetic and dereferencing, to the value.  The upshot is
+             that we cannot use the "standalone" location-describing operators
+             such as DW_op_regx; instead we would use DW_op_bregx.  (Another
+             way of looking at this is that we need to get the DWARF operator
+             sequence without [DW_op_stack_value], either implicitly or
+             explicitly, at the end.) *)
+          (* CR-someday mshinwell: When we fix the CR in flambda_utils.ml and
+             generate [Iphantom_read_var_field] and [Iphantom_offset_var] for
+             more than just closure parameters, we should think carefully as
+             to whether the existing approach is reasonable (having separate
+             DIEs for the rvalues and lvalues).  Maybe one of those DIEs should
+             call the other. *)
+          location_of_identifier_yielding_stack_value t ~ident
+            ~proto_dies_for_idents
+        in
+        let read_field = SLD.read_field location ~field in
+        let composite =
+          Composite_location_description.pieces_of_simple_location_descriptions
+            [(read_field, Arch.size_addr)]
+        in
+        Composite composite
       | Iphantom_offset_var (ident, offset_in_words) ->
-        let location = location_of_identifier t ~ident ~proto_dies_for_idents in
-        SLD.offset_pointer location ~offset_in_words
+        let location =
+          location_of_identifier_yielding_stack_value t ~ident
+            ~proto_dies_for_idents
+        in
+        let offset_var = SLD.offset_pointer location ~offset_in_words in
+        let composite =
+          Composite_location_description.pieces_of_simple_location_descriptions
+            [(offset_var, Arch.size_addr)]
+        in
+        Composite composite
       | Iphantom_block { tag; fields; } ->
         (* A phantom block construction: instead of the block existing in the
            target program's address space, it is going to be conjured up in the
@@ -390,14 +459,19 @@ let construct_value_description t ~parent ~fundecl
             ]
             ()
         in
-        SLD.implicit_pointer ~offset_in_bytes:0
+        Simple (SLD.implicit_pointer ~offset_in_bytes:0
           ~die_label:(Proto_die.reference proto_die)
-          ~dwarf_version
+          ~dwarf_version)
   in
   let single_location_description =
-    Single_location_description.of_simple_location_description (
-      simple_location_description
-        ~location:(Available_subrange.location available_subrange))
+    match
+      location_description
+        ~location:(Available_subrange.location available_subrange)
+    with
+    | Simple simple ->
+      Single_location_description.of_simple_location_description simple
+    | Composite composite ->
+      Single_location_description.of_composite_location_description composite
   in
   let start_of_code_symbol =
     Name_laundry.fun_name_to_symbol fundecl.Linearize.fun_name
@@ -420,6 +494,7 @@ let construct_value_description t ~parent ~fundecl
 
 let dwarf_for_identifier t ~fundecl ~function_proto_die
       ~lexical_block_proto_die ~proto_dies_for_idents
+      ~must_yield_value_on_dwarf_stack
       ~(ident : Ident.t) ~(ident_for_type : Ident.t option) ~is_unique
       ~range =
   let type_info = Available_range.type_info range in
@@ -459,7 +534,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
           let location_list_entry =
             construct_value_description t ~parent:(Some function_proto_die)
               ~fundecl ~available_subrange ~proto_dies_for_idents
-              ~type_info
+              ~type_info ~must_yield_value_on_dwarf_stack
           in
           location_list_entry::location_list_entries)
     in
@@ -515,11 +590,15 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
              location.) *)
           ident, Some (Ident.name ident_for_type)
     in
-    construct_type_of_value_description t
-      ~parent:(Some t.compilation_unit_proto_die)
-      ~ident ~output_path:t.output_path
-      ~type_info ~proto_dies_for_idents
-      ~reference;
+    (* CR mshinwell: This should be tidied up.  It's only correct by virtue
+       of the fact we do the closure-env ones second below. *)
+    if not must_yield_value_on_dwarf_stack then begin
+      construct_type_of_value_description t
+        ~parent:(Some t.compilation_unit_proto_die)
+        ~ident ~output_path:t.output_path
+        ~type_info ~proto_dies_for_idents
+        ~reference
+    end;
     let name_for_ident =
       match name_for_ident with
       | None -> []
@@ -535,7 +614,13 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
     | Local -> Dwarf_tag.Variable
   in
   let reference =
-    (proto_dies_for_identifier ~ident ~proto_dies_for_idents).value_die
+    let proto_dies =
+      proto_dies_for_identifier ~ident ~proto_dies_for_idents
+    in
+    if must_yield_value_on_dwarf_stack then
+      proto_dies.value_die_yielding_stack_value
+    else
+      proto_dies.value_die
   in
   let proto_die =
     Proto_die.create ~reference
@@ -582,9 +667,9 @@ let iterate_over_variable_like_things _t ~available_ranges ~f =
           match provenance with
           | None ->
             (* In this case the variable won't be given a name in the DWARF,
-              so as not to appear in the debugger; but we still need to emit
-              a DIE for it, as it may be referenced as part of some chain of
-              phantom lets. *)
+               so as not to appear in the debugger; but we still need to emit
+               a DIE for it, as it may be referenced as part of some chain of
+               phantom lets. *)
             None
           | Some provenance -> Some provenance.original_ident
         end
@@ -598,12 +683,28 @@ let dwarf_for_variables_and_parameters t ~function_proto_die
   iterate_over_variable_like_things t ~available_ranges
     ~f:(fun ~ident ~ident_for_type:_ ~is_unique:_ ~range:_ ->
       let value_die = Proto_die.create_reference () in
+      let value_die_yielding_stack_value = Proto_die.create_reference () in
       let type_die = Proto_die.create_reference () in
       assert (not (Ident.Tbl.mem proto_dies_for_idents ident));
-      Ident.Tbl.add proto_dies_for_idents ident { value_die; type_die; });
+      Ident.Tbl.add proto_dies_for_idents ident
+        { value_die; value_die_yielding_stack_value; type_die; });
   iterate_over_variable_like_things t ~available_ranges
     ~f:(dwarf_for_identifier t ~fundecl ~function_proto_die
-      ~lexical_block_proto_die ~proto_dies_for_idents)
+      ~lexical_block_proto_die ~proto_dies_for_idents
+      ~must_yield_value_on_dwarf_stack:false);
+  iterate_over_variable_like_things t ~available_ranges
+    ~f:(fun ~ident ~ident_for_type ~is_unique ~range ->
+      (* We only need DIEs that yield actually on the DWARF stack the locations
+         of entities for closure arguments, since those are the only ones
+         that may be involved with [Iphantom_read_var_field] and
+         [Iphantom_var] constructions.  (See comments above.) *)
+      (* CR mshinwell: Make this test less messy *)
+      if Ident.name ident = "*closure_env*" then begin
+        dwarf_for_identifier t ~fundecl ~function_proto_die
+          ~lexical_block_proto_die ~proto_dies_for_idents
+          ~must_yield_value_on_dwarf_stack:true
+          ~ident ~ident_for_type ~is_unique ~range
+      end)
 
 let dwarf_for_function_definition t ~(fundecl:Linearize.fundecl)
       ~available_ranges ~(emit_info : Emit.fundecl_result) =
@@ -695,7 +796,7 @@ let dwarf_for_toplevel_constant t ~idents ~module_path ~symbol =
           DAH.create_type ~proto_die:type_proto_die;
           DAH.create_const_value_from_symbol ~symbol;
           (* Mark everything as "external" so gdb puts the constants in its
-            list of "global symbols". *)
+             list of "global symbols". *)
           DAH.create_external ~is_visible_externally:true;
         ])
     idents
