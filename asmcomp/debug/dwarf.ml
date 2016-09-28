@@ -482,9 +482,9 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
         let ident = `Ident ident_for_type in
         match is_parameter with
         | Local ->
-          (* If the unstamped name of [ident]is unambiguous within the function,
-             then use it; otherwise, equip the name with the location of its
-             definition. *)
+          (* If the unstamped name of [ident] is unambiguous within the
+             function, then use it; otherwise, equip the name with the location
+             of its definition. *)
           if is_unique then
             ident, Some (Ident.name ident_for_type)
           else
@@ -510,7 +510,9 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
             end
         | Parameter _ ->
           (* Parameters for a given function have unique names, so are never
-             equipped with locations. *)
+             equipped with locations.  (A parameter may have the same name as
+             a local, but in that case, the local will be equipped with its
+             location.) *)
           ident, Some (Ident.name ident_for_type)
     in
     construct_type_of_value_description t

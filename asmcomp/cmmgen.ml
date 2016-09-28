@@ -3052,7 +3052,7 @@ let send_function arity =
   Cfunction
    {fun_name;
     fun_args = fun_args;
-    fun_original_params = [None; None; None];
+    fun_original_params = List.map (fun _ -> None) fun_args;
     fun_body = body;
     fun_fast = true;
     fun_dbg  = Debuginfo.none;

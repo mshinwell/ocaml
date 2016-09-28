@@ -188,6 +188,7 @@ and close t ?(bound_name:(Variable.t * Flambda.let_provenance) option) env
     let defining_expr =
       close_let_bound_expression t var env defining_expr
     in
+    (* CR-soon mshinwell: add location to [Llet] *)
     let location =
       match body with
       | Levent (_, { lev_loc = location; _ }) -> location
