@@ -100,15 +100,43 @@ let rec compile_to_yield_value desc =
   | In_stack_slot { offset_in_words; } ->
     let offset_in_bytes = Arch.size_addr * offset_in_words in
     Operator.contents_of_stack_slot ~offset_in_bytes
-  | Offset_pointer { block; offset_in_words; } ->
-    let offset_in_bytes = Int64.of_int (Arch.size_addr * offset_in_words) in
-    (compile_to_yield_value block)
-      @ [Operator.add_unsigned_const offset_in_bytes]
   | Read_field { block; field; } ->
-    (compile_to_yield_value block) @ [
-      Operator.add_unsigned_const (Int64.of_int (Arch.size_addr * field));
-      Operator.deref ();
-    ]
+    (* We emit special code to catch the case where evaluation of [block]
+       fails (for example due to unavailability). *)
+    (* CR-soon mshinwell: Factor this code somewhat? *)
+    (* CR-soon mshinwell: There should be protection against [block] being
+       too long.  This probably doesn't happen with the current OCaml
+       emitter since [block] is always a DW_op_call. *)
+    (Operator.signed_int_const 0L) ::
+      (compile_to_yield_value block) @ [
+        Operator.dup ();
+      ] @
+      (Operator.conditional ~if_zero:[
+          Operator.nop ();
+        ]
+        ~if_nonzero:[
+          Operator.swap ();
+          Operator.drop ();
+          Operator.add_unsigned_const (Int64.of_int (Arch.size_addr * field));
+          Operator.deref ();
+        ]) @
+      [Operator.nop ()]  (* seems to be needed (it is a branch target...) *)
+  | Offset_pointer { block; offset_in_words; } ->
+    (* Similar to [Read_field], above. *)
+    let offset_in_bytes = Int64.of_int (Arch.size_addr * offset_in_words) in
+    (Operator.signed_int_const 0L) ::
+      (compile_to_yield_value block) @ [
+        Operator.dup ();
+      ] @
+      (Operator.conditional ~if_zero:[
+          Operator.nop ();
+        ]
+        ~if_nonzero:[
+          Operator.swap ();
+          Operator.drop ();
+          Operator.add_unsigned_const offset_in_bytes;
+        ]) @
+      [Operator.nop ()]  (* best put this in, since it's a branch target *)
   | Read_symbol_field_yielding_rvalue { block; field; } ->
     (compile_to_yield_value block) @ [
       Operator.add_unsigned_const (Int64.of_int (Arch.size_addr * field));
@@ -119,13 +147,13 @@ let rec compile_to_yield_value desc =
   | Implicit_pointer { offset_in_bytes; die_label; dwarf_version; } ->
     [Operator.implicit_pointer ~offset_in_bytes ~die_label ~dwarf_version]
 
-let compile (need_stack_value_op, desc) =
+let compile (do_not_add_stack_value_op, desc) =
   let sequence =
     let compiled = compile_to_yield_value desc in
-    if need_stack_value_op then
-      compiled @ [Operator.stack_value ()]
-    else
+    if do_not_add_stack_value_op then
       compiled
+    else
+      compiled @ [Operator.stack_value ()]
   in
 (*
   Format.eprintf "SLE.compile non-optimized: %a\n"

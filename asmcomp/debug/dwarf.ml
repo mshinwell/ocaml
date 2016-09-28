@@ -371,7 +371,9 @@ let construct_value_description t ~parent ~fundecl
            since I think the (e.g.) dereferencing needs to be inside the piece
            delimiters, exposing us to an error.  At the moment this should just
            get caught by the exception handler in libmonda, but even still, a
-           better solution would be desirable. *)
+           better solution would be desirable.  Follow-up: actually it doesn't
+           get that far---the error is thrown even before the value printer
+           is called. *)
         let location =
           location_of_identifier t ~ident ~proto_dies_for_idents
         in

@@ -106,6 +106,12 @@ type t =
      currently support it.  This would remove the "header label" nonsense. *)
   | DW_op_call4 of { label : Cmm.label;
       compilation_unit_header_label : Cmm.label; }
+  | DW_op_skip of { num_bytes_forward : int; }
+  | DW_op_bra of { num_bytes_forward : int; }
+  | DW_op_drop
+  | DW_op_dup
+  | DW_op_swap
+  | DW_op_nop
 
 let print ppf t =
   let fprintf = Format.fprintf in
@@ -232,6 +238,14 @@ let print ppf t =
     fprintf ppf "DW_op_piece %d" size_in_bytes
   | DW_op_call4 { label; _ } ->
     fprintf ppf "DW_op_call4 %d" label
+  | DW_op_skip { num_bytes_forward; } ->
+    fprintf ppf "DW_op_skip %d" num_bytes_forward
+  | DW_op_bra { num_bytes_forward; } ->
+    fprintf ppf "DW_op_bra %d" num_bytes_forward
+  | DW_op_drop -> fprintf ppf "DW_op_drop"
+  | DW_op_dup -> fprintf ppf "DW_op_dup"
+  | DW_op_swap -> fprintf ppf "DW_op_swap"
+  | DW_op_nop -> fprintf ppf "DW_op_nop"
 
 let contents_of_register ~reg_number =
   DW_op_bregx { reg_number; offset_in_bytes = 0L; }
@@ -263,6 +277,11 @@ let add_unsigned_const i =
 let deref () = DW_op_deref { optimize = true; }
 
 let deref_do_not_optimize () = DW_op_deref { optimize = false; }
+
+let drop () = DW_op_drop
+let dup () = DW_op_dup
+let swap () = DW_op_swap
+let nop () = DW_op_nop
 
 let stack_value () = DW_op_stack_value
 
@@ -485,6 +504,12 @@ let opcode = function
   | DW_op_stack_value -> 0x9f
   | DW_op_GNU_implicit_pointer _ -> 0xf2
   | DW_op_implicit_pointer _ -> 0xa0
+  | DW_op_skip { num_bytes_forward = _; } -> 0x2f
+  | DW_op_bra { num_bytes_forward = _; } -> 0x28
+  | DW_op_drop -> 0x13
+  | DW_op_dup -> 0x12
+  | DW_op_swap -> 0x16
+  | DW_op_nop -> 0x96
 
 let size t =
   let opcode_size = Int64.of_int 1 in
@@ -585,6 +610,13 @@ let size t =
       Dwarf_value.size (
         Distance_between_labels_32bit
           { upper = label; lower = compilation_unit_header_label; })
+    | DW_op_skip { num_bytes_forward; }
+    | DW_op_bra { num_bytes_forward; } ->
+      Dwarf_value.size (Int16 (Numbers.Int16.of_int_exn num_bytes_forward))
+    | DW_op_drop
+    | DW_op_dup
+    | DW_op_swap
+    | DW_op_nop -> 0L
   in
   Int64.add opcode_size args_size
 
@@ -699,3 +731,38 @@ let emit t asm =
     Dwarf_value.emit (
         Distance_between_labels_32bit
           { upper = label; lower = compilation_unit_header_label; }) asm
+  | DW_op_skip { num_bytes_forward; }
+  | DW_op_bra { num_bytes_forward; } ->
+    Dwarf_value.emit (Int16 (Numbers.Int16.of_int_exn num_bytes_forward)) asm
+  | DW_op_drop
+  | DW_op_dup
+  | DW_op_swap
+  | DW_op_nop -> ()
+
+let conditional ~if_zero ~if_nonzero =
+  let nonzero_branch_size =
+    List.fold_left (fun nonzero_branch_size op ->
+        Int64.add (size op) nonzero_branch_size)
+      0L
+      if_nonzero
+  in
+  let max_branch_size = Int64.of_int ((1 lsl 16) - 1) in
+  if nonzero_branch_size > max_branch_size then begin
+    Misc.fatal_error "Dwarf_operator.conditional: nonzero branch too long"
+  end;
+  let if_zero =
+    if_zero @
+      [DW_op_skip { num_bytes_forward = Int64.to_int nonzero_branch_size; }]
+  in
+  let zero_branch_size =
+    List.fold_left (fun zero_branch_size op ->
+        Int64.add (size op) zero_branch_size)
+      0L
+      if_zero
+  in
+  let (>) a b = Int64.compare a b > 0 in
+  if zero_branch_size > max_branch_size then begin
+    Misc.fatal_error "Dwarf_operator.conditional: zero branch too long"
+  end;
+  DW_op_bra { num_bytes_forward = Int64.to_int zero_branch_size; }
+    :: if_zero @ if_nonzero
