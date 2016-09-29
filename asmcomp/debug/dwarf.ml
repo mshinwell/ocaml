@@ -586,6 +586,8 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
               ident, Some name
             end
         | Parameter _ ->
+          (* CR mshinwell: This is actually only true for parameters with
+             names in the source code... *)
           (* Parameters for a given function have unique names, so are never
              equipped with locations.  (A parameter may have the same name as
              a local, but in that case, the local will be equipped with its

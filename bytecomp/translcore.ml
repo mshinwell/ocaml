@@ -1185,10 +1185,10 @@ and transl_apply ?(should_be_tailcall=false) ?(inlined = Default_inline)
 and transl_function loc untuplify_fn repr partial param cases =
   match cases with
     [{c_lhs=pat; c_guard=None;
-      c_rhs={exp_desc = Texp_function(_, param, pl,partial')} as exp}]
+      c_rhs={exp_desc = Texp_function(_, param', pl,partial')} as exp}]
     when Parmatch.fluid pat ->
       let ((_, params), body) =
-        transl_function exp.exp_loc false repr partial' param pl in
+        transl_function exp.exp_loc false repr partial' param' pl in
       ((Curried, param :: params),
        Matching.for_function loc None (Lvar param) [pat, body] partial)
   | {c_lhs={pat_desc = Tpat_tuple pl}} :: _ when untuplify_fn ->
