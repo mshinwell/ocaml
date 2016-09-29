@@ -17,6 +17,9 @@
    operators such as DW_op_regx, DW_op_stack_value and the implicit stuff
    which cannot form a sub-part of some larger computation. *)
 
+(* CR mshinwell: Add another module above this and move the conditional
+   stuff into that upper module. *)
+
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 type implicit_value =
@@ -112,8 +115,11 @@ type t =
   | DW_op_dup
   | DW_op_swap
   | DW_op_nop
+  (* Conditionals are managed separately since [DW_op_bra] and [DW_op_skip]
+     contain lengths, which may be changed by [optimize]. *)
+  | Conditional of { if_zero : t list; if_nonzero : t list; }
 
-let print ppf t =
+let rec print ppf t =
   let fprintf = Format.fprintf in
   match t with
   | DW_op_addr sym -> fprintf ppf "DW_op_addr %a" Symbol.print sym
@@ -246,6 +252,10 @@ let print ppf t =
   | DW_op_dup -> fprintf ppf "DW_op_dup"
   | DW_op_swap -> fprintf ppf "DW_op_swap"
   | DW_op_nop -> fprintf ppf "DW_op_nop"
+  | Conditional { if_zero; if_nonzero; } ->
+    fprintf ppf "Conditional(if_zero %a)(if_nonzero %a)"
+      (Format.pp_print_list print) if_zero
+      (Format.pp_print_list print) if_nonzero
 
 let contents_of_register ~reg_number =
   DW_op_bregx { reg_number; offset_in_bytes = 0L; }
@@ -298,6 +308,13 @@ let piece ~size_in_bytes = DW_op_piece { size_in_bytes; }
 let call ~die_label ~compilation_unit_header_label =
   DW_op_call4 { label = die_label; compilation_unit_header_label; }
 
+let conditional ~if_zero ~if_nonzero =
+  Conditional { if_zero; if_nonzero; }
+
+(* CR-soon mshinwell: The name "optimize" is a misnomer.  The transformations
+   that make DW_op_implicit_pointer appear with nothing after it are
+   required to avoid errors in gdb.  Maybe we're actually initially
+   generating something actually wrong here. *)
 let optimize_sequence ts =
   let rec optimize ts =
     match ts with
@@ -338,6 +355,10 @@ let optimize_sequence ts =
     | ((DW_op_call4 _) as call)
         :: DW_op_stack_value :: ts ->
       call :: (optimize ts)
+    | Conditional { if_zero; if_nonzero; } :: ts ->
+      (Conditional
+        { if_zero = optimize if_zero; if_nonzero = optimize if_nonzero; })
+        :: (optimize ts)
     | t::ts -> t :: (optimize ts)
   in
   List.map (function
@@ -510,14 +531,166 @@ let opcode = function
   | DW_op_dup -> 0x12
   | DW_op_swap -> 0x16
   | DW_op_nop -> 0x96
+  | Conditional _ -> assert false
 
-let size t =
-  let opcode_size = Int64.of_int 1 in
-  let args_size =
+let rec size t =
+  match t with
+  | Conditional { if_zero; if_nonzero; } ->
+    List.fold_left (fun total_size op -> Int64.add (size op) total_size)
+      0L
+      (encode_conditional ~if_zero ~if_nonzero)
+  | _ ->
+    let opcode_size = Int64.of_int 1 in
+    let args_size =
+      match t with
+      | DW_op_addr _addr -> Int64.of_int Arch.size_addr
+      | DW_op_regx { reg_number; } ->
+        Dwarf_value.size (Uleb128 (Int64.of_int reg_number))
+      | DW_op_reg0
+      | DW_op_reg1
+      | DW_op_reg2
+      | DW_op_reg3
+      | DW_op_reg4
+      | DW_op_reg5
+      | DW_op_reg6
+      | DW_op_reg7
+      | DW_op_reg8
+      | DW_op_reg9
+      | DW_op_reg10
+      | DW_op_reg11
+      | DW_op_reg12
+      | DW_op_reg13
+      | DW_op_reg14
+      | DW_op_reg15
+      | DW_op_reg16
+      | DW_op_reg17
+      | DW_op_reg18
+      | DW_op_reg19
+      | DW_op_reg20
+      | DW_op_reg21
+      | DW_op_reg22
+      | DW_op_reg23
+      | DW_op_reg24
+      | DW_op_reg25
+      | DW_op_reg26
+      | DW_op_reg27
+      | DW_op_reg28
+      | DW_op_reg29
+      | DW_op_reg30
+      | DW_op_reg31 -> 0L
+      | DW_op_fbreg { offset_in_bytes; } ->
+        Dwarf_value.size (Sleb128 offset_in_bytes)
+      | DW_op_bregx { reg_number; offset_in_bytes; } ->
+        Int64.add (Dwarf_value.size (Uleb128 (Int64.of_int reg_number)))
+          (Dwarf_value.size (Sleb128 offset_in_bytes))
+      | DW_op_breg0 { offset_in_bytes; }
+      | DW_op_breg1 { offset_in_bytes; }
+      | DW_op_breg2 { offset_in_bytes; }
+      | DW_op_breg3 { offset_in_bytes; }
+      | DW_op_breg4 { offset_in_bytes; }
+      | DW_op_breg5 { offset_in_bytes; }
+      | DW_op_breg6 { offset_in_bytes; }
+      | DW_op_breg7 { offset_in_bytes; }
+      | DW_op_breg8 { offset_in_bytes; }
+      | DW_op_breg9 { offset_in_bytes; }
+      | DW_op_breg10 { offset_in_bytes; }
+      | DW_op_breg11 { offset_in_bytes; }
+      | DW_op_breg12 { offset_in_bytes; }
+      | DW_op_breg13 { offset_in_bytes; }
+      | DW_op_breg14 { offset_in_bytes; }
+      | DW_op_breg15 { offset_in_bytes; }
+      | DW_op_breg16 { offset_in_bytes; }
+      | DW_op_breg17 { offset_in_bytes; }
+      | DW_op_breg18 { offset_in_bytes; }
+      | DW_op_breg19 { offset_in_bytes; }
+      | DW_op_breg20 { offset_in_bytes; }
+      | DW_op_breg21 { offset_in_bytes; }
+      | DW_op_breg22 { offset_in_bytes; }
+      | DW_op_breg23 { offset_in_bytes; }
+      | DW_op_breg24 { offset_in_bytes; }
+      | DW_op_breg25 { offset_in_bytes; }
+      | DW_op_breg26 { offset_in_bytes; }
+      | DW_op_breg27 { offset_in_bytes; }
+      | DW_op_breg28 { offset_in_bytes; }
+      | DW_op_breg29 { offset_in_bytes; }
+      | DW_op_breg30 { offset_in_bytes; }
+      | DW_op_breg31 { offset_in_bytes; } ->
+        Dwarf_value.size (Sleb128 offset_in_bytes)
+      | DW_op_implicit_value (Int _) ->
+        let size_int = Int64.of_int Arch.size_int in
+        Int64.add (Dwarf_value.size (Sleb128 size_int)) size_int
+      | DW_op_implicit_value (Symbol _) ->
+        let size_addr = Int64.of_int Arch.size_addr in
+        Int64.add (Dwarf_value.size (Sleb128 size_addr)) size_addr
+      | DW_op_plus_uconst const -> Dwarf_value.size (Uleb128 const)
+      | DW_op_consts const -> Dwarf_value.size (Sleb128 const)
+      | DW_op_deref _
+      | DW_op_minus
+      | DW_op_call_frame_cfa
+      | DW_op_stack_value -> 0L
+      | DW_op_GNU_implicit_pointer { offset_in_bytes; label; }
+      | DW_op_implicit_pointer { offset_in_bytes; label; } ->
+        Int64.add (Dwarf_value.size (Offset_into_debug_info label))
+          (Dwarf_value.size (Sleb128 (Int64.of_int offset_in_bytes)))
+      | DW_op_piece { size_in_bytes; } ->
+        Dwarf_value.size (Uleb128 (Int64.of_int size_in_bytes))
+      | DW_op_call4 { label; compilation_unit_header_label } ->
+        Dwarf_value.size (
+          Distance_between_labels_32bit
+            { upper = label; lower = compilation_unit_header_label; })
+      | DW_op_skip { num_bytes_forward; }
+      | DW_op_bra { num_bytes_forward; } ->
+        Dwarf_value.size (Int16 (Numbers.Int16.of_int_exn num_bytes_forward))
+      | DW_op_drop
+      | DW_op_dup
+      | DW_op_swap
+      | DW_op_nop -> 0L
+      | Conditional _ -> assert false
+    in
+    Int64.add opcode_size args_size
+
+and encode_conditional ~if_zero ~if_nonzero =
+  let nonzero_branch_size =
+    List.fold_left (fun nonzero_branch_size op ->
+        Int64.add (size op) nonzero_branch_size)
+      0L
+      if_nonzero
+  in
+  let max_branch_size = Int64.of_int ((1 lsl 16) - 1) in
+  let (>) a b = Int64.compare a b > 0 in
+  if nonzero_branch_size > max_branch_size then begin
+    Misc.fatal_error "Dwarf_operator.conditional: nonzero branch too long"
+  end;
+  let if_zero =
+    if_zero @
+      [DW_op_skip { num_bytes_forward = Int64.to_int nonzero_branch_size; }]
+  in
+  let zero_branch_size =
+    List.fold_left (fun zero_branch_size op ->
+        Int64.add (size op) zero_branch_size)
+      0L
+      if_zero
+  in
+  if zero_branch_size > max_branch_size then begin
+    Misc.fatal_error "Dwarf_operator.conditional: zero branch too long"
+  end;
+  (* The [DW_op_nop] is there in case no other operator follows (this is a
+     branch target). *)
+  DW_op_bra { num_bytes_forward = Int64.to_int zero_branch_size; }
+    :: if_zero @ if_nonzero @ [DW_op_nop]
+
+let rec emit t asm =
+  match t with
+  | Conditional { if_zero; if_nonzero; } ->
+    List.iter (fun op -> emit op asm)
+      (encode_conditional ~if_zero ~if_nonzero)
+  | _ ->
+    Dwarf_value.emit (Dwarf_value.Int8 (Numbers.Int8.of_int_exn (opcode t)))
+      asm;
     match t with
-    | DW_op_addr _addr -> Int64.of_int Arch.size_addr
-    | DW_op_regx { reg_number; } ->
-      Dwarf_value.size (Uleb128 (Int64.of_int reg_number))
+    | DW_op_addr sym -> Dwarf_value.emit (Code_address_from_symbol sym) asm
+    | DW_op_regx { reg_number ; } ->
+      Dwarf_value.emit (Uleb128 (Int64.of_int reg_number)) asm
     | DW_op_reg0
     | DW_op_reg1
     | DW_op_reg2
@@ -549,12 +722,12 @@ let size t =
     | DW_op_reg28
     | DW_op_reg29
     | DW_op_reg30
-    | DW_op_reg31 -> 0L
+    | DW_op_reg31 -> ()
     | DW_op_fbreg { offset_in_bytes; } ->
-      Dwarf_value.size (Sleb128 offset_in_bytes)
+      Dwarf_value.emit (Sleb128 offset_in_bytes) asm
     | DW_op_bregx { reg_number; offset_in_bytes; } ->
-      Int64.add (Dwarf_value.size (Uleb128 (Int64.of_int reg_number)))
-        (Dwarf_value.size (Sleb128 offset_in_bytes))
+      Dwarf_value.emit (Uleb128 (Int64.of_int reg_number)) asm;
+      Dwarf_value.emit (Sleb128 offset_in_bytes) asm
     | DW_op_breg0 { offset_in_bytes; }
     | DW_op_breg1 { offset_in_bytes; }
     | DW_op_breg2 { offset_in_bytes; }
@@ -587,182 +760,47 @@ let size t =
     | DW_op_breg29 { offset_in_bytes; }
     | DW_op_breg30 { offset_in_bytes; }
     | DW_op_breg31 { offset_in_bytes; } ->
-      Dwarf_value.size (Sleb128 offset_in_bytes)
-    | DW_op_implicit_value (Int _) ->
-      let size_int = Int64.of_int Arch.size_int in
-      Int64.add (Dwarf_value.size (Sleb128 size_int)) size_int
-    | DW_op_implicit_value (Symbol _) ->
-      let size_addr = Int64.of_int Arch.size_addr in
-      Int64.add (Dwarf_value.size (Sleb128 size_addr)) size_addr
-    | DW_op_plus_uconst const -> Dwarf_value.size (Uleb128 const)
-    | DW_op_consts const -> Dwarf_value.size (Sleb128 const)
+      Dwarf_value.emit (Sleb128 offset_in_bytes) asm
+    | DW_op_implicit_value (Int i) ->
+      let buf =
+        match Arch.size_int with
+        | 4 ->
+          let buf = Bytes.create 4 in
+          caml_string_set32 buf ~index:0 (Int64.to_int32 i);
+          buf
+        | 8 ->
+          let buf = Bytes.create 8 in
+          caml_string_set64 buf ~index:0 i;
+          buf
+        | n ->
+          Misc.fatal_errorf "Dwarf_operator: bad Arch.size_int = %d" n
+      in
+      Dwarf_value.emit (Sleb128 (Int64.of_int (Bytes.length buf))) asm;
+      Dwarf_value.emit (String (Bytes.to_string buf)) asm
+    | DW_op_implicit_value (Symbol symbol) ->
+      Dwarf_value.emit (Sleb128 (Int64.of_int Arch.size_addr)) asm;
+      Dwarf_value.emit (Code_address_from_symbol symbol) asm
+    | DW_op_plus_uconst const -> Dwarf_value.emit (Uleb128 const) asm
+    | DW_op_consts const -> Dwarf_value.emit (Sleb128 const) asm
     | DW_op_deref _
     | DW_op_minus
     | DW_op_call_frame_cfa
-    | DW_op_stack_value -> 0L
+    | DW_op_stack_value -> ()
     | DW_op_GNU_implicit_pointer { offset_in_bytes; label; }
     | DW_op_implicit_pointer { offset_in_bytes; label; } ->
-      Int64.add (Dwarf_value.size (Offset_into_debug_info label))
-        (Dwarf_value.size (Sleb128 (Int64.of_int offset_in_bytes)))
+      Dwarf_value.emit (Offset_into_debug_info label) asm;
+      Dwarf_value.emit (Sleb128 (Int64.of_int offset_in_bytes)) asm
     | DW_op_piece { size_in_bytes; } ->
-      Dwarf_value.size (Uleb128 (Int64.of_int size_in_bytes))
-    | DW_op_call4 { label; compilation_unit_header_label } ->
-      Dwarf_value.size (
-        Distance_between_labels_32bit
-          { upper = label; lower = compilation_unit_header_label; })
+      Dwarf_value.emit (Uleb128 (Int64.of_int size_in_bytes)) asm
+    | DW_op_call4 { label; compilation_unit_header_label; } ->
+      Dwarf_value.emit (
+          Distance_between_labels_32bit
+            { upper = label; lower = compilation_unit_header_label; }) asm
     | DW_op_skip { num_bytes_forward; }
     | DW_op_bra { num_bytes_forward; } ->
-      Dwarf_value.size (Int16 (Numbers.Int16.of_int_exn num_bytes_forward))
+      Dwarf_value.emit (Int16 (Numbers.Int16.of_int_exn num_bytes_forward)) asm
     | DW_op_drop
     | DW_op_dup
     | DW_op_swap
-    | DW_op_nop -> 0L
-  in
-  Int64.add opcode_size args_size
-
-let emit t asm =
-  Dwarf_value.emit (Dwarf_value.Int8 (Numbers.Int8.of_int_exn (opcode t))) asm;
-  match t with
-  | DW_op_addr sym -> Dwarf_value.emit (Code_address_from_symbol sym) asm
-  | DW_op_regx { reg_number ; } ->
-    Dwarf_value.emit (Uleb128 (Int64.of_int reg_number)) asm
-  | DW_op_reg0
-  | DW_op_reg1
-  | DW_op_reg2
-  | DW_op_reg3
-  | DW_op_reg4
-  | DW_op_reg5
-  | DW_op_reg6
-  | DW_op_reg7
-  | DW_op_reg8
-  | DW_op_reg9
-  | DW_op_reg10
-  | DW_op_reg11
-  | DW_op_reg12
-  | DW_op_reg13
-  | DW_op_reg14
-  | DW_op_reg15
-  | DW_op_reg16
-  | DW_op_reg17
-  | DW_op_reg18
-  | DW_op_reg19
-  | DW_op_reg20
-  | DW_op_reg21
-  | DW_op_reg22
-  | DW_op_reg23
-  | DW_op_reg24
-  | DW_op_reg25
-  | DW_op_reg26
-  | DW_op_reg27
-  | DW_op_reg28
-  | DW_op_reg29
-  | DW_op_reg30
-  | DW_op_reg31 -> ()
-  | DW_op_fbreg { offset_in_bytes; } ->
-    Dwarf_value.emit (Sleb128 offset_in_bytes) asm
-  | DW_op_bregx { reg_number; offset_in_bytes; } ->
-    Dwarf_value.emit (Uleb128 (Int64.of_int reg_number)) asm;
-    Dwarf_value.emit (Sleb128 offset_in_bytes) asm
-  | DW_op_breg0 { offset_in_bytes; }
-  | DW_op_breg1 { offset_in_bytes; }
-  | DW_op_breg2 { offset_in_bytes; }
-  | DW_op_breg3 { offset_in_bytes; }
-  | DW_op_breg4 { offset_in_bytes; }
-  | DW_op_breg5 { offset_in_bytes; }
-  | DW_op_breg6 { offset_in_bytes; }
-  | DW_op_breg7 { offset_in_bytes; }
-  | DW_op_breg8 { offset_in_bytes; }
-  | DW_op_breg9 { offset_in_bytes; }
-  | DW_op_breg10 { offset_in_bytes; }
-  | DW_op_breg11 { offset_in_bytes; }
-  | DW_op_breg12 { offset_in_bytes; }
-  | DW_op_breg13 { offset_in_bytes; }
-  | DW_op_breg14 { offset_in_bytes; }
-  | DW_op_breg15 { offset_in_bytes; }
-  | DW_op_breg16 { offset_in_bytes; }
-  | DW_op_breg17 { offset_in_bytes; }
-  | DW_op_breg18 { offset_in_bytes; }
-  | DW_op_breg19 { offset_in_bytes; }
-  | DW_op_breg20 { offset_in_bytes; }
-  | DW_op_breg21 { offset_in_bytes; }
-  | DW_op_breg22 { offset_in_bytes; }
-  | DW_op_breg23 { offset_in_bytes; }
-  | DW_op_breg24 { offset_in_bytes; }
-  | DW_op_breg25 { offset_in_bytes; }
-  | DW_op_breg26 { offset_in_bytes; }
-  | DW_op_breg27 { offset_in_bytes; }
-  | DW_op_breg28 { offset_in_bytes; }
-  | DW_op_breg29 { offset_in_bytes; }
-  | DW_op_breg30 { offset_in_bytes; }
-  | DW_op_breg31 { offset_in_bytes; } ->
-    Dwarf_value.emit (Sleb128 offset_in_bytes) asm
-  | DW_op_implicit_value (Int i) ->
-    let buf =
-      match Arch.size_int with
-      | 4 ->
-        let buf = Bytes.create 4 in
-        caml_string_set32 buf ~index:0 (Int64.to_int32 i);
-        buf
-      | 8 ->
-        let buf = Bytes.create 8 in
-        caml_string_set64 buf ~index:0 i;
-        buf
-      | n ->
-        Misc.fatal_errorf "Dwarf_operator: bad Arch.size_int = %d" n
-    in
-    Dwarf_value.emit (Sleb128 (Int64.of_int (Bytes.length buf))) asm;
-    Dwarf_value.emit (String (Bytes.to_string buf)) asm
-  | DW_op_implicit_value (Symbol symbol) ->
-    Dwarf_value.emit (Sleb128 (Int64.of_int Arch.size_addr)) asm;
-    Dwarf_value.emit (Code_address_from_symbol symbol) asm
-  | DW_op_plus_uconst const -> Dwarf_value.emit (Uleb128 const) asm
-  | DW_op_consts const -> Dwarf_value.emit (Sleb128 const) asm
-  | DW_op_deref _
-  | DW_op_minus
-  | DW_op_call_frame_cfa
-  | DW_op_stack_value -> ()
-  | DW_op_GNU_implicit_pointer { offset_in_bytes; label; }
-  | DW_op_implicit_pointer { offset_in_bytes; label; } ->
-    Dwarf_value.emit (Offset_into_debug_info label) asm;
-    Dwarf_value.emit (Sleb128 (Int64.of_int offset_in_bytes)) asm
-  | DW_op_piece { size_in_bytes; } ->
-    Dwarf_value.emit (Uleb128 (Int64.of_int size_in_bytes)) asm
-  | DW_op_call4 { label; compilation_unit_header_label; } ->
-    Dwarf_value.emit (
-        Distance_between_labels_32bit
-          { upper = label; lower = compilation_unit_header_label; }) asm
-  | DW_op_skip { num_bytes_forward; }
-  | DW_op_bra { num_bytes_forward; } ->
-    Dwarf_value.emit (Int16 (Numbers.Int16.of_int_exn num_bytes_forward)) asm
-  | DW_op_drop
-  | DW_op_dup
-  | DW_op_swap
-  | DW_op_nop -> ()
-
-let conditional ~if_zero ~if_nonzero =
-  let nonzero_branch_size =
-    List.fold_left (fun nonzero_branch_size op ->
-        Int64.add (size op) nonzero_branch_size)
-      0L
-      if_nonzero
-  in
-  let max_branch_size = Int64.of_int ((1 lsl 16) - 1) in
-  if nonzero_branch_size > max_branch_size then begin
-    Misc.fatal_error "Dwarf_operator.conditional: nonzero branch too long"
-  end;
-  let if_zero =
-    if_zero @
-      [DW_op_skip { num_bytes_forward = Int64.to_int nonzero_branch_size; }]
-  in
-  let zero_branch_size =
-    List.fold_left (fun zero_branch_size op ->
-        Int64.add (size op) zero_branch_size)
-      0L
-      if_zero
-  in
-  let (>) a b = Int64.compare a b > 0 in
-  if zero_branch_size > max_branch_size then begin
-    Misc.fatal_error "Dwarf_operator.conditional: zero branch too long"
-  end;
-  DW_op_bra { num_bytes_forward = Int64.to_int zero_branch_size; }
-    :: if_zero @ if_nonzero
+    | DW_op_nop -> ()
+    | Conditional _ -> assert false

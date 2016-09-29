@@ -34,7 +34,7 @@ val nop : unit -> t
 (** [conditional] tests the value at the top of the DWARF stack for equality
     with the integer constant zero.  If the test succeeds then [if_zero] will
     be executed, otherwise [if_nonzero]. *)
-val conditional : if_zero:t list -> if_nonzero:t list -> t list
+val conditional : if_zero:t list -> if_nonzero:t list -> t
 
 val call
    : die_label:Cmm.label

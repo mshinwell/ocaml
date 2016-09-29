@@ -111,16 +111,14 @@ let rec compile_to_yield_value desc =
       (compile_to_yield_value block) @ [
         Operator.dup ();
       ] @
-      (Operator.conditional ~if_zero:[
-          Operator.nop ();
+      [Operator.conditional ~if_zero:[
         ]
         ~if_nonzero:[
           Operator.swap ();
           Operator.drop ();
           Operator.add_unsigned_const (Int64.of_int (Arch.size_addr * field));
           Operator.deref ();
-        ]) @
-      [Operator.nop ()]  (* seems to be needed (it is a branch target...) *)
+        ]]
   | Offset_pointer { block; offset_in_words; } ->
     (* Similar to [Read_field], above. *)
     let offset_in_bytes = Int64.of_int (Arch.size_addr * offset_in_words) in
@@ -128,15 +126,13 @@ let rec compile_to_yield_value desc =
       (compile_to_yield_value block) @ [
         Operator.dup ();
       ] @
-      (Operator.conditional ~if_zero:[
-          Operator.nop ();
+      [Operator.conditional ~if_zero:[
         ]
         ~if_nonzero:[
           Operator.swap ();
           Operator.drop ();
           Operator.add_unsigned_const offset_in_bytes;
-        ]) @
-      [Operator.nop ()]  (* best put this in, since it's a branch target *)
+        ]]
   | Read_symbol_field_yielding_rvalue { block; field; } ->
     (compile_to_yield_value block) @ [
       Operator.add_unsigned_const (Int64.of_int (Arch.size_addr * field));
