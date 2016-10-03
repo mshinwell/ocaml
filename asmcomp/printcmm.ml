@@ -58,11 +58,11 @@ let raise_kind fmt = function
   | Raise_notrace -> Format.fprintf fmt "raise_notrace"
 
 let operation = function
-  | Capply(_ty, d) -> "app" ^ Debuginfo.to_string d
-  | Cextcall(lbl, _ty, _alloc, d, _) ->
-      Printf.sprintf "extcall \"%s\"%s" lbl (Debuginfo.to_string d)
+  | Capply _ty -> "app"
+  | Cextcall(lbl, _ty, _alloc, _) ->
+      Printf.sprintf "extcall \"%s\"" lbl
   | Cload c -> Printf.sprintf "load %s" (chunk c)
-  | Calloc d -> "alloc" ^ Debuginfo.to_string d
+  | Calloc -> "alloc"
   | Cstore (c, init) ->
     let init =
       match init with
@@ -95,8 +95,8 @@ let operation = function
   | Cfloatofint -> "floatofint"
   | Cintoffloat -> "intoffloat"
   | Ccmpf c -> Printf.sprintf "%sf" (comparison c)
-  | Craise (k, d) -> Format.asprintf "%a%s" raise_kind k (Debuginfo.to_string d)
-  | Ccheckbound d -> "checkbound" ^ Debuginfo.to_string d
+  | Craise k -> Format.asprintf "%a" raise_kind k
+  | Ccheckbound -> "checkbound"
 
 let rec expr ppf = function
   | Cconst_int n -> fprintf ppf "%i" n
@@ -157,12 +157,12 @@ let rec expr ppf = function
           expr ppf e)
         el in
       fprintf ppf "@[<1>[%a]@]" tuple el
-  | Cop(op, el) ->
-      fprintf ppf "@[<2>(%s" (operation op);
+  | Cop(op, el, dbg) ->
+      fprintf ppf "@[<2>(%s<%s>" (operation op) (Debuginfo.to_string dbg);
       List.iter (fun e -> fprintf ppf "@ %a" expr e) el;
       begin match op with
-      | Capply (mty, _) -> fprintf ppf "@ %a" machtype mty
-      | Cextcall(_, mty, _, _, _) -> fprintf ppf "@ %a" machtype mty
+      | Capply mty -> fprintf ppf "@ %a" machtype mty
+      | Cextcall(_, mty, _, _) -> fprintf ppf "@ %a" machtype mty
       | _ -> ()
       end;
       fprintf ppf ")@]"

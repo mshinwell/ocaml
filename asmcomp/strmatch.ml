@@ -71,8 +71,10 @@ module Make(I:I) = struct
   let gen_size_id () = Ident.create "size"
 
   let mk_let_cell id str ind body =
+    let dbg = Debuginfo.none in
     let cell =
-      Cop(Cload Word_int,[Cop(Cadda,[str;Cconst_int(Arch.size_int*ind)])]) in
+      Cop(Cload Word_int,[Cop(Cadda,[str;Cconst_int(Arch.size_int*ind)], dbg)],
+        dbg) in
     Clet(id, None, cell, body)
 
   let mk_let_size id str body =
@@ -80,7 +82,10 @@ module Make(I:I) = struct
     Clet(id, None, size, body)
 
   let mk_cmp_gen cmp_op id nat ifso ifnot =
-    let test = Cop (Ccmpi cmp_op, [ Cvar id; Cconst_natpointer nat ]) in
+    let dbg = Debuginfo.none in
+    let test =
+      Cop (Ccmpi cmp_op, [ Cvar id; Cconst_natpointer nat ], dbg)
+    in
     Cifthenelse (test, ifso, ifnot)
 
   let mk_lt = mk_cmp_gen Clt
