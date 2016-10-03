@@ -229,6 +229,8 @@ fail := true;
            registers always become unavailable unless:
            (a) they are "live across" the call; and/or
            (b) they hold immediates and are assigned to the stack. *)
+        (* CR-someday mshinwell: Consider factoring this out from here and
+           [Available_ranges.Make_ranges.end_pos_offset]. *)
         let made_unavailable_2 =
           (* XCR mshinwell: still need to deal with the case where a
              variable is not spilled but is available just before the

@@ -499,8 +499,7 @@ module Make_ranges = Make (struct
     | Ok available_before -> Key.Set.of_list (RD.Set.elements available_before)
 
   let end_pos_offset ~prev_insn ~key:reg =
-    (* If the range is for a register destroyed by a call (which for
-       calls to OCaml functions means any non-spilled register) and which
+    (* If the range is for a register destroyed by a call and which
        ends immediately after a call instruction, move the end of the
        range back very slightly.  The effect is that the register is seen
        in the debugger as available when standing on the call instruction
@@ -526,7 +525,16 @@ module Make_ranges = Make (struct
           Array.map (fun (reg : Reg.t) -> reg.loc)
             (Proc.destroyed_at_oper (Mach.Iop op))
         in
-        if Array.mem (RD.location reg) destroyed_locations then
+        let holds_immediate = RD.holds_non_pointer reg in
+        let on_stack = RD.assigned_to_stack reg in
+        let live_across = Reg.Set.mem (RD.reg reg) prev_insn.L.live in
+        let remains_available =
+          live_across
+            || (holds_immediate && on_stack)
+        in
+        if Array.mem (RD.location reg) destroyed_locations
+            || not remains_available
+        then
           Some (-1)
         else
           None
