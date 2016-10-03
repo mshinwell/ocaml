@@ -14,16 +14,6 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(***********************************************************************)
-(**                                                                   **)
-(**               WARNING WARNING WARNING                             **)
-(**                                                                   **)
-(** When you change this file, you must make the parallel change      **)
-(** in config.mlbuild                                                 **)
-(**                                                                   **)
-(***********************************************************************)
-
-
 (* The main OCaml version string has moved to ../VERSION *)
 let version = Sys.ocaml_version
 
@@ -113,6 +103,7 @@ let with_frame_pointers = %%WITH_FRAME_POINTERS%%
 let spacetime = %%WITH_SPACETIME%%
 let libunwind_available = %%LIBUNWIND_AVAILABLE%%
 let libunwind_link_flags = "%%LIBUNWIND_LINK_FLAGS%%"
+let profinfo = %%WITH_PROFINFO%%
 let profinfo_width = %%PROFINFO_WIDTH%%
 
 let ext_obj = "%%EXT_OBJ%%"
