@@ -67,12 +67,53 @@ let rec accumulate ~substitution ~copied_lets ~extracted_lets
     { copied_lets; extracted_lets;
       terminator = Flambda_utils.toplevel_substitution substitution expr;
     }
-  | Let { var; defining_expr = Normal (Expr (Var alias)); body; _ }
-  | Let_rec { vars_and_defining_exprs = [var, Expr (Var alias), _]; body; } ->
+  | Let { var; defining_expr = Normal (Expr (Var alias)); body; provenance }
+  | Let_rec { vars_and_defining_exprs = [var, Expr (Var alias), provenance];
+      body; } ->
     let alias =
       match Variable.Map.find alias substitution with
       | exception Not_found -> alias
       | original_alias -> original_alias
+    in
+    (* We can end up with situations such as:
+        currentstamp/116[=currentstamp/1330]
+          (makemutable 0 (int)<{typing/ident.ml:25,19-24}>
+            Pmakeblock_arg/115)
+        currentstamp/113[=currentstamp/1330]
+            <path `Ident', typing/ident.ml:27,4--10>
+          *currentstamp/116[=currentstamp/1330]
+       where provenance information is only attached to the final "Expr"
+       binding.  (It is not duplicated on the other bindings as this can cause
+       duplicate variables to appear in the debugger in the case where these
+       bindings do not get lifted.)  If we are going to lift, then we ensure
+       that any provenance information is pushed onto the lifted binding
+       itself. *)
+    let extracted_lets =
+      match provenance with
+      | None -> extracted_lets
+      | Some provenance ->
+        match Variable.original_ident var with
+        | None -> extracted_lets
+        | Some original_ident ->
+          let provenance =
+            let provenance : Flambda.symbol_provenance =
+              { original_ident;
+                module_path = provenance.module_path;
+                location = provenance.location;
+              }
+            in
+            Some provenance
+          in
+          List.map (fun defn ->
+              match defn with
+              | Expr (var', defining_expr, None)
+                  when Variable.equal alias var' ->
+                Expr (var', defining_expr, provenance)
+              | Exprs (vars, defining_expr, None)
+                  when List.exists (Variable.equal alias) vars ->
+                Exprs (vars, defining_expr, provenance)
+              | Expr _ | Exprs _ | Block _ -> defn)
+            extracted_lets
     in
     accumulate
       ~substitution:(Variable.Map.add var alias substitution)

@@ -3060,7 +3060,20 @@ let for_let loc param pat body =
   | Tpat_var (id, _) ->
       (* fast path, and keep track of simple bindings to unboxable numbers *)
       let k = Typeopt.value_kind pat.pat_env pat.pat_type in
-      Llet(Strict, k, id, param, body)
+      let binding =
+        Llet(Strict, k, id, param, body)
+      in
+      if not (!Clflags.native_code && !Clflags.debug) then
+        binding
+      else
+        let event =
+          { lev_loc = pat.pat_loc;
+            lev_kind = Lev_before;
+            lev_repr = None;
+            lev_env = Env.summary pat.pat_env;
+          }
+        in
+        Levent (binding, event)
   | _ ->
       let opt = ref false in
       let nraise = next_raise_count () in
