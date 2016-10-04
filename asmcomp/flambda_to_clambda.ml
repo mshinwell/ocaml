@@ -412,16 +412,19 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
       List.map (subst_var env) args)
   | Static_catch (static_exn, vars, body, handler) ->
     let env_handler, ids =
-      List.fold_right (fun var (env, ids) ->
+      List.fold_right (fun (var, provenance) (env, ids) ->
           let id, env = Env.add_fresh_ident env var in
-          env, id :: ids)
+          let provenance = to_clambda_let_provenance var provenance in
+          env, (id, provenance) :: ids)
         vars (env, [])
     in
     Ucatch (Static_exception.to_int static_exn, ids,
       to_clambda t env body, to_clambda t env_handler handler)
-  | Try_with (body, var, handler) ->
+  | Try_with (body, var, provenance, handler) ->
     let id, env_handler = Env.add_fresh_ident env var in
-    Utrywith (to_clambda t env body, id, to_clambda t env_handler handler)
+    let provenance = to_clambda_let_provenance var provenance in
+    Utrywith (to_clambda t env body, id, provenance,
+      to_clambda t env_handler handler)
   | If_then_else (arg, ifso, ifnot) ->
     Uifthenelse (subst_var env arg, to_clambda t env ifso,
       to_clambda t env ifnot)

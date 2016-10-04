@@ -214,8 +214,9 @@ let variable_and_symbol_invariants (program : Flambda.program) =
     | Static_catch (static_exn, vars, body, handler) ->
       ignore_static_exception static_exn;
       loop env body;
+      let vars = List.map (fun (var, _provenance) -> var) vars in
       loop (add_binding_occurrences env vars) handler
-    | Try_with (body, var, handler) ->
+    | Try_with (body, var, _provenance, handler) ->
       loop env body;
       loop (add_binding_occurrence env var) handler
     (* Everything else: *)

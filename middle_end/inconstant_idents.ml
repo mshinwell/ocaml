@@ -248,13 +248,13 @@ module Inconstants (P:Param) (Backend:Backend_intf.S) = struct
        bound variables as in NC also *)
     | Assign _ ->
       mark_curr curr
-    | Try_with (f1,id,f2) ->
+    | Try_with (f1, id, _provenance, f2) ->
       mark_curr [Var id];
       mark_curr curr;
       mark_loop ~toplevel [] f1;
       mark_loop ~toplevel [] f2
     | Static_catch (_,ids,f1,f2) ->
-      List.iter (fun id -> mark_curr [Var id]) ids;
+      List.iter (fun (id, _provenance) -> mark_curr [Var id]) ids;
       mark_curr curr;
       mark_loop ~toplevel [] f1;
       mark_loop ~toplevel [] f2

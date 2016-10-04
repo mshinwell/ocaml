@@ -39,10 +39,13 @@ let ignore_primitive (_ : Lambda.primitive) = ()
 let ignore_string (_ : string) = ()
 let ignore_int_array (_ : int array) = ()
 let ignore_ident_list (_ : Ident.t list) = ()
+let ignore_ident_cross_let_provenance_option_list
+      (_ : (Ident.t * Clambda.ulet_provenance option) list) = ()
 let ignore_ident_option_list (_ : Ident.t option list) = ()
 let ignore_direction_flag (_ : Asttypes.direction_flag) = ()
 let ignore_meth_kind (_ : Lambda.meth_kind) = ()
 let ignore_path_option (_ : Path.t option) = ()
+let ignore_let_provenance_option (_ : Clambda.ulet_provenance option) = ()
 
 (* CR-soon mshinwell: check we aren't traversing function bodies more than
    once (need to analyse exactly what the calls are from Cmmgen into this
@@ -141,12 +144,13 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
       List.iter loop args
     | Ucatch (static_exn, idents, body, handler) ->
       ignore_int static_exn;
-      ignore_ident_list idents;
+      ignore_ident_cross_let_provenance_option_list idents;
       loop body;
       loop handler
-    | Utrywith (body, ident, handler) ->
+    | Utrywith (body, ident, provenance, handler) ->
       loop body;
       ignore_ident ident;
+      ignore_let_provenance_option provenance;
       loop handler
     | Uifthenelse (cond, ifso, ifnot) ->
       loop cond;
@@ -344,17 +348,18 @@ let let_bound_vars_that_can_be_moved ident_info (clam : Clambda.ulambda) =
       let_stack := []
     | Ucatch (static_exn, idents, body, handler) ->
       ignore_int static_exn;
-      ignore_ident_list idents;
+      ignore_ident_cross_let_provenance_option_list idents;
       let_stack := [];
       loop body;
       let_stack := [];
       loop handler;
       let_stack := []
-    | Utrywith (body, ident, handler) ->
+    | Utrywith (body, ident, provenance, handler) ->
       let_stack := [];
       loop body;
       let_stack := [];
       ignore_ident ident;
+      ignore_let_provenance_option provenance;
       loop handler;
       let_stack := []
     | Uifthenelse (cond, ifso, ifnot) ->
@@ -509,10 +514,10 @@ let rec substitute_let_moveable is_let_moveable env (clam : Clambda.ulambda)
     let body = substitute_let_moveable is_let_moveable env body in
     let handler = substitute_let_moveable is_let_moveable env handler in
     Ucatch (n, ids, body, handler)
-  | Utrywith (body, id, handler) ->
+  | Utrywith (body, id, provenance, handler) ->
     let body = substitute_let_moveable is_let_moveable env body in
     let handler = substitute_let_moveable is_let_moveable env handler in
-    Utrywith (body, id, handler)
+    Utrywith (body, id, provenance, handler)
   | Uifthenelse (cond, ifso, ifnot) ->
     let cond = substitute_let_moveable is_let_moveable env cond in
     let ifso = substitute_let_moveable is_let_moveable env ifso in
@@ -742,10 +747,10 @@ let rec un_anf_and_moveable ident_info env (clam : Clambda.ulambda)
     let body = un_anf ident_info env body in
     let handler = un_anf ident_info env handler in
     Ucatch (n, ids, body, handler), Fixed
-  | Utrywith (body, id, handler) ->
+  | Utrywith (body, id, provenance, handler) ->
     let body = un_anf ident_info env body in
     let handler = un_anf ident_info env handler in
-    Utrywith (body, id, handler), Fixed
+    Utrywith (body, id, provenance, handler), Fixed
   | Uifthenelse (cond, ifso, ifnot) ->
     let cond, cond_moveable = un_anf_and_moveable ident_info env cond in
     let ifso, ifso_moveable = un_anf_and_moveable ident_info env ifso in

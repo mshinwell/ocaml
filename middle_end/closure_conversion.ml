@@ -543,11 +543,34 @@ and close t ?(bound_name:(Variable.t * Flambda.let_provenance) option) env
     let st_exn = Static_exception.create () in
     let env = Env.add_static_exception env i st_exn in
     let vars = List.map (Variable.create_with_same_name_as_ident) ids in
-    Static_catch (st_exn, vars, close t env body,
+    (* CR mshinwell: factor this code out *)
+    let location =
+      match body with
+      | Levent (_, { lev_loc = location; _ }) -> location
+      | _ -> Location.none
+    in
+    let provenance : Flambda.let_provenance =
+      { module_path = Env.current_module_path env;
+        location;
+      }
+    in
+    let vars' = List.map (fun var -> var, Some provenance) vars in
+    Static_catch (st_exn, vars', close t env body,
       close t (Env.add_vars env ids vars) handler)
   | Ltrywith (body, id, handler) ->
     let var = Variable.create_with_same_name_as_ident id in
-    Try_with (close t env body, var, close t (Env.add_var env id var) handler)
+    let location =
+      match body with
+      | Levent (_, { lev_loc = location; _ }) -> location
+      | _ -> Location.none
+    in
+    let provenance : Flambda.let_provenance =
+      { module_path = Env.current_module_path env;
+        location;
+      }
+    in
+    Try_with (close t env body, var, Some provenance,
+      close t (Env.add_var env id var) handler)
   | Lifthenelse (cond, ifso, ifnot) ->
     let cond = close t env cond in
     let cond_var = Variable.create "cond" in

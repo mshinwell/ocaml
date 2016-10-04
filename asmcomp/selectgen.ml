@@ -746,7 +746,7 @@ method emit_expr env exp =
   | Ccatch(nfail, ids, e1, e2) ->
       let rs =
         List.map
-          (fun id ->
+          (fun (id, _provenance) ->
             let r = self#regs_for typ_val in name_regs id r; r)
           ids in
       catch_regs := (nfail, Array.concat rs) :: !catch_regs ;
@@ -754,7 +754,13 @@ method emit_expr env exp =
       catch_regs := List.tl !catch_regs ;
       let new_env_idents =
         List.fold_left
-        (fun idents (id,r) -> Tbl.add id r idents)
+        (fun idents ((id, provenance), r) ->
+          let naming_op =
+            Iname_for_debugger { ident = id; provenance;
+              which_parameter = None; }
+          in
+          self#insert_debug env (Iop naming_op) Debuginfo.none r [| |];
+          Tbl.add id r idents)
         env.idents (List.combine ids rs) in
       let new_env = { env with idents = new_env_idents; } in
       let (r2, s2) = self#emit_sequence new_env e2 in
@@ -775,11 +781,16 @@ method emit_expr env exp =
           self#insert env (Iexit nfail) [||] [||];
           None
       end
-  | Ctrywith(e1, v, e2) ->
+  | Ctrywith(e1, v, provenance, e2) ->
       let (r1, s1) = self#emit_sequence env e1 in
       let rv = self#regs_for typ_val in
       let (r2, s2) =
         let env = { env with idents = Tbl.add v rv env.idents; } in
+        let naming_op =
+          Iname_for_debugger { ident = v; provenance;
+            which_parameter = None; }
+        in
+        self#insert_debug env (Iop naming_op) Debuginfo.none rv [| |];
         self#emit_sequence env e2
       in
       let r = join env r1 s1 r2 s2 in
@@ -1018,7 +1029,7 @@ method emit_tail env exp =
   | Ccatch(nfail, ids, e1, e2) ->
        let rs =
         List.map
-          (fun id ->
+          (fun (id, _provenance) ->
             let r = self#regs_for typ_val in
             name_regs id r  ;
             r)
@@ -1028,14 +1039,25 @@ method emit_tail env exp =
       catch_regs := List.tl !catch_regs ;
       let new_env =
         List.fold_left
-        (fun env (id,r) -> { env with idents = Tbl.add id r env.idents; })
+        (fun env ((id, provenance), r) ->
+          let naming_op =
+            Iname_for_debugger { ident = id; provenance;
+              which_parameter = None; }
+          in
+          self#insert_debug env (Iop naming_op) Debuginfo.none r [| |];
+          { env with idents = Tbl.add id r env.idents; })
         env (List.combine ids rs) in
       let s2 = self#emit_tail_sequence new_env e2 in
       self#insert env (Icatch(nfail, s1, s2)) [||] [||]
-  | Ctrywith(e1, v, e2) ->
+  | Ctrywith(e1, v, provenance, e2) ->
       let (opt_r1, s1) = self#emit_sequence env e1 in
       let rv = self#regs_for typ_val in
       let s2 =
+        let naming_op =
+          Iname_for_debugger { ident = v; provenance;
+            which_parameter = None; }
+        in
+        self#insert_debug env (Iop naming_op) Debuginfo.none rv [| |];
         let env = { env with idents = Tbl.add v rv env.idents; } in
         self#emit_tail_sequence env e2
       in

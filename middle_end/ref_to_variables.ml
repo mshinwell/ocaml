@@ -82,7 +82,7 @@ let variables_not_used_as_local_reference (tree:Flambda.t) =
     | Static_catch (_, _, body, handler) ->
       loop body;
       loop handler
-    | Try_with (body, _, handler) ->
+    | Try_with (body, _, _, handler) ->
       loop body;
       loop handler
     | While (cond, body) ->

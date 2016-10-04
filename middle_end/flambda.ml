@@ -73,8 +73,9 @@ type t =
   | Switch of Variable.t * switch
   | String_switch of Variable.t * (string * t) list * t option
   | Static_raise of Static_exception.t * Variable.t list
-  | Static_catch of Static_exception.t * Variable.t list * t * t
-  | Try_with of t * Variable.t * t
+  | Static_catch of Static_exception.t
+      * (Variable.t * let_provenance option) list * t * t
+  | Try_with of t * Variable.t * let_provenance option * t
   | While of t * t
   | For of for_loop
   | Proved_unreachable
@@ -360,14 +361,16 @@ let rec lam ppf (flam : t) =
         (fun ppf vars -> match vars with
            | [] -> ()
            | _ ->
-               List.iter
-                 (fun x -> fprintf ppf " %a" Variable.print x)
-                 vars)
+              List.iter (fun (x, provenance) ->
+                  fprintf ppf " %a%a" Variable.print x
+                    print_let_provenance_opt provenance)
+                vars)
         vars
         lam lhandler
-  | Try_with(lbody, param, lhandler) ->
-      fprintf ppf "@[<2>(try@ %a@;<1 -1>with %a@ %a)@]"
-        lam lbody Variable.print param lam lhandler
+  | Try_with(lbody, param, provenance, lhandler) ->
+      fprintf ppf "@[<2>(try@ %a@;<1 -1>with %a%a@ %a)@]"
+        lam lbody Variable.print param
+        print_let_provenance_opt provenance lam lhandler
   | If_then_else(lcond, lif, lelse) ->
       fprintf ppf "@[<2>(if@ %a@ then begin@ %a@ end else begin@ %a@ end)@]"
         Variable.print lcond
@@ -655,10 +658,10 @@ let rec free_names_expr ?ignore_uses_in_project_var ?ignore_uses_as_callee
       | Static_raise (_, es) ->
         List.iter free_variable es
       | Static_catch (_, vars, e1, e2) ->
-        List.iter bound_variable vars;
+        List.iter (fun (var, _provenance) -> bound_variable var) vars;
         aux e1;
         aux e2
-      | Try_with (e1, var, e2) ->
+      | Try_with (e1, var, _provenance, e2) ->
         aux e1;
         bound_variable var;
         aux e2
@@ -950,7 +953,7 @@ let iter_general ~toplevel f f_named maybe_named =
       | Let_rec { vars_and_defining_exprs = defs; body; } ->
         List.iter (fun (_, l, _) -> aux_named l) defs;
         aux body
-      | Try_with (f1,_,f2)
+      | Try_with (f1, _, _, f2)
       | While (f1,f2)
       | Static_catch (_,_,f1,f2) ->
         aux f1; aux f2

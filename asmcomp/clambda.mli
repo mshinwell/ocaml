@@ -79,8 +79,8 @@ and ulambda =
   | Uswitch of ulambda * ulambda_switch
   | Ustringswitch of ulambda * (string * ulambda) list * ulambda option
   | Ustaticfail of int * ulambda list
-  | Ucatch of int * Ident.t list * ulambda * ulambda
-  | Utrywith of ulambda * Ident.t * ulambda
+  | Ucatch of int * (Ident.t * ulet_provenance option) list * ulambda * ulambda
+  | Utrywith of ulambda * Ident.t * ulet_provenance option * ulambda
   | Uifthenelse of ulambda * ulambda * ulambda
   | Usequence of ulambda * ulambda
   | Uwhile of ulambda * ulambda

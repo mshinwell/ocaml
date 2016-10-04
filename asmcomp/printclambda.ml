@@ -191,13 +191,15 @@ and lam ppf = function
           | [] -> ()
           | _ ->
               List.iter
-                (fun x -> fprintf ppf " %a" Ident.print x)
+                (fun (x, provenance) ->
+                  fprintf ppf " %a%a"
+                    Ident.print x let_provenance_opt provenance)
                 vars)
         vars
         lam lhandler
-  | Utrywith(lbody, param, lhandler) ->
-      fprintf ppf "@[<2>(try@ %a@;<1 -1>with %a@ %a)@]"
-        lam lbody Ident.print param lam lhandler
+  | Utrywith(lbody, param, provenance, lhandler) ->
+      fprintf ppf "@[<2>(try@ %a@;<1 -1>with %a%a@ %a)@]"
+        lam lbody Ident.print param let_provenance_opt provenance lam lhandler
   | Uifthenelse(lcond, lif, lelse) ->
       fprintf ppf "@[<2>(if@ %a@ %a@ %a)@]" lam lcond lam lif lam lelse
   | Usequence(l1, l2) ->

@@ -1218,19 +1218,23 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
           | Static_raise (j, args) ->
             assert (Static_exception.equal i j);
             let handler =
-              List.fold_left2 (fun body var arg ->
-                  Flambda.create_let var (Expr (Var arg)) body)
+              List.fold_left2 (fun body (var, provenance) arg ->
+                  Flambda.create_let var (Expr (Var arg)) body ?provenance)
                 handler vars args
             in
             let r = R.exit_scope_catch r i in
             simplify env r handler
           | _ ->
-            let vars, sb = Freshening.add_variables' (E.freshening env) vars in
+            let vars', provenances = List.split vars in
+            let vars, sb =
+              Freshening.add_variables' (E.freshening env) vars'
+            in
+            let vars = List.combine vars provenances in
             let approx = R.approx r in
             let env =
               List.fold_left (fun env id ->
                   E.add env id (A.value_unknown Other))
-                (E.set_freshening env sb) vars
+                (E.set_freshening env sb) vars'
             in
             let env = E.inside_branch env in
             let handler, r = simplify env r handler in
@@ -1239,13 +1243,13 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
               R.meet_approx r env approx
         end
     end
-  | Try_with (body, id, handler) ->
+  | Try_with (body, id, provenance, handler) ->
     let body, r = simplify env r body in
     let id, sb = Freshening.add_variable (E.freshening env) id in
     let env = E.add (E.set_freshening env sb) id (A.value_unknown Other) in
     let env = E.inside_branch env in
     let handler, r = simplify env r handler in
-    Try_with (body, id, handler), ret r (A.value_unknown Other)
+    Try_with (body, id, provenance, handler), ret r (A.value_unknown Other)
   | If_then_else (arg, ifso, ifnot) ->
     (* When arg is the constant false or true (or something considered
        as true), we can drop the if and replace it by a sequence.

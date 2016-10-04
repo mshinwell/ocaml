@@ -141,9 +141,11 @@ and expression =
   | Cifthenelse of expression * expression * expression
   | Cswitch of expression * int array * expression array
   | Cloop of expression
-  | Ccatch of int * Ident.t list * expression * expression
+  | Ccatch of int * (Ident.t * Clambda.ulet_provenance option) list
+      * expression * expression
   | Cexit of int * expression list
-  | Ctrywith of expression * Ident.t * expression
+  | Ctrywith of expression * Ident.t * Clambda.ulet_provenance option
+      * expression
 
 type fundecl =
   { fun_name: string;

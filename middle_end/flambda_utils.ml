@@ -124,12 +124,15 @@ let rec same (l1 : Flambda.t) (l2 : Flambda.t) =
     Static_exception.equal e1 e2 && Misc.Stdlib.List.equal Variable.equal a1 a2
   | Static_raise _, _ | _, Static_raise _ -> false
   | Static_catch (s1, v1, a1, b1), Static_catch (s2, v2, a2, b2) ->
+    let var_and_provenance_equal (var1, _provenance1) (var2, _provenance2) =
+      Variable.equal var1 var2
+    in
     Static_exception.equal s1 s2
-      && Misc.Stdlib.List.equal Variable.equal v1 v2
+      && Misc.Stdlib.List.equal var_and_provenance_equal v1 v2
       && same a1 a2
       && same b1 b2
   | Static_catch _, _ | _, Static_catch _ -> false
-  | Try_with (a1, v1, b1), Try_with (a2, v2, b2) ->
+  | Try_with (a1, v1, _provenance1, b1), Try_with (a2, v2, _provenance2, b2) ->
     same a1 a2 && Variable.equal v1 v2 && same b1 b2
   | Try_with _, _ | _, Try_with _ -> false
   | If_then_else (a1, b1, c1), If_then_else (a2, b2, c2) ->

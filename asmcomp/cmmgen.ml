@@ -530,8 +530,8 @@ let rec unbox_float cmm dbg =
       Cswitch(e, tbl, Array.map (fun e -> unbox_float e dbg) el)
   | Ccatch(n, ids, e1, e2) ->
       Ccatch(n, ids, unbox_float e1 dbg, unbox_float e2 dbg)
-  | Ctrywith(e1, id, e2) ->
-      Ctrywith(unbox_float e1 dbg, id, unbox_float e2 dbg)
+  | Ctrywith(e1, id, provenance, e2) ->
+      Ctrywith(unbox_float e1 dbg, id, provenance, unbox_float e2 dbg)
   | c -> Cop(Cload Double_u, [c], dbg))
 
 (* Complex *)
@@ -564,8 +564,8 @@ let rec remove_unit cmm =
       Cswitch(sel, index, Array.map remove_unit cases)
   | Ccatch(io, ids, body, handler) ->
       Ccatch(io, ids, remove_unit body, remove_unit handler)
-  | Ctrywith(body, exn, handler) ->
-      Ctrywith(remove_unit body, exn, remove_unit handler)
+  | Ctrywith(body, exn, provenance, handler) ->
+      Ctrywith(remove_unit body, exn, provenance, remove_unit handler)
   | Clet(id, provenance, c1, c2) ->
       Clet(id, provenance, c1, remove_unit c2)
   | Cop(Capply _mty, args, dbg) ->
@@ -936,8 +936,8 @@ let rec unbox_int bi arg dbg =
       Cswitch(e, tbl, Array.map (fun e -> unbox_int bi e dbg) el)
   | Ccatch(n, ids, e1, e2) ->
       Ccatch(n, ids, unbox_int bi e1 dbg, unbox_int bi e2 dbg)
-  | Ctrywith(e1, id, e2) ->
-      Ctrywith(unbox_int bi e1 dbg, id, unbox_int bi e2 dbg)
+  | Ctrywith(e1, id, provenance, e2) ->
+      Ctrywith(unbox_int bi e1 dbg, id, provenance, unbox_int bi e2 dbg)
   | _ ->
       if size_int = 4 && bi = Pint64 then
         split_int64_for_32bit_target arg dbg
@@ -1593,7 +1593,7 @@ let rec is_unboxed_number ~strict env e =
       | Some default -> join k default
       end
   | Ustaticfail _ -> No_result
-  | Uifthenelse (_, e1, e2) | Ucatch (_, _, e1, e2) | Utrywith (e1, _, e2) ->
+  | Uifthenelse (_, e1, e2) | Ucatch (_, _, e1, e2) | Utrywith (e1, _, _, e2) ->
       join (is_unboxed_number ~strict env e1) e2
   | _ -> No_unboxing
 
@@ -1808,8 +1808,8 @@ let rec transl env e =
       make_catch nfail (transl env body) (transl env handler)
   | Ucatch(nfail, ids, body, handler) ->
       Ccatch(nfail, ids, transl env body, transl env handler)
-  | Utrywith(body, exn, handler) ->
-      Ctrywith(transl env body, exn, transl env handler)
+  | Utrywith(body, exn, provenance, handler) ->
+      Ctrywith(transl env body, exn, provenance, transl env handler)
   | Uifthenelse (cond', ifso', ifnot') ->
       let cond_phantom, cond = extract_and_strip_phantom_lets cond' in
       let ifso = strip_phantom_lets ifso' in
