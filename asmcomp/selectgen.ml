@@ -774,18 +774,23 @@ method emit_expr env exp ~bound_name =
       catch_regs := (nfail, Array.concat rs) :: !catch_regs ;
       let (r1, s1) = self#emit_sequence env e1 ~bound_name:None in
       catch_regs := List.tl !catch_regs ;
+      let ids_and_rs = List.combine ids rs in
       let new_env_idents =
         List.fold_left
         (fun idents ((id, provenance), r) ->
-          let naming_op =
-            Iname_for_debugger { ident = id; provenance;
-              which_parameter = None; }
-          in
-          self#insert_debug env (Iop naming_op) Debuginfo.none r [| |];
           Tbl.add id (r, provenance) idents)
-        env.idents (List.combine ids rs) in
+        env.idents ids_and_rs in
       let new_env = { env with idents = new_env_idents; } in
-      let (r2, s2) = self#emit_sequence new_env e2 ~bound_name in
+      let (r2, s2) =
+        self#emit_sequence new_env e2 ~bound_name ~at_start:(fun seq ->
+          List.iter (fun ((ident, provenance), r) ->
+              let naming_op =
+                Iname_for_debugger { ident; provenance;
+                  which_parameter = None; }
+              in
+              seq#insert_debug env (Iop naming_op) Debuginfo.none r [| |])
+            ids_and_rs)
+      in
       let r = join env r1 s1 r2 s2 in
       self#insert env (Icatch(nfail, s1#extract, s2#extract)) [||] [||];
       r
@@ -804,18 +809,18 @@ method emit_expr env exp ~bound_name =
           None
       end
   | Ctrywith(e1, v, provenance, e2) ->
-      let (r1, s1) = self#emit_sequence env e1 ~bound_name:None in
+      let (r1, s1) = self#emit_sequence env e1 ~bound_name in
       let rv = self#regs_for typ_val in
       let (r2, s2) =
         let env =
           { env with idents = Tbl.add v (rv, provenance) env.idents; }
         in
-        let naming_op =
-          Iname_for_debugger { ident = v; provenance;
-            which_parameter = None; }
-        in
-        self#insert_debug env (Iop naming_op) Debuginfo.none rv [| |];
-        self#emit_sequence env e2 ~bound_name
+        self#emit_sequence env e2 ~bound_name ~at_start:(fun seq ->
+          let naming_op =
+            Iname_for_debugger { ident = v; provenance;
+              which_parameter = None; }
+          in
+          seq#insert_debug env (Iop naming_op) Debuginfo.none rv [| |])
       in
       let r = join env r1 s1 r2 s2 in
       let s2 = s2#extract in
@@ -826,8 +831,12 @@ method emit_expr env exp ~bound_name =
         [||] [||];
       r
 
-method private emit_sequence env exp ~bound_name =
+method private emit_sequence ?at_start env exp ~bound_name =
   let s = {< instr_seq = dummy_instr >} in
+  begin match at_start with
+  | None -> ()
+  | Some f -> f s
+  end;
   let r = s#emit_expr env exp ~bound_name in
   (r, s)
 
@@ -1062,31 +1071,36 @@ method emit_tail env exp =
       catch_regs := (nfail, Array.concat rs) :: !catch_regs ;
       let s1 = self#emit_tail_sequence env e1 in
       catch_regs := List.tl !catch_regs ;
+      let ids_and_rs = List.combine ids rs in
       let new_env =
         List.fold_left
         (fun env ((id, provenance), r) ->
-          let naming_op =
-            Iname_for_debugger { ident = id; provenance;
-              which_parameter = None; }
-          in
-          self#insert_debug env (Iop naming_op) Debuginfo.none r [| |];
           { env with idents = Tbl.add id (r, provenance) env.idents; })
-        env (List.combine ids rs) in
-      let s2 = self#emit_tail_sequence new_env e2 in
+        env ids_and_rs in
+      let s2 =
+        self#emit_tail_sequence new_env e2 ~at_start:(fun seq ->
+          List.iter (fun ((ident, provenance), r) ->
+              let naming_op =
+                Iname_for_debugger { ident; provenance;
+                  which_parameter = None; }
+              in
+              seq#insert_debug env (Iop naming_op) Debuginfo.none r [| |])
+            ids_and_rs)
+      in
       self#insert env (Icatch(nfail, s1, s2)) [||] [||]
   | Ctrywith(e1, v, provenance, e2) ->
       let (opt_r1, s1) = self#emit_sequence env e1 ~bound_name:None in
       let rv = self#regs_for typ_val in
       let s2 =
-        let naming_op =
-          Iname_for_debugger { ident = v; provenance;
-            which_parameter = None; }
-        in
-        self#insert_debug env (Iop naming_op) Debuginfo.none rv [| |];
         let env =
           { env with idents = Tbl.add v (rv, provenance) env.idents; }
         in
-        self#emit_tail_sequence env e2
+        self#emit_tail_sequence env e2 ~at_start:(fun seq ->
+          let naming_op =
+            Iname_for_debugger { ident = v; provenance;
+              which_parameter = None; }
+          in
+          seq#insert_debug env (Iop naming_op) Debuginfo.none rv [| |])
       in
       self#insert env
         (Itrywith(s1#extract,
@@ -1103,8 +1117,12 @@ method emit_tail env exp =
   | _ ->
       self#emit_return env exp
 
-method private emit_tail_sequence env exp =
+method private emit_tail_sequence ?at_start env exp =
   let s = {< instr_seq = dummy_instr >} in
+  begin match at_start with
+  | None -> ()
+  | Some f -> f s
+  end;
   s#emit_tail env exp;
   s#extract
 

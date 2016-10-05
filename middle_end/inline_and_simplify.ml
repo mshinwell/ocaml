@@ -1226,10 +1226,10 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
             simplify env r handler
           | _ ->
             let vars', provenances = List.split vars in
-            let vars, sb =
+            let vars', sb =
               Freshening.add_variables' (E.freshening env) vars'
             in
-            let vars = List.combine vars provenances in
+            let vars = List.combine vars' provenances in
             let approx = R.approx r in
             let env =
               List.fold_left (fun env id ->
