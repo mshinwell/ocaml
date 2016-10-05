@@ -139,7 +139,7 @@ and expression =
   | Cop of operation * expression list * Debuginfo.t
   | Csequence of expression * expression
   | Cifthenelse of expression * expression * expression
-  | Cswitch of expression * int array * expression array
+  | Cswitch of Debuginfo.t * expression * int array * expression array
   | Cloop of expression
   | Ccatch of int * (Ident.t * Clambda.ulet_provenance option) list
       * expression * expression

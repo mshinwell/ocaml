@@ -170,7 +170,7 @@ let rec expr ppf = function
       fprintf ppf "@[<2>(seq@ %a@ %a)@]" sequence e1 sequence e2
   | Cifthenelse(e1, e2, e3) ->
       fprintf ppf "@[<2>(if@ %a@ %a@ %a)@]" expr e1 expr e2 expr e3
-  | Cswitch(e1, index, cases) ->
+  | Cswitch(_, e1, index, cases) ->
       let print_case i ppf =
         for j = 0 to Array.length index - 1 do
           if index.(j) = i then fprintf ppf "case %i:" j

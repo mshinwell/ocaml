@@ -37,13 +37,13 @@ let rec no_effects (flam : Flambda.t) =
     no_effects body
       && List.for_all (fun (_, def, _) -> no_effects_named def) defs
   | If_then_else (_, ifso, ifnot) -> no_effects ifso && no_effects ifnot
-  | Switch (_, sw) ->
+  | Switch (_, _, sw) ->
     let aux (_, flam) = no_effects flam in
     List.for_all aux sw.blocks
       && List.for_all aux sw.consts
       && Misc.Stdlib.Option.value_default no_effects sw.failaction
         ~default:true
-  | String_switch (_, sw, def) ->
+  | String_switch (_, _, sw, def) ->
     List.for_all (fun (_, lam) -> no_effects lam) sw
       && Misc.Stdlib.Option.value_default no_effects def
         ~default:true

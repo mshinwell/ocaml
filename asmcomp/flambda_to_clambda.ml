@@ -366,7 +366,7 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
     let callee = subst_var env func in
     Ugeneric_apply (check_closure callee (Flambda.Expr (Var func)),
       subst_vars env args, dbg)
-  | Switch (arg, sw) ->
+  | Switch (dbg, arg, sw) ->
     let aux () : Clambda.ulambda =
       let const_index, const_actions =
         to_clambda_switch t env sw.consts sw.numconsts sw.failaction
@@ -374,7 +374,7 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
       let block_index, block_actions =
         to_clambda_switch t env sw.blocks sw.numblocks sw.failaction
       in
-      Uswitch (subst_var env arg,
+      Uswitch (dbg, subst_var env arg,
         { us_index_consts = const_index;
           us_actions_consts = const_actions;
           us_index_blocks = block_index;
@@ -398,15 +398,15 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
         }
       in
       let expr : Flambda.t =
-        Static_catch (exn, [], Switch (arg, sw), failaction)
+        Static_catch (exn, [], Switch (dbg, arg, sw), failaction)
       in
       to_clambda t env expr
     end
-  | String_switch (arg, sw, def) ->
+  | String_switch (dbg, arg, sw, def) ->
     let arg = subst_var env arg in
     let sw = List.map (fun (s, e) -> s, to_clambda t env e) sw in
     let def = Misc.may_map (to_clambda t env) def in
-    Ustringswitch (arg, sw, def)
+    Ustringswitch (dbg, arg, sw, def)
   | Static_raise (static_exn, args) ->
     Ustaticfail (Static_exception.to_int static_exn,
       List.map (subst_var env) args)

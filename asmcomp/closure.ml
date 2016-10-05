@@ -68,10 +68,10 @@ let occurs_var var u =
     | Uletrec(decls, body) ->
         List.exists (fun (_prov, _id, u) -> occurs u) decls || occurs body
     | Uprim(_p, args, _) -> List.exists occurs args
-    | Uswitch(arg, s) ->
+    | Uswitch(_, arg, s) ->
         occurs arg ||
         occurs_array s.us_actions_consts || occurs_array s.us_actions_blocks
-    | Ustringswitch(arg,sw,d) ->
+    | Ustringswitch(_, arg,sw,d) ->
         occurs arg ||
         List.exists (fun (_,e) -> occurs e) sw ||
         (match d with None -> false | Some d -> occurs d)
@@ -160,13 +160,13 @@ let lambda_smaller lam threshold =
     | Uprim(prim, args, _) ->
         size := !size + prim_size prim args;
         lambda_list_size args
-    | Uswitch(lam, cases) ->
+    | Uswitch(_, lam, cases) ->
         if Array.length cases.us_actions_consts > 1 then size := !size + 5 ;
         if Array.length cases.us_actions_blocks > 1 then size := !size + 5 ;
         lambda_size lam;
         lambda_array_size cases.us_actions_consts ;
         lambda_array_size cases.us_actions_blocks
-    | Ustringswitch (lam,sw,d) ->
+    | Ustringswitch (_,lam,sw,d) ->
         lambda_size lam ;
        (* as ifthenelse *)
         List.iter
@@ -567,7 +567,7 @@ let rec substitute loc fpc sb ulam =
       let (res, _) =
         simplif_prim fpc p (sargs, List.map approx_ulam sargs) dbg in
       res
-  | Uswitch(arg, sw) ->
+  | Uswitch(dbg, arg, sw) ->
       let sarg = substitute loc fpc sb arg in
       let action =
         (* Unfortunately, we cannot easily deal with the
@@ -586,7 +586,7 @@ let rec substitute loc fpc sb ulam =
       begin match action with
       | Some u -> substitute loc fpc sb u
       | None ->
-          Uswitch(sarg,
+          Uswitch(dbg, sarg,
                   { sw with
                     us_actions_consts =
                       Array.map (substitute loc fpc sb) sw.us_actions_consts;
@@ -594,9 +594,9 @@ let rec substitute loc fpc sb ulam =
                       Array.map (substitute loc fpc sb) sw.us_actions_blocks;
                   })
       end
-  | Ustringswitch(arg,sw,d) ->
+  | Ustringswitch(dbg, arg,sw,d) ->
       Ustringswitch
-        (substitute loc fpc sb arg,
+        (dbg, substitute loc fpc sb arg,
          List.map (fun (s,act) -> s,substitute loc fpc sb act) sw,
          Misc.may_map (substitute loc fpc sb) d)
   | Ustaticfail (nfail, args) ->
@@ -982,7 +982,7 @@ let rec close fenv cenv = function
       let dbg = Debuginfo.from_location loc in
       simplif_prim !Clflags.float_const_prop
                    p (close_list_approx fenv cenv args) dbg
-  | Lswitch(arg, sw) ->
+  | Lswitch(arg, sw, loc) ->
       let fn fail =
         let (uarg, _) = close fenv cenv arg in
         let const_index, const_actions, fconst =
@@ -991,7 +991,8 @@ let rec close fenv cenv = function
           close_switch fenv cenv sw.sw_blocks sw.sw_numblocks fail in
         let ulam =
           Uswitch
-            (uarg,
+            (Debuginfo.from_location loc,
+             uarg,
              {us_index_consts = const_index;
               us_actions_consts = const_actions;
               us_index_blocks = block_index;
@@ -1012,7 +1013,7 @@ let rec close fenv cenv = function
             Ucatch (i,[],ubody,uhandler),Value_unknown
           else fn fail
       end
-  | Lstringswitch(arg,sw,d,_) ->
+  | Lstringswitch(arg,sw,d,loc) ->
       let uarg,_ = close fenv cenv arg in
       let usw =
         List.map
@@ -1025,7 +1026,7 @@ let rec close fenv cenv = function
           (fun d ->
             let ud,_ = close fenv cenv d in
             ud) d in
-      Ustringswitch (uarg,usw,ud),Value_unknown
+      Ustringswitch (Debuginfo.from_location loc, uarg,usw,ud),Value_unknown
   | Lstaticraise (i, args) ->
       (Ustaticfail (i, close_list fenv cenv args), Value_unknown)
   | Lstaticcatch(body, (i, vars), handler) ->
@@ -1324,11 +1325,11 @@ let collect_exported_structured_constants a =
     | Ulet (_str, _kind, _prov, _, u1, u2) -> ulam u1; ulam u2
     | Uletrec (l, u) -> List.iter (fun (_, _, u) -> ulam u) l; ulam u
     | Uprim (_, ul, _) -> List.iter ulam ul
-    | Uswitch (u, sl) ->
+    | Uswitch (_, u, sl) ->
         ulam u;
         Array.iter ulam sl.us_actions_consts;
         Array.iter ulam sl.us_actions_blocks
-    | Ustringswitch (u,sw,d) ->
+    | Ustringswitch (_,u,sw,d) ->
         ulam u ;
         List.iter (fun (_,act) -> ulam act) sw ;
         Misc.may ulam d

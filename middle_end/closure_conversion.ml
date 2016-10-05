@@ -514,22 +514,24 @@ and close t ?(bound_name:(Variable.t * Flambda.let_provenance) option) env
       ~create_body:(fun args ->
         name_expr_with_bound_name bound_name (Prim (p, args, dbg))
           ~name)
-  | Lswitch (arg, sw) ->
+  | Lswitch (arg, sw, loc) ->
     let scrutinee = Variable.create "switch" in
     let aux (i, lam) = i, close t env lam in
     let zero_to_n = Numbers.Int.zero_to_n in
+    let dbg = Debuginfo.from_location loc in
     Flambda.create_let scrutinee (Expr (close t env arg))
-      (Switch (scrutinee,
+      (Switch (dbg, scrutinee,
         { numconsts = zero_to_n (sw.sw_numconsts - 1);
           consts = List.map aux sw.sw_consts;
           numblocks = zero_to_n (sw.sw_numblocks - 1);
           blocks = List.map aux sw.sw_blocks;
           failaction = Misc.may_map (close t env) sw.sw_failaction;
         }))
-  | Lstringswitch (arg, sw, def, _) ->
+  | Lstringswitch (arg, sw, def, loc) ->
     let scrutinee = Variable.create "string_switch" in
+    let dbg = Debuginfo.from_location loc in
     Flambda.create_let scrutinee (Expr (close t env arg))
-      (String_switch (scrutinee,
+      (String_switch (dbg, scrutinee,
         List.map (fun (s, e) -> s, close t env e) sw,
         Misc.may_map (close t env) def))
   | Lstaticraise (i, args) ->

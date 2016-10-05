@@ -526,8 +526,8 @@ let rec unbox_float cmm dbg =
   | Cifthenelse(cond, e1, e2) ->
       Cifthenelse(cond, unbox_float e1 dbg, unbox_float e2 dbg)
   | Csequence(e1, e2) -> Csequence(e1, unbox_float e2 dbg)
-  | Cswitch(e, tbl, el) ->
-      Cswitch(e, tbl, Array.map (fun e -> unbox_float e dbg) el)
+  | Cswitch(dbg, e, tbl, el) ->
+      Cswitch(dbg, e, tbl, Array.map (fun e -> unbox_float e dbg) el)
   | Ccatch(n, ids, e1, e2) ->
       Ccatch(n, ids, unbox_float e1 dbg, unbox_float e2 dbg)
   | Ctrywith(e1, id, provenance, e2) ->
@@ -560,8 +560,8 @@ let rec remove_unit cmm =
       end
   | Cifthenelse(cond, ifso, ifnot) ->
       Cifthenelse(cond, remove_unit ifso, remove_unit ifnot)
-  | Cswitch(sel, index, cases) ->
-      Cswitch(sel, index, Array.map remove_unit cases)
+  | Cswitch(dbg, sel, index, cases) ->
+      Cswitch(dbg, sel, index, Array.map remove_unit cases)
   | Ccatch(io, ids, body, handler) ->
       Ccatch(io, ids, remove_unit body, remove_unit handler)
   | Ctrywith(body, exn, provenance, handler) ->
@@ -932,8 +932,8 @@ let rec unbox_int bi arg dbg =
   | Cifthenelse(cond, e1, e2) ->
       Cifthenelse(cond, unbox_int bi e1 dbg, unbox_int bi e2 dbg)
   | Csequence(e1, e2) -> Csequence(e1, unbox_int bi e2 dbg)
-  | Cswitch(e, tbl, el) ->
-      Cswitch(e, tbl, Array.map (fun e -> unbox_int bi e dbg) el)
+  | Cswitch(dbg, e, tbl, el) ->
+      Cswitch(dbg, e, tbl, Array.map (fun e -> unbox_int bi e dbg) el)
   | Ccatch(n, ids, e1, e2) ->
       Ccatch(n, ids, unbox_int bi e1 dbg, unbox_int bi e2 dbg)
   | Ctrywith(e1, id, provenance, e2) ->
@@ -1400,7 +1400,8 @@ struct
   let make_isout h arg = Cop (Ccmpa Clt, [h ; arg], Debuginfo.none)
   let make_isin h arg = Cop (Ccmpa Cge, [h ; arg], Debuginfo.none)
   let make_if cond ifso ifnot = Cifthenelse (cond, ifso, ifnot)
-  let make_switch arg cases actions = Cswitch (arg,cases,actions)
+  let make_switch loc arg cases actions =
+    Cswitch (Debuginfo.from_location loc, arg,cases,actions)
   let bind arg body = bind "switcher" arg body
 
   (* CR mshinwell: This should preserve phantom lets. *)
@@ -1441,7 +1442,7 @@ module SwitcherBlocks = Switch.Make(SArgBlocks)
 (* Int switcher, arg in [low..high],
    cases is list of individual cases, and is sorted by first component *)
 
-let transl_int_switch arg low high cases default = match cases with
+let transl_int_switch dbg arg low high cases default = match cases with
 | [] -> assert false
 | _::_ ->
     let store = StoreExp.mk_store () in
@@ -1480,7 +1481,9 @@ let transl_int_switch arg low high cases default = match cases with
         else inters low (k0-1) 0 cases in
     bind "switcher" arg
       (fun a ->
-        SwitcherBlocks.zyva
+        (* CR-someday mshinwell: Consider making the switcher take
+           Debuginfo.t to ensure no loss of information *)
+        SwitcherBlocks.zyva (Debuginfo.to_location dbg)
           (low,high)
           a
           (Array.of_list inters) store)
@@ -1583,10 +1586,10 @@ let rec is_unboxed_number ~strict env e =
   | Ulet (_, _, _, _, _, e) | Uletrec (_, e) | Usequence (_, e)
   | Uphantom_let (_, _, _, e) ->
       is_unboxed_number ~strict env e
-  | Uswitch (_, switch) ->
+  | Uswitch (_, _, switch) ->
       let k = Array.fold_left join No_result switch.us_actions_consts in
       Array.fold_left join k switch.us_actions_blocks
-  | Ustringswitch (_, actions, default_opt) ->
+  | Ustringswitch (_, _, actions, default_opt) ->
       let k = List.fold_left (fun k (_, e) -> join k e) No_result actions in
       begin match default_opt with
         None -> k
@@ -1777,30 +1780,30 @@ let rec transl env e =
       end
 
   (* Control structures *)
-  | Uswitch(arg, s) ->
-      let dbg = Debuginfo.none in
+  | Uswitch(dbg, arg, s) ->
       (* As in the bytecode interpreter, only matching against constants
          can be checked *)
       if Array.length s.us_index_blocks = 0 then
         Cswitch
-          (untag_int (transl env arg) dbg,
+          (dbg,
+           untag_int (transl env arg) dbg,
            s.us_index_consts,
            Array.map (transl env) s.us_actions_consts)
       else if Array.length s.us_index_consts = 0 then
-        transl_switch env (get_tag (transl env arg) dbg)
+        transl_switch dbg env (get_tag (transl env arg) dbg)
           s.us_index_blocks s.us_actions_blocks
       else
         bind "switch" (transl env arg) (fun arg ->
           Cifthenelse(
           Cop(Cand, [arg; Cconst_int 1], dbg),
-          transl_switch env
+          transl_switch dbg env
             (untag_int arg dbg) s.us_index_consts s.us_actions_consts,
-          transl_switch env
+          transl_switch dbg env
             (get_tag arg dbg) s.us_index_blocks s.us_actions_blocks))
-  | Ustringswitch(arg,sw,d) ->
+  | Ustringswitch(dbg, arg,sw,d) ->
       bind "switch" (transl env arg)
         (fun arg ->
-          strmatch_compile arg (Misc.may_map (transl env) d)
+          strmatch_compile dbg arg (Misc.may_map (transl env) d)
             (List.map (fun (s,act) -> s,transl env act) sw))
   | Ustaticfail (nfail, args) ->
       Cexit (nfail, List.map (transl env) args)
@@ -2720,7 +2723,7 @@ and exit_if_false env cond otherwise nfail =
       if_then_else(test_bool(transl env cond) Debuginfo.none,
         otherwise, Cexit (nfail, [])))
 
-and transl_switch env arg index cases = match Array.length cases with
+and transl_switch dbg env arg index cases = match Array.length cases with
 | 0 -> fatal_error "Cmmgen.transl_switch"
 | 1 -> transl env cases.(0)
 | _ ->
@@ -2752,7 +2755,7 @@ and transl_switch env arg index cases = match Array.length cases with
     | inters ->
         bind "switcher" arg
           (fun a ->
-            SwitcherBlocks.zyva
+            SwitcherBlocks.zyva (Debuginfo.to_location dbg)
               (0,n_index-1)
               a
               (Array.of_list inters) store)

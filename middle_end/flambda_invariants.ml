@@ -241,7 +241,9 @@ let variable_and_symbol_invariants (program : Flambda.program) =
       check_variable_is_bound env cond;
       loop env ifso;
       loop env ifnot
-    | Switch (arg, { numconsts; consts; numblocks; blocks; failaction; }) ->
+    | Switch (dbg, arg,
+        { numconsts; consts; numblocks; blocks; failaction; }) ->
+      ignore_debuginfo dbg;
       check_variable_is_bound env arg;
       ignore_int_set numconsts;
       ignore_int_set numblocks;
@@ -250,7 +252,8 @@ let variable_and_symbol_invariants (program : Flambda.program) =
           loop env e)
         (consts @ blocks);
       Misc.may (loop env) failaction
-    | String_switch (arg, cases, e_opt) ->
+    | String_switch (dbg, arg, cases, e_opt) ->
+      ignore_debuginfo dbg;
       check_variable_is_bound env arg;
       List.iter (fun (label, case) ->
           ignore_string label;

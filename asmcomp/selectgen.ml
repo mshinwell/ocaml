@@ -747,7 +747,7 @@ method emit_expr env exp ~bound_name =
                       rarg [||];
           r
       end
-  | Cswitch(esel, index, ecases) ->
+  | Cswitch(dbg, esel, index, ecases) ->
       begin match self#emit_expr env esel ~bound_name:None with
         None -> None
       | Some rsel ->
@@ -756,9 +756,9 @@ method emit_expr env exp ~bound_name =
               ecases
           in
           let r = join_array env rscases in
-          self#insert env (Iswitch(index,
-                               Array.map (fun (_, s) -> s#extract) rscases))
-                      rsel [||];
+          self#insert_debug env
+            (Iswitch(index, Array.map (fun (_, s) -> s#extract) rscases))
+            dbg rsel [||];
           r
       end
   | Cloop(ebody) ->
@@ -1052,13 +1052,13 @@ method emit_tail env exp =
                                          self#emit_tail_sequence env eelse))
                       rarg [||]
       end
-  | Cswitch(esel, index, ecases) ->
+  | Cswitch(dbg, esel, index, ecases) ->
       begin match self#emit_expr env esel ~bound_name:None with
         None -> ()
       | Some rsel ->
-          self#insert env
+          self#insert_debug env
             (Iswitch(index, Array.map (self#emit_tail_sequence env) ecases))
-            rsel [||]
+            dbg rsel [||]
       end
   | Ccatch(nfail, ids, e1, e2) ->
        let rs =

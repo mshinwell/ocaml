@@ -31,11 +31,11 @@ let apply_on_subexpressions f f_named (flam : Flambda.t) =
   | Let_rec { vars_and_defining_exprs = defs; body; } ->
     List.iter (fun (_, l, _) -> f_named l) defs;
     f body
-  | Switch (_, sw) ->
+  | Switch (_, _, sw) ->
     List.iter (fun (_,l) -> f l) sw.consts;
     List.iter (fun (_,l) -> f l) sw.blocks;
     Misc.may f sw.failaction
-  | String_switch (_, sw, def) ->
+  | String_switch (_, _, sw, def) ->
     List.iter (fun (_,l) -> f l) sw;
     Misc.may f def
   | Static_catch (_,_,f1,f2) ->
@@ -116,7 +116,7 @@ let map_subexpressions f f_named (tree:Flambda.t) : Flambda.t =
       tree
     else
       Let_mutable { mutable_let with body = new_body }
-  | Switch (arg, sw) ->
+  | Switch (dbg, arg, sw) ->
     let aux = map_snd_sharing (fun _ v -> f v) in
     let new_consts = list_map_sharing aux sw.consts in
     let new_blocks = list_map_sharing aux sw.blocks in
@@ -133,14 +133,14 @@ let map_subexpressions f f_named (tree:Flambda.t) : Flambda.t =
           blocks = new_blocks;
         }
       in
-      Switch (arg, sw)
-  | String_switch (arg, sw, def) ->
+      Switch (dbg, arg, sw)
+  | String_switch (dbg, arg, sw, def) ->
     let new_sw = list_map_sharing (map_snd_sharing (fun _ v -> f v)) sw in
     let new_def = may_map_sharing f def in
     if sw == new_sw && def == new_def then
       tree
     else
-      String_switch(arg, new_sw, new_def)
+      String_switch (dbg,arg, new_sw, new_def)
   | Static_catch (i, vars, body, handler) ->
     let new_body = f body in
     let new_handler = f handler in
@@ -346,7 +346,7 @@ let map_general ~toplevel f f_named f_phantom tree =
             tree
           else
             Let_rec { vars_and_defining_exprs = defs; body; }
-        | Switch (arg, sw) ->
+        | Switch (dbg, arg, sw) ->
           let done_something = ref false in
           let sw =
             { sw with
@@ -369,8 +369,8 @@ let map_general ~toplevel f f_named f_phantom tree =
           if not !done_something then
             tree
           else
-            Switch (arg, sw)
-        | String_switch (arg, sw, def) ->
+            Switch (dbg, arg, sw)
+        | String_switch (dbg, arg, sw, def) ->
           let done_something = ref false in
           let sw =
             List.map (fun (i, v) -> i, aux_done_something v done_something) sw
@@ -383,7 +383,7 @@ let map_general ~toplevel f f_named f_phantom tree =
           if not !done_something then
             tree
           else
-            String_switch(arg, sw, def)
+            String_switch (dbg, arg, sw, def)
         | Static_catch (i, vars, body, handler) ->
           let new_body = aux body in
           let new_handler = aux handler in

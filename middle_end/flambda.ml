@@ -70,8 +70,8 @@ type t =
   | Send of send
   | Assign of assign
   | If_then_else of Variable.t * t * t
-  | Switch of Variable.t * switch
-  | String_switch of Variable.t * (string * t) list * t option
+  | Switch of Debuginfo.t * Variable.t * switch
+  | String_switch of Debuginfo.t * Variable.t * (string * t) list * t option
   | Static_raise of Static_exception.t * Variable.t list
   | Static_catch of Static_exception.t
       * (Variable.t * let_provenance option) list * t * t
@@ -310,7 +310,7 @@ let rec lam ppf (flam : t) =
           id_arg_list in
       fprintf ppf
         "@[<2>(letrec@ (@[<hv 1>%a@])@ %a)@]" bindings id_arg_list lam body
-  | Switch(larg, sw) ->
+  | Switch (dbg, larg, sw) ->
       let switch ppf (sw : switch) =
         let spc = ref false in
         List.iter
@@ -330,12 +330,13 @@ let rec lam ppf (flam : t) =
             fprintf ppf "@[<hv 1>default:@ %a@]" lam l
         end in
       fprintf ppf
-        "@[<1>(%s(%i,%i) %a@ @[<v 0>%a@])@]"
+        "@[<1>(%s<%s>(%i,%i) %a@ @[<v 0>%a@])@]"
         (match sw.failaction with None -> "switch*" | _ -> "switch")
+        (Debuginfo.to_string dbg)
         (Int.Set.cardinal sw.numconsts)
         (Int.Set.cardinal sw.numblocks)
         Variable.print larg switch sw
-  | String_switch(arg, cases, default) ->
+  | String_switch (dbg, arg, cases, default) ->
       let switch ppf cases =
         let spc = ref false in
         List.iter
@@ -350,7 +351,9 @@ let rec lam ppf (flam : t) =
         | None -> ()
         end in
       fprintf ppf
-       "@[<1>(stringswitch %a@ @[<v 0>%a@])@]" Variable.print arg switch cases
+       "@[<1>(stringswitch<%s> %a@ @[<v 0>%a@])@]"
+         (Debuginfo.to_string dbg)
+          Variable.print arg switch cases
   | Static_raise (i, ls)  ->
       let lams ppf largs =
         List.iter (fun l -> fprintf ppf "@ %a" Variable.print l) largs in
@@ -646,12 +649,12 @@ let rec free_names_expr ?ignore_uses_in_project_var ?ignore_uses_as_callee
               ~free_names defining_expr)
           bindings;
         aux body
-      | Switch (scrutinee, switch) ->
+      | Switch (_, scrutinee, switch) ->
         free_variable scrutinee;
         List.iter (fun (_, e) -> aux e) switch.consts;
         List.iter (fun (_, e) -> aux e) switch.blocks;
         Misc.may aux switch.failaction
-      | String_switch (scrutinee, cases, failaction) ->
+      | String_switch (_, scrutinee, cases, failaction) ->
         free_variable scrutinee;
         List.iter (fun (_, e) -> aux e) cases;
         Misc.may aux failaction
@@ -960,11 +963,11 @@ let iter_general ~toplevel f f_named maybe_named =
       | For { body; _ } -> aux body
       | If_then_else (_, f1, f2) ->
         aux f1; aux f2
-      | Switch (_, sw) ->
+      | Switch (_, _, sw) ->
         List.iter (fun (_,l) -> aux l) sw.consts;
         List.iter (fun (_,l) -> aux l) sw.blocks;
         Misc.may aux sw.failaction
-      | String_switch (_, sw, def) ->
+      | String_switch (_, _, sw, def) ->
         List.iter (fun (_,l) -> aux l) sw;
         Misc.may aux def
   and aux_named (named : named) =

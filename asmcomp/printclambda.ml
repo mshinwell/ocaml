@@ -147,7 +147,7 @@ and lam ppf = function
       let lams ppf largs =
         List.iter (fun l -> fprintf ppf "@ %a" lam l) largs in
       fprintf ppf "@[<2>(%a%a)@]" Printlambda.primitive prim lams largs
-  | Uswitch(larg, sw) ->
+  | Uswitch(dbg, larg, sw) ->
       let print_case tag index i ppf =
         for j = 0 to Array.length index - 1 do
           if index.(j) = i then fprintf ppf "case %s %i:" tag j
@@ -161,9 +161,9 @@ and lam ppf = function
         print_cases "int" sw.us_index_consts sw.us_actions_consts ppf ;
         print_cases "tag" sw.us_index_blocks sw.us_actions_blocks ppf  in
       fprintf ppf
-       "@[<v 0>@[<2>(switch@ %a@ @]%a)@]"
-        lam larg switch sw
-  | Ustringswitch(larg,sw,d) ->
+       "@[<v 0>@[<2>(switch<%s>@ %a@ @]%a)@]"
+        (Debuginfo.to_string dbg) lam larg switch sw
+  | Ustringswitch(dbg, larg,sw,d) ->
       let switch ppf sw =
         let spc = ref false in
         List.iter
@@ -179,7 +179,8 @@ and lam ppf = function
         | None -> ()
         end in
       fprintf ppf
-        "@[<1>(switch %a@ @[<v 0>%a@])@]" lam larg switch sw
+        "@[<1>(switch<%s> %a@ @[<v 0>%a@])@]"
+          (Debuginfo.to_string dbg) lam larg switch sw
   | Ustaticfail (i, ls)  ->
       let lams ppf largs =
         List.iter (fun l -> fprintf ppf "@ %a" lam l) largs in

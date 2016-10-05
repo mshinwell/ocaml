@@ -111,10 +111,10 @@ let rec same (l1 : Flambda.t) (l2 : Flambda.t) =
     Let_rec { vars_and_defining_exprs = bl2; body = a2; } ->
     Misc.Stdlib.List.equal samebinding bl1 bl2 && same a1 a2
   | Let_rec _, _ | _, Let_rec _ -> false
-  | Switch (a1, s1), Switch (a2, s2) ->
+  | Switch (_, a1, s1), Switch (_, a2, s2) ->
     Variable.equal a1 a2 && sameswitch s1 s2
   | Switch _, _ | _, Switch _ -> false
-  | String_switch (a1, s1, d1), String_switch (a2, s2, d2) ->
+  | String_switch (_, a1, s1, d1), String_switch (_, a2, s2, d2) ->
     Variable.equal a1 a2
       && Misc.Stdlib.List.equal
         (fun (s1, e1) (s2, e2) -> s1 = s2 && same e1 e2) s1 s2
@@ -292,12 +292,12 @@ let toplevel_substitution sb tree =
     | If_then_else (cond, e1, e2) ->
       let cond = sb cond in
       If_then_else (cond, e1, e2)
-    | Switch (cond, sw) ->
+    | Switch (dbg, cond, sw) ->
       let cond = sb cond in
-      Switch (cond, sw)
-    | String_switch (cond, branches, def) ->
+      Switch (dbg, cond, sw)
+    | String_switch (dbg, cond, branches, def) ->
       let cond = sb cond in
-      String_switch (cond, branches, def)
+      String_switch (dbg, cond, branches, def)
     | Send { kind; meth; obj; args; dbg } ->
       let meth = sb meth in
       let obj = sb obj in
@@ -781,14 +781,15 @@ let substitute_read_symbol_field_for_variables
       bind cond fresh (If_then_else (fresh, ifso, ifnot))
     | If_then_else _ ->
       expr
-    | Switch (cond, sw) when Variable.Map.mem cond substitution ->
+    | Switch (dbg, cond, sw) when Variable.Map.mem cond substitution ->
       let fresh = Variable.rename cond in
-      bind cond fresh (Switch (fresh, sw))
+      bind cond fresh (Switch (dbg, fresh, sw))
     | Switch _ ->
       expr
-    | String_switch (cond, sw, def) when Variable.Map.mem cond substitution ->
+    | String_switch (dbg, cond, sw, def)
+        when Variable.Map.mem cond substitution ->
       let fresh = Variable.rename cond in
-      bind cond fresh (String_switch (fresh, sw, def))
+      bind cond fresh (String_switch (dbg, fresh, sw, def))
     | String_switch _ ->
       expr
     | Assign { being_assigned; new_value }
