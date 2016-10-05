@@ -245,7 +245,7 @@ class virtual instruction_selection = object (self)
         ~is_tail
         ~label:label_after
     in
-    match self#emit_expr env instrumentation with
+    match self#emit_expr env instrumentation ~bound_name:None with
     | None -> assert false
     | Some reg -> Some reg
 
@@ -256,7 +256,7 @@ class virtual instruction_selection = object (self)
     let callee_ident = Ident.create "callee" in
     let env =
       { env with
-        idents = Tbl.add callee_ident [| callee |] env.idents;
+        idents = Tbl.add callee_ident ([| callee |], None) env.idents;
       }
     in
     let instrumentation =
@@ -266,7 +266,7 @@ class virtual instruction_selection = object (self)
         ~is_tail
         ~label:label_after
     in
-    match self#emit_expr env instrumentation with
+    match self#emit_expr env instrumentation ~bound_name:None with
     | None -> assert false
     | Some reg -> Some reg
 
@@ -304,7 +304,7 @@ class virtual instruction_selection = object (self)
         ~node:(Lazy.force !spacetime_node_ident)
         ~value's_header ~dbg
     in
-    self#emit_expr env instrumentation
+    self#emit_expr env instrumentation ~bound_name:None
 
   method private emit_prologue f ~node_hole ~(env : Selectgen.environment) =
     (* We don't need the prologue unless we inserted some instrumentation.
@@ -316,7 +316,7 @@ class virtual instruction_selection = object (self)
       in
       disable_instrumentation <- true;
       let node_temp_reg =
-        match self#emit_expr env prologue_cmm with
+        match self#emit_expr env prologue_cmm ~bound_name:None with
         | None ->
           Misc.fatal_error "Spacetime prologue instruction \
               selection did not yield a destination register"
@@ -324,7 +324,7 @@ class virtual instruction_selection = object (self)
       in
       disable_instrumentation <- false;
       let node = Lazy.force !spacetime_node_ident in
-      let node_reg = Tbl.find node env.idents in
+      let node_reg = fst (Tbl.find node env.idents) in
       self#insert_moves env node_temp_reg node_reg
     end
 
@@ -360,7 +360,7 @@ class virtual instruction_selection = object (self)
 
   method! select_allocation_args (env : Selectgen.environment) =
     if self#can_instrument () then begin
-      let regs = Tbl.find (Lazy.force !spacetime_node_ident) env.idents in
+      let regs = fst (Tbl.find (Lazy.force !spacetime_node_ident) env.idents) in
       match regs with
       | [| reg |] -> [| reg |]
       | _ -> failwith "Expected one register only for spacetime_node_ident"
@@ -399,7 +399,7 @@ class virtual instruction_selection = object (self)
     if Config.spacetime then
       { env with
         idents = Tbl.add (Lazy.force !spacetime_node_ident)
-          (self#regs_for Cmm.typ_int) env.idents;
+          (self#regs_for Cmm.typ_int, None) env.idents;
       }
     else
       env

@@ -17,7 +17,7 @@
    sequentialization. *)
 
 type environment = {
-  idents : (Ident.t, Reg.t array) Tbl.t;
+  idents : (Ident.t, Reg.t array * Clambda.ulet_provenance option) Tbl.t;
   phantom_idents : Ident.Set.t;
 }
 
@@ -110,7 +110,9 @@ class virtual selector_generic : object
   method insert_moves : environment -> Reg.t array -> Reg.t array -> unit
   method adjust_type : Reg.t -> Reg.t -> unit
   method adjust_types : Reg.t array -> Reg.t array -> unit
-  method emit_expr : environment -> Cmm.expression -> Reg.t array option
+  method emit_expr : environment -> Cmm.expression
+    -> bound_name:(Ident.t * Clambda.ulet_provenance option) option
+    -> Reg.t array option
   method emit_tail : environment -> Cmm.expression -> unit
 
   (* Only for the use of [Spacetime_profiling]. *)

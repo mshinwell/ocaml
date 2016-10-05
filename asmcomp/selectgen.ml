@@ -22,7 +22,7 @@ open Reg
 open Mach
 
 type environment = {
-  idents : (Ident.t, Reg.t array) Tbl.t;
+  idents : (Ident.t, Reg.t array * Clambda.ulet_provenance option) Tbl.t;
   phantom_idents : Ident.Set.t;
 }
 
@@ -64,7 +64,7 @@ let size_expr env exp =
           Tbl.find id localenv
         with Not_found ->
         try
-          let regs = Tbl.find id env.idents in
+          let regs, _ = Tbl.find id env.idents in
           size_machtype (Array.map (fun r -> r.typ) regs)
         with Not_found ->
           fatal_error("Selection.size_expr: unbound var " ^
@@ -575,7 +575,7 @@ method private maybe_emit_spacetime_move env ~spacetime_reg =
 (* Add the instructions for the given expression
    at the end of the self sequence *)
 
-method emit_expr env exp =
+method emit_expr env exp ~bound_name =
   match exp with
     Cconst_int n ->
       let r = self#regs_for typ_int in
@@ -599,32 +599,32 @@ method emit_expr env exp =
       self#emit_blockheader env n dbg
   | Cvar v ->
       begin try
-        Some(Tbl.find v env.idents)
+        Some(fst(Tbl.find v env.idents))
       with Not_found ->
         fatal_error("Selection.emit_expr: unbound var " ^ Ident.unique_name v)
       end
   | Clet(v, provenance, e1, e2) ->
-      begin match self#emit_expr env e1 with
+      begin match self#emit_expr env e1 ~bound_name:(Some (v, provenance)) with
         None -> None
-      | Some r1 -> self#emit_expr (self#bind_let env v r1 ~provenance) e2
+      | Some r1 ->
+        self#emit_expr (self#bind_let env v r1 ~provenance) e2 ~bound_name
       end
   | Cphantom_let (ident, provenance, defining_expr, body) ->
       let env =
         self#env_for_phantom_let env ~ident ~provenance ~defining_expr
       in
-      self#emit_expr env body
+      self#emit_expr env body ~bound_name
   | Cassign(v, e1) ->
-      let rv =
+      let rv, provenance =
         try
           Tbl.find v env.idents
         with Not_found ->
           fatal_error ("Selection.emit_expr: unbound var " ^ Ident.name v) in
-      begin match self#emit_expr env e1 with
+      begin match self#emit_expr env e1 ~bound_name:None with
         None -> None
       | Some r1 ->
         let naming_op =
-          (* CR mshinwell: the provenance shouldn't be None. *)
-          Iname_for_debugger { ident = v; provenance = None;
+          Iname_for_debugger { ident = v; provenance;
             which_parameter = None; }
         in
         self#insert_debug env (Iop naming_op) Debuginfo.none r1 [| |];
@@ -639,7 +639,7 @@ method emit_expr env exp =
           Some(self#emit_tuple ext_env simple_list)
       end
   | Cop(Craise k, [arg], dbg) ->
-      begin match self#emit_expr env arg with
+      begin match self#emit_expr env arg ~bound_name:None with
         None -> None
       | Some r1 ->
           let rd = [|Proc.loc_exn_bucket|] in
@@ -649,10 +649,21 @@ method emit_expr env exp =
       end
   | Cop(Ccmpf _, _, _) ->
       self#emit_expr env (Cifthenelse(exp, Cconst_int 1, Cconst_int 0))
+        ~bound_name
   | Cop(op, args, dbg) ->
       begin match self#emit_parts_list env args with
         None -> None
       | Some(simple_args, env) ->
+          let add_naming_op_for_bound_name regs =
+            match bound_name with
+            | None -> ()
+            | Some (bound_name, provenance) ->
+              let naming_op =
+                Iname_for_debugger { ident = bound_name; provenance;
+                  which_parameter = None; }
+              in
+              self#insert_debug env (Iop naming_op) Debuginfo.none regs [| |]
+          in
           let ty = oper_result_type op in
           let (new_op, new_args) = self#select_operation op simple_args in
           match new_op with
@@ -669,6 +680,12 @@ method emit_expr env exp =
               self#maybe_emit_spacetime_move env ~spacetime_reg;
               self#insert_debug env (Iop new_op) dbg
                           (Array.append [|r1.(0)|] loc_arg) loc_res;
+              (* The destination registers (as per the procedure calling
+                 convention) need to be named right now, otherwise the result
+                 of the function call may be unavailable in the debugger
+                 immediately after the call.  This is what necessitates the
+                 presence of the [bound_name] argument to [emit_expr]. *)
+              add_naming_op_for_bound_name loc_res;
               self#insert_move_results env loc_res rd stack_ofs;
               Some rd
           | Icall_imm _ ->
@@ -682,6 +699,7 @@ method emit_expr env exp =
               self#insert_move_args env r1 loc_arg stack_ofs;
               self#maybe_emit_spacetime_move env ~spacetime_reg;
               self#insert_debug env (Iop new_op) dbg loc_arg loc_res;
+              add_naming_op_for_bound_name loc_res;
               self#insert_move_results env loc_res rd stack_ofs;
               Some rd
           | Iextcall _ ->
@@ -694,6 +712,7 @@ method emit_expr env exp =
               let loc_res =
                 self#insert_op_debug env new_op dbg
                   loc_arg (Proc.loc_external_results rd) in
+              add_naming_op_for_bound_name loc_res;
               self#insert_move_results env loc_res rd stack_ofs;
               Some rd
           | Ialloc { words = _; spacetime_index; label_after_call_gc; } ->
@@ -712,27 +731,30 @@ method emit_expr env exp =
               Some (self#insert_op_debug env op dbg r1 rd)
       end
   | Csequence(e1, e2) ->
-      begin match self#emit_expr env e1 with
+      begin match self#emit_expr env e1 ~bound_name:None with
         None -> None
-      | Some _ -> self#emit_expr env e2
+      | Some _ -> self#emit_expr env e2 ~bound_name
       end
   | Cifthenelse(econd, eif, eelse) ->
       let (cond, earg) = self#select_condition econd in
-      begin match self#emit_expr env earg with
+      begin match self#emit_expr env earg ~bound_name:None with
         None -> None
       | Some rarg ->
-          let (rif, sif) = self#emit_sequence env eif in
-          let (relse, selse) = self#emit_sequence env eelse in
+          let (rif, sif) = self#emit_sequence env eif ~bound_name in
+          let (relse, selse) = self#emit_sequence env eelse ~bound_name in
           let r = join env rif sif relse selse in
           self#insert env (Iifthenelse(cond, sif#extract, selse#extract))
                       rarg [||];
           r
       end
   | Cswitch(esel, index, ecases) ->
-      begin match self#emit_expr env esel with
+      begin match self#emit_expr env esel ~bound_name:None with
         None -> None
       | Some rsel ->
-          let rscases = Array.map (self#emit_sequence env) ecases in
+          let rscases =
+            Array.map (fun case -> self#emit_sequence env case ~bound_name)
+              ecases
+          in
           let r = join_array env rscases in
           self#insert env (Iswitch(index,
                                Array.map (fun (_, s) -> s#extract) rscases))
@@ -740,7 +762,7 @@ method emit_expr env exp =
           r
       end
   | Cloop(ebody) ->
-      let (_rarg, sbody) = self#emit_sequence env ebody in
+      let (_rarg, sbody) = self#emit_sequence env ebody ~bound_name:None in
       self#insert env (Iloop(sbody#extract)) [||] [||];
       Some [||]
   | Ccatch(nfail, ids, e1, e2) ->
@@ -750,7 +772,7 @@ method emit_expr env exp =
             let r = self#regs_for typ_val in name_regs id r; r)
           ids in
       catch_regs := (nfail, Array.concat rs) :: !catch_regs ;
-      let (r1, s1) = self#emit_sequence env e1 in
+      let (r1, s1) = self#emit_sequence env e1 ~bound_name:None in
       catch_regs := List.tl !catch_regs ;
       let new_env_idents =
         List.fold_left
@@ -760,10 +782,10 @@ method emit_expr env exp =
               which_parameter = None; }
           in
           self#insert_debug env (Iop naming_op) Debuginfo.none r [| |];
-          Tbl.add id r idents)
+          Tbl.add id (r, provenance) idents)
         env.idents (List.combine ids rs) in
       let new_env = { env with idents = new_env_idents; } in
-      let (r2, s2) = self#emit_sequence new_env e2 in
+      let (r2, s2) = self#emit_sequence new_env e2 ~bound_name in
       let r = join env r1 s1 r2 s2 in
       self#insert env (Icatch(nfail, s1#extract, s2#extract)) [||] [||];
       r
@@ -782,16 +804,18 @@ method emit_expr env exp =
           None
       end
   | Ctrywith(e1, v, provenance, e2) ->
-      let (r1, s1) = self#emit_sequence env e1 in
+      let (r1, s1) = self#emit_sequence env e1 ~bound_name:None in
       let rv = self#regs_for typ_val in
       let (r2, s2) =
-        let env = { env with idents = Tbl.add v rv env.idents; } in
+        let env =
+          { env with idents = Tbl.add v (rv, provenance) env.idents; }
+        in
         let naming_op =
           Iname_for_debugger { ident = v; provenance;
             which_parameter = None; }
         in
         self#insert_debug env (Iop naming_op) Debuginfo.none rv [| |];
-        self#emit_sequence env e2
+        self#emit_sequence env e2 ~bound_name
       in
       let r = join env r1 s1 r2 s2 in
       let s2 = s2#extract in
@@ -802,21 +826,21 @@ method emit_expr env exp =
         [||] [||];
       r
 
-method private emit_sequence env exp =
+method private emit_sequence env exp ~bound_name =
   let s = {< instr_seq = dummy_instr >} in
-  let r = s#emit_expr env exp in
+  let r = s#emit_expr env exp ~bound_name in
   (r, s)
 
 method private bind_let env ident r1 ~provenance =
   let result =
     if all_regs_anonymous r1 then begin
       name_regs ident r1;
-      { env with idents = Tbl.add ident r1 env.idents; }
+      { env with idents = Tbl.add ident (r1, provenance) env.idents; }
     end else begin
       let rv = Reg.createv_like r1 in
       name_regs ident rv;
       self#insert_moves env r1 rv;
-      { env with idents = Tbl.add ident rv env.idents; }
+      { env with idents = Tbl.add ident (rv, provenance) env.idents; }
     end
   in
   let naming_op =
@@ -829,7 +853,7 @@ method private emit_parts env exp =
   if self#is_simple_expr exp then
     Some (exp, env)
   else begin
-    match self#emit_expr env exp with
+    match self#emit_expr env exp ~bound_name:None with
       None -> None
     | Some r ->
         if Array.length r = 0 then
@@ -840,13 +864,13 @@ method private emit_parts env exp =
           if all_regs_anonymous r then
             (* r is an anonymous, unshared register; use it directly *)
             Some (Cvar id,
-              { env with idents = Tbl.add id r env.idents; })
+              { env with idents = Tbl.add id (r, None) env.idents; })
           else begin
             (* Introduce a fresh temp to hold the result *)
             let tmp = Reg.createv_like r in
             self#insert_moves env r tmp;
             Some (Cvar id,
-              { env with idents = Tbl.add id tmp env.idents; })
+              { env with idents = Tbl.add id (tmp, None) env.idents; })
           end
         end
   end
@@ -870,7 +894,7 @@ method private emit_tuple_not_flattened env exp_list =
   | exp :: rem ->
       (* Again, force right-to-left evaluation *)
       let loc_rem = emit_list rem in
-      match self#emit_expr env exp with
+      match self#emit_expr env exp ~bound_name:None with
         None -> assert false  (* should have been caught in emit_parts *)
       | Some loc_exp -> loc_exp :: loc_rem
   in
@@ -899,7 +923,7 @@ method emit_stores env data regs_addr =
   List.iter
     (fun e ->
       let (op, arg) = self#select_store false !a e in
-      match self#emit_expr env arg with
+      match self#emit_expr env arg ~bound_name:None with
         None -> assert false
       | Some regs ->
           match op with
@@ -919,7 +943,7 @@ method emit_stores env data regs_addr =
 (* Same, but in tail position *)
 
 method private emit_return env exp =
-  match self#emit_expr env exp with
+  match self#emit_expr env exp ~bound_name:None with
     None -> ()
   | Some r ->
       let loc = Proc.loc_results r in
@@ -929,7 +953,8 @@ method private emit_return env exp =
 method emit_tail env exp =
   match exp with
     Clet(v, provenance, e1, e2) ->
-      begin match self#emit_expr env e1 with
+      let bound_name = Some (v, provenance) in
+      begin match self#emit_expr env e1 ~bound_name with
         None -> ()
       | Some r1 -> self#emit_tail (self#bind_let env v r1 ~provenance) e2
       end
@@ -1005,13 +1030,13 @@ method emit_tail env exp =
           | _ -> fatal_error "Selection.emit_tail"
       end
   | Csequence(e1, e2) ->
-      begin match self#emit_expr env e1 with
+      begin match self#emit_expr env e1 ~bound_name:None with
         None -> ()
       | Some _ -> self#emit_tail env e2
       end
   | Cifthenelse(econd, eif, eelse) ->
       let (cond, earg) = self#select_condition econd in
-      begin match self#emit_expr env earg with
+      begin match self#emit_expr env earg ~bound_name:None with
         None -> ()
       | Some rarg ->
           self#insert env (Iifthenelse(cond, self#emit_tail_sequence env eif,
@@ -1019,7 +1044,7 @@ method emit_tail env exp =
                       rarg [||]
       end
   | Cswitch(esel, index, ecases) ->
-      begin match self#emit_expr env esel with
+      begin match self#emit_expr env esel ~bound_name:None with
         None -> ()
       | Some rsel ->
           self#insert env
@@ -1045,12 +1070,12 @@ method emit_tail env exp =
               which_parameter = None; }
           in
           self#insert_debug env (Iop naming_op) Debuginfo.none r [| |];
-          { env with idents = Tbl.add id r env.idents; })
+          { env with idents = Tbl.add id (r, provenance) env.idents; })
         env (List.combine ids rs) in
       let s2 = self#emit_tail_sequence new_env e2 in
       self#insert env (Icatch(nfail, s1, s2)) [||] [||]
   | Ctrywith(e1, v, provenance, e2) ->
-      let (opt_r1, s1) = self#emit_sequence env e1 in
+      let (opt_r1, s1) = self#emit_sequence env e1 ~bound_name:None in
       let rv = self#regs_for typ_val in
       let s2 =
         let naming_op =
@@ -1058,7 +1083,9 @@ method emit_tail env exp =
             which_parameter = None; }
         in
         self#insert_debug env (Iop naming_op) Debuginfo.none rv [| |];
-        let env = { env with idents = Tbl.add v rv env.idents; } in
+        let env =
+          { env with idents = Tbl.add v (rv, provenance) env.idents; }
+        in
         self#emit_tail_sequence env e2
       in
       self#insert env
@@ -1166,7 +1193,7 @@ method emit_fundecl f =
   let env =
     List.fold_right2
       (fun (id, _ty) r env ->
-         { env with idents = Tbl.add id r env.idents; })
+         { env with idents = Tbl.add id (r, None) env.idents; })
       f.Cmm.fun_args rargs (self#initial_env ()) in
   let spacetime_node_hole, env =
     if not Config.spacetime then None, env
@@ -1174,7 +1201,7 @@ method emit_fundecl f =
       let reg = self#regs_for typ_int in
       let node_hole = Ident.create "spacetime_node_hole" in
       Some (node_hole, reg),
-        { env with idents = Tbl.add node_hole reg env.idents; }
+        { env with idents = Tbl.add node_hole (reg, None) env.idents; }
     end
   in
   let phantom_lets_at_top, body = self#extract_phantom_lets f.Cmm.fun_body in
