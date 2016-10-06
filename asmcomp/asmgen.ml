@@ -91,7 +91,7 @@ let rec regalloc ppf round fd =
     Reg.reinit(); Liveness.fundecl ppf newfd; regalloc ppf (round + 1) newfd
   end else newfd
 
-let available_regs _ppf fundecl =
+let available_regs ppf fundecl =
   if not !Clflags.debug then fundecl
   else begin
     Printmach.print_availability := true;
@@ -99,7 +99,9 @@ let available_regs _ppf fundecl =
 (*     dump_if ppf dump_regalloc "After register allocation" fd; *)
 (* CR mshinwell: don't do Available_regs except with -g.  It seems we still
    get some available sets even without -g, though the pass doesn't run *)
-    Available_regs.fundecl fundecl
+    let fd = Available_regs.fundecl fundecl in
+    dump_if ppf dump_regalloc "After Available_regs" fd;
+    fd
   end
 
 let emit ppf fundecl ~dwarf =
