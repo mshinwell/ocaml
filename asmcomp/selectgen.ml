@@ -108,10 +108,31 @@ let name_regs id rv =
       rv.(i).part <- Some i
     done
 
-(* "Join" two instruction sequences, making sure they return their results
-   in the same registers. *)
+let maybe_emit_naming_op ~env ~bound_name seq regs =
+  match bound_name with
+  | None -> ()
+  | Some (bound_name, provenance) ->
+    let naming_op =
+      Iname_for_debugger { ident = bound_name; provenance;
+        which_parameter = None; is_assignment = false; }
+    in
+    seq#insert_debug env (Iop naming_op) Debuginfo.none regs [| |]
 
-let join env opt_r1 seq1 opt_r2 seq2 =
+(* "Join" two instruction sequences, making sure they return their results
+   in the same registers.
+
+   We also need some special handling relating to names. [Spill] may add spill
+   code at the end of code paths just before join points. If the result of the
+   (e.g.) conditional is [let]-bound then there will also be a naming operation
+   after the join point. However this operation would come after any such spill
+   code and cause the spilled registers not to be named. To avoid this, we
+   explicitly add the naming operations here after each move we insert.  (They
+   are inserted after each move to ensure that the code in [Spill] that
+   looks for naming operations recognises them correctly.)
+*)
+
+let join env opt_r1 seq1 opt_r2 seq2 ~bound_name =
+  let maybe_emit_naming_op = maybe_emit_naming_op ~env ~bound_name in
   match (opt_r1, opt_r2) with
     (None, _) -> opt_r2
   | (_, None) -> opt_r1
@@ -124,24 +145,29 @@ let join env opt_r1 seq1 opt_r2 seq2 =
           && Cmm.ge_component r1.(i).typ r2.(i).typ
         then begin
           r.(i) <- r1.(i);
-          seq2#insert_move env r2.(i) r1.(i)
+          seq2#insert_move env r2.(i) r1.(i);
+          maybe_emit_naming_op seq2 [| r1.(i) |]
         end else if Reg.anonymous r2.(i)
           && Cmm.ge_component r2.(i).typ r1.(i).typ
         then begin
           r.(i) <- r2.(i);
-          seq1#insert_move env r1.(i) r2.(i)
+          seq1#insert_move env r1.(i) r2.(i);
+          maybe_emit_naming_op seq1 [| r2.(i) |]
         end else begin
           let typ = Cmm.lub_component r1.(i).typ r2.(i).typ in
           r.(i) <- Reg.create typ;
           seq1#insert_move env r1.(i) r.(i);
-          seq2#insert_move env r2.(i) r.(i)
+          maybe_emit_naming_op seq1 [| r.(i) |];
+          seq2#insert_move env r2.(i) r.(i);
+          maybe_emit_naming_op seq2 [| r.(i) |]
         end
       done;
       Some r
 
 (* Same, for N branches *)
 
-let join_array env rs =
+let join_array env rs ~bound_name =
+  let maybe_emit_naming_op = maybe_emit_naming_op ~env ~bound_name in
   let some_res = ref None in
   for i = 0 to Array.length rs - 1 do
     let (r, _) = rs.(i) in
@@ -168,7 +194,9 @@ let join_array env rs =
         let (r, s) = rs.(i) in
         match r with
           None -> ()
-        | Some r -> s#insert_moves env r res
+        | Some r ->
+          s#insert_moves env r res;
+          maybe_emit_naming_op s res
       done;
       Some res
 
@@ -625,7 +653,7 @@ method emit_expr env exp ~bound_name =
       | Some r1 ->
         let naming_op =
           Iname_for_debugger { ident = v; provenance;
-            which_parameter = None; }
+            which_parameter = None; is_assignment = true; }
         in
         self#insert_debug env (Iop naming_op) Debuginfo.none r1 [| |];
         self#adjust_types r1 rv; self#insert_moves env r1 rv; Some [||]
@@ -660,7 +688,7 @@ method emit_expr env exp ~bound_name =
             | Some (bound_name, provenance) ->
               let naming_op =
                 Iname_for_debugger { ident = bound_name; provenance;
-                  which_parameter = None; }
+                  which_parameter = None; is_assignment = false; }
               in
               self#insert_debug env (Iop naming_op) Debuginfo.none regs [| |]
           in
@@ -742,7 +770,7 @@ method emit_expr env exp ~bound_name =
       | Some rarg ->
           let (rif, sif) = self#emit_sequence env eif ~bound_name in
           let (relse, selse) = self#emit_sequence env eelse ~bound_name in
-          let r = join env rif sif relse selse in
+          let r = join env rif sif relse selse ~bound_name in
           self#insert env (Iifthenelse(cond, sif#extract, selse#extract))
                       rarg [||];
           r
@@ -755,7 +783,7 @@ method emit_expr env exp ~bound_name =
             Array.map (fun case -> self#emit_sequence env case ~bound_name)
               ecases
           in
-          let r = join_array env rscases in
+          let r = join_array env rscases ~bound_name in
           self#insert_debug env
             (Iswitch(index, Array.map (fun (_, s) -> s#extract) rscases))
             dbg rsel [||];
@@ -786,12 +814,12 @@ method emit_expr env exp ~bound_name =
           List.iter (fun ((ident, provenance), r) ->
               let naming_op =
                 Iname_for_debugger { ident; provenance;
-                  which_parameter = None; }
+                  which_parameter = None; is_assignment = false; }
               in
               seq#insert_debug env (Iop naming_op) Debuginfo.none r [| |])
             ids_and_rs)
       in
-      let r = join env r1 s1 r2 s2 in
+      let r = join env r1 s1 r2 s2 ~bound_name in
       self#insert env (Icatch(nfail, s1#extract, s2#extract)) [||] [||];
       r
   | Cexit (nfail,args) ->
@@ -818,11 +846,11 @@ method emit_expr env exp ~bound_name =
         self#emit_sequence env e2 ~bound_name ~at_start:(fun seq ->
           let naming_op =
             Iname_for_debugger { ident = v; provenance;
-              which_parameter = None; }
+              which_parameter = None; is_assignment = false; }
           in
           seq#insert_debug env (Iop naming_op) Debuginfo.none rv [| |])
       in
-      let r = join env r1 s1 r2 s2 in
+      let r = join env r1 s1 r2 s2 ~bound_name in
       let s2 = s2#extract in
       self#insert env
         (Itrywith(s1#extract,
@@ -853,7 +881,8 @@ method private bind_let env ident r1 ~provenance =
     end
   in
   let naming_op =
-    Iname_for_debugger { ident; which_parameter = None; provenance; }
+    Iname_for_debugger { ident; which_parameter = None; provenance;
+      is_assignment = false; }
   in
   self#insert_debug env (Iop naming_op) Debuginfo.none r1 [| |];
   result
@@ -1082,7 +1111,7 @@ method emit_tail env exp =
           List.iter (fun ((ident, provenance), r) ->
               let naming_op =
                 Iname_for_debugger { ident; provenance;
-                  which_parameter = None; }
+                  which_parameter = None; is_assignment = false; }
               in
               seq#insert_debug env (Iop naming_op) Debuginfo.none r [| |])
             ids_and_rs)
@@ -1098,7 +1127,7 @@ method emit_tail env exp =
         self#emit_tail_sequence env e2 ~at_start:(fun seq ->
           let naming_op =
             Iname_for_debugger { ident = v; provenance;
-              which_parameter = None; }
+              which_parameter = None; is_assignment = false; }
           in
           seq#insert_debug env (Iop naming_op) Debuginfo.none rv [| |])
       in
@@ -1150,7 +1179,7 @@ method insert_prologue f ~loc_arg ~rarg ~num_regs_per_arg
       in
       let naming_op =
         Iname_for_debugger { ident; provenance;
-          which_parameter = Some param_index; }
+          which_parameter = Some param_index; is_assignment = false; }
       in
       let num_regs_for_arg = num_regs_per_arg.(param_index) in
       let hard_regs_for_arg =

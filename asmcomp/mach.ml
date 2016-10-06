@@ -69,7 +69,7 @@ type operation =
   | Ifloatofint | Iintoffloat
   | Ispecific of Arch.specific_operation
   | Iname_for_debugger of { ident : Ident.t; which_parameter : int option;
-      provenance : Clambda.ulet_provenance option; }
+      provenance : Clambda.ulet_provenance option; is_assignment : bool; }
 
 type instruction =
   { desc: instruction_desc;

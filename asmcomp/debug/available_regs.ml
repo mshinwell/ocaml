@@ -138,17 +138,22 @@ fail := true;
       | Iend -> Ok avail_before
       | Ireturn | Iop (Itailcall_ind _) | Iop (Itailcall_imm _) ->
         Unreachable
-      | Iop (Iname_for_debugger { ident; which_parameter; provenance; }) ->
-        (* First forget about any existing debug info to do with [ident]. *)
+      | Iop (Iname_for_debugger { ident; which_parameter; provenance;
+          is_assignment; }) ->
+        (* First forget about any existing debug info to do with [ident]
+           if the naming corresponds to an assignment operation. *)
         let forgetting_ident =
-          RD.Set.map (fun reg ->
-              match RD.debug_info reg with
-              | None -> reg
-              | Some debug_info ->
-                if Ident.same (RD.Debug_info.holds_value_of debug_info) ident
-                then RD.clear_debug_info reg
-                else reg)
+          if not is_assignment then
             avail_before
+          else
+            RD.Set.map (fun reg ->
+                match RD.debug_info reg with
+                | None -> reg
+                | Some debug_info ->
+                  if Ident.same (RD.Debug_info.holds_value_of debug_info) ident
+                  then RD.clear_debug_info reg
+                  else reg)
+              avail_before
         in
         let avail_after = ref forgetting_ident in
         let num_parts_of_value = Array.length instr.arg in

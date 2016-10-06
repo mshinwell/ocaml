@@ -81,12 +81,13 @@ type operation =
   | Ifloatofint | Iintoffloat
   | Ispecific of Arch.specific_operation
   | Iname_for_debugger of { ident : Ident.t; which_parameter : int option;
-      provenance : Clambda.ulet_provenance option; }
+      provenance : Clambda.ulet_provenance option; is_assignment : bool; }
     (** [Iname_for_debugger] has the following semantics:
         (a) The argument register(s) is/are deemed to contain the value of the
             given identifier.
-        (b) Any information about other [Reg.t]s that have been previously
-            deemed to hold the value of that identifier is forgotten. *)
+        (b) If [is_assignment] is [true], any information about other [Reg.t]s
+            that have been previously deemed to hold the value of that
+            identifier is forgotten. *)
 
 type instruction =
   { desc: instruction_desc;
