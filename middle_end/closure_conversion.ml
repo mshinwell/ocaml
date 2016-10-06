@@ -144,6 +144,13 @@ let name_expr_with_bound_name bound_name named ~name =
        variables---instead it will appear on the encoding let-bound one. *)
     Flambda.create_let var named (Var var) ?provenance:None
 
+let rec location_from_lambda (lam : Lambda.lambda) =
+  (* CR-soon mshinwell: add location to [Llet] *)
+  match lam with
+  | Levent (_, { lev_loc = location; _ }) -> location
+  | Llet (_, _, _, _, body) -> location_from_lambda body
+  | _ -> Location.none
+
 let rec close_const t ?bound_name env (const : Lambda.structured_constant)
       : Flambda.named * string =
   match const with
@@ -188,12 +195,7 @@ and close t ?(bound_name:(Variable.t * Flambda.let_provenance) option) env
     let defining_expr =
       close_let_bound_expression t var env defining_expr
     in
-    (* CR-soon mshinwell: add location to [Llet] *)
-    let location =
-      match body with
-      | Levent (_, { lev_loc = location; _ }) -> location
-      | _ -> Location.none
-    in
+    let location = location_from_lambda body in
     let body = close t (Env.add_var env id var) ?bound_name body in
     let provenance : Flambda.let_provenance =
       { module_path = Env.current_module_path env;
@@ -207,11 +209,7 @@ and close t ?(bound_name:(Variable.t * Flambda.let_provenance) option) env
     let defining_expr =
       close_let_bound_expression t var env defining_expr
     in
-    let location =
-      match body with
-      | Levent (_, { lev_loc = location; _ }) -> location
-      | _ -> Location.none
-    in
+    let location = location_from_lambda body in
     let body = close t (Env.add_mutable_var env id mut_var) ?bound_name body in
     let provenance : Flambda.let_provenance =
       { module_path = Env.current_module_path env;
@@ -545,12 +543,7 @@ and close t ?(bound_name:(Variable.t * Flambda.let_provenance) option) env
     let st_exn = Static_exception.create () in
     let env = Env.add_static_exception env i st_exn in
     let vars = List.map (Variable.create_with_same_name_as_ident) ids in
-    (* CR mshinwell: factor this code out *)
-    let location =
-      match body with
-      | Levent (_, { lev_loc = location; _ }) -> location
-      | _ -> Location.none
-    in
+    let location = location_from_lambda body in
     let provenance : Flambda.let_provenance =
       { module_path = Env.current_module_path env;
         location;
@@ -561,11 +554,7 @@ and close t ?(bound_name:(Variable.t * Flambda.let_provenance) option) env
       close t (Env.add_vars env ids vars) handler)
   | Ltrywith (body, id, handler) ->
     let var = Variable.create_with_same_name_as_ident id in
-    let location =
-      match body with
-      | Levent (_, { lev_loc = location; _ }) -> location
-      | _ -> Location.none
-    in
+    let location = location_from_lambda body in
     let provenance : Flambda.let_provenance =
       { module_path = Env.current_module_path env;
         location;
