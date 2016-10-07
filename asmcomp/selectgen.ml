@@ -751,6 +751,7 @@ method emit_expr env exp ~bound_name =
               in
               let args = self#select_allocation_args env in
               self#insert_debug env (Iop op) dbg args rd;
+              add_naming_op_for_bound_name rd;
               self#emit_stores env new_args rd;
               Some rd
           | op ->

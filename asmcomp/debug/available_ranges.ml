@@ -332,8 +332,10 @@ end) = struct
       | Some prev_insn ->
         KS.diff (S.available_before prev_insn) (S.available_before insn)
     in
-    let restart_ranges =
+    (* CR mshinwell: add command line flag to restart ranges *)
+    let restart_ranges = false (*
       KS.cardinal proto_births <> 0 || KS.cardinal proto_deaths <> 0
+*)
     in
     let births =
       match prev_insn with

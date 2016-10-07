@@ -146,6 +146,9 @@ let name_expr_with_bound_name bound_name named ~name =
 
 let rec location_from_lambda (lam : Lambda.lambda) =
   (* CR-soon mshinwell: add location to [Llet] *)
+  (* CR-soon mshinwell: This is a bit crappy sometimes---in particular if
+     the defining expression is long, the location of the bound identifier
+     may be several lines away [at the start of the body]. *)
   match lam with
   | Levent (_, { lev_loc = location; _ }) -> location
   | Llet (_, _, _, _, body) -> location_from_lambda body
