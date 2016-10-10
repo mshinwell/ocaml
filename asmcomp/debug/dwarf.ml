@@ -562,6 +562,9 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
           (* If the unstamped name of [ident] is unambiguous within the
              function, then use it; otherwise, equip the name with the location
              of its definition. *)
+          (* CR mshinwell: This isn't enough to guarantee uniqueness in
+             the presence of inlining.  We should get the inlining stack onto
+             the locations here. *)
           if is_unique then
             ident, Some (Ident.name ident_for_type)
           else
@@ -675,7 +678,14 @@ let iterate_over_variable_like_things _t ~available_ranges ~f =
                a DIE for it, as it may be referenced as part of some chain of
                phantom lets. *)
             None
-          | Some provenance -> Some provenance.original_ident
+          | Some provenance ->
+            if provenance.location = Location.none
+                && (Available_range.is_parameter range
+                  = Available_ranges.Local)
+            then
+              None
+            else
+              Some provenance.original_ident
         end
       in
       f ~ident ~ident_for_type ~is_unique ~range)
