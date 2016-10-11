@@ -141,7 +141,7 @@ let inline_by_copying_function_body ~env ~r
     (* CR-soon mshinwell: This is a dummy module path.  See CR-soon in
        [Dwarf]. *)
     { module_path = Pident (Ident.create "*dummy*");
-      location = Debuginfo.to_location dbg;
+      location = dbg;
     }
   in
   let bindings_for_params_to_args =
@@ -367,7 +367,7 @@ let inline_by_copying_function_declaration ~env ~r
       (* CR-soon mshinwell: This is a dummy module path.  See CR-soon in
         [Dwarf]. *)
       { module_path = Pident (Ident.create "*dummy*");
-        location = Debuginfo.to_location dbg;
+        location = dbg;
       }
     in
     (* Generate a copy of the function application, including the function

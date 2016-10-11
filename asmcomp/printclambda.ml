@@ -35,7 +35,7 @@ let value_kind =
 let let_provenance ppf (provenance : Clambda.ulet_provenance) =
   fprintf ppf "(from %a, %a)"
     Printtyp.path provenance.module_path
-    Location.print_loc provenance.location
+    Debuginfo.print_compact provenance.location
 
 let let_provenance_opt ppf = function
   | None -> ()

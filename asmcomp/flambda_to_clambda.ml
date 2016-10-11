@@ -667,13 +667,12 @@ and to_clambda_set_of_closures t env
     let body =
       List.fold_left (fun body (id, original_id, phantom) : Clambda.ulambda ->
           let provenance =
-            let location = Debuginfo.to_location function_decl.dbg in
             match original_id with
             | None -> None
             | Some original_ident ->
               let provenance : Clambda.ulet_provenance =
                 { module_path;
-                  location;
+                  location = function_decl.dbg;
                   original_ident;
                 }
               in
@@ -747,10 +746,9 @@ and to_clambda_closed_set_of_closures t env symbol
             match original_id with
             | None -> None
             | Some original_ident ->
-              let location = Debuginfo.to_location function_decl.dbg in
               let provenance : Clambda.ulet_provenance =
                 { module_path = function_decl.module_path;
-                  location;
+                  location = function_decl.dbg;
                   original_ident;
                 }
               in

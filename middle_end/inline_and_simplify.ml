@@ -188,6 +188,13 @@ let approx_for_allocated_const (const : Allocated_const.t) =
       A.value_immutable_float_array
         (Array.map A.value_float (Array.of_list a))
 
+let add_debuginfo_to_provenance env provenance =
+  match provenance with
+  | None -> None
+  | Some (provenance : Flambda.let_provenance) ->
+    let location = E.add_inlined_debuginfo env ~dbg:provenance.location in
+    Some { provenance with location; }
+
 type filtered_switch_branches =
   | Must_be_taken of Flambda.t
   | Can_be_taken of (int * Flambda.t) list
@@ -1100,7 +1107,9 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
     simplify_apply env r ~apply
   | Let _ ->
     let for_defining_expr (env, r) var
-          (defining_expr : Flambda.defining_expr_of_let) =
+          (defining_expr : Flambda.defining_expr_of_let)
+          (provenance : Flambda.let_provenance option) =
+      let provenance = add_debuginfo_to_provenance env provenance in
       let defining_expr, r =
         match defining_expr with
         | Normal defining_expr ->
@@ -1115,7 +1124,7 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
       let var, sb = Freshening.add_variable (E.freshening env) var in
       let env = E.set_freshening env sb in
       let env = E.add env var (R.approx r) in
-      (env, r), var, defining_expr
+      (env, r), var, defining_expr, provenance
     in
     let for_last_body (env, r) body =
       simplify env r body
@@ -1164,6 +1173,7 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
       let body, r =
         simplify (E.add_mutable env mut_var (A.value_unknown Other)) r body
       in
+      let provenance = add_debuginfo_to_provenance env provenance in
       Flambda.Let_mutable
         { var = mut_var;
           initial_value = var;
@@ -1185,6 +1195,7 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
     let defs, body_env, r =
       List.fold_right (fun (id, lam, provenance) (defs, env_acc, r) ->
           let lam, r = simplify_named def_env r lam in
+          let provenance = add_debuginfo_to_provenance env provenance in
           let defs = (id, lam, provenance) :: defs in
           let env_acc = E.add env_acc id (R.approx r) in
           defs, env_acc, r)
@@ -1219,6 +1230,7 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
             assert (Static_exception.equal i j);
             let handler =
               List.fold_left2 (fun body (var, provenance) arg ->
+                  let provenance = add_debuginfo_to_provenance env provenance in
                   Flambda.create_let var (Expr (Var arg)) body ?provenance)
                 handler vars args
             in
@@ -1228,6 +1240,11 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
             let vars', provenances = List.split vars in
             let vars', sb =
               Freshening.add_variables' (E.freshening env) vars'
+            in
+            let provenances =
+              List.map (fun provenance ->
+                  add_debuginfo_to_provenance env provenance)
+                provenances
             in
             let vars = List.combine vars' provenances in
             let approx = R.approx r in
@@ -1249,6 +1266,7 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
     let env = E.add (E.set_freshening env sb) id (A.value_unknown Other) in
     let env = E.inside_branch env in
     let handler, r = simplify env r handler in
+    let provenance = add_debuginfo_to_provenance env provenance in
     Try_with (body, id, provenance, handler), ret r (A.value_unknown Other)
   | If_then_else (arg, ifso, ifnot) ->
     (* When arg is the constant false or true (or something considered

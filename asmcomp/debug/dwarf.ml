@@ -561,10 +561,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
         | Local ->
           (* If the unstamped name of [ident] is unambiguous within the
              function, then use it; otherwise, equip the name with the location
-             of its definition. *)
-          (* CR mshinwell: This isn't enough to guarantee uniqueness in
-             the presence of inlining.  We should get the inlining stack onto
-             the locations here. *)
+             of its definition together with any inlined-out frames. *)
           if is_unique then
             ident, Some (Ident.name ident_for_type)
           else
@@ -579,7 +576,7 @@ let dwarf_for_identifier t ~fundecl ~function_proto_die
             | Some provenance ->
               let location =
                 Format.asprintf "%a"
-                  Location.print_compact provenance.location
+                  Debuginfo.print_compact provenance.location
               in
               let name =
                 Format.sprintf "%s[%s]"
@@ -679,7 +676,7 @@ let iterate_over_variable_like_things _t ~available_ranges ~f =
                phantom lets. *)
             None
           | Some provenance ->
-            if provenance.location = Location.none
+            if provenance.location = Debuginfo.none
                 && (Available_range.is_parameter range
                   = Available_ranges.Local)
             then

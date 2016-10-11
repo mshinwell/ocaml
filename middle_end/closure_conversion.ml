@@ -150,9 +150,9 @@ let rec location_from_lambda (lam : Lambda.lambda) =
      the defining expression is long, the location of the bound identifier
      may be several lines away [at the start of the body]. *)
   match lam with
-  | Levent (_, { lev_loc = location; _ }) -> location
+  | Levent (_, { lev_loc = location; _ }) -> Debuginfo.from_location location
   | Llet (_, _, _, _, body) -> location_from_lambda body
-  | _ -> Location.none
+  | _ -> Debuginfo.none
 
 let rec close_const t ?bound_name env (const : Lambda.structured_constant)
       : Flambda.named * string =
@@ -259,7 +259,7 @@ and close t ?(bound_name:(Variable.t * Flambda.let_provenance) option) env
     in
     let provenance : Flambda.let_provenance =
       { module_path = Env.current_module_path env;
-        location;
+        location = Debuginfo.from_location location;
       }
     in
     Flambda.create_let set_of_closures_var set_of_closures
@@ -320,7 +320,7 @@ and close t ?(bound_name:(Variable.t * Flambda.let_provenance) option) env
         | Some location -> location
       in
       { module_path = Env.current_module_path env;
-        location;
+        location = Debuginfo.from_location location;
       }
     in
     begin match
@@ -383,7 +383,7 @@ and close t ?(bound_name:(Variable.t * Flambda.let_provenance) option) env
               | Lambda.Lfunction { loc; _ } ->
                 let provenance  : Flambda.let_provenance =
                   { module_path = Env.current_module_path env;
-                    location = loc;
+                    location = Debuginfo.from_location loc;
                   }
                 in
                 Some provenance
@@ -649,7 +649,7 @@ and close_functions t external_env function_declarations : Flambda.named =
     let module_path = Env.current_module_path closure_env in
     let provenance : Flambda.let_provenance =
       { module_path;
-        location = loc;
+        location = Debuginfo.from_location loc;
       }
     in
     let bound_name = Variable.rename ~append:"_return" closure_bound_var in
@@ -730,7 +730,7 @@ and close_let_bound_expression t ?let_rec_ident let_bound_var
     in
     let provenance : Flambda.let_provenance =
       { module_path = Env.current_module_path env;
-        location = loc;
+        location = Debuginfo.from_location loc;
       }
     in
     Expr (Flambda.create_let set_of_closures_var set_of_closures
@@ -742,7 +742,7 @@ and close_let_bound_expression t ?let_rec_ident let_bound_var
        need it though.  Should think again and adjust types if necessary *)
     let provenance : Flambda.let_provenance =
       { module_path = Env.current_module_path env;
-        location = Location.none;
+        location = Debuginfo.none;
       }
     in
     Expr (close t env ~bound_name:(let_bound_var, provenance) lam)
@@ -787,7 +787,7 @@ let lambda_to_flambda ~backend ~module_ident ~size ~filename lam
   in
   let provenance : Flambda.let_provenance =
     { module_path = Pident current_unit_id;
-      location = Location.none;
+      location = Debuginfo.none;
     }
   in
   let module_initializer : Flambda.program_body =

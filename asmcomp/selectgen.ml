@@ -1171,7 +1171,7 @@ method insert_prologue f ~loc_arg ~rarg ~num_regs_per_arg
         | Some original_ident ->
           let provenance =
             { Clambda.
-              location = Location.none;
+              location = Debuginfo.none;
               module_path = Path.Pident (Ident.create_persistent "foo");
               original_ident;
             }

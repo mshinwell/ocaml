@@ -28,7 +28,7 @@ type usymbol_provenance = {
 
 type ulet_provenance = {
   module_path : Path.t;
-  location : Location.t;
+  location : Debuginfo.t;
   original_ident : Ident.t;
 }
 

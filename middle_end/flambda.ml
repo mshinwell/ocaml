@@ -58,7 +58,7 @@ type specialised_to = {
 
 type let_provenance = {
   module_path : Path.t;
-  location : Location.t;
+  location : Debuginfo.t;
 }
 
 type t =
@@ -184,7 +184,7 @@ type expr = t
 
 type symbol_provenance = {
   module_path : Path.t;
-  location : Location.t;
+  location : Debuginfo.t;
   original_ident : Ident.t;
 }
 
@@ -224,7 +224,7 @@ let print_project_closure = Projection.print_project_closure
 let print_let_provenance ppf (provenance : let_provenance) =
   fprintf ppf "<path `%a', %a>"
     Printtyp.path provenance.module_path
-    Location.print_compact provenance.location
+    Debuginfo.print_compact provenance.location
 
 let print_let_provenance_opt ppf = function
   | None -> ()
@@ -537,7 +537,7 @@ let print_symbol_provenance ppf (provenance : symbol_provenance) =
   fprintf ppf "<%a.%a at %a>"
     Ident.print provenance.original_ident
     Printtyp.path provenance.module_path
-    Location.print_compact provenance.location
+    Debuginfo.print_compact provenance.location
 
 let print_symbol_provenance_opt ppf = function
   | None -> ()
@@ -1068,7 +1068,8 @@ end
 let fold_lets_option
     t ~init
     ~(for_defining_expr:('a -> Variable.t -> defining_expr_of_let
-      -> 'a * Variable.t * defining_expr_of_let))
+      -> let_provenance option
+      -> 'a * Variable.t * defining_expr_of_let * let_provenance option))
     ~for_last_body
     ~(filter_defining_expr:('b -> Variable.t -> defining_expr_of_let
       -> Free_names.t -> 'b * Variable.t * defining_expr_of_let)) =
@@ -1103,8 +1104,8 @@ let fold_lets_option
   let rec loop (t : t) ~acc ~rev_lets =
     match t with
     | Let { var; defining_expr; body; provenance; _ } ->
-      let acc, var, defining_expr =
-        for_defining_expr acc var defining_expr
+      let acc, var, defining_expr, provenance =
+        for_defining_expr acc var defining_expr provenance
       in
       let rev_lets = (var, defining_expr, provenance) :: rev_lets in
       loop body ~acc ~rev_lets

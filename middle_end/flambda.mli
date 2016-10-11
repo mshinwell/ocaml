@@ -89,7 +89,7 @@ type specialised_to = {
 
 type let_provenance = {
   module_path : Path.t;
-  location : Location.t;
+  location : Debuginfo.t;
 }
 
 (** Flambda terms are partitioned in a pseudo-ANF manner; many terms are
@@ -433,7 +433,7 @@ type expr = t
 
 type symbol_provenance = {
   module_path : Path.t;
-  location : Location.t;
+  location : Debuginfo.t;
   original_ident : Ident.t;
 }
 
@@ -538,7 +538,8 @@ val fold_lets_option
       'a
     -> Variable.t
     -> defining_expr_of_let
-    -> 'a * Variable.t * defining_expr_of_let)
+    -> let_provenance option
+    -> 'a * Variable.t * defining_expr_of_let * let_provenance option)
   -> for_last_body:('a -> t -> t * 'b)
   (* CR-someday mshinwell: consider making [filter_defining_expr]
      optional *)
