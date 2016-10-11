@@ -1158,6 +1158,7 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
                  as phantom lets (for example a conditional that was fully
                  evaluated at compile time to some constant). *)
               Simple_value_approx.phantomize (R.approx r)
+                ~is_present_in_env:(E.mem env)
             | defining_expr -> defining_expr
           in
           r, var, (Phantom defining_expr : Flambda.defining_expr_of_let)

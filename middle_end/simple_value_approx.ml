@@ -857,17 +857,23 @@ let potentially_taken_block_switch_branch t tag =
   | Value_bottom ->
     Cannot_be_taken
 
-let phantomize t : Flambda.defining_expr_of_phantom_let =
+let phantomize t ~is_present_in_env : Flambda.defining_expr_of_phantom_let =
   match t.var with
-  | Some var -> Var var
-  | None ->
+  | Some var when is_present_in_env var -> Var var
+  | _ ->
     match t.descr with
     | Value_block (tag, fields) ->
       let failed = ref false in
       let fields =
         Misc.Stdlib.List.filter_map (fun field ->
-            if field.var = None then failed := true;
-            field.var)
+            let var =
+              match field.var with
+              | None -> None
+              | Some var when is_present_in_env var -> Some var
+              | Some _ -> None
+            in
+            if var = None then failed := true;
+            var)
           (Array.to_list fields)
       in
       if !failed then Dead else Block { tag; fields; }
