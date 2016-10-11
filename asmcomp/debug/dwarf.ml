@@ -661,9 +661,12 @@ let iterate_over_variable_like_things _t ~available_ranges ~f =
          not all have the same value. *)
       (* CR-soon mshinwell: Default arguments currently appear as local
          variables, not parameters. *)
+      (* CR mshinwell: Introduce some flag on Ident.t to mark identifiers that
+         were generated internally (or vice-versa)? *)
       let ident_for_type =
         if Ident.name ident = "*closure_env*"
           || Ident.name ident = "*opt*"
+          || Ident.name ident = "*match*"
         then begin
           None
         end else begin

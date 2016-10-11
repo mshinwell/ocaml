@@ -2687,7 +2687,7 @@ let rec name_pattern default = function
 let arg_to_var arg cls = match arg with
 | Lvar v -> v,arg
 | _ ->
-    let v = name_pattern "match" cls in
+    let v = name_pattern "*match*" cls in
     v,Lvar v
 
 
@@ -3188,7 +3188,7 @@ let do_for_multiple_match loc paraml pat_act_list partial =
       let next, nexts = split_precompile None pm1 in
 
       let size = List.length paraml
-      and idl = List.map (fun _ -> Ident.create "match") paraml in
+      and idl = List.map (fun _ -> Ident.create "*match*") paraml in
       let args =  List.map (fun id -> Lvar id, Alias) idl in
 
       let flat_next = flatten_precompiled size args next
@@ -3225,7 +3225,7 @@ let do_for_multiple_match loc paraml pat_act_list partial =
 
 let param_to_var param = match param with
 | Lvar v -> v,None
-| _ -> Ident.create "match",Some param
+| _ -> Ident.create "*match*",Some param
 
 let bind_opt (v,eo) k = match eo with
 | None -> k
