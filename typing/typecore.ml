@@ -2104,8 +2104,13 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         Exp.let_ ~loc Nonrecursive ~attrs:[mknoloc "#default",PStr []]
           [Vb.mk spat smatch] sbody
       in
-      type_function ?in_function loc sexp.pexp_attributes env ty_expected
-        l [Exp.case pat body]
+      let ident_for_parameter =
+        match spat.ppat_desc with
+        | Ppat_var { txt; _ } -> Some (Ident.create txt)
+        | _ -> None
+      in
+      type_function ?ident_for_parameter ?in_function loc sexp.pexp_attributes
+        env ty_expected l [Exp.case pat body]
   | Pexp_fun (l, None, spat, sbody) ->
       type_function ?in_function loc sexp.pexp_attributes env ty_expected
         l [Ast_helper.Exp.case spat sbody]
@@ -3004,7 +3009,8 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
            exp_attributes = sexp.pexp_attributes;
            exp_env = env }
 
-and type_function ?in_function loc attrs env ty_expected l caselist =
+and type_function ?ident_for_parameter ?in_function loc attrs env ty_expected
+      l caselist =
   let (loc_fun, ty_fun) =
     match in_function with Some p -> p
     | None -> (loc, instance env ty_expected)
@@ -3046,7 +3052,11 @@ and type_function ?in_function loc attrs env ty_expected l caselist =
   if is_optional l && not_function ty_res then
     Location.prerr_warning (List.hd cases).c_lhs.pat_loc
       Warnings.Unerasable_optional_argument;
-  let ident = name_pattern "param" cases in
+  let ident =
+    match ident_for_parameter with
+    | None -> name_pattern "param" cases
+    | Some ident -> ident
+  in
   re {
   exp_desc = Texp_function(l, ident, cases, partial);
     exp_loc = loc; exp_extra = [];

@@ -1150,7 +1150,15 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
                  (ii) does not correspond to a variable in the user's source
                       code. *)
           let defining_expr =
-            Flambda_utils.phantomize_defining_expr defining_expr
+            match
+              Flambda_utils.phantomize_defining_expr defining_expr
+            with
+            | Dead ->
+              (* Using the approximation enables us to express more computations
+                 as phantom lets (for example a conditional that was fully
+                 evaluated at compile time to some constant). *)
+              Simple_value_approx.phantomize (R.approx r)
+            | defining_expr -> defining_expr
           in
           r, var, (Phantom defining_expr : Flambda.defining_expr_of_let)
         else

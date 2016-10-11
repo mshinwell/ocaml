@@ -659,8 +659,12 @@ let iterate_over_variable_like_things _t ~available_ranges ~f =
          We cannot conflate these since the multiple [idents] that might
          be associated with a given [ident_for_type] (due to inlining) may
          not all have the same value. *)
+      (* CR-soon mshinwell: Default arguments currently appear as local
+         variables, not parameters. *)
       let ident_for_type =
-        if Ident.name ident = "*closure_env*" then begin
+        if Ident.name ident = "*closure_env*"
+          || Ident.name ident = "*opt*"
+        then begin
           None
         end else begin
           let provenance =

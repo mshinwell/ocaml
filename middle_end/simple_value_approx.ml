@@ -857,3 +857,36 @@ let potentially_taken_block_switch_branch t tag =
   | Value_bottom ->
     Cannot_be_taken
 
+let phantomize t : Flambda.defining_expr_of_phantom_let =
+  match t.var with
+  | Some var -> Var var
+  | None ->
+    match t.descr with
+    | Value_block (tag, fields) ->
+      let failed = ref false in
+      let fields =
+        Misc.Stdlib.List.filter_map (fun field ->
+            if field.var = None then failed := true;
+            field.var)
+          (Array.to_list fields)
+      in
+      if !failed then Dead else Block { tag; fields; }
+    | Value_int i -> Const (Int i)
+    | Value_char c -> Const (Char c)
+    | Value_constptr p -> Const (Const_pointer p)
+    | Value_float None -> Dead
+    (* CR-soon mshinwell: We should be able to make some of these other cases
+      work---in particular for allocated constants. *)
+    | Value_float (Some _) -> Dead
+    | Value_boxed_int _ -> Dead
+    (* CR-soon mshinwell: Fix these closure cases when we fix
+      [Flambda_utils.phantomize_defining_expr]. *)
+    | Value_set_of_closures _
+    | Value_closure _ -> Dead
+    | Value_string _ -> Dead
+    | Value_float_array _ -> Dead
+    | Value_unknown _ -> Dead
+    | Value_bottom -> Dead
+    | Value_extern _ -> Dead
+    | Value_symbol symbol -> Symbol symbol
+    | Value_unresolved _symbol -> Dead
