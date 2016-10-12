@@ -329,6 +329,7 @@ objinfo_helper$(EXE): objinfo_helper.c ../config/s.h
 OBJINFO=../compilerlibs/ocamlcommon.cma \
         ../compilerlibs/ocamlbytecomp.cma \
         ../compilerlibs/ocamlmiddleend.cma \
+        ../asmcomp/ident_ibp.cmo \
         ../asmcomp/printclambda.cmo \
         ../asmcomp/export_info.cmo \
         objinfo.cmo
