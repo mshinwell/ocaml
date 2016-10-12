@@ -32,7 +32,9 @@ let bind name arg fn =
     Cvar _ | Cconst_int _ | Cconst_natint _ | Cconst_symbol _
   | Cconst_pointer _ | Cconst_natpointer _
   | Cblockheader _ -> fn arg
-  | _ -> let id = Ident.create name in Clet(id, None, arg, fn (Cvar id))
+  | _ ->
+    let id = Ident_ibp.create (Ident.create name) None in
+    Clet(id, arg, fn (Cvar (Ident_ibp.ident id)))
 
 let bind_load name arg fn =
   match arg with
@@ -44,7 +46,9 @@ let bind_nonvar name arg fn =
     Cconst_int _ | Cconst_natint _ | Cconst_symbol _
   | Cconst_pointer _ | Cconst_natpointer _
   | Cblockheader _ -> fn arg
-  | _ -> let id = Ident.create name in Clet(id, None, arg, fn (Cvar id))
+  | _ ->
+    let id = Ident_ibp.create (Ident.create name) None in
+    Clet(id, arg, fn (Cvar (Ident_ibp.ident id)))
 
 let caml_black = Nativeint.shift_left (Nativeint.of_int 3) 8
     (* cf. byterun/gc.h *)
@@ -230,13 +234,13 @@ let untag_int i dbg =
 
 let rec strip_phantom_lets ulam =
   match ulam with
-  | Uphantom_let (_, _, _, body) -> strip_phantom_lets body
+  | Uphantom_let (_, _, body) -> strip_phantom_lets body
   | _ -> ulam
 
 let rec preserve_phantom_lets ulam f =
   match ulam with
-  | Uphantom_let (id, provenance, defining_expr, body) ->
-    Cphantom_let (id, provenance, defining_expr, preserve_phantom_lets body f)
+  | Uphantom_let (id, defining_expr, body) ->
+    Cphantom_let (id, defining_expr, preserve_phantom_lets body f)
   | _ -> f ulam
 
 let preserve_phantom_lets_list ulams f =
@@ -250,13 +254,13 @@ let preserve_phantom_lets_list ulams f =
 
 let rec strip_phantom_lets_cmm cmm =
   match cmm with
-  | Cphantom_let (_, _, _, body) -> strip_phantom_lets_cmm body
+  | Cphantom_let (_, _, body) -> strip_phantom_lets_cmm body
   | _ -> cmm
 
 let rec preserve_phantom_lets_cmm cmm f =
   match cmm with
-  | Cphantom_let (id, provenance, defining_expr, body) ->
-    Cphantom_let (id, provenance, defining_expr,
+  | Cphantom_let (id, defining_expr, body) ->
+    Cphantom_let (id, defining_expr,
       preserve_phantom_lets_cmm body f)
   | _ -> f cmm
 
@@ -268,15 +272,15 @@ let preserve_phantom_lets_cmm2 cmm1 cmm2 f =
 let extract_and_strip_phantom_lets ulam =
   let rec extract ulam extracted =
     match ulam with
-    | Uphantom_let (id, provenance, defining_expr, body) -> 
-      extract body ((id, provenance, defining_expr) :: extracted)
+    | Uphantom_let (id, defining_expr, body) -> 
+      extract body ((id, defining_expr) :: extracted)
     | _ -> extracted, ulam
   in
   extract ulam []
 
 let add_phantom_lets ulam phantom_lets =
-  List.fold_left (fun ulam (id, provenance, defining_expr) ->
-      Uphantom_let (id, provenance, defining_expr, ulam))
+  List.fold_left (fun ulam (id, defining_expr) ->
+      Uphantom_let (id, defining_expr, ulam))
     ulam
     phantom_lets
 
@@ -523,8 +527,8 @@ let rec unbox_float cmm dbg =
   preserve_phantom_lets_cmm cmm (fun cmm ->
   match cmm with
   | Cop(Calloc, [_header; c], _) -> c
-  | Clet(id, provenance, exp, body) ->
-      Clet(id, provenance, exp, unbox_float body dbg)
+  | Clet(id, exp, body) ->
+      Clet(id, exp, unbox_float body dbg)
   | Cifthenelse(cond, e1, e2) ->
       Cifthenelse(cond, unbox_float e1 dbg, unbox_float e2 dbg)
   | Csequence(e1, e2) -> Csequence(e1, unbox_float e2 dbg)
@@ -532,8 +536,8 @@ let rec unbox_float cmm dbg =
       Cswitch(dbg, e, tbl, Array.map (fun e -> unbox_float e dbg) el)
   | Ccatch(n, ids, e1, e2) ->
       Ccatch(n, ids, unbox_float e1 dbg, unbox_float e2 dbg)
-  | Ctrywith(e1, id, provenance, e2) ->
-      Ctrywith(unbox_float e1 dbg, id, provenance, unbox_float e2 dbg)
+  | Ctrywith(e1, id, e2) ->
+      Ctrywith(unbox_float e1 dbg, id, unbox_float e2 dbg)
   | c -> Cop(Cload Double_u, [c], dbg))
 
 (* Complex *)
@@ -566,10 +570,10 @@ let rec remove_unit cmm =
       Cswitch(dbg, sel, index, Array.map remove_unit cases)
   | Ccatch(io, ids, body, handler) ->
       Ccatch(io, ids, remove_unit body, remove_unit handler)
-  | Ctrywith(body, exn, provenance, handler) ->
-      Ctrywith(remove_unit body, exn, provenance, remove_unit handler)
-  | Clet(id, provenance, c1, c2) ->
-      Clet(id, provenance, c1, remove_unit c2)
+  | Ctrywith(body, exn, handler) ->
+      Ctrywith(remove_unit body, exn, remove_unit handler)
+  | Clet(id, c1, c2) ->
+      Clet(id, c1, remove_unit c2)
   | Cop(Capply _mty, args, dbg) ->
       Cop(Capply typ_void, args, dbg)
   | Cop(Cextcall(proc, _mty, alloc, label_after), args, dbg) ->
@@ -698,7 +702,7 @@ let float_array_set arr ofs newval dbg =
 let string_length exp dbg =
   bind "str" exp (fun str ->
     let tmp_var = Ident.create "tmp" in
-    Clet(tmp_var, None,
+    Clet(Ident_ibp.create tmp_var None,
          Cop(Csubi,
              [Cop(Clsl,
                    [get_size str dbg;
@@ -744,7 +748,7 @@ let make_alloc_generic set_fn dbg tag wordsize args =
       [] -> Cvar id
     | e1::el -> Csequence(set_fn (Cvar id) (Cconst_int idx) e1 dbg,
                           fill_fields (idx + 2) el) in
-    Clet(id, None,
+    Clet(Ident_ibp.create id None,
          Cop(Cextcall("caml_alloc", typ_val, true, None),
                  [Cconst_int wordsize; Cconst_int tag], dbg),
          fill_fields 1 args)
@@ -794,7 +798,8 @@ let rec expr_size env = function
       begin try Ident.find_same id env with Not_found -> RHS_nonrec end
   | Uclosure(fundecls, clos_vars) ->
       RHS_block (fundecls_size fundecls + List.length clos_vars)
-  | Ulet(_str, _kind, _provenance, id, exp, body) ->
+  | Ulet(_str, _kind, id, exp, body) ->
+      let id = Ident_ibp.ident id in
       expr_size (Ident.add id (expr_size env exp) env) body
   | Uletrec(_bindings, body) ->
       expr_size env body
@@ -818,7 +823,7 @@ let rec expr_size env = function
       expr_size env closure
   | Usequence(_exp, exp') ->
       expr_size env exp'
-  | Uphantom_let (_, _, _, body) -> expr_size env body
+  | Uphantom_let (_, _, body) -> expr_size env body
   | _ -> RHS_nonrec
 
 (* Record application and currying functions *)
@@ -929,8 +934,8 @@ let rec unbox_int bi arg dbg =
           dbg)
       | contents -> contents
       end
-  | Clet(id, provenance, exp, body) ->
-      Clet(id, provenance, exp, unbox_int bi body dbg)
+  | Clet(id, exp, body) ->
+      Clet(id, exp, unbox_int bi body dbg)
   | Cifthenelse(cond, e1, e2) ->
       Cifthenelse(cond, unbox_int bi e1 dbg, unbox_int bi e2 dbg)
   | Csequence(e1, e2) -> Csequence(e1, unbox_int bi e2 dbg)
@@ -938,8 +943,8 @@ let rec unbox_int bi arg dbg =
       Cswitch(dbg, e, tbl, Array.map (fun e -> unbox_int bi e dbg) el)
   | Ccatch(n, ids, e1, e2) ->
       Ccatch(n, ids, unbox_int bi e1 dbg, unbox_int bi e2 dbg)
-  | Ctrywith(e1, id, provenance, e2) ->
-      Ctrywith(unbox_int bi e1 dbg, id, provenance, unbox_int bi e2 dbg)
+  | Ctrywith(e1, id, e2) ->
+      Ctrywith(unbox_int bi e1 dbg, id, unbox_int bi e2 dbg)
   | _ ->
       if size_int = 4 && bi = Pint64 then
         split_int64_for_32bit_target arg dbg
@@ -1585,8 +1590,8 @@ let rec is_unboxed_number ~strict env e =
         | Praise _ -> No_result
         | _ -> No_unboxing
       end
-  | Ulet (_, _, _, _, _, e) | Uletrec (_, e) | Usequence (_, e)
-  | Uphantom_let (_, _, _, e) ->
+  | Ulet (_, _, _, _, e) | Uletrec (_, e) | Usequence (_, e)
+  | Uphantom_let (_, _, e) ->
       is_unboxed_number ~strict env e
   | Uswitch (_, _, switch) ->
       let k = Array.fold_left join No_result switch.us_actions_consts in
@@ -1598,7 +1603,7 @@ let rec is_unboxed_number ~strict env e =
       | Some default -> join k default
       end
   | Ustaticfail _ -> No_result
-  | Uifthenelse (_, e1, e2) | Ucatch (_, _, e1, e2) | Utrywith (e1, _, _, e2) ->
+  | Uifthenelse (_, e1, e2) | Ucatch (_, _, e1, e2) | Utrywith (e1, _, e2) ->
       join (is_unboxed_number ~strict env e1) e2
   | _ -> No_unboxing
 
@@ -1696,10 +1701,10 @@ let rec transl env e =
         | _ ->
             bind "met" (lookup_tag obj (transl env met) dbg)
               (call_met obj args))
-  | Ulet(str, kind, provenance, id, exp, body) ->
-      transl_let env str kind id provenance exp body
-  | Uphantom_let (ident, provenance, defining_expr, body) ->
-      Cphantom_let (ident, provenance, defining_expr, transl env body)
+  | Ulet(str, kind, id, exp, body) ->
+      transl_let env str kind id exp body
+  | Uphantom_let (ident, defining_expr, body) ->
+      Cphantom_let (ident, defining_expr, transl env body)
   | Uletrec(bindings, body) ->
       transl_letrec env bindings (transl env body)
 
@@ -1813,8 +1818,8 @@ let rec transl env e =
       make_catch nfail (transl env body) (transl env handler)
   | Ucatch(nfail, ids, body, handler) ->
       Ccatch(nfail, ids, transl env body, transl env handler)
-  | Utrywith(body, exn, provenance, handler) ->
-      Ctrywith(transl env body, exn, provenance, transl env handler)
+  | Utrywith(body, exn, handler) ->
+      Ctrywith(transl env body, exn, transl env handler)
   | Uifthenelse (cond', ifso', ifnot') ->
       let cond_phantom, cond = extract_and_strip_phantom_lets cond' in
       let ifso = strip_phantom_lets ifso' in
@@ -1874,26 +1879,28 @@ let rec transl env e =
       let tst = match dir with Upto -> Cgt   | Downto -> Clt in
       let inc = match dir with Upto -> Caddi | Downto -> Csubi in
       let raise_num = next_raise_count () in
-      let id_prev = Ident.rename id in
+      let id_prev = Ident_ibp.rename id in
+      let id' = Ident_ibp.ident id in
+      let id_prev' = Ident_ibp.ident id_prev in
       return_unit
         (Clet
-           (id, None, transl env low,
+           (id, transl env low,
             bind_nonvar "bound" (transl env high) (fun high ->
               Ccatch
                 (raise_num, [],
                  Cifthenelse
-                   (Cop(Ccmpi tst, [Cvar id; high], dbg),
+                   (Cop(Ccmpi tst, [Cvar id'; high], dbg),
                     Cexit (raise_num, []),
                     Cloop
                       (Csequence
                          (remove_unit(transl env body),
-                         Clet(id_prev, None, Cvar id,
+                         Clet(id_prev, Cvar id',
                           Csequence
-                            (Cassign(id,
-                               Cop(inc, [Cvar id; Cconst_int 2],
+                            (Cassign(id',
+                               Cop(inc, [Cvar id'; Cconst_int 2],
                                  Debuginfo.none)),
                              Cifthenelse
-                               (Cop(Ccmpi Ceq, [Cvar id_prev; high],
+                               (Cop(Ccmpi Ceq, [Cvar id_prev'; high],
                                   Debuginfo.none),
                                 Cexit (raise_num,[]), Ctuple [])))))),
                  Ctuple []))))
@@ -2563,7 +2570,7 @@ and transl_unbox_number env bn arg =
   | Boxed_float _ -> transl_unbox_float env arg
   | Boxed_integer (bi, _) -> transl_unbox_int env bi arg
 
-and transl_let env mutability kind id provenance exp body =
+and transl_let env mutability kind id exp body =
   let mutability =
     match mutability with
     | Asttypes.Immutable -> Immutable
@@ -2597,15 +2604,19 @@ and transl_let env mutability kind id provenance exp body =
   in
   match unboxing with
   | No_unboxing | Boxed (_, true) ->
-      Clet(id, provenance, transl env exp, transl env body)
+      Clet(id, transl env exp, transl env body)
   | No_result ->
       (* the let-bound expression never returns a value, we can ignore
          the body *)
       transl env exp
   | Boxed (boxed_number, _false) ->
-      let unboxed_id = Ident.create (Ident.name id) in
-      Clet(unboxed_id, provenance, transl_unbox_number env boxed_number exp,
-           transl (add_unboxed_id id unboxed_id boxed_number env) body)
+      let unboxed_id =
+        Ident_ibp.create (Ident.create (Ident_ibp.name id))
+          (Ident_ibp.provenance id)
+      in
+      Clet(unboxed_id, transl_unbox_number env boxed_number exp,
+           transl (add_unboxed_id (Ident_ibp.ident id)
+             (Ident_ibp.ident unboxed_id) boxed_number env) body)
 
 (* CR mshinwell: think about phantom lets again for these two *)
 and make_catch ncatch body handler =
@@ -2764,7 +2775,7 @@ and transl_switch dbg env arg index cases = match Array.length cases with
 
 and transl_letrec env bindings cont =
   let bsz =
-    List.map (fun (_, id, exp) -> (id, exp, expr_size Ident.empty exp))
+    List.map (fun (id, exp) -> (id, exp, expr_size Ident.empty exp))
       bindings
   in
   let op_alloc prim sz =
@@ -2772,24 +2783,25 @@ and transl_letrec env bindings cont =
   let rec init_blocks = function
     | [] -> fill_nonrec bsz
     | (id, _exp, RHS_block sz) :: rem ->
-        Clet(id, None, op_alloc "caml_alloc_dummy" sz, init_blocks rem)
+        Clet(id, op_alloc "caml_alloc_dummy" sz,
+          init_blocks rem)
     | (id, _exp, RHS_floatblock sz) :: rem ->
-        Clet(id, None, op_alloc "caml_alloc_dummy_float" sz,
+        Clet(id, op_alloc "caml_alloc_dummy_float" sz,
           init_blocks rem)
     | (id, _exp, RHS_nonrec) :: rem ->
-        Clet (id, None, Cconst_int 0, init_blocks rem)
+        Clet (id, Cconst_int 0, init_blocks rem)
   and fill_nonrec = function
     | [] -> fill_blocks bsz
     | (_id, _exp, (RHS_block _ | RHS_floatblock _)) :: rem ->
         fill_nonrec rem
     | (id, exp, RHS_nonrec) :: rem ->
-        Clet(id, None, transl env exp, fill_nonrec rem)
+        Clet(id, transl env exp, fill_nonrec rem)
   and fill_blocks = function
     | [] -> cont
     | (id, exp, (RHS_block _ | RHS_floatblock _)) :: rem ->
         let op =
           Cop(Cextcall("caml_update_dummy", typ_void, false, None),
-              [Cvar id; transl env exp], Debuginfo.none) in
+              [Cvar (Ident_ibp.ident id); transl env exp], Debuginfo.none) in
         Csequence(op, fill_blocks rem)
     | (_id, _exp, RHS_nonrec) :: rem ->
         fill_blocks rem
@@ -2797,7 +2809,7 @@ and transl_letrec env bindings cont =
 
 (* Translate a function definition *)
 
-let transl_function f =
+let transl_function (f : Clambda.ufunction) =
   let body =
     if Config.flambda then
       Un_anf.apply f.body ~what:f.label
@@ -2806,7 +2818,6 @@ let transl_function f =
   in
   Cfunction {fun_name = f.label;
              fun_args = List.map (fun id -> (id, typ_val)) f.params;
-             fun_original_params = f.original_params;
              fun_body = transl empty_env body;
              fun_fast = !Clflags.optimize_for_speed;
              fun_dbg  = f.dbg;
@@ -3051,7 +3062,6 @@ let compunit ~unit_name (ulam, preallocated_blocks, constants) =
   let module_path = Path.Pident unit_name in
   let c1 = [Cfunction {fun_name = Compilenv.make_symbol (Some "entry");
                        fun_args = [];
-                       fun_original_params = [];
                        fun_body = init_code; fun_fast = false;
                        fun_dbg  = Debuginfo.none;
                        fun_human_name = "";
@@ -3079,15 +3089,15 @@ let cache_public_method meths tag cache dbg =
   let li = Ident.create "li" and hi = Ident.create "hi"
   and mi = Ident.create "mi" and tagged = Ident.create "tagged" in
   Clet (
-  li, None, Cconst_int 3,
+  Ident_ibp.create li None, Cconst_int 3,
   Clet (
-  hi, None, Cop(Cload Word_int, [meths], dbg),
+  Ident_ibp.create hi None, Cop(Cload Word_int, [meths], dbg),
   Csequence(
   Ccatch
     (raise_num, [],
      Cloop
        (Clet(
-        mi, None,
+        Ident_ibp.create mi None,
         Cop(Cor,
             [Cop(Clsr, [Cop(Caddi, [Cvar li; Cvar hi], dbg); Cconst_int 1],
                dbg);
@@ -3109,10 +3119,11 @@ let cache_public_method meths tag cache dbg =
            Ctuple [])))),
      Ctuple []),
   Clet (
-  tagged, None, Cop(Cadda, [lsl_const (Cvar li) log2_size_addr dbg;
-                      Cconst_int(1 - 3 * size_addr)], dbg),
-  Csequence(Cop (Cstore (Word_int, Assignment), [cache; Cvar tagged], dbg),
-            Cvar tagged)))))
+    Ident_ibp.create tagged None,
+      Cop(Cadda, [lsl_const (Cvar li) log2_size_addr dbg;
+        Cconst_int(1 - 3 * size_addr)], dbg),
+    Csequence(Cop (Cstore (Word_int, Assignment), [cache; Cvar tagged], dbg),
+              Cvar tagged)))))
 
 (* Generate an application function:
      (defun caml_applyN (a1 ... aN clos)
@@ -3136,7 +3147,7 @@ let apply_function_body arity =
           [get_field (Cvar clos) 0 dbg; Cvar arg.(n); Cvar clos], dbg)
     else begin
       let newclos = Ident.create "clos" in
-      Clet(newclos, None,
+      Clet(Ident_ibp.create newclos None,
            Cop(Capply typ_val,
                [get_field (Cvar clos) 0 dbg; Cvar arg.(n); Cvar clos], dbg),
            app_fun newclos (n+1))
@@ -3172,11 +3183,12 @@ let send_function arity =
                               Cconst_int(3*size_addr-1)], dbg) in
     let tag' = Cop(Cload Word_int, [tag_pos], dbg) in
     Clet (
-    meths, None, Cop(Cload Word_val, [obj], dbg),
+    Ident_ibp.create meths None, Cop(Cload Word_val, [obj], dbg),
     Clet (
-    cached, None, Cop(Cand, [Cop(Cload Word_int, [cache], dbg); mask], dbg),
+    Ident_ibp.create cached None,
+      Cop(Cand, [Cop(Cload Word_int, [cache], dbg); mask], dbg),
     Clet (
-    real, None,
+    Ident_ibp.create real None,
     Cifthenelse(Cop(Ccmpa Cne, [tag'; tag], dbg),
                 cache_public_method (Cvar meths) tag cache dbg,
                 cached_pos),
@@ -3184,15 +3196,19 @@ let send_function arity =
                                      Cconst_int(2*size_addr-1)], dbg)], dbg))))
 
   in
-  let body = Clet(clos', None, clos, body) in
+  let body = Clet(Ident_ibp.create clos' None, clos, body) in
+  let obj = Ident_ibp.create obj None in
+  let tag = Ident_ibp.create tag None in
+  let cache = Ident_ibp.create cache None in
   let fun_args =
     [obj, typ_val; tag, typ_int; cache, typ_val]
-    @ List.map (fun id -> (id, typ_val)) (List.tl args) in
+    @ List.map (fun id ->
+        let id = Ident_ibp.create id None in
+        (id, typ_val)) (List.tl args) in
   let fun_name = "caml_send" ^ string_of_int arity in
   Cfunction
    {fun_name;
     fun_args = fun_args;
-    fun_original_params = List.map (fun _ -> None) fun_args;
     fun_body = body;
     fun_fast = true;
     fun_dbg  = Debuginfo.none;
@@ -3202,12 +3218,13 @@ let send_function arity =
 
 let apply_function arity =
   let (args, clos, body) = apply_function_body arity in
-  let all_args = args @ [clos] in
+  let all_args =
+    List.map (fun arg -> Ident_ibp.create arg None) (args @ [clos])
+  in
   let fun_name = "caml_apply" ^ string_of_int arity in
   Cfunction
    {fun_name;
     fun_args = List.map (fun id -> (id, typ_val)) all_args;
-    fun_original_params = List.map (fun _ -> None) all_args;
     fun_body = body;
     fun_fast = true;
     fun_dbg  = Debuginfo.none;
@@ -3228,10 +3245,11 @@ let tuplify_function arity =
     then []
     else get_field (Cvar arg) i dbg :: access_components(i+1) in
   let fun_name = "caml_tuplify" ^ string_of_int arity in
+  let arg = Ident_ibp.create arg None in
+  let clos' = Ident_ibp.create clos None in
   Cfunction
    {fun_name;
-    fun_args = [arg, typ_val; clos, typ_val];
-    fun_original_params = [None; None];
+    fun_args = [arg, typ_val; clos', typ_val];
     fun_body =
       Cop(Capply typ_val,
           get_field (Cvar clos) 2 dbg :: access_components 0 @ [Cvar clos],
@@ -3285,23 +3303,24 @@ let final_curry_function arity =
       if n = arity - 1 || arity > max_arity_optimized then
         begin
       let newclos = Ident.create "clos" in
-      Clet(newclos, None,
+      Clet(Ident_ibp.create newclos None,
            get_field (Cvar clos) 3 dbg,
            curry_fun (get_field (Cvar clos) 2 dbg :: args) newclos (n-1))
         end else
         begin
           let newclos = Ident.create "clos" in
-          Clet(newclos, None,
+          Clet(Ident_ibp.create newclos None,
                get_field (Cvar clos) 4 dbg,
                curry_fun (get_field (Cvar clos) 3 dbg :: args) newclos (n-1))
     end in
   let fun_name =
     "caml_curry" ^ string_of_int arity ^ "_" ^ string_of_int (arity-1)
   in
+  let last_arg = Ident_ibp.create last_arg None in
+  let last_clos' = Ident_ibp.create last_clos None in
   Cfunction
    {fun_name;
-    fun_args = [last_arg, typ_val; last_clos, typ_val];
-    fun_original_params = [None; None];
+    fun_args = [last_arg, typ_val; last_clos', typ_val];
     fun_body = curry_fun [] last_clos (arity-1);
     fun_fast = true;
     fun_dbg  = Debuginfo.none;
@@ -3317,10 +3336,11 @@ let rec intermediate_curry_functions arity num =
     let name1 = "caml_curry" ^ string_of_int arity in
     let name2 = if num = 0 then name1 else name1 ^ "_" ^ string_of_int num in
     let arg = Ident.create "arg" and clos = Ident.create "clos" in
+    let arg' = Ident_ibp.create arg None in
+    let clos' = Ident_ibp.create clos None in
     Cfunction
      {fun_name = name2;
-      fun_args = [arg, typ_val; clos, typ_val];
-      fun_original_params = [None; None];
+      fun_args = [arg', typ_val; clos', typ_val];
       fun_body =
          if arity - num > 2 && arity <= max_arity_optimized then
            Cop(Calloc,
@@ -3356,17 +3376,19 @@ let rec intermediate_curry_functions arity num =
                   (get_field (Cvar clos) 2 dbg) :: args @ [Cvar clos], dbg)
             else
               let newclos = Ident.create "clos" in
-              Clet(newclos, None,
+              Clet(Ident_ibp.create newclos None,
                    get_field (Cvar clos) 4 dbg,
                    iter (i-1) (get_field (Cvar clos) 3 dbg :: args) newclos)
           in
           let fun_name = name1 ^ "_" ^ string_of_int (num+1) ^ "_app" in
-          let fun_args = direct_args @ [clos, typ_val] in
+          let fun_args =
+            List.map (fun (arg, typ) -> Ident_ibp.create arg None, typ)
+              (direct_args @ [clos, typ_val])
+          in
           let cf =
             Cfunction
               {fun_name;
                fun_args;
-               fun_original_params = List.map (fun _ -> None) fun_args;
                fun_body = iter (num+1)
                   (List.map (fun (arg,_) -> Cvar arg) direct_args) clos;
                fun_fast = true;
@@ -3434,7 +3456,6 @@ let entry_point namelist =
       namelist (Cconst_int 1) in
   Cfunction {fun_name = "caml_program";
              fun_args = [];
-             fun_original_params = [];
              fun_body = body;
              fun_fast = false;
              fun_dbg  = Debuginfo.none;

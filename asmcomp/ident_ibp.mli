@@ -2,10 +2,9 @@
 (*                                                                        *)
 (*                                 OCaml                                  *)
 (*                                                                        *)
-(*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
+(*                  Mark Shinwell, Jane Street Europe                     *)
 (*                                                                        *)
-(*   Copyright 1996 Institut National de Recherche en Informatique et     *)
-(*     en Automatique.                                                    *)
+(*   Copyright 2016 Jane Street Group LLC                                 *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -13,12 +12,23 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Clambda
-open Format
+(** Identifiers in binding position ("Ident_ibp"). *)
 
-val clambda: formatter -> ulambda -> unit
-val approx: formatter -> value_approximation -> unit
-val uconstant: formatter -> uconstant -> unit
-val structured_constant: formatter -> ustructured_constant -> unit
-val phantom_defining_expr_opt: formatter
-  -> uphantom_defining_expr option -> unit
+type provenance = {
+  module_path : Path.t;
+  location : Debuginfo.t;
+  original_ident : Ident.t;
+}
+
+type t
+
+val create : Ident.t -> provenance option -> t
+
+val ident : t -> Ident.t
+val provenance : t -> provenance option
+
+val name : t -> string
+
+val rename : t -> t
+
+val print : Format.formatter -> t -> unit

@@ -64,7 +64,7 @@ type fundecl =
     fun_arity : int;
     fun_module_path : Path.t option;
     fun_phantom_lets :
-      (Clambda.ulet_provenance option * Mach.phantom_defining_expr)
+      (Ident_ibp.provenance option * Mach.phantom_defining_expr)
         Ident.Map.t;
     fun_spacetime_shape : Mach.spacetime_shape option;
   }

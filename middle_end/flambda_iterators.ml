@@ -169,12 +169,14 @@ let map_subexpressions f f_named (tree:Flambda.t) : Flambda.t =
       tree
     else
       While(new_cond, new_body)
-  | For { bound_var; from_value; to_value; direction; body; } ->
+  | For { bound_var; provenance; from_value; to_value; direction; body; } ->
     let new_body = f body in
     if new_body == body then
       tree
     else
-      For { bound_var; from_value; to_value; direction; body = new_body; }
+      For { bound_var; provenance; from_value; to_value; direction;
+        body = new_body;
+      }
 
 let iter_general = Flambda.iter_general
 
@@ -412,12 +414,13 @@ let map_general ~toplevel f f_named f_phantom tree =
             tree
           else
             While (new_cond, new_body)
-        | For { bound_var; from_value; to_value; direction; body; } ->
+        | For { bound_var; provenance; from_value; to_value; direction;
+            body; } ->
           let new_body = aux body in
           if new_body == body then
             tree
           else
-            For { bound_var; from_value; to_value; direction;
+            For { bound_var; provenance; from_value; to_value; direction;
               body = new_body; }
       in
       f exp

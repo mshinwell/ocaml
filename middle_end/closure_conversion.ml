@@ -607,13 +607,21 @@ and close t ?(bound_name:(Variable.t * Flambda.let_provenance) option) env
     Flambda.create_let var lam1 lam2
   | Lwhile (cond, body) -> While (close t env cond, close t env body)
   | Lfor (id, lo, hi, direction, body) ->
+    let location = location_from_lambda body in
+    let provenance : Flambda.let_provenance =
+      { module_path = Env.current_module_path env;
+        location;
+      }
+    in
     let bound_var = Variable.create_with_same_name_as_ident id in
     let from_value = Variable.create "for_from" in
     let to_value = Variable.create "for_to" in
     let body = close t (Env.add_var env id bound_var) body in
     Flambda.create_let from_value (Expr (close t env lo))
       (Flambda.create_let to_value (Expr (close t env hi))
-        (For { bound_var; from_value; to_value; direction; body; }))
+        (For { bound_var; provenance = Some provenance; from_value; to_value;
+          direction; body;
+        }))
   | Lassign (id, new_value) ->
     let being_assigned =
       match Env.find_mutable_var_exn env id with

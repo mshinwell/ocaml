@@ -256,7 +256,7 @@ let to_clambda_let_provenance var (provenance : Flambda.let_provenance option) =
     match Variable.original_ident var with
     | None -> None
     | Some original_ident ->
-      let provenance : Clambda.ulet_provenance =
+      let provenance : Ident_ibp.provenance =
         { module_path = provenance.module_path;
           location = provenance.location;
           original_ident;
@@ -273,7 +273,8 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
     let provenance = to_clambda_let_provenance var provenance in
     begin match defining_expr with
     | Normal defining_expr ->
-      Ulet (Immutable, Pgenval, provenance, id,
+      let id = Ident_ibp.create id provenance in
+      Ulet (Immutable, Pgenval, id,
         to_clambda_named t env var defining_expr,
         to_clambda t env_body body)
     | Phantom defining_expr ->
@@ -329,16 +330,16 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
           Some (Clambda.Uphantom_block { tag = Tag.to_int tag; fields; })
         | Dead -> None
       in
-      Uphantom_let (id, provenance, defining_expr,
-        to_clambda t env_body body)
+      let id = Ident_ibp.create id provenance in
+      Uphantom_let (id, defining_expr, to_clambda t env_body body)
     end
   | Let_mutable { var = mut_var; initial_value = var; body; contents_kind;
         provenance; } ->
     let id, env_body = Env.add_fresh_mutable_ident env mut_var in
     let def = subst_var env var in
     let provenance = to_clambda_let_provenance var provenance in
-    Ulet (Mutable, contents_kind, provenance, id, def,
-      to_clambda t env_body body)
+    let id = Ident_ibp.create id provenance in
+    Ulet (Mutable, contents_kind, id, def, to_clambda t env_body body)
   | Let_rec { vars_and_defining_exprs = defs; body; } ->
     let env, defs =
       List.fold_right (fun (var, def, provenance) (env, defs) ->
@@ -349,7 +350,8 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
     in
     let defs =
       List.map (fun (id, var, def, provenance) ->
-          provenance, id, to_clambda_named t env var def)
+          let id = Ident_ibp.create id provenance in
+          id, to_clambda_named t env var def)
         defs
     in
     Uletrec (defs, to_clambda t env body)
@@ -415,7 +417,8 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
       List.fold_right (fun (var, provenance) (env, ids) ->
           let id, env = Env.add_fresh_ident env var in
           let provenance = to_clambda_let_provenance var provenance in
-          env, (id, provenance) :: ids)
+          let id = Ident_ibp.create id provenance in
+          env, id :: ids)
         vars (env, [])
     in
     Ucatch (Static_exception.to_int static_exn, ids,
@@ -423,15 +426,17 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
   | Try_with (body, var, provenance, handler) ->
     let id, env_handler = Env.add_fresh_ident env var in
     let provenance = to_clambda_let_provenance var provenance in
-    Utrywith (to_clambda t env body, id, provenance,
-      to_clambda t env_handler handler)
+    let id = Ident_ibp.create id provenance in
+    Utrywith (to_clambda t env body, id, to_clambda t env_handler handler)
   | If_then_else (arg, ifso, ifnot) ->
     Uifthenelse (subst_var env arg, to_clambda t env ifso,
       to_clambda t env ifnot)
   | While (cond, body) ->
     Uwhile (to_clambda t env cond, to_clambda t env body)
-  | For { bound_var; from_value; to_value; direction; body } ->
+  | For { bound_var; provenance; from_value; to_value; direction; body } ->
     let id, env_body = Env.add_fresh_ident env bound_var in
+    let provenance = to_clambda_let_provenance bound_var provenance in
+    let id = Ident_ibp.create id provenance in
     Ufor (id, subst_var env from_value, subst_var env to_value,
       direction, to_clambda t env_body body)
   | Assign { being_assigned; new_value } ->
@@ -645,7 +650,7 @@ and to_clambda_set_of_closures t env
           (* CR-soon mshinwell: this phantom let should not be added if the
              function isn't recursive *)
           (id, Variable.original_ident var,
-              Clambda.Uphantom_offset_var_field (env_var, pos))
+              Clambda.Uphantom_offset_var (env_var, pos))
             :: phantom_bindings
         in
         env, phantom_bindings
@@ -656,11 +661,21 @@ and to_clambda_set_of_closures t env
     let env_body, params =
       List.fold_right (fun var (env, params) ->
           let id, env = Env.add_fresh_ident env var in
+          let provenance =
+            match Variable.original_ident var with
+            | None -> None
+            | Some original_ident ->
+              let provenance : Ident_ibp.provenance =
+                { module_path;
+                  location = function_decl.dbg;
+                  original_ident;
+                }
+              in
+              Some provenance
+          in
+          let id = Ident_ibp.create id provenance in
           env, id :: params)
         function_decl.params (env, [])
-    in
-    let original_params =
-      List.map (fun var -> Variable.original_ident var) function_decl.params
     in
     let env_body = Env.entering_closure env_body closure_id in
     let body = to_clambda t env_body function_decl.body in
@@ -670,7 +685,7 @@ and to_clambda_set_of_closures t env
             match original_id with
             | None -> None
             | Some original_ident ->
-              let provenance : Clambda.ulet_provenance =
+              let provenance : Ident_ibp.provenance =
                 { module_path;
                   location = function_decl.dbg;
                   original_ident;
@@ -678,14 +693,15 @@ and to_clambda_set_of_closures t env
               in
               Some provenance
           in
-          Uphantom_let (id, provenance, Some phantom, body))
+          let id = Ident_ibp.create id provenance in
+          Uphantom_let (id, Some phantom, body))
         body
         phantom_bindings
     in
+    let env_var = Ident_ibp.create env_var None in
     { label = Compilenv.function_label closure_id;
       arity = Flambda_utils.function_arity function_decl;
       params = params @ [env_var];
-      original_params = original_params @ [None];
       body;
       dbg = function_decl.dbg;
       human_name = Closure_id.base_name closure_id;
@@ -730,12 +746,23 @@ and to_clambda_closed_set_of_closures t env symbol
     in
     let env_body, params =
       List.fold_right (fun var (env, params) ->
+          (* CR mshinwell: This code is the same as in the previous function *)
           let id, env = Env.add_fresh_ident env var in
+          let provenance =
+            match Variable.original_ident var with
+            | None -> None
+            | Some original_ident ->
+              let provenance : Ident_ibp.provenance =
+                { module_path = function_decl.module_path;
+                  location = function_decl.dbg;
+                  original_ident;
+                }
+              in
+              Some provenance
+          in
+          let id = Ident_ibp.create id provenance in
           env, id :: params)
         function_decl.params (env, [])
-    in
-    let original_params =
-      List.map (fun var -> Variable.original_ident var) function_decl.params
     in
     let closure_id = Closure_id.wrap closure_id in
     let env_body = Env.entering_closure env_body closure_id in
@@ -746,7 +773,7 @@ and to_clambda_closed_set_of_closures t env symbol
             match original_id with
             | None -> None
             | Some original_ident ->
-              let provenance : Clambda.ulet_provenance =
+              let provenance : Ident_ibp.provenance =
                 { module_path = function_decl.module_path;
                   location = function_decl.dbg;
                   original_ident;
@@ -754,14 +781,14 @@ and to_clambda_closed_set_of_closures t env symbol
               in
               Some provenance
           in
-          Uphantom_let (id, provenance, Some phantom, body))
+          let id = Ident_ibp.create id provenance in
+          Uphantom_let (id, Some phantom, body))
         body
         phantom_bindings
     in
     { label = Compilenv.function_label closure_id;
       arity = Flambda_utils.function_arity function_decl;
       params;
-      original_params;
       body;
       dbg = function_decl.dbg;
       human_name = Closure_id.base_name closure_id;

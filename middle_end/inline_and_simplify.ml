@@ -1309,7 +1309,7 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
         simplify_free_variables env args ~f:(fun _env args _args_approx ->
           Send { kind; meth; obj; args; dbg; },
             ret r (A.value_unknown Other))))
-  | For { bound_var; from_value; to_value; direction; body; } ->
+  | For { bound_var; provenance; from_value; to_value; direction; body; } ->
     simplify_free_variable env from_value ~f:(fun env from_value _approx ->
       simplify_free_variable env to_value ~f:(fun env to_value _approx ->
         let bound_var, sb =
@@ -1320,7 +1320,7 @@ and simplify env r (tree : Flambda.t) : Flambda.t * R.t =
             (A.value_unknown Other)
         in
         let body, r = simplify env r body in
-        For { bound_var; from_value; to_value; direction; body; },
+        For { bound_var; provenance; from_value; to_value; direction; body; },
           ret r (A.value_unknown Other)))
   | Assign { being_assigned; new_value; } ->
     (* No need to use something like [simplify_free_variable]: the

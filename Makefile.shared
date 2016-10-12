@@ -141,7 +141,7 @@ DWARF_HIGH=\
 
 ASMCOMP=\
   $(ARCH_SPECIFIC_ASMCOMP) \
-  asmcomp/arch.cmo \
+  asmcomp/arch.cmo asmcomp/ident_ibp.cmo \
   asmcomp/clambda.cmo asmcomp/printclambda.cmo \
   asmcomp/cmm.cmo asmcomp/printcmm.cmo \
   asmcomp/reg.cmo asmcomp/debug/reg_with_debug_info.cmo \

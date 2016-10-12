@@ -20,7 +20,7 @@ module Debug_info = struct
     part_of_value : int;
     num_parts_of_value : int;
     which_parameter : int option;
-    provenance : Clambda.ulet_provenance option;
+    provenance : Ident_ibp.provenance option;
   }
 
   let compare t1 t2 =

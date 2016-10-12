@@ -21,17 +21,6 @@ open Lambda
 
 type function_label = string
 
-type usymbol_provenance = {
-  original_idents : Ident.t list;
-  module_path : Path.t;
-}
-
-type ulet_provenance = {
-  module_path : Path.t;
-  location : Debuginfo.t;
-  original_ident : Ident.t;
-}
-
 type ustructured_constant =
   | Uconst_float of float
   | Uconst_int32 of int32
@@ -56,14 +45,15 @@ and uphantom_defining_expr =
   (** The phantom-let-bound-variable's value is found by adding the given
       number of words to the pointer contained in the given identifier, then
       dereferencing. *)
-  (* CR mshinwell: delete "field" from "offset_var_field" *)
-  | Uphantom_offset_var_field of Ident.t * int
+  | Uphantom_offset_var of Ident.t * int
   (** The phantom-let-bound-variable's value is defined by adding the given
       number of words to the pointer contained in the given identifier. *)
   | Uphantom_read_symbol_field of uconstant * int
   (** As for [Uphantom_read_var_field], but with the pointer specified by
       a symbol. *)
   | Uphantom_block of { tag : int; fields : Ident.t list; }
+  (** The phantom-let-bound variable points at a block with the given
+      structure. *)
 
 and ulambda =
     Uvar of Ident.t
@@ -72,31 +62,28 @@ and ulambda =
   | Ugeneric_apply of ulambda * ulambda list * Debuginfo.t
   | Uclosure of ufunction list * ulambda list
   | Uoffset of ulambda * int
-  | Ulet of mutable_flag * value_kind * ulet_provenance option * Ident.t
-      * ulambda * ulambda
-  | Uletrec of (ulet_provenance option * Ident.t * ulambda) list * ulambda
+  | Ulet of mutable_flag * value_kind * Ident_ibp.t * ulambda * ulambda
+  | Uphantom_let of Ident_ibp.t * uphantom_defining_expr option * ulambda
+  | Uletrec of (Ident_ibp.t * ulambda) list * ulambda
   | Uprim of primitive * ulambda list * Debuginfo.t
   | Uswitch of Debuginfo.t * ulambda * ulambda_switch
   | Ustringswitch of Debuginfo.t * ulambda * (string * ulambda) list
       * ulambda option
   | Ustaticfail of int * ulambda list
-  | Ucatch of int * (Ident.t * ulet_provenance option) list * ulambda * ulambda
-  | Utrywith of ulambda * Ident.t * ulet_provenance option * ulambda
+  | Ucatch of int * Ident_ibp.t list * ulambda * ulambda
+  | Utrywith of ulambda * Ident_ibp.t * ulambda
   | Uifthenelse of ulambda * ulambda * ulambda
   | Usequence of ulambda * ulambda
   | Uwhile of ulambda * ulambda
-  | Ufor of Ident.t * ulambda * ulambda * direction_flag * ulambda
+  | Ufor of Ident_ibp.t * ulambda * ulambda * direction_flag * ulambda
   | Uassign of Ident.t * ulambda
   | Usend of meth_kind * ulambda * ulambda * ulambda list * Debuginfo.t
   | Uunreachable
-  | Uphantom_let of Ident.t * ulet_provenance option
-      * uphantom_defining_expr option * ulambda
 
 and ufunction = {
   label  : function_label;
   arity  : int;
-  params : Ident.t list;
-  original_params : Ident.t option list;
+  params : Ident_ibp.t list;
   body   : ulambda;
   dbg    : Debuginfo.t;
   human_name : string;
@@ -134,6 +121,11 @@ val compare_structured_constants:
         ustructured_constant -> ustructured_constant -> int
 val compare_constants:
         uconstant -> uconstant -> int
+
+type usymbol_provenance = {
+  original_idents : Ident.t list;
+  module_path : Path.t;
+}
 
 type preallocated_block = {
   symbol : string;

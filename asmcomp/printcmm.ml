@@ -110,42 +110,40 @@ let rec expr ppf = function
   | Cconst_pointer n -> fprintf ppf "%ia" n
   | Cconst_natpointer n -> fprintf ppf "%sa" (Nativeint.to_string n)
   | Cvar id -> Ident.print ppf id
-  | Clet(id, provenance, def, (Clet(_, _, _, _) as body)) ->
-      let print_binding id provenance ppf def =
-        fprintf ppf "@[<2>%a%a@ %a@]" Ident.print id
-          Printclambda.let_provenance_opt provenance expr def in
+  | Clet(id,  def, (Clet(_, _, _) as body)) ->
+      let print_binding id ppf def =
+        fprintf ppf "@[<2>%a@ %a@]" Ident_ibp.print id expr def in
       let rec in_part ppf = function
-        | Clet(id, provenance, def, body) ->
-            fprintf ppf "@ %a" (print_binding id provenance) def;
+        | Clet(id, def, body) ->
+            fprintf ppf "@ %a" (print_binding id) def;
             in_part ppf body
         | exp -> exp in
-      fprintf ppf "@[<2>(let@ @[<1>(%a" (print_binding id provenance) def;
+      fprintf ppf "@[<2>(let@ @[<1>(%a" (print_binding id) def;
       let exp = in_part ppf body in
       fprintf ppf ")@]@ %a)@]" sequence exp
-  | Clet(id, provenance, def, body) ->
+  | Clet(id, def, body) ->
      fprintf ppf
-      "@[<2>(let@ @[<2>%a%a@ %a@]@ %a)@]"
-      Ident.print id Printclambda.let_provenance_opt provenance
-        expr def sequence body
-  | Cphantom_let(id, provenance, def, (Cphantom_let(_, _, _, _) as body)) ->
-      let print_binding id provenance ppf def =
-        fprintf ppf "@[<2>%a%a@ %a@]" Ident.print id
-          Printclambda.let_provenance_opt provenance
+      "@[<2>(let@ @[<2>%a@ %a@]@ %a)@]"
+      Ident_ibp.print id expr def sequence body
+  | Cphantom_let(id, def, (Cphantom_let(_, _, _) as body)) ->
+      let print_binding id ppf def =
+        fprintf ppf "@[<2>%a@ %a@]" Ident_ibp.print id
           Printclambda.phantom_defining_expr_opt def
       in
       let rec in_part ppf = function
-        | Cphantom_let(id, provenance, def, body) ->
-            fprintf ppf "@ %a" (print_binding id provenance) def;
+        | Cphantom_let(id, def, body) ->
+            fprintf ppf "@ %a" (print_binding id) def;
             in_part ppf body
         | exp -> exp in
-      fprintf ppf "@[<2>(let?@ @[<1>(%a" (print_binding id provenance) def;
+      fprintf ppf "@[<2>(let?@ @[<1>(%a" (print_binding id) def;
       let exp = in_part ppf body in
       fprintf ppf ")@]@ %a)@]" sequence exp
-  | Cphantom_let(id, provenance, def, body) ->
+  | Cphantom_let(id, def, body) ->
     fprintf ppf
-      "@[<2>(let?@ @[<2>%a(%a)@ %a@]@ %a)@]"
-      Ident.print id Printclambda.let_provenance_opt provenance
-      Printclambda.phantom_defining_expr_opt def sequence body
+      "@[<2>(let?@ @[<2>%a@ %a@]@ %a)@]"
+      Ident_ibp.print id
+      Printclambda.phantom_defining_expr_opt def
+      sequence body
   | Cassign(id, exp) ->
       fprintf ppf "@[<2>(assign @[<2>%a@ %a@])@]" Ident.print id expr exp
   | Ctuple el ->
@@ -187,19 +185,17 @@ let rec expr ppf = function
         "@[<2>(catch@ %a@;<1 -2>with(%d%a)@ %a)@]"
         sequence e1 i
         (fun ppf ids ->
-          List.iter (fun (id, provenance) ->
-              fprintf ppf " %a%a" Ident.print id
-                Printclambda.let_provenance_opt provenance)
-            ids) ids
+          List.iter (fun id -> fprintf ppf " %a" Ident_ibp.print id) ids)
+        ids
         sequence e2
   | Cexit (i, el) ->
       fprintf ppf "@[<2>(exit %d" i ;
       List.iter (fun e -> fprintf ppf "@ %a" expr e) el;
       fprintf ppf ")@]"
-  | Ctrywith(e1, id, provenance, e2) ->
-      fprintf ppf "@[<2>(try@ %a@;<1 -2>with@ %a%a@ %a)@]"
-             sequence e1 Ident.print id
-             Printclambda.let_provenance_opt provenance
+  | Ctrywith(e1, id,  e2) ->
+      fprintf ppf "@[<2>(try@ %a@;<1 -2>with@ %a@ %a)@]"
+             sequence e1
+             Ident_ibp.print id
              sequence e2
 
 and sequence ppf = function
@@ -214,7 +210,7 @@ let fundecl ppf f =
     List.iter
      (fun (id, ty) ->
        if !first then first := false else fprintf ppf "@ ";
-       fprintf ppf "%a: %a" Ident.print id machtype ty)
+       fprintf ppf "%a: %a" Ident_ibp.print id machtype ty)
      cases in
   fprintf ppf "@[<1>(function%s %s@;<1 4>@[<1>(%a)@]@ @[%a@])@]@."
          (Debuginfo.to_string f.fun_dbg) f.fun_name

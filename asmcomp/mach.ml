@@ -69,7 +69,7 @@ type operation =
   | Ifloatofint | Iintoffloat
   | Ispecific of Arch.specific_operation
   | Iname_for_debugger of { ident : Ident.t; which_parameter : int option;
-      provenance : Clambda.ulet_provenance option; is_assignment : bool; }
+      provenance : Ident_ibp.provenance option; is_assignment : bool; }
 
 type instruction =
   { desc: instruction_desc;
@@ -110,7 +110,7 @@ type fundecl =
     fun_human_name : string;
     fun_module_path : Path.t option;
     fun_phantom_lets :
-      (Clambda.ulet_provenance option * phantom_defining_expr)
+      (Ident_ibp.provenance option * phantom_defining_expr)
         Ident.Map.t;
     fun_spacetime_shape : spacetime_shape option;
   }

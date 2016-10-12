@@ -35,28 +35,25 @@ let ignore_function_label (_ : Clambda.function_label) = ()
 let ignore_debuginfo (_ : Debuginfo.t) = ()
 let ignore_int (_ : int) = ()
 let ignore_ident (_ : Ident.t) = ()
+let ignore_ident_ibp (_ : Ident_ibp.t) = ()
 let ignore_primitive (_ : Lambda.primitive) = ()
 let ignore_string (_ : string) = ()
 let ignore_int_array (_ : int array) = ()
-let ignore_ident_list (_ : Ident.t list) = ()
-let ignore_ident_cross_let_provenance_option_list
-      (_ : (Ident.t * Clambda.ulet_provenance option) list) = ()
-let ignore_ident_option_list (_ : Ident.t option list) = ()
+let ignore_ident_ibp_list (_ : Ident_ibp.t list) = ()
 let ignore_direction_flag (_ : Asttypes.direction_flag) = ()
 let ignore_meth_kind (_ : Lambda.meth_kind) = ()
 let ignore_path_option (_ : Path.t option) = ()
-let ignore_let_provenance_option (_ : Clambda.ulet_provenance option) = ()
 
 (* CR-soon mshinwell: check we aren't traversing function bodies more than
    once (need to analyse exactly what the calls are from Cmmgen into this
    module). *)
 
-let closure_environment_ident (ufunction:Clambda.ufunction) =
+let closure_environment_ident (ufunction : Clambda.ufunction) =
   (* The argument after the arity is the environment *)
   if List.length ufunction.params = ufunction.arity + 1 then
     let env_var = List.nth ufunction.params ufunction.arity in
-    assert(Ident.name env_var = "*closure_env*");
-    Some env_var
+    assert (Ident_ibp.name env_var = "*closure_env*");
+    Some (Ident_ibp.ident env_var)
   else
     (* closed function, no environment *)
     None
@@ -107,7 +104,7 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
          experience. *)
       force_non_linear captured_variables;
       List.iter loop captured_variables;
-      List.iter (fun ({ Clambda. label; arity; params; original_params; body;
+      List.iter (fun ({ Clambda. label; arity; params; body;
             dbg; human_name; module_path; } as clos) ->
           (match closure_environment_ident clos with
            | None -> ()
@@ -116,8 +113,7 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
                Ident.Set.add env_var !environment_idents);
           ignore_function_label label;
           ignore_int arity;
-          ignore_ident_list params;
-          ignore_ident_option_list original_params;
+          ignore_ident_ibp_list params;
           loop body;
           ignore_debuginfo dbg;
           ignore_string human_name;
@@ -126,14 +122,16 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
     | Uoffset (expr, offset) ->
       loop expr;
       ignore_int offset
-    | Ulet (_let_kind, _value_kind, _provenance, _ident, def, body) ->
+    | Ulet (_let_kind, _value_kind, ident, def, body) ->
+      ignore_ident_ibp ident;
       loop def;
       loop body
-    | Uphantom_let (_ident, _provenance, _defining_expr, body) ->
+    | Uphantom_let (ident, _defining_expr, body) ->
+      ignore_ident_ibp ident;
       loop body
     | Uletrec (defs, body) ->
-      List.iter (fun (_provenance, ident, def) ->
-          ignore_ident ident;
+      List.iter (fun (ident, def) ->
+          ignore_ident_ibp ident;
           loop def)
         defs;
       loop body
@@ -162,13 +160,12 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
       List.iter loop args
     | Ucatch (static_exn, idents, body, handler) ->
       ignore_int static_exn;
-      ignore_ident_cross_let_provenance_option_list idents;
+      ignore_ident_ibp_list idents;
       loop body;
       loop handler
-    | Utrywith (body, ident, provenance, handler) ->
+    | Utrywith (body, ident, handler) ->
       loop body;
-      ignore_ident ident;
-      ignore_let_provenance_option provenance;
+      ignore_ident_ibp ident;
       loop handler
     | Uifthenelse (cond, ifso, ifnot) ->
       loop cond;
@@ -181,7 +178,7 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
       loop cond;
       loop body
     | Ufor (ident, low, high, direction_flag, body) ->
-      ignore_ident ident;
+      ignore_ident_ibp ident;
       loop low;
       loop high;
       ignore_direction_flag direction_flag;
@@ -283,12 +280,11 @@ let let_bound_vars_that_can_be_moved ident_info (clam : Clambda.ulambda) =
     | Uclosure (functions, captured_variables) ->
       ignore_ulambda_list captured_variables;
       (* Start a new let stack for speed. *)
-      List.iter (fun { Clambda. label; arity; params; original_params; body;
+      List.iter (fun { Clambda. label; arity; params; body;
               dbg; human_name; module_path; } ->
           ignore_function_label label;
           ignore_int arity;
-          ignore_ident_list params;
-          ignore_ident_option_list original_params;
+          ignore_ident_ibp_list params;
           let_stack := [];
           loop body;
           let_stack := [];
@@ -300,7 +296,8 @@ let let_bound_vars_that_can_be_moved ident_info (clam : Clambda.ulambda) =
       (* [expr] should usually be a variable. *)
       examine_argument_list [expr];
       ignore_int offset
-    | Ulet (_let_kind, _value_kind, _provenance, ident, def, body) ->
+    | Ulet (_let_kind, _value_kind, ident, def, body) ->
+      let ident = Ident_ibp.ident ident in
       begin match def with
       | Uconst _ ->
         (* The defining expression is obviously constant, so we don't
@@ -320,14 +317,15 @@ let let_bound_vars_that_can_be_moved ident_info (clam : Clambda.ulambda) =
         end;
         loop body
       end
-    | Uphantom_let (_id, _provenance, _defining_expr, body) ->
+    | Uphantom_let (id, _defining_expr, body) ->
+      ignore_ident_ibp id;
       loop body
     | Uletrec (defs, body) ->
       (* Evaluation order for [defs] is not defined, and this case
          probably isn't important for [Cmmgen] anyway. *)
       let_stack := [];
-      List.iter (fun (_provenance, ident, def) ->
-          ignore_ident ident;
+      List.iter (fun (ident, def) ->
+          ignore_ident_ibp ident;
           loop def;
           let_stack := [])
         defs;
@@ -368,18 +366,17 @@ let let_bound_vars_that_can_be_moved ident_info (clam : Clambda.ulambda) =
       let_stack := []
     | Ucatch (static_exn, idents, body, handler) ->
       ignore_int static_exn;
-      ignore_ident_cross_let_provenance_option_list idents;
+      ignore_ident_ibp_list idents;
       let_stack := [];
       loop body;
       let_stack := [];
       loop handler;
       let_stack := []
-    | Utrywith (body, ident, provenance, handler) ->
+    | Utrywith (body, ident, handler) ->
       let_stack := [];
       loop body;
       let_stack := [];
-      ignore_ident ident;
-      ignore_let_provenance_option provenance;
+      ignore_ident_ibp ident;
       loop handler;
       let_stack := []
     | Uifthenelse (cond, ifso, ifnot) ->
@@ -401,7 +398,7 @@ let let_bound_vars_that_can_be_moved ident_info (clam : Clambda.ulambda) =
       loop body;
       let_stack := []
     | Ufor (ident, low, high, direction_flag, body) ->
-      ignore_ident ident;
+      ignore_ident_ibp ident;
       (* Cmmgen generates code that evaluates low before high,
          but we don't do anything here at the moment anyway. *)
       ignore_ulambda low;
@@ -467,10 +464,10 @@ let rec substitute_let_moveable is_let_moveable env (clam : Clambda.ulambda)
   | Uoffset (clam, n) ->
     let clam = substitute_let_moveable is_let_moveable env clam in
     Uoffset (clam, n)
-  | Ulet (let_kind, value_kind, provenance, id, def, body) ->
+  | Ulet (let_kind, value_kind, id, def, body) ->
     let def = substitute_let_moveable is_let_moveable env def in
-    if Ident.Set.mem id is_let_moveable then begin
-      let env = Ident.Map.add id def env in
+    if Ident.Set.mem (Ident_ibp.ident id) is_let_moveable then begin
+      let env = Ident.Map.add (Ident_ibp.ident id) def env in
       let body = substitute_let_moveable is_let_moveable env body in
       (* If we are about to delete a [let] in debug mode, keep it for the
          debugger. *)
@@ -479,23 +476,22 @@ let rec substitute_let_moveable is_let_moveable env (clam : Clambda.ulambda)
       else
         match def with
         | Uconst const ->
-          Uphantom_let (id, provenance, Some (Clambda.Uphantom_const const),
-            body)
+          Uphantom_let (id, Some (Clambda.Uphantom_const const), body)
         | Uvar var ->
-          Uphantom_let (id, provenance, Some (Clambda.Uphantom_var var), body)
+          Uphantom_let (id, Some (Clambda.Uphantom_var var), body)
         | _ ->
-          Uphantom_let (id, provenance, None, body)
+          Uphantom_let (id, None, body)
     end else begin
-      Ulet (let_kind, value_kind, provenance,
+      Ulet (let_kind, value_kind,
             id, def, substitute_let_moveable is_let_moveable env body)
     end
-  | Uphantom_let (ident, provenance, defining_expr, body) ->
+  | Uphantom_let (ident, defining_expr, body) ->
     let body = substitute_let_moveable is_let_moveable env body in
-    Uphantom_let (ident, provenance, defining_expr, body)
+    Uphantom_let (ident, defining_expr, body)
   | Uletrec (defs, body) ->
     let defs =
-      List.map (fun (provenance, id, def) ->
-          provenance, id, substitute_let_moveable is_let_moveable env def)
+      List.map (fun (id, def) ->
+          id, substitute_let_moveable is_let_moveable env def)
         defs
     in
     let body = substitute_let_moveable is_let_moveable env body in
@@ -534,10 +530,10 @@ let rec substitute_let_moveable is_let_moveable env (clam : Clambda.ulambda)
     let body = substitute_let_moveable is_let_moveable env body in
     let handler = substitute_let_moveable is_let_moveable env handler in
     Ucatch (n, ids, body, handler)
-  | Utrywith (body, id, provenance, handler) ->
+  | Utrywith (body, id, handler) ->
     let body = substitute_let_moveable is_let_moveable env body in
     let handler = substitute_let_moveable is_let_moveable env handler in
-    Utrywith (body, id, provenance, handler)
+    Utrywith (body, id, handler)
   | Uifthenelse (cond, ifso, ifnot) ->
     let cond = substitute_let_moveable is_let_moveable env cond in
     let ifso = substitute_let_moveable is_let_moveable env ifso in
@@ -671,13 +667,13 @@ let rec un_anf_and_moveable ident_info env (clam : Clambda.ulambda)
   | Uoffset (clam, n) ->
     let clam, moveable = un_anf_and_moveable ident_info env clam in
     Uoffset (clam, n), moveable
-  | Ulet (_let_kind, _value_kind, _provenance, id, def, Uvar id')
-      when Ident.same id id' ->
+  | Ulet (_let_kind, _value_kind, id, def, Uvar id')
+      when Ident.same (Ident_ibp.ident id) id' ->
     un_anf_and_moveable ident_info env def
-  | Ulet (let_kind, value_kind, provenance, id, def, body) ->
+  | Ulet (let_kind, value_kind, id, def, body) ->
     let def, def_moveable = un_anf_and_moveable ident_info env def in
-    let is_linear = Ident.Set.mem id ident_info.linear in
-    let is_used = Ident.Set.mem id ident_info.used in
+    let is_linear = Ident.Set.mem (Ident_ibp.ident id) ident_info.linear in
+    let is_used = Ident.Set.mem (Ident_ibp.ident id) ident_info.used in
     let maybe_for_debugger (body, moveable) : Clambda.ulambda * moveable =
       (* CR-soon mshinwell: consider sharing with the let-moveable code,
          above. *)
@@ -686,14 +682,13 @@ let rec un_anf_and_moveable ident_info env (clam : Clambda.ulambda)
       else
         match def with
         | Uconst const ->
-          Uphantom_let (id, provenance, Some (Clambda.Uphantom_const const),
+          Uphantom_let (id, Some (Clambda.Uphantom_const const),
             body), moveable
         | Uvar var ->
-          Uphantom_let (id, provenance, Some (Clambda.Uphantom_var var), body),
+          Uphantom_let (id, Some (Clambda.Uphantom_var var), body),
             moveable
         | _ ->
-          Uphantom_let (id, provenance, None, body),
-            moveable
+          Uphantom_let (id, None, body), moveable
     in
     begin match def_moveable, is_linear, is_used with
     | (Moveable | Moveable_not_into_loops), _, false ->
@@ -711,7 +706,7 @@ let rec un_anf_and_moveable ident_info env (clam : Clambda.ulambda)
           | Moveable_not_into_loops -> Moveable_not_into_loops
           | Fixed -> assert false
         in
-        Ident.Map.add id (def_moveable, def) env
+        Ident.Map.add (Ident_ibp.ident id) (def_moveable, def) env
       in
       maybe_for_debugger (un_anf_and_moveable ident_info env body)
     | Moveable_not_into_loops, true, true
@@ -723,17 +718,15 @@ let rec un_anf_and_moveable ident_info env (clam : Clambda.ulambda)
         (* Moveable but not used linearly. *)
     | Fixed, _, _ ->
       let body, body_moveable = un_anf_and_moveable ident_info env body in
-      Ulet (let_kind, value_kind, provenance, id, def, body),
+      Ulet (let_kind, value_kind, id, def, body),
         both_moveable def_moveable body_moveable
     end
-  | Uphantom_let (ident, provenance, defining_expr, body) ->
+  | Uphantom_let (ident, defining_expr, body) ->
     let body, body_moveable = un_anf_and_moveable ident_info env body in
-    Uphantom_let (ident, provenance, defining_expr, body), body_moveable
+    Uphantom_let (ident, defining_expr, body), body_moveable
   | Uletrec (defs, body) ->
     let defs =
-      List.map (fun (provenance, id, def) ->
-          provenance, id, un_anf ident_info env def)
-        defs
+      List.map (fun (id, def) -> id, un_anf ident_info env def) defs
     in
     let body = un_anf ident_info env body in
     Uletrec (defs, body), Fixed
@@ -767,10 +760,10 @@ let rec un_anf_and_moveable ident_info env (clam : Clambda.ulambda)
     let body = un_anf ident_info env body in
     let handler = un_anf ident_info env handler in
     Ucatch (n, ids, body, handler), Fixed
-  | Utrywith (body, id, provenance, handler) ->
+  | Utrywith (body, id, handler) ->
     let body = un_anf ident_info env body in
     let handler = un_anf ident_info env handler in
-    Utrywith (body, id, provenance, handler), Fixed
+    Utrywith (body, id, handler), Fixed
   | Uifthenelse (cond, ifso, ifnot) ->
     let cond, cond_moveable = un_anf_and_moveable ident_info env cond in
     let ifso, ifso_moveable = un_anf_and_moveable ident_info env ifso in

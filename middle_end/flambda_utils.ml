@@ -303,10 +303,10 @@ let toplevel_substitution sb tree =
       let obj = sb obj in
       let args = List.map sb args in
       Send { kind; meth; obj; args; dbg }
-    | For { bound_var; from_value; to_value; direction; body } ->
+    | For { bound_var; provenance; from_value; to_value; direction; body } ->
       let from_value = sb from_value in
       let to_value = sb to_value in
-      For { bound_var; from_value; to_value; direction; body }
+      For { bound_var; provenance; from_value; to_value; direction; body }
     | Static_raise (static_exn, args) ->
       let args = List.map sb args in
       Static_raise (static_exn, args)
@@ -804,12 +804,14 @@ let substitute_read_symbol_field_for_variables
       in
       List.fold_right (fun f expr -> f expr) bind_args @@
         Flambda.Static_raise (exn, args)
-    | For { bound_var; from_value; to_value; direction; body } ->
+    | For { bound_var; provenance; from_value; to_value; direction; body } ->
       let from_value, bind_from_value = make_var_subst from_value in
       let to_value, bind_to_value = make_var_subst to_value in
       bind_from_value @@
       bind_to_value @@
-      Flambda.For { bound_var; from_value; to_value; direction; body }
+      Flambda.For { bound_var; provenance; from_value; to_value; direction;
+        body;
+      }
     | Apply { func; args; kind; dbg; inline; specialise } ->
       let func, bind_func = make_var_subst func in
       let args, bind_args =

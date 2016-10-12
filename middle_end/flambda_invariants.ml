@@ -206,8 +206,9 @@ let variable_and_symbol_invariants (program : Flambda.program) =
         already_added_bound_variable_to_env var;
         loop_named env def) defs;
       loop env body
-    | For { bound_var; from_value; to_value; direction; body; } ->
+    | For { bound_var; provenance; from_value; to_value; direction; body; } ->
       ignore_direction_flag direction;
+      ignore_let_provenance_option provenance;
       check_variable_is_bound env from_value;
       check_variable_is_bound env to_value;
       loop (add_binding_occurrence env bound_var) body
@@ -216,7 +217,8 @@ let variable_and_symbol_invariants (program : Flambda.program) =
       loop env body;
       let vars = List.map (fun (var, _provenance) -> var) vars in
       loop (add_binding_occurrences env vars) handler
-    | Try_with (body, var, _provenance, handler) ->
+    | Try_with (body, var, provenance, handler) ->
+      ignore_let_provenance_option provenance;
       loop env body;
       loop (add_binding_occurrence env var) handler
     (* Everything else: *)

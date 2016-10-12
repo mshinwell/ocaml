@@ -30,7 +30,7 @@ module Debug_info : sig
   (** If the register corresponds to a function parameter, the value returned
       is the zero-based index of said parameter; otherwise it is [None]. *)
 
-  val provenance : t -> Clambda.ulet_provenance option
+  val provenance : t -> Ident_ibp.provenance option
 end
 
 type t
@@ -43,7 +43,7 @@ val create
   -> part_of_value:int
   -> num_parts_of_value:int
   -> which_parameter:int option
-  -> provenance:Clambda.ulet_provenance option
+  -> provenance:Ident_ibp.provenance option
   -> t
 
 val create_with_debug_info : reg:Reg.t -> debug_info:Debug_info.t option -> t

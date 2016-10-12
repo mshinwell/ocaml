@@ -159,9 +159,9 @@ type expression =
   | Cconst_natpointer of nativeint
   | Cblockheader of nativeint * Debuginfo.t
   | Cvar of Ident.t
-  | Clet of Ident.t * Clambda.ulet_provenance option * expression * expression
-  | Cphantom_let of Ident.t * Clambda.ulet_provenance option
-      * Clambda.uphantom_defining_expr option * expression
+  | Clet of Ident_ibp.t * expression * expression
+  | Cphantom_let of Ident_ibp.t * Clambda.uphantom_defining_expr option
+      * expression
   | Cassign of Ident.t * expression
   | Ctuple of expression list
   | Cop of operation * expression list * Debuginfo.t
@@ -169,16 +169,13 @@ type expression =
   | Cifthenelse of expression * expression * expression
   | Cswitch of Debuginfo.t * expression * int array * expression array
   | Cloop of expression
-  | Ccatch of int * (Ident.t * Clambda.ulet_provenance option) list
-      * expression * expression
+  | Ccatch of int * Ident_ibp.t list * expression * expression
   | Cexit of int * expression list
-  | Ctrywith of expression * Ident.t * Clambda.ulet_provenance option
-      * expression
+  | Ctrywith of expression * Ident_ibp.t * expression
 
 type fundecl =
   { fun_name: string;
-    fun_args: (Ident.t * machtype) list;
-    fun_original_params : Ident.t option list;
+    fun_args: (Ident_ibp.t * machtype) list;
     fun_body: expression;
     fun_fast: bool;
     fun_dbg : Debuginfo.t;

@@ -164,6 +164,7 @@ and switch = {
 
 and for_loop = {
   bound_var : Variable.t;
+  provenance : let_provenance option;
   from_value : Variable.t;
   to_value : Variable.t;
   direction : Asttypes.direction_flag;

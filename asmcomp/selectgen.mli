@@ -17,7 +17,7 @@
    sequentialization. *)
 
 type environment = {
-  idents : (Ident.t, Reg.t array * Clambda.ulet_provenance option) Tbl.t;
+  idents : (Ident.t, Reg.t array * Ident_ibp.provenance option) Tbl.t;
   phantom_idents : Ident.Set.t;
 }
 
@@ -111,7 +111,7 @@ class virtual selector_generic : object
   method adjust_type : Reg.t -> Reg.t -> unit
   method adjust_types : Reg.t array -> Reg.t array -> unit
   method emit_expr : environment -> Cmm.expression
-    -> bound_name:(Ident.t * Clambda.ulet_provenance option) option
+    -> bound_name:Ident_ibp.t option
     -> Reg.t array option
   method emit_tail : environment -> Cmm.expression -> unit
 

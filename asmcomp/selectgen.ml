@@ -22,7 +22,7 @@ open Reg
 open Mach
 
 type environment = {
-  idents : (Ident.t, Reg.t array * Clambda.ulet_provenance option) Tbl.t;
+  idents : (Ident.t, Reg.t array * Ident_ibp.provenance option) Tbl.t;
   phantom_idents : Ident.Set.t;
 }
 
@@ -74,7 +74,8 @@ let size_expr env exp =
         List.fold_right (fun e sz -> size localenv e + sz) el 0
     | Cop(op, _, _) ->
         size_machtype(oper_result_type op)
-    | Clet(id, _, arg, body) ->
+    | Clet(id, arg, body) ->
+        let id = Ident_ibp.ident id in
         size (Tbl.add id (size localenv arg) localenv) body
     | Csequence(_e1, e2) ->
         size localenv e2
@@ -111,7 +112,9 @@ let name_regs id rv =
 let maybe_emit_naming_op ~env ~bound_name seq regs =
   match bound_name with
   | None -> ()
-  | Some (bound_name, provenance) ->
+  | Some bound_name ->
+    let provenance = Ident_ibp.provenance bound_name in
+    let bound_name = Ident_ibp.ident bound_name in
     let naming_op =
       Iname_for_debugger { ident = bound_name; provenance;
         which_parameter = None; is_assignment = false; }
@@ -233,7 +236,7 @@ method is_simple_expr = function
   | Cblockheader _ -> true
   | Cvar _ -> true
   | Ctuple el -> List.for_all self#is_simple_expr el
-  | Clet(_id, _, arg, body) ->
+  | Clet(_id, arg, body) ->
       self#is_simple_expr arg && self#is_simple_expr body
   | Csequence(e1, e2) -> self#is_simple_expr e1 && self#is_simple_expr e2
   | Cop(op, args, _) ->
@@ -435,7 +438,7 @@ method select_condition = function
 (* Lowering of phantom lets *)
 
 method private lower_phantom_let
-      ~(provenance : Clambda.ulet_provenance option)
+      ~(provenance : Ident_ibp.provenance option)
       ~(defining_expr : Clambda.uphantom_defining_expr option) =
   match defining_expr with
   | None ->
@@ -471,7 +474,7 @@ method private lower_phantom_let
           None
         else
           Some (Mach.Iphantom_read_var_field (defining_ident, field))
-      | C.Uphantom_offset_var_field (defining_ident, offset_in_words) ->
+      | C.Uphantom_offset_var (defining_ident, offset_in_words) ->
         if Ident.Set.mem defining_ident !dead_phantom_lets then
           None
         else
@@ -489,11 +492,13 @@ method private lower_phantom_let
     | None -> None
     | Some defining_expr -> Some (provenance, defining_expr)
 
-method private env_for_phantom_let env ~ident ~provenance ~defining_expr =
+method private env_for_phantom_let env ~ident ~defining_expr =
   (* Information about phantom lets is split at this stage:
      1. The phantom identifiers in scope are recorded in the environment
         and subsequently tagged onto Mach instructions.
      2. The defining expressions are recorded separately. *)
+  let provenance = Ident_ibp.provenance ident in
+  let ident = Ident_ibp.ident ident in
   match self#lower_phantom_let ~provenance ~defining_expr with
   | None ->
     dead_phantom_lets := Ident.Set.add ident !dead_phantom_lets;
@@ -631,15 +636,15 @@ method emit_expr env exp ~bound_name =
       with Not_found ->
         fatal_error("Selection.emit_expr: unbound var " ^ Ident.unique_name v)
       end
-  | Clet(v, provenance, e1, e2) ->
-      begin match self#emit_expr env e1 ~bound_name:(Some (v, provenance)) with
+  | Clet(v, e1, e2) ->
+      begin match self#emit_expr env e1 ~bound_name:(Some v) with
         None -> None
       | Some r1 ->
-        self#emit_expr (self#bind_let env v r1 ~provenance) e2 ~bound_name
+        self#emit_expr (self#bind_let env v r1) e2 ~bound_name
       end
-  | Cphantom_let (ident, provenance, defining_expr, body) ->
+  | Cphantom_let (ident, defining_expr, body) ->
       let env =
-        self#env_for_phantom_let env ~ident ~provenance ~defining_expr
+        self#env_for_phantom_let env ~ident ~defining_expr
       in
       self#emit_expr env body ~bound_name
   | Cassign(v, e1) ->
@@ -685,7 +690,9 @@ method emit_expr env exp ~bound_name =
           let add_naming_op_for_bound_name regs =
             match bound_name with
             | None -> ()
-            | Some (bound_name, provenance) ->
+            | Some bound_name ->
+              let provenance = Ident_ibp.provenance bound_name in
+              let bound_name = Ident_ibp.ident bound_name in
               let naming_op =
                 Iname_for_debugger { ident = bound_name; provenance;
                   which_parameter = None; is_assignment = false; }
@@ -797,7 +804,8 @@ method emit_expr env exp ~bound_name =
   | Ccatch(nfail, ids, e1, e2) ->
       let rs =
         List.map
-          (fun (id, _provenance) ->
+          (fun id ->
+            let id = Ident_ibp.ident id in
             let r = self#regs_for typ_val in name_regs id r; r)
           ids in
       catch_regs := (nfail, Array.concat rs) :: !catch_regs ;
@@ -806,13 +814,15 @@ method emit_expr env exp ~bound_name =
       let ids_and_rs = List.combine ids rs in
       let new_env_idents =
         List.fold_left
-        (fun idents ((id, provenance), r) ->
-          Tbl.add id (r, provenance) idents)
+        (fun idents (id, r) ->
+          Tbl.add (Ident_ibp.ident id) (r, Ident_ibp.provenance id) idents)
         env.idents ids_and_rs in
       let new_env = { env with idents = new_env_idents; } in
       let (r2, s2) =
         self#emit_sequence new_env e2 ~bound_name ~at_start:(fun seq ->
-          List.iter (fun ((ident, provenance), r) ->
+          List.iter (fun (ident, r) ->
+              let provenance = Ident_ibp.provenance ident in
+              let ident = Ident_ibp.ident ident in
               let naming_op =
                 Iname_for_debugger { ident; provenance;
                   which_parameter = None; is_assignment = false; }
@@ -837,7 +847,9 @@ method emit_expr env exp ~bound_name =
           self#insert env (Iexit nfail) [||] [||];
           None
       end
-  | Ctrywith(e1, v, provenance, e2) ->
+  | Ctrywith(e1, v, e2) ->
+      let provenance = Ident_ibp.provenance v in
+      let v = Ident_ibp.ident v in
       let (r1, s1) = self#emit_sequence env e1 ~bound_name in
       let rv = self#regs_for typ_val in
       let (r2, s2) =
@@ -869,7 +881,9 @@ method private emit_sequence ?at_start env exp ~bound_name =
   let r = s#emit_expr env exp ~bound_name in
   (r, s)
 
-method private bind_let env ident r1 ~provenance =
+method private bind_let env ident r1 =
+  let provenance = Ident_ibp.provenance ident in
+  let ident = Ident_ibp.ident ident in
   let result =
     if all_regs_anonymous r1 then begin
       name_regs ident r1;
@@ -991,16 +1005,14 @@ method private emit_return env exp =
 
 method emit_tail env exp =
   match exp with
-    Clet(v, provenance, e1, e2) ->
-      let bound_name = Some (v, provenance) in
+    Clet(v,  e1, e2) ->
+      let bound_name = Some v in
       begin match self#emit_expr env e1 ~bound_name with
         None -> ()
-      | Some r1 -> self#emit_tail (self#bind_let env v r1 ~provenance) e2
+      | Some r1 -> self#emit_tail (self#bind_let env v r1) e2
       end
-  | Cphantom_let (ident, provenance, defining_expr, body) ->
-      let env =
-        self#env_for_phantom_let env ~ident ~provenance ~defining_expr
-      in
+  | Cphantom_let (ident, defining_expr, body) ->
+      let env = self#env_for_phantom_let env ~ident ~defining_expr in
       self#emit_tail env body
   | Cop((Capply ty) as op, args, dbg) ->
       begin match self#emit_parts_list env args with
@@ -1093,9 +1105,9 @@ method emit_tail env exp =
   | Ccatch(nfail, ids, e1, e2) ->
        let rs =
         List.map
-          (fun (id, _provenance) ->
+          (fun id ->
             let r = self#regs_for typ_val in
-            name_regs id r  ;
+            name_regs (Ident_ibp.ident id) r;
             r)
           ids in
       catch_regs := (nfail, Array.concat rs) :: !catch_regs ;
@@ -1104,12 +1116,16 @@ method emit_tail env exp =
       let ids_and_rs = List.combine ids rs in
       let new_env =
         List.fold_left
-        (fun env ((id, provenance), r) ->
+        (fun env (id, r) ->
+          let provenance = Ident_ibp.provenance id in
+          let id = Ident_ibp.ident id in
           { env with idents = Tbl.add id (r, provenance) env.idents; })
         env ids_and_rs in
       let s2 =
         self#emit_tail_sequence new_env e2 ~at_start:(fun seq ->
-          List.iter (fun ((ident, provenance), r) ->
+          List.iter (fun (ident, r) ->
+              let provenance = Ident_ibp.provenance ident in
+              let ident = Ident_ibp.ident ident in
               let naming_op =
                 Iname_for_debugger { ident; provenance;
                   which_parameter = None; is_assignment = false; }
@@ -1118,7 +1134,9 @@ method emit_tail env exp =
             ids_and_rs)
       in
       self#insert env (Icatch(nfail, s1, s2)) [||] [||]
-  | Ctrywith(e1, v, provenance, e2) ->
+  | Ctrywith(e1, v, e2) ->
+      let provenance = Ident_ibp.provenance v in
+      let v = Ident_ibp.ident v in
       let (opt_r1, s1) = self#emit_sequence env e1 ~bound_name:None in
       let rv = self#regs_for typ_val in
       let s2 =
@@ -1161,23 +1179,9 @@ method private emit_tail_sequence ?at_start env exp =
 method insert_prologue f ~loc_arg ~rarg ~num_regs_per_arg
       ~spacetime_node_hole:_ ~env =
   let loc_arg_index = ref 0 in
-  assert (List.length f.Cmm.fun_args = List.length f.Cmm.fun_original_params);
-  List.iteri (fun param_index ((ident, _ty), original_ident) ->
-      let provenance =
-        (* CR mshinwell: The location information isn't used here.  Should
-           be optional? *)
-        match original_ident with
-        | None -> None
-        | Some original_ident ->
-          let provenance =
-            { Clambda.
-              location = Debuginfo.none;
-              module_path = Path.Pident (Ident.create_persistent "foo");
-              original_ident;
-            }
-          in
-          Some provenance
-      in
+  List.iteri (fun param_index (ident, _ty) ->
+      let provenance = Ident_ibp.provenance ident in
+      let ident = Ident_ibp.ident ident in
       let naming_op =
         Iname_for_debugger { ident; provenance;
           which_parameter = Some param_index; is_assignment = false; }
@@ -1190,7 +1194,7 @@ method insert_prologue f ~loc_arg ~rarg ~num_regs_per_arg
       loc_arg_index := !loc_arg_index + num_regs_for_arg;
       self#insert_debug env (Iop naming_op) Debuginfo.none
         hard_regs_for_arg [| |])
-    (List.combine f.Cmm.fun_args f.Cmm.fun_original_params);
+    f.Cmm.fun_args;
   self#insert_moves env loc_arg rarg;
   None
 
@@ -1207,9 +1211,9 @@ method insert_prologue f ~loc_arg ~rarg ~num_regs_per_arg
 
 method private extract_phantom_lets expr =
   match expr with
-  | Cphantom_let (ident, provenance, defining_expr, expr) ->
+  | Cphantom_let (ident, defining_expr, expr) ->
     let phantom_lets, expr = self#extract_phantom_lets expr in
-    (ident, provenance, defining_expr) :: phantom_lets, expr
+    (ident, defining_expr) :: phantom_lets, expr
   | _ -> [], expr
 
 (* Sequentialization of a function definition *)
@@ -1226,7 +1230,7 @@ method emit_fundecl f =
   let rargs =
     List.mapi (fun arg_index (ident, ty) ->
         let r = self#regs_for ty in
-        name_regs ident r;
+        name_regs (Ident_ibp.ident ident) r;
         num_regs_per_arg.(arg_index) <- Array.length r;
         r)
       f.Cmm.fun_args
@@ -1241,6 +1245,7 @@ method emit_fundecl f =
   let env =
     List.fold_right2
       (fun (id, _ty) r env ->
+         let id = Ident_ibp.ident id in
          { env with idents = Tbl.add id (r, None) env.idents; })
       f.Cmm.fun_args rargs (self#initial_env ()) in
   let spacetime_node_hole, env =
@@ -1254,8 +1259,8 @@ method emit_fundecl f =
   in
   let phantom_lets_at_top, body = self#extract_phantom_lets f.Cmm.fun_body in
   let env =
-    List.fold_left (fun env (ident, provenance, defining_expr) ->
-        self#env_for_phantom_let env ~ident ~provenance ~defining_expr)
+    List.fold_left (fun env (ident, defining_expr) ->
+        self#env_for_phantom_let env ~ident ~defining_expr)
       env
       phantom_lets_at_top
   in

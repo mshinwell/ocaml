@@ -80,19 +80,20 @@ let code_for_function_prologue ~function_name ~node_hole =
     match indexes with
     | [] -> body
     | _ ->
-      Clet (new_node_encoded, None,
+      Clet (Ident_ibp.create new_node_encoded None,
         (* Cf. [Encode_tail_caller_node] in the runtime. *)
         Cop (Cor, [Cvar new_node; Cconst_int 1], dbg),
         body)
   in
   let pc = Ident.create "pc" in
-  Clet (node, None, Cop (Cload Word_int, [Cvar node_hole], dbg),
-    Clet (must_allocate_node, None, Cop (Cand, [Cvar node; Cconst_int 1], dbg),
+  Clet (Ident_ibp.create node None, Cop (Cload Word_int, [Cvar node_hole], dbg),
+    Clet (Ident_ibp.create must_allocate_node None,
+      Cop (Cand, [Cvar node; Cconst_int 1], dbg),
       Cifthenelse (
         Cop (Ccmpi Cne, [Cvar must_allocate_node; Cconst_int 1], dbg),
         Cvar node,
-        Clet (is_new_node, None,
-          Clet (pc, None, Cconst_symbol function_name,
+        Clet (Ident_ibp.create is_new_node None,
+          Clet (Ident_ibp.create pc None, Cconst_symbol function_name,
             Cop (Cextcall ("caml_spacetime_allocate_node",
                 [| Int |], false, None),
               [Cconst_int (1 (* header *) + !index_within_node);
@@ -100,7 +101,8 @@ let code_for_function_prologue ~function_name ~node_hole =
                Cvar node_hole;
               ],
               dbg)),
-            Clet (new_node, None, Cop (Cload Word_int, [Cvar node_hole], dbg),
+            Clet (Ident_ibp.create new_node None,
+              Cop (Cload Word_int, [Cvar node_hole], dbg),
               if no_tail_calls then Cvar new_node
               else
                 Cifthenelse (
@@ -138,19 +140,19 @@ let code_for_blockheader ~value's_header ~node ~dbg =
   (* Check if we have already allocated a profinfo value for this allocation
      point with the current backtrace.  If so, use that value; if not,
      allocate a new one. *)
-  Clet (address_of_profinfo, None,
+  Clet (Ident_ibp.create address_of_profinfo None,
     Cop (Caddi, [
       Cvar node;
       Cconst_int offset_into_node;
     ], dbg),
-    Clet (existing_profinfo, None,
+    Clet (Ident_ibp.create existing_profinfo None,
         Cop (Cload Word_int, [Cvar address_of_profinfo], dbg),
-      Clet (profinfo, None,
+      Clet (Ident_ibp.create profinfo None,
         Cifthenelse (
           Cop (Ccmpi Cne, [Cvar existing_profinfo; Cconst_int 1 (* () *)], dbg),
           Cvar existing_profinfo,
           generate_new_profinfo),
-        Clet (existing_count, None,
+        Clet (Ident_ibp.create existing_count None,
           Cop (Cload Word_int, [
             Cop (Caddi,
               [Cvar address_of_profinfo; Cconst_int Arch.size_addr], dbg)
@@ -213,7 +215,7 @@ let code_for_call ~node ~callee ~is_tail ~label =
   let place_within_node = Ident.create "place_within_node" in
   let dbg = Debuginfo.none in
   let open Cmm in
-  Clet (place_within_node, None,
+  Clet (Ident_ibp.create place_within_node None,
     Cop (Caddi, [node; Cconst_int (index_within_node * Arch.size_addr)], dbg),
     (* The following code returns the address that is to be moved into the
        (hard) node hole pointer register immediately before the call.
