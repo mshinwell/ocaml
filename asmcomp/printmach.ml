@@ -175,7 +175,7 @@ let rec instr ppf i =
   end;
   if !print_availability then begin
     fprintf ppf "@[<1>AB={%a}@]@,"
-      (Reg_availability.print ~print_reg:reg) i.available_before
+      (Reg_availability_set.print ~print_reg:reg) i.available_before
   end;
   begin match i.desc with
   | Iend -> ()

@@ -24,7 +24,7 @@ type instruction =
     res: Reg.t array;
     dbg: Debuginfo.t;
     live: Reg.Set.t;
-    mutable available_before: Reg_availability.t;
+    mutable available_before: Reg_availability_set.t;
     mutable phantom_available_before: Ident.Set.t;
   }
 
@@ -62,7 +62,7 @@ val has_fallthrough :  instruction_desc -> bool
 val end_instr: instruction
 val instr_cons:
   instruction_desc -> Reg.t array -> Reg.t array -> instruction
-    -> available_before:Reg_availability.t
+    -> available_before:Reg_availability_set.t
     -> phantom_available_before:Ident.Set.t
     -> instruction
 val invert_test: Mach.test -> Mach.test

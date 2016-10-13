@@ -55,7 +55,7 @@ let operation_can_raise (op : Mach.operation) =
 let augment_availability_at_raise avail =
   match !avail_at_raise with
   | None -> avail_at_raise := Some avail
-  | Some avail' -> avail_at_raise := Some (Reg_availability.inter avail avail')
+  | Some avail' -> avail_at_raise := Some (Reg_availability_set.inter avail avail')
 
 (* [available_regs ~instr ~avail_before] calculates, given the registers
    "available before" an instruction [instr], the registers that are available
@@ -72,8 +72,8 @@ let augment_availability_at_raise avail =
    function.
 *)
 let rec available_regs (instr : M.instruction)
-      ~(avail_before : Reg_availability.t) : Reg_availability.t =
-  let avail_before : Reg_availability.t =
+      ~(avail_before : Reg_availability_set.t) : Reg_availability_set.t =
+  let avail_before : Reg_availability_set.t =
     (* If this instruction might expand into multiple machine instructions
        and clobber registers during that code sequence, make sure any
        such clobbered registers are marked as "unavailable before". *)
@@ -99,8 +99,8 @@ let rec available_regs (instr : M.instruction)
         Misc.fatal_errorf "Live registers not a subset of available registers: \
             live={%a} avail_before=%a missing={%a} insn=%a"
           Printmach.regset instr.live
-          (Reg_availability.print ~print_reg:Printmach.reg)
-          (Reg_availability.Ok avail_before)
+          (Reg_availability_set.print ~print_reg:Printmach.reg)
+          (Reg_availability_set.Ok avail_before)
           Printmach.regset (R.Set.diff instr.live
             (RD.Set.forget_debug_info avail_before))
           Printmach.instr ({ instr with Mach. next = Mach.end_instr (); })
@@ -119,7 +119,7 @@ let rec available_regs (instr : M.instruction)
   (* CR pchambart: Given how it's used I would rename it to
      available_across rather than available_before. *)
   instr.available_before <- avail_before;
-  let avail_after : Reg_availability.t =
+  let avail_after : Reg_availability_set.t =
     match avail_before with
     | Unreachable -> Unreachable
     | Ok avail_before ->
@@ -206,7 +206,7 @@ let rec available_regs (instr : M.instruction)
           (RD.Set.of_array results))
       | Iop op ->
         if operation_can_raise op then begin
-          augment_availability_at_raise (Reg_availability.Ok avail_before)
+          augment_availability_at_raise (Reg_availability_set.Ok avail_before)
         end;
         (* We split the calculation of registers that become unavailable after
            a call into two parts.  First: anything that the target marks as
@@ -258,7 +258,7 @@ let rec available_regs (instr : M.instruction)
       | Iifthenelse (_, ifso, ifnot) -> join [ifso; ifnot] ~avail_before
       | Iswitch (_, cases) -> join (Array.to_list cases) ~avail_before
       | Iloop body ->
-        let avail_after = ref (Reg_availability.Ok avail_before) in
+        let avail_after = ref (Reg_availability_set.Ok avail_before) in
         (* CR pchambart: This should probably be instr.available_before to do a
            single loop in case of nested Iloop.  *)
         begin try
@@ -271,10 +271,10 @@ let rec available_regs (instr : M.instruction)
                available_before. An assertion should check that never
                more than 2 rounds are required.  *)
             let avail_after' =
-              Reg_availability.inter !avail_after
+              Reg_availability_set.inter !avail_after
                 (available_regs body ~avail_before:!avail_after)
             in
-            if Reg_availability.equal !avail_after avail_after' then raise Exit;
+            if Reg_availability_set.equal !avail_after avail_after' then raise Exit;
             avail_after := avail_after'
           done
         with Exit -> ()
@@ -282,7 +282,7 @@ let rec available_regs (instr : M.instruction)
         Unreachable
       | Icatch (nfail, body, handler) ->
         let avail_after_body =
-          available_regs body ~avail_before:(Reg_availability.Ok avail_before)
+          available_regs body ~avail_before:(Reg_availability_set.Ok avail_before)
         in
         begin match
           try Some (Hashtbl.find avail_at_exit_table nfail)
@@ -291,34 +291,34 @@ let rec available_regs (instr : M.instruction)
         | None -> avail_after_body  (* The handler is unreachable. *)
         | Some avail_at_exit ->
           Hashtbl.remove avail_at_exit_table nfail;
-          Reg_availability.inter avail_after_body
+          Reg_availability_set.inter avail_after_body
             (available_regs handler ~avail_before:avail_at_exit)
         end
       | Iexit nfail ->
-        let avail_before = Reg_availability.Ok avail_before in
+        let avail_before = Reg_availability_set.Ok avail_before in
         begin match Hashtbl.find avail_at_exit_table nfail with
         | exception Not_found ->
           Hashtbl.add avail_at_exit_table nfail avail_before
         | avail_at_exit ->
           Hashtbl.replace avail_at_exit_table nfail
-            (Reg_availability.inter avail_at_exit avail_before)
+            (Reg_availability_set.inter avail_at_exit avail_before)
         end;
         Unreachable
       | Itrywith (body, handler) ->
         let saved_avail_at_raise = !avail_at_raise in
         avail_at_raise := None;
-        let avail_before = Reg_availability.Ok avail_before in
+        let avail_before = Reg_availability_set.Ok avail_before in
         let after_body = available_regs body ~avail_before in
-        let avail_before_handler : Reg_availability.t =
+        let avail_before_handler : Reg_availability_set.t =
           match !avail_at_raise with
           | None -> Unreachable
           | Some avail -> avail
         in
         avail_at_raise := saved_avail_at_raise;
-        Reg_availability.inter after_body
+        Reg_availability_set.inter after_body
           (available_regs handler ~avail_before:avail_before_handler)
       | Iraise _ ->
-        let avail_before = Reg_availability.Ok avail_before in
+        let avail_before = Reg_availability_set.Ok avail_before in
         augment_availability_at_raise avail_before;
         Unreachable
   in
@@ -327,11 +327,11 @@ let rec available_regs (instr : M.instruction)
   | _ -> available_regs instr.next ~avail_before:avail_after
 
 and join branches ~avail_before =
-  let avail_before = Reg_availability.Ok avail_before in
+  let avail_before = Reg_availability_set.Ok avail_before in
   let avails = List.map (available_regs ~avail_before) branches in
   begin match avails with
   | [] -> avail_before
-  | avail::avails -> List.fold_left Reg_availability.inter avail avails
+  | avail::avails -> List.fold_left Reg_availability_set.inter avail avails
   end
 
 let fundecl (f : Mach.fundecl) =
@@ -341,7 +341,7 @@ let fundecl (f : Mach.fundecl) =
   avail_at_raise := None;
   let fun_args = R.set_of_array f.fun_args in
   let avail_before =
-    Reg_availability.Ok (RD.Set.without_debug_info fun_args)
+    Reg_availability_set.Ok (RD.Set.without_debug_info fun_args)
   in
-  ignore ((available_regs f.fun_body ~avail_before) : Reg_availability.t);
+  ignore ((available_regs f.fun_body ~avail_before) : Reg_availability_set.t);
   f

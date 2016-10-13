@@ -35,7 +35,7 @@ let instr ppf i =
           fprintf ppf "@[<1>LA={%a}@]@," regsetaddr i.live;
           if !Clflags.debug then begin
             fprintf ppf "@[<1>AB=%a@]@,"
-              (Reg_availability.print ~print_reg:Printmach.reg)
+              (Reg_availability_set.print ~print_reg:Printmach.reg)
               i.available_before;
             let phantom = Ident.Set.elements i.phantom_available_before in
             fprintf ppf "@[<1>PAB={%a}@]@,"

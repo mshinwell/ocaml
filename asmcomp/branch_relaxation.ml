@@ -76,7 +76,7 @@ module Make (T : Branch_relaxation_intf.S) = struct
           arg [||]
           (* [available_before] currently doesn't matter: the available range
              calculation has already been done by the time we get here. *)
-          ~available_before:(Reg_availability.Ok Reg_with_debug_info.Set.empty)
+          ~available_before:(Reg_availability_set.Ok Reg_with_debug_info.Set.empty)
           ~phantom_available_before:Ident.Set.empty next
     in
     let rec fixup did_fix pc instr =
@@ -108,11 +108,11 @@ module Make (T : Branch_relaxation_intf.S) = struct
             let cont =
               instr_cons (Lbranch lbl) [||] [||]
                   ~available_before:
-                    (Reg_availability.Ok Reg_with_debug_info.Set.empty)
+                    (Reg_availability_set.Ok Reg_with_debug_info.Set.empty)
                   ~phantom_available_before:Ident.Set.empty
                 (instr_cons (Llabel lbl2) [||] [||] instr.next
                   ~available_before:
-                    (Reg_availability.Ok Reg_with_debug_info.Set.empty)
+                    (Reg_availability_set.Ok Reg_with_debug_info.Set.empty)
                   ~phantom_available_before:Ident.Set.empty)
             in
             instr.desc <- Lcondbranch (invert_test test, lbl2);

@@ -21,7 +21,7 @@ let rec filter_inplace (insn : L.instruction) =
   | Lend -> ()
   | _ ->
     insn.available_before
-      <- Reg_availability.canonicalise insn.available_before;
+      <- Reg_availability_set.canonicalise insn.available_before;
     filter_inplace insn.next
 
 let fundecl (decl : L.fundecl) =

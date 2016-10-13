@@ -79,7 +79,7 @@ type instruction =
     dbg: Debuginfo.t;
     phantom_available_before : Ident.Set.t;
     mutable live: Reg.Set.t;
-    mutable available_before: Reg_availability.t;
+    mutable available_before: Reg_availability_set.t;
   }
 
 and instruction_desc =
@@ -122,7 +122,7 @@ let rec dummy_instr =
     res = [||];
     dbg = Debuginfo.none;
     live = Reg.Set.empty;
-    available_before = Reg_availability.Ok Reg_with_debug_info.Set.empty;
+    available_before = Reg_availability_set.Ok Reg_with_debug_info.Set.empty;
     phantom_available_before = Ident.Set.empty;
   }
 
@@ -133,20 +133,20 @@ let end_instr () =
     res = [||];
     dbg = Debuginfo.none;
     live = Reg.Set.empty;
-    available_before = Reg_availability.Ok Reg_with_debug_info.Set.empty;
+    available_before = Reg_availability_set.Ok Reg_with_debug_info.Set.empty;
     phantom_available_before = Ident.Set.empty;
   }
 
 let instr_cons d a r ~phantom_available_before n =
   { desc = d; next = n; arg = a; res = r;
     dbg = Debuginfo.none; live = Reg.Set.empty;
-    available_before = Reg_availability.Ok Reg_with_debug_info.Set.empty;
+    available_before = Reg_availability_set.Ok Reg_with_debug_info.Set.empty;
     phantom_available_before;
   }
 
 let instr_cons_debug d a r dbg ~phantom_available_before n =
   { desc = d; next = n; arg = a; res = r; dbg = dbg; live = Reg.Set.empty;
-    available_before = Reg_availability.Ok Reg_with_debug_info.Set.empty;
+    available_before = Reg_availability_set.Ok Reg_with_debug_info.Set.empty;
     phantom_available_before;
   }
 

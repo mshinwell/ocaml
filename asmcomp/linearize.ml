@@ -27,7 +27,7 @@ type instruction =
     res: Reg.t array;
     dbg: Debuginfo.t;
     live: Reg.Set.t;
-    mutable available_before: Reg_availability.t;
+    mutable available_before: Reg_availability_set.t;
     mutable phantom_available_before: Ident.Set.t;
   }
 
@@ -93,7 +93,7 @@ let rec end_instr =
     res = [||];
     dbg = Debuginfo.none;
     live = Reg.Set.empty;
-    available_before = Reg_availability.Ok Reg_with_debug_info.Set.empty;
+    available_before = Reg_availability_set.Ok Reg_with_debug_info.Set.empty;
     phantom_available_before = Ident.Set.empty;
   }
 
