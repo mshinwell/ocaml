@@ -71,16 +71,8 @@ let augment_availability_at_raise avail =
    The [available_before] field of each instruction is updated by this
    function.
 *)
-(*
-let fail = ref false
-*)
 let rec available_regs (instr : M.instruction)
       ~(avail_before : Reg_availability.t) : Reg_availability.t =
-(*
-Format.eprintf "available_regs on entry: AB=%a instr=%a\n%!"
-  (Reg_availability.print ~print_reg:Printmach.reg) avail_before
-  Printmach.instr ({ instr with Mach.next = Mach.dummy_instr; });
-*)
   let avail_before : Reg_availability.t =
     (* If this instruction might expand into multiple machine instructions
        and clobber registers during that code sequence, make sure any
@@ -112,9 +104,6 @@ Format.eprintf "available_regs on entry: AB=%a instr=%a\n%!"
           Printmach.regset (R.Set.diff instr.live
             (RD.Set.forget_debug_info avail_before))
           Printmach.instr ({ instr with Mach. next = Mach.end_instr (); })
-(*
-fail := true;
-*)
       end;
       match instr.desc with
       | Iop (Ialloc _) ->
@@ -301,31 +290,16 @@ fail := true;
         with
         | None -> avail_after_body  (* The handler is unreachable. *)
         | Some avail_at_exit ->
-(*
-Format.eprintf "nfail %d avail_at_exit=%a\n%!" nfail
-  (Reg_availability.print ~print_reg:Printmach.reg) avail_at_exit;
-*)
           Hashtbl.remove avail_at_exit_table nfail;
           Reg_availability.inter avail_after_body
             (available_regs handler ~avail_before:avail_at_exit)
         end
       | Iexit nfail ->
         let avail_before = Reg_availability.Ok avail_before in
-(*
-Format.eprintf "EXIT nfail %d avail=%a\n%!" nfail
-  (Reg_availability.print ~print_reg:Printmach.reg) avail_before;
-*)
         begin match Hashtbl.find avail_at_exit_table nfail with
         | exception Not_found ->
           Hashtbl.add avail_at_exit_table nfail avail_before
         | avail_at_exit ->
-(*
-Format.eprintf "***** INTER nfail %d at_exit=%a AB=%a result=%a\n%!" nfail
-  (Reg_availability.print ~print_reg:Printmach.reg) avail_at_exit
-  (Reg_availability.print ~print_reg:Printmach.reg) avail_before
-  (Reg_availability.print ~print_reg:Printmach.reg)
-            (Reg_availability.inter avail_at_exit avail_before);
-*)
           Hashtbl.replace avail_at_exit_table nfail
             (Reg_availability.inter avail_at_exit avail_before)
         end;
@@ -361,11 +335,6 @@ and join branches ~avail_before =
   end
 
 let fundecl (f : Mach.fundecl) =
-(*
-Printmach.print_live := true;
-Format.eprintf "Available_regs:\n%a%!"
-  Printmach.fundecl f;
-*)
   (* XCR pchambart: this should be cleaned by the Icatch instruction.
      It should be replaced by an assertion *)
   assert (Hashtbl.length avail_at_exit_table = 0);
@@ -375,11 +344,4 @@ Format.eprintf "Available_regs:\n%a%!"
     Reg_availability.Ok (RD.Set.without_debug_info fun_args)
   in
   ignore ((available_regs f.fun_body ~avail_before) : Reg_availability.t);
-(*
-Printmach.print_availability := true;
-Format.eprintf "Available_regs AFTERWARDS:\n%a%!"
-  Printmach.fundecl f;
-Printmach.print_availability := false;
-if !fail then Misc.fatal_error "failure";
-*)
   f
