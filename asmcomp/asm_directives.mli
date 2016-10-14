@@ -43,6 +43,7 @@ module Directive : sig
     | Indirect_symbol of string
     | Loc of { file_num : int; line : int; col : int; }
     | Private_extern of string
+    (* Note that on Mac OS X, [Set] always makes the expression absolute. *)
     | Set of string * constant
     | Size of string * constant
     | Sleb128 of constant
@@ -62,18 +63,6 @@ val initialize : emit:(Directive.t -> unit) -> unit
 (** Reinitialize the emitter before compiling a different source file. *)
 val reset : unit -> unit
 
-(** A good explanation of relocatability in this context is given in the Apple
-    documentation: https://developer.apple.com/library/content/\
-    documentation/DeveloperTools/Reference/Assembler/\
-    030-Assembly_Language_Statements/asm_language.html *)
-type constant_evaluated_at =
-  | Compile_time of constant
-  (** The operands are to be evaluated when the assembler runs at compile
-      time---in other words, an absolute expression. *)
-  | Link_time of constant
-  (** The operands are to be evaluated at link time---in other words, a
-      relocatable expression. *)
-
 type width =
   | Thirty_two
   | Sixty_four
@@ -89,6 +78,8 @@ type dwarf_section =
 type section =
   | Text
   | Data
+  | Jump_tables
+  | Floating_point_literals
   | Dwarf of dwarf_section
 
 (** Retrieve the label that [switch_to_section] (below) will put at the start
@@ -109,8 +100,6 @@ val switch_to_section : section -> unit
 (** Leave as much space as is required to achieve the given alignment. *)
 val align : bytes:int -> unit
 
-val byte : constant -> unit
-
 (** Adjust the current frame address offset by the given number of bytes. *)
 val cfi_adjust_cfa_offset : bytes:int -> unit
 
@@ -123,6 +112,19 @@ val cfi_endproc : unit -> unit
 (** Emit a comment. *)
 val comment : string -> unit
 
+(** Emit an 8-bit constant. *)
+val const8 : constant -> unit
+
+(** Emit a 16-bit constant. *)
+val const8 : constant -> unit
+
+(** Emit a 32-bit constant. *)
+val const32 : constant -> unit
+
+(** Emit a 64-bit constant. *)
+val const64 : constant -> unit
+
+(** Assign a file number to a filename. *)
 val file : file_num:int -> file_name:string -> unit
 
 val global : string -> unit
@@ -144,16 +146,15 @@ val int64 : Int64.t -> unit
 (** Mark the source location of the current assembly position. *)
 val loc : file_num:int -> line:int -> col:int -> unit
 
-val long : constant -> unit
+(** Mark that the call stack is not to be executable at runtime.  Not
+    supported on all platforms. *)
+val mark_stack_non_executable : unit -> unit
 
 val private_extern : string -> unit
 
-val qword : constant -> unit
-
-(** Set the given variable to the given expression.  (On Mac OS X this
-    translates to .set or direct assignment depending on the relocatability of
-    the expression.) *)
-val set_variable : string * constant_evaluated_at -> unit
+(** Set the given variable to the given expression.  Note that on Mac OS X
+    such an expression is evaluated to an _absolute_ assembly-time constant. *)
+val set : string * constant_evaluated_at -> unit
 
 val size : string -> constant -> unit
 
@@ -172,28 +173,6 @@ val symbol : Symbol.t -> unit
 
 (** Define a symbol at the current output position. *)
 val define_symbol : Symbol.t -> unit
-
-(** Emit a machine-width reference giving the displacement between the
-    two given symbols.  To obtain a positive result the symbol at the
-    lower address should be the second argument (just like subtraction). *)
-val between_symbols : upper:Symbol.t -> lower:Symbol.t -> unit
-
-(** Emit a 32-bit number giving the displacement between the two given
-    labels.  To obtain a positive result the symbol at the lower address
-    should be the second argument (just like subtraction).
-    The arguments are not relocated before the subtraction: in other words,
-    the displacement in the linked executable will equal the displacement
-    in the unlinked object file. *)
-val between_labels_32bit : upper:Cmm.label -> lower:Cmm.label -> unit
-
-(** Emit a machine-width reference giving the displacement between the
-    lower symbol and the sum of the address of the upper label plus
-    [offset_upper]. *)
-val between_symbol_and_label_offset
-   : upper:Linearize.label
-  -> lower:Symbol.t
-  -> offset_upper:Target_system.Address.t
-  -> unit
 
 (** Emit a machine-width reference to the address formed by adding the
     given byte offset to the address of the given symbol. *)
@@ -236,11 +215,44 @@ val cache_string : string -> Linearize.label
     the cache. *)
 val emit_cached_strings : unit -> unit
 
+(** The following functions calculate distances between various entities
+    such as labels and symbols.  These distances are calculated at link time
+    after the entities concerned have been relocated.  This means that they
+    can be safely used even when the linker may insert (or remove) code or
+    data between the points being measured. *)
+(* CR mshinwell: Let's verify that the relocation stuff is as expected *)
+
+(** Emit a machine-width reference giving the displacement between two given
+    labels.  To obtain a positive result the symbol at the lower address
+    should be the second argument, as for normal subtraction. *)
+val between_symbols : upper:Symbol.t -> lower:Symbol.t -> unit
+
+(** Like [between_symbols], but for two labels, emitting a 32-bit-wide
+    reference.  The behaviour upon overflow is unspecified. *)
+val between_labels_32bit : upper:Cmm.label -> lower:Cmm.label -> unit
+
+(** Emit a machine-width reference giving the displacement between the
+    lower symbol and the sum of the address of the upper label plus
+    [offset_upper]. *)
+val between_symbol_and_label_offset
+   : upper:Linearize.label
+  -> lower:Symbol.t
+  -> offset_upper:Targetint.t
+  -> unit
+
+(** Emit a 32-bit-wide reference giving the displacement between obtained
+    by subtracting the current assembly location from the sum of the address
+    of the given label plus the given offset. *)
+(* CR mshinwell: Make sure that emit_label lines up with what Asm_directives
+   does for int -> string label conversion *)
+val between_this_and_label_offset_32bit
+   : upper:Linearize.label
+  -> offset_upper:Targetint.t
+  -> unit
+
 (** Emit an integer giving the distance obtained by subtracting the
     address of [base] from the address of [label].  [width] specifies the
-    size of the integer.  The subtraction is performed after relocation: in
-    other words, the displacement in the linked executable may differ from
-    the displacement in the object file. *)
+    size of the integer. *)
 val offset_into_section_label
    : section:section
   -> label:Linearize.label
