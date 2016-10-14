@@ -15,49 +15,6 @@
 
 open X86_ast
 
-type system =
-  (* 32 bits and 64 bits *)
-  | S_macosx
-  | S_gnu
-  | S_cygwin
-
-  (* 32 bits only *)
-  | S_solaris
-  | S_win32
-  | S_linux_elf
-  | S_bsd_elf
-  | S_beos
-  | S_mingw
-
-  (* 64 bits only *)
-  | S_win64
-  | S_linux
-  | S_mingw64
-
-  | S_unknown
-
-
-let system = match Config.system with
-  | "macosx" -> S_macosx
-  | "solaris" -> S_solaris
-  | "win32" -> S_win32
-  | "linux_elf" -> S_linux_elf
-  | "bsd_elf" -> S_bsd_elf
-  | "beos" -> S_beos
-  | "gnu" -> S_gnu
-  | "cygwin" -> S_cygwin
-  | "mingw" -> S_mingw
-  | "mingw64" -> S_mingw64
-  | "win64" -> S_win64
-  | "linux" -> S_linux
-
-  | _ -> S_unknown
-
-let windows =
-  match system with
-  | S_mingw64 | S_cygwin | S_win64 -> true
-  | _ -> false
-
 let string_of_string_literal s =
   let b = Buffer.create (String.length s + 2) in
   let last_was_escape = ref false in
@@ -227,12 +184,6 @@ let assembler_passes = ref ([] : (asm_program -> asm_program) list)
 let internal_assembler = ref None
 let register_internal_assembler f = internal_assembler := Some f
 
-(* Which asm conventions to use *)
-let masm =
-  match system with
-  | S_win32 | S_win64 -> true
-  | _ -> false
-
 (* Shall we use an external assembler command ?
    If [binary_content] contains some data, we can directly
    save it. Otherwise, we have to ask an external command.
@@ -255,20 +206,8 @@ let assemble_file infile outfile =
 
 let asm_code = ref []
 
-let copy_of_asm_code = ref []
-let recording = ref false
-
-let start_recording_directives () =
-  recording := true;
-  copy_of_asm_code := []
-
-let finish_recording_directives () =
-  recording := false;
-  List.rev !copy_of_asm_code
-
 let directive dir =
-  asm_code := dir :: !asm_code;
-  if !recording then copy_of_asm_code := dir :: !copy_of_asm_code
+  asm_code := dir :: !asm_code
 
 let emit ins = directive (Ins ins)
 

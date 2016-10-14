@@ -176,7 +176,6 @@ ASMCOMP=\
   asmcomp/branch_relaxation.cmo \
   $(DWARF_LOW) \
   asmcomp/asm_directives.cmo \
-  asmcomp/asm_directives_x86.cmo \
   asmcomp/emitaux.cmo asmcomp/emit.cmo \
   $(DWARF_HIGH) \
   asmcomp/debug/dwarf.cmo \

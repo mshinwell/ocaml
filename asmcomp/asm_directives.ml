@@ -12,6 +12,20 @@
 (*                                                                        *)
 (**************************************************************************)
 
+[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+
+module Int8 = Numbers.Int8
+module Int16 = Numbers.Int16
+module TS = Target_system
+
+type constant =
+  | Const of int64
+  | This
+  | Label of string
+  | Numeric_label of Linearize.label
+  | Add of constant * constant
+  | Sub of constant * constant
+
 type width =
   | Thirty_two
   | Sixty_four
@@ -25,6 +39,8 @@ type dwarf_section =
   | Debug_line
 
 type section =
+  | Text
+  | Data
   | Dwarf of dwarf_section
 
 let debug_info_label = Cmm.new_label ()
@@ -42,43 +58,401 @@ let label_for_section = function
   | Dwarf Debug_str -> debug_str_label
   | Dwarf Debug_line -> debug_line_label
 
-module type S = sig
-  val init : unit -> unit
-  val switch_to_section : section -> unit
-  val symbol : Symbol.t -> unit
-  val define_symbol : Symbol.t -> unit
-  val between_symbols : upper:Symbol.t -> lower:Symbol.t -> unit
-  val between_labels_32bit : upper:Cmm.label -> lower:Cmm.label -> unit
-  val between_symbol_and_label_offset
-     : upper:Linearize.label
-    -> lower:Symbol.t
-    -> offset_upper:Target_system.Address.t
-    -> unit
-  val symbol_plus_offset
-     : Symbol.t
-    -> offset_in_bytes:Target_system.Address.t
-    -> unit
-  val label : Linearize.label -> unit
-  val label_declaration : label_name:Linearize.label -> unit
-  val int8 : Numbers.Int8.t -> unit
-  val int16 : Numbers.Int16.t -> unit
-  val int32 : Int32.t -> unit
-  val int64 : Int64.t -> unit
-  val target_address : Target_system.Address.t -> unit
-  val uleb128 : Int64.t -> unit
-  val sleb128 : Int64.t -> unit
-  val string : string -> unit
-  val cache_string : string -> Linearize.label
-  val emit_cached_strings : unit -> unit
-  val offset_into_section_label
-     : section:section
-    -> label:Linearize.label
-    -> width:width
-    -> unit
-  val offset_into_section_symbol
-     : section:section
-    -> symbol:Symbol.t
-    -> width:width
-    -> unit
-  val reset : unit -> unit
+module Directive = struct
+  type directive =
+    | Align of bool * int
+    | Byte of constant
+    | Bytes of string
+    | Comment of string
+    | Global of string
+    | Long of constant
+    | NewLabel of string
+    | Quad of constant
+    | Section of string list * string option * string list
+    | Space of int
+    | Word of constant
+    | Cfi_adjust_cfa_offset of int
+    | Cfi_endproc
+    | Cfi_startproc
+    | File of { file_num : int; filename : int; }
+    | Indirect_symbol of string
+    | Loc of { file_num : int; line : int; col : int; }
+    | Private_extern of string
+    | Set of string * constant
+    | Size of string * constant
+    | Sleb128 of constant
+    | Type of string * string
+    | Uleb128 of constant
+    | Direct_assignment of string * constant
+
+  let rec cst b = function
+    | Label _ |  _ | This as c -> scst b c
+    | Add (c1, c2) -> bprintf b "%a + %a" scst c1 scst c2
+    | Sub (c1, c2) -> bprintf b "%a - %a" scst c1 scst c2
+
+  and scst b = function
+    | This -> Buffer.add_string b "."
+    | Label l -> Buffer.add_string b l
+    | n when n <= 0x7FFF_FFFFL && n >= -0x8000_0000L ->
+      Buffer.add_string b (Int64.to_string n)
+    | n -> bprintf b "0x%Lx" n
+    | Add (c1, c2) -> bprintf b "(%a + %a)" scst c1 scst c2
+    | Sub (c1, c2) -> bprintf b "(%a - %a)" scst c1 scst c2
+
+  let print_gas b = function
+    | Align { bytes = n; } ->
+      (* Mac OS X's assembler interprets the integer n as a 2^n alignment *)
+      let n = if TS.system = S_macosx then Misc.log2 n else n in
+      bprintf b "\t.align\t%d" n
+    | Byte n -> bprintf b "\t.byte\t%a" cst n
+    | Bytes s ->
+      if TS.system = S_solaris then buf_bytes_directive b ".byte" s
+      else bprintf b "\t.ascii\t\"%s\"" (string_of_string_literal s)
+    | Comment s -> bprintf b "\t\t\t\t/* %s */" s
+    | Global s -> bprintf b "\t.globl\t%s" s;
+    | Long n -> bprintf b "\t.long\t%a" cst n
+    | NewLabel s -> bprintf b "%s:" s
+    | Quad n -> bprintf b "\t.quad\t%a" cst n
+    | Section ([".data" ], _, _) -> bprintf b "\t.data"
+    | Section ([".text" ], _, _) -> bprintf b "\t.text"
+    | Section (name, flags, args) ->
+      bprintf b "\t.section %s" (String.concat "," name);
+      begin match flags with
+      | None -> ()
+      | Some flags -> bprintf b ",%S" flags
+      end;
+      begin match args with
+      | [] -> ()
+      | _ -> bprintf b ",%s" (String.concat "," args)
+      end
+    | Space n ->
+      if TS.system = S_solaris then bprintf b "\t.zero\t%d" n
+      else bprintf b "\t.space\t%d" n
+    | Word n ->
+      (* Apple's documentation says that ".word" is i386-specific, so we use
+          ".short" instead. *)
+      if TS.system = S_solaris then bprintf b "\t.value\t%a" cst n
+      else bprintf b "\t.short\t%a" cst n
+    | Cfi_adjust_cfa_offset n -> bprintf b "\t.cfi_adjust_cfa_offset %d" n
+    | Cfi_endproc -> bprintf b "\t.cfi_endproc"
+    | Cfi_startproc -> bprintf b "\t.cfi_startproc"
+    | File (file_num, file_name) ->
+      bprintf b "\t.file\t%d\t\"%s\""
+        file_num (X86_proc.string_of_string_literal file_name)
+    | Indirect_symbol s -> bprintf b "\t.indirect_symbol %s" s
+    | Loc (file_num, line, col) ->
+      (* PR#7726: Location.none uses column -1, breaks LLVM assembler *)
+      if col >= 0 then bprintf b "\t.loc\t%d\t%d\t%d" file_num line col
+      else bprintf b "\t.loc\t%d\t%d" file_num line
+    | Private_extern s -> bprintf b "\t.private_extern %s" s
+    | Set (arg1, arg2) -> bprintf b "\t.set %s, %a" arg1 cst arg2
+    | Size (s, c) -> bprintf b "\t.size %s,%a" s cst c
+    | Sleb128 c -> bprintf b "\t.sleb128 %a" cst c
+    | Type (s, typ) -> bprintf b "\t.type %s,%s" s typ
+    | Uleb128 c -> bprintf b "\t.uleb128 %a" cst c
+    | Direct_assignment (var, const) ->
+      if TS.system <> S_macosx then failwith "Cannot emit Direct_assignment";
+      bprintf b "%s = %a" var cst const
+
+  let print_masm b = function
+    | Align { bytes; } -> bprintf b "\tALIGN\t%d" bytes
+    | Byte n -> bprintf b "\tBYTE\t%a" cst n
+    | Bytes s -> buf_bytes_directive b "BYTE" s
+    | Comment s -> bprintf b " ; %s " s
+    | Global s -> bprintf b "\tPUBLIC\t%s" s
+    | Long n -> bprintf b "\tDWORD\t%a" cst n
+    | NewLabel (s, NONE) -> bprintf b "%s:" s
+    | NewLabel (s, ptr) -> bprintf b "%s LABEL %s" s (string_of_datatype ptr)
+    | Quad n -> bprintf b "\tQWORD\t%a" cst n
+    | Section ([".data"], None, []) -> bprintf b "\t.DATA"
+    | Section ([".text"], None, []) -> bprintf b "\t.CODE"
+    | Section _ -> assert false
+    | Space n -> bprintf b "\tBYTE\t%d DUP (?)" n
+    | Word n -> bprintf b "\tWORD\t%a" cst n
+    | External (s, ptr) -> bprintf b "\tEXTRN\t%s: %s" s (string_of_datatype ptr)
+    | Mode386 -> bprintf b "\t.386"
+    | Model name -> bprintf b "\t.MODEL %s" name (* name = FLAT *)
+    | NewLabel _
+    | Cfi_adjust_cfa_offset _
+    | Cfi_endproc
+    | Cfi_startproc
+    | File _
+    | Indirect_symbol _
+    | Loc _
+    | Private_extern _
+    | Set _
+    | Size _
+    | Sleb128 _
+    | Type _
+    | Uleb128 _
+    | Direct_assignment _ ->
+      Misc.fatal_error "Unsupported asm directive for MASM"
+
+  let print b t =
+    if TS.masm then print_masm b t
+    else print_gas b t
 end
+
+type constant_evaluated_at =
+  | Compile_time of constant
+  | Link_time of constant
+
+let emit_ref = ref None
+
+let emit d =
+  match !emit_ref with
+  | Some emit -> emit d
+  | None -> Misc.fatal_error "initialize not called"
+
+let section segment flags args = emit (Section (segment, flags, args))
+let align ~bytes = emit (Align (false, bytes))
+let byte n = emit (Byte n)
+let bytes s = emit (Bytes s)
+let cfi_adjust_cfa_offset ~bytes = emit (Cfi_adjust_cfa_offset bytes)
+let cfi_endproc () = emit Cfi_endproc
+let cfi_startproc () = emit Cfi_startproc
+let comment s = emit (Comment s)
+let data () = section [ ".data" ] None []
+let direct_assignment var const = emit (Direct_assignment (var, const))
+let extrn s ptr = emit (External (s, ptr))
+let file ~file_num ~file_name = emit (File (file_num, file_name))
+let global s = emit (Global s)
+let indirect_symbol s = emit (Indirect_symbol s)
+let label s = emit (NewLabel s)
+let loc ~file_num ~line ~col = emit (Loc (file_num, line, col))
+let long cst = emit (Long cst)
+let mode386 () = emit Mode386
+let model name = emit (Model name)
+let private_extern s = emit (Private_extern s)
+let qword cst = emit (Quad cst)
+let set x y = emit (Set (x, y))
+let size name cst = emit (Size (name, cst))
+let sleb128 cst = emit (Sleb128 (Const i))
+let space n = emit (Space n)
+let string = bytes
+let text () = section [ ".text" ] None []
+let type_ name typ = emit (Type (name, typ))
+let uleb128 cst = emit (Uleb128 (Const i))
+let word cst = emit (Word cst)
+
+let set_variable var const =
+  match const with
+  | Compile_time const ->
+    begin match TS.system with
+    | S.macosx -> set var const
+    | _ -> ...
+    end
+  | Link_time const ->
+    begin match TS.system with
+    | S.macosx -> direct_assignment var const
+    | _ -> set var const
+    end
+
+let string_of_label label_name =
+  match TS.system with
+  | S_macosx | S_win64 -> "L" ^ string_of_int label_name
+  | S_gnu
+  | S_cygwin
+  | S_solaris
+  | S_win32
+  | S_linux_elf
+  | S_bsd_elf
+  | S_beos
+  | S_mingw
+  | S_linux
+  | S_mingw64
+  | S_unknown -> ".L" ^ string_of_int label_name
+
+let label label_name =
+  qword (ConstLabel (string_of_label label_name))
+
+let label_declaration ~label_name =
+  (* CR mshinwell: should this always be QWORD?  (taken from emit.mlp) *)
+  label (string_of_label label_name) ~typ:QWORD
+
+let sections_seen = ref []
+
+let switch_to_section (section : section) =
+  let first_occurrence =
+    if List.mem section !sections_seen then false
+    else begin
+      sections_seen := section::!sections_seen;
+      true
+    end
+  in
+  let section_name, middle_part, attrs =
+    match section, X86_proc.system with
+    | Dwarf dwarf, S_macosx ->
+      let name =
+        match dwarf with
+        | Debug_info -> "__debug_info"
+        | Debug_abbrev -> "__debug_abbrev"
+        | Debug_aranges -> "__debug_aranges"
+        | Debug_loc -> "__debug_loc"
+        | Debug_str -> "__debug_str"
+        | Debug_line -> "__debug_line"
+      in
+      ["__DWARF"; name], None, ["regular"; "debug"]
+    | Dwarf dwarf, _ ->
+      let name =
+        match dwarf with
+        | Debug_info -> ".debug_info"
+        | Debug_abbrev -> ".debug_abbrev"
+        | Debug_aranges -> ".debug_aranges"
+        | Debug_loc -> ".debug_loc"
+        | Debug_str -> ".debug_str"
+        | Debug_line -> ".debug_line"
+      in
+      let middle_part =
+        if first_occurrence then
+          Some ""
+        else
+          None
+      in
+      let attrs =
+        if first_occurrence then
+          ["%progbits"]
+        else
+          []
+      in
+      [name], middle_part, attrs
+  in
+  section section_name middle_part attrs;
+  if first_occurrence then begin
+    label_declaration ~label_name:(label_for_section section)
+  end
+
+let cached_strings = ref ([] : (string * Linearize.label) list)
+
+let reset () =
+  cached_strings := [];
+  sections_seen := []
+
+let initialize ~emit =
+  emit_ref := emit;
+  reset ();
+  match X86_proc.system with
+  | S_macosx -> ()
+  | _ ->
+    if !Clflags.debug then begin
+      (* Forward label references are illegal in gas. *)
+      switch_to_section (Dwarf Debug_info);
+      switch_to_section (Dwarf Debug_abbrev);
+      switch_to_section (Dwarf Debug_aranges);
+      switch_to_section (Dwarf Debug_loc);
+      switch_to_section (Dwarf Debug_str);
+      switch_to_section (Dwarf Debug_line)
+    end
+
+let symbol_prefix = if X86_proc.system = X86_proc.S_macosx then "_" else ""
+
+let escape_symbol s = X86_proc.string_of_symbol symbol_prefix s
+
+let symbol sym =
+  let sym = Linkage_name.to_string (Symbol.label sym) in
+  qword (ConstLabel (escape_symbol sym))
+
+let symbol_plus_offset sym ~offset_in_bytes =
+  let sym = Linkage_name.to_string (Symbol.label sym) in
+  let offset_in_bytes = TS.Address.to_int64 offset_in_bytes in
+  qword (ConstAdd (ConstLabel (escape_symbol sym), Const offset_in_bytes))
+
+let between_symbols ~upper ~lower =
+  let upper = Linkage_name.to_string (Symbol.label upper) in
+  let lower = Linkage_name.to_string (Symbol.label lower) in
+  qword (ConstSub (
+    ConstLabel (escape_symbol upper),
+    ConstLabel (escape_symbol lower)))
+
+let between_labels_32bit ~upper ~lower =
+  long (ConstSub (
+    ConstLabel (string_of_label upper),
+    ConstLabel (string_of_label lower)))
+
+let define_symbol sym =
+  let name = Linkage_name.to_string (Symbol.label sym) in
+  qword (ConstLabel (escape_symbol name));
+  global name
+
+let between_symbol_and_label_offset ~upper ~lower ~offset_upper =
+  let upper = string_of_label upper in
+  let lower = Linkage_name.to_string (Symbol.label lower) in
+  let offset_upper = TS.Address.to_int64 offset_upper in
+  qword (ConstSub (
+    ConstAdd (ConstLabel upper, Const offset_upper),
+    ConstLabel (escape_symbol lower)))
+
+let temp_var_counter = ref 0
+let new_temp_var () =
+  let id = !temp_var_counter in
+  incr temp_var_counter;
+  Printf.sprintf "Ltemp%d" id
+
+let constant_with_width expr ~(width : width) =
+  match width with
+  (* CR mshinwell: make sure this behaves properly on 32-bit platforms.
+     This width is independent of the natural machine width. *)
+  | Thirty_two -> long expr
+  | Sixty_four -> qword expr
+
+let offset_into_section_label ~section ~label:upper ~width =
+  let lower = string_of_label (label_for_section section) in
+  let expr : X86_ast.constant =
+    match X86_proc.system with
+    | S_macosx ->
+      let temp = new_temp_var () in
+      set_variable temp (Link_time (Sub (Numeric_label upper, Label lower)));
+      Label temp
+    | _ ->
+      Numeric_label upper
+  in
+  constant_with_width expr width
+
+let offset_into_section_symbol ~section ~symbol ~width =
+  let lower = string_of_label (label_for_section section) in
+  let upper = escape_symbol (Linkage_name.to_string (Symbol.label symbol)) in
+  let expr : constant =
+    match X86_proc.system with
+    | S_macosx ->
+      let temp = new_temp_var () in
+      set_variable temp (Link_time (Sub (Label upper, Label lower)));
+      Label temp
+    | _ -> Label upper
+  in
+  constant_with_width expr width
+
+let int8 i =
+  byte (X.const (Int8.to_int i))
+
+(* CR mshinwell: check these are the correct directives for both 64 and 32
+   (same for the symbol case above). *)
+
+let int16 i =
+  word (X.const (Int16.to_int i))
+
+let int32 i =
+  long (X.const_32 i)
+
+let int64 i =
+  qword (Const i)
+
+let target_address addr =
+  match Targetint.repr addr with
+  | Int32 i -> int32 i
+  | Int64 i -> int64 i
+
+let cache_string str =
+  match List.assoc str !cached_strings with
+  | label -> label
+  | exception Not_found ->
+    let label = Cmm.new_label () in
+    cached_strings := (str, label) :: !cached_strings;
+    label
+
+let emit_cached_strings () =
+  List.iter (fun (str, label_name) ->
+      label_declaration ~label_name;
+      string str;
+      int8 Int8.zero)
+    !cached_strings;
+  cached_strings := []
