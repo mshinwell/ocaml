@@ -159,12 +159,21 @@ module type S = sig
   (** Define a symbol at the current output position. *)
   val define_symbol : Symbol.t -> unit
 
+  (* CR-soon mshinwell: Try to tighten things up so there aren't any functions
+     that just use [string], and hide the escaping in this module. *)
+  (** Escape a symbol so it is suitable for those functions in this file
+      taking [string] arguments for symbols. *)
+  val escape_symbol : string -> string
+
   (** Emit a machine-width reference to the address formed by adding the
       given byte offset to the address of the given symbol. *)
   val symbol_plus_offset
     : Symbol.t
     -> offset_in_bytes:Targetint.t
     -> unit
+
+  (** Encode a numeric label as a string. *)
+  val string_of_label : Linearize.label -> string
 
   (** Emit a machine-width reference to the given label. *)
   val label : Linearize.label -> unit

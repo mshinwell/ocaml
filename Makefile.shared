@@ -95,16 +95,18 @@ BYTECOMP=bytecomp/meta.cmo bytecomp/instruct.cmo bytecomp/bytegen.cmo \
   driver/errors.cmo driver/compile.cmo
 
 INTEL_ASM=\
-  asmcomp/x86_proc.cmo \
   asmcomp/x86_dsl.cmo \
   asmcomp/x86_gas.cmo \
   asmcomp/x86_masm.cmo
 
+ARCH_SPECIFIC_ASMCOMP_EARLY=
 ARCH_SPECIFIC_ASMCOMP=
 ifeq ($(ARCH),i386)
+ARCH_SPECIFIC_ASMCOMP_EARLY=asmcomp/x86_proc.cmo
 ARCH_SPECIFIC_ASMCOMP=$(INTEL_ASM)
 endif
 ifeq ($(ARCH),amd64)
+ARCH_SPECIFIC_ASMCOMP_EARLY=asmcomp/x86_proc.cmo
 ARCH_SPECIFIC_ASMCOMP=$(INTEL_ASM)
 endif
 
@@ -140,7 +142,7 @@ DWARF_HIGH=\
   supportlibs/dwarf_high/dwarf_world.cmo
 
 ASMCOMP=\
-  $(ARCH_SPECIFIC_ASMCOMP) \
+  $(ARCH_SPECIFIC_ASMCOMP_EARLY) \
   asmcomp/arch.cmo asmcomp/ident_ibp.cmo \
   asmcomp/clambda.cmo asmcomp/printclambda.cmo \
   asmcomp/cmm.cmo asmcomp/printcmm.cmo \
@@ -177,6 +179,7 @@ ASMCOMP=\
   $(DWARF_LOW) \
   asmcomp/asm_directives_intf.cmo \
   asmcomp/asm_directives.cmo \
+  $(ARCH_SPECIFIC_ASMCOMP) \
   asmcomp/emitaux.cmo asmcomp/emit.cmo \
   $(DWARF_HIGH) \
   asmcomp/debug/dwarf.cmo \

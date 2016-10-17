@@ -81,7 +81,9 @@ module D = struct
   let emit dir = directive (MASM_directive dir)
 
   let extrn s ptr = emit (External (s, ptr))
-  let label ?(typ = NONE) s = emit (NewLabel (s, typ))
+  let label ?(typ = NONE) s =
+    if Target_system.masm then emit (NewLabel (s, typ))
+    else Asm_directives.label_declaration' s
   let mode386 () = emit Mode386
   let model name = emit (Model name)
 end

@@ -70,9 +70,11 @@ module D : sig
   (** x86-specific directives.
       (For generic directives, see [Asm_directives].) *)
 
+  (** [typ] is only used for MASM. *)
+  val label: ?typ:data_type -> string -> unit
+
   (** The following are MASM-specific. *)
   val extrn: string -> data_type -> unit
-  val label: ?typ:data_type -> string -> unit
   val mode386: unit -> unit
   val model: string -> unit
 end

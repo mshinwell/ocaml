@@ -21,5 +21,5 @@ val emit
   -> end_of_code_symbol:Symbol.t
   -> compilation_unit_header_label:Cmm.label
   -> debug_loc_table:Debug_loc_table.t
-  -> (module Asm_directives.S)
+  -> (module Asm_directives_intf.S)
   -> unit

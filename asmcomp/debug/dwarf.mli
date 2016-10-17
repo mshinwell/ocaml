@@ -39,4 +39,4 @@ val dwarf_for_function_definition
   -> emit_info:Emit.fundecl_result
   -> unit
 
-val emit : t -> (module Asm_directives.S) -> unit
+val emit : t -> (module Asm_directives_intf.S) -> unit
