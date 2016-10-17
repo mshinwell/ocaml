@@ -15,25 +15,6 @@
 
 open X86_ast
 
-let string_of_string_literal s =
-  let b = Buffer.create (String.length s + 2) in
-  let last_was_escape = ref false in
-  for i = 0 to String.length s - 1 do
-    let c = s.[i] in
-    if c >= '0' && c <= '9' then
-      if !last_was_escape
-      then Printf.bprintf b "\\%o" (Char.code c)
-      else Buffer.add_char b c
-    else if c >= ' ' && c <= '~' && c <> '"' (* '"' *) && c <> '\\' then begin
-      Buffer.add_char b c;
-      last_was_escape := false
-    end else begin
-      Printf.bprintf b "\\%o" (Char.code c);
-      last_was_escape := true
-    end
-  done;
-  Buffer.contents b
-
 let string_of_symbol prefix s =
   let spec = ref false in
   for i = 0 to String.length s - 1 do
@@ -52,22 +33,6 @@ let string_of_symbol prefix s =
       )
       s;
     Buffer.contents b
-
-let buf_bytes_directive b directive s =
-  let pos = ref 0 in
-  for i = 0 to String.length s - 1 do
-    if !pos = 0
-    then begin
-      if i > 0 then Buffer.add_char b '\n';
-      Buffer.add_char b '\t';
-      Buffer.add_string b directive;
-      Buffer.add_char b '\t';
-    end
-    else Buffer.add_char b ',';
-    Printf.bprintf b "%d" (Char.code s.[i]);
-    incr pos;
-    if !pos >= 16 then begin pos := 0 end
-  done
 
 let string_of_reg64 = function
   | RAX -> "rax"
@@ -191,7 +156,7 @@ let register_internal_assembler f = internal_assembler := Some f
 let binary_content = ref None
 
 let compile infile outfile =
-  if masm then
+  if Target_system.masm then
     Ccomp.command (Config.asm ^
                    Filename.quote outfile ^ " " ^ Filename.quote infile ^
                    (if !Clflags.verbose then "" else ">NUL"))

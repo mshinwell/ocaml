@@ -185,7 +185,7 @@ type masm_directive =
 
 type asm_line =
   | Ins of instruction
-  | Directive of Asm_directives.directive
+  | Directive of Asm_directives.Directive.t
   | MASM_directive of masm_directive
 
 type asm_program = asm_line list

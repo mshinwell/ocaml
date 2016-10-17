@@ -28,17 +28,17 @@ type t =
   | String of string
   | Indirect_string of string
   (* CR mshinwell: remove "Code" name. *)
-  | Absolute_code_address of Target_system.Address.t
+  | Absolute_code_address of Targetint.t
   | Code_address_from_label of Linearize.label
   | Code_address_from_symbol of Symbol.t
   | Code_address_from_label_symbol_diff of
       { upper : Linearize.label;
         lower : Symbol.t;
-        offset_upper : Target_system.Address.t;
+        offset_upper : Targetint.t;
       }
     (** The calculation is: (upper + offset_upper) - lower. *)
   | Code_address_from_symbol_diff of { upper : Symbol.t; lower : Symbol.t; }
-  | Code_address_from_symbol_plus_bytes of Symbol.t * Target_system.Address.t
+  | Code_address_from_symbol_plus_bytes of Symbol.t * Targetint.t
   (* N.B. The basic "offset" constructors here take labels rather than
      absolute addresses---this is important so that the references are
      relocated when multiple object files are linked together (and DWARF

@@ -38,10 +38,11 @@ let sym s = Sym s
 
 let nat n = Imm (Int64.of_nativeint n)
 let int n = Imm (Int64.of_int n)
-
+(*
 let const_32 n = Const (Int64.of_int32 n)
 let const_nat n = Const (Int64.of_nativeint n)
 let const n = Const (Int64.of_int n)
+*)
 
 let al  = Reg8L RAX
 let ah  = Reg8H AH
@@ -77,12 +78,12 @@ let mem64_rip typ ?(ofs = 0) s =
   Mem64_RIP (typ, s, ofs)
 
 module D = struct
-  let emit directive = emit (MASM_directive directive)
+  let emit dir = directive (MASM_directive dir)
 
+  let extrn s ptr = emit (External (s, ptr))
   let label ?(typ = NONE) s = emit (NewLabel (s, typ))
   let mode386 () = emit Mode386
   let model name = emit (Model name)
-  let private_extern s = emit (Private_extern s)
 end
 
 module I = struct

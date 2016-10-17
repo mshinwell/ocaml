@@ -31,7 +31,7 @@ let create ~location_list_entries =
 let label t = t.name
 
 let end_marker () =
-  Dwarf_value.Absolute_code_address (Target_system.Address.zero ())
+  Dwarf_value.Absolute_code_address Targetint.zero
 
 let size t =
   let (+) = Int64.add in
@@ -50,7 +50,7 @@ let compare_increasing_vma t1 t2 =
   | _ -> failwith "Location_list.compare on empty location list(s)"
 
 let emit t asm =
-  let module A = (val asm : Asm_directives.S) in
+  let module A = (val asm : Asm_directives_intf.S) in
   A.label_declaration ~label_name:t.name;
   List.iter (fun entry -> Location_list_entry.emit entry asm) t.entries;
   (* DWARF-4 spec, section 2.6.2. *)

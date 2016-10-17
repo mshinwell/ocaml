@@ -32,15 +32,15 @@ type t =
   | Sleb128 of Int64.t
   | String of string
   | Indirect_string of string
-  | Absolute_code_address of Target_system.Address.t
+  | Absolute_code_address of Targetint.t
   | Code_address_from_label of Linearize.label
   | Code_address_from_symbol of Symbol.t
   | Code_address_from_label_symbol_diff of
       { upper : Linearize.label; lower : Symbol.t;
-        offset_upper : Target_system.Address.t;
+        offset_upper : Targetint.t;
       }
   | Code_address_from_symbol_diff of { upper : Symbol.t; lower : Symbol.t; }
-  | Code_address_from_symbol_plus_bytes of Symbol.t * Target_system.Address.t
+  | Code_address_from_symbol_plus_bytes of Symbol.t * Targetint.t
   | Offset_into_debug_info of Linearize.label
   | Offset_into_debug_info_from_symbol of Symbol.t
   | Offset_into_debug_line of Linearize.label
@@ -75,9 +75,10 @@ let size t =
   | Code_address_from_label_symbol_diff _
   | Code_address_from_symbol_diff _
   | Code_address_from_symbol_plus_bytes _ ->
-    begin match Target_system.Address.word_size () with
-    | Four -> 4L
-    | Eight -> 8L
+    begin match Targetint.size with
+    | 32 -> 4L
+    | 64 -> 8L
+    | bits -> Misc.fatal_errorf "Unsupported Targetint.size %d" bits
     end
   | String str -> Int64.of_int (String.length str + 1)
   | Indirect_string _
@@ -90,14 +91,14 @@ let size t =
     Dwarf_format_int.size (Dwarf_format_int.zero ())
   | Distance_between_labels_32bit _ -> 4L
 
-let width_for_ref_addr_or_sec_offset () : Asm_directives.width =
-  (* DWARF-4 specification p.142. *)
-  match Dwarf_format.get () with
-  | Thirty_two -> Thirty_two
-  | Sixty_four -> Sixty_four
-
 let emit t asm =
-  let module A = (val asm : Asm_directives.S) in
+  let module A = (val asm : Asm_directives_intf.S) in
+  let width_for_ref_addr_or_sec_offset () : A.width =
+    (* DWARF-4 specification p.142. *)
+    match Dwarf_format.get () with
+    | Thirty_two -> Thirty_two
+    | Sixty_four -> Sixty_four
+  in
   match t with
   | Flag_true -> ()  (* DWARF-4 specification p.148 *)
   | Bool b -> A.int8 (if b then Int8.one else Int8.zero)

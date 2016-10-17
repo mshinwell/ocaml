@@ -29,9 +29,11 @@ open X86_ast
 val sym: string -> arg
 val nat: nativeint -> arg
 val int: int -> arg
+(*
 val const_32: int32 -> constant
 val const_nat: nativeint -> constant
 val const: int -> constant
+*)
 val al: arg
 val ah: arg
 val cl: arg

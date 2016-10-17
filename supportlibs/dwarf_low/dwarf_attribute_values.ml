@@ -86,11 +86,11 @@ module Attribute_value = struct
     match value with
     | Dwarf_value value -> Dwarf_value.emit value asm
     | Single_location_description loc_desc ->
-      let module A = (val asm : Asm_directives.S) in
+      let module A = (val asm : Asm_directives_intf.S) in
       A.uleb128 (Single_location_description.size loc_desc);
       Single_location_description.emit loc_desc asm
     | Composite_location_description loc_desc ->
-      let module A = (val asm : Asm_directives.S) in
+      let module A = (val asm : Asm_directives_intf.S) in
       A.uleb128 (Composite_location_description.size loc_desc);
       Composite_location_description.emit loc_desc asm
 

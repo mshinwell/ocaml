@@ -92,20 +92,6 @@ let arg b = function
       else if displ < 0 then bprintf b "%d" displ
   | Mem addr -> arg_mem b addr
 
-let rec cst b = function
-  | ConstLabel _ | Const _ | ConstThis as c -> scst b c
-  | ConstAdd (c1, c2) -> bprintf b "%a + %a" scst c1 scst c2
-  | ConstSub (c1, c2) -> bprintf b "%a - %a" scst c1 scst c2
-
-and scst b = function
-  | ConstThis -> Buffer.add_string b "THIS BYTE"
-  | ConstLabel l -> Buffer.add_string b l
-  | Const n when n <= 0x7FFF_FFFFL && n >= -0x8000_0000L ->
-      Buffer.add_string b (Int64.to_string n)
-  | Const n -> bprintf b "0%LxH" n
-  | ConstAdd (c1, c2) -> bprintf b "(%a + %a)" scst c1 scst c2
-  | ConstSub (c1, c2) -> bprintf b "(%a - %a)" scst c1 scst c2
-
 let i0 b s = bprintf b "\t%s" s
 let i1 b s x = bprintf b "\t%s\t%a" s arg x
 let i2 b s x y = bprintf b "\t%s\t%a, %a" s arg y arg x
@@ -214,7 +200,7 @@ let print_instr b = function
 
 let print_line b = function
   | Ins instr -> print_instr b instr
-  | Directive d -> Asm_directives.print b d
+  | Directive d -> Asm_directives.Directive.print b d
   | MASM_directive (NewLabel (s, NONE)) -> bprintf b "%s:" s
   | MASM_directive (NewLabel (s, ptr)) ->
     bprintf b "%s LABEL %s" s (string_of_datatype ptr)

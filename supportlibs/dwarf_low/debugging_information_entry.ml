@@ -39,7 +39,7 @@ let null =
 let create_null () = Lazy.force null
 
 let emit t asm =
-  let module A = (val asm : Asm_directives.S) in
+  let module A = (val asm : Asm_directives_intf.S) in
   (* The null DIE is likely to be emitted multiple times; we must not
      emit its label multiple times, or the assembler would complain.
      We don't actually need to point at the null DIE from anywhere else, so

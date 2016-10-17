@@ -12,24 +12,32 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Basic types corresponding to the compiler's target machine.
-    We provide for the future potential of the compiler's target being
-    selected at runtime. *)
+(** Types corresponding to the compiler's target machine. *)
 
-module Address : sig
-  (** Addresses on the target. *)
+(** Target systems of the OCaml native code compiler. *)
+type system = private
+  (* 32 and 64 bit *)
+  | S_macosx
+  | S_gnu
+  | S_cygwin
+  (* 32 bit only *)
+  | S_solaris
+  | S_win32
+  | S_linux_elf
+  | S_bsd_elf
+  | S_beos
+  | S_mingw
+  (* 64 bit only *)
+  | S_win64
+  | S_linux
+  | S_mingw64
+  | S_unknown
 
-  type t = private
-    | Int32 of Int32.t
-    | Int64 of Int64.t
+(** The selected target system of the OCaml compiler. *)
+val system : system
 
-  val zero : unit -> t
+(** Whether the target system is a Windows platform. *)
+val windows : bool
 
-  val all_ones : unit -> t
-
-  type word_size = Four | Eight
-  val word_size : unit -> word_size
-
-  val of_int_exn : int -> t
-  val to_int64 : t -> Int64.t
-end
+(** Whether the target system uses the MASM assembler. *)
+val masm : bool

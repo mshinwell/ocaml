@@ -57,7 +57,7 @@ let size t =
 let emit t asm =
   let size_without_first_word = size_without_first_word t in
   let initial_length = Initial_length.create size_without_first_word in
-  let module A = (val asm : Asm_directives.S) in
+  let module A = (val asm : Asm_directives_intf.S) in
   A.label_declaration ~label_name:t.compilation_unit_header_label;
   Initial_length.emit initial_length asm;
   Dwarf_version.emit dwarf_version asm;

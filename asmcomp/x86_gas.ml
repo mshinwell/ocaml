@@ -171,7 +171,7 @@ let print_instr b = function
   | MOV ((Imm n as arg1), (Reg64 _ as arg2))
     when not (n <= 0x7FFF_FFFFL && n >= -0x8000_0000L) ->
       i2 b "movabsq" arg1 arg2
-  | MOV ((Sym _ as arg1), (Reg64 _ as arg2)) when windows ->
+  | MOV ((Sym _ as arg1), (Reg64 _ as arg2)) when Target_system.windows ->
       i2 b "movabsq" arg1 arg2
   | MOV (arg1, arg2) -> i2_s b "mov" arg1 arg2
   | MOVAPD (arg1, arg2) -> i2 b "movapd" arg1 arg2
@@ -228,7 +228,7 @@ let print_instr b = function
 
 let print_line b = function
   | Ins instr -> print_instr b instr
-  | Directive d -> Asm_directives.print b d
+  | Directive d -> Asm_directives.Directive.print b d
   | MASM_directive _ ->
     Misc.fatal_error "Cannot emit MASM directives to gas target"
 

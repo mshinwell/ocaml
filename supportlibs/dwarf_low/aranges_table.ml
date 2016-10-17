@@ -37,8 +37,8 @@ let create ~start_of_code_symbol ~end_of_code_symbol
     V.Code_address_from_symbol start_of_code_symbol;
     V.Code_address_from_symbol_diff
       { upper = end_of_code_symbol; lower = start_of_code_symbol; };
-    V.Absolute_code_address (Target_system.Address.zero ());
-    V.Absolute_code_address (Target_system.Address.zero ());
+    V.Absolute_code_address Targetint.zero;
+    V.Absolute_code_address Targetint.zero;
   ]
   in
   let size =

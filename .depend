@@ -31,10 +31,8 @@ utils/strongly_connected_components.cmo : utils/numbers.cmi utils/misc.cmi \
 utils/strongly_connected_components.cmx : utils/numbers.cmx utils/misc.cmx \
     utils/identifiable.cmx utils/strongly_connected_components.cmi
 utils/strongly_connected_components.cmi : utils/identifiable.cmi
-utils/target_system.cmo : utils/misc.cmi utils/config.cmi \
-    utils/target_system.cmi
-utils/target_system.cmx : utils/misc.cmx utils/config.cmx \
-    utils/target_system.cmi
+utils/target_system.cmo : utils/config.cmi utils/target_system.cmi
+utils/target_system.cmx : utils/config.cmx utils/target_system.cmi
 utils/target_system.cmi :
 utils/targetint.cmo : utils/misc.cmi utils/targetint.cmi
 utils/targetint.cmx : utils/misc.cmx utils/targetint.cmi
@@ -723,9 +721,13 @@ asmcomp/asm_directives.cmx : asmcomp/x86_proc.cmx utils/targetint.cmx \
     utils/numbers.cmx utils/misc.cmx middle_end/base_types/linkage_name.cmx \
     asmcomp/linearize.cmx asmcomp/cmm.cmx utils/clflags.cmx \
     asmcomp/asm_directives.cmi
-asmcomp/asm_directives.cmi : utils/targetint.cmi utils/target_system.cmi \
+asmcomp/asm_directives.cmi : asmcomp/asm_directives_intf.cmo
+asmcomp/asm_directives_intf.cmo : utils/targetint.cmi \
     middle_end/base_types/symbol.cmi utils/numbers.cmi asmcomp/linearize.cmi \
     asmcomp/cmm.cmi
+asmcomp/asm_directives_intf.cmx : utils/targetint.cmx \
+    middle_end/base_types/symbol.cmx utils/numbers.cmx asmcomp/linearize.cmx \
+    asmcomp/cmm.cmx
 asmcomp/asmgen.cmo : asmcomp/un_anf.cmi bytecomp/translmod.cmi \
     utils/timings.cmi middle_end/base_types/symbol.cmi asmcomp/split.cmi \
     asmcomp/spill.cmi asmcomp/selection.cmi asmcomp/selectgen.cmi \
@@ -1360,13 +1362,13 @@ supportlibs/dwarf_high/assign_abbrevs.cmi : \
     supportlibs/dwarf_high/proto_die.cmi \
     supportlibs/dwarf_low/debugging_information_entry.cmi \
     supportlibs/dwarf_low/abbreviations_table.cmi
-supportlibs/dwarf_high/dwarf_attribute_helpers.cmo : utils/target_system.cmi \
+supportlibs/dwarf_high/dwarf_attribute_helpers.cmo : utils/targetint.cmi \
     supportlibs/dwarf_high/proto_die.cmi \
     middle_end/base_types/linkage_name.cmi \
     supportlibs/dwarf_low/dwarf_attributes.cmi \
     supportlibs/dwarf_low/dwarf_attribute_values.cmi \
     supportlibs/dwarf_high/dwarf_attribute_helpers.cmi
-supportlibs/dwarf_high/dwarf_attribute_helpers.cmx : utils/target_system.cmx \
+supportlibs/dwarf_high/dwarf_attribute_helpers.cmx : utils/targetint.cmx \
     supportlibs/dwarf_high/proto_die.cmx \
     middle_end/base_types/linkage_name.cmx \
     supportlibs/dwarf_low/dwarf_attributes.cmx \
@@ -1457,11 +1459,11 @@ supportlibs/dwarf_low/abbreviations_table_entry.cmi : \
     supportlibs/dwarf_low/dwarf_attributes.cmi \
     supportlibs/dwarf_low/child_determination.cmi \
     supportlibs/dwarf_low/abbreviation_code.cmi
-supportlibs/dwarf_low/aranges_table.cmo : utils/target_system.cmi \
+supportlibs/dwarf_low/aranges_table.cmo : utils/targetint.cmi \
     utils/numbers.cmi supportlibs/dwarf_low/initial_length.cmi \
     supportlibs/dwarf_low/dwarf_value.cmi asmcomp/arch.cmo \
     supportlibs/dwarf_low/aranges_table.cmi
-supportlibs/dwarf_low/aranges_table.cmx : utils/target_system.cmx \
+supportlibs/dwarf_low/aranges_table.cmx : utils/targetint.cmx \
     utils/numbers.cmx supportlibs/dwarf_low/initial_length.cmx \
     supportlibs/dwarf_low/dwarf_value.cmx asmcomp/arch.cmx \
     supportlibs/dwarf_low/aranges_table.cmi
@@ -1607,17 +1609,17 @@ supportlibs/dwarf_low/dwarf_tag.cmx : utils/numbers.cmx \
 supportlibs/dwarf_low/dwarf_tag.cmi : utils/numbers.cmi \
     supportlibs/dwarf_low/dwarf_emittable.cmi \
     supportlibs/dwarf_low/child_determination.cmi
-supportlibs/dwarf_low/dwarf_value.cmo : utils/target_system.cmi \
+supportlibs/dwarf_low/dwarf_value.cmo : utils/targetint.cmi \
     middle_end/base_types/symbol.cmi utils/numbers.cmi asmcomp/linearize.cmi \
     supportlibs/dwarf_low/dwarf_format_int.cmi \
     supportlibs/dwarf_low/dwarf_format.cmi asmcomp/cmm.cmi \
     asmcomp/asm_directives.cmi supportlibs/dwarf_low/dwarf_value.cmi
-supportlibs/dwarf_low/dwarf_value.cmx : utils/target_system.cmx \
+supportlibs/dwarf_low/dwarf_value.cmx : utils/targetint.cmx \
     middle_end/base_types/symbol.cmx utils/numbers.cmx asmcomp/linearize.cmx \
     supportlibs/dwarf_low/dwarf_format_int.cmx \
     supportlibs/dwarf_low/dwarf_format.cmx asmcomp/cmm.cmx \
     asmcomp/asm_directives.cmx supportlibs/dwarf_low/dwarf_value.cmi
-supportlibs/dwarf_low/dwarf_value.cmi : utils/target_system.cmi \
+supportlibs/dwarf_low/dwarf_value.cmi : utils/targetint.cmi \
     middle_end/base_types/symbol.cmi utils/numbers.cmi asmcomp/linearize.cmi \
     supportlibs/dwarf_low/dwarf_emittable.cmi asmcomp/cmm.cmi
 supportlibs/dwarf_low/dwarf_version.cmo : utils/numbers.cmi \
@@ -1646,23 +1648,23 @@ supportlibs/dwarf_low/initial_length.cmx : utils/misc.cmx \
     supportlibs/dwarf_low/initial_length.cmi
 supportlibs/dwarf_low/initial_length.cmi : \
     supportlibs/dwarf_low/dwarf_emittable.cmi
-supportlibs/dwarf_low/location_list.cmo : utils/target_system.cmi \
+supportlibs/dwarf_low/location_list.cmo : utils/targetint.cmi \
     supportlibs/dwarf_low/location_list_entry.cmi asmcomp/linearize.cmi \
     supportlibs/dwarf_low/dwarf_value.cmi asmcomp/cmm.cmi \
     asmcomp/asm_directives.cmi supportlibs/dwarf_low/location_list.cmi
-supportlibs/dwarf_low/location_list.cmx : utils/target_system.cmx \
+supportlibs/dwarf_low/location_list.cmx : utils/targetint.cmx \
     supportlibs/dwarf_low/location_list_entry.cmx asmcomp/linearize.cmx \
     supportlibs/dwarf_low/dwarf_value.cmx asmcomp/cmm.cmx \
     asmcomp/asm_directives.cmx supportlibs/dwarf_low/location_list.cmi
 supportlibs/dwarf_low/location_list.cmi : \
     supportlibs/dwarf_low/location_list_entry.cmi asmcomp/linearize.cmi \
     supportlibs/dwarf_low/dwarf_emittable.cmi
-supportlibs/dwarf_low/location_list_entry.cmo : utils/target_system.cmi \
+supportlibs/dwarf_low/location_list_entry.cmo : utils/targetint.cmi \
     middle_end/base_types/symbol.cmi \
     supportlibs/dwarf_low/single_location_description.cmi utils/numbers.cmi \
     asmcomp/linearize.cmi supportlibs/dwarf_low/dwarf_value.cmi \
     asmcomp/asm_directives.cmi supportlibs/dwarf_low/location_list_entry.cmi
-supportlibs/dwarf_low/location_list_entry.cmx : utils/target_system.cmx \
+supportlibs/dwarf_low/location_list_entry.cmx : utils/targetint.cmx \
     middle_end/base_types/symbol.cmx \
     supportlibs/dwarf_low/single_location_description.cmx utils/numbers.cmx \
     asmcomp/linearize.cmx supportlibs/dwarf_low/dwarf_value.cmx \

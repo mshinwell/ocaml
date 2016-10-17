@@ -16,6 +16,9 @@
 (**************************************************************************)
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
+(* CR-someday mshinwell: Eliminate uses of [bprintf] from the assembly
+   generation code, then enable this warning. *)
+[@@@ocaml.warning "-3"]
 
 module Int8 = Numbers.Int8
 module Int16 = Numbers.Int16
@@ -46,12 +49,14 @@ type section =
   | Data
   | Eight_byte_literals
   | Sixteen_byte_literals
+  | Jump_tables
   | Dwarf of dwarf_section
 
 let text_label = Cmm.new_label ()
 let data_label = Cmm.new_label ()
 let eight_byte_literals_label = Cmm.new_label ()
 let sixteen_byte_literals_label = Cmm.new_label ()
+let jump_tables_label = Cmm.new_label ()
 let debug_info_label = Cmm.new_label ()
 let debug_abbrev_label = Cmm.new_label ()
 let debug_aranges_label = Cmm.new_label ()
@@ -64,6 +69,7 @@ let label_for_section = function
   | Data -> data_label
   | Eight_byte_literals -> eight_byte_literals_label
   | Sixteen_byte_literals -> sixteen_byte_literals_label
+  | Jump_tables -> jump_tables_label
   | Dwarf Debug_info -> debug_info_label
   | Dwarf Debug_abbrev -> debug_abbrev_label
   | Dwarf Debug_aranges -> debug_aranges_label
@@ -71,172 +77,7 @@ let label_for_section = function
   | Dwarf Debug_str -> debug_str_label
   | Dwarf Debug_line -> debug_line_label
 
-module Directive = struct
-  type directive =
-    | Align of bool * int
-    | Byte of constant
-    | Bytes of string
-    | Comment of string
-    | Global of string
-    | Long of constant
-    | NewLabel of string
-    | Quad of constant
-    | Section of string list * string option * string list
-    | Space of int
-    | Word of constant
-    | Cfi_adjust_cfa_offset of int
-    | Cfi_endproc
-    | Cfi_startproc
-    | File of { file_num : int; filename : int; }
-    | Indirect_symbol of string
-    | Loc of { file_num : int; line : int; col : int; }
-    | Private_extern of string
-    | Set of string * constant
-    | Size of string * constant
-    | Sleb128 of constant
-    | Type of string * string
-    | Uleb128 of constant
-    | Direct_assignment of string * constant
-
-  let rec cst b = function
-    | Label _ |  _ | This as c -> scst b c
-    | Add (c1, c2) -> bprintf b "%a + %a" scst c1 scst c2
-    | Sub (c1, c2) -> bprintf b "%a - %a" scst c1 scst c2
-
-  and scst b = function
-    | This -> Buffer.add_string b "."
-    | Label l -> Buffer.add_string b l
-    | n when n <= 0x7FFF_FFFFL && n >= -0x8000_0000L ->
-      Buffer.add_string b (Int64.to_string n)
-    | n -> bprintf b "0x%Lx" n
-    | Add (c1, c2) -> bprintf b "(%a + %a)" scst c1 scst c2
-    | Sub (c1, c2) -> bprintf b "(%a - %a)" scst c1 scst c2
-
-  let print_gas b = function
-    | Align { bytes = n; } ->
-      (* Mac OS X's assembler interprets the integer n as a 2^n alignment *)
-      let n = if TS.system = S_macosx then Misc.log2 n else n in
-      bprintf b "\t.align\t%d" n
-    | Byte n -> bprintf b "\t.byte\t%a" cst n
-    | Bytes s ->
-      if TS.system = S_solaris then buf_bytes_directive b ".byte" s
-      else bprintf b "\t.ascii\t\"%s\"" (string_of_string_literal s)
-    | Comment s -> bprintf b "\t\t\t\t/* %s */" s
-    | Global s -> bprintf b "\t.globl\t%s" s;
-    | Long n -> bprintf b "\t.long\t%a" cst n
-    | NewLabel s -> bprintf b "%s:" s
-    | Quad n -> bprintf b "\t.quad\t%a" cst n
-    | Section ([".data" ], _, _) -> bprintf b "\t.data"
-    | Section ([".text" ], _, _) -> bprintf b "\t.text"
-    | Section (name, flags, args) ->
-      bprintf b "\t.section %s" (String.concat "," name);
-      begin match flags with
-      | None -> ()
-      | Some flags -> bprintf b ",%S" flags
-      end;
-      begin match args with
-      | [] -> ()
-      | _ -> bprintf b ",%s" (String.concat "," args)
-      end
-    | Space n ->
-      if TS.system = S_solaris then bprintf b "\t.zero\t%d" n
-      else bprintf b "\t.space\t%d" n
-    | Word n ->
-      (* Apple's documentation says that ".word" is i386-specific, so we use
-          ".short" instead. *)
-      if TS.system = S_solaris then bprintf b "\t.value\t%a" cst n
-      else bprintf b "\t.short\t%a" cst n
-    | Cfi_adjust_cfa_offset n -> bprintf b "\t.cfi_adjust_cfa_offset %d" n
-    | Cfi_endproc -> bprintf b "\t.cfi_endproc"
-    | Cfi_startproc -> bprintf b "\t.cfi_startproc"
-    | File { file_num; filename; } ->
-      bprintf b "\t.file\t%d\t\"%s\""
-        file_num (X86_proc.string_of_string_literal filename)
-    | Indirect_symbol s -> bprintf b "\t.indirect_symbol %s" s
-    | Loc { file_num; line; col; } ->
-      (* PR#7726: Location.none uses column -1, breaks LLVM assembler *)
-      if col >= 0 then bprintf b "\t.loc\t%d\t%d\t%d" file_num line col
-      else bprintf b "\t.loc\t%d\t%d" file_num line
-    | Private_extern s -> bprintf b "\t.private_extern %s" s
-    | Set (arg1, arg2) -> bprintf b "\t.set %s, %a" arg1 cst arg2
-    | Size (s, c) -> bprintf b "\t.size %s,%a" s cst c
-    | Sleb128 c -> bprintf b "\t.sleb128 %a" cst c
-    | Type (s, typ) -> bprintf b "\t.type %s,%s" s typ
-    | Uleb128 c -> bprintf b "\t.uleb128 %a" cst c
-    | Direct_assignment (var, const) ->
-      if TS.system <> S_macosx then failwith "Cannot emit Direct_assignment";
-      bprintf b "%s = %a" var cst const
-
-  let print_masm b = function
-    | Align { bytes; } -> bprintf b "\tALIGN\t%d" bytes
-    | Byte n -> bprintf b "\tBYTE\t%a" cst n
-    | Bytes s -> buf_bytes_directive b "BYTE" s
-    | Comment s -> bprintf b " ; %s " s
-    | Global s -> bprintf b "\tPUBLIC\t%s" s
-    | Long n -> bprintf b "\tDWORD\t%a" cst n
-    | Quad n -> bprintf b "\tQUAD\t%a" cst n
-    | Section ([".data"], None, []) -> bprintf b "\t.DATA"
-    | Section ([".text"], None, []) -> bprintf b "\t.CODE"
-    | Section _ -> assert false
-    | Space n -> bprintf b "\tBYTE\t%d DUP (?)" n
-    | Word n -> bprintf b "\tWORD\t%a" cst n
-    | External (s, ptr) -> bprintf b "\tEXTRN\t%s: %s" s (string_of_datatype ptr)
-    | Mode386 -> bprintf b "\t.386"
-    | Model name -> bprintf b "\t.MODEL %s" name (* name = FLAT *)
-    | Cfi_adjust_cfa_offset _
-    | Cfi_endproc
-    | Cfi_startproc
-    | File _
-    | Indirect_symbol _
-    | Loc _
-    | Private_extern _
-    | Set _
-    | Size _
-    | Sleb128 _
-    | Type _
-    | Uleb128 _
-    | Direct_assignment _ ->
-      Misc.fatal_error "Unsupported asm directive for MASM"
-
-  let print b t =
-    if TS.masm then print_masm b t
-    else print_gas b t
-end
-
-let emit_ref = ref None
-
-let emit d =
-  match !emit_ref with
-  | Some emit -> emit d
-  | None -> Misc.fatal_error "initialize not called"
-
-let section segment flags args = emit (Section (segment, flags, args))
-let align ~bytes = emit (Align (false, bytes))
-let byte n = emit (Byte n)
-let cfi_adjust_cfa_offset ~bytes = emit (Cfi_adjust_cfa_offset bytes)
-let cfi_endproc () = emit Cfi_endproc
-let cfi_startproc () = emit Cfi_startproc
-let comment s = emit (Comment s)
-let data () = section [ ".data" ] None []
-let direct_assignment var const = emit (Direct_assignment (var, const))
-let extrn s ptr = emit (External (s, ptr))
-let file ~file_num ~file_name = emit (File (file_num, file_name))
-let global s = emit (Global s)
-let indirect_symbol s = emit (Indirect_symbol s)
-let label s = emit (NewLabel s)
-let loc ~file_num ~line ~col = emit (Loc (file_num, line, col))
-let long cst = emit (Long cst)
-let quad cst = emit (Quad cst)
-let set x y = emit (Set (x, y))
-let size name cst = emit (Size (name, cst))
-let sleb128 cst = emit (Sleb128 (Const i))
-let space ~bytes = emit (Space bytes)
-let string s = emit (Bytes s)
-let text () = section [ ".text" ] None []
-let type_ name typ = emit (Type (name, typ))
-let uleb128 cst = emit (Uleb128 (Const i))
-let word cst = emit (Word cst)
-
+(* CR-soon mshinwell: Use this from the emitters. *)
 let string_of_label label_name =
   match TS.system with
   | S_macosx | S_win64 -> "L" ^ string_of_int label_name
@@ -252,11 +93,241 @@ let string_of_label label_name =
   | S_mingw64
   | S_unknown -> ".L" ^ string_of_int label_name
 
+module Directive = struct
+  type t =
+    | Align of { bytes : int; }
+    | Byte of constant
+    | Bytes of string
+    | Comment of string
+    | Global of string
+    | Long of constant
+    | NewLabel of string
+    | Quad of constant
+    | Section of string list * string option * string list
+    | Space of { bytes : int; }
+    | Word of constant
+    | Cfi_adjust_cfa_offset of int
+    | Cfi_endproc
+    | Cfi_startproc
+    | File of { file_num : int; filename : string; }
+    | Indirect_symbol of string
+    | Loc of { file_num : int; line : int; col : int; }
+    | Private_extern of string
+    | Set of string * constant
+    | Size of string * constant
+    | Sleb128 of constant
+    | Type of string * string
+    | Uleb128 of constant
+    | Direct_assignment of string * constant
+
+  let bprintf = Printf.bprintf
+
+  let string_of_string_literal s =
+    let buf = Buffer.create (String.length s + 2) in
+    let last_was_escape = ref false in
+    for i = 0 to String.length s - 1 do
+      let c = s.[i] in
+      if c >= '0' && c <= '9' then
+        if !last_was_escape
+        then Printf.bprintf buf "\\%o" (Char.code c)
+        else Buffer.add_char buf c
+      else if c >= ' ' && c <= '~' && c <> '"' (* '"' *) && c <> '\\' then begin
+        Buffer.add_char buf c;
+        last_was_escape := false
+      end else begin
+        Printf.bprintf buf "\\%o" (Char.code c);
+        last_was_escape := true
+      end
+    done;
+    Buffer.contents buf
+
+  let buf_bytes_directive buf ~directive s =
+    let pos = ref 0 in
+    for i = 0 to String.length s - 1 do
+      if !pos = 0
+      then begin
+        if i > 0 then Buffer.add_char buf '\n';
+        Buffer.add_char buf '\t';
+        Buffer.add_string buf directive;
+        Buffer.add_char buf '\t';
+      end
+      else Buffer.add_char buf ',';
+      Printf.bprintf buf "%d" (Char.code s.[i]);
+      incr pos;
+      if !pos >= 16 then begin pos := 0 end
+    done
+
+  let rec cst buf = function
+    | Label _ | Numeric_label _ | Const _ | This as c -> scst buf c
+    | Add (c1, c2) -> bprintf buf "%a + %a" scst c1 scst c2
+    | Sub (c1, c2) -> bprintf buf "%a - %a" scst c1 scst c2
+
+  and scst buf = function
+    | This -> Buffer.add_string buf "."
+    | Label l -> Buffer.add_string buf l
+    | Numeric_label l -> Buffer.add_string buf (string_of_label l)
+    | Const n when n <= 0x7FFF_FFFFL && n >= -0x8000_0000L ->
+      Buffer.add_string buf (Int64.to_string n)
+    | Const n -> bprintf buf "0x%Lx" n
+    | Add (c1, c2) -> bprintf buf "(%a + %a)" scst c1 scst c2
+    | Sub (c1, c2) -> bprintf buf "(%a - %a)" scst c1 scst c2
+
+  let print_gas buf = function
+    | Align { bytes = n; } ->
+      (* Mac OS X's assembler interprets the integer n as a 2^n alignment *)
+      let n =
+        match TS.system with
+        | S_macosx -> Misc.log2 n
+        | _ -> n
+      in
+      bprintf buf "\t.align\t%d" n
+    | Byte n -> bprintf buf "\t.byte\t%a" cst n
+    | Bytes s ->
+      begin match TS.system with
+      | S_solaris -> buf_bytes_directive buf ~directive:".byte" s
+      | _ -> bprintf buf "\t.ascii\t\"%s\"" (string_of_string_literal s)
+      end
+    | Comment s -> bprintf buf "\t\t\t\t/* %s */" s
+    | Global s -> bprintf buf "\t.globl\t%s" s;
+    | Long n -> bprintf buf "\t.long\t%a" cst n
+    | NewLabel s -> bprintf buf "%s:" s
+    | Quad n -> bprintf buf "\t.quad\t%a" cst n
+    | Section ([".data" ], _, _) -> bprintf buf "\t.data"
+    | Section ([".text" ], _, _) -> bprintf buf "\t.text"
+    | Section (name, flags, args) ->
+      bprintf buf "\t.section %s" (String.concat "," name);
+      begin match flags with
+      | None -> ()
+      | Some flags -> bprintf buf ",%S" flags
+      end;
+      begin match args with
+      | [] -> ()
+      | _ -> bprintf buf ",%s" (String.concat "," args)
+      end
+    | Space { bytes; } ->
+      begin match TS.system with
+      | S_solaris -> bprintf buf "\t.zero\t%d" bytes
+      | _ -> bprintf buf "\t.space\t%d" bytes
+      end
+    | Word n ->
+      begin match TS.system with
+      | S_solaris -> bprintf buf "\t.value\t%a" cst n
+      | _ ->
+        (* Apple's documentation says that ".word" is i386-specific, so we use
+            ".short" instead. *)
+        bprintf buf "\t.short\t%a" cst n
+      end
+    | Cfi_adjust_cfa_offset n -> bprintf buf "\t.cfi_adjust_cfa_offset %d" n
+    | Cfi_endproc -> bprintf buf "\t.cfi_endproc"
+    | Cfi_startproc -> bprintf buf "\t.cfi_startproc"
+    | File { file_num; filename; } ->
+      bprintf buf "\t.file\t%d\t\"%s\""
+        file_num (string_of_string_literal filename)
+    | Indirect_symbol s -> bprintf buf "\t.indirect_symbol %s" s
+    | Loc { file_num; line; col; } ->
+      (* PR#7726: Location.none uses column -1, breaks LLVM assembler *)
+      if col >= 0 then bprintf buf "\t.loc\t%d\t%d\t%d" file_num line col
+      else bprintf buf "\t.loc\t%d\t%d" file_num line
+    | Private_extern s -> bprintf buf "\t.private_extern %s" s
+    | Set (arg1, arg2) -> bprintf buf "\t.set %s, %a" arg1 cst arg2
+    | Size (s, c) -> bprintf buf "\t.size %s,%a" s cst c
+    | Sleb128 c -> bprintf buf "\t.sleb128 %a" cst c
+    | Type (s, typ) -> bprintf buf "\t.type %s,%s" s typ
+    | Uleb128 c -> bprintf buf "\t.uleb128 %a" cst c
+    | Direct_assignment (var, const) ->
+      begin match TS.system with
+      | S_macosx -> bprintf buf "%s = %a" var cst const
+      | _ -> failwith "Cannot emit Direct_assignment"
+      end
+
+  let rec cst buf = function
+    | Label _ | Numeric_label _ | Const _ | This as c -> scst buf c
+    | Add (c1, c2) -> bprintf buf "%a + %a" scst c1 scst c2
+    | Sub (c1, c2) -> bprintf buf "%a - %a" scst c1 scst c2
+
+  and scst buf = function
+    | This -> Buffer.add_string buf "THIS BYTE"
+    | Label l -> Buffer.add_string buf l
+    | Numeric_label l -> Buffer.add_string buf (string_of_label l)
+    | Const n when n <= 0x7FFF_FFFFL && n >= -0x8000_0000L ->
+        Buffer.add_string buf (Int64.to_string n)
+    | Const n -> bprintf buf "0%LxH" n
+    | Add (c1, c2) -> bprintf buf "(%a + %a)" scst c1 scst c2
+    | Sub (c1, c2) -> bprintf buf "(%a - %a)" scst c1 scst c2
+
+  let print_masm buf = function
+    | Align { bytes; } -> bprintf buf "\tALIGN\t%d" bytes
+    | Byte n -> bprintf buf "\tBYTE\t%a" cst n
+    | Bytes s -> buf_bytes_directive buf ~directive:"BYTE" s
+    | Comment s -> bprintf buf " ; %s " s
+    | Global s -> bprintf buf "\tPUBLIC\t%s" s
+    | Long n -> bprintf buf "\tDWORD\t%a" cst n
+    | Quad n -> bprintf buf "\tQUAD\t%a" cst n
+    | Section ([".data"], None, []) -> bprintf buf "\t.DATA"
+    | Section ([".text"], None, []) -> bprintf buf "\t.CODE"
+    | Section _ -> assert false
+    | Space { bytes; } -> bprintf buf "\tBYTE\t%d DUP (?)" bytes
+    | Word n -> bprintf buf "\tWORD\t%a" cst n
+    | Cfi_adjust_cfa_offset _
+    | Cfi_endproc
+    | Cfi_startproc
+    | File _
+    | Indirect_symbol _
+    | Loc _
+    | Private_extern _
+    | Set _
+    | Size _
+    | Sleb128 _
+    | Type _
+    | Uleb128 _
+    | Direct_assignment _
+    | NewLabel _ ->
+      Misc.fatal_error "Unsupported asm directive for MASM"
+
+  let print b t =
+    if TS.masm then print_masm b t
+    else print_gas b t
+end
+
+let emit_ref = ref None
+
+let emit (d : Directive.t) =
+  match !emit_ref with
+  | Some emit -> emit d
+  | None -> Misc.fatal_error "initialize not called"
+
+let section segment flags args = emit (Section (segment, flags, args))
+let align ~bytes = emit (Align { bytes; })
+let byte n = emit (Byte n)
+let cfi_adjust_cfa_offset ~bytes = emit (Cfi_adjust_cfa_offset bytes)
+let cfi_endproc () = emit Cfi_endproc
+let cfi_startproc () = emit Cfi_startproc
+let comment s = emit (Comment s)
+let data () = section [ ".data" ] None []
+let direct_assignment var const = emit (Direct_assignment (var, const))
+let file ~file_num ~file_name = emit (File { file_num; filename = file_name; })
+let global s = emit (Global s)
+let indirect_symbol s = emit (Indirect_symbol s)
+let loc ~file_num ~line ~col = emit (Loc { file_num; line; col; })
+let long cst = emit (Long cst)
+let quad cst = emit (Quad cst)
+let set x y = emit (Set (x, y))
+let size name cst = emit (Size (name, cst))
+let sleb128 cst = emit (Sleb128 (Const cst))
+let space ~bytes = emit (Space { bytes; })
+let string s = emit (Bytes s)
+let text () = section [ ".text" ] None []
+let type_ name typ = emit (Type (name, typ))
+let uleb128 cst = emit (Uleb128 (Const cst))
+let word cst = emit (Word cst)
+
 let label label_name =
   quad (Label (string_of_label label_name))
 
+let label_declaration' s = emit (NewLabel s)
+
 let label_declaration ~label_name =
-  label (string_of_label label_name)
+  label_declaration' (string_of_label label_name)
 
 let sections_seen = ref []
 
@@ -272,8 +343,8 @@ let switch_to_section (section : section) =
     let text () = [".text"], None, [] in
     let data () = [".data"], None, [] in
     match section, TS.system with
-    | Text -> text ()
-    | Data -> data ()
+    | Text, _ -> text ()
+    | Data, _ -> data ()
     | Dwarf dwarf, S_macosx ->
       let name =
         match dwarf with

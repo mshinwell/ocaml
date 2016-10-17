@@ -19,7 +19,7 @@ module type S = sig
   val size : t -> Int64.t
 
   (** Emit assembler directives to describe the given entity. *)
-  val emit : t -> (module Asm_directives.S) -> unit
+  val emit : t -> (module Asm_directives_intf.S) -> unit
 end
 
 module type S1_ignore = sig
@@ -29,5 +29,5 @@ module type S1_ignore = sig
   val size : _ t -> Int64.t
 
   (** Emit assembler directives to describe the given entity. *)
-  val emit : _ t -> (module Asm_directives.S) -> unit
+  val emit : _ t -> (module Asm_directives_intf.S) -> unit
 end

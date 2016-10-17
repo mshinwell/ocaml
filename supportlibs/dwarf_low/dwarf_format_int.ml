@@ -35,7 +35,7 @@ let size t =
   | Sixty_four _ -> 8L
 
 let emit t asm =
-  let module A = (val asm : Asm_directives.S) in
+  let module A = (val asm : Asm_directives_intf.S) in
   match t with
   | Thirty_two i -> A.int32 i
   | Sixty_four i -> A.int64 i
