@@ -64,6 +64,17 @@ val mem64:
 
 val mem64_rip: data_type -> ?ofs:int -> string -> arg
 
+module D : sig
+  (** x86-specific directives.
+      (For generic directives, see [Asm_directives].) *)
+
+  (** The following are MASM-specific. *)
+  val extrn: string -> data_type -> unit
+  val label: ?typ:data_type -> string -> unit
+  val mode386: unit -> unit
+  val model: string -> unit
+end
+
 module I : sig
   (* Instructions *)
 

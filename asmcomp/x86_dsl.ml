@@ -76,6 +76,15 @@ let mem64 typ ?(scale = 1) ?base ?sym displ idx =
 let mem64_rip typ ?(ofs = 0) s =
   Mem64_RIP (typ, s, ofs)
 
+module D = struct
+  let emit directive = emit (MASM_directive directive)
+
+  let label ?(typ = NONE) s = emit (NewLabel (s, typ))
+  let mode386 () = emit Mode386
+  let model name = emit (Model name)
+  let private_extern s = emit (Private_extern s)
+end
+
 module I = struct
   let add x y = emit (ADD (x, y))
   let addsd x y = emit (ADDSD (x, y))

@@ -2,8 +2,11 @@
 (*                                                                        *)
 (*                                 OCaml                                  *)
 (*                                                                        *)
+(*          Fabrice Le Fessant, projet Gallium, INRIA Rocquencourt        *)
 (*                  Mark Shinwell, Jane Street Europe                     *)
 (*                                                                        *)
+(*   Copyright 2014 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
 (*   Copyright 2016 Jane Street Group LLC                                 *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
@@ -41,8 +44,14 @@ type dwarf_section =
 type section =
   | Text
   | Data
+  | Eight_byte_literals
+  | Sixteen_byte_literals
   | Dwarf of dwarf_section
 
+let text_label = Cmm.new_label ()
+let data_label = Cmm.new_label ()
+let eight_byte_literals_label = Cmm.new_label ()
+let sixteen_byte_literals_label = Cmm.new_label ()
 let debug_info_label = Cmm.new_label ()
 let debug_abbrev_label = Cmm.new_label ()
 let debug_aranges_label = Cmm.new_label ()
@@ -51,6 +60,10 @@ let debug_str_label = Cmm.new_label ()
 let debug_line_label = Cmm.new_label ()
 
 let label_for_section = function
+  | Text -> text_label
+  | Data -> data_label
+  | Eight_byte_literals -> eight_byte_literals_label
+  | Sixteen_byte_literals -> sixteen_byte_literals_label
   | Dwarf Debug_info -> debug_info_label
   | Dwarf Debug_abbrev -> debug_abbrev_label
   | Dwarf Debug_aranges -> debug_aranges_label
@@ -138,7 +151,7 @@ module Directive = struct
     | Cfi_startproc -> bprintf b "\t.cfi_startproc"
     | File { file_num; filename; } ->
       bprintf b "\t.file\t%d\t\"%s\""
-        file_num (X86_proc.string_of_string_literal file§name)
+        file_num (X86_proc.string_of_string_literal filename)
     | Indirect_symbol s -> bprintf b "\t.indirect_symbol %s" s
     | Loc { file_num; line; col; } ->
       (* PR#7726: Location.none uses column -1, breaks LLVM assembler *)
@@ -213,32 +226,16 @@ let indirect_symbol s = emit (Indirect_symbol s)
 let label s = emit (NewLabel s)
 let loc ~file_num ~line ~col = emit (Loc (file_num, line, col))
 let long cst = emit (Long cst)
-let mode386 () = emit Mode386
-let model name = emit (Model name)
-let private_extern s = emit (Private_extern s)
 let quad cst = emit (Quad cst)
 let set x y = emit (Set (x, y))
 let size name cst = emit (Size (name, cst))
 let sleb128 cst = emit (Sleb128 (Const i))
-let space n = emit (Space n)
+let space ~bytes = emit (Space bytes)
 let string s = emit (Bytes s)
 let text () = section [ ".text" ] None []
 let type_ name typ = emit (Type (name, typ))
 let uleb128 cst = emit (Uleb128 (Const i))
 let word cst = emit (Word cst)
-
-let set_variable var const =
-  match const with
-  | Compile_time const ->
-    begin match TS.system with
-    | S.macosx -> set var const
-    | _ -> ...
-    end
-  | Link_time const ->
-    begin match TS.system with
-    | S.macosx -> direct_assignment var const
-    | _ -> set var const
-    end
 
 let string_of_label label_name =
   match TS.system with
@@ -259,8 +256,7 @@ let label label_name =
   quad (Label (string_of_label label_name))
 
 let label_declaration ~label_name =
-  (* CR mshinwell: should this always be QUAD?  (taken from emit.mlp) *)
-  label (string_of_label label_name) ~typ:QUAD
+  label (string_of_label label_name)
 
 let sections_seen = ref []
 
@@ -273,7 +269,11 @@ let switch_to_section (section : section) =
     end
   in
   let section_name, middle_part, attrs =
+    let text () = [".text"], None, [] in
+    let data () = [".data"], None, [] in
     match section, TS.system with
+    | Text -> text ()
+    | Data -> data ()
     | Dwarf dwarf, S_macosx ->
       let name =
         match dwarf with
@@ -308,26 +308,28 @@ let switch_to_section (section : section) =
           []
       in
       [name], middle_part, attrs
-    | (* caml_negf/absf_mask *)
-    begin match system with
-    | S_macosx -> D.section ["__TEXT";"__literal16"] None ["16byte_literals"]
-    | S_mingw64 | S_cygwin -> D.section [".rdata"] (Some "dr") []
-    | S_win64 -> D.switch_to_section Data
-    | _ -> D.section [".rodata.cst8"] (Some "a") ["@progbits"]
-    end;
-    | Floating_point_literals, ...
-    begin match system with
-    | S_macosx -> D.section ["__TEXT";"__literal8"] None ["8byte_literals"]
-    | S_mingw64 | S_cygwin -> D.section [".rdata"] (Some "dr") []
-    | S_win64 -> D.switch_to_section Data
-    | _ -> D.section [".rodata.cst8"] (Some "a") ["@progbits"]
-    end;
-    | Jump_tables, ...
-      begin match system with
-      | S_mingw64 | S_cygwin -> D.section [".rdata"] (Some "dr") []
-      | S_macosx | S_win64 -> () (* with LLVM/OS X and MASM, use the text segment *)
-      | _ -> D.section [".rodata"] None []
-      end;
+    | Sixteen_byte_literals, S_macosx ->
+      ["__TEXT";"__literal16"], None, ["16byte_literals"]
+    | Sixteen_byte_literals, (S_mingw64 | S_cygwin) ->
+      [".rdata"], Some "dr", []
+    | Sixteen_byte_literals, S_win64 ->
+      data ()
+    | Sixteen_byte_literals, _ ->
+      [".rodata.cst8"], Some "a", ["@progbits"]
+    | Eight_byte_literals, S_macosx ->
+      ["__TEXT";"__literal8"], None, ["8byte_literals"]
+    | Eight_byte_literals, (S_mingw64 | S_cygwin) ->
+      [".rdata"], Some "dr", []
+    | Eight_byte_literals, S_win64 ->
+      data ()
+    | Eight_byte_literals, _ ->
+      [".rodata.cst8"], Some "a", ["@progbits"]
+    | Jump_tables, (S_mingw64 | S_cygwin) ->
+      [".rdata"], Some "dr", []
+    | Jump_tables, (S_macosx | S_win64) ->
+      text () (* with LLVM/OS X and MASM, use the text segment *)
+    | Jump_tables, _ ->
+      [".rodata"], None, []
   in
   section section_name middle_part attrs;
   if first_occurrence then begin
@@ -348,6 +350,10 @@ let initialize ~emit =
   | _ ->
     if !Clflags.debug then begin
       (* Forward label references are illegal in gas. *)
+      switch_to_section Text;
+      switch_to_section Data;
+      switch_to_section Eight_byte_literals;
+      switch_to_section Sixteen_byte_literals;
       switch_to_section (Dwarf Debug_info);
       switch_to_section (Dwarf Debug_abbrev);
       switch_to_section (Dwarf Debug_aranges);

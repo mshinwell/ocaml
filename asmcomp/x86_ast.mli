@@ -177,7 +177,7 @@ type instruction =
   | XOR of arg * arg
   | XORPD of arg * arg
 
-type MASM_directive =
+type masm_directive =
   | NewLabel of string * data_type
   | External of string * data_type
   | Mode386
@@ -186,6 +186,6 @@ type MASM_directive =
 type asm_line =
   | Ins of instruction
   | Directive of Asm_directives.directive
-  | MASM_directive of MASM_directive
+  | MASM_directive of masm_directive
 
 type asm_program = asm_line list

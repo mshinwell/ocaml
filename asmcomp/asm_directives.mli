@@ -2,8 +2,11 @@
 (*                                                                        *)
 (*                                 OCaml                                  *)
 (*                                                                        *)
+(*          Fabrice Le Fessant, projet Gallium, INRIA Rocquencourt        *)
 (*                  Mark Shinwell, Jane Street Europe                     *)
 (*                                                                        *)
+(*   Copyright 2014 Institut National de Recherche en Informatique et     *)
+(*     en Automatique.                                                    *)
 (*   Copyright 2016 Jane Street Group LLC                                 *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
@@ -12,8 +15,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Abstraction over backends for the emission of assembler directives. *)
+(** Emission of assembler directives that are supported on multiple targets. *)
 
+(** Expressions computing assembly- or link- time constants.  (Which of these
+    is computed depends on the assembler's semantics, except when using
+    the higher-level functions for computing displacements below.) *)
 type constant =
   | Const of int64
   | This
@@ -23,6 +29,8 @@ type constant =
   | Sub of constant * constant
 
 module Directive : sig
+  (** Internal representation of directives.  Only needed if writing a custom
+      assembler or printer instead of using [print], below. *)
   type t = private
     | Align of bool * int
     | Byte of constant
@@ -52,6 +60,8 @@ module Directive : sig
     (* Mac OS X only: *)
     | Direct_assignment of string * constant
 
+  (** Translate the given directive to textual form.  This produces output
+      suitable for either gas or MASM as appropriate. *)
   val print : Buffer.t -> t -> unit
 end
 
@@ -63,10 +73,12 @@ val initialize : emit:(Directive.t -> unit) -> unit
 (** Reinitialize the emitter before compiling a different source file. *)
 val reset : unit -> unit
 
+(** Widths of data types. *)
 type width =
   | Thirty_two
   | Sixty_four
 
+(** Sections that hold for DWARF debugging information. *)
 type dwarf_section =
   | Debug_info
   | Debug_abbrev
@@ -75,11 +87,13 @@ type dwarf_section =
   | Debug_str
   | Debug_line
 
+(** The linker may share constants in [Eight_byte_literals] and
+    [Sixteen_byte_literals] sections. *)
 type section =
   | Text
   | Data
-  | Jump_tables
-  | Floating_point_literals
+  | Eight_byte_literals
+  | Sixteen_byte_literals
   | Dwarf of dwarf_section
 
 (** Retrieve the label that [switch_to_section] (below) will put at the start
@@ -112,32 +126,41 @@ val cfi_endproc : unit -> unit
 (** Emit a comment. *)
 val comment : string -> unit
 
-(** Emit an 8-bit constant. *)
+(** Emit an 8-bit constant.  There is no padding or sign extension. *)
 val const8 : constant -> unit
 
-(** Emit a 16-bit constant. *)
+(** Emit a 16-bit constant.  There is no padding or sign extension. *)
 val const8 : constant -> unit
 
-(** Emit a 32-bit constant. *)
+(** Emit a 32-bit constant.  There is no padding or sign extension. *)
 val const32 : constant -> unit
 
 (** Emit a 64-bit constant. *)
 val const64 : constant -> unit
 
+(** Emit a direct assignment statement (Mac OS X only; required if the
+    behaviour of ".set" which makes expressions non-relocatable is
+    undesirable).  If about to write a displacement calculation it is better
+    to use the high-level functions below instead. *)
+val direct_assignment : string -> unit
+
 (** Assign a file number to a filename. *)
 val file : file_num:int -> file_name:string -> unit
 
+(** Mark a symbol as global. *)
 val global : string -> unit
 
+(** Marker inside the definition of a lazy symbol stub (see platform or
+    assembler documentation for details). *)
 val indirect_symbol : string -> unit
 
-(** Emit an 8-bit integer (not padded). *)
+(** Emit an 8-bit integer.  There is no padding or sign extension. *)
 val int8 : Numbers.Int8.t -> unit
 
-(** Emit a 16-bit integer (not padded). *)
+(** Emit a 16-bit integer.  There is no padding or sign extension. *)
 val int16 : Numbers.Int16.t -> unit
 
-(** Emit a 32-bit integer (not padded). *)
+(** Emit a 32-bit integer.  There is no padding or sign extension. *)
 val int32 : Int32.t -> unit
 
 (** Emit a 64-bit integer. *)
@@ -150,23 +173,28 @@ val loc : file_num:int -> line:int -> col:int -> unit
     supported on all platforms. *)
 val mark_stack_non_executable : unit -> unit
 
+(** Mark a symbol as "private extern" (see assembler documentation for
+    exactly what this means). *)
 val private_extern : string -> unit
 
 (** Set the given variable to the given expression.  Note that on Mac OS X
-    such an expression is evaluated to an _absolute_ assembly-time constant. *)
-val set : string * constant_evaluated_at -> unit
+    such an expression is evaluated to an _absolute_ assembly-time constant.
+    If about to write a displacement calculation it is better to use the
+    high-level functions below instead. *)
+val set : string * constant -> unit
 
+(** Identify the size of the entity pointed at by the given symbol. *)
 val size : string -> constant -> unit
 
-val space : int -> unit
+(** Leave a gap in the object file. *)
+val space : bytes:int -> unit
 
 (** Emit a string (directly into the current section).  This function
     does not write a terminating null. *)
 val string : string -> unit
 
-val type_ : string -> string -> unit
-
-val word : constant -> unit
+(** Set the type of a symbol. *)
+val type_ : string -> type_:string -> unit
 
 (** Emit a machine-width reference to the given symbol. *)
 val symbol : Symbol.t -> unit

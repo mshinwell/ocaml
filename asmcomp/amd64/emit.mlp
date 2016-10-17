@@ -29,6 +29,8 @@ open X86_ast
 open X86_proc
 open X86_dsl
 
+module D = Asm_directives
+
 type fundecl_result = {
   end_of_function_label : Linearize.label;
 }
@@ -130,7 +132,7 @@ let emit_imp_table () =
     _label (emit_symbol imps);
     D.const64 (Label (emit_symbol s))
   in
-  D.data();
+  D.switch_to_section Data;
   D.comment "relocation table start";
   D.align 8;
   Hashtbl.iter f imp_table;
@@ -177,7 +179,7 @@ let label s = sym (emit_label s)
 let def_label s = D.label (emit_label s)
 
 let emit_Llabel fallthrough lbl =
-  if not fallthrough && !fastcode_flag then D.align 4;
+  if not fallthrough && !fastcode_flag then D.align ~bytes:4;
   def_label lbl
 
 (* Output a pseudo-register *)
@@ -871,11 +873,10 @@ let emit_instr fallthrough i =
       I.jmp (reg tmp1);
 
       D.switch_to_section Jump_tables;
-      D.align 4;
+      D.align ~bytes:4;
       _label lbl;
       for i = 0 to Array.length jumptbl - 1 do
-        D.const32 (Sub (Label(emit_label jumptbl.(i)),
-                         Label lbl))
+        D.const32 (Sub (Label (emit_label jumptbl.(i)), Label lbl))
       done;
       D.switch_to_section Text
   | Lsetuptrap lbl ->
@@ -954,7 +955,7 @@ let fundecl fundecl =
   cfi_endproc ();
   begin match system with
   | S_gnu | S_linux ->
-      D.type_ (emit_symbol fundecl.fun_name) "@function";
+      D.type_ (emit_symbol fundecl.fun_name) ~type_:"@function";
       D.size (emit_symbol fundecl.fun_name)
         (Sub (This, Label (emit_symbol fundecl.fun_name)))
   | _ -> ()
@@ -974,8 +975,8 @@ let emit_item = function
   | Cdouble f -> D.int64 (Int64.bits_of_float f)
   | Csymbol_address s -> add_used_symbol s; D.const64 (Label (emit_symbol s))
   | Cstring s -> D.string s
-  | Cskip n -> if n > 0 then D.space n
-  | Calign n -> D.align n
+  | Cskip bytes -> if n > 0 then D.space ~bytes
+  | Calign bytes -> D.align ~bytes
 
 let data l =
   D.switch_to_section Data;
@@ -985,12 +986,13 @@ let data l =
 
 let begin_assembly() =
   X86_proc.reset_asm_code ();
-  Asm_directives_x86.init ();
+  Asm_directives_x86.init ~emit:X86_proc.emit;
   reset_debug_info();                   (* PR#5603 *)
   reset_imp_table();
   float_constants := [];
   all_functions := [];
   if system = S_win64 then begin
+    let module D = X86_dsl.D in
     D.extrn "caml_young_ptr" QWORD;
     D.extrn "caml_young_limit" QWORD;
     D.extrn "caml_exception_pointer" QWORD;
@@ -1006,7 +1008,7 @@ let begin_assembly() =
 
   if !Clflags.dlcode then begin
     (* from amd64.S; could emit these constants on demand *)
-    D.switch_to_section Literals_16;
+    D.switch_to_section Sixteen_byte_literals;
     D.align 16;
     _label (emit_symbol "caml_negf_mask");
     D.int64 0x8000000000000000L;
@@ -1061,7 +1063,7 @@ let emit_spacetime_shapes () =
 
 let end_assembly ~before_code_generation =
   if !float_constants <> [] then begin
-    D.switch_to_section Floating_point_literals;
+    D.switch_to_section Eight_byte_literals;
     List.iter (fun (cst,lbl) -> emit_float_constant cst lbl) !float_constants
   end;
 
@@ -1107,7 +1109,7 @@ let end_assembly ~before_code_generation =
     StringSet.iter
       (fun s ->
          if not (StringSet.mem s !symbols_defined) then
-           D.extrn (emit_symbol s) NEAR)
+           X86_dsl.D.extrn (emit_symbol s) NEAR)
       !symbols_used;
     symbols_used := StringSet.empty;
     symbols_defined := StringSet.empty;
