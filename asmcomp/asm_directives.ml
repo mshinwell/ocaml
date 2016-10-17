@@ -96,16 +96,16 @@ let string_of_label label_name =
 module Directive = struct
   type t =
     | Align of { bytes : int; }
-    | Byte of constant
     | Bytes of string
     | Comment of string
     | Global of string
-    | Long of constant
+    | Const8 of constant
+    | Const16 of constant
+    | Const32 of constant
+    | Const64 of constant
     | NewLabel of string
-    | Quad of constant
     | Section of string list * string option * string list
     | Space of { bytes : int; }
-    | Word of constant
     | Cfi_adjust_cfa_offset of int
     | Cfi_endproc
     | Cfi_startproc
@@ -181,7 +181,17 @@ module Directive = struct
         | _ -> n
       in
       bprintf buf "\t.align\t%d" n
-    | Byte n -> bprintf buf "\t.byte\t%a" cst n
+    | Const8 n -> bprintf buf "\t.byte\t%a" cst n
+    | Const16 n ->
+      begin match TS.system with
+      | S_solaris -> bprintf buf "\t.value\t%a" cst n
+      | _ ->
+        (* Apple's documentation says that ".word" is i386-specific, so we use
+            ".short" instead. *)
+        bprintf buf "\t.short\t%a" cst n
+      end
+    | Const32 n -> bprintf buf "\t.long\t%a" cst n
+    | Const64 n -> bprintf buf "\t.quad\t%a" cst n
     | Bytes s ->
       begin match TS.system with
       | S_solaris -> buf_bytes_directive buf ~directive:".byte" s
@@ -189,9 +199,7 @@ module Directive = struct
       end
     | Comment s -> bprintf buf "\t\t\t\t/* %s */" s
     | Global s -> bprintf buf "\t.globl\t%s" s;
-    | Long n -> bprintf buf "\t.long\t%a" cst n
     | NewLabel s -> bprintf buf "%s:" s
-    | Quad n -> bprintf buf "\t.quad\t%a" cst n
     | Section ([".data" ], _, _) -> bprintf buf "\t.data"
     | Section ([".text" ], _, _) -> bprintf buf "\t.text"
     | Section (name, flags, args) ->
@@ -208,14 +216,6 @@ module Directive = struct
       begin match TS.system with
       | S_solaris -> bprintf buf "\t.zero\t%d" bytes
       | _ -> bprintf buf "\t.space\t%d" bytes
-      end
-    | Word n ->
-      begin match TS.system with
-      | S_solaris -> bprintf buf "\t.value\t%a" cst n
-      | _ ->
-        (* Apple's documentation says that ".word" is i386-specific, so we use
-            ".short" instead. *)
-        bprintf buf "\t.short\t%a" cst n
       end
     | Cfi_adjust_cfa_offset n -> bprintf buf "\t.cfi_adjust_cfa_offset %d" n
     | Cfi_endproc -> bprintf buf "\t.cfi_endproc"
@@ -257,17 +257,17 @@ module Directive = struct
 
   let print_masm buf = function
     | Align { bytes; } -> bprintf buf "\tALIGN\t%d" bytes
-    | Byte n -> bprintf buf "\tBYTE\t%a" cst n
     | Bytes s -> buf_bytes_directive buf ~directive:"BYTE" s
     | Comment s -> bprintf buf " ; %s " s
+    | Const8 n -> bprintf buf "\tBYTE\t%a" cst n
+    | Const16 n -> bprintf buf "\tWORD\t%a" cst n
+    | Const32 n -> bprintf buf "\tDWORD\t%a" cst n
+    | Const64 n -> bprintf buf "\tQUAD\t%a" cst n
     | Global s -> bprintf buf "\tPUBLIC\t%s" s
-    | Long n -> bprintf buf "\tDWORD\t%a" cst n
-    | Quad n -> bprintf buf "\tQUAD\t%a" cst n
     | Section ([".data"], None, []) -> bprintf buf "\t.DATA"
     | Section ([".text"], None, []) -> bprintf buf "\t.CODE"
     | Section _ -> assert false
     | Space { bytes; } -> bprintf buf "\tBYTE\t%d DUP (?)" bytes
-    | Word n -> bprintf buf "\tWORD\t%a" cst n
     | Cfi_adjust_cfa_offset _
     | Cfi_endproc
     | Cfi_startproc
@@ -298,31 +298,31 @@ let emit (d : Directive.t) =
 
 let section segment flags args = emit (Section (segment, flags, args))
 let align ~bytes = emit (Align { bytes; })
-let byte n = emit (Byte n)
 let cfi_adjust_cfa_offset ~bytes = emit (Cfi_adjust_cfa_offset bytes)
 let cfi_endproc () = emit Cfi_endproc
 let cfi_startproc () = emit Cfi_startproc
 let comment s = emit (Comment s)
-let data () = section [ ".data" ] None []
 let direct_assignment var const = emit (Direct_assignment (var, const))
 let file ~file_num ~file_name = emit (File { file_num; filename = file_name; })
 let global s = emit (Global s)
 let indirect_symbol s = emit (Indirect_symbol s)
 let loc ~file_num ~line ~col = emit (Loc { file_num; line; col; })
-let long cst = emit (Long cst)
-let quad cst = emit (Quad cst)
+let private_extern s = emit (Private_extern s)
 let set x y = emit (Set (x, y))
 let size name cst = emit (Size (name, cst))
 let sleb128 cst = emit (Sleb128 (Const cst))
 let space ~bytes = emit (Space { bytes; })
 let string s = emit (Bytes s)
-let text () = section [ ".text" ] None []
-let type_ name typ = emit (Type (name, typ))
+let type_ name ~type_ = emit (Type (name, type_))
 let uleb128 cst = emit (Uleb128 (Const cst))
-let word cst = emit (Word cst)
+
+let const8 n = emit (Const8 n)
+let const16 cst = emit (Const16 cst)
+let const32 cst = emit (Const32 cst)
+let const64 cst = emit (Const64 cst)
 
 let label label_name =
-  quad (Label (string_of_label label_name))
+  const64 (Label (string_of_label label_name))
 
 let label_declaration' s = emit (NewLabel s)
 
@@ -402,25 +402,28 @@ let switch_to_section (section : section) =
     | Jump_tables, _ ->
       [".rodata"], None, []
   in
-  section section_name middle_part attrs;
+  emit (Section (section_name, middle_part, attrs));
   if first_occurrence then begin
     label_declaration ~label_name:(label_for_section section)
   end
 
 let cached_strings = ref ([] : (string * Linearize.label) list)
+let temp_var_counter = ref 0
 
 let reset () =
   cached_strings := [];
-  sections_seen := []
+  sections_seen := [];
+  temp_var_counter := 0
 
 let initialize ~emit =
-  emit_ref := emit;
+  emit_ref := Some emit;
   reset ();
   match TS.system with
   | S_macosx -> ()
   | _ ->
     if !Clflags.debug then begin
-      (* Forward label references are illegal in gas. *)
+      (* Forward label references are illegal in gas.  Just put them in for
+         all assemblers, they won't harm. *)
       switch_to_section Text;
       switch_to_section Data;
       switch_to_section Eight_byte_literals;
@@ -433,18 +436,45 @@ let initialize ~emit =
       switch_to_section (Dwarf Debug_line)
     end
 
-let symbol_prefix = if TS.system = X86_proc.S_macosx then "_" else ""
+let string_of_symbol prefix s =
+  let spec = ref false in
+  for i = 0 to String.length s - 1 do
+    match String.unsafe_get s i with
+    | 'A'..'Z' | 'a'..'z' | '0'..'9' | '_' -> ()
+    | _ -> spec := true;
+  done;
+  if not !spec then if prefix = "" then s else prefix ^ s
+  else
+    let b = Buffer.create (String.length s + 10) in
+    Buffer.add_string b prefix;
+    String.iter
+      (function
+        | ('A'..'Z' | 'a'..'z' | '0'..'9' | '_') as c -> Buffer.add_char b c
+        | c -> Printf.bprintf b "$%02x" (Char.code c)
+      )
+      s;
+    Buffer.contents b
 
-let escape_symbol s = X86_proc.string_of_symbol symbol_prefix s
+let symbol_prefix =
+  match TS.system with
+  | S_macosx -> "_"
+  | _ -> ""
+
+let escape_symbol s = string_of_symbol symbol_prefix s
 
 let symbol sym =
   let sym = Linkage_name.to_string (Symbol.label sym) in
-  quad (Label (escape_symbol sym))
+  const64 (Label (escape_symbol sym))
 
 let symbol_plus_offset sym ~offset_in_bytes =
   let sym = Linkage_name.to_string (Symbol.label sym) in
-  let offset_in_bytes = TS.Address.to_int64 offset_in_bytes in
-  quad (Add (Label (escape_symbol sym), Const offset_in_bytes))
+  let offset_in_bytes = Targetint.to_int64 offset_in_bytes in
+  const64 (Add (Label (escape_symbol sym), Const offset_in_bytes))
+
+let new_temp_var () =
+  let id = !temp_var_counter in
+  incr temp_var_counter;
+  Printf.sprintf "Ltemp%d" id
 
 (* To avoid callers of this module having to worry about whether operands
    involved in displacement calculations are or are not relocatable, and to
@@ -475,12 +505,12 @@ let between_labels_32bit ~upper ~lower =
 
 let define_symbol sym =
   let name = Linkage_name.to_string (Symbol.label sym) in
-  quad (Label (escape_symbol name));
+  const64 (Label (escape_symbol name));
   global name
 
 let between_symbol_and_label_offset ~upper ~lower ~offset_upper =
   let lower = Linkage_name.to_string (Symbol.label lower) in
-  let offset_upper = TS.Address.to_int64 offset_upper in
+  let offset_upper = Targetint.to_int64 offset_upper in
   let expr =
     Sub (
       Add (Numeric_label upper, Const offset_upper),
@@ -489,24 +519,18 @@ let between_symbol_and_label_offset ~upper ~lower ~offset_upper =
   const64 (force_relocatable expr)
 
 let between_this_and_label_offset_32bit ~upper ~offset_upper =
-  let offset_upper = TS.Address.to_int64 offset_upper in
+  let offset_upper = Targetint.to_int64 offset_upper in
   let expr =
     Sub (Add (Numeric_label upper, Const offset_upper), This)
   in
   const32 (force_relocatable expr)
 
-let temp_var_counter = ref 0
-let new_temp_var () =
-  let id = !temp_var_counter in
-  incr temp_var_counter;
-  Printf.sprintf "Ltemp%d" id
-
 let constant_with_width expr ~(width : width) =
   match width with
   (* CR mshinwell: make sure this behaves properly on 32-bit platforms.
      This width is independent of the natural machine width. *)
-  | Thirty_two -> long expr
-  | Sixty_four -> quad expr
+  | Thirty_two -> const32 expr
+  | Sixty_four -> const64 expr
 
 let offset_into_section_label ~section ~label:upper ~width =
   let lower = string_of_label (label_for_section section) in
@@ -524,7 +548,7 @@ let offset_into_section_label ~section ~label:upper ~width =
     | _ ->
       Numeric_label upper
   in
-  constant_with_width expr width
+  constant_with_width expr ~width
 
 let offset_into_section_symbol ~section ~symbol ~width =
   let lower = string_of_label (label_for_section section) in
@@ -538,19 +562,19 @@ let offset_into_section_symbol ~section ~symbol ~width =
       Label temp
     | _ -> Label upper
   in
-  constant_with_width expr width
+  constant_with_width expr ~width
 
 let int8 i =
-  byte (Const (Int64.of_int (Int8.to_int i)))
+  const8 (Const (Int64.of_int (Int8.to_int i)))
 
 let int16 i =
-  word (Const (Int64.of_int (Int16.to_int i)))
+  const16 (Const (Int64.of_int (Int16.to_int i)))
 
 let int32 i =
-  long (Const (Int64.of_int i))
+  const32 (Const (Int64.of_int32 i))
 
 let int64 i =
-  quad (Const i)
+  const64 (Const i)
 
 let target_address addr =
   match Targetint.repr addr with
@@ -575,5 +599,5 @@ let emit_cached_strings () =
 
 let mark_stack_non_executable () =
   match TS.system with
-  | Linux -> section [".note.GNU-stack"] (Some "") [ "%progbits" ]
+  | S_linux -> section [".note.GNU-stack"] (Some "") [ "%progbits" ]
   | _ -> ()

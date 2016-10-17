@@ -99,7 +99,7 @@ module type S = sig
       behaviour of ".set" which makes expressions non-relocatable is
       undesirable).  If about to write a displacement calculation it is better
       to use the high-level functions below instead. *)
-  val direct_assignment : string -> unit
+  val direct_assignment : string -> constant -> unit
 
   (** Assign a file number to a filename. *)
   val file : file_num:int -> file_name:string -> unit
@@ -138,7 +138,7 @@ module type S = sig
       such an expression is evaluated to an _absolute_ assembly-time constant.
       If about to write a displacement calculation it is better to use the
       high-level functions below instead. *)
-  val set : string * constant -> unit
+  val set : string -> constant -> unit
 
   (** Identify the size of the entity pointed at by the given symbol. *)
   val size : string -> constant -> unit

@@ -24,16 +24,16 @@ module Directive : sig
       assembler or printer instead of using [print], below. *)
   type t = private
     | Align of { bytes : int; }
-    | Byte of constant
     | Bytes of string
     | Comment of string
     | Global of string
-    | Long of constant
+    | Const8 of constant
+    | Const16 of constant
+    | Const32 of constant
+    | Const64 of constant
     | NewLabel of string
-    | Quad of constant
     | Section of string list * string option * string list
     | Space of { bytes : int; }
-    | Word of constant
     (* gas only (the masm emitter will fail on them): *)
     | Cfi_adjust_cfa_offset of int
     | Cfi_endproc
