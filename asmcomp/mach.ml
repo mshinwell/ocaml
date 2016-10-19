@@ -58,6 +58,8 @@ type operation =
   | Iintop_imm of integer_operation * int
   | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
   | Ifloatofint | Iintoffloat
+  | Ipushtrap of { static_exn : int; }
+  | Ipoptrap of { static_exn : int; }
   | Ispecific of Arch.specific_operation
 
 type instruction =
@@ -77,8 +79,7 @@ and instruction_desc =
   | Iloop of instruction
   | Icatch of int * instruction * instruction
   | Iexit of int
-  | Itrywith of instruction * instruction
-  | Iraise of Cmm.raise_kind
+  | Iraise of { kind : Cmm.raise_kind; static_exn : int; }
 
 type spacetime_part_of_shape =
   | Direct_call_point of { callee : string; }
@@ -177,3 +178,8 @@ let spacetime_node_hole_pointer_is_live_before insn =
     end
   | Iend | Ireturn | Iifthenelse _ | Iswitch _ | Iloop _ | Icatch _
   | Iexit _ | Itrywith _ | Iraise _ -> false
+
+let op_is_pure op =
+  match op with
+  | Ipushtrap _ | Ipoptrap _ -> false
+  | _ -> Proc.op_is_pure op
