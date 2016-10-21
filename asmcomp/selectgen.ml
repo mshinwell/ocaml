@@ -211,7 +211,8 @@ method is_simple_expr = function
   | Cop(op, args) ->
       begin match op with
         (* The following may have side effects *)
-      | Capply _ | Cextcall _ | Calloc _ | Cstore _ | Craise _ -> false
+      | Capply _ | Cextcall _ | Calloc _ | Cstore _ | Craise _
+      | Cpushtrap _ | Cpoptrap _ -> false
         (* The remaining operations are simple if their args are *)
       | _ ->
           List.for_all self#is_simple_expr args
@@ -527,10 +528,20 @@ method emit_expr env exp =
         fatal_error("Selection.emit_expr: unbound var " ^ Ident.unique_name v)
       end
   | Clet(v, e1, e2) ->
+      (* CR mshinwell: a bit dubious *)
+      let env =
+        begin match self#emit_expr env e1 with
+          None -> Tbl.add v (self#regs_for typ_int) env
+        | Some r1 -> self#bind_let env v r1
+        end
+      in
+      self#emit_expr env e2
+(*
       begin match self#emit_expr env e1 with
         None -> None
       | Some r1 -> self#emit_expr (self#bind_let env v r1) e2
       end
+*)
   | Cassign(v, e1) ->
       let rv =
         try
@@ -624,10 +635,15 @@ method emit_expr env exp =
               Some (self#insert_op_debug op dbg r1 rd)
       end
   | Csequence(e1, e2) ->
+      (* CR mshinwell: think about this *)
+      ignore (self#emit_expr env e1);
+      self#emit_expr env e2
+(*
       begin match self#emit_expr env e1 with
         None -> None
       | Some _ -> self#emit_expr env e2
       end
+*)
   | Cifthenelse(econd, eif, eelse) ->
       let (cond, earg) = self#select_condition econd in
       begin match self#emit_expr env earg with
@@ -825,10 +841,14 @@ method private emit_return env exp =
 method emit_tail env exp =
   match exp with
     Clet(v, e1, e2) ->
-      begin match self#emit_expr env e1 with
-        None -> ()
-      | Some r1 -> self#emit_tail (self#bind_let env v r1) e2
-      end
+      (* CR mshinwell: a bit dubious.  typ_int is dubious too *)
+      let env =
+        begin match self#emit_expr env e1 with
+          None -> Tbl.add v (self#regs_for typ_int) env
+        | Some r1 -> self#bind_let env v r1
+        end
+      in
+      self#emit_tail env e2
   | Cop(Capply(ty, dbg) as op, args) ->
       begin match self#emit_parts_list env args with
         None -> ()
@@ -896,10 +916,15 @@ method emit_tail env exp =
           | _ -> fatal_error "Selection.emit_tail"
       end
   | Csequence(e1, e2) ->
+      ignore (self#emit_expr env e1);
+      self#emit_tail env e2
+
+(*
       begin match self#emit_expr env e1 with
         None -> ()
       | Some _ -> self#emit_tail env e2
       end
+*)
   | Cifthenelse(econd, eif, eelse) ->
       let (cond, earg) = self#select_condition econd in
       begin match self#emit_expr env earg with

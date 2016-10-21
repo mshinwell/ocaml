@@ -168,7 +168,7 @@ let rec instr ppf i =
     fprintf ppf "}@]@,";
   end;
   begin match i.desc with
-  | Iend -> ()
+  | Iend -> fprintf ppf "END"
   | Iop op ->
       operation op i.arg ppf i.res
   | Ireturn ->

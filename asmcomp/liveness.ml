@@ -55,8 +55,9 @@ let rec live i finally exn_stack_finally =
       i.live <- finally;
       finally, exn_stack_finally
   | Ireturn | Iop(Itailcall_ind _) | Iop(Itailcall_imm _) ->
+      let _, exn_stack = live i.next finally exn_stack_finally in
       i.live <- Reg.Set.empty; (* no regs are live across *)
-      Reg.set_of_array arg, exn_stack_finally
+      Reg.set_of_array arg, exn_stack
   | Iop op ->
       let after, exn_stack = live i.next finally exn_stack_finally in
       if Proc.op_is_pure op                    (* no side effects *)
@@ -90,11 +91,19 @@ let rec live i finally exn_stack_finally =
         i.live <- across;
         let exn_stack =
           match op with
-          | Ipoptrap { static_exn; } -> static_exn :: exn_stack
+          | Ipoptrap { static_exn; } ->
+            static_exn :: exn_stack
           | Ipushtrap { static_exn; } ->
             begin match exn_stack with
             | static_exn'::exn_stack when static_exn = static_exn' -> exn_stack
-            | _ -> Misc.fatal_error "Liveness analysis exn stack is wrong"
+            | static_exn'::_ ->
+              Misc.fatal_errorf "Liveness analysis exn stack is wrong (\
+                  expected static exn %d on the top but we have %d"
+                static_exn static_exn'
+            | [] ->
+              Misc.fatal_errorf "Liveness analysis exn stack is empty (\
+                  expected static exn %d on the top)"
+                static_exn
             end
           | _ -> exn_stack
         in
@@ -102,10 +111,10 @@ let rec live i finally exn_stack_finally =
       end
   | Iifthenelse(_test, ifso, ifnot) ->
       let at_join, exn_stack = live i.next finally exn_stack_finally in
-      let ifso_live, ifso_exn_stack = live ifso at_join exn_stack in
-      let ifnot_live, ifnot_exn_stack = live ifnot at_join exn_stack in
-      assert (exn_stack = ifso_exn_stack);
-      assert (exn_stack = ifnot_exn_stack);
+      let ifso_live, ifso_exn_stack = live ifso at_join [] in
+      let ifnot_live, ifnot_exn_stack = live ifnot at_join [] in
+      assert (ifso_exn_stack = []);
+      assert (ifnot_exn_stack = []);
       let at_fork = Reg.Set.union ifso_live ifnot_live in
       i.live <- at_fork;
       Reg.add_set_array at_fork arg, exn_stack
@@ -113,21 +122,21 @@ let rec live i finally exn_stack_finally =
       let at_join, exn_stack = live i.next finally exn_stack_finally in
       let at_fork = ref Reg.Set.empty in
       for i = 0 to Array.length cases - 1 do
-        let case_live, case_exn_stack = live cases.(i) at_join exn_stack in
-        assert (exn_stack = case_exn_stack);
+        let case_live, case_exn_stack = live cases.(i) at_join [] in
+        assert (case_exn_stack = []);
         at_fork := Reg.Set.union !at_fork case_live
       done;
       i.live <- !at_fork;
       Reg.add_set_array !at_fork arg, exn_stack
   | Iloop(body) ->
+      let _, exn_stack = live i.next finally exn_stack_finally in
       let at_top = ref Reg.Set.empty in
-      let exn_stack_before = ref [] in
       (* Yes, there are better algorithms, but we'll just iterate till
          reaching a fixpoint. *)
       begin try
         while true do
-          let live, exn_stack = live body !at_top exn_stack_finally in
-          exn_stack_before := exn_stack;
+          let live, exn_stack = live body !at_top [] in
+          assert (exn_stack = []);
           let new_at_top = Reg.Set.union !at_top live in
           if Reg.Set.equal !at_top new_at_top then raise Exit;
           at_top := new_at_top;
@@ -135,32 +144,34 @@ let rec live i finally exn_stack_finally =
       with Exit -> ()
       end;
       i.live <- !at_top;
-      !at_top, !exn_stack_before
+      !at_top, exn_stack
   | Icatch(nfail, body, handler) ->
       let at_join, exn_stack = live i.next finally exn_stack_finally in
-      let before_handler, exn_stack' = live handler at_join exn_stack in
-      assert (exn_stack = exn_stack');
+      let before_handler, exn_stack' = live handler at_join [] in
+      assert (exn_stack' = []);
       let before_body =
           live_at_exit := (nfail,before_handler) :: !live_at_exit ;
-          let before_body, exn_stack' = live body at_join exn_stack in
-          assert (exn_stack = exn_stack');
+          let before_body, exn_stack' = live body at_join [] in
+          assert (exn_stack' = []);
           live_at_exit := List.tl !live_at_exit ;
           before_body in
       i.live <- before_body;
       before_body, exn_stack
   | Iexit nfail ->
+      let _, exn_stack = live i.next finally exn_stack_finally in
       let this_live = find_live_at_exit nfail ~for_exception_raise:false in
       i.live <- this_live ;
-      this_live, exn_stack_finally
+      this_live, exn_stack
   | Iraise _ ->
+      let _, exn_stack = live i.next finally exn_stack_finally in
       let this_live =
-        match exn_stack_finally with
+        match exn_stack with
         | static_exn::_ ->
           find_live_at_exit static_exn ~for_exception_raise:true
         | [] -> Reg.Set.empty
       in
       i.live <- this_live;
-      Reg.add_set_array this_live arg, exn_stack_finally
+      Reg.add_set_array this_live arg, exn_stack
 
 let reset () =
   live_at_exit := []

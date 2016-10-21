@@ -79,7 +79,7 @@ let rec regalloc ppf round fd =
   if round > 50 then
     fatal_error(fd.Mach.fun_name ^
                 ": function too complex, cannot complete register allocation");
-  dump_if ppf dump_live "Liveness analysis" fd;
+  dump_if ppf dump_live "Liveness analysis before regalloc" fd;
   Interf.build_graph fd;
   if !dump_interf then Printmach.interferences ppf ();
   if !dump_prefer then Printmach.preferences ppf ();
@@ -105,14 +105,17 @@ let compile_fundecl (ppf : formatter) fd_cmm =
   ++ Timings.(accumulate_time (CSE build)) CSE.fundecl
   ++ pass_dump_if ppf dump_cse "After CSE"
   ++ Timings.(accumulate_time (Liveness build)) (liveness ppf)
+  ++ pass_dump_if ppf dump_live "Liveness analysis 0"
   ++ Timings.(accumulate_time (Deadcode build)) Deadcode.fundecl
-  ++ pass_dump_if ppf dump_live "Liveness analysis"
+  ++ pass_dump_if ppf dump_live "After deadcode"
   ++ Timings.(accumulate_time (Spill build)) Spill.fundecl
+  ++ pass_dump_if ppf dump_live "After spilling"
   ++ Timings.(accumulate_time (Liveness build)) (liveness ppf)
-  ++ pass_dump_if ppf dump_spill "After spilling"
+  ++ pass_dump_if ppf dump_spill "After liveness just after spilling"
   ++ Timings.(accumulate_time (Split build)) Split.fundecl
   ++ pass_dump_if ppf dump_split "After live range splitting"
   ++ Timings.(accumulate_time (Liveness build)) (liveness ppf)
+  ++ pass_dump_if ppf dump_live "Liveness analysis 3"
   ++ Timings.(accumulate_time (Regalloc build)) (regalloc ppf 1)
   ++ Timings.(accumulate_time (Linearize build)) Linearize.fundecl
   ++ pass_dump_linear_if ppf dump_linear "Linearized code"

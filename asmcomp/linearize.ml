@@ -291,9 +291,7 @@ let rec linear i n =
          so as to preserve the stack offset during assembler generation. *)
       let num_traps = !try_depth - handler_try_depth in
       assert (num_traps >= 0);
-      let old_try_depth = !try_depth in
       let n1 = linear i.Mach.next n in
-      assert (old_try_depth = !try_depth);
       let n1 = cons_instr (Lphantom_pushtrap num_traps) n1 in
       let rec add_poptraps i depth =
         if depth <= 0 then i

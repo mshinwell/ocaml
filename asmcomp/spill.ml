@@ -419,16 +419,18 @@ let rec spill i finally exn_stack_finally =
        before,
        exn_stack)
   | Iexit nfail ->
+      let _, _, exn_stack = spill i.next finally exn_stack_finally in
       (i, find_spill_at_exit nfail ~for_exception_raise:false,
-        exn_stack_finally)
+        exn_stack)
   | Iraise _ ->
+      let _, _, exn_stack = spill i.next finally exn_stack_finally in
       let spill_at_raise =
         match exn_stack_finally with
         | static_exn::_ ->
           find_spill_at_exit static_exn ~for_exception_raise:true
         | [] -> Reg.Set.empty
       in
-      (i, spill_at_raise, exn_stack_finally)
+      (i, spill_at_raise, exn_stack)
 
 (* Entry point *)
 
