@@ -180,13 +180,6 @@ let rec rename i sub =
       let r = find_exit_subst nfail in
       r := merge_substs !r sub i;
       (i, None)
-  | Itrywith(body, handler) ->
-      let (new_body, sub_body) = rename body sub in
-      let (new_handler, sub_handler) = rename handler sub in
-      let (new_next, sub_next) =
-        rename i.next (merge_substs sub_body sub_handler i.next) in
-      (instr_cons (Itrywith(new_body, new_handler)) [||] [||] new_next,
-       sub_next)
   | Iraise k ->
       (instr_cons_debug (Iraise k) (subst_regs i.arg sub) [||] i.dbg i.next,
        None)

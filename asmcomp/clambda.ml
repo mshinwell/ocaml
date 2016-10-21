@@ -21,6 +21,10 @@ open Lambda
 
 type function_label = string
 
+type catch_args =
+  | Exit of Ident.t list
+  | Exception_bucket of Ident.t
+
 type ustructured_constant =
   | Uconst_float of float
   | Uconst_int32 of int32
@@ -49,8 +53,9 @@ and ulambda =
   | Uswitch of ulambda * ulambda_switch
   | Ustringswitch of ulambda * (string * ulambda) list * ulambda option
   | Ustaticfail of int * ulambda list
-  | Ucatch of int * Ident.t list * ulambda * ulambda
-  | Utrywith of ulambda * Ident.t * ulambda
+  | Ucatch of int * catch_args * ulambda * ulambda
+  | Upushtrap of { static_exn : int; }
+  | Upoptrap of { static_exn : int; }
   | Uifthenelse of ulambda * ulambda * ulambda
   | Usequence of ulambda * ulambda
   | Uwhile of ulambda * ulambda

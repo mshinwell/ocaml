@@ -117,6 +117,10 @@ type raise_kind =
   | Raise_withtrace
   | Raise_notrace
 
+type catch_args =
+  | Exit of Ident.t list
+  | Exception_bucket of Ident.t
+
 type memory_chunk =
     Byte_unsigned
   | Byte_signed
@@ -149,6 +153,8 @@ and operation =
   | Ccmpf of comparison
   | Craise of raise_kind * Debuginfo.t
   | Ccheckbound of Debuginfo.t
+  | Cpushtrap of { static_exn : int; }
+  | Cpoptrap of { static_exn : int; }
 
 type expression =
     Cconst_int of int
@@ -167,9 +173,8 @@ type expression =
   | Cifthenelse of expression * expression * expression
   | Cswitch of expression * int array * expression array
   | Cloop of expression
-  | Ccatch of int * Ident.t list * expression * expression
+  | Ccatch of int * catch_args * expression * expression
   | Cexit of int * expression list
-  | Ctrywith of expression * Ident.t * expression
 
 type fundecl =
   { fun_name: string;

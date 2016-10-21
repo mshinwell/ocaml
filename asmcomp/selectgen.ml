@@ -258,8 +258,6 @@ method mark_instr = function
              #mark_c_tailcall to get a good stack backtrace *)
           self#mark_call
     end
-  | Itrywith _ ->
-    self#mark_call
   | _ -> ()
 
 (* Default instruction selection for operators *)
@@ -333,6 +331,7 @@ method select_operation op args =
     let extra_args = self#select_checkbound_extra_args () in
     let op = self#select_checkbound () in
     self#select_arith op (args @ extra_args)
+  | (Cexception_bucket, _, _) -> (Iexception_bucket, args)
   | _ -> fatal_error "Selection.select_oper"
 
 method private select_arith_comm op = function
@@ -654,20 +653,33 @@ method emit_expr env exp =
       let (_rarg, sbody) = self#emit_sequence env ebody in
       self#insert (Iloop(sbody#extract)) [||] [||];
       Some [||]
-  | Ccatch(nfail, ids, e1, e2) ->
+  | Ccatch(nfail, args, e1, e2) ->
+      let ids, is_exn_bucket =
+        match args with
+        | Exit ids -> ids, false
+        | Exception_bucket id -> [id], true
+      in
       let rs =
         List.map
           (fun id ->
             let r = self#regs_for typ_val in name_regs id r; r)
           ids in
-      catch_regs := (nfail, Array.concat rs) :: !catch_regs ;
+      if not is_exn_bucket then begin
+        catch_regs := (nfail, Array.concat rs) :: !catch_regs
+      end;
       let (r1, s1) = self#emit_sequence env e1 in
-      catch_regs := List.tl !catch_regs ;
+      if not is_exn_bucket then begin
+        catch_regs := List.tl !catch_regs
+      end;
       let new_env =
         List.fold_left
         (fun env (id,r) -> Tbl.add id r env)
         env (List.combine ids rs) in
-      let (r2, s2) = self#emit_sequence new_env e2 in
+      let (r2, s2) =
+        self#emit_sequence new_env e2 ~first:(fun seq ->
+          if not is_exn_bucket then seq
+          else seq#insert (Iop Imove) [| Proc.loc_exn_bucket |] rs)
+      in
       let r = join r1 s1 r2 s2 in
       self#insert (Icatch(nfail, s1#extract, s2#extract)) [||] [||];
       r
@@ -685,20 +697,13 @@ method emit_expr env exp =
           self#insert (Iexit nfail) [||] [||];
           None
       end
-  | Ctrywith(e1, v, e2) ->
-      let (r1, s1) = self#emit_sequence env e1 in
-      let rv = self#regs_for typ_val in
-      let (r2, s2) = self#emit_sequence (Tbl.add v rv env) e2 in
-      let r = join r1 s1 r2 s2 in
-      self#insert
-        (Itrywith(s1#extract,
-                  instr_cons (Iop Imove) [|Proc.loc_exn_bucket|] rv
-                             (s2#extract)))
-        [||] [||];
-      r
 
-method private emit_sequence env exp =
+method private emit_sequence ?first env exp =
   let s = {< instr_seq = dummy_instr >} in
+  begin match first with
+  | None -> ()
+  | Some first -> first s
+  end;
   let r = s#emit_expr env exp in
   (r, s)
 
@@ -924,21 +929,6 @@ method emit_tail env exp =
         env (List.combine ids rs) in
       let s2 = self#emit_tail_sequence new_env e2 in
       self#insert (Icatch(nfail, s1, s2)) [||] [||]
-  | Ctrywith(e1, v, e2) ->
-      let (opt_r1, s1) = self#emit_sequence env e1 in
-      let rv = self#regs_for typ_val in
-      let s2 = self#emit_tail_sequence (Tbl.add v rv env) e2 in
-      self#insert
-        (Itrywith(s1#extract,
-                  instr_cons (Iop Imove) [|Proc.loc_exn_bucket|] rv s2))
-        [||] [||];
-      begin match opt_r1 with
-        None -> ()
-      | Some r1 ->
-          let loc = Proc.loc_results r1 in
-          self#insert_moves r1 loc;
-          self#insert Ireturn loc [||]
-      end
   | _ ->
       self#emit_return env exp
 

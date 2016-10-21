@@ -462,7 +462,6 @@ let rec unbox_float = function
   | Csequence(e1, e2) -> Csequence(e1, unbox_float e2)
   | Cswitch(e, tbl, el) -> Cswitch(e, tbl, Array.map unbox_float el)
   | Ccatch(n, ids, e1, e2) -> Ccatch(n, ids, unbox_float e1, unbox_float e2)
-  | Ctrywith(e1, id, e2) -> Ctrywith(unbox_float e1, id, unbox_float e2)
   | c -> Cop(Cload Double_u, [c])
 
 (* Complex *)
@@ -489,8 +488,6 @@ let rec remove_unit = function
       Cswitch(sel, index, Array.map remove_unit cases)
   | Ccatch(io, ids, body, handler) ->
       Ccatch(io, ids, remove_unit body, remove_unit handler)
-  | Ctrywith(body, exn, handler) ->
-      Ctrywith(remove_unit body, exn, remove_unit handler)
   | Clet(id, c1, c2) ->
       Clet(id, c1, remove_unit c2)
   | Cop(Capply (_mty, dbg), args) ->
@@ -840,7 +837,6 @@ let rec unbox_int bi arg =
   | Csequence(e1, e2) -> Csequence(e1, unbox_int bi e2)
   | Cswitch(e, tbl, el) -> Cswitch(e, tbl, Array.map (unbox_int bi) el)
   | Ccatch(n, ids, e1, e2) -> Ccatch(n, ids, unbox_int bi e1, unbox_int bi e2)
-  | Ctrywith(e1, id, e2) -> Ctrywith(unbox_int bi e1, id, unbox_int bi e2)
   | _ ->
       if size_int = 4 && bi = Pint64 then
         split_int64_for_32bit_target arg
@@ -1275,7 +1271,7 @@ struct
       | Cexit (j,_) ->
           if i=j then handler
           else body
-      | _ ->  Ccatch (i,[],body,handler))
+      | _ ->  Ccatch (i, Exit [],body,handler))
 
   let make_exit i = Cexit (i,[])
 
@@ -1449,7 +1445,7 @@ let rec is_unboxed_number ~strict env e =
       | Some default -> join k default
       end
   | Ustaticfail _ -> No_result
-  | Uifthenelse (_, e1, e2) | Ucatch (_, _, e1, e2) | Utrywith (e1, _, e2) ->
+  | Uifthenelse (_, e1, e2) | Ucatch (_, _, e1, e2) ->
       join (is_unboxed_number ~strict env e1) e2
   | _ -> No_unboxing
 
@@ -1645,12 +1641,16 @@ let rec transl env e =
             (List.map (fun (s,act) -> s,transl env act) sw))
   | Ustaticfail (nfail, args) ->
       Cexit (nfail, List.map (transl env) args)
-  | Ucatch(nfail, [], body, handler) ->
+  | Ucatch(nfail, Exception_bucket id, body, handler) ->
+      Ccatch(nfail, Exception_bucket id, transl env body, transl env handler)
+  | Ucatch(nfail, Exit [], body, handler) ->
       make_catch nfail (transl env body) (transl env handler)
-  | Ucatch(nfail, ids, body, handler) ->
-      Ccatch(nfail, ids, transl env body, transl env handler)
-  | Utrywith(body, exn, handler) ->
-      Ctrywith(transl env body, exn, transl env handler)
+  | Ucatch(nfail, Exit ids, body, handler) ->
+      Ccatch(nfail, Exit ids, transl env body, transl env handler)
+  | Upushtrap { static_exn; } ->
+      Cop (Cpushtrap { static_exn; }, [])
+  | Upoptrap { static_exn; } ->
+      Cop (Cpoptrap { static_exn; }, [])
   | Uifthenelse(Uprim(Pnot, [arg], _), ifso, ifnot) ->
       transl env (Uifthenelse(arg, ifnot, ifso))
   | Uifthenelse(cond, ifso, Ustaticfail (nfail, [])) ->
@@ -1690,7 +1690,7 @@ let rec transl env e =
       let raise_num = next_raise_count () in
       return_unit
         (Ccatch
-           (raise_num, [],
+           (raise_num, Exit [],
             Cloop(exit_if_false env cond
                     (remove_unit(transl env body)) raise_num),
             Ctuple []))
@@ -1704,7 +1704,7 @@ let rec transl env e =
            (id, transl env low,
             bind_nonvar "bound" (transl env high) (fun high ->
               Ccatch
-                (raise_num, [],
+                (raise_num, Exit [],
                  Cifthenelse
                    (Cop(Ccmpi tst, [Cvar id; high]), Cexit (raise_num, []),
                     Cloop
@@ -2375,7 +2375,7 @@ and transl_let env str kind id exp body =
 
 and make_catch ncatch body handler = match body with
 | Cexit (nexit,[]) when nexit=ncatch -> handler
-| _ ->  Ccatch (ncatch, [], body, handler)
+| _ ->  Ccatch (ncatch, Exit [], body, handler)
 
 and make_catch2 mk_body handler = match handler with
 | Cexit (_,[])|Ctuple []|Cconst_int _|Cconst_pointer _ ->
@@ -2801,7 +2801,7 @@ let cache_public_method meths tag cache =
   hi, Cop(Cload Word_int, [meths]),
   Csequence(
   Ccatch
-    (raise_num, [],
+    (raise_num, Exit [],
      Cloop
        (Clet(
         mi,

@@ -353,10 +353,6 @@ method private cse n i =
       {i with desc = Icatch(nfail, self#cse n body,
                             self#cse empty_numbering handler);
               next = self#cse empty_numbering i.next}
-  | Itrywith(body, handler) ->
-      {i with desc = Itrywith(self#cse n body,
-                              self#cse empty_numbering handler);
-              next = self#cse empty_numbering i.next}
 
 method fundecl f =
   {f with fun_body = self#cse empty_numbering f.fun_body}

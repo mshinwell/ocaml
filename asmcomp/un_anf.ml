@@ -41,6 +41,7 @@ let ignore_int_array (_ : int array) = ()
 let ignore_ident_list (_ : Ident.t list) = ()
 let ignore_direction_flag (_ : Asttypes.direction_flag) = ()
 let ignore_meth_kind (_ : Lambda.meth_kind) = ()
+let ignore_catch_args (_ : Clambda.catch_args) = ()
 
 (* CR-soon mshinwell: check we aren't traversing function bodies more than
    once (need to analyse exactly what the calls are from Cmmgen into this
@@ -133,12 +134,8 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
       List.iter loop args
     | Ucatch (static_exn, idents, body, handler) ->
       ignore_int static_exn;
-      ignore_ident_list idents;
+      ignore_catch_args idents;
       loop body;
-      loop handler
-    | Utrywith (body, ident, handler) ->
-      loop body;
-      ignore_ident ident;
       loop handler
     | Uifthenelse (cond, ifso, ifnot) ->
       loop cond;
@@ -167,6 +164,10 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
       ignore_debuginfo dbg
     | Uunreachable ->
       ()
+    | Upushtrap { static_exn; } ->
+      ignore_int static_exn
+    | Upoptrap { static_exn; } ->
+      ignore_int static_exn
   in
   loop clam;
   let linear =
@@ -328,19 +329,12 @@ let let_bound_vars_that_can_be_moved ident_info (clam : Clambda.ulambda) =
       ignore_int static_exn;
       ignore_ulambda_list args;
       let_stack := []
-    | Ucatch (static_exn, idents, body, handler) ->
+    | Ucatch (static_exn, args, body, handler) ->
       ignore_int static_exn;
-      ignore_ident_list idents;
+      ignore_catch_args args;
       let_stack := [];
       loop body;
       let_stack := [];
-      loop handler;
-      let_stack := []
-    | Utrywith (body, ident, handler) ->
-      let_stack := [];
-      loop body;
-      let_stack := [];
-      ignore_ident ident;
       loop handler;
       let_stack := []
     | Uifthenelse (cond, ifso, ifnot) ->
@@ -384,6 +378,10 @@ let let_bound_vars_that_can_be_moved ident_info (clam : Clambda.ulambda) =
       ignore_debuginfo dbg
     | Uunreachable ->
       let_stack := []
+    | Upushtrap { static_exn; } ->
+      ignore_int static_exn
+    | Upoptrap { static_exn; } ->
+      ignore_int static_exn
   in
   loop clam;
   !can_move
@@ -478,10 +476,6 @@ let rec substitute_let_moveable is_let_moveable env (clam : Clambda.ulambda)
     let body = substitute_let_moveable is_let_moveable env body in
     let handler = substitute_let_moveable is_let_moveable env handler in
     Ucatch (n, ids, body, handler)
-  | Utrywith (body, id, handler) ->
-    let body = substitute_let_moveable is_let_moveable env body in
-    let handler = substitute_let_moveable is_let_moveable env handler in
-    Utrywith (body, id, handler)
   | Uifthenelse (cond, ifso, ifnot) ->
     let cond = substitute_let_moveable is_let_moveable env cond in
     let ifso = substitute_let_moveable is_let_moveable env ifso in
@@ -510,6 +504,10 @@ let rec substitute_let_moveable is_let_moveable env (clam : Clambda.ulambda)
     Usend (kind, e1, e2, args, dbg)
   | Uunreachable ->
     Uunreachable
+  | Upushtrap { static_exn; } ->
+    Upushtrap { static_exn; }
+  | Upoptrap { static_exn; } ->
+    Upoptrap { static_exn; }
 
 and substitute_let_moveable_list is_let_moveable env clams =
   List.map (substitute_let_moveable is_let_moveable env) clams
@@ -685,10 +683,6 @@ let rec un_anf_and_moveable ident_info env (clam : Clambda.ulambda)
     let body = un_anf ident_info env body in
     let handler = un_anf ident_info env handler in
     Ucatch (n, ids, body, handler), Fixed
-  | Utrywith (body, id, handler) ->
-    let body = un_anf ident_info env body in
-    let handler = un_anf ident_info env handler in
-    Utrywith (body, id, handler), Fixed
   | Uifthenelse (cond, ifso, ifnot) ->
     let cond, cond_moveable = un_anf_and_moveable ident_info env cond in
     let ifso, ifso_moveable = un_anf_and_moveable ident_info env ifso in
@@ -722,6 +716,8 @@ let rec un_anf_and_moveable ident_info env (clam : Clambda.ulambda)
     Usend (kind, e1, e2, args, dbg), Fixed
   | Uunreachable ->
     Uunreachable, Fixed
+  | Upushtrap { static_exn; } -> Upushtrap { static_exn; }, Fixed
+  | Upoptrap { static_exn; } -> Upoptrap { static_exn; }, Fixed
 
 and un_anf ident_info env clam : Clambda.ulambda =
   let clam, _moveable = un_anf_and_moveable ident_info env clam in

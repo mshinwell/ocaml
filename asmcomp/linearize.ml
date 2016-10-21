@@ -198,7 +198,19 @@ let rec linear i n =
     when i.Mach.arg.(0).loc = i.Mach.res.(0).loc ->
       linear i.Mach.next n
   | Iop op ->
-      copy_instr (Lop op) i (linear i.Mach.next n)
+      begin match op with
+      | Ipoptrap { static_exn; } ->
+        if !try_depth <= 0 then begin
+          Misc.fatal_error "Linearize.linear: mismatched Ipushtrap/Ipoptrap"
+        end;
+        decr try_depth;
+        copy_instr (Lpoptrap { static_exn; }) i (linear i.Mach.next n)
+      | Ipushtrap { static_exn; } ->
+        incr try_depth;
+        copy_instr (Lpushtrap { static_exn; }) i (linear i.Mach.next n)
+      | _ ->
+        copy_instr (Lop op) i (linear i.Mach.next n)
+      end
   | Ireturn ->
       let n1 = copy_instr Lreturn i (discard_dead_code n) in
       if !Proc.contains_calls
@@ -286,17 +298,6 @@ let rec linear i n =
         else add_poptraps (cons_instr Lpoptrap i) (depth - 1)
       in
       add_poptraps (add_branch lbl n1) num_traps
-  | Itrywith(body, handler) ->
-      let (lbl_join, n1) = get_label (linear i.Mach.next n) in
-      let (lbl_handler, n2) = get_label (linear handler n1) in
-      incr try_depth;
-      assert (i.Mach.arg = [| |] || Config.spacetime);
-      let result =
-        instr_cons (Lpushtrap { handler = lbl_handler; }) i.Mach.arg [| |]
-          (linear body (cons_instr Lpoptrap (add_branch lbl_join n2)))
-      in
-      decr try_depth;
-      result
   | Iraise k ->
       copy_instr (Lraise k) i (discard_dead_code n)
 

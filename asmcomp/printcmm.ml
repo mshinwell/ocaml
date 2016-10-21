@@ -97,6 +97,10 @@ let operation = function
   | Ccmpf c -> Printf.sprintf "%sf" (comparison c)
   | Craise (k, d) -> Format.asprintf "%a%s" raise_kind k (Debuginfo.to_string d)
   | Ccheckbound d -> "checkbound" ^ Debuginfo.to_string d
+  | Cpushtrap { static_exn; } ->
+      Format.asprintf "@[<2>(pushtrap@ %d)@]" static_exn
+  | Cpoptrap { static_exn; } ->
+      Format.asprintf "@[<2>(poptrap@ %d)@]" static_exn
 
 let rec expr ppf = function
   | Cconst_int n -> fprintf ppf "%i" n
@@ -166,17 +170,18 @@ let rec expr ppf = function
         "@[<2>(catch@ %a@;<1 -2>with(%d%a)@ %a)@]"
         sequence e1 i
         (fun ppf ids ->
-          List.iter
-            (fun id -> fprintf ppf " %a" Ident.print id)
-            ids) ids
+          match ids with
+          | Exit ids ->
+            List.iter
+              (fun id -> fprintf ppf " %a" Ident.print id)
+              ids
+          | Exception_bucket id ->
+              fprintf ppf " %a(exn)" Ident.print id) ids
         sequence e2
   | Cexit (i, el) ->
       fprintf ppf "@[<2>(exit %d" i ;
       List.iter (fun e -> fprintf ppf "@ %a" expr e) el;
       fprintf ppf ")@]"
-  | Ctrywith(e1, id, e2) ->
-      fprintf ppf "@[<2>(try@ %a@;<1 -2>with@ %a@ %a)@]"
-             sequence e1 Ident.print id sequence e2
 
 and sequence ppf = function
   | Csequence(e1, e2) -> fprintf ppf "%a@ %a" sequence e1 sequence e2

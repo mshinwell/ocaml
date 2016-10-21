@@ -157,17 +157,20 @@ and lam ppf = function
   | Ucatch(i, vars, lbody, lhandler) ->
       fprintf ppf "@[<2>(catch@ %a@;<1 -1>with (%d%a)@ %a)@]"
         lam lbody i
-        (fun ppf vars -> match vars with
-          | [] -> ()
-          | _ ->
-              List.iter
-                (fun x -> fprintf ppf " %a" Ident.print x)
-                vars)
+        (fun ppf args ->
+          match args with
+          | Exit vars ->
+            begin match vars with
+            | [] -> ()
+            | _ ->
+                List.iter
+                  (fun x -> fprintf ppf " %a" Ident.print x)
+                  vars
+            end
+          | Exception_bucket var ->
+            fprintf ppf " %a(exn)" Ident.print var)
         vars
         lam lhandler
-  | Utrywith(lbody, param, lhandler) ->
-      fprintf ppf "@[<2>(try@ %a@;<1 -1>with %a@ %a)@]"
-        lam lbody Ident.print param lam lhandler
   | Uifthenelse(lcond, lif, lelse) ->
       fprintf ppf "@[<2>(if@ %a@ %a@ %a)@]" lam lcond lam lif lam lelse
   | Usequence(l1, l2) ->
@@ -191,6 +194,10 @@ and lam ppf = function
       fprintf ppf "@[<2>(send%s@ %a@ %a%a)@]" kind lam obj lam met args largs
   | Uunreachable ->
       fprintf ppf "unreachable"
+  | Upushtrap { static_exn; } ->
+      fprintf ppf "pushtrap %d" static_exn
+  | Upoptrap { static_exn; } ->
+      fprintf ppf "poptrap %d" static_exn
 
 and sequence ppf ulam = match ulam with
   | Usequence(l1, l2) ->

@@ -35,6 +35,7 @@ and instruction_desc =
   | Lcondbranch of Mach.test * label
   | Lcondbranch3 of label option * label option * label option
   | Lswitch of label array
+  (* CR mshinwell: think again about whether these should be an "operation" *)
   | Lpushtrap of { handler : label; }
   | Lpoptrap
   | Lphantom_pushtrap of int

@@ -111,9 +111,6 @@ let build_graph fundecl =
         interf body; interf handler; interf i.next
     | Iexit _ ->
         ()
-    | Itrywith(body, handler) ->
-        add_interf_set Proc.destroyed_at_raise handler.live;
-        interf body; interf handler; interf i.next
     | Iraise _ -> () in
 
   (* Add a preference from one reg to another.
@@ -183,8 +180,6 @@ let build_graph fundecl =
         prefer weight body; prefer weight handler; prefer weight i.next
     | Iexit _ ->
         ()
-    | Itrywith(body, handler) ->
-        prefer weight body; prefer weight handler; prefer weight i.next
     | Iraise _ -> ()
   in
 

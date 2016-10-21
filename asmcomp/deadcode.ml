@@ -65,11 +65,6 @@ let rec deadcode i =
       ({i with desc = Icatch(nfail, body', handler'); next = s}, i.live)
   | Iexit _ ->
       (i, i.live)
-  | Itrywith(body, handler) ->
-      let (body', _) = deadcode body in
-      let (handler', _) = deadcode handler in
-      let (s, _) = deadcode i.next in
-      ({i with desc = Itrywith(body', handler'); next = s}, i.live)
 
 let fundecl f =
   let (new_body, _) = deadcode f.fun_body in

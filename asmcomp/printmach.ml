@@ -156,6 +156,8 @@ let operation op arg ppf res =
   | Idivf -> fprintf ppf "%a /f %a" reg arg.(0) reg arg.(1)
   | Ifloatofint -> fprintf ppf "floatofint %a" reg arg.(0)
   | Iintoffloat -> fprintf ppf "intoffloat %a" reg arg.(0)
+  | Ipushtrap { static_exn; } -> fprintf ppf "pushtrap %d" static_exn
+  | Ipoptrap { static_exn; } -> fprintf ppf "poptrap %d" static_exn
   | Ispecific op ->
       Arch.print_specific_operation reg op ppf arg
 
@@ -196,9 +198,6 @@ let rec instr ppf i =
         instr body i instr handler
   | Iexit i ->
       fprintf ppf "exit(%d)" i
-  | Itrywith(body, handler) ->
-      fprintf ppf "@[<v 2>try@,%a@;<0 -2>with@,%a@;<0 -2>endtry@]"
-             instr body instr handler
   | Iraise k ->
       fprintf ppf "%a %a" Printcmm.raise_kind k reg i.arg.(0)
   end;

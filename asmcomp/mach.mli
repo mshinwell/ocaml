@@ -68,6 +68,8 @@ type operation =
   | Iintop_imm of integer_operation * int
   | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
   | Ifloatofint | Iintoffloat
+  | Ipushtrap of { static_exn : int; }
+  | Ipoptrap of { static_exn : int; }
   | Ispecific of Arch.specific_operation
 
 type instruction =
@@ -87,7 +89,6 @@ and instruction_desc =
   | Iloop of instruction
   | Icatch of int * instruction * instruction
   | Iexit of int
-  | Itrywith of instruction * instruction
   | Iraise of Cmm.raise_kind
 
 type spacetime_part_of_shape =
@@ -123,3 +124,5 @@ val instr_cons_debug:
 val instr_iter: (instruction -> unit) -> instruction -> unit
 
 val spacetime_node_hole_pointer_is_live_before : instruction -> bool
+
+val op_is_pure : operation -> bool

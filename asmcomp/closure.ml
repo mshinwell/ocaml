@@ -77,7 +77,6 @@ let occurs_var var u =
         (match d with None -> false | Some d -> occurs d)
     | Ustaticfail (_, args) -> List.exists occurs args
     | Ucatch(_, _, body, hdlr) -> occurs body || occurs hdlr
-    | Utrywith(body, _exn, hdlr) -> occurs body || occurs hdlr
     | Uifthenelse(cond, ifso, ifnot) ->
         occurs cond || occurs ifso || occurs ifnot
     | Usequence(u1, u2) -> occurs u1 || occurs u2
@@ -177,8 +176,6 @@ let lambda_smaller lam threshold =
     | Ustaticfail (_,args) -> lambda_list_size args
     | Ucatch(_, _, body, handler) ->
         incr size; lambda_size body; lambda_size handler
-    | Utrywith(body, _id, handler) ->
-        size := !size + 8; lambda_size body; lambda_size handler
     | Uifthenelse(cond, ifso, ifnot) ->
         size := !size + 2;
         lambda_size cond; lambda_size ifso; lambda_size ifnot
@@ -608,10 +605,6 @@ let rec substitute loc fpc sb ulam =
           ids ids' sb
       in
       Ucatch(nfail, ids', substitute loc fpc sb u1, substitute loc fpc sb' u2)
-  | Utrywith(u1, id, u2) ->
-      let id' = Ident.rename id in
-      Utrywith(substitute loc fpc sb u1, id',
-               substitute loc fpc (Tbl.add id (Uvar id') sb) u2)
   | Uifthenelse(u1, u2, u3) ->
       begin match substitute loc fpc sb u1 with
         Uconst (Uconst_ptr n) ->
@@ -1024,11 +1017,13 @@ let rec close fenv cenv = function
   | Lstaticcatch(body, (i, vars), handler) ->
       let (ubody, _) = close fenv cenv body in
       let (uhandler, _) = close fenv cenv handler in
-      (Ucatch(i, vars, ubody, uhandler), Value_unknown)
-  | Ltrywith(body, id, handler) ->
+      (Ucatch(i, Exit vars, ubody, uhandler), Value_unknown)
+  | Ltrywith(_body, _id, _handler) -> assert false
+(*
       let (ubody, _) = close fenv cenv body in
       let (uhandler, _) = close fenv cenv handler in
       (Utrywith(ubody, id, uhandler), Value_unknown)
+*)
   | Lifthenelse(arg, ifso, ifnot) ->
       begin match close fenv cenv arg with
         (uarg, Value_const (Uconst_ptr n)) ->

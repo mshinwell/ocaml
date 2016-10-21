@@ -118,9 +118,6 @@ method private reload i =
         (self#reload i.next)
   | Iexit i ->
       instr_cons (Iexit i) [||] [||] dummy_instr
-  | Itrywith(body, handler) ->
-      instr_cons (Itrywith(self#reload body, self#reload handler)) [||] [||]
-        (self#reload i.next)
 
 method fundecl f =
   redo_regalloc <- false;
