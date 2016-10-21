@@ -190,10 +190,12 @@ let rec linear i n =
   match i.Mach.desc with
     Iend -> n
   | Iop(Itailcall_ind _ | Itailcall_imm _ as op) ->
+(*
       if not Config.spacetime then
         copy_instr (Lop op) i (discard_dead_code n)
       else
-        copy_instr (Lop op) i (linear i.Mach.next n)
+*)
+        copy_instr (Lop op) i (discard_dead_code (linear i.Mach.next n))
   | Iop(Imove | Ireload | Ispill)
     when i.Mach.arg.(0).loc = i.Mach.res.(0).loc ->
       linear i.Mach.next n
@@ -207,14 +209,16 @@ let rec linear i n =
         decr try_depth;
         copy_instr Lpoptrap i (linear i.Mach.next n)
       | Ipushtrap { static_exn; } ->
-        let handler = find_exit_label static_exn in
         incr try_depth;
+        let handler, _ = find_exit_label_try_depth static_exn in
         copy_instr (Lpushtrap { handler; }) i (linear i.Mach.next n)
       | _ ->
         copy_instr (Lop op) i (linear i.Mach.next n)
       end
   | Ireturn ->
-      let n1 = copy_instr Lreturn i (discard_dead_code n) in
+      let n1 =
+        copy_instr Lreturn i (discard_dead_code (linear i.Mach.next n))
+      in
       if !Proc.contains_calls
       then cons_instr Lreloadretaddr n1
       else n1
@@ -299,7 +303,10 @@ let rec linear i n =
       in
       add_poptraps (add_branch lbl n1) num_traps
   | Iraise k ->
+      copy_instr (Lraise k) i (discard_dead_code (linear i.Mach.next n))
+(*
       copy_instr (Lraise k) i (discard_dead_code n)
+*)
 
 let fundecl f =
   { fun_name = f.Mach.fun_name;
