@@ -317,25 +317,28 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
           env, id :: ids)
         vars (env, [])
     in
-    Ucatch (Static_exception.to_int static_exn, ids,
+    Ucatch (Static_exception.to_int static_exn, Exit ids,
       to_clambda t env body, to_clambda t env_handler handler)
   | Try_with (body, var, handler) ->
     let id, env_handler = Env.add_fresh_ident env var in
-    let handler = Static_exception.create () in
-    let body =
+    let static_exn =
+      let handler = Static_exception.create () in
+      Static_exception.to_int handler
+    in
+    let body : Clambda.ulambda =
       (* Note that wrapping the body doesn't break tail calls, because
          there are no tail calls generated inside the body of a try/with
          (except under lambdas of course). *)
       let result = Ident.create "result" in
       Usequence (
-        Upushtrap { static_exn = handler; },
-        Ulet (result,
+        Upushtrap { static_exn; },
+        Ulet (Immutable, Pgenval, result,
           to_clambda t env body,
           Usequence (
-            Upoptrap { static_exn = handler; },
+            Upoptrap { static_exn; },
             Uvar result)))
     in
-    Ucatch (Static_exception.to_int handler, Exception_bucket id,
+    Ucatch (static_exn, Exception_bucket id,
       body, to_clambda t env_handler handler)
   | If_then_else (arg, ifso, ifnot) ->
     Uifthenelse (subst_var env arg, to_clambda t env ifso,

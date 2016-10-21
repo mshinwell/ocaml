@@ -199,15 +199,17 @@ let rec linear i n =
       linear i.Mach.next n
   | Iop op ->
       begin match op with
-      | Ipoptrap { static_exn; } ->
+      | Ipoptrap { static_exn = _; } ->
+        (* CR mshinwell: Check or remove static_exn from Ipoptrap *)
         if !try_depth <= 0 then begin
           Misc.fatal_error "Linearize.linear: mismatched Ipushtrap/Ipoptrap"
         end;
         decr try_depth;
-        copy_instr (Lpoptrap { static_exn; }) i (linear i.Mach.next n)
+        copy_instr Lpoptrap i (linear i.Mach.next n)
       | Ipushtrap { static_exn; } ->
+        let handler = find_exit_label static_exn in
         incr try_depth;
-        copy_instr (Lpushtrap { static_exn; }) i (linear i.Mach.next n)
+        copy_instr (Lpushtrap { handler; }) i (linear i.Mach.next n)
       | _ ->
         copy_instr (Lop op) i (linear i.Mach.next n)
       end

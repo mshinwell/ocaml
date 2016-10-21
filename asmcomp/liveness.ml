@@ -84,7 +84,7 @@ let rec live i finally exn_stack_finally =
                   find_live_at_exit static_exn ~for_exception_raise:true
                 | _ -> Reg.Set.empty
               in
-              Reg.Set.union across_after !live_at_raise
+              Reg.Set.union across_after live_at_raise
            | _ ->
                across_after in
         i.live <- across;
@@ -149,12 +149,12 @@ let rec live i finally exn_stack_finally =
       i.live <- before_body;
       before_body, exn_stack
   | Iexit nfail ->
-      let this_live = find_live_at_exit nfail in
+      let this_live = find_live_at_exit nfail ~for_exception_raise:false in
       i.live <- this_live ;
       this_live, exn_stack_finally
   | Iraise _ ->
       let this_live =
-        match exn_stack with
+        match exn_stack_finally with
         | static_exn::_ ->
           find_live_at_exit static_exn ~for_exception_raise:true
         | [] -> Reg.Set.empty

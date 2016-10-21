@@ -86,6 +86,7 @@ let occurs_var var u =
     | Usend(_, met, obj, args, _) ->
         occurs met || occurs obj || List.exists occurs args
     | Uunreachable -> false
+    | Upushtrap _ | Upoptrap _ -> false
   and occurs_array a =
     try
       for i = 0 to Array.length a - 1 do
@@ -191,6 +192,7 @@ let lambda_smaller lam threshold =
         size := !size + 8;
         lambda_size met; lambda_size obj; lambda_list_size args
     | Uunreachable -> ()
+    | Upushtrap _ | Upoptrap _ -> ()  (* CR mshinwell: fixme *)
   and lambda_list_size l = List.iter lambda_size l
   and lambda_array_size a = Array.iter lambda_size a in
   try
@@ -597,14 +599,17 @@ let rec substitute loc fpc sb ulam =
          Misc.may_map (substitute loc fpc sb) d)
   | Ustaticfail (nfail, args) ->
       Ustaticfail (nfail, List.map (substitute loc fpc sb) args)
-  | Ucatch(nfail, ids, u1, u2) ->
+  | Ucatch(nfail, Exit ids, u1, u2) ->
       let ids' = List.map Ident.rename ids in
       let sb' =
         List.fold_right2
           (fun id id' s -> Tbl.add id (Uvar id') s)
           ids ids' sb
       in
-      Ucatch(nfail, ids', substitute loc fpc sb u1, substitute loc fpc sb' u2)
+      Ucatch(nfail, Exit ids',
+        substitute loc fpc sb u1, substitute loc fpc sb' u2)
+  | Ucatch(_nfail, Exception_bucket _, _u1, _u2) -> assert false
+  | Upushtrap _ | Upoptrap _ -> assert false
   | Uifthenelse(u1, u2, u3) ->
       begin match substitute loc fpc sb u1 with
         Uconst (Uconst_ptr n) ->
@@ -995,7 +1000,7 @@ let rec close fenv cenv = function
             let i = next_raise_count () in
             let ubody,_ = fn (Some (Lstaticraise (i,[])))
             and uhandler,_ = close fenv cenv lamfail in
-            Ucatch (i,[],ubody,uhandler),Value_unknown
+            Ucatch (i, Exit [],ubody,uhandler),Value_unknown
           else fn fail
       end
   | Lstringswitch(arg,sw,d,_) ->
@@ -1263,7 +1268,7 @@ and close_switch fenv cenv cases num_keys default =
                 (string_of_lambda lam) ;
 *)
             let ohs = !hs in
-            hs := (fun e -> Ucatch (i,[],ohs e,ulam)) ;
+            hs := (fun e -> Ucatch (i, Exit [],ohs e,ulam)) ;
             Ustaticfail (i,[]))
       acts in
   match actions with
@@ -1318,7 +1323,6 @@ let collect_exported_structured_constants a =
         Misc.may ulam d
     | Ustaticfail (_, ul) -> List.iter ulam ul
     | Ucatch (_, _, u1, u2)
-    | Utrywith (u1, _, u2)
     | Usequence (u1, u2)
     | Uwhile (u1, u2)  -> ulam u1; ulam u2
     | Uifthenelse (u1, u2, u3)
@@ -1326,6 +1330,7 @@ let collect_exported_structured_constants a =
     | Uassign (_, u) -> ulam u
     | Usend (_, u1, u2, ul, _) -> ulam u1; ulam u2; List.iter ulam ul
     | Uunreachable -> ()
+    | Upushtrap _ | Upoptrap _ -> ()
   in
   approx a
 

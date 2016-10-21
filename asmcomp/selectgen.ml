@@ -46,6 +46,7 @@ let oper_result_type = function
   | Cintoffloat -> typ_int
   | Craise _ -> typ_void
   | Ccheckbound _ -> typ_void
+  | Cpushtrap _ | Cpoptrap _ -> typ_void
 
 (* Infer the size in bytes of the result of a simple expression *)
 
@@ -331,7 +332,8 @@ method select_operation op args =
     let extra_args = self#select_checkbound_extra_args () in
     let op = self#select_checkbound () in
     self#select_arith op (args @ extra_args)
-  | (Cexception_bucket, _, _) -> (Iexception_bucket, args)
+  | (Cpushtrap { static_exn; }, _) -> (Ipushtrap { static_exn; }, args)
+  | (Cpoptrap { static_exn; }, _) -> (Ipoptrap { static_exn; }, args)
   | _ -> fatal_error "Selection.select_oper"
 
 method private select_arith_comm op = function
@@ -677,8 +679,11 @@ method emit_expr env exp =
         env (List.combine ids rs) in
       let (r2, s2) =
         self#emit_sequence new_env e2 ~first:(fun seq ->
-          if not is_exn_bucket then seq
-          else seq#insert (Iop Imove) [| Proc.loc_exn_bucket |] rs)
+          if not is_exn_bucket then ()
+          else begin
+            assert (List.length rs = 1);
+            seq#insert (Iop Imove) [| Proc.loc_exn_bucket |] (List.hd rs)
+          end)
       in
       let r = join r1 s1 r2 s2 in
       self#insert (Icatch(nfail, s1#extract, s2#extract)) [||] [||];
@@ -912,7 +917,12 @@ method emit_tail env exp =
             (Iswitch(index, Array.map (self#emit_tail_sequence env) ecases))
             rsel [||]
       end
-  | Ccatch(nfail, ids, e1, e2) ->
+  | Ccatch(nfail, args, e1, e2) ->
+      let ids, is_exn_bucket =
+        match args with
+        | Exit ids -> ids, false
+        | Exception_bucket id -> [id], true
+      in
        let rs =
         List.map
           (fun id ->
@@ -920,6 +930,9 @@ method emit_tail env exp =
             name_regs id r  ;
             r)
           ids in
+      if not is_exn_bucket then begin
+        catch_regs := (nfail, Array.concat rs) :: !catch_regs
+      end;
       catch_regs := (nfail, Array.concat rs) :: !catch_regs ;
       let s1 = self#emit_tail_sequence env e1 in
       catch_regs := List.tl !catch_regs ;
@@ -927,13 +940,24 @@ method emit_tail env exp =
         List.fold_left
         (fun env (id,r) -> Tbl.add id r env)
         env (List.combine ids rs) in
-      let s2 = self#emit_tail_sequence new_env e2 in
+      let s2 =
+        self#emit_tail_sequence new_env e2 ~first:(fun seq ->
+          if not is_exn_bucket then ()
+          else begin
+            assert (List.length rs = 1);
+            seq#insert (Iop Imove) [| Proc.loc_exn_bucket |] (List.hd rs)
+          end)
+      in
       self#insert (Icatch(nfail, s1, s2)) [||] [||]
   | _ ->
       self#emit_return env exp
 
-method private emit_tail_sequence env exp =
+method private emit_tail_sequence ?first env exp =
   let s = {< instr_seq = dummy_instr >} in
+  begin match first with
+  | None -> ()
+  | Some first -> first s
+  end;
   s#emit_tail env exp;
   s#extract
 

@@ -291,7 +291,7 @@ let rec spill i finally exn_stack_finally =
       (instr_cons i.desc i.arg i.res new_next,
        Reg.add_set_array before1 i.res,
        exn_stack)
-  | Iop _ ->
+  | Iop op ->
       let (new_next, after, exn_stack) =
         spill i.next finally exn_stack_finally
       in
@@ -306,7 +306,7 @@ let rec spill i finally exn_stack_finally =
                 find_spill_at_exit static_exn ~for_exception_raise:true
               | _ -> Reg.Set.empty
             in
-            Reg.Set.union before1 !spill_at_raise
+            Reg.Set.union before1 spill_at_raise
         | _ ->
             before1 in
       let exn_stack =
@@ -366,7 +366,7 @@ let rec spill i finally exn_stack_finally =
       let new_cases =
         Array.map
           (fun c ->
-            let (new_c, before_c, exn_stack_c) = spill c at_join in
+            let (new_c, before_c, exn_stack_c) = spill c at_join exn_stack in
             assert (exn_stack = exn_stack_c);
             before := Reg.Set.union !before before_c;
             new_c)
@@ -376,7 +376,7 @@ let rec spill i finally exn_stack_finally =
        !before,
        exn_stack)
   | Iloop(body) ->
-      let (new_next, _) = spill i.next finally in
+      let (new_next, _, exn_stack') = spill i.next finally exn_stack_finally in
       let saved_inside_loop = !inside_loop in
       inside_loop := true;
       let at_head = ref Reg.Set.empty in
@@ -384,7 +384,9 @@ let rec spill i finally exn_stack_finally =
       let exn_stack_before = ref [] in
       begin try
         while true do
-          let (new_body, before_body, exn_stack) = spill body !at_head in
+          let (new_body, before_body, exn_stack) =
+            spill body !at_head exn_stack'
+          in
           exn_stack_before := exn_stack;
           let new_at_head = Reg.Set.union !at_head before_body in
           if Reg.Set.equal new_at_head !at_head then begin
@@ -417,10 +419,11 @@ let rec spill i finally exn_stack_finally =
        before,
        exn_stack)
   | Iexit nfail ->
-      (i, find_spill_at_exit nfail, exn_stack_finally)
+      (i, find_spill_at_exit nfail ~for_exception_raise:false,
+        exn_stack_finally)
   | Iraise _ ->
       let spill_at_raise =
-        match exn_stack with
+        match exn_stack_finally with
         | static_exn::_ ->
           find_spill_at_exit static_exn ~for_exception_raise:true
         | [] -> Reg.Set.empty
@@ -439,7 +442,7 @@ let fundecl f =
   reset ();
 
   let (body1, _) = reload f.fun_body Reg.Set.empty in
-  let (body2, tospill_at_entry) = spill body1 Reg.Set.empty in
+  let (body2, tospill_at_entry, _) = spill body1 Reg.Set.empty [] in
   let new_body =
     add_spills (Reg.inter_set_array tospill_at_entry f.fun_args) body2 in
   spill_env := Reg.Map.empty;

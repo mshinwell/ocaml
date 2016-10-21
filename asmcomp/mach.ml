@@ -173,11 +173,7 @@ let spacetime_node_hole_pointer_is_live_before insn =
     | Iconst_symbol _ | Istackoffset _ | Iload _ | Istore _
     | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
     | Ifloatofint | Iintoffloat -> false
+    | Ipushtrap _ | Ipoptrap _ -> false
     end
   | Iend | Ireturn | Iifthenelse _ | Iswitch _ | Iloop _ | Icatch _
   | Iexit _ | Iraise _ -> false
-
-let op_is_pure op =
-  match op with
-  | Ipushtrap _ | Ipoptrap _ -> false
-  | _ -> Proc.op_is_pure op

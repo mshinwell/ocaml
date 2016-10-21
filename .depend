@@ -1024,10 +1024,10 @@ asmcomp/liveness.cmx : asmcomp/reg.cmx asmcomp/proc.cmx \
     asmcomp/printmach.cmx utils/misc.cmx asmcomp/mach.cmx utils/config.cmx \
     asmcomp/liveness.cmi
 asmcomp/liveness.cmi : asmcomp/mach.cmi
-asmcomp/mach.cmo : asmcomp/reg.cmi middle_end/debuginfo.cmi asmcomp/cmm.cmi \
-    asmcomp/arch.cmo asmcomp/mach.cmi
-asmcomp/mach.cmx : asmcomp/reg.cmx middle_end/debuginfo.cmx asmcomp/cmm.cmx \
-    asmcomp/arch.cmx asmcomp/mach.cmi
+asmcomp/mach.cmo : asmcomp/reg.cmi asmcomp/proc.cmi middle_end/debuginfo.cmi \
+    asmcomp/cmm.cmi asmcomp/arch.cmo asmcomp/mach.cmi
+asmcomp/mach.cmx : asmcomp/reg.cmx asmcomp/proc.cmx middle_end/debuginfo.cmx \
+    asmcomp/cmm.cmx asmcomp/arch.cmx asmcomp/mach.cmi
 asmcomp/mach.cmi : asmcomp/reg.cmi middle_end/debuginfo.cmi asmcomp/cmm.cmi \
     asmcomp/arch.cmo
 asmcomp/printclambda.cmo : bytecomp/printlambda.cmi bytecomp/lambda.cmi \
@@ -1877,6 +1877,8 @@ middle_end/base_types/export_id.cmx : utils/identifiable.cmx \
     middle_end/base_types/export_id.cmi
 middle_end/base_types/export_id.cmi : utils/identifiable.cmi \
     middle_end/base_types/compilation_unit.cmi
+middle_end/base_types/fully_qualified_id.cmo :
+middle_end/base_types/fully_qualified_id.cmx :
 middle_end/base_types/id_types.cmo : utils/identifiable.cmi \
     middle_end/base_types/id_types.cmi
 middle_end/base_types/id_types.cmx : utils/identifiable.cmx \
@@ -1895,6 +1897,8 @@ middle_end/base_types/mutable_variable.cmx : utils/identifiable.cmx \
     middle_end/base_types/mutable_variable.cmi
 middle_end/base_types/mutable_variable.cmi : utils/identifiable.cmi \
     typing/ident.cmi middle_end/base_types/compilation_unit.cmi
+middle_end/base_types/name_for_debugger.cmo :
+middle_end/base_types/name_for_debugger.cmx :
 middle_end/base_types/set_of_closures_id.cmo : utils/identifiable.cmi \
     middle_end/base_types/id_types.cmi \
     middle_end/base_types/compilation_unit.cmi \

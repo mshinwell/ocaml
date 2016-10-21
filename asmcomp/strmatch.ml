@@ -371,7 +371,7 @@ module Make(I:I) = struct
     | Cexit (_e,[]) ->  k arg
     | _ ->
         let e =  next_raise_count () in
-        Ccatch (e,[],k (Cexit (e,[])),arg)
+        Ccatch (e, Exit [],k (Cexit (e,[])),arg)
 
     let compile str default cases =
 (* We do not attempt to really optimise default=None *)

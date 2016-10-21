@@ -327,6 +327,7 @@ let op_is_pure = function
   | Iintop(Icheckbound _) | Iintop_imm(Icheckbound _, _) -> false
   | Ispecific(Ilea _) -> true
   | Ispecific _ -> false
+  | Ipushtrap _ | Ipoptrap _ -> false
   | _ -> true
 
 (* Layout of the stack frame *)

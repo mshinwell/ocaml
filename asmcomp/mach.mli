@@ -124,5 +124,3 @@ val instr_cons_debug:
 val instr_iter: (instruction -> unit) -> instruction -> unit
 
 val spacetime_node_hole_pointer_is_live_before : instruction -> bool
-
-val op_is_pure : operation -> bool
