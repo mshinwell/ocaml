@@ -150,16 +150,19 @@ let emit_call s = I.call (rel_plt s)
 
 let emit_jump s = I.jmp (rel_plt s)
 
-let load_symbol_addr s arg =
+let load_symbol_or_label_addr s arg ~emit =
   if !Clflags.dlcode then
     if windows then begin
       (* I.mov (mem__imp s) arg (\* mov __caml_imp_foo(%rip), ... *\) *)
-      I.mov (sym (emit_symbol s)) arg (* movabsq $foo, ... *)
-    end else I.mov (mem64_rip QWORD (emit_symbol s ^ "@GOTPCREL")) arg
+      I.mov (sym (emit s)) arg (* movabsq $foo, ... *)
+    end else I.mov (mem64_rip QWORD (emit s ^ "@GOTPCREL")) arg
   else if !Clflags.pic_code then
-    I.lea (mem64_rip NONE (emit_symbol s)) arg
+    I.lea (mem64_rip NONE (emit s)) arg
   else
-    I.mov (sym (emit_symbol s)) arg
+    I.mov (sym (emit s)) arg
+
+let load_symbol_addr s arg =
+  load_symbol_or_label_addr s arg ~emit:emit_symbol
 
 (* Output a label *)
 
@@ -175,6 +178,9 @@ let def_label s = D.label (emit_label s)
 let emit_Llabel fallthrough lbl =
   if not fallthrough && !fastcode_flag then D.align 4;
   def_label lbl
+
+let load_label_addr s arg =
+  load_symbol_or_label_addr s arg ~emit:emit_label
 
 (* Output a pseudo-register *)
 
@@ -484,6 +490,7 @@ let tailrec_entry_point = ref 0
 
 (* Emit an instruction *)
 let emit_instr fallthrough i =
+  D.comment (Printf.sprintf "Stack offset %d before:%!" !stack_offset);
   emit_debug_info i.dbg;
   match i.desc with
   | Lend -> ()
@@ -835,11 +842,12 @@ let emit_instr fallthrough i =
                          ConstLabel lbl))
       done;
       D.text ()
-  | Lsetuptrap lbl ->
-      I.call (label lbl)
-  | Lpushtrap ->
-      cfi_adjust_cfa_offset 8;
+  | Lpushtrap { handler; } ->
+      I.mov r14 (mem64 QWORD (-16) RSP);
+      load_label_addr handler r14;
       I.push r14;
+      cfi_adjust_cfa_offset 8;
+      I.sub (int 8) rsp;
       cfi_adjust_cfa_offset 8;
       I.mov rsp r14;
       stack_offset := !stack_offset + 16
@@ -849,6 +857,18 @@ let emit_instr fallthrough i =
       I.add (int 8) rsp;
       cfi_adjust_cfa_offset (-8);
       stack_offset := !stack_offset - 16
+  | Lphantom_pushtrap depth ->
+      assert (depth >= 0);
+      if depth > 0 then begin
+        let offset = 16 * depth in
+        stack_offset := !stack_offset + offset
+      end
+  | Lphantom_poptrap depth ->
+      assert (depth >= 0);
+      if depth > 0 then begin
+        let offset = 16 * depth in
+        stack_offset := !stack_offset - offset
+      end
   | Lraise k ->
       (* No Spacetime instrumentation is required for [caml_raise_exn] and
          [caml_reraise_exn].  The only function called that might affect the

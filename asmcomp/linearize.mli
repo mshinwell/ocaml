@@ -35,9 +35,10 @@ and instruction_desc =
   | Lcondbranch of Mach.test * label
   | Lcondbranch3 of label option * label option * label option
   | Lswitch of label array
-  | Lsetuptrap of label
-  | Lpushtrap
+  | Lpushtrap of { handler : label; }
   | Lpoptrap
+  | Lphantom_pushtrap of int
+  | Lphantom_poptrap of int
   | Lraise of Cmm.raise_kind
 
 val has_fallthrough :  instruction_desc -> bool

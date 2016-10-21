@@ -38,9 +38,10 @@ and instruction_desc =
   | Lcondbranch of test * label
   | Lcondbranch3 of label option * label option * label option
   | Lswitch of label array
-  | Lsetuptrap of label
-  | Lpushtrap
+  | Lpushtrap of { handler : label; }
   | Lpoptrap
+  | Lphantom_pushtrap of int
+  | Lphantom_poptrap of int
   | Lraise of Cmm.raise_kind
 
 let has_fallthrough = function
@@ -127,10 +128,20 @@ let rec discard_dead_code n =
   match n.desc with
     Lend -> n
   | Llabel _ -> n
-(* Do not discard Lpoptrap/Lpushtrap or Istackoffset instructions,
-   as this may cause a stack imbalance later during assembler generation. *)
-  | Lpoptrap | Lpushtrap -> n
-  | Lop(Istackoffset _) -> n
+  (* To avoid stack offset calculations being wrong during assembly code
+     generation, replace unused pop/pushtrap instructions with their phantom
+     equivalents.  Never discard the phantom equivalents. *)
+  | Lpoptrap ->
+    let next = discard_dead_code n.next in
+    { n with desc = Lphantom_poptrap 1; next; }
+  | Lpushtrap _ ->
+    let next = discard_dead_code n.next in
+    { n with desc = Lphantom_pushtrap 1; next; }
+  | Lphantom_poptrap _
+  | Lphantom_pushtrap _
+  | Lop(Istackoffset _) ->
+    let next = discard_dead_code n.next in
+    { n with next; }
   | _ -> discard_dead_code n.next
 
 (*
@@ -261,33 +272,31 @@ let rec linear i n =
       exit_label := List.tl !exit_label;
       n3
   | Iexit nfail ->
-      let lbl, t = find_exit_label_try_depth nfail in
-      (* We need to re-insert dummy pushtrap (which won't be executed),
-         so as to preserve stack offset during assembler generation.
-         It would make sense to have a special pseudo-instruction
-         only to inform the later pass about this stack offset
-         (corresponding to N traps).
-       *)
-      let rec loop i tt =
-        if t = tt then i
-        else loop (cons_instr Lpushtrap i) (tt - 1)
+      let lbl, handler_try_depth = find_exit_label_try_depth nfail in
+      (* We need to insert phantom pushtraps (which generate no code),
+         so as to preserve the stack offset during assembler generation. *)
+      let num_traps = !try_depth - handler_try_depth in
+      assert (num_traps >= 0);
+      let old_try_depth = !try_depth in
+      let n1 = linear i.Mach.next n in
+      assert (old_try_depth = !try_depth);
+      let n1 = cons_instr (Lphantom_pushtrap num_traps) n1 in
+      let rec add_poptraps i depth =
+        if depth <= 0 then i
+        else add_poptraps (cons_instr Lpoptrap i) (depth - 1)
       in
-      let n1 = loop (linear i.Mach.next n) !try_depth in
-      let rec loop i tt =
-        if t = tt then i
-        else loop (cons_instr Lpoptrap i) (tt - 1)
-      in
-      loop (add_branch lbl n1) !try_depth
+      add_poptraps (add_branch lbl n1) num_traps
   | Itrywith(body, handler) ->
       let (lbl_join, n1) = get_label (linear i.Mach.next n) in
+      let (lbl_handler, n2) = get_label (linear handler n1) in
       incr try_depth;
       assert (i.Mach.arg = [| |] || Config.spacetime);
-      let (lbl_body, n2) =
-        get_label (instr_cons Lpushtrap i.Mach.arg [| |]
-                    (linear body (cons_instr Lpoptrap n1))) in
+      let result =
+        instr_cons (Lpushtrap { handler = lbl_handler; }) i.Mach.arg [| |]
+          (linear body (cons_instr Lpoptrap (add_branch lbl_join n2)))
+      in
       decr try_depth;
-      instr_cons (Lsetuptrap lbl_body) i.Mach.arg [| |]
-        (linear handler (add_branch lbl_join n2))
+      result
   | Iraise k ->
       copy_instr (Lraise k) i (discard_dead_code n)
 
