@@ -1648,9 +1648,9 @@ let rec transl env e =
   | Ucatch(nfail, Exit ids, body, handler) ->
       Ccatch(nfail, Exit ids, transl env body, transl env handler)
   | Upushtrap { static_exn; } ->
-      Cop (Cpushtrap { static_exn; }, [])
+      return_unit (Cop (Cpushtrap { static_exn; }, []))
   | Upoptrap { static_exn; } ->
-      Cop (Cpoptrap { static_exn; }, [])
+      return_unit (Cop (Cpoptrap { static_exn; }, []))
   | Uifthenelse(Uprim(Pnot, [arg], _), ifso, ifnot) ->
       transl env (Uifthenelse(arg, ifnot, ifso))
   | Uifthenelse(cond, ifso, Ustaticfail (nfail, [])) ->

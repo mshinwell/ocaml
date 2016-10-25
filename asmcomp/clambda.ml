@@ -177,3 +177,39 @@ let compare_structured_constants c1 c2 =
   | _, _ ->
     (* no overflow possible here *)
     rank_structured_constant c1 - rank_structured_constant c2
+(*
+let insert_poptraps_before_exit_points t ~to_insert ~f =
+  let rec insert t ~tail =
+    match t with
+    | Uvar _ 
+    | Uconst _
+    | Uclosure _
+    | Uoffset _
+    | Uassign _
+    | Uwhile _
+    | Ufor _
+    | Upushtrap _
+    | Upoptrap _
+    | Uprim _
+    | Uunreachable ->
+      if not tail then
+        t
+      else
+        let result = Ident.create "result" in
+        Ulet (result, Pgenval, t, Usequence (to_insert, Uvar result))
+    | Ustaticfail _ ->
+      if 
+
+    | Udirect_apply of function_label * ulambda list * Debuginfo.t
+    | Ugeneric_apply of ulambda * ulambda list * Debuginfo.t
+    | Ulet of mutable_flag * value_kind * Ident.t * ulambda * ulambda
+    | Uletrec of (Ident.t * ulambda) list * ulambda
+    | Uswitch of ulambda * ulambda_switch
+    | Ustringswitch of ulambda * (string * ulambda) list * ulambda option
+    | Ucatch of int * catch_args * ulambda * ulambda
+    | Uifthenelse of ulambda * ulambda * ulambda
+    | Usequence of ulambda * ulambda
+    | Usend of meth_kind * ulambda * ulambda * ulambda list * Debuginfo.t
+  in
+  insert t ~tail:true
+*)
