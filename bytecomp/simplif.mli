@@ -24,12 +24,14 @@ val simplify_lambda: lambda -> lambda
 
 val split_default_wrapper
    : ?create_wrapper_body:(lambda -> lambda)
-  -> Ident.t
-  -> function_kind
-  -> Ident.t list
-  -> lambda
-  -> function_attribute
-  -> Location.t
+  -> id:Ident.t
+  -> kind:function_kind
+  -> params:Ident.t list
+  -> body:lambda
+  -> attr:function_attribute
+  -> loc:Location.t
+  -> wrapper_attr:function_attribute
+  -> unit
   -> (Ident.t * lambda) list
 
 (* To be filled by asmcomp/selectgen.ml *)
