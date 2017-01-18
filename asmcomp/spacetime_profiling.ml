@@ -12,6 +12,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Asttypes
+
 let node_num_header_words = 2 (* [Node_num_header_words] in the runtime. *)
 let index_within_node = ref node_num_header_words
 (* The [lazy]s are to ensure that we don't create [Ident.t]s at toplevel
@@ -83,7 +85,7 @@ let code_for_function_prologue ~function_name ~node_hole =
         body)
   in
   let pc = Ident.create "pc" in
-  Clet (node, Cop (Cload Word_int, [Cvar node_hole]),
+  Clet (node, Cop (Cload (Word_int, Mutable), [Cvar node_hole]),
     Clet (must_allocate_node, Cop (Cand, [Cvar node; Cconst_int 1]),
       Cifthenelse (Cop (Ccmpi Cne, [Cvar must_allocate_node; Cconst_int 1]),
         Cvar node,
@@ -95,7 +97,7 @@ let code_for_function_prologue ~function_name ~node_hole =
                Cvar pc;
                Cvar node_hole;
               ])),
-            Clet (new_node, Cop (Cload Word_int, [Cvar node_hole]),
+            Clet (new_node, Cop (Cload (Word_int, Mutable), [Cvar node_hole]),
               if no_tail_calls then Cvar new_node
               else
                 Cifthenelse (
@@ -137,14 +139,15 @@ let code_for_blockheader ~value's_header ~node ~dbg =
       Cvar node;
       Cconst_int offset_into_node;
     ]),
-    Clet (existing_profinfo, Cop (Cload Word_int, [Cvar address_of_profinfo]),
+    Clet (existing_profinfo,
+      Cop (Cload (Word_int, Mutable), [Cvar address_of_profinfo]),
       Clet (profinfo,
         Cifthenelse (
           Cop (Ccmpi Cne, [Cvar existing_profinfo; Cconst_int 1 (* () *)]),
           Cvar existing_profinfo,
           generate_new_profinfo),
         Clet (existing_count,
-          Cop (Cload Word_int, [
+          Cop (Cload (Word_int, Mutable), [
             Cop (Caddi,
               [Cvar address_of_profinfo; Cconst_int Arch.size_addr])
           ]),
