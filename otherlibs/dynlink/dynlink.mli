@@ -3,9 +3,11 @@
 (*                                 OCaml                                  *)
 (*                                                                        *)
 (*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
+(*             Mark Shinwell and Leo White, Jane Street Europe            *)
 (*                                                                        *)
 (*   Copyright 1996 Institut National de Recherche en Informatique et     *)
 (*     en Automatique.                                                    *)
+(*   Copyright 2017 Jane Street Group LLC                                 *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -13,9 +15,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Dynamic loading of object files. *)
+(** Dynamic loading of .cmo and .cmxs files. *)
 
-val is_native: bool
+val is_native : bool
 (** [true] if the program is native,
     [false] if the program is bytecode. *)
 
@@ -25,18 +27,39 @@ val loadfile : string -> unit
 (** In bytecode: load the given bytecode object file ([.cmo] file) or
     bytecode library file ([.cma] file), and link it with the running
     program. In native code: load the given OCaml plugin file (usually
-    [.cmxs]), and link it with the running
-    program.
+    [.cmxs]), and link it with the running program.
+
     All toplevel expressions in the loaded compilation units
     are evaluated. No facilities are provided to
     access value names defined by the unit. Therefore, the unit
-    must register itself its entry points with the main program,
-    e.g. by modifying tables of functions. *)
+    must register itself its entry points with the main program (or a
+    previously-loaded library) e.g. by modifying tables of functions.
+
+    An exception will be raised if the given library defines toplevel modules
+    (for example the name of a compilation unit "Foo" or some module in a pack
+    "Pack.Foo") whose names clash with modules existing either in the main
+    program or a previously-loaded shared library loaded with [loadfile].
+    Shared libraries loaded with [loadfile_private], below, are not subject
+    to this restriction.
+
+    The compilation units loaded by this function are added to the
+    "allowed units" list (see below). *)
 
 val loadfile_private : string -> unit
 (** Same as [loadfile], except that the compilation units just loaded
     are hidden (cannot be referenced) from other modules dynamically
-    loaded afterwards. *)
+    loaded afterwards.  The compilation units may define toplevel modules
+    with the same name as other modules already existing in the program (see
+    documentation above for [loadfile]).
+
+    An exception will be raised if a shared library being loaded privately
+    using this function implements an interface that has already been depended
+    upon by either the main program or a previously-loaded shared library.
+    This applies even if such dependency is only a "module alias" dependency
+    (i.e. just on the name rather than the contents of an interface).
+
+    For avoidance of doubt: this function does not add the loaded units to the
+    "allowed units" list. *)
 
 val adapt_filename : string -> string
 (** In bytecode, the identity function. In native code, replace the last
@@ -44,34 +67,43 @@ val adapt_filename : string -> string
 
 (** {6 Access control} *)
 
-val allow_only: string list -> unit
-(** [allow_only units] restricts the compilation units that
-    dynamically-linked units can reference: it forbids all references
-    to units other than those named in the list [units]. References
-    to any other compilation unit will cause a [Unavailable_unit]
-    error during [loadfile] or [loadfile_private].
+val set_allowed_units : string list -> unit
+(** Set the list of compilation units that may be referenced from units that
+    are dynamically loaded in the future to be exactly the given value.
 
-    Initially (or after calling [default_available_units]) all
-    compilation units composing the program currently running are
-    available for reference from dynamically-linked units.
-    [allow_only] can be used to restrict access to a subset of these
+    Initially all compilation units composing the program currently running
+    are available for reference from dynamically-linked units.
+    [set_allowed_units] can be used to restrict access to a subset of these
     units, e.g. to the units that compose the API for
     dynamically-linked code, and prevent access to all other units,
-    e.g. private, internal modules of the running program. If
-    [allow_only] is called several times, access will be restricted to
-    the intersection of the given lists (i.e. a call to [allow_only]
-    can never increase the set of available units). *)
+    e.g. private, internal modules of the running program.
 
-val prohibit: string list -> unit
+    Note that [loadfile], above, changes the allowed-units list. *)
+
+val allow_only: string list -> unit
+(** [allow_only units] sets the list of allowed units to be the intersection
+    of the existing allowed units and the given list of units.  As such it
+    can never increase the set of allowed units. *)
+
+val prohibit : string list -> unit
 (** [prohibit units] prohibits dynamically-linked units from referencing
-    the units named in list [units].  This can be used to prevent
-    access to selected units, e.g. private, internal modules of
-    the running program. *)
+    the units named in list [units] by removing such units from the allowed
+    units list.  This can be used to prevent access to selected units,
+    e.g. private, internal modules of the running program. *)
 
-val default_available_units: unit -> unit
-(** Reset the set of units that can be referenced from dynamically-linked
-    code to its default value, that is, all units composing the currently
-    running program. *)
+val main_program_units : unit -> string list
+(** Return the list of compilation units that form the main program (i.e.
+    are not dynamically linked). *)
+
+val public_dynamically_loaded_units : unit -> string list
+(** Return the list of compilation units that have been dynamically loaded via
+    [loadfile] (and not via [loadfile_private]).  Note that compilation units
+    loaded dynamically cannot be unloaded. *)
+
+val all_units : unit -> string list
+(** Return the list of compilation units that form the main program together
+    with those that have been dynamically loaded via [loadfile] (and not via
+    [loadfile_private]). *)
 
 val allow_unsafe_modules : bool -> unit
 (** Govern whether unsafe object files are allowed to be
@@ -81,68 +113,34 @@ val allow_unsafe_modules : bool -> unit
     not allowed. In native code, this function does nothing; object files
     with external functions are always allowed to be dynamically linked. *)
 
-(** {6 Deprecated, low-level API for access control} *)
-
-(** @deprecated  The functions [add_interfaces], [add_available_units]
-    and [clear_available_units] should not be used in new programs,
-    since the default initialization of allowed units, along with the
-    [allow_only] and [prohibit] function, provides a better, safer
-    mechanism to control access to program units.  The three functions
-    below are provided for backward compatibility only and are not
-    available in native code. *)
-
-val add_interfaces : string list -> string list -> unit
-(** [add_interfaces units path] grants dynamically-linked object
-    files access to the compilation  units named in list [units].
-    The interfaces ([.cmi] files) for these units are searched in
-    [path] (a list of directory names). *)
-
-val add_available_units : (string * Digest.t) list -> unit
-(** Same as {!Dynlink.add_interfaces}, but instead of searching [.cmi] files
-    to find the unit interfaces, uses the interface digests given
-    for each unit. This way, the [.cmi] interface files need not be
-    available at run-time. The digests can be extracted from [.cmi]
-    files using the [extract_crc] program installed in the
-    OCaml standard library directory. *)
-
-val clear_available_units : unit -> unit
-(** Empty the list of compilation units accessible to dynamically-linked
-    programs. *)
-
-(** {6 Deprecated, initialization} *)
-
-val init : unit -> unit
-(** @deprecated Initialize the [Dynlink] library. This function is called
-    automatically when needed. *)
+(* XXX add a test case for Private_library_cannot_implement_interface. *)
 
 (** {6 Error reporting} *)
 
 type linking_error =
-    Undefined_global of string
+  | Undefined_global of string
   | Unavailable_primitive of string
   | Uninitialized_global of string
 
 type error =
-    Not_a_bytecode_file of string
+  | Not_a_bytecode_file of string
   | Inconsistent_import of string
   | Unavailable_unit of string
   | Unsafe_file
   | Linking_error of string * linking_error
   | Corrupted_interface of string
-  | File_not_found of string
-  | Cannot_open_dll of string
+  | Cannot_open_dynamic_library of exn
+  | Library's_module_initializers_failed of exn
   | Inconsistent_implementation of string
+  | Module_already_loaded of string
+  | Private_library_cannot_implement_interface of string
 
 exception Error of error
 (** Errors in dynamic linking are reported by raising the [Error]
-    exception with a description of the error. *)
+    exception with a description of the error.
+    A common case is the dynamic library not being found on the system: this
+    is reported via [Cannot_open_dynamic_library] (the enclosed exception may
+    be platform-specific). *)
 
 val error_message : error -> string
 (** Convert an error description to a printable message. *)
-
-
-(**/**)
-
-(** {6 Internal functions} *)
-
-val digest_interface : string -> string list -> Digest.t

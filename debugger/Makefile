@@ -54,8 +54,8 @@ OTHEROBJS=\
   ../typing/envaux.cmo \
   ../bytecomp/runtimedef.cmo ../bytecomp/bytesections.cmo \
   ../bytecomp/dll.cmo ../bytecomp/meta.cmo ../bytecomp/symtable.cmo \
-  ../bytecomp/opcodes.cmo ../driver/compdynlink.cmo \
-  ../toplevel/genprintval.cmo
+  ../bytecomp/opcodes.cmo ../driver/compdynlink_common.cmo \
+  ../driver/compdynlink.cmo ../toplevel/genprintval.cmo
 
 
 OBJS=\

@@ -1,0 +1,1 @@
+Fatal error: exception Dynlink.Error(Dynlink.Linking_error ("/usr/local/home/mshinwell/mshinwell-ocaml5/testsuite/tests/lib-dynlink-initializers/test2_second_plugin.cmo", Dynlink.Uninitialized_global "Test2_plugin"))

@@ -1,0 +1,9 @@
+API
+zero=0
+fact (zero+5) = 120
+API
+ERROR: interface mismatch on Packed
+API
+ERROR: interface mismatch on Packed
+API
+ERROR: The module `Packed' is already loaded (either by the main program or a previously-dynlinked library)

@@ -230,6 +230,10 @@ Working version
 - PR#7468: possible GC problem in caml_alloc_sprintf
   (Xavier Leroy, discovery by Olivier Andrieu)
 
+- PR#4208, PR#4229, PR#4839, PR#6462, PR#6957, PR#6950, GPR#1063: Make
+  (nat)dynlink sound
+  (Pierre Chambart, Mark Shinwell, Leo White)
+
 - PR#7496: Fixed conjunctive polymorphic variant tags do not unify
   with themselves
   (Jacques Garrigue, report by Leo White)
@@ -267,6 +271,10 @@ Working version
   (Max Mouratov, review and discussion by Damien Doligez, Gabriel Scherer,
   Mark Shinwell, Thomas Braibant, Stephen Dolan, Pierre Chambart,
   François Bobot, Jacques Garrigue, David Allsopp, and Alain Frisch)
+- PR#4229, PR#6462, PR#6957, PR#6950, GPR#1063: Forbid dynamic
+- PR#4229, PR#4839, PR#6462, PR#6957, PR#6950, GPR#1063: Forbid dynamic
+  loading of compilation units that have already been loaded
+  (Pierre Chambart, Mark Shinwell)
 
 - GPR#938, GPR#1170: Stack overflow detection on 64-bit Windows
   (Olivier Andrieu)

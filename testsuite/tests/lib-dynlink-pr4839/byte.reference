@@ -1,0 +1,10 @@
+API
+zero=0
+fact (zero+5) = 120
+API
+ERROR: interface mismatch on Packed
+API
+ERROR: interface mismatch on Packed
+API
+zero=-1
+fact (zero+5) = 24
