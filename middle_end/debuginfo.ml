@@ -94,3 +94,6 @@ let compare dbg1 dbg2 =
       loop ds1 ds2
   in
   loop (List.rev dbg1) (List.rev dbg2)
+
+let hash t =
+  List.fold_left (fun hash item -> Hashtbl.hash (hash, item)) 0 t
