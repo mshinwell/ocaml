@@ -25,6 +25,7 @@ let main () =
   | pid ->
       print_string "In parent..."; print_newline();
       Thread.delay 4.0;
+      ignore ((Unix.waitpid [Unix.WNOHANG] pid) : int * _);
       print_string "Parent is exiting."; print_newline();
       exit 0
 

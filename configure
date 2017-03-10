@@ -697,6 +697,14 @@ case "$target" in
 esac
 
 case "$target" in
+  *-*-openbsd*)
+    echo "#define ARCH_INT64_TYPE int64_t" >> m.h
+    echo "#define ARCH_UINT64_TYPE uint64_t" >> m.h
+    echo "#define ARCH_INT64_PRINTF_FORMAT \"ll\"" >> m.h
+    ;;
+esac
+
+case "$target" in
   # PR#5088: autodetection is unreliable on ARM.  PR#5280: also on MIPS.
   sparc*-*-*|hppa*-*-*|arm*-*-*|mips*-*-*)
     if test $2 = 8; then
@@ -1138,6 +1146,16 @@ fi
 if sh ./hasgot times; then
   inf "times() found."
   echo "#define HAS_TIMES" >> s.h
+fi
+
+# For more robust random number generation e.g. on OpenBSD
+
+if sh ./hasgot arc4random; then
+  inf "arc4random() found."
+  echo "#define CAML_RAND arc4random" >> s.h
+else
+  inf "arc4random() not found."
+  echo "#define CAML_RAND rand" >> s.h
 fi
 
 # For the terminfo module

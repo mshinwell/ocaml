@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include "../../../config/s.h"
 
 void caml_ml_array_bound_error(void)
 {
@@ -81,7 +82,7 @@ int main(int argc, char **argv)
     srand(argc >= 3 ? atoi(argv[2]) : time((time_t *) 0));
     n = atoi(argv[1]);
     a = (long *) malloc(n * sizeof(long));
-    for (i = 0 ; i < n; i++) a[i] = rand() & 0xFFF;
+    for (i = 0 ; i < n; i++) a[i] = CAML_RAND() & 0xFFF;
 #ifdef DEBUG
     for (i = 0; i < n; i++) printf("%ld ", a[i]); printf("\n");
 #endif
