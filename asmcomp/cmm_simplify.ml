@@ -97,6 +97,8 @@ let add_no_overflow op n x c dbg =
   let d = n + x in
   if d = 0 then c else Cop(op, [c; Cconst_int d], dbg)
 
+(* CR mshinwell: Check that none of these assume the presence of a tag bit *)
+
 let rec add_const_generic op c n dbg =
   if n = 0 then c
   else
@@ -125,13 +127,13 @@ let rec add_int (op : Cmm.operation) env c1 c2 dbg =
   let c2 = Env.lookup_expr env c2 in
   match (c1, c2) with
   | (Cconst_int n, c) | (c, Cconst_int n) ->
-      add_const op c n dbg
-  | (Cop(Caddi, [c1; Cconst_int n1], _), c2) ->
-      add_const op (add_int c1 c2 dbg) n1 dbg
-  | (c1, Cop(Caddi, [c2; Cconst_int n2], _)) ->
-      add_const op (add_int c1 c2 dbg) n2 dbg
+      add_const_generic op c n dbg
+  | (Cop(op', [c1; Cconst_int n1], _), c2) when op = op' ->
+      add_const_generic op (add_int op c1 c2 dbg) n1 dbg
+  | (c1, Cop(op', [c2; Cconst_int n2], _)) when op = op' ->
+      add_const_generic op (add_int op c1 c2 dbg) n2 dbg
   | (_, _) ->
-      Cop(Caddi, [c1; c2], dbg)
+      Cop(op, [c1; c2], dbg)
 
 let rec sub_int c1 c2 dbg =
   let c1 = Env.lookup_expr env c1 in
@@ -153,9 +155,9 @@ let rec lsl_int c1 c2 dbg =
   | (Cop(Clsl, [c; Cconst_int n1], _), Cconst_int n2)
     when n1 > 0 && n2 > 0 && n1 + n2 < size_int * 8 ->
       Cop(Clsl, [c; Cconst_int (n1 + n2)], dbg)
-  | (Cop(Caddi, [c1; Cconst_int n1], _), Cconst_int n2)
+  | (Cop((Caddi | Cadda | Caddv) as op, [c1; Cconst_int n1], _), Cconst_int n2)
     when no_overflow_lsl n1 n2 ->
-      add_const (lsl_int c1 c2 dbg) (n1 lsl n2) dbg
+      add_const_generic op (lsl_int c1 c2 dbg) (n1 lsl n2) dbg
   | (_, _) ->
       Cop(Clsl, [c1; c2], dbg)
 
@@ -175,10 +177,10 @@ let rec mul_int c1 c2 dbg =
       sub_int (Cconst_int 0) c dbg
   | (c, Cconst_int n) when is_power2 n -> mult_power2 c n dbg
   | (Cconst_int n, c) when is_power2 n -> mult_power2 c n dbg
-  | (Cop(Caddi, [c; Cconst_int n], _), Cconst_int k) |
-    (Cconst_int k, Cop(Caddi, [c; Cconst_int n], _))
+  | (Cop((Caddi | Cadda | Caddv) as op, [c; Cconst_int n], _), Cconst_int k)
+  | (Cconst_int k, Cop((Caddi | Cadda | Caddv) as op, [c; Cconst_int n], _))
     when no_overflow_mul n k ->
-      add_const (mul_int c (Cconst_int k) dbg) (n * k) dbg
+      add_const_generic op (mul_int c (Cconst_int k) dbg) (n * k) dbg
   | (c1, c2) ->
       Cop(Cmuli, [c1; c2], dbg)
 
@@ -378,7 +380,7 @@ let mod_int c1 c2 is_safe dbg =
         bind "dividend" c1 (fun c1 ->
           sub_int c1 (mul_int (div_int c1 c2 is_safe dbg) c2 dbg) dbg)
   | (c1, c2) when !Clflags.fast || is_safe = Lambda.Unsafe ->
-      (* Flambda already generates that test *)
+      (* Flambda already generates this test *)
       Cop(Cmodi, [c1; c2], dbg)
   | (c1, c2) ->
       bind "divisor" c2 (fun c2 ->
@@ -438,13 +440,26 @@ let rec simplify_expr env (expr : Cmm.expression) =
       Csequence (simplify env expr1, simplify env expr2)
   | Cifthenelse (cond, ifso, ifnot) ->
       Cifthenelse (simplify env cond, simplify env ifso, simplify env ifnot)
-  | Cswitch of expression * int array * expression array * Debuginfo.t
+  | Cswitch (scrutinee, consts, arms, dbg) ->
+      let scrutinee = simplify env scrutinee in
+      let arms = Array.map (fun arm -> simplify env arm) arms in
+      Cswitch (scrutinee, consts, arms, dbg)
   | Cloop expr -> Cloop (simplify env expr)
-  | Ccatch of rec_flag * (int * Ident.t list * expression) list * expression
+  | Ccatch (rec_flag, handlers, body) ->
+    let handlers =
+      List.map (fun (cont, params, handler) ->
+          cont, params, simplify env handler)
+        handlers
+    in
+    let body = simplify env body in
+    Ccatch (rec_flag, handlers, body)
   | Cexit (cont, exprs) -> Cexit (cont, simplify_list env exprs)
   | Ctrywith (body, id, handler) ->
       Ctrywith (simplify env body, id, simplify env handler)
 
-let run expr =
-  let expr, _env = simplify_expr Env.empty expr in
-  expr
+and simplify_exprs env exprs =
+  List.map (fun expr -> simplify env expr) exprs
+
+let fundecl (fundecl : Cmm.fundecl) =
+  let fun_body, _env = simplify_expr Env.empty fundecl.fun_body in
+  { fundecl with fun_body; }

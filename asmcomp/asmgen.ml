@@ -130,9 +130,12 @@ let compile_fundecl (ppf : formatter) fd_cmm =
 let compile_phrase ppf p =
   if !dump_cmm then fprintf ppf "%a@." Printcmm.phrase p;
   match p with
-  | Cfunction fd -> compile_fundecl ppf fd
+  | Cfunction fd ->
+    let fd =
+      Timings.time ~accumulate:true "cmm_simplify" Cmm_simplify.fundecl fd
+    in
+    compile_fundecl ppf fd
   | Cdata dl -> Emit.data dl
-
 
 (* For the native toplevel: generates generic functions unless
    they are already available in the process *)
