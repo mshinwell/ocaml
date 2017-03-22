@@ -268,8 +268,8 @@ binaryop:
   | ADDI                        { Caddi }
   | SUBI                        { Csubi }
   | STAR                        { Cmuli }
-  | DIVI                        { Cdivi }
-  | MODI                        { Cmodi }
+  | DIVI                        { Cdivi Lambda.Safe }
+  | MODI                        { Cmodi Lambda.Safe }
   | AND                         { Cand }
   | OR                          { Cor }
   | XOR                         { Cxor }

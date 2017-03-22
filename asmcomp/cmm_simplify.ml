@@ -21,7 +21,10 @@ module Env : sig
   type t
 
   val empty : t
+
   val add : t -> Ident.t -> Cmm.expression -> t
+
+  val mem : t -> Ident.t -> bool
   val lookup_expr : t -> Cmm.expression -> Cmm.expression
 end = struct
   type t = Cmm.expression Ident.Map.t
@@ -39,10 +42,6 @@ end = struct
         | Csubi
         | Cmuli
         | Cmulhi
-        | Cmodi _
-        | Cand
-        | Cor
-        | Cxor
         | Clsl
         | Clsr
         | Casr -> List.for_all (fun arg -> eligible arg) args
@@ -51,6 +50,10 @@ end = struct
         | Cload _
         | Calloc
         | Cstore _
+        | Cand
+        | Cor
+        | Cxor
+        | Cmodi _
         | Cdivi _
         | Ccmpi _
         | Ccmpa _
@@ -66,8 +69,8 @@ end = struct
     | Cconst_float _
     | Cconst_symbol _
     | Cconst_pointer _
-    | Cconst_natpointer _
-    | Cblockheader _ -> true
+    | Cconst_natpointer _ -> true
+    | Cblockheader _
     | Clet _
     | Cassign _
     | Ctuple _
@@ -83,6 +86,8 @@ end = struct
     if eligible expr then Ident.Map.add id expr t
     else t
 
+  let mem t id = Ident.Map.mem id t
+
   let lookup_expr t (expr : Cmm.expression) =
     match expr with
     | Cvar id ->
@@ -93,47 +98,89 @@ end = struct
     | _ -> expr
 end
 
+module Cost : sig
+  type t = int
+
+  val of_expression : Cmm.expression -> t
+  val strictly_better : t -> than:t -> bool
+end = struct
+  type t = int
+
+  let rec of_expression (expr : Cmm.expression) =
+    match expr with
+    | Cop (_op, args, _dbg) -> 1 + of_expressions args
+    | Csequence (expr1, expr2) -> of_expression expr1 + of_expression expr2
+    | Cvar _
+    | Cconst_int _
+    | Cconst_natint _
+    | Cconst_float _
+    | Cconst_symbol _
+    | Cconst_pointer _
+    | Cconst_natpointer _ -> 1
+      (* We don't currently simplify anything to the following, so ignore the
+         constructs themselves, and just traverse subexpressions. *)
+    | Cblockheader _ -> 0
+    | Clet (_mut, _id, defining_expr, body) ->
+        of_expression defining_expr + of_expression body
+    | Cassign (_id, expr) -> of_expression expr
+    | Ctuple exprs -> of_expressions exprs
+    | Cifthenelse (cond, ifso, ifnot) ->
+        of_expression cond + of_expression ifso + of_expression ifnot
+    | Cswitch (scrutinee, _consts, arms, _dbg) ->
+        of_expression scrutinee + of_expressions (Array.to_list arms)
+    | Cloop expr -> of_expression expr
+    | Ccatch (_rec, handlers, body) ->
+        let handlers =
+          List.map (fun (_cont, _params, handler) -> handler) handlers
+        in
+        of_expression body + of_expressions handlers
+    | Cexit (_cont, exprs) -> of_expressions exprs
+    | Ctrywith (body, _id, handler) ->
+        of_expression body + of_expression handler
+
+  and of_expressions exprs =
+    List.fold_left (fun cost expr -> cost + of_expression expr) 0 exprs
+
+  let strictly_better (t : t) ~than =
+    t < than
+end
+
 let add_no_overflow op n x c dbg : Cmm.expression =
   let d = n + x in
   if d = 0 then c else Cop(op, [c; Cmm.Cconst_int d], dbg)
 
-(* CR mshinwell: Check that none of these assume the presence of a tag bit *)
-
-let rec add_const_generic env op c n dbg : Cmm.expression =
+let rec add_const env c n dbg : Cmm.expression =
+  let c = Env.lookup_expr env c in
   if n = 0 then c
   else
-    let c = Env.lookup_expr env c in
     match c with
     | Cconst_int x when Misc.no_overflow_add x n -> Cconst_int (x + n)
-    | Cop(op, [Cconst_int x; c], _)
+    | Cop(Caddi, [Cconst_int x; c], _)
       when Misc.no_overflow_add n x ->
-        add_no_overflow op n x c dbg
-    | Cop(op, [c; Cconst_int x], _)
+        add_no_overflow Caddi n x c dbg
+    | Cop(Caddi, [c; Cconst_int x], _)
       when Misc.no_overflow_add n x ->
-        add_no_overflow op n x c dbg
+        add_no_overflow Caddi n x c dbg
     | Cop(Csubi, [Cconst_int x; c], _)
-          when op = Cmm.Caddi && Misc.no_overflow_add n x ->
+          when Misc.no_overflow_add n x ->
         Cop(Csubi, [Cmm.Cconst_int (n + x); c], dbg)
     | Cop(Csubi, [c; Cconst_int x], _)
-          when op = Cmm.Caddi && Misc.no_overflow_sub n x ->
-        add_const_generic env op c (n - x) dbg
-    | c -> Cop(op, [c; Cmm.Cconst_int n], dbg)
+          when Misc.no_overflow_sub n x ->
+        add_const env c (n - x) dbg
+    | c -> Cop(Caddi, [c; Cmm.Cconst_int n], dbg)
 
-let add_const env c n dbg = add_const_generic env Cmm.Caddi c n dbg
-
-let rec add_int (op : Cmm.operation) env c1 c2 dbg : Cmm.expression =
-  assert (op = Cmm.Caddi || op = Cmm.Cadda || op = Cmm.Caddv);
+let rec add_int env c1 c2 dbg : Cmm.expression =
   let c1 = Env.lookup_expr env c1 in
   let c2 = Env.lookup_expr env c2 in
   match (c1, c2) with
   | (Cconst_int n, c) | (c, Cconst_int n) ->
-      add_const_generic env op c n dbg
-  | (Cop(op', [c1; Cconst_int n1], _), c2) when op = op' ->
-      add_const_generic env op (add_int op env c1 c2 dbg) n1 dbg
-  | (c1, Cop(op', [c2; Cconst_int n2], _)) when op = op' ->
-      add_const_generic env op (add_int op env c1 c2 dbg) n2 dbg
+      add_const env c n dbg
+  | (Cop(Caddi, [c1; Cconst_int n1], _), c2) ->
+      add_const env (add_int env c1 c2 dbg) n1 dbg
+  | (c1, Cop(Caddi, [c2; Cconst_int n2], _)) ->
+      add_const env (add_int env c1 c2 dbg) n2 dbg
   | (_, _) ->
-      Cop(op, [c1; c2], dbg)
+      Cop(Caddi, [c1; c2], dbg)
 
 let rec sub_int env c1 c2 dbg : Cmm.expression =
   let c1 = Env.lookup_expr env c1 in
@@ -155,9 +202,9 @@ let rec lsl_int env c1 c2 dbg : Cmm.expression =
   | (Cop(Clsl, [c; Cconst_int n1], _), Cconst_int n2)
     when n1 > 0 && n2 > 0 && n1 + n2 < Arch.size_int * 8 ->
       Cop(Clsl, [c; Cmm.Cconst_int (n1 + n2)], dbg)
-  | (Cop((Caddi | Cadda | Caddv) as op, [c1; Cconst_int n1], _), Cconst_int n2)
+  | (Cop(Caddi, [c1; Cconst_int n1], _), Cconst_int n2)
     when Misc.no_overflow_lsl n1 n2 ->
-      add_const_generic env op (lsl_int env c1 c2 dbg) (n1 lsl n2) dbg
+      add_const env (lsl_int env c1 c2 dbg) (n1 lsl n2) dbg
   | (_, _) ->
       Cop(Clsl, [c1; c2], dbg)
 
@@ -178,10 +225,10 @@ let rec mul_int env c1 c2 dbg : Cmm.expression =
       sub_int env (Cconst_int 0) c dbg
   | (c, Cconst_int n) when is_power2 n -> mult_power2 env c n dbg
   | (Cconst_int n, c) when is_power2 n -> mult_power2 env c n dbg
-  | (Cop((Caddi | Cadda | Caddv) as op, [c; Cconst_int n], _), Cconst_int k)
-  | (Cconst_int k, Cop((Caddi | Cadda | Caddv) as op, [c; Cconst_int n], _))
+  | (Cop(Caddi, [c; Cconst_int n], _), Cconst_int k)
+  | (Cconst_int k, Cop(Caddi, [c; Cconst_int n], _))
     when Misc.no_overflow_mul n k ->
-      add_const_generic env op
+      add_const env
         (mul_int env c (Cmm.Cconst_int k) dbg) (n * k) dbg
   | (c1, c2) ->
       Cop(Cmuli, [c1; c2], dbg)
@@ -327,7 +374,7 @@ let rec div_int env c1 c2 is_safe dbg : Cmm.expression =
                      let t =
                       lsr_int env t (Cconst_int (Nativeint.size - l)) dbg
                      in
-                     add_int Caddi env c1 t dbg);
+                     add_int env c1 t dbg);
                    Cconst_int l], dbg)
       else if n < 0 then
         sub_int env (Cconst_int 0)
@@ -345,7 +392,7 @@ let rec div_int env c1 c2 is_safe dbg : Cmm.expression =
           let t = Cop(Cmulhi, [c1; Cconst_natint m], dbg) in
           let t = if m < 0n then Cop(Caddi, [t; c1], dbg) else t in
           let t = if p > 0 then Cop(Casr, [t; Cconst_int p], dbg) else t in
-          add_int Caddi env
+          add_int env
             t (lsr_int env c1 (Cconst_int (Nativeint.size - 1)) dbg) dbg)
       end
   | (c1, c2) when !Clflags.fast || is_safe = Lambda.Unsafe ->
@@ -381,7 +428,7 @@ let mod_int env c1 c2 is_safe dbg : Cmm.expression =
         bind "dividend" c1 (fun c1 ->
           let t = asr_int env c1 (Cconst_int (l - 1)) dbg in
           let t = lsr_int env t (Cconst_int (Nativeint.size - l)) dbg in
-          let t = add_int Caddi env c1 t dbg in
+          let t = add_int env c1 t dbg in
           let t = Cop(Cand, [t; Cconst_int (-n)], dbg) in
           sub_int env c1 t dbg)
       else
@@ -397,27 +444,33 @@ let mod_int env c1 c2 is_safe dbg : Cmm.expression =
                     Cop(Cmodi is_safe, [c1; c2], dbg),
                     Cmmgen.raise_symbol dbg "caml_exn_Division_by_zero"))
 
-let simplify_op env (op : Cmm.operation) args dbg expr =
+type result =
+  | No_simplification
+  | If_beneficial of Cmm.expression
+  | Always of Cmm.expression
+
+let simplify_op_core env (op : Cmm.operation) args dbg : result =
   match op with
   | Capply _
   | Cextcall _
   | Cload _
   | Calloc
-  | Cstore _ -> expr
-  | Caddi -> add_int Caddi env args.(0) args.(1) dbg
-  | Caddv -> add_int Caddv env args.(0) args.(1) dbg
-  | Cadda -> add_int Cadda env args.(0) args.(1) dbg
-  | Csubi -> sub_int env args.(0) args.(1) dbg
-  | Cmuli -> mul_int env args.(0) args.(1) dbg
-  | Cmulhi -> expr
-  | Cdivi is_safe -> div_int env args.(0) args.(1) is_safe dbg
-  | Cmodi is_safe -> mod_int env args.(0) args.(1) is_safe dbg
+  | Cstore _ -> No_simplification
+  | Caddi -> If_beneficial (add_int env args.(0) args.(1) dbg)
+  | Caddv -> No_simplification (* add_int Caddv env args.(0) args.(1) dbg*)
+  | Cadda -> No_simplification (* add_int Cadda env args.(0) args.(1) dbg *)
+  | Csubi -> If_beneficial (sub_int env args.(0) args.(1) dbg)
+  | Cmuli -> If_beneficial (mul_int env args.(0) args.(1) dbg)
+  | Cmulhi -> No_simplification
+  (* CR mshinwell: Maybe "If_beneficial" when optimising for size? *)
+  | Cdivi is_safe -> Always (div_int env args.(0) args.(1) is_safe dbg)
+  | Cmodi is_safe -> Always (mod_int env args.(0) args.(1) is_safe dbg)
   | Cand
   | Cor
-  | Cxor -> expr
-  | Clsl -> lsl_int env args.(0) args.(1) dbg
-  | Clsr -> lsr_int env args.(0) args.(1) dbg
-  | Casr -> asr_int env args.(0) args.(1) dbg
+  | Cxor -> No_simplification
+  | Clsl -> If_beneficial (lsl_int env args.(0) args.(1) dbg)
+  | Clsr -> If_beneficial (lsr_int env args.(0) args.(1) dbg)
+  | Casr -> If_beneficial (asr_int env args.(0) args.(1) dbg)
   | Ccmpi _
   | Ccmpa _
   | Cnegf | Cabsf
@@ -425,7 +478,25 @@ let simplify_op env (op : Cmm.operation) args dbg expr =
   | Cfloatofint | Cintoffloat
   | Ccmpf _
   | Craise _
-  | Ccheckbound -> expr
+  | Ccheckbound -> No_simplification
+
+let simplify_op env op args dbg expr =
+  match simplify_op_core env op args dbg with
+  | No_simplification -> expr
+  | If_beneficial new_expr ->
+    let old_cost = Cost.of_expression expr in
+    let new_cost = Cost.of_expression new_expr in
+(*
+Format.eprintf "Old expr: %a New expr: %a Old cost: %d New cost:%d %s\n%!"
+  Printcmm.expression expr
+  Printcmm.expression new_expr
+  old_cost
+  new_cost
+  (if Cost.strictly_better new_cost ~than:old_cost then "YES" else "");
+*)
+    if Cost.strictly_better new_cost ~than:old_cost then new_expr
+    else expr
+  | Always new_expr -> new_expr
 
 let rec simplify_expr env (expr : Cmm.expression) : Cmm.expression =
   match expr with
@@ -437,16 +508,25 @@ let rec simplify_expr env (expr : Cmm.expression) : Cmm.expression =
   | Cconst_natpointer _
   | Cblockheader _
   | Cvar _ -> expr
-  | Clet (id, defining_expr, body) ->
+  | Clet (mut, id, defining_expr, body) ->
       let defining_expr = simplify_expr env defining_expr in
-      let env = Env.add env id defining_expr in
+      let env =
+        match mut with
+        | Immutable -> Env.add env id defining_expr
+        | Mutable -> env
+      in
       let body = simplify_expr env body in
-      Clet (id, defining_expr, body)
-  | Cassign (id, expr) -> Cassign (id, simplify_expr env expr)
+      Clet (mut, id, defining_expr, body)
+  | Cassign (id, expr) ->
+     if Env.mem env id then begin
+       Misc.fatal_errorf "Found mutable variable %a in environment"
+         Ident.print id
+     end;
+     Cassign (id, simplify_expr env expr)
   | Ctuple exprs -> Ctuple (simplify_exprs env exprs)
   | Cop (op, args, dbg) ->
-      let args = Array.of_list (simplify_exprs env args) in
-      simplify_op env op args dbg expr
+      let args = simplify_exprs env args in
+      simplify_op env op (Array.of_list args) dbg (Cop (op, args, dbg))
   | Csequence (expr1, expr2) ->
       Csequence (simplify_expr env expr1, simplify_expr env expr2)
   | Cifthenelse (cond, ifso, ifnot) ->

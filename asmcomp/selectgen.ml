@@ -94,7 +94,7 @@ let size_expr (env:environment) exp =
         List.fold_right (fun e sz -> size localenv e + sz) el 0
     | Cop(op, _, _) ->
         size_machtype(oper_result_type op)
-    | Clet(id, arg, body) ->
+    | Clet(_, id, arg, body) ->
         size (Tbl.add id (size localenv arg) localenv) body
     | Csequence(_e1, e2) ->
         size localenv e2
@@ -289,7 +289,8 @@ method is_simple_expr = function
   | Cblockheader _ -> true
   | Cvar _ -> true
   | Ctuple el -> List.for_all self#is_simple_expr el
-  | Clet(_id, arg, body) -> self#is_simple_expr arg && self#is_simple_expr body
+  | Clet(_, _id, arg, body) ->
+      self#is_simple_expr arg && self#is_simple_expr body
   | Csequence(e1, e2) -> self#is_simple_expr e1 && self#is_simple_expr e2
   | Cop(op, args, _) ->
       begin match op with
@@ -324,7 +325,7 @@ method effects_of exp =
   | Cconst_pointer _ | Cconst_natpointer _ | Cblockheader _
   | Cvar _ -> EC.none
   | Ctuple el -> EC.join_list_map el self#effects_of
-  | Clet (_id, arg, body) ->
+  | Clet (_, _id, arg, body) ->
     EC.join (self#effects_of arg) (self#effects_of body)
   | Csequence (e1, e2) ->
     EC.join (self#effects_of e1) (self#effects_of e2)
@@ -661,7 +662,7 @@ method emit_expr (env:environment) exp =
       with Not_found ->
         fatal_error("Selection.emit_expr: unbound var " ^ Ident.unique_name v)
       end
-  | Clet(v, e1, e2) ->
+  | Clet(_, v, e1, e2) ->
       begin match self#emit_expr env e1 with
         None -> None
       | Some r1 -> self#emit_expr (self#bind_let env v r1) e2
@@ -1030,7 +1031,7 @@ method private emit_return (env:environment) exp =
 
 method emit_tail (env:environment) exp =
   match exp with
-    Clet(v, e1, e2) ->
+    Clet(_, v, e1, e2) ->
       begin match self#emit_expr env e1 with
         None -> ()
       | Some r1 -> self#emit_tail (self#bind_let env v r1) e2

@@ -128,12 +128,19 @@ let compile_fundecl (ppf : formatter) fd_cmm =
   ++ Timings.time ~accumulate:true "emit" Emit.fundecl
 
 let compile_phrase ppf p =
-  if !dump_cmm then fprintf ppf "%a@." Printcmm.phrase p;
+(*
+  if !dump_cmm then begin
+    fprintf ppf "Cmm before simplification:@ \n%a@." Printcmm.phrase p
+  end;
+*)
   match p with
   | Cfunction fd ->
     let fd =
       Timings.time ~accumulate:true "cmm_simplify" Cmm_simplify.fundecl fd
     in
+    if !dump_cmm then begin
+      fprintf ppf "Cmm after simplification:@ \n%a@." Printcmm.fundecl fd
+    end;
     compile_fundecl ppf fd
   | Cdata dl -> Emit.data dl
 

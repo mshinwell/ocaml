@@ -63,7 +63,7 @@ let bind name arg fn =
     Cvar _ | Cconst_int _ | Cconst_natint _ | Cconst_symbol _
   | Cconst_pointer _ | Cconst_natpointer _
   | Cblockheader _ -> fn arg
-  | _ -> let id = Ident.create name in Clet(id, arg, fn (Cvar id))
+  | _ -> let id = Ident.create name in Clet(Immutable, id, arg, fn (Cvar id))
 
 let bind_load name arg fn =
   match arg with
@@ -75,7 +75,7 @@ let bind_nonvar name arg fn =
     Cconst_int _ | Cconst_natint _ | Cconst_symbol _
   | Cconst_pointer _ | Cconst_natpointer _
   | Cblockheader _ -> fn arg
-  | _ -> let id = Ident.create name in Clet(id, arg, fn (Cvar id))
+  | _ -> let id = Ident.create name in Clet(Immutable, id, arg, fn (Cvar id))
 
 let caml_black = Nativeint.shift_left (Nativeint.of_int 3) 8
     (* cf. byterun/gc.h *)
@@ -247,7 +247,7 @@ let map_ccatch f rec_flag handlers body =
 let rec unbox_float dbg cmm =
   match cmm with
   | Cop(Calloc, [_header; c], _) -> c
-  | Clet(id, exp, body) -> Clet(id, exp, unbox_float dbg body)
+  | Clet(mut, id, exp, body) -> Clet(mut, id, exp, unbox_float dbg body)
   | Cifthenelse(cond, e1, e2) ->
       Cifthenelse(cond, unbox_float dbg e1, unbox_float dbg e2)
   | Csequence(e1, e2) -> Csequence(e1, unbox_float dbg e2)
@@ -284,8 +284,8 @@ let rec remove_unit = function
       map_ccatch remove_unit rec_flag handlers body
   | Ctrywith(body, exn, handler) ->
       Ctrywith(remove_unit body, exn, remove_unit handler)
-  | Clet(id, c1, c2) ->
-      Clet(id, c1, remove_unit c2)
+  | Clet(mut, id, c1, c2) ->
+      Clet(mut, id, c1, remove_unit c2)
   | Cop(Capply _mty, args, dbg) ->
       Cop(Capply typ_void, args, dbg)
   | Cop(Cextcall(proc, _mty, alloc, label_after), args, dbg) ->
@@ -432,7 +432,7 @@ let float_array_set arr ofs newval dbg =
 let string_length exp dbg =
   bind "str" exp (fun str ->
     let tmp_var = Ident.create "tmp" in
-    Clet(tmp_var,
+    Clet(Immutable, tmp_var,
          Cop(Csubi,
              [Cop(Clsl,
                    [get_size str dbg;
@@ -478,7 +478,7 @@ let make_alloc_generic set_fn dbg tag wordsize args =
       [] -> Cvar id
     | e1::el -> Csequence(set_fn (Cvar id) (Cconst_int idx) e1 dbg,
                           fill_fields (idx + 2) el) in
-    Clet(id,
+    Clet(Immutable, id,
          Cop(Cextcall("caml_alloc", typ_val, true, None),
                  [Cconst_int wordsize; Cconst_int tag], dbg),
          fill_fields 1 args)
@@ -672,7 +672,7 @@ let rec unbox_int bi arg dbg =
       Cop(Casr, [Cop(Clsl, [contents; Cconst_int 32], dbg); Cconst_int 32], dbg)
   | Cop(Calloc, [_hdr; _ops; contents], _dbg) ->
       contents
-  | Clet(id, exp, body) -> Clet(id, exp, unbox_int bi body dbg)
+  | Clet(mut, id, exp, body) -> Clet(mut, id, exp, unbox_int bi body dbg)
   | Cifthenelse(cond, e1, e2) ->
       Cifthenelse(cond, unbox_int bi e1 dbg, unbox_int bi e2 dbg)
   | Csequence(e1, e2) -> Csequence(e1, unbox_int bi e2 dbg)
@@ -1627,7 +1627,7 @@ let rec transl env e =
       let id_prev = Ident.rename id in
       return_unit
         (Clet
-           (id, transl env low,
+           (Mutable, id, transl env low,
             bind_nonvar "bound" (transl env high) (fun high ->
               ccatch
                 (raise_num, [],
@@ -1637,7 +1637,7 @@ let rec transl env e =
                     Cloop
                       (Csequence
                          (remove_unit(transl env body),
-                         Clet(id_prev, Cvar id,
+                         Clet(Immutable, id_prev, Cvar id,
                           Csequence
                             (Cassign(id,
                                Cop(inc, [Cvar id; Cconst_int 2],
@@ -2364,10 +2364,10 @@ and transl_let env str kind id exp body =
   | No_unboxing | Boxed (_, true) | No_result ->
       (* N.B. [body] must still be traversed even if [exp] will never return:
          there may be constant closures inside that need lifting out. *)
-      Clet(id, transl env exp, transl env body)
+      Clet(str, id, transl env exp, transl env body)
   | Boxed (boxed_number, _false) ->
       let unboxed_id = Ident.create (Ident.name id) in
-      Clet(unboxed_id, transl_unbox_number dbg env boxed_number exp,
+      Clet(str, unboxed_id, transl_unbox_number dbg env boxed_number exp,
            transl (add_unboxed_id id unboxed_id boxed_number env) body)
 
 and make_catch ncatch body handler = match body with
@@ -2501,19 +2501,19 @@ and transl_letrec env bindings cont =
   let rec init_blocks = function
     | [] -> fill_nonrec bsz
     | (id, _exp, RHS_block sz) :: rem ->
-        Clet(id, op_alloc "caml_alloc_dummy" sz,
+        Clet(Immutable, id, op_alloc "caml_alloc_dummy" sz,
           init_blocks rem)
     | (id, _exp, RHS_floatblock sz) :: rem ->
-        Clet(id, op_alloc "caml_alloc_dummy_float" sz,
+        Clet(Immutable, id, op_alloc "caml_alloc_dummy_float" sz,
           init_blocks rem)
     | (id, _exp, RHS_nonrec) :: rem ->
-        Clet (id, Cconst_int 0, init_blocks rem)
+        Clet (Immutable, id, Cconst_int 0, init_blocks rem)
   and fill_nonrec = function
     | [] -> fill_blocks bsz
     | (_id, _exp, (RHS_block _ | RHS_floatblock _)) :: rem ->
         fill_nonrec rem
     | (id, exp, RHS_nonrec) :: rem ->
-        Clet(id, transl env exp, fill_nonrec rem)
+        Clet(Immutable, id, transl env exp, fill_nonrec rem)
   and fill_blocks = function
     | [] -> cont
     | (id, exp, (RHS_block _ | RHS_floatblock _)) :: rem ->
@@ -2821,14 +2821,14 @@ let cache_public_method meths tag cache dbg =
   let li = Ident.create "li" and hi = Ident.create "hi"
   and mi = Ident.create "mi" and tagged = Ident.create "tagged" in
   Clet (
-  li, Cconst_int 3,
+  Mutable, li, Cconst_int 3,
   Clet (
-  hi, Cop(Cload (Word_int, Mutable), [meths], dbg),
+  Mutable, hi, Cop(Cload (Word_int, Mutable), [meths], dbg),
   Csequence(
   ccatch
     (raise_num, [],
      Cloop
-       (Clet(
+       (Clet(Immutable,
         mi,
         Cop(Cor,
             [Cop(Clsr, [Cop(Caddi, [Cvar li; Cvar hi], dbg); Cconst_int 1],
@@ -2850,7 +2850,7 @@ let cache_public_method meths tag cache dbg =
           (Cop(Ccmpi Cge, [Cvar li; Cvar hi], dbg), Cexit (raise_num, []),
            Ctuple [])))),
      Ctuple []),
-  Clet (
+  Clet (Immutable,
     tagged,
       Cop(Cadda, [lsl_const (Cvar li) log2_size_addr dbg;
         Cconst_int(1 - 3 * size_addr)], dbg),
@@ -2880,7 +2880,7 @@ let apply_function_body arity =
           [get_field env (Cvar clos) 0 dbg; Cvar arg.(n); Cvar clos], dbg)
     else begin
       let newclos = Ident.create "clos" in
-      Clet(newclos,
+      Clet(Immutable, newclos,
            Cop(Capply typ_val,
                [get_field env (Cvar clos) 0 dbg; Cvar arg.(n); Cvar clos], dbg),
            app_fun newclos (n+1))
@@ -2913,12 +2913,12 @@ let send_function arity =
                               Cconst_int(3*size_addr-1)], dbg) in
     let tag' = Cop(Cload (Word_int, Mutable), [tag_pos], dbg) in
     Clet (
-    meths, Cop(Cload (Word_val, Mutable), [obj], dbg),
+    Immutable, meths, Cop(Cload (Word_val, Mutable), [obj], dbg),
     Clet (
-    cached,
+    Immutable, cached,
       Cop(Cand, [Cop(Cload (Word_int, Mutable), [cache], dbg); mask], dbg),
     Clet (
-    real,
+    Immutable, real,
     Cifthenelse(Cop(Ccmpa Cne, [tag'; tag], dbg),
                 cache_public_method (Cvar meths) tag cache dbg,
                 cached_pos),
@@ -2927,7 +2927,7 @@ let send_function arity =
        Cconst_int(2*size_addr-1)], dbg)], dbg))))
 
   in
-  let body = Clet(clos', clos, body) in
+  let body = Clet(Immutable, clos', clos, body) in
   let cache = cache in
   let fun_args =
     [obj, typ_val; tag, typ_int; cache, typ_val]
@@ -3021,13 +3021,13 @@ let final_curry_function arity =
       if n = arity - 1 || arity > max_arity_optimized then
         begin
       let newclos = Ident.create "clos" in
-      Clet(newclos,
+      Clet(Immutable, newclos,
            get_field env (Cvar clos) 3 dbg,
            curry_fun (get_field env (Cvar clos) 2 dbg :: args) newclos (n-1))
         end else
         begin
           let newclos = Ident.create "clos" in
-          Clet(newclos,
+          Clet(Immutable, newclos,
                get_field env (Cvar clos) 4 dbg,
                curry_fun (get_field env (Cvar clos) 3 dbg :: args) newclos (n-1))
     end in
@@ -3084,7 +3084,7 @@ let rec intermediate_curry_functions arity num =
                   dbg)
             else
               let newclos = Ident.create "clos" in
-              Clet(newclos,
+              Clet(Immutable, newclos,
                    get_field env (Cvar clos) 4 dbg,
                    iter (i-1) (get_field env (Cvar clos) 3 dbg :: args) newclos)
           in
