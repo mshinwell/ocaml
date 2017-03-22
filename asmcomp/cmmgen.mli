@@ -38,3 +38,10 @@ val predef_exception: int -> string -> Cmm.phrase
 val plugin_header: (Cmx_format.unit_infos * Digest.t) list -> Cmm.phrase
 val black_block_header: (*tag:*)int -> (*size:*)int -> nativeint
 val raise_symbol: Debuginfo.t -> string -> Cmm.expression
+val ignore_low_bit_int: Cmm.expression -> Cmm.expression
+
+val bind
+   : string
+  -> Cmm.expression
+  -> (Cmm.expression -> Cmm.expression)
+  -> Cmm.expression

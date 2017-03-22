@@ -140,7 +140,8 @@ and operation =
   | Cload of memory_chunk * Asttypes.mutable_flag
   | Calloc
   | Cstore of memory_chunk * Lambda.initialization_or_assignment
-  | Caddi | Csubi | Cmuli | Cmulhi | Cdivi of Lambda.is_safe | Cmodi
+  | Caddi | Csubi | Cmuli | Cmulhi
+  | Cdivi of Lambda.is_safe | Cmodi of Lambda.is_safe
   | Cand | Cor | Cxor | Clsl | Clsr | Casr
   | Ccmpi of comparison
   | Caddv | Cadda

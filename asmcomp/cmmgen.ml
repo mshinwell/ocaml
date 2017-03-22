@@ -129,17 +129,26 @@ let int_const n =
 let cint_const n =
   Cint(Nativeint.add (Nativeint.shift_left (Nativeint.of_int n) 1) 1n)
 
-let rec add_const c n dbg = Cop(Caddi, [c; Cconst_int n], dbg)
+let add_const c n dbg = Cop(Caddi, [c; Cconst_int n], dbg)
 
 let incr_int c dbg = add_const c 1 dbg
 let decr_int c dbg = add_const c (-1) dbg
 
 let add_int c1 c2 dbg = Cop (Caddi, [c1; c2], dbg)
 let sub_int c1 c2 dbg = Cop (Csubi, [c1; c2], dbg)
-let lsl_int c1 c2 dbg = Cop (Clsl, [c1; c2], dbg)
 let mul_int c1 c2 dbg = Cop (Cmuli, [c1; c2], dbg)
+let div_int c1 c2 is_safe dbg = Cop (Cdivi is_safe, [c1; c2], dbg)
+let mod_int c1 c2 is_safe dbg = Cop (Cmodi is_safe, [c1; c2], dbg)
+let lsl_int c1 c2 dbg = Cop (Clsl, [c1; c2], dbg)
 let lsr_int c1 c2 dbg = Cop (Clsr, [c1; c2], dbg)
 let asr_int c1 c2 dbg = Cop (Casr, [c1; c2], dbg)
+
+let ignore_low_bit_int = function
+  | Cop(Caddi, [(Cop(Clsl, [_; Cconst_int n], _) as c); Cconst_int 1], _)
+      when n > 0
+      -> c
+  | Cop(Cor, [c; Cconst_int 1], _) -> c
+  | c -> c
 
 let tag_int i dbg =
   match i with
