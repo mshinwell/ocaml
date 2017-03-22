@@ -111,7 +111,7 @@ and operation =
   | Cload of memory_chunk * Asttypes.mutable_flag
   | Calloc
   | Cstore of memory_chunk * Lambda.initialization_or_assignment
-  | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi
+  | Caddi | Csubi | Cmuli | Cmulhi | Cdivi of Lambda.is_safe | Cmodi
   | Cand | Cor | Cxor | Clsl | Clsr | Casr
   | Ccmpi of comparison
   | Caddv (* pointer addition that produces a [Val] (well-formed Caml value) *)
