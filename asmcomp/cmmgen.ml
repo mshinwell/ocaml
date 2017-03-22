@@ -152,84 +152,12 @@ let rec add_const c n dbg =
 let incr_int c dbg = add_const c 1 dbg
 let decr_int c dbg = add_const c (-1) dbg
 
-let rec add_int c1 c2 dbg =
-  match (c1, c2) with
-  | (Cconst_int n, c) | (c, Cconst_int n) ->
-      add_const c n dbg
-  | (Cop(Caddi, [c1; Cconst_int n1], _), c2) ->
-      add_const (add_int c1 c2 dbg) n1 dbg
-  | (c1, Cop(Caddi, [c2; Cconst_int n2], _)) ->
-      add_const (add_int c1 c2 dbg) n2 dbg
-  | (_, _) ->
-      Cop(Caddi, [c1; c2], dbg)
-
-let rec sub_int c1 c2 dbg =
-  match (c1, c2) with
-  | (c1, Cconst_int n2) when n2 <> min_int ->
-      add_const c1 (-n2) dbg
-  | (c1, Cop(Caddi, [c2; Cconst_int n2], _)) when n2 <> min_int ->
-      add_const (sub_int c1 c2 dbg) (-n2) dbg
-  | (Cop(Caddi, [c1; Cconst_int n1], _), c2) ->
-      add_const (sub_int c1 c2 dbg) n1 dbg
-  | (c1, c2) ->
-      Cop(Csubi, [c1; c2], dbg)
-
-let rec lsl_int c1 c2 dbg =
-  match (c1, c2) with
-  | (Cop(Clsl, [c; Cconst_int n1], _), Cconst_int n2)
-    when n1 > 0 && n2 > 0 && n1 + n2 < size_int * 8 ->
-      Cop(Clsl, [c; Cconst_int (n1 + n2)], dbg)
-  | (Cop(Caddi, [c1; Cconst_int n1], _), Cconst_int n2)
-    when no_overflow_lsl n1 n2 ->
-      add_const (lsl_int c1 c2 dbg) (n1 lsl n2) dbg
-  | (_, _) ->
-      Cop(Clsl, [c1; c2], dbg)
-
-let is_power2 n = n = 1 lsl Misc.log2 n
-
-and mult_power2 c n dbg = lsl_int c (Cconst_int (Misc.log2 n)) dbg
-
-let rec mul_int c1 c2 dbg =
-  match (c1, c2) with
-  | (c, Cconst_int 0) | (Cconst_int 0, c) -> Csequence (c, Cconst_int 0)
-  | (c, Cconst_int 1) | (Cconst_int 1, c) ->
-      c
-  | (c, Cconst_int(-1)) | (Cconst_int(-1), c) ->
-      sub_int (Cconst_int 0) c dbg
-  | (c, Cconst_int n) when is_power2 n -> mult_power2 c n dbg
-  | (Cconst_int n, c) when is_power2 n -> mult_power2 c n dbg
-  | (Cop(Caddi, [c; Cconst_int n], _), Cconst_int k) |
-    (Cconst_int k, Cop(Caddi, [c; Cconst_int n], _))
-    when no_overflow_mul n k ->
-      add_const (mul_int c (Cconst_int k) dbg) (n * k) dbg
-  | (c1, c2) ->
-      Cop(Cmuli, [c1; c2], dbg)
-
-
-let ignore_low_bit_int = function
-    Cop(Caddi, [(Cop(Clsl, [_; Cconst_int n], _) as c); Cconst_int 1], _)
-      when n > 0
-      -> c
-  | Cop(Cor, [c; Cconst_int 1], _) -> c
-  | c -> c
-
-let lsr_int c1 c2 dbg =
-  match c2 with
-    Cconst_int 0 ->
-      c1
-  | Cconst_int n when n > 0 ->
-      Cop(Clsr, [ignore_low_bit_int c1; c2], dbg)
-  | _ ->
-      Cop(Clsr, [c1; c2], dbg)
-
-let asr_int c1 c2 dbg =
-  match c2 with
-    Cconst_int 0 ->
-      c1
-  | Cconst_int n when n > 0 ->
-      Cop(Casr, [ignore_low_bit_int c1; c2], dbg)
-  | _ ->
-      Cop(Casr, [c1; c2], dbg)
+let add_int c1 c2 dbg = Cop (Caddi, [c1; c2], dbg)
+let sub_int c1 c2 dbg = Cop (Csubi, [c1; c2], dbg)
+let lsl_int c1 c2 dbg = Cop (Clsl, [c1; c2], dbg)
+let mul_int c1 c2 dbg = Cop (Cmuli, [c1; c2], dbg)
+let lsr_int c1 c2 dbg = Cop (Clsr, [c1; c2], dbg)
+let asr_int c1 c2 dbg = Cop (Casr, [c1; c2], dbg)
 
 let tag_int i dbg =
   match i with
