@@ -19,6 +19,7 @@ open Arch
 open Proc
 open Cmm
 open Mach
+open Asttypes
 
 module Env = Selection_env
 
@@ -36,28 +37,28 @@ let rec select_addr env exp =
     Cconst_symbol s when not !Clflags.dlcode ->
       (Asymbol s, 0)
   | Cop((Caddi | Caddv | Cadda), [arg; Cconst_int m], _) ->
-      let (a, n) = select_addr arg in (a, n + m)
+      let (a, n) = select_addr env arg in (a, n + m)
   | Cop(Csubi, [arg; Cconst_int m], _) ->
-      let (a, n) = select_addr arg in (a, n - m)
+      let (a, n) = select_addr env arg in (a, n - m)
   | Cop((Caddi | Caddv | Cadda), [Cconst_int m; arg], _) ->
-      let (a, n) = select_addr arg in (a, n + m)
+      let (a, n) = select_addr env arg in (a, n + m)
   | Cop(Clsl, [arg; Cconst_int(1|2|3 as shift)], _) ->
-      begin match select_addr arg with
+      begin match select_addr env arg with
         (Alinear e, n) -> (Ascale(e, 1 lsl shift), n lsl shift)
       | _ -> (Alinear exp, 0)
       end
   | Cop(Cmuli, [arg; Cconst_int(2|4|8 as mult)], _) ->
-      begin match select_addr arg with
+      begin match select_addr env arg with
         (Alinear e, n) -> (Ascale(e, mult), n * mult)
       | _ -> (Alinear exp, 0)
       end
   | Cop(Cmuli, [Cconst_int(2|4|8 as mult); arg], _) ->
-      begin match select_addr arg with
+      begin match select_addr env arg with
         (Alinear e, n) -> (Ascale(e, mult), n * mult)
       | _ -> (Alinear exp, 0)
       end
   | Cop((Caddi | Caddv | Cadda), [arg1; arg2], _) ->
-      begin match (select_addr arg1, select_addr arg2) with
+      begin match (select_addr env arg1, select_addr env arg2) with
           ((Alinear e1, n1), (Alinear e2, n2)) ->
               (Aadd(e1, e2), n1 + n2)
         | ((Alinear e1, n1), (Ascale(e2, scale), n2)) ->
@@ -68,29 +69,27 @@ let rec select_addr env exp =
               (Ascaledadd(arg1, e2, scale), n2)
         | ((Ascale(e1, scale), n1), _) ->
               (Ascaledadd(arg2, e1, scale), n1)
-        | ((Ascaledadd (base1, to_scale1, factor1), n1),
-            (Alinear (Cconst_int n2), 0)) ->
+        | (Ascaledadd (base1, to_scale1, factor1), n1),
+            (Alinear (Cconst_int n2), 0) ->
               (Ascaledadd (base1, to_scale1, factor1), n1 + n2)
-        | (Alinear (Cconst_int n1), 0))
-            ((Ascaledadd (base2, to_scale2, factor2), n2) ->
+        | (Alinear (Cconst_int n1), 0),
+            (Ascaledadd (base2, to_scale2, factor2), n2) ->
               (Ascaledadd (base2, to_scale2, factor2), n1 + n2)
         | _ ->
               (Aadd(arg1, arg2), 0)
       end
   | Cvar var ->
-      begin match Env.find_with_mutability env var with
+      begin match Env.mutability env var with
       | exception Not_found -> Alinear exp, 0
-      | _, Mutable -> Alinear exp, 0
-      | exp, Immutable -> select_addr env exp
+      | Mutable -> Alinear exp, 0
+      | Immutable ->
+        begin match Env.find_simple_expression env var with
+        | exception Not_found -> Alinear exp, 0
+        | exp -> select_addr env exp
+        end
       end
   | arg ->
       (Alinear arg, 0)
-
-method! interesting_expression expr =
-  let mode, _displacement = select_addr expr in
-  match mode with
-  | Alinear _ -> false
-  | Asymbol _ | Aadd _ | Ascale _ | Ascaledadd _ -> true
 
 (* Special constraints on operand and result registers *)
 
@@ -170,6 +169,12 @@ method! effects_of e =
   | _ ->
       super#effects_of e
 
+method! interesting_expression env expr =
+  let mode, _displacement = select_addr env expr in
+  match mode with
+  | Alinear _ -> false
+  | Asymbol _ | Aadd _ | Ascale _ | Ascaledadd _ -> true
+
 method select_addressing env _chunk exp =
   let (a, d) = select_addr env exp in
   (* PR#4625: displacement must be a signed 32-bit immediate *)
@@ -203,28 +208,28 @@ method! select_store is_assign addr exp =
   | _ ->
       super#select_store is_assign addr exp
 
-method! select_operation op args dbg =
+method! select_operation env op args dbg =
   match op with
   (* Recognize the LEA instruction *)
     Caddi | Caddv | Cadda | Csubi ->
-      begin match self#select_addressing Word_int (Cop(op, args, dbg)) with
+      begin match self#select_addressing env Word_int (Cop(op, args, dbg)) with
         (Iindexed _, _)
-      | (Iindexed2 0, _) -> super#select_operation op args dbg
+      | (Iindexed2 0, _) -> super#select_operation env op args dbg
       | (addr, arg) -> (Ispecific(Ilea addr), [arg])
       end
   (* Recognize float arithmetic with memory. *)
   | Caddf ->
-      self#select_floatarith true Iaddf Ifloatadd args
+      self#select_floatarith env true Iaddf Ifloatadd args
   | Csubf ->
-      self#select_floatarith false Isubf Ifloatsub args
+      self#select_floatarith env false Isubf Ifloatsub args
   | Cmulf ->
-      self#select_floatarith true Imulf Ifloatmul args
+      self#select_floatarith env true Imulf Ifloatmul args
   | Cdivf ->
-      self#select_floatarith false Idivf Ifloatdiv args
+      self#select_floatarith env false Idivf Ifloatdiv args
   | Cextcall("sqrt", _, false, _) ->
      begin match args with
        [Cop(Cload ((Double|Double_u as chunk), _), [loc], _dbg)] ->
-         let (addr, arg) = self#select_addressing chunk loc in
+         let (addr, arg) = self#select_addressing env chunk loc in
          (Ispecific(Ifloatsqrtf addr), [arg])
      | [arg] ->
          (Ispecific Isqrtf, [arg])
@@ -236,10 +241,10 @@ method! select_operation op args dbg =
       begin match args with
         [loc; Cop(Caddi, [Cop(Cload _, [loc'], _); Cconst_int n], _)]
         when loc = loc' && self#is_immediate n ->
-          let (addr, arg) = self#select_addressing chunk loc in
+          let (addr, arg) = self#select_addressing env chunk loc in
           (Ispecific(Ioffset_loc(n, addr)), [arg])
       | _ ->
-          super#select_operation op args dbg
+          super#select_operation env op args dbg
       end
   | Cextcall("caml_bswap16_direct", _, _, _) ->
       (Ispecific (Ibswap 16), args)
@@ -251,19 +256,19 @@ method! select_operation op args dbg =
   (* AMD64 does not support immediate operands for multiply high signed *)
   | Cmulhi ->
       (Iintop Imulh, args)
-  | _ -> super#select_operation op args dbg
+  | _ -> super#select_operation env op args dbg
 
 (* Recognize float arithmetic with mem *)
 
-method select_floatarith commutative regular_op mem_op args =
+method select_floatarith env commutative regular_op mem_op args =
   match args with
     [arg1; Cop(Cload ((Double|Double_u as chunk), _), [loc2], _)] ->
-      let (addr, arg2) = self#select_addressing chunk loc2 in
+      let (addr, arg2) = self#select_addressing env chunk loc2 in
       (Ispecific(Ifloatarithmem(mem_op, addr)),
                  [arg1; arg2])
   | [Cop(Cload ((Double|Double_u as chunk), _), [loc1], _); arg2]
         when commutative ->
-      let (addr, arg1) = self#select_addressing chunk loc1 in
+      let (addr, arg1) = self#select_addressing env chunk loc1 in
       (Ispecific(Ifloatarithmem(mem_op, addr)),
                  [arg2; arg1])
   | [arg1; arg2] ->

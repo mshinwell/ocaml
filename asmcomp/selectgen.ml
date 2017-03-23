@@ -17,6 +17,7 @@
    sequentialization. *)
 
 open Misc
+open Asttypes
 open Cmm
 open Reg
 open Mach
@@ -50,7 +51,7 @@ let oper_result_type = function
 (* Infer the size in bytes of the result of an expression whose evaluation
    may be deferred (cf. [emit_parts]). *)
 
-let size_expr (env:environment) exp =
+let size_expr env exp =
   let rec size localenv = function
       Cconst_int _ | Cconst_natint _ -> Arch.size_int
     | Cconst_symbol _ | Cconst_pointer _ | Cconst_natpointer _ ->
@@ -334,7 +335,8 @@ method virtual is_immediate : int -> bool
 (* Selection of addressing modes *)
 
 method virtual select_addressing :
-  Cmm.memory_chunk -> Cmm.expression -> Arch.addressing_mode * Cmm.expression
+  Selection_env.t -> Cmm.memory_chunk -> Cmm.expression
+    -> Arch.addressing_mode * Cmm.expression
 
 (* Default instruction selection for stores (of words) *)
 
@@ -382,7 +384,7 @@ method select_checkbound () =
   Icheckbound { spacetime_index = 0; label_after_error = None; }
 method select_checkbound_extra_args () = []
 
-method select_operation op args _dbg =
+method select_operation env op args _dbg =
   match (op, args) with
   | (Capply _, Cconst_symbol func :: rem) ->
     let label_after = Cmm.new_label () in
@@ -398,10 +400,10 @@ method select_operation op args _dbg =
     in
     Iextcall { func; alloc; label_after; }, args
   | (Cload (chunk, _mut), [arg]) ->
-      let (addr, eloc) = self#select_addressing chunk arg in
+      let (addr, eloc) = self#select_addressing env chunk arg in
       (Iload(chunk, addr), [eloc])
   | (Cstore (chunk, init), [arg1; arg2]) ->
-      let (addr, eloc) = self#select_addressing chunk arg1 in
+      let (addr, eloc) = self#select_addressing env chunk arg1 in
       let is_assign =
         match init with
         | Lambda.Root_initialization -> false
@@ -608,7 +610,7 @@ method private maybe_emit_spacetime_move ~spacetime_reg =
 (* Add the instructions for the given expression
    at the end of the self sequence *)
 
-method emit_expr (env:environment) exp =
+method emit_expr env exp =
   match exp with
     Cconst_int n ->
       let r = self#regs_for typ_int in
@@ -683,7 +685,9 @@ method emit_expr (env:environment) exp =
         None -> None
       | Some(simple_args, env) ->
           let ty = oper_result_type op in
-          let (new_op, new_args) = self#select_operation op simple_args dbg in
+          let (new_op, new_args) =
+            self#select_operation env op simple_args dbg
+          in
           match new_op with
             Icall_ind _ ->
               let r1 = self#emit_tuple env new_args in
@@ -835,7 +839,7 @@ method emit_expr (env:environment) exp =
   | Ctrywith(e1, v, e2) ->
       let (r1, s1) = self#emit_sequence env e1 in
       let rv = self#regs_for typ_val in
-      let (r2, s2) = self#emit_sequence (Env.add env v rv) e2 in
+      let (r2, s2) = self#emit_sequence (Env.add env v rv Immutable) e2 in
       let r = join r1 s1 r2 s2 in
       self#insert
         (Itrywith(s1#extract,
@@ -844,14 +848,14 @@ method emit_expr (env:environment) exp =
         [||] [||];
       r
 
-method private emit_sequence (env:environment) exp =
+method private emit_sequence env exp =
   let s = {< instr_seq = dummy_instr >} in
   let r = s#emit_expr env exp in
   (r, s)
 
-method interesting_expression _expr = false
+method interesting_expression _env _expr = false
 
-method private bind_let (env:environment) mut v defining_expr r1 =
+method private bind_let env mut v defining_expr r1 =
   let env =
     if all_regs_anonymous r1 then begin
       name_regs v r1;
@@ -860,7 +864,7 @@ method private bind_let (env:environment) mut v defining_expr r1 =
       let rv = Reg.createv_like r1 in
       name_regs v rv;
       self#insert_moves r1 rv;
-      Env.add v rv mut env
+      Env.add env v rv mut
     end
   in
   (* Since [defining_expr] may involve a reference to a mutable variable
@@ -868,8 +872,8 @@ method private bind_let (env:environment) mut v defining_expr r1 =
      Users of the environment must ensure that they check appropriately for
      the presence of mutable variables in any expressions they may use from
      it. *)
-  if self#interesting_expression defining_expr then
-    Env.add_interesting_expression env v defining_expr
+  if self#interesting_expression env defining_expr then
+    Env.add_simple_expression env v defining_expr
   else
     env
 
@@ -877,7 +881,7 @@ method private bind_let (env:environment) mut v defining_expr r1 =
    right-to-left evaluation order as required by the Flambda [Un_anf] pass
    (and to be consistent with the bytecode compiler). *)
 
-method private emit_parts (env:environment) ~effects_after exp =
+method private emit_parts env ~effects_after exp =
   let module EC = Effect_and_coeffect in
   let may_defer_evaluation =
     let ec = self#effects_of exp in
@@ -940,7 +944,7 @@ method private emit_parts (env:environment) ~effects_after exp =
         end
   end
 
-method private emit_parts_list (env:environment) exp_list =
+method private emit_parts_list env exp_list =
   let module EC = Effect_and_coeffect in
   let exp_list_right_to_left, _effect =
     (* Annotate each expression with the (co)effects that happen after it
@@ -1016,7 +1020,7 @@ method emit_stores env data regs_addr =
 
 (* Same, but in tail position *)
 
-method private emit_return (env:environment) exp =
+method private emit_return env exp =
   match self#emit_expr env exp with
     None -> ()
   | Some r ->
@@ -1024,7 +1028,7 @@ method private emit_return (env:environment) exp =
       self#insert_moves r loc;
       self#insert Ireturn loc [||]
 
-method emit_tail (env:environment) exp =
+method emit_tail env exp =
   match exp with
     Clet(mut, v, e1, e2) ->
       begin match self#emit_expr env e1 with
@@ -1035,7 +1039,9 @@ method emit_tail (env:environment) exp =
       begin match self#emit_parts_list env args with
         None -> ()
       | Some(simple_args, env) ->
-          let (new_op, new_args) = self#select_operation op simple_args dbg in
+          let (new_op, new_args) =
+            self#select_operation env op simple_args dbg
+          in
           match new_op with
             Icall_ind { label_after; } ->
               let r1 = self#emit_tuple env new_args in

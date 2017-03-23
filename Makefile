@@ -169,7 +169,8 @@ ASMCOMP=\
   asmcomp/afl_instrument.cmo \
   asmcomp/strmatch.cmo asmcomp/cmmgen.cmo \
   asmcomp/interval.cmo \
-  asmcomp/printmach.cmo asmcomp/selectgen.cmo \
+  asmcomp/printmach.cmo \
+  asmcomp/selection_env.cmo asmcomp/selectgen.cmo \
   asmcomp/spacetime_profiling.cmo asmcomp/selection.cmo \
   asmcomp/comballoc.cmo \
   asmcomp/CSEgen.cmo asmcomp/CSE.cmo \

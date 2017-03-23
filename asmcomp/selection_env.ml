@@ -15,10 +15,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
+module Int = Numbers.Int
+
 type t = {
-  vars : (Ident.t, Reg.t array * Asttypes.mutable_flag) Ident.Map.t;
+  vars : (Reg.t array * Asttypes.mutable_flag) Ident.Map.t;
   simple_expressions : Cmm.expression Ident.Map.t;
-  static_exceptions : (int, Reg.t array list) Ident.Map.t;
+  static_exceptions : Reg.t array list Int.Map.t;
   (* Which registers must be populated when jumping to the given
      handler. *)
 }
@@ -26,7 +28,7 @@ type t = {
 let empty = {
   vars = Ident.Map.empty;
   simple_expressions = Ident.Map.empty;
-  static_exceptions = Ident.Map.empty;
+  static_exceptions = Int.Map.empty;
 }
 
 let add t id v mut =
@@ -36,7 +38,12 @@ let add t id v mut =
 
 let add_static_exception t id v =
   { t with
-    static_exceptions = Ident.Map.add id v t.static_exceptions;
+    static_exceptions = Int.Map.add id v t.static_exceptions;
+  }
+
+let add_simple_expression t id expr =
+  { t with
+    simple_expressions = Ident.Map.add id expr t.simple_expressions;
   }
 
 let find t id =
@@ -47,8 +54,11 @@ let find_with_mutability t id =
   Ident.Map.find id t.vars
 
 let find_static_exception t id =
-  Ident.Map.find id t.static_exceptions
+  Int.Map.find id t.static_exceptions
 
-let is_immutable t id =
-  let _regs, mut = Ident.Map.find id env.vars in
+let find_simple_expression t id =
+  Ident.Map.find id t.simple_expressions
+
+let mutability t id =
+  let _regs, mut = Ident.Map.find id t.vars in
   mut

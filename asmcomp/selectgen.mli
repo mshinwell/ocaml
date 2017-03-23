@@ -55,12 +55,14 @@ class virtual selector_generic : object
     (* Must be defined to indicate whether a constant is a suitable
        immediate operand to arithmetic instructions *)
   method virtual select_addressing :
-    Cmm.memory_chunk -> Cmm.expression -> Arch.addressing_mode * Cmm.expression
+    Selection_env.t -> Cmm.memory_chunk -> Cmm.expression
+      -> Arch.addressing_mode * Cmm.expression
     (* Must be defined to select addressing modes *)
   method is_simple_expr: Cmm.expression -> bool
   method effects_of : Cmm.expression -> Effect_and_coeffect.t
     (* Can be overridden to reflect special extcalls known to be pure *)
   method select_operation :
+    Selection_env.t ->
     Cmm.operation ->
     Cmm.expression list ->
     Debuginfo.t ->
@@ -117,7 +119,7 @@ class virtual selector_generic : object
      above; overloading this is useful if Ispecific instructions need
      marking *)
 
-  method interesting_expression : Cmm.expression -> bool
+  method interesting_expression : Selection_env.t -> Cmm.expression -> bool
   (** Should return [true] if the expression should be added to the
       environment for the future use of, for example, [select_addressing]. *)
 

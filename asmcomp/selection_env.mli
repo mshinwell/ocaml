@@ -22,12 +22,12 @@ type t
 val empty : t
 
 val add : t -> Ident.t -> Reg.t array -> Asttypes.mutable_flag -> t
-val add_static_exception : t -> Ident.t -> int -> Reg.t array list -> t
+val add_static_exception : t -> int -> Reg.t array list -> t
 val add_simple_expression : t -> Ident.t -> Cmm.expression -> t
 
 val find : t -> Ident.t -> Reg.t array
 val find_with_mutability : t -> Ident.t -> Reg.t array * Asttypes.mutable_flag
-val find_static_exception : t -> Ident.t -> int -> Reg.t array list
+val find_static_exception : t -> int -> Reg.t array list
 val find_simple_expression : t -> Ident.t -> Cmm.expression
 
-val is_immutable : t -> Ident.t -> bool
+val mutability : t -> Ident.t -> Asttypes.mutable_flag
