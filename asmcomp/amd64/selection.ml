@@ -68,6 +68,12 @@ let rec select_addr env exp =
               (Ascaledadd(arg1, e2, scale), n2)
         | ((Ascale(e1, scale), n1), _) ->
               (Ascaledadd(arg2, e1, scale), n1)
+        | ((Ascaledadd (base1, to_scale1, factor1), n1),
+            (Alinear (Cconst_int n2), 0)) ->
+              (Ascaledadd (base1, to_scale1, factor1), n1 + n2)
+        | (Alinear (Cconst_int n1), 0))
+            ((Ascaledadd (base2, to_scale2, factor2), n2) ->
+              (Ascaledadd (base2, to_scale2, factor2), n1 + n2)
         | _ ->
               (Aadd(arg1, arg2), 0)
       end
@@ -80,7 +86,7 @@ let rec select_addr env exp =
       (Alinear arg, 0)
 
 method! interesting_expression expr =
-  let mode, _ = select_addr expr in
+  let mode, _displacement = select_addr expr in
   match mode with
   | Alinear _ -> false
   | Asymbol _ | Aadd _ | Ascale _ | Ascaledadd _ -> true

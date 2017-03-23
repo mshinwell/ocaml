@@ -15,29 +15,27 @@
 (*                                                                        *)
 (**************************************************************************)
 
-type t = {
+type t = private {
   vars : (Ident.t, Reg.t array) Tbl.t;
   immutable_vars : Ident.Set.t;
+  simple_expressions : Cmm.expression Ident.Map.t;
   static_exceptions : (int, Reg.t array list) Tbl.t;
+  (** Which registers must be populated when jumping to the given
+      handler. *)
 }
 
-let empty = {
-  vars = Tbl.empty;
-  immutable_vars = Ident.Set.empty;
-  static_exceptions = Tbl.empty;
-}
+val empty : t
 
-let add id v ~immutable env =
-  let immutable_vars =
-    if immutable then Ident.Set.add id env.immutable_vars
-  in
-  { env with vars = Tbl.add id v env.vars }
+val add : Ident.t -> Reg.t array -> immutable:bool -> t -> t
 
-let add_static_exception id v env =
-  { env with static_exceptions = Tbl.add id v env.static_exceptions }
+val add_static_exception : Ident.t -> int -> Reg.t array list -> t -> t
 
-let find id env =
-  Tbl.find id env.vars
+val add_simple_expression : t -> Ident.t -> Cmm.expression -> t
 
-let find_static_exception id env =
-  Tbl.find id env.static_exceptions
+val find : Ident.t -> t -> Reg.t array
+
+val find_static_exception : Ident.t -> int -> t -> Reg.t array list
+
+val is_immutable : t -> Ident.t -> bool
+
+val find_simple_expression : t -> Ident.t -> Cmm.expression

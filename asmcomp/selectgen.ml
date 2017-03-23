@@ -267,7 +267,8 @@ method is_simple_expr = function
   | Cblockheader _ -> true
   | Cvar _ -> true
   | Ctuple el -> List.for_all self#is_simple_expr el
-  | Clet(_id, arg, body) -> self#is_simple_expr arg && self#is_simple_expr body
+  | Clet(_, _id, arg, body) ->
+      self#is_simple_expr arg && self#is_simple_expr body
   | Csequence(e1, e2) -> self#is_simple_expr e1 && self#is_simple_expr e2
   | Cop(op, args, _) ->
       begin match op with
@@ -635,10 +636,10 @@ method emit_expr (env:environment) exp =
       with Not_found ->
         fatal_error("Selection.emit_expr: unbound var " ^ Ident.unique_name v)
       end
-  | Clet(_, v, e1, e2) ->
+  | Clet(mut, v, e1, e2) ->
       begin match self#emit_expr env e1 with
         None -> None
-      | Some r1 -> self#emit_expr (self#bind_let env v r1) e2
+      | Some r1 -> self#emit_expr (self#bind_let env mut v e1 r1) e2
       end
   | Cassign(v, e1) ->
       let rv =
@@ -840,16 +841,25 @@ method private emit_sequence (env:environment) exp =
   let r = s#emit_expr env exp in
   (r, s)
 
-method private bind_let (env:environment) v r1 =
-  if all_regs_anonymous r1 then begin
-    name_regs v r1;
-    Env.add v r1 env
-  end else begin
-    let rv = Reg.createv_like r1 in
-    name_regs v rv;
-    self#insert_moves r1 rv;
-    Env.add v rv env
-  end
+method private bind_let (env:environment) mut v defining_expr r1 =
+  let env =
+    if all_regs_anonymous r1 then begin
+      name_regs v r1;
+      Env.add v r1 env
+    end else begin
+      let rv = Reg.createv_like r1 in
+      name_regs v rv;
+      self#insert_moves r1 rv;
+      Env.add v rv env
+    end
+  in
+  match mut with
+  | Mutable -> env
+  | Immutable ->
+    if self#interesting_expression defining_expr then
+      Env.add_interesting_expression env v defining_expr
+    else
+      env
 
 (* The following two functions, [emit_parts] and [emit_parts_list], force
    right-to-left evaluation order as required by the Flambda [Un_anf] pass
@@ -1004,10 +1014,10 @@ method private emit_return (env:environment) exp =
 
 method emit_tail (env:environment) exp =
   match exp with
-    Clet(_, v, e1, e2) ->
+    Clet(mut, v, e1, e2) ->
       begin match self#emit_expr env e1 with
         None -> ()
-      | Some r1 -> self#emit_tail (self#bind_let env v r1) e2
+      | Some r1 -> self#emit_tail (self#bind_let env mut v e1 r1) e2
       end
   | Cop((Capply ty) as op, args, dbg) ->
       begin match self#emit_parts_list env args with

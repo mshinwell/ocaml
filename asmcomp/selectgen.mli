@@ -16,13 +16,7 @@
 (* Selection of pseudo-instructions, assignment of pseudo-registers,
    sequentialization. *)
 
-type environment
-
-val env_add : Ident.t -> Reg.t array -> environment -> environment
-
-val env_find : Ident.t -> environment -> Reg.t array
-
-val size_expr : environment -> Cmm.expression -> int
+val size_expr : Selection_env.t -> Cmm.expression -> int
 
 module Effect : sig
   type t =
@@ -92,10 +86,10 @@ class virtual selector_generic : object
     (* Can be overridden to deal with 2-address instructions
        or instructions with hardwired input/output registers *)
   method emit_extcall_args :
-    environment -> Cmm.expression list -> Reg.t array * int
+    Selection_env.t -> Cmm.expression list -> Reg.t array * int
     (* Can be overridden to deal with stack-based calling conventions *)
   method emit_stores :
-    environment -> Cmm.expression list -> Reg.t array -> unit
+    Selection_env.t -> Cmm.expression list -> Reg.t array -> unit
     (* Fill a freshly allocated block.  Can be overridden for architectures
        that do not provide Arch.offset_addressing. *)
 
@@ -123,6 +117,12 @@ class virtual selector_generic : object
      above; overloading this is useful if Ispecific instructions need
      marking *)
 
+  method interesting_expression : Cmm.expression -> bool
+  (** Should return [true] if the expression should be added to the
+      environment for the future use of, for example, [select_addressing].
+      Expressions involving mutable variables will never be added to the
+      environment even if this returns [true]. *)
+
   (* The following method is the entry point and should not be overridden
      (except by [Spacetime_profiling]). *)
   method emit_fundecl : Cmm.fundecl -> Mach.fundecl
@@ -142,31 +142,31 @@ class virtual selector_generic : object
   method adjust_type : Reg.t -> Reg.t -> unit
   method adjust_types : Reg.t array -> Reg.t array -> unit
   method emit_expr :
-    environment -> Cmm.expression -> Reg.t array option
-  method emit_tail : environment -> Cmm.expression -> unit
+    Selection_env.t -> Cmm.expression -> Reg.t array option
+  method emit_tail : Selection_env.t -> Cmm.expression -> unit
 
   (* Only for the use of [Spacetime_profiling]. *)
   method select_allocation : int -> Mach.operation
-  method select_allocation_args : environment -> Reg.t array
+  method select_allocation_args : Selection_env.t -> Reg.t array
   method select_checkbound : unit -> Mach.integer_operation
   method select_checkbound_extra_args : unit -> Cmm.expression list
   method emit_blockheader
-     : environment
+     : Selection_env.t
     -> nativeint
     -> Debuginfo.t
     -> Reg.t array option
   method about_to_emit_call
-     : environment
+     : Selection_env.t
     -> Mach.instruction_desc
     -> Reg.t array
     -> Reg.t array option
-  method initial_env : unit -> environment
+  method initial_env : unit -> Selection_env.t
   method insert_prologue
      : Cmm.fundecl
     -> loc_arg:Reg.t array
     -> rarg:Reg.t array
     -> spacetime_node_hole:(Ident.t * Reg.t array) option
-    -> env:environment
+    -> env:Selection_env.t
     -> Mach.spacetime_shape option
 
   val mutable instr_seq : Mach.instruction
