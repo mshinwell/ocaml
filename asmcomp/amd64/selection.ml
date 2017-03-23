@@ -20,6 +20,8 @@ open Proc
 open Cmm
 open Mach
 
+module Env = Selection_env
+
 (* Auxiliary for recognizing addressing modes *)
 
 type addressing_expr =
@@ -29,7 +31,7 @@ type addressing_expr =
   | Ascale of expression * int
   | Ascaledadd of expression * expression * int
 
-let rec select_addr exp =
+let rec select_addr env exp =
   match exp with
     Cconst_symbol s when not !Clflags.dlcode ->
       (Asymbol s, 0)
@@ -69,8 +71,19 @@ let rec select_addr exp =
         | _ ->
               (Aadd(arg1, arg2), 0)
       end
+  | Cvar var ->
+      begin match Env.find env var with
+      | exception Not_found -> Alinear arg, 0
+      | expr -> select_addr env expr
+      end
   | arg ->
       (Alinear arg, 0)
+
+method! interesting_expression expr =
+  let mode, _ = select_addr expr in
+  match mode with
+  | Alinear _ -> false
+  | Asymbol _ | Aadd _ | Ascale _ | Ascaledadd _ -> true
 
 (* Special constraints on operand and result registers *)
 
@@ -150,8 +163,8 @@ method! effects_of e =
   | _ ->
       super#effects_of e
 
-method select_addressing _chunk exp =
-  let (a, d) = select_addr exp in
+method select_addressing env _chunk exp =
+  let (a, d) = select_addr env exp in
   (* PR#4625: displacement must be a signed 32-bit immediate *)
   if not (self # is_immediate d)
   then (Iindexed 0, exp)

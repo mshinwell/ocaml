@@ -21,29 +21,7 @@ open Cmm
 open Reg
 open Mach
 
-type environment =
-  { vars : (Ident.t, Reg.t array) Tbl.t;
-    static_exceptions : (int, Reg.t array list) Tbl.t;
-    (** Which registers must be populated when jumping to the given
-        handler. *)
-  }
-
-let env_add id v env =
-  { env with vars = Tbl.add id v env.vars }
-
-let env_add_static_exception id v env =
-  { env with static_exceptions = Tbl.add id v env.static_exceptions }
-
-let env_find id env =
-  Tbl.find id env.vars
-
-let env_find_static_exception id env =
-  Tbl.find id env.static_exceptions
-
-let env_empty = {
-  vars = Tbl.empty;
-  static_exceptions = Tbl.empty;
-}
+module Env = Selection_env
 
 (* Infer the type of the result of an operation *)
 
@@ -84,7 +62,7 @@ let size_expr (env:environment) exp =
           Tbl.find id localenv
         with Not_found ->
         try
-          let regs = env_find id env in
+          let regs = Env.find id env in
           size_machtype (Array.map (fun r -> r.typ) regs)
         with Not_found ->
           fatal_error("Selection.size_expr: unbound var " ^
@@ -94,7 +72,7 @@ let size_expr (env:environment) exp =
         List.fold_right (fun e sz -> size localenv e + sz) el 0
     | Cop(op, _, _) ->
         size_machtype(oper_result_type op)
-    | Clet(id, arg, body) ->
+    | Clet(_, id, arg, body) ->
         size (Tbl.add id (size localenv arg) localenv) body
     | Csequence(_e1, e2) ->
         size localenv e2
@@ -323,7 +301,7 @@ method effects_of exp =
   | Cconst_pointer _ | Cconst_natpointer _ | Cblockheader _
   | Cvar _ -> EC.none
   | Ctuple el -> EC.join_list_map el self#effects_of
-  | Clet (_id, arg, body) ->
+  | Clet (_, _id, arg, body) ->
     EC.join (self#effects_of arg) (self#effects_of body)
   | Csequence (e1, e2) ->
     EC.join (self#effects_of e1) (self#effects_of e2)
@@ -653,11 +631,11 @@ method emit_expr (env:environment) exp =
       self#emit_blockheader env n dbg
   | Cvar v ->
       begin try
-        Some(env_find v env)
+        Some(Env.find v env)
       with Not_found ->
         fatal_error("Selection.emit_expr: unbound var " ^ Ident.unique_name v)
       end
-  | Clet(v, e1, e2) ->
+  | Clet(_, v, e1, e2) ->
       begin match self#emit_expr env e1 with
         None -> None
       | Some r1 -> self#emit_expr (self#bind_let env v r1) e2
@@ -665,7 +643,7 @@ method emit_expr (env:environment) exp =
   | Cassign(v, e1) ->
       let rv =
         try
-          env_find v env
+          Env.find v env
         with Not_found ->
           fatal_error ("Selection.emit_expr: unbound var " ^ Ident.name v) in
       begin match self#emit_expr env e1 with
@@ -804,14 +782,14 @@ method emit_expr (env:environment) exp =
            the same environment is used for translating both the handlers and
            the body. *)
         List.fold_left (fun env (nfail, _ids, rs, _e2) ->
-            env_add_static_exception nfail rs env)
+            Env.add_static_exception nfail rs env)
           env handlers
       in
       let (r_body, s_body) = self#emit_sequence env body in
       let translate_one_handler (nfail, ids, rs, e2) =
         assert(List.length ids = List.length rs);
         let new_env =
-          List.fold_left (fun env (id, r) -> env_add id r env)
+          List.fold_left (fun env (id, r) -> Env.add id r env)
             env (List.combine ids rs)
         in
         let (r, s) = self#emit_sequence new_env e2 in
@@ -829,7 +807,7 @@ method emit_expr (env:environment) exp =
       | Some (simple_list, ext_env) ->
           let src = self#emit_tuple ext_env simple_list in
           let dest_args =
-            try env_find_static_exception nfail env
+            try Env.find_static_exception nfail env
             with Not_found ->
               fatal_error ("Selection.emit_expr: unboun label "^
                            string_of_int nfail)
@@ -848,7 +826,7 @@ method emit_expr (env:environment) exp =
   | Ctrywith(e1, v, e2) ->
       let (r1, s1) = self#emit_sequence env e1 in
       let rv = self#regs_for typ_val in
-      let (r2, s2) = self#emit_sequence (env_add v rv env) e2 in
+      let (r2, s2) = self#emit_sequence (Env.add v rv env) e2 in
       let r = join r1 s1 r2 s2 in
       self#insert
         (Itrywith(s1#extract,
@@ -865,12 +843,12 @@ method private emit_sequence (env:environment) exp =
 method private bind_let (env:environment) v r1 =
   if all_regs_anonymous r1 then begin
     name_regs v r1;
-    env_add v r1 env
+    Env.add v r1 env
   end else begin
     let rv = Reg.createv_like r1 in
     name_regs v rv;
     self#insert_moves r1 rv;
-    env_add v rv env
+    Env.add v rv env
   end
 
 (* The following two functions, [emit_parts] and [emit_parts_list], force
@@ -930,12 +908,12 @@ method private emit_parts (env:environment) ~effects_after exp =
           let id = Ident.create "bind" in
           if all_regs_anonymous r then
             (* r is an anonymous, unshared register; use it directly *)
-            Some (Cvar id, env_add id r env)
+            Some (Cvar id, Env.add id r env)
           else begin
             (* Introduce a fresh temp to hold the result *)
             let tmp = Reg.createv_like r in
             self#insert_moves r tmp;
-            Some (Cvar id, env_add id tmp env)
+            Some (Cvar id, Env.add id tmp env)
           end
         end
   end
@@ -1026,7 +1004,7 @@ method private emit_return (env:environment) exp =
 
 method emit_tail (env:environment) exp =
   match exp with
-    Clet(v, e1, e2) ->
+    Clet(_, v, e1, e2) ->
       begin match self#emit_expr env e1 with
         None -> ()
       | Some r1 -> self#emit_tail (self#bind_let env v r1) e2
@@ -1132,14 +1110,14 @@ method emit_tail (env:environment) exp =
           handlers in
       let env =
         List.fold_left (fun env (nfail, _ids, rs, _e2) ->
-            env_add_static_exception nfail rs env)
+            Env.add_static_exception nfail rs env)
           env handlers in
       let s_body = self#emit_tail_sequence env e1 in
       let aux (nfail, ids, rs, e2) =
         assert(List.length ids = List.length rs);
         let new_env =
           List.fold_left
-            (fun env (id,r) -> env_add id r env)
+            (fun env (id,r) -> Env.add id r env)
             env (List.combine ids rs) in
         nfail, self#emit_tail_sequence new_env e2
       in
@@ -1147,7 +1125,7 @@ method emit_tail (env:environment) exp =
   | Ctrywith(e1, v, e2) ->
       let (opt_r1, s1) = self#emit_sequence env e1 in
       let rv = self#regs_for typ_val in
-      let s2 = self#emit_tail_sequence (env_add v rv env) e2 in
+      let s2 = self#emit_tail_sequence (Env.add v rv env) e2 in
       self#insert
         (Itrywith(s1#extract,
                   instr_cons (Iop Imove) [|Proc.loc_exn_bucket|] rv s2))
@@ -1175,7 +1153,7 @@ method insert_prologue _f ~loc_arg ~rarg ~spacetime_node_hole:_ ~env:_ =
 
 (* Sequentialization of a function definition *)
 
-method initial_env () = env_empty
+method initial_env () = Env.empty
 
 method emit_fundecl f =
   Proc.contains_calls := false;
@@ -1193,14 +1171,14 @@ method emit_fundecl f =
      together is then simply prepended to the body. *)
   let env =
     List.fold_right2
-      (fun (id, _ty) r env -> env_add id r env)
+      (fun (id, _ty) r env -> Env.add id r env)
       f.Cmm.fun_args rargs (self#initial_env ()) in
   let spacetime_node_hole, env =
     if not Config.spacetime then None, env
     else begin
       let reg = self#regs_for typ_int in
       let node_hole = Ident.create "spacetime_node_hole" in
-      Some (node_hole, reg), env_add node_hole reg env
+      Some (node_hole, reg), Env.add node_hole reg env
     end
   in
   self#emit_tail env f.Cmm.fun_body;

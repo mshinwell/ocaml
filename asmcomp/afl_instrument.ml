@@ -38,8 +38,10 @@ let rec with_afl_logging b =
     let cur_pos = Ident.create "pos" in
     let afl_area = Ident.create "shared_mem" in
     let op oper args = Cop (oper, args, Debuginfo.none) in
-    Clet(afl_area, op (Cload (Word_int, Asttypes.Mutable)) [afl_area_ptr],
-    Clet(cur_pos,  op Cxor [op (Cload (Word_int, Asttypes.Mutable))
+    Clet(Asttypes.Immutable, afl_area, op (Cload (Word_int, Asttypes.Mutable))
+      [afl_area_ptr],
+    Clet(Asttypes.Immutable, cur_pos,
+      op Cxor [op (Cload (Word_int, Asttypes.Mutable))
       [afl_prev_loc]; Cconst_int cur_location],
     Csequence(
       op (Cstore(Byte_unsigned, Assignment))
@@ -63,7 +65,7 @@ and instrument = function
      Cswitch (instrument e, cases, Array.map with_afl_logging handlers, dbg)
 
   (* these cases add no logging, but instrument subexpressions *)
-  | Clet (v, e, body) -> Clet (v, instrument e, instrument body)
+  | Clet (mut, v, e, body) -> Clet (mut, v, instrument e, instrument body)
   | Cassign (v, e) -> Cassign (v, instrument e)
   | Ctuple es -> Ctuple (List.map instrument es)
   | Cop (op, es, dbg) -> Cop (op, List.map instrument es, dbg)

@@ -137,7 +137,7 @@ and expression =
   | Cconst_natpointer of nativeint
   | Cblockheader of nativeint * Debuginfo.t
   | Cvar of Ident.t
-  | Clet of Ident.t * expression * expression
+  | Clet of Asttypes.mutable_flag * Ident.t * expression * expression
   | Cassign of Ident.t * expression
   | Ctuple of expression list
   | Cop of operation * expression list * Debuginfo.t
