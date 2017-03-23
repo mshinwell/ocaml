@@ -35,6 +35,7 @@ type env = {
   unboxed_ids : (Ident.t * boxed_number) Ident.tbl;
   environment_param : Ident.t option;
   simple_expressions : expression Ident.Map.t;
+  known_immutable : Ident.Set.t;
 }
 
 let empty_env =
@@ -42,12 +43,14 @@ let empty_env =
     unboxed_ids =Ident.empty;
     environment_param = None;
     simple_expressions = Ident.Map.empty;
+    known_immutable = Ident.Set.empty;
   }
 
-let create_env ~environment_param =
+let create_env ~environment_param ~known_immutable =
   { unboxed_ids = Ident.empty;
     environment_param;
     simple_expressions = Ident.Map.empty;
+    known_immutable;
   }
 
 let is_unboxed_id id env =
@@ -59,10 +62,10 @@ let add_unboxed_id id unboxed_id bn env =
     unboxed_ids = Ident.add id (unboxed_id, bn) env.unboxed_ids;
   }
 
-let add_simple_expression_to_environment env id expr =
+let add_expression_to_environment env ~immutable_id expr =
   let rec eligible expr =
     match expr with
-    | Cvar _ -> true
+    | Cvar id -> Ident.Set.mem id env.known_immutable
     | Cop (op, args, _dbg) ->
         begin match op with
         | Caddi | Caddv | Cadda | Csubi | Cmuli | Cmulhi | Clsl | Clsr | Casr
@@ -78,10 +81,16 @@ let add_simple_expression_to_environment env id expr =
     | Cifthenelse _ | Cswitch _ | Cloop _ | Ccatch _ | Cexit _
     | Ctrywith _ -> false
   in
+  let env =
+    { env with
+      known_immutable = Ident.Set.add immutable_id env.known_immutable;
+    }
+  in
   if not (eligible expr) then env
   else
     { env with
-      simple_expressions = Ident.Map.add id expr env.simple_expressions;
+      simple_expressions =
+        Ident.Map.add immutable_id expr env.simple_expressions;
     }
 
 let find_simple_expression env expr =
@@ -190,6 +199,8 @@ let incr_int c dbg = add_const c 1 dbg
 let decr_int c dbg = add_const c (-1) dbg
 
 let rec add_int env c1 c2 dbg =
+  let c1 = find_simple_expression env c1 in
+  let c2 = find_simple_expression env c2 in
   match (c1, c2) with
   | (Cconst_int n, c) | (c, Cconst_int n) ->
       add_const c n dbg
@@ -2665,7 +2676,7 @@ and transl_let env str kind id exp body =
       let env =
         match str with
         | Immutable ->
-          add_simple_expression_to_environment env id defining_expr
+          add_expression_to_environment env ~immutable_id:id defining_expr
         | Mutable -> env
       in
       Clet(id, defining_expr, transl env body)
@@ -2677,7 +2688,8 @@ and transl_let env str kind id exp body =
       let env =
         match str with
         | Immutable ->
-          add_simple_expression_to_environment env unboxed_id defining_expr
+          add_expression_to_environment env ~immutable_id:unboxed_id
+            defining_expr
         | Mutable -> env
       in
       Clet(unboxed_id, defining_expr,
@@ -2850,7 +2862,10 @@ let transl_function f =
       f.body
   in
   let cmm_body =
-    let env = create_env ~environment_param:f.env in
+    let env =
+      create_env ~environment_param:f.env
+        ~known_immutable:(Ident.Set.of_list f.params)
+    in
     if !Clflags.afl_instrument then
       Afl_instrument.instrument_function (transl env body)
     else
