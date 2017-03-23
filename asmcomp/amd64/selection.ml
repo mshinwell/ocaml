@@ -85,7 +85,10 @@ let rec select_addr env exp =
       | Immutable ->
         begin match Env.find_simple_expression env var with
         | exception Not_found -> Alinear exp, 0
-        | exp -> select_addr env exp
+        | exp ->
+          (* By induction, we will check that [exp] does not contain any
+             mutable variables. *)
+          select_addr env exp
         end
       end
   | arg ->
