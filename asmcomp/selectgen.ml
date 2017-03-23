@@ -62,7 +62,7 @@ let size_expr (env:environment) exp =
           Tbl.find id localenv
         with Not_found ->
         try
-          let regs = Env.find id env in
+          let regs = Env.find env id in
           size_machtype (Array.map (fun r -> r.typ) regs)
         with Not_found ->
           fatal_error("Selection.size_expr: unbound var " ^
@@ -632,7 +632,7 @@ method emit_expr (env:environment) exp =
       self#emit_blockheader env n dbg
   | Cvar v ->
       begin try
-        Some(Env.find v env)
+        Some(Env.find env v)
       with Not_found ->
         fatal_error("Selection.emit_expr: unbound var " ^ Ident.unique_name v)
       end
@@ -642,11 +642,19 @@ method emit_expr (env:environment) exp =
       | Some r1 -> self#emit_expr (self#bind_let env mut v e1 r1) e2
       end
   | Cassign(v, e1) ->
-      let rv =
+      let rv, mut =
         try
-          Env.find v env
+          Env.find_with_mutability env v
         with Not_found ->
           fatal_error ("Selection.emit_expr: unbound var " ^ Ident.name v) in
+      begin match mut with
+      | Mutable -> ()
+      | Immutable ->
+        Misc.fatal_errorf "Selection.emit_expr: assignment to non-mutable \
+            variable %a <- %a"
+          Ident.print v
+          Printcmm.expression e1
+      end;
       begin match self#emit_expr env e1 with
         None -> None
       | Some r1 -> self#adjust_types r1 rv; self#insert_moves r1 rv; Some [||]
@@ -783,14 +791,14 @@ method emit_expr (env:environment) exp =
            the same environment is used for translating both the handlers and
            the body. *)
         List.fold_left (fun env (nfail, _ids, rs, _e2) ->
-            Env.add_static_exception nfail rs env)
+            Env.add_static_exception env nfail rs)
           env handlers
       in
       let (r_body, s_body) = self#emit_sequence env body in
       let translate_one_handler (nfail, ids, rs, e2) =
         assert(List.length ids = List.length rs);
         let new_env =
-          List.fold_left (fun env (id, r) -> Env.add id r env)
+          List.fold_left (fun env (id, r) -> Env.add env id r Immutable)
             env (List.combine ids rs)
         in
         let (r, s) = self#emit_sequence new_env e2 in
@@ -808,7 +816,7 @@ method emit_expr (env:environment) exp =
       | Some (simple_list, ext_env) ->
           let src = self#emit_tuple ext_env simple_list in
           let dest_args =
-            try Env.find_static_exception nfail env
+            try Env.find_static_exception env nfail
             with Not_found ->
               fatal_error ("Selection.emit_expr: unboun label "^
                            string_of_int nfail)
@@ -827,7 +835,7 @@ method emit_expr (env:environment) exp =
   | Ctrywith(e1, v, e2) ->
       let (r1, s1) = self#emit_sequence env e1 in
       let rv = self#regs_for typ_val in
-      let (r2, s2) = self#emit_sequence (Env.add v rv env) e2 in
+      let (r2, s2) = self#emit_sequence (Env.add env v rv) e2 in
       let r = join r1 s1 r2 s2 in
       self#insert
         (Itrywith(s1#extract,
@@ -841,25 +849,29 @@ method private emit_sequence (env:environment) exp =
   let r = s#emit_expr env exp in
   (r, s)
 
+method interesting_expression _expr = false
+
 method private bind_let (env:environment) mut v defining_expr r1 =
   let env =
     if all_regs_anonymous r1 then begin
       name_regs v r1;
-      Env.add v r1 env
+      Env.add env v r1 mut
     end else begin
       let rv = Reg.createv_like r1 in
       name_regs v rv;
       self#insert_moves r1 rv;
-      Env.add v rv env
+      Env.add v rv mut env
     end
   in
-  match mut with
-  | Mutable -> env
-  | Immutable ->
-    if self#interesting_expression defining_expr then
-      Env.add_interesting_expression env v defining_expr
-    else
-      env
+  (* Since [defining_expr] may involve a reference to a mutable variable
+     in any case, there isn't any point in checking [mut] again here.
+     Users of the environment must ensure that they check appropriately for
+     the presence of mutable variables in any expressions they may use from
+     it. *)
+  if self#interesting_expression defining_expr then
+    Env.add_interesting_expression env v defining_expr
+  else
+    env
 
 (* The following two functions, [emit_parts] and [emit_parts_list], force
    right-to-left evaluation order as required by the Flambda [Un_anf] pass
@@ -918,12 +930,12 @@ method private emit_parts (env:environment) ~effects_after exp =
           let id = Ident.create "bind" in
           if all_regs_anonymous r then
             (* r is an anonymous, unshared register; use it directly *)
-            Some (Cvar id, Env.add id r env)
+            Some (Cvar id, Env.add env id r Immutable)
           else begin
             (* Introduce a fresh temp to hold the result *)
             let tmp = Reg.createv_like r in
             self#insert_moves r tmp;
-            Some (Cvar id, Env.add id tmp env)
+            Some (Cvar id, Env.add env id tmp Immutable)
           end
         end
   end
@@ -1120,14 +1132,14 @@ method emit_tail (env:environment) exp =
           handlers in
       let env =
         List.fold_left (fun env (nfail, _ids, rs, _e2) ->
-            Env.add_static_exception nfail rs env)
+            Env.add_static_exception env nfail rs)
           env handlers in
       let s_body = self#emit_tail_sequence env e1 in
       let aux (nfail, ids, rs, e2) =
         assert(List.length ids = List.length rs);
         let new_env =
           List.fold_left
-            (fun env (id,r) -> Env.add id r env)
+            (fun env (id,r) -> Env.add env id r Immutable)
             env (List.combine ids rs) in
         nfail, self#emit_tail_sequence new_env e2
       in
@@ -1135,7 +1147,7 @@ method emit_tail (env:environment) exp =
   | Ctrywith(e1, v, e2) ->
       let (opt_r1, s1) = self#emit_sequence env e1 in
       let rv = self#regs_for typ_val in
-      let s2 = self#emit_tail_sequence (Env.add v rv env) e2 in
+      let s2 = self#emit_tail_sequence (Env.add env v rv Immutable) e2 in
       self#insert
         (Itrywith(s1#extract,
                   instr_cons (Iop Imove) [|Proc.loc_exn_bucket|] rv s2))
@@ -1181,14 +1193,14 @@ method emit_fundecl f =
      together is then simply prepended to the body. *)
   let env =
     List.fold_right2
-      (fun (id, _ty) r env -> Env.add id r env)
+      (fun (id, _ty) r env -> Env.add env id r Immutable)
       f.Cmm.fun_args rargs (self#initial_env ()) in
   let spacetime_node_hole, env =
     if not Config.spacetime then None, env
     else begin
       let reg = self#regs_for typ_int in
       let node_hole = Ident.create "spacetime_node_hole" in
-      Some (node_hole, reg), Env.add node_hole reg env
+      Some (node_hole, reg), Env.add env node_hole reg Immutable
     end
   in
   self#emit_tail env f.Cmm.fun_body;

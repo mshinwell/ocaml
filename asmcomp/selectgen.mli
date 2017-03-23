@@ -119,9 +119,7 @@ class virtual selector_generic : object
 
   method interesting_expression : Cmm.expression -> bool
   (** Should return [true] if the expression should be added to the
-      environment for the future use of, for example, [select_addressing].
-      Expressions involving mutable variables will never be added to the
-      environment even if this returns [true]. *)
+      environment for the future use of, for example, [select_addressing]. *)
 
   (* The following method is the entry point and should not be overridden
      (except by [Spacetime_profiling]). *)

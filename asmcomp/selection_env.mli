@@ -15,27 +15,19 @@
 (*                                                                        *)
 (**************************************************************************)
 
-type t = private {
-  vars : (Ident.t, Reg.t array) Tbl.t;
-  immutable_vars : Ident.Set.t;
-  simple_expressions : Cmm.expression Ident.Map.t;
-  static_exceptions : (int, Reg.t array list) Tbl.t;
-  (** Which registers must be populated when jumping to the given
-      handler. *)
-}
+(** Environments used during instruction selection. *)
+
+type t
 
 val empty : t
 
-val add : Ident.t -> Reg.t array -> immutable:bool -> t -> t
-
-val add_static_exception : Ident.t -> int -> Reg.t array list -> t -> t
-
+val add : t -> Ident.t -> Reg.t array -> Asttypes.mutable_flag -> t
+val add_static_exception : t -> Ident.t -> int -> Reg.t array list -> t
 val add_simple_expression : t -> Ident.t -> Cmm.expression -> t
 
-val find : Ident.t -> t -> Reg.t array
-
-val find_static_exception : Ident.t -> int -> t -> Reg.t array list
+val find : t -> Ident.t -> Reg.t array
+val find_with_mutability : t -> Ident.t -> Reg.t array * Asttypes.mutable_flag
+val find_static_exception : t -> Ident.t -> int -> Reg.t array list
+val find_simple_expression : t -> Ident.t -> Cmm.expression
 
 val is_immutable : t -> Ident.t -> bool
-
-val find_simple_expression : t -> Ident.t -> Cmm.expression

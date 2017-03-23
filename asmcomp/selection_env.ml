@@ -16,28 +16,39 @@
 (**************************************************************************)
 
 type t = {
-  vars : (Ident.t, Reg.t array) Tbl.t;
-  immutable_vars : Ident.Set.t;
-  static_exceptions : (int, Reg.t array list) Tbl.t;
+  vars : (Ident.t, Reg.t array * Asttypes.mutable_flag) Ident.Map.t;
+  simple_expressions : Cmm.expression Ident.Map.t;
+  static_exceptions : (int, Reg.t array list) Ident.Map.t;
+  (* Which registers must be populated when jumping to the given
+     handler. *)
 }
 
 let empty = {
-  vars = Tbl.empty;
-  immutable_vars = Ident.Set.empty;
-  static_exceptions = Tbl.empty;
+  vars = Ident.Map.empty;
+  simple_expressions = Ident.Map.empty;
+  static_exceptions = Ident.Map.empty;
 }
 
-let add id v ~immutable env =
-  let immutable_vars =
-    if immutable then Ident.Set.add id env.immutable_vars
-  in
-  { env with vars = Tbl.add id v env.vars }
+let add t id v mut =
+  { t with
+    vars = Ident.Map.add id (v, mut) t.vars;
+  }
 
-let add_static_exception id v env =
-  { env with static_exceptions = Tbl.add id v env.static_exceptions }
+let add_static_exception t id v =
+  { t with
+    static_exceptions = Ident.Map.add id v t.static_exceptions;
+  }
 
-let find id env =
-  Tbl.find id env.vars
+let find t id =
+  let regs, _mut = Ident.Map.find id t.vars in
+  regs
 
-let find_static_exception id env =
-  Tbl.find id env.static_exceptions
+let find_with_mutability t id =
+  Ident.Map.find id t.vars
+
+let find_static_exception t id =
+  Ident.Map.find id t.static_exceptions
+
+let is_immutable t id =
+  let _regs, mut = Ident.Map.find id env.vars in
+  mut

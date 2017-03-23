@@ -78,9 +78,10 @@ let rec select_addr env exp =
               (Aadd(arg1, arg2), 0)
       end
   | Cvar var ->
-      begin match Env.find env var with
-      | exception Not_found -> Alinear arg, 0
-      | expr -> select_addr env expr
+      begin match Env.find_with_mutability env var with
+      | exception Not_found -> Alinear exp, 0
+      | _, Mutable -> Alinear exp, 0
+      | exp, Immutable -> select_addr env exp
       end
   | arg ->
       (Alinear arg, 0)
