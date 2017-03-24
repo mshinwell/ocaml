@@ -49,10 +49,16 @@ let rec select_addr env exp =
   | Cop(Clsl, [arg; Cconst_int(1|2|3 as shift)], _) ->
       begin match select_addr env arg with
         (Alinear e, n) -> (Ascale(e, 1 lsl shift), n lsl shift)
-      | (Ascaledadd (base, to_scale, factor), disp1) ->
+      | (Ascale (to_scale, factor), displ) ->
           let new_factor = factor * (1 lsl shift) in
           if valid_scaling_factor new_factor then
-            Ascaledadd (base, to_scale, new_factor), disp1 * new_factor
+            Ascale (to_scale, new_factor), displ * new_factor
+          else
+            Alinear exp, 0
+      | (Ascaledadd (base, to_scale, factor), displ) ->
+          let new_factor = factor * (1 lsl shift) in
+          if valid_scaling_factor new_factor then
+            Ascaledadd (base, to_scale, new_factor), displ * new_factor
           else
             Alinear exp, 0
       | _ -> (Alinear exp, 0)
