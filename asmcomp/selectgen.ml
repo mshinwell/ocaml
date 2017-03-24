@@ -854,6 +854,28 @@ method private emit_sequence env exp =
   (r, s)
 
 method interesting_expression _env _expr = false
+(*
+  match expr with
+  | Cconst_int _
+  | Cconst_natint _
+  | Cconst_float _
+  | Cconst_symbol _
+  | Cconst_pointer _
+  | Cconst_natpointer _ -> true
+  | Cblockheader _
+  | Cvar _
+  | Clet _
+  | Cassign _
+  | Ctuple _
+  | Cop _
+  | Csequence _
+  | Cifthenelse _
+  | Cswitch _
+  | Cloop _
+  | Ccatch _
+  | Cexit _
+  | Ctrywith _ -> false
+*)
 
 method private bind_let env mut v defining_expr r1 =
   let env =

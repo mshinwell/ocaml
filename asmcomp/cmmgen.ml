@@ -618,7 +618,7 @@ let float_array_length hdr dbg =
 
 let lsl_const c n dbg =
   if n = 0 then c
-  else Cop(Clsl, [c; Cconst_int n], dbg)
+  else lsl_int c (Cconst_int n) dbg
 
 (* Produces a pointer to the element of the array [ptr] on the position [ofs]
    with the given element [log2size] log2 element size. [ofs] is given as a

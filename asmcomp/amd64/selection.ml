@@ -32,6 +32,10 @@ type addressing_expr =
   | Ascale of expression * int
   | Ascaledadd of expression * expression * int
 
+let valid_scaling_factor = function
+  | 2 | 4 | 8 -> true
+  | _ -> false
+
 let rec select_addr env exp =
   match exp with
     Cconst_symbol s when not !Clflags.dlcode ->
@@ -47,12 +51,18 @@ let rec select_addr env exp =
         (Alinear e, n) -> (Ascale(e, 1 lsl shift), n lsl shift)
       | _ -> (Alinear exp, 0)
       end
-  | Cop(Cmuli, [arg; Cconst_int(2|4|8 as mult)], _) ->
+  | Cop(Cmuli, [arg; Cconst_int mult], _) when valid_scaling_factor mult ->
       begin match select_addr env arg with
         (Alinear e, n) -> (Ascale(e, mult), n * mult)
+      | (Ascaledadd (base, to_scale, factor), disp1) ->
+          let new_factor = factor * mult in
+          if valid_scaling_factor new_factor then
+            Ascaledadd (base, to_scale, new_factor), disp1 * new_factor
+          else
+            Alinear exp, 0
       | _ -> (Alinear exp, 0)
       end
-  | Cop(Cmuli, [Cconst_int(2|4|8 as mult); arg], _) ->
+  | Cop(Cmuli, [Cconst_int mult; arg], _) when valid_scaling_factor mult ->
       begin match select_addr env arg with
         (Alinear e, n) -> (Ascale(e, mult), n * mult)
       | _ -> (Alinear exp, 0)
@@ -69,12 +79,12 @@ let rec select_addr env exp =
               (Ascaledadd(arg1, e2, scale), n2)
         | ((Ascale(e1, scale), n1), _) ->
               (Ascaledadd(arg2, e1, scale), n1)
-        | (Ascaledadd (base1, to_scale1, factor1), n1),
-            (Alinear (Cconst_int n2), 0) ->
-              (Ascaledadd (base1, to_scale1, factor1), n1 + n2)
-        | (Alinear (Cconst_int n1), 0),
-            (Ascaledadd (base2, to_scale2, factor2), n2) ->
-              (Ascaledadd (base2, to_scale2, factor2), n1 + n2)
+        | (Ascaledadd (base1, to_scale1, factor1), disp1),
+            (Alinear (Cconst_int disp2), 0) ->
+              (Ascaledadd (base1, to_scale1, factor1), disp1 + disp2)
+        | (Alinear (Cconst_int disp1), 0),
+            (Ascaledadd (base2, to_scale2, factor2), disp2) ->
+              (Ascaledadd (base2, to_scale2, factor2), disp1 + disp2)
         | _ ->
               (Aadd(arg1, arg2), 0)
       end
