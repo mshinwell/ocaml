@@ -52,7 +52,7 @@ let rec select_addr env exp =
       | (Ascale (to_scale, factor), displ) ->
           let new_factor = factor * (1 lsl shift) in
           if valid_scaling_factor new_factor then
-            Ascale (to_scale, new_factor), displ * new_factor
+            Ascale (to_scale, new_factor), displ * (1 lsl shift)
           else
             Alinear exp, 0
       | (Ascaledadd (base, to_scale, factor), displ) ->
