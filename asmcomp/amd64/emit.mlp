@@ -495,7 +495,9 @@ let emit_instr fallthrough i =
       if n = 0n then begin
         match i.res.(0).loc with
         | Reg _ ->
-          (* Clearing the bottom half also clears the top half. *)
+          (* Clearing the bottom half also clears the top half (except for
+             64-bit-only registers where the behaviour is as if the operands
+             were 64 bit). *)
           I.xor (res32 i 0) (res32 i 0)
         | _ ->
           I.mov (int 0) (res i 0)
@@ -508,7 +510,8 @@ let emit_instr fallthrough i =
         if fits_in_32_bits then begin
           match i.res.(0).loc with
           | Reg _ ->
-            (* Setting the bottom half also sets the top half to zero. *)
+            (* Setting the bottom half also sets the top half to zero
+               (with the same caveat as above). *)
             I.mov (nat n) (res32 i 0)
           | _ -> I.mov (nat n) (res i 0)
         end else begin
@@ -722,10 +725,12 @@ let emit_instr fallthrough i =
       instr_for_intop op (arg i 1) (res i 0)
   | Lop(Iintop_imm(Iadd, n)) when i.arg.(0).loc <> i.res.(0).loc ->
       I.lea (mem64 NONE n (arg64 i 0)) (res i 0)
+(* Page 3-21 of the Intel optimisation manual says not to use these:
   | Lop(Iintop_imm(Iadd, 1) | Iintop_imm(Isub, -1)) ->
       I.inc (res i 0)
   | Lop(Iintop_imm(Iadd, -1) | Iintop_imm(Isub, 1)) ->
       I.dec (res i 0)
+*)
   | Lop(Iintop_imm(op, n)) ->
       (* We have i.arg.(0) = i.res.(0) *)
       instr_for_intop op (int n) (res i 0)
