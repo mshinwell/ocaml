@@ -105,7 +105,9 @@ let compile_fundecl (ppf : formatter) fd_cmm =
   Proc.init ();
   Reg.reset();
   fd_cmm
+(*
   ++ Timings.time ~accumulate:true "cmm_constprop" Cmm_constprop.fundecl
+*)
   ++ Timings.time ~accumulate:true "selection" Selection.fundecl
   ++ pass_dump_if ppf dump_selection "After instruction selection"
   ++ Timings.time ~accumulate:true "comballoc" Comballoc.fundecl
