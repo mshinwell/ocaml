@@ -186,13 +186,13 @@ method! is_simple_expr e =
   | _ ->
       super#is_simple_expr e
 
-method! effects_of e =
+method! effects_of env e =
   match e with
   | Cop(Cextcall(fn, _, _, _), args, _)
     when List.mem fn inline_ops ->
-      Selectgen.Effect_and_coeffect.join_list_map args self#effects_of
+      Selectgen.Effect_and_coeffect.join_list_map args (self#effects_of env)
   | _ ->
-      super#effects_of e
+      super#effects_of env e
 
 method! interesting_expression env expr =
   let mode, _displacement = select_addr env expr in

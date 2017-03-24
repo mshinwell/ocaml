@@ -300,20 +300,23 @@ method effects_of env exp =
   let module EC = Effect_and_coeffect in
   match exp with
   | Cconst_int _ | Cconst_natint _ | Cconst_float _ | Cconst_symbol _
-  | Cconst_pointer _ | Cconst_natpointer _ | Cblockheader _
+  | Cconst_pointer _ | Cconst_natpointer _ | Cblockheader _ -> EC.none
   | Cvar var ->
     begin match Env.mutability env var with
+    | exception Not_found ->
+      (* This must be a variable bound in [exp]. *)
+      EC.none
     | Immutable -> EC.none
     | Mutable -> EC.coeffect_only Coeffect.Read_mutable
     end
-  | Ctuple el -> EC.join_list_map el self#effects_of
+  | Ctuple el -> EC.join_list_map el (self#effects_of env)
   | Clet (_, _id, arg, body) ->
-    EC.join (self#effects_of arg) (self#effects_of body)
+    EC.join (self#effects_of env arg) (self#effects_of env body)
   | Csequence (e1, e2) ->
-    EC.join (self#effects_of e1) (self#effects_of e2)
+    EC.join (self#effects_of env e1) (self#effects_of env e2)
   | Cifthenelse (cond, ifso, ifnot) ->
-    EC.join (self#effects_of cond)
-      (EC.join (self#effects_of ifso) (self#effects_of ifnot))
+    EC.join (self#effects_of env cond)
+      (EC.join (self#effects_of env ifso) (self#effects_of env ifnot))
   | Cop (op, args, _) ->
     let from_op =
       match op with
@@ -328,7 +331,7 @@ method effects_of env exp =
       | Caddf | Csubf | Cmulf | Cdivf | Cfloatofint | Cintoffloat | Ccmpf _ ->
         EC.none
     in
-    EC.join from_op (EC.join_list_map args self#effects_of)
+    EC.join from_op (EC.join_list_map args (self#effects_of env))
   | Cassign _ | Cswitch _ | Cloop _ | Ccatch _ | Cexit _ | Ctrywith _ ->
     EC.arbitrary
 
@@ -910,7 +913,7 @@ method private bind_let env mut v defining_expr r1 =
 method private emit_parts env ~effects_after exp =
   let module EC = Effect_and_coeffect in
   let may_defer_evaluation =
-    let ec = self#effects_of exp in
+    let ec = self#effects_of env exp in
     match EC.effect ec with
     | Effect.Arbitrary | Effect.Raise ->
       (* Preserve the ordering of effectful expressions by evaluating them
@@ -977,7 +980,7 @@ method private emit_parts_list env exp_list =
        when the original expression list is evaluated from right to left.
        The resulting expression list has the rightmost expression first. *)
     List.fold_left (fun (exp_list, effects_after) exp ->
-        let exp_effect = self#effects_of exp in
+        let exp_effect = self#effects_of env exp in
         (exp, effects_after)::exp_list, EC.join exp_effect effects_after)
       ([], EC.none)
       exp_list
