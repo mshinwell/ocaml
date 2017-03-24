@@ -296,12 +296,16 @@ method is_simple_expr = function
    order first with their results going into temporaries, then the block is
    allocated, then the remaining arguments are evaluated before being
    combined with the temporaries. *)
-method effects_of exp =
+method effects_of env exp =
   let module EC = Effect_and_coeffect in
   match exp with
   | Cconst_int _ | Cconst_natint _ | Cconst_float _ | Cconst_symbol _
   | Cconst_pointer _ | Cconst_natpointer _ | Cblockheader _
-  | Cvar _ -> EC.none
+  | Cvar var ->
+    begin match Env.mutability env var with
+    | Immutable -> EC.none
+    | Mutable -> EC.coeffect_only Coeffect.Read_mutable
+    end
   | Ctuple el -> EC.join_list_map el self#effects_of
   | Clet (_, _id, arg, body) ->
     EC.join (self#effects_of arg) (self#effects_of body)
