@@ -884,8 +884,8 @@ method emit_fundecl f =
       (fun (id, ty) r env -> Tbl.add id r env)
       f.Cmm.fun_args rargs Tbl.empty in
   self#insert_moves loc_arg rarg;
-  let callee_saves = Reg.createv_like Proc.loc_callee_saves 
-  callee_saved_regs <- callee_saves;
+  let callee_saves = Reg.createv_like Proc.loc_callee_saves in
+  callee_saved_regs := callee_saves;
   self#insert_moves Proc.loc_callee_saves callee_saves;
   self#emit_tail env f.Cmm.fun_body;
   let body = self#extract in

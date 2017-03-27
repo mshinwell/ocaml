@@ -24,28 +24,31 @@ let rec insert_moves (insn : Mach.instruction) =
       let live_locations =
         List.map Reg.location (Reg.Set.elements insn.live)
       in
-      let callee_save_locations =
-        List.map Reg.location Proc.loc_callee_saves
+      let live =
+        Reg.Set.union insn.live (Reg.set_of_array Proc.loc_callee_saves);
       in
       let call =
         { insn with
           next;
-          live = Reg.Set.union insn.live Proc.callee_save_registers;
+          live;
         }
       in
-      List.fold_left (fun next callee_save_location : Mach.instruction ->
-          let same_location loc1 loc2 = Pervasives.compare loc1 loc2 = 0 in
+      Array.fold_left (fun next callee_save : Mach.instruction ->
+          let same_location loc =
+            Pervasives.compare loc (Reg.location callee_save) = 0
+          in
           if List.exists same_location live_locations then
             next
           else
             { desc = Iop (Iintop Ixor);
               next;
-              arg = callee_save_location;
-              res = callee_save_location;
+              arg = [| callee_save |];
+              res = [| callee_save |];
               dbg = call.dbg;
+              live = insn.live;
             })
         call
-        callee_save_locations
+        Proc.loc_callee_saves
     | Imove | Ispill | Ireload | Iconst_int _ | Iconst_float _ | Iconst_symbol _
     | Iconst_blockheader _ | Itailcall_ind | Itailcall_imm _ | Iextcall _
     | Istackoffset _ | Iload _ | Istore _ | Ialloc _ | Iintop _ | Iintop_imm _
@@ -62,6 +65,7 @@ let rec insert_moves (insn : Mach.instruction) =
       next;
     }
   | Iswitch (consts, arms) ->
+    let next = insert_moves insn.next in
     { insn with
       desc = Iswitch (consts, Array.map insert_moves arms);
       next;
