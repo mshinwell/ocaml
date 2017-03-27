@@ -748,6 +748,7 @@ method private emit_return env exp =
   match self#emit_expr env exp with
     None -> ()
   | Some r ->
+      self#insert_moves !callee_saved_regs Proc.loc_callee_saves;
       let loc = Proc.loc_results r in
       self#insert_moves r loc;
       self#insert Ireturn loc [||]
