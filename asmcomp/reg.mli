@@ -55,6 +55,8 @@ val anonymous : t -> bool
 (* Name for printing *)
 val name : t -> string
 
+val location : t -> location
+
 module Set: Set.S with type elt = t
 module Map: Map.S with type key = t
 

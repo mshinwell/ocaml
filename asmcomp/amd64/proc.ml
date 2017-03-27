@@ -126,6 +126,15 @@ let hard_int_reg =
   for i = 0 to 12 do v.(i) <- Reg.at_location Int (Reg i) done;
   v
 
+let first_callee_save_reg = 6
+
+let hard_int_non_callee_save_regs =
+  let v = Array.make first_callee_save_reg Reg.dummy in
+  for i = 0 to first_callee_save_reg - 1 do
+    v.(i) <- Reg.at_location Int (Reg i)
+  done;
+  v
+
 let hard_float_reg =
   let v = Array.make 16 Reg.dummy in
   for i = 0 to 15 do v.(i) <- Reg.at_location Float (Reg (100 + i)) done;
@@ -133,6 +142,9 @@ let hard_float_reg =
 
 let all_phys_regs =
   Array.append hard_int_reg hard_float_reg
+
+let non_callee_save_regs =
+  Array.append hard_int_non_callee_save_regs hard_float_reg
 
 let phys_reg n =
   if n < 100 then hard_int_reg.(n) else hard_float_reg.(n - 100)
@@ -184,7 +196,11 @@ let outgoing ofs = Outgoing ofs
 let not_supported ofs = fatal_error "Proc.loc_results: cannot call"
 
 let loc_arguments arg =
-  calling_conventions 0 9 100 109 outgoing arg
+  calling_conventions 0 (first_callee_save_reg - 1) 100 109 outgoing arg
+let num_callee_saved_regs = 10 - first_callee_save_reg
+let loc_callee_saves =
+  Array.init num_callee_saved_regs
+    (fun offset -> phys_reg (first_callee_save_reg + offset))
 let loc_parameters arg =
   let (loc, ofs) = calling_conventions 0 9 100 109 incoming arg in loc
 let loc_results res =
@@ -271,7 +287,8 @@ let destroyed_at_c_call =
        108;109;110;111;112;113;114;115])
 
 let destroyed_at_oper = function
-    Iop(Icall_ind | Icall_imm _ | Iextcall(_, true)) -> all_phys_regs
+  | Iop(Icall_ind | Icall_imm _) -> non_callee_save_regs
+  | Iop(Iextcall(_, true)) -> all_phys_regs
   | Iop(Iextcall(_, false)) -> destroyed_at_c_call
   | Iop(Iintop(Idiv | Imod)) | Iop(Iintop_imm((Idiv | Imod), _))
         -> [| rax; rdx |]

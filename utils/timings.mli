@@ -42,6 +42,7 @@ type compiler_pass =
   | Spill of source_provenance
   | Split of source_provenance
   | Regalloc of source_provenance
+  | Callee_save of source_provenance
   | Linearize of source_provenance
   | Scheduling of source_provenance
   | Emit of source_provenance

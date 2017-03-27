@@ -495,6 +495,11 @@ LBL(caml_start_program):
         pushq   %r13; CFI_ADJUST(8)
         pushq   %r14; CFI_ADJUST(8)
         movq    %rsp, %r14
+    /* Initialise callee-save registers */
+        xor     %r8, %r8
+        xor     %r9, %r9
+        xor     %r10, %r10
+        xor     %r11, %r11
     /* Call the OCaml code */
         call    *%r12
 LBL(107):

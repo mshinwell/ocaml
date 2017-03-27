@@ -26,9 +26,11 @@ val first_available_register: int array
 val register_name: int -> string
 val phys_reg: int -> Reg.t
 val rotate_registers: bool
+val num_callee_saved_regs: int
 
 (* Calling conventions *)
 val loc_arguments: Reg.t array -> Reg.t array * int
+val loc_callee_saves: Reg.t array
 val loc_results: Reg.t array -> Reg.t array
 val loc_parameters: Reg.t array -> Reg.t array
 (* For argument number [n] split across multiple registers, the target-specific

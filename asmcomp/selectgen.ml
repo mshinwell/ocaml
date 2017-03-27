@@ -174,6 +174,10 @@ let catch_regs = ref []
 (* Name of function being compiled *)
 let current_function_name = ref ""
 
+(* Pseudos holding values of callee-saved registers upon entry to the
+   current function *)
+let callee_saved_regs = ref [| |]
+
 (* The default instruction selection class *)
 
 class virtual selector_generic = object (self)
@@ -767,6 +771,7 @@ method emit_tail env exp =
               let (loc_arg, stack_ofs) = Proc.loc_arguments rarg in
               if stack_ofs = 0 then begin
                 self#insert_moves rarg loc_arg;
+                self#insert_moves !callee_saved_regs Proc.loc_callee_saves;
                 self#insert (Iop Itailcall_ind)
                             (Array.append [|r1.(0)|] loc_arg) [||]
               end else begin
@@ -783,10 +788,12 @@ method emit_tail env exp =
               let (loc_arg, stack_ofs) = Proc.loc_arguments r1 in
               if stack_ofs = 0 then begin
                 self#insert_moves r1 loc_arg;
+                self#insert_moves !callee_saved_regs Proc.loc_callee_saves;
                 self#insert (Iop(Itailcall_imm lbl)) loc_arg [||]
               end else if lbl = !current_function_name then begin
                 let loc_arg' = Proc.loc_parameters r1 in
                 self#insert_moves r1 loc_arg';
+                self#insert_moves !callee_saved_regs Proc.loc_callee_saves;
                 self#insert (Iop(Itailcall_imm lbl)) loc_arg' [||]
               end else begin
                 let rd = self#regs_for ty in
@@ -876,6 +883,9 @@ method emit_fundecl f =
       (fun (id, ty) r env -> Tbl.add id r env)
       f.Cmm.fun_args rargs Tbl.empty in
   self#insert_moves loc_arg rarg;
+  let callee_saves = Reg.createv_like Proc.loc_callee_saves 
+  callee_saved_regs <- callee_saves;
+  self#insert_moves Proc.loc_callee_saves callee_saves;
   self#emit_tail env f.Cmm.fun_body;
   let body = self#extract in
   instr_iter (fun instr -> self#mark_instr instr.Mach.desc) body;

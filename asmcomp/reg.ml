@@ -117,6 +117,8 @@ let name t =
     | None -> with_spilled
     | Some part -> with_spilled ^ "#" ^ string_of_int part
 
+let location = t.loc
+
 let first_virtual_reg_stamp = ref (-1)
 
 let reset() =

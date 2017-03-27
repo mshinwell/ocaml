@@ -114,6 +114,7 @@ let compile_fundecl (ppf : formatter) fd_cmm =
   ++ pass_dump_if ppf dump_split "After live range splitting"
   ++ Timings.(accumulate_time (Liveness build)) (liveness ppf)
   ++ Timings.(accumulate_time (Regalloc build)) (regalloc ppf 1)
+  ++ Timings.(accumulate_time (Callee_save build)) Callee_save.fundecl
   ++ Timings.(accumulate_time (Linearize build)) Linearize.fundecl
   ++ pass_dump_linear_if ppf dump_linear "Linearized code"
   ++ Timings.(accumulate_time (Scheduling build)) Scheduling.fundecl
