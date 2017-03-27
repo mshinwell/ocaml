@@ -215,6 +215,7 @@ let arg16 i n = emit_subreg reg_low_16_name WORD i.arg.(n)
 let arg32 i n = emit_subreg reg_low_32_name DWORD i.arg.(n)
 let arg64 i n = reg64 i.arg.(n)
 
+let res8 i n = emit_subreg reg_low_8_name BYTE i.res.(n)
 let res16 i n = emit_subreg reg_low_16_name WORD i.res.(n)
 let res32 i n = emit_subreg reg_low_32_name DWORD i.res.(n)
 
@@ -700,14 +701,29 @@ let emit_instr fallthrough i =
         I.lea (mem64 NONE 8 R15) (res i 0)
       end
   | Lop(Iintop(Icomp cmp)) ->
-      (* Zero the destination first to avoid partial register stall. *)
-      I.xor (arg i 1) (arg i 1);
-      I.cmp (arg i 1) (arg i 0);
-      I.set (cond cmp) (arg8 i 1)
+      if i.arg.(0).loc <> i.res.(0).loc && i.arg.(1).loc <> i.res.(0).loc
+      then begin
+        (* Zero the destination first to avoid partial register stall. *)
+        I.xor (res i 0) (res i 0);
+        I.cmp (arg i 1) (arg i 0);
+        I.set (cond cmp) (res8 i 0)
+      end else begin
+        I.cmp (arg i 1) (arg i 0);
+        (* Put up with a potential partial register stall, but avoid the
+           need for a distinguished register. *)
+        I.mov (int 0) (res i 0);  (* doesn't affect the flags *)
+        I.set (cond cmp) (res8 i 0)
+      end
   | Lop(Iintop_imm(Icomp cmp, n)) ->
-      I.xor (arg i 0) (arg i 0);
-      I.cmp (int n) (arg i 0);
-      I.set (cond cmp) (arg8 i 0)
+      if i.arg.(0).loc <> i.res.(0).loc then begin
+        I.xor (res i 0) (res i 0);
+        I.cmp (int n) (arg i 0);
+        I.set (cond cmp) (res8 i 0)
+      end else begin
+        I.cmp (int n) (arg i 0);
+        I.mov (int 0) (res i 0);
+        I.set (cond cmp) (res8 i 0)
+      end
   | Lop(Iintop (Icheckbound { label_after_error; spacetime_index; } )) ->
       let spacetime =
         if not Config.spacetime then None
