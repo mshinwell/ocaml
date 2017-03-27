@@ -132,6 +132,8 @@ let find_reload_at_exit k =
   with
   | Not_found -> Misc.fatal_error "Spill.find_reload_at_exit"
 
+let at_return = ref Reg.Set.empty
+
 let rec reload i before =
   incr current_date;
   record_use i.arg;
@@ -140,6 +142,7 @@ let rec reload i before =
     Iend ->
       (i, before)
   | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) ->
+      Reg.Set.union (Reg.set_of_array i.arg) !at_return
       (add_reloads (Reg.inter_set_array before i.arg) i,
        Reg.Set.empty)
   | Iop(Icall_ind | Icall_imm _ | Iextcall(_, true)) ->
@@ -402,9 +405,11 @@ let fundecl f =
   reset ();
 
   let (body1, _) = reload f.fun_body Reg.Set.empty in
-  let (body2, tospill_at_entry) = spill body1 Reg.Set.empty in
+  let callee_saves = Reg.set_of_array Proc.loc_callee_saves in
+  let (body2, tospill_at_entry) = spill body1 callee_saves in
   let new_body =
-    add_spills (Reg.inter_set_array tospill_at_entry f.fun_args) body2 in
+    add_spills (Reg.inter_set_array tospill_at_entry
+      (Reg.Set.union callee_saves f.fun_args)) body2 in
   spill_env := Reg.Map.empty;
   use_date := Reg.Map.empty;
   destroyed_at_fork := [];

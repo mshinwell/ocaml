@@ -26,6 +26,7 @@ let find_live_at_exit k =
   with
   | Not_found -> Misc.fatal_error "Liveness.find_live_at_exit"
 
+let live_at_return = ref Reg.Set.empty
 let live_at_raise = ref Reg.Set.empty
 
 let rec live i finally =
@@ -41,7 +42,7 @@ let rec live i finally =
       finally
   | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) ->
       i.live <- Reg.Set.empty; (* no regs are live across *)
-      Reg.set_of_array i.arg
+      Reg.Set.union (Reg.set_of_array i.arg) !live_at_return
   | Iop op ->
       let after = live i.next finally in
       if Proc.op_is_pure op                    (* no side effects *)
@@ -128,6 +129,7 @@ let reset () =
 
 let fundecl ppf f =
   let callee_saves = Reg.set_of_array Proc.loc_callee_saves in
+  live_at_return := callee_saves;
   let initially_live = live f.fun_body callee_saves in
   (* Sanity check: only function parameters and callee-save registers can
      be live at entrypoint *)

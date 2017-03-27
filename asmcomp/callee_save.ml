@@ -42,7 +42,7 @@ let rec insert_moves (insn : Mach.instruction) =
           else
             { desc = Iop (Iintop Ixor);
               next;
-              arg = [| callee_save |];
+              arg = [| callee_save; callee_save |];
               res = [| callee_save |];
               dbg = call.dbg;
               live = insn.live;
