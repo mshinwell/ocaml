@@ -202,7 +202,9 @@ let loc_callee_saves =
   Array.init num_callee_saved_regs
     (fun offset -> phys_reg (first_callee_save_reg + offset))
 let loc_parameters arg =
-  let (loc, ofs) = calling_conventions 0 9 100 109 incoming arg in loc
+  let (loc, ofs) =
+    calling_conventions 0 (first_callee_save_reg - 1) 100 109 incoming arg
+  in loc
 let loc_results res =
   let (loc, ofs) = calling_conventions 0 0 100 100 not_supported res in loc
 

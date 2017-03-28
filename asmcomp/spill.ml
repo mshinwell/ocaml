@@ -132,11 +132,6 @@ let find_reload_at_exit k =
   with
   | Not_found -> Misc.fatal_error "Spill.find_reload_at_exit"
 
-let fun_callee_save_regs = ref [| |]
-
-let is_callee_save reg =
-  Array.exists (fun reg' -> reg.loc = reg'.loc) !fun_callee_save_regs
-
 let rec reload i before =
   incr current_date;
   record_use i.arg;
@@ -147,17 +142,38 @@ let rec reload i before =
   | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) ->
       (add_reloads (Reg.inter_set_array before i.arg) i,
        Reg.Set.empty)
-  | Iop(Icall_ind | Icall_imm _ | Iextcall(_, true)) ->
-      (* All regs live across (and not in callee save regs for OCaml calls)
-         must be spilled *)
+  | Iop(Icall_ind | Icall_imm _) ->
+      (* Suggest that the callee save registers be the N (or fewer) most
+         recently used registers that are live across the call, where N is
+         the number of callee saves. *)
       let need_reloading_after_call =
-        match i.desc with
-        | Iop (Icall_ind | Icall_imm _) ->
-            Reg.Set.filter (fun reg -> not (is_callee_save reg)) i.live
-        | Iop (Iextcall (_, true)) -> i.live
-        | _ -> assert false
+        let uses =
+          List.filter (fun (reg, _date) -> Reg.Set.mem reg i.live)
+            (Reg.Map.bindings !use_date)
+        in
+        let uses =
+          List.sort (fun (_reg1, date1) (_reg2, date2) ->
+              Pervasives.compare date1 date2)
+            uses
+        in
+        let need_reloading, _num_taken =
+          List.fold_left (fun (need_reloading, num_taken) (reg, _date) ->
+              if num_taken >= Proc.num_callee_saved_regs then
+                need_reloading, num_taken
+              else
+                Reg.Set.add reg need_reloading, num_taken + 1)
+            (Reg.Set.empty, 0)
+            uses
+        in
+        need_reloading
       in
       let (new_next, finally) = reload i.next need_reloading_after_call in
+      (add_reloads (Reg.inter_set_array before i.arg)
+                   (instr_cons_debug i.desc i.arg i.res i.dbg new_next),
+       finally)
+  | Iop(Iextcall(_, true)) ->
+      (* All regs live across must be spilled *)
+      let (new_next, finally) = reload i.next i.live in
       (add_reloads (Reg.inter_set_array before i.arg)
                    (instr_cons_debug i.desc i.arg i.res i.dbg new_next),
        finally)
@@ -413,7 +429,6 @@ let reset () =
 
 let fundecl f =
   reset ();
-  fun_callee_save_regs := f.fun_callee_save_regs;
   let (body1, _) = reload f.fun_body Reg.Set.empty in
   let (body2, tospill_at_entry) = spill body1 Reg.Set.empty in
   let new_body =

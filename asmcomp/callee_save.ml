@@ -56,10 +56,7 @@ let rec insert_moves (insn : Mach.instruction) =
   | Iop op ->
     let next, pending = insert_moves insn.next in
     let destroyed = RL.set_of_array (Proc.destroyed_at_oper insn.desc) in
-    let must_place_here =
-      RL.Set.union destroyed
-        (RL.Set.union (RL.set_of_array insn.arg) (RL.set_of_array insn.res))
-    in
+    let must_place_here = RL.Set.union destroyed (RL.set_of_array insn.res) in
     let place_here = RL.Set.inter pending must_place_here in
     let pending = RL.Set.diff pending place_here in
     let next = place_moves place_here ~around:next in
@@ -77,6 +74,7 @@ let rec insert_moves (insn : Mach.instruction) =
       | Imulf | Idivf | Ifloatofint | Iintoffloat
       | Ispecific _ -> pending
     in
+    let pending = RL.Set.diff pending (RL.set_of_array insn.arg) in
     { insn with next; }, pending
   | Ireturn | Iexit _ | Iraise _ ->
     let next = insert_moves_starting_over insn.next in
