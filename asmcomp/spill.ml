@@ -156,16 +156,17 @@ let rec reload i before =
               Pervasives.compare date1 date2)
             uses
         in
-        let need_reloading, _num_taken =
+        let callee_saves, _num_taken =
           List.fold_left (fun (need_reloading, num_taken) (reg, _date) ->
               if num_taken >= Proc.num_callee_saved_regs then
                 need_reloading, num_taken
               else
                 Reg.Set.add reg need_reloading, num_taken + 1)
             (Reg.Set.empty, 0)
-            uses
+            (List.rev uses)
         in
-        need_reloading
+        assert (Reg.Set.cardinal callee_saves <= Proc.num_callee_saved_regs);
+        Reg.Set.diff i.live callee_saves
       in
       let (new_next, finally) = reload i.next need_reloading_after_call in
       (add_reloads (Reg.inter_set_array before i.arg)
