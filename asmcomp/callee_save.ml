@@ -14,8 +14,32 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+module Reg_by_location = struct
+  module T = struct
+    type t = Reg.t
+    let compare (t1 : t) (t2 : t) = Pervasives.compare t1.loc t2.loc
+  end
+
+  include T
+  module Set = Set.Make (T)
+
+  let of_set (set : Reg.Set.t) =
+    Reg.Set.fold (fun reg t ->
+        Set.add reg t)
+      set
+      Set.empty
+
+  let set_of_array (set : Reg.t array) : Set.t =
+    Array.fold_left (fun t reg ->
+        Set.add reg t)
+      Set.empty
+      set
+end
+
+module RL = Reg_by_location
+
 let place_moves regs ~around =
-  Reg.Set.fold (fun reg (next : Mach.instruction) : Mach.instruction ->
+  RL.Set.fold (fun reg (next : Mach.instruction) : Mach.instruction ->
       { desc = Iop (Iintop Ixor);
         next;
         arg = [| reg; reg |];
@@ -28,31 +52,24 @@ let place_moves regs ~around =
 
 let rec insert_moves (insn : Mach.instruction) =
   match insn.desc with
-  | Iend -> insn, Reg.Set.empty
+  | Iend -> insn, RL.Set.empty
   | Iop op ->
     let next, pending = insert_moves insn.next in
-    let destroyed = Reg.set_of_array (Proc.destroyed_at_oper insn.desc) in
+    let destroyed = RL.set_of_array (Proc.destroyed_at_oper insn.desc) in
     let must_place_here =
-      Reg.Set.union destroyed
-        (Reg.Set.union (Reg.set_of_array insn.arg) (Reg.set_of_array insn.res))
+      RL.Set.union destroyed
+        (RL.Set.union (RL.set_of_array insn.arg) (RL.set_of_array insn.res))
     in
-    let place_here = Reg.Set.inter pending must_place_here in
-    let pending = Reg.Set.diff pending place_here in
+    let place_here = RL.Set.inter pending must_place_here in
+    let pending = RL.Set.diff pending place_here in
     let next = place_moves place_here ~around:next in
     let pending =
       match op with
       | Icall_ind | Icall_imm _ ->
-        let live_locations =
-          List.map Reg.location (Reg.Set.elements insn.live)
-        in
-        Array.fold_left (fun pending callee_save ->
-            let same_location loc =
-              Pervasives.compare loc (Reg.location callee_save) = 0
-            in
-            if List.exists same_location live_locations then pending
-            else Reg.Set.add callee_save pending)
-          pending
-          Proc.loc_callee_saves
+        let live = RL.of_set insn.live in
+        let callee_saves = RL.set_of_array Proc.loc_callee_saves in
+        let need_initialising = RL.Set.diff callee_saves live in
+        RL.Set.union pending need_initialising
       | Imove | Ispill | Ireload | Iconst_int _ | Iconst_float _
       | Iconst_symbol _ | Iconst_blockheader _ | Itailcall_ind
       | Itailcall_imm _ | Iextcall _ | Istackoffset _ | Iload _ | Istore _
@@ -63,14 +80,14 @@ let rec insert_moves (insn : Mach.instruction) =
     { insn with next; }, pending
   | Ireturn | Iexit _ | Iraise _ ->
     let next = insert_moves_starting_over insn.next in
-    { insn with next; }, Reg.Set.empty
+    { insn with next; }, RL.Set.empty
   | Iifthenelse (cond, ifso, ifnot) ->
     let next = insert_moves_starting_over insn.next in
     let ifso, ifso_pending = insert_moves ifso in
     let ifnot, ifnot_pending = insert_moves ifnot in
-    let pending = Reg.Set.inter ifso_pending ifnot_pending in
-    let place_at_top_of_ifso = Reg.Set.diff ifso_pending pending in
-    let place_at_top_of_ifnot = Reg.Set.diff ifnot_pending pending in
+    let pending = RL.Set.inter ifso_pending ifnot_pending in
+    let place_at_top_of_ifso = RL.Set.diff ifso_pending pending in
+    let place_at_top_of_ifnot = RL.Set.diff ifnot_pending pending in
     let ifso = place_moves place_at_top_of_ifso ~around:ifso in
     let ifnot = place_moves place_at_top_of_ifnot ~around:ifnot in
     let insn =
@@ -87,18 +104,18 @@ let rec insert_moves (insn : Mach.instruction) =
       Array.fold_left (fun pending (_arm, arm_pending) ->
           match pending with
           | None -> Some arm_pending
-          | Some pending -> Some (Reg.Set.inter arm_pending pending))
+          | Some pending -> Some (RL.Set.inter arm_pending pending))
         None
         arms
     in
     let pending =
       match pending with
-      | None -> Reg.Set.empty
+      | None -> RL.Set.empty
       | Some pending -> pending
     in
     let arms =
       Array.map (fun (arm, arm_pending) ->
-          let pending = Reg.Set.diff arm_pending pending in
+          let pending = RL.Set.diff arm_pending pending in
           place_moves pending ~around:arm)
         arms
     in
@@ -117,7 +134,7 @@ let rec insert_moves (insn : Mach.instruction) =
         next;
       }
     in
-    insn, Reg.Set.empty
+    insn, RL.Set.empty
   | Icatch (cont, body, handler) ->
     let next = insert_moves_starting_over insn.next in
     let body = insert_moves_starting_over body in
@@ -128,7 +145,7 @@ let rec insert_moves (insn : Mach.instruction) =
         next;
       }
     in
-    insn, Reg.Set.empty
+    insn, RL.Set.empty
   | Itrywith (body, handler) ->
     let next = insert_moves_starting_over insn.next in
     let body = insert_moves_starting_over body in
@@ -139,18 +156,13 @@ let rec insert_moves (insn : Mach.instruction) =
         next;
       }
     in
-    insn, Reg.Set.empty
+    insn, RL.Set.empty
 
 and insert_moves_starting_over insn =
   let insn, pending = insert_moves insn in
   place_moves pending ~around:insn
 
 let fundecl (fundecl : Mach.fundecl) =
-  (* If we end up wanting to insert initialisations at the top of the function,
-     we can just ignore them: the callee save registers will already contain
-     valid values.  It's just unfortunate in such cases that the register
-     allocator didn't do better. *)
-  let fun_body, _pending = insert_moves fundecl.fun_body in
   { fundecl with
-    fun_body;
+    fun_body = insert_moves_starting_over fundecl.fun_body;
   }
