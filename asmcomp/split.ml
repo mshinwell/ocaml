@@ -206,12 +206,15 @@ let fundecl f =
   reset ();
 
   let new_args = Array.copy f.fun_args in
+  let new_callee_saves = Array.copy f.fun_callee_save_regs in
   let (new_body, sub_body) = rename f.fun_body (Some Reg.Map.empty) in
   repres_regs new_args;
+  repres_regs new_callee_saves;
   set_repres new_body;
   equiv_classes := Reg.Map.empty;
   { fun_name = f.fun_name;
     fun_args = new_args;
+    fun_callee_save_regs = new_callee_saves;
     fun_body = new_body;
     fun_fast = f.fun_fast;
     fun_dbg  = f.fun_dbg }

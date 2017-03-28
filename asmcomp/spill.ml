@@ -132,7 +132,10 @@ let find_reload_at_exit k =
   with
   | Not_found -> Misc.fatal_error "Spill.find_reload_at_exit"
 
-let at_return = ref Reg.Set.empty
+let fun_callee_save_regs = ref [| |]
+
+let is_callee_save reg =
+  Array.exists (fun reg' -> reg.loc = reg'.loc) !fun_callee_save_regs
 
 let rec reload i before =
   incr current_date;
@@ -142,12 +145,19 @@ let rec reload i before =
     Iend ->
       (i, before)
   | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) ->
-      Reg.Set.union (Reg.set_of_array i.arg) !at_return
       (add_reloads (Reg.inter_set_array before i.arg) i,
        Reg.Set.empty)
   | Iop(Icall_ind | Icall_imm _ | Iextcall(_, true)) ->
-      (* All regs live across must be spilled *)
-      let (new_next, finally) = reload i.next i.live in
+      (* All regs live across (and not in callee save regs for OCaml calls)
+         must be spilled *)
+      let need_reloading_after_call =
+        match i.desc with
+        | Iop (Icall_ind | Icall_imm _) ->
+            Reg.Set.filter (fun reg -> not (is_callee_save reg)) i.live
+        | Iop (Iextcall (_, true)) -> i.live
+        | _ -> assert false
+      in
+      let (new_next, finally) = reload i.next need_reloading_after_call in
       (add_reloads (Reg.inter_set_array before i.arg)
                    (instr_cons_debug i.desc i.arg i.res i.dbg new_next),
        finally)
@@ -403,18 +413,22 @@ let reset () =
 
 let fundecl f =
   reset ();
-
+  fun_callee_save_regs := f.fun_callee_save_regs;
   let (body1, _) = reload f.fun_body Reg.Set.empty in
-  let callee_saves = Reg.set_of_array Proc.loc_callee_saves in
-  let (body2, tospill_at_entry) = spill body1 callee_saves in
+  let (body2, tospill_at_entry) = spill body1 Reg.Set.empty in
   let new_body =
-    add_spills (Reg.inter_set_array tospill_at_entry
-      (Reg.Set.union callee_saves f.fun_args)) body2 in
+    let defined_on_entry =
+      Reg.Set.union (Reg.set_of_array f.fun_callee_save_regs)
+        (Reg.set_of_array f.fun_args)
+    in
+    add_spills (Reg.Set.inter tospill_at_entry defined_on_entry) body2
+  in
   spill_env := Reg.Map.empty;
   use_date := Reg.Map.empty;
   destroyed_at_fork := [];
   { fun_name = f.fun_name;
     fun_args = f.fun_args;
+    fun_callee_save_regs = f.fun_callee_save_regs;
     fun_body = new_body;
     fun_fast = f.fun_fast;
     fun_dbg  = f.fun_dbg }

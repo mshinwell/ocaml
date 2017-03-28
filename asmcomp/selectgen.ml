@@ -892,6 +892,7 @@ method emit_fundecl f =
   instr_iter (fun instr -> self#mark_instr instr.Mach.desc) body;
   { fun_name = f.Cmm.fun_name;
     fun_args = loc_arg;
+    fun_callee_save_regs = callee_saves;
     fun_body = body;
     fun_fast = f.Cmm.fun_fast;
     fun_dbg  = f.Cmm.fun_dbg }

@@ -14,6 +14,8 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-(** Insert initialisations, prior to calls, of dead callee save registers. *)
+(** Insert initialisations, prior to calls, of dead callee save registers.
+    The initialisations may be pulled upwards across fork points but will
+    never be pulled upwards across join points. *)
 
 val fundecl : Mach.fundecl -> Mach.fundecl

@@ -80,6 +80,7 @@ and instruction_desc =
 type fundecl =
   { fun_name: string;
     fun_args: Reg.t array;
+    fun_callee_save_regs: Reg.t array;
     fun_body: instruction;
     fun_fast: bool;
     fun_dbg : Debuginfo.t }
