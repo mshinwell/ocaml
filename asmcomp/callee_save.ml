@@ -14,7 +14,7 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-let place_initialisers regs ~around =
+let place_moves regs ~around =
   Reg.Set.fold (fun reg (next : Mach.instruction) : Mach.instruction ->
       { desc = Iop (Iintop Ixor);
         next;
@@ -38,7 +38,7 @@ let rec insert_moves (insn : Mach.instruction) =
     in
     let place_here = Reg.Set.inter pending must_place_here in
     let pending = Reg.Set.diff pending place_here in
-    let next = place_initialisers place_here ~around:next in
+    let next = place_moves place_here ~around:next in
     let pending =
       match op with
       | Icall_ind | Icall_imm _ ->
@@ -71,8 +71,8 @@ let rec insert_moves (insn : Mach.instruction) =
     let pending = Reg.Set.inter ifso_pending ifnot_pending in
     let place_at_top_of_ifso = Reg.Set.diff ifso_pending pending in
     let place_at_top_of_ifnot = Reg.Set.diff ifnot_pending pending in
-    let ifso = place_initialisers place_at_top_of_ifso ~around:ifso in
-    let ifnot = place_initialisers place_at_top_of_ifnot ~around:ifnot in
+    let ifso = place_moves place_at_top_of_ifso ~around:ifso in
+    let ifnot = place_moves place_at_top_of_ifnot ~around:ifnot in
     let insn =
       { insn with
         desc = Iifthenelse (cond, ifso, ifnot);
@@ -99,7 +99,7 @@ let rec insert_moves (insn : Mach.instruction) =
     let arms =
       Array.map (fun (arm, arm_pending) ->
           let pending = Reg.Set.diff arm_pending pending in
-          place_initialisers pending ~around:arm)
+          place_moves pending ~around:arm)
         arms
     in
     let insn =
@@ -143,7 +143,7 @@ let rec insert_moves (insn : Mach.instruction) =
 
 and insert_moves_starting_over insn =
   let insn, pending = insert_moves insn in
-  place_initialisers pending ~around:insn
+  place_moves pending ~around:insn
 
 let fundecl (fundecl : Mach.fundecl) =
   (* If we end up wanting to insert initialisations at the top of the function,
