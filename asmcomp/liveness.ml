@@ -128,13 +128,13 @@ let reset () =
   live_at_exit := []
 
 let fundecl ppf f =
-  let callee_saves = Reg.set_of_array Proc.loc_callee_saves in
-  live_at_return := callee_saves;
-  let initially_live = live f.fun_body callee_saves in
+  live_at_return := Reg.set_of_array f.fun_callee_save_regs;
+  let initially_live = live f.fun_body !live_at_return in
   (* Sanity check: only function parameters and callee-save registers can
      be live at entrypoint *)
   let ok_at_entry =
-    Reg.Set.union (Reg.set_of_array f.fun_args) callee_saves
+    Reg.Set.union (Reg.set_of_array f.fun_args)
+      (Reg.set_of_array f.fun_callee_save_regs)
   in
   let wrong_live = Reg.Set.diff initially_live ok_at_entry in
   if not (Reg.Set.is_empty wrong_live) then begin

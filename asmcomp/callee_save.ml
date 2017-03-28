@@ -31,6 +31,14 @@ let rec insert_moves (insn : Mach.instruction) =
   | Iend -> insn, Reg.Set.empty
   | Iop op ->
     let next, pending = insert_moves insn.next in
+    let destroyed = Reg.set_of_array (Proc.destroyed_at_oper insn.desc) in
+    let must_place_here =
+      Reg.Set.union destroyed
+        (Reg.Set.union (Reg.set_of_array insn.arg) (Reg.set_of_array insn.res))
+    in
+    let place_here = Reg.Set.inter pending must_place_here in
+    let pending = Reg.Set.diff pending place_here in
+    let next = place_initialisers place_here ~around:next in
     let pending =
       match op with
       | Icall_ind | Icall_imm _ ->
@@ -52,15 +60,6 @@ let rec insert_moves (insn : Mach.instruction) =
       | Imulf | Idivf | Ifloatofint | Iintoffloat
       | Ispecific _ -> pending
     in
-    let destroyed = Reg.set_of_array (Proc.destroyed_at_oper insn.desc) in
-    assert (Reg.Set.is_empty (
-      Reg.Set.inter destroyed (Reg.set_of_array Proc.loc_callee_saves)));
-    let must_place_here =
-      Reg.Set.union (Reg.set_of_array insn.arg) (Reg.set_of_array insn.res)
-    in
-    let place_here = Reg.Set.inter pending must_place_here in
-    let insn = place_initialisers place_here ~around:insn in
-    let pending = Reg.Set.diff pending place_here in
     { insn with next; }, pending
   | Ireturn | Iexit _ | Iraise _ ->
     let next = insert_moves_starting_over insn.next in
@@ -147,7 +146,11 @@ and insert_moves_starting_over insn =
   place_initialisers pending ~around:insn
 
 let fundecl (fundecl : Mach.fundecl) =
-  let fun_body, pending = insert_moves fundecl.fun_body in
+  (* If we end up wanting to insert initialisations at the top of the function,
+     we can just ignore them: the callee save registers will already contain
+     valid values.  It's just unfortunate in such cases that the register
+     allocator didn't do better. *)
+  let fun_body, _pending = insert_moves fundecl.fun_body in
   { fundecl with
-    fun_body = place_initialisers pending ~around:fun_body;
+    fun_body;
   }
