@@ -240,7 +240,8 @@ method private instr_issue_cycles instr =
 
 method private destroyed_by_instr instr =
   match instr.desc with
-  | Lop op -> Proc.destroyed_at_oper (Iop op)
+  (* CR mshinwell: conservative setting for [under_try] *)
+  | Lop op -> Proc.destroyed_at_oper ~under_try:true (Iop op)
   | Lreloadretaddr -> [||]
   | _ -> assert false
 

@@ -495,13 +495,15 @@ LBL(caml_start_program):
         pushq   %r13; CFI_ADJUST(8)
         pushq   %r14; CFI_ADJUST(8)
         movq    %rsp, %r14
+    /* Move code pointer away from callee-save registers */
+      	movq    %r12, %r10
     /* Initialise callee-save registers */
         xor     %r8, %r8
         xor     %r9, %r9
-        xor     %r10, %r10
-        xor     %r11, %r11
+        xor     %r12, %r12
+        xor     %r13, %r13
     /* Call the OCaml code */
-        call    *%r12
+        call    *%r10
 LBL(107):
     /* Pop the exception handler */
         popq    %r14; CFI_ADJUST(-8)

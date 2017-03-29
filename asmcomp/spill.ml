@@ -125,6 +125,7 @@ let add_reloads regset i =
     regset i
 
 let reload_at_exit = ref []
+let callee_save_regs = ref Reg.Set.empty
 
 let find_reload_at_exit k =
   try
@@ -140,7 +141,8 @@ let rec reload i before =
     Iend ->
       (i, before)
   | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) ->
-      (add_reloads (Reg.inter_set_array before i.arg) i,
+      (add_reloads (Reg.Set.inter before (
+        Reg.Set.union !callee_save_regs (Reg.set_of_array i.arg))) i,
        Reg.Set.empty)
   | Iop(Icall_ind | Icall_imm _) ->
       (* Suggest that the callee save registers be the N (or fewer) most
@@ -430,6 +432,7 @@ let reset () =
 
 let fundecl f =
   reset ();
+  callee_save_regs := Reg.set_of_array f.fun_callee_save_regs;
   let (body1, _) = reload f.fun_body Reg.Set.empty in
   let (body2, tospill_at_entry) = spill body1 Reg.Set.empty in
   let new_body =

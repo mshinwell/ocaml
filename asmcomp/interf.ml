@@ -81,40 +81,44 @@ let build_graph fundecl =
 
   (* Compute interferences *)
 
-  let rec interf i =
-    let destroyed = Proc.destroyed_at_oper i.desc in
+  let rec interf_core ~under_try i =
+    let destroyed = Proc.destroyed_at_oper ~under_try i.desc in
     if Array.length destroyed > 0 then add_interf_set destroyed i.live;
     match i.desc with
       Iend -> ()
     | Ireturn -> ()
     | Iop(Imove | Ispill | Ireload) ->
         add_interf_move i.arg.(0) i.res.(0) i.live;
-        interf i.next
+        interf_core ~under_try i.next
     | Iop(Itailcall_ind) -> ()
     | Iop(Itailcall_imm lbl) -> ()
     | Iop op ->
         add_interf_set i.res i.live;
         add_interf_self i.res;
-        interf i.next
+        interf_core ~under_try i.next
     | Iifthenelse(tst, ifso, ifnot) ->
-        interf ifso;
-        interf ifnot;
-        interf i.next
+        interf_core ~under_try ifso;
+        interf_core ~under_try ifnot;
+        interf_core ~under_try i.next
     | Iswitch(index, cases) ->
         for i = 0 to Array.length cases - 1 do
-          interf cases.(i)
+          interf_core ~under_try cases.(i)
         done;
-        interf i.next
+        interf_core ~under_try i.next
     | Iloop body ->
-        interf body; interf i.next
+        interf_core ~under_try body; interf_core ~under_try i.next
     | Icatch(_, body, handler) ->
-        interf body; interf handler; interf i.next
+        interf_core ~under_try body; interf_core ~under_try handler;
+        interf_core ~under_try i.next
     | Iexit _ ->
         ()
     | Itrywith(body, handler) ->
         add_interf_set Proc.destroyed_at_raise handler.live;
-        interf body; interf handler; interf i.next
+        interf_core ~under_try:true body; interf_core ~under_try handler;
+        interf_core ~under_try i.next
     | Iraise _ -> () in
+
+  let interf insn = interf_core ~under_try:false insn in
 
   (* Add a preference from one reg to another.
      Do not add anything if the two registers conflict,

@@ -18,13 +18,21 @@
 
 open Mach
 
+let callee_save_regs = ref Reg.Set.empty
+
 (* [deadcode i] returns a pair of an optimized instruction [i']
    and a set of registers live "before" instruction [i]. *)
 
 let rec deadcode i =
   match i.desc with
-  | Iend | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) | Iraise _ ->
+  | Iend | Iraise _ ->
       (i, Reg.add_set_array i.live i.arg)
+  | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _) ->
+      let live_before =
+        Reg.Set.union (Reg.set_of_array i.arg)
+          (Reg.Set.union i.live !callee_save_regs)
+      in
+      (i, live_before)
   | Iop op ->
       let (s, before) = deadcode i.next in
       if Proc.op_is_pure op                     (* no side effects *)
@@ -66,5 +74,6 @@ let rec deadcode i =
       ({i with desc = Itrywith(body', handler'); next = s}, i.live)
 
 let fundecl f =
+  callee_save_regs := Reg.set_of_array f.fun_callee_save_regs;
   let (new_body, _) = deadcode f.fun_body in
   {f with fun_body = new_body}

@@ -27,6 +27,7 @@ val register_name: int -> string
 val phys_reg: int -> Reg.t
 val rotate_registers: bool
 val num_callee_saved_regs: int
+val is_callee_save : int -> bool
 
 (* Calling conventions *)
 val loc_arguments: Reg.t array -> Reg.t array * int
@@ -55,7 +56,7 @@ val safe_register_pressure: Mach.operation -> int
 val max_register_pressure: Mach.operation -> int array
 
 (* Registers destroyed by operations *)
-val destroyed_at_oper: Mach.instruction_desc -> Reg.t array
+val destroyed_at_oper: under_try:bool -> Mach.instruction_desc -> Reg.t array
 val destroyed_at_raise: Reg.t array
 
 (* Volatile registers: those that change value when read *)

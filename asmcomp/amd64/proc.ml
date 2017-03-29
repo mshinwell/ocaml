@@ -132,6 +132,10 @@ let num_non_callee_save_regs =
   if fp then num_available_registers.(0) - 1 - num_callee_saved_regs
   else num_available_registers.(0) - num_callee_saved_regs
 
+let is_callee_save reg =
+  reg >= first_callee_save_reg
+    && reg < first_callee_save_reg + num_callee_saved_regs
+
 let hard_int_non_callee_save_regs =
   let num_available_registers =
     if fp then num_available_registers.(0) - 1
@@ -300,8 +304,10 @@ let destroyed_at_c_call =
        100;101;102;103;104;105;106;107;
        108;109;110;111;112;113;114;115])
 
-let destroyed_at_oper = function
-  | Iop(Icall_ind | Icall_imm _) -> non_callee_save_regs
+let destroyed_at_oper ~under_try = function
+  | Iop(Icall_ind | Icall_imm _) ->
+    if under_try then all_phys_regs
+    else non_callee_save_regs
   | Iop(Iextcall(_, true)) -> all_phys_regs
   | Iop(Iextcall(_, false)) -> destroyed_at_c_call
   | Iop(Iintop(Idiv | Imod)) | Iop(Iintop_imm((Idiv | Imod), _))

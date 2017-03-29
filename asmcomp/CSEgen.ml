@@ -253,7 +253,7 @@ method private kill_loads n =
 (* Perform CSE on the given instruction [i] and its successors.
    [n] is the value numbering current at the beginning of [i]. *)
 
-method private cse n i =
+method private cse ~under_try n i =
   match i.desc with
   | Iend | Ireturn | Iop(Itailcall_ind) | Iop(Itailcall_imm _)
   | Iexit _ | Iraise _ ->
@@ -262,7 +262,7 @@ method private cse n i =
       (* For moves, we associate the same value number to the result reg
          as to the argument reg. *)
       let n1 = set_move n i.arg.(0) i.res.(0) in
-      {i with next = self#cse n1 i.next}
+      {i with next = self#cse ~under_try n1 i.next}
   | Iop (Icall_ind | Icall_imm _ | Iextcall _) ->
       (* For function calls, we should at least forget:
          - equations involving memory loads, since the callee can
@@ -276,7 +276,7 @@ method private cse n i =
          could be kept, but won't be usable for CSE as one of their
          arguments is always a memory load.  For simplicity, we
          just forget everything. *)
-      {i with next = self#cse empty_numbering i.next}
+      {i with next = self#cse ~under_try empty_numbering i.next}
   | Iop (Ialloc _) ->
       (* For allocations, we must avoid extending the live range of a
          pseudoregister across the allocation if this pseudoreg
@@ -290,12 +290,12 @@ method private cse n i =
          Hence, all equations over loads must be removed. *)
        let n1 = kill_addr_regs (self#kill_loads n) in
        let n2 = set_unknown_regs n1 i.res in
-       {i with next = self#cse n2 i.next}
+       {i with next = self#cse ~under_try n2 i.next}
   | Iop op ->
       begin match self#class_of_operation op with
       | (Op_pure | Op_checkbound | Op_load) as op_class ->
           let (n1, varg) = valnum_regs n i.arg in
-          let n2 = set_unknown_regs n1 (Proc.destroyed_at_oper i.desc) in
+          let n2 = set_unknown_regs n1 (Proc.destroyed_at_oper ~under_try i.desc) in
           begin match find_equation op_class n1 (op, varg) with
           | Some vres ->
               (* This operation was computed earlier. *)
@@ -310,56 +310,57 @@ method private cse n i =
                   let n3 = set_known_regs n1 i.res vres in
                   (* This is n1 above and not n2 because the move
                      does not destroy any regs *)
-                  insert_move res i.res (self#cse n3 i.next)
+                  insert_move res i.res (self#cse ~under_try n3 i.next)
               | _ ->
                   (* We already computed the operation but lost its
                      results.  Associate the result registers to
                      the result valnums of the previous operation. *)
                   let n3 = set_known_regs n2 i.res vres in
-                  {i with next = self#cse n3 i.next}
+                  {i with next = self#cse ~under_try n3 i.next}
               end
           | None ->
               (* This operation produces a result we haven't seen earlier. *)
               let n3 = set_fresh_regs n2 i.res (op, varg) op_class in
-              {i with next = self#cse n3 i.next}
+              {i with next = self#cse ~under_try n3 i.next}
           end
       | Op_store false | Op_other ->
           (* An initializing store or an "other" operation do not invalidate
              any equations, but we do not know anything about the results. *)
-         let n1 = set_unknown_regs n (Proc.destroyed_at_oper i.desc) in
+         let n1 = set_unknown_regs n (Proc.destroyed_at_oper ~under_try i.desc) in
          let n2 = set_unknown_regs n1 i.res in
-         {i with next = self#cse n2 i.next}
+         {i with next = self#cse ~under_try n2 i.next}
       | Op_store true ->
           (* A non-initializing store can invalidate
              anything we know about prior loads. *)
-         let n1 = set_unknown_regs n (Proc.destroyed_at_oper i.desc) in
+         let n1 = set_unknown_regs n (Proc.destroyed_at_oper ~under_try i.desc) in
          let n2 = set_unknown_regs n1 i.res in
          let n3 = self#kill_loads n2 in
-         {i with next = self#cse n3 i.next}
+         {i with next = self#cse ~under_try n3 i.next}
       end
   (* For control structures, we set the numbering to empty at every
      join point, but propagate the current numbering across fork points. *)
   | Iifthenelse(test, ifso, ifnot) ->
-     let n1 = set_unknown_regs n (Proc.destroyed_at_oper i.desc) in
-      {i with desc = Iifthenelse(test, self#cse n1 ifso, self#cse n1 ifnot);
-              next = self#cse empty_numbering i.next}
+     let n1 = set_unknown_regs n (Proc.destroyed_at_oper ~under_try i.desc) in
+      {i with desc = Iifthenelse(test, self#cse ~under_try n1 ifso,
+                                 self#cse ~under_try n1 ifnot);
+              next = self#cse ~under_try empty_numbering i.next}
   | Iswitch(index, cases) ->
-     let n1 = set_unknown_regs n (Proc.destroyed_at_oper i.desc) in
-      {i with desc = Iswitch(index, Array.map (self#cse n1) cases);
-              next = self#cse empty_numbering i.next}
+     let n1 = set_unknown_regs n (Proc.destroyed_at_oper ~under_try i.desc) in
+      {i with desc = Iswitch(index, Array.map (self#cse ~under_try n1) cases);
+              next = self#cse ~under_try empty_numbering i.next}
   | Iloop(body) ->
-      {i with desc = Iloop(self#cse empty_numbering body);
-              next = self#cse empty_numbering i.next}
+      {i with desc = Iloop(self#cse ~under_try empty_numbering body);
+              next = self#cse ~under_try empty_numbering i.next}
   | Icatch(nfail, body, handler) ->
-      {i with desc = Icatch(nfail, self#cse n body,
-                            self#cse empty_numbering handler);
-              next = self#cse empty_numbering i.next}
+      {i with desc = Icatch(nfail, self#cse ~under_try n body,
+                            self#cse ~under_try empty_numbering handler);
+              next = self#cse ~under_try empty_numbering i.next}
   | Itrywith(body, handler) ->
-      {i with desc = Itrywith(self#cse n body,
-                              self#cse empty_numbering handler);
-              next = self#cse empty_numbering i.next}
+      {i with desc = Itrywith(self#cse ~under_try:true n body,
+                              self#cse ~under_try empty_numbering handler);
+              next = self#cse ~under_try empty_numbering i.next}
 
 method fundecl f =
-  {f with fun_body = self#cse empty_numbering f.fun_body}
+  {f with fun_body = self#cse ~under_try:false empty_numbering f.fun_body}
 
 end

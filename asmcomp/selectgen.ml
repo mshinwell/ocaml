@@ -781,8 +781,8 @@ method emit_tail env exp =
                 self#insert_move_args rarg loc_arg stack_ofs;
                 self#insert_debug (Iop Icall_ind) dbg
                             (Array.append [|r1.(0)|] loc_arg) loc_res;
-                self#insert(Iop(Istackoffset(-stack_ofs))) [||] [||];
                 self#insert_moves !callee_saved_regs Proc.loc_callee_saves;
+                self#insert(Iop(Istackoffset(-stack_ofs))) [||] [||];
                 self#insert Ireturn loc_res [||]
               end
           | Icall_imm lbl ->
@@ -802,8 +802,8 @@ method emit_tail env exp =
                 let loc_res = Proc.loc_results rd in
                 self#insert_move_args r1 loc_arg stack_ofs;
                 self#insert_debug (Iop(Icall_imm lbl)) dbg loc_arg loc_res;
-                self#insert(Iop(Istackoffset(-stack_ofs))) [||] [||];
                 self#insert_moves !callee_saved_regs Proc.loc_callee_saves;
+                self#insert(Iop(Istackoffset(-stack_ofs))) [||] [||];
                 self#insert Ireturn loc_res [||]
               end
           | _ -> fatal_error "Selection.emit_tail"
