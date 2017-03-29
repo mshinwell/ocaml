@@ -50,13 +50,17 @@ let place_moves regs ~around =
     regs
     around
 
-let rec insert_moves ~under_try (insn : Mach.instruction) =
+let rec insert_moves (insn : Mach.instruction) =
   match insn.desc with
   | Iend -> insn, RL.Set.empty
   | Iop op ->
-    let next, pending = insert_moves ~under_try insn.next in
+    let next, pending = insert_moves insn.next in
     let destroyed =
-      RL.set_of_array (Proc.destroyed_at_oper ~under_try insn.desc)
+      (* [under_try] is always [false] here because, even if we are under a
+         [try], we still need to initialise callee-save registers as that's
+         what the callee expects.  The difference is that we will have forced
+         those registers to spill in the caller. *)
+      RL.set_of_array (Proc.destroyed_at_oper ~under_try:false insn.desc)
     in
     let must_place_here = RL.Set.union destroyed (RL.set_of_array insn.res) in
     let place_here = RL.Set.inter pending must_place_here in
@@ -81,12 +85,12 @@ let rec insert_moves ~under_try (insn : Mach.instruction) =
     let pending = RL.Set.diff pending (RL.set_of_array insn.arg) in
     { insn with next; }, pending
   | Ireturn | Iexit _ | Iraise _ ->
-    let next = insert_moves_starting_over ~under_try insn.next in
+    let next = insert_moves_starting_over insn.next in
     { insn with next; }, RL.Set.empty
   | Iifthenelse (cond, ifso, ifnot) ->
-    let next = insert_moves_starting_over ~under_try insn.next in
-    let ifso, ifso_pending = insert_moves ~under_try ifso in
-    let ifnot, ifnot_pending = insert_moves ~under_try ifnot in
+    let next = insert_moves_starting_over insn.next in
+    let ifso, ifso_pending = insert_moves ifso in
+    let ifnot, ifnot_pending = insert_moves ifnot in
     let pending = RL.Set.inter ifso_pending ifnot_pending in
     let place_at_top_of_ifso = RL.Set.diff ifso_pending pending in
     let place_at_top_of_ifnot = RL.Set.diff ifnot_pending pending in
@@ -100,8 +104,8 @@ let rec insert_moves ~under_try (insn : Mach.instruction) =
     in
     insn, pending
   | Iswitch (consts, arms) ->
-    let next = insert_moves_starting_over ~under_try insn.next in
-    let arms = Array.map (insert_moves ~under_try) arms in
+    let next = insert_moves_starting_over insn.next in
+    let arms = Array.map insert_moves arms in
     let pending =
       Array.fold_left (fun pending (_arm, arm_pending) ->
           match pending with
@@ -129,18 +133,18 @@ let rec insert_moves ~under_try (insn : Mach.instruction) =
     in
     insn, pending
   | Iloop body ->
-    let next = insert_moves_starting_over ~under_try insn.next in
+    let next = insert_moves_starting_over insn.next in
     let insn =
       { insn with
-        desc = Iloop (insert_moves_starting_over ~under_try body);
+        desc = Iloop (insert_moves_starting_over body);
         next;
       }
     in
     insn, RL.Set.empty
   | Icatch (cont, body, handler) ->
-    let next = insert_moves_starting_over ~under_try insn.next in
-    let body = insert_moves_starting_over ~under_try body in
-    let handler = insert_moves_starting_over ~under_try handler in
+    let next = insert_moves_starting_over insn.next in
+    let body = insert_moves_starting_over body in
+    let handler = insert_moves_starting_over handler in
     let insn =
       { insn with
         desc = Icatch (cont, body, handler);
@@ -149,9 +153,9 @@ let rec insert_moves ~under_try (insn : Mach.instruction) =
     in
     insn, RL.Set.empty
   | Itrywith (body, handler) ->
-    let next = insert_moves_starting_over ~under_try insn.next in
-    let body = insert_moves_starting_over ~under_try:true body in
-    let handler = insert_moves_starting_over ~under_try handler in
+    let next = insert_moves_starting_over insn.next in
+    let body = insert_moves_starting_over body in
+    let handler = insert_moves_starting_over handler in
     let insn =
       { insn with
         desc = Itrywith (body, handler);
@@ -160,11 +164,11 @@ let rec insert_moves ~under_try (insn : Mach.instruction) =
     in
     insn, RL.Set.empty
 
-and insert_moves_starting_over ~under_try insn =
-  let insn, pending = insert_moves ~under_try insn in
+and insert_moves_starting_over insn =
+  let insn, pending = insert_moves insn in
   place_moves pending ~around:insn
 
 let fundecl (fundecl : Mach.fundecl) =
   { fundecl with
-    fun_body = insert_moves_starting_over ~under_try:false fundecl.fun_body;
+    fun_body = insert_moves_starting_over fundecl.fun_body;
   }
