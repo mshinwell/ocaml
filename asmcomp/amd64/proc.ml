@@ -127,11 +127,24 @@ let hard_int_reg =
   v
 
 let first_callee_save_reg = 6
+let num_callee_saved_regs = 4
+let num_non_callee_save_regs =
+  if fp then num_available_registers.(0) - 1 - num_callee_saved_regs
+  else num_available_registers.(0) - num_callee_saved_regs
 
 let hard_int_non_callee_save_regs =
-  let v = Array.make first_callee_save_reg Reg.dummy in
+  let num_available_registers =
+    if fp then num_available_registers.(0) - 1
+    else num_available_registers.(0)
+  in
+  let v = Array.make num_non_callee_save_regs Reg.dummy in
   for i = 0 to first_callee_save_reg - 1 do
     v.(i) <- Reg.at_location Int (Reg i)
+  done;
+  let start = first_callee_save_reg + num_callee_saved_regs in
+  for i = start to num_available_registers - 1
+  do
+    v.(i - start + first_callee_save_reg) <- Reg.at_location Int (Reg i)
   done;
   v
 
@@ -197,7 +210,6 @@ let not_supported ofs = fatal_error "Proc.loc_results: cannot call"
 
 let loc_arguments arg =
   calling_conventions 0 (first_callee_save_reg - 1) 100 109 outgoing arg
-let num_callee_saved_regs = 10 - first_callee_save_reg
 let loc_callee_saves =
   Array.init num_callee_saved_regs
     (fun offset -> phys_reg (first_callee_save_reg + offset))
