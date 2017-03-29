@@ -133,6 +133,8 @@ let find_reload_at_exit k =
   with
   | Not_found -> Misc.fatal_error "Spill.find_reload_at_exit"
 
+let under_try = ref false
+
 let rec reload i before =
   incr current_date;
   record_use i.arg;
@@ -144,6 +146,12 @@ let rec reload i before =
       (add_reloads (Reg.Set.inter before (
         Reg.Set.union !callee_save_regs (Reg.set_of_array i.arg))) i,
        Reg.Set.empty)
+  | Iop(Icall_ind | Icall_imm _) when !under_try ->
+      (* All regs live across must be spilled *)
+      let (new_next, finally) = reload i.next i.live in
+      (add_reloads (Reg.inter_set_array before i.arg)
+                   (instr_cons_debug i.desc i.arg i.res i.dbg new_next),
+       finally)
   | Iop(Icall_ind | Icall_imm _) ->
       (* Suggest that the callee save registers be the N (or fewer) most
          recently used registers that are live across the call, where N is
@@ -267,7 +275,9 @@ let rec reload i before =
       set := Reg.Set.union !set before;
       (i, Reg.Set.empty)
   | Itrywith(body, handler) ->
+      under_try := true;
       let (new_body, after_body) = reload body before in
+      under_try := false;
       (* All registers live at the beginning of the handler are destroyed,
          except the exception bucket *)
       let before_handler =

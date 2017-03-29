@@ -127,7 +127,7 @@ let hard_int_reg =
   v
 
 let first_callee_save_reg = 6
-let num_callee_saved_regs = 4
+let num_callee_saved_regs = 0
 let num_non_callee_save_regs =
   if fp then num_available_registers.(0) - 1 - num_callee_saved_regs
   else num_available_registers.(0) - num_callee_saved_regs
