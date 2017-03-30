@@ -284,9 +284,10 @@ let rec reload i before =
       set := Reg.Set.union !set before;
       (i, Reg.Set.empty)
   | Itrywith(body, handler) ->
+      let prev_under_try = !under_try in
       under_try := true;
       let (new_body, after_body) = reload body before in
-      under_try := false;
+      under_try := prev_under_try;
       (* All registers live at the beginning of the handler are destroyed,
          except the exception bucket *)
       let before_handler =
@@ -452,6 +453,7 @@ let reset () =
 let fundecl f =
   reset ();
   callee_save_regs := Reg.set_of_array f.fun_callee_save_regs;
+  under_try := false;
   let (body1, _) = reload f.fun_body Reg.Set.empty in
   let (body2, tospill_at_entry) = spill body1 Reg.Set.empty in
   let new_body =
