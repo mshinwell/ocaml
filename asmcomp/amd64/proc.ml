@@ -125,7 +125,7 @@ let hard_int_reg =
   v
 
 let first_callee_save_reg = 6
-let num_callee_saved_regs = 0
+let num_callee_saved_regs = 4
 
 let max_arguments_for_tailcalls = 10 - num_callee_saved_regs
 

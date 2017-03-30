@@ -154,8 +154,10 @@ let rec reload i before =
        finally)
   | Iop(Icall_ind | Icall_imm _) ->
       (* Suggest that the callee save registers be the N (or fewer) most
-         recently used registers that are live across the call, where N is
-         the number of callee saves. *)
+         recently used registers of type [Int] or [Val] that are live across
+         the call, where N is the number of callee saves.
+         Registers of type [Addr] or [Float] will always be spilled across
+         calls. *)
       let need_reloading_after_call =
         let uses =
           List.filter (fun (reg, _date) -> Reg.Set.mem reg i.live)
@@ -167,11 +169,18 @@ let rec reload i before =
             uses
         in
         let callee_saves, _num_taken =
-          List.fold_left (fun (need_reloading, num_taken) (reg, _date) ->
-              if num_taken >= Proc.num_callee_saved_regs then
-                need_reloading, num_taken
+          List.fold_left (fun (callee_saves, num_taken) (reg, _date) ->
+              let ineligible =
+                num_taken >= Proc.num_callee_saved_regs
+                  || begin match reg.typ with
+                     | Cmm.Addr | Cmm.Float -> true
+                     | Cmm.Int | Cmm.Val -> false
+                     end
+              in
+              if ineligible then
+                callee_saves, num_taken
               else
-                Reg.Set.add reg need_reloading, num_taken + 1)
+                Reg.Set.add reg callee_saves, num_taken + 1)
             (Reg.Set.empty, 0)
             (List.rev uses)
         in

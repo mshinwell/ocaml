@@ -243,20 +243,17 @@ let addressing addr typ i n =
 
 (* Record live pointers at call points -- see Emitaux *)
 
-let record_frame_label ?ignore_callee_saves live dbg =
+let record_frame_label ?may_be_live_callee_saves live dbg =
   let lbl = new_label() in
   let live_offset = ref [] in
   Reg.Set.iter
     (function
       | {typ = Val; loc = Reg r} ->
-          let is_callee_save = Proc.is_callee_save r in
-          let ignore =
-            match ignore_callee_saves with
-            | None -> false
-            | Some () -> is_callee_save
-          in
-          if not ignore then begin
+          begin match may_be_live_callee_saves with
+          | None ->
             live_offset := ((r lsl 1) + 1) :: !live_offset
+          | Some () ->
+            assert (Proc.is_callee_save r)
           end
       | {typ = Val; loc = Stack s} as reg ->
           live_offset := slot_offset s (register_class reg) :: !live_offset
@@ -272,8 +269,8 @@ let record_frame_label ?ignore_callee_saves live dbg =
       fd_debuginfo = dbg } :: !frame_descriptors;
   lbl
 
-let record_frame ?ignore_callee_saves live dbg =
-  let lbl = record_frame_label ?ignore_callee_saves live dbg in
+let record_frame ?may_be_live_callee_saves live dbg =
+  let lbl = record_frame_label ?may_be_live_callee_saves live dbg in
   def_label lbl
 
 (* Record calls to the GC -- we've moved them out of the way *)
@@ -492,11 +489,11 @@ let emit_instr fallthrough i =
       load_symbol_addr s (res i 0)
   | Lop(Icall_ind) ->
       I.call (arg i 0);
-      record_frame ~ignore_callee_saves:() i.live i.dbg
+      record_frame ~may_be_live_callee_saves:() i.live i.dbg
   | Lop(Icall_imm s) ->
       add_used_symbol s;
       emit_call s;
-      record_frame ~ignore_callee_saves:() i.live i.dbg
+      record_frame ~may_be_live_callee_saves:() i.live i.dbg
   | Lop(Itailcall_ind) ->
       output_epilogue begin fun () ->
         I.jmp (arg i 0)

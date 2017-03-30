@@ -69,11 +69,17 @@ let rec insert_moves (insn : Mach.instruction) =
     let pending =
       match op with
       | Icall_ind | Icall_imm _ ->
-        let live_before =
-          RL.Set.union (RL.set_of_array insn.arg) (RL.of_set insn.live)
-        in
         let callee_saves = RL.set_of_array Proc.loc_callee_saves in
-        let need_initialising = RL.Set.diff callee_saves live_before in
+        if not (RL.Set.is_empty (
+          RL.Set.inter (RL.set_of_array insn.arg) callee_saves))
+        then begin
+          Misc.fatal_errorf "Cannot pass arguments to an OCaml function in \
+              callee-save registers:@ %a"
+            Printmach.instr insn
+        end;
+        let need_initialising =
+          RL.Set.diff callee_saves (RL.of_set insn.live)
+        in
         RL.Set.union pending need_initialising
       | Imove | Ispill | Ireload | Iconst_int _ | Iconst_float _
       | Iconst_symbol _ | Iconst_blockheader _ | Itailcall_ind
