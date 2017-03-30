@@ -90,14 +90,22 @@ let build_graph fundecl =
     | Iop(Imove | Ispill | Ireload) ->
         add_interf_move i.arg.(0) i.res.(0) i.live;
         interf_core ~under_try i.next
-    | Iop Icall_ind ->
+    | Iop(Itailcall_ind) ->
+        (* CR mshinwell: Should we have "implicit_arg" in
+           [Mach.instruction]? *)
         (* Ensure the naked code pointer doesn't end up in a callee-save
            register. *)
-       assert (Array.length i.arg >= 1);
-       add_interf_set Proc.loc_callee_saves (Reg.Set.singleton i.arg.(0))
-    | Iop(Itailcall_ind) -> ()
+        assert (Array.length i.arg >= 1);
+        add_interf_set Proc.loc_callee_saves (Reg.Set.singleton i.arg.(0))
     | Iop(Itailcall_imm lbl) -> ()
     | Iop op ->
+        begin match op with
+        | Icall_ind ->
+            (* As for [Itailcall_ind], above. *)
+            assert (Array.length i.arg >= 1);
+            add_interf_set Proc.loc_callee_saves (Reg.Set.singleton i.arg.(0))
+        | _ -> ()
+        end;
         add_interf_set i.res i.live;
         add_interf_self i.res;
         interf_core ~under_try i.next

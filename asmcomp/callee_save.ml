@@ -73,8 +73,8 @@ let rec insert_moves (insn : Mach.instruction) =
         if not (RL.Set.is_empty (
           RL.Set.inter (RL.set_of_array insn.arg) callee_saves))
         then begin
-          Misc.fatal_errorf "Cannot pass arguments to an OCaml function in \
-              callee-save registers:@ %a"
+          Misc.fatal_errorf "Cannot pass code pointer for an indirect call, \
+              or arguments to an OCaml function, in callee-save registers:@ %a"
             Printmach.instr insn
         end;
         let need_initialising =
