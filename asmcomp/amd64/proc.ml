@@ -79,8 +79,6 @@ let masm =
      Linux's dynamic loader also destroys r10.
 *)
 
-let max_arguments_for_tailcalls = 10
-
 let int_reg_name =
   match Config.ccomp_type with
   | "msvc" ->
@@ -128,6 +126,9 @@ let hard_int_reg =
 
 let first_callee_save_reg = 6
 let num_callee_saved_regs = 0
+
+let max_arguments_for_tailcalls = 10 - num_callee_saved_regs
+
 let num_non_callee_save_regs =
   if fp then num_available_registers.(0) - 1 - num_callee_saved_regs
   else num_available_registers.(0) - num_callee_saved_regs
@@ -143,14 +144,18 @@ let hard_int_non_callee_save_regs =
   in
   let v = Array.make num_non_callee_save_regs Reg.dummy in
   for i = 0 to first_callee_save_reg - 1 do
-    v.(i) <- Reg.at_location Int (Reg i)
+    v.(i) <- hard_int_reg.(i)
   done;
   let start = first_callee_save_reg + num_callee_saved_regs in
   for i = start to num_available_registers - 1
   do
-    v.(i - start + first_callee_save_reg) <- Reg.at_location Int (Reg i)
+    v.(i - start + first_callee_save_reg) <- hard_int_reg.(i)
   done;
   v
+
+let () =
+  assert (num_callee_saved_regs > 0
+    || hard_int_non_callee_save_regs = hard_int_reg)
 
 let hard_float_reg =
   let v = Array.make 16 Reg.dummy in
@@ -214,13 +219,16 @@ let not_supported ofs = fatal_error "Proc.loc_results: cannot call"
 
 let loc_arguments arg =
   calling_conventions 0 (first_callee_save_reg - 1) 100 109 outgoing arg
+
 let loc_callee_saves =
   Array.init num_callee_saved_regs
     (fun offset -> phys_reg (first_callee_save_reg + offset))
+
 let loc_parameters arg =
   let (loc, ofs) =
     calling_conventions 0 (first_callee_save_reg - 1) 100 109 incoming arg
   in loc
+
 let loc_results res =
   let (loc, ofs) = calling_conventions 0 0 100 100 not_supported res in loc
 

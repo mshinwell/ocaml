@@ -498,10 +498,12 @@ LBL(caml_start_program):
     /* Move code pointer away from callee-save registers */
       	movq    %r12, %r10
     /* Initialise callee-save registers */
+  /*
         xor     %r8, %r8
         xor     %r9, %r9
         xor     %r12, %r12
         xor     %r13, %r13
+  */
     /* Call the OCaml code */
         call    *%r10
 LBL(107):
