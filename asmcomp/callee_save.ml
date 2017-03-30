@@ -81,9 +81,20 @@ let rec insert_moves (insn : Mach.instruction) =
           RL.Set.diff callee_saves (RL.of_set insn.live)
         in
         RL.Set.union pending need_initialising
+      | Itailcall_ind | Itailcall_imm _ ->
+        let callee_saves = RL.set_of_array Proc.loc_callee_saves in
+        if not (RL.Set.is_empty (
+          RL.Set.inter (RL.set_of_array insn.arg) callee_saves))
+        then begin
+          Misc.fatal_errorf "Cannot pass code pointer for an indirect call, \
+              or arguments to an OCaml function, in callee-save registers \
+              for tail call:@ %a"
+            Printmach.instr insn
+        end;
+        pending
       | Imove | Ispill | Ireload | Iconst_int _ | Iconst_float _
-      | Iconst_symbol _ | Iconst_blockheader _ | Itailcall_ind
-      | Itailcall_imm _ | Iextcall _ | Istackoffset _ | Iload _ | Istore _
+      | Iconst_symbol _ | Iconst_blockheader _ 
+      | Iextcall _ | Istackoffset _ | Iload _ | Istore _
       | Ialloc _ | Iintop _ | Iintop_imm _ | Inegf | Iabsf | Iaddf | Isubf
       | Imulf | Idivf | Ifloatofint | Iintoffloat
       | Ispecific _ -> pending
