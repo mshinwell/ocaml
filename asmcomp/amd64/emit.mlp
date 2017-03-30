@@ -253,7 +253,9 @@ let record_frame_label ?may_be_live_callee_saves live dbg =
           | None ->
             live_offset := ((r lsl 1) + 1) :: !live_offset
           | Some () ->
-            assert (Proc.is_callee_save r)
+            (* Either a code pointer (for indirect calls) or a callee-save
+               register.  Neither should be registered. *)
+            ()
           end
       | {typ = Val; loc = Stack s} as reg ->
           live_offset := slot_offset s (register_class reg) :: !live_offset
