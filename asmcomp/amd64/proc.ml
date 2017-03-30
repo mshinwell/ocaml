@@ -168,6 +168,10 @@ let all_phys_regs =
 let non_callee_save_regs =
   Array.append hard_int_non_callee_save_regs hard_float_reg
 
+let () =
+  assert (num_callee_saved_regs > 0
+    || non_callee_save_regs = all_phys_regs)
+
 let phys_reg n =
   if n < 100 then hard_int_reg.(n) else hard_float_reg.(n - 100)
 
