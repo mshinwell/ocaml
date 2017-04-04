@@ -711,7 +711,7 @@ let emit_instr fallthrough i =
         I.cmp (arg i 1) (arg i 0);
         (* Put up with a potential partial register stall, but avoid the
            need for a distinguished register. *)
-        I.mov (int 0) (res i 0);  (* doesn't affect the flags *)
+        I.mov (int 0) (res32 i 0);  (* doesn't affect the flags *)
         I.set (cond cmp) (res8 i 0)
       end
   | Lop(Iintop_imm(Icomp cmp, n)) ->
@@ -721,7 +721,7 @@ let emit_instr fallthrough i =
         I.set (cond cmp) (res8 i 0)
       end else begin
         I.cmp (int n) (arg i 0);
-        I.mov (int 0) (res i 0);
+        I.mov (int 0) (res32 i 0);
         I.set (cond cmp) (res8 i 0)
       end
   | Lop(Iintop (Icheckbound { label_after_error; spacetime_index; } )) ->
