@@ -215,7 +215,7 @@ let arg16 i n = emit_subreg reg_low_16_name WORD i.arg.(n)
 let arg32 i n = emit_subreg reg_low_32_name DWORD i.arg.(n)
 let arg64 i n = reg64 i.arg.(n)
 
-let res8 i n = emit_subreg reg_low_8_name BYTE i.res.(n)
+let _res8 i n = emit_subreg reg_low_8_name BYTE i.res.(n)
 let res16 i n = emit_subreg reg_low_16_name WORD i.res.(n)
 let res32 i n = emit_subreg reg_low_32_name DWORD i.res.(n)
 
@@ -505,8 +505,8 @@ let emit_instr fallthrough i =
       end
       else begin
         let fits_in_32_bits =
-          Nativeint.compare n 0n >= 0
-            && Nativeint.compare n 0xffff_ffffn <= 0
+          Nativeint.compare n (-0x8000_0000n) >= 0
+            && Nativeint.compare n 0x7fff_ffffn <= 0
         in
         if fits_in_32_bits then begin
           match i.res.(0).loc with
@@ -522,7 +522,10 @@ let emit_instr fallthrough i =
           if fits_in_top_32_bits then begin
             match i.res.(0).loc with
             | Reg _ ->
-              I.mov (nat (Nativeint.shift_right n 32)) (res32 i 0);
+              let const32 =
+                Nativeint.logand (Nativeint.shift_right n 32) 0xffff_ffffn
+              in
+              I.mov (nat const32) (res32 i 0);
               I.sal (nat 32n) (res i 0)
             | _ -> I.mov (nat n) (res i 0)
           end else begin
@@ -701,6 +704,10 @@ let emit_instr fallthrough i =
         I.lea (mem64 NONE 8 R15) (res i 0)
       end
   | Lop(Iintop(Icomp cmp)) ->
+      I.cmp (arg i 1) (arg i 0);
+      I.set (cond cmp) al;
+      I.movzx al (res i 0)
+(*
       if i.arg.(0).loc <> i.res.(0).loc && i.arg.(1).loc <> i.res.(0).loc
       then begin
         (* Zero the destination first to avoid partial register stall. *)
@@ -714,7 +721,12 @@ let emit_instr fallthrough i =
         I.mov (int 0) (res32 i 0);  (* doesn't affect the flags *)
         I.set (cond cmp) (res8 i 0)
       end
+*)
   | Lop(Iintop_imm(Icomp cmp, n)) ->
+      I.cmp (int n) (arg i 0);
+      I.set (cond cmp) al;
+      I.movzx al (res i 0)
+(*
       if i.arg.(0).loc <> i.res.(0).loc then begin
         I.xor (res i 0) (res i 0);
         I.cmp (int n) (arg i 0);
@@ -724,6 +736,7 @@ let emit_instr fallthrough i =
         I.mov (int 0) (res32 i 0);
         I.set (cond cmp) (res8 i 0)
       end
+*)
   | Lop(Iintop (Icheckbound { label_after_error; spacetime_index; } )) ->
       let spacetime =
         if not Config.spacetime then None
