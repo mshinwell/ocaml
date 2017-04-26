@@ -129,7 +129,7 @@ let reset () =
 
 let fundecl ppf f =
   live_at_return := Reg.set_of_array f.fun_callee_save_regs;
-  let initially_live = live f.fun_body !live_at_return in
+  let initially_live = live f.fun_body Reg.Set.empty in
   (* Sanity check: only function parameters and callee-save registers can
      be live at entrypoint *)
   let ok_at_entry =

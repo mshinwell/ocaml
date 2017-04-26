@@ -243,19 +243,15 @@ let addressing addr typ i n =
 
 (* Record live pointers at call points -- see Emitaux *)
 
-let record_frame_label ?may_be_live_callee_saves live dbg =
+let record_frame_label ?using_caml_gc_regs live dbg =
   let lbl = new_label() in
   let live_offset = ref [] in
   Reg.Set.iter
     (function
       | {typ = Val; loc = Reg r} ->
-          begin match may_be_live_callee_saves with
-          | None ->
-            live_offset := ((r lsl 1) + 1) :: !live_offset
-          | Some () ->
-            (* Either a code pointer (for indirect calls) or a callee-save
-               register.  Neither should be registered. *)
-            ()
+          begin match using_caml_gc_regs with
+          | Some () -> live_offset := ((r lsl 1) + 1) :: !live_offset
+          | None -> assert (Proc.is_callee_save r)
           end
       | {typ = Val; loc = Stack s} as reg ->
           live_offset := slot_offset s (register_class reg) :: !live_offset
@@ -271,8 +267,8 @@ let record_frame_label ?may_be_live_callee_saves live dbg =
       fd_debuginfo = dbg } :: !frame_descriptors;
   lbl
 
-let record_frame ?may_be_live_callee_saves live dbg =
-  let lbl = record_frame_label ?may_be_live_callee_saves live dbg in
+let record_frame ?using_caml_gc_regs live dbg =
+  let lbl = record_frame_label ?using_caml_gc_regs live dbg in
   def_label lbl
 
 (* Record calls to the GC -- we've moved them out of the way *)
@@ -491,11 +487,11 @@ let emit_instr fallthrough i =
       load_symbol_addr s (res i 0)
   | Lop(Icall_ind) ->
       I.call (arg i 0);
-      record_frame ~may_be_live_callee_saves:() i.live i.dbg
+      record_frame i.live i.dbg
   | Lop(Icall_imm s) ->
       add_used_symbol s;
       emit_call s;
-      record_frame ~may_be_live_callee_saves:() i.live i.dbg
+      record_frame i.live i.dbg
   | Lop(Itailcall_ind) ->
       output_epilogue begin fun () ->
         I.jmp (arg i 0)
@@ -585,7 +581,9 @@ let emit_instr fallthrough i =
         end else
           I.cmp (mem64_rip QWORD (emit_symbol "caml_young_limit")) r15;
         let lbl_call_gc = new_label() in
-        let lbl_frame = record_frame_label i.live Debuginfo.none in
+        let lbl_frame =
+          record_frame_label ~using_caml_gc_regs:() i.live Debuginfo.none
+        in
         I.jb (label lbl_call_gc);
         I.lea (mem64 NONE 8 R15) (res i 0);
         call_gc_sites :=
@@ -601,7 +599,7 @@ let emit_instr fallthrough i =
             I.mov (int n) rax;
             emit_call "caml_allocN"
         end;
-        record_frame i.live Debuginfo.none;
+        record_frame ~using_caml_gc_regs:() i.live Debuginfo.none;
         I.lea (mem64 NONE 8 R15) (res i 0)
       end
   | Lop(Iintop(Icomp cmp)) ->
@@ -847,6 +845,53 @@ let fundecl fundecl =
     end;
   end;
   def_label !tailrec_entry_point;
+(*
+I.push (Reg64 RAX);
+cfi_adjust_cfa_offset 8;
+I.push (Reg64 RBX);
+cfi_adjust_cfa_offset 8;
+I.push (Reg64 RDI);
+cfi_adjust_cfa_offset 8;
+I.push (Reg64 RSI);
+cfi_adjust_cfa_offset 8;
+I.push (Reg64 RDX);
+cfi_adjust_cfa_offset 8;
+I.push (Reg64 RCX);
+cfi_adjust_cfa_offset 8;
+I.push (Reg64 R8);
+cfi_adjust_cfa_offset 8;
+I.push (Reg64 R9);
+cfi_adjust_cfa_offset 8;
+I.push (Reg64 R10);
+cfi_adjust_cfa_offset 8;
+I.push (Reg64 R11);
+cfi_adjust_cfa_offset 8;
+I.mov (Reg64 R8) (Reg64 RDI);
+I.mov (Reg64 R9) (Reg64 RSI);
+I.mov (Reg64 R12) (Reg64 RDX);
+I.mov (Reg64 R13) (Reg64 RCX);
+emit_call "caml_check_callee_saves_on_entry";
+I.pop (Reg64 R11);
+cfi_adjust_cfa_offset (-8);
+I.pop (Reg64 R10);
+cfi_adjust_cfa_offset (-8);
+I.pop (Reg64 R9);
+cfi_adjust_cfa_offset (-8);
+I.pop (Reg64 R8);
+cfi_adjust_cfa_offset (-8);
+I.pop (Reg64 RCX);
+cfi_adjust_cfa_offset (-8);
+I.pop (Reg64 RDX);
+cfi_adjust_cfa_offset (-8);
+I.pop (Reg64 RSI);
+cfi_adjust_cfa_offset (-8);
+I.pop (Reg64 RDI);
+cfi_adjust_cfa_offset (-8);
+I.pop (Reg64 RBX);
+cfi_adjust_cfa_offset (-8);
+I.pop (Reg64 RAX);
+cfi_adjust_cfa_offset (-8);
+*)
   emit_all true fundecl.fun_body;
   List.iter emit_call_gc !call_gc_sites;
   emit_call_bound_errors ();

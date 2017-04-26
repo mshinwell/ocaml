@@ -119,23 +119,27 @@ let rotate_registers = false
 
 (* Representation of hard registers by pseudo-registers *)
 
-let hard_int_reg =
-  let v = Array.make 13 Reg.dummy in
-  for i = 0 to 12 do v.(i) <- Reg.at_location Int (Reg i) done;
-  v
-
 let first_callee_save_reg = 6
 let num_callee_saved_regs = 4
+
+let is_callee_save reg =
+  reg >= first_callee_save_reg
+    && reg < first_callee_save_reg + num_callee_saved_regs
+
+let hard_int_reg =
+  let v = Array.make 13 Reg.dummy in
+  (* CR mshinwell: Can they all be [Val]? *)
+  for i = 0 to 12 do
+    let typ = if is_callee_save i then Val else Int in
+    v.(i) <- Reg.at_location typ (Reg i)
+  done;
+  v
 
 let max_arguments_for_tailcalls = 10 - num_callee_saved_regs
 
 let num_non_callee_save_regs =
   if fp then num_available_registers.(0) - 1 - num_callee_saved_regs
   else num_available_registers.(0) - num_callee_saved_regs
-
-let is_callee_save reg =
-  reg >= first_callee_save_reg
-    && reg < first_callee_save_reg + num_callee_saved_regs
 
 let hard_int_non_callee_save_regs =
   let num_available_registers =

@@ -517,3 +517,72 @@ uintnat caml_stack_usage (void)
     sz += (*caml_stack_usage_hook)();
   return sz;
 }
+
+#ifdef DEBUG
+
+#include <stdio.h>
+
+static int is_uninit (value v)
+{
+  return v == Debug_free_minor
+    || v == Debug_free_major
+    || v == Debug_free_shrink
+    || v == Debug_free_truncate
+    || v == Debug_uninit_minor
+    || v == Debug_uninit_major
+    || v == Debug_uninit_align
+    || v == Debug_filler_align;
+}
+
+static void check (const char* name, value r)
+{
+  value contents;
+
+  if (r == (value) 0) return;
+
+  if (is_uninit (r)) {
+    fprintf(stderr, "%s is itself an uninit marker\n", name);
+    fflush(stderr);
+    abort();
+  }
+
+  if (!Is_block(r)) return;
+
+  contents = ((value*) r)[-1];
+  if (is_uninit (contents)) {
+    fprintf(stderr,
+      "%s (= %p) points at a block with header being an uninit marker\n",
+      name, (void*) r);
+    fflush(stderr);
+    abort();
+  }
+
+  if (Wosize_val(r) < 1) return;
+
+  contents = *(value*) r;
+  if (is_uninit (contents)) {
+    fprintf(stderr, "%s (= %p) points at an uninit marker\n", name, (void*) r);
+    fflush(stderr);
+    abort();
+  }
+}
+
+CAMLprim value caml_check_callee_saves_on_entry (value r8, value r9,
+                                                 value r12, value r13)
+{
+  check("r8", r8);
+  check("r9", r9);
+  check("r12", r12);
+  check("r13", r13);
+  return Val_unit;
+}
+
+#else
+
+CAMLprim value caml_check_callee_saves_on_entry (value r8, value r9,
+                                                 value r12, value r13)
+{
+  return Val_unit;
+}
+
+#endif
