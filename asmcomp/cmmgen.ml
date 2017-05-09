@@ -1634,8 +1634,8 @@ let rec transl env e =
            (fun shared_true ->
              if_then_else
                (test_bool (transl env cond),
-                exit_if_true env condso shared_true num_false,
-                exit_if_true env condnot shared_true num_false))
+                exit_if_false env condso shared_true num_false,
+                exit_if_false env condnot shared_true num_false))
            (transl env ifso))
         (transl env ifnot)
   | Uifthenelse(cond, ifso, ifnot) ->
