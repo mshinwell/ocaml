@@ -476,7 +476,8 @@ let emit_instr fallthrough i =
       end
       else begin
         let fits_in_32_bits =
-          Nativeint.compare n (-0x8000_0000n) >= 0
+          (* XXX This needs fixing properly *)
+          Nativeint.compare n 0n (* (-0x8000_0000n) *) >= 0
             && Nativeint.compare n 0x7fff_ffffn <= 0
         in
         if fits_in_32_bits then begin
@@ -487,9 +488,11 @@ let emit_instr fallthrough i =
             I.mov (nat n) (res32 i 0)
           | _ -> I.mov (nat n) (res i 0)
         end else begin
-          let fits_in_top_32_bits =
+          let fits_in_top_32_bits = false in
+(*
             Nativeint.compare (Nativeint.shift_left n 32) Nativeint.zero = 0
           in
+*)
           if fits_in_top_32_bits then begin
             match i.res.(0).loc with
             | Reg _ ->
