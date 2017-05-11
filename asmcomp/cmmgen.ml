@@ -725,6 +725,8 @@ let rec expr_size env = function
 
 let apply_function n =
   Compilenv.need_apply_fun n; "caml_apply" ^ string_of_int n
+let fast_apply_function n =
+  Compilenv.need_fast_apply_fun n; "caml_fast_apply" ^ string_of_int n
 let curry_function n =
   Compilenv.need_curry_fun n;
   if n >= 0
@@ -1470,14 +1472,28 @@ let rec transl env e =
       else Cop(Caddv, [ptr; Cconst_int(offset * size_addr)])
   | Udirect_apply(lbl, args, dbg) ->
       Cop(Capply(typ_val, dbg), Cconst_symbol lbl :: List.map (transl env) args)
-  | Ugeneric_apply(clos, [arg], dbg) ->
-      bind "fun" (transl env clos) (fun clos ->
-        Cop(Capply(typ_val, dbg), [get_field clos 0; transl env arg; clos]))
   | Ugeneric_apply(clos, args, dbg) ->
       let arity = List.length args in
-      let cargs = Cconst_symbol(apply_function arity) ::
-        List.map (transl env) (args @ [clos]) in
-      Cop(Capply(typ_val, dbg), cargs)
+      bind "fun" (transl env clos) (fun clos ->
+        let args = List.map (transl env) args in
+        let via_caml_curry_or_caml_apply =
+          match args with
+          | [arg] ->
+            Cop(Capply(typ_val, dbg), [get_field clos 0; arg; clos])
+          | _args ->
+            let cargs =
+              Cconst_symbol(fast_apply_function arity) :: args @ [clos]
+            in
+            Cop(Capply(typ_val, dbg), cargs)
+        in
+        let full_application =
+          Cop(Capply(typ_val, Debuginfo.none),
+              get_field clos 2 :: args @ [clos])
+        in
+        Cifthenelse (
+          Cop (Ccmpi Cne, [get_field clos 1; int_const arity]),
+          via_caml_curry_or_caml_apply,
+          full_application))
   | Usend(kind, met, obj, args, dbg) ->
       let call_met obj args clos =
         if args = [] then
@@ -2744,6 +2760,24 @@ let cache_public_method meths tag cache =
            (app closN-1.code aN closN-1))))
 *)
 
+let fast_apply_function_body arity =
+  let arg = Array.make arity (Ident.create "arg") in
+  for i = 1 to arity - 1 do arg.(i) <- Ident.create "arg" done;
+  let clos = Ident.create "clos" in
+  let rec app_fun clos n =
+    if n = arity-1 then
+      Cop(Capply(typ_val, Debuginfo.none),
+          [get_field (Cvar clos) 0; Cvar arg.(n); Cvar clos])
+    else begin
+      let newclos = Ident.create "clos" in
+      Clet(newclos,
+           Cop(Capply(typ_val, Debuginfo.none),
+               [get_field (Cvar clos) 0; Cvar arg.(n); Cvar clos]),
+           app_fun newclos (n+1))
+    end in
+  let args = Array.to_list arg in
+  (args, clos, app_fun clos 0)
+
 let apply_function_body arity =
   let arg = Array.make arity (Ident.create "arg") in
   for i = 1 to arity - 1 do arg.(i) <- Ident.create "arg" done;
@@ -2813,6 +2847,18 @@ let apply_function arity =
   let all_args = args @ [clos] in
   Cfunction
    {fun_name = "caml_apply" ^ string_of_int arity;
+    fun_args = List.map (fun id -> (id, typ_val)) all_args;
+    fun_body = body;
+    fun_fast = true;
+    fun_dbg  = Debuginfo.none;
+    fun_env  = None;
+   }
+
+let fast_apply_function arity =
+  let (args, clos, body) = fast_apply_function_body arity in
+  let all_args = args @ [clos] in
+  Cfunction
+   {fun_name = "caml_fast_apply" ^ string_of_int arity;
     fun_args = List.map (fun id -> (id, typ_val)) all_args;
     fun_body = body;
     fun_fast = true;
@@ -2981,16 +3027,19 @@ let default_apply = IntSet.add 2 (IntSet.add 3 IntSet.empty)
      the run-time system needs them (cf. asmrun/<arch>.S) . *)
 
 let generic_functions shared units =
-  let (apply,send,curry) =
+  let (apply,fast_apply,send,curry) =
     List.fold_left
-      (fun (apply,send,curry) ui ->
+      (fun (apply,fast_apply,send,curry) ui ->
          List.fold_right IntSet.add ui.ui_apply_fun apply,
+         List.fold_right IntSet.add ui.ui_fast_apply_fun fast_apply,
          List.fold_right IntSet.add ui.ui_send_fun send,
          List.fold_right IntSet.add ui.ui_curry_fun curry)
-      (IntSet.empty,IntSet.empty,IntSet.empty)
+      (IntSet.empty,IntSet.empty,IntSet.empty,IntSet.empty)
       units in
   let apply = if shared then apply else IntSet.union apply default_apply in
+  let fast_apply = if shared then fast_apply else IntSet.union fast_apply default_apply in
   let accu = IntSet.fold (fun n accu -> apply_function n :: accu) apply [] in
+  let accu = IntSet.fold (fun n accu -> fast_apply_function n :: accu) fast_apply accu in
   let accu = IntSet.fold (fun n accu -> send_function n :: accu) send accu in
   IntSet.fold (fun n accu -> curry_function n @ accu) curry accu
 
