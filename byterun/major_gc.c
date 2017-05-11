@@ -149,7 +149,7 @@ static void realloc_gray_vals (void)
 void caml_darken (value v, value *p /* not used */)
 {
 #ifdef NATIVE_CODE_AND_NO_NAKED_POINTERS
-  if (Is_block (v) && !Is_young (v) && Wosize_val (v) > 0) {
+  if (Is_block (v) && v != (value) 0 && !Is_young (v) && Wosize_val (v) > 0) {
 #else
   if (Is_block (v) && Is_in_heap (v)) {
 #endif
@@ -167,7 +167,7 @@ void caml_darken (value v, value *p /* not used */)
        when the value is allocated in a read-only section.  (For the values
        where it would be safe it is a performance improvement since we avoid
        putting them on the grey list.) */
-    CAMLassert (Is_in_heap (v) || Is_black_hd (h));
+    CAMLassert (Is_in_heap (v) || v == (value) 0 || Is_black_hd (h));
 #endif
     CAMLassert (!Is_blue_hd (h));
     if (Is_white_hd (h)){
@@ -240,6 +240,7 @@ static inline value* mark_slice_darken(value *gray_vals_ptr, value v, int i,
 
 #ifdef NATIVE_CODE_AND_NO_NAKED_POINTERS
   if (Is_block (child)
+	&& child != (value) 0
         && ! Is_young (child)
         && Wosize_val (child) > 0  /* Atoms never need to be marked. */
         /* Closure blocks contain code pointers at offsets that cannot
@@ -277,7 +278,7 @@ static inline value* mark_slice_darken(value *gray_vals_ptr, value v, int i,
     }
 #ifdef NATIVE_CODE_AND_NO_NAKED_POINTERS
     /* See [caml_darken] for a description of this assertion. */
-    CAMLassert (Is_in_heap (child) || Is_black_hd (chd));
+    CAMLassert (Is_in_heap (child) || child == (value) 0 || Is_black_hd (chd));
 #endif
     if (Is_white_hd (chd)){
       ephe_list_pure = 0;
