@@ -1497,8 +1497,9 @@ let rec transl env e =
               Cop(Capply(typ_val, dbg), cargs)
           in
           let full_application =
+            let code_pointer_field = if arity < 2 then 0 else 2 in
             Cop(Capply(typ_val, Debuginfo.none),
-                get_field clos 2 :: args @ [clos])
+                get_field clos code_pointer_field :: args @ [clos])
           in
           Cifthenelse (
             Cop (Ccmpi Cne, [get_field clos 1; int_const arity]),
