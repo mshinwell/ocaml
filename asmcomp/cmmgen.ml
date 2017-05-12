@@ -1502,9 +1502,9 @@ let rec transl env e =
                 get_field clos code_pointer_field :: args @ [clos])
           in
           Cifthenelse (
-            Cop (Ccmpi Cne, [get_field clos 1; int_const arity]),
-            via_caml_curry_or_caml_apply,
-            full_application)))
+            Cop (Ccmpi Ceq, [get_field clos 1; int_const arity]),
+            full_application,
+            via_caml_curry_or_caml_apply)))
   | Usend(kind, met, obj, args, dbg) ->
       let call_met obj args clos =
         if args = [] then
