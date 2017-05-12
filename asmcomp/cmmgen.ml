@@ -34,6 +34,16 @@ let bind name arg fn =
   | Cconst_blockheader _ -> fn arg
   | _ -> let id = Ident.create name in Clet(id, arg, fn (Cvar id))
 
+let bind_list name args fn =
+  let ids = List.map (fun _arg -> Ident.create name) args in
+  let body =
+    let args = List.map (fun id -> Cvar id) ids in
+    fn args
+  in
+  List.fold_left2 (fun expr id arg -> Clet (id, arg, expr))
+    body
+    ids args
+
 let bind_load name arg fn =
   match arg with
   | Cop(Cload _, [Cvar _]) -> fn arg
@@ -1475,25 +1485,25 @@ let rec transl env e =
   | Ugeneric_apply(clos, args, dbg) ->
       let arity = List.length args in
       bind "fun" (transl env clos) (fun clos ->
-        let args = List.map (transl env) args in
-        let via_caml_curry_or_caml_apply =
-          match args with
-          | [arg] ->
-            Cop(Capply(typ_val, dbg), [get_field clos 0; arg; clos])
-          | _args ->
-            let cargs =
-              Cconst_symbol(fast_apply_function arity) :: args @ [clos]
-            in
-            Cop(Capply(typ_val, dbg), cargs)
-        in
-        let full_application =
-          Cop(Capply(typ_val, Debuginfo.none),
-              get_field clos 2 :: args @ [clos])
-        in
-        Cifthenelse (
-          Cop (Ccmpi Cne, [get_field clos 1; int_const arity]),
-          via_caml_curry_or_caml_apply,
-          full_application))
+        bind_list "arg" (List.map (transl env) args) (fun args ->
+          let via_caml_curry_or_caml_apply =
+            match args with
+            | [arg] ->
+              Cop(Capply(typ_val, dbg), [get_field clos 0; arg; clos])
+            | _args ->
+              let cargs =
+                Cconst_symbol(fast_apply_function arity) :: args @ [clos]
+              in
+              Cop(Capply(typ_val, dbg), cargs)
+          in
+          let full_application =
+            Cop(Capply(typ_val, Debuginfo.none),
+                get_field clos 2 :: args @ [clos])
+          in
+          Cifthenelse (
+            Cop (Ccmpi Cne, [get_field clos 1; int_const arity]),
+            via_caml_curry_or_caml_apply,
+            full_application)))
   | Usend(kind, met, obj, args, dbg) ->
       let call_met obj args clos =
         if args = [] then
