@@ -231,7 +231,12 @@ let check_scale_factor scale =
       scale
   end
 
-let addressing addr typ i n =
+let addressing ?for_lea addr typ i n =
+  let can_optimise_scaled_by_2 =
+    match for_lea with
+    | None -> true
+    | Some () -> not !Arch.sandy_bridge
+  in
   match addr with
   | Ibased(s, ofs) ->
       add_used_symbol s;
@@ -240,7 +245,7 @@ let addressing addr typ i n =
       mem64 typ d (arg64 i n)
   | Iindexed2 d ->
       mem64 typ ~base:(arg64 i n) d (arg64 i (n+1))
-  | Iscaled(2, d) when not !Arch.sandy_bridge ->
+  | Iscaled(2, d) when can_optimise_scaled_by_2 ->
       mem64 typ ~base:(arg64 i n) d (arg64 i n)
   | Iscaled(scale, d) ->
       check_scale_factor scale;
@@ -690,7 +695,7 @@ let emit_instr fallthrough i =
   | Lop(Iintoffloat) ->
       I.cvttsd2si (arg i 0) (res i 0)
   | Lop(Ispecific(Ilea addr)) ->
-      I.lea (addressing addr NONE i 0) (res i 0)
+      I.lea (addressing ~for_lea:() addr NONE i 0) (res i 0)
   | Lop(Ispecific(Istore_int(n, addr, _))) ->
       I.mov (nat n) (addressing addr QWORD i 0)
   | Lop(Ispecific(Istore_symbol(s, addr, _))) ->
