@@ -474,11 +474,47 @@ let emit_instr fallthrough i =
   | Lop(Iconst_int n | Iconst_blockheader n) ->
       if n = 0n then begin
         match i.res.(0).loc with
-        | Reg _ -> I.xor (res i 0) (res i 0)
-        | _     -> I.mov (int 0) (res i 0)
+        | Reg _ ->
+          (* Clearing the bottom half also clears the top half (except for
+             64-bit-only registers where the behaviour is as if the operands
+             were 64 bit). *)
+          I.xor (res32 i 0) (res32 i 0)
+        | _ ->
+          I.mov (int 0) (res i 0)
       end
-      else
-        I.mov (nat n) (res i 0)
+      else begin
+        let fits_in_32_bits =
+          (* XXX This needs fixing properly *)
+          Nativeint.compare n 0n (* (-0x8000_0000n) *) >= 0
+            && Nativeint.compare n 0x7fff_ffffn <= 0
+        in
+        if fits_in_32_bits then begin
+          match i.res.(0).loc with
+          | Reg _ ->
+            (* Setting the bottom half also sets the top half to zero
+               (with the same caveat as above). *)
+            I.mov (nat n) (res32 i 0)
+          | _ -> I.mov (nat n) (res i 0)
+        end else begin
+          let fits_in_top_32_bits = false in
+(*
+            Nativeint.compare (Nativeint.shift_left n 32) Nativeint.zero = 0
+          in
+*)
+          if fits_in_top_32_bits then begin
+            match i.res.(0).loc with
+            | Reg _ ->
+              let const32 =
+                Nativeint.logand (Nativeint.shift_right n 32) 0xffff_ffffn
+              in
+              I.mov (nat const32) (res32 i 0);
+              I.sal (nat 32n) (res i 0)
+            | _ -> I.mov (nat n) (res i 0)
+          end else begin
+            I.mov (nat n) (res i 0)
+          end
+        end
+      end
   | Lop(Iconst_float f) ->
       begin match f with
       | 0x0000_0000_0000_0000L ->       (* +0.0 *)
