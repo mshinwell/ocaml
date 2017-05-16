@@ -220,6 +220,12 @@ let res32 i n = emit_subreg reg_low_32_name DWORD i.res.(n)
 
 (* Output an addressing mode *)
 
+let check_scale_factor scale =
+  if scale <> 2 && scale <> 4 && scale <> 8 then begin
+    Misc.fatal_errorf "Bad scale factor (%d) for Intel addressing mode"
+      scale
+  end
+
 let addressing addr typ i n =
   match addr with
   | Ibased(s, ofs) ->
@@ -229,11 +235,13 @@ let addressing addr typ i n =
       mem64 typ d (arg64 i n)
   | Iindexed2 d ->
       mem64 typ ~base:(arg64 i n) d (arg64 i (n+1))
-  | Iscaled(2, d) ->
+  | Iscaled(2, d) when not !Arch.sandy_bridge ->
       mem64 typ ~base:(arg64 i n) d (arg64 i n)
   | Iscaled(scale, d) ->
+      check_scale_factor scale;
       mem64 typ ~scale d (arg64 i n)
   | Iindexed2scaled(scale, d) ->
+      check_scale_factor scale;
       mem64 typ ~scale ~base:(arg64 i n) d (arg64 i (n+1))
 
 (* Record live pointers at call points -- see Emitaux *)
