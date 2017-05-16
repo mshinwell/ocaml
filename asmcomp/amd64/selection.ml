@@ -186,7 +186,13 @@ method! select_operation op args =
       begin match self#select_addressing Word_int (Cop(op, args)) with
         (Iindexed d, _) -> super#select_operation op args
       | (Iindexed2 0, _) -> super#select_operation op args
-      | (addr, arg) -> (Ispecific(Ilea addr), [arg])
+      | ((Iscaled _) as addr, arg) when !Arch.sandy_bridge ->
+          (Ispecific(Ilea addr), [arg])
+      | (addr, arg) ->
+        if !Arch.sandy_bridge then
+          super#select_operation op args
+        else
+          (Ispecific(Ilea addr), [arg])
       end
   (* Recognize float arithmetic with memory. *)
   | Caddf ->

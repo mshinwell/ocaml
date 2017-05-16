@@ -15,11 +15,16 @@
 
 (* Machine-specific command-line options *)
 
+let sandy_bridge = ref false
+
 let command_line_options =
   [ "-fPIC", Arg.Set Clflags.pic_code,
       " Generate position-independent machine code (default)";
     "-fno-PIC", Arg.Clear Clflags.pic_code,
-      " Generate position-dependent machine code" ]
+      " Generate position-dependent machine code";
+    "-march=sandy-bridge", Arg.Set sandy_bridge,
+      " Generate code optimised for Sandy Bridge and later CPUs";
+  ]
 
 (* Specific operations for the AMD64 processor *)
 
