@@ -486,8 +486,10 @@ let emit_instr fallthrough i =
           I.xor (res32 i 0) (res32 i 0)
         | _ ->
           I.mov (int 0) (res i 0)
-      end
-      else begin
+      end else if n = 1n then begin
+        I.xor (res32 i 0) (res32 i 0);
+        I.inc (res32 i 0)
+      end else begin
         let fits_in_32_bits =
           (* XXX This needs fixing properly *)
           Nativeint.compare n 0n (* (-0x8000_0000n) *) >= 0
@@ -675,12 +677,10 @@ let emit_instr fallthrough i =
       instr_for_intop op (arg i 1) (res i 0)
   | Lop(Iintop_imm(Iadd, n)) when i.arg.(0).loc <> i.res.(0).loc ->
       I.lea (mem64 NONE n (arg64 i 0)) (res i 0)
-(*
   | Lop(Iintop_imm(Iadd, 1) | Iintop_imm(Isub, -1)) ->
       I.inc (res i 0)
   | Lop(Iintop_imm(Iadd, -1) | Iintop_imm(Isub, 1)) ->
       I.dec (res i 0)
-*)
   | Lop(Iintop_imm(op, n)) ->
       (* We have i.arg.(0) = i.res.(0) *)
       instr_for_intop op (int n) (res i 0)
