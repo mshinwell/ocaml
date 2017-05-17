@@ -463,6 +463,11 @@ let function_name = ref ""
 (* Entry point for tail recursive calls *)
 let tailrec_entry_point = ref 0
 
+let is_reg r =
+  match r.loc with
+  | Reg _ -> true
+  | _ -> false
+
 (* Emit an instruction *)
 let emit_instr fallthrough i =
   emit_debug_info i.dbg;
@@ -486,7 +491,7 @@ let emit_instr fallthrough i =
           I.xor (res32 i 0) (res32 i 0)
         | _ ->
           I.mov (int 0) (res i 0)
-      end else if n = 1n then begin
+      end else if n = 1n && is_reg i.res.(0) then begin
         I.xor (res32 i 0) (res32 i 0);
         I.inc (res32 i 0)
       end else begin
