@@ -653,7 +653,11 @@ let emit_instr fallthrough i =
       I.set (cond cmp) al;
       I.movzx al (res i 0)
   | Lop(Iintop_imm(Icomp cmp, n)) ->
-      I.cmp (int n) (arg i 0);
+      if n = 0 then begin
+        I.test (arg i 0) (arg i 0)
+      end else begin
+        I.cmp (int n) (arg i 0)
+      end;
       I.set (cond cmp) al;
       I.movzx al (res i 0)
   | Lop(Iintop Icheckbound) ->
