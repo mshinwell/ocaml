@@ -834,7 +834,7 @@ let emit_instr fallthrough i =
         D.long (ConstSub (ConstLabel(emit_label jumptbl.(i)),
                          ConstLabel lbl))
       done;
-      D.text ()
+      D.text ~subsection:(emit_symbol !function_name) ()
   | Lsetuptrap lbl ->
       I.call (label lbl)
   | Lpushtrap ->
@@ -900,7 +900,7 @@ let fundecl fundecl =
   bound_error_sites := [];
   bound_error_call := 0;
   all_functions := fundecl :: !all_functions;
-  D.text ();
+  D.text ~subsection:(emit_symbol fundecl.fun_name) ();
   D.align 16;
   add_def_symbol fundecl.fun_name;
   if system = S_macosx
