@@ -203,6 +203,8 @@ method! select_operation op args =
       self#select_floatarith true Imulf Ifloatmul args
   | Cdivf ->
       self#select_floatarith false Idivf Ifloatdiv args
+  | Cextcall("caml_minor_heap_ptr", _, _, _) ->
+      Ispecific Iminor_heap_ptr, []
   | Cextcall("sqrt", _, false, _) ->
      begin match args with
        [Cop(Cload ((Double|Double_u as chunk), _), [loc])] ->

@@ -640,6 +640,31 @@ CAMLexport CAMLweakdef void caml_modify (value *fp, value val)
   }
 }
 
+CAMLexport CAMLweakdef void caml_modify_not_in_minor_heap (value *fp, value val)
+{
+  value old;
+
+  CAMLassert(!Is_young((value)fp));
+
+  /* The modified object resides in the major heap. */
+  CAMLassert(Is_in_heap(fp));
+  old = *fp;
+  *fp = val;
+  if (Is_block(old)) {
+    /* If [old] is a pointer within the minor heap, we already
+        have a major->minor pointer and [fp] is already in the
+        remembered set.  Conditions 1 and 2 cannot occur. */
+    if (Is_young(old)) return;
+    /* Here, [old] can be a pointer within the major heap.
+        Check for condition 2. */
+    if (caml_gc_phase == Phase_mark) caml_darken(old, NULL);
+  }
+  /* Check for condition 1. */
+  if (Is_block(val) && Is_young(val)) {
+    add_to_ref_table (&caml_ref_table, fp);
+  }
+}
+
 /* [sz] is a number of bytes */
 CAMLexport void * caml_stat_alloc (asize_t sz)
 {
