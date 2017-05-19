@@ -31,6 +31,7 @@ let oper_result_type = function
   | Cload (c, _) ->
       begin match c with
       | Word_val -> typ_val
+      | Word_addr -> typ_addr
       | Single | Double | Double_u -> typ_float
       | _ -> typ_int
       end
@@ -46,6 +47,7 @@ let oper_result_type = function
   | Cintoffloat -> typ_int
   | Craise _ -> typ_void
   | Ccheckbound _ -> typ_void
+  | Cminor_heap_ptr -> typ_addr
 
 (* Infer the size in bytes of the result of an expression whose evaluation
    may be deferred (cf. [emit_parts]). *)
@@ -347,6 +349,7 @@ method effects_of exp =
       | Clsl | Clsr | Casr | Ccmpi _ | Caddv | Cadda | Ccmpa _ | Cnegf | Cabsf
       | Caddf | Csubf | Cmulf | Cdivf | Cfloatofint | Cintoffloat | Ccmpf _ ->
         EC.none
+      | Cminor_heap_ptr -> EC.coeffect_only Coeffect.Arbitrary
     in
     EC.join from_op (EC.join_list_map args self#effects_of)
   | Cassign _ | Cswitch _ | Cloop _ | Ccatch _ | Cexit _ | Ctrywith _ ->
@@ -447,6 +450,7 @@ method select_operation op args =
   | (Cfloatofint, _) -> (Ifloatofint, args)
   | (Cintoffloat, _) -> (Iintoffloat, args)
   | (Ccheckbound _, _) -> self#select_arith Icheckbound args
+  | (Cminor_heap_ptr, _) -> (Iminor_heap_ptr, args)
   | _ -> fatal_error "Selection.select_oper"
 
 method private select_arith_comm op = function

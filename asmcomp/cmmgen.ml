@@ -599,28 +599,31 @@ let float_array_ref arr ofs =
   box_float(unboxed_float_array_ref arr ofs)
 
 let caml_modify addr newval =
-  (* Hmm, we should share [addr]'s code, but that will cause trouble *)
   bind "newval" newval (fun newval ->
-    let minor_heap_min =
-      Cop (Cextcall ("caml_minor_heap_ptr", typ_addr, false, Debuginfo.none),
-        [])
-    in
-    let minor_heap_max =
-      Cop (Cload (Word_int, Mutable), [Cconst_symbol "caml_young_end"])
-    in
-    let cont = next_raise_count () in
-    Ccatch (cont, [],
-      Cifthenelse (Cop (Ccmpa Cge, [addr; minor_heap_min]),
-        Cifthenelse (Cop (Ccmpa Clt, [addr; minor_heap_max]),
-          Cop (Cstore (Word_int, Assignment), [addr; newval]),
-          Cexit (cont, [])),
-        Cexit (cont, [])),
-      Cop (Cextcall ("caml_modify_not_in_minor_heap", typ_void, false,
-          Debuginfo.none),
-        [addr; newval])))
+    bind "addr" addr (fun addr ->
+      let cont = next_raise_count () in
+      Ccatch (cont, [],
+        begin
+          let minor_heap_min =
+            Cop (Cminor_heap_ptr, [])
+          in
+          let minor_heap_max =
+            Cop (Cload (Word_addr, Mutable), [Cconst_symbol "caml_young_end"])
+          in
+          bind "minor_heap_min" minor_heap_min (fun minor_heap_min ->
+            bind "minor_heap_max" minor_heap_max (fun minor_heap_max ->
+              Cifthenelse (Cop (Ccmpa Cge, [addr; minor_heap_min]),
+                Cifthenelse (Cop (Ccmpa Clt, [addr; minor_heap_max]),
+                  Cop (Cstore (Word_val, Assignment), [addr; newval]),
+                  Cexit (cont, [])),
+                Cexit (cont, []))))
+        end,
+        Cop (Cextcall ("caml_modify_not_in_minor_heap", typ_void, false,
+            Debuginfo.none),
+          [addr; newval]))))
 
 let addr_array_set arr ofs newval =
-  caml_modify (array_indexing log2_size_addr arr ofs) newval
+  caml_modify (array_indexing ~typ:Addr log2_size_addr arr ofs) newval
 let int_array_set arr ofs newval =
   Cop(Cstore (Word_int, Assignment),
     [array_indexing log2_size_addr arr ofs; newval])

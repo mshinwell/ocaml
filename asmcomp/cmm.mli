@@ -92,6 +92,7 @@ type memory_chunk =
   | Thirtytwo_signed
   | Word_int                           (* integer or pointer outside heap *)
   | Word_val                           (* pointer inside heap or encoded int *)
+  | Word_addr                          (* derived pointer within heap *)
   | Single
   | Double                             (* 64-bit-aligned 64-bit float *)
   | Double_u                           (* word-aligned 64-bit float *)
@@ -114,6 +115,7 @@ type operation =
   | Ccmpf of comparison
   | Craise of Lambda.raise_kind * Debuginfo.t
   | Ccheckbound of Debuginfo.t
+  | Cminor_heap_ptr
 
 type expression =
     Cconst_int of int
