@@ -129,12 +129,17 @@ typedef struct {
 } allocation_point;
 
 typedef struct {
+  value callee_node;
+  value call_count;
+} call_point;
+
+typedef struct {
   /* CR-soon mshinwell: delete [gc_header], all the offset arithmetic will
      then go away */
   uintnat gc_header;
   uintnat pc;           /* see above for encodings */
   union {
-    value callee_node;  /* for CALL */
+    call_point call;  /* for CALL */
     allocation_point allocation;  /* for ALLOCATION */
   } data;
   value next;           /* [Val_unit] for the end of the list */
