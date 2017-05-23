@@ -101,17 +101,17 @@ module Shape_table = struct
   let _ = Indirect_call 0L
   let _ = Allocation_point 0L
 
-  let part_of_shape_size = function
-    | Direct_call _
-    | Indirect_call _ -> 1
-    | Allocation_point _ -> 3
-
   type raw = (Int64.t * (part_of_shape list)) list
 
   type t = {
     shapes : part_of_shape list Int64_map.t;
     call_counts : bool;
   }
+
+  let part_of_shape_size t = function
+    | Direct_call _ -> if t.call_counts then 2 else 1
+    | Indirect_call _ -> 1
+    | Allocation_point _ -> 3
 
   let demarshal chn ~call_counts : t =
     let raw : raw = Marshal.from_channel chn in
@@ -357,7 +357,9 @@ module Trace = struct
         match t.remaining_layout with
         | [] -> None
         | part_of_shape::remaining_layout ->
-          let size = Shape_table.part_of_shape_size t.part_of_shape in
+          let size =
+            Shape_table.part_of_shape_size t.shape_table t.part_of_shape
+          in
           let offset = t.offset + size in
           assert (offset < Obj.size (Obj.repr t.node));
           let t =
