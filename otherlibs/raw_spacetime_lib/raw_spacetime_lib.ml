@@ -108,15 +108,24 @@ module Shape_table = struct
 
   type raw = (Int64.t * (part_of_shape list)) list
 
-  type t = part_of_shape list Int64_map.t
+  type t = {
+    shapes : part_of_shape list Int64_map.t;
+    call_counts : bool;
+  }
 
-  let demarshal chn : t =
+  let demarshal chn ~call_counts : t =
     let raw : raw = Marshal.from_channel chn in
-    List.fold_left (fun map (key, data) -> Int64_map.add key data map)
-      Int64_map.empty
-      raw
+    let shapes =
+      List.fold_left (fun map (key, data) -> Int64_map.add key data map)
+        Int64_map.empty
+        raw
+    in
+    { shapes;
+      call_counts;
+    }
 
-  let find_exn = Int64_map.find
+  let find_exn func_id t = Int64_map.find func_id t.shapes
+  let call_counts t = t.call_counts
 end
 
 module Annotation = struct
@@ -132,6 +141,7 @@ module Trace = struct
   type uninstrumented_node
 
   type t = node option
+  type trace = t
 
   (* This function unmarshals into malloc blocks, which mean that we
      obtain a straightforward means of writing [compare] on [node]s. *)
@@ -165,7 +175,6 @@ module Trace = struct
       part_of_shape : Shape_table.part_of_shape;
       remaining_layout : Shape_table.part_of_shape list;
       shape_table : Shape_table.t;
-      call_counts : bool;
     }
 
     module Allocation_point = struct
@@ -216,8 +225,10 @@ module Trace = struct
           "caml_spacetime_ocaml_direct_call_point_call_count"
 
       let call_count t =
-        if t.call_counts then Some (call_count t.node)
-        else None
+        if Shape_table.call_counts t.shape_table then
+          Some (call_count t.node t.offset)
+        else
+          None
     end
 
     module Indirect_call_point = struct
@@ -254,7 +265,7 @@ module Trace = struct
 
         let callee_node t = callee_node t.node
 
-        external call_count : foreign_node -> int -> int
+        external call_count : foreign_node -> int
           = "caml_spacetime_only_works_for_native_code"
             "caml_spacetime_c_node_call_count"
 
@@ -268,23 +279,24 @@ module Trace = struct
 
         let next t =
           let next = { t with node = next t.node; } in
-          if foreign_node_is_null next then None
+          if foreign_node_is_null next.node then None
           else Some next
       end
 
-      external callees : ocaml_node -> int -> Callee.t
+      external callees : ocaml_node -> int -> foreign_node
         = "caml_spacetime_only_works_for_native_code"
           "caml_spacetime_ocaml_indirect_call_point_callees"
           "noalloc"
 
       let callees t =
-        let callees = callees t.node t.offset in
-        if Callee.is_null callees then None
-        else
-          Some {
-            node = callees;
-            call_counts = t.call_counts;
+        let callees =
+          { Callee.
+            node = callees t.node t.offset;
+            call_counts = Shape_table.call_counts t.shape_table;
           }
+        in
+        if Callee.is_null callees then None
+        else Some callees
     end
 
     module Field = struct
@@ -379,7 +391,8 @@ module Trace = struct
           "caml_spacetime_compare_node" "noalloc"
 
       let fields t ~shape_table =
-        match Shape_table.find_exn (function_identifier t) shape_table with
+        let id = function_identifier t in
+        match Shape_table.find_exn id shape_table with
         | exception Not_found -> None
         | [] -> None
         | part_of_shape::remaining_layout ->
@@ -634,7 +647,7 @@ module Heap_snapshot = struct
           let num_snapshots = Array.length snapshots in
           let time_of_writer_close : float = Marshal.from_channel chn in
           let frame_table = Frame_table.demarshal chn in
-          let shape_table = Shape_table.demarshal chn in
+          let shape_table = Shape_table.demarshal chn ~call_counts in
           let num_threads : int = Marshal.from_channel chn in
           let traces_by_thread = Array.init num_threads (fun _ -> None) in
           let finaliser_traces_by_thread =

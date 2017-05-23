@@ -183,7 +183,7 @@ while : ; do
     -spacetime|--spacetime)
         with_spacetime=true;;
     -spacetime-call-counts|--spacetime-call-counts)
-        with_spacetime=true;;
+        with_spacetime=true
         with_spacetime_call_counts=true;;
     -no-cfi|--no-cfi)
         with_cfi=false;;
@@ -2064,9 +2064,9 @@ else
   if $with_spacetime; then
     inf "        spacetime profiling....... yes"
     if test "$with_spacetime_call_counts" = "true"; then
-      inf "        ... with call counts...... yes"
+      inf "          ... with call counts.... yes"
     else
-      inf "        ... with call counts...... no"
+      inf "          ... with call counts.... no"
     fi
     inf "          ... with libunwind...... $has_libunwind"
   else

@@ -97,6 +97,7 @@ module Trace : sig
       information required to decode profiling annotations written into
       values' headers. *)
   type t
+  type trace = t
 
   type node
   type ocaml_node
