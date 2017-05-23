@@ -98,9 +98,11 @@ typedef enum {
 #define Alloc_point_next_ptr(node, offset) (Field(node, offset + 2))
 
 /* Direct call points (tail or non-tail) within OCaml nodes.
-   They just hold a pointer to the child node.  The call site and callee are
-   both recorded in the shape. */
+   They hold a pointer to the child node and (if the compiler was so
+   configured) a call count.
+   The call site and callee are both recorded in the shape. */
 #define Direct_callee_node(node,offset) (Field(node, offset))
+#define Direct_call_count(node,offset) (Field(node, offset + 1))
 #define Encode_call_point_pc(pc) (((value) pc) | 1)
 #define Decode_call_point_pc(pc) ((void*) (((value) pc) & ~((uintnat) 1)))
 

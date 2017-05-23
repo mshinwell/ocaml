@@ -580,7 +580,8 @@ static c_node* allocate_c_node(void)
 
   node->gc_header =
     Make_header(sizeof(c_node)/sizeof(uintnat) - 1, C_node_tag, Caml_black);
-  node->data.callee_node = Val_unit;
+  node->data.call.callee_node = Val_unit;
+  node->data.call.call_count = Val_long(0);
   node->next = Val_unit;
 
   return node;
@@ -633,8 +634,8 @@ CAMLprim value* caml_spacetime_indirect_node_hole_ptr
       c_node->data.call.call_count =
         Val_long (Long_val(c_node->data.call.call_count) + 1);
 #endif
-      last_indirect_node_hole_ptr_result = &(c_node->data.call.callee_node);
-      return last_indirect_node_hole_ptr_result;
+      last_indirect_node_hole_ptr_result = &(c_node->data.call);
+      return &(last_indirect_node_hole_ptr_result->callee_node);
     }
     else {
       node_hole = &c_node->next;
@@ -663,7 +664,7 @@ CAMLprim value* caml_spacetime_indirect_node_hole_ptr
 #endif
   last_indirect_node_hole_ptr_result = &(c_node->data.call);
 
-  return last_indirect_node_hole_ptr_result;
+  return &(last_indirect_node_hole_ptr_result->callee_node);
 }
 
 /* Some notes on why caml_call_gc doesn't need a distinguished node.
@@ -869,7 +870,7 @@ static NOINLINE void* find_trie_node_from_libunwind(int for_allocation,
 
     Assert(caml_spacetime_classify_c_node(node) == expected_type);
     Assert(pc_inside_c_node_matches(node, pc));
-    node_hole = &node->data.callee_node;
+    node_hole = &node->data.call.callee_node;
   }
 
   if (must_initialise_node_for_allocation) {
