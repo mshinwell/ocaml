@@ -122,6 +122,7 @@ type memory_chunk =
   | Thirtytwo_signed
   | Word_int
   | Word_val
+  | Word_addr
   | Single
   | Double
   | Double_u
@@ -145,6 +146,7 @@ and operation =
   | Ccmpf of comparison
   | Craise of Lambda.raise_kind * Debuginfo.t
   | Ccheckbound of Debuginfo.t
+  | Cminor_heap_ptr
 
 type expression =
     Cconst_int of int

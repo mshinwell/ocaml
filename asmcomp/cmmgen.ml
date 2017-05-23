@@ -34,6 +34,16 @@ let bind name arg fn =
   | Cblockheader _ -> fn arg
   | _ -> let id = Ident.create name in Clet(id, arg, fn (Cvar id))
 
+let bind_list name args fn =
+  let ids = List.map (fun _arg -> Ident.create name) args in
+  let body =
+    let args = List.map (fun id -> Cvar id) ids in
+    fn args
+  in
+  List.fold_left2 (fun expr id arg -> Clet (id, arg, expr))
+    body
+    ids args
+
 let bind_load name arg fn =
   match arg with
   | Cop(Cload _, [Cvar _]) -> fn arg
@@ -65,7 +75,9 @@ let black_closure_header sz = black_block_header Obj.closure_tag sz
 let infix_header ofs = block_header Obj.infix_tag ofs
 let float_header = block_header Obj.double_tag (size_float / size_addr)
 let floatarray_header len =
-      block_header Obj.double_array_tag (len * size_float / size_addr)
+  assert (len >= 0);
+  if len = 0 then block_header 0 0
+  else block_header Obj.double_array_tag (len * size_float / size_addr)
 let string_header len =
       block_header Obj.string_tag ((len + size_addr) / size_addr)
 let boxedint32_header = block_header Obj.custom_tag 2
@@ -593,9 +605,33 @@ let unboxed_float_array_ref arr ofs =
 let float_array_ref dbg arr ofs =
   box_float dbg (unboxed_float_array_ref arr ofs)
 
+let caml_modify addr newval =
+  bind "newval" newval (fun newval ->
+    bind "addr" addr (fun addr ->
+      let cont = next_raise_count () in
+      Ccatch (cont, [],
+        begin
+          let minor_heap_min =
+            Cop (Cminor_heap_ptr, [])
+          in
+          let minor_heap_max =
+            Cop (Cload (Word_addr, Mutable), [Cconst_symbol "caml_young_end"])
+          in
+          bind "minor_heap_min" minor_heap_min (fun minor_heap_min ->
+            bind "minor_heap_max" minor_heap_max (fun minor_heap_max ->
+              Cifthenelse (Cop (Ccmpa Cge, [addr; minor_heap_min]),
+                Cifthenelse (Cop (Ccmpa Clt, [addr; minor_heap_max]),
+                  Cop (Cstore (Word_val, Assignment), [addr; newval]),
+                  Cexit (cont, [])),
+                Cexit (cont, []))))
+        end,
+        Cop (Cextcall ("caml_modify_not_in_minor_heap", typ_void, false,
+            Debuginfo.none, None),
+          [addr; newval]))))
+
 let addr_array_set arr ofs newval =
-  Cop(Cextcall("caml_modify", typ_void, false, Debuginfo.none, None),
-      [array_indexing log2_size_addr arr ofs; newval])
+  caml_modify (array_indexing ~typ:Addr log2_size_addr arr ofs) newval
+
 let int_array_set arr ofs newval =
   Cop(Cstore (Word_int, Assignment),
     [array_indexing log2_size_addr arr ofs; newval])
@@ -731,6 +767,8 @@ let rec expr_size env = function
 
 let apply_function n =
   Compilenv.need_apply_fun n; "caml_apply" ^ string_of_int n
+let fast_apply_function n =
+  Compilenv.need_fast_apply_fun n; "caml_fast_apply" ^ string_of_int n
 let curry_function n =
   Compilenv.need_curry_fun n;
   if n >= 0
@@ -1492,14 +1530,29 @@ let rec transl env e =
       else Cop(Caddv, [ptr; Cconst_int(offset * size_addr)])
   | Udirect_apply(lbl, args, dbg) ->
       Cop(Capply(typ_val, dbg), Cconst_symbol lbl :: List.map (transl env) args)
-  | Ugeneric_apply(clos, [arg], dbg) ->
-      bind "fun" (transl env clos) (fun clos ->
-        Cop(Capply(typ_val, dbg), [get_field clos 0; transl env arg; clos]))
   | Ugeneric_apply(clos, args, dbg) ->
       let arity = List.length args in
-      let cargs = Cconst_symbol(apply_function arity) ::
-        List.map (transl env) (args @ [clos]) in
-      Cop(Capply(typ_val, dbg), cargs)
+      bind "fun" (transl env clos) (fun clos ->
+        bind_list "arg" (List.map (transl env) args) (fun args ->
+          let via_caml_curry_or_caml_apply =
+            match args with
+            | [arg] ->
+              Cop(Capply(typ_val, dbg), [get_field clos 0; arg; clos])
+            | _args ->
+              let cargs =
+                Cconst_symbol(fast_apply_function arity) :: args @ [clos]
+              in
+              Cop(Capply(typ_val, dbg), cargs)
+          in
+          let full_application =
+            let code_pointer_field = if arity < 2 then 0 else 2 in
+            Cop(Capply(typ_val, Debuginfo.none),
+                get_field clos code_pointer_field :: args @ [clos])
+          in
+          Cifthenelse (
+            Cop (Ccmpi Cne, [get_field clos 1; int_const arity]),
+            via_caml_curry_or_caml_apply,
+            full_application)))
   | Usend(kind, met, obj, args, dbg) ->
       let call_met obj args clos =
         if args = [] then
@@ -1649,17 +1702,17 @@ let rec transl env e =
         (exit_if_true env cond raise_num (transl env ifnot))
         (transl env ifso)
   | Uifthenelse (Uifthenelse (cond, condso, condnot), ifso, ifnot) ->
-      let num_true = next_raise_count () in
+      let num_false = next_raise_count () in
       make_catch
-        num_true
+        num_false
         (make_catch2
-           (fun shared_false ->
+           (fun shared_true ->
              if_then_else
                (test_bool (transl env cond),
-                exit_if_true env condso num_true shared_false,
-                exit_if_true env condnot num_true shared_false))
-           (transl env ifnot))
-        (transl env ifso)
+                exit_if_false env condso shared_true num_false,
+                exit_if_false env condnot shared_true num_false))
+           (transl env ifso))
+        (transl env ifnot)
   | Uifthenelse(cond, ifso, ifnot) ->
       if_then_else(test_bool(transl env cond), transl env ifso,
         transl env ifnot)
@@ -1867,9 +1920,8 @@ and transl_prim_2 env p arg1 arg2 dbg =
     Psetfield(n, ptr, init) ->
       begin match init, ptr with
       | Assignment, Pointer ->
-        return_unit(Cop(Cextcall("caml_modify", typ_void, false,Debuginfo.none,
-                          None),
-                        [field_address (transl env arg1) n; transl env arg2]))
+        return_unit(
+          caml_modify (field_address (transl env arg1) n) (transl env arg2))
       | Assignment, Immediate
       | Initialization, (Immediate | Pointer) ->
         return_unit(set_field (transl env arg1) n (transl env arg2) init)
@@ -2769,6 +2821,24 @@ let cache_public_method meths tag cache =
            (app closN-1.code aN closN-1))))
 *)
 
+let fast_apply_function_body arity =
+  let arg = Array.make arity (Ident.create "arg") in
+  for i = 1 to arity - 1 do arg.(i) <- Ident.create "arg" done;
+  let clos = Ident.create "clos" in
+  let rec app_fun clos n =
+    if n = arity-1 then
+      Cop(Capply(typ_val, Debuginfo.none),
+          [get_field (Cvar clos) 0; Cvar arg.(n); Cvar clos])
+    else begin
+      let newclos = Ident.create "clos" in
+      Clet(newclos,
+           Cop(Capply(typ_val, Debuginfo.none),
+               [get_field (Cvar clos) 0; Cvar arg.(n); Cvar clos]),
+           app_fun newclos (n+1))
+    end in
+  let args = Array.to_list arg in
+  (args, clos, app_fun clos 0)
+
 let apply_function_body arity =
   let arg = Array.make arity (Ident.create "arg") in
   for i = 1 to arity - 1 do arg.(i) <- Ident.create "arg" done;
@@ -2838,6 +2908,18 @@ let apply_function arity =
   let all_args = args @ [clos] in
   Cfunction
    {fun_name = "caml_apply" ^ string_of_int arity;
+    fun_args = List.map (fun id -> (id, typ_val)) all_args;
+    fun_body = body;
+    fun_fast = true;
+    fun_dbg  = Debuginfo.none;
+    fun_env  = None;
+   }
+
+let fast_apply_function arity =
+  let (args, clos, body) = fast_apply_function_body arity in
+  let all_args = args @ [clos] in
+  Cfunction
+   {fun_name = "caml_fast_apply" ^ string_of_int arity;
     fun_args = List.map (fun id -> (id, typ_val)) all_args;
     fun_body = body;
     fun_fast = true;
@@ -3006,16 +3088,19 @@ let default_apply = IntSet.add 2 (IntSet.add 3 IntSet.empty)
      the run-time system needs them (cf. asmrun/<arch>.S) . *)
 
 let generic_functions shared units =
-  let (apply,send,curry) =
+  let (apply,fast_apply,send,curry) =
     List.fold_left
-      (fun (apply,send,curry) ui ->
+      (fun (apply,fast_apply,send,curry) ui ->
          List.fold_right IntSet.add ui.ui_apply_fun apply,
+         List.fold_right IntSet.add ui.ui_fast_apply_fun fast_apply,
          List.fold_right IntSet.add ui.ui_send_fun send,
          List.fold_right IntSet.add ui.ui_curry_fun curry)
-      (IntSet.empty,IntSet.empty,IntSet.empty)
+      (IntSet.empty,IntSet.empty,IntSet.empty,IntSet.empty)
       units in
   let apply = if shared then apply else IntSet.union apply default_apply in
+  let fast_apply = if shared then fast_apply else IntSet.union fast_apply default_apply in
   let accu = IntSet.fold (fun n accu -> apply_function n :: accu) apply [] in
+  let accu = IntSet.fold (fun n accu -> fast_apply_function n :: accu) fast_apply accu in
   let accu = IntSet.fold (fun n accu -> send_function n :: accu) send accu in
   IntSet.fold (fun n accu -> curry_function n @ accu) curry accu
 

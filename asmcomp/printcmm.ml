@@ -49,6 +49,7 @@ let chunk = function
   | Thirtytwo_signed -> "signed int32"
   | Word_int -> "int"
   | Word_val -> "val"
+  | Word_addr -> "addr"
   | Single -> "float32"
   | Double -> "float64"
   | Double_u -> "float64u"
@@ -94,6 +95,7 @@ let operation = function
   | Ccmpf c -> Printf.sprintf "%sf" (comparison c)
   | Craise (k, d) -> Lambda.raise_kind k ^ Debuginfo.to_string d
   | Ccheckbound d -> "checkbound" ^ Debuginfo.to_string d
+  | Cminor_heap_ptr -> "minor_heap_ptr"
 
 let rec expr ppf = function
   | Cconst_int n -> fprintf ppf "%i" n

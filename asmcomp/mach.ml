@@ -59,6 +59,7 @@ type operation =
   | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
   | Ifloatofint | Iintoffloat
   | Ispecific of Arch.specific_operation
+  | Iminor_heap_ptr
 
 type instruction =
   { desc: instruction_desc;
@@ -174,6 +175,7 @@ let spacetime_node_hole_pointer_is_live_before insn =
     | Iconst_symbol _ | Istackoffset _ | Iload _ | Istore _
     | Inegf | Iabsf | Iaddf | Isubf | Imulf | Idivf
     | Ifloatofint | Iintoffloat -> false
+    | Iminor_heap_ptr -> false
     end
   | Iend | Ireturn | Iifthenelse _ | Iswitch _ | Iloop _ | Icatch _
   | Iexit _ | Itrywith _ | Iraise _ -> false

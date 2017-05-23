@@ -225,7 +225,18 @@ let res32 i n = emit_subreg reg_low_32_name DWORD i.res.(n)
 
 (* Output an addressing mode *)
 
-let addressing addr typ i n =
+let check_scale_factor scale =
+  if scale <> 2 && scale <> 4 && scale <> 8 then begin
+    Misc.fatal_errorf "Bad scale factor (%d) for Intel addressing mode"
+      scale
+  end
+
+let addressing ?for_lea addr typ i n =
+  let can_optimise_scaled_by_2 =
+    match for_lea with
+    | None -> true
+    | Some () -> not !Arch.sandy_bridge
+  in
   match addr with
   | Ibased(s, ofs) ->
       add_used_symbol s;
@@ -234,11 +245,13 @@ let addressing addr typ i n =
       mem64 typ d (arg64 i n)
   | Iindexed2 d ->
       mem64 typ ~base:(arg64 i n) d (arg64 i (n+1))
-  | Iscaled(2, d) ->
+  | Iscaled(2, d) when can_optimise_scaled_by_2 ->
       mem64 typ ~base:(arg64 i n) d (arg64 i n)
   | Iscaled(scale, d) ->
+      check_scale_factor scale;
       mem64 typ ~scale d (arg64 i n)
   | Iindexed2scaled(scale, d) ->
+      check_scale_factor scale;
       mem64 typ ~scale ~base:(arg64 i n) d (arg64 i (n+1))
 
 (* Record live pointers at call points -- see Emitaux *)
@@ -487,6 +500,11 @@ let function_name = ref ""
 (* Entry point for tail recursive calls *)
 let tailrec_entry_point = ref 0
 
+let is_reg r =
+  match r.loc with
+  | Reg _ -> true
+  | _ -> false
+
 (* Emit an instruction *)
 let emit_instr fallthrough i =
   emit_debug_info i.dbg;
@@ -503,11 +521,49 @@ let emit_instr fallthrough i =
   | Lop(Iconst_int n) ->
       if n = 0n then begin
         match i.res.(0).loc with
-        | Reg _ -> I.xor (res i 0) (res i 0)
-        | _     -> I.mov (int 0) (res i 0)
+        | Reg _ ->
+          (* Clearing the bottom half also clears the top half (except for
+             64-bit-only registers where the behaviour is as if the operands
+             were 64 bit). *)
+          I.xor (res32 i 0) (res32 i 0)
+        | _ ->
+          I.mov (int 0) (res i 0)
+      end else if n = 1n && is_reg i.res.(0) then begin
+        I.xor (res32 i 0) (res32 i 0);
+        I.inc (res32 i 0)
+      end else begin
+        let fits_in_32_bits =
+          (* XXX This needs fixing properly *)
+          Nativeint.compare n 0n (* (-0x8000_0000n) *) >= 0
+            && Nativeint.compare n 0x7fff_ffffn <= 0
+        in
+        if fits_in_32_bits then begin
+          match i.res.(0).loc with
+          | Reg _ ->
+            (* Setting the bottom half also sets the top half to zero
+               (with the same caveat as above). *)
+            I.mov (nat n) (res32 i 0)
+          | _ -> I.mov (nat n) (res i 0)
+        end else begin
+          let fits_in_top_32_bits = false in
+(*
+            Nativeint.compare (Nativeint.shift_left n 32) Nativeint.zero = 0
+          in
+*)
+          if fits_in_top_32_bits then begin
+            match i.res.(0).loc with
+            | Reg _ ->
+              let const32 =
+                Nativeint.logand (Nativeint.shift_right n 32) 0xffff_ffffn
+              in
+              I.mov (nat const32) (res32 i 0);
+              I.sal (nat 32n) (res i 0)
+            | _ -> I.mov (nat n) (res i 0)
+          end else begin
+            I.mov (nat n) (res i 0)
+          end
+        end
       end
-      else
-        I.mov (nat n) (res i 0)
   | Lop(Iconst_float f) ->
       begin match f with
       | 0x0000_0000_0000_0000L ->       (* +0.0 *)
@@ -581,7 +637,7 @@ let emit_instr fallthrough i =
   | Lop(Iload(chunk, addr)) ->
       let dest = res i 0 in
       begin match chunk with
-      | Word_int | Word_val ->
+      | Word_int | Word_addr | Word_val ->
           I.mov (addressing addr QWORD i 0) dest
       | Byte_unsigned ->
           I.movzx (addressing addr BYTE i 0) dest
@@ -602,7 +658,7 @@ let emit_instr fallthrough i =
       end
   | Lop(Istore(chunk, addr, _)) ->
       begin match chunk with
-      | Word_int | Word_val ->
+      | Word_int | Word_addr | Word_val ->
           I.mov (arg i 0) (addressing addr QWORD i 1)
       | Byte_unsigned | Byte_signed ->
           I.mov (arg8 i 0) (addressing addr BYTE i 1)
@@ -683,7 +739,11 @@ let emit_instr fallthrough i =
       I.set (cond cmp) al;
       I.movzx al (res i 0)
   | Lop(Iintop_imm(Icomp cmp, n)) ->
-      I.cmp (int n) (arg i 0);
+      if n = 0 then begin
+        I.test (arg i 0) (arg i 0)
+      end else begin
+        I.cmp (int n) (arg i 0)
+      end;
       I.set (cond cmp) al;
       I.movzx al (res i 0)
   | Lop(Iintop (Icheckbound { label_after_error; spacetime_index; } )) ->
@@ -733,7 +793,7 @@ let emit_instr fallthrough i =
   | Lop(Iintoffloat) ->
       I.cvttsd2si (arg i 0) (res i 0)
   | Lop(Ispecific(Ilea addr)) ->
-      I.lea (addressing addr NONE i 0) (res i 0)
+      I.lea (addressing ~for_lea:() addr NONE i 0) (res i 0)
   | Lop(Ispecific(Istore_int(n, addr, _))) ->
       I.mov (nat n) (addressing addr QWORD i 0)
   | Lop(Ispecific(Istore_symbol(s, addr, _))) ->
@@ -758,6 +818,8 @@ let emit_instr fallthrough i =
       I.sqrtsd (arg i 0) (res i 0)
   | Lop(Ispecific(Ifloatsqrtf addr)) ->
       I.sqrtsd (addressing addr REAL8 i 0) (res i 0)
+  | Lop Iminor_heap_ptr ->
+      I.mov r15 (res i 0)
   | Lreloadretaddr ->
       ()
   | Lreturn ->
@@ -839,7 +901,7 @@ let emit_instr fallthrough i =
         D.long (ConstSub (ConstLabel(emit_label jumptbl.(i)),
                          ConstLabel lbl))
       done;
-      D.text ()
+      D.text ~subsection:(emit_symbol !function_name) ()
   | Lsetuptrap lbl ->
       I.call (label lbl)
   | Lpushtrap ->
@@ -909,7 +971,7 @@ let fundecl fundecl =
   bound_error_sites := [];
   bound_error_call := 0;
   all_functions := fundecl :: !all_functions;
-  D.text ();
+  D.text ~subsection:(emit_symbol fundecl.fun_name) ();
   D.align 16;
   add_def_symbol fundecl.fun_name;
   if system = S_macosx
