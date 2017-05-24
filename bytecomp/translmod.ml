@@ -75,20 +75,8 @@ let rec apply_coercion loc strict restr arg =
         wrap_id_pos_list loc id_pos_list get_field lam)
   | Tcoerce_functor(cc_arg, cc_res) ->
       let param = Ident.create "funarg" in
-      name_lambda strict arg (fun id ->
-        Lfunction{kind = Curried; params = [param];
-                  attr = { default_function_attribute with
-                           is_a_functor = true };
-                  loc = loc;
-                  body = apply_coercion
-                           loc Strict cc_res
-                           (Lapply{ap_should_be_tailcall=false;
-                                   ap_loc=loc;
-                                   ap_func=Lvar id;
-                                   ap_args=[apply_coercion loc Alias cc_arg
-                                                           (Lvar param)];
-                                   ap_inlined=Default_inline;
-                                   ap_specialised=Default_specialise})})
+      let carg = apply_coercion loc Alias cc_arg (Lvar param) in
+      apply_coercion_result loc strict arg [param] [carg] cc_res
   | Tcoerce_primitive { pc_loc; pc_desc; pc_env; pc_type; } ->
       transl_primitive pc_loc pc_desc pc_env pc_type None
   | Tcoerce_alias (path, cc) ->
@@ -97,6 +85,28 @@ let rec apply_coercion loc strict restr arg =
 
 and apply_coercion_field loc get_field (pos, cc) =
   apply_coercion loc Alias cc (get_field pos)
+
+and apply_coercion_result loc strict funct params args cc_res =
+  match cc_res with
+  | Tcoerce_functor(cc_arg, cc_res) ->
+    let param = Ident.create "funarg" in
+    let arg = apply_coercion loc Alias cc_arg (Lvar param) in
+    apply_coercion_result loc strict funct
+      (param :: params) (arg :: args) cc_res
+  | _ ->
+    name_lambda strict funct (fun id ->
+      Lfunction{kind = Curried; params = List.rev params;
+                attr = { default_function_attribute with
+                         is_a_functor = true };
+                loc = loc;
+                body = apply_coercion
+                         loc Strict cc_res
+                         (Lapply{ap_should_be_tailcall=false;
+                                 ap_loc=loc;
+                                 ap_func=Lvar id;
+                                 ap_args=List.rev args;
+                                 ap_inlined=Default_inline;
+                                 ap_specialised=Default_specialise})})
 
 and wrap_id_pos_list loc id_pos_list get_field lam =
   let fv = free_variables lam in
@@ -385,10 +395,10 @@ let rec compile_functor mexp coercion root_path loc =
   assert (List.length functor_params_rev >= 1);
   let params, body =
     List.fold_left (fun (params, body) (param, loc, arg_coercion) ->
-        let param' = Ident.create "funarg" in
+        let param' = Ident.rename param in
         let arg =
           match arg_coercion with
-          | None -> Lvar param
+          | None -> Lvar param'
           | Some arg_coercion ->
             apply_coercion loc Alias arg_coercion (Lvar param')
         in
