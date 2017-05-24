@@ -29,7 +29,7 @@ open Translclass
 
 type error =
   Circular_dependency of Ident.t
-
+| Conflicting_inline_attributes
 
 exception Error of Location.t * error
 
@@ -342,9 +342,77 @@ let transl_class_bindings cl_list =
        (id, transl_class ids id meths cl vf))
      cl_list)
 
+(* Compile a functor, merging curried functors into multi-argument ones. *)
+
+let merge_inline_attributes attr1 attr2 loc =
+  match Lambda.merge_inline_attributes attr1 attr2 with
+  | Some attr -> attr
+  | None -> raise (Error (loc, Conflicting_inline_attributes))
+
+let merge_functors mexp coercion body_path =
+  let rec merge mexp coercion path acc inline_attribute =
+    let finished () = acc, mexp, path, coercion, inline_attribute in
+    match mexp.mod_type with
+    | Mty_alias _ -> finished ()
+    | _ ->
+      match mexp.mod_desc with
+      | Tmod_functor (param, _, _, body) ->
+        let inline_attribute' =
+          Translattribute.get_inline_attribute mexp.mod_attributes
+        in
+        let arg_coercion, res_coercion =
+          match coercion with
+          | Tcoerce_none -> None, Tcoerce_none
+          | Tcoerce_functor (arg_coercion, res_coercion) ->
+            Some arg_coercion, res_coercion
+          | _ -> fatal_error "Translmod.merge_functors: bad coercion"
+        in
+        let loc = mexp.mod_loc in
+        let path = functor_path path param in
+        let inline_attribute =
+          merge_inline_attributes inline_attribute inline_attribute' loc
+        in
+        merge body res_coercion path ((param, loc, arg_coercion) :: acc)
+          inline_attribute
+      | _ -> finished ()
+  in
+  merge mexp coercion body_path [] Default_inline
+
+let rec compile_functor mexp coercion root_path loc =
+  let functor_params_rev, body, body_path, res_coercion, inline_attribute =
+    merge_functors mexp coercion root_path
+  in
+  assert (List.length functor_params_rev >= 1);
+  let params, body =
+    List.fold_left (fun (params, body) (param, loc, arg_coercion) ->
+        let param' = Ident.create "funarg" in
+        let arg =
+          match arg_coercion with
+          | None -> Lvar param
+          | Some arg_coercion ->
+            apply_coercion loc Alias arg_coercion (Lvar param')
+        in
+        let params = param' :: params in
+        let body = Llet (Alias, Pgenval, param, arg, body) in
+        params, body)
+    ([], transl_module res_coercion body_path body)
+    functor_params_rev
+  in
+  Lfunction {
+    kind = Curried;
+    params;
+    attr = {
+      inline = inline_attribute;
+      specialise = Default_specialise;
+      is_a_functor = true;
+    };
+    loc;
+    body;
+  }
+
 (* Compile a module expression *)
 
-let rec transl_module cc rootpath mexp =
+and transl_module cc rootpath mexp =
   List.iter (Translattribute.check_attribute_on_module mexp)
     mexp.mod_attributes;
   let loc = mexp.mod_loc in
@@ -357,34 +425,9 @@ let rec transl_module cc rootpath mexp =
             (transl_path ~loc mexp.mod_env path)
       | Tmod_structure str ->
           fst (transl_struct loc [] cc rootpath str)
-      | Tmod_functor(param, _, _, body) ->
-          let bodypath = functor_path rootpath param in
-          let inline_attribute =
-            Translattribute.get_inline_attribute mexp.mod_attributes
-          in
-          oo_wrap mexp.mod_env true
-            (function
-              | Tcoerce_none ->
-                  Lfunction{kind = Curried; params = [param];
-                            attr = { inline = inline_attribute;
-                                     specialise = Default_specialise;
-                                     is_a_functor = true };
-                            loc = loc;
-                            body = transl_module Tcoerce_none bodypath body}
-              | Tcoerce_functor(ccarg, ccres) ->
-                  let param' = Ident.create "funarg" in
-                  Lfunction{kind = Curried; params = [param'];
-                            attr = { inline = inline_attribute;
-                                     specialise = Default_specialise;
-                                     is_a_functor = true };
-                            loc = loc;
-                            body = Llet(Alias, Pgenval, param,
-                                        apply_coercion loc Alias ccarg
-                                                       (Lvar param'),
-                                        transl_module ccres bodypath body)}
-              | _ ->
-                  fatal_error "Translmod.transl_module")
-            cc
+      | Tmod_functor _ ->
+          oo_wrap mexp.mod_env true (fun cc ->
+            compile_functor mexp cc rootpath loc) cc
       | Tmod_apply(funct, arg, ccarg) ->
           let inlined_attribute, funct =
             Translattribute.get_and_remove_inlined_attribute_on_module funct
@@ -1204,6 +1247,9 @@ let report_error ppf = function
         "@[Cannot safely evaluate the definition@ \
          of the recursively-defined module %a@]"
         Printtyp.ident id
+  | Conflicting_inline_attributes ->
+      fprintf ppf
+        "@[Conflicting ``inline'' attributes@]"
 
 let () =
   Location.register_error_of_exn
