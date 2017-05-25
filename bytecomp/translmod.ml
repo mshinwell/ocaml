@@ -352,14 +352,18 @@ let transl_class_bindings cl_list =
        (id, transl_class ids id meths cl vf))
      cl_list)
 
-(* Compile a functor, merging curried functors into multi-argument ones. *)
+(* Compile one or more functors, merging curried functors to produce
+   multi-argument functors.  Any [@inline] attribute on a functor that is
+   merged must be consistent with any other [@inline] attribute(s) on the
+   functor(s) being merged with.  Such an attribute will be placed on the
+   resulting merged functor. *)
 
 let merge_inline_attributes attr1 attr2 loc =
   match Lambda.merge_inline_attributes attr1 attr2 with
   | Some attr -> attr
   | None -> raise (Error (loc, Conflicting_inline_attributes))
 
-let merge_functors mexp coercion body_path =
+let merge_functors mexp coercion root_path =
   let rec merge mexp coercion path acc inline_attribute =
     let finished () = acc, mexp, path, coercion, inline_attribute in
     match mexp.mod_type with
@@ -386,13 +390,13 @@ let merge_functors mexp coercion body_path =
           inline_attribute
       | _ -> finished ()
   in
-  merge mexp coercion body_path [] Default_inline
+  merge mexp coercion root_path [] Default_inline
 
 let rec compile_functor mexp coercion root_path loc =
   let functor_params_rev, body, body_path, res_coercion, inline_attribute =
     merge_functors mexp coercion root_path
   in
-  assert (List.length functor_params_rev >= 1);
+  assert (List.length functor_params_rev >= 1);  (* cf. [transl_module] *)
   let params, body =
     List.fold_left (fun (params, body) (param, loc, arg_coercion) ->
         let param' = Ident.rename param in
@@ -405,8 +409,8 @@ let rec compile_functor mexp coercion root_path loc =
         let params = param' :: params in
         let body = Llet (Alias, Pgenval, param, arg, body) in
         params, body)
-    ([], transl_module res_coercion body_path body)
-    functor_params_rev
+      ([], transl_module res_coercion body_path body)
+      functor_params_rev
   in
   Lfunction {
     kind = Curried;
@@ -436,8 +440,8 @@ and transl_module cc rootpath mexp =
       | Tmod_structure str ->
           fst (transl_struct loc [] cc rootpath str)
       | Tmod_functor _ ->
-          oo_wrap mexp.mod_env true (fun cc ->
-            compile_functor mexp cc rootpath loc) cc
+          oo_wrap mexp.mod_env true (fun () ->
+            compile_functor mexp cc rootpath loc) ()
       | Tmod_apply(funct, arg, ccarg) ->
           let inlined_attribute, funct =
             Translattribute.get_and_remove_inlined_attribute_on_module funct
