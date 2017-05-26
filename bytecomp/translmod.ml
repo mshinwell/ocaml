@@ -114,7 +114,8 @@ and apply_coercion_result loc strict funct params args cc_res =
     name_lambda strict funct (fun id ->
       Lfunction{kind = Curried; params = List.rev params; loc;
                 attr = { default_function_attribute with
-                         is_a_functor = true; };
+                         is_a_functor = true;
+                         stub = true; };
                 body = apply_coercion loc
                          Strict cc_res
                          (Lapply{ap_should_be_tailcall=false;
@@ -438,6 +439,7 @@ let rec compile_functor mexp coercion root_path loc =
       inline = inline_attribute;
       specialise = Default_specialise;
       is_a_functor = true;
+      stub = false;
     };
     body;
   }

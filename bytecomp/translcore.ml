@@ -395,7 +395,7 @@ let transl_primitive loc p env ty path =
       Lfunction{kind = Curried; params = [parm];
                 body = Matching.inline_lazy_force (Lvar parm) Location.none;
                 loc = loc;
-                attr = default_function_attribute }
+                attr = default_stub_attribute }
   | Ploc kind ->
     let lam = lam_of_loc kind loc in
     begin match p.prim_arity with
@@ -403,7 +403,7 @@ let transl_primitive loc p env ty path =
       | 1 -> (* TODO: we should issue a warning ? *)
         let param = Ident.create "prim" in
         Lfunction{kind = Curried; params = [param];
-                  attr = default_function_attribute;
+                  attr = default_stub_attribute;
                   loc = loc;
                   body = Lprim(Pmakeblock(0, Immutable),
                                [lam; Lvar param], loc)}
@@ -414,7 +414,7 @@ let transl_primitive loc p env ty path =
         if n <= 0 then [] else Ident.create "prim" :: make_params (n-1) in
       let params = make_params p.prim_arity in
       Lfunction{ kind = Curried; params;
-                 attr = default_function_attribute;
+                 attr = default_stub_attribute;
                  loc = loc;
                  body = Lprim(prim, List.map (fun id -> Lvar id) params, loc) }
 
@@ -670,14 +670,14 @@ and transl_exp0 e =
         let kind = if public_send then Public else Self in
         let obj = Ident.create "obj" and meth = Ident.create "meth" in
         Lfunction{kind = Curried; params = [obj; meth];
-                  attr = default_function_attribute;
+                  attr = default_stub_attribute;
                   loc = e.exp_loc;
                   body = Lsend(kind, Lvar meth, Lvar obj, [], e.exp_loc)}
       else if p.prim_name = "%sendcache" then
         let obj = Ident.create "obj" and meth = Ident.create "meth" in
         let cache = Ident.create "cache" and pos = Ident.create "pos" in
         Lfunction{kind = Curried; params = [obj; meth; cache; pos];
-                  attr = default_function_attribute;
+                  attr = default_stub_attribute;
                   loc = e.exp_loc;
                   body = Lsend(Cached, Lvar meth, Lvar obj,
                                [Lvar cache; Lvar pos], e.exp_loc)}
@@ -1135,7 +1135,7 @@ and transl_apply ?(should_be_tailcall=false) ?(inlined = Default_inline)
               Lfunction{kind = Curried; params = id_arg::ids; body = lam; attr; loc}
           | lam ->
               Lfunction{kind = Curried; params = [id_arg]; body = lam;
-                        attr = default_function_attribute; loc = loc}
+                        attr = default_stub_attribute; loc = loc}
         in
         List.fold_left
           (fun body (id, lam) -> Llet(Strict, id, lam, body))

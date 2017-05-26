@@ -213,6 +213,7 @@ type function_attribute = {
   inline : inline_attribute;
   specialise : specialise_attribute;
   is_a_functor: bool;
+  stub: bool;
 }
 
 type lambda =
@@ -304,6 +305,7 @@ val commute_comparison : comparison -> comparison
 val negate_comparison : comparison -> comparison
 
 val default_function_attribute : function_attribute
+val default_stub_attribute : function_attribute
 
 (***********************)
 (* For static failures *)
