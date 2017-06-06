@@ -435,6 +435,7 @@ utils/config.ml: utils/config.mlp config/Makefile
 	    -e 's|%%SAFE_STRING%%|$(SAFE_STRING)|' \
 	    -e 's|%%FLEXLINK_FLAGS%%|$(subst \,\\,$(FLEXLINK_FLAGS))|' \
 	    -e 's|%%FLEXDLL_DIR%%|$(FLEXDLL_DIR)|' \
+	    -e 's|%%CMX_CONTAINS_ALL_CODE%%|$(CMX_CONTAINS_ALL_CODE)|' \
 	    utils/config.mlp > utils/config.ml
 
 partialclean::

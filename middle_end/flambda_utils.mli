@@ -105,7 +105,7 @@ val needed_import_symbols : Flambda.program -> Symbol.Set.t
 
 val introduce_needed_import_symbols : Flambda.program -> Flambda.program
 
-val root_symbol : Flambda.program -> Symbol.t
+val root_symbols : Flambda.program -> Symbol.Set.t
 
 (** Returns [true] iff the given term might raise the given static
     exception. *)
@@ -229,3 +229,15 @@ val parameters_specialised_to_the_same_variable
    : function_decls:Flambda.function_declarations
   -> specialised_args:Flambda.specialised_to Variable.Map.t
   -> specialised_to_same_as list Variable.Map.t
+
+val concatenate : Flambda.program list -> Flambda.program
+(** [concatenate programs] is the program that does all the side
+    effects of [programs] following the list order and exports all the
+    symbols exported by any of the [programs]. *)
+
+val clear_all_exported_symbols : Flambda.program -> Flambda.program
+(** Remove all exported symbols from the program, leading to a program
+    where only side effects matters. *)
+
+val replace_compilation_unit_of_symbols
+  : Compilation_unit.t -> Flambda.program -> Flambda.program
