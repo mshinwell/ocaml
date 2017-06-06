@@ -1,91 +1,23 @@
-Next minor version (4.04.1):
-----------------------------
-
-### Code generation and optimizations:
-
-- PR#7501, GPR#1089: Consider arrays of length zero as constants
-  when using Flambda.
-  (Pierre Chambart, review by Mark Shinwell and Leo White)
+Next version (4.04.1):
+----------------------
 
 ### Standard library:
 
 - PR#7403, GPR#894: fix a bug in Set.map as introduced in 4.04.0
   (Gabriel Scherer, report by Thomas Leonard)
 
-### Tools:
-
-- PR#7411: ocamldoc, avoid nested <pre> tags in module description.
-  (Florian Angeletti, report by user 'kosik')
-
-- PR#7488: ocamldoc, wrong Latex output for variant types
-  with constructors without arguments.
-  (Florian Angeletti, report by Xavier Leroy)
-
-### Build system:
-
-- PR#7373, GPR#1023: New flexlink target in Makefile.nt to bootstrap the
-  flexlink binary only, rather than the flexlink binary and the FlexDLL C
-  objects.
-  (David Allsopp)
-
 ### Bug fixes
-
-- PR#7369: Str.regexp raises "Invalid_argument: index out of bounds"
-  (Damien Doligez, report by John Whitington)
-
-- PR#7373, GPR#1023: Fix ocamlmklib with bootstrapped FlexDLL. Bootstrapped
-  FlexDLL objects are now installed to a subdirectory flexdll of the Standard
-  Library which allows the compilers to pick them up explicitly and also
-  ocamlmklib to include them without unnecessarily adding the entire Standard
-  Library.
-  (David Allsopp)
-
-- PR#7385, GPR#1057: fix incorrect timestamps returned by Unix.stat on Windows
-  when either TZ is set or system date is in DST.
-  (David Allsopp, report and initial fix by Nicolás Ojeda Bär, review and
-   superior implementation suggestion by Xavier Leroy)
 
 - PR#7405, GPR#903: s390x: Fix address of caml_raise_exn in native dynlink modules
   (Richard Jones, review by Xavier Leroy)
 
-- PR#7417, GPR#930: ensure 16 byte stack alignment inside caml_allocN on x86-64
+- MPR#7417, GPR#930: ensure 16 byte stack alignment inside caml_allocN on x86-64
   for ocaml build with WITH_FRAME_POINTERS defined
   (Christoph Cullmann)
-
-- PR#7456, GPR#1092: fix slow compilation on source files containing a lot
-  of similar debugging information location entries
-  (Mark Shinwell)
-
-- PR#7457: a case of double free in the systhreads library (POSIX implementation)
-  (Xavier Leroy, report by Chet Murthy)
-
-- PR#7460, GPR#1011: catch uncaught exception when unknown files are passed
-  as argument (regression in 4.04.0)
-  (Bernhard Schommer, review by Florian Angeletti and Gabriel Scherer,
-   report by Stephen Dolan)
-
-- PR#7505: Memory cannot be released after calling
-    Bigarray.Genarray.change_layout.
-  (Damien Doligez and Xavier Leroy, report by Liang Wang)
 
 - GPR#912: Fix segfault in Unix.create_process on Windows caused by wrong header
   configuration.
   (David Allsopp)
-
-- GPR#980: add dynlink options to ocamlbytecomp.cmxa to allow ocamlopt.opt
-  to load plugins. See http://github.com/OCamlPro/ocamlc-plugins for examples.
-  (Fabrice Le Fessant, review by David Allsopp)
-
-- GPR#992: caml-types.el: Fix missing format argument, so that it can show kind
-  of call at point correctly.
-  (Chunhui He)
-
-- GPR#1043: Allow Windows CRLF line-endings in ocamlyacc on Unix and Cygwin.
-  (David Allsopp, review by Damien Doligez and Xavier Leroy)
-
-- GPR#1072: Fix segfault in Sys.runtime_parameters when exception backtraces
-  are enabled.
-  (Olivier Andrieu)
 
 OCaml 4.04.0 (4 Nov 2016):
 --------------------------
@@ -105,7 +37,7 @@ OCaml 4.04.0 (4 Nov 2016):
   (Alain Frisch)
 
 - GPR#508: Allow shortcut for extension on semicolons: ;%foo
-  (Jérémie Dimino)
+  (Jeremie Dimino)
 
 - GPR#606: optimized representation for immutable records with a single
   field, and concrete types with a single constructor with a single argument.
@@ -154,16 +86,16 @@ OCaml 4.04.0 (4 Nov 2016):
 
 ### Standard library:
 
+- GPR#473: Provide `Sys.backend_type` so that user can write backend-specific
+  code in some cases (for example,  code generator).
+  (Hongbo Zhang)
+
 - PR#6279, GPR#553: implement Set.map
   (Gabriel Scherer)
 
 - PR#6820, GPR#560: Add Obj.reachable_words to compute the
   "transitive" heap size of a value
   (Alain Frisch, review by Mark Shinwell and Damien Doligez)
-
-- GPR#473: Provide `Sys.backend_type` so that user can write backend-specific
-  code in some cases (for example,  code generator).
-  (Hongbo Zhang)
 
 - GPR#589: Add a non-allocating function to recover the number of
   allocated minor words.
@@ -173,7 +105,7 @@ OCaml 4.04.0 (4 Nov 2016):
   (Alain Frisch)
 
 - GPR#669: Filename.extension and Filename.remove_extension
-  (Alain Frisch, request by Edgar Aroutiounian, review by Daniel Bünzli
+  (Alain Frisch, request by Edgar Aroutiounian, review by Daniel Bunzli
   and Damien Doligez)
 
 - GPR#674: support unknown Sys.os_type in Filename, defaulting to Unix
@@ -181,10 +113,6 @@ OCaml 4.04.0 (4 Nov 2016):
    Sys.os_type values other than "Unix", "Win32" and "Cygwin";
    mirage-os uses "xen")
   (Anil Madhavapeddy)
-
-- GPR#772 %string_safe_set and %string_unsafe_set are deprecated aliases
-  for %bytes_safe_set and %bytes_unsafe_set.
-  (Hongbo Zhang and Damien Doligez)
 
 ### Other libraries
 
@@ -216,10 +144,6 @@ OCaml 4.04.0 (4 Nov 2016):
   not always preserve the arguments
   (Pierre Chambart, Mark Shinwell, report by Simon Cruanes)
 
-- PR#7328, GPR#702: Do not eliminate boxed int divisions by zero and
-  avoid checking twice if divisor is zero with flambda.
-  (Pierre Chambart, report by Jeremy Yallop)
-
 - GPR#427: Obj.is_block is now an inlined OCaml function instead of a
   C external.  This should be faster.
   (Demi Obenour)
@@ -229,6 +153,10 @@ OCaml 4.04.0 (4 Nov 2016):
 
 - GPR#602: Do not generate dummy code to force module linking
   (Pierre Chambart, reviewed by Jacques Garrigue)
+
+- PR#7328, GPR#702: Do not eliminate boxed int divisions by zero and
+  avoid checking twice if divisor is zero with flambda.
+  (Pierre Chambart, report by Jeremy Yallop)
 
 - GPR#703: Optimize some constant string operations when the "-safe-string"
   configure time option is enabled.
@@ -255,24 +183,12 @@ OCaml 4.04.0 (4 Nov 2016):
 
 ### Runtime system:
 
-- PR#7203, GPR#534: Add a new primitive caml_alloc_float_array to allocate an
-  array of floats
-  (Thomas Braibant)
-
 - PR#7210, GPR#562: Allows to register finalisation function that are
   called only when a value will never be reachable anymore. The
   drawbacks compared to the existing one is that the finalisation
   function is not called with the value as argument. These finalisers
   are registered with `GC.finalise_last`
   (François Bobot reviewed by Damien Doligez and Leo White)
-
-- GPR#247: In previous OCaml versions, inlining caused stack frames to
-  disappear from stacktraces. This made debugging harder in presence of
-  optimizations, and flambda was going to make this worse. The debugging
-  information produced by the compiler now enables the reconstruction of the
-  original backtrace. Use `Printexc.get_raw_backtrace_next_slot` to traverse
-  the list of inlined stack frames.
-  (Frédéric Bour, review by Mark Shinwell and Xavier Leroy)
 
 - GPR#590: Do not perform compaction if the real overhead is less than expected
   (Thomas Braibant)
@@ -320,6 +236,12 @@ OCaml 4.04.0 (4 Nov 2016):
 
 - GPR#585: Spacetime, a new memory profiler (Mark Shinwell, Leo White)
 
+### Runtime system:
+
+- PR#7203, GPR#534: Add a new primitive caml_alloc_float_array to allocate an
+  array of floats
+  (Thomas Braibant)
+
 ### Manual and documentation:
 
 - PR#7007, PR#7311: document the existence of OCAMLPARAM and
@@ -343,10 +265,10 @@ OCaml 4.04.0 (4 Nov 2016):
 - PR#7355: Gc.finalise and lazy values
   (Jeremy Yallop)
 
-- GPR#842: Document that [Store_field] must not be used to populate
+- GPR#841: Document that [Store_field] must not be used to populate
   arrays of values declared using [CAMLlocalN] (Mark Shinwell)
 
-### Compiler distribution build system:
+### Build system:
 
 - GPR#324: Compiler developers: Adding new primitives to the
   standard runtime doesn't require anymore to run `make bootstrap`
@@ -365,9 +287,6 @@ OCaml 4.04.0 (4 Nov 2016):
   now the native-code versions of the tools, if those versions were
   built.
   (Demi Obenour)
-
-- GPR#525: fix build on OpenIndiana
-  (Sergey Avseyev, review by Damien Doligez)
 
 - GPR#687: "./configure -safe-string" to get a system where
   "-unsafe-string" is not allowed, thus giving stronger non-local
@@ -487,6 +406,9 @@ OCaml 4.04.0 (4 Nov 2016):
 
 - GPR#880: Fix [@@inline] with default parameters in flambda (Leo White)
 
+- GPR#525: fix build on OpenIndiana
+  (Sergey Avseyev, review by Damien Doligez)
+
 ### Internal/compiler-libs changes:
 
 - PR#7200, GPR#539: Improve, fix, and add test for parsing/pprintast.ml
@@ -557,7 +479,7 @@ OCaml 4.03.0 (25 Apr 2016):
 
 - GPR#112: octal escape sequences for char and string literals
   "Make it \o033[1mBOLD\o033[0m"
-  (Rafaël Bocquet, request by John Whitington)
+  (Rafaël Bocquet, request by John Whitingthon)
 
 - GPR#167: allow to annotate externals' arguments and result types so
   they can be unboxed or untagged: [@unboxed], [@untagged]. Supports
@@ -794,6 +716,10 @@ OCaml 4.03.0 (25 Apr 2016):
   caml_fill_bytes and caml_create_bytes for migration
   (Hongbo Zhang, review by Damien Doligez, Alain Frisch, and Hugo Heuzard)
 
+- GPR#772 %string_safe_set and %string_unsafe_set are deprecated aliases
+  for %bytes_safe_set and %bytes_unsafe_set.
+  (Hongbo Zhang and Damien Doligez)
+
 - PR#3612, PR#92: allow allocating custom block with finalizers
   in the minor heap.
   (Pierre Chambart)
@@ -834,7 +760,7 @@ OCaml 4.03.0 (25 Apr 2016):
 
 * GPR#297: Several changes to improve the worst-case GC pause time.
   Changes Gc.control and Gc.major_slice and adds functions to the Gc module.
-  (Damien Doligez, with help from François Bobot, Thomas Braibant, Leo White)
+  (Damien Doligez, with help from Francois Bobot, Thomas Braibant, Leo White)
 
 - GPR#325: Add v=0x400 flag to OCAMLRUNPARAM to display GC stats on exit
   (Louis Gesbert, review by Alain Frisch)
@@ -1235,7 +1161,7 @@ OCaml 4.03.0 (25 Apr 2016):
   (Jacques Garrigue, report by Leo White)
 
 - PR#6954: Infinite loop in type checker with module aliases
-  (Jacques Garrigue, report by Markus Mottl)
+  (Jacques Garrigue, report by Mark Mottl)
 
 - PR#6972, GPR#276: 4.02.3 regression on documentation comments in .cmt files
   (Leo White, report by Olivier Andrieu)
@@ -1369,7 +1295,7 @@ OCaml 4.03.0 (25 Apr 2016):
   (Krzysztof Pszeniczny)
 
 - GPR#205: Clear caml_backtrace_last_exn before registering as root
-  (report and fix by Frédéric Bour)
+  (report and fix by Frederic Bour)
 
 - GPR#220: minor -dsource error on recursive modules
   (Hongbo Zhang)
@@ -1698,7 +1624,7 @@ Bug fixes:
 - PR#6669: fix 4.02 regression in toplevel printing of lazy values
   (Leo White, review by Gabriel Scherer)
 - PR#6671: Windows: environment variable 'TZ' affects Unix.gettimeofday
-  (Mickaël Delahaye and Damien Doligez)
+  (Mickael Delahaye and Damien Doligez)
 - PR#6680: Missing parentheses in warning about polymorphic variant value
   (Jacques Garrigue and Gabriel Scherer, report by Philippe Veber)
 - PR#6686: Bug in [subst_boxed_number]
@@ -4354,7 +4280,7 @@ Standard library:
 - Module Printf:
     added %S and %C formats (quoted, escaped strings and characters);
     added kprintf (calls user-specified continuation on formatted string).
-- Module Queue: faster implementation (courtesy of François Pottier).
+- Module Queue: faster implementation (courtesy of Francois Pottier).
 - Module Random: added Random.bool.
 - Module Stack: added Stack.is_empty.
 - Module Pervasives:
@@ -5587,7 +5513,7 @@ Objective Caml 1.01 (12 Jun 1996):
 Objective Caml 1.00 (9 May 1996):
 ---------------------------------
 
-* Merge of Jérôme Vouillon and Didier Rémy's object-oriented
+* Merge of Jerome Vouillon and Didier Remy's object-oriented
 extensions.
 
 * All libraries: all "new" functions renamed to "create" because "new"
