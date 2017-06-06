@@ -40,7 +40,7 @@ let import_eid_for_pack units pack id =
 let import_symbol_for_pack units pack symbol =
   let compilation_unit = Symbol.compilation_unit symbol in
   if Compilation_unit.Set.mem compilation_unit units
-  then Symbol.import_for_pack ~pack symbol
+  then Symbol.import_to_compilation_unit ~unit:pack symbol
   else symbol
 
 let import_approx_for_pack units pack (approx : Export_info.approx)
@@ -204,6 +204,7 @@ let import_for_pack ~pack_units ~pack (exp : Export_info.t) =
     ~invariant_params:
       (Set_of_closures_id.Map.map_keys import_set_of_closures_id
          exp.invariant_params)
+    ~code:exp.code
 
 let clear_import_state () =
   Set_of_closures_id.Tbl.clear imported_function_declarations_table;
