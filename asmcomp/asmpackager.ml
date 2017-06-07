@@ -259,6 +259,8 @@ let build_package_cmx ppf members cmxfile =
           union(List.map (fun info -> info.ui_curry_fun) units);
       ui_apply_fun =
           union(List.map (fun info -> info.ui_apply_fun) units);
+      ui_fast_apply_fun =
+          union(List.map (fun info -> info.ui_fast_apply_fun) units);
       ui_send_fun =
           union(List.map (fun info -> info.ui_send_fun) units);
       ui_force_link =

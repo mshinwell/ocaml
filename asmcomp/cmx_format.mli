@@ -41,6 +41,7 @@ type unit_infos =
               (string * Digest.t option) list; (* Interfaces imported *)
     mutable ui_imports_cmx:(string * Digest.t option) list; (* Infos imported *)
     mutable ui_curry_fun: int list;             (* Currying functions needed *)
+    mutable ui_fast_apply_fun: int list;             (* Apply functions needed *)
     mutable ui_apply_fun: int list;             (* Apply functions needed *)
     mutable ui_send_fun: int list;              (* Send functions needed *)
     mutable ui_export_info: export_info;
