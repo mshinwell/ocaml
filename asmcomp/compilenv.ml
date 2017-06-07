@@ -84,7 +84,6 @@ let current_unit =
     ui_imports_cmx = [];
     ui_curry_fun = [];
     ui_apply_fun = [];
-    ui_fast_apply_fun = [];
     ui_send_fun = [];
     ui_force_link = false;
     ui_export_info = default_ui_export_info }
@@ -129,7 +128,6 @@ let reset ?packname ~source_provenance:file name =
   current_unit.ui_imports_cmx <- [];
   current_unit.ui_curry_fun <- [];
   current_unit.ui_apply_fun <- [];
-  current_unit.ui_fast_apply_fun <- [];
   current_unit.ui_send_fun <- [];
   current_unit.ui_force_link <- false;
   Hashtbl.clear exported_constants;
@@ -338,11 +336,6 @@ let need_apply_fun n =
   assert(n > 0);
   if not (List.mem n current_unit.ui_apply_fun) then
     current_unit.ui_apply_fun <- n :: current_unit.ui_apply_fun
-
-let need_fast_apply_fun n =
-  assert(n > 0);
-  if not (List.mem n current_unit.ui_fast_apply_fun) then
-    current_unit.ui_fast_apply_fun <- n :: current_unit.ui_fast_apply_fun
 
 let need_send_fun n =
   if not (List.mem n current_unit.ui_send_fun) then
