@@ -190,7 +190,13 @@ method! select_operation op args dbg =
       begin match self#select_addressing Word_int (Cop(op, args, dbg)) with
         (Iindexed _, _)
       | (Iindexed2 0, _) -> super#select_operation op args dbg
-      | (addr, arg) -> (Ispecific(Ilea addr), [arg])
+      | ((Iscaled _) as addr, arg) when !Arch.no_three_operand_lea ->
+          (Ispecific(Ilea addr), [arg])
+      | (addr, arg) ->
+        if !Arch.no_three_operand_lea then
+          super#select_operation op args dbg
+        else
+          (Ispecific(Ilea addr), [arg])
       end
   (* Recognize float arithmetic with memory. *)
   | Caddf ->

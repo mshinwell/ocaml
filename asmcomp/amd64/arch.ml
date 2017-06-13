@@ -15,11 +15,16 @@
 
 (* Machine-specific command-line options *)
 
+let no_three_operand_lea = ref true
+
 let command_line_options =
   [ "-fPIC", Arg.Set Clflags.pic_code,
       " Generate position-independent machine code (default)";
     "-fno-PIC", Arg.Clear Clflags.pic_code,
-      " Generate position-dependent machine code" ]
+      " Generate position-dependent machine code";
+    "-fno-three-operand-lea", Arg.Set no_three_operand_lea,
+      " Do not generate three-operand LEA instructions";
+  ]
 
 (* Specific operations for the AMD64 processor *)
 

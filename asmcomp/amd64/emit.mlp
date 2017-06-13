@@ -229,7 +229,7 @@ let addressing addr typ i n =
       mem64 typ d (arg64 i n)
   | Iindexed2 d ->
       mem64 typ ~base:(arg64 i n) d (arg64 i (n+1))
-  | Iscaled(2, d) ->
+  | Iscaled(2, d) when not !Arch.no_three_operand_lea ->
       mem64 typ ~base:(arg64 i n) d (arg64 i n)
   | Iscaled(scale, d) ->
       mem64 typ ~scale d (arg64 i n)
