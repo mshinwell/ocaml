@@ -1847,17 +1847,17 @@ let rec transl env e =
         (transl env ifso)
   | Uifthenelse (Uifthenelse (cond, condso, condnot), ifso, ifnot) ->
       let dbg = Debuginfo.none in
-      let num_true = next_raise_count () in
+      let num_false = next_raise_count () in
       make_catch
-        num_true
+        num_false
         (make_catch2
-           (fun shared_false ->
+           (fun shared_true ->
              if_then_else
                (test_bool dbg (transl env cond),
-                exit_if_true dbg env condso num_true shared_false,
-                exit_if_true dbg env condnot num_true shared_false))
-           (transl env ifnot))
-        (transl env ifso)
+                exit_if_false dbg env condso shared_true num_false,
+                exit_if_false dbg env condnot shared_true num_false))
+           (transl env ifso))
+        (transl env ifnot)
   | Uifthenelse(cond, ifso, ifnot) ->
       let dbg = Debuginfo.none in
       if_then_else(test_bool dbg (transl env cond), transl env ifso,

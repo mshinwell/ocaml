@@ -41,6 +41,10 @@ Working version
   (Markus Mottl, review by Alain Frisch, Xavier Leroy, Gabriel Scherer,
   Mark Shinwell and Leo White)
 
+- GPR#1201: Arrange for the order of if-then-else blocks to more
+  frequently be the same as Closure when using Flambda
+  (Mark Shinwell, Leo White)
+
 ### Standard library:
 
 - GRP#1119: Change Set (private) type to inline records.
