@@ -230,8 +230,9 @@ Working version
 - PR#7468: possible GC problem in caml_alloc_sprintf
   (Xavier Leroy, discovery by Olivier Andrieu)
 
-- PR#4208, PR#4229, PR#4839, PR#6462, PR#6957, PR#6950, GPR#1063: Make
-  (nat)dynlink sound
+* PR#4208, PR#4229, PR#4839, PR#6462, PR#6957, PR#6950, GPR#1063: Make
+  (nat)dynlink sound.  Fixes various bugs and makes some interface
+  changes, in particular removing long-deprecated functions
   (Pierre Chambart, Mark Shinwell, Leo White)
 
 - PR#7496: Fixed conjunctive polymorphic variant tags do not unify
