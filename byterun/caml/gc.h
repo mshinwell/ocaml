@@ -27,7 +27,7 @@
 #define caml_color_hd(hd) \
   ({ \
     header_t result = hd; \
-    asm ("andq	$0x0300, %0" \
+    asm ("andq\t$0x0300, %0" \
          : "+r" (result) \
          : /* no other input operands */); \
     result; \
