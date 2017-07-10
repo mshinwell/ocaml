@@ -24,7 +24,17 @@
 #define Caml_blue  (2 << 8)
 #define Caml_black (3 << 8)
 
-#define Color_hd(hd) ((color_t) ((hd) & Caml_black))
+#define caml_color_hd(hd) \
+  ({ \
+    header_t result = hd; \
+    asm ("andq	$0x0300, %0" \
+         : "+r" (result) \
+         : /* no other input operands */); \
+    result; \
+  })
+
+#define Color_hd(hd) ((color_t) caml_color_hd(hd))
+
 #define Color_hp(hp) (Color_hd (Hd_hp (hp)))
 #define Color_val(val) (Color_hd (Hd_val (val)))
 
@@ -33,10 +43,19 @@
 #define Is_blue_hd(hd) (Color_hd (hd) == Caml_blue)
 #define Is_black_hd(hd) (Color_hd (hd) == Caml_black)
 
-#define Whitehd_hd(hd) (((hd)  & ~Caml_black)/*| Caml_white*/)
-#define Grayhd_hd(hd)  (((hd)  & ~Caml_black)  | Caml_gray)
-#define Blackhd_hd(hd) (((hd)/*& ~Caml_black*/)| Caml_black)
-#define Bluehd_hd(hd)  (((hd)  & ~Caml_black)  | Caml_blue)
+#define caml_hd_and_not_caml_black_or_mask(hd, mask) \
+  ({ \
+    header_t result = hd; \
+    asm ("andq\t$0xfffffffffffffcff, %0\n\torq\t%1, %0" \
+         : "+r" (result) \
+         : "Z" (mask)); \
+    result; \
+  })
+
+#define Whitehd_hd(hd) caml_hd_and_not_caml_black_or_mask(hd, Caml_white)
+#define Grayhd_hd(hd)  caml_hd_and_not_caml_black_or_mask(hd, Caml_gray)
+#define Blackhd_hd(hd) caml_hd_and_not_caml_black_or_mask(hd, Caml_black)
+#define Bluehd_hd(hd)  caml_hd_and_not_caml_black_or_mask(hd, Caml_blue)
 
 /* This depends on the layout of the header.  See [mlvalues.h]. */
 #define Make_header(wosize, tag, color)                                       \
@@ -72,8 +91,18 @@ extern uintnat caml_spacetime_my_profinfo(struct ext_table**, uintnat);
 #define Is_blue_val(val) (Color_val(val) == Caml_blue)
 #define Is_black_val(val) (Color_val(val) == Caml_black)
 
+#define caml_hd_and_not_caml_black_or_inconstant_mask(hd, mask) \
+  ({ \
+    header_t result = hd; \
+    asm ("andq\t$0xfffffffffffffcff, %0\n\torq\t%1, %0" \
+         : "+r" (result) \
+         : "r" (mask)); \
+    result; \
+  })
+
 /* For extern.c */
-#define Colornum_hd(hd) ((color_t) (((hd) >> 8) & 3))
-#define Coloredhd_hd(hd,colnum) (((hd) & ~Caml_black) | ((colnum) << 8))
+#define Colornum_hd(hd) ((color_t) (caml_color_hd(hd) >> 8))
+#define Coloredhd_hd(hd,colnum) \
+  caml_hd_and_not_caml_black_or_inconstant_mask(hd, (colnum) << 8)
 
 #endif /* CAML_GC_H */
