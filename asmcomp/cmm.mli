@@ -108,11 +108,7 @@ type memory_chunk =
 and operation =
     Capply of machtype
   | Cextcall of string * machtype * bool * label option
-<<<<<<< HEAD
-  | Cload of memory_chunk
-=======
   | Cload of memory_chunk * Asttypes.mutable_flag
->>>>>>> ocaml/trunk
   | Calloc
   | Cstore of memory_chunk * Lambda.initialization_or_assignment
   | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi
@@ -149,15 +145,9 @@ and expression =
   | Cop of operation * expression list * Debuginfo.t
   | Csequence of expression * expression
   | Cifthenelse of expression * expression * expression
-<<<<<<< HEAD
-  | Cswitch of Debuginfo.t * expression * int array * expression array
-  | Cloop of expression
-  | Ccatch of int * Ident_ibp.t list * expression * expression
-=======
   | Cswitch of expression * int array * expression array * Debuginfo.t
   | Cloop of expression
   | Ccatch of rec_flag * (int * Ident.t list * expression) list * expression
->>>>>>> ocaml/trunk
   | Cexit of int * expression list
   | Ctrywith of expression * Ident_ibp.t * expression
 

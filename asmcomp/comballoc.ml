@@ -92,13 +92,8 @@ let rec combine i allocstate =
       let newhandlers =
         List.map (fun (io, handler) -> io, combine_restart handler) handlers in
       let newnext = combine_restart i.next in
-<<<<<<< HEAD
-      (instr_cons (Icatch(io, newbody, newhandler)) i.arg i.res
+      (instr_cons (Icatch(rec_flag, newhandlers, newbody)) i.arg i.res
         ~phantom_available_before:i.phantom_available_before newnext, sz)
-=======
-      (instr_cons (Icatch(rec_flag, newhandlers, newbody))
-         i.arg i.res newnext, sz)
->>>>>>> ocaml/trunk
   | Itrywith(body, handler) ->
       let (newbody, sz) = combine body allocstate in
       let newhandler = combine_restart handler in

@@ -55,14 +55,8 @@ and ulambda =
   | Uphantom_let of Ident_ibp.t * uphantom_defining_expr option * ulambda
   | Uletrec of (Ident_ibp.t * ulambda) list * ulambda
   | Uprim of primitive * ulambda list * Debuginfo.t
-<<<<<<< HEAD
-  | Uswitch of Debuginfo.t * ulambda * ulambda_switch
-  | Ustringswitch of Debuginfo.t * ulambda * (string * ulambda) list
-      * ulambda option
-=======
   | Uswitch of ulambda * ulambda_switch * Debuginfo.t
   | Ustringswitch of ulambda * (string * ulambda) list * ulambda option
->>>>>>> ocaml/trunk
   | Ustaticfail of int * ulambda list
   | Ucatch of int * Ident_ibp.t list * ulambda * ulambda
   | Utrywith of ulambda * Ident_ibp.t * ulambda
@@ -80,12 +74,9 @@ and ufunction = {
   params : Ident_ibp.t list;
   body   : ulambda;
   dbg    : Debuginfo.t;
-<<<<<<< HEAD
   human_name : string;
   module_path : Path.t option;
-=======
   env    : Ident.t option;
->>>>>>> ocaml/trunk
 }
 
 and ulambda_switch =

@@ -68,14 +68,10 @@ let occurs_var var u =
     | Uletrec(decls, body) ->
         List.exists (fun (_id, u) -> occurs u) decls || occurs body
     | Uprim(_p, args, _) -> List.exists occurs args
-<<<<<<< HEAD
-    | Uswitch(_, arg, s) ->
-=======
     | Uswitch(arg, s, _dbg) ->
->>>>>>> ocaml/trunk
         occurs arg ||
         occurs_array s.us_actions_consts || occurs_array s.us_actions_blocks
-    | Ustringswitch(_, arg,sw,d) ->
+    | Ustringswitch(arg,sw,d) ->
         occurs arg ||
         List.exists (fun (_,e) -> occurs e) sw ||
         (match d with None -> false | Some d -> occurs d)
@@ -91,7 +87,6 @@ let occurs_var var u =
     | Usend(_, met, obj, args, _) ->
         occurs met || occurs obj || List.exists occurs args
     | Uunreachable -> false
-    | Uphantom_let (_, _, body) -> occurs body
   and occurs_array a =
     try
       for i = 0 to Array.length a - 1 do
@@ -164,17 +159,13 @@ let lambda_smaller lam threshold =
     | Uprim(prim, args, _) ->
         size := !size + prim_size prim args;
         lambda_list_size args
-<<<<<<< HEAD
-    | Uswitch(_, lam, cases) ->
-=======
     | Uswitch(lam, cases, _dbg) ->
->>>>>>> ocaml/trunk
         if Array.length cases.us_actions_consts > 1 then size := !size + 5 ;
         if Array.length cases.us_actions_blocks > 1 then size := !size + 5 ;
         lambda_size lam;
         lambda_array_size cases.us_actions_consts ;
         lambda_array_size cases.us_actions_blocks
-    | Ustringswitch (_,lam,sw,d) ->
+    | Ustringswitch (lam,sw,d) ->
         lambda_size lam ;
        (* as ifthenelse *)
         List.iter
@@ -203,7 +194,6 @@ let lambda_smaller lam threshold =
         size := !size + 8;
         lambda_size met; lambda_size obj; lambda_list_size args
     | Uunreachable -> ()
-    | Uphantom_let (_, _, body) -> lambda_size body
   and lambda_list_size l = List.iter lambda_size l
   and lambda_array_size a = Array.iter lambda_size a in
   try
@@ -560,25 +550,19 @@ let rec substitute loc fpc sb ulam =
       Uclosure(defs, List.map (substitute loc fpc sb) env)
   | Uoffset(u, ofs) -> Uoffset(substitute loc fpc sb u, ofs)
   | Ulet(str, kind, id, u1, u2) ->
-      let id' = Ident_ibp.rename id in
+      let id' = Ident.rename id in
       Ulet(str, kind, id', substitute loc fpc sb u1,
-           substitute loc fpc
-             (Tbl.add (Ident_ibp.ident id) (Uvar (Ident_ibp.ident id')) sb) u2)
-  | Uphantom_let (id, defining_expr, body) ->
-      Uphantom_let (id, defining_expr, substitute loc fpc sb body)
+           substitute loc fpc (Tbl.add id (Uvar id') sb) u2)
   | Uletrec(bindings, body) ->
       let bindings1 =
-        List.map (fun (id, rhs) -> (id, Ident_ibp.rename id, rhs))
-          bindings
-      in
+        List.map (fun (id, rhs) -> (id, Ident.rename id, rhs)) bindings in
       let sb' =
         List.fold_right
-          (fun (id, id', _) s ->
-            Tbl.add (Ident_ibp.ident id) (Uvar (Ident_ibp.ident id')) s)
+          (fun (id, id', _) s -> Tbl.add id (Uvar id') s)
           bindings1 sb in
       Uletrec(
-        List.map (fun (_id, id', rhs) ->
-            (id', substitute loc fpc sb' rhs))
+        List.map
+           (fun (_id, id', rhs) -> (id', substitute loc fpc sb' rhs))
            bindings1,
         substitute loc fpc sb' body)
   | Uprim(p, args, dbg) ->
@@ -587,11 +571,7 @@ let rec substitute loc fpc sb ulam =
       let (res, _) =
         simplif_prim fpc p (sargs, List.map approx_ulam sargs) dbg in
       res
-<<<<<<< HEAD
-  | Uswitch(dbg, arg, sw) ->
-=======
   | Uswitch(arg, sw, dbg) ->
->>>>>>> ocaml/trunk
       let sarg = substitute loc fpc sb arg in
       let action =
         (* Unfortunately, we cannot easily deal with the
@@ -610,7 +590,7 @@ let rec substitute loc fpc sb ulam =
       begin match action with
       | Some u -> substitute loc fpc sb u
       | None ->
-          Uswitch(dbg, sarg,
+          Uswitch(sarg,
                   { sw with
                     us_actions_consts =
                       Array.map (substitute loc fpc sb) sw.us_actions_consts;
@@ -619,28 +599,25 @@ let rec substitute loc fpc sb ulam =
                   },
                   dbg)
       end
-  | Ustringswitch(dbg, arg,sw,d) ->
+  | Ustringswitch(arg,sw,d) ->
       Ustringswitch
-        (dbg, substitute loc fpc sb arg,
+        (substitute loc fpc sb arg,
          List.map (fun (s,act) -> s,substitute loc fpc sb act) sw,
          Misc.may_map (substitute loc fpc sb) d)
   | Ustaticfail (nfail, args) ->
       Ustaticfail (nfail, List.map (substitute loc fpc sb) args)
   | Ucatch(nfail, ids, u1, u2) ->
-      let ids' = List.map Ident_ibp.rename ids in
+      let ids' = List.map Ident.rename ids in
       let sb' =
         List.fold_right2
-          (fun id id' s ->
-            Tbl.add (Ident_ibp.ident id) (Uvar (Ident_ibp.ident id')) s)
+          (fun id id' s -> Tbl.add id (Uvar id') s)
           ids ids' sb
       in
       Ucatch(nfail, ids', substitute loc fpc sb u1, substitute loc fpc sb' u2)
   | Utrywith(u1, id, u2) ->
-      let id' = Ident_ibp.rename id in
+      let id' = Ident.rename id in
       Utrywith(substitute loc fpc sb u1, id',
-               substitute loc fpc
-                 (Tbl.add (Ident_ibp.ident id) (Uvar (Ident_ibp.ident id')) sb)
-                 u2)
+               substitute loc fpc (Tbl.add id (Uvar id') sb) u2)
   | Uifthenelse(u1, u2, u3) ->
       begin match substitute loc fpc sb u1 with
         Uconst (Uconst_ptr n) ->
@@ -655,10 +632,9 @@ let rec substitute loc fpc sb ulam =
   | Uwhile(u1, u2) ->
       Uwhile(substitute loc fpc sb u1, substitute loc fpc sb u2)
   | Ufor(id, u1, u2, dir, u3) ->
-      let id' = Ident_ibp.rename id in
+      let id' = Ident.rename id in
       Ufor(id', substitute loc fpc sb u1, substitute loc fpc sb u2, dir,
-           substitute loc fpc (Tbl.add (Ident_ibp.ident id)
-             (Uvar (Ident_ibp.ident id')) sb) u3)
+           substitute loc fpc (Tbl.add id (Uvar id') sb) u3)
   | Uassign(id, u) ->
       let id' =
         try
@@ -700,9 +676,7 @@ let rec bind_params_rec loc fpc subst params args body =
         in
         let body' =
           bind_params_rec loc fpc (Tbl.add p1 u2 subst) pl al body in
-        let p1' = Ident_ibp.create p1' None in
-        if occurs_var p1 body then
-          Ulet(Immutable, Pgenval, p1', u1, body')
+        if occurs_var p1 body then Ulet(Immutable, Pgenval, p1', u1, body')
         else if no_effects a1 then body'
         else Usequence(a1, body')
       end
@@ -880,7 +854,6 @@ let rec close fenv cenv = function
           match args with
               [] -> body
             | (arg1, arg2) :: args ->
-              let arg1 = Ident_ibp.create arg1 None in
               iter args
                 (Ulet (Immutable, Pgenval, arg1, arg2, body))
         in
@@ -946,14 +919,12 @@ let rec close fenv cenv = function
       begin match (str, alam) with
         (Variable, _) ->
           let (ubody, abody) = close fenv cenv body in
-          let id = Ident_ibp.create id None in
           (Ulet(Mutable, kind, id, ulam, ubody), abody)
       | (_, Value_const _)
         when str = Alias || is_pure lam ->
           close (Tbl.add id alam fenv) cenv body
       | (_, _) ->
           let (ubody, abody) = close (Tbl.add id alam fenv) cenv body in
-          let id = Ident_ibp.create id None in
           (Ulet(Immutable, kind, id, ulam, ubody), abody)
       end
   | Lletrec(defs, body) ->
@@ -974,7 +945,6 @@ let rec close fenv cenv = function
             (fun (id, pos, _approx) sb ->
               Tbl.add id (Uoffset(Uvar clos_ident, pos)) sb)
             infos Tbl.empty in
-        let clos_ident = Ident_ibp.create clos_ident None in
         (Ulet(Immutable, Pgenval, clos_ident, clos,
               substitute Location.none !Clflags.float_const_prop sb ubody),
          approx)
@@ -985,8 +955,7 @@ let rec close fenv cenv = function
         | (id, lam) :: rem ->
             let (udefs, fenv_body) = clos_defs rem in
             let (ulam, approx) = close_named fenv cenv id lam in
-            let id_ibp = Ident_ibp.create id None in
-            ((id_ibp, ulam) :: udefs, Tbl.add id approx fenv_body) in
+            ((id, ulam) :: udefs, Tbl.add id approx fenv_body) in
         let (udefs, fenv_body) = clos_defs defs in
         let (ubody, approx) = close fenv_body cenv body in
         (Uletrec(udefs, ubody), approx)
@@ -1025,11 +994,7 @@ let rec close fenv cenv = function
       let dbg = Debuginfo.from_location loc in
       simplif_prim !Clflags.float_const_prop
                    p (close_list_approx fenv cenv args) dbg
-<<<<<<< HEAD
-  | Lswitch(arg, sw, loc) ->
-=======
   | Lswitch(arg, sw, dbg) ->
->>>>>>> ocaml/trunk
       let fn fail =
         let (uarg, _) = close fenv cenv arg in
         let const_index, const_actions, fconst =
@@ -1038,8 +1003,7 @@ let rec close fenv cenv = function
           close_switch fenv cenv sw.sw_blocks sw.sw_numblocks fail in
         let ulam =
           Uswitch
-            (Debuginfo.from_location loc,
-             uarg,
+            (uarg,
              {us_index_consts = const_index;
               us_actions_consts = const_actions;
               us_index_blocks = block_index;
@@ -1062,7 +1026,7 @@ let rec close fenv cenv = function
             Ucatch (i,[],ubody,uhandler),Value_unknown
           else fn fail
       end
-  | Lstringswitch(arg,sw,d,loc) ->
+  | Lstringswitch(arg,sw,d,_) ->
       let uarg,_ = close fenv cenv arg in
       let usw =
         List.map
@@ -1075,18 +1039,16 @@ let rec close fenv cenv = function
           (fun d ->
             let ud,_ = close fenv cenv d in
             ud) d in
-      Ustringswitch (Debuginfo.from_location loc, uarg,usw,ud),Value_unknown
+      Ustringswitch (uarg,usw,ud),Value_unknown
   | Lstaticraise (i, args) ->
       (Ustaticfail (i, close_list fenv cenv args), Value_unknown)
   | Lstaticcatch(body, (i, vars), handler) ->
       let (ubody, _) = close fenv cenv body in
       let (uhandler, _) = close fenv cenv handler in
-      let vars = List.map (fun var -> Ident_ibp.create var None) vars in
       (Ucatch(i, vars, ubody, uhandler), Value_unknown)
   | Ltrywith(body, id, handler) ->
       let (ubody, _) = close fenv cenv body in
       let (uhandler, _) = close fenv cenv handler in
-      let id = Ident_ibp.create id None in
       (Utrywith(ubody, id, uhandler), Value_unknown)
   | Lifthenelse(arg, ifso, ifnot) ->
       begin match close fenv cenv arg with
@@ -1110,7 +1072,6 @@ let rec close fenv cenv = function
       let (ulo, _) = close fenv cenv lo in
       let (uhi, _) = close fenv cenv hi in
       let (ubody, _) = close fenv cenv body in
-      let id = Ident_ibp.create id None in
       (Ufor(id, ulo, uhi, dir, ubody), Value_unknown)
   | Lassign(id, lam) ->
       let (ulam, _) = close fenv cenv lam in
@@ -1204,7 +1165,7 @@ and close_functions fenv cenv fun_defs =
   let useless_env = ref initially_closed in
   (* Translate each function definition *)
   let clos_fundef (id, params, body, fundesc, dbg) env_pos =
-    let env_param = Ident.create "*closure_env*" in
+    let env_param = Ident.create "env" in
     let cenv_fv =
       build_closure_env env_param (fv_pos - env_pos) fv in
     let cenv_body =
@@ -1215,22 +1176,14 @@ and close_functions fenv cenv fun_defs =
     let (ubody, approx) = close fenv_rec cenv_body body in
     if !useless_env && occurs_var env_param ubody then raise NotClosed;
     let fun_params = if !useless_env then params else params @ [env_param] in
-    let params =
-      List.map (fun param -> Ident_ibp.create param None) params
-    in
     let f =
       {
         label  = fundesc.fun_label;
         arity  = fundesc.fun_arity;
-        params;
+        params = fun_params;
         body   = ubody;
         dbg;
-<<<<<<< HEAD
-        human_name = fundesc.fun_label;
-        module_path = None;
-=======
         env = Some env_param;
->>>>>>> ocaml/trunk
       }
     in
     (* give more chance of function with default parameters (i.e.
@@ -1382,15 +1335,11 @@ let collect_exported_structured_constants a =
     | Ulet (_str, _kind, _, u1, u2) -> ulam u1; ulam u2
     | Uletrec (l, u) -> List.iter (fun (_, u) -> ulam u) l; ulam u
     | Uprim (_, ul, _) -> List.iter ulam ul
-<<<<<<< HEAD
-    | Uswitch (_, u, sl) ->
-=======
     | Uswitch (u, sl, _dbg) ->
->>>>>>> ocaml/trunk
         ulam u;
         Array.iter ulam sl.us_actions_consts;
         Array.iter ulam sl.us_actions_blocks
-    | Ustringswitch (_,u,sw,d) ->
+    | Ustringswitch (u,sw,d) ->
         ulam u ;
         List.iter (fun (_,act) -> ulam act) sw ;
         Misc.may ulam d
@@ -1403,7 +1352,6 @@ let collect_exported_structured_constants a =
     | Ufor (_, u1, u2, _, u3) -> ulam u1; ulam u2; ulam u3
     | Uassign (_, u) -> ulam u
     | Usend (_, u1, u2, ul, _) -> ulam u1; ulam u2; List.iter ulam ul
-    | Uphantom_let (_, _, body) -> ulam body
     | Uunreachable -> ()
   in
   approx a

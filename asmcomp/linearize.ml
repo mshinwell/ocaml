@@ -301,12 +301,6 @@ let rec linear i n =
       let lbl_head = Cmm.new_label() in
       let n1 = linear i.Mach.next n in
 <<<<<<< HEAD
-      let n2 =
-        linear body (cons_instr (Lbranch lbl_head) n1
-          ~available_before:i.Mach.available_before
-          ~phantom_available_before:i.Mach.phantom_available_before)
-      in
-      cons_instr_same_avail (Llabel lbl_head) n2
   | Icatch(io, body, handler) ->
       let (lbl_end, n1) = get_label(linear i.Mach.next n) in
       let (lbl_handler, n2) = get_label(linear handler n1) in
@@ -319,8 +313,12 @@ let rec linear i n =
       in
       exit_label := List.tl !exit_label;
 =======
-      let n2 = linear body (cons_instr (Lbranch lbl_head) n1) in
-      cons_instr (Llabel lbl_head) n2
+      let n2 =
+        linear body (cons_instr (Lbranch lbl_head) n1
+          ~available_before:i.Mach.available_before
+          ~phantom_available_before:i.Mach.phantom_available_before)
+      in
+      cons_instr_same_avail (Llabel lbl_head) n2
   | Icatch(_rec_flag, handlers, body) ->
       let (lbl_end, n1) = get_label(linear i.Mach.next n) in
       (* CR mshinwell for pchambart:

@@ -35,11 +35,8 @@ let ignore_function_label (_ : Clambda.function_label) = ()
 let ignore_debuginfo (_ : Debuginfo.t) = ()
 let ignore_int (_ : int) = ()
 let ignore_ident (_ : Ident.t) = ()
-<<<<<<< HEAD
 let ignore_ident_ibp (_ : Ident_ibp.t) = ()
-=======
 let ignore_ident_option (_ : Ident.t option) = ()
->>>>>>> ocaml/trunk
 let ignore_primitive (_ : Lambda.primitive) = ()
 let ignore_string (_ : string) = ()
 let ignore_int_array (_ : int array) = ()
@@ -108,13 +105,8 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
          experience. *)
       force_non_linear captured_variables;
       List.iter loop captured_variables;
-<<<<<<< HEAD
       List.iter (fun ({ Clambda. label; arity; params; body;
-            dbg; human_name; module_path; } as clos) ->
-=======
-      List.iter (fun (
-        { Clambda. label; arity; params; body; dbg; env; } as clos) ->
->>>>>>> ocaml/trunk
+            dbg; human_name; module_path; env; } as clos) ->
           (match closure_environment_ident clos with
            | None -> ()
            | Some env_var ->
@@ -125,12 +117,9 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
           ignore_ident_ibp_list params;
           loop body;
           ignore_debuginfo dbg;
-<<<<<<< HEAD
           ignore_string human_name;
           ignore_path_option module_path)
-=======
           ignore_ident_option env)
->>>>>>> ocaml/trunk
         functions
     | Uoffset (expr, offset) ->
       loop expr;
@@ -152,27 +141,15 @@ let make_ident_info (clam : Clambda.ulambda) : ident_info =
       ignore_primitive prim;
       List.iter loop args;
       ignore_debuginfo dbg
-<<<<<<< HEAD
-    | Uswitch (dbg, cond, { us_index_consts; us_actions_consts;
-          us_index_blocks; us_actions_blocks }) ->
-      ignore_debuginfo dbg;
-=======
     | Uswitch (cond, { us_index_consts; us_actions_consts;
           us_index_blocks; us_actions_blocks }, dbg) ->
->>>>>>> ocaml/trunk
       loop cond;
       ignore_int_array us_index_consts;
       Array.iter loop us_actions_consts;
       ignore_int_array us_index_blocks;
-<<<<<<< HEAD
-      Array.iter loop us_actions_blocks
-    | Ustringswitch (dbg, cond, branches, default) ->
-      ignore_debuginfo dbg;
-=======
       Array.iter loop us_actions_blocks;
       ignore_debuginfo dbg
     | Ustringswitch (cond, branches, default) ->
->>>>>>> ocaml/trunk
       loop cond;
       List.iter (fun (str, branch) ->
           ignore_string str;
@@ -304,12 +281,8 @@ let let_bound_vars_that_can_be_moved ident_info (clam : Clambda.ulambda) =
     | Uclosure (functions, captured_variables) ->
       ignore_ulambda_list captured_variables;
       (* Start a new let stack for speed. *)
-<<<<<<< HEAD
       List.iter (fun { Clambda. label; arity; params; body;
-              dbg; human_name; module_path; } ->
-=======
-      List.iter (fun { Clambda. label; arity; params; body; dbg; env; } ->
->>>>>>> ocaml/trunk
+              dbg; human_name; module_path; env; } ->
           ignore_function_label label;
           ignore_int arity;
           ignore_ident_ibp_list params;
@@ -317,12 +290,9 @@ let let_bound_vars_that_can_be_moved ident_info (clam : Clambda.ulambda) =
           loop body;
           let_stack := [];
           ignore_debuginfo dbg;
-<<<<<<< HEAD
           ignore_string human_name;
-          ignore_path_option module_path)
-=======
+          ignore_path_option module_path;
           ignore_ident_option env)
->>>>>>> ocaml/trunk
         functions
     | Uoffset (expr, offset) ->
       (* [expr] should usually be a variable. *)
@@ -366,14 +336,8 @@ let let_bound_vars_that_can_be_moved ident_info (clam : Clambda.ulambda) =
       ignore_primitive prim;
       examine_argument_list args;
       ignore_debuginfo dbg
-<<<<<<< HEAD
-    | Uswitch (dbg, cond, { us_index_consts; us_actions_consts;
-          us_index_blocks; us_actions_blocks }) ->
-      ignore_debuginfo dbg;
-=======
     | Uswitch (cond, { us_index_consts; us_actions_consts;
           us_index_blocks; us_actions_blocks }, dbg) ->
->>>>>>> ocaml/trunk
       examine_argument_list [cond];
       ignore_int_array us_index_consts;
       Array.iter (fun action ->
@@ -539,11 +503,7 @@ let rec substitute_let_moveable is_let_moveable env (clam : Clambda.ulambda)
   | Uprim (prim, args, dbg) ->
     let args = substitute_let_moveable_list is_let_moveable env args in
     Uprim (prim, args, dbg)
-<<<<<<< HEAD
-  | Uswitch (dbg, cond, sw) ->
-=======
   | Uswitch (cond, sw, dbg) ->
->>>>>>> ocaml/trunk
     let cond = substitute_let_moveable is_let_moveable env cond in
     let sw =
       { sw with
@@ -555,13 +515,8 @@ let rec substitute_let_moveable is_let_moveable env (clam : Clambda.ulambda)
             sw.us_actions_blocks;
       }
     in
-<<<<<<< HEAD
-    Uswitch (dbg, cond, sw)
-  | Ustringswitch (dbg, cond, branches, default) ->
-=======
     Uswitch (cond, sw, dbg)
   | Ustringswitch (cond, branches, default) ->
->>>>>>> ocaml/trunk
     let cond = substitute_let_moveable is_let_moveable env cond in
     let branches =
       List.map (fun (s, branch) ->
@@ -698,14 +653,6 @@ let rec un_anf_and_moveable ident_info env (clam : Clambda.ulambda)
           })
         functions
     in
-<<<<<<< HEAD
-    let variables_bound_by_the_closure, moveable =
-      un_anf_list_and_moveable ident_info env
-        variables_bound_by_the_closure
-=======
-    let variables_bound_by_the_closure =
-      un_anf_list ident_info env variables_bound_by_the_closure
->>>>>>> ocaml/trunk
     in
     Uclosure (functions, variables_bound_by_the_closure), Fixed
   | Uoffset (clam, n) ->
