@@ -18,7 +18,11 @@
 module type I = sig
   val string_block_length : Cmm.expression -> Cmm.expression
   val transl_switch :
+<<<<<<< HEAD
       Debuginfo.t -> Cmm.expression -> int -> int ->
+=======
+      Location.t -> Cmm.expression -> int -> int ->
+>>>>>>> ocaml/trunk
         (int * Cmm.expression) list -> Cmm.expression ->
           Cmm.expression
 end
@@ -26,7 +30,12 @@ end
 module Make(I:I) : sig
   (* Compile stringswitch (arg,cases,d)
      Note: cases should not contain string duplicates *)
+<<<<<<< HEAD
   val compile : Debuginfo.t ->
     Cmm.expression (* arg *) -> Cmm.expression option (* d *) ->
+=======
+  val compile : Debuginfo.t -> Cmm.expression (* arg *)
+    -> Cmm.expression option (* d *) ->
+>>>>>>> ocaml/trunk
     (string * Cmm.expression) list (* cases *)-> Cmm.expression
 end

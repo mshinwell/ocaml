@@ -56,7 +56,8 @@ let rec eliminate_ref id = function
          sw_blocks =
             List.map (fun (n, e) -> (n, eliminate_ref id e)) sw.sw_blocks;
          sw_failaction =
-            Misc.may_map (eliminate_ref id) sw.sw_failaction; }, loc)
+            Misc.may_map (eliminate_ref id) sw.sw_failaction; },
+        loc)
   | Lstringswitch(e, sw, default, loc) ->
       Lstringswitch
         (eliminate_ref id e,
@@ -118,7 +119,7 @@ let simplify_exits lam =
       List.iter (fun (_v, l) -> count l) bindings;
       count body
   | Lprim(_p, ll, _) -> List.iter count ll
-  | Lswitch(l, sw, _) ->
+  | Lswitch(l, sw, _loc) ->
       count_default sw ;
       count l;
       List.iter (fun (_, l) -> count l) sw.sw_consts;
@@ -240,7 +241,8 @@ let simplify_exits lam =
       Lswitch
         (new_l,
          {sw with sw_consts = new_consts ; sw_blocks = new_blocks;
-                  sw_failaction = new_fail}, loc)
+                  sw_failaction = new_fail},
+         loc)
   | Lstringswitch(l,sw,d,loc) ->
       Lstringswitch
         (simplif l,List.map (fun (s,l) -> s,simplif l) sw,
@@ -309,12 +311,8 @@ let beta_reduce params body args =
 
 let simplify_lets lam =
 
-  (* Disable optimisations for bytecode compilation with -g flag
-     and for flambda compilation with -g *)
-  let optimize =
-    (!Clflags.native_code || not !Clflags.debug)
-      && (not (!Clflags.native_code && Config.flambda && !Clflags.debug))
-  in
+  (* Disable optimisations for bytecode compilation with -g flag *)
+  let optimize = !Clflags.native_code || not !Clflags.debug in
 
   (* First pass: count the occurrences of all let-bound identifiers *)
 
@@ -383,7 +381,7 @@ let simplify_lets lam =
       List.iter (fun (_v, l) -> count bv l) bindings;
       count bv body
   | Lprim(_p, ll, _) -> List.iter (count bv) ll
-  | Lswitch(l, sw, _) ->
+  | Lswitch(l, sw, _loc) ->
       count_default bv sw ;
       count bv l;
       List.iter (fun (_, l) -> count bv l) sw.sw_consts;
@@ -474,18 +472,7 @@ let simplify_lets lam =
       simplif l2
   | Llet(Strict, kind, v,
          Lprim(Pmakeblock(0, Mutable, kind_ref) as prim, [linit], loc), lbody)
-    when optimize && Config.flambda = false ->
-      (* This optimization, which turns non-escaping references into
-         mutable variables, is disabled by flambda as it is then done
-         separately as a more precise pass,
-         middle_end/ref_to_variables.ml, which benefits from being
-         applied after inlining.
-
-         According to Pierre Chambart, doing the transformation here
-         would make some further analyzes less precise, while
-         ref_to_variables carefully preserves analysis results; this
-         justifies disabling this one instead of combining both
-         passes. *)
+    when optimize ->
       let slinit = simplif linit in
       let slbody = simplif lbody in
       begin try
@@ -521,7 +508,8 @@ let simplify_lets lam =
       Lswitch
         (new_l,
          {sw with sw_consts = new_consts ; sw_blocks = new_blocks;
-                  sw_failaction = new_fail}, loc)
+                  sw_failaction = new_fail},
+         loc)
   | Lstringswitch (l,sw,d,loc) ->
       Lstringswitch
         (simplif l,List.map (fun (s,l) -> s,simplif l) sw,
@@ -589,7 +577,7 @@ let rec emit_tail_infos is_tail lambda =
       emit_tail_infos is_tail arg2
   | Lprim (_, l, _) ->
       list_emit_tail_infos false l
-  | Lswitch (lam, sw, _) ->
+  | Lswitch (lam, sw, _loc) ->
       emit_tail_infos false lam;
       list_emit_tail_infos_fun snd is_tail sw.sw_consts;
       list_emit_tail_infos_fun snd is_tail sw.sw_blocks;
@@ -647,8 +635,7 @@ and list_emit_tail_infos is_tail =
    'Some' constructor, only to deconstruct it immediately in the
    function's body. *)
 
-let split_default_wrapper ?(create_wrapper_body = fun lam -> lam)
-      fun_id kind params body attr loc =
+let split_default_wrapper ~id:fun_id ~kind ~params ~body ~attr ~loc =
   let rec aux map = function
     | Llet(Strict, k, id, (Lifthenelse(Lvar optparam, _, _) as def), rest) when
         Ident.name optparam = "*opt*" && List.mem optparam params
@@ -690,9 +677,9 @@ let split_default_wrapper ?(create_wrapper_body = fun lam -> lam)
         (wrapper_body, (inner_id, inner_fun))
   in
   try
-    let wrapper_body, inner = aux [] body in
-    [(fun_id, Lfunction{kind; params; body = create_wrapper_body wrapper_body;
-       attr; loc}); inner]
+    let body, inner = aux [] body in
+    let attr = default_stub_attribute in
+    [(fun_id, Lfunction{kind; params; body; attr; loc}); inner]
   with Exit ->
     [(fun_id, Lfunction{kind; params; body; attr; loc})]
 

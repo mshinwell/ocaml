@@ -360,7 +360,7 @@ and function_declarations = private {
 }
 
 and function_declaration = private {
-  params : Variable.t list;
+  params : Parameter.t list;
   body : t;
   free_names : Free_names.t;
   (** All variables and symbols free in the *body* of the function.  For
@@ -658,7 +658,7 @@ end
 (** Create a function declaration.  This calculates the free variables and
     symbols occurring in the specified [body]. *)
 val create_function_declaration
-   : params:Variable.t list
+   : params:Parameter.t list
   -> body:t
   -> stub:bool
   -> dbg:Debuginfo.t
@@ -678,6 +678,12 @@ val create_function_declarations
 val update_function_declarations
    : function_declarations
   -> funs:function_declaration Variable.Map.t
+  -> function_declarations
+
+val import_function_declarations_for_pack
+   : function_declarations
+  -> (Set_of_closures_id.t -> Set_of_closures_id.t)
+  -> (Set_of_closures_origin.t -> Set_of_closures_origin.t)
   -> function_declarations
 
 (** Create a set of closures.  Checks are made to ensure that [free_vars]

@@ -135,7 +135,11 @@ and lam ppf = function
       let lams ppf largs =
         List.iter (fun l -> fprintf ppf "@ %a" lam l) largs in
       fprintf ppf "@[<2>(%a%a)@]" Printlambda.primitive prim lams largs
+<<<<<<< HEAD
   | Uswitch(dbg, larg, sw) ->
+=======
+  | Uswitch(larg, sw, _dbg) ->
+>>>>>>> ocaml/trunk
       let print_case tag index i ppf =
         for j = 0 to Array.length index - 1 do
           if index.(j) = i then fprintf ppf "case %s %i:" tag j

@@ -381,7 +381,8 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
           us_actions_consts = const_actions;
           us_index_blocks = block_index;
           us_actions_blocks = block_actions;
-        })
+        },
+        Debuginfo.none)  (* debug info will be added by GPR#855 *)
     in
     (* Check that the [failaction] may be duplicated.  If this is not the
        case, share it through a static raise / static catch. *)
@@ -660,6 +661,7 @@ and to_clambda_set_of_closures t env
     in
     let env_body, params =
       List.fold_right (fun var (env, params) ->
+<<<<<<< HEAD
           let id, env = Env.add_fresh_ident env var in
           let provenance =
             match Variable.original_ident var with
@@ -674,6 +676,9 @@ and to_clambda_set_of_closures t env
               Some provenance
           in
           let id = Ident_ibp.create id provenance in
+=======
+          let id, env = Env.add_fresh_ident env (Parameter.var var) in
+>>>>>>> ocaml/trunk
           env, id :: params)
         function_decl.params (env, [])
     in
@@ -704,8 +709,12 @@ and to_clambda_set_of_closures t env
       params = params @ [env_var];
       body;
       dbg = function_decl.dbg;
+<<<<<<< HEAD
       human_name = Closure_id.base_name closure_id;
       module_path = Some module_path;
+=======
+      env = Some env_var;
+>>>>>>> ocaml/trunk
     }
   in
   let funs = List.map to_clambda_function all_functions in
@@ -746,6 +755,7 @@ and to_clambda_closed_set_of_closures t env symbol
     in
     let env_body, params =
       List.fold_right (fun var (env, params) ->
+<<<<<<< HEAD
           (* CR mshinwell: This code is the same as in the previous function *)
           let id, env = Env.add_fresh_ident env var in
           let provenance =
@@ -761,6 +771,9 @@ and to_clambda_closed_set_of_closures t env symbol
               Some provenance
           in
           let id = Ident_ibp.create id provenance in
+=======
+          let id, env = Env.add_fresh_ident env (Parameter.var var) in
+>>>>>>> ocaml/trunk
           env, id :: params)
         function_decl.params (env, [])
     in
@@ -791,6 +804,7 @@ and to_clambda_closed_set_of_closures t env symbol
       params;
       body;
       dbg = function_decl.dbg;
+<<<<<<< HEAD
       human_name = Closure_id.base_name closure_id;
       (* We use this rather than the symbol provenance information available in
          e.g. [accumulate_structured_constants], below, because in the case
@@ -800,6 +814,9 @@ and to_clambda_closed_set_of_closures t env symbol
          no associated symbol provenance information (by virtue of the
          behaviour of [Lift_let_to_initialize_symbol]). *)
       module_path = Some function_decl.module_path;
+=======
+      env = None;
+>>>>>>> ocaml/trunk
     }
   in
   let ufunct = List.map to_clambda_function functions in
@@ -813,7 +830,7 @@ let to_clambda_initialize_symbol t env symbol fields : Clambda.ulambda =
   let build_setfield (index, field) : Clambda.ulambda =
     (* Note that this will never cause a write barrier hit, owing to
        the [Initialization]. *)
-    Uprim (Psetfield (index, Pointer, Initialization),
+    Uprim (Psetfield (index, Pointer, Root_initialization),
       [to_clambda_symbol env symbol; field],
       Debuginfo.none)
   in

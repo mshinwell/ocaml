@@ -119,6 +119,7 @@ method private reload i =
           (self#reload i.next))
         ~phantom_available_before:i.phantom_available_before
   | Iloop body ->
+<<<<<<< HEAD
       instr_cons (Iloop(self#reload body)) [||] [||]
         ~phantom_available_before:i.phantom_available_before
         (self#reload i.next)
@@ -126,6 +127,15 @@ method private reload i =
       instr_cons
         (Icatch(nfail, self#reload body, self#reload handler)) [||] [||]
         ~phantom_available_before:i.phantom_available_before
+=======
+      instr_cons (Iloop(self#reload body)) [||] [||] (self#reload i.next)
+  | Icatch(rec_flag, handlers, body) ->
+      let new_handlers = List.map
+          (fun (nfail, handler) -> nfail, self#reload handler)
+          handlers in
+      instr_cons
+        (Icatch(rec_flag, new_handlers, self#reload body)) [||] [||]
+>>>>>>> ocaml/trunk
         (self#reload i.next)
   | Iexit lbl ->
       instr_cons (Iexit lbl) [||] [||]

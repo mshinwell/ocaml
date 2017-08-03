@@ -28,6 +28,7 @@ type t = {
   symbol_for_global' : (Ident.t -> Symbol.t);
   filename : string;
   mutable imported_symbols : Symbol.Set.t;
+  mutable declared_symbols : (Symbol.t * Flambda.constant_defining_value) list;
 }
 
 (* CR mshinwell: things to do:
@@ -36,17 +37,6 @@ type t = {
 *)
 
 let add_default_argument_wrappers lam =
-  (* CR-someday mshinwell: Temporary hack to mark default argument wrappers
-     as stubs.  Other possibilities:
-     1. Change Lambda.inline_attribute to add another ("stub") case;
-     2. Add a "stub" field to the Lfunction record. *)
-  let stubify body : Lambda.lambda =
-    let stub_prim =
-      Primitive.simple ~name:Closure_conversion_aux.stub_hack_prim_name
-        ~arity:1 ~alloc:false
-    in
-    Lprim (Pccall stub_prim, [body], Location.none)
-  in
   let defs_are_all_functions (defs : (_ * Lambda.lambda) list) =
     List.for_all (function (_, Lambda.Lfunction _) -> true | _ -> false) defs
   in
@@ -55,8 +45,8 @@ let add_default_argument_wrappers lam =
     | Llet (( Strict | Alias | StrictOpt), _k, id,
         Lfunction {kind; params; body = fbody; attr; loc}, body) ->
       begin match
-        Simplif.split_default_wrapper id kind params fbody attr loc
-          ~create_wrapper_body:stubify
+        Simplif.split_default_wrapper ~id ~kind ~params
+          ~body:fbody ~attr ~loc
       with
       | [fun_id, def] -> Llet (Alias, Pgenval, fun_id, def, body)
       | [fun_id, def; inner_fun_id, def_inner] ->
@@ -71,8 +61,8 @@ let add_default_argument_wrappers lam =
             (List.map
                (function
                  | (id, Lambda.Lfunction {kind; params; body; attr; loc}) ->
-                   Simplif.split_default_wrapper id kind params body attr loc
-                     ~create_wrapper_body:stubify
+                   Simplif.split_default_wrapper ~id ~kind ~params ~body
+                     ~attr ~loc
                  | _ -> assert false)
                defs)
         in
@@ -87,7 +77,7 @@ let add_default_argument_wrappers lam =
     manner from the tuple. *)
 let tupled_function_call_stub env original_params unboxed_version
       : Flambda.function_declaration =
-  let tuple_param =
+  let tuple_param_var =
     Variable.rename ~append:"tupled_stub_param" unboxed_version
   in
   let params = List.map (fun p -> Variable.rename p) original_params in
@@ -106,28 +96,29 @@ let tupled_function_call_stub env original_params unboxed_version
   let _, body =
     List.fold_left (fun (pos, body) param ->
         let lam : Flambda.named =
-          Prim (Pfield pos, [tuple_param], Debuginfo.none)
+          Prim (Pfield pos, [tuple_param_var], Debuginfo.none)
         in
         pos + 1, Flambda.create_let param lam body)
       (0, call) params
   in
+  let tuple_param = Parameter.wrap tuple_param_var in
   (* CR-soon mshinwell: This should not use [Debuginfo.none] *)
   Flambda.create_function_declaration ~params:[tuple_param]
     ~body ~stub:true ~dbg:Debuginfo.none ~inline:Default_inline
     ~specialise:Default_specialise ~is_a_functor:false
     ~module_path:(Env.current_module_path env)
 
-let rec eliminate_const_block (const : Lambda.structured_constant)
-      : Lambda.lambda =
-  match const with
-  | Const_block (tag, consts) ->
-    (* CR-soon mshinwell for lwhite: fix location *)
-    Lprim (Pmakeblock (tag, Asttypes.Immutable, None),
-      List.map eliminate_const_block consts, Location.none)
-  | Const_base _
-  | Const_pointer _
-  | Const_immstring _
-  | Const_float_array _ -> Lconst const
+let register_const t (constant:Flambda.constant_defining_value) name
+      : Flambda.constant_defining_value_block_field * string =
+  let current_compilation_unit = Compilation_unit.get_current_exn () in
+  (* Create a variable to ensure uniqueness of the symbol *)
+  let var = Variable.create ~current_compilation_unit name in
+  let symbol =
+    Symbol.create current_compilation_unit
+      (Linkage_name.create (Variable.unique_name var))
+  in
+  t.declared_symbols <- (symbol, constant) :: t.declared_symbols;
+  Symbol symbol, name
 
 let add_path_except_compilation_unit env name =
   match Env.current_module_path env with
@@ -154,29 +145,51 @@ let rec location_from_lambda (lam : Lambda.lambda) =
   | Llet (_, _, _, _, body) -> location_from_lambda body
   | _ -> Debuginfo.none
 
-let rec close_const t ?bound_name env (const : Lambda.structured_constant)
-      : Flambda.named * string =
+let rec declare_const t (const : Lambda.structured_constant)
+      : Flambda.constant_defining_value_block_field * string =
   match const with
   | Const_base (Const_int c) -> Const (Int c), "int"
   | Const_base (Const_char c) -> Const (Char c), "char"
   | Const_base (Const_string (s, _)) ->
-    if Config.safe_string then Allocated_const (Immutable_string s), "immstring"
-    else Allocated_const (String s), "string"
+    let const, name =
+      if Config.safe_string then
+        Flambda.Allocated_const (Immutable_string s), "immstring"
+      else Flambda.Allocated_const (String s), "string"
+    in
+    register_const t const name
   | Const_base (Const_float c) ->
-    Allocated_const (Float (float_of_string c)), "float"
-  | Const_base (Const_int32 c) -> Allocated_const (Int32 c), "int32"
-  | Const_base (Const_int64 c) -> Allocated_const (Int64 c), "int64"
+    register_const t
+      (Allocated_const (Float (float_of_string c)))
+      "float"
+  | Const_base (Const_int32 c) ->
+    register_const t (Allocated_const (Int32 c)) "int32"
+  | Const_base (Const_int64 c) ->
+    register_const t (Allocated_const (Int64 c)) "int64"
   | Const_base (Const_nativeint c) ->
-    Allocated_const (Nativeint c), "nativeint"
+    register_const t (Allocated_const (Nativeint c)) "nativeint"
   | Const_pointer c -> Const (Const_pointer c), "pointer"
-  | Const_immstring c -> Allocated_const (Immutable_string c), "immstring"
+  | Const_immstring c ->
+    register_const t (Allocated_const (Immutable_string c)) "immstring"
   | Const_float_array c ->
-    Allocated_const (Immutable_float_array (List.map float_of_string c)),
+    register_const t
+      (Allocated_const (Immutable_float_array (List.map float_of_string c)))
       "float_array"
-  | Const_block _ ->
-    Expr (close t ?bound_name env (eliminate_const_block const)), "const_block"
+  | Const_block (tag, consts) ->
+    let const : Flambda.constant_defining_value =
+      Block (Tag.create_exn tag,
+             List.map (fun c -> fst (declare_const t c)) consts)
+    in
+    register_const t const "const_block"
 
-and close t ?(bound_name:(Variable.t * Flambda.let_provenance) option) env
+let close_const t (const : Lambda.structured_constant)
+      : Flambda.named * string =
+  match declare_const t const with
+  | Const c, name ->
+    Const c, name
+  | Symbol s, name ->
+    Symbol s, name
+
+let rec close t ?(bound_name:(Variable.t * Flambda.let_provenance) option) env
       (lam : Lambda.lambda) : Flambda.t =
   match lam with
   | Lvar id ->
@@ -190,7 +203,7 @@ and close t ?(bound_name:(Variable.t * Flambda.let_provenance) option) env
           Ident.print id
     end
   | Lconst cst ->
-    let cst, name = close_const ?bound_name t env cst in
+    let cst, name = close_const t cst in
     name_expr cst ~name:("const_" ^ name)
   | Llet ((Strict | Alias | StrictOpt), _value_kind, id, defining_expr, body) ->
     (* TODO: keep value_kind in flambda *)
@@ -247,8 +260,7 @@ and close t ?(bound_name:(Variable.t * Flambda.let_provenance) option) env
     let set_of_closures =
       let decl =
         Function_decl.create ~let_rec_ident:None ~closure_bound_var ~kind
-          ~params ~body ~inline:attr.inline ~specialise:attr.specialise
-          ~is_a_functor:attr.is_a_functor ~loc:location
+          ~params ~body ~attr ~loc
       in
       close_functions t env (Function_decls.create [decl])
     in
@@ -302,8 +314,7 @@ and close t ?(bound_name:(Variable.t * Flambda.let_provenance) option) env
             let function_declaration =
               Function_decl.create ~let_rec_ident:(Some let_rec_ident)
                 ~closure_bound_var ~kind ~params ~body
-                ~inline:attr.inline ~specialise:attr.specialise
-                ~is_a_functor:attr.is_a_functor ~loc
+                ~attr ~loc
             in
             begin match !location with
             | None -> location := Some loc
@@ -677,12 +688,9 @@ and close_functions t external_env function_declarations : Flambda.named =
        argument with a default value, make sure it always gets inlined.
        CR-someday pchambart: eta-expansion wrapper for a primitive are
        not marked as stub but certainly should *)
-    let stub, body =
-      match Function_decl.primitive_wrapper decl with
-      | None -> false, body
-      | Some wrapper_body -> true, wrapper_body
-    in
-    let params = List.map (Env.find_var closure_env) params in
+    let stub = Function_decl.stub decl in
+    let param_vars = List.map (Env.find_var closure_env) params in
+    let params = List.map Parameter.wrap param_vars in
     let closure_bound_var = Function_decl.closure_bound_var decl in
     let module_path = Env.current_module_path closure_env in
     let provenance : Flambda.let_provenance =
@@ -704,7 +712,7 @@ and close_functions t external_env function_declarations : Flambda.named =
     | Tupled ->
       let unboxed_version = Variable.rename closure_bound_var in
       let generic_function_stub =
-        tupled_function_call_stub closure_env params unboxed_version
+        tupled_function_call_stub closure_env param_vars unboxed_version
       in
       Variable.Map.add unboxed_version fun_decl
         (Variable.Map.add closure_bound_var generic_function_stub map)
@@ -752,8 +760,7 @@ and close_let_bound_expression t ?let_rec_ident let_bound_var
     let closure_bound_var = Variable.rename let_bound_var in
     let decl =
       Function_decl.create ~let_rec_ident ~closure_bound_var ~kind ~params
-        ~body ~inline:attr.inline ~specialise:attr.specialise
-        ~is_a_functor:attr.is_a_functor ~loc
+        ~body ~attr ~loc
     in
     let set_of_closures_var =
       Variable.rename let_bound_var ~append:"_set_of_closures"
@@ -798,6 +805,7 @@ let lambda_to_flambda ~backend ~module_ident ~size ~filename lam
       symbol_for_global' = Backend.symbol_for_global';
       filename;
       imported_symbols = Symbol.Set.empty;
+      declared_symbols = [];
     }
   in
   let module_symbol = Backend.symbol_for_global' module_ident in
@@ -843,6 +851,13 @@ let lambda_to_flambda ~backend ~module_ident ~size ~filename lam
         Array.to_list fields,
         End module_symbol))
   in
+  let program_body =
+    List.fold_left
+      (fun program_body (symbol, constant) : Flambda.program_body ->
+         Let_symbol (symbol, constant, program_body))
+      module_initializer
+      t.declared_symbols
+  in
   { imported_symbols = t.imported_symbols;
-    program_body = module_initializer;
+    program_body;
   }

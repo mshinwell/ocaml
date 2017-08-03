@@ -90,6 +90,8 @@ type raise_kind =
   | Raise_withtrace
   | Raise_notrace
 
+type rec_flag = Nonrecursive | Recursive
+
 type memory_chunk =
     Byte_unsigned
   | Byte_signed
@@ -106,7 +108,11 @@ type memory_chunk =
 and operation =
     Capply of machtype
   | Cextcall of string * machtype * bool * label option
+<<<<<<< HEAD
   | Cload of memory_chunk
+=======
+  | Cload of memory_chunk * Asttypes.mutable_flag
+>>>>>>> ocaml/trunk
   | Calloc
   | Cstore of memory_chunk * Lambda.initialization_or_assignment
   | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi
@@ -122,6 +128,10 @@ and operation =
   | Craise of raise_kind
   | Ccheckbound
 
+(** Not all cmm expressions currently have [Debuginfo.t] values attached to
+    them.  The ones that do are those that are likely to generate code that
+    can fairly robustly be mapped back to a source location.  In the future
+    it might be the case that more [Debuginfo.t] annotations are desirable. *)
 and expression =
     Cconst_int of int
   | Cconst_natint of nativeint
@@ -139,9 +149,15 @@ and expression =
   | Cop of operation * expression list * Debuginfo.t
   | Csequence of expression * expression
   | Cifthenelse of expression * expression * expression
+<<<<<<< HEAD
   | Cswitch of Debuginfo.t * expression * int array * expression array
   | Cloop of expression
   | Ccatch of int * Ident_ibp.t list * expression * expression
+=======
+  | Cswitch of expression * int array * expression array * Debuginfo.t
+  | Cloop of expression
+  | Ccatch of rec_flag * (int * Ident.t list * expression) list * expression
+>>>>>>> ocaml/trunk
   | Cexit of int * expression list
   | Ctrywith of expression * Ident_ibp.t * expression
 
@@ -172,5 +188,7 @@ type data_item =
 type phrase =
     Cfunction of fundecl
   | Cdata of data_item list
+
+val ccatch : int * Ident.t list * expression * expression -> expression
 
 val reset : unit -> unit

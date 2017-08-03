@@ -4,7 +4,7 @@
 (*                                                                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2015--2016 Jane Street Group LLC                           *)
+(*   Copyright 2015--2017 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -33,7 +33,12 @@ let something_was_instrumented () =
 let next_index_within_node ~part_of_shape ~label =
   let index = !index_within_node in
   begin match part_of_shape with
-  | Mach.Direct_call_point _ | Mach.Indirect_call_point ->
+  | Mach.Direct_call_point _ ->
+    incr index_within_node;
+    if Config.spacetime_call_counts then begin
+      incr index_within_node
+    end
+  | Mach.Indirect_call_point ->
     incr index_within_node
   | Mach.Allocation_point ->
     incr index_within_node;
@@ -86,8 +91,13 @@ let code_for_function_prologue ~function_name ~node_hole =
         body)
   in
   let pc = Ident.create "pc" in
+<<<<<<< HEAD
   Clet (Ident_ibp.create node None, Cop (Cload Word_int, [Cvar node_hole], dbg),
     Clet (Ident_ibp.create must_allocate_node None,
+=======
+  Clet (node, Cop (Cload (Word_int, Asttypes.Mutable), [Cvar node_hole], dbg),
+    Clet (must_allocate_node,
+>>>>>>> ocaml/trunk
       Cop (Cand, [Cvar node; Cconst_int 1], dbg),
       Cifthenelse (
         Cop (Ccmpi Cne, [Cvar must_allocate_node; Cconst_int 1], dbg),
@@ -101,8 +111,13 @@ let code_for_function_prologue ~function_name ~node_hole =
                Cvar node_hole;
               ],
               dbg)),
+<<<<<<< HEAD
             Clet (Ident_ibp.create new_node None,
               Cop (Cload Word_int, [Cvar node_hole], dbg),
+=======
+            Clet (new_node,
+              Cop (Cload (Word_int, Asttypes.Mutable), [Cvar node_hole], dbg),
+>>>>>>> ocaml/trunk
               if no_tail_calls then Cvar new_node
               else
                 Cifthenelse (
@@ -145,15 +160,27 @@ let code_for_blockheader ~value's_header ~node ~dbg =
       Cvar node;
       Cconst_int offset_into_node;
     ], dbg),
+<<<<<<< HEAD
     Clet (Ident_ibp.create existing_profinfo None,
         Cop (Cload Word_int, [Cvar address_of_profinfo], dbg),
       Clet (Ident_ibp.create profinfo None,
+=======
+    Clet (existing_profinfo,
+        Cop (Cload (Word_int, Asttypes.Mutable), [Cvar address_of_profinfo],
+          dbg),
+      Clet (profinfo,
+>>>>>>> ocaml/trunk
         Cifthenelse (
           Cop (Ccmpi Cne, [Cvar existing_profinfo; Cconst_int 1 (* () *)], dbg),
           Cvar existing_profinfo,
           generate_new_profinfo),
+<<<<<<< HEAD
         Clet (Ident_ibp.create existing_count None,
           Cop (Cload Word_int, [
+=======
+        Clet (existing_count,
+          Cop (Cload (Word_int, Asttypes.Mutable), [
+>>>>>>> ocaml/trunk
             Cop (Caddi,
               [Cvar address_of_profinfo; Cconst_int Arch.size_addr], dbg)
           ], dbg),
@@ -215,13 +242,34 @@ let code_for_call ~node ~callee ~is_tail ~label =
   let place_within_node = Ident.create "place_within_node" in
   let dbg = Debuginfo.none in
   let open Cmm in
+<<<<<<< HEAD
   Clet (Ident_ibp.create place_within_node None,
+=======
+  Clet (place_within_node,
+>>>>>>> ocaml/trunk
     Cop (Caddi, [node; Cconst_int (index_within_node * Arch.size_addr)], dbg),
     (* The following code returns the address that is to be moved into the
        (hard) node hole pointer register immediately before the call.
        (That move is inserted in [Selectgen].) *)
     match callee with
-    | Direct _callee -> Cvar place_within_node
+    | Direct _callee ->
+      if Config.spacetime_call_counts then begin
+        let count_addr = Ident.create "call_count_addr" in
+        let count = Ident.create "call_count" in
+        Clet (count_addr,
+          Cop (Caddi, [Cvar place_within_node; Cconst_int Arch.size_addr], dbg),
+          Clet (count,
+            Cop (Cload (Word_int, Asttypes.Mutable), [Cvar count_addr], dbg),
+            Csequence (
+              Cop (Cstore (Word_int, Lambda.Assignment),
+                (* Adding 2 really means adding 1; the count is encoded
+                   as an OCaml integer. *)
+                [Cvar count_addr; Cop (Caddi, [Cvar count; Cconst_int 2], dbg)],
+                dbg),
+              Cvar place_within_node)))
+      end else begin
+        Cvar place_within_node
+      end
     | Indirect callee ->
       let caller_node =
         if is_tail then node
@@ -251,6 +299,7 @@ class virtual instruction_selection = object (self)
     | None -> assert false
     | Some reg -> Some reg
 
+<<<<<<< HEAD
   method private instrument_indirect_call ~(env : Selectgen.environment)
         ~callee ~is_tail ~label_after =
     (* [callee] is a pseudoregister, so we have to bind it in the environment
@@ -261,6 +310,14 @@ class virtual instruction_selection = object (self)
         idents = Tbl.add callee_ident ([| callee |], None) env.idents;
       }
     in
+=======
+  method private instrument_indirect_call ~env ~callee ~is_tail
+      ~label_after =
+    (* [callee] is a pseudoregister, so we have to bind it in the environment
+       and reference the variable to which it is bound. *)
+    let callee_ident = Ident.create "callee" in
+    let env = Selectgen.env_add callee_ident [| callee |] env in
+>>>>>>> ocaml/trunk
     let instrumentation =
       code_for_call
         ~node:(Lazy.force !spacetime_node)
@@ -326,8 +383,13 @@ class virtual instruction_selection = object (self)
       in
       disable_instrumentation <- false;
       let node = Lazy.force !spacetime_node_ident in
+<<<<<<< HEAD
       let node_reg = fst (Tbl.find node env.idents) in
       self#insert_moves env node_temp_reg node_reg
+=======
+      let node_reg = Selectgen.env_find node env in
+      self#insert_moves node_temp_reg node_reg
+>>>>>>> ocaml/trunk
     end
 
   method! emit_blockheader env n dbg =
@@ -362,7 +424,11 @@ class virtual instruction_selection = object (self)
 
   method! select_allocation_args (env : Selectgen.environment) =
     if self#can_instrument () then begin
+<<<<<<< HEAD
       let regs = fst (Tbl.find (Lazy.force !spacetime_node_ident) env.idents) in
+=======
+      let regs = Selectgen.env_find (Lazy.force !spacetime_node_ident) env in
+>>>>>>> ocaml/trunk
       match regs with
       | [| reg |] -> [| reg |]
       | _ -> failwith "Expected one register only for spacetime_node_ident"
@@ -399,10 +465,15 @@ class virtual instruction_selection = object (self)
   method! initial_env () =
     let env = super#initial_env () in
     if Config.spacetime then
+<<<<<<< HEAD
       { env with
         idents = Tbl.add (Lazy.force !spacetime_node_ident)
           (self#regs_for Cmm.typ_int, None) env.idents;
       }
+=======
+      Selectgen.env_add (Lazy.force !spacetime_node_ident)
+        (self#regs_for Cmm.typ_int) env
+>>>>>>> ocaml/trunk
     else
       env
 

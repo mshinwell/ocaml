@@ -54,6 +54,7 @@ type mapper = {
   open_description: mapper -> T.open_description -> open_description;
   pat: mapper -> T.pattern -> pattern;
   row_field: mapper -> T.row_field -> row_field;
+  object_field: mapper -> T.object_field -> object_field;
   signature: mapper -> T.signature -> signature;
   signature_item: mapper -> T.signature_item -> signature_item;
   structure: mapper -> T.structure -> structure;
@@ -365,13 +366,15 @@ let expression sub exp =
 
     (* Pexp_function can't have a label, so we split in 3 cases. *)
     (* One case, no guard: It's a fun. *)
-    | Texp_function (label, _param, [{c_lhs=p; c_guard=None; c_rhs=e}], _) ->
-        Pexp_fun (label, None, sub.pat sub p, sub.expr sub e)
+    | Texp_function { arg_label; cases = [{c_lhs=p; c_guard=None; c_rhs=e}];
+          _ } ->
+        Pexp_fun (arg_label, None, sub.pat sub p, sub.expr sub e)
     (* No label: it's a function. *)
-    | Texp_function (Nolabel, _param, cases, _) ->
+    | Texp_function { arg_label = Nolabel; cases; _; } ->
         Pexp_function (sub.cases sub cases)
     (* Mix of both, we generate `fun ~label:$name$ -> match $name$ with ...` *)
-    | Texp_function (Labelled s | Optional s as label, _param, cases, _) ->
+    | Texp_function { arg_label = Labelled s | Optional s as label; cases;
+          _ } ->
         let name = fresh_name s exp.exp_env in
         Pexp_fun (label, None, Pat.var ~loc {loc;txt = name },
           Exp.match_ ~loc (Exp.ident ~loc {loc;txt= Lident name})
@@ -632,6 +635,9 @@ let class_expr sub cexpr =
     | Tcl_constraint (cl, Some clty, _vals, _meths, _concrs) ->
         Pcl_constraint (sub.class_expr sub cl,  sub.class_type sub clty)
 
+    | Tcl_open (ovf, _p, lid, _env, e) ->
+        Pcl_open (ovf, lid, sub.class_expr sub e)
+
     | Tcl_ident _ -> assert false
     | Tcl_constraint (_, None, _, _, _) -> assert false
   in
@@ -646,6 +652,8 @@ let class_type sub ct =
         Pcty_constr (map_loc sub lid, List.map (sub.typ sub) list)
     | Tcty_arrow (label, ct, cl) ->
         Pcty_arrow (label, sub.typ sub ct, sub.class_type sub cl)
+    | Tcty_open (ovf, _p, lid, _env, e) ->
+        Pcty_open (ovf, lid, sub.class_type sub e)
   in
   Cty.mk ~loc ~attrs desc
 
@@ -684,8 +692,7 @@ let core_type sub ct =
           List.map (sub.typ sub) list)
     | Ttyp_object (list, o) ->
         Ptyp_object
-          (List.map (fun (s, a, t) ->
-               (mkloc s loc, a, sub.typ sub t)) list, o)
+          (List.map (sub.object_field sub) list, o)
     | Ttyp_class (_path, lid, list) ->
         Ptyp_class (map_loc sub lid, List.map (sub.typ sub) list)
     | Ttyp_alias (ct, s) ->
@@ -716,6 +723,12 @@ let row_field sub rf =
       Rtag (label, sub.attributes sub attrs, bool, List.map (sub.typ sub) list)
   | Tinherit ct -> Rinherit (sub.typ sub ct)
 
+let object_field sub ofield =
+  match ofield with
+    OTtag (label, attrs, ct) ->
+      Otag (label, sub.attributes sub attrs, sub.typ sub ct)
+  | OTinherit ct -> Oinherit (sub.typ sub ct)
+
 and is_self_pat = function
   | { pat_desc = Tpat_alias(_pat, id, _) } ->
       string_is_prefix "self-" (Ident.name id)
@@ -738,7 +751,8 @@ let class_field sub cf =
         Pcf_method (lab, priv, Cfk_virtual (sub.typ sub cty))
     | Tcf_method (lab, priv, Tcfk_concrete (o, exp)) ->
         let remove_fun_self = function
-          | { exp_desc = Texp_function(Nolabel, _param, [case], _) }
+          | { exp_desc =
+              Texp_function { arg_label = Nolabel; cases = [case]; _ } }
             when is_self_pat case.c_lhs && case.c_guard = None -> case.c_rhs
           | e -> e
         in
@@ -746,7 +760,8 @@ let class_field sub cf =
         Pcf_method (lab, priv, Cfk_concrete (o, sub.expr sub exp))
     | Tcf_initializer exp ->
         let remove_fun_self = function
-          | { exp_desc = Texp_function(Nolabel, _param, [case], _) }
+          | { exp_desc =
+              Texp_function { arg_label = Nolabel; cases = [case]; _ } }
             when is_self_pat case.c_lhs && case.c_guard = None -> case.c_rhs
           | e -> e
         in
@@ -800,6 +815,7 @@ let default_mapper =
     case = case;
     location = location;
     row_field = row_field ;
+    object_field = object_field ;
   }
 
 let untype_structure ?(mapper=default_mapper) structure =

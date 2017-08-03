@@ -21,7 +21,11 @@ open Cmm
 module type I = sig
   val string_block_length : Cmm.expression -> Cmm.expression
   val transl_switch :
+<<<<<<< HEAD
       Debuginfo.t -> Cmm.expression -> int -> int ->
+=======
+      Location.t -> Cmm.expression -> int -> int ->
+>>>>>>> ocaml/trunk
         (int * Cmm.expression) list -> Cmm.expression ->
           Cmm.expression
 end
@@ -73,9 +77,15 @@ module Make(I:I) = struct
   let mk_let_cell id str ind body =
     let dbg = Debuginfo.none in
     let cell =
+<<<<<<< HEAD
       Cop(Cload Word_int,[Cop(Cadda,[str;Cconst_int(Arch.size_int*ind)], dbg)],
         dbg) in
     let id = Ident_ibp.create id None in
+=======
+      Cop(Cload (Word_int, Asttypes.Mutable),
+        [Cop(Cadda,[str;Cconst_int(Arch.size_int*ind)], dbg)],
+        dbg) in
+>>>>>>> ocaml/trunk
     Clet(id, cell, body)
 
   let mk_let_size id str body =
@@ -351,7 +361,12 @@ module Make(I:I) = struct
             (len,act))
           (by_size cases) in
       let id = gen_size_id () in
+<<<<<<< HEAD
       let switch = I.transl_switch dbg (Cvar id) 1 max_int size_cases default in
+=======
+      let loc = Debuginfo.to_location dbg in
+      let switch = I.transl_switch loc (Cvar id) 1 max_int size_cases default in
+>>>>>>> ocaml/trunk
       mk_let_size id str switch
 
 (*
@@ -378,7 +393,7 @@ module Make(I:I) = struct
     | Cexit (_e,[]) ->  k arg
     | _ ->
         let e =  next_raise_count () in
-        Ccatch (e,[],k (Cexit (e,[])),arg)
+        ccatch (e,[],k (Cexit (e,[])),arg)
 
     let compile dbg str default cases =
 (* We do not attempt to really optimise default=None *)
