@@ -471,6 +471,8 @@ let rec substitute_let_moveable is_let_moveable env (clam : Clambda.ulambda)
       let body = substitute_let_moveable is_let_moveable env body in
       (* If we are about to delete a [let] in debug mode, keep it for the
          debugger. *)
+      (* CR mshinwell: find out why some closure constructions were
+         not leaving phantom lets behind after substitution. *)
       if not !Clflags.debug then
         body
       else
