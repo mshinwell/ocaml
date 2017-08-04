@@ -153,6 +153,28 @@ and expression = {
   desc : expression_desc;
 }
 
+val cconst_int : int -> expression
+val cconst_natint : nativeint -> expression
+val cconst_float : float -> expression
+val cconst_symbol : string -> expression
+val cconst_pointer : int -> expression
+val cconst_natpointer : nativeint -> expression
+val cblockheader : nativeint * Debuginfo.t -> expression
+val cvar : Ident.t -> expression
+val clet : Ident.t * expression * expression -> expression
+val cassign : Ident.t * expression -> expression
+val ctuple : expression list -> expression
+val cop : operation * expression list * Debuginfo.t -> expression
+val csequence : expression * expression -> expression
+val cifthenelse : expression * expression * expression -> expression
+val cswitch : expression * int array * expression array * Debuginfo.t
+  -> expression
+val cloop : expression -> expression
+val ccatch : rec_flag * (int * Ident.t list * expression) list * expression
+  -> expression
+val cexit : int * expression list -> expression
+val ctrywith : expression * Ident.t * expression -> expression
+
 type fundecl =
   { fun_name: string;
     fun_args: (Ident.t * machtype) list;
