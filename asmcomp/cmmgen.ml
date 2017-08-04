@@ -86,7 +86,7 @@ let caml_black = Nativeint.shift_left (Nativeint.of_int 3) 8
 
 (* Block headers. Meaning of the tag field: see stdlib/obj.ml *)
 
-let floatarray_tag = Cconst_int Obj.double_array_tag
+let floatarray_tag = { desc = Cconst_int Obj.double_array_tag; }
 
 let block_header tag sz =
   Nativeint.add (Nativeint.shift_left (Nativeint.of_int sz) 10)
@@ -111,13 +111,20 @@ let boxedint32_header = block_header Obj.custom_tag 2
 let boxedint64_header = block_header Obj.custom_tag (1 + 8 / size_addr)
 let boxedintnat_header = block_header Obj.custom_tag 2
 
-let alloc_float_header dbg = Cblockheader (float_header, dbg)
-let alloc_floatarray_header len dbg = Cblockheader (floatarray_header len, dbg)
-let alloc_closure_header sz dbg = Cblockheader (white_closure_header sz, dbg)
-let alloc_infix_header ofs dbg = Cblockheader (infix_header ofs, dbg)
-let alloc_boxedint32_header dbg = Cblockheader (boxedint32_header, dbg)
-let alloc_boxedint64_header dbg = Cblockheader (boxedint64_header, dbg)
-let alloc_boxedintnat_header dbg = Cblockheader (boxedintnat_header, dbg)
+let alloc_float_header dbg =
+  { desc = Cblockheader (float_header, dbg); }
+let alloc_floatarray_header len dbg =
+  { desc = Cblockheader (floatarray_header len, dbg); }
+let alloc_closure_header sz dbg =
+  { desc = Cblockheader (white_closure_header sz, dbg); }
+let alloc_infix_header ofs dbg =
+  { desc = Cblockheader (infix_header ofs, dbg); }
+let alloc_boxedint32_header dbg =
+  { desc = Cblockheader (boxedint32_header, dbg); }
+let alloc_boxedint64_header dbg =
+  { desc = Cblockheader (boxedint64_header, dbg); }
+let alloc_boxedintnat_header dbg =
+  { desc = Cblockheader (boxedintnat_header, dbg); }
 
 (* Integers *)
 
@@ -557,93 +564,115 @@ let map_ccatch f rec_flag handlers body =
   let handlers = List.map
       (fun (n, ids, handler) -> (n, ids, f handler))
       handlers in
-  Ccatch(rec_flag, handlers, f body)
+  { desc = Ccatch(rec_flag, handlers, f body); }
 
 let rec unbox_float dbg cmm =
-  match cmm with
+  match cmm.desc with
   | Cop(Calloc, [_header; c], _) -> c
-  | Clet(id, exp, body) -> Clet(id, exp, unbox_float dbg body)
+  | Clet(id, exp, body) ->
+    { desc = Clet(id, exp, unbox_float dbg body); }
   | Cifthenelse(cond, e1, e2) ->
-      Cifthenelse(cond, unbox_float dbg e1, unbox_float dbg e2)
-  | Csequence(e1, e2) -> Csequence(e1, unbox_float dbg e2)
+    { desc = Cifthenelse(cond, unbox_float dbg e1, unbox_float dbg e2); }
+  | Csequence(e1, e2) ->
+    { desc = Csequence(e1, unbox_float dbg e2); }
   | Cswitch(e, tbl, el, dbg') ->
-    Cswitch(e, tbl, Array.map (unbox_float dbg) el, dbg')
+    { desc = Cswitch(e, tbl, Array.map (unbox_float dbg) el, dbg'); }
   | Ccatch(rec_flag, handlers, body) ->
     map_ccatch (unbox_float dbg) rec_flag handlers body
-  | Ctrywith(e1, id, e2) -> Ctrywith(unbox_float dbg e1, id, unbox_float dbg e2)
-  | c -> Cop(Cload (Double_u, Immutable), [c], dbg)
+  | Ctrywith(e1, id, e2) ->
+    { desc = Ctrywith(unbox_float dbg e1, id, unbox_float dbg e2); }
+  | _ ->
+    { desc = Cop(Cload (Double_u, Immutable), [cmm], dbg); }
 
 (* Complex *)
 
 let box_complex dbg c_re c_im =
-  Cop(Calloc, [alloc_floatarray_header 2 dbg; c_re; c_im], dbg)
+  { desc = Cop(Calloc, [alloc_floatarray_header 2 dbg; c_re; c_im], dbg); }
 
-let complex_re c dbg = Cop(Cload (Double_u, Immutable), [c], dbg)
-let complex_im c dbg = Cop(Cload (Double_u, Immutable),
-                        [Cop(Cadda, [c; Cconst_int size_float], dbg)], dbg)
+let complex_re c dbg =
+  { desc = Cop(Cload (Double_u, Immutable), [c], dbg); }
+
+let complex_im c dbg =
+  { desc =
+      Cop(Cload (Double_u, Immutable),
+        [{ desc = Cop(Cadda, [c; { desc = Cconst_int size_float; }], dbg); }],
+        dbg);
+  }
 
 (* Unit *)
 
-let return_unit c = Csequence(c, Cconst_pointer 1)
+let return_unit c = { desc = Csequence(c, { desc = Cconst_pointer 1; }); }
 
-let rec remove_unit = function
-    Cconst_pointer 1 -> Ctuple []
-  | Csequence(c, Cconst_pointer 1) -> c
+let rec remove_unit exp =
+  match exp.desc with
+  | Cconst_pointer 1 -> { desc = Ctuple []; }
+  | Csequence(c, { desc = Cconst_pointer 1; }) -> c
   | Csequence(c1, c2) ->
-      Csequence(c1, remove_unit c2)
+      { desc = Csequence(c1, remove_unit c2); }
   | Cifthenelse(cond, ifso, ifnot) ->
-      Cifthenelse(cond, remove_unit ifso, remove_unit ifnot)
+      { desc = Cifthenelse(cond, remove_unit ifso, remove_unit ifnot); }
   | Cswitch(sel, index, cases, dbg) ->
-      Cswitch(sel, index, Array.map remove_unit cases, dbg)
+      { desc = Cswitch(sel, index, Array.map remove_unit cases, dbg); }
   | Ccatch(rec_flag, handlers, body) ->
       map_ccatch remove_unit rec_flag handlers body
   | Ctrywith(body, exn, handler) ->
-      Ctrywith(remove_unit body, exn, remove_unit handler)
+      { desc = Ctrywith(remove_unit body, exn, remove_unit handler); }
   | Clet(id, c1, c2) ->
-      Clet(id, c1, remove_unit c2)
+      { desc = Clet(id, c1, remove_unit c2); }
   | Cop(Capply _mty, args, dbg) ->
-      Cop(Capply typ_void, args, dbg)
+      { desc = Cop(Capply typ_void, args, dbg); }
   | Cop(Cextcall(proc, _mty, alloc, label_after), args, dbg) ->
-      Cop(Cextcall(proc, typ_void, alloc, label_after), args, dbg)
-  | Cexit (_,_) as c -> c
-  | Ctuple [] as c -> c
-  | c -> Csequence(c, Ctuple [])
+      { desc = Cop(Cextcall(proc, typ_void, alloc, label_after), args, dbg); }
+  | Cexit (_,_)
+  | Ctuple [] -> exp
+  | _ -> { desc = Csequence(exp, { desc = Ctuple []; }); }
 
 (* Access to block fields *)
 
 let field_address ptr n dbg =
   if n = 0
   then ptr
-  else Cop(Cadda, [ptr; Cconst_int(n * size_addr)], dbg)
+  else
+    { desc =
+        Cop(Cadda, [ptr; { desc = Cconst_int(n * size_addr); }], dbg);
+    }
 
 let get_field env ptr n dbg =
   let mut =
     match env.environment_param with
     | None -> Mutable
     | Some environment_param ->
-      match ptr with
+      match ptr.desc with
       | Cvar ptr ->
         (* Loads from the current function's closure are immutable. *)
         if Ident.same environment_param ptr then Immutable
         else Mutable
       | _ -> Mutable
   in
-  Cop(Cload (Word_val, mut), [field_address ptr n dbg], dbg)
+  { desc = Cop(Cload (Word_val, mut), [field_address ptr n dbg], dbg); }
 
 let set_field ptr n newval init dbg =
-  Cop(Cstore (Word_val, init), [field_address ptr n dbg; newval], dbg)
+  { desc =
+      Cop(Cstore (Word_val, init), [field_address ptr n dbg; newval], dbg);
+  }
 
 let non_profinfo_mask = (1 lsl (64 - Config.profinfo_width)) - 1
 
 let get_header ptr dbg =
   (* We cannot deem this as [Immutable] due to the presence of [Obj.truncate]
      and [Obj.set_tag]. *)
-  Cop(Cload (Word_int, Mutable),
-    [Cop(Cadda, [ptr; Cconst_int(-size_int)], dbg)], dbg)
+  { desc =
+      Cop(Cload (Word_int, Mutable),
+        [{ desc = Cop(Cadda, [ptr; { desc = Cconst_int(-size_int); }], dbg); }],
+        dbg);
+  }
 
 let get_header_without_profinfo ptr dbg =
   if Config.profinfo then
-    Cop(Cand, [get_header ptr dbg; Cconst_int non_profinfo_mask], dbg)
+    { desc =
+        Cop(Cand, [get_header ptr dbg;
+          { desc = Cconst_int non_profinfo_mask; }], dbg);
+    }
   else
     get_header ptr dbg
 
@@ -652,13 +681,19 @@ let tag_offset =
 
 let get_tag ptr dbg =
   if Proc.word_addressed then           (* If byte loads are slow *)
-    Cop(Cand, [get_header ptr dbg; Cconst_int 255], dbg)
+    { desc = Cop(Cand, [get_header ptr dbg; { desc = Cconst_int 255; }], dbg); }
   else                                  (* If byte loads are efficient *)
-    Cop(Cload (Byte_unsigned, Mutable), (* Same comment as [get_header] above *)
-        [Cop(Cadda, [ptr; Cconst_int(tag_offset)], dbg)], dbg)
+    { desc =  (* Same comment as [get_header] above *)
+      Cop(Cload (Byte_unsigned, Mutable),
+          [{ desc = Cop(Cadda, [ptr; { desc = Cconst_int tag_offset; }],
+                        dbg); }], dbg);
+    }
 
 let get_size ptr dbg =
-  Cop(Clsr, [get_header_without_profinfo ptr dbg; Cconst_int 10], dbg)
+  { desc =
+    Cop(Clsr, [get_header_without_profinfo ptr dbg;
+      { desc = Cconst_int 10; }], dbg);
+  }
 
 (* Array indexing *)
 
@@ -669,19 +704,29 @@ let wordsize_shift = 9
 let numfloat_shift = 9 + log2_size_float - log2_size_addr
 
 let is_addr_array_hdr hdr dbg =
-  Cop(Ccmpi Cne, [Cop(Cand, [hdr; Cconst_int 255], dbg); floatarray_tag], dbg)
+  { desc =
+    Cop(Ccmpi Cne, [
+        { desc = Cop(Cand, [hdr; { desc = Cconst_int 255; }], dbg); };
+        floatarray_tag;
+      ], dbg);
+  }
 
 let is_addr_array_ptr ptr dbg =
-  Cop(Ccmpi Cne, [get_tag ptr dbg; floatarray_tag], dbg)
+  { desc = Cop(Ccmpi Cne, [get_tag ptr dbg; floatarray_tag], dbg); }
 
 let addr_array_length hdr dbg =
-  Cop(Clsr, [hdr; Cconst_int wordsize_shift], dbg)
+  { desc =
+      Cop(Clsr, [hdr; { desc = Cconst_int wordsize_shift; }], dbg);
+  }
+
 let float_array_length hdr dbg =
-  Cop(Clsr, [hdr; Cconst_int numfloat_shift], dbg)
+  { desc =
+      Cop(Clsr, [hdr; { desc = Cconst_int numfloat_shift; }], dbg);
+  }
 
 let lsl_const c n dbg =
   if n = 0 then c
-  else Cop(Clsl, [c; Cconst_int n], dbg)
+  else { desc = Cop(Clsl, [c; { desc = Cconst_int n; }], dbg); }
 
 (* Produces a pointer to the element of the array [ptr] on the position [ofs]
    with the given element [log2size] log2 element size. [ofs] is given as a
@@ -697,48 +742,85 @@ let array_indexing ?typ log2size ptr ofs dbg =
     | None | Some Addr -> Cadda
     | Some Int -> Caddi
     | _ -> assert false in
-  match ofs with
+  match ofs.desc with
   | Cconst_int n ->
-      let i = n asr 1 in
-      if i = 0 then ptr else Cop(add, [ptr; Cconst_int(i lsl log2size)], dbg)
-  | Cop(Caddi, [Cop(Clsl, [c; Cconst_int 1], _); Cconst_int 1], dbg') ->
-      Cop(add, [ptr; lsl_const c log2size dbg], dbg')
-  | Cop(Caddi, [c; Cconst_int n], dbg') when log2size = 0 ->
-      Cop(add, [Cop(add, [ptr; untag_int c dbg], dbg); Cconst_int (n asr 1)],
-        dbg')
-  | Cop(Caddi, [c; Cconst_int n], _) ->
-      Cop(add, [Cop(add, [ptr; lsl_const c (log2size - 1) dbg], dbg);
-                    Cconst_int((n-1) lsl (log2size - 1))], dbg)
+    let i = n asr 1 in
+    if i = 0 then ptr
+    else
+      { desc = Cop(add, [ptr; { desc = Cconst_int(i lsl log2size); }], dbg); }
+  | Cop(Caddi, [
+      { desc = Cop(Clsl, [c; { desc = Cconst_int 1; }], _); };
+      { desc = Cconst_int 1; };
+    ], dbg') ->
+    { desc = Cop(add, [ptr; lsl_const c log2size dbg], dbg'); }
+  | Cop(Caddi, [c; { desc = Cconst_int n; }], dbg') when log2size = 0 ->
+    { desc =
+        Cop(add, [
+            { desc = Cop(add, [ptr; untag_int c dbg], dbg); };
+            { desc = Cconst_int (n asr 1); }
+          ], dbg');
+    }
+  | Cop(Caddi, [c; { desc = Cconst_int n; }], _) ->
+    { desc =
+        Cop(add, [
+            { desc = Cop(add, [ptr; lsl_const c (log2size - 1) dbg], dbg); };
+            { desc = Cconst_int((n-1) lsl (log2size - 1)); };
+          ], dbg);
+    }
   | _ when log2size = 0 ->
-      Cop(add, [ptr; untag_int ofs dbg], dbg)
+    { desc = Cop(add, [ptr; untag_int ofs dbg], dbg); }
   | _ ->
-      Cop(add, [Cop(add, [ptr; lsl_const ofs (log2size - 1) dbg], dbg);
-                    Cconst_int((-1) lsl (log2size - 1))], dbg)
+    { desc =
+        Cop(add, [
+            { desc = Cop(add, [ptr; lsl_const ofs (log2size - 1) dbg], dbg); };
+            { desc = Cconst_int((-1) lsl (log2size - 1)); };
+          ], dbg);
+    }
 
 let addr_array_ref arr ofs dbg =
-  Cop(Cload (Word_val, Mutable),
-    [array_indexing log2_size_addr arr ofs dbg], dbg)
+  { desc =
+      Cop(Cload (Word_val, Mutable),
+        [array_indexing log2_size_addr arr ofs dbg], dbg);
+  }
+
 let int_array_ref arr ofs dbg =
-  Cop(Cload (Word_int, Mutable),
-    [array_indexing log2_size_addr arr ofs dbg], dbg)
+  { desc =
+    Cop(Cload (Word_int, Mutable),
+      [array_indexing log2_size_addr arr ofs dbg], dbg);
+  }
+
 let unboxed_float_array_ref arr ofs dbg =
-  Cop(Cload (Double_u, Mutable),
-    [array_indexing log2_size_float arr ofs dbg], dbg)
+  { desc =
+      Cop(Cload (Double_u, Mutable),
+        [array_indexing log2_size_float arr ofs dbg], dbg);
+  }
+
 let float_array_ref dbg arr ofs =
   box_float dbg (unboxed_float_array_ref arr ofs dbg)
 
 let addr_array_set arr ofs newval dbg =
-  Cop(Cextcall("caml_modify", typ_void, false, None),
-      [array_indexing log2_size_addr arr ofs dbg; newval], dbg)
+  { desc =
+      Cop(Cextcall("caml_modify", typ_void, false, None),
+          [array_indexing log2_size_addr arr ofs dbg; newval], dbg);
+  }
+
 let addr_array_initialize arr ofs newval dbg =
-  Cop(Cextcall("caml_initialize", typ_void, false, None),
-      [array_indexing log2_size_addr arr ofs dbg; newval], dbg)
+  { desc =
+      Cop(Cextcall("caml_initialize", typ_void, false, None),
+          [array_indexing log2_size_addr arr ofs dbg; newval], dbg);
+  }
+
 let int_array_set arr ofs newval dbg =
-  Cop(Cstore (Word_int, Assignment),
-    [array_indexing log2_size_addr arr ofs dbg; newval], dbg)
+  { desc =
+      Cop(Cstore (Word_int, Assignment),
+        [array_indexing log2_size_addr arr ofs dbg; newval], dbg);
+  }
+
 let float_array_set arr ofs newval dbg =
-  Cop(Cstore (Double_u, Assignment),
-    [array_indexing log2_size_float arr ofs dbg; newval], dbg)
+  { desc =
+      Cop(Cstore (Double_u, Assignment),
+        [array_indexing log2_size_float arr ofs dbg; newval], dbg);
+  }
 
 (* String length *)
 
@@ -747,62 +829,94 @@ let float_array_set arr ofs newval dbg =
 let string_length exp dbg =
   bind "str" exp (fun str ->
     let tmp_var = Ident.create "tmp" in
-    Clet(tmp_var,
-         Cop(Csubi,
-             [Cop(Clsl,
-                   [get_size str dbg;
-                     Cconst_int log2_size_addr],
-                   dbg);
-              Cconst_int 1],
-             dbg),
-         Cop(Csubi,
-             [Cvar tmp_var;
-               Cop(Cload (Byte_unsigned, Mutable),
-                     [Cop(Cadda, [str; Cvar tmp_var], dbg)], dbg)], dbg)))
+    { desc =
+      Clet(tmp_var,
+        { desc =
+            Cop(Csubi,
+                [{ desc = Cop(Clsl,
+                      [get_size str dbg;
+                        { desc = Cconst_int log2_size_addr; }],
+                      dbg); };
+                 { desc = Cconst_int 1; }
+                ], dbg)
+        },
+        { desc =
+            Cop(Csubi,
+                [{ desc = Cvar tmp_var; };
+                 { desc = Cop(Cload (Byte_unsigned, Mutable),
+                     [{ desc =
+                       Cop(Cadda, [str; { desc = Cvar tmp_var; }], dbg); }],
+                     dbg); }
+                ], dbg);
+        });
+    })
 
 (* Message sending *)
 
 let lookup_tag obj tag dbg =
   bind "tag" tag (fun tag ->
-    Cop(Cextcall("caml_get_public_method", typ_val, false, None),
-        [obj; tag],
-        dbg))
+    { desc =
+      Cop(Cextcall("caml_get_public_method", typ_val, false, None),
+          [obj; tag],
+          dbg);
+    })
 
 let lookup_label obj lab dbg =
   bind "lab" lab (fun lab ->
-    let table = Cop (Cload (Word_val, Mutable), [obj], dbg) in
+    let table =
+      { desc = Cop (Cload (Word_val, Mutable), [obj], dbg); }
+    in
     addr_array_ref table lab dbg)
 
 let call_cached_method obj tag cache pos args dbg =
   let arity = List.length args in
   let cache = array_indexing log2_size_addr cache pos dbg in
   Compilenv.need_send_fun arity;
-  Cop(Capply typ_val,
-      Cconst_symbol("caml_send" ^ string_of_int arity) ::
-        obj :: tag :: cache :: args,
-      dbg)
+  { desc =
+      Cop(Capply typ_val,
+          { desc = Cconst_symbol("caml_send" ^ string_of_int arity); } ::
+            obj :: tag :: cache :: args,
+          dbg);
+  }
 
 (* Allocation *)
 
 let make_alloc_generic set_fn dbg tag wordsize args =
   if wordsize <= Config.max_young_wosize then
-    Cop(Calloc, Cblockheader(block_header tag wordsize, dbg) :: args, dbg)
+    { desc =
+      Cop(Calloc,
+        { desc = Cblockheader(block_header tag wordsize, dbg); } :: args,
+        dbg);
+    }
   else begin
     let id = Ident.create "alloc" in
     let rec fill_fields idx = function
-      [] -> Cvar id
-    | e1::el -> Csequence(set_fn (Cvar id) (Cconst_int idx) e1 dbg,
-                          fill_fields (idx + 2) el) in
-    Clet(id,
-         Cop(Cextcall("caml_alloc", typ_val, true, None),
-                 [Cconst_int wordsize; Cconst_int tag], dbg),
-         fill_fields 1 args)
+      [] -> { desc = Cvar id; }
+    | e1::el ->
+      { desc =
+          Csequence (
+            set_fn { desc = Cvar id; } { desc = Cconst_int idx; } e1 dbg,
+            fill_fields (idx + 2) el);
+      }
+    in
+    { desc =
+        Clet(id,
+          { desc =
+              Cop (Cextcall("caml_alloc", typ_val, true, None),
+                [{ desc = Cconst_int wordsize; };
+                 { desc = Cconst_int tag; }],
+                dbg);
+          },
+          fill_fields 1 args);
+    }
   end
 
 let make_alloc dbg tag args =
   let addr_array_init arr ofs newval dbg =
-    Cop(Cextcall("caml_initialize", typ_void, false, None),
-        [array_indexing log2_size_addr arr ofs dbg; newval], dbg)
+    { desc =
+      Cop(Cextcall("caml_initialize", typ_void, false, None),
+          [array_indexing log2_size_addr arr ofs dbg; newval], dbg);
+    }
   in
   make_alloc_generic addr_array_init dbg tag (List.length args) args
 
@@ -812,11 +926,18 @@ let make_float_alloc dbg tag args =
 
 (* Bounds checking *)
 
-let make_checkbound dbg = function
-  | [Cop(Clsr, [a1; Cconst_int n], _); Cconst_int m] when (m lsl n) > n ->
-      Cop(Ccheckbound, [a1; Cconst_int(m lsl n + 1 lsl n - 1)], dbg)
-  | args ->
-      Cop(Ccheckbound, args, dbg)
+let make_checkbound dbg args =
+  match List.map (fun exp -> exp.desc) args with
+  | [Cop(Clsr, [a1; { desc = Cconst_int n; }], _); Cconst_int m]
+    when (m lsl n) > n ->
+      { desc =
+          Cop(Ccheckbound, [
+              a1;
+              { desc = Cconst_int(m lsl n + 1 lsl n - 1); };
+            ], dbg);
+      }
+  | _args ->
+      { desc = Cop(Ccheckbound, args, dbg); }
 
 (* To compile "let rec" over values *)
 
@@ -843,7 +964,8 @@ type rhs_kind =
   | RHS_floatblock of int
   | RHS_nonrec
 ;;
-let rec expr_size env = function
+let rec expr_size env (exp : Clambda.ulambda) =
+  match exp.desc with
   | Uvar id ->
       begin try Ident.find_same id env with Not_found -> RHS_nonrec end
   | Uclosure(fundecls, clos_vars) ->
@@ -914,7 +1036,7 @@ let transl_constant = function
 
 let transl_structured_constant cst =
   let label = Compilenv.new_structured_constant cst ~shared:true in
-  Cconst_symbol label
+  { desc = Cconst_symbol label; }
 
 (* Translate constant closures *)
 
@@ -953,26 +1075,37 @@ let alloc_header_boxed_int bi =
   | Pint64 -> alloc_boxedint64_header
 
 let box_int dbg bi arg =
-  match arg with
-    Cconst_int n ->
+  match arg.desc with
+  | Cconst_int n ->
       transl_structured_constant (box_int_constant bi (Nativeint.of_int n))
   | Cconst_natint n ->
       transl_structured_constant (box_int_constant bi n)
   | _ ->
       let arg' =
         if bi = Pint32 && size_int = 8 && big_endian
-        then Cop(Clsl, [arg; Cconst_int 32], dbg)
-        else arg in
-      Cop(Calloc, [alloc_header_boxed_int bi dbg;
-                   Cconst_symbol(operations_boxed_int bi);
-                   arg'], dbg)
+        then { desc = Cop(Clsl, [arg; { desc = Cconst_int 32; }], dbg); }
+        else arg
+      in
+      { desc =
+          Cop(Calloc, [alloc_header_boxed_int bi dbg;
+                      { desc = Cconst_symbol(operations_boxed_int bi); };
+                      arg'], dbg);
+      }
 
 let split_int64_for_32bit_target arg dbg =
   bind "split_int64" arg (fun arg ->
-    let first = Cop (Cadda, [Cconst_int size_int; arg], dbg) in
-    let second = Cop (Cadda, [Cconst_int (2 * size_int); arg], dbg) in
-    Ctuple [Cop (Cload (Thirtytwo_unsigned, Mutable), [first], dbg);
-            Cop (Cload (Thirtytwo_unsigned, Mutable), [second], dbg)])
+    let first =
+      { desc = Cop (Cadda, [{ desc = Cconst_int size_int; }; arg], dbg); }
+    in
+    let second =
+      { desc = Cop (Cadda, [{ desc = Cconst_int (2 * size_int); }; arg], dbg); }
+    in
+    { desc =
+        Ctuple [
+          { desc = Cop (Cload (Thirtytwo_unsigned, Mutable), [first], dbg); };
+          { desc = Cop (Cload (Thirtytwo_unsigned, Mutable), [second], dbg); };
+        ];
+    })
 
 let rec unbox_int bi arg dbg =
   match arg with
