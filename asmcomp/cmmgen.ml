@@ -829,94 +829,62 @@ let float_array_set arr ofs newval dbg =
 let string_length exp dbg =
   bind "str" exp (fun str ->
     let tmp_var = Ident.create "tmp" in
-    { desc =
-      Clet(tmp_var,
-        { desc =
-            Cop(Csubi,
-                [{ desc = Cop(Clsl,
-                      [get_size str dbg;
-                        { desc = Cconst_int log2_size_addr; }],
-                      dbg); };
-                 { desc = Cconst_int 1; }
-                ], dbg)
-        },
-        { desc =
-            Cop(Csubi,
-                [{ desc = Cvar tmp_var; };
-                 { desc = Cop(Cload (Byte_unsigned, Mutable),
-                     [{ desc =
-                       Cop(Cadda, [str; { desc = Cvar tmp_var; }], dbg); }],
-                     dbg); }
-                ], dbg);
-        });
-    })
+    Clet(tmp_var,
+         Cop(Csubi,
+             [Cop(Clsl,
+                   [get_size str dbg;
+                     Cconst_int log2_size_addr],
+                   dbg);
+              Cconst_int 1],
+             dbg),
+         Cop(Csubi,
+             [Cvar tmp_var;
+               Cop(Cload (Byte_unsigned, Mutable),
+                     [Cop(Cadda, [str; Cvar tmp_var], dbg)], dbg)], dbg)))
 
 (* Message sending *)
 
 let lookup_tag obj tag dbg =
   bind "tag" tag (fun tag ->
-    { desc =
-      Cop(Cextcall("caml_get_public_method", typ_val, false, None),
-          [obj; tag],
-          dbg);
-    })
+    Cop(Cextcall("caml_get_public_method", typ_val, false, None),
+        [obj; tag],
+        dbg))
 
 let lookup_label obj lab dbg =
   bind "lab" lab (fun lab ->
-    let table =
-      { desc = Cop (Cload (Word_val, Mutable), [obj], dbg); }
-    in
+    let table = Cop (Cload (Word_val, Mutable), [obj], dbg) in
     addr_array_ref table lab dbg)
 
 let call_cached_method obj tag cache pos args dbg =
   let arity = List.length args in
   let cache = array_indexing log2_size_addr cache pos dbg in
   Compilenv.need_send_fun arity;
-  { desc =
-      Cop(Capply typ_val,
-          { desc = Cconst_symbol("caml_send" ^ string_of_int arity); } ::
-            obj :: tag :: cache :: args,
-          dbg);
-  }
+  Cop(Capply typ_val,
+      Cconst_symbol("caml_send" ^ string_of_int arity) ::
+        obj :: tag :: cache :: args,
+      dbg)
 
 (* Allocation *)
 
 let make_alloc_generic set_fn dbg tag wordsize args =
   if wordsize <= Config.max_young_wosize then
-    { desc =
-      Cop(Calloc,
-        { desc = Cblockheader(block_header tag wordsize, dbg); } :: args,
-        dbg);
-    }
+    Cop(Calloc, Cblockheader(block_header tag wordsize, dbg) :: args, dbg)
   else begin
     let id = Ident.create "alloc" in
     let rec fill_fields idx = function
-      [] -> { desc = Cvar id; }
-    | e1::el ->
-      { desc =
-          Csequence (
-            set_fn { desc = Cvar id; } { desc = Cconst_int idx; } e1 dbg,
-            fill_fields (idx + 2) el);
-      }
-    in
-    { desc =
-        Clet(id,
-          { desc =
-              Cop (Cextcall("caml_alloc", typ_val, true, None),
-                [{ desc = Cconst_int wordsize; };
-                 { desc = Cconst_int tag; }],
-                dbg);
-          },
-          fill_fields 1 args);
-    }
+      [] -> Cvar id
+    | e1::el -> Csequence(set_fn (Cvar id) (Cconst_int idx) e1 dbg,
+                          fill_fields (idx + 2) el) in
+    Clet(id,
+         Cop(Cextcall("caml_alloc", typ_val, true, None),
+                 [Cconst_int wordsize; Cconst_int tag], dbg),
+         fill_fields 1 args)
   end
 
 let make_alloc dbg tag args =
   let addr_array_init arr ofs newval dbg =
-    { desc =
-      Cop(Cextcall("caml_initialize", typ_void, false, None),
-          [array_indexing log2_size_addr arr ofs dbg; newval], dbg);
-    }
+    Cop(Cextcall("caml_initialize", typ_void, false, None),
+        [array_indexing log2_size_addr arr ofs dbg; newval], dbg)
   in
   make_alloc_generic addr_array_init dbg tag (List.length args) args
 
@@ -926,18 +894,11 @@ let make_float_alloc dbg tag args =
 
 (* Bounds checking *)
 
-let make_checkbound dbg args =
-  match List.map (fun exp -> exp.desc) args with
-  | [Cop(Clsr, [a1; { desc = Cconst_int n; }], _); Cconst_int m]
-    when (m lsl n) > n ->
-      { desc =
-          Cop(Ccheckbound, [
-              a1;
-              { desc = Cconst_int(m lsl n + 1 lsl n - 1); };
-            ], dbg);
-      }
-  | _args ->
-      { desc = Cop(Ccheckbound, args, dbg); }
+let make_checkbound dbg = function
+  | [Cop(Clsr, [a1; Cconst_int n], _); Cconst_int m] when (m lsl n) > n ->
+      Cop(Ccheckbound, [a1; Cconst_int(m lsl n + 1 lsl n - 1)], dbg)
+  | args ->
+      Cop(Ccheckbound, args, dbg)
 
 (* To compile "let rec" over values *)
 
@@ -964,8 +925,7 @@ type rhs_kind =
   | RHS_floatblock of int
   | RHS_nonrec
 ;;
-let rec expr_size env (exp : Clambda.ulambda) =
-  match exp.desc with
+let rec expr_size env = function
   | Uvar id ->
       begin try Ident.find_same id env with Not_found -> RHS_nonrec end
   | Uclosure(fundecls, clos_vars) ->
@@ -1036,7 +996,7 @@ let transl_constant = function
 
 let transl_structured_constant cst =
   let label = Compilenv.new_structured_constant cst ~shared:true in
-  { desc = Cconst_symbol label; }
+  Cconst_symbol label
 
 (* Translate constant closures *)
 
@@ -1075,37 +1035,26 @@ let alloc_header_boxed_int bi =
   | Pint64 -> alloc_boxedint64_header
 
 let box_int dbg bi arg =
-  match arg.desc with
-  | Cconst_int n ->
+  match arg with
+    Cconst_int n ->
       transl_structured_constant (box_int_constant bi (Nativeint.of_int n))
   | Cconst_natint n ->
       transl_structured_constant (box_int_constant bi n)
   | _ ->
       let arg' =
         if bi = Pint32 && size_int = 8 && big_endian
-        then { desc = Cop(Clsl, [arg; { desc = Cconst_int 32; }], dbg); }
-        else arg
-      in
-      { desc =
-          Cop(Calloc, [alloc_header_boxed_int bi dbg;
-                      { desc = Cconst_symbol(operations_boxed_int bi); };
-                      arg'], dbg);
-      }
+        then Cop(Clsl, [arg; Cconst_int 32], dbg)
+        else arg in
+      Cop(Calloc, [alloc_header_boxed_int bi dbg;
+                   Cconst_symbol(operations_boxed_int bi);
+                   arg'], dbg)
 
 let split_int64_for_32bit_target arg dbg =
   bind "split_int64" arg (fun arg ->
-    let first =
-      { desc = Cop (Cadda, [{ desc = Cconst_int size_int; }; arg], dbg); }
-    in
-    let second =
-      { desc = Cop (Cadda, [{ desc = Cconst_int (2 * size_int); }; arg], dbg); }
-    in
-    { desc =
-        Ctuple [
-          { desc = Cop (Cload (Thirtytwo_unsigned, Mutable), [first], dbg); };
-          { desc = Cop (Cload (Thirtytwo_unsigned, Mutable), [second], dbg); };
-        ];
-    })
+    let first = Cop (Cadda, [Cconst_int size_int; arg], dbg) in
+    let second = Cop (Cadda, [Cconst_int (2 * size_int); arg], dbg) in
+    Ctuple [Cop (Cload (Thirtytwo_unsigned, Mutable), [first], dbg);
+            Cop (Cload (Thirtytwo_unsigned, Mutable), [second], dbg)])
 
 let rec unbox_int bi arg dbg =
   match arg with
@@ -1825,11 +1774,7 @@ let strmatch_compile =
       end) in
   S.compile
 
-let rec transl env (e : Clambda.ulambda) : Cmm.expression =
-  { desc = transl_desc env e.desc;
-  }
-
-and transl_desc env (e : Clambda.ulambda_desc) : Cmm.expression_desc =
+let rec transl env e =
   match e with
     Uvar id ->
       begin match is_unboxed_id id env with
