@@ -58,24 +58,28 @@ let add_unboxed_id id unboxed_id bn env =
 
 (* Local binding of complex expressions *)
 
-let bind name arg fn =
-  match arg with
+let bind name arg fn : Cmm.expression =
+  match arg.desc with
     Cvar _ | Cconst_int _ | Cconst_natint _ | Cconst_symbol _
   | Cconst_pointer _ | Cconst_natpointer _
   | Cblockheader _ -> fn arg
-  | _ -> let id = Ident.create name in Clet(id, arg, fn (Cvar id))
+  | _ ->
+    let id = Ident.create name in
+    { desc = Clet(id, arg, fn { desc = Cvar id; }); }
 
-let bind_load name arg fn =
-  match arg with
-  | Cop(Cload _, [Cvar _], _) -> fn arg
+let bind_load name arg fn : Cmm.expression =
+  match arg.desc with
+  | Cop(Cload _, [{ desc = Cvar _; }], _) -> fn arg
   | _ -> bind name arg fn
 
-let bind_nonvar name arg fn =
-  match arg with
+let bind_nonvar name arg fn : Cmm.expression =
+  match arg.desc with
     Cconst_int _ | Cconst_natint _ | Cconst_symbol _
   | Cconst_pointer _ | Cconst_natpointer _
   | Cblockheader _ -> fn arg
-  | _ -> let id = Ident.create name in Clet(id, arg, fn (Cvar id))
+  | _ ->
+    let id = Ident.create name in
+    { desc = Clet(id, arg, fn { desc = Cvar id; }); }
 
 let caml_black = Nativeint.shift_left (Nativeint.of_int 3) 8
     (* cf. byterun/gc.h *)
@@ -131,143 +135,169 @@ let cint_const n =
 
 let add_no_overflow n x c dbg =
   let d = n + x in
-  if d = 0 then c else Cop(Caddi, [c; Cconst_int d], dbg)
+  if d = 0 then c
+  else { desc = Cop(Caddi, [c; { desc = Cconst_int d; }], dbg); }
 
 let rec add_const c n dbg =
   if n = 0 then c
-  else match c with
-  | Cconst_int x when no_overflow_add x n -> Cconst_int (x + n)
-  | Cop(Caddi, [Cconst_int x; c], _)
+  else match c.desc with
+  | Cconst_int x when no_overflow_add x n ->
+      { desc = Cconst_int (x + n); }
+  | Cop(Caddi, [{ desc = Cconst_int x; }; c], _)
     when no_overflow_add n x ->
       add_no_overflow n x c dbg
-  | Cop(Caddi, [c; Cconst_int x], _)
+  | Cop(Caddi, [c; { desc = Cconst_int x; }], _)
     when no_overflow_add n x ->
       add_no_overflow n x c dbg
-  | Cop(Csubi, [Cconst_int x; c], _) when no_overflow_add n x ->
-      Cop(Csubi, [Cconst_int (n + x); c], dbg)
-  | Cop(Csubi, [c; Cconst_int x], _) when no_overflow_sub n x ->
+  | Cop(Csubi, [{ desc = Cconst_int x; }; c], _)
+    when no_overflow_add n x ->
+      { desc = Cop(Csubi, [{ desc = Cconst_int (n + x); }; c], dbg); }
+  | Cop(Csubi, [c; { desc = Cconst_int x; }], _)
+    when no_overflow_sub n x ->
       add_const c (n - x) dbg
-  | c -> Cop(Caddi, [c; Cconst_int n], dbg)
+  | _ ->
+      { desc = Cop(Caddi, [c; { desc = Cconst_int n; }], dbg); }
 
 let incr_int c dbg = add_const c 1 dbg
 let decr_int c dbg = add_const c (-1) dbg
 
 let rec add_int c1 c2 dbg =
   match (c1, c2) with
-  | (Cconst_int n, c) | (c, Cconst_int n) ->
+  | ({ desc = Cconst_int n; }, c) | (c, { desc = Cconst_int n; }) ->
       add_const c n dbg
-  | (Cop(Caddi, [c1; Cconst_int n1], _), c2) ->
+  | ({ desc = Cop(Caddi, [c1; { desc = Cconst_int n1; }], _); }, c2) ->
       add_const (add_int c1 c2 dbg) n1 dbg
-  | (c1, Cop(Caddi, [c2; Cconst_int n2], _)) ->
+  | (c1, { desc = Cop(Caddi, [c2; { desc = Cconst_int n2; }], _); }) ->
       add_const (add_int c1 c2 dbg) n2 dbg
   | (_, _) ->
-      Cop(Caddi, [c1; c2], dbg)
+      { desc = Cop(Caddi, [c1; c2], dbg); }
 
 let rec sub_int c1 c2 dbg =
   match (c1, c2) with
-  | (c1, Cconst_int n2) when n2 <> min_int ->
+  | (c1, { desc = Cconst_int n2; }) when n2 <> min_int ->
       add_const c1 (-n2) dbg
-  | (c1, Cop(Caddi, [c2; Cconst_int n2], _)) when n2 <> min_int ->
+  | (c1, { desc = Cop(Caddi, [c2; { desc = Cconst_int n2; }], _); })
+    when n2 <> min_int ->
       add_const (sub_int c1 c2 dbg) (-n2) dbg
-  | (Cop(Caddi, [c1; Cconst_int n1], _), c2) ->
+  | ({ desc = Cop(Caddi, [c1; { desc = Cconst_int n1; }], _); }, c2) ->
       add_const (sub_int c1 c2 dbg) n1 dbg
   | (c1, c2) ->
-      Cop(Csubi, [c1; c2], dbg)
+      { desc = Cop(Csubi, [c1; c2], dbg); }
 
 let rec lsl_int c1 c2 dbg =
   match (c1, c2) with
-  | (Cop(Clsl, [c; Cconst_int n1], _), Cconst_int n2)
+  | ({ desc = Cop(Clsl, [c; { desc = Cconst_int n1; }], _); },
+     { desc = Cconst_int n2; })
     when n1 > 0 && n2 > 0 && n1 + n2 < size_int * 8 ->
-      Cop(Clsl, [c; Cconst_int (n1 + n2)], dbg)
-  | (Cop(Caddi, [c1; Cconst_int n1], _), Cconst_int n2)
+      { desc = Cop(Clsl, [c; { desc = Cconst_int (n1 + n2); }], dbg); }
+  | ({ desc = Cop(Caddi, [c1; { desc = Cconst_int n1; }], _); },
+     { desc = Cconst_int n2; })
     when no_overflow_lsl n1 n2 ->
       add_const (lsl_int c1 c2 dbg) (n1 lsl n2) dbg
   | (_, _) ->
-      Cop(Clsl, [c1; c2], dbg)
+      { desc = Cop(Clsl, [c1; c2], dbg); }
 
 let is_power2 n = n = 1 lsl Misc.log2 n
 
-and mult_power2 c n dbg = lsl_int c (Cconst_int (Misc.log2 n)) dbg
+and mult_power2 c n dbg = lsl_int c { desc = Cconst_int (Misc.log2 n); } dbg
 
 let rec mul_int c1 c2 dbg =
   match (c1, c2) with
-  | (c, Cconst_int 0) | (Cconst_int 0, c) -> Csequence (c, Cconst_int 0)
-  | (c, Cconst_int 1) | (Cconst_int 1, c) ->
+  | (c, { desc = Cconst_int 0; })
+  | ({ desc = Cconst_int 0; }, c) ->
+      { desc = Csequence (c, { desc = Cconst_int 0; }); }
+  | (c, { desc = Cconst_int 1; }) | ({ desc = Cconst_int 1; }, c) ->
       c
-  | (c, Cconst_int(-1)) | (Cconst_int(-1), c) ->
-      sub_int (Cconst_int 0) c dbg
-  | (c, Cconst_int n) when is_power2 n -> mult_power2 c n dbg
-  | (Cconst_int n, c) when is_power2 n -> mult_power2 c n dbg
-  | (Cop(Caddi, [c; Cconst_int n], _), Cconst_int k) |
-    (Cconst_int k, Cop(Caddi, [c; Cconst_int n], _))
+  | (c, { desc = Cconst_int(-1); }) | ({ desc = Cconst_int(-1); }, c) ->
+      sub_int { desc = Cconst_int 0; } c dbg
+  | (c, { desc = Cconst_int n; }) when is_power2 n -> mult_power2 c n dbg
+  | ({ desc = Cconst_int n; }, c) when is_power2 n -> mult_power2 c n dbg
+  | ({ desc = Cop(Caddi, [c; { desc = Cconst_int n; }], _)},
+     { desc = Cconst_int k; })
+  | ({ desc = Cconst_int k; },
+     { desc = Cop(Caddi, [c; { desc = Cconst_int n; }], _); })
     when no_overflow_mul n k ->
-      add_const (mul_int c (Cconst_int k) dbg) (n * k) dbg
+      add_const (mul_int c { desc = Cconst_int k; } dbg) (n * k) dbg
   | (c1, c2) ->
-      Cop(Cmuli, [c1; c2], dbg)
+      { desc = Cop(Cmuli, [c1; c2], dbg); }
 
 
-let ignore_low_bit_int = function
-    Cop(Caddi, [(Cop(Clsl, [_; Cconst_int n], _) as c); Cconst_int 1], _)
-      when n > 0
-      -> c
-  | Cop(Cor, [c; Cconst_int 1], _) -> c
-  | c -> c
+let ignore_low_bit_int expr =
+  match expr.desc with
+  | Cop(Caddi, [({ desc = Cop(Clsl, [_; { desc = Cconst_int n; }], _)} as c);
+      { desc = Cconst_int 1; }], _)
+    when n > 0 -> c
+  | Cop(Cor, [c; { desc = Cconst_int 1; }], _) -> c
+  | _ -> expr
 
 let lsr_int c1 c2 dbg =
   match c2 with
-    Cconst_int 0 ->
+  | { desc = Cconst_int 0; } ->
       c1
-  | Cconst_int n when n > 0 ->
-      Cop(Clsr, [ignore_low_bit_int c1; c2], dbg)
+  | { desc = Cconst_int n; } when n > 0 ->
+      { desc = Cop(Clsr, [ignore_low_bit_int c1; c2], dbg); }
   | _ ->
-      Cop(Clsr, [c1; c2], dbg)
+      { desc = Cop(Clsr, [c1; c2], dbg); }
 
 let asr_int c1 c2 dbg =
   match c2 with
-    Cconst_int 0 ->
+  | { desc = Cconst_int 0; } ->
       c1
-  | Cconst_int n when n > 0 ->
-      Cop(Casr, [ignore_low_bit_int c1; c2], dbg)
+  | { desc = Cconst_int n; } when n > 0 ->
+      { desc = Cop(Casr, [ignore_low_bit_int c1; c2], dbg); }
   | _ ->
-      Cop(Casr, [c1; c2], dbg)
+      { desc = Cop(Casr, [c1; c2], dbg); }
 
 let tag_int i dbg =
   match i with
-    Cconst_int n ->
-      int_const n
-  | Cop(Casr, [c; Cconst_int n], _) when n > 0 ->
-      Cop(Cor, [asr_int c (Cconst_int (n - 1)) dbg; Cconst_int 1], dbg)
+  | { desc = Cconst_int n; } ->
+      { desc = int_const n; }
+  | { desc = Cop(Casr, [c; { desc = Cconst_int n; }], _); } when n > 0 ->
+      { desc = Cop(Cor, [asr_int c { desc = Cconst_int (n - 1); } dbg;
+          { desc = Cconst_int 1; }], dbg);
+      }
   | c ->
-      incr_int (lsl_int c (Cconst_int 1) dbg) dbg
+      incr_int (lsl_int c { desc = Cconst_int 1; } dbg) dbg
 
 let force_tag_int i dbg =
   match i with
-    Cconst_int n ->
-      int_const n
-  | Cop(Casr, [c; Cconst_int n], dbg') when n > 0 ->
-      Cop(Cor, [asr_int c (Cconst_int (n - 1)) dbg'; Cconst_int 1], dbg)
+  | { desc = Cconst_int n; } ->
+      { desc = int_const n; }
+  | { desc = Cop(Casr, [c; { desc = Cconst_int n; _ }], dbg'); } when n > 0 ->
+      { desc = Cop(Cor, [asr_int c { desc = Cconst_int (n - 1); } dbg';
+        { desc = Cconst_int 1; }], dbg); }
   | c ->
-      Cop(Cor, [lsl_int c (Cconst_int 1) dbg; Cconst_int 1], dbg)
+      { desc = Cop(Cor, [lsl_int c { desc = Cconst_int 1; } dbg;
+        { desc = Cconst_int 1; }], dbg); }
 
 let untag_int i dbg =
   match i with
-    Cconst_int n -> Cconst_int(n asr 1)
-  | Cop(Caddi, [Cop(Clsl, [c; Cconst_int 1], _); Cconst_int 1], _) -> c
-  | Cop(Cor, [Cop(Casr, [c; Cconst_int n], _); Cconst_int 1], _)
+  | { desc = Cconst_int n; } ->
+      { desc = Cconst_int(n asr 1); }
+  | { desc = Cop(Caddi, [
+      { desc = Cop(Clsl, [c; { desc = Cconst_int 1; }], _); };
+      { desc = Cconst_int 1; }], _); } -> c
+  | { desc = Cop(Cor, [
+      { desc = Cop(Casr, [c; { desc = Cconst_int n; }], _); };
+      { desc = Cconst_int 1; }], _); }
     when n > 0 && n < size_int * 8 ->
-      Cop(Casr, [c; Cconst_int (n+1)], dbg)
-  | Cop(Cor, [Cop(Clsr, [c; Cconst_int n], _); Cconst_int 1], _)
+      { desc = Cop(Casr, [c; { desc = Cconst_int (n+1); }], dbg); }
+  | { desc = Cop(Cor, [
+      { desc = Cop(Clsr, [c; { desc = Cconst_int n; }], _); };
+      { desc = Cconst_int 1; }], _); }
     when n > 0 && n < size_int * 8 ->
-      Cop(Clsr, [c; Cconst_int (n+1)], dbg)
-  | Cop(Cor, [c; Cconst_int 1], _) -> Cop(Casr, [c; Cconst_int 1], dbg)
-  | c -> Cop(Casr, [c; Cconst_int 1], dbg)
+      { desc = Cop(Clsr, [c; { desc = Cconst_int (n+1); }], dbg); }
+  | { desc = Cop(Cor, [c; { desc = Cconst_int 1; }], _); } ->
+      { desc = Cop(Casr, [c; { desc = Cconst_int 1; }], dbg); }
+  | c ->
+      { desc = Cop(Casr, [c; { desc = Cconst_int 1; }], dbg); }
 
 let if_then_else (cond, ifso, ifnot) =
-  match cond with
+  match cond.desc with
   | Cconst_int 0 -> ifnot
   | Cconst_int 1 -> ifso
   | _ ->
-    Cifthenelse(cond, ifso, ifnot)
+    { desc = Cifthenelse(cond, ifso, ifnot); }
 
 (* Turning integer divisions into multiply-high then shift.
    The [division_parameters] function is used in module Emit for
@@ -359,23 +389,28 @@ let validate d m p =
 *)
 
 let raise_regular dbg exc =
-  Csequence(
-    Cop(Cstore (Thirtytwo_signed, Assignment),
-        [(Cconst_symbol "caml_backtrace_pos"); Cconst_int 0], dbg),
-      Cop(Craise Raise_withtrace,[exc], dbg))
+  { desc =
+      Csequence(
+        { desc =
+            Cop(Cstore (Thirtytwo_signed, Assignment),
+                [({ desc = Cconst_symbol "caml_backtrace_pos"; });
+                  { desc = Cconst_int 0; }], dbg);
+        },
+        { desc = Cop(Craise Raise_withtrace,[exc], dbg); });
+  }
 
 let raise_symbol dbg symb =
-  raise_regular dbg (Cconst_symbol symb)
+  raise_regular dbg { desc = Cconst_symbol symb; }
 
 let rec div_int c1 c2 is_safe dbg =
   match (c1, c2) with
-    (c1, Cconst_int 0) ->
-      Csequence(c1, raise_symbol dbg "caml_exn_Division_by_zero")
-  | (c1, Cconst_int 1) ->
+    (c1, { desc = Cconst_int 0; }) ->
+      { desc = Csequence(c1, raise_symbol dbg "caml_exn_Division_by_zero"); }
+  | (c1, { desc = Cconst_int 1; }) ->
       c1
-  | (Cconst_int n1, Cconst_int n2) ->
-      Cconst_int (n1 / n2)
-  | (c1, Cconst_int n) when n <> min_int ->
+  | ({ desc = Cconst_int n1; }, { desc = Cconst_int n2; }) ->
+      { desc = Cconst_int (n1 / n2); }
+  | (c1, { desc = Cconst_int n; }) when n <> min_int ->
       let l = Misc.log2 n in
       if n = 1 lsl l then
         (* Algorithm:
@@ -384,13 +419,18 @@ let rec div_int c1 c2 is_safe dbg =
               t = c1 + t
               res = shift-right-signed(c1 + t, l)
         *)
-        Cop(Casr, [bind "dividend" c1 (fun c1 ->
-                     let t = asr_int c1 (Cconst_int (l - 1)) dbg in
-                     let t = lsr_int t (Cconst_int (Nativeint.size - l)) dbg in
-                     add_int c1 t dbg);
-                   Cconst_int l], dbg)
+        { desc =
+            Cop(Casr, [bind "dividend" c1 (fun c1 ->
+                let t = asr_int c1 { desc = Cconst_int (l - 1); } dbg in
+                let t =
+                  lsr_int t { desc = Cconst_int (Nativeint.size - l); } dbg
+                in
+                add_int c1 t dbg);
+              { desc = Cconst_int l; }], dbg);
+        }
       else if n < 0 then
-        sub_int (Cconst_int 0) (div_int c1 (Cconst_int (-n)) is_safe dbg) dbg
+        sub_int { desc = Cconst_int 0; }
+          (div_int c1 { desc = Cconst_int (-n); } is_safe dbg) dbg
       else begin
         let (m, p) = divimm_parameters (Nativeint.of_int n) in
         (* Algorithm:
@@ -400,29 +440,40 @@ let rec div_int c1 c2 is_safe dbg =
               res = t + sign-bit(c1)
         *)
         bind "dividend" c1 (fun c1 ->
-          let t = Cop(Cmulhi, [c1; Cconst_natint m], dbg) in
-          let t = if m < 0n then Cop(Caddi, [t; c1], dbg) else t in
-          let t = if p > 0 then Cop(Casr, [t; Cconst_int p], dbg) else t in
-          add_int t (lsr_int c1 (Cconst_int (Nativeint.size - 1)) dbg) dbg)
+          let t =
+            { desc = Cop(Cmulhi, [c1; { desc = Cconst_natint m; }], dbg); }
+          in
+          let t =
+            if m < 0n then { desc = Cop(Caddi, [t; c1], dbg); }
+            else t
+          in
+          let t =
+            if p > 0 then
+              { desc = Cop(Casr, [t; { desc = Cconst_int p; }], dbg); }
+            else t
+          in
+          add_int t (lsr_int c1 (
+            { desc = Cconst_int (Nativeint.size - 1); }) dbg) dbg)
       end
   | (c1, c2) when !Clflags.fast || is_safe = Lambda.Unsafe ->
-      Cop(Cdivi, [c1; c2], dbg)
+      { desc = Cop(Cdivi, [c1; c2], dbg); }
   | (c1, c2) ->
       bind "divisor" c2 (fun c2 ->
         bind "dividend" c1 (fun c1 ->
-          Cifthenelse(c2,
-                      Cop(Cdivi, [c1; c2], dbg),
-                      raise_symbol dbg "caml_exn_Division_by_zero")))
+          { desc = Cifthenelse(c2,
+              { desc = Cop(Cdivi, [c1; c2], dbg); },
+              raise_symbol dbg "caml_exn_Division_by_zero");
+          }))
 
 let mod_int c1 c2 is_safe dbg =
   match (c1, c2) with
-    (c1, Cconst_int 0) ->
-      Csequence(c1, raise_symbol dbg "caml_exn_Division_by_zero")
-  | (c1, Cconst_int (1 | (-1))) ->
-      Csequence(c1, Cconst_int 0)
-  | (Cconst_int n1, Cconst_int n2) ->
-      Cconst_int (n1 mod n2)
-  | (c1, (Cconst_int n as c2)) when n <> min_int ->
+    (c1, { desc = Cconst_int 0; }) ->
+      { desc = Csequence(c1, raise_symbol dbg "caml_exn_Division_by_zero"); }
+  | (c1, { desc = Cconst_int (1 | (-1)); }) ->
+      { desc = Csequence(c1, { desc = Cconst_int 0; }); }
+  | ({ desc = Cconst_int n1; }, { desc = Cconst_int n2; }) ->
+      { desc = Cconst_int (n1 mod n2); }
+  | (c1, ({ desc = Cconst_int n; } as c2)) when n <> min_int ->
       let l = Misc.log2 n in
       if n = 1 lsl l then
         (* Algorithm:
@@ -433,29 +484,33 @@ let mod_int c1 c2 is_safe dbg =
               res = c1 - t
          *)
         bind "dividend" c1 (fun c1 ->
-          let t = asr_int c1 (Cconst_int (l - 1)) dbg in
-          let t = lsr_int t (Cconst_int (Nativeint.size - l)) dbg in
+          let t = asr_int c1 { desc = Cconst_int (l - 1); } dbg in
+          let t = lsr_int t { desc = Cconst_int (Nativeint.size - l); } dbg in
           let t = add_int c1 t dbg in
-          let t = Cop(Cand, [t; Cconst_int (-n)], dbg) in
+          let t =
+            { desc = Cop(Cand, [t; { desc = Cconst_int (-n); }], dbg); }
+          in
           sub_int c1 t dbg)
       else
         bind "dividend" c1 (fun c1 ->
           sub_int c1 (mul_int (div_int c1 c2 is_safe dbg) c2 dbg) dbg)
   | (c1, c2) when !Clflags.fast || is_safe = Lambda.Unsafe ->
       (* Flambda already generates that test *)
-      Cop(Cmodi, [c1; c2], dbg)
+      { desc = Cop(Cmodi, [c1; c2], dbg); }
   | (c1, c2) ->
       bind "divisor" c2 (fun c2 ->
         bind "dividend" c1 (fun c1 ->
-          Cifthenelse(c2,
-                      Cop(Cmodi, [c1; c2], dbg),
-                      raise_symbol dbg "caml_exn_Division_by_zero")))
+          { desc = Cifthenelse(c2,
+              { desc = Cop(Cmodi, [c1; c2], dbg); },
+              raise_symbol dbg "caml_exn_Division_by_zero");
+          }))
 
 (* Division or modulo on boxed integers.  The overflow case min_int / -1
    can occur, in which case we force x / -1 = -x and x mod -1 = 0. (PR#5513). *)
 
-let is_different_from x = function
-    Cconst_int n -> n <> x
+let is_different_from x expr =
+  match expr.desc with
+  | Cconst_int n -> n <> x
   | Cconst_natint n -> n <> Nativeint.of_int x
   | _ -> false
 
@@ -466,31 +521,37 @@ let safe_divmod_bi mkop is_safe mkm1 c1 c2 bi dbg =
     if Arch.division_crashes_on_overflow
     && (size_int = 4 || bi <> Pint32)
     && not (is_different_from (-1) c2)
-    then Cifthenelse(Cop(Ccmpi Cne, [c2; Cconst_int(-1)], dbg), c, mkm1 c1 dbg)
+    then
+      { desc = Cifthenelse({ desc = Cop(Ccmpi Cne,
+          [c2; { desc =  Cconst_int(-1); }], dbg); }, c, mkm1 c1 dbg);
+      }
     else c))
 
 let safe_div_bi is_safe =
   safe_divmod_bi div_int is_safe
-    (fun c1 dbg -> Cop(Csubi, [Cconst_int 0; c1], dbg))
+    (fun c1 dbg -> { desc = Cop(Csubi, [{ desc = Cconst_int 0; }; c1], dbg); })
 
 let safe_mod_bi is_safe =
-  safe_divmod_bi mod_int is_safe (fun _ _ -> Cconst_int 0)
+  safe_divmod_bi mod_int is_safe (fun _ _ -> { desc = Cconst_int 0; })
 
 (* Bool *)
 
 let test_bool dbg cmm =
-  match cmm with
-  | Cop(Caddi, [Cop(Clsl, [c; Cconst_int 1], _); Cconst_int 1], _) -> c
+  match cmm.desc with
+  | Cop(Caddi, [
+      { desc = Cop(Clsl, [c; { desc = Cconst_int 1; }], _); };
+      { desc = Cconst_int 1; }], _) -> c
   | Cconst_int n ->
       if n = 1 then
-        Cconst_int 0
+        { desc = Cconst_int 0; }
       else
-        Cconst_int 1
-  | c -> Cop(Ccmpi Cne, [c; Cconst_int 1], dbg)
+        { desc = Cconst_int 1; }
+  | _ -> { desc = Cop(Ccmpi Cne, [cmm; { desc = Cconst_int 1; }], dbg); }
 
 (* Float *)
 
-let box_float dbg c = Cop(Calloc, [alloc_float_header dbg; c], dbg)
+let box_float dbg c =
+  { desc = Cop(Calloc, [alloc_float_header dbg; c], dbg); }
 
 let map_ccatch f rec_flag handlers body =
   let handlers = List.map
@@ -1631,11 +1692,11 @@ let strmatch_compile =
       end) in
   S.compile
 
-let rec transl env (e : expression) : expression =
+let rec transl env (e : Clambda.ulambda) : Cmm.expression =
   { desc = transl_desc env e.desc;
   }
 
-and transl_desc env (e : expression_desc) =
+and transl_desc env (e : Clambda.ulambda_desc) : Cmm.expression_desc =
   match e with
     Uvar id ->
       begin match is_unboxed_id id env with
