@@ -79,7 +79,7 @@ let is_function_constant t closure_id =
 (* Instrumentation of closure and field accesses to try to catch compiler
    bugs. *)
 
-let check_closure ulam named : Clambda.ulambda =
+let check_closure ulam named : Clambda.ulambda_desc =
   if not !Clflags.clambda_checks then ulam
   else
     let desc =
@@ -91,10 +91,15 @@ let check_closure ulam named : Clambda.ulambda =
       Compilenv.new_structured_constant (Uconst_string str) ~shared:true
     in
     Uprim (Pccall desc,
-           [ulam; Clambda.Uconst (Uconst_ref (str_const, None))],
-           Debuginfo.none)
+      [{ Clambda.desc = ulam; };
+       { Clambda.desc = Uconst (Uconst_ref (str_const, None)); }
+      ],
+      Debuginfo.none)
 
-let check_field ulam pos named_opt : Clambda.ulambda =
+let check_closure' ulam named : Clambda.ulambda =
+  { desc = check_closure ulam named; }
+
+let check_field ulam pos named_opt : Clambda.ulambda_desc =
   if not !Clflags.clambda_checks then ulam
   else
     let desc =
@@ -109,17 +114,23 @@ let check_field ulam pos named_opt : Clambda.ulambda =
     let str_const =
       Compilenv.new_structured_constant (Uconst_string str) ~shared:true
     in
-    Uprim (Pccall desc, [ulam; Clambda.Uconst (Uconst_int pos);
-        Clambda.Uconst (Uconst_ref (str_const, None))],
+    Uprim (Pccall desc,
+      [{ Clambda.desc = ulam; };
+       { Clambda.desc = Uconst (Uconst_int pos); };
+       { Clambda.desc = Uconst (Uconst_ref (str_const, None)); };
+      ],
       Debuginfo.none)
+
+let check_field' ulam pos named_opt : Clambda.ulambda =
+  { desc = check_field ulam pos named_opt; }
 
 module Env : sig
   type t
 
   val empty : t
 
-  val add_subst : t -> Variable.t -> Clambda.ulambda -> t
-  val find_subst_exn : t -> Variable.t -> Clambda.ulambda
+  val add_subst : t -> Variable.t -> Clambda.ulambda_desc -> t
+  val find_subst_exn : t -> Variable.t -> Clambda.ulambda_desc
 
   val add_fresh_ident : t -> Variable.t -> Ident.t * t
   val ident_for_var_exn : t -> Variable.t -> Ident.t
@@ -133,7 +144,7 @@ module Env : sig
   val keep_only_symbols : t -> t
 end = struct
   type t =
-    { subst : Clambda.ulambda Variable.Map.t;
+    { subst : Clambda.ulambda_desc Variable.Map.t;
       var : Ident.t Variable.Map.t;
       mutable_var : Ident.t Mutable_variable.Map.t;
       toplevel : bool;
@@ -184,7 +195,7 @@ end = struct
     }
 end
 
-let subst_var env var : Clambda.ulambda =
+let subst_var env var : Clambda.ulambda_desc =
   try Env.find_subst_exn env var
   with Not_found ->
     try Uvar (Env.ident_for_var_exn env var)
@@ -192,11 +203,15 @@ let subst_var env var : Clambda.ulambda =
       Misc.fatal_errorf "Flambda_to_clambda: unbound variable %a@."
         Variable.print var
 
-let subst_vars env vars = List.map (subst_var env) vars
+let subst_var' env var : Clambda.ulambda =
+  { desc = subst_var env var; }
 
-let build_uoffset ulam offset : Clambda.ulambda =
+let subst_vars' env vars =
+  List.map (subst_var' env) vars
+
+let build_uoffset ulam offset : Clambda.ulambda_desc =
   if offset = 0 then ulam
-  else Uoffset (ulam, offset)
+  else Uoffset ({ desc = ulam; }, offset)
 
 let to_clambda_allocated_constant (const : Allocated_const.t)
       : Clambda.ustructured_constant =
@@ -215,22 +230,28 @@ let to_uconst_symbol env symbol : Clambda.ustructured_constant option =
   | None  (* CR-soon mshinwell: Try to make this an error. *)
   | Some _ -> None
 
-let to_clambda_symbol' env sym : Clambda.uconstant =
+let to_clambda_symbol_uconstant env sym : Clambda.uconstant =
   let lbl = Linkage_name.to_string (Symbol.label sym) in
   Uconst_ref (lbl, to_uconst_symbol env sym)
 
-let to_clambda_symbol env sym : Clambda.ulambda =
-  Uconst (to_clambda_symbol' env sym)
+let to_clambda_symbol env sym : Clambda.ulambda_desc =
+  Uconst (to_clambda_symbol_uconstant env sym)
+
+let to_clambda_symbol' env sym : Clambda.ulambda =
+  { desc = to_clambda_symbol env sym; }
 
 let to_clambda_const env (const : Flambda.constant_defining_value_block_field)
       : Clambda.uconstant =
   match const with
-  | Symbol symbol -> to_clambda_symbol' env symbol
+  | Symbol symbol -> to_clambda_symbol_uconstant env symbol
   | Const (Int i) -> Uconst_int i
   | Const (Char c) -> Uconst_int (Char.code c)
   | Const (Const_pointer i) -> Uconst_ptr i
 
 let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
+  { desc = to_clambda_desc t env flam; }
+
+and to_clambda_desc t env (flam : Flambda.t) : Clambda.ulambda_desc =
   match flam with
   | Var var -> subst_var env var
   | Let { var; defining_expr; body; _ } ->
@@ -240,7 +261,7 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
       to_clambda t env_body body)
   | Let_mutable { var = mut_var; initial_value = var; body; contents_kind } ->
     let id, env_body = Env.add_fresh_mutable_ident env mut_var in
-    let def = subst_var env var in
+    let def = subst_var' env var in
     Ulet (Mutable, contents_kind, id, def, to_clambda t env_body body)
   | Let_rec (defs, body) ->
     let env, defs =
@@ -264,17 +285,17 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
     to_clambda_direct_apply t func args direct_func dbg env
   | Apply { func; args; kind = Indirect; dbg = dbg } ->
     let callee = subst_var env func in
-    Ugeneric_apply (check_closure callee (Flambda.Expr (Var func)),
-      subst_vars env args, dbg)
+    Ugeneric_apply (check_closure' callee (Flambda.Expr (Var func)),
+      subst_vars' env args, dbg)
   | Switch (arg, sw) ->
-    let aux () : Clambda.ulambda =
+    let aux () : Clambda.ulambda_desc =
       let const_index, const_actions =
         to_clambda_switch t env sw.consts sw.numconsts sw.failaction
       in
       let block_index, block_actions =
         to_clambda_switch t env sw.blocks sw.numblocks sw.failaction
       in
-      Uswitch (subst_var env arg,
+      Uswitch (subst_var' env arg,
         { us_index_consts = const_index;
           us_actions_consts = const_actions;
           us_index_blocks = block_index;
@@ -301,16 +322,15 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
       let expr : Flambda.t =
         Static_catch (exn, [], Switch (arg, sw), failaction)
       in
-      to_clambda t env expr
+      to_clambda_desc t env expr
     end
   | String_switch (arg, sw, def) ->
-    let arg = subst_var env arg in
+    let arg = subst_var' env arg in
     let sw = List.map (fun (s, e) -> s, to_clambda t env e) sw in
     let def = Misc.may_map (to_clambda t env) def in
     Ustringswitch (arg, sw, def)
   | Static_raise (static_exn, args) ->
-    Ustaticfail (Static_exception.to_int static_exn,
-      List.map (subst_var env) args)
+    Ustaticfail (Static_exception.to_int static_exn, subst_vars' env args)
   | Static_catch (static_exn, vars, body, handler) ->
     let env_handler, ids =
       List.fold_right (fun var (env, ids) ->
@@ -324,13 +344,13 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
     let id, env_handler = Env.add_fresh_ident env var in
     Utrywith (to_clambda t env body, id, to_clambda t env_handler handler)
   | If_then_else (arg, ifso, ifnot) ->
-    Uifthenelse (subst_var env arg, to_clambda t env ifso,
+    Uifthenelse (subst_var' env arg, to_clambda t env ifso,
       to_clambda t env ifnot)
   | While (cond, body) ->
     Uwhile (to_clambda t env cond, to_clambda t env body)
   | For { bound_var; from_value; to_value; direction; body } ->
     let id, env_body = Env.add_fresh_ident env bound_var in
-    Ufor (id, subst_var env from_value, subst_var env to_value,
+    Ufor (id, subst_var' env from_value, subst_var' env to_value,
       direction, to_clambda t env_body body)
   | Assign { being_assigned; new_value } ->
     let id =
@@ -340,13 +360,17 @@ let rec to_clambda t env (flam : Flambda.t) : Clambda.ulambda =
           Mutable_variable.print being_assigned
           Flambda.print flam
     in
-    Uassign (id, subst_var env new_value)
+    Uassign (id, subst_var' env new_value)
   | Send { kind; meth; obj; args; dbg } ->
-    Usend (kind, subst_var env meth, subst_var env obj,
-      subst_vars env args, dbg)
+    Usend (kind, subst_var' env meth, subst_var' env obj,
+      subst_vars' env args, dbg)
   | Proved_unreachable -> Uunreachable
 
 and to_clambda_named t env var (named : Flambda.named) : Clambda.ulambda =
+  { desc = to_clambda_desc_named t env var named; }
+
+and to_clambda_desc_named t env var (named : Flambda.named)
+      : Clambda.ulambda_desc =
   match named with
   | Symbol sym -> to_clambda_symbol env sym
   | Const (Const_pointer n) -> Uconst (Uconst_ptr n)
@@ -365,7 +389,7 @@ and to_clambda_named t env var (named : Flambda.named) : Clambda.ulambda =
         Flambda.print_named named
     end
   | Read_symbol_field (symbol, field) ->
-    Uprim (Pfield field, [to_clambda_symbol env symbol], Debuginfo.none)
+    Uprim (Pfield field, [to_clambda_symbol' env symbol], Debuginfo.none)
   | Set_of_closures set_of_closures ->
     to_clambda_set_of_closures t env set_of_closures
   | Project_closure { set_of_closures; closure_id } ->
@@ -391,20 +415,20 @@ and to_clambda_named t env var (named : Flambda.named) : Clambda.ulambda =
     let var_offset = get_fv_offset t var in
     let pos = var_offset - fun_offset in
     Uprim (Pfield pos,
-      [check_field (check_closure ulam (Expr (Var closure))) pos (Some named)],
+      [check_field' (check_closure ulam (Expr (Var closure))) pos (Some named)],
       Debuginfo.none)
   | Prim (Pfield index, [block], dbg) ->
-    Uprim (Pfield index, [check_field (subst_var env block) index None], dbg)
+    Uprim (Pfield index, [check_field' (subst_var env block) index None], dbg)
   | Prim (Psetfield (index, maybe_ptr, init), [block; new_value], dbg) ->
     Uprim (Psetfield (index, maybe_ptr, init), [
-        check_field (subst_var env block) index None;
-        subst_var env new_value;
+        check_field' (subst_var env block) index None;
+        subst_var' env new_value;
       ], dbg)
   | Prim (Popaque, args, dbg) ->
-    Uprim (Pidentity, subst_vars env args, dbg)
+    Uprim (Pidentity, subst_vars' env args, dbg)
   | Prim (p, args, dbg) ->
-    Uprim (p, subst_vars env args, dbg)
-  | Expr expr -> to_clambda t env expr
+    Uprim (p, subst_vars' env args, dbg)
+  | Expr expr -> to_clambda_desc t env expr
 
 and to_clambda_switch t env cases num_keys default =
   let num_keys =
@@ -423,15 +447,16 @@ and to_clambda_switch t env cases num_keys default =
   | [| |] -> [| |], [| |]  (* May happen when [default] is [None]. *)
   | _ -> index, actions
 
-and to_clambda_direct_apply t func args direct_func dbg env : Clambda.ulambda =
+and to_clambda_direct_apply t func args direct_func dbg env
+      : Clambda.ulambda_desc =
   let closed = is_function_constant t direct_func in
   let label = Compilenv.function_label direct_func in
   let uargs =
-    let uargs = subst_vars env args in
+    let uargs = subst_vars' env args in
     (* Remove the closure argument if the closure is closed.  (Note that the
        closure argument is always a variable, so we can be sure we are not
        dropping any side effects.) *)
-    if closed then uargs else uargs @ [subst_var env func]
+    if closed then uargs else uargs @ [subst_var' env func]
   in
   Udirect_apply (label, uargs, dbg)
 
@@ -461,7 +486,7 @@ and to_clambda_direct_apply t func args direct_func dbg env : Clambda.ulambda =
 *)
 and to_clambda_set_of_closures t env
       (({ function_decls; free_vars } : Flambda.set_of_closures)
-        as set_of_closures) : Clambda.ulambda =
+        as set_of_closures) : Clambda.ulambda_desc =
   let all_functions = Variable.Map.bindings function_decls.funs in
   let env_var = Ident.create "env" in
   let to_clambda_function
@@ -492,7 +517,8 @@ and to_clambda_set_of_closures t env
         in
         let pos = var_offset - fun_offset in
         Env.add_subst env id
-          (Uprim (Pfield pos, [Clambda.Uvar env_var], Debuginfo.none))
+          (Uprim (Pfield pos, [{ Clambda.desc = Clambda.Uvar env_var; }],
+            Debuginfo.none))
       in
       let env = Variable.Map.fold add_env_free_variable free_vars env in
       (* Add the Clambda expressions for all functions defined in the current
@@ -504,7 +530,9 @@ and to_clambda_set_of_closures t env
           Closure_id.Map.find (Closure_id.wrap id)
             t.current_unit.fun_offset_table
         in
-        let exp : Clambda.ulambda = Uoffset (Uvar env_var, offset - pos) in
+        let exp : Clambda.ulambda_desc =
+          Uoffset ({ desc = Uvar env_var; }, offset - pos)
+        in
         Env.add_subst env id exp
       in
       List.fold_left (add_env_function fun_offset) env all_functions
@@ -527,7 +555,7 @@ and to_clambda_set_of_closures t env
   let free_vars =
     Variable.Map.bindings (Variable.Map.map (
       fun (free_var : Flambda.specialised_to) ->
-        subst_var env free_var.var) free_vars)
+        subst_var' env free_var.var) free_vars)
   in
   Uclosure (funs, List.map snd free_vars)
 
@@ -574,15 +602,17 @@ let to_clambda_initialize_symbol t env symbol fields : Clambda.ulambda =
   let build_setfield (index, field) : Clambda.ulambda =
     (* Note that this will never cause a write barrier hit, owing to
        the [Initialization]. *)
-    Uprim (Psetfield (index, Pointer, Root_initialization),
-      [to_clambda_symbol env symbol; field],
-      Debuginfo.none)
+    { desc =
+        Uprim (Psetfield (index, Pointer, Root_initialization),
+          [to_clambda_symbol' env symbol; field],
+          Debuginfo.none);
+    }
   in
   match fields with
-  | [] -> Uconst (Uconst_ptr 0)
+  | [] -> { desc = Uconst (Uconst_ptr 0); }
   | h :: t ->
-    List.fold_left (fun acc (p, field) ->
-        Clambda.Usequence (build_setfield (p, field), acc))
+    List.fold_left (fun acc (p, field) : Clambda.ulambda ->
+        { desc = Clambda.Usequence (build_setfield (p, field), acc); })
       (build_setfield h) t
 
 let accumulate_structured_constants t env symbol
@@ -630,13 +660,13 @@ let to_clambda_program t env constants (program : Flambda.program) =
          here. *)
       let e1 = to_clambda_initialize_symbol t env symbol fields in
       let e2, constants = loop env constants program in
-      Usequence (e1, e2), constants
+      { desc = Usequence (e1, e2); }, constants
     | Effect (expr, program) ->
       let e1 = to_clambda t env expr in
       let e2, constants = loop env constants program in
-      Usequence (e1, e2), constants
+      { desc = Usequence (e1, e2); }, constants
     | End _ ->
-      Uconst (Uconst_ptr 0), constants
+      { desc = Uconst (Uconst_ptr 0); }, constants
   in
   loop env constants program.program_body
 

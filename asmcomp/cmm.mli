@@ -128,7 +128,7 @@ and operation =
     them.  The ones that do are those that are likely to generate code that
     can fairly robustly be mapped back to a source location.  In the future
     it might be the case that more [Debuginfo.t] annotations are desirable. *)
-and expression =
+and expression_desc =
     Cconst_int of int
   | Cconst_natint of nativeint
   | Cconst_float of float
@@ -148,6 +148,10 @@ and expression =
   | Ccatch of rec_flag * (int * Ident.t list * expression) list * expression
   | Cexit of int * expression list
   | Ctrywith of expression * Ident.t * expression
+
+and expression = {
+  desc : expression_desc;
+}
 
 type fundecl =
   { fun_name: string;

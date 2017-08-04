@@ -36,7 +36,7 @@ and uconstant =
   | Uconst_int of int
   | Uconst_ptr of int
 
-and ulambda =
+and ulambda_desc =
     Uvar of Ident.t
   | Uconst of uconstant
   | Udirect_apply of function_label * ulambda list * Debuginfo.t
@@ -58,6 +58,10 @@ and ulambda =
   | Uassign of Ident.t * ulambda
   | Usend of meth_kind * ulambda * ulambda * ulambda list * Debuginfo.t
   | Uunreachable
+
+and ulambda = {
+  desc : ulambda_desc;
+}
 
 and ufunction = {
   label  : function_label;

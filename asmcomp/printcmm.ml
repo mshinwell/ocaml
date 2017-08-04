@@ -104,7 +104,7 @@ let operation d = function
   | Craise k -> Format.asprintf "%a%s" raise_kind k (Debuginfo.to_string d)
   | Ccheckbound -> "checkbound" ^ Debuginfo.to_string d
 
-let rec expr ppf = function
+let rec expr_desc ppf = function
   | Cconst_int n -> fprintf ppf "%i" n
   | Cconst_natint n ->
     fprintf ppf "%s" (Nativeint.to_string n)
@@ -192,6 +192,9 @@ let rec expr ppf = function
   | Ctrywith(e1, id, e2) ->
       fprintf ppf "@[<2>(try@ %a@;<1 -2>with@ %a@ %a)@]"
              sequence e1 Ident.print id sequence e2
+
+and expr ppf (expr : expression) =
+  expr_desc expr.desc
 
 and sequence ppf = function
   | Csequence(e1, e2) -> fprintf ppf "%a@ %a" sequence e1 sequence e2

@@ -68,7 +68,10 @@ and uconstant ppf = function
   | Uconst_int i -> fprintf ppf "%i" i
   | Uconst_ptr i -> fprintf ppf "%ia" i
 
-and lam ppf = function
+and lam ppf (ulam : ulambda) =
+  lam_desc ppf ulam.desc
+
+and lam_desc ppf = function
   | Uvar id ->
       Ident.print ppf id
   | Uconst c -> uconstant ppf c
@@ -93,7 +96,7 @@ and lam ppf = function
       fprintf ppf "@[<2>(closure@ %a %a)@]" funs clos lams fv
   | Uoffset(l,i) -> fprintf ppf "@[<2>(offset %a %d)@]" lam l i
   | Ulet(mut, kind, id, arg, body) ->
-      let rec letbody ul = match ul with
+      let rec letbody ul = match ul.desc with
         | Ulet(mut, kind, id, arg, body) ->
             fprintf ppf "@ @[<2>%a%s%s@ %a@]"
               Ident.print id (mutable_flag mut) (value_kind kind) lam arg;
@@ -192,7 +195,7 @@ and lam ppf = function
   | Uunreachable ->
       fprintf ppf "unreachable"
 
-and sequence ppf ulam = match ulam with
+and sequence ppf ulam = match ulam.desc with
   | Usequence(l1, l2) ->
       fprintf ppf "%a@ %a" sequence l1 sequence l2
   | _ -> lam ppf ulam

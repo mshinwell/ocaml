@@ -1631,7 +1631,11 @@ let strmatch_compile =
       end) in
   S.compile
 
-let rec transl env e =
+let rec transl env (e : expression) : expression =
+  { desc = transl_desc env e.desc;
+  }
+
+and transl_desc env (e : expression_desc) =
   match e with
     Uvar id ->
       begin match is_unboxed_id id env with

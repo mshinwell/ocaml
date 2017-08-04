@@ -787,7 +787,11 @@ let close_approx_var fenv cenv id =
 let close_var fenv cenv id =
   let (ulam, _app) = close_approx_var fenv cenv id in ulam
 
-let rec close fenv cenv = function
+let rec close fenv cenv (lam : lambda) : ulambda =
+  { desc = close_desc fenv cenv lam;
+  }
+
+and close_desc fenv cenv = function
     Lvar id ->
       close_approx_var fenv cenv id
   | Lconst cst ->

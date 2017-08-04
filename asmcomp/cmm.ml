@@ -152,7 +152,7 @@ and operation =
   | Craise of raise_kind
   | Ccheckbound
 
-type expression =
+type expression_desc =
     Cconst_int of int
   | Cconst_natint of nativeint
   | Cconst_float of float
@@ -172,6 +172,10 @@ type expression =
   | Ccatch of rec_flag * (int * Ident.t list * expression) list * expression
   | Cexit of int * expression list
   | Ctrywith of expression * Ident.t * expression
+
+and expression = {
+  desc : expression_desc;
+}
 
 type fundecl =
   { fun_name: string;
