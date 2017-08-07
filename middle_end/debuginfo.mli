@@ -41,3 +41,25 @@ val compare : t -> t -> int
 val hash : t -> int
 
 val print_compact : Format.formatter -> t -> unit
+
+module Position : sig
+  type nonrec t = t
+end
+
+module Expression : sig
+  (** A value of type [t] represents debugging information attached to an
+      expression (e.g. in Clambda or Cmm). *)
+  type 'term t
+
+  val create
+     : Position.t
+       (** Source code location of the expression. *)
+    -> phantom_lets:(Ident.t * 'term) list
+       (** List of phantom lets to surround the expression.  They must be in
+           scope order, outermost first. *)
+    -> 'term t
+
+  val concat : outer:'term t -> inner:'term t -> 'term t
+
+  val disjoint_union : 'term t -> 'term t -> 'term t
+end

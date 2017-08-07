@@ -25,6 +25,8 @@ open Clambda
 open Cmm
 open Cmx_format
 
+module D = Debuginfo.Expression
+
 (* Environments used for translation to Cmm. *)
 
 type boxed_number =
@@ -126,76 +128,111 @@ let min_repr_int = min_int asr 1
 
 let int_const n =
   if n <= max_repr_int && n >= min_repr_int
-  then Cconst_int((n lsl 1) + 1)
-  else Cconst_natint
+  then cconst_int((n lsl 1) + 1)
+  else cconst_natint
           (Nativeint.add (Nativeint.shift_left (Nativeint.of_int n) 1) 1n)
 
 let cint_const n =
   Cint(Nativeint.add (Nativeint.shift_left (Nativeint.of_int n) 1) 1n)
 
-let add_no_overflow n x c dbg =
+let add_no_overflow ~n ~x c ~n_dbg ~x_dbg =
+
   let d = n + x in
   if d = 0 then c
-  else { desc = Cop(Caddi, [c; { desc = Cconst_int d; }], dbg); }
+  else cop(Caddi, [c; cconst_int d], dbg)
 
-let rec add_const c n dbg =
-  if n = 0 then c
-  else match c.desc with
-  | Cconst_int x when no_overflow_add x n ->
-      { desc = Cconst_int (x + n); }
-  | Cop(Caddi, [{ desc = Cconst_int x; }; c], _)
-    when no_overflow_add n x ->
-      add_no_overflow n x c dbg
-  | Cop(Caddi, [c; { desc = Cconst_int x; }], _)
-    when no_overflow_add n x ->
-      add_no_overflow n x c dbg
-  | Cop(Csubi, [{ desc = Cconst_int x; }; c], _)
-    when no_overflow_add n x ->
-      { desc = Cop(Csubi, [{ desc = Cconst_int (n + x); }; c], dbg); }
-  | Cop(Csubi, [c; { desc = Cconst_int x; }], _)
-    when no_overflow_sub n x ->
-      add_const c (n - x) dbg
-  | _ ->
-      { desc = Cop(Caddi, [c; { desc = Cconst_int n; }], dbg); }
+let rec add_const c ~n ~n_dbg =
+  let result =
+    if n = 0 then c
+    else match c with
+    | { desc = Cconst_int x; dbg = c_dbg; } when no_overflow_add x n ->
+        { desc = Cconst_int (x + n);
+          dbg = D.disjoint_union c_dbg n_dbg;
+        }
+    | { desc = Cop(Caddi, [{ desc = Cconst_int x; dbg = x_dbg; }; c]);
+        dbg = outer_dbg;
+      }
+      when no_overflow_add n x ->
+        add_no_overflow ~n ~x c ~n_dbg ~x_dbg ~outer_dbg
+    | Cop(Caddi, [c; { desc = Cconst_int x; dbg; }])
+      when no_overflow_add n x ->
+        add_no_overflow n x c
+          ~dbg:(D.disjoint_union (D.concat ~outer:c.dbg ~inner:dbg) n_dbg)
+    | Cop(Csubi, [{ desc = Cconst_int x; dbg; }; c])
+      when no_overflow_add n x ->
+        { desc = Cop(Csubi, [cconst_int (n + x); c], dbg);
+          dbg = D.concat ~outer:c.dbg ~inner:dbg;
+        }
+    | Cop(Csubi, [c; { desc = Cconst_int x; dbg; }])
+      when no_overflow_sub n x ->
+        add_const c (n - x) dbg ~dbg
+    | _ ->
+        { desc = Cop(Caddi, [c; cconst_int n], dbg);
+          dbg = c.dbg;
+        }
+  in
+  { result with
+    dbg = result.dbg @ dbg;
+  }
 
 let incr_int c dbg = add_const c 1 dbg
 let decr_int c dbg = add_const c (-1) dbg
 
 let rec add_int c1 c2 dbg =
   match (c1, c2) with
-  | ({ desc = Cconst_int n; }, c) | (c, { desc = Cconst_int n; }) ->
-      add_const c n dbg
-  | ({ desc = Cop(Caddi, [c1; { desc = Cconst_int n1; }], _); }, c2) ->
+  | ({ desc = Cconst_int n; dbg; }, c)
+  | (c, { desc = Cconst_int n; dbg; }) ->
+      add_const c n dbg ~dbg
+  | ({ desc = Cop(Caddi, [c1; { desc = Cconst_int n1; dbg; }], _);
+       dbg = dbg';
+     }, c2) ->
       add_const (add_int c1 c2 dbg) n1 dbg
-  | (c1, { desc = Cop(Caddi, [c2; { desc = Cconst_int n2; }], _); }) ->
+        ~dbg:(concat_dbg ~outer:dbg' ~inner:dbg)
+  | (c1, { desc = Cop(Caddi, [c2; { desc = Cconst_int n2; dbg; }], _);
+           dbg = dbg';
+         }) ->
       add_const (add_int c1 c2 dbg) n2 dbg
+        ~dbg:(concat_dbg ~outer:dbg' ~inner:dbg)
   | (_, _) ->
-      { desc = Cop(Caddi, [c1; c2], dbg); }
+      cop(Caddi, [c1; c2], dbg)
 
 let rec sub_int c1 c2 dbg =
   match (c1, c2) with
-  | (c1, { desc = Cconst_int n2; }) when n2 <> min_int ->
-      add_const c1 (-n2) dbg
-  | (c1, { desc = Cop(Caddi, [c2; { desc = Cconst_int n2; }], _); })
+  | (c1, { desc = Cconst_int n2; dbg; }) when n2 <> min_int ->
+      add_const c1 (-n2) dbg ~dbg
+  | (c1, { desc = Cop(Caddi, [c2; { desc = Cconst_int n2; dbg; }], _);
+           dbg = dbg';
+         })
     when n2 <> min_int ->
       add_const (sub_int c1 c2 dbg) (-n2) dbg
-  | ({ desc = Cop(Caddi, [c1; { desc = Cconst_int n1; }], _); }, c2) ->
+        ~dbg:(concat_dbg ~outer:dbg' ~inner:dbg)
+  | ({ desc = Cop(Caddi, [c1; { desc = Cconst_int n1; dbg; }], _);
+       dbg = dbg';
+     }, c2) ->
       add_const (sub_int c1 c2 dbg) n1 dbg
+        ~dbg:(concat_dbg ~outer:dbg' ~inner:dbg)
   | (c1, c2) ->
-      { desc = Cop(Csubi, [c1; c2], dbg); }
+      cop(Csubi, [c1; c2], dbg)
 
 let rec lsl_int c1 c2 dbg =
   match (c1, c2) with
-  | ({ desc = Cop(Clsl, [c; { desc = Cconst_int n1; }], _); },
-     { desc = Cconst_int n2; })
+  | ({ desc = Cop(Clsl, [c; { desc = Cconst_int n1; dbg; }], _);
+       dbg = dbg'; },
+     { desc = Cconst_int n2; dbg = dbg2; })
     when n1 > 0 && n2 > 0 && n1 + n2 < size_int * 8 ->
-      { desc = Cop(Clsl, [c; { desc = Cconst_int (n1 + n2); }], dbg); }
-  | ({ desc = Cop(Caddi, [c1; { desc = Cconst_int n1; }], _); },
-     { desc = Cconst_int n2; })
+      { desc = Cop(Clsl, [c; { desc = Cconst_int (n1 + n2);
+                               dbg = dbg @ dbg2;
+                             }], dbg);
+        dbg = dbg';
+      }
+  | ({ desc = Cop(Caddi, [c1; { desc = Cconst_int n1; dbg; }], _);
+       dbg = dbg'; },
+     { desc = Cconst_int n2; dbg = dbg2; })
     when no_overflow_lsl n1 n2 ->
       add_const (lsl_int c1 c2 dbg) (n1 lsl n2) dbg
+        ~dbg:(dbg' @ dbg @ dbg2)
   | (_, _) ->
-      { desc = Cop(Clsl, [c1; c2], dbg); }
+      cop(Clsl, [c1; c2], dbg)
 
 let is_power2 n = n = 1 lsl Misc.log2 n
 
@@ -596,7 +633,7 @@ let return_unit c = { desc = Csequence(c, { desc = Cconst_pointer 1; }); }
 
 let rec remove_unit exp =
   match exp.desc with
-  | Cconst_pointer 1 -> { desc = Ctuple []; }
+  | Cconst_pointer 1 -> ctuple []
   | Csequence(c, { desc = Cconst_pointer 1; }) -> c
   | Csequence(c1, c2) ->
       csequence(c1, remove_unit c2)
@@ -616,7 +653,7 @@ let rec remove_unit exp =
       cop(Cextcall(proc, typ_void, alloc, label_after), args, dbg)
   | Cexit (_,_)
   | Ctuple [] -> exp
-  | _ -> { desc = Csequence(exp, { desc = Ctuple []; }); }
+  | _ -> csequence (exp, ctuple [])
 
 (* Access to block fields *)
 

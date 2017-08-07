@@ -92,6 +92,8 @@ type raise_kind =
 
 type rec_flag = Nonrecursive | Recursive
 
+type expr_debug_info
+
 type memory_chunk =
     Byte_unsigned
   | Byte_signed
@@ -124,10 +126,6 @@ and operation =
   | Craise of raise_kind
   | Ccheckbound
 
-(** Not all cmm expressions currently have [Debuginfo.t] values attached to
-    them.  The ones that do are those that are likely to generate code that
-    can fairly robustly be mapped back to a source location.  In the future
-    it might be the case that more [Debuginfo.t] annotations are desirable. *)
 and expression_desc =
     Cconst_int of int
   | Cconst_natint of nativeint
@@ -135,21 +133,22 @@ and expression_desc =
   | Cconst_symbol of string
   | Cconst_pointer of int
   | Cconst_natpointer of nativeint
-  | Cblockheader of nativeint * Debuginfo.t
+  | Cblockheader of nativeint
   | Cvar of Ident.t
   | Clet of Ident.t * expression * expression
   | Cassign of Ident.t * expression
   | Ctuple of expression list
-  | Cop of operation * expression list * Debuginfo.t
+  | Cop of operation * expression list
   | Csequence of expression * expression
   | Cifthenelse of expression * expression * expression
-  | Cswitch of expression * int array * expression array * Debuginfo.t
+  | Cswitch of expression * int array * expression array
   | Cloop of expression
   | Ccatch of rec_flag * (int * Ident.t list * expression) list * expression
   | Cexit of int * expression list
   | Ctrywith of expression * Ident.t * expression
 
 and expression = {
+  dbg : expression Debuginfo.Expression.t;
   desc : expression_desc;
 }
 
