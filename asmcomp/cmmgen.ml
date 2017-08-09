@@ -1556,6 +1556,7 @@ module StoreExp =
       let make_key = function
         | Cexit (i,[]) -> Some i
         | _ -> None
+      let compare_key = Pervasives.compare
     end)
 
 module SwitcherBlocks = Switch.Make(SArgBlocks)
