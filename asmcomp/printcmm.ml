@@ -105,16 +105,13 @@ let operation d = function
   | Ccheckbound -> "checkbound" ^ Debuginfo.to_string d
 
 let rec expr ppf = function
-  | Cconst_int n -> fprintf ppf "%i" n
-  | Cconst_natint n ->
-    fprintf ppf "%s" (Nativeint.to_string n)
+  | Cconst_int n -> fprintf ppf "%a" Targetint.print n
   | Cblockheader(n, d) ->
-    fprintf ppf "block-hdr(%s)%s"
-      (Nativeint.to_string n) (Debuginfo.to_string d)
+    fprintf ppf "block-hdr(%a)%s"
+      Targetint.Unsigned.print n (Debuginfo.to_string d)
   | Cconst_float n -> fprintf ppf "%F" n
   | Cconst_symbol s -> fprintf ppf "\"%s\"" s
-  | Cconst_pointer n -> fprintf ppf "%ia" n
-  | Cconst_natpointer n -> fprintf ppf "%sa" (Nativeint.to_string n)
+  | Cconst_pointer n -> fprintf ppf "%a" Targetint.print n
   | Cvar id -> Ident.print ppf id
   | Clet(id, def, (Clet(_, _, _) as body)) ->
       let print_binding id ppf def =
@@ -214,16 +211,16 @@ let fundecl ppf f =
 let data_item ppf = function
   | Cdefine_symbol s -> fprintf ppf "\"%s\":" s
   | Cglobal_symbol s -> fprintf ppf "global \"%s\"" s
-  | Cint8 n -> fprintf ppf "byte %i" n
-  | Cint16 n -> fprintf ppf "int16 %i" n
-  | Cint32 n -> fprintf ppf "int32 %s" (Nativeint.to_string n)
-  | Cint n -> fprintf ppf "int %s" (Nativeint.to_string n)
+  | Cint8 n -> fprintf ppf "byte %a" Numbers.Int8.print n
+  | Cint16 n -> fprintf ppf "int16 %a" Numbers.Int16.print n
+  | Cint32 n -> fprintf ppf "int32 %a" Int32.print n
+  | Cint n -> fprintf ppf "int %a" Targetint.print n
   | Csingle f -> fprintf ppf "single %F" f
   | Cdouble f -> fprintf ppf "double %F" f
   | Csymbol_address s -> fprintf ppf "addr \"%s\"" s
   | Cstring s -> fprintf ppf "string \"%s\"" s
-  | Cskip n -> fprintf ppf "skip %i" n
-  | Calign n -> fprintf ppf "align %i" n
+  | Cskip n -> fprintf ppf "skip %a" Targetint.print n
+  | Calign n -> fprintf ppf "align %a" Targetint.print n
 
 let data ppf dl =
   let items ppf = List.iter (fun d -> fprintf ppf "@ %a" data_item d) dl in

@@ -26,13 +26,15 @@ type call_kind =
 (** Simple constants.  ("Structured constants" are rewritten to invocations
     of [Pmakeblock] so that they easily take part in optimizations.) *)
 type const =
-  | Int of int
+  | Int of Targetint.t
   | Char of char
   (** [Char] is kept separate from [Int] to improve printing *)
-  | Const_pointer of int
+  | Const_pointer of Targetint.t
   (** [Const_pointer] is an immediate value of a type whose values may be
-     boxed (typically a variant type with both constant and non-constant
-     constructors). *)
+      boxed (typically a variant type with both constant and non-constant
+      constructors). *)
+  (* CR-someday mshinwell: as per the comment in [Closure] this argument
+     should, morally speaking, be of type [Targetint.Unsigned.t]. *)
 
 (** The application of a function to a list of arguments. *)
 type apply = {

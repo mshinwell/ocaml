@@ -34,7 +34,7 @@ module Simplify_boxed_integer_operator (I : sig
   val shift_left : t -> int -> t
   val shift_right : t -> int -> t
   val shift_right_logical : t -> int -> t
-  val to_int : t -> int
+  val to_int : t -> Targetint.t
   val to_int32 : t -> Int32.t
   val to_int64 : t -> Int64.t
   val neg : t -> t

@@ -204,17 +204,19 @@ let name_for_int_operation = function
 
 (* Load an integer constant into a register *)
 
+let ffff = Targetint.of_int 0xffff
+
 let emit_intconst dst n =
   let rec emit_pos first shift =
     if shift < 0 then begin
       if first then `	mov	{emit_reg dst}, xzr\n`
     end else begin
-      let s = Nativeint.(logand (shift_right_logical n shift) 0xFFFFn) in
-      if s = 0n then emit_pos first (shift - 16) else begin
+      let s = Targetint.(logand (shift_right_logical n shift) ffff) in
+      if Targetint.equal s Targetint.zero then emit_pos first (shift - 16) else begin
         if first then
-          `	movz	{emit_reg dst}, #{emit_nativeint s}, lsl #{emit_int shift}\n`
+          `	movz	{emit_reg dst}, #{emit_targetint s}, lsl #{emit_int shift}\n`
         else
-           `	movk	{emit_reg dst}, #{emit_nativeint s}, lsl #{emit_int shift}\n`;
+           `	movk	{emit_reg dst}, #{emit_targetint s}, lsl #{emit_int shift}\n`;
         emit_pos false (shift - 16)
       end
     end
@@ -222,17 +224,17 @@ let emit_intconst dst n =
     if shift < 0 then begin
       if first then `	movn	{emit_reg dst}, #0\n`
     end else begin
-      let s = Nativeint.(logand (shift_right_logical n shift) 0xFFFFn) in
-      if s = 0xFFFFn then emit_neg first (shift - 16) else begin
+      let s = Targetint.(logand (shift_right_logical n shift) ffff) in
+      if Targetint.equal s ffff then emit_neg first (shift - 16) else begin
         if first then
-          `	movn	{emit_reg dst}, #{emit_nativeint (Nativeint.logxor s 0xFFFFn)}, lsl #{emit_int shift}\n`
+          `	movn	{emit_reg dst}, #{emit_targetint (Targetint.logxor s ffff)}, lsl #{emit_int shift}\n`
         else
-           `	movk	{emit_reg dst}, #{emit_nativeint s}, lsl #{emit_int shift}\n`;
+           `	movk	{emit_reg dst}, #{emit_targetint s}, lsl #{emit_int shift}\n`;
         emit_neg false (shift - 16)
       end
     end
   in
-    if n < 0n then emit_neg true 48 else emit_pos true 48
+  if Targetint.strictly_negative n then emit_neg true 48 else emit_pos true 48
 
 let num_instructions_for_intconst n =
   let num_instructions = ref 0 in
@@ -240,8 +242,8 @@ let num_instructions_for_intconst n =
     if shift < 0 then begin
       if first then incr num_instructions
     end else begin
-      let s = Nativeint.(logand (shift_right_logical n shift) 0xFFFFn) in
-      if s = 0n then count_pos first (shift - 16) else begin
+      let s = Targetint.(logand (shift_right_logical n shift) ffff) in
+      if Targetint.is_zero s then count_pos first (shift - 16) else begin
         incr num_instructions;
         count_pos false (shift - 16)
       end
@@ -250,14 +252,14 @@ let num_instructions_for_intconst n =
     if shift < 0 then begin
       if first then incr num_instructions
     end else begin
-      let s = Nativeint.(logand (shift_right_logical n shift) 0xFFFFn) in
-      if s = 0xFFFFn then count_neg first (shift - 16) else begin
+      let s = Targetint.(logand (shift_right_logical n shift) ffff) in
+      if Targetint.equal s ffff then count_neg first (shift - 16) else begin
         incr num_instructions;
         count_neg false (shift - 16)
       end
     end
   in
-  if n < 0n then count_neg true 48 else count_pos true 48;
+  if Targetint.strictly_negative n then count_neg true 48 else count_pos true 48;
   !num_instructions
 
 (* Recognize float constants appropriate for FMOV dst, #fpimm instruction:
@@ -447,7 +449,7 @@ module BR = Branch_relaxation.Make (struct
     | Lop (Ispecific (Ifar_alloc { words = num_words; _ })) ->
       begin match num_words with
       | 16 | 24 | 32 -> 1
-      | _ -> 1 + num_instructions_for_intconst (Nativeint.of_int num_words)
+      | _ -> 1 + num_instructions_for_intconst (Targetint.of_int num_words)
       end
     | Lop (Iintop (Icomp _)) -> 2
     | Lop (Iintop_imm (Icomp _, _)) -> 2
@@ -549,6 +551,7 @@ let assembly_code_for_allocation ?label_after_call_gc i ~n ~far =
     | _  -> emit_intconst reg_x15 (Nativeint.of_int n);
             `	bl	{emit_symbol "caml_allocN"}\n`
     end;
+    | _  -> emit_intconst reg_x15 (Targetint.of_int n);
     `{emit_label lbl_frame}:	add	{emit_reg i.res.(0)}, {emit_reg reg_alloc_ptr}, #8\n`
   end
 

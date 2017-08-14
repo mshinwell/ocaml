@@ -19,7 +19,7 @@ open Cmm
 
 let afl_area_ptr = Cconst_symbol "caml_afl_area_ptr"
 let afl_prev_loc = Cconst_symbol "caml_afl_prev_loc"
-let afl_map_size = 1 lsl 16
+let afl_map_size = Targetint.of_int_exn (1 lsl 16)
 
 let rec with_afl_logging b =
   if !Clflags.afl_inst_ratio < 100 &&
@@ -34,7 +34,7 @@ let rec with_afl_logging b =
        See http://lcamtuf.coredump.cx/afl/technical_details.txt or
        docs/technical_details.txt in afl-fuzz source for for a full
        description of what's going on. *)
-    let cur_location = Random.int afl_map_size in
+    let cur_location = Targetint.random afl_map_size in
     let cur_pos = Ident.create "pos" in
     let afl_area = Ident.create "shared_mem" in
     let op oper args = Cop (oper, args, Debuginfo.none) in
@@ -46,9 +46,11 @@ let rec with_afl_logging b =
          [op Cadda [Cvar afl_area; Cvar cur_pos];
           op Cadda [op (Cload (Byte_unsigned, Asttypes.Mutable))
                        [op Cadda [Cvar afl_area; Cvar cur_pos]];
-                    Cconst_int 1]],
+                    Cconst_int Targetint.one]],
       op (Cstore(Word_int, Assignment))
-         [afl_prev_loc; Cconst_int (cur_location lsr 1)]))) in
+         [afl_prev_loc;
+          Cconst_int (Targetint.shift_right_logical cur_location 1)])))
+  in
   Csequence(instrumentation, instrument b)
 
 and instrument = function
@@ -75,8 +77,7 @@ and instrument = function
   | Cexit (ex, args) -> Cexit (ex, List.map instrument args)
 
   (* these are base cases and have no logging *)
-  | Cconst_int _ | Cconst_natint _ | Cconst_float _
-  | Cconst_symbol _ | Cconst_pointer _ | Cconst_natpointer _
+  | Cconst_int _ | Cconst_float _ | Cconst_symbol _ | Cconst_pointer _
   | Cblockheader _ | Cvar _ as c -> c
 
 let instrument_function c =
@@ -89,6 +90,6 @@ let instrument_initialiser c =
   with_afl_logging
     (Csequence
        (Cop (Cextcall ("caml_setup_afl", typ_int, false, None),
-             [Cconst_int 0],
+             [Cconst_int Targetint.zero],
              Debuginfo.none),
         c))

@@ -19,9 +19,11 @@ type repr =
   | Int64 of int64
 
 module type S = sig
-  type t
+  type targetint
+  type t = targetint
   val zero : t
   val one : t
+  val eight : t
   val minus_one : t
   val neg : t -> t
   val add : t -> t -> t
@@ -43,6 +45,7 @@ module type S = sig
   val shift_right_logical : t -> int -> t
   val of_int : int -> t
   val of_int_exn : int -> t
+  val of_nativeint_exn : nativeint -> t
   val to_int : t -> int
   val of_float : float -> t
   val to_float : t -> float
@@ -55,6 +58,20 @@ module type S = sig
   val compare: t -> t -> int
   val equal: t -> t -> bool
   val repr: t -> repr
+  val fits_in_16_bits : t -> bool
+  val fits_in_32_bits : t -> bool
+  val is_zero : t -> bool
+  val strictly_negative : t -> bool
+  val random : t -> t
+  val incr : t ref -> unit
+  val print : Format.formatter -> t -> unit
+
+  module Unsigned : sig
+    type t
+    val create : targetint -> t
+    val of_int_exn : int -> t
+    val print : Format.formatter -> t -> unit
+  end
 end
 
 let size = Sys.word_size
@@ -63,6 +80,10 @@ let size = Sys.word_size
 
 module Int32 = struct
   include Int32
+  type targetint = t
+
+  let eight = 8l
+
   let of_int_exn =
     match Sys.word_size with (* size of [int] *)
     | 32 ->
@@ -75,19 +96,93 @@ module Int32 = struct
             Int32.of_int n
     | _ ->
         assert false
+  let of_nativeint_exn = Nativeint.to_int32
   let of_int32 x = x
   let to_int32 x = x
   let of_int64 = Int64.to_int32
   let to_int64 = Int64.of_int32
   let repr x = Int32 x
+
+  let fits_in_16_bits n =
+    n >= -0x8000l && n <= 0x7FFFl
+
+  let fits_in_32_bits n =
+    n >= -0x8000_0000l && n <= 0x7FFF_FFFFl
+
+  let is_zero n = (n = 0l)
+  let strictly_negative n = (n < 0l)
+
+  let print ppf t = Format.fprintf ppf "%ld" t
+
+  let random t =
+    Random.int32 t
+
+  let incr t_ref =
+    t_ref := add !t_ref 1l
+
+  module Unsigned = struct
+    type nonrec t = t
+
+    let create t = t
+
+    let of_int_exn (n : int) =
+      if n < 0 then
+        Misc.fatal_errorf "Cannot construct Targetint.Unsigned.t from the \
+            negative number %d"
+          n
+      else
+        Int32.of_int n
+
+    let print ppf t =
+      Format.fprintf ppf "%lu" t
+  end
 end
 
 module Int64 = struct
   include Int64
+  type targetint = t
+
+  let eight = 8L
+
   let of_int_exn = Int64.of_int
+  let of_nativeint_exn = Int64.of_nativeint
   let of_int64 x = x
   let to_int64 x = x
   let repr x = Int64 x
+
+  let fits_in_16_bits n =
+    n >= -0x8000L && n <= 0x7FFFL
+
+  let fits_in_32_bits n =
+    n >= -0x8000_0000L && n <= 0x7FFF_FFFFL
+
+  let is_zero n = (n = 0L)
+  let strictly_negative n = (n < 0L)
+
+  let print ppf t = Format.fprintf ppf "%Ld" t
+
+  let random t =
+    Random.int64 t
+
+  let incr t_ref =
+    t_ref := add !t_ref 1L
+
+  module Unsigned = struct
+    type nonrec t = t
+
+    let create t = t
+
+    let of_int_exn (n : int) =
+      if n < 0 then
+        Misc.fatal_errorf "Cannot construct Targetint.Unsigned.t from the \
+            negative number %d"
+          n
+      else
+        Int64.of_int n
+
+    let print ppf t =
+      Format.fprintf ppf "%Lu" t
+  end
 end
 
 include (val

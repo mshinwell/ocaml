@@ -29,7 +29,7 @@
 
 val const_int_expr
    : Flambda.named
-  -> int
+  -> Targetint.t
   -> Flambda.named * Simple_value_approx.t * Inlining_cost.Benefit.t
 
 val const_char_expr
@@ -44,7 +44,7 @@ val const_bool_expr
 
 val const_ptr_expr
    : Flambda.named
-  -> int
+  -> Targetint.t
   -> Flambda.named * Simple_value_approx.t * Inlining_cost.Benefit.t
 
 val const_float_expr

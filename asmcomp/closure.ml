@@ -222,8 +222,8 @@ let make_const c = (Uconst c, Value_const c)
 let make_const_ref c =
   make_const(Uconst_ref(Compilenv.new_structured_constant ~shared:true c,
     Some c))
-let make_const_int n = make_const (Uconst_int n)
-let make_const_ptr n = make_const (Uconst_ptr n)
+let make_const_int n = make_const (Uconst_int (Targetint.of_int n))
+let make_const_ptr n = make_const (Uconst_ptr (Targetint.of_int n))
 let make_const_bool b = make_const_ptr(if b then 1 else 0)
 let make_comparison cmp x y =
   make_const_bool
@@ -252,7 +252,7 @@ let simplif_arith_prim_pure fpc p (args, approxs) dbg =
       | Pnegint -> make_const_int (- n1)
       | Poffsetint n -> make_const_int (n + n1)
       | Pfloatofint when fpc -> make_const_float (float_of_int n1)
-      | Pbintofint Pnativeint -> make_const_natint (Nativeint.of_int n1)
+      | Pbintofint Pnativeint -> make_const_natint (Targetint.of_int n1)
       | Pbintofint Pint32 -> make_const_int32 (Int32.of_int n1)
       | Pbintofint Pint64 -> make_const_int64 (Int64.of_int n1)
       | Pbswap16 -> make_const_int (((n1 land 0xff) lsl 8)

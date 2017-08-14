@@ -392,7 +392,7 @@ let emit_instr i =
           end; 1
         end
     | Lop(Iconst_int n) ->
-        emit_intconst i.res.(0) (Nativeint.to_int32 n)
+        emit_intconst i.res.(0) (Targetint.to_int32 n)
     | Lop(Iconst_float f) when !fpu = Soft ->
         let high_bits = Int64.to_int32 (Int64.shift_right_logical f 32)
         and low_bits = Int64.to_int32 f in

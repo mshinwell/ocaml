@@ -25,7 +25,7 @@ type ustructured_constant =
   | Uconst_float of float
   | Uconst_int32 of int32
   | Uconst_int64 of int64
-  | Uconst_nativeint of nativeint
+  | Uconst_nativeint of Targetint.t
   | Uconst_block of int * uconstant list
   | Uconst_float_array of float list
   | Uconst_string of string
@@ -33,8 +33,8 @@ type ustructured_constant =
 
 and uconstant =
   | Uconst_ref of string * ustructured_constant option
-  | Uconst_int of int
-  | Uconst_ptr of int
+  | Uconst_int of Targetint.t
+  | Uconst_ptr of Targetint.t
 
 and ulambda =
     Uvar of Ident.t
@@ -161,7 +161,7 @@ let compare_structured_constants c1 c2 =
   | Uconst_float x1, Uconst_float x2 -> compare_floats x1 x2
   | Uconst_int32 x1, Uconst_int32 x2 -> Int32.compare x1 x2
   | Uconst_int64 x1, Uconst_int64 x2 -> Int64.compare x1 x2
-  | Uconst_nativeint x1, Uconst_nativeint x2 -> Nativeint.compare x1 x2
+  | Uconst_nativeint x1, Uconst_nativeint x2 -> Targetint.compare x1 x2
   | Uconst_block(t1, l1), Uconst_block(t2, l2) ->
       let c = t1 - t2 (* no overflow possible here *) in
       if c <> 0 then c else compare_constant_lists l1 l2

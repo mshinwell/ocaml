@@ -40,7 +40,7 @@ let const_ptr_expr expr n =
     new_expr, approx, C.Benefit.remove_code_named expr C.Benefit.zero
   else expr, A.value_constptr n, C.Benefit.zero
 let const_bool_expr expr b =
-  const_int_expr expr (if b then 1 else 0)
+  const_int_expr expr (if b then Targetint.one else Targetint.zero)
 let const_float_expr expr f =
   if Effect_analysis.no_effects_named expr then
     let (new_expr, approx) = A.make_const_float_named f in

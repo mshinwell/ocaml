@@ -116,7 +116,9 @@ let register_const t (constant:Flambda.constant_defining_value) name
 let rec declare_const t (const : Lambda.structured_constant)
       : Flambda.constant_defining_value_block_field * string =
   match const with
-  | Const_base (Const_int c) -> Const (Int c), "int"
+  | Const_base (Const_int c) ->
+    let c = Targetint.of_int_exn c in
+    Const (Int c), "int"
   | Const_base (Const_char c) -> Const (Char c), "char"
   | Const_base (Const_string (s, _)) ->
     let const, name =
@@ -134,8 +136,11 @@ let rec declare_const t (const : Lambda.structured_constant)
   | Const_base (Const_int64 c) ->
     register_const t (Allocated_const (Int64 c)) "int64"
   | Const_base (Const_nativeint c) ->
+    let c = Targetint.of_nativeint_exn c in
     register_const t (Allocated_const (Nativeint c)) "nativeint"
-  | Const_pointer c -> Const (Const_pointer c), "pointer"
+  | Const_pointer c ->
+    let c = Targetint.of_int_exn c in
+    Const (Const_pointer c), "pointer"
   | Const_immstring c ->
     register_const t (Allocated_const (Immutable_string c)) "immstring"
   | Const_float_array c ->
@@ -344,13 +349,13 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
     let zero_const : Flambda.named =
       match prim with
       | Pdivint _ | Pmodint _ ->
-        Const (Int 0)
+        Const (Int Targetint.zero)
       | Pdivbint { size = Pint32 } | Pmodbint { size = Pint32 } ->
         Allocated_const (Int32 0l)
       | Pdivbint { size = Pint64 } | Pmodbint { size = Pint64 } ->
         Allocated_const (Int64 0L)
       | Pdivbint { size = Pnativeint } | Pmodbint { size = Pnativeint } ->
-        Allocated_const (Nativeint 0n)
+        Allocated_const (Nativeint Targetint.zero)
       | _ -> assert false
     in
     let prim : Lambda.primitive =
@@ -395,7 +400,7 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
     let arg2 = close t env arg2 in
     let const_true = Variable.create "const_true" in
     let cond = Variable.create "cond_sequor" in
-    Flambda.create_let const_true (Const (Int 1))
+    Flambda.create_let const_true (Const (Int Targetint.one))
       (Flambda.create_let cond (Expr arg1)
         (If_then_else (cond, Var const_true, arg2)))
   | Lprim (Psequand, [arg1; arg2], _) ->
@@ -403,7 +408,7 @@ let rec close t env (lam : Lambda.lambda) : Flambda.t =
     let arg2 = close t env arg2 in
     let const_false = Variable.create "const_false" in
     let cond = Variable.create "cond_sequand" in
-    Flambda.create_let const_false (Const (Int 0))
+    Flambda.create_let const_false (Const (Int Targetint.zero))
       (Flambda.create_let cond (Expr arg1)
         (If_then_else (cond, arg2, Var const_false)))
   | Lprim ((Psequand | Psequor), _, _) ->

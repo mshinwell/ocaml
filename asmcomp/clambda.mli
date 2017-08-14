@@ -25,7 +25,7 @@ type ustructured_constant =
   | Uconst_float of float
   | Uconst_int32 of int32
   | Uconst_int64 of int64
-  | Uconst_nativeint of nativeint
+  | Uconst_nativeint of Targetint.t
   | Uconst_block of int * uconstant list
   | Uconst_float_array of float list
   | Uconst_string of string
@@ -33,8 +33,12 @@ type ustructured_constant =
 
 and uconstant =
   | Uconst_ref of string * ustructured_constant option
-  | Uconst_int of int
-  | Uconst_ptr of int
+  | Uconst_int of Targetint.t
+  | Uconst_ptr of Targetint.t
+    (* CR-someday mshinwell: Perhaps [Uconst_ptr] should take
+       [Targetint.Unsigned.t] instead.  However this is a tricky change
+       (see for example closure.ml and simplify_primitives.ml) and the
+       semantics as-is should be correct. *)
 
 and ulambda =
     Uvar of Ident.t

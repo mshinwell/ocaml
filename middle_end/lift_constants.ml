@@ -887,7 +887,7 @@ let lift_constants (program : Flambda.program) ~backend =
       (Linkage_name.create name)
   in
   let program_body : Flambda.program_body =
-    Let_symbol (the_dead_constant, Allocated_const (Nativeint 0n),
+    Let_symbol (the_dead_constant, Allocated_const (Nativeint Targetint.zero),
       program.program_body)
   in
   let program : Flambda.program =

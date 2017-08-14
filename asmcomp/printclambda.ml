@@ -36,7 +36,7 @@ let rec structured_constant ppf = function
   | Uconst_float x -> fprintf ppf "%F" x
   | Uconst_int32 x -> fprintf ppf "%ldl" x
   | Uconst_int64 x -> fprintf ppf "%LdL" x
-  | Uconst_nativeint x -> fprintf ppf "%ndn" x
+  | Uconst_nativeint x -> fprintf ppf "%an" Targetint.print x
   | Uconst_block (tag, l) ->
       fprintf ppf "block(%i" tag;
       List.iter (fun u -> fprintf ppf ",%a" uconstant u) l;
@@ -65,8 +65,10 @@ and uconstant ppf = function
   | Uconst_ref (s, Some c) ->
       fprintf ppf "%S=%a" s structured_constant c
   | Uconst_ref (s, None) -> fprintf ppf "%S"s
-  | Uconst_int i -> fprintf ppf "%i" i
-  | Uconst_ptr i -> fprintf ppf "%ia" i
+  | Uconst_int i -> fprintf ppf "%a" Targetint.print i
+  | Uconst_ptr i ->
+      let i = Targetint.Unsigned.create i in
+      fprintf ppf "%aa" Targetint.Unsigned.print i
 
 and lam ppf = function
   | Uvar id ->

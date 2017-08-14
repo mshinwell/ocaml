@@ -129,13 +129,11 @@ and operation =
     can fairly robustly be mapped back to a source location.  In the future
     it might be the case that more [Debuginfo.t] annotations are desirable. *)
 and expression =
-    Cconst_int of int
-  | Cconst_natint of nativeint
+    Cconst_int of Targetint.t
   | Cconst_float of float
   | Cconst_symbol of string
-  | Cconst_pointer of int
-  | Cconst_natpointer of nativeint
-  | Cblockheader of nativeint * Debuginfo.t
+  | Cconst_pointer of Targetint.Unsigned.t
+  | Cblockheader of Targetint.Unsigned.t * Debuginfo.t
   | Cvar of Ident.t
   | Clet of Ident.t * expression * expression
   | Cassign of Ident.t * expression
@@ -160,20 +158,22 @@ type fundecl =
 type data_item =
     Cdefine_symbol of string
   | Cglobal_symbol of string
-  | Cint8 of int
-  | Cint16 of int
-  | Cint32 of nativeint
-  | Cint of nativeint
+  | Cint8 of Numbers.Int8.t
+  | Cint16 of Numbers.Int16.t
+  | Cint32 of Int32.t
+  | Cint of Targetint.t
   | Csingle of float
   | Cdouble of float
   | Csymbol_address of string
   | Cstring of string
-  | Cskip of int
-  | Calign of int
+  | Cskip of Targetint.Unsigned.t
+  | Calign of Targetint.Unsigned.t
 
 type phrase =
     Cfunction of fundecl
   | Cdata of data_item list
+
+val cconst_int : int -> expression
 
 val ccatch : int * Ident.t list * expression * expression -> expression
 

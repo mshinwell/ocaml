@@ -85,7 +85,7 @@ let ge_component comp1 comp2 =
 let size_machtype mty =
   let size = ref 0 in
   for i = 0 to Array.length mty - 1 do
-    size := !size + size_component mty.(i)
+    size := !size + (size_component mty.(i))
   done;
   !size
 
@@ -153,13 +153,11 @@ and operation =
   | Ccheckbound
 
 type expression =
-    Cconst_int of int
-  | Cconst_natint of nativeint
+    Cconst_int of Targetint.t
   | Cconst_float of float
   | Cconst_symbol of string
-  | Cconst_pointer of int
-  | Cconst_natpointer of nativeint
-  | Cblockheader of nativeint * Debuginfo.t
+  | Cconst_pointer of Targetint.Unsigned.t
+  | Cblockheader of Targetint.Unsigned.t * Debuginfo.t
   | Cvar of Ident.t
   | Clet of Ident.t * expression * expression
   | Cassign of Ident.t * expression
@@ -184,20 +182,22 @@ type fundecl =
 type data_item =
     Cdefine_symbol of string
   | Cglobal_symbol of string
-  | Cint8 of int
-  | Cint16 of int
-  | Cint32 of nativeint
-  | Cint of nativeint
+  | Cint8 of Numbers.Int8.t
+  | Cint16 of Numbers.Int16.t
+  | Cint32 of Int32.t
+  | Cint of Targetint.t
   | Csingle of float
   | Cdouble of float
   | Csymbol_address of string
   | Cstring of string
-  | Cskip of int
-  | Calign of int
+  | Cskip of Targetint.Unsigned.t
+  | Calign of Targetint.Unsigned.t
 
 type phrase =
     Cfunction of fundecl
   | Cdata of data_item list
+
+let cconst_int n = Cconst_int (Targetint.of_int_exn n)
 
 let ccatch (i, ids, e1, e2)=
   Ccatch(Nonrecursive, [i, ids, e2], e1)

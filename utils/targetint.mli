@@ -25,7 +25,8 @@
    on the word size of the target architecture.
 *)
 
-type t
+type targetint
+type t = targetint
 (** The type of target integers. *)
 
 val zero : t
@@ -33,6 +34,9 @@ val zero : t
 
 val one : t
 (** The target integer 1.*)
+
+val eight : t
+(** The target integer 8. *)
 
 val minus_one : t
 (** The target integer -1.*)
@@ -117,6 +121,10 @@ val shift_right_logical : t -> int -> t
     regardless of the sign of [x].
     The result is unspecified if [y < 0] or [y >= bitsize]. *)
 
+(* CR mshinwell: we need to add comments concerning the sign extension
+   semantics here.  For example [of_int32] sign extends.
+   Maybe there should be a [Target_ptr.t] or similar which zero extends. *)
+
 val of_int : int -> t
 (** Convert the given integer (type [int]) to a target integer
     (type [t]), module the target word size. *)
@@ -124,6 +132,11 @@ val of_int : int -> t
 val of_int_exn : int -> t
 (** Convert the given integer (type [int]) to a target integer
     (type [t]).  Raises a fatal error if the conversion is not exact. *)
+
+val of_nativeint_exn : nativeint -> t
+(** Convert the given integer (type [nativeint]) to a target integer
+    (type [t]).  Raises a fatal error if the conversion is not exact. *)
+(* CR mshinwell: this exception-raising property needs to be checked *)
 
 val to_int : t -> int
 (** Convert the given target integer (type [t]) to an
@@ -186,3 +199,35 @@ type repr =
 
 val repr : t -> repr
 (** The concrete representation of a native integer. *)
+
+val fits_in_16_bits : t -> bool
+(** Whether the given target integer fits within 16 bits without loss of
+    information. *)
+
+val fits_in_32_bits : t -> bool
+(** Whether the given target integer fits within 32 bits without loss of
+    information. *)
+
+val is_zero : t -> bool
+(** Whether the given target integer is zero. *)
+
+val strictly_negative : t -> bool
+(** Whether the given target integer is strictly less than zero. *)
+
+val random : t -> t
+(** As for [Random.int32] and [Random.int64], but for target integers. *)
+
+val incr : t ref -> unit
+
+val print : Format.formatter -> t -> unit
+
+module Unsigned : sig
+  type t
+  (** The type of unsigned target integers (e.g. memory addresses). *)
+
+  val create : targetint -> t
+
+  val of_int_exn : int -> t
+
+  val print : Format.formatter -> t -> unit
+end

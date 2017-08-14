@@ -20,7 +20,7 @@ type t =
   | Float of float
   | Int32 of int32
   | Int64 of int64
-  | Nativeint of nativeint
+  | Nativeint of Targetint.t
   | Float_array of float list
   | Immutable_float_array of float list
   | String of string
@@ -75,7 +75,7 @@ let print ppf (t : t) =
   | Immutable_string s -> fprintf ppf "#%S" s
   | Int32 n -> fprintf ppf "%lil" n
   | Int64 n -> fprintf ppf "%LiL" n
-  | Nativeint n -> fprintf ppf "%nin" n
+  | Nativeint n -> fprintf ppf "%an" Targetint.print n
   | Float f -> fprintf ppf "%f" f
   | Float_array [] -> fprintf ppf "[| |]"
   | Float_array (f1 :: fl) ->

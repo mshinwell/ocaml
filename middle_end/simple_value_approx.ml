@@ -21,7 +21,7 @@ module U = Flambda_utils
 type 'a boxed_int =
   | Int32 : int32 boxed_int
   | Int64 : int64 boxed_int
-  | Nativeint : nativeint boxed_int
+  | Nativeint : Targetint.t boxed_int
 
 type value_string = {
   (* CR-soon mshinwell: use variant *)
@@ -45,9 +45,9 @@ type t = {
 
 and descr =
   | Value_block of Tag.t * t array
-  | Value_int of int
+  | Value_int of Targetint.t
   | Value_char of char
-  | Value_constptr of int
+  | Value_constptr of Targetint.t
   | Value_float of float option
   | Value_boxed_int : 'a boxed_int * 'a -> descr
   | Value_set_of_closures of value_set_of_closures
@@ -101,9 +101,9 @@ let print_unresolved_value ppf = function
     Format.fprintf ppf "Symbol %a" Symbol.print symbol
 
 let rec print_descr ppf = function
-  | Value_int i -> Format.pp_print_int ppf i
+  | Value_int i -> Targetint.print ppf i
   | Value_char c -> Format.fprintf ppf "%c" c
-  | Value_constptr i -> Format.fprintf ppf "%ia" i
+  | Value_constptr i -> Format.fprintf ppf "%aa" Targetint.print i
   | Value_block (tag,fields) ->
     let p ppf fields =
       Array.iter (fun v -> Format.fprintf ppf "%a@ " print v) fields in
@@ -149,7 +149,7 @@ let rec print_descr ppf = function
     match t with
     | Int32 -> Format.fprintf ppf "%li" i
     | Int64 -> Format.fprintf ppf "%Li" i
-    | Nativeint -> Format.fprintf ppf "%ni" i
+    | Nativeint -> Targetint.print ppf i
 
 and print ppf { descr; var; symbol; } =
   let print ppf = function
@@ -300,12 +300,11 @@ let name_expr_fst (named, thing) ~name =
 
 let make_const_int_named n : Flambda.named * t =
   Const (Int n), value_int n
-let make_const_int (n : int) =
+let make_const_int n =
   let name =
-    match n with
-    | 0 -> "const_zero"
-    | 1 -> "const_one"
-    | _ -> "const_int"
+    if Targetint.equal n Targetint.zero then "const_zero"
+    else if Targetint.equal n Targetint.one then "const_one"
+    else "const_int"
   in
   name_expr_fst (make_const_int_named n) ~name
 
@@ -316,17 +315,16 @@ let make_const_char n =
 
 let make_const_ptr_named n : Flambda.named * t =
   Const (Const_pointer n), value_constptr n
-let make_const_ptr (n : int) =
+let make_const_ptr n =
   let name =
-    match n with
-    | 0 -> "const_ptr_zero"
-    | 1 -> "const_ptr_one"
-    | _ -> "const_ptr"
+    if Targetint.equal n Targetint.zero then "const_ptr_zero"
+    else if Targetint.equal n Targetint.one then "const_ptr_one"
+    else "const_ptr"
   in
   name_expr_fst (make_const_ptr_named n) ~name
 
 let make_const_bool_named b : Flambda.named * t =
-  make_const_ptr_named (if b then 1 else 0)
+  make_const_ptr_named (if b then Targetint.one else Targetint.zero)
 let make_const_bool b =
   name_expr_fst (make_const_bool_named b) ~name:"const_bool"
 
@@ -569,7 +567,7 @@ let equal_boxed_int (type t1) (type t2)
   match bi1, bi2 with
   | Int32, Int32 -> Int32.equal i1 i2
   | Int64, Int64 -> Int64.equal i1 i2
-  | Nativeint, Nativeint -> Nativeint.equal i1 i2
+  | Nativeint, Nativeint -> Targetint.equal i1 i2
   | _ -> false
 
 (* Closures and set of closures descriptions cannot be merged.
@@ -820,7 +818,8 @@ let potentially_taken_const_switch_branch t branch =
     (* In theory symbol cannot contain integers but this shouldn't
        matter as this will always be an imported approximation *)
     Can_be_taken
-  | Value_constptr i | Value_int i when i = branch ->
+  | Value_constptr i | Value_int i
+      when Targetint.equal i (Targetint.of_int_exn branch) ->
     Must_be_taken
   | Value_char c when Char.code c = branch ->
     Must_be_taken

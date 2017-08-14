@@ -21,9 +21,9 @@ type call_kind =
   | Direct of Closure_id.t
 
 type const =
-  | Int of int
+  | Int of Targetint.t
   | Char of char
-  | Const_pointer of int
+  | Const_pointer of Targetint.t
 
 type apply = {
   func : Variable.t;
@@ -420,9 +420,9 @@ and print_set_of_closures ppf (set_of_closures : set_of_closures) =
 
 and print_const ppf (c : const) =
   match c with
-  | Int n -> fprintf ppf "%i" n
+  | Int n -> fprintf ppf "%a" Targetint.print n
   | Char c -> fprintf ppf "%C" c
-  | Const_pointer n -> fprintf ppf "%ia" n
+  | Const_pointer n -> fprintf ppf "%aa" Targetint.print n
 
 let print_function_declarations ppf (fd : function_declarations) =
   let funs ppf =
@@ -1118,9 +1118,9 @@ let used_params function_decl =
 
 let compare_const (c1:const) (c2:const) =
   match c1, c2 with
-  | Int i1, Int i2 -> compare i1 i2
+  | Int i1, Int i2 -> Targetint.compare i1 i2
   | Char i1, Char i2 -> compare i1 i2
-  | Const_pointer i1, Const_pointer i2 -> compare i1 i2
+  | Const_pointer i1, Const_pointer i2 -> Targetint.compare i1 i2
   | Int _, (Char _ | Const_pointer _) -> -1
   | (Char _ | Const_pointer _), Int _ -> 1
   | Char _, Const_pointer _ -> -1

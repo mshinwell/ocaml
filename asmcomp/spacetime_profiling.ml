@@ -32,16 +32,16 @@ let next_index_within_node ~part_of_shape ~label =
   let index = !index_within_node in
   begin match part_of_shape with
   | Mach.Direct_call_point _ ->
-    incr index_within_node;
+    Targetint.incr index_within_node;
     if Config.spacetime_call_counts then begin
-      incr index_within_node
+      Targetint.incr index_within_node
     end
   | Mach.Indirect_call_point ->
-    incr index_within_node
+    Targetint.incr index_within_node
   | Mach.Allocation_point ->
-    incr index_within_node;
-    incr index_within_node;
-    incr index_within_node
+    Targetint.incr index_within_node;
+    Targetint.incr index_within_node;
+    Targetint.incr index_within_node
   end;
   reverse_shape := (part_of_shape, label) :: !reverse_shape;
   index
@@ -71,7 +71,7 @@ let code_for_function_prologue ~function_name ~node_hole =
     let body =
       List.fold_left (fun init_code index ->
           (* Cf. [Direct_callee_node] in the runtime. *)
-          let offset_in_bytes = index * Arch.size_addr in
+          let offset_in_bytes = Targetint.mul index Arch.size_addr in
           Csequence (
             Cop (Cstore (Word_int, Lambda.Assignment),
               [Cop (Caddi, [Cvar new_node; Cconst_int offset_in_bytes], dbg);
@@ -85,21 +85,22 @@ let code_for_function_prologue ~function_name ~node_hole =
     | _ ->
       Clet (new_node_encoded,
         (* Cf. [Encode_tail_caller_node] in the runtime. *)
-        Cop (Cor, [Cvar new_node; Cconst_int 1], dbg),
+        Cop (Cor, [Cvar new_node; cconst_int 1], dbg),
         body)
   in
   let pc = Ident.create "pc" in
   Clet (node, Cop (Cload (Word_int, Asttypes.Mutable), [Cvar node_hole], dbg),
     Clet (must_allocate_node,
-      Cop (Cand, [Cvar node; Cconst_int 1], dbg),
+      Cop (Cand, [Cvar node; cconst_int 1], dbg),
       Cifthenelse (
-        Cop (Ccmpi Cne, [Cvar must_allocate_node; Cconst_int 1], dbg),
+        Cop (Ccmpi Cne, [Cvar must_allocate_node; cconst_int 1], dbg),
         Cvar node,
         Clet (is_new_node,
           Clet (pc, Cconst_symbol function_name,
             Cop (Cextcall ("caml_spacetime_allocate_node",
                 [| Int |], false, None),
-              [Cconst_int (1 (* header *) + !index_within_node);
+              [Cconst_int (  (* we add 1 to allow for the header *)
+                 Targetint.add Targetint.one !index_within_node);
                Cvar pc;
                Cvar node_hole;
               ],
@@ -109,12 +110,12 @@ let code_for_function_prologue ~function_name ~node_hole =
               if no_tail_calls then Cvar new_node
               else
                 Cifthenelse (
-                  Cop (Ccmpi Ceq, [Cvar is_new_node; Cconst_int 0], dbg),
+                  Cop (Ccmpi Ceq, [Cvar is_new_node; cconst_int 0], dbg),
                   Cvar new_node,
                   initialize_direct_tail_call_points_and_return_node))))))
 
 let code_for_blockheader ~value's_header ~node ~dbg =
-  let num_words = Nativeint.shift_right_logical value's_header 10 in
+  let num_words = Targetint.shift_right_logical value's_header 10 in
   let existing_profinfo = Ident.create "existing_profinfo" in
   let existing_count = Ident.create "existing_count" in
   let profinfo = Ident.create "profinfo" in
@@ -153,7 +154,7 @@ let code_for_blockheader ~value's_header ~node ~dbg =
           dbg),
       Clet (profinfo,
         Cifthenelse (
-          Cop (Ccmpi Cne, [Cvar existing_profinfo; Cconst_int 1 (* () *)], dbg),
+          Cop (Ccmpi Cne, [Cvar existing_profinfo; cconst_int 1 (* () *)], dbg),
           Cvar existing_profinfo,
           generate_new_profinfo),
         Clet (existing_count,
@@ -246,7 +247,7 @@ let code_for_call ~node ~callee ~is_tail ~label =
     | Indirect callee ->
       let caller_node =
         if is_tail then node
-        else Cconst_int 1  (* [Val_unit] *)
+        else cconst_int 1  (* [Val_unit] *)
       in
       Cop (Cextcall ("caml_spacetime_indirect_node_hole_ptr",
           [| Int |], false, None),
