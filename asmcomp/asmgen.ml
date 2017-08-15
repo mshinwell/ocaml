@@ -101,30 +101,51 @@ let rec regalloc ppf round fd =
 
 let (++) x f = f x
 
-let compile_fundecl (ppf : formatter) fd_cmm =
+module L = Save_ir.Language
+
+let run_pass ~output_prefix ?dump_if (lang : L.t) ~print ~to_string
+      ~to_human_string f term =
+  let name = to_string lang in
+  let term = Profile.record ~accumulate:true name f term in
+  Save_ir.save lang ~output_prefix print term;
+  match dump_if with
+  | None -> term
+  | Some dump_if ->
+    let name = to_human_string pass in
+    pass_dump_if ppf dump_if name term
+
+let mach_pass ~output_prefix ?dump_if (pass : L.mach_pass) f term =
+  run_pass ~output_prefix ?dump_if (Mach pass)
+    ~print:Printmach.fundecl
+    ~to_string:L.mach_to_string
+    ~to_human_string:L.mach_to_human_string
+
+let linear_pass ~output_prefix ?dump_if (pass : L.linear_pass) f term =
+  run_pass ~output_prefix ?dump_if (Linear pass)
+    ~print:Printlinear.fundecl
+    ~to_string:L.linear_to_string
+    ~to_human_string:L.linear_to_human_string
+
+let compile_fundecl (ppf : formatter) ~output_prefix fd_cmm =
+  let run_pass = run_pass ~output_prefix in
   Proc.init ();
   Reg.reset();
   fd_cmm
-  ++ Profile.record ~accumulate:true "selection" Selection.fundecl
-  ++ pass_dump_if ppf dump_selection "After instruction selection"
-  ++ Profile.record ~accumulate:true "comballoc" Comballoc.fundecl
-  ++ pass_dump_if ppf dump_combine "After allocation combining"
-  ++ Profile.record ~accumulate:true "cse" CSE.fundecl
-  ++ pass_dump_if ppf dump_cse "After CSE"
-  ++ Profile.record ~accumulate:true "liveness" (liveness ppf)
-  ++ Profile.record ~accumulate:true "deadcode" Deadcode.fundecl
-  ++ pass_dump_if ppf dump_live "Liveness analysis"
-  ++ Profile.record ~accumulate:true "spill" Spill.fundecl
-  ++ Profile.record ~accumulate:true "liveness" (liveness ppf)
-  ++ pass_dump_if ppf dump_spill "After spilling"
-  ++ Profile.record ~accumulate:true "split" Split.fundecl
-  ++ pass_dump_if ppf dump_split "After live range splitting"
-  ++ Profile.record ~accumulate:true "liveness" (liveness ppf)
+  ++ mach_pass Selection Selection.fundecl ~dump_if:dump_selection
+  ++ mach_pass Combine Comballoc.fundecl ~dump_if:dump_combine
+  ++ mach_pass CSE CSE.fundecl ~dump_if:dump_cse
+  ++ mach_pass Liveness_1 (liveness ppf)
+  ++ mach_pass Deadcode Deadcode.fundecl ~dump_if:dump_live
+  ++ mach_pass Spill Spill.fundecl
+  ++ mach_pass Liveness_2 (liveness ppf) ~dump_if:dump_spill
+  ++ mach_pass Split Split.fundecl ~dump_if:dump_split
+  ++ mach_pass Liveness_3 (liveness ppf)
+  ++ mach_pass Regalloc (regalloc ppf 1)
   ++ Profile.record ~accumulate:true "regalloc" (regalloc ppf 1)
-  ++ Profile.record ~accumulate:true "linearize" Linearize.fundecl
-  ++ pass_dump_linear_if ppf dump_linear "Linearized code"
-  ++ Profile.record ~accumulate:true "scheduling" Scheduling.fundecl
-  ++ pass_dump_linear_if ppf dump_scheduling "After instruction scheduling"
+  ++ Save_ir.passes_finished Mach Printmach.fundecl
+  ++ linear_pass Linearize Linearize.fundecl ~dump_if:dump_linear
+  ++ linear_pass Scheduling Scheduling.fundecl ~dump_if:dump_scheduling
+  ++ Save_ir.passes_finished Linear Printlinear.fundecl
   ++ Profile.record ~accumulate:true "emit" Emit.fundecl
 
 let compile_phrase ppf p =

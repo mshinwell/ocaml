@@ -67,6 +67,9 @@ module Language : sig
     | Cmm
     | Mach of mach pass
     | Linear of linear pass
+
+  val mach_to_string : mach pass -> string
+  val mach_to_human_string : mach pass -> string
 end
 
 (** Mark that the given language should be saved at a particular stage. *)
@@ -91,3 +94,5 @@ val save
   -> (Format.formatter -> 'a -> unit)
   -> 'a
   -> unit
+
+val passes_finished : ...
