@@ -81,10 +81,14 @@ let implementation ~backend ppf sourcefile outputprefix =
         ast
         ++ print_if ppf Clflags.dump_parsetree Printast.implementation
         ++ print_if ppf Clflags.dump_source Pprintast.structure
+        ++ Save_ir.save Parsetree ~output_prefix:outputprefix
+             Pprintast.implementation
         ++ Profile.(record typing)
             (Typemod.type_implementation sourcefile outputprefix modulename env)
         ++ print_if ppf Clflags.dump_typedtree
             Printtyped.implementation_with_coercion
+        ++ Save_ir.save Save_ir.Typedtree ~output_prefix:outputprefix
+             Printtyped.implementation_with_coercion
       in
       if not !Clflags.print_types then begin
         if Config.flambda then begin
@@ -101,9 +105,13 @@ let implementation ~backend ppf sourcefile outputprefix =
             (fun { Lambda.module_ident; main_module_block_size;
                    required_globals; code } ->
             ((module_ident, main_module_block_size), code)
+            +++ Save_ir.save (Lambda Before_simplif)
+                  ~output_prefix:outputprefix Printlambda.lambda
             +++ print_if ppf Clflags.dump_rawlambda Printlambda.lambda
             +++ Simplif.simplify_lambda sourcefile
             +++ print_if ppf Clflags.dump_lambda Printlambda.lambda
+            +++ Save_ir.save (Lambda After_simplif)
+                  ~output_prefix:outputprefix Printlambda.lambda
             ++ (fun ((module_ident, size), lam) ->
                 Middle_end.middle_end ppf
                   ~prefixname:outputprefix
@@ -122,12 +130,16 @@ let implementation ~backend ppf sourcefile outputprefix =
           ++ Profile.(record transl)
               (Translmod.transl_store_implementation modulename)
           ++ print_if ppf Clflags.dump_rawlambda Printlambda.program
+          ++ Save_ir.save (Lambda Before_simplif)
+               ~output_prefix:outputprefix Printlambda.lambda
           ++ Profile.(record generate)
               (fun program ->
                 { program with
                   Lambda.code = Simplif.simplify_lambda sourcefile
                     program.Lambda.code }
                 ++ print_if ppf Clflags.dump_lambda Printlambda.program
+                ++ Save_ir.save (Lambda After_simplif)
+                     ~output_prefix:outputprefix Printlambda.lambda
                 ++ Asmgen.compile_implementation_clambda
                   outputprefix ppf;
                 Compilenv.save_unit_info cmxfile)

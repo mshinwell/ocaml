@@ -432,6 +432,13 @@ let mk_safe_string f =
   else " Make strings immutable"
 ;;
 
+let mk_save_ir f =
+  let langs = String.concat ", " (Save_ir.all_languages ()) in
+  "-save-ir", Arg.String f,
+  ("<language>  Save intermediate representation(s) to file (may be \
+    given more than once); valid languages: %s" ^ langs)
+;;
+
 let mk_shared f =
   "-shared", Arg.Unit f, " Produce a dynlinkable plugin"
 ;;
