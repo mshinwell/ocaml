@@ -34,7 +34,7 @@ module Simplify_boxed_integer_operator (I : sig
   val shift_left : t -> int -> t
   val shift_right : t -> int -> t
   val shift_right_logical : t -> int -> t
-  val to_int : t -> Targetint.t
+  val to_targetint : t -> Targetint.t
   val to_int32 : t -> Int32.t
   val to_int64 : t -> Int64.t
   val neg : t -> t
@@ -50,7 +50,9 @@ end) : Simplify_boxed_integer_ops_intf.S with type t := I.t = struct
     let eval_conv kind op = S.const_boxed_int_expr expr kind (op n) in
     let eval_unboxed op = S.const_int_expr expr (op n) in
     match p with
-    | Pintofbint kind when kind = I.kind -> eval_unboxed I.to_int
+    | Pintofbint kind when kind = I.kind ->
+      (* XXX should have extra error here *)
+      eval_unboxed I.to_int
     | Pcvtbint (kind, Pint32) when kind = I.kind ->
       eval_conv A.Int32 I.to_int32
     | Pcvtbint (kind, Pint64) when kind = I.kind ->
@@ -89,13 +91,15 @@ end
 
 module Simplify_boxed_nativeint = Simplify_boxed_integer_operator (struct
   include Nativeint
-  let to_int64 = Int64.of_nativeint
+  let to_targetint n = n
+  let to_int64 = Targetint.to_int64
   let swap = S.swapnative
   let kind = Lambda.Pnativeint
 end)
 
 module Simplify_boxed_int32 = Simplify_boxed_integer_operator (struct
   include Int32
+  let to_targetint n = Targetint.of_int32
   let to_int32 i = i
   let to_int64 = Int64.of_int32
   let swap = S.swap32
