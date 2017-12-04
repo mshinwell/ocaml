@@ -223,6 +223,7 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
   | Let (id, defining_expr, body) ->
     let body_env, var = Env.add_var_like env id in
     let cont defining_expr =
+      (* CR pchambart: Not tail ! *)
       let body = close t body_env body in
       (* CR pchambart: Kind anntation on let should to go through Ilambda *)
       Flambda.Expr.create_let var
@@ -436,25 +437,25 @@ and close_named t env (named : Ilambda.named) (cont : Flambda.Named.t -> Flambda
     cont (Simple simple)
   | Const cst ->
     cont (fst (close_const t cst))
-  | Prim (Pread_mutable id, args, _) ->
+  | Prim { prim = Pread_mutable id; args } ->
     (* All occurrences of mutable variables bound by [Let_mutable] are
        identified by [Prim (Pread_mutable, ...)] in Ilambda. *)
     assert (args = []);
     cont (Read_mutable (Env.find_mutable_var env id))
-  | Prim (Pgetglobal id, [], _) when Ident.is_predef_exn id ->
+  | Prim { prim = Pgetglobal id; args = [] } when Ident.is_predef_exn id ->
     let symbol = t.symbol_for_global' id in
     t.imported_symbols <- Symbol.Set.add symbol t.imported_symbols;
     cont (Simple (Simple.symbol symbol))
-  | Prim (Pgetglobal id, [], _) ->
+  | Prim { prim = Pgetglobal id; args = [] } ->
     assert (not (Ident.same id t.current_unit_id));
     let symbol = t.symbol_for_global' id in
     t.imported_symbols <- Symbol.Set.add symbol t.imported_symbols;
     cont (Simple (Simple.symbol symbol))
-  | Prim (p, args, loc) ->
-    let prim =
-      Lambda_to_flambda_primitives.convert p (Env.find_simples env args)
-    in
-    cont (Prim (prim, Debuginfo.from_location loc))
+  | Prim { prim; args; loc; exception_continuation } ->
+    Lambda_to_flambda_primitives.convert_and_bind prim
+      ~args:(Env.find_simples env args)
+      ~exception_continuation
+      (Debuginfo.from_location loc) cont
   | Assign { being_assigned; new_value; } ->
     cont (Assign {
       being_assigned = Env.find_mutable_var env being_assigned;

@@ -449,6 +449,7 @@ let rec simplify_primitive env (prim : L.primitive) args loc =
   | (Psequand | Psequor), _ ->
     Misc.fatal_error "Psequand / Psequor must have exactly two arguments"
   | Pidentity, [arg] -> arg
+  | Pignore, [_arg] -> L.Lconst (Const_pointer 0)
   | Pdirapply, [funct; arg]
   | Prevapply, [arg; funct] ->
     let apply : L.lambda_apply =
