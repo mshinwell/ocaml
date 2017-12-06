@@ -269,6 +269,7 @@ type unary_primitive =
   | Project_closure of Closure_id.Set.t
   | Move_within_set_of_closures of Closure_id.t Closure_id.Map.t
   | Project_var of Var_within_closure.t Closure_id.Map.t
+  | Boolean_not
 
 let compare_unary_primitive p1 p2 =
   let unary_primitive_numbering p =
@@ -291,9 +292,10 @@ let compare_unary_primitive p1 p2 =
     | Bigarray_length _ -> 15
     | Unbox_number _ -> 16
     | Box_number _ -> 17
-    | Project_closure _ -> 18 
+    | Project_closure _ -> 18
     | Move_within_set_of_closures _ -> 19
     | Project_var _ -> 20
+    | Boolean_not -> 21
   in
   match p1, p2 with
   | Block_load (size1, kind1, mut1), Block_load (size2, kind2, mut2) ->
@@ -362,7 +364,8 @@ let compare_unary_primitive p1 p2 =
     | Box_number _
     | Project_closure _
     | Move_within_set_of_closures _
-    | Project_var _), _ ->
+    | Project_var _
+    | Boolean_not), _ ->
     Pervasives.compare (unary_primitive_numbering p1)
       (unary_primitive_numbering p2)
 
@@ -409,6 +412,7 @@ let print_unary_primitive ppf p =
   | Project_var by_closure ->
     Format.fprintf ppf "(project_var@ %a)"
       (Closure_id.Map.print Var_within_closure.print) by_closure
+  | Boolean_not -> fprintf ppf "not"
 
 let arg_kind_of_unary_primitive p =
   match p with
@@ -434,6 +438,7 @@ let arg_kind_of_unary_primitive p =
   | Project_closure _
   | Move_within_set_of_closures _
   | Project_var _ -> K.value Must_scan
+  | Boolean_not -> K.value Can_scan
 
 let result_kind_of_unary_primitive p : result_kind =
   match p with
@@ -459,6 +464,7 @@ let result_kind_of_unary_primitive p : result_kind =
   | Project_closure _
   | Move_within_set_of_closures _
   | Project_var _ -> Singleton (K.value Must_scan)
+  | Boolean_not -> Singleton (K.value Can_scan)
 
 let effects_and_coeffects_of_unary_primitive p =
   match p with
@@ -493,6 +499,7 @@ let effects_and_coeffects_of_unary_primitive p =
   | Project_closure _
   | Move_within_set_of_closures _
   | Project_var _ -> No_effects, No_coeffects
+  | Boolean_not -> No_effects, No_coeffects
 
 type binary_int_arith_op =
   | Add | Sub | Mul | Div | Mod | And | Or | Xor

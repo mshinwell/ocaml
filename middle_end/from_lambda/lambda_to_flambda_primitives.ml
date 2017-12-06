@@ -52,16 +52,40 @@ let convert_mutable_flag (flag : Asttypes.mutable_flag)
   | Mutable -> Mutable
   | Immutable -> Immutable
 
+let convert_comparison (comp : Lambda.comparison) : P.comparison =
+  match comp with
+  | Ceq -> Eq
+  | Cneq -> Neq
+  | Clt -> Lt
+  | Cgt -> Gt
+  | Cle -> Le
+  | Cge -> Ge
+
+let boxable_number_of_boxed_integer (bint : Lambda.boxed_integer)
+  : Flambda_kind.Boxable_number.t =
+  match bint with
+  | Pnativeint -> Naked_nativeint
+  | Pint32 -> Naked_int32
+  | Pint64 -> Naked_int64
+
+let standard_int_of_boxed_integer (bint : Lambda.boxed_integer)
+  : Flambda_kind.Standard_int.t =
+  match bint with
+  | Pnativeint -> Naked_nativeint
+  | Pint32 -> Naked_int32
+  | Pint64 -> Naked_int64
+
+let convert_record_representation (repr : Types.record_representation)
+   : P.record_representation =
+  match repr with
+  | Record_regular -> Regular
+  | Record_float -> Float
+  | Record_unboxed inlined -> Unboxed { inlined }
+  | Record_inlined tag -> Inlined (Tag.Scannable.create_exn tag)
+  | Record_extension -> Extension
+
 (* let convert (prim : Lambda.primitive) (args : Simple.t list) : P.t = *)
 (*   match prim, args with *)
-(*   | Pmakeblock (tag, flag, shape), _ -> *)
-(*     let flag = convert_mutable_flag flag in *)
-(*     let arity = of_block_shape shape ~num_fields:(List.length args) in *)
-(*     Variadic (Make_block (Tag.Scannable.create_exn tag, flag, arity), args) *)
-(*   | Pnegint, [arg] -> *)
-(*     Unary (Int_arith (Flambda_kind.Standard_int.Tagged_immediate, Neg), arg) *)
-(*   | Paddint, [arg1; arg2] -> *)
-(*     Binary (Int_arith (Flambda_kind.Standard_int.Tagged_immediate, Add), arg1, arg2) *)
 (*   | Pfield field, [arg] -> *)
 (*     (\* CR pchambart: every load is annotated as mutable we must be *)
 (*        careful to update that when we know it is not. This should not *)
@@ -93,6 +117,10 @@ let convert_mutable_flag (flag : Asttypes.mutable_flag)
 
 [@@@ocaml.warning "-37"]
 
+type failure =
+  | Division_by_zero
+  | Index_out_of_bound
+
 type expr_primitive =
   | Unary of P.unary_primitive * simple_or_prim
   | Binary of P.binary_primitive * simple_or_prim * simple_or_prim
@@ -100,7 +128,7 @@ type expr_primitive =
   | Variadic of P.variadic_primitive * (simple_or_prim list)
   | Checked of { validity_condition : expr_primitive;
                  primitive : expr_primitive;
-                 failure : Ident.t; (* Predefined exception *)
+                 failure : failure; (* Predefined exception *)
                  dbg : Debuginfo.t }
 
 and simple_or_prim =
@@ -172,6 +200,28 @@ and bind_rec_primitive
     in
     bind_rec p dbg ~exception_continuation cont
 
+let box_float (arg : expr_primitive) : expr_primitive =
+  Unary (Box_number Flambda_kind.Boxable_number.Naked_float, Prim arg)
+let unbox_float (arg : simple_or_prim) : simple_or_prim =
+  Prim (Unary (Unbox_number Flambda_kind.Boxable_number.Naked_float, arg))
+let box_bint bi (arg : expr_primitive) : expr_primitive =
+  Unary (Box_number (boxable_number_of_boxed_integer bi), Prim arg)
+let unbox_bint bi (arg : simple_or_prim) : simple_or_prim =
+  Prim (Unary (Unbox_number (boxable_number_of_boxed_integer bi), arg))
+
+let tagged_immediate_as_naked_nativeint (_arg : simple_or_prim) : simple_or_prim =
+  failwith "TODO add a primitive for that"
+
+let bint_binary_prim bi prim arg1 arg2 =
+  box_bint bi
+    (Binary (Int_arith (standard_int_of_boxed_integer bi, prim),
+             unbox_bint bi arg1, unbox_bint bi arg2))
+let bint_shift bi prim arg1 arg2 =
+  box_bint bi
+    (Binary (Int_shift (standard_int_of_boxed_integer bi, prim),
+             unbox_bint bi arg1, unbox_bint bi arg2))
+
+
 let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
       (dbg : Debuginfo.t) : expr_primitive =
   let args = List.map (fun arg : simple_or_prim -> Simple arg) args in
@@ -180,8 +230,125 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     let flag = convert_mutable_flag flag in
     let arity = of_block_shape shape ~num_fields:(List.length args) in
     Variadic (Make_block (Tag.Scannable.create_exn tag, flag, arity), args)
+  | Popaque, [arg] ->
+    Unary (Opaque_identity, arg)
+  | Pduprecord (repr, num_fields), [arg] ->
+    Unary (Duplicate_record {
+      repr = convert_record_representation repr;
+      num_fields;
+    }, arg)
   | Pnegint, [arg] ->
-    Unary (Int_arith (Flambda_kind.Standard_int.Tagged_immediate, Neg), arg)
+    Unary (Int_arith (I.Tagged_immediate, Neg), arg)
+  | Paddint, [arg1; arg2] ->
+    Binary (Int_arith (I.Tagged_immediate, Add), arg1, arg2)
+  | Psubint, [arg1; arg2] ->
+    Binary (Int_arith (I.Tagged_immediate, Sub), arg1, arg2)
+  | Pmulint, [arg1; arg2] ->
+    Binary (Int_arith (I.Tagged_immediate, Mul), arg1, arg2)
+  | Pandint, [arg1; arg2] ->
+    Binary (Int_arith (I.Tagged_immediate, And), arg1, arg2)
+  | Porint, [arg1; arg2] ->
+    Binary (Int_arith (I.Tagged_immediate, Or), arg1, arg2)
+  | Pxorint, [arg1; arg2] ->
+    Binary (Int_arith (I.Tagged_immediate, Xor), arg1, arg2)
+  | Plslint, [arg1; arg2] ->
+    Binary (Int_shift (I.Tagged_immediate, Lsl), arg1, arg2)
+  | Plsrint, [arg1; arg2] ->
+    Binary (Int_shift (I.Tagged_immediate, Lsr), arg1, arg2)
+  | Pasrint, [arg1; arg2] ->
+    Binary (Int_shift (I.Tagged_immediate, Asr), arg1, arg2)
+  | Pnot, [arg] ->
+    Unary (Boolean_not, arg)
+  | Pintcomp comp, [arg1; arg2] ->
+    Binary (Int_comp (I.Tagged_immediate, convert_comparison comp), arg1, arg2)
+  | Pintoffloat Boxed, [arg] ->
+    Unary (Int_of_float, unbox_float arg)
+  | Pfloatofint Boxed, [arg] ->
+    box_float (Unary (Float_of_int, arg))
+  | Pnegfloat Boxed, [arg] ->
+    box_float (Unary (Float_arith Neg, unbox_float arg))
+  | Pabsfloat Boxed, [arg] ->
+    box_float (Unary (Float_arith Abs, unbox_float arg))
+  | Paddfloat Boxed, [arg1; arg2] ->
+    box_float (Binary (Float_arith Add, unbox_float arg1, unbox_float arg2))
+  | Psubfloat Boxed, [arg1; arg2] ->
+    box_float (Binary (Float_arith Sub, unbox_float arg1, unbox_float arg2))
+  | Pmulfloat Boxed, [arg1; arg2] ->
+    box_float (Binary (Float_arith Mul, unbox_float arg1, unbox_float arg2))
+  | Pdivfloat Boxed, [arg1; arg2] ->
+    box_float (Binary (Float_arith Div, unbox_float arg1, unbox_float arg2))
+  | Pfloatcomp (comp, Boxed), [arg1; arg2] ->
+    Binary (Float_comp (convert_comparison comp),
+            unbox_float arg1, unbox_float arg2)
+  | Pstringlength, [arg] ->
+    Unary (String_length String, arg)
+  | Pbyteslength, [arg] ->
+    Unary (String_length Bytes, arg)
+  | Pstringrefu, [arg1; arg2] ->
+    Binary (String_load Eight, arg1, arg2)
+  | Pbytesrefu, [arg1; arg2] ->
+    Binary (String_load Eight, arg1, arg2)
+  | (Pstringrefs | Pbytesrefs), [arg1; arg2] ->
+    Checked {
+      primitive = Binary (String_load Eight, arg1, arg2);
+      validity_condition =
+        Binary (Int_comp_unsigned Lt,
+                (* CR pchambart:
+                   Int_comp_unsigned assumes that the arguments are naked
+                   integers, but it is correct for tagged integers too as
+                   untagging of both arguments doesn't change the result. *)
+                tagged_immediate_as_naked_nativeint arg2,
+                tagged_immediate_as_naked_nativeint
+                  (Prim (Unary (String_length String, arg1))));
+      failure = Index_out_of_bound;
+      dbg;
+    }
+  | Pisint, [arg] ->
+    Unary (Is_int, arg)
+  | Pgettag, [arg] ->
+    Unary (Get_tag, arg)
+  | Pisout, [arg1; arg2] ->
+    Binary (Int_comp_unsigned Lt,
+            tagged_immediate_as_naked_nativeint arg1,
+            tagged_immediate_as_naked_nativeint arg2)
+  | Pbintofint bi, [arg] ->
+    let dst = standard_int_of_boxed_integer bi in
+    Unary (
+      Box_number
+        (boxable_number_of_boxed_integer bi),
+      Prim (Unary (Int_conv { src = I.Tagged_immediate; dst }, arg)))
+  | Pintofbint bi, [arg] ->
+    let src = standard_int_of_boxed_integer bi in
+    Unary (
+      Int_conv { src; dst = I.Tagged_immediate },
+      Prim (Unary (Unbox_number (boxable_number_of_boxed_integer bi), arg)))
+  | Pnegbint bi, [arg] ->
+    box_bint bi (Unary (Int_arith (standard_int_of_boxed_integer bi, Neg), unbox_bint bi arg))
+  | Paddbint bi, [arg1; arg2] ->
+    bint_binary_prim bi Add arg1 arg2
+  | Psubbint bi, [arg1; arg2] ->
+    bint_binary_prim bi Sub arg1 arg2
+  | Pmulbint bi, [arg1; arg2] ->
+    bint_binary_prim bi Mul arg1 arg2
+  | Pandbint bi, [arg1; arg2] ->
+    bint_binary_prim bi And arg1 arg2
+  | Porbint bi, [arg1; arg2] ->
+    bint_binary_prim bi Or arg1 arg2
+  | Pxorbint bi, [arg1; arg2] ->
+    bint_binary_prim bi Xor arg1 arg2
+  | Plslbint bi, [arg1; arg2] ->
+    bint_shift bi Lsl arg1 arg2
+  | Plsrbint bi, [arg1; arg2] ->
+    bint_shift bi Lsr arg1 arg2
+  | Pasrbint bi, [arg1; arg2] ->
+    bint_shift bi Asr arg1 arg2
+  | Poffsetint n, [arg] ->
+    let const =
+      Simple.const
+        (Simple.Const.Tagged_immediate
+           (Immediate.int (Targetint.of_int n)))
+    in
+    Binary (Int_arith (I.Tagged_immediate, Add), arg, Simple const)
   | Pfield field, [arg] ->
     (* CR pchambart: every load is annotated as mutable we must be
        careful to update that when we know it is not. This should not
@@ -205,8 +372,6 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     in
     Binary (Block_set (field, set_kind, init_or_assign), block, value)
 
-  (* Test checked *)
-
   | Pdivint Safe, [arg1; arg2] ->
     Checked {
       primitive =
@@ -217,21 +382,79 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
                   (Simple.const
                      (Simple.Const.Tagged_immediate
                         (Immediate.int (Targetint.zero)))));
-      failure = Predef.ident_division_by_zero;
+      failure = Division_by_zero;
       dbg;
     }
 
+  | Pmodint Safe, [arg1; arg2] ->
+    Checked {
+      primitive =
+        Binary (Int_arith (I.Tagged_immediate, Mod), arg1, arg2);
+      validity_condition =
+        Binary (Int_comp (I.Tagged_immediate, Eq), arg2,
+                Simple
+                  (Simple.const
+                     (Simple.Const.Tagged_immediate
+                        (Immediate.int (Targetint.zero)))));
+      failure = Division_by_zero;
+      dbg;
+    }
 
-  | ( Pdivint Unsafe | Psetglobal _ | Ploc _ ), _ ->
+  | ( Pdivint Unsafe | Pmodint Unsafe | Psetglobal _ | Ploc _
+    | Pintoffloat Unboxed | Pfloatofint Unboxed
+    | Pnegfloat Unboxed | Pabsfloat Unboxed
+    | Paddfloat Unboxed | Psubfloat Unboxed | Pmulfloat Unboxed
+    | Pdivfloat Unboxed | Pfloatcomp (_, Unboxed)
+    | Preturn
+    ), _ ->
     Misc.fatal_errorf "Closure_conversion.convert_primitive: \
                        Primitive %a shouldn't be here"
       Printlambda.primitive prim
-  | ( Pfield _ | Pnegint | Pdivint _ | Psetfield _ ), _ ->
-    Misc.fatal_errorf "Closure_conversion.convert_primitive: \
-                       Wrong arrity for %a: %i"
-      Printlambda.primitive prim (List.length args)
 
-  | ( Pidentity | Pignore | Prevapply | Pdirapply ), _ ->
+  | ( Pfield _ | Pnegint | Pnot | Poffsetint _
+    | Pintoffloat Boxed | Pfloatofint Boxed
+    | Pnegfloat Boxed | Pabsfloat Boxed | Pstringlength
+    | Pbyteslength | Pisint | Pgettag
+    | Pbintofint _
+    | Pintofbint _
+    | Pnegbint _
+    | Popaque
+    | Pduprecord _
+    ),
+    ([] |  _ :: _ :: _) ->
+    Misc.fatal_errorf "Closure_conversion.convert_primitive: \
+                       Wrong arity for unary primitive %a: %i"
+      Printlambda.primitive prim (List.length args)
+  | ( Paddint | Psubint | Pmulint
+    | Pandint | Porint | Pxorint | Plslint | Plsrint | Pasrint
+    | Pdivint _ | Pmodint _ | Psetfield _ | Pintcomp _
+    | Paddfloat Boxed | Psubfloat Boxed | Pmulfloat Boxed
+    | Pdivfloat Boxed | Pfloatcomp (_, Boxed)
+    | Pstringrefu | Pbytesrefu
+    | Pstringrefs | Pbytesrefs
+    | Pisout
+    | Paddbint _
+    | Psubbint _
+    | Pmulbint _
+    | Pandbint _
+    | Porbint _
+    | Pxorbint _
+    | Plslbint _
+    | Plsrbint _
+    | Pasrbint _
+    ),
+    ([] | [_] | _ :: _ :: _ :: _) ->
+    Misc.fatal_errorf "Closure_conversion.convert_primitive: \
+                       Wrong arity for binary primitive %a: %i"
+      Printlambda.primitive prim (List.length args)
+  (* | (  ), _ -> *)
+  (*   Misc.fatal_errorf "Closure_conversion.convert_primitive: \ *)
+  (*                      Wrong arity for %a: %i" *)
+  (*     Printlambda.primitive prim (List.length args) *)
+
+  | ( Pidentity | Pignore | Prevapply | Pdirapply | Psequand
+    | Psequor
+    ), _ ->
     Misc.fatal_errorf "[%a] should have been removed by \
       [Prepare_lambda.prepare]"
       Printlambda.primitive prim
@@ -248,43 +471,12 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     | Psetfield_computed _
     | Pfloatfield _
     | Psetfloatfield _
-    | Pduprecord _
     | Plazyforce
     | Pccall _
     | Pccall_unboxed _
     | Praise _
-    | Psequand
-    | Psequor
-    | Pnot
-    | Paddint
-    | Psubint
-    | Pmulint
-    | Pmodint _
-    | Pandint
-    | Porint
-    | Pxorint
-    | Plslint
-    | Plsrint
-    | Pasrint
-    | Pintcomp _
-    | Poffsetint _
     | Poffsetref _
-    | Pintoffloat _
-    | Pfloatofint _
-    | Pnegfloat _
-    | Pabsfloat _
-    | Paddfloat _
-    | Psubfloat _
-    | Pmulfloat _
-    | Pdivfloat _
-    | Pfloatcomp _
-    | Pstringlength
-    | Pstringrefu
-    | Pstringrefs
-    | Pbyteslength
-    | Pbytesrefu
     | Pbytessetu
-    | Pbytesrefs
     | Pbytessets
     | Pmakearray _
     | Pduparray _
@@ -293,25 +485,12 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     | Parraysetu _
     | Parrayrefs _
     | Parraysets _
-    | Pisint
-    | Pgettag
-    | Pisout
     | Pbittest
-    | Pbintofint _
-    | Pintofbint _
     | Pcvtbint _
-    | Pnegbint _
-    | Paddbint _
-    | Psubbint _
-    | Pmulbint _
+
     | Pdivbint _
     | Pmodbint _
-    | Pandbint _
-    | Porbint _
-    | Pxorbint _
-    | Plslbint _
-    | Plsrbint _
-    | Pasrbint _
+
     | Pbintcomp _
     | Pbigarrayref _
     | Pbigarrayset _
@@ -332,8 +511,6 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     | Pbswap16
     | Pbbswap _
     | Pint_as_pointer
-    | Popaque
-    | Preturn
     | Pmake_unboxed_tuple
     | Punboxed_tuple_field _
     | Punbox_float

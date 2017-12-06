@@ -143,6 +143,7 @@ type unary_primitive =
   | Project_var of Var_within_closure.t Closure_id.Map.t
     (** For each possible value of closure, get a different field of the
         closure. *)
+  | Boolean_not
 
 (** Binary arithmetic operations on integers. *)
 type binary_int_arith_op =

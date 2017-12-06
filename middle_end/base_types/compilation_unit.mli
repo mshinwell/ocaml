@@ -33,5 +33,7 @@ val get_current_id_exn : unit -> Ident.t
 val string_for_printing : t -> string
 
 val predefined_exception : unit -> t
+val external_symbols : unit -> t
 
 val is_predefined_exception : t -> bool
+val is_external_symbols : t -> bool

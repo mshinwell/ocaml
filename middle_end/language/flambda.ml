@@ -1273,7 +1273,8 @@ end = struct
       | Array_length _, _
       | Bigarray_length _, _
       | Unbox_number _, _
-      | Box_number _, _ -> ()  (* None of these contain names. *)
+      | Box_number _, _
+      | Boolean_not, _ -> ()  (* None of these contain names. *)
       end
     | Binary (prim, x0, x1) ->
       let kind0, kind1 = P.args_kind_of_binary_primitive prim in
