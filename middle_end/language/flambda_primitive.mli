@@ -105,6 +105,8 @@ type unary_primitive =
   | Is_int
   | Get_tag
   | String_length of string_or_bytes
+  (* CR pchambart: There are 32 and 64 bits swap, that probably need
+     to be represented differently *)
   | Swap_byte_endianness of Flambda_kind.Standard_int.t
   (** [Swap_byte_endianness] on a [Tagged_immediate] treats the immediate as
       encoding a 16-bit quantity (described in the least significant 16 bits
