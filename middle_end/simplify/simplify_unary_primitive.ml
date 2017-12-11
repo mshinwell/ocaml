@@ -1117,7 +1117,7 @@ let simplify_bigarray_length env r prim bigarray ~dimension dbg =
     (E.type_accessor env T.prove_of_kind_value_with_expected_value_kind
       Definitely_pointer) bigarray
   in
-  begin match proof with
+  match proof with
   | Proved _ ->
     let named : Named.t = Prim (Unary (prim, bigarray), dbg) in
     named, T.unknown result_kind Other
