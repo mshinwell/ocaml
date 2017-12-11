@@ -2220,8 +2220,6 @@ let prove_lengths_of_arrays_or_blocks ~importer ~type_of_name t
     Misc.fatal_errorf "Wrong kind for something claimed to be an array \
         or structured block: %a"
       print t
-  in
-  result
 
 let prove_is_tagged_immediate ~importer ~type_of_name t : bool proof =
   let t_evaluated, _canonical_name =
