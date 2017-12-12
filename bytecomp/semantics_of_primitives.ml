@@ -74,12 +74,8 @@ let for_primitive (prim : Lambda.primitive) =
   | Psubfloat _
   | Pmulfloat _
   | Pdivfloat _
-  | Pfloatcomp _
-  | Puntag_immediate | Ptag_immediate
-  | Punbox_float | Punbox_int32 | Punbox_int64 | Punbox_nativeint ->
+  | Pfloatcomp _ ->
     No_effects, No_coeffects
-  | Pbox_float | Pbox_int32 | Pbox_int64 | Pbox_nativeint ->
-    Only_generative_effects, No_coeffects
   | Pstringlength | Pbyteslength
   | Parraylength _ ->
       No_effects, Has_coeffects  (* That old chestnut: [Obj.truncate]. *)
@@ -169,8 +165,6 @@ let for_primitive (prim : Lambda.primitive) =
       Misc.fatal_error "Pread_mutable should only exist between \
         Prepare_lambda and Closure_conversion"
   | Preturn -> Arbitrary_effects, Has_coeffects
-  | Pmake_unboxed_tuple | Punboxed_tuple_field _ ->
-    No_effects, No_coeffects
 
 (* CR pchambart: added to do the transition, it will replace 'for_primitive' *)
 let for_backend_primitive _ = assert false
@@ -185,7 +179,6 @@ type return_type =
  
 let return_type_of_primitive (prim : Lambda.primitive) =
   match prim with
-  | Pbox_float
   | Pfloatofint Boxed
   | Pnegfloat Boxed
   | Pabsfloat Boxed
@@ -199,7 +192,6 @@ let return_type_of_primitive (prim : Lambda.primitive) =
   | Pbigarrayref(_, _, (Pbigarray_float32 | Pbigarray_float64), _)
   | Pccall { prim_native_repr_res = Unboxed_float } ->
       Boxed_float
-  | Punbox_float
   | Pfloatofint Unboxed
   | Pnegfloat Unboxed
   | Pabsfloat Unboxed

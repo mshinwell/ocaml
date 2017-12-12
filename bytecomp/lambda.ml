@@ -165,19 +165,6 @@ type primitive =
   (* Marking of return points: only used between [Flambda_to_clambda] and
      [Un_anf]. *)
   | Preturn
-  (* Construction and destruction of groups of multiple function results *)
-  | Pmake_unboxed_tuple
-  | Punboxed_tuple_field of int
-  | Punbox_float
-  | Pbox_float
-  | Punbox_int32
-  | Pbox_int32
-  | Punbox_int64
-  | Pbox_int64
-  | Punbox_nativeint
-  | Pbox_nativeint
-  | Puntag_immediate
-  | Ptag_immediate
 
 and comparison =
     Ceq | Cneq | Clt | Cgt | Cle | Cge
@@ -689,46 +676,6 @@ let rec map f lam =
         Lifused (v, map f e)
   in
   f lam
-
-(* let unboxed_prim = function *)
-(*   | Pnegfloat Boxed -> Pnegfloat Unboxed *)
-(*   | Pabsfloat Boxed -> Pabsfloat Unboxed *)
-(*   | Paddfloat Boxed -> Paddfloat Unboxed *)
-(*   | Psubfloat Boxed -> Psubfloat Unboxed *)
-(*   | Pmulfloat Boxed -> Pmulfloat Unboxed *)
-(*   | Pdivfloat Boxed -> Pdivfloat Unboxed *)
-(*   | Pfloatcomp (cmp, Boxed) -> Pfloatcomp (cmp, Unboxed) *)
-(*   | Pintoffloat Boxed -> Pintoffloat Unboxed *)
-(*   | Pfloatofint Boxed -> Pfloatofint Unboxed *)
-(*   | Pbigarrayset(unsafe, dim, (Pbigarray_float32 | Pbigarray_float64 as kind), *)
-(*                  (Pbigarray_c_layout | Pbigarray_fortran_layout as layout), *)
-(*                  Boxed) -> *)
-(*       Pbigarrayset(unsafe, dim, kind, layout, Unboxed) *)
-(*   | Pbigarrayref(unsafe, dim, (Pbigarray_float32 | Pbigarray_float64 as kind), *)
-(*                  (Pbigarray_c_layout | Pbigarray_fortran_layout as layout), *)
-(*                  Boxed) -> *)
-(*       Pbigarrayref(unsafe, dim, kind, layout, Unboxed) *)
-(*   | Pccall descr -> Pccall_unboxed descr *)
-(*   | _ -> *)
-(*       (\* CR mshinwell: maybe this should return an option? *\) *)
-(*       Misc.fatal_error "Lambda.unboxed_prim: no possible unboxing \ *)
-(*                         for the primitive" *)
-
-(* let returns_unboxed_value = function *)
-(*   | Punbox_float *)
-(*   | Pnegfloat Unboxed *)
-(*   | Pabsfloat Unboxed *)
-(*   | Paddfloat Unboxed *)
-(*   | Psubfloat Unboxed *)
-(*   | Pmulfloat Unboxed *)
-(*   | Pdivfloat Unboxed *)
-(*   | Pfloatofint Unboxed *)
-(*   | Pbigarrayref(_, _, _, _, Unboxed) *)
-(*   | Pccall_unboxed *)
-(*       { Primitive.prim_native_repr_res = Primitive.Unboxed_float } -> *)
-(*       true *)
-(*   | _ -> *)
-(*       false *)
 
 (* To let-bind expressions to variables *)
 

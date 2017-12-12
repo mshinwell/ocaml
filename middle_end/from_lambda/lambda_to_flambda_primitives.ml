@@ -625,19 +625,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
 
     | Pbswap16
     | Pbbswap _
-    | Pint_as_pointer
-    | Pmake_unboxed_tuple
-    | Punboxed_tuple_field _
-    | Punbox_float
-    | Pbox_float
-    | Punbox_int32
-    | Pbox_int32
-    | Punbox_int64
-    | Pbox_int64
-    | Punbox_nativeint
-    | Pbox_nativeint
-    | Puntag_immediate
-    | Ptag_immediate ), _
+    | Pint_as_pointer ), _
     -> failwith "TODO"
 
 let convert_and_bind

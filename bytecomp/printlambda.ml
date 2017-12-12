@@ -336,18 +336,6 @@ let primitive ppf = function
   | Popaque -> fprintf ppf "opaque"
   | Pread_mutable i -> fprintf ppf "read_mutable %a" Ident.print i
   | Preturn -> fprintf ppf "return"
-  | Pmake_unboxed_tuple -> fprintf ppf "make_unboxed_tuple"
-  | Punboxed_tuple_field i -> fprintf ppf "unboxed_tuple_field %d" i
-  | Punbox_float -> fprintf ppf "unbox_float"
-  | Pbox_float -> fprintf ppf "box_float"
-  | Punbox_int32 -> fprintf ppf "unbox_int32"
-  | Pbox_int32 -> fprintf ppf "box_int32"
-  | Punbox_int64 -> fprintf ppf "unbox_int64"
-  | Pbox_int64 -> fprintf ppf "box_int64"
-  | Punbox_nativeint -> fprintf ppf "unbox_nativeint"
-  | Pbox_nativeint -> fprintf ppf "box_nativeint"
-  | Puntag_immediate -> fprintf ppf "untag"
-  | Ptag_immediate -> fprintf ppf "tag"
 
 let name_of_primitive = function
   | Pidentity -> "Pidentity"
@@ -455,18 +443,6 @@ let name_of_primitive = function
   | Popaque -> "Popaque"
   | Pread_mutable _ -> "Pread_mutable"
   | Preturn -> "Preturn"
-  | Pmake_unboxed_tuple -> "Pmake_unboxed_tuple"
-  | Punboxed_tuple_field _ -> "Punboxed_tuple_field"
-  | Punbox_float -> "Punbox_float"
-  | Pbox_float -> "Pbox_float"
-  | Punbox_int32 -> "unbox_int32"
-  | Pbox_int32 -> "box_int32"
-  | Punbox_int64 -> "unbox_int64"
-  | Pbox_int64 -> "box_int64"
-  | Punbox_nativeint -> "unbox_nativeint"
-  | Pbox_nativeint -> "box_nativeint"
-  | Puntag_immediate -> "untag"
-  | Ptag_immediate -> "tag"
 
 let function_attribute ppf { inline; specialise; is_a_functor; stub } =
   if is_a_functor then
