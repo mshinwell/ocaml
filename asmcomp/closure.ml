@@ -209,7 +209,15 @@ let lambda_smaller lam threshold =
   with Exit ->
     false
 
+(* CR pchambart: find a good way to avoid duplicating semantics of
+   primitives here *)
 let is_pure_prim p =
+  let open Semantics_of_primitives in
+  match Semantics_of_primitives.for_primitive p with
+  | (No_effects | Only_generative_effects), _ -> true
+  | Arbitrary_effects, _ -> false
+
+let is_pure_backend_prim p =
   let open Semantics_of_primitives in
   match Semantics_of_primitives.for_backend_primitive p with
   | (No_effects | Only_generative_effects), _ -> true
@@ -221,7 +229,7 @@ let is_pure_prim p =
 let rec is_pure_clambda = function
     Uvar _ -> true
   | Uconst _ -> true
-  | Uprim(p, args, _) -> is_pure_prim p && List.for_all is_pure_clambda args
+  | Uprim(p, args, _) -> is_pure_backend_prim p && List.for_all is_pure_clambda args
   | _ -> false
 
 (* Simplify primitive operations on known arguments *)
@@ -713,7 +721,6 @@ let rec is_pure = function
     Lvar _ -> true
   | Lconst _ -> true
   | Lprim(p, args,_) ->
-      let p = Backend_primitives_from_lambda.convert p in
       is_pure_prim p && List.for_all is_pure args
   | Levent(lam, _ev) -> is_pure lam
   | _ -> false
