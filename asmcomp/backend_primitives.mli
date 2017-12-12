@@ -129,6 +129,8 @@ type t =
   | Pasrbint of boxed_integer
   | Pbintcomp of boxed_integer * comparison
   (* Operations on big arrays: (unsafe, #dimensions, kind, layout, boxed) *)
+  (* The boxing annotation is required because for not type annotated
+     version, there is no way to unbox it. *)
   | Pbigarrayref of bool * int * bigarray_kind * bigarray_layout * boxed
   | Pbigarrayset of bool * int * bigarray_kind * bigarray_layout * boxed
   (* size of the nth dimension of a big array *)
