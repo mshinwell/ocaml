@@ -108,9 +108,9 @@ type memory_chunk =
 and operation =
     Capply of machtype array
   | Cextcall of string * machtype * bool * label option
-  | Cload of memory_chunk * Asttypes.mutable_flag
+  | Cload of memory_chunk * Backend_primitives.mutable_flag
   | Calloc
-  | Cstore of memory_chunk * Lambda.initialization_or_assignment
+  | Cstore of memory_chunk * Backend_primitives.initialization_or_assignment
   | Cmultistore
   | Cmultiload of int
   | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi

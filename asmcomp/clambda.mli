@@ -46,7 +46,7 @@ and ulambda =
   | Ugeneric_apply of ulambda * ulambda list * Debuginfo.t
   | Uclosure of ufunction list * ulambda list
   | Uoffset of ulambda * int
-  | Ulet of mutable_flag * value_kind * Ident.t * ulambda * ulambda
+  | Ulet of Backend_primitives.mutable_flag * Backend_primitives.value_kind * Ident.t * ulambda * ulambda
   | Uletrec of (Ident.t * ulambda) list * ulambda
   | Uprim of Backend_primitives.t * ulambda list * Debuginfo.t
   | Uswitch of ulambda * ulambda_switch * Debuginfo.t

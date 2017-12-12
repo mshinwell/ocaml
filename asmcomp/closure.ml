@@ -269,7 +269,7 @@ let simplif_arith_prim_pure fpc p (args, approxs) dbg =
       | Pnot -> make_const_bool (n1 = 0)
       | Pnegint -> make_const_int (- n1)
       | Poffsetint n -> make_const_int (n + n1)
-      | Pfloatofint Boxed when fpc -> make_const_float (float_of_int n1)
+      | Pfloatofint when fpc -> make_const_float (float_of_int n1)
       | Pbintofint Pnativeint -> make_const_natint (Nativeint.of_int n1)
       | Pbintofint Pint32 -> make_const_int32 (Int32.of_int n1)
       | Pbintofint Pint64 -> make_const_int64 (Int64.of_int n1)
@@ -303,20 +303,20 @@ let simplif_arith_prim_pure fpc p (args, approxs) dbg =
   (* float *)
   | [Value_const(Uconst_ref(_, Some (Uconst_float n1)))] when fpc ->
       begin match p with
-      | Pintoffloat Boxed -> make_const_int (int_of_float n1)
-      | Pnegfloat Boxed -> make_const_float (-. n1)
-      | Pabsfloat Boxed -> make_const_float (abs_float n1)
+      | Pintoffloat -> make_const_int (int_of_float n1)
+      | Pnegfloat -> make_const_float (-. n1)
+      | Pabsfloat -> make_const_float (abs_float n1)
       | _ -> default
       end
   (* float, float *)
   | [Value_const(Uconst_ref(_, Some (Uconst_float n1)));
      Value_const(Uconst_ref(_, Some (Uconst_float n2)))] when fpc ->
       begin match p with
-      | Paddfloat Boxed -> make_const_float (n1 +. n2)
-      | Psubfloat Boxed -> make_const_float (n1 -. n2)
-      | Pmulfloat Boxed -> make_const_float (n1 *. n2)
-      | Pdivfloat Boxed -> make_const_float (n1 /. n2)
-      | Pfloatcomp (c, Boxed)  -> make_comparison c n1 n2
+      | Paddfloat -> make_const_float (n1 +. n2)
+      | Psubfloat -> make_const_float (n1 -. n2)
+      | Pmulfloat -> make_const_float (n1 *. n2)
+      | Pdivfloat -> make_const_float (n1 /. n2)
+      | Pfloatcomp c  -> make_comparison c n1 n2
       | _ -> default
       end
   (* nativeint *)
@@ -703,7 +703,7 @@ let rec bind_params_rec loc fpc subst params args body =
         in
         let body' =
           bind_params_rec loc fpc (Tbl.add p1 u2 subst) pl al body in
-        if occurs_var p1 body then Ulet(Immutable, Pgenval, p1', u1, body')
+        if occurs_var p1 body then Ulet(P.Immutable, P.Pgenval, p1', u1, body')
         else if no_effects a1 then body'
         else Usequence(a1, body')
       end
@@ -883,7 +883,7 @@ let rec close fenv cenv = function
               [] -> body
             | (arg1, arg2) :: args ->
               iter args
-                (Ulet (Immutable, Pgenval, arg1, arg2, body))
+                (Ulet (P.Immutable, P.Pgenval, arg1, arg2, body))
         in
         let internal_args =
           (List.map (fun (arg1, _arg2) -> Lvar arg1) first_args)
@@ -906,7 +906,7 @@ let rec close fenv cenv = function
         in
         let new_fun =
           iter first_args
-            (Ulet (Immutable, Pgenval, funct_var, ufunct, new_fun))
+            (Ulet (P.Immutable, P.Pgenval, funct_var, ufunct, new_fun))
         in
         warning_if_forced_inline ~loc ~attribute "Partial application";
         (new_fun, approx)
@@ -926,7 +926,7 @@ let rec close fenv cenv = function
           in
           let result =
             List.fold_left (fun body (id, defining_expr) ->
-                Ulet (Immutable, Pgenval, id, defining_expr, body))
+                Ulet (P.Immutable, P.Pgenval, id, defining_expr, body))
               body
               args
           in
@@ -943,17 +943,18 @@ let rec close fenv cenv = function
       (Usend(kind, umet, uobj, close_list fenv cenv args, dbg),
        Value_unknown)
   | Llet(str, kind, id, lam, body) ->
+      let kind = Backend_primitives_from_lambda.value_kind kind in
       let (ulam, alam) = close_named fenv cenv id lam in
       begin match (str, alam) with
         (Variable, _) ->
           let (ubody, abody) = close fenv cenv body in
-          (Ulet(Mutable, kind, id, ulam, ubody), abody)
+          (Ulet(P.Mutable, kind, id, ulam, ubody), abody)
       | (_, Value_const _)
         when str = Alias || is_pure lam ->
           close (Tbl.add id alam fenv) cenv body
       | (_, _) ->
           let (ubody, abody) = close (Tbl.add id alam fenv) cenv body in
-          (Ulet(Immutable, kind, id, ulam, ubody), abody)
+          (Ulet(P.Immutable, kind, id, ulam, ubody), abody)
       end
   | Lletrec(defs, body) ->
       if List.for_all
@@ -973,7 +974,7 @@ let rec close fenv cenv = function
             (fun (id, pos, _approx) sb ->
               Tbl.add id (Uoffset(Uvar clos_ident, pos)) sb)
             infos Tbl.empty in
-        (Ulet(Immutable, Pgenval, clos_ident, clos,
+        (Ulet(P.Immutable, P.Pgenval, clos_ident, clos,
               substitute Location.none !Clflags.float_const_prop sb ubody),
          approx)
       end else begin

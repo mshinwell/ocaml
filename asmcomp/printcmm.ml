@@ -18,6 +18,8 @@
 open Format
 open Cmm
 
+module P = Backend_primitives
+
 let rec_flag ppf = function
   | Nonrecursive -> ()
   | Recursive -> fprintf ppf " rec"
@@ -68,15 +70,15 @@ let operation d = function
   | Capply _ty -> "app" ^ Debuginfo.to_string d
   | Cextcall(lbl, _ty, _alloc, _) ->
       Printf.sprintf "extcall \"%s\"%s" lbl (Debuginfo.to_string d)
-  | Cload (c, Asttypes.Immutable) -> Printf.sprintf "load %s" (chunk c)
-  | Cload (c, Asttypes.Mutable) -> Printf.sprintf "load_mut %s" (chunk c)
+  | Cload (c, P.Immutable) -> Printf.sprintf "load %s" (chunk c)
+  | Cload (c, P.Mutable) -> Printf.sprintf "load_mut %s" (chunk c)
   | Calloc -> "alloc" ^ Debuginfo.to_string d
   | Cstore (c, init) ->
     let init =
       match init with
-      | Lambda.Heap_initialization -> "(heap-init)"
-      | Lambda.Root_initialization -> "(root-init)"
-      | Lambda.Assignment -> ""
+      | P.Heap_initialization -> "(heap-init)"
+      | P.Root_initialization -> "(root-init)"
+      | P.Assignment -> ""
     in
     Printf.sprintf "store %s%s" (chunk c) init
   | Cmultiload n -> Printf.sprintf "multiload %d" n

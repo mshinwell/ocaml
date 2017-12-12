@@ -18,12 +18,14 @@ open Format
 open Asttypes
 open Clambda
 
+module P = Backend_primitives
+
 let mutable_flag = function
-  | Mutable-> "[mut]"
-  | Immutable -> ""
+  | P.Mutable-> "[mut]"
+  | P.Immutable -> ""
 
 let value_kind =
-  let open Lambda in
+  let open Backend_primitives in
   function
   | Pgenval -> ""
   | Pintval -> ":int"
