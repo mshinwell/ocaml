@@ -515,7 +515,6 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     | Pdivfloat Unboxed | Pfloatcomp (_, Unboxed)
     | Praise _
     | Plazyforce
-    | Preturn
     | Pccall _
     | Pccall_unboxed _
     ), _ ->

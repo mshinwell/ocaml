@@ -170,9 +170,6 @@ type primitive =
   (* Reading of an identifier bound with a [Variable] let.  Uses of this
      primitive only exist during the conversion of Lambda to Flambda. *)    
   | Pread_mutable of Ident.t
-  (* Marking of return points: only used between [Flambda_to_clambda] and
-     [Un_anf]. *)
-  | Preturn
 
 and comparison =
     Ceq | Cneq | Clt | Cgt | Cle | Cge

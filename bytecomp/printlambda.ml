@@ -335,7 +335,6 @@ let primitive ppf = function
   | Pint_as_pointer -> fprintf ppf "int_as_pointer"
   | Popaque -> fprintf ppf "opaque"
   | Pread_mutable i -> fprintf ppf "read_mutable %a" Ident.print i
-  | Preturn -> fprintf ppf "return"
 
 let name_of_primitive = function
   | Pidentity -> "Pidentity"
@@ -442,7 +441,6 @@ let name_of_primitive = function
   | Pint_as_pointer -> "Pint_as_pointer"
   | Popaque -> "Popaque"
   | Pread_mutable _ -> "Pread_mutable"
-  | Preturn -> "Preturn"
 
 let function_attribute ppf { inline; specialise; is_a_functor; stub } =
   if is_a_functor then

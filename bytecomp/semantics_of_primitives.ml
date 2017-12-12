@@ -164,7 +164,6 @@ let for_primitive (prim : Lambda.primitive) =
   | Pread_mutable _ ->
       Misc.fatal_error "Pread_mutable should only exist between \
         Prepare_lambda and Closure_conversion"
-  | Preturn -> Arbitrary_effects, Has_coeffects
 
 (* CR pchambart: added to do the transition, it will replace 'for_primitive' *)
 let for_backend_primitive _ = assert false
