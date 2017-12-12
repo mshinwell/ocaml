@@ -138,9 +138,9 @@ type primitive =
   | Plsrbint of boxed_integer
   | Pasrbint of boxed_integer
   | Pbintcomp of boxed_integer * comparison
-  (* Operations on big arrays: (unsafe, #dimensions, kind, layout, boxed) *)
-  | Pbigarrayref of bool * int * bigarray_kind * bigarray_layout * boxed
-  | Pbigarrayset of bool * int * bigarray_kind * bigarray_layout * boxed
+  (* Operations on big arrays: (unsafe, #dimensions, kind, layout) *)
+  | Pbigarrayref of bool * int * bigarray_kind * bigarray_layout
+  | Pbigarrayset of bool * int * bigarray_kind * bigarray_layout
   (* size of the nth dimension of a big array *)
   | Pbigarraydim of int
   (* load/set 16,32,64 bits from a string: (unsafe)*)
@@ -378,12 +378,6 @@ val negate_comparison : comparison -> comparison
 
 val default_function_attribute : function_attribute
 val default_stub_attribute : function_attribute
-
-(** Returns the version of the primitive working on unboxed values.
-    Raises if there is no such primitive. *)
-val unboxed_prim : primitive -> primitive
-
-val returns_unboxed_value : primitive -> bool
 
 (***********************)
 (* For static failures *)

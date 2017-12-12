@@ -21,6 +21,7 @@ open Primitive
 open Lambda
 open Switch
 open Clambda
+module P = Backend_primitives
 
 module Storer =
   Switch.Store
@@ -43,7 +44,7 @@ let rec split_list n l =
 let rec build_closure_env env_param pos = function
     [] -> Tbl.empty
   | id :: rem ->
-      Tbl.add id (Uprim(Pfield pos, [Uvar env_param], Debuginfo.none))
+      Tbl.add id (Uprim(P.Pfield pos, [Uvar env_param], Debuginfo.none))
               (build_closure_env env_param (pos+1) rem)
 
 (* Auxiliary for accessing globals.  We change the name of the global
@@ -52,7 +53,7 @@ let rec build_closure_env env_param pos = function
    contain the right names if the -for-pack option is active. *)
 
 let getglobal dbg id =
-  Uprim(Pgetglobal (Ident.create_persistent (Compilenv.symbol_for_global id)),
+  Uprim(P.Pgetglobal (Ident.create_persistent (Compilenv.symbol_for_global id)),
         [], dbg)
 
 (* Check if a variable occurs in a [clambda] term. *)
@@ -105,6 +106,7 @@ let occurs_var var u =
    some threshold *)
 
 let prim_size prim args =
+  let open Backend_primitives in
   match prim with
     Pidentity | Pbytes_to_string | Pbytes_of_string -> 0
   | Pgetglobal _ -> 1
@@ -135,8 +137,8 @@ let prim_size prim args =
   | Parrayrefs kind -> if kind = Pgenarray then 18 else 8
   | Parraysets kind -> if kind = Pgenarray then 22 else 10
   | Pbittest -> 3
-  | Pbigarrayref(_, ndims, _, _) -> 4 + ndims * 6
-  | Pbigarrayset(_, ndims, _, _) -> 4 + ndims * 6
+  | Pbigarrayref(_, ndims, _, _, _) -> 4 + ndims * 6
+  | Pbigarrayset(_, ndims, _, _, _) -> 4 + ndims * 6
   | _ -> 2 (* arithmetic and comparisons *)
 
 (* Very raw approximation of switch cost *)
@@ -209,7 +211,7 @@ let lambda_smaller lam threshold =
 
 let is_pure_prim p =
   let open Semantics_of_primitives in
-  match Semantics_of_primitives.for_primitive p with
+  match Semantics_of_primitives.for_backend_primitive p with
   | (No_effects | Only_generative_effects), _ -> true
   | Arbitrary_effects, _ -> false
 
@@ -232,6 +234,7 @@ let make_const_int n = make_const (Uconst_int n)
 let make_const_ptr n = make_const (Uconst_ptr n)
 let make_const_bool b = make_const_ptr(if b then 1 else 0)
 let make_comparison cmp x y =
+  let open Backend_primitives in
   make_const_bool
     (match cmp with
        Ceq -> x = y
@@ -249,6 +252,7 @@ let make_const_int64 n = make_const_ref (Uconst_int64 n)
    floating-point computations is allowed *)
 
 let simplif_arith_prim_pure fpc p (args, approxs) dbg =
+  let open Backend_primitives in
   let default = (Uprim(p, args, dbg), Value_unknown) in
   match approxs with
   (* int (or enumerated type) *)
@@ -257,7 +261,7 @@ let simplif_arith_prim_pure fpc p (args, approxs) dbg =
       | Pnot -> make_const_bool (n1 = 0)
       | Pnegint -> make_const_int (- n1)
       | Poffsetint n -> make_const_int (n + n1)
-      | Pfloatofint when fpc -> make_const_float (float_of_int n1)
+      | Pfloatofint Boxed when fpc -> make_const_float (float_of_int n1)
       | Pbintofint Pnativeint -> make_const_natint (Nativeint.of_int n1)
       | Pbintofint Pint32 -> make_const_int32 (Int32.of_int n1)
       | Pbintofint Pint64 -> make_const_int64 (Int64.of_int n1)
@@ -291,20 +295,20 @@ let simplif_arith_prim_pure fpc p (args, approxs) dbg =
   (* float *)
   | [Value_const(Uconst_ref(_, Some (Uconst_float n1)))] when fpc ->
       begin match p with
-      | Pintoffloat -> make_const_int (int_of_float n1)
-      | Pnegfloat -> make_const_float (-. n1)
-      | Pabsfloat -> make_const_float (abs_float n1)
+      | Pintoffloat Boxed -> make_const_int (int_of_float n1)
+      | Pnegfloat Boxed -> make_const_float (-. n1)
+      | Pabsfloat Boxed -> make_const_float (abs_float n1)
       | _ -> default
       end
   (* float, float *)
   | [Value_const(Uconst_ref(_, Some (Uconst_float n1)));
      Value_const(Uconst_ref(_, Some (Uconst_float n2)))] when fpc ->
       begin match p with
-      | Paddfloat -> make_const_float (n1 +. n2)
-      | Psubfloat -> make_const_float (n1 -. n2)
-      | Pmulfloat -> make_const_float (n1 *. n2)
-      | Pdivfloat -> make_const_float (n1 /. n2)
-      | Pfloatcomp c  -> make_comparison c n1 n2
+      | Paddfloat Boxed -> make_const_float (n1 +. n2)
+      | Psubfloat Boxed -> make_const_float (n1 -. n2)
+      | Pmulfloat Boxed -> make_const_float (n1 *. n2)
+      | Pdivfloat Boxed -> make_const_float (n1 /. n2)
+      | Pfloatcomp (c, Boxed)  -> make_comparison c n1 n2
       | _ -> default
       end
   (* nativeint *)
@@ -434,6 +438,7 @@ let field_approx n = function
   | _ -> Value_unknown
 
 let simplif_prim_pure fpc p (args, approxs) dbg =
+  let open Backend_primitives in
   match p, args, approxs with
   (* Block construction *)
   | Pmakeblock(tag, Immutable, _kind), _, _ ->
@@ -497,7 +502,7 @@ let simplif_prim fpc p (args, approxs as args_approxs) dbg =
     (* XXX : always return the same approxs as simplif_prim_pure? *)
     let approx =
       match p with
-      | Pmakeblock(_, Immutable, _kind) ->
+      | P.Pmakeblock(_, P.Immutable, _kind) ->
           Value_tuple (Array.of_list approxs)
       | _ ->
           Value_unknown
@@ -589,7 +594,7 @@ let rec substitute loc fpc sb ulam =
         *)
         match sarg with
         | Uconst (Uconst_ref (_,  Some (Uconst_block (tag, _))))
-        | Uprim (Pmakeblock (tag, Immutable, _), _, _) ->
+        | Uprim (P.Pmakeblock (tag, P.Immutable, _), _, _) ->
             find_action sw.us_index_blocks sw.us_actions_blocks tag
         | Uconst (Uconst_ptr tag) ->
             find_action sw.us_index_consts sw.us_actions_consts tag
@@ -634,7 +639,7 @@ let rec substitute loc fpc sb ulam =
       begin match substitute loc fpc sb u1 with
         Uconst (Uconst_ptr n) ->
           if n <> 0 then substitute loc fpc sb u2 else substitute loc fpc sb u3
-      | Uprim(Pmakeblock _, _, _) ->
+      | Uprim(P.Pmakeblock _, _, _) ->
           substitute loc fpc sb u2
       | su1 ->
           Uifthenelse(su1, substitute loc fpc sb u2, substitute loc fpc sb u3)
@@ -683,8 +688,8 @@ let rec bind_params_rec loc fpc subst params args body =
         let p1' = Ident.rename p1 in
         let u1, u2 =
           match Ident.name p1, a1 with
-          | "*opt*", Uprim(Pmakeblock(0, Immutable, kind), [a], dbg) ->
-              a, Uprim(Pmakeblock(0, Immutable, kind), [Uvar p1'], dbg)
+          | "*opt*", Uprim(P.Pmakeblock(0, P.Immutable, kind), [a], dbg) ->
+              a, Uprim(P.Pmakeblock(0, P.Immutable, kind), [Uvar p1'], dbg)
           | _ ->
               a1, Uvar p1'
         in
@@ -707,7 +712,9 @@ let bind_params loc fpc params args body =
 let rec is_pure = function
     Lvar _ -> true
   | Lconst _ -> true
-  | Lprim(p, args,_) -> is_pure_prim p && List.for_all is_pure args
+  | Lprim(p, args,_) ->
+      let p = Backend_primitives_from_lambda.convert p in
+      is_pure_prim p && List.for_all is_pure args
   | Levent(lam, _ev) -> is_pure lam
   | _ -> false
 
@@ -757,12 +764,12 @@ let check_constant_result lam ulam approx =
     Value_const c when is_pure lam -> make_const c
   | Value_global_field (id, i) when is_pure lam ->
       begin match ulam with
-      | Uprim(Pfield _, [Uprim(Pgetglobal _, _, _)], _) -> (ulam, approx)
+      | Uprim(P.Pfield _, [Uprim(P.Pgetglobal _, _, _)], _) -> (ulam, approx)
       | _ ->
           let glb =
-            Uprim(Pgetglobal (Ident.create_persistent id), [], Debuginfo.none)
+            Uprim(P.Pgetglobal (Ident.create_persistent id), [], Debuginfo.none)
           in
-          Uprim(Pfield i, [glb], Debuginfo.none), approx
+          Uprim(P.Pfield i, [glb], Debuginfo.none), approx
       end
   | _ -> (ulam, approx)
 
@@ -846,7 +853,7 @@ let rec close fenv cenv = function
       let nargs = List.length args in
       begin match (close fenv cenv funct, close_list fenv cenv args) with
         ((ufunct, Value_closure(fundesc, approx_res)),
-         [Uprim(Pmakeblock _, uargs, _)])
+         [Uprim(P.Pmakeblock _, uargs, _)])
         when List.length uargs = - fundesc.fun_arity ->
           let app =
             direct_apply ~loc ~attribute fundesc funct ufunct uargs in
@@ -990,22 +997,26 @@ let rec close fenv cenv = function
   | Lprim(Pfield n, [lam], loc) ->
       let (ulam, approx) = close fenv cenv lam in
       let dbg = Debuginfo.from_location loc in
-      check_constant_result lam (Uprim(Pfield n, [ulam], dbg))
+      check_constant_result lam (Uprim(P.Pfield n, [ulam], dbg))
                             (field_approx n approx)
   | Lprim(Psetfield(n, is_ptr, init), [Lprim(Pgetglobal id, [], _); lam], loc)->
       let (ulam, approx) = close fenv cenv lam in
       if approx <> Value_unknown then
         (!global_approx).(n) <- approx;
       let dbg = Debuginfo.from_location loc in
-      (Uprim(Psetfield(n, is_ptr, init), [getglobal dbg id; ulam], dbg),
+      let is_ptr = Backend_primitives_from_lambda.immediate_or_pointer is_ptr in
+      let init = Backend_primitives_from_lambda.initialization_or_assignment init in
+      (Uprim(P.Psetfield(n, is_ptr, init), [getglobal dbg id; ulam], dbg),
        Value_unknown)
   | Lprim(Praise k, [arg], loc) ->
       let (ulam, _approx) = close fenv cenv arg in
       let dbg = Debuginfo.from_location loc in
-      (Uprim(Praise k, [ulam], dbg),
+      let k = Backend_primitives_from_lambda.raise_kind k in
+      (Uprim(P.Praise k, [ulam], dbg),
        Value_unknown)
   | Lprim(p, args, loc) ->
       let dbg = Debuginfo.from_location loc in
+      let p = Backend_primitives_from_lambda.convert p in
       simplif_prim !Clflags.float_const_prop
                    p (close_list_approx fenv cenv args) dbg
   | Lswitch(arg, sw, dbg) ->

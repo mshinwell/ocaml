@@ -238,9 +238,12 @@ ASMCOMP=\
   asmcomp/cmm.cmo asmcomp/printcmm.cmo \
   asmcomp/reg.cmo asmcomp/mach.cmo asmcomp/proc.cmo \
   asmcomp/backend_primitives.cmo \
+  asmcomp/printbackend_primitives.cmo \
+  asmcomp/backend_primitives_from_lambda.cmo \
   asmcomp/clambda.cmo asmcomp/printclambda.cmo \
   $(MIDDLE_END_CMX_EARLY) \
   asmcomp/compilenv.cmo \
+  asmcomp/closure.cmo \
   asmcomp/interval.cmo \
   asmcomp/printmach.cmo \
   driver/opterrors.cmo driver/optcompile.cmo

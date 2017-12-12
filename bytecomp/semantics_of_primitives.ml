@@ -113,7 +113,7 @@ let for_primitive (prim : Lambda.primitive) =
   | Pstring_load_16 true
   | Pstring_load_32 true
   | Pstring_load_64 true
-  | Pbigarrayref (true, _, _, _, _)
+  | Pbigarrayref (true, _, _, _)
   | Pbigstring_load_16 true
   | Pbigstring_load_32 true
   | Pbigstring_load_64 true ->
@@ -124,7 +124,7 @@ let for_primitive (prim : Lambda.primitive) =
   | Pstring_load_16 false
   | Pstring_load_32 false
   | Pstring_load_64 false
-  | Pbigarrayref (false, _, _, _, _)
+  | Pbigarrayref (false, _, _, _)
   | Pbigstring_load_16 false
   | Pbigstring_load_32 false
   | Pbigstring_load_64 false ->
@@ -172,6 +172,9 @@ let for_primitive (prim : Lambda.primitive) =
   | Pmake_unboxed_tuple | Punboxed_tuple_field _ ->
     No_effects, No_coeffects
 
+(* CR pchambart: added to do the transition, it will replace 'for_primitive' *)
+let for_backend_primitive _ = assert false
+
 type return_type =
   | Boxed_float
   | Unboxed_float
@@ -193,7 +196,7 @@ let return_type_of_primitive (prim : Lambda.primitive) =
   | Pfloatfield _
   | Parrayrefu Pfloatarray
   | Parrayrefs Pfloatarray
-  | Pbigarrayref(_, _, (Pbigarray_float32 | Pbigarray_float64), _, Boxed)
+  | Pbigarrayref(_, _, (Pbigarray_float32 | Pbigarray_float64), _)
   | Pccall { prim_native_repr_res = Unboxed_float } ->
       Boxed_float
   | Punbox_float
@@ -204,7 +207,6 @@ let return_type_of_primitive (prim : Lambda.primitive) =
   | Psubfloat Unboxed
   | Pmulfloat Unboxed
   | Pdivfloat Unboxed
-  | Pbigarrayref(_, _, (Pbigarray_float32 | Pbigarray_float64), _, Unboxed)
   | Pccall_unboxed { prim_native_repr_res = Unboxed_float } ->
       Unboxed_float
   | Pintofbint Pint32 -> Unboxed_int32

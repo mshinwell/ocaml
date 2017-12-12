@@ -79,8 +79,8 @@ let boxed_integer_mark name = function
 let print_boxed_integer name ppf bi =
   fprintf ppf "%s" (boxed_integer_mark name bi);;
 
-let print_bigarray name unsafe kind ppf layout boxed =
-  fprintf ppf "Bigarray.%s[%s,%s%s]"
+let print_bigarray name unsafe kind ppf layout =
+  fprintf ppf "Bigarray.%s[%s,%s]"
     (if unsafe then "unsafe_"^ name else name)
     (match kind with
      | Pbigarray_unknown -> "generic"
@@ -100,9 +100,6 @@ let print_bigarray name unsafe kind ppf layout boxed =
     |  Pbigarray_unknown_layout -> "unknown"
      | Pbigarray_c_layout -> "C"
      | Pbigarray_fortran_layout -> "Fortran")
-    (match boxed with
-     | Boxed -> ""
-     | Unboxed -> ",unboxed")
 
 let record_rep ppf r =
   match r with
@@ -292,10 +289,10 @@ let primitive ppf = function
   | Pbintcomp(bi, Cgt) -> print_boxed_integer ">" ppf bi
   | Pbintcomp(bi, Cle) -> print_boxed_integer "<=" ppf bi
   | Pbintcomp(bi, Cge) -> print_boxed_integer ">=" ppf bi
-  | Pbigarrayref(unsafe, _n, kind, layout, boxed) ->
-      print_bigarray "get" unsafe kind ppf layout boxed
-  | Pbigarrayset(unsafe, _n, kind, layout, boxed) ->
-      print_bigarray "set" unsafe kind ppf layout boxed
+  | Pbigarrayref(unsafe, _n, kind, layout) ->
+      print_bigarray "get" unsafe kind ppf layout
+  | Pbigarrayset(unsafe, _n, kind, layout) ->
+      print_bigarray "set" unsafe kind ppf layout
   | Pbigarraydim(n) -> fprintf ppf "Bigarray.dim_%i" n
   | Pstring_load_16(unsafe) ->
      if unsafe then fprintf ppf "string.unsafe_get16"

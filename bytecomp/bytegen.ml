@@ -366,9 +366,9 @@ let comp_primitive p args =
   | Pbintcomp(_, Cgt) -> Kccall("caml_greaterthan", 2)
   | Pbintcomp(_, Cle) -> Kccall("caml_lessequal", 2)
   | Pbintcomp(_, Cge) -> Kccall("caml_greaterequal", 2)
-  | Pbigarrayref(_, n, _, _, Boxed) ->
+  | Pbigarrayref(_, n, _, _) ->
       Kccall("caml_ba_get_" ^ string_of_int n, n + 1)
-  | Pbigarrayset(_, n, _, _, Boxed) ->
+  | Pbigarrayset(_, n, _, _) ->
       Kccall("caml_ba_set_" ^ string_of_int n, n + 2)
   | Pbigarraydim(n) -> Kccall("caml_ba_dim_" ^ string_of_int n, 1)
   | Pbigstring_load_16(_) -> Kccall("caml_ba_uint8_get16", 2)
