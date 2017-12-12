@@ -294,23 +294,23 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     Unary (Boolean_not, arg)
   | Pintcomp comp, [arg1; arg2] ->
     Binary (Int_comp (I.Tagged_immediate, convert_comparison comp), arg1, arg2)
-  | Pintoffloat Boxed, [arg] ->
+  | Pintoffloat, [arg] ->
     Unary (Int_of_float, unbox_float arg)
-  | Pfloatofint Boxed, [arg] ->
+  | Pfloatofint, [arg] ->
     box_float (Unary (Float_of_int, arg))
-  | Pnegfloat Boxed, [arg] ->
+  | Pnegfloat, [arg] ->
     box_float (Unary (Float_arith Neg, unbox_float arg))
-  | Pabsfloat Boxed, [arg] ->
+  | Pabsfloat, [arg] ->
     box_float (Unary (Float_arith Abs, unbox_float arg))
-  | Paddfloat Boxed, [arg1; arg2] ->
+  | Paddfloat, [arg1; arg2] ->
     box_float (Binary (Float_arith Add, unbox_float arg1, unbox_float arg2))
-  | Psubfloat Boxed, [arg1; arg2] ->
+  | Psubfloat, [arg1; arg2] ->
     box_float (Binary (Float_arith Sub, unbox_float arg1, unbox_float arg2))
-  | Pmulfloat Boxed, [arg1; arg2] ->
+  | Pmulfloat, [arg1; arg2] ->
     box_float (Binary (Float_arith Mul, unbox_float arg1, unbox_float arg2))
-  | Pdivfloat Boxed, [arg1; arg2] ->
+  | Pdivfloat, [arg1; arg2] ->
     box_float (Binary (Float_arith Div, unbox_float arg1, unbox_float arg2))
-  | Pfloatcomp (comp, Boxed), [arg1; arg2] ->
+  | Pfloatcomp comp, [arg1; arg2] ->
     Binary (Float_comp (convert_comparison comp),
             unbox_float arg1, unbox_float arg2)
   | Pfield_computed, [obj; field] ->
@@ -509,22 +509,17 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
   | ( Pdivint Unsafe | Pmodint Unsafe
     | Pdivbint { is_safe = Unsafe } | Pmodbint { is_safe = Unsafe }
     | Psetglobal _ | Ploc _
-    | Pintoffloat Unboxed | Pfloatofint Unboxed
-    | Pnegfloat Unboxed | Pabsfloat Unboxed
-    | Paddfloat Unboxed | Psubfloat Unboxed | Pmulfloat Unboxed
-    | Pdivfloat Unboxed | Pfloatcomp (_, Unboxed)
     | Praise _
     | Plazyforce
     | Pccall _
-    | Pccall_unboxed _
     ), _ ->
     Misc.fatal_errorf "Closure_conversion.convert_primitive: \
                        Primitive %a shouldn't be here"
       Printlambda.primitive prim
 
   | ( Pfield _ | Pnegint | Pnot | Poffsetint _
-    | Pintoffloat Boxed | Pfloatofint Boxed
-    | Pnegfloat Boxed | Pabsfloat Boxed | Pstringlength
+    | Pintoffloat | Pfloatofint
+    | Pnegfloat | Pabsfloat | Pstringlength
     | Pbyteslength | Pisint | Pgettag
     | Pbintofint _
     | Pintofbint _
@@ -543,8 +538,8 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
   | ( Paddint | Psubint | Pmulint
     | Pandint | Porint | Pxorint | Plslint | Plsrint | Pasrint
     | Pdivint _ | Pmodint _ | Psetfield _ | Pintcomp _
-    | Paddfloat Boxed | Psubfloat Boxed | Pmulfloat Boxed
-    | Pdivfloat Boxed | Pfloatcomp (_, Boxed)
+    | Paddfloat | Psubfloat | Pmulfloat
+    | Pdivfloat | Pfloatcomp _
     | Pstringrefu | Pbytesrefu
     | Pstringrefs | Pbytesrefs
     | Pisout

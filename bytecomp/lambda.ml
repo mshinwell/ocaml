@@ -47,10 +47,6 @@ type is_safe =
   | Safe
   | Unsafe
 
-type boxed =
-  | Boxed
-  | Unboxed
-
 type primitive =
   | Pidentity
   | Pbytes_to_string
@@ -75,7 +71,6 @@ type primitive =
   | Plazyforce
   (* External call *)
   | Pccall of Primitive.description
-  | Pccall_unboxed of Primitive.description
   (* Exceptions *)
   | Praise of raise_kind
   (* Boolean operations *)
@@ -89,11 +84,11 @@ type primitive =
   | Poffsetint of int
   | Poffsetref of int
   (* Float operations *)
-  | Pintoffloat of boxed | Pfloatofint of boxed
-  | Pnegfloat of boxed | Pabsfloat of boxed
-  | Paddfloat of boxed | Psubfloat of boxed | Pmulfloat of boxed
-  | Pdivfloat of boxed
-  | Pfloatcomp of comparison * boxed
+  | Pintoffloat | Pfloatofint
+  | Pnegfloat | Pabsfloat
+  | Paddfloat | Psubfloat | Pmulfloat
+  | Pdivfloat
+  | Pfloatcomp of comparison
   (* String operations *)
   | Pstringlength | Pstringrefu  | Pstringrefs
   | Pbyteslength | Pbytesrefu | Pbytessetu | Pbytesrefs | Pbytessets

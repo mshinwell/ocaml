@@ -33,14 +33,10 @@ let for_primitive (prim : Lambda.primitive) =
       Only_generative_effects, Has_coeffects
   | Pccall { prim_name =
                ( "caml_format_float" | "caml_format_int" | "caml_int32_format"
-               | "caml_nativeint_format" | "caml_int64_format" ) }
-  | Pccall_unboxed { prim_name =
-               ( "caml_format_float" | "caml_format_int" | "caml_int32_format"
                | "caml_nativeint_format" | "caml_int64_format" ) } ->
       No_effects, No_coeffects
   | Plazyforce
-  | Pccall _
-  | Pccall_unboxed _ -> Arbitrary_effects, Has_coeffects
+  | Pccall _ -> Arbitrary_effects, Has_coeffects
   | Praise _ -> Arbitrary_effects, No_coeffects
   | Pnot
   | Pnegint
@@ -66,14 +62,14 @@ let for_primitive (prim : Lambda.primitive) =
       Arbitrary_effects, No_coeffects
   | Poffsetint _ -> No_effects, No_coeffects
   | Poffsetref _ -> Arbitrary_effects, Has_coeffects
-  | Pintoffloat _
-  | Pfloatofint _
-  | Pnegfloat _
-  | Pabsfloat _
-  | Paddfloat _
-  | Psubfloat _
-  | Pmulfloat _
-  | Pdivfloat _
+  | Pintoffloat
+  | Pfloatofint
+  | Pnegfloat
+  | Pabsfloat
+  | Paddfloat
+  | Psubfloat
+  | Pmulfloat
+  | Pdivfloat
   | Pfloatcomp _ ->
     No_effects, No_coeffects
   | Pstringlength | Pbyteslength
@@ -178,28 +174,19 @@ type return_type =
  
 let return_type_of_primitive (prim : Lambda.primitive) =
   match prim with
-  | Pfloatofint Boxed
-  | Pnegfloat Boxed
-  | Pabsfloat Boxed
-  | Paddfloat Boxed
-  | Psubfloat Boxed
-  | Pmulfloat Boxed
-  | Pdivfloat Boxed
+  | Pfloatofint
+  | Pnegfloat
+  | Pabsfloat
+  | Paddfloat
+  | Psubfloat
+  | Pmulfloat
+  | Pdivfloat
   | Pfloatfield _
   | Parrayrefu Pfloatarray
   | Parrayrefs Pfloatarray
   | Pbigarrayref(_, _, (Pbigarray_float32 | Pbigarray_float64), _)
   | Pccall { prim_native_repr_res = Unboxed_float } ->
       Boxed_float
-  | Pfloatofint Unboxed
-  | Pnegfloat Unboxed
-  | Pabsfloat Unboxed
-  | Paddfloat Unboxed
-  | Psubfloat Unboxed
-  | Pmulfloat Unboxed
-  | Pdivfloat Unboxed
-  | Pccall_unboxed { prim_native_repr_res = Unboxed_float } ->
-      Unboxed_float
   | Pintofbint Pint32 -> Unboxed_int32
   | Pintofbint Pint64 -> Unboxed_int64
   | Pintofbint Pnativeint -> Unboxed_nativeint

@@ -130,10 +130,6 @@ let block_shape ppf shape = match shape with
         t;
       Format.fprintf ppf ")"
 
-let boxed ppf = function
-  | Boxed -> ()
-  | Unboxed -> fprintf ppf "(unboxed)"
-
 let primitive ppf = function
   | Pidentity -> fprintf ppf "id"
   | Pbytes_to_string -> fprintf ppf "bytes_to_string"
@@ -188,7 +184,6 @@ let primitive ppf = function
   | Pduprecord (rep, size) -> fprintf ppf "duprecord %a %i" record_rep rep size
   | Plazyforce -> fprintf ppf "force"
   | Pccall p -> fprintf ppf "%s" p.prim_name
-  | Pccall_unboxed p -> fprintf ppf "%s(unboxed)" p.prim_name
   | Praise k -> fprintf ppf "%s" (Lambda.raise_kind k)
   | Psequand -> fprintf ppf "&&"
   | Psequor -> fprintf ppf "||"
@@ -215,20 +210,20 @@ let primitive ppf = function
   | Pintcomp(Cge) -> fprintf ppf ">="
   | Poffsetint n -> fprintf ppf "%i+" n
   | Poffsetref n -> fprintf ppf "+:=%i"n
-  | Pintoffloat b -> fprintf ppf "int_of_float%a" boxed b
-  | Pfloatofint b -> fprintf ppf "float_of_int%a" boxed b
-  | Pnegfloat b -> fprintf ppf "~.%a" boxed b
-  | Pabsfloat b -> fprintf ppf "abs.%a" boxed b
-  | Paddfloat b -> fprintf ppf "+.%a" boxed b
-  | Psubfloat b -> fprintf ppf "-.%a" boxed b
-  | Pmulfloat b -> fprintf ppf "*.%a" boxed b
-  | Pdivfloat b -> fprintf ppf "/.%a" boxed b
-  | Pfloatcomp(Ceq,b) -> fprintf ppf "==.%a" boxed b
-  | Pfloatcomp(Cneq,b) -> fprintf ppf "!=.%a" boxed b
-  | Pfloatcomp(Clt,b) -> fprintf ppf "<.%a" boxed b
-  | Pfloatcomp(Cle,b) -> fprintf ppf "<=.%a" boxed b
-  | Pfloatcomp(Cgt,b) -> fprintf ppf ">.%a" boxed b
-  | Pfloatcomp(Cge,b) -> fprintf ppf ">=.%a" boxed b
+  | Pintoffloat -> fprintf ppf "int_of_float"
+  | Pfloatofint -> fprintf ppf "float_of_int"
+  | Pnegfloat -> fprintf ppf "~."
+  | Pabsfloat -> fprintf ppf "abs."
+  | Paddfloat -> fprintf ppf "+."
+  | Psubfloat -> fprintf ppf "-."
+  | Pmulfloat -> fprintf ppf "*."
+  | Pdivfloat -> fprintf ppf "/."
+  | Pfloatcomp(Ceq) -> fprintf ppf "==."
+  | Pfloatcomp(Cneq) -> fprintf ppf "!=."
+  | Pfloatcomp(Clt) -> fprintf ppf "<."
+  | Pfloatcomp(Cle) -> fprintf ppf "<=."
+  | Pfloatcomp(Cgt) -> fprintf ppf ">."
+  | Pfloatcomp(Cge) -> fprintf ppf ">=."
   | Pstringlength -> fprintf ppf "string.length"
   | Pstringrefu -> fprintf ppf "string.unsafe_get"
   | Pstringrefs -> fprintf ppf "string.get"
@@ -356,7 +351,6 @@ let name_of_primitive = function
   | Pduprecord _ -> "Pduprecord"
   | Plazyforce -> "Plazyforce"
   | Pccall _ -> "Pccall"
-  | Pccall_unboxed _ -> "Pccall_unboxed"
   | Praise _ -> "Praise"
   | Psequand -> "Psequand"
   | Psequor -> "Psequor"
@@ -376,14 +370,14 @@ let name_of_primitive = function
   | Pintcomp _ -> "Pintcomp"
   | Poffsetint _ -> "Poffsetint"
   | Poffsetref _ -> "Poffsetref"
-  | Pintoffloat _ -> "Pintoffloat"
-  | Pfloatofint _ -> "Pfloatofint"
-  | Pnegfloat _ -> "Pnegfloat"
-  | Pabsfloat _ -> "Pabsfloat"
-  | Paddfloat _ -> "Paddfloat"
-  | Psubfloat _ -> "Psubfloat"
-  | Pmulfloat _ -> "Pmulfloat"
-  | Pdivfloat _ -> "Pdivfloat"
+  | Pintoffloat -> "Pintoffloat"
+  | Pfloatofint -> "Pfloatofint"
+  | Pnegfloat -> "Pnegfloat"
+  | Pabsfloat -> "Pabsfloat"
+  | Paddfloat -> "Paddfloat"
+  | Psubfloat -> "Psubfloat"
+  | Pmulfloat -> "Pmulfloat"
+  | Pdivfloat -> "Pdivfloat"
   | Pfloatcomp _ -> "Pfloatcomp"
   | Pstringlength -> "Pstringlength"
   | Pstringrefu -> "Pstringrefu"

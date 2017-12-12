@@ -72,7 +72,7 @@ let comparisons_table = create_hashtable 11 [
   "%equal",
       (Pccall(Primitive.simple ~name:"caml_equal" ~arity:2 ~alloc:true),
        Pintcomp Ceq,
-       Pfloatcomp (Ceq, Boxed),
+       Pfloatcomp (Ceq),
        Pccall(Primitive.simple ~name:"caml_string_equal" ~arity:2
                 ~alloc:false),
        Pccall(Primitive.simple ~name:"caml_bytes_equal" ~arity:2
@@ -84,7 +84,7 @@ let comparisons_table = create_hashtable 11 [
   "%notequal",
       (Pccall(Primitive.simple ~name:"caml_notequal" ~arity:2 ~alloc:true),
        Pintcomp Cneq,
-       Pfloatcomp (Cneq, Boxed),
+       Pfloatcomp (Cneq),
        Pccall(Primitive.simple ~name:"caml_string_notequal" ~arity:2
                 ~alloc:false),
        Pccall(Primitive.simple ~name:"caml_bytes_notequal" ~arity:2
@@ -96,7 +96,7 @@ let comparisons_table = create_hashtable 11 [
   "%lessthan",
       (Pccall(Primitive.simple ~name:"caml_lessthan" ~arity:2 ~alloc:true),
        Pintcomp Clt,
-       Pfloatcomp (Clt, Boxed),
+       Pfloatcomp (Clt),
        Pccall(Primitive.simple ~name:"caml_string_lessthan" ~arity:2
                 ~alloc:false),
        Pccall(Primitive.simple ~name:"caml_bytes_lessthan" ~arity:2
@@ -108,7 +108,7 @@ let comparisons_table = create_hashtable 11 [
   "%greaterthan",
       (Pccall(Primitive.simple ~name:"caml_greaterthan" ~arity:2 ~alloc:true),
        Pintcomp Cgt,
-       Pfloatcomp (Cgt, Boxed),
+       Pfloatcomp (Cgt),
        Pccall(Primitive.simple ~name:"caml_string_greaterthan" ~arity:2
                 ~alloc: false),
        Pccall(Primitive.simple ~name:"caml_bytes_greaterthan" ~arity:2
@@ -120,7 +120,7 @@ let comparisons_table = create_hashtable 11 [
   "%lessequal",
       (Pccall(Primitive.simple ~name:"caml_lessequal" ~arity:2 ~alloc:true),
        Pintcomp Cle,
-       Pfloatcomp (Cle, Boxed),
+       Pfloatcomp (Cle),
        Pccall(Primitive.simple ~name:"caml_string_lessequal" ~arity:2
                 ~alloc:false),
        Pccall(Primitive.simple ~name:"caml_bytes_lessequal" ~arity:2
@@ -132,7 +132,7 @@ let comparisons_table = create_hashtable 11 [
   "%greaterequal",
       (Pccall(Primitive.simple ~name:"caml_greaterequal" ~arity:2 ~alloc:true),
        Pintcomp Cge,
-       Pfloatcomp (Cge, Boxed),
+       Pfloatcomp (Cge),
        Pccall(Primitive.simple ~name:"caml_string_greaterequal" ~arity:2
                 ~alloc:false),
        Pccall(Primitive.simple ~name:"caml_bytes_greaterequal" ~arity:2
@@ -215,20 +215,20 @@ let primitives_table = create_hashtable 57 [
   "%geint", Pintcomp Cge;
   "%incr", Poffsetref(1);
   "%decr", Poffsetref(-1);
-  "%intoffloat", Pintoffloat Boxed;
-  "%floatofint", Pfloatofint Boxed;
-  "%negfloat", Pnegfloat Boxed;
-  "%absfloat", Pabsfloat Boxed;
-  "%addfloat", Paddfloat Boxed;
-  "%subfloat", Psubfloat Boxed;
-  "%mulfloat", Pmulfloat Boxed;
-  "%divfloat", Pdivfloat Boxed;
-  "%eqfloat", Pfloatcomp (Ceq, Boxed);
-  "%noteqfloat", Pfloatcomp (Cneq, Boxed);
-  "%ltfloat", Pfloatcomp (Clt, Boxed);
-  "%lefloat", Pfloatcomp (Cle, Boxed);
-  "%gtfloat", Pfloatcomp (Cgt, Boxed);
-  "%gefloat", Pfloatcomp (Cge, Boxed);
+  "%intoffloat", Pintoffloat;
+  "%floatofint", Pfloatofint;
+  "%negfloat", Pnegfloat;
+  "%absfloat", Pabsfloat;
+  "%addfloat", Paddfloat;
+  "%subfloat", Psubfloat;
+  "%mulfloat", Pmulfloat;
+  "%divfloat", Pdivfloat;
+  "%eqfloat", Pfloatcomp Ceq;
+  "%noteqfloat", Pfloatcomp Cneq;
+  "%ltfloat", Pfloatcomp Clt;
+  "%lefloat", Pfloatcomp Cle;
+  "%gtfloat", Pfloatcomp Cgt;
+  "%gefloat", Pfloatcomp Cge;
   "%string_length", Pstringlength;
   "%string_safe_get", Pstringrefs;
   "%string_safe_set", Pbytessets;
