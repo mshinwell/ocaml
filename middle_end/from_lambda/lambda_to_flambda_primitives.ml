@@ -114,37 +114,6 @@ let convert_array_kind (kind : Lambda.array_kind)
   | Pintarray -> Can_scan
   | Pfloatarray -> Naked_float
 
-(* let convert (prim : Lambda.primitive) (args : Simple.t list) : P.t = *)
-(*   match prim, args with *)
-(*   | Pfield field, [arg] -> *)
-(*     (\* CR pchambart: every load is annotated as mutable we must be *)
-(*        careful to update that when we know it is not. This should not *)
-(*        be an error. *)
-(*        We need more type propagations to be precise here *\) *)
-(*     Unary (Block_load (field, Not_a_float, Mutable), arg) *)
-(*   | Psetfield (field, immediate_or_pointer, initialization_or_assignment), *)
-(*     [block; value] -> *)
-(*     let set_kind : P.block_set_kind = *)
-(*       match immediate_or_pointer with *)
-(*         | Immediate -> Immediate *)
-(*         | Pointer -> Pointer *)
-(*     in *)
-(*     let init_or_assign : P.init_or_assign = *)
-(*       match initialization_or_assignment with *)
-(*       | Assignment -> Assignment *)
-(*       | Heap_initialization -> Initialization *)
-(*       (\* Root initialization cannot exist in lambda. This is *)
-(*          represented by the static part of expressions in flambda. *\) *)
-(*       | Root_initialization -> assert false *)
-(*     in *)
-(*     Binary (Block_set (field, set_kind, init_or_assign), block, value) *)
-(*   | ( Pfield _ | Pnegint | Psetfield _ ), _ -> *)
-(*     Misc.fatal_errorf "Closure_conversion.convert_primitive: \ *)
-(*                        Wrong arrity for %a: %i" *)
-(*       Printlambda.primitive prim (List.length args) *)
-(*   | _ -> *)
-(*     assert false *)
-
 [@@@ocaml.warning "-37"]
 
 type failure =
