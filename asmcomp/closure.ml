@@ -998,10 +998,14 @@ let rec close fenv cenv = function
   | Lswitch(arg, sw, dbg) ->
       let fn fail =
         let (uarg, _) = close fenv cenv arg in
+        let sw_blocks =
+          List.map (fun ({ Lambda. sw_tag; sw_size = _; }, arm) -> sw_tag, arm)
+            sw.sw_blocks
+        in
         let const_index, const_actions, fconst =
           close_switch fenv cenv sw.sw_consts sw.sw_numconsts fail
         and block_index, block_actions, fblock =
-          close_switch fenv cenv sw.sw_blocks sw.sw_numblocks fail in
+          close_switch fenv cenv sw_blocks sw.sw_numblocks fail in
         let ulam =
           Uswitch
             (uarg,
