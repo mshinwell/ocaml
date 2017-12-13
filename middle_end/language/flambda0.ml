@@ -76,7 +76,7 @@ module Call_kind = struct
     match call with
     | Direct { return_arity; _ }
     | Indirect_known_arity { return_arity; _ } -> return_arity
-    | Indirect_unknown_arity -> [Flambda_kind.value Must_scan]
+    | Indirect_unknown_arity -> [Flambda_kind.value Unknown]
 
   type method_kind = Self | Public | Cached
 
@@ -139,7 +139,7 @@ module Call_kind = struct
   let return_arity t : Flambda_arity.t =
     match t with
     | Function call -> return_arity_function_call call
-    | Method _ -> [Flambda_kind.value Must_scan]
+    | Method _ -> [Flambda_kind.value Unknown]
     | C_call { return_arity; _ } -> return_arity
 end
 
@@ -936,13 +936,17 @@ end = struct
     | Naked_immediate ->
       Misc.fatal_error "Not yet supported"
     | Naked_float ->
-      Prim (Unary (Box_number Naked_float, simple), dbg), K.value Must_scan
+      Prim (Unary (Box_number Naked_float, simple), dbg),
+        K.value Definitely_pointer
     | Naked_int32 ->
-      Prim (Unary (Box_number Naked_int32, simple), dbg), K.value Must_scan
+      Prim (Unary (Box_number Naked_int32, simple), dbg),
+        K.value Definitely_pointer
     | Naked_int64 ->
-      Prim (Unary (Box_number Naked_int64, simple), dbg), K.value Must_scan
+      Prim (Unary (Box_number Naked_int64, simple), dbg),
+        K.value Definitely_pointer
     | Naked_nativeint ->
-      Prim (Unary (Box_number Naked_nativeint, simple), dbg), K.value Must_scan
+      Prim (Unary (Box_number Naked_nativeint, simple), dbg),
+        K.value Definitely_pointer
 
   let unbox_value name (kind : Flambda_kind.t) dbg : Named.t * Flambda_kind.t =
     let simple = Simple.name name in

@@ -395,7 +395,7 @@ end = struct
   let is_empty t = Tag.Scannable.Map.is_empty t
 
   let all_possible_sizes t =
-    Tag.Scannable.Map.fold (fun fields sizes ->
+    Tag.Scannable.Map.fold (fun _tag fields sizes ->
         let size = Targetint.OCaml.of_int (Array.length fields) in
         Targetint.OCaml.Set.add size sizes)
       t
@@ -2220,8 +2220,6 @@ let prove_lengths_of_arrays_or_blocks ~importer ~type_of_name t
     Misc.fatal_errorf "Wrong kind for something claimed to be an array \
         or structured block: %a"
       print t
-  in
-  result
 
 let prove_is_tagged_immediate ~importer ~type_of_name t : bool proof =
   let t_evaluated, _canonical_name =
