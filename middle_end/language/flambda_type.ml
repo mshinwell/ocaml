@@ -471,27 +471,18 @@ module Float_array = struct
 end
 
 module Evaluated_first_stage = struct
-  (* We use a set-theoretic model that enables us to keep track of joins
-     right until the end (unlike meets, joins cannot be "evaluated early":
-     consider "({ 4 } join { 6 }) meet ({ 4 } join { 5 })").
-
-     Having dealt with all of the meets without losing any information about
-     joins, the "second stage" of evaluation (producing [Evaluated.t]) then
-     flattens certain unions (in particular for closures etc). *)
-
   type t_values =
     | Unknown
     | Bottom
-    | Blocks_and_tagged_immediates of
-        Blocks.t * (Immediate.Set.t Or_not_all_values_known.t)
+    | Blocks_and_tagged_immediates of (Blocks.t * Immediate.Set.t) list
     | Boxed_floats of ty_naked_float
     | Boxed_int32s of ty_naked_int32
     | Boxed_int64s of ty_naked_int64
     | Boxed_nativeints of ty_naked_nativeint
-    | Closures of Closure.t list Or_not_all_values_known.t
-    | Sets_of_closures of Set_of_closures.t list Or_not_all_values_known.t
-    | Strings of String_info.Set.t Or_not_all_values_known.t
-    | Float_arrays of Float_array.t list Or_not_all_values_known.t
+    | Closures of Closure.t list
+    | Sets_of_closures of Set_of_closures.t list
+    | Strings of String_info.Set.t
+    | Float_arrays of Float_array.t list
 
   type t_naked_immediates = Immediate.Set.t Or_not_all_values_known.t
   type t_naked_floats = Float_by_bit_pattern.Set.t Or_not_all_values_known.t
@@ -2086,6 +2077,39 @@ let prove_boxed_nativeint ~importer ~type_of_name t : ty_naked_nativeint proof =
     Misc.fatal_errorf "Wrong kind for something claimed to be a boxed \
         nativeint: %a"
       print t
+
+let prove_boxed_float ~importer ~type_of_name t : ty_naked_float Proof.t =
+  fold t
+    ~init:(Invalid : _ Proof.t)
+    ~singleton:(fun (proof : _ Proof.t)
+            (singleton : of_kind_value) : _ Proof.t ->
+      match singleton with
+      | Boxed_float ty_naked_float -> Ok ty_naked_float
+      | Tagged_immediate _
+      | Boxed_int32 _
+      | Boxed_int64 _
+      | Boxed_nativeint _
+      | Block _
+      | Closure _
+      | String _
+      | Float_array _ -> Invalid)
+    ~meet:(fun proof (constr : constraint_of_kind_value) : _ or_invalid ->
+      match constr with
+      | Boxed_float -> Ok proof
+      | Tagged_immediate
+      | Boxed_int32
+      | Boxed_int64
+      | Boxed_nativeint
+      | Block _
+      | Closure _
+      | String
+      | Float_array _ -> Invalid)
+    ~join:(fun proofs ->
+      Proof.join_list proofs
+        ~join_contents:(fun ty_naked_float1 ty_naked_float2 ->
+          join_ty_naked_float ~importer ~type_of_name
+            ty_naked_float1 ty_naked_float2))
+
 
 let prove_boxed_float ~importer ~type_of_name t : ty_naked_float proof =
   let t_evaluated, _canonical_name =
