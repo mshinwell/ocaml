@@ -69,11 +69,10 @@ module type S = sig
   end
 
   type 'a or_alias = private
-    | Normal of 'a
+    | Normal of 'a * typing_environment
     | Alias of Name.t
 
   (* CR-someday mshinwell / lwhite: Types in ANF form? *)
-  (* CR-someday mshinwell / lwhite: "Phantom" (for debugging work) as a kind? *)
 
   type combining_op = Union | Intersection
 
@@ -89,8 +88,17 @@ module type S = sig
     | Naked_int32 of ty_naked_int32
     | Naked_int64 of ty_naked_int64
     | Naked_nativeint of ty_naked_nativeint
+    | Fabricated of ty_fabricated
+    | Phantom of ty_phantom
 
   and flambda_type = t
+
+  and typing_environment_entry = {
+    ty : t;
+    existential : bool;
+  }
+
+  and typing_environment = typing_environment_entry Name.Map.t
 
   (** Types of kind [Value] are equipped with an extra piece of information
       such that when we are at the top element, [Unknown], we still know
@@ -101,6 +109,8 @@ module type S = sig
   and ty_naked_int32 = (of_kind_naked_int32, unit) ty
   and ty_naked_int64 = (of_kind_naked_int64, unit) ty
   and ty_naked_nativeint = (of_kind_naked_nativeint, unit) ty
+  and ty_fabricated = (of_kind_fabricated, unit) ty
+  and ty_phantom = (of_kind_phantom, unit) ty
 
   and ('a, 'u) ty = ('a, 'u) maybe_unresolved or_alias
 
@@ -113,6 +123,8 @@ module type S = sig
     | Naked_int32 of resolved_ty_naked_int32
     | Naked_int64 of resolved_ty_naked_int64
     | Naked_nativeint of resolved_ty_naked_nativeint
+    | Fabricated of resolved_ty_fabricated
+    | Phantom of resolved_ty_phantom
 
   and resolved_ty_value = (of_kind_value, Flambda_kind.Value_kind.t) resolved_ty
   and resolved_ty_naked_immediate = (of_kind_naked_immediate, unit) resolved_ty
@@ -120,6 +132,9 @@ module type S = sig
   and resolved_ty_naked_int32 = (of_kind_naked_int32, unit) resolved_ty
   and resolved_ty_naked_int64 = (of_kind_naked_int64, unit) resolved_ty
   and resolved_ty_naked_nativeint = (of_kind_naked_nativeint, unit) resolved_ty
+  and resolved_ty_naked_fabricated =
+    (of_kind_naked_fabricated, unit) resolved_ty
+  and resolved_ty_phantom = (of_kind_phantom, unit) resolved_ty
 
   and ('a, 'u) resolved_ty = ('a, 'u) or_unknown_or_bottom or_alias
 
@@ -147,13 +162,18 @@ module type S = sig
         * 'a singleton_or_combination or_alias
         * 'a singleton_or_combination or_alias
 
+(* Or some kind of: Env + N types, for the various argument-like cases *)
+
   and of_kind_value = private
     | Tagged_immediate of ty_naked_immediate
     | Boxed_float of ty_naked_float
     | Boxed_int32 of ty_naked_int32
     | Boxed_int64 of ty_naked_int64
     | Boxed_nativeint of ty_naked_nativeint
-    | Block of Tag.Scannable.t * (ty_value array)
+    | Block of {
+        tag : ty_fabricated;
+        fields : ty_value array or_unknown_length;
+      }
     | Set_of_closures of set_of_closures
     | Closure of closure
     | String of String_info.t
@@ -227,6 +247,7 @@ module type S = sig
 
   and of_kind_fabricated = private
     | Tag of Tag.Scannable.t
+    | Dependent_tag of Name.t
     | Set_of_closures of set_of_closures
 
   and of_kind_phantom = private
