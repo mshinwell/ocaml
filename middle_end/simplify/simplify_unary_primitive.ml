@@ -407,7 +407,7 @@ let simplify_duplicate_block env r prim arg dbg
                 | Immutable ->
                   B.to_type block
               in
-              let ty = (E.type_accessor env T.meet) ty template in
+              let ty = (E.type_accessor env T.meet_of_kind_value) ty template in
               ty :: new_block_tys)
       in
       let type_of_new_block = (E.type_accessor env T.join) new_block_tys in
@@ -419,7 +419,7 @@ let simplify_duplicate_block env r prim arg dbg
           | Mutable -> T.unknown kind_of_block Other
           | Immutable -> ty
         in
-        (E.type_accessor env T.meet) ty template
+        (E.type_accessor env T.meet_of_kind_value) ty template
       in
       Reachable.reachable (original_term ()), type_of_new_block
     | Invalid ->
@@ -437,7 +437,9 @@ let simplify_duplicate_block env r prim arg dbg
               | Mutable -> T.mutable_float_array ~size
               | Immutable -> T.immutable_float_array fields
             in
-            let ty = (E.type_accessor env T.meet) ty template in
+            let ty =
+              (E.type_accessor env T.meet_of_kind_naked_float) ty template
+            in
             ty :: new_block_tys)
           arrays
           []
@@ -451,7 +453,7 @@ let simplify_duplicate_block env r prim arg dbg
           | Mutable -> T.unknown kind_of_block Other
           | Immutable -> ty
         in
-        (E.type_accessor env T.meet) ty template
+        (E.type_accessor env T.meet_of_kind_value) ty template
       in
       Reachable.reachable (original_term ()), type_of_new_block
     | Invalid ->
@@ -460,28 +462,17 @@ let simplify_duplicate_block env r prim arg dbg
   let term, ty =
     match kind with
     | Full_of_values_known_length (new_tag, new_value_kinds) ->
-      let unknown_fields_of_new_block =
-        T.unknowns_from_value_kinds new_value_kinds
-      in
       let unknown_type_of_new_block =
-        T.block new_tag unknown_fields_of_new_block
+        T.constraint_block new_tag new_value_kinds
       in
-      full_of_values ~template:unknown_type_of_new_block
+      full_of_values ~template:(Some unknown_type_of_new_block)
     | Full_of_values_unknown_length (new_tag, new_value_kind) ->
-      full_of_values ~template:(T.unknown kind_of_block Other)
+      full_of_values ~template:None
     | Full_of_naked_floats { length; } ->
       let size_constraint =
         match length with
-        | None -> T.unknown kind_of_block Other
-        | Some size ->
-          match destination_mutability with
-          | Mutable -> T.mutable_float_array ~size
-          | Immutable ->
-            let fields =
-              Array.init size (fun _index ->
-                T.any_naked_float_as_ty_naked_float ())
-            in
-            T.immutable_float_array fields
+        | None -> None
+        | Some size -> Some (T.constraint_float_array ~size)
       in
       full_of_naked_floats ~template:size_constraint
     | Generic_array _ -> assert false

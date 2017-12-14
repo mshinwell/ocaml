@@ -22,7 +22,7 @@ module K = Flambda_kind
 module Expr = F0.Expr
 module Named = F0.Named
 
-module Float = Numbers.Float
+module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
 module Int = Numbers.Int
 module Int32 = Numbers.Int32
 module Int64 = Numbers.Int64
@@ -236,7 +236,7 @@ let physically_different_values (types : t list) =
     | Union _, Union _ -> false
     | Union _, _ | _, Union _ -> true
     | Unboxed_float fs1, Unboxed_float fs2 ->
-      Float.By_bit_pattern.Set.is_empty (Float.By_bit_pattern.Set.inter fs1 fs2)
+      Float_by_bit_pattern.Set.is_empty (Float_by_bit_pattern.Set.inter fs1 fs2)
     | Unboxed_float _, _ | _, Unboxed_float _ -> true
     | Unboxed_int32 ns1, Unboxed_int32 ns2 ->
       Int32.Set.is_empty (Int32.Set.inter ns1 ns2)
@@ -285,7 +285,7 @@ let reify_as_unboxed_float_array (fa : float_array) : float list option =
     Array.fold_right (fun elt acc ->
         match acc, descr elt with
         | Some acc, Unboxed_float fs ->
-          begin match Float.By_bit_pattern.Set.get_singleton fs with
+          begin match Float_by_bit_pattern.Set.get_singleton fs with
           | None -> None
           | Some f -> Some (f :: acc)
           end
@@ -359,12 +359,6 @@ module Blocks : sig
 
   val create_singleton : Tag.Scannable.t -> ty_value array -> t
 
-  val get_field
-     : (t
-    -> field_index:int
-    -> expected_result_kind:K.t
-    -> get_field_result) type_accessor
-
   val unique_tag_and_size : t -> (Tag.Scannable.t * int) option
 
   val join : (t -> t -> t or_wrong) type_accessor
@@ -395,7 +389,7 @@ end = struct
   let is_empty t = Tag.Scannable.Map.is_empty t
 
   let all_possible_sizes t =
-    Tag.Scannable.Map.fold (fun fields sizes ->
+    Tag.Scannable.Map.fold (fun _tag fields sizes ->
         let size = Targetint.OCaml.of_int (Array.length fields) in
         Targetint.OCaml.Set.add size sizes)
       t
@@ -472,34 +466,26 @@ module Float_array = struct
     match t.fields with
     | Some fields -> fields
     | None ->
-      Array.init t.size (fun _index -> T.any_naked_float_as_ty_naked_float ())
+      Array.init (Targetint.OCaml.to_int t.size)
+        (fun _index -> any_naked_float_as_ty_naked_float ())
 end
 
 module Evaluated_first_stage = struct
-  (* We use a set-theoretic model that enables us to keep track of joins
-     right until the end (unlike meets, joins cannot be "evaluated early":
-     consider "({ 4 } join { 6 }) meet ({ 4 } join { 5 })").
-
-     Having dealt with all of the meets without losing any information about
-     joins, the "second stage" of evaluation (producing [Evaluated.t]) then
-     flattens certain unions (in particular for closures etc). *)
-
   type t_values =
     | Unknown
     | Bottom
-    | Blocks_and_tagged_immediates of
-        Blocks.t * (Immediate.Set.t Or_not_all_values_known.t)
-    | Boxed_floats of ty_naked_float Or_not_all_values_known.t
-    | Boxed_int32s of ty_naked_int32 Or_not_all_values_known.t
-    | Boxed_int64s of ty_naked_int64 Or_not_all_values_known.t
-    | Boxed_nativeints of ty_naked_nativeint Or_not_all_values_known.t
-    | Closures of Closure.t list Or_not_all_values_known.t
-    | Sets_of_closures of Set_of_closures.t list Or_not_all_values_known.t
-    | Strings of String_info.Set.t Or_not_all_values_known.t
-    | Float_arrays of Float_array.t list Or_not_all_values_known.t
+    | Blocks_and_tagged_immediates of (Blocks.t * Immediate.Set.t) list
+    | Boxed_floats of ty_naked_float
+    | Boxed_int32s of ty_naked_int32
+    | Boxed_int64s of ty_naked_int64
+    | Boxed_nativeints of ty_naked_nativeint
+    | Closures of Closure.t list
+    | Sets_of_closures of Set_of_closures.t list
+    | Strings of String_info.Set.t
+    | Float_arrays of Float_array.t list
 
   type t_naked_immediates = Immediate.Set.t Or_not_all_values_known.t
-  type t_naked_floats = Float.By_bit_pattern.Set.t Or_not_all_values_known.t
+  type t_naked_floats = Float_by_bit_pattern.Set.t Or_not_all_values_known.t
   type t_naked_int32s = Int32.Set.t Or_not_all_values_known.t
   type t_naked_int64s = Int64.Set.t Or_not_all_values_known.t
   type t_naked_nativeints = Targetint.Set.t Or_not_all_values_known.t
@@ -547,9 +533,9 @@ module Evaluated_first_stage = struct
       -> Immediate.Set.t
 
     val combine_float_sets
-       : Float.By_bit_pattern.Set.t
-      -> Float.By_bit_pattern.Set.t
-      -> Float.By_bit_pattern.Set.t
+       : Float_by_bit_pattern.Set.t
+      -> Float_by_bit_pattern.Set.t
+      -> Float_by_bit_pattern.Set.t
 
     val combine_int32_sets
        : Int32.Set.t
@@ -581,8 +567,8 @@ module Evaluated_first_stage = struct
       | _, Unknown -> if P.is_join then Unknown else t1
       | Bottom, _ -> if P.is_join then t2 else Bottom
       | _, Bottom -> if P.is_join then t1 else Bottom
-      | Blocks_and_tagged_immediates variant1,
-          Blocks_and_tagged_immediates variant2 ->
+      | Blocks_and_tagged_immediates (blocks1, imms1),
+          Blocks_and_tagged_immediates (blocks2, imms2) ->
         begin match
           P.combine_or_not_all_values_known
             (fun (b1, imms1) (b2, imms2) : _ or_wrong ->
@@ -609,7 +595,7 @@ module Evaluated_first_stage = struct
            [Or_not_all_values_known] to remove these "assert false"s *)
         begin match
           P.combine_or_not_all_values_known
-            (fun fs1 fs2 : Float.By_bit_pattern.Set.t or_wrong ->
+            (fun fs1 fs2 : Float_by_bit_pattern.Set.t or_wrong ->
               Ok (P.combine_float_sets fs1 fs2))
             fs1 fs2
         with
@@ -780,7 +766,7 @@ module Evaluated_first_stage = struct
     let combine_blocks = Blocks.join
     let combine_int_sets = Int.Set.union
     let combine_immediate_sets = Immediate.Set.union
-    let combine_float_sets = Float.By_bit_pattern.Set.union
+    let combine_float_sets = Float_by_bit_pattern.Set.union
     let combine_int32_sets = Int32.Set.union
     let combine_int64_sets = Int64.Set.union
     let combine_targetint_sets = Targetint.Set.union
@@ -800,7 +786,7 @@ module Evaluated_first_stage = struct
     let combine_blocks = Blocks.meet
     let combine_int_sets = Int.Set.inter
     let combine_immediate_sets = Immediate.Set.inter
-    let combine_float_sets = Float.By_bit_pattern.Set.inter
+    let combine_float_sets = Float_by_bit_pattern.Set.inter
     let combine_int32_sets = Int32.Set.inter
     let combine_int64_sets = Int64.Set.inter
     let combine_targetint_sets = Targetint.Set.inter
@@ -938,7 +924,7 @@ module Evaluated_first_stage = struct
     let eval_singleton (singleton : of_kind_naked_float)
           : t_naked_floats =
       match singleton with
-      | Naked_float imm -> Exactly (Float.By_bit_pattern.Set.singleton imm)
+      | Naked_float imm -> Exactly (Float_by_bit_pattern.Set.singleton imm)
     in
     evaluate_ty ~importer
       ~importer_this_kind:
@@ -950,7 +936,7 @@ module Evaluated_first_stage = struct
       ~meet:Meet.combine_naked_floats
       ~eval_singleton
       ~unknown:(Not_all_values_known : t_naked_floats)
-      ~bottom:((Exactly Float.By_bit_pattern.Set.empty) : t_naked_floats)
+      ~bottom:((Exactly Float_by_bit_pattern.Set.empty) : t_naked_floats)
       ty
 
   and evaluate_ty_naked_int32 ~importer ~type_of_name
@@ -1332,7 +1318,7 @@ module Evaluated = struct
   type t =
     | Values of t_values
     | Naked_immediates of Immediate.Set.t Or_not_all_values_known.t
-    | Naked_floats of Float.By_bit_pattern.Set.t Or_not_all_values_known.t
+    | Naked_floats of Float_by_bit_pattern.Set.t Or_not_all_values_known.t
     | Naked_int32s of Int32.Set.t Or_not_all_values_known.t
     | Naked_int64s of Int64.Set.t Or_not_all_values_known.t
     | Naked_nativeints of Targetint.Set.t Or_not_all_values_known.t
@@ -1387,7 +1373,7 @@ module Evaluated = struct
         imms
     | Naked_floats fs ->
       Format.fprintf ppf "@[(Naked_floats@ (%a))@]"
-        (Or_not_all_values_known.print Float.By_bit_pattern.Set.print)
+        (Or_not_all_values_known.print Float_by_bit_pattern.Set.print)
         fs
     | Naked_int32s is ->
       Format.fprintf ppf "@[(Naked_int32s@ (%a))@]"
@@ -1509,7 +1495,7 @@ module Evaluated = struct
         assert (not (Blocks.is_empty blocks));  (* cf. [invariant]. *)
         Immediate.Set.is_empty imms
       | Tagged_immediates_only (Exactly imms) -> Immediate.Set.is_empty imms
-      | Boxed_floats (Exactly fs) -> Float.By_bit_pattern.Set.is_empty fs
+      | Boxed_floats (Exactly fs) -> Float_by_bit_pattern.Set.is_empty fs
       | Boxed_int32s (Exactly is) -> Int32.Set.is_empty is
       | Boxed_int64s (Exactly is) -> Int64.Set.is_empty is
       | Boxed_nativeints (Exactly is) -> Targetint.Set.is_empty is
@@ -1529,7 +1515,7 @@ module Evaluated = struct
       | Float_arrays { lengths = Not_all_values_known; } -> false
       end
     | Naked_immediates (Exactly is) -> Immediate.Set.is_empty is
-    | Naked_floats (Exactly fs) -> Float.By_bit_pattern.Set.is_empty fs
+    | Naked_floats (Exactly fs) -> Float_by_bit_pattern.Set.is_empty fs
     | Naked_int32s (Exactly is) -> Int32.Set.is_empty is
     | Naked_int64s (Exactly is) -> Int64.Set.is_empty is
     | Naked_nativeints (Exactly is) -> Targetint.Set.is_empty is
@@ -1617,7 +1603,7 @@ module Evaluated = struct
         Tagged_immediates_only ti2 ->
       O.equal Immediate.Set.equal ti1 ti2
     | Boxed_floats fs1, Boxed_floats fs2 ->
-      O.equal Float.By_bit_pattern.Set.equal fs1 fs2
+      O.equal Float_by_bit_pattern.Set.equal fs1 fs2
     | Boxed_int32s is1, Boxed_int32s is2 ->
       O.equal Int32.Set.equal is1 is2
     | Boxed_int64s is1, Boxed_int64s is2 ->
@@ -1643,7 +1629,7 @@ module Evaluated = struct
     | Naked_immediates is1, Naked_immediates is2 ->
       O.equal Immediate.Set.equal is1 is2
     | Naked_floats fs1, Naked_floats fs2 ->
-      O.equal Float.By_bit_pattern.Set.equal fs1 fs2
+      O.equal Float_by_bit_pattern.Set.equal fs1 fs2
     | Naked_int32s is1, Naked_int32s is2 ->
       O.equal Int32.Set.equal is1 is2
     | Naked_int64s is1, Naked_int64s is2 ->
@@ -1764,7 +1750,7 @@ let reify ~importer ~type_of_name ~allow_free_variables t
       | None -> try_name ()
       end
     | Naked_floats (Exactly fs) ->
-      begin match Float.By_bit_pattern.Set.get_singleton fs with
+      begin match Float_by_bit_pattern.Set.get_singleton fs with
       | Some f -> Term (Simple.const (Naked_float f), t)
       | None -> try_name ()
       end
@@ -2091,6 +2077,39 @@ let prove_boxed_nativeint ~importer ~type_of_name t : ty_naked_nativeint proof =
     Misc.fatal_errorf "Wrong kind for something claimed to be a boxed \
         nativeint: %a"
       print t
+
+let prove_boxed_float ~importer ~type_of_name t : ty_naked_float Proof.t =
+  fold t
+    ~init:(Invalid : _ Proof.t)
+    ~singleton:(fun (proof : _ Proof.t)
+            (singleton : of_kind_value) : _ Proof.t ->
+      match singleton with
+      | Boxed_float ty_naked_float -> Ok ty_naked_float
+      | Tagged_immediate _
+      | Boxed_int32 _
+      | Boxed_int64 _
+      | Boxed_nativeint _
+      | Block _
+      | Closure _
+      | String _
+      | Float_array _ -> Invalid)
+    ~meet:(fun proof (constr : constraint_of_kind_value) : _ or_invalid ->
+      match constr with
+      | Boxed_float -> Ok proof
+      | Tagged_immediate
+      | Boxed_int32
+      | Boxed_int64
+      | Boxed_nativeint
+      | Block _
+      | Closure _
+      | String
+      | Float_array _ -> Invalid)
+    ~join:(fun proofs ->
+      Proof.join_list proofs
+        ~join_contents:(fun ty_naked_float1 ty_naked_float2 ->
+          join_ty_naked_float ~importer ~type_of_name
+            ty_naked_float1 ty_naked_float2))
+
 
 let prove_boxed_float ~importer ~type_of_name t : ty_naked_float proof =
   let t_evaluated, _canonical_name =

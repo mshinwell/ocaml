@@ -38,6 +38,23 @@ module Value_kind : sig
   val print : Format.formatter -> t -> unit
 end
 
+module Fabricated_kind : sig
+  type t =
+    | Definitely_pointer
+    | Definitely_immediate
+end
+
+module Phantom_kind : sig
+  type t = private
+    | Value of Value_kind.t
+    | Naked_immediate
+    | Naked_float
+    | Naked_int32
+    | Naked_int64
+    | Naked_nativeint
+    | Fabricated of Fabricated_kind.t
+end
+
 type t = private
   | Value of Value_kind.t
   | Naked_immediate
@@ -45,6 +62,13 @@ type t = private
   | Naked_int32
   | Naked_int64
   | Naked_nativeint
+  | Fabricated of Fabricated_kind.t
+    (** GC-scannable values, known to be pointers, which have been introduced
+        by Flambda and are never accessible at the source language level (for
+        example sets of closures). *)
+  | Phantom of Phantom_kind.t
+    (** The kind of entities that do not exist at runtime but which are left in
+        Flambda terms for the purpose of generating debugging information. *)
 
 type kind = t
 

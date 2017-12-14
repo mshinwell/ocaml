@@ -34,6 +34,10 @@ let dbg = false
   Now, see Lefessant-Maranget ``Optimizing Pattern-Matching'' ICFP'2001
 *)
 
+type simple_constructor_tag =
+  | Constant of int
+  | Block of int
+
 (*
    Compatibility predicate that considers potential rebindings of constructors
    of an extension type.
@@ -1403,10 +1407,10 @@ let divide_variant row ctx {cases = cl; args = al; default=def} =
           match pato with
             None ->
               add (make_variant_matching_constant p lab def ctx) variants
-                (=) (Cstr_constant tag) (patl, action) al
+                (=) (Constant tag) (patl, action) al
           | Some pat ->
               add (make_variant_matching_nonconst p lab def ctx) variants
-                (=) (Cstr_block tag) (pat :: patl, action) al
+                (=) (Block tag) (pat :: patl, action) al
         end
     | _ -> []
   in
@@ -1522,14 +1526,17 @@ let inline_lazy_force_switch arg loc =
              { sw_numconsts = 0; sw_consts = [];
                sw_numblocks = 256;  (* PR#6033 - tag ranges from 0 to 255 *)
                sw_blocks =
-                 [ (Obj.forward_tag, Lprim(Pfield 0, [varg], loc));
-                   (Obj.lazy_tag,
-                    Lapply{ap_should_be_tailcall=false;
-                           ap_loc=loc;
-                           ap_func=force_fun;
-                           ap_args=[varg];
-                           ap_inlined=Default_inline;
-                           ap_specialised=Default_specialise}) ];
+                 [ ({ sw_tag = Obj.forward_tag;
+                      sw_size = 1;
+                    }, Lprim(Pfield 0, [varg], loc));
+                   ({ sw_tag = Obj.lazy_tag;
+                      sw_size = 1;
+                    }, Lapply{ap_should_be_tailcall=false;
+                              ap_loc=loc;
+                              ap_func=force_fun;
+                              ap_args=[varg];
+                              ap_inlined=Default_inline;
+                              ap_specialised=Default_specialise}) ];
                sw_failaction = Some varg }, loc ))))
 
 let inline_lazy_force arg loc =
@@ -1976,11 +1983,11 @@ let reintroduce_fail sw = match sw.sw_failaction with
         end) t ;
     if !max >= 3 then
       let default = !i_max in
-      let remove =
+      let remove cases =
         List.filter
           (fun (_,lam) -> match as_simple_exit lam with
           | Some j -> j <> default
-          | None -> true) in
+          | None -> true) cases in
       {sw with
        sw_consts = remove sw.sw_consts ;
        sw_blocks = remove sw.sw_blocks ;
@@ -2267,9 +2274,27 @@ let split_cases tag_lambda_list =
         let (consts, nonconsts) = split_rec rem in
         match cstr with
           Cstr_constant n -> ((n, act) :: consts, nonconsts)
-        | Cstr_block n    -> (consts, (n, act) :: nonconsts)
-        | Cstr_unboxed    -> (consts, (0, act) :: nonconsts)
+        | Cstr_block { tag; size; } ->
+          let desc = { sw_tag = tag; sw_size = size; } in
+          (consts, (desc, act) :: nonconsts)
+        | Cstr_unboxed ->
+          (* The [sw_size] will never make it through to a [Lswitch]. *)
+          let desc = { sw_tag = 0; sw_size = 0; } in
+          (consts, (desc, act) :: nonconsts)
         | Cstr_extension _ -> assert false in
+  let const, nonconst = split_rec tag_lambda_list in
+  sort_int_lambda_list const,
+  sort_int_lambda_list nonconst
+
+let split_cases_simple tag_lambda_list =
+  let rec split_rec = function
+      [] -> ([], [])
+    | (cstr, act) :: rem ->
+        let (consts, nonconsts) = split_rec rem in
+        match cstr with
+        | Constant n -> ((n, act) :: consts, nonconsts)
+        | Block n    -> (consts, (n, act) :: nonconsts)
+  in
   let const, nonconst = split_rec tag_lambda_list in
   sort_int_lambda_list const,
   sort_int_lambda_list nonconst
@@ -2347,7 +2372,7 @@ let combine_constructor loc arg ex_pat cstr partial ctx def
           match
             (cstr.cstr_consts, cstr.cstr_nonconsts, consts, nonconsts)
           with
-          | (1, 1, [0, act1], [0, act2]) when not !Clflags.native_code ->
+          | (1, 1, [0, act1], [{ sw_tag = 0; sw_size = _; }, act2]) ->
            (* Typically, match on lists, will avoid isint primitive in that
               case *)
               Lifthenelse(arg, act2, act1)
@@ -2422,7 +2447,7 @@ let combine_variant loc row arg partial ctx def
       None, jumps_empty
     else
       mk_failaction_neg partial ctx def in
-  let (consts, nonconsts) = split_cases tag_lambda_list in
+  let (consts, nonconsts) = split_cases_simple tag_lambda_list in
   let lambda1 = match fail, one_action with
   | None, Some act -> act
   | _,_ ->
