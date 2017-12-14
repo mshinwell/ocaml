@@ -72,11 +72,10 @@ module type S = sig
     | Normal of 'a
     | Alias of Name.t
 
-  type 'a or_unknown_length = private
-    | Known_length of 'a
-    | Unknown_length
-
   (* CR-someday mshinwell / lwhite: Types in ANF form? *)
+  (* CR-someday mshinwell / lwhite: "Phantom" (for debugging work) as a kind? *)
+
+  type combining_op = Union | Intersection
 
   (** Values of type [t] are known as "Flambda types".  Each Flambda type
       has a unique kind.
@@ -90,32 +89,20 @@ module type S = sig
     | Naked_int32 of ty_naked_int32
     | Naked_int64 of ty_naked_int64
     | Naked_nativeint of ty_naked_nativeint
-    | Fabricated of ty_fabricated
-    | Phantom
 
   and flambda_type = t
 
   (** Types of kind [Value] are equipped with an extra piece of information
       such that when we are at the top element, [Unknown], we still know
       whether a root has to be registered. *)
-  and ty_value =
-    (of_kind_value, constraint_of_kind_value, Flambda_kind.Value_kind.t) ty
-  and ty_naked_immediate =
-    (of_kind_naked_immediate, constraint_of_kind_naked_immediate, unit) ty
-  and ty_naked_float =
-    (of_kind_naked_float, constraint_of_kind_naked_immediate, unit) ty
-  and ty_naked_int32 =
-    (of_kind_naked_int32, constraint_of_kind_naked_int32, unit) ty
-  and ty_naked_int64 =
-    (of_kind_naked_int64, constraint_of_kind_naked_int64, unit) ty
-  and ty_naked_nativeint =
-    (of_kind_naked_nativeint, constraint_of_kind_naked_nativeint, unit) ty
-  and ty_fabricated =
-    (of_kind_fabricated, constraint_of_kind_fabricated,
-      Flambda_kind.Fabricated_kind.t) ty
+  and ty_value = (of_kind_value, Flambda_kind.Value_kind.t) ty
+  and ty_naked_immediate = (of_kind_naked_immediate, unit) ty
+  and ty_naked_float = (of_kind_naked_float, unit) ty
+  and ty_naked_int32 = (of_kind_naked_int32, unit) ty
+  and ty_naked_int64 = (of_kind_naked_int64, unit) ty
+  and ty_naked_nativeint = (of_kind_naked_nativeint, unit) ty
 
-  and ('singleton, 'constraint, 'u) ty =
-    ('singleton, 'constraint, 'u) maybe_unresolved or_alias
+  and ('a, 'u) ty = ('a, 'u) maybe_unresolved or_alias
 
   (* CR mshinwell: It's not quite clear to me that the extra complexity
      introduced by having this static "resolved" distinction is worth it. *)
@@ -126,59 +113,39 @@ module type S = sig
     | Naked_int32 of resolved_ty_naked_int32
     | Naked_int64 of resolved_ty_naked_int64
     | Naked_nativeint of resolved_ty_naked_nativeint
-    | Fabricated of resolved_ty_fabricated
-    | Phantom
 
-  and resolved_ty_value =
-    (of_kind_value, constraint_of_kind_value, Flambda_kind.Value_kind.t) 
-      resolved_ty
-  and resolved_ty_naked_immediate =
-    (of_kind_naked_immediate, constraint_of_kind_naked_immediate, unit) 
-      resolved_ty
-  and resolved_ty_naked_float =
-    (of_kind_naked_float, constraint_of_kind_naked_immediate, unit) 
-      resolved_ty
-  and resolved_ty_naked_int32 =
-    (of_kind_naked_int32, constraint_of_kind_naked_int32, unit) 
-      resolved_ty
-  and resolved_ty_naked_int64 =
-    (of_kind_naked_int64, constraint_of_kind_naked_int64, unit) 
-      resolved_ty
-  and resolved_ty_naked_nativeint =
-    (of_kind_naked_nativeint, constraint_of_kind_naked_nativeint, unit) 
-      resolved_ty
-  and resolved_ty_fabricated =
-    (of_kind_fabricated, constraint_of_kind_fabricated,
-        Flambda_kind.Fabricated_kind.t) 
-      resolved_ty
+  and resolved_ty_value = (of_kind_value, Flambda_kind.Value_kind.t) resolved_ty
+  and resolved_ty_naked_immediate = (of_kind_naked_immediate, unit) resolved_ty
+  and resolved_ty_naked_float = (of_kind_naked_float, unit) resolved_ty
+  and resolved_ty_naked_int32 = (of_kind_naked_int32, unit) resolved_ty
+  and resolved_ty_naked_int64 = (of_kind_naked_int64, unit) resolved_ty
+  and resolved_ty_naked_nativeint = (of_kind_naked_nativeint, unit) resolved_ty
 
-  and ('singleton, 'constraint, 'u) resolved_ty =
-    ('singleton, 'constraint, 'u) or_unknown_or_bottom or_alias
+  and ('a, 'u) resolved_ty = ('a, 'u) or_unknown_or_bottom or_alias
 
-  and ('singleton, 'constraint, 'u) maybe_unresolved = private
-    | Resolved of ('singleton, 'constraint, 'u) or_unknown_or_bottom
+  and ('a, 'u) maybe_unresolved = private
+    | Resolved of ('a, 'u) or_unknown_or_bottom
     (** The head constructor is available in memory. *)
     | Load_lazily of load_lazily
     (** The head constructor requires loading from a .cmx file. *)
 
   (** For each kind (cf. [Flambda_kind], although with the "Value" cases
       merged into one) there is a lattice of types. *)
-  and ('singleton, 'constraint, 'u) or_unknown_or_bottom = private
+  and ('a, 'u) or_unknown_or_bottom = private
     | Unknown of unknown_because_of * 'u
     (** "Any value can flow to this point": the top element. *)
-    | Ok of ('singleton, 'constraint) singleton_or_combination
+    | Ok of 'a singleton_or_combination
     | Bottom
     (** "No value can flow to this point": the bottom element. *)
 
   (** Note: [Singleton] refers to the structure of the type.  A [Singleton]
       type may still describe more than one particular runtime value (for
       example, it may describe a boxed float whose contents is unknown). *)
-  and ('singleton, 'constraint) singleton_or_combination = private
-    | Singleton of 'singleton
-    | Join of ('singleton, 'constraint) singleton_or_combination or_alias
-        * ('singleton, 'constraint) singleton_or_combination or_alias
-    | Meet of ('singleton, 'constraint) singleton_or_combination or_alias
-        * 'constraint
+  and 'a singleton_or_combination = private
+    | Singleton of 'a
+    | Combination of combining_op
+        * 'a singleton_or_combination or_alias
+        * 'a singleton_or_combination or_alias
 
   and of_kind_value = private
     | Tagged_immediate of ty_naked_immediate
@@ -186,37 +153,13 @@ module type S = sig
     | Boxed_int32 of ty_naked_int32
     | Boxed_int64 of ty_naked_int64
     | Boxed_nativeint of ty_naked_nativeint
-    | Block of {
-        tag : ty_fabricated;
-        fields : ty_value array or_unknown_length;
-      }
+    | Block of Tag.Scannable.t * (ty_value array)
+    | Set_of_closures of set_of_closures
     | Closure of closure
     | String of String_info.t
-    | Float_array of ty_naked_float array or_unknown_length
-
-  and constraint_of_kind_value = private
-    | Tagged_immediate
-    | Boxed_float
-    | Boxed_int32
-    | Boxed_int64
-    | Boxed_nativeint
-    | Block of {
-        tag : Tag.Scannable.t;
-        fields : Flambda_kind.Value_kind.t list;
-      }
-    | Closure of Closure_id.t
-    | String
-    | Float_array of { size : Targetint.OCaml.t; }
-
-  type ('singleton, 'constraint) folder =
-     : t
-    -> init:'a
-    -> singleton:('a -> 'singleton -> 'a)
-    -> meet:('a -> 'constraint -> 'a or_invalid)
-    -> join:('a list -> 'b)
-    -> 'b or_unknown_or_invalid
-
-  val fold_of_kind_value : (of_kind_value, constraint_of_kind_value) folder
+      (* CR mshinwell: maybe this should be ty_naked_float array option?
+         (May be more consistent with existing flambda) *)
+    | Float_array of ty_naked_float array
 
   and inlinable_function_declaration = private {
     closure_origin : Closure_origin.t;
@@ -267,42 +210,24 @@ module type S = sig
     closure_id : Closure_id.t;
   }
 
-  and of_kind_naked_immediate =
+  and of_kind_naked_immediate = private
     | Naked_immediate of Immediate.t
 
-  and constraint_of_kind_naked_immediate =
-    | Naked_immediate
-
-  and of_kind_naked_float =
+  and of_kind_naked_float = private
     | Naked_float of Numbers.Float_by_bit_pattern.t
 
-  and constraint_of_kind_naked_float =
-    | Naked_float
-
-  and of_kind_naked_int32 =
+  and of_kind_naked_int32 = private
     | Naked_int32 of Int32.t
 
-  and constraint_of_kind_naked_int32 =
-    | Naked_int32
-
-  and of_kind_naked_int64 =
+  and of_kind_naked_int64 = private
     | Naked_int64 of Int64.t
 
-  and constraint_of_kind_naked_int64 =
-    | Naked_int64
-
-  and of_kind_naked_nativeint =
+  and of_kind_naked_nativeint = private
     | Naked_nativeint of Targetint.t
 
-  and constraint_of_kind_naked_nativeint =
-    | Naked_nativeint
-
-  and of_kind_fabricated =
+  and of_kind_fabricated = private
     | Tag of Tag.Scannable.t
     | Set_of_closures of set_of_closures
-
-  and constraint_of_kind_fabricated_pointer =
-    | Set_of_closures
 
   and of_kind_phantom = private
     | Value of ty_kind_value
@@ -312,15 +237,6 @@ module type S = sig
     | Naked_int64 of ty_kind_naked_int64
     | Naked_nativeint of ty_kind_naked_nativeint
     | Fabricated_pointer of ty_kind_fabricated_pointer
-
-  and constraint_of_kind_phantom = private
-    | Value of constraint_of_kind_value
-    | Naked_immediate of constraint_of_kind_naked_immediate
-    | Naked_float of constraint_of_kind_naked_float
-    | Naked_int32 of constraint_of_kind_naked_int32
-    | Naked_int64 of constraint_of_kind_naked_int64
-    | Naked_nativeint of constraint_of_kind_naked_nativeint
-    | Fabricated_pointer of constraint_of_kind_fabricated_pointer
 
   val print : Format.formatter -> t -> unit
 
@@ -407,15 +323,6 @@ module type S = sig
       been loaded into memory (from a .cmx file). *)
   val export_id_loaded_lazily : Flambda_kind.t -> Export_id.t -> t
   val symbol_loaded_lazily : Symbol.t -> t
-
-  val constraint_block
-     : Tag.Scannable.t
-    -> Flambda_kind.Value_kind.t list
-    -> constraint_of_kind_value
-
-  val constraint_float_array
-     : size:Targetint.OCaml.t
-    -> constraint_of_kind_value
 
   val create_inlinable_function_declaration
      : is_classic_mode:bool
@@ -568,27 +475,32 @@ module type S = sig
      : (ty_naked_nativeint -> ty_naked_nativeint -> ty_naked_nativeint)
          type_accessor
 
-  (** Refine a type of kind [Value] using a constraint. *)
-  val meet_of_kind_value
-    : (t -> constraint_of_kind_value -> t) type_accessor
+  (** Greatest lower bound of two types. *)
+  val meet : (t -> t -> t) type_accessor
 
-  (** Refine a type of kind [Naked_float] using a constraint. *)
-  val meet_of_kind_naked_float
-    : (t -> constraint_of_kind_naked_float -> t) type_accessor
-(*
+  (** Greatest lower bound of an arbitrary number of types. *)
+  val meet_list : (Flambda_kind.t -> t list -> t) type_accessor
+
+  (** Greatest lower bound of two types known to be of kind [Value]. *)
+  val meet_ty_value : (ty_value -> ty_value -> ty_value) type_accessor
+
+  (** Greatest lower bound of two types known to be of kind [Naked_float]. *)
   val meet_ty_naked_float
      : (ty_naked_float -> ty_naked_float -> ty_naked_float) type_accessor
 
+  (** Greatest lower bound of two types known to be of kind [Naked_int32]. *)
   val meet_ty_naked_int32
      : (ty_naked_int32 -> ty_naked_int32 -> ty_naked_int32) type_accessor
 
+  (** Greatest lower bound of two types known to be of kind [Naked_int64]. *)
   val meet_ty_naked_int64
      : (ty_naked_int64 -> ty_naked_int64 -> ty_naked_int64) type_accessor
 
+  (** Greatest lower bound of two types known to be of kind
+      [Naked_nativeint]. *)
   val meet_ty_naked_nativeint
      : (ty_naked_nativeint -> ty_naked_nativeint -> ty_naked_nativeint)
          type_accessor
-*)
 
   (** Follow chains of [Alias]es, loading .cmx files as necessary, until
       either a [Normal] type is reached or a name cannot be resolved.
