@@ -1,0 +1,115 @@
+type t = Foo of ... | Bar of ...
+
+let b = f () in
+(* b : unknown *)
+let_cont k0 =
+  (* Context:
+      b : Block (unknown tag, [= f1; ...])
+      exists f1 : Block (Tag = f1_tag, unknown_length)
+      exists f1_tag : Int 0
+      exists x_init_foo : Block (Tag 0, [unknown])
+      ...
+  *)
+  let f0 = field 0 of b in  (* This now simplifies to:  f0 = f1 *)
+  let f0_tag = get_tag f0 in  (* This now simplifies to:  f0_tag = f1_tag *)
+  switch f0_tag:  (* now f1_tag, and this is known to be 0 *)
+  | 0 -> ...
+  | 1 -> ...  (* known dead *)
+  | 2 -> ...  (* known dead *)
+in
+let_cont k1 =
+  ...
+in
+let_cont k E x =
+  (* The context is:
+          b : Block (unknown tag, [= f1; ...])
+          exists f1_tag : Int ({0, 1})
+          exists f1 : Block (Tag = f1_tag, unknown_length)
+
+     The type of x is the join between:
+     1. Type: Block (Tag 0, [unknown])  (or, "= x_init_foo")
+        Context:
+          exists f1_tag : Int 0
+          exists x_init_foo : Block (Tag 0, [unknown])
+
+     2. Type: Block (Tag 1, [unknown])  (or, "= x_init_bar")
+        Context:
+          exists f1_tag : Int 1
+          exists x_init_bar : Block (Tag 0, [unknown])
+  *)
+  let t = get_tag x in
+  switch t:
+  | 0 ->
+    (* t = 0 *)
+    (* The type of x is now:
+       join (
+          Type: Block (Tag 0, [unknown])  (or, "= x_init_foo")
+          Context:
+            exists f1_tag : Int 0
+            exists x_init_foo : Block (Tag 0, [unknown])
+
+          Type: Block (Tag 1, [unknown])  (or, "= x_init_bar")
+          Context:
+            exists f1_tag : Int 1
+            exists x_init_bar : Block (Tag 0, [unknown])
+       meet
+       Block (Tag = t, unknown_length)
+
+       Since t = 0 then the type of x simplifies to:
+
+       Block (Tag = t, [unknown])
+       and the following also holds:
+        exists f1_tag : Int 0
+        exists x_init_foo : Block (Tag 0, [unknown])
+       (These will be intersected with the current context)
+    *)
+    k0
+  | 1 ->
+    (* t = 1 *)
+    k1
+in
+let_cont j_foo =
+  (* Context:
+     b : Block (unknown tag, [= f1; ...])
+     exists f1_tag : Int 0
+     exists f1 : Block (Tag = f1_tag, unknown_length)
+  *)
+  let x_init_foo (* Foo *) = makeblock (tag 0) ... in
+  (* x_init_foo : Block (Tag 0, [unknown]) *)
+  k x_init_foo
+in
+let_cont j_bar =
+  (* Context:
+     b : Block (unknown tag, [= f1; ...])
+     exists f1_tag : Int 1
+     exists f1 : Block (Tag = f1_tag, unknown_length)
+  *)
+  let x_init_bar (* Bar *) = makeblock (tag 1) ... in
+  (* x_init_bar : Block (Tag 1, [unknown]) *)
+  k x_init_bar
+in
+let f1 = field 0 of b in
+(* f1 : unknown *)
+(* b : Block (unknown tag, [= f1; ...]) *)
+let f1_tag = get_tag f1 in
+(* b : Block (unknown tag, [= f1; ...]) *)
+(* f1 : unknown meet Block (Tag = f1_tag, unknown_length) *)
+(* f1_tag : unknown :: Fabricated *)
+switch f1_tag:
+| 0 ->
+  (* f1_tag = 0 *)
+  (* Context:
+     b : Block (unknown tag, [= f1; ...])
+     exists f1_tag : Int 0
+     exists f1 : Block (Tag = f1_tag, unknown_length)
+  *)
+  j_foo
+| 1 ->
+  (* f1_tag = 1 *)
+  (* Context:
+     b : Block (unknown tag, [= f1; ...])
+     exists f1_tag : Int 1
+     exists f1 : Block (Tag = f1_tag, unknown_length)
+  *)
+  j_bar
+| 2 -> ...

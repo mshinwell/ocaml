@@ -37,15 +37,6 @@ module type S = sig
     | Never_specialise
     | Default_specialise
 
-  type unresolved_value =
-    | Set_of_closures_id of Set_of_closures_id.t
-    | Export_id of Export_id.t
-    | Name of Name.t
-
-  type unknown_because_of =
-    | Unresolved_value of unresolved_value
-    | Other
-
   type load_lazily =
     | Export_id of Export_id.t
     | Symbol of Symbol.t
@@ -76,6 +67,27 @@ module type S = sig
 
   type combining_op = Union | Intersection
 
+  module Typing_context : sig
+    type t
+
+    val create : unit -> t
+
+    val add : t -> Name.t -> Scope_level.t -> flambda_type -> t
+
+    type binding_type = Normal | Existential
+
+    val find : t -> Name.t -> t * binding_type
+
+    val cut
+       : t
+      -> minimum_scope_level_to_be_existential:Scope_level.t
+      -> t
+
+    val join : (t -> t -> t) type_accessor
+
+    val meet : (t -> t -> t) type_accessor
+  end
+
   (** Values of type [t] are known as "Flambda types".  Each Flambda type
       has a unique kind.
 
@@ -105,7 +117,7 @@ module type S = sig
   and ty_fabricated = (of_kind_fabricated, unit) ty
   and ty_phantom = (of_kind_phantom, unit) ty
 
-  and ('a, 'u) ty = ('a, 'u) maybe_unresolved or_alias
+  and ('a, 'u) ty = ('a, 'u) maybe_unresolved
 
   (* CR mshinwell: It's not quite clear to me that the extra complexity
      introduced by having this static "resolved" distinction is worth it. *)
@@ -129,7 +141,7 @@ module type S = sig
     (of_kind_naked_fabricated, unit) resolved_ty
   and resolved_ty_phantom = (of_kind_phantom, unit) resolved_ty
 
-  and ('a, 'u) resolved_ty = ('a, 'u) or_unknown_or_bottom or_alias
+  and ('a, 'u) resolved_ty = ('a, 'u) or_unknown_or_bottom
 
   and ('a, 'u) maybe_unresolved = private
     | Resolved of ('a, 'u) or_unknown_or_bottom
@@ -137,26 +149,28 @@ module type S = sig
     | Load_lazily of load_lazily
     (** The head constructor requires loading from a .cmx file. *)
 
-  (** For each kind (cf. [Flambda_kind], although with the "Value" cases
-      merged into one) there is a lattice of types. *)
+  (** For each kind there is a lattice of types. *)
   and ('a, 'u) or_unknown_or_bottom = private
-    | Unknown of unknown_because_of * 'u
+    | Unknown of 'u * Typing_context.t
     (** "Any value can flow to this point": the top element. *)
-    | Ok of 'a singleton_or_combination
+    | Alias of Name.t * Typing_context.t
+    (** Having the same type as another name. *)
+    | Singleton of 'a * Typing_context.t
+    (** Type not involving unions or intersections at the top level. *)
+    | Combination of 'a combination
+    (** Union or intersection type. *)
     | Bottom
     (** "No value can flow to this point": the bottom element. *)
 
-  (** Note: [Singleton] refers to the structure of the type.  A [Singleton]
-      type may still describe more than one particular runtime value (for
-      example, it may describe a boxed float whose contents is unknown). *)
-  and 'a singleton_or_combination = private
-    | Singleton of 'a
-    | Combination of combining_op
-        * 'a singleton_or_combination or_alias
-        * 'a singleton_or_combination or_alias
-    | Judgements of typing_environment * ('a singleton_or_combination)
-
-(* Or some kind of: Env + N types, for the various argument-like cases *)
+  and 'a combination = private
+    | Leaf of 'a
+    | Branch of {
+        op : combining_op;
+        left_ty : 'a combination or_alias;
+        left_context : Typing_context.t;
+        right_ty : 'a combination or_alias;
+        right_context : Typing_context.t;
+      }
 
   and of_kind_value = private
     | Tagged_immediate of ty_naked_immediate
@@ -166,7 +180,7 @@ module type S = sig
     | Boxed_nativeint of ty_naked_nativeint
     | Block of {
         tag : ty_fabricated;
-        fields : ty_value array or_unknown_length;
+        fields : types_in_context length_judgement;
       }
     | Set_of_closures of set_of_closures
     | Closure of closure
@@ -253,12 +267,20 @@ module type S = sig
     | Naked_nativeint of ty_kind_naked_nativeint
     | Fabricated_pointer of ty_kind_fabricated_pointer
 
-  and typing_environment_entry = {
-    ty : t;
-    existential : bool;
+  and ts_in_context = private {
+    context : typing_context;
+    types : t array;
   }
 
-  and typing_environment = typing_environment_entry Name.Map.t
+  and ty_values_in_context = private {
+    context : typing_context;
+    types : ty_value array;
+  }
+
+  and 'a length_judgement = private
+    | Exactly of 'a
+    | Length_at_least of Targetint.OCaml.t
+    | Length_exactly of Targetint.OCaml.t
 
   val print : Format.formatter -> t -> unit
 

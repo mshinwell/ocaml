@@ -323,6 +323,13 @@ end) = struct
   and of_kind_naked_nativeint =
     | Naked_nativeint of Targetint.t
 
+  and typing_context = {
+    names_to_types : t Name.Map.t;
+    levels_to_names : Name.Set.t Scope_level.Map.t;
+    existentials : Name.Set.t;
+    existential_freshening : Freshening.t;
+  }
+
   let print_unresolved_value ppf (unresolved : unresolved_value) =
     match unresolved with
     | Set_of_closures_id set ->
@@ -2375,4 +2382,157 @@ end) = struct
     match ty with
     | Alias alias -> Alias alias
     | Normal s_or_c -> Normal (Resolved (Ok s_or_c))
+
+  module Typing_context = struct
+    type t = typing_context
+
+    let print ppf { names_to_types; levels_to_names;
+          existentials; existential_freshening; } =
+      Format.fprintf ppf
+        "@[((names_to_types %a)@ \
+            (levels_to_names %a)@ \
+            (existentials %a)@ \
+            (existential_freshening %a))@]"
+        Name.Map.print print names_to_types
+        Scope_level.Map.print Name.Set.print levels_to_names
+        Name.Set.print existentials
+        Freshening.print existential_freshening
+
+    let create () =
+      let existential_freshening = Freshening.activate Freshening.empty in
+      { names_to_types = Name.Map.empty;
+        levels_to_names : Scope_level.Map.empty;
+        existentials : Name.Set.empty;
+        existential_freshening;
+      }
+
+    let add t name scope_level ty =
+      match Name.Map.find name t.names_to_types with
+      | exception Not_found ->
+        let names = Name.Map.add name ty t.names_to_types in
+        let levels_to_names =
+          Scope_level.Map.update scope_level
+            (function
+               | None -> Name.Set.singleton name
+               | Some names -> Name.Set.add name names)
+        in
+        { t with
+          names;
+          levels_to_names;
+        }
+      | _ty ->
+        Misc.fatal_errorf "Cannot rebind %a in environment: %a"
+          Name.print name
+          print t
+
+    type binding_type = Normal | Existential
+
+    let find t name =
+      match Name.Map.find name t.names_to_types with
+      | exception Not_found ->
+        Misc.fatal_errorf "Cannot find %a in environment: %a"
+          Name.print name
+          print t
+      | ty ->
+        let binding_type =
+          if Name.Map.mem name t.existentials then Existential
+          else Normal
+        in
+        match binding_type with
+        | Normal -> ty, Normal
+        | Existential ->
+          let ty = rename_variables t freshening in
+          ty, Existential
+
+    let cut t ~minimum_scope_level_to_be_existential =
+      let existentials =
+        Scope_level.Map.fold (fun scope_level names resulting_existentials ->
+            let will_be_existential =
+              Scope_level.(>=) scope_level minimum_scope_level_to_be_existential
+            in
+            if will_be_existential then
+              Name.Set.union names resulting_existentials
+            else
+              resulting_existentials)
+          t.levels_to_names
+          Name.Set.empty
+      in
+      let existential_freshening =
+        Name.Set.fold (fun (name : Name.t) freshening ->
+            match name with
+            | Symbol _ -> freshening
+            | Var var ->
+              let new_var = Variable.rename var in
+              Freshening.add_variable freshening var new_var)
+          t.existential_freshening
+      in
+      (* XXX we actually need to rename in the domain of [names_to_types] *)
+      { names_to_types = t.names_to_types;
+        levels_to_names = t.levels_to_names;
+        existentials;
+        existential_freshening;
+      }
+
+    let join ~importer ~type_of_name t1 t2 =
+      let names_to_types =
+        Name.Map.inter (fun ty1 ty2 ->
+            join ~importer ~type_of_name t1 t2)
+          t1.names_to_types
+          t2.names_to_types
+      in
+      let all_levels_to_names =
+        Scope_level.Map.union
+          (fun names1 names2 -> Name.Set.union names1 names2)
+          t1.levels_to_names
+          t2.levels_to_names
+      in
+      let levels_to_names =
+        Scope_level.Map.filter (fun _scope_level name ->
+            Name.Map.mem name names_to_types)
+          all_levels_to_names
+      in
+      let existentials =
+        (* XXX care if a name is non-existential in one and existential
+           in the other *)
+        Name.Set.inter t1.existentials t2.existentials
+      in
+      let existential_freshening =
+        ...
+      in
+      { names_to_types;
+        types_to_levels;
+        existentials;
+        existential_freshening;
+      }
+
+    let meet ~importer ~type_of_name t1 t2 =
+      let names_to_types =
+        Name.Map.union (fun ty1 ty2 ->
+            meet ~importer ~type_of_name t1 t2)
+          t1.names_to_types
+          t2.names_to_types
+      in
+      let all_levels_to_names =
+        Scope_level.Map.union
+          (fun names1 names2 -> Name.Set.union names1 names2)
+          t1.levels_to_names
+          t2.levels_to_names
+      in
+      let levels_to_names =
+        Scope_level.Map.filter (fun _scope_level name ->
+            Name.Map.mem name names_to_types)
+          all_levels_to_names
+      in
+      let existentials =
+        Name.Set.union t1.existentials t2.existentials
+      in
+      let existential_freshening =
+        ...
+      in
+      { names_to_types;
+        types_to_levels;
+        existentials;
+        existential_freshening;
+      }
+  end
 end

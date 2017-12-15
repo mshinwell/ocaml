@@ -158,7 +158,13 @@ end
 
 module Switch : sig
   (** Conditional control flow (the only such form). *)
+
+  type switch_kind =
+    | Value
+    | Fabricated
+
   type t = private {
+    kind : switch_kind;
     arms : Continuation.t Targetint.Map.t;
     (** Branches for all possible values of the scrutinee.
         Invariant: the map is always non-empty. *)
