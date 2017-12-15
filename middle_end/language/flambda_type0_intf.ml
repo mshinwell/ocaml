@@ -69,7 +69,7 @@ module type S = sig
   end
 
   type 'a or_alias = private
-    | Normal of 'a * typing_environment
+    | Normal of 'a
     | Alias of Name.t
 
   (* CR-someday mshinwell / lwhite: Types in ANF form? *)
@@ -92,13 +92,6 @@ module type S = sig
     | Phantom of ty_phantom
 
   and flambda_type = t
-
-  and typing_environment_entry = {
-    ty : t;
-    existential : bool;
-  }
-
-  and typing_environment = typing_environment_entry Name.Map.t
 
   (** Types of kind [Value] are equipped with an extra piece of information
       such that when we are at the top element, [Unknown], we still know
@@ -161,6 +154,7 @@ module type S = sig
     | Combination of combining_op
         * 'a singleton_or_combination or_alias
         * 'a singleton_or_combination or_alias
+    | Judgements of typing_environment * ('a singleton_or_combination)
 
 (* Or some kind of: Env + N types, for the various argument-like cases *)
 
@@ -258,6 +252,13 @@ module type S = sig
     | Naked_int64 of ty_kind_naked_int64
     | Naked_nativeint of ty_kind_naked_nativeint
     | Fabricated_pointer of ty_kind_fabricated_pointer
+
+  and typing_environment_entry = {
+    ty : t;
+    existential : bool;
+  }
+
+  and typing_environment = typing_environment_entry Name.Map.t
 
   val print : Format.formatter -> t -> unit
 
