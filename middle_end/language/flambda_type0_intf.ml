@@ -37,6 +37,15 @@ module type S = sig
     | Never_specialise
     | Default_specialise
 
+  type unresolved_value =
+    | Set_of_closures_id of Set_of_closures_id.t
+    | Export_id of Export_id.t
+    | Name of Name.t
+
+  type unknown_because_of =
+    | Unresolved_value of unresolved_value
+    | Other
+
   type load_lazily =
     | Export_id of Export_id.t
     | Symbol of Symbol.t
@@ -60,33 +69,19 @@ module type S = sig
   end
 
   type 'a or_alias = private
-    | Normal of 'a
+    | Normal of 'a * typing_environment
     | Alias of Name.t
 
   (* CR-someday mshinwell / lwhite: Types in ANF form? *)
 
   type combining_op = Union | Intersection
 
-  module Typing_context : sig
-    type t
+  type 'a length_constraint =
+    | Exactly of 'a
+    | At_least of Targetint.OCaml.t
+    | Of_length of Targetint.OCaml.t
 
-    val create : unit -> t
-
-    val add : t -> Name.t -> Scope_level.t -> flambda_type -> t
-
-    type binding_type = Normal | Existential
-
-    val find : t -> Name.t -> t * binding_type
-
-    val cut
-       : t
-      -> minimum_scope_level_to_be_existential:Scope_level.t
-      -> t
-
-    val join : (t -> t -> t) type_accessor
-
-    val meet : (t -> t -> t) type_accessor
-  end
+  type type_environment
 
   (** Values of type [t] are known as "Flambda types".  Each Flambda type
       has a unique kind.
@@ -117,7 +112,7 @@ module type S = sig
   and ty_fabricated = (of_kind_fabricated, unit) ty
   and ty_phantom = (of_kind_phantom, unit) ty
 
-  and ('a, 'u) ty = ('a, 'u) maybe_unresolved
+  and ('a, 'u) ty = ('a, 'u) maybe_unresolved or_alias
 
   (* CR mshinwell: It's not quite clear to me that the extra complexity
      introduced by having this static "resolved" distinction is worth it. *)
@@ -141,7 +136,7 @@ module type S = sig
     (of_kind_naked_fabricated, unit) resolved_ty
   and resolved_ty_phantom = (of_kind_phantom, unit) resolved_ty
 
-  and ('a, 'u) resolved_ty = ('a, 'u) or_unknown_or_bottom
+  and ('a, 'u) resolved_ty = ('a, 'u) or_unknown_or_bottom or_alias
 
   and ('a, 'u) maybe_unresolved = private
     | Resolved of ('a, 'u) or_unknown_or_bottom
@@ -149,28 +144,23 @@ module type S = sig
     | Load_lazily of load_lazily
     (** The head constructor requires loading from a .cmx file. *)
 
-  (** For each kind there is a lattice of types. *)
+  (** For each kind (cf. [Flambda_kind], although with the "Value" cases
+      merged into one) there is a lattice of types. *)
   and ('a, 'u) or_unknown_or_bottom = private
-    | Unknown of 'u * Typing_context.t
+    | Unknown of unknown_because_of * 'u
     (** "Any value can flow to this point": the top element. *)
-    | Alias of Name.t * Typing_context.t
-    (** Having the same type as another name. *)
-    | Singleton of 'a * Typing_context.t
-    (** Type not involving unions or intersections at the top level. *)
-    | Combination of 'a combination
-    (** Union or intersection type. *)
+    | Ok of 'a singleton_or_combination
     | Bottom
     (** "No value can flow to this point": the bottom element. *)
 
-  and 'a combination = private
-    | Leaf of 'a
-    | Branch of {
-        op : combining_op;
-        left_ty : 'a combination or_alias;
-        left_context : Typing_context.t;
-        right_ty : 'a combination or_alias;
-        right_context : Typing_context.t;
-      }
+  (** Note: [Singleton] refers to the structure of the type.  A [Singleton]
+      type may still describe more than one particular runtime value (for
+      example, it may describe a boxed float whose contents is unknown). *)
+  and 'a singleton_or_combination = private
+    | Singleton of 'a
+    | Combination of combining_op
+        * 'a singleton_or_combination or_alias
+        * 'a singleton_or_combination or_alias
 
   and of_kind_value = private
     | Tagged_immediate of ty_naked_immediate
@@ -179,8 +169,9 @@ module type S = sig
     | Boxed_int64 of ty_naked_int64
     | Boxed_nativeint of ty_naked_nativeint
     | Block of {
+        env : type_environment;
         tag : ty_fabricated;
-        fields : types_in_context length_judgement;
+        fields : ty_value length_constraint;
       }
     | Set_of_closures of set_of_closures
     | Closure of closure
@@ -188,6 +179,124 @@ module type S = sig
       (* CR mshinwell: maybe this should be ty_naked_float array option?
          (May be more consistent with existing flambda) *)
     | Float_array of ty_naked_float array
+
+(* [prove_tag] does something like [reify] *)
+
+module Blocks : sig
+  type t = private ty_value array length_constraint Tag.Scannable.Map.t
+
+  val add
+     : (t
+    -> tags:Tag.Scannable.Set.t
+    -> fields:ty_value array length_constraint
+    -> t) type_accessor
+end = struct
+  type t = ty_value array length_constraint Tag.Scannable.Map.t
+
+  let add_one_tag ~importer ~type_of_name t ~tag
+        ~(fields : ty_value length_constraint) =
+    match Tag.Scannable.Map.find t tag with
+    | exception Not_found -> Tag.Scannable.Map.add tag fields t
+    | existing_fields ->
+      let fields : ty_value length_constraint or_invalid =
+        match existing_fields, fields with
+        | At_least size1, At_least size2 ->
+          Ok (At_least (max size1 size2))
+        | At_least conjectured_size, Of_length exact_size
+        | Of_length exact_size, At_least conjectured_size ->
+          if Targetint.OCaml.(>) conjectured_size exact_size then Invalid
+          else Ok (Of_length exact_size)
+        | Of_length exact_size1, Of_length exact_size2 ->
+          if not (Targetint.OCaml.equal exact_size1 exact_size2) then Invalid
+          else Ok (Of_length exact_size1)
+        | Exactly fields, At_least conjectured_size
+        | At_least conjectured_size, Exactly fields ->
+          let exact_size = Array.length fields in
+          if Targetint.OCaml.(>) conjectured_size exact_size then Invalid
+          else Ok (Exactly fields)
+        | Exactly fields, Of_length exact_size1
+        | Of_length exact_size1, Exactly fields ->
+          let exact_size2 = Array.length fields in
+          if not (Targetint.OCaml.equal exact_size1 exact_size2) then Invalid
+          else Ok (Exactly fields)
+        | Exactly fields1, Exactly fields2 ->
+          if Array.length fields1 <> Array.length fields2 then Invalid
+          else
+            let fields =
+              Array.map2 (fun field1 field2 ->
+                  meet_ty_value ~importer ~type_of_name field1 field2)
+                fields1 fields2
+            in
+            Ok (Exactly fields)
+      in
+      match fields with
+      | Invalid -> t
+      | Ok fields -> Tag.Scannable.Map.add tag fields t
+
+  let add t ~tags ~(fields : ty_value array length_constraint) =
+    Tag.Scannable.Set.fold (fun tag t ->
+        add_one_tag t ~tag ~fields)
+      tags
+end
+
+let prove_blocks ~importer ~type_of_name t : ... Proof.t =
+  fold t
+    ~init:(Invalid : _ Proof.t)
+    ~singleton:(fun (proof : _ Proof.t)
+            (singleton : of_kind_value) : blocks ->
+      match singleton with
+      | Blocks { env; tag; fields; } ->
+        let tag_proof = prove_tag ~importer ~type_of_name tag in
+        begin match tag_proof with
+        | Invalid -> Invalid
+        | Unknown -> Unknown
+        | Ok tags ->
+          let 
+        end
+      | Tagged_immediate _
+      | Boxed_float _
+      | Boxed_int32 _
+      | Boxed_int64 _
+      | Boxed_nativeint _
+      | Block _
+      | Closure _
+      | String _
+      | Float_array _ -> Invalid)
+
+
+    ~meet:(fun proof (constr : constraint_of_kind_value) : _ or_invalid ->
+      match constr with
+      | Boxed_float -> Ok proof
+      | Tagged_immediate
+      | Boxed_int32
+      | Boxed_int64
+      | Boxed_nativeint
+      | Block _
+      | Closure _
+      | String
+      | Float_array _ -> Invalid)
+    ~join:(fun proofs ->
+      Proof.join_list proofs
+        ~join_contents:(fun ty_naked_float1 ty_naked_float2 ->
+          join_ty_naked_float ~importer ~type_of_name
+            ty_naked_float1 ty_naked_float2))
+
+
+let meet ... =
+  ...
+  | Block { env = env1; tag = tag1; fields = fields1; },
+      Block { env = env2; tag = tag2; fields = fields2; } ->
+    if Array.length fields1 <> Array.length fields2 then
+      Combine
+    else
+      let env = Typing_environment.meet ~importer ~type_of_name env1 env2 in
+      let tag = meet_ty_fabricated ~importer ~type_of_name tag1 tag2 in
+      let fields =
+        Array.map2 (fun field1 field2 ->
+            meet_ty_value ~importer ~type_of_name field1 field2)
+          fields1 fields2
+      in
+      singleton (Block { env; tag; fields; })
 
   and inlinable_function_declaration = private {
     closure_origin : Closure_origin.t;
@@ -267,20 +376,26 @@ module type S = sig
     | Naked_nativeint of ty_kind_naked_nativeint
     | Fabricated_pointer of ty_kind_fabricated_pointer
 
-  and ts_in_context = private {
-    context : typing_context;
-    types : t array;
-  }
+  module Type_environment : sig
+    type t = type_environment
 
-  and ty_values_in_context = private {
-    context : typing_context;
-    types : ty_value array;
-  }
+    val create : unit -> t
 
-  and 'a length_judgement = private
-    | Exactly of 'a
-    | Length_at_least of Targetint.OCaml.t
-    | Length_exactly of Targetint.OCaml.t
+    val add : t -> Name.t -> Scope_level.t -> flambda_type -> t
+
+    type binding_type = Normal | Existential
+
+    val find : t -> Name.t -> t * binding_type
+
+    val cut
+       : t
+      -> minimum_scope_level_to_be_existential:Scope_level.t
+      -> t
+
+    val join : (t -> t -> t) type_accessor
+
+    val meet : (t -> t -> t) type_accessor
+  end
 
   val print : Format.formatter -> t -> unit
 
@@ -357,8 +472,13 @@ module type S = sig
   val box_int32 : t -> t
   val box_int64 : t -> t
   val box_nativeint : t -> t
-  val block : Tag.Scannable.t -> ty_value array -> t
   val immutable_float_array : ty_naked_float array -> t
+
+  val block
+     : type_environment
+    -> tag:ty_fabricated
+    -> fields:ty_value array
+    -> t
 
   (** The bottom type for the given kind ("no value can flow to this point"). *)
   val bottom : Flambda_kind.t -> t
@@ -519,14 +639,23 @@ module type S = sig
      : (ty_naked_nativeint -> ty_naked_nativeint -> ty_naked_nativeint)
          type_accessor
 
-  (** Greatest lower bound of two types. *)
-  val meet : (t -> t -> t) type_accessor
+  (** Greatest lower bound of two types.
+      When meeting types of kind [Value] this can introduce new judgements
+      into the typing context. *)
+  val meet : (type_environment -> t -> t -> type_environment * t) type_accessor
 
   (** Greatest lower bound of an arbitrary number of types. *)
-  val meet_list : (Flambda_kind.t -> t list -> t) type_accessor
+  val meet_list
+     : (type_environment
+     -> Flambda_kind.t
+     -> t list
+     -> type_environment * t) type_accessor
 
   (** Greatest lower bound of two types known to be of kind [Value]. *)
-  val meet_ty_value : (ty_value -> ty_value -> ty_value) type_accessor
+  val meet_ty_value
+     : (type_environment * ty_value
+    -> ty_value
+    -> type_environment * ty_value) type_accessor
 
   (** Greatest lower bound of two types known to be of kind [Naked_float]. *)
   val meet_ty_naked_float
@@ -630,4 +759,6 @@ module type S = sig
 
     val print : Format.formatter -> t -> unit
   end
+
+
 end
