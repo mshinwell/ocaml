@@ -168,10 +168,9 @@ module type S = sig
     | Boxed_int32 of ty_naked_int32
     | Boxed_int64 of ty_naked_int64
     | Boxed_nativeint of ty_naked_nativeint
-    | Block of {
-        env : type_environment;
-        tag : ty_fabricated;
-        fields : ty_value length_constraint;
+    | Blocks of {
+        tag : Simple.t;
+        cases : block_case Tag.Scannable.Map.t;
       }
     | Set_of_closures of set_of_closures
     | Closure of closure
@@ -180,106 +179,11 @@ module type S = sig
          (May be more consistent with existing flambda) *)
     | Float_array of ty_naked_float array
 
-(* [prove_tag] does something like [reify] *)
+  and block_case = private
+    { env_extension : typing_environment;
+      fields : ty_value array or_unknown_length;
+    }
 
-module Blocks : sig
-  type t = private ty_value array length_constraint Tag.Scannable.Map.t
-
-  val add
-     : (t
-    -> tags:Tag.Scannable.Set.t
-    -> fields:ty_value array length_constraint
-    -> t) type_accessor
-end = struct
-  type t = ty_value array length_constraint Tag.Scannable.Map.t
-
-  let add_one_tag ~importer ~type_of_name t ~tag
-        ~(fields : ty_value length_constraint) =
-    match Tag.Scannable.Map.find t tag with
-    | exception Not_found -> Tag.Scannable.Map.add tag fields t
-    | existing_fields ->
-      let fields : ty_value length_constraint or_invalid =
-        match existing_fields, fields with
-        | At_least size1, At_least size2 ->
-          Ok (At_least (max size1 size2))
-        | At_least conjectured_size, Of_length exact_size
-        | Of_length exact_size, At_least conjectured_size ->
-          if Targetint.OCaml.(>) conjectured_size exact_size then Invalid
-          else Ok (Of_length exact_size)
-        | Of_length exact_size1, Of_length exact_size2 ->
-          if not (Targetint.OCaml.equal exact_size1 exact_size2) then Invalid
-          else Ok (Of_length exact_size1)
-        | Exactly fields, At_least conjectured_size
-        | At_least conjectured_size, Exactly fields ->
-          let exact_size = Array.length fields in
-          if Targetint.OCaml.(>) conjectured_size exact_size then Invalid
-          else Ok (Exactly fields)
-        | Exactly fields, Of_length exact_size1
-        | Of_length exact_size1, Exactly fields ->
-          let exact_size2 = Array.length fields in
-          if not (Targetint.OCaml.equal exact_size1 exact_size2) then Invalid
-          else Ok (Exactly fields)
-        | Exactly fields1, Exactly fields2 ->
-          if Array.length fields1 <> Array.length fields2 then Invalid
-          else
-            let fields =
-              Array.map2 (fun field1 field2 ->
-                  meet_ty_value ~importer ~type_of_name field1 field2)
-                fields1 fields2
-            in
-            Ok (Exactly fields)
-      in
-      match fields with
-      | Invalid -> t
-      | Ok fields -> Tag.Scannable.Map.add tag fields t
-
-  let add t ~tags ~(fields : ty_value array length_constraint) =
-    Tag.Scannable.Set.fold (fun tag t ->
-        add_one_tag t ~tag ~fields)
-      tags
-end
-
-let prove_blocks ~importer ~type_of_name t : ... Proof.t =
-  fold t
-    ~init:(Invalid : _ Proof.t)
-    ~singleton:(fun (proof : _ Proof.t)
-            (singleton : of_kind_value) : blocks ->
-      match singleton with
-      | Blocks { env; tag; fields; } ->
-        let tag_proof = prove_tag ~importer ~type_of_name tag in
-        begin match tag_proof with
-        | Invalid -> Invalid
-        | Unknown -> Unknown
-        | Ok tags ->
-          let 
-        end
-      | Tagged_immediate _
-      | Boxed_float _
-      | Boxed_int32 _
-      | Boxed_int64 _
-      | Boxed_nativeint _
-      | Block _
-      | Closure _
-      | String _
-      | Float_array _ -> Invalid)
-
-
-    ~meet:(fun proof (constr : constraint_of_kind_value) : _ or_invalid ->
-      match constr with
-      | Boxed_float -> Ok proof
-      | Tagged_immediate
-      | Boxed_int32
-      | Boxed_int64
-      | Boxed_nativeint
-      | Block _
-      | Closure _
-      | String
-      | Float_array _ -> Invalid)
-    ~join:(fun proofs ->
-      Proof.join_list proofs
-        ~join_contents:(fun ty_naked_float1 ty_naked_float2 ->
-          join_ty_naked_float ~importer ~type_of_name
-            ty_naked_float1 ty_naked_float2))
 
 
 let meet ... =
@@ -462,6 +366,10 @@ let meet ... =
   val mutable_string : size:Targetint.OCaml.t -> t
   val mutable_float_array : size:Targetint.OCaml.t -> t
   val mutable_float_arrays_of_various_sizes : sizes:Targetint.OCaml.Set.t -> t
+
+  (** Building of types corresponding to values that did not exist at
+      source level. *)
+  val these_tags : Tag.Set.t -> t
 
   (** Building of types from other types.  These functions will fail with
       a fatal error if the supplied type is not of the correct kind. *)

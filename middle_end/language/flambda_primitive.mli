@@ -165,7 +165,7 @@ type unary_primitive =
     (** [Duplicate_block] may not be used to change the tag of a block. *)
   | Is_int
   | Get_tag of {
-      possible_tags_and_sizes : int Tag.Map.t;
+      tags_to_sizes : int Tag.Map.t;
     }
   | Array_length of block_access_kind
   | Bigarray_length of { dimension : int; }

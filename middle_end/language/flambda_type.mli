@@ -44,7 +44,7 @@ val unknown_like_array : (t array -> t array) type_accessor
     [value_kind]s. *)
 val unknowns_from_value_kinds : Flambda_kind.Value_kind.t list -> t array
 
-val this_many_unknowns : Flambda_kind.t -> t array
+val this_many_unknowns : int -> Flambda_kind.t -> t array
 
 (** Rename free variables in a type. *)
 val rename_variables

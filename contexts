@@ -113,3 +113,40 @@ switch f1_tag:
   *)
   j_bar
 | 2 -> ...
+
+
+new idea:
+
+let f1 = field 0 of b in
+(* f1 : unknown *)
+(* b : Block (unknown tag, [= f1; ...]) *)
+let f1_tag = get_tag (f1, { tag 0 |-> size 1; tag 1 |-> size 2 }) in
+(* b : Block (unknown tag, [= f1; ...]) *)
+(* f1 : unknown meet
+     (Block (Tag 0, [unknown])
+      join
+      Block (Tag 1, [unknown; unknown]))
+*)
+(* f1_tag : Tag_of f1 :: Fabricated *)  (* dependent type *)
+
+switch f1_tag:
+| 0 ->
+  (* f1_tag = 0
+     Since f1_tag : Tag_of f1 then
+     we refine the type of f1 to only contain tag 0 descriptions
+  *)
+  (* Context:
+     b : Block (unknown tag, [= f1; ...])
+     exists f1_tag : Tag_of f1  (* note: not simplified to a constant *)
+     exists f1 : Block (Tag 0, [unknown])
+  *)
+  j_foo
+| 1 ->
+  (* f1_tag = 1 *)
+  (* Context:
+     b : Block (unknown tag, [= f1; ...])
+     exists f1_tag : Tag_of f1  (* note: not simplified to a constant *)
+     exists f1 : Block (Tag 1, [unknown; unknown])
+  *)
+  j_bar
+| 2 -> ...
