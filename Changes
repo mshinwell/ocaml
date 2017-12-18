@@ -12,9 +12,8 @@ Working version
 
 ### Type system:
 
-- GPR#1370: Fix code duplication in Cmmgen
-  (Vincent Laviron, with help from Pierre Chambart,
-   reviews by Gabriel Scherer and Luc Maranget)
+- MPR#7611, GPR#1491: reject the use of generative functors as applicative
+  (Valentin Gatien-Baron)
 
 - GPR#1469: Use the information from [@@immediate] annotations when
   computing whether a type can be [@@unboxed]
@@ -37,6 +36,10 @@ Working version
   colors for the native Windows ports now work under Cygwin/MSYS2.
   (Nicolas Ojeda Bar, review by Gabriel Scherer, David Allsopp, Xavier Leroy)
 
+- GPR#1451: [getpwuid], [getgrgid], [getpwnam], [getgrnam] now raise Unix error
+  instead of returning [Not_found] when interrupted by a signal.
+  (Arseniy Alekseyev, review by Mark Shinwell and Xavier Leroy)
+
 - GPR#1477: raw_spacetime_lib can now be used in bytecode.
   (Nicolas Ojeda Bar, review by Mark Shinwell)
 
@@ -53,6 +56,10 @@ Working version
   (Arthur Charguéraud and Armaël Guéneau, with help from Gabriel Scherer and
   Frédéric Bour)
 
+- GPR#1491: Improve error reporting for ill-typed applicative functor
+  types, F(M).t.
+  (Valentin Gatien-Baron, review by Florian Angeletti and Gabriel Radanne)
+
 - GPR#1496: Refactor the code printing explanation for unification type errors,
   in order to avoid duplicating pattern matches
   (Armaël Guéneau, review by Florian Angeletti and Gabriel Scherer)
@@ -62,7 +69,16 @@ Working version
   (Arthur Charguéraud and Armaël Guéneau, with help from Leo White, review by
   Florian Angeletti and Gabriel Radanne)
 
+- GPR#1534: Extend the warning printed when (*) is used, adding a hint to
+  suggest using ( * ) instead
+  (Armaël Guéneau, with help and review from Florian Angeletti and Gabriel
+  Scherer)
+
 ### Code generation and optimizations:
+
+- GPR#1370: Fix code duplication in Cmmgen
+  (Vincent Laviron, with help from Pierre Chambart,
+   reviews by Gabriel Scherer and Luc Maranget)
 
 ### Runtime system:
 
@@ -72,6 +88,10 @@ Working version
 - GPR#1478: The Spacetime profiler now works under Windows (but it is not yet
   able to collect profiling information from C stubs).
   (Nicolas Ojeda Bar, review by Xavier Leroy, Mark Shinwell)
+
+- GPR#1526: install the debug and instrumented runtimes
+  (lib{caml,asm}run{d,i}.a)
+  (Gabriel Scherer, reminded by Julia Lawall)
 
 ### Tools:
 
@@ -103,8 +123,9 @@ Working version
   (Gabriel Scherer and Armaël Guéneau,
    review by Valentin Gatien-Baron and Damien Doligez)
 
-- GPR#1519: migrate expect tests to ocamltest
-  (Sébastien Hinderer, review by Gabriel Scherer)
+- GPR#1519, GPR#1532: migrate expect tests to ocamltest
+  (Sébastien Hinderer, review by Gabriel Scherer, Valentin Gatien-Baron
+  and Nicolás Ojeda Bär)
 
 ### Bug fixes
 
@@ -138,6 +159,10 @@ Working version
 - GPR#1517: More robust handling of type variables in mcomp
   (Leo White and Thomas Refis, review by Jacques Garrigue)
 
+- PR#4499, GPR#1479: Use native Windows API to implement Sys.getenv,
+  Unix.getenv and Unix.environment under Windows.
+  (Nicolas Ojeda Bar, report by Alain Frisch, review by David Allsopp, Xavier
+  Leroy)
 
 4.06 maintenance branch
 -----------------------
