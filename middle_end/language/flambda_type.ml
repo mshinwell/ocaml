@@ -2372,20 +2372,9 @@ end = struct
     | existing_fields ->
       let fields : ty_value length_constraint or_invalid =
         match existing_fields, fields with
-        | At_least size1, At_least size2 ->
-          Ok (At_least (max size1 size2))
-        | At_least conjectured_size, Of_length exact_size
-        | Of_length exact_size, At_least conjectured_size ->
-          if Targetint.OCaml.(>) conjectured_size exact_size then Invalid
-          else Ok (Of_length exact_size)
         | Of_length exact_size1, Of_length exact_size2 ->
           if not (Targetint.OCaml.equal exact_size1 exact_size2) then Invalid
           else Ok (Of_length exact_size1)
-        | Exactly fields, At_least conjectured_size
-        | At_least conjectured_size, Exactly fields ->
-          let exact_size = Array.length fields in
-          if Targetint.OCaml.(>) conjectured_size exact_size then Invalid
-          else Ok (Exactly fields)
         | Exactly fields, Of_length exact_size1
         | Of_length exact_size1, Exactly fields ->
           let exact_size2 = Array.length fields in

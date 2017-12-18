@@ -56,11 +56,24 @@ type duplicate_block_kind =
 (* CR-someday mshinwell: We should have unboxed arrays of int32, int64 and
    nativeint. *)
 
-type block_access_kind =
-  | Any_value
-  | Definitely_immediate
-  | Naked_float
-  | Generic_array of Generic_array_specialisation.t
+module Block_access_kind : sig
+  type t0 =
+    | Any_value
+    | Definitely_immediate
+    | Naked_float
+
+  type t =
+    | Block of t0
+    | Array of t0
+    | Generic_array of Generic_array_specialisation.t
+
+  (** The kind of the field of the block being accessed. *)
+  val kind_this_element : t -> Flambda-kind.t
+
+  (** A suitable kind to assign to _all_ the fields of the block being
+      accessed. *)
+  val kind_all_elements : t -> Flambda_kind.t
+end
 
 (* Notes for producing [make_block_kind] / [Duplicate_scannable_block] from
    [Pduparray] and [Pduprecord]:  (Now out of date)

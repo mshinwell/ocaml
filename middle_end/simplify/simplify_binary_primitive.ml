@@ -797,33 +797,111 @@ let get_field ~importer ~type_of_name t ~field_index ~field_is_mutable
       field_index
       print t
 
+type block_access_op =
+  | Immutable_load of { result_var : Variable.t option; }
+  | Mutable_load
+  | Store
 
-let simplify_block_load_known_index env r prim arg dbg ~field_index
-      ~block_access_kind ~field_is_mutable =
-  let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
-  let kind = Flambda_primitive.kind_of_field_kind field_kind in
-  let get_field_result =
-    (E.type_accessor env T.get_field) ty
-      ~field_index ~field_is_mutable ~block_access_kind
+let refine_block_ty_upon_access env r ~block ~block_ty ~field_index
+      ~block_access_kind (op : block_access_op) =
+  let unknown_kind =
+    match block_access_kind with
+    | Block Any_value
+    | Array Any_value -> K.value Unknown
+    | Block Definitely_immediate -> K.value Unknown
+    | Array Definitely_immediate -> K.value Definitely_immediate
+    | Block Naked_float
+    | Array Naked_float -> K.naked_float ()
+    | Generic_array No_specialisation -> K.value Unknown
+    | Generic_array Full_of_naked_floats -> K.naked_float ()
+    | Generic_array Full_of_immediates -> K.value Definitely_immediate
+    | Generic_array Full_of_arbitrary_values_but_not_floats -> K.value Unknown
   in
-  let term, ty =
-    match get_field_result with
-    | Ok field_ty ->
-      assert ((not field_is_mutable) || T.is_unknown field_ty);
-      let reified =
-        (E.type_accessor env T.reify) ~allow_free_variables:true field_ty
+  let field_kind =
+    match block_access_kind with
+    | Block Definitely_immediate -> K.value Definitely_immediate
+    | _ -> unknown_kind
+  in
+  let first_unknown_fields =
+    if field_index > 0 then T.this_many_unknowns field_index unknown_kind
+    else [| |]
+  in
+  let first_known_field =
+    match access with
+    | Immutable_load { result_var; } -> [| T.alias field_kind result_var |]
+    | Mutable_load
+    | Store -> [| T.unknown field_kind |]
+  in
+  let first_fields =
+    Array.append first_unknown_fields first_known_field
+  in
+  assert (Array.length first_fields = field_index + 1);
+  let block_ty_refinement =
+    match block_access_kind with
+    | Any_value | Definitely_immediate ->
+      let block_case =
+        T.block_case_size_possibly_longer
+          ~env_extension:(T.Type_environment.create ())
+          ~first_fields
       in
-      begin match reified with
-      | Term (simple, ty) -> Named.Simple simple, ty
-      | Cannot_reify -> original_term (), field_ty
-      | Invalid -> Reachable.invalid (), T.bottom kind
-      end
-    | Invalid -> Reachable.invalid (), T.bottom kind
+      T.block ~tag:Unknown ~block_case
+    | Naked_float ->
+      T.float_array_size_possibly_longer ~first_fields
+    | Generic_array _ -> Misc.fatal_error "Not yet implemented"
   in
-  term, ty, r
+  let block_ty =
+    (E.type_accessor env T.meet) block_ty block_ty_refinement
+  in
+  let r = R.add_typing_judgement r block block_ty in
+  block_ty, r
+
+let simplify_block_load_known_index env r ~result_var prim ~block ~block_ty dbg
+      ~field_index ~block_access_kind ~field_is_mutable =
+  let original_term () : Named.t =
+    let field_index = Simple.const (Tagged_immediate field_index) in
+    Prim (Binary (prim, block, field_index), dbg)
+  in
+  let invalid () =
+    Reachable.invalid (), T.bottom field_kind,
+      R.map_benefit (B.remove_primitive Block_load) r
+  in
+  let unknown () =
+    let op : block_access_op =
+      match field_is_mutable with
+      | Mutable -> Mutable_load
+      | Immutable -> Immutable_load { result_var = Some result_var; }
+    in
+    let block_ty, r =
+      refine_block_ty_upon_access env r ~block ~block_ty ~field_index
+        ~block_access_kind op
+    in
+  in
+  let block_ty, r =
+    let op : block_access_op =
+      match field_is_mutable with
+      | Mutable -> Mutable_load
+      | Immutable -> Immutable_load { result_var = None; }
+    in
+    refine_block_ty_upon_access env r ~block ~block_ty ~field_index
+      ~block_access_kind op
+  in
+  let proof = (E.type_accessor env T.prove_blocks) block in
+  match proof with
+  | Ok (blocks, imms) ->
+    begin match T.Blocks.get_singleton blocks with
+    | Some block ->
+      begin match T.Blocks.Block.get_field block ~field_index with
+      | Ok field_ty -> original_term (), field_ty, r
+      | Unknown -> unknown r
+      | Invalid -> invalid ()
+      end
+    | None -> unknown r
+    end
+  | Unknown -> unknown r
+  | Invalid -> invalid ()
 
 (* XXX this could maybe be shared with the equivalent [block_set] wrapper *)
-let simplify_block_load env r prim ~block ~index
+let simplify_block_load env r ~result_var prim ~block ~index
       ~field_kind ~field_is_mutable dbg =
   let index, index_ty = S.simplify_simple env index in
   let block, block_ty = S.simplify_simple env block in
@@ -843,7 +921,7 @@ let simplify_block_load env r prim ~block ~index
     | Proved (Exactly indexes) ->
       begin match Immediate.Set.get_singleton indexes with
       | Some field_index ->
-        simplify_block_load_known_index env r prim block dbg
+        simplify_block_load_known_index env r prim ~block ~block_ty dbg
           ~field_index ~field_kind ~field_is_mutable
       | None -> unique_index_unknown ()
       end
@@ -1036,10 +1114,10 @@ let simplify_string_or_bigstring_load env r prim dbg
     else unknown ()
   | Invalid _, _ | _, Invalid _ -> invalid ()
 
-let simplify_binary_primitive env r prim arg1 arg2 dbg =
+let simplify_binary_primitive env r ~result_var prim arg1 arg2 dbg =
   match prim with
   | Block_load ->
-    simplify_block_load env r prim ~block:arg1 ~index:arg2 dbg
+    simplify_block_load env r ~result_var prim ~block:arg1 ~index:arg2 dbg
   | Block_set (field, field_kind, init_or_assign) ->
     simplify_block_set env r prim ~field ~field_kind ~init_or_assign
       ~block:arg1 ~new_value:arg2 dbg

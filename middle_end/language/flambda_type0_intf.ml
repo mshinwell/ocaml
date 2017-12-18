@@ -76,10 +76,9 @@ module type S = sig
 
   type combining_op = Union | Intersection
 
-  type 'a length_constraint =
+  type 'a or_unknown_length =
     | Exactly of 'a
-    | At_least of Targetint.OCaml.t
-    | Of_length of Targetint.OCaml.t
+    | Unknown_length
 
   type type_environment
 
@@ -149,18 +148,16 @@ module type S = sig
   and ('a, 'u) or_unknown_or_bottom = private
     | Unknown of unknown_because_of * 'u
     (** "Any value can flow to this point": the top element. *)
-    | Ok of 'a singleton_or_combination
+    | Ok of 'a singleton_or_union
     | Bottom
     (** "No value can flow to this point": the bottom element. *)
 
   (** Note: [Singleton] refers to the structure of the type.  A [Singleton]
       type may still describe more than one particular runtime value (for
       example, it may describe a boxed float whose contents is unknown). *)
-  and 'a singleton_or_combination = private
+  and 'a singleton_or_union = private
     | Singleton of 'a
-    | Combination of combining_op
-        * 'a singleton_or_combination or_alias
-        * 'a singleton_or_combination or_alias
+    | Join of 'a singleton_or_union or_alias * 'a singleton_or_union or_alias
 
   and of_kind_value = private
     | Tagged_immediate of ty_naked_immediate
@@ -169,22 +166,44 @@ module type S = sig
     | Boxed_int64 of ty_naked_int64
     | Boxed_nativeint of ty_naked_nativeint
     | Blocks of {
-        tag : Simple.t;
+        tag : Simple.t or_unknown;
         cases : block_case Tag.Scannable.Map.t;
       }
     | Set_of_closures of set_of_closures
     | Closure of closure
     | String of String_info.t
-      (* CR mshinwell: maybe this should be ty_naked_float array option?
-         (May be more consistent with existing flambda) *)
-    | Float_array of ty_naked_float array
+    | Float_array of ty_naked_float array or_unknown_length
 
   and block_case = private
     { env_extension : typing_environment;
       fields : ty_value array or_unknown_length;
     }
 
+  val block_case_known_size
+     : env_extension:typing_environment
+    -> fields:ty_value array
+    -> block_case
 
+  val block_case_size_possibly_longer
+     : env_extension:typing_environment
+    -> first_fields:ty_value array
+    -> block_case
+
+  val block
+     : tag:Simple.t
+    -> block_case
+    -> t
+
+  val blocks
+     : tag:Simple.t
+    -> tags_to_block_cases:block_case Tag.Scannable.Map.t
+    -> t
+
+  val float_array_size_possibly_longer
+     : first_fields:ty_naked_float array
+    -> t
+
+  val possible_tags : (t -> Tag.Set.t) type_accessor
 
 let meet ... =
   ...

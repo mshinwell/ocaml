@@ -500,36 +500,39 @@ let simplify_is_int env r prim arg dbg =
 
 let simplify_get_tag env r ~result_var prim ~tags_to_sizes ~block dbg =
   let block, block_type = S.simplify_simple env block in
-  let inferred_tags = (E.type_accessor env T.possible_tags) ty in
-  let possible_tags = Tag.Map.keys tags_to_sizes in
+  let inferred_tags = (E.type_accessor env T.possible_structured_tags) ty in
+  let possible_tags = Tag.Scannable.Map.keys tags_to_sizes in
   match inferred_tags with
   | Exactly inferred_tags ->
-    let tags = Tag.Set.inter inferred_tags possible_tags in
+    let tags = Tag.Scannable.Set.inter inferred_tags possible_tags in
     let r = R.map_benefit (B.remove_primitive Get_tag) r in
-    if Tag.Set.is_empty tags then
+    if Tag.Scannable.Set.is_empty tags then
       Reachable.invalid (), T.bottom (K.fabricated Definitely_immediate), r
     else
       let tags_to_sizes =
-        Tag.Map.filter (fun tag -> Tag.Set.mem inferred_tags) tags_to_sizes
+        Tag.Scannable.Map.filter
+          (fun tag -> Tag.Scannable.Set.mem inferred_tags)
+          tags_to_sizes
       in
-      assert (not (Tag.Map.is_empty tags_to_sizes));
+      assert (not (Tag.Scannable.Map.is_empty tags_to_sizes));
       let prim : Flambda_primitive.unary_primitive = Get_tag tags_to_sizes in
       let term : Named.t = Prim (Unary (prim, block), dbg) in
       term, T.these_tags tags, r
   | Unknown ->
     let block_field_kind = K.value Unknown in
     let tags_to_block_cases =
-      Tag.Map.fold (fun tag size tags_to_block_cases ->
+      Tag.Scannable.Map.fold (fun tag size tags_to_block_cases ->
           let block_case =
-            T.block_case ~env:(T.Type_environment.create ())
+            T.block_case_known_size
+              ~env_extension:(T.Type_environment.create ())
               ~fields:(T.this_many_unknowns size block_field_kind)
           in
-          Tag.Map.add tag block_case tags_to_block_cases)
+          Tag.Scannable.Map.add tag block_case tags_to_block_cases)
         tags_to_sizes
-        Tag.Map.empty
+        Tag.Scannable.Map.empty
     in
     let block_type_refinement =
-      T.blocks ~tag:(Var result_var) ~tags_to_block_cases
+      T.blocks ~tag:(Ok (Var result_var)) ~tags_to_block_cases
     in
     let block_type =
       (E.type_accessor env T.meet) block_type block_type_refinement

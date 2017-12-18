@@ -44,14 +44,18 @@ let simplify_block_set_known_index env r prim ~block_access_kind
       Reachable.reachable (original_term ()), T.unknown result_kind Other
     | Invalid -> invalid ()
   in
+  let block_ty, r =
+    refine_block_ty_upon_access env r ~block ~block_ty ~field_index
+      ~block_access_kind Store
+  in
   match block_access_kind with
   | Definitely_immediate | Must_scan ->
     let proof = (E.type_accessor env T.prove_blocks) block_ty in
     begin match proof with
-    | Proved (Exactly blocks) ->
+    | Proved blocks ->
       if not (T.Blocks.valid_field_access blocks ~field) then invalid ()
       else ok ()
-    | Proved Not_all_values_known -> ok ()
+    | Unknown -> ok ()
     | Invalid -> invalid ()
     end
   | Naked_float ->
@@ -60,10 +64,10 @@ let simplify_block_set_known_index env r prim ~block_access_kind
       (E.type_accessor env T.prove_naked_float) new_value_ty
     in
     begin match block_proof with
-    | Proved (Exactly sizes) ->
+    | Proved sizes ->
       if not (Int.Set.exists (fun size -> size > field) sizes) then invalid ()
       else ok ()
-    | Proved Not_all_values_known -> ok ()
+    | Proved Unknown -> ok ()
     | Invalid -> invalid ()
     end
   | Generic_array _spec -> Misc.fatal_error "Not yet implemented"
