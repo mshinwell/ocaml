@@ -101,6 +101,15 @@ end) = struct
     end)
   end
 
+  type 'a or_alias =
+    | Normal of 'a
+    | Type of Export_id.t
+    | Type_of of Name.t
+
+  type 'a or_unknown_length =
+    | Exactly of 'a
+    | Unknown_length
+
   type t =
     | Value of ty_value
     | Naked_number : _ ty_naked_number -> t
@@ -143,17 +152,25 @@ end) = struct
   and block_case =
     | Join of singleton_block list
 
-  and blocks_and_immediates = {
-    immediates : immediate_case Immediate_or_unknown.Map.t;
+  and blocks_and_tagged_immediates = {
+    immediates : immediate_case Immediate.Or_unknown.Map.t;
     blocks : block_case Tag.Scannable.Map.t;
   }
 
   and 'a of_kind_value_boxed_number =
-    | Boxed_float : ty_naked_float -> ty_naked_float of_kind_value_boxed_number
-    | Boxed_int32 : ty_naked_int32 -> ty_naked_int32 of_kind_value_boxed_number
-    | Boxed_int64 : ty_naked_int64 -> ty_naked_int64 of_kind_value_boxed_number
-    | Boxed_nativeint :
-        ty_naked_nativeint -> ty_naked_nativeint of_kind_value_boxed_number
+    | Boxed_float
+         : Numbers.Float_by_bit_pattern.t ty_naked_number
+        -> Numbers.Float_by_bit_pattern.t ty_naked_number
+             of_kind_value_boxed_number
+    | Boxed_int32
+         : Int32.t ty_naked_number
+        -> Int32.t ty_naked_number of_kind_value_boxed_number
+    | Boxed_int64
+         : Int64.t ty_naked_number
+        -> Int64.t ty_naked_number of_kind_value_boxed_number
+    | Boxed_nativeint
+         : Nativeint.t ty_naked_number
+        -> Nativeint.t ty_naked_number of_kind_value_boxed_number
 
   and closures = {
     set_of_closures : ty_value;
@@ -207,7 +224,7 @@ end) = struct
   }
 
   and of_kind_fabricated =
-    | Tag of tag_case Tag.Map.t;
+    | Tag of tag_case Tag.Map.t
     | Set_of_closures of set_of_closures
 
   and of_kind_phantom =
@@ -215,20 +232,25 @@ end) = struct
     | Naked_number : _ ty_naked_number -> of_kind_phantom
     | Fabricated of ty_fabricated
 
-  and type_environment = {
+  and typing_environment = {
     names_to_types : t Name.Map.t;
     levels_to_names : Name.Set.t Scope_level.Map.t;
     existentials : Name.Set.t;
     existential_freshening : Freshening.t;
   }
 
-  let print_or_alias print_descr ppf var_or_symbol =
-    match var_or_symbol with
+  let print_or_alias print_descr ppf (or_alias : _ or_alias) =
+    match or_alias with
     | Normal descr -> print_descr ppf descr
     | Type_of name ->
       Format.fprintf ppf "@[(= type_of %a)@]" Name.print name
     | Type export_id ->
       Format.fprintf ppf "@[(= %a)@]" Export_id.print export_id
+
+  let print_or_unknown_length f ppf (unk : _ or_unknown_length) =
+    match unk with
+    | Exactly contents -> f ppf contents
+    | Unknown_length -> Format.pp_print_string ppf "<unknown length>"
 
   let print_or_unknown_or_bottom print_contents print_unknown_payload ppf
         (o : _ or_unknown_or_bottom) =
@@ -241,7 +263,7 @@ end) = struct
   let rec print_or_join print_contents ppf or_join =
     match or_join with
     | Normal contents -> print_contents ppf contents
-    | Join (op, or_alias1, or_alias2) ->
+    | Join (or_alias1, or_alias2) ->
       let print_part ppf w =
         print_or_alias (print_or_join print_contents) ppf w
       in
@@ -251,42 +273,47 @@ end) = struct
 
   let print_ty_generic print_contents print_unknown_payload ppf ty =
     (print_or_alias
-      (print_maybe_unresolved
         (print_or_unknown_or_bottom
-          (print_singleton_or_combination print_contents)
-          print_unknown_payload)))
+          (print_or_join print_contents)
+          print_unknown_payload))
       ppf ty
 
-  let print_block_tag ppf { tag; env_extension; } =
-    Format.fprintf ppf "@[(Tag %a with %a)@]"
-      Tag.Scannable.print tag
+  let rec print_immediate_case ppf ({ env_extension; } : immediate_case) =
+    Format.fprintf ppf "@[(env_extension %a)@]"
       print_typing_environment env_extension
 
-  let print_or_unknown f ppf (unk : _ or_unknown) =
-    match unk with
-    | Ok contents -> f ppf contents
-    | Unknown -> Format.pp_print_string ppf "<unknown>"
+  and print_first_fields ppf (fields : t array or_unknown_length) =
+    (print_or_unknown_length print_array) ppf fields
 
-  let print_or_unknown_length f ppf (unk : _ or_unknown_length) =
-    match unk with
-    | Exactly contents -> f ppf contents
-    | Unknown_length -> Format.pp_print_string ppf "<unknown length>"
+  and print_singleton_block ppf { env_extension; first_fields; } =
+    Format.fprintf ppf "@[((env_extension %a) (first_fields %a))@]"
+      print_typing_environment env_extension
+      print_first_fields first_fields
 
-  let rec print_of_kind_value ppf (of_kind_value : of_kind_value) =
+  and print_block_case ppf ((Join singleton_blocks) : block_case) =
+    match singleton_blocks with
+    | [] -> Format.pp_print_string ppf "<empty join>"
+    | [block] -> print_singleton_block ppf block
+    | blocks ->
+      Format.fprintf ppf "(Join %a)"
+        (Format.pp_print_list print_singleton_block) blocks
+
+  and print_immediates ppf cases =
+    Immediate.Or_unknown.Map.print print_immediate_case ppf cases
+
+  and print_blocks ppf cases =
+    Tag.Scannable.Map.print print_block_case ppf cases
+
+  and print_of_kind_value ppf (of_kind_value : of_kind_value) =
     match of_kind_value with
     | Blocks_and_tagged_immediates { blocks; immediates; } ->
       Format.fprintf ppf
         "@[(Blocks_and_immediates@ @[(blocks %a)@]@ @[(immediates %a)@])@]"
         print_blocks blocks
         print_immediates immediates
-    | Boxed_number (Boxed_float f) ->
-      Format.fprintf ppf "[@(Boxed_float %a)@]" print_ty_naked_float f
-    | Boxed_number (Boxed_int32 n) ->
-      Format.fprintf ppf "[@(Boxed_int32 %a)@]" print_ty_naked_int32 n
-    | Boxed_number (Boxed_int64 n) ->
-      Format.fprintf ppf "[@(Boxed_int64 %a)@]" print_ty_naked_int64 n
-    | Boxed_number (Boxed_nativeint n) ->
-      Format.fprintf ppf "[@(Boxed_nativeint %a)@]" print_ty_naked_nativeint n
+    | Boxed_number n ->
+
+      Format.fprintf ppf "[@(Boxed_number %a)@]" print_ty_naked_number n
     | Closure closure -> print_closure ppf closure
     | String str_infos ->
       Format.fprintf ppf "@[(Strings (%a))@]" String_info.Set.print str_infos
@@ -294,11 +321,12 @@ end) = struct
   and print_ty_value ppf (ty : ty_value) =
     print_ty_generic print_of_kind_value K.Value_kind.print ppf ty
 
-  and print_ty_value_array ppf tys =
-    Format.pp_print_list ppf
-      ~pp_sep:(fun ppf () -> Format.fprintf ppf "; ")
-      print_ty_value
-      (Array.to_list tys)
+  and print_ty_value_array ppf ty_values =
+    Format.fprintf ppf "@[[| %a |]@]"
+      (Format.pp_print_list
+        ~pp_sep:(fun ppf () -> Format.pp_print_string ppf ";@ ")
+        print_ty_value)
+      (Array.to_list ty_values)
 
   and _unused = Expr.print
 
@@ -381,7 +409,10 @@ end) = struct
       print_function_declarations set.function_decls
       (Var_within_closure.Map.print print_ty_value) set.closure_elements
 
-  let print_of_kind_naked_number (type n) ppf (n : n of_kind_naked_number) =
+  and print_ty_naked_number ppf ty =
+    print_ty_generic print_of_kind_naked_number (fun _ () -> ()) ppf ty
+
+  and print_of_kind_naked_number (type n) ppf (n : n of_kind_naked_number) =
     match n with
     | Immediate i ->
       Format.fprintf ppf "@[(Naked_immediates (%a))@]"
@@ -399,16 +430,17 @@ end) = struct
       Format.fprintf ppf "@[(Naked_nativeints (%a))@]"
         Targetint.Set.print i
 
-  let print_of_kind_fabricated ppf (o : of_kind_fabricated) =
+  and print_tag_case ppf ({ env_extension; } : tag_case) =
+    Format.fprintf ppf "@[(env_extension %a)@]"
+      print_typing_environment env_extension
+
+  and print_of_kind_fabricated ppf (o : of_kind_fabricated) =
     match o with
     | Tag tag_map ->
-      ...
-      Format.fprintf "@[(Tag %a and %a)@]"
-        Tag.print tag
-        print_typing_environment env_extension
+      Format.fprintf "@[(Tags %a)@]" Tag.Map.print print_tag_case ppf tag_map
     | Set_of_closures set -> print_set_of_closures ppf set
 
-  let print_of_kind_phantom ppf (o : of_kind_phantom) =
+  and print_of_kind_phantom ppf (o : of_kind_phantom) =
     match o with
     | Value ty_value ->
       Format.fprintf ppf "[@(Phantom %a)@]"
@@ -420,63 +452,52 @@ end) = struct
       Format.fprintf ppf "[@(Phantom %a)@]"
         print_ty_fabricated ty_fabricated
 
-  and print_ty_naked_immediate ppf (ty : ty_naked_immediate) =
-    print_ty_generic print_of_kind_naked_immediate (fun _ () -> ()) ppf ty
-
-  and print_ty_naked_float ppf (ty : ty_naked_float) =
-    print_ty_generic print_of_kind_naked_float (fun _ () -> ()) ppf ty
-
-  and print_ty_naked_float_array ppf tys =
-    Format.pp_print_list ppf
-      ~pp_sep:Format.pp_print_space
-      print_ty_naked_float
-      (Array.to_list tys)
-
-  and print_ty_naked_int32 ppf (ty : ty_naked_int32) =
-    print_ty_generic print_of_kind_naked_int32 (fun _ () -> ()) ppf ty
-
-  and print_ty_naked_int64 ppf (ty : ty_naked_int64) =
-    print_ty_generic print_of_kind_naked_int64 (fun _ () -> ()) ppf ty
-
-  and print_ty_naked_nativeint ppf (ty : ty_naked_nativeint) =
-    print_ty_generic print_of_kind_naked_nativeint (fun _ () -> ()) ppf ty
-
   and print ppf (t : t) =
     match t with
     | Value ty ->
       Format.fprintf ppf "(Value (%a))" print_ty_value ty
-    | Naked_immediate ty ->
-      Format.fprintf ppf "(Naked_immediate (%a))" print_ty_naked_immediate ty
-    | Naked_float ty ->
-      Format.fprintf ppf "(Naked_float (%a))" print_ty_naked_float ty
-    | Naked_int32 ty ->
-      Format.fprintf ppf "(Naked_int32 (%a))" print_ty_naked_int32 ty
-    | Naked_int64 ty ->
-      Format.fprintf ppf "(Naked_int64 (%a))" print_ty_naked_int64 ty
-    | Naked_nativeint ty ->
-      Format.fprintf ppf "(Naked_nativeint (%a))" print_ty_naked_nativeint ty
+    | Naked_number ty ->
+      Format.fprintf ppf "(Naked_number (%a))" print_ty_naked_number ty
+    | Fabricated ty ->
+      Format.fprintf ppf "(Fabricated (%a))" print_ty_fabricated ty
+    | Phantom ty ->
+      Format.fprintf ppf "(Phantom (%a))" print_ty_phantom ty
 
-  let print_ty_value_array ppf ty_values =
+  and print_array ppf (ts : t array) =
     Format.fprintf ppf "@[[| %a |]@]"
       (Format.pp_print_list
-        ~pp_sep:(fun ppf () -> Format.pp_print_string ppf "; ")
-        print_ty_value)
-      (Array.to_list ty_values)
+        ~pp_sep:(fun ppf () -> Format.pp_print_string ppf ";@ ")
+        print)
+      (Array.to_list ts)
+
+  and print_typing_environment ppf { names_to_types; levels_to_names;
+        existentials; existential_freshening; } =
+    Format.fprintf ppf
+      "@[((names_to_types %a)@ \
+          (levels_to_names %a)@ \
+          (existentials %a)@ \
+          (existential_freshening %a))@]"
+      Name.Map.print print names_to_types
+      Scope_level.Map.print Name.Set.print levels_to_names
+      Name.Set.print existentials
+      Freshening.print existential_freshening
 
   let alias (kind : Flambda_kind.t) name : t =
     match kind with
-    | Value _ -> Value (Alias name)
-    | Naked_immediate -> Naked_immediate (Alias name)
-    | Naked_float -> Naked_float (Alias name)
-    | Naked_int32 -> Naked_int32 (Alias name)
-    | Naked_int64 -> Naked_int64 (Alias name)
-    | Naked_nativeint -> Naked_nativeint (Alias name)
+    | Value _ -> Value (Alias (Type_of name))
+    | Naked_immediate -> Naked_number (Immediate (Alias (Type_of name)))
+    | Naked_float -> Naked_number (Float (Alias (Type_of name)))
+    | Naked_int32 -> Naked_number (Int32 (Alias (Type_of name)))
+    | Naked_int64 -> Naked_number (Int64 (Alias (Type_of name)))
+    | Naked_nativeint -> Naked_number (Nativeint (Alias (Type_of name)))
+    | Fabricated _ -> Fabricated (Alias (Type_of name))
+    | Phantom _ -> Phantom (Alias (Type_of name))
 
 (*
   let unknown_as_ty_value reason value_kind : ty_value =
     Normal (Resolved (Unknown (reason, value_kind)))
 *)
-
+(*
   let unknown_as_resolved_ty_value reason value_kind : resolved_ty_value =
     Normal (Unknown (reason, value_kind))
 
@@ -2236,4 +2257,5 @@ end) = struct
         { immediates = immediates2; blocks = blocks2; }
         : blocks_and_immediates =
 
+*)
 end

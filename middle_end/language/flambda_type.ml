@@ -14,6 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(*
+
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module F0 = Flambda0
@@ -2487,3 +2489,4 @@ let prove_blocks ~importer ~type_of_name t : ... Proof.t =
         ~join_contents:(fun ty_naked_float1 ty_naked_float2 ->
           join_ty_naked_float ~importer ~type_of_name
             ty_naked_float1 ty_naked_float2))
+*)

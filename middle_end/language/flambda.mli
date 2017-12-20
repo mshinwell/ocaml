@@ -121,7 +121,7 @@ module rec Expr : sig
     lwhite: the params restriction seems odd, perhaps give a reason
     in the comment. *)
   val make_closure_declaration
-     : (id:Variable.t
+     : id:Variable.t
     -> free_variable_kind:(Variable.t -> Flambda_kind.t)
     -> body:t
     -> params:Typed_parameter.t list
@@ -132,12 +132,9 @@ module rec Expr : sig
     -> continuation:Continuation.t
     -> return_arity:Flambda_arity.t
     -> dbg:Debuginfo.t
-    -> t) Flambda_type.with_importer
-
-  val toplevel_substitution
-     : (Variable.t Variable.Map.t
     -> t
-    -> t) Flambda_type.with_importer
+
+  val toplevel_substitution : Variable.t Variable.Map.t -> t -> t
 
   val description_of_toplevel_node : t -> string
 
@@ -318,10 +315,7 @@ end and Named : sig
 
   val maybe_generative_effects_but_no_coeffects : t -> bool
 
-  val toplevel_substitution
-     : (Variable.t Variable.Map.t
-    -> t
-    -> t) Flambda_type.with_importer
+  val toplevel_substitution : Variable.t Variable.Map.t -> t -> t
 
   module Iterators : sig
     val iter : (Expr.t -> unit) -> (t -> unit) -> t -> unit

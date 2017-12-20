@@ -268,6 +268,7 @@ MIDDLE_END_BASE_TYPES=\
   middle_end/base_types/mutable_variable.cmo \
   middle_end/base_types/num_continuation_uses.cmo \
   middle_end/base_types/parameter.cmo \
+  middle_end/base_types/scope_level.cmo \
   middle_end/base_types/set_of_closures_id.cmo \
   middle_end/base_types/set_of_closures_origin.cmo \
   middle_end/base_types/symbol.cmo \
@@ -303,6 +304,7 @@ MIDDLE_END_INLINING=\
 MIDDLE_END_LANGUAGE=\
   middle_end/language/flambda_kind.cmo \
   middle_end/language/simple.cmo \
+  middle_end/language/freshening.cmo \
   middle_end/language/flambda_arity.cmo \
   middle_end/language/flambda_primitive.cmo \
   middle_end/language/allocated_const.cmo \
@@ -327,7 +329,6 @@ MIDDLE_END_REMOVAL=\
   # middle_end/removal/unrecursify.cmo
 
 MIDDLE_END_SIMPLIFY=\
-  middle_end/simplify/freshening.cmo \
   middle_end/simplify/simplify_env_and_result.cmo \
   middle_end/simplify/simplify_aux.cmo \
   middle_end/simplify/simplify_simple.cmo \

@@ -22,9 +22,6 @@ module type S = sig
   (** Compute the symbol for the given identifier. *)
   val symbol_for_global' : (Ident.t -> Symbol.t)
 
-  (** Importing of types from .cmx files. *)
-  include Flambda_type.Importer
-
   (** All predefined exception symbols. *)
   val all_predefined_exception_symbols : unit -> Symbol.Set.t
 

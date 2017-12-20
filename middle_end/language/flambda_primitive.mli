@@ -180,7 +180,7 @@ type unary_primitive =
   | Get_tag of {
       tags_to_sizes : int Tag.Map.t;
     }
-  | Array_length of block_access_kind
+  | Array_length of Block_access_kind.t
   | Bigarray_length of { dimension : int; }
     (* CR mshinwell/xclerc: Invariant check: dimension >= 0 *)
   | String_length of string_or_bytes
@@ -227,7 +227,7 @@ type binary_float_arith_op = Add | Sub | Mul | Div
 
 (** Primitives taking exactly two arguments. *)
 type binary_primitive =
-  | Block_load of block_access_kind * mutable_or_immutable
+  | Block_load of Block_access_kind.t * mutable_or_immutable
   | String_or_bigstring_load of string_like_value * string_accessor_width
   | Int_arith of Flambda_kind.Standard_int.t * binary_int_arith_op
   | Int_shift of Flambda_kind.Standard_int.t * int_shift_op
@@ -237,7 +237,7 @@ type binary_primitive =
 
 (** Primitives taking exactly three arguments. *)
 type ternary_primitive =
-  | Block_set of block_access_kind * init_or_assign
+  | Block_set of Block_access_kind.t * init_or_assign
   | Bytes_or_bigstring_set of bytes_like_value * string_accessor_width
 
 (** Primitives taking zero or more arguments. *)

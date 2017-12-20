@@ -60,15 +60,11 @@ module type S = sig
     | Type of Export_id.t
     | Type_of of Name.t
 
-  type 'a or_unknown =
-    | Ok of 'a
-    | Unknown
-
-  type 'a or_unknown_length =
+  type 'a or_unknown_length = private
     | Exactly of 'a
     | Unknown_length
 
-  type type_environment
+  type typing_environment
 
   (** Values of type [t] are known as "Flambda types".  Each Flambda type
       has a unique kind. *)
@@ -124,17 +120,25 @@ module type S = sig
   and block_case = private
     | Join of singleton_block list
 
-  and blocks_and_immediates = private {
-    immediates : immediate_case Immediate_or_unknown.Map.t;
+  and blocks_and_tagged_immediates = private {
+    immediates : immediate_case Immediate.Or_unknown.Map.t;
     blocks : block_case Tag.Scannable.Map.t;
   }
 
   and 'a of_kind_value_boxed_number = private
-    | Boxed_float : ty_naked_float -> ty_naked_float of_kind_value_boxed_number
-    | Boxed_int32 : ty_naked_int32 -> ty_naked_int32 of_kind_value_boxed_number
-    | Boxed_int64 : ty_naked_int64 -> ty_naked_int64 of_kind_value_boxed_number
-    | Boxed_nativeint :
-        ty_naked_nativeint -> ty_naked_nativeint of_kind_value_boxed_number
+    | Boxed_float
+         : Numbers.Float_by_bit_pattern.t ty_naked_number
+        -> Numbers.Float_by_bit_pattern.t ty_naked_number
+             of_kind_value_boxed_number
+    | Boxed_int32
+         : Int32.t ty_naked_number
+        -> Int32.t ty_naked_number of_kind_value_boxed_number
+    | Boxed_int64
+         : Int64.t ty_naked_number
+        -> Int64.t ty_naked_number of_kind_value_boxed_number
+    | Boxed_nativeint
+         : Nativeint.t ty_naked_number
+        -> Nativeint.t ty_naked_number of_kind_value_boxed_number
 
   and closures = private {
     (* CR pchambart: should Unknown or Bottom really be allowed here ? *)
@@ -190,8 +194,8 @@ module type S = sig
     | Immediate : Immediate.Set.t -> Immediate.Set.t of_kind_naked_number
     | Float : Numbers.Float_by_bit_pattern.Set.t
         -> Numbers.Float_by_bit_pattern.Set.t of_kind_naked_number
-    | Int32 : Int32.Set.t -> Int32.Set.t of_kind_naked_number
-    | Int64 : Int64.Set.t -> Int64.Set.t of_kind_naked_number
+    | Int32 : Numbers.Int32.Set.t -> Numbers.Int32.Set.t of_kind_naked_number
+    | Int64 : Numbers.Int64.Set.t -> Numbers.Int64.Set.t of_kind_naked_number
     | Nativeint : Targetint.Set.t -> Targetint.Set.t of_kind_naked_number
 
   and tag_case = private {
@@ -201,7 +205,7 @@ module type S = sig
   and of_kind_fabricated = private
     (* CR mshinwell: Note that these should be represented as naked
        immediates *)
-    | Tag of tag_case Tag.Map.t;
+    | Tag of tag_case Tag.Map.t
     | Set_of_closures of set_of_closures
 
   and of_kind_phantom = private
@@ -241,9 +245,9 @@ module type S = sig
   val possible_tags : (t -> Tag.Set.t) type_accessor
 *)
 
-  module Type_environment : sig
-    type t = type_environment
-
+  module Typing_environment : sig
+    type t = typing_environment
+(*
     val create : unit -> t
 
     val add : t -> Name.t -> Scope_level.t -> flambda_type -> t
@@ -260,6 +264,7 @@ module type S = sig
     val join : (t -> t -> t) type_accessor
 
     val meet : (t -> t -> t) type_accessor
+*)
   end
 
   val print : Format.formatter -> t -> unit
@@ -272,6 +277,8 @@ module type S = sig
      : Format.formatter
     -> inlinable_function_declaration
     -> unit
+
+(*
 
   (** Construction of top types. *)
   val unknown : Flambda_kind.t -> unknown_because_of -> t
@@ -344,7 +351,7 @@ module type S = sig
   val immutable_float_array : ty_naked_float array -> t
 
   val block
-     : type_environment
+     : typing_environment
     -> tag:ty_fabricated
     -> fields:ty_value array
     -> t
@@ -398,11 +405,12 @@ module type S = sig
 
   (** Free names in a type. *)
   val free_names : t -> Name.Set.t
-
+*)
   (** Annotation for functions that may require examination of the current
       simplification environment. *)
   type 'a type_accessor = type_of_name:(Name.t -> t option) -> 'a
 
+(*
   (** Determine the (unique) kind of a type. *)
   val kind : (t -> Flambda_kind.t) type_accessor
 
@@ -439,20 +447,20 @@ module type S = sig
   (** Greatest lower bound of two types.
       When meeting types of kind [Value] this can introduce new judgements
       into the typing context. *)
-  val meet : (type_environment -> t -> t -> type_environment * t) type_accessor
+  val meet : (typing_environment -> t -> t -> typing_environment * t) type_accessor
 
   (** Greatest lower bound of an arbitrary number of types. *)
   val meet_list
-     : (type_environment
+     : (typing_environment
      -> Flambda_kind.t
      -> t list
-     -> type_environment * t) type_accessor
+     -> typing_environment * t) type_accessor
 
   (** Greatest lower bound of two types known to be of kind [Value]. *)
   val meet_ty_value
-     : (type_environment * ty_value
+     : (typing_environment * ty_value
     -> ty_value
-    -> type_environment * ty_value) type_accessor
+    -> typing_environment * ty_value) type_accessor
 
   (** Greatest lower bound of two types known to be of kind [Naked_float]. *)
   val meet_ty_naked_float
@@ -554,6 +562,6 @@ module type S = sig
 
     val print : Format.formatter -> t -> unit
   end
-
+*)
 
 end

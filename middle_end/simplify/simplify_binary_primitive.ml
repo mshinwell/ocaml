@@ -875,6 +875,7 @@ let simplify_block_load_known_index env r ~result_var prim ~block ~block_ty dbg
       refine_block_ty_upon_access env r ~block ~block_ty ~field_index
         ~block_access_kind op
     in
+    assert false (* XXX *)
   in
   let block_ty, r =
     let op : block_access_op =

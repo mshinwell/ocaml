@@ -47,10 +47,7 @@ val unknowns_from_value_kinds : Flambda_kind.Value_kind.t list -> t array
 val this_many_unknowns : int -> Flambda_kind.t -> t array
 
 (** Rename free variables in a type. *)
-val rename_variables
-   : (t
-  -> f:(Variable.t -> Variable.t)
-  -> t) with_importer
+val rename_variables : t -> f:(Variable.t -> Variable.t) -> t
 
 (** Building of types and terms representing tagged / boxed values from
     specified constants. *)
@@ -88,7 +85,7 @@ module Joined_closures : sig
 
   val to_type : t -> flambda_type
 end
-
+(*
 module Joined_sets_of_closures : sig
   type t
 
@@ -304,3 +301,4 @@ val as_or_more_precise : (t -> than:t -> bool) type_accessor
 
 (** Type equality.  (This isn't just syntactic.) *)
 val equal : (t -> t -> bool) type_accessor
+*)

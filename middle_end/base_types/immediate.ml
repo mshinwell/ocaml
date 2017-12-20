@@ -109,3 +109,30 @@ let set_to_targetint_set set =
 
 let all_bools =
   Set.of_list [bool_true; bool_false]
+
+module Or_unknown = struct
+  type nonrec t =
+    | Ok of t
+    | Unknown
+
+  include Identifiable.Make (struct
+    type nonrec t = t
+
+    let compare t1 t2 =
+      match t1, t2 with
+      | Ok _, Unknown -> -1
+      | Unknown, Ok _ -> 1
+      | Unknown, Unknown -> 0
+      | Ok imm1, Ok imm2 -> compare imm1 imm2
+
+    let hash t =
+      match t with
+      | Ok imm -> Hashtbl.hash (0, hash imm)
+      | Unknown -> Hashtbl.hash 1
+
+    let print ppf t =
+      match t with
+      | Ok imm -> print ppf imm
+      | Unknown -> Format.pp_print_string ppf "Unknown"
+  end)
+end
