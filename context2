@@ -1,0 +1,130 @@
+type t = A of ... | B of ...
+type s = Foo | Bar
+
+let foo y =
+  ...
+  let_cont j x =
+    Always holds: {}
+    x :
+      (Foo with
+         { exists s1 .
+           s1 : Tag A;
+           y : Blocks (tag = Var s1, { ... });
+         }
+       or Bar with
+         { exists s1 .
+           s1 : Tag A;
+           y : Blocks (tag = Var s1, { ... });
+         })
+
+    switch<imm> x:
+    | Foo ->
+      { x = Foo (* 0 *) }
+      Since:
+        x :
+          (Foo with
+             { exists s1 : Tag B meet Tags { A, B } = Tag A;
+               y : Blocks (tag = Var s1, { ... });
+             }
+           or Bar with
+             { exists s1 : Tag B meet Tags { A, B } = Tag B;
+               y : Blocks (tag = Var s1, { ... });
+             })
+      then we now know:
+        x : Foo
+      and we introduce:
+      { exists s1 : Tag B meet Tags { A, B } = Tag A;
+        y : Blocks (tag = Var s1, { ... });
+      }
+
+      let s0 = get_tag (y, ...) in
+      (* Tag of [y] is manifestly [s1], which has type [Tag A] *)
+      switch s0:
+      | A -> ...
+      | B -> ...  (* dead *)
+    | Bar ->
+      { x = 1 }
+      ...
+  in
+  let s1 = get_tag (y, { A |-> ..., B |-> ... }) in
+  { y : Blocks (tag = Var s1, { ... });
+    s1 : Tags { A, B };
+  }
+  switch<tag> s1:
+  | A ->
+    { s1 : (Tag A meet Tags { A, B }) = Tag A;
+      y : Blocks (tag = Var s1, { ... });
+    }
+    j Foo
+  | B ->
+    { s1 : (Tag B meet Tags { A, B }) = Tag B;
+      y : Blocks (tag = Var s1, { ... });
+    }
+    j Bar
+
+(* Now box [x] *)
+
+type t = A of ... | B of ...
+type s = Foo of int | Bar of int
+
+let foo y =
+  ...
+  let_cont j x =
+    Always holds: {}
+    x :
+      (Foo (Int 42) with
+         { exists s1 .
+           s1 : Tag A;
+           y : Blocks (tag = Var s1, { ... });
+         }
+       or Bar (Int 0) with
+         { exists s1 .
+           s1 : Tag A;
+           y : Blocks (tag = Var s1, { ... });
+         })
+
+    let x_tag = get_tag (x, ...) in
+    { x_tag : { Foo, Bar };
+      x : 
+        (Foo (Int 42) with
+           { exists s1 .
+             s1 : Tag A;
+             y : Blocks (tag = Var s1, { ... });
+           }
+         or Bar (Int 0) with
+           { exists s1 .
+             s1 : Tag A;
+             y : Blocks (tag = Var s1, { ... });
+           })
+         meet
+           Blocks (tag = x_tag; ...);
+    }
+    switch<tag> x_tag:
+    | Foo ->
+      { x_tag = Foo; }
+
+      let s0 = get_tag (y, ...) in
+      switch s0:
+      | A -> ...
+      | B -> ...
+    | Bar ->
+      ...
+  in
+  let s1 = get_tag (y, { A |-> ..., B |-> ... }) in
+
+  s1 : Tag_of y
+
+  { y : Blocks (tag = Var s1, { ... });
+    s1 : Tags { A, B };
+  }
+  switch<tag> s1:
+  | A ->
+    { s1 : (Tag A meet Tags { A, B }) = Tag A;
+      y : Blocks (tag = Var s1, { ... });
+    }
+    j (Foo 42)
+  | B ->
+    { s1 : (Tag B meet Tags { A, B }) = Tag B;
+      y : Blocks (tag = Var s1, { ... });
+    }
+    j (Bar 0)

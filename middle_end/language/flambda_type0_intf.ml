@@ -37,19 +37,6 @@ module type S = sig
     | Never_specialise
     | Default_specialise
 
-  type unresolved_value =
-    | Set_of_closures_id of Set_of_closures_id.t
-    | Export_id of Export_id.t
-    | Name of Name.t
-
-  type unknown_because_of =
-    | Unresolved_value of unresolved_value
-    | Other
-
-  type load_lazily =
-    | Export_id of Export_id.t
-    | Symbol of Symbol.t
-
   type string_contents = private
     (* Known strings are constrained to [Sys.max_string_length] on the machine
        running the compiler. *)
@@ -69,12 +56,17 @@ module type S = sig
   end
 
   type 'a or_alias = private
-    | Normal of 'a * typing_environment
-    | Alias of Name.t
+    | Normal of 'a
+    | Type of Export_id.t
+    | Type_of of Name.t
 
   (* CR-someday mshinwell / lwhite: Types in ANF form? *)
 
   type combining_op = Union | Intersection
+
+  type 'a or_unknown =
+    | Ok of 'a
+    | Unknown
 
   type 'a or_unknown_length =
     | Exactly of 'a
@@ -83,17 +75,10 @@ module type S = sig
   type type_environment
 
   (** Values of type [t] are known as "Flambda types".  Each Flambda type
-      has a unique kind.
-
-      Flambda types may be loaded lazily from .cmx files.  In some cases they
-      may be formed into union types. *)
+      has a unique kind. *)
   type t = private
     | Value of ty_value
-    | Naked_immediate of ty_naked_immediate
-    | Naked_float of ty_naked_float
-    | Naked_int32 of ty_naked_int32
-    | Naked_int64 of ty_naked_int64
-    | Naked_nativeint of ty_naked_nativeint
+    | Naked_number : _ ty_naked_number -> t
     | Fabricated of ty_fabricated
     | Phantom of ty_phantom
 
@@ -103,123 +88,62 @@ module type S = sig
       such that when we are at the top element, [Unknown], we still know
       whether a root has to be registered. *)
   and ty_value = (of_kind_value, Flambda_kind.Value_kind.t) ty
-  and ty_naked_immediate = (of_kind_naked_immediate, unit) ty
-  and ty_naked_float = (of_kind_naked_float, unit) ty
-  and ty_naked_int32 = (of_kind_naked_int32, unit) ty
-  and ty_naked_int64 = (of_kind_naked_int64, unit) ty
-  and ty_naked_nativeint = (of_kind_naked_nativeint, unit) ty
+  and 'a ty_naked_number = ('a of_kind_naked_number, unit) ty
   and ty_fabricated = (of_kind_fabricated, unit) ty
   and ty_phantom = (of_kind_phantom, unit) ty
 
-  and ('a, 'u) ty = ('a, 'u) maybe_unresolved or_alias
+  and ('a, 'u) ty = ('a, 'u) or_unknown_or_bottom or_alias
 
-  (* CR mshinwell: It's not quite clear to me that the extra complexity
-     introduced by having this static "resolved" distinction is worth it. *)
-  and resolved_t = private
-    | Value of resolved_ty_value
-    | Naked_immediate of resolved_ty_naked_immediate
-    | Naked_float of resolved_ty_naked_float
-    | Naked_int32 of resolved_ty_naked_int32
-    | Naked_int64 of resolved_ty_naked_int64
-    | Naked_nativeint of resolved_ty_naked_nativeint
-    | Fabricated of resolved_ty_fabricated
-    | Phantom of resolved_ty_phantom
-
-  and resolved_ty_value = (of_kind_value, Flambda_kind.Value_kind.t) resolved_ty
-  and resolved_ty_naked_immediate = (of_kind_naked_immediate, unit) resolved_ty
-  and resolved_ty_naked_float = (of_kind_naked_float, unit) resolved_ty
-  and resolved_ty_naked_int32 = (of_kind_naked_int32, unit) resolved_ty
-  and resolved_ty_naked_int64 = (of_kind_naked_int64, unit) resolved_ty
-  and resolved_ty_naked_nativeint = (of_kind_naked_nativeint, unit) resolved_ty
-  and resolved_ty_naked_fabricated =
-    (of_kind_naked_fabricated, unit) resolved_ty
-  and resolved_ty_phantom = (of_kind_phantom, unit) resolved_ty
-
-  and ('a, 'u) resolved_ty = ('a, 'u) or_unknown_or_bottom or_alias
-
-  and ('a, 'u) maybe_unresolved = private
-    | Resolved of ('a, 'u) or_unknown_or_bottom
-    (** The head constructor is available in memory. *)
-    | Load_lazily of load_lazily
-    (** The head constructor requires loading from a .cmx file. *)
-
-  (** For each kind (cf. [Flambda_kind], although with the "Value" cases
-      merged into one) there is a lattice of types. *)
+ (** For each kind there is a lattice of types. *)
   and ('a, 'u) or_unknown_or_bottom = private
-    | Unknown of unknown_because_of * 'u
+    | Unknown of 'u
     (** "Any value can flow to this point": the top element. *)
-    | Ok of 'a singleton_or_union
+    | Ok of 'a or_join
     | Bottom
     (** "No value can flow to this point": the bottom element. *)
 
   (** Note: [Singleton] refers to the structure of the type.  A [Singleton]
       type may still describe more than one particular runtime value (for
       example, it may describe a boxed float whose contents is unknown). *)
-  and 'a singleton_or_union = private
+  and 'a or_join = private
     | Singleton of 'a
-    | Join of 'a singleton_or_union or_alias * 'a singleton_or_union or_alias
+    | Join of 'a or_join or_alias * 'a or_join or_alias
 
   and of_kind_value = private
-    | Tagged_immediate of ty_naked_immediate
-    | Boxed_float of ty_naked_float
-    | Boxed_int32 of ty_naked_int32
-    | Boxed_int64 of ty_naked_int64
-    | Boxed_nativeint of ty_naked_nativeint
-    | Blocks of {
-        tag : Simple.t or_unknown;
-        cases : block_case Tag.Scannable.Map.t;
-      }
-    | Set_of_closures of set_of_closures
+    | Blocks_and_tagged_immediates of blocks_and_tagged_immediates
+    | Boxed_number : _ of_kind_value_boxed_number -> of_kind_value
     | Closure of closure
-    | String of String_info.t
-    | Float_array of ty_naked_float array or_unknown_length
+    | String of String_info.Set.t
 
-  and block_case = private
-    { env_extension : typing_environment;
-      fields : ty_value array or_unknown_length;
-    }
+  and immediate = {
+    env_extension : typing_environment;
+  }
 
-  val block_case_known_size
-     : env_extension:typing_environment
-    -> fields:ty_value array
-    -> block_case
+  and singleton_block = {
+    env_extension : typing_environment;
+    first_fields : t array or_unknown_length;
+  }
 
-  val block_case_size_possibly_longer
-     : env_extension:typing_environment
-    -> first_fields:ty_value array
-    -> block_case
+  and block =
+    | Join of singleton_block list
 
-  val block
-     : tag:Simple.t
-    -> block_case
-    -> t
+  and blocks_and_immediates = {
+    immediates : immediate Immediate_or_unknown.Map.t;
+    blocks : block Tag.Scannable.Map.t;
+  }
 
-  val blocks
-     : tag:Simple.t
-    -> tags_to_block_cases:block_case Tag.Scannable.Map.t
-    -> t
+  and 'a of_kind_value_boxed_number =
+    | Float : ty_naked_float -> ty_naked_float of_kind_value_boxed_number
+    | Int32 : ty_naked_int32 -> ty_naked_int32 of_kind_value_boxed_number
+    | Int64 : ty_naked_int64 -> ty_naked_int64 of_kind_value_boxed_number
+    | Nativeint :
+        ty_naked_nativeint -> ty_naked_nativeint of_kind_value_boxed_number
 
-  val float_array_size_possibly_longer
-     : first_fields:ty_naked_float array
-    -> t
-
-  val possible_tags : (t -> Tag.Set.t) type_accessor
-
-let meet ... =
-  ...
-  | Block { env = env1; tag = tag1; fields = fields1; },
-      Block { env = env2; tag = tag2; fields = fields2; } ->
-    if Array.length fields1 <> Array.length fields2 then
-      Combine
-    else
-      let env = Typing_environment.meet ~importer ~type_of_name env1 env2 in
-      let tag = meet_ty_fabricated ~importer ~type_of_name tag1 tag2 in
-      let fields =
-        Array.map2 (fun field1 field2 ->
-            meet_ty_value ~importer ~type_of_name field1 field2)
-          fields1 fields2
-      in
-      singleton (Block { env; tag; fields; })
+  and closure = private {
+    (* CR pchambart: should Unknown or Bottom really be allowed here ? *)
+    set_of_closures : ty_value;
+    closure_id : Closure_id.t;
+  }
 
   and inlinable_function_declaration = private {
     closure_origin : Closure_origin.t;
@@ -264,40 +188,83 @@ let meet ... =
     closure_elements : ty_value Var_within_closure.Map.t;
   }
 
-  and closure = private {
-    (* CR pchambart: should Unknown or Bottom really be allowed here ? *)
-    set_of_closures : ty_value;
-    closure_id : Closure_id.t;
+  and 'a of_kind_naked_number = private
+    | Immediate : Immediate.Set.t -> Immediate.Set.t of_kind_naked_number
+    | Float : Numbers.Float_by_bit_pattern.Set.t
+        -> Numbers.Float_by_bit_pattern.Set.t of_kind_naked_number
+    | Int32 : Int32.Set.t -> Int32.Set.t of_kind_naked_number
+    | Int64 : Int64.Set.t -> Int64.Set.t of_kind_naked_number
+    | Nativeint : Targetint.Set.t -> Targetint.Set.t of_kind_naked_number
+
+  and tag = {
+    env_extension : typing_environment;
   }
 
-  and of_kind_naked_immediate = private
-    | Naked_immediate of Immediate.t
-
-  and of_kind_naked_float = private
-    | Naked_float of Numbers.Float_by_bit_pattern.t
-
-  and of_kind_naked_int32 = private
-    | Naked_int32 of Int32.t
-
-  and of_kind_naked_int64 = private
-    | Naked_int64 of Int64.t
-
-  and of_kind_naked_nativeint = private
-    | Naked_nativeint of Targetint.t
-
   and of_kind_fabricated = private
-    | Tag of Tag.Scannable.t
-    | Dependent_tag of Name.t
+    (* CR mshinwell: Note that these should be represented as naked
+       immediates *)
+    | Tag of tag Tag.Map.t;
     | Set_of_closures of set_of_closures
 
   and of_kind_phantom = private
-    | Value of ty_kind_value
-    | Naked_immediate of ty_kind_naked_immediate
-    | Naked_float of ty_kind_naked_float
-    | Naked_int32 of ty_kind_naked_int32
-    | Naked_int64 of ty_kind_naked_int64
-    | Naked_nativeint of ty_kind_naked_nativeint
-    | Fabricated_pointer of ty_kind_fabricated_pointer
+    | Value of ty_value
+    | Naked_number : _ ty_naked_number -> of_kind_phantom
+    | Fabricated of ty_fabricated
+
+  module Simple : sig
+    (** "Simple" types have [Join]s at their top level replaced by
+        [Unknown]s. *)
+
+    type t = private
+      | Value of ty_value
+      | Naked_number : _ ty_naked_number -> t
+      | Fabricated of ty_fabricated
+      | Phantom of ty_phantom
+
+    and ty_value = (of_kind_value, Flambda_kind.Value_kind.t) ty
+    and 'a ty_naked_number = ('a of_kind_naked_number, unit) ty
+    and ty_fabricated = (of_kind_fabricated, unit) ty
+    and ty_phantom = (of_kind_phantom, unit) ty
+
+    and ('a, 'u) ty = ('a, 'u) or_unknown_or_bottom or_alias
+
+    and ('a, 'u) or_unknown_or_bottom = private
+      | Unknown of 'u
+      | Ok of 'a
+      | Bottom
+
+    val create : flambda_type -> t
+
+    val print : Format.formatter -> t -> unit
+  end
+
+(*
+  val block_case_known_size
+     : env_extension:typing_environment
+    -> fields:ty_value array
+    -> block_case
+
+  val block_case_size_possibly_longer
+     : env_extension:typing_environment
+    -> first_fields:ty_value array
+    -> block_case
+
+  val block
+     : tag:Simple.t
+    -> block_case
+    -> t
+
+  val blocks
+     : tag:Simple.t
+    -> tags_to_block_cases:block_case Tag.Scannable.Map.t
+    -> t
+
+  val float_array_size_possibly_longer
+     : first_fields:ty_naked_float array
+    -> t
+
+  val possible_tags : (t -> Tag.Set.t) type_accessor
+*)
 
   module Type_environment : sig
     type t = type_environment
@@ -410,11 +377,6 @@ let meet ... =
   (** The bottom type for the given kind ("no value can flow to this point"). *)
   val bottom : Flambda_kind.t -> t
 
-  (** Construction of types that link to other types which have not yet
-      been loaded into memory (from a .cmx file). *)
-  val export_id_loaded_lazily : Flambda_kind.t -> Export_id.t -> t
-  val symbol_loaded_lazily : Symbol.t -> t
-
   val create_inlinable_function_declaration
      : is_classic_mode:bool
     -> closure_origin:Closure_origin.t
@@ -455,83 +417,16 @@ let meet ... =
 
   (** Construct a type equal to the type of the given name.  (The name
       must be present in the given environment when calling e.g. [join].) *)
-  val alias : Flambda_kind.t -> Name.t -> t
+  val alias_type_of : Flambda_kind.t -> Name.t -> t
+
+  val alias_type : Flambda_kind.t -> Export_id.t -> t
 
   (** Free names in a type. *)
   val free_names : t -> Name.Set.t
 
-  (** A module type comprising operations for importing types from .cmx files.
-      These operations are derived from the functions supplied to the
-      [Make_backend] functor, below.  A first class module of this type has
-      to be passed to various operations that destruct types. *)
-  module type Importer = sig
-    val import_value_type_as_resolved_ty_value
-       : ty_value
-      -> resolved_ty_value
-
-    val import_naked_immediate_type_as_resolved_ty_naked_immediate
-       : ty_naked_immediate
-      -> resolved_ty_naked_immediate
-
-    val import_naked_float_type_as_resolved_ty_naked_float
-       : ty_naked_float
-      -> resolved_ty_naked_float
-
-    val import_naked_int32_type_as_resolved_ty_naked_int32
-       : ty_naked_int32
-      -> resolved_ty_naked_int32
-
-    val import_naked_int64_type_as_resolved_ty_naked_int64
-       : ty_naked_int64
-      -> resolved_ty_naked_int64
-
-    val import_naked_nativeint_type_as_resolved_ty_naked_nativeint
-       : ty_naked_nativeint
-      -> resolved_ty_naked_nativeint
-
-    (* CR mshinwell: Are these next ones needed? *)
-    val import_value_type : ty_value -> resolved_t
-    val import_naked_immediate_type : ty_naked_immediate -> resolved_t
-    val import_naked_float_type : ty_naked_float -> resolved_t
-    val import_naked_int32_type : ty_naked_int32 -> resolved_t
-    val import_naked_int64_type : ty_naked_int64 -> resolved_t
-    val import_naked_nativeint_type : ty_naked_nativeint -> resolved_t
-  end
-
-  module type Importer_intf = sig
-    (** Return the type stored on disk under the given export identifier, or
-        [None] if no such type can be loaded.  This function should not attempt
-        to resolve export IDs or symbols recursively in the event that the
-        type on disk is another [Load_lazily].  (This will be performed
-        automatically by the implementation of this functor.) *)
-    val import_export_id : Export_id.t -> t option
-
-    (** As for [import_export_id], except that the desired type is specified by
-        symbol, rather than by export identifier. *)
-    val import_symbol : Symbol.t -> t option
-  end
-
-  (** A functor used to construct the various type-importing operations from
-      straightforward backend-provided ones. *)
-  module Make_importer (S : Importer_intf) : Importer
-
-  (** An [Importer] that does nothing. *)
-  val null_importer : (module Importer)
-
-  (** Annotation for functions that may require the importing of types from
-      .cmx files or the examination of the current simplification
-      environment. *)
-  type 'a type_accessor =
-       importer:(module Importer)
-    -> type_of_name:(Name.t -> t option)
-    -> 'a
-
-  (** Annotation for functions that may require the importing of types from
-      .cmx files (but not the examination of the current simplification
-      environment). *)
-  type 'a with_importer =
-       importer:(module Importer)
-    -> 'a
+  (** Annotation for functions that may require examination of the current
+      simplification environment. *)
+  type 'a type_accessor = type_of_name:(Name.t -> t option) -> 'a
 
   (** Determine the (unique) kind of a type. *)
   val kind : (t -> Flambda_kind.t) type_accessor
@@ -602,8 +497,8 @@ let meet ... =
      : (ty_naked_nativeint -> ty_naked_nativeint -> ty_naked_nativeint)
          type_accessor
 
-  (** Follow chains of [Alias]es, loading .cmx files as necessary, until
-      either a [Normal] type is reached or a name cannot be resolved.
+  (** Follow chains of [Alias]es until either a [Normal] type is reached
+      or a name cannot be resolved.
 
       This function also returns the "canonical name" for the given type.
       Canonical names are stated with reference to the input type [t] given
@@ -622,8 +517,7 @@ let meet ... =
 
   (** Like [resolve_aliases], but for use when you have a [ty], not a [t]. *)
   val resolve_aliases_on_ty
-     : importer_this_kind:(('a, 'b) ty -> ('a, 'b) resolved_ty)
-    -> force_to_kind:(t -> ('a, 'b) ty)
+     : force_to_kind:(t -> ('a, 'b) ty)
     -> type_of_name:(Name.t -> t option)
     -> ('a, 'b) ty
     -> ('a, 'b) resolved_ty * (Name.t option)
@@ -631,8 +525,7 @@ let meet ... =
   (** Like [resolve_aliases_on_ty], but unresolved names are changed into
       an [Unknown] (with payload given by [unknown_payload]). *)
   val resolve_aliases_and_squash_unresolved_names_on_ty
-     : importer_this_kind:(('a, 'b) ty -> ('a, 'b) resolved_ty)
-    -> force_to_kind:(t -> ('a, 'b) ty)
+     : force_to_kind:(t -> ('a, 'b) ty)
     -> type_of_name:(Name.t -> t option)
     -> unknown_payload:'b
     -> ('a, 'b) ty

@@ -54,118 +54,6 @@ end) = struct
     | Never_specialise -> fprintf ppf "Never_specialise"
     | Default_specialise -> fprintf ppf "Default_specialise"
 
-  type unresolved_value =
-    | Set_of_closures_id of Set_of_closures_id.t
-    | Export_id of Export_id.t
-    | Name of Name.t
-
-  type unknown_because_of =
-    | Unresolved_value of unresolved_value
-    | Other
-
-  let combine_unknown_because_of u1 u2 =
-    (* This logic is valid for both joins and meets. *)
-    match u1, u2 with
-    | Unresolved_value (Set_of_closures_id s1),
-        Unresolved_value (Set_of_closures_id s2) ->
-      if Set_of_closures_id.equal s1 s2 then u1 else Other
-    | Unresolved_value (Export_id s1), Unresolved_value (Export_id s2) ->
-      if Export_id.equal s1 s2 then u1 else Other
-    | Unresolved_value (Name s1), Unresolved_value (Name s2) ->
-      if Name.equal s1 s2 then u1 else Other
-    | _, _ -> Other
-
-  (** Types from other compilation units are loaded lazily.  There are two
-      kinds of cross-compilation unit reference to be resolved: via
-      [Export_id.t] values and via [Symbol.t] values. *)
-  type load_lazily =
-    | Export_id of Export_id.t
-    | Symbol of Symbol.t
-
-  let print_load_lazily ppf (ll : load_lazily) =
-    match ll with
-    | Export_id id -> Format.fprintf ppf "(eid %a)" Export_id.print id
-    | Symbol sym ->
-      Format.fprintf ppf "(sym %a)" Symbol.print sym
-
-  (* CR mshinwell: update comment *)
-  (* A value of type [T.t] corresponds to an "approximation" of the result of
-     a computation in the program being compiled.  That is to say, it
-     represents what knowledge we have about such a result at compile time.
-     The simplification pass exploits this information to partially evaluate
-     computations.
-
-     At a high level, an approximation for a value [v] has three parts:
-     - the "description" (for example, "the constant integer 42");
-     - an optional variable;
-     - an optional symbol or symbol field.
-     If the variable (resp. symbol) is present then that variable (resp.
-     symbol) may be used to obtain the value [v].
-
-     The exact semantics of the variable and symbol fields follows.
-
-     Approximations are deduced at particular points in an expression tree,
-     but may subsequently be propagated to other locations.
-
-     At the point at which an approximation is built for some value [v], we can
-     construct a set of variables (call the set [S]) that are known to alias the
-     same value [v].  Each member of [S] will have the same or a more precise
-     [descr] field in its approximation relative to the approximation for [v].
-     (An increase in precision may currently be introduced for pattern
-     matches.)  If [S] is non-empty then it is guaranteed that there is a
-     unique member of [S] that was declared in a scope further out ("earlier")
-     than all other members of [S].  If such a member exists then it is
-     recorded in the [var] field.  Otherwise [var] is [None].
-
-     Analogous to the construction of the set [S], we can construct a set [T]
-     consisting of all symbols that are known to alias the value whose
-     approximation is being constructed.  If [T] is non-empty then the
-     [symbol] field is set to some member of [T]; it does not matter which
-     one.  (There is no notion of scope for symbols.)
-
-     Note about mutable blocks:
-
-     Mutable blocks are always represented by [Unknown] or
-     [Bottom].  Any other approximation could leave the door open to
-     a miscompilation.   Such bad scenarios are most likely a user using
-     [Obj.magic] or [Obj.set_field] in an inappropriate situation.
-     Such a situation might be:
-     [let x = (1, 1) in
-     Obj.set_field (Obj.repr x) 0 (Obj.repr 2);
-     assert(fst x = 2)]
-     The user would probably expect the assertion to be true, but the
-     compiler could in fact propagate the value of [x] across the
-     [Obj.set_field].
-
-     Insisting that mutable blocks have [Unknown] or [bottom]
-     approximations certainly won't always prevent this kind of error, but
-     should help catch many of them.
-
-     It is possible that there may be some false positives, with correct
-     but unreachable code causing this check to fail.  However the likelihood
-     of this seems sufficiently low, especially compared to the advantages
-     gained by performing the check, that we include it.
-
-     An example of a pattern that might trigger a false positive is:
-     [type a = { a : int }
-     type b = { mutable b : int }
-     type t =
-       | A : a t
-       | B : b t
-     let f (type x) (v:x t) (r:x) =
-       match v with
-       | A -> r.a
-       | B -> r.b <- 2; 3
-
-     let v =
-     let r =
-       ref A in
-       r := A; (* Some pattern that the compiler can't understand *)
-       f !r { a = 1 }]
-     When inlining [f], the B branch is unreachable, yet the compiler
-     cannot prove it and must therefore keep it.
-  *)
-
   type string_contents =
     | Contents of string
     | Unknown_or_mutable
@@ -199,11 +87,12 @@ end) = struct
     end)
   end
 
-  type 'a or_alias =
-    | Normal of 'a
-    | Alias of Name.t
+  type 'a or_alias = private
+    | Normal of 'a * typing_environment
+    | Type of Export_id.t
+    | Type_of of Name.t
 
-  type combining_op = Union | Intersection
+  type combining_op = Join | Meet
 
   type t =
     | Value of ty_value
@@ -212,6 +101,8 @@ end) = struct
     | Naked_int32 of ty_naked_int32
     | Naked_int64 of ty_naked_int64
     | Naked_nativeint of ty_naked_nativeint
+    | Fabricated of ty_fabricated
+    | Phantom of ty_phantom
 
   and flambda_type = t
 
@@ -221,6 +112,8 @@ end) = struct
   and ty_naked_int32 = (of_kind_naked_int32, unit) ty
   and ty_naked_int64 = (of_kind_naked_int64, unit) ty
   and ty_naked_nativeint = (of_kind_naked_nativeint, unit) ty
+  and ty_fabricated = (of_kind_fabricated, unit) ty
+  and ty_phantom = (of_kind_phantom, unit) ty
 
   and ('a, 'u) ty = ('a, 'u) maybe_unresolved or_alias
 
@@ -231,19 +124,10 @@ end) = struct
     | Naked_int32 of resolved_ty_naked_int32
     | Naked_int64 of resolved_ty_naked_int64
     | Naked_nativeint of resolved_ty_naked_nativeint
+    | Fabricated of resolved_ty_fabricated
+    | Phantom of resolved_ty_phantom
 
-  and resolved_ty_value = (of_kind_value, Flambda_kind.Value_kind.t) resolved_ty
-  and resolved_ty_naked_immediate = (of_kind_naked_immediate, unit) resolved_ty
-  and resolved_ty_naked_float = (of_kind_naked_float, unit) resolved_ty
-  and resolved_ty_naked_int32 = (of_kind_naked_int32, unit) resolved_ty
-  and resolved_ty_naked_int64 = (of_kind_naked_int64, unit) resolved_ty
-  and resolved_ty_naked_nativeint = (of_kind_naked_nativeint, unit) resolved_ty
-
-  and ('a, 'u) resolved_ty = ('a, 'u) or_unknown_or_bottom or_alias
-
-  and ('a, 'u) maybe_unresolved =
-    | Resolved of ('a, 'u) or_unknown_or_bottom
-    | Load_lazily of load_lazily
+  and ('a, 'u) ty = ('a, 'u) or_unknown_or_bottom or_alias
 
   and ('a, 'u) or_unknown_or_bottom =
     | Unknown of unknown_because_of * 'u
@@ -257,17 +141,27 @@ end) = struct
         * 'a singleton_or_combination or_alias
 
   and of_kind_value =
-    | Tagged_immediate of ty_naked_immediate
+    | Tagged_immediate of {
+        imm : Immediate.t;
+        env_extension : typing_environment;
+      }
+    | Block of {
+        tag : block_tag or_unknown;
+        fields : ty_value array or_unknown_length;
+      }
     | Boxed_float of ty_naked_float
     | Boxed_int32 of ty_naked_int32
     | Boxed_int64 of ty_naked_int64
     | Boxed_nativeint of ty_naked_nativeint
     (* CR mshinwell: Add an [Immutable_array] module *)
-    | Block of Tag.Scannable.t * (ty_value array)
-    | Set_of_closures of set_of_closures
     | Closure of closure
     | String of String_info.t
-    | Float_array of ty_naked_float array
+    | Float_array of ty_naked_float array or_unknown_length
+
+  and block_tag = {
+    tag : Tag.Scannable.t;
+    env_extension : typing_environment;
+  }
 
   and inlinable_function_declaration = {
     closure_origin : Closure_origin.t;
@@ -323,64 +217,98 @@ end) = struct
   and of_kind_naked_nativeint =
     | Naked_nativeint of Targetint.t
 
-  and typing_context = {
+  and of_kind_fabricated = private
+    | Tag of {
+        tag : Tag.t;
+        env_extension : typing_environment;
+      }
+    | Set_of_closures of set_of_closures
+
+  and of_kind_phantom = private
+    | Value of ty_value
+    | Naked_immediate of ty_naked_immediate
+    | Naked_float of ty_naked_float
+    | Naked_int32 of ty_naked_int32
+    | Naked_int64 of ty_naked_int64
+    | Naked_nativeint of ty_naked_nativeint
+    | Fabricated of ty_fabricated
+
+  and type_environment = {
     names_to_types : t Name.Map.t;
     levels_to_names : Name.Set.t Scope_level.Map.t;
     existentials : Name.Set.t;
     existential_freshening : Freshening.t;
   }
 
-  let print_unresolved_value ppf (unresolved : unresolved_value) =
-    match unresolved with
-    | Set_of_closures_id set ->
-      Format.fprintf ppf "Set_of_closures_id %a" Set_of_closures_id.print set
-    | Name name ->
-      Format.fprintf ppf "Name %a" Name.print name
-    | Export_id id ->
-      Format.fprintf ppf "Export_id %a" Export_id.print id
-
   let print_or_alias print_descr ppf var_or_symbol =
     match var_or_symbol with
     | Normal descr -> print_descr ppf descr
-    | Alias name -> Name.print ppf name
-
-  let print_maybe_unresolved print_contents ppf (m : _ maybe_unresolved) =
-    match m with
-    | Resolved contents -> print_contents ppf contents
-    | Load_lazily ll -> Format.fprintf ppf "lazy(%a)" print_load_lazily ll
+    | Type_of name ->
+      Format.fprintf ppf "@[(= type_of %a)@]" Name.print name
+    | Type export_id ->
+      Format.fprintf ppf "@[(= %a)@]" Export_id.print export_id
 
   let print_of_kind_naked_immediate ppf (o : of_kind_naked_immediate) =
     match o with
-    | Naked_immediate i -> Format.fprintf ppf "%a" Immediate.print i
+    | Naked_immediate i ->
+      Format.fprintf ppf "@[(Naked_immediate %a)@]" Immediate.print i
 
   let print_of_kind_naked_float ppf (o : of_kind_naked_float) =
     match o with
     | Naked_float f ->
-      Format.fprintf ppf "%a" Numbers.Float_by_bit_pattern.print f
+      Format.fprintf ppf "@[(Naked_float %a)@]"
+        Numbers.Float_by_bit_pattern.print f
 
   let print_of_kind_naked_int32 ppf (o : of_kind_naked_int32) =
     match o with
-    | Naked_int32 i -> Format.fprintf ppf "%a" Int32.print i
+    | Naked_int32 i ->
+      Format.fprintf ppf "@[(Naked_int32 %a)@]" Int32.print i
 
   let print_of_kind_naked_int64 ppf (o : of_kind_naked_int64) =
-    match o with
-    | Naked_int64 i -> Format.fprintf ppf "%a" Int64.print i
+    | Naked_int64 i ->
+      Format.fprintf ppf "@[(Naked_int64 %a)@]" Int64.print i
 
   let print_of_kind_naked_nativeint ppf (o : of_kind_naked_nativeint) =
     match o with
-    | Naked_nativeint i -> Format.fprintf ppf "%a" Targetint.print i
+    | Naked_nativeint i ->
+      Format.fprintf ppf "@[(Naked_nativeint %a)@]" Targetint.print i
+
+  let print_of_kind_fabricated ppf (o : of_kind_fabricated) =
+    match o with
+    | Tag { tag; env_extension; } ->
+      Format.fprintf "@[(Tag %a and %a)@]"
+        Tag.print tag
+        print_typing_environment env_extension
+    | Set_of_closures set -> print_set_of_closures ppf set
+
+  let print_of_kind_phantom ppf (o : of_kind_phantom) =
+    match o with
+    | Value ty_value ->
+      Format.fprintf ppf "[@(Phantom (Value %a))@]"
+        print_ty_value ty_value
+    | Naked_immediate ty_naked_immediate ->
+      Format.fprintf ppf "[@(Phantom (Naked_immediate %a))@]"
+        print_ty_naked_immediate ty_naked_immediate
+    | Naked_float ty_naked_float ->
+      Format.fprintf ppf "[@(Phantom (Naked_float %a))@]"
+        print_ty_naked_float ty_naked_float
+    | Naked_int32 ty_naked_int32 ->
+      Format.fprintf ppf "[@(Phantom (Naked_int32 %a))@]"
+        print_ty_naked_int32 ty_naked_int32
+    | Naked_int64 ty_naked_int64 ->
+      Format.fprintf ppf "[@(Phantom (Naked_int64 %a))@]"
+        print_ty_naked_int64 ty_naked_int64
+    | Naked_nativeint ty_naked_nativeint ->
+      Format.fprintf ppf "[@(Phantom (Naked_nativeint %a))@]"
+        print_ty_naked_nativeint ty_naked_nativeint
+    | Fabricated ty_fabricated ->
+      Format.fprintf ppf "[@(Phantom (Fabricated %a))@]"
+        print_ty_fabricated ty_fabricated
 
   let print_or_unknown_or_bottom print_contents print_unknown_payload ppf
         (o : _ or_unknown_or_bottom) =
     match o with
-    | Unknown (reason, payload) ->
-      begin match reason with
-      | Unresolved_value value ->
-        Format.fprintf ppf "?%a(due to unresolved %a)"
-          print_unknown_payload payload
-          print_unresolved_value value
-      | Other -> Format.fprintf ppf "?%a" print_unknown_payload payload
-      end;
+    | Unknown payload -> Format.fprintf ppf "?%a" print_unknown_payload payload
     | Ok contents -> print_contents ppf contents
     | Bottom -> Format.fprintf ppf "bottom"
 
@@ -393,7 +321,7 @@ end) = struct
           ppf w
       in
       Format.fprintf ppf "@[(%s@ @[(%a)@]@ @[(%a)@])@]"
-        (match op with Union -> "Union" | Intersection -> "Intersection")
+        (match op with Join -> "Join" | Meet -> "Meet")
         print_part or_alias1
         print_part or_alias2
 
@@ -405,34 +333,39 @@ end) = struct
           print_unknown_payload)))
       ppf ty
 
-(*
-  let print_resolved_ty_generic print_contents print_unknown_payload ppf ty =
-    (print_or_alias
-      (print_or_unknown_or_bottom
-        (print_singleton_or_combination print_contents)
-        print_unknown_payload))
-      ppf ty
-*)
+  let print_block_tag ppf { tag; env_extension; } =
+    Format.fprintf ppf "@[(Tag %a with %a)@]"
+      Tag.Scannable.print tag
+      print_typing_environment env_extension
+
+  let print_or_unknown f ppf (unk : _ or_unknown) =
+    match unk with
+    | Ok contents -> f ppf contents
+    | Unknown -> Format.pp_print_string ppf "<unknown>"
+
+  let print_or_unknown_length f ppf (unk : _ or_unknown_length) =
+    match unk with
+    | Exactly contents -> f ppf contents
+    | Unknown_length -> Format.pp_print_string ppf "<unknown length>"
 
   let rec print_of_kind_value ppf (of_kind_value : of_kind_value) =
     match of_kind_value with
-    | Tagged_immediate t ->
-      Format.fprintf ppf "(tagged_imm %a)" print_ty_naked_immediate t
+    | Tagged_immediate { imm; env_extension; } ->
+      Format.fprintf ppf "[@(Tagged_immediate (%a and %a)@]"
+        (print_or_unknown Immediate.print) imm
+        print_typing_environment env_extension
+    | Block { tag; fields; } ->
+      Format.fprintf ppf "@[(Block (tag %a) (fields %a))@]"
+        (print_or_unknown print_block_tag) tag
+        (print_or_unknown_length print_ty_value_array) fields
     | Boxed_float f ->
-      Format.fprintf ppf "(boxed_float %a)" print_ty_naked_float f
+      Format.fprintf ppf "[@(Boxed_float %a)@]" print_ty_naked_float f
     | Boxed_int32 n ->
-      Format.fprintf ppf "(boxed_int32 %a)" print_ty_naked_int32 n
+      Format.fprintf ppf "[@(Boxed_int32 %a)@]" print_ty_naked_int32 n
     | Boxed_int64 n ->
-      Format.fprintf ppf "(boxed_int64 %a)" print_ty_naked_int64 n
+      Format.fprintf ppf "[@(Boxed_int64 %a)@]" print_ty_naked_int64 n
     | Boxed_nativeint n ->
-      Format.fprintf ppf "(boxed_nativeint %a)" print_ty_naked_nativeint n
-    | Block (tag, fields) ->
-      Format.fprintf ppf "@[[%a: %a]@]"
-        Tag.Scannable.print tag
-        (Format.pp_print_list ~pp_sep:(fun ppf () -> Format.fprintf ppf "; ")
-          print_ty_value) (Array.to_list fields)
-    | Set_of_closures set_of_closures ->
-      print_set_of_closures ppf set_of_closures
+      Format.fprintf ppf "[@(Boxed_nativeint %a)@]" print_ty_naked_nativeint n
     | Closure closure -> print_closure ppf closure
     | String { contents; size; } ->
       begin match contents with
@@ -448,13 +381,17 @@ end) = struct
         Format.fprintf ppf "string %a %S" Targetint.OCaml.print size s
       end
     | Float_array fields ->
-      Format.fprintf ppf "@[(float_array %a)@]"
-        (Format.pp_print_list ~pp_sep:Format.pp_print_space
-          print_ty_naked_float)
-        (Array.to_list fields)
+      Format.fprintf ppf "@[(Float_array %a)@]"
+        (print_or_unknown_length print_ty_naked_float_array) fields
 
   and print_ty_value ppf (ty : ty_value) =
     print_ty_generic print_of_kind_value K.Value_kind.print ppf ty
+
+  and print_ty_value_array ppf tys =
+    Format.pp_print_list ppf
+      ~pp_sep:(fun ppf () -> Format.fprintf ppf "; ")
+      print_ty_value
+      (Array.to_list tys)
 
   and _unused = Expr.print
 
@@ -542,6 +479,12 @@ end) = struct
 
   and print_ty_naked_float ppf (ty : ty_naked_float) =
     print_ty_generic print_of_kind_naked_float (fun _ () -> ()) ppf ty
+
+  and print_ty_naked_float_array ppf tys =
+    Format.pp_print_list ppf
+      ~pp_sep:Format.pp_print_space
+      print_ty_naked_float
+      (Array.to_list tys)
 
   and print_ty_naked_int32 ppf (ty : ty_naked_int32) =
     print_ty_generic print_of_kind_naked_int32 (fun _ () -> ()) ppf ty
@@ -909,363 +852,9 @@ end) = struct
     Normal (Ok (Singleton (Block (Tag.Scannable.object_tag, fields))))
 *)
 
-  module type Importer = sig
-    val import_value_type_as_resolved_ty_value
-       : ty_value
-      -> resolved_ty_value
-
-    val import_naked_immediate_type_as_resolved_ty_naked_immediate
-       : ty_naked_immediate
-      -> resolved_ty_naked_immediate
-
-    val import_naked_float_type_as_resolved_ty_naked_float
-       : ty_naked_float
-      -> resolved_ty_naked_float
-
-    val import_naked_int32_type_as_resolved_ty_naked_int32
-       : ty_naked_int32
-      -> resolved_ty_naked_int32
-
-    val import_naked_int64_type_as_resolved_ty_naked_int64
-       : ty_naked_int64
-      -> resolved_ty_naked_int64
-
-    val import_naked_nativeint_type_as_resolved_ty_naked_nativeint
-       : ty_naked_nativeint
-      -> resolved_ty_naked_nativeint
-
-    val import_value_type : ty_value -> resolved_t
-    val import_naked_immediate_type : ty_naked_immediate -> resolved_t
-    val import_naked_float_type : ty_naked_float -> resolved_t
-    val import_naked_int32_type : ty_naked_int32 -> resolved_t
-    val import_naked_int64_type : ty_naked_int64 -> resolved_t
-    val import_naked_nativeint_type : ty_naked_nativeint -> resolved_t
-  end
-
-  module type Importer_intf = sig
-    val import_export_id : Export_id.t -> t option
-    val import_symbol : Symbol.t -> t option
-  end
-
   type 'a type_accessor =
-       importer:(module Importer)
-    -> type_of_name:(Name.t -> t option)
+     : type_of_name:(Name.t -> t option)
     -> 'a
-
-  type 'a with_importer =
-       importer:(module Importer)
-    -> 'a
-
-  type 'a create_resolved_t_result =
-    | Have_resolved of 'a
-    | Load_lazily_again of load_lazily
-
-  module Make_importer (S : Importer_intf) : Importer = struct
-    type 'a import_result =
-      | Have_resolved of 'a
-      | Treat_as_unknown_must_scan of unknown_because_of
-
-    let import_type (type a) ll ~create_symbol
-          ~(create_resolved_t : t -> a create_resolved_t_result) =
-      let rec import_type (ll : load_lazily) ~export_ids_seen ~symbols_seen
-            : a import_result =
-        match ll with
-        | Export_id id ->
-          if Export_id.Set.mem id export_ids_seen then begin
-            Misc.fatal_errorf "Circularity whilst resolving export ID %a"
-              Export_id.print id
-          end;
-          begin match S.import_export_id id with
-          | None -> Treat_as_unknown_must_scan (Unresolved_value (Export_id id))
-          | Some t ->
-            match create_resolved_t t with
-            | Have_resolved resolved_t -> Have_resolved resolved_t
-            | Load_lazily_again ll ->
-              let export_ids_seen = Export_id.Set.add id export_ids_seen in
-              import_type ll ~export_ids_seen ~symbols_seen
-          end
-        | Symbol sym ->
-          let t =
-            let current_unit = Compilation_unit.get_current_exn () in
-            if Symbol.in_compilation_unit sym current_unit
-              || Symbol.is_predefined_exception sym
-            then begin
-              Some (create_symbol sym)
-            end else begin
-              if Symbol.Set.mem sym symbols_seen then begin
-                Misc.fatal_errorf "Circularity whilst resolving symbol %a"
-                  Symbol.print sym
-              end;
-              S.import_symbol sym
-            end
-          in
-          match t with
-          | None ->
-            Treat_as_unknown_must_scan (Unresolved_value (
-              Name (Name.symbol sym)))
-          | Some t ->
-            match create_resolved_t t with
-            (* CR mshinwell: We used to [augment_with_symbol] here but maybe
-               we don't need it any more? *)
-            | Have_resolved resolved_t -> Have_resolved resolved_t
-            | Load_lazily_again ll ->
-              let symbols_seen = Symbol.Set.add sym symbols_seen in
-              import_type ll ~export_ids_seen ~symbols_seen
-      in
-      import_type ll ~export_ids_seen:Export_id.Set.empty
-        ~symbols_seen:Symbol.Set.empty
-
-    let import_value_type_as_resolved_ty_value (ty : ty_value)
-          : resolved_ty_value =
-      match ty with
-      | Alias name -> Alias name
-      | Normal (Resolved ty) -> Normal ty
-      | Normal (Load_lazily load_lazily) ->
-        let create_resolved_t t : resolved_ty_value create_resolved_t_result =
-          match t with
-          | Value ty ->
-            begin match ty with
-            | Alias name -> Have_resolved (Alias name)
-            | Normal (Resolved descr) -> Have_resolved (Normal descr)
-            | Normal (Load_lazily ll) -> Load_lazily_again ll
-            end
-          | Naked_immediate _
-          | Naked_float _
-          | Naked_int32 _
-          | Naked_int64 _
-          | Naked_nativeint _ ->
-            Misc.fatal_errorf "Kind mismatch when importing %a; expected kind \
-                [Value]"
-              print_load_lazily load_lazily
-        in
-        let create_symbol sym : t = Value (Alias (Name.symbol sym)) in
-        let result =
-          import_type load_lazily ~create_symbol ~create_resolved_t
-        in
-        match result with
-        | Have_resolved result -> result
-        | Treat_as_unknown_must_scan reason ->
-          unknown_as_resolved_ty_value reason Unknown
-
-    let import_value_type ty : resolved_t =
-      Value (import_value_type_as_resolved_ty_value ty)
-
-    let import_naked_immediate_type_as_resolved_ty_naked_immediate
-          (ty : ty_naked_immediate) : resolved_ty_naked_immediate =
-      match ty with
-      | Alias name -> Alias name
-      | Normal (Resolved ty) -> Normal ty
-      | Normal (Load_lazily load_lazily) ->
-        let create_resolved_t t
-              : resolved_ty_naked_immediate create_resolved_t_result =
-          match t with
-          | Naked_immediate ty ->
-            begin match ty with
-            | Alias name -> Have_resolved (Alias name)
-            | Normal (Resolved descr) -> Have_resolved (Normal descr)
-            | Normal (Load_lazily ll) -> Load_lazily_again ll
-            end
-          | Value _
-          | Naked_float _
-          | Naked_int32 _
-          | Naked_int64 _
-          | Naked_nativeint _ ->
-            Misc.fatal_errorf "Kind mismatch when importing %a; expected kind \
-                [Naked_immediate]"
-              print_load_lazily load_lazily
-        in
-        let create_symbol sym =
-          Misc.fatal_errorf "Symbols cannot be imported at kinds other than \
-              [Value]: %a"
-            Symbol.print sym
-        in
-        let result =
-          import_type load_lazily ~create_symbol ~create_resolved_t
-        in
-        match result with
-        | Have_resolved result -> result
-        | Treat_as_unknown_must_scan reason ->
-          unknown_as_resolved_ty_naked_immediate reason ()
-
-    let import_naked_immediate_type ty : resolved_t =
-      Naked_immediate (
-        import_naked_immediate_type_as_resolved_ty_naked_immediate ty)
-
-    let import_naked_float_type_as_resolved_ty_naked_float
-          (ty : ty_naked_float) : resolved_ty_naked_float =
-      match ty with
-      | Alias name -> Alias name
-      | Normal (Resolved ty) -> Normal ty
-      | Normal (Load_lazily load_lazily) ->
-        let create_resolved_t t
-              : resolved_ty_naked_float create_resolved_t_result =
-          match t with
-          | Naked_float ty ->
-            begin match ty with
-            | Alias name -> Have_resolved (Alias name)
-            | Normal (Resolved descr) -> Have_resolved (Normal descr)
-            | Normal (Load_lazily ll) -> Load_lazily_again ll
-            end
-          | Value _
-          | Naked_immediate _
-          | Naked_int32 _
-          | Naked_int64 _
-          | Naked_nativeint _ ->
-            Misc.fatal_errorf "Kind mismatch when importing %a; expected kind \
-                [Naked_float]"
-              print_load_lazily load_lazily
-        in
-        let create_symbol sym =
-          Misc.fatal_errorf "Symbols cannot be imported at kinds other than \
-              [Value]: %a"
-            Symbol.print sym
-        in
-        let result =
-          import_type load_lazily ~create_symbol ~create_resolved_t
-        in
-        match result with
-        | Have_resolved result -> result
-        | Treat_as_unknown_must_scan reason ->
-          unknown_as_resolved_ty_naked_float reason ()
-
-    let import_naked_float_type ty : resolved_t =
-      Naked_float (import_naked_float_type_as_resolved_ty_naked_float ty)
-
-    let import_naked_int32_type_as_resolved_ty_naked_int32
-          (ty : ty_naked_int32) : resolved_ty_naked_int32 =
-      match ty with
-      | Alias name -> Alias name
-      | Normal (Resolved ty) -> Normal ty
-      | Normal (Load_lazily load_lazily) ->
-        let create_resolved_t t
-              : resolved_ty_naked_int32 create_resolved_t_result =
-          match t with
-          | Naked_int32 ty ->
-            begin match ty with
-            | Alias name -> Have_resolved (Alias name)
-            | Normal (Resolved descr) -> Have_resolved (Normal descr)
-            | Normal (Load_lazily ll) -> Load_lazily_again ll
-            end
-          | Value _
-          | Naked_immediate _
-          | Naked_float _
-          | Naked_int64 _
-          | Naked_nativeint _ ->
-            Misc.fatal_errorf "Kind mismatch when importing %a; expected kind \
-                [Naked_int32]"
-              print_load_lazily load_lazily
-        in
-        let create_symbol sym =
-          Misc.fatal_errorf "Symbols cannot be imported at kinds other than \
-              [Value]: %a"
-            Symbol.print sym
-        in
-        let result =
-          import_type load_lazily ~create_symbol ~create_resolved_t
-        in
-        match result with
-        | Have_resolved result -> result
-        | Treat_as_unknown_must_scan reason ->
-          unknown_as_resolved_ty_naked_int32 reason ()
-
-    let import_naked_int32_type ty : resolved_t =
-      Naked_int32 (import_naked_int32_type_as_resolved_ty_naked_int32 ty)
-
-    let import_naked_int64_type_as_resolved_ty_naked_int64
-          (ty : ty_naked_int64) : resolved_ty_naked_int64 =
-      match ty with
-      | Alias name -> Alias name
-      | Normal (Resolved ty) -> Normal ty
-      | Normal (Load_lazily load_lazily) ->
-        let create_resolved_t t
-              : resolved_ty_naked_int64 create_resolved_t_result =
-          match t with
-          | Naked_int64 ty ->
-            begin match ty with
-            | Alias name -> Have_resolved (Alias name)
-            | Normal (Resolved descr) -> Have_resolved (Normal descr)
-            | Normal (Load_lazily ll) -> Load_lazily_again ll
-            end
-          | Value _
-          | Naked_immediate _
-          | Naked_float _
-          | Naked_int32 _
-          | Naked_nativeint _ ->
-            Misc.fatal_errorf "Kind mismatch when importing %a; expected kind \
-                [Naked_int64]"
-              print_load_lazily load_lazily
-        in
-        let create_symbol sym =
-          Misc.fatal_errorf "Symbols cannot be imported at kinds other than \
-              [Value]: %a"
-            Symbol.print sym
-        in
-        let result =
-          import_type load_lazily ~create_symbol ~create_resolved_t
-        in
-        match result with
-        | Have_resolved result -> result
-        | Treat_as_unknown_must_scan reason ->
-          unknown_as_resolved_ty_naked_int64 reason ()
-
-    let import_naked_int64_type ty : resolved_t =
-      Naked_int64 (import_naked_int64_type_as_resolved_ty_naked_int64 ty)
-
-    let import_naked_nativeint_type_as_resolved_ty_naked_nativeint
-          (ty : ty_naked_nativeint) : resolved_ty_naked_nativeint =
-      match ty with
-      | Alias name -> Alias name
-      | Normal (Resolved ty) -> Normal ty
-      | Normal (Load_lazily load_lazily) ->
-        let create_resolved_t t
-              : resolved_ty_naked_nativeint create_resolved_t_result =
-          match t with
-          | Naked_nativeint ty ->
-            begin match ty with
-            | Alias name -> Have_resolved (Alias name)
-            | Normal (Resolved descr) -> Have_resolved (Normal descr)
-            | Normal (Load_lazily ll) -> Load_lazily_again ll
-            end
-          | Value _
-          | Naked_immediate _
-          | Naked_float _
-          | Naked_int32 _
-          | Naked_int64 _ ->
-            Misc.fatal_errorf "Kind mismatch when importing %a; expected kind \
-                [Naked_nativeint]"
-              print_load_lazily load_lazily
-        in
-        let create_symbol sym =
-          Misc.fatal_errorf "Symbols cannot be imported at kinds other than \
-              [Value]: %a"
-            Symbol.print sym
-        in
-        let result =
-          import_type load_lazily ~create_symbol ~create_resolved_t
-        in
-        match result with
-        | Have_resolved result -> result
-        | Treat_as_unknown_must_scan reason ->
-          unknown_as_resolved_ty_naked_nativeint reason ()
-
-    let import_naked_nativeint_type ty : resolved_t =
-      Naked_nativeint (
-        import_naked_nativeint_type_as_resolved_ty_naked_nativeint ty)
-  end
-
-  module No_importing = struct
-    let import_export_id _ = None
-    let import_symbol _ = None
-  end
-
-  module Null_importer = Make_importer (No_importing)
-
-  let null_importer = (module Null_importer : Importer)
-
-  let with_null_importer f =
-    f ~importer:null_importer
-      ~type_of_name:(fun name ->
-        Misc.fatal_errorf "Unbound name %a in null importer" Name.print name)
 
   let force_to_kind_value t =
     match t with
@@ -1468,12 +1057,12 @@ end) = struct
       | Unknown (_, value_kind) -> value_kind
       | Ok (Singleton (Tagged_immediate _)) -> Definitely_immediate
       | Ok (Singleton _) -> Unknown
-      | Ok (Combination (Union, ty1, ty2)) ->
+      | Ok (Combination (Join, ty1, ty2)) ->
         let ty1 = ty_of_resolved_ok_ty ty1 in
         let ty2 = ty_of_resolved_ok_ty ty2 in
         K.Value_kind.join (value_kind_ty_value ty1)
           (value_kind_ty_value ty2)
-      | Ok (Combination (Intersection, ty1, ty2)) ->
+      | Ok (Combination (Meet, ty1, ty2)) ->
         let ty1 = ty_of_resolved_ok_ty ty1 in
         let ty2 = ty_of_resolved_ok_ty ty2 in
         (* CR mshinwell: Think more about the following two uses of
@@ -1876,7 +1465,7 @@ end) = struct
           Float_array fields
       in
       Singleton singleton
-    | Union (w1, w2) ->
+    | Join (w1, w2) ->
       let w1 =
         { var = clean_var_opt w1.var;
           symbol = w1.symbol;
@@ -1889,7 +1478,7 @@ end) = struct
           descr = clean_of_kind_value ~importer w2.descr clean_var_opt;
         }
       in
-      Union (w1, w2)
+      Join (w1, w2)
 *)
 
   module Join_or_meet (P : sig
@@ -1906,8 +1495,8 @@ end) = struct
             (Normal ((Resolved ty_value2) : _ maybe_unresolved))
       in
       match P.combining_op with
-      | Union -> K.Value_kind.join value_kind1 value_kind2
-      | Intersection ->
+      | Join -> K.Value_kind.join value_kind1 value_kind2
+      | Meet ->
         (* CR mshinwell: Same comment as above re. Definitely_immediate *)
         begin match K.Value_kind.meet value_kind1 value_kind2 with
         | Ok value_kind -> value_kind
@@ -1976,25 +1565,25 @@ end) = struct
               ty1 ty2
           | Unknown (reason, payload), _ ->
             begin match P.combining_op with
-            | Union ->
+            | Join ->
               Unknown (reason, combine_unknown_payload ty1 payload ty2 None)
-            | Intersection -> ty2
+            | Meet -> ty2
             end
           | _, Unknown (reason, payload) ->
             begin match P.combining_op with
-            | Union ->
+            | Join ->
               Unknown (reason, combine_unknown_payload ty2 payload ty1 None)
-            | Intersection -> ty1
+            | Meet -> ty1
             end
           | Bottom, _ ->
             begin match P.combining_op with
-            | Union -> ty2
-            | Intersection -> Bottom
+            | Join -> ty2
+            | Meet -> Bottom
             end
           | _, Bottom ->
             begin match P.combining_op with
-            | Union -> ty1
-            | Intersection -> Bottom
+            | Join -> ty1
+            | Meet -> Bottom
             end
         in
         Normal ((Resolved ty) : _ maybe_unresolved)
@@ -2199,12 +1788,12 @@ end) = struct
 
   module Join = Join_or_meet (struct
     let description = "join"
-    let combining_op = Union
+    let combining_op = Join
   end)
 
   module Meet = Join_or_meet (struct
     let description = "meet"
-    let combining_op = Intersection
+    let combining_op = Meet
   end)
 
   let join = Join.combine
@@ -2535,4 +2124,172 @@ end) = struct
         existential_freshening;
       }
   end
+
+
+
+
+
+
+  let or_unknown_or_bottom_of_or_alias (type ty) (type unk) ~type_of_name
+        ~(ty_of_t : t -> ty) (ty or_join or_alias)
+        : (ty, unk) or_unknown_or_bottom =
+    ...
+
+  let meet_on_or_join (type ty) (type unk) ~type_of_name
+        (oj1 : ty or_join) (oj2 : ty or_join)
+        ~meet_ty:(ty -> ty -> (ty, unk) or_unknown_or_bottom)
+        ~meet_unk:(unk -> unk -> unk)
+        ~join_ty:(ty -> ty -> (ty, unk) or_unknown_or_bottom)
+        ~join_unk:(unk -> unk -> unk)
+        ~ty_of_t:(t -> ty)
+        : (ty, unk) or_unknown_or_bottom =
+    match oj1, oj2 with
+    | Singleton s1, Singleton s2 ->
+      meet_ty ~type_of_name s1 s2
+    | ((Singleton _ | Join _) as other_side), Join (or_alias1, or_alias2)
+    | Join (or_alias1, or_alias2), ((Singleton _ | Join _) as other_side) ->
+      (* CR mshinwell: We should maybe be returning equations when we
+         meet types equipped with alias information. *)
+      let join_left =
+        or_unknown_or_bottom_of_or_alias ~type_of_name ~ty_of_t or_alias1
+      in
+      let join_right =
+        or_unknown_or_bottom_of_or_alias ~type_of_name ~ty_of_t or_alias2
+      in
+      let other_side_meet_join_left =
+        meet_on_or_unknown_or_bottom ~type_of_name
+          (Ok other_side) join_left
+      in
+      let other_side_meet_join_right =
+        meet_on_or_unknown_or_bottom ~type_of_name
+          (Ok other_side) join_right
+      in
+      join_or_unknown_or_bottom ~type_of_name
+        other_side_meet_join_left other_side_meet_join_right
+
+  let join_on_or_join (type ty) (type unk) ~type_of_name
+        (oj1 : ty or_join) (oj2 : ty or_join)
+        ~join_ty:(ty -> ty -> (ty, unk) or_unknown_or_bottom)
+        ~join_unk:(unk -> unk -> unk)
+        ~ty_of_t:(t -> ty)
+        : (ty, unk) or_unknown_or_bottom =
+    match oj1, oj2 with
+    | ...
+
+  let meet_on_or_unknown_or_bottom (type ty) (type unk) ~type_of_name
+        (ou1 : (ty, unk) or_unknown_or_bottom)
+        (ou2 : (ty, unk) or_unknown_or_bottom)
+        ~meet_ty:(ty -> ty -> (ty, unk) or_unknown_or_bottom)
+        ~meet_unk:(unk -> unk -> unk)
+        ~join_ty:(ty -> ty -> (ty, unk) or_unknown_or_bottom)
+        ~join_unk:(unk -> unk -> unk)
+        ~ty_of_t:(t -> ty)
+        : (ty, unk) or_unknown_or_bottom =
+    match ou1, ou2 with
+    | Bottom, _ | _, Bottom -> Bottom
+    | Unknown unk1, Unknown unk2 -> Unknown (meet_unk unk1 unk2)
+    | Unknown _, ou2 -> ou2
+    | ou1, Unknown _ -> ou1
+    | Ok or_join1, Ok or_join2 ->
+      meet_on_or_join ~type_of_name or_join1 or_join2
+        ~meet_ty ~meet_unk
+        ~join_ty ~join_unk
+        ~ty_of_t
+
+  let join_on_or_unknown_or_bottom (type ty) (type unk) ~type_of_name ...
+        (ou1 : (ty, unk) or_unknown_or_bottom)
+        (ou2 : (ty, unk) or_unknown_or_bottom)
+        ~join_ty:(ty -> ty -> (ty, unk) or_unknown_or_bottom)
+        ~join_unk:(unk -> unk -> unk)
+        : (ty, unk) or_unknown_or_bottom =
+    match s1_meet_join_left, s1_meet_join_right with
+    | Unknown unk_left, Unknown unk_right ->
+      Unknown (join_unk unk_left unk_right)
+    | Unknown unk, _ | _, Unknown unk -> Unknown unk
+    | Bottom, _ -> s1_meet_join_right
+    | _, Bottom -> s1_meet_join_left
+    | Ok or_join1, Ok or_join2 ->
+      Ok (join_on_or_join ~type_of_name or_join1 or_join2 ...)
+
+  let meet_immediate ~type_of_name
+        ({ env_extension = env_extension1; } : immediate)
+        ({ env_extension = env_extension2; } : immediate) : immediate =
+    let env_extension =
+      meet_typing_environment ~type_of_name env_extension1 env_extension2
+    in
+    { env_extension; }
+
+  let join_immediate ~type_of_name
+        ({ env_extension = env_extension1; } : immediate)
+        ({ env_extension = env_extension2; } : immediate) : immediate =
+    let env_extension =
+      join_typing_environment ~type_of_name env_extension1 env_extension2
+    in
+    { env_extension; }
+
+  let meet_singleton_block ~type_of_name
+        ({ env_extension = env_extension1;
+           first_fields = first_fields1;
+         } : singleton_block)
+        ({ env_extension = env_extension2;
+           first_fields = first_fields2;
+         } : singleton_block) : singleton_block =
+    let env_extension =
+      meet_typing_environment ~type_of_name env_extension1 env_extension2
+    in
+    let first_fields =
+      match first_fields1, first_fields2 with
+      | Exactly fields, Unknown_length
+      | Unknown_length, Exactly fields -> Exactly fields
+      | Unknown_length, Unknown_length -> Unknown_length
+      | Exactly fields1, Exactly fields2 ->
+        if Array.length fields1 = Array.length fields2 then
+          Array.map2 (fun field1 field2 ->
+              meet ~type_of_name field1 field2)
+            fields1 fields2
+        else
+          ...
+    in
+    { env_extension;
+      first_fields;
+    }
+
+  let join_singleton_block ~type_of_name
+        ({ env_extension = env_extension1;
+           first_fields = first_fields1;
+         } : singleton_block)
+        ({ env_extension = env_extension2;
+           first_fields = first_fields2;
+         } : singleton_block) : singleton_block list =
+    let env_extension =
+      meet_typing_environment ~type_of_name env_extension1 env_extension2
+    in
+    let first_fields =
+      match first_fields1, first_fields2 with
+      | Exactly fields, Unknown_length ->
+      | Unknown_length, Exactly fields ->
+      | Unknown_length, Unknown_length ->
+      | Exactly fields1, Exactly fields2 ->
+    in
+    { env_extension;
+      first_fields;
+    }
+
+  let meet_block ~type_of_name ((Join singleton_blocks) : block) =
+
+
+  let join_block ~type_of_name ((Join singleton_blocks) : block) =
+
+
+  let meet_blocks_and_immediates ~type_of_name
+        { immediates = immediates1; blocks = blocks1; }
+        { immediates = immediates2; blocks = blocks2; }
+        : blocks_and_immediates =
+
+
+  let join_blocks_and_immediates ~type_of_name
+        { immediates = immediates1; blocks = blocks1; }
+        { immediates = immediates2; blocks = blocks2; }
+        : blocks_and_immediates =
+
 end

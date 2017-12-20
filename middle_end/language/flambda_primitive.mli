@@ -68,7 +68,7 @@ module Block_access_kind : sig
     | Generic_array of Generic_array_specialisation.t
 
   (** The kind of the field of the block being accessed. *)
-  val kind_this_element : t -> Flambda-kind.t
+  val kind_this_element : t -> Flambda_kind.t
 
   (** A suitable kind to assign to _all_ the fields of the block being
       accessed. *)
