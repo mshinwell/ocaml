@@ -16,6 +16,7 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
 module Int32 = Numbers.Int32
 module Int64 = Numbers.Int64
 
@@ -83,84 +84,80 @@ end) = struct
 
       let hash t = Hashtbl.hash t
 
-      let print _ppf _t = Misc.fatal_error "Not yet implemented"
+      let print ppf { contents; size; } =
+        match contents with
+        | Unknown_or_mutable ->
+          Format.fprintf ppf "(size %a)" Targetint.OCaml.print size
+        | Contents s ->
+          let s, dots =
+            let max_size = Targetint.OCaml.ten in
+            let long = Targetint.OCaml.compare size max_size > 0 in
+            if long then String.sub s 0 8, "..."
+            else s, ""
+          in
+          Format.fprintf ppf "(size %a) (contents \"%S\"%s)"
+            Targetint.OCaml.print size
+            s dots
     end)
   end
 
-  type 'a or_alias = private
-    | Normal of 'a * typing_environment
-    | Type of Export_id.t
-    | Type_of of Name.t
-
-  type combining_op = Join | Meet
-
   type t =
     | Value of ty_value
-    | Naked_immediate of ty_naked_immediate
-    | Naked_float of ty_naked_float
-    | Naked_int32 of ty_naked_int32
-    | Naked_int64 of ty_naked_int64
-    | Naked_nativeint of ty_naked_nativeint
+    | Naked_number : _ ty_naked_number -> t
     | Fabricated of ty_fabricated
     | Phantom of ty_phantom
 
   and flambda_type = t
 
   and ty_value = (of_kind_value, Flambda_kind.Value_kind.t) ty
-  and ty_naked_immediate = (of_kind_naked_immediate, unit) ty
-  and ty_naked_float = (of_kind_naked_float, unit) ty
-  and ty_naked_int32 = (of_kind_naked_int32, unit) ty
-  and ty_naked_int64 = (of_kind_naked_int64, unit) ty
-  and ty_naked_nativeint = (of_kind_naked_nativeint, unit) ty
+  and 'a ty_naked_number = ('a of_kind_naked_number, unit) ty
   and ty_fabricated = (of_kind_fabricated, unit) ty
   and ty_phantom = (of_kind_phantom, unit) ty
-
-  and ('a, 'u) ty = ('a, 'u) maybe_unresolved or_alias
-
-  and resolved_t =
-    | Value of resolved_ty_value
-    | Naked_immediate of resolved_ty_naked_immediate
-    | Naked_float of resolved_ty_naked_float
-    | Naked_int32 of resolved_ty_naked_int32
-    | Naked_int64 of resolved_ty_naked_int64
-    | Naked_nativeint of resolved_ty_naked_nativeint
-    | Fabricated of resolved_ty_fabricated
-    | Phantom of resolved_ty_phantom
 
   and ('a, 'u) ty = ('a, 'u) or_unknown_or_bottom or_alias
 
   and ('a, 'u) or_unknown_or_bottom =
-    | Unknown of unknown_because_of * 'u
-    | Ok of 'a singleton_or_combination
+    | Unknown of 'u
+    | Ok of 'a or_join
     | Bottom
 
-  and 'a singleton_or_combination =
-    | Singleton of 'a
-    | Combination of combining_op
-        * 'a singleton_or_combination or_alias
-        * 'a singleton_or_combination or_alias
+  and 'a or_join =
+    | Normal of 'a
+    | Join of 'a or_join or_alias * 'a or_join or_alias
 
   and of_kind_value =
-    | Tagged_immediate of {
-        imm : Immediate.t;
-        env_extension : typing_environment;
-      }
-    | Block of {
-        tag : block_tag or_unknown;
-        fields : ty_value array or_unknown_length;
-      }
-    | Boxed_float of ty_naked_float
-    | Boxed_int32 of ty_naked_int32
-    | Boxed_int64 of ty_naked_int64
-    | Boxed_nativeint of ty_naked_nativeint
-    (* CR mshinwell: Add an [Immutable_array] module *)
-    | Closure of closure
-    | String of String_info.t
-    | Float_array of ty_naked_float array or_unknown_length
+    | Blocks_and_tagged_immediates of blocks_and_tagged_immediates
+    | Boxed_number : _ of_kind_value_boxed_number -> of_kind_value
+    | Closure of closures
+    | String of String_info.Set.t
 
-  and block_tag = {
-    tag : Tag.Scannable.t;
+  and immediate_case = {
     env_extension : typing_environment;
+  }
+ 
+  and singleton_block = {
+    env_extension : typing_environment;
+    first_fields : t array or_unknown_length;
+  }
+
+  and block_case =
+    | Join of singleton_block list
+
+  and blocks_and_immediates = {
+    immediates : immediate_case Immediate_or_unknown.Map.t;
+    blocks : block_case Tag.Scannable.Map.t;
+  }
+
+  and 'a of_kind_value_boxed_number =
+    | Boxed_float : ty_naked_float -> ty_naked_float of_kind_value_boxed_number
+    | Boxed_int32 : ty_naked_int32 -> ty_naked_int32 of_kind_value_boxed_number
+    | Boxed_int64 : ty_naked_int64 -> ty_naked_int64 of_kind_value_boxed_number
+    | Boxed_nativeint :
+        ty_naked_nativeint -> ty_naked_nativeint of_kind_value_boxed_number
+
+  and closures = {
+    set_of_closures : ty_value;
+    closure_id : Closure_id.t;
   }
 
   and inlinable_function_declaration = {
@@ -190,11 +187,6 @@ end) = struct
     | Non_inlinable of non_inlinable_function_declaration
     | Inlinable of inlinable_function_declaration
 
-  and closure = {
-    set_of_closures : ty_value;
-    closure_id : Closure_id.t;
-  }
-
   and set_of_closures = {
     set_of_closures_id : Set_of_closures_id.t;
     set_of_closures_origin : Set_of_closures_origin.t;
@@ -202,35 +194,25 @@ end) = struct
     closure_elements : ty_value Var_within_closure.Map.t;
   }
 
-  and of_kind_naked_immediate =
-    | Naked_immediate of Immediate.t
+  and 'a of_kind_naked_number =
+    | Immediate : Immediate.Set.t -> Immediate.Set.t of_kind_naked_number
+    | Float : Numbers.Float_by_bit_pattern.Set.t
+        -> Numbers.Float_by_bit_pattern.Set.t of_kind_naked_number
+    | Int32 : Int32.Set.t -> Int32.Set.t of_kind_naked_number
+    | Int64 : Int64.Set.t -> Int64.Set.t of_kind_naked_number
+    | Nativeint : Targetint.Set.t -> Targetint.Set.t of_kind_naked_number
 
-  and of_kind_naked_float =
-    | Naked_float of Numbers.Float_by_bit_pattern.t
+  and tag_case = {
+    env_extension : typing_environment;
+  }
 
-  and of_kind_naked_int32 =
-    | Naked_int32 of Int32.t
-
-  and of_kind_naked_int64 =
-    | Naked_int64 of Int64.t
-
-  and of_kind_naked_nativeint =
-    | Naked_nativeint of Targetint.t
-
-  and of_kind_fabricated = private
-    | Tag of {
-        tag : Tag.t;
-        env_extension : typing_environment;
-      }
+  and of_kind_fabricated =
+    | Tag of tag_case Tag.Map.t;
     | Set_of_closures of set_of_closures
 
-  and of_kind_phantom = private
+  and of_kind_phantom =
     | Value of ty_value
-    | Naked_immediate of ty_naked_immediate
-    | Naked_float of ty_naked_float
-    | Naked_int32 of ty_naked_int32
-    | Naked_int64 of ty_naked_int64
-    | Naked_nativeint of ty_naked_nativeint
+    | Naked_number : _ ty_naked_number -> of_kind_phantom
     | Fabricated of ty_fabricated
 
   and type_environment = {
@@ -248,80 +230,22 @@ end) = struct
     | Type export_id ->
       Format.fprintf ppf "@[(= %a)@]" Export_id.print export_id
 
-  let print_of_kind_naked_immediate ppf (o : of_kind_naked_immediate) =
-    match o with
-    | Naked_immediate i ->
-      Format.fprintf ppf "@[(Naked_immediate %a)@]" Immediate.print i
-
-  let print_of_kind_naked_float ppf (o : of_kind_naked_float) =
-    match o with
-    | Naked_float f ->
-      Format.fprintf ppf "@[(Naked_float %a)@]"
-        Numbers.Float_by_bit_pattern.print f
-
-  let print_of_kind_naked_int32 ppf (o : of_kind_naked_int32) =
-    match o with
-    | Naked_int32 i ->
-      Format.fprintf ppf "@[(Naked_int32 %a)@]" Int32.print i
-
-  let print_of_kind_naked_int64 ppf (o : of_kind_naked_int64) =
-    | Naked_int64 i ->
-      Format.fprintf ppf "@[(Naked_int64 %a)@]" Int64.print i
-
-  let print_of_kind_naked_nativeint ppf (o : of_kind_naked_nativeint) =
-    match o with
-    | Naked_nativeint i ->
-      Format.fprintf ppf "@[(Naked_nativeint %a)@]" Targetint.print i
-
-  let print_of_kind_fabricated ppf (o : of_kind_fabricated) =
-    match o with
-    | Tag { tag; env_extension; } ->
-      Format.fprintf "@[(Tag %a and %a)@]"
-        Tag.print tag
-        print_typing_environment env_extension
-    | Set_of_closures set -> print_set_of_closures ppf set
-
-  let print_of_kind_phantom ppf (o : of_kind_phantom) =
-    match o with
-    | Value ty_value ->
-      Format.fprintf ppf "[@(Phantom (Value %a))@]"
-        print_ty_value ty_value
-    | Naked_immediate ty_naked_immediate ->
-      Format.fprintf ppf "[@(Phantom (Naked_immediate %a))@]"
-        print_ty_naked_immediate ty_naked_immediate
-    | Naked_float ty_naked_float ->
-      Format.fprintf ppf "[@(Phantom (Naked_float %a))@]"
-        print_ty_naked_float ty_naked_float
-    | Naked_int32 ty_naked_int32 ->
-      Format.fprintf ppf "[@(Phantom (Naked_int32 %a))@]"
-        print_ty_naked_int32 ty_naked_int32
-    | Naked_int64 ty_naked_int64 ->
-      Format.fprintf ppf "[@(Phantom (Naked_int64 %a))@]"
-        print_ty_naked_int64 ty_naked_int64
-    | Naked_nativeint ty_naked_nativeint ->
-      Format.fprintf ppf "[@(Phantom (Naked_nativeint %a))@]"
-        print_ty_naked_nativeint ty_naked_nativeint
-    | Fabricated ty_fabricated ->
-      Format.fprintf ppf "[@(Phantom (Fabricated %a))@]"
-        print_ty_fabricated ty_fabricated
-
   let print_or_unknown_or_bottom print_contents print_unknown_payload ppf
         (o : _ or_unknown_or_bottom) =
     match o with
-    | Unknown payload -> Format.fprintf ppf "?%a" print_unknown_payload payload
+    | Unknown payload ->
+      Format.fprintf ppf "(Unknown %a)" print_unknown_payload payload
     | Ok contents -> print_contents ppf contents
-    | Bottom -> Format.fprintf ppf "bottom"
+    | Bottom -> Format.fprintf ppf "Bottom"
 
-  let rec print_singleton_or_combination print_contents ppf soc =
-    match soc with
-    | Singleton contents -> print_contents ppf contents
-    | Combination (op, or_alias1, or_alias2) ->
+  let rec print_or_join print_contents ppf or_join =
+    match or_join with
+    | Normal contents -> print_contents ppf contents
+    | Join (op, or_alias1, or_alias2) ->
       let print_part ppf w =
-        print_or_alias (print_singleton_or_combination print_contents)
-          ppf w
+        print_or_alias (print_or_join print_contents) ppf w
       in
-      Format.fprintf ppf "@[(%s@ @[(%a)@]@ @[(%a)@])@]"
-        (match op with Join -> "Join" | Meet -> "Meet")
+      Format.fprintf ppf "@[(Join@ @[(%a)@]@ @[(%a)@])@]"
         print_part or_alias1
         print_part or_alias2
 
@@ -350,39 +274,22 @@ end) = struct
 
   let rec print_of_kind_value ppf (of_kind_value : of_kind_value) =
     match of_kind_value with
-    | Tagged_immediate { imm; env_extension; } ->
-      Format.fprintf ppf "[@(Tagged_immediate (%a and %a)@]"
-        (print_or_unknown Immediate.print) imm
-        print_typing_environment env_extension
-    | Block { tag; fields; } ->
-      Format.fprintf ppf "@[(Block (tag %a) (fields %a))@]"
-        (print_or_unknown print_block_tag) tag
-        (print_or_unknown_length print_ty_value_array) fields
-    | Boxed_float f ->
+    | Blocks_and_tagged_immediates { blocks; immediates; } ->
+      Format.fprintf ppf
+        "@[(Blocks_and_immediates@ @[(blocks %a)@]@ @[(immediates %a)@])@]"
+        print_blocks blocks
+        print_immediates immediates
+    | Boxed_number (Boxed_float f) ->
       Format.fprintf ppf "[@(Boxed_float %a)@]" print_ty_naked_float f
-    | Boxed_int32 n ->
+    | Boxed_number (Boxed_int32 n) ->
       Format.fprintf ppf "[@(Boxed_int32 %a)@]" print_ty_naked_int32 n
-    | Boxed_int64 n ->
+    | Boxed_number (Boxed_int64 n) ->
       Format.fprintf ppf "[@(Boxed_int64 %a)@]" print_ty_naked_int64 n
-    | Boxed_nativeint n ->
+    | Boxed_number (Boxed_nativeint n) ->
       Format.fprintf ppf "[@(Boxed_nativeint %a)@]" print_ty_naked_nativeint n
     | Closure closure -> print_closure ppf closure
-    | String { contents; size; } ->
-      begin match contents with
-      | Unknown_or_mutable ->
-        Format.fprintf ppf "string %a" Targetint.OCaml.print size
-      | Contents s ->
-        let s =
-          let max_size = Targetint.OCaml.ten in
-          let long = Targetint.OCaml.compare size max_size > 0 in
-          if long then String.sub s 0 8 ^ "..."
-          else s
-        in
-        Format.fprintf ppf "string %a %S" Targetint.OCaml.print size s
-      end
-    | Float_array fields ->
-      Format.fprintf ppf "@[(Float_array %a)@]"
-        (print_or_unknown_length print_ty_naked_float_array) fields
+    | String str_infos ->
+      Format.fprintf ppf "@[(Strings (%a))@]" String_info.Set.print str_infos
 
   and print_ty_value ppf (ty : ty_value) =
     print_ty_generic print_of_kind_value K.Value_kind.print ppf ty
@@ -473,6 +380,45 @@ end) = struct
       Set_of_closures_origin.print set.set_of_closures_origin
       print_function_declarations set.function_decls
       (Var_within_closure.Map.print print_ty_value) set.closure_elements
+
+  let print_of_kind_naked_number (type n) ppf (n : n of_kind_naked_number) =
+    match n with
+    | Immediate i ->
+      Format.fprintf ppf "@[(Naked_immediates (%a))@]"
+        Immediate.Set.print i
+    | Float f ->
+      Format.fprintf ppf "@[(Naked_floats (%a))@]"
+        Float_by_bit_pattern.Set.print f
+    | Int32 i ->
+      Format.fprintf ppf "@[(Naked_int32s (%a))@]"
+        Int32.Set.print i
+    | Int64 i ->
+      Format.fprintf ppf "@[(Naked_int64s (%a))@]"
+        Int64.Set.print i
+    | Nativeint i ->
+      Format.fprintf ppf "@[(Naked_nativeints (%a))@]"
+        Targetint.Set.print i
+
+  let print_of_kind_fabricated ppf (o : of_kind_fabricated) =
+    match o with
+    | Tag tag_map ->
+      ...
+      Format.fprintf "@[(Tag %a and %a)@]"
+        Tag.print tag
+        print_typing_environment env_extension
+    | Set_of_closures set -> print_set_of_closures ppf set
+
+  let print_of_kind_phantom ppf (o : of_kind_phantom) =
+    match o with
+    | Value ty_value ->
+      Format.fprintf ppf "[@(Phantom %a)@]"
+        print_ty_value ty_value
+    | Naked_number ty_naked_number ->
+      Format.fprintf ppf "[@(Phantom %a)@]"
+        print_ty_naked_number ty_naked_number
+    | Fabricated ty_fabricated ->
+      Format.fprintf ppf "[@(Phantom %a)@]"
+        print_ty_fabricated ty_fabricated
 
   and print_ty_naked_immediate ppf (ty : ty_naked_immediate) =
     print_ty_generic print_of_kind_naked_immediate (fun _ () -> ()) ppf ty
@@ -565,28 +511,28 @@ end) = struct
 
   let this_naked_immediate (i : Immediate.t) : t =
     let i : of_kind_naked_immediate = Naked_immediate i in
-    Naked_immediate (Normal (Resolved (Ok (Singleton i))))
+    Naked_immediate (Normal (Resolved (Ok (Normal i))))
 
   let this_naked_float f : t =
     let f : of_kind_naked_float = Naked_float f in
-    Naked_float (Normal (Resolved (Ok (Singleton f))))
+    Naked_float (Normal (Resolved (Ok (Normal f))))
 
   let this_naked_int32 n : t =
     let n : of_kind_naked_int32 = Naked_int32 n in
-    Naked_int32 (Normal (Resolved (Ok (Singleton n))))
+    Naked_int32 (Normal (Resolved (Ok (Normal n))))
 
   let this_naked_int64 n : t =
     let n : of_kind_naked_int64 = Naked_int64 n in
-    Naked_int64 (Normal (Resolved (Ok (Singleton n))))
+    Naked_int64 (Normal (Resolved (Ok (Normal n))))
 
   let this_naked_nativeint n : t =
     let n : of_kind_naked_nativeint = Naked_nativeint n in
-    Naked_nativeint (Normal (Resolved (Ok (Singleton n))))
+    Naked_nativeint (Normal (Resolved (Ok (Normal n))))
 
   let tag_immediate (t : t) : t =
     match t with
     | Naked_immediate ty_naked_immediate ->
-      Value (Normal (Resolved (Ok (Singleton (
+      Value (Normal (Resolved (Ok (Normal (
         Tagged_immediate ty_naked_immediate)))))
     | Value _
     | Naked_float _
@@ -598,21 +544,19 @@ end) = struct
 
   let box_float (t : t) : t =
     match t with
-    | Naked_float ty_naked_float ->
-      Value (Normal (Resolved (Ok (Singleton (
-        Boxed_float ty_naked_float)))))
+    | Naked_number (Float ty_naked_float) ->
+      Value (Normal (Ok (Boxed_number (Float, ty_naked_float))))
     | Value _
-    | Naked_immediate _
-    | Naked_int32 _
-    | Naked_int64 _
-    | Naked_nativeint _ ->
-      Misc.fatal_errorf "Expected type of kind [Naked_float] but got %a"
+    | Naked_number _
+    | Fabricated _
+    | Phantom _ ->
+      Misc.fatal_errorf "Expected type of kind [Naked_number Float] but got %a"
         print t
 
   let box_int32 (t : t) : t =
     match t with
     | Naked_int32 ty_naked_int32 ->
-      Value (Normal (Resolved (Ok (Singleton (
+      Value (Normal (Resolved (Ok (Normal (
         Boxed_int32 ty_naked_int32)))))
     | Value _
     | Naked_immediate _
@@ -625,7 +569,7 @@ end) = struct
   let box_int64 (t : t) : t =
     match t with
     | Naked_int64 ty_naked_int64 ->
-      Value (Normal (Resolved (Ok (Singleton (
+      Value (Normal (Resolved (Ok (Normal (
         Boxed_int64 ty_naked_int64)))))
     | Value _
     | Naked_immediate _
@@ -638,7 +582,7 @@ end) = struct
   let box_nativeint (t : t) : t =
     match t with
     | Naked_nativeint ty_naked_nativeint ->
-      Value (Normal (Resolved (Ok (Singleton (
+      Value (Normal (Resolved (Ok (Normal (
         Boxed_nativeint ty_naked_nativeint)))))
     | Value _
     | Naked_immediate _
@@ -651,37 +595,37 @@ end) = struct
   let this_tagged_immediate i : t =
     let i : ty_naked_immediate =
       let i : of_kind_naked_immediate = Naked_immediate i in
-      Normal (Resolved (Ok (Singleton i)))
+      Normal (Resolved (Ok (Normal i)))
     in
-    Value (Normal (Resolved (Ok (Singleton (Tagged_immediate i)))))
+    Value (Normal (Resolved (Ok (Normal (Tagged_immediate i)))))
 
   let this_boxed_float f =
     let f : ty_naked_float =
       let f : of_kind_naked_float = Naked_float f in
-      Normal (Resolved (Ok (Singleton f)))
+      Normal (Resolved (Ok (Normal f)))
     in
-    Value (Normal (Resolved (Ok (Singleton (Boxed_float f)))))
+    Value (Normal (Resolved (Ok (Normal (Boxed_float f)))))
 
   let this_boxed_int32 n =
     let n : ty_naked_int32 =
       let n : of_kind_naked_int32 = Naked_int32 n in
-      Normal (Resolved (Ok (Singleton n)))
+      Normal (Resolved (Ok (Normal n)))
     in
-    Value (Normal (Resolved (Ok (Singleton (Boxed_int32 n)))))
+    Value (Normal (Resolved (Ok (Normal (Boxed_int32 n)))))
 
   let this_boxed_int64 n =
     let n : ty_naked_int64 =
       let n : of_kind_naked_int64 = Naked_int64 n in
-      Normal (Resolved (Ok (Singleton n)))
+      Normal (Resolved (Ok (Normal n)))
     in
-    Value (Normal (Resolved (Ok (Singleton (Boxed_int64 n)))))
+    Value (Normal (Resolved (Ok (Normal (Boxed_int64 n)))))
 
   let this_boxed_nativeint n =
     let n : ty_naked_nativeint =
       let n : of_kind_naked_nativeint = Naked_nativeint n in
-      Normal (Resolved (Ok (Singleton n)))
+      Normal (Resolved (Ok (Normal n)))
     in
-    Value (Normal (Resolved (Ok (Singleton (Boxed_nativeint n)))))
+    Value (Normal (Resolved (Ok (Normal (Boxed_nativeint n)))))
 
   let this_immutable_string_as_ty_value str : ty_value =
     let str : String_info.t =
@@ -690,7 +634,7 @@ end) = struct
         size = Targetint.OCaml.of_int (String.length str);
       }
     in
-    Normal (Resolved (Ok (Singleton (String str))))
+    Normal (Resolved (Ok (Normal (String str))))
 
   let this_immutable_string str : t =
     Value (this_immutable_string_as_ty_value str)
@@ -701,7 +645,7 @@ end) = struct
         size;
       }
     in
-    Normal (Resolved (Ok (Singleton (String str))))
+    Normal (Resolved (Ok (Normal (String str))))
 
   let immutable_string ~size : t =
     Value (immutable_string_as_ty_value ~size)
@@ -712,7 +656,7 @@ end) = struct
         size;
       }
     in
-    Value (Normal (Resolved (Ok (Singleton (String str)))))
+    Value (Normal (Resolved (Ok (Normal (String str)))))
 
   (* CR mshinwell: We need to think about these float array functions in
      conjunction with the 4.06 feature for disabling the float array
@@ -721,10 +665,10 @@ end) = struct
   let this_immutable_float_array fields : t =
     let make_field f : ty_naked_float =
       let f : of_kind_naked_float = Naked_float f in
-      Normal (Resolved (Ok (Singleton f)))
+      Normal (Resolved (Ok (Normal f)))
     in
     let fields = Array.map make_field fields in
-    Value (Normal (Resolved (Ok (Singleton (Float_array fields)))))
+    Value (Normal (Resolved (Ok (Normal (Float_array fields)))))
 
   let immutable_float_array fields : t =
 (*
@@ -740,7 +684,7 @@ end) = struct
         fields
     in
 *)
-    Value (Normal (Resolved (Ok (Singleton (Float_array fields)))))
+    Value (Normal (Resolved (Ok (Normal (Float_array fields)))))
 
   let mutable_float_array0 ~size : _ singleton_or_combination =
     let make_field () : ty_naked_float =
@@ -749,7 +693,7 @@ end) = struct
     (* CR mshinwell: dubious for cross compilation *)
     let size = Targetint.OCaml.to_int size in
     let fields = Array.init size (fun _ -> make_field ()) in
-    Singleton (Float_array fields)
+    Normal (Float_array fields)
 
   let mutable_float_array ~size : t =
     let ty = mutable_float_array0 ~size in
@@ -769,7 +713,7 @@ end) = struct
         fields
     in
 *)
-    Value (Normal (Resolved (Ok (Singleton (Block (tag, fields))))))
+    Value (Normal (Resolved (Ok (Normal (Block (tag, fields))))))
 
   let export_id_loaded_lazily (kind : K.t) export_id : t =
     match kind with
@@ -824,23 +768,23 @@ end) = struct
 
   let any_tagged_immediate () : t =
     let i : ty_naked_immediate = Normal (Resolved (Unknown (Other, ()))) in
-    Value (Normal (Resolved (Ok (Singleton (Tagged_immediate i)))))
+    Value (Normal (Resolved (Ok (Normal (Tagged_immediate i)))))
 
   let any_boxed_float () =
     let f : ty_naked_float = Normal (Resolved (Unknown (Other, ()))) in
-    Value (Normal (Resolved (Ok (Singleton (Boxed_float f)))))
+    Value (Normal (Resolved (Ok (Normal (Boxed_float f)))))
 
   let any_boxed_int32 () =
     let n : ty_naked_int32 = Normal (Resolved (Unknown (Other, ()))) in
-    Value (Normal (Resolved (Ok (Singleton (Boxed_int32 n)))))
+    Value (Normal (Resolved (Ok (Normal (Boxed_int32 n)))))
 
   let any_boxed_int64 () =
     let n : ty_naked_int64 = Normal (Resolved (Unknown (Other, ()))) in
-    Value (Normal (Resolved (Ok (Singleton (Boxed_int64 n)))))
+    Value (Normal (Resolved (Ok (Normal (Boxed_int64 n)))))
 
   let any_boxed_nativeint () =
     let n : ty_naked_nativeint = Normal (Resolved (Unknown (Other, ()))) in
-    Value (Normal (Resolved (Ok (Singleton (Boxed_nativeint n)))))
+    Value (Normal (Resolved (Ok (Normal (Boxed_nativeint n)))))
 
   (* CR mshinwell: Check this is being used correctly
   let resolved_ty_value_for_predefined_exception ~name : resolved_ty_value =
@@ -849,7 +793,7 @@ end) = struct
          unknown_as_ty_value Other Must_scan;
       |]
     in
-    Normal (Ok (Singleton (Block (Tag.Scannable.object_tag, fields))))
+    Normal (Ok (Normal (Block (Tag.Scannable.object_tag, fields))))
 *)
 
   type 'a type_accessor =
@@ -1055,8 +999,8 @@ end) = struct
       in
       match ty with
       | Unknown (_, value_kind) -> value_kind
-      | Ok (Singleton (Tagged_immediate _)) -> Definitely_immediate
-      | Ok (Singleton _) -> Unknown
+      | Ok (Normal (Tagged_immediate _)) -> Definitely_immediate
+      | Ok (Normal _) -> Unknown
       | Ok (Combination (Join, ty1, ty2)) ->
         let ty1 = ty_of_resolved_ok_ty ty1 in
         let ty2 = ty_of_resolved_ok_ty ty2 in
@@ -1127,7 +1071,7 @@ end) = struct
     (* CR mshinwell: pass a description to the "force" functions *)
     let set_of_closures = force_to_kind_value set_of_closures in
     Value (Normal (Resolved (Ok (
-      Singleton (Closure { set_of_closures; closure_id; })))))
+      Normal (Closure { set_of_closures; closure_id; })))))
 
   let create_set_of_closures ~set_of_closures_id ~set_of_closures_origin
         ~function_decls ~closure_elements : set_of_closures =
@@ -1144,7 +1088,7 @@ end) = struct
         ~function_decls ~closure_elements
     in
     Value (Normal (Resolved (Ok (
-      Singleton (Set_of_closures set_of_closures)))))
+      Normal (Set_of_closures set_of_closures)))))
 
   let rec free_names t acc =
     match t with
@@ -1221,7 +1165,7 @@ end) = struct
   and free_names_of_kind_value
         (o : of_kind_value singleton_or_combination) acc =
     match o with
-    | Singleton singleton ->
+    | Normal singleton ->
       begin match singleton with
       | Tagged_immediate i ->
         free_names_ty_naked_immediate i acc
@@ -1427,7 +1371,7 @@ end) = struct
   and clean_of_kind_value ~importer (o : of_kind_value) clean_var_opt
         : of_kind_value =
     match o with
-    | Singleton singleton ->
+    | Normal singleton ->
       let singleton : of_kind_value_singleton =
         match singleton with
         | Tagged_immediate i ->
@@ -1464,7 +1408,7 @@ end) = struct
           in
           Float_array fields
       in
-      Singleton singleton
+      Normal singleton
     | Join (w1, w2) ->
       let w1 =
         { var = clean_var_opt w1.var;
@@ -1516,13 +1460,13 @@ end) = struct
         Ok (Combination (P.combining_op, Normal ty1, Normal ty2))
       in
       match ty1, ty2 with
-      | Singleton s1, Singleton s2 ->
+      | Normal s1, Normal s2 ->
         begin match combine_of_kind s1 s2 with
         | Exactly result -> result
         | Combine -> combine ()
         end
-      | Singleton _, Combination _
-      | Combination _, Singleton _
+      | Normal _, Combination _
+      | Combination _, Normal _
       | Combination _, Combination _ -> combine ()
 
     let combine_ty (type a) (type u) ~importer:_ ~importer_this_kind
@@ -1592,7 +1536,7 @@ end) = struct
           (t1 : of_kind_value) t2
           : (of_kind_value, K.Value_kind.t) or_unknown_or_bottom or_combine =
       let singleton s : _ or_combine =
-        Exactly ((Ok (Singleton s)) : _ or_unknown_or_bottom)
+        Exactly ((Ok (Normal s)) : _ or_unknown_or_bottom)
       in
       match t1, t2 with
       | Tagged_immediate ty1, Tagged_immediate ty2 ->
@@ -1650,7 +1594,7 @@ end) = struct
           Combine
         else
           Exactly (Ok (
-            Singleton ((Naked_immediate i1) : of_kind_naked_immediate)))
+            Normal ((Naked_immediate i1) : of_kind_naked_immediate)))
 
     and combine_of_kind_naked_float
           (t1 : of_kind_naked_float) (t2 : of_kind_naked_float)
@@ -1660,7 +1604,7 @@ end) = struct
         if not (Numbers.Float_by_bit_pattern.equal i1 i2) then
           Combine
         else
-          Exactly (Ok (Singleton ((Naked_float i1) : of_kind_naked_float)))
+          Exactly (Ok (Normal ((Naked_float i1) : of_kind_naked_float)))
 
     and combine_of_kind_naked_int32
           (t1 : of_kind_naked_int32) (t2 : of_kind_naked_int32)
@@ -1670,7 +1614,7 @@ end) = struct
         if not (Int32.equal i1 i2) then
           Combine
         else
-          Exactly (Ok (Singleton ((Naked_int32 i1) : of_kind_naked_int32)))
+          Exactly (Ok (Normal ((Naked_int32 i1) : of_kind_naked_int32)))
 
     and combine_of_kind_naked_int64
           (t1 : of_kind_naked_int64) (t2 : of_kind_naked_int64)
@@ -1680,7 +1624,7 @@ end) = struct
         if not (Int64.equal i1 i2) then
           Combine
         else
-          Exactly (Ok (Singleton ((Naked_int64 i1) : of_kind_naked_int64)))
+          Exactly (Ok (Normal ((Naked_int64 i1) : of_kind_naked_int64)))
 
     and combine_of_kind_naked_nativeint
           (t1 : of_kind_naked_nativeint) (t2 : of_kind_naked_nativeint)
@@ -1691,7 +1635,7 @@ end) = struct
           Combine
         else
           Exactly (Ok (
-            Singleton ((Naked_nativeint i1) : of_kind_naked_nativeint)))
+            Normal ((Naked_nativeint i1) : of_kind_naked_nativeint)))
 
     and combine_ty_value ~importer ~type_of_name
           (ty1 : ty_value) (ty2 : ty_value) : ty_value =
@@ -2144,10 +2088,10 @@ end) = struct
         ~ty_of_t:(t -> ty)
         : (ty, unk) or_unknown_or_bottom =
     match oj1, oj2 with
-    | Singleton s1, Singleton s2 ->
+    | Normal s1, Normal s2 ->
       meet_ty ~type_of_name s1 s2
-    | ((Singleton _ | Join _) as other_side), Join (or_alias1, or_alias2)
-    | Join (or_alias1, or_alias2), ((Singleton _ | Join _) as other_side) ->
+    | ((Normal _ | Join _) as other_side), Join (or_alias1, or_alias2)
+    | Join (or_alias1, or_alias2), ((Normal _ | Join _) as other_side) ->
       (* CR mshinwell: We should maybe be returning equations when we
          meet types equipped with alias information. *)
       let join_left =

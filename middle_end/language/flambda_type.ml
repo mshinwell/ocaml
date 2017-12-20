@@ -302,6 +302,52 @@ let reify_as_string t : string option =
   | Load_lazily _ -> None
 *)
 
+
+
+
+
+module Simple : sig
+  (** "Simple" types differ in two ways from normal types:
+      1. They do not (at the top level of their structure) describe
+      joins between incompatible types: [Ok (Join ...)] is replaced by
+      [Unknown].
+      2. Aliases are substituted out at the top level.
+  *)
+  type t = private
+    | Value of ty_value
+    | Naked_number : _ ty_naked_number -> t
+    | Fabricated of ty_fabricated
+    | Phantom of ty_phantom
+
+  and ty_value = (of_kind_value, Flambda_kind.Value_kind.t) ty
+  and 'a ty_naked_number = ('a of_kind_naked_number, unit) ty
+  and ty_fabricated = (of_kind_fabricated, unit) ty
+  and ty_phantom = (of_kind_phantom, unit) ty
+
+  and ('a, 'u) ty = ('a, 'u) or_unknown_or_bottom
+
+  and ('a, 'u) or_unknown_or_bottom = private
+    | Unknown of 'u
+    | Ok of 'a
+    | Bottom
+
+  (** Create a simple type from a type.  If the type has an alias at its
+      top level stating that it is the type of some named value, that alias
+      is (recursively) expanded, and the final ("canonical") name
+      returned. *)
+  val create : (flambda_type -> t * (Name.t option)) type_accessor
+
+  val print : Format.formatter -> t -> unit
+end
+
+
+
+
+
+
+
+
+
 type 'a or_wrong =
   | Ok of 'a
   | Wrong

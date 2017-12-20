@@ -60,10 +60,6 @@ module type S = sig
     | Type of Export_id.t
     | Type_of of Name.t
 
-  (* CR-someday mshinwell / lwhite: Types in ANF form? *)
-
-  type combining_op = Union | Intersection
-
   type 'a or_unknown =
     | Ok of 'a
     | Unknown
@@ -102,45 +98,47 @@ module type S = sig
     | Bottom
     (** "No value can flow to this point": the bottom element. *)
 
-  (** Note: [Singleton] refers to the structure of the type.  A [Singleton]
-      type may still describe more than one particular runtime value (for
-      example, it may describe a boxed float whose contents is unknown). *)
   and 'a or_join = private
-    | Singleton of 'a
+    | Normal of 'a
     | Join of 'a or_join or_alias * 'a or_join or_alias
+      (** A join between two incompatible types which has been remembered
+          in case it is refined by a subsequent meet.  Joins between compatible
+          types are immediately pushed down through the top level structure
+          of the type. *)
 
   and of_kind_value = private
     | Blocks_and_tagged_immediates of blocks_and_tagged_immediates
     | Boxed_number : _ of_kind_value_boxed_number -> of_kind_value
-    | Closure of closure
+    | Closure of closures
     | String of String_info.Set.t
 
-  and immediate = {
+  and immediate_case = private {
     env_extension : typing_environment;
   }
-
-  and singleton_block = {
+ 
+  and singleton_block = private {
     env_extension : typing_environment;
     first_fields : t array or_unknown_length;
   }
 
-  and block =
+  and block_case = private
     | Join of singleton_block list
 
-  and blocks_and_immediates = {
-    immediates : immediate Immediate_or_unknown.Map.t;
-    blocks : block Tag.Scannable.Map.t;
+  and blocks_and_immediates = private {
+    immediates : immediate_case Immediate_or_unknown.Map.t;
+    blocks : block_case Tag.Scannable.Map.t;
   }
 
-  and 'a of_kind_value_boxed_number =
-    | Float : ty_naked_float -> ty_naked_float of_kind_value_boxed_number
-    | Int32 : ty_naked_int32 -> ty_naked_int32 of_kind_value_boxed_number
-    | Int64 : ty_naked_int64 -> ty_naked_int64 of_kind_value_boxed_number
-    | Nativeint :
+  and 'a of_kind_value_boxed_number = private
+    | Boxed_float : ty_naked_float -> ty_naked_float of_kind_value_boxed_number
+    | Boxed_int32 : ty_naked_int32 -> ty_naked_int32 of_kind_value_boxed_number
+    | Boxed_int64 : ty_naked_int64 -> ty_naked_int64 of_kind_value_boxed_number
+    | Boxed_nativeint :
         ty_naked_nativeint -> ty_naked_nativeint of_kind_value_boxed_number
 
-  and closure = private {
+  and closures = private {
     (* CR pchambart: should Unknown or Bottom really be allowed here ? *)
+    (* XXX what exactly is needed here?  It needs to represent the join *)
     set_of_closures : ty_value;
     closure_id : Closure_id.t;
   }
@@ -177,7 +175,7 @@ module type S = sig
     direct_call_surrogate : Closure_id.t option;
   }
 
-  and function_declaration =
+  and function_declaration = private
     | Non_inlinable of non_inlinable_function_declaration
     | Inlinable of inlinable_function_declaration
 
@@ -196,14 +194,14 @@ module type S = sig
     | Int64 : Int64.Set.t -> Int64.Set.t of_kind_naked_number
     | Nativeint : Targetint.Set.t -> Targetint.Set.t of_kind_naked_number
 
-  and tag = {
+  and tag_case = private {
     env_extension : typing_environment;
   }
 
   and of_kind_fabricated = private
     (* CR mshinwell: Note that these should be represented as naked
        immediates *)
-    | Tag of tag Tag.Map.t;
+    | Tag of tag_case Tag.Map.t;
     | Set_of_closures of set_of_closures
 
   and of_kind_phantom = private
@@ -211,32 +209,9 @@ module type S = sig
     | Naked_number : _ ty_naked_number -> of_kind_phantom
     | Fabricated of ty_fabricated
 
-  module Simple : sig
-    (** "Simple" types have [Join]s at their top level replaced by
-        [Unknown]s. *)
-
-    type t = private
-      | Value of ty_value
-      | Naked_number : _ ty_naked_number -> t
-      | Fabricated of ty_fabricated
-      | Phantom of ty_phantom
-
-    and ty_value = (of_kind_value, Flambda_kind.Value_kind.t) ty
-    and 'a ty_naked_number = ('a of_kind_naked_number, unit) ty
-    and ty_fabricated = (of_kind_fabricated, unit) ty
-    and ty_phantom = (of_kind_phantom, unit) ty
-
-    and ('a, 'u) ty = ('a, 'u) or_unknown_or_bottom or_alias
-
-    and ('a, 'u) or_unknown_or_bottom = private
-      | Unknown of 'u
-      | Ok of 'a
-      | Bottom
-
-    val create : flambda_type -> t
-
-    val print : Format.formatter -> t -> unit
-  end
+  (** If the given type has kind [Phantom], return it; otherwise form the
+      correct type of kind [Phantom] describing the given type. *)
+  val phantomize : t -> t
 
 (*
   val block_case_known_size
