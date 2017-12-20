@@ -25,9 +25,9 @@ Working version
 
 ### Standard library:
 
-- GPR#????: Add unsigned operations div_unsigned, rem_unsigned,
-  and compare_unsigned to modules Int32, Int64, Nativeint.
-  (Nicolas Ojeda Bar, review by ....)
+- MPR#7690, GPR#1528: fix the float_of_string function for hexadecimal floats
+  with very large values of the exponent.
+  (Olivier Andrieu)
 
 ### Other libraries:
 
@@ -82,6 +82,11 @@ Working version
 
 ### Runtime system:
 
+- MPR#6411, GPR#1535: don't compile everything with -static-libgcc on mingw32,
+  only dllbigarray.dll and libbigarray.a. Allows the use of C++ libraries which
+  raise exceptions.
+  (David Allsopp)
+
 - GPR#1431: remove ocamlrun dependencies on curses/terminfo/termcap C library
   (Xavier Leroy, review by Daniel Bünzli)
 
@@ -126,6 +131,9 @@ Working version
 - GPR#1519, GPR#1532: migrate expect tests to ocamltest
   (Sébastien Hinderer, review by Gabriel Scherer, Valentin Gatien-Baron
   and Nicolás Ojeda Bär)
+
+- GPR#1520: more robust implementation of Misc.no_overflow_mul
+  (Max Mouratov, review by Xavier Leroy)
 
 ### Bug fixes
 
@@ -176,6 +184,9 @@ Working version
 
 - GPR#1470: Don't commute negation with float comparison
   (Leo White, review by Xavier Leroy)
+
+- GPR#1538: Make pattern matching compilation more robust to ill-typed columns
+  (Gabriel Scherer and Thomas Refis, review by Luc Maranget)
 
 OCaml 4.06.0 (3 Nov 2017):
 --------------------------
