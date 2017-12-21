@@ -692,12 +692,15 @@ end) = struct
     include Identifiable.Make (struct
       type nonrec t = t
 
-      let compare t1, t2 =
+      let compare t1 t2 =
         match t1, t2 with
         | Name _, Export_id _ -> -1
         | Export_id _, Name _ -> 1
         | Name name1, Name name2 -> Name.compare name1 name2
         | Export_id id1, Export_id id2 -> Export_id.compare id1 id2
+
+      let equal t1 t2 =
+        compare t1 t2 = 0
  
       let hash t =
         match t with
@@ -1073,7 +1076,7 @@ end) = struct
 
 (*
 
-  (* CR mshinwell: Check this is being used correctly
+  (* CR mshinwell: Check this is being used correctly *)
   let resolved_ty_value_for_predefined_exception ~name : resolved_ty_value =
     let fields =
       [| this_immutable_string_as_ty_value name;
@@ -1086,70 +1089,11 @@ end) = struct
   let force_to_kind_value t =
     match t with
     | Value ty_value -> ty_value
-    | Naked_immediate _
-    | Naked_float _
-    | Naked_int32 _
-    | Naked_int64 _
-    | Naked_nativeint _ ->
+    | Naked_number _
+    | Fabricated _
+    | Phantom _ ->
       Misc.fatal_errorf "Type has wrong kind (expected [Value]): %a"
         print t
-
-  let force_to_kind_naked_immediate t =
-    match t with
-    | Naked_immediate ty_naked_immediate -> ty_naked_immediate
-    | Value _
-    | Naked_float _
-    | Naked_int32 _
-    | Naked_int64 _
-    | Naked_nativeint _ ->
-      Misc.fatal_errorf "Type has wrong kind (expected [Naked_immediate]): %a"
-        print t
-
-  let force_to_kind_naked_float t =
-    match t with
-    | Naked_float ty_naked_float -> ty_naked_float
-    | Value _
-    | Naked_immediate _
-    | Naked_int32 _
-    | Naked_int64 _
-    | Naked_nativeint _ ->
-      Misc.fatal_errorf "Type has wrong kind (expected [Naked_float]): %a"
-        print t
-
-  let force_to_kind_naked_int32 t =
-    match t with
-    | Naked_int32 ty_naked_int32 -> ty_naked_int32
-    | Value _
-    | Naked_immediate _
-    | Naked_float _
-    | Naked_int64 _
-    | Naked_nativeint _ ->
-      Misc.fatal_errorf "Type has wrong kind (expected [Naked_int32]): %a"
-        print t
-
-  let force_to_kind_naked_int64 t =
-    match t with
-    | Naked_int64 ty_naked_int64 -> ty_naked_int64
-    | Value _
-    | Naked_immediate _
-    | Naked_float _
-    | Naked_int32 _
-    | Naked_nativeint _ ->
-      Misc.fatal_errorf "Type has wrong kind (expected [Naked_int64]): %a"
-        print t
-
-  let force_to_kind_naked_nativeint t =
-    match t with
-    | Naked_nativeint ty_naked_nativeint -> ty_naked_nativeint
-    | Value _
-    | Naked_immediate _
-    | Naked_float _
-    | Naked_int32 _
-    | Naked_int64 _ ->
-      Misc.fatal_errorf "Type has wrong kind (expected [Naked_nativeint]): %a"
-        print t
-
-*)
 
   let force_to_kind_naked_number (type n) (kind : n K.Naked_number.t) (t : t)
         : n ty_naked_number =
@@ -1184,6 +1128,15 @@ end) = struct
     | Naked_number _
     | Phantom _ ->
       Misc.fatal_errorf "Type has wrong kind (expected [Fabricated]): %a"
+        print t
+
+  let force_to_kind_phantom t =
+    match t with
+    | Phantom ty_phantom -> ty_phantom
+    | Value _
+    | Naked_number _
+    | Fabricated _ ->
+      Misc.fatal_errorf "Type has wrong kind (expected [Phantom]): %a"
         print t
 
 (*
@@ -1242,25 +1195,68 @@ end) = struct
     in
     ty, canonical_name
 
-  let resolve_aliases ~importer ~type_of_name t : t * (Name.t option) =
-    let module I = (val importer : Importer) in
+  let resolve_aliases ~type_of_name t : t * (Name.t option) =
     match t with
     | Value ty ->
       let force_to_kind = force_to_kind_value in
-      let resolved_ty, canonical_name =
+      let ty, canonical_name =
         resolve_aliases_on_ty ~force_to_kind ~type_of_name ty
       in
-      Value (ty_of_resolved_ty resolved_ty), canonical_name
+      Value ty, canonical_name
     | Naked_number (ty, kind) ->
       let force_to_kind = force_to_kind_naked_number kind in
-      let resolved_ty, canonical_name =
+      let ty, canonical_name =
         resolve_aliases_on_ty ~force_to_kind ~type_of_name ty
       in
-      Naked_immediate (ty_of_resolved_ty resolved_ty), canonical_name
+      Naked_number (ty, kind), canonical_name
     | Fabricated ty ->
-      assert false
+      let force_to_kind = force_to_kind_fabricated in
+      let ty, canonical_name =
+        resolve_aliases_on_ty ~force_to_kind ~type_of_name ty
+      in
+      Fabricated ty, canonical_name
     | Phantom ty ->
-      assert false
+      let force_to_kind = force_to_kind_phantom in
+      let ty, canonical_name =
+        resolve_aliases_on_ty ~force_to_kind ~type_of_name ty
+      in
+      Phantom ty, canonical_name
+
+  let resolve_aliases_and_squash_unresolved_names ~type_of_name t
+        : t * (Name.t option) =
+    match t with
+    | Value ty ->
+      let force_to_kind = force_to_kind_value in
+      let ty, canonical_name =
+        resolve_aliases_and_squash_unresolved_names_on_ty ~force_to_kind
+          ~type_of_name ~unknown_payload:K.Value_kind.Unknown ty
+      in
+      Value (No_alias ty), canonical_name
+    | Naked_number (ty, kind) ->
+      let force_to_kind
+          = force_to_kind_naked_number kind in
+      let ty, canonical_name =
+        resolve_aliases_and_squash_unresolved_names_on_ty ~force_to_kind
+          ~type_of_name ~unknown_payload:() ty
+      in
+      Naked_number (No_alias ty, kind), canonical_name
+    | Fabricated ty ->
+      let force_to_kind
+          = force_to_kind_fabricated in
+      let ty, canonical_name =
+        resolve_aliases_and_squash_unresolved_names_on_ty ~force_to_kind
+          ~type_of_name ~unknown_payload:() ty
+      in
+      Fabricated (No_alias ty), canonical_name
+    | Phantom ty ->
+      let force_to_kind
+          = force_to_kind_phantom in
+      let ty, canonical_name =
+        resolve_aliases_and_squash_unresolved_names_on_ty ~force_to_kind
+          ~type_of_name ~unknown_payload:() ty
+      in
+      Phantom (No_alias ty), canonical_name
+
 
 (*
   let value_kind_ty_value ~importer ~type_of_name ty =

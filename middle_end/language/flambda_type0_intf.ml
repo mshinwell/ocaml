@@ -515,55 +515,46 @@ module type S = sig
   val meet_ty_naked_nativeint
      : (ty_naked_nativeint -> ty_naked_nativeint -> ty_naked_nativeint)
          type_accessor
+*)
 
-  (** Follow chains of [Alias]es until either a [Normal] type is reached
+  (* CR mshinwell: We may not need to expose all of the following functions *)
+
+  (** Follow chains of [Alias]es until either a [No_alias] type is reached
       or a name cannot be resolved.
 
-      This function also returns the "canonical name" for the given type.
-      Canonical names are stated with reference to the input type [t] given
-      to this function.  There are three cases:
-
-      1. The returned type is [Normal]; following aliases from [t] it is
-         pointed at by an [Alias].  The canonical name is the name given in
-         that [Alias].
-
-      2. The returned type is [Normal]; following aliases from [t] it is not
-         pointed at by an [Alias].  There is no canonical name.
-
-      3. The returned type is [Alias] due to an unresolved name.  That name is
-         the canonical name. *)
+      This function also returns the "canonical name" for the given type:
+      the furthest-away [Name.t] in any chain of aliases leading from the given
+      type.  (The chain may also involve [Export_id.t] links either before or
+      after any returned canonical name.) *)
   val resolve_aliases : (t -> t * (Name.t option)) type_accessor
+
+  (** Like [resolve_aliases], but unresolved names at the top level are
+      changed into [Unknown]s. *)
+  val resolve_aliases_and_squash_unresolved_names
+     : (t -> t * (Name.t option)) type_accessor
 
   (** Like [resolve_aliases], but for use when you have a [ty], not a [t]. *)
   val resolve_aliases_on_ty
      : force_to_kind:(t -> ('a, 'b) ty)
-    -> type_of_name:(Name.t -> t option)
+    -> type_of_name:(Name_or_export_id.t -> t option)
     -> ('a, 'b) ty
-    -> ('a, 'b) resolved_ty * (Name.t option)
+    -> ('a, 'b) ty * (Name.t option)
 
-  (** Like [resolve_aliases_on_ty], but unresolved names are changed into
-      an [Unknown] (with payload given by [unknown_payload]). *)
+  (** Like [resolve_aliases_on_ty], but unresolved names at the top level are
+      changed into [Unknown]s (with payloads given by [unknown_payload]). *)
   val resolve_aliases_and_squash_unresolved_names_on_ty
      : force_to_kind:(t -> ('a, 'b) ty)
-    -> type_of_name:(Name.t -> t option)
+    -> type_of_name:(Name_or_export_id.t -> t option)
     -> unknown_payload:'b
     -> ('a, 'b) ty
     -> ('a, 'b) or_unknown_or_bottom * (Name.t option)
 
   val force_to_kind_value : t -> ty_value
 
-  val force_to_kind_naked_immediate : t -> ty_naked_immediate
-
-  val force_to_kind_naked_float : t -> ty_naked_float
-
-  val force_to_kind_naked_int32 : t -> ty_naked_int32
-
-  val force_to_kind_naked_int64 : t -> ty_naked_int64
-
-  val force_to_kind_naked_nativeint : t -> ty_naked_nativeint
-
-*)
-
+  val force_to_kind_naked_number
+     : 'kind Flambda_kind.Naked_number.t
+    -> t
+    -> 'kind ty_naked_number
 
   val force_to_kind_fabricated : t -> ty_fabricated
 
