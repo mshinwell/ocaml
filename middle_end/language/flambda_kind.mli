@@ -62,6 +62,8 @@ module Naked_number_kind : sig
     | Naked_int32
     | Naked_int64
     | Naked_nativeint
+
+  val print : Format.formatter -> t -> unit
 end
 
 (* CR mshinwell: Once disambiguation works on GADTs, consider turning [t]
@@ -160,4 +162,6 @@ module Naked_number : sig
     | Naked_int32 : Numbers.Int32.Set.t t
     | Naked_int64 : Numbers.Int64.Set.t t
     | Naked_nativeint : Targetint.Set.t t
+
+  val print : Format.formatter -> _ t -> unit
 end

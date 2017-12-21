@@ -250,6 +250,9 @@ module type S = sig
 
   module Typing_environment : sig
     type t = typing_environment
+
+    val print : Format.formatter -> t -> unit
+
 (*
     val create : unit -> t
 
@@ -325,9 +328,9 @@ module type S = sig
   val these_boxed_int64s : Numbers.Int64.Set.t -> t
   val this_boxed_nativeint : Targetint.t -> t
   val these_boxed_nativeints : Targetint.Set.t -> t
+  val this_immutable_string : string -> t
 
 (*
-  val this_immutable_string : string -> t
   val this_immutable_float_array : Numbers.Float_by_bit_pattern.t array -> t
 *)
 
@@ -343,13 +346,14 @@ module type S = sig
   val this_naked_nativeint : Targetint.t -> t
   val these_naked_nativeints : Targetint.Set.t -> t
 
-(*
   (** Building of types corresponding to immutable values given only the
       size of such values. *)
   val immutable_string : size:Targetint.OCaml.t -> t
 
   (** Building of types corresponding to mutable values. *)
   val mutable_string : size:Targetint.OCaml.t -> t
+
+(*
   val mutable_float_array : size:Targetint.OCaml.t -> t
   val mutable_float_arrays_of_various_sizes : sizes:Targetint.OCaml.Set.t -> t
 *)
@@ -427,14 +431,20 @@ module type S = sig
 
   val alias_type : Flambda_kind.t -> Export_id.t -> t
 
-(*
   (** Free names in a type. *)
   val free_names : t -> Name.Set.t
-*)
+
+  module Name_or_export_id : sig
+    type t = private
+      | Name of Name.t
+      | Export_id of Export_id.t
+
+    include Identifiable.S with type t := t
+  end
 
   (** Annotation for functions that may require examination of the current
       simplification environment. *)
-  type 'a type_accessor = type_of_name:(Name.t -> t option) -> 'a
+  type 'a type_accessor = type_of_name:(Name_or_export_id.t -> t option) -> 'a
 
 (*
   (** Determine the (unique) kind of a type. *)

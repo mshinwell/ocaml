@@ -684,7 +684,34 @@ end) = struct
       Phantom (No_alias (Ok (Normal of_kind_phantom)))
     | Phantom _ -> t
 
-  type 'a type_accessor = type_of_name:(Name.t -> t option) -> 'a
+  module Name_or_export_id = struct
+    type t =
+      | Name of Name.t
+      | Export_id of Export_id.t
+
+    include Identifiable.Make (struct
+      type nonrec t = t
+
+      let compare t1, t2 =
+        match t1, t2 with
+        | Name _, Export_id _ -> -1
+        | Export_id _, Name _ -> 1
+        | Name name1, Name name2 -> Name.compare name1 name2
+        | Export_id id1, Export_id id2 -> Export_id.compare id1 id2
+ 
+      let hash t =
+        match t with
+        | Name name -> Hashtbl.hash (0, Name.hash name)
+        | Export_id id -> Hashtbl.hash (1, Export_id.hash id)
+
+      let print ppf t =
+        match t with
+        | Name name -> Name.print ppf name
+        | Export_id id -> Export_id.print ppf id
+    end)
+  end
+
+  type 'a type_accessor = type_of_name:(Name_or_export_id.t -> t option) -> 'a
 
   let alias_type_of (kind : K.t) name : t =
     match kind with
@@ -983,23 +1010,6 @@ end) = struct
 *)
     Value (No_alias (Resolved (Ok (No_alias (Block (tag, fields))))))
 
-  let export_id_loaded_lazily (kind : K.t) export_id : t =
-    match kind with
-    | Value _ ->
-      Value (No_alias (Load_lazily (Export_id export_id)))
-    | Naked_immediate ->
-      Naked_immediate (No_alias (Load_lazily (Export_id export_id)))
-    | Naked_float ->
-      Naked_float (No_alias (Load_lazily (Export_id export_id)))
-    | Naked_int32 ->
-      Naked_int32 (No_alias (Load_lazily (Export_id export_id)))
-    | Naked_int64 ->
-      Naked_int64 (No_alias (Load_lazily (Export_id export_id)))
-    | Naked_nativeint ->
-      Naked_nativeint (No_alias (Load_lazily (Export_id export_id)))
-
-  let symbol_loaded_lazily sym : t =
-    Value (No_alias (Load_lazily (Symbol sym)))
 
 *)
 
@@ -1141,6 +1151,32 @@ end) = struct
 
 *)
 
+  let force_to_kind_naked_number (type n) (kind : n K.Naked_number.t) (t : t)
+        : n ty_naked_number =
+    match t, kind with
+    | Naked_number (ty_naked_number, K.Naked_number.Naked_immediate),
+        K.Naked_number.Naked_immediate ->
+      ty_naked_number
+    | Naked_number (ty_naked_number, K.Naked_number.Naked_float),
+        K.Naked_number.Naked_float ->
+      ty_naked_number
+    | Naked_number (ty_naked_number, K.Naked_number.Naked_int32),
+        K.Naked_number.Naked_int32 ->
+      ty_naked_number
+    | Naked_number (ty_naked_number, K.Naked_number.Naked_int64),
+        K.Naked_number.Naked_int64 ->
+      ty_naked_number
+    | Naked_number (ty_naked_number, K.Naked_number.Naked_nativeint),
+        K.Naked_number.Naked_nativeint ->
+      ty_naked_number
+    | Naked_number _, _
+    | Fabricated _, _
+    | Value _, _
+    | Phantom _, _ ->
+      Misc.fatal_errorf "Type has wrong kind (expected [Naked_number %a]): %a"
+        K.Naked_number.print kind
+        print t
+
   let force_to_kind_fabricated t =
     match t with
     | Fabricated ty_fabricated -> ty_fabricated
@@ -1155,33 +1191,26 @@ end) = struct
 
   let t_of_ty_naked_float (ty : ty_naked_float) : t = Naked_float ty
 
-  let ty_of_resolved_ty (ty : _ resolved_ty) : _ ty =
-    match ty with
-    | No_alias ty -> No_alias ((Resolved ty) : _ maybe_unresolved)
-    | Alias name -> Alias name
+*)
 
-  let ty_of_resolved_ok_ty (ty : _ singleton_or_combination or_alias)
-        : _ ty =
-    match ty with
-    | No_alias ty -> No_alias ((Resolved (Ok ty)) : _ maybe_unresolved)
-    | Alias name -> Alias name
-
-  let resolve_aliases_on_ty (type a) ~importer_this_kind
+  let resolve_aliases_on_ty (type a)
         ~(force_to_kind : t -> (a, _) ty)
-        ~(type_of_name : Name.t -> t option)
+        ~(type_of_name : Name_or_export_id.t -> t option)
         (ty : (a, _) ty)
-        : (a, _) resolved_ty * (Name.t option) =
-    let rec resolve_aliases names_seen ~canonical_name (ty : _ resolved_ty) =
-      match ty with
-      | No_alias _ -> ty, canonical_name
-      | Alias name ->
-        if Name.Set.mem name names_seen then begin
+        : (a, _) ty * (Name.t option) =
+    let rec resolve_aliases names_seen ~canonical_name (ty : (a, _) ty) =
+      let resolve (name : Name_or_export_id.t) =
+        if Name_or_export_id.Set.mem name names_seen then begin
           (* CR-soon mshinwell: Improve message -- but this means passing the
              printing functions to this function. *)
           Misc.fatal_errorf "Loop on %a whilst resolving aliases"
-            Name.print name
+            Name_or_export_id.print name
         end;
-        let canonical_name = Some name in
+        let canonical_name =
+          match name with
+          | Name name -> Some name
+          | Export_id _ -> None
+        in
         begin match type_of_name name with
         | None ->
           (* The type could not be obtained but we still wish to keep the
@@ -1189,23 +1218,27 @@ end) = struct
              available). *)
           ty, canonical_name
         | Some t ->
-          let names_seen = Name.Set.add name names_seen in
+          let names_seen = Name_or_export_id.Set.add name names_seen in
           let ty = force_to_kind t in
-          resolve_aliases names_seen ~canonical_name (importer_this_kind ty)
+          resolve_aliases names_seen ~canonical_name ty
         end
+      in
+      match ty with
+      | No_alias _ -> ty, canonical_name
+      | Type export_id -> resolve (Name_or_export_id.Export_id export_id)
+      | Type_of name -> resolve (Name_or_export_id.Name name)
     in
-    resolve_aliases Name.Set.empty ~canonical_name:None
-      (importer_this_kind ty)
+    resolve_aliases Name_or_export_id.Set.empty ~canonical_name:None ty
 
-  let resolve_aliases_and_squash_unresolved_names_on_ty ~importer_this_kind
-        ~force_to_kind ~type_of_name ~unknown_payload ty =
+  let resolve_aliases_and_squash_unresolved_names_on_ty ~force_to_kind
+        ~type_of_name ~unknown_payload ty =
     let ty, canonical_name =
-      resolve_aliases_on_ty ~importer_this_kind ~force_to_kind ~type_of_name ty
+      resolve_aliases_on_ty ~force_to_kind ~type_of_name ty
     in
     let ty =
       match ty with
       | No_alias ty -> ty
-      | Alias name -> Unknown (Unresolved_value (Name name), unknown_payload)
+      | Type _ | Type_of _ -> Unknown unknown_payload
     in
     ty, canonical_name
 
@@ -1213,64 +1246,23 @@ end) = struct
     let module I = (val importer : Importer) in
     match t with
     | Value ty ->
-      let importer_this_kind = I.import_value_type_as_resolved_ty_value in
       let force_to_kind = force_to_kind_value in
       let resolved_ty, canonical_name =
-        resolve_aliases_on_ty ~importer_this_kind ~force_to_kind
-          ~type_of_name ty
+        resolve_aliases_on_ty ~force_to_kind ~type_of_name ty
       in
       Value (ty_of_resolved_ty resolved_ty), canonical_name
-    | Naked_immediate ty ->
-      let importer_this_kind =
-        I.import_naked_immediate_type_as_resolved_ty_naked_immediate
-      in
-      let force_to_kind = force_to_kind_naked_immediate in
+    | Naked_number (ty, kind) ->
+      let force_to_kind = force_to_kind_naked_number kind in
       let resolved_ty, canonical_name =
-        resolve_aliases_on_ty ~importer_this_kind ~force_to_kind
-          ~type_of_name ty
+        resolve_aliases_on_ty ~force_to_kind ~type_of_name ty
       in
       Naked_immediate (ty_of_resolved_ty resolved_ty), canonical_name
-    | Naked_float ty ->
-      let importer_this_kind =
-        I.import_naked_float_type_as_resolved_ty_naked_float
-      in
-      let force_to_kind = force_to_kind_naked_float in
-      let resolved_ty, canonical_name =
-        resolve_aliases_on_ty ~importer_this_kind ~force_to_kind
-          ~type_of_name ty
-      in
-      Naked_float (ty_of_resolved_ty resolved_ty), canonical_name
-    | Naked_int32 ty ->
-      let importer_this_kind =
-        I.import_naked_int32_type_as_resolved_ty_naked_int32
-      in
-      let force_to_kind = force_to_kind_naked_int32 in
-      let resolved_ty, canonical_name =
-        resolve_aliases_on_ty ~importer_this_kind ~force_to_kind
-          ~type_of_name ty
-      in
-      Naked_int32 (ty_of_resolved_ty resolved_ty), canonical_name
-    | Naked_int64 ty ->
-      let importer_this_kind =
-        I.import_naked_int64_type_as_resolved_ty_naked_int64
-      in
-      let force_to_kind = force_to_kind_naked_int64 in
-      let resolved_ty, canonical_name =
-        resolve_aliases_on_ty ~importer_this_kind ~force_to_kind
-          ~type_of_name ty
-      in
-      Naked_int64 (ty_of_resolved_ty resolved_ty), canonical_name
-    | Naked_nativeint ty ->
-      let importer_this_kind =
-        I.import_naked_nativeint_type_as_resolved_ty_naked_nativeint
-      in
-      let force_to_kind = force_to_kind_naked_nativeint in
-      let resolved_ty, canonical_name =
-        resolve_aliases_on_ty ~importer_this_kind ~force_to_kind
-          ~type_of_name ty
-      in
-      Naked_nativeint (ty_of_resolved_ty resolved_ty), canonical_name
+    | Fabricated ty ->
+      assert false
+    | Phantom ty ->
+      assert false
 
+(*
   let value_kind_ty_value ~importer ~type_of_name ty =
     let rec value_kind_ty_value (ty : ty_value) : K.Value_kind.t =
       let module I = (val importer : Importer) in
