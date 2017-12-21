@@ -232,6 +232,8 @@ type binary_primitive =
   | Int_arith of Flambda_kind.Standard_int.t * binary_int_arith_op
   | Int_shift of Flambda_kind.Standard_int.t * int_shift_op
   | Int_comp of Flambda_kind.Standard_int.t * signed_or_unsigned * comparison
+    (* XXX Pintcomp is used with "int" versus "pointer": we need to support
+       this somehow.  The int may always be compile time. *)
   | Float_arith of binary_float_arith_op
   | Float_comp of comparison
 

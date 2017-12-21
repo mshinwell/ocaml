@@ -1147,8 +1147,8 @@ end) = struct
 *)
 
   let resolve_aliases_on_ty (type a)
-        ~(force_to_kind : t -> (a, _) ty)
         ~(type_of_name : Name_or_export_id.t -> t option)
+        ~(force_to_kind : t -> (a, _) ty)
         (ty : (a, _) ty)
         : (a, _) ty * (Name.t option) =
     let rec resolve_aliases names_seen ~canonical_name (ty : (a, _) ty) =
@@ -1183,8 +1183,8 @@ end) = struct
     in
     resolve_aliases Name_or_export_id.Set.empty ~canonical_name:None ty
 
-  let resolve_aliases_and_squash_unresolved_names_on_ty ~force_to_kind
-        ~type_of_name ~unknown_payload ty =
+  let resolve_aliases_and_squash_unresolved_names_on_ty ~type_of_name
+        ~force_to_kind ~unknown_payload ty =
     let ty, canonical_name =
       resolve_aliases_on_ty ~force_to_kind ~type_of_name ty
     in
@@ -1257,63 +1257,95 @@ end) = struct
       in
       Phantom (No_alias ty), canonical_name
 
-
-(*
-  let value_kind_ty_value ~importer ~type_of_name ty =
+  let value_kind_ty_value ~type_of_name ty =
     let rec value_kind_ty_value (ty : ty_value) : K.Value_kind.t =
-      let module I = (val importer : Importer) in
-      let importer_this_kind = I.import_value_type_as_resolved_ty_value in
       let (ty : _ or_unknown_or_bottom), _canonical_name =
-        resolve_aliases_and_squash_unresolved_names_on_ty ~importer_this_kind
+        resolve_aliases_and_squash_unresolved_names_on_ty
           ~force_to_kind:force_to_kind_value
           ~type_of_name
           ~unknown_payload:K.Value_kind.Unknown
           ty
       in
       match ty with
-      | Unknown (_, value_kind) -> value_kind
-      | Ok (No_alias (Tagged_immediate _)) -> Definitely_immediate
-      | Ok (No_alias _) -> Unknown
-      | Ok (Combination (Join, ty1, ty2)) ->
+      | Unknown value_kind -> value_kind
+      | Ok (Normal of_kind_value) ->
+        begin match of_kind_value with
+        | Blocks_and_tagged_immediates { blocks; immediates = _; } ->
+          if Tag.Scannable.Map.is_empty blocks then Definitely_immediate
+          else Unknown
+        | Boxed_number _ | Closure _ | String _ -> Definitely_pointer
+        end
+      | Ok (Join (ty1, ty2)) ->
         let ty1 = ty_of_resolved_ok_ty ty1 in
         let ty2 = ty_of_resolved_ok_ty ty2 in
         K.Value_kind.join (value_kind_ty_value ty1)
           (value_kind_ty_value ty2)
-      | Ok (Combination (Meet, ty1, ty2)) ->
-        let ty1 = ty_of_resolved_ok_ty ty1 in
-        let ty2 = ty_of_resolved_ok_ty ty2 in
-        (* CR mshinwell: Think more about the following two uses of
-           [Definitely_immediate] *)
-        let meet =
-          K.Value_kind.meet (value_kind_ty_value ty1)
-            (value_kind_ty_value ty2)
-        in
-        begin match meet with
-        | Ok value_kind -> value_kind
-        | Bottom -> Definitely_immediate
-        end
-      | Bottom -> Definitely_immediate
+      | Bottom -> Unknown
     in
     value_kind_ty_value ty
 
-  let kind_ty_value ~importer ~type_of_name (ty : ty_value) =
+  let kind_ty_value ~type_of_name (ty : ty_value) =
     let value_kind =
       value_kind_ty_value ~importer ~type_of_name ty
     in
     K.value value_kind
 
-  let kind ~importer ~type_of_name (t : t) =
+  let fabricated_kind_ty_fabricated ~type_of_name ty =
+    let rec fabricated_kind_ty_fabricated (ty : ty_fabricated)
+          : K.Fabricated_kind.t =
+      let (ty : _ or_unknown_or_bottom), _canonical_name =
+        resolve_aliases_and_squash_unresolved_names_on_ty
+          ~force_to_kind:force_to_kind_value
+          ~type_of_name
+          ~unknown_payload:K.Value_kind.Unknown
+          ty
+      in
+      match ty with
+      | Unknown () -> value_kind
+      | Ok (Normal of_kind_fabricated) ->
+        begin match of_kind_fabricated with
+        | Tag _ -> 
+        | Set_of_closures _ -> 
+        end
+      | Ok (Join (ty1, ty2)) ->
+        let ty1 = ty_of_resolved_ok_ty ty1 in
+        let ty2 = ty_of_resolved_ok_ty ty2 in
+        let kind1 = fabricated_kind_ty_fabricated ty1 in
+        let kind2 = fabricated_kind_ty_fabricated ty2 in
+        if not (K.Fabricated_kind.equal kind1 kind2) then begin
+          Misc.fatal_errorf "Cannot join between entities of kind \
+              [Fabricated] with different subkinds: %a"
+            print t
+        end;
+        kind1
+      | Bottom -> Unknown
+    in
+    fabricated_kind_ty_fabricated ty
+
+  let kind_ty_fabricated ~type_of_name ty =
+    let fabricated_kind =
+      fabricated_kind_ty_fabricated ~importer ~type_of_name ty
+    in
+    K.fabricated fabricated_kind
+
+  let kind_ty_phantom ~type_of_name ty =
+
+
+  let kind ~type_of_name (t : t) =
     match t with
-    | Naked_immediate _ -> K.naked_immediate ()
-    | Naked_float _ -> K.naked_float ()
-    | Naked_int32 _ -> K.naked_int32 ()
-    | Naked_int64 _ -> K.naked_int64 ()
-    | Naked_nativeint _ -> K.naked_nativeint ()
-    | Value ty -> kind_ty_value ~importer ~type_of_name ty
-
-  let value_kind = value_kind_ty_value
-
-*)
+    | Value ty -> kind_ty_value ~type_of_name ty
+    | Naked_number (_, K.Naked_number.Naked_immediate) ->
+      K.naked_immediate ()
+    | Naked_number (_, K.Naked_number.Naked_float) ->
+      K.naked_float ()
+    | Naked_number (_, K.Naked_number.Naked_int32) ->
+      K.naked_int32 ()
+    | Naked_number (_, K.Naked_number.Naked_int64) ->
+      K.naked_int64 ()
+    | Naked_number (_, K.Naked_number.Naked_nativeint) ->
+      K.naked_nativeint ()
+    | Fabricated ty -> kind_ty_fabricated ~type_of_name ty
+    | Phantom ty -> kind_ty_phantom ~type_of_name ty
 
   let create_inlinable_function_declaration ~is_classic_mode ~closure_origin
         ~continuation_param ~params ~body ~result ~stub ~dbg ~inline

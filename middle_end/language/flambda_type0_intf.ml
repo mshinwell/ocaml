@@ -446,14 +446,15 @@ module type S = sig
       simplification environment. *)
   type 'a type_accessor = type_of_name:(Name_or_export_id.t -> t option) -> 'a
 
-(*
   (** Determine the (unique) kind of a type. *)
   val kind : (t -> Flambda_kind.t) type_accessor
 
   (** Given a type known to be of kind [Value], determine the corresponding
       value kind. *)
-  val value_kind : (ty_value -> Flambda_kind.Value_kind.t) type_accessor
+  val value_kind_ty_value
+     : (ty_value -> Flambda_kind.Value_kind.t) type_accessor
 
+(*
   (** Least upper bound of two types. *)
   val join : (t -> t -> t) type_accessor
 
@@ -535,19 +536,17 @@ module type S = sig
 
   (** Like [resolve_aliases], but for use when you have a [ty], not a [t]. *)
   val resolve_aliases_on_ty
-     : force_to_kind:(t -> ('a, 'b) ty)
-    -> type_of_name:(Name_or_export_id.t -> t option)
+     : (force_to_kind:(t -> ('a, 'b) ty)
     -> ('a, 'b) ty
-    -> ('a, 'b) ty * (Name.t option)
+    -> ('a, 'b) ty * (Name.t option)) type_accessor
 
   (** Like [resolve_aliases_on_ty], but unresolved names at the top level are
       changed into [Unknown]s (with payloads given by [unknown_payload]). *)
   val resolve_aliases_and_squash_unresolved_names_on_ty
-     : force_to_kind:(t -> ('a, 'b) ty)
-    -> type_of_name:(Name_or_export_id.t -> t option)
+     : (force_to_kind:(t -> ('a, 'b) ty)
     -> unknown_payload:'b
     -> ('a, 'b) ty
-    -> ('a, 'b) or_unknown_or_bottom * (Name.t option)
+    -> ('a, 'b) or_unknown_or_bottom * (Name.t option)) type_accessor
 
   val force_to_kind_value : t -> ty_value
 
