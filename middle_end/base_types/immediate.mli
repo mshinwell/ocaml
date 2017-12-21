@@ -25,6 +25,8 @@ type t = private {
   print_as_char : bool;
 }
 
+type immediate = t
+
 (** The comparison function for type [t] ignores [print_as_char]. *)
 include Identifiable.S with type t := t
 
@@ -47,9 +49,12 @@ val set_to_targetint_set : Set.t -> Targetint.OCaml.Set.t
 val all_bools : Set.t
 
 module Or_unknown : sig
-  type nonrec t =
+  type nonrec t = private
     | Ok of t
     | Unknown
+
+  val ok : immediate -> t
+  val unknown : unit -> t
 
   include Identifiable.S with type t := t
 end

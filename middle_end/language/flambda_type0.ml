@@ -174,7 +174,7 @@ end) = struct
         -> Targetint.Set.t ty_naked_number of_kind_value_boxed_number
 
   and closures = {
-    set_of_closures : ty_value;
+    set_of_closures : ty_fabricated;
     closure_id : Closure_id.t;
   }
 
@@ -373,7 +373,7 @@ end) = struct
   and print_closure ppf ({ closure_id; set_of_closures; } : closures) =
     Format.fprintf ppf "@[(Closures@ @[<2>[@ %a @[<2>from@ %a@];@ ]@])@]"
       Closure_id.print closure_id
-      print_ty_value set_of_closures
+      print_ty_fabricated set_of_closures
 
   and print_inlinable_function_declaration ppf
         (decl : inlinable_function_declaration) =
@@ -507,8 +507,123 @@ end) = struct
       Name.Set.print existentials
       Freshening.print existential_freshening
 
-  (* CR-someday mshinwell: Functions such as [alias] and [bottom] will be
-     simplified once [Flambda_kind.t] is a GADT. *)
+  let free_names_or_alias free_names_contents (or_alias : _ or_alias) acc =
+    match or_alias with
+    | No_alias contents -> free_names_contents contents acc
+    | Type _export_id -> acc
+    | Type_of name -> Name.Set.add name acc
+
+  let free_names_or_join free_names_contents (or_join : _ or_join) acc =
+    match or_join with
+    | Normal contents -> free_names_contents contents acc
+    | Join (or_alias1, or_alias2) ->
+      let acc =
+        free_names_or_alias (free_or_join free_names_contents) or_alias1 acc
+      in
+      free_names_or_alias (free_or_join free_names_contents) or_alias2 acc
+
+  let free_names_or_unknown_or_bottom free_names_contents free_names_unk
+        (o : _ or_unknown_or_bottom) acc =
+    match o with
+    | Unknown unk -> free_names_unk unk acc
+    | Ok or_join -> free_names_or_join free_names_contents or_join acc
+    | Bottom -> acc
+
+  let free_names_ty free_names_contents ty acc =
+    let free_names_unk _unk acc = acc in
+    free_names_or_alias
+      (free_names_or_unknown_or_bottom free_names_contents free_names_unk)
+      ty
+      acc
+
+  let rec free_names t acc =
+    match t with
+    | Value ty -> free_names_ty free_names_of_kind_value ty acc
+    | Naked_number (ty, _kind) ->
+      free_names_ty free_names_of_kind_naked_number ty acc
+    | Fabricated ty -> free_names_ty free_names_of_kind_fabricated ty acc
+    | Phantom ty ->
+      (* CR mshinwell: We need to think more about this.  There may be a need
+         for a normal name / phantom name split. *)
+      free_names_ty free_names_of_kind_phantom ty acc
+
+
+  and free_names_set_of_closures (set_of_closures : set_of_closures) acc =
+    let acc =
+      Var_within_closure.Map.fold (fun _var ty_value acc ->
+          free_names_ty_value ty_value acc)
+        set_of_closures.closure_elements acc
+    in
+    Closure_id.Map.fold
+      (fun _closure_id (decl : function_declaration) acc ->
+        match decl with
+        | Inlinable decl ->
+          let acc =
+            List.fold_left (fun acc ty ->
+              free_names ty acc)
+              acc
+              decl.result
+          in
+          List.fold_left (fun acc (_param, ty) ->
+              free_names ty acc)
+            acc
+            decl.params
+        | Non_inlinable decl ->
+          List.fold_left (fun acc ty ->
+            free_names ty acc)
+            acc
+            decl.result)
+      set_of_closures.function_decls
+      acc
+
+  and free_names_of_kind_value
+        (o : of_kind_value singleton_or_combination) acc =
+    match o with
+    | No_alias singleton ->
+      begin match singleton with
+      | Blocks_and_tagged_immediates { blocks; immediates; } ->
+
+        free_names_ty_naked_immediate i acc
+
+
+      | Boxed_number n ->
+        free_names_ty_boxed_number n acc
+      | Block (_tag, fields) ->
+        Array.fold_left (fun acc t -> free_names_ty_value t acc)
+          acc fields
+      | Set_of_closures set_of_closures ->
+        free_names_set_of_closures set_of_closures acc
+      | Closure { set_of_closures; closure_id = _; } ->
+        free_names_ty_value set_of_closures acc
+      | String _ -> acc
+      | Float_array fields ->
+        Array.fold_left (fun acc field ->
+            free_names_ty_naked_float field acc)
+          acc fields
+      end
+    | Combination (_op, ty1, ty2) ->
+      let ty1 = ty_of_resolved_ok_ty ty1 in
+      let ty2 = ty_of_resolved_ok_ty ty2 in
+      free_names_ty_value ty2 (free_names_ty_value ty1 acc)
+
+  let free_names t = free_names t Name.Set.empty
+
+  module Typing_environment = struct
+    type t = typing_environment
+
+    let print = print_typing_environment
+
+    let create () =
+      let existential_freshening = Freshening.activate Freshening.empty in
+      { names_to_types = Name.Map.empty;
+        levels_to_names = Scope_level.Map.empty;
+        existentials = Name.Set.empty;
+        existential_freshening;
+      }
+  end
+
+  (* CR-someday mshinwell: Functions such as [alias] and [bottom] could be
+     simplified if [Flambda_kind.t] were a GADT. *)
 
   let phantomize t : t =
     match t with
@@ -531,7 +646,7 @@ end) = struct
 
   type 'a type_accessor = type_of_name:(Name.t -> t option) -> 'a
 
-  let alias (kind : K.t) name : t =
+  let alias_type_of (kind : K.t) name : t =
     match kind with
     | Value _ -> Value (Type_of name)
     | Naked_number Naked_immediate ->
@@ -546,6 +661,22 @@ end) = struct
       Naked_number (Type_of name, K.Naked_number.Naked_nativeint)
     | Fabricated _ -> Fabricated (Type_of name)
     | Phantom _ -> Phantom (Type_of name)
+
+  let alias_type (kind : K.t) export_id : t =
+    match kind with
+    | Value _ -> Value (Type export_id)
+    | Naked_number Naked_immediate ->
+      Naked_number (Type export_id, K.Naked_number.Naked_immediate)
+    | Naked_number Naked_float ->
+      Naked_number (Type export_id, K.Naked_number.Naked_float)
+    | Naked_number Naked_int32 ->
+      Naked_number (Type export_id, K.Naked_number.Naked_int32)
+    | Naked_number Naked_int64 ->
+      Naked_number (Type export_id, K.Naked_number.Naked_int64)
+    | Naked_number Naked_nativeint ->
+      Naked_number (Type export_id, K.Naked_number.Naked_nativeint)
+    | Fabricated _ -> Fabricated (Type export_id)
+    | Phantom _ -> Phantom (Type export_id)
 
   let bottom (kind : K.t) : t =
     match kind with
@@ -667,6 +798,47 @@ end) = struct
       Misc.fatal_errorf "Type of wrong kind for [box_nativeint]: %a"
         print t
 
+  let these_tagged_immediates imms : t =
+    let immediates =
+      Immediate.Set.fold (fun imm map ->
+          let case : immediate_case =
+            { env_extension = Typing_environment.create ();
+            }
+          in
+          let key = Immediate.Or_unknown.ok imm in
+          Immediate.Or_unknown.Map.add key case map)
+        imms
+        Immediate.Or_unknown.Map.empty
+    in
+    let blocks_and_tagged_immediates : blocks_and_tagged_immediates =
+      { immediates;
+        blocks = Tag.Scannable.Map.empty;
+      }
+    in
+    Value (No_alias (Ok (Normal (Blocks_and_tagged_immediates
+      blocks_and_tagged_immediates))))
+
+  let this_tagged_immediate imm =
+    these_tagged_immediates (Immediate.Set.singleton imm)
+
+  let this_boxed_float f = box_float (this_naked_float f)
+  let this_boxed_int32 f = box_int32 (this_naked_int32 f)
+  let this_boxed_int64 f = box_int64 (this_naked_int64 f)
+  let this_boxed_nativeint f = box_nativeint (this_naked_nativeint f)
+
+  let these_boxed_floats f = box_float (these_naked_floats f)
+  let these_boxed_int32s f = box_int32 (these_naked_int32s f)
+  let these_boxed_int64s f = box_int64 (these_naked_int64s f)
+  let these_boxed_nativeints f = box_nativeint (these_naked_nativeints f)
+
+  let these_tags tags_to_env_extensions : t =
+    let tag_map =
+      Tag.Map.map (fun env : tag_case ->
+          { env_extension = env; })
+        tags_to_env_extensions
+    in
+    Fabricated (No_alias (Ok (Normal (Tag tag_map))))
+
 (*
 
   let this_tagged_immediate i : t =
@@ -676,33 +848,7 @@ end) = struct
     in
     Value (No_alias (Resolved (Ok (No_alias (Tagged_immediate i)))))
 
-  let this_boxed_float f =
-    let f : ty_naked_float =
-      let f : of_kind_naked_float = Naked_float f in
-      No_alias (Resolved (Ok (No_alias f)))
-    in
-    Value (No_alias (Resolved (Ok (No_alias (Boxed_float f)))))
 
-  let this_boxed_int32 n =
-    let n : ty_naked_int32 =
-      let n : of_kind_naked_int32 = Naked_int32 n in
-      No_alias (Resolved (Ok (No_alias n)))
-    in
-    Value (No_alias (Resolved (Ok (No_alias (Boxed_int32 n)))))
-
-  let this_boxed_int64 n =
-    let n : ty_naked_int64 =
-      let n : of_kind_naked_int64 = Naked_int64 n in
-      No_alias (Resolved (Ok (No_alias n)))
-    in
-    Value (No_alias (Resolved (Ok (No_alias (Boxed_int64 n)))))
-
-  let this_boxed_nativeint n =
-    let n : ty_naked_nativeint =
-      let n : of_kind_naked_nativeint = Naked_nativeint n in
-      No_alias (Resolved (Ok (No_alias n)))
-    in
-    Value (No_alias (Resolved (Ok (No_alias (Boxed_nativeint n)))))
 
   let this_immutable_string_as_ty_value str : ty_value =
     let str : String_info.t =
@@ -810,58 +956,67 @@ end) = struct
   let symbol_loaded_lazily sym : t =
     Value (No_alias (Load_lazily (Symbol sym)))
 
-  let any_naked_immediate () : t =
-    Naked_immediate (No_alias (Resolved (Unknown (Other, ()))))
+*)
 
-  let any_naked_float () : t =
-    Naked_float (No_alias (Resolved (Unknown (Other, ()))))
+(*
 
   let any_naked_float_as_ty_naked_float () : ty_naked_float =
     No_alias (Resolved (Unknown (Other, ())))
+*)
+
+  let any_value_as_ty_value value_kind : ty_value =
+    No_alias (Unknown value_kind)
+
+  let any_value value_kind : t =
+    Value (any_value_as_ty_value value_kind)
+
+  let any_naked_immediate () : t =
+    Naked_number (No_alias (Unknown ()), K.Naked_number.Naked_immediate)
+
+  let any_naked_float () : t =
+    Naked_number (No_alias (Unknown ()), K.Naked_number.Naked_float)
 
   let any_naked_int32 () : t =
-    Naked_int32 (No_alias (Resolved (Unknown (Other, ()))))
+    Naked_number (No_alias (Unknown ()), K.Naked_number.Naked_int32)
 
   let any_naked_int64 () : t =
-    Naked_int64 (No_alias (Resolved (Unknown (Other, ()))))
+    Naked_number (No_alias (Unknown ()), K.Naked_number.Naked_int64)
 
   let any_naked_nativeint () : t =
-    Naked_nativeint (No_alias (Resolved (Unknown (Other, ()))))
+    Naked_number (No_alias (Unknown ()), K.Naked_number.Naked_nativeint)
 
-  let any_value_as_ty_value value_kind unknown_because_of : ty_value =
-    No_alias (Resolved (Unknown (unknown_because_of, value_kind)))
+  let any_fabricated () : t =
+    Fabricated (No_alias (Unknown ()))
 
-  let any_value value_kind unknown_because_of : t =
-    Value (any_value_as_ty_value value_kind unknown_because_of)
+  let any_phantom () : t =
+    Phantom (No_alias (Unknown ()))
 
-  let unknown (kind : K.t) unknown_because_of =
+  let unknown (kind : K.t) =
     match kind with
-    | Value value_kind -> any_value value_kind unknown_because_of
-    | Naked_immediate -> any_naked_immediate ()
-    | Naked_float -> any_naked_float ()
-    | Naked_int32 -> any_naked_int32 ()
-    | Naked_int64 -> any_naked_int64 ()
-    | Naked_nativeint -> any_naked_nativeint ()
+    | Value value_kind -> any_value value_kind
+    | Naked_number Naked_immediate -> any_naked_immediate ()
+    | Naked_number Naked_float -> any_naked_float ()
+    | Naked_number Naked_int32 -> any_naked_int32 ()
+    | Naked_number Naked_int64 -> any_naked_int64 ()
+    | Naked_number Naked_nativeint -> any_naked_nativeint ()
+    | Fabricated _ -> any_fabricated ()
+    | Phantom _ -> any_phantom ()
+
+(*
 
   let any_tagged_immediate () : t =
     let i : ty_naked_immediate = No_alias (Resolved (Unknown (Other, ()))) in
     Value (No_alias (Resolved (Ok (No_alias (Tagged_immediate i)))))
 
-  let any_boxed_float () =
-    let f : ty_naked_float = No_alias (Resolved (Unknown (Other, ()))) in
-    Value (No_alias (Resolved (Ok (No_alias (Boxed_float f)))))
+*)
 
-  let any_boxed_int32 () =
-    let n : ty_naked_int32 = No_alias (Resolved (Unknown (Other, ()))) in
-    Value (No_alias (Resolved (Ok (No_alias (Boxed_int32 n)))))
+  let any_boxed_float () = box_float (any_naked_float ())
+  let any_boxed_int32 () = box_int32 (any_naked_int32 ())
+  let any_boxed_int64 () = box_int64 (any_naked_int64 ())
+  let any_boxed_nativeint () = box_nativeint (any_naked_nativeint ())
 
-  let any_boxed_int64 () =
-    let n : ty_naked_int64 = No_alias (Resolved (Unknown (Other, ()))) in
-    Value (No_alias (Resolved (Ok (No_alias (Boxed_int64 n)))))
 
-  let any_boxed_nativeint () =
-    let n : ty_naked_nativeint = No_alias (Resolved (Unknown (Other, ()))) in
-    Value (No_alias (Resolved (Ok (No_alias (Boxed_nativeint n)))))
+(*
 
   (* CR mshinwell: Check this is being used correctly
   let resolved_ty_value_for_predefined_exception ~name : resolved_ty_value =
@@ -939,6 +1094,18 @@ end) = struct
       Misc.fatal_errorf "Type has wrong kind (expected [Naked_nativeint]): %a"
         print t
 
+*)
+
+  let force_to_kind_fabricated t =
+    match t with
+    | Fabricated ty_fabricated -> ty_fabricated
+    | Value _
+    | Naked_number _
+    | Phantom _ ->
+      Misc.fatal_errorf "Type has wrong kind (expected [Fabricated]): %a"
+        print t
+
+(*
   let t_of_ty_value (ty : ty_value) : t = Value ty
 
   let t_of_ty_naked_float (ty : ty_naked_float) : t = Naked_float ty
@@ -1113,6 +1280,8 @@ end) = struct
 
   let value_kind = value_kind_ty_value
 
+*)
+
   let create_inlinable_function_declaration ~is_classic_mode ~closure_origin
         ~continuation_param ~params ~body ~result ~stub ~dbg ~inline
         ~specialise ~is_a_functor ~invariant_params ~size ~direct_call_surrogate
@@ -1142,9 +1311,8 @@ end) = struct
 
   let closure ~set_of_closures closure_id : t =
     (* CR mshinwell: pass a description to the "force" functions *)
-    let set_of_closures = force_to_kind_value set_of_closures in
-    Value (No_alias (Resolved (Ok (
-      No_alias (Closure { set_of_closures; closure_id; })))))
+    let set_of_closures = force_to_kind_fabricated set_of_closures in
+    Value (No_alias (Ok (Normal (Closure { set_of_closures; closure_id; }))))
 
   let create_set_of_closures ~set_of_closures_id ~set_of_closures_origin
         ~function_decls ~closure_elements : set_of_closures =
@@ -1160,116 +1328,10 @@ end) = struct
       create_set_of_closures ~set_of_closures_id ~set_of_closures_origin
         ~function_decls ~closure_elements
     in
-    Value (No_alias (Resolved (Ok (
-      No_alias (Set_of_closures set_of_closures)))))
+    Fabricated (No_alias (Ok (Normal (Set_of_closures set_of_closures))))
 
-  let rec free_names t acc =
-    match t with
-    | Value ty -> free_names_ty_value ty acc
-    | Naked_immediate ty -> free_names_ty_naked_immediate ty acc
-    | Naked_float ty -> free_names_ty_naked_float ty acc
-    | Naked_int32 ty -> free_names_ty_naked_int32 ty acc
-    | Naked_int64 ty -> free_names_ty_naked_int64 ty acc
-    | Naked_nativeint ty -> free_names_ty_naked_nativeint ty acc
 
-  and free_names_ty_value (ty : ty_value) acc =
-    match ty with
-    | Alias name -> Name.Set.add name acc
-    | No_alias (Resolved ((Unknown _) | Bottom)) -> acc
-    | No_alias (Resolved (Ok of_kind_value)) ->
-      free_names_of_kind_value of_kind_value acc
-    | No_alias (Load_lazily _load_lazily) ->
-      (* Types saved in .cmx files cannot contain free names. *)
-      acc
-
-  and free_names_ty_naked_immediate (ty : ty_naked_immediate) acc =
-    match ty with
-    | Alias name -> Name.Set.add name acc
-    | No_alias _ -> acc
-
-  and free_names_ty_naked_float (ty : ty_naked_float) acc =
-    match ty with
-    | Alias name -> Name.Set.add name acc
-    | No_alias _ -> acc
-
-  and free_names_ty_naked_int32 (ty : ty_naked_int32) acc =
-    match ty with
-    | Alias name -> Name.Set.add name acc
-    | No_alias _ -> acc
-
-  and free_names_ty_naked_int64 (ty : ty_naked_int64) acc =
-    match ty with
-    | Alias name -> Name.Set.add name acc
-    | No_alias _ -> acc
-
-  and free_names_ty_naked_nativeint (ty : ty_naked_nativeint) acc =
-    match ty with
-    | Alias name -> Name.Set.add name acc
-    | No_alias _ -> acc
-
-  and free_names_set_of_closures (set_of_closures : set_of_closures) acc =
-    let acc =
-      Var_within_closure.Map.fold (fun _var ty_value acc ->
-          free_names_ty_value ty_value acc)
-        set_of_closures.closure_elements acc
-    in
-    Closure_id.Map.fold
-      (fun _closure_id (decl : function_declaration) acc ->
-        match decl with
-        | Inlinable decl ->
-          let acc =
-            List.fold_left (fun acc ty ->
-              free_names ty acc)
-              acc
-              decl.result
-          in
-          List.fold_left (fun acc (_param, ty) ->
-              free_names ty acc)
-            acc
-            decl.params
-        | Non_inlinable decl ->
-          List.fold_left (fun acc ty ->
-            free_names ty acc)
-            acc
-            decl.result)
-      set_of_closures.function_decls
-      acc
-
-  and free_names_of_kind_value
-        (o : of_kind_value singleton_or_combination) acc =
-    match o with
-    | No_alias singleton ->
-      begin match singleton with
-      | Tagged_immediate i ->
-        free_names_ty_naked_immediate i acc
-      | Boxed_float f ->
-        free_names_ty_naked_float f acc
-      | Boxed_int32 n ->
-        free_names_ty_naked_int32 n acc
-      | Boxed_int64 n ->
-        free_names_ty_naked_int64 n acc
-      | Boxed_nativeint n ->
-        free_names_ty_naked_nativeint n acc
-      | Block (_tag, fields) ->
-        Array.fold_left (fun acc t -> free_names_ty_value t acc)
-          acc fields
-      | Set_of_closures set_of_closures ->
-        free_names_set_of_closures set_of_closures acc
-      | Closure { set_of_closures; closure_id = _; } ->
-        free_names_ty_value set_of_closures acc
-      | String _ -> acc
-      | Float_array fields ->
-        Array.fold_left (fun acc field ->
-            free_names_ty_naked_float field acc)
-          acc fields
-      end
-    | Combination (_op, ty1, ty2) ->
-      let ty1 = ty_of_resolved_ok_ty ty1 in
-      let ty2 = ty_of_resolved_ok_ty ty2 in
-      free_names_ty_value ty2 (free_names_ty_value ty1 acc)
-
-  let free_names t = free_names t Name.Set.empty
-
+(*
   (* CR mshinwell: We need tests to check that [clean] matches up with
      [free_variables]. *)
 (*
@@ -1924,14 +1986,6 @@ end) = struct
     | Alias alias -> Alias alias
     | No_alias s_or_c -> No_alias (Resolved (Ok s_or_c))
 
-*)
-
-  module Typing_environment = struct
-    type t = typing_environment
-
-    let print = print_typing_environment
-
-(*
     let print ppf { names_to_types; levels_to_names;
           existentials; existential_freshening; } =
       Format.fprintf ppf
@@ -2080,13 +2134,9 @@ end) = struct
         existentials;
         existential_freshening;
       }
-*)
 
   end
 
-
-
-(*
 
 
   let or_unknown_or_bottom_of_or_alias (type ty) (type unk) ~type_of_name

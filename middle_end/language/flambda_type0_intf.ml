@@ -144,7 +144,7 @@ module type S = sig
   and closures = private {
     (* CR pchambart: should Unknown or Bottom really be allowed here ? *)
     (* XXX what exactly is needed here?  It needs to represent the join *)
-    set_of_closures : ty_value;
+    set_of_closures : ty_fabricated;
     closure_id : Closure_id.t;
   }
 
@@ -281,26 +281,37 @@ module type S = sig
     -> inlinable_function_declaration
     -> unit
 
-(*
 
   (** Construction of top types. *)
-  val unknown : Flambda_kind.t -> unknown_because_of -> t
-  val any_value : Flambda_kind.Value_kind.t -> unknown_because_of -> t
+  val unknown : Flambda_kind.t -> t
+
+  val any_value : Flambda_kind.Value_kind.t -> t
+
   val any_value_as_ty_value
      : Flambda_kind.Value_kind.t
-    -> unknown_because_of
     -> ty_value
+
+(*
   val any_tagged_immediate : unit -> t
+*)
+
   val any_boxed_float : unit -> t
   val any_boxed_int32 : unit -> t
   val any_boxed_int64 : unit -> t
   val any_boxed_nativeint : unit -> t
+
   val any_naked_immediate : unit -> t
   val any_naked_float : unit -> t
-  val any_naked_float_as_ty_naked_float : unit -> ty_naked_float
   val any_naked_int32 : unit -> t
   val any_naked_int64 : unit -> t
   val any_naked_nativeint : unit -> t
+
+  val any_fabricated : unit -> t
+  val any_phantom : unit -> t
+
+(*
+  val any_naked_float_as_ty_naked_float : unit -> ty_naked_float
+*)
 
   (** Building of types representing tagged / boxed values from specified
       constants. *)
@@ -314,6 +325,8 @@ module type S = sig
   val these_boxed_int64s : Numbers.Int64.Set.t -> t
   val this_boxed_nativeint : Targetint.t -> t
   val these_boxed_nativeints : Targetint.Set.t -> t
+
+(*
   val this_immutable_string : string -> t
   val this_immutable_float_array : Numbers.Float_by_bit_pattern.t array -> t
 *)
@@ -339,10 +352,13 @@ module type S = sig
   val mutable_string : size:Targetint.OCaml.t -> t
   val mutable_float_array : size:Targetint.OCaml.t -> t
   val mutable_float_arrays_of_various_sizes : sizes:Targetint.OCaml.Set.t -> t
+*)
 
   (** Building of types corresponding to values that did not exist at
       source level. *)
-  val these_tags : Tag.Set.t -> t
+  val these_tags : typing_environment Tag.Map.t -> t
+
+(*
 
   (** Building of types from other types.  These functions will fail with
       a fatal error if the supplied type is not of the correct kind. *)
@@ -362,6 +378,7 @@ module type S = sig
     -> tag:ty_fabricated
     -> fields:ty_value array
     -> t
+*)
 
   (** The bottom type for the given kind ("no value can flow to this point"). *)
   val bottom : Flambda_kind.t -> t
@@ -410,6 +427,7 @@ module type S = sig
 
   val alias_type : Flambda_kind.t -> Export_id.t -> t
 
+(*
   (** Free names in a type. *)
   val free_names : t -> Name.Set.t
 *)
@@ -533,6 +551,13 @@ module type S = sig
   val force_to_kind_naked_int64 : t -> ty_naked_int64
 
   val force_to_kind_naked_nativeint : t -> ty_naked_nativeint
+
+*)
+
+
+  val force_to_kind_fabricated : t -> ty_fabricated
+
+(*
 
   val t_of_ty_value : ty_value -> t
 

@@ -1760,7 +1760,7 @@ middle_end/language/flambda.cmi : middle_end/base_types/variable.cmi \
     middle_end/base_types/var_within_closure.cmi \
     middle_end/base_types/symbol.cmi middle_end/base_types/name.cmi \
     middle_end/language/invariant_env.cmi \
-    middle_end/language/flambda_type.cmi middle_end/language/flambda_kind.cmi \
+    middle_end/language/flambda_kind.cmi \
     middle_end/language/flambda_arity.cmi middle_end/language/flambda0.cmi \
     middle_end/base_types/debuginfo.cmi \
     middle_end/base_types/continuation.cmi \
@@ -1825,11 +1825,14 @@ middle_end/language/flambda_arity.cmx : utils/misc.cmx \
     middle_end/language/flambda_arity.cmi
 middle_end/language/flambda_arity.cmi : utils/identifiable.cmi \
     middle_end/language/flambda_kind.cmi
-middle_end/language/flambda_kind.cmo : utils/identifiable.cmi \
+middle_end/language/flambda_kind.cmo : utils/targetint.cmi utils/numbers.cmi \
+    middle_end/base_types/immediate.cmi utils/identifiable.cmi \
     middle_end/language/flambda_kind.cmi
-middle_end/language/flambda_kind.cmx : utils/identifiable.cmx \
+middle_end/language/flambda_kind.cmx : utils/targetint.cmx utils/numbers.cmx \
+    middle_end/base_types/immediate.cmx utils/identifiable.cmx \
     middle_end/language/flambda_kind.cmi
-middle_end/language/flambda_kind.cmi : utils/identifiable.cmi
+middle_end/language/flambda_kind.cmi : utils/targetint.cmi utils/numbers.cmi \
+    middle_end/base_types/immediate.cmi utils/identifiable.cmi
 middle_end/language/flambda_primitive.cmo : \
     middle_end/base_types/var_within_closure.cmi utils/targetint.cmi \
     middle_end/base_types/tag.cmi middle_end/language/simple.cmi \
@@ -1907,9 +1910,7 @@ middle_end/language/flambda_type.cmo : middle_end/language/flambda_type.cmi
 middle_end/language/flambda_type.cmx : middle_end/language/flambda_type.cmi
 middle_end/language/flambda_type.cmi : middle_end/base_types/variable.cmi \
     utils/targetint.cmi middle_end/base_types/symbol.cmi \
-    middle_end/language/simple.cmi utils/numbers.cmi \
-    middle_end/base_types/name.cmi middle_end/base_types/immediate.cmi \
-    middle_end/language/flambda_kind.cmi \
+    middle_end/base_types/immediate.cmi middle_end/language/flambda_kind.cmi \
     middle_end/language/flambda_arity.cmi middle_end/language/flambda0.cmi \
     middle_end/base_types/closure_id.cmi
 middle_end/language/flambda_type0.cmo : middle_end/base_types/variable.cmi \

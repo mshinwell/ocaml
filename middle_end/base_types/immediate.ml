@@ -27,6 +27,8 @@ type t = {
   print_as_char : bool;
 }
 
+type immediate = t
+
 include Identifiable.Make (struct
   type nonrec t = t
 
@@ -114,6 +116,9 @@ module Or_unknown = struct
   type nonrec t =
     | Ok of t
     | Unknown
+
+  let ok imm = Ok imm
+  let unknown () = Unknown
 
   include Identifiable.Make (struct
     type nonrec t = t
