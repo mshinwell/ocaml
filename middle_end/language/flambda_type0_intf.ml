@@ -128,18 +128,18 @@ module type S = sig
 
   and 'a of_kind_value_boxed_number = private
     | Boxed_float
-         : Numbers.Float_by_bit_pattern.t ty_naked_number
-        -> Numbers.Float_by_bit_pattern.t ty_naked_number
+         : Numbers.Float_by_bit_pattern.Set.t ty_naked_number
+        -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number
              of_kind_value_boxed_number
     | Boxed_int32
-         : Int32.t ty_naked_number
-        -> Int32.t ty_naked_number of_kind_value_boxed_number
+         : Numbers.Int32.Set.t ty_naked_number
+        -> Numbers.Int32.Set.t ty_naked_number of_kind_value_boxed_number
     | Boxed_int64
-         : Int64.t ty_naked_number
-        -> Int64.t ty_naked_number of_kind_value_boxed_number
+         : Numbers.Int64.Set.t ty_naked_number
+        -> Numbers.Int64.Set.t ty_naked_number of_kind_value_boxed_number
     | Boxed_nativeint
-         : Nativeint.t ty_naked_number
-        -> Nativeint.t ty_naked_number of_kind_value_boxed_number
+         : Targetint.Set.t ty_naked_number
+        -> Targetint.Set.t ty_naked_number of_kind_value_boxed_number
 
   and closures = private {
     (* CR pchambart: should Unknown or Bottom really be allowed here ? *)
@@ -316,6 +316,7 @@ module type S = sig
   val these_boxed_nativeints : Targetint.Set.t -> t
   val this_immutable_string : string -> t
   val this_immutable_float_array : Numbers.Float_by_bit_pattern.t array -> t
+*)
 
   (** Building of types representing untagged / unboxed values from
       specified constants. *)
@@ -329,6 +330,7 @@ module type S = sig
   val this_naked_nativeint : Targetint.t -> t
   val these_naked_nativeints : Targetint.Set.t -> t
 
+(*
   (** Building of types corresponding to immutable values given only the
       size of such values. *)
   val immutable_string : size:Targetint.OCaml.t -> t
@@ -347,10 +349,12 @@ module type S = sig
   (* XXX maybe we should change all of these to the "ty_..." variants, so
      we can avoid the exception case *)
   val tag_immediate : t -> t
+*)
   val box_float : t -> t
   val box_int32 : t -> t
   val box_int64 : t -> t
   val box_nativeint : t -> t
+(*
   val immutable_float_array : ty_naked_float array -> t
 
   val block
@@ -409,6 +413,7 @@ module type S = sig
   (** Free names in a type. *)
   val free_names : t -> Name.Set.t
 *)
+
   (** Annotation for functions that may require examination of the current
       simplification environment. *)
   type 'a type_accessor = type_of_name:(Name.t -> t option) -> 'a

@@ -55,13 +55,20 @@ module Phantom_kind : sig
     | Fabricated of Fabricated_kind.t
 end
 
+module Naked_number_kind : sig
+  type t = private
+    | Naked_immediate
+    | Naked_float
+    | Naked_int32
+    | Naked_int64
+    | Naked_nativeint
+end
+
+(* CR mshinwell: Once disambiguation works on GADTs, consider turning [t]
+   into a GADT. *)
 type t = private
   | Value of Value_kind.t
-  | Naked_immediate
-  | Naked_float
-  | Naked_int32
-  | Naked_int64
-  | Naked_nativeint
+  | Naked_number of Naked_number_kind.t
   | Fabricated of Fabricated_kind.t
     (** GC-scannable values, known to be pointers, which have been introduced
         by Flambda and are never accessible at the source language level (for

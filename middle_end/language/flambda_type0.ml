@@ -160,18 +160,18 @@ end) = struct
 
   and 'a of_kind_value_boxed_number =
     | Boxed_float
-         : Numbers.Float_by_bit_pattern.t ty_naked_number
-        -> Numbers.Float_by_bit_pattern.t ty_naked_number
+         : Numbers.Float_by_bit_pattern.Set.t ty_naked_number
+        -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number
              of_kind_value_boxed_number
     | Boxed_int32
-         : Int32.t ty_naked_number
-        -> Int32.t ty_naked_number of_kind_value_boxed_number
+         : Int32.Set.t ty_naked_number
+        -> Int32.Set.t ty_naked_number of_kind_value_boxed_number
     | Boxed_int64
-         : Int64.t ty_naked_number
-        -> Int64.t ty_naked_number of_kind_value_boxed_number
+         : Int64.Set.t ty_naked_number
+        -> Int64.Set.t ty_naked_number of_kind_value_boxed_number
     | Boxed_nativeint
-         : Nativeint.t ty_naked_number
-        -> Nativeint.t ty_naked_number of_kind_value_boxed_number
+         : Targetint.Set.t ty_naked_number
+        -> Targetint.Set.t ty_naked_number of_kind_value_boxed_number
 
   and closures = {
     set_of_closures : ty_value;
@@ -507,21 +507,8 @@ end) = struct
       Name.Set.print existentials
       Freshening.print existential_freshening
 
-  let alias (kind : Flambda_kind.t) name : t =
-    match kind with
-    | Value _ -> Value (Type_of name)
-    | Naked_immediate ->
-      Naked_number (Type_of name, K.Naked_number.Naked_immediate)
-    | Naked_float ->
-      Naked_number (Type_of name, K.Naked_number.Naked_float)
-    | Naked_int32 ->
-      Naked_number (Type_of name, K.Naked_number.Naked_int32)
-    | Naked_int64 ->
-      Naked_number (Type_of name, K.Naked_number.Naked_int64)
-    | Naked_nativeint ->
-      Naked_number (Type_of name, K.Naked_number.Naked_nativeint)
-    | Fabricated _ -> Fabricated (Type_of name)
-    | Phantom _ -> Phantom (Type_of name)
+  (* CR-someday mshinwell: Functions such as [alias] and [bottom] will be
+     simplified once [Flambda_kind.t] is a GADT. *)
 
   let phantomize t : t =
     match t with
@@ -544,125 +531,143 @@ end) = struct
 
   type 'a type_accessor = type_of_name:(Name.t -> t option) -> 'a
 
-(*
-  let unknown_as_ty_value reason value_kind : ty_value =
-    No_alias (Resolved (Unknown (reason, value_kind)))
-*)
-(*
-  let unknown_as_resolved_ty_value reason value_kind : resolved_ty_value =
-    No_alias (Unknown (reason, value_kind))
-
-  let unknown_as_resolved_ty_naked_immediate reason value_kind
-        : resolved_ty_naked_immediate =
-    No_alias (Unknown (reason, value_kind))
-
-  let unknown_as_resolved_ty_naked_float reason value_kind
-        : resolved_ty_naked_float =
-    No_alias (Unknown (reason, value_kind))
-
-  let unknown_as_resolved_ty_naked_int32 reason value_kind
-        : resolved_ty_naked_int32 =
-    No_alias (Unknown (reason, value_kind))
-
-  let unknown_as_resolved_ty_naked_int64 reason value_kind
-        : resolved_ty_naked_int64 =
-    No_alias (Unknown (reason, value_kind))
-
-  let unknown_as_resolved_ty_naked_nativeint reason value_kind
-        : resolved_ty_naked_nativeint =
-    No_alias (Unknown (reason, value_kind))
+  let alias (kind : K.t) name : t =
+    match kind with
+    | Value _ -> Value (Type_of name)
+    | Naked_number Naked_immediate ->
+      Naked_number (Type_of name, K.Naked_number.Naked_immediate)
+    | Naked_number Naked_float ->
+      Naked_number (Type_of name, K.Naked_number.Naked_float)
+    | Naked_number Naked_int32 ->
+      Naked_number (Type_of name, K.Naked_number.Naked_int32)
+    | Naked_number Naked_int64 ->
+      Naked_number (Type_of name, K.Naked_number.Naked_int64)
+    | Naked_number Naked_nativeint ->
+      Naked_number (Type_of name, K.Naked_number.Naked_nativeint)
+    | Fabricated _ -> Fabricated (Type_of name)
+    | Phantom _ -> Phantom (Type_of name)
 
   let bottom (kind : K.t) : t =
     match kind with
-    | Value _ -> Value (No_alias (Resolved Bottom))
-    | Naked_immediate -> Naked_immediate (No_alias (Resolved Bottom))
-    | Naked_float -> Naked_float (No_alias (Resolved Bottom))
-    | Naked_int32 -> Naked_int32 (No_alias (Resolved Bottom))
-    | Naked_int64 -> Naked_int64 (No_alias (Resolved Bottom))
-    | Naked_nativeint -> Naked_nativeint (No_alias (Resolved Bottom))
+    | Value _ -> Value (No_alias Bottom)
+    | Naked_number Naked_immediate ->
+      Naked_number (No_alias Bottom, K.Naked_number.Naked_immediate)
+    | Naked_number Naked_float ->
+      Naked_number (No_alias Bottom, K.Naked_number.Naked_float)
+    | Naked_number Naked_int32 ->
+      Naked_number (No_alias Bottom, K.Naked_number.Naked_int32)
+    | Naked_number Naked_int64 ->
+      Naked_number (No_alias Bottom, K.Naked_number.Naked_int64)
+    | Naked_number Naked_nativeint ->
+      Naked_number (No_alias Bottom, K.Naked_number.Naked_nativeint)
+    | Fabricated _ -> Fabricated (No_alias Bottom)
+    | Phantom _ -> Phantom (No_alias Bottom)
 
-  let this_naked_immediate (i : Immediate.t) : t =
-    let i : of_kind_naked_immediate = Naked_immediate i in
-    Naked_immediate (No_alias (Resolved (Ok (No_alias i))))
+  let these_naked_immediates (is : Immediate.Set.t) : t =
+    let of_kind : _ of_kind_naked_number = Immediate is in
+    Naked_number (No_alias (Ok (Normal of_kind)),
+      K.Naked_number.Naked_immediate)
 
-  let this_naked_float f : t =
-    let f : of_kind_naked_float = Naked_float f in
-    Naked_float (No_alias (Resolved (Ok (No_alias f))))
+  let these_naked_floats (is : Float_by_bit_pattern.Set.t) : t =
+    let of_kind : _ of_kind_naked_number = Float is in
+    Naked_number (No_alias (Ok (Normal of_kind)),
+      K.Naked_number.Naked_float)
 
-  let this_naked_int32 n : t =
-    let n : of_kind_naked_int32 = Naked_int32 n in
-    Naked_int32 (No_alias (Resolved (Ok (No_alias n))))
+  let these_naked_int32s (is : Int32.Set.t) : t =
+    let of_kind : _ of_kind_naked_number = Int32 is in
+    Naked_number (No_alias (Ok (Normal of_kind)),
+      K.Naked_number.Naked_int32)
 
-  let this_naked_int64 n : t =
-    let n : of_kind_naked_int64 = Naked_int64 n in
-    Naked_int64 (No_alias (Resolved (Ok (No_alias n))))
+  let these_naked_int64s (is : Int64.Set.t) : t =
+    let of_kind : _ of_kind_naked_number = Int64 is in
+    Naked_number (No_alias (Ok (Normal of_kind)),
+      K.Naked_number.Naked_int64)
 
-  let this_naked_nativeint n : t =
-    let n : of_kind_naked_nativeint = Naked_nativeint n in
-    Naked_nativeint (No_alias (Resolved (Ok (No_alias n))))
+  let these_naked_nativeints (is : Targetint.Set.t) : t =
+    let of_kind : _ of_kind_naked_number = Nativeint is in
+    Naked_number (No_alias (Ok (Normal of_kind)),
+      K.Naked_number.Naked_nativeint)
 
+  let this_naked_immediate i =
+    these_naked_immediates (Immediate.Set.singleton i)
+
+  let this_naked_float i =
+    these_naked_floats (Float_by_bit_pattern.Set.singleton i)
+
+  let this_naked_int32 i =
+    these_naked_int32s (Int32.Set.singleton i)
+
+  let this_naked_int64 i =
+    these_naked_int64s (Int64.Set.singleton i)
+
+  let this_naked_nativeint i =
+    these_naked_nativeints (Targetint.Set.singleton i)
+
+(* This one is tricky
   let tag_immediate (t : t) : t =
     match t with
-    | Naked_immediate ty_naked_immediate ->
-      Value (No_alias (Resolved (Ok (No_alias (
-        Tagged_immediate ty_naked_immediate)))))
-    | Value _
-    | Naked_float _
-    | Naked_int32 _
-    | Naked_int64 _
-    | Naked_nativeint _ ->
-      Misc.fatal_errorf "Expected type of kind [Naked_immediate] but got %a"
-        print t
+    | Naked_number (ty_naked_number, Naked_immediate) ->
 
-  let box_float (t : t) : t =
-    match t with
-    | Naked_number (Float ty_naked_float) ->
-      Value (No_alias (Ok (Boxed_number (Float, ty_naked_float))))
+
+      Value (No_alias (Ok (No_alias (
+        Tagged_immediate ty_naked_immediate))))
     | Value _
     | Naked_number _
     | Fabricated _
     | Phantom _ ->
-      Misc.fatal_errorf "Expected type of kind [Naked_number Float] but got %a"
+      Misc.fatal_errorf "Type of wrong kind for [tag_immediate]: %a"
+        print t
+*)
+
+  let box_float (t : t) : t =
+    match t with
+    | Naked_number (ty_naked_float, K.Naked_number.Naked_float) ->
+      Value (No_alias (Ok (Normal (
+        Boxed_number (Boxed_float ty_naked_float)))))
+    | Value _
+    | Naked_number _
+    | Fabricated _
+    | Phantom _ ->
+      Misc.fatal_errorf "Type of wrong kind for [box_float]: %a"
         print t
 
   let box_int32 (t : t) : t =
     match t with
-    | Naked_int32 ty_naked_int32 ->
-      Value (No_alias (Resolved (Ok (No_alias (
-        Boxed_int32 ty_naked_int32)))))
+    | Naked_number (ty_naked_int32, K.Naked_number.Naked_int32) ->
+      Value (No_alias (Ok (Normal (
+        Boxed_number (Boxed_int32 ty_naked_int32)))))
     | Value _
-    | Naked_immediate _
-    | Naked_float _
-    | Naked_int64 _
-    | Naked_nativeint _ ->
-      Misc.fatal_errorf "Expected type of kind [Naked_int32] but got %a"
+    | Naked_number _
+    | Fabricated _
+    | Phantom _ ->
+      Misc.fatal_errorf "Type of wrong kind for [box_int32]: %a"
         print t
 
   let box_int64 (t : t) : t =
     match t with
-    | Naked_int64 ty_naked_int64 ->
-      Value (No_alias (Resolved (Ok (No_alias (
-        Boxed_int64 ty_naked_int64)))))
+    | Naked_number (ty_naked_int64, K.Naked_number.Naked_int64) ->
+      Value (No_alias (Ok (Normal (
+        Boxed_number (Boxed_int64 ty_naked_int64)))))
     | Value _
-    | Naked_immediate _
-    | Naked_float _
-    | Naked_int32 _
-    | Naked_nativeint _ ->
-      Misc.fatal_errorf "Expected type of kind [Naked_int64] but got %a"
+    | Naked_number _
+    | Fabricated _
+    | Phantom _ ->
+      Misc.fatal_errorf "Type of wrong kind for [box_int64]: %a"
         print t
 
   let box_nativeint (t : t) : t =
     match t with
-    | Naked_nativeint ty_naked_nativeint ->
-      Value (No_alias (Resolved (Ok (No_alias (
-        Boxed_nativeint ty_naked_nativeint)))))
+    | Naked_number (ty_naked_nativeint, K.Naked_number.Naked_nativeint) ->
+      Value (No_alias (Ok (Normal (
+        Boxed_number (Boxed_nativeint ty_naked_nativeint)))))
     | Value _
-    | Naked_immediate _
-    | Naked_float _
-    | Naked_int32 _
-    | Naked_int64 _ ->
-      Misc.fatal_errorf "Expected type of kind [Naked_nativeint] but got %a"
+    | Naked_number _
+    | Fabricated _
+    | Phantom _ ->
+      Misc.fatal_errorf "Type of wrong kind for [box_nativeint]: %a"
         print t
+
+(*
 
   let this_tagged_immediate i : t =
     let i : ty_naked_immediate =
@@ -1904,71 +1909,6 @@ end) = struct
 
     let print = print_set_of_closures
   end
-
-  (* CR mshinwell: Try to move these next ones to flambda_type.ml *)
-
-  let these_naked_floats fs =
-    let tys =
-      List.map (fun f -> this_naked_float f)
-        (Numbers.Float_by_bit_pattern.Set.elements fs)
-    in
-    (with_null_importer join_list) (K.naked_float ()) tys
-
-  let these_naked_int32s ns =
-    let tys =
-      List.map (fun n -> this_naked_int32 n)
-        (Int32.Set.elements ns)
-    in
-    (with_null_importer join_list) (K.naked_int32 ()) tys
-
-  let these_naked_int64s ns =
-    let tys =
-      List.map (fun n -> this_naked_int64 n)
-        (Int64.Set.elements ns)
-    in
-    (with_null_importer join_list) (K.naked_int64 ()) tys
-
-  let these_naked_nativeints ns =
-    let tys =
-      List.map (fun n -> this_naked_nativeint n)
-        (Targetint.Set.elements ns)
-    in
-    (with_null_importer join_list) (K.naked_nativeint ()) tys
-
-  let these_tagged_immediates imms =
-    let tys =
-      List.map (fun imm -> this_tagged_immediate imm)
-        (Immediate.Set.elements imms)
-    in
-    (with_null_importer join_list) (K.value Definitely_immediate) tys
-
-  let these_boxed_floats fs =
-    let tys =
-      List.map (fun f -> this_boxed_float f)
-        (Numbers.Float_by_bit_pattern.Set.elements fs)
-    in
-    (with_null_importer join_list) (K.value Definitely_pointer) tys
-
-  let these_boxed_int32s ns =
-    let tys =
-      List.map (fun f -> this_boxed_int32 f)
-        (Int32.Set.elements ns)
-    in
-    (with_null_importer join_list) (K.value Definitely_pointer) tys
-
-  let these_boxed_int64s ns =
-    let tys =
-      List.map (fun f -> this_boxed_int64 f)
-        (Int64.Set.elements ns)
-    in
-    (with_null_importer join_list) (K.value Definitely_pointer) tys
-
-  let these_boxed_nativeints ns =
-    let tys =
-      List.map (fun f -> this_boxed_nativeint f)
-        (Targetint.Set.elements ns)
-    in
-    (with_null_importer join_list) (K.value Definitely_pointer) tys
 
   let mutable_float_arrays_of_various_sizes ~sizes : t =
     let tys =
