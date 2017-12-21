@@ -245,3 +245,12 @@ module Boxable_number = struct
     | Naked_int64 -> Format.pp_print_string ppf "naked_int64"
     | Naked_nativeint -> Format.pp_print_string ppf "naked_nativeint"
 end
+
+module Naked_number = struct
+  type 'values t =
+    | Naked_immediate : Immediate.Set.t t
+    | Naked_float : Numbers.Float_by_bit_pattern.Set.t t
+    | Naked_int32 : Numbers.Int32.Set.t t
+    | Naked_int64 : Numbers.Int64.Set.t t
+    | Naked_nativeint : Targetint.Set.t t
+end

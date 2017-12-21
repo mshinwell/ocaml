@@ -145,3 +145,12 @@ module Boxable_number : sig
 
   include Identifiable.S with type t := t
 end
+
+module Naked_number : sig
+  type 'values t =
+    | Naked_immediate : Immediate.Set.t t
+    | Naked_float : Numbers.Float_by_bit_pattern.Set.t t
+    | Naked_int32 : Numbers.Int32.Set.t t
+    | Naked_int64 : Numbers.Int64.Set.t t
+    | Naked_nativeint : Targetint.Set.t t
+end

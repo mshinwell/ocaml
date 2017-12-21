@@ -56,7 +56,7 @@ module type S = sig
   end
 
   type 'a or_alias = private
-    | Normal of 'a
+    | No_alias of 'a
     | Type of Export_id.t
     | Type_of of Name.t
 
@@ -70,7 +70,8 @@ module type S = sig
       has a unique kind. *)
   type t = private
     | Value of ty_value
-    | Naked_number : _ ty_naked_number -> t
+    | Naked_number :
+        'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t -> t
     | Fabricated of ty_fabricated
     | Phantom of ty_phantom
 
@@ -210,7 +211,9 @@ module type S = sig
 
   and of_kind_phantom = private
     | Value of ty_value
-    | Naked_number : _ ty_naked_number -> of_kind_phantom
+    | Naked_number
+         : 'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t
+        -> of_kind_phantom
     | Fabricated of ty_fabricated
 
   (** If the given type has kind [Phantom], return it; otherwise form the

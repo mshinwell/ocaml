@@ -102,7 +102,7 @@ end) = struct
   end
 
   type 'a or_alias =
-    | Normal of 'a
+    | No_alias of 'a
     | Type of Export_id.t
     | Type_of of Name.t
 
@@ -112,7 +112,8 @@ end) = struct
 
   type t =
     | Value of ty_value
-    | Naked_number : _ ty_naked_number -> t
+    | Naked_number :
+        'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t -> t
     | Fabricated of ty_fabricated
     | Phantom of ty_phantom
 
@@ -229,7 +230,9 @@ end) = struct
 
   and of_kind_phantom =
     | Value of ty_value
-    | Naked_number : _ ty_naked_number -> of_kind_phantom
+    | Naked_number
+         : 'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t
+        -> of_kind_phantom
     | Fabricated of ty_fabricated
 
   and typing_environment = {
@@ -241,7 +244,7 @@ end) = struct
 
   let print_or_alias print_descr ppf (or_alias : _ or_alias) =
     match or_alias with
-    | Normal descr -> print_descr ppf descr
+    | No_alias descr -> print_descr ppf descr
     | Type_of name ->
       Format.fprintf ppf "@[(= type_of %a)@]" Name.print name
     | Type export_id ->
@@ -278,6 +281,43 @@ end) = struct
           print_unknown_payload))
       ppf ty
 
+  let print_of_kind_naked_number (type n) ppf (n : n of_kind_naked_number) =
+    match n with
+    | Immediate i ->
+      Format.fprintf ppf "@[(Naked_immediates (%a))@]"
+        Immediate.Set.print i
+    | Float f ->
+      Format.fprintf ppf "@[(Naked_floats (%a))@]"
+        Float_by_bit_pattern.Set.print f
+    | Int32 i ->
+      Format.fprintf ppf "@[(Naked_int32s (%a))@]"
+        Int32.Set.print i
+    | Int64 i ->
+      Format.fprintf ppf "@[(Naked_int64s (%a))@]"
+        Int64.Set.print i
+    | Nativeint i ->
+      Format.fprintf ppf "@[(Naked_nativeints (%a))@]"
+        Targetint.Set.print i
+
+  let print_ty_naked_number (type n) ppf (ty : n ty_naked_number) =
+    print_ty_generic print_of_kind_naked_number (fun _ () -> ()) ppf ty
+
+  let print_of_kind_value_boxed_number (type n)
+        ppf (n : n of_kind_value_boxed_number) =
+    match n with
+    | Boxed_float f ->
+      Format.fprintf ppf "@[(Boxed_float (%a))@]"
+        print_ty_naked_number f
+    | Boxed_int32 i ->
+      Format.fprintf ppf "@[(Boxed_int32 (%a))@]"
+        print_ty_naked_number i
+    | Boxed_int64 i ->
+      Format.fprintf ppf "@[(Boxed_int64 (%a))@]"
+        print_ty_naked_number i
+    | Boxed_nativeint i ->
+      Format.fprintf ppf "@[(Boxed_nativeint (%a))@]"
+        print_ty_naked_number i
+
   let rec print_immediate_case ppf ({ env_extension; } : immediate_case) =
     Format.fprintf ppf "@[(env_extension %a)@]"
       print_typing_environment env_extension
@@ -312,8 +352,8 @@ end) = struct
         print_blocks blocks
         print_immediates immediates
     | Boxed_number n ->
-
-      Format.fprintf ppf "[@(Boxed_number %a)@]" print_ty_naked_number n
+      Format.fprintf ppf "[@(Boxed_number %a)@]"
+        print_of_kind_value_boxed_number n
     | Closure closure -> print_closure ppf closure
     | String str_infos ->
       Format.fprintf ppf "@[(Strings (%a))@]" String_info.Set.print str_infos
@@ -330,8 +370,8 @@ end) = struct
 
   and _unused = Expr.print
 
-  and print_closure ppf ({ closure_id; set_of_closures; } : closure) =
-    Format.fprintf ppf "(closure:@ @[<2>[@ %a @[<2>from@ %a@];@ ]@])"
+  and print_closure ppf ({ closure_id; set_of_closures; } : closures) =
+    Format.fprintf ppf "@[(Closures@ @[<2>[@ %a @[<2>from@ %a@];@ ]@])@]"
       Closure_id.print closure_id
       print_ty_value set_of_closures
 
@@ -409,27 +449,6 @@ end) = struct
       print_function_declarations set.function_decls
       (Var_within_closure.Map.print print_ty_value) set.closure_elements
 
-  and print_ty_naked_number ppf ty =
-    print_ty_generic print_of_kind_naked_number (fun _ () -> ()) ppf ty
-
-  and print_of_kind_naked_number (type n) ppf (n : n of_kind_naked_number) =
-    match n with
-    | Immediate i ->
-      Format.fprintf ppf "@[(Naked_immediates (%a))@]"
-        Immediate.Set.print i
-    | Float f ->
-      Format.fprintf ppf "@[(Naked_floats (%a))@]"
-        Float_by_bit_pattern.Set.print f
-    | Int32 i ->
-      Format.fprintf ppf "@[(Naked_int32s (%a))@]"
-        Int32.Set.print i
-    | Int64 i ->
-      Format.fprintf ppf "@[(Naked_int64s (%a))@]"
-        Int64.Set.print i
-    | Nativeint i ->
-      Format.fprintf ppf "@[(Naked_nativeints (%a))@]"
-        Targetint.Set.print i
-
   and print_tag_case ppf ({ env_extension; } : tag_case) =
     Format.fprintf ppf "@[(env_extension %a)@]"
       print_typing_environment env_extension
@@ -437,26 +456,32 @@ end) = struct
   and print_of_kind_fabricated ppf (o : of_kind_fabricated) =
     match o with
     | Tag tag_map ->
-      Format.fprintf "@[(Tags %a)@]" Tag.Map.print print_tag_case ppf tag_map
+      Format.fprintf ppf "@[(Tags %a)@]" (Tag.Map.print print_tag_case) tag_map
     | Set_of_closures set -> print_set_of_closures ppf set
+
+  and print_ty_fabricated ppf (ty : ty_fabricated) =
+    print_ty_generic print_of_kind_fabricated (fun _ppf () -> ()) ppf ty
 
   and print_of_kind_phantom ppf (o : of_kind_phantom) =
     match o with
     | Value ty_value ->
       Format.fprintf ppf "[@(Phantom %a)@]"
         print_ty_value ty_value
-    | Naked_number ty_naked_number ->
+    | Naked_number (ty_naked_number, _kind) ->
       Format.fprintf ppf "[@(Phantom %a)@]"
         print_ty_naked_number ty_naked_number
     | Fabricated ty_fabricated ->
-      Format.fprintf ppf "[@(Phantom %a)@]"
+      Format.fprintf ppf "[@(Fabricated %a)@]"
         print_ty_fabricated ty_fabricated
+
+  and print_ty_phantom ppf (ty : ty_phantom) =
+    print_ty_generic print_of_kind_phantom (fun _ppf () -> ()) ppf ty
 
   and print ppf (t : t) =
     match t with
     | Value ty ->
       Format.fprintf ppf "(Value (%a))" print_ty_value ty
-    | Naked_number ty ->
+    | Naked_number (ty, _kind) ->
       Format.fprintf ppf "(Naked_number (%a))" print_ty_naked_number ty
     | Fabricated ty ->
       Format.fprintf ppf "(Fabricated (%a))" print_ty_fabricated ty
@@ -477,83 +502,109 @@ end) = struct
           (levels_to_names %a)@ \
           (existentials %a)@ \
           (existential_freshening %a))@]"
-      Name.Map.print print names_to_types
-      Scope_level.Map.print Name.Set.print levels_to_names
+      (Name.Map.print print) names_to_types
+      (Scope_level.Map.print Name.Set.print) levels_to_names
       Name.Set.print existentials
       Freshening.print existential_freshening
 
   let alias (kind : Flambda_kind.t) name : t =
     match kind with
-    | Value _ -> Value (Alias (Type_of name))
-    | Naked_immediate -> Naked_number (Immediate (Alias (Type_of name)))
-    | Naked_float -> Naked_number (Float (Alias (Type_of name)))
-    | Naked_int32 -> Naked_number (Int32 (Alias (Type_of name)))
-    | Naked_int64 -> Naked_number (Int64 (Alias (Type_of name)))
-    | Naked_nativeint -> Naked_number (Nativeint (Alias (Type_of name)))
-    | Fabricated _ -> Fabricated (Alias (Type_of name))
-    | Phantom _ -> Phantom (Alias (Type_of name))
+    | Value _ -> Value (Type_of name)
+    | Naked_immediate ->
+      Naked_number (Type_of name, K.Naked_number.Naked_immediate)
+    | Naked_float ->
+      Naked_number (Type_of name, K.Naked_number.Naked_float)
+    | Naked_int32 ->
+      Naked_number (Type_of name, K.Naked_number.Naked_int32)
+    | Naked_int64 ->
+      Naked_number (Type_of name, K.Naked_number.Naked_int64)
+    | Naked_nativeint ->
+      Naked_number (Type_of name, K.Naked_number.Naked_nativeint)
+    | Fabricated _ -> Fabricated (Type_of name)
+    | Phantom _ -> Phantom (Type_of name)
+
+  let phantomize t : t =
+    match t with
+    | Value ty_value ->
+      let of_kind_phantom : of_kind_phantom =
+        Value ty_value
+      in
+      Phantom (No_alias (Ok (Normal of_kind_phantom)))
+    | Naked_number (ty_naked_number, kind) ->
+      let of_kind_phantom : of_kind_phantom =
+        Naked_number (ty_naked_number, kind)
+      in
+      Phantom (No_alias (Ok (Normal of_kind_phantom)))
+    | Fabricated ty_fabricated ->
+      let of_kind_phantom : of_kind_phantom =
+        Fabricated ty_fabricated
+      in
+      Phantom (No_alias (Ok (Normal of_kind_phantom)))
+    | Phantom _ -> t
+
+  type 'a type_accessor = type_of_name:(Name.t -> t option) -> 'a
 
 (*
   let unknown_as_ty_value reason value_kind : ty_value =
-    Normal (Resolved (Unknown (reason, value_kind)))
+    No_alias (Resolved (Unknown (reason, value_kind)))
 *)
 (*
   let unknown_as_resolved_ty_value reason value_kind : resolved_ty_value =
-    Normal (Unknown (reason, value_kind))
+    No_alias (Unknown (reason, value_kind))
 
   let unknown_as_resolved_ty_naked_immediate reason value_kind
         : resolved_ty_naked_immediate =
-    Normal (Unknown (reason, value_kind))
+    No_alias (Unknown (reason, value_kind))
 
   let unknown_as_resolved_ty_naked_float reason value_kind
         : resolved_ty_naked_float =
-    Normal (Unknown (reason, value_kind))
+    No_alias (Unknown (reason, value_kind))
 
   let unknown_as_resolved_ty_naked_int32 reason value_kind
         : resolved_ty_naked_int32 =
-    Normal (Unknown (reason, value_kind))
+    No_alias (Unknown (reason, value_kind))
 
   let unknown_as_resolved_ty_naked_int64 reason value_kind
         : resolved_ty_naked_int64 =
-    Normal (Unknown (reason, value_kind))
+    No_alias (Unknown (reason, value_kind))
 
   let unknown_as_resolved_ty_naked_nativeint reason value_kind
         : resolved_ty_naked_nativeint =
-    Normal (Unknown (reason, value_kind))
+    No_alias (Unknown (reason, value_kind))
 
   let bottom (kind : K.t) : t =
     match kind with
-    | Value _ -> Value (Normal (Resolved Bottom))
-    | Naked_immediate -> Naked_immediate (Normal (Resolved Bottom))
-    | Naked_float -> Naked_float (Normal (Resolved Bottom))
-    | Naked_int32 -> Naked_int32 (Normal (Resolved Bottom))
-    | Naked_int64 -> Naked_int64 (Normal (Resolved Bottom))
-    | Naked_nativeint -> Naked_nativeint (Normal (Resolved Bottom))
+    | Value _ -> Value (No_alias (Resolved Bottom))
+    | Naked_immediate -> Naked_immediate (No_alias (Resolved Bottom))
+    | Naked_float -> Naked_float (No_alias (Resolved Bottom))
+    | Naked_int32 -> Naked_int32 (No_alias (Resolved Bottom))
+    | Naked_int64 -> Naked_int64 (No_alias (Resolved Bottom))
+    | Naked_nativeint -> Naked_nativeint (No_alias (Resolved Bottom))
 
   let this_naked_immediate (i : Immediate.t) : t =
     let i : of_kind_naked_immediate = Naked_immediate i in
-    Naked_immediate (Normal (Resolved (Ok (Normal i))))
+    Naked_immediate (No_alias (Resolved (Ok (No_alias i))))
 
   let this_naked_float f : t =
     let f : of_kind_naked_float = Naked_float f in
-    Naked_float (Normal (Resolved (Ok (Normal f))))
+    Naked_float (No_alias (Resolved (Ok (No_alias f))))
 
   let this_naked_int32 n : t =
     let n : of_kind_naked_int32 = Naked_int32 n in
-    Naked_int32 (Normal (Resolved (Ok (Normal n))))
+    Naked_int32 (No_alias (Resolved (Ok (No_alias n))))
 
   let this_naked_int64 n : t =
     let n : of_kind_naked_int64 = Naked_int64 n in
-    Naked_int64 (Normal (Resolved (Ok (Normal n))))
+    Naked_int64 (No_alias (Resolved (Ok (No_alias n))))
 
   let this_naked_nativeint n : t =
     let n : of_kind_naked_nativeint = Naked_nativeint n in
-    Naked_nativeint (Normal (Resolved (Ok (Normal n))))
+    Naked_nativeint (No_alias (Resolved (Ok (No_alias n))))
 
   let tag_immediate (t : t) : t =
     match t with
     | Naked_immediate ty_naked_immediate ->
-      Value (Normal (Resolved (Ok (Normal (
+      Value (No_alias (Resolved (Ok (No_alias (
         Tagged_immediate ty_naked_immediate)))))
     | Value _
     | Naked_float _
@@ -566,7 +617,7 @@ end) = struct
   let box_float (t : t) : t =
     match t with
     | Naked_number (Float ty_naked_float) ->
-      Value (Normal (Ok (Boxed_number (Float, ty_naked_float))))
+      Value (No_alias (Ok (Boxed_number (Float, ty_naked_float))))
     | Value _
     | Naked_number _
     | Fabricated _
@@ -577,7 +628,7 @@ end) = struct
   let box_int32 (t : t) : t =
     match t with
     | Naked_int32 ty_naked_int32 ->
-      Value (Normal (Resolved (Ok (Normal (
+      Value (No_alias (Resolved (Ok (No_alias (
         Boxed_int32 ty_naked_int32)))))
     | Value _
     | Naked_immediate _
@@ -590,7 +641,7 @@ end) = struct
   let box_int64 (t : t) : t =
     match t with
     | Naked_int64 ty_naked_int64 ->
-      Value (Normal (Resolved (Ok (Normal (
+      Value (No_alias (Resolved (Ok (No_alias (
         Boxed_int64 ty_naked_int64)))))
     | Value _
     | Naked_immediate _
@@ -603,7 +654,7 @@ end) = struct
   let box_nativeint (t : t) : t =
     match t with
     | Naked_nativeint ty_naked_nativeint ->
-      Value (Normal (Resolved (Ok (Normal (
+      Value (No_alias (Resolved (Ok (No_alias (
         Boxed_nativeint ty_naked_nativeint)))))
     | Value _
     | Naked_immediate _
@@ -616,37 +667,37 @@ end) = struct
   let this_tagged_immediate i : t =
     let i : ty_naked_immediate =
       let i : of_kind_naked_immediate = Naked_immediate i in
-      Normal (Resolved (Ok (Normal i)))
+      No_alias (Resolved (Ok (No_alias i)))
     in
-    Value (Normal (Resolved (Ok (Normal (Tagged_immediate i)))))
+    Value (No_alias (Resolved (Ok (No_alias (Tagged_immediate i)))))
 
   let this_boxed_float f =
     let f : ty_naked_float =
       let f : of_kind_naked_float = Naked_float f in
-      Normal (Resolved (Ok (Normal f)))
+      No_alias (Resolved (Ok (No_alias f)))
     in
-    Value (Normal (Resolved (Ok (Normal (Boxed_float f)))))
+    Value (No_alias (Resolved (Ok (No_alias (Boxed_float f)))))
 
   let this_boxed_int32 n =
     let n : ty_naked_int32 =
       let n : of_kind_naked_int32 = Naked_int32 n in
-      Normal (Resolved (Ok (Normal n)))
+      No_alias (Resolved (Ok (No_alias n)))
     in
-    Value (Normal (Resolved (Ok (Normal (Boxed_int32 n)))))
+    Value (No_alias (Resolved (Ok (No_alias (Boxed_int32 n)))))
 
   let this_boxed_int64 n =
     let n : ty_naked_int64 =
       let n : of_kind_naked_int64 = Naked_int64 n in
-      Normal (Resolved (Ok (Normal n)))
+      No_alias (Resolved (Ok (No_alias n)))
     in
-    Value (Normal (Resolved (Ok (Normal (Boxed_int64 n)))))
+    Value (No_alias (Resolved (Ok (No_alias (Boxed_int64 n)))))
 
   let this_boxed_nativeint n =
     let n : ty_naked_nativeint =
       let n : of_kind_naked_nativeint = Naked_nativeint n in
-      Normal (Resolved (Ok (Normal n)))
+      No_alias (Resolved (Ok (No_alias n)))
     in
-    Value (Normal (Resolved (Ok (Normal (Boxed_nativeint n)))))
+    Value (No_alias (Resolved (Ok (No_alias (Boxed_nativeint n)))))
 
   let this_immutable_string_as_ty_value str : ty_value =
     let str : String_info.t =
@@ -655,7 +706,7 @@ end) = struct
         size = Targetint.OCaml.of_int (String.length str);
       }
     in
-    Normal (Resolved (Ok (Normal (String str))))
+    No_alias (Resolved (Ok (No_alias (String str))))
 
   let this_immutable_string str : t =
     Value (this_immutable_string_as_ty_value str)
@@ -666,7 +717,7 @@ end) = struct
         size;
       }
     in
-    Normal (Resolved (Ok (Normal (String str))))
+    No_alias (Resolved (Ok (No_alias (String str))))
 
   let immutable_string ~size : t =
     Value (immutable_string_as_ty_value ~size)
@@ -677,7 +728,7 @@ end) = struct
         size;
       }
     in
-    Value (Normal (Resolved (Ok (Normal (String str)))))
+    Value (No_alias (Resolved (Ok (No_alias (String str)))))
 
   (* CR mshinwell: We need to think about these float array functions in
      conjunction with the 4.06 feature for disabling the float array
@@ -686,10 +737,10 @@ end) = struct
   let this_immutable_float_array fields : t =
     let make_field f : ty_naked_float =
       let f : of_kind_naked_float = Naked_float f in
-      Normal (Resolved (Ok (Normal f)))
+      No_alias (Resolved (Ok (No_alias f)))
     in
     let fields = Array.map make_field fields in
-    Value (Normal (Resolved (Ok (Normal (Float_array fields)))))
+    Value (No_alias (Resolved (Ok (No_alias (Float_array fields)))))
 
   let immutable_float_array fields : t =
 (*
@@ -705,20 +756,20 @@ end) = struct
         fields
     in
 *)
-    Value (Normal (Resolved (Ok (Normal (Float_array fields)))))
+    Value (No_alias (Resolved (Ok (No_alias (Float_array fields)))))
 
   let mutable_float_array0 ~size : _ singleton_or_combination =
     let make_field () : ty_naked_float =
-      Normal (Resolved (Unknown (Other, ())))
+      No_alias (Resolved (Unknown (Other, ())))
     in
     (* CR mshinwell: dubious for cross compilation *)
     let size = Targetint.OCaml.to_int size in
     let fields = Array.init size (fun _ -> make_field ()) in
-    Normal (Float_array fields)
+    No_alias (Float_array fields)
 
   let mutable_float_array ~size : t =
     let ty = mutable_float_array0 ~size in
-    Value (Normal (Resolved (Ok ty)))
+    Value (No_alias (Resolved (Ok ty)))
 
   let block tag fields : t =
 (*
@@ -734,46 +785,46 @@ end) = struct
         fields
     in
 *)
-    Value (Normal (Resolved (Ok (Normal (Block (tag, fields))))))
+    Value (No_alias (Resolved (Ok (No_alias (Block (tag, fields))))))
 
   let export_id_loaded_lazily (kind : K.t) export_id : t =
     match kind with
     | Value _ ->
-      Value (Normal (Load_lazily (Export_id export_id)))
+      Value (No_alias (Load_lazily (Export_id export_id)))
     | Naked_immediate ->
-      Naked_immediate (Normal (Load_lazily (Export_id export_id)))
+      Naked_immediate (No_alias (Load_lazily (Export_id export_id)))
     | Naked_float ->
-      Naked_float (Normal (Load_lazily (Export_id export_id)))
+      Naked_float (No_alias (Load_lazily (Export_id export_id)))
     | Naked_int32 ->
-      Naked_int32 (Normal (Load_lazily (Export_id export_id)))
+      Naked_int32 (No_alias (Load_lazily (Export_id export_id)))
     | Naked_int64 ->
-      Naked_int64 (Normal (Load_lazily (Export_id export_id)))
+      Naked_int64 (No_alias (Load_lazily (Export_id export_id)))
     | Naked_nativeint ->
-      Naked_nativeint (Normal (Load_lazily (Export_id export_id)))
+      Naked_nativeint (No_alias (Load_lazily (Export_id export_id)))
 
   let symbol_loaded_lazily sym : t =
-    Value (Normal (Load_lazily (Symbol sym)))
+    Value (No_alias (Load_lazily (Symbol sym)))
 
   let any_naked_immediate () : t =
-    Naked_immediate (Normal (Resolved (Unknown (Other, ()))))
+    Naked_immediate (No_alias (Resolved (Unknown (Other, ()))))
 
   let any_naked_float () : t =
-    Naked_float (Normal (Resolved (Unknown (Other, ()))))
+    Naked_float (No_alias (Resolved (Unknown (Other, ()))))
 
   let any_naked_float_as_ty_naked_float () : ty_naked_float =
-    Normal (Resolved (Unknown (Other, ())))
+    No_alias (Resolved (Unknown (Other, ())))
 
   let any_naked_int32 () : t =
-    Naked_int32 (Normal (Resolved (Unknown (Other, ()))))
+    Naked_int32 (No_alias (Resolved (Unknown (Other, ()))))
 
   let any_naked_int64 () : t =
-    Naked_int64 (Normal (Resolved (Unknown (Other, ()))))
+    Naked_int64 (No_alias (Resolved (Unknown (Other, ()))))
 
   let any_naked_nativeint () : t =
-    Naked_nativeint (Normal (Resolved (Unknown (Other, ()))))
+    Naked_nativeint (No_alias (Resolved (Unknown (Other, ()))))
 
   let any_value_as_ty_value value_kind unknown_because_of : ty_value =
-    Normal (Resolved (Unknown (unknown_because_of, value_kind)))
+    No_alias (Resolved (Unknown (unknown_because_of, value_kind)))
 
   let any_value value_kind unknown_because_of : t =
     Value (any_value_as_ty_value value_kind unknown_because_of)
@@ -788,24 +839,24 @@ end) = struct
     | Naked_nativeint -> any_naked_nativeint ()
 
   let any_tagged_immediate () : t =
-    let i : ty_naked_immediate = Normal (Resolved (Unknown (Other, ()))) in
-    Value (Normal (Resolved (Ok (Normal (Tagged_immediate i)))))
+    let i : ty_naked_immediate = No_alias (Resolved (Unknown (Other, ()))) in
+    Value (No_alias (Resolved (Ok (No_alias (Tagged_immediate i)))))
 
   let any_boxed_float () =
-    let f : ty_naked_float = Normal (Resolved (Unknown (Other, ()))) in
-    Value (Normal (Resolved (Ok (Normal (Boxed_float f)))))
+    let f : ty_naked_float = No_alias (Resolved (Unknown (Other, ()))) in
+    Value (No_alias (Resolved (Ok (No_alias (Boxed_float f)))))
 
   let any_boxed_int32 () =
-    let n : ty_naked_int32 = Normal (Resolved (Unknown (Other, ()))) in
-    Value (Normal (Resolved (Ok (Normal (Boxed_int32 n)))))
+    let n : ty_naked_int32 = No_alias (Resolved (Unknown (Other, ()))) in
+    Value (No_alias (Resolved (Ok (No_alias (Boxed_int32 n)))))
 
   let any_boxed_int64 () =
-    let n : ty_naked_int64 = Normal (Resolved (Unknown (Other, ()))) in
-    Value (Normal (Resolved (Ok (Normal (Boxed_int64 n)))))
+    let n : ty_naked_int64 = No_alias (Resolved (Unknown (Other, ()))) in
+    Value (No_alias (Resolved (Ok (No_alias (Boxed_int64 n)))))
 
   let any_boxed_nativeint () =
-    let n : ty_naked_nativeint = Normal (Resolved (Unknown (Other, ()))) in
-    Value (Normal (Resolved (Ok (Normal (Boxed_nativeint n)))))
+    let n : ty_naked_nativeint = No_alias (Resolved (Unknown (Other, ()))) in
+    Value (No_alias (Resolved (Ok (No_alias (Boxed_nativeint n)))))
 
   (* CR mshinwell: Check this is being used correctly
   let resolved_ty_value_for_predefined_exception ~name : resolved_ty_value =
@@ -814,12 +865,8 @@ end) = struct
          unknown_as_ty_value Other Must_scan;
       |]
     in
-    Normal (Ok (Normal (Block (Tag.Scannable.object_tag, fields))))
+    No_alias (Ok (No_alias (Block (Tag.Scannable.object_tag, fields))))
 *)
-
-  type 'a type_accessor =
-     : type_of_name:(Name.t -> t option)
-    -> 'a
 
   let force_to_kind_value t =
     match t with
@@ -893,13 +940,13 @@ end) = struct
 
   let ty_of_resolved_ty (ty : _ resolved_ty) : _ ty =
     match ty with
-    | Normal ty -> Normal ((Resolved ty) : _ maybe_unresolved)
+    | No_alias ty -> No_alias ((Resolved ty) : _ maybe_unresolved)
     | Alias name -> Alias name
 
   let ty_of_resolved_ok_ty (ty : _ singleton_or_combination or_alias)
         : _ ty =
     match ty with
-    | Normal ty -> Normal ((Resolved (Ok ty)) : _ maybe_unresolved)
+    | No_alias ty -> No_alias ((Resolved (Ok ty)) : _ maybe_unresolved)
     | Alias name -> Alias name
 
   let resolve_aliases_on_ty (type a) ~importer_this_kind
@@ -909,7 +956,7 @@ end) = struct
         : (a, _) resolved_ty * (Name.t option) =
     let rec resolve_aliases names_seen ~canonical_name (ty : _ resolved_ty) =
       match ty with
-      | Normal _ -> ty, canonical_name
+      | No_alias _ -> ty, canonical_name
       | Alias name ->
         if Name.Set.mem name names_seen then begin
           (* CR-soon mshinwell: Improve message -- but this means passing the
@@ -940,7 +987,7 @@ end) = struct
     in
     let ty =
       match ty with
-      | Normal ty -> ty
+      | No_alias ty -> ty
       | Alias name -> Unknown (Unresolved_value (Name name), unknown_payload)
     in
     ty, canonical_name
@@ -1020,8 +1067,8 @@ end) = struct
       in
       match ty with
       | Unknown (_, value_kind) -> value_kind
-      | Ok (Normal (Tagged_immediate _)) -> Definitely_immediate
-      | Ok (Normal _) -> Unknown
+      | Ok (No_alias (Tagged_immediate _)) -> Definitely_immediate
+      | Ok (No_alias _) -> Unknown
       | Ok (Combination (Join, ty1, ty2)) ->
         let ty1 = ty_of_resolved_ok_ty ty1 in
         let ty2 = ty_of_resolved_ok_ty ty2 in
@@ -1091,8 +1138,8 @@ end) = struct
   let closure ~set_of_closures closure_id : t =
     (* CR mshinwell: pass a description to the "force" functions *)
     let set_of_closures = force_to_kind_value set_of_closures in
-    Value (Normal (Resolved (Ok (
-      Normal (Closure { set_of_closures; closure_id; })))))
+    Value (No_alias (Resolved (Ok (
+      No_alias (Closure { set_of_closures; closure_id; })))))
 
   let create_set_of_closures ~set_of_closures_id ~set_of_closures_origin
         ~function_decls ~closure_elements : set_of_closures =
@@ -1108,8 +1155,8 @@ end) = struct
       create_set_of_closures ~set_of_closures_id ~set_of_closures_origin
         ~function_decls ~closure_elements
     in
-    Value (Normal (Resolved (Ok (
-      Normal (Set_of_closures set_of_closures)))))
+    Value (No_alias (Resolved (Ok (
+      No_alias (Set_of_closures set_of_closures)))))
 
   let rec free_names t acc =
     match t with
@@ -1123,37 +1170,37 @@ end) = struct
   and free_names_ty_value (ty : ty_value) acc =
     match ty with
     | Alias name -> Name.Set.add name acc
-    | Normal (Resolved ((Unknown _) | Bottom)) -> acc
-    | Normal (Resolved (Ok of_kind_value)) ->
+    | No_alias (Resolved ((Unknown _) | Bottom)) -> acc
+    | No_alias (Resolved (Ok of_kind_value)) ->
       free_names_of_kind_value of_kind_value acc
-    | Normal (Load_lazily _load_lazily) ->
+    | No_alias (Load_lazily _load_lazily) ->
       (* Types saved in .cmx files cannot contain free names. *)
       acc
 
   and free_names_ty_naked_immediate (ty : ty_naked_immediate) acc =
     match ty with
     | Alias name -> Name.Set.add name acc
-    | Normal _ -> acc
+    | No_alias _ -> acc
 
   and free_names_ty_naked_float (ty : ty_naked_float) acc =
     match ty with
     | Alias name -> Name.Set.add name acc
-    | Normal _ -> acc
+    | No_alias _ -> acc
 
   and free_names_ty_naked_int32 (ty : ty_naked_int32) acc =
     match ty with
     | Alias name -> Name.Set.add name acc
-    | Normal _ -> acc
+    | No_alias _ -> acc
 
   and free_names_ty_naked_int64 (ty : ty_naked_int64) acc =
     match ty with
     | Alias name -> Name.Set.add name acc
-    | Normal _ -> acc
+    | No_alias _ -> acc
 
   and free_names_ty_naked_nativeint (ty : ty_naked_nativeint) acc =
     match ty with
     | Alias name -> Name.Set.add name acc
-    | Normal _ -> acc
+    | No_alias _ -> acc
 
   and free_names_set_of_closures (set_of_closures : set_of_closures) acc =
     let acc =
@@ -1186,7 +1233,7 @@ end) = struct
   and free_names_of_kind_value
         (o : of_kind_value singleton_or_combination) acc =
     match o with
-    | Normal singleton ->
+    | No_alias singleton ->
       begin match singleton with
       | Tagged_immediate i ->
         free_names_ty_naked_immediate i acc
@@ -1392,7 +1439,7 @@ end) = struct
   and clean_of_kind_value ~importer (o : of_kind_value) clean_var_opt
         : of_kind_value =
     match o with
-    | Normal singleton ->
+    | No_alias singleton ->
       let singleton : of_kind_value_singleton =
         match singleton with
         | Tagged_immediate i ->
@@ -1429,7 +1476,7 @@ end) = struct
           in
           Float_array fields
       in
-      Normal singleton
+      No_alias singleton
     | Join (w1, w2) ->
       let w1 =
         { var = clean_var_opt w1.var;
@@ -1457,7 +1504,7 @@ end) = struct
         | Some value_kind2 -> value_kind2
         | None ->
           value_kind_ty_value ~importer ~type_of_name
-            (Normal ((Resolved ty_value2) : _ maybe_unresolved))
+            (No_alias ((Resolved ty_value2) : _ maybe_unresolved))
       in
       match P.combining_op with
       | Join -> K.Value_kind.join value_kind1 value_kind2
@@ -1478,16 +1525,16 @@ end) = struct
     let combine_singleton_or_combination ty1 ty2
           ~combine_of_kind : _ or_unknown_or_bottom =
       let combine () : _ or_unknown_or_bottom =
-        Ok (Combination (P.combining_op, Normal ty1, Normal ty2))
+        Ok (Combination (P.combining_op, No_alias ty1, No_alias ty2))
       in
       match ty1, ty2 with
-      | Normal s1, Normal s2 ->
+      | No_alias s1, No_alias s2 ->
         begin match combine_of_kind s1 s2 with
         | Exactly result -> result
         | Combine -> combine ()
         end
-      | Normal _, Combination _
-      | Combination _, Normal _
+      | No_alias _, Combination _
+      | Combination _, No_alias _
       | Combination _, Combination _ -> combine ()
 
     let combine_ty (type a) (type u) ~importer:_ ~importer_this_kind
@@ -1512,7 +1559,7 @@ end) = struct
         let unresolved_var_or_symbol_to_unknown (ty : _ resolved_ty)
               : _ or_unknown_or_bottom =
           match ty with
-          | Normal ty -> ty
+          | No_alias ty -> ty
           | Alias _ -> Unknown (Other, unknown_payload_top)
         in
         let ty1 = unresolved_var_or_symbol_to_unknown ty1 in
@@ -1551,13 +1598,13 @@ end) = struct
             | Meet -> Bottom
             end
         in
-        Normal ((Resolved ty) : _ maybe_unresolved)
+        No_alias ((Resolved ty) : _ maybe_unresolved)
 
     let rec combine_of_kind_value ~importer ~type_of_name
           (t1 : of_kind_value) t2
           : (of_kind_value, K.Value_kind.t) or_unknown_or_bottom or_combine =
       let singleton s : _ or_combine =
-        Exactly ((Ok (Normal s)) : _ or_unknown_or_bottom)
+        Exactly ((Ok (No_alias s)) : _ or_unknown_or_bottom)
       in
       match t1, t2 with
       | Tagged_immediate ty1, Tagged_immediate ty2 ->
@@ -1615,7 +1662,7 @@ end) = struct
           Combine
         else
           Exactly (Ok (
-            Normal ((Naked_immediate i1) : of_kind_naked_immediate)))
+            No_alias ((Naked_immediate i1) : of_kind_naked_immediate)))
 
     and combine_of_kind_naked_float
           (t1 : of_kind_naked_float) (t2 : of_kind_naked_float)
@@ -1625,7 +1672,7 @@ end) = struct
         if not (Numbers.Float_by_bit_pattern.equal i1 i2) then
           Combine
         else
-          Exactly (Ok (Normal ((Naked_float i1) : of_kind_naked_float)))
+          Exactly (Ok (No_alias ((Naked_float i1) : of_kind_naked_float)))
 
     and combine_of_kind_naked_int32
           (t1 : of_kind_naked_int32) (t2 : of_kind_naked_int32)
@@ -1635,7 +1682,7 @@ end) = struct
         if not (Int32.equal i1 i2) then
           Combine
         else
-          Exactly (Ok (Normal ((Naked_int32 i1) : of_kind_naked_int32)))
+          Exactly (Ok (No_alias ((Naked_int32 i1) : of_kind_naked_int32)))
 
     and combine_of_kind_naked_int64
           (t1 : of_kind_naked_int64) (t2 : of_kind_naked_int64)
@@ -1645,7 +1692,7 @@ end) = struct
         if not (Int64.equal i1 i2) then
           Combine
         else
-          Exactly (Ok (Normal ((Naked_int64 i1) : of_kind_naked_int64)))
+          Exactly (Ok (No_alias ((Naked_int64 i1) : of_kind_naked_int64)))
 
     and combine_of_kind_naked_nativeint
           (t1 : of_kind_naked_nativeint) (t2 : of_kind_naked_nativeint)
@@ -1656,7 +1703,7 @@ end) = struct
           Combine
         else
           Exactly (Ok (
-            Normal ((Naked_nativeint i1) : of_kind_naked_nativeint)))
+            No_alias ((Naked_nativeint i1) : of_kind_naked_nativeint)))
 
     and combine_ty_value ~importer ~type_of_name
           (ty1 : ty_value) (ty2 : ty_value) : ty_value =
@@ -1935,11 +1982,16 @@ end) = struct
         : (a, _) ty =
     match ty with
     | Alias alias -> Alias alias
-    | Normal s_or_c -> Normal (Resolved (Ok s_or_c))
+    | No_alias s_or_c -> No_alias (Resolved (Ok s_or_c))
 
-  module Typing_context = struct
-    type t = typing_context
+*)
 
+  module Typing_environment = struct
+    type t = typing_environment
+
+    let print = print_typing_environment
+
+(*
     let print ppf { names_to_types; levels_to_names;
           existentials; existential_freshening; } =
       Format.fprintf ppf
@@ -1979,7 +2031,7 @@ end) = struct
           Name.print name
           print t
 
-    type binding_type = Normal | Existential
+    type binding_type = No_alias | Existential
 
     let find t name =
       match Name.Map.find name t.names_to_types with
@@ -1990,10 +2042,10 @@ end) = struct
       | ty ->
         let binding_type =
           if Name.Map.mem name t.existentials then Existential
-          else Normal
+          else No_alias
         in
         match binding_type with
-        | Normal -> ty, Normal
+        | No_alias -> ty, No_alias
         | Existential ->
           let ty = rename_variables t freshening in
           ty, Existential
@@ -2088,11 +2140,13 @@ end) = struct
         existentials;
         existential_freshening;
       }
+*)
+
   end
 
 
 
-
+(*
 
 
   let or_unknown_or_bottom_of_or_alias (type ty) (type unk) ~type_of_name
@@ -2109,10 +2163,10 @@ end) = struct
         ~ty_of_t:(t -> ty)
         : (ty, unk) or_unknown_or_bottom =
     match oj1, oj2 with
-    | Normal s1, Normal s2 ->
+    | No_alias s1, No_alias s2 ->
       meet_ty ~type_of_name s1 s2
-    | ((Normal _ | Join _) as other_side), Join (or_alias1, or_alias2)
-    | Join (or_alias1, or_alias2), ((Normal _ | Join _) as other_side) ->
+    | ((No_alias _ | Join _) as other_side), Join (or_alias1, or_alias2)
+    | Join (or_alias1, or_alias2), ((No_alias _ | Join _) as other_side) ->
       (* CR mshinwell: We should maybe be returning equations when we
          meet types equipped with alias information. *)
       let join_left =
