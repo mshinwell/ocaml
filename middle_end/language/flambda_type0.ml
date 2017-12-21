@@ -513,14 +513,16 @@ end) = struct
     | Type _export_id -> acc
     | Type_of name -> Name.Set.add name acc
 
-  let free_names_or_join free_names_contents (or_join : _ or_join) acc =
+  let rec free_names_or_join free_names_contents (or_join : _ or_join) acc =
     match or_join with
     | Normal contents -> free_names_contents contents acc
     | Join (or_alias1, or_alias2) ->
       let acc =
-        free_names_or_alias (free_or_join free_names_contents) or_alias1 acc
+        free_names_or_alias (free_names_or_join free_names_contents)
+          or_alias1 acc
       in
-      free_names_or_alias (free_or_join free_names_contents) or_alias2 acc
+      free_names_or_alias (free_names_or_join free_names_contents)
+        or_alias2 acc
 
   let free_names_or_unknown_or_bottom free_names_contents free_names_unk
         (o : _ or_unknown_or_bottom) acc =
@@ -536,7 +538,11 @@ end) = struct
       ty
       acc
 
-  let rec free_names t acc =
+  let free_names_of_kind_naked_number (type n) (_ty : n of_kind_naked_number)
+        acc =
+    acc
+
+  let rec free_names (t : t) acc =
     match t with
     | Value ty -> free_names_ty free_names_of_kind_value ty acc
     | Naked_number (ty, _kind) ->
@@ -547,64 +553,98 @@ end) = struct
          for a normal name / phantom name split. *)
       free_names_ty free_names_of_kind_phantom ty acc
 
-
-  and free_names_set_of_closures (set_of_closures : set_of_closures) acc =
-    let acc =
-      Var_within_closure.Map.fold (fun _var ty_value acc ->
-          free_names_ty_value ty_value acc)
-        set_of_closures.closure_elements acc
-    in
-    Closure_id.Map.fold
-      (fun _closure_id (decl : function_declaration) acc ->
-        match decl with
-        | Inlinable decl ->
-          let acc =
-            List.fold_left (fun acc ty ->
-              free_names ty acc)
+  and free_names_of_kind_value (of_kind : of_kind_value) acc =
+    match of_kind with
+    | Blocks_and_tagged_immediates { blocks; immediates; } ->
+      let acc =
+        Tag.Scannable.Map.fold (fun _tag ((Join singletons) : block_case) acc ->
+            List.fold_left (fun acc (singleton : singleton_block) ->
+                let acc =
+                  free_names_of_typing_environment singleton.env_extension acc
+                in
+                match singleton.first_fields with
+                | Unknown_length -> acc
+                | Exactly first_fields ->
+                  Array.fold_left (fun acc t -> free_names t acc)
+                    acc first_fields)
               acc
-              decl.result
-          in
-          List.fold_left (fun acc (_param, ty) ->
-              free_names ty acc)
-            acc
-            decl.params
-        | Non_inlinable decl ->
-          List.fold_left (fun acc ty ->
-            free_names ty acc)
-            acc
-            decl.result)
-      set_of_closures.function_decls
-      acc
+              singletons)
+          blocks
+          acc
+      in
+      Immediate.Or_unknown.Map.fold (fun _imm (case : immediate_case) acc ->
+          free_names_of_typing_environment case.env_extension acc)
+        immediates
+        acc
+    | Boxed_number (Boxed_float n) ->
+      free_names_ty free_names_of_kind_naked_number n acc
+    | Boxed_number (Boxed_int32 n) ->
+      free_names_ty free_names_of_kind_naked_number n acc
+    | Boxed_number (Boxed_int64 n) ->
+      free_names_ty free_names_of_kind_naked_number n acc
+    | Boxed_number (Boxed_nativeint n) ->
+      free_names_ty free_names_of_kind_naked_number n acc
+    | Closure { set_of_closures; closure_id = _; } ->
+      free_names_ty free_names_of_kind_fabricated set_of_closures acc
+    | String _ -> acc
 
-  and free_names_of_kind_value
-        (o : of_kind_value singleton_or_combination) acc =
-    match o with
-    | No_alias singleton ->
-      begin match singleton with
-      | Blocks_and_tagged_immediates { blocks; immediates; } ->
+  and free_names_of_kind_fabricated (of_kind : of_kind_fabricated) acc =
+    match of_kind with
+    | Tag tag_map ->
+      Tag.Map.fold (fun _tag ({ env_extension; } : tag_case) acc ->
+          free_names_of_typing_environment env_extension acc)
+        tag_map
+        acc
+    | Set_of_closures set ->
+      let acc =
+        Var_within_closure.Map.fold (fun _var ty_value acc ->
+            free_names_ty free_names_of_kind_value ty_value acc)
+          set.closure_elements acc
+      in
+      Closure_id.Map.fold
+        (fun _closure_id (decl : function_declaration) acc ->
+          match decl with
+          | Inlinable decl ->
+            let acc =
+              List.fold_left (fun acc t ->
+                free_names t acc)
+                acc
+                decl.result
+            in
+            List.fold_left (fun acc (_param, t) ->
+                free_names t acc)
+              acc
+              decl.params
+          | Non_inlinable decl ->
+            List.fold_left (fun acc t ->
+              free_names t acc)
+              acc
+              decl.result)
+        set.function_decls
+        acc
 
-        free_names_ty_naked_immediate i acc
+  and free_names_of_kind_phantom (of_kind : of_kind_phantom) acc =
+    match of_kind with
+    | Value ty_value ->
+      free_names_ty free_names_of_kind_value ty_value acc
+    | Naked_number (ty_naked_number, _kind) ->
+      free_names_ty free_names_of_kind_naked_number ty_naked_number acc
+    | Fabricated ty_fabricated ->
+      free_names_ty free_names_of_kind_fabricated ty_fabricated acc
 
-
-      | Boxed_number n ->
-        free_names_ty_boxed_number n acc
-      | Block (_tag, fields) ->
-        Array.fold_left (fun acc t -> free_names_ty_value t acc)
-          acc fields
-      | Set_of_closures set_of_closures ->
-        free_names_set_of_closures set_of_closures acc
-      | Closure { set_of_closures; closure_id = _; } ->
-        free_names_ty_value set_of_closures acc
-      | String _ -> acc
-      | Float_array fields ->
-        Array.fold_left (fun acc field ->
-            free_names_ty_naked_float field acc)
-          acc fields
-      end
-    | Combination (_op, ty1, ty2) ->
-      let ty1 = ty_of_resolved_ok_ty ty1 in
-      let ty2 = ty_of_resolved_ok_ty ty2 in
-      free_names_ty_value ty2 (free_names_ty_value ty1 acc)
+  and free_names_of_typing_environment (env : typing_environment) acc =
+    let all_names =
+      Name.Map.fold (fun _bound_name t all_names ->
+          free_names t all_names)
+        env.names_to_types
+        Name.Set.empty
+    in
+    let bound_names =
+      Name.Set.union (Name.Map.keys env.names_to_types)
+        env.existentials
+    in
+    let free_names = Name.Set.diff all_names bound_names in
+    Name.Set.union free_names acc
 
   let free_names t = free_names t Name.Set.empty
 
@@ -848,7 +888,7 @@ end) = struct
     in
     Value (No_alias (Resolved (Ok (No_alias (Tagged_immediate i)))))
 
-
+*)
 
   let this_immutable_string_as_ty_value str : ty_value =
     let str : String_info.t =
@@ -857,7 +897,8 @@ end) = struct
         size = Targetint.OCaml.of_int (String.length str);
       }
     in
-    No_alias (Resolved (Ok (No_alias (String str))))
+    let str = String_info.Set.singleton str in
+    No_alias (Ok (Normal (String str)))
 
   let this_immutable_string str : t =
     Value (this_immutable_string_as_ty_value str)
@@ -868,7 +909,8 @@ end) = struct
         size;
       }
     in
-    No_alias (Resolved (Ok (No_alias (String str))))
+    let str = String_info.Set.singleton str in
+    No_alias (Ok (Normal (String str)))
 
   let immutable_string ~size : t =
     Value (immutable_string_as_ty_value ~size)
@@ -879,7 +921,10 @@ end) = struct
         size;
       }
     in
-    Value (No_alias (Resolved (Ok (No_alias (String str)))))
+    let str = String_info.Set.singleton str in
+    Value (No_alias (Ok (Normal (String str))))
+
+(*
 
   (* CR mshinwell: We need to think about these float array functions in
      conjunction with the 4.06 feature for disabling the float array
