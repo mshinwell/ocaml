@@ -98,6 +98,7 @@ module type S = sig
   and 'a or_join = private
     | Normal of 'a
     | Join of 'a * ('a list)
+      (* XXX What about calling this just "Incompatible"? *)
       (** A join, between incompatible types, which has been remembered
           in case it is refined by a subsequent meet.  Joins between compatible
           types are immediately pushed down through the top level structure
