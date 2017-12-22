@@ -118,6 +118,7 @@ module type S = sig
     first_fields : t array or_unknown_length;
   }
 
+  (* CR mshinwell: Maybe these should also be stored as a binary tree. *)
   and block_case = private
     | Join of singleton_block list
 

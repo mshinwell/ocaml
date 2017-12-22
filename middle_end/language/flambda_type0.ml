@@ -1949,7 +1949,7 @@ end) = struct
            } : singleton_block)
           ({ env_extension = env_extension2;
              first_fields = first_fields2;
-           } : singleton_block) : singleton_block =
+           } : singleton_block) : singleton_block or_bottom =
       let env_extension =
         Meet_or_join.meet_typing_environment ~type_of_name
           env_extension1 env_extension2
@@ -1957,19 +1957,32 @@ end) = struct
       let first_fields =
         match first_fields1, first_fields2 with
         | Exactly fields, Unknown_length
-        | Unknown_length, Exactly fields -> Exactly fields
-        | Unknown_length, Unknown_length -> Unknown_length
+        | Unknown_length, Exactly fields -> Ok (Exactly fields)
+        | Unknown_length, Unknown_length -> Ok Unknown_length
         | Exactly fields1, Exactly fields2 ->
           if Array.length fields1 = Array.length fields2 then
-            Array.map2 (fun field1 field2 ->
-                Meet_or_join.meet ~type_of_name field1 field2)
-              fields1 fields2
+            let fields =
+              Array.map2 (fun field1 field2 ->
+                  Meet_or_join.meet ~type_of_name field1 field2)
+                fields1 fields2
+            in
+            Ok (Exactly fields)
           else
-            ...
+            Bottom
       in
-      { env_extension;
-        first_fields;
-      }
+      match first_fields with
+      | Ok first_fields ->
+        let singleton_block : singleton_block =
+          { env_extension;
+            first_fields;
+          }
+        in
+        Ok singleton_block
+      | Bottom -> Bottom
+
+    type join_singleton_block_result =
+      | Joined of singleton_block
+      | Incompatible
 
     let join_singleton_block ~type_of_name
           ({ env_extension = env_extension1;
@@ -1977,7 +1990,7 @@ end) = struct
            } : singleton_block)
           ({ env_extension = env_extension2;
              first_fields = first_fields2;
-           } : singleton_block) : singleton_block list =
+           } : singleton_block) : join_singleton_block_result =
       let env_extension =
         Meet_or_join.meet_typing_environment ~type_of_name
           env_extension1 env_extension2
@@ -1997,14 +2010,59 @@ end) = struct
           ((Join singleton_blocks1) : block)
           ((Join singleton_blocks2) : block)
           : block_case or_bottom =
-
+      let all_combinations =
+        List.cross_product singleton_blocks1 singleton_blocks2
+      in
+      let meets =
+        List.filter_map (fun (singleton_block1, singleton_block2) ->
+            let meet =
+              meet_singleton_block ~type_of_name
+                singleton_block1 singleton_block2
+            in
+            match meet with
+            | Ok meet -> Some meet
+            | Bottom -> None)
+          all_combinations
+      in
+      match meets with
+      | [] -> Bottom
+      | meet::meets ->
+        List.fold_left (fun singleton_block meet ->
+            meet_singleton_block ~type_of_name singleton_block meet)
+          meets
+          (Ok meet)
 
     let join_block_case ~type_of_name
           ((Join singleton_blocks1) : block)
           ((Join singleton_blocks2) : block)
           : block_case =
-
-
+      let all_combinations =
+        List.cross_product singleton_blocks1 singleton_blocks2
+      in
+      let joins =
+        List.fold_left (fun (singleton_block1, singleton_block2) joins ->
+            let join_result =
+              join_singleton_block ~type_of_name
+                singleton_block1 singleton_block2
+            in
+            match join_result with
+            | Joined of singleton_block ->
+              singleton_block :: joins
+            | Incompatible ->
+              singleton_block1 :: singleton_block2 :: joins)
+          all_combinations
+          []
+      in
+      match joins with
+      | [] ->
+        (* CR mshinwell: We need to work out how to ensure there are always
+           elements in this list.  Using a binary tree would sort it. *)
+        assert false
+      | join::joins ->
+        List.fold_left (fun singleton_block join ->
+            join_singleton_block ~type_of_name singleton_block join)
+          joins
+          join
 
     let meet_blocks ~type_of_name blocks1 blocks2 : _ or_bottom =
       let blocks =
