@@ -133,7 +133,7 @@ end) = struct
 
   and 'a or_join =
     | Normal of 'a
-    | Join of 'a or_join or_alias * 'a or_join or_alias
+    | Join of 'a or_join * 'a or_join
 
   and of_kind_value =
     | Blocks_and_tagged_immediates of blocks_and_tagged_immediates
@@ -266,13 +266,10 @@ end) = struct
   let rec print_or_join print_contents ppf or_join =
     match or_join with
     | Normal contents -> print_contents ppf contents
-    | Join (or_alias1, or_alias2) ->
-      let print_part ppf w =
-        print_or_alias (print_or_join print_contents) ppf w
-      in
+    | Join (or_join1, or_join2) ->
       Format.fprintf ppf "@[(Join@ @[(%a)@]@ @[(%a)@])@]"
-        print_part or_alias1
-        print_part or_alias2
+        (print_or_join print_contents) or_join1
+        (print_or_join print_contents) or_join2
 
   let print_ty_generic print_contents print_unknown_payload ppf ty =
     (print_or_alias
@@ -507,6 +504,14 @@ end) = struct
       Name.Set.print existentials
       Freshening.print existential_freshening
 
+  let create_typing_environment () =
+    let existential_freshening = Freshening.activate Freshening.empty in
+    { names_to_types = Name.Map.empty;
+      levels_to_names = Scope_level.Map.empty;
+      existentials = Name.Set.empty;
+      existential_freshening;
+    }
+
   let put_ok_under_or_alias (or_alias : _ or_alias)
         : _ or_unknown_or_bottom or_alias =
     match or_alias with
@@ -523,13 +528,9 @@ end) = struct
   let rec free_names_or_join free_names_contents (or_join : _ or_join) acc =
     match or_join with
     | Normal contents -> free_names_contents contents acc
-    | Join (or_alias1, or_alias2) ->
-      let acc =
-        free_names_or_alias (free_names_or_join free_names_contents)
-          or_alias1 acc
-      in
-      free_names_or_alias (free_names_or_join free_names_contents)
-        or_alias2 acc
+    | Join (or_join1, or_join2) ->
+      let acc = free_names_or_join free_names_contents or_join1 acc in
+      free_names_or_join free_names_contents or_join2 acc
 
   let free_names_or_unknown_or_bottom free_names_contents free_names_unk
         (o : _ or_unknown_or_bottom) acc =
@@ -654,20 +655,6 @@ end) = struct
     Name.Set.union free_names acc
 
   let free_names t = free_names t Name.Set.empty
-
-  module Typing_environment = struct
-    type t = typing_environment
-
-    let print = print_typing_environment
-
-    let create () =
-      let existential_freshening = Freshening.activate Freshening.empty in
-      { names_to_types = Name.Map.empty;
-        levels_to_names = Scope_level.Map.empty;
-        existentials = Name.Set.empty;
-        existential_freshening;
-      }
-  end
 
   (* CR-someday mshinwell: Functions such as [alias] and [bottom] could be
      simplified if [K.t] were a GADT. *)
@@ -879,7 +866,7 @@ end) = struct
     let immediates =
       Immediate.Set.fold (fun imm map ->
           let case : immediate_case =
-            { env_extension = Typing_environment.create ();
+            { env_extension = create_typing_environment ();
             }
           in
           let key = Immediate.Or_unknown.ok imm in
@@ -1265,7 +1252,7 @@ end) = struct
       Phantom (No_alias ty), canonical_name
 
   let value_kind_ty_value ~type_of_name ty =
-    let rec value_kind_ty_value (ty : ty_value) : K.Value_kind.t =
+    let value_kind_ty_value (ty : ty_value) : K.Value_kind.t =
       let (ty : _ or_unknown_or_bottom), _canonical_name =
         resolve_aliases_and_squash_unresolved_names_on_ty
           ~force_to_kind:force_to_kind_value
@@ -1273,20 +1260,22 @@ end) = struct
           ~unknown_payload:K.Value_kind.Unknown
           ty
       in
+      let rec value_kind_or_join (or_join : _ or_join) : K.Value_kind.t =
+        match or_join with
+        | Normal of_kind_value ->
+          begin match of_kind_value with
+          | Blocks_and_tagged_immediates { blocks; immediates = _; } ->
+            if Tag.Scannable.Map.is_empty blocks then Definitely_immediate
+            else Unknown
+          | Boxed_number _ | Closure _ | String _ -> Definitely_pointer
+          end
+        | Join (or_join1, or_join2) ->
+          K.Value_kind.join (value_kind_or_join or_join1)
+            (value_kind_or_join or_join2)
+      in
       match ty with
       | Unknown value_kind -> value_kind
-      | Ok (Normal of_kind_value) ->
-        begin match of_kind_value with
-        | Blocks_and_tagged_immediates { blocks; immediates = _; } ->
-          if Tag.Scannable.Map.is_empty blocks then Definitely_immediate
-          else Unknown
-        | Boxed_number _ | Closure _ | String _ -> Definitely_pointer
-        end
-      | Ok (Join (ty1, ty2)) ->
-        let ty1 = put_ok_under_or_alias ty1 in
-        let ty2 = put_ok_under_or_alias ty2 in
-        K.Value_kind.join (value_kind_ty_value ty1)
-          (value_kind_ty_value ty2)
+      | Ok or_join -> value_kind_or_join or_join
       | Bottom -> Bottom
     in
     value_kind_ty_value ty
@@ -1298,8 +1287,7 @@ end) = struct
     K.value value_kind
 
   let value_kind_ty_fabricated ~type_of_name ty =
-    let rec value_kind_ty_fabricated (ty : ty_fabricated)
-          : K.Value_kind.t =
+    let value_kind_ty_fabricated (ty : ty_fabricated) : K.Value_kind.t =
       let (ty : _ or_unknown_or_bottom), _canonical_name =
         resolve_aliases_and_squash_unresolved_names_on_ty
           ~force_to_kind:force_to_kind_fabricated
@@ -1307,18 +1295,21 @@ end) = struct
           ~unknown_payload:K.Value_kind.Unknown
           ty
       in
+      let rec value_kind_or_join (or_join : of_kind_fabricated or_join)
+            : K.Value_kind.t =
+        match or_join with
+        | Normal of_kind_fabricated ->
+          begin match of_kind_fabricated with
+          | Tag _ -> K.Value_kind.Definitely_immediate
+          | Set_of_closures _ -> K.Value_kind.Definitely_pointer
+          end
+        | Join (or_join1, or_join2) ->
+          K.Value_kind.join (value_kind_or_join or_join1)
+            (value_kind_or_join or_join2)
+      in
       match ty with
       | Unknown value_kind -> value_kind
-      | Ok (Normal of_kind_fabricated) ->
-        begin match of_kind_fabricated with
-        | Tag _ -> K.Value_kind.Definitely_immediate
-        | Set_of_closures _ -> K.Value_kind.Definitely_pointer
-        end
-      | Ok (Join (ty1, ty2)) ->
-        let ty1 = put_ok_under_or_alias ty1 in
-        let ty2 = put_ok_under_or_alias ty2 in
-        K.Value_kind.join (value_kind_ty_fabricated ty1)
-          (value_kind_ty_fabricated ty2)
+      | Ok or_join -> value_kind_or_join or_join
       | Bottom -> Bottom
     in
     value_kind_ty_fabricated ty
@@ -1328,7 +1319,7 @@ end) = struct
     K.fabricated value_kind
 
   let phantom_kind_ty_phantom ~type_of_name ty =
-    let rec phantom_kind_ty_phantom (ty : ty_phantom)
+    let phantom_kind_ty_phantom (ty : ty_phantom)
           : K.Phantom_kind.t =
       let (ty : _ or_unknown_or_bottom), _canonical_name =
         resolve_aliases_and_squash_unresolved_names_on_ty
@@ -1337,36 +1328,39 @@ end) = struct
           ~unknown_payload:K.Phantom_kind.Unknown
           ty
       in
+      let rec phantom_kind_or_join (or_join : of_kind_phantom or_join)
+            : K.Phantom_kind.t =
+        match or_join with
+        | Normal of_kind_phantom ->
+          begin match of_kind_phantom with
+          | Value ty_value ->
+            let value_kind =
+              value_kind_ty_value ~type_of_name ty_value
+            in
+            Value value_kind
+          | Naked_number (_, K.Naked_number.Naked_immediate) ->
+            Naked_number Naked_immediate
+          | Naked_number (_, K.Naked_number.Naked_float) ->
+            Naked_number Naked_float
+          | Naked_number (_, K.Naked_number.Naked_int32) ->
+            Naked_number Naked_int32
+          | Naked_number (_, K.Naked_number.Naked_int64) ->
+            Naked_number Naked_int64
+          | Naked_number (_, K.Naked_number.Naked_nativeint) ->
+            Naked_number Naked_nativeint
+          | Fabricated ty_fabricated ->
+            let value_kind =
+              value_kind_ty_fabricated ~type_of_name ty_fabricated
+            in
+            Fabricated value_kind
+          end
+        | Join (or_join1, or_join2) ->
+          K.Phantom_kind.join (phantom_kind_or_join or_join1)
+            (phantom_kind_or_join or_join2)
+      in
       match ty with
-      | Unknown phantom_kind -> phantom_kind
-      | Ok (Normal of_kind_phantom) ->
-        begin match of_kind_phantom with
-        | Value ty_value ->
-          let value_kind =
-            value_kind_ty_value ~type_of_name ty_value
-          in
-          Value value_kind
-        | Naked_number (_, K.Naked_number.Naked_immediate) ->
-          Naked_number Naked_immediate
-        | Naked_number (_, K.Naked_number.Naked_float) ->
-          Naked_number Naked_float
-        | Naked_number (_, K.Naked_number.Naked_int32) ->
-          Naked_number Naked_int32
-        | Naked_number (_, K.Naked_number.Naked_int64) ->
-          Naked_number Naked_int64
-        | Naked_number (_, K.Naked_number.Naked_nativeint) ->
-          Naked_number Naked_nativeint
-        | Fabricated ty_fabricated ->
-          let value_kind =
-            value_kind_ty_fabricated ~type_of_name ty_fabricated
-          in
-          Fabricated value_kind
-        end
-      | Ok (Join (ty1, ty2)) ->
-        let ty1 = put_ok_under_or_alias ty1 in
-        let ty2 = put_ok_under_or_alias ty2 in
-        K.Phantom_kind.join (phantom_kind_ty_phantom ty1)
-          (phantom_kind_ty_phantom ty2)
+      | Unknown value_kind -> value_kind
+      | Ok or_join -> phantom_kind_or_join or_join
       | Bottom -> Bottom
     in
     phantom_kind_ty_phantom ty
@@ -1443,7 +1437,6 @@ end) = struct
 (*
   (* CR mshinwell: We need tests to check that [clean] matches up with
      [free_variables]. *)
-(*
   type cleaning_spec =
     | Available
     | Available_different_name of Variable.t
@@ -1667,369 +1660,6 @@ end) = struct
         }
       in
       Join (w1, w2)
-*)
-
-  module Join_or_meet (P : sig
-    val description : string
-    val combining_op : combining_op
-  end) = struct
-    let combine_unknown_payload_for_value ~type_of_name
-          _ty_value1 value_kind1 ty_value2 value_kind2_opt =
-      let value_kind2 : K.Value_kind.t =
-        match value_kind2_opt with
-        | Some value_kind2 -> value_kind2
-        | None ->
-          value_kind_ty_value ~type_of_name
-            (No_alias ((Resolved ty_value2) : _ maybe_unresolved))
-      in
-      match P.combining_op with
-      | Join -> K.Value_kind.join value_kind1 value_kind2
-      | Meet ->
-        (* CR mshinwell: Same comment as above re. Definitely_immediate *)
-        begin match K.Value_kind.meet value_kind1 value_kind2 with
-        | Ok value_kind -> value_kind
-        | Bottom -> K.Value_kind.Definitely_immediate
-        end
-
-    let combine_unknown_payload_for_non_value _ty1 () _ty2 (_ : unit option) =
-      ()
-
-    type 'a or_combine =
-      | Exactly of 'a
-      | Combine
-
-    let combine_singleton_or_combination ty1 ty2
-          ~combine_of_kind : _ or_unknown_or_bottom =
-      let combine () : _ or_unknown_or_bottom =
-        Ok (Combination (P.combining_op, No_alias ty1, No_alias ty2))
-      in
-      match ty1, ty2 with
-      | No_alias s1, No_alias s2 ->
-        begin match combine_of_kind s1 s2 with
-        | Exactly result -> result
-        | Combine -> combine ()
-        end
-      | No_alias _, Combination _
-      | Combination _, No_alias _
-      | Combination _, Combination _ -> combine ()
-
-    let combine_ty (type a) (type u):__this_kind
-          ~(force_to_kind : t -> (a, u) ty)
-          ~(type_of_name : Name.t -> t option)
-          unknown_payload_top
-          combine_contents combine_unknown_payload
-          (ty1 : (a, u) ty) (ty2 : (a, u) ty) : (a, u) ty =
-      (* CR mshinwell: Should something be happening here with the canonical
-         names? *)
-      let ty1, _canonical_name1 =
-        resolve_aliases_on_ty_this_kind ~force_to_kind
-          ~type_of_name ty1
-      in
-      let ty2, _canonical_name2 =
-        resolve_aliases_on_ty_this_kind ~force_to_kind
-          ~type_of_name ty2
-      in
-      match ty1, ty2 with
-      | Alias name1, Alias name2 when Name.equal name1 name2 -> Alias name1
-      | _, _ ->
-        let unresolved_var_or_symbol_to_unknown (ty : _ resolved_ty)
-              : _ or_unknown_or_bottom =
-          match ty with
-          | No_alias ty -> ty
-          | Alias _ -> Unknown (Other, unknown_payload_top)
-        in
-        let ty1 = unresolved_var_or_symbol_to_unknown ty1 in
-        let ty2 = unresolved_var_or_symbol_to_unknown ty2 in
-        let ty =
-          (* Care: we need to handle the payloads of [Unknown]. *)
-          match ty1, ty2 with
-          | Unknown (reason1, payload1), Unknown (reason2, payload2) ->
-            Unknown (combine_unknown_because_of reason1 reason2,
-              combine_unknown_payload ty1 payload1
-                ty2 (Some payload2))
-          | Ok ty1, Ok ty2 ->
-            combine_singleton_or_combination
-              ~combine_of_kind:combine_contents
-              ty1 ty2
-          | Unknown (reason, payload), _ ->
-            begin match P.combining_op with
-            | Join ->
-              Unknown (reason, combine_unknown_payload ty1 payload ty2 None)
-            | Meet -> ty2
-            end
-          | _, Unknown (reason, payload) ->
-            begin match P.combining_op with
-            | Join ->
-              Unknown (reason, combine_unknown_payload ty2 payload ty1 None)
-            | Meet -> ty1
-            end
-          | Bottom, _ ->
-            begin match P.combining_op with
-            | Join -> ty2
-            | Meet -> Bottom
-            end
-          | _, Bottom ->
-            begin match P.combining_op with
-            | Join -> ty1
-            | Meet -> Bottom
-            end
-        in
-        No_alias ((Resolved ty) : _ maybe_unresolved)
-
-    let rec combine_of_kind_value ~type_of_name
-          (t1 : of_kind_value) t2
-          : (of_kind_value, K.Value_kind.t) or_unknown_or_bottom or_combine =
-      let singleton s : _ or_combine =
-        Exactly ((Ok (No_alias s)) : _ or_unknown_or_bottom)
-      in
-      match t1, t2 with
-      | Tagged_immediate ty1, Tagged_immediate ty2 ->
-        singleton (Tagged_immediate (
-          combine_ty_naked_immediate ~type_of_name
-            ty1 ty2))
-      | Boxed_float ty1, Boxed_float ty2 ->
-        singleton (Boxed_float (
-          combine_ty_naked_float ~type_of_name
-            ty1 ty2))
-      | Boxed_int32 ty1, Boxed_int32 ty2 ->
-        singleton (Boxed_int32 (
-          combine_ty_naked_int32 ~type_of_name
-            ty1 ty2))
-      | Boxed_int64 ty1, Boxed_int64 ty2 ->
-        singleton (Boxed_int64 (
-          combine_ty_naked_int64 ~type_of_name
-            ty1 ty2))
-      | Boxed_nativeint ty1, Boxed_nativeint ty2 ->
-        singleton (Boxed_nativeint (
-          combine_ty_naked_nativeint ~type_of_name
-            ty1 ty2))
-      | Block (tag1, fields1), Block (tag2, fields2)
-          when Tag.Scannable.equal tag1 tag2
-            && Array.length fields1 = Array.length fields2 ->
-        let fields =
-          Array.map2 (fun ty1 ty2 ->
-              combine_ty_value ~type_of_name
-                ty1 ty2)
-            fields1 fields2
-        in
-        singleton (Block (tag1, fields))
-      | String { contents = Contents str1; _ },
-          String { contents = Contents str2; _ }
-          when String.equal str1 str2 ->
-        singleton t1
-      | Float_array fields1, Float_array fields2
-          when Array.length fields1 = Array.length fields2 ->
-        let fields =
-          Array.map2 (fun ty1 ty2 ->
-              combine_ty_naked_float ~type_of_name
-                ty1 ty2)
-            fields1 fields2
-        in
-        singleton (Float_array fields)
-      | _, _ -> Combine
-
-    and combine_of_kind_naked_immediate
-          (t1 : of_kind_naked_immediate)
-          (t2 : of_kind_naked_immediate)
-          : (of_kind_naked_immediate, _) or_unknown_or_bottom or_combine =
-      match t1, t2 with
-      | Naked_immediate i1, Naked_immediate i2 ->
-        if not (Immediate.equal i1 i2) then
-          Combine
-        else
-          Exactly (Ok (
-            No_alias ((Naked_immediate i1) : of_kind_naked_immediate)))
-
-    and combine_of_kind_naked_float
-          (t1 : of_kind_naked_float) (t2 : of_kind_naked_float)
-          : (of_kind_naked_float, _) or_unknown_or_bottom or_combine =
-      match t1, t2 with
-      | Naked_float i1, Naked_float i2 ->
-        if not (Numbers.Float_by_bit_pattern.equal i1 i2) then
-          Combine
-        else
-          Exactly (Ok (No_alias ((Naked_float i1) : of_kind_naked_float)))
-
-    and combine_of_kind_naked_int32
-          (t1 : of_kind_naked_int32) (t2 : of_kind_naked_int32)
-          : (of_kind_naked_int32, _) or_unknown_or_bottom or_combine =
-      match t1, t2 with
-      | Naked_int32 i1, Naked_int32 i2 ->
-        if not (Int32.equal i1 i2) then
-          Combine
-        else
-          Exactly (Ok (No_alias ((Naked_int32 i1) : of_kind_naked_int32)))
-
-    and combine_of_kind_naked_int64
-          (t1 : of_kind_naked_int64) (t2 : of_kind_naked_int64)
-          : (of_kind_naked_int64, _) or_unknown_or_bottom or_combine =
-      match t1, t2 with
-      | Naked_int64 i1, Naked_int64 i2 ->
-        if not (Int64.equal i1 i2) then
-          Combine
-        else
-          Exactly (Ok (No_alias ((Naked_int64 i1) : of_kind_naked_int64)))
-
-    and combine_of_kind_naked_nativeint
-          (t1 : of_kind_naked_nativeint) (t2 : of_kind_naked_nativeint)
-          : (of_kind_naked_nativeint, _) or_unknown_or_bottom or_combine =
-      match t1, t2 with
-      | Naked_nativeint i1, Naked_nativeint i2 ->
-        if not (Targetint.equal i1 i2) then
-          Combine
-        else
-          Exactly (Ok (
-            No_alias ((Naked_nativeint i1) : of_kind_naked_nativeint)))
-
-    and combine_ty_value ~type_of_name
-          (ty1 : ty_value) (ty2 : ty_value) : ty_value =
-      let module I = (val importer : Importer) in
-      combine_ty ~type_of_name
-       _this_kind:I.import_value_type_as_resolved_ty_value
-        ~force_to_kind:force_to_kind_value
-        K.Value_kind.Unknown
-        (combine_of_kind_value ~type_of_name)
-        (combine_unknown_payload_for_value ~type_of_name)
-        ty1 ty2
-
-    and combine_ty_naked_immediate ~type_of_name ty1 ty2 =
-      let module I = (val importer : Importer) in
-      combine_ty ~type_of_name 
-       _this_kind:
-          I.import_naked_immediate_type_as_resolved_ty_naked_immediate
-        ~force_to_kind:force_to_kind_naked_immediate
-        ()
-        combine_of_kind_naked_immediate
-        combine_unknown_payload_for_non_value
-        ty1 ty2
-
-    and combine_ty_naked_float ~type_of_name ty1 ty2 =
-      let module I = (val importer : Importer) in
-      combine_ty ~type_of_name 
-       _this_kind:I.import_naked_float_type_as_resolved_ty_naked_float
-        ~force_to_kind:force_to_kind_naked_float
-        ()
-        combine_of_kind_naked_float
-        combine_unknown_payload_for_non_value
-        ty1 ty2
-
-    and combine_ty_naked_int32 ~type_of_name ty1 ty2 =
-      let module I = (val importer : Importer) in
-      combine_ty ~type_of_name 
-       _this_kind:I.import_naked_int32_type_as_resolved_ty_naked_int32
-        ~force_to_kind:force_to_kind_naked_int32
-        ()
-        combine_of_kind_naked_int32
-        combine_unknown_payload_for_non_value
-        ty1 ty2
-
-    and combine_ty_naked_int64 ~type_of_name ty1 ty2 =
-      let module I = (val importer : Importer) in
-      combine_ty ~type_of_name 
-       _this_kind:I.import_naked_int64_type_as_resolved_ty_naked_int64
-        ~force_to_kind:force_to_kind_naked_int64
-        ()
-        combine_of_kind_naked_int64
-        combine_unknown_payload_for_non_value
-        ty1 ty2
-
-    and combine_ty_naked_nativeint ~type_of_name ty1 ty2 =
-      let module I = (val importer : Importer) in
-      combine_ty ~type_of_name 
-       _this_kind:
-          I.import_naked_nativeint_type_as_resolved_ty_naked_nativeint
-        ~force_to_kind:force_to_kind_naked_nativeint
-        ()
-        combine_of_kind_naked_nativeint
-        combine_unknown_payload_for_non_value
-        ty1 ty2
-
-    let combine ~type_of_name (t1 : t) (t2 : t) : t =
-      if t1 == t2 then t1
-      else
-        match t1, t2 with
-        | Value ty1, Value ty2 ->
-          Value (combine_ty_value
-            ~type_of_name ty1 ty2)
-        | Naked_immediate ty1, Naked_immediate ty2 ->
-          Naked_immediate (combine_ty_naked_immediate
-            ~type_of_name ty1 ty2)
-        | Naked_float ty1, Naked_float ty2 ->
-          Naked_float (combine_ty_naked_float
-            ~type_of_name ty1 ty2)
-        | Naked_int32 ty1, Naked_int32 ty2 ->
-          Naked_int32 (combine_ty_naked_int32
-            ~type_of_name ty1 ty2)
-        | Naked_int64 ty1, Naked_int64 ty2 ->
-          Naked_int64 (combine_ty_naked_int64
-            ~type_of_name ty1 ty2)
-        | Naked_nativeint ty1, Naked_nativeint ty2 ->
-          Naked_nativeint (combine_ty_naked_nativeint
-            ~type_of_name ty1 ty2)
-        | _, _ ->
-          Misc.fatal_errorf "Cannot take the %s of two types with different \
-              kinds: %a and %a"
-            P.description
-            print t1
-            print t2
-  end
-
-  module Join = Join_or_meet (struct
-    let description = "join"
-    let combining_op = Join
-  end)
-
-  module Meet = Join_or_meet (struct
-    let description = "meet"
-    let combining_op = Meet
-  end)
-
-  let join = Join.combine
-  let join_ty_value = Join.combine_ty_value
-  let join_ty_naked_float = Join.combine_ty_naked_float
-  let join_ty_naked_int32 = Join.combine_ty_naked_int32
-  let join_ty_naked_int64 = Join.combine_ty_naked_int64
-  let join_ty_naked_nativeint = Join.combine_ty_naked_nativeint
-
-  let join_list ~type_of_name kind ts =
-    match ts with
-    | [] -> bottom kind
-    | t::ts ->
-      List.fold_left (fun result t -> join ~type_of_name result t)
-        t
-        ts
-
-  let meet = Meet.combine
-  let meet_ty_value = Meet.combine_ty_value
-  let meet_ty_naked_float = Meet.combine_ty_naked_float
-  let meet_ty_naked_int32 = Meet.combine_ty_naked_int32
-  let meet_ty_naked_int64 = Meet.combine_ty_naked_int64
-  let meet_ty_naked_nativeint = Meet.combine_ty_naked_nativeint
-
-  let meet_list ~type_of_name kind ts =
-    match ts with
-    | [] -> bottom kind
-    | t::ts ->
-      List.fold_left (fun result t -> meet ~type_of_name result t)
-        t
-        ts
-
-  type 'a or_bottom =
-    | Ok of 'a
-    | Bottom
-
-  let generic_meet_list ~meet ~type_of_name ts t =
-    Misc.Stdlib.List.filter_map (fun t' ->
-        match meet ~type_of_name t t' with
-        | Ok meet -> Some meet
-        | Bottom -> None)
-      ts
-
-  let generic_meet_lists ~meet ~type_of_name ts1 ts2 =
-    List.fold_left (fun result t1 ->
-        generic_meet_list ~type_of_name ~meet result t1)
-      ts2
-      ts1
 
   module Closure = struct
     type t = closure
@@ -2088,180 +1718,7 @@ end) = struct
     in
     (with_null_importer join_list) (K.value Definitely_pointer) tys
 
-  let combination_component_to_ty (type a)
-        (ty : a singleton_or_combination or_alias)
-        : (a, _) ty =
-    match ty with
-    | Alias alias -> Alias alias
-    | No_alias s_or_c -> No_alias (Resolved (Ok s_or_c))
-
-    let print ppf { names_to_types; levels_to_names;
-          existentials; existential_freshening; } =
-      Format.fprintf ppf
-        "@[((names_to_types %a)@ \
-            (levels_to_names %a)@ \
-            (existentials %a)@ \
-            (existential_freshening %a))@]"
-        Name.Map.print print names_to_types
-        Scope_level.Map.print Name.Set.print levels_to_names
-        Name.Set.print existentials
-        Freshening.print existential_freshening
-
-    let create () =
-      let existential_freshening = Freshening.activate Freshening.empty in
-      { names_to_types = Name.Map.empty;
-        levels_to_names : Scope_level.Map.empty;
-        existentials : Name.Set.empty;
-        existential_freshening;
-      }
-
-    let add t name scope_level ty =
-      match Name.Map.find name t.names_to_types with
-      | exception Not_found ->
-        let names = Name.Map.add name ty t.names_to_types in
-        let levels_to_names =
-          Scope_level.Map.update scope_level
-            (function
-               | None -> Name.Set.singleton name
-               | Some names -> Name.Set.add name names)
-        in
-        { t with
-          names;
-          levels_to_names;
-        }
-      | _ty ->
-        Misc.fatal_errorf "Cannot rebind %a in environment: %a"
-          Name.print name
-          print t
-
-    type binding_type = No_alias | Existential
-
-    let find t name =
-      match Name.Map.find name t.names_to_types with
-      | exception Not_found ->
-        Misc.fatal_errorf "Cannot find %a in environment: %a"
-          Name.print name
-          print t
-      | ty ->
-        let binding_type =
-          if Name.Map.mem name t.existentials then Existential
-          else No_alias
-        in
-        match binding_type with
-        | No_alias -> ty, No_alias
-        | Existential ->
-          let ty = rename_variables t freshening in
-          ty, Existential
-
-    let cut t ~minimum_scope_level_to_be_existential =
-      let existentials =
-        Scope_level.Map.fold (fun scope_level names resulting_existentials ->
-            let will_be_existential =
-              Scope_level.(>=) scope_level minimum_scope_level_to_be_existential
-            in
-            if will_be_existential then
-              Name.Set.union names resulting_existentials
-            else
-              resulting_existentials)
-          t.levels_to_names
-          Name.Set.empty
-      in
-      let existential_freshening =
-        Name.Set.fold (fun (name : Name.t) freshening ->
-            match name with
-            | Symbol _ -> freshening
-            | Var var ->
-              let new_var = Variable.rename var in
-              Freshening.add_variable freshening var new_var)
-          t.existential_freshening
-      in
-      (* XXX we actually need to rename in the domain of [names_to_types] *)
-      { names_to_types = t.names_to_types;
-        levels_to_names = t.levels_to_names;
-        existentials;
-        existential_freshening;
-      }
-
-    let join ~type_of_name t1 t2 =
-      let names_to_types =
-        Name.Map.inter (fun ty1 ty2 ->
-            join ~type_of_name t1 t2)
-          t1.names_to_types
-          t2.names_to_types
-      in
-      let all_levels_to_names =
-        Scope_level.Map.union
-          (fun names1 names2 -> Name.Set.union names1 names2)
-          t1.levels_to_names
-          t2.levels_to_names
-      in
-      let levels_to_names =
-        Scope_level.Map.filter (fun _scope_level name ->
-            Name.Map.mem name names_to_types)
-          all_levels_to_names
-      in
-      let existentials =
-        (* XXX care if a name is non-existential in one and existential
-           in the other *)
-        Name.Set.inter t1.existentials t2.existentials
-      in
-      let existential_freshening =
-        ...
-      in
-      { names_to_types;
-        types_to_levels;
-        existentials;
-        existential_freshening;
-      }
-
-    let meet ~type_of_name t1 t2 =
-      let names_to_types =
-        Name.Map.union (fun ty1 ty2 ->
-            meet ~type_of_name t1 t2)
-          t1.names_to_types
-          t2.names_to_types
-      in
-      let all_levels_to_names =
-        Scope_level.Map.union
-          (fun names1 names2 -> Name.Set.union names1 names2)
-          t1.levels_to_names
-          t2.levels_to_names
-      in
-      let levels_to_names =
-        Scope_level.Map.filter (fun _scope_level name ->
-            Name.Map.mem name names_to_types)
-          all_levels_to_names
-      in
-      let existentials =
-        Name.Set.union t1.existentials t2.existentials
-      in
-      let existential_freshening =
-        ...
-      in
-      { names_to_types;
-        types_to_levels;
-        existentials;
-        existential_freshening;
-      }
-
-  end
-
-
-
 *)
-
-  let join_or_alias (type contents) ~join_contents
-        (or_alias1 : contents or_alias) (or_alias2 : contents or_alias) =
-
-
-
-  let resolve_aliases_on_ty (type a)
-        ~(type_of_name : Name_or_export_id.t -> t option)
-        ~(force_to_kind : t -> (a, _) ty)
-        (ty : (a, _) ty)
-        : (a, _) ty * (Name.t option) =
-  let resolve_aliases_and_squash_unresolved_names_on_ty ~type_of_name
-        ~force_to_kind ~unknown_payload ty =
 
   type 'a or_bottom =
     | Ok of 'a
@@ -2278,7 +1735,7 @@ end) = struct
     val meet_of_kind_foo
        : (of_kind_foo
       -> of_kind_foo
-      -> (of_kind_foo, unk) or_bottom) type_accessor
+      -> of_kind_foo or_join or_bottom) type_accessor
 
     val meet_unk : unk -> unk -> unk
 
@@ -2290,10 +1747,17 @@ end) = struct
     val join_unk : unk -> unk -> unk
   end
 
-  module Meet_or_join = sig
+  module type Meet_or_join = sig
     type of_kind_foo
     type unk
 
+    (** Least upper bound of two types of a particular kind. *)
+    val join_ty
+       : ((of_kind_foo, unk) ty
+      -> (of_kind_foo, unk) ty
+      -> (of_kind_foo, unk) ty) type_accessor
+
+    (** Greatest lower bound of two types of a particular kind. *)
     val meet_ty
        : ((of_kind_foo, unk) ty
       -> (of_kind_foo, unk) ty
@@ -2311,29 +1775,25 @@ end) = struct
   *)
   module Make_meet_and_join (S : Meet_or_join_spec) : sig
     include Meet_or_join
-      with type of_kind_foo = S.of_kind_foo
-      with type unk = S.unk
+      with type of_kind_foo := S.of_kind_foo
+      with type unk := S.unk
   end = struct
     let rec join_on_or_join ~type_of_name
           (oj1 : S.of_kind_foo or_join) (oj2 : S.of_kind_foo or_join)
           : (S.of_kind_foo, S.unk) or_unknown_or_bottom =
       match oj1, oj2 with
       | Normal s1, Normal s2 ->
-        join_ty ~type_of_name s1 s2
-      | ((Normal _ | Join _) as other_side), Join (or_alias1, or_alias2)
-      | Join (or_alias1, or_alias2), ((Normal _ | Join _) as other_side) ->
+        Ok (S.join_of_kind_foo ~type_of_name s1 s2)
+      | ((Normal _ | Join _) as other_side), Join (or_join1, or_join2)
+      | Join (or_join1, or_join2), ((Normal _ | Join _) as other_side) ->
         (* Rule 2(b) from above. *)
-        let join_left = put_ok_under_or_alias or_alias1 in
-        let join_right = put_ok_under_or_alias or_alias2 in
         let other_side_join_join_left =
-          join_on_or_unknown_or_bottom ~type_of_name
-            (Ok other_side) join_left
+          join_on_or_join ~type_of_name other_side or_join1
         in
         let other_side_join_join_right =
-          join_on_or_unknown_or_bottom ~type_of_name
-            (Ok other_side) join_right
+          join_on_or_join ~type_of_name other_side or_join2
         in
-        join_or_unknown_or_bottom ~type_of_name
+        join_on_or_unknown_or_bottom ~type_of_name
           other_side_join_join_left other_side_join_join_right
 
     and join_on_or_unknown_or_bottom ~type_of_name
@@ -2342,34 +1802,35 @@ end) = struct
           : (S.of_kind_foo, S.unk) or_unknown_or_bottom =
       match ou1, ou2 with
       | Unknown unk_left, Unknown unk_right ->
-        Unknown (join_unk unk_left unk_right)
+        Unknown (S.join_unk unk_left unk_right)
       | Unknown unk, _ | _, Unknown unk -> Unknown unk
       | Bottom, _ -> ou2
       | _, Bottom -> ou1
       | Ok or_join1, Ok or_join2 ->
         join_on_or_join ~type_of_name or_join1 or_join2
 
-    let meet_ty (type a) (type unk) ~type_of_name
-          (or_alias1 : (a, unk) ty) (or_alias2 : (a, unk) ty)
-          : (a, unk) ty =
+    and join_ty ~type_of_name
+          (or_alias1 : (S.of_kind_foo, S.unk) ty)
+          (or_alias2 : (S.of_kind_foo, S.unk) ty)
+          : (S.of_kind_foo, S.unk) ty =
       let or_unknown_or_bottom1, canonical_name1 =
         resolve_aliases_and_squash_unresolved_names_on_ty ~type_of_name
-          ~force_to_kind
-          ~unknown_payload
+          ~force_to_kind:S.force_to_kind
+          ~unknown_payload:S.unknown_payload
           or_alias1
       in
       let or_unknown_or_bottom2, canonical_name2 =
         resolve_aliases_and_squash_unresolved_names_on_ty ~type_of_name
-          ~force_to_kind
-          ~unknown_payload
+          ~force_to_kind:S.force_to_kind
+          ~unknown_payload:S.unknown_payload
           or_alias2
       in
       match canonical_name1, canonical_name2 with
       | Some name1, Some name2 when Name.equal name1 name2 ->
-        alias_type_of kind name1
+        Type_of name1
       | _, _ ->
         let or_unknown_or_bottom =
-          meet_on_or_unknown_or_bottom ~type_of_name
+          join_on_or_unknown_or_bottom ~type_of_name
             or_unknown_or_bottom1 or_unknown_or_bottom2
         in
         No_alias or_unknown_or_bottom
@@ -2379,25 +1840,20 @@ end) = struct
           : (S.of_kind_foo, S.unk) or_unknown_or_bottom =
       match oj1, oj2 with
       | Normal s1, Normal s2 ->
-        meet_of_kind_foo ~type_of_name s1 s2
-      | ((Normal _ | Join _) as other_side), Join (or_alias1, or_alias2)
-      | Join (or_alias1, or_alias2), ((Normal _ | Join _) as other_side) ->
+        begin match S.meet_of_kind_foo ~type_of_name s1 s2 with
+        | Ok meet -> Ok meet
+        | Bottom -> Bottom
+        end
+      | ((Normal _ | Join _) as other_side), Join (or_join1, or_join2)
+      | Join (or_join1, or_join2), ((Normal _ | Join _) as other_side) ->
         (* Rule 2(a) from above. *)
         (* CR mshinwell: We should maybe be returning equations when we
            meet types equipped with alias information. *)
-        let join_left =
-          put_ok_under_or_alias ~type_of_name ~force_to_kind or_alias1
-        in
-        let join_right =
-          put_ok_under_or_alias ~type_of_name ~force_to_kind or_alias2
-        in
         let other_side_meet_join_left =
-          meet_on_or_unknown_or_bottom ~type_of_name
-            (Ok other_side) join_left
+          meet_on_or_join ~type_of_name other_side or_join1
         in
         let other_side_meet_join_right =
-          meet_on_or_unknown_or_bottom ~type_of_name
-            (Ok other_side) join_right
+          meet_on_or_join ~type_of_name other_side or_join2
         in
         join_on_or_unknown_or_bottom ~type_of_name
           other_side_meet_join_left other_side_meet_join_right
@@ -2408,11 +1864,37 @@ end) = struct
           : (S.of_kind_foo, S.unk) or_unknown_or_bottom =
       match ou1, ou2 with
       | Bottom, _ | _, Bottom -> Bottom
-      | Unknown unk1, Unknown unk2 -> Unknown (meet_unk unk1 unk2)
+      | Unknown unk1, Unknown unk2 -> Unknown (S.meet_unk unk1 unk2)
       | Unknown _, ou2 -> ou2
       | ou1, Unknown _ -> ou1
       | Ok or_join1, Ok or_join2 ->
         meet_on_or_join ~type_of_name or_join1 or_join2
+
+    and meet_ty ~type_of_name
+          (or_alias1 : (S.of_kind_foo, S.unk) ty)
+          (or_alias2 : (S.of_kind_foo, S.unk) ty)
+          : (S.of_kind_foo, S.unk) ty =
+      let or_unknown_or_bottom1, canonical_name1 =
+        resolve_aliases_and_squash_unresolved_names_on_ty ~type_of_name
+          ~force_to_kind:S.force_to_kind
+          ~unknown_payload:S.unknown_payload
+          or_alias1
+      in
+      let or_unknown_or_bottom2, canonical_name2 =
+        resolve_aliases_and_squash_unresolved_names_on_ty ~type_of_name
+          ~force_to_kind:S.force_to_kind
+          ~unknown_payload:S.unknown_payload
+          or_alias2
+      in
+      match canonical_name1, canonical_name2 with
+      | Some name1, Some name2 when Name.equal name1 name2 ->
+        Type_of name1
+      | _, _ ->
+        let or_unknown_or_bottom =
+          meet_on_or_unknown_or_bottom ~type_of_name
+            or_unknown_or_bottom1 or_unknown_or_bottom2
+        in
+        No_alias or_unknown_or_bottom
   end
 
   module rec Meet_or_join_value : sig
@@ -2426,6 +1908,143 @@ end) = struct
     let force_to_kind = force_to_kind_value
 
     let unknown_payload = K.Value_kind.Unknown
+
+    let meet_immediate ~type_of_name
+          ({ env_extension = env_extension1; } : immediate)
+          ({ env_extension = env_extension2; } : immediate) : immediate =
+      let env_extension =
+        Meet_or_join.meet_typing_environment ~type_of_name
+          env_extension1 env_extension2
+      in
+      { env_extension; }
+
+    let join_immediate ~type_of_name
+          ({ env_extension = env_extension1; } : immediate)
+          ({ env_extension = env_extension2; } : immediate) : immediate =
+      let env_extension =
+        Meet_or_join.join_typing_environment ~type_of_name
+          env_extension1 env_extension2
+      in
+      { env_extension; }
+
+    let meet_immediates ~type_of_name immediates1 immediates2 : _ or_bottom =
+      let immediates =
+        Immediate.Or_unknown.Map.inter_merge (fun imm1 imm2 ->
+            meet_immediate ~type_of_name imm1 imm2)
+          immediates1
+          immediates2
+      in
+      if Immediate.Or_unknown.Map.is_empty immediates then Bottom
+      else Ok immediates
+
+    let join_immediates ~type_of_name immediates1 immediates2 =
+      Immediate.Or_unknown.Map.union_merge (fun imm1 imm2 ->
+          join_immediate ~type_of_name imm1 imm2)
+        immediates1
+        immediates2
+
+    let meet_singleton_block ~type_of_name
+          ({ env_extension = env_extension1;
+             first_fields = first_fields1;
+           } : singleton_block)
+          ({ env_extension = env_extension2;
+             first_fields = first_fields2;
+           } : singleton_block) : singleton_block =
+      let env_extension =
+        Meet_or_join.meet_typing_environment ~type_of_name
+          env_extension1 env_extension2
+      in
+      let first_fields =
+        match first_fields1, first_fields2 with
+        | Exactly fields, Unknown_length
+        | Unknown_length, Exactly fields -> Exactly fields
+        | Unknown_length, Unknown_length -> Unknown_length
+        | Exactly fields1, Exactly fields2 ->
+          if Array.length fields1 = Array.length fields2 then
+            Array.map2 (fun field1 field2 ->
+                Meet_or_join.meet ~type_of_name field1 field2)
+              fields1 fields2
+          else
+            ...
+      in
+      { env_extension;
+        first_fields;
+      }
+
+    let join_singleton_block ~type_of_name
+          ({ env_extension = env_extension1;
+             first_fields = first_fields1;
+           } : singleton_block)
+          ({ env_extension = env_extension2;
+             first_fields = first_fields2;
+           } : singleton_block) : singleton_block list =
+      let env_extension =
+        Meet_or_join.meet_typing_environment ~type_of_name
+          env_extension1 env_extension2
+      in
+      let first_fields =
+        match first_fields1, first_fields2 with
+        | Exactly fields, Unknown_length ->
+        | Unknown_length, Exactly fields ->
+        | Unknown_length, Unknown_length ->
+        | Exactly fields1, Exactly fields2 ->
+      in
+      { env_extension;
+        first_fields;
+      }
+
+    let meet_block_case ~type_of_name
+          ((Join singleton_blocks1) : block)
+          ((Join singleton_blocks2) : block)
+          : block_case or_bottom =
+
+
+    let join_block_case ~type_of_name
+          ((Join singleton_blocks1) : block)
+          ((Join singleton_blocks2) : block)
+          : block_case =
+
+
+
+    let meet_blocks ~type_of_name blocks1 blocks2 : _ or_bottom =
+      let blocks =
+        Tag.Scannable.Map.inter (fun block_case1 block_case2 ->
+            match meet_block_case ~type_of_name block_case1 block_case2 with
+            | Ok block_case -> Some block_case
+            | Bottom -> None)
+          blocks1
+          blocks2
+      in
+      if Tag.Scannable.Map.is_empty blocks then Bottom
+      else Ok blocks
+
+    let join_blocks ~type_of_name blocks1 blocks2 =
+      Tag.Scannable.Map.union_merge (fun block_case1 block_case2 ->
+          join_block_case ~type_of_name block_case1 block_case2)
+        blocks1
+        blocks2
+
+    let meet_blocks_and_tagged_immediates ~type_of_name
+          { blocks = blocks1; immediates = imms1; }
+          { blocks = blocks2; immediates = imms2; }
+          : blocks_and_tagged_immediates or_bottom =
+      match meet_blocks ~type_of_name blocks1 blocks2 with
+      | Bottom -> Bottom
+      | Ok blocks ->
+        let immediates =
+          match meet_immediates ~type_of_name imms1 imms2 with
+          | Bottom -> Immediate.Or_unknown.Map.empty
+          | Ok immediates -> immediates
+        in
+        Ok { blocks; immediates; }
+
+    let join_blocks_and_tagged_immediates ~type_of_name
+          { blocks = blocks1; immediates = imms1; }
+          { blocks = blocks2; immediates = imms2; }
+          : blocks_and_tagged_immediates =
+      let blocks = join_blocks ~type_of_name blocks1 blocks2 in
+      let immediates = join_immediates ~type_of_name imms1 imms2 in
+      { blocks; immediates; }
 
     let meet_of_kind_foo ~type_of_name
           (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
@@ -2442,6 +2061,7 @@ end) = struct
           Ok (Normal (Blocks_and_tagged_immediates blocks_imms))
         | Bottom -> Bottom
         end
+(*
       | Boxed_number ((Boxed_float _) as n1),
           Boxed_number ((Boxed_float _) as n2) ->
         let n : _ ty_naked_number =
@@ -2466,6 +2086,7 @@ end) = struct
           Meet_or_join_naked_number.meet_ty ~type_of_name n1 n2
         in
         Normal (Boxed_number (Boxed_nativeint n))
+*)
       | Closure closures1, Closure _closures2 ->
         closures1 (* XXX pchambart to fix *)
       | String strs1, String strs2 ->
@@ -2492,6 +2113,7 @@ end) = struct
             blocks_imms1 blocks_imms2
         in
         Normal (Blocks_and_tagged_immediates blocks_imms)
+(*
       | Boxed_number ((Boxed_float _) as n1),
           Boxed_number ((Boxed_float _) as n2) ->
         let n : _ ty_naked_number =
@@ -2516,6 +2138,7 @@ end) = struct
           Meet_or_join_naked_number.join_ty ~type_of_name n1 n2
         in
         Normal (Boxed_number (Boxed_nativeint n))
+*)
       | Closure closures1, Closure _closures2 ->
         closures1 (* XXX pchambart to fix *)
       | String strs1, String strs2 ->
@@ -2532,7 +2155,7 @@ end) = struct
 
     let join_unk value_kind1 value_kind2 =
       K.Value_kind.join value_kind1 value_kind2
-  end and Meet_or_join_naked_number : sig
+  end) (* and Meet_or_join_naked_number : sig
     include Meet_or_join
       with type of_kind_foo = of_kind_naked_number
       with type unk = K.Value_kind.t
@@ -2613,90 +2236,172 @@ end) = struct
 
     let join_unk phantom_kind1 phantom_kind2 =
       K.Phantom_kind.join phantom_kind1 phantom_kind2
-  end
+  end)
+*)
+  and Meet_or_join : sig
+    val meet : (t -> t -> t) type_accessor
+
+    val join : (t -> t -> t) type_accessor
+
+    val meet_typing_environment
+       : (typing_environment
+      -> typing_environment
+      -> typing_environment) type_accessor
+
+    val join_typing_environment
+       : (typing_environment
+      -> typing_environment
+      -> typing_environment) type_accessor
+  end = struct
+    let meet _t1 _t2 = assert false
+
+    let join _t1 _t2 = assert false
+
+    let meet_typing_environment _t1 _t2 = assert false
+
+    let join_typing_environment _t1 _t2 = assert false
 
 (*
-  let meet_immediate ~type_of_name
-        ({ env_extension = env_extension1; } : immediate)
-        ({ env_extension = env_extension2; } : immediate) : immediate =
-    let env_extension =
-      meet_typing_environment ~type_of_name env_extension1 env_extension2
-    in
-    { env_extension; }
+    let join_typing_environment ~type_of_name t1 t2 =
+      let names_to_types =
+        Name.Map.inter (fun ty1 ty2 ->
+            join ~type_of_name t1 t2)
+          t1.names_to_types
+          t2.names_to_types
+      in
+      let all_levels_to_names =
+        Scope_level.Map.union
+          (fun names1 names2 -> Name.Set.union names1 names2)
+          t1.levels_to_names
+          t2.levels_to_names
+      in
+      let levels_to_names =
+        Scope_level.Map.filter (fun _scope_level name ->
+            Name.Map.mem name names_to_types)
+          all_levels_to_names
+      in
+      let existentials =
+        (* XXX care if a name is non-existential in one and existential
+           in the other *)
+        Name.Set.inter t1.existentials t2.existentials
+      in
+      let existential_freshening =
+        ...
+      in
+      { names_to_types;
+        types_to_levels;
+        existentials;
+        existential_freshening;
+      }
 
-  let join_immediate ~type_of_name
-        ({ env_extension = env_extension1; } : immediate)
-        ({ env_extension = env_extension2; } : immediate) : immediate =
-    let env_extension =
-      join_typing_environment ~type_of_name env_extension1 env_extension2
-    in
-    { env_extension; }
-
-  let meet_singleton_block ~type_of_name
-        ({ env_extension = env_extension1;
-           first_fields = first_fields1;
-         } : singleton_block)
-        ({ env_extension = env_extension2;
-           first_fields = first_fields2;
-         } : singleton_block) : singleton_block =
-    let env_extension =
-      meet_typing_environment ~type_of_name env_extension1 env_extension2
-    in
-    let first_fields =
-      match first_fields1, first_fields2 with
-      | Exactly fields, Unknown_length
-      | Unknown_length, Exactly fields -> Exactly fields
-      | Unknown_length, Unknown_length -> Unknown_length
-      | Exactly fields1, Exactly fields2 ->
-        if Array.length fields1 = Array.length fields2 then
-          Array.map2 (fun field1 field2 ->
-              meet ~type_of_name field1 field2)
-            fields1 fields2
-        else
-          ...
-    in
-    { env_extension;
-      first_fields;
-    }
-
-  let join_singleton_block ~type_of_name
-        ({ env_extension = env_extension1;
-           first_fields = first_fields1;
-         } : singleton_block)
-        ({ env_extension = env_extension2;
-           first_fields = first_fields2;
-         } : singleton_block) : singleton_block list =
-    let env_extension =
-      meet_typing_environment ~type_of_name env_extension1 env_extension2
-    in
-    let first_fields =
-      match first_fields1, first_fields2 with
-      | Exactly fields, Unknown_length ->
-      | Unknown_length, Exactly fields ->
-      | Unknown_length, Unknown_length ->
-      | Exactly fields1, Exactly fields2 ->
-    in
-    { env_extension;
-      first_fields;
-    }
-
-  let meet_block ~type_of_name ((Join singleton_blocks) : block) =
-
-
-  let join_block ~type_of_name ((Join singleton_blocks) : block) =
-
-
-  let meet_blocks_and_immediates ~type_of_name
-        { immediates = immediates1; blocks = blocks1; }
-        { immediates = immediates2; blocks = blocks2; }
-        : blocks_and_immediates =
-
-
-  let join_blocks_and_immediates ~type_of_name
-        { immediates = immediates1; blocks = blocks1; }
-        { immediates = immediates2; blocks = blocks2; }
-        : blocks_and_immediates =
-
+    let meet_typing_environment ~type_of_name t1 t2 =
+      let names_to_types =
+        Name.Map.union (fun ty1 ty2 ->
+            meet ~type_of_name t1 t2)
+          t1.names_to_types
+          t2.names_to_types
+      in
+      let all_levels_to_names =
+        Scope_level.Map.union
+          (fun names1 names2 -> Name.Set.union names1 names2)
+          t1.levels_to_names
+          t2.levels_to_names
+      in
+      let levels_to_names =
+        Scope_level.Map.filter (fun _scope_level name ->
+            Name.Map.mem name names_to_types)
+          all_levels_to_names
+      in
+      let existentials =
+        Name.Set.union t1.existentials t2.existentials
+      in
+      let existential_freshening =
+        ...
+      in
+      { names_to_types;
+        types_to_levels;
+        existentials;
+        existential_freshening;
+      }
 *)
+  end
 
+  let meet = Meet_or_join.meet
+  let join = Meet_or_join.join
+
+  module Typing_environment = struct
+    type t = typing_environment
+
+    let print = print_typing_environment
+    let create = create_typing_environment
+
+(*
+    let add t name scope_level ty =
+      match Name.Map.find name t.names_to_types with
+      | exception Not_found ->
+        let names = Name.Map.add name ty t.names_to_types in
+        let levels_to_names =
+          Scope_level.Map.update scope_level
+            (function
+               | None -> Name.Set.singleton name
+               | Some names -> Name.Set.add name names)
+        in
+        { t with
+          names;
+          levels_to_names;
+        }
+      | _ty ->
+        Misc.fatal_errorf "Cannot rebind %a in environment: %a"
+          Name.print name
+          print t
+
+    type binding_type = No_alias | Existential
+
+    let find t name =
+      match Name.Map.find name t.names_to_types with
+      | exception Not_found ->
+        Misc.fatal_errorf "Cannot find %a in environment: %a"
+          Name.print name
+          print t
+      | ty ->
+        let binding_type =
+          if Name.Map.mem name t.existentials then Existential
+          else No_alias
+        in
+        match binding_type with
+        | No_alias -> ty, No_alias
+        | Existential ->
+          let ty = rename_variables t freshening in
+          ty, Existential
+
+    let cut t ~minimum_scope_level_to_be_existential =
+      let existentials =
+        Scope_level.Map.fold (fun scope_level names resulting_existentials ->
+            let will_be_existential =
+              Scope_level.(>=) scope_level minimum_scope_level_to_be_existential
+            in
+            if will_be_existential then
+              Name.Set.union names resulting_existentials
+            else
+              resulting_existentials)
+          t.levels_to_names
+          Name.Set.empty
+      in
+      let existential_freshening =
+        Name.Set.fold (fun (name : Name.t) freshening ->
+            match name with
+            | Symbol _ -> freshening
+            | Var var ->
+              let new_var = Variable.rename var in
+              Freshening.add_variable freshening var new_var)
+          t.existential_freshening
+      in
+      (* XXX we actually need to rename in the domain of [names_to_types] *)
+      { names_to_types = t.names_to_types;
+        levels_to_names = t.levels_to_names;
+        existentials;
+        existential_freshening;
+      }
+*)
+  end
 end

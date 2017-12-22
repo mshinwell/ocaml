@@ -97,7 +97,7 @@ module type S = sig
 
   and 'a or_join = private
     | Normal of 'a
-    | Join of 'a or_join or_alias * 'a or_join or_alias
+    | Join of 'a or_join * 'a or_join
       (** A join between two incompatible types which has been remembered
           in case it is refined by a subsequent meet.  Joins between compatible
           types are immediately pushed down through the top level structure
