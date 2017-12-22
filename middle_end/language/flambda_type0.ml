@@ -2248,87 +2248,297 @@ end) = struct
 
 
 
-  let or_unknown_or_bottom_of_or_alias (type ty) (type unk) ~type_of_name
-        ~(ty_of_t : t -> ty) (ty or_join or_alias)
-        : (ty, unk) or_unknown_or_bottom =
-    ...
+*)
 
-  let meet_on_or_join (type ty) (type unk) ~type_of_name
+  let join_or_alias (type contents) ~join_contents
+        (or_alias1 : contents or_alias) (or_alias2 : contents or_alias) =
+
+
+  let rec join_on_or_join (type ty) (type unk) ~type_of_name
         (oj1 : ty or_join) (oj2 : ty or_join)
-        ~meet_ty:(ty -> ty -> (ty, unk) or_unknown_or_bottom)
-        ~meet_unk:(unk -> unk -> unk)
-        ~join_ty:(ty -> ty -> (ty, unk) or_unknown_or_bottom)
-        ~join_unk:(unk -> unk -> unk)
-        ~ty_of_t:(t -> ty)
+        ~(join_ty : (ty -> ty -> (ty, unk) or_unknown_or_bottom) type_accessor)
+        ~(join_unk : unk -> unk -> unk)
+        ~(ty_of_t : t -> ty)
         : (ty, unk) or_unknown_or_bottom =
     match oj1, oj2 with
-    | No_alias s1, No_alias s2 ->
-      meet_ty ~type_of_name s1 s2
-    | ((No_alias _ | Join _) as other_side), Join (or_alias1, or_alias2)
-    | Join (or_alias1, or_alias2), ((No_alias _ | Join _) as other_side) ->
-      (* CR mshinwell: We should maybe be returning equations when we
-         meet types equipped with alias information. *)
-      let join_left =
-        or_unknown_or_bottom_of_or_alias ~type_of_name ~ty_of_t or_alias1
-      in
-      let join_right =
-        or_unknown_or_bottom_of_or_alias ~type_of_name ~ty_of_t or_alias2
-      in
-      let other_side_meet_join_left =
-        meet_on_or_unknown_or_bottom ~type_of_name
+    | Normal s1, Normal s2 ->
+      join_ty ~type_of_name s1 s2
+    | ((Normal _ | Join _) as other_side), Join (or_alias1, or_alias2)
+    | Join (or_alias1, or_alias2), ((Normal _ | Join _) as other_side) ->
+      let join_left = put_ok_under_or_alias or_alias1 in
+      let join_right = put_ok_under_or_alias or_alias2 in
+      let other_side_join_join_left =
+        join_on_or_unknown_or_bottom ~type_of_name
           (Ok other_side) join_left
+          ~join_ty ~join_unk ~ty_of_t
       in
-      let other_side_meet_join_right =
-        meet_on_or_unknown_or_bottom ~type_of_name
+      let other_side_join_join_right =
+        join_on_or_unknown_or_bottom ~type_of_name
           (Ok other_side) join_right
+          ~join_ty ~join_unk ~ty_of_t
       in
       join_or_unknown_or_bottom ~type_of_name
-        other_side_meet_join_left other_side_meet_join_right
+        other_side_join_join_left other_side_join_join_right
 
-  let join_on_or_join (type ty) (type unk) ~type_of_name
-        (oj1 : ty or_join) (oj2 : ty or_join)
-        ~join_ty:(ty -> ty -> (ty, unk) or_unknown_or_bottom)
-        ~join_unk:(unk -> unk -> unk)
-        ~ty_of_t:(t -> ty)
-        : (ty, unk) or_unknown_or_bottom =
-    match oj1, oj2 with
-    | ...
-
-  let meet_on_or_unknown_or_bottom (type ty) (type unk) ~type_of_name
+  and join_on_or_unknown_or_bottom (type ty) (type unk) ~type_of_name
         (ou1 : (ty, unk) or_unknown_or_bottom)
         (ou2 : (ty, unk) or_unknown_or_bottom)
-        ~meet_ty:(ty -> ty -> (ty, unk) or_unknown_or_bottom)
-        ~meet_unk:(unk -> unk -> unk)
-        ~join_ty:(ty -> ty -> (ty, unk) or_unknown_or_bottom)
-        ~join_unk:(unk -> unk -> unk)
-        ~ty_of_t:(t -> ty)
+        ~(join_ty : (ty -> ty -> (ty, unk) or_unknown_or_bottom) type_accessor)
+        ~(join_unk : unk -> unk -> unk)
+        ~(ty_of_t : t -> ty)
         : (ty, unk) or_unknown_or_bottom =
     match ou1, ou2 with
-    | Bottom, _ | _, Bottom -> Bottom
-    | Unknown unk1, Unknown unk2 -> Unknown (meet_unk unk1 unk2)
-    | Unknown _, ou2 -> ou2
-    | ou1, Unknown _ -> ou1
-    | Ok or_join1, Ok or_join2 ->
-      meet_on_or_join ~type_of_name or_join1 or_join2
-        ~meet_ty ~meet_unk
-        ~join_ty ~join_unk
-        ~ty_of_t
-
-  let join_on_or_unknown_or_bottom (type ty) (type unk) ~type_of_name ...
-        (ou1 : (ty, unk) or_unknown_or_bottom)
-        (ou2 : (ty, unk) or_unknown_or_bottom)
-        ~join_ty:(ty -> ty -> (ty, unk) or_unknown_or_bottom)
-        ~join_unk:(unk -> unk -> unk)
-        : (ty, unk) or_unknown_or_bottom =
-    match s1_meet_join_left, s1_meet_join_right with
     | Unknown unk_left, Unknown unk_right ->
       Unknown (join_unk unk_left unk_right)
     | Unknown unk, _ | _, Unknown unk -> Unknown unk
-    | Bottom, _ -> s1_meet_join_right
-    | _, Bottom -> s1_meet_join_left
+    | Bottom, _ -> ou2
+    | _, Bottom -> ou1
     | Ok or_join1, Ok or_join2 ->
-      Ok (join_on_or_join ~type_of_name or_join1 or_join2 ...)
+      join_on_or_join ~type_of_name or_join1 or_join2
+        ~join_ty ~join_unk ~ty_of_t
 
+  let resolve_aliases_on_ty (type a)
+        ~(type_of_name : Name_or_export_id.t -> t option)
+        ~(force_to_kind : t -> (a, _) ty)
+        (ty : (a, _) ty)
+        : (a, _) ty * (Name.t option) =
+  let resolve_aliases_and_squash_unresolved_names_on_ty ~type_of_name
+        ~force_to_kind ~unknown_payload ty =
+
+  module type Meet_or_join_spec = sig
+    type of_kind_foo
+    type unk
+
+    val force_to_kind : t -> (of_kind_foo, unk) ty
+
+    val unknown_payload : unk
+
+    val meet_of_kind_foo
+       : (of_kind_foo
+      -> of_kind_foo
+      -> (of_kind_foo, unk) or_unknown_or_bottom) type_accessor
+
+    val meet_unk : unk -> unk -> unk
+
+    val join_of_kind_foo
+       : (of_kind_foo
+      -> of_kind_foo
+      -> of_kind_foo or_join) type_accessor
+
+    val join_unk : unk -> unk -> unk
+  end
+
+  module Meet_or_join = sig
+    type of_kind_foo
+    type unk
+
+    val meet_ty
+       : ((of_kind_foo, unk) ty
+      -> (of_kind_foo, unk) ty
+      -> (of_kind_foo, unk) ty) type_accessor
+  end
+
+  module Make_meet_and_join (S : Meet_or_join_spec) : sig
+    include Meet_or_join
+      with type of_kind_foo = S.of_kind_foo
+      with type unk = S.unk
+  end = struct
+    let meet_ty (type a) (type unk) ~type_of_name
+          (or_alias1 : (a, unk) ty) (or_alias2 : (a, unk) ty)
+          : (a, unk) ty =
+      let or_unknown_or_bottom1, canonical_name1 =
+        resolve_aliases_and_squash_unresolved_names_on_ty ~type_of_name
+          ~force_to_kind
+          ~unknown_payload
+          or_alias1
+      in
+      let or_unknown_or_bottom2, canonical_name2 =
+        resolve_aliases_and_squash_unresolved_names_on_ty ~type_of_name
+          ~force_to_kind
+          ~unknown_payload
+          or_alias2
+      in
+      match canonical_name1, canonical_name2 with
+      | Some name1, Some name2 when Name.equal name1 name2 ->
+        alias_type_of kind name1
+      | _, _ ->
+        let or_unknown_or_bottom =
+          meet_on_or_unknown_or_bottom ~type_of_name
+            or_unknown_or_bottom1 or_unknown_or_bottom2
+            ~force_to_kind
+            ~meet_of_kind_foo ~meet_unk
+            ~join_of_kind_foo ~join_unk
+            ~ty_of_t
+        in
+
+
+      match or_alias1, or_alias2 with
+      | No_alias contents1, No_alias contents2 ->
+        No_alias (meet_contents contents1 contents2)
+      | No_alias contents, (Type export_id | Type_of name) ->
+
+
+      | (Type export_id | Type_of name), No_alias contents ->
+
+      | Type export_id1, Type export_id2 ->
+
+      | Type_of name1, 
+
+    let rec meet_on_or_join (type ty) (type unk) (type of_kind_foo) ~type_of_name
+          (oj1 : ty or_join) (oj2 : ty or_join)
+          ~(meet_of_kind_foo : (of_kind_foo -> of_kind_foo
+            -> (of_kind_foo, unk) or_unknown_or_bottom) type_accessor)
+          ~(meet_unk : unk -> unk -> unk)
+          ~(join_of_kind_foo : (of_kind_foo -> of_kind_foo
+            -> (of_kind_foo, unk) or_unknown_or_bottom) type_accessor)
+          ~(join_unk : unk -> unk -> unk)
+          ~(ty_of_t : t -> ty)
+          : (ty, unk) or_unknown_or_bottom =
+      match oj1, oj2 with
+      | Normal s1, Normal s2 ->
+        meet_of_kind_foo ~type_of_name s1 s2
+      | ((Normal _ | Join _) as other_side), Join (or_alias1, or_alias2)
+      | Join (or_alias1, or_alias2), ((Normal _ | Join _) as other_side) ->
+        (* CR mshinwell: We should maybe be returning equations when we
+           meet types equipped with alias information. *)
+        let join_left =
+          put_ok_under_or_alias ~type_of_name ~ty_of_t or_alias1
+        in
+        let join_right =
+          put_ok_under_or_alias ~type_of_name ~ty_of_t or_alias2
+        in
+        let other_side_meet_join_left =
+          meet_on_or_unknown_or_bottom ~type_of_name
+            (Ok other_side) join_left
+            ~meet_of_kind_foo ~meet_unk ~join_of_kind_foo ~join_unk ~ty_of_t
+        in
+        let other_side_meet_join_right =
+          meet_on_or_unknown_or_bottom ~type_of_name
+            (Ok other_side) join_right
+            ~meet_of_kind_foo ~meet_unk ~join_of_kind_foo ~join_unk ~ty_of_t
+        in
+        join_on_or_unknown_or_bottom ~type_of_name
+          other_side_meet_join_left other_side_meet_join_right
+
+    and meet_on_or_unknown_or_bottom (type ty) (type unk) ~type_of_name
+          (ou1 : (ty, unk) or_unknown_or_bottom)
+          (ou2 : (ty, unk) or_unknown_or_bottom)
+          : (ty, unk) or_unknown_or_bottom =
+      match ou1, ou2 with
+      | Bottom, _ | _, Bottom -> Bottom
+      | Unknown unk1, Unknown unk2 -> Unknown (meet_unk unk1 unk2)
+      | Unknown _, ou2 -> ou2
+      | ou1, Unknown _ -> ou1
+      | Ok or_join1, Ok or_join2 ->
+        meet_on_or_join ~type_of_name or_join1 or_join2
+          ~meet_of_kind_foo ~meet_unk
+          ~join_of_kind_foo ~join_unk
+          ~ty_of_t
+  end
+
+  module rec Meet_or_join_value : sig
+    include Meet_or_join
+      with type of_kind_foo = of_kind_value
+      with type unk = K.Value_kind.t
+  end = Make_meet_or_join (struct
+    type of_kind_foo = of_kind_value
+    type unk = K.Value_kind.t
+
+    let force_to_kind = force_to_kind_value
+
+    let unknown_payload = K.Value_kind.Unknown
+
+    let meet_of_kind_foo ~type_of_name
+          (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
+          : (of_kind_value, unk) or_unknown_or_bottom =
+      match of_kind1, of_kind2 with
+      | Blocks_and_tagged_immediates blocks_imms1,
+          Blocks_and_tagged_immediates blocks_imms2 ->
+        let blocks_imms =
+          meet_blocks_and_tagged_immediates ~type_of_name
+            blocks_imms1 blocks_imms2
+        in
+        begin match blocks_imms with
+        | Ok blocks_imms ->
+          Ok (Normal (Blocks_and_tagged_immediates blocks_imms))
+        | Bottom -> Bottom
+        end
+      | Boxed_number ((Boxed_float _) as n1),
+          Boxed_number ((Boxed_float _) as n2) ->
+        let n : _ ty_naked_number ... =
+          Meet_or_join_naked_number.meet_ty ~type_of_name n1 n2
+        in
+        Normal (Boxed_number (Boxed_float n))
+
+      | Closure closures1, Closure closures2 ->
+
+      | String strs1, String strs2 ->
+        let strs = String_info.Set.inter strs1 strs2 in
+        if String_info.Set.is_empty strs then Bottom
+        else Ok (Normal (String strs))
+      | (Blocks_and_tagged_immediates _
+          | Boxed_number _
+          | Closure _
+          | String _), _ ->
+        Bottom
+
+    let meet_unk value_kind1 value_kind2 =
+      K.Value_kind.meet value_kind1 value_kind2
+
+    let join_of_kind_foo ~type_of_name
+          (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
+          : of_kind_value or_join =
+      match of_kind1, of_kind2 with
+      | Blocks_and_tagged_immediates blocks_imms1,
+          Blocks_and_tagged_immediates blocks_imms2 ->
+        let blocks_imms =
+          join_blocks_and_tagged_immediates ~type_of_name
+            blocks_imms1 blocks_imms2
+        in
+        Normal (Blocks_and_tagged_immediates blocks_imms)
+      | Boxed_number ((Boxed_float _) as n1),
+          Boxed_number ((Boxed_float _) as n2) ->
+        let n : _ ty_naked_number =
+          Meet_or_join_naked_number.join_ty ~type_of_name n1 n2
+        in
+        Normal (Boxed_number (Boxed_float n))
+      | Boxed_number ((Boxed_int32 _) as n1),
+          Boxed_number ((Boxed_int32 _) as n2) ->
+        let n : _ ty_naked_number =
+          Meet_or_join_naked_number.join_ty ~type_of_name n1 n2
+        in
+        Normal (Boxed_number (Boxed_int32 n))
+      | Boxed_number ((Boxed_int64 _) as n1),
+          Boxed_number ((Boxed_int64 _) as n2) ->
+        let n : _ ty_naked_number =
+          Meet_or_join_naked_number.join_ty ~type_of_name n1 n2
+        in
+        Normal (Boxed_number (Boxed_int64 n))
+      | Boxed_number ((Boxed_nativeint _) as n1),
+          Boxed_number ((Boxed_nativeint _) as n2) ->
+        let n : _ ty_naked_number =
+          Meet_or_join_naked_number.join_ty ~type_of_name n1 n2
+        in
+        Normal (Boxed_number (Boxed_nativeint n))
+      | Closure closures1, Closure closures2 ->
+
+      | String strs1, String strs2 ->
+        let strs = String_info.Set.union strs1 strs2 in
+        Normal (String strs)
+      | (Blocks_and_tagged_immediates _
+          | Boxed_number _
+          | Closure _
+          | String _), _ ->
+        (* CR mshinwell: Hmm, there is never any alias here. *)
+        let left = No_alias (Normal of_kind1) in
+        let right = No_alias (Normal of_kind2) in
+        Join (left, right)
+
+    let join_unk value_kind1 value_kind2 =
+      K.Value_kind.join value_kind1 value_kind2
+  end
+
+(*
   let meet_immediate ~type_of_name
         ({ env_extension = env_extension1; } : immediate)
         ({ env_extension = env_extension2; } : immediate) : immediate =
@@ -2411,4 +2621,5 @@ end) = struct
         : blocks_and_immediates =
 
 *)
+
 end
