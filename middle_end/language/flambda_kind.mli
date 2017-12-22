@@ -26,11 +26,10 @@ module Value_kind : sig
     | Unknown
     | Definitely_pointer
     | Definitely_immediate
-
-  type 'a or_bottom = Ok of 'a | Bottom
+    | Bottom
 
   val join : t -> t -> t
-  val meet : t -> t -> t or_bottom
+  val meet : t -> t -> t
   val compatible : t -> if_used_at:t -> bool
 
   val compare : t -> t -> int
@@ -38,30 +37,27 @@ module Value_kind : sig
   val print : Format.formatter -> t -> unit
 end
 
-module Fabricated_kind : sig
+module Naked_number_kind : sig
   type t =
-    | Definitely_pointer
-    | Definitely_immediate
+    | Naked_immediate
+    | Naked_float
+    | Naked_int32
+    | Naked_int64
+    | Naked_nativeint
+
+  val print : Format.formatter -> t -> unit
 end
 
 module Phantom_kind : sig
-  type t = private
+  type t =
+    | Unknown
     | Value of Value_kind.t
-    | Naked_immediate
-    | Naked_float
-    | Naked_int32
-    | Naked_int64
-    | Naked_nativeint
-    | Fabricated of Fabricated_kind.t
-end
+    | Naked_number of Naked_number_kind.t
+    | Fabricated of Value_kind.t
+    | Bottom
 
-module Naked_number_kind : sig
-  type t = private
-    | Naked_immediate
-    | Naked_float
-    | Naked_int32
-    | Naked_int64
-    | Naked_nativeint
+  val join : t -> t -> t
+  val meet : t -> t -> t
 
   val print : Format.formatter -> t -> unit
 end
@@ -71,7 +67,7 @@ end
 type t = private
   | Value of Value_kind.t
   | Naked_number of Naked_number_kind.t
-  | Fabricated of Fabricated_kind.t
+  | Fabricated of Value_kind.t
     (** GC-scannable values, known to be pointers, which have been introduced
         by Flambda and are never accessible at the source language level (for
         example sets of closures). *)
@@ -87,6 +83,8 @@ val naked_float : unit -> t
 val naked_int32 : unit -> t
 val naked_int64 : unit -> t
 val naked_nativeint : unit -> t
+val fabricated : Value_kind.t -> t
+val phantom : Phantom_kind.t -> t
 
 val is_value : t -> bool
 val is_naked_float : t -> bool

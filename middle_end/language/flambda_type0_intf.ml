@@ -82,8 +82,8 @@ module type S = sig
       whether a root has to be registered. *)
   and ty_value = (of_kind_value, Flambda_kind.Value_kind.t) ty
   and 'a ty_naked_number = ('a of_kind_naked_number, unit) ty
-  and ty_fabricated = (of_kind_fabricated, unit) ty
-  and ty_phantom = (of_kind_phantom, unit) ty
+  and ty_fabricated = (of_kind_fabricated, Flambda_kind.Value_kind.t) ty
+  and ty_phantom = (of_kind_phantom, Flambda_kind.Phantom_kind.t) ty
 
   and ('a, 'u) ty = ('a, 'u) or_unknown_or_bottom or_alias
 

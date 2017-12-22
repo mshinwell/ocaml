@@ -113,16 +113,16 @@ end) = struct
   type t =
     | Value of ty_value
     | Naked_number :
-        'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t -> t
+        'kind ty_naked_number * 'kind K.Naked_number.t -> t
     | Fabricated of ty_fabricated
     | Phantom of ty_phantom
 
   and flambda_type = t
 
-  and ty_value = (of_kind_value, Flambda_kind.Value_kind.t) ty
+  and ty_value = (of_kind_value, K.Value_kind.t) ty
   and 'a ty_naked_number = ('a of_kind_naked_number, unit) ty
-  and ty_fabricated = (of_kind_fabricated, unit) ty
-  and ty_phantom = (of_kind_phantom, unit) ty
+  and ty_fabricated = (of_kind_fabricated, K.Value_kind.t) ty
+  and ty_phantom = (of_kind_phantom, K.Phantom_kind.t) ty
 
   and ('a, 'u) ty = ('a, 'u) or_unknown_or_bottom or_alias
 
@@ -231,7 +231,7 @@ end) = struct
   and of_kind_phantom =
     | Value of ty_value
     | Naked_number
-         : 'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t
+         : 'kind ty_naked_number * 'kind K.Naked_number.t
         -> of_kind_phantom
     | Fabricated of ty_fabricated
 
@@ -460,7 +460,7 @@ end) = struct
     | Set_of_closures set -> print_set_of_closures ppf set
 
   and print_ty_fabricated ppf (ty : ty_fabricated) =
-    print_ty_generic print_of_kind_fabricated (fun _ppf () -> ()) ppf ty
+    print_ty_generic print_of_kind_fabricated K.Value_kind.print ppf ty
 
   and print_of_kind_phantom ppf (o : of_kind_phantom) =
     match o with
@@ -475,7 +475,7 @@ end) = struct
         print_ty_fabricated ty_fabricated
 
   and print_ty_phantom ppf (ty : ty_phantom) =
-    print_ty_generic print_of_kind_phantom (fun _ppf () -> ()) ppf ty
+    print_ty_generic print_of_kind_phantom K.Phantom_kind.print ppf ty
 
   and print ppf (t : t) =
     match t with
@@ -506,6 +506,13 @@ end) = struct
       (Scope_level.Map.print Name.Set.print) levels_to_names
       Name.Set.print existentials
       Freshening.print existential_freshening
+
+  let put_ok_under_or_alias (or_alias : _ or_alias)
+        : _ or_unknown_or_bottom or_alias =
+    match or_alias with
+    | No_alias contents -> No_alias (Ok contents)
+    | Type export_id -> Type export_id
+    | Type_of name -> Type_of name
 
   let free_names_or_alias free_names_contents (or_alias : _ or_alias) acc =
     match or_alias with
@@ -663,7 +670,7 @@ end) = struct
   end
 
   (* CR-someday mshinwell: Functions such as [alias] and [bottom] could be
-     simplified if [Flambda_kind.t] were a GADT. *)
+     simplified if [K.t] were a GADT. *)
 
   let phantomize t : t =
     match t with
@@ -1044,10 +1051,10 @@ end) = struct
     Naked_number (No_alias (Unknown ()), K.Naked_number.Naked_nativeint)
 
   let any_fabricated () : t =
-    Fabricated (No_alias (Unknown ()))
+    Fabricated (No_alias (Unknown K.Value_kind.Unknown))
 
   let any_phantom () : t =
-    Phantom (No_alias (Unknown ()))
+    Phantom (No_alias (Unknown K.Phantom_kind.Unknown))
 
   let unknown (kind : K.t) =
     match kind with
@@ -1245,7 +1252,7 @@ end) = struct
           = force_to_kind_fabricated in
       let ty, canonical_name =
         resolve_aliases_and_squash_unresolved_names_on_ty ~force_to_kind
-          ~type_of_name ~unknown_payload:() ty
+          ~type_of_name ~unknown_payload:K.Value_kind.Unknown ty
       in
       Fabricated (No_alias ty), canonical_name
     | Phantom ty ->
@@ -1253,7 +1260,7 @@ end) = struct
           = force_to_kind_phantom in
       let ty, canonical_name =
         resolve_aliases_and_squash_unresolved_names_on_ty ~force_to_kind
-          ~type_of_name ~unknown_payload:() ty
+          ~type_of_name ~unknown_payload:K.Phantom_kind.Unknown ty
       in
       Phantom (No_alias ty), canonical_name
 
@@ -1276,60 +1283,97 @@ end) = struct
         | Boxed_number _ | Closure _ | String _ -> Definitely_pointer
         end
       | Ok (Join (ty1, ty2)) ->
-        let ty1 = ty_of_resolved_ok_ty ty1 in
-        let ty2 = ty_of_resolved_ok_ty ty2 in
+        let ty1 = put_ok_under_or_alias ty1 in
+        let ty2 = put_ok_under_or_alias ty2 in
         K.Value_kind.join (value_kind_ty_value ty1)
           (value_kind_ty_value ty2)
-      | Bottom -> Unknown
+      | Bottom -> Bottom
     in
     value_kind_ty_value ty
 
   let kind_ty_value ~type_of_name (ty : ty_value) =
     let value_kind =
-      value_kind_ty_value ~importer ~type_of_name ty
+      value_kind_ty_value ~type_of_name ty
     in
     K.value value_kind
 
-  let fabricated_kind_ty_fabricated ~type_of_name ty =
-    let rec fabricated_kind_ty_fabricated (ty : ty_fabricated)
-          : K.Fabricated_kind.t =
+  let value_kind_ty_fabricated ~type_of_name ty =
+    let rec value_kind_ty_fabricated (ty : ty_fabricated)
+          : K.Value_kind.t =
       let (ty : _ or_unknown_or_bottom), _canonical_name =
         resolve_aliases_and_squash_unresolved_names_on_ty
-          ~force_to_kind:force_to_kind_value
+          ~force_to_kind:force_to_kind_fabricated
           ~type_of_name
           ~unknown_payload:K.Value_kind.Unknown
           ty
       in
       match ty with
-      | Unknown () -> value_kind
+      | Unknown value_kind -> value_kind
       | Ok (Normal of_kind_fabricated) ->
         begin match of_kind_fabricated with
-        | Tag _ -> 
-        | Set_of_closures _ -> 
+        | Tag _ -> K.Value_kind.Definitely_immediate
+        | Set_of_closures _ -> K.Value_kind.Definitely_pointer
         end
       | Ok (Join (ty1, ty2)) ->
-        let ty1 = ty_of_resolved_ok_ty ty1 in
-        let ty2 = ty_of_resolved_ok_ty ty2 in
-        let kind1 = fabricated_kind_ty_fabricated ty1 in
-        let kind2 = fabricated_kind_ty_fabricated ty2 in
-        if not (K.Fabricated_kind.equal kind1 kind2) then begin
-          Misc.fatal_errorf "Cannot join between entities of kind \
-              [Fabricated] with different subkinds: %a"
-            print t
-        end;
-        kind1
-      | Bottom -> Unknown
+        let ty1 = put_ok_under_or_alias ty1 in
+        let ty2 = put_ok_under_or_alias ty2 in
+        K.Value_kind.join (value_kind_ty_fabricated ty1)
+          (value_kind_ty_fabricated ty2)
+      | Bottom -> Bottom
     in
-    fabricated_kind_ty_fabricated ty
+    value_kind_ty_fabricated ty
 
   let kind_ty_fabricated ~type_of_name ty =
-    let fabricated_kind =
-      fabricated_kind_ty_fabricated ~importer ~type_of_name ty
+    let value_kind = value_kind_ty_fabricated ~type_of_name ty in
+    K.fabricated value_kind
+
+  let phantom_kind_ty_phantom ~type_of_name ty =
+    let rec phantom_kind_ty_phantom (ty : ty_phantom)
+          : K.Phantom_kind.t =
+      let (ty : _ or_unknown_or_bottom), _canonical_name =
+        resolve_aliases_and_squash_unresolved_names_on_ty
+          ~force_to_kind:force_to_kind_phantom
+          ~type_of_name
+          ~unknown_payload:K.Phantom_kind.Unknown
+          ty
+      in
+      match ty with
+      | Unknown phantom_kind -> phantom_kind
+      | Ok (Normal of_kind_phantom) ->
+        begin match of_kind_phantom with
+        | Value ty_value ->
+          let value_kind =
+            value_kind_ty_value ~type_of_name ty_value
+          in
+          Value value_kind
+        | Naked_number (_, K.Naked_number.Naked_immediate) ->
+          Naked_number Naked_immediate
+        | Naked_number (_, K.Naked_number.Naked_float) ->
+          Naked_number Naked_float
+        | Naked_number (_, K.Naked_number.Naked_int32) ->
+          Naked_number Naked_int32
+        | Naked_number (_, K.Naked_number.Naked_int64) ->
+          Naked_number Naked_int64
+        | Naked_number (_, K.Naked_number.Naked_nativeint) ->
+          Naked_number Naked_nativeint
+        | Fabricated ty_fabricated ->
+          let value_kind =
+            value_kind_ty_fabricated ~type_of_name ty_fabricated
+          in
+          Fabricated value_kind
+        end
+      | Ok (Join (ty1, ty2)) ->
+        let ty1 = put_ok_under_or_alias ty1 in
+        let ty2 = put_ok_under_or_alias ty2 in
+        K.Phantom_kind.join (phantom_kind_ty_phantom ty1)
+          (phantom_kind_ty_phantom ty2)
+      | Bottom -> Bottom
     in
-    K.fabricated fabricated_kind
+    phantom_kind_ty_phantom ty
 
   let kind_ty_phantom ~type_of_name ty =
-
+    let phantom_kind = phantom_kind_ty_phantom ~type_of_name ty in
+    K.phantom phantom_kind
 
   let kind ~type_of_name (t : t) =
     match t with
@@ -1405,7 +1449,7 @@ end) = struct
     | Available_different_name of Variable.t
     | Unavailable
 
-  let rec clean ~importer t classify =
+  let rec clean t classify =
     let clean_var var =
       match classify var with
       | Available -> Some var
@@ -1422,24 +1466,24 @@ end) = struct
           if var == var' then var_opt
           else var_opt'
     in
-    clean_t ~importer t clean_var_opt
+    clean_t t clean_var_opt
 
-  and clean_t ~importer (t : t) clean_var_opt : t =
+  and clean_t (t : t) clean_var_opt : t =
     match t with
     | Value ty ->
-      Value (clean_ty_value ~importer ty clean_var_opt)
+      Value (clean_ty_value ty clean_var_opt)
     | Naked_immediate ty ->
-      Naked_immediate (clean_ty_naked_immediate ~importer ty clean_var_opt)
+      Naked_immediate (clean_ty_naked_immediate ty clean_var_opt)
     | Naked_float ty ->
-      Naked_float (clean_ty_naked_float ~importer ty clean_var_opt)
+      Naked_float (clean_ty_naked_float ty clean_var_opt)
     | Naked_int32 ty ->
-      Naked_int32 (clean_ty_naked_int32 ~importer ty clean_var_opt)
+      Naked_int32 (clean_ty_naked_int32 ty clean_var_opt)
     | Naked_int64 ty ->
-      Naked_int64 (clean_ty_naked_int64 ~importer ty clean_var_opt)
+      Naked_int64 (clean_ty_naked_int64 ty clean_var_opt)
     | Naked_nativeint ty ->
-      Naked_nativeint (clean_ty_naked_nativeint ~importer ty clean_var_opt)
+      Naked_nativeint (clean_ty_naked_nativeint ty clean_var_opt)
 
-  and clean_ty_value ~importer ty_value clean_var_opt : ty_value =
+  and clean_ty_value ty_value clean_var_opt : ty_value =
     let module I = (val importer : Importer) in
     let ty_value = I.import_value_type_as_resolved_ty_value ty_value in
     let var = clean_var_opt ty_value.var in
@@ -1447,14 +1491,14 @@ end) = struct
       match ty_value.descr with
       | (Unknown _) | Bottom -> ty_value.descr
       | Ok of_kind_value ->
-        Ok (clean_of_kind_value ~importer of_kind_value clean_var_opt)
+        Ok (clean_of_kind_value of_kind_value clean_var_opt)
     in
     { var;
       symbol = ty_value.symbol;
       descr = Ok descr;
     }
 
-  and clean_resolved_ty_set_of_closures ~importer
+  and clean_resolved_ty_set_of_closures
         (resolved_ty_set_of_closures : resolved_ty_set_of_closures)
         clean_var_opt
         : resolved_ty_set_of_closures =
@@ -1463,14 +1507,14 @@ end) = struct
       match resolved_ty_set_of_closures.descr with
       | (Unknown _) | Bottom -> resolved_ty_set_of_closures.descr
       | Ok set_of_closures ->
-        Ok (clean_set_of_closures ~importer set_of_closures clean_var_opt)
+        Ok (clean_set_of_closures set_of_closures clean_var_opt)
     in
     { var;
       symbol = resolved_ty_set_of_closures.symbol;
       descr = descr;
     }
 
-  and clean_ty_naked_immediate ~importer ty_naked_immediate clean_var_opt
+  and clean_ty_naked_immediate ty_naked_immediate clean_var_opt
         : ty_naked_immediate =
     let module I = (val importer : Importer) in
     let ty_naked_immediate =
@@ -1483,7 +1527,7 @@ end) = struct
       descr = Ok ty_naked_immediate.descr;
     }
 
-  and clean_ty_naked_float ~importer ty_naked_float clean_var_opt
+  and clean_ty_naked_float ty_naked_float clean_var_opt
         : ty_naked_float =
     let module I = (val importer : Importer) in
     let ty_naked_float =
@@ -1495,7 +1539,7 @@ end) = struct
       descr = Ok ty_naked_float.descr;
     }
 
-  and clean_ty_naked_int32 ~importer ty_naked_int32 clean_var_opt
+  and clean_ty_naked_int32 ty_naked_int32 clean_var_opt
         : ty_naked_int32 =
     let module I = (val importer : Importer) in
     let ty_naked_int32 =
@@ -1507,7 +1551,7 @@ end) = struct
       descr = Ok ty_naked_int32.descr;
     }
 
-  and clean_ty_naked_int64 ~importer ty_naked_int64 clean_var_opt
+  and clean_ty_naked_int64 ty_naked_int64 clean_var_opt
         : ty_naked_int64 =
     let module I = (val importer : Importer) in
     let ty_naked_int64 =
@@ -1519,7 +1563,7 @@ end) = struct
       descr = Ok ty_naked_int64.descr;
     }
 
-  and clean_ty_naked_nativeint ~importer ty_naked_nativeint clean_var_opt
+  and clean_ty_naked_nativeint ty_naked_nativeint clean_var_opt
         : ty_naked_nativeint =
     let module I = (val importer : Importer) in
     let ty_naked_nativeint =
@@ -1532,10 +1576,10 @@ end) = struct
       descr = Ok ty_naked_nativeint.descr;
     }
 
-  and clean_set_of_closures ~importer set_of_closures clean_var_opt =
+  and clean_set_of_closures set_of_closures clean_var_opt =
     let closure_elements =
       Var_within_closure.Map.map (fun t ->
-          clean_ty_value ~importer t clean_var_opt)
+          clean_ty_value t clean_var_opt)
         set_of_closures.closure_elements
     in
     let function_decls =
@@ -1545,19 +1589,19 @@ end) = struct
           | Inlinable decl ->
             let params =
               List.map (fun (param, t) ->
-                  param, clean_t ~importer t clean_var_opt)
+                  param, clean_t t clean_var_opt)
                 decl.params
             in
             let result =
               List.map (fun ty ->
-                clean_t ~importer ty clean_var_opt)
+                clean_t ty clean_var_opt)
                 decl.result
             in
             Inlinable { decl with params; result; }
           | Non_inlinable decl ->
             let result =
               List.map (fun ty ->
-                clean_t ~importer ty clean_var_opt)
+                clean_t ty clean_var_opt)
                 decl.result
             in
             Non_inlinable { decl with result; })
@@ -1568,34 +1612,34 @@ end) = struct
       closure_elements;
     }
 
-  and clean_of_kind_value ~importer (o : of_kind_value) clean_var_opt
+  and clean_of_kind_value (o : of_kind_value) clean_var_opt
         : of_kind_value =
     match o with
     | No_alias singleton ->
       let singleton : of_kind_value_singleton =
         match singleton with
         | Tagged_immediate i ->
-          Tagged_immediate (clean_ty_naked_immediate ~importer i clean_var_opt)
+          Tagged_immediate (clean_ty_naked_immediate i clean_var_opt)
         | Boxed_float f ->
-          Boxed_float (clean_ty_naked_float ~importer f clean_var_opt)
+          Boxed_float (clean_ty_naked_float f clean_var_opt)
         | Boxed_int32 n ->
-          Boxed_int32 (clean_ty_naked_int32 ~importer n clean_var_opt)
+          Boxed_int32 (clean_ty_naked_int32 n clean_var_opt)
         | Boxed_int64 n ->
-          Boxed_int64 (clean_ty_naked_int64 ~importer n clean_var_opt)
+          Boxed_int64 (clean_ty_naked_int64 n clean_var_opt)
         | Boxed_nativeint n ->
-          Boxed_nativeint (clean_ty_naked_nativeint ~importer n clean_var_opt)
+          Boxed_nativeint (clean_ty_naked_nativeint n clean_var_opt)
         | Block (tag, fields) ->
           let fields =
-            Array.map (fun t -> clean_ty_value ~importer t clean_var_opt)
+            Array.map (fun t -> clean_ty_value t clean_var_opt)
               fields
           in
           Block (tag, fields)
         | Set_of_closures set_of_closures ->
           Set_of_closures
-            (clean_set_of_closures ~importer set_of_closures clean_var_opt)
+            (clean_set_of_closures set_of_closures clean_var_opt)
         | Closure { set_of_closures; closure_id; } ->
           let set_of_closures =
-            clean_resolved_ty_set_of_closures ~importer set_of_closures
+            clean_resolved_ty_set_of_closures set_of_closures
               clean_var_opt
           in
           Closure { set_of_closures; closure_id; }
@@ -1603,7 +1647,7 @@ end) = struct
         | Float_array fields ->
           let fields =
             Array.map (fun field ->
-                clean_ty_naked_float ~importer field clean_var_opt)
+                clean_ty_naked_float field clean_var_opt)
               fields
           in
           Float_array fields
@@ -1613,13 +1657,13 @@ end) = struct
       let w1 =
         { var = clean_var_opt w1.var;
           symbol = w1.symbol;
-          descr = clean_of_kind_value ~importer w1.descr clean_var_opt;
+          descr = clean_of_kind_value w1.descr clean_var_opt;
         }
       in
       let w2 =
         { var = clean_var_opt w2.var;
           symbol = w2.symbol;
-          descr = clean_of_kind_value ~importer w2.descr clean_var_opt;
+          descr = clean_of_kind_value w2.descr clean_var_opt;
         }
       in
       Join (w1, w2)
@@ -1629,13 +1673,13 @@ end) = struct
     val description : string
     val combining_op : combining_op
   end) = struct
-    let combine_unknown_payload_for_value ~importer ~type_of_name
+    let combine_unknown_payload_for_value ~type_of_name
           _ty_value1 value_kind1 ty_value2 value_kind2_opt =
       let value_kind2 : K.Value_kind.t =
         match value_kind2_opt with
         | Some value_kind2 -> value_kind2
         | None ->
-          value_kind_ty_value ~importer ~type_of_name
+          value_kind_ty_value ~type_of_name
             (No_alias ((Resolved ty_value2) : _ maybe_unresolved))
       in
       match P.combining_op with
@@ -1669,7 +1713,7 @@ end) = struct
       | Combination _, No_alias _
       | Combination _, Combination _ -> combine ()
 
-    let combine_ty (type a) (type u) ~importer:_ ~importer_this_kind
+    let combine_ty (type a) (type u):__this_kind
           ~(force_to_kind : t -> (a, u) ty)
           ~(type_of_name : Name.t -> t option)
           unknown_payload_top
@@ -1678,11 +1722,11 @@ end) = struct
       (* CR mshinwell: Should something be happening here with the canonical
          names? *)
       let ty1, _canonical_name1 =
-        resolve_aliases_on_ty ~importer_this_kind ~force_to_kind
+        resolve_aliases_on_ty_this_kind ~force_to_kind
           ~type_of_name ty1
       in
       let ty2, _canonical_name2 =
-        resolve_aliases_on_ty ~importer_this_kind ~force_to_kind
+        resolve_aliases_on_ty_this_kind ~force_to_kind
           ~type_of_name ty2
       in
       match ty1, ty2 with
@@ -1732,7 +1776,7 @@ end) = struct
         in
         No_alias ((Resolved ty) : _ maybe_unresolved)
 
-    let rec combine_of_kind_value ~importer ~type_of_name
+    let rec combine_of_kind_value ~type_of_name
           (t1 : of_kind_value) t2
           : (of_kind_value, K.Value_kind.t) or_unknown_or_bottom or_combine =
       let singleton s : _ or_combine =
@@ -1741,30 +1785,30 @@ end) = struct
       match t1, t2 with
       | Tagged_immediate ty1, Tagged_immediate ty2 ->
         singleton (Tagged_immediate (
-          combine_ty_naked_immediate ~importer ~type_of_name
+          combine_ty_naked_immediate ~type_of_name
             ty1 ty2))
       | Boxed_float ty1, Boxed_float ty2 ->
         singleton (Boxed_float (
-          combine_ty_naked_float ~importer ~type_of_name
+          combine_ty_naked_float ~type_of_name
             ty1 ty2))
       | Boxed_int32 ty1, Boxed_int32 ty2 ->
         singleton (Boxed_int32 (
-          combine_ty_naked_int32 ~importer ~type_of_name
+          combine_ty_naked_int32 ~type_of_name
             ty1 ty2))
       | Boxed_int64 ty1, Boxed_int64 ty2 ->
         singleton (Boxed_int64 (
-          combine_ty_naked_int64 ~importer ~type_of_name
+          combine_ty_naked_int64 ~type_of_name
             ty1 ty2))
       | Boxed_nativeint ty1, Boxed_nativeint ty2 ->
         singleton (Boxed_nativeint (
-          combine_ty_naked_nativeint ~importer ~type_of_name
+          combine_ty_naked_nativeint ~type_of_name
             ty1 ty2))
       | Block (tag1, fields1), Block (tag2, fields2)
           when Tag.Scannable.equal tag1 tag2
             && Array.length fields1 = Array.length fields2 ->
         let fields =
           Array.map2 (fun ty1 ty2 ->
-              combine_ty_value ~importer ~type_of_name
+              combine_ty_value ~type_of_name
                 ty1 ty2)
             fields1 fields2
         in
@@ -1777,7 +1821,7 @@ end) = struct
           when Array.length fields1 = Array.length fields2 ->
         let fields =
           Array.map2 (fun ty1 ty2 ->
-              combine_ty_naked_float ~importer ~type_of_name
+              combine_ty_naked_float ~type_of_name
                 ty1 ty2)
             fields1 fields2
         in
@@ -1837,21 +1881,21 @@ end) = struct
           Exactly (Ok (
             No_alias ((Naked_nativeint i1) : of_kind_naked_nativeint)))
 
-    and combine_ty_value ~importer ~type_of_name
+    and combine_ty_value ~type_of_name
           (ty1 : ty_value) (ty2 : ty_value) : ty_value =
       let module I = (val importer : Importer) in
-      combine_ty ~importer ~type_of_name
-        ~importer_this_kind:I.import_value_type_as_resolved_ty_value
+      combine_ty ~type_of_name
+       _this_kind:I.import_value_type_as_resolved_ty_value
         ~force_to_kind:force_to_kind_value
         K.Value_kind.Unknown
-        (combine_of_kind_value ~importer ~type_of_name)
-        (combine_unknown_payload_for_value ~importer ~type_of_name)
+        (combine_of_kind_value ~type_of_name)
+        (combine_unknown_payload_for_value ~type_of_name)
         ty1 ty2
 
-    and combine_ty_naked_immediate ~importer ~type_of_name ty1 ty2 =
+    and combine_ty_naked_immediate ~type_of_name ty1 ty2 =
       let module I = (val importer : Importer) in
-      combine_ty ~importer ~type_of_name 
-        ~importer_this_kind:
+      combine_ty ~type_of_name 
+       _this_kind:
           I.import_naked_immediate_type_as_resolved_ty_naked_immediate
         ~force_to_kind:force_to_kind_naked_immediate
         ()
@@ -1859,40 +1903,40 @@ end) = struct
         combine_unknown_payload_for_non_value
         ty1 ty2
 
-    and combine_ty_naked_float ~importer ~type_of_name ty1 ty2 =
+    and combine_ty_naked_float ~type_of_name ty1 ty2 =
       let module I = (val importer : Importer) in
-      combine_ty ~importer ~type_of_name 
-        ~importer_this_kind:I.import_naked_float_type_as_resolved_ty_naked_float
+      combine_ty ~type_of_name 
+       _this_kind:I.import_naked_float_type_as_resolved_ty_naked_float
         ~force_to_kind:force_to_kind_naked_float
         ()
         combine_of_kind_naked_float
         combine_unknown_payload_for_non_value
         ty1 ty2
 
-    and combine_ty_naked_int32 ~importer ~type_of_name ty1 ty2 =
+    and combine_ty_naked_int32 ~type_of_name ty1 ty2 =
       let module I = (val importer : Importer) in
-      combine_ty ~importer ~type_of_name 
-        ~importer_this_kind:I.import_naked_int32_type_as_resolved_ty_naked_int32
+      combine_ty ~type_of_name 
+       _this_kind:I.import_naked_int32_type_as_resolved_ty_naked_int32
         ~force_to_kind:force_to_kind_naked_int32
         ()
         combine_of_kind_naked_int32
         combine_unknown_payload_for_non_value
         ty1 ty2
 
-    and combine_ty_naked_int64 ~importer ~type_of_name ty1 ty2 =
+    and combine_ty_naked_int64 ~type_of_name ty1 ty2 =
       let module I = (val importer : Importer) in
-      combine_ty ~importer ~type_of_name 
-        ~importer_this_kind:I.import_naked_int64_type_as_resolved_ty_naked_int64
+      combine_ty ~type_of_name 
+       _this_kind:I.import_naked_int64_type_as_resolved_ty_naked_int64
         ~force_to_kind:force_to_kind_naked_int64
         ()
         combine_of_kind_naked_int64
         combine_unknown_payload_for_non_value
         ty1 ty2
 
-    and combine_ty_naked_nativeint ~importer ~type_of_name ty1 ty2 =
+    and combine_ty_naked_nativeint ~type_of_name ty1 ty2 =
       let module I = (val importer : Importer) in
-      combine_ty ~importer ~type_of_name 
-        ~importer_this_kind:
+      combine_ty ~type_of_name 
+       _this_kind:
           I.import_naked_nativeint_type_as_resolved_ty_naked_nativeint
         ~force_to_kind:force_to_kind_naked_nativeint
         ()
@@ -1900,27 +1944,27 @@ end) = struct
         combine_unknown_payload_for_non_value
         ty1 ty2
 
-    let combine ~importer ~type_of_name (t1 : t) (t2 : t) : t =
+    let combine ~type_of_name (t1 : t) (t2 : t) : t =
       if t1 == t2 then t1
       else
         match t1, t2 with
         | Value ty1, Value ty2 ->
-          Value (combine_ty_value ~importer
+          Value (combine_ty_value
             ~type_of_name ty1 ty2)
         | Naked_immediate ty1, Naked_immediate ty2 ->
-          Naked_immediate (combine_ty_naked_immediate ~importer
+          Naked_immediate (combine_ty_naked_immediate
             ~type_of_name ty1 ty2)
         | Naked_float ty1, Naked_float ty2 ->
-          Naked_float (combine_ty_naked_float ~importer
+          Naked_float (combine_ty_naked_float
             ~type_of_name ty1 ty2)
         | Naked_int32 ty1, Naked_int32 ty2 ->
-          Naked_int32 (combine_ty_naked_int32 ~importer
+          Naked_int32 (combine_ty_naked_int32
             ~type_of_name ty1 ty2)
         | Naked_int64 ty1, Naked_int64 ty2 ->
-          Naked_int64 (combine_ty_naked_int64 ~importer
+          Naked_int64 (combine_ty_naked_int64
             ~type_of_name ty1 ty2)
         | Naked_nativeint ty1, Naked_nativeint ty2 ->
-          Naked_nativeint (combine_ty_naked_nativeint ~importer
+          Naked_nativeint (combine_ty_naked_nativeint
             ~type_of_name ty1 ty2)
         | _, _ ->
           Misc.fatal_errorf "Cannot take the %s of two types with different \
@@ -1947,11 +1991,11 @@ end) = struct
   let join_ty_naked_int64 = Join.combine_ty_naked_int64
   let join_ty_naked_nativeint = Join.combine_ty_naked_nativeint
 
-  let join_list ~importer ~type_of_name kind ts =
+  let join_list ~type_of_name kind ts =
     match ts with
     | [] -> bottom kind
     | t::ts ->
-      List.fold_left (fun result t -> join ~importer ~type_of_name result t)
+      List.fold_left (fun result t -> join ~type_of_name result t)
         t
         ts
 
@@ -1962,11 +2006,11 @@ end) = struct
   let meet_ty_naked_int64 = Meet.combine_ty_naked_int64
   let meet_ty_naked_nativeint = Meet.combine_ty_naked_nativeint
 
-  let meet_list ~importer ~type_of_name kind ts =
+  let meet_list ~type_of_name kind ts =
     match ts with
     | [] -> bottom kind
     | t::ts ->
-      List.fold_left (fun result t -> meet ~importer ~type_of_name result t)
+      List.fold_left (fun result t -> meet ~type_of_name result t)
         t
         ts
 
@@ -1974,28 +2018,28 @@ end) = struct
     | Ok of 'a
     | Bottom
 
-  let generic_meet_list ~meet ~importer ~type_of_name ts t =
+  let generic_meet_list ~meet ~type_of_name ts t =
     Misc.Stdlib.List.filter_map (fun t' ->
-        match meet ~importer ~type_of_name t t' with
+        match meet ~type_of_name t t' with
         | Ok meet -> Some meet
         | Bottom -> None)
       ts
 
-  let generic_meet_lists ~meet ~importer ~type_of_name ts1 ts2 =
+  let generic_meet_lists ~meet ~type_of_name ts1 ts2 =
     List.fold_left (fun result t1 ->
-        generic_meet_list ~importer ~type_of_name ~meet result t1)
+        generic_meet_list ~type_of_name ~meet result t1)
       ts2
       ts1
 
   module Closure = struct
     type t = closure
 
-    let meet ~importer ~type_of_name (t1 : t) (t2 : t) : t or_bottom =
+    let meet ~type_of_name (t1 : t) (t2 : t) : t or_bottom =
       if not (Closure_id.equal t1.closure_id t2.closure_id) then
         Bottom
       else
         let set_of_closures =
-          meet_ty_value ~importer ~type_of_name
+          meet_ty_value ~type_of_name
             t1.set_of_closures t2.set_of_closures
         in
         Ok {
@@ -2011,7 +2055,7 @@ end) = struct
   module Set_of_closures = struct
     type t = set_of_closures
 
-    let meet ~importer ~type_of_name (t1 : t) (t2 : t) : t or_bottom =
+    let meet ~type_of_name (t1 : t) (t2 : t) : t or_bottom =
       let same_set =
         Set_of_closures_id.equal t1.set_of_closures_id t2.set_of_closures_id
           && Set_of_closures_origin.equal t1.set_of_closures_origin
@@ -2021,7 +2065,7 @@ end) = struct
       else
         let closure_elements =
           Var_within_closure.Map.inter_merge (fun elt1 elt2 ->
-              join_ty_value ~importer ~type_of_name elt1 elt2)
+              join_ty_value ~type_of_name elt1 elt2)
             t1.closure_elements
             t2.closure_elements
         in
@@ -2138,10 +2182,10 @@ end) = struct
         existential_freshening;
       }
 
-    let join ~importer ~type_of_name t1 t2 =
+    let join ~type_of_name t1 t2 =
       let names_to_types =
         Name.Map.inter (fun ty1 ty2 ->
-            join ~importer ~type_of_name t1 t2)
+            join ~type_of_name t1 t2)
           t1.names_to_types
           t2.names_to_types
       in
@@ -2170,10 +2214,10 @@ end) = struct
         existential_freshening;
       }
 
-    let meet ~importer ~type_of_name t1 t2 =
+    let meet ~type_of_name t1 t2 =
       let names_to_types =
         Name.Map.union (fun ty1 ty2 ->
-            meet ~importer ~type_of_name t1 t2)
+            meet ~type_of_name t1 t2)
           t1.names_to_types
           t2.names_to_types
       in
