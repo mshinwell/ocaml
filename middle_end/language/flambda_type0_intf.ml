@@ -97,11 +97,13 @@ module type S = sig
 
   and 'a or_join = private
     | Normal of 'a
-    | Join of 'a or_join * 'a or_join
-      (** A join between two incompatible types which has been remembered
+    | Join of 'a * ('a list)
+      (** A join, between incompatible types, which has been remembered
           in case it is refined by a subsequent meet.  Joins between compatible
           types are immediately pushed down through the top level structure
-          of the type. *)
+          of the type.
+          Invariant: any two members of the non-empty list specified by a
+          [Join] will join to give "unknown". *)
 
   and of_kind_value = private
     | Blocks_and_tagged_immediates of blocks_and_tagged_immediates
@@ -118,9 +120,12 @@ module type S = sig
     first_fields : t array or_unknown_length;
   }
 
-  (* CR mshinwell: Maybe these should also be stored as a binary tree. *)
   and block_case = private
-    | Join of singleton_block list
+    | Join of { by_length : singleton_block Immediate.Or_unknown.Map.t; }
+    (** This is similar to the [Join] case at the top level of types: no two
+        [singleton_block]s in a [Join] here can have a compatible structure.
+        The only thing which determines the compatibility in this case is
+        the length, which we can make explicit using a map. *)
 
   and blocks_and_tagged_immediates = private {
     immediates : immediate_case Immediate.Or_unknown.Map.t;
