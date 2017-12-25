@@ -471,8 +471,12 @@ module type S = sig
 
   (** Greatest lower bound of two types.
       This can introduce new judgements into the typing environment. *)
+  (* CR mshinwell: maybe we'd better do that part later *)
+  val meet : (t -> t -> t) type_accessor
+(*
   val meet :
      (typing_environment -> t -> t -> typing_environment * t) type_accessor
+*)
 
 (*
   (** Least upper bound of an arbitrary number of types. *)

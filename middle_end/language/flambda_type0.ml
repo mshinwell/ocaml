@@ -2623,11 +2623,17 @@ end) = struct
             ty_fabricated1 ty_fabricated2
         in
         Ok ((Fabricated ty_fabricated) : of_kind_phantom)
-      | (Value _ | Naked_number _ | Fabricated _), _ -> Unknown
+      | (Value _ | Naked_number _ | Fabricated _), _ ->
+        (* CR mshinwell: isn't this really a kind error?  Same for meet *)
+        Unknown
 
     let join_unk phantom_kind1 phantom_kind2 =
       K.Phantom_kind.join phantom_kind1 phantom_kind2
   end) and Meet_and_join : sig
+(*
+    val meet :
+      (typing_environment -> t -> t -> typing_environment * t) type_accessor
+*)
     val meet : (t -> t -> t) type_accessor
 
     val join : (t -> t -> t) type_accessor
@@ -2642,9 +2648,119 @@ end) = struct
       -> typing_environment
       -> typing_environment) type_accessor
   end = struct
-    let meet ~type_of_name:_ _t1 _t2 = assert false
+    let meet ~type_of_name (t1 : t) (t2 : t) : t =
+      match t1, t2 with
+      | Value ty_value1, Value ty_value2 ->
+        let ty_value =
+          Meet_and_join_value.meet_ty ~type_of_name ty_value1 ty_value2
+        in
+        Value ty_value
+      | Naked_number (ty_naked_number1, kind1),
+          Naked_number (ty_naked_number2, kind2) ->
+        let module N = K.Naked_number in
+        begin match kind1, kind2 with
+        | N.Naked_immediate, N.Naked_immediate ->
+          let ty_naked_number =
+            Meet_and_join_naked_immediate.meet_ty ~type_of_name
+              ty_naked_number1 ty_naked_number2
+          in
+          Naked_number (ty_naked_number, N.Naked_immediate)
+        | N.Naked_float, N.Naked_float ->
+          let ty_naked_number =
+            Meet_and_join_naked_float.meet_ty ~type_of_name
+              ty_naked_number1 ty_naked_number2
+          in
+          Naked_number (ty_naked_number, N.Naked_float)
+        | N.Naked_int32, N.Naked_int32 ->
+          let ty_naked_number =
+            Meet_and_join_naked_int32.meet_ty ~type_of_name
+              ty_naked_number1 ty_naked_number2
+          in
+          Naked_number (ty_naked_number, N.Naked_int32)
+        | N.Naked_int64, N.Naked_int64 ->
+          let ty_naked_number =
+            Meet_and_join_naked_int64.meet_ty ~type_of_name
+              ty_naked_number1 ty_naked_number2
+          in
+          Naked_number (ty_naked_number, N.Naked_int64)
+        | N.Naked_nativeint, N.Naked_nativeint ->
+          let ty_naked_number =
+            Meet_and_join_naked_nativeint.meet_ty ~type_of_name
+              ty_naked_number1 ty_naked_number2
+          in
+          Naked_number (ty_naked_number, N.Naked_nativeint)
+        | _, _ ->
+          Misc.fatal_errorf "Kind mismatch upon meet: %a versus %a"
+            print t1
+            print t2
+        end
+      | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
+        let ty_fabricated =
+          Meet_and_join_fabricated.meet_ty ~type_of_name
+            ty_fabricated1 ty_fabricated2
+        in
+        Fabricated ty_fabricated
+      | (Value _ | Naked_number _ | Fabricated _ | Phantom _), _ ->
+        Misc.fatal_errorf "Kind mismatch upon meet: %a versus %a"
+          print t1
+          print t2
 
-    let join ~type_of_name:_ _t1 _t2 = assert false
+    let join ~type_of_name t1 t2 =
+      match t1, t2 with
+      | Value ty_value1, Value ty_value2 ->
+        let ty_value =
+          Meet_and_join_value.join_ty ~type_of_name ty_value1 ty_value2
+        in
+        Value ty_value
+      | Naked_number (ty_naked_number1, kind1),
+          Naked_number (ty_naked_number2, kind2) ->
+        let module N = K.Naked_number in
+        begin match kind1, kind2 with
+        | N.Naked_immediate, N.Naked_immediate ->
+          let ty_naked_number =
+            Meet_and_join_naked_immediate.join_ty ~type_of_name
+              ty_naked_number1 ty_naked_number2
+          in
+          Naked_number (ty_naked_number, N.Naked_immediate)
+        | N.Naked_float, N.Naked_float ->
+          let ty_naked_number =
+            Meet_and_join_naked_float.join_ty ~type_of_name
+              ty_naked_number1 ty_naked_number2
+          in
+          Naked_number (ty_naked_number, N.Naked_float)
+        | N.Naked_int32, N.Naked_int32 ->
+          let ty_naked_number =
+            Meet_and_join_naked_int32.join_ty ~type_of_name
+              ty_naked_number1 ty_naked_number2
+          in
+          Naked_number (ty_naked_number, N.Naked_int32)
+        | N.Naked_int64, N.Naked_int64 ->
+          let ty_naked_number =
+            Meet_and_join_naked_int64.join_ty ~type_of_name
+              ty_naked_number1 ty_naked_number2
+          in
+          Naked_number (ty_naked_number, N.Naked_int64)
+        | N.Naked_nativeint, N.Naked_nativeint ->
+          let ty_naked_number =
+            Meet_and_join_naked_nativeint.join_ty ~type_of_name
+              ty_naked_number1 ty_naked_number2
+          in
+          Naked_number (ty_naked_number, N.Naked_nativeint)
+        | _, _ ->
+          Misc.fatal_errorf "Kind mismatch upon meet: %a versus %a"
+            print t1
+            print t2
+        end
+      | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
+        let ty_fabricated =
+          Meet_and_join_fabricated.join_ty ~type_of_name
+            ty_fabricated1 ty_fabricated2
+        in
+        Fabricated ty_fabricated
+      | (Value _ | Naked_number _ | Fabricated _ | Phantom _), _ ->
+        Misc.fatal_errorf "Kind mismatch upon meet: %a versus %a"
+          print t1
+          print t2
 
     let meet_typing_environment ~type_of_name:_ _t1 _t2 = assert false
 
