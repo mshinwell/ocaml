@@ -7,7 +7,7 @@ Working version
 
 - GPR#1467: Allow expressions sequences inside extended indexing and bigarray
   indexing operators, e.g.: e1.![e2; e3; ...], etc.
-  (Nicolas Ojeda Bar, review by Gabriel Radanne, Damien Doligez, Gabriel
+  (Nicolás Ojeda Bär, review by Gabriel Radanne, Damien Doligez, Gabriel
   Scherer)
 
 ### Type system:
@@ -17,7 +17,7 @@ Working version
 
 - GPR#1469: Use the information from [@@immediate] annotations when
   computing whether a type can be [@@unboxed]
-  (Damien Doligez, report by Stephan Muenzel, review by ...)
+  (Damien Doligez, report by Stephan Muenzel, review by Alain Frisch)
 
 - GPR#1516: Allow float array construction in recursive bindings
   when configured with -no-flat-float-array
@@ -34,14 +34,18 @@ Working version
 * GPR#1406: Unix.isatty now returns true in the native Windows ports when
   passed a file descriptor connected to a Cygwin PTY. In particular, compiler
   colors for the native Windows ports now work under Cygwin/MSYS2.
-  (Nicolas Ojeda Bar, review by Gabriel Scherer, David Allsopp, Xavier Leroy)
+  (Nicolás Ojeda Bär, review by Gabriel Scherer, David Allsopp, Xavier Leroy)
 
 - GPR#1451: [getpwuid], [getgrgid], [getpwnam], [getgrnam] now raise Unix error
   instead of returning [Not_found] when interrupted by a signal.
   (Arseniy Alekseyev, review by Mark Shinwell and Xavier Leroy)
 
 - GPR#1477: raw_spacetime_lib can now be used in bytecode.
-  (Nicolas Ojeda Bar, review by Mark Shinwell)
+  (Nicolás Ojeda Bär, review by Mark Shinwell)
+
+- GPR#1533: (a) The implementation of Thread.yield for system thread
+  now uses nanosleep(1) for enabling better preemption.
+  (b) Thread.delay is now an alias for Unix.sleepf.
 
 ### Compiler user-interface and warnings:
 
@@ -74,6 +78,11 @@ Working version
   (Armaël Guéneau, with help and review from Florian Angeletti and Gabriel
   Scherer)
 
+- GPR#1510: Add specific explanation for unification errors caused by type
+  constraints propagated by keywords (such as if, while, for...)
+  (Armaël Guéneau and Gabriel Scherer, original design by Arthur Charguéraud,
+  review by Frédéric Bour, Gabriel Radanne and Alain Frisch)
+
 ### Code generation and optimizations:
 
 - GPR#1370: Fix code duplication in Cmmgen
@@ -92,7 +101,7 @@ Working version
 
 - GPR#1478: The Spacetime profiler now works under Windows (but it is not yet
   able to collect profiling information from C stubs).
-  (Nicolas Ojeda Bar, review by Xavier Leroy, Mark Shinwell)
+  (Nicolás Ojeda Bär, review by Xavier Leroy, Mark Shinwell)
 
 - GPR#1526: install the debug and instrumented runtimes
   (lib{caml,asm}run{d,i}.a)
@@ -108,6 +117,9 @@ Working version
 
 - PR#7647, GPR#1384: emphasize ocaml.org website and forum in README
   (Yawar Amin, review by Gabriel Scherer)
+
+- GPR#1540: manual, decouple verbatim and toplevel style in code examples
+  (Florian Angeletti, review by Gabriel Scherer)
 
 ### Compiler distribution build system
 
@@ -152,7 +164,7 @@ Working version
 
 - PR#7660, GPR#1445: Use native Windows API to implement Unix.utimes in order to
   avoid unintended shifts of the argument timestamp depending on DST setting.
-  (Nicolas Ojeda Bar, review by David Allsopp, Xavier Leroy)
+  (Nicolás Ojeda Bär, review by David Allsopp, Xavier Leroy)
 
 - MPR#7668: -principal is broken with polymorphic variants
   (Jacques Garrigue, report by Jun Furuse)
@@ -169,7 +181,7 @@ Working version
 
 - PR#4499, GPR#1479: Use native Windows API to implement Sys.getenv,
   Unix.getenv and Unix.environment under Windows.
-  (Nicolas Ojeda Bar, report by Alain Frisch, review by David Allsopp, Xavier
+  (Nicolás Ojeda Bär, report by Alain Frisch, review by David Allsopp, Xavier
   Leroy)
 
 4.06 maintenance branch
@@ -289,7 +301,7 @@ OCaml 4.06.0 (3 Nov 2017):
   separate the "unaligned" and "aligned" parts of the documentation string. If
   tab is not present, then space is used as a fallback. Allows to have spaces in
   the unaligned part, which is useful for Tuple options.
-  (Nicolas Ojeda Bar, review by Alain Frisch and Gabriel Scherer)
+  (Nicolás Ojeda Bär, review by Alain Frisch and Gabriel Scherer)
 
 * GPR#615: Format, add symbolic formatters that output symbolic
   pretty-printing items. New fields have been added to the
@@ -346,7 +358,7 @@ OCaml 4.06.0 (3 Nov 2017):
 
 - MPR#7564, GPR#1211: Allow forward slashes in the target of symbolic links
   created by Unix.symlink under Windows.
-  (Nicolas Ojeda Bar, review by David Allsopp)
+  (Nicolás Ojeda Bär, review by David Allsopp)
 
 * MPR#7640, GPR#1414: reimplementation of Unix.execvpe to fix issues
   with the 4.05 implementation.  The main issue is that the current
@@ -366,7 +378,7 @@ OCaml 4.06.0 (3 Nov 2017):
 
 - GPR#1217: Restrict Unix.environment in privileged contexts; add
   Unix.unsafe_environment.
-  (Jeremy Yallop, review by Mark Shinwell, Nicolas Ojeda Bar,
+  (Jeremy Yallop, review by Mark Shinwell, Nicolás Ojeda Bär,
   Damien Doligez and Hannes Mehnert)
 
 - GPR#1321: Reimplement Unix.isatty on Windows. It no longer returns true for
@@ -438,8 +450,8 @@ OCaml 4.06.0 (3 Nov 2017):
   allocator represents a trade-off between worse generated code
   performance for higher compilation speed (especially interesting in
   some cases graph coloring is necessarily quadratic).
-  (Marcell Fischbach and Benedikt Meurer, adapted by Nicolas Ojeda
-  Bar, review by Nicolas Ojeda Bar and Alain Frisch)
+  (Marcell Fischbach and Benedikt Meurer, adapted by Nicolás Ojeda Bär, review
+  by Nicolás Ojeda Bär and Alain Frisch)
 
 - MPR#6927, GPR#988: On macOS, when compiling bytecode stubs, plugins,
   and shared libraries through -output-obj, generate dylibs instead of
@@ -625,7 +637,7 @@ OCaml 4.06.0 (3 Nov 2017):
 
 * MPR#3771, GPR#153, GPR#1200, GPR#1357, GPR#1362, GPR#1363, GPR#1369, GPR#1398,
   GPR#1446, GPR#1448: Unicode support for the Windows runtime.
-  (ygrek, Nicolas Ojeda Bar, review by Alain Frisch, David Allsopp, Damien
+  (ygrek, Nicolás Ojeda Bär, review by Alain Frisch, David Allsopp, Damien
   Doligez)
 
 * MPR#7594, GPR#1274, GPR#1368: String_val now returns 'const char*', not
@@ -1143,7 +1155,7 @@ OCaml 4.05.0 (13 Jul 2017):
 - GPR#1042: Fix escaping of command-line arguments in
   Unix.create_process{,_env} under Windows.  Arguments with tabs should now
   be received verbatim by the child process.
-  (Nicolas Ojeda Bar, Andreas Hauptmann review by Xavier Leroy)
+  (Nicolás Ojeda Bär, Andreas Hauptmann review by Xavier Leroy)
 
 ### Debugging and profiling:
 
@@ -1275,7 +1287,7 @@ OCaml 4.05.0 (13 Jul 2017):
 
 - GPR#803: new ocamllex-based tool to extract bytecode compiler
   opcode information from C headers.
-  (Nicolas Ojeda Bar)
+  (Nicolás Ojeda Bär)
 
 - GPR#827: install missing mli and cmti files, new make target
   install-compiler-sources for installation of compiler-libs ml files
@@ -1929,7 +1941,7 @@ OCaml 4.04.0 (4 Nov 2016):
   cf. PR#7313, meaning that you may sometimes need to add type annotations
   to explicitly instantiate non-generalizable type variables.
   (Jacques Garrigue, following discussion with Jeremy Yallop,
-   Nicolas Ojeda Bar and Alain Frisch)
+   Nicolás Ojeda Bär and Alain Frisch)
 
 - PR#7112: Aliased arguments ignored for equality of module types
   (Jacques Garrigue, report by Leo White)
@@ -1951,7 +1963,7 @@ OCaml 4.04.0 (4 Nov 2016):
   (Pierre Chambart, report by Reed Wilson, review by Mark Shinwell)
 
 - PR#7260: GADT + subtyping compile time crash
-  (Jacques Garrigue, report by Nicolas Ojeda Bar)
+  (Jacques Garrigue, report by Nicolás Ojeda Bär)
 
 - PR#7269: Segfault from conjunctive constraints in GADT
   (Jacques Garrigue, report by Stephen Dolan)
@@ -2006,7 +2018,7 @@ OCaml 4.04.0 (4 Nov 2016):
   (Bogdan Tătăroiu, review by Thomas Braibant and Alain Frisch)
 
 - GPR#700: Fix maximum weak bucket size
-  (Nicolas Ojeda Bar, review by François Bobot)
+  (Nicolás Ojeda Bär, review by François Bobot)
 
 - GPR#708 Allow more module aliases in strengthening (Leo White)
 
@@ -2331,7 +2343,7 @@ OCaml 4.03.0 (25 Apr 2016):
 
 - GPR#545: use reraise to preserve backtrace on
   `match .. with exception e -> raise e`
-  (Nicolas Ojeda Bar, review by Gabriel Scherer)
+  (Nicolás Ojeda Bär, review by Gabriel Scherer)
 
 ### Runtime system:
 
