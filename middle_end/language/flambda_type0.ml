@@ -124,9 +124,9 @@ end) = struct
   and ty_fabricated = (of_kind_fabricated, K.Value_kind.t) ty
   and ty_phantom = (of_kind_phantom, K.Phantom_kind.t) ty
 
-  and ('a, 'u) ty = ('a, 'u) or_unknown_or_bottom or_alias
+  and ('a, 'u) ty = ('a, 'u) unknown_or_join or_alias
 
-  and ('a, 'u) or_unknown_or_bottom =
+  and ('a, 'u) unknown_or_join =
     | Unknown of 'u
     | Ok of 'a or_join
     | Bottom
@@ -255,8 +255,8 @@ end) = struct
     | Exactly contents -> f ppf contents
     | Unknown_length -> Format.pp_print_string ppf "<unknown length>"
 
-  let print_or_unknown_or_bottom print_contents print_unknown_payload ppf
-        (o : _ or_unknown_or_bottom) =
+  let print_unknown_or_join print_contents print_unknown_payload ppf
+        (o : _ unknown_or_join) =
     match o with
     | Unknown payload ->
       Format.fprintf ppf "(Unknown %a)" print_unknown_payload payload
@@ -273,7 +273,7 @@ end) = struct
 
   let print_ty_generic print_contents print_unknown_payload ppf ty =
     (print_or_alias
-        (print_or_unknown_or_bottom
+        (print_unknown_or_join
           (print_or_join print_contents)
           print_unknown_payload))
       ppf ty
@@ -513,7 +513,7 @@ end) = struct
     }
 
   let put_ok_under_or_alias (or_alias : _ or_alias)
-        : _ or_unknown_or_bottom or_alias =
+        : _ unknown_or_join or_alias =
     match or_alias with
     | No_alias contents -> No_alias (Ok contents)
     | Type export_id -> Type export_id
@@ -532,8 +532,8 @@ end) = struct
       let acc = free_names_or_join free_names_contents or_join1 acc in
       free_names_or_join free_names_contents or_join2 acc
 
-  let free_names_or_unknown_or_bottom free_names_contents free_names_unk
-        (o : _ or_unknown_or_bottom) acc =
+  let free_names_unknown_or_join free_names_contents free_names_unk
+        (o : _ unknown_or_join) acc =
     match o with
     | Unknown unk -> free_names_unk unk acc
     | Ok or_join -> free_names_or_join free_names_contents or_join acc
@@ -542,7 +542,7 @@ end) = struct
   let free_names_ty free_names_contents ty acc =
     let free_names_unk _unk acc = acc in
     free_names_or_alias
-      (free_names_or_unknown_or_bottom free_names_contents free_names_unk)
+      (free_names_unknown_or_join free_names_contents free_names_unk)
       ty
       acc
 
@@ -1253,7 +1253,7 @@ end) = struct
 
   let value_kind_ty_value ~type_of_name ty =
     let value_kind_ty_value (ty : ty_value) : K.Value_kind.t =
-      let (ty : _ or_unknown_or_bottom), _canonical_name =
+      let (ty : _ unknown_or_join), _canonical_name =
         resolve_aliases_and_squash_unresolved_names_on_ty
           ~force_to_kind:force_to_kind_value
           ~type_of_name
@@ -1288,7 +1288,7 @@ end) = struct
 
   let value_kind_ty_fabricated ~type_of_name ty =
     let value_kind_ty_fabricated (ty : ty_fabricated) : K.Value_kind.t =
-      let (ty : _ or_unknown_or_bottom), _canonical_name =
+      let (ty : _ unknown_or_join), _canonical_name =
         resolve_aliases_and_squash_unresolved_names_on_ty
           ~force_to_kind:force_to_kind_fabricated
           ~type_of_name
@@ -1321,7 +1321,7 @@ end) = struct
   let phantom_kind_ty_phantom ~type_of_name ty =
     let phantom_kind_ty_phantom (ty : ty_phantom)
           : K.Phantom_kind.t =
-      let (ty : _ or_unknown_or_bottom), _canonical_name =
+      let (ty : _ unknown_or_join), _canonical_name =
         resolve_aliases_and_squash_unresolved_names_on_ty
           ~force_to_kind:force_to_kind_phantom
           ~type_of_name
@@ -1480,7 +1480,7 @@ end) = struct
     let module I = (val importer : Importer) in
     let ty_value = I.import_value_type_as_resolved_ty_value ty_value in
     let var = clean_var_opt ty_value.var in
-    let descr : (of_kind_value, _) or_unknown_or_bottom =
+    let descr : (of_kind_value, _) unknown_or_join =
       match ty_value.descr with
       | (Unknown _) | Bottom -> ty_value.descr
       | Ok of_kind_value ->
@@ -1496,7 +1496,7 @@ end) = struct
         clean_var_opt
         : resolved_ty_set_of_closures =
     let var = clean_var_opt resolved_ty_set_of_closures.var in
-    let descr : (set_of_closures, _) or_unknown_or_bottom =
+    let descr : (set_of_closures, _) unknown_or_join =
       match resolved_ty_set_of_closures.descr with
       | (Unknown _) | Bottom -> resolved_ty_set_of_closures.descr
       | Ok set_of_closures ->
@@ -1724,6 +1724,10 @@ end) = struct
     | Ok of 'a
     | Bottom
 
+  type 'a or_unknown =
+    | Ok of 'a
+    | Unknown
+
   module type Meet_or_join_spec = sig
     type of_kind_foo
     type unk
@@ -1739,10 +1743,15 @@ end) = struct
 
     val meet_unk : unk -> unk -> unk
 
+    (* If the supplied types are compatible, the join must be pushed inside
+       their structure, and [Ok] returned.  Otherwise [Unknown] must be
+       returned. *)
+    (* CR mshinwell: add comment about requirement for equivalence
+       relationness *)
     val join_of_kind_foo
        : (of_kind_foo
       -> of_kind_foo
-      -> of_kind_foo or_join) type_accessor
+      -> of_kind_foo or_unknown) type_accessor
 
     val join_unk : unk -> unk -> unk
   end
@@ -1751,75 +1760,80 @@ end) = struct
     type of_kind_foo
     type unk
 
-    (** Least upper bound of two types of a particular kind. *)
+    (* Least upper bound of two types of a particular kind. *)
     val join_ty
        : ((of_kind_foo, unk) ty
       -> (of_kind_foo, unk) ty
       -> (of_kind_foo, unk) ty) type_accessor
 
-    (** Greatest lower bound of two types of a particular kind. *)
+    (* Greatest lower bound of two types of a particular kind. *)
     val meet_ty
        : ((of_kind_foo, unk) ty
       -> (of_kind_foo, unk) ty
       -> (of_kind_foo, unk) ty) type_accessor
   end
 
-  (** The [Make_meet_and_join] functor encodes the basic properties of
-      meets and joins:
-        1. Action of absorbing and identity elements.  (For meet, unknown
-           is the identity and bottom is absorbing; vice-versa for join.)
-        2. Distributivity:
-           (a) X n (X' u Y') == (X n X') u (X n Y')
-           (b) X u (X' u Y') == (X u X') u (X u Y')
-           (where "n" is meet and "u" is join).
+  (* The [Make_meet_and_join] functor encodes the basic properties of
+     meets and joins:
+       1. Action of absorbing and identity elements.  (For meet, unknown
+          is the identity and bottom is absorbing; vice-versa for join.)
+       2. Distributivity of meet over join:
+          X n (X' u Y') == (X n X') u (X n Y').
   *)
   module Make_meet_and_join (S : Meet_or_join_spec) : sig
     include Meet_or_join
       with type of_kind_foo := S.of_kind_foo
       with type unk := S.unk
   end = struct
-    let rec join_on_or_join ~type_of_name
-          (oj1 : S.of_kind_foo or_join) (oj2 : S.of_kind_foo or_join)
-          : (S.of_kind_foo, S.unk) or_unknown_or_bottom =
-      match oj1, oj2 with
-      | Normal s1, Normal s2 ->
-        Ok (S.join_of_kind_foo ~type_of_name s1 s2)
-      | ((Normal _ | Join _) as other_side), Join (or_join1, or_join2)
-      | Join (or_join1, or_join2), ((Normal _ | Join _) as other_side) ->
-        (* Rule 2(b) from above. *)
-        let other_side_join_join_left =
-          join_on_or_join ~type_of_name other_side or_join1
-        in
-        let other_side_join_join_right =
-          join_on_or_join ~type_of_name other_side or_join2
-        in
-        join_on_or_unknown_or_bottom ~type_of_name
-          other_side_join_join_left other_side_join_join_right
-
-    and join_on_or_unknown_or_bottom ~type_of_name
-          (ou1 : (S.of_kind_foo, S.unk) or_unknown_or_bottom)
-          (ou2 : (S.of_kind_foo, S.unk) or_unknown_or_bottom)
-          : (S.of_kind_foo, S.unk) or_unknown_or_bottom =
-      match ou1, ou2 with
+    let rec join_on_unknown_or_join ~type_of_name
+          (uj1 : (S.of_kind_foo, S.unk) unknown_or_join)
+          (uj2 : (S.of_kind_foo, S.unk) unknown_or_join)
+          : (S.of_kind_foo, S.unk) unknown_or_join =
+      match uj1, uj2 with
       | Unknown unk_left, Unknown unk_right ->
         Unknown (S.join_unk unk_left unk_right)
       | Unknown unk, _ | _, Unknown unk -> Unknown unk
-      | Bottom, _ -> ou2
-      | _, Bottom -> ou1
-      | Ok or_join1, Ok or_join2 ->
-        join_on_or_join ~type_of_name or_join1 or_join2
+      | Join of_kind_foos1, Join of_kind_foos2 ->
+        let of_kind_foos =
+          List.fold_left (fun of_kind_foos of_kind_foo ->
+              (* By virtue of the invariant (see flambda_type0_intf.ml),
+                 [of_kind_foo] can be compatible with at most one of the
+                 elements of [of_kind_foos]. *)
+              let found_one = ref false in
+              let joined =
+                List.map (fun of_kind_foo' ->
+                    let join =
+                      S.join_of_kind_foo ~type_of_name of_kind_foo of_kind_foo'
+                    in
+                    match join with
+                    | Ok of_kind_foo ->
+                      if !found_one then begin
+                        (* CR mshinwell: Add detail showing what was wrong. *)
+                        Misc.fatal_errorf "Invariant broken for [Join]"
+                      end;
+                      found_one := true;
+                      of_kind_foo
+                    | Unknown -> of_kind_foo')
+                  of_kind_foos
+              in
+              if not !found_one then of_kind_foo :: of_kind_foos
+              else joined)
+            of_kind_foos2
+            of_kind_foos1
+        in
+        Join of_kind_foos
 
     and join_ty ~type_of_name
           (or_alias1 : (S.of_kind_foo, S.unk) ty)
           (or_alias2 : (S.of_kind_foo, S.unk) ty)
           : (S.of_kind_foo, S.unk) ty =
-      let or_unknown_or_bottom1, canonical_name1 =
+      let unknown_or_join1, canonical_name1 =
         resolve_aliases_and_squash_unresolved_names_on_ty ~type_of_name
           ~force_to_kind:S.force_to_kind
           ~unknown_payload:S.unknown_payload
           or_alias1
       in
-      let or_unknown_or_bottom2, canonical_name2 =
+      let unknown_or_join2, canonical_name2 =
         resolve_aliases_and_squash_unresolved_names_on_ty ~type_of_name
           ~force_to_kind:S.force_to_kind
           ~unknown_payload:S.unknown_payload
@@ -1829,15 +1843,15 @@ end) = struct
       | Some name1, Some name2 when Name.equal name1 name2 ->
         Type_of name1
       | _, _ ->
-        let or_unknown_or_bottom =
-          join_on_or_unknown_or_bottom ~type_of_name
-            or_unknown_or_bottom1 or_unknown_or_bottom2
+        let unknown_or_join =
+          join_on_unknown_or_join ~type_of_name
+            unknown_or_join1 unknown_or_join2
         in
-        No_alias or_unknown_or_bottom
+        No_alias unknown_or_join
 
     let rec meet_on_or_join ~type_of_name
           (oj1 : S.of_kind_foo or_join) (oj2 : S.of_kind_foo or_join)
-          : (S.of_kind_foo, S.unk) or_unknown_or_bottom =
+          : (S.of_kind_foo, S.unk) unknown_or_join =
       match oj1, oj2 with
       | Normal s1, Normal s2 ->
         begin match S.meet_of_kind_foo ~type_of_name s1 s2 with
@@ -1846,7 +1860,7 @@ end) = struct
         end
       | ((Normal _ | Join _) as other_side), Join (or_join1, or_join2)
       | Join (or_join1, or_join2), ((Normal _ | Join _) as other_side) ->
-        (* Rule 2(a) from above. *)
+        (* Rule 2 from above. *)
         (* CR mshinwell: We should maybe be returning equations when we
            meet types equipped with alias information. *)
         let other_side_meet_join_left =
@@ -1855,13 +1869,13 @@ end) = struct
         let other_side_meet_join_right =
           meet_on_or_join ~type_of_name other_side or_join2
         in
-        join_on_or_unknown_or_bottom ~type_of_name
+        join_on_unknown_or_join ~type_of_name
           other_side_meet_join_left other_side_meet_join_right
 
-    and meet_on_or_unknown_or_bottom ~type_of_name
-          (ou1 : (S.of_kind_foo, S.unk) or_unknown_or_bottom)
-          (ou2 : (S.of_kind_foo, S.unk) or_unknown_or_bottom)
-          : (S.of_kind_foo, S.unk) or_unknown_or_bottom =
+    and meet_on_unknown_or_join ~type_of_name
+          (ou1 : (S.of_kind_foo, S.unk) unknown_or_join)
+          (ou2 : (S.of_kind_foo, S.unk) unknown_or_join)
+          : (S.of_kind_foo, S.unk) unknown_or_join =
       match ou1, ou2 with
       | Bottom, _ | _, Bottom -> Bottom
       | Unknown unk1, Unknown unk2 -> Unknown (S.meet_unk unk1 unk2)
@@ -1874,13 +1888,13 @@ end) = struct
           (or_alias1 : (S.of_kind_foo, S.unk) ty)
           (or_alias2 : (S.of_kind_foo, S.unk) ty)
           : (S.of_kind_foo, S.unk) ty =
-      let or_unknown_or_bottom1, canonical_name1 =
+      let unknown_or_join1, canonical_name1 =
         resolve_aliases_and_squash_unresolved_names_on_ty ~type_of_name
           ~force_to_kind:S.force_to_kind
           ~unknown_payload:S.unknown_payload
           or_alias1
       in
-      let or_unknown_or_bottom2, canonical_name2 =
+      let unknown_or_join2, canonical_name2 =
         resolve_aliases_and_squash_unresolved_names_on_ty ~type_of_name
           ~force_to_kind:S.force_to_kind
           ~unknown_payload:S.unknown_payload
@@ -1890,11 +1904,11 @@ end) = struct
       | Some name1, Some name2 when Name.equal name1 name2 ->
         Type_of name1
       | _, _ ->
-        let or_unknown_or_bottom =
-          meet_on_or_unknown_or_bottom ~type_of_name
-            or_unknown_or_bottom1 or_unknown_or_bottom2
+        let unknown_or_join =
+          meet_on_unknown_or_join ~type_of_name
+            unknown_or_join1 unknown_or_join2
         in
-        No_alias or_unknown_or_bottom
+        No_alias unknown_or_join
   end
 
   module rec Meet_or_join_value : sig
@@ -2106,7 +2120,7 @@ end) = struct
 
     let meet_of_kind_foo ~type_of_name
           (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
-          : (of_kind_value, unk) or_unknown_or_bottom =
+          : (of_kind_value, unk) unknown_or_join =
       match of_kind1, of_kind2 with
       | Blocks_and_tagged_immediates blocks_imms1,
           Blocks_and_tagged_immediates blocks_imms2 ->
@@ -2227,7 +2241,7 @@ end) = struct
 
     let meet_of_kind_foo ~type_of_name
           (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
-          : (of_kind_value, unk) or_unknown_or_bottom =
+          : (of_kind_value, unk) unknown_or_join =
       match of_kind1, of_kind2 with
 
     let meet_unk value_kind1 value_kind2 =
@@ -2254,7 +2268,7 @@ end) = struct
 
     let meet_of_kind_foo ~type_of_name
           (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
-          : (of_kind_fabricated, unk) or_unknown_or_bottom =
+          : (of_kind_fabricated, unk) unknown_or_join =
       match of_kind1, of_kind2 with
 
     let meet_unk value_kind1 value_kind2 =
@@ -2281,7 +2295,7 @@ end) = struct
 
     let meet_of_kind_foo ~type_of_name
           (of_kind1 : of_kind_phantom) (of_kind2 : of_kind_phantom)
-          : (of_kind_phantom, unk) or_unknown_or_bottom =
+          : (of_kind_phantom, unk) unknown_or_join =
       match of_kind1, of_kind2 with
 
     let meet_unk phantom_kind1 phantom_kind2 =

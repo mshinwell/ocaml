@@ -85,26 +85,23 @@ module type S = sig
   and ty_fabricated = (of_kind_fabricated, Flambda_kind.Value_kind.t) ty
   and ty_phantom = (of_kind_phantom, Flambda_kind.Phantom_kind.t) ty
 
-  and ('a, 'u) ty = ('a, 'u) or_unknown_or_bottom or_alias
+  and ('a, 'u) ty = ('a, 'u) unknown_or_join or_alias
 
  (** For each kind there is a lattice of types. *)
-  and ('a, 'u) or_unknown_or_bottom = private
+  and ('a, 'u) unknown_or_join = private
     | Unknown of 'u
     (** "Any value can flow to this point": the top element. *)
-    | Ok of 'a or_join
-    | Bottom
-    (** "No value can flow to this point": the bottom element. *)
-
-  and 'a or_join = private
-    | Normal of 'a
-    | Join of 'a * ('a list)
-      (* XXX What about calling this just "Incompatible"? *)
-      (** A join, between incompatible types, which has been remembered
+    | Join of 'a list
+    (** The list being empty means bottom: "no value can flow to this point".
+        The list containing a single element is the usual case where there is
+        no join between incompatible types.
+        If the list contains more than one element:
+          A join, between incompatible types, which has been remembered
           in case it is refined by a subsequent meet.  Joins between compatible
           types are immediately pushed down through the top level structure
           of the type.
-          Invariant: any two members of the non-empty list specified by a
-          [Join] will join to give "unknown". *)
+          Invariant: for [Join (o, os)] then all of [(o :: os)] are mutually
+          incompatible. *)
 
   and of_kind_value = private
     | Blocks_and_tagged_immediates of blocks_and_tagged_immediates
@@ -553,7 +550,7 @@ module type S = sig
      : (force_to_kind:(t -> ('a, 'b) ty)
     -> unknown_payload:'b
     -> ('a, 'b) ty
-    -> ('a, 'b) or_unknown_or_bottom * (Name.t option)) type_accessor
+    -> ('a, 'b) unknown_or_join * (Name.t option)) type_accessor
 
   val force_to_kind_value : t -> ty_value
 
