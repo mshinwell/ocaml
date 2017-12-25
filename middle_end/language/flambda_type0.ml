@@ -128,12 +128,7 @@ end) = struct
 
   and ('a, 'u) unknown_or_join =
     | Unknown of 'u
-    | Ok of 'a or_join
-    | Bottom
-
-  and 'a or_join =
-    | Normal of 'a
-    | Join of 'a or_join * 'a or_join
+    | Join of 'a list
 
   and of_kind_value =
     | Blocks_and_tagged_immediates of blocks_and_tagged_immediates
@@ -150,12 +145,12 @@ end) = struct
     first_fields : t array or_unknown_length;
   }
 
-  and block_case =
-    | Join of singleton_block list
+  and block_cases =
+    | Join of { by_length : singleton_block Immediate.Or_unknown.Map.t; }
 
   and blocks_and_tagged_immediates = {
     immediates : immediate_case Immediate.Or_unknown.Map.t;
-    blocks : block_case Tag.Scannable.Map.t;
+    blocks : block_cases Tag.Map.t;
   }
 
   and 'a of_kind_value_boxed_number =
@@ -259,22 +254,17 @@ end) = struct
         (o : _ unknown_or_join) =
     match o with
     | Unknown payload ->
-      Format.fprintf ppf "(Unknown %a)" print_unknown_payload payload
-    | Ok contents -> print_contents ppf contents
-    | Bottom -> Format.fprintf ppf "Bottom"
-
-  let rec print_or_join print_contents ppf or_join =
-    match or_join with
-    | Normal contents -> print_contents ppf contents
-    | Join (or_join1, or_join2) ->
-      Format.fprintf ppf "@[(Join@ @[(%a)@]@ @[(%a)@])@]"
-        (print_or_join print_contents) or_join1
-        (print_or_join print_contents) or_join2
+      Format.fprintf ppf "@[(Unknown %a)@]" print_unknown_payload payload
+    | Join [] -> Format.fprintf ppf "Bottom"
+    | Join [contents] -> print_contents ppf contents
+    | Join incompatibles ->
+      Format.fprintf ppf "@[(Join_incompatible@ @[(%a)@])@]"
+        (Format.pp_print_list print_contents) incompatibles
 
   let print_ty_generic print_contents print_unknown_payload ppf ty =
     (print_or_alias
         (print_unknown_or_join
-          (print_or_join print_contents)
+          print_contents
           print_unknown_payload))
       ppf ty
 
@@ -327,19 +317,18 @@ end) = struct
       print_typing_environment env_extension
       print_first_fields first_fields
 
-  and print_block_case ppf ((Join singleton_blocks) : block_case) =
-    match singleton_blocks with
-    | [] -> Format.pp_print_string ppf "<empty join>"
-    | [block] -> print_singleton_block ppf block
-    | blocks ->
-      Format.fprintf ppf "(Join %a)"
-        (Format.pp_print_list print_singleton_block) blocks
+  and print_block_cases ppf ((Join { by_length; }) : block_cases) =
+    match Immediate.Or_unknown.Map.get_singleton by_length with
+    | Some (_length, block) -> print_singleton_block ppf block
+    | None ->
+      Format.fprintf ppf "(Join (by_length %a))"
+        (Immediate.Or_unknown.Map.print print_singleton_block) by_length
 
   and print_immediates ppf cases =
     Immediate.Or_unknown.Map.print print_immediate_case ppf cases
 
   and print_blocks ppf cases =
-    Tag.Scannable.Map.print print_block_case ppf cases
+    Tag.Map.print print_block_cases ppf cases
 
   and print_of_kind_value ppf (of_kind_value : of_kind_value) =
     match of_kind_value with
@@ -512,32 +501,21 @@ end) = struct
       existential_freshening;
     }
 
-  let put_ok_under_or_alias (or_alias : _ or_alias)
-        : _ unknown_or_join or_alias =
-    match or_alias with
-    | No_alias contents -> No_alias (Ok contents)
-    | Type export_id -> Type export_id
-    | Type_of name -> Type_of name
-
   let free_names_or_alias free_names_contents (or_alias : _ or_alias) acc =
     match or_alias with
     | No_alias contents -> free_names_contents contents acc
     | Type _export_id -> acc
     | Type_of name -> Name.Set.add name acc
 
-  let rec free_names_or_join free_names_contents (or_join : _ or_join) acc =
-    match or_join with
-    | Normal contents -> free_names_contents contents acc
-    | Join (or_join1, or_join2) ->
-      let acc = free_names_or_join free_names_contents or_join1 acc in
-      free_names_or_join free_names_contents or_join2 acc
-
   let free_names_unknown_or_join free_names_contents free_names_unk
         (o : _ unknown_or_join) acc =
     match o with
     | Unknown unk -> free_names_unk unk acc
-    | Ok or_join -> free_names_or_join free_names_contents or_join acc
-    | Bottom -> acc
+    | Join contents_list ->
+      List.fold_left (fun free_names contents ->
+          free_names_contents contents free_names)
+        Name.Set.empty
+        contents_list
 
   let free_names_ty free_names_contents ty acc =
     let free_names_unk _unk acc = acc in
@@ -565,8 +543,9 @@ end) = struct
     match of_kind with
     | Blocks_and_tagged_immediates { blocks; immediates; } ->
       let acc =
-        Tag.Scannable.Map.fold (fun _tag ((Join singletons) : block_case) acc ->
-            List.fold_left (fun acc (singleton : singleton_block) ->
+        Tag.Map.fold (fun _tag ((Join { by_length; }) : block_cases) acc ->
+            Immediate.Or_unknown.Map.fold
+              (fun _length (singleton : singleton_block) acc ->
                 let acc =
                   free_names_of_typing_environment singleton.env_extension acc
                 in
@@ -575,8 +554,8 @@ end) = struct
                 | Exactly first_fields ->
                   Array.fold_left (fun acc t -> free_names t acc)
                     acc first_fields)
-              acc
-              singletons)
+              by_length
+              acc)
           blocks
           acc
       in
@@ -665,17 +644,17 @@ end) = struct
       let of_kind_phantom : of_kind_phantom =
         Value ty_value
       in
-      Phantom (No_alias (Ok (Normal of_kind_phantom)))
+      Phantom (No_alias (Join [of_kind_phantom]))
     | Naked_number (ty_naked_number, kind) ->
       let of_kind_phantom : of_kind_phantom =
         Naked_number (ty_naked_number, kind)
       in
-      Phantom (No_alias (Ok (Normal of_kind_phantom)))
+      Phantom (No_alias (Join [of_kind_phantom]))
     | Fabricated ty_fabricated ->
       let of_kind_phantom : of_kind_phantom =
         Fabricated ty_fabricated
       in
-      Phantom (No_alias (Ok (Normal of_kind_phantom)))
+      Phantom (No_alias (Join [of_kind_phantom]))
     | Phantom _ -> t
 
   module Name_or_export_id = struct
@@ -744,43 +723,43 @@ end) = struct
 
   let bottom (kind : K.t) : t =
     match kind with
-    | Value _ -> Value (No_alias Bottom)
+    | Value _ -> Value (No_alias (Join []))
     | Naked_number Naked_immediate ->
-      Naked_number (No_alias Bottom, K.Naked_number.Naked_immediate)
+      Naked_number (No_alias (Join []), K.Naked_number.Naked_immediate)
     | Naked_number Naked_float ->
-      Naked_number (No_alias Bottom, K.Naked_number.Naked_float)
+      Naked_number (No_alias (Join []), K.Naked_number.Naked_float)
     | Naked_number Naked_int32 ->
-      Naked_number (No_alias Bottom, K.Naked_number.Naked_int32)
+      Naked_number (No_alias (Join []), K.Naked_number.Naked_int32)
     | Naked_number Naked_int64 ->
-      Naked_number (No_alias Bottom, K.Naked_number.Naked_int64)
+      Naked_number (No_alias (Join []), K.Naked_number.Naked_int64)
     | Naked_number Naked_nativeint ->
-      Naked_number (No_alias Bottom, K.Naked_number.Naked_nativeint)
-    | Fabricated _ -> Fabricated (No_alias Bottom)
-    | Phantom _ -> Phantom (No_alias Bottom)
+      Naked_number (No_alias (Join []), K.Naked_number.Naked_nativeint)
+    | Fabricated _ -> Fabricated (No_alias (Join []))
+    | Phantom _ -> Phantom (No_alias (Join []))
 
   let these_naked_immediates (is : Immediate.Set.t) : t =
     let of_kind : _ of_kind_naked_number = Immediate is in
-    Naked_number (No_alias (Ok (Normal of_kind)),
+    Naked_number (No_alias (Join [of_kind]),
       K.Naked_number.Naked_immediate)
 
   let these_naked_floats (is : Float_by_bit_pattern.Set.t) : t =
     let of_kind : _ of_kind_naked_number = Float is in
-    Naked_number (No_alias (Ok (Normal of_kind)),
+    Naked_number (No_alias (Join [of_kind]),
       K.Naked_number.Naked_float)
 
   let these_naked_int32s (is : Int32.Set.t) : t =
     let of_kind : _ of_kind_naked_number = Int32 is in
-    Naked_number (No_alias (Ok (Normal of_kind)),
+    Naked_number (No_alias (Join [of_kind]),
       K.Naked_number.Naked_int32)
 
   let these_naked_int64s (is : Int64.Set.t) : t =
     let of_kind : _ of_kind_naked_number = Int64 is in
-    Naked_number (No_alias (Ok (Normal of_kind)),
+    Naked_number (No_alias (Join [of_kind]),
       K.Naked_number.Naked_int64)
 
   let these_naked_nativeints (is : Targetint.Set.t) : t =
     let of_kind : _ of_kind_naked_number = Nativeint is in
-    Naked_number (No_alias (Ok (Normal of_kind)),
+    Naked_number (No_alias (Join [of_kind]),
       K.Naked_number.Naked_nativeint)
 
   let this_naked_immediate i =
@@ -817,8 +796,8 @@ end) = struct
   let box_float (t : t) : t =
     match t with
     | Naked_number (ty_naked_float, K.Naked_number.Naked_float) ->
-      Value (No_alias (Ok (Normal (
-        Boxed_number (Boxed_float ty_naked_float)))))
+      Value (No_alias (Join [
+        Boxed_number (Boxed_float ty_naked_float)]))
     | Value _
     | Naked_number _
     | Fabricated _
@@ -829,8 +808,8 @@ end) = struct
   let box_int32 (t : t) : t =
     match t with
     | Naked_number (ty_naked_int32, K.Naked_number.Naked_int32) ->
-      Value (No_alias (Ok (Normal (
-        Boxed_number (Boxed_int32 ty_naked_int32)))))
+      Value (No_alias (Join [
+        Boxed_number (Boxed_int32 ty_naked_int32)]))
     | Value _
     | Naked_number _
     | Fabricated _
@@ -841,8 +820,8 @@ end) = struct
   let box_int64 (t : t) : t =
     match t with
     | Naked_number (ty_naked_int64, K.Naked_number.Naked_int64) ->
-      Value (No_alias (Ok (Normal (
-        Boxed_number (Boxed_int64 ty_naked_int64)))))
+      Value (No_alias (Join [
+        Boxed_number (Boxed_int64 ty_naked_int64)]))
     | Value _
     | Naked_number _
     | Fabricated _
@@ -853,8 +832,8 @@ end) = struct
   let box_nativeint (t : t) : t =
     match t with
     | Naked_number (ty_naked_nativeint, K.Naked_number.Naked_nativeint) ->
-      Value (No_alias (Ok (Normal (
-        Boxed_number (Boxed_nativeint ty_naked_nativeint)))))
+      Value (No_alias (Join [
+        Boxed_number (Boxed_nativeint ty_naked_nativeint)]))
     | Value _
     | Naked_number _
     | Fabricated _
@@ -863,24 +842,30 @@ end) = struct
         print t
 
   let these_tagged_immediates imms : t =
-    let immediates =
-      Immediate.Set.fold (fun imm map ->
-          let case : immediate_case =
-            { env_extension = create_typing_environment ();
-            }
-          in
-          let key = Immediate.Or_unknown.ok imm in
-          Immediate.Or_unknown.Map.add key case map)
-        imms
-        Immediate.Or_unknown.Map.empty
-    in
-    let blocks_and_tagged_immediates : blocks_and_tagged_immediates =
-      { immediates;
-        blocks = Tag.Scannable.Map.empty;
-      }
-    in
-    Value (No_alias (Ok (Normal (Blocks_and_tagged_immediates
-      blocks_and_tagged_immediates))))
+    (* CR mshinwell: Hmm, or should this return "any_tagged_immediate" if the
+       set is empty? *)
+    if Immediate.Set.is_empty imms then
+      bottom (K.value Definitely_immediate)
+    else
+      let immediates =
+        Immediate.Set.fold (fun imm map ->
+            let case : immediate_case =
+              { env_extension = create_typing_environment ();
+              }
+            in
+            let key = Immediate.Or_unknown.ok imm in
+            Immediate.Or_unknown.Map.add key case map)
+          imms
+          Immediate.Or_unknown.Map.empty
+      in
+      (* CR mshinwell: See if we can have a creation function for this *)
+      let blocks_and_tagged_immediates : blocks_and_tagged_immediates =
+        { immediates;
+          blocks = Tag.Map.empty;
+        }
+      in
+      Value (No_alias (Join [Blocks_and_tagged_immediates
+        blocks_and_tagged_immediates]))
 
   let this_tagged_immediate imm =
     these_tagged_immediates (Immediate.Set.singleton imm)
@@ -901,7 +886,7 @@ end) = struct
           { env_extension = env; })
         tags_to_env_extensions
     in
-    Fabricated (No_alias (Ok (Normal (Tag tag_map))))
+    Fabricated (No_alias (Join [Tag tag_map]))
 
 (*
 
@@ -922,7 +907,7 @@ end) = struct
       }
     in
     let str = String_info.Set.singleton str in
-    No_alias (Ok (Normal (String str)))
+    No_alias (Join [String str])
 
   let this_immutable_string str : t =
     Value (this_immutable_string_as_ty_value str)
@@ -934,7 +919,7 @@ end) = struct
       }
     in
     let str = String_info.Set.singleton str in
-    No_alias (Ok (Normal (String str)))
+    No_alias (Join [String str])
 
   let immutable_string ~size : t =
     Value (immutable_string_as_ty_value ~size)
@@ -946,7 +931,7 @@ end) = struct
       }
     in
     let str = String_info.Set.singleton str in
-    Value (No_alias (Ok (Normal (String str))))
+    Value (No_alias (Join [String str]))
 
 (*
 
@@ -1021,6 +1006,21 @@ end) = struct
 
   let any_value value_kind : t =
     Value (any_value_as_ty_value value_kind)
+
+  let any_tagged_immediate () : t =
+    let immediates =
+      let case : immediate_case =
+        { env_extension = create_typing_environment ();
+        }
+      in
+      Immediate.Or_unknown.Map.add (Immediate.Or_unknown.unknown ())
+        case
+        Immediate.Or_unknown.Map.empty
+    in
+    Value (No_alias (Join [Blocks_and_tagged_immediates {
+      blocks = Tag.Map.empty;
+      immediates;
+    }]))
 
   let any_naked_immediate () : t =
     Naked_number (No_alias (Unknown ()), K.Naked_number.Naked_immediate)
@@ -1260,23 +1260,24 @@ end) = struct
           ~unknown_payload:K.Value_kind.Unknown
           ty
       in
-      let rec value_kind_or_join (or_join : _ or_join) : K.Value_kind.t =
-        match or_join with
-        | Normal of_kind_value ->
-          begin match of_kind_value with
-          | Blocks_and_tagged_immediates { blocks; immediates = _; } ->
-            if Tag.Scannable.Map.is_empty blocks then Definitely_immediate
-            else Unknown
-          | Boxed_number _ | Closure _ | String _ -> Definitely_pointer
-          end
-        | Join (or_join1, or_join2) ->
-          K.Value_kind.join (value_kind_or_join or_join1)
-            (value_kind_or_join or_join2)
-      in
       match ty with
       | Unknown value_kind -> value_kind
-      | Ok or_join -> value_kind_or_join or_join
-      | Bottom -> Bottom
+      | Join of_kind_values ->
+        List.fold_left (fun result of_kind_value ->
+            let this_kind : K.Value_kind.t =
+              match of_kind_value with
+              | Blocks_and_tagged_immediates { blocks; immediates; } ->
+                if Tag.Map.is_empty blocks then
+                  Definitely_immediate
+                else if Immediate.Or_unknown.Map.is_empty immediates then
+                  Definitely_pointer
+                else
+                  Unknown
+              | Boxed_number _ | Closure _ | String _ -> Definitely_pointer
+            in
+            K.Value_kind.join result this_kind)
+          K.Value_kind.Bottom
+          of_kind_values
     in
     value_kind_ty_value ty
 
@@ -1295,22 +1296,18 @@ end) = struct
           ~unknown_payload:K.Value_kind.Unknown
           ty
       in
-      let rec value_kind_or_join (or_join : of_kind_fabricated or_join)
-            : K.Value_kind.t =
-        match or_join with
-        | Normal of_kind_fabricated ->
-          begin match of_kind_fabricated with
-          | Tag _ -> K.Value_kind.Definitely_immediate
-          | Set_of_closures _ -> K.Value_kind.Definitely_pointer
-          end
-        | Join (or_join1, or_join2) ->
-          K.Value_kind.join (value_kind_or_join or_join1)
-            (value_kind_or_join or_join2)
-      in
       match ty with
       | Unknown value_kind -> value_kind
-      | Ok or_join -> value_kind_or_join or_join
-      | Bottom -> Bottom
+      | Join of_kind_fabricateds ->
+        List.fold_left (fun result of_kind_fabricated ->
+            let this_kind : K.Value_kind.t =
+              match of_kind_fabricated with
+              | Tag _ -> K.Value_kind.Definitely_immediate
+              | Set_of_closures _ -> K.Value_kind.Definitely_pointer
+            in
+            K.Value_kind.join result this_kind)
+          K.Value_kind.Bottom
+          of_kind_fabricateds
     in
     value_kind_ty_fabricated ty
 
@@ -1328,40 +1325,36 @@ end) = struct
           ~unknown_payload:K.Phantom_kind.Unknown
           ty
       in
-      let rec phantom_kind_or_join (or_join : of_kind_phantom or_join)
-            : K.Phantom_kind.t =
-        match or_join with
-        | Normal of_kind_phantom ->
-          begin match of_kind_phantom with
-          | Value ty_value ->
-            let value_kind =
-              value_kind_ty_value ~type_of_name ty_value
-            in
-            Value value_kind
-          | Naked_number (_, K.Naked_number.Naked_immediate) ->
-            Naked_number Naked_immediate
-          | Naked_number (_, K.Naked_number.Naked_float) ->
-            Naked_number Naked_float
-          | Naked_number (_, K.Naked_number.Naked_int32) ->
-            Naked_number Naked_int32
-          | Naked_number (_, K.Naked_number.Naked_int64) ->
-            Naked_number Naked_int64
-          | Naked_number (_, K.Naked_number.Naked_nativeint) ->
-            Naked_number Naked_nativeint
-          | Fabricated ty_fabricated ->
-            let value_kind =
-              value_kind_ty_fabricated ~type_of_name ty_fabricated
-            in
-            Fabricated value_kind
-          end
-        | Join (or_join1, or_join2) ->
-          K.Phantom_kind.join (phantom_kind_or_join or_join1)
-            (phantom_kind_or_join or_join2)
-      in
       match ty with
-      | Unknown value_kind -> value_kind
-      | Ok or_join -> phantom_kind_or_join or_join
-      | Bottom -> Bottom
+      | Unknown phantom_kind -> phantom_kind
+      | Join of_kind_phantoms ->
+        List.fold_left (fun result (of_kind_phantom : of_kind_phantom) ->
+            let this_kind : K.Phantom_kind.t =
+              match of_kind_phantom with
+              | Value ty_value ->
+                let value_kind =
+                  value_kind_ty_value ~type_of_name ty_value
+                in
+                Value value_kind
+              | Naked_number (_, K.Naked_number.Naked_immediate) ->
+                Naked_number Naked_immediate
+              | Naked_number (_, K.Naked_number.Naked_float) ->
+                Naked_number Naked_float
+              | Naked_number (_, K.Naked_number.Naked_int32) ->
+                Naked_number Naked_int32
+              | Naked_number (_, K.Naked_number.Naked_int64) ->
+                Naked_number Naked_int64
+              | Naked_number (_, K.Naked_number.Naked_nativeint) ->
+                Naked_number Naked_nativeint
+              | Fabricated ty_fabricated ->
+                let value_kind =
+                  value_kind_ty_fabricated ~type_of_name ty_fabricated
+                in
+                Fabricated value_kind
+            in
+            K.Phantom_kind.join result this_kind)
+          K.Phantom_kind.Bottom
+          of_kind_phantoms
     in
     phantom_kind_ty_phantom ty
 
@@ -1415,7 +1408,7 @@ end) = struct
   let closure ~set_of_closures closure_id : t =
     (* CR mshinwell: pass a description to the "force" functions *)
     let set_of_closures = force_to_kind_fabricated set_of_closures in
-    Value (No_alias (Ok (Normal (Closure { set_of_closures; closure_id; }))))
+    Value (No_alias (Join [Closure { set_of_closures; closure_id; }]))
 
   let create_set_of_closures ~set_of_closures_id ~set_of_closures_origin
         ~function_decls ~closure_elements : set_of_closures =
@@ -1431,7 +1424,7 @@ end) = struct
       create_set_of_closures ~set_of_closures_id ~set_of_closures_origin
         ~function_decls ~closure_elements
     in
-    Fabricated (No_alias (Ok (Normal (Set_of_closures set_of_closures))))
+    Fabricated (No_alias (Join [Set_of_closures set_of_closures]))
 
 
 (*
@@ -1739,7 +1732,7 @@ end) = struct
     val meet_of_kind_foo
        : (of_kind_foo
       -> of_kind_foo
-      -> of_kind_foo or_join or_bottom) type_accessor
+      -> of_kind_foo or_bottom) type_accessor
 
     val meet_unk : unk -> unk -> unk
 
@@ -1773,13 +1766,9 @@ end) = struct
       -> (of_kind_foo, unk) ty) type_accessor
   end
 
-  (* The [Make_meet_and_join] functor encodes the basic properties of
-     meets and joins:
-       1. Action of absorbing and identity elements.  (For meet, unknown
-          is the identity and bottom is absorbing; vice-versa for join.)
-       2. Distributivity of meet over join:
-          X n (X' u Y') == (X n X') u (X n Y').
-  *)
+  (* CR mshinwell: Work out which properties we need to prove, e.g.
+     Distributivity of meet over join:
+       X n (X' u Y') == (X n X') u (X n Y'). *)
   module Make_meet_and_join (S : Meet_or_join_spec) : sig
     include Meet_or_join
       with type of_kind_foo := S.of_kind_foo
@@ -1794,10 +1783,12 @@ end) = struct
         Unknown (S.join_unk unk_left unk_right)
       | Unknown unk, _ | _, Unknown unk -> Unknown unk
       | Join of_kind_foos1, Join of_kind_foos2 ->
+        (* We rely on the invariant in flambda_type0_intf.ml.
+           Everything in [of_kind_foos1] is mutually incompatible with each
+           other; likewise in [of_kind_foos2]. *)
         let of_kind_foos =
           List.fold_left (fun of_kind_foos of_kind_foo ->
-              (* By virtue of the invariant (see flambda_type0_intf.ml),
-                 [of_kind_foo] can be compatible with at most one of the
+              (* [of_kind_foo] can be compatible with at most one of the
                  elements of [of_kind_foos]. *)
               let found_one = ref false in
               let joined =
@@ -1849,45 +1840,36 @@ end) = struct
         in
         No_alias unknown_or_join
 
-    let rec meet_on_or_join ~type_of_name
-          (oj1 : S.of_kind_foo or_join) (oj2 : S.of_kind_foo or_join)
-          : (S.of_kind_foo, S.unk) unknown_or_join =
-      match oj1, oj2 with
-      | Normal s1, Normal s2 ->
-        begin match S.meet_of_kind_foo ~type_of_name s1 s2 with
-        | Ok meet -> Ok meet
-        | Bottom -> Bottom
-        end
-      | ((Normal _ | Join _) as other_side), Join (or_join1, or_join2)
-      | Join (or_join1, or_join2), ((Normal _ | Join _) as other_side) ->
-        (* Rule 2 from above. *)
-        (* CR mshinwell: We should maybe be returning equations when we
-           meet types equipped with alias information. *)
-        let other_side_meet_join_left =
-          meet_on_or_join ~type_of_name other_side or_join1
-        in
-        let other_side_meet_join_right =
-          meet_on_or_join ~type_of_name other_side or_join2
-        in
-        join_on_unknown_or_join ~type_of_name
-          other_side_meet_join_left other_side_meet_join_right
-
-    and meet_on_unknown_or_join ~type_of_name
+    let rec meet_on_unknown_or_join ~type_of_name
           (ou1 : (S.of_kind_foo, S.unk) unknown_or_join)
           (ou2 : (S.of_kind_foo, S.unk) unknown_or_join)
           : (S.of_kind_foo, S.unk) unknown_or_join =
       match ou1, ou2 with
-      | Bottom, _ | _, Bottom -> Bottom
       | Unknown unk1, Unknown unk2 -> Unknown (S.meet_unk unk1 unk2)
       | Unknown _, ou2 -> ou2
       | ou1, Unknown _ -> ou1
-      | Ok or_join1, Ok or_join2 ->
-        meet_on_or_join ~type_of_name or_join1 or_join2
+      | Join of_kind_foos1, Join of_kind_foos2 ->
+        let of_kind_foos =
+          List.fold_left (fun of_kind_foos of_kind_foo ->
+              List.filter_map (fun of_kind_foo' ->
+                  let meet =
+                    S.meet_of_kind_foo ~type_of_name of_kind_foo of_kind_foo'
+                  in
+                  match meet with
+                  | Ok of_kind_foo -> Some of_kind_foo
+                  | Bottom -> None)
+                of_kind_foos)
+            of_kind_foos2
+            of_kind_foos1
+        in
+        Join of_kind_foos
 
     and meet_ty ~type_of_name
           (or_alias1 : (S.of_kind_foo, S.unk) ty)
           (or_alias2 : (S.of_kind_foo, S.unk) ty)
           : (S.of_kind_foo, S.unk) ty =
+      (* CR mshinwell: We should maybe be returning equations when we
+         meet types equipped with alias information. *)
       let unknown_or_join1, canonical_name1 =
         resolve_aliases_and_squash_unresolved_names_on_ty ~type_of_name
           ~force_to_kind:S.force_to_kind
@@ -1963,40 +1945,33 @@ end) = struct
            } : singleton_block)
           ({ env_extension = env_extension2;
              first_fields = first_fields2;
-           } : singleton_block) : singleton_block or_bottom =
+           } : singleton_block) : singleton_block =
       let env_extension =
         Meet_or_join.meet_typing_environment ~type_of_name
           env_extension1 env_extension2
       in
-      let first_fields =
+      let first_fields : _ or_unknown_length =
+        (* Note: this function is only called with blocks of the same
+           known length (or with both blocks of unknown length). *)
         match first_fields1, first_fields2 with
-        | Exactly fields, Unknown_length
-        | Unknown_length, Exactly fields -> Ok (Exactly fields)
-        | Unknown_length, Unknown_length -> Ok Unknown_length
+        | Unknown_length, Unknown_length -> Unknown_length
         | Exactly fields1, Exactly fields2 ->
-          if Array.length fields1 = Array.length fields2 then
-            let fields =
-              Array.map2 (fun field1 field2 ->
-                  Meet_or_join.meet ~type_of_name field1 field2)
-                fields1 fields2
-            in
-            Ok (Exactly fields)
-          else
-            Bottom
+          assert (Array.length fields1 = Array.length fields2);
+          let fields =
+            Array.map2 (fun field1 field2 ->
+                Meet_or_join.meet ~type_of_name field1 field2)
+              fields1 fields2
+          in
+          Exactly fields
+        | Exactly _, Unknown_length
+        | Unknown_length, Exactly _ -> assert false
       in
-      match first_fields with
-      | Ok first_fields ->
-        let singleton_block : singleton_block =
-          { env_extension;
-            first_fields;
-          }
-        in
-        Ok singleton_block
-      | Bottom -> Bottom
-
-    type join_singleton_block_result =
-      | Joined of singleton_block
-      | Incompatible
+      let singleton_block : singleton_block =
+        { env_extension;
+          first_fields;
+        }
+      in
+      Ok singleton_block
 
     let join_singleton_block ~type_of_name
           ({ env_extension = env_extension1;
@@ -2004,94 +1979,69 @@ end) = struct
            } : singleton_block)
           ({ env_extension = env_extension2;
              first_fields = first_fields2;
-           } : singleton_block) : join_singleton_block_result =
+           } : singleton_block) : singleton_block =
       let env_extension =
-        Meet_or_join.meet_typing_environment ~type_of_name
+        Meet_or_join.join_typing_environment ~type_of_name
           env_extension1 env_extension2
       in
       let first_fields =
         match first_fields1, first_fields2 with
-        | Exactly fields, Unknown_length ->
-        | Unknown_length, Exactly fields ->
-        | Unknown_length, Unknown_length ->
+        | Unknown_length, Unknown_length -> Unknown_length
         | Exactly fields1, Exactly fields2 ->
+          assert (Array.length fields1 = Array.length fields2);
+          let fields =
+            Array.map2 (fun field1 field2 ->
+                Meet_or_join.join ~type_of_name field1 field2)
+              fields1 fields2
+          in
+          Exactly fields
+        | Exactly _, Unknown_length
+        | Unknown_length, Exactly _ -> assert false
       in
       { env_extension;
         first_fields;
       }
 
-    let meet_block_case ~type_of_name
-          ((Join singleton_blocks1) : block)
-          ((Join singleton_blocks2) : block)
-          : block_case or_bottom =
-      let all_combinations =
-        List.cross_product singleton_blocks1 singleton_blocks2
+    let meet_block_cases ~type_of_name
+          ((Join singleton_blocks1) : block_cases)
+          ((Join singleton_blocks2) : block_cases)
+          : block_cases or_bottom =
+      let block_cases =
+        Immediate.Or_unknown.Map.inter
+          (fun singleton_block1 singleton_block2 ->
+            meet_singleton_block ~type_of_name
+              singleton_block1 singleton_block2)
+          blocks1
+          blocks2
       in
-      let meets =
-        List.filter_map (fun (singleton_block1, singleton_block2) ->
-            let meet =
-              meet_singleton_block ~type_of_name
-                singleton_block1 singleton_block2
-            in
-            match meet with
-            | Ok meet -> Some meet
-            | Bottom -> None)
-          all_combinations
-      in
-      match meets with
-      | [] -> Bottom
-      | meet::meets ->
-        List.fold_left (fun singleton_block meet ->
-            meet_singleton_block ~type_of_name singleton_block meet)
-          meets
-          (Ok meet)
+      if Immediate.Or_unknown.Map.is_empty block_cases then Bottom
+      else Ok blocks
 
-    let join_block_case ~type_of_name
-          ((Join singleton_blocks1) : block)
-          ((Join singleton_blocks2) : block)
-          : block_case =
-      let all_combinations =
-        List.cross_product singleton_blocks1 singleton_blocks2
-      in
-      let joins =
-        List.fold_left (fun (singleton_block1, singleton_block2) joins ->
-            let join_result =
-              join_singleton_block ~type_of_name
-                singleton_block1 singleton_block2
-            in
-            match join_result with
-            | Joined of singleton_block ->
-              singleton_block :: joins
-            | Incompatible ->
-              singleton_block1 :: singleton_block2 :: joins)
-          all_combinations
-          []
-      in
-      match joins with
-      | [] ->
-        (* CR mshinwell: We need to work out how to ensure there are always
-           elements in this list.  Using a binary tree would sort it. *)
-        assert false
-      | join::joins ->
-        List.fold_left (fun singleton_block join ->
-            join_singleton_block ~type_of_name singleton_block join)
-          joins
-          join
+    let join_block_cases ~type_of_name
+          ((Join singleton_blocks1) : block_cases)
+          ((Join singleton_blocks2) : block_cases)
+          : block_cases =
+      Immediate.Or_unknown.Map.union_merge
+          (fun singleton_block1 singleton_block2 ->
+            join_singleton_block ~type_of_name
+              singleton_block1 singleton_block2)
+        blocks1
+        blocks2
 
     let meet_blocks ~type_of_name blocks1 blocks2 : _ or_bottom =
       let blocks =
-        Tag.Scannable.Map.inter (fun block_case1 block_case2 ->
-            match meet_block_case ~type_of_name block_case1 block_case2 with
-            | Ok block_case -> Some block_case
+        Tag.Map.inter (fun block_cases1 block_cases2 ->
+            match meet_block_cases ~type_of_name block_cases1 block_cases2 with
+            | Ok block_cases -> Some block_cases
             | Bottom -> None)
           blocks1
           blocks2
       in
-      if Tag.Scannable.Map.is_empty blocks then Bottom
+      if Tag.Map.is_empty blocks then Bottom
       else Ok blocks
 
     let join_blocks ~type_of_name blocks1 blocks2 =
-      Tag.Scannable.Map.union_merge (fun block_case1 block_case2 ->
+      Tag.Map.union_merge (fun block_case1 block_case2 ->
           join_block_case ~type_of_name block_case1 block_case2)
         blocks1
         blocks2
@@ -2100,15 +2050,23 @@ end) = struct
           { blocks = blocks1; immediates = imms1; }
           { blocks = blocks2; immediates = imms2; }
           : blocks_and_tagged_immediates or_bottom =
-      match meet_blocks ~type_of_name blocks1 blocks2 with
-      | Bottom -> Bottom
-      | Ok blocks ->
-        let immediates =
-          match meet_immediates ~type_of_name imms1 imms2 with
-          | Bottom -> Immediate.Or_unknown.Map.empty
-          | Ok immediates -> immediates
-        in
-        Ok { blocks; immediates; }
+      let blocks =
+        match meet_blocks ~type_of_name blocks1 blocks2 with
+        | Bottom -> Join { by_length = Immediate.Or_unknown.Map.empty; }
+        | Ok blocks -> blocks
+      in
+      let immediates =
+        match meet_immediates ~type_of_name imms1 imms2 with
+        | Bottom -> Immediate.Or_unknown.Map.empty
+        | Ok immediates -> immediates
+      in
+      let (Join { by_length; }) = blocks in
+      let is_bottom =
+        Immediate.Or_unknown.Map.is_empty by_length
+          && Immediate.Or_unknown.Map.is_empty immediates
+      in
+      if is_bottom then Bottom
+      else Ok { blocks; immediates; }
 
     let join_blocks_and_tagged_immediates ~type_of_name
           { blocks = blocks1; immediates = imms1; }

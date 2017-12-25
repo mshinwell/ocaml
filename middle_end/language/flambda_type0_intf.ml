@@ -87,22 +87,28 @@ module type S = sig
 
   and ('a, 'u) ty = ('a, 'u) unknown_or_join or_alias
 
- (** For each kind there is a lattice of types. *)
+  (** For each kind there is a lattice of types. *)
   and ('a, 'u) unknown_or_join = private
     | Unknown of 'u
     (** "Any value can flow to this point": the top element. *)
     | Join of 'a list
-    (** The list being empty means bottom: "no value can flow to this point".
-        The list containing a single element is the usual case where there is
-        no join between incompatible types.
-        If the list contains more than one element:
+    (** - The list being empty means bottom, the least element: "no value can
+          flow to this point".
+        - The list containing a single element is the usual case where there is
+          no join between incompatible types.
+        - If the list contains more than one element:
           A join, between incompatible types, which has been remembered
           in case it is refined by a subsequent meet.  Joins between compatible
           types are immediately pushed down through the top level structure
           of the type.
-          Invariant: for [Join (o, os)] then all of [(o :: os)] are mutually
-          incompatible. *)
+        Invariant: every member of a [Join] is mutually incompatible with the
+        other members. *)
 
+  (* CR mshinwell: There needs to be an invariant function which checks that
+     any possible "bottom" case here is represented instead by "Join []".
+     (Example: Blocks_and_tagged_immediates with both blocks and
+     immediates the empty map.)  This means that to check bottomness it
+     suffices to check against "Join []". *)
   and of_kind_value = private
     | Blocks_and_tagged_immediates of blocks_and_tagged_immediates
     | Boxed_number : _ of_kind_value_boxed_number -> of_kind_value
@@ -118,16 +124,18 @@ module type S = sig
     first_fields : t array or_unknown_length;
   }
 
-  and block_case = private
+  and block_cases = private
     | Join of { by_length : singleton_block Immediate.Or_unknown.Map.t; }
-    (** This is similar to the [Join] case at the top level of types: no two
-        [singleton_block]s in a [Join] here can have a compatible structure.
+    (** This is similar to the [Join] case at the top level of types:
+        no two [singleton_block]s in one of these [Join]s can have a
+        compatible structure.
         The only thing which determines the compatibility in this case is
-        the length, which we can make explicit using a map. *)
+        the length, which we can make explicit using a map.
+        Invariant: the map is always non-empty. *)
 
   and blocks_and_tagged_immediates = private {
     immediates : immediate_case Immediate.Or_unknown.Map.t;
-    blocks : block_case Tag.Scannable.Map.t;
+    blocks : block_cases Tag.Map.t;
   }
 
   and 'a of_kind_value_boxed_number = private
