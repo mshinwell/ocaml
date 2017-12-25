@@ -228,6 +228,18 @@ module type S = sig
         -> of_kind_phantom
     | Fabricated of ty_fabricated
 
+  module Name_or_export_id : sig
+    type t = private
+      | Name of Name.t
+      | Export_id of Export_id.t
+
+    include Identifiable.S with type t := t
+  end
+
+  (** Annotation for functions that may require examination of the current
+      simplification environment. *)
+  type 'a type_accessor = type_of_name:(Name_or_export_id.t -> t option) -> 'a
+
   (** If the given type has kind [Phantom], return it; otherwise form the
       correct type of kind [Phantom] describing the given type. *)
   val phantomize : t -> t
@@ -265,8 +277,8 @@ module type S = sig
 
     val print : Format.formatter -> t -> unit
 
-(*
     val create : unit -> t
+(*
 
     val add : t -> Name.t -> Scope_level.t -> flambda_type -> t
 
@@ -278,11 +290,11 @@ module type S = sig
        : t
       -> minimum_scope_level_to_be_existential:Scope_level.t
       -> t
+*)
 
     val join : (t -> t -> t) type_accessor
 
     val meet : (t -> t -> t) type_accessor
-*)
   end
 
   val print : Format.formatter -> t -> unit
@@ -445,18 +457,6 @@ module type S = sig
 
   (** Free names in a type. *)
   val free_names : t -> Name.Set.t
-
-  module Name_or_export_id : sig
-    type t = private
-      | Name of Name.t
-      | Export_id of Export_id.t
-
-    include Identifiable.S with type t := t
-  end
-
-  (** Annotation for functions that may require examination of the current
-      simplification environment. *)
-  type 'a type_accessor = type_of_name:(Name_or_export_id.t -> t option) -> 'a
 
   (** Determine the (unique) kind of a type. *)
   val kind : (t -> Flambda_kind.t) type_accessor

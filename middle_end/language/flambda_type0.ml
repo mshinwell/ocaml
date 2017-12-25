@@ -2762,73 +2762,71 @@ end) = struct
           print t1
           print t2
 
-    let meet_typing_environment ~type_of_name:_ _t1 _t2 = assert false
-
-    let join_typing_environment ~type_of_name:_ _t1 _t2 = assert false
-
-(*
-    let join_typing_environment ~type_of_name t1 t2 =
+    let join_typing_environment ~type_of_name
+          (t1 : typing_environment) (t2 : typing_environment) =
       let names_to_types =
-        Name.Map.inter (fun ty1 ty2 ->
-            join ~type_of_name t1 t2)
+        Name.Map.inter_merge (fun ty1 ty2 ->
+            join ~type_of_name ty1 ty2)
           t1.names_to_types
           t2.names_to_types
       in
       let all_levels_to_names =
-        Scope_level.Map.union
+        Scope_level.Map.union_merge
           (fun names1 names2 -> Name.Set.union names1 names2)
           t1.levels_to_names
           t2.levels_to_names
       in
       let levels_to_names =
-        Scope_level.Map.filter (fun _scope_level name ->
-            Name.Map.mem name names_to_types)
-          all_levels_to_names
-      in
-      let existentials =
-        (* XXX care if a name is non-existential in one and existential
-           in the other *)
-        Name.Set.inter t1.existentials t2.existentials
-      in
-      let existential_freshening =
-        ...
-      in
-      { names_to_types;
-        types_to_levels;
-        existentials;
-        existential_freshening;
-      }
-
-    let meet_typing_environment ~type_of_name t1 t2 =
-      let names_to_types =
-        Name.Map.union (fun ty1 ty2 ->
-            meet ~type_of_name t1 t2)
-          t1.names_to_types
-          t2.names_to_types
-      in
-      let all_levels_to_names =
-        Scope_level.Map.union
-          (fun names1 names2 -> Name.Set.union names1 names2)
-          t1.levels_to_names
-          t2.levels_to_names
-      in
-      let levels_to_names =
-        Scope_level.Map.filter (fun _scope_level name ->
-            Name.Map.mem name names_to_types)
+        Scope_level.Map.map (fun names ->
+            Name.Set.filter (fun name ->
+                Name.Map.mem name names_to_types)
+              names)
           all_levels_to_names
       in
       let existentials =
         Name.Set.union t1.existentials t2.existentials
       in
       let existential_freshening =
-        ...
+        t1.existential_freshening (* XXX *)
       in
       { names_to_types;
-        types_to_levels;
+        levels_to_names;
         existentials;
         existential_freshening;
       }
-*)
+
+    let meet_typing_environment ~type_of_name
+          (t1 : typing_environment) (t2 : typing_environment) =
+      let names_to_types =
+        Name.Map.union_merge (fun ty1 ty2 ->
+            meet ~type_of_name ty1 ty2)
+          t1.names_to_types
+          t2.names_to_types
+      in
+      let all_levels_to_names =
+        Scope_level.Map.union_merge
+          (fun names1 names2 -> Name.Set.union names1 names2)
+          t1.levels_to_names
+          t2.levels_to_names
+      in
+      let levels_to_names =
+        Scope_level.Map.map (fun names ->
+            Name.Set.filter (fun name ->
+                Name.Map.mem name names_to_types)
+              names)
+          all_levels_to_names
+      in
+      let existentials =
+        Name.Set.inter t1.existentials t2.existentials
+      in
+      let existential_freshening =
+        t1.existential_freshening (* XXX *)
+      in
+      { names_to_types;
+        levels_to_names;
+        existentials;
+        existential_freshening;
+      }
   end
 
   let meet = Meet_and_join.meet
@@ -2839,6 +2837,9 @@ end) = struct
 
     let print = print_typing_environment
     let create = create_typing_environment
+
+    let meet = Meet_and_join.meet_typing_environment
+    let join = Meet_and_join.join_typing_environment
 
 (*
     let add t name scope_level ty =
