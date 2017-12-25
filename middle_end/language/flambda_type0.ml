@@ -1721,7 +1721,7 @@ end) = struct
     | Ok of 'a
     | Unknown
 
-  module type Meet_or_join_spec = sig
+  module type Meet_and_join_spec = sig
     type of_kind_foo
     type unk
 
@@ -1749,7 +1749,7 @@ end) = struct
     val join_unk : unk -> unk -> unk
   end
 
-  module type Meet_or_join = sig
+  module type Meet_and_join = sig
     type of_kind_foo
     type unk
 
@@ -1769,8 +1769,8 @@ end) = struct
   (* CR mshinwell: Work out which properties we need to prove, e.g.
      Distributivity of meet over join:
        X n (X' u Y') == (X n X') u (X n Y'). *)
-  module Make_meet_and_join (S : Meet_or_join_spec) : sig
-    include Meet_or_join
+  module Make_meet_and_join (S : Meet_and_join_spec) : sig
+    include Meet_and_join
       with type of_kind_foo := S.of_kind_foo
       with type unk := S.unk
   end = struct
@@ -1851,7 +1851,7 @@ end) = struct
       | Join of_kind_foos1, Join of_kind_foos2 ->
         let of_kind_foos =
           List.fold_left (fun of_kind_foos of_kind_foo ->
-              List.filter_map (fun of_kind_foo' ->
+              Misc.Stdlib.List.filter_map (fun of_kind_foo' ->
                   let meet =
                     S.meet_of_kind_foo ~type_of_name of_kind_foo of_kind_foo'
                   in
@@ -1893,11 +1893,11 @@ end) = struct
         No_alias unknown_or_join
   end
 
-  module rec Meet_or_join_value : sig
-    include Meet_or_join
-      with type of_kind_foo = of_kind_value
-      with type unk = K.Value_kind.t
-  end = Make_meet_or_join (struct
+  module rec Meet_and_join_value : sig
+    include Meet_and_join
+      with type of_kind_foo := of_kind_value
+      with type unk := K.Value_kind.t
+  end = Make_meet_and_join (struct
     type of_kind_foo = of_kind_value
     type unk = K.Value_kind.t
 
@@ -1905,18 +1905,20 @@ end) = struct
 
     let unknown_payload = K.Value_kind.Unknown
 
-    let meet_immediate ~type_of_name
-          ({ env_extension = env_extension1; } : immediate)
-          ({ env_extension = env_extension2; } : immediate) : immediate =
+    let meet_immediate_case ~type_of_name
+          ({ env_extension = env_extension1; } : immediate_case)
+          ({ env_extension = env_extension2; } : immediate_case)
+          : immediate_case =
       let env_extension =
         Meet_or_join.meet_typing_environment ~type_of_name
           env_extension1 env_extension2
       in
       { env_extension; }
 
-    let join_immediate ~type_of_name
-          ({ env_extension = env_extension1; } : immediate)
-          ({ env_extension = env_extension2; } : immediate) : immediate =
+    let join_immediate_case ~type_of_name
+          ({ env_extension = env_extension1; } : immediate_case)
+          ({ env_extension = env_extension2; } : immediate_case)
+          : immediate_case =
       let env_extension =
         Meet_or_join.join_typing_environment ~type_of_name
           env_extension1 env_extension2
@@ -1926,7 +1928,7 @@ end) = struct
     let meet_immediates ~type_of_name immediates1 immediates2 : _ or_bottom =
       let immediates =
         Immediate.Or_unknown.Map.inter_merge (fun imm1 imm2 ->
-            meet_immediate ~type_of_name imm1 imm2)
+            meet_immediate_case ~type_of_name imm1 imm2)
           immediates1
           immediates2
       in
@@ -1935,7 +1937,7 @@ end) = struct
 
     let join_immediates ~type_of_name immediates1 immediates2 =
       Immediate.Or_unknown.Map.union_merge (fun imm1 imm2 ->
-          join_immediate ~type_of_name imm1 imm2)
+          join_immediate_case ~type_of_name imm1 imm2)
         immediates1
         immediates2
 
@@ -1966,12 +1968,9 @@ end) = struct
         | Exactly _, Unknown_length
         | Unknown_length, Exactly _ -> assert false
       in
-      let singleton_block : singleton_block =
-        { env_extension;
-          first_fields;
-        }
-      in
-      Ok singleton_block
+      { env_extension;
+        first_fields;
+      }
 
     let join_singleton_block ~type_of_name
           ({ env_extension = env_extension1;
@@ -2003,30 +2002,33 @@ end) = struct
       }
 
     let meet_block_cases ~type_of_name
-          ((Join singleton_blocks1) : block_cases)
-          ((Join singleton_blocks2) : block_cases)
+          ((Join { by_length = singleton_blocks1; }) : block_cases)
+          ((Join { by_length = singleton_blocks2; }) : block_cases)
           : block_cases or_bottom =
-      let block_cases =
-        Immediate.Or_unknown.Map.inter
+      let by_length =
+        Immediate.Or_unknown.Map.inter_merge
           (fun singleton_block1 singleton_block2 ->
             meet_singleton_block ~type_of_name
               singleton_block1 singleton_block2)
-          blocks1
-          blocks2
+          singleton_blocks1
+          singleton_blocks2
       in
-      if Immediate.Or_unknown.Map.is_empty block_cases then Bottom
-      else Ok blocks
+      if Immediate.Or_unknown.Map.is_empty by_length then Bottom
+      else Ok ((Join { by_length; }) : block_cases)
 
     let join_block_cases ~type_of_name
-          ((Join singleton_blocks1) : block_cases)
-          ((Join singleton_blocks2) : block_cases)
+          ((Join { by_length = singleton_blocks1; }) : block_cases)
+          ((Join { by_length = singleton_blocks2; }) : block_cases)
           : block_cases =
-      Immediate.Or_unknown.Map.union_merge
-          (fun singleton_block1 singleton_block2 ->
-            join_singleton_block ~type_of_name
-              singleton_block1 singleton_block2)
-        blocks1
-        blocks2
+      let by_length =
+        Immediate.Or_unknown.Map.union_merge
+            (fun singleton_block1 singleton_block2 ->
+              join_singleton_block ~type_of_name
+                singleton_block1 singleton_block2)
+          singleton_blocks1
+          singleton_blocks2
+      in
+      Join { by_length; }
 
     let meet_blocks ~type_of_name blocks1 blocks2 : _ or_bottom =
       let blocks =
@@ -2041,8 +2043,8 @@ end) = struct
       else Ok blocks
 
     let join_blocks ~type_of_name blocks1 blocks2 =
-      Tag.Map.union_merge (fun block_case1 block_case2 ->
-          join_block_case ~type_of_name block_case1 block_case2)
+      Tag.Map.union_merge (fun block_cases1 block_cases2 ->
+          join_block_cases ~type_of_name block_cases1 block_cases2)
         blocks1
         blocks2
 
@@ -2052,7 +2054,7 @@ end) = struct
           : blocks_and_tagged_immediates or_bottom =
       let blocks =
         match meet_blocks ~type_of_name blocks1 blocks2 with
-        | Bottom -> Join { by_length = Immediate.Or_unknown.Map.empty; }
+        | Bottom -> Tag.Map.empty
         | Ok blocks -> blocks
       in
       let immediates =
@@ -2060,9 +2062,8 @@ end) = struct
         | Bottom -> Immediate.Or_unknown.Map.empty
         | Ok immediates -> immediates
       in
-      let (Join { by_length; }) = blocks in
       let is_bottom =
-        Immediate.Or_unknown.Map.is_empty by_length
+        Tag.Map.is_empty blocks
           && Immediate.Or_unknown.Map.is_empty immediates
       in
       if is_bottom then Bottom
@@ -2078,7 +2079,7 @@ end) = struct
 
     let meet_of_kind_foo ~type_of_name
           (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
-          : (of_kind_value, unk) unknown_or_join =
+          : of_kind_value or_bottom =
       match of_kind1, of_kind2 with
       | Blocks_and_tagged_immediates blocks_imms1,
           Blocks_and_tagged_immediates blocks_imms2 ->
@@ -2088,7 +2089,7 @@ end) = struct
         in
         begin match blocks_imms with
         | Ok blocks_imms ->
-          Ok (Normal (Blocks_and_tagged_immediates blocks_imms))
+          Ok (Blocks_and_tagged_immediates blocks_imms)
         | Bottom -> Bottom
         end
 (*
@@ -2118,11 +2119,11 @@ end) = struct
         Normal (Boxed_number (Boxed_nativeint n))
 *)
       | Closure closures1, Closure _closures2 ->
-        closures1 (* XXX pchambart to fix *)
+        Ok (Closure closures1) (* XXX pchambart to fix *)
       | String strs1, String strs2 ->
         let strs = String_info.Set.inter strs1 strs2 in
         if String_info.Set.is_empty strs then Bottom
-        else Ok (Normal (String strs))
+        else Ok (String strs)
       | (Blocks_and_tagged_immediates _
           | Boxed_number _
           | Closure _
@@ -2134,7 +2135,7 @@ end) = struct
 
     let join_of_kind_foo ~type_of_name
           (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
-          : of_kind_value or_join =
+          : of_kind_value or_unknown =
       match of_kind1, of_kind2 with
       | Blocks_and_tagged_immediates blocks_imms1,
           Blocks_and_tagged_immediates blocks_imms2 ->
@@ -2142,7 +2143,7 @@ end) = struct
           join_blocks_and_tagged_immediates ~type_of_name
             blocks_imms1 blocks_imms2
         in
-        Normal (Blocks_and_tagged_immediates blocks_imms)
+        Ok (Blocks_and_tagged_immediates blocks_imms)
 (*
       | Boxed_number ((Boxed_float _) as n1),
           Boxed_number ((Boxed_float _) as n2) ->
@@ -2170,18 +2171,15 @@ end) = struct
         Normal (Boxed_number (Boxed_nativeint n))
 *)
       | Closure closures1, Closure _closures2 ->
-        closures1 (* XXX pchambart to fix *)
+        Ok (Closure closures1) (* XXX pchambart to fix *)
       | String strs1, String strs2 ->
         let strs = String_info.Set.union strs1 strs2 in
-        Normal (String strs)
+        Ok (String strs)
       | (Blocks_and_tagged_immediates _
           | Boxed_number _
           | Closure _
           | String _), _ ->
-        (* CR mshinwell: Hmm, there is never any alias here. *)
-        let left = No_alias (Normal of_kind1) in
-        let right = No_alias (Normal of_kind2) in
-        Join (left, right)
+        Unknown
 
     let join_unk value_kind1 value_kind2 =
       K.Value_kind.join value_kind1 value_kind2
@@ -2283,13 +2281,13 @@ end) = struct
       -> typing_environment
       -> typing_environment) type_accessor
   end = struct
-    let meet _t1 _t2 = assert false
+    let meet ~type_of_name:_ _t1 _t2 = assert false
 
-    let join _t1 _t2 = assert false
+    let join ~type_of_name:_ _t1 _t2 = assert false
 
-    let meet_typing_environment _t1 _t2 = assert false
+    let meet_typing_environment ~type_of_name:_ _t1 _t2 = assert false
 
-    let join_typing_environment _t1 _t2 = assert false
+    let join_typing_environment ~type_of_name:_ _t1 _t2 = assert false
 
 (*
     let join_typing_environment ~type_of_name t1 t2 =
