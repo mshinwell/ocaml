@@ -308,7 +308,6 @@ module type S = sig
     -> inlinable_function_declaration
     -> unit
 
-
   (** Construction of top types. *)
   val unknown : Flambda_kind.t -> t
 
@@ -318,9 +317,7 @@ module type S = sig
      : Flambda_kind.Value_kind.t
     -> ty_value
 
-(*
   val any_tagged_immediate : unit -> t
-*)
 
   val any_boxed_float : unit -> t
   val any_boxed_int32 : unit -> t
@@ -426,12 +423,12 @@ module type S = sig
     -> invariant_params:Variable.Set.t lazy_t
     -> size:int option lazy_t
     -> direct_call_surrogate:Closure_id.t option
-    -> inlinable_function_declaration
+    -> function_declaration
 
   val create_non_inlinable_function_declaration
      : result:t list
     -> direct_call_surrogate:Closure_id.t option
-    -> non_inlinable_function_declaration
+    -> function_declaration
 
   val closure : set_of_closures:t -> Closure_id.t -> t
 
@@ -574,12 +571,6 @@ module type S = sig
   val force_to_kind_fabricated : t -> ty_fabricated
 
 (*
-
-  val t_of_ty_value : ty_value -> t
-
-  val t_of_ty_naked_float : ty_naked_float -> t
-
-(*
   type cleaning_spec =
     | Available
     | Available_different_name of Variable.t
@@ -591,26 +582,4 @@ module type S = sig
       under another name, or unavailable. *)
   val clean : (t -> (Variable.t -> cleaning_spec) -> t) type_accessor
 *)
-
-  val combination_component_to_ty
-     : 'a singleton_or_combination or_alias
-    -> ('a, _) ty
-
-  module Closure : sig
-    type t = closure
-
-    val meet_lists : (t list -> t list -> t list) type_accessor
-
-    val print : Format.formatter -> t -> unit
-  end
-
-  module Set_of_closures : sig
-    type t = set_of_closures
-
-    val meet_lists : (t list -> t list -> t list) type_accessor
-
-    val print : Format.formatter -> t -> unit
-  end
-*)
-
 end
