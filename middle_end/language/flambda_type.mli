@@ -72,52 +72,37 @@ module Or_not_all_values_known : sig
     | Not_all_values_known
 end
 
-module Blocks : sig
-  type t
+module Simplified_type : sig
+  (** Simplified types omit the following at top level:
+      - alias information;
+      - joins between incompatible types (these turn into "Unknown").
+  *)
+  type t = private
+    | Value of ty_value
+    | Naked_number :
+        'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t -> t
+    | Fabricated of ty_fabricated
+    | Phantom of ty_phantom
 
-  val valid_field_access : t -> field:int -> bool
+  and ty_value = (of_kind_value, Flambda_kind.Value_kind.t) ty
+  and 'a ty_naked_number = ('a of_kind_naked_number, unit) ty
+  and ty_fabricated = (of_kind_fabricated, Flambda_kind.Value_kind.t) ty
+  and ty_phantom = (of_kind_phantom, Flambda_kind.Phantom_kind.t) ty
+
+  and ('a, 'u) ty = private
+    | Unknown of 'u
+    | Ok of 'a
+    | Bottom
 end
 
-module Joined_closures : sig
-  type t
+(* To do:
+   - invariant checks on types (for bottom etc)
+   - finish implementations of methods in Flambda_type0
+   - sort out Flambda_type
+   - finish off the environment module
+*)
 
-  val sets_of_closures : t -> flambda_type Closure_id.Map.t
-
-  val to_type : t -> flambda_type
-end
 (*
-module Joined_sets_of_closures : sig
-  type t
-
-  (** Return the type of a given closure, specified by closure ID, selected
-      from the given set of closures. *)
-  val type_for_closure_id : t -> Closure_id.t -> flambda_type
-
-  val to_type : t -> flambda_type
-  val to_unique_set_of_closures : t -> Set_of_closures.t option
-end
-
-module Float_array : sig
-  type t
-
-  val size : t -> Targetint.OCaml.t
-  val fields : t -> ty_naked_float array
-end
-
-module Evaluated : sig
-  (** A canonical form which can be used for the determination of properties
-      of a type. *)
-  type t
-
-  (** Evaluate the given type to a canonical form, possibly with an associated
-      name. *)
-  val create : (flambda_type -> t * (Name.t option)) type_accessor
-
-  val print : Format.formatter -> t -> unit
-
-  (** The kind of the given evaluated type. *)
-  val kind : t -> Flambda_kind.t
-end
 
 (** Whether the given type says that a term of that type can never be
     constructed (in other words, it is [Invalid]). *)
