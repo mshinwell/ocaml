@@ -2073,9 +2073,9 @@ end) = struct
           : block_cases =
       let by_length =
         Immediate.Or_unknown.Map.union_merge
-            (fun singleton_block1 singleton_block2 ->
-              join_singleton_block ~type_of_name
-                singleton_block1 singleton_block2)
+          (fun singleton_block1 singleton_block2 ->
+            join_singleton_block ~type_of_name
+              singleton_block1 singleton_block2)
           singleton_blocks1
           singleton_blocks2
       in
@@ -2393,20 +2393,57 @@ end) = struct
 
     let meet_of_kind_foo ~type_of_name
           (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
-          : (of_kind_fabricated, unk) unknown_or_join =
+          : of_kind_fabricated or_bottom =
       match of_kind1, of_kind2 with
+      | Tag tags1, Tag tags2 ->
+        let tags =
+          Tag.Map.inter_merge
+            (fun ({ env_extension = env_extension1; } : tag_case)
+                  ({ env_extension = env_extension2; } : tag_case)
+                  : tag_case ->
+              let env_extension =
+                Meet_or_join.meet_typing_environment ~type_of_name
+                  env_extension1 env_extension2
+              in
+              (* CR mshinwell: Do we ever flip back to [Bottom] here? *)
+              { env_extension; })
+            tags1
+            tags2
+        in
+        Ok (Tag tags)
+      | Set_of_closures set1, Set_of_closures _set2 ->
+        Ok (Set_of_closures set1)  (* XXX pchambart to fix *)
+      | _, _ -> Bottom
 
     let meet_unk value_kind1 value_kind2 =
       K.Value_kind.meet value_kind1 value_kind2
 
     let join_of_kind_foo ~type_of_name
           (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
-          : of_kind_fabricated or_join =
+          : of_kind_fabricated or_unknown =
       match of_kind1, of_kind2 with
+      | Tag tags1, Tag tags2 ->
+        let tags =
+          Tag.Map.union_merge
+            (fun ({ env_extension = env_extension1; } : tag_case)
+                  ({ env_extension = env_extension2; } : tag_case)
+                  : tag_case ->
+              let env_extension =
+                Meet_or_join.join_typing_environment ~type_of_name
+                  env_extension1 env_extension2
+              in
+              { env_extension; })
+            tags1
+            tags2
+        in
+        Ok (Tag tags)
+      | Set_of_closures set1, Set_of_closures _set2 ->
+        Ok (Set_of_closures set1)  (* XXX pchambart to fix *)
+      | _, _ -> Unknown
 
     let join_unk value_kind1 value_kind2 =
       K.Value_kind.join value_kind1 value_kind2
-  end (* and Meet_or_join_phantom : sig
+  end) (* and Meet_or_join_phantom : sig
     include Meet_or_join
       with type of_kind_foo = of_kind_phantom
       with type unk = K.Phantom_kind.t

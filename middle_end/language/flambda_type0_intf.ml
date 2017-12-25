@@ -466,10 +466,15 @@ module type S = sig
   val value_kind_ty_value
      : (ty_value -> Flambda_kind.Value_kind.t) type_accessor
 
-(*
   (** Least upper bound of two types. *)
   val join : (t -> t -> t) type_accessor
 
+  (** Greatest lower bound of two types.
+      This can introduce new judgements into the typing environment. *)
+  val meet :
+     (typing_environment -> t -> t -> typing_environment * t) type_accessor
+
+(*
   (** Least upper bound of an arbitrary number of types. *)
   val join_list : (Flambda_kind.t -> t list -> t) type_accessor
 
@@ -492,11 +497,6 @@ module type S = sig
   val join_ty_naked_nativeint
      : (ty_naked_nativeint -> ty_naked_nativeint -> ty_naked_nativeint)
          type_accessor
-
-  (** Greatest lower bound of two types.
-      When meeting types of kind [Value] this can introduce new judgements
-      into the typing context. *)
-  val meet : (typing_environment -> t -> t -> typing_environment * t) type_accessor
 
   (** Greatest lower bound of an arbitrary number of types. *)
   val meet_list
