@@ -1089,6 +1089,19 @@ end) = struct
       Misc.fatal_errorf "Type has wrong kind (expected [Value]): %a"
         print t
 
+  let force_to_kind_naked_immediate (type n) (t : t)
+        : Immediate.Set.t ty_naked_number =
+    match t with
+    | Naked_number (ty_naked_number, K.Naked_number.Naked_immediate) ->
+      ty_naked_number
+    | Naked_number _
+    | Fabricated _
+    | Value _
+    | Phantom _ ->
+      Misc.fatal_errorf
+        "Type has wrong kind (expected [Naked_number Immediate]): %a"
+        print t
+
   let force_to_kind_naked_float (type n) (t : t)
         : Float_by_bit_pattern.Set.t ty_naked_number =
     match t with
@@ -1961,7 +1974,7 @@ end) = struct
           ({ env_extension = env_extension2; } : immediate_case)
           : immediate_case =
       let env_extension =
-        Meet_or_join.meet_typing_environment ~type_of_name
+        Meet_and_join.meet_typing_environment ~type_of_name
           env_extension1 env_extension2
       in
       { env_extension; }
@@ -1971,7 +1984,7 @@ end) = struct
           ({ env_extension = env_extension2; } : immediate_case)
           : immediate_case =
       let env_extension =
-        Meet_or_join.join_typing_environment ~type_of_name
+        Meet_and_join.join_typing_environment ~type_of_name
           env_extension1 env_extension2
       in
       { env_extension; }
@@ -2000,7 +2013,7 @@ end) = struct
              first_fields = first_fields2;
            } : singleton_block) : singleton_block =
       let env_extension =
-        Meet_or_join.meet_typing_environment ~type_of_name
+        Meet_and_join.meet_typing_environment ~type_of_name
           env_extension1 env_extension2
       in
       let first_fields : _ or_unknown_length =
@@ -2012,7 +2025,7 @@ end) = struct
           assert (Array.length fields1 = Array.length fields2);
           let fields =
             Array.map2 (fun field1 field2 ->
-                Meet_or_join.meet ~type_of_name field1 field2)
+                Meet_and_join.meet ~type_of_name field1 field2)
               fields1 fields2
           in
           Exactly fields
@@ -2031,7 +2044,7 @@ end) = struct
              first_fields = first_fields2;
            } : singleton_block) : singleton_block =
       let env_extension =
-        Meet_or_join.join_typing_environment ~type_of_name
+        Meet_and_join.join_typing_environment ~type_of_name
           env_extension1 env_extension2
       in
       let first_fields =
@@ -2041,7 +2054,7 @@ end) = struct
           assert (Array.length fields1 = Array.length fields2);
           let fields =
             Array.map2 (fun field1 field2 ->
-                Meet_or_join.join ~type_of_name field1 field2)
+                Meet_and_join.join ~type_of_name field1 field2)
               fields1 fields2
           in
           Exactly fields
@@ -2143,32 +2156,30 @@ end) = struct
           Ok (Blocks_and_tagged_immediates blocks_imms)
         | Bottom -> Bottom
         end
-(*
-      | Boxed_number ((Boxed_float _) as n1),
-          Boxed_number ((Boxed_float _) as n2) ->
+      | Boxed_number (Boxed_float n1),
+          Boxed_number (Boxed_float n2) ->
         let n : _ ty_naked_number =
-          Meet_or_join_naked_number.meet_ty ~type_of_name n1 n2
+          Meet_and_join_naked_float.meet_ty ~type_of_name n1 n2
         in
-        Normal (Boxed_number (Boxed_float n))
-      | Boxed_number ((Boxed_int32 _) as n1),
-          Boxed_number ((Boxed_int32 _) as n2) ->
+        Ok (Boxed_number (Boxed_float n))
+      | Boxed_number (Boxed_int32 n1),
+          Boxed_number (Boxed_int32 n2) ->
         let n : _ ty_naked_number =
-          Meet_or_join_naked_number.meet_ty ~type_of_name n1 n2
+          Meet_and_join_naked_int32.meet_ty ~type_of_name n1 n2
         in
-        Normal (Boxed_number (Boxed_int32 n))
-      | Boxed_number ((Boxed_int64 _) as n1),
-          Boxed_number ((Boxed_int64 _) as n2) ->
+        Ok (Boxed_number (Boxed_int32 n))
+      | Boxed_number (Boxed_int64 n1),
+          Boxed_number (Boxed_int64 n2) ->
         let n : _ ty_naked_number =
-          Meet_or_join_naked_number.meet_ty ~type_of_name n1 n2
+          Meet_and_join_naked_int64.meet_ty ~type_of_name n1 n2
         in
-        Normal (Boxed_number (Boxed_int64 n))
-      | Boxed_number ((Boxed_nativeint _) as n1),
-          Boxed_number ((Boxed_nativeint _) as n2) ->
+        Ok (Boxed_number (Boxed_int64 n))
+      | Boxed_number (Boxed_nativeint n1),
+          Boxed_number (Boxed_nativeint n2) ->
         let n : _ ty_naked_number =
-          Meet_or_join_naked_number.meet_ty ~type_of_name n1 n2
+          Meet_and_join_naked_nativeint.meet_ty ~type_of_name n1 n2
         in
-        Normal (Boxed_number (Boxed_nativeint n))
-*)
+        Ok (Boxed_number (Boxed_nativeint n))
       | Closure closures1, Closure _closures2 ->
         Ok (Closure closures1) (* XXX pchambart to fix *)
       | String strs1, String strs2 ->
@@ -2197,29 +2208,27 @@ end) = struct
         Ok (Blocks_and_tagged_immediates blocks_imms)
       | Boxed_number (Boxed_float n1), Boxed_number (Boxed_float n2) ->
         let n : _ ty_naked_number =
-          Meet_or_join_naked_float.join_ty ~type_of_name n1 n2
+          Meet_and_join_naked_float.join_ty ~type_of_name n1 n2
         in
         Ok (Boxed_number (Boxed_float n))
-(*
-      | Boxed_number ((Boxed_int32 _) as n1),
-          Boxed_number ((Boxed_int32 _) as n2) ->
+      | Boxed_number (Boxed_int32 n1),
+          Boxed_number (Boxed_int32 n2) ->
         let n : _ ty_naked_number =
-          Meet_or_join_naked_number.join_ty ~type_of_name n1 n2
+          Meet_and_join_naked_int32.join_ty ~type_of_name n1 n2
         in
-        Normal (Boxed_number (Boxed_int32 n))
-      | Boxed_number ((Boxed_int64 _) as n1),
-          Boxed_number ((Boxed_int64 _) as n2) ->
+        Ok (Boxed_number (Boxed_int32 n))
+      | Boxed_number (Boxed_int64 n1),
+          Boxed_number (Boxed_int64 n2) ->
         let n : _ ty_naked_number =
-          Meet_or_join_naked_number.join_ty ~type_of_name n1 n2
+          Meet_and_join_naked_int64.join_ty ~type_of_name n1 n2
         in
-        Normal (Boxed_number (Boxed_int64 n))
-      | Boxed_number ((Boxed_nativeint _) as n1),
-          Boxed_number ((Boxed_nativeint _) as n2) ->
+        Ok (Boxed_number (Boxed_int64 n))
+      | Boxed_number (Boxed_nativeint n1),
+          Boxed_number (Boxed_nativeint n2) ->
         let n : _ ty_naked_number =
-          Meet_or_join_naked_number.join_ty ~type_of_name n1 n2
+          Meet_and_join_naked_nativeint.join_ty ~type_of_name n1 n2
         in
-        Normal (Boxed_number (Boxed_nativeint n))
-*)
+        Ok (Boxed_number (Boxed_nativeint n))
       | Closure closures1, Closure _closures2 ->
         Ok (Closure closures1) (* XXX pchambart to fix *)
       | String strs1, String strs2 ->
@@ -2233,7 +2242,45 @@ end) = struct
 
     let join_unk value_kind1 value_kind2 =
       K.Value_kind.join value_kind1 value_kind2
-  end) and Meet_or_join_naked_float : sig
+  end) and Meet_and_join_naked_immediate : sig
+    (* CR mshinwell: See if we can abstract these naked number cases some
+       more? *)
+    include Meet_and_join
+      with type of_kind_foo := Immediate.Set.t of_kind_naked_number
+      with type unk := unit
+  end = Make_meet_and_join (struct
+    type of_kind_foo = Immediate.Set.t of_kind_naked_number
+    type unk = unit
+
+    let force_to_kind = force_to_kind_naked_immediate
+
+    let unknown_payload = ()
+
+    let meet_of_kind_foo ~type_of_name
+          (of_kind1 : Immediate.Set.t of_kind_naked_number)
+          (of_kind2 : Immediate.Set.t of_kind_naked_number)
+          : Immediate.Set.t of_kind_naked_number or_bottom =
+      match of_kind1, of_kind2 with
+      | Immediate fs1, Immediate fs2 ->
+        let fs = Immediate.Set.inter fs1 fs2 in
+        if Immediate.Set.is_empty fs then Bottom
+        else Ok (Immediate fs)
+      | _, _ -> Bottom
+
+    let meet_unk () () = ()
+
+    let join_of_kind_foo ~type_of_name
+          (of_kind1 : Immediate.Set.t of_kind_naked_number)
+          (of_kind2 : Immediate.Set.t of_kind_naked_number)
+          : Immediate.Set.t of_kind_naked_number or_unknown =
+      match of_kind1, of_kind2 with
+      | Immediate fs1, Immediate fs2 ->
+        let fs = Immediate.Set.union fs1 fs2 in
+        Ok (Immediate fs)
+      | _, _ -> Unknown
+
+    let join_unk () () = ()
+  end) and Meet_and_join_naked_float : sig
     (* CR mshinwell: See if we can abstract these naked number cases some
        more? *)
     include Meet_and_join
@@ -2271,7 +2318,7 @@ end) = struct
       | _, _ -> Unknown
 
     let join_unk () () = ()
-  end) and Meet_or_join_naked_int32 : sig
+  end) and Meet_and_join_naked_int32 : sig
     include Meet_and_join
       with type of_kind_foo := Int32.Set.t of_kind_naked_number
       with type unk := unit
@@ -2307,7 +2354,7 @@ end) = struct
       | _, _ -> Unknown
 
     let join_unk () () = ()
-  end) and Meet_or_join_naked_int64 : sig
+  end) and Meet_and_join_naked_int64 : sig
     include Meet_and_join
       with type of_kind_foo := Int64.Set.t of_kind_naked_number
       with type unk := unit
@@ -2343,7 +2390,7 @@ end) = struct
       | _, _ -> Unknown
 
     let join_unk () () = ()
-  end) and Meet_or_join_naked_nativeint : sig
+  end) and Meet_and_join_naked_nativeint : sig
     include Meet_and_join
       with type of_kind_foo := Targetint.Set.t of_kind_naked_number
       with type unk := unit
@@ -2402,7 +2449,7 @@ end) = struct
                   ({ env_extension = env_extension2; } : tag_case)
                   : tag_case ->
               let env_extension =
-                Meet_or_join.meet_typing_environment ~type_of_name
+                Meet_and_join.meet_typing_environment ~type_of_name
                   env_extension1 env_extension2
               in
               (* CR mshinwell: Do we ever flip back to [Bottom] here? *)
@@ -2413,7 +2460,7 @@ end) = struct
         Ok (Tag tags)
       | Set_of_closures set1, Set_of_closures _set2 ->
         Ok (Set_of_closures set1)  (* XXX pchambart to fix *)
-      | _, _ -> Bottom
+      | (Tag _ | Set_of_closures _), _ -> Bottom
 
     let meet_unk value_kind1 value_kind2 =
       K.Value_kind.meet value_kind1 value_kind2
@@ -2429,7 +2476,7 @@ end) = struct
                   ({ env_extension = env_extension2; } : tag_case)
                   : tag_case ->
               let env_extension =
-                Meet_or_join.join_typing_environment ~type_of_name
+                Meet_and_join.join_typing_environment ~type_of_name
                   env_extension1 env_extension2
               in
               { env_extension; })
@@ -2443,11 +2490,11 @@ end) = struct
 
     let join_unk value_kind1 value_kind2 =
       K.Value_kind.join value_kind1 value_kind2
-  end) (* and Meet_or_join_phantom : sig
-    include Meet_or_join
-      with type of_kind_foo = of_kind_phantom
-      with type unk = K.Phantom_kind.t
-  end = Make_meet_or_join (struct
+  end) and Meet_and_join_phantom : sig
+    include Meet_and_join
+      with type of_kind_foo := of_kind_phantom
+      with type unk := K.Phantom_kind.t
+  end = Make_meet_and_join (struct
     type of_kind_foo = of_kind_phantom
     type unk = K.Phantom_kind.t
 
@@ -2457,22 +2504,130 @@ end) = struct
 
     let meet_of_kind_foo ~type_of_name
           (of_kind1 : of_kind_phantom) (of_kind2 : of_kind_phantom)
-          : (of_kind_phantom, unk) unknown_or_join =
+          : of_kind_phantom or_bottom =
       match of_kind1, of_kind2 with
+      | Value ty_value1, Value ty_value2 ->
+        let ty_value =
+          Meet_and_join_value.meet_ty ~type_of_name ty_value1 ty_value2
+        in
+        (* CR mshinwell: Should this be tested for bottom and then we return
+           Bottom if that succeeds?
+           If not, then we should factor code about between this and [join],
+           below. *)
+        Ok ((Value ty_value) : of_kind_phantom)
+      | Naked_number (ty_naked_number1, kind1),
+          Naked_number (ty_naked_number2, kind2) ->
+        let module N = K.Naked_number in
+        begin match kind1, kind2 with
+        | N.Naked_immediate, N.Naked_immediate ->
+          let ty_naked_number =
+            Meet_and_join_naked_immediate.meet_ty ~type_of_name
+              ty_naked_number1 ty_naked_number2
+          in
+          Ok ((Naked_number (ty_naked_number, N.Naked_immediate))
+            : of_kind_phantom)
+        | N.Naked_float, N.Naked_float ->
+          let ty_naked_number =
+            Meet_and_join_naked_float.meet_ty ~type_of_name
+              ty_naked_number1 ty_naked_number2
+          in
+          Ok ((Naked_number (ty_naked_number, N.Naked_float))
+            : of_kind_phantom)
+        | N.Naked_int32, N.Naked_int32 ->
+          let ty_naked_number =
+            Meet_and_join_naked_int32.meet_ty ~type_of_name
+              ty_naked_number1 ty_naked_number2
+          in
+          Ok ((Naked_number (ty_naked_number, N.Naked_int32))
+            : of_kind_phantom)
+        | N.Naked_int64, N.Naked_int64 ->
+          let ty_naked_number =
+            Meet_and_join_naked_int64.meet_ty ~type_of_name
+              ty_naked_number1 ty_naked_number2
+          in
+          Ok ((Naked_number (ty_naked_number, N.Naked_int64))
+            : of_kind_phantom)
+        | N.Naked_nativeint, N.Naked_nativeint ->
+          let ty_naked_number =
+            Meet_and_join_naked_nativeint.meet_ty ~type_of_name
+              ty_naked_number1 ty_naked_number2
+          in
+          Ok ((Naked_number (ty_naked_number, N.Naked_nativeint))
+            : of_kind_phantom)
+        | _, _ -> Bottom
+        end
+      | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
+        let ty_fabricated =
+          Meet_and_join_fabricated.meet_ty ~type_of_name
+            ty_fabricated1 ty_fabricated2
+        in
+        Ok ((Fabricated ty_fabricated) : of_kind_phantom)
+      | (Value _ | Naked_number _ | Fabricated _), _ -> Bottom
 
     let meet_unk phantom_kind1 phantom_kind2 =
       K.Phantom_kind.meet phantom_kind1 phantom_kind2
 
     let join_of_kind_foo ~type_of_name
           (of_kind1 : of_kind_phantom) (of_kind2 : of_kind_phantom)
-          : of_kind_phantom or_join =
+          : of_kind_phantom or_unknown =
       match of_kind1, of_kind2 with
+      | Value ty_value1, Value ty_value2 ->
+        let ty_value =
+          Meet_and_join_value.join_ty ~type_of_name ty_value1 ty_value2
+        in
+        Ok ((Value ty_value) : of_kind_phantom)
+      | Naked_number (ty_naked_number1, kind1),
+          Naked_number (ty_naked_number2, kind2) ->
+        let module N = K.Naked_number in
+        begin match kind1, kind2 with
+        | N.Naked_immediate, N.Naked_immediate ->
+          let ty_naked_number =
+            Meet_and_join_naked_immediate.join_ty ~type_of_name
+              ty_naked_number1 ty_naked_number2
+          in
+          Ok ((Naked_number (ty_naked_number, N.Naked_immediate))
+            : of_kind_phantom)
+        | N.Naked_float, N.Naked_float ->
+          let ty_naked_number =
+            Meet_and_join_naked_float.join_ty ~type_of_name
+              ty_naked_number1 ty_naked_number2
+          in
+          Ok ((Naked_number (ty_naked_number, N.Naked_float))
+            : of_kind_phantom)
+        | N.Naked_int32, N.Naked_int32 ->
+          let ty_naked_number =
+            Meet_and_join_naked_int32.join_ty ~type_of_name
+              ty_naked_number1 ty_naked_number2
+          in
+          Ok ((Naked_number (ty_naked_number, N.Naked_int32))
+            : of_kind_phantom)
+        | N.Naked_int64, N.Naked_int64 ->
+          let ty_naked_number =
+            Meet_and_join_naked_int64.join_ty ~type_of_name
+              ty_naked_number1 ty_naked_number2
+          in
+          Ok ((Naked_number (ty_naked_number, N.Naked_int64))
+            : of_kind_phantom)
+        | N.Naked_nativeint, N.Naked_nativeint ->
+          let ty_naked_number =
+            Meet_and_join_naked_nativeint.join_ty ~type_of_name
+              ty_naked_number1 ty_naked_number2
+          in
+          Ok ((Naked_number (ty_naked_number, N.Naked_nativeint))
+            : of_kind_phantom)
+        | _, _ -> Unknown
+        end
+      | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
+        let ty_fabricated =
+          Meet_and_join_fabricated.join_ty ~type_of_name
+            ty_fabricated1 ty_fabricated2
+        in
+        Ok ((Fabricated ty_fabricated) : of_kind_phantom)
+      | (Value _ | Naked_number _ | Fabricated _), _ -> Unknown
 
     let join_unk phantom_kind1 phantom_kind2 =
       K.Phantom_kind.join phantom_kind1 phantom_kind2
-  end)
-*)
-  and Meet_or_join : sig
+  end) and Meet_and_join : sig
     val meet : (t -> t -> t) type_accessor
 
     val join : (t -> t -> t) type_accessor
@@ -2560,8 +2715,8 @@ end) = struct
 *)
   end
 
-  let meet = Meet_or_join.meet
-  let join = Meet_or_join.join
+  let meet = Meet_and_join.meet
+  let join = Meet_and_join.join
 
   module Typing_environment = struct
     type t = typing_environment
