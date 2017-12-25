@@ -215,9 +215,6 @@ end) = struct
     | Int64 : Int64.Set.t -> Int64.Set.t of_kind_naked_number
     | Nativeint : Targetint.Set.t -> Targetint.Set.t of_kind_naked_number
 
-  and of_kind_naked_number_packed = private
-    | E : 'a of_kind_naked_number -> of_kind_naked_number_packed
-
   and tag_case = {
     env_extension : typing_environment;
   }
@@ -1090,6 +1087,57 @@ end) = struct
     | Fabricated _
     | Phantom _ ->
       Misc.fatal_errorf "Type has wrong kind (expected [Value]): %a"
+        print t
+
+  let force_to_kind_naked_float (type n) (t : t)
+        : Float_by_bit_pattern.Set.t ty_naked_number =
+    match t with
+    | Naked_number (ty_naked_number, K.Naked_number.Naked_float) ->
+      ty_naked_number
+    | Naked_number _
+    | Fabricated _
+    | Value _
+    | Phantom _ ->
+      Misc.fatal_errorf
+        "Type has wrong kind (expected [Naked_number Float]): %a"
+        print t
+
+  let force_to_kind_naked_int32 (type n) (t : t) : Int32.Set.t ty_naked_number =
+    match t with
+    | Naked_number (ty_naked_number, K.Naked_number.Naked_int32) ->
+      ty_naked_number
+    | Naked_number _
+    | Fabricated _
+    | Value _
+    | Phantom _ ->
+      Misc.fatal_errorf
+        "Type has wrong kind (expected [Naked_number Int32]): %a"
+        print t
+
+  let force_to_kind_naked_int64 (type n) (t : t)
+        : Int64.Set.t ty_naked_number =
+    match t with
+    | Naked_number (ty_naked_number, K.Naked_number.Naked_int64) ->
+      ty_naked_number
+    | Naked_number _
+    | Fabricated _
+    | Value _
+    | Phantom _ ->
+      Misc.fatal_errorf
+        "Type has wrong kind (expected [Naked_number Int64]): %a"
+        print t
+
+  let force_to_kind_naked_nativeint (type n) (t : t)
+        : Targetint.Set.t ty_naked_number =
+    match t with
+    | Naked_number (ty_naked_number, K.Naked_number.Naked_nativeint) ->
+      ty_naked_number
+    | Naked_number _
+    | Fabricated _
+    | Value _
+    | Phantom _ ->
+      Misc.fatal_errorf
+        "Type has wrong kind (expected [Naked_number Nativeint]): %a"
         print t
 
   let force_to_kind_naked_number (type n) (kind : n K.Naked_number.t) (t : t)
@@ -2147,13 +2195,12 @@ end) = struct
             blocks_imms1 blocks_imms2
         in
         Ok (Blocks_and_tagged_immediates blocks_imms)
-(*
-      | Boxed_number ((Boxed_float _) as n1),
-          Boxed_number ((Boxed_float _) as n2) ->
+      | Boxed_number (Boxed_float n1), Boxed_number (Boxed_float n2) ->
         let n : _ ty_naked_number =
-          Meet_or_join_naked_number.join_ty ~type_of_name n1 n2
+          Meet_or_join_naked_float.join_ty ~type_of_name n1 n2
         in
-        Normal (Boxed_number (Boxed_float n))
+        Ok (Boxed_number (Boxed_float n))
+(*
       | Boxed_number ((Boxed_int32 _) as n1),
           Boxed_number ((Boxed_int32 _) as n2) ->
         let n : _ ty_naked_number =
@@ -2186,70 +2233,157 @@ end) = struct
 
     let join_unk value_kind1 value_kind2 =
       K.Value_kind.join value_kind1 value_kind2
-  end) and Meet_or_join_naked_number : sig
+  end) and Meet_or_join_naked_float : sig
+    (* CR mshinwell: See if we can abstract these naked number cases some
+       more? *)
     include Meet_and_join
-      with type of_kind_foo := of_kind_naked_number_packed
+      with type of_kind_foo := Float_by_bit_pattern.Set.t of_kind_naked_number
       with type unk := unit
   end = Make_meet_and_join (struct
-    type of_kind_foo = of_kind_naked_number_packed
+    type of_kind_foo = Float_by_bit_pattern.Set.t of_kind_naked_number
     type unk = unit
 
-    let force_to_kind = force_to_kind_naked_number_packed
+    let force_to_kind = force_to_kind_naked_float
 
     let unknown_payload = ()
 
-    let meet_of_kind_foo (type m) (type n) ~type_of_name
-          (of_kind1 : m of_kind_naked_number)
-          (of_kind2 : n of_kind_naked_number)
-          : m of_kind_naked_number or_bottom =
+    let meet_of_kind_foo ~type_of_name
+          (of_kind1 : Float_by_bit_pattern.Set.t of_kind_naked_number)
+          (of_kind2 : Float_by_bit_pattern.Set.t of_kind_naked_number)
+          : Float_by_bit_pattern.Set.t of_kind_naked_number or_bottom =
       match of_kind1, of_kind2 with
-      | Immediate imms1, Immediate imms2 ->
-        let imms = Immediate.Set.inter imms1 imms2 in
-        if Immediate.Set.is_empty imms then Bottom
-        else Ok imms
       | Float fs1, Float fs2 ->
         let fs = Float_by_bit_pattern.Set.inter fs1 fs2 in
         if Float_by_bit_pattern.Set.is_empty fs then Bottom
-        else Ok fs
-      | Int32 is1, Int32 is2 ->
-        let is = Int32.Set.inter is1 is2 in
-        if Int32.Set.is_empty is then Bottom
-        else Ok is
-      | Int64 is1, Int64 is2 ->
-        let is = Int64.Set.inter is1 is2 in
-        if Int64.Set.is_empty is then Bottom
-        else Ok is
-      | Nativeint is1, Nativeint is2 ->
-        let is = Targetint.Set.inter is1 is2 in
-        if Targetint.Set.is_empty is then Bottom
-        else Ok is
+        else Ok (Float fs)
       | _, _ -> Bottom
 
     let meet_unk () () = ()
 
-    let join_of_kind_foo (type m) (type n) ~type_of_name
-          (of_kind1 : m of_kind_naked_number)
-          (of_kind2 : n of_kind_naked_number)
-          : m of_kind_naked_number or_unknown =
+    let join_of_kind_foo ~type_of_name
+          (of_kind1 : Float_by_bit_pattern.Set.t of_kind_naked_number)
+          (of_kind2 : Float_by_bit_pattern.Set.t of_kind_naked_number)
+          : Float_by_bit_pattern.Set.t of_kind_naked_number or_unknown =
       match of_kind1, of_kind2 with
-      | Immediate imms1, Immediate imms2 ->
-        Ok (Immediate.Set.union imms1 imms2)
       | Float fs1, Float fs2 ->
-        Ok (Float_by_bit_pattern.Set.inter fs1 fs2)
-      | Int32 is1, Int32 is2 ->
-        Ok (Int32.Set.inter is1 is2)
-      | Int64 is1, Int64 is2 ->
-        Ok (Int64.Set.inter is1 is2)
-      | Nativeint is1, Nativeint is2 ->
-        Ok (Targetint.Set.inter is1 is2)
+        let fs = Float_by_bit_pattern.Set.union fs1 fs2 in
+        Ok (Float fs)
       | _, _ -> Unknown
 
     let join_unk () () = ()
-  end) (* and Meet_or_join_fabricated : sig
-    include Meet_or_join
-      with type of_kind_foo = of_kind_fabricated
-      with type unk = K.Value_kind.t
-  end = Make_meet_or_join (struct
+  end) and Meet_or_join_naked_int32 : sig
+    include Meet_and_join
+      with type of_kind_foo := Int32.Set.t of_kind_naked_number
+      with type unk := unit
+  end = Make_meet_and_join (struct
+    type of_kind_foo = Int32.Set.t of_kind_naked_number
+    type unk = unit
+
+    let force_to_kind = force_to_kind_naked_int32
+
+    let unknown_payload = ()
+
+    let meet_of_kind_foo ~type_of_name
+          (of_kind1 : Int32.Set.t of_kind_naked_number)
+          (of_kind2 : Int32.Set.t of_kind_naked_number)
+          : Int32.Set.t of_kind_naked_number or_bottom =
+      match of_kind1, of_kind2 with
+      | Int32 is1, Int32 is2 ->
+        let is = Int32.Set.inter is1 is2 in
+        if Int32.Set.is_empty is then Bottom
+        else Ok (Int32 is)
+      | _, _ -> Bottom
+
+    let meet_unk () () = ()
+
+    let join_of_kind_foo ~type_of_name
+          (of_kind1 : Int32.Set.t of_kind_naked_number)
+          (of_kind2 : Int32.Set.t of_kind_naked_number)
+          : Int32.Set.t of_kind_naked_number or_unknown =
+      match of_kind1, of_kind2 with
+      | Int32 is1, Int32 is2 ->
+        let is = Int32.Set.union is1 is2 in
+        Ok (Int32 is)
+      | _, _ -> Unknown
+
+    let join_unk () () = ()
+  end) and Meet_or_join_naked_int64 : sig
+    include Meet_and_join
+      with type of_kind_foo := Int64.Set.t of_kind_naked_number
+      with type unk := unit
+  end = Make_meet_and_join (struct
+    type of_kind_foo = Int64.Set.t of_kind_naked_number
+    type unk = unit
+
+    let force_to_kind = force_to_kind_naked_int64
+
+    let unknown_payload = ()
+
+    let meet_of_kind_foo ~type_of_name
+          (of_kind1 : Int64.Set.t of_kind_naked_number)
+          (of_kind2 : Int64.Set.t of_kind_naked_number)
+          : Int64.Set.t of_kind_naked_number or_bottom =
+      match of_kind1, of_kind2 with
+      | Int64 is1, Int64 is2 ->
+        let is = Int64.Set.inter is1 is2 in
+        if Int64.Set.is_empty is then Bottom
+        else Ok (Int64 is)
+      | _, _ -> Bottom
+
+    let meet_unk () () = ()
+
+    let join_of_kind_foo ~type_of_name
+          (of_kind1 : Int64.Set.t of_kind_naked_number)
+          (of_kind2 : Int64.Set.t of_kind_naked_number)
+          : Int64.Set.t of_kind_naked_number or_unknown =
+      match of_kind1, of_kind2 with
+      | Int64 is1, Int64 is2 ->
+        let is = Int64.Set.union is1 is2 in
+        Ok (Int64 is)
+      | _, _ -> Unknown
+
+    let join_unk () () = ()
+  end) and Meet_or_join_naked_nativeint : sig
+    include Meet_and_join
+      with type of_kind_foo := Targetint.Set.t of_kind_naked_number
+      with type unk := unit
+  end = Make_meet_and_join (struct
+    type of_kind_foo = Targetint.Set.t of_kind_naked_number
+    type unk = unit
+
+    let force_to_kind = force_to_kind_naked_nativeint
+
+    let unknown_payload = ()
+
+    let meet_of_kind_foo ~type_of_name
+          (of_kind1 : Targetint.Set.t of_kind_naked_number)
+          (of_kind2 : Targetint.Set.t of_kind_naked_number)
+          : Targetint.Set.t of_kind_naked_number or_bottom =
+      match of_kind1, of_kind2 with
+      | Nativeint is1, Nativeint is2 ->
+        let is = Targetint.Set.inter is1 is2 in
+        if Targetint.Set.is_empty is then Bottom
+        else Ok (Nativeint is)
+      | _, _ -> Bottom
+
+    let meet_unk () () = ()
+
+    let join_of_kind_foo ~type_of_name
+          (of_kind1 : Targetint.Set.t of_kind_naked_number)
+          (of_kind2 : Targetint.Set.t of_kind_naked_number)
+          : Targetint.Set.t of_kind_naked_number or_unknown =
+      match of_kind1, of_kind2 with
+      | Nativeint is1, Nativeint is2 ->
+        let is = Targetint.Set.union is1 is2 in
+        Ok (Nativeint is)
+      | _, _ -> Unknown
+
+    let join_unk () () = ()
+  end) and Meet_and_join_fabricated : sig
+    include Meet_and_join
+      with type of_kind_foo := of_kind_fabricated
+      with type unk := K.Value_kind.t
+  end = Make_meet_and_join (struct
     type of_kind_foo = of_kind_fabricated
     type unk = K.Value_kind.t
 
@@ -2272,7 +2406,7 @@ end) = struct
 
     let join_unk value_kind1 value_kind2 =
       K.Value_kind.join value_kind1 value_kind2
-  end and Meet_or_join_phantom : sig
+  end (* and Meet_or_join_phantom : sig
     include Meet_or_join
       with type of_kind_foo = of_kind_phantom
       with type unk = K.Phantom_kind.t
