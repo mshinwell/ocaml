@@ -901,18 +901,6 @@ end) = struct
   let any_tag () : ty_fabricated =
     No_alias (Unknown K.Value_kind.Definitely_immediate)
 
-
-(*
-
-  let this_tagged_immediate i : t =
-    let i : ty_naked_immediate =
-      let i : of_kind_naked_immediate = Naked_immediate i in
-      No_alias (Resolved (Ok (No_alias i)))
-    in
-    Value (No_alias (Resolved (Ok (No_alias (Tagged_immediate i)))))
-
-*)
-
   let this_immutable_string_as_ty_value str : ty_value =
     let str : String_info.t =
       { contents = Contents str;
