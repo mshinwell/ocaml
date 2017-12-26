@@ -497,6 +497,9 @@ module Simplified_type : sig
      is (recursively) expanded, and the final ("canonical") name
      returned. *)
   val create : (flambda_type -> t * (Name.t option)) type_accessor
+
+  val is_unknown : t -> bool
+  val is_bottom : t -> bool
 end = struct
   type t =
     | Value of ty_value
@@ -514,6 +517,22 @@ end = struct
     | Unknown of 'u
     | Ok of 'a
     | Bottom
+
+  let is_unknown t =
+    match t with
+    | Value (Unknown _) -> true
+    | Naked_number (Unknown _, _) -> true
+    | Fabricated (Unknown _) -> true
+    | Phantom (Unknown _) -> true
+    | _ -> false
+
+  let is_bottom t =
+    match t with
+    | Value Bottom -> true
+    | Naked_number (Bottom, _) -> true
+    | Fabricated Bottom -> true
+    | Phantom Bottom -> true
+    | _ -> false
 
   let ty_from_or_unknown_or_join (unknown_or_join : _ unknown_or_join)
         ~unknown_payload : _ ty =
@@ -843,351 +862,6 @@ end = struct
       t2.closure_elements
 end
 
-module Evaluated = struct
-  type t_values =
-    | Unknown
-    | Bottom
-    | Blocks_and_tagged_immediates of
-        Blocks.t * (Immediate.Set.t Or_not_all_values_known.t)
-    | Tagged_immediates_only of Immediate.Set.t Or_not_all_values_known.t
-    | Boxed_floats of ty_naked_float
-    | Boxed_int32s of ty_naked_int32
-    | Boxed_int64s of ty_naked_int64
-    | Boxed_nativeints of ty_naked_nativeint
-    | Closures of Joined_closures.t Or_not_all_values_known.t
-    | Sets_of_closures of Joined_sets_of_closures.t Or_not_all_values_known.t
-    | Strings of String_info.Set.t Or_not_all_values_known.t
-    | Float_arrays of Float_array.t list Or_not_all_values_known.t
-
-  type t =
-    | Values of t_values
-    | Naked_immediates of Immediate.Set.t Or_not_all_values_known.t
-    | Naked_floats of Float_by_bit_pattern.Set.t Or_not_all_values_known.t
-    | Naked_int32s of Int32.Set.t Or_not_all_values_known.t
-    | Naked_int64s of Int64.Set.t Or_not_all_values_known.t
-    | Naked_nativeints of Targetint.Set.t Or_not_all_values_known.t
-
-  let print_blocks_and_immediates ppf (blocks, imms) =
-    Format.fprintf ppf "@[((blocks@ %a)@ (immediates@ %a))@]"
-      Blocks.print blocks
-      Immediate.Set.print imms
-
-  let print_t_values ppf (t_values : t_values) =
-    match t_values with
-    | Unknown -> Format.pp_print_string ppf "Unknown"
-    | Bottom -> Format.pp_print_string ppf "Bottom"
-    | Blocks_and_tagged_immediates variant ->
-      Format.fprintf ppf "@[(Blocks_and_tagged_immediates@ %a)@]"
-        (Or_not_all_values_known.print print_blocks_and_immediates) variant
-    | Tagged_immediates_only imms ->
-      Format.fprintf ppf "@[(Tagged_immediates_only@ %a)@]"
-        (Or_not_all_values_known.print Immediate.Set.print) imms
-    | Boxed_floats fs ->
-      Format.fprintf ppf "@[(Boxed_floats@ %a)@]"
-        print_ty_naked_float fs
-    | Boxed_int32s is ->
-      Format.fprintf ppf "@[(Boxed_int32s@ %a)@]"
-        print_ty_naked_int32 is
-    | Boxed_int64s is ->
-      Format.fprintf ppf "@[(Boxed_int64s@ %a)@]"
-        print_ty_naked_int64 is
-    | Boxed_nativeints is ->
-      Format.fprintf ppf "@[(Boxed_nativeints@ %a)@]"
-        print_ty_naked_nativeint is
-    | Closures closures ->
-      Format.fprintf ppf "@[(Closures@ %a)@]"
-        (Or_not_all_values_known.print Joined_closures.print) closures
-    | Sets_of_closures sets ->
-      Format.fprintf ppf "@[(Sets_of_closures@ %a)@]"
-        (Or_not_all_values_known.print Joined_sets_of_closures.print) sets
-    | Strings strs ->
-      Format.fprintf ppf "@[(Strings@ %a)@]"
-        (Or_not_all_values_known.print String_info.Set.print) strs
-    | Float_arrays { lengths; } ->
-      Format.fprintf ppf "@[(Float_arrays@ %a)@]"
-        (Or_not_all_values_known.print Int.Set.print) lengths
-
-  let print ppf (t : t) =
-    match t with
-    | Values t_values ->
-      Format.fprintf ppf "@[(Values@ (%a))@]" print_t_values t_values
-    | Naked_immediates imms ->
-      Format.fprintf ppf "@[(Naked_immediates@ (%a))@]"
-        (Or_not_all_values_known.print Immediate.Set.print)
-        imms
-    | Naked_floats fs ->
-      Format.fprintf ppf "@[(Naked_floats@ (%a))@]"
-        (Or_not_all_values_known.print Float_by_bit_pattern.Set.print)
-        fs
-    | Naked_int32s is ->
-      Format.fprintf ppf "@[(Naked_int32s@ (%a))@]"
-        (Or_not_all_values_known.print Int32.Set.print)
-        is
-    | Naked_int64s is ->
-      Format.fprintf ppf "@[(Naked_int64s@ (%a))@]"
-        (Or_not_all_values_known.print Int64.Set.print)
-        is
-    | Naked_nativeints is ->
-      Format.fprintf ppf "@[(Naked_nativeints@ (%a))@]"
-        (Or_not_all_values_known.print Targetint.Set.print)
-        is
-
-  let invariant t =
-    if !Clflags.flambda_invariant_checks then begin
-      match t with
-      | Values values ->
-        begin match values with
-        | Blocks_and_tagged_immediates (Exactly (blocks, _imms)) ->
-          if Blocks.is_empty blocks then begin
-            Misc.fatal_error "Use [Tagged_immediates_only] instead of \
-              [Blocks_and_tagged_immediates] when there are no blocks: %a"
-          end
-        | Unknown
-        | Bottom
-        | Blocks_and_tagged_immediates Not_all_values_known
-        | Tagged_immediates_only _
-        | Boxed_floats _
-        | Boxed_int32s _
-        | Boxed_int64s _
-        | Boxed_nativeints _
-        | Closures _
-        | Sets_of_closures _
-        | Strings _
-        | Float_arrays _ -> ()
-        end
-      | Naked_immediates _
-      | Naked_floats _
-      | Naked_int32s _
-      | Naked_int64s _
-      | Naked_nativeints _ -> ()
-    end
-
-  let kind (t : t) =
-    match t with
-    | Values values ->
-      begin match values with
-      | Bottom
-      | Tagged_immediates_only _ -> K.value Definitely_immediate
-      | Unknown
-      | Blocks_and_tagged_immediates _
-      | Boxed_floats _
-      | Boxed_int32s _
-      | Boxed_int64s _
-      | Boxed_nativeints _
-      | Closures _
-      | Sets_of_closures _
-      | Strings _
-      | Float_arrays _ ->
-        (* CR mshinwell: For something like a statically-allocated set of
-           closures we may not need to scan it, and maybe in some cases it
-           might only be marked [Definitely_immediate].  Are we at risk of this lub
-           check failing in that case? *)
-        K.value Must_scan
-      end
-    | Naked_immediates _ -> K.naked_immediate ()
-    | Naked_floats _ -> K.naked_float ()
-    | Naked_int32s _ -> K.naked_int32 ()
-    | Naked_int64s _ -> K.naked_int64 ()
-    | Naked_nativeints _ -> K.naked_nativeint ()
-
-  let is_unknown (t : t) =
-    match t with
-    | Values values ->
-      begin match values with
-      | Unknown
-      | Blocks_and_tagged_immediates Not_all_values_known
-      | Tagged_immediates_only Not_all_values_known
-      | Boxed_floats Not_all_values_known
-      | Boxed_int32s Not_all_values_known
-      | Boxed_int64s Not_all_values_known
-      | Boxed_nativeints Not_all_values_known
-      | Closures Not_all_values_known
-      | Sets_of_closures Not_all_values_known
-      | Strings Not_all_values_known
-      | Float_arrays { lengths = Not_all_values_known; } -> true
-      | Bottom
-      | Blocks_and_tagged_immediates (Exactly _)
-      | Tagged_immediates_only (Exactly _)
-      | Boxed_floats (Exactly _)
-      | Boxed_int32s (Exactly _)
-      | Boxed_int64s (Exactly _)
-      | Boxed_nativeints (Exactly _)
-      | Closures (Exactly _)
-      | Sets_of_closures (Exactly _)
-      | Strings (Exactly _)
-      | Float_arrays { lengths = Exactly _; } -> false
-      end
-    | Naked_immediates Not_all_values_known
-    | Naked_floats Not_all_values_known
-    | Naked_int32s Not_all_values_known
-    | Naked_int64s Not_all_values_known
-    | Naked_nativeints Not_all_values_known -> true
-    | Naked_immediates (Exactly _)
-    | Naked_floats (Exactly _)
-    | Naked_int32s (Exactly _)
-    | Naked_int64s (Exactly _)
-    | Naked_nativeints (Exactly _) -> false
-
-  let is_known t = not (is_unknown t)
-
-  let is_bottom (t : t) =
-    match t with
-    | Values values ->
-      begin match values with
-      | Bottom -> true
-      | Blocks_and_tagged_immediates (Exactly (blocks, imms)) ->
-        assert (not (Blocks.is_empty blocks));  (* cf. [invariant]. *)
-        Immediate.Set.is_empty imms
-      | Tagged_immediates_only (Exactly imms) -> Immediate.Set.is_empty imms
-      | Boxed_floats (Exactly fs) -> Float_by_bit_pattern.Set.is_empty fs
-      | Boxed_int32s (Exactly is) -> Int32.Set.is_empty is
-      | Boxed_int64s (Exactly is) -> Int64.Set.is_empty is
-      | Boxed_nativeints (Exactly is) -> Targetint.Set.is_empty is
-      | Closures (Exactly closures) -> Joined_closures.is_bottom closures
-      | Strings (Exactly strs) -> String_info.Set.is_empty strs
-      | Float_arrays { lengths = Exactly lengths; } -> Int.Set.is_empty lengths
-      | Unknown
-      | Blocks_and_tagged_immediates Not_all_values_known
-      | Tagged_immediates_only Not_all_values_known
-      | Boxed_floats Not_all_values_known
-      | Boxed_int32s Not_all_values_known
-      | Boxed_int64s Not_all_values_known
-      | Boxed_nativeints Not_all_values_known
-      | Closures Not_all_values_known
-      | Sets_of_closures _
-      | Strings Not_all_values_known
-      | Float_arrays { lengths = Not_all_values_known; } -> false
-      end
-    | Naked_immediates (Exactly is) -> Immediate.Set.is_empty is
-    | Naked_floats (Exactly fs) -> Float_by_bit_pattern.Set.is_empty fs
-    | Naked_int32s (Exactly is) -> Int32.Set.is_empty is
-    | Naked_int64s (Exactly is) -> Int64.Set.is_empty is
-    | Naked_nativeints (Exactly is) -> Targetint.Set.is_empty is
-    | Naked_immediates Not_all_values_known
-    | Naked_floats Not_all_values_known
-    | Naked_int32s Not_all_values_known
-    | Naked_int64s Not_all_values_known
-    | Naked_nativeints Not_all_values_known -> false
-
-  let is_non_bottom t = not (is_bottom t)
-
-  let is_useful t = is_known t && is_non_bottom t
-
-  let of_evaluated_first_stage ~type_of_name
-        (evaluated_first_stage : Evaluated_first_stage.t) : t =
-    let t : t =
-      match evaluated_first_stage with
-      | Values values ->
-        let values : t_values =
-          match values with
-          | Unknown -> Unknown
-          | Bottom -> Bottom
-          | Blocks_and_tagged_immediates Not_all_values_known ->
-            Blocks_and_tagged_immediates Not_all_values_known
-          | Blocks_and_tagged_immediates (Exactly (blocks, imms)) ->
-            if Blocks.is_empty blocks then
-              Tagged_immediates_only (Exactly imms)
-            else
-              Blocks_and_tagged_immediates (Exactly (blocks, imms))
-          | Boxed_floats fs -> Boxed_floats fs
-          | Boxed_int32s is -> Boxed_int32s is
-          | Boxed_int64s is -> Boxed_int64s is
-          | Boxed_nativeints is -> Boxed_nativeints is
-          | Closures Not_all_values_known -> Closures Not_all_values_known
-          | Closures (Exactly closures) ->
-            let joined =
-              Joined_closures.create ~type_of_name closures
-            in
-            Closures (Exactly joined)
-          | Sets_of_closures Not_all_values_known ->
-            Sets_of_closures Not_all_values_known
-          | Sets_of_closures (Exactly sets) ->
-            let joined =
-              Joined_sets_of_closures.create ~type_of_name sets
-            in
-            Sets_of_closures (Exactly joined)
-          | Strings strs -> Strings strs
-          | Float_arrays { lengths; } -> Float_arrays { lengths; }
-        in
-        Values values
-      | Naked_immediates is -> Naked_immediates is
-      | Naked_floats fs -> Naked_floats fs
-      | Naked_int32s is -> Naked_int32s is
-      | Naked_int64s is -> Naked_int64s is
-      | Naked_nativeints is -> Naked_nativeints is
-    in
-    invariant t;
-    t
-
-  let create ~type_of_name t : t * (Name.t option) =
-    let t0, canonical_name =
-      Evaluated_first_stage.create ~type_of_name t
-    in
-    let t = of_evaluated_first_stage ~type_of_name t0 in
-    t, canonical_name
-
-  let create_ignore_name ~type_of_name t =
-    let t, _name = create ~type_of_name t in
-    t
-
-  let rec equal_t_values ~type_of_name
-        (tv1 : t_values) (tv2 : t_values) =
-    let module O = Or_not_all_values_known in
-    let equal_type = equal_type ~type_of_name in
-    match tv1, tv2 with
-    | Unknown, Unknown
-    | Bottom, Bottom -> true
-    | Blocks_and_tagged_immediates bti1,
-        Blocks_and_tagged_immediates bti2 ->
-      O.equal (fun (blocks1, imms1) (blocks2, imms2) ->
-          Blocks.equal ~equal_type blocks1 blocks2
-            && Immediate.Set.equal imms1 imms2)
-        bti1 bti2
-    | Tagged_immediates_only ti1,
-        Tagged_immediates_only ti2 ->
-      O.equal Immediate.Set.equal ti1 ti2
-    | Boxed_floats fs1, Boxed_floats fs2 ->
-      O.equal Float_by_bit_pattern.Set.equal fs1 fs2
-    | Boxed_int32s is1, Boxed_int32s is2 ->
-      O.equal Int32.Set.equal is1 is2
-    | Boxed_int64s is1, Boxed_int64s is2 ->
-      O.equal Int64.Set.equal is1 is2
-    | Boxed_nativeints is1, Boxed_nativeints is2 ->
-      O.equal Targetint.Set.equal is1 is2
-    | Closures closures1, Closures closures2 ->
-      O.equal (Joined_closures.equal ~equal_type) closures1 closures2
-    | Sets_of_closures sets1, Sets_of_closures sets2 ->
-      O.equal (Joined_sets_of_closures.equal ~equal_type) sets1 sets2
-    | Strings strs1, Strings strs2 ->
-      O.equal String_info.Set.equal strs1 strs2
-    | Float_arrays { lengths = lengths1; },
-        Float_arrays { lengths = lengths2; } ->
-      O.equal Int.Set.equal lengths1 lengths2
-    | _, _ -> false
-
-  and equal ~type_of_name (t1 : t) (t2 : t) =
-    let module O = Or_not_all_values_known in
-    match t1, t2 with
-    | Values t_values1, Values t_values2 ->
-      equal_t_values ~type_of_name t_values1 t_values2
-    | Naked_immediates is1, Naked_immediates is2 ->
-      O.equal Immediate.Set.equal is1 is2
-    | Naked_floats fs1, Naked_floats fs2 ->
-      O.equal Float_by_bit_pattern.Set.equal fs1 fs2
-    | Naked_int32s is1, Naked_int32s is2 ->
-      O.equal Int32.Set.equal is1 is2
-    | Naked_int64s is1, Naked_int64s is2 ->
-      O.equal Int64.Set.equal is1 is2
-    | Naked_nativeints is1, Naked_nativeints is2 ->
-      O.equal Targetint.Set.equal is1 is2
-    | _, _ -> false
-
-  and equal_type ~type_of_name
-        (type1 : flambda_type) (type2 : flambda_type) =
-    let t1 = create_ignore_name ~type_of_name type1 in
-    let t2 = create_ignore_name ~type_of_name type2 in
-    equal ~type_of_name t1 t2
-
   let tags (t_values : t_values) : Targetint.Set.t Or_not_all_values_known.t =
     let singleton tag : _ Or_not_all_values_known.t =
       Exactly (Targetint.Set.singleton (Tag.to_targetint tag))
@@ -1214,7 +888,6 @@ module Evaluated = struct
     | Sets_of_closures _ -> singleton Tag.closure_tag
     | Strings _ -> singleton Tag.string_tag
     | Float_arrays _ -> singleton Tag.double_array_tag
-end
 
 let equal ~type_of_name t1 t2 =
   Evaluated.equal_type ~type_of_name t1 t2
@@ -1222,17 +895,23 @@ let equal ~type_of_name t1 t2 =
 let as_or_more_precise ~type_of_name t ~than =
   equal ~type_of_name t (meet ~type_of_name t than)
 
+*)
+
 let is_bottom ~type_of_name t =
-  Evaluated.is_bottom (Evaluated.create_ignore_name ~type_of_name t)
+  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  Simplified_type.is_bottom simplified
 
 let is_unknown ~type_of_name t =
-  Evaluated.is_unknown (Evaluated.create_ignore_name ~type_of_name t)
+  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  Simplified_type.is_unknown simplified
 
 let is_known ~type_of_name t =
-  Evaluated.is_known (Evaluated.create_ignore_name ~type_of_name t)
+  not (is_unknown ~type_of_name t)
 
 let is_useful ~type_of_name t =
-  Evaluated.is_useful (Evaluated.create_ignore_name ~type_of_name t)
+  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  (not (Simplified_type.is_unknown simplified))
+    && (not (Simplified_type.is_bottom simplified))
 
 let all_not_useful ~type_of_name ts =
   List.for_all (fun t -> not (is_useful ~type_of_name t)) ts
@@ -1246,10 +925,8 @@ let reify ~type_of_name ~allow_free_variables t
       : reification_result =
   let original_t = t in
   let t, _canonical_name = resolve_aliases ~type_of_name t in
-  let t_evaluated, canonical_name =
-    Evaluated.create ~type_of_name t
-  in
-  if Evaluated.is_bottom t_evaluated then
+  let simplified, canonical_name = Simplified_type.create ~type_of_name t in
+  if Simplified_type.is_bottom simplified then
     Invalid
   else
     let try_name () : reification_result =
@@ -1264,61 +941,59 @@ let reify ~type_of_name ~allow_free_variables t
              make the type more precise later, so we return an alias type rather
              than [t]. *)
           let kind = kind ~type_of_name t in
-          let t = alias kind name in
+          let t = alias_type_of kind name in
           Term (Simple.name name, t)
     in
-    match t_evaluated with
-    | Values values ->
-      begin match values with
+    match simplified with
+    | Value ty_value ->
+      begin match ty_value with
+      | Unknown _ -> try_name ()
       | Bottom -> Invalid
-      | Tagged_immediates_only (Exactly imms) ->
+      | Ok (Blocks_and_tagged_immediates blocks_imms) ->
+        if not (Tag.Map.is_empty blocks_imms.blocks) then try_name ()
+        else
+          begin match
+            Immediate.Or_unknown.Map.get_singleton blocks_imms.immediates
+          with
+          | Some (Ok imm, _) -> Term (Simple.const (Tagged_immediate imm), t)
+          | Some (Unknown, _) | None -> try_name ()
+          end
+      | Ok (Boxed_number _) -> try_name ()
+      | Ok (Closure _ | String _) -> try_name ()
+      end
+    | Simplified_type.Naked_number (ty_naked_number, _) ->
+      begin match ty_naked_number with
+      | Unknown _ -> try_name ()
+      | Bottom -> Invalid
+      | Ok (Immediate imms) ->
         begin match Immediate.Set.get_singleton imms with
-        | Some imm -> Term (Simple.const (Tagged_immediate imm), t)
+        | Some imm -> Term (Simple.const (Untagged_immediate imm), t)
         | None -> try_name ()
         end
-      | Unknown
-      | Blocks_and_tagged_immediates _
-      | Tagged_immediates_only _
-      | Boxed_floats _
-      | Boxed_int32s _
-      | Boxed_int64s _
-      | Boxed_nativeints _
-      | Closures _
-      | Sets_of_closures _
-      | Strings _
-      | Float_arrays _ -> try_name ()
+      | Ok (Float fs) ->
+        begin match Float_by_bit_pattern.Set.get_singleton fs with
+        | Some f -> Term (Simple.const (Naked_float f), t)
+        | None -> try_name ()
+        end
+      | Ok (Int32 is) ->
+        begin match Int32.Set.get_singleton is with
+        | Some i -> Term (Simple.const (Naked_int32 i), t)
+        | None -> try_name ()
+        end
+      | Ok (Int64 is) ->
+        begin match Int64.Set.get_singleton is with
+        | Some i -> Term (Simple.const (Naked_int64 i), t)
+        | None -> try_name ()
+        end
+      | Ok (Nativeint is) ->
+        begin match Targetint.Set.get_singleton is with
+        | Some i -> Term (Simple.const (Naked_nativeint i), t)
+        | None -> try_name ()
+        end
       end
-    | Naked_immediates (Exactly is) ->
-      begin match Immediate.Set.get_singleton is with
-      | Some i -> Term (Simple.const (Untagged_immediate i), t)
-      | None -> try_name ()
-      end
-    | Naked_floats (Exactly fs) ->
-      begin match Float_by_bit_pattern.Set.get_singleton fs with
-      | Some f -> Term (Simple.const (Naked_float f), t)
-      | None -> try_name ()
-      end
-    | Naked_int32s (Exactly is) ->
-      begin match Int32.Set.get_singleton is with
-      | Some i -> Term (Simple.const (Naked_int32 i), t)
-      | None -> try_name ()
-      end
-    | Naked_int64s (Exactly is) ->
-      begin match Int64.Set.get_singleton is with
-      | Some i -> Term (Simple.const (Naked_int64 i), t)
-      | None -> try_name ()
-      end
-    | Naked_nativeints (Exactly is) ->
-      begin match Targetint.Set.get_singleton is with
-      | Some i -> Term (Simple.const (Naked_nativeint i), t)
-      | None -> try_name ()
-      end
-    | Naked_immediates Not_all_values_known
-    | Naked_floats Not_all_values_known
-    | Naked_int32s Not_all_values_known
-    | Naked_int64s Not_all_values_known
-    | Naked_nativeints Not_all_values_known -> try_name ()
+    | Fabricated _ | Phantom _ -> Cannot_reify
 
+(*
 type 'a proof =
   | Proved of 'a
   | Unknown

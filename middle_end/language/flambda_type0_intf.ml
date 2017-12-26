@@ -136,6 +136,9 @@ module type S = sig
         Invariant: the map is always non-empty. *)
 
   and blocks_and_tagged_immediates = private {
+    (* CR mshinwell: this "or_unknown" is dubious, since it could effectively
+       overlap some of the known cases.  Maybe for this case and the blocks
+       case there should be an "unknown" here ("unknown length" for blocks) *)
     immediates : immediate_case Immediate.Or_unknown.Map.t;
     blocks : block_cases Tag.Map.t;
   }
