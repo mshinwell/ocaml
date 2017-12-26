@@ -150,7 +150,7 @@ end) = struct
   }
 
   and block_cases =
-    | Join of { by_length : singleton_block Immediate.Or_unknown.Map.t; }
+    | Join of { by_length : singleton_block Targetint.OCaml.Or_unknown.Map.t; }
 
   and blocks_and_tagged_immediates = {
     immediates : immediate_case Immediate.Or_unknown.Map.t;
@@ -322,11 +322,11 @@ end) = struct
       print_first_fields first_fields
 
   and print_block_cases ppf ((Join { by_length; }) : block_cases) =
-    match Immediate.Or_unknown.Map.get_singleton by_length with
+    match Targetint.OCaml.Or_unknown.Map.get_singleton by_length with
     | Some (_length, block) -> print_singleton_block ppf block
     | None ->
       Format.fprintf ppf "(Join (by_length %a))"
-        (Immediate.Or_unknown.Map.print print_singleton_block) by_length
+        (Targetint.OCaml.Or_unknown.Map.print print_singleton_block) by_length
 
   and print_immediates ppf cases =
     Immediate.Or_unknown.Map.print print_immediate_case ppf cases
@@ -548,7 +548,7 @@ end) = struct
     | Blocks_and_tagged_immediates { blocks; immediates; } ->
       let acc =
         Tag.Map.fold (fun _tag ((Join { by_length; }) : block_cases) acc ->
-            Immediate.Or_unknown.Map.fold
+            Targetint.OCaml.Or_unknown.Map.fold
               (fun _length (singleton : singleton_block) acc ->
                 let acc =
                   free_names_of_typing_environment singleton.env_extension acc
@@ -937,6 +937,37 @@ end) = struct
     let str = String_info.Set.singleton str in
     Value (No_alias (Join [String str]))
 
+  let immutable_float_array fields : t =
+    match Targetint.OCaml.of_int_option (Array.length fields) with
+    | None ->
+      Misc.fatal_error "Immutable float array too long for target"
+    | Some length ->
+      let fields =
+        Array.map (fun ty_naked_number : t ->
+            Naked_number (ty_naked_number, K.Naked_number.Naked_float))
+          fields
+      in
+      let singleton_block : singleton_block =
+        { env_extension = create_typing_environment ();
+          first_fields = Exactly fields;
+        }
+      in
+      let length = Targetint.OCaml.Or_unknown.ok length in
+      let by_length =
+        Targetint.OCaml.Or_unknown.Map.add length singleton_block
+          Targetint.OCaml.Or_unknown.Map.empty
+      in
+      let block_cases : block_cases = Join { by_length; } in
+      let blocks =
+        Tag.Map.add Tag.double_array_tag block_cases Tag.Map.empty
+      in
+      let blocks_imms : blocks_and_tagged_immediates =
+        { immediates = Immediate.Or_unknown.Map.empty;
+          blocks;
+        }
+      in
+      Value (No_alias (Join [Blocks_and_tagged_immediates blocks_imms]))
+
 (*
 
   (* CR mshinwell: We need to think about these float array functions in
@@ -951,7 +982,6 @@ end) = struct
     let fields = Array.map make_field fields in
     Value (No_alias (Resolved (Ok (No_alias (Float_array fields)))))
 
-  let immutable_float_array fields : t =
 (*
     let fields =
       Array.map (fun (field : t) ->
@@ -2073,14 +2103,14 @@ end) = struct
           ((Join { by_length = singleton_blocks2; }) : block_cases)
           : block_cases or_bottom =
       let by_length =
-        Immediate.Or_unknown.Map.inter_merge
+        Targetint.OCaml.Or_unknown.Map.inter_merge
           (fun singleton_block1 singleton_block2 ->
             meet_singleton_block ~type_of_name
               singleton_block1 singleton_block2)
           singleton_blocks1
           singleton_blocks2
       in
-      if Immediate.Or_unknown.Map.is_empty by_length then Bottom
+      if Targetint.OCaml.Or_unknown.Map.is_empty by_length then Bottom
       else Ok ((Join { by_length; }) : block_cases)
 
     let join_block_cases ~type_of_name
@@ -2088,7 +2118,7 @@ end) = struct
           ((Join { by_length = singleton_blocks2; }) : block_cases)
           : block_cases =
       let by_length =
-        Immediate.Or_unknown.Map.union_merge
+        Targetint.OCaml.Or_unknown.Map.union_merge
           (fun singleton_block1 singleton_block2 ->
             join_singleton_block ~type_of_name
               singleton_block1 singleton_block2)

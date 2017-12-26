@@ -76,6 +76,7 @@ module type S = sig
 
   module OCaml : sig
     type t
+    type targetint_ocaml = t
     val max_string_length : t
     val zero : t
     val one : t
@@ -84,6 +85,7 @@ module type S = sig
     val bottom_byte_to_int : t -> int
     val of_char : char -> t
     val of_int : int -> t  (* CR mshinwell: clarify semantics *)
+    val of_int_option : int -> t option
     val to_int : t -> int
     include Identifiable.S with type t := t
   end
@@ -156,6 +158,8 @@ module Int32 = struct
   module OCaml = struct
     type nonrec t = t
 
+    type targetint_ocaml = t
+
     let zero = 0l
     let one = 1l
     let ten = 10l
@@ -169,6 +173,13 @@ module Int32 = struct
 
     let of_int = Int32.of_int
     let to_int = Int32.to_int
+
+    let of_int_option i =
+      let t = of_int i in
+      let via_t = Int64.of_int32 t in
+      let not_via_t = Int64.of_int i in
+      if Int64.equal via_t not_via_t then Some t
+      else None
 
     (* XXX This needs to be retrieved properly.
        Also, there are bugs in asmcomp/closure.ml and cmmgen.ml where max_wosize
@@ -187,6 +198,36 @@ module Int32 = struct
     module Map = Map
     module Set = Set
     module Tbl = Tbl
+
+    module Or_unknown = struct
+      type nonrec t =
+        | Ok of t
+        | Unknown
+    
+      let ok imm = Ok imm
+      let unknown () = Unknown
+    
+      include Identifiable.Make (struct
+        type nonrec t = t
+    
+        let compare t1 t2 =
+          match t1, t2 with
+          | Ok _, Unknown -> -1
+          | Unknown, Ok _ -> 1
+          | Unknown, Unknown -> 0
+          | Ok imm1, Ok imm2 -> compare imm1 imm2
+    
+        let hash t =
+          match t with
+          | Ok imm -> Hashtbl.hash (0, hash imm)
+          | Unknown -> Hashtbl.hash 1
+    
+        let print ppf t =
+          match t with
+          | Ok imm -> print ppf imm
+          | Unknown -> Format.pp_print_string ppf "Unknown"
+      end)
+    end
   end
 end
 
@@ -240,6 +281,8 @@ module Int64 = struct
   module OCaml = struct
     type nonrec t = t
 
+    type targetint_ocaml = t
+
     let zero = 0L
     let one = 1L
     let ten = 10L
@@ -253,6 +296,8 @@ module Int64 = struct
 
     let of_int = Int64.of_int
     let to_int = Int64.to_int
+
+    let of_int_option i = Some (of_int i)
 
     let max_array_length = Int64.sub (Int64.shift_left 1L 54) 1L
 
@@ -268,6 +313,37 @@ module Int64 = struct
     module Map = Map
     module Set = Set
     module Tbl = Tbl
+
+    (* CR mshinwell: share code with 32-bit version above *)
+    module Or_unknown = struct
+      type nonrec t =
+        | Ok of t
+        | Unknown
+    
+      let ok imm = Ok imm
+      let unknown () = Unknown
+    
+      include Identifiable.Make (struct
+        type nonrec t = t
+    
+        let compare t1 t2 =
+          match t1, t2 with
+          | Ok _, Unknown -> -1
+          | Unknown, Ok _ -> 1
+          | Unknown, Unknown -> 0
+          | Ok imm1, Ok imm2 -> compare imm1 imm2
+    
+        let hash t =
+          match t with
+          | Ok imm -> Hashtbl.hash (0, hash imm)
+          | Unknown -> Hashtbl.hash 1
+    
+        let print ppf t =
+          match t with
+          | Ok imm -> print ppf imm
+          | Unknown -> Format.pp_print_string ppf "Unknown"
+      end)
+    end
   end
 end
 

@@ -224,6 +224,8 @@ module OCaml : sig
 
   type t
 
+  type targetint_ocaml = t
+
   (* CR mshinwell: Maybe this should move somewhere else
     let max_array_length = max_wosize ()
     let max_string_length = word_size / 8 * max_array_length - 1
@@ -239,7 +241,23 @@ module OCaml : sig
 
   val of_char : char -> t
   val of_int : int -> t
+
+  (** Returns [None] iff the given [int] cannot be represented as a target
+      "int"-width integer. *)
+  val of_int_option : int -> t option
+
   val to_int : t -> int
 
   include Identifiable.S with type t := t
+
+  module Or_unknown : sig
+    type nonrec t = private
+      | Ok of t
+      | Unknown
+
+    val ok : targetint_ocaml -> t
+    val unknown : unit -> t
+
+    include Identifiable.S with type t := t
+  end
 end

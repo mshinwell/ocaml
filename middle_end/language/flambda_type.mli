@@ -96,7 +96,6 @@ module Simplified_type : sig
 end
 
 (* To do:
-   - invariant checks on types (for bottom etc)
    - finish implementations of methods in Flambda_type0
    - sort out Flambda_type
    - finish off the environment module

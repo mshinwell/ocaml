@@ -125,7 +125,7 @@ module type S = sig
   }
 
   and block_cases = private
-    | Join of { by_length : singleton_block Immediate.Or_unknown.Map.t; }
+    | Join of { by_length : singleton_block Targetint.OCaml.Or_unknown.Map.t; }
     (** This is similar to the [Join] case at the top level of types:
         no two [singleton_block]s in one of these [Join]s can have a
         compatible structure.
@@ -245,25 +245,6 @@ module type S = sig
   val phantomize : t -> t
 
 (*
-  val block_case_known_size
-     : env_extension:typing_environment
-    -> fields:ty_value array
-    -> block_case
-
-  val block_case_size_possibly_longer
-     : env_extension:typing_environment
-    -> first_fields:ty_value array
-    -> block_case
-
-  val block
-     : tag:Simple.t
-    -> block_case
-    -> t
-
-  val blocks
-     : tag:Simple.t
-    -> tags_to_block_cases:block_case Tag.Scannable.Map.t
-    -> t
 
   val float_array_size_possibly_longer
      : first_fields:ty_naked_float array
@@ -395,13 +376,36 @@ module type S = sig
   val box_int32 : t -> t
   val box_int64 : t -> t
   val box_nativeint : t -> t
-(*
-  val immutable_float_array : ty_naked_float array -> t
 
+  val immutable_float_array
+     : Numbers.Float_by_bit_pattern.Set.t ty_naked_number array
+    -> t
+
+(*
   val block
      : typing_environment
     -> tag:ty_fabricated
     -> fields:ty_value array
+    -> t
+
+  val block_case_known_size
+     : env_extension:typing_environment
+    -> fields:ty_value array
+    -> block_case
+
+  val block_case_size_possibly_longer
+     : env_extension:typing_environment
+    -> first_fields:ty_value array
+    -> block_case
+
+  val block
+     : tag:Simple.t
+    -> block_case
+    -> t
+
+  val blocks
+     : tag:Simple.t
+    -> tags_to_block_cases:block_case Tag.Scannable.Map.t
     -> t
 *)
 
