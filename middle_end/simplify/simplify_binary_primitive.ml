@@ -797,13 +797,15 @@ let get_field ~importer ~type_of_name t ~field_index ~field_is_mutable
       field_index
       print t
 
+(* CR mshinwell: This currently can't be done unless we know the exact size
+   of the block.  Also, the refining function would need to take the tag.
 type block_access_op =
   | Immutable_load of { result_var : Variable.t option; }
   | Mutable_load
   | Store
 
-let refine_block_ty_upon_access env r ~block ~block_ty ~field_index
-      ~block_access_kind (op : block_access_op) =
+let refine_block_ty_upon_access _env r ~block:_ ~block_ty ~field_index:_
+      ~block_access_kind:_ (_op : block_access_op) =
   let unknown_kind =
     match block_access_kind with
     | Block Any_value
@@ -853,77 +855,61 @@ let refine_block_ty_upon_access env r ~block ~block_ty ~field_index
     (E.type_accessor env T.meet) block_ty block_ty_refinement
   in
   let r = R.add_typing_judgement r block block_ty in
+*)
   block_ty, r
 
-let simplify_block_load_known_index env r ~result_var prim ~block ~block_ty dbg
-      ~field_index ~block_access_kind ~field_is_mutable =
+let simplify_block_load_known_index env r prim ~block ~block_ty ~index
+      ~block_access_kind ~field_is_mutable ~field_kind ~invalid dbg =
   let original_term () : Named.t =
-    let field_index = Simple.const (Tagged_immediate field_index) in
-    Prim (Binary (prim, block, field_index), dbg)
+    let index = Simple.const (Tagged_immediate index) in
+    Prim (Binary (prim, block, index), dbg)
+  in
+  let unknown () =
+    Reachable.reachable (original_term ()), T.unknown field_kind Other, r
+  in
+  let proof =
+    (E.type_accessor env prove_get_field_from_block) block ~index ~field_kind
+  in
+  begin match proof with
+  | Ok ty -> original_term (), ty, r
+  | Unknown -> unknown ()
+  | Invalid -> invalid ()
+  end
+
+(* CR mshinwell: this could maybe be shared with the equivalent [block_set]
+   wrapper *)
+let simplify_block_load env r ~result_var prim ~block ~index
+      ~block_access_kind ~field_is_mutable dbg =
+  let index, index_ty = S.simplify_simple env index in
+  let block, block_ty = S.simplify_simple env block in
+  let original_term () : Named.t = Prim (Binary (prim, block, index), dbg) in
+  let kind_of_all_fields =
+    Flambda_primitive.Block_access_kind.kind_all_elements block_access_kind
+  in
+  let field_kind =
+    Flambda_primitive.Block_access_kind.kind_this_element block_access_kind
   in
   let invalid () =
     Reachable.invalid (), T.bottom field_kind,
       R.map_benefit (B.remove_primitive Block_load) r
   in
-  let unknown () =
-    let op : block_access_op =
-      match field_is_mutable with
-      | Mutable -> Mutable_load
-      | Immutable -> Immutable_load { result_var = Some result_var; }
-    in
-    let block_ty, r =
-      refine_block_ty_upon_access env r ~block ~block_ty ~field_index
-        ~block_access_kind op
-    in
-    assert false (* XXX *)
-  in
-  let block_ty, r =
-    let op : block_access_op =
-      match field_is_mutable with
-      | Mutable -> Mutable_load
-      | Immutable -> Immutable_load { result_var = None; }
-    in
-    refine_block_ty_upon_access env r ~block ~block_ty ~field_index
-      ~block_access_kind op
-  in
-  let proof = (E.type_accessor env T.prove_blocks) block in
-  match proof with
-  | Ok (blocks, imms) ->
-    begin match T.Blocks.get_singleton blocks with
-    | Some block ->
-      begin match T.Blocks.Block.get_field block ~field_index with
-      | Ok field_ty -> original_term (), field_ty, r
-      | Unknown -> unknown r
-      | Invalid -> invalid ()
-      end
-    | None -> unknown r
-    end
-  | Unknown -> unknown r
-  | Invalid -> invalid ()
-
-(* XXX this could maybe be shared with the equivalent [block_set] wrapper *)
-let simplify_block_load env r ~result_var prim ~block ~index
-      ~field_kind ~field_is_mutable dbg =
-  let index, index_ty = S.simplify_simple env index in
-  let block, block_ty = S.simplify_simple env block in
-  let original_term () : Named.t = Prim (Binary (prim, block, index), dbg) in
-  let invalid () = Reachable.invalid (), T.bottom field_kind in
-  let proof = (E.type_accessor env T.prove_tagged_immediate) arg in
   let unique_index_unknown () =
-    (* XXX maybe this isn't good enough; we should check [block] is actually
-       a block.  What constraints on tags/sizes are there? *)
-    if (E.type_accessor env T.is_bottom) ty then
-      invalid ()
-    else
-      Reachable.reachable (original_term ()), T.unknown field_kind Other
+    let proof =
+      (E.type_accessor env T.prove_is_block) block ~kind_of_all_fields
+    in
+    match proof with
+    | Unknown | Proved true ->
+      Reachable.reachable (original_term ()), T.unknown field_kind
+    | Proved false | Invalid -> invalid ()
   in
+  let proof = (E.type_accessor env T.prove_tagged_immediate) arg in
   let term, ty =
     match proof with
     | Proved (Exactly indexes) ->
       begin match Immediate.Set.get_singleton indexes with
-      | Some field_index ->
-        simplify_block_load_known_index env r prim ~block ~block_ty dbg
-          ~field_index ~field_kind ~field_is_mutable
+      | Some index ->
+        simplify_block_load_known_index env r prim ~block ~block_ty
+          ~index ~block_access_kind ~field_is_mutable ~field_kind ~invalid dbg
       | None -> unique_index_unknown ()
       end
     | Proved Not_all_values_known -> unique_index_unknown ()
@@ -1117,8 +1103,9 @@ let simplify_string_or_bigstring_load env r prim dbg
 
 let simplify_binary_primitive env r ~result_var prim arg1 arg2 dbg =
   match prim with
-  | Block_load ->
-    simplify_block_load env r ~result_var prim ~block:arg1 ~index:arg2 dbg
+  | Block_load (block_access_kind, field_is_mutable) ->
+    simplify_block_load env r ~result_var prim ~block:arg1 ~index:arg2
+      block_access_kind ~field_is_mutable dbg
   | Block_set (field, field_kind, init_or_assign) ->
     simplify_block_set env r prim ~field ~field_kind ~init_or_assign
       ~block:arg1 ~new_value:arg2 dbg

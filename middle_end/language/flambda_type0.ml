@@ -512,6 +512,8 @@ end) = struct
       existential_freshening;
     }
 
+  let of_ty_value ty_value : t = Value ty_value
+
   let free_names_or_alias free_names_contents (or_alias : _ or_alias) acc =
     match or_alias with
     | No_alias contents -> free_names_contents contents acc
@@ -736,9 +738,12 @@ end) = struct
     | Fabricated _ -> Fabricated (Type export_id)
     | Phantom _ -> Phantom (Type export_id)
 
+  let bottom_as_ty_value () : ty_value =
+    No_alias (Join [])
+
   let bottom (kind : K.t) : t =
     match kind with
-    | Value _ -> Value (No_alias (Join []))
+    | Value _ -> Value (bottom_as_ty_value ())
     | Naked_number Naked_immediate ->
       Naked_number (No_alias (Join []), K.Naked_number.Naked_immediate)
     | Naked_number Naked_float ->
@@ -2908,6 +2913,9 @@ end) = struct
 
   let meet = Meet_and_join.meet
   let join = Meet_and_join.join
+
+  let meet_ty_value = Meet_and_join.meet_ty
+  let join_ty_value = Meet_and_join.join_ty
 
   module Typing_environment = struct
     type t = typing_environment

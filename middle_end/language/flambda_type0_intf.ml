@@ -127,6 +127,7 @@ module type S = sig
   }
  
   and singleton_block = private {
+    (* CR mshinwell: Should this indicate if the block is an array? *)
     env_extension : typing_environment;
     fields : t mutable_or_immutable array;
   }
@@ -288,6 +289,8 @@ module type S = sig
     -> inlinable_function_declaration
     -> unit
 
+  val of_ty_value : ty_value -> t
+
   (** Construction of top types. *)
   val unknown : Flambda_kind.t -> t
 
@@ -391,6 +394,8 @@ module type S = sig
   (** The bottom type for the given kind ("no value can flow to this point"). *)
   val bottom : Flambda_kind.t -> t
 
+  val bottom_as_ty_value : unit -> ty_value
+
   val create_inlinable_function_declaration
      : is_classic_mode:bool
     -> closure_origin:Closure_origin.t
@@ -449,6 +454,9 @@ module type S = sig
   (** Least upper bound of two types. *)
   val join : (t -> t -> t) type_accessor
 
+  (** Least upper bound of two types known to be of kind [Value]. *)
+  val join_ty_value : (ty_value -> ty_value -> ty_value) type_accessor
+
   (** Greatest lower bound of two types.
       This can introduce new judgements into the typing environment. *)
   (* CR mshinwell: maybe we'd better do that part later *)
@@ -461,9 +469,6 @@ module type S = sig
 (*
   (** Least upper bound of an arbitrary number of types. *)
   val join_list : (Flambda_kind.t -> t list -> t) type_accessor
-
-  (** Least upper bound of two types known to be of kind [Value]. *)
-  val join_ty_value : (ty_value -> ty_value -> ty_value) type_accessor
 
   (** Least upper bound of two types known to be of kind [Naked_float]. *)
   val join_ty_naked_float

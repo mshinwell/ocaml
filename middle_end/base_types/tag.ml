@@ -74,6 +74,11 @@ module Scannable = struct
   let object_tag = Obj.object_tag
 end
 
+let is_structured_block t =
+  match Scannable.create t with
+  | None -> false
+  | Some _ -> true
+
 module Non_scannable = struct
   type nonrec t = t
 

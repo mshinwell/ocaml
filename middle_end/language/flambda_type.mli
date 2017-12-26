@@ -40,11 +40,14 @@ val unknown_like : (t -> t) type_accessor
 (** Like [unknown_like] but for a array of types. *)
 val unknown_like_array : (t array -> t array) type_accessor
 
+(*
 (** Create an array of "unknown" types of kind [Value], with the given
     [value_kind]s. *)
 val unknowns_from_value_kinds : Flambda_kind.Value_kind.t list -> t array
 
 val this_many_unknowns : int -> Flambda_kind.t -> t array
+
+*)
 
 (** Rename free variables in a type. *)
 val rename_variables : t -> f:(Variable.t -> Variable.t) -> t
@@ -57,7 +60,9 @@ val this_tagged_immediate_named : Immediate.t -> Flambda0.Named.t * t
 (** Building of types and terms representing untagged / unboxed values from
     specified constants. *)
 val this_untagged_immediate_named : Immediate.t -> Flambda0.Named.t * t
-val this_naked_float_named : float -> Flambda0.Named.t * t
+val this_naked_float_named
+   : Numbers.Float_by_bit_pattern.t
+  -> Flambda0.Named.t * t
 val this_naked_int32_named : Int32.t -> Flambda0.Named.t * t
 val this_naked_int64_named : Int64.t -> Flambda0.Named.t * t
 val this_naked_nativeint_named : Targetint.t -> Flambda0.Named.t * t
@@ -139,55 +144,62 @@ type 'a known_values = 'a Or_not_all_values_known.t proof
 *)
 val prove_tagged_immediate : (t -> Immediate.Set.t known_values) type_accessor
 
-(*
+(** Similar to [prove_tagged_immediate], but for naked float values. *)
+val prove_naked_float
+   : (t -> Numbers.Float_by_bit_pattern.Set.t proof) type_accessor
 
-(** Similar to [prove_tagged_immediate], but for naked float values: the
-    difference is that there are no [Unknown] or [Invalid] return values
-    possible.  ([Proved] is also implicit.) *)
-val prove_naked_float : (t -> Numbers.Float_by_bit_pattern.Set.t) type_accessor
+(** Similar to [prove_tagged_immediate], but for naked int32 values. *)
+val prove_naked_int32
+   : (t -> Numbers.Int32.Set.t proof) type_accessor
 
-(** As for [prove_tagged_immediate], but for naked int32 values. *)
-val prove_naked_int32 : (t -> Numbers.Int32.Set.t) type_accessor
+(** Similar to [prove_tagged_immediate], but for naked int64 values. *)
+val prove_naked_int64
+   : (t -> Numbers.Int64.Set.t proof) type_accessor
 
-(** As for [prove_tagged_immediate], but for naked int64 values. *)
-val prove_naked_int64 : (t -> Numbers.Int64.Set.t) type_accessor
+(** Similar to [prove_tagged_immediate], but for naked nativeint values. *)
+val prove_naked_nativeint
+   : (t -> Targetint.Set.t proof) type_accessor
 
-(** As for [prove_tagged_immediate], but for naked nativeint (target width
-    integer) values. *)
-val prove_naked_nativeint : (t -> Targetint.Set.t) type_accessor
-
-(** As for [prove_tagged_immediate], but for (structured, tag less than
-    [No_scan_tag]) blocks. *)
-val prove_block : (t -> Blocks.t proof) type_accessor
-
-(** Like [prove_block] except for handling values of variant types. *)
-val prove_blocks_and_immediates
+val prove_get_field_from_block
    : (t
-  -> (Blocks.t * (Immediate.Set.t Or_not_all_values_known.t)) proof)
-       type_accessor
+    -> index:Targetint.OCaml.t
+    -> field_kind:Flambda_kind.t
+    -> t proof) type_accessor
 
-(** As for [prove_tagged_immediate], but for float arrays (with tag
-    [Double_array_tag]). *)
-val prove_float_array : (t -> Float_array.t list known_values) type_accessor
+(* CR mshinwell: maybe this could just be "unit proof", in fact, with the
+   "false" case going to "Invalid" *)
+val prove_is_a_block
+   : (t
+    -> kind_of_all_fields:Flambda_kind.t
+    -> bool proof) type_accessor
 
 (** As for [prove_tagged_immediate], but for strings. *)
-val prove_string : (t -> String_info.Set.t known_values) type_accessor
+val prove_string : (t -> String_info.Set.t proof) type_accessor
 
-(** Prove that the given type represents a boxed int32 value, returning the
+(** Prove that the given type represents a boxed float value, returning the
     type of the unboxed number therein.  (That type may in itself specify
     a union, etc.)  This function returns [Unknown] and [Invalid] in
     equivalent situations as for [prove_tagged_immediate]. *)
-val prove_boxed_int32 : (t -> ty_naked_int32 proof) type_accessor
+val prove_boxed_float
+   : (t -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number proof)
+       type_accessor
 
-(** As for [prove_boxed_int32], but for boxed int64 values. *)
-val prove_boxed_int64 : (t -> ty_naked_int64 proof) type_accessor
+(** As for [prove_boxed_float], but for boxed int32 values. *)
+val prove_boxed_int32
+   : (t -> Numbers.Int32.Set.t ty_naked_number proof)
+       type_accessor
 
-(** As for [prove_boxed_int32], but for boxed nativeint values. *)
-val prove_boxed_nativeint : (t -> ty_naked_nativeint proof) type_accessor
+(** As for [prove_boxed_float], but for boxed int64 values. *)
+val prove_boxed_int64
+   : (t -> Numbers.Int64.Set.t ty_naked_number proof)
+       type_accessor
 
-(** As for [prove_boxed_int32], but for boxed float values. *)
-val prove_boxed_float : (t -> ty_naked_float proof) type_accessor
+(** As for [prove_boxed_float], but for boxed nativeint values. *)
+val prove_boxed_nativeint
+   : (t -> Targetint.Set.t ty_naked_number proof)
+       type_accessor
 
+(*
 (** As for [prove_tagged_immediate] but for closures. *)
 val prove_closures : (t -> Joined_closures.t known_values) type_accessor
 

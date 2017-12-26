@@ -34,6 +34,8 @@ val double_tag : t
 val double_array_tag : t
 val custom_tag : t
 
+val is_structured_block : t -> bool
+
 val all_as_targetints : Targetint.Set.t
 
 (* CR mshinwell: This name should be changed---all "value"s are scannable.

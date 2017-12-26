@@ -34,7 +34,9 @@ let simplify_block_set_known_index env r prim ~block_access_kind
       field
       Flambda_primitive.print prim
   end;
-  let field_kind' = Flambda_primitive.kind_of_block_set_kind field_kind in
+  let field_kind =
+    Flambda_primitive.Block_access_kind.kind_this_element block_access_kind
+  in
   let original_term () : Named.t = Prim (Binary (prim, block, index), dbg) in
   let result_kind = K.unit () in
   let invalid () = Reachable.invalid (), T.bottom result_kind in
@@ -44,36 +46,16 @@ let simplify_block_set_known_index env r prim ~block_access_kind
       Reachable.reachable (original_term ()), T.unknown result_kind Other
     | Invalid -> invalid ()
   in
-  let block_ty, r =
-    refine_block_ty_upon_access env r ~block ~block_ty ~field_index
-      ~block_access_kind Store
+  let proof =
+    (* Even though we're setting not getting, the "prove get field" function
+       does exactly what we want in terms of checks on the block, to determine
+       if the set is invalid. *)
+    (E.type_accessor env prove_get_field_from_block) block ~index ~field_kind
   in
-  match block_access_kind with
-  | Definitely_immediate | Must_scan ->
-    let proof = (E.type_accessor env T.prove_blocks) block_ty in
-    begin match proof with
-    | Proved blocks ->
-      if not (T.Blocks.valid_field_access blocks ~field) then invalid ()
-      else ok ()
-    | Unknown -> ok ()
-    | Invalid -> invalid ()
-    end
-  | Naked_float ->
-    let block_proof = (E.type_accessor env T.prove_float_array) block_ty in
-    let new_value_proof =
-      (E.type_accessor env T.prove_naked_float) new_value_ty
-    in
-    begin match block_proof with
-    | Proved sizes ->
-      if not (Int.Set.exists (fun size -> size > field) sizes) then invalid ()
-      else ok ()
-    | Proved Unknown -> ok ()
-    | Invalid -> invalid ()
-    end
-  | Generic_array _spec -> Misc.fatal_error "Not yet implemented"
-    (* CR mshinwell: Finish off
-    Simplify_generic_array.simplify_block_set env r prim ~field spec args
-    *)
+  begin match proof with
+  | Ok _ | Unknown -> ok ()
+  | Invalid -> invalid ()
+  end
 
 let simplify_block_set env r prim dbg ~block_access_kind ~init_or_assign
       ~block ~index ~new_value =
@@ -81,14 +63,22 @@ let simplify_block_set env r prim dbg ~block_access_kind ~init_or_assign
   let index, index_ty = S.simplify_simple env index in
   let new_value, new_value_ty = S.simplify_simple env new_value in
   let original_term () : Named.t = Prim (Binary (prim, block, index), dbg) in
+  let kind_of_all_fields =
+    Flambda_primitive.Block_access_kind.kind_all_elements block_access_kind
+  in
+  let field_kind =
+    Flambda_primitive.Block_access_kind.kind_this_element block_access_kind
+  in
   let invalid () = Reachable.invalid (), T.bottom field_kind in
   let proof = (E.type_accessor env T.prove_tagged_immediate) arg in
   let unique_index_unknown () =
-    (* XXX See [Simplify_binary_primitive.simplify_block_load] *)
-    if (E.type_accessor env T.is_bottom) ty then
-      invalid ()
-    else
-      Reachable.reachable (original_term ()), T.unknown field_kind Other
+    let proof =
+      (E.type_accessor env T.prove_is_block) block ~kind_of_all_fields
+    in
+    match proof with
+    | Unknown | Proved true ->
+      Reachable.reachable (original_term ()), T.unknown field_kind
+    | Proved false | Invalid -> invalid ()
   in
   let term, ty =
     match proof with

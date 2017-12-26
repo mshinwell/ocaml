@@ -363,26 +363,41 @@ module Trap_action = struct
 end
 
 module Switch = struct
-  type t = {
-    arms : Continuation.t Targetint.Map.t;
-  }
+  type t =
+    | Value of Continuation.t Targetint.Map.t
+    | Fabricated of Continuation.t Tag.Map.t
 
   include Identifiable.Make_no_hash (struct
     type nonrec t = t
 
     let compare t1 t2 =
-      Targetint.Map.compare Continuation.compare t1.arms t2.arms
+      match t1, t2 with
+      | Value _, Fabricated _ -> -1
+      | Fabricated _, Value _ -> 1
+      | Value arms1, Value arms2 ->
+        Targetint.Map.compare Continuation.compare arms1 arms2
+      | Fabricated arms1, Fabricated arms2 ->
+        Tag.Map.compare Continuation.compare arms1 arms2
 
     let equal t1 t2 = (compare t1 t2 = 0)
 
     let print ppf (t : t) =
       let spc = ref false in
-      Targetint.Map.iter (fun n l ->
-          if !spc then fprintf ppf "@ " else spc := true;
-          fprintf ppf "@[<hv 1>| %a ->@ goto %a@]"
-            Targetint.print n
-            Continuation.print l)
-        t.arms
+      match t with
+      | Value arms ->
+        Targetint.Map.iter (fun n l ->
+            if !spc then fprintf ppf "@ " else spc := true;
+            fprintf ppf "@[<hv 1>| %a ->@ goto %a@]"
+              Targetint.print n
+              Continuation.print l)
+          arms
+      | Fabricated arms ->
+        Targetint.Map.iter (fun n l ->
+            if !spc then fprintf ppf "@ " else spc := true;
+            fprintf ppf "@[<hv 1>| tag %a ->@ goto %a@]"
+              Tag.print n
+              Continuation.print l)
+          arms
   end)
 end
 
