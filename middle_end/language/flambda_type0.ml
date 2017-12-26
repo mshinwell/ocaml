@@ -884,13 +884,20 @@ end) = struct
   let these_boxed_int64s f = box_int64 (these_naked_int64s f)
   let these_boxed_nativeints f = box_nativeint (these_naked_nativeints f)
 
-  let these_tags tags_to_env_extensions : t =
+  let these_tags tags_to_env_extensions : ty_fabricated =
     let tag_map =
       Tag.Map.map (fun env : tag_case ->
           { env_extension = env; })
         tags_to_env_extensions
     in
-    Fabricated (No_alias (Join [Tag tag_map]))
+    No_alias (Join [Tag tag_map])
+
+  let this_tag tag =
+    let tags_to_env_extensions =
+      Tag.Map.add tag (create_typing_environment ()) Tag.Map.empty
+    in
+    these_tags tags_to_env_extensions
+
 
 (*
 

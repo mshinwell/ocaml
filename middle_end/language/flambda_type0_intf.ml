@@ -362,7 +362,13 @@ module type S = sig
 
   (** Building of types corresponding to values that did not exist at
       source level. *)
-  val these_tags : typing_environment Tag.Map.t -> t
+
+  (** The given block tag. *)
+  val this_tag : Tag.t -> ty_fabricated
+
+  (** The given block tags coupled with the equations that hold if the
+      corresponding block can be shown to have one of the tags. *)
+  val these_tags : typing_environment Tag.Map.t -> ty_fabricated
 
 (*
 
