@@ -59,6 +59,10 @@ module type S = sig
     | Immutable of 'a
     | Mutable
 
+  type 'a or_unknown =
+    | Known of 'a
+    | Unknown
+
   type 'a or_alias = private
     | No_alias of 'a
     | Type of Export_id.t
@@ -109,6 +113,7 @@ module type S = sig
      (Example: Blocks_and_tagged_immediates with both blocks and
      immediates the empty map.)  This means that to check bottomness it
      suffices to check against "Join []".
+     ** But what is the equivalent rule for "Unknown"?
      The check should also ensure that blocks are only ty_value /
      ty_naked_float *)
   and of_kind_value = private
@@ -136,10 +141,7 @@ module type S = sig
         Invariant: the map is always non-empty. *)
 
   and blocks_and_tagged_immediates = private {
-    (* CR mshinwell: this "or_unknown" is dubious, since it could effectively
-       overlap some of the known cases.  Maybe for this case and the blocks
-       case there should be an "unknown" here ("unknown length" for blocks) *)
-    immediates : immediate_case Immediate.Or_unknown.Map.t;
+    immediates : immediate_case Immediate.Map.t or_unknown;
     blocks : block_cases Tag.Map.t;
   }
 

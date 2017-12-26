@@ -109,6 +109,10 @@ end) = struct
     | Immutable of 'a
     | Mutable
 
+  type 'a or_unknown =
+    | Known of 'a
+    | Unknown
+
   type 'a or_alias =
     | No_alias of 'a
     | Type of Export_id.t
@@ -153,7 +157,7 @@ end) = struct
     | Join of { by_length : singleton_block Targetint.OCaml.Map.t; }
 
   and blocks_and_tagged_immediates = {
-    immediates : immediate_case Immediate.Or_unknown.Map.t;
+    immediates : immediate_case Immediate.Map.t or_unknown;
     blocks : block_cases Tag.Map.t;
   }
 
@@ -247,6 +251,11 @@ end) = struct
     | Immutable contents -> print_contents ppf contents
     | Mutable -> Format.pp_print_string ppf "<mutable>"
 
+  let print_or_unknown print_contents ppf (or_unknown : _ or_unknown) =
+    match or_unknown with
+    | Known contents -> print_contents ppf contents
+    | Unknown -> Format.pp_print_string ppf "<unknown>"
+
   let print_or_alias print_descr ppf (or_alias : _ or_alias) =
     match or_alias with
     | No_alias descr -> print_descr ppf descr
@@ -334,7 +343,7 @@ end) = struct
         (Targetint.OCaml.Map.print print_singleton_block) by_length
 
   and print_immediates ppf cases =
-    Immediate.Or_unknown.Map.print print_immediate_case ppf cases
+    Immediate.Map.print print_immediate_case ppf cases
 
   and print_blocks ppf cases =
     Tag.Map.print print_block_cases ppf cases
@@ -345,7 +354,7 @@ end) = struct
       Format.fprintf ppf
         "@[(Blocks_and_immediates@ @[(blocks %a)@]@ @[(immediates %a)@])@]"
         print_blocks blocks
-        print_immediates immediates
+        (print_or_unknown print_immediates) immediates
     | Boxed_number n ->
       Format.fprintf ppf "[@(Boxed_number %a)@]"
         print_of_kind_value_boxed_number n
@@ -561,10 +570,14 @@ end) = struct
           blocks
           acc
       in
-      Immediate.Or_unknown.Map.fold (fun _imm (case : immediate_case) acc ->
-          free_names_of_typing_environment case.env_extension acc)
-        immediates
-        acc
+      begin match immediates with
+      | Unknown -> acc
+      | Known immediates ->
+        Immediate.Map.fold (fun _imm (case : immediate_case) acc ->
+            free_names_of_typing_environment case.env_extension acc)
+          immediates
+          acc
+      end
     | Boxed_number (Boxed_float n) ->
       free_names_ty free_names_of_kind_naked_number n acc
     | Boxed_number (Boxed_int32 n) ->
@@ -752,18 +765,9 @@ end) = struct
     Value (any_value_as_ty_value value_kind)
 
   let any_tagged_immediate () : t =
-    let immediates =
-      let case : immediate_case =
-        { env_extension = create_typing_environment ();
-        }
-      in
-      Immediate.Or_unknown.Map.add (Immediate.Or_unknown.unknown ())
-        case
-        Immediate.Or_unknown.Map.empty
-    in
     Value (No_alias (Join [Blocks_and_tagged_immediates {
       blocks = Tag.Map.empty;
-      immediates;
+      immediates = Unknown;
     }]))
 
   let any_naked_immediate () : t =
@@ -914,14 +918,13 @@ end) = struct
               { env_extension = create_typing_environment ();
               }
             in
-            let key = Immediate.Or_unknown.ok imm in
-            Immediate.Or_unknown.Map.add key case map)
+            Immediate.Map.add imm case map)
           imms
-          Immediate.Or_unknown.Map.empty
+          Immediate.Map.empty
       in
       (* CR mshinwell: See if we can have a creation function for this *)
       let blocks_and_tagged_immediates : blocks_and_tagged_immediates =
-        { immediates;
+        { immediates = Known immediates;
           blocks = Tag.Map.empty;
         }
       in
@@ -1011,7 +1014,7 @@ end) = struct
       Tag.Map.add Tag.double_array_tag block_cases Tag.Map.empty
     in
     let blocks_imms : blocks_and_tagged_immediates =
-      { immediates = Immediate.Or_unknown.Map.empty;
+      { immediates = Known Immediate.Map.empty;
         blocks;
       }
     in
@@ -1044,7 +1047,7 @@ end) = struct
         Tag.Map.add Tag.double_array_tag block_cases Tag.Map.empty
       in
       let blocks_imms : blocks_and_tagged_immediates =
-        { immediates = Immediate.Or_unknown.Map.empty;
+        { immediates = Known Immediate.Map.empty;
           blocks;
         }
       in
@@ -1082,7 +1085,7 @@ end) = struct
       let block_cases : block_cases = Join { by_length; } in
       let blocks = Tag.Map.add tag block_cases Tag.Map.empty in
       let blocks_imms : blocks_and_tagged_immediates =
-        { immediates = Immediate.Or_unknown.Map.empty;
+        { immediates = Known Immediate.Map.empty;
           blocks;
         }
       in
@@ -1400,10 +1403,13 @@ end) = struct
               | Blocks_and_tagged_immediates { blocks; immediates; } ->
                 if Tag.Map.is_empty blocks then
                   Definitely_immediate
-                else if Immediate.Or_unknown.Map.is_empty immediates then
-                  Definitely_pointer
                 else
-                  Unknown
+                  begin match immediates with
+                  | Known imms when Immediate.Map.is_empty imms ->
+                    Definitely_pointer
+                  | Known _ | Unknown ->
+                    Unknown
+                  end
               | Boxed_number _ | Closure _ | String _ -> Definitely_pointer
             in
             K.Value_kind.join result this_kind)
@@ -1850,10 +1856,6 @@ end) = struct
     | Ok of 'a
     | Bottom
 
-  type 'a or_unknown =
-    | Ok of 'a
-    | Unknown
-
   module type Meet_and_join_spec = sig
     type of_kind_foo
     type unk
@@ -1930,7 +1932,7 @@ end) = struct
                       S.join_of_kind_foo ~type_of_name of_kind_foo of_kind_foo'
                     in
                     match join with
-                    | Ok of_kind_foo ->
+                    | Known of_kind_foo ->
                       if !found_one then begin
                         (* CR mshinwell: Add detail showing what was wrong. *)
                         Misc.fatal_errorf "Invariant broken for [Join]"
@@ -2060,16 +2062,16 @@ end) = struct
 
     let meet_immediates ~type_of_name immediates1 immediates2 : _ or_bottom =
       let immediates =
-        Immediate.Or_unknown.Map.inter_merge (fun imm1 imm2 ->
+        Immediate.Map.inter_merge (fun imm1 imm2 ->
             meet_immediate_case ~type_of_name imm1 imm2)
           immediates1
           immediates2
       in
-      if Immediate.Or_unknown.Map.is_empty immediates then Bottom
+      if Immediate.Map.is_empty immediates then Bottom
       else Ok immediates
 
     let join_immediates ~type_of_name immediates1 immediates2 =
-      Immediate.Or_unknown.Map.union_merge (fun imm1 imm2 ->
+      Immediate.Map.union_merge (fun imm1 imm2 ->
           join_immediate_case ~type_of_name imm1 imm2)
         immediates1
         immediates2
@@ -2184,14 +2186,21 @@ end) = struct
         | Bottom -> Tag.Map.empty
         | Ok blocks -> blocks
       in
-      let immediates =
-        match meet_immediates ~type_of_name imms1 imms2 with
-        | Bottom -> Immediate.Or_unknown.Map.empty
-        | Ok immediates -> immediates
+      let immediates : _ or_unknown =
+        match imms1, imms2 with
+        | Unknown, _ -> imms2
+        | _, Unknown -> imms1
+        | Known imms1, Known imms2 ->
+          match meet_immediates ~type_of_name imms1 imms2 with
+          | Bottom -> Known Immediate.Map.empty
+          | Ok immediates -> Known immediates
       in
       let is_bottom =
         Tag.Map.is_empty blocks
-          && Immediate.Or_unknown.Map.is_empty immediates
+          && begin match immediates with
+             | Known imms when Immediate.Map.is_empty imms -> true
+             | Known _ | Unknown -> false
+             end
       in
       if is_bottom then Bottom
       else Ok { blocks; immediates; }
@@ -2201,7 +2210,12 @@ end) = struct
           { blocks = blocks2; immediates = imms2; }
           : blocks_and_tagged_immediates =
       let blocks = join_blocks ~type_of_name blocks1 blocks2 in
-      let immediates = join_immediates ~type_of_name imms1 imms2 in
+      let immediates : _ or_unknown =
+        match imms1, imms2 with
+        | Unknown, _ | _, Unknown -> Unknown
+        | Known imms1, Known imms2 ->
+          Known (join_immediates ~type_of_name imms1 imms2)
+      in
       { blocks; immediates; }
 
     let meet_of_kind_foo ~type_of_name
@@ -2268,35 +2282,35 @@ end) = struct
           join_blocks_and_tagged_immediates ~type_of_name
             blocks_imms1 blocks_imms2
         in
-        Ok (Blocks_and_tagged_immediates blocks_imms)
+        Known (Blocks_and_tagged_immediates blocks_imms)
       | Boxed_number (Boxed_float n1), Boxed_number (Boxed_float n2) ->
         let n : _ ty_naked_number =
           Meet_and_join_naked_float.join_ty ~type_of_name n1 n2
         in
-        Ok (Boxed_number (Boxed_float n))
+        Known (Boxed_number (Boxed_float n))
       | Boxed_number (Boxed_int32 n1),
           Boxed_number (Boxed_int32 n2) ->
         let n : _ ty_naked_number =
           Meet_and_join_naked_int32.join_ty ~type_of_name n1 n2
         in
-        Ok (Boxed_number (Boxed_int32 n))
+        Known (Boxed_number (Boxed_int32 n))
       | Boxed_number (Boxed_int64 n1),
           Boxed_number (Boxed_int64 n2) ->
         let n : _ ty_naked_number =
           Meet_and_join_naked_int64.join_ty ~type_of_name n1 n2
         in
-        Ok (Boxed_number (Boxed_int64 n))
+        Known (Boxed_number (Boxed_int64 n))
       | Boxed_number (Boxed_nativeint n1),
           Boxed_number (Boxed_nativeint n2) ->
         let n : _ ty_naked_number =
           Meet_and_join_naked_nativeint.join_ty ~type_of_name n1 n2
         in
-        Ok (Boxed_number (Boxed_nativeint n))
+        Known (Boxed_number (Boxed_nativeint n))
       | Closure closures1, Closure _closures2 ->
-        Ok (Closure closures1) (* XXX pchambart to fix *)
+        Known (Closure closures1) (* XXX pchambart to fix *)
       | String strs1, String strs2 ->
         let strs = String_info.Set.union strs1 strs2 in
-        Ok (String strs)
+        Known (String strs)
       | (Blocks_and_tagged_immediates _
           | Boxed_number _
           | Closure _
@@ -2339,7 +2353,7 @@ end) = struct
       match of_kind1, of_kind2 with
       | Immediate fs1, Immediate fs2 ->
         let fs = Immediate.Set.union fs1 fs2 in
-        Ok (Immediate fs)
+        Known (Immediate fs)
       | _, _ -> Unknown
 
     let join_unk () () = ()
@@ -2377,7 +2391,7 @@ end) = struct
       match of_kind1, of_kind2 with
       | Float fs1, Float fs2 ->
         let fs = Float_by_bit_pattern.Set.union fs1 fs2 in
-        Ok (Float fs)
+        Known (Float fs)
       | _, _ -> Unknown
 
     let join_unk () () = ()
@@ -2413,7 +2427,7 @@ end) = struct
       match of_kind1, of_kind2 with
       | Int32 is1, Int32 is2 ->
         let is = Int32.Set.union is1 is2 in
-        Ok (Int32 is)
+        Known (Int32 is)
       | _, _ -> Unknown
 
     let join_unk () () = ()
@@ -2449,7 +2463,7 @@ end) = struct
       match of_kind1, of_kind2 with
       | Int64 is1, Int64 is2 ->
         let is = Int64.Set.union is1 is2 in
-        Ok (Int64 is)
+        Known (Int64 is)
       | _, _ -> Unknown
 
     let join_unk () () = ()
@@ -2485,7 +2499,7 @@ end) = struct
       match of_kind1, of_kind2 with
       | Nativeint is1, Nativeint is2 ->
         let is = Targetint.Set.union is1 is2 in
-        Ok (Nativeint is)
+        Known (Nativeint is)
       | _, _ -> Unknown
 
     let join_unk () () = ()
@@ -2546,9 +2560,9 @@ end) = struct
             tags1
             tags2
         in
-        Ok (Tag tags)
+        Known (Tag tags)
       | Set_of_closures set1, Set_of_closures _set2 ->
-        Ok (Set_of_closures set1)  (* XXX pchambart to fix *)
+        Known (Set_of_closures set1)  (* XXX pchambart to fix *)
       | _, _ -> Unknown
 
     let join_unk value_kind1 value_kind2 =
@@ -2638,7 +2652,7 @@ end) = struct
         let ty_value =
           Meet_and_join_value.join_ty ~type_of_name ty_value1 ty_value2
         in
-        Ok ((Value ty_value) : of_kind_phantom)
+        Known ((Value ty_value) : of_kind_phantom)
       | Naked_number (ty_naked_number1, kind1),
           Naked_number (ty_naked_number2, kind2) ->
         let module N = K.Naked_number in
@@ -2648,35 +2662,35 @@ end) = struct
             Meet_and_join_naked_immediate.join_ty ~type_of_name
               ty_naked_number1 ty_naked_number2
           in
-          Ok ((Naked_number (ty_naked_number, N.Naked_immediate))
+          Known ((Naked_number (ty_naked_number, N.Naked_immediate))
             : of_kind_phantom)
         | N.Naked_float, N.Naked_float ->
           let ty_naked_number =
             Meet_and_join_naked_float.join_ty ~type_of_name
               ty_naked_number1 ty_naked_number2
           in
-          Ok ((Naked_number (ty_naked_number, N.Naked_float))
+          Known ((Naked_number (ty_naked_number, N.Naked_float))
             : of_kind_phantom)
         | N.Naked_int32, N.Naked_int32 ->
           let ty_naked_number =
             Meet_and_join_naked_int32.join_ty ~type_of_name
               ty_naked_number1 ty_naked_number2
           in
-          Ok ((Naked_number (ty_naked_number, N.Naked_int32))
+          Known ((Naked_number (ty_naked_number, N.Naked_int32))
             : of_kind_phantom)
         | N.Naked_int64, N.Naked_int64 ->
           let ty_naked_number =
             Meet_and_join_naked_int64.join_ty ~type_of_name
               ty_naked_number1 ty_naked_number2
           in
-          Ok ((Naked_number (ty_naked_number, N.Naked_int64))
+          Known ((Naked_number (ty_naked_number, N.Naked_int64))
             : of_kind_phantom)
         | N.Naked_nativeint, N.Naked_nativeint ->
           let ty_naked_number =
             Meet_and_join_naked_nativeint.join_ty ~type_of_name
               ty_naked_number1 ty_naked_number2
           in
-          Ok ((Naked_number (ty_naked_number, N.Naked_nativeint))
+          Known ((Naked_number (ty_naked_number, N.Naked_nativeint))
             : of_kind_phantom)
         | _, _ -> Unknown
         end
@@ -2685,7 +2699,7 @@ end) = struct
           Meet_and_join_fabricated.join_ty ~type_of_name
             ty_fabricated1 ty_fabricated2
         in
-        Ok ((Fabricated ty_fabricated) : of_kind_phantom)
+        Known ((Fabricated ty_fabricated) : of_kind_phantom)
       | (Value _ | Naked_number _ | Fabricated _), _ ->
         (* CR mshinwell: isn't this really a kind error?  Same for meet *)
         Unknown

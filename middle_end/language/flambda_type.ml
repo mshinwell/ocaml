@@ -993,7 +993,6 @@ let reify ~type_of_name ~allow_free_variables t
       end
     | Fabricated _ | Phantom _ -> Cannot_reify
 
-(*
 type 'a proof =
   | Proved of 'a
   | Unknown
@@ -1003,34 +1002,35 @@ type 'a known_values = 'a Or_not_all_values_known.t proof
 
 let prove_tagged_immediate ~type_of_name t
       : Immediate.Set.t known_values =
-  let t_evaluated, _canonical_name =
-    Evaluated.create ~type_of_name t
-  in
-  match t_evaluated with
-  | Values values ->
-    begin match values with
-    | Unknown -> Unknown
-    | Tagged_immediates_only imms -> Proved imms
-    | Boxed_floats _
-    | Blocks_and_tagged_immediates _
-    | Bottom
-    | Boxed_int32s _
-    | Boxed_int64s _
-    | Boxed_nativeints _
-    | Closures _
-    | Sets_of_closures _
-    | Strings _
-    | Float_arrays _ -> Invalid
-    end
-  | Naked_immediates _
-  | Naked_floats _
-  | Naked_int32s _
-  | Naked_int64s _
-  | Naked_nativeints _ ->
+  let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a tagged \
         immediate: %a"
       print t
+  in
+  let _simplified, canonical_name = Simplified_type.create ~type_of_name t in
+  match t_evaluated with
+  | Value ty_value ->
+    begin match ty_value with
+    | Unknown _ -> Unknown
+    | Bottom -> Invalid
+    | Blocks_and_tagged_immediates blocks_imms ->
+      if not (Tag.Map.is_empty blocks_imms.blocks) then begin
+        Invalid
+      end else begin
+        match blocks_imms.imms with
+        | Unknown -> Proved Not_all_values_known
+        | Ok imms ->
+          assert (not (Immediate.Map.is_empty imms));
+          Proved (Exactly (Immediate.Map.keys imms))
+        end
+    | Boxed_number _ -> Invalid
+    | Closure _ | String _ -> Invalid
+    end
+  | Simplified_type.Naked_number _ -> wrong_kind ()
+  | Fabricated _
+  | Phantom _ -> wrong_kind ()
 
+(*
 let prove_naked_float ~type_of_name t
       : Numbers.Float_by_bit_pattern.Set.t known_values0 =
   let t_evaluated, _canonical_name =

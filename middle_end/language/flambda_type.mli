@@ -78,14 +78,6 @@ end
   val possible_tags : (t -> Tag.Set.t) type_accessor
 *)
 
-(* To do:
-   - finish implementations of methods in Flambda_type0
-   - sort out Flambda_type
-   - finish off the environment module
-*)
-
-(*
-
 (** Whether the given type says that a term of that type can never be
     constructed (in other words, it is [Invalid]). *)
 val is_bottom : (t -> bool) type_accessor
@@ -146,6 +138,8 @@ type 'a known_values = 'a Or_not_all_values_known.t proof
     type definitely cannot represent any tagged immediate) is returned.
 *)
 val prove_tagged_immediate : (t -> Immediate.Set.t known_values) type_accessor
+
+(*
 
 (** Similar to [prove_tagged_immediate], but for naked float values: the
     difference is that there are no [Unknown] or [Invalid] return values
