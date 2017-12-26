@@ -1466,6 +1466,9 @@ let int_switch_branches ~type_of_name t ~branches =
                 match Immediate.Map.find (Immediate.int branch) imms with
                 | exception Not_found -> Cannot_be_taken
                 | { env_extension; } -> Must_be_taken { env_extension; }
+(* XXX Not quite right yet: "must" did in fact really mean that, the test
+   can be removed.  Now---just check the result to see if there is a single
+   "can_be_taken"? *)
               in
               Targetint.OCaml.Map.add branch classification result)
             branches
