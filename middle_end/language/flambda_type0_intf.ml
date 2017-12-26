@@ -121,14 +121,11 @@ module type S = sig
  
   and singleton_block = private {
     env_extension : typing_environment;
-    (** Note: the length of [first_fields] might not be the length of the block.
-        The length must be taken from the key in the [by_length] map inside
-        values of type [block_cases]. *)
-    first_fields : t array or_unknown_length;
+    fields : t array;
   }
 
   and block_cases = private
-    | Join of { by_length : singleton_block Targetint.OCaml.Or_unknown.Map.t; }
+    | Join of { by_length : singleton_block Targetint.OCaml.Map.t; }
     (** This is similar to the [Join] case at the top level of types:
         no two [singleton_block]s in one of these [Join]s can have a
         compatible structure.
@@ -379,8 +376,7 @@ module type S = sig
   val box_nativeint : t -> t
 
   val immutable_float_array
-     : ?may_have_more_elements_after:unit
-    -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number array
+     : Numbers.Float_by_bit_pattern.Set.t ty_naked_number array
     -> t
 
 (*
