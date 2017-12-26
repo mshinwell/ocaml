@@ -966,19 +966,16 @@ end) = struct
       in
       Value (No_alias (Join [Blocks_and_tagged_immediates blocks_imms]))
 
-(*
-
-  (* CR mshinwell: We need to think about these float array functions in
-     conjunction with the 4.06 feature for disabling the float array
-     optimisation *)
-
   let this_immutable_float_array fields : t =
-    let make_field f : ty_naked_float =
-      let f : of_kind_naked_float = Naked_float f in
-      No_alias (Resolved (Ok (No_alias f)))
+    let make_field f : _ ty_naked_number =
+      No_alias (Join [Float (Float_by_bit_pattern.Set.singleton f)])
     in
     let fields = Array.map make_field fields in
-    Value (No_alias (Resolved (Ok (No_alias (Float_array fields)))))
+    immutable_float_array fields
+
+(*
+
+
 
 (*
     let fields =

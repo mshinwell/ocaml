@@ -95,6 +95,13 @@ module Simplified_type : sig
     | Bottom
 end
 
+
+
+(*
+
+  val possible_tags : (t -> Tag.Set.t) type_accessor
+*)
+
 (* To do:
    - finish implementations of methods in Flambda_type0
    - sort out Flambda_type

@@ -245,15 +245,6 @@ module type S = sig
       correct type of kind [Phantom] describing the given type. *)
   val phantomize : t -> t
 
-(*
-
-  val float_array_size_possibly_longer
-     : first_fields:ty_naked_float array
-    -> t
-
-  val possible_tags : (t -> Tag.Set.t) type_accessor
-*)
-
   module Typing_environment : sig
     type t = typing_environment
 
@@ -332,10 +323,7 @@ module type S = sig
   val this_boxed_nativeint : Targetint.t -> t
   val these_boxed_nativeints : Targetint.Set.t -> t
   val this_immutable_string : string -> t
-
-(*
   val this_immutable_float_array : Numbers.Float_by_bit_pattern.t array -> t
-*)
 
   (** Building of types representing untagged / unboxed values from
       specified constants. *)
