@@ -105,6 +105,10 @@ end) = struct
     end)
   end
 
+  type 'a mutable_or_immutable =
+    | Immutable of 'a
+    | Mutable
+
   type 'a or_alias =
     | No_alias of 'a
     | Type of Export_id.t
@@ -142,7 +146,7 @@ end) = struct
  
   and singleton_block = {
     env_extension : typing_environment;
-    fields : t array;
+    fields : t mutable_or_immutable array;
   }
 
   and block_cases =
@@ -237,6 +241,12 @@ end) = struct
     existential_freshening : Freshening.t;
   }
 
+  let print_mutable_or_immutable print_contents ppf
+        (mut : _ mutable_or_immutable) =
+    match mut with
+    | Immutable contents -> print_contents ppf contents
+    | Mutable -> Format.pp_print_string ppf "<mutable>"
+
   let print_or_alias print_descr ppf (or_alias : _ or_alias) =
     match or_alias with
     | No_alias descr -> print_descr ppf descr
@@ -304,8 +314,12 @@ end) = struct
     Format.fprintf ppf "@[(env_extension %a)@]"
       print_typing_environment env_extension
 
-  and print_fields ppf (fields : t array) =
-    print_array ppf fields
+  and print_fields ppf (fields : t mutable_or_immutable array) =
+    Format.fprintf ppf "@[[| %a |]@]"
+      (Format.pp_print_list
+        ~pp_sep:(fun ppf () -> Format.pp_print_string ppf ";@ ")
+        (print_mutable_or_immutable print))
+      (Array.to_list fields)
 
   and print_singleton_block ppf { env_extension; fields; } =
     Format.fprintf ppf "@[((env_extension %a) (fields %a))@]"
@@ -469,13 +483,6 @@ end) = struct
     | Phantom ty ->
       Format.fprintf ppf "(Phantom (%a))" print_ty_phantom ty
 
-  and print_array ppf (ts : t array) =
-    Format.fprintf ppf "@[[| %a |]@]"
-      (Format.pp_print_list
-        ~pp_sep:(fun ppf () -> Format.pp_print_string ppf ";@ ")
-        print)
-      (Array.to_list ts)
-
   and print_typing_environment ppf { names_to_types; levels_to_names;
         existentials; existential_freshening; } =
     Format.fprintf ppf
@@ -544,7 +551,10 @@ end) = struct
                 let acc =
                   free_names_of_typing_environment singleton.env_extension acc
                 in
-                Array.fold_left (fun acc t -> free_names t acc)
+                Array.fold_left (fun acc (field : _ mutable_or_immutable) ->
+                    match field with
+                    | Immutable t -> free_names t acc
+                    | Mutable -> acc)
                   acc singleton.fields)
               by_length
               acc)
@@ -985,7 +995,7 @@ end) = struct
   let mutable_float_array ~size : t =
     let fields =
       Array.init (Targetint.OCaml.to_int size)
-        (fun _index -> any_naked_float ())
+        (fun _index : _ mutable_or_immutable -> Mutable)
     in
     let singleton_block : singleton_block =
       { env_extension = create_typing_environment ();
@@ -1013,8 +1023,11 @@ end) = struct
       Misc.fatal_error "Immutable float array too long for target"
     | Some length ->
       let fields =
-        Array.map (fun ty_naked_number : t ->
-            Naked_number (ty_naked_number, K.Naked_number.Naked_float))
+        Array.map (fun ty_naked_number : _ mutable_or_immutable ->
+            let t : t =
+              Naked_number (ty_naked_number, K.Naked_number.Naked_float)
+            in
+            Immutable t)
           fields
       in
       let singleton_block : singleton_block =
@@ -1049,7 +1062,14 @@ end) = struct
     | None ->
       Misc.fatal_error "Block of values too long for target"
     | Some length ->
-      let fields = Array.map (fun ty_value : t -> Value ty_value) fields in
+      let fields =
+        Array.map
+          (fun (field : _ mutable_or_immutable) : t mutable_or_immutable ->
+            match field with
+            | Immutable ty_value -> Immutable (Value ty_value)
+            | Mutable -> Mutable)
+          fields
+      in
       let singleton_block : singleton_block =
         { env_extension = create_typing_environment ();
           fields;
@@ -2067,8 +2087,13 @@ end) = struct
       in
       assert (Array.length fields1 = Array.length fields2);
       let fields =
-        Array.map2 (fun field1 field2 ->
-            Meet_and_join.meet ~type_of_name field1 field2)
+        Array.map2
+          (fun (field1 : _ mutable_or_immutable)
+               (field2 : _ mutable_or_immutable) : _ mutable_or_immutable ->
+            match field1, field2 with
+            | Mutable, _ | _, Mutable -> Mutable
+            | Immutable field1, Immutable field2 ->
+              Immutable (Meet_and_join.meet ~type_of_name field1 field2))
           fields1
           fields2
       in
@@ -2089,8 +2114,13 @@ end) = struct
       in
       assert (Array.length fields1 = Array.length fields2);
       let fields =
-        Array.map2 (fun field1 field2 ->
-            Meet_and_join.join ~type_of_name field1 field2)
+        Array.map2
+          (fun (field1 : _ mutable_or_immutable)
+               (field2 : _ mutable_or_immutable) : _ mutable_or_immutable ->
+            match field1, field2 with
+            | Mutable, _ | _, Mutable -> Mutable
+            | Immutable field1, Immutable field2 ->
+              Immutable (Meet_and_join.join ~type_of_name field1 field2))
           fields1
           fields2
       in

@@ -55,6 +55,10 @@ module type S = sig
     include Identifiable.S with type t := t
   end
 
+  type 'a mutable_or_immutable =
+    | Immutable of 'a
+    | Mutable
+
   type 'a or_alias = private
     | No_alias of 'a
     | Type of Export_id.t
@@ -119,7 +123,7 @@ module type S = sig
  
   and singleton_block = private {
     env_extension : typing_environment;
-    fields : t array;
+    fields : t mutable_or_immutable array;
   }
 
   and block_cases = private
@@ -376,7 +380,7 @@ module type S = sig
 
   val block_of_values
      : Tag.t
-    -> fields:ty_value array
+    -> fields:ty_value mutable_or_immutable array
     -> t
 
   (** The bottom type for the given kind ("no value can flow to this point"). *)
