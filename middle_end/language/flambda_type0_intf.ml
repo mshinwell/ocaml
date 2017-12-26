@@ -216,8 +216,9 @@ module type S = sig
   }
 
   and of_kind_fabricated = private
-    (* CR mshinwell: Note that these should be represented as naked
-       immediates *)
+    (* CR mshinwell: Should tags be represented as naked immediates?  (A bit
+       troublesome since the obvious Fabricated_kind.t wouldn't have a unique
+       top element) *)
     | Tag of tag_case Tag.Map.t
     | Set_of_closures of set_of_closures
 
@@ -369,6 +370,9 @@ module type S = sig
   (** The given block tags coupled with the equations that hold if the
       corresponding block can be shown to have one of the tags. *)
   val these_tags : typing_environment Tag.Map.t -> ty_fabricated
+
+  (** Any block tag. *)
+  val any_tag : unit -> ty_fabricated
 
 (*
 

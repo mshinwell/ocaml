@@ -68,9 +68,8 @@ type t = private
   | Value of Value_kind.t
   | Naked_number of Naked_number_kind.t
   | Fabricated of Value_kind.t
-    (** GC-scannable values, known to be pointers, which have been introduced
-        by Flambda and are never accessible at the source language level (for
-        example sets of closures). *)
+    (** Values which have been introduced by Flambda and are never accessible
+        at the source language level (for example sets of closures). *)
   | Phantom of Phantom_kind.t
     (** The kind of entities that do not exist at runtime but which are left in
         Flambda terms for the purpose of generating debugging information. *)

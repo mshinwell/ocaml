@@ -898,6 +898,9 @@ end) = struct
     in
     these_tags tags_to_env_extensions
 
+  let any_tag () : ty_fabricated =
+    No_alias (Unknown K.Value_kind.Definitely_immediate)
+
 
 (*
 
