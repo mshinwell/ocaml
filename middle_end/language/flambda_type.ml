@@ -1428,45 +1428,32 @@ let tags ~type_of_name t =
     Misc.fatal_errorf "Type should be of kind [Value] but is not: %a"
       print t
 
+*)
+
 type switch_branch_classification =
   | Cannot_be_taken
   | Can_be_taken
   | Must_be_taken
 
-let classify_switch_branch ~type_of_name t ~scrutinee branch
+let classify_int_switch_branch ~type_of_name t branch
       : switch_branch_classification =
-  let t_evaluated, _canonical_name =
-    Evaluated.create ~type_of_name t
-  in
-  match t_evaluated with
-  | Values values ->
-    begin match values with
-    | Unknown
-    | Tagged_immediates_only Not_all_values_known -> Can_be_taken
-    | Tagged_immediates_only (Exactly all_possible_values) ->
-      let all_possible_values =
-        Immediate.set_to_targetint_set all_possible_values
-      in
-      if Targetint.Set.mem branch all_possible_values then Must_be_taken
-      else Cannot_be_taken
-    | Bottom
-    | Blocks_and_tagged_immediates _
-    | Boxed_floats _
-    | Boxed_int32s _
-    | Boxed_int64s _
-    | Boxed_nativeints _
-    | Closures _
-    | Sets_of_closures _
-    | Strings _
-    | Float_arrays _ -> Cannot_be_taken
-    end
-  | Naked_immediates _
-  | Naked_floats _
-  | Naked_int32s _
-  | Naked_int64s _
-  | Naked_nativeints _ ->
-    Misc.fatal_errorf "Switch on %a has wrong kind: the scrutinee must have \
-        kind [Value]"
-      Name.print scrutinee
+  let proof = prove_tagged_immediate ~type_of_name t in
+  match proof with
+  | Unknown | Proved Not_all_values_known -> Can_be_taken
+  | Invalid -> Cannot_be_taken
+  | Proved (Exactly all_possible_values) ->
+    let all_possible_values =
+      Immediate.set_to_targetint_set all_possible_values
+    in
+    if Targetint.OCaml.Set.mem branch all_possible_values then Must_be_taken
+    else Cannot_be_taken
 
-*)
+let classify_tag_switch_branch ~type_of_name t branch
+      : switch_branch_classification =
+  let proof = prove_tags ~type_of_name t in
+  match proof with
+  | Unknown | Proved Not_all_values_known -> Can_be_taken
+  | Invalid -> Cannot_be_taken
+  | Proved (Exactly all_possible_values) ->
+    if Tag.Set.mem branch all_possible_values then Must_be_taken
+    else Cannot_be_taken
