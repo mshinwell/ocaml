@@ -121,6 +121,9 @@ module type S = sig
  
   and singleton_block = private {
     env_extension : typing_environment;
+    (** Note: the length of [first_fields] might not be the length of the block.
+        The length must be taken from the key in the [by_length] map inside
+        values of type [block_cases]. *)
     first_fields : t array or_unknown_length;
   }
 

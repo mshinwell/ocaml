@@ -2034,16 +2034,25 @@ end) = struct
           env_extension1 env_extension2
       in
       let first_fields : _ or_unknown_length =
-        (* Note: this function is only called with blocks of the same
-           known length (or with both blocks of unknown length). *)
         match first_fields1, first_fields2 with
         | Unknown_length, Unknown_length -> Unknown_length
         | First_fields_are fields1, First_fields_are fields2 ->
-          assert (Array.length fields1 = Array.length fields2);
+          let length = max (Array.length fields1) (Array.length fields2) in
           let fields =
-            Array.map2 (fun field1 field2 ->
-                Meet_and_join.meet ~type_of_name field1 field2)
-              fields1 fields2
+            Array.init length (fun index ->
+              let field1 =
+                if index < Array.length fields1 then Some fields1.(index)
+                else None
+              in
+              let field2 =
+                if index < Array.length fields2 then Some fields2.(index)
+                else None
+              in
+              match field1, field2 with
+              | Some field1, Some field2 ->
+                Meet_and_join.meet ~type_of_name field1 field2
+              | Some field, None | None, Some field -> field
+              | None, None -> assert false)
           in
           First_fields_are fields
         | First_fields_are _, Unknown_length
@@ -2068,11 +2077,22 @@ end) = struct
         match first_fields1, first_fields2 with
         | Unknown_length, Unknown_length -> Unknown_length
         | First_fields_are fields1, First_fields_are fields2 ->
-          assert (Array.length fields1 = Array.length fields2);
+          let length = min (Array.length fields1) (Array.length fields2) in
           let fields =
-            Array.map2 (fun field1 field2 ->
-                Meet_and_join.join ~type_of_name field1 field2)
-              fields1 fields2
+            Array.init length (fun index ->
+              let field1 =
+                if index < Array.length fields1 then Some fields1.(index)
+                else None
+              in
+              let field2 =
+                if index < Array.length fields2 then Some fields2.(index)
+                else None
+              in
+              match field1, field2 with
+              | Some field1, Some field2 ->
+                Meet_and_join.join ~type_of_name field1 field2
+              | Some field, None | None, Some field -> field
+              | None, None -> assert false)
           in
           First_fields_are fields
         | First_fields_are _, Unknown_length
