@@ -1433,27 +1433,47 @@ let tags ~type_of_name t =
 type switch_branch_classification =
   | Cannot_be_taken
   | Can_be_taken
-  | Must_be_taken
+  | Must_be_taken of { env_extension : typing_environment; }
 
-let classify_int_switch_branch ~type_of_name t branch
-      : switch_branch_classification =
-  let proof = prove_tagged_immediate ~type_of_name t in
-  match proof with
-  | Unknown | Proved Not_all_values_known -> Can_be_taken
-  | Invalid -> Cannot_be_taken
-  | Proved (Exactly all_possible_values) ->
-    let all_possible_values =
-      Immediate.set_to_targetint_set all_possible_values
-    in
-    if Targetint.OCaml.Set.mem branch all_possible_values then Must_be_taken
-    else Cannot_be_taken
-
-let classify_tag_switch_branch ~type_of_name t branch
-      : switch_branch_classification =
-  let proof = prove_tags ~type_of_name t in
-  match proof with
-  | Unknown | Proved Not_all_values_known -> Can_be_taken
-  | Invalid -> Cannot_be_taken
-  | Proved (Exactly all_possible_values) ->
-    if Tag.Set.mem branch all_possible_values then Must_be_taken
-    else Cannot_be_taken
+let int_switch_branches ~type_of_name t ~branches =
+  let wrong_kind () =
+    Misc.fatal_errorf "Wrong kind for something claimed to be a tagged \
+        immediate: %a"
+      print t
+  in
+  let for_all_branches classification =
+    Targetint.OCaml.Set.fold (fun branch result ->
+        Targetint.OCaml.Map.add branch classification result)
+      branches
+      Targetint.OCaml.Map.empty
+  in
+  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  match simplified with
+  | Value ty_value ->
+    begin match ty_value with
+    | Unknown _ -> for_all_branches Can_be_taken
+    | Bottom -> for_all_branches Cannot_be_taken
+    | Ok (Blocks_and_tagged_immediates blocks_imms) ->
+      if not (Tag.Map.is_empty blocks_imms.blocks) then begin
+        for_all_branches Cannot_be_taken
+      end else begin
+        match blocks_imms.immediates with
+        | Unknown -> for_all_branches Can_be_taken
+        | Known imms ->
+          assert (not (Immediate.Map.is_empty imms));
+          Targetint.OCaml.Set.fold (fun branch result ->
+              let classification =
+                match Immediate.Map.find (Immediate.int branch) imms with
+                | exception Not_found -> Cannot_be_taken
+                | { env_extension; } -> Must_be_taken { env_extension; }
+              in
+              Targetint.OCaml.Map.add branch classification result)
+            branches
+            Targetint.OCaml.Map.empty
+      end
+    | Ok (Boxed_number _) -> for_all_branches Cannot_be_taken
+    | Ok (Closure _ | String _) -> for_all_branches Cannot_be_taken
+    end
+  | Simplified_type.Naked_number _ -> wrong_kind ()
+  | Fabricated _
+  | Phantom _ -> wrong_kind ()

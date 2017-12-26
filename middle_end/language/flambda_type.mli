@@ -256,21 +256,19 @@ val force_to_kind_naked_float_list : t list -> ty_naked_float list
 type switch_branch_classification = private
   | Cannot_be_taken
   | Can_be_taken
-  | Must_be_taken
+  | Must_be_taken of { env_extension : typing_environment; }
 
-(** Given the type of a [Switch] integer scrutinee, determine whether the case
-    of the corresponding switch with the given label either cannot be taken,
-    can be taken or will always be taken. *)
-val classify_int_switch_branch
+val int_switch_branches
    : (flambda_type
-  -> Targetint.OCaml.t
-  -> switch_branch_classification) type_accessor
+  -> branches:Targetint.OCaml.Set.t
+  -> switch_branch_classification Targetint.OCaml.Map.t) type_accessor
 
-(** As for [classify_int_switch_branch], but for switches on tags. *)
-val classify_tag_switch_branch
+(*
+val tag_switch_branches
    : (flambda_type
-  -> Tag.t
-  -> switch_branch_classification) type_accessor
+  -> branches:Tag.Set.t
+  -> switch_branch_classification Tag.Map.t
+*)
 
 (*
 (* CR mshinwell: Maybe this should return Tag.Set.t? *)
