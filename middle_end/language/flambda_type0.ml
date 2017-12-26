@@ -729,6 +729,65 @@ end) = struct
     | Fabricated _ -> Fabricated (No_alias (Join []))
     | Phantom _ -> Phantom (No_alias (Join []))
 
+(*
+
+  let any_naked_float_as_ty_naked_float () : ty_naked_float =
+    No_alias (Resolved (Unknown (Other, ())))
+*)
+
+  let any_value_as_ty_value value_kind : ty_value =
+    No_alias (Unknown value_kind)
+
+  let any_value value_kind : t =
+    Value (any_value_as_ty_value value_kind)
+
+  let any_tagged_immediate () : t =
+    let immediates =
+      let case : immediate_case =
+        { env_extension = create_typing_environment ();
+        }
+      in
+      Immediate.Or_unknown.Map.add (Immediate.Or_unknown.unknown ())
+        case
+        Immediate.Or_unknown.Map.empty
+    in
+    Value (No_alias (Join [Blocks_and_tagged_immediates {
+      blocks = Tag.Map.empty;
+      immediates;
+    }]))
+
+  let any_naked_immediate () : t =
+    Naked_number (No_alias (Unknown ()), K.Naked_number.Naked_immediate)
+
+  let any_naked_float () : t =
+    Naked_number (No_alias (Unknown ()), K.Naked_number.Naked_float)
+
+  let any_naked_int32 () : t =
+    Naked_number (No_alias (Unknown ()), K.Naked_number.Naked_int32)
+
+  let any_naked_int64 () : t =
+    Naked_number (No_alias (Unknown ()), K.Naked_number.Naked_int64)
+
+  let any_naked_nativeint () : t =
+    Naked_number (No_alias (Unknown ()), K.Naked_number.Naked_nativeint)
+
+  let any_fabricated () : t =
+    Fabricated (No_alias (Unknown K.Value_kind.Unknown))
+
+  let any_phantom () : t =
+    Phantom (No_alias (Unknown K.Phantom_kind.Unknown))
+
+  let unknown (kind : K.t) =
+    match kind with
+    | Value value_kind -> any_value value_kind
+    | Naked_number Naked_immediate -> any_naked_immediate ()
+    | Naked_number Naked_float -> any_naked_float ()
+    | Naked_number Naked_int32 -> any_naked_int32 ()
+    | Naked_number Naked_int64 -> any_naked_int64 ()
+    | Naked_number Naked_nativeint -> any_naked_nativeint ()
+    | Fabricated _ -> any_fabricated ()
+    | Phantom _ -> any_phantom ()
+
   let these_naked_immediates (is : Immediate.Set.t) : t =
     let of_kind : _ of_kind_naked_number = Immediate is in
     Naked_number (No_alias (Join [of_kind]),
@@ -923,6 +982,31 @@ end) = struct
     let str = String_info.Set.singleton str in
     Value (No_alias (Join [String str]))
 
+  let mutable_float_array ~size : t =
+    let fields =
+      Array.init (Targetint.OCaml.to_int size)
+        (fun _index -> any_naked_float ())
+    in
+    let singleton_block : singleton_block =
+      { env_extension = create_typing_environment ();
+        fields;
+      }
+    in
+    let by_length =
+      Targetint.OCaml.Map.add size singleton_block
+        Targetint.OCaml.Map.empty
+    in
+    let block_cases : block_cases = Join { by_length; } in
+    let blocks =
+      Tag.Map.add Tag.double_array_tag block_cases Tag.Map.empty
+    in
+    let blocks_imms : blocks_and_tagged_immediates =
+      { immediates = Immediate.Or_unknown.Map.empty;
+        blocks;
+      }
+    in
+    Value (No_alias (Join [Blocks_and_tagged_immediates blocks_imms]))
+
   let immutable_float_array fields : t =
     match Targetint.OCaml.of_int_option (Array.length fields) with
     | None ->
@@ -1019,65 +1103,6 @@ end) = struct
 
 
 *)
-
-(*
-
-  let any_naked_float_as_ty_naked_float () : ty_naked_float =
-    No_alias (Resolved (Unknown (Other, ())))
-*)
-
-  let any_value_as_ty_value value_kind : ty_value =
-    No_alias (Unknown value_kind)
-
-  let any_value value_kind : t =
-    Value (any_value_as_ty_value value_kind)
-
-  let any_tagged_immediate () : t =
-    let immediates =
-      let case : immediate_case =
-        { env_extension = create_typing_environment ();
-        }
-      in
-      Immediate.Or_unknown.Map.add (Immediate.Or_unknown.unknown ())
-        case
-        Immediate.Or_unknown.Map.empty
-    in
-    Value (No_alias (Join [Blocks_and_tagged_immediates {
-      blocks = Tag.Map.empty;
-      immediates;
-    }]))
-
-  let any_naked_immediate () : t =
-    Naked_number (No_alias (Unknown ()), K.Naked_number.Naked_immediate)
-
-  let any_naked_float () : t =
-    Naked_number (No_alias (Unknown ()), K.Naked_number.Naked_float)
-
-  let any_naked_int32 () : t =
-    Naked_number (No_alias (Unknown ()), K.Naked_number.Naked_int32)
-
-  let any_naked_int64 () : t =
-    Naked_number (No_alias (Unknown ()), K.Naked_number.Naked_int64)
-
-  let any_naked_nativeint () : t =
-    Naked_number (No_alias (Unknown ()), K.Naked_number.Naked_nativeint)
-
-  let any_fabricated () : t =
-    Fabricated (No_alias (Unknown K.Value_kind.Unknown))
-
-  let any_phantom () : t =
-    Phantom (No_alias (Unknown K.Phantom_kind.Unknown))
-
-  let unknown (kind : K.t) =
-    match kind with
-    | Value value_kind -> any_value value_kind
-    | Naked_number Naked_immediate -> any_naked_immediate ()
-    | Naked_number Naked_float -> any_naked_float ()
-    | Naked_number Naked_int32 -> any_naked_int32 ()
-    | Naked_number Naked_int64 -> any_naked_int64 ()
-    | Naked_number Naked_nativeint -> any_naked_nativeint ()
-    | Fabricated _ -> any_fabricated ()
-    | Phantom _ -> any_phantom ()
 
 (*
 

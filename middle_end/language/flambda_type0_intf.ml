@@ -342,10 +342,7 @@ module type S = sig
   (** Building of types corresponding to mutable values. *)
   val mutable_string : size:Targetint.OCaml.t -> t
 
-(*
   val mutable_float_array : size:Targetint.OCaml.t -> t
-  val mutable_float_arrays_of_various_sizes : sizes:Targetint.OCaml.Set.t -> t
-*)
 
   (** Building of types corresponding to values that did not exist at
       source level. *)
