@@ -60,10 +60,6 @@ module type S = sig
     | Type of Export_id.t
     | Type_of of Name.t
 
-  type 'a or_unknown_length = private
-    | First_fields_are of 'a
-    | Unknown_length
-
   type typing_environment
 
   (** Values of type [t] are known as "Flambda types".  Each Flambda type
@@ -385,16 +381,6 @@ module type S = sig
     -> tag:ty_fabricated
     -> fields:ty_value array
     -> t
-
-  val block_case_known_size
-     : env_extension:typing_environment
-    -> fields:ty_value array
-    -> block_case
-
-  val block_case_size_possibly_longer
-     : env_extension:typing_environment
-    -> first_fields:ty_value array
-    -> block_case
 
   val block
      : tag:Simple.t

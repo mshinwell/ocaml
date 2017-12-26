@@ -110,10 +110,6 @@ end) = struct
     | Type of Export_id.t
     | Type_of of Name.t
 
-  type 'a or_unknown_length =
-    | First_fields_are of 'a
-    | Unknown_length
-
   type t =
     | Value of ty_value
     | Naked_number :
@@ -146,11 +142,11 @@ end) = struct
  
   and singleton_block = {
     env_extension : typing_environment;
-    first_fields : t array or_unknown_length;
+    fields : t array;
   }
 
   and block_cases =
-    | Join of { by_length : singleton_block Targetint.OCaml.Or_unknown.Map.t; }
+    | Join of { by_length : singleton_block Targetint.OCaml.Map.t; }
 
   and blocks_and_tagged_immediates = {
     immediates : immediate_case Immediate.Or_unknown.Map.t;
@@ -249,12 +245,6 @@ end) = struct
     | Type export_id ->
       Format.fprintf ppf "@[(= %a)@]" Export_id.print export_id
 
-  let print_or_unknown_length f ppf (unk : _ or_unknown_length) =
-    match unk with
-    | First_fields_are contents ->
-      Format.fprintf ppf "(first_fields_are (%a))" f contents
-    | Unknown_length -> Format.pp_print_string ppf "<unknown length>"
-
   let print_unknown_or_join print_contents print_unknown_payload ppf
         (o : _ unknown_or_join) =
     match o with
@@ -314,20 +304,20 @@ end) = struct
     Format.fprintf ppf "@[(env_extension %a)@]"
       print_typing_environment env_extension
 
-  and print_first_fields ppf (fields : t array or_unknown_length) =
-    (print_or_unknown_length print_array) ppf fields
+  and print_fields ppf (fields : t array) =
+    print_array ppf fields
 
-  and print_singleton_block ppf { env_extension; first_fields; } =
-    Format.fprintf ppf "@[((env_extension %a) (first_fields %a))@]"
+  and print_singleton_block ppf { env_extension; fields; } =
+    Format.fprintf ppf "@[((env_extension %a) (fields %a))@]"
       print_typing_environment env_extension
-      print_first_fields first_fields
+      print_fields fields
 
   and print_block_cases ppf ((Join { by_length; }) : block_cases) =
-    match Targetint.OCaml.Or_unknown.Map.get_singleton by_length with
+    match Targetint.OCaml.Map.get_singleton by_length with
     | Some (_length, block) -> print_singleton_block ppf block
     | None ->
       Format.fprintf ppf "(Join (by_length %a))"
-        (Targetint.OCaml.Or_unknown.Map.print print_singleton_block) by_length
+        (Targetint.OCaml.Map.print print_singleton_block) by_length
 
   and print_immediates ppf cases =
     Immediate.Or_unknown.Map.print print_immediate_case ppf cases
@@ -549,16 +539,13 @@ end) = struct
     | Blocks_and_tagged_immediates { blocks; immediates; } ->
       let acc =
         Tag.Map.fold (fun _tag ((Join { by_length; }) : block_cases) acc ->
-            Targetint.OCaml.Or_unknown.Map.fold
+            Targetint.OCaml.Map.fold
               (fun _length (singleton : singleton_block) acc ->
                 let acc =
                   free_names_of_typing_environment singleton.env_extension acc
                 in
-                match singleton.first_fields with
-                | Unknown_length -> acc
-                | First_fields_are first_fields ->
-                  Array.fold_left (fun acc t -> free_names t acc)
-                    acc first_fields)
+                Array.fold_left (fun acc t -> free_names t acc)
+                  acc singleton.fields)
               by_length
               acc)
           blocks
@@ -936,7 +923,7 @@ end) = struct
     let str = String_info.Set.singleton str in
     Value (No_alias (Join [String str]))
 
-  let immutable_float_array ?may_have_more_elements_after fields : t =
+  let immutable_float_array fields : t =
     match Targetint.OCaml.of_int_option (Array.length fields) with
     | None ->
       Misc.fatal_error "Immutable float array too long for target"
@@ -948,17 +935,12 @@ end) = struct
       in
       let singleton_block : singleton_block =
         { env_extension = create_typing_environment ();
-          first_fields = First_fields_are fields;
+          fields;
         }
       in
-      let length =
-        match may_have_more_elements_after with
-        | None -> Targetint.OCaml.Or_unknown.ok length
-        | Some () -> Targetint.OCaml.Or_unknown.unknown ()
-      in
       let by_length =
-        Targetint.OCaml.Or_unknown.Map.add length singleton_block
-          Targetint.OCaml.Or_unknown.Map.empty
+        Targetint.OCaml.Map.add length singleton_block
+          Targetint.OCaml.Map.empty
       in
       let block_cases : block_cases = Join { by_length; } in
       let blocks =
@@ -2024,82 +2006,46 @@ end) = struct
 
     let meet_singleton_block ~type_of_name
           ({ env_extension = env_extension1;
-             first_fields = first_fields1;
+             fields = fields1;
            } : singleton_block)
           ({ env_extension = env_extension2;
-             first_fields = first_fields2;
+             fields = fields2;
            } : singleton_block) : singleton_block =
       let env_extension =
         Meet_and_join.meet_typing_environment ~type_of_name
           env_extension1 env_extension2
       in
-      let first_fields : _ or_unknown_length =
-        match first_fields1, first_fields2 with
-        | Unknown_length, Unknown_length -> Unknown_length
-        | First_fields_are fields1, First_fields_are fields2 ->
-          let length = max (Array.length fields1) (Array.length fields2) in
-          let fields =
-            Array.init length (fun index ->
-              let field1 =
-                if index < Array.length fields1 then Some fields1.(index)
-                else None
-              in
-              let field2 =
-                if index < Array.length fields2 then Some fields2.(index)
-                else None
-              in
-              match field1, field2 with
-              | Some field1, Some field2 ->
-                Meet_and_join.meet ~type_of_name field1 field2
-              | Some field, None | None, Some field -> field
-              | None, None -> assert false)
-          in
-          First_fields_are fields
-        | First_fields_are _, Unknown_length
-        | Unknown_length, First_fields_are _ -> assert false
+      assert (Array.length fields1 = Array.length fields2);
+      let fields =
+        Array.map2 (fun field1 field2 ->
+            Meet_and_join.meet ~type_of_name field1 field2)
+          fields1
+          fields2
       in
       { env_extension;
-        first_fields;
+        fields;
       }
 
     let join_singleton_block ~type_of_name
           ({ env_extension = env_extension1;
-             first_fields = first_fields1;
+             fields = fields1;
            } : singleton_block)
           ({ env_extension = env_extension2;
-             first_fields = first_fields2;
+             fields = fields2;
            } : singleton_block) : singleton_block =
       let env_extension =
         Meet_and_join.join_typing_environment ~type_of_name
           env_extension1 env_extension2
       in
-      let first_fields =
-        match first_fields1, first_fields2 with
-        | Unknown_length, Unknown_length -> Unknown_length
-        | First_fields_are fields1, First_fields_are fields2 ->
-          let length = min (Array.length fields1) (Array.length fields2) in
-          let fields =
-            Array.init length (fun index ->
-              let field1 =
-                if index < Array.length fields1 then Some fields1.(index)
-                else None
-              in
-              let field2 =
-                if index < Array.length fields2 then Some fields2.(index)
-                else None
-              in
-              match field1, field2 with
-              | Some field1, Some field2 ->
-                Meet_and_join.join ~type_of_name field1 field2
-              | Some field, None | None, Some field -> field
-              | None, None -> assert false)
-          in
-          First_fields_are fields
-        | First_fields_are _, Unknown_length
-        | Unknown_length, First_fields_are _ -> assert false
+      assert (Array.length fields1 = Array.length fields2);
+      let fields =
+        Array.map2 (fun field1 field2 ->
+            Meet_and_join.join ~type_of_name field1 field2)
+          fields1
+          fields2
       in
       { env_extension;
-        first_fields;
+        fields;
       }
 
     let meet_block_cases ~type_of_name
@@ -2107,14 +2053,14 @@ end) = struct
           ((Join { by_length = singleton_blocks2; }) : block_cases)
           : block_cases or_bottom =
       let by_length =
-        Targetint.OCaml.Or_unknown.Map.inter_merge
+        Targetint.OCaml.Map.inter_merge
           (fun singleton_block1 singleton_block2 ->
             meet_singleton_block ~type_of_name
               singleton_block1 singleton_block2)
           singleton_blocks1
           singleton_blocks2
       in
-      if Targetint.OCaml.Or_unknown.Map.is_empty by_length then Bottom
+      if Targetint.OCaml.Map.is_empty by_length then Bottom
       else Ok ((Join { by_length; }) : block_cases)
 
     let join_block_cases ~type_of_name
@@ -2122,7 +2068,7 @@ end) = struct
           ((Join { by_length = singleton_blocks2; }) : block_cases)
           : block_cases =
       let by_length =
-        Targetint.OCaml.Or_unknown.Map.union_merge
+        Targetint.OCaml.Map.union_merge
           (fun singleton_block1 singleton_block2 ->
             join_singleton_block ~type_of_name
               singleton_block1 singleton_block2)
