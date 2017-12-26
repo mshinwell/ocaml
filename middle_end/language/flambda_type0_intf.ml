@@ -548,6 +548,8 @@ module type S = sig
 
   val force_to_kind_fabricated : t -> ty_fabricated
 
+  val force_to_kind_phantom : t -> ty_phantom
+
 (*
   type cleaning_spec =
     | Available

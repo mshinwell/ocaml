@@ -72,30 +72,6 @@ module Or_not_all_values_known : sig
     | Not_all_values_known
 end
 
-module Simplified_type : sig
-  (** Simplified types omit the following at top level:
-      - alias information;
-      - joins between incompatible types (these turn into "Unknown").
-  *)
-  type t = private
-    | Value of ty_value
-    | Naked_number :
-        'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t -> t
-    | Fabricated of ty_fabricated
-    | Phantom of ty_phantom
-
-  and ty_value = (of_kind_value, Flambda_kind.Value_kind.t) ty
-  and 'a ty_naked_number = ('a of_kind_naked_number, unit) ty
-  and ty_fabricated = (of_kind_fabricated, Flambda_kind.Value_kind.t) ty
-  and ty_phantom = (of_kind_phantom, Flambda_kind.Phantom_kind.t) ty
-
-  and ('a, 'u) ty = private
-    | Unknown of 'u
-    | Ok of 'a
-    | Bottom
-end
-
-
 
 (*
 
