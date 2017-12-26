@@ -104,7 +104,9 @@ module type S = sig
      any possible "bottom" case here is represented instead by "Join []".
      (Example: Blocks_and_tagged_immediates with both blocks and
      immediates the empty map.)  This means that to check bottomness it
-     suffices to check against "Join []". *)
+     suffices to check against "Join []".
+     The check should also ensure that blocks are only ty_value /
+     ty_naked_float *)
   and of_kind_value = private
     | Blocks_and_tagged_immediates of blocks_and_tagged_immediates
     | Boxed_number : _ of_kind_value_boxed_number -> of_kind_value
@@ -375,23 +377,10 @@ module type S = sig
      : Numbers.Float_by_bit_pattern.Set.t ty_naked_number array
     -> t
 
-(*
-  val block
-     : typing_environment
-    -> tag:ty_fabricated
+  val block_of_values
+     : Tag.t
     -> fields:ty_value array
     -> t
-
-  val block
-     : tag:Simple.t
-    -> block_case
-    -> t
-
-  val blocks
-     : tag:Simple.t
-    -> tags_to_block_cases:block_case Tag.Scannable.Map.t
-    -> t
-*)
 
   (** The bottom type for the given kind ("no value can flow to this point"). *)
   val bottom : Flambda_kind.t -> t

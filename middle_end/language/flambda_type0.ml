@@ -960,6 +960,31 @@ end) = struct
     let fields = Array.map make_field fields in
     immutable_float_array fields
 
+  let block_of_values tag ~fields =
+    match Targetint.OCaml.of_int_option (Array.length fields) with
+    | None ->
+      Misc.fatal_error "Block of values too long for target"
+    | Some length ->
+      let fields = Array.map (fun ty_value : t -> Value ty_value) fields in
+      let singleton_block : singleton_block =
+        { env_extension = create_typing_environment ();
+          fields;
+        }
+      in
+      let by_length =
+        Targetint.OCaml.Map.add length singleton_block
+          Targetint.OCaml.Map.empty
+      in
+      let block_cases : block_cases = Join { by_length; } in
+      let blocks = Tag.Map.add tag block_cases Tag.Map.empty in
+      let blocks_imms : blocks_and_tagged_immediates =
+        { immediates = Immediate.Or_unknown.Map.empty;
+          blocks;
+        }
+      in
+      Value (No_alias (Join [Blocks_and_tagged_immediates blocks_imms]))
+
+
 (*
 
 
