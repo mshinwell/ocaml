@@ -61,7 +61,7 @@ module type S = sig
     | Type_of of Name.t
 
   type 'a or_unknown_length = private
-    | Exactly of 'a
+    | First_fields_are of 'a
     | Unknown_length
 
   type typing_environment
@@ -376,7 +376,8 @@ module type S = sig
   val box_nativeint : t -> t
 
   val immutable_float_array
-     : Numbers.Float_by_bit_pattern.Set.t ty_naked_number array
+     : ?may_have_more_elements_after:unit
+    -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number array
     -> t
 
 (*

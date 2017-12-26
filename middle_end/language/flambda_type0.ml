@@ -111,7 +111,7 @@ end) = struct
     | Type_of of Name.t
 
   type 'a or_unknown_length =
-    | Exactly of 'a
+    | First_fields_are of 'a
     | Unknown_length
 
   type t =
@@ -251,7 +251,8 @@ end) = struct
 
   let print_or_unknown_length f ppf (unk : _ or_unknown_length) =
     match unk with
-    | Exactly contents -> f ppf contents
+    | First_fields_are contents ->
+      Format.fprintf ppf "(first_fields_are (%a))" f contents
     | Unknown_length -> Format.pp_print_string ppf "<unknown length>"
 
   let print_unknown_or_join print_contents print_unknown_payload ppf
@@ -555,7 +556,7 @@ end) = struct
                 in
                 match singleton.first_fields with
                 | Unknown_length -> acc
-                | Exactly first_fields ->
+                | First_fields_are first_fields ->
                   Array.fold_left (fun acc t -> free_names t acc)
                     acc first_fields)
               by_length
@@ -935,7 +936,7 @@ end) = struct
     let str = String_info.Set.singleton str in
     Value (No_alias (Join [String str]))
 
-  let immutable_float_array fields : t =
+  let immutable_float_array ?may_have_more_elements_after fields : t =
     match Targetint.OCaml.of_int_option (Array.length fields) with
     | None ->
       Misc.fatal_error "Immutable float array too long for target"
@@ -947,10 +948,14 @@ end) = struct
       in
       let singleton_block : singleton_block =
         { env_extension = create_typing_environment ();
-          first_fields = Exactly fields;
+          first_fields = First_fields_are fields;
         }
       in
-      let length = Targetint.OCaml.Or_unknown.ok length in
+      let length =
+        match may_have_more_elements_after with
+        | None -> Targetint.OCaml.Or_unknown.ok length
+        | Some () -> Targetint.OCaml.Or_unknown.unknown ()
+      in
       let by_length =
         Targetint.OCaml.Or_unknown.Map.add length singleton_block
           Targetint.OCaml.Or_unknown.Map.empty
@@ -975,22 +980,6 @@ end) = struct
 
 (*
 
-
-
-(*
-    let fields =
-      Array.map (fun (field : t) ->
-          match field with
-          | Naked_float ty_naked_float -> ty_naked_float
-          | Value _ | Naked_immediate _ | Naked_int32 _ | Naked_int64 _
-          | Naked_nativeint _ ->
-            Misc.fatal_errorf "Can only form [Float_array] types with fields \
-                of kind [Naked_float].  Wrong field type: %a"
-              print field)
-        fields
-    in
-*)
-    Value (No_alias (Resolved (Ok (No_alias (Float_array fields)))))
 
   let mutable_float_array0 ~size : _ singleton_or_combination =
     let make_field () : ty_naked_float =
@@ -2049,16 +2038,16 @@ end) = struct
            known length (or with both blocks of unknown length). *)
         match first_fields1, first_fields2 with
         | Unknown_length, Unknown_length -> Unknown_length
-        | Exactly fields1, Exactly fields2 ->
+        | First_fields_are fields1, First_fields_are fields2 ->
           assert (Array.length fields1 = Array.length fields2);
           let fields =
             Array.map2 (fun field1 field2 ->
                 Meet_and_join.meet ~type_of_name field1 field2)
               fields1 fields2
           in
-          Exactly fields
-        | Exactly _, Unknown_length
-        | Unknown_length, Exactly _ -> assert false
+          First_fields_are fields
+        | First_fields_are _, Unknown_length
+        | Unknown_length, First_fields_are _ -> assert false
       in
       { env_extension;
         first_fields;
@@ -2078,16 +2067,16 @@ end) = struct
       let first_fields =
         match first_fields1, first_fields2 with
         | Unknown_length, Unknown_length -> Unknown_length
-        | Exactly fields1, Exactly fields2 ->
+        | First_fields_are fields1, First_fields_are fields2 ->
           assert (Array.length fields1 = Array.length fields2);
           let fields =
             Array.map2 (fun field1 field2 ->
                 Meet_and_join.join ~type_of_name field1 field2)
               fields1 fields2
           in
-          Exactly fields
-        | Exactly _, Unknown_length
-        | Unknown_length, Exactly _ -> assert false
+          First_fields_are fields
+        | First_fields_are _, Unknown_length
+        | Unknown_length, First_fields_are _ -> assert false
       in
       { env_extension;
         first_fields;
