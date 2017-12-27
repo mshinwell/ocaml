@@ -28,6 +28,9 @@ module Int64 = Numbers.Int64
 
 include F0.Flambda_type
 
+let bottom_types_from_arity t =
+  List.map (fun kind -> bottom kind) t
+
 let unknown_types_from_arity t =
   List.map (fun kind -> unknown kind) t
 
