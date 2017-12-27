@@ -364,7 +364,7 @@ end
 
 module Switch = struct
   type t =
-    | Value of Continuation.t Targetint.Map.t
+    | Value of Continuation.t Targetint.OCaml.Map.t
     | Fabricated of Continuation.t Tag.Map.t
 
   include Identifiable.Make_no_hash (struct
@@ -375,7 +375,7 @@ module Switch = struct
       | Value _, Fabricated _ -> -1
       | Fabricated _, Value _ -> 1
       | Value arms1, Value arms2 ->
-        Targetint.Map.compare Continuation.compare arms1 arms2
+        Targetint.OCaml.Map.compare Continuation.compare arms1 arms2
       | Fabricated arms1, Fabricated arms2 ->
         Tag.Map.compare Continuation.compare arms1 arms2
 
@@ -385,14 +385,14 @@ module Switch = struct
       let spc = ref false in
       match t with
       | Value arms ->
-        Targetint.Map.iter (fun n l ->
+        Targetint.OCaml.Map.iter (fun n l ->
             if !spc then fprintf ppf "@ " else spc := true;
             fprintf ppf "@[<hv 1>| %a ->@ goto %a@]"
               Targetint.print n
               Continuation.print l)
           arms
       | Fabricated arms ->
-        Targetint.Map.iter (fun n l ->
+        Targetint.OCaml.Map.iter (fun n l ->
             if !spc then fprintf ppf "@ " else spc := true;
             fprintf ppf "@[<hv 1>| tag %a ->@ goto %a@]"
               Tag.print n
@@ -589,16 +589,25 @@ end = struct
     else
       Invalid Halt_and_catch_fire
 
-  let create_switch' ~scrutinee ~arms =
-    let num_possible_values = Targetint.Map.cardinal arms in
+  let create_int_switch' ~scrutinee ~arms =
+    let num_possible_values = Targetint.OCaml.Map.cardinal arms in
     if num_possible_values < 1 then
-      invalid (), false
+      invalid (), true
     else
-      let t : t = Switch (scrutinee, { arms; }) in
-      t, true
+      match Targetint.OCaml.Map.get_singleton arms with
+      | Some (_arm, cont) ->
+        let t : t = Apply_cont (cont, None, []) in
+        t, true
+      | None ->
+        let t : t = Switch (scrutinee, { arms; }) in
+        t, false
 
-  let create_switch ~scrutinee ~arms =
-    let switch, _benefit = create_switch' ~scrutinee ~arms in
+  let create_int_switch ~scrutinee ~arms =
+    let switch, _benefit = create_int_switch' ~scrutinee ~arms in
+    switch
+
+  let create_tag_switch ~scrutinee ~arms =
+    let switch, _benefit = create_tag_switch' ~scrutinee ~arms in
     switch
 
   let rec free_continuations (t : t) =

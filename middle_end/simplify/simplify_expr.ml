@@ -157,6 +157,81 @@ let _simplify_newly_introduced_let_bindings env r ~bindings
   in
   bindings, around, invalid_term_semantics, r
 
+module Make_simplify_switch (S : sig
+  module Map : Map.S
+
+  val switch_arms
+     : (T.t
+      -> arms:Continuation.t Map.t
+      -> (T.Typing_environment.t * Continuation.t) Map.t) T.type_accessor
+
+  val create_switch'
+     : scrutinee:Name.t
+    -> arms:Continuation.t Map.t
+    -> Expr.t * bool
+end) = struct
+  let simplify_switch env r ~(scrutinee : Name.t)
+        (arms : Continuation.t S.Map.t)
+        : Expr.t * R.t =
+    let original_scrutinee = scrutinee in
+    let scrutinee, scrutinee_ty = E.simplify_name env scrutinee in
+    let arms = (E.type_accessor env S.switch_arms) ~arms in
+    let destination_is_unreachable cont =
+      (* CR mshinwell: This unreachable thing should be tidied up and also
+         done on [Apply_cont]. *)
+      let cont = freshen_continuation env cont in
+      let cont_type = E.find_continuation env cont in
+      match Continuation_approx.handlers cont_type with
+      | None | Some (Recursive _) -> false
+      | Some (Non_recursive handler) ->
+        match handler.handler with
+        | Invalid Treat_as_unreachable -> true
+        | _ -> false
+    in
+    let arms =
+      S.Map.filter (fun _arm (_env, cont) ->
+          not (destination_is_unreachable cont))
+        arms
+    in
+    let env = E.inside_branch env in
+    let arms, r =
+      S.Map.fold (fun arm (env_extension, cont) (arms, r) ->
+          let cont, r =
+            let env = E.extend_typing_environment env ~env_extension in
+            simplify_continuation_use_cannot_inline env r cont ~arity:[]
+          in
+          let arms = Targetint.Map.add arm cont arms in
+          arms, r)
+        arms
+        (S.Map.empty, r)
+    in
+    let switch, removed_branch =
+      S.create_switch' ~scrutinee:scrutinee ~arms
+    in
+    if removed_branch then switch, R.map_benefit r B.remove_branch
+    else switch, r
+end
+
+module Simplify_int_switch = Make_simplify_switch (struct
+  module Map = Targetint.OCaml.Map
+  let switch_arms = T.int_switch_arms
+  let create_switch' = Expr.create_int_switch'
+end)
+
+module Simplify_tag_switch = Make_simplify_switch (struct
+  module Map = Tag.Map
+  let switch_arms = T.tag_switch_arms
+  let create_switch' = Expr.create_tag_switch'
+end)
+
+let simplify_switch env r ~(scrutinee : Name.t) (switch : Switch.t)
+      : Expr.t * R.t =
+  match switch with
+  | Value arms ->
+    Simplify_int_switch.simplify_switch env r ~scrutinee ~arms
+  | Fabricated arms ->
+    Simplify_tag_switch.simplify_switch env r ~scrutinee ~arms
+
 (* Prepare an environment for the simplification of the given continuation
    handler when its parameters are being used at types [arg_tys]. *)
 let environment_for_let_cont_handler ~env cont
@@ -1075,59 +1150,6 @@ and simplify_apply_cont env r cont ~(trap_action : Flambda.Trap_action.t option)
         Some trap_action, r
     in
     Apply_cont (cont, trap_action, args), r
-
-and simplify_switch env r ~(scrutinee : Name.t) ~arms : Expr.t * R.t =
-  let original_scrutinee = scrutinee in
-  let scrutinee, scrutinee_ty = E.simplify_name env scrutinee in
-  let destination_is_unreachable cont =
-    (* CR mshinwell: This unreachable thing should be tidied up and also
-       done on [Apply_cont]. *)
-    let cont = freshen_continuation env cont in
-    let cont_type = E.find_continuation env cont in
-    match Continuation_approx.handlers cont_type with
-    | None | Some (Recursive _) -> false
-    | Some (Non_recursive handler) ->
-      match handler.handler with
-      | Invalid Treat_as_unreachable -> true
-      | _ -> false
-  in
-  let rec filter_branches filter branches compatible_branches =
-    match branches with
-    | [] -> Can_be_taken compatible_branches
-    | (c, cont) as branch :: branches ->
-      if destination_is_unreachable cont then
-        filter_branches filter branches compatible_branches
-      else
-        match filter scrutinee_ty ~scrutinee:original_scrutinee c with
-        | T.Cannot_be_taken ->
-          filter_branches filter branches compatible_branches
-        | T.Can_be_taken ->
-          filter_branches filter branches (branch :: compatible_branches)
-        | T.Must_be_taken ->
-          Must_be_taken cont
-  in
-  let classify_switch_branch = E.type_accessor env T.classify_switch_branch in
-  let arms' = Targetint.Map.bindings arms in  (* CR mshinwell: improve this *)
-  match filter_branches classify_switch_branch arms' [] with
-  | Must_be_taken cont ->
-    let expr, r = simplify_apply_cont env r cont ~trap_action:None ~args:[] in
-    expr, R.map_benefit r B.remove_branch
-  | Can_be_taken arms ->
-    let env = E.inside_branch env in
-    let arms, r =
-      List.fold_left (fun (arms, r) (value, cont) ->
-          let cont, r =
-            simplify_continuation_use_cannot_inline env r cont ~arity:[]
-          in
-          Targetint.Map.add value cont arms, r)
-        (Targetint.Map.empty, r)
-        arms
-    in
-    let switch, removed_branch =
-      Expr.create_switch' ~scrutinee:scrutinee ~arms
-    in
-    if removed_branch then switch, R.map_benefit r B.remove_branch
-    else switch, r
 
 and simplify_expr env r (tree : Expr.t) : Expr.t * R.t =
   match tree with

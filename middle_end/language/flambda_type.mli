@@ -253,22 +253,17 @@ val force_to_kind_naked_float_list : t list -> ty_naked_float list
 
 *)
 
-type switch_branch_classification = private
-  | Cannot_be_taken
-  | Can_be_taken
-  | Must_be_taken of { env_extension : typing_environment; }
-
-val int_switch_branches
+val int_switch_arms
    : (flambda_type
-  -> branches:Targetint.OCaml.Set.t
-  -> switch_branch_classification Targetint.OCaml.Map.t) type_accessor
+    -> arms:Continuation.t Targetint.OCaml.Map.t
+    -> (Typing_environment.t * Continuation.t) Targetint.OCaml.Map.t)
+  type_accessor
 
-(*
-val tag_switch_branches
+val tag_switch_arms
    : (flambda_type
-  -> branches:Tag.Set.t
-  -> switch_branch_classification Tag.Map.t
-*)
+    -> arms:Continuation.t Tag.Map.t
+    -> (Typing_environment.t * Continuation.t) Tag.Map.t)
+  type_accessor
 
 (*
 (* CR mshinwell: Maybe this should return Tag.Set.t? *)

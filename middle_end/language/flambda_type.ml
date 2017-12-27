@@ -1430,53 +1430,77 @@ let tags ~type_of_name t =
 
 *)
 
-type switch_branch_classification =
-  | Cannot_be_taken
-  | Can_be_taken
-  | Must_be_taken of { env_extension : typing_environment; }
-
-let int_switch_branches ~type_of_name t ~branches =
+let int_switch_arms ~type_of_name t ~arms =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a tagged \
         immediate: %a"
       print t
   in
-  let for_all_branches classification =
-    Targetint.OCaml.Set.fold (fun branch result ->
-        Targetint.OCaml.Map.add branch classification result)
-      branches
+  let unknown () =
+    let empty_env = Typing_environment.create () in
+    Targetint.OCaml.Map.fold (fun arm cont result ->
+        Targetint.OCaml.Map.add arm (empty_env, cont) result)
+      arms
       Targetint.OCaml.Map.empty
   in
+  let invalid () = Targetint.OCaml.Map.empty in
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
   match simplified with
   | Value ty_value ->
     begin match ty_value with
-    | Unknown _ -> for_all_branches Can_be_taken
-    | Bottom -> for_all_branches Cannot_be_taken
+    | Unknown _ -> unknown ()
+    | Bottom -> invalid ()
     | Ok (Blocks_and_tagged_immediates blocks_imms) ->
       if not (Tag.Map.is_empty blocks_imms.blocks) then begin
-        for_all_branches Cannot_be_taken
+        invalid ()
       end else begin
         match blocks_imms.immediates with
-        | Unknown -> for_all_branches Can_be_taken
+        | Unknown -> unknown ()
         | Known imms ->
           assert (not (Immediate.Map.is_empty imms));
-          Targetint.OCaml.Set.fold (fun branch result ->
-              let classification =
-                match Immediate.Map.find (Immediate.int branch) imms with
-                | exception Not_found -> Cannot_be_taken
-                | { env_extension; } -> Must_be_taken { env_extension; }
-(* XXX Not quite right yet: "must" did in fact really mean that, the test
-   can be removed.  Now---just check the result to see if there is a single
-   "can_be_taken"? *)
-              in
-              Targetint.OCaml.Map.add branch classification result)
-            branches
+          Targetint.OCaml.Map.fold (fun arm cont result ->
+              match Immediate.Map.find (Immediate.int arm) imms with
+              | exception Not_found -> result
+              | { env_extension; } ->
+                Targetint.OCaml.Map.add arm (env_extension, cont) result)
+            arms
             Targetint.OCaml.Map.empty
       end
-    | Ok (Boxed_number _) -> for_all_branches Cannot_be_taken
-    | Ok (Closure _ | String _) -> for_all_branches Cannot_be_taken
+    | Ok (Boxed_number _) -> invalid ()
+    | Ok (Closure _ | String _) -> invalid ()
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _
   | Phantom _ -> wrong_kind ()
+
+let tag_switch_arms ~type_of_name t ~arms =
+  let wrong_kind () =
+    Misc.fatal_errorf "Wrong kind for something claimed to be a tag: %a"
+      print t
+  in
+  let unknown () =
+    let empty_env = Typing_environment.create () in
+    Tag.Map.fold (fun arm cont result ->
+        Tag.Map.add arm (empty_env, cont) result)
+      arms
+      Tag.Map.empty
+  in
+  let invalid () = Tag.Map.empty in
+  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  match simplified with
+  | Fabricated ty_fabricated ->
+    begin match ty_fabricated with
+    | Unknown _ -> unknown ()
+    | Bottom -> invalid ()
+    | Ok (Tag tag_map) ->
+      Tag.Map.fold (fun arm cont result ->
+          match Tag.Map.find arm tag_map with
+          | exception Not_found -> result
+          | { env_extension; } ->
+            Tag.Map.add arm (env_extension, cont) result)
+        arms
+        Tag.Map.empty
+    | Ok (Set_of_closures _) -> invalid ()
+    end
+  | Simplified_type.Naked_number _ -> wrong_kind ()
+  | Value _ | Phantom _ -> wrong_kind ()
