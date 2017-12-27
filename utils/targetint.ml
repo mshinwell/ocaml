@@ -24,6 +24,7 @@ type num_bits =
 
 module type S = sig
   type t
+  type targetint = t
   val zero : t
   val one : t
   val minus_one : t
@@ -87,6 +88,7 @@ module type S = sig
     val of_int : int -> t  (* CR mshinwell: clarify semantics *)
     val of_int_option : int -> t option
     val to_int : t -> int
+    val to_targetint : t -> targetint
     include Identifiable.S with type t := t
   end
 end
@@ -97,6 +99,9 @@ let size = Sys.word_size
 
 module Int32 = struct
   include Int32
+
+  type targetint = t
+
   let of_int_exn =
     match Sys.word_size with (* size of [int] *)
     | 32 ->
@@ -174,6 +179,8 @@ module Int32 = struct
     let of_int = Int32.of_int
     let to_int = Int32.to_int
 
+    let to_int t = t
+
     let of_int_option i =
       let t = of_int i in
       let via_t = Int64.of_int32 t in
@@ -233,6 +240,9 @@ end
 
 module Int64 = struct
   include Int64
+
+  type targetint = t
+
   let num_bits = Sixty_four
   let of_int_exn = Int64.of_int
   let of_int64 x = x
@@ -296,6 +306,8 @@ module Int64 = struct
 
     let of_int = Int64.of_int
     let to_int = Int64.to_int
+
+    let to_int t = t
 
     let of_int_option i = Some (of_int i)
 

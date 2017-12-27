@@ -957,6 +957,9 @@ end) = struct
     in
     No_alias (Join [Tag tag_map])
 
+  let these_tags tags_to_env_extensions : t =
+    Fabricated (these_tags_as_ty_fabricated tags_to_env_extensions)
+
   let this_tag_as_ty_fabricated tag =
     let tags_to_env_extensions =
       Tag.Map.add tag (create_typing_environment ()) Tag.Map.empty

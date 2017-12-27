@@ -98,6 +98,8 @@ let var t = Name (Name.var t)
 let symbol t = Name (Name.symbol t)
 let const t = Const t
 
+let const_bool b = Const (if b then Const.const_true else Const.const_false)
+
 let const_true = Const Const.const_true
 let const_false = Const Const.const_false
 

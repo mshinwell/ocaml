@@ -414,7 +414,7 @@ type unary_primitive =
     }
   | Is_int
   | Get_tag of {
-      possible_tags_and_sizes : int Tag.Map.t;
+      tags_to_sizes : int Tag.Scannable.Map.t;
     }
   | Array_length of Block_access_kind.t
   | Bigarray_length of { dimension : int; }
@@ -1057,6 +1057,12 @@ let maybe_generative_effects_but_no_coeffects t =
   match effects_and_coeffects t with
   | (No_effects | Only_generative_effects _), No_coeffects -> true
   | _, _ -> false
+
+type without_args =
+  | Unary of unary_primitive
+  | Binary of binary_primitive
+  | Ternary of ternary_primitive
+  | Variadic of variadic_primitive
 
 module With_fixed_value = struct
   type t = primitive_application

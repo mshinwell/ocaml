@@ -910,6 +910,38 @@ let prove_tagged_immediate ~type_of_name t
   | Fabricated _
   | Phantom _ -> wrong_kind ()
 
+let prove_is_tagged_immediate ~type_of_name t : bool proof =
+  let wrong_kind () =
+    Misc.fatal_errorf "Wrong kind for something claimed to be a tagged \
+        immediate: %a"
+      print t
+  in
+  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  match simplified with
+  | Value ty_value ->
+    begin match ty_value with
+    | Unknown _ -> Unknown
+    | Bottom -> Invalid
+    | Ok (Blocks_and_tagged_immediates blocks_imms) ->
+      if not (Tag.Map.is_empty blocks_imms.blocks) then begin
+        Proved false
+      end else begin
+        match blocks_imms.immediates with
+        | Unknown -> Proved true
+        | Known imms ->
+          assert (not (Immediate.Map.is_empty imms));
+          Proved true
+      end
+    (* CR mshinwell: If we marked this function as specifically for dealing
+       with the "is_int" primitive, then these next cases could probably
+       all be [Invalid]. *)
+    | Ok (Boxed_number _) -> Proved false
+    | Ok (Closure _ | String _) -> Proved false
+    end
+  | Simplified_type.Naked_number _ -> wrong_kind ()
+  | Fabricated _
+  | Phantom _ -> wrong_kind ()
+
 let prove_naked_float ~type_of_name t
       : Numbers.Float_by_bit_pattern.Set.t proof =
   let wrong_kind () =
@@ -1161,6 +1193,42 @@ let prove_blocks_and_immediates ~type_of_name t
       print t
 *)
 
+(* CR mshinwell: There's a bit of a wart here (in conjunction with the
+   [Get_tag] primitive -- some of these tags don't really make any sense in
+   that context, e.g. for closures, since there isn't a
+   [Blocks_and_tagged_immediates] description for them.  Double_array_tag
+   is of course an exception... maybe there should be a submodule of Tag
+   which permits < No_scan_tag and also Double_array_tag? *)
+let prove_tags ~type_of_name t : Tag.Set.t proof =
+  let wrong_kind () =
+    Misc.fatal_errorf "Wrong kind for something claimed to be a value: %a"
+      print t
+  in
+  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  match simplified with
+  | Value ty_value ->
+    begin match ty_value with
+    | Unknown _ -> Unknown
+    | Bottom -> Invalid
+    | Ok (Blocks_and_tagged_immediates blocks_imms) ->
+      Proved (Tag.Map.keys blocks_imms.blocks)
+    | Ok (Boxed_number (Boxed_float _)) ->
+      Proved (Tag.Set.singleton Tag.double_tag)
+    | Ok (Boxed_number (Boxed_int32 _)) ->
+      Proved (Tag.Set.singleton Tag.custom_tag)
+    | Ok (Boxed_number (Boxed_int64 _)) ->
+      Proved (Tag.Set.singleton Tag.custom_tag)
+    | Ok (Boxed_number (Boxed_nativeint _)) ->
+      Proved (Tag.Set.singleton Tag.custom_tag)
+    | Ok (Closure _) ->
+      Proved (Tag.Set.singleton Tag.closure_tag)
+    | Ok (String _) ->
+      Proved (Tag.Set.singleton Tag.string_tag)
+    end
+  | Simplified_type.Naked_number _ -> wrong_kind ()
+  | Fabricated _
+  | Phantom _ -> wrong_kind ()
+
 let prove_string ~type_of_name t : String_info.Set.t proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a string: %a"
@@ -1362,32 +1430,6 @@ let prove_lengths_of_arrays_or_blocks ~type_of_name t
         or structured block: %a"
       print t
 
-let prove_is_tagged_immediate ~type_of_name t : bool proof =
-  let t_evaluated, _canonical_name =
-    Evaluated.create ~type_of_name t
-  in
-  match t_evaluated with
-  | Values values ->
-    begin match values with
-    | Unknown -> Unknown
-    | Tagged_immediates_only _ -> Proved true
-    | Boxed_floats _
-    | Blocks_and_tagged_immediates _
-    | Bottom
-    | Boxed_int32s _
-    | Boxed_int64s _
-    | Boxed_nativeints _
-    | Closures _
-    | Sets_of_closures _
-    | Strings _
-    | Float_arrays _ -> Proved false
-    end
-  | Naked_immediates _
-  | Naked_floats _
-  | Naked_int32s _
-  | Naked_int64s _
-  | Naked_nativeints _ -> Invalid
-
 let force_to_kind_value_with_expected_value_kind ~type_of_name
         t expected_kind =
   let ty_value = force_to_kind_value t in
@@ -1416,20 +1458,6 @@ let force_to_kind_value_with_expected_value_kinds ~type_of_name
 
 let force_to_kind_naked_float_list ts =
   List.iter force_to_kind_naked_float ts
-
-let tags ~type_of_name t =
-  let t_evaluated, _canonical_name =
-    Evaluated.create ~type_of_name t
-  in
-  match t_evaluated with
-  | Values values -> Evaluated.tags values
-  | Naked_immediates _
-  | Naked_floats _
-  | Naked_int32s _
-  | Naked_int64s _
-  | Naked_nativeints _ ->
-    Misc.fatal_errorf "Type should be of kind [Value] but is not: %a"
-      print t
 
 *)
 

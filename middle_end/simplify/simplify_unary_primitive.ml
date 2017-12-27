@@ -20,6 +20,7 @@ module B = Inlining_cost.Benefit
 module E = Simplify_env_and_result.Env
 module K = Flambda_kind
 module R = Simplify_env_and_result.Result
+module S = Simplify_simple
 module T = Flambda_type
 
 module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
@@ -380,9 +381,10 @@ let rec simplify_project_var env r ~(project_var : Projection.Project_var.t)
 
 *)
 
-let simplify_duplicate_block env r prim arg dbg
-      (kind : Flambda_primitive.make_block_kind)
-      ~source_mutability:_ ~destination_mutability =
+let simplify_duplicate_block _env _r _prim _arg _dbg
+      (_kind : Flambda_primitive.make_block_kind)
+      ~source_mutability:_ ~destination_mutability = assert false
+(* Let's finish this later
   let arg, ty = S.simplify_simple env arg in
   let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
   let kind_of_block = K.value Definitely_pointer in
@@ -479,68 +481,84 @@ let simplify_duplicate_block env r prim arg dbg
       (* To finish later.  (Also, evict to [Simplify_generic_array].) *)
   in
   term, ty, r
+*)
 
 let simplify_is_int env r prim arg dbg =
   let arg, ty = S.simplify_simple env arg in
   let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
   let proof = (E.type_accessor env T.prove_is_tagged_immediate) ty in
-  let term, ty =
-    match proof with
-    | Proved is_tagged_immediate ->
-      let simple = Simple.const_bool is_tagged_immediate in
-      let imm = Immediate.const_bool is_tagged_immediate in
-      Reachable.reachable (Simple simple), T.this_tagged_immediate imm
-    | Unknown ->
-      Reachable.reachable (original_term ()),
-        T.these_tagged_immediates Immediate.all_bools
-    | Invalid -> 
-      Reachable.invalid (), T.bottom (K.value Definitely_immediate)
-  in
-  term, ty, r
+  match proof with
+  | Proved is_tagged_immediate ->
+    let simple = Simple.const_bool is_tagged_immediate in
+    let imm = Immediate.bool is_tagged_immediate in
+    Reachable.reachable (Simple simple), T.this_tagged_immediate imm,
+      R.map_benefit r (B.remove_primitive (Unary prim))
+  | Unknown ->
+    Reachable.reachable (original_term ()),
+      T.these_tagged_immediates Immediate.all_bools, r
+  | Invalid -> 
+    Reachable.invalid (), T.bottom (K.value Definitely_immediate),
+      R.map_benefit r (B.remove_primitive (Unary prim))
 
 let simplify_get_tag env r ~result_var prim ~tags_to_sizes ~block dbg =
-  let block, block_type = S.simplify_simple env block in
-  let inferred_tags = (E.type_accessor env T.possible_structured_tags) ty in
+  let block, block_ty = S.simplify_simple env block in
+  let inferred_tags = (E.type_accessor env T.prove_tags) block_ty in
   let possible_tags = Tag.Scannable.Map.keys tags_to_sizes in
+  let invalid r =
+    Reachable.invalid (), T.bottom (K.fabricated Definitely_immediate),
+      R.map_benefit r (B.remove_primitive (Unary prim))
+  in
+  let result_var_type ~tags_to_sizes =
+    let tags_to_env_extensions =
+      Tag.Scannable.Map.fold (fun tag size tags_to_env_extensions ->
+          let block_ty = T.block_of_unknown_values tag Unknown ~size in
+          let env =
+            match block with
+            | Const _ ->
+              (* CR mshinwell: This is kind of silly---it will never be a
+                 [Const] *)
+              T.Typing_environment.create ()
+            | Name block ->
+              T.Typing_environment.add (T.Typing_environment.create ())
+                block (E.continuation_scope_level env) block_ty
+          in
+          Tag.Map.add (Tag.Scannable.to_tag tag) env tags_to_env_extensions)
+        tags_to_sizes
+        Tag.Map.empty
+    in
+    T.these_tags tags_to_env_extensions
+  in
   match inferred_tags with
-  | Exactly inferred_tags ->
+  | Proved inferred_tags ->
+    let inferred_tags = Tag.to_scannable_set inferred_tags in
     let tags = Tag.Scannable.Set.inter inferred_tags possible_tags in
-    let r = R.map_benefit (B.remove_primitive Get_tag) r in
-    if Tag.Scannable.Set.is_empty tags then
-      Reachable.invalid (), T.bottom (K.fabricated Definitely_immediate), r
-    else
+    let r =
+      R.map_benefit r (B.remove_primitive (Unary (Get_tag { tags_to_sizes; })))
+    in
+    if Tag.Scannable.Set.is_empty tags then begin
+      invalid r
+    end else begin
       let tags_to_sizes =
         Tag.Scannable.Map.filter
-          (fun tag -> Tag.Scannable.Set.mem inferred_tags)
+          (fun tag _size -> Tag.Scannable.Set.mem tag inferred_tags)
           tags_to_sizes
       in
       assert (not (Tag.Scannable.Map.is_empty tags_to_sizes));
-      let prim : Flambda_primitive.unary_primitive = Get_tag tags_to_sizes in
+      let prim : Flambda_primitive.unary_primitive =
+        Get_tag { tags_to_sizes; }
+      in
       let term : Named.t = Prim (Unary (prim, block), dbg) in
-      term, T.these_tags tags, r
+      let result_var_type = result_var_type ~tags_to_sizes in
+      Reachable.reachable term, result_var_type, r
+    end
   | Unknown ->
-    let block_field_kind = K.value Unknown in
-    let tags_to_block_cases =
-      Tag.Scannable.Map.fold (fun tag size tags_to_block_cases ->
-          let block_case =
-            T.block_case_known_size
-              ~env_extension:(T.Type_environment.create ())
-              ~fields:(T.this_many_unknowns size block_field_kind)
-          in
-          Tag.Scannable.Map.add tag block_case tags_to_block_cases)
-        tags_to_sizes
-        Tag.Scannable.Map.empty
+    let prim : Flambda_primitive.unary_primitive =
+      Get_tag { tags_to_sizes; }
     in
-    let block_type_refinement =
-      T.blocks ~tag:(Ok (Var result_var)) ~tags_to_block_cases
-    in
-    let block_type =
-      (E.type_accessor env T.meet) block_type block_type_refinement
-    in
-    let r = R.add_typing_judgement r block block_type in
-    let prim : Flambda_primitive.unary_primitive = Get_tag tags_to_sizes in
     let term : Named.t = Prim (Unary (prim, block), dbg) in
-    term, T.these_tags possible_tags, r
+    let result_var_type = result_var_type ~tags_to_sizes in
+    Reachable.reachable term, result_var_type, r
+  | Invalid -> invalid r
 
 module type For_standard_ints = sig
   module Num : sig
@@ -557,7 +575,7 @@ module type For_standard_ints = sig
   end
 
   val kind : K.Standard_int.t
-  val prover : (T.t -> Num.Set.t proof) T.type_accessor
+  val prover : (T.t -> Num.Set.t T.proof) T.type_accessor
   val this : Num.t -> T.t
   val these : Num.Set.t -> T.t
 end
@@ -568,19 +586,18 @@ module Make_simplify_swap_byte_endianness (P : For_standard_ints) = struct
     let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
     let proof = (E.type_accessor env P.prover) ty in
     let kind = K.Standard_int.to_kind P.kind in
-    let term, ty =
-      match proof with
-      | Proved nums ->
-        let nums =
-          P.Set.map (fun imm -> P.swap_byte_endianness imm) nums
-        in
-        Reachable.reachable (original_term ()), P.these nums
-      | Proved Not_all_values_known ->
-        Reachable.reachable (original_term ()), T.unknown kind Other
-      | Invalid ->
-        Reachable.invalid (), T.bottom kind
-    in
-    term, ty, r
+    match proof with
+    | Proved nums ->
+      let nums =
+        P.Num.Set.map (fun imm -> P.Num.swap_byte_endianness imm) nums
+      in
+      Reachable.reachable (original_term ()), P.these nums,
+        R.map_benefit r (B.remove_primitive (Unary prim))
+    | Unknown ->
+      Reachable.reachable (original_term ()), T.unknown kind, r
+    | Invalid ->
+      Reachable.invalid (), T.bottom kind,
+        R.map_benefit r (B.remove_primitive (Unary prim))
 end
 
 module For_standard_ints_tagged_immediate : For_standard_ints = struct
@@ -588,17 +605,17 @@ module For_standard_ints_tagged_immediate : For_standard_ints = struct
     include Immediate
 
     let swap_byte_endianness t =
-      Immediate.map (fun i ->
-          Targetint.get_least_significant_16_bits_then_byte_swap i)
+      Immediate.map ~f:(fun i ->
+          Targetint.OCaml.get_least_significant_16_bits_then_byte_swap i)
         t
 
     let to_const t = Simple.Const.Tagged_immediate t
 
     let to_tagged_immediate t = t
 
-    let to_naked_int32 t = Targetint.to_int32 (Immediate.to_targetint t)
-    let to_naked_int64 t = Targetint.to_int64 (Immediate.to_targetint t)
-    let to_naked_nativeint t = Immediate.to_targetint t
+    let to_naked_int32 t = Targetint.OCaml.to_int32 (Immediate.to_targetint t)
+    let to_naked_int64 t = Targetint.OCaml.to_int64 (Immediate.to_targetint t)
+    let to_naked_nativeint t = Targetint.OCaml.Immediate.to_targetint t
 
     (* It seems as if the various [float_of_int] functions never raise
        an exception even in the case of NaN or infinity. *)

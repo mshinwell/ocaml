@@ -366,6 +366,9 @@ module type S = sig
   val these_tags_as_ty_fabricated
      : typing_environment Tag.Map.t
     -> ty_fabricated
+  val these_tags
+     : typing_environment Tag.Map.t
+    -> t
 
   (** Any block tag. *)
   val any_tag_as_ty_fabricated : unit -> ty_fabricated
@@ -390,6 +393,12 @@ module type S = sig
   val block_of_values
      : Tag.t
     -> fields:ty_value mutable_or_immutable array
+    -> t
+
+  val block_of_unknown_values
+     : Tag.Scannable.t
+    -> Flambda_kind.Value_kind.t
+    -> size:int
     -> t
 
   (** The bottom type for the given kind ("no value can flow to this point"). *)

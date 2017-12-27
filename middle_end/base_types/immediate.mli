@@ -36,6 +36,9 @@ val join_set : Set.t -> Set.t -> Set.t
 
 val bool_true : t
 val bool_false : t
+
+val bool : bool -> t
+
 val int : Targetint.OCaml.t -> t
 val char : char -> t
 

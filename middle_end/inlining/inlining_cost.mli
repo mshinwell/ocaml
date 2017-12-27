@@ -70,11 +70,11 @@ module Benefit : sig
   val max : round:int -> t -> t -> t
 
   val remove_call : t -> t
+  (* CR mshinwell: can we use remove_primitive instead of remove_alloc etc? *)
   (* CR-soon mshinwell: [remove_alloc] should take the size of the block
      (to account for removal of initializing writes). *)
   val remove_alloc : t -> t
-  val remove_prim : t -> t
-  val remove_prims : t -> int -> t
+  val remove_primitive : Flambda_primitive.without_args -> t -> t
   val remove_branch : t -> t
   val remove_box : Flambda_kind.Boxable_number.t -> t
   val direct_call_of_indirect_unknown_arity : t -> t

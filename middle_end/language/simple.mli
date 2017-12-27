@@ -46,6 +46,8 @@ val symbol : Symbol.t -> t
 
 val const : Const.t -> t
 
+val const_bool : bool -> t
+
 val const_true : t
 
 val const_false : t

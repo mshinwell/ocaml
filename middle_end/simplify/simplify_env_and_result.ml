@@ -178,7 +178,7 @@ module Continuation_uses = struct
             in
             arg_tys, env)
           (Use.Kind.arg_tys use.kind, T.Typing_environment.create ())
-          uses)
+          uses
       in
       Some (arg_tys, env)
 
@@ -879,14 +879,12 @@ end = struct
           Continuation_uses.cut_environments uses
             ~existential_if_defined_later_than:definition_scope_level
         in
-        let uses =
-          Continuation_uses.
         { t with
           used_continuations = Continuation.Map.remove i t.used_continuations;
         }, uses
     in
     assert (continuation_unused t cont);
-    t, env_extension, uses
+    t, uses
 
   let update_all_continuation_use_environments t ~if_present_in_env
         ~then_add_to_env =

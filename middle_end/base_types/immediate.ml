@@ -87,6 +87,9 @@ let bool_false = {
   print_as_char = false;
 }
 
+let bool b =
+  if b then bool_true else bool_false
+
 let int value = {
   value;
   print_as_char = false;

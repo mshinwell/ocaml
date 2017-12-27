@@ -178,7 +178,7 @@ type unary_primitive =
     (** [Duplicate_block] may not be used to change the tag of a block. *)
   | Is_int
   | Get_tag of {
-      possible_tags_and_sizes : int Tag.Map.t;
+      tags_to_sizes : int Tag.Scannable.Map.t;
     }
   | Array_length of Block_access_kind.t
   | Bigarray_length of { dimension : int; }
@@ -262,6 +262,14 @@ type primitive_application = t
 
 (** Total ordering, equality, printing, sets, maps etc. *)
 include Identifiable.S_no_hash with type t := t
+
+(** Simpler version (e.g. for [Inlining_cost]), where only the actual
+    primitive matters, not the arguments. *)
+type without_args =
+  | Unary of unary_primitive
+  | Binary of binary_primitive
+  | Ternary of ternary_primitive
+  | Variadic of variadic_primitive
 
 (** All free names in a primitive application. *)
 val free_names : t -> Name.Set.t

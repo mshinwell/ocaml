@@ -28,6 +28,8 @@
 type t
 (** The type of target integers. *)
 
+type targetint = t
+
 val zero : t
 (** The target integer 0.*)
 
@@ -247,6 +249,7 @@ module OCaml : sig
   val of_int_option : int -> t option
 
   val to_int : t -> int
+  val to_targetint : t -> targetint
 
   include Identifiable.S with type t := t
 

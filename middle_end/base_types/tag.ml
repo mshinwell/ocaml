@@ -74,6 +74,14 @@ module Scannable = struct
   let object_tag = Obj.object_tag
 end
 
+let to_scannable_set set =
+  Set.fold (fun t result ->
+      match Scannable.create t with
+      | None -> result
+      | Some scannable -> Scannable.Set.add scannable result)
+    set
+    Scannable.Set.empty
+
 let is_structured_block t =
   match Scannable.create t with
   | None -> false

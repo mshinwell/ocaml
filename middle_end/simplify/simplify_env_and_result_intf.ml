@@ -62,13 +62,6 @@ module type Env = sig
       compiler backend being used for compilation. *)
   val backend : t -> (module Backend_intf.S)
 
-  (** Prepare an [Flambda_type.with_importer] function for use in the current
-      environment. *)
-  val with_importer
-     : t
-    -> 'a Flambda_type.with_importer
-    -> 'a
-
   (** Prepare an [Flambda_type.type_accessor] function for use in the current
       environment. *)
   val type_accessor
@@ -101,8 +94,6 @@ module type Env = sig
       -> arg_tys:Flambda_type.t list
       -> Continuation.t * result)
 
-  val importer : t -> (module Flambda_type.Importer)
-
   (** Which simplification round we are currently in. *)
   val round : t -> int
 
@@ -115,6 +106,8 @@ module type Env = sig
 
   (** Like [add], but for mutable variables. *)
   val add_mutable : t -> Mutable_variable.t -> Flambda_type.t -> t
+
+  val continuation_scope_level : t -> Scope_level.t
 
   (* CR mshinwell: The [Continuation.t] is in the [Continuation.approx.t] *)
   val add_continuation : t -> Continuation.t -> Continuation_approx.t -> t

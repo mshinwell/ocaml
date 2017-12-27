@@ -146,6 +146,8 @@ type 'a known_values = 'a Or_not_all_values_known.t proof
 *)
 val prove_tagged_immediate : (t -> Immediate.Set.t known_values) type_accessor
 
+val prove_is_tagged_immediate : (t -> bool proof) type_accessor
+
 (** Similar to [prove_tagged_immediate], but for naked float values. *)
 val prove_naked_float
    : (t -> Numbers.Float_by_bit_pattern.Set.t proof) type_accessor
@@ -168,8 +170,6 @@ val prove_get_field_from_block
     -> field_kind:Flambda_kind.t
     -> t proof) type_accessor
 
-(* CR mshinwell: maybe this could just be "unit proof", in fact, with the
-   "false" case going to "Invalid" *)
 val prove_is_a_block
    : (t
     -> kind_of_all_fields:Flambda_kind.t
@@ -200,6 +200,10 @@ val prove_boxed_int64
 val prove_boxed_nativeint
    : (t -> Targetint.Set.t ty_naked_number proof)
        type_accessor
+
+(** Determine which tags values of the given type may take on. *)
+(* CR mshinwell: duplicate return value (Proved empty_set, and Invalid) *)
+val prove_tags : (t -> Tag.Set.t proof) type_accessor
 
 (*
 (** As for [prove_tagged_immediate] but for closures. *)
@@ -268,9 +272,6 @@ val tag_switch_arms
   type_accessor
 
 (*
-(* CR mshinwell: Maybe this should return Tag.Set.t? *)
-val tags : (t -> Targetint.Set.t Or_not_all_values_known.t) type_accessor
-
 (** Returns [true] iff the given type provides the same or strictly more
     information about the corresponding value than the supplied type [than]. *)
 val as_or_more_precise : (t -> than:t -> bool) type_accessor

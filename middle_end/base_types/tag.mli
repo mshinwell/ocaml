@@ -61,6 +61,8 @@ module Scannable : sig
   include Identifiable.S with type t := t
 end
 
+val to_scannable_set : Set.t -> Scannable.Set.t
+
 module Non_scannable : sig
   (** Tags that are at or above [No_scan_tag], corresponding to blocks whose
       fields cannot be scanned by the GC. *)
