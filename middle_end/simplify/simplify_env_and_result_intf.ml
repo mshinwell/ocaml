@@ -111,11 +111,15 @@ module type Env = sig
       environment. *)
   val add_variable : t -> Variable.t -> Flambda_type.t -> t
 
+  val add_or_meet_variable : t -> Variable.t -> Flambda_type.t -> t
+
   (** Like [add], but for mutable variables. *)
   val add_mutable : t -> Mutable_variable.t -> Flambda_type.t -> t
 
   (* CR mshinwell: The [Continuation.t] is in the [Continuation.approx.t] *)
   val add_continuation : t -> Continuation.t -> Continuation_approx.t -> t
+
+  val scope_level_of_continuation : t -> Continuation.t -> Scope_level.t -> t
 
   val find_continuation : t -> Continuation.t -> Continuation_approx.t
 
@@ -193,6 +197,14 @@ module type Env = sig
     -> projection:Projection.t
     -> Variable.t option
   *)
+
+  val get_typing_environment : t -> Flambda_type.Typing_environment.t
+
+  val extend_typing_environment
+     : t
+    -> env_extension:Flambda_type.Typing_environment.t
+    -> t
+
 
   (** Whether the environment has an approximation for the given variable. *)
   val mem : t -> Variable.t -> bool

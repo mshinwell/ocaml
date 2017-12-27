@@ -266,12 +266,12 @@ module type S = sig
     type binding_type = Normal | Existential
 
     val find : t -> Name.t -> t * binding_type
+*)
 
     val cut
        : t
-      -> minimum_scope_level_to_be_existential:Scope_level.t
+      -> existential_if_defined_later_than:Scope_level.t
       -> t
-*)
 
     val join : (t -> t -> t) type_accessor
 
@@ -360,14 +360,17 @@ module type S = sig
       source level. *)
 
   (** The given block tag. *)
-  val this_tag : Tag.t -> ty_fabricated
+  val this_tag_as_ty_fabricated : Tag.t -> ty_fabricated
+  val this_tag : Tag.t -> t
 
   (** The given block tags coupled with the equations that hold if the
       corresponding block can be shown to have one of the tags. *)
-  val these_tags : typing_environment Tag.Map.t -> ty_fabricated
+  val these_tags_as_ty_fabricated
+     : typing_environment Tag.Map.t
+    -> ty_fabricated
 
   (** Any block tag. *)
-  val any_tag : unit -> ty_fabricated
+  val any_tag_as_ty_fabricated : unit -> ty_fabricated
 
 (*
 
@@ -450,6 +453,8 @@ module type S = sig
       value kind. *)
   val value_kind_ty_value
      : (ty_value -> Flambda_kind.Value_kind.t) type_accessor
+
+  val add_judgements : (t -> Typing_environment.t -> t) type_accessor
 
   (** Least upper bound of two types. *)
   val join : (t -> t -> t) type_accessor

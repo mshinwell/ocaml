@@ -949,7 +949,7 @@ end) = struct
   let these_boxed_int64s f = box_int64 (these_naked_int64s f)
   let these_boxed_nativeints f = box_nativeint (these_naked_nativeints f)
 
-  let these_tags tags_to_env_extensions : ty_fabricated =
+  let these_tags_as_ty_fabricated tags_to_env_extensions : ty_fabricated =
     let tag_map =
       Tag.Map.map (fun env : tag_case ->
           { env_extension = env; })
@@ -957,13 +957,16 @@ end) = struct
     in
     No_alias (Join [Tag tag_map])
 
-  let this_tag tag =
+  let this_tag_as_ty_fabricated tag =
     let tags_to_env_extensions =
       Tag.Map.add tag (create_typing_environment ()) Tag.Map.empty
     in
     these_tags tags_to_env_extensions
 
-  let any_tag () : ty_fabricated =
+  let this_tag tag : t =
+    Fabricated (this_tag_as_ty_fabricated tag)
+
+  let any_tag_as_ty_fabricated () : ty_fabricated =
     No_alias (Unknown K.Value_kind.Definitely_immediate)
 
   let this_immutable_string_as_ty_value str : ty_value =
@@ -1856,6 +1859,75 @@ end) = struct
     (with_null_importer join_list) (K.value Definitely_pointer) tys
 
 *)
+
+  let add_judgements ~type_of_name t env : t =
+    let t, _canonical_name = resolve_aliases ~type_of_name t in
+    match t with
+    | Value (Join of_kind_values) ->
+      let of_kind_values =
+        List.map
+          (fun (of_kind_value : of_kind_value) : of_kind_value ->
+            match of_kind_value with
+            | Blocks_and_immediates { blocks; immediates; } ->
+              let blocks =
+                Tag.Map.map
+                  (fun ((Join { by_length }) : block_cases) : block_cases ->
+                    let by_length =
+                      Targetint.OCaml.Map.map
+                        (fun (block : singleton_block) : singleton_block ->
+                          let env_extension =
+                            Typing_environment.meet block.env_extension env
+                          in
+                          { block with env_extension; })
+                        by_length
+                    in
+                    Join { by_length; })
+                  blocks
+              in
+              let immediates : _ or_unknown =
+                match immediates with
+                | Unknown -> Unknown
+                | Known imm_map ->
+                  let imm_map =
+                    Immediate.Map.map
+                      (fun ({ env_extension; } : immediate_case
+                            : immediate_case ->
+                        let env_extension =
+                          Typing_environment.meet env_extension env
+                        in
+                        { env_extension; })
+                      imm_map
+                  in
+                  Known imm_map
+              in
+              Blocks_and_immediates { blocks; immediates; }
+            | Boxed_number _ | Closure _ | String _ -> of_kind_value)
+          of_kind_values
+      in
+      Join of_kind_values
+    | Fabricated (Join of_kind_fabricateds) ->
+      let of_kind_fabricateds =
+        List.map
+          (fun (of_kind_fabricated : of_kind_fabricated) : of_kind_fabricated ->
+            match of_kind_fabricated with
+            | Tag tag_map ->
+              let tag_map =
+                Tag.Map.map (fun ({ env_extension; } : tag_case : tag_case ->
+                    let env_extension =
+                      Typing_environment.meet env_extension env
+                    in
+                    { env_extension; })
+                  tag_map
+              in
+              Tag tag_map
+            | Set_of_closures _ -> of_kind_fabricated)
+          of_kind_fabricateds
+      in
+      Join of_kind_fabricateds
+    | Value (Type _ | Type_of _ | No_alias (Unknown _))
+    | Fabricated (Type _ | Type_of _ | No_alias (Unknown _)) -> t
+    | Naked_number _ -> t
+    | Phantom -> t
 
   type 'a or_bottom =
     | Ok of 'a

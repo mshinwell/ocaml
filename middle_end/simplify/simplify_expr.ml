@@ -197,6 +197,8 @@ end) = struct
     let arms, r =
       S.Map.fold (fun arm (env_extension, cont) (arms, r) ->
           let cont, r =
+            let scrutinee_ty = S.type_of_scrutinee arm in
+            let env = E.add_or_meet_variable env scrutinee scrutinee_ty in
             let env = E.extend_typing_environment env ~env_extension in
             simplify_continuation_use_cannot_inline env r cont ~arity:[]
           in
@@ -216,12 +218,14 @@ module Simplify_int_switch = Make_simplify_switch (struct
   module Map = Targetint.OCaml.Map
   let switch_arms = T.int_switch_arms
   let create_switch' = Expr.create_int_switch'
+  let type_of_scrutinee arm = T.this_tagged_immediate (Immediate.int arm)
 end)
 
 module Simplify_tag_switch = Make_simplify_switch (struct
   module Map = Tag.Map
   let switch_arms = T.tag_switch_arms
   let create_switch' = Expr.create_tag_switch'
+  let type_of_scrutinee arm = T.this_tag arm
 end)
 
 let simplify_switch env r ~(scrutinee : Name.t) (switch : Switch.t)
@@ -319,23 +323,27 @@ and simplify_let_cont_handlers ~env ~r ~handlers
        the handlers. *)
     None, r
   end else
-    (* First we simplify the continuations themselves. *)
     let handlers =
       Continuation.Map.fold (fun cont
                 (handler : Flambda.Continuation_handler.t) handlers ->
           let cont' = Freshening.apply_continuation freshening cont in
-          let arg_tys =
+          let arg_tys, new_env =
             (* CR mshinwell: I have a suspicion that [r] may not contain the
                usage information for the continuation when it's come from
                [Unbox_continuation_params]. Check. *)
-            R.continuation_args_types r cont'
+            R.continuation_arg_tys r cont
               ~arity:(Flambda.Continuation_handler.param_arity handler)
+              ~default_env:env
           in
+          (* [new_env] contains everything we know holds at _all_ of the use
+             points of the continuation, with anything out of scope at the
+             definition site of [cont] marked as existential. *)
+          let env = E.replace_typing_environment env new_env in
           let r, handler =
             simplify_let_cont_handler ~env ~r:(R.create ()) ~cont:cont'
               ~handler ~arg_tys
           in
-          Continuation.Map.add cont' (handler, r) handlers)
+          Continuation.Map.add cont' (handler, env, r) handlers)
         handlers
         Continuation.Map.empty
     in
@@ -363,14 +371,14 @@ and simplify_let_cont_handlers ~env ~r ~handlers
     in
     let r, handlers =
       Continuation.Map.fold (fun cont
-              ((handler : Flambda.Continuation_handler.t), _r_from_handler)
+              ((handler : Flambda.Continuation_handler.t), env, _r_from_handler)
               (r, handlers) ->
           let r, uses = R.exit_scope_of_let_cont r env cont in
           if continuation_unused cont then
             r, handlers
           else
             let handlers =
-              Continuation.Map.add cont (handler, uses) handlers
+              Continuation.Map.add cont (handler, env, uses) handlers
             in
             r, handlers)
         handlers
@@ -384,7 +392,7 @@ and simplify_let_cont_handlers ~env ~r ~handlers
     end else
       let r, handlers =
         Continuation.Map.fold (fun cont
-                ((handler : Flambda.Continuation_handler.t), uses)
+                ((handler : Flambda.Continuation_handler.t), env, uses)
                 (r, handlers') ->
             let ty =
               let handlers : Continuation_approx.continuation_handlers =
@@ -502,8 +510,8 @@ and simplify_let_cont env r ~body
   (* CR mshinwell: Is _unfreshened_name redundant? *)
   let body_env =
     let env = E.set_freshening env freshening in
-    Continuation.Map.fold (fun name (_unfreshened_name, flambda_type) env ->
-        E.add_continuation env name flambda_type)
+    Continuation.Map.fold (fun name (_unfreshened_name, cont_approx) env ->
+        E.add_continuation env name cont_approx)
       conts_and_types
       env
   in

@@ -16,6 +16,221 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+module T = Flambda_type
+
+module Continuation_uses = struct
+  module Use = struct
+    module Kind = struct
+      type t =
+        | Not_inlinable_or_specialisable of T.t list
+        | Inlinable_and_specialisable of
+            (Variable.t * T.t) list
+        | Only_specialisable of (Variable.t * T.t) list
+
+      let print ppf t =
+        let print_arg_and_approx ppf (arg, approx) =
+          Format.fprintf ppf "(%a %a)"
+            Variable.print arg
+            A.print approx
+        in
+        match t with
+        | Not_inlinable_or_specialisable args_approxs ->
+          Format.fprintf ppf "(Not_inlinable_or_specialisable %a)"
+            (Format.pp_print_list A.print) args_approxs
+        | Inlinable_and_specialisable args_and_approxs ->
+          Format.fprintf ppf "(Inlinable_and_specialisable %a)"
+            (Format.pp_print_list print_arg_and_approx) args_and_approxs
+        | Only_specialisable args_and_approxs ->
+          Format.fprintf ppf "(Only_specialisable %a)"
+            (Format.pp_print_list print_arg_and_approx) args_and_approxs
+
+      let args t =
+        match t with
+        | Not_inlinable_or_specialisable _ -> []
+        | Inlinable_and_specialisable args_and_approxs
+        | Only_specialisable args_and_approxs ->
+          List.map (fun (arg, _approx) -> arg) args_and_approxs
+
+      let args_approxs t =
+        match t with
+        | Not_inlinable_or_specialisable args_approxs -> args_approxs
+        | Inlinable_and_specialisable args_and_approxs
+        | Only_specialisable args_and_approxs ->
+          List.map (fun (_arg, approx) -> approx) args_and_approxs
+
+(*
+      let has_useful_approx t =
+        List.exists (fun approx -> A.useful approx) (args_approxs t)
+*)
+
+      let is_inlinable t =
+        match t with
+        | Not_inlinable_or_specialisable _ -> false
+        | Inlinable_and_specialisable _ -> true
+        | Only_specialisable _ -> false
+
+      let is_specialisable t =
+        match t with
+        | Not_inlinable_or_specialisable _ -> None
+        | Inlinable_and_specialisable args_and_approxs
+        | Only_specialisable args_and_approxs -> Some args_and_approxs
+    end
+
+    type t = {
+      kind : Kind.t;
+      env : Env.t;
+    }
+
+    let print ppf t = Kind.print ppf t.kind
+  end
+
+  type t = {
+    backend : (module Backend_intf.S);
+    continuation : Continuation.t;
+    definition_scope_level : Scope_level.t;
+    application_points : Use.t list;
+  }
+
+  let create ~continuation ~definition_scope_level ~backend =
+    { backend;
+      continuation;
+      definition_scope_level;
+      application_points = [];
+    }
+
+  let union t1 t2 =
+    if not (Continuation.equal t1.continuation t2.continuation) then begin
+      Misc.fatal_errorf "Cannot union [Continuation_uses.t] for two different \
+          continuations (%a and %a)"
+        Continuation.print t1.continuation
+        Continuation.print t2.continuation
+    end;
+    { backend = t1.backend;
+      continuation = t1.continuation;
+      scope_level = t1.scope_level;
+      application_points = t1.application_points @ t2.application_points;
+    }
+
+  let print ppf t =
+    Format.fprintf ppf "(%a application_points = (%a))"
+      Continuation.print t.continuation
+      (Format.pp_print_list Use.print) t.application_points
+
+  let add_use t env kind =
+    { t with
+      application_points = { Use. env; kind; } :: t.application_points;
+    }
+
+  let num_application_points t : Num_continuation_uses.t =
+    match t.application_points with
+    | [] -> Zero
+    | [_] -> One
+    | _ -> Many
+
+  let unused t =
+    match num_application_points t with
+    | Zero -> true
+    | One | Many -> false
+
+  let linearly_used t =
+    match num_application_points t with
+    | Zero -> false
+    | One -> true
+    | Many -> false
+
+  let num_uses t = List.length t.application_points
+
+  let linearly_used_in_inlinable_position t =
+    match t.application_points with
+    | [use] when Use.Kind.is_inlinable use.kind -> true
+    | _ -> false
+
+  let join_of_arg_tys_opt t =
+    match t.application_points with
+    | [] -> None
+    | use::uses ->
+      let arg_tys, env =
+        List.fold_left (fun (arg_tys, env) (use : Use.t) ->
+            let arg_tys' = Use.Kind.arg_tys use.kind in
+            if List.length arg_tys <> List.length arg_tys' then begin
+              Misc.fatal_errorf "join_of_arg_tys_opt %a: approx length %d, \
+                  use length %d"
+                Continuation.print t.continuation
+                (List.length arg_tys) (List.length arg_tys')
+            end;
+            let this_env =
+              T.Typing_environment.cut (E.get_typing_environment use.env)
+                ~existential_if_defined_later_than:t.definition_scope_level
+            in
+            let arg_tys =
+              List.map2 (fun result this_ty ->
+                  let this_ty =
+                    (Env.type_accessor use.env T.add_judgements)
+                      this_ty this_env
+                  in
+                  (Env.type_accessor use.env T.join) result this_ty)
+                arg_tys arg_tys'
+            in
+            let env =
+              (* XXX Which environment should be used here for
+                 [type_of_name]? *)
+              (Env.type_accessor env T.Typing_environment.join) env this_env
+            in
+            arg_tys, env)
+          (Use.Kind.arg_tys use.kind, T.Typing_environment.create ())
+          uses)
+      in
+      Some (arg_tys, env)
+
+  let join_of_arg_tys t ~arity ~default_env =
+    match join_of_arg_tys_opt t with
+    | None -> T.bottom_types_from_arity arity, default_env
+    | Some join -> join
+
+  let application_points t = t.application_points
+(*
+  let filter_out_non_useful_uses t =
+    (* CR mshinwell: This should check that the approximation is always
+       better than the join.  We could do this easily by adding an equality
+       function to T and then using that in conjunction with
+       the "join" function *)
+    let application_points =
+      List.filter (fun (use : Use.t) ->
+          Use.Kind.has_useful_approx use.kind)
+        t.application_points
+    in
+    { t with application_points; }
+*)
+
+  let update_use_environments t ~if_present_in_env ~then_add_to_env =
+    let application_points =
+      List.map (fun (use : Use.t) ->
+          if Env.mem_continuation use.env if_present_in_env then
+            let new_cont, approx = then_add_to_env in
+            let env = Env.add_continuation use.env new_cont approx in
+            { use with env; }
+          else
+            use)
+        t.application_points
+    in
+    { t with application_points; }
+end
+
+module Continuation_usage_snapshot = struct
+  type t = {
+    used_continuations : Continuation_uses.t Continuation.Map.t;
+    defined_continuations :
+      (Continuation_uses.t * Continuation_approx.t * Env.t
+          * Asttypes.rec_flag)
+        Continuation.Map.t;
+  }
+
+  let continuations_defined_between_snapshots ~before ~after =
+    Continuation.Set.diff
+      (Continuation.Map.keys after.defined_continuations)
+      (Continuation.Map.keys before.defined_continuations)
+end
+
 module rec Env : sig
   include Simplify_env_and_result_intf.Env with type result = Result.t
 end = struct
@@ -64,6 +279,7 @@ end = struct
     closure_depth : int;
     inlining_stats_closure_stack : Inlining_stats.Closure_stack.t;
     inlined_debuginfo : Debuginfo.t;
+    continuation_scope_level : int;
   }
 
   let create ~never_inline ~allow_continuation_inlining
@@ -95,6 +311,7 @@ end = struct
       simplify_toplevel;
       simplify_expr;
       simplify_apply_cont_to_cont;
+      continuation_scope_level = 0;
     }
 
   let print ppf t =
@@ -126,6 +343,7 @@ end = struct
       projections = Projection.Map.empty;
       freshening = Freshening.empty_preserving_activation_state env.freshening;
       inlined_debuginfo = Debuginfo.none;
+      continuation_scope_level = 0;
     }
 
   let mem t var = Variable.Map.mem var t.variables
@@ -166,8 +384,12 @@ end = struct
     | var -> Some var
 
   let add_continuation t cont ty =
+    let continuations =
+      Continuation.Map.add cont (t.continuation_scope_level, ty)
+        t.continuations
+    in
     { t with
-      continuations = Continuation.Map.add cont ty t.continuations;
+      continuations;
     }
 
   let find_continuation t cont =
@@ -176,7 +398,15 @@ end = struct
       Misc.fatal_errorf "Unbound continuation %a.\n@ \n%a\n%!"
         Continuation.print cont
         print t
-    | ty -> ty
+    | (_scope_level, ty) -> ty
+
+  let scope_level_of_continuation t cont =
+    match Continuation.Map.find cont t.continuations with
+    | exception Not_found ->
+      Misc.fatal_errorf "Unbound continuation %a.\n@ \n%a\n%!"
+        Continuation.print cont
+        print t
+    | (scope_level, _ty) -> scope_level
 
   let mem_continuation t cont =
     Continuation.Map.mem cont t.continuations
@@ -618,83 +848,45 @@ end = struct
   let continuation_defined t cont =
     Continuation.Map.mem cont t.defined_continuations
 
-  let continuation_args_approxs t i ~num_params =
-    match Continuation.Map.find i t.used_continuations with
+  let continuation_arg_tys t cont ~arity ~default_env =
+    match Continuation.Map.find cont t.used_continuations with
     | exception Not_found ->
-  (*
-  Format.eprintf "Continuation %a not in used_continuations, returning bottom\n%!"
-  Continuation.print i;
-  *)
-      let approxs = Array.make num_params (Flambda_type.value_bottom) in
-      Array.to_list approxs
+      let tys = Array.make num_params (Flambda_type.value_bottom) in
+      Array.to_list tys, default_env
     | uses ->
-  (*
-  let approxs =
-  *)
-      Continuation_uses.meet_of_args_approxs uses ~num_params
-  (*
-  in
-  Format.eprintf "Continuation %a IS in used_continuations: %a\n%!"
-  Continuation.print i
-  (Format.pp_print_list Flambda_type.print) approxs;
-  approxs
-  *)
-  let defined_continuation_args_approxs t i ~num_params =
+      Continuation_uses.join_of_arg_tys uses ~arity ~default_env
+  
+  let defined_continuation_args_approxs t i ~arity =
     match Continuation.Map.find i t.defined_continuations with
     | exception Not_found ->
-      let approxs = Array.make num_params (Flambda_type.value_bottom) in
-      Array.to_list approxs
+      T.bottom_types_from_arity arity
     | (uses, _approx, _env, _recursive) ->
-      Continuation_uses.meet_of_args_approxs uses ~num_params
+      Continuation_uses.join_of_args_approxs uses ~num_params
 
-  let exit_scope_catch t env i =
-  (*
-    Format.eprintf "exit_scope_catch %a\n%!" Continuation.print i;
-  *)
+  let exit_scope_of_let_cont t env cont =
     let t, uses =
-      match Continuation.Map.find i t.used_continuations with
+      match Continuation.Map.find cont t.used_continuations with
       | exception Not_found ->
-  (*
-  Format.eprintf "no uses\n%!";
-  *)
         let uses =
-          Continuation_uses.create ~continuation:i ~backend:(Env.backend env)
+          Continuation_uses.create ~continuation:cont ~backend:(Env.backend env)
         in
         t, uses
       | uses ->
-  (*
-  let application_points =
-  Continuation_uses.application_points uses
-  in
-  Format.eprintf "Uses:\n";
-  let count = ref 1 in
-  List.iter (fun (use : Continuation_uses.Use.t) ->
-  let env = use.env in
-  Format.eprintf "Use %d: %a@ \n%!"
-    (!count) Env.print env;
-  incr count)
-  application_points;
-  *)
+        let definition_scope_level =
+          Env.scope_level_of_continuation env cont
+        in
+        let continuation_uses =
+          Continuation_uses.cut_environments uses
+            ~existential_if_defined_later_than:definition_scope_level
+        in
+        let uses =
+          Continuation_uses.
         { t with
           used_continuations = Continuation.Map.remove i t.used_continuations;
         }, uses
     in
-    assert (continuation_unused t i);
-  (*
-    Format.eprintf "exit_scope_catch %a finished.\n%!" Continuation.print i;
-  let application_points =
-  Continuation_uses.application_points uses
-  in
-  Format.eprintf "Uses being returned:\n";
-  let count = ref 1 in
-  List.iter (fun (use : Continuation_uses.Use.t) ->
-  let env = use.env in
-  Format.eprintf "Use %d: %a@ \n%!"
-    (!count) Env.print env;
-  incr count)
-  application_points;
-  *)
-    t, uses
+    assert (continuation_unused t cont);
+    t, env_extension, uses
 
   let update_all_continuation_use_environments t ~if_present_in_env
         ~then_add_to_env =

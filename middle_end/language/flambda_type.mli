@@ -27,8 +27,10 @@ include module type of struct include Flambda0.Flambda_type end
     It is assumed that the symbol's value may need scanning by the GC. *)
 val unresolved_symbol : Symbol.t -> t
 
-(** For each of the kinds in an arity, create an "unknown" type, with
-    reason [Other]. *)
+(** For each of the kinds in an arity, create a "bottom" type. *)
+val bottom_types_from_arity : Flambda_arity.t -> t list
+
+(** For each of the kinds in an arity, create an "unknown" type. *)
 val unknown_types_from_arity : Flambda_arity.t -> t list
 
 (** Create an "bottom" type with the same kind as the given type. *)
