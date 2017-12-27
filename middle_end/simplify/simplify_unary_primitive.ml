@@ -25,6 +25,8 @@ module T = Flambda_type
 
 module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
 module Int = Numbers.Int
+module Int32 = Numbers.Int32
+module Int64 = Numbers.Int64
 module Named = Flambda.Named
 module Reachable = Flambda.Reachable
 
@@ -615,7 +617,8 @@ module For_standard_ints_tagged_immediate : For_standard_ints = struct
 
     let to_naked_int32 t = Targetint.OCaml.to_int32 (Immediate.to_targetint t)
     let to_naked_int64 t = Targetint.OCaml.to_int64 (Immediate.to_targetint t)
-    let to_naked_nativeint t = Targetint.OCaml.Immediate.to_targetint t
+    let to_naked_nativeint t =
+      Targetint.OCaml.to_targetint (Immediate.to_targetint t)
 
     (* It seems as if the various [float_of_int] functions never raise
        an exception even in the case of NaN or infinity. *)
@@ -637,11 +640,10 @@ module For_standard_ints_naked_int32 : For_standard_ints = struct
 
     let to_const t = Simple.Const.Naked_int32 t
 
-    let to_tagged_immediate t =
-      Immediate.int (Targetint.treat_as_int (Targetint.of_int32 t))
+    let to_tagged_immediate t = Immediate.int (Targetint.OCaml.of_int32 t)
     let to_naked_int32 t = t
     let to_naked_int64 t = Int64.of_int32 t
-    let to_naked_nativeint t = Targetint.of_int64 t
+    let to_naked_nativeint t = Targetint.of_int32 t
   end
 
   let kind : K.Standard_int.t = Naked_int32
@@ -657,8 +659,7 @@ module For_standard_ints_naked_int64 : For_standard_ints = struct
 
     let to_const t = Simple.Const.Naked_int64 t
 
-    let to_tagged_immediate t =
-      Immediate.int (Targetint.treat_as_int (Targetint.of_int64 t))
+    let to_tagged_immediate t = Immediate.int (Targetint.OCaml.of_int64 t)
     let to_naked_int32 t = Int64.to_int32 t
     let to_naked_int64 t = t
     let to_naked_nativeint t = Targetint.of_int64 t
@@ -677,9 +678,9 @@ module For_standard_ints_naked_nativeint : For_standard_ints = struct
 
     let to_const t = Simple.Const.Naked_nativeint t
 
-    let to_tagged_immediate t = Immediate.int (Targetint.treat_as_int t)
-    let to_naked_int32 t = Targetint.to_int32
-    let to_naked_int64 t = Targetint.to_int64
+    let to_tagged_immediate t = Immediate.int (Targetint.OCaml.of_targetint t)
+    let to_naked_int32 t = Targetint.to_int32 t
+    let to_naked_int64 t = Targetint.to_int64 t
     let to_naked_nativeint t = t
   end
 
@@ -711,7 +712,9 @@ module type For_unboxable_ints = sig
   end
 
   val kind : K.Boxable_number.t
-  val prover : (T.t -> Num.Set.t proof) T.type_accessor
+
+  val boxed_prover : (T.t -> _ T.ty_naked_number T.proof) T.type_accessor
+  val unboxed_prover : (T.t -> Num.Set.t T.proof) T.type_accessor
 
   val this : Num.t -> T.t
   val these : Num.Set.t -> T.t
@@ -724,22 +727,28 @@ module Make_simplify_unbox_number (P : For_unboxable_ints) = struct
     let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
     let proof = (E.type_accessor env P.boxed_prover) ty in
     let kind = K.Boxable_number.to_kind P.kind in
-    let term, ty =
-      match proof with
-      | Proved unboxed_ty ->
-        let proof = (E.type_accessor env P.unboxed_prover) unboxed_ty in
-        begin match proof with
-        | Proved nums ->
-          Reachable.reachable (original_term ()), P.these nums
-        | Unknown ->
-          Reachable.reachable (original_term ()), unboxed_ty
-        | Invalid ->
-          Reachable.invalid (), T.bottom kind
-        end
-      | Invalid -> 
-        Reachable.invalid (), T.bottom kind
+    let invalid () =
+      Reachable.invalid (), T.bottom kind,
+        R.map_benefit r (B.remove_primitive (Unary prim))
     in
-    term, ty, r
+    match proof with
+    | Proved unboxed_ty ->
+      let unboxed_ty = T.of_ty_naked_number unboxed_ty in
+      let proof = (E.type_accessor env P.unboxed_prover) unboxed_ty in
+      begin match proof with
+      | Proved nums ->
+        Reachable.reachable (original_term ()), P.these nums,
+          R.map_benefit r (B.remove_primitive (Unary prim))
+      | Unknown ->
+        (* In this case, [unboxed_ty] might actually be an alias, meaning
+           that we can replace the primitive with a variable.  This will be
+           done automagically by the code in [Simplify_named] using
+           [reify]. *)
+        Reachable.reachable (original_term ()), unboxed_ty, r
+      | Invalid -> invalid ()
+      end
+    | Unknown -> Reachable.reachable (original_term ()), unboxed_ty, r
+    | Invalid -> invalid ()
 end
 
 module Simplify_unbox_number_float =

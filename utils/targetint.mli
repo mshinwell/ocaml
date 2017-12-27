@@ -219,6 +219,8 @@ val cross_product : Set.t -> Set.t -> Pair.Set.t
     integer by zero-extending those two bytes. *)
 val get_least_significant_16_bits_then_byte_swap : t -> t
 
+val swap_byte_endianness : t -> t
+
 module OCaml : sig
   (** Operations using the semantics of the type "int" on the target
       machine.  That is to say, 31-bit arithmetic on 32-bit targets; and
@@ -248,8 +250,16 @@ module OCaml : sig
       "int"-width integer. *)
   val of_int_option : int -> t option
 
+  val of_int32 : int32 -> t
+  val of_int64 : int64 -> t
+  val of_targetint : targetint -> t
+
   val to_int : t -> int
+  val to_int32 : t -> int32
+  val to_int64 : t -> int64
   val to_targetint : t -> targetint
+
+  val get_least_significant_16_bits_then_byte_swap : t -> t
 
   include Identifiable.S with type t := t
 

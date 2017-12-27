@@ -87,7 +87,12 @@ module type S = sig
     val of_char : char -> t
     val of_int : int -> t  (* CR mshinwell: clarify semantics *)
     val of_int_option : int -> t option
+    val of_int32 : int32 -> t
+    val of_int64 : int64 -> t
+    val of_targetint : targetint -> t
     val to_int : t -> int
+    val to_int32 : t -> int32
+    val to_int64 : t -> int64
     val to_targetint : t -> targetint
     include Identifiable.S with type t := t
   end
@@ -180,6 +185,8 @@ module Int32 = struct
     let to_int = Int32.to_int
 
     let to_int t = t
+    let to_int32 t = Int64.to_int32
+    let to_int64 t = t
 
     let of_int_option i =
       let t = of_int i in
@@ -195,6 +202,9 @@ module Int32 = struct
 
     let max_string_length =
       Int32.sub (Int32.mul 4l max_array_length) 1l
+
+    (* CR mshinwell: implement *)
+    let get_least_significant_16_bits_then_byte_swap _t = assert false
 
     let compare = compare
     let equal = equal
@@ -308,6 +318,8 @@ module Int64 = struct
     let to_int = Int64.to_int
 
     let to_int t = t
+    let to_int32 t = Int64.to_int32
+    let to_int64 t = t
 
     let of_int_option i = Some (of_int i)
 
@@ -315,6 +327,9 @@ module Int64 = struct
 
     let max_string_length =
       Int64.sub (Int64.mul 8L max_array_length) 1L
+
+    (* CR mshinwell: implement *)
+    let get_least_significant_16_bits_then_byte_swap _t = assert false
 
     let compare = compare
     let equal = equal

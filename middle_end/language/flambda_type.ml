@@ -881,7 +881,7 @@ type 'a proof =
 type 'a known_values = 'a Or_not_all_values_known.t proof
 
 let prove_tagged_immediate ~type_of_name t
-      : Immediate.Set.t known_values =
+      : Immediate.Set.t proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a tagged \
         immediate: %a"

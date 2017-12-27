@@ -291,7 +291,7 @@ let simplify_named env r (tree : Named.t) : named_simplifier =
       Simplify_primitive.simplify_primitive env r prim dbg
     in
     (* CR mshinwell: Add benefit calculations *)
-    begin match (E.type_accessor env T.reify) ty with
+    begin match (E.type_accessor env T.reify) ty ~allow_free_variables:true with
     | Reified (simple, ty) ->
       let term : Named.t = Simple simple in
       new_bindings, term, ty, r

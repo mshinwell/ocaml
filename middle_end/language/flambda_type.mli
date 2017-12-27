@@ -144,7 +144,7 @@ type 'a known_values = 'a Or_not_all_values_known.t proof
     tagged immediates, but we don't know) or [Invalid] (stating that the
     type definitely cannot represent any tagged immediate) is returned.
 *)
-val prove_tagged_immediate : (t -> Immediate.Set.t known_values) type_accessor
+val prove_tagged_immediate : (t -> Immediate.Set.t proof) type_accessor
 
 val prove_is_tagged_immediate : (t -> bool proof) type_accessor
 

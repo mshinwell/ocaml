@@ -59,6 +59,7 @@ module Float_by_bit_pattern : sig
 
   val create : float -> t
 
+  val of_bits : Int64.t -> t
   val of_string : string -> t
 
   val one : t
@@ -83,19 +84,24 @@ module Float_by_bit_pattern : sig
 end
 
 module Int32 : sig
-  include Identifiable.S with type t = Int32.t
+  include module type of struct include Int32 end
+  include Identifiable.S with type t := Int32.t
 
-  val byte_swap : t -> t
+  val swap_byte_endianness : t -> t
 end
 
 module Int64 : sig
-  include Identifiable.S with type t = Int64.t
+  include module type of struct include Int64 end
+  include Identifiable.S with type t := Int64.t
 
-  val byte_swap : t -> t
+  val swap_byte_endianness : t -> t
 end
 
+(* CR mshinwell: We may be able to remove this (all uses for target numbers
+   should use Targetint instead) *)
 module Nativeint : sig
-  include Identifiable.S with type t = Nativeint.t
+  include module type of struct include Nativeint end
+  include Identifiable.S with type t := Nativeint.t
 
-  val byte_swap : t -> t
+  val swap_byte_endianness : t -> t
 end

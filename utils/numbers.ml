@@ -88,6 +88,7 @@ module Float_by_bit_pattern = struct
 
   let create f = Int64.bits_of_float f
 
+  let of_bits bits = bits
   let of_string str = create (float_of_string str)
 
   let to_float t = Int64.float_of_bits t
@@ -136,7 +137,7 @@ end
 module Int32 = struct
   type t = Int32.t
 
-  external byte_swap : t -> t = "%bswap_int32"
+  external swap_byte_endianness : t -> t = "%bswap_int32"
 
   include Identifiable.Make (struct
     type t = Int32.t
@@ -151,7 +152,7 @@ end
 module Int64 = struct
   type t = Int64.t
 
-  external byte_swap : t -> t = "%bswap_int64"
+  external swap_byte_endianness : t -> t = "%bswap_int64"
 
   include Identifiable.Make (struct
     type t = Int64.t
@@ -166,7 +167,7 @@ end
 module Nativeint = struct
   type t = Nativeint.t
 
-  external byte_swap : t -> t = "%bswap_native"
+  external swap_byte_endianness : t -> t = "%bswap_native"
 
   include Identifiable.Make (struct
     type t = Nativeint.t

@@ -514,6 +514,19 @@ end) = struct
 
   let of_ty_value ty_value : t = Value ty_value
 
+  let of_ty_naked_number (type n) (ty_naked_number : n ty_naked_number) : t =
+    match n with
+    | Immediate _ ->
+      Naked_number (ty_naked_number, K.Naked_number.Naked_immediate)
+    | Float _ ->
+      Naked_number (ty_naked_number, K.Naked_number.Naked_float)
+    | Int32 _ ->
+      Naked_number (ty_naked_number, K.Naked_number.Naked_int32)
+    | Int64 _ ->
+      Naked_number (ty_naked_number, K.Naked_number.Naked_int64)
+    | Nativeint _ ->
+      Naked_number (ty_naked_number, K.Naked_number.Naked_nativeint)
+
   let free_names_or_alias free_names_contents (or_alias : _ or_alias) acc =
     match or_alias with
     | No_alias contents -> free_names_contents contents acc

@@ -288,6 +288,7 @@ module type S = sig
     -> unit
 
   val of_ty_value : ty_value -> t
+  val of_ty_naked_number : _ ty_naked_number -> t
 
   (** Construction of top types. *)
   val unknown : Flambda_kind.t -> t
