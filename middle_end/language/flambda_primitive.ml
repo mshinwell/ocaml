@@ -144,22 +144,66 @@ let print_duplicate_block_kind ppf (kind : duplicate_block_kind) =
 (* CR-someday mshinwell: We should have unboxed arrays of int32, int64 and
    nativeint. *)
 
-type block_access_kind =
-  | Any_value
-  | Definitely_immediate
-  | Naked_float
-  | Generic_array of Generic_array_specialisation.t
+module Block_access_kind = struct
+  type t0 =
+    | Any_value
+    | Definitely_immediate
+    | Naked_float
 
-let print_block_access_kind ppf kind =
-  match kind with
-  | Any_value -> Format.pp_print_string ppf "any"
-  | Definitely_immediate -> Format.pp_print_string ppf "imm"
-  | Naked_float -> Format.pp_print_string ppf "float"
-  | Generic_array spec ->
-    Format.fprintf ppf "generic(%a)" Generic_array_specialisation.print spec
+  type t =
+    | Block of t0
+    | Array of t0
+    | Generic_array of Generic_array_specialisation.t
 
-let compare_block_access_kind kind1 kind2 =
-  Pervasives.compare kind1 kind2
+  let kind_this_element t =
+    match t with
+    | Block Any_value -> K.value Unknown
+    | Block Definitely_immediate -> K.value Definitely_immediate
+    | Block Naked_float -> K.naked_float ()
+    | Array Any_value -> K.value Unknown
+    | Array Definitely_immediate -> K.value Definitely_immediate
+    | Array Naked_float -> K.naked_float ()
+    | Generic_array _ -> Misc.fatal_error "Not yet implemented"
+
+  let kind_all_elements t =
+    match t with
+    | Block Any_value -> K.value Unknown
+    | Block Definitely_immediate -> K.value Unknown
+    | Block Naked_float -> K.naked_float ()
+    | Array Any_value -> K.value Unknown
+    | Array Definitely_immediate -> K.value Definitely_immediate
+    | Array Naked_float -> K.naked_float ()
+    | Generic_array _ -> Misc.fatal_error "Not yet implemented"
+
+  let compare_t0 (t0_1 : t0) t0_2 = Pervasives.compare t0_1 t0_2
+
+  let compare t1 t2 =
+    match t1, t2 with
+    | Block _, Array _ -> -1
+    | Block _, Generic_array _ -> -1
+    | Array _, Block _ -> 1
+    | Array _, Generic_array _ -> -1
+    | Generic_array _, Block _ -> 1
+    | Generic_array _, Array _ -> 1
+    | Block t0_1, Block t0_2 -> compare_t0 t0_1 t0_2
+    | Array t0_1, Array t0_2 -> compare_t0 t0_1 t0_2
+    | Generic_array spec1, Generic_array spec2 ->
+      Generic_array_specialisation.compare spec1 spec2
+
+  let print_t0 ppf t0 =
+    match t0 with
+    | Any_value -> Format.pp_print_string ppf "Any_value"
+    | Definitely_immediate -> Format.pp_print_string ppf "Definitely_immediate"
+    | Naked_float -> Format.pp_print_string ppf "Naked_float"
+
+  let print ppf kind =
+    match kind with
+    | Block t0 -> Format.fprintf ppf "(Block %a)" print_t0 t0
+    | Array t0 -> Format.fprintf ppf "(Array %a)" print_t0 t0
+    | Generic_array spec ->
+      Format.fprintf ppf "(Generic %a)"
+        Generic_array_specialisation.print spec
+end
 
 type string_or_bytes = String | Bytes
 
@@ -372,7 +416,7 @@ type unary_primitive =
   | Get_tag of {
       possible_tags_and_sizes : int Tag.Map.t;
     }
-  | Array_length of block_access_kind
+  | Array_length of Block_access_kind.t
   | Bigarray_length of { dimension : int; }
   | String_length of string_or_bytes
   | Int_as_pointer
@@ -621,7 +665,7 @@ let print_binary_float_arith_op ppf o =
   | Div -> fprintf ppf "/."
 
 type binary_primitive =
-  | Block_load of block_access_kind * mutable_or_immutable
+  | Block_load of Block_access_kind.t * mutable_or_immutable
   | String_or_bigstring_load of string_like_value * string_accessor_width
   | Int_arith of Flambda_kind.Standard_int.t * binary_int_arith_op
   | Int_shift of Flambda_kind.Standard_int.t * int_shift_op
@@ -642,7 +686,7 @@ let compare_binary_primitive p1 p2 =
   in
   match p1, p2 with
   | Block_load (kind1, mut1), Block_load (kind2, mut2) ->
-    let c = compare_block_access_kind kind1 kind2 in
+    let c = Block_access_kind.compare kind1 kind2 in
     if c <> 0 then c
     else compare_mutable_or_immutable mut1 mut2
   | Int_arith (kind1, op1), Int_arith (kind2, op2) ->
@@ -680,7 +724,7 @@ let print_binary_primitive ppf p =
   match p with
   | Block_load (kind, mut) ->
     fprintf ppf "block_load[%a,%a]"
-      print_block_access_kind kind
+      Block_access_kind.print kind
       print_mutable_or_immutable mut
   | String_or_bigstring_load (string_like, width) ->
     fprintf ppf "string_load[%a,%a]"
@@ -713,20 +757,8 @@ let args_kind_of_binary_primitive p =
 
 let result_kind_of_binary_primitive p : result_kind =
   match p with
-  | Block_load (Any_value, _) ->
-    Singleton (K.value Unknown)
-  | Block_load (Definitely_immediate, _) ->
-    Singleton (K.value Definitely_immediate)
-  | Block_load (Naked_float, _) ->
-    Singleton (K.naked_float ())
-  | Block_load (Generic_array No_specialisation, _) ->
-    Singleton (K.value Unknown)
-  | Block_load (Generic_array Full_of_naked_floats, _) ->
-    Singleton (K.naked_float ())
-  | Block_load (Generic_array Full_of_immediates, _) ->
-    Singleton (K.value Definitely_immediate)
-  | Block_load (Generic_array Full_of_arbitrary_values_but_not_floats, _) ->
-    Singleton (K.value Unknown)
+  | Block_load (block_access_kind, _) ->
+    Singleton (Block_access_kind.kind_this_element block_access_kind)
   | String_or_bigstring_load (_, (Eight | Sixteen)) ->
     Singleton (K.value Definitely_immediate)
   | String_or_bigstring_load (_, Thirty_two) ->
@@ -751,7 +783,7 @@ let effects_and_coeffects_of_binary_primitive p =
   | String_or_bigstring_load _ -> reading_from_an_array_like_thing
 
 type ternary_primitive =
-  | Block_set of block_access_kind * init_or_assign
+  | Block_set of Block_access_kind.t * init_or_assign
   | Bytes_or_bigstring_set of bytes_like_value * string_accessor_width
 
 let compare_ternary_primitive p1 p2 =
@@ -763,7 +795,7 @@ let compare_ternary_primitive p1 p2 =
   match p1, p2 with
   | Block_set (kind1, init_or_assign1),
       Block_set (kind2, init_or_assign2) ->
-    let c = compare_block_access_kind kind1 kind2 in
+    let c = Block_access_kind.compare kind1 kind2 in
     if c <> 0 then c
     else Pervasives.compare init_or_assign1 init_or_assign2
   | Bytes_or_bigstring_set (kind1, width1),
@@ -781,7 +813,7 @@ let print_ternary_primitive ppf p =
   match p with
   | Block_set (kind, init) ->
     fprintf ppf "block_set[%a,%a]"
-      print_block_access_kind kind
+      Block_access_kind.print kind
       print_init_or_assign init
   | Bytes_or_bigstring_set (kind, string_accessor_width) ->
     fprintf ppf "bytes_set[%a,%a]"
