@@ -961,7 +961,7 @@ end) = struct
     let tags_to_env_extensions =
       Tag.Map.add tag (create_typing_environment ()) Tag.Map.empty
     in
-    these_tags tags_to_env_extensions
+    these_tags_as_ty_fabricated tags_to_env_extensions
 
   let this_tag tag : t =
     Fabricated (this_tag_as_ty_fabricated tag)
@@ -1859,75 +1859,6 @@ end) = struct
     (with_null_importer join_list) (K.value Definitely_pointer) tys
 
 *)
-
-  let add_judgements ~type_of_name t env : t =
-    let t, _canonical_name = resolve_aliases ~type_of_name t in
-    match t with
-    | Value (Join of_kind_values) ->
-      let of_kind_values =
-        List.map
-          (fun (of_kind_value : of_kind_value) : of_kind_value ->
-            match of_kind_value with
-            | Blocks_and_immediates { blocks; immediates; } ->
-              let blocks =
-                Tag.Map.map
-                  (fun ((Join { by_length }) : block_cases) : block_cases ->
-                    let by_length =
-                      Targetint.OCaml.Map.map
-                        (fun (block : singleton_block) : singleton_block ->
-                          let env_extension =
-                            Typing_environment.meet block.env_extension env
-                          in
-                          { block with env_extension; })
-                        by_length
-                    in
-                    Join { by_length; })
-                  blocks
-              in
-              let immediates : _ or_unknown =
-                match immediates with
-                | Unknown -> Unknown
-                | Known imm_map ->
-                  let imm_map =
-                    Immediate.Map.map
-                      (fun ({ env_extension; } : immediate_case
-                            : immediate_case ->
-                        let env_extension =
-                          Typing_environment.meet env_extension env
-                        in
-                        { env_extension; })
-                      imm_map
-                  in
-                  Known imm_map
-              in
-              Blocks_and_immediates { blocks; immediates; }
-            | Boxed_number _ | Closure _ | String _ -> of_kind_value)
-          of_kind_values
-      in
-      Join of_kind_values
-    | Fabricated (Join of_kind_fabricateds) ->
-      let of_kind_fabricateds =
-        List.map
-          (fun (of_kind_fabricated : of_kind_fabricated) : of_kind_fabricated ->
-            match of_kind_fabricated with
-            | Tag tag_map ->
-              let tag_map =
-                Tag.Map.map (fun ({ env_extension; } : tag_case : tag_case ->
-                    let env_extension =
-                      Typing_environment.meet env_extension env
-                    in
-                    { env_extension; })
-                  tag_map
-              in
-              Tag tag_map
-            | Set_of_closures _ -> of_kind_fabricated)
-          of_kind_fabricateds
-      in
-      Join of_kind_fabricateds
-    | Value (Type _ | Type_of _ | No_alias (Unknown _))
-    | Fabricated (Type _ | Type_of _ | No_alias (Unknown _)) -> t
-    | Naked_number _ -> t
-    | Phantom -> t
 
   type 'a or_bottom =
     | Ok of 'a
@@ -2986,8 +2917,8 @@ end) = struct
   let meet = Meet_and_join.meet
   let join = Meet_and_join.join
 
-  let meet_ty_value = Meet_and_join.meet_ty
-  let join_ty_value = Meet_and_join.join_ty
+(*  let meet_ty_value = Meet_and_join_value.meet_ty *)
+  let join_ty_value = Meet_and_join_value.join_ty
 
   module Typing_environment = struct
     type t = typing_environment
@@ -2998,19 +2929,19 @@ end) = struct
     let meet = Meet_and_join.meet_typing_environment
     let join = Meet_and_join.join_typing_environment
 
-(*
     let add t name scope_level ty =
       match Name.Map.find name t.names_to_types with
       | exception Not_found ->
-        let names = Name.Map.add name ty t.names_to_types in
+        let names_to_types = Name.Map.add name ty t.names_to_types in
         let levels_to_names =
           Scope_level.Map.update scope_level
             (function
-               | None -> Name.Set.singleton name
-               | Some names -> Name.Set.add name names)
+               | None -> Some (Name.Set.singleton name)
+               | Some names -> Some (Name.Set.add name names))
+            t.levels_to_names
         in
         { t with
-          names;
+          names_to_types;
           levels_to_names;
         }
       | _ty ->
@@ -3018,7 +2949,7 @@ end) = struct
           Name.print name
           print t
 
-    type binding_type = No_alias | Existential
+    type binding_type = Normal | Existential
 
     let find t name =
       match Name.Map.find name t.names_to_types with
@@ -3028,16 +2959,18 @@ end) = struct
           print t
       | ty ->
         let binding_type =
-          if Name.Map.mem name t.existentials then Existential
-          else No_alias
+          if Name.Set.mem name t.existentials then Existential
+          else Normal
         in
         match binding_type with
-        | No_alias -> ty, No_alias
+        | Normal -> ty, Normal
         | Existential ->
-          let ty = rename_variables t freshening in
+     (* XXX     let ty = rename_variables t freshening in *)
           ty, Existential
 
-    let cut t ~minimum_scope_level_to_be_existential =
+    let cut _t ~existential_if_defined_later_than:_ =
+      assert false
+(*
       let existentials =
         Scope_level.Map.fold (fun scope_level names resulting_existentials ->
             let will_be_existential =
@@ -3067,4 +3000,75 @@ end) = struct
       }
 *)
   end
+
+  let add_judgements ~type_of_name t env : t =
+    let t, _canonical_name = resolve_aliases ~type_of_name t in
+    match t with
+    | Value (No_alias (Join of_kind_values)) ->
+      let of_kind_values =
+        List.map
+          (fun (of_kind_value : of_kind_value) : of_kind_value ->
+            match of_kind_value with
+            | Blocks_and_tagged_immediates { blocks; immediates; } ->
+              let blocks =
+                Tag.Map.map
+                  (fun ((Join { by_length }) : block_cases) : block_cases ->
+                    let by_length =
+                      Targetint.OCaml.Map.map
+                        (fun (block : singleton_block) : singleton_block ->
+                          let env_extension =
+                            Typing_environment.meet ~type_of_name
+                              block.env_extension env
+                          in
+                          { block with env_extension; })
+                        by_length
+                    in
+                    Join { by_length; })
+                  blocks
+              in
+              let immediates : _ or_unknown =
+                match immediates with
+                | Unknown -> Unknown
+                | Known imm_map ->
+                  let imm_map =
+                    Immediate.Map.map
+                      (fun ({ env_extension; } : immediate_case)
+                            : immediate_case ->
+                        let env_extension =
+                          Typing_environment.meet ~type_of_name
+                            env_extension env
+                        in
+                        { env_extension; })
+                      imm_map
+                  in
+                  Known imm_map
+              in
+              Blocks_and_tagged_immediates { blocks; immediates; }
+            | Boxed_number _ | Closure _ | String _ -> of_kind_value)
+          of_kind_values
+      in
+      Value (No_alias (Join of_kind_values))
+    | Fabricated (No_alias (Join of_kind_fabricateds)) ->
+      let of_kind_fabricateds =
+        List.map
+          (fun (of_kind_fabricated : of_kind_fabricated) : of_kind_fabricated ->
+            match of_kind_fabricated with
+            | Tag tag_map ->
+              let tag_map =
+                Tag.Map.map (fun ({ env_extension; } : tag_case) : tag_case ->
+                    let env_extension =
+                      Typing_environment.meet ~type_of_name env_extension env
+                    in
+                    { env_extension; })
+                  tag_map
+              in
+              Tag tag_map
+            | Set_of_closures _ -> of_kind_fabricated)
+          of_kind_fabricateds
+      in
+      Fabricated (No_alias (Join of_kind_fabricateds))
+    | Value (Type _ | Type_of _ | No_alias (Unknown _))
+    | Fabricated (Type _ | Type_of _ | No_alias (Unknown _)) -> t
+    | Naked_number _ -> t
+    | Phantom _ -> t
 end

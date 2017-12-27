@@ -199,7 +199,7 @@ end) = struct
           let cont, r =
             let scrutinee_ty = S.type_of_scrutinee arm in
             let env = E.add_or_meet_variable env scrutinee scrutinee_ty in
-            let env = E.extend_typing_environment env ~env_extension in
+            let env = E.meet_typing_environment env env_extension in
             simplify_continuation_use_cannot_inline env r cont ~arity:[]
           in
           let arms = Targetint.Map.add arm cont arms in

@@ -259,14 +259,12 @@ module type S = sig
     val print : Format.formatter -> t -> unit
 
     val create : unit -> t
-(*
 
     val add : t -> Name.t -> Scope_level.t -> flambda_type -> t
 
     type binding_type = Normal | Existential
 
-    val find : t -> Name.t -> t * binding_type
-*)
+    val find : t -> Name.t -> flambda_type * binding_type
 
     val cut
        : t
