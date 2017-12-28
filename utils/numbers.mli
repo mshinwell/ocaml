@@ -76,6 +76,7 @@ module Float_by_bit_pattern : sig
     val sub : t -> t -> t
     val mul : t -> t -> t
     val div : t -> t -> t
+    val mod_ : t -> t -> t
 
     val neg : t -> t
     val abs : t -> t
@@ -83,6 +84,14 @@ module Float_by_bit_pattern : sig
     val compare : t -> t -> int
     val equal : t -> t -> bool
   end
+
+  module Pair : sig
+    type nonrec t = t * t
+
+    include Identifiable.S with type t := t
+  end
+
+  val cross_product : Set.t -> Set.t -> Pair.Set.t
 end
 
 module Int32 : sig
@@ -90,6 +99,14 @@ module Int32 : sig
   include Identifiable.S with type t := Int32.t
 
   val swap_byte_endianness : t -> t
+
+  module Pair : sig
+    type nonrec t = t * t
+
+    include Identifiable.S with type t := t
+  end
+
+  val cross_product : Set.t -> Set.t -> Pair.Set.t
 end
 
 module Int64 : sig
@@ -97,6 +114,14 @@ module Int64 : sig
   include Identifiable.S with type t := Int64.t
 
   val swap_byte_endianness : t -> t
+
+  module Pair : sig
+    type nonrec t = t * t
+
+    include Identifiable.S with type t := t
+  end
+
+  val cross_product : Set.t -> Set.t -> Pair.Set.t
 end
 
 (* CR mshinwell: We may be able to remove this (all uses for target numbers

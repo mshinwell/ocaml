@@ -16,6 +16,7 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+module A = Number_adjuncts
 module B = Inlining_cost.Benefit
 module E = Simplify_env_and_result.Env
 module K = Flambda_kind
@@ -228,42 +229,7 @@ end = struct
       result_invalid ()
 end
 
-module Int_ops_for_binary_arith (I : sig
-  type t
-
-  val kind : K.Standard_int.t
-  val term : t -> Named.t
-
-  val zero : t
-  val one : t
-  val minus_one : t
-
-  val add : t -> t -> t
-  val sub : t -> t -> t
-  val mul : t -> t -> t
-  (* CR mshinwell: We should think very carefully to make sure this is right.
-     Also see whether unsafe division can be exposed to the user.  The
-     current assumption that division by zero reaching here is dead code. *)
-  val div : t -> t -> t option
-  val mod_ : t -> t -> t option
-  val and_ : t -> t -> t
-  val or_ : t -> t -> t
-  val xor : t -> t -> t
-
-  include Identifiable.S with type t := t
-
-  val these : Set.t -> flambda_type
-
-  val prover : (flambda_type -> Set.t) T.type_accessor
-
-  module Pair : sig
-    type nonrec t = t * t
-
-    include Identifiable.S with type t := t
-  end
-
-  val cross_product : Set.t -> Set.t -> Pair.Set.t
-end) : sig
+module Int_ops_for_binary_arith (I : A.Int_number_kind) : sig
   include Binary_arith_like_sig
     with type op = binary_int_arith_op
 end = struct
@@ -337,6 +303,10 @@ end = struct
       if I.equal rhs I.zero then The_other_side
       else Cannot_simplify
     | Div ->
+      (* CR mshinwell: We should think very carefully to make sure our
+         handling of division is correct.  Also see whether unsafe division
+         can be exposed to the user.  The current assumption that division
+         by zero reaching here is dead code. *)
       if I.equal rhs I.zero then Invalid
       else if I.equal rhs I.one then The_other_side
       else if I.equal rhs I.minus_one then negate_the_other_side ()
@@ -366,13 +336,13 @@ end = struct
 end
 
 module Int_ops_for_binary_arith_tagged_immediate =
-  Int_ops_for_binary_arith (Targetint.OCaml)
+  Int_ops_for_binary_arith (A.For_tagged_immediates)
 module Int_ops_for_binary_arith_int32 =
-  Int_ops_for_binary_arith (Int32)
+  Int_ops_for_binary_arith (A.For_int32s)
 module Int_ops_for_binary_arith_int64 =
-  Int_ops_for_binary_arith (Int64)
+  Int_ops_for_binary_arith (A.For_int64s)
 module Int_ops_for_binary_arith_nativeint =
-  Int_ops_for_binary_arith (Targetint)
+  Int_ops_for_binary_arith (A.For_nativeints)
 
 module Binary_int_arith_tagged_immediate =
   Binary_arith_like (Int_ops_for_binary_arith_tagged_immediate)
@@ -383,33 +353,7 @@ module Binary_int_arith_int64 =
 module Binary_int_arith_nativeint =
   Binary_arith_like (Int_ops_for_binary_arith_nativeint)
 
-module Int_ops_for_binary_shift (I : sig
-  type t
-
-  val kind : K.Standard_int.t
-  val term : t -> Named.t
-
-  val zero : t
-
-  val shift_left : t -> t -> t
-  (* [shift_right] is arithmetic shift right, matching [Int32], [Int64], etc. *)
-  val shift_right : t -> t -> t
-  val shift_right_logical : t -> t -> t
-
-  include Identifiable.S with type t := t
-
-  val these : Set.t -> flambda_type
-
-  val prover : (flambda_type -> Set.t) T.type_accessor
-
-  module Pair : sig
-    type nonrec t = t * t
-
-    include Identifiable.S with type t := t
-  end
-
-  val cross_product : Set.t -> Set.t -> Pair.Set.t
-end) : sig
+module Int_ops_for_binary_shift (I : A.Number_kind) : sig
   include Binary_arith_sig
     with type op = binary_int_arith_op
 end = struct
@@ -462,13 +406,13 @@ end = struct
 end
 
 module Int_ops_for_binary_shift_tagged_immediate =
-  Int_ops_for_binary_shift (Targetint.OCaml)
+  Int_ops_for_binary_shift (A.For_tagged_immediates)
 module Int_ops_for_binary_shift_int32 =
-  Int_ops_for_binary_shift (Int32)
+  Int_ops_for_binary_shift (A.For_int32s)
 module Int_ops_for_binary_shift_int64 =
-  Int_ops_for_binary_shift (Int64)
+  Int_ops_for_binary_shift (A.For_int64s)
 module Int_ops_for_binary_shift_nativeint =
-  Int_ops_for_binary_shift (Targetint)
+  Int_ops_for_binary_shift (A.For_nativeints)
 
 module Binary_int_shift_tagged_immediate =
   Binary_arith_like (Int_ops_for_binary_shift_tagged_immediate)
@@ -479,30 +423,7 @@ module Binary_int_shift_int64 =
 module Binary_int_shift_nativeint =
   Binary_arith_like (Int_ops_for_binary_shift_nativeint)
 
-module Int_ops_for_binary_comp (I : sig
-  type t
-
-  val kind : K.Standard_int.t
-  val term : t -> Named.t
-
-  val zero : t
-
-  val compare : t -> t -> int
-
-  include Identifiable.S with type t := t
-
-  val these : Set.t -> flambda_type
-
-  val prover : (flambda_type -> Set.t) T.type_accessor
-
-  module Pair : sig
-    type nonrec t = t * t
-
-    include Identifiable.S with type t := t
-  end
-
-  val cross_product : Set.t -> Set.t -> Pair.Set.t
-end) : sig
+module Int_ops_for_binary_comp (I : A.Number_kind) : sig
   include Binary_arith_sig
     with type op = Flambda_primitive.comparison
 end = struct
@@ -535,17 +456,13 @@ end = struct
 end
 
 module Int_ops_for_binary_comp_tagged_immediate =
-  Int_ops_for_binary_comp (Targetint.OCaml)
+  Int_ops_for_binary_comp (A.For_tagged_immediates)
 module Int_ops_for_binary_comp_int32 =
-  Int_ops_for_binary_comp (Int32)
+  Int_ops_for_binary_comp (A.For_int32s)
 module Int_ops_for_binary_comp_int64 =
-  Int_ops_for_binary_comp (Int64)
+  Int_ops_for_binary_comp (A.For_int64s)
 module Int_ops_for_binary_comp_nativeint =
-  Int_ops_for_binary_comp (Targetint)
-
-(* CR mshinwell: The old code used to check inequality on types to simplify
-   comparisons.  What did this apply to though---are we misunderstanding
-   something about Pintcomp? *)
+  Int_ops_for_binary_comp (A.For_nativeints)
 
 module Binary_int_comp_tagged_immediate =
   Binary_arith_like (Int_ops_for_binary_comp_tagged_immediate)

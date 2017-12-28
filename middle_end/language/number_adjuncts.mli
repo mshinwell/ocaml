@@ -20,18 +20,38 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-module type Number_kind = sig
-  module Num : sig
-    include Identifiable.S
+module type Num_common = sig
+  include Identifiable.S
 
-    val to_const : t -> Simple.Const.t
+  module Pair : sig
+    type nonrec t = t * t
 
-    val to_tagged_immediate : t -> Immediate.t
-    val to_naked_float : t -> Numbers.Float_by_bit_pattern.t
-    val to_naked_int32 : t -> Numbers.Int32.t
-    val to_naked_int64 : t -> Numbers.Int64.t
-    val to_naked_nativeint : t -> Targetint.t
+    include Identifiable.S with type t := t
   end
+
+  val cross_product : Set.t -> Set.t -> Pair.Set.t
+
+  val zero : t
+  val one : t
+  val minus_one : t
+
+  val add : t -> t -> t
+  val sub : t -> t -> t
+  val mul : t -> t -> t
+  val div : t -> t -> t option
+  val mod_ : t -> t -> t option
+
+  val to_const : t -> Simple.Const.t
+
+  val to_tagged_immediate : t -> Immediate.t
+  val to_naked_float : t -> Numbers.Float_by_bit_pattern.t
+  val to_naked_int32 : t -> Numbers.Int32.t
+  val to_naked_int64 : t -> Numbers.Int64.t
+  val to_naked_nativeint : t -> Targetint.t
+end
+
+module type Number_kind_common = sig
+  module Num : Identifiable.S
 
   val kind : Flambda_kind.Standard_int_or_float.t
 
@@ -43,31 +63,28 @@ module type Number_kind = sig
   val these_unboxed : Num.Set.t -> Flambda_type.t
 end
 
-(* CR mshinwell: Share code somehow with previous "module type" *)
+module type Number_kind = sig
+  module Num : Num_common
+  include Number_kind_common with module Num := Num
+end
+
 module type Int_number_kind = sig
   module Num : sig
-    include Identifiable.S
+    include Num_common
 
+    val and_ : t -> t -> t
+    val or_ : t -> t -> t
+    val xor : t -> t -> t
+    val shift_left : t -> int -> t
+    (* [shift_right] is arithmetic shift right, matching [Int32],
+       [Int64], etc. *)
+    val shift_right : t -> int -> t
+    val shift_right_logical : t -> int -> t
     val swap_byte_endianness : t -> t
     val neg : t -> t
-
-    val to_const : t -> Simple.Const.t
-
-    val to_tagged_immediate : t -> Immediate.t
-    val to_naked_float : t -> Numbers.Float_by_bit_pattern.t
-    val to_naked_int32 : t -> Numbers.Int32.t
-    val to_naked_int64 : t -> Numbers.Int64.t
-    val to_naked_nativeint : t -> Targetint.t
   end
 
-  val kind : Flambda_kind.Standard_int_or_float.t
-
-  val unboxed_prover
-     : (Flambda_type.t -> Num.Set.t Flambda_type.proof)
-       Flambda_type.type_accessor
-
-  val this_unboxed : Num.t -> Flambda_type.t
-  val these_unboxed : Num.Set.t -> Flambda_type.t
+  include Number_kind_common with module Num := Num
 end
 
 module type Boxable = sig
