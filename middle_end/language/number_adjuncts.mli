@@ -53,6 +53,7 @@ end
 module type Number_kind_common = sig
   module Num : Identifiable.S
 
+  (* CR mshinwell: Rename to standard_int_or_float_kind? *)
   val kind : Flambda_kind.Standard_int_or_float.t
 
   val unboxed_prover
@@ -61,6 +62,8 @@ module type Number_kind_common = sig
 
   val this_unboxed : Num.t -> Flambda_type.t
   val these_unboxed : Num.Set.t -> Flambda_type.t
+
+  val term_unboxed : Num.t -> Flambda.Named.t
 end
 
 module type Number_kind = sig
@@ -85,6 +88,8 @@ module type Int_number_kind = sig
   end
 
   include Number_kind_common with module Num := Num
+
+  val standard_int_kind : Flambda_kind.Standard_int.t
 end
 
 module type Boxable = sig

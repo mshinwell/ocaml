@@ -86,6 +86,8 @@ module type Int_number_kind = sig
   end
 
   include Number_kind_common with module Num := Num
+
+  val standard_int_kind : Flambda_kind.Standard_int.t
 end
 
 module type Boxable = sig
@@ -165,6 +167,7 @@ module For_tagged_immediates : Int_number_kind = struct
   end
 
   let kind : K.Standard_int_or_float.t = Tagged_immediate
+  let standard_int_kind : K.Standard_int.t = Tagged_immediate
 
   let unboxed_prover = T.prove_tagged_immediate
   let this_unboxed = T.this_tagged_immediate
@@ -245,6 +248,7 @@ module For_int32s : Boxable_int_number_kind = struct
   end
 
   let kind : K.Standard_int_or_float.t = Naked_int32
+  let standard_int_kind : K.Standard_int.t = Naked_int32
 
   let unboxed_prover = T.prove_naked_int32
   let this_unboxed = T.this_naked_int32
@@ -292,6 +296,7 @@ module For_int64s : Boxable_int_number_kind = struct
   end
 
   let kind : K.Standard_int_or_float.t = Naked_int64
+  let standard_int_kind : K.Standard_int.t = Naked_int64
 
   let unboxed_prover = T.prove_naked_int64
   let this_unboxed = T.this_naked_int64
@@ -339,6 +344,7 @@ module For_nativeints : Boxable_int_number_kind = struct
   end
 
   let kind : K.Standard_int_or_float.t = Naked_nativeint
+  let standard_int_kind : K.Standard_int.t = Naked_nativeint
 
   let unboxed_prover = T.prove_naked_nativeint
   let this_unboxed = T.this_naked_nativeint

@@ -33,6 +33,7 @@ type 'a binary_arith_outcome_for_one_side_only =
   | Exactly of 'a
   | This_primitive of Flambda_primitive.t
   | The_other_side
+  | Negation_of_the_other_side
   | Cannot_simplify
   | Invalid
 
@@ -54,7 +55,9 @@ module type Binary_arith_like_sig = sig
 
   val cross_product : Lhs.Set.t -> Rhs.Set.t -> Pair.Set.t
 
-  val kind : K.t
+  val kind : K.Standard_int_or_float.t
+  val standard_int_kind : K.Standard_int.t
+
   val term : Result.t -> Named.t
 
   val prover_lhs : (T.t -> Lhs.Set.t T.proof) T.type_accessor
@@ -120,12 +123,13 @@ end = struct
     let arg2, arg_ty2 = S.simplify_simple env arg2 in
     let proof1 = (E.type_accessor env N.prover_lhs) arg_ty1 in
     let proof2 = (E.type_accessor env N.prover_rhs) arg_ty2 in
+    let kind = K.Standard_int_or_float.to_kind N.kind in
     let original_term () : Named.t = Prim (Binary (prim, arg1, arg2), dbg) in
     let result_unknown () =
-      Reachable.reachable (original_term ()), T.unknown N.kind, r
+      Reachable.reachable (original_term ()), T.unknown kind, r
     in
     let result_invalid () =
-      Reachable.invalid (), T.bottom N.kind,
+      Reachable.invalid (), T.bottom kind,
         R.map_benefit r (B.remove_primitive (Binary prim))
     in
     let check_possible_results ~possible_results =
@@ -160,7 +164,7 @@ end = struct
             N.these (N.Result.Set.of_list is)
           else
             match P.Set.get_singleton possible_results with
-            | Some (Simple (Name name)) -> T.alias_type_of N.kind name
+            | Some (Simple (Name name)) -> T.alias_type_of kind name
             | Some (Simple ((Const _) as simple)) ->
               (* This shouldn't happen because the "proving" functions should
                  have returned [Proved] for this term.  However we provide an
@@ -169,7 +173,7 @@ end = struct
               ty
             | Some (Exactly _)
             | Some (Prim _)
-            | None -> T.unknown N.kind
+            | None -> T.unknown kind
         in
         Reachable.reachable named, ty, r
     in
@@ -186,6 +190,11 @@ end = struct
                 Some (P.Set.add (Prim prim) possible_results)
               | The_other_side ->
                 Some (P.Set.add (Simple other_side) possible_results)
+              | Negation_of_the_other_side ->
+                let prim : Flambda_primitive.t =
+                  Unary (Int_arith (N.standard_int_kind, Neg), other_side)
+                in
+                Some (P.Set.add (Prim prim) possible_results)
               | Cannot_simplify -> None
               | Invalid -> Some possible_results)
           nums
@@ -233,14 +242,26 @@ module Int_ops_for_binary_arith (I : A.Int_number_kind) : sig
   include Binary_arith_like_sig
     with type op = Flambda_primitive.binary_int_arith_op
 end = struct
-  module Lhs = I
-  module Rhs = I
-  module Result = I
+  module Lhs = I.Num
+  module Rhs = I.Num
+  module Result = I.Num
+
+  type op = Flambda_primitive.binary_int_arith_op
 
   let ok_to_evaluate _env = true
 
+  let kind = I.kind
+  let standard_int_kind = I.standard_int_kind
+
   let prover_lhs = I.unboxed_prover
   let prover_rhs = I.unboxed_prover
+
+  let these = I.these_unboxed
+
+  let term = I.term_unboxed
+
+  module Pair = I.Num.Pair
+  let cross_product = I.Num.cross_product
 
   let op (op : Flambda_primitive.binary_int_arith_op) n1 n2 =
     let always_some f = Some (f n1 n2) in
@@ -261,36 +282,33 @@ end = struct
     | Or
     | Xor
 
+  module Num = I.Num
+
   let symmetric_op_one_side_unknown (op : symmetric_op) ~this_side
-        : N.t binary_arith_outcome_for_one_side_only =
-    let negate_lhs () : N.t binary_arith_outcome_for_one_side_only =
-      This_primitive (Unary (Int_arith Neg, arg1))
-    in
+        : Num.t binary_arith_outcome_for_one_side_only =
     match op with
     | Add ->
-      if N.equal rhs N.zero then The_other_side
+      if Num.equal this_side Num.zero then The_other_side
       else Cannot_simplify
     | Mul ->
-      if N.equal rhs N.zero then Exactly N.zero
-      else if N.equal rhs N.one then The_other_side
-      else if N.equal rhs N.minus_one then negate_lhs ()
+      if Num.equal this_side Num.zero then Exactly Num.zero
+      else if Num.equal this_side Num.one then The_other_side
+      else if Num.equal this_side Num.minus_one then Negation_of_the_other_side
       else Cannot_simplify
     | And ->
-      if N.equal rhs N.minus_one then The_other_side
-      else if N.equal rhs N.zero then Exactly N.zero
+      if Num.equal this_side Num.minus_one then The_other_side
+      else if Num.equal this_side Num.zero then Exactly Num.zero
       else Cannot_simplify
     | Or ->
-      if N.equal rhs N.minus_one then Exactly N.minus_one
-      else if N.equal rhs N.zero then The_other_side
+      if Num.equal this_side Num.minus_one then Exactly Num.minus_one
+      else if Num.equal this_side Num.zero then The_other_side
       else Cannot_simplify
     | Xor ->
-      if N.equal lhs N.zero then The_other_side
+      if Num.equal this_side Num.zero then The_other_side
       else Cannot_simplify
 
-  let op_lhs_unknown ~rhs : N.t binary_arith_outcome_for_one_side_only =
-    let negate_the_other_side () : N.t binary_arith_outcome_for_one_side_only =
-      This_primitive (Unary (Int_arith Neg, arg1))
-    in
+  let op_lhs_unknown (op : Flambda_primitive.binary_int_arith_op) ~rhs
+        : Num.t binary_arith_outcome_for_one_side_only =
     match op with
     | Add -> symmetric_op_one_side_unknown Add ~this_side:rhs
     | Mul -> symmetric_op_one_side_unknown Mul ~this_side:rhs
@@ -298,29 +316,27 @@ end = struct
     | Or -> symmetric_op_one_side_unknown Or ~this_side:rhs
     | Xor -> symmetric_op_one_side_unknown Xor ~this_side:rhs
     | Sub ->
-      if I.equal rhs I.zero then The_other_side
+      if Num.equal rhs Num.zero then The_other_side
       else Cannot_simplify
     | Div ->
       (* CR mshinwell: We should think very carefully to make sure our
          handling of division is correct.  Also see whether unsafe division
          can be exposed to the user.  The current assumption that division
          by zero reaching here is dead code. *)
-      if I.equal rhs I.zero then Invalid
-      else if I.equal rhs I.one then The_other_side
-      else if I.equal rhs I.minus_one then negate_the_other_side ()
+      if Num.equal rhs Num.zero then Invalid
+      else if Num.equal rhs Num.one then The_other_side
+      else if Num.equal rhs Num.minus_one then Negation_of_the_other_side
       (* CR mshinwell: Add 0 / x = 0 when x <> 0 *)
       else Cannot_simplify
     | Mod ->
       (* CR mshinwell: We could be more clever for Mod and And *)
-      if I.equal rhs I.zero then Invalid
-      else if I.equal rhs I.one then Exactly I.zero
-      else if I.equal rhs I.minus_one then Exactly I.zero
+      if Num.equal rhs Num.zero then Invalid
+      else if Num.equal rhs Num.one then Exactly Num.zero
+      else if Num.equal rhs Num.minus_one then Exactly Num.zero
       else Cannot_simplify
 
-  let op_rhs_unknown ~lhs : N.t binary_arith_outcome_for_one_side_only =
-    let negate_the_other_side () : N.t binary_arith_outcome_for_one_side_only =
-      This_primitive (Unary (Int_arith Neg, arg2))
-    in
+  let op_rhs_unknown (op : Flambda_primitive.binary_int_arith_op) ~lhs
+        : Num.t binary_arith_outcome_for_one_side_only =
     match op with
     | Add -> symmetric_op_one_side_unknown Add ~this_side:lhs
     | Mul -> symmetric_op_one_side_unknown Mul ~this_side:lhs
@@ -328,7 +344,7 @@ end = struct
     | Or -> symmetric_op_one_side_unknown Or ~this_side:lhs
     | Xor -> symmetric_op_one_side_unknown Xor ~this_side:lhs
     | Sub ->
-      if I.equal lhs I.zero then negate_the_other_side ()
+      if Num.equal lhs Num.zero then Negation_of_the_other_side
       else Cannot_simplify
     | Div | Mod -> Cannot_simplify
 end
