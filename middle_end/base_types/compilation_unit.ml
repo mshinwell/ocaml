@@ -81,3 +81,13 @@ let predefined_exception () =
 
 let is_predefined_exception t =
   equal t predefined_exception_t
+
+let external_symbols_t =
+  create (Ident.create_persistent "extern")
+    (Linkage_name.create "extern")
+
+let external_symbols () =
+  external_symbols_t
+
+let is_external_symbols t =
+  equal t external_symbols_t

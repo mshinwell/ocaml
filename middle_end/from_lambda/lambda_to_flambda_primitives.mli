@@ -14,4 +14,10 @@
 (*                                                                        *)
 (**************************************************************************)
 
-val convert : Lambda.primitive -> Simple.t list -> Flambda_primitive.t
+val convert_and_bind
+   : Lambda.primitive
+  -> args:Simple.t list
+  -> exception_continuation:Continuation.t
+  -> Debuginfo.t
+  -> (Flambda.Named.t -> Flambda.Expr.t)
+  -> Flambda.Expr.t

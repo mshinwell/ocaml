@@ -37,7 +37,8 @@ type t =
 and named =
   | Var of Ident.t
   | Const of Lambda.structured_constant
-  | Prim of Lambda.primitive * Ident.t list * Location.t
+  | Prim of { prim : Lambda.primitive; args : Ident.t list; loc : Location.t;
+              exception_continuation : Continuation.t; }
   | Assign of { being_assigned : Ident.t; new_value : Ident.t; }
 
 and let_mutable = {

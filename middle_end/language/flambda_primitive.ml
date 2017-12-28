@@ -448,6 +448,7 @@ type unary_primitive =
   | Project_closure of Closure_id.Set.t
   | Move_within_set_of_closures of Closure_id.t Closure_id.Map.t
   | Project_var of Var_within_closure.t Closure_id.Map.t
+  | Boolean_not
 
 let compare_unary_primitive p1 p2 =
   let unary_primitive_numbering p =
@@ -528,7 +529,8 @@ let compare_unary_primitive p1 p2 =
     | Box_number _
     | Project_closure _
     | Move_within_set_of_closures _
-    | Project_var _), _ ->
+    | Project_var _
+    | Boolean_not), _ ->
     Pervasives.compare (unary_primitive_numbering p1)
       (unary_primitive_numbering p2)
 
@@ -567,6 +569,7 @@ let print_unary_primitive ppf p =
   | Project_var by_closure ->
     Format.fprintf ppf "(project_var@ %a)"
       (Closure_id.Map.print Var_within_closure.print) by_closure
+  | Boolean_not -> fprintf ppf "not"
 
 let arg_kind_of_unary_primitive p =
   match p with
@@ -585,7 +588,7 @@ let arg_kind_of_unary_primitive p =
   | Box_number kind -> K.Boxable_number.to_kind kind
   | Project_closure _
   | Move_within_set_of_closures _
-  | Project_var _ -> K.value Definitely_pointer
+  | Project_var _ -> K.value Unknown
 
 let result_kind_of_unary_primitive p : result_kind =
   match p with
@@ -608,7 +611,7 @@ let result_kind_of_unary_primitive p : result_kind =
   | Unbox_number kind -> Singleton (K.Boxable_number.to_kind kind)
   | Box_number _
   | Project_closure _
-  | Move_within_set_of_closures _ -> Singleton (K.value Definitely_pointer)
+  | Move_within_set_of_closures _
   | Project_var _ -> Singleton (K.value Unknown)
 
 let effects_and_coeffects_of_unary_primitive p =
@@ -645,6 +648,7 @@ let effects_and_coeffects_of_unary_primitive p =
   | Project_closure _
   | Move_within_set_of_closures _
   | Project_var _ -> No_effects, No_coeffects
+  | Boolean_not -> No_effects, No_coeffects
 
 type binary_int_arith_op =
   | Add | Sub | Mul | Div | Mod | And | Or | Xor

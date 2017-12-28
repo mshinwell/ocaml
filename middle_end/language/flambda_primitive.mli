@@ -188,6 +188,13 @@ type unary_primitive =
   | Bigarray_length of { dimension : int; }
     (* CR mshinwell/xclerc: Invariant check: dimension >= 0 *)
   | String_length of string_or_bytes
+  (* CR pchambart: There are 32 and 64 bits swap, that probably need
+     to be represented differently *)
+  | Swap_byte_endianness of Flambda_kind.Standard_int.t
+  (** [Swap_byte_endianness] on a [Tagged_immediate] treats the immediate as
+      encoding a 16-bit quantity (described in the least significant 16 bits
+      of the immediate after untagging) and exchanges the two halves of the
+      16-bit quantity. *)
   | Int_as_pointer
   | Opaque_identity
   | Int_arith of Flambda_kind.Standard_int.t * unary_int_arith_op
@@ -215,6 +222,7 @@ type unary_primitive =
   | Project_var of Var_within_closure.t Closure_id.Map.t
     (** For each possible value of closure, get a different field of the
         closure. *)
+  | Boolean_not
 
 (** Binary arithmetic operations on integers. *)
 type binary_int_arith_op =

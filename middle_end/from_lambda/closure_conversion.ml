@@ -21,6 +21,8 @@ module Function_decls = Closure_conversion_aux.Function_decls
 module Function_decl = Function_decls.Function_decl
 module IdentSet = Lambda.IdentSet
 module P = Flambda_primitive
+module K = Flambda_kind
+module Typed_parameter = Flambda.Typed_parameter
 
 type t = {
   current_unit_id : Ident.t;
@@ -218,13 +220,131 @@ let convert_specialise_attribute_from_lambda
   | Never_specialise -> Never_specialise
   | Default_specialise -> Default_specialise
 
+let kind_of_repr (repr:Primitive.native_repr) : K.t =
+  match repr with
+  | Same_as_ocaml_repr -> K.value Must_scan
+  | Unboxed_float -> K.naked_float ()
+  | Unboxed_integer Pnativeint -> K.naked_nativeint ()
+  | Unboxed_integer Pint32 -> K.naked_int32 ()
+  | Unboxed_integer Pint64 -> K.naked_int64 ()
+  | Untagged_int -> K.naked_immediate ()
+
 let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
   match lam with
+  | Let (id,
+         Prim { prim = Pccall prim; args; loc; exception_continuation },
+         body) ->
+    (* CR pchambart: there should be a special case if body is a
+       apply_cont *)
+    let continuation = Continuation.create () in
+    let return_kind = kind_of_repr prim.prim_native_repr_res in
+    let call_kind : Flambda.Call_kind.t =
+      C_call {
+        alloc = prim.prim_alloc;
+        param_arity = List.map kind_of_repr prim.prim_native_repr_args;
+        return_arity = [ return_kind ];
+      }
+    in
+    let call_symbol =
+      Symbol.create
+        (Compilation_unit.external_symbols ())
+        (Linkage_name.create prim.prim_name)
+    in
+    let dbg = Debuginfo.from_location loc in
+    (* TODO:
+       unbox arguments
+       box return *)
+    let call args : Flambda.Expr.t =
+      Apply ({
+        call_kind;
+        func = Name.symbol call_symbol;
+        args;
+        continuation;
+        exn_continuation = exception_continuation;
+        dbg;
+        inline = Default_inline;
+        specialise = Default_specialise;
+      })
+    in
+    let call =
+      List.fold_right2
+        (fun arg (arg_repr:Primitive.native_repr)
+          (call : Simple.t list -> Flambda.Expr.t) ->
+        let boxing : P.unary_primitive option =
+          match arg_repr with
+          | Same_as_ocaml_repr -> None
+          | Unboxed_float ->
+            Some (P.Unbox_number Naked_float)
+          | Unboxed_integer Pnativeint ->
+            Some (P.Unbox_number Naked_nativeint)
+          | Unboxed_integer Pint32 ->
+            Some (P.Unbox_number Naked_int32)
+          | Unboxed_integer Pint64 ->
+            Some (P.Unbox_number Naked_int64)
+          | Untagged_int ->
+            Some (P.Int_conv { src = Tagged_immediate; dst = Naked_nativeint })
+        in
+        match boxing with
+        | None ->
+          (fun args -> call (arg :: args))
+        | Some named ->
+          (fun args ->
+             let unboxed_arg = Variable.create "unboxed" in
+             Flambda.Expr.create_let unboxed_arg
+               (kind_of_repr arg_repr) (Prim (Unary (named, arg), dbg))
+               (call (Simple.var unboxed_arg :: args))))
+        (Env.find_simples env args)
+        prim.prim_native_repr_args
+        call []
+    in
+    let cont, handler_param =
+      let unboxing : P.unary_primitive option =
+        match prim.prim_native_repr_res with
+        | Same_as_ocaml_repr -> None
+        | Unboxed_float ->
+          Some (P.Box_number Naked_float)
+        | Unboxed_integer Pnativeint ->
+          Some (P.Box_number Naked_nativeint)
+        | Unboxed_integer Pint32 ->
+          Some (P.Box_number Naked_int32)
+        | Unboxed_integer Pint64 ->
+          Some (P.Box_number Naked_int64)
+        | Untagged_int ->
+          Some (P.Int_conv { src = Naked_nativeint; dst = Tagged_immediate })
+      in
+      match unboxing with
+      | None ->
+        let body_env, handler_param = Env.add_var_like env id in
+        let body = close t body_env body in
+        body, handler_param
+      | Some unboxing ->
+        let handler_param = Variable.create (prim.prim_name ^ "_return") in
+        let body_env, boxed_var = Env.add_var_like env id in
+        let body = close t body_env body in
+        Flambda.Expr.create_let boxed_var (Flambda_kind.value Must_scan)
+          (Prim (Unary (unboxing, Simple.var handler_param), dbg)) body,
+          handler_param
+    in
+    let handler : Flambda.Continuation_handler.t = {
+      params =
+        [ Typed_parameter.create_from_kind
+            (Parameter.wrap handler_param)
+            return_kind ];
+      stub = false;
+      is_exn_handler = false;
+      handler = cont;
+    } in
+    Let_cont {
+      body = call;
+      handlers = Non_recursive { name = continuation; handler };
+    };
+
   | Let (id, defining_expr, body) ->
     let body_env, var = Env.add_var_like env id in
     let cont defining_expr =
+      (* CR pchambart: Not tail ! *)
       let body = close t body_env body in
-      (* CR pchambart: Kind anntation on let should to go through Ilambda *)
+      (* CR pchambart: Kind annotation on let should to go through Ilambda *)
       Flambda.Expr.create_let var
         (Flambda_kind.value Must_scan)
         defining_expr body
@@ -233,7 +353,7 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
   | Let_mutable { id; initial_value; contents_kind; body; } ->
     (* See comment on [Pread_mutable] below. *)
     let var = Mutable_variable.of_ident id in
-    let initial_value = Env.find_name env initial_value in
+    let initial_value = Env.find_simple env initial_value in
     let body = close t (Env.add_mutable_var env id var) body in
     Let_mutable {
       var;
@@ -436,25 +556,25 @@ and close_named t env (named : Ilambda.named) (cont : Flambda.Named.t -> Flambda
     cont (Simple simple)
   | Const cst ->
     cont (fst (close_const t cst))
-  | Prim (Pread_mutable id, args, _) ->
+  | Prim { prim = Pread_mutable id; args } ->
     (* All occurrences of mutable variables bound by [Let_mutable] are
        identified by [Prim (Pread_mutable, ...)] in Ilambda. *)
     assert (args = []);
     cont (Read_mutable (Env.find_mutable_var env id))
-  | Prim (Pgetglobal id, [], _) when Ident.is_predef_exn id ->
+  | Prim { prim = Pgetglobal id; args = [] } when Ident.is_predef_exn id ->
     let symbol = t.symbol_for_global' id in
     t.imported_symbols <- Symbol.Set.add symbol t.imported_symbols;
     cont (Simple (Simple.symbol symbol))
-  | Prim (Pgetglobal id, [], _) ->
+  | Prim { prim = Pgetglobal id; args = [] } ->
     assert (not (Ident.same id t.current_unit_id));
     let symbol = t.symbol_for_global' id in
     t.imported_symbols <- Symbol.Set.add symbol t.imported_symbols;
     cont (Simple (Simple.symbol symbol))
-  | Prim (p, args, loc) ->
-    let prim =
-      Lambda_to_flambda_primitives.convert p (Env.find_simples env args)
-    in
-    cont (Prim (prim, Debuginfo.from_location loc))
+  | Prim { prim; args; loc; exception_continuation } ->
+    Lambda_to_flambda_primitives.convert_and_bind prim
+      ~args:(Env.find_simples env args)
+      ~exception_continuation
+      (Debuginfo.from_location loc) cont
   | Assign { being_assigned; new_value; } ->
     cont (Assign {
       being_assigned = Env.find_mutable_var env being_assigned;

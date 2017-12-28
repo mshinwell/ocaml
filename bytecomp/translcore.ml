@@ -70,7 +70,7 @@ let comparisons_table = create_hashtable 11 [
   "%equal",
       (Pccall(Primitive.simple ~name:"caml_equal" ~arity:2 ~alloc:true),
        Pintcomp Ceq,
-       Pfloatcomp (Ceq, Boxed),
+       Pfloatcomp (Ceq),
        Pccall(Primitive.simple ~name:"caml_string_equal" ~arity:2
                 ~alloc:false),
        Pccall(Primitive.simple ~name:"caml_bytes_equal" ~arity:2
@@ -82,7 +82,7 @@ let comparisons_table = create_hashtable 11 [
   "%notequal",
       (Pccall(Primitive.simple ~name:"caml_notequal" ~arity:2 ~alloc:true),
        Pintcomp Cneq,
-       Pfloatcomp (Cneq, Boxed),
+       Pfloatcomp (Cneq),
        Pccall(Primitive.simple ~name:"caml_string_notequal" ~arity:2
                 ~alloc:false),
        Pccall(Primitive.simple ~name:"caml_bytes_notequal" ~arity:2
@@ -94,7 +94,7 @@ let comparisons_table = create_hashtable 11 [
   "%lessthan",
       (Pccall(Primitive.simple ~name:"caml_lessthan" ~arity:2 ~alloc:true),
        Pintcomp Clt,
-       Pfloatcomp (Clt, Boxed),
+       Pfloatcomp (Clt),
        Pccall(Primitive.simple ~name:"caml_string_lessthan" ~arity:2
                 ~alloc:false),
        Pccall(Primitive.simple ~name:"caml_bytes_lessthan" ~arity:2
@@ -106,7 +106,7 @@ let comparisons_table = create_hashtable 11 [
   "%greaterthan",
       (Pccall(Primitive.simple ~name:"caml_greaterthan" ~arity:2 ~alloc:true),
        Pintcomp Cgt,
-       Pfloatcomp (Cgt, Boxed),
+       Pfloatcomp (Cgt),
        Pccall(Primitive.simple ~name:"caml_string_greaterthan" ~arity:2
                 ~alloc: false),
        Pccall(Primitive.simple ~name:"caml_bytes_greaterthan" ~arity:2
@@ -118,7 +118,7 @@ let comparisons_table = create_hashtable 11 [
   "%lessequal",
       (Pccall(Primitive.simple ~name:"caml_lessequal" ~arity:2 ~alloc:true),
        Pintcomp Cle,
-       Pfloatcomp (Cle, Boxed),
+       Pfloatcomp (Cle),
        Pccall(Primitive.simple ~name:"caml_string_lessequal" ~arity:2
                 ~alloc:false),
        Pccall(Primitive.simple ~name:"caml_bytes_lessequal" ~arity:2
@@ -130,7 +130,7 @@ let comparisons_table = create_hashtable 11 [
   "%greaterequal",
       (Pccall(Primitive.simple ~name:"caml_greaterequal" ~arity:2 ~alloc:true),
        Pintcomp Cge,
-       Pfloatcomp (Cge, Boxed),
+       Pfloatcomp (Cge),
        Pccall(Primitive.simple ~name:"caml_string_greaterequal" ~arity:2
                 ~alloc:false),
        Pccall(Primitive.simple ~name:"caml_bytes_greaterequal" ~arity:2
@@ -216,20 +216,20 @@ let primitives_table = create_hashtable 57 [
   "%geint", Pintcomp Cge;
   "%incr", Poffsetref(1);
   "%decr", Poffsetref(-1);
-  "%intoffloat", Pintoffloat Boxed;
-  "%floatofint", Pfloatofint Boxed;
-  "%negfloat", Pnegfloat Boxed;
-  "%absfloat", Pabsfloat Boxed;
-  "%addfloat", Paddfloat Boxed;
-  "%subfloat", Psubfloat Boxed;
-  "%mulfloat", Pmulfloat Boxed;
-  "%divfloat", Pdivfloat Boxed;
-  "%eqfloat", Pfloatcomp (Ceq, Boxed);
-  "%noteqfloat", Pfloatcomp (Cneq, Boxed);
-  "%ltfloat", Pfloatcomp (Clt, Boxed);
-  "%lefloat", Pfloatcomp (Cle, Boxed);
-  "%gtfloat", Pfloatcomp (Cgt, Boxed);
-  "%gefloat", Pfloatcomp (Cge, Boxed);
+  "%intoffloat", Pintoffloat;
+  "%floatofint", Pfloatofint;
+  "%negfloat", Pnegfloat;
+  "%absfloat", Pabsfloat;
+  "%addfloat", Paddfloat;
+  "%subfloat", Psubfloat;
+  "%mulfloat", Pmulfloat;
+  "%divfloat", Pdivfloat;
+  "%eqfloat", Pfloatcomp Ceq;
+  "%noteqfloat", Pfloatcomp Cneq;
+  "%ltfloat", Pfloatcomp Clt;
+  "%lefloat", Pfloatcomp Cle;
+  "%gtfloat", Pfloatcomp Cgt;
+  "%gefloat", Pfloatcomp Cge;
   "%string_length", Pstringlength;
   "%string_safe_get", Pstringrefs;
   "%string_safe_set", Pbytessets;
@@ -304,29 +304,29 @@ let primitives_table = create_hashtable 57 [
   "%int64_of_nativeint", Pcvtbint(Pnativeint, Pint64);
   "%int64_to_nativeint", Pcvtbint(Pint64, Pnativeint);
   "%caml_ba_ref_1",
-    Pbigarrayref(false, 1, Pbigarray_unknown, Pbigarray_unknown_layout, Boxed);
+    Pbigarrayref(false, 1, Pbigarray_unknown, Pbigarray_unknown_layout);
   "%caml_ba_ref_2",
-    Pbigarrayref(false, 2, Pbigarray_unknown, Pbigarray_unknown_layout, Boxed);
+    Pbigarrayref(false, 2, Pbigarray_unknown, Pbigarray_unknown_layout);
   "%caml_ba_ref_3",
-    Pbigarrayref(false, 3, Pbigarray_unknown, Pbigarray_unknown_layout, Boxed);
+    Pbigarrayref(false, 3, Pbigarray_unknown, Pbigarray_unknown_layout);
   "%caml_ba_set_1",
-    Pbigarrayset(false, 1, Pbigarray_unknown, Pbigarray_unknown_layout, Boxed);
+    Pbigarrayset(false, 1, Pbigarray_unknown, Pbigarray_unknown_layout);
   "%caml_ba_set_2",
-    Pbigarrayset(false, 2, Pbigarray_unknown, Pbigarray_unknown_layout, Boxed);
+    Pbigarrayset(false, 2, Pbigarray_unknown, Pbigarray_unknown_layout);
   "%caml_ba_set_3",
-    Pbigarrayset(false, 3, Pbigarray_unknown, Pbigarray_unknown_layout, Boxed);
+    Pbigarrayset(false, 3, Pbigarray_unknown, Pbigarray_unknown_layout);
   "%caml_ba_unsafe_ref_1",
-    Pbigarrayref(true, 1, Pbigarray_unknown, Pbigarray_unknown_layout, Boxed);
+    Pbigarrayref(true, 1, Pbigarray_unknown, Pbigarray_unknown_layout);
   "%caml_ba_unsafe_ref_2",
-    Pbigarrayref(true, 2, Pbigarray_unknown, Pbigarray_unknown_layout, Boxed);
+    Pbigarrayref(true, 2, Pbigarray_unknown, Pbigarray_unknown_layout);
   "%caml_ba_unsafe_ref_3",
-    Pbigarrayref(true, 3, Pbigarray_unknown, Pbigarray_unknown_layout, Boxed);
+    Pbigarrayref(true, 3, Pbigarray_unknown, Pbigarray_unknown_layout);
   "%caml_ba_unsafe_set_1",
-    Pbigarrayset(true, 1, Pbigarray_unknown, Pbigarray_unknown_layout, Boxed);
+    Pbigarrayset(true, 1, Pbigarray_unknown, Pbigarray_unknown_layout);
   "%caml_ba_unsafe_set_2",
-    Pbigarrayset(true, 2, Pbigarray_unknown, Pbigarray_unknown_layout, Boxed);
+    Pbigarrayset(true, 2, Pbigarray_unknown, Pbigarray_unknown_layout);
   "%caml_ba_unsafe_set_3",
-    Pbigarrayset(true, 3, Pbigarray_unknown, Pbigarray_unknown_layout, Boxed);
+    Pbigarrayset(true, 3, Pbigarray_unknown, Pbigarray_unknown_layout);
   "%caml_ba_dim_1", Pbigarraydim(1);
   "%caml_ba_dim_2", Pbigarraydim(2);
   "%caml_ba_dim_3", Pbigarraydim(3);
@@ -445,11 +445,11 @@ let specialize_primitive p env ty ~has_constant_constructor =
         Boxed),
        p1 :: _) ->
         let (k, l) = bigarray_type_kind_and_layout env p1 in
-        Pbigarrayref(unsafe, n, k, l, Boxed)
-    | (Pbigarrayset(unsafe, n, Pbigarray_unknown, Pbigarray_unknown_layout, Boxed),
+        Pbigarrayref(unsafe, n, k, l)
+    | (Pbigarrayset(unsafe, n, Pbigarray_unknown, Pbigarray_unknown_layout),
        p1 :: _) ->
         let (k, l) = bigarray_type_kind_and_layout env p1 in
-        Pbigarrayset(unsafe, n, k, l, Boxed)
+        Pbigarrayset(unsafe, n, k, l)
     | (Pmakeblock(tag, mut, None), fields) ->
         let shape = List.map (Typeopt.value_kind env) fields in
         Pmakeblock(tag, mut, Some shape)

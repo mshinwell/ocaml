@@ -35,7 +35,8 @@ type t =
 and named =
   | Var of Ident.t
   | Const of L.structured_constant
-  | Prim of L.primitive * Ident.t list * Location.t
+  | Prim of { prim : L.primitive; args : Ident.t list; loc : Location.t;
+              exception_continuation : Continuation.t; }
   | Assign of { being_assigned : Ident.t; new_value : Ident.t; }
 
 and let_mutable = {
@@ -123,7 +124,7 @@ and print_named ppf (named : named) =
   match named with
   | Var id -> Ident.print ppf id
   | Const cst -> Printlambda.structured_constant ppf cst
-  | Prim (prim, largs, _) ->
+  | Prim { prim; args = largs; _ } ->
     fprintf ppf "@[<2>(%a %a)@]" Printlambda.primitive prim
       Ident.print_list largs
   | Assign { being_assigned; new_value; } ->

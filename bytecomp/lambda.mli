@@ -52,10 +52,6 @@ type is_safe =
   | Safe
   | Unsafe
 
-type boxed =
-  | Boxed
-  | Unboxed
-
 type primitive =
   | Pidentity
   | Pbytes_to_string
@@ -80,7 +76,6 @@ type primitive =
   | Plazyforce
   (* External call *)
   | Pccall of Primitive.description
-  | Pccall_unboxed of Primitive.description
   (* Exceptions *)
   | Praise of raise_kind
   (* Boolean operations *)
@@ -94,11 +89,11 @@ type primitive =
   | Poffsetint of int
   | Poffsetref of int
   (* Float operations *)
-  | Pintoffloat of boxed | Pfloatofint of boxed
-  | Pnegfloat of boxed | Pabsfloat of boxed
-  | Paddfloat of boxed | Psubfloat of boxed | Pmulfloat of boxed
-  | Pdivfloat of boxed
-  | Pfloatcomp of comparison * boxed
+  | Pintoffloat | Pfloatofint
+  | Pnegfloat | Pabsfloat
+  | Paddfloat | Psubfloat | Pmulfloat
+  | Pdivfloat
+  | Pfloatcomp of comparison
   (* String operations *)
   | Pstringlength | Pstringrefu  | Pstringrefs
   | Pbyteslength | Pbytesrefu | Pbytessetu | Pbytesrefs | Pbytessets
@@ -138,9 +133,9 @@ type primitive =
   | Plsrbint of boxed_integer
   | Pasrbint of boxed_integer
   | Pbintcomp of boxed_integer * comparison
-  (* Operations on big arrays: (unsafe, #dimensions, kind, layout, boxed) *)
-  | Pbigarrayref of bool * int * bigarray_kind * bigarray_layout * boxed
-  | Pbigarrayset of bool * int * bigarray_kind * bigarray_layout * boxed
+  (* Operations on big arrays: (unsafe, #dimensions, kind, layout) *)
+  | Pbigarrayref of bool * int * bigarray_kind * bigarray_layout
+  | Pbigarrayset of bool * int * bigarray_kind * bigarray_layout
   (* size of the nth dimension of a big array *)
   | Pbigarraydim of int
   (* load/set 16,32,64 bits from a string: (unsafe)*)
@@ -172,24 +167,6 @@ type primitive =
   (* Reading of an identifier bound with a [Variable] let.  Uses of this
      primitive only exist during the conversion of Lambda to Flambda. *)    
   | Pread_mutable of Ident.t
-  (* Marking of return points: only used between [Flambda_to_clambda] and
-     [Un_anf]. *)
-  | Preturn
-  (* Construction and destruction of groups of multiple function results *)
-  | Pmake_unboxed_tuple
-  | Punboxed_tuple_field of int
-  (* Boxing and unboxing of numbers *)
-  | Punbox_float
-  | Pbox_float
-  | Punbox_int32
-  | Pbox_int32
-  | Punbox_int64
-  | Pbox_int64
-  | Punbox_nativeint
-  | Pbox_nativeint
-  (* Tagging and untagging of immediates (ints, chars, constptrs) *)
-  | Puntag_immediate
-  | Ptag_immediate
 
 and comparison =
     Ceq | Cneq | Clt | Cgt | Cle | Cge
@@ -386,12 +363,6 @@ val negate_comparison : comparison -> comparison
 
 val default_function_attribute : function_attribute
 val default_stub_attribute : function_attribute
-
-(** Returns the version of the primitive working on unboxed values.
-    Raises if there is no such primitive. *)
-val unboxed_prim : primitive -> primitive
-
-val returns_unboxed_value : primitive -> bool
 
 (***********************)
 (* For static failures *)

@@ -17,13 +17,14 @@
 
 open Misc
 open Arch
-open Asttypes
 open Primitive
 open Types
-open Lambda
+open Backend_primitives
 open Clambda
 open Cmm
 open Cmx_format
+
+module P = Backend_primitives
 
 (* Environments used for translation to Cmm. *)
 
@@ -401,7 +402,7 @@ let raise_regular dbg exc =
 let raise_symbol dbg symb =
   raise_regular dbg (Cconst_symbol symb)
 
-let rec div_int c1 c2 is_safe dbg =
+let rec div_int c1 c2 (is_safe:P.is_safe) dbg =
   match (c1, c2) with
     (c1, Cconst_int 0) ->
       Csequence(c1, raise_symbol dbg "caml_exn_Division_by_zero")
@@ -439,7 +440,7 @@ let rec div_int c1 c2 is_safe dbg =
           let t = if p > 0 then Cop(Casr, [t; Cconst_int p], dbg) else t in
           add_int t (lsr_int c1 (Cconst_int (Nativeint.size - 1)) dbg) dbg)
       end
-  | (c1, c2) when !Clflags.fast || is_safe = Lambda.Unsafe ->
+  | (c1, c2) when !Clflags.fast || is_safe = Unsafe ->
       Cop(Cdivi, [c1; c2], dbg)
   | (c1, c2) ->
       bind "divisor" c2 (fun c2 ->
@@ -475,7 +476,7 @@ let mod_int c1 c2 is_safe dbg =
       else
         bind "dividend" c1 (fun c1 ->
           sub_int c1 (mul_int (div_int c1 c2 is_safe dbg) c2 dbg) dbg)
-  | (c1, c2) when !Clflags.fast || is_safe = Lambda.Unsafe ->
+  | (c1, c2) when !Clflags.fast || is_safe = Unsafe ->
       (* Flambda already generates that test *)
       Cop(Cmodi, [c1; c2], dbg)
   | (c1, c2) ->
@@ -866,12 +867,12 @@ let curry_function n =
 (* Comparisons *)
 
 let transl_comparison = function
-    Lambda.Ceq -> Ceq
-  | Lambda.Cneq -> Cne
-  | Lambda.Cge -> Cge
-  | Lambda.Cgt -> Cgt
-  | Lambda.Cle -> Cle
-  | Lambda.Clt -> Clt
+    P.Ceq -> Ceq
+  | P.Cneq -> Cne
+  | P.Cge -> Cge
+  | P.Cgt -> Cgt
+  | P.Cle -> Cle
+  | P.Clt -> Clt
 
 (* Translate structured constants *)
 
@@ -1357,12 +1358,12 @@ let simplif_primitive_32bits = function
   | Plslbint Pint64 -> Pccall (default_prim "caml_int64_shift_left")
   | Plsrbint Pint64 -> Pccall (default_prim "caml_int64_shift_right_unsigned")
   | Pasrbint Pint64 -> Pccall (default_prim "caml_int64_shift_right")
-  | Pbintcomp(Pint64, Lambda.Ceq) -> Pccall (default_prim "caml_equal")
-  | Pbintcomp(Pint64, Lambda.Cneq) -> Pccall (default_prim "caml_notequal")
-  | Pbintcomp(Pint64, Lambda.Clt) -> Pccall (default_prim "caml_lessthan")
-  | Pbintcomp(Pint64, Lambda.Cgt) -> Pccall (default_prim "caml_greaterthan")
-  | Pbintcomp(Pint64, Lambda.Cle) -> Pccall (default_prim "caml_lessequal")
-  | Pbintcomp(Pint64, Lambda.Cge) -> Pccall (default_prim "caml_greaterequal")
+  | Pbintcomp(Pint64, Ceq) -> Pccall (default_prim "caml_equal")
+  | Pbintcomp(Pint64, Cneq) -> Pccall (default_prim "caml_notequal")
+  | Pbintcomp(Pint64, Clt) -> Pccall (default_prim "caml_lessthan")
+  | Pbintcomp(Pint64, Cgt) -> Pccall (default_prim "caml_greaterthan")
+  | Pbintcomp(Pint64, Cle) -> Pccall (default_prim "caml_lessequal")
+  | Pbintcomp(Pint64, Cge) -> Pccall (default_prim "caml_greaterequal")
   | Pbigarrayref(_unsafe, n, Pbigarray_int64, _layout, Unboxed) ->
       Pccall (default_prim ("caml_ba_get_" ^ string_of_int n))
   | Pbigarrayset(_unsafe, n, Pbigarray_int64, _layout, Unboxed) ->
@@ -1455,7 +1456,7 @@ struct
   let make_catch handler = match handler with
   | Cexit (i,[]) -> i,fun e -> e
   | _ ->
-      let i = next_raise_count () in
+      let i = Lambda.next_raise_count () in
 (*
       Printf.eprintf  "SHARE CMM: %i\n" i ;
       Printcmm.expression Format.str_formatter handler ;
@@ -1626,13 +1627,13 @@ let rec is_unboxed_number ~strict env e =
               p.prim_native_repr_res
         | Pbox_float -> Boxed (Boxed_float dbg, false)
         | Pfloatfield _
-        | Pfloatofint Unboxed
-        | Pnegfloat Unboxed
-        | Pabsfloat Unboxed
-        | Paddfloat Unboxed
-        | Psubfloat Unboxed
-        | Pmulfloat Unboxed
-        | Pdivfloat Unboxed
+        | Pfloatofint
+        | Pnegfloat
+        | Pabsfloat
+        | Paddfloat
+        | Psubfloat
+        | Pmulfloat
+        | Pdivfloat
           -> No_unboxing
         | Parrayrefu Pfloatarray
         | Parrayrefs Pfloatarray
@@ -1680,7 +1681,8 @@ let rec is_unboxed_number ~strict env e =
       end
   | Ustaticfail _ -> No_result
   | Uifthenelse (_, e1, e2)
-  | Ucatch (Normal Nonrecursive, [_, _, e1], e2) | Utrywith (e1, _, e2) ->
+  | Ucatch (Normal Asttypes.Nonrecursive, [_, _, e1], e2)
+  | Utrywith (e1, _, e2) ->
       join (is_unboxed_number ~strict env e1) e2
   | _ -> No_unboxing
 
@@ -1781,10 +1783,10 @@ let rec transl env e =
       in
       bind "obj" (transl env obj) (fun obj ->
         match kind, args with
-          Self, _ ->
+          Lambda.Self, _ ->
             bind "met" (lookup_label obj (transl env met) dbg)
               (call_met obj args)
-        | Cached, cache :: pos :: args ->
+        | Lambda.Cached, cache :: pos :: args ->
             call_cached_method obj
               (transl env met) (transl env cache) (transl env pos)
               (List.map (transl env) args) dbg
@@ -1810,8 +1812,7 @@ let rec transl env e =
       | (Punboxed_tuple_field i, args) ->
           Cop(Cmultiload i, List.map (transl env) args, dbg)
       | (Pccall prim, args) ->
-          transl_ccall env prim args dbg
-          transl_ccall Lambda.Boxed env prim args dbg
+          transl_ccall P.Boxed env prim args dbg
       | (Pccall_unboxed prim, args) ->
           transl_ccall Unboxed env prim args dbg
       | (Pduparray (kind, _), [Uprim (Pmakearray (kind', _), args, _dbg)]) ->
@@ -1831,7 +1832,7 @@ let rec transl env e =
           let prim_obj_dup =
             Primitive.simple ~name:"caml_obj_dup" ~arity:1 ~alloc:true
           in
-          transl_ccall Lambda.Boxed env prim_obj_dup [arg] dbg
+          transl_ccall P.Boxed env prim_obj_dup [arg] dbg
       | (Pmakearray _, []) ->
           transl_structured_constant (Uconst_block(0, []))
       | (Pmakearray (kind, _), args) -> transl_make_array dbg env kind args
@@ -1948,7 +1949,7 @@ let rec transl env e =
       Csequence(remove_unit(transl env exp1), transl env exp2)
   | Uwhile(cond, body) ->
       let dbg = Debuginfo.none in
-      let raise_num = next_raise_count () in
+      let raise_num = Lambda.next_raise_count () in
       return_unit
         (ccatch
            (raise_num, [],
@@ -1958,9 +1959,9 @@ let rec transl env e =
             Ctuple []))
   | Ufor(id, low, high, dir, body) ->
       let dbg = Debuginfo.none in
-      let tst = match dir with Upto -> Cgt   | Downto -> Clt in
-      let inc = match dir with Upto -> Caddi | Downto -> Csubi in
-      let raise_num = next_raise_count () in
+      let tst = match dir with Asttypes.Upto -> Cgt   | Asttypes.Downto -> Clt in
+      let inc = match dir with Asttypes.Upto -> Caddi | Asttypes.Downto -> Csubi in
+      let raise_num = Lambda.next_raise_count () in
       let id_prev = Ident.rename id in
       return_unit
         (Clet
@@ -2011,7 +2012,7 @@ and transl_make_array dbg env kind args =
       make_float_alloc dbg Obj.double_array_tag
                       (List.map (transl_unbox_float dbg env) args)
 
-and transl_ccall (boxing:Lambda.boxed) env prim args dbg =
+and transl_ccall (boxing:Backend_primitives.boxed) env prim args dbg =
   let transl_arg native_repr arg =
     match native_repr with
     | Same_as_ocaml_repr -> transl env arg
@@ -2075,11 +2076,11 @@ and transl_prim_1 env p arg dbg =
   (* Exceptions *)
   | Praise _ when not (!Clflags.debug) ->
       Cop(Craise Cmm.Raise_notrace, [transl env arg], dbg)
-  | Praise Lambda.Raise_notrace ->
+  | Praise Raise_notrace ->
       Cop(Craise Cmm.Raise_notrace, [transl env arg], dbg)
-  | Praise Lambda.Raise_reraise ->
+  | Praise Raise_reraise ->
       Cop(Craise Cmm.Raise_withtrace, [transl env arg], dbg)
-  | Praise Lambda.Raise_regular ->
+  | Praise Raise_regular ->
       raise_regular dbg (transl env arg)
   (* Integer operations *)
   | Pnegint ->
@@ -2116,13 +2117,13 @@ and transl_prim_1 env p arg dbg =
       box_float dbg (transl env arg)
   | Punbox_float ->
       transl_unbox_float dbg env arg
-  | Pfloatofint Unboxed ->
+  | Pfloatofint ->
       Cop(Cfloatofint, [untag_int(transl env arg) dbg], dbg)
-  | Pintoffloat Unboxed ->
+  | Pintoffloat ->
      tag_int(Cop(Cintoffloat, [transl env arg], dbg)) dbg
-  | Pnegfloat Unboxed ->
+  | Pnegfloat ->
       Cop(Cnegf, [transl env arg], dbg)
-  | Pabsfloat Unboxed ->
+  | Pabsfloat ->
       Cop(Cabsf, [transl env arg], dbg)
   (* String operations *)
   | Pstringlength | Pbyteslength ->
@@ -2178,7 +2179,8 @@ and transl_prim_1 env p arg dbg =
                    dbg))
               dbg
   | prim ->
-      fatal_errorf "Cmmgen.transl_prim_1: %a" Printlambda.primitive prim
+      fatal_errorf "Cmmgen.transl_prim_1: %a"
+        Printbackend_primitives.primitive prim
 
 and transl_prim_2 env p arg1 arg2 dbg =
   match p with
@@ -2269,43 +2271,23 @@ and transl_prim_2 env p arg1 arg2 dbg =
   | Pisout ->
       transl_isout (transl env arg1) (transl env arg2) dbg
   (* Float operations *)
-  | Paddfloat Boxed ->
-      box_float dbg (Cop(Caddf,
-                    [transl_unbox_float dbg env arg1; transl_unbox_float dbg env arg2],
-                    dbg))
-  | Psubfloat Boxed ->
-      box_float dbg (Cop(Csubf,
-                    [transl_unbox_float dbg env arg1; transl_unbox_float dbg env arg2],
-                    dbg))
-  | Pmulfloat Boxed ->
-      box_float dbg (Cop(Cmulf,
-                    [transl_unbox_float dbg env arg1; transl_unbox_float dbg env arg2],
-                    dbg))
-  | Pdivfloat Boxed ->
-      box_float dbg (Cop(Cdivf,
-                    [transl_unbox_float dbg env arg1; transl_unbox_float dbg env arg2],
-                    dbg))
-  | Pfloatcomp (cmp, Boxed) ->
-      tag_int(Cop(Ccmpf(transl_comparison cmp),
-                  [transl_unbox_float dbg env arg1; transl_unbox_float dbg env arg2],
-                  dbg)) dbg
-  | Paddfloat Unboxed ->
+  | Paddfloat ->
       Cop(Caddf,
           [transl env arg1; transl env arg2],
           dbg)
-  | Psubfloat Unboxed ->
+  | Psubfloat ->
       Cop(Csubf,
           [transl env arg1; transl env arg2],
           dbg)
-  | Pmulfloat Unboxed ->
+  | Pmulfloat ->
       Cop(Cmulf,
           [transl env arg1; transl env arg2],
           dbg)
-  | Pdivfloat Unboxed ->
+  | Pdivfloat ->
       Cop(Cdivf,
           [transl env arg1; transl env arg2],
           dbg)
-  | Pfloatcomp (cmp, Unboxed) ->
+  | Pfloatcomp cmp ->
       tag_int(Cop(Ccmpf(transl_comparison cmp),
                   [transl env arg1; transl env arg2],
                   dbg)) dbg
@@ -2505,7 +2487,8 @@ and transl_prim_2 env p arg1 arg2 dbg =
                      [transl_unbox_int dbg env bi arg1;
                       transl_unbox_int dbg env bi arg2], dbg)) dbg
   | prim ->
-      fatal_errorf "Cmmgen.transl_prim_2: %a" Printlambda.primitive prim
+      fatal_errorf "Cmmgen.transl_prim_2: %a"
+        Printbackend_primitives.primitive prim
 
 and transl_prim_3 env p arg1 arg2 arg3 dbg =
   match p with
@@ -2678,7 +2661,8 @@ and transl_prim_3 env p arg1 arg2 arg3 dbg =
                       (unaligned_set_64 ba_data idx newval dbg))))))
 
   | prim ->
-      fatal_errorf "Cmmgen.transl_prim_3: %a" Printlambda.primitive prim
+      fatal_errorf "Cmmgen.transl_prim_3: %a"
+        Printbackend_primitives.primitive prim
 
 and transl_unbox_float dbg env = function
     Uconst(Uconst_ref(_, Some (Uconst_float f))) -> Cconst_float f
@@ -2732,6 +2716,8 @@ and transl_let env str kind id exp body =
            return a boxed value (of the same kind).  Indeed, with GADTs,
            different branches could return different types. *)
         is_unboxed_number ~strict:true env exp
+    | _, Pnaked_intval ->
+        No_unboxing
     | _, Pintval ->
         No_unboxing
   in
@@ -3191,7 +3177,7 @@ CAMLprim value caml_cache_public_method (value meths, value tag, value *cache)
 *)
 
 let cache_public_method meths tag cache dbg =
-  let raise_num = next_raise_count () in
+  let raise_num = Lambda.next_raise_count () in
   let li = Ident.create "li" and hi = Ident.create "hi"
   and mi = Ident.create "mi" and tagged = Ident.create "tagged" in
   Clet (

@@ -61,6 +61,7 @@ type coeffects = No_coeffects | Has_coeffects
     To determine whether such an application is (co)effectful, the arguments
     must also be analysed. *)
 val for_primitive: Lambda.primitive -> effects * coeffects
+val for_backend_primitive: Backend_primitives.t -> effects * coeffects
 
 type return_type =
   | Boxed_float

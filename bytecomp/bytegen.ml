@@ -286,20 +286,20 @@ let comp_primitive p args =
   | Pasrint -> Kasrint
   | Poffsetint n -> Koffsetint n
   | Poffsetref n -> Koffsetref n
-  | Pintoffloat Boxed -> Kccall("caml_int_of_float", 1)
-  | Pfloatofint Boxed -> Kccall("caml_float_of_int", 1)
-  | Pnegfloat Boxed -> Kccall("caml_neg_float", 1)
-  | Pabsfloat Boxed -> Kccall("caml_abs_float", 1)
-  | Paddfloat Boxed -> Kccall("caml_add_float", 2)
-  | Psubfloat Boxed -> Kccall("caml_sub_float", 2)
-  | Pmulfloat Boxed -> Kccall("caml_mul_float", 2)
-  | Pdivfloat Boxed -> Kccall("caml_div_float", 2)
-  | Pfloatcomp (Ceq, Boxed) -> Kccall("caml_eq_float", 2)
-  | Pfloatcomp (Cneq, Boxed) -> Kccall("caml_neq_float", 2)
-  | Pfloatcomp (Clt, Boxed) -> Kccall("caml_lt_float", 2)
-  | Pfloatcomp (Cgt, Boxed) -> Kccall("caml_gt_float", 2)
-  | Pfloatcomp (Cle, Boxed) -> Kccall("caml_le_float", 2)
-  | Pfloatcomp (Cge, Boxed) -> Kccall("caml_ge_float", 2)
+  | Pintoffloat -> Kccall("caml_int_of_float", 1)
+  | Pfloatofint -> Kccall("caml_float_of_int", 1)
+  | Pnegfloat -> Kccall("caml_neg_float", 1)
+  | Pabsfloat -> Kccall("caml_abs_float", 1)
+  | Paddfloat -> Kccall("caml_add_float", 2)
+  | Psubfloat -> Kccall("caml_sub_float", 2)
+  | Pmulfloat -> Kccall("caml_mul_float", 2)
+  | Pdivfloat -> Kccall("caml_div_float", 2)
+  | Pfloatcomp Ceq -> Kccall("caml_eq_float", 2)
+  | Pfloatcomp Cneq -> Kccall("caml_neq_float", 2)
+  | Pfloatcomp Clt -> Kccall("caml_lt_float", 2)
+  | Pfloatcomp Cgt -> Kccall("caml_gt_float", 2)
+  | Pfloatcomp Cle -> Kccall("caml_le_float", 2)
+  | Pfloatcomp Cge -> Kccall("caml_ge_float", 2)
   | Pstringlength -> Kccall("caml_ml_string_length", 1)
   | Pbyteslength -> Kccall("caml_ml_bytes_length", 1)
   | Pstringrefs -> Kccall("caml_string_get", 2)
@@ -366,9 +366,9 @@ let comp_primitive p args =
   | Pbintcomp(_, Cgt) -> Kccall("caml_greaterthan", 2)
   | Pbintcomp(_, Cle) -> Kccall("caml_lessequal", 2)
   | Pbintcomp(_, Cge) -> Kccall("caml_greaterequal", 2)
-  | Pbigarrayref(_, n, _, _, Boxed) ->
+  | Pbigarrayref(_, n, _, _) ->
       Kccall("caml_ba_get_" ^ string_of_int n, n + 1)
-  | Pbigarrayset(_, n, _, _, Boxed) ->
+  | Pbigarrayset(_, n, _, _) ->
       Kccall("caml_ba_set_" ^ string_of_int n, n + 2)
   | Pbigarraydim(n) -> Kccall("caml_ba_dim_" ^ string_of_int n, 1)
   | Pbigstring_load_16(_) -> Kccall("caml_ba_uint8_get16", 2)

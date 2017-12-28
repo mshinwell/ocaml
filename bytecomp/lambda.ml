@@ -47,10 +47,6 @@ type is_safe =
   | Safe
   | Unsafe
 
-type boxed =
-  | Boxed
-  | Unboxed
-
 type primitive =
   | Pidentity
   | Pbytes_to_string
@@ -75,7 +71,6 @@ type primitive =
   | Plazyforce
   (* External call *)
   | Pccall of Primitive.description
-  | Pccall_unboxed of Primitive.description
   (* Exceptions *)
   | Praise of raise_kind
   (* Boolean operations *)
@@ -89,11 +84,11 @@ type primitive =
   | Poffsetint of int
   | Poffsetref of int
   (* Float operations *)
-  | Pintoffloat of boxed | Pfloatofint of boxed
-  | Pnegfloat of boxed | Pabsfloat of boxed
-  | Paddfloat of boxed | Psubfloat of boxed | Pmulfloat of boxed
-  | Pdivfloat of boxed
-  | Pfloatcomp of comparison * boxed
+  | Pintoffloat | Pfloatofint
+  | Pnegfloat | Pabsfloat
+  | Paddfloat | Psubfloat | Pmulfloat
+  | Pdivfloat
+  | Pfloatcomp of comparison
   (* String operations *)
   | Pstringlength | Pstringrefu  | Pstringrefs
   | Pbyteslength | Pbytesrefu | Pbytessetu | Pbytesrefs | Pbytessets
@@ -131,8 +126,8 @@ type primitive =
   | Pasrbint of boxed_integer
   | Pbintcomp of boxed_integer * comparison
   (* Operations on big arrays: (unsafe, #dimensions, kind, layout, boxed) *)
-  | Pbigarrayref of bool * int * bigarray_kind * bigarray_layout * boxed
-  | Pbigarrayset of bool * int * bigarray_kind * bigarray_layout * boxed
+  | Pbigarrayref of bool * int * bigarray_kind * bigarray_layout
+  | Pbigarrayset of bool * int * bigarray_kind * bigarray_layout
   (* size of the nth dimension of a big array *)
   | Pbigarraydim of int
   (* load/set 16,32,64 bits from a string: (unsafe)*)
@@ -162,22 +157,6 @@ type primitive =
   (* Reading of an identifier bound with a [Variable] let.  Uses of this
      primitive only exist during the conversion of Lambda to Flambda. *)    
   | Pread_mutable of Ident.t
-  (* Marking of return points: only used between [Flambda_to_clambda] and
-     [Un_anf]. *)
-  | Preturn
-  (* Construction and destruction of groups of multiple function results *)
-  | Pmake_unboxed_tuple
-  | Punboxed_tuple_field of int
-  | Punbox_float
-  | Pbox_float
-  | Punbox_int32
-  | Pbox_int32
-  | Punbox_int64
-  | Pbox_int64
-  | Punbox_nativeint
-  | Pbox_nativeint
-  | Puntag_immediate
-  | Ptag_immediate
 
 and comparison =
     Ceq | Cneq | Clt | Cgt | Cle | Cge
@@ -689,46 +668,6 @@ let rec map f lam =
         Lifused (v, map f e)
   in
   f lam
-
-let unboxed_prim = function
-  | Pnegfloat Boxed -> Pnegfloat Unboxed
-  | Pabsfloat Boxed -> Pabsfloat Unboxed
-  | Paddfloat Boxed -> Paddfloat Unboxed
-  | Psubfloat Boxed -> Psubfloat Unboxed
-  | Pmulfloat Boxed -> Pmulfloat Unboxed
-  | Pdivfloat Boxed -> Pdivfloat Unboxed
-  | Pfloatcomp (cmp, Boxed) -> Pfloatcomp (cmp, Unboxed)
-  | Pintoffloat Boxed -> Pintoffloat Unboxed
-  | Pfloatofint Boxed -> Pfloatofint Unboxed
-  | Pbigarrayset(unsafe, dim, (Pbigarray_float32 | Pbigarray_float64 as kind),
-                 (Pbigarray_c_layout | Pbigarray_fortran_layout as layout),
-                 Boxed) ->
-      Pbigarrayset(unsafe, dim, kind, layout, Unboxed)
-  | Pbigarrayref(unsafe, dim, (Pbigarray_float32 | Pbigarray_float64 as kind),
-                 (Pbigarray_c_layout | Pbigarray_fortran_layout as layout),
-                 Boxed) ->
-      Pbigarrayref(unsafe, dim, kind, layout, Unboxed)
-  | Pccall descr -> Pccall_unboxed descr
-  | _ ->
-      (* CR mshinwell: maybe this should return an option? *)
-      Misc.fatal_error "Lambda.unboxed_prim: no possible unboxing \
-                        for the primitive"
-
-let returns_unboxed_value = function
-  | Punbox_float
-  | Pnegfloat Unboxed
-  | Pabsfloat Unboxed
-  | Paddfloat Unboxed
-  | Psubfloat Unboxed
-  | Pmulfloat Unboxed
-  | Pdivfloat Unboxed
-  | Pfloatofint Unboxed
-  | Pbigarrayref(_, _, _, _, Unboxed)
-  | Pccall_unboxed
-      { Primitive.prim_native_repr_res = Primitive.Unboxed_float } ->
-      true
-  | _ ->
-      false
 
 (* To let-bind expressions to variables *)
 

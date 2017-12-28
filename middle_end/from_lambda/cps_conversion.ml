@@ -209,7 +209,8 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
   | Llet (_let_kind, _value_kind, id, Lprim (prim, args, loc), body) ->
     let body = cps_non_tail body k k_exn in
     cps_non_tail_list args (fun args ->
-      I.Let (id, Prim (prim, args, loc), body)) k_exn
+      I.Let (id, Prim {prim; args; loc; exception_continuation = k_exn}, body))
+      k_exn
   | Llet (_let_kind, _value_kind, id, Lassign (being_assigned, new_value),
       body) ->
     let body = cps_non_tail body k k_exn in
@@ -240,7 +241,10 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
     let name = Printlambda.name_of_primitive prim in
     let result_var = Ident.create name in
     cps_non_tail_list args (fun args ->
-      I.Let (result_var, Prim (prim, args, loc), k result_var)) k_exn
+      I.Let (result_var,
+             Prim {prim; args; loc; exception_continuation = k_exn},
+             k result_var))
+      k_exn
   | Lswitch (scrutinee, switch, _loc) ->
     begin match switch.sw_blocks with
     | [] -> ()
@@ -459,7 +463,8 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
   | Llet (_let_kind, _value_kind, id, Lprim (prim, args, loc), body) ->
     let body, k_count = cps_tail body k k_exn in
     cps_non_tail_list args (fun args ->
-      I.Let (id, Prim (prim, args, loc), body)) k_exn, k_count
+      I.Let (id, Prim {prim; args; loc; exception_continuation = k_exn}, body))
+      k_exn, k_count
   | Llet (_let_kind, _value_kind, id, Lassign (being_assigned, new_value),
       body) ->
     let body, k_count = cps_tail body k k_exn in
@@ -490,7 +495,7 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
     let name = Printlambda.name_of_primitive prim in
     let result_var = Ident.create name in
     cps_non_tail_list args (fun args ->
-      I.Let (result_var, Prim (prim, args, loc),
+      I.Let (result_var, Prim {prim; args; loc; exception_continuation = k_exn},
         Apply_cont (k, None, [result_var]))) k_exn,
     N.One
   | Lswitch (scrutinee, switch, _loc) ->
