@@ -744,6 +744,9 @@ let simplify_eq_comp env r prim dbg kind op arg1 arg2 =
       K.print kind
   end
 
+(* XXX We should still be able to do this if the block's size is already
+   known... *)
+
 (* CR mshinwell: This currently can't be done unless we know the exact size
    of the block.  Also, the refining function would need to take the tag.
 type block_access_op =
