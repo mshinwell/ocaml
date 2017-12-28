@@ -469,36 +469,44 @@ module Binary_int_shift_int64 =
 module Binary_int_shift_nativeint =
   Binary_arith_like (Int_ops_for_binary_shift_nativeint)
 
-module Int_ops_for_binary_comp (I : A.Number_kind) : sig
-  include Binary_arith_sig
-    with type op = Flambda_primitive.comparison
+module Int_ops_for_binary_comp (I : A.Int_number_kind) : sig
+  include Binary_arith_like_sig
+    with type op = Flambda_primitive.ordered_comparison
 end = struct
-  module Lhs = I
-  module Rhs = I
+  module Lhs = I.Num
+  module Rhs = I.Num
   module Result = Immediate
+
+  type op = Flambda_primitive.ordered_comparison
+
+  let kind = I.kind
+  let standard_int_kind = I.standard_int_kind
 
   let ok_to_evaluate _env = true
 
-  let prover_lhs = I.prover
-  let prover_rhs = I.prover
+  let prover_lhs = I.unboxed_prover
+  let prover_rhs = I.unboxed_prover
 
-  let op (op : Flambda_primitive.comparison) n1 n2 =
-    let bool b =
-      if b then Immediate.const_true else Immediate.const_false
-    in
+  let these = T.these_tagged_immediates
+
+  let term imm : Named.t =
+    Simple (Simple.const (Tagged_immediate imm))
+
+  module Pair = I.Num.Pair
+  let cross_product = I.Num.cross_product
+
+  module Num = I.Num
+
+  let op (op : Flambda_primitive.ordered_comparison) n1 n2 =
+    let bool b = Immediate.bool b in
     match op with
-    | Eq -> Some (bool (I.equal n1 n2))
-    | Neq -> Some (bool (not (I.equal n1 n2)))
-    | Lt -> Some (bool (I.compare n1 n2 < 0))
-    | Gt -> Some (bool (I.compare n1 n2 > 0))
-    | Le -> Some (bool (I.compare n1 n2 <= 0))
-    | Ge -> Some (bool (I.compare n1 n2 >= 0))
+    | Lt -> Some (bool (Num.compare n1 n2 < 0))
+    | Gt -> Some (bool (Num.compare n1 n2 > 0))
+    | Le -> Some (bool (Num.compare n1 n2 <= 0))
+    | Ge -> Some (bool (Num.compare n1 n2 >= 0))
 
-  let op_lhs_unknown _op ~rhs:_ : N.t binary_arith_outcome_for_one_side_only =
-    Cannot_simplify
-
-  let op_rhs_unknown _op ~lhs:_ : N.t binary_arith_outcome_for_one_side_only =
-    Cannot_simplify
+  let op_lhs_unknown _op ~rhs:_ = Cannot_simplify
+  let op_rhs_unknown _op ~lhs:_ = Cannot_simplify
 end
 
 module Int_ops_for_binary_comp_tagged_immediate =
@@ -529,6 +537,7 @@ end = struct
 
   let ok_to_evaluate _env = true
 
+  (* XXX check kind here *)
   let prover_lhs = T.prove_naked_immediate
   let prover_rhs = T.prove_naked_immediate
 
@@ -668,6 +677,72 @@ end = struct
 end
 
 module Binary_float_comp = Binary_arith_like (Float_ops_for_binary_comp)
+
+module Int_ops_for_binary_eq_comp (I : A.Int_number_kind) : sig
+  include Binary_arith_like_sig
+    with type op = Flambda_primitive.equality_comparison
+end = struct
+  module Lhs = I.Num
+  module Rhs = I.Num
+  module Result = Immediate
+
+  type op = Flambda_primitive.equality_comparison
+
+  let kind = I.kind
+  let standard_int_kind = I.standard_int_kind
+
+  let ok_to_evaluate _env = true
+
+  let prover_lhs = I.unboxed_prover
+  let prover_rhs = I.unboxed_prover
+
+  let these = T.these_tagged_immediates
+
+  let term imm : Named.t =
+    Simple (Simple.const (Tagged_immediate imm))
+
+  module Pair = I.Num.Pair
+  let cross_product = I.Num.cross_product
+
+  module Num = I.Num
+
+  let op (op : Flambda_primitive.equality_comparison) n1 n2 =
+    let bool b = Immediate.bool b in
+    match op with
+    | Eq -> Some (bool (Num.compare n1 n2 = 0))
+    | Neq -> Some (bool (Num.compare n1 n2 <> 0))
+
+  let op_lhs_unknown _op ~rhs:_ = Cannot_simplify
+  let op_rhs_unknown _op ~lhs:_ = Cannot_simplify
+end
+
+module Int_ops_for_binary_eq_comp_tagged_immediate =
+  Int_ops_for_binary_eq_comp (A.For_tagged_immediates)
+module Int_ops_for_binary_eq_comp_int32 =
+  Int_ops_for_binary_eq_comp (A.For_int32s)
+module Int_ops_for_binary_eq_comp_int64 =
+  Int_ops_for_binary_eq_comp (A.For_int64s)
+module Int_ops_for_binary_eq_comp_nativeint =
+  Int_ops_for_binary_eq_comp (A.For_nativeints)
+
+let simplify_eq_comp env r prim dbg kind op arg1 arg2 =
+  begin match kind with
+  | Value _ -> assert false (* XXX *)
+(*
+    Binary_int_comp_tagged_immediate.simplify env r prim dbg op arg1 arg2
+*)
+  | Naked_number Naked_immediate ->
+    Misc.fatal_error "Not yet implemented"
+  | Naked_number Naked_int32 ->
+    Binary_int_comp_naked_int32.simplify env r prim dbg op arg1 arg2
+  | Naaked_number Naked_int64 ->
+    Binary_int_comp_naked_int64.simplify env r prim dbg op arg1 arg2
+  | Naked_nativeint ->
+    Binary_int_comp_naked_nativeint.simplify env r prim dbg op arg1 arg2
+  | Fabricated _ | Phantom _ ->
+    Misc.fatal_errorf "Bad kind for equality comparison: %a"
+      K.print kind
+  end
 
 (* CR mshinwell: This currently can't be done unless we know the exact size
    of the block.  Also, the refining function would need to take the tag.
@@ -980,6 +1055,7 @@ let simplify_binary_primitive env r ~result_var prim arg1 arg2 dbg =
   | Block_set (field, field_kind, init_or_assign) ->
     simplify_block_set env r prim ~field ~field_kind ~init_or_assign
       ~block:arg1 ~new_value:arg2 dbg
+  | Eq_comp (kind, op) -> simplify_eq_comp env r prim dbg kind op arg1 arg2
   | Int_arith (kind, op) ->
     begin match kind with
     | Tagged_immediate ->
