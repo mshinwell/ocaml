@@ -231,7 +231,7 @@ end
 
 module Int_ops_for_binary_arith (I : A.Int_number_kind) : sig
   include Binary_arith_like_sig
-    with type op = binary_int_arith_op
+    with type op = Flambda_primitive.binary_int_arith_op
 end = struct
   module Lhs = I
   module Rhs = I
@@ -242,17 +242,17 @@ end = struct
   let prover_lhs = I.unboxed_prover
   let prover_rhs = I.unboxed_prover
 
-  let op (op : binary_int_arith_op) n1 n2 =
+  let op (op : Flambda_primitive.binary_int_arith_op) n1 n2 =
     let always_some f = Some (f n1 n2) in
     match op with
-    | Add -> always_some I.add
-    | Sub -> always_some I.sub
-    | Mul -> always_some I.mul
-    | Div -> I.div n1 n2
-    | Mod -> I.mod_ n1 n2
-    | And -> always_some I.and_
-    | Or -> always_some I.or_
-    | Xor -> always_some I.xor
+    | Add -> always_some I.Num.add
+    | Sub -> always_some I.Num.sub
+    | Mul -> always_some I.Num.mul
+    | Div -> I.Num.div n1 n2
+    | Mod -> I.Num.mod_ n1 n2
+    | And -> always_some I.Num.and_
+    | Or -> always_some I.Num.or_
+    | Xor -> always_some I.Num.xor
 
   type symmetric_op =
     | Add
@@ -268,25 +268,23 @@ end = struct
     in
     match op with
     | Add ->
-      if I.equal rhs I.zero then The_other_side
+      if N.equal rhs N.zero then The_other_side
       else Cannot_simplify
     | Mul ->
-      if I.equal rhs I.zero then Exactly I.zero
-      else if I.equal rhs I.one then The_other_side
-      else if I.equal rhs I.minus_one then negate_lhs ()
+      if N.equal rhs N.zero then Exactly N.zero
+      else if N.equal rhs N.one then The_other_side
+      else if N.equal rhs N.minus_one then negate_lhs ()
       else Cannot_simplify
     | And ->
-      if I.equal rhs I.minus_one then The_other_side
-      else if I.equal rhs I.zero then Exactly I.zero
+      if N.equal rhs N.minus_one then The_other_side
+      else if N.equal rhs N.zero then Exactly N.zero
       else Cannot_simplify
     | Or ->
-      if I.equal rhs I.minus_one then Exactly I.minus_one
-      else if I.equal rhs I.zero then The_other_side
+      if N.equal rhs N.minus_one then Exactly N.minus_one
+      else if N.equal rhs N.zero then The_other_side
       else Cannot_simplify
     | Xor ->
-      if I.equal lhs I.zero then The_other_side
-      (* CR mshinwell: We don't have bitwise NOT
-      else if I.equal lhs I.minus_one then bitwise NOT of rhs *)
+      if N.equal lhs N.zero then The_other_side
       else Cannot_simplify
 
   let op_lhs_unknown ~rhs : N.t binary_arith_outcome_for_one_side_only =

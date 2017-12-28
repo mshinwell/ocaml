@@ -559,7 +559,7 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
     Reachable.reachable term, result_var_type, r
   | Invalid -> invalid r
 
-module Make_simplify_unbox_number (P : Boxable_number_kind) = struct
+module Make_simplify_unbox_number (P : A.Boxable_number_kind) = struct
   let simplify env r prim arg dbg =
     let arg, ty = S.simplify_simple env arg in
     let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
@@ -597,7 +597,7 @@ module Simplify_unbox_number_int64 = Make_simplify_unbox_number (A.For_int64s)
 module Simplify_unbox_number_nativeint =
   Make_simplify_unbox_number (A.For_nativeints)
 
-module Make_simplify_box_number (P : Boxable_number_kind) = struct
+module Make_simplify_box_number (P : A.Boxable_number_kind) = struct
   let simplify env r prim arg dbg =
     (* CR mshinwell: If [arg] is already a [Const] we shouldn't have to do
        much work... *)
@@ -628,7 +628,7 @@ module Simplify_box_number_int64 = Make_simplify_box_number (A.For_int64s)
 module Simplify_box_number_nativeint =
   Make_simplify_box_number (A.For_nativeints)
 
-module Unary_int_arith (I : Int_number_kind) = struct
+module Unary_int_arith (I : A.Int_number_kind) = struct
   let simplify env r prim dbg (op : Flambda_primitive.unary_int_arith_op) arg =
     let arg, arg_ty = S.simplify_simple env arg in
     let proof = (E.type_accessor env I.unboxed_prover) arg_ty in
@@ -666,12 +666,12 @@ module Unary_int_arith (I : Int_number_kind) = struct
 end
 
 module Unary_int_arith_tagged_immediate =
-  Unary_int_arith (For_tagged_immediates)
-module Unary_int_arith_naked_int32 = Unary_int_arith (For_int32s)
-module Unary_int_arith_naked_int64 = Unary_int_arith (For_int64s)
-module Unary_int_arith_naked_nativeint = Unary_int_arith (For_nativeints)
+  Unary_int_arith (A.For_tagged_immediates)
+module Unary_int_arith_naked_int32 = Unary_int_arith (A.For_int32s)
+module Unary_int_arith_naked_int64 = Unary_int_arith (A.For_int64s)
+module Unary_int_arith_naked_nativeint = Unary_int_arith (A.For_nativeints)
 
-module Make_simplify_int_conv (N : Number_kind) = struct
+module Make_simplify_int_conv (N : A.Number_kind) = struct
   module F = Float_by_bit_pattern
 
   let simplify env r prim arg ~(dst : K.Standard_int_or_float.t) dbg =
@@ -749,6 +749,39 @@ module Simplify_int_conv_naked_int32 = Make_simplify_int_conv (A.For_int32s)
 module Simplify_int_conv_naked_int64 = Make_simplify_int_conv (A.For_int64s)
 module Simplify_int_conv_naked_nativeint =
   Make_simplify_int_conv (A.For_nativeints)
+
+let simplify_boolean_not env r prim arg dbg =
+  let arg, ty = S.simplify_simple env arg in
+  let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
+  let proof = (E.type_accessor env T.prove_tagged_immediate) ty in
+  let invalid () =
+    Reachable.invalid (), T.bottom (K.value Definitely_immediate),
+      R.map_benefit r (B.remove_primitive (Unary prim))
+  in
+  match proof with
+  | Proved imms ->
+    let imms_ok =
+      Immediate.Set.for_all (fun imm ->
+          Immediate.equal imm Immediate.zero
+            || Immediate.equal imm Immediate.one)
+        imms
+    in
+    if not imms_ok then invalid ()
+    else
+      let imms =
+        Immediate.Set.map (fun imm ->
+            if Immediate.equal imm Immediate.zero then
+              Immediate.one
+            else
+              Immediate.zero)
+          imms
+      in
+      Reachable.reachable (original_term ()),
+        T.these_tagged_immediates imms, r
+  | Unknown ->
+    Reachable.reachable (original_term ()),
+      T.these_tagged_immediates Immediate.all_bools, r
+  | Invalid -> invalid ()
 
 let simplify_unary_float_arith_op env r prim
       (op : Flambda_primitive.unary_float_arith_op) arg dbg =
@@ -892,6 +925,8 @@ let simplify_unary_primitive env r (prim : Flambda_primitive.unary_primitive)
     Simplify_int_conv_naked_int64.simplify env r prim arg ~dst dbg
   | Num_conv { src = Naked_nativeint; dst; } ->
     Simplify_int_conv_naked_nativeint.simplify env r prim arg ~dst dbg
+  | Boolean_not ->
+    simplify_boolean_not env r prim arg dbg
   | Float_arith op -> simplify_unary_float_arith_op env r prim op arg dbg
   | Array_length block_access_kind ->
     simplify_array_length env r prim arg ~block_access_kind dbg

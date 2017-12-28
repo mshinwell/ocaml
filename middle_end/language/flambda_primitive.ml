@@ -443,12 +443,12 @@ type unary_primitive =
       src : Flambda_kind.Standard_int_or_float.t;
       dst : Flambda_kind.Standard_int_or_float.t;
     }
+  | Boolean_not
   | Unbox_number of Flambda_kind.Boxable_number.t
   | Box_number of Flambda_kind.Boxable_number.t
   | Project_closure of Closure_id.Set.t
   | Move_within_set_of_closures of Closure_id.t Closure_id.Map.t
   | Project_var of Var_within_closure.t Closure_id.Map.t
-  | Boolean_not
 
 let compare_unary_primitive p1 p2 =
   let unary_primitive_numbering p =
@@ -464,11 +464,12 @@ let compare_unary_primitive p1 p2 =
     | Int_arith _ -> 8
     | Float_arith _ -> 9
     | Num_conv _ -> 10
-    | Unbox_number _ -> 11
-    | Box_number _ -> 12
-    | Project_closure _ -> 13
-    | Move_within_set_of_closures _ -> 14
-    | Project_var _ -> 15
+    | Boolean_not -> 11
+    | Unbox_number _ -> 12
+    | Box_number _ -> 13
+    | Project_closure _ -> 14
+    | Move_within_set_of_closures _ -> 15
+    | Project_var _ -> 16
   in
   match p1, p2 with
   | Duplicate_block { kind = kind1;
@@ -522,6 +523,7 @@ let compare_unary_primitive p1 p2 =
     | Opaque_identity
     | Int_arith _
     | Num_conv _
+    | Boolean_not
     | Float_arith _
     | Array_length _
     | Bigarray_length _
@@ -529,8 +531,7 @@ let compare_unary_primitive p1 p2 =
     | Box_number _
     | Project_closure _
     | Move_within_set_of_closures _
-    | Project_var _
-    | Boolean_not), _ ->
+    | Project_var _), _ ->
     Pervasives.compare (unary_primitive_numbering p1)
       (unary_primitive_numbering p2)
 
@@ -552,6 +553,7 @@ let print_unary_primitive ppf p =
     fprintf ppf "conv_%a_to_%a"
       Flambda_kind.Standard_int_or_float.print src
       Flambda_kind.Standard_int_or_float.print dst
+  | Boolean_not -> fprintf ppf "boolean_not"
   | Float_arith o -> print_unary_float_arith_op ppf o
   | Array_length _ -> fprintf ppf "array_length"
   | Bigarray_length { dimension; } ->
@@ -569,7 +571,6 @@ let print_unary_primitive ppf p =
   | Project_var by_closure ->
     Format.fprintf ppf "(project_var@ %a)"
       (Closure_id.Map.print Var_within_closure.print) by_closure
-  | Boolean_not -> fprintf ppf "not"
 
 let arg_kind_of_unary_primitive p =
   match p with
@@ -581,6 +582,7 @@ let arg_kind_of_unary_primitive p =
   | Opaque_identity -> K.value Unknown
   | Int_arith (kind, _) -> K.Standard_int.to_kind kind
   | Num_conv { src; dst = _; } -> K.Standard_int_or_float.to_kind src
+  | Boolean_not -> K.value Definitely_immediate
   | Float_arith _ -> K.naked_float ()
   | Array_length _
   | Bigarray_length _ -> K.value Definitely_pointer
@@ -605,6 +607,7 @@ let result_kind_of_unary_primitive p : result_kind =
   | Int_arith (kind, _) -> Singleton (K.Standard_int.to_kind kind)
   | Num_conv { src = _; dst; } ->
     Singleton (K.Standard_int_or_float.to_kind dst)
+  | Boolean_not -> Singleton (K.value Definitely_immediate)
   | Float_arith _ -> Singleton (K.naked_float ())
   | Array_length _
   | Bigarray_length _ -> Singleton (K.value Definitely_immediate)
@@ -636,6 +639,7 @@ let effects_and_coeffects_of_unary_primitive p =
   | Opaque_identity -> Arbitrary_effects, Has_coeffects
   | Int_arith (_, (Neg | Swap_byte_endianness))
   | Num_conv _
+  | Boolean_not
   | Float_arith (Abs | Neg) -> No_effects, No_coeffects
   | Array_length _ ->
     reading_from_an_array_like_thing
@@ -648,7 +652,6 @@ let effects_and_coeffects_of_unary_primitive p =
   | Project_closure _
   | Move_within_set_of_closures _
   | Project_var _ -> No_effects, No_coeffects
-  | Boolean_not -> No_effects, No_coeffects
 
 type binary_int_arith_op =
   | Add | Sub | Mul | Div | Mod | And | Or | Xor

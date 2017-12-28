@@ -170,7 +170,7 @@ type signed_or_unsigned =
 type unary_int_arith_op = Neg | Swap_byte_endianness
 
 (** Naked float unary arithmetic operations. *)
-type unary_float_arith_op = Abs | Neg
+type unary_float_arith_op = Abs | Neg 
 
 (** Primitives taking exactly one argument. *)
 type unary_primitive =
@@ -188,13 +188,9 @@ type unary_primitive =
   | Bigarray_length of { dimension : int; }
     (* CR mshinwell/xclerc: Invariant check: dimension >= 0 *)
   | String_length of string_or_bytes
-  (* CR pchambart: There are 32 and 64 bits swap, that probably need
-     to be represented differently *)
-  | Swap_byte_endianness of Flambda_kind.Standard_int.t
-  (** [Swap_byte_endianness] on a [Tagged_immediate] treats the immediate as
-      encoding a 16-bit quantity (described in the least significant 16 bits
-      of the immediate after untagging) and exchanges the two halves of the
-      16-bit quantity. *)
+  (* XCR pchambart: There are 32 and 64 bits swap, that probably need
+     to be represented differently
+     mshinwell: I think this should be ok now, please check *)
   | Int_as_pointer
   | Opaque_identity
   | Int_arith of Flambda_kind.Standard_int.t * unary_int_arith_op
@@ -203,6 +199,7 @@ type unary_primitive =
       src : Flambda_kind.Standard_int_or_float.t;
       dst : Flambda_kind.Standard_int_or_float.t;
     }
+  | Boolean_not
   (* CR-someday mshinwell: We should maybe change int32.ml and friends to
      use a %-primitive instead of directly calling C stubs for conversions;
      then we could have a single primitive here taking two
@@ -222,7 +219,6 @@ type unary_primitive =
   | Project_var of Var_within_closure.t Closure_id.Map.t
     (** For each possible value of closure, get a different field of the
         closure. *)
-  | Boolean_not
 
 (** Binary arithmetic operations on integers. *)
 type binary_int_arith_op =
