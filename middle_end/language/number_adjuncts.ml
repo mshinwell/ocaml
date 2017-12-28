@@ -78,9 +78,9 @@ module type Int_number_kind = sig
     val and_ : t -> t -> t
     val or_ : t -> t -> t
     val xor : t -> t -> t
-    val shift_left : t -> int -> t
-    val shift_right : t -> int -> t
-    val shift_right_logical : t -> int -> t
+    val shift_left : t -> Immediate.t -> t
+    val shift_right : t -> Immediate.t -> t
+    val shift_right_logical : t -> Immediate.t -> t
     val swap_byte_endianness : t -> t
     val neg : t -> t
   end
@@ -112,6 +112,15 @@ module type Boxable_int_number_kind = sig
   include Boxable with module Num := Num
 end
 
+let with_shift shift if_undefined f =
+  match Targetint.OCaml.to_int_option (Immediate.to_targetint shift) with
+  | None ->
+    (* As per a similar case in [Simplify_binary_primitive], we are here
+       assigning a semantics to an operation which has undefined
+       semantics. *)
+    if_undefined
+  | Some shift -> f shift
+
 module For_tagged_immediates : Int_number_kind = struct
   module Num = struct
     include Immediate
@@ -123,6 +132,15 @@ module For_tagged_immediates : Int_number_kind = struct
     let mod_ t1 t2 =
       if Immediate.equal t2 Immediate.zero then None
       else Some (mod_ t1 t2)
+
+    let shift_left t shift =
+      with_shift shift zero (fun shift -> shift_left t shift)
+
+    let shift_right t shift =
+      with_shift shift zero (fun shift -> shift_right t shift)
+
+    let shift_right_logical t shift =
+      with_shift shift zero (fun shift -> shift_right_logical t shift)
 
     let swap_byte_endianness t =
       Immediate.map ~f:(fun i ->
@@ -208,6 +226,15 @@ module For_int32s : Boxable_int_number_kind = struct
       if equal t2 zero then None
       else Some (rem t1 t2)
 
+    let shift_left t shift =
+      with_shift shift zero (fun shift -> shift_left t shift)
+
+    let shift_right t shift =
+      with_shift shift zero (fun shift -> shift_right t shift)
+
+    let shift_right_logical t shift =
+      with_shift shift zero (fun shift -> shift_right_logical t shift)
+
     let to_const t = Simple.Const.Naked_int32 t
 
     let to_tagged_immediate t = Immediate.int (Targetint.OCaml.of_int32 t)
@@ -246,6 +273,15 @@ module For_int64s : Boxable_int_number_kind = struct
       if equal t2 zero then None
       else Some (rem t1 t2)
 
+    let shift_left t shift =
+      with_shift shift zero (fun shift -> shift_left t shift)
+
+    let shift_right t shift =
+      with_shift shift zero (fun shift -> shift_right t shift)
+
+    let shift_right_logical t shift =
+      with_shift shift zero (fun shift -> shift_right_logical t shift)
+
     let to_const t = Simple.Const.Naked_int64 t
 
     let to_tagged_immediate t = Immediate.int (Targetint.OCaml.of_int64 t)
@@ -283,6 +319,15 @@ module For_nativeints : Boxable_int_number_kind = struct
     let mod_ t1 t2 =
       if equal t2 zero then None
       else Some (rem t1 t2)
+
+    let shift_left t shift =
+      with_shift shift zero (fun shift -> shift_left t shift)
+
+    let shift_right t shift =
+      with_shift shift zero (fun shift -> shift_right t shift)
+
+    let shift_right_logical t shift =
+      with_shift shift zero (fun shift -> shift_right_logical t shift)
 
     let to_const t = Simple.Const.Naked_nativeint t
 

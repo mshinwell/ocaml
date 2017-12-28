@@ -75,11 +75,11 @@ module type Int_number_kind = sig
     val and_ : t -> t -> t
     val or_ : t -> t -> t
     val xor : t -> t -> t
-    val shift_left : t -> int -> t
+    val shift_left : t -> Immediate.t -> t
     (* [shift_right] is arithmetic shift right, matching [Int32],
        [Int64], etc. *)
-    val shift_right : t -> int -> t
-    val shift_right_logical : t -> int -> t
+    val shift_right : t -> Immediate.t -> t
+    val shift_right_logical : t -> Immediate.t -> t
     val swap_byte_endianness : t -> t
     val neg : t -> t
   end

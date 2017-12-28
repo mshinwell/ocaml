@@ -239,8 +239,8 @@ end = struct
 
   let ok_to_evaluate _env = true
 
-  let prover_lhs = I.prover
-  let prover_rhs = I.prover
+  let prover_lhs = I.unboxed_prover
+  let prover_rhs = I.unboxed_prover
 
   let op (op : binary_int_arith_op) n1 n2 =
     let always_some f = Some (f n1 n2) in

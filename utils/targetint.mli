@@ -259,6 +259,7 @@ module OCaml : sig
   val to_float : t -> float
 
   val to_int : t -> int
+  val to_int_option : t -> int option
   val to_int32 : t -> int32
   val to_int64 : t -> int64
   val to_targetint : t -> targetint
