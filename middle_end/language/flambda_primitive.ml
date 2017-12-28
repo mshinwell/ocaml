@@ -244,19 +244,30 @@ let block_kind = K.value Definitely_pointer
 let block_element_kind = K.value Unknown
 let string_or_bytes_kind = K.value Definitely_pointer
 
+type comparison = Eq | Neq | Lt | Gt | Le | Ge
+
+let print_comparison ppf c =
+  let fprintf = Format.fprintf in
+  begin match c with
+  | Neq -> fprintf ppf "<>"
+  | Eq -> fprintf ppf "="
+  | Lt -> fprintf ppf "<"
+  | Le -> fprintf ppf "<="
+  | Gt -> fprintf ppf ">"
+  | Ge -> fprintf ppf ">="
+  end
+
 type signed_or_unsigned =
   | Signed
   | Unsigned
 
-type comparison = Eq | Neq | Lt | Gt | Le | Ge
+type ordered_comparison = Lt | Gt | Le | Ge
 
-let print_comparison ppf signedness c =
+let print_ordered_comparison ppf signedness c =
   let fprintf = Format.fprintf in
   match signedness with
   | Unsigned ->
     begin match c with
-    | Eq -> fprintf ppf "=="
-    | Neq -> fprintf ppf "!="
     | Lt -> fprintf ppf "<"
     | Le -> fprintf ppf "<="
     | Gt -> fprintf ppf ">"
@@ -264,13 +275,18 @@ let print_comparison ppf signedness c =
     end
   | Signed ->
     begin match c with
-    | Eq -> fprintf ppf "==u"
-    | Neq -> fprintf ppf "!=u"
     | Lt -> fprintf ppf "<u"
     | Le -> fprintf ppf "<=u"
     | Gt -> fprintf ppf ">u"
     | Ge -> fprintf ppf ">=u"
     end
+
+type equality_comparison = Eq | Neq
+
+let print_equality_comparison ppf op =
+  match op with
+  | Eq -> Format.pp_print_string ppf "Eq"
+  | Neq -> Format.pp_print_string ppf "Neq"
 
 type bigarray_kind =
   | Unknown
@@ -667,9 +683,11 @@ let print_binary_float_arith_op ppf o =
 type binary_primitive =
   | Block_load of Block_access_kind.t * mutable_or_immutable
   | String_or_bigstring_load of string_like_value * string_accessor_width
+  | Eq_comp of Flambda_kind.t * equality_comparison
   | Int_arith of Flambda_kind.Standard_int.t * binary_int_arith_op
   | Int_shift of Flambda_kind.Standard_int.t * int_shift_op
-  | Int_comp of Flambda_kind.Standard_int.t * signed_or_unsigned * comparison
+  | Int_comp of Flambda_kind.Standard_int.t * signed_or_unsigned
+      * ordered_comparison
   | Float_arith of binary_float_arith_op
   | Float_comp of comparison
 
@@ -678,17 +696,27 @@ let compare_binary_primitive p1 p2 =
     match p with
     | Block_load _ -> 0
     | String_or_bigstring_load _ -> 1
-    | Int_arith _ -> 2
-    | Int_shift _ -> 3
-    | Int_comp _ -> 4
-    | Float_arith _ -> 5
-    | Float_comp _ -> 6
+    | Eq_comp _ -> 2
+    | Int_arith _ -> 3
+    | Int_shift _ -> 4
+    | Int_comp _ -> 5
+    | Float_arith _ -> 6
+    | Float_comp _ -> 7
   in
   match p1, p2 with
   | Block_load (kind1, mut1), Block_load (kind2, mut2) ->
     let c = Block_access_kind.compare kind1 kind2 in
     if c <> 0 then c
     else compare_mutable_or_immutable mut1 mut2
+  | String_or_bigstring_load (string_like1, width1),
+      String_or_bigstring_load (string_like2, width2) ->
+    let c = Pervasives.compare string_like1 string_like2 in
+    if c <> 0 then c
+    else Pervasives.compare width1 width2
+  | Eq_comp (kind1, comp1), Eq_comp (kind2, comp2) ->
+    let c = K.compare kind1 kind2 in
+    if c <> 0 then c
+    else Pervasives.compare comp1 comp2
   | Int_arith (kind1, op1), Int_arith (kind2, op2) ->
     let c = K.Standard_int.compare kind1 kind2 in
     if c <> 0 then c
@@ -711,6 +739,7 @@ let compare_binary_primitive p1 p2 =
     Pervasives.compare comp1 comp2
   | (Block_load _
     | String_or_bigstring_load _
+    | Eq_comp _
     | Int_arith _
     | Int_shift _
     | Int_comp _
@@ -730,11 +759,15 @@ let print_binary_primitive ppf p =
     fprintf ppf "string_load[%a,%a]"
       print_string_like_value string_like
       print_string_accessor_width width
+  | Eq_comp (kind, op) ->
+    Format.fprintf ppf "(Eq_comp %a %a)"
+      K.print kind
+      print_equality_comparison op
   | Int_arith (_k, op) -> print_binary_int_arith_op ppf op
   | Int_shift (_k, op) -> print_int_shift_op ppf op
-  | Int_comp (_, signedness, c) -> print_comparison ppf signedness c
+  | Int_comp (_, signedness, c) -> print_ordered_comparison ppf signedness c
   | Float_arith op -> print_binary_float_arith_op ppf op
-  | Float_comp c -> print_comparison ppf Signed c; fprintf ppf "."
+  | Float_comp c -> print_comparison ppf c; fprintf ppf "."
 
 let args_kind_of_binary_primitive p =
   match p with
@@ -744,6 +777,7 @@ let args_kind_of_binary_primitive p =
     string_or_bytes_kind, array_like_thing_index_kind
   | String_or_bigstring_load (Bigstring, _) ->
     bigstring_kind, array_like_thing_index_kind
+  | Eq_comp (kind, _) -> kind, kind
   | Int_arith (kind, _) ->
     let kind = K.Standard_int.to_kind kind in
     kind, kind
@@ -768,12 +802,14 @@ let result_kind_of_binary_primitive p : result_kind =
   | Int_arith (kind, _)
   | Int_shift (kind, _) -> Singleton (K.Standard_int.to_kind kind)
   | Float_arith _ -> Singleton (K.naked_float ())
+  | Eq_comp _
   | Int_comp _
   | Float_comp _ -> Singleton (K.value Definitely_immediate)
 
 let effects_and_coeffects_of_binary_primitive p =
   match p with
   | Block_load _ -> reading_from_an_array_like_thing
+  | Eq_comp _ -> No_effects, No_coeffects
   | Int_arith (_kind, (Add | Sub | Mul | Div | Mod | And | Or | Xor)) ->
     No_effects, No_coeffects
   | Int_shift _ -> No_effects, No_coeffects

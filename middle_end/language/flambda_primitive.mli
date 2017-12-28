@@ -112,6 +112,10 @@ type init_or_assign = Initialization | Assignment
 
 type comparison = Eq | Neq | Lt | Gt | Le | Ge
 
+type ordered_comparison = Lt | Gt | Le | Ge
+
+type equality_comparison = Eq | Neq
+
 type bigarray_kind =
   | Unknown
   | Float32 | Float64
@@ -229,11 +233,11 @@ type binary_float_arith_op = Add | Sub | Mul | Div
 type binary_primitive =
   | Block_load of Block_access_kind.t * mutable_or_immutable
   | String_or_bigstring_load of string_like_value * string_accessor_width
+  | Eq_comp of Flambda_kind.t * equality_comparison
   | Int_arith of Flambda_kind.Standard_int.t * binary_int_arith_op
   | Int_shift of Flambda_kind.Standard_int.t * int_shift_op
-  | Int_comp of Flambda_kind.Standard_int.t * signed_or_unsigned * comparison
-    (* XXX Pintcomp is used with "int" versus "pointer": we need to support
-       this somehow.  The int may always be compile time. *)
+  | Int_comp of Flambda_kind.Standard_int.t * signed_or_unsigned
+      * ordered_comparison
   | Float_arith of binary_float_arith_op
   | Float_comp of comparison
 
