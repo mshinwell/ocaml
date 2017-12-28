@@ -1,0 +1,236 @@
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                                                                        *)
+(*   Copyright 2013--2017 OCamlPro SAS                                    *)
+(*   Copyright 2014--2017 Jane Street Group LLC                           *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+
+module K = Flambda_kind
+module T = Flambda_type
+
+module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
+module Int32 = Numbers.Int32
+module Int64 = Numbers.Int64
+
+module type Number_kind = sig
+  module Num : sig
+    include Identifiable.S
+
+    val to_const : t -> Simple.Const.t
+
+    val to_tagged_immediate : t -> Immediate.t
+    val to_naked_float : t -> Float_by_bit_pattern.t
+    val to_naked_int32 : t -> Int32.t
+    val to_naked_int64 : t -> Int64.t
+    val to_naked_nativeint : t -> Targetint.t
+  end
+
+  val kind : K.Standard_int_or_float.t
+
+  val unboxed_prover : (T.t -> Num.Set.t T.proof) T.type_accessor
+
+  val this_unboxed : Num.t -> T.t
+  val these_unboxed : Num.Set.t -> T.t
+end
+
+(* CR mshinwell: Share code somehow with previous "module type" *)
+module type Int_number_kind = sig
+  module Num : sig
+    include Identifiable.S
+
+    val swap_byte_endianness : t -> t
+    val neg : t -> t
+
+    val to_const : t -> Simple.Const.t
+
+    val to_tagged_immediate : t -> Immediate.t
+    val to_naked_float : t -> Float_by_bit_pattern.t
+    val to_naked_int32 : t -> Int32.t
+    val to_naked_int64 : t -> Int64.t
+    val to_naked_nativeint : t -> Targetint.t
+  end
+
+  val kind : K.Standard_int_or_float.t
+
+  val unboxed_prover : (T.t -> Num.Set.t T.proof) T.type_accessor
+
+  val this_unboxed : Num.t -> T.t
+  val these_unboxed : Num.Set.t -> T.t
+end
+
+module type Boxable = sig
+  module Num : Identifiable.S
+
+  val boxed_prover
+     : (T.t -> Num.Set.t T.ty_naked_number T.proof) T.type_accessor
+
+  val this_boxed : Num.t -> T.t
+  val these_boxed : Num.Set.t -> T.t
+
+  val box : T.t -> T.t
+end
+
+module type Boxable_number_kind = sig
+  include Number_kind
+  include Boxable with module Num := Num
+end
+
+module type Boxable_int_number_kind = sig
+  include Int_number_kind
+  include Boxable with module Num := Num
+end
+
+module For_tagged_immediates : Int_number_kind = struct
+  module Num = struct
+    include Immediate
+
+    let swap_byte_endianness t =
+      Immediate.map ~f:(fun i ->
+          Targetint.OCaml.get_least_significant_16_bits_then_byte_swap i)
+        t
+
+    let to_const t = Simple.Const.Tagged_immediate t
+
+    let to_tagged_immediate t = t
+
+    (* It seems as if the various [float_of_int] functions never raise
+       an exception even in the case of NaN or infinity. *)
+    (* CR mshinwell: We should be sure this semantics is reasonable. *)
+    let to_naked_float t =
+      Float_by_bit_pattern.create (Targetint.OCaml.to_float (
+        Immediate.to_targetint t))
+
+    let to_naked_int32 t = Targetint.OCaml.to_int32 (Immediate.to_targetint t)
+    let to_naked_int64 t = Targetint.OCaml.to_int64 (Immediate.to_targetint t)
+    let to_naked_nativeint t =
+      Targetint.OCaml.to_targetint (Immediate.to_targetint t)
+  end
+
+  let kind : K.Standard_int_or_float.t = Tagged_immediate
+
+  let unboxed_prover = T.prove_tagged_immediate
+  let this_unboxed = T.this_tagged_immediate
+  let these_unboxed = T.these_tagged_immediates
+end
+
+module For_floats : Boxable_number_kind = struct
+  module Num = struct
+    include Float_by_bit_pattern
+
+    let to_const t = Simple.Const.Naked_float t
+
+    (* CR mshinwell: We need to validate that the backend compiles
+       the [Int_of_float] primitive in the same way as
+       [Targetint.of_float].  Ditto for [Float_of_int].  (For the record,
+       [Pervasives.int_of_float] and [Nativeint.of_float] on [nan] produce
+       wildly different results). *)
+    let to_tagged_immediate t =
+      Immediate.int (Targetint.OCaml.of_float (to_float t))
+
+    let to_naked_float t = t
+    let to_naked_int32 t = Int32.of_float (to_float t)
+    let to_naked_int64 t = Int64.of_float (to_float t)
+    let to_naked_nativeint t = Targetint.of_float (to_float t)
+  end
+
+  let kind : K.Standard_int_or_float.t = Naked_float
+
+  let unboxed_prover = T.prove_naked_float
+  let this_unboxed = T.this_naked_float
+  let these_unboxed = T.these_naked_floats
+
+  let boxed_prover = T.prove_boxed_float
+  let this_boxed = T.this_boxed_float
+  let these_boxed = T.these_boxed_floats
+
+  let box = T.box_float
+end
+
+module For_int32s : Boxable_int_number_kind = struct
+  module Num = struct
+    include Int32
+
+    let to_const t = Simple.Const.Naked_int32 t
+
+    let to_tagged_immediate t = Immediate.int (Targetint.OCaml.of_int32 t)
+    let to_naked_float t = Float_by_bit_pattern.create (Int32.to_float t)
+    let to_naked_int32 t = t
+    let to_naked_int64 t = Int64.of_int32 t
+    let to_naked_nativeint t = Targetint.of_int32 t
+  end
+
+  let kind : K.Standard_int_or_float.t = Naked_int32
+
+  let unboxed_prover = T.prove_naked_int32
+  let this_unboxed = T.this_naked_int32
+  let these_unboxed = T.these_naked_int32s
+
+  let boxed_prover = T.prove_boxed_int32
+  let this_boxed = T.this_boxed_int32
+  let these_boxed = T.these_boxed_int32s
+
+  let box = T.box_int32
+end
+
+module For_int64s : Boxable_int_number_kind = struct
+  module Num = struct
+    include Int64
+
+    let to_const t = Simple.Const.Naked_int64 t
+
+    let to_tagged_immediate t = Immediate.int (Targetint.OCaml.of_int64 t)
+    let to_naked_float t = Float_by_bit_pattern.create (Int64.to_float t)
+    let to_naked_int32 t = Int64.to_int32 t
+    let to_naked_int64 t = t
+    let to_naked_nativeint t = Targetint.of_int64 t
+  end
+
+  let kind : K.Standard_int_or_float.t = Naked_int64
+
+  let unboxed_prover = T.prove_naked_int64
+  let this_unboxed = T.this_naked_int64
+  let these_unboxed = T.these_naked_int64s
+
+  let boxed_prover = T.prove_boxed_int64
+  let this_boxed = T.this_boxed_int64
+  let these_boxed = T.these_boxed_int64s
+
+  let box = T.box_int64
+end
+
+module For_nativeints : Boxable_int_number_kind = struct
+  module Num = struct
+    include Targetint
+
+    let to_const t = Simple.Const.Naked_nativeint t
+
+    let to_tagged_immediate t = Immediate.int (Targetint.OCaml.of_targetint t)
+    let to_naked_float t = Float_by_bit_pattern.create (Targetint.to_float t)
+    let to_naked_int32 t = Targetint.to_int32 t
+    let to_naked_int64 t = Targetint.to_int64 t
+    let to_naked_nativeint t = t
+  end
+
+  let kind : K.Standard_int_or_float.t = Naked_nativeint
+
+  let unboxed_prover = T.prove_naked_nativeint
+  let this_unboxed = T.this_naked_nativeint
+  let these_unboxed = T.these_naked_nativeints
+
+  let boxed_prover = T.prove_boxed_nativeint
+  let this_boxed = T.this_boxed_nativeint
+  let these_boxed = T.these_boxed_nativeints
+
+  let box = T.box_nativeint
+end

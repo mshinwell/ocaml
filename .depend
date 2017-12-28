@@ -1651,8 +1651,10 @@ middle_end/inlining/inlining_cost.cmx : typing/primitive.cmx utils/misc.cmx \
     middle_end/base_types/continuation.cmx \
     middle_end/base_types/closure_id.cmx utils/clflags.cmx \
     middle_end/inlining/inlining_cost.cmi
-middle_end/inlining/inlining_cost.cmi : middle_end/language/flambda_kind.cmi \
-    middle_end/language/flambda.cmi middle_end/base_types/closure_id.cmi
+middle_end/inlining/inlining_cost.cmi : \
+    middle_end/language/flambda_primitive.cmi \
+    middle_end/language/flambda_kind.cmi middle_end/language/flambda.cmi \
+    middle_end/base_types/closure_id.cmi
 middle_end/inlining/inlining_decision.cmo : \
     middle_end/base_types/variable.cmi middle_end/simplify/simplify_aux.cmi \
     utils/misc.cmi middle_end/inlining/inlining_transforms.cmi \
@@ -2066,6 +2068,20 @@ middle_end/language/invariant_env.cmi : middle_end/base_types/variable.cmi \
     middle_end/language/flambda_arity.cmi middle_end/language/flambda0.cmi \
     middle_end/base_types/continuation.cmi \
     middle_end/base_types/closure_id.cmi
+middle_end/language/number_adjuncts.cmo : utils/targetint.cmi \
+    middle_end/language/simple.cmi utils/numbers.cmi \
+    middle_end/base_types/immediate.cmi utils/identifiable.cmi \
+    middle_end/language/flambda_type.cmi middle_end/language/flambda_kind.cmi \
+    middle_end/language/number_adjuncts.cmi
+middle_end/language/number_adjuncts.cmx : utils/targetint.cmx \
+    middle_end/language/simple.cmx utils/numbers.cmx \
+    middle_end/base_types/immediate.cmx utils/identifiable.cmx \
+    middle_end/language/flambda_type.cmx middle_end/language/flambda_kind.cmx \
+    middle_end/language/number_adjuncts.cmi
+middle_end/language/number_adjuncts.cmi : utils/targetint.cmi \
+    middle_end/language/simple.cmi utils/numbers.cmi \
+    middle_end/base_types/immediate.cmi utils/identifiable.cmi \
+    middle_end/language/flambda_type.cmi middle_end/language/flambda_kind.cmi
 middle_end/language/simple.cmo : utils/targetint.cmi utils/numbers.cmi \
     middle_end/base_types/name.cmi utils/misc.cmi \
     middle_end/base_types/immediate.cmi utils/identifiable.cmi \
@@ -2452,24 +2468,22 @@ middle_end/simplify/simplify_ternary_primitive.cmi : \
     middle_end/language/simple.cmi middle_end/language/flambda_type.cmi \
     middle_end/language/flambda_primitive.cmi middle_end/language/flambda.cmi \
     middle_end/base_types/debuginfo.cmi
-middle_end/simplify/simplify_unary_primitive.cmo : \
-    middle_end/base_types/variable.cmi utils/targetint.cmi \
+middle_end/simplify/simplify_unary_primitive.cmo : utils/targetint.cmi \
     middle_end/base_types/tag.cmi middle_end/simplify/simplify_simple.cmi \
     middle_end/simplify/simplify_env_and_result.cmi \
     middle_end/language/simple.cmi utils/numbers.cmi \
-    middle_end/base_types/name.cmi middle_end/inlining/inlining_cost.cmi \
-    middle_end/base_types/immediate.cmi utils/identifiable.cmi \
+    middle_end/language/number_adjuncts.cmi \
+    middle_end/inlining/inlining_cost.cmi middle_end/base_types/immediate.cmi \
     middle_end/language/flambda_type.cmi \
     middle_end/language/flambda_primitive.cmi \
     middle_end/language/flambda_kind.cmi middle_end/language/flambda.cmi \
     middle_end/simplify/simplify_unary_primitive.cmi
-middle_end/simplify/simplify_unary_primitive.cmx : \
-    middle_end/base_types/variable.cmx utils/targetint.cmx \
+middle_end/simplify/simplify_unary_primitive.cmx : utils/targetint.cmx \
     middle_end/base_types/tag.cmx middle_end/simplify/simplify_simple.cmx \
     middle_end/simplify/simplify_env_and_result.cmx \
     middle_end/language/simple.cmx utils/numbers.cmx \
-    middle_end/base_types/name.cmx middle_end/inlining/inlining_cost.cmx \
-    middle_end/base_types/immediate.cmx utils/identifiable.cmx \
+    middle_end/language/number_adjuncts.cmx \
+    middle_end/inlining/inlining_cost.cmx middle_end/base_types/immediate.cmx \
     middle_end/language/flambda_type.cmx \
     middle_end/language/flambda_primitive.cmx \
     middle_end/language/flambda_kind.cmx middle_end/language/flambda.cmx \
