@@ -28,10 +28,6 @@ module Int = Numbers.Int
 module Named = Flambda.Named
 module Reachable = Flambda.Reachable
 
-type named_simplifier =
-  (Variable.t * Named.t) list * Reachable.t
-    * Flambda_type.t * R.t
-
 type 'a binary_arith_outcome_for_one_side_only =
   | Exactly of 'a
   | This_primitive of Flambda_primitive.t
@@ -53,7 +49,7 @@ module type Binary_arith_like_sig = sig
     include Identifiable.S
   end
 
-  val ok_to_evaluate : Env.t -> unit
+  val ok_to_evaluate : E.t -> bool
 
   val cross_product : Lhs.Set.t -> Rhs.Set.t -> Pair.Set.t
 
@@ -84,16 +80,16 @@ module Binary_arith_like (N : Binary_arith_like_sig) : sig
   val simplify
      : E.t
     -> R.t
-    -> Flambda_primitive.t
+    -> Flambda_primitive.binary_primitive
     -> Debuginfo.t
-    -> op:N.op
+    -> N.op
     -> Simple.t
     -> Simple.t
-    -> Named.t * R.t
+    -> Reachable.t * T.t * R.t
 end = struct
   module Possible_result = struct
     type t =
-      | Var of Variable.t
+      | Simple of Simple.t
       | Prim of Flambda_primitive.t
       | Exactly of N.Result.t
 
@@ -102,13 +98,13 @@ end = struct
 
       let compare t1 t2 =
         match t1, t2 with
-        | Var var1, Var var2 -> Variable.compare var1 var2
+        | Simple simple1, Simple simple2 -> Simple.compare simple1 simple2
         | Prim prim1, Prim prim2 -> Flambda_primitive.compare prim1 prim2
         | Exactly i1, Exactly i2 -> N.Result.compare i1 i2
-        | Var _, (Prim _ | Exactly _) -> -1
-        | Prim _, Var _ -> 1
+        | Simple _, (Prim _ | Exactly _) -> -1
+        | Prim _, Simple _ -> 1
         | Prim _, Exactly _ -> -1
-        | Exactly _, (Var _ | Prim _) -> 1
+        | Exactly _, (Simple _ | Prim _) -> 1
 
       let equal t1 t2 =
         compare t1 t2 = 0
@@ -144,8 +140,8 @@ end = struct
             (* CR mshinwell: We should account for the benefit properly
                (replacing one primitive with another). *)
             Named.Prim (prim, dbg), r
-          | Some (Var var) ->
-            Named.Simple (Simple.var var),
+          | Some (Simple simple) ->
+            Named.Simple simple,
               R.map_benefit r (B.remove_primitive (Binary prim))
           | None -> original_term (), r
         in
@@ -155,7 +151,7 @@ end = struct
               (fun (possible_result : P.t) ->
                 match possible_result with
                 | Exactly i -> Some i
-                | Prim _ | Var _ -> None)
+                | Prim _ | Simple _ -> None)
               (P.Set.elements possible_results)
           in
           if List.length is = P.Set.cardinal possible_results
@@ -163,14 +159,20 @@ end = struct
             N.these (N.Result.Set.of_list is)
           else
             match P.Set.get_singleton possible_results with
-            | Some (Var var) -> T.alias_type_of N.kind (Name.var var)
+            | Some (Simple (Name name)) -> T.alias_type_of N.kind name
+            | Some (Simple ((Const _) as simple)) ->
+              (* This shouldn't happen because the "proving" functions should
+                 have returned [Proved] for this term.  However we provide an
+                 implementation to be robust. *)
+              let _term, ty = S.simplify_simple env simple in
+              ty
             | Some (Exactly _)
             | Some (Prim _)
             | None -> T.unknown N.kind
         in
         Reachable.reachable named, ty, r
     in
-    let only_one_side_known op nums ~folder ~other_side_var =
+    let only_one_side_known op nums ~folder ~other_side =
       let possible_results =
         folder (fun i possible_results ->
             match possible_results with
@@ -182,7 +184,7 @@ end = struct
               | This_primitive prim ->
                 Some (P.Set.add (Prim prim) possible_results)
               | The_other_side ->
-                Some (P.Set.add (Var other_side_var) possible_results)
+                Some (P.Set.add (Simple other_side) possible_results)
               | Cannot_simplify -> None
               | Invalid -> Some possible_results)
           nums
@@ -192,41 +194,38 @@ end = struct
       | Some results -> check_possible_results ~possible_results:results
       | None -> result_unknown ()
     in
-    let term, ty =
-      match proof1, proof2 with
-      | (Proved nums1, Proved nums2)
-          when N.ok_to_evaluate env ->
-        assert (not (N.Lhs.Set.is_empty nums1));
-        assert (not (N.Rhs.Set.is_empty nums2));
-        let all_pairs = N.cross_product nums1 nums2 in
-        let possible_results =
-          N.Pair.Set.fold (fun (i1, i2) possible_results ->
-              match N.op op i1 i2 with
-              | None -> possible_results
-              | Some result ->
-                N.Result.Set.add (Exactly result) possible_results)
-            all_pairs
-            N.Result.Set.empty
-        in
-        check_possible_results ~possible_results
-      | (Proved nums1, Unknown)
-          when N.ok_to_evaluate env ->
-        assert (not (N.Lhs.Set.is_empty nums1));
-        only_one_side_known (fun i -> N.op_rhs_unknown op ~lhs:i) nums1
-          ~folder:N.Lhs.Set.fold
-          ~other_side_var:arg2
-      | (Unknown, Proved nums2)
-          when N.ok_to_evaluate env ->
-        assert (not (N.Rhs.Set.is_empty nums2));
-        only_one_side_known (fun i -> N.op_lhs_unknown op ~rhs:i) nums2
-          ~folder:N.Rhs.Set.fold
-          ~other_side_var:arg1
-      | (Proved _ | Unknown), (Proved _ | Unknown) ->
-        result_unknown ()
-      | Invalid, _ | _, Invalid ->
-        result_invalid ()
-    in
-    term, ty, r
+    match proof1, proof2 with
+    | (Proved nums1, Proved nums2)
+        when N.ok_to_evaluate env ->
+      assert (not (N.Lhs.Set.is_empty nums1));
+      assert (not (N.Rhs.Set.is_empty nums2));
+      let all_pairs = N.cross_product nums1 nums2 in
+      let possible_results =
+        N.Pair.Set.fold (fun (i1, i2) possible_results ->
+            match N.op op i1 i2 with
+            | None -> possible_results
+            | Some result ->
+              P.Set.add (Exactly result) possible_results)
+          all_pairs
+          P.Set.empty
+      in
+      check_possible_results ~possible_results
+    | (Proved nums1, Unknown)
+        when N.ok_to_evaluate env ->
+      assert (not (N.Lhs.Set.is_empty nums1));
+      only_one_side_known (fun i -> N.op_rhs_unknown op ~lhs:i) nums1
+        ~folder:N.Lhs.Set.fold
+        ~other_side:arg2
+    | (Unknown, Proved nums2)
+        when N.ok_to_evaluate env ->
+      assert (not (N.Rhs.Set.is_empty nums2));
+      only_one_side_known (fun i -> N.op_lhs_unknown op ~rhs:i) nums2
+        ~folder:N.Rhs.Set.fold
+        ~other_side:arg1
+    | (Proved _ | Unknown), (Proved _ | Unknown) ->
+      result_unknown ()
+    | Invalid, _ | _, Invalid ->
+      result_invalid ()
 end
 
 module Int_ops_for_binary_arith (I : sig
@@ -766,7 +765,6 @@ let refine_block_ty_upon_access _env r ~block:_ ~block_ty ~field_index:_
   in
   let r = R.add_typing_judgement r block block_ty in
 *)
-  block_ty, r
 
 let simplify_block_load_known_index env r prim ~block ~block_ty ~index
       ~block_access_kind ~field_is_mutable ~field_kind ~invalid dbg =
