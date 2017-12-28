@@ -2211,7 +2211,7 @@ middle_end/simplify/simplify_aux.cmx : \
 middle_end/simplify/simplify_aux.cmi :
 middle_end/simplify/simplify_binary_primitive.cmo : \
     middle_end/base_types/variable.cmi utils/targetint.cmi \
-    middle_end/base_types/tag.cmi \
+    middle_end/base_types/tag.cmi middle_end/simplify/simplify_simple.cmi \
     middle_end/simplify/simplify_env_and_result.cmi \
     middle_end/language/simple.cmi utils/numbers.cmi utils/misc.cmi \
     middle_end/inlining/inlining_cost.cmi middle_end/base_types/immediate.cmi \
@@ -2222,7 +2222,7 @@ middle_end/simplify/simplify_binary_primitive.cmo : \
     middle_end/simplify/simplify_binary_primitive.cmi
 middle_end/simplify/simplify_binary_primitive.cmx : \
     middle_end/base_types/variable.cmx utils/targetint.cmx \
-    middle_end/base_types/tag.cmx \
+    middle_end/base_types/tag.cmx middle_end/simplify/simplify_simple.cmx \
     middle_end/simplify/simplify_env_and_result.cmx \
     middle_end/language/simple.cmx utils/numbers.cmx utils/misc.cmx \
     middle_end/inlining/inlining_cost.cmx middle_end/base_types/immediate.cmx \

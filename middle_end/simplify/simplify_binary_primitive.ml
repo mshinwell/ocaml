@@ -20,6 +20,7 @@ module B = Inlining_cost.Benefit
 module E = Simplify_env_and_result.Env
 module K = Flambda_kind
 module R = Simplify_env_and_result.Result
+module S = Simplify_simple
 module T = Flambda_type
 
 module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
@@ -59,10 +60,10 @@ module type Binary_arith_like_sig = sig
   val kind : K.t
   val term : Result.t -> Named.t
 
-  val prover_lhs : (flambda_type -> Lhs.Set.t) T.type_accessor
-  val prover_rhs : (flambda_type -> Rhs.Set.t) T.type_accessor
+  val prover_lhs : (T.t -> Lhs.Set.t T.proof) T.type_accessor
+  val prover_rhs : (T.t -> Rhs.Set.t T.proof) T.type_accessor
 
-  val these : Result.Set.t -> flambda_type
+  val these : Result.Set.t -> T.t
 
   type op
 
@@ -94,7 +95,7 @@ end = struct
     type t =
       | Var of Variable.t
       | Prim of Flambda_primitive.t
-      | Exactly of N.t
+      | Exactly of N.Result.t
 
     include Identifiable.Make_no_hash (struct
       type nonrec t = t
@@ -103,59 +104,71 @@ end = struct
         match t1, t2 with
         | Var var1, Var var2 -> Variable.compare var1 var2
         | Prim prim1, Prim prim2 -> Flambda_primitive.compare prim1 prim2
-        | Exactly i1, Exactly i2 -> N.compare i1 i2
+        | Exactly i1, Exactly i2 -> N.Result.compare i1 i2
         | Var _, (Prim _ | Exactly _) -> -1
         | Prim _, Var _ -> 1
         | Prim _, Exactly _ -> -1
-        | Exactly, (Var _ | Prim _) -> 1
+        | Exactly _, (Var _ | Prim _) -> 1
+
+      let equal t1 t2 =
+        compare t1 t2 = 0
 
       let print _ppf _t = Misc.fatal_error "Not yet implemented"
     end)
   end
 
-  let simplify env r prim dbg op arg1 arg2 : Named.t * R.t =
+  let simplify env r prim dbg op arg1 arg2 =
     let module P = Possible_result in
-    let arg1, ty1 = S.simplify_simple env arg1 in
-    let arg2, ty2 = S.simplify_simple env arg2 in
-    let proof1 = (E.type_accessor env N.prover_lhs) arg1 in
-    let proof2 = (E.type_accessor env N.prover_rhs) arg2 in
+    let arg1, arg_ty1 = S.simplify_simple env arg1 in
+    let arg2, arg_ty2 = S.simplify_simple env arg2 in
+    let proof1 = (E.type_accessor env N.prover_lhs) arg_ty1 in
+    let proof2 = (E.type_accessor env N.prover_rhs) arg_ty2 in
     let original_term () : Named.t = Prim (Binary (prim, arg1, arg2), dbg) in
     let result_unknown () =
-      Reachable.reachable (original_term ()), T.unknown N.kind Other
+      Reachable.reachable (original_term ()), T.unknown N.kind, r
     in
-    let result_invalid () = Reachable.invalid (), T.bottom N.kind in
+    let result_invalid () =
+      Reachable.invalid (), T.bottom N.kind,
+        R.map_benefit r (B.remove_primitive (Binary prim))
+    in
     let check_possible_results ~possible_results =
       (* CR mshinwell: We may want to bound the size of the set. *)
-      let named, ty =
-        if N.Result.Set.is_empty possible_results then
-          result_invalid ()
-        else
-          let named =
-            match N.Result.Set.get_singleton possible_results with
-            | Some (Exactly i) -> N.term i
-            | Some (Prim prim) -> Named.Prim (prim, dbg)
-            | Some (Var var) -> Named.Simple (Simple.var var)
-            | None -> original_term ()
+      if P.Set.is_empty possible_results then
+        result_invalid ()
+      else
+        let named, r =
+          match P.Set.get_singleton possible_results with
+          | Some (Exactly i) ->
+            N.term i, R.map_benefit r (B.remove_primitive (Binary prim))
+          | Some (Prim prim) ->
+            (* CR mshinwell: We should account for the benefit properly
+               (replacing one primitive with another). *)
+            Named.Prim (prim, dbg), r
+          | Some (Var var) ->
+            Named.Simple (Simple.var var),
+              R.map_benefit r (B.remove_primitive (Binary prim))
+          | None -> original_term (), r
+        in
+        let ty =
+          let is =
+            Misc.Stdlib.List.filter_map
+              (fun (possible_result : P.t) ->
+                match possible_result with
+                | Exactly i -> Some i
+                | Prim _ | Var _ -> None)
+              (P.Set.elements possible_results)
           in
-          let ty =
-            let is =
-              List.filter_map (function
-                  | Exactly i -> Some i
-                  | Prim _ | Var _ -> None)
-                (N.Result.Set.to_list possible_results)
-            in
-            if List.length is = N.Result.Set.cardinal possible_results then
-              N.these (N.Result.Set.of_list is)
-            else
-              match N.Result.Set.get_singleton possible_results with
-              | Some (Var var) -> T.alias kind var
-              | Some (Exactly _)
-              | Some (Prim _)
-              | None -> T.unknown kind Other
-          in
-          named, ty
-      in
-      Reachable.reachable named, ty
+          if List.length is = P.Set.cardinal possible_results
+          then
+            N.these (N.Result.Set.of_list is)
+          else
+            match P.Set.get_singleton possible_results with
+            | Some (Var var) -> T.alias_type_of N.kind (Name.var var)
+            | Some (Exactly _)
+            | Some (Prim _)
+            | None -> T.unknown N.kind
+        in
+        Reachable.reachable named, ty, r
     in
     let only_one_side_known op nums ~folder ~other_side_var =
       let possible_results =
@@ -165,23 +178,23 @@ end = struct
             | Some possible_results ->
               match op i with
               | Exactly result ->
-                P.Set.add (Exactly result) possible_results
+                Some (P.Set.add (Exactly result) possible_results)
               | This_primitive prim ->
-                P.Set.add (Prim prim) possible_results
+                Some (P.Set.add (Prim prim) possible_results)
               | The_other_side ->
-                P.Set.add (Var other_side_var) possible_results
+                Some (P.Set.add (Var other_side_var) possible_results)
               | Cannot_simplify -> None
-              | Invalid -> possible_results)
+              | Invalid -> Some possible_results)
           nums
-          Some (N.Result.Set.empty)
+          (Some P.Set.empty)
       in
       match possible_results with
-      | Some results -> check_possible_results ~possible_results
+      | Some results -> check_possible_results ~possible_results:results
       | None -> result_unknown ()
     in
     let term, ty =
       match proof1, proof2 with
-      | (Proved (Exactly nums1), Proved (Exactly nums2))
+      | (Proved nums1, Proved nums2)
           when N.ok_to_evaluate env ->
         assert (not (N.Lhs.Set.is_empty nums1));
         assert (not (N.Rhs.Set.is_empty nums2));
@@ -196,19 +209,19 @@ end = struct
             N.Result.Set.empty
         in
         check_possible_results ~possible_results
-      | (Proved (Exactly nums1), Proved Not_all_values_known)
+      | (Proved nums1, Unknown)
           when N.ok_to_evaluate env ->
         assert (not (N.Lhs.Set.is_empty nums1));
         only_one_side_known (fun i -> N.op_rhs_unknown op ~lhs:i) nums1
           ~folder:N.Lhs.Set.fold
           ~other_side_var:arg2
-      | (Proved Not_all_values_known, Proved (Exactly nums2))
+      | (Unknown, Proved nums2)
           when N.ok_to_evaluate env ->
         assert (not (N.Rhs.Set.is_empty nums2));
         only_one_side_known (fun i -> N.op_lhs_unknown op ~rhs:i) nums2
           ~folder:N.Rhs.Set.fold
           ~other_side_var:arg1
-      | Proved _, Proved _ ->
+      | (Proved _ | Unknown), (Proved _ | Unknown) ->
         result_unknown ()
       | Invalid, _ | _, Invalid ->
         result_invalid ()
@@ -693,109 +706,6 @@ end = struct
 end
 
 module Binary_float_comp = Binary_arith_like (Float_ops_for_binary_comp)
-
-let get_field ~importer ~type_of_name t ~field_index ~expected_result_kind
-      ~field_is_mutable ~is_unknown : get_field_result =
-  let block_t = t in
-  (* XXX not sure this is right -- see comment below *)
-  match Tag.Scannable.Map.get_singleton t with
-  | None -> Invalid
-  | Some (_tag, fields) ->
-    if field_index < 0 || field_index >= Array.length fields then
-      Invalid
-    else
-      let ty = fields.(field_index) in
-      let scanning = scanning_ty_value ~importer ~type_of_name ty in
-      let actual_kind = K.value scanning in
-      if not (K.compatible actual_kind ~if_used_at:expected_result_kind)
-      then begin
-        Misc.fatal_errorf "Expected field %d of block with the following \
-            type to have kind %a, but it has kind %a: %a"
-          field_index
-          K.print expected_result_kind
-          K.print actual_kind
-          print t
-      end;
-      let t = t_of_ty_value ty in
-      if field_is_mutable then begin
-        if not (is_unknown ~importer ~type_of_name t) then begin
-          Misc.fatal_errorf "Field %d of type %a in block with the following \
-              type is apparently mutable, yet its type is not unknown: %a"
-            field_index
-            print block_t
-            print t
-        end
-      end;
-      Ok t
-
-let get_field ~importer ~type_of_name t ~field_index ~field_is_mutable
-      ~(block_access_kind : Flambda_primitive.block_access_kind)
-      : get_field_result =
-  let t_evaluated, _canonical_name =
-    Evaluated.create ~importer ~type_of_name t
-  in
-  let expected_result_kind =
-    match block_access_kind with
-    | Dynamic_must_scan_or_naked_float -> K.value Must_scan
-    | Must_scan -> K.value Must_scan
-    | Definitely_immediate -> K.value Definitely_immediate
-    | Naked_float -> K.naked_float ()
-  in
-  match t_evaluated with
-  | Values values ->
-    begin match values with
-    | Unknown -> Ok (unknown expected_result_kind Other)
-    | Blocks_and_tagged_immediates (Exactly (blocks, imms)) ->
-      (* XXX this needs reviewing again in the light of the work in
-         Simplify_primitive (for block set).  I suspect this next conditional
-         should go *)
-      if not (Immediate.Set.is_empty imms) then
-        Invalid
-      else
-        (* XXX we shouldn't be doing this if [field_kind] is [Float] -- and
-           vice-versa in the float array case *)
-        Blocks.get_field ~importer ~type_of_name blocks ~field_index
-          ~expected_result_kind ~field_is_mutable ~is_unknown
-    | Float_arrays { lengths; } ->
-      let if_used_at = Flambda_kind.naked_float () in
-      (* CR mshinwell: If this check fails, maybe it's always a compiler bug?
-         We need to check how the kind for [Block_load] is set in the frontend
-         (i.e. Pfield / Pfloatfield). *)
-      if not (Flambda_kind.compatible expected_result_kind ~if_used_at) then
-        Invalid
-      else
-        let index_is_out_of_range_for_all_lengths =
-          match lengths with
-          | Not_all_values_known -> false
-          | Exactly lengths ->
-            Int.Set.for_all (fun length ->
-                field_index < 0 || field_index >= length)
-              lengths
-        in
-        if index_is_out_of_range_for_all_lengths then
-          Invalid
-        else
-          Ok (unknown (Flambda_kind.naked_float ()) Other)
-    | Bottom
-    | Blocks_and_tagged_immediates _
-    | Tagged_immediates_only _
-    | Boxed_floats _
-    | Boxed_int32s _
-    | Boxed_int64s _
-    | Boxed_nativeints _
-    | Closures _
-    | Sets_of_closures _
-    | Strings _ -> Invalid
-    end
-  | Naked_immediates _
-  | Naked_floats _
-  | Naked_int32s _
-  | Naked_int64s _
-  | Naked_nativeints _ ->
-    Misc.fatal_errorf "Cannot extract field %d from block with the following \
-        type (invalid kind): %a"
-      field_index
-      print t
 
 (* CR mshinwell: This currently can't be done unless we know the exact size
    of the block.  Also, the refining function would need to take the tag.
