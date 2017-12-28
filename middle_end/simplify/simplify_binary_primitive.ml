@@ -367,27 +367,58 @@ module Binary_int_arith_int64 =
 module Binary_int_arith_nativeint =
   Binary_arith_like (Int_ops_for_binary_arith_nativeint)
 
-module Int_ops_for_binary_shift (I : A.Number_kind) : sig
-  include Binary_arith_sig
-    with type op = binary_int_arith_op
+module Int_ops_for_binary_shift (I : A.Int_number_kind) : sig
+  include Binary_arith_like_sig
+    with type op = Flambda_primitive.int_shift_op
 end = struct
-  module Lhs = I
+  module Lhs = I.Num
   module Rhs = Immediate
-  module Result = I
+  module Result = I.Num
+
+  type op = Flambda_primitive.int_shift_op
+
+  let kind = I.kind
+  let standard_int_kind = I.standard_int_kind
 
   let ok_to_evaluate _env = true
 
-  let prover_lhs = I.prover
+  let prover_lhs = I.unboxed_prover
   let prover_rhs = T.prove_tagged_immediate
 
-  let op (op : binary_int_arith_op) n1 n2 =
+  let these = I.these_unboxed
+
+  let term = I.term_unboxed
+
+  (* CR mshinwell: Try to factor out this cross product code directly into
+     [Identifiable] *)
+  module Pair = struct
+    type nonrec t = Lhs.t * Rhs.t
+
+    module T_pair = Identifiable.Pair (Lhs) (Rhs)
+
+    include Identifiable.Make (T_pair)
+  end
+
+  let cross_product set1 set2 =
+    Lhs.Set.fold (fun elt1 result ->
+        Rhs.Set.fold (fun elt2 result ->
+            Pair.Set.add (elt1, elt2) result)
+          set2
+          result)
+      set1
+      Pair.Set.empty
+
+  module Num = I.Num
+
+  let op (op : Flambda_primitive.int_shift_op) n1 n2 =
     let always_some f = Some (f n1 n2) in
     match op with
-    | Lsl -> always_some I.shift_left
-    | Lsr -> always_some I.shift_right_logical
-    | Asr -> always_some I.shift_right
+    | Lsl -> always_some Num.shift_left
+    | Lsr -> always_some Num.shift_right_logical
+    | Asr -> always_some Num.shift_right
 
-  let op_lhs_unknown ~rhs : N.t binary_arith_outcome_for_one_side_only =
+  let op_lhs_unknown (op : Flambda_primitive.int_shift_op) ~rhs
+        : Num.t binary_arith_outcome_for_one_side_only =
     let module O = Targetint.OCaml in
     let rhs = Immediate.to_targetint rhs in
     match op with
@@ -401,7 +432,8 @@ end = struct
       if O.equal rhs O.zero then The_other_side
       else Cannot_simplify
 
-  let op_rhs_unknown ~lhs : N.t binary_arith_outcome_for_one_side_only =
+  let op_rhs_unknown (op : Flambda_primitive.int_shift_op) ~lhs
+        : Num.t binary_arith_outcome_for_one_side_only =
     (* In these cases we are giving a semantics for some cases where the
        right-hand side may be less than zero or greater than or equal to
        [Targetint.size].  These cases have undefined semantics, as above;
@@ -411,11 +443,11 @@ end = struct
        such benefit.) *)
     match op with
     | Lsl | Lsr ->
-      if I.equal lhs I.zero then Exactly I.zero
+      if Num.equal lhs Num.zero then Exactly Num.zero
       else Cannot_simplify
     | Asr ->
-      if I.equal lhs I.zero then Exactly I.zero
-      else if I.equal lhs I.minus_one then Exactly I.minus_one
+      if Num.equal lhs Num.zero then Exactly Num.zero
+      else if Num.equal lhs Num.minus_one then Exactly Num.minus_one
       else Cannot_simplify
 end
 

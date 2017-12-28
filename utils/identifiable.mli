@@ -40,7 +40,11 @@ module type Set = sig
   module T : Set.OrderedType
   include Set.S
     with type elt = T.t
-     and type t = Set.Make (T).t
+  (* CR mshinwell: I had to delete this:
+       and type t = Set.Make (T).t
+     as it was causing trouble in [Simplify_binary_primitive].  I don't really
+     see why we need it nor the similar annotations below, which we should
+     probably get rid of too. *)
 
   val print : Format.formatter -> t -> unit
   val to_string : t -> string
