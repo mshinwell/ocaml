@@ -254,11 +254,15 @@ module OCaml : sig
   val of_int64 : int64 -> t
   val of_targetint : targetint -> t
 
+  (* CR mshinwell: this must of course match [int_of_float] on the target *)
+  val of_float : float -> t
+
   val to_int : t -> int
   val to_int32 : t -> int32
   val to_int64 : t -> int64
   val to_targetint : t -> targetint
 
+  val neg : t -> t
   val get_least_significant_16_bits_then_byte_swap : t -> t
 
   include Identifiable.S with type t := t

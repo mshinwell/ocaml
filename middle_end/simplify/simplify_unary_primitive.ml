@@ -562,11 +562,9 @@ let simplify_get_tag env r ~result_var prim ~tags_to_sizes ~block dbg =
     Reachable.reachable term, result_var_type, r
   | Invalid -> invalid r
 
-module type For_standard_ints = sig
+module type Number_kind = sig
   module Num : sig
     include Identifiable.S
-
-    val swap_byte_endianness : t -> t
 
     val to_const : t -> Simple.Const.t
 
@@ -576,33 +574,61 @@ module type For_standard_ints = sig
     val to_naked_nativeint : t -> Targetint.t
   end
 
-  val kind : K.Standard_int.t
-  val prover : (T.t -> Num.Set.t T.proof) T.type_accessor
-  val this : Num.t -> T.t
-  val these : Num.Set.t -> T.t
+  val kind : K.Standard_int_or_float.t
+
+  val unboxed_prover : (T.t -> Num.Set.t T.proof) T.type_accessor
+
+  val this_unboxed : Num.t -> T.t
+  val these_unboxed : Num.Set.t -> T.t
 end
 
-module Make_simplify_swap_byte_endianness (P : For_standard_ints) = struct
-  let simplify env r prim arg dbg =
-    let arg, ty = S.simplify_simple env arg in
-    let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
-    let proof = (E.type_accessor env P.prover) ty in
-    let kind = K.Standard_int.to_kind P.kind in
-    match proof with
-    | Proved nums ->
-      let nums =
-        P.Num.Set.map (fun imm -> P.Num.swap_byte_endianness imm) nums
-      in
-      Reachable.reachable (original_term ()), P.these nums,
-        R.map_benefit r (B.remove_primitive (Unary prim))
-    | Unknown ->
-      Reachable.reachable (original_term ()), T.unknown kind, r
-    | Invalid ->
-      Reachable.invalid (), T.bottom kind,
-        R.map_benefit r (B.remove_primitive (Unary prim))
+(* CR mshinwell: Share code somehow with previous "module type" *)
+module type Int_number_kind = sig
+  module Num : sig
+    include Identifiable.S
+
+    val swap_byte_endianness : t -> t
+    val neg : t -> t
+
+    val to_const : t -> Simple.Const.t
+
+    val to_tagged_immediate : t -> Immediate.t
+    val to_naked_int32 : t -> Int32.t
+    val to_naked_int64 : t -> Int64.t
+    val to_naked_nativeint : t -> Targetint.t
+  end
+
+  val kind : K.Standard_int_or_float.t
+
+  val unboxed_prover : (T.t -> Num.Set.t T.proof) T.type_accessor
+
+  val this_unboxed : Num.t -> T.t
+  val these_unboxed : Num.Set.t -> T.t
 end
 
-module For_standard_ints_tagged_immediate : For_standard_ints = struct
+module type Boxable = sig
+  module Num : Identifiable.S
+
+  val boxed_prover
+     : (T.t -> Num.Set.t T.ty_naked_number T.proof) T.type_accessor
+
+  val this_boxed : Num.t -> T.t
+  val these_boxed : Num.Set.t -> T.t
+
+  val box : T.t -> T.t
+end
+
+module type Boxable_number_kind = sig
+  include Number_kind
+  include Boxable with module Num := Num
+end
+
+module type Boxable_int_number_kind = sig
+  include Int_number_kind
+  include Boxable with module Num := Num
+end
+
+module For_tagged_immediates : Int_number_kind = struct
   module Num = struct
     include Immediate
 
@@ -627,14 +653,47 @@ module For_standard_ints_tagged_immediate : For_standard_ints = struct
       Float_by_bit_pattern.of_bits (to_naked_int64 t)
   end
 
-  let kind : K.Standard_int.t = Tagged_immediate
-  let or_float_kind : K.Standard_int_or_float.t = Tagged_immediate
-  let prover = T.prove_tagged_immediate
-  let this = T.this_tagged_immediate
-  let these = T.these_tagged_immediates
+  let kind : K.Standard_int_or_float.t = Tagged_immediate
+
+  let unboxed_prover = T.prove_tagged_immediate
+  let this_unboxed = T.this_tagged_immediate
+  let these_unboxed = T.these_tagged_immediates
 end
 
-module For_standard_ints_naked_int32 : For_standard_ints = struct
+module For_floats : Boxable_number_kind = struct
+  module Num = struct
+    include Float_by_bit_pattern
+
+    let to_const t = Simple.Const.Naked_float t
+
+    (* CR mshinwell: We need to validate that the backend compiles
+       the [Int_of_float] primitive in the same way as
+       [Targetint.of_float].  Ditto for [Float_of_int].  (For the record,
+       [Pervasives.int_of_float] and [Nativeint.of_float] on [nan] produce
+       wildly different results). *)
+    let to_tagged_immediate t =
+      Immediate.int (Targetint.OCaml.of_float (to_float t))
+
+    let to_naked_float t = t
+    let to_naked_int32 t = Int32.of_float (to_float t)
+    let to_naked_int64 t = Int64.of_float (to_float t)
+    let to_naked_nativeint t = Targetint.of_float (to_float t)
+  end
+
+  let kind : K.Standard_int_or_float.t = Naked_float
+
+  let unboxed_prover = T.prove_naked_float
+  let this_unboxed = T.this_naked_float
+  let these_unboxed = T.these_naked_floats
+
+  let boxed_prover = T.prove_boxed_float
+  let this_boxed = T.this_boxed_float
+  let these_boxed = T.these_boxed_floats
+
+  let box = T.box_float
+end
+
+module For_int32s : Boxable_int_number_kind = struct
   module Num = struct
     include Int32
 
@@ -646,14 +705,20 @@ module For_standard_ints_naked_int32 : For_standard_ints = struct
     let to_naked_nativeint t = Targetint.of_int32 t
   end
 
-  let kind : K.Standard_int.t = Naked_int32
-  let or_float_kind : K.Standard_int_or_float.t = Naked_int32
-  let prover = T.prove_naked_int32
-  let this = T.this_naked_int32
-  let these = T.these_naked_int32s
+  let kind : K.Standard_int_or_float.t = Naked_int32
+
+  let unboxed_prover = T.prove_naked_int32
+  let this_unboxed = T.this_naked_int32
+  let these_unboxed = T.these_naked_int32s
+
+  let boxed_prover = T.prove_boxed_int32
+  let this_boxed = T.this_boxed_int32
+  let these_boxed = T.these_boxed_int32s
+
+  let box = T.box_int32
 end
 
-module For_standard_ints_naked_int64 : For_standard_ints = struct
+module For_int64s : Boxable_int_number_kind = struct
   module Num = struct
     include Int64
 
@@ -665,14 +730,20 @@ module For_standard_ints_naked_int64 : For_standard_ints = struct
     let to_naked_nativeint t = Targetint.of_int64 t
   end
 
-  let kind : K.Standard_int.t = Naked_int64
-  let or_float_kind : K.Standard_int_or_float.t = Naked_int64
-  let prover = T.prove_naked_int64
-  let this = T.this_naked_int64
-  let these = T.these_naked_int64s
+  let kind : K.Standard_int_or_float.t = Naked_int64
+
+  let unboxed_prover = T.prove_naked_int64
+  let this_unboxed = T.this_naked_int64
+  let these_unboxed = T.these_naked_int64s
+
+  let boxed_prover = T.prove_boxed_int64
+  let this_boxed = T.this_boxed_int64
+  let these_boxed = T.these_boxed_int64s
+
+  let box = T.box_int64
 end
 
-module For_standard_ints_naked_nativeint : For_standard_ints = struct
+module For_nativeints : Boxable_int_number_kind = struct
   module Num = struct
     include Targetint
 
@@ -684,51 +755,57 @@ module For_standard_ints_naked_nativeint : For_standard_ints = struct
     let to_naked_nativeint t = t
   end
 
-  let kind : K.Standard_int.t = Naked_nativeint
-  let or_float_kind : K.Standard_int_or_float.t = Naked_nativeint
-  let prover = T.prove_naked_nativeint
-  let this = T.this_naked_nativeint
-  let these = T.these_naked_nativeints
+  let kind : K.Standard_int_or_float.t = Naked_nativeint
+
+  let unboxed_prover = T.prove_naked_nativeint
+  let this_unboxed = T.this_naked_nativeint
+  let these_unboxed = T.these_naked_nativeints
+
+  let boxed_prover = T.prove_boxed_nativeint
+  let this_boxed = T.this_boxed_nativeint
+  let these_boxed = T.these_boxed_nativeints
+
+  let box = T.box_nativeint
+end
+
+module Make_simplify_swap_byte_endianness (N : Int_number_kind) = struct
+  let simplify env r prim arg dbg =
+    let arg, ty = S.simplify_simple env arg in
+    let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
+    let proof = (E.type_accessor env N.unboxed_prover) ty in
+    let kind = K.Standard_int_or_float.to_kind N.kind in
+    match proof with
+    | Proved nums ->
+      let nums =
+        N.Num.Set.map (fun imm -> N.Num.swap_byte_endianness imm) nums
+      in
+      Reachable.reachable (original_term ()), N.these_unboxed nums,
+        R.map_benefit r (B.remove_primitive (Unary prim))
+    | Unknown ->
+      Reachable.reachable (original_term ()), T.unknown kind, r
+    | Invalid ->
+      Reachable.invalid (), T.bottom kind,
+        R.map_benefit r (B.remove_primitive (Unary prim))
 end
 
 module Simplify_swap_byte_endianness_tagged_immediate =
-  Make_simplify_swap_byte_endianness (For_standard_ints_tagged_immediate)
+  Make_simplify_swap_byte_endianness (For_tagged_immediates)
 
 module Simplify_swap_byte_endianness_naked_int32 =
-  Make_simplify_swap_byte_endianness (For_standard_ints_naked_int32)
+  Make_simplify_swap_byte_endianness (For_int32s)
 
 module Simplify_swap_byte_endianness_naked_int64 =
-  Make_simplify_swap_byte_endianness (For_standard_ints_naked_int64)
+  Make_simplify_swap_byte_endianness (For_int64s)
 
 module Simplify_swap_byte_endianness_naked_nativeint =
-  Make_simplify_swap_byte_endianness (For_standard_ints_naked_nativeint)
+  Make_simplify_swap_byte_endianness (For_nativeints)
 
-module type For_unboxable_numbers = sig
-  module Num : sig
-    include Identifiable.S
-
-    val to_const : t -> Simple.Const.t
-  end
-
-  val kind : K.Boxable_number.t
-
-  type naked_num_set
-
-  val boxed_prover
-     : (T.t -> naked_num_set T.ty_naked_number T.proof) T.type_accessor
-  val unboxed_prover : (T.t -> Num.Set.t T.proof) T.type_accessor
-
-  val this : Num.t -> T.t
-  val these : Num.Set.t -> T.t
-  val box : T.t -> T.t
-end
-
-module Make_simplify_unbox_number (P : For_unboxable_numbers) = struct
+module Make_simplify_unbox_number (P : Boxable_number_kind) = struct
   let simplify env r prim arg dbg =
     let arg, ty = S.simplify_simple env arg in
     let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
     let proof = (E.type_accessor env P.boxed_prover) ty in
-    let kind = K.Boxable_number.to_kind P.kind in
+    let kind = K.Standard_int_or_float.to_kind P.kind in
     let unknown () =
       Reachable.reachable (original_term ()), T.unknown kind, r
     in
@@ -742,7 +819,7 @@ module Make_simplify_unbox_number (P : For_unboxable_numbers) = struct
       let proof = (E.type_accessor env P.unboxed_prover) unboxed_ty in
       begin match proof with
       | Proved nums ->
-        Reachable.reachable (original_term ()), P.these nums,
+        Reachable.reachable (original_term ()), P.these_unboxed nums,
           R.map_benefit r (B.remove_primitive (Unary prim))
       | Unknown -> unknown ()
         (* In this case, [unboxed_ty] might actually be an alias, meaning
@@ -755,80 +832,19 @@ module Make_simplify_unbox_number (P : For_unboxable_numbers) = struct
     | Invalid -> invalid ()
 end
 
-module Simplify_unbox_number_float =
-  Make_simplify_unbox_number (struct
-    module Num = struct
-      include Float_by_bit_pattern
-      let to_const t = Simple.Const.Naked_float t
-    end
-
-    let kind : K.Boxable_number.t = Naked_float
-    type naked_num_set = Float_by_bit_pattern.Set.t
-    let boxed_prover = T.prove_boxed_float
-    let unboxed_prover = T.prove_naked_float
-    let this = T.this_naked_float
-    let these = T.these_naked_floats
-    let box = T.box_float
-  end)
-
-module Simplify_unbox_number_int32 =
-  Make_simplify_unbox_number (struct
-    module Num = struct
-      include Int32
-      let to_const t = Simple.Const.Naked_int32 t
-    end
-
-    let kind : K.Boxable_number.t = Naked_int32
-    type naked_num_set = Int32.Set.t
-    let boxed_prover = T.prove_boxed_int32
-    let unboxed_prover = T.prove_naked_int32
-    let this = T.this_naked_int32
-    let these = T.these_naked_int32s
-    let box = T.box_int32
-  end)
-
-module Simplify_unbox_number_int64 =
-  Make_simplify_unbox_number (struct
-    module Num = struct
-      include Int64
-      let to_const t = Simple.Const.Naked_int64 t
-    end
-
-    let kind : K.Boxable_number.t = Naked_int64
-    type naked_num_set = Int64.Set.t
-    let boxed_prover = T.prove_boxed_int64
-    let unboxed_prover = T.prove_naked_int64
-    let this = T.this_naked_int64
-    let these = T.these_naked_int64s
-    let box = T.box_int64
-  end)
-
+module Simplify_unbox_number_float = Make_simplify_unbox_number (For_floats)
+module Simplify_unbox_number_int32 = Make_simplify_unbox_number (For_int32s)
+module Simplify_unbox_number_int64 = Make_simplify_unbox_number (For_int64s)
 module Simplify_unbox_number_nativeint =
-  Make_simplify_unbox_number (struct
-    module Num = struct
-      include Targetint
-      let to_const t = Simple.Const.Naked_nativeint t
-    end
+  Make_simplify_unbox_number (For_nativeints)
 
-    let kind : K.Boxable_number.t = Naked_nativeint
-    type naked_num_set = Targetint.Set.t
-    let boxed_prover = T.prove_boxed_nativeint
-    let unboxed_prover = T.prove_naked_nativeint
-    let this = T.this_naked_nativeint
-    let these = T.these_naked_nativeints
-    let box = T.box_nativeint
-  end)
-
-(* CR mshinwell: It's a bit strange that the argument to this functor
-   includes [boxed_prover], which isn't used *)
-module Make_simplify_box_number (P : For_unboxable_numbers) = struct
+module Make_simplify_box_number (P : Boxable_number_kind) = struct
   let simplify env r prim arg dbg =
     (* CR mshinwell: If [arg] is already a [Const] we shouldn't have to do
        much work... *)
     let arg, ty = S.simplify_simple env arg in
     let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
     let proof = (E.type_accessor env P.unboxed_prover) ty in
-    let kind = K.Boxable_number.to_kind P.kind in
     match proof with
     | Proved nums ->
       (* begin match P.Num.Set.get_singleton nums with
@@ -840,188 +856,74 @@ module Make_simplify_box_number (P : For_unboxable_numbers) = struct
       | None -> ...
       end *)
       assert (not (P.Num.Set.is_empty nums));
-      Reachable.reachable (original_term ()), P.these nums, r
+      Reachable.reachable (original_term ()), P.these_unboxed nums, r
     | Unknown ->
       Reachable.reachable (original_term ()), P.box ty, r
     | Invalid -> 
-      Reachable.invalid (), T.bottom kind, r
+      Reachable.invalid (), T.bottom (K.value Definitely_pointer), r
 end
 
-module Simplify_box_number_float =
-  Make_simplify_box_number (struct
-    module Num = struct
-      include Numbers.Float_by_bit_pattern
-      let to_const t = Simple.Const.Naked_float t
-    end
+module Simplify_box_number_float = Make_simplify_box_number (For_floats)
+module Simplify_box_number_int32 = Make_simplify_box_number (For_int32s)
+module Simplify_box_number_int64 = Make_simplify_box_number (For_int64s)
+module Simplify_box_number_nativeint = Make_simplify_box_number (For_nativeints)
 
-    let kind : K.Boxable_number.t = Naked_float
-    type naked_num_set = Float_by_bit_pattern.Set.t
-    let unboxed_prover = T.prove_naked_float
-    let boxed_prover = T.prove_boxed_float
-    let this = T.this_boxed_float
-    let these = T.these_boxed_floats
-    let box = T.box_float
-  end)
-
-module Simplify_box_number_int32 =
-  Make_simplify_box_number (struct
-    module Num = struct
-      include Int32
-      let to_const t = Simple.Const.Naked_int32 t
-    end
-
-    let kind : K.Boxable_number.t = Naked_int32
-    type naked_num_set = Int32.Set.t
-    let unboxed_prover = T.prove_naked_int32
-    let boxed_prover = T.prove_boxed_int32
-    let this = T.this_boxed_int32
-    let these = T.these_boxed_int32s
-    let box = T.box_int32
-  end)
-
-module Simplify_box_number_int64 =
-  Make_simplify_box_number (struct
-    module Num = struct
-      include Int64
-      let to_const t = Simple.Const.Naked_int64 t
-    end
-
-    let kind : K.Boxable_number.t = Naked_int64
-    type naked_num_set = Int64.Set.t
-    let unboxed_prover = T.prove_naked_int64
-    let boxed_prover = T.prove_boxed_int64
-    let this = T.this_boxed_int64
-    let these = T.these_boxed_int64s
-    let box = T.box_int64
-  end)
-
-module Simplify_box_number_nativeint =
-  Make_simplify_box_number (struct
-    module Num = struct
-      include Targetint
-      let to_const t = Simple.Const.Naked_nativeint t
-    end
-
-    let kind : K.Boxable_number.t = Naked_nativeint
-    type naked_num_set = Targetint.Set.t
-    let unboxed_prover = T.prove_naked_nativeint
-    let boxed_prover = T.prove_boxed_nativeint
-    let this = T.this_boxed_nativeint
-    let these = T.these_boxed_nativeints
-    let box = T.box_nativeint
-  end)
-
-module Unary_int_arith (I : sig
-  type t
-
-  val kind : K.Standard_int.t
-  val term : t -> Named.t
-
-  val neg : t -> t
-
-  include Identifiable.S with type t := t
-
-  val this : t -> T.t
-  val these : Set.t -> T.t
-end) = struct
+module Unary_int_arith (I : Int_number_kind) = struct
   let simplify env r prim dbg (op : Flambda_primitive.unary_int_arith_op) arg =
-    let arg, ty = S.simplify_simple env arg in
-    let proof = (E.type_accessor env T.prove_tagged_immediate) arg in
+    let arg, arg_ty = S.simplify_simple env arg in
+    let proof = (E.type_accessor env I.unboxed_prover) arg_ty in
     let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
     let result_unknown () =
       (* One might imagine doing something complicated to [ty] to reflect
          the operation that has happened, but we don't.  As such we cannot
          propagate [ty] and must return "unknown". *)
       Reachable.reachable (original_term ()),
-        T.unknown (K.Standard_int.to_kind I.kind) Other
+        T.unknown (K.Standard_int_or_float.to_kind I.kind),
+        r
     in
     let result_invalid () =
       Reachable.invalid (),
-        T.bottom (K.Standard_int.to_kind I.kind)
+        T.bottom (K.Standard_int_or_float.to_kind I.kind),
+        R.map_benefit r (B.remove_primitive (Unary prim))
     in
-    let term, ty =
-      match proof with
-      | Proved (Exactly ints) ->
-        assert (not (I.Set.is_empty ints));
-        begin match op with
-        | Neg ->
-          let possible_results = I.Set.map (fun i -> I.neg i) ints in
-          Reachable.reachable (original_term ()), I.these possible_results
-        end
-      | Proved Not_all_values_known -> result_unknown ()
-      | Invalid -> result_invalid ()
-    in
-    term, ty, r
+    match proof with
+    | Proved ints ->
+      assert (not (I.Num.Set.is_empty ints));
+      begin match op with
+      | Neg ->
+        let possible_results = I.Num.Set.map (fun i -> I.Num.neg i) ints in
+        Reachable.reachable (original_term ()),
+          I.these_unboxed possible_results, r
+      | Swap_byte_endianness ->
+        let possible_results =
+          I.Num.Set.map (fun i -> I.Num.swap_byte_endianness i) ints
+        in
+        Reachable.reachable (original_term ()),
+          I.these_unboxed possible_results, r
+      end
+    | Unknown -> result_unknown ()
+    | Invalid -> result_invalid ()
 end
 
-module Unary_int_arith_tagged_immediate = Unary_int_arith (Targetint)
-module Unary_int_arith_naked_int32 = Unary_int_arith (Int32)
-module Unary_int_arith_naked_int64 = Unary_int_arith (Int64)
-module Unary_int_arith_naked_nativeint = Unary_int_arith (Targetint)
+module Unary_int_arith_tagged_immediate =
+  Unary_int_arith (For_tagged_immediates)
+module Unary_int_arith_naked_int32 = Unary_int_arith (For_int32s)
+module Unary_int_arith_naked_int64 = Unary_int_arith (For_int64s)
+module Unary_int_arith_naked_nativeint = Unary_int_arith (For_nativeints)
 
-module type For_standard_int_or_float = sig
-  module Num : sig
-    include Identifiable.S
-
-    val to_const : t -> Simple.Const.t
-
-    val to_tagged_immediate : t -> Immediate.t
-    val to_naked_float : t -> Float_by_bit_pattern.t
-    val to_naked_int32 : t -> Int32.t
-    val to_naked_int64 : t -> Int64.t
-    val to_naked_nativeint : t -> Targetint.t
-  end
-
-  val or_float_kind : K.Standard_int_or_float.t
-  val prover : (T.t -> Num.Set.t proof) T.type_accessor
-  val this : Num.t -> T.t
-  val these : Num.Set.t -> T.t
-end
-
-module For_standard_ints_naked_float : For_standard_int_or_float = struct
-  module Num = struct
-    include Float_by_bit_pattern
-
-    let to_const t = Simple.Const.Naked_float t
-
-    (* CR mshinwell: We need to validate that the backend compiles
-       the [Int_of_float] primitive in the same way as
-       [Targetint.of_float].  Ditto for [Float_of_int].  (For the record,
-       [Pervasives.int_of_float] and [Nativeint.of_float] on [nan] produce
-       wildly different results). *)
-    let to_tagged_immediate t =
-      let f = Float_by_bit_pattern.to_float t in
-      Immediate.int (Targetint.OCaml.of_float f)
-
-    let to_naked_float t = t
-
-    let to_naked_int32 t = Int32.of_float (Float_by_bit_pattern.to_float t)
-
-    let to_naked_int64 t = Int64.of_float (Float_by_bit_pattern.to_float t)
-
-    let to_naked_nativeint t =
-      Targetint.of_float (Float_by_bit_pattern.to_float t)
-  end
-
-  let or_float_kind : K.Standard_int_or_float.t = Naked_float
-  let prover = T.prove_naked_float
-  let this = T.this_naked_float
-  let these = T.these_naked_floats
-end
-
-module Make_simplify_int_conv (N : For_standard_int_or_float) = struct
+module Make_simplify_int_conv (N : Number_kind) = struct
   module F = Float_by_bit_pattern
 
   let simplify env r prim arg ~(dst : K.Standard_int_or_float.t) dbg =
-    let arg, ty = S.simplify_simple env arg in
+    let arg, arg_ty = S.simplify_simple env arg in
     if K.Standard_int_or_float.equal N.kind dst then
-      if T.is_bottom ty then
+      if (E.type_accessor env T.is_bottom) ty then
         Reachable.invalid (),
           T.bottom (K.Standard_int_or_float.to_kind dst), r
       else
         Reachable.reachable (Flambda.Named.Simple arg), ty, r
     else
-      let proof = (E.type_accessor env N.prover) arg in
+      let proof = (E.type_accessor env N.unboxed_prover) arg_ty in
       let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
       let module N = N.Num in
       let term, ty =
@@ -1073,23 +975,20 @@ module Make_simplify_int_conv (N : For_standard_int_or_float) = struct
           end
         | Proved Not_all_values_known ->
           Reachable.reachable (original_term ()),
-            T.unknown (K.Standard_int.to_kind dst) Other
+            T.unknown (K.Standard_int_or_float.to_kind dst) Other
         | Invalid ->
-          Reachable.invalid (), T.bottom (K.Standard_int.to_kind dst)
+          Reachable.invalid (), T.bottom (K.Standard_int_or_float.to_kind dst)
       in
       term, ty, r
 end
 
 module Simplify_int_conv_tagged_immediate =
-  Make_simplify_int_conv (For_standard_ints_tagged_immediate)
-module Simplify_int_conv_naked_float =
-  Make_simplify_int_conv (For_standard_ints_naked_float)
-module Simplify_int_conv_naked_int32 =
-  Make_simplify_int_conv (For_standard_ints_naked_int32)
-module Simplify_int_conv_naked_int64 =
-  Make_simplify_int_conv (For_standard_ints_naked_int64)
+  Make_simplify_int_conv (For_tagged_immediates)
+module Simplify_int_conv_naked_float = Make_simplify_int_conv (For_floats)
+module Simplify_int_conv_naked_int32 = Make_simplify_int_conv (For_int32s)
+module Simplify_int_conv_naked_int64 = Make_simplify_int_conv (For_int64s)
 module Simplify_int_conv_naked_nativeint =
-  Make_simplify_int_conv (For_standard_ints_naked_nativeint)
+  Make_simplify_int_conv (For_nativeints)
 
 let simplify_unary_float_arith_op env r prim
       (op : Flambda_primitive.unary_float_arith_op) arg dbg =

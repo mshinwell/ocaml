@@ -48,6 +48,12 @@ val to_targetint : t -> Targetint.OCaml.t
 
 val set_to_targetint_set : Set.t -> Targetint.OCaml.Set.t
 
+val set_of_targetint_set : Targetint.OCaml.Set.t -> Set.t
+
+val neg : t -> t
+
+val get_least_significant_16_bits_then_byte_swap : t -> t
+
 (** The set consisting of the representations of constant [true] and [false]. *)
 val all_bools : Set.t
 

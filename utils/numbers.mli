@@ -62,6 +62,8 @@ module Float_by_bit_pattern : sig
   val of_bits : Int64.t -> t
   val of_string : string -> t
 
+  val to_float : t -> float
+
   val one : t
   val zero : t
   val minus_one : t
