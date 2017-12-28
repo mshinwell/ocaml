@@ -256,6 +256,7 @@ module OCaml : sig
 
   (* CR mshinwell: this must of course match [int_of_float] on the target *)
   val of_float : float -> t
+  val to_float : t -> float
 
   val to_int : t -> int
   val to_int32 : t -> int32

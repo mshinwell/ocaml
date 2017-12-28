@@ -62,6 +62,11 @@ module type Env = sig
       compiler backend being used for compilation. *)
   val backend : t -> (module Backend_intf.S)
 
+  (** Whether floating-point arithmetic operations may be evaluated by the
+      compiler.  (Typically [false] when the user may change rounding modes
+      at runtime.) *)
+  val const_float_prop : t -> bool
+
   (** Prepare an [Flambda_type.type_accessor] function for use in the current
       environment. *)
   val type_accessor
