@@ -24,15 +24,10 @@ module S = Simplify_simple
 module T = Flambda_type
 
 module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
-module Int = Numbers.Int
 module Int32 = Numbers.Int32
 module Int64 = Numbers.Int64
 module Named = Flambda.Named
 module Reachable = Flambda.Reachable
-
-type named_simplifier =
-  (Variable.t * Named.t) list * Reachable.t
-    * Flambda_type.t * R.t
 
 (* To fix with Pierre
 
@@ -384,8 +379,9 @@ let rec simplify_project_var env r ~(project_var : Projection.Project_var.t)
 *)
 
 let simplify_duplicate_block _env _r _prim _arg _dbg
-      (_kind : Flambda_primitive.make_block_kind)
-      ~source_mutability:_ ~destination_mutability = assert false
+      ~(kind : Flambda_primitive.duplicate_block_kind)
+      ~source_mutability:_ ~destination_mutability:_ =
+  ignore kind; assert false
 (* Let's finish this later
   let arg, ty = S.simplify_simple env arg in
   let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
@@ -502,7 +498,7 @@ let simplify_is_int env r prim arg dbg =
     Reachable.invalid (), T.bottom (K.value Definitely_immediate),
       R.map_benefit r (B.remove_primitive (Unary prim))
 
-let simplify_get_tag env r ~result_var prim ~tags_to_sizes ~block dbg =
+let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
   let block, block_ty = S.simplify_simple env block in
   let inferred_tags = (E.type_accessor env T.prove_tags) block_ty in
   let possible_tags = Tag.Scannable.Map.keys tags_to_sizes in
@@ -774,38 +770,6 @@ module For_nativeints : Boxable_int_number_kind = struct
   let box = T.box_nativeint
 end
 
-module Make_simplify_swap_byte_endianness (N : Int_number_kind) = struct
-  let simplify env r prim arg dbg =
-    let arg, ty = S.simplify_simple env arg in
-    let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
-    let proof = (E.type_accessor env N.unboxed_prover) ty in
-    let kind = K.Standard_int_or_float.to_kind N.kind in
-    match proof with
-    | Proved nums ->
-      let nums =
-        N.Num.Set.map (fun imm -> N.Num.swap_byte_endianness imm) nums
-      in
-      Reachable.reachable (original_term ()), N.these_unboxed nums,
-        R.map_benefit r (B.remove_primitive (Unary prim))
-    | Unknown ->
-      Reachable.reachable (original_term ()), T.unknown kind, r
-    | Invalid ->
-      Reachable.invalid (), T.bottom kind,
-        R.map_benefit r (B.remove_primitive (Unary prim))
-end
-
-module Simplify_swap_byte_endianness_tagged_immediate =
-  Make_simplify_swap_byte_endianness (For_tagged_immediates)
-
-module Simplify_swap_byte_endianness_naked_int32 =
-  Make_simplify_swap_byte_endianness (For_int32s)
-
-module Simplify_swap_byte_endianness_naked_int64 =
-  Make_simplify_swap_byte_endianness (For_int64s)
-
-module Simplify_swap_byte_endianness_naked_nativeint =
-  Make_simplify_swap_byte_endianness (For_nativeints)
-
 module Make_simplify_unbox_number (P : Boxable_number_kind) = struct
   let simplify env r prim arg dbg =
     let arg, ty = S.simplify_simple env arg in
@@ -1049,91 +1013,89 @@ let simplify_string_length env r prim arg dbg =
   | Invalid -> result_invalid ()
 
 (* CR mshinwell: Factorize out together with [simplify_string_length] *)
-let simplify_array_length env r prim arg ~array_kind dbg =
-  let arg, ty = S.simplify_simple env arg in
-  (* XXX this may be wrong: for 32-bit platforms, arrays of floats have
-     lengths differing from the lengths of the blocks *)
-  let proof = (E.type_accessor env T.lengths_of_arrays_or_blocks) arg in
+(* CR mshinwell: Is it right that [block_access_kind] is unused? *)
+let simplify_array_length env r prim arg ~block_access_kind:_ dbg =
+  let arg, arg_ty = S.simplify_simple env arg in
+  (* CR mshinwell: this may be wrong: for 32-bit platforms, arrays of floats
+     have lengths differing from the lengths of the blocks
+     ...hmm, but in Flambda we should only be using "logical" block
+     numbering, so this may be irrelevant *)
+  let proof =
+    (E.type_accessor env T.prove_lengths_of_arrays_or_blocks) arg_ty
+  in
   let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
   let result_kind = K.value Definitely_immediate in
-  let result_invalid () = Reachable.invalid (), T.bottom result_kind in
-  let term, ty =
-    match proof with
-    | Proved (Exactly lengths) ->
-      assert (Targetint.Set.cardinal lengths > 0);
-      let lengths =
-        Targetint.Set.fold (fun length lengths ->
-            let length = Immediate.of_int length in
-            Immediate.Set.add length lengths)
-          lengths
-          Immediate.Set.empty
-      in
-      Reachable (original_term ()), T.these_tagged_immediates lengths
-    | Proved Not_all_values_known ->
-      Reachable (original_term ()), T.unknown result_kind Other
-    | Invalid -> result_invalid ()
-  in
-  term, ty, r
-
-let simplify_bigarray_length env r prim bigarray ~dimension dbg =
-  let bigarray, ty = S.simplify_simple env bigarray in
-  let result_kind = K.value Definitely_immediate in
-  let bigarray_proof =
-    (E.type_accessor env T.prove_of_kind_value_with_expected_value_kind
-      Definitely_pointer) bigarray
+  let result_invalid () =
+    Reachable.invalid (), T.bottom result_kind,
+      R.map_benefit r (B.remove_primitive (Unary prim))
   in
   match proof with
-  | Proved _ ->
-    let named : Named.t = Prim (Unary (prim, bigarray), dbg) in
-    named, T.unknown result_kind Other
-  | Invalid ->
-    Reachable.invalid (), T.bottom result_kind
+  | Proved lengths ->
+    assert (Targetint.OCaml.Set.cardinal lengths > 0);
+    let lengths =
+      Targetint.OCaml.Set.fold (fun length lengths ->
+          let length = Immediate.int length in
+          Immediate.Set.add length lengths)
+        lengths
+        Immediate.Set.empty
+    in
+    Reachable.reachable (original_term ()),
+      T.these_tagged_immediates lengths, r
+  | Unknown ->
+    Reachable.reachable (original_term ()), T.unknown result_kind, r
+  | Invalid -> result_invalid ()
 
-let simplify_unary_primitive env r ~result_var prim arg dbg =
+let simplify_bigarray_length env r prim bigarray ~dimension:_ dbg =
+  let bigarray, bigarray_ty = S.simplify_simple env bigarray in
+  let result_kind = K.value Definitely_immediate in
+  let proof =
+    (E.type_accessor env T.prove_of_kind_value_with_expected_value_kind)
+      bigarray_ty Definitely_pointer
+  in
+  match proof with
+  | Proved _ | Unknown ->
+    let named : Named.t = Prim (Unary (prim, bigarray), dbg) in
+    Reachable.reachable named, T.unknown result_kind, r
+  | Invalid ->
+    Reachable.invalid (), T.bottom result_kind,
+      R.map_benefit r (B.remove_primitive (Unary prim))
+
+let simplify_unary_primitive env r (prim : Flambda_primitive.unary_primitive)
+      arg dbg : Reachable.t * T.t * R.t =
   match prim with
-  | Block_load (field_index, field_kind, field_is_mutable) ->
-    simplify_block_load env r prim arg dbg ~field_index ~field_kind
-      ~field_is_mutable
   | Duplicate_block { kind; source_mutability;
       destination_mutability; } ->
     simplify_duplicate_block env r prim arg dbg ~kind
       ~source_mutability ~destination_mutability
   | Is_int -> simplify_is_int env r prim arg dbg
   | Get_tag { tags_to_sizes; } ->
-    simplify_get_tag env r ~result_var prim ~tags_to_sizes ~block:arg dbg
+    simplify_get_tag env r  prim ~tags_to_sizes ~block:arg dbg
   | String_length _string_or_bytes ->
     simplify_string_length env r prim arg dbg
-  | Swap_byte_endianness Tagged_immediate ->
-    Simplify_swap_byte_endianness_tagged_immediate.simplify env r prim arg dbg
-  | Swap_byte_endianness Naked_int32 ->
-    Simplify_swap_byte_endianness_naked_int32.simplify env r prim arg dbg
-  | Swap_byte_endianness Naked_int64 ->
-    Simplify_swap_byte_endianness_naked_int64.simplify env r prim arg dbg
-  | Swap_byte_endianness Naked_nativeint ->
-    Simplify_swap_byte_endianness_naked_nativeint.simplify env r prim arg dbg
   | Int_as_pointer ->
-    let arg, _ty = S.simplify_simple env arg in
-    (* There is no check on the kind of [arg]: a fatal error resulting from
-       such could potentially be triggered by wrong user code. *)
-    (* CR mshinwell: think about this some more *)
-    Prim (Unary (prim, arg), dbg), T.unknown K.naked_immediate Other
+    let arg, _arg_ty = S.simplify_simple env arg in
+    Reachable.reachable (Prim (Unary (prim, arg), dbg)),
+      T.unknown (K.value Unknown), r
   | Opaque_identity ->
-    let arg, ty = S.simplify_simple env arg in
-    let kind = (E.type_accessor env T.kind) ty in
-    Prim (Unary (prim, arg), dbg), T.unknown kind Other
+    let arg, arg_ty = S.simplify_simple env arg in
+    let kind = (E.type_accessor env T.kind) arg_ty in
+    Reachable.reachable (Prim (Unary (prim, arg), dbg)),
+      T.unknown kind, r
   | Int_arith (kind, op) ->
     begin match kind with
     | Tagged_immediate ->
-      Unary_int_arith_tagged_immediate.simplify env r op arg
+      Unary_int_arith_tagged_immediate.simplify env r prim dbg op arg
     | Naked_int32 ->
-      Unary_int_arith_naked_int32.simplify env r op arg
+      Unary_int_arith_naked_int32.simplify env r prim dbg op arg
     | Naked_int64 ->
-      Unary_int_arith_naked_int64.simplify env r op arg
+      Unary_int_arith_naked_int64.simplify env r prim dbg op arg
     | Naked_nativeint ->
-      Unary_int_arith_naked_nativeint.simplify env r op arg
+      Unary_int_arith_naked_nativeint.simplify env r prim dbg op arg
     end
   | Num_conv { src = Tagged_immediate; dst; } ->
     Simplify_int_conv_tagged_immediate.simplify env r prim arg ~dst dbg
+  | Num_conv { src = Naked_float; dst; } ->
+    Simplify_int_conv_naked_float.simplify env r prim arg ~dst dbg
   | Num_conv { src = Naked_int32; dst; } ->
     Simplify_int_conv_naked_int32.simplify env r prim arg ~dst dbg
   | Num_conv { src = Naked_int64; dst; } ->
@@ -1141,8 +1103,8 @@ let simplify_unary_primitive env r ~result_var prim arg dbg =
   | Num_conv { src = Naked_nativeint; dst; } ->
     Simplify_int_conv_naked_nativeint.simplify env r prim arg ~dst dbg
   | Float_arith op -> simplify_unary_float_arith_op env r prim op arg dbg
-  | Array_length array_kind ->
-    simplify_array_length env r prim arg ~array_kind dbg
+  | Array_length block_access_kind ->
+    simplify_array_length env r prim arg ~block_access_kind dbg
   | Bigarray_length { dimension : int; } ->
     simplify_bigarray_length env r prim arg ~dimension dbg
   | Unbox_number Naked_float ->

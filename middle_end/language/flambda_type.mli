@@ -205,14 +205,6 @@ val prove_boxed_nativeint
 (* CR mshinwell: duplicate return value (Proved empty_set, and Invalid) *)
 val prove_tags : (t -> Tag.Set.t proof) type_accessor
 
-(*
-(** As for [prove_tagged_immediate] but for closures. *)
-val prove_closures : (t -> Joined_closures.t known_values) type_accessor
-
-(** As for [prove_closures] but for sets of closures. *)
-val prove_sets_of_closures
-   : (t -> Joined_sets_of_closures.t known_values) type_accessor
-
 (** Determine the set of all possible length(s) of the array(s) or structured
     block(s) (i.e. blocks with tag less than [No_scan_tag]) described by the
     given type.  This function correctly handles float arrays (where the length
@@ -223,6 +215,19 @@ val prove_sets_of_closures
 *)
 val prove_lengths_of_arrays_or_blocks
    : (t -> Targetint.OCaml.Set.t proof) type_accessor
+
+val prove_of_kind_value_with_expected_value_kind
+   : (t
+  -> Flambda_kind.Value_kind.t
+  -> ty_value proof) type_accessor
+
+(*
+(** As for [prove_tagged_immediate] but for closures. *)
+val prove_closures : (t -> Joined_closures.t known_values) type_accessor
+
+(** As for [prove_closures] but for sets of closures. *)
+val prove_sets_of_closures
+   : (t -> Joined_sets_of_closures.t known_values) type_accessor
 
 (** Prove that the given type:
     - only ever represents one or more tagged immediates ("Proved true");

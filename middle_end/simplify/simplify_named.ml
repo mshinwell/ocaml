@@ -290,6 +290,8 @@ let simplify_named env r (tree : Named.t) : named_simplifier =
     let new_bindings, term, ty, r =
       Simplify_primitive.simplify_primitive env r prim dbg
     in
+    (* XXX This needs to add a typing judgement "result_var : ty" to the
+       environment *)
     (* CR mshinwell: Add benefit calculations *)
     begin match (E.type_accessor env T.reify) ty ~allow_free_variables:true with
     | Reified (simple, ty) ->
