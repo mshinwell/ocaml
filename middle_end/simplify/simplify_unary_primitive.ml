@@ -819,14 +819,8 @@ module Simplify_unbox_number_nativeint =
     let box = T.box_nativeint
   end)
 
-(* CR mshinwell:
-   1. Overlap with Lift_constants?
-   2. Work out how to make use of the projection information, e.g. for
-      boxing/unboxing.
-   3. Where there are aliases e.g. x = 3 and x = 5, we don't emit a term
-      "x" even if we emit "3 union 5" as the type.
-*)
-
+(* CR mshinwell: It's a bit strange that the argument to this functor
+   includes [boxed_prover], which isn't used *)
 module Make_simplify_box_number (P : For_unboxable_numbers) = struct
   let simplify env r prim arg dbg =
     (* CR mshinwell: If [arg] is already a [Const] we shouldn't have to do
@@ -837,16 +831,16 @@ module Make_simplify_box_number (P : For_unboxable_numbers) = struct
     let kind = K.Boxable_number.to_kind P.kind in
     match proof with
     | Proved nums ->
-      begin match P.Num.Set.get_singleton nums with
+      (* begin match P.Num.Set.get_singleton nums with
       | Some n ->
-        let symbol, r = R.new_lifted_constant r env (Boxed_float (Const n)) in
+        let symbol, r = R.new_lifted_constant r (Boxed_float (Const n)) in
         let r = R.map_benefit r (B.remove_primitive (Unary prim)) in
         let named : Named.t = Simple (Simple.name (Name.symbol symbol)) in
         Reachable.reachable named, P.this n, r
-      | None ->
-        assert (not (P.Num.Set.is_empty nums));
-        Reachable.reachable (original_term ()), P.these nums, r
-      end
+      | None -> ...
+      end *)
+      assert (not (P.Num.Set.is_empty nums));
+      Reachable.reachable (original_term ()), P.these nums, r
     | Unknown ->
       Reachable.reachable (original_term ()), P.box ty, r
     | Invalid -> 
@@ -861,7 +855,9 @@ module Simplify_box_number_float =
     end
 
     let kind : K.Boxable_number.t = Naked_float
-    let prover = T.prove_naked_float
+    type naked_num_set = Float_by_bit_pattern.Set.t
+    let unboxed_prover = T.prove_naked_float
+    let boxed_prover = T.prove_boxed_float
     let this = T.this_boxed_float
     let these = T.these_boxed_floats
     let box = T.box_float
@@ -875,7 +871,9 @@ module Simplify_box_number_int32 =
     end
 
     let kind : K.Boxable_number.t = Naked_int32
-    let prover = T.prove_naked_int32
+    type naked_num_set = Int32.Set.t
+    let unboxed_prover = T.prove_naked_int32
+    let boxed_prover = T.prove_boxed_int32
     let this = T.this_boxed_int32
     let these = T.these_boxed_int32s
     let box = T.box_int32
@@ -889,7 +887,9 @@ module Simplify_box_number_int64 =
     end
 
     let kind : K.Boxable_number.t = Naked_int64
-    let prover = T.prove_naked_int64
+    type naked_num_set = Int64.Set.t
+    let unboxed_prover = T.prove_naked_int64
+    let boxed_prover = T.prove_boxed_int64
     let this = T.this_boxed_int64
     let these = T.these_boxed_int64s
     let box = T.box_int64
@@ -898,12 +898,14 @@ module Simplify_box_number_int64 =
 module Simplify_box_number_nativeint =
   Make_simplify_box_number (struct
     module Num = struct
-      include Nativeint
+      include Targetint
       let to_const t = Simple.Const.Naked_nativeint t
     end
 
     let kind : K.Boxable_number.t = Naked_nativeint
-    let prover = T.prove_naked_nativeint
+    type naked_num_set = Targetint.Set.t
+    let unboxed_prover = T.prove_naked_nativeint
+    let boxed_prover = T.prove_boxed_nativeint
     let this = T.this_boxed_nativeint
     let these = T.these_boxed_nativeints
     let box = T.box_nativeint
@@ -919,8 +921,8 @@ module Unary_int_arith (I : sig
 
   include Identifiable.S with type t := t
 
-  val this : t -> flambda_type
-  val these : Set.t -> flambda_type
+  val this : t -> T.t
+  val these : Set.t -> T.t
 end) = struct
   let simplify env r prim dbg (op : Flambda_primitive.unary_int_arith_op) arg =
     let arg, ty = S.simplify_simple env arg in
