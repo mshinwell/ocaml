@@ -234,6 +234,10 @@ val prove_of_kind_value_with_expected_value_kind
   -> Flambda_kind.Value_kind.t
   -> ty_value) type_accessor
 
+val prove_of_kind_naked_float
+   : (t
+  -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number) type_accessor
+
 (*
 (** As for [prove_tagged_immediate] but for closures. *)
 val prove_closures : (t -> Joined_closures.t known_values) type_accessor

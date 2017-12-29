@@ -21,7 +21,7 @@
 val simplify_variadic_primitive
    : Simplify_env_and_result.Env.t
   -> Simplify_env_and_result.Result.t
-  -> Flambda_primitive.unary_primitive
+  -> Flambda_primitive.variadic_primitive
   -> Simple.t list
   -> Debuginfo.t
   -> Flambda.Reachable.t * Flambda_type.t * Simplify_env_and_result.Result.t

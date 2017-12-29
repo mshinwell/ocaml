@@ -1085,6 +1085,7 @@ end) = struct
     immutable_float_array fields
 
   let block_of_values tag ~fields =
+    let tag = Tag.Scannable.to_tag tag in
     match Targetint.OCaml.of_int_option (Array.length fields) with
     | None ->
       Misc.fatal_error "Block of values too long for target"

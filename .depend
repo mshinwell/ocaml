@@ -2478,17 +2478,19 @@ middle_end/simplify/simplify_simple.cmi : \
     middle_end/language/flambda_type.cmi
 middle_end/simplify/simplify_ternary_primitive.cmo : utils/targetint.cmi \
     middle_end/simplify/simplify_simple.cmi \
-    middle_end/simplify/simplify_env_and_result.cmi utils/numbers.cmi \
-    utils/misc.cmi middle_end/inlining/inlining_cost.cmi \
-    middle_end/base_types/immediate.cmi middle_end/language/flambda_type.cmi \
+    middle_end/simplify/simplify_env_and_result.cmi \
+    middle_end/simplify/simplify_aux.cmi utils/misc.cmi \
+    middle_end/inlining/inlining_cost.cmi middle_end/base_types/immediate.cmi \
+    middle_end/language/flambda_type.cmi \
     middle_end/language/flambda_primitive.cmi \
     middle_end/language/flambda_kind.cmi middle_end/language/flambda.cmi \
     middle_end/simplify/simplify_ternary_primitive.cmi
 middle_end/simplify/simplify_ternary_primitive.cmx : utils/targetint.cmx \
     middle_end/simplify/simplify_simple.cmx \
-    middle_end/simplify/simplify_env_and_result.cmx utils/numbers.cmx \
-    utils/misc.cmx middle_end/inlining/inlining_cost.cmx \
-    middle_end/base_types/immediate.cmx middle_end/language/flambda_type.cmx \
+    middle_end/simplify/simplify_env_and_result.cmx \
+    middle_end/simplify/simplify_aux.cmx utils/misc.cmx \
+    middle_end/inlining/inlining_cost.cmx middle_end/base_types/immediate.cmx \
+    middle_end/language/flambda_type.cmx \
     middle_end/language/flambda_primitive.cmx \
     middle_end/language/flambda_kind.cmx middle_end/language/flambda.cmx \
     middle_end/simplify/simplify_ternary_primitive.cmi
@@ -2523,16 +2525,18 @@ middle_end/simplify/simplify_unary_primitive.cmi : \
     middle_end/language/flambda_primitive.cmi middle_end/language/flambda.cmi \
     middle_end/base_types/debuginfo.cmi
 middle_end/simplify/simplify_variadic_primitive.cmo : utils/targetint.cmi \
+    middle_end/simplify/simplify_simple.cmi \
     middle_end/simplify/simplify_env_and_result.cmi \
-    middle_end/language/simple.cmi utils/numbers.cmi utils/misc.cmi \
+    middle_end/language/simple.cmi utils/misc.cmi \
     middle_end/inlining/inlining_cost.cmi middle_end/base_types/immediate.cmi \
     middle_end/language/flambda_type.cmi \
     middle_end/language/flambda_primitive.cmi \
     middle_end/language/flambda_kind.cmi middle_end/language/flambda.cmi \
     middle_end/simplify/simplify_variadic_primitive.cmi
 middle_end/simplify/simplify_variadic_primitive.cmx : utils/targetint.cmx \
+    middle_end/simplify/simplify_simple.cmx \
     middle_end/simplify/simplify_env_and_result.cmx \
-    middle_end/language/simple.cmx utils/numbers.cmx utils/misc.cmx \
+    middle_end/language/simple.cmx utils/misc.cmx \
     middle_end/inlining/inlining_cost.cmx middle_end/base_types/immediate.cmx \
     middle_end/language/flambda_type.cmx \
     middle_end/language/flambda_primitive.cmx \

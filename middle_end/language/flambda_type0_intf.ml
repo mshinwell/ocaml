@@ -396,7 +396,7 @@ module type S = sig
     -> t
 
   val block_of_values
-     : Tag.t
+     : Tag.Scannable.t
     -> fields:ty_value mutable_or_immutable array
     -> t
 

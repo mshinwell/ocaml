@@ -133,6 +133,8 @@ let rec declare_const t (const : Lambda.structured_constant)
   | Const_base (Const_char c) -> Tagged_immediate (Immediate.char c), "char"
   | Const_base (Const_string (s, _)) ->
     let const, name =
+      (* CR mshinwell: Double-check this is the correct condition for
+         everything in the application being compiled with safe-string *)
       if Config.safe_string then
         Static_part.Immutable_string (Const s), "immstring"
       else

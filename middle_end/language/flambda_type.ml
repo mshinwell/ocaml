@@ -1456,6 +1456,19 @@ let prove_of_kind_value_with_expected_value_kind ~type_of_name
     end;
   force_to_kind_value t
 
+let prove_of_kind_naked_float ~type_of_name t =
+  let actual_kind = kind ~type_of_name t in
+  let expected_kind = K.naked_float () in
+  if not (Flambda_kind.compatible actual_kind ~if_used_at:expected_kind)
+  then begin
+    Misc.fatal_errorf "Type should be compatible with kind %a but \
+        has incompatible kind %a: %a"
+      Flambda_kind.print expected_kind
+      Flambda_kind.print actual_kind
+      print t
+    end;
+  force_to_kind_naked_float t
+
 let physically_equal ~type_of_name:_ (t1 : t) (t2 : t) =
   let check_aliases (ty1 : _ ty) (ty2 : _ ty) =
     match ty1, ty2 with
