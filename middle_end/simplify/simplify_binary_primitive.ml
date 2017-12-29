@@ -777,23 +777,39 @@ module Int_ops_for_binary_eq_comp_int64 =
 module Int_ops_for_binary_eq_comp_nativeint =
   Int_ops_for_binary_eq_comp (A.For_nativeints)
 
-let simplify_eq_comp env r prim dbg kind op arg1 arg2 =
+module Binary_int_eq_comp_tagged_immediate =
+  Binary_arith_like (Int_ops_for_binary_eq_comp_tagged_immediate)
+module Binary_int_eq_comp_int32 =
+  Binary_arith_like (Int_ops_for_binary_eq_comp_int32)
+module Binary_int_eq_comp_int64 =
+  Binary_arith_like (Int_ops_for_binary_eq_comp_int64)
+module Binary_int_eq_comp_nativeint =
+  Binary_arith_like (Int_ops_for_binary_eq_comp_nativeint)
+
+let simplify_eq_comp env r prim dbg (kind : K.t)
+      (op : Flambda_primitive.equality_comparison) arg1 arg2 =
   begin match kind with
-  | Value ->
-    let proof1 = (E.type_accessor env T.prove_tagged_immediate) arg1 in
-    let proof2 = (E.type_accessor env T.prove_tagged_immediate) arg2 in
+  | Value _ ->
+    let arg1, arg1_ty = S.simplify_simple env arg1 in
+    let arg2, arg2_ty = S.simplify_simple env arg2 in
+    let proof1 =
+      (E.type_accessor env T.prove_tagged_immediate) arg1_ty
+    in
+    let proof2 =
+      (E.type_accessor env T.prove_tagged_immediate) arg2_ty
+    in
     begin match proof1, proof2 with
     | Proved _, Proved _ ->
-      Binary_int_comp_tagged_immediate.simplify env r prim dbg op arg1 arg2
+      Binary_int_eq_comp_tagged_immediate.simplify env r prim dbg op arg1 arg2
     | _, _ ->
       let physically_equal =
-        (E.type_accessor env T.physically_equal) arg1 arg2
+        (E.type_accessor env T.physically_equal) arg1_ty arg2_ty
       in
       let physically_distinct =
         (* Structural inequality implies physical inequality. *)
-        (E.type_accessor env T.structurally_distinct) arg1 arg2
+        (E.type_accessor env T.structurally_distinct) arg1_ty arg2_ty
       in
-      let const bool () =
+      let const bool =
         Reachable.reachable (Simple (Simple.const_bool bool)),
           T.this_tagged_immediate (Immediate.bool bool),
           R.map_benefit r (B.remove_primitive (Binary prim))
@@ -804,19 +820,28 @@ let simplify_eq_comp env r prim dbg kind op arg1 arg2 =
       | Eq, _, true -> const false
       | Neq, _, true -> const true
       | _, _, _ ->
-        Reachable.reachable (Prim (Binary (prim, arg1, arg2))),
+        Reachable.reachable (Prim (Binary (prim, arg1, arg2), dbg)),
           T.these_tagged_immediates Immediate.all_bools,
           r
       end
     end
   | Naked_number Naked_immediate ->
     Misc.fatal_error "Not yet implemented"
+  | Naked_number Naked_float ->
+    (* CR mshinwell: Should this case be statically disallowed in the type,
+       to force people to use [Float_comp]? *)
+    let op : Flambda_primitive.comparison =
+      match op with
+      | Eq -> Eq
+      | Neq -> Neq
+    in
+    Binary_float_comp.simplify env r prim dbg op arg1 arg2
   | Naked_number Naked_int32 ->
-    Binary_int_comp_naked_int32.simplify env r prim dbg op arg1 arg2
+    Binary_int_eq_comp_int32.simplify env r prim dbg op arg1 arg2
   | Naked_number Naked_int64 ->
-    Binary_int_comp_naked_int64.simplify env r prim dbg op arg1 arg2
-  | Naked_nativeint ->
-    Binary_int_comp_naked_nativeint.simplify env r prim dbg op arg1 arg2
+    Binary_int_eq_comp_int64.simplify env r prim dbg op arg1 arg2
+  | Naked_number Naked_nativeint ->
+    Binary_int_eq_comp_nativeint.simplify env r prim dbg op arg1 arg2
   | Fabricated _ | Phantom _ ->
     Misc.fatal_errorf "Bad kind for equality comparison: %a"
       K.print kind
