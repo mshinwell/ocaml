@@ -227,7 +227,7 @@ val prove_lengths_of_arrays_or_blocks
 val prove_of_kind_value_with_expected_value_kind
    : (t
   -> Flambda_kind.Value_kind.t
-  -> ty_value proof) type_accessor
+  -> ty_value) type_accessor
 
 (*
 (** As for [prove_tagged_immediate] but for closures. *)

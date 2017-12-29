@@ -129,6 +129,8 @@ module type S = sig
   and singleton_block = private {
     (* CR mshinwell: Should this indicate if the block is an array? *)
     env_extension : typing_environment;
+    (* CR mshinwell: We should note explicitly that these are logical fields
+       (I think this only matters for float arrays on 32-bit targets) *)
     fields : t mutable_or_immutable array;
   }
 

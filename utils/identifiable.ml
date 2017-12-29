@@ -36,7 +36,6 @@ module type Set = sig
   module T : Set.OrderedType
   include Set.S
     with type elt = T.t
-     and type t = Set.Make (T).t
 
   val print : Format.formatter -> t -> unit
   val to_string : t -> string
@@ -48,43 +47,41 @@ end
 
 module type Map = sig
   module T : Map.OrderedType
+  module Our_set : Set.S
+
   include Map.S
     with type key = T.t
      and type 'a t = 'a Map.Make (T).t
 
   val filter_map : 'a t -> f:(key -> 'a -> 'b option) -> 'b t
   val of_list : (key * 'a) list -> 'a t
-
   val disjoint_union : ?eq:('a -> 'a -> bool) -> ?print:(Format.formatter -> 'a -> unit) -> 'a t -> 'a t -> 'a t
-
   val union_right : 'a t -> 'a t -> 'a t
-
   val union_left : 'a t -> 'a t -> 'a t
-
   val union_merge : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
-
   val union_both
      : ('a -> 'a)
     -> ('a -> 'a -> 'a)
     -> 'a t
     -> 'a t
     -> 'a t
-
   val inter : ('a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
   val inter_merge : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
   val rename : key t -> key -> key
   val map_keys : (key -> key) -> 'a t -> 'a t
-  val keys : 'a t -> Set.Make(T).t
+  val keys : 'a t -> Our_set.t
   val data : 'a t -> 'a list
-  val of_set : (key -> 'a) -> Set.Make(T).t -> 'a t
+  val of_set : (key -> 'a) -> Our_set.t -> 'a t
   val transpose_keys_and_data : key t -> key t
-  val transpose_keys_and_data_set : key t -> Set.Make(T).t t
+  val transpose_keys_and_data_set : key t -> Our_set.t t
   val print :
     (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a t -> unit
   val get_singleton : 'a t -> (key * 'a) option
 end
 
 module type Tbl = sig
+  module Our_map : Map.S
+
   module T : sig
     type t
     include Map.OrderedType with type t := t
@@ -92,13 +89,11 @@ module type Tbl = sig
   end
   include Hashtbl.S
     with type key = T.t
-     and type 'a t = 'a Hashtbl.Make (T).t
 
   val to_list : 'a t -> (T.t * 'a) list
   val of_list : (T.t * 'a) list -> 'a t
-
-  val to_map : 'a t -> 'a Map.Make(T).t
-  val of_map : 'a Map.Make(T).t -> 'a t
+  val to_map : 'a t -> 'a Our_map.t
+  val of_map : 'a Our_map.t -> 'a t
   val memoize : 'a t -> (key -> 'a) -> key -> 'a
   val map : 'a t -> ('a -> 'b) -> 'b t
 end
@@ -297,8 +292,8 @@ module type S = sig
   include Thing with type t := T.t
 
   module Set : Set with module T := T
-  module Map : Map with module T := T
-  module Tbl : Tbl with module T := T
+  module Map : Map with module T := T with module Our_set := Set
+  module Tbl : Tbl with module T := T with module Our_map := Map
 end
 
 module Make (T : Thing) = struct
@@ -351,7 +346,7 @@ module type S_no_hash = sig
   include Thing_no_hash with type t := T.t
 
   module Set : Set with module T := T
-  module Map : Map with module T := T
+  module Map : Map with module T := T with module Our_set := Set
 
   val equal : t -> t -> bool
 end

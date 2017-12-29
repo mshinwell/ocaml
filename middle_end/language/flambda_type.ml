@@ -1388,6 +1388,7 @@ let prove_sets_of_closures ~type_of_name t
     Misc.fatal_errorf "Wrong kind for something claimed to be a set of \
         closures: %a"
       print t
+*)
 
 (* XXX What about [Obj.truncate]?
    In fact, what happens regarding this for block access too? *)
@@ -1397,72 +1398,61 @@ let prove_sets_of_closures ~type_of_name t
 
 let prove_lengths_of_arrays_or_blocks ~type_of_name t
       : Targetint.OCaml.Set.t proof =
-  let t_evaluated, _canonical_name =
-    Evaluated.create ~type_of_name t
-  in
-  match t_evaluated with
-  | Values values ->
-    begin match values with
-    | Unknown -> Unknown
-    | Float_arrays Not_all_values_known -> Unknown
-    | Float_arrays (Exactly float_arrays) ->
-      let sizes = List.map Float_array.size float_arrays in
-      Proved (Targetint.OCaml.Set.of_list sizes)
-    | Blocks_and_tagged_immediates (blocks, _) ->
-      Proved (Blocks.all_possible_sizes blocks)
-    | Boxed_floats _
-    | Bottom
-    | Blocks_and_tagged_immediates _
-    | Tagged_immediates_only _
-    | Boxed_int32s _
-    | Boxed_int64s _
-    | Boxed_nativeints _
-    | Closures _
-    | Sets_of_closures _
-    | Strings _ -> Invalid
-    end
-  | Naked_immediates _
-  | Naked_floats _
-  | Naked_int32s _
-  | Naked_int64s _
-  | Naked_nativeints _ ->
-    Misc.fatal_errorf "Wrong kind for something claimed to be an array \
-        or structured block: %a"
+  let wrong_kind () =
+    Misc.fatal_errorf "Wrong kind for something claimed to be a block: %a"
       print t
+  in
+  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  match simplified with
+  | Value ty_value ->
+    begin match ty_value with
+    | Unknown _ -> Unknown
+    | Bottom -> Invalid
+    | Ok (Blocks_and_tagged_immediates blocks_imms) ->
+      let no_immediates =
+        match blocks_imms.immediates with
+        | Known imms when Immediate.Map.is_empty imms -> true
+        | Known _ | Unknown -> false
+      in
+      if not no_immediates then begin
+        Invalid
+      end else begin
+        assert (not (Tag.Map.is_empty blocks_imms.blocks));
+        let lengths =
+          Tag.Map.fold (fun _tag ((Join { by_length; }) : block_cases) result ->
+              Targetint.OCaml.Map.fold (fun length _block result ->
+                  Targetint.OCaml.Set.add length result)
+                by_length
+                result)
+            blocks_imms.blocks
+            Targetint.OCaml.Set.empty
+        in
+        assert (not (Targetint.OCaml.Set.is_empty lengths));
+        Proved lengths
+      end
+    | Ok (Boxed_number _) -> Invalid
+    | Ok (Closure _ | String _) -> Invalid
+    end
+  | Simplified_type.Naked_number _ -> wrong_kind ()
+  | Fabricated _
+  | Phantom _ -> wrong_kind ()
 
-let force_to_kind_value_with_expected_value_kind ~type_of_name
-        t expected_kind =
-  let ty_value = force_to_kind_value t in
-  let actual_kind = value_kind ~type_of_name ty_value in
+let prove_of_kind_value_with_expected_value_kind ~type_of_name
+        t expected_value_kind =
+  let actual_kind = kind ~type_of_name t in
+  let expected_kind = K.value expected_value_kind in
   if not (Flambda_kind.compatible actual_kind ~if_used_at:expected_kind)
   then begin
-    Misc.fatal_errorf "Type should be compatible with kind [Value %a] but \
-        is not: %a"
-      Flambda_kind.print_value_kind expected_kind
+    Misc.fatal_errorf "Type should be compatible with kind %a but \
+        has incompatible kind %a: %a"
+      Flambda_kind.print expected_kind
+      Flambda_kind.print actual_kind
       print t
-    end
+    end;
+  force_to_kind_value t
 
-let force_to_kind_value_with_expected_value_kinds ~type_of_name
-        ts expected_kind =
-  List.iter (fun t ->
-      force_to_kind_value_with_expected_value_kind ~type_of_name
-        t expected_kind)
-    ts
-
-let force_to_kind_value_with_expected_value_kinds ~type_of_name
-        ts_and_expected_kinds =
-  List.iter (fun (t, expected_kind) ->
-      force_to_kind_value_with_expected_value_kind ~type_of_name
-        t expected_kind)
-    ts_and_expected_kinds
-
-let force_to_kind_naked_float_list ts =
-  List.iter force_to_kind_naked_float ts
-
-*)
-
-let physically_equal ~type_of_name t1 t2 =
-  let check_aliases (ty1 : _ ty) (ty2 : _ty) =
+let physically_equal ~type_of_name:_ (t1 : t) (t2 : t) =
+  let check_aliases (ty1 : _ ty) (ty2 : _ ty) =
     match ty1, ty2 with
     | No_alias _, _ | _, No_alias _ ->
       (* We don't need to check cases such as immediates, where we could
@@ -1484,20 +1474,7 @@ let physically_equal ~type_of_name t1 t2 =
   match t1, t2 with
   | Value ty_value1, Value ty_value2 ->
     check_aliases ty_value1 ty_value2
-  | Naked_number (Immediate ty_naked_number1, _),
-      Naked_number (Immediate ty_naked_number2, _) ->
-    check_aliases ty_naked_number1 ty_naked_number2
-  | Naked_number (Float ty_naked_number1, _),
-      Naked_number (Float ty_naked_number2, _) ->
-    check_aliases ty_naked_number1 ty_naked_number2
-  | Naked_number (Int32 ty_naked_number1, _),
-      Naked_number (Int32 ty_naked_number2, _) ->
-    check_aliases ty_naked_number1 ty_naked_number2
-  | Naked_number (Int64 ty_naked_number1, _),
-      Naked_number (Int64 ty_naked_number2, _) ->
-    check_aliases ty_naked_number1 ty_naked_number2
-  | Naked_number (Nativeint ty_naked_number1, _),
-      Naked_number (Nativeint ty_naked_number2, _) ->
+  | Naked_number (ty_naked_number1, _), Naked_number (ty_naked_number2, _) ->
     check_aliases ty_naked_number1 ty_naked_number2
   | Fabricated _, Fabricated _
   | Phantom _, Phantom _ -> false
@@ -1506,125 +1483,135 @@ let physically_equal ~type_of_name t1 t2 =
       print t1
       print t2
 
-let structurally_different ~type_of_name t1 t2 =
+let structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
   let simplified1, _canonical_name1 = Simplified_type.create ~type_of_name t1 in
   let simplified2, _canonical_name2 = Simplified_type.create ~type_of_name t2 in
-  match t1, t2 with
+  let module S = Simplified_type in
+  match simplified1, simplified2 with
   | Value ty_value1, Value ty_value2 ->
     begin match ty_value1, ty_value2 with
-    | Blocks_and_immediates { blocks = blocks1; immediates = imms1; },
-        Blocks_and_immediates { blocks = blocks2; immediates = imms2; } ->
-      (* CR-someday mshinwell: This could be improved if required. *)
-      if (Tag.Map.is_empty blocks1 && not (Tag.Map.is_empty blocks2))
-        || (not (Tag.Map.is_empty blocks1) && Tag.Map.is_empty blocks2)
-      then
-        true
-      else
-        begin match imms1, imms2 with
-        | Unknown, _ | _, Unknown -> false
-        | Known imms1, Known imms2 ->
-          (* CR mshinwell for pchambart: Please think about this very carefully.
-             I'm wondering if we could actually say:
-               not (Immediate.Set.equal imms1 imms2)
-             The same applies for several other cases below.
-          *)
-          Immediate.Set.is_empty (Immediate.Set.inter imms1 imms2)
+    | Unknown _, _ | _, Unknown _ | Bottom, _ | _, Bottom -> false
+    | Ok of_kind_value1, Ok of_kind_value2 ->
+      begin match of_kind_value1, of_kind_value2 with
+      | Blocks_and_tagged_immediates { blocks = blocks1; immediates = imms1; },
+          Blocks_and_tagged_immediates
+            { blocks = blocks2; immediates = imms2; } ->
+        (* CR-someday mshinwell: This could be improved if required. *)
+        if (Tag.Map.is_empty blocks1 && not (Tag.Map.is_empty blocks2))
+          || (not (Tag.Map.is_empty blocks1) && Tag.Map.is_empty blocks2)
+        then
+          true
+        else
+          begin match imms1, imms2 with
+          | Unknown, _ | _, Unknown -> false
+          | Known imms1, Known imms2 ->
+            (* CR mshinwell for pchambart: Please think about this very carefully.
+               I'm wondering if we could actually say:
+                 not (Immediate.Set.equal imms1 imms2)
+               The same applies for several other cases below.
+            *)
+            let imms1 = Immediate.Map.keys imms1 in
+            let imms2 = Immediate.Map.keys imms2 in
+            Immediate.Set.is_empty (Immediate.Set.inter imms1 imms2)
+          end
+      | Blocks_and_tagged_immediates _, _
+      | _, Blocks_and_tagged_immediates _ -> true
+      | Boxed_number (Boxed_float ty_naked_number1),
+          Boxed_number (Boxed_float ty_naked_number2) ->
+        begin match
+          prove_naked_float ~type_of_name (of_ty_naked_number ty_naked_number1),
+          prove_naked_float ~type_of_name (of_ty_naked_number ty_naked_number2)
+        with
+        | Proved nums1, Proved nums2 ->
+          Float_by_bit_pattern.Set.is_empty
+            (Float_by_bit_pattern.Set.inter nums1 nums2)
+        | _, _ -> false
         end
-    | Blocks_and_immediates _, _ | _, Blocks_and_immediates _ -> true
-    | Boxed_number (Boxed_float ty_naked_number1),
-        Boxed_number (Boxed_float ty_naked_number2) ->
-      begin match
-        prove_naked_float ~type_of_name ty_naked_number1,
-        prove_naked_float ~type_of_name ty_naked_number2
-      with
-      | Proved nums1, Proved nums2 ->
-        Float_by_bit_pattern.Set.is_empty
-          (Float_by_bit_pattern.Set.inter nums1 nums2)
-      | _, _ -> false
+      | Boxed_number (Boxed_int32 ty_naked_number1),
+          Boxed_number (Boxed_int32 ty_naked_number2) ->
+        begin match
+          prove_naked_int32 ~type_of_name (of_ty_naked_number ty_naked_number1),
+          prove_naked_int32 ~type_of_name (of_ty_naked_number ty_naked_number2)
+        with
+        | Proved nums1, Proved nums2 ->
+          Int32.Set.is_empty
+            (Int32.Set.inter nums1 nums2)
+        | _, _ -> false
+        end
+      | Boxed_number (Boxed_int64 ty_naked_number1),
+          Boxed_number (Boxed_int64 ty_naked_number2) ->
+        begin match
+          prove_naked_int64 ~type_of_name (of_ty_naked_number ty_naked_number1),
+          prove_naked_int64 ~type_of_name (of_ty_naked_number ty_naked_number2)
+        with
+        | Proved nums1, Proved nums2 ->
+          Int64.Set.is_empty
+            (Int64.Set.inter nums1 nums2)
+        | _, _ -> false
+        end
+      | Boxed_number (Boxed_nativeint ty_naked_number1),
+          Boxed_number (Boxed_nativeint ty_naked_number2) ->
+        begin match
+          prove_naked_nativeint ~type_of_name
+            (of_ty_naked_number ty_naked_number1),
+          prove_naked_nativeint ~type_of_name
+            (of_ty_naked_number ty_naked_number2)
+        with
+        | Proved nums1, Proved nums2 ->
+          Targetint.Set.is_empty
+            (Targetint.Set.inter nums1 nums2)
+        | _, _ -> false
+        end
+      | Boxed_number _, _ -> true
+      | _, Boxed_number _ -> true
+      | Closure _, Closure _ -> false
+      | Closure _, _ | _, Closure _ -> true
+      | String strs1, String strs2 ->
+        String_info.Set.is_empty (String_info.Set.inter strs1 strs2)
       end
-    | Boxed_number (Boxed_int32 ty_naked_number1),
-        Boxed_number (Boxed_int32 ty_naked_number2) ->
-      begin match
-        prove_naked_int32 ~type_of_name ty_naked_number1,
-        prove_naked_int32 ~type_of_name ty_naked_number2
-      with
-      | Proved nums1, Proved nums2 ->
-        Int32.Set.is_empty
-          (Int32.Set.inter nums1 nums2)
-      | _, _ -> false
-      end
-    | Boxed_number (Boxed_int64 ty_naked_number1),
-        Boxed_number (Boxed_int64 ty_naked_number2) ->
-      begin match
-        prove_naked_int64 ~type_of_name ty_naked_number1,
-        prove_naked_int64 ~type_of_name ty_naked_number2
-      with
-      | Proved nums1, Proved nums2 ->
-        Int64.Set.is_empty
-          (Int64.Set.inter nums1 nums2)
-      | _, _ -> false
-      end
-    | Boxed_number (Boxed_nativeint ty_naked_number1),
-        Boxed_number (Boxed_nativeint ty_naked_number2) ->
-      begin match
-        prove_naked_nativeint ~type_of_name ty_naked_number1,
-        prove_naked_nativeint ~type_of_name ty_naked_number2
-      with
-      | Proved nums1, Proved nums2 ->
-        Targetint.Set.is_empty
-          (Targetint.Set.inter nums1 nums2)
-      | _, _ -> false
-      end
-    | Boxed_number _, _ -> true
-    | _, Boxed_number _ -> true
-    | Closure _, Closure _ -> false
-    | Closure _, _ | _, Closure _ -> true
-    | String strs1, String strs2 ->
-      String_info.Set.is_empty (String_info.Set.inter strs1 strs2)
-    | String _, _ | _, String _ -> true
     end
-  | Naked_number (Immediate _ty_naked_number1, _),
-      Naked_number (Immediate _ty_naked_number2, _) ->
+  | S.Naked_number (_ty_naked_number1, K.Naked_number.Naked_immediate),
+      S.Naked_number (_ty_naked_number2, K.Naked_number.Naked_immediate) ->
     (* CR-someday mshinwell: Support to be implemented later. *)
     false
-  | Naked_number (Float ty_naked_number1, _),
-      Naked_number (Float ty_naked_number2, _) ->
+  | S.Naked_number (_, K.Naked_number.Naked_float),
+      S.Naked_number (_, K.Naked_number.Naked_float) ->
     begin match
-      prove_naked_float ~type_of_name ty_naked_number1,
-      prove_naked_float ~type_of_name ty_naked_number2
+      prove_naked_float ~type_of_name t1,
+        prove_naked_float ~type_of_name t2
     with
     | Proved nums1, Proved nums2 ->
       Float_by_bit_pattern.Set.is_empty
         (Float_by_bit_pattern.Set.inter nums1 nums2)
     | _, _ -> false
     end
-  | Naked_number (Int32 ty_naked_number1, _),
-      Naked_number (Int32 ty_naked_number2, _) ->
+  | S.Naked_number (_, K.Naked_number.Naked_int32),
+      S.Naked_number (_, K.Naked_number.Naked_int32) ->
     begin match
-      prove_naked_int32 ~type_of_name ty_naked_number1,
-      prove_naked_int32 ~type_of_name ty_naked_number2
+      prove_naked_int32 ~type_of_name t1,
+        prove_naked_int32 ~type_of_name t2
     with
     | Proved nums1, Proved nums2 ->
       Int32.Set.is_empty
         (Int32.Set.inter nums1 nums2)
     | _, _ -> false
     end
-  | Naked_number (Int64 ty_naked_number1, _),
-      Naked_number (Int64 ty_naked_number2, _) ->
+  | S.Naked_number (_, K.Naked_number.Naked_int64),
+      S.Naked_number (_, K.Naked_number.Naked_int64) ->
     begin match
-      prove_naked_int64 ~type_of_name ty_naked_number1,
-      prove_naked_int64 ~type_of_name ty_naked_number2
+      prove_naked_int64 ~type_of_name t1,
+        prove_naked_int64 ~type_of_name t2
     with
     | Proved nums1, Proved nums2 ->
       Int64.Set.is_empty
         (Int64.Set.inter nums1 nums2)
     | _, _ -> false
     end
-  | Naked_number (Nativeint ty_naked_number1, _),
-      Naked_number (Nativeint ty_naked_number2, _) ->
+  | S.Naked_number (_, K.Naked_number.Naked_nativeint),
+      S.Naked_number (_, K.Naked_number.Naked_nativeint) ->
     begin match
-      prove_naked_nativeint ~type_of_name ty_naked_number1,
-      prove_naked_nativeint ~type_of_name ty_naked_number2
+      prove_naked_nativeint ~type_of_name t1,
+        prove_naked_nativeint ~type_of_name t2
     with
     | Proved nums1, Proved nums2 ->
       Targetint.Set.is_empty
