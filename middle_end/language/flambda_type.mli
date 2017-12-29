@@ -140,6 +140,8 @@ type 'a proof = private
 
 type 'a known_values = 'a Or_not_all_values_known.t proof
 
+val unknown_proof : unit -> _ proof
+
 (* CR mshinwell: Add unit tests to check that the condition about the result
    sets in [Proved] being non-empty holds. *)
 
@@ -224,6 +226,7 @@ val prove_tags : (t -> Tag.Set.t proof) type_accessor
 val prove_lengths_of_arrays_or_blocks
    : (t -> Targetint.OCaml.Set.t proof) type_accessor
 
+(* CR mshinwell: rename "prove" -> "check"? *)
 val prove_of_kind_value_with_expected_value_kind
    : (t
   -> Flambda_kind.Value_kind.t

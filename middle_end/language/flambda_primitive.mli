@@ -57,6 +57,9 @@ type duplicate_block_kind =
    nativeint. *)
 
 module Block_access_kind : sig
+  (* CR mshinwell: This module needs documenting well to avoid any
+     misconceptions about the semantics of the various constructors *)
+
   type t0 =
     | Any_value
     | Definitely_immediate

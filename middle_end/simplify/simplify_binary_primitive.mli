@@ -21,7 +21,7 @@
 val simplify_binary_primitive
    : Simplify_env_and_result.Env.t
   -> Simplify_env_and_result.Result.t
-  -> Flambda_primitive.unary_primitive
+  -> Flambda_primitive.binary_primitive
   -> Simple.t
   -> Simple.t
   -> Debuginfo.t

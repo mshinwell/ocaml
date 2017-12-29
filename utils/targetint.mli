@@ -233,7 +233,11 @@ module OCaml : sig
   (* CR mshinwell: Maybe this should move somewhere else
     let max_array_length = max_wosize ()
     let max_string_length = word_size / 8 * max_array_length - 1
+
   *)
+
+  val min : t
+  val max : t
   val max_string_length : t
 
   val zero : t
@@ -266,6 +270,8 @@ module OCaml : sig
 
   val neg : t -> t
   val get_least_significant_16_bits_then_byte_swap : t -> t
+
+  val sub : t -> t -> t
 
   include Identifiable.S with type t := t
 

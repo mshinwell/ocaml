@@ -25,13 +25,13 @@ module S = Simplify_simple
 module T = Flambda_type
 
 module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
-module Int = Numbers.Int
+module Int32 = Numbers.Int32
+module Int64 = Numbers.Int64
 module Named = Flambda.Named
 module Reachable = Flambda.Reachable
 
 type 'a binary_arith_outcome_for_one_side_only =
   | Exactly of 'a
-  | This_primitive of Flambda_primitive.t
   | The_other_side
   | Negation_of_the_other_side
   | Float_negation_of_the_other_side
@@ -189,8 +189,6 @@ end = struct
               match op i with
               | Exactly result ->
                 Some (P.Set.add (Exactly result) possible_results)
-              | This_primitive prim ->
-                Some (P.Set.add (Prim prim) possible_results)
               | The_other_side ->
                 Some (P.Set.add (Simple other_side) possible_results)
               | Negation_of_the_other_side ->
@@ -269,7 +267,6 @@ end = struct
   let ok_to_evaluate _env = true
 
   let kind = I.kind
-  let standard_int_kind = I.standard_int_kind
 
   let prover_lhs = I.unboxed_prover
   let prover_rhs = I.unboxed_prover
@@ -396,7 +393,6 @@ end = struct
   type op = Flambda_primitive.int_shift_op
 
   let kind = I.kind
-  let standard_int_kind = I.standard_int_kind
 
   let ok_to_evaluate _env = true
 
@@ -498,7 +494,6 @@ end = struct
   type op = Flambda_primitive.ordered_comparison
 
   let kind = I.kind
-  let standard_int_kind = I.standard_int_kind
 
   let ok_to_evaluate _env = true
 
@@ -556,7 +551,6 @@ end = struct
   type op = Flambda_primitive.ordered_comparison
 
   let kind = I.kind
-  let standard_int_kind = I.standard_int_kind
 
   let ok_to_evaluate _env = true
 
@@ -587,9 +581,21 @@ end
 
 module Int_ops_for_binary_comp_unsigned_tagged_immediate =
   Int_ops_for_binary_comp_unsigned (A.For_tagged_immediates)
+module Int_ops_for_binary_comp_unsigned_int32 =
+  Int_ops_for_binary_comp_unsigned (A.For_int32s)
+module Int_ops_for_binary_comp_unsigned_int64 =
+  Int_ops_for_binary_comp_unsigned (A.For_int64s)
+module Int_ops_for_binary_comp_unsigned_nativeint =
+  Int_ops_for_binary_comp_unsigned (A.For_nativeints)
 
-module Binary_int_comp_unsigned =
+module Binary_int_comp_unsigned_tagged_immediate =
   Binary_arith_like (Int_ops_for_binary_comp_unsigned_tagged_immediate)
+module Binary_int_comp_unsigned_int32 =
+  Binary_arith_like (Int_ops_for_binary_comp_unsigned_int32)
+module Binary_int_comp_unsigned_int64 =
+  Binary_arith_like (Int_ops_for_binary_comp_unsigned_int64)
+module Binary_int_comp_unsigned_nativeint =
+  Binary_arith_like (Int_ops_for_binary_comp_unsigned_nativeint)
 
 module Float_ops_for_binary_arith : sig
   include Binary_arith_like_sig
@@ -741,7 +747,6 @@ end = struct
   type op = Flambda_primitive.equality_comparison
 
   let kind = I.kind
-  let standard_int_kind = I.standard_int_kind
 
   let ok_to_evaluate _env = true
 
@@ -911,26 +916,29 @@ let refine_block_ty_upon_access _env r ~block:_ ~block_ty ~field_index:_
 *)
 
 let simplify_block_load_known_index env r prim ~block ~block_ty ~index
-      ~block_access_kind ~field_is_mutable ~field_kind ~invalid dbg =
+      ~block_access_kind:_ ~field_is_mutable:_ ~field_kind ~invalid dbg =
+  (* XXX think about above two unused variables *)
   let original_term () : Named.t =
     let index = Simple.const (Tagged_immediate index) in
     Prim (Binary (prim, block, index), dbg)
   in
   let unknown () =
-    Reachable.reachable (original_term ()), T.unknown field_kind Other, r
+    Reachable.reachable (original_term ()), T.unknown field_kind, r
   in
   let proof =
-    (E.type_accessor env prove_get_field_from_block) block ~index ~field_kind
+    (E.type_accessor env T.prove_get_field_from_block) block_ty
+      ~index:(Immediate.to_targetint index)
+      ~field_kind
   in
   begin match proof with
-  | Ok ty -> original_term (), ty, r
+  | Proved ty -> Reachable.reachable (original_term ()), ty, r
   | Unknown -> unknown ()
   | Invalid -> invalid ()
   end
 
 (* CR mshinwell: this could maybe be shared with the equivalent [block_set]
    wrapper *)
-let simplify_block_load env r ~result_var prim ~block ~index
+let simplify_block_load env r prim ~block ~index
       ~block_access_kind ~field_is_mutable dbg =
   let index, index_ty = S.simplify_simple env index in
   let block, block_ty = S.simplify_simple env block in
@@ -943,31 +951,28 @@ let simplify_block_load env r ~result_var prim ~block ~index
   in
   let invalid () =
     Reachable.invalid (), T.bottom field_kind,
-      R.map_benefit (B.remove_primitive Block_load) r
+      R.map_benefit r (B.remove_primitive (Binary prim))
   in
   let unique_index_unknown () =
     let proof =
-      (E.type_accessor env T.prove_is_block) block ~kind_of_all_fields
+      (E.type_accessor env T.prove_is_a_block) block_ty ~kind_of_all_fields
     in
     match proof with
     | Unknown | Proved true ->
-      Reachable.reachable (original_term ()), T.unknown field_kind
+      Reachable.reachable (original_term ()), T.unknown field_kind, r
     | Proved false | Invalid -> invalid ()
   in
-  let proof = (E.type_accessor env T.prove_tagged_immediate) arg in
-  let term, ty =
-    match proof with
-    | Proved (Exactly indexes) ->
-      begin match Immediate.Set.get_singleton indexes with
-      | Some index ->
-        simplify_block_load_known_index env r prim ~block ~block_ty
-          ~index ~block_access_kind ~field_is_mutable ~field_kind ~invalid dbg
-      | None -> unique_index_unknown ()
-      end
-    | Proved Not_all_values_known -> unique_index_unknown ()
-    | Invalid -> invalid ()
-  in
-  term, ty, r
+  let proof = (E.type_accessor env T.prove_tagged_immediate) index_ty in
+  match proof with
+  | Proved indexes ->
+    begin match Immediate.Set.get_singleton indexes with
+    | Some index ->
+      simplify_block_load_known_index env r prim ~block ~block_ty
+        ~index ~block_access_kind ~field_is_mutable ~field_kind ~invalid dbg
+    | None -> unique_index_unknown ()
+    end
+  | Unknown -> unique_index_unknown ()
+  | Invalid -> invalid ()
 
 module String_info_and_immediate =
   Identifiable.Make_pair (T.String_info) (Immediate)
@@ -978,39 +983,35 @@ type bounds_check_result =
 
 (* CR mshinwell: This function will also be needed when producing the
    bounds check code when compiling from [Lambda]. *)
-let bounds_check ~string_length_in_bytes ~index_in_bytes
-      ~result_size_in_bytes : bounds_check_result =
-  if Targetint.OCaml.(<) index_in_bytes Targetint.OCaml.zero then
+let bounds_check ~width ~string_length_in_bytes ~index_in_bytes
+      : bounds_check_result =
+  let index_in_bytes = Immediate.to_targetint index_in_bytes in
+  if Targetint.OCaml.compare index_in_bytes Targetint.OCaml.zero < 0 then
     Out_of_range
   else
-    let string_length_in_bytes =
-      Targetint.OCaml.of_int string_length_in_bytes
-    in
     let result_size_in_bytes =
       Targetint.OCaml.of_int
         (Flambda_primitive.byte_width_of_string_accessor_width width)
     in
     (* We are careful here to avoid overflow for ease of reasoning. *)
     let highest_index_allowed =
-      Targetint.OCaml.(-) string_length_in_bytes result_size_in_bytes
+      Targetint.OCaml.sub string_length_in_bytes result_size_in_bytes
     in
-    if Targetint.OCaml.(>=) index_in_bytes highest_index_allowed then
+    if Targetint.OCaml.compare index_in_bytes highest_index_allowed >= 0 then
       Out_of_range
     else
       In_range
 
-let all_indexes_out_of_range indexes ~max_string_length
-      ~result_size_in_bytes =
+let all_indexes_out_of_range ~width indexes ~max_string_length =
   Immediate.Set.for_all (fun index_in_bytes ->
-      let index_in_bytes = Immediate.to_targetint index_in_bytes in
       let in_range =
-        bounds_check ~string_length_in_bytes:max_string_length
-          ~index_in_bytes ~result_size_in_bytes
+        bounds_check ~width ~string_length_in_bytes:max_string_length
+          ~index_in_bytes
       in
       match in_range with
       | Out_of_range -> true
       | In_range -> false)
-    strs
+    indexes
 
 external swap16 : int -> int = "%bswap16" [@@noalloc]
 
@@ -1035,189 +1036,196 @@ external string_unsafe_get64
 let simplify_string_or_bigstring_load env r prim dbg
       (string_like_value : Flambda_primitive.string_like_value)
       (width : Flambda_primitive.string_accessor_width)
-      str index =
+      ~str ~index =
   let str, str_ty = S.simplify_simple env str in
   let index, index_ty = S.simplify_simple env index in
   let original_term () : Named.t = Prim (Binary (prim, str, index), dbg) in
   let result_kind = Flambda_primitive.kind_of_string_accessor_width width in
-  let invalid () = Reachable.invalid (), T.bottom result_kind in
-  let unknown () =
-    Reachable.reachable (original_term ()), T.unknown result_kind Other
+  let invalid () =
+    Reachable.invalid (), T.bottom result_kind,
+      R.map_benefit r (B.remove_primitive (Binary prim))
   in
-  let str_proof : T.string_proof =
+  let unknown () =
+    Reachable.reachable (original_term ()), T.unknown result_kind, r
+  in
+  let str_proof : T.String_info.Set.t T.proof =
     match string_like_value with
-    | String | Bytes -> (E.type_accessor env T.prove_string) str
+    | String | Bytes -> (E.type_accessor env T.prove_string) str_ty
     | Bigstring ->
       (* For the moment just check that the bigstring is of kind [Value]. *)
-      let proof =
-        (E.type_accessor env T.prove_of_kind_value_with_expected_scanning
-          Must_scan) str
+      (* CR mshinwell: Could we tighten [Unknown] to [Definitely_pointer]?
+         Not sure this is going to work... *)
+      let _ty_value =
+        (E.type_accessor env T.prove_of_kind_value_with_expected_value_kind)
+          str_ty Unknown
       in
-      match proof with
-      | Proved _ ->
-        (* At the moment we don't track anything in the type system about
-           bigarrays. *)
-        Proved Not_all_values_known
-      | Invalid -> Invalid
+      (* At the moment we don't track anything in the type system about
+         bigarrays. *)
+      T.unknown_proof ()
   in
-  let index_proof = (E.type_accessor env T.prove_tagged_immediate) index in
+  let index_proof = (E.type_accessor env T.prove_tagged_immediate) index_ty in
   let all_the_empty_string strs =
     T.String_info.Set.for_all (fun (info : T.String_info.t) ->
-        info.size = 0)
+        Targetint.OCaml.equal info.size Targetint.OCaml.zero)
       strs
   in
-  let result_size_in_bytes =
-    Flambda_primitive.byte_width_of_string_accessor_width width
-  in
   match str_proof, index_proof with
-  | Proved (Exactly strs), Proved (Exactly indexes) ->
+  | Proved strs, Proved indexes ->
     (* CR-someday mshinwell: Here, and also for block load cases etc., we
        could actually refine the _container_ type (the string in this case)
        based on the indexes. *)
     assert (not (T.String_info.Set.is_empty strs));
     assert (not (Immediate.Set.is_empty indexes));
     let strs_and_indexes =
-      String_info_and_immediate.Set.create_from_cross_product strs indexes
+      String_info_and_immediate.create_from_cross_product strs indexes
     in
-    let tys =
+    let bottom =
+      match width with
+      | Eight | Sixteen -> T.bottom (K.value Definitely_immediate)
+      | Thirty_two -> T.bottom (K.naked_int32 ())
+      | Sixty_four -> T.bottom (K.naked_int64 ())
+    in
+    let ty =
       String_info_and_immediate.Set.fold
-        (fun ((info : T.String_info.t), index_in_bytes) tys ->
+        (fun ((info : T.String_info.t), index_in_bytes) ty ->
           let in_range =
-            bounds_check ~string_length_in_bytes:info.size ~index_in_bytes
-              ~result_size_in_bytes
+            bounds_check ~width ~string_length_in_bytes:info.size
+              ~index_in_bytes
           in
           match in_range with
-          | Out_of_range -> tys
+          | Out_of_range -> ty
           | In_range ->
-            match info.contents with
-            | Unknown_or_mutable ->
-              begin match width with
-              | Eight -> T.any_tagged_immediate ()
-              | Sixteen -> T.any_tagged_immediate ()
-              | Thirty_two -> T.any_naked_int32 ()
-              | Sixty_four -> T.any_naked_int64 ()
-              end
-            | Contents str ->
-              match Targetint.OCaml.to_int index with
-              | None ->
-                (* The existence of [Contents str] and the checks done on
-                   [index] above form a proof that the [index] fits into
-                   type [int] on the host machine (in fact, below
-                   [Sys.max_string_length] on the host). *)
-                Misc.fatal_errorf "Inconsistent [String_info]: access at \
-                    index %a to %a"
-                  Targetint.OCaml.print index
-                  T.String_info.print info
-              | Some index_in_bytes ->
-                (* Note that we cannot be in the [Bigstring] case here. *)
-                assert (string_like_value <> Bigstring);
-                let must_byte_swap =
-                  let module Backend = (val (E.backend env) : Backend_intf.S) in
-                  Sys.big_endian <> Backend.big_endian ()
-                in
-                match width with
-                | Eight ->
-                  T.this_tagged_immediate
-                    (String.unsafe_get str index_in_bytes)
-                | Sixteen ->
-                  let result =
-                    string_unsafe_get16 str index_in_bytes
+            let this_ty =
+              match info.contents with
+              | Unknown_or_mutable ->
+                begin match width with
+                | Eight -> T.any_tagged_immediate ()
+                | Sixteen -> T.any_tagged_immediate ()
+                | Thirty_two -> T.any_naked_int32 ()
+                | Sixty_four -> T.any_naked_int64 ()
+                end
+              | Contents str ->
+                match
+                  Targetint.OCaml.to_int_option (
+                    Immediate.to_targetint index_in_bytes)
+                with
+                | None ->
+                  (* The existence of [Contents str] and the checks done on
+                     [index] above form a proof that the [index] fits into
+                     type [int] on the host machine (in fact, below
+                     [Sys.max_string_length] on the host). *)
+                  Misc.fatal_errorf "Inconsistent [String_info]: access at \
+                      index %a to %a"
+                    Immediate.print index_in_bytes
+                    T.String_info.print info
+                | Some index_in_bytes ->
+                  (* Note that we cannot be in the [Bigstring] case here. *)
+                  assert (string_like_value
+                    <> (Bigstring : Flambda_primitive.string_like_value));
+                  let must_byte_swap =
+                    let module Backend =
+                      (val (E.backend env) : Backend_intf.S)
+                    in
+                    Sys.big_endian <> Backend.big_endian
                   in
-                  let result =
-                    if must_byte_swap then swap16 result
-                    else result
-                  in
-                  T.this_tagged_immediate result
-                | Thirty_two ->
-                  let result =
-                    string_unsafe_get32 str index_in_bytes
-                  in
-                  let result =
-                    if must_byte_swap then Int32.swap_byte_endianness result
-                    else result
-                  in
-                  T.this_naked_int32 result
-                | Sixty_four ->
-                  let result =
-                    string_unsafe_get64 str index_in_bytes
-                  in
-                  let result =
-                    if must_byte_swap then Int64.swap_byte_endianness result
-                    else result
-                  in
-                  T.this_naked_int64 result)
+                  match width with
+                  | Eight ->
+                    T.this_tagged_immediate
+                      (Immediate.char (String.unsafe_get str index_in_bytes))
+                  | Sixteen ->
+                    let result =
+                      string_unsafe_get16 str index_in_bytes
+                    in
+                    let result =
+                      if must_byte_swap then swap16 result
+                      else result
+                    in
+                    let result = Targetint.OCaml.of_int result in
+                    T.this_tagged_immediate (Immediate.int result)
+                  | Thirty_two ->
+                    let result =
+                      string_unsafe_get32 str index_in_bytes
+                    in
+                    let result =
+                      if must_byte_swap then Int32.swap_byte_endianness result
+                      else result
+                    in
+                    T.this_naked_int32 result
+                  | Sixty_four ->
+                    let result =
+                      string_unsafe_get64 str index_in_bytes
+                    in
+                    let result =
+                      if must_byte_swap then Int64.swap_byte_endianness result
+                      else result
+                    in
+                    T.this_naked_int64 result
+            in
+            (E.type_accessor env T.join) this_ty ty)
         strs_and_indexes
-        []
+        bottom
     in
-    begin match tys with
-    | [] -> invalid ()
-    | tys ->
-      let ty = (E.type_accessor env T.join) tys in
-      (* CR mshinwell: add benefit to [r] *)
-      [], Reachable.reachable (original_term ()), ty, r
-    end
-  | Proved strs, Proved Not_all_values_known ->
+    Reachable.reachable (original_term ()), ty, r
+  | Proved strs, Unknown ->
     assert (not (T.String_info.Set.is_empty strs));
     (* CR-someday mshinwell: We could return the union of all the characters
        in the strings, within reason... *)
     if all_the_empty_string strs then invalid ()
     else unknown ()
-  | Proved Not_all_values_known, Proved indexes ->
+  | Unknown, Proved indexes ->
     assert (not (Immediate.Set.is_empty indexes));
     let max_string_length =
       match string_like_value with
       | String | Bytes -> Targetint.OCaml.max_string_length
-      | Bigstring -> Targetint.OCaml.max_int
+      | Bigstring -> Targetint.OCaml.max
     in
     let all_indexes_out_of_range =
-      all_indexes_out_of_range indexes ~max_string_length
-        ~result_size_in_bytes
+      all_indexes_out_of_range indexes ~width ~max_string_length
     in
-    if all_indexes_out_of_range indexes then invalid ()
+    if all_indexes_out_of_range then invalid ()
     else unknown ()
-  | Invalid _, _ | _, Invalid _ -> invalid ()
+  | Unknown, Unknown -> unknown ()
+  | Invalid, _ | _, Invalid -> invalid ()
 
-let simplify_binary_primitive env r ~result_var prim arg1 arg2 dbg =
+let simplify_binary_primitive env r (prim : Flambda_primitive.binary_primitive)
+      arg1 arg2 dbg =
   match prim with
   | Block_load (block_access_kind, field_is_mutable) ->
-    simplify_block_load env r ~result_var prim ~block:arg1 ~index:arg2
-      block_access_kind ~field_is_mutable dbg
-  | Block_set (field, field_kind, init_or_assign) ->
-    simplify_block_set env r prim ~field ~field_kind ~init_or_assign
-      ~block:arg1 ~new_value:arg2 dbg
+    simplify_block_load env r prim ~block:arg1 ~index:arg2
+      ~block_access_kind ~field_is_mutable dbg
   | Eq_comp (kind, op) -> simplify_eq_comp env r prim dbg kind op arg1 arg2
   | Int_arith (kind, op) ->
     begin match kind with
     | Tagged_immediate ->
       Binary_int_arith_tagged_immediate.simplify env r prim dbg op arg1 arg2
     | Naked_int32 ->
-      Binary_int_arith_naked_int32.simplify env r prim dbg op arg1 arg2
+      Binary_int_arith_int32.simplify env r prim dbg op arg1 arg2
     | Naked_int64 ->
-      Binary_int_arith_naked_int64.simplify env r prim dbg op arg1 arg2
+      Binary_int_arith_int64.simplify env r prim dbg op arg1 arg2
     | Naked_nativeint ->
-      Binary_int_arith_naked_nativeint.simplify env r prim dbg op arg1 arg2
+      Binary_int_arith_nativeint.simplify env r prim dbg op arg1 arg2
     end
   | Int_shift (kind, op) ->
     begin match kind with
     | Tagged_immediate ->
       Binary_int_shift_tagged_immediate.simplify env r prim dbg op arg1 arg2
     | Naked_int32 ->
-      Binary_int_shift_naked_int32.simplify env r prim dbg op arg1 arg2
+      Binary_int_shift_int32.simplify env r prim dbg op arg1 arg2
     | Naked_int64 ->
-      Binary_int_shift_naked_int64.simplify env r prim dbg op arg1 arg2
+      Binary_int_shift_int64.simplify env r prim dbg op arg1 arg2
     | Naked_nativeint ->
-      Binary_int_shift_naked_nativeint.simplify env r prim dbg op arg1 arg2
+      Binary_int_shift_nativeint.simplify env r prim dbg op arg1 arg2
     end
   | Int_comp (kind, Signed, op) ->
     begin match kind with
     | Tagged_immediate ->
       Binary_int_comp_tagged_immediate.simplify env r prim dbg op arg1 arg2
     | Naked_int32 ->
-      Binary_int_comp_naked_int32.simplify env r prim dbg op arg1 arg2
+      Binary_int_comp_int32.simplify env r prim dbg op arg1 arg2
     | Naked_int64 ->
-      Binary_int_comp_naked_int64.simplify env r prim dbg op arg1 arg2
+      Binary_int_comp_int64.simplify env r prim dbg op arg1 arg2
     | Naked_nativeint ->
-      Binary_int_comp_naked_nativeint.simplify env r prim dbg op arg1 arg2
+      Binary_int_comp_nativeint.simplify env r prim dbg op arg1 arg2
     end
   | Int_comp (kind, Unsigned, op) ->
     begin match kind with
@@ -1225,11 +1233,11 @@ let simplify_binary_primitive env r ~result_var prim arg1 arg2 dbg =
       Binary_int_comp_unsigned_tagged_immediate.simplify env r prim dbg op
         arg1 arg2
     | Naked_int32 ->
-      Binary_int_comp_unsigned_naked_int32.simplify env r prim dbg op arg1 arg2
+      Binary_int_comp_unsigned_int32.simplify env r prim dbg op arg1 arg2
     | Naked_int64 ->
-      Binary_int_comp_unsigned_naked_int64.simplify env r prim dbg op arg1 arg2
+      Binary_int_comp_unsigned_int64.simplify env r prim dbg op arg1 arg2
     | Naked_nativeint ->
-      Binary_int_comp_unsigned_naked_nativeint.simplify env r prim dbg op
+      Binary_int_comp_unsigned_nativeint.simplify env r prim dbg op
         arg1 arg2
     end
   | Float_arith op ->
@@ -1237,5 +1245,5 @@ let simplify_binary_primitive env r ~result_var prim arg1 arg2 dbg =
   | Float_comp op ->
     Binary_float_comp.simplify env r prim dbg op arg1 arg2
   | String_or_bigstring_load (string_like_value, width) ->
-    simplify_string_load env r prim dbg string_like_value width
+    simplify_string_or_bigstring_load env r prim dbg string_like_value width
       ~str:arg1 ~index:arg2

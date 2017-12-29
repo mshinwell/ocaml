@@ -880,6 +880,8 @@ type 'a proof =
 
 type 'a known_values = 'a Or_not_all_values_known.t proof
 
+let unknown_proof () = Unknown
+
 let prove_tagged_immediate ~type_of_name t
       : Immediate.Set.t proof =
   let wrong_kind () =

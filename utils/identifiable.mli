@@ -55,7 +55,6 @@ module type Map = sig
 
   include Map.S
     with type key = T.t
-     and type 'a t = 'a Map.Make (T).t
 
   val filter_map : 'a t -> f:(key -> 'a -> 'b option) -> 'b t
   val of_list : (key * 'a) list -> 'a t
@@ -138,6 +137,7 @@ module Make (T : Thing) : S with type t := T.t
 module Make_pair (T0 : S) (T1 : S) : sig
   include S with type t := T0.t * T1.t
 
+  (* CR mshinwell: "create" -> "create_set"? *)
   val create_from_cross_product : T0.Set.t -> T1.Set.t -> Set.t
 end
 
