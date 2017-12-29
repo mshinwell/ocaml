@@ -125,6 +125,14 @@ val reify
   -> t
   -> reification_result) type_accessor
 
+(** Whether values of the given two types will always be physically equal
+    to each other. *)
+val physically_equal : (t -> t -> bool) type_accessor
+
+(** Whether values of the given two types will always have a different
+    structure from each other. *)
+val structurally_distinct : (t -> t -> bool) type_accessor
+
 type 'a proof = private
   | Proved of 'a
   | Unknown

@@ -727,15 +727,41 @@ module Int_ops_for_binary_eq_comp_nativeint =
 
 let simplify_eq_comp env r prim dbg kind op arg1 arg2 =
   begin match kind with
-  | Value _ -> assert false (* XXX *)
-(*
-    Binary_int_comp_tagged_immediate.simplify env r prim dbg op arg1 arg2
-*)
+  | Value ->
+    let proof1 = (E.type_accessor env T.prove_tagged_immediate) arg1 in
+    let proof2 = (E.type_accessor env T.prove_tagged_immediate) arg2 in
+    begin match proof1, proof2 with
+    | Proved _, Proved _ ->
+      Binary_int_comp_tagged_immediate.simplify env r prim dbg op arg1 arg2
+    | _, _ ->
+      let physically_equal =
+        (E.type_accessor env T.physically_equal) arg1 arg2
+      in
+      let physically_distinct =
+        (* Structural inequality implies physical inequality. *)
+        (E.type_accessor env T.structurally_distinct) arg1 arg2
+      in
+      let const bool () =
+        Reachable.reachable (Simple (Simple.const_bool bool)),
+          T.this_tagged_immediate (Immediate.bool bool),
+          R.map_benefit r (B.remove_primitive (Binary prim))
+      in
+      begin match op, physically_equal, physically_distinct with
+      | Eq, true, _ -> const true
+      | Neq, true, _ -> const false
+      | Eq, _, true -> const false
+      | Neq, _, true -> const true
+      | _, _, _ ->
+        Reachable.reachable (Prim (Binary (prim, arg1, arg2))),
+          T.these_tagged_immediates Immediate.all_bools,
+          r
+      end
+    end
   | Naked_number Naked_immediate ->
     Misc.fatal_error "Not yet implemented"
   | Naked_number Naked_int32 ->
     Binary_int_comp_naked_int32.simplify env r prim dbg op arg1 arg2
-  | Naaked_number Naked_int64 ->
+  | Naked_number Naked_int64 ->
     Binary_int_comp_naked_int64.simplify env r prim dbg op arg1 arg2
   | Naked_nativeint ->
     Binary_int_comp_naked_nativeint.simplify env r prim dbg op arg1 arg2
