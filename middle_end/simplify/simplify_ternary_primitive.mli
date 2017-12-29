@@ -21,7 +21,7 @@
 val simplify_ternary_primitive
    : Simplify_env_and_result.Env.t
   -> Simplify_env_and_result.Result.t
-  -> Flambda_primitive.unary_primitive
+  -> Flambda_primitive.ternary_primitive
   -> Simple.t
   -> Simple.t
   -> Simple.t

@@ -916,8 +916,8 @@ let refine_block_ty_upon_access _env r ~block:_ ~block_ty ~field_index:_
 *)
 
 let simplify_block_load_known_index env r prim ~block ~block_ty ~index
-      ~block_access_kind:_ ~field_is_mutable:_ ~field_kind ~invalid dbg =
-  (* XXX think about above two unused variables *)
+      ~field_is_mutable:_ ~field_kind ~invalid dbg =
+  (* XXX think about above unused variable *)
   let original_term () : Named.t =
     let index = Simple.const (Tagged_immediate index) in
     Prim (Binary (prim, block, index), dbg)
@@ -968,7 +968,7 @@ let simplify_block_load env r prim ~block ~index
     begin match Immediate.Set.get_singleton indexes with
     | Some index ->
       simplify_block_load_known_index env r prim ~block ~block_ty
-        ~index ~block_access_kind ~field_is_mutable ~field_kind ~invalid dbg
+        ~index ~field_is_mutable ~field_kind ~invalid dbg
     | None -> unique_index_unknown ()
     end
   | Unknown -> unique_index_unknown ()
@@ -976,42 +976,6 @@ let simplify_block_load env r prim ~block ~index
 
 module String_info_and_immediate =
   Identifiable.Make_pair (T.String_info) (Immediate)
-
-type bounds_check_result =
-  | In_range
-  | Out_of_range
-
-(* CR mshinwell: This function will also be needed when producing the
-   bounds check code when compiling from [Lambda]. *)
-let bounds_check ~width ~string_length_in_bytes ~index_in_bytes
-      : bounds_check_result =
-  let index_in_bytes = Immediate.to_targetint index_in_bytes in
-  if Targetint.OCaml.compare index_in_bytes Targetint.OCaml.zero < 0 then
-    Out_of_range
-  else
-    let result_size_in_bytes =
-      Targetint.OCaml.of_int
-        (Flambda_primitive.byte_width_of_string_accessor_width width)
-    in
-    (* We are careful here to avoid overflow for ease of reasoning. *)
-    let highest_index_allowed =
-      Targetint.OCaml.sub string_length_in_bytes result_size_in_bytes
-    in
-    if Targetint.OCaml.compare index_in_bytes highest_index_allowed >= 0 then
-      Out_of_range
-    else
-      In_range
-
-let all_indexes_out_of_range ~width indexes ~max_string_length =
-  Immediate.Set.for_all (fun index_in_bytes ->
-      let in_range =
-        bounds_check ~width ~string_length_in_bytes:max_string_length
-          ~index_in_bytes
-      in
-      match in_range with
-      | Out_of_range -> true
-      | In_range -> false)
-    indexes
 
 external swap16 : int -> int = "%bswap16" [@@noalloc]
 
@@ -1089,7 +1053,7 @@ let simplify_string_or_bigstring_load env r prim dbg
       String_info_and_immediate.Set.fold
         (fun ((info : T.String_info.t), index_in_bytes) ty ->
           let in_range =
-            bounds_check ~width ~string_length_in_bytes:info.size
+            Simplify_aux.bounds_check ~width ~string_length_in_bytes:info.size
               ~index_in_bytes
           in
           match in_range with
@@ -1180,7 +1144,7 @@ let simplify_string_or_bigstring_load env r prim dbg
       | Bigstring -> Targetint.OCaml.max
     in
     let all_indexes_out_of_range =
-      all_indexes_out_of_range indexes ~width ~max_string_length
+      Simplify_aux.all_indexes_out_of_range indexes ~width ~max_string_length
     in
     if all_indexes_out_of_range then invalid ()
     else unknown ()

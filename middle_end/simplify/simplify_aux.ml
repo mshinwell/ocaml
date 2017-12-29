@@ -15,9 +15,46 @@
 (**************************************************************************)
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
-
+(*
 module E = Simplify_env_and_result.Env
-module T = Flambda_types
+module T = Flambda_type
+*)
+
+type bounds_check_result =
+  | In_range
+  | Out_of_range
+
+(* CR mshinwell: This function will also be needed when producing the
+   bounds check code when compiling from [Lambda]. *)
+let bounds_check ~width ~string_length_in_bytes ~index_in_bytes
+      : bounds_check_result =
+  let index_in_bytes = Immediate.to_targetint index_in_bytes in
+  if Targetint.OCaml.compare index_in_bytes Targetint.OCaml.zero < 0 then
+    Out_of_range
+  else
+    let result_size_in_bytes =
+      Targetint.OCaml.of_int
+        (Flambda_primitive.byte_width_of_string_accessor_width width)
+    in
+    (* We are careful here to avoid overflow for ease of reasoning. *)
+    let highest_index_allowed =
+      Targetint.OCaml.sub string_length_in_bytes result_size_in_bytes
+    in
+    if Targetint.OCaml.compare index_in_bytes highest_index_allowed >= 0 then
+      Out_of_range
+    else
+      In_range
+
+let all_indexes_out_of_range ~width indexes ~max_string_length =
+  Immediate.Set.for_all (fun index_in_bytes ->
+      let in_range =
+        bounds_check ~width ~string_length_in_bytes:max_string_length
+          ~index_in_bytes
+      in
+      match in_range with
+      | Out_of_range -> true
+      | In_range -> false)
+    indexes
 
 (*
 let prepare_to_simplify_set_of_closures ~env

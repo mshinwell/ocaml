@@ -20,40 +20,36 @@ module B = Inlining_cost.Benefit
 module E = Simplify_env_and_result.Env
 module K = Flambda_kind
 module R = Simplify_env_and_result.Result
+module S = Simplify_simple
 module T = Flambda_type
 
-module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
-module Int = Numbers.Int
 module Named = Flambda.Named
 module Reachable = Flambda.Reachable
 
-let simplify_block_set_known_index env r prim ~block_access_kind
-      ~init_or_assign ~block ~index ~new_value dbg =
-  if field < 0 then begin
-    Misc.fatal_errorf "[Block_set] with bad field index %d: %a"
-      field
-      Flambda_primitive.print prim
+let simplify_block_set_known_index env r _prim ~block_access_kind
+      ~init_or_assign:_ ~block_ty ~index ~new_value:_ _dbg
+      ~original_term ~invalid =
+  if Targetint.OCaml.compare index Targetint.OCaml.zero < 0 then begin
+    Misc.fatal_errorf "[Block_set] with bad field index %a: %a"
+      Targetint.OCaml.print index
+      T.print block_ty
   end;
   let field_kind =
     Flambda_primitive.Block_access_kind.kind_this_element block_access_kind
   in
-  let original_term () : Named.t = Prim (Binary (prim, block, index), dbg) in
   let result_kind = K.unit () in
-  let invalid () = Reachable.invalid (), T.bottom result_kind in
   let ok () =
-    match new_value_proof with
-    | Proved _ ->
-      Reachable.reachable (original_term ()), T.unknown result_kind Other
-    | Invalid -> invalid ()
+    Reachable.reachable (original_term ()), T.unknown result_kind, r
   in
   let proof =
     (* Even though we're setting not getting, the "prove get field" function
        does exactly what we want in terms of checks on the block, to determine
        if the set is invalid. *)
-    (E.type_accessor env prove_get_field_from_block) block ~index ~field_kind
+    (E.type_accessor env T.prove_get_field_from_block) block_ty ~index
+      ~field_kind
   in
   begin match proof with
-  | Ok _ | Unknown -> ok ()
+  | Proved _ | Unknown -> ok ()
   | Invalid -> invalid ()
   end
 
@@ -62,40 +58,53 @@ let simplify_block_set env r prim dbg ~block_access_kind ~init_or_assign
   let block, block_ty = S.simplify_simple env block in
   let index, index_ty = S.simplify_simple env index in
   let new_value, new_value_ty = S.simplify_simple env new_value in
-  let original_term () : Named.t = Prim (Binary (prim, block, index), dbg) in
+  let original_term () : Named.t =
+    Prim (Ternary (prim, block, index, new_value), dbg)
+  in
   let kind_of_all_fields =
     Flambda_primitive.Block_access_kind.kind_all_elements block_access_kind
   in
   let field_kind =
     Flambda_primitive.Block_access_kind.kind_this_element block_access_kind
   in
-  let invalid () = Reachable.invalid (), T.bottom field_kind in
-  let proof = (E.type_accessor env T.prove_tagged_immediate) arg in
+  let invalid () =
+    Reachable.invalid (), T.bottom (K.unit ()),
+      R.map_benefit r (B.remove_primitive (Ternary prim))
+  in
+  let new_value_kind = (E.type_accessor env T.kind) new_value_ty in
+  if not (K.compatible new_value_kind ~if_used_at:field_kind) then begin
+    Misc.fatal_errorf "New value for [Block_set] has kind %a, incompatible \
+        with %a.  Block type: %a"
+      K.print new_value_kind
+      K.print field_kind
+      T.print block_ty
+  end;
+  let index_proof = (E.type_accessor env T.prove_tagged_immediate) index_ty in
   let unique_index_unknown () =
-    let proof =
-      (E.type_accessor env T.prove_is_block) block ~kind_of_all_fields
+    let block_proof =
+      (E.type_accessor env T.prove_is_a_block) block_ty ~kind_of_all_fields
     in
-    match proof with
+    match block_proof with
     | Unknown | Proved true ->
-      Reachable.reachable (original_term ()), T.unknown field_kind
+      Reachable.reachable (original_term ()), T.unknown field_kind, r
     | Proved false | Invalid -> invalid ()
   in
-  let term, ty =
-    match proof with
-    | Proved (Exactly indexes) ->
-      begin match Immediate.Set.get_singleton indexes with
-      | Some index ->
-        simplify_block_set_known_index env r prim ~block_access_kind
-          ~init_or_assign ~block ~index ~new_value dbg
-      | None -> unique_index_unknown ()
-      end
-    | Proved Not_all_values_known -> unique_index_unknown ()
-    | Invalid -> invalid ()
-  in
-  term, ty, r
+  match index_proof with
+  | Proved indexes ->
+    begin match Immediate.Set.get_singleton indexes with
+    | Some index ->
+      let index = Immediate.to_targetint index in
+      simplify_block_set_known_index env r prim ~block_access_kind
+        ~init_or_assign ~block_ty ~index ~new_value dbg
+        ~original_term ~invalid
+    | None -> unique_index_unknown ()
+    end
+  | Unknown -> unique_index_unknown ()
+  | Invalid -> invalid ()
 
-let simplify_bytes_or_bigstring_set env r prim dbg bytes_like_value
-      string_accessor_width ~str ~index ~new_value =
+let simplify_bytes_or_bigstring_set env r prim dbg
+      (bytes_like_value : Flambda_primitive.bytes_like_value)
+      ~string_accessor_width ~str ~index ~new_value =
   let str, str_ty = S.simplify_simple env str in
   let index, index_ty = S.simplify_simple env index in
   let new_value, new_value_ty = S.simplify_simple env new_value in
@@ -103,90 +112,55 @@ let simplify_bytes_or_bigstring_set env r prim dbg bytes_like_value
     Prim (Ternary (prim, str, index, new_value), dbg)
   in
   let result_kind = Flambda_kind.unit () in
-  let invalid () = Reachable.invalid (), T.bottom result_kind in
-  (* CR mshinwell: Factor out with
-     [Simplify_binary_primitive.simplify_string_or_bigstring_load].  In fact,
-     maybe we could share the whole skeleton of this function? *)
-  let str_proof : T.string_proof =
-    match string_like_value with
-    | String | Bytes -> (E.type_accessor env T.prove_string) str
-    | Bigstring ->
-      (* For the moment just check that the bigstring is of kind [Value]. *)
-      let proof =
-        (E.type_accessor env T.prove_of_kind_value_with_expected_scanning
-          Must_scan) str
-      in
-      match proof with
-      | Proved _ ->
-        (* At the moment we don't track anything in the type system about
-           bigarrays. *)
-        Proved Not_all_values_known
-      | Invalid -> Invalid
+  let ok () = Reachable.reachable (original_term ()), T.unit (), r in
+  let invalid () =
+    Reachable.invalid (), T.bottom result_kind,
+      R.map_benefit r (B.remove_primitive (Ternary prim))
   in
-  let index_proof = (E.type_accessor env T.prove_tagged_immediate) index in
-  let all_the_empty_string strs =
-    (* CR mshinwell: Move into [T.String_info] *)
-    T.String_info.Set.for_all (fun (info : T.String_info.t) ->
-        info.size = 0)
-      strs
+  (* For the moment just check that the container is of kind [Value]:
+     we don't track anything in the type system about bigarrays or values
+     of type [bytes]. *)
+  let _ty_value =
+    (E.type_accessor env T.prove_of_kind_value_with_expected_value_kind)
+      str_ty Unknown
+    (* CR mshinwell: We should do more here (e.g. make sure the type is
+       Unknown) -- it would rule out obviously wrong cases such as
+       being presented with a closure instead of a string. *)
   in
-  let check_new_value () =
-    let new_value_proof =
-      (E.type_accessor env T.prove_of_kind result_kind) new_value
-    in
-    match new_value_proof with
-    | Proved _ ->
-      [], Reachable.reachable (original_term ()),
-        T.unknown result_kind Other, r
-    | Invalid -> invalid ()
+  let new_value_kind = (E.type_accessor env T.kind) new_value_ty in
+  let field_kind =
+    Flambda_primitive.kind_of_string_accessor_width string_accessor_width
   in
-  match str_proof, index_proof with
-  | Proved (Exactly strs), Proved (Exactly indexes) ->
-    assert (not (T.String_info.Set.is_empty strs));
-    assert (not (Immediate.Set.is_empty indexes));
-    let strs_and_indexes =
-      String_info_and_immediate.Set.create_from_cross_product strs indexes
-    in
-    let at_least_one_valid_case =
-      String_info_and_immediate.Set.exits
-        (fun ((info : T.String_info.t), index_in_bytes) ->
-          let in_range =
-            XXX.bounds_check ~string_length_in_bytes:info.size ~index_in_bytes
-              ~result_size_in_bytes
-          in
-          match in_range with
-          | Out_of_range -> false
-          | In_range -> true)
-        strs_and_indexes
-    in
-    if at_least_one_valid_case then check_new_value ()
-    else invalid ()
-  | Proved strs, Proved Not_all_values_known ->
-    assert (not (T.String_info.Set.is_empty strs));
-    if all_the_empty_string strs then invalid ()
-    else check_new_value ()
-  | Proved Not_all_values_known, Proved indexes ->
+  if not (K.compatible new_value_kind ~if_used_at:field_kind) then begin
+    Misc.fatal_errorf "New value for bytes / Bigstring set has kind %a, \
+        incompatible with %a."
+      K.print new_value_kind
+      K.print field_kind
+  end;
+  let index_proof = (E.type_accessor env T.prove_tagged_immediate) index_ty in
+  match index_proof with
+  | Proved indexes ->
     assert (not (Immediate.Set.is_empty indexes));
     let max_string_length =
-      match string_like_value with
-      | String | Bytes -> Targetint.OCaml.max_string_length
-      | Bigstring -> Targetint.OCaml.max_int
+      match bytes_like_value with
+      | Bytes -> Targetint.OCaml.max_string_length
+      | Bigstring -> Targetint.OCaml.max
     in
     let all_indexes_out_of_range =
-      all_indexes_out_of_range indexes ~max_string_length
-        ~result_size_in_bytes
+      Simplify_aux.all_indexes_out_of_range ~width:string_accessor_width
+        indexes ~max_string_length
     in
-    if all_indexes_out_of_range indexes then invalid ()
-    else check_new_value ()
-  | Invalid _, _ | _, Invalid _ -> invalid ()
+    if all_indexes_out_of_range then invalid ()
+    else ok ()
+  | Unknown -> ok ()
+  | Invalid -> invalid ()
 
-let simplify_ternary_primitive env r prim arg1 arg2 arg3 dbg =
+let simplify_ternary_primitive env r
+      (prim : Flambda_primitive.ternary_primitive) arg1 arg2 arg3 dbg =
   match prim with
-  | Block_set (value_kind, init_or_assign) ->
-    simplify_block_set env r prim dbg ~value_kind ~init_or_assign
-      arg1 arg2 arg3
-  | Bytes_set string_accessor_width ->
-    simplify_bytes_set env r prim dbg ~string_accessor_width arg1 arg2 arg3
-  | Bigstring_set bigstring_accessor_width ->
-    simplify_bigstring_set env r prim dbg ~bigstring_accessor_width
-      arg1 arg2 arg3
+  | Block_set (block_access_kind, init_or_assign) ->
+    simplify_block_set env r prim dbg ~block_access_kind ~init_or_assign
+      ~block:arg1 ~index:arg2 ~new_value:arg3
+  | Bytes_or_bigstring_set (bytes_like_value, string_accessor_width) ->
+    simplify_bytes_or_bigstring_set env r prim dbg bytes_like_value
+      ~string_accessor_width ~str:arg1 ~index:arg2 ~new_value:arg3

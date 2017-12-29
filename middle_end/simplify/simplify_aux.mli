@@ -16,6 +16,22 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+type bounds_check_result = private
+  | In_range
+  | Out_of_range
+
+val bounds_check
+   : width:Flambda_primitive.string_accessor_width
+  -> string_length_in_bytes:Targetint.OCaml.t
+  -> index_in_bytes:Immediate.t
+  -> bounds_check_result
+
+val all_indexes_out_of_range
+   : width:Flambda_primitive.string_accessor_width
+  -> Immediate.Set.t
+  -> max_string_length:Targetint.OCaml.t
+  -> bool
+
 (*
 
 (** Command line argument -inline *)

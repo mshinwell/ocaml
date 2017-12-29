@@ -69,6 +69,8 @@ val this_naked_int32_named : Int32.t -> Flambda0.Named.t * t
 val this_naked_int64_named : Int64.t -> Flambda0.Named.t * t
 val this_naked_nativeint_named : Targetint.t -> Flambda0.Named.t * t
 
+val unit : unit -> t
+
 type 'a or_wrong = private
   | Ok of 'a
   | Wrong

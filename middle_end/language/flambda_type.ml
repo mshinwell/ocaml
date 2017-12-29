@@ -54,6 +54,9 @@ let rename_variables _t ~f:_ =
 let unresolved_symbol _sym =
   any_value Definitely_immediate
 
+let unit () =
+  this_tagged_immediate Immediate.zero
+
 let this_tagged_immediate_named n : Named.t * t =
   Simple (Simple.const (Tagged_immediate n)), this_tagged_immediate n
 
