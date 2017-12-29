@@ -85,6 +85,8 @@ module type Int_number_kind = sig
     val shift_right_logical : t -> Immediate.t -> t
     val swap_byte_endianness : t -> t
     val neg : t -> t
+
+    val compare_unsigned : t -> t -> int
   end
 
   include Number_kind_common with module Num := Num

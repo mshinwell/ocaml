@@ -34,6 +34,7 @@ type 'a binary_arith_outcome_for_one_side_only =
   | This_primitive of Flambda_primitive.t
   | The_other_side
   | Negation_of_the_other_side
+  | Float_negation_of_the_other_side
   | Cannot_simplify
   | Invalid
 
@@ -56,7 +57,6 @@ module type Binary_arith_like_sig = sig
   val cross_product : Lhs.Set.t -> Rhs.Set.t -> Pair.Set.t
 
   val kind : K.Standard_int_or_float.t
-  val standard_int_kind : K.Standard_int.t
 
   val term : Result.t -> Named.t
 
@@ -194,8 +194,23 @@ end = struct
               | The_other_side ->
                 Some (P.Set.add (Simple other_side) possible_results)
               | Negation_of_the_other_side ->
+                let standard_int_kind : K.Standard_int.t =
+                  match N.kind with
+                  | Tagged_immediate -> Tagged_immediate
+                  | Naked_int32 -> Naked_int32
+                  | Naked_int64 -> Naked_int64
+                  | Naked_nativeint -> Naked_nativeint
+                  | Naked_float ->
+                    Misc.fatal_error "Cannot use [Negation_of_the_other_side] \
+                        with floats; use the float version instead"
+                in
                 let prim : Flambda_primitive.t =
-                  Unary (Int_arith (N.standard_int_kind, Neg), other_side)
+                  Unary (Int_arith (standard_int_kind, Neg), other_side)
+                in
+                Some (P.Set.add (Prim prim) possible_results)
+              | Float_negation_of_the_other_side ->
+                let prim : Flambda_primitive.t =
+                  Unary (Float_arith Neg, other_side)
                 in
                 Some (P.Set.add (Prim prim) possible_results)
               | Cannot_simplify -> None
@@ -530,73 +545,98 @@ module Binary_int_comp_int64 =
 module Binary_int_comp_nativeint =
   Binary_arith_like (Int_ops_for_binary_comp_nativeint)
 
-module Int_ops_for_binary_comp_unsigned : sig
-  include Binary_arith_sig
-    with type op = Flambda_primitive.comparison
+module Int_ops_for_binary_comp_unsigned (I : A.Int_number_kind) : sig
+  include Binary_arith_like_sig
+    with type op = Flambda_primitive.ordered_comparison
 end = struct
-  module Lhs = Targetint
-  module Rhs = Targetint
+  module Lhs = I.Num
+  module Rhs = I.Num
   module Result = Immediate
+
+  type op = Flambda_primitive.ordered_comparison
+
+  let kind = I.kind
+  let standard_int_kind = I.standard_int_kind
 
   let ok_to_evaluate _env = true
 
-  (* XXX check kind here *)
-  let prover_lhs = T.prove_naked_immediate
-  let prover_rhs = T.prove_naked_immediate
+  let prover_lhs = I.unboxed_prover
+  let prover_rhs = I.unboxed_prover
 
-  let op (op : Flambda_primitive.comparison) n1 n2 =
-    let bool b =
-      if b then Immediate.const_true else Immediate.const_false
-    in
+  let these = T.these_tagged_immediates
+
+  let term imm : Named.t =
+    Simple (Simple.const (Tagged_immediate imm))
+
+  module Pair = I.Num.Pair
+  let cross_product = I.Num.cross_product
+
+  module Num = I.Num
+
+  let op (op : Flambda_primitive.ordered_comparison) n1 n2 =
+    let bool b = Immediate.bool b in
     match op with
-    | Eq -> Some (bool (Targetint.equal n1 n2))
-    | Neq -> Some (bool (not (Targetint.equal n1 n2)))
-    | Lt -> Some (bool (Targetint.compare_unsigned n1 n2 < 0))
-    | Gt -> Some (bool (Targetint.compare_unsigned n1 n2 > 0))
-    | Le -> Some (bool (Targetint.compare_unsigned n1 n2 <= 0))
-    | Ge -> Some (bool (Targetint.compare_unsigned n1 n2 >= 0))
+    | Lt -> Some (bool (Num.compare_unsigned n1 n2 < 0))
+    | Gt -> Some (bool (Num.compare_unsigned n1 n2 > 0))
+    | Le -> Some (bool (Num.compare_unsigned n1 n2 <= 0))
+    | Ge -> Some (bool (Num.compare_unsigned n1 n2 >= 0))
 
-  let op_lhs_unknown _op ~rhs:_ : N.t binary_arith_outcome_for_one_side_only =
-    Cannot_simplify
-
-  let op_rhs_unknown _op ~lhs:_ : N.t binary_arith_outcome_for_one_side_only =
-    Cannot_simplify
+  let op_lhs_unknown _op ~rhs:_ = Cannot_simplify
+  let op_rhs_unknown _op ~lhs:_ = Cannot_simplify
 end
 
+module Int_ops_for_binary_comp_unsigned_tagged_immediate =
+  Int_ops_for_binary_comp_unsigned (A.For_tagged_immediates)
+
 module Binary_int_comp_unsigned =
-  Binary_arith_like (Int_ops_for_binary_comp_unsigned)
+  Binary_arith_like (Int_ops_for_binary_comp_unsigned_tagged_immediate)
 
 module Float_ops_for_binary_arith : sig
-  include Binary_arith_sig
-    with type op = binary_float_arith_op
+  include Binary_arith_like_sig
+    with type op = Flambda_primitive.binary_float_arith_op
 end = struct
-  module F = Numbers.Float_by_bit_pattern
+  module F = Float_by_bit_pattern
 
-  let ok_to_evaluate env = E.float_const_prop env
+  module Lhs = F
+  module Rhs = F
+  module Result = F
 
-  let op op n1 n2 =
+  type op = Flambda_primitive.binary_float_arith_op
+
+  let kind = K.Standard_int_or_float.Naked_float
+
+  let ok_to_evaluate env = E.const_float_prop env
+
+  let prover_lhs = T.prove_naked_float
+  let prover_rhs = T.prove_naked_float
+
+  let these = T.these_naked_floats
+
+  let term f : Named.t =
+    Simple (Simple.const (Naked_float f))
+
+  module Pair = F.Pair
+  let cross_product = F.cross_product
+
+  let op (op : op) n1 n2 =
     let always_some f = Some (f n1 n2) in
     match op with
-    | Add -> always_some F.add
-    | Sub -> always_some F.sub
-    | Mul -> always_some F.mul
-    | Div -> always_some F.div
+    | Add -> always_some F.IEEE_semantics.add
+    | Sub -> always_some F.IEEE_semantics.sub
+    | Mul -> always_some F.IEEE_semantics.mul
+    | Div -> always_some F.IEEE_semantics.div
 
   type symmetric_op =
     | Add
     | Mul
 
   let symmetric_op_one_side_unknown (op : symmetric_op) ~this_side
-        : N.t binary_arith_outcome_for_one_side_only =
-    let negate_the_other_side () : N.t binary_arith_outcome_for_one_side_only =
-      This_primitive (Unary (Float_arith Neg, arg1))
-    in
+        : F.t binary_arith_outcome_for_one_side_only =
     match op with
     | Add ->
       (* You might think that "x + 0" has the same representation as "x".
          However it doesn't in the case where that constant zero is +0 and
          x is equal to -0. *)
-      (* CR mshinwell: Shall we add a compiler flag to allow this? *)
       Cannot_simplify
     | Mul ->
       if F.equal this_side F.one then
@@ -604,16 +644,14 @@ end = struct
         [@z3 check_float_binary_neutral `Mul (+1.0) `Right]
         [@z3 check_float_binary_neutral `Mul (+1.0) `Left]
       else if F.equal this_side F.minus_one then
-        negate_the_other_side ()
+        Float_negation_of_the_other_side
         [@z3 check_float_binary_opposite `Mul (-1.0) `Left]
         [@z3 check_float_binary_opposite `Mul (-1.0) `Right]
       else
         Cannot_simplify
 
-  let op_lhs_unknown ~rhs : N.t binary_arith_outcome_for_one_side_only =
-    let negate_the_other_side () : N.t binary_arith_outcome_for_one_side_only =
-      This_primitive (Unary (Float_arith Neg, arg1))
-    in
+  let op_lhs_unknown (op : op) ~rhs
+        : F.t binary_arith_outcome_for_one_side_only =
     match op with
     | Add -> symmetric_op_one_side_unknown Add ~this_side:rhs
     | Mul -> symmetric_op_one_side_unknown Mul ~this_side:rhs
@@ -623,12 +661,13 @@ end = struct
         The_other_side
         [@z3 check_float_binary_neutral `Div (+1.0) `Right]
       else if F.equal rhs F.minus_one then
-        negate_the_other_side ()
+        Float_negation_of_the_other_side
         [@z3 check_float_binary_opposite `Div (-1.0) `Right]
       else
         Cannot_simplify
 
-  let op_rhs_unknown ~lhs : N.t binary_arith_outcome_for_one_side_only =
+  let op_rhs_unknown (op : op)
+        ~lhs : F.t binary_arith_outcome_for_one_side_only =
     match op with
     | Add -> symmetric_op_one_side_unknown Add ~this_side:lhs
     | Mul -> symmetric_op_one_side_unknown Mul ~this_side:lhs
@@ -640,41 +679,51 @@ module Binary_float_arith = Binary_arith_like (Float_ops_for_binary_arith)
 
 module Float_ops_for_binary_comp : sig
   include Binary_arith_like_sig
-    with type op = binary_float_comp_op
+    with type op = Flambda_primitive.comparison
 end = struct
-  module Lhs = I
-  module Rhs = I
+  module F = Float_by_bit_pattern
+
+  module Lhs = F
+  module Rhs = F
   module Result = Immediate
 
-  let prover_lhs = I.prover
-  let prover_rhs = I.prover
+  type op = Flambda_primitive.comparison
 
-  let ok_to_evaluate env = E.float_const_prop env
+  let kind = K.Standard_int_or_float.Naked_float
 
-  module F = Numbers.Float_by_bit_pattern
+  let ok_to_evaluate env = E.const_float_prop env
 
-  let op (op : Flambda_primitive.comparison) n1 n2 =
-    let bool b =
-      if b then Immediate.const_true else Immediate.const_false
-    in
+  let prover_lhs = T.prove_naked_float
+  let prover_rhs = T.prove_naked_float
+
+  let these = T.these_tagged_immediates
+
+  let term imm : Named.t =
+    Simple (Simple.const (Tagged_immediate imm))
+
+  module Pair = F.Pair
+  let cross_product = F.cross_product
+
+  let op (op : op) n1 n2 =
+    let bool b = Immediate.bool b in
     match op with
-    | Eq -> Some (bool (F.equal_ieee n1 n2))
-    | Neq -> Some (bool (not (F.equal_ieee n1 n2)))
-    | Lt -> Some (bool (F.compare_ieee n1 n2 < 0))
-    | Gt -> Some (bool (F.compare_ieee n1 n2 > 0))
-    | Le -> Some (bool (F.compare_ieee n1 n2 <= 0))
-    | Ge -> Some (bool (F.compare_ieee n1 n2 >= 0))
+    | Eq -> Some (bool (F.IEEE_semantics.equal n1 n2))
+    | Neq -> Some (bool (not (F.IEEE_semantics.equal n1 n2)))
+    | Lt -> Some (bool (F.IEEE_semantics.compare n1 n2 < 0))
+    | Gt -> Some (bool (F.IEEE_semantics.compare n1 n2 > 0))
+    | Le -> Some (bool (F.IEEE_semantics.compare n1 n2 <= 0))
+    | Ge -> Some (bool (F.IEEE_semantics.compare n1 n2 >= 0))
 
-  let result_of_comparison_with_nan op =
+  let result_of_comparison_with_nan (op : op) =
     match op with
-    | Neq -> Immediate.const_true
-    | Eq | Lt | Gt | Le | Ge -> Immediate.const_false
+    | Neq -> Exactly Immediate.bool_true
+    | Eq | Lt | Gt | Le | Ge -> Exactly Immediate.bool_false
 
-  let op_lhs_unknown op ~rhs : N.t binary_arith_outcome_for_one_side_only =
+  let op_lhs_unknown op ~rhs : _ binary_arith_outcome_for_one_side_only =
     if F.is_any_nan rhs then result_of_comparison_with_nan op
     else Cannot_simplify
 
-  let op_rhs_unknown op ~lhs : N.t binary_arith_outcome_for_one_side_only =
+  let op_rhs_unknown op ~lhs : _ binary_arith_outcome_for_one_side_only =
     if F.is_any_nan lhs then result_of_comparison_with_nan op
     else Cannot_simplify
 end
@@ -938,7 +987,7 @@ let all_indexes_out_of_range indexes ~max_string_length
       | In_range -> false)
     strs
 
-external swap16 : int -> int = "%bswap16"
+external swap16 : int -> int = "%bswap16" [@@noalloc]
 
 external string_unsafe_get16
    : string
@@ -1134,7 +1183,7 @@ let simplify_binary_primitive env r ~result_var prim arg1 arg2 dbg =
     | Naked_nativeint ->
       Binary_int_shift_naked_nativeint.simplify env r prim dbg op arg1 arg2
     end
-  | Int_comp (kind, op) ->
+  | Int_comp (kind, Signed, op) ->
     begin match kind with
     | Tagged_immediate ->
       Binary_int_comp_tagged_immediate.simplify env r prim dbg op arg1 arg2
@@ -1145,8 +1194,19 @@ let simplify_binary_primitive env r ~result_var prim arg1 arg2 dbg =
     | Naked_nativeint ->
       Binary_int_comp_naked_nativeint.simplify env r prim dbg op arg1 arg2
     end
-  | Int_comp_unsigned op ->
-    Binary_int_comp_unsigned.simplify env r prim dbg op arg1 arg2
+  | Int_comp (kind, Unsigned, op) ->
+    begin match kind with
+    | Tagged_immediate ->
+      Binary_int_comp_unsigned_tagged_immediate.simplify env r prim dbg op
+        arg1 arg2
+    | Naked_int32 ->
+      Binary_int_comp_unsigned_naked_int32.simplify env r prim dbg op arg1 arg2
+    | Naked_int64 ->
+      Binary_int_comp_unsigned_naked_int64.simplify env r prim dbg op arg1 arg2
+    | Naked_nativeint ->
+      Binary_int_comp_unsigned_naked_nativeint.simplify env r prim dbg op
+        arg1 arg2
+    end
   | Float_arith op ->
     Binary_float_arith.simplify env r prim dbg op arg1 arg2
   | Float_comp op ->

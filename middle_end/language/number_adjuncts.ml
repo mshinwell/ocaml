@@ -85,6 +85,8 @@ module type Int_number_kind = sig
     val neg : t -> t
   end
 
+  val compare_unsigned : t -> t -> int
+
   include Number_kind_common with module Num := Num
 
   val standard_int_kind : Flambda_kind.Standard_int.t
@@ -126,6 +128,9 @@ let with_shift shift if_undefined f =
 module For_tagged_immediates : Int_number_kind = struct
   module Num = struct
     include Immediate
+
+    let compare_unsigned t1 t2 =
+      Targetint.compare_unsigned t1 t2
 
     let div t1 t2 =
       if Immediate.equal t2 Immediate.zero then None
@@ -217,6 +222,9 @@ module For_int32s : Boxable_int_number_kind = struct
   module Num = struct
     include Int32
 
+    let compare_unsigned _t1 _t2 =
+      Misc.fatal_error "Not yet implemented (waiting on upstream stdlib change)"
+
     let xor = logxor
     let or_ = logor
     let and_ = logand
@@ -265,6 +273,9 @@ module For_int64s : Boxable_int_number_kind = struct
   module Num = struct
     include Int64
 
+    let compare_unsigned _t1 _t2 =
+      Misc.fatal_error "Not yet implemented (waiting on upstream stdlib change)"
+
     let xor = logxor
     let or_ = logor
     let and_ = logand
@@ -312,6 +323,9 @@ end
 module For_nativeints : Boxable_int_number_kind = struct
   module Num = struct
     include Targetint
+
+    let compare_unsigned _t1 _t2 =
+      Misc.fatal_error "Not yet implemented (waiting on upstream stdlib change)"
 
     let xor = logxor
     let or_ = logor

@@ -1483,6 +1483,8 @@ let physically_equal ~type_of_name:_ (t1 : t) (t2 : t) =
       print t1
       print t2
 
+(* CR mshinwell: We only use [structurally_distinct] on things of kind
+   [Value] at the moment (same for [physically_equal], above). *)
 let structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
   let simplified1, _canonical_name1 = Simplified_type.create ~type_of_name t1 in
   let simplified2, _canonical_name2 = Simplified_type.create ~type_of_name t2 in
