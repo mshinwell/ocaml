@@ -57,6 +57,9 @@ let unresolved_symbol _sym =
 let unit () =
   this_tagged_immediate Immediate.zero
 
+let unit_bottom () =
+  bottom (K.value Definitely_immediate)
+
 let this_tagged_immediate_named n : Named.t * t =
   Simple (Simple.const (Tagged_immediate n)), this_tagged_immediate n
 

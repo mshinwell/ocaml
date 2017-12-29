@@ -69,7 +69,10 @@ val this_naked_int32_named : Int32.t -> Flambda0.Named.t * t
 val this_naked_int64_named : Int64.t -> Flambda0.Named.t * t
 val this_naked_nativeint_named : Targetint.t -> Flambda0.Named.t * t
 
+(* CR mshinwell: rename to [unknown_unit]? *)
 val unit : unit -> t
+
+val unit_bottom : unit -> t
 
 type 'a or_wrong = private
   | Ok of 'a
@@ -228,7 +231,9 @@ val prove_tags : (t -> Tag.Set.t proof) type_accessor
 val prove_lengths_of_arrays_or_blocks
    : (t -> Targetint.OCaml.Set.t proof) type_accessor
 
-(* CR mshinwell: rename "prove" -> "check"? *)
+(* CR mshinwell: rename "prove" -> "check"?
+   In fact, it seems the common use case is for a check on "bottom" to be done
+   before this function is called.  We should roll that all into one. *)
 val prove_of_kind_value_with_expected_value_kind
    : (t
   -> Flambda_kind.Value_kind.t

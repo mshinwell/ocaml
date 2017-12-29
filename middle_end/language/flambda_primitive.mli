@@ -128,6 +128,8 @@ type bigarray_kind =
   | Int_width_int | Targetint_width_int
   | Complex32 | Complex64
 
+val element_kind_of_bigarray_kind : bigarray_kind -> Flambda_kind.t
+
 type bigarray_layout = Unknown | C | Fortran
 
 (* We can use array_kind instead

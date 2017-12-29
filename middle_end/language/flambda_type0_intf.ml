@@ -577,6 +577,8 @@ module type S = sig
 
   val force_to_kind_phantom : t -> ty_phantom
 
+  val check_of_kind : t -> Flambda_kind.t -> unit
+
 (*
   type cleaning_spec =
     | Available

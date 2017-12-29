@@ -1292,6 +1292,14 @@ end) = struct
       Misc.fatal_errorf "Type has wrong kind (expected [Phantom]): %a"
         print t
 
+  let check_of_kind ~type_of_name t (expected_kind : K.t) =
+    let actual_kind = kind ~type_of_name t in
+    if not (K.equal actual_kind expected_kind) then begin
+      Misc.fatal_errorf "Type has wrong kind: have %a but expected %a"
+        K.print actual_kind
+        K.print expected_kind
+    end
+
 (*
   let t_of_ty_value (ty : ty_value) : t = Value ty
 
