@@ -133,7 +133,10 @@ end = struct
         R.map_benefit r (B.remove_primitive (Binary prim))
     in
     let check_possible_results ~possible_results =
-      (* CR mshinwell: We may want to bound the size of the set. *)
+      (* CR mshinwell: We may want to bound the size of the set.
+         CARE: if we do this, take note of the comment in
+         [Flambda_type.structurally_distinct].  We cannot just return an
+         arbitrary subset. *)
       if P.Set.is_empty possible_results then
         result_invalid ()
       else
@@ -935,6 +938,8 @@ let all_indexes_out_of_range indexes ~max_string_length
       | In_range -> false)
     strs
 
+external swap16 : int -> int = "%bswap16"
+
 external string_unsafe_get16
    : string
   -> int
@@ -1032,19 +1037,41 @@ let simplify_string_or_bigstring_load env r prim dbg
               | Some index_in_bytes ->
                 (* Note that we cannot be in the [Bigstring] case here. *)
                 assert (string_like_value <> Bigstring);
-                (* XXX if the target endianness does not match the host
-                   endianness, we need to swap the bytes *)
+                let must_byte_swap =
+                  let module Backend = (val (E.backend env) : Backend_intf.S) in
+                  Sys.big_endian <> Backend.big_endian ()
+                in
                 match width with
                 | Eight ->
                   T.this_tagged_immediate
                     (String.unsafe_get str index_in_bytes)
                 | Sixteen ->
-                  T.this_tagged_immediate
-                    (string_unsafe_get16 str index_in_bytes)
+                  let result =
+                    string_unsafe_get16 str index_in_bytes
+                  in
+                  let result =
+                    if must_byte_swap then swap16 result
+                    else result
+                  in
+                  T.this_tagged_immediate result
                 | Thirty_two ->
-                  T.this_naked_int32 (string_unsafe_get32 str index_in_bytes)
+                  let result =
+                    string_unsafe_get32 str index_in_bytes
+                  in
+                  let result =
+                    if must_byte_swap then Int32.swap_byte_endianness result
+                    else result
+                  in
+                  T.this_naked_int32 result
                 | Sixty_four ->
-                  T.this_naked_int64 (string_unsafe_get64 str index_in_bytes))
+                  let result =
+                    string_unsafe_get64 str index_in_bytes
+                  in
+                  let result =
+                    if must_byte_swap then Int64.swap_byte_endianness result
+                    else result
+                  in
+                  T.this_naked_int64 result)
         strs_and_indexes
         []
     in

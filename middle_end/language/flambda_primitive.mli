@@ -237,6 +237,8 @@ type binary_float_arith_op = Add | Sub | Mul | Div
 type binary_primitive =
   | Block_load of Block_access_kind.t * mutable_or_immutable
   | String_or_bigstring_load of string_like_value * string_accessor_width
+  (* CR mshinwell: Eq_comp should maybe have "phys" in the name somewhere;
+     this is physical (in)equality *)
   | Eq_comp of Flambda_kind.t * equality_comparison
   | Int_arith of Flambda_kind.Standard_int.t * binary_int_arith_op
   | Int_shift of Flambda_kind.Standard_int.t * int_shift_op
