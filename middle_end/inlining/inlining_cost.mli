@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2016 OCamlPro SAS                                    *)
-(*   Copyright 2014--2016 Jane Street Group LLC                           *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -22,7 +22,7 @@
 module Threshold : sig
 
   (** The maximum size, in some abstract measure of space cost, that an
-     Flambda expression may be in order to be inlined. *)
+      Flambda expression may be in order to be inlined. *)
   type t =
     | Never_inline
     | Can_inline_if_no_larger_than of int
@@ -75,6 +75,7 @@ module Benefit : sig
      (to account for removal of initializing writes). *)
   val remove_alloc : t -> t
   val remove_primitive : Flambda_primitive.without_args -> t -> t
+  val remove_primitive_application : Flambda_primitive.t -> t -> t
   val remove_branch : t -> t
   val remove_box : Flambda_kind.Boxable_number.t -> t
   val direct_call_of_indirect_unknown_arity : t -> t

@@ -26,6 +26,8 @@ module Expr = Flambda.Expr
 module Named = Flambda.Named
 module Typed_parameter = Flambda.Typed_parameter
 
+let simplify_name = Simplify_aux.simplify_name
+
 type filtered_switch_branches =
   | Must_be_taken of Continuation.t
   | Can_be_taken of (Targetint.t * Continuation.t) list
@@ -55,7 +57,7 @@ let simplify_continuation_use_cannot_inline env r cont ~arity =
 
 let simplify_exn_continuation env r cont =
   simplify_continuation_use_cannot_inline env r cont
-    ~arity:[Flambda_kind.value Must_scan]
+    ~arity:[Flambda_kind.value Unknown]
 
 let for_defining_expr_of_let (env, r) var kind defining_expr =
   let new_bindings, defining_expr, ty, r =
@@ -158,24 +160,29 @@ let _simplify_newly_introduced_let_bindings env r ~bindings
   bindings, around, invalid_term_semantics, r
 
 module Make_simplify_switch (S : sig
-  module Map : Map.S
+  module Arm : sig
+    type t
+    module Map : Map.S with type key = t
+  end
 
   val switch_arms
      : (T.t
-      -> arms:Continuation.t Map.t
-      -> (T.Typing_environment.t * Continuation.t) Map.t) T.type_accessor
+      -> arms:Continuation.t Arm.Map.t
+      -> (T.Typing_environment.t * Continuation.t) Arm.Map.t) T.type_accessor
 
   val create_switch'
      : scrutinee:Name.t
-    -> arms:Continuation.t Map.t
+    -> arms:Continuation.t Arm.Map.t
     -> Expr.t * bool
+
+  val type_of_scrutinee : Arm.t -> T.t
 end) = struct
   let simplify_switch env r ~(scrutinee : Name.t)
-        (arms : Continuation.t S.Map.t)
+        (arms : Continuation.t S.Arm.Map.t)
         : Expr.t * R.t =
     let original_scrutinee = scrutinee in
-    let scrutinee, scrutinee_ty = E.simplify_name env scrutinee in
-    let arms = (E.type_accessor env S.switch_arms) ~arms in
+    let scrutinee, scrutinee_ty = simplify_name env scrutinee in
+    let arms = (E.type_accessor env S.switch_arms) scrutinee_ty ~arms in
     let destination_is_unreachable cont =
       (* CR mshinwell: This unreachable thing should be tidied up and also
          done on [Apply_cont]. *)
@@ -189,23 +196,28 @@ end) = struct
         | _ -> false
     in
     let arms =
-      S.Map.filter (fun _arm (_env, cont) ->
+      S.Arm.Map.filter (fun _arm (_env, cont) ->
           not (destination_is_unreachable cont))
         arms
     in
     let env = E.inside_branch env in
     let arms, r =
-      S.Map.fold (fun arm (env_extension, cont) (arms, r) ->
+      S.Arm.Map.fold (fun arm (env_extension, cont) (arms, r) ->
           let cont, r =
             let scrutinee_ty = S.type_of_scrutinee arm in
-            let env = E.add_or_meet_variable env scrutinee scrutinee_ty in
-            let env = E.meet_typing_environment env env_extension in
+            let env =
+              match scrutinee with
+              | Var scrutinee ->
+                E.add_or_meet_variable env scrutinee scrutinee_ty
+              | Symbol _ -> env
+            in
+            let env = E.extend_typing_environment env ~env_extension in
             simplify_continuation_use_cannot_inline env r cont ~arity:[]
           in
-          let arms = Targetint.Map.add arm cont arms in
+          let arms = S.Arm.Map.add arm cont arms in
           arms, r)
         arms
-        (S.Map.empty, r)
+        (S.Arm.Map.empty, r)
     in
     let switch, removed_branch =
       S.create_switch' ~scrutinee:scrutinee ~arms
@@ -215,26 +227,26 @@ end) = struct
 end
 
 module Simplify_int_switch = Make_simplify_switch (struct
-  module Map = Targetint.OCaml.Map
+  module Arm = Targetint.OCaml
   let switch_arms = T.int_switch_arms
   let create_switch' = Expr.create_int_switch'
   let type_of_scrutinee arm = T.this_tagged_immediate (Immediate.int arm)
 end)
 
 module Simplify_tag_switch = Make_simplify_switch (struct
-  module Map = Tag.Map
+  module Arm = Tag
   let switch_arms = T.tag_switch_arms
   let create_switch' = Expr.create_tag_switch'
   let type_of_scrutinee arm = T.this_tag arm
 end)
 
-let simplify_switch env r ~(scrutinee : Name.t) (switch : Switch.t)
+let simplify_switch env r ~(scrutinee : Name.t) (switch : Flambda0.Switch.t)
       : Expr.t * R.t =
   match switch with
   | Value arms ->
-    Simplify_int_switch.simplify_switch env r ~scrutinee ~arms
+    Simplify_int_switch.simplify_switch env r ~scrutinee arms
   | Fabricated arms ->
-    Simplify_tag_switch.simplify_switch env r ~scrutinee ~arms
+    Simplify_tag_switch.simplify_switch env r ~scrutinee arms
 
 (* Prepare an environment for the simplification of the given continuation
    handler when its parameters are being used at types [arg_tys]. *)
@@ -260,6 +272,7 @@ let environment_for_let_cont_handler ~env cont
             ~f:(fun var -> Freshening.apply_variable freshening var)
         in
         let param_ty = Typed_parameter.ty param in
+(*
         if !Clflags.flambda_invariant_checks then begin
           if not ((E.type_accessor env T.as_or_more_precise)
             arg_ty ~than:param_ty)
@@ -271,8 +284,9 @@ let environment_for_let_cont_handler ~env cont
               T.print arg_ty
           end
         end;
+*)
         let ty =
-          (E.with_importer env T.rename_variables) arg_ty
+          T.rename_variables arg_ty
             ~f:(fun var -> Freshening.apply_variable freshening var)
         in
         Typed_parameter.with_type param ty)
@@ -331,7 +345,7 @@ and simplify_let_cont_handlers ~env ~r ~handlers
             (* CR mshinwell: I have a suspicion that [r] may not contain the
                usage information for the continuation when it's come from
                [Unbox_continuation_params]. Check. *)
-            R.continuation_arg_tys r cont
+            R.continuation_args_types r cont
               ~arity:(Flambda.Continuation_handler.param_arity handler)
               ~default_env:env
           in
@@ -853,7 +867,7 @@ and simplify_over_application env r ~args ~arg_tys ~continuation
 
 and simplify_apply_shared env r (apply : Flambda.Apply.t)
       : T.t * (T.t list) * Flambda.Apply.t * R.t =
-  let func, func_ty = E.simplify_name env apply.func in
+  let func, func_ty = simplify_name env apply.func in
   let args, args_tys = List.split (S.simplify_simple_list env apply.args) in
   let continuation, r =
     simplify_continuation_use_cannot_inline env r apply.continuation
@@ -1065,7 +1079,7 @@ and simplify_method_call env r (apply : Flambda.Apply.t) ~kind ~obj
       Flambda_kind.print callee_kind
       T.print callee_ty
   end;
-  let obj, _obj_ty = E.simplify_name env obj in
+  let obj, _obj_ty = simplify_name env obj in
   let apply : Flambda.Apply.t = {
     apply with
     call_kind = Method { kind; obj; };

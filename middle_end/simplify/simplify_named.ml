@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2017 OCamlPro SAS                                    *)
-(*   Copyright 2014--2017 Jane Street Group LLC                           *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -28,6 +28,7 @@ module Reachable = Flambda.Reachable
 let simplify_set_of_closures original_env r
       (set_of_closures : Flambda.Set_of_closures.t)
       : Flambda.Set_of_closures.t * T.t * R.t =
+(* CR mshinwell for pchambart: This can be removed now, right?
   let function_decls =
     let module Backend = (val (E.backend original_env) : Backend_intf.S) in
     (* CR-soon mshinwell: Does this affect
@@ -38,6 +39,7 @@ let simplify_set_of_closures original_env r
       set_of_closures.function_decls
       ~make_closure_symbol:Backend.closure_symbol
   in
+*)
   let env = E.increase_closure_depth original_env in
   let free_vars, function_decls, parameter_types,
       internal_value_set_of_closures, set_of_closures_env =
@@ -290,21 +292,20 @@ let simplify_named env r (tree : Named.t) : named_simplifier =
     let new_bindings, term, ty, r =
       Simplify_primitive.simplify_primitive env r prim dbg
     in
-    (* XXX This needs to add a typing judgement "result_var : ty" to the
-       environment *)
-    (* CR mshinwell: Add benefit calculations *)
+    let remove_primitive () =
+      R.map_benefit r (B.remove_primitive_application prim)
+    in
     begin match (E.type_accessor env T.reify) ty ~allow_free_variables:true with
     | Reified (simple, ty) ->
       let term : Named.t = Simple simple in
-      new_bindings, term, ty, r
+      new_bindings, term, ty, remove_primitive ()
     | Cannot_reify -> new_bindings, term, ty, r
     | Invalid ->
       let ty = (E.type_accessor env T.bottom_like) ty in
-      [], Reachable.invalid (), ty, r
+      [], Reachable.invalid (), ty, remove_primitive ()
     end
   | Assign { being_assigned; new_value; } ->
-    (* No need to use something like [freshen_and_squash_aliases]: the
-       Flambda type of [being_assigned] is always unknown. *)
+    (* CR mshinwell: check type of [begin_assigned] *)
     let being_assigned =
       Freshening.apply_mutable_variable (E.freshening env) being_assigned
     in

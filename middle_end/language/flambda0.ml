@@ -589,18 +589,26 @@ end = struct
     else
       Invalid Halt_and_catch_fire
 
-  let create_int_switch' ~scrutinee ~arms =
-    let num_possible_values = Targetint.OCaml.Map.cardinal arms in
-    if num_possible_values < 1 then
-      invalid (), true
-    else
-      match Targetint.OCaml.Map.get_singleton arms with
-      | Some (_arm, cont) ->
-        let t : t = Apply_cont (cont, None, []) in
-        t, true
-      | None ->
-        let t : t = Switch (scrutinee, { arms; }) in
-        t, false
+  module Create_switch (M : Map.S) = struct
+    let create_switch' ~scrutinee ~arms =
+      let num_possible_values = M.Map.cardinal arms in
+      if num_possible_values < 1 then
+        invalid (), true
+      else
+        match M.Map.get_singleton arms with
+        | Some (_arm, cont) ->
+          let t : t = Apply_cont (cont, None, []) in
+          t, true
+        | None ->
+          let t : t = Switch (scrutinee, { arms; }) in
+          t, false
+  end
+
+  module Create_int_switch = Create_switch (Targetint.OCaml)
+  module Create_tag_switch = Create_switch (Tag)
+
+  let create_int_switch' = Create_int_switch.create_switch'
+  let create_tag_switch' = Create_tag_switch.create_switch'
 
   let create_int_switch ~scrutinee ~arms =
     let switch, _benefit = create_int_switch' ~scrutinee ~arms in

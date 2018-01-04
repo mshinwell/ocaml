@@ -162,6 +162,7 @@ module Switch : sig
   (** Values of type [t] are indexed by the kind of the scrutinee.  They
       contain branches for all possible values of the scrutinee.
       Invariant: the maps are always non-empty. *)
+  (* CR mshinwell: add invariant function *)
   type t = private
     | Value of Continuation.t Targetint.OCaml.Map.t
     | Fabricated of Continuation.t Tag.Map.t
@@ -230,13 +231,21 @@ module rec Expr : sig
 
   (** Create a suitable [expr] to represent the given switch.  (The result may
       not actually be a [Switch].) *)
-  val create_switch
+  val create_int_switch
      : scrutinee:Name.t
-    -> arms:Continuation.t Targetint.Map.t
+    -> arms:Continuation.t Targetint.OCaml.Map.t
     -> Expr.t
-  val create_switch'
+  val create_int_switch'
      : scrutinee:Name.t
-    -> arms:Continuation.t Targetint.Map.t
+    -> arms:Continuation.t Targetint.OCaml.Map.t
+    -> Expr.t * bool  (* CR mshinwell: improve result type *)
+  val create_tag_switch
+     : scrutinee:Name.t
+    -> arms:Continuation.t Tag.Map.t
+    -> Expr.t
+  val create_tag_switch'
+     : scrutinee:Name.t
+    -> arms:Continuation.t Tag.Map.t
     -> Expr.t * bool  (* CR mshinwell: improve result type *)
 
   (** Compute the free names of a term.  (This is O(1) for [Let]s).

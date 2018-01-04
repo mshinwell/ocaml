@@ -16,6 +16,11 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+val simplify_name
+   : Simplify_env_and_result.Env.t
+  -> Name.t
+  -> Name.t * Flambda_type.t
+
 type bounds_check_result = private
   | In_range
   | Out_of_range
