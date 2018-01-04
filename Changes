@@ -78,6 +78,9 @@ Working version
   (Armaël Guéneau, with help and review from Florian Angeletti and Gabriel
   Scherer)
 
+- GPR#1554: warnings 52 and 57: fix reference to manual detailed explanation
+  (Florian Angeletti, review by Thomas Refis and Gabriel Scherer)
+
 - GPR#1510: Add specific explanation for unification errors caused by type
   constraints propagated by keywords (such as if, while, for...)
   (Armaël Guéneau and Gabriel Scherer, original design by Arthur Charguéraud,
@@ -88,6 +91,12 @@ Working version
 - GPR#1370: Fix code duplication in Cmmgen
   (Vincent Laviron, with help from Pierre Chambart,
    reviews by Gabriel Scherer and Luc Maranget)
+
+- GPR#1486: ARM 32-bit port: add support for ARMv8 in 32-bit mode,
+  a.k.a. AArch32.
+  For this platform, avoid ITE conditional instruction blocks and use
+  simpler IT blocks instead
+  (Xavier Leroy, review by Mark Shinwell)
 
 ### Runtime system:
 
@@ -176,6 +185,9 @@ Working version
 - MPR#7682, GPR#1495: fix [@@unboxed] for records with 1 polymorphic field
   (Alain Frisch, report by Stéphane Graham-Lengrand, review by Gabriel Scherer)
 
+- MPR#7695, GPR#1541: Fatal error: exception Ctype.Unify(_) with field override
+  (Jacques Garrigue, report by Nicolas Ojeda Bar)
+
 - GPR#1517: More robust handling of type variables in mcomp
   (Leo White and Thomas Refis, review by Jacques Garrigue)
 
@@ -183,6 +195,10 @@ Working version
   Unix.getenv and Unix.environment under Windows.
   (Nicolás Ojeda Bär, report by Alain Frisch, review by David Allsopp, Xavier
   Leroy)
+
+- GPR#1550, GPR#1555: Make pattern matching warnings more robust
+  to ill-typed columns
+  (Thomas Refis, with help from Gabriel Scherer and Luc Maranget)
 
 4.06 maintenance branch
 -----------------------
