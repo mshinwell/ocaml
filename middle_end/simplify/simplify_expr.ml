@@ -28,10 +28,6 @@ module Typed_parameter = Flambda.Typed_parameter
 
 let simplify_name = Simplify_aux.simplify_name
 
-type filtered_switch_branches =
-  | Must_be_taken of Continuation.t
-  | Can_be_taken of (Targetint.t * Continuation.t) list
-
 let freshen_continuation env cont =
   Freshening.apply_continuation (E.freshening env) cont
 
@@ -180,7 +176,6 @@ end) = struct
   let simplify_switch env r ~(scrutinee : Name.t)
         (arms : Continuation.t S.Arm.Map.t)
         : Expr.t * R.t =
-    let original_scrutinee = scrutinee in
     let scrutinee, scrutinee_ty = simplify_name env scrutinee in
     let arms = (E.type_accessor env S.switch_arms) scrutinee_ty ~arms in
     let destination_is_unreachable cont =
@@ -266,13 +261,13 @@ let environment_for_let_cont_handler ~env cont
   end;
   let params =
     List.map (fun (param, arg_ty) : Typed_parameter.t ->
-        let unfreshened_param = param in
+(*        let unfreshened_param = param in *)
         let param =
           Typed_parameter.map_var param
             ~f:(fun var -> Freshening.apply_variable freshening var)
         in
-        let param_ty = Typed_parameter.ty param in
 (*
+        let param_ty = Typed_parameter.ty param in
         if !Clflags.flambda_invariant_checks then begin
           if not ((E.type_accessor env T.as_or_more_precise)
             arg_ty ~than:param_ty)
@@ -347,7 +342,7 @@ and simplify_let_cont_handlers ~env ~r ~handlers
                [Unbox_continuation_params]. Check. *)
             R.continuation_args_types r cont
               ~arity:(Flambda.Continuation_handler.param_arity handler)
-              ~default_env:env
+              ~default_env:(E.get_typing_environment env)
           in
           (* [new_env] contains everything we know holds at _all_ of the use
              points of the continuation, with anything out of scope at the
@@ -365,7 +360,7 @@ and simplify_let_cont_handlers ~env ~r ~handlers
       (* For a continuation being bound in the group to be unused, it must be
          unused within *all of the handlers* and the body. *)
       let unused_within_all_handlers =
-        Continuation.Map.for_all (fun _cont (_handler, r_from_handler) ->
+        Continuation.Map.for_all (fun _cont (_handler, _env, r_from_handler) ->
             not (R.is_used_continuation r_from_handler cont))
           handlers
       in
@@ -377,7 +372,8 @@ and simplify_let_cont_handlers ~env ~r ~handlers
        inlining and specialisation transformations. *)
     let r =
       Continuation.Map.fold (fun cont
-              ((_handler : Flambda.Continuation_handler.t), r_from_handler) r ->
+              ((_handler : Flambda.Continuation_handler.t), _env,
+               r_from_handler) r ->
           if continuation_unused cont then r
           else R.union r r_from_handler)
         handlers
@@ -413,7 +409,7 @@ and simplify_let_cont_handlers ~env ~r ~handlers
                 match recursive with
                 | Non_recursive ->
                   begin match Continuation.Map.bindings handlers with
-                  | [_cont, (handler, _)] -> Non_recursive handler
+                  | [_cont, (handler, _, _)] -> Non_recursive handler
                   | _ ->
                     Misc.fatal_errorf "Non_recursive Let_cont may only have one \
                         handler, but binds %a"
@@ -421,7 +417,7 @@ and simplify_let_cont_handlers ~env ~r ~handlers
                   end
                 | Recursive ->
                   let handlers =
-                    Continuation.Map.map (fun (handler, _uses) -> handler)
+                    Continuation.Map.map (fun (handler, _env, _uses) -> handler)
                       handlers
                   in
                   Recursive handlers
@@ -541,7 +537,7 @@ and simplify_let_cont env r ~body
       then Unchanged { handler; }
       else
         let args_types =
-          R.continuation_args_types r name
+          R.continuation_args_types' r name
             ~arity:(Flambda.Continuation_handler.param_arity handler)
         in
         Unbox_continuation_params.for_non_recursive_continuation ~handler
@@ -671,7 +667,7 @@ and simplify_let_cont env r ~body
     end
   end
 
-and simplify_full_application env r ~callee
+and _simplify_full_application env r ~callee
       ~callee's_closure_id ~function_decl ~set_of_closures ~args
       ~arg_tys ~continuation ~exn_continuation ~dbg ~inline_requested
       ~specialise_requested =
@@ -679,7 +675,7 @@ and simplify_full_application env r ~callee
     ~callee's_closure_id ~function_decl ~args ~arg_tys ~continuation
     ~exn_continuation ~dbg ~inline_requested ~specialise_requested
 
-and simplify_partial_application env r ~callee
+and _simplify_partial_application env r ~callee
       ~callee's_closure_id
       ~(function_decl : Flambda_type.inlinable_function_declaration)
       ~(args : Simple.t list)
@@ -766,8 +762,7 @@ and simplify_partial_application env r ~callee
        inline it here.  Note that the boxing stuff in that function isn't
        needed here because a partial application can only involve arguments
        of kind [Value] *)
-    Expr.make_closure_declaration ~importer:(E.importer env)
-      ~id:closure_variable
+    Expr.make_closure_declaration ~id:closure_variable
       ~free_variable_kind
       ~body
       ~params
@@ -787,7 +782,7 @@ and simplify_partial_application env r ~callee
   in
   simplify_expr env r (Expr.bind ~bindings ~body:wrapper_taking_remaining_args)
 
-and simplify_over_application env r ~args ~arg_tys ~continuation
+and _simplify_over_application env r ~args ~arg_tys ~continuation
       ~exn_continuation ~callee ~callee's_closure_id
       ~(function_decl : Flambda_type.inlinable_function_declaration)
       ~set_of_closures ~dbg ~inline_requested ~specialise_requested =
@@ -805,7 +800,7 @@ and simplify_over_application env r ~args ~arg_tys ~continuation
   let full_app_args, remaining_args = Misc.Stdlib.List.split_at arity args in
   let full_app_types, _ = Misc.Stdlib.List.split_at arity arg_tys in
   let func_var = Variable.create "full_apply" in
-  let func_var_kind = Flambda_kind.value Must_scan in
+  let func_var_kind = Flambda_kind.value Definitely_pointer in
   let func_param =
     Flambda.Typed_parameter.create_from_kind (Parameter.wrap func_var)
       func_var_kind
@@ -838,7 +833,7 @@ and simplify_over_application env r ~args ~arg_tys ~continuation
       E.add_continuation env after_full_application
         after_full_application_approx
     in
-    simplify_full_application env r ~callee ~callee's_closure_id
+    _simplify_full_application env r ~callee ~callee's_closure_id
       ~function_decl ~set_of_closures ~args:full_app_args
       ~arg_tys:full_app_types ~continuation:after_full_application
       (* CR mshinwell: check [exn_continuation] is correct *)
@@ -868,7 +863,7 @@ and simplify_over_application env r ~args ~arg_tys ~continuation
 and simplify_apply_shared env r (apply : Flambda.Apply.t)
       : T.t * (T.t list) * Flambda.Apply.t * R.t =
   let func, func_ty = simplify_name env apply.func in
-  let args, args_tys = List.split (S.simplify_simple_list env apply.args) in
+  let args, args_tys = List.split (S.simplify_simples env apply.args) in
   let continuation, r =
     simplify_continuation_use_cannot_inline env r apply.continuation
       ~arity:(Flambda.Call_kind.return_arity apply.call_kind)
@@ -892,7 +887,7 @@ and simplify_apply_shared env r (apply : Flambda.Apply.t)
 
 and simplify_function_application env r (apply : Flambda.Apply.t)
       (call : Flambda.Call_kind.function_call) : Expr.t * R.t =
-  let callee_ty, arg_tys, apply, r = simplify_apply_shared env r apply in
+  let _callee_ty, _arg_tys, apply, r = simplify_apply_shared env r apply in
   let {
     Flambda.Apply. func = callee; args; call_kind = _; dbg;
     inline = inline_requested; specialise = specialise_requested;
@@ -937,6 +932,8 @@ and simplify_function_application env r (apply : Flambda.Apply.t)
       exn_continuation;
     }), r
   in
+  unknown_closures ()
+(* XXX To be worked out with Pierre, although this should be nearly ok
   let module JC = T.Joined_closures in
   let module JSC = T.Joined_sets_of_closures in
   match (E.type_accessor env T.prove_closures) callee_ty with
@@ -1029,6 +1026,7 @@ and simplify_function_application env r (apply : Flambda.Apply.t)
     end
   | Proved Not_all_values_known -> unknown_closures ()
   | Invalid -> Expr.invalid (), r
+*)
 (* CR mshinwell: Have disabled direct call surrogates just for the moment
     let callee, callee's_closure_id,
           value_set_of_closures, env, wrap =
@@ -1104,9 +1102,9 @@ and simplify_apply_cont env r cont ~(trap_action : Flambda.Trap_action.t option)
   let cont = freshen_continuation env cont in
   let cont_approx = E.find_continuation env cont in
   let cont = Continuation_approx.name cont_approx in
-  let args_and_types = S.simplify_simple_list env args in
+  let args_and_types = S.simplify_simples env args in
   let args, arg_tys = List.split args_and_types in
-  let param_arity_of_exn_handler = [Flambda_kind.value Must_scan] in
+  let param_arity_of_exn_handler = [Flambda_kind.value Unknown] in
   let freshen_trap_action env r (trap_action : Flambda.Trap_action.t) =
     match trap_action with
     | Push { id; exn_handler; } ->
@@ -1191,7 +1189,7 @@ and simplify_expr env r (tree : Expr.t) : Expr.t * R.t =
     in
     let env = E.set_freshening env freshening in
     let contents_kind = (E.type_accessor env T.kind) contents_type in
-    let ty = T.unknown contents_kind Other in
+    let ty = T.unknown contents_kind in
     let body, r = simplify_expr (E.add_mutable env var ty) r body in
     let initial_value_kind = (E.type_accessor env T.kind) initial_value_ty in
     if not (Flambda_kind.compatible initial_value_kind
@@ -1224,5 +1222,5 @@ and simplify_expr env r (tree : Expr.t) : Expr.t * R.t =
   | Apply_cont (cont, trap_action, args) ->
     simplify_apply_cont env r cont ~trap_action ~args
   | Switch (scrutinee, switch) ->
-    simplify_switch env r ~scrutinee ~arms:switch.arms
+    simplify_switch env r ~scrutinee switch
   | Invalid _ -> tree, r

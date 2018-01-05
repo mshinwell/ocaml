@@ -203,6 +203,10 @@ module type Env = sig
     -> env_extension:Flambda_type.Typing_environment.t
     -> t
 
+  val replace_typing_environment
+     : t
+    -> Flambda_type.Typing_environment.t
+    -> t
 
   (** Whether the environment has an approximation for the given variable. *)
   val mem : t -> Variable.t -> bool
@@ -466,13 +470,30 @@ module type Result = sig
   val continuation_unused : t -> Continuation.t -> bool
   val continuation_defined : t -> Continuation.t -> bool
 
+  (** Return the types to be assigned to the parameters of the given
+      continuation according to the usage information of such continuation
+      seen thus far.  The typing environment that is to be used as the
+      "environment of definition" of the continuation is also returned.
+      In the event that no uses of the given continuation have yet been seen,
+      [default_env] will be returned as the environment. *)
+  (* CR mshinwell: rename [default_env] (or can we even remove it?) *)
+  (* CR mshinwell: improve names of these functions.  Not least "parameters"
+     not "arguments" *)
   val continuation_args_types
+     : t
+    -> Continuation.t
+    -> arity:Flambda_arity.t
+    -> default_env:Flambda_type.Typing_environment.t
+    -> Flambda_type.t list * Flambda_type.Typing_environment.t
+
+  (** Like [continuation_args_types'], except only returns the parameters'
+      types, not the typing environment. *)
+  val continuation_args_types'
      : t
     -> Continuation.t
     -> arity:Flambda_arity.t
     -> Flambda_type.t list
 
-  (* CR mshinwell: improve names of these two functions *)
   val defined_continuation_args_types
      : t
     -> Continuation.t
