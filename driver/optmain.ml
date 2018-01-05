@@ -121,6 +121,7 @@ module Options = Main_args.Make_optcomp_options (struct
   let _alias_deps = clear transparent_modules
   let _no_alias_deps = set transparent_modules
   let _linscan = set use_linscan
+  let _mretpoline = set mretpoline
   let _app_funct = set applicative_functors
   let _no_app_funct = clear applicative_functors
   let _no_float_const_prop = clear float_const_prop

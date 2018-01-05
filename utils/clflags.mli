@@ -78,6 +78,7 @@ val make_archive : bool ref
 val debug : bool ref
 val fast : bool ref
 val use_linscan : bool ref
+val mretpoline : bool ref
 val link_everything : bool ref
 val custom_runtime : bool ref
 val no_check_prims : bool ref

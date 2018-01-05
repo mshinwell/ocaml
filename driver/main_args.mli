@@ -199,6 +199,7 @@ module type Optcomp_options = sig
   include Compiler_options
   include Optcommon_options
   val _linscan : unit -> unit
+  val _mretpoline : unit -> unit
   val _no_float_const_prop : unit -> unit
   val _nodynlink : unit -> unit
   val _p : unit -> unit

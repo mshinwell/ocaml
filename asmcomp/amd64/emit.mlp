@@ -341,6 +341,41 @@ let emit_call_bound_errors () =
     emit_call "caml_ml_array_bound_error"
   end
 
+(* Handling of indirect call veneers with capture of speculative execution,
+   cf. https://support.google.com/faqs/answer/7625886 *)
+
+let used_retpolines = ref Reg.Location_map.empty
+
+let label_for_retpoline loc =
+  match Reg.Location_map.find loc !used_retpolines with
+  | exception Not_found ->
+    let label = new_label () in
+    used_retpolines := Reg.Location_map.add loc label !used_retpolines;
+    label
+  | label -> label
+
+let indirect_jump tgt =
+  if !Clflags.mretpoline then I.jmp (label (label_for_retpoline tgt.loc))
+  else I.jmp (reg tgt)
+
+let indirect_call tgt =
+  if !Clflags.mretpoline then I.call (label (label_for_retpoline tgt.loc))
+  else I.call (reg tgt)
+
+let emit_retpoline loc retpoline_label =
+  D.comment (Format.asprintf "Retpoline for %a:" Printmach.reg_location loc);
+  let set_up_target = new_label () in
+  let capture_spec = new_label () in
+  def_label retpoline_label;
+  I.call (label set_up_target);
+  def_label capture_spec;
+  (* CR mshinwell: add a pause here.  Which instruction? *)
+  I.jmp (label capture_spec);
+  def_label set_up_target;
+  let loc = { Reg.dummy with loc; } in
+  I.mov (reg loc) (mem64 QWORD 0 RSP);
+  I.ret ()
+
 (* Names for instructions *)
 
 let instr_for_intop = function
@@ -506,7 +541,7 @@ let emit_instr fallthrough i =
       add_used_symbol s;
       load_symbol_addr s (res i 0)
   | Lop(Icall_ind { label_after; }) ->
-      I.call (arg i 0);
+      indirect_call i.arg.(0);
       record_frame i.live false i.dbg ~label:label_after
   | Lop(Icall_imm { func; label_after; }) ->
       add_used_symbol func;
@@ -514,7 +549,7 @@ let emit_instr fallthrough i =
       record_frame i.live false i.dbg ~label:label_after
   | Lop(Itailcall_ind { label_after; }) ->
       output_epilogue begin fun () ->
-        I.jmp (arg i 0);
+        indirect_jump i.arg.(0);
         if Config.spacetime then begin
           record_frame Reg.Set.empty false i.dbg ~label:label_after
         end
@@ -794,6 +829,7 @@ let emit_instr fallthrough i =
       | Some lbl -> I.jg (label lbl)
       end
   | Lswitch jumptbl ->
+      assert (not !Clflags.mretpoline);
       let lbl = emit_label (new_label()) in
       (* rax and rdx are clobbered by the Lswitch,
          meaning that no variable that is live across the Lswitch
@@ -965,6 +1001,7 @@ let begin_assembly() =
   reset_imp_table();
   float_constants := [];
   all_functions := [];
+  used_retpolines := Reg.Location_map.empty;
   if system = S_win64 then begin
     D.extrn "caml_young_ptr" QWORD;
     D.extrn "caml_young_limit" QWORD;
@@ -1052,6 +1089,7 @@ let end_assembly() =
   end;
 
   D.text ();
+  Reg.Location_map.iter emit_retpoline !used_retpolines;
   if system = S_macosx then I.nop ();
   (* suppress "ld warning: atom sorting error" *)
 

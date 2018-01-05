@@ -144,6 +144,11 @@ let reinit_reg r =
 let reinit() =
   List.iter reinit_reg !reg_list
 
+module Location_map = Map.Make (struct
+  type t = location
+  let compare = Pervasives.compare
+end)
+
 module RegOrder =
   struct
     type t = reg

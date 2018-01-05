@@ -18,6 +18,7 @@
 open Format
 
 val reg: formatter -> Reg.t -> unit
+val reg_location: formatter -> Reg.location -> unit
 val regs: formatter -> Reg.t array -> unit
 val regset: formatter -> Reg.Set.t -> unit
 val regsetaddr: formatter -> Reg.Set.t -> unit

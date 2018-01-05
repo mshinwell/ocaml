@@ -21,14 +21,8 @@ open Reg
 open Mach
 open Interval
 
-let reg ppf r =
-  if not (Reg.anonymous r) then
-    fprintf ppf "%s" (Reg.name r)
-  else
-    fprintf ppf "%s"
-      (match r.typ with Val -> "V" | Addr -> "A" | Int -> "I" | Float -> "F");
-  fprintf ppf "/%i" r.stamp;
-  begin match r.loc with
+let reg_location ppf loc =
+  match loc with
   | Unknown -> ()
   | Reg r ->
       fprintf ppf "[%s]" (Proc.register_name r)
@@ -38,7 +32,15 @@ let reg ppf r =
       fprintf ppf "[si%i]" s
   | Stack(Outgoing s) ->
       fprintf ppf "[so%i]" s
-  end
+
+let reg ppf r =
+  if not (Reg.anonymous r) then
+    fprintf ppf "%s" (Reg.name r)
+  else
+    fprintf ppf "%s"
+      (match r.typ with Val -> "V" | Addr -> "A" | Int -> "I" | Float -> "F");
+  fprintf ppf "/%i" r.stamp;
+  reg_location ppf r.loc
 
 let regs ppf v =
   match Array.length v with

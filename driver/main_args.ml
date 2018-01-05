@@ -272,6 +272,10 @@ let mk_modern f =
   "-modern", Arg.Unit f, " (deprecated) same as -labels"
 ;;
 
+let mk_mretpoline f =
+  "-mretpoline", Arg.Unit f, " Mitigate against CVE-2017-5715"
+;;
+
 let mk_alias_deps f =
   "-alias-deps", Arg.Unit f,
   " Do record dependencies for module aliases"
@@ -959,6 +963,7 @@ module type Optcomp_options = sig
   include Compiler_options
   include Optcommon_options
   val _linscan : unit -> unit
+  val _mretpoline : unit -> unit
   val _no_float_const_prop : unit -> unit
   val _nodynlink : unit -> unit
   val _p : unit -> unit
@@ -1197,6 +1202,7 @@ struct
     mk_alias_deps F._alias_deps;
     mk_no_alias_deps F._no_alias_deps;
     mk_linscan F._linscan;
+    mk_mretpoline F._mretpoline;
     mk_app_funct F._app_funct;
     mk_no_app_funct F._no_app_funct;
     mk_no_float_const_prop F._no_float_const_prop;
