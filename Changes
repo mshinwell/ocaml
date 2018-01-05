@@ -130,6 +130,10 @@ Working version
 - GPR#1540: manual, decouple verbatim and toplevel style in code examples
   (Florian Angeletti, review by Gabriel Scherer)
 
+- GPR#1556: manual, add a consistency test for manual references inside
+  the compiler source code.
+  (Florian Angeletti, review by Gabriel Scherer)
+
 ### Compiler distribution build system
 
 - MPR#7679: make sure .a files are erased before calling ar rc, otherwise
@@ -186,7 +190,7 @@ Working version
   (Alain Frisch, report by Stéphane Graham-Lengrand, review by Gabriel Scherer)
 
 - MPR#7695, GPR#1541: Fatal error: exception Ctype.Unify(_) with field override
-  (Jacques Garrigue, report by Nicolas Ojeda Bar)
+  (Jacques Garrigue, report by Nicolás Ojeda Bär)
 
 - GPR#1517: More robust handling of type variables in mcomp
   (Leo White and Thomas Refis, review by Jacques Garrigue)
@@ -199,6 +203,9 @@ Working version
 - GPR#1550, GPR#1555: Make pattern matching warnings more robust
   to ill-typed columns
   (Thomas Refis, with help from Gabriel Scherer and Luc Maranget)
+
+- MPR#7705, GPR#1558: add missing bounds check in Bigarray.Genarray.nth_dim.
+  (Nicolás Ojeda Bär, report by Jeremy Yallop, review by Gabriel Scherer)
 
 4.06 maintenance branch
 -----------------------
