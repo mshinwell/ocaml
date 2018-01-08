@@ -1702,6 +1702,7 @@ end and Typed_parameter : sig
     -> t
     -> t
     -> bool
+  val rename : t -> t
   module List : sig
     type nonrec t = t list
     val vars : t -> Variable.t list

@@ -114,3 +114,8 @@ val freshen_free_vars_projection_relation'
 *)
 
 val range_of_continuation_freshening : t -> Continuation.Set.t
+
+val for_function_declarations
+   : t
+  -> Flambda.Function_declarations.t
+  -> Flambda.Function_declarations.t * t

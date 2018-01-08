@@ -163,6 +163,13 @@ let active_add_variable t id =
   let t = add_sb_var t id id' in
   id', t
 
+module TP = Flambda.Typed_parameter
+
+let active_add_parameter t param =
+  let param' = TP.rename param in
+  let t = add_sb_var t (TP.var param) (TP.var param') in
+  param', t
+
 let add_variable t id =
   match t with
   | Inactive -> id, t
@@ -179,6 +186,12 @@ let add_variables' t ids =
   List.fold_right (fun id (ids, t) ->
       let id', t = add_variable t id in
       id' :: ids, t) ids ([], t)
+
+let active_add_parameters' t (params : TP.t list) =
+  List.fold_right (fun param (params, t) ->
+      let param', t = active_add_parameter t param in
+      param' :: params, t)
+    params ([], t)
 
 let active_add_mutable_variable t id =
   let id' = Mutable_variable.freshen id in
@@ -315,3 +328,33 @@ let range_of_continuation_freshening t =
   | Inactive -> Continuation.Set.empty
   | Active tbl ->
     Continuation.Set.of_list (Continuation.Map.data tbl.sb_exn)
+
+let for_function_declarations t
+      (func_decls : Flambda.Function_declarations.t) =
+  match t with
+  | Inactive -> func_decls, t
+  | Active subst ->
+    let subst_func_decl (func_decl : Flambda.Function_declaration.t) subst =
+      let params, subst = active_add_parameters' subst func_decl.params in
+      (* Since all parameters are distinct, even between functions, we can
+         just use a single substitution. *)
+      let body =
+        Flambda.Expr.toplevel_substitution subst.sb_var func_decl.body
+      in
+      let function_decl =
+        Flambda.Function_declaration.update_params_and_body func_decl
+          ~params ~body
+      in
+      function_decl, subst
+    in
+    let funs, subst =
+      Closure_id.Map.fold (fun closure_id func_decl (funs, subst) ->
+          let func_decl, subst = subst_func_decl func_decl subst in
+          Closure_id.Map.add closure_id func_decl funs, subst)
+        func_decls.funs
+        (Closure_id.Map.empty, subst)
+    in
+    let function_decls =
+      Flambda.Function_declarations.update func_decls ~funs
+    in
+    function_decls, Active subst

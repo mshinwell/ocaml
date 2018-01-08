@@ -725,6 +725,8 @@ end and Typed_parameter : sig
     -> t
     -> bool
 
+  val rename : t -> t
+
   module List : sig
     type nonrec t = t list
 
