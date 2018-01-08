@@ -21,3 +21,19 @@ val simplify_expr
   -> Simplify_env_and_result.Result.t
   -> Flambda.Expr.t
   -> Flambda.Expr.t * Simplify_env_and_result.Result.t
+
+val simplify_continuation_use_cannot_inline
+   : Simplify_env_and_result.Env.t
+  -> Simplify_env_and_result.Result.t
+  -> Continuation.t
+  -> arity:Flambda_arity.t
+  -> Continuation.t * Simplify_env_and_result.Result.t
+
+val simplify_let_cont_handlers
+   : Simplify_env_and_result.Env.t
+  -> Simplify_env_and_result.Result.t
+  -> handlers:Flambda.Let_cont_handlers.t
+  -> recursive:Flambda.recursive
+  -> freshening:Freshening.t
+  -> Flambda.Let_cont_handlers.t option
+       * Simplify_env_and_result.Result.t

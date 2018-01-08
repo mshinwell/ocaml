@@ -22,6 +22,7 @@ module type Env = sig
   type t
 
   type result
+  type continuation_uses
 
   val invariant : t -> unit
 
@@ -42,19 +43,19 @@ module type Env = sig
       -> result
       -> Flambda.Expr.t
       -> continuation:Continuation.t
+      -> exn_continuation:Continuation.t
       -> descr:string
-      -> Flambda.Expr.t * result)
+      -> Flambda.Expr.t * result * continuation_uses)
     -> simplify_expr:(
          t
       -> result
       -> Flambda.Expr.t
       -> Flambda.Expr.t * result)
-    -> simplify_apply_cont_to_cont:(
-         ?don't_record_use:unit
-      -> t
+    -> simplify_continuation_use_cannot_inline:(
+         t
       -> result
       -> Continuation.t
-      -> arg_tys:Flambda_type.t list
+      -> arity:Flambda_arity.t
       -> Continuation.t * result)
     -> t
 
@@ -90,7 +91,7 @@ module type Env = sig
       -> Flambda.Expr.t
       -> Flambda.Expr.t * result)
 
-  val simplify_apply_cont_to_cont
+  val simplify_continuation_use_cannot_inline
      : t
     -> (?don't_record_use:unit
       -> t

@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2017 OCamlPro SAS                                    *)
-(*   Copyright 2014--2017 Jane Street Group LLC                           *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -16,10 +16,8 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-module B = Inlining_cost.Benefit
-module E = Simplify_env
-module R = Simplify_result
-module T = Flambda_type
+module E = Simplify_env_and_result.Env
+module R = Simplify_env_and_result.Result
 
 (** Values of two types hold the information propagated during simplification:
     - [E.t] "environments", top-down, almost always called "env";
@@ -31,11 +29,15 @@ module T = Flambda_type
     to always hold a particular constant.
 *)
 
-let check_toplevel_simplification_result r expr ~continuation ~descr =
+let check_toplevel_simplification_result r expr ~continuation
+      ~exn_continuation ~descr =
   if !Clflags.flambda_invariant_checks then begin
     let without_definitions = R.used_continuations r in
     let bad_without_definitions =
       Continuation.Set.remove continuation without_definitions
+    in
+    let bad_without_definitions =
+      Continuation.Set.remove exn_continuation bad_without_definitions
     in
     if not (Continuation.Set.is_empty bad_without_definitions) then begin
       Misc.fatal_errorf "The following continuations in %s \
@@ -52,7 +54,7 @@ let check_toplevel_simplification_result r expr ~continuation ~descr =
       Continuation.Map.keys continuation_definitions_with_uses
     in
     let defined_continuations =
-      Flambda_utils.all_defined_continuations_toplevel expr
+      Flambda.Expr.all_defined_continuations_toplevel expr
     in
     (* This is deliberately a strong condition. *)
     if not (Continuation.Set.equal defined_continuations_in_r
@@ -101,7 +103,7 @@ let check_toplevel_simplification_result r expr ~continuation ~descr =
        argument of some continuation fails to be removed by a transformation
        that produces a more precise approximation (which can cause the
        join of the argument's approximations to remain at [Value_unknown]). *)
-    let counts = Flambda_utils.count_continuation_uses_toplevel expr in
+    let counts = Flambda.Expr.count_continuation_uses_toplevel expr in
     Continuation.Map.iter (fun cont (uses, _, _, _) ->
         let num_in_term =
           match Continuation.Map.find cont counts with
@@ -109,7 +111,7 @@ let check_toplevel_simplification_result r expr ~continuation ~descr =
           | count -> count
         in
         let num_in_r =
-          Simplify_aux.Continuation_uses.num_uses uses
+          Simplify_env_and_result.Result.Continuation_uses.num_uses uses
         in
         if num_in_term <> num_in_r then begin
           Misc.fatal_errorf "Continuation count mismatch for %a between the \
@@ -117,7 +119,7 @@ let check_toplevel_simplification_result r expr ~continuation ~descr =
             Continuation.print cont
             num_in_term
             num_in_r
-            Simplify_aux.Continuation_uses.print uses
+            Simplify_env_and_result.Result.Continuation_uses.print uses
             Flambda.Expr.print expr
         end)
       continuation_definitions_with_uses
@@ -129,12 +131,18 @@ let check_toplevel_simplification_result r expr ~continuation ~descr =
    regressing in preciseness, even if we are now robust against that
    possibility. *)
 
-let simplify_toplevel env r expr ~continuation ~descr =
+let simplify_toplevel env r expr ~continuation ~exn_continuation ~descr =
   if not (Continuation.Map.mem continuation (E.continuations_in_scope env))
   then begin
     Misc.fatal_errorf "The continuation parameter (%a) must be in the \
         environment before calling [simplify_toplevel]"
       Continuation.print continuation
+  end;
+  if not (Continuation.Map.mem exn_continuation (E.continuations_in_scope env))
+  then begin
+    Misc.fatal_errorf "The exception continuation parameter (%a) must be in \
+        the environment before calling [simplify_toplevel]"
+      Continuation.print exn_continuation
   end;
   (* Use-def pairs of continuations cannot cross function boundaries.
      We localise the uses and definitions of continuations within each
@@ -147,9 +155,9 @@ let simplify_toplevel env r expr ~continuation ~descr =
   let continuation_uses_snapshot, r =
     R.snapshot_and_forget_continuation_uses r
   in
-  let expr, r = simplify env r expr in
-  Flambda_invariants.check_toplevel_simplification_result r expr
-    ~continuation ~descr;
+  let expr, r = Simplify_expr.simplify_expr env r expr in
+  check_toplevel_simplification_result r expr ~continuation ~exn_continuation
+    ~descr;
   let expr, r =
     let expr, r =
       if E.never_inline_continuations env then begin
@@ -162,10 +170,11 @@ let simplify_toplevel env r expr ~continuation ~descr =
            changes to [r] that need to be made by the inlining pass are
            straightforward. *)
         let expr, r =
-          Continuation_inlining.for_toplevel_expression expr r
+          (E.type_accessor env Continuation_inlining.for_toplevel_expression)
+            expr r
         in
-        Flambda_invariants.check_toplevel_simplification_result r expr
-          ~continuation ~descr;
+        check_toplevel_simplification_result r expr ~continuation
+          ~exn_continuation ~descr;
         expr, r
       end
     in
@@ -177,7 +186,8 @@ let simplify_toplevel env r expr ~continuation ~descr =
         (* CR mshinwell: Should the specialisation pass return some
            benefit value? *)
         Continuation_specialisation.for_toplevel_expression expr
-          ~vars_in_scope r ~simplify_let_cont_handlers
+          ~vars_in_scope r
+          ~simplify_let_cont_handlers:Simplify_expr.simplify_let_cont_handlers
           ~backend:(E.backend env)
       in
       match new_expr with
@@ -192,12 +202,13 @@ let simplify_toplevel env r expr ~continuation ~descr =
      slightly less precise.  Any subsequent round of simplification will
      calculate the improved Flambda type anyway. *)
   (* CR mshinwell: try to fix the above *)
-  let r, uses = R.exit_scope_catch r env continuation in
+  let r, uses = R.exit_scope_of_let_cont r env continuation in
+  let r, _uses = R.exit_scope_of_let_cont r env exn_continuation in
   let r = R.roll_back_continuation_uses r continuation_uses_snapshot in
   (* At this stage:
      - no continuation defined in [expr] should be mentioned in [r];
      - the free continuations of [expr] must be at most the [continuation]
-       parameter. *)
+       and [exn_continuation] parameters. *)
   if !Clflags.flambda_invariant_checks then begin
     let defined_conts = Flambda.Expr.all_defined_continuations_toplevel expr in
     let r_used = R.used_continuations r in
@@ -217,29 +228,35 @@ let simplify_toplevel env r expr ~continuation ~descr =
     in
     check_defined r_used "the use information inside";
     check_defined r_defined "the defined-continuations information inside";
-    let free_conts = Flambda.free_continuations expr in
+    let free_conts = Flambda.Expr.free_continuations expr in
     let bad_free_conts =
       Continuation.Set.diff free_conts
-        (Continuation.Set.singleton continuation)
+        (Continuation.Set.union
+          (Continuation.Set.singleton continuation)
+          (Continuation.Set.singleton exn_continuation))
     in
     if not (Continuation.Set.is_empty bad_free_conts) then begin
       Misc.fatal_errorf "The free continuations of %s \
-          must be at most {%a} (but are instead {%a}):@ \n%a"
+          must be at most {%a %a} (but are instead {%a}):@ \n%a"
         descr
         Continuation.print continuation
+        Continuation.print exn_continuation
         Continuation.Set.print free_conts
         Flambda.Expr.print expr
     end
   end;
   expr, r, uses
 
-let duplicate_function ~env ~(set_of_closures : Flambda.Set_of_closures.t)
-      ~fun_var ~new_fun_var =
+let duplicate_function ~env:_ ~(set_of_closures : Flambda.Set_of_closures.t)
+      ~closure_id:_ ~new_closure_id:_ =
+  ignore set_of_closures;
+  assert false
+(* CR mshinwell: To do later (crib from Simplify_named)
   let function_decl =
-    match Variable.Map.find fun_var set_of_closures.function_decls.funs with
+    match Closure_id.Map.find fun_var set_of_closures.function_decls.funs with
     | exception Not_found ->
       Misc.fatal_errorf "duplicate_function: cannot find function %a"
-        Variable.print fun_var
+        Closure_id.print fun_var
     | function_decl -> function_decl
   in
   let env = E.activate_freshening (E.set_never_inline env) in
@@ -281,7 +298,7 @@ let duplicate_function ~env ~(set_of_closures : Flambda.Set_of_closures.t)
         simplify body_env r function_decl.body)
   in
   let _r, _uses =
-    R.exit_scope_catch r env function_decl.continuation_param
+    R.exit_scope_of_let_cont r env function_decl.continuation_param
   in
   let function_decl =
     Flambda.Function_declaration.create ~params:function_decl.params
@@ -293,10 +310,10 @@ let duplicate_function ~env ~(set_of_closures : Flambda.Set_of_closures.t)
       ~closure_origin:(Closure_origin.create (Closure_id.wrap new_fun_var))
   in
   function_decl, specialised_args
+*)
 
 let run ~never_inline ~allow_continuation_inlining
       ~allow_continuation_specialisation ~backend ~prefixname ~round program =
-  let r = R.create () in
   let report = !Clflags.inlining_report in
   if never_inline then Clflags.inlining_report := false;
   let initial_env =
@@ -304,19 +321,19 @@ let run ~never_inline ~allow_continuation_inlining
       ~allow_continuation_specialisation ~backend ~round
       ~simplify_toplevel
       ~simplify_expr:Simplify_expr.simplify_expr
-      ~simplify_apply_cont_to_cont:Simplify_expr.simplify_apply_cont_to_cont
+      ~simplify_continuation_use_cannot_inline:
+        Simplify_expr.simplify_continuation_use_cannot_inline
   in
-  let result, r = Simplify_program.simplify_program initial_env r program in
-  if not (R.no_continuations_in_scope r) then begin
-    Misc.fatal_errorf "Continuations %a had uses but not definitions recorded \
-        in [r] by the end of simplification.  Program:@ \n%a"
-      Continuation.Set.print (R.used_continuations r)
-      Flambda_static.Program.print result
-  end;
-  let result = Flambda_static.introduce_needed_import_symbols result in
+  let program = Simplify_program.simplify_program initial_env program in
+  let free_symbols = Flambda_static.Program.free_symbols program in
+  let program : Flambda_static.Program.t =
+    { program with
+      imported_symbols = Symbol.Set.union program.imported_symbols free_symbols;
+    }
+  in
   if !Clflags.inlining_report then begin
     let output_prefix = Printf.sprintf "%s.%d" prefixname round in
     Inlining_stats.save_then_forget_decisions ~output_prefix
   end;
   Clflags.inlining_report := report;
-  result
+  program

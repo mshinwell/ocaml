@@ -38,6 +38,7 @@ let make_variables_symbol vars =
   in
   Symbol.create (Compilation_unit.get_current_exn ()) (Linkage_name.create name)
 
+(*
 type sharing_key = Continuation.t
 let make_key cont = Some cont
 let compare_key = Continuation.compare
@@ -54,6 +55,7 @@ module Switch_storer =
       let make_key = make_key
       let compare_key = compare_key
     end)
+*)
 (*
 type specialised_to_same_as =
   | Not_specialised

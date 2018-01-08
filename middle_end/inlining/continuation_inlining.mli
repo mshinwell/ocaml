@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2016--2017 OCamlPro SAS                                    *)
-(*   Copyright 2016--2017 Jane Street Group LLC                           *)
+(*   Copyright 2016--2018 OCamlPro SAS                                    *)
+(*   Copyright 2016--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -25,5 +25,6 @@
 
 val for_toplevel_expression
    : (Flambda.Expr.t
-  -> Simplify_result.t
-  -> Flambda.Expr.t * Simplify_result.t) Flambda_type.with_importer
+      -> Simplify_env_and_result.Result.t
+      -> Flambda.Expr.t * Simplify_env_and_result.Result.t)
+     Flambda_type.type_accessor

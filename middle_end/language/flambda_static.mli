@@ -82,7 +82,7 @@ module Program : sig
        : t
       -> f:(Flambda.Set_of_closures.t -> unit)
       -> unit
-      
+
     (** Iterate over all toplevel expressions in the program, including
         subfunctions.
         Note the difference in semantics between this and

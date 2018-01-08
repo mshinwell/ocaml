@@ -25,6 +25,11 @@ module T = Flambda_type
 module Named = Flambda.Named
 module Reachable = Flambda.Reachable
 
+let simplify_name = Simplify_aux.simplify_name
+
+let freshen_continuation env cont =
+  Freshening.apply_continuation (E.freshening env) cont
+
 let simplify_set_of_closures original_env r
       (set_of_closures : Flambda.Set_of_closures.t)
       : Flambda.Set_of_closures.t * T.t * R.t =
@@ -57,12 +62,25 @@ let simplify_set_of_closures original_env r
     in
     let continuation_param, closure_env =
       let continuation_param, freshening =
-        Freshening.add_static_exception (E.freshening closure_env)
-          function_decl.continuation_param
+        freshen_continuation closure_env function_decl.continuation_param
       in
       let cont_type =
         Continuation_approx.create_unknown ~name:continuation_param
-          ~num_params:function_decl.return_arity
+          ~arity:function_decl.return_arity
+      in
+      let closure_env =
+        E.add_continuation (E.set_freshening closure_env freshening)
+          continuation_param cont_type
+      in
+      continuation_param, closure_env
+    in
+    let exn_continuation_param, closure_env =
+      let exn_continuation_param, freshening =
+        freshen_continuation closure_env function_decl.exn_continuation_param
+      in
+      let cont_type =
+        Continuation_approx.create_unknown ~name:exn_continuation_param
+          ~arity:[K.value Unknown]
       in
       let closure_env =
         E.add_continuation (E.set_freshening closure_env freshening)
@@ -112,7 +130,7 @@ let simplify_set_of_closures original_env r
     in
     let function_decl =
       Flambda.Function_declaration.create ~params:function_decl.params
-        ~continuation_param:continuation_param
+        ~continuation_param ~exn_continuation_param
         ~return_arity:function_decl.return_arity
         ~body ~stub:function_decl.stub ~dbg:function_decl.dbg
         ~inline ~specialise:function_decl.specialise

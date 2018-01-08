@@ -440,7 +440,8 @@ let rec simplify_program_body env (body : Program_body.t) : Program_body.t =
     Define_symbol_rec (defn, body)
   | Root _ -> body
 
-let simplify_program env ~backend (program : Program.t) =
+let simplify_program env (program : Program.t) =
+  let backend = E.backend env in
   let module Backend = (val backend : Backend_intf.S) in
   let predef_exn_symbols = Backend.all_predefined_exception_symbols () in
   let env =

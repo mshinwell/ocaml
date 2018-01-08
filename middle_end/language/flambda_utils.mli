@@ -31,10 +31,12 @@ val make_variables_symbol
    : Variable.t list
   -> Symbol.t
 
+(*
 (** For the compilation of switch statements. *)
 module Switch_storer : sig
   val mk_store : unit -> Continuation.t Switch.t_store
 end
+*)
 
 (*
 type specialised_to_same_as =
