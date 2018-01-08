@@ -128,7 +128,7 @@ module State = struct
     Mutable_variable.Set.is_empty t.mutable_variables_used
 end
 
-let rec lift_let_cont ~importer ~body ~handlers ~state
+let rec lift_let_cont ~body ~handlers ~state
       ~(recursive : Flambda.recursive) =
   let bound_recursively =
     match recursive with
@@ -146,7 +146,7 @@ let rec lift_let_cont ~importer ~body ~handlers ~state
             ~continuations_to_remain:bound_recursively
         in
         let handler_terminator, state =
-          lift_expr ~importer handler.handler ~state
+          lift_expr handler.handler ~state
         in
         handler, handler_terminator, state)
       handlers
@@ -233,28 +233,28 @@ let rec lift_let_cont ~importer ~body ~handlers ~state
     if can_lift_handler then State.lift_continuations state ~handlers
     else State.to_remain state (Let_cont handlers)
   in
-  lift_expr ~importer body ~state
+  lift_expr body ~state
 
-and lift_expr ~importer (expr : Flambda.Expr.t) ~state =
+and lift_expr (expr : Flambda.Expr.t) ~state =
   match expr with
   | Let ({ var; defining_expr; body; } as let_expr) ->
     begin match defining_expr with
     | Simple (((Name (Symbol _)) | (Const _)) as simple) ->
       let state = State.add_constant state ~var ~simple in
-      lift_expr ~importer body ~state
+      lift_expr body ~state
     | Simple (Name (Var _)) | Prim _ | Assign _ | Read_mutable _
     | Set_of_closures _ ->
       let defining_expr, state =
         match defining_expr with
         | Set_of_closures set_of_closures ->
           let set_of_closures =
-            lift_set_of_closures ~importer set_of_closures
+            lift_set_of_closures set_of_closures
           in
           let defining_expr : Flambda.Named.t =
             Set_of_closures set_of_closures
           in
-          Flambda.With_free_names.of_named (Flambda_kind.value Must_scan)
-            defining_expr, state
+          Flambda.With_free_names.of_named
+            (Flambda_kind.value Definitely_pointer) defining_expr, state
         | Read_mutable mut_var ->
           let state = State.use_mutable_variable state mut_var in
           Flambda.With_free_names.of_defining_expr_of_let let_expr, state
@@ -265,13 +265,13 @@ and lift_expr ~importer (expr : Flambda.Expr.t) ~state =
           Flambda.With_free_names.of_defining_expr_of_let let_expr, state
       in
       let state = State.to_remain state (Let (var, defining_expr)) in
-      lift_expr ~importer body ~state
+      lift_expr body ~state
     end
   | Let_mutable { var; initial_value; contents_type; body; } ->
     let state =
       State.to_remain state (Let_mutable (var, initial_value, contents_type))
     in
-    let expr, state = lift_expr ~importer body ~state in
+    let expr, state = lift_expr body ~state in
     expr, State.forget_mutable_variable state var
   | Let_cont { body; handlers = Non_recursive ({ name; handler; }); }
       when handler.is_exn_handler ->
@@ -284,11 +284,11 @@ and lift_expr ~importer (expr : Flambda.Expr.t) ~state =
         name;
         handler = {
           handler with
-          handler = lift ~importer handler.handler;
+          handler = lift handler.handler;
         }
       }
     in
-    let body = lift ~importer body in
+    let body = lift body in
     Flambda.Expr.Let_cont { body; handlers; }, state
   | Let_cont { body; handlers = Recursive handlers; }
       when Continuation.Map.exists
@@ -300,11 +300,11 @@ and lift_expr ~importer (expr : Flambda.Expr.t) ~state =
           fun (handler : Flambda.Continuation_handler.t)
                   : Flambda.Continuation_handler.t ->
             { handler with
-              handler = lift ~importer handler.handler;
+              handler = lift handler.handler;
             })
         handlers)
     in
-    let body = lift ~importer body in
+    let body = lift body in
     Flambda.Expr.Let_cont { body; handlers; }, state
   | Let_cont { body; handlers; } ->
     let recursive : Flambda.recursive =
@@ -313,16 +313,16 @@ and lift_expr ~importer (expr : Flambda.Expr.t) ~state =
       | Recursive _ -> Recursive
     in
     let handlers = Flambda.Let_cont_handlers.to_continuation_map handlers in
-    lift_let_cont ~importer ~body ~handlers ~state ~recursive
+    lift_let_cont ~body ~handlers ~state ~recursive
   | Apply _ | Apply_cont _ | Switch _ | Invalid _ -> expr, state
 
-and lift_set_of_closures ~importer
+and lift_set_of_closures
       (set_of_closures : Flambda.Set_of_closures.t) =
   let funs =
     Closure_id.Map.map (fun
             (function_decl : Flambda.Function_declaration.t) ->
         Flambda.Function_declaration.update_body function_decl
-          ~body:(lift ~importer function_decl.body))
+          ~body:(lift function_decl.body))
       set_of_closures.function_decls.funs
   in
   let function_decls =
@@ -333,12 +333,12 @@ and lift_set_of_closures ~importer
     ~in_closure:set_of_closures.free_vars
     ~direct_call_surrogates:set_of_closures.direct_call_surrogates
 
-and lift ~importer (expr : Flambda.Expr.t) =
+and lift (expr : Flambda.Expr.t) =
   let state =
     State.create ~variables_to_remain:[]
       ~continuations_to_remain:Continuation.Set.empty
   in
-  let expr, state = lift_expr ~importer expr ~state in
+  let expr, state = lift_expr expr ~state in
   let expr =
     bind_things_to_remain ~rev_things:(State.rev_to_remain state) ~around:expr
   in
@@ -365,12 +365,12 @@ and lift ~importer (expr : Flambda.Expr.t) =
   in
   (* CR mshinwell: Do this substitution more efficiently *)
   let expr =
-    Flambda.Expr.toplevel_substitution ~importer subst expr
+    Flambda.Expr.toplevel_substitution subst expr
   in
   Simple.Map.fold (fun (simple : Simple.t) var expr ->
       let kind =
         match simple with
-        | Name (Symbol _) -> Flambda_kind.value Can_scan
+        | Name (Symbol _) -> Flambda_kind.value Definitely_pointer
         | Const const -> Simple.Const.kind const
         | Name (Var _) -> assert false  (* see above *)
       in
@@ -378,8 +378,8 @@ and lift ~importer (expr : Flambda.Expr.t) =
     constants
     expr
 
-let run ~importer program =
+let run program =
   Flambda_static.Program.Mappers.map_toplevel_exprs program
     ~f:(fun ~continuation_arity:_ _continuation expr ->
       (* CR mshinwell: Shouldn't this do something with [continuation]? *)
-      lift ~importer expr)
+      lift expr)

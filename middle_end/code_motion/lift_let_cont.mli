@@ -24,6 +24,4 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-val run
-   : (Flambda_static.Program.t
-  -> Flambda_static.Program.t) Flambda_type.with_importer
+val run : Flambda_static.Program.t -> Flambda_static.Program.t

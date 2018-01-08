@@ -65,7 +65,9 @@ type block_type = Normal | Boxed_float
 type letrec = {
   blocks : (Ident.t * block_type * int) list;
   (* CR pchambart: Should we preallocate with the tag ?
-     How to get the tag for cases involving duprecord ? *)
+     How to get the tag for cases involving duprecord ?
+     mshinwell: I think the tag is always zero for duprecord, but need to
+     double-check. *)
   consts : (Ident.t * L.structured_constant) list;
   pre : Lambda.lambda -> Lambda.lambda;
   effects : Lambda.lambda;
@@ -412,12 +414,12 @@ let rec simplify_primitive env (prim : L.primitive) args loc =
                 (Lifthenelse (Lvar is_zero,
                   Lprim (Praise Raise_regular, [L.Lvar exn], loc),
                   (* CR-someday pchambart: find the right event.
-                      mshinwell: I briefly looked at this, and couldn't
-                      figure it out.
-                      lwhite: I don't think any of the existing events
-                      are suitable. I had to add a new one for a similar
-                      case in the array data types work.
-                      mshinwell: deferred CR *)
+                     mshinwell: I briefly looked at this, and couldn't
+                     figure it out.
+                     lwhite: I don't think any of the existing events
+                     are suitable. I had to add a new one for a similar
+                     case in the array data types work.
+                     mshinwell: deferred CR *)
                   Lprim (prim, [L.Lvar numerator; L.Lvar denominator],
                     loc))))))))))))
     in
