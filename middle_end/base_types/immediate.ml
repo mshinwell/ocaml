@@ -29,7 +29,7 @@ type t = {
 
 type immediate = t
 
-include Identifiable.Make (struct
+module T0 = struct
   type nonrec t = t
 
   let compare t1 t2 = TO.compare t1.value t2.value
@@ -50,7 +50,25 @@ include Identifiable.Make (struct
     else
       Format.fprintf ppf "(immediate %a)"
         TO.print t.value
-end)
+end
+
+module Self = Identifiable.Make (T0)
+
+include Self
+
+module Pair = struct
+  include Identifiable.Make_pair (struct
+    type nonrec t = t
+    include Self
+  end) (struct
+    type nonrec t = t
+    include Self
+  end)
+
+  type nonrec t = t * t
+end
+
+let cross_product = Pair.create_from_cross_product
 
 let join t1 t2 : t or_wrong =
   if not (TO.equal t1.value t2.value) then
@@ -120,30 +138,36 @@ let set_of_targetint_set (tis : TO.Set.t) : Set.t =
 let all_bools =
   Set.of_list [bool_true; bool_false]
 
-module Pair = TO.Pair
-
-let cross_product = TO.cross_product
-
-let map_value f t =
+let map_value1 f t =
   { t with
     value = f t.value;
   }
 
+let map_value2 f t0 t1 =
+  { value = f t0.value t1.value;
+    print_as_char = t0.print_as_char && t1.print_as_char;
+  }
+
+let map_value2' f t i =
+  { t with
+    value = f t.value i;
+  }
+
 let get_least_significant_16_bits_then_byte_swap
-  = map_value TO.get_least_significant_16_bits_then_byte_swap
-let swap_byte_endianness = map_value TO.swap_byte_endianness
-let shift_right_logical = map_value TO.shift_right_logical
-let shift_right = map_value TO.shift_right
-let shift_left = map_value TO.shift_left
-let xor = map_value TO.xor
-let or_ = map_value TO.or_
-let and_ = map_value TO.and_
-let mod_ = map_value TO.mod_
-let div = map_value TO.div
-let mul = map_value TO.mul
-let sub = map_value TO.sub
-let add = map_value TO.add
-let neg = map_value TO.neg
+  = map_value1 TO.get_least_significant_16_bits_then_byte_swap
+let swap_byte_endianness = map_value1 TO.swap_byte_endianness
+let shift_right_logical = map_value2' TO.shift_right_logical
+let shift_right = map_value2' TO.shift_right
+let shift_left = map_value2' TO.shift_left
+let xor = map_value2 TO.xor
+let or_ = map_value2 TO.or_
+let and_ = map_value2 TO.and_
+let mod_ = map_value2 TO.mod_
+let div = map_value2 TO.div
+let mul = map_value2 TO.mul
+let sub = map_value2 TO.sub
+let add = map_value2 TO.add
+let neg = map_value1 TO.neg
 
 let minus_one = int TO.minus_one
 let zero = int TO.zero
