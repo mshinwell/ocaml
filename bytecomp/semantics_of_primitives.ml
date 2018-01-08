@@ -75,7 +75,7 @@ let for_primitive (prim : Lambda.primitive) =
   | Pstringlength | Pbyteslength
   | Parraylength _ ->
       No_effects, Has_coeffects  (* That old chestnut: [Obj.truncate]. *)
-  | Pgettag -> No_effects, Has_coeffects
+  | Pgettag _ -> No_effects, Has_coeffects
   | Pisint
   | Pisout
   | Pbittest

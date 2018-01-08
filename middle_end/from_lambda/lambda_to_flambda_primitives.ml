@@ -37,7 +37,7 @@ val of_block_shape : Lambda.block_shape -> num_fields:int -> t
 let of_block_shape (shape : Lambda.block_shape) ~num_fields =
   match shape with
   | None ->
-    List.init num_fields (fun _field -> Flambda_kind.value Must_scan)
+    List.init num_fields (fun _field -> Flambda_kind.value Unknown)
   | Some shape ->
     let shape_length = List.length shape in
     if num_fields <> shape_length then begin
@@ -48,8 +48,9 @@ let of_block_shape (shape : Lambda.block_shape) ~num_fields =
     end;
     List.map (fun (kind : Lambda.value_kind) ->
         match kind with
-        | Pgenval | Pfloatval | Pboxedintval _ -> Flambda_kind.value Must_scan
-        | Pintval -> Flambda_kind.value Can_scan
+        | Pgenval -> Flambda_kind.value Unknown
+        | Pfloatval | Pboxedintval _ -> Flambda_kind.value Definitely_pointer
+        | Pintval -> Flambda_kind.value Definitely_immediate
         | Pnaked_intval -> Flambda_kind.naked_immediate ())
       shape
 

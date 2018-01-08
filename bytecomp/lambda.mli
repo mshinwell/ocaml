@@ -111,7 +111,7 @@ type primitive =
   (* Test if the argument is a block or an immediate integer *)
   | Pisint
   (* Extract a block's tag *)
-  | Pgettag
+  | Pgettag of { tags_to_sizes : Targetint.OCaml.t Tag.Scannable.Map.t; }
   (* Test if the (integer) argument is outside an interval *)
   | Pisout
   (* Bitvect operations *)

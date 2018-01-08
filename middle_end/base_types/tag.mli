@@ -49,6 +49,8 @@ module Scannable : sig
       it is greater than or equal to [No_scan_tag]. *)
   val create_exn : int -> t
 
+  val create : int -> t option
+
   val of_tag : tag -> t option
 
   val to_int : t -> int

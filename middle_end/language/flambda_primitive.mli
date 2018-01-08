@@ -187,7 +187,7 @@ type unary_primitive =
     (** [Duplicate_block] may not be used to change the tag of a block. *)
   | Is_int
   | Get_tag of {
-      tags_to_sizes : int Tag.Scannable.Map.t;
+      tags_to_sizes : Targetint.OCaml.t Tag.Scannable.Map.t;
     }
   | Array_length of Block_access_kind.t
   | Bigarray_length of { dimension : int; }

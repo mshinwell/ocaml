@@ -556,6 +556,23 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
                 sw_failaction;
               }
             in
+            let tags_to_sizes =
+              List.fold_left (fun tags_to_sizes
+                        ({ sw_tag; sw_size; } : L.lambda_switch_block_key) ->
+                  match Tag.Scannable.create sw_tag with
+                  | Some tag ->
+                    let size = Targetint.OCaml.of_int sw_size in
+                    Tag.Scannable.Map.add tag size tags_to_sizes
+                  | None ->
+                    Misc.fatal_errorf "Bad tag %d in [Lswitch]" sw_tag)
+                Tag.Scannable.Map.empty
+                block_nums
+            in
+            let block_nums =
+              List.map (fun ({ sw_tag; _} : L.lambda_switch_block_key) ->
+                  sw_tag)
+                block_nums
+            in
             let blocks_switch : L.lambda_switch =
               { sw_numconsts = switch.sw_numblocks;
                 sw_consts = List.combine block_nums sw_blocks;
@@ -568,7 +585,8 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
               L.Lswitch (scrutinee, consts_switch, loc)
             in
             let blocks_switch : L.lambda =
-              L.Lswitch (Lprim (Pgettag, [scrutinee], Location.none),
+              L.Lswitch (
+               Lprim (Pgettag { tags_to_sizes; }, [scrutinee], Location.none),
                blocks_switch, loc)
             in
             let isint_switch : L.lambda_switch =
