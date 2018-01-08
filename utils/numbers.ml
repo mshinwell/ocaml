@@ -97,20 +97,41 @@ module Float_by_bit_pattern = struct
   let one = create 1.
   let minus_one = create (-1.)
 
-  include Identifiable.Make (struct
+  module T0 = struct
     type t = Int64.t
 
     let compare = Int64.compare
     let equal = Int64.equal
     let hash f = Hashtbl.hash f
     let print ppf t = Format.pp_print_float ppf (Int64.float_of_bits t)
-  end)
+  end
+
+  module Self = Identifiable.Make (T0)
+
+  include Self
+
+  (* CR mshinwell: Clean up this mess and provide a proper construction in
+     [Identifiable] *)
+  module Pair = struct
+    include Identifiable.Make_pair (struct
+      type nonrec t = t
+      include Self
+    end) (struct
+      type nonrec t = t
+      include Self
+    end)
+
+    type nonrec t = t * t
+  end
+
+  let cross_product = Pair.create_from_cross_product
 
   module IEEE_semantics = struct
     let add t1 t2 = create (Pervasives.(+.) (to_float t1) (to_float t2))
     let sub t1 t2 = create (Pervasives.(-.) (to_float t1) (to_float t2))
     let mul t1 t2 = create (Pervasives.( *. ) (to_float t1) (to_float t2))
     let div t1 t2 = create (Pervasives.(/.) (to_float t1) (to_float t2))
+    let mod_ t1 t2 = create (Pervasives.mod_float (to_float t1) (to_float t2))
 
     let neg t = create (Pervasives.(~-.) (to_float t))
     let abs t = create (Pervasives.abs_float (to_float t))
@@ -135,37 +156,73 @@ module Float_by_bit_pattern = struct
 end
 
 module Int32 = struct
-  type t = Int32.t
+  include Int32
 
   external swap_byte_endianness : t -> t = "%bswap_int32"
 
-  include Identifiable.Make (struct
+  module T0 = struct
     type t = Int32.t
 
     let compare x y = Int32.compare x y
     let hash f = Hashtbl.hash f
     let equal (i : Int32.t) j = i = j
     let print ppf t = Format.fprintf ppf "%ld" t
-  end)
+  end
+
+  module Self = Identifiable.Make (T0)
+
+  include Self
+
+  module Pair = struct
+    include Identifiable.Make_pair (struct
+      type nonrec t = t
+      include Self
+    end) (struct
+      type nonrec t = t
+      include Self
+    end)
+
+    type nonrec t = t * t
+  end
+
+  let cross_product = Pair.create_from_cross_product
 end
 
 module Int64 = struct
-  type t = Int64.t
+  include Int64
 
   external swap_byte_endianness : t -> t = "%bswap_int64"
 
-  include Identifiable.Make (struct
+  module T0 = struct
     type t = Int64.t
 
     let compare x y = Int64.compare x y
     let hash f = Hashtbl.hash f
     let equal (i : Int64.t) j = i = j
     let print ppf t = Format.fprintf ppf "%Ld" t
-  end)
+  end
+
+  module Self = Identifiable.Make (T0)
+
+  include Self
+
+  module Pair = struct
+    include Identifiable.Make_pair (struct
+      type nonrec t = t
+      include Self
+    end) (struct
+      type nonrec t = t
+      include Self
+    end)
+
+    type nonrec t = t * t
+  end
+
+  let cross_product = Pair.create_from_cross_product
 end
 
 module Nativeint = struct
-  type t = Nativeint.t
+  include Nativeint
 
   external swap_byte_endianness : t -> t = "%bswap_native"
 

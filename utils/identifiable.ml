@@ -51,7 +51,6 @@ module type Map = sig
 
   include Map.S
     with type key = T.t
-     and type 'a t = 'a Map.Make (T).t
 
   val filter_map : 'a t -> f:(key -> 'a -> 'b option) -> 'b t
   val of_list : (key * 'a) list -> 'a t

@@ -4,9 +4,11 @@
 (*                                                                        *)
 (*             Xavier Leroy, projet Cristal, INRIA Rocquencourt           *)
 (*                        Nicolas Ojeda Bar, LexiFi                       *)
+(*                    Mark Shinwell, Jane Street Europe                   *)
 (*                                                                        *)
 (*   Copyright 2016 Institut National de Recherche en Informatique et     *)
 (*     en Automatique.                                                    *)
+(*   Copyright 2017--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -21,6 +23,8 @@ type repr =
 type num_bits =
   | Thirty_two
   | Sixty_four
+
+(* CR mshinwell: Stop duplicating this signature, use a .intf file *)
 
 module type S = sig
   type t
@@ -65,6 +69,7 @@ module type S = sig
   val min: t -> t -> t
   val max: t -> t -> t
   val get_least_significant_16_bits_then_byte_swap : t -> t
+  val swap_byte_endianness : t -> t
 
   include Identifiable.S with type t := t
 
@@ -78,6 +83,8 @@ module type S = sig
   module OCaml : sig
     type t
     type targetint_ocaml = t
+    val min : t
+    val max : t
     val max_string_length : t
     val zero : t
     val one : t
@@ -90,11 +97,31 @@ module type S = sig
     val of_int32 : int32 -> t
     val of_int64 : int64 -> t
     val of_targetint : targetint -> t
+    val of_float : float -> t
+
+    val to_float : t -> float
     val to_int : t -> int
+    val to_int_option : t -> int option
     val to_int32 : t -> int32
     val to_int64 : t -> int64
     val to_targetint : t -> targetint
+
+    val neg : t -> t
+    val get_least_significant_16_bits_then_byte_swap : t -> t
+    val sub : t -> t -> t
+
     include Identifiable.S with type t := t
+
+    module Or_unknown : sig
+      type nonrec t = private
+        | Ok of t
+        | Unknown
+
+      val ok : targetint_ocaml -> t
+      val unknown : unit -> t
+
+      include Identifiable.S with type t := t
+    end
   end
 end
 
@@ -165,6 +192,8 @@ module Int32 = struct
     Int32.logor second_to_least_significant_byte
       (shift_left least_significant_byte 8)
 
+  external swap_byte_endianness : t -> t = "%bswap_int32"
+
   module OCaml = struct
     type nonrec t = t
 
@@ -175,6 +204,14 @@ module Int32 = struct
     let ten = 10l
     let hex_ff = 0xffl
 
+    (* XXX Implement correctly *)
+
+    let min = Int32.min_int
+    let max = Int32.max_int
+
+    let sub = Int32.sub
+    let neg = Int32.neg
+
     let bottom_byte_to_int t =
       Int32.to_int (Int32.logand t hex_ff)
 
@@ -184,9 +221,15 @@ module Int32 = struct
     let of_int = Int32.of_int
     let to_int = Int32.to_int
 
-    let to_int t = t
-    let to_int32 t = Int64.to_int32
-    let to_int64 t = t
+    let of_int32 t = t (* CR mshinwell: Overflow semantics? *)
+    let of_int64 t = Int64.to_int32 t (* CR mshinwell: Overflow semantics? *)
+
+    let to_int32 t = t
+    let to_int64 t = Int64.of_int32 t
+    let to_targetint t = t
+
+    let of_float t = of_int64 (Int64.bits_of_float t)
+    let to_float t = Int64.float_of_bits (to_int64 t)
 
     let of_int_option i =
       let t = of_int i in
@@ -194,6 +237,12 @@ module Int32 = struct
       let not_via_t = Int64.of_int i in
       if Int64.equal via_t not_via_t then Some t
       else None
+
+    let to_int_option t = (* XXX this is wrong, implement correctly *)
+      Some (to_int t)
+
+    (* CR mshinwell: Overflow semantics? *)
+    let of_targetint t = t
 
     (* XXX This needs to be retrieved properly.
        Also, there are bugs in asmcomp/closure.ml and cmmgen.ml where max_wosize
@@ -233,6 +282,9 @@ module Int32 = struct
           | Unknown, Ok _ -> 1
           | Unknown, Unknown -> 0
           | Ok imm1, Ok imm2 -> compare imm1 imm2
+
+        let equal t1 t2 =
+          compare t1 t2 = 0
     
         let hash t =
           match t with
@@ -298,6 +350,8 @@ module Int64 = struct
     Int64.logor second_to_least_significant_byte
       (Int64.shift_left least_significant_byte 8)
 
+  external swap_byte_endianness : t -> t = "%bswap_int32"
+
   module OCaml = struct
     type nonrec t = t
 
@@ -308,6 +362,14 @@ module Int64 = struct
     let ten = 10L
     let hex_ff = 0xffL
 
+    (* XXX Implement correctly *)
+    let min = Int64.min_int
+    let max = Int64.max_int
+
+    (* XXX Implement correctly *)
+    let sub = Int64.sub
+    let neg = Int64.neg
+
     let bottom_byte_to_int t =
       Int64.to_int (Int64.logand t hex_ff)
 
@@ -317,11 +379,22 @@ module Int64 = struct
     let of_int = Int64.of_int
     let to_int = Int64.to_int
 
-    let to_int t = t
-    let to_int32 t = Int64.to_int32
+    let to_int_option t = (* XXX this is wrong, implement correctly *)
+      Some (to_int t)
+
+    let of_int32 t = Int64.of_int32 t
+    let of_int64 t = t (* CR mshinwell: Overflow semantics? *)
+    let of_float t = Int64.bits_of_float t
+
+    let to_int32 t = Int64.to_int32 t
     let to_int64 t = t
+    let to_targetint t = t
+    let to_float t = Int64.float_of_bits t
 
     let of_int_option i = Some (of_int i)
+
+    (* CR mshinwell: Overflow semantics? *)
+    let of_targetint t = t
 
     let max_array_length = Int64.sub (Int64.shift_left 1L 54) 1L
 
@@ -359,6 +432,9 @@ module Int64 = struct
           | Unknown, Ok _ -> 1
           | Unknown, Unknown -> 0
           | Ok imm1, Ok imm2 -> compare imm1 imm2
+
+        let equal t1 t2 =
+          compare t1 t2 = 0
     
         let hash t =
           match t with
