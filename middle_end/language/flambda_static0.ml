@@ -145,7 +145,7 @@ module Static_part = struct
         Symbol.print set_of_closures
         Closure_id.print closure_id
     | Boxed_float (Const f) ->
-      fprintf ppf "@[(Boxed_float %f)@]" f
+      fprintf ppf "@[(Boxed_float %a)@]" Numbers.Float_by_bit_pattern.print f
     | Boxed_float (Var v) ->
       fprintf ppf "@[(Boxed_float %a)@]" Variable.print v
     | Boxed_int32 (Const n) ->

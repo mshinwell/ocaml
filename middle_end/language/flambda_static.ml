@@ -26,7 +26,7 @@ module Of_kind_value = struct
     | Tagged_immediate _ -> ()
     | Dynamically_computed var ->
       E.check_variable_is_bound_and_of_kind env var
-        (Flambda_kind.value Must_scan)
+        (Flambda_kind.value Unknown)
 end
 
 module Static_part = struct
@@ -56,7 +56,7 @@ module Static_part = struct
     | Mutable_string { initial_value = Var v; }
     | Immutable_string (Var v) ->
       E.check_variable_is_bound_and_of_kind env v
-        (Flambda_kind.value Must_scan)
+        (Flambda_kind.value Definitely_pointer)
     | Boxed_float (Const _)
     | Boxed_int32 (Const _)
     | Boxed_int64 (Const _)
@@ -272,12 +272,16 @@ module Program_body = struct
           end)
         computation.computed_values
     end;
+    (* CR mshinwell: lwhite/xclerc have some fixes on the old Flambda in this
+       area which we should port forward *)
     let env =
       match recursive with
       | Non_recursive -> env
       | Recursive ->
         List.fold_left (fun env (sym, _static_part) ->
-            let ty = Flambda_type.unknown (Flambda_kind.value Definitely_immediate) Other in
+            let ty =
+              Flambda_type.unknown (Flambda_kind.value Definitely_immediate)
+            in
             E.add_symbol env sym ty)
           env
           defn.static_structure
@@ -307,7 +311,9 @@ module Program_body = struct
         Static_part.invariant env static_part)
       defn.static_structure;
     List.fold_left (fun env (sym, _static_part) ->
-        let ty = Flambda_type.unknown (Flambda_kind.value Definitely_immediate) Other in
+        let ty =
+          Flambda_type.unknown (Flambda_kind.value Definitely_immediate)
+        in
         match recursive with
         | Non_recursive -> E.add_symbol env sym ty
         | Recursive ->
@@ -723,7 +729,9 @@ module Program = struct
     in
     let env =
       Symbol.Set.fold (fun symbol env ->
-          let ty = Flambda_type.unknown (Flambda_kind.value Definitely_immediate) Other in
+          let ty =
+            Flambda_type.unknown (Flambda_kind.value Definitely_immediate)
+          in
           E.add_symbol env symbol ty)
         t.imported_symbols
         (E.create ())
