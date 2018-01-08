@@ -115,6 +115,29 @@ let set_to_targetint_set set =
 let all_bools =
   Set.of_list [bool_true; bool_false]
 
+module Pair = TO.Pair
+
+let cross_product = TO.cross_product
+let get_least_significant_16_bits_then_byte_swap
+  = TO.get_least_significant_16_bits_then_byte_swap
+let swap_byte_endianness = TO.swap_byte_endianness
+let shift_right_logical = TO.shift_right_logical
+let shift_right = TO.shift_right
+let shift_left = TO.shift_left
+let xor = TO.xor
+let or_ = TO.or_
+let and_ = TO.and_
+let mod_ = TO.mod_
+let div = TO.div
+let mul = TO.mul
+let sub = TO.sub
+let add = TO.add
+let neg = TO.neg
+let set_of_targetint_set = TO.set_of_targetint_set
+let minus_one = TO.minus_one
+let zero = TO.zero
+let one = TO.one
+
 module Or_unknown = struct
   type nonrec t =
     | Ok of t
@@ -132,6 +155,9 @@ module Or_unknown = struct
       | Unknown, Ok _ -> 1
       | Unknown, Unknown -> 0
       | Ok imm1, Ok imm2 -> compare imm1 imm2
+
+    let equal t1 t2 =
+      compare t1 t2 = 0
 
     let hash t =
       match t with

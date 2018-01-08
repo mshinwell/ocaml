@@ -441,11 +441,13 @@ let specialize_primitive p env ty ~has_constant_constructor =
         Parrayrefs(glb_array_type t (array_type_kind env p1))
     | (Parraysets t, p1 :: _) ->
         Parraysets(glb_array_type t (array_type_kind env p1))
+(* CR mshinwell: merge trouble?  Not sure what's going on here yet
     | (Pbigarrayref(unsafe, n, Pbigarray_unknown, Pbigarray_unknown_layout,
         Boxed),
        p1 :: _) ->
         let (k, l) = bigarray_type_kind_and_layout env p1 in
         Pbigarrayref(unsafe, n, k, l)
+*)
     | (Pbigarrayset(unsafe, n, Pbigarray_unknown, Pbigarray_unknown_layout),
        p1 :: _) ->
         let (k, l) = bigarray_type_kind_and_layout env p1 in

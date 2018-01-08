@@ -275,6 +275,14 @@ module OCaml : sig
 
   include Identifiable.S with type t := t
 
+  module Pair : sig
+    type nonrec t = t * t
+
+    include Identifiable.S with type t := t
+  end
+
+  val cross_product : Set.t -> Set.t -> Pair.Set.t
+
   module Or_unknown : sig
     type nonrec t = private
       | Ok of t

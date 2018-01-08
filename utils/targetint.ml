@@ -112,6 +112,14 @@ module type S = sig
 
     include Identifiable.S with type t := t
 
+    module Pair : sig
+      type nonrec t = t * t
+
+      include Identifiable.S with type t := t
+    end
+
+    val cross_product : Set.t -> Set.t -> Pair.Set.t
+
     module Or_unknown : sig
       type nonrec t = private
         | Ok of t
@@ -265,6 +273,9 @@ module Int32 = struct
     module Set = Set
     module Tbl = Tbl
 
+    module Pair = Pair
+    let cross_product = cross_product
+
     module Or_unknown = struct
       type nonrec t =
         | Ok of t
@@ -413,6 +424,9 @@ module Int64 = struct
     module Map = Map
     module Set = Set
     module Tbl = Tbl
+
+    module Pair = Pair
+    let cross_product = cross_product
 
     (* CR mshinwell: share code with 32-bit version above *)
     module Or_unknown = struct
