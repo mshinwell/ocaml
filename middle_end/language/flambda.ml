@@ -104,7 +104,7 @@ module rec Expr : sig
   val free_variables : t -> Variable.Set.t
   val free_symbols : t -> Symbol.Set.t
   val make_closure_declaration
-     : (id:Variable.t
+     : id:Variable.t
     -> free_variable_kind:(Variable.t -> K.t)
     -> body:t
     -> params:Typed_parameter.t list
@@ -115,11 +115,11 @@ module rec Expr : sig
     -> continuation:Continuation.t
     -> return_arity:Flambda_arity.t
     -> dbg:Debuginfo.t
-    -> t) Flambda_type.with_importer
-  val toplevel_substitution
-     : (Variable.t Variable.Map.t
     -> t
-    -> t) Flambda_type.with_importer
+  val toplevel_substitution
+     : Variable.t Variable.Map.t
+    -> t
+    -> t
   val description_of_toplevel_node : t -> string
   val bind
      : bindings:(Variable.t * K.t * Named.t) list
@@ -662,12 +662,11 @@ end = struct
   end
 
   (* CR-soon mshinwell: this should use the explicit ignore functions *)
-  let toplevel_substitution ~importer sb tree =
+  let toplevel_substitution sb tree =
     let sb' = sb in
     let sb v = try Variable.Map.find v sb with Not_found -> v in
     let substitute_type ty =
-      Flambda_type.rename_variables ~importer ty
-        ~f:(fun var -> sb var)
+      Flambda_type.rename_variables ty ~f:(fun var -> sb var)
     in
     let substitute_params_list params =
       List.map (fun param ->
@@ -740,7 +739,7 @@ end = struct
     if Variable.Map.is_empty sb' then tree
     else Mappers.Toplevel_only.map aux aux_named tree
 
-  let make_closure_declaration ~importer ~id
+  let make_closure_declaration ~id
         ~(free_variable_kind : Variable.t -> K.t) ~body ~params
         ~continuation_param ~exn_continuation_param ~stub ~continuation
         ~return_arity ~dbg : Expr.t =
@@ -759,7 +758,7 @@ end = struct
     (* CR-soon mshinwell: try to eliminate this [toplevel_substitution].  This
        function is only called from [Simplify], so we should be able
        to do something similar to what happens in [Inlining_transforms] now. *)
-    let body = toplevel_substitution ~importer sb body in
+    let body = toplevel_substitution sb body in
     let vars_within_closure =
       Variable.Map.of_set Var_within_closure.wrap
         (Variable.Set.diff free_variables param_set)
@@ -778,14 +777,15 @@ end = struct
           match kind with
           | Value _ ->
             Expr.create_let new_var kind projection body
-          | Naked_immediate | Naked_float | Naked_int32
-          | Naked_int64 | Naked_nativeint  ->
+          | Naked_number _ ->
             let boxed_var = Variable.rename new_var in
             let unbox, boxed_kind =
               Named.unbox_value (Name.var boxed_var) kind dbg
             in
             Expr.create_let boxed_var boxed_kind projection
-              (Expr.create_let new_var kind unbox body))
+              (Expr.create_let new_var kind unbox body)
+          | Phantom _ | Fabricated _ ->
+            Misc.fatal_error "Not yet implemented" (* XXX *) )
         vars_within_closure body
     in
     let subst var = Variable.Map.find var sb in
@@ -807,11 +807,12 @@ end = struct
             match kind with
             | Value _ ->
               id, boxed_vars
-            | Naked_immediate | Naked_float | Naked_int32
-            | Naked_int64 | Naked_nativeint ->
+            | Naked_number _ ->
               let boxed_var = Variable.rename id in
               let box, boxed_kind = Named.box_value (Name.var id) kind dbg in
-              boxed_var, ((boxed_var, boxed_kind, box) :: boxed_vars)
+              boxed_var, (boxed_var, boxed_kind, box) :: boxed_vars
+            | Phantom _ | Fabricated _ ->
+              Misc.fatal_error "Not yet implemented" (* XXX *)
           in
           let free_var = Free_var.create var in
           let in_closure =
@@ -842,9 +843,9 @@ end = struct
       Variable.create "project_closure" ~current_compilation_unit
     in
     let body =
-      Expr.create_let set_of_closures_var (K.value Must_scan)
+      Expr.create_let set_of_closures_var (K.value Definitely_pointer)
         (Set_of_closures set_of_closures)
-        (Expr.create_let project_closure_var (K.value Must_scan)
+        (Expr.create_let project_closure_var (K.value Definitely_pointer)
           project_closure
           (Apply_cont (continuation, None, [Simple.var project_closure_var])))
     in
@@ -879,8 +880,10 @@ end = struct
         | Apply_cont (cont, Some (Pop { exn_handler; _ }), _) ->
           use cont;
           use exn_handler
-        | Switch (_, switch) ->
-          Targetint.Map.iter (fun _value cont -> use cont) switch.arms
+        | Switch (_, Value switch) ->
+          Targetint.OCaml.Map.iter (fun _value cont -> use cont) switch
+        | Switch (_, Fabricated switch) ->
+          Tag.Map.iter (fun _value cont -> use cont) switch
         | Let _ | Let_mutable _ | Let_cont _ | Invalid _ -> ())
       (fun _named -> ())
       expr;
@@ -888,7 +891,6 @@ end = struct
 
   let invariant env expr =
     let module E = Invariant_env in
-    let importer = Flambda_type.null_importer in
     let unbound_continuation cont reason =
       Misc.fatal_errorf "Unbound continuation %a in %s: %a"
         Continuation.print cont
@@ -923,14 +925,17 @@ end = struct
               print t
           end
         end;
-        let ty = Flambda_type.unknown kind Other in
+        let ty = Flambda_type.unknown kind in
         let env = E.add_variable env var ty in
         loop env body
       | Let_mutable { var; initial_value; body; contents_type; } ->
         let initial_value_kind = E.kind_of_simple env initial_value in
         let contents_kind =
-          Flambda_type.kind ~importer
-            ~type_of_name:(fun name -> E.type_of_name_option env name)
+          Flambda_type.kind ~type_of_name:
+            (fun (id : Flambda_type.Name_or_export_id.t) ->
+              match id with
+              | Name name -> E.type_of_name_option env name
+              | Export_id _ -> None)
             contents_type
         in
         if not (K.equal initial_value_kind contents_kind) then begin
@@ -940,7 +945,7 @@ end = struct
             Flambda_type.print contents_type
             print t
         end;
-        let contents_ty = Flambda_type.unknown contents_kind Other in
+        let contents_ty = Flambda_type.unknown contents_kind in
         let env = E.add_mutable_variable env var contents_ty in
         loop env body
       | Let_cont { body; handlers; } ->
@@ -1026,7 +1031,7 @@ end = struct
                 print expr
             end;
             assert (not (Continuation.equal cont exn_handler));
-            let expected_arity = [K.value Must_scan] in
+            let expected_arity = [K.value Unknown] in
             if not (Flambda_arity.equal arity expected_arity) then begin
               Misc.fatal_errorf "Exception handler continuation %a has \
                   the wrong arity for the trap handler action of this \
@@ -1053,20 +1058,20 @@ end = struct
       | Apply ({ func; continuation; exn_continuation; args; call_kind; dbg;
                  inline; specialise; } as apply) ->
         let stack = E.current_continuation_stack env in
-        E.check_name_is_bound_and_of_kind env func (K.value Must_scan);
+        E.check_name_is_bound_and_of_kind env func (K.value Definitely_pointer);
         begin match call_kind with
         | Function (Direct { closure_id = _; return_arity = _; }) ->
           (* Note that [return_arity] is checked for all the cases below. *)
           E.check_simples_are_bound env args
         | Function Indirect_unknown_arity ->
-          E.check_simples_are_bound_and_of_kind env args (K.value Must_scan)
+          E.check_simples_are_bound_and_of_kind env args (K.value Unknown)
         | Function (Indirect_known_arity { param_arity; return_arity = _; }) ->
           ignore (param_arity : Flambda_arity.t);
           E.check_simples_are_bound env args
         | Method { kind; obj; } ->
           ignore (kind : Call_kind.method_kind);
-          E.check_name_is_bound_and_of_kind env obj (K.value Must_scan);
-          E.check_simples_are_bound_and_of_kind env args (K.value Must_scan)
+          E.check_name_is_bound_and_of_kind env obj (K.value Unknown);
+          E.check_simples_are_bound_and_of_kind env args (K.value Unknown)
         | C_call { alloc = _; param_arity = _; return_arity = _; } ->
           (* CR mshinwell: Check exactly what Cmmgen can compile and then
              add further checks on [param_arity] and [return_arity] *)
@@ -1116,7 +1121,7 @@ end = struct
               print expr
           | Exn_handler -> ()
           end;
-          let expected_arity = [Flambda_kind.value Must_scan] in
+          let expected_arity = [Flambda_kind.value Definitely_pointer] in
           if not (Flambda_arity.equal arity expected_arity) then begin
             Misc.fatal_errorf "Exception continuation %a named in this \
                 [Apply] term has the wrong arity: expected %a but have %a: %a"
@@ -1130,13 +1135,15 @@ end = struct
         ignore (dbg : Debuginfo.t);
         ignore (inline : inline_attribute);
         ignore (specialise : specialise_attribute)
-      | Switch (arg, { arms; }) ->
-        E.check_name_is_bound_and_of_kind env arg (K.value Must_scan);
-        if Targetint.Map.cardinal arms < 1 then begin
+      | Switch (arg, Value arms) ->
+        (* CR mshinwell: Can we check this?  It might be of kind "unknown" *)
+        E.check_name_is_bound_and_of_kind env arg
+          (K.value Definitely_immediate);
+        if Targetint.OCaml.Map.cardinal arms < 1 then begin
           Misc.fatal_errorf "Empty switch: %a" print t
         end;
         let check i cont =
-          ignore (i : Targetint.t);
+          ignore (i : Targetint.OCaml.t);
           match E.find_continuation_opt env cont with
           | None ->
             unbound_continuation cont "[Switch] term"
@@ -1158,7 +1165,38 @@ end = struct
                 Flambda_arity.print arity
             end
         in
-        Targetint.Map.iter check arms
+        Targetint.OCaml.Map.iter check arms
+      (* CR mshinwell: Factor out and share with case above *)
+      | Switch (arg, Fabricated arms) ->
+        E.check_name_is_bound_and_of_kind env arg
+          (K.value Definitely_immediate);
+        if Tag.Map.cardinal arms < 1 then begin
+          Misc.fatal_errorf "Empty switch: %a" print t
+        end;
+        let check i cont =
+          ignore (i : Tag.t);
+          match E.find_continuation_opt env cont with
+          | None ->
+            unbound_continuation cont "[Switch] term"
+          | Some (arity, kind, cont_stack) ->
+            let current_stack = E.current_continuation_stack env in
+            E.Continuation_stack.unify cont cont_stack current_stack;
+            begin match kind with
+            | Normal -> ()
+            | Exn_handler ->
+              Misc.fatal_errorf "Continuation %a is an exception handler \
+                  but is used in this [Switch] as a normal continuation: %a"
+                Continuation.print cont
+                print expr
+            end;
+            if List.length arity <> 0 then begin
+              Misc.fatal_errorf "Continuation %a is used in this [Switch] \
+                  and thus must have arity [], but has arity %a"
+                Continuation.print cont
+                Flambda_arity.print arity
+            end
+        in
+        Tag.Map.iter check arms
       | Invalid _ -> ()
     in
     loop env expr
@@ -1170,9 +1208,9 @@ end and Named : sig
     -> t
     -> Flambda_primitive.result_kind
   val toplevel_substitution
-     : (Variable.t Variable.Map.t
+     : Variable.t Variable.Map.t
     -> t
-    -> t) Flambda_type.with_importer
+    -> t
   val no_effects_or_coeffects : t -> bool
   val maybe_generative_effects_but_no_coeffects : t -> bool
   module Iterators : sig
@@ -1201,15 +1239,15 @@ end = struct
     | Assign _ | Read_mutable _ -> false
 
   (* CR mshinwell: Implement this properly. *)
-  let toplevel_substitution ~importer sb (t : t) =
+  let toplevel_substitution sb (t : t) =
     let var = Variable.create "subst" in
     let cont = Continuation.create () in
     let expr : Expr.t =
       Expr.create_let var
-        (K.value Must_scan (* arbitrary *)) t
+        (K.value Unknown (* arbitrary *)) t
         (Apply_cont (cont, None, []))
     in
-    match Expr.toplevel_substitution ~importer sb expr with
+    match Expr.toplevel_substitution sb expr with
     | Let let_expr -> let_expr.defining_expr
     | _ -> assert false
 
@@ -1240,41 +1278,38 @@ end = struct
       begin match prim, x0 with
       | Project_closure closure_id, set_of_closures ->
         E.check_simple_is_bound_and_of_kind env set_of_closures
-          (K.value Must_scan);
+          (K.value Definitely_pointer);
         Closure_id.Set.iter (fun closure_id ->
             E.add_use_of_closure_id env closure_id)
           closure_id
       | Move_within_set_of_closures move, closure ->
-        E.check_simple_is_bound_and_of_kind env closure (K.value Must_scan);
+        E.check_simple_is_bound_and_of_kind env closure
+          (K.value Definitely_pointer);
         Closure_id.Map.iter (fun closure_id move_to ->
             E.add_use_of_closure_id env closure_id;
             E.add_use_of_closure_id env move_to)
           move
       | Project_var var, closure ->
-        E.check_simple_is_bound_and_of_kind env closure (K.value Must_scan);
+        E.check_simple_is_bound_and_of_kind env closure
+          (K.value Definitely_pointer);
         Closure_id.Map.iter (fun closure_id var_within_closure ->
             E.add_use_of_closure_id env closure_id;
             E.add_use_of_var_within_closure env var_within_closure)
           var
-      | Block_load _, _
-      | Duplicate_array _, _
-      | Duplicate_record _, _
+      | Duplicate_block _, _
       | Is_int, _
-      | Get_tag, _
+      | Get_tag _, _
+      | Array_length _, _
+      | Bigarray_length _, _
       | String_length _, _
-      | Swap_byte_endianness _, _
       | Int_as_pointer, _
       | Opaque_identity, _
       | Int_arith _, _
-      | Int_conv _, _
       | Float_arith _, _
-      | Int_of_float, _
-      | Float_of_int, _
-      | Array_length _, _
-      | Bigarray_length _, _
+      | Num_conv _, _
+      | Boolean_not, _
       | Unbox_number _, _
-      | Box_number _, _
-      | Boolean_not, _ -> ()  (* None of these contain names. *)
+      | Box_number _, _ -> ()  (* None of these contain names. *)
       end
     | Binary (prim, x0, x1) ->
       let kind0, kind1 = P.args_kind_of_binary_primitive prim in
@@ -1283,18 +1318,14 @@ end = struct
       begin match prim with
       (* None of these currently contain names: this is here so that we
          are reminded to check upon adding a new primitive. *)
-      | Block_load_computed_index
-      | Block_set _
+      | Block_load _
+      | String_or_bigstring_load _
+      | Eq_comp _
       | Int_arith _
       | Int_shift _
       | Int_comp _
-      | Int_comp_unsigned _
       | Float_arith _
-      | Float_comp _
-      | Bit_test
-      | Array_load _
-      | String_load _
-      | Bigstring_load _ -> ()
+      | Float_comp _ -> ()
       end
     | Ternary (prim, x0, x1, x2) ->
       let kind0, kind1, kind2 = P.args_kind_of_ternary_primitive prim in
@@ -1302,10 +1333,8 @@ end = struct
       E.check_simple_is_bound_and_of_kind env x1 kind1;
       E.check_simple_is_bound_and_of_kind env x2 kind2;
       begin match prim with
-      | Block_set_computed _
-      | Bytes_set _
-      | Array_set _
-      | Bigstring_set _ -> ()
+      | Block_set _
+      | Bytes_or_bigstring_set _ -> ()
       end
     | Variadic (prim, xs) ->
       let kinds =
@@ -1319,7 +1348,6 @@ end = struct
         xs kinds;
       begin match prim with
       | Make_block _
-      | Make_array _
       | Bigarray_set _
       | Bigarray_load _ -> ()
       end
@@ -1344,10 +1372,10 @@ end = struct
           Mutable_variable.print being_assigned
           K.print being_assigned_kind
       end;
-      Singleton (K.value Definitely_immediate)
+      Singleton (K.unit ())
     | Set_of_closures set_of_closures ->
       Set_of_closures.invariant env set_of_closures;
-      Singleton (K.value Must_scan)
+      Singleton (K.value Definitely_pointer)
     | Prim (prim, dbg) ->
       primitive_invariant env prim;
       ignore (dbg : Debuginfo.t);

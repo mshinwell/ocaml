@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2017 OCamlPro SAS                                    *)
-(*   Copyright 2014--2017 Jane Street Group LLC                           *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -277,9 +277,10 @@ let check_name_is_bound_and_of_kind t name desired_kind =
     Misc.fatal_errorf "Unbound name %a" Name.print name
   | ty ->
     let kind =
-      T.kind ty
-        ~importer:T.null_importer
-        ~type_of_name:(fun ty -> type_of_name_option t ty)
+      T.kind ty ~type_of_name:(fun (id : T.Name_or_export_id.t) ->
+        match id with
+        | Name name -> type_of_name_option t name
+        | Export_id _ -> None)
     in
     if not (Flambda_kind.compatible kind ~if_used_at:desired_kind) then begin
       Misc.fatal_errorf "Name %a is expected to have kind [%a] but is \
@@ -339,9 +340,11 @@ let kind_of_name t name =
   | exception Not_found ->
     Misc.fatal_errorf "Unbound name %a" Name.print name
   | ty ->
-    T.kind ty
-      ~importer:T.null_importer
-      ~type_of_name:(fun ty -> type_of_name_option t ty)
+    (* CR mshinwell: factor this code out *)
+    T.kind ty ~type_of_name:(fun (id : T.Name_or_export_id.t) ->
+      match id with
+      | Name name -> type_of_name_option t name
+      | Export_id _ -> None)
 
 let kind_of_simple t (simple : Simple.t) =
   match simple with
@@ -355,9 +358,10 @@ let kind_of_mutable_variable t var =
   | exception Not_found ->
     Misc.fatal_errorf "Unbound mutable variable %a" Mutable_variable.print var
   | ty ->
-    T.kind ty
-      ~importer:T.null_importer
-      ~type_of_name:(fun ty -> type_of_name_option t ty)
+    T.kind ty ~type_of_name:(fun (id : T.Name_or_export_id.t) ->
+      match id with
+      | Name name -> type_of_name_option t name
+      | Export_id _ -> None)
 
 let current_continuation_stack t = t.continuation_stack
 

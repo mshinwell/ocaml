@@ -18,11 +18,13 @@
 
 include Identifiable.S
 
-(* CR mshinwell for pchambart: These should be deleted, right? *)
-(*
+(* CR mshinwell for pchambart: These should be deleted, right?
+   Hmm, except that in e.g. Flambda.make_closure_declaration we still have
+   uses *)
+
 val wrap : Variable.t -> t
 val wrap_map : 'a Variable.Map.t -> 'a Map.t
-*)
+
 val unwrap : t -> Variable.t
 
 val unwrap_set : Set.t -> Variable.Set.t
