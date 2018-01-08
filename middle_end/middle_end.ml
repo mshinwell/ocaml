@@ -125,7 +125,6 @@ let middle_end ppf ~prefixname ~backend
         (* +-+ ("Initialize_symbol_to_let_symbol", *)
         (*      Initialize_symbol_to_let_symbol.run) *)
       in
-(*
       let rec loop flam =
         pass_number := 0;
         let round = !round_number in
@@ -137,26 +136,32 @@ let middle_end ppf ~prefixname ~backend
              duplicate strings. *)
           +-+ ("Lift_let_cont 1", Lift_let_cont.run)
           +-+ ("Sink_lets 1", Sink_lets.run)
+(*
           +-+ ("Lift_constants", Lift_constants.lift_constants ~backend)
           +-+ ("Share_constants", Share_constants.share_constants)
           +-+ ("Remove_unused_program_constructs",
                Remove_unused_program_constructs.
                  remove_unused_program_constructs)
+*)
           +-+ ("Lift_to_toplevel",
                Lift_to_toplevel.lift ~backend)
           +-+ ("Lift_let_cont 2", Lift_let_cont.run)
           +-+ ("Sink_lets 2", Sink_lets.run)
+(*
           +-+ ("Remove_unused_closure_vars 1",
                Remove_unused_closure_vars.remove_unused_closure_variables
                 ~remove_direct_call_surrogates:false)
+*)
           +-+ ("Simplify",
                Simplify.run ~never_inline:false
                  ~allow_continuation_inlining:false
                  ~allow_continuation_specialisation:false
                  ~backend ~prefixname ~round)
+(*
           +-+ ("Remove_unused_closure_vars 2",
                Remove_unused_closure_vars.remove_unused_closure_variables
                 ~remove_direct_call_surrogates:false)
+*)
           +-+ ("Lift_let_cont 3", Lift_let_cont.run)
           +-+ ("Sink_lets 3", Sink_lets.run)
           +-+ ("Simplify continuation unboxing & specialisation",
@@ -164,13 +169,16 @@ let middle_end ppf ~prefixname ~backend
                 ~allow_continuation_inlining:false
                 ~allow_continuation_specialisation:true
                 ~backend ~prefixname ~round)
+(*
           +-+ ("Remove_unused_continuation_params",
                 Remove_unused_continuation_params.run ~backend)
+*)
           +-+ ("Simplify (func. inlining off, cont. inlining on)",
                 Simplify.run ~never_inline:true
                   ~allow_continuation_inlining:true
                   ~allow_continuation_specialisation:false
                   ~backend ~prefixname ~round)
+(*
           +-+ ("Remove_unused_closure_vars 3",
                Remove_unused_closure_vars.remove_unused_closure_variables
                 ~remove_direct_call_surrogates:false)
@@ -178,9 +186,9 @@ let middle_end ppf ~prefixname ~backend
                Ref_to_variables.eliminate_ref)
           +-+ ("Initialize_symbol_to_let_symbol",
                Initialize_symbol_to_let_symbol.run)
+*)
           |> loop
       in
-*)
       let back_end flam =
         flam
         (* +-+ ("Remove_unused_closure_vars", *)
@@ -192,11 +200,8 @@ let middle_end ppf ~prefixname ~backend
         (*   Remove_unused_program_constructs.remove_unused_program_constructs) *)
       in
       let flam =
-        (* if !Clflags.classic_inlining then *)
-        (*   fast_mode flam *)
-        (* else *)
-        (*   loop flam *)
-        fast_mode flam
+        if !Clflags.classic_inlining then fast_mode flam
+        else loop flam
       in
       let flam = back_end flam in
       (* Check that there aren't any unused "always inline" attributes. *)
