@@ -262,6 +262,9 @@ module Free_var = struct
         { var = var2; equalities = equalities2; } =
     Variable.equal var1 var2
       && Flambda_primitive.With_fixed_value.Set.equal equalities1 equalities2
+
+  let map_var t ~f =
+    { t with var = f t.var; }
 end
 
 module Free_vars = struct
@@ -297,6 +300,11 @@ module Free_vars = struct
 
   let equal ~equal_type:_ t1 t2 =
     Var_within_closure.Map.equal Free_var.equal t1 t2
+
+  let map_vars t ~f =
+    Var_within_closure.Map.map (fun free_var ->
+        Free_var.map_var free_var ~f)
+      t
 end
 
 module Trap_action = struct

@@ -103,6 +103,7 @@ type assign = {
 module Free_var : sig
   type t = {
     var : Variable.t;
+    (* XXX [equalities] isn't right now.  Think about what should replace it *)
     equalities : Flambda_primitive.With_fixed_value.Set.t;
   }
 
@@ -127,6 +128,8 @@ module Free_vars : sig
   val find_by_variable : t -> Variable.t -> Var_within_closure.t option
 
   val all_outer_variables : t -> Variable.Set.t
+
+  val map_vars : t -> f:(Variable.t -> Variable.t) -> t
 end
 
 (** Actions affecting exception traps on the stack.  These are always
@@ -339,7 +342,7 @@ end and Named : sig
     -> t
     -> Name.Set.t
 
-  (** Build an expression boxing the name. The returned kind is the
+  (** Build an expression boxing the name.  The returned kind is the
       one of the unboxed version. *)
   val box_value
       : Name.t
@@ -347,7 +350,7 @@ end and Named : sig
      -> Debuginfo.t
      -> Named.t * Flambda_kind.t
 
-  (** Build an expression unboxing the name. The returned kind is the
+  (** Build an expression unboxing the name.  The returned kind is the
       one of the unboxed version. *)
   val unbox_value
       : Name.t
@@ -368,7 +371,7 @@ end and Let : sig
     defining_expr : Named.t;
     body : Expr.t;
     (* CR-someday mshinwell: we could consider having these be keys into some
-      kind of global cache, to reduce memory usage. *)
+       kind of global cache, to reduce memory usage. *)
     free_names_of_defining_expr : Name.Set.t;
     (** A cache of the free names in the defining expression of the
         [Let]. *)
@@ -502,10 +505,10 @@ end and Set_of_closures : sig
         The domain of this map is sometimes known as the "variables bound by
         the closure". *)
     direct_call_surrogates : Closure_id.t Closure_id.Map.t;
-    (** If [direct_call_surrogates] maps [fun_var1] to [fun_var2] then direct
-        calls to [fun_var1] should be redirected to [fun_var2].  This is used
-        to reduce the overhead of transformations that introduce wrapper
-        functions (which will be inlined at direct call sites, but will
+    (** If [direct_call_surrogates] maps [closure_id1] to [closure_id2] then
+        direct calls to [closure_id1] should be redirected to [closure_id2].
+        This is used to reduce the overhead of transformations that introduce
+        wrapper functions (which will be inlined at direct call sites, but will
         penalise indirect call sites).
         N.B. [direct_call_surrogates] might not be transitively closed. *)
   }

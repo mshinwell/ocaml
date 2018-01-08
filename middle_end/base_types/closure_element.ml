@@ -18,8 +18,11 @@
 
 include Variable
 
-let wrap t = t
 let unwrap t = t
 
+(*
+let wrap t = t
 let wrap_map t = t
+*)
+
 let unwrap_set t = t

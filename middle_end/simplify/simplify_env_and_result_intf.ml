@@ -81,8 +81,9 @@ module type Env = sig
       -> result
       -> Flambda.Expr.t
       -> continuation:Continuation.t
+      -> exn_continuation:Continuation.t
       -> descr:string
-      -> Flambda.Expr.t * result)
+      -> Flambda.Expr.t * result * continuation_uses)
 
   val simplify_expr
      : t
@@ -93,11 +94,10 @@ module type Env = sig
 
   val simplify_continuation_use_cannot_inline
      : t
-    -> (?don't_record_use:unit
-      -> t
+    -> (t
       -> result
       -> Continuation.t
-      -> arg_tys:Flambda_type.t list
+      -> arity:Flambda_arity.t
       -> Continuation.t * result)
 
   (** Which simplification round we are currently in. *)

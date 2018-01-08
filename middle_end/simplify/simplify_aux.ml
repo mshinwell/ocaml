@@ -69,60 +69,17 @@ let all_indexes_out_of_range ~width indexes ~max_string_length =
 let prepare_to_simplify_set_of_closures ~env
       ~(set_of_closures : Flambda.Set_of_closures.t)
       ~function_decls =
-
-
-  let free_vars =
-    Variable.Map.map (fun (external_var : Flambda.Free_var.t) ->
-        let var =
-          let var =
-            Freshening.apply_variable (E.freshening env) external_var.var
-          in
-          (* XXX This should use [reify], since there's an advantage if that
-             works: removing a free variable. *)
-          match
-            T.follow_variable_equality (E.find_exn env var)
-              ~is_present_in_env:(fun var -> E.mem env var)
-          with
-          | None -> var
-          | Some var -> var
-        in
-        let ty = E.find_exn env var in
-        var, approx)
-      set_of_closures.free_vars
-  in
-  let environment_before_cleaning = env in
-  (* [E.local] helps us to catch bugs whereby variables escape their scope. *)
   let env = E.local env in
-  let free_vars, function_decls, sb, freshening =
-    Freshening.apply_function_decls_and_free_vars (E.freshening env) free_vars
-      function_decls ~only_freshen_parameters:(not freshen)
-  in
-  let env = E.set_freshening env sb in
-  let specialised_args =
-    Variable.Map.map_keys (Freshening.apply_variable (E.freshening env))
-      specialised_args
-  in
-  let direct_call_surrogates =
-    Variable.Map.fold (fun existing surrogate surrogates ->
-        let existing =
-          Freshening.Project_var.apply_closure_id freshening
-            (Closure_id.wrap existing)
-        in
-        let surrogate =
-          Freshening.Project_var.apply_closure_id freshening
-            (Closure_id.wrap surrogate)
-        in
-        assert (not (Closure_id.Map.mem existing surrogates));
-        Closure_id.Map.add existing surrogate surrogates)
-      set_of_closures.direct_call_surrogates
-      Closure_id.Map.empty
+  let function_decls, freshening =
+    Freshening.for_function_declarations (E.freshening env) function_decls
   in
   let env =
-    E.enter_set_of_closures_declaration env
+    E.enter_set_of_closures_declaration (E.set_freshening env freshening)
       function_decls.set_of_closures_origin
   in
-  (* we use the previous closure for evaluating the functions *)
-  let internal_value_set_of_closures =
+  let set_of_closures_ty =
+    T.unknown (Flambda_kind.value Definitely_pointer)
+(* XXX to fix.  Old code:
     let bound_vars =
       Variable.Map.fold (fun id (_, desc) map ->
           Var_within_closure.Map.add (Var_within_closure.wrap id) desc map)
@@ -131,38 +88,67 @@ let prepare_to_simplify_set_of_closures ~env
     T.create_value_set_of_closures ~function_decls ~bound_vars
       ~invariant_params:(lazy Variable.Map.empty) ~specialised_args
       ~freshening ~direct_call_surrogates
+*)
   in
-  (* Populate the environment with the approximation of each closure.
-     This part of the environment is shared between all of the closures in
-     the set of closures. *)
   let set_of_closures_env =
     Variable.Map.fold (fun closure _ env ->
-        let approx =
+        let closure_ty =
+          T.unknown (Flambda_kind.value Definitely_pointer)
+(* XXX to fix.  Old code:
           T.closure ~closure_var:closure
             (Closure_id.Map.singleton (Closure_id.wrap closure)
                internal_value_set_of_closures)
+*)
         in
-        E.add env closure approx
-      )
+        E.add_variable env closure closure_ty)
       function_decls.funs env
   in
-  free_vars, specialised_args, function_decls,
-    internal_value_set_of_closures, set_of_closures_env
+  function_decls, set_of_closures_ty, set_of_closures_env
 
-let prepare_to_simplify_closure ~(function_decl : Flambda.Function_declaration.t)
-      ~free_vars ~specialised_args ~set_of_closures_env =
+let prepare_to_simplify_closure
+      ~(function_decl : Flambda.Function_declaration.t)
+      ~set_of_closures_env =
+(*
   let closure_env =
     Variable.Map.fold (fun inner_var (_outer_var, ty) env ->
         E.add_outer_scope env inner_var ty)
       free_vars set_of_closures_env
   in
+*)
+  let env =
+    (* XXX use the correct my_closure type. *)
+    E.add_variable set_of_closures_env my_closure
+      (T.unknown (Flambda_kind.value Definitely_pointer))
+  in
   (* CR mshinwell: Freshening?  And cleaning? *)
   List.fold_left (fun env param ->
       let var = Parameter.var param in
       let ty = Parameter.ty param in
-      let env = E.add env var ty in
-      match T.projection ty with
-      | None -> env
-      | Some projection ->
-        E.add_projection env ~projection ~bound_to:var)
+      E.add_variable env var ty)
     env function_decl.params
+
+
+let initial_inlining_threshold ~round : Inlining_cost.Threshold.t =
+  let unscaled =
+    Clflags.Float_arg_helper.get ~key:round !Clflags.inline_threshold
+  in
+  (* CR-soon pchambart: Add a warning if this is too big
+     mshinwell: later *)
+  Can_inline_if_no_larger_than
+    (int_of_float
+      (unscaled *. float_of_int Inlining_cost.scale_inline_threshold_by))
+
+let initial_inlining_toplevel_threshold ~round : Inlining_cost.Threshold.t =
+  let ordinary_threshold =
+    Clflags.Float_arg_helper.get ~key:round !Clflags.inline_threshold
+  in
+  let toplevel_threshold =
+    Clflags.Int_arg_helper.get ~key:round !Clflags.inline_toplevel_threshold
+  in
+  let unscaled =
+    (int_of_float ordinary_threshold) + toplevel_threshold
+  in
+  (* CR-soon pchambart: Add a warning if this is too big
+     mshinwell: later *)
+  Can_inline_if_no_larger_than
+    (unscaled * Inlining_cost.scale_inline_threshold_by)

@@ -23,12 +23,9 @@ module R = Simplify_env_and_result.Result
 module T = Flambda_type
 
 module Named = Flambda.Named
-module Reachable = Flambda.Reachable
-
-let simplify_name = Simplify_aux.simplify_name
 
 let freshen_continuation env cont =
-  Freshening.apply_continuation (E.freshening env) cont
+  Freshening.add_continuation (E.freshening env) cont
 
 let simplify_set_of_closures original_env r
       (set_of_closures : Flambda.Set_of_closures.t)
@@ -46,19 +43,18 @@ let simplify_set_of_closures original_env r
   in
 *)
   let env = E.increase_closure_depth original_env in
-  let free_vars, function_decls, parameter_types,
-      internal_value_set_of_closures, set_of_closures_env =
+  let function_decls, _set_of_closures_ty, set_of_closures_env =
     Simplify_aux.prepare_to_simplify_set_of_closures ~env
-      ~set_of_closures ~function_decls ~only_for_function_decl:None
-      ~freshen:true
+      ~set_of_closures ~function_decls:set_of_closures.function_decls
   in
   let continuation_param_uses = Continuation.Tbl.create 42 in
-  let simplify_function fun_var (function_decl : Flambda.Function_declaration.t)
-        (funs, used_params, r)
-        : Flambda.Function_declaration.t Variable.Map.t * Variable.Set.t * R.t =
+  let simplify_function closure_id
+        (function_decl : Flambda.Function_declaration.t)
+        (funs, r)
+        : Flambda.Function_declaration.t Closure_id.Map.t * R.t =
     let closure_env =
       Simplify_aux.prepare_to_simplify_closure ~function_decl
-        ~free_vars ~parameter_types ~set_of_closures_env
+        ~set_of_closures_env
     in
     let continuation_param, closure_env =
       let continuation_param, freshening =
@@ -88,8 +84,12 @@ let simplify_set_of_closures original_env r
       in
       continuation_param, closure_env
     in
+    let my_closure, freshening =
+      Freshening.add_variable (E.freshening env) function_decl.my_closure
+    in
+    let closure_env = E.set_freshening closure_env freshening in
     let body, r =
-      E.enter_closure closure_env ~closure_id:(Closure_id.wrap fun_var)
+      E.enter_closure closure_env ~closure_id
         ~inline_inside:
           (Inlining_decision.should_inline_inside_declaration function_decl)
         ~dbg:function_decl.dbg
@@ -98,35 +98,33 @@ let simplify_set_of_closures original_env r
             function_decls.set_of_closures_origin body_env);
           let body, r, uses =
             let descr =
-              Format.asprintf "the body of %a" Variable.print fun_var
+              Format.asprintf "the body of %a" Closure_id.print closure_id
             in
             (E.simplify_toplevel body_env) body_env r function_decl.body
               ~continuation:continuation_param
+              ~exn_continuation:exn_continuation_param
               ~descr
           in
           Continuation.Tbl.add continuation_param_uses continuation_param uses;
           body, r)
     in
-    let inline : Lambda.inline_attribute =
+    let inline : Flambda.inline_attribute =
       match function_decl.inline with
       | Default_inline ->
-        if !Clflags.classic_inlining && not function_decl.stub then
+        if !Clflags.classic_inlining && not function_decl.stub then begin
           (* In classic-inlining mode, the inlining decision is taken at
-             definition site (here). If the function is small enough
+             definition site (here).  If the function is small enough
              (below the -inline threshold) it will always be inlined. *)
           let inlining_threshold =
-            Simplify_aux.initial_inlining_threshold
-              ~round:(E.round env)
+            Simplify_aux.initial_inlining_threshold ~round:(E.round env)
           in
           if Inlining_cost.can_inline body inlining_threshold ~bonus:0
-          then
-            Always_inline
-          else
-            Default_inline
-        else
+          then Always_inline
+          else Default_inline
+        end else begin
           Default_inline
-      | inline ->
-        inline
+        end
+      | inline -> inline
     in
     let function_decl =
       Flambda.Function_declaration.create ~params:function_decl.params
@@ -136,19 +134,20 @@ let simplify_set_of_closures original_env r
         ~inline ~specialise:function_decl.specialise
         ~is_a_functor:function_decl.is_a_functor
         ~closure_origin:function_decl.closure_origin
+        ~my_closure
     in
+(* CR mshinwell: temporarily disabled
     let function_decl =
-      match Unrecursify.unrecursify_function ~fun_var ~function_decl with
+      match Unrecursify.unrecursify_function ~closure_id ~function_decl with
       | None -> function_decl
       | Some function_decl -> function_decl
     in
-    let used_params' = Flambda.used_params function_decl in
-    Variable.Map.add fun_var function_decl funs,
-      Variable.Set.union used_params used_params', r
+*)
+    Closure_id.Map.add closure_id function_decl funs, r
   in
-  let funs, _used_params, r =
-    Variable.Map.fold simplify_function function_decls.funs
-      (Variable.Map.empty, Variable.Set.empty, r)
+  let funs, r =
+    Closure_id.Map.fold simplify_function function_decls.funs
+      (Closure_id.Map.empty, r)
   in
   let function_decls =
     Flambda.Function_declarations.update function_decls ~funs
@@ -171,10 +170,14 @@ let simplify_set_of_closures original_env r
         ~function_decls ~backend:(E.backend env)
   in
 *)
-  let invariant_params =
+  let _invariant_params =
+    Variable.Map.empty
+(* CR mshinwell for pchambart: Need to fix Invariant_params
     lazy (Invariant_params.Functions.invariant_params_in_recursion
       function_decls ~backend:(E.backend env))
+*)
   in
+(* XXX Closure typing to be fixed later
   let value_set_of_closures =
     T.create_set_of_closures ~function_decls
       ~bound_vars:internal_value_set_of_closures.bound_vars
@@ -191,42 +194,50 @@ let simplify_set_of_closures original_env r
       internal_value_set_of_closures.direct_call_surrogates
       Variable.Map.empty
   in
+*)
+  let in_closure =
+    Flambda.Free_vars.map_vars set_of_closures.free_vars ~f:(fun var ->
+      (* XXX This should use a variant of [simplify_named] called
+         [simplify_var] which always returns [Variable.t], otherwise
+         we're not following aliases via types *)
+      Freshening.apply_variable (E.freshening env) var)
+  in
   let set_of_closures =
     Flambda.Set_of_closures.create ~function_decls
-      ~free_vars:(Variable.Map.map fst free_vars)
-      ~direct_call_surrogates
+      ~in_closure
+      ~direct_call_surrogates:Closure_id.Map.empty
   in
+(*
   let ty = T.set_of_closures value_set_of_closures in
+*)
+  let ty = T.unknown (Flambda_kind.value Definitely_pointer) in
   set_of_closures, ty, r
 
 (** [simplify_named] returns:
     - extra [Let]-bindings to be inserted prior to the one being simplified;
     - the simplified [named];
     - the new result structure. *)
-let simplify_named env r (tree : Named.t) : named_simplifier =
+let simplify_named env r (tree : Named.t) =
   match tree with
-  | Var var ->
-    let var, var_ty = simplify_name env var in
-    var, var_ty, r
-  | Symbol sym ->
-    let symbol_ty = E.find_symbol env sym in
-    Reachable tree, symbol_ty, r
-  | Const cst -> [], Reachable tree, type_for_const cst, r
+  | Simple simple ->
+    let simple, ty = Simplify_simple.simplify_simple env simple in
+    [], Flambda.Reachable.reachable (Simple simple), ty, r
   | Read_mutable mut_var ->
     (* See comment on the [Assign] case. *)
     let mut_var =
       Freshening.apply_mutable_variable (E.freshening env) mut_var
     in
-    [], Reachable (Read_mutable mut_var), T.unknown Value Other
+    let ty = E.find_mutable_exn env mut_var in
+    [], Flambda.Reachable.reachable (Read_mutable mut_var), ty, r
   | Set_of_closures set_of_closures ->
 (*
     let backend = E.backend env in
     let cont_usage_snapshot = R.snapshot_continuation_uses r in
 *)
-    let set_of_closures, r =
+    let set_of_closures, ty, r =
       simplify_set_of_closures env r set_of_closures
     in
-    [], Reachable (Set_of_closures set_of_closures), r
+    [], Flambda.Reachable.reachable (Set_of_closures set_of_closures), ty, r
 (* XXX Disabled just for the moment -- mshinwell
     let simplify env r ~bindings ~set_of_closures ~pass_name =
       (* If simplifying a set of closures more than once during any given round
@@ -309,26 +320,27 @@ let simplify_named env r (tree : Named.t) : named_simplifier =
           | None -> [], Reachable (Set_of_closures set_of_closures), r
     end *)
   | Prim (prim, dbg) ->
-    let new_bindings, term, ty, r =
+    let term, ty, r =
       Simplify_primitive.simplify_primitive env r prim dbg
     in
     let remove_primitive () =
       R.map_benefit r (B.remove_primitive_application prim)
     in
     begin match (E.type_accessor env T.reify) ty ~allow_free_variables:true with
-    | Reified (simple, ty) ->
+    | Term (simple, ty) ->
       let term : Named.t = Simple simple in
-      new_bindings, term, ty, remove_primitive ()
-    | Cannot_reify -> new_bindings, term, ty, r
+      [], Flambda.Reachable.reachable term, ty, remove_primitive ()
+    | Cannot_reify -> [], term, ty, r
     | Invalid ->
       let ty = (E.type_accessor env T.bottom_like) ty in
-      [], Reachable.invalid (), ty, remove_primitive ()
+      [], Flambda.Reachable.invalid (), ty, remove_primitive ()
     end
   | Assign { being_assigned; new_value; } ->
-    (* CR mshinwell: check type of [begin_assigned] *)
     let being_assigned =
       Freshening.apply_mutable_variable (E.freshening env) being_assigned
     in
-    simplify_name_named env new_value ~f:(fun _env new_value _type ->
-      [], Reachable (Assign { being_assigned; new_value; }),
-        ret r (T.unknown Value Other))
+    (* CR mshinwell: This needs a kind check, but we're planning to remove
+       mutable variables soon anyway, so we won't bother *)
+    let new_value, _ty = Simplify_simple.simplify_simple env new_value in
+    [], Flambda.Reachable.reachable (Assign { being_assigned; new_value; }),
+      T.unit (), r
