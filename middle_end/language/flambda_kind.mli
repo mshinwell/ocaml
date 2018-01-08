@@ -29,7 +29,9 @@ module Value_kind : sig
     | Bottom
 
   val join : t -> t -> t
+
   val meet : t -> t -> t
+
   val compatible : t -> if_used_at:t -> bool
 
   val compare : t -> t -> int

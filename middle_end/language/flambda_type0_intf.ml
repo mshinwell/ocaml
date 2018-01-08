@@ -292,7 +292,11 @@ module type S = sig
     -> unit
 
   val of_ty_value : ty_value -> t
-  val of_ty_naked_number : _ ty_naked_number -> t
+
+  val of_ty_naked_number
+     : 'kind ty_naked_number
+    -> 'kind Flambda_kind.Naked_number.t
+    -> t
 
   (** Construction of top types. *)
   val unknown : Flambda_kind.t -> t
@@ -577,7 +581,7 @@ module type S = sig
 
   val force_to_kind_phantom : t -> ty_phantom
 
-  val check_of_kind : t -> Flambda_kind.t -> unit
+  val check_of_kind : (t -> Flambda_kind.t -> unit) type_accessor
 
 (*
   type cleaning_spec =

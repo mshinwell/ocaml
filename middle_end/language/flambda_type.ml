@@ -1542,8 +1542,12 @@ let structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
       | Boxed_number (Boxed_float ty_naked_number1),
           Boxed_number (Boxed_float ty_naked_number2) ->
         begin match
-          prove_naked_float ~type_of_name (of_ty_naked_number ty_naked_number1),
-          prove_naked_float ~type_of_name (of_ty_naked_number ty_naked_number2)
+          prove_naked_float ~type_of_name
+            (of_ty_naked_number ty_naked_number1,
+              K.Naked_number.Naked_float),
+          prove_naked_float ~type_of_name
+            (of_ty_naked_number ty_naked_number2,
+              K.Naked_number.Naked_float)
         with
         | Proved nums1, Proved nums2 ->
           Float_by_bit_pattern.Set.is_empty
@@ -1553,8 +1557,12 @@ let structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
       | Boxed_number (Boxed_int32 ty_naked_number1),
           Boxed_number (Boxed_int32 ty_naked_number2) ->
         begin match
-          prove_naked_int32 ~type_of_name (of_ty_naked_number ty_naked_number1),
-          prove_naked_int32 ~type_of_name (of_ty_naked_number ty_naked_number2)
+          prove_naked_int32 ~type_of_name
+            (of_ty_naked_number ty_naked_number1,
+              K.Naked_number.Naked_int32),
+          prove_naked_int32 ~type_of_name
+            (of_ty_naked_number ty_naked_number2,
+              K.Naked_number.Naked_int32)
         with
         | Proved nums1, Proved nums2 ->
           Int32.Set.is_empty (Int32.Set.inter nums1 nums2)
@@ -1563,8 +1571,12 @@ let structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
       | Boxed_number (Boxed_int64 ty_naked_number1),
           Boxed_number (Boxed_int64 ty_naked_number2) ->
         begin match
-          prove_naked_int64 ~type_of_name (of_ty_naked_number ty_naked_number1),
-          prove_naked_int64 ~type_of_name (of_ty_naked_number ty_naked_number2)
+          prove_naked_int64 ~type_of_name
+            (of_ty_naked_number ty_naked_number1,
+              K.Naked_number.Naked_int64),
+          prove_naked_int64 ~type_of_name
+            (of_ty_naked_number ty_naked_number2,
+              K.Naked_number.Naked_int64)
         with
         | Proved nums1, Proved nums2 ->
           Int64.Set.is_empty (Int64.Set.inter nums1 nums2)
@@ -1574,9 +1586,11 @@ let structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
           Boxed_number (Boxed_nativeint ty_naked_number2) ->
         begin match
           prove_naked_nativeint ~type_of_name
-            (of_ty_naked_number ty_naked_number1),
+            (of_ty_naked_number ty_naked_number1,
+              K.Naked_number.Naked_nativeint),
           prove_naked_nativeint ~type_of_name
-            (of_ty_naked_number ty_naked_number2)
+            (of_ty_naked_number ty_naked_number2,
+              K.Naked_number.Naked_nativeint)
         with
         | Proved nums1, Proved nums2 ->
           Targetint.Set.is_empty (Targetint.Set.inter nums1 nums2)

@@ -514,18 +514,9 @@ end) = struct
 
   let of_ty_value ty_value : t = Value ty_value
 
-  let of_ty_naked_number (type n) (ty_naked_number : n ty_naked_number) : t =
-    match n with
-    | Immediate _ ->
-      Naked_number (ty_naked_number, K.Naked_number.Naked_immediate)
-    | Float _ ->
-      Naked_number (ty_naked_number, K.Naked_number.Naked_float)
-    | Int32 _ ->
-      Naked_number (ty_naked_number, K.Naked_number.Naked_int32)
-    | Int64 _ ->
-      Naked_number (ty_naked_number, K.Naked_number.Naked_int64)
-    | Nativeint _ ->
-      Naked_number (ty_naked_number, K.Naked_number.Naked_nativeint)
+  let of_ty_naked_number (type n) (ty_naked_number : n ty_naked_number)
+        (kind : n K.Naked_number.t) : t =
+    Naked_number (ty_naked_number, kind)
 
   let free_names_or_alias free_names_contents (or_alias : _ or_alias) acc =
     match or_alias with
@@ -1116,6 +1107,12 @@ end) = struct
       in
       Value (No_alias (Join [Blocks_and_tagged_immediates blocks_imms]))
 
+  let block_of_unknown_values tag value_kind ~size =
+    let fields =
+      Array.init size (fun _index : _ mutable_or_immutable ->
+        Immutable (any_value_as_ty_value value_kind))
+    in
+    block_of_values tag ~fields
 
 (*
 
@@ -1291,14 +1288,6 @@ end) = struct
     | Fabricated _ ->
       Misc.fatal_errorf "Type has wrong kind (expected [Phantom]): %a"
         print t
-
-  let check_of_kind ~type_of_name t (expected_kind : K.t) =
-    let actual_kind = kind ~type_of_name t in
-    if not (K.equal actual_kind expected_kind) then begin
-      Misc.fatal_errorf "Type has wrong kind: have %a but expected %a"
-        K.print actual_kind
-        K.print expected_kind
-    end
 
 (*
   let t_of_ty_value (ty : ty_value) : t = Value ty
@@ -1547,6 +1536,14 @@ end) = struct
       K.naked_nativeint ()
     | Fabricated ty -> kind_ty_fabricated ~type_of_name ty
     | Phantom ty -> kind_ty_phantom ~type_of_name ty
+
+  let check_of_kind ~type_of_name t (expected_kind : K.t) =
+    let actual_kind = kind ~type_of_name t in
+    if not (K.equal actual_kind expected_kind) then begin
+      Misc.fatal_errorf "Type has wrong kind: have %a but expected %a"
+        K.print actual_kind
+        K.print expected_kind
+    end
 
   let create_inlinable_function_declaration ~is_classic_mode ~closure_origin
         ~continuation_param ~params ~body ~result ~stub ~dbg ~inline
