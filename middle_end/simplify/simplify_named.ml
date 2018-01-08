@@ -204,7 +204,7 @@ let simplify_set_of_closures original_env r
 let simplify_named env r (tree : Named.t) : named_simplifier =
   match tree with
   | Var var ->
-    let var, var_ty = freshen_and_squash_aliases env var in
+    let var, var_ty = simplify_name env var in
     var, var_ty, r
   | Symbol sym ->
     let symbol_ty = E.find_symbol env sym in
@@ -327,6 +327,6 @@ let simplify_named env r (tree : Named.t) : named_simplifier =
     let being_assigned =
       Freshening.apply_mutable_variable (E.freshening env) being_assigned
     in
-    freshen_and_squash_aliases_named env new_value ~f:(fun _env new_value _type ->
+    simplify_name_named env new_value ~f:(fun _env new_value _type ->
       [], Reachable (Assign { being_assigned; new_value; }),
         ret r (T.unknown Value Other))

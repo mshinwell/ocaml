@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2016--2017 OCamlPro SAS                                    *)
-(*   Copyright 2016--2017 Jane Street Group LLC                           *)
+(*   Copyright 2016--2018 OCamlPro SAS                                    *)
+(*   Copyright 2016--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -16,9 +16,9 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-module R = Simplify_result
+module R = Simplify_env_and_result.Result
 
-let for_toplevel_expression ~importer expr r =
+let for_toplevel_expression expr r =
   (* This pass only performs linear inlining, even for stubs.  Non-linear
      inlining for stubs is done by [Simplify]. *)
   let used_linearly =
@@ -37,7 +37,7 @@ let for_toplevel_expression ~importer expr r =
     let rec substitute env (expr : Flambda.Expr.t) : Flambda.Expr.t =
       match expr with
       | Let ({ var; body; _ } as let_expr) ->
-        let module W = Flambda.With_free_variables in
+        let module W = Flambda.With_free_names in
         let defining_expr = W.of_defining_expr_of_let let_expr in
         let body = substitute env body in
         W.create_let_reusing_defining_expr var defining_expr body
@@ -73,7 +73,7 @@ let for_toplevel_expression ~importer expr r =
           let approx =
             Continuation_approx.create ~name
               ~handlers:(Non_recursive handler)
-              ~num_params:(List.length handler.params)
+              ~arity:(Flambda.Continuation_handler.param_arity handler)
           in
           r := R.update_defined_continuation_approx !r name approx;
           Let_cont { body; handlers = Non_recursive { name; handler; }; }
@@ -98,7 +98,7 @@ let for_toplevel_expression ~importer expr r =
             let approx =
               Continuation_approx.create ~name
                 ~handlers:(Recursive handlers)
-                ~num_params:(List.length handler.params)
+                ~arity:(Flambda.Continuation_handler.param_arity handler)
             in
             r := R.update_defined_continuation_approx !r name approx)
           handlers;
@@ -118,8 +118,8 @@ let for_toplevel_expression ~importer expr r =
           r := R.forget_continuation_definition !r cont;
           List.fold_left2 (fun expr param arg ->
               let var = Flambda.Typed_parameter.var param in
-              let kind = Flambda.Typed_parameter.kind ~importer param in
-              Flambda.Expr.create_let var kind (Var arg) expr)
+              let kind = Flambda.Typed_parameter.kind param in
+              Flambda.Expr.create_let var kind (Simple arg) expr)
             handler.handler
             handler.params args
         end

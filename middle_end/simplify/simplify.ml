@@ -170,8 +170,7 @@ let simplify_toplevel env r expr ~continuation ~exn_continuation ~descr =
            changes to [r] that need to be made by the inlining pass are
            straightforward. *)
         let expr, r =
-          (E.type_accessor env Continuation_inlining.for_toplevel_expression)
-            expr r
+          Continuation_inlining.for_toplevel_expression expr r
         in
         check_toplevel_simplification_result r expr ~continuation
           ~exn_continuation ~descr;
