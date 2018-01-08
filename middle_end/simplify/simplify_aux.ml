@@ -66,11 +66,11 @@ let all_indexes_out_of_range ~width indexes ~max_string_length =
       | In_range -> false)
     indexes
 
-(*
 let prepare_to_simplify_set_of_closures ~env
       ~(set_of_closures : Flambda.Set_of_closures.t)
-      ~function_decls ~freshen
-      ~(only_for_function_decl : Flambda.Function_declaration.t option) =
+      ~function_decls =
+
+
   let free_vars =
     Variable.Map.map (fun (external_var : Flambda.Free_var.t) ->
         let var =
@@ -166,52 +166,3 @@ let prepare_to_simplify_closure ~(function_decl : Flambda.Function_declaration.t
       | Some projection ->
         E.add_projection env ~projection ~bound_to:var)
     env function_decl.params
-
-module C = Inlining_cost
-
-external swap16 : int -> int = "%bswap16"
-external swap32 : int32 -> int32 = "%bswap_int32"
-external swap64 : int64 -> int64 = "%bswap_int64"
-external swapnative : nativeint -> nativeint = "%bswap_native"
-
-let const_int_expr expr n =
-  if Effect_analysis.no_effects_named expr then
-    let (new_expr, approx) = T.make_const_int_named n in
-    new_expr, approx, C.Benefit.remove_code_named expr C.Benefit.zero
-  else expr, T.value_int n, C.Benefit.zero
-let const_char_expr expr c =
-  if Effect_analysis.no_effects_named expr then
-    let (new_expr, approx) = T.make_const_char_named c in
-    new_expr, approx, C.Benefit.remove_code_named expr C.Benefit.zero
-  else expr, T.value_char c, C.Benefit.zero
-let const_ptr_expr expr n =
-  if Effect_analysis.no_effects_named expr then
-    let (new_expr, approx) = T.make_const_ptr_named n in
-    new_expr, approx, C.Benefit.remove_code_named expr C.Benefit.zero
-  else expr, T.value_constptr n, C.Benefit.zero
-let const_bool_expr expr b =
-  const_ptr_expr expr (if b then 1 else 0)
-let const_float_expr expr f =
-  if Effect_analysis.no_effects_named expr then
-    let (new_expr, approx) = T.make_const_float_named f in
-    new_expr, approx, C.Benefit.remove_code_named expr C.Benefit.zero
-  else expr, T.value_boxed_float f, C.Benefit.zero
-let const_boxed_int_expr expr t i =
-  if Effect_analysis.no_effects_named expr then
-    let (new_expr, approx) = T.make_const_boxed_int_named t i in
-    new_expr, approx, C.Benefit.remove_code_named expr C.Benefit.zero
-  else expr, T.value_boxed_int t i, C.Benefit.zero
-
-let const_comparison_expr expr (cmp : Flambda_primitive.comparison) x y =
-  (* Using the [Pervasives] comparison functions here in the compiler
-     coincides with the definitions of such functions in the code
-     compiled by the user, and is thus correct. *)
-  const_bool_expr expr
-    (match cmp with
-     | Eq -> x = y
-     | Neq -> x <> y
-     | Lt -> x < y
-     | Gt -> x > y
-     | Le -> x <= y
-     | Ge -> x >= y)
-*)

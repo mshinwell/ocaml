@@ -52,6 +52,7 @@ val this_many_unknowns : int -> Flambda_kind.t -> t array
 *)
 
 (** Rename free variables in a type. *)
+(* CR mshinwell: and bound ones too, now... *)
 val rename_variables : t -> f:(Variable.t -> Variable.t) -> t
 
 (** Building of types and terms representing tagged / boxed values from

@@ -153,6 +153,7 @@ let simplify_set_of_closures original_env r
   let function_decls =
     Flambda.Function_declarations.update function_decls ~funs
   in
+(*
   let function_decls =
     (* CR mshinwell: I'm not sure about this "round" condition.  It seems
        though that doing [Unbox_returns] too early may be
@@ -169,6 +170,7 @@ let simplify_set_of_closures original_env r
       Unbox_returns.run ~continuation_uses:continuation_param_uses
         ~function_decls ~backend:(E.backend env)
   in
+*)
   let invariant_params =
     lazy (Invariant_params.Functions.invariant_params_in_recursion
       function_decls ~backend:(E.backend env))

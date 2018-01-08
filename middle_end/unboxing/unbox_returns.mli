@@ -21,7 +21,7 @@
 
 val run
    : continuation_uses:
-       Simplify_result.Continuation_uses.t Continuation.Map.t
+       Simplify_env_and_result.Result.Continuation_uses.t Continuation.Map.t
   -> function_decls:Flambda.Function_declarations.t
   -> backend:(module Backend_intf.S)
   -> Flambda.Function_declarations.t
