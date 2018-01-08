@@ -18,6 +18,4 @@
 
 (** Lift expressions to [Define_symbol] constructions. *)
 
-val lift
-   : (Flambda_static.Program.t
-  -> Flambda_static.Program.t) Flambda_type.with_importer
+val lift : Flambda_static.Program.t -> Flambda_static.Program.t

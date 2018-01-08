@@ -44,21 +44,34 @@ let static_structure name ~vars_with_kinds =
         | Value _ ->
           Block (Tag.Scannable.zero, Immutable,
             [Flambda_static.Of_kind_value.Dynamically_computed var])
-        | Naked_float -> Boxed_float (Var var)
-        | Naked_int32 -> Boxed_int32 (Var var)
-        | Naked_int64 -> Boxed_int64 (Var var)
-        | Naked_nativeint -> Boxed_nativeint (Var var)
-        | Naked_immediate -> Misc.fatal_errorf "Not yet implemented"
+        | Naked_number Naked_float -> Boxed_float (Var var)
+        | Naked_number Naked_int32 -> Boxed_int32 (Var var)
+        | Naked_number Naked_int64 -> Boxed_int64 (Var var)
+        | Naked_number Naked_nativeint -> Boxed_nativeint (Var var)
+        | Naked_number Naked_immediate ->
+          Misc.fatal_errorf "Not yet implemented"
+        | Fabricated _
+        | Phantom _ ->
+          (* CR mshinwell: Think about what to do here *)
+          Misc.fatal_error "Not yet implemented"
       in
       let prim : Flambda_primitive.t =
         let var = Simple.var var in
         match kind with
-        | Value _ -> Unary (Block_load (0, Not_a_float, Immutable), var)
-        | Naked_float -> Unary (Unbox_number Naked_float, var)
-        | Naked_int32 -> Unary (Unbox_number Naked_int32, var)
-        | Naked_int64 -> Unary (Unbox_number Naked_int64, var)
-        | Naked_nativeint -> Unary (Unbox_number Naked_nativeint, var)
-        | Naked_immediate -> Misc.fatal_errorf "Not yet implemented"
+        | Value _ ->
+          Binary (Block_load (Block Any_value, Immutable), var,
+            Simple.const (Tagged_immediate Immediate.zero))
+        | Naked_number Naked_float -> Unary (Unbox_number Naked_float, var)
+        | Naked_number Naked_int32 -> Unary (Unbox_number Naked_int32, var)
+        | Naked_number Naked_int64 -> Unary (Unbox_number Naked_int64, var)
+        | Naked_number Naked_nativeint ->
+          Unary (Unbox_number Naked_nativeint, var)
+        | Naked_number Naked_immediate ->
+          Misc.fatal_errorf "Not yet implemented"
+        | Fabricated _
+        | Phantom _ ->
+          (* CR mshinwell: Think about what to do here *)
+          Misc.fatal_error "Not yet implemented"
       in
       let binding : Flambda.Named.t = Prim (prim, dbg) in
       assign_symbols (index + 1) ~vars_with_kinds
@@ -104,6 +117,10 @@ let rec lift (expr : Flambda.Expr.t) ~to_copy =
       let computation : Program_body.computation =
         { expr = body;
           return_cont = name;
+          (* Since there is only one free continuation in the body of the
+             [Let_cont] and we know that to be a non-exception-handling
+             continuation, the body cannot raise any exceptions. *)
+          exception_cont = Continuation.create ();
           computed_values = vars_with_kinds;
         }
       in
@@ -181,6 +198,7 @@ let rec lift (expr : Flambda.Expr.t) ~to_copy =
       let computation : Program_body.computation =
         { expr;
           return_cont;
+          exception_cont = Continuation.create ();
           computed_values = vars_with_kinds;
         }
       in
@@ -219,7 +237,7 @@ let rec lift (expr : Flambda.Expr.t) ~to_copy =
 (* CR-someday mshinwell: Try to avoid having a separate substitution phase
    (so long as it doesn't complicate the code too much; the function above
    is already quite tricky). *)
-let introduce_symbols ~importer (defn : Program_body.definition) =
+let introduce_symbols (defn : Program_body.definition) =
   let computation_and_lifted =
     Misc.Stdlib.Option.map (fun (computation : Program_body.computation) ->
       let _free_conts, lifted, expr = lift computation.expr ~to_copy:[] in
@@ -237,7 +255,7 @@ let introduce_symbols ~importer (defn : Program_body.definition) =
             let to_copy =
               List.map (fun (var, kind, defining_expr) ->
                   let defining_expr =
-                    Flambda.Named.toplevel_substitution ~importer subst
+                    Flambda.Named.toplevel_substitution subst
                       defining_expr
                   in
                   var, kind, defining_expr)
@@ -247,7 +265,7 @@ let introduce_symbols ~importer (defn : Program_body.definition) =
               Misc.Stdlib.Option.map
                 (fun (computation : Program_body.computation) ->
                   let expr =
-                    Flambda.Expr.toplevel_substitution ~importer subst expr
+                    Flambda.Expr.toplevel_substitution subst expr
                   in
                   { computation with expr; })
                 defn.computation
@@ -288,11 +306,11 @@ let add_extracted lifted program_body =
     program_body
     (List.rev lifted)
 
-let rec lift_program_body ~importer (body : Flambda_static.Program_body.t)
+let rec lift_program_body (body : Flambda_static.Program_body.t)
       : Flambda_static.Program_body.t =
   let lift_define_symbol defn body ~rebuild =
-    let introduced, defn = introduce_symbols ~importer defn in
-    let body = lift_program_body ~importer body in
+    let introduced, defn = introduce_symbols defn in
+    let body = lift_program_body body in
     add_extracted introduced (rebuild defn body)
   in
   match body with
@@ -304,7 +322,7 @@ let rec lift_program_body ~importer (body : Flambda_static.Program_body.t)
       Program_body.Define_symbol_rec (defn, body))
   | Root _ -> body
 
-let lift ~importer (program : Flambda_static.Program.t) =
+let lift (program : Flambda_static.Program.t) =
   { program with
-    body = lift_program_body ~importer program.body;
+    body = lift_program_body program.body;
   }
