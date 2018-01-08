@@ -577,6 +577,10 @@ module type S = sig
     -> t
     -> 'kind ty_naked_number
 
+  val force_to_kind_naked_float
+     : t
+    -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number
+
   val force_to_kind_fabricated : t -> ty_fabricated
 
   val force_to_kind_phantom : t -> ty_phantom

@@ -1543,10 +1543,10 @@ let structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
           Boxed_number (Boxed_float ty_naked_number2) ->
         begin match
           prove_naked_float ~type_of_name
-            (of_ty_naked_number ty_naked_number1,
+            (of_ty_naked_number ty_naked_number1
               K.Naked_number.Naked_float),
           prove_naked_float ~type_of_name
-            (of_ty_naked_number ty_naked_number2,
+            (of_ty_naked_number ty_naked_number2
               K.Naked_number.Naked_float)
         with
         | Proved nums1, Proved nums2 ->
@@ -1558,10 +1558,10 @@ let structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
           Boxed_number (Boxed_int32 ty_naked_number2) ->
         begin match
           prove_naked_int32 ~type_of_name
-            (of_ty_naked_number ty_naked_number1,
+            (of_ty_naked_number ty_naked_number1
               K.Naked_number.Naked_int32),
           prove_naked_int32 ~type_of_name
-            (of_ty_naked_number ty_naked_number2,
+            (of_ty_naked_number ty_naked_number2
               K.Naked_number.Naked_int32)
         with
         | Proved nums1, Proved nums2 ->
@@ -1572,10 +1572,10 @@ let structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
           Boxed_number (Boxed_int64 ty_naked_number2) ->
         begin match
           prove_naked_int64 ~type_of_name
-            (of_ty_naked_number ty_naked_number1,
+            (of_ty_naked_number ty_naked_number1
               K.Naked_number.Naked_int64),
           prove_naked_int64 ~type_of_name
-            (of_ty_naked_number ty_naked_number2,
+            (of_ty_naked_number ty_naked_number2
               K.Naked_number.Naked_int64)
         with
         | Proved nums1, Proved nums2 ->
@@ -1586,10 +1586,10 @@ let structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
           Boxed_number (Boxed_nativeint ty_naked_number2) ->
         begin match
           prove_naked_nativeint ~type_of_name
-            (of_ty_naked_number ty_naked_number1,
+            (of_ty_naked_number ty_naked_number1
               K.Naked_number.Naked_nativeint),
           prove_naked_nativeint ~type_of_name
-            (of_ty_naked_number ty_naked_number2,
+            (of_ty_naked_number ty_naked_number2
               K.Naked_number.Naked_nativeint)
         with
         | Proved nums1, Proved nums2 ->

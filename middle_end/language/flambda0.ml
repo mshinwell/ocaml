@@ -396,14 +396,14 @@ module Switch = struct
         Targetint.OCaml.Map.iter (fun n l ->
             if !spc then fprintf ppf "@ " else spc := true;
             fprintf ppf "@[<hv 1>| %a ->@ goto %a@]"
-              Targetint.print n
+              Targetint.OCaml.print n
               Continuation.print l)
           arms
       | Fabricated arms ->
-        Targetint.OCaml.Map.iter (fun n l ->
+        Tag.Map.iter (fun tag l ->
             if !spc then fprintf ppf "@ " else spc := true;
             fprintf ppf "@[<hv 1>| tag %a ->@ goto %a@]"
-              Tag.print n
+              Tag.print tag
               Continuation.print l)
           arms
   end)
@@ -432,13 +432,21 @@ module rec Expr : sig
     | Invalid of invalid_term_semantics
 
   val create_let : Variable.t -> Flambda_kind.t -> Named.t -> t -> t
-  val create_switch
+  val create_int_switch
      : scrutinee:Name.t
-    -> arms:Continuation.t Targetint.Map.t
+    -> arms:Continuation.t Targetint.OCaml.Map.t
     -> Expr.t
-  val create_switch'
+  val create_int_switch'
      : scrutinee:Name.t
-    -> arms:Continuation.t Targetint.Map.t
+    -> arms:Continuation.t Targetint.OCaml.Map.t
+    -> Expr.t * bool
+  val create_tag_switch
+     : scrutinee:Name.t
+    -> arms:Continuation.t Tag.Map.t
+    -> Expr.t
+  val create_tag_switch'
+     : scrutinee:Name.t
+    -> arms:Continuation.t Tag.Map.t
     -> Expr.t * bool
   val free_names_advanced
      : ?ignore_uses_as_callee:unit
@@ -597,23 +605,33 @@ end = struct
     else
       Invalid Halt_and_catch_fire
 
-  module Create_switch (M : Map.S) = struct
+  module Create_switch (S : sig
+    module T : Identifiable.S
+    val create : Continuation.t T.Map.t -> Switch.t
+  end) = struct
     let create_switch' ~scrutinee ~arms =
-      let num_possible_values = M.Map.cardinal arms in
+      let num_possible_values = S.T.Map.cardinal arms in
       if num_possible_values < 1 then
         invalid (), true
       else
-        match M.Map.get_singleton arms with
+        match S.T.Map.get_singleton arms with
         | Some (_arm, cont) ->
           let t : t = Apply_cont (cont, None, []) in
           t, true
         | None ->
-          let t : t = Switch (scrutinee, { arms; }) in
+          let t : t = Switch (scrutinee, S.create arms) in
           t, false
   end
 
-  module Create_int_switch = Create_switch (Targetint.OCaml)
-  module Create_tag_switch = Create_switch (Tag)
+  module Create_int_switch = Create_switch (struct
+    module T = Targetint.OCaml
+    let create map : Switch.t = Value map
+  end)
+
+  module Create_tag_switch = Create_switch (struct
+    module T = Tag
+    let create map : Switch.t = Fabricated map
+  end)
 
   let create_int_switch' = Create_int_switch.create_switch'
   let create_tag_switch' = Create_tag_switch.create_switch'
@@ -661,8 +679,10 @@ end = struct
         specialise = _;
         } ->
       Continuation.Set.of_list [continuation; exn_continuation]
-    | Switch (_scrutinee, switch) ->
-      Continuation.Set.of_list (Targetint.Map.data switch.arms)
+    | Switch (_scrutinee, Value int_switch) ->
+      Continuation.Set.of_list (Targetint.OCaml.Map.data int_switch)
+    | Switch (_scrutinee, Fabricated tag_switch) ->
+      Continuation.Set.of_list (Tag.Map.data tag_switch)
     | Invalid _ -> Continuation.Set.empty
 
   let create_let var kind defining_expr body : t =
@@ -973,36 +993,46 @@ end = struct
     let simple = Simple.name name in
     match kind with
     | Value _ -> Simple simple, kind
-    | Naked_immediate ->
+    | Naked_number Naked_immediate ->
       Misc.fatal_error "Not yet supported"
-    | Naked_float ->
+    | Naked_number Naked_float ->
       Prim (Unary (Box_number Naked_float, simple), dbg),
         K.value Definitely_pointer
-    | Naked_int32 ->
+    | Naked_number Naked_int32 ->
       Prim (Unary (Box_number Naked_int32, simple), dbg),
         K.value Definitely_pointer
-    | Naked_int64 ->
+    | Naked_number Naked_int64 ->
       Prim (Unary (Box_number Naked_int64, simple), dbg),
         K.value Definitely_pointer
-    | Naked_nativeint ->
+    | Naked_number Naked_nativeint ->
       Prim (Unary (Box_number Naked_nativeint, simple), dbg),
         K.value Definitely_pointer
+    | Fabricated _ ->
+      Misc.fatal_error "Cannot box values of [Fabricated] kind"
+    | Phantom _ ->
+      (* CR mshinwell: this should probably be supported? *)
+      Misc.fatal_error "Cannot box values of [Phantom] kind"
 
   let unbox_value name (kind : Flambda_kind.t) dbg : Named.t * Flambda_kind.t =
     let simple = Simple.name name in
     match kind with
     | Value _ -> Simple simple, kind
-    | Naked_immediate ->
+    | Naked_number Naked_immediate ->
       Misc.fatal_error "Not yet supported"
-    | Naked_float ->
+    | Naked_number Naked_float ->
       Prim (Unary (Unbox_number Naked_float, simple), dbg), K.naked_float ()
-    | Naked_int32 ->
+    | Naked_number Naked_int32 ->
       Prim (Unary (Unbox_number Naked_int32, simple), dbg), K.naked_int32 ()
-    | Naked_int64 ->
+    | Naked_number Naked_int64 ->
       Prim (Unary (Unbox_number Naked_int64, simple), dbg), K.naked_int64 ()
-    | Naked_nativeint ->
+    | Naked_number Naked_nativeint ->
       Prim (Unary (Unbox_number Naked_nativeint, simple), dbg),
         K.naked_nativeint ()
+    | Fabricated _ ->
+      Misc.fatal_error "Cannot box values of [Fabricated] kind"
+    | Phantom _ ->
+      (* CR mshinwell: this should probably be supported? *)
+      Misc.fatal_error "Cannot box values of [Phantom] kind"
 
   let equal ~equal_type t1 t2 =
     match t1, t2 with
@@ -1741,8 +1771,8 @@ end = struct
     kind : Flambda_kind.t;
   }
 
-  let create ~importer ~type_of_name param ty =
-    let kind = Flambda_type.kind ~importer ~type_of_name ty in
+  let create ~type_of_name param ty =
+    let kind = Flambda_type.kind ~type_of_name ty in
     { param;
       equalities = Flambda_primitive.With_fixed_value.Set.empty;
       ty;
@@ -1752,7 +1782,7 @@ end = struct
   let create_from_kind param kind =
     { param;
       equalities = Flambda_primitive.With_fixed_value.Set.empty;
-      ty = Flambda_type.unknown kind Other;
+      ty = Flambda_type.unknown kind;
       kind;
     }
 

@@ -64,6 +64,8 @@ module type Number_kind_common = sig
 
   val this_unboxed : Num.t -> Flambda_type.t
   val these_unboxed : Num.Set.t -> Flambda_type.t
+
+  val term_unboxed : Num.t -> Flambda.Named.t
 end
 
 module type Number_kind = sig
@@ -83,9 +85,9 @@ module type Int_number_kind = sig
     val shift_right_logical : t -> Immediate.t -> t
     val swap_byte_endianness : t -> t
     val neg : t -> t
-  end
 
-  val compare_unsigned : t -> t -> int
+    val compare_unsigned : t -> t -> int
+  end
 
   include Number_kind_common with module Num := Num
 
@@ -129,8 +131,8 @@ module For_tagged_immediates : Int_number_kind = struct
   module Num = struct
     include Immediate
 
-    let compare_unsigned t1 t2 =
-      Targetint.compare_unsigned t1 t2
+    let compare_unsigned _t1 _t2 =
+      Misc.fatal_error "Not yet implemented"
 
     let div t1 t2 =
       if Immediate.equal t2 Immediate.zero then None
@@ -177,6 +179,9 @@ module For_tagged_immediates : Int_number_kind = struct
   let unboxed_prover = T.prove_tagged_immediate
   let this_unboxed = T.this_tagged_immediate
   let these_unboxed = T.these_tagged_immediates
+
+  let term_unboxed imm : Flambda.Named.t =
+    Simple (Simple.const (Tagged_immediate imm))
 end
 
 module For_floats : Boxable_number_kind = struct
@@ -216,6 +221,9 @@ module For_floats : Boxable_number_kind = struct
   let these_boxed = T.these_boxed_floats
 
   let box = T.box_float
+
+  let term_unboxed f : Flambda.Named.t =
+    Simple (Simple.const (Naked_float f))
 end
 
 module For_int32s : Boxable_int_number_kind = struct
@@ -267,6 +275,9 @@ module For_int32s : Boxable_int_number_kind = struct
   let these_boxed = T.these_boxed_int32s
 
   let box = T.box_int32
+
+  let term_unboxed i : Flambda.Named.t =
+    Simple (Simple.const (Naked_int32 i))
 end
 
 module For_int64s : Boxable_int_number_kind = struct
@@ -318,6 +329,9 @@ module For_int64s : Boxable_int_number_kind = struct
   let these_boxed = T.these_boxed_int64s
 
   let box = T.box_int64
+
+  let term_unboxed i : Flambda.Named.t =
+    Simple (Simple.const (Naked_int64 i))
 end
 
 module For_nativeints : Boxable_int_number_kind = struct
@@ -369,4 +383,7 @@ module For_nativeints : Boxable_int_number_kind = struct
   let these_boxed = T.these_boxed_nativeints
 
   let box = T.box_nativeint
+
+  let term_unboxed i : Flambda.Named.t =
+    Simple (Simple.const (Naked_nativeint i))
 end
