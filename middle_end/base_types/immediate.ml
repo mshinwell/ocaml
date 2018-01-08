@@ -107,10 +107,15 @@ let map t ~f =
     print_as_char = t.print_as_char;
   }
 
-let set_to_targetint_set set =
+let set_to_targetint_set (set : Set.t) : TO.Set.t =
   Set.fold (fun t targetints -> TO.Set.add t.value targetints)
     set
     TO.Set.empty
+
+let set_of_targetint_set (tis : TO.Set.t) : Set.t =
+  TO.Set.fold (fun i set -> Set.add (int i) set)
+    tis
+    Set.empty
 
 let all_bools =
   Set.of_list [bool_true; bool_false]
@@ -118,25 +123,31 @@ let all_bools =
 module Pair = TO.Pair
 
 let cross_product = TO.cross_product
+
+let map_value f t =
+  { t with
+    value = f t.value;
+  }
+
 let get_least_significant_16_bits_then_byte_swap
-  = TO.get_least_significant_16_bits_then_byte_swap
-let swap_byte_endianness = TO.swap_byte_endianness
-let shift_right_logical = TO.shift_right_logical
-let shift_right = TO.shift_right
-let shift_left = TO.shift_left
-let xor = TO.xor
-let or_ = TO.or_
-let and_ = TO.and_
-let mod_ = TO.mod_
-let div = TO.div
-let mul = TO.mul
-let sub = TO.sub
-let add = TO.add
-let neg = TO.neg
-let set_of_targetint_set = TO.set_of_targetint_set
-let minus_one = TO.minus_one
-let zero = TO.zero
-let one = TO.one
+  = map_value TO.get_least_significant_16_bits_then_byte_swap
+let swap_byte_endianness = map_value TO.swap_byte_endianness
+let shift_right_logical = map_value TO.shift_right_logical
+let shift_right = map_value TO.shift_right
+let shift_left = map_value TO.shift_left
+let xor = map_value TO.xor
+let or_ = map_value TO.or_
+let and_ = map_value TO.and_
+let mod_ = map_value TO.mod_
+let div = map_value TO.div
+let mul = map_value TO.mul
+let sub = map_value TO.sub
+let add = map_value TO.add
+let neg = map_value TO.neg
+
+let minus_one = int TO.minus_one
+let zero = int TO.zero
+let one = int TO.one
 
 module Or_unknown = struct
   type nonrec t =

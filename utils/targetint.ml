@@ -73,6 +73,8 @@ module type S = sig
 
   include Identifiable.S with type t := t
 
+  module Targetint_set = Set
+
   module Pair : sig
     type nonrec t = t * t
     include Identifiable.S with type t := t
@@ -86,6 +88,7 @@ module type S = sig
     val min : t
     val max : t
     val max_string_length : t
+    val minus_one : t
     val zero : t
     val one : t
     val ten : t
@@ -108,9 +111,25 @@ module type S = sig
 
     val neg : t -> t
     val get_least_significant_16_bits_then_byte_swap : t -> t
+    val swap_byte_endianness : t -> t
+
+    val add : t -> t -> t
     val sub : t -> t -> t
+    val mul : t -> t -> t
+    val mod_ : t -> t -> t
+    val div : t -> t -> t
+
+    val and_ : t -> t -> t
+    val or_ : t -> t -> t
+    val xor : t -> t -> t
+
+    val shift_left : t -> int -> t
+    val shift_right : t -> int -> t
+    val shift_right_logical : t -> int -> t
 
     include Identifiable.S with type t := t
+
+    val set_of_targetint_set : Targetint_set.t -> Set.t
 
     module Pair : sig
       type nonrec t = t * t
@@ -175,6 +194,8 @@ module Int32 = struct
   let max t1 t2 =
     if compare t1 t2 <= 0 then t2 else t1
 
+  module Targetint_set = Set
+
   module Pair = struct
     type nonrec t = t * t
 
@@ -207,6 +228,7 @@ module Int32 = struct
 
     type targetint_ocaml = t
 
+    let minus_one = (-1l)
     let zero = 0l
     let one = 1l
     let ten = 10l
@@ -219,6 +241,20 @@ module Int32 = struct
 
     let sub = Int32.sub
     let neg = Int32.neg
+
+    let swap_byte_endianness = swap_byte_endianness
+
+    let shift_left = Int32.shift_left
+    let shift_right = Int32.shift_right
+    let shift_right_logical = Int32.shift_right_logical
+
+    let xor = Int32.logxor
+    let or_ = Int32.logor
+    let and_ = Int32.logand
+    let mod_ = Int32.rem
+    let div = Int32.div
+    let mul = Int32.mul
+    let add = Int32.add
 
     let bottom_byte_to_int t =
       Int32.to_int (Int32.logand t hex_ff)
@@ -275,6 +311,8 @@ module Int32 = struct
 
     module Pair = Pair
     let cross_product = cross_product
+
+    let set_of_targetint_set set = set
 
     module Or_unknown = struct
       type nonrec t =
@@ -336,6 +374,8 @@ module Int64 = struct
   let max t1 t2 =
     if compare t1 t2 <= 0 then t2 else t1
 
+  module Targetint_set = Set
+
   module Pair = struct
     type nonrec t = t * t
 
@@ -368,6 +408,7 @@ module Int64 = struct
 
     type targetint_ocaml = t
 
+    let minus_one = (-1L)
     let zero = 0L
     let one = 1L
     let ten = 10L
@@ -380,6 +421,20 @@ module Int64 = struct
     (* XXX Implement correctly *)
     let sub = Int64.sub
     let neg = Int64.neg
+
+    let shift_left = Int64.shift_left
+    let shift_right = Int64.shift_right
+    let shift_right_logical = Int64.shift_right_logical
+
+    let xor = Int64.logxor
+    let or_ = Int64.logor
+    let and_ = Int64.logand
+    let mod_ = Int64.rem
+    let div = Int64.div
+    let mul = Int64.mul
+    let add = Int64.add
+
+    let swap_byte_endianness = swap_byte_endianness
 
     let bottom_byte_to_int t =
       Int64.to_int (Int64.logand t hex_ff)
@@ -427,6 +482,8 @@ module Int64 = struct
 
     module Pair = Pair
     let cross_product = cross_product
+
+    let set_of_targetint_set set = set
 
     (* CR mshinwell: share code with 32-bit version above *)
     module Or_unknown = struct
