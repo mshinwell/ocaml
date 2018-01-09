@@ -268,7 +268,7 @@ end = struct
     | Some _ -> true
 
   let mem_name t (name : Name.t) =
-    match simple with
+    match name with
     | Var var -> mem_variable t var
     | Symbol sym -> mem_symbol t sym
 

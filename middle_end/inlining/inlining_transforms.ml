@@ -19,6 +19,7 @@
 module B = Inlining_cost.Benefit
 module E = Simplify_env_and_result.Env
 module R = Simplify_env_and_result.Result
+module T = Flambda_type
 
 (*
 
@@ -38,7 +39,7 @@ let which_function_parameters_can_we_specialise ~params ~args
           spec_args
       in
       let worth_specialising_args =
-        if Flambda_type.useful ty
+        if T.useful ty
           && Variable.Map.mem var (Lazy.force invariant_params)
         then
           Variable.Set.add var worth_specialising_args
@@ -57,12 +58,12 @@ let which_function_parameters_can_we_specialise ~params ~args
     user-specified function as an [Flambda.Named.t] value that projects the
     variable from its closure. *)
 let fold_over_projections_of_vars_bound_by_closure ~callee's_closure_id
-      ~callee ~(set_of_closures : Flambda_type.set_of_closures) dbg
+      ~callee ~(set_of_closures : T.set_of_closures) dbg
       ~init ~f =
   Var_within_closure.Map.fold (fun var _ty acc ->
       let var_map = Closure_id.Map.singleton callee's_closure_id var in
       let expr : Flambda.Named.t =
-        Prim (Unary (Project_var var_map, callee), dbg)
+        Prim (Unary (Project_var var_map, Simple.name callee), dbg)
       in
       f ~acc ~var ~expr)
     set_of_closures.closure_elements
@@ -76,8 +77,8 @@ let set_inline_attribute_on_all_apply body inline specialise =
 
 (** Assign fresh names for a function's parameters and rewrite the body to
     use these new names. *)
-let copy_of_function's_body_with_freshened_params env
-      ~(function_decl : Flambda_type.inlinable_function_declaration) =
+let copy_of_function's_body_with_freshened_params _env
+      ~(function_decl : T.inlinable_function_declaration) =
   let params = function_decl.params in
   let param_vars =
     List.map (fun (param, _ty) -> Parameter.var param) params
@@ -121,12 +122,12 @@ let copy_of_function's_body_with_freshened_params env
     (= "variables bound by the closure"), and any function identifiers
     introduced by the corresponding set of closures. *)
 let inline_by_copying_function_body ~env ~r
-      ~(set_of_closures : Flambda_type.set_of_closures)
+      ~(set_of_closures : T.set_of_closures)
       ~callee
       ~(inline_requested : Flambda.inline_attribute)
       ~(specialise_requested : Flambda.specialise_attribute)
       ~callee's_closure_id
-      ~(function_decl : Flambda_type.inlinable_function_declaration) ~args
+      ~(function_decl : T.inlinable_function_declaration) ~args
       ~continuation ~dbg =
   assert (E.mem_name env callee);
   assert (List.for_all (E.mem_simple env) args);
@@ -157,12 +158,10 @@ let inline_by_copying_function_body ~env ~r
   let handlers =
     (* CR mshinwell: this occurs in [Inlining_decision] too, factor out *)
     let return_arity =
-      List.map (fun ty -> Flambda_type.kind ty) function_decl.result
+      List.map (fun ty -> (E.type_accessor env T.kind) ty) function_decl.result
     in
-    let parameter_types =
-      (E.type_accessor env Flambda_type.unknown_types_from_arity) return_arity
-    in
-    Flambda_utils.make_let_cont_alias
+    let parameter_types = T.unknown_types_from_arity return_arity in
+    (E.type_accessor env Flambda_utils.make_let_cont_alias)
       ~name:function_decl.continuation_param
       ~alias_of:continuation
       ~parameter_types
@@ -173,8 +172,8 @@ let inline_by_copying_function_body ~env ~r
     let bindings =
       List.map2 (fun (param, ty) arg ->
           let var = Parameter.var param in
-          let kind = Flambda_type.kind ty in
-          var, kind, Flambda.Named.Var arg)
+          let kind = (E.type_accessor env T.kind) ty in
+          var, kind, Flambda.Named.Simple arg)
         freshened_params
         args
     in
@@ -183,10 +182,10 @@ let inline_by_copying_function_body ~env ~r
   (* Add bindings for the variables bound by the closure. *)
   let bindings_for_vars_bound_by_closure_and_params_to_args =
     fold_over_projections_of_vars_bound_by_closure ~callee's_closure_id
-      ~callee ~set_of_closures ~init:bindings_for_params_to_args
+      ~callee ~set_of_closures dbg ~init:bindings_for_params_to_args
       ~f:(fun ~acc:body ~var ~expr ->
         let var = Var_within_closure.unwrap var in
-        let kind = Flambda_kind.value Must_scan in
+        let kind = Flambda_kind.value Unknown in
         Flambda.Expr.create_let var kind expr body)
   in
   (* Add bindings for variables corresponding to the functions introduced by
@@ -207,11 +206,9 @@ let inline_by_copying_function_body ~env ~r
           Closure_id.unwrap another_closure_in_set
         in
         Flambda.Expr.create_let another_closure_in_set
-          (Flambda_kind.value Must_scan)
-          (Move_within_set_of_closures {
-            closure = callee;
-            move;
-          })
+          (Flambda_kind.value Definitely_pointer)
+          (Prim (Unary (Move_within_set_of_closures move, Simple.name callee),
+            dbg))
           expr)
       all_closure_ids_in_set
       bindings_for_vars_bound_by_closure_and_params_to_args
