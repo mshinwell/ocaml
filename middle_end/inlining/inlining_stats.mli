@@ -36,6 +36,7 @@ module Closure_stack : sig
   val note_entering_inlined : t -> t
   val note_entering_specialised : t -> closure_ids:Closure_id.Set.t -> t
 
+  val print : Format.formatter -> t -> unit
 end
 
 val record_decision

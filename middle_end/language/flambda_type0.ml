@@ -2945,27 +2945,32 @@ end) = struct
   module Typing_environment = struct
     type t = typing_environment
 
+    (* CR mshinwell: Add invariant check.  First one: symbols should never be
+       existential *)
+
     let print = print_typing_environment
     let create = create_typing_environment
 
     let meet = Meet_and_join.meet_typing_environment
     let join = Meet_and_join.join_typing_environment
 
+    let add_or_replace t name scope_level ty =
+      let names_to_types = Name.Map.add name ty t.names_to_types in
+      let levels_to_names =
+        Scope_level.Map.update scope_level
+          (function
+             | None -> Some (Name.Set.singleton name)
+             | Some names -> Some (Name.Set.add name names))
+          t.levels_to_names
+      in
+      { t with
+        names_to_types;
+        levels_to_names;
+      }
+
     let add t name scope_level ty =
       match Name.Map.find name t.names_to_types with
-      | exception Not_found ->
-        let names_to_types = Name.Map.add name ty t.names_to_types in
-        let levels_to_names =
-          Scope_level.Map.update scope_level
-            (function
-               | None -> Some (Name.Set.singleton name)
-               | Some names -> Some (Name.Set.add name names))
-            t.levels_to_names
-        in
-        { t with
-          names_to_types;
-          levels_to_names;
-        }
+      | exception Not_found -> add_or_replace t name scope_level ty
       | _ty ->
         Misc.fatal_errorf "Cannot rebind %a in environment: %a"
           Name.print name
@@ -2990,16 +2995,37 @@ end) = struct
      (* XXX     let ty = rename_variables t freshening in *)
           ty, Existential
 
+    let find_opt t name =
+      match Name.Map.find name t.names_to_types with
+      | exception Not_found -> None
+      | ty ->
+        let binding_type =
+          if Name.Set.mem name t.existentials then Existential
+          else Normal
+        in
+        match binding_type with
+        | Normal -> Some (ty, Normal)
+        | Existential ->
+     (* XXX     let ty = rename_variables t freshening in *)
+          Some (ty, Existential)
+
     let cut _t ~existential_if_defined_later_than:_ =
       assert false
-(*
+(* N.B.
       let existentials =
         Scope_level.Map.fold (fun scope_level names resulting_existentials ->
             let will_be_existential =
               Scope_level.(>=) scope_level minimum_scope_level_to_be_existential
             in
             if will_be_existential then
-              Name.Set.union names resulting_existentials
+              let non_symbols =
+                Name.Set.filter (fun (name : Name.t) ->
+                    match name with
+                    | Var _ -> true
+                    | Symbol _ -> false)
+                  names
+              in
+              Name.Set.union non_symbols resulting_existentials
             else
               resulting_existentials)
           t.levels_to_names
@@ -3008,7 +3034,8 @@ end) = struct
       let existential_freshening =
         Name.Set.fold (fun (name : Name.t) freshening ->
             match name with
-            | Symbol _ -> freshening
+            | Symbol _ ->
+              Misc.fatal_error "Symbols cannot be existentially bound"
             | Var var ->
               let new_var = Variable.rename var in
               Freshening.add_variable freshening var new_var)

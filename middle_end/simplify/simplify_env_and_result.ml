@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2017 OCamlPro SAS                                    *)
-(*   Copyright 2014--2017 Jane Street Group LLC                           *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,253 +14,47 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module T = Flambda_type
-
-module Continuation_uses = struct
-  module Use = struct
-    module Kind = struct
-      type t =
-        | Not_inlinable_or_specialisable of T.t list
-        | Inlinable_and_specialisable of
-            (Variable.t * T.t) list
-        | Only_specialisable of (Variable.t * T.t) list
-
-      let print ppf t =
-        let print_arg_and_approx ppf (arg, approx) =
-          Format.fprintf ppf "(%a %a)"
-            Variable.print arg
-            A.print approx
-        in
-        match t with
-        | Not_inlinable_or_specialisable args_approxs ->
-          Format.fprintf ppf "(Not_inlinable_or_specialisable %a)"
-            (Format.pp_print_list A.print) args_approxs
-        | Inlinable_and_specialisable args_and_approxs ->
-          Format.fprintf ppf "(Inlinable_and_specialisable %a)"
-            (Format.pp_print_list print_arg_and_approx) args_and_approxs
-        | Only_specialisable args_and_approxs ->
-          Format.fprintf ppf "(Only_specialisable %a)"
-            (Format.pp_print_list print_arg_and_approx) args_and_approxs
-
-      let args t =
-        match t with
-        | Not_inlinable_or_specialisable _ -> []
-        | Inlinable_and_specialisable args_and_approxs
-        | Only_specialisable args_and_approxs ->
-          List.map (fun (arg, _approx) -> arg) args_and_approxs
-
-      let args_approxs t =
-        match t with
-        | Not_inlinable_or_specialisable args_approxs -> args_approxs
-        | Inlinable_and_specialisable args_and_approxs
-        | Only_specialisable args_and_approxs ->
-          List.map (fun (_arg, approx) -> approx) args_and_approxs
-
-(*
-      let has_useful_approx t =
-        List.exists (fun approx -> A.useful approx) (args_approxs t)
-*)
-
-      let is_inlinable t =
-        match t with
-        | Not_inlinable_or_specialisable _ -> false
-        | Inlinable_and_specialisable _ -> true
-        | Only_specialisable _ -> false
-
-      let is_specialisable t =
-        match t with
-        | Not_inlinable_or_specialisable _ -> None
-        | Inlinable_and_specialisable args_and_approxs
-        | Only_specialisable args_and_approxs -> Some args_and_approxs
-    end
-
-    type t = {
-      kind : Kind.t;
-      env : Env.t;
-    }
-
-    let print ppf t = Kind.print ppf t.kind
-  end
-
-  type t = {
-    backend : (module Backend_intf.S);
-    continuation : Continuation.t;
-    definition_scope_level : Scope_level.t;
-    application_points : Use.t list;
-  }
-
-  let create ~continuation ~definition_scope_level ~backend =
-    { backend;
-      continuation;
-      definition_scope_level;
-      application_points = [];
-    }
-
-  let union t1 t2 =
-    if not (Continuation.equal t1.continuation t2.continuation) then begin
-      Misc.fatal_errorf "Cannot union [Continuation_uses.t] for two different \
-          continuations (%a and %a)"
-        Continuation.print t1.continuation
-        Continuation.print t2.continuation
-    end;
-    { backend = t1.backend;
-      continuation = t1.continuation;
-      scope_level = t1.scope_level;
-      application_points = t1.application_points @ t2.application_points;
-    }
-
-  let print ppf t =
-    Format.fprintf ppf "(%a application_points = (%a))"
-      Continuation.print t.continuation
-      (Format.pp_print_list Use.print) t.application_points
-
-  let add_use t env kind =
-    { t with
-      application_points = { Use. env; kind; } :: t.application_points;
-    }
-
-  let num_application_points t : Num_continuation_uses.t =
-    match t.application_points with
-    | [] -> Zero
-    | [_] -> One
-    | _ -> Many
-
-  let unused t =
-    match num_application_points t with
-    | Zero -> true
-    | One | Many -> false
-
-  let linearly_used t =
-    match num_application_points t with
-    | Zero -> false
-    | One -> true
-    | Many -> false
-
-  let num_uses t = List.length t.application_points
-
-  let linearly_used_in_inlinable_position t =
-    match t.application_points with
-    | [use] when Use.Kind.is_inlinable use.kind -> true
-    | _ -> false
-
-  let join_of_arg_tys_opt t =
-    match t.application_points with
-    | [] -> None
-    | use::uses ->
-      let arg_tys, env =
-        List.fold_left (fun (arg_tys, env) (use : Use.t) ->
-            let arg_tys' = Use.Kind.arg_tys use.kind in
-            if List.length arg_tys <> List.length arg_tys' then begin
-              Misc.fatal_errorf "join_of_arg_tys_opt %a: approx length %d, \
-                  use length %d"
-                Continuation.print t.continuation
-                (List.length arg_tys) (List.length arg_tys')
-            end;
-            let this_env =
-              T.Typing_environment.cut (E.get_typing_environment use.env)
-                ~existential_if_defined_later_than:t.definition_scope_level
-            in
-            let arg_tys =
-              List.map2 (fun result this_ty ->
-                  let this_ty =
-                    (Env.type_accessor use.env T.add_judgements)
-                      this_ty this_env
-                  in
-                  (Env.type_accessor use.env T.join) result this_ty)
-                arg_tys arg_tys'
-            in
-            let env =
-              (* XXX Which environment should be used here for
-                 [type_of_name]? *)
-              (Env.type_accessor env T.Typing_environment.join) env this_env
-            in
-            arg_tys, env)
-          (Use.Kind.arg_tys use.kind, T.Typing_environment.create ())
-          uses
-      in
-      Some (arg_tys, env)
-
-  let join_of_arg_tys t ~arity ~default_env =
-    match join_of_arg_tys_opt t with
-    | None -> T.bottom_types_from_arity arity, default_env
-    | Some join -> join
-
-  let application_points t = t.application_points
-(*
-  let filter_out_non_useful_uses t =
-    (* CR mshinwell: This should check that the approximation is always
-       better than the join.  We could do this easily by adding an equality
-       function to T and then using that in conjunction with
-       the "join" function *)
-    let application_points =
-      List.filter (fun (use : Use.t) ->
-          Use.Kind.has_useful_approx use.kind)
-        t.application_points
-    in
-    { t with application_points; }
-*)
-
-  let update_use_environments t ~if_present_in_env ~then_add_to_env =
-    let application_points =
-      List.map (fun (use : Use.t) ->
-          if Env.mem_continuation use.env if_present_in_env then
-            let new_cont, approx = then_add_to_env in
-            let env = Env.add_continuation use.env new_cont approx in
-            { use with env; }
-          else
-            use)
-        t.application_points
-    in
-    { t with application_points; }
-end
-
-module Continuation_usage_snapshot = struct
-  type t = {
-    used_continuations : Continuation_uses.t Continuation.Map.t;
-    defined_continuations :
-      (Continuation_uses.t * Continuation_approx.t * Env.t
-          * Asttypes.rec_flag)
-        Continuation.Map.t;
-  }
-
-  let continuations_defined_between_snapshots ~before ~after =
-    Continuation.Set.diff
-      (Continuation.Map.keys after.defined_continuations)
-      (Continuation.Map.keys before.defined_continuations)
-end
+module TE = Flambda_type.Typing_environment
 
 module rec Env : sig
-  include Simplify_env_and_result_intf.Env with type result = Result.t
+  include Simplify_env_and_result_intf.Env
+    with type result = Result.t
+    with type continuation_uses = Result.Continuation_uses.t
 end = struct
+  type result = Result.t
+  type continuation_uses = Result.Continuation_uses.t
+
   type t = {
     backend : (module Backend_intf.S);
     simplify_toplevel:(
          t
-      -> Simplify_result.t
+      -> Result.t
       -> Flambda.Expr.t
       -> continuation:Continuation.t
+      -> exn_continuation:Continuation.t
       -> descr:string
-      -> Flambda.Expr.t * Simplify_result.t);
+      -> Flambda.Expr.t * Result.t * Result.Continuation_uses.t);
     simplify_expr:(
          t
-      -> Simplify_result.t
+      -> Result.t
       -> Flambda.Expr.t
-      -> Flambda.Expr.t * Simplify_result.t);
-    simplify_apply_cont_to_cont:(
-         ?don't_record_use:unit
-      -> t
-      -> Simplify_result.t
+      -> Flambda.Expr.t * Result.t);
+    simplify_continuation_use_cannot_inline:(
+         t
+      -> Result.t
       -> Continuation.t
-      -> arg_tys:Flambda_type.t list
-      -> Continuation.t * Simplify_result.t);
+      -> arity:Flambda_arity.t
+      -> Continuation.t * Result.t);
     round : int;
-    variables : Flambda_type.t Variable.Map.t;
-    mutable_variables : Flambda_type.t Mutable_variable.Map.t;
-    symbols : Flambda_type.Of_symbol.t Symbol.Map.t;
-    continuations : Continuation_approx.t Continuation.Map.t;
-    projections : Variable.t Projection.Map.t;
+    typing_environment : TE.t;
+    mutable_variables : T.t Mutable_variable.Map.t;
+    continuations : (Scope_level.t * Continuation_approx.t) Continuation.Map.t;
+    continuation_scope_level : Scope_level.t;
+(*    projections : Variable.t Projection.Map.t; *)
+    (* CR mshinwell: but we do need the CSEed pure primitives *)
     current_functions : Set_of_closures_origin.Set.t;
     (* The functions currently being declared: used to avoid inlining
        recursively *)
@@ -279,19 +73,22 @@ end = struct
     closure_depth : int;
     inlining_stats_closure_stack : Inlining_stats.Closure_stack.t;
     inlined_debuginfo : Debuginfo.t;
-    continuation_scope_level : int;
   }
 
   let create ~never_inline ~allow_continuation_inlining
         ~allow_continuation_specialisation ~round ~backend
-        ~simplify_toplevel ~simplify_expr ~simplify_apply_cont_to_cont =
+        ~simplify_toplevel ~simplify_expr
+        ~simplify_continuation_use_cannot_inline =
     { backend;
       round;
-      variables = Variable.Map.empty;
+      simplify_toplevel;
+      simplify_expr;
+      simplify_continuation_use_cannot_inline;
+      typing_environment = TE.create ();
       mutable_variables = Mutable_variable.Map.empty;
-      symbols = Symbol.Map.empty;
       continuations = Continuation.Map.empty;
-      projections = Projection.Map.empty;
+      continuation_scope_level = Scope_level.initial;
+(*      projections = Projection.Map.empty; *)
       current_functions = Set_of_closures_origin.Set.empty;
       inlining_level = 0;
       inside_branch = 0;
@@ -308,70 +105,206 @@ end = struct
       inlining_stats_closure_stack =
         Inlining_stats.Closure_stack.create ();
       inlined_debuginfo = Debuginfo.none;
-      simplify_toplevel;
-      simplify_expr;
-      simplify_apply_cont_to_cont;
-      continuation_scope_level = 0;
     }
 
+  let print_scope_level_and_continuation_approx ppf (level, approx) =
+    Format.fprintf ppf "@[((scope_level %a)@ (approx %a))@]"
+      Scope_level.print level
+      Continuation_approx.print approx
+
   let print ppf t =
-    Format.fprintf ppf
-      "Environment maps: %a@.Projections: %a@.Freshening: %a@.\
-        Continuations: %a@.Currently inside functions: %a@.\
-        Never inline: %b@.Never inline inside closures: %b@.\
-        Never inline outside closures: %b@."
-      Variable.Set.print (Variable.Map.keys t.variables)
-      (Projection.Map.print Variable.print) t.projections
-      Freshening.print t.freshening
-      (Continuation.Map.print Continuation_approx.print) t.continuations
+    Format.fprintf ppf "@[(\
+        @[(round %d)@]@ \
+        @[(typing_environment %a)@]@ \
+        @[(mutable_variables %a)@]@ \
+        @[(continuations %a)@]@ \
+        @[(continuation_scope_level %a)@]\
+        @[(current_functions %a)@]@ \
+        @[(inlining_level %d)@]@ \
+        @[(inside_branch %d)@]@ \
+        @[(freshening %a)@]@ \
+        @[(never_inline %b)@]@ \
+        @[(never_inline_inside_closures %b)@]@ \
+        @[(never_inline_outside_closures %b)@]@ \
+        @[(allow_continuation_inlining %b)@]@ \
+        @[(allow_continuation_specialisation %b)@]@ \
+        @[(unroll_counts %a)@]@ \
+        @[(inlining_counts %a)@]@ \
+        @[(actively_unrolling %a)@]@ \
+        @[(closure_depth %d)@]@ \
+        @[(inlining_stats_closure_stack %a)@]@ \
+        @[(inlined_debuginfo %a)@]@ \
+        )@]"
+      t.round
+      TE.print t.typing_environment
+      (Mutable_variable.Map.print T.print) t.mutable_variables
+      (Continuation.Map.print print_scope_level_and_continuation_approx)
+        t.continuations
+      Scope_level.print t.continuation_scope_level
       Set_of_closures_origin.Set.print t.current_functions
+      t.inlining_level
+      t.inside_branch
+      Freshening.print t.freshening
       t.never_inline
       t.never_inline_inside_closures
       t.never_inline_outside_closures
+      t.allow_continuation_inlining
+      t.allow_continuation_specialisation
+      (Set_of_closures_origin.Map.print Format.pp_print_int) t.unroll_counts
+      (Closure_origin.Map.print Format.pp_print_int) t.inlining_counts
+      (Set_of_closures_origin.Map.print Format.pp_print_int)
+        t.actively_unrolling
+      t.closure_depth
+      Inlining_stats.Closure_stack.print t.inlining_stats_closure_stack
+      Debuginfo.print t.inlined_debuginfo
 
   let backend t = t.backend
-  let importer t = t.backend
   let round t = t.round
   let simplify_toplevel t = t.simplify_toplevel
   let simplify_expr t = t.simplify_expr
-  let simplify_apply_cont_to_cont t = t.simplify_apply_cont_to_cont
+  let simplify_continuation_use_cannot_inline t =
+    t.simplify_continuation_use_cannot_inline
+  let continuation_scope_level t = t.continuation_scope_level
+
+  let const_float_prop _t =
+    (* CR mshinwell: Does this need to be in the environment?
+       Also, the naming should be made consistent with Clflags *)
+    !Clflags.float_const_prop
+
+  let get_typing_environment t = t.typing_environment
+
+  let replace_typing_environment t typing_environment =
+    { t with typing_environment; }
+
+  let extend_typing_environment ~type_of_name t ~env_extension =
+    let typing_environment =
+      T.Typing_environment.meet ~type_of_name
+        t.typing_environment env_extension
+    in
+    { t with typing_environment; }
 
   let local env =
     { env with
-      variables = Variable.Map.empty;
+      typing_environment = TE.create ();
       continuations = Continuation.Map.empty;
-      projections = Projection.Map.empty;
+(*      projections = Projection.Map.empty; *)
       freshening = Freshening.empty_preserving_activation_state env.freshening;
       inlined_debuginfo = Debuginfo.none;
-      continuation_scope_level = 0;
+      continuation_scope_level = Scope_level.initial;
     }
 
-  let mem t var = Variable.Map.mem var t.variables
+  let find_variable t var =
+    let ty, binding_type = TE.find t.typing_environment (Name.var var) in
+    match binding_type with
+    | Normal -> ty
+    | Existential ->
+      Misc.fatal_errorf "Variable %a is not in scope"
+        Variable.print var
 
-  let add t var ty =
-    let ty = Flambda_type.augment_with_variable ty var in
-    let variables = Variable.Map.add var ty t.variables in
-    { t with variables; }
+  let find_variable_opt t var =
+    match TE.find_opt t.typing_environment (Name.var var) with
+    | None -> None
+    | Some (ty, binding_type) ->
+      match binding_type with
+      | Normal -> Some ty
+      | Existential ->
+        Misc.fatal_errorf "Variable %a is not in scope"
+          Variable.print var
+
+  let mem_variable t var =
+    match find_variable_opt t var with
+    | None -> false
+    | Some _ -> true
+
+  let add_variable t var ty =
+    let typing_environment =
+      TE.add t.typing_environment (Name.var var) t.continuation_scope_level ty
+    in
+    { t with typing_environment; }
+
+  let add_or_meet_variable ~type_of_name t var ty =
+    let ty =
+      match find_variable_opt t var with
+      | None -> ty
+      | Some existing_ty -> T.meet ~type_of_name ty existing_ty
+    in
+    let typing_environment =
+      TE.add_or_replace t.typing_environment
+        (Name.var var) t.continuation_scope_level ty
+    in
+    { t with typing_environment; }
+
+  let add_symbol t sym ty =
+    let typing_environment =
+      TE.add t.typing_environment (Name.symbol sym) Scope_level.for_symbols ty
+    in
+    { t with typing_environment; }
+
+  let find_symbol t sym =
+    let ty, binding_type =
+      TE.find t.typing_environment (Name.symbol sym)
+    in
+    match binding_type with
+    | Normal -> ty
+    | Existential ->
+      Misc.fatal_errorf "Symbols cannot be existentially bound in the typing \
+          environment: %a"
+        Symbol.print sym
+
+  let find_symbol_opt t sym =
+    match TE.find_opt t.typing_environment (Name.symbol sym) with
+    | None -> None
+    | Some (ty, binding_type) ->
+      match binding_type with
+      | Normal -> Some ty
+      | Existential ->
+        Misc.fatal_errorf "Symbols cannot be existentially bound in the typing \
+            environment: %a"
+          Symbol.print sym
+
+  let mem_symbol t sym =
+    match find_symbol_opt t sym with
+    | None -> false
+    | Some _ -> true
+
+  let mem_simple t (simple : Simple.t) =
+    match simple with
+    | Name (Var var) -> mem_variable t var
+    | Name (Symbol sym) -> mem_symbol t sym
+    | Const _ -> true
+
+  let redefine_symbol t sym ty =
+    match find_symbol_opt t sym with
+    | Some _ ->
+      let typing_environment =
+        TE.add_or_replace t.typing_environment (Name.symbol sym)
+          Scope_level.initial ty
+      in
+      { t with typing_environment; }
+    | None ->
+      Misc.fatal_errorf "Symbol %a cannot be redefined when it is not \
+          already defined"
+        Symbol.print sym
+
+  let type_of_name t (name_or_export_id : T.Name_or_export_id.t) =
+    match name_or_export_id with
+    | Name name ->
+      begin match name with
+      | Var var -> Some (find_variable t var)
+      | Symbol sym -> Some (find_symbol t sym)
+      end
+    | Export_id _export_id ->
+      (* CR mshinwell: The loading from .cmx files should slot in here. *)
+      None
+
+  let type_accessor t f = f ~type_of_name:(type_of_name t)
 
   let add_mutable t mut_var ty =
     { t with mutable_variables =
       Mutable_variable.Map.add mut_var ty t.mutable_variables;
     }
 
-  let find_symbol_exn t symbol =
-    match Symbol.Map.find symbol t.symbols with
-    | exception Not_found ->
-      if Compilation_unit.equal
-          (Compilation_unit.get_current_exn ())
-          (Symbol.compilation_unit symbol)
-      then begin
-        Misc.fatal_errorf "Symbol %a from the current compilation unit is \
-            unbound.  Maybe there is a missing [Let_symbol] or similar?"
-          Symbol.print symbol
-      end;
-      Flambda_type.symbol_loaded_lazily symbol
-    | ty -> ty
-
+(*
   let add_projection t ~projection ~bound_to =
     { t with
       projections =
@@ -382,6 +315,7 @@ end = struct
     match Projection.Map.find projection t.projections with
     | exception Not_found -> None
     | var -> Some var
+*)
 
   let add_continuation t cont ty =
     let continuations =
@@ -411,44 +345,13 @@ end = struct
   let mem_continuation t cont =
     Continuation.Map.mem cont t.continuations
 
+(*
   let does_not_bind t vars =
     not (List.exists (fun var -> mem t var) vars)
 
   let does_not_freshen t vars =
     Freshening.does_not_freshen t.freshening vars
-
-  let add_symbol t symbol ty =
-    match find_symbol_exn t symbol with
-    | exception Not_found ->
-      { t with
-        symbols = Symbol.Map.add symbol ty t.symbols;
-      }
-    | _ ->
-      Misc.fatal_errorf "Attempt to redefine symbol %a (to %a) in environment \
-          for [Simplify]"
-        Symbol.print symbol
-        Flambda_type.print ty
-
-  let redefine_symbol t symbol ty =
-    match find_symbol_exn t symbol with
-    | exception Not_found ->
-      Misc.fatal_errorf "Cannot redefine undefined symbol %a"
-        Symbol.print symbol
-    | _ ->
-      { t with
-        symbols = Symbol.Map.add symbol ty t.symbols;
-      }
-
-  let find_exn t id =
-    try
-      really_import_ty_with_scope t
-        (Variable.Map.find id t.variables)
-    with Not_found ->
-      Misc.fatal_errorf "Env.find_with_scope_exn: Unbound variable \
-          %a@.%s@. Environment: %a@."
-        Variable.print id
-        (Printexc.raw_backtrace_to_string (Printexc.get_callstack max_int))
-        print t
+*)
 
   let find_mutable_exn t mut_var =
     try Mutable_variable.Map.find mut_var t.mutable_variables
@@ -458,7 +361,7 @@ end = struct
         Mutable_variable.print mut_var
         (Printexc.raw_backtrace_to_string (Printexc.get_callstack max_int))
         print t
-
+(*
   let find_list_exn t vars =
     List.map (fun var -> find_exn t var) vars
 
@@ -468,13 +371,14 @@ end = struct
     try Some (really_import_ty t
                 (snd (Variable.Map.find id t.variables)))
     with Not_found -> None
+*)
 
   let activate_freshening t =
     { t with freshening = Freshening.activate t.freshening }
 
   (* CR-someday mshinwell: consider changing name to remove "declaration".
      Also, isn't this the inlining stack?  Maybe we can use that instead. *)
-  let enter_set_of_closures_declaration t origin =
+  let _enter_set_of_closures_declaration t origin =
   (*
   Format.eprintf "Entering decl: have %a, adding %a, result %a\n%!"
   Set_of_closures_origin.Set.print t.current_functions
@@ -503,11 +407,7 @@ end = struct
     { t with freshening; }
 
   let increase_closure_depth t =
-    let ty =
-      Variable.Map.map (fun (_scope, ty) -> Outer, ty) t.variables
-    in
     { t with
-      ty;
       closure_depth = t.closure_depth + 1;
     }
 
@@ -687,7 +587,9 @@ end = struct
   let add_inlined_debuginfo t ~dbg =
     Debuginfo.concat t.inlined_debuginfo dbg
 
-  let continuations_in_scope t = t.continuations
+  let continuations_in_scope t =
+    Continuation.Map.map (fun (_scope_level, approx) -> approx)
+      t.continuations
 
   let invariant t =
     if !Clflags.flambda_invariant_checks then begin
@@ -710,6 +612,219 @@ end = struct
 end and Result : sig
   include Simplify_env_and_result_intf.Result with type env = Env.t
 end = struct
+  module Continuation_uses = struct
+    module Use = struct
+      module Kind = struct
+        type t =
+          | Not_inlinable_or_specialisable of T.t list
+          | Inlinable_and_specialisable of
+              (Simple.t * T.t) list
+          | Only_specialisable of (Simple.t * T.t) list
+
+        let print ppf t =
+          let print_arg_and_ty ppf (arg, ty) =
+            Format.fprintf ppf "(%a %a)"
+              Simple.print arg
+              T.print ty
+          in
+          match t with
+          | Not_inlinable_or_specialisable args_tys ->
+            Format.fprintf ppf "(Not_inlinable_or_specialisable %a)"
+              (Format.pp_print_list T.print) args_tys
+          | Inlinable_and_specialisable args_and_tys ->
+            Format.fprintf ppf "(Inlinable_and_specialisable %a)"
+              (Format.pp_print_list print_arg_and_ty) args_and_tys
+          | Only_specialisable args_and_tys ->
+            Format.fprintf ppf "(Only_specialisable %a)"
+              (Format.pp_print_list print_arg_and_ty) args_and_tys
+
+        let args t =
+          match t with
+          | Not_inlinable_or_specialisable _ -> []
+          | Inlinable_and_specialisable args_and_tys
+          | Only_specialisable args_and_tys ->
+            List.map (fun (arg, _ty) -> arg) args_and_tys
+
+        let arg_tys t =
+          match t with
+          | Not_inlinable_or_specialisable args_tys -> args_tys
+          | Inlinable_and_specialisable args_and_tys
+          | Only_specialisable args_and_tys ->
+            List.map (fun (_arg, ty) -> ty) args_and_tys
+
+  (*
+        let has_useful_ty t =
+          List.exists (fun ty -> A.useful ty) (args_tys t)
+  *)
+
+        let is_inlinable t =
+          match t with
+          | Not_inlinable_or_specialisable _ -> false
+          | Inlinable_and_specialisable _ -> true
+          | Only_specialisable _ -> false
+
+        let is_specialisable t =
+          match t with
+          | Not_inlinable_or_specialisable _ -> None
+          | Inlinable_and_specialisable args_and_tys
+          | Only_specialisable args_and_tys -> Some args_and_tys
+      end
+
+      type t = {
+        kind : Kind.t;
+        env : Env.t;
+      }
+
+      let print ppf t = Kind.print ppf t.kind
+    end
+
+    type t = {
+      backend : (module Backend_intf.S);
+      continuation : Continuation.t;
+      definition_scope_level : Scope_level.t;
+      application_points : Use.t list;
+    }
+
+    let create ~continuation ~definition_scope_level ~backend =
+      { backend;
+        continuation;
+        definition_scope_level;
+        application_points = [];
+      }
+
+    let union t1 t2 =
+      if not (Continuation.equal t1.continuation t2.continuation) then begin
+        Misc.fatal_errorf "Cannot union [Continuation_uses.t] for two \
+            different continuations (%a and %a)"
+          Continuation.print t1.continuation
+          Continuation.print t2.continuation
+      end;
+      { backend = t1.backend;
+        continuation = t1.continuation;
+        definition_scope_level = t1.definition_scope_level;
+        application_points = t1.application_points @ t2.application_points;
+      }
+
+    let print ppf t =
+      Format.fprintf ppf "(%a application_points = (%a))"
+        Continuation.print t.continuation
+        (Format.pp_print_list Use.print) t.application_points
+
+    let add_use t env kind =
+      { t with
+        application_points = { Use. env; kind; } :: t.application_points;
+      }
+
+    let num_application_points t : Num_continuation_uses.t =
+      match t.application_points with
+      | [] -> Zero
+      | [_] -> One
+      | _ -> Many
+
+    let unused t =
+      match num_application_points t with
+      | Zero -> true
+      | One | Many -> false
+
+    let linearly_used t =
+      match num_application_points t with
+      | Zero -> false
+      | One -> true
+      | Many -> false
+
+    let num_uses t = List.length t.application_points
+
+    let linearly_used_in_inlinable_position t =
+      match t.application_points with
+      | [use] when Use.Kind.is_inlinable use.kind -> true
+      | _ -> false
+
+    let join_of_arg_types_opt t =
+      match t.application_points with
+      | [] -> None
+      | use::uses ->
+        let arg_tys, env =
+          List.fold_left (fun (arg_tys, env) (use : Use.t) ->
+              let arg_tys' = Use.Kind.arg_tys use.kind in
+              if List.length arg_tys <> List.length arg_tys' then begin
+                Misc.fatal_errorf "join_of_arg_tys_opt %a: approx length %d, \
+                    use length %d"
+                  Continuation.print t.continuation
+                  (List.length arg_tys) (List.length arg_tys')
+              end;
+              let this_env =
+                TE.cut (Env.get_typing_environment use.env)
+                  ~existential_if_defined_later_than:t.definition_scope_level
+              in
+              let arg_tys =
+                List.map2 (fun result this_ty ->
+                    let this_ty =
+                      (Env.type_accessor use.env T.add_judgements)
+                        this_ty this_env
+                    in
+                    (Env.type_accessor use.env T.join) result this_ty)
+                  arg_tys arg_tys'
+              in
+              let env =
+                (* XXX Which environment should be used here for
+                   [type_of_name]? *)
+                (Env.type_accessor use.env TE.join) env this_env
+              in
+              arg_tys, env)
+            (Use.Kind.arg_tys use.kind, TE.create ())
+            uses
+        in
+        Some (arg_tys, env)
+
+    let join_of_arg_types t ~arity ~default_env =
+      match join_of_arg_types_opt t with
+      | None -> T.bottom_types_from_arity arity, default_env
+      | Some join -> join
+
+    let application_points t = t.application_points
+  (*
+    let filter_out_non_useful_uses t =
+      (* CR mshinwell: This should check that the approximation is always
+         better than the join.  We could do this easily by adding an equality
+         function to T and then using that in conjunction with
+         the "join" function *)
+      let application_points =
+        List.filter (fun (use : Use.t) ->
+            Use.Kind.has_useful_approx use.kind)
+          t.application_points
+      in
+      { t with application_points; }
+  *)
+
+    let update_use_environments t ~if_present_in_env ~then_add_to_env =
+      let application_points =
+        List.map (fun (use : Use.t) ->
+            if Env.mem_continuation use.env if_present_in_env then
+              let new_cont, approx = then_add_to_env in
+              let env = Env.add_continuation use.env new_cont approx in
+              { use with env; }
+            else
+              use)
+          t.application_points
+      in
+      { t with application_points; }
+  end
+
+  module Continuation_usage_snapshot = struct
+    type t = {
+      used_continuations : Continuation_uses.t Continuation.Map.t;
+      defined_continuations :
+        (Continuation_uses.t * Continuation_approx.t * Env.t
+            * Flambda.recursive)
+          Continuation.Map.t;
+    }
+
+    let continuations_defined_between_snapshots ~before ~after =
+      Continuation.Set.diff
+        (Continuation.Map.keys after.defined_continuations)
+        (Continuation.Map.keys before.defined_continuations)
+  end
+
   type env = Env.t
 
   type t =
@@ -725,8 +840,7 @@ end = struct
     }
 
   let create () =
-    { approx = Flambda_type.value_bottom;
-      used_continuations = Continuation.Map.empty;
+    { used_continuations = Continuation.Map.empty;
       defined_continuations = Continuation.Map.empty;
       inlining_threshold = None;
       benefit = Inlining_cost.Benefit.zero;
@@ -734,8 +848,7 @@ end = struct
     }
 
   let union t1 t2 =
-    { approx = Flambda_type.value_bottom;
-      used_continuations =
+    { used_continuations =
         Continuation.Map.union_merge Continuation_uses.union
           t1.used_continuations t2.used_continuations;
       defined_continuations =
@@ -749,11 +862,11 @@ end = struct
 
   let use_continuation t env cont kind =
     let args = Continuation_uses.Use.Kind.args kind in
-    if not (List.for_all (fun arg -> Env.mem env arg) args) then begin
+    if not (List.for_all (fun arg -> Env.mem_simple env arg) args) then begin
       Misc.fatal_errorf "use_continuation %a: argument(s) (%a) not in \
           environment %a"
         Continuation.print cont
-        Variable.print_list args
+        (Format.pp_print_list Simple.print) args
         Env.print env
     end;
   (*
@@ -771,6 +884,7 @@ end = struct
       match Continuation.Map.find cont t.used_continuations with
       | exception Not_found ->
         Continuation_uses.create ~continuation:cont ~backend:(Env.backend env)
+          ~definition_scope_level:(Env.scope_level_of_continuation env cont)
       | uses -> uses
     in
     let uses = Continuation_uses.add_use uses env kind in
@@ -848,20 +962,28 @@ end = struct
   let continuation_defined t cont =
     Continuation.Map.mem cont t.defined_continuations
 
-  let continuation_arg_tys t cont ~arity ~default_env =
+  let continuation_args_types t cont ~arity ~default_env =
     match Continuation.Map.find cont t.used_continuations with
     | exception Not_found ->
-      let tys = Array.make num_params (Flambda_type.value_bottom) in
-      Array.to_list tys, default_env
+      let tys = List.map (fun kind -> T.bottom kind) arity in
+      tys, default_env
     | uses ->
-      Continuation_uses.join_of_arg_tys uses ~arity ~default_env
+      Continuation_uses.join_of_arg_types uses ~arity ~default_env
+
+  let continuation_args_types' t cont ~arity =
+    let tys, _env =
+      continuation_args_types t cont ~arity
+        ~default_env:(T.Typing_environment.create ())
+    in
+    tys
   
-  let defined_continuation_args_approxs t i ~arity =
-    match Continuation.Map.find i t.defined_continuations with
+  let defined_continuation_args_types t cont ~arity ~default_env =
+    match Continuation.Map.find cont t.defined_continuations with
     | exception Not_found ->
-      T.bottom_types_from_arity arity
+      let tys = List.map (fun kind -> T.bottom kind) arity in
+      tys, default_env
     | (uses, _approx, _env, _recursive) ->
-      Continuation_uses.join_of_args_approxs uses ~num_params
+      Continuation_uses.join_of_arg_types uses ~arity ~default_env
 
   let exit_scope_of_let_cont t env cont =
     let t, uses =
@@ -869,18 +991,13 @@ end = struct
       | exception Not_found ->
         let uses =
           Continuation_uses.create ~continuation:cont ~backend:(Env.backend env)
+            ~definition_scope_level:(Env.scope_level_of_continuation env cont)
         in
         t, uses
       | uses ->
-        let definition_scope_level =
-          Env.scope_level_of_continuation env cont
-        in
-        let continuation_uses =
-          Continuation_uses.cut_environments uses
-            ~existential_if_defined_later_than:definition_scope_level
-        in
         { t with
-          used_continuations = Continuation.Map.remove i t.used_continuations;
+          used_continuations =
+            Continuation.Map.remove cont t.used_continuations;
         }, uses
     in
     assert (continuation_unused t cont);

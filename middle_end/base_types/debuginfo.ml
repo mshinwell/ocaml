@@ -127,3 +127,6 @@ let print_or_elide ppf t =
   if not (is_none t) then begin
     Format.fprintf ppf "@ <%a>" print_compact t
   end
+
+(* CR mshinwell: provide an sexp printer here *)
+let print = print_compact

@@ -21,5 +21,6 @@ type t
 include Identifiable.S with type t := t
 
 val initial : t
+val for_symbols : t
 
 val next : t -> t

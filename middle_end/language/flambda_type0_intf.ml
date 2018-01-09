@@ -266,9 +266,13 @@ module type S = sig
 
     val add : t -> Name.t -> Scope_level.t -> flambda_type -> t
 
+    val add_or_replace : t -> Name.t -> Scope_level.t -> flambda_type -> t
+
     type binding_type = Normal | Existential
 
     val find : t -> Name.t -> flambda_type * binding_type
+
+    val find_opt : t -> Name.t -> (flambda_type * binding_type) option
 
     val cut
        : t

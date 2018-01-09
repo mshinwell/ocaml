@@ -17,4 +17,10 @@
 include Numbers.Int
 
 let initial = 0
-let next t = t + 1
+let for_symbols = (-1)
+
+let next t =
+  if t < 0 then begin
+    Misc.fatal_error "Cannot increment scope level from [for_symbols]"
+  end;
+  t + 1

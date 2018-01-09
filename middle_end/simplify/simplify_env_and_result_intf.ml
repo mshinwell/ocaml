@@ -108,9 +108,34 @@ module type Env = sig
       environment. *)
   val add_variable : t -> Variable.t -> Flambda_type.t -> t
 
-  val add_or_meet_variable : t -> Variable.t -> Flambda_type.t -> t
+  val add_or_meet_variable
+     : (t
+    -> Variable.t
+    -> Flambda_type.t
+    -> t) Flambda_type.type_accessor
 
-  (** Like [add], but for mutable variables. *)
+  (** Find the type of a given variable, raising a fatal error if the
+      environment does not know about the variable, or if the variable is
+      existentially bound. *)
+  val find_variable : t -> Variable.t -> Flambda_type.t
+
+  (** Whether the given variable is in scope. *)
+  val mem_variable : t -> Variable.t -> bool
+
+  val add_symbol : t -> Symbol.t -> Flambda_type.t -> t
+
+  val redefine_symbol : t -> Symbol.t -> Flambda_type.t -> t
+
+  val find_symbol : t -> Symbol.t -> Flambda_type.t
+
+  val mem_simple : t -> Simple.t -> bool
+
+  val type_of_name
+     : t
+    -> Flambda_type.Name_or_export_id.t
+    -> Flambda_type.t option
+
+  (** Like [add_variable], but for mutable variables. *)
   val add_mutable : t -> Mutable_variable.t -> Flambda_type.t -> t
 
   val continuation_scope_level : t -> Scope_level.t
@@ -118,32 +143,16 @@ module type Env = sig
   (* CR mshinwell: The [Continuation.t] is in the [Continuation.approx.t] *)
   val add_continuation : t -> Continuation.t -> Continuation_approx.t -> t
 
-  val scope_level_of_continuation : t -> Continuation.t -> Scope_level.t -> t
+  val scope_level_of_continuation : t -> Continuation.t -> Scope_level.t
 
   val find_continuation : t -> Continuation.t -> Continuation_approx.t
 
   val mem_continuation : t -> Continuation.t -> bool
 
-  (** Find the approximation of a given variable, raising a fatal error if
-      the environment does not know about the variable.  Use [find_opt]
-      instead if you need to catch the failure case. *)
-  val find_var : t -> Variable.t -> Flambda_type.t
-
-  val find_simple : t -> Simple.t -> Flambda_type.t
-
-  val type_of_name : t -> Name.t -> Flambda_type.t option
-
   (** Like [find_exn], but for mutable variables. *)
   val find_mutable_exn : t -> Mutable_variable.t -> Flambda_type.t
 
-  type scope = Current | Outer
-
-  val find_with_scope_exn : t -> Variable.t -> scope * Flambda_type.t
-
-  (** Like [find_exn], but intended for use where the "not present in
-      environment" case is to be handled by the caller. *)
-  val find_opt : t -> Variable.t -> Flambda_type.t option
-
+(*
   (** Like [find_exn], but for a list of variables. *)
   val find_list_exn : t -> Variable.t list -> Flambda_type.t list
 
@@ -152,34 +161,7 @@ module type Env = sig
   val does_not_bind : t -> Variable.t list -> bool
 
   val does_not_freshen : t -> Variable.t list -> bool
-
-  val add_symbol
-     : t
-    -> Symbol.t
-    -> ?definition:Flambda_static.Program_body.definition
-    -> Flambda_type.t
-    -> t
-
-  (** Mark the given symbol as bound, but with its definition currently unknown,
-      to be loaded lazily from a .cmx file. *)
-  val import_symbol
-     : t
-    -> Symbol.t
-    -> t
-
-  val redefine_symbol
-     : t
-    -> Symbol.t
-    -> ?definition:Flambda_static.Program_body.definition
-    -> Flambda_type.t
-    -> t
-
-  val find_symbol : t -> Symbol.t -> Flambda_type.t
-
-  val find_symbol_by_definition
-     : t
-    -> Flambda_static.Program_body.definition
-    -> Symbol.t option
+*)
 
   (* XXX to be turned into equations (including to primitives)
   (** Note that the given [bound_to] holds the given [projection]. *)
@@ -200,17 +182,14 @@ module type Env = sig
   val get_typing_environment : t -> Flambda_type.Typing_environment.t
 
   val extend_typing_environment
-     : t
+     : (t
     -> env_extension:Flambda_type.Typing_environment.t
-    -> t
+    -> t) Flambda_type.type_accessor
 
   val replace_typing_environment
      : t
     -> Flambda_type.Typing_environment.t
     -> t
-
-  (** Whether the environment has an approximation for the given variable. *)
-  val mem : t -> Variable.t -> bool
 
   (** Return the freshening that should be applied to variables when
       rewriting code (in [Simplify], etc.) using the given
@@ -412,6 +391,7 @@ module type Result = sig
 
     val create
        : continuation:Continuation.t
+      -> definition_scope_level:Scope_level.t
       -> backend:(module Backend_intf.S)
       -> t
 
@@ -424,12 +404,15 @@ module type Result = sig
 
     val num_uses : t -> int
 
-    val join_of_arg_tys
+    val join_of_arg_types
        : t
-      -> num_params:int
-      -> Flambda_type.t list
+      -> arity:Flambda_arity.t
+      -> default_env:Flambda_type.Typing_environment.t
+      -> Flambda_type.t list * Flambda_type.Typing_environment.t
 
-    val join_of_arg_tys_opt : t -> Flambda_type.t list option
+    val join_of_arg_types_opt
+       : t
+      -> (Flambda_type.t list * Flambda_type.Typing_environment.t) option
   end
 
   module Continuation_usage_snapshot : sig
@@ -499,7 +482,8 @@ module type Result = sig
      : t
     -> Continuation.t
     -> arity:Flambda_arity.t
-    -> Flambda_type.t list
+    -> default_env:Flambda_type.Typing_environment.t
+    -> Flambda_type.t list * Flambda_type.Typing_environment.t
 
   (** Continuation usage information for use after examining the body of
       a [Let_cont] but before [define_continuation] has been called. *)
@@ -594,10 +578,12 @@ module type Result = sig
   val seen_direct_application : t -> t
   val num_direct_applications : t -> int
 
+(*
   (* XXX this must be in the snapshotted part. *)
   val new_lifted_constant
      : t
     -> Env.t
     -> Flambda_static.Static_part.t
     -> Symbol.t * t
+*)
 end

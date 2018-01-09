@@ -63,6 +63,23 @@ module Closure_stack = struct
         Misc.fatal_errorf "note_entering_specialised: missing Call node"
       | (Call _) :: _ -> Specialised closure_ids :: t
 
+  let print_node ppf node =
+    match node with
+    | Closure (closure_id, dbg) ->
+      Format.fprintf ppf "@[(Closure (closure_id %a)@ (dbg %a))@]"
+        Closure_id.print closure_id
+        Debuginfo.print dbg
+    | Call (closure_id, dbg) ->
+      Format.fprintf ppf "@[(Call (closure_id %a)@ (dbg %a))@]"
+        Closure_id.print closure_id
+        Debuginfo.print dbg
+    | Inlined -> Format.pp_print_string ppf "Inlined"
+    | Specialised set ->
+      Format.fprintf ppf "@[(Specialised %a)@]" Closure_id.Set.print set
+
+  let print ppf t =
+    Format.fprintf ppf "@[(%a)@]"
+      (Format.pp_print_list print_node) t
 end
 
 let log
