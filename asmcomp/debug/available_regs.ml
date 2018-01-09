@@ -239,8 +239,8 @@ let rec available_regs (instr : M.instruction)
         with Exit -> ()
         end;
         None, unreachable
-      | Icatch (recursive, handlers, body) ->
-        List.iter (fun (nfail, _handler) ->
+      | Icatch (recursive, _, handlers, body) ->
+        List.iter (fun (nfail, _trap_stack, _handler) ->
             (* In case there are nested [Icatch] expressions with the same
                handler numbers, we rely on the [Hashtbl] shadowing
                semantics. *)
@@ -251,12 +251,13 @@ let rec available_regs (instr : M.instruction)
         in
         (* CR-someday mshinwell: Consider potential efficiency speedups
            (see suggestions from @chambart on GPR#856). *)
-        let aux (nfail, handler) (nfail', avail_at_top_of_handler) =
+        let aux (nfail, _trap_stack, handler)
+                (nfail', _trap_stack, avail_at_top_of_handler) =
           assert (nfail = nfail');
           available_regs handler ~avail_before:avail_at_top_of_handler
         in
-        let aux_equal (nfail, avail_before_handler)
-              (nfail', avail_before_handler') =
+        let aux_equal (nfail, _trap_stack, avail_before_handler)
+              (nfail', _trap_stack, avail_before_handler') =
           assert (nfail = nfail');
           RAS.equal avail_before_handler avail_before_handler'
         in
@@ -265,10 +266,10 @@ let rec available_regs (instr : M.instruction)
             List.map2 aux handlers avail_at_top_of_handlers
           in
           let avail_at_top_of_handlers' =
-            List.map (fun (nfail, _handler) ->
+            List.map (fun (nfail, trap_stack, _handler) ->
                 match Hashtbl.find avail_at_exit nfail with
                 | exception Not_found -> assert false  (* see above *)
-                | avail_at_top_of_handler -> nfail, avail_at_top_of_handler)
+                | avail_at_top_of_handler -> nfail, trap_stack, avail_at_top_of_handler)
               handlers
           in
           match recursive with
@@ -280,14 +281,14 @@ let rec available_regs (instr : M.instruction)
             else fixpoint avail_at_top_of_handlers'
         in
         let init_avail_at_top_of_handlers =
-          List.map (fun (nfail, _handler) ->
+          List.map (fun (nfail, trap_stack, _handler) ->
               match Hashtbl.find avail_at_exit nfail with
               | exception Not_found -> assert false  (* see above *)
-              | avail_at_top_of_handler -> nfail, avail_at_top_of_handler)
+              | avail_at_top_of_handler -> nfail, trap_stack, avail_at_top_of_handler)
             handlers
         in
         let avail_after_handlers = fixpoint init_avail_at_top_of_handlers in
-        List.iter (fun (nfail, _handler) ->
+        List.iter (fun (nfail, _trap_stack, _handler) ->
             Hashtbl.remove avail_at_exit nfail)
           handlers;
         let avail_after =
@@ -310,6 +311,7 @@ let rec available_regs (instr : M.instruction)
         in
         Hashtbl.replace avail_at_exit nfail avail_at_top_of_handler;
         None, unreachable
+(*
       | Itrywith (body, handler) ->
         let saved_avail_at_raise = !avail_at_raise in
         avail_at_raise := unreachable;
@@ -334,9 +336,12 @@ let rec available_regs (instr : M.instruction)
             (available_regs handler ~avail_before:avail_before_handler)
         in
         None, avail_after
+*)
       | Iraise _ ->
         let avail_before = ok avail_before in
         augment_availability_at_raise avail_before;
+        None, unreachable
+      | Iunreachable _ ->
         None, unreachable
   in
   instr.available_across <- avail_across;

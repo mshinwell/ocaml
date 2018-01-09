@@ -15,8 +15,8 @@
 
 (* Translation of string matching from closed lambda to C-- *)
 
-open Lambda
 open Cmm
+open Backend_primitives
 
 module type I = sig
   val string_block_length : Cmm.expression -> Cmm.expression
@@ -73,7 +73,7 @@ module Make(I:I) = struct
   let mk_let_cell id str ind body =
     let dbg = Debuginfo.none in
     let cell =
-      Cop(Cload (Word_int, Asttypes.Mutable),
+      Cop(Cload (Word_int, Mutable),
         [Cop(Cadda,[str;Cconst_int(Arch.size_int*ind)], dbg)],
         dbg) in
     Clet(id, cell, body)
@@ -377,7 +377,7 @@ module Make(I:I) = struct
     let catch arg k = match arg with
     | Cexit (_e,[]) ->  k arg
     | _ ->
-        let e =  next_raise_count () in
+        let e = Lambda.next_raise_count () in
         Ccatch (Clambda.Normal Asttypes.Nonrecursive,
           [e, [], arg], k (Cexit (e,[])))
 

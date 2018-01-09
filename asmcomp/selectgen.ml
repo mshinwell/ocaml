@@ -343,8 +343,8 @@ method effects_of exp =
       | Calloc -> EC.none
       | Cstore _ | Cmultistore -> EC.effect_only Effect.Arbitrary
       | Craise _ | Ccheckbound -> EC.effect_only Effect.Raise
-      | Cload (_, Asttypes.Immutable) -> EC.none
-      | Cload (_, Asttypes.Mutable) -> EC.coeffect_only Coeffect.Read_mutable
+      | Cload (_, Backend_primitives.Immutable) -> EC.none
+      | Cload (_, Backend_primitives.Mutable) -> EC.coeffect_only Coeffect.Read_mutable
       | Cmultiload _ -> EC.none  (* always an immutable load *)
       | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi | Cand | Cor | Cxor
       | Clsl | Clsr | Casr | Ccmpi _ | Caddv | Cadda | Ccmpa _ | Cnegf | Cabsf
@@ -435,9 +435,9 @@ method select_operation op args _dbg =
       let (addr, eloc) = self#select_addressing chunk arg1 in
       let is_assign =
         match init with
-        | Lambda.Root_initialization -> false
-        | Lambda.Heap_initialization -> false
-        | Lambda.Assignment -> true
+        | Backend_primitives.Root_initialization -> false
+        | Backend_primitives.Heap_initialization -> false
+        | Backend_primitives.Assignment -> true
       in
       if chunk = Word_int || chunk = Word_val then begin
         let (op, newarg2) = self#select_store is_assign addr arg2 in
