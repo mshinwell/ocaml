@@ -202,9 +202,10 @@ MIDDLE_END_TO_CLAMBDA=\
   # middle_end/to_clambda/un_anf.cmo \
   # middle_end/to_clambda/un_cps.cmo
 
-# ASMCOMP=\
-  # $(ARCH_SPECIFIC_ASMCOMP) \
+ASMCOMP=\
+  $(ARCH_SPECIFIC_ASMCOMP) \
   asmcomp/arch.cmo \
+  asmcomp/backend_primitives.cmo \
   asmcomp/cmm.cmo asmcomp/printcmm.cmo \
   asmcomp/reg.cmo asmcomp/debug/reg_with_debug_info.cmo \
   asmcomp/debug/reg_availability_set.cmo \
@@ -235,21 +236,6 @@ MIDDLE_END_TO_CLAMBDA=\
   asmcomp/branch_relaxation.cmo \
   asmcomp/emitaux.cmo asmcomp/emit.cmo asmcomp/asmgen.cmo \
   asmcomp/asmlink.cmo asmcomp/asmlibrarian.cmo asmcomp/asmpackager.cmo \
-  driver/opterrors.cmo driver/optcompile.cmo
-
-ASMCOMP=\
-  $(ARCH_SPECIFIC_ASMCOMP) \
-  asmcomp/arch.cmo \
-  asmcomp/backend_primitives.cmo \
-  asmcomp/cmm.cmo asmcomp/printcmm.cmo \
-  asmcomp/reg.cmo asmcomp/mach.cmo asmcomp/proc.cmo \
-  asmcomp/clambda.cmo asmcomp/printclambda.cmo \
-  $(MIDDLE_END_CMX_EARLY) \
-  asmcomp/compilenv.cmo \
-  asmcomp/closure.cmo \
-  asmcomp/cmmgen.cmo \
-  asmcomp/interval.cmo \
-  asmcomp/printmach.cmo \
   driver/opterrors.cmo driver/optcompile.cmo
 
 #  asmcomp/printbackend_primitives.cmo \
@@ -302,10 +288,10 @@ MIDDLE_END_INLINING=\
   middle_end/inlining/continuation_approx.cmo \
   middle_end/inlining/continuation_inlining.cmo \
   middle_end/inlining/inlining_cost.cmo \
-  middle_end/inlining/inlining_stats.cmo \
   middle_end/inlining/inlining_stats_types.cmo \
-  middle_end/inlining/inlining_decision.cmo \
-  middle_end/inlining/inlining_transforms.cmo
+  middle_end/inlining/inlining_stats.cmo \
+  middle_end/inlining/inlining_transforms.cmo \
+  middle_end/inlining/inlining_decision.cmo
 
   # middle_end/inlining/continuation_specialisation.cmo \
   # middle_end/inlining/continuation_with_specialised_args.cmo \
