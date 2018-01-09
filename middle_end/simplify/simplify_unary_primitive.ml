@@ -510,6 +510,8 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
   let result_var_type ~tags_to_sizes =
     let tags_to_env_extensions =
       Tag.Scannable.Map.fold (fun tag size tags_to_env_extensions ->
+          (* CR mshinwell: thikn about this conversion *)
+          let size = Targetint.OCaml.to_int size in
           let block_ty = T.block_of_unknown_values tag Unknown ~size in
           let env =
             match block with
@@ -574,7 +576,7 @@ module Make_simplify_unbox_number (P : A.Boxable_number_kind) = struct
     in
     match proof with
     | Proved unboxed_ty ->
-      let unboxed_ty = T.of_ty_naked_number unboxed_ty in
+      let unboxed_ty = P.t_of_ty unboxed_ty in
       let proof = (E.type_accessor env P.unboxed_prover) unboxed_ty in
       begin match proof with
       | Proved nums ->
@@ -871,17 +873,12 @@ let simplify_array_length env r prim arg ~block_access_kind:_ dbg =
 let simplify_bigarray_length env r prim bigarray ~dimension:_ dbg =
   let bigarray, bigarray_ty = S.simplify_simple env bigarray in
   let result_kind = K.value Definitely_immediate in
-  let proof =
+  let _ty_value =
     (E.type_accessor env T.prove_of_kind_value_with_expected_value_kind)
       bigarray_ty Definitely_pointer
   in
-  match proof with
-  | Proved _ | Unknown ->
-    let named : Named.t = Prim (Unary (prim, bigarray), dbg) in
-    Reachable.reachable named, T.unknown result_kind, r
-  | Invalid ->
-    Reachable.invalid (), T.bottom result_kind,
-      R.map_benefit r (B.remove_primitive (Unary prim))
+  let named : Named.t = Prim (Unary (prim, bigarray), dbg) in
+  Reachable.reachable named, T.unknown result_kind, r
 
 let simplify_unary_primitive env r (prim : Flambda_primitive.unary_primitive)
       arg dbg : Reachable.t * T.t * R.t =

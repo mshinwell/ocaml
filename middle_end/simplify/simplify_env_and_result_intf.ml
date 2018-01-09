@@ -322,6 +322,8 @@ module type Env = sig
        inliner has already entered the call with [note_entering_call]. *)
   val note_entering_specialised : t -> closure_ids:Closure_id.Set.t -> t
 
+  val enter_set_of_closures_declaration : t -> Set_of_closures_origin.t -> t
+
   (** Update a given environment to record that the inliner is about to
       descend into [closure_id] and pass the resulting environment to [f].
       If [inline_inside] is [false] then the environment passed to [f] will be

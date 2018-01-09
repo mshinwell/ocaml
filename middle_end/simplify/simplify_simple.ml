@@ -30,7 +30,7 @@ let type_for_const (const : Simple.Const.t) =
   | Naked_nativeint n -> T.this_naked_nativeint n
 
 let simplify_name env name =
-  match E.type_of_name env name with
+  match E.type_of_name env (Name name) with
   | None ->
     Misc.fatal_errorf "Unbound name %a" Name.print name
   | Some ty ->
@@ -43,7 +43,7 @@ let simplify_simple env (simple : Simple.t) =
   match simple with
   | Const c -> simple, type_for_const c
   | Name name ->
-    match E.type_of_name env name with
+    match E.type_of_name env (Name name) with
     | None ->
       Misc.fatal_errorf "Unbound name %a" Name.print name
     | Some ty ->

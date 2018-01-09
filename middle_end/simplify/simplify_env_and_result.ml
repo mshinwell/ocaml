@@ -378,7 +378,7 @@ end = struct
 
   (* CR-someday mshinwell: consider changing name to remove "declaration".
      Also, isn't this the inlining stack?  Maybe we can use that instead. *)
-  let _enter_set_of_closures_declaration t origin =
+  let enter_set_of_closures_declaration t origin =
   (*
   Format.eprintf "Entering decl: have %a, adding %a, result %a\n%!"
   Set_of_closures_origin.Set.print t.current_functions

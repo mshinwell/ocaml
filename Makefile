@@ -281,11 +281,12 @@ MIDDLE_END_BASE_TYPES=\
   middle_end/base_types/name.cmo
 
 MIDDLE_END_CODE_MOTION=\
-#  middle_end/code_motion/lift_constants.cmo \
   middle_end/code_motion/lift_let_cont.cmo \
   middle_end/code_motion/lift_to_toplevel.cmo \
-  middle_end/code_motion/share_constants.cmo \
   middle_end/code_motion/sink_lets.cmo
+
+#  middle_end/code_motion/lift_constants.cmo \
+  middle_end/code_motion/share_constants.cmo \
 
 MIDDLE_END_FROM_LAMBDA=\
   middle_end/from_lambda/prepare_lambda.cmo \
@@ -351,9 +352,10 @@ MIDDLE_END_SIMPLIFY=\
   middle_end/simplify/simplify.cmo
 
 MIDDLE_END_UNBOXING=\
+  middle_end/unboxing/unbox_continuation_params.cmo
+
   # middle_end/unboxing/augment_specialised_args.cmo \
   # middle_end/unboxing/unbox_closures.cmo \
-  # middle_end/unboxing/unbox_continuation_params.cmo \
   # middle_end/unboxing/unbox_free_vars_of_closures.cmo \
   # middle_end/unboxing/unbox_one_variable.cmo \
   # middle_end/unboxing/unbox_returns.cmo \

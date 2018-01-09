@@ -242,7 +242,7 @@ module type S = sig
     | Fabricated of ty_fabricated
 
   module Name_or_export_id : sig
-    type t = private
+    type t =
       | Name of Name.t
       | Export_id of Export_id.t
 

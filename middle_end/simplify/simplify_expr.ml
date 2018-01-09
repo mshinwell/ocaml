@@ -203,10 +203,14 @@ end) = struct
             let env =
               match scrutinee with
               | Var scrutinee ->
-                E.add_or_meet_variable env scrutinee scrutinee_ty
+                (E.type_accessor env E.add_or_meet_variable)
+                  env scrutinee scrutinee_ty
               | Symbol _ -> env
             in
-            let env = E.extend_typing_environment env ~env_extension in
+            let env =
+              (E.type_accessor env E.extend_typing_environment) env
+                ~env_extension
+            in
             simplify_continuation_use_cannot_inline env r cont ~arity:[]
           in
           let arms = S.Arm.Map.add arm cont arms in
@@ -612,7 +616,8 @@ and simplify_let_cont env r ~body
                will produce [Value_bottom] for the arguments, rather than
                failing. *)
             R.defined_continuation_args_types r cont
-              ~arity:(Flambda.Continuation_handler.param_arity handler))
+              ~arity:(Flambda.Continuation_handler.param_arity handler)
+              ~default_env:(E.get_typing_environment env))
           original_handlers
       in
       let handlers = original_handlers in

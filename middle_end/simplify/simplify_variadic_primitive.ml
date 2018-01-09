@@ -190,7 +190,7 @@ let simplify_bigarray_set env r prim dbg ~num_dims ~kind ~layout ~args =
           if indexes_are_invalid then begin
             invalid ()
           end else begin
-            T.check_of_kind new_value_ty element_kind;
+            (E.type_accessor env T.check_of_kind) new_value_ty element_kind;
             Reachable.reachable (original_term ()), T.unit (), r
           end
         end

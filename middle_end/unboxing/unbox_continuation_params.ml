@@ -16,6 +16,8 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
+(*
+
 module H = Unbox_one_variable.How_to_unbox
 (*module CAV = Invariant_params.Continuations.Continuation_and_variable*)
 
@@ -110,6 +112,9 @@ Format.eprintf "Invariant params:\n@;%a\n"
     unboxings_by_cont unboxings_by_cont'
 *)
 
+*)
+
+(*
 let for_continuations ~continuation_uses ~handlers ~backend
       : Flambda_utils.with_wrapper Continuation.Map.t option =
 (*
@@ -250,9 +255,11 @@ Format.eprintf "Unbox_continuation_params starting with continuations %a\n%!"
     in
     Some with_wrappers
   end
+*)
 
-let for_non_recursive_continuation ~name ~handler ~args_tys ~backend
-      : Flambda_utils.with_wrapper =
+let for_non_recursive_continuation ~name:_ ~handler ~args_types:_ ~backend:_
+      : Flambda.Expr.with_wrapper = Unchanged { handler; }
+(*
 (*
 Format.eprintf "Unbox_continuation_params starting: nonrecursive %a\n%!"
   Continuation.print name;
@@ -273,17 +280,21 @@ Format.eprintf "Unbox_continuation_params starting: nonrecursive %a\n%!"
       with_wrapper
     | _ -> assert false
 
-let for_recursive_continuations ~handlers ~args_tys ~backend =
+*)
+
+let for_recursive_continuations ~handlers ~args_types:_ ~backend:_ =
 (*
 Format.eprintf "Unbox_continuation_params starting: recursive %a\n%!"
   Continuation.Set.print (Continuation.Map.keys handlers);
 *)
-  let result =
+  let result = None
+(*
     for_continuations ~continuation_uses:args_tys ~handlers ~backend
+*)
   in
   match result with
   | None ->
-    Continuation.Map.map (fun handler : Flambda_utils.with_wrapper ->
+    Continuation.Map.map (fun handler : Flambda.Expr.with_wrapper ->
           Unchanged { handler; })
       handlers
   | Some with_wrappers -> with_wrappers

@@ -20,7 +20,7 @@ module E = Simplify_env_and_result.Env
 module T = Flambda_type
 
 let simplify_name env name =
-  let ty = E.type_of_name env name in
+  let ty = E.type_of_name env (Name name) in
   match ty with
   | None ->
     Misc.fatal_errorf "Unbound name %a" Name.print name
@@ -69,6 +69,7 @@ let all_indexes_out_of_range ~width indexes ~max_string_length =
 let prepare_to_simplify_set_of_closures ~env
       ~(set_of_closures : Flambda.Set_of_closures.t)
       ~function_decls =
+  ignore set_of_closures;
   let env = E.local env in
   let function_decls, freshening =
     Freshening.for_function_declarations (E.freshening env) function_decls
@@ -90,8 +91,9 @@ let prepare_to_simplify_set_of_closures ~env
       ~freshening ~direct_call_surrogates
 *)
   in
+(*
   let set_of_closures_env =
-    Variable.Map.fold (fun closure _ env ->
+    Closure_id.Map.fold (fun closure _ env ->
         let closure_ty =
           T.unknown (Flambda_kind.value Definitely_pointer)
 (* XXX to fix.  Old code:
@@ -103,6 +105,8 @@ let prepare_to_simplify_set_of_closures ~env
         E.add_variable env closure closure_ty)
       function_decls.funs env
   in
+*)
+  let set_of_closures_env = env in
   function_decls, set_of_closures_ty, set_of_closures_env
 
 let prepare_to_simplify_closure
@@ -115,18 +119,21 @@ let prepare_to_simplify_closure
       free_vars set_of_closures_env
   in
 *)
+  let my_closure =
+    Freshening.apply_variable (E.freshening set_of_closures_env)
+      function_decl.my_closure
+  in
   let env =
     (* XXX use the correct my_closure type. *)
     E.add_variable set_of_closures_env my_closure
       (T.unknown (Flambda_kind.value Definitely_pointer))
   in
   (* CR mshinwell: Freshening?  And cleaning? *)
-  List.fold_left (fun env param ->
-      let var = Parameter.var param in
-      let ty = Parameter.ty param in
+  List.fold_left (fun env (param : Flambda.Typed_parameter.t) ->
+      let var = Flambda.Typed_parameter.var param in
+      let ty = Flambda.Typed_parameter.ty param in
       E.add_variable env var ty)
     env function_decl.params
-
 
 let initial_inlining_threshold ~round : Inlining_cost.Threshold.t =
   let unscaled =

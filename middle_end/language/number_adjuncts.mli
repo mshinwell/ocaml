@@ -106,6 +106,8 @@ module type Boxable = sig
   val these_boxed : Num.Set.t -> Flambda_type.t
 
   val box : Flambda_type.t -> Flambda_type.t
+
+  val t_of_ty : Num.Set.t Flambda_type.ty_naked_number -> Flambda_type.t
 end
 
 module type Boxable_number_kind = sig
