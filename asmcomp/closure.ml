@@ -15,6 +15,8 @@
 
 (* Introduction of closures, uncurrying, recognition of direct calls *)
 
+(*
+
 open Misc
 open Asttypes
 open Primitive
@@ -1398,14 +1400,18 @@ let collect_exported_structured_constants a =
     | Upushtrap _ | Upoptrap _ -> ()
   in
   approx a
+*)
 
-let reset () =
+let reset () = ()
+(*
   global_approx := [||];
   function_nesting_depth := 0
+*)
 
 (* The entry point *)
 
-let intro size lam =
+let intro _size _lam = assert false
+(*
   reset ();
   let id = Compilenv.make_symbol None in
   global_approx := Array.init size (fun i -> Value_global_field (id, i));
@@ -1420,3 +1426,4 @@ let intro size lam =
   else collect_exported_structured_constants (Value_tuple !global_approx);
   global_approx := [||];
   ulam
+*)

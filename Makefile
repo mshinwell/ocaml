@@ -243,8 +243,6 @@ ASMCOMP=\
   asmcomp/backend_primitives.cmo \
   asmcomp/cmm.cmo asmcomp/printcmm.cmo \
   asmcomp/reg.cmo asmcomp/mach.cmo asmcomp/proc.cmo \
-  asmcomp/printbackend_primitives.cmo \
-  asmcomp/backend_primitives_from_lambda.cmo \
   asmcomp/clambda.cmo asmcomp/printclambda.cmo \
   $(MIDDLE_END_CMX_EARLY) \
   asmcomp/compilenv.cmo \
@@ -253,6 +251,9 @@ ASMCOMP=\
   asmcomp/interval.cmo \
   asmcomp/printmach.cmo \
   driver/opterrors.cmo driver/optcompile.cmo
+
+#  asmcomp/printbackend_primitives.cmo \
+#  asmcomp/backend_primitives_from_lambda.cmo \
 
 MIDDLE_END_ANALYSIS=\
   # middle_end/analysis/alias_analysis.cmo \

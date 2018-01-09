@@ -1947,7 +1947,8 @@ let rec transl env e =
         (transl env ifso) (transl env ifnot)
   | Usequence(exp1, exp2) ->
       Csequence(remove_unit(transl env exp1), transl env exp2)
-  | Uwhile(cond, body) ->
+  | Uwhile _ -> assert false
+(* CR mshinwell: need to resurrect (cond, body) ->
       let dbg = Debuginfo.none in
       let raise_num = Lambda.next_raise_count () in
       return_unit
@@ -1957,6 +1958,7 @@ let rec transl env e =
                     (remove_unit(transl env body))
                     (Cexit (raise_num,[]))),
             Ctuple []))
+*)
   | Ufor(id, low, high, dir, body) ->
       let dbg = Debuginfo.none in
       let tst = match dir with Asttypes.Upto -> Cgt   | Asttypes.Downto -> Clt in
@@ -2178,9 +2180,11 @@ and transl_prim_1 env p arg dbg =
                    [untag_int (transl env arg) dbg],
                    dbg))
               dbg
-  | prim ->
+  | _prim -> assert false
+(*
       fatal_errorf "Cmmgen.transl_prim_1: %a"
         Printbackend_primitives.primitive prim
+*)
 
 and transl_prim_2 env p arg1 arg2 dbg =
   match p with
@@ -2486,9 +2490,11 @@ and transl_prim_2 env p arg1 arg2 dbg =
       tag_int (Cop(Ccmpi(transl_comparison cmp),
                      [transl_unbox_int dbg env bi arg1;
                       transl_unbox_int dbg env bi arg2], dbg)) dbg
-  | prim ->
+  | _prim -> assert false
+(*
       fatal_errorf "Cmmgen.transl_prim_2: %a"
         Printbackend_primitives.primitive prim
+*)
 
 and transl_prim_3 env p arg1 arg2 arg3 dbg =
   match p with
@@ -2660,9 +2666,11 @@ and transl_prim_3 env p arg1 arg2 arg3 dbg =
                                           dbg) idx
                       (unaligned_set_64 ba_data idx newval dbg))))))
 
-  | prim ->
+  | _prim -> assert false
+(*
       fatal_errorf "Cmmgen.transl_prim_3: %a"
         Printbackend_primitives.primitive prim
+*)
 
 and transl_unbox_float dbg env = function
     Uconst(Uconst_ref(_, Some (Uconst_float f))) -> Cconst_float f
@@ -2746,9 +2754,9 @@ and is_shareable_cont exp =
 and make_shareable_cont mk exp =
   if is_shareable_cont exp then mk exp
   else begin
-    let nfail = next_raise_count () in
+    let nfail = Lambda.next_raise_count () in
     make_catch
-      nfail
+      nfail (Normal Asttypes.Nonrecursive)
       (mk (Cexit (nfail,[])))
       exp
   end

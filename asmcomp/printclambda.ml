@@ -116,10 +116,12 @@ and lam ppf = function
           id_arg_list in
       fprintf ppf
         "@[<2>(letrec@ (@[<hv 1>%a@])@ %a)@]" bindings id_arg_list lam body
-  | Uprim(prim, largs, _) ->
+  | Uprim(_prim, _largs, _) -> assert false
+(*
       let lams ppf largs =
         List.iter (fun l -> fprintf ppf "@ %a" lam l) largs in
       fprintf ppf "@[<2>(%a%a)@]" Printbackend_primitives.primitive prim lams largs
+*)
   | Uswitch(larg, sw, _dbg) ->
       let print_case tag index i ppf =
         for j = 0 to Array.length index - 1 do
