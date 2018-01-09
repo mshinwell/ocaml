@@ -68,8 +68,9 @@ module Static_part = struct
     | Boxed_int32 of Int32.t or_variable
     | Boxed_int64 of Int64.t or_variable
     | Boxed_nativeint of Targetint.t or_variable
-    | Mutable_float_array of { initial_value : float or_variable list; }
-    | Immutable_float_array of float or_variable list
+    | Mutable_float_array of
+        { initial_value : Numbers.Float_by_bit_pattern.t or_variable list; }
+    | Immutable_float_array of Numbers.Float_by_bit_pattern.t or_variable list
     | Mutable_string of { initial_value : string or_variable; }
     | Immutable_string of string or_variable
 
@@ -115,7 +116,7 @@ module Static_part = struct
     | Immutable_string (Const _) -> Name.Set.empty
     | Mutable_float_array { initial_value = fields; }
     | Immutable_float_array fields ->
-      List.fold_left (fun fns (field : float or_variable) ->
+      List.fold_left (fun fns (field : _ or_variable) ->
           match field with
           | Var v -> Name.Set.add (Name.var v) fns
           | Const _ -> fns)
@@ -127,7 +128,7 @@ module Static_part = struct
   let print ppf (t : t) =
     let fprintf = Format.fprintf in
     let print_float_array_field ppf = function
-      | Const f -> fprintf ppf "%f" f
+      | Const f -> fprintf ppf "%a" Numbers.Float_by_bit_pattern.print f
       | Var v -> Variable.print ppf v
     in
     match t with

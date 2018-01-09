@@ -65,7 +65,7 @@ module Static_part = struct
     | Immutable_string (Const _) -> ()
     | Mutable_float_array { initial_value = fields; }
     | Immutable_float_array fields ->
-      List.iter (fun (field : float or_variable) ->
+      List.iter (fun (field : _ or_variable) ->
           match field with
           | Var v ->
             E.check_variable_is_bound_and_of_kind env v

@@ -169,7 +169,10 @@ let rec declare_const t (const : Lambda.structured_constant)
     (* CR mshinwell: check that Const_float_array is always immutable *)
     register_const t
       (Static_part.Immutable_float_array
-         (List.map (fun s -> Static_part.Const (float_of_string s)) c))
+         (List.map (fun s ->
+           let f = float_of_string s in
+           let f = Numbers.Float_by_bit_pattern.create f in
+           Static_part.Const f) c))
       "float_array"
   | Const_block (tag, consts) ->
     let const : Static_part.t =

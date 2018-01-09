@@ -20,9 +20,6 @@ module E = Simplify_env_and_result.Env
 module R = Simplify_env_and_result.Result
 module T = Flambda_type
 
-module Float = Numbers.Float
-module Int32 = Numbers.Int32
-module Int64 = Numbers.Int64
 module Of_kind_value = Flambda_static.Of_kind_value
 module Program = Flambda_static.Program
 module Program_body = Flambda_static.Program_body
@@ -33,7 +30,6 @@ type 'a or_invalid =
   | Invalid
 
 let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
-  let importer = E.importer env in
   let type_of_name = E.type_of_name env in
   let simplify_float_fields (mut : Flambda_primitive.mutable_or_immutable)
         fields =
@@ -48,17 +44,20 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
           match field with
           | Const f -> done_something, ((field, or_unknown f) :: fields_rev)
           | Var var ->
-            let ty = E.find_var env var in
-            begin match T.prove_naked_float ~importer ~type_of_name ty with
-            | Not_all_values_known ->
+            let ty = E.find_variable env var in
+            begin match T.prove_naked_float ~type_of_name ty with
+            | Unknown ->
               done_something, ((field, None) :: fields_rev)
-            | Exactly fs ->
-              begin match Float.Set.get_singleton fs with
+            | Proved fs ->
+              begin match Numbers.Float_by_bit_pattern.Set.get_singleton fs with
               | None ->
                 done_something, ((field, None) :: fields_rev)
               | Some f ->
                 true, ((Static_part.Const f, or_unknown f) :: fields_rev)
               end
+            | Invalid ->
+              (* CR mshinwell: fill in this case *)
+              Misc.fatal_error "Not yet implemented"
             end)
         (false, [])
         fields
@@ -71,7 +70,7 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
     let or_unknown scanning ty =
       match mut with
       | Immutable -> ty
-      | Mutable -> T.any_value scanning Other
+      | Mutable -> T.any_value scanning
     in
     let fields_and_types =
       List.map (fun (field : Of_kind_value.t) ->
@@ -82,9 +81,9 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
           | Tagged_immediate imm ->
             field, or_unknown Definitely_immediate (T.this_tagged_immediate imm)
           | Dynamically_computed var ->
-            let ty = E.find_var env var in
+            let ty = E.find_variable env var in
             let ty, canonical_name =
-              T.resolve_aliases ~importer ~type_of_name ty
+              T.resolve_aliases ~type_of_name ty
             in
             let canonical_var =
               match canonical_name with
@@ -95,23 +94,23 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
             | Some (Symbol sym) ->
               Of_kind_value.Symbol sym, or_unknown Definitely_immediate ty
             | (Some (Var _)) | None ->
-              match T.prove_tagged_immediate ~importer ~type_of_name ty with
-              | Proved (Exactly imms) ->
+              match T.prove_tagged_immediate ~type_of_name ty with
+              | Proved imms ->
                 begin match Immediate.Set.get_singleton imms with
                 | None ->
                   Of_kind_value.Dynamically_computed canonical_var,
-                    or_unknown Must_scan ty
+                    or_unknown Unknown ty
                 | Some imm ->
                   Of_kind_value.Tagged_immediate imm,
-                    or_unknown Definitely_immediate (T.this_tagged_immediate imm)
+                    or_unknown Definitely_immediate
+                      (T.this_tagged_immediate imm)
                 end
-              | Proved Not_all_values_known
-              | Invalid ->
+              | Unknown | Invalid ->
                 (* Note that [Invalid] does not propagate here: all it means
                    is that this is something of kind [Value], but not a
                    tagged immediate.  Such things are still legal in this
                    context. *)
-                Of_kind_value.Dynamically_computed var, or_unknown Must_scan ty
+                Of_kind_value.Dynamically_computed var, or_unknown Unknown ty
             end)
         fields
     in
@@ -119,94 +118,125 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
     assert (match mut with
       | Immutable -> true
       | Mutable ->
-        List.for_all (fun ty -> not (T.is_known ~importer ~type_of_name ty))
+        List.for_all (fun ty -> not (T.is_known ~type_of_name ty))
           field_types);
-    let ty = T.block tag (Array.of_list field_types) in
+    let field_types =
+      List.map (fun field_type : _ T.mutable_or_immutable ->
+          Immutable (T.force_to_kind_value field_type))
+        field_types
+    in
+    let ty = T.block_of_values tag ~fields:(Array.of_list field_types) in
     Ok (Static_part.Block (tag, mut, fields), ty)
   | Set_of_closures set ->
     let r = R.create () in
     let set, ty, _r = Simplify_named.simplify_set_of_closures env r set in
     Ok (Static_part.Set_of_closures set, ty)
-  | Closure (sym, closure_id) ->
+  | Closure _ -> assert false (* XXX to do with Pierre (sym, closure_id) ->
     let ty = E.find_symbol env sym in
-    begin match T.prove_sets_of_closures ~importer ~type_of_name ty with
+    begin match T.prove_sets_of_closures ~type_of_name ty with
     | Proved (Exactly sets) ->
       let closure_ty =
         T.Joined_sets_of_closures.type_for_closure_id sets closure_id
       in
       Ok (static_part, closure_ty)
     | Proved Not_all_values_known ->
-      Ok (static_part, T.any_value Must_scan Other)
+      Ok (static_part, T.any_value Definitely_pointer)
     | Invalid -> Invalid
-    end
+    end*)
   | Boxed_float (Const f) -> Ok (static_part, T.this_boxed_float f)
   | Mutable_string { initial_value = Const str; } ->
-    Ok (static_part, T.mutable_string ~size:(String.length str))
+    let size = Targetint.OCaml.of_int (String.length str) in
+    Ok (static_part, T.mutable_string ~size)
   | Immutable_string (Const str) ->
     let ty = T.this_immutable_string str in
     Ok (static_part, ty)
   | Boxed_float (Var var) ->
-    let ty = E.find_var env var in
-    (* CR mshinwell: Add e.g. [T.prove_unique_boxed_float] -- should save
-       code here *)
-    begin match T.prove_boxed_float ~importer ~type_of_name ty with
-    | Proved (Exactly fs) ->
-      begin match Float.Set.get_singleton fs with
-      | Some f ->
-        Ok (Static_part.Boxed_float (Const f), T.this_boxed_float f)
-      | None ->
-        Ok (static_part, T.any_boxed_float ())
+    (* CR mshinwell: Share code between these float/int32/int64/nativeint cases.
+       [Number_adjuncts] may help *)
+    let ty = E.find_variable env var in
+    begin match T.prove_boxed_float ~type_of_name ty with
+    | Proved ty_naked_float ->
+      let ty = T.of_ty_naked_number ty_naked_float Naked_float in
+      begin match T.prove_naked_float ~type_of_name ty with
+      | Proved fs ->
+        begin match Numbers.Float_by_bit_pattern.Set.get_singleton fs with
+        | Some f ->
+          Ok (Static_part.Boxed_float (Const f), T.this_boxed_float f)
+        | None ->
+          Ok (static_part, T.any_boxed_float ())
+        end
+      | Unknown -> Ok (static_part, T.any_boxed_float ())
+      | Invalid -> Invalid
       end
-    | Proved Not_all_values_known -> Ok (static_part, T.any_boxed_float ())
+    | Unknown -> Ok (static_part, T.any_boxed_float ())
     | Invalid -> Invalid
     end
   | Boxed_int32 (Const n) -> Ok (static_part, T.this_boxed_int32 n)
   | Boxed_int32 (Var var) ->
-    let ty = E.find_var env var in
-    begin match T.prove_boxed_int32 ~importer ~type_of_name ty with
-    | Proved (Exactly is) ->
-      begin match Int32.Set.get_singleton is with
-      | Some i ->
-        Ok (Static_part.Boxed_int32 (Const i), T.this_boxed_int32 i)
-      | None ->
-        Ok (static_part, T.any_boxed_int32 ())
+    let ty = E.find_variable env var in
+    begin match T.prove_boxed_int32 ~type_of_name ty with
+    | Proved ty_naked_int32 ->
+      let ty = T.of_ty_naked_number ty_naked_int32 Naked_int32 in
+      begin match T.prove_naked_int32 ~type_of_name ty with
+      | Proved fs ->
+        begin match Numbers.Int32.Set.get_singleton fs with
+        | Some f ->
+          Ok (Static_part.Boxed_int32 (Const f), T.this_boxed_int32 f)
+        | None ->
+          Ok (static_part, T.any_boxed_int32 ())
+        end
+      | Unknown -> Ok (static_part, T.any_boxed_int32 ())
+      | Invalid -> Invalid
       end
-    | Proved Not_all_values_known -> Ok (static_part, T.any_boxed_int32 ())
+    | Unknown -> Ok (static_part, T.any_boxed_int32 ())
     | Invalid -> Invalid
     end
   | Boxed_int64 (Const n) -> Ok (static_part, T.this_boxed_int64 n)
   | Boxed_int64 (Var var) ->
-    let ty = E.find_var env var in
-    begin match T.prove_boxed_int64 ~importer ~type_of_name ty with
-    | Proved (Exactly is) ->
-      begin match Int64.Set.get_singleton is with
-      | Some i ->
-        Ok (Static_part.Boxed_int64 (Const i), T.this_boxed_int64 i)
-      | None ->
-        Ok (static_part, T.any_boxed_int64 ())
+    let ty = E.find_variable env var in
+    begin match T.prove_boxed_int64 ~type_of_name ty with
+    | Proved ty_naked_int64 ->
+      let ty = T.of_ty_naked_number ty_naked_int64 Naked_int64 in
+      begin match T.prove_naked_int64 ~type_of_name ty with
+      | Proved fs ->
+        begin match Numbers.Int64.Set.get_singleton fs with
+        | Some f ->
+          Ok (Static_part.Boxed_int64 (Const f), T.this_boxed_int64 f)
+        | None ->
+          Ok (static_part, T.any_boxed_int64 ())
+        end
+      | Unknown -> Ok (static_part, T.any_boxed_int64 ())
+      | Invalid -> Invalid
       end
-    | Proved Not_all_values_known -> Ok (static_part, T.any_boxed_int64 ())
+    | Unknown -> Ok (static_part, T.any_boxed_int64 ())
     | Invalid -> Invalid
     end
   | Boxed_nativeint (Const n) -> Ok (static_part, T.this_boxed_nativeint n)
   | Boxed_nativeint (Var var) ->
-    let ty = E.find_var env var in
-    begin match T.prove_boxed_nativeint ~importer ~type_of_name ty with
-    | Proved (Exactly is) ->
-      begin match Targetint.Set.get_singleton is with
-      | Some i ->
-        Ok (Static_part.Boxed_nativeint (Const i), T.this_boxed_nativeint i)
-      | None ->
-        Ok (static_part, T.any_boxed_nativeint ())
+    let ty = E.find_variable env var in
+    begin match T.prove_boxed_nativeint ~type_of_name ty with
+    | Proved ty_naked_nativeint ->
+      let ty = T.of_ty_naked_number ty_naked_nativeint Naked_nativeint in
+      begin match T.prove_naked_nativeint ~type_of_name ty with
+      | Proved fs ->
+        begin match Targetint.Set.get_singleton fs with
+        | Some f ->
+          Ok (Static_part.Boxed_nativeint (Const f), T.this_boxed_nativeint f)
+        | None ->
+          Ok (static_part, T.any_boxed_nativeint ())
+        end
+      | Unknown -> Ok (static_part, T.any_boxed_nativeint ())
+      | Invalid -> Invalid
       end
-    | Proved Not_all_values_known -> Ok (static_part, T.any_boxed_nativeint ())
+    | Unknown -> Ok (static_part, T.any_boxed_nativeint ())
     | Invalid -> Invalid
     end
   | Mutable_float_array { initial_value = fields; } ->
     let done_something, initial_value, fields =
       simplify_float_fields Mutable fields
     in
-    let ty = T.mutable_float_array ~size:(List.length fields) in
+    let size = Targetint.OCaml.of_int (List.length fields) in
+    let ty = T.mutable_float_array ~size in
     if not done_something then Ok (static_part, ty)
     else Ok (Static_part.Mutable_float_array { initial_value; }, ty)
   | Immutable_float_array fields ->
@@ -216,17 +246,17 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
     let fields =
       List.map (fun field ->
           match field with
-          | None -> T.any_naked_float ()
-          | Some f -> T.this_naked_float f)
+          | None -> T.any_naked_float_as_ty_naked_float ()
+          | Some f -> T.this_naked_float_as_ty_naked_float f)
         fields
     in
     let ty = T.immutable_float_array (Array.of_list fields) in
     if not done_something then Ok (static_part, ty)
     else Ok (Static_part.Immutable_float_array static_part_fields, ty)
   | Mutable_string { initial_value = Var var; } ->
-    let ty = E.find_var env var in
-    begin match T.prove_string ~importer ~type_of_name ty with
-    | Proved (Exactly strs) ->
+    let ty = E.find_variable env var in
+    begin match T.prove_string ~type_of_name ty with
+    | Proved strs ->
       begin match T.String_info.Set.get_singleton strs with
       | Some str ->
         let ty = T.mutable_string ~size:str.size in
@@ -235,16 +265,16 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
         | Contents str ->
           Ok (Static_part.Mutable_string { initial_value = Const str; }, ty)
         end
-      | None -> Ok (static_part, T.any_value Must_scan Other)
+      | None -> Ok (static_part, T.any_value Definitely_pointer)
       end
-    | Proved Not_all_values_known ->
-      Ok (static_part, T.any_value Must_scan Other)
+    | Unknown ->
+      Ok (static_part, T.any_value Definitely_pointer)
     | Invalid -> Invalid
     end
   | Immutable_string (Var var) ->
-    let ty = E.find_var env var in
-    begin match T.prove_string ~importer ~type_of_name ty with
-    | Proved (Exactly strs) ->
+    let ty = E.find_variable env var in
+    begin match T.prove_string ~type_of_name ty with
+    | Proved strs ->
       begin match T.String_info.Set.get_singleton strs with
       | Some str ->
         begin match str.contents with
@@ -255,10 +285,10 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
           let ty = T.immutable_string ~size:str.size in
           Ok (static_part, ty)
         end
-      | None -> Ok (static_part, T.any_value Must_scan Other)
+      | None -> Ok (static_part, T.any_value Definitely_pointer)
       end
-    | Proved Not_all_values_known ->
-      Ok (static_part, T.any_value Must_scan Other)
+    | Unknown ->
+      Ok (static_part, T.any_value Definitely_pointer)
     | Invalid -> Invalid
     end
 
@@ -310,8 +340,15 @@ let simplify_define_symbol env (recursive : Flambda.recursive)
       let return_cont_approx =
         Continuation_approx.create_unknown ~name ~arity
       in
+      let exn_cont_approx =
+        Continuation_approx.create_unknown ~name:computation.exception_cont
+          ~arity:[Flambda_kind.value Unknown]
+      in
       let expr, r, _continuation_uses =
         let env = E.add_continuation env name return_cont_approx in
+        let env =
+          E.add_continuation env computation.exception_cont exn_cont_approx
+        in
         let r = R.create () in
         let descr =
           let symbol_names =
@@ -322,7 +359,9 @@ let simplify_define_symbol env (recursive : Flambda.recursive)
           Printf.sprintf "Toplevel binding(s) of: %s"
             (String.concat "+" symbol_names)
         in
-        Simplify.simplify_toplevel env r computation.expr ~continuation:name
+        Simplify.simplify_toplevel env r computation.expr
+          ~continuation:name
+          ~exn_continuation:computation.exception_cont
           ~descr
       in
       (* CR mshinwell: Add unboxing of the continuation here.  This will look
@@ -331,13 +370,12 @@ let simplify_define_symbol env (recursive : Flambda.recursive)
          need to do something else here).  Note that the linearity check
          for Unbox_returns will enable us to handle mutable returned values
          too. *)
-      let args_types = R.continuation_args_types r name ~arity in
+      let args_types, _typing_env =
+        R.continuation_args_types r name ~arity
+          ~default_env:(E.get_typing_environment env)
+      in
       assert (List.for_all2 (fun (_var, kind1) ty ->
-          let kind2 =
-            T.kind ~importer:(E.importer env)
-              ~type_of_name:(E.type_of_name env)
-              ty
-          in
+          let kind2 = T.kind ~type_of_name:(E.type_of_name env) ty in
           Flambda_kind.equal kind1 kind2)
         computation.computed_values args_types);
       let env =
@@ -445,7 +483,8 @@ let simplify_program env (program : Program.t) =
   let module Backend = (val backend : Backend_intf.S) in
   let predef_exn_symbols = Backend.all_predefined_exception_symbols () in
   let env =
-    Symbol.Set.fold (fun symbol env -> E.import_symbol env symbol)
+    Symbol.Set.fold (fun symbol env ->
+        E.add_symbol env symbol (T.any_value Unknown))
       (Symbol.Set.union program.imported_symbols predef_exn_symbols)
       env
   in

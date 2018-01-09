@@ -320,16 +320,17 @@ module type S = sig
 
   val any_naked_immediate : unit -> t
   val any_naked_float : unit -> t
+
+  val any_naked_float_as_ty_naked_float
+     : unit
+    -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number
+
   val any_naked_int32 : unit -> t
   val any_naked_int64 : unit -> t
   val any_naked_nativeint : unit -> t
 
   val any_fabricated : unit -> t
   val any_phantom : unit -> t
-
-(*
-  val any_naked_float_as_ty_naked_float : unit -> ty_naked_float
-*)
 
   (** Building of types representing tagged / boxed values from specified
       constants. *)
@@ -350,6 +351,9 @@ module type S = sig
       specified constants. *)
   val this_naked_immediate : Immediate.t -> t
   val this_naked_float : Numbers.Float_by_bit_pattern.t -> t
+  val this_naked_float_as_ty_naked_float
+     : Numbers.Float_by_bit_pattern.t
+    -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number
   val these_naked_floats : Numbers.Float_by_bit_pattern.Set.t -> t
   val this_naked_int32 : Int32.t -> t
   val these_naked_int32s : Numbers.Int32.Set.t -> t

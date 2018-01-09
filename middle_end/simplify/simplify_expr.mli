@@ -29,10 +29,11 @@ val simplify_continuation_use_cannot_inline
   -> arity:Flambda_arity.t
   -> Continuation.t * Simplify_env_and_result.Result.t
 
+(* CR mshinwell: Rename function (it doesn't take Let_cont_handlers.t) *)
 val simplify_let_cont_handlers
    : Simplify_env_and_result.Env.t
   -> Simplify_env_and_result.Result.t
-  -> handlers:Flambda.Let_cont_handlers.t
+  -> handlers:Flambda.Continuation_handlers.t
   -> recursive:Flambda.recursive
   -> freshening:Freshening.t
   -> Flambda.Let_cont_handlers.t option

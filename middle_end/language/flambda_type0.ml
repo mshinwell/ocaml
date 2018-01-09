@@ -761,14 +761,11 @@ end) = struct
     | Fabricated _ -> Fabricated (No_alias (Join []))
     | Phantom _ -> Phantom (No_alias (Join []))
 
-(*
-
-  let any_naked_float_as_ty_naked_float () : ty_naked_float =
-    No_alias (Resolved (Unknown (Other, ())))
-*)
-
   let any_value_as_ty_value value_kind : ty_value =
     No_alias (Unknown value_kind)
+
+  let any_naked_float_as_ty_naked_float () : _ ty_naked_number =
+    No_alias (Unknown ())
 
   let any_value value_kind : t =
     Value (any_value_as_ty_value value_kind)
@@ -839,8 +836,13 @@ end) = struct
   let this_naked_immediate i =
     these_naked_immediates (Immediate.Set.singleton i)
 
-  let this_naked_float i =
-    these_naked_floats (Float_by_bit_pattern.Set.singleton i)
+  let this_naked_float f =
+    these_naked_floats (Float_by_bit_pattern.Set.singleton f)
+
+  let this_naked_float_as_ty_naked_float f =
+    let fs = Float_by_bit_pattern.Set.singleton f in
+    let of_kind : _ of_kind_naked_number = Float fs in
+    No_alias (Join [of_kind])
 
   let this_naked_int32 i =
     these_naked_int32s (Int32.Set.singleton i)

@@ -312,7 +312,7 @@ let rec simplify_let_cont_handler ~env ~r ~cont ~handler ~arg_tys =
   in
   r, handler
 
-and simplify_let_cont_handlers ~env ~r ~handlers
+and simplify_let_cont_handlers env r ~handlers
       ~(recursive : Flambda.recursive) ~freshening
       : Flambda.Let_cont_handlers.t option * R.t =
   Continuation.Map.iter (fun cont _handler ->
@@ -541,8 +541,9 @@ and simplify_let_cont env r ~body
       then Unchanged { handler; }
       else
         let args_types =
-          R.continuation_args_types' r name
+          R.continuation_args_types r name
             ~arity:(Flambda.Continuation_handler.param_arity handler)
+            ~default_env:(E.get_typing_environment env)
         in
         Unbox_continuation_params.for_non_recursive_continuation ~handler
           ~args_types ~name ~backend:(E.backend env)
@@ -559,7 +560,7 @@ and simplify_let_cont env r ~body
       in
       let recursive : Flambda.recursive = Non_recursive in
       let handlers, r =
-        simplify_let_cont_handlers ~env ~r ~handlers ~recursive ~freshening
+        simplify_let_cont_handlers env r ~handlers ~recursive ~freshening
       in
       match handlers with
       | None -> body, r
@@ -596,12 +597,14 @@ and simplify_let_cont env r ~body
        5. The continuation(s) is/are unboxed as required.
        6. The continuation(s) are simplified once again using the
           Flambda types deduced in step 2.
+       We could continue to a fixed point, but it doesn't seem worth the
+       complication.
     *)
     let original_r = r in
     let original_handlers = handlers in
     let recursive : Flambda.recursive = Recursive in
     let handlers, r =
-      simplify_let_cont_handlers ~env ~r ~handlers ~recursive ~freshening
+      simplify_let_cont_handlers env r ~handlers ~recursive ~freshening
     in
     begin match handlers with
     | None -> body, r
@@ -656,7 +659,7 @@ and simplify_let_cont env r ~body
             (Continuation.Map.empty, body_env, [])
       in
       let handlers, r =
-        simplify_let_cont_handlers ~env ~r ~handlers ~recursive ~freshening
+        simplify_let_cont_handlers env r ~handlers ~recursive ~freshening
       in
       let r =
         List.fold_left (fun r (if_present_in_env, then_add_to_env) ->
@@ -912,7 +915,7 @@ and simplify_function_application env r (apply : Flambda.Apply.t)
              regressing?  (This should be ok because if it regresses it
              should still be conservative.) *)
           List.map (fun arg ->
-              let ty = E.find_simple env arg in
+              let _arg, ty = S.simplify_simple env arg in
               (E.type_accessor env T.kind) ty)
             args
         in
