@@ -20,7 +20,9 @@ type result = {
   expr : Clambda.ulambda;
   preallocated_blocks : Clambda.preallocated_block list;
   structured_constants : Clambda.ustructured_constant Symbol.Map.t;
+(*
   exported : Export_info.t;
+*)
 }
 
 (** Convert an Flambda program, with associated proto-export information,
@@ -35,4 +37,4 @@ type result = {
     For direct calls, the hidden closure parameter is added.  Switch
     tables are also built.
 *)
-val convert : Flambda.program * Export_info.t -> result
+val convert : Flambda_static.Program.t (* * Export_info.t *) -> result

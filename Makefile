@@ -284,12 +284,16 @@ MIDDLE_END_FROM_LAMBDA=\
 
 #  middle_end/from_lambda/lambda_to_flambda_primitives.cmo \
 
+# CR mshinwell: Wart: simplify modules in the inlining stanza below
+
 MIDDLE_END_INLINING=\
-  middle_end/inlining/continuation_approx.cmo \
-  middle_end/inlining/continuation_inlining.cmo \
   middle_end/inlining/inlining_cost.cmo \
   middle_end/inlining/inlining_stats_types.cmo \
   middle_end/inlining/inlining_stats.cmo \
+  middle_end/inlining/continuation_approx.cmo \
+  middle_end/simplify/simplify_env_and_result.cmo \
+  middle_end/simplify/simplify_aux.cmo \
+  middle_end/inlining/continuation_inlining.cmo \
   middle_end/inlining/inlining_transforms.cmo \
   middle_end/inlining/inlining_decision.cmo
 
@@ -325,8 +329,6 @@ MIDDLE_END_REMOVAL=\
   # middle_end/removal/unrecursify.cmo
 
 MIDDLE_END_SIMPLIFY=\
-  middle_end/simplify/simplify_env_and_result.cmo \
-  middle_end/simplify/simplify_aux.cmo \
   middle_end/simplify/simplify_simple.cmo \
   middle_end/simplify/simplify_generic_array.cmo \
   middle_end/simplify/simplify_unary_primitive.cmo \
@@ -360,8 +362,8 @@ MIDDLE_END=\
   $(MIDDLE_END_FROM_LAMBDA) \
   $(MIDDLE_END_INLINING) \
   $(MIDDLE_END_REMOVAL) \
-  $(MIDDLE_END_SIMPLIFY) \
   $(MIDDLE_END_UNBOXING) \
+  $(MIDDLE_END_SIMPLIFY) \
   $(MIDDLE_END_TOPLEVEL)
 
 TOPLEVEL=toplevel/genprintval.cmo toplevel/toploop.cmo \

@@ -42,7 +42,7 @@ let pass_dump_linear_if ppf flag message phrase =
 
 let flambda_raw_clambda_dump_if ppf
       ({ Flambda_to_clambda. expr = ulambda; preallocated_blocks = _;
-        structured_constants; exported = _; } as input) =
+        structured_constants; (* exported = _; *) } as input) =
   if !dump_rawclambda then
     begin
       Format.fprintf ppf "@.clambda (before Un_anf):@.";
@@ -173,8 +173,10 @@ let compile_unit _output_prefix asm_filename keep_asm
     remove_file obj_filename;
     raise exn
 
-let set_export_info (ulambda, prealloc, structured_constants, export) =
+let set_export_info (ulambda, prealloc, structured_constants (*, export *)) =
+(*
   Compilenv.set_export_info export;
+*)
   (ulambda, prealloc, structured_constants)
 
 let end_gen_implementation ?toplevel ppf
@@ -199,20 +201,21 @@ let end_gen_implementation ?toplevel ppf
     );
   Emit.end_assembly ()
 
-let flambda_gen_implementation ?toplevel ~backend ppf
-    (program:Flambda.program) =
-  let export = Build_export_info.build_export_info ~backend program in
+let flambda_gen_implementation ?toplevel ~backend:_ ppf
+    (program : Flambda_static.Program.t) =
+(*  let export = Build_export_info.build_export_info ~backend program in *)
   let (clambda, preallocated, constants) =
     Profile.record_call "backend" (fun () ->
-      (program, export)
+      (* CR mshinwell: Re-enable here for export info work *)
+      (program (* , export *))
       ++ Flambda_to_clambda.convert
       ++ flambda_raw_clambda_dump_if ppf
       ++ (fun { Flambda_to_clambda. expr; preallocated_blocks;
-                structured_constants; exported; } ->
+                structured_constants; (* exported; *) } ->
              (* "init_code" following the name used in
                 [Cmmgen.compunit_and_constants]. *)
            Un_anf.apply expr ~what:"init_code", preallocated_blocks,
-           structured_constants, exported)
+           structured_constants (*, exported *))
       ++ set_export_info)
   in
   let constants =
@@ -261,7 +264,7 @@ let compile_implementation_clambda ?toplevel prefixname
     ppf lambda_gen_implementation program
 
 let compile_implementation_flambda ?toplevel prefixname
-    ~required_globals ~backend ppf (program:Flambda.program) =
+    ~required_globals ~backend ppf (program : Flambda_static.Program.t) =
   compile_implementation_gen ?toplevel prefixname
     ~required_globals ppf (flambda_gen_implementation ~backend) program
 

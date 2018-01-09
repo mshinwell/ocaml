@@ -14,6 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(* CR mshinwell: Needs rewriting using the new type system
+
 (* CR mshinwell: There must be a check that types saved into .cmx files
    do not contain free variables. *)
 
@@ -699,3 +701,5 @@ Format.eprintf "Export info@;%a@;%!"
   Export_info.print_all (export_info, [global_symbol]);
 *)
 export_info
+
+*)

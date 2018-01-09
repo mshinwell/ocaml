@@ -13,7 +13,7 @@
 (*   special exception on linking described in the file LICENSE.          *)
 (*                                                                        *)
 (**************************************************************************)
-
+(*
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 type for_one_or_more_units = {
@@ -1034,7 +1034,11 @@ let import_arities ({sets_of_closures}:Export_info.t) =
     sets_of_closures;
   !table
 
-let convert (program, exported) : result =
+*)
+
+let convert (_program, _exported) : result = assert false
+
+(*
   let current_unit =
     let offsets = Closure_offsets.compute program in
     { fun_offset_table = offsets.function_offsets;
@@ -1083,6 +1087,7 @@ let convert (program, exported) : result =
       ~constant_sets_of_closures:current_unit.constant_sets_of_closures
   in
   { expr; preallocated_blocks; structured_constants; exported; }
+*)
 
 (*
 

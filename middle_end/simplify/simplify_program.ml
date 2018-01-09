@@ -359,7 +359,7 @@ let simplify_define_symbol env (recursive : Flambda.recursive)
           Printf.sprintf "Toplevel binding(s) of: %s"
             (String.concat "+" symbol_names)
         in
-        Simplify.simplify_toplevel env r computation.expr
+        (E.simplify_toplevel env) env r computation.expr
           ~continuation:name
           ~exn_continuation:computation.exception_cont
           ~descr
