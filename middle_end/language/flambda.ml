@@ -21,8 +21,15 @@ module K = Flambda_kind
 
 type assign = F0.assign
 type mutable_or_immutable = Flambda0.mutable_or_immutable
-type inline_attribute = F0.inline_attribute
-type specialise_attribute = F0.specialise_attribute
+type inline_attribute = F0.inline_attribute =
+  | Always_inline
+  | Never_inline
+  | Unroll of int
+  | Default_inline
+type specialise_attribute = F0.specialise_attribute =
+  | Always_specialise
+  | Never_specialise
+  | Default_specialise
 type recursive = F0.recursive
 
 module Free_var = F0.Free_var
@@ -1693,6 +1700,7 @@ end and Function_declarations : sig
   val all_functions_parameters : t -> Variable.Set.t
   val contains_stub : t -> bool
   val map_parameter_types : t -> f:(Flambda_type.t -> Flambda_type.t) -> t
+  val freshen : t -> Freshening.t -> t * Freshening.t
 end = struct
   include F0.Function_declarations
 
@@ -1781,6 +1789,50 @@ end = struct
         t.funs
     in
     update t ~funs
+
+  let freshen (func_decls : t) freshening =
+    let freshen_func_decl (func_decl : Function_declaration.t)
+          freshening =
+      let params_rev, freshening =
+        List.fold_left (fun (params_rev, freshening) param ->
+            let var = Typed_parameter.var param in
+            let fresh_var, freshening =
+              Freshening.add_variable freshening var
+            in
+            let param =
+              (* CR mshinwell: Add [Typed_parameter.replace_var] *)
+              Typed_parameter.map_var ~f:(fun _var -> fresh_var) param
+            in
+            param :: params_rev, freshening)
+          ([], freshening)
+          func_decl.params
+      in
+      let params = List.rev params_rev in
+      (* Since all parameters are distinct, even between functions, we can
+         just use a single substitution. *)
+      (* CR mshinwell: Why does this [toplevel_substitution] need to happen?
+         Can't this freshening be put into the environment and then applied
+         as needed? *)
+      let body =
+        Expr.toplevel_substitution (Freshening.variable_substitution freshening)
+          func_decl.body
+      in
+      let function_decl =
+        Function_declaration.update_params_and_body func_decl ~params ~body
+      in
+      function_decl, freshening
+    in
+    let funs, freshening =
+      Closure_id.Map.fold (fun closure_id func_decl (funs, freshening) ->
+          let func_decl, freshening =
+            freshen_func_decl func_decl freshening
+          in
+          Closure_id.Map.add closure_id func_decl funs, freshening)
+        func_decls.funs
+        (Closure_id.Map.empty, freshening)
+    in
+    let function_decls = update func_decls ~funs in
+    function_decls, freshening
 end and Function_declaration : sig
   include module type of F0.Function_declaration
 

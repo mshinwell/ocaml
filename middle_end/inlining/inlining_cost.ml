@@ -18,7 +18,8 @@
 
 (* Simple approximation of the space cost of a primitive. *)
 
-let prim_size (prim : Flambda_primitive.t) args =
+let prim_size (_prim : Flambda_primitive.t) = 1
+(* CR mshinwell: Implement this function
   match prim with
   | Pidentity -> 0
   | Pgetglobal _ -> 1
@@ -62,34 +63,41 @@ let prim_size (prim : Flambda_primitive.t) args =
   (* CR-soon mshinwell: This match must be made exhaustive.
      mshinwell: Let's do this when we have the new size computation. *)
   | _ -> 2 (* arithmetic and comparisons *)
+*)
 
 (* Simple approximation of the space cost of an Flambda expression. *)
 
 (* CR-soon mshinwell: Investigate revised size numbers. *)
 
 let direct_call_size = 4
-let project_size = 1
+let _project_size = 1
 
 let lambda_smaller' lam ~than:threshold =
   let size = ref 0 in
   let rec lambda_size (lam : Flambda.Expr.t) =
     if !size > threshold then raise Exit;
     match lam with
-    | Apply ({ func = _; args = _; call_kind = direct }) ->
+    | Apply { call_kind; _ } ->
       let call_cost =
-        match direct with
-        | Indirect_unknown_arity -> 6
-        | Indirect_known_arity _ -> 6  (* CR mshinwell: what should this say? *)
-        | Direct _ -> direct_call_size
+        match call_kind with
+        | Function Direct _ -> direct_call_size
+        | Function Indirect_unknown_arity -> 6
+        | Function Indirect_known_arity _ ->
+          6  (* CR mshinwell: what should this say? *)
+        | Method _ -> 1 (* CR mshinwell: fix *)
+        | C_call _ -> 1 (* CR mshinwell: fix *)
       in
       size := !size + call_cost
     | Let { defining_expr; body; _ } ->
       lambda_named_size defining_expr;
       lambda_size body
     | Let_mutable { body } -> lambda_size body
-    | Switch (_, sw) ->
+    | Switch (_, Value arms) ->
       let aux = function _::_::_ -> size := !size + 5 | _ -> () in
-      aux sw.consts
+      aux (Targetint.OCaml.Map.bindings arms)
+    | Switch (_, Fabricated arms) ->
+      let aux = function _::_::_ -> size := !size + 5 | _ -> () in
+      aux (Tag.Map.bindings arms)
     | Apply_cont _ -> incr size
     | Let_cont { body; handlers; } ->
       lambda_size body;
@@ -106,20 +114,16 @@ let lambda_smaller' lam ~than:threshold =
   and lambda_named_size (named : Flambda.Named.t) =
     if !size > threshold then raise Exit;
     match named with
-    | Var _ | Symbol _ | Read_mutable _ -> ()
+    | Simple (Name _) -> ()
+    | Simple (Const _) -> incr size
     | Assign _ -> incr size
-    | Const _ | Allocated_const _ -> incr size
-    | Read_symbol_field _ -> incr size
-    | Set_of_closures ({ function_decls = ffuns }) ->
-      Closure_id.Map.iter (fun _ (ffun : Flambda.Function_declaration.t) ->
-          lambda_size ffun.body)
-        ffuns.funs
-    | Project_closure _ | Project_var _ ->
-      size := !size + project_size
-    | Move_within_set_of_closures _ ->
-      incr size
-    | Prim (prim, args, _) ->
-      size := !size + prim_size prim args
+    | Read_mutable _ -> ()
+    | Set_of_closures ({ function_decls; _ }) ->
+      Closure_id.Map.iter (fun _ (func_decl : Flambda.Function_declaration.t) ->
+          lambda_size func_decl.body)
+        function_decls.funs
+    | Prim (prim, _) ->
+      size := !size + prim_size prim
   in
   try
     lambda_size lam;
@@ -231,11 +235,21 @@ module Benefit = struct
 
   let remove_call t = { t with remove_call = t.remove_call + 1; }
   let remove_alloc t = { t with remove_alloc = t.remove_alloc + 1; }
-  let remove_prim t = { t with remove_prim = t.remove_prim + 1; }
-  let remove_prims t n = { t with remove_prim = t.remove_prim + n; }
+
+  let remove_primitive _prim t =
+    { t with remove_prim = t.remove_prim + 1; }
+
+  let remove_primitive_application _prim t =
+    { t with remove_prim = t.remove_prim + 1; }
+
   let remove_branch t = { t with remove_branch = t.remove_branch + 1; }
-  let direct_call_of_indirect t =
+
+  let direct_call_of_indirect_known_arity t =
     { t with direct_call_of_indirect = t.direct_call_of_indirect + 1; }
+
+  let direct_call_of_indirect_unknown_arity t =
+    { t with direct_call_of_indirect = t.direct_call_of_indirect + 1; }
+
   let requested_inline t ~size_of =
     let size = lambda_size size_of in
     { t with requested_inline = t.requested_inline + size; }
@@ -245,10 +259,12 @@ module Benefit = struct
     | Switch _ | Apply_cont _ | Apply _ -> b := remove_call !b
     | Let _ | Let_mutable _ | Let_cont _ | Invalid _ -> ()
 
-  let remove_code_helper_named b (named : Flambda.Named.t) =
+  let remove_code_helper_named _b (named : Flambda.Named.t) =
     match named with
-    | Assign _ -> b := remove_prim !b
+    | Assign _ -> ()  (* CR mshinwell: Being removed anyway...
+      b := remove_prim !b *)
     | Set_of_closures _
+(* CR mshinwell: To fix
     | Prim ((Pmakearray _ | Pmakeblock _ | Pduprecord _ | Pbox_float), _, _) ->
       b := remove_alloc !b
       (* CR pchambart: should we consider that boxed integer and float
@@ -257,7 +273,8 @@ module Benefit = struct
     | Prim _ | Project_closure _ | Project_var _
     | Move_within_set_of_closures _
     | Read_symbol_field _ -> b := remove_prim !b
-    | Var _ | Symbol _ | Read_mutable _ | Allocated_const _ | Const _ -> ()
+*)
+    | Simple _ | Read_mutable _  | Prim _ -> ()
 
   let remove_code lam b =
     let b = ref b in
@@ -271,10 +288,12 @@ module Benefit = struct
       (remove_code_helper_named b) lam;
     !b
 
+(*
   let remove_projection (_proj : Projection.t) b =
     (* They are all primitives for the moment.  The [Projection.t] argument
        is here for future expansion. *)
     remove_prim b
+*)
 
   let print ppf b =
     Format.fprintf ppf "@[remove_call: %i@ remove_alloc: %i@ \
@@ -328,8 +347,10 @@ module Benefit = struct
   let add_code_named lam b =
     b - (remove_code_named lam zero)
 
+(*
   let add_projection proj b =
     b - (remove_projection proj zero)
+*)
 
   (* Print out a benefit as a table *)
 

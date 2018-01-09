@@ -72,7 +72,7 @@ let prepare_to_simplify_set_of_closures ~env
   ignore set_of_closures;
   let env = E.local env in
   let function_decls, freshening =
-    Freshening.for_function_declarations (E.freshening env) function_decls
+    Flambda.Function_declarations.freshen function_decls (E.freshening env)
   in
   let env =
     E.enter_set_of_closures_declaration (E.set_freshening env freshening)

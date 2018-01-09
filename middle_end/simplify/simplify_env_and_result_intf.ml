@@ -130,6 +130,8 @@ module type Env = sig
 
   val mem_simple : t -> Simple.t -> bool
 
+  val mem_name : t -> Name.t -> bool
+
   val type_of_name
      : t
     -> Flambda_type.Name_or_export_id.t

@@ -299,15 +299,16 @@ MIDDLE_END_FROM_LAMBDA=\
 #  middle_end/from_lambda/lambda_to_flambda_primitives.cmo \
 
 MIDDLE_END_INLINING=\
-  # middle_end/inlining/continuation_approx.cmo \
-  # middle_end/inlining/continuation_inlining.cmo \
+  middle_end/inlining/continuation_approx.cmo \
+  middle_end/inlining/continuation_inlining.cmo \
+  middle_end/inlining/inlining_cost.cmo \
+  middle_end/inlining/inlining_stats.cmo \
+  middle_end/inlining/inlining_stats_types.cmo \
+  middle_end/inlining/inlining_decision.cmo \
+  middle_end/inlining/inlining_transforms.cmo
+
   # middle_end/inlining/continuation_specialisation.cmo \
   # middle_end/inlining/continuation_with_specialised_args.cmo \
-  # middle_end/inlining/inlining_cost.cmo \
-  # middle_end/inlining/inlining_decision.cmo \
-  # middle_end/inlining/inlining_stats.cmo \
-  # middle_end/inlining/inlining_stats_types.cmo \
-  # middle_end/inlining/inlining_transforms.cmo
 
 MIDDLE_END_LANGUAGE=\
   middle_end/language/flambda_kind.cmo \

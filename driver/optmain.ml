@@ -45,20 +45,6 @@ module Backend = struct
   let import_export_id =
     (fun _ -> assert false)
   let all_predefined_exception_symbols = fun _ -> assert false
-
-  let import_value_type_as_resolved_ty_value _ = assert false
-  let import_naked_immediate_type_as_resolved_ty_naked_immediate _ = assert false
-  let import_naked_float_type_as_resolved_ty_naked_float _ = assert false
-  let import_naked_int32_type_as_resolved_ty_naked_int32 _ = assert false
-  let import_naked_int64_type_as_resolved_ty_naked_int64 _ = assert false
-  let import_naked_nativeint_type_as_resolved_ty_naked_nativeint _ = assert false
-  let import_value_type _ = assert false
-  let import_naked_immediate_type _ = assert false
-  let import_naked_float_type _ = assert false
-  let import_naked_int32_type _ = assert false
-  let import_naked_int64_type _ = assert false
-  let import_naked_nativeint_type _ = assert false
-
 end
 let backend = (module Backend : Backend_intf.S)
 

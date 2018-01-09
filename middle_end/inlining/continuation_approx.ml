@@ -23,23 +23,23 @@ type continuation_handlers =
 type t = {
   name : Continuation.t;
   handlers : continuation_handlers option;
-  num_params : int;
+  arity : Flambda_arity.t;
 }
 
-let create ~name ~(handlers : continuation_handlers) ~num_params =
+let create ~name ~(handlers : continuation_handlers) ~arity =
   { name;
     handlers = Some handlers;
-    num_params;
+    arity;
   }
 
-let create_unknown ~name ~num_params =
+let create_unknown ~name ~arity =
   { name;
     handlers = None;
-    num_params;
+    arity;
   }
 
 let name t = t.name
-let num_params t = t.num_params
+let arity t = t.arity
 let handlers t = t.handlers
 
 let is_alias t =
@@ -48,10 +48,17 @@ let is_alias t =
   | Some (Non_recursive handler) ->
     match handler.handler with
     | Apply_cont (cont, None, args) ->
-      if Flambda.Typed_parameter.List.equal_vars handler.params args then
-        Some cont
-      else
-        None
+      let args' =
+        Misc.Stdlib.List.filter_map (fun (arg : Simple.t) ->
+            match arg with
+            | Name (Var var) -> Some var
+            | Name (Symbol _) | Const _ -> None)
+          args
+      in
+      if List.compare_lengths args args' = 0
+         && Flambda.Typed_parameter.List.equal_vars handler.params args'
+      then Some cont
+      else None
     | _ -> None
 
 let print ppf t =
@@ -65,7 +72,7 @@ let print ppf t =
       | Recursive handlers ->
         Flambda.Let_cont_handlers.print ppf (Recursive handlers)
   in
-  Format.fprintf ppf "@[(%a with %d params %a)@]"
+  Format.fprintf ppf "@[((name %a) (arity %a) (handlers %a))@]"
     Continuation.print t.name
-    t.num_params
+    Flambda_arity.print t.arity
     print_handlers t.handlers

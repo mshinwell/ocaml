@@ -267,10 +267,14 @@ end = struct
     | None -> false
     | Some _ -> true
 
+  let mem_name t (name : Name.t) =
+    match simple with
+    | Var var -> mem_variable t var
+    | Symbol sym -> mem_symbol t sym
+
   let mem_simple t (simple : Simple.t) =
     match simple with
-    | Name (Var var) -> mem_variable t var
-    | Name (Symbol sym) -> mem_symbol t sym
+    | Name name -> mem_name t name
     | Const _ -> true
 
   let redefine_symbol t sym ty =

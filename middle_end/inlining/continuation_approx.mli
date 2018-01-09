@@ -32,7 +32,7 @@ val create_unknown : name:Continuation.t -> arity:Flambda_arity.t -> t
 
 val name : t -> Continuation.t
 
-val num_params : t -> int
+val arity : t -> Flambda_arity.t
 val handlers : t -> continuation_handlers option
 
 val is_alias : t -> Continuation.t option

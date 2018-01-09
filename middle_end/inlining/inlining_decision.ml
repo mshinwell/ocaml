@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*     Mark Shinwell, Fu Yong Quah and Leo White, Jane Street Europe      *)
 (*                                                                        *)
-(*   Copyright 2013--2017 OCamlPro SAS                                    *)
-(*   Copyright 2014--2017 Jane Street Group LLC                           *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -16,13 +16,13 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-module T = Flambda_type
-module E = Simplify_env
-module R = Simplify_result
-module W = Inlining_cost.Whether_sufficient_benefit
-module S = Inlining_stats_types
-module D = S.Decision
+module D = Inlining_stats_types.Decision
+module E = Simplify_env_and_result.Env
 module IT = Inlining_cost.Threshold
+module R = Simplify_env_and_result.Result
+module S = Inlining_stats_types
+module T = Flambda_type
+module W = Inlining_cost.Whether_sufficient_benefit
 
 type ('a, 'b) inlining_result =
   | Changed of (Flambda.Expr.t * R.t) * 'a
@@ -35,12 +35,24 @@ type 'b good_idea =
 (* CR mshinwell: We should take the meet of the types on the function's
    parameters and the arguments when inlining *)
 
-let inline ~importer env r ~lhs_of_application
-    ~closure_id_being_applied
+let all_types_not_useful env simples =
+  List.for_all (fun (simple : Simple.t) ->
+      match simple with
+      | Name name ->
+        let ty = E.type_of_name env (Name name) in
+        begin match ty with
+        | None -> true
+        | Some ty -> not ((E.type_accessor env T.is_useful) ty)
+        end
+      | Const _ -> false)
+    simples
+
+let inline env r ~callee
+    ~callee's_closure_id
     ~(function_decl : T.inlinable_function_declaration)
     ~(set_of_closures : T.set_of_closures)
     ~only_use_of_function ~original ~recursive
-    ~(args : Variable.t list) ~continuation ~size_from_approximation ~dbg
+    ~(args : Simple.t list) ~continuation ~size_from_approximation ~dbg
     ~(inline_requested : Flambda.inline_attribute)
     ~(specialise_requested : Flambda.specialise_attribute)
     ~self_call ~fun_cost ~inlining_threshold =
@@ -60,12 +72,17 @@ let inline ~importer env r ~lhs_of_application
         true, true, false, env
       else false, false, true, env
     | None -> begin
-        let inline_annotation =
+        let inline_annotation : Flambda.inline_attribute =
           (* Merge call site annotation and function annotation.
              The call site annotation takes precedence *)
-          match (inline_requested : Flambda.inline_attribute) with
+          match inline_requested with
           | Always_inline | Never_inline | Unroll _ -> inline_requested
-          | Default_inline -> function_decl.inline
+          | Default_inline ->
+            match function_decl.inline with
+            | Always_inline -> Always_inline
+            | Never_inline -> Never_inline
+            | Unroll n -> Unroll n
+            | Default_inline -> Default_inline
         in
         match inline_annotation with
         | Always_inline -> false, true, false, env
@@ -109,7 +126,8 @@ let inline ~importer env r ~lhs_of_application
       in
       Don't_try_it (S.Not_inlined.Above_threshold threshold)
     else if not (toplevel && branch_depth = 0)
-         && T.all_not_useful ~importer (E.find_list_exn env args) then
+         && all_types_not_useful env args
+    then
       (* When all of the arguments to the function being inlined are unknown,
          then we cannot materially simplify the function.  As such, we know
          what the benefit of inlining it would be: just removing the call.
@@ -181,15 +199,15 @@ let inline ~importer env r ~lhs_of_application
          site. *)
 (*
 Format.eprintf "Inlining application of %a whose body is:@ \n%a\n%!"
-  Variable.print lhs_of_application Flambda.Expr.print function_decl.body;
+  Variable.print callee Flambda.Expr.print function_decl.body;
 *)
       Inlining_transforms.inline_by_copying_function_body ~env
         ~r:(R.reset_benefit r)
         ~set_of_closures
-        ~lhs_of_application
+        ~callee
         ~inline_requested
         ~specialise_requested
-        ~closure_id_being_applied
+        ~callee's_closure_id
         ~function_decl
         ~args
         ~continuation
@@ -310,10 +328,10 @@ Format.eprintf "Inlining application of %a whose body is:@ \n%a\n%!"
 (* CR mshinwell: Stop specialising functions when there is no increase in
    precision of the argument approximations.  (Will act as a backstop to
    prevent unbounded recursion during specialisation.) *)
-let specialise env r ~lhs_of_application
+let specialise env r ~callee
       ~(function_decls : Flambda.Function_declarations.t)
       ~(function_decl : Flambda.Function_declaration.t)
-      ~closure_id_being_applied
+      ~callee's_closure_id
       ~(value_set_of_closures : Flambda_type.value_set_of_closures)
       ~args ~args_approxs ~continuation ~dbg ~simplify ~original ~recursive
       ~self_call ~inlining_threshold ~fun_cost
@@ -322,7 +340,7 @@ let specialise env r ~lhs_of_application
     lazy
       (let closures_required =
          Flambda_utils.closures_required_by_entry_point
-           ~entry_point:closure_id_being_applied
+           ~entry_point:callee's_closure_id
            ~backend:(E.backend env)
            function_decls
        in
@@ -416,8 +434,8 @@ let specialise env r ~lhs_of_application
       in
       let copied_function_declaration =
         Inlining_transforms.inline_by_copying_function_declaration ~env
-          ~r:(R.reset_benefit r) ~lhs_of_application
-          ~function_decls ~closure_id_being_applied ~function_decl
+          ~r:(R.reset_benefit r) ~callee
+          ~function_decls ~callee's_closure_id ~function_decl
           ~args ~args_approxs ~continuation
           ~invariant_params:value_set_of_closures.invariant_params
           ~specialised_args:value_set_of_closures.specialised_args
@@ -528,12 +546,11 @@ Format.eprintf "Application env: %a@ \nExpression:\n%a%!"
 *)
 
 let for_call_site ~env ~r
-      ~lhs_of_application ~closure_id_being_applied
+      ~callee ~callee's_closure_id
       ~(function_decl : Flambda_type.inlinable_function_declaration)
       ~(set_of_closures : Flambda_type.set_of_closures)
-      ~args ~arg_tys ~continuation ~dbg ~inline_requested
+      ~args ~arg_tys ~continuation ~exn_continuation ~dbg ~inline_requested
       ~specialise_requested =
-  let importer = E.importer env in
   if List.length args <> List.length arg_tys then begin
     Misc.fatal_error "Inlining_decision.for_call_site: inconsistent lengths \
         of [args] and [arg_tys]"
@@ -553,17 +570,18 @@ let for_call_site ~env ~r
     | Always_inline | Default_inline | Never_inline -> inline_requested
   in
   let return_arity =
-    List.map (fun ty -> Flambda_type.kind ~importer ty) function_decl.result
+    List.map (fun ty -> (E.type_accessor env T.kind) ty)
+      function_decl.result
   in
-  let original_apply : Flambda.apply =
-    { kind = Function;
-      continuation;
-      func = lhs_of_application;
+  let original_apply : Flambda.Apply.t =
+    { continuation;
+      exn_continuation;
+      func = callee;
       args;
-      call_kind = Direct {
-        closure_id = closure_id_being_applied;
+      call_kind = Function (Direct {
+        closure_id = callee's_closure_id;
         return_arity;
-      };
+      });
       dbg;
       inline = inline_requested;
       specialise = specialise_requested;
@@ -572,11 +590,8 @@ let for_call_site ~env ~r
   let original_expr : Flambda.Expr.t = Apply original_apply in
   let original r =
     let continuation, r =
-      let arg_tys =
-        Flambda_type.unknown_types_from_arity return_arity
-      in
-      (E.simplify_apply_cont_to_cont env) ?don't_record_use:None env r
-        continuation ~arg_tys
+      (E.simplify_continuation_use_cannot_inline env) env r
+        continuation ~arity:return_arity
     in
     let original_expr : Flambda.Expr.t =
       Apply {
@@ -588,19 +603,19 @@ let for_call_site ~env ~r
   in
 (*
 Format.eprintf "Application of %a (%a).\n%!"
-  Closure_id.print closure_id_being_applied
+  Closure_id.print callee's_closure_id
   Variable.print_list args;
 *)
 (*
 Format.eprintf "Application of %a (%a): inline_requested=%a self_call=%b\n%!"
-  Closure_id.print closure_id_being_applied
+  Closure_id.print callee's_closure_id
   Variable.print_list args
   Printlambda.apply_inlined_attribute inline_requested self_call;
 *)
   let original_r = R.seen_direct_application r in
   if function_decl.stub then
     Inlining_transforms.inline_by_copying_function_body ~env ~r
-      ~set_of_closures ~lhs_of_application ~closure_id_being_applied
+      ~set_of_closures ~callee ~callee's_closure_id
       ~specialise_requested ~inline_requested ~function_decl ~args
       ~continuation ~dbg
   else if E.never_inline env then
@@ -611,7 +626,7 @@ Format.eprintf "Application of %a (%a): inline_requested=%a self_call=%b\n%!"
   else if function_decl.is_classic_mode then begin
     let env =
       E.note_entering_call env
-        ~closure_id:closure_id_being_applied ~dbg:dbg
+        ~closure_id:callee's_closure_id ~dbg:dbg
     in
     let simpl =
       let self_call =
@@ -633,8 +648,8 @@ Format.eprintf "Application of %a (%a): inline_requested=%a self_call=%b\n%!"
       | Try_it ->
         let body, r =
           Inlining_transforms.inline_by_copying_function_body ~env
-            ~r ~set_of_closures ~lhs_of_application
-            ~closure_id_being_applied ~specialise_requested ~inline_requested
+            ~r ~set_of_closures ~callee
+            ~callee's_closure_id ~specialise_requested ~inline_requested
             ~function_decl ~args ~continuation ~dbg
         in
         let env = E.note_entering_inlined env in
@@ -690,7 +705,7 @@ Format.eprintf "Application of %a (%a): inline_requested=%a self_call=%b\n%!"
     let env = E.unset_never_inline_inside_closures env in
     let env =
       E.note_entering_call env
-        ~closure_id:closure_id_being_applied ~dbg:dbg
+        ~closure_id:callee's_closure_id ~dbg:dbg
     in
     let max_level =
       Clflags.Int_arg_helper.get ~key:(E.round env) !Clflags.inline_max_depth
@@ -745,7 +760,7 @@ Format.eprintf "Application of %a (%a): inline_requested=%a self_call=%b\n%!"
         let recursive = lazy false in  (* XXX *)
 (*
         let fun_var =
-          U.find_declaration_variable closure_id_being_applied function_decls
+          U.find_declaration_variable callee's_closure_id function_decls
         in
           lazy
             (Variable.Set.mem fun_var
@@ -758,8 +773,8 @@ Format.eprintf "Application of %a (%a): inline_requested=%a self_call=%b\n%!"
         let specialise_result =
           Original (S.Not_specialised.No_useful_approximations)  (* XXX *)
 (*
-          specialise env r ~lhs_of_application ~function_decls ~recursive
-            ~closure_id_being_applied ~function_decl ~value_set_of_closures
+          specialise env r ~callee ~function_decls ~recursive
+            ~callee's_closure_id ~function_decl ~value_set_of_closures
             ~args ~arg_tys ~continuation ~dbg ~simplify
             ~original:original_expr
             ~inline_requested ~specialise_requested ~fun_cost ~self_call
@@ -787,8 +802,8 @@ Format.eprintf "Application of %a (%a): inline_requested=%a self_call=%b\n%!"
 *)
           let r = R.roll_back_continuation_uses r cont_usage_snapshot in
           let inline_result =
-            inline ~importer env r ~lhs_of_application
-              ~closure_id_being_applied ~function_decl ~set_of_closures
+            inline env r ~callee
+              ~callee's_closure_id ~function_decl ~set_of_closures
               ~only_use_of_function ~original:original_expr ~recursive
               ~inline_requested ~specialise_requested ~args ~continuation
               ~size_from_approximation ~dbg ~fun_cost ~self_call

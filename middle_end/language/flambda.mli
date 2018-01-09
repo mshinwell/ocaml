@@ -22,8 +22,15 @@
 module F0 = Flambda0
 
 type assign = F0.assign
-type inline_attribute = F0.inline_attribute
-type specialise_attribute = F0.specialise_attribute
+type inline_attribute = F0.inline_attribute =
+  | Always_inline
+  | Never_inline
+  | Unroll of int
+  | Default_inline
+type specialise_attribute = F0.specialise_attribute =
+  | Always_specialise
+  | Never_specialise
+  | Default_specialise
 type mutable_or_immutable = F0.mutable_or_immutable
 type recursive = F0.recursive
 
@@ -413,6 +420,8 @@ end and Function_declarations : sig
   val all_functions_parameters : t -> Variable.Set.t
 
   val contains_stub : t -> bool
+
+  val freshen : t -> Freshening.t -> t * Freshening.t
 end and Function_declaration : sig
   include module type of struct include F0.Function_declaration end
 

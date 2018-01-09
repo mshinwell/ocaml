@@ -65,18 +65,18 @@
         f (fst x') (y' + snd x')  (* body of [f] with parameters freshened *)
 *)
 val inline_by_copying_function_body
-   : env:Simplify_env.t
-  -> r:Simplify_result.t
+   : env:Simplify_env_and_result.Env.t
+  -> r:Simplify_env_and_result.Result.t
   -> set_of_closures:Flambda_type.set_of_closures
-  -> lhs_of_application:Variable.t
+  -> callee:Name.t
   -> inline_requested:Flambda.inline_attribute
   -> specialise_requested:Flambda.specialise_attribute
-  -> closure_id_being_applied:Closure_id.t
+  -> callee's_closure_id:Closure_id.t
   -> function_decl:Flambda_type.inlinable_function_declaration
-  -> args:Variable.t list
+  -> args:Simple.t list
   -> continuation:Continuation.t
   -> dbg:Debuginfo.t
-  -> Flambda.Expr.t * Simplify_result.t
+  -> Flambda.Expr.t * Simplify_env_and_result.Result.t
 
 (*
 (** Inlining of recursive function(s) yields a copy of the functions'
@@ -90,9 +90,9 @@ val inline_by_copying_function_declaration
    : env:Simplify_env.t
   -> r:Simplify_result.t
   -> function_decls:Flambda.Function_declarations.t
-  -> lhs_of_application:Variable.t
+  -> callee:Variable.t
   -> inline_requested:Flambda.inline_attribute
-  -> closure_id_being_applied:Closure_id.t
+  -> callee's_closure_id:Closure_id.t
   -> function_decl:Flambda.Function_declaration.t
   -> args:Variable.t list
   -> args_approxs:Flambda_type.t list

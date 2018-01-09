@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2017 OCamlPro SAS                                    *)
-(*   Copyright 2014--2017 Jane Street Group LLC                           *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,11 +14,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module B = Inlining_cost.Benefit
-module E = Simplify_env
-module R = Simplify_result
+module E = Simplify_env_and_result.Env
+module R = Simplify_env_and_result.Result
 
 (*
 
@@ -52,20 +52,17 @@ let which_function_parameters_can_we_specialise ~params ~args
 *)
 
 (** Fold over all variables bound by the given closure, which is bound to the
-    variable [lhs_of_application], and corresponds to the given
+    variable [callee], and corresponds to the given
     [function_decls].  Each variable bound by the closure is passed to the
     user-specified function as an [Flambda.Named.t] value that projects the
     variable from its closure. *)
-let fold_over_projections_of_vars_bound_by_closure ~closure_id_being_applied
-      ~lhs_of_application ~(set_of_closures : Flambda_type.set_of_closures)
+let fold_over_projections_of_vars_bound_by_closure ~callee's_closure_id
+      ~callee ~(set_of_closures : Flambda_type.set_of_closures) dbg
       ~init ~f =
   Var_within_closure.Map.fold (fun var _ty acc ->
-      let var_map = Closure_id.Map.singleton closure_id_being_applied var in
+      let var_map = Closure_id.Map.singleton callee's_closure_id var in
       let expr : Flambda.Named.t =
-        Project_var {
-          closure = lhs_of_application;
-          var = var_map;
-        }
+        Prim (Unary (Project_var var_map, callee), dbg)
       in
       f ~acc ~var ~expr)
     set_of_closures.closure_elements
@@ -79,7 +76,7 @@ let set_inline_attribute_on_all_apply body inline specialise =
 
 (** Assign fresh names for a function's parameters and rewrite the body to
     use these new names. *)
-let copy_of_function's_body_with_freshened_params ~importer env
+let copy_of_function's_body_with_freshened_params env
       ~(function_decl : Flambda_type.inlinable_function_declaration) =
   let params = function_decl.params in
   let param_vars =
@@ -93,11 +90,13 @@ let copy_of_function's_body_with_freshened_params ~importer env
      original [params] may still be referenced; for (b) we cannot do it
      either since the freshening may already be renaming the parameters for
      the first inlining of the function. *)
+(* CR mshinwell: Re-enable once functions are implemented
   if E.does_not_bind env param_vars
     && E.does_not_freshen env param_vars
   then
     params, function_decl.body
   else
+*)
     let freshened_params =
       List.map (fun (param, ty) ->
           let param =
@@ -113,7 +112,7 @@ let copy_of_function's_body_with_freshened_params ~importer env
       Variable.Map.of_list (List.combine param_vars freshened_param_vars)
     in
     let body =
-      Flambda.Expr.toplevel_substitution ~importer subst function_decl.body
+      Flambda.Expr.toplevel_substitution subst function_decl.body
     in
     freshened_params, body
 
@@ -123,26 +122,25 @@ let copy_of_function's_body_with_freshened_params ~importer env
     introduced by the corresponding set of closures. *)
 let inline_by_copying_function_body ~env ~r
       ~(set_of_closures : Flambda_type.set_of_closures)
-      ~lhs_of_application
+      ~callee
       ~(inline_requested : Flambda.inline_attribute)
       ~(specialise_requested : Flambda.specialise_attribute)
-      ~closure_id_being_applied
+      ~callee's_closure_id
       ~(function_decl : Flambda_type.inlinable_function_declaration) ~args
       ~continuation ~dbg =
-  let importer = E.importer env in
-  assert (E.mem env lhs_of_application);
-  assert (List.for_all (E.mem env) args);
+  assert (E.mem_name env callee);
+  assert (List.for_all (E.mem_simple env) args);
   let r =
     if function_decl.stub then r
     else R.map_benefit r B.remove_call
   in
   let freshened_params, body =
-    copy_of_function's_body_with_freshened_params ~importer env ~function_decl
+    copy_of_function's_body_with_freshened_params env ~function_decl
   in
   let body =
     if function_decl.stub &&
-       ((inline_requested <> Flambda_type.Default_inline)
-        || (specialise_requested <> Flambda_type.Default_specialise))
+       ((inline_requested <> Flambda.Default_inline)
+        || (specialise_requested <> Flambda.Default_specialise))
     then
       (* When the function inlined function is a stub, the annotation
          is reported to the function applications inside the stub.
@@ -159,12 +157,12 @@ let inline_by_copying_function_body ~env ~r
   let handlers =
     (* CR mshinwell: this occurs in [Inlining_decision] too, factor out *)
     let return_arity =
-      List.map (fun ty -> Flambda_type.kind ~importer ty) function_decl.result
+      List.map (fun ty -> Flambda_type.kind ty) function_decl.result
     in
     let parameter_types =
-      Flambda_type.unknown_types_from_arity return_arity
+      (E.type_accessor env Flambda_type.unknown_types_from_arity) return_arity
     in
-    Flambda_utils.make_let_cont_alias ~importer
+    Flambda_utils.make_let_cont_alias
       ~name:function_decl.continuation_param
       ~alias_of:continuation
       ~parameter_types
@@ -175,7 +173,7 @@ let inline_by_copying_function_body ~env ~r
     let bindings =
       List.map2 (fun (param, ty) arg ->
           let var = Parameter.var param in
-          let kind = Flambda_type.kind ~importer ty in
+          let kind = Flambda_type.kind ty in
           var, kind, Flambda.Named.Var arg)
         freshened_params
         args
@@ -184,8 +182,8 @@ let inline_by_copying_function_body ~env ~r
   in
   (* Add bindings for the variables bound by the closure. *)
   let bindings_for_vars_bound_by_closure_and_params_to_args =
-    fold_over_projections_of_vars_bound_by_closure ~closure_id_being_applied
-      ~lhs_of_application ~set_of_closures ~init:bindings_for_params_to_args
+    fold_over_projections_of_vars_bound_by_closure ~callee's_closure_id
+      ~callee ~set_of_closures ~init:bindings_for_params_to_args
       ~f:(fun ~acc:body ~var ~expr ->
         let var = Var_within_closure.unwrap var in
         let kind = Flambda_kind.value Must_scan in
@@ -202,7 +200,7 @@ let inline_by_copying_function_body ~env ~r
   let expr =
     Closure_id.Set.fold (fun another_closure_in_set expr ->
         let move =
-          Closure_id.Map.singleton closure_id_being_applied
+          Closure_id.Map.singleton callee's_closure_id
             another_closure_in_set
         in
         let another_closure_in_set =
@@ -211,7 +209,7 @@ let inline_by_copying_function_body ~env ~r
         Flambda.Expr.create_let another_closure_in_set
           (Flambda_kind.value Must_scan)
           (Move_within_set_of_closures {
-            closure = lhs_of_application;
+            closure = callee;
             move;
           })
           expr)
@@ -226,9 +224,9 @@ let inline_by_copying_function_body ~env ~r
 
 let inline_by_copying_function_declaration ~env ~r
     ~(function_decls : Flambda.Function_declarations.t)
-    ~lhs_of_application
+    ~callee
     ~(inline_requested : Flambda.inline_attribute)
-    ~closure_id_being_applied
+    ~callee's_closure_id
     ~(function_decl : Flambda.Function_declaration.t)
     ~args ~args_tys ~continuation
     ~(invariant_params:Variable.Set.t Variable.Map.t lazy_t)
@@ -318,8 +316,8 @@ let inline_by_copying_function_declaration ~env ~r
        copied.  We add these bindings using [Let] around the new
        set-of-closures declaration. *)
     let free_vars, free_vars_for_lets =
-      fold_over_projections_of_vars_bound_by_closure ~closure_id_being_applied
-        ~lhs_of_application ~function_decls ~init:(Variable.Map.empty, [])
+      fold_over_projections_of_vars_bound_by_closure ~callee's_closure_id
+        ~callee ~function_decls ~init:(Variable.Map.empty, [])
         ~f:(fun ~acc:(map, for_lets) ~var:internal_var ~expr ->
           let from_closure : Flambda.Free_var.t =
             { var = new_var "from_closure";
@@ -332,7 +330,7 @@ let inline_by_copying_function_declaration ~env ~r
     let required_functions =
       Flambda.Function_declarations.closures_required_by_entry_point
         ~backend:(E.backend env)
-        ~entry_point:closure_id_being_applied
+        ~entry_point:callee's_closure_id
         function_decls
     in
     let funs =
@@ -350,8 +348,8 @@ let inline_by_copying_function_declaration ~env ~r
           let var = Variable.create "closure" in
           let original_closure : Flambda.Named.t =
             Move_within_set_of_closures
-              { closure = lhs_of_application;
-                move = Closure_id.Map.add closure_id_being_applied
+              { closure = callee;
+                move = Closure_id.Map.add callee's_closure_id
                   (Closure_id.wrap fun_var) Closure_id.Map.empty;
               }
           in
@@ -417,7 +415,7 @@ let inline_by_copying_function_declaration ~env ~r
                       Original specialised args = %a"
                     Variable.print param
                     Flambda.print_specialised_to spec_to
-                    Closure_id.print closure_id_being_applied
+                    Closure_id.print callee's_closure_id
                     Variable.Set.print required_functions
                     (Variable.Map.print Flambda.print_specialised_to)
                       specialisable_renaming
@@ -555,7 +553,7 @@ let inline_by_copying_function_declaration ~env ~r
     let duplicated_application : Flambda.Expr.t =
       let project_closure : Projection.Project_closure.t =
         { set_of_closures = set_of_closures_var;
-          closure_id = Closure_id.Set.singleton closure_id_being_applied;
+          closure_id = Closure_id.Set.singleton callee's_closure_id;
         }
       in
       let func = new_var "dup_func" in
@@ -569,7 +567,7 @@ let inline_by_copying_function_declaration ~env ~r
               func;
               args;
               call_kind = Direct {
-                closure_id = closure_id_being_applied;
+                closure_id = callee's_closure_id;
                 return_arity = function_decl.return_arity;
               };
               dbg;

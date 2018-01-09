@@ -82,6 +82,7 @@ val apply_continuation : t -> Continuation.t -> Continuation.t
 (** As for [apply_variable], but for exception trap identifiers. *)
 val apply_trap : t -> Trap_id.t -> Trap_id.t
 
+(*
 (** Replace recursive accesses to the closures in the set through
     [Symbol] by the corresponding [Var]. This is used to recover
     the recursive call when importing code from another compilation unit.
@@ -93,8 +94,11 @@ val rewrite_recursive_calls_with_symbols
   -> Flambda.Function_declarations.t
   -> make_closure_symbol:(Closure_id.t -> Symbol.t)
   -> Flambda.Function_declarations.t
+*)
 
 val does_not_freshen : t -> Variable.t list -> bool
+
+val variable_substitution : t -> Variable.t Variable.Map.t
 
 val print : Format.formatter -> t -> unit
 
@@ -114,8 +118,3 @@ val freshen_free_vars_projection_relation'
 *)
 
 val range_of_continuation_freshening : t -> Continuation.Set.t
-
-val for_function_declarations
-   : t
-  -> Flambda.Function_declarations.t
-  -> Flambda.Function_declarations.t * t
