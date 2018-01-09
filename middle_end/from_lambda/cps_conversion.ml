@@ -24,6 +24,7 @@ module I = Ilambda
 module L = Lambda
 
 type proto_switch = {
+  kind : I.switch_kind;
   numconsts : int;
   consts : (int * L.lambda) list;
   failaction : L.lambda option;
@@ -253,8 +254,16 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
     let after_switch = Continuation.create () in
     let result_var = Ident.create "switch_result" in
     let after = k result_var in
+    let kind : I.switch_kind =
+      match switch.sw_numblocks with
+      | 0 -> Int
+      | -1 -> Tag
+      | _ ->
+        Misc.fatal_errorf "Bad [sw_numblocks] value: %d" switch.sw_numblocks
+    in
     let proto_switch : proto_switch =
-      { numconsts = switch.sw_numconsts;
+      { kind;
+        numconsts = switch.sw_numconsts;
         consts = switch.sw_consts;
         failaction = switch.sw_failaction;
       }
@@ -503,8 +512,17 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
     | [] -> ()
     | _ -> Misc.fatal_error "Lswitch `block' cases are forbidden"
     end;
+    let kind : I.switch_kind =
+      (* CR mshinwell: share code with above *)
+      match switch.sw_numblocks with
+      | 0 -> Int
+      | -1 -> Tag
+      | _ ->
+        Misc.fatal_errorf "Bad [sw_numblocks] value: %d" switch.sw_numblocks
+    in
     let proto_switch : proto_switch =
-      { numconsts = switch.sw_numconsts;
+      { kind;
+        numconsts = switch.sw_numconsts;
         consts = switch.sw_consts;
         failaction = switch.sw_failaction;
       }
@@ -669,7 +687,8 @@ and cps_switch (switch : proto_switch) ~scrutinee (k : Continuation.t)
       Some cont, Some (cont, failaction)
   in
   let switch : Ilambda.switch =
-    { numconsts = switch.numconsts;
+    { kind = switch.kind;
+      numconsts = switch.numconsts;
       consts = List.combine const_nums const_conts;
       failaction = failaction_cont;
     }

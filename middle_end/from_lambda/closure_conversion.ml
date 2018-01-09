@@ -65,7 +65,7 @@ let tupled_function_call_stub
            redundancy here (func is also unboxed_version) *)
         call_kind = Function (Direct {
           closure_id = unboxed_version;
-          return_arity = [Flambda_kind.value Must_scan];
+          return_arity = [Flambda_kind.value Unknown];
         });
         dbg = Debuginfo.none;
         inline = Default_inline;
@@ -77,19 +77,22 @@ let tupled_function_call_stub
       P.Move_within_set_of_closures
         (Closure_id.Map.singleton closure_bound_var unboxed_version)
     in
-    Flambda.Expr.create_let unboxed_version_var (Flambda_kind.value Must_scan)
+    Flambda.Expr.create_let unboxed_version_var
+      (Flambda_kind.value Definitely_pointer)
       (Prim (Unary (move, Simple.var my_closure), Debuginfo.none))
       call
   in
   let _, body =
     List.fold_left (fun (pos, body) param ->
         let lam : Flambda.Named.t =
-          Prim (Unary (Block_load (pos, Not_a_float, Immutable),
-                       Simple.var tuple_param_var),
+          let pos = Immediate.int (Targetint.OCaml.of_int pos) in
+          Prim (Binary (Block_load (Block Any_value, Immutable),
+                        Simple.var tuple_param_var,
+                        Simple.const (Tagged_immediate pos)),
                 Debuginfo.none)
         in
         pos + 1,
-        Flambda.Expr.create_let param (Flambda_kind.value Must_scan) lam body)
+        Flambda.Expr.create_let param (Flambda_kind.value Unknown) lam body)
       (0, body_with_closure_bound) params
   in
   let tuple_param =
@@ -101,13 +104,13 @@ let tupled_function_call_stub
     (*       (List.map (fun _ -> Flambda_type.any_value Must_scan Other) params))) *)
 
     Flambda.Typed_parameter.create_from_kind (Parameter.wrap tuple_param_var)
-      (Flambda_kind.value Must_scan)
+      (Flambda_kind.value Unknown)
   in
   Flambda.Function_declaration.create
     ~my_closure
     ~params:[tuple_param] ~continuation_param
     ~exn_continuation_param
-    ~return_arity:[Flambda_kind.value Must_scan]
+    ~return_arity:[Flambda_kind.value Unknown]
     ~body ~stub:true ~dbg:Debuginfo.none ~inline:Default_inline
     ~specialise:Default_specialise ~is_a_functor:false
     ~closure_origin:(Closure_origin.create closure_bound_var)
@@ -129,7 +132,7 @@ let rec declare_const t (const : Lambda.structured_constant)
       : Flambda_static0.Of_kind_value.t * string =
   match const with
   | Const_base (Const_int c) ->
-    Tagged_immediate (Immediate.int (Targetint.of_int c)), "int"
+    Tagged_immediate (Immediate.int (Targetint.OCaml.of_int c)), "int"
   | Const_base (Const_char c) -> Tagged_immediate (Immediate.char c), "char"
   | Const_base (Const_string (s, _)) ->
     let const, name =
@@ -143,7 +146,7 @@ let rec declare_const t (const : Lambda.structured_constant)
     in
     register_const t const name
   | Const_base (Const_float c) ->
-    let c = float_of_string c in
+    let c = Numbers.Float_by_bit_pattern.create (float_of_string c) in
     register_const t (Static_part.Boxed_float (Const c)) "float"
   | Const_base (Const_int32 c) ->
     register_const t (Static_part.Boxed_int32 (Const c)) "int32"
@@ -159,7 +162,7 @@ let rec declare_const t (const : Lambda.structured_constant)
        say that this value must be scanned
        mshinwell: I don't think it does need to be scanned?
     *)
-    Tagged_immediate (Immediate.int (Targetint.of_int c)), "pointer"
+    Tagged_immediate (Immediate.int (Targetint.OCaml.of_int c)), "pointer"
   | Const_immstring c ->
     register_const t (Static_part.Immutable_string (Const c)) "immstring"
   | Const_float_array c ->
@@ -190,7 +193,7 @@ let close_const t (const : Lambda.structured_constant)
 let flambda_type_of_lambda_value_kind (k : Lambda.value_kind) : Flambda_type.t =
   match k with
   | Pgenval ->
-    Flambda_type.any_value Must_scan Other
+    Flambda_type.any_value Unknown
   | Pfloatval ->
     Flambda_type.any_boxed_float ()
   | Pboxedintval Pint32 ->
@@ -202,8 +205,7 @@ let flambda_type_of_lambda_value_kind (k : Lambda.value_kind) : Flambda_type.t =
   | Pintval ->
     Flambda_type.any_tagged_immediate ()
   | Pnaked_intval ->
-    Misc.fatal_errorf "Naked immediate shouldn't exist before flambda"
-    (* Flambda_type.any_naked_immediate () *)
+    Misc.fatal_error "[Pnaked_intval] shouldn't exist before Flambda"
 
 let convert_inline_attribute_from_lambda
       (attr : Lambda.inline_attribute)
@@ -222,9 +224,9 @@ let convert_specialise_attribute_from_lambda
   | Never_specialise -> Never_specialise
   | Default_specialise -> Default_specialise
 
-let kind_of_repr (repr:Primitive.native_repr) : K.t =
+let kind_of_repr (repr : Primitive.native_repr) : K.t =
   match repr with
-  | Same_as_ocaml_repr -> K.value Must_scan
+  | Same_as_ocaml_repr -> K.value Unknown
   | Unboxed_float -> K.naked_float ()
   | Unboxed_integer Pnativeint -> K.naked_nativeint ()
   | Unboxed_integer Pint32 -> K.naked_int32 ()
@@ -284,7 +286,7 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
           | Unboxed_integer Pint64 ->
             Some (P.Unbox_number Naked_int64)
           | Untagged_int ->
-            Some (P.Int_conv { src = Tagged_immediate; dst = Naked_nativeint })
+            Some (P.Num_conv { src = Tagged_immediate; dst = Naked_nativeint; })
         in
         match boxing with
         | None ->
@@ -312,7 +314,7 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
         | Unboxed_integer Pint64 ->
           Some (P.Box_number Naked_int64)
         | Untagged_int ->
-          Some (P.Int_conv { src = Naked_nativeint; dst = Tagged_immediate })
+          Some (P.Num_conv { src = Naked_nativeint; dst = Tagged_immediate })
       in
       match unboxing with
       | None ->
@@ -323,7 +325,8 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
         let handler_param = Variable.create (prim.prim_name ^ "_return") in
         let body_env, boxed_var = Env.add_var_like env id in
         let body = close t body_env body in
-        Flambda.Expr.create_let boxed_var (Flambda_kind.value Must_scan)
+        Flambda.Expr.create_let boxed_var
+          (Flambda_kind.value Definitely_pointer)
           (Prim (Unary (unboxing, Simple.var handler_param), dbg)) body,
           handler_param
     in
@@ -348,7 +351,7 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
       let body = close t body_env body in
       (* CR pchambart: Kind annotation on let should to go through Ilambda *)
       Flambda.Expr.create_let var
-        (Flambda_kind.value Must_scan)
+        (Flambda_kind.value Unknown)
         defining_expr body
     in
     close_named t env defining_expr cont
@@ -359,7 +362,7 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
     let body = close t (Env.add_mutable_var env id var) body in
     Let_mutable {
       var;
-      initial_value = Simple.name initial_value;
+      initial_value;
       body;
       contents_type = flambda_type_of_lambda_value_kind contents_kind;
     }
@@ -424,14 +427,16 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
           (* Inside the body of the [let], each function is referred to by
              a [Project_closure] expression, which projects from the set of
              closures. *)
-          (Flambda.Expr.create_let let_bound_var (Flambda_kind.value Must_scan)
+          (Flambda.Expr.create_let let_bound_var
+             (Flambda_kind.value Definitely_pointer)
              (Prim (Unary (Project_closure closure_id,
                            Simple.var set_of_closures_var),
                     Debuginfo.none))
             body))
         (close t env body) function_declarations
     in
-    Flambda.Expr.create_let set_of_closures_var (Flambda_kind.value Must_scan)
+    Flambda.Expr.create_let set_of_closures_var
+      (Flambda_kind.value Definitely_pointer)
       set_of_closures body
   | Let_cont let_cont ->
     if let_cont.is_exn_handler then begin
@@ -453,7 +458,7 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
         List.map (fun param ->
           Flambda.Typed_parameter.create_from_kind
             (Parameter.wrap param)
-            (Flambda_kind.value Must_scan))
+            (Flambda_kind.value Unknown))
           params
       in
       let handler : Flambda.Continuation_handler.t =
@@ -521,26 +526,51 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
       Apply_cont (cont, trap_action, List.map Simple.var args)
     end
   | Switch (scrutinee, sw) ->
-    let arms =
-      List.map (fun (case, arm) -> Targetint.of_int_exn case, arm)
-        sw.consts
-    in
-    let arms =
-      match sw.failaction with
-      | None ->
-        Targetint.Map.of_list arms
-      | Some default ->
-        Numbers.Int.Set.fold (fun case cases ->
-          let case = Targetint.of_int_exn case in
-          if Targetint.Map.mem case cases then
-            cases
-          else
-            Targetint.Map.add case default cases)
-          (Numbers.Int.zero_to_n (sw.numconsts - 1))
-          (Targetint.Map.of_list arms)
-    in
-    Flambda.Expr.create_switch ~scrutinee:(Env.find_name env scrutinee)
-      ~arms
+    begin match sw.kind with
+    | Int ->
+      let arms =
+        List.map (fun (case, arm) -> Targetint.OCaml.of_int case, arm)
+          sw.consts
+      in
+      let arms =
+        match sw.failaction with
+        | None ->
+          Targetint.OCaml.Map.of_list arms
+        | Some default ->
+          Numbers.Int.Set.fold (fun case cases ->
+            let case = Targetint.OCaml.of_int case in
+            if Targetint.OCaml.Map.mem case cases then
+              cases
+            else
+              Targetint.OCaml.Map.add case default cases)
+            (Numbers.Int.zero_to_n (sw.numconsts - 1))
+            (Targetint.OCaml.Map.of_list arms)
+      in
+      Flambda.Expr.create_int_switch ~scrutinee:(Env.find_name env scrutinee)
+        ~arms
+    | Tag ->
+      (* CR mshinwell: work out how to share code with case above *)
+      let arms =
+        List.map (fun (case, arm) -> Tag.create_exn case, arm)
+          sw.consts
+      in
+      let arms =
+        match sw.failaction with
+        | None ->
+          Tag.Map.of_list arms
+        | Some default ->
+          Numbers.Int.Set.fold (fun case cases ->
+            let case = Tag.create_exn case in
+            if Tag.Map.mem case cases then
+              cases
+            else
+              Tag.Map.add case default cases)
+            (Numbers.Int.zero_to_n (sw.numconsts - 1))
+            (Tag.Map.of_list arms)
+      in
+      Flambda.Expr.create_tag_switch ~scrutinee:(Env.find_name env scrutinee)
+        ~arms
+    end
   | Event (ilam, _) -> close t env ilam
 
 and close_named t env (named : Ilambda.named) (cont : Flambda.Named.t -> Flambda.Expr.t) : Flambda.Expr.t =
@@ -572,11 +602,14 @@ and close_named t env (named : Ilambda.named) (cont : Flambda.Named.t -> Flambda
     let symbol = t.symbol_for_global' id in
     t.imported_symbols <- Symbol.Set.add symbol t.imported_symbols;
     cont (Simple (Simple.symbol symbol))
+  | Prim _ -> assert false
+(*
   | Prim { prim; args; loc; exception_continuation } ->
     Lambda_to_flambda_primitives.convert_and_bind prim
       ~args:(Env.find_simples env args)
       ~exception_continuation
       (Debuginfo.from_location loc) cont
+*)
   | Assign { being_assigned; new_value; } ->
     cont (Assign {
       being_assigned = Env.find_mutable_var env being_assigned;
@@ -697,7 +730,6 @@ and close_functions t external_env function_declarations : Flambda.Named.t =
     let params =
       List.map (fun (p, t) ->
         Flambda.Typed_parameter.create (Parameter.wrap p)
-          ~importer:Flambda_type.null_importer
           ~type_of_name:(fun _ -> None)
           (flambda_type_of_lambda_value_kind t))
         param_vars
@@ -714,7 +746,7 @@ and close_functions t external_env function_declarations : Flambda.Named.t =
             Flambda_primitive.Move_within_set_of_closures
               (Closure_id.Map.singleton my_closure_id closure_id)
           in
-          Flambda.Expr.create_let var (Flambda_kind.value Must_scan)
+          Flambda.Expr.create_let var (Flambda_kind.value Definitely_pointer)
             (Prim (Unary (move, Simple.var my_closure), Debuginfo.none))
             body
         else
@@ -729,7 +761,8 @@ and close_functions t external_env function_declarations : Flambda.Named.t =
             Flambda_primitive.Project_var
               (Closure_id.Map.singleton my_closure_id var_within_closure)
           in
-          Flambda.Expr.create_let var (Flambda_kind.value Must_scan)
+          Flambda.Expr.create_let var
+            (Flambda_kind.value Definitely_pointer)
             (Prim
                (Unary (projection, Simple.var my_closure),
                 Debuginfo.none))
@@ -756,7 +789,7 @@ and close_functions t external_env function_declarations : Flambda.Named.t =
         ~params
         ~continuation_param:(Function_decl.continuation_param decl)
         ~exn_continuation_param:(Function_decl.exn_continuation_param decl)
-        ~return_arity:[Flambda_kind.value Must_scan]
+        ~return_arity:[Flambda_kind.value Unknown]
         ~body ~stub ~dbg ~inline
         ~specialise
         ~is_a_functor:(Function_decl.is_a_functor decl)
@@ -852,7 +885,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
       (fun pos ->
          let pos_str = string_of_int pos in
          Variable.create ("block_symbol_" ^ pos_str),
-         Flambda_kind.value Must_scan)
+         Flambda_kind.value Unknown)
   in
   let assign_continuation_body =
     let field_vars =
@@ -867,9 +900,11 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
          List.map (fun (_, var) -> Simple.var var) field_vars)
     in
     List.fold_left (fun body (pos, var) ->
-      Flambda.Expr.create_let var (Flambda_kind.value Must_scan)
-        (Prim (Unary (Block_load (pos, Not_a_float, Immutable),
-                      Simple.var block_var),
+      let pos = Immediate.int (Targetint.OCaml.of_int pos) in
+      Flambda.Expr.create_let var (Flambda_kind.value Unknown)
+        (Prim (Binary (Block_load (Block Any_value, Immutable),
+                       Simple.var block_var,
+                       Simple.const (Tagged_immediate pos)),
                Debuginfo.none))
         body)
       body field_vars
@@ -878,7 +913,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
     { params =
         [Flambda.Typed_parameter.create_from_kind
            (Parameter.wrap block_var)
-           (Flambda_kind.value Must_scan)];
+           (Flambda_kind.value Definitely_pointer)];
       stub = true;
       is_exn_handler = false;
       handler = assign_continuation_body;

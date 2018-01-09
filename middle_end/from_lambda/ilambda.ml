@@ -86,10 +86,15 @@ and apply_kind =
   | Method of { kind : L.meth_kind; obj : Ident.t; }
 
 and switch =
-  { numconsts : int;
+  { kind : switch_kind;
+    numconsts : int;
     consts : (int * Continuation.t) list;
     failaction : Continuation.t option;
   }
+
+and switch_kind =
+  | Int
+  | Tag
 
 type program =
   { expr : t;
@@ -178,6 +183,11 @@ and lam ppf (t : t) =
     fprintf ppf
       "@[<2>(let_rec@ (@[<hv 1>%a@])@ %a)@]" bindings id_arg_list lam body
   | Switch(larg, sw) ->
+    let switch_kind =
+      match sw.kind with
+      | Int -> "_int"
+      | Tag -> "_tag"
+    in
     let switch ppf sw =
       let spc = ref false in
       List.iter (fun (n, l) ->
@@ -192,9 +202,11 @@ and lam ppf (t : t) =
         fprintf ppf "@[<hv 1>default:@ apply_cont %a@]" Continuation.print l
       end in
     fprintf ppf
-      "@[<1>(@[<v 1>%s %a@ @[<v 0>%a@]@])@]"
+      "@[<1>(@[<v 1>%s%s %a@ @[<v 0>%a@]@])@]"
       (match sw.failaction with None -> "switch*" | _ -> "switch")
-      Ident.print larg switch sw
+      switch_kind
+      Ident.print larg
+      switch sw
   | Let_cont _ ->
     let rec gather_let_conts let_conts (t : t) =
       match t with

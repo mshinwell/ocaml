@@ -576,7 +576,7 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
             let blocks_switch : L.lambda_switch =
               { sw_numconsts = switch.sw_numblocks;
                 sw_consts = List.combine block_nums sw_blocks;
-                sw_numblocks = 0;
+                sw_numblocks = -1;  (* indicates a tag switch *)
                 sw_blocks = [];
                 sw_failaction;
               }
