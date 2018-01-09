@@ -205,7 +205,7 @@ let spacetime_node_hole_pointer_is_live_before insn =
     | Iname_for_debugger _ -> false
     end
   | Iend | Ireturn | Iifthenelse _ | Iswitch _ | Iloop _ | Icatch _
-  | Iexit _ | Itrywith _ | Iraise _ -> false
+  | Iexit _ | Iraise _ | Iunreachable _ -> false
 
 let operation_can_raise op =
   match op with

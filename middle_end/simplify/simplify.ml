@@ -180,6 +180,8 @@ let simplify_toplevel env r expr ~continuation ~exn_continuation ~descr =
     if E.never_specialise_continuations env then begin
       expr, r
     end else begin
+      expr, r
+(* CR mshinwell: To be re-enabled
       let vars_in_scope = E.vars_in_scope env in
       let new_expr =
         (* CR mshinwell: Should the specialisation pass return some
@@ -192,6 +194,7 @@ let simplify_toplevel env r expr ~continuation ~exn_continuation ~descr =
       match new_expr with
       | None -> expr, r
       | Some new_expr -> new_expr, r
+*)
     end
   in
   (* Continuation specialisation could theoretically improve the precision

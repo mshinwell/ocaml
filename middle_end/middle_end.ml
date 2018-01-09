@@ -143,8 +143,7 @@ let middle_end ppf ~prefixname ~backend
                Remove_unused_program_constructs.
                  remove_unused_program_constructs)
 *)
-          +-+ ("Lift_to_toplevel",
-               Lift_to_toplevel.lift ~backend)
+          +-+ ("Lift_to_toplevel", Lift_to_toplevel.lift)
           +-+ ("Lift_let_cont 2", Lift_let_cont.run)
           +-+ ("Sink_lets 2", Sink_lets.run)
 (*
