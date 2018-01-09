@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2017 OCamlPro SAS                                    *)
-(*   Copyright 2014--2017 Jane Street Group LLC                           *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -32,7 +32,6 @@ type t = {
   mutable declared_symbols :
     (Symbol.t * Flambda_static0.Static_part.t) list;
 }
-
 
 (** Generate a wrapper ("stub") function that accepts a tuple argument and
     calls another function with arguments extracted in the obvious
@@ -576,7 +575,8 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
     end
   | Event (ilam, _) -> close t env ilam
 
-and close_named t env (named : Ilambda.named) (cont : Flambda.Named.t -> Flambda.Expr.t) : Flambda.Expr.t =
+and close_named t env (named : Ilambda.named)
+      (cont : Flambda.Named.t -> Flambda.Expr.t) : Flambda.Expr.t =
   match named with
   | Var id ->
     let simple =
