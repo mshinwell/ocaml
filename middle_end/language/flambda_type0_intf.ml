@@ -195,6 +195,7 @@ module type S = sig
   }
 
   and non_inlinable_function_declaration = private {
+    arity : Flambda_arity.t;
     result : t list;
     direct_call_surrogate : Closure_id.t option;
   }
@@ -203,13 +204,16 @@ module type S = sig
     | Non_inlinable of non_inlinable_function_declaration
     | Inlinable of inlinable_function_declaration
 
-  and set_of_closures = private {
-    function_decls : function_declaration Closure_id.Map.t;
-    closure_elements : ty_value Var_within_closure.Map.t;
+  and closure = private {
+    set_of_closures : ty_fabricated;
+    function_decls : function_declaration;
   }
 
-  and closures = private {
-    by_closure_id : ty_fabricated Closure_id.Map.t;
+  and closures = closure Closure_id.Map.t
+
+  and set_of_closures = private {
+    closures : ty_value;
+    closure_elements : ty_value Var_within_closure.Map.t;
   }
 
   and 'a of_kind_naked_number = private

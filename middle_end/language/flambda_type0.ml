@@ -2077,6 +2077,8 @@ end) = struct
       match canonical_name1, canonical_name2 with
       | Some name1, Some name2 when Name.equal name1 name2 ->
         Type_of name1, []
+      (* XXX This should bind the type to just one of the names, and set the
+         other name equal to that *)
       | Some name1, Some name2 -> normal_case ~names_to_bind:[name1; name2]
       | Some name1, None -> normal_case ~names_to_bind:[name1]
       | None, Some name2 -> normal_case ~names_to_bind:[name2]
