@@ -175,6 +175,7 @@ module type S = sig
     (** Whether the file from which this function declaration originated was
         compiled in classic mode. *)
     params : (Parameter.t * t) list;
+    code_id : Code_id.t;
     body : expr;
     free_names_in_body : Name.Set.t;
     result : t list;
@@ -203,17 +204,12 @@ module type S = sig
     | Inlinable of inlinable_function_declaration
 
   and set_of_closures = private {
-    set_of_closures_id : Set_of_closures_id.t;
-    set_of_closures_origin : Set_of_closures_origin.t;
     function_decls : function_declaration Closure_id.Map.t;
     closure_elements : ty_value Var_within_closure.Map.t;
   }
 
   and closures = private {
-    (* CR pchambart: should Unknown or Bottom really be allowed here ? *)
-    (* XXX what exactly is needed here?  It needs to represent the join *)
-    set_of_closures : ty_fabricated;
-    closure_id : Closure_id.t;
+    by_closure_id : ty_fabricated Closure_id.Map.t;
   }
 
   and 'a of_kind_naked_number = private
@@ -451,16 +447,12 @@ module type S = sig
   val closure : set_of_closures:t -> Closure_id.t -> t
 
   val create_set_of_closures
-     : set_of_closures_id:Set_of_closures_id.t
-    -> set_of_closures_origin:Set_of_closures_origin.t
-    -> function_decls:function_declaration Closure_id.Map.t
+     : function_decls:function_declaration Closure_id.Map.t
     -> closure_elements:ty_value Var_within_closure.Map.t
     -> set_of_closures
 
   val set_of_closures
-     : set_of_closures_id:Set_of_closures_id.t
-    -> set_of_closures_origin:Set_of_closures_origin.t
-    -> function_decls:function_declaration Closure_id.Map.t
+     : function_decls:function_declaration Closure_id.Map.t
     -> closure_elements:ty_value Var_within_closure.Map.t
     -> t
 

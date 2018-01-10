@@ -731,12 +731,12 @@ asmcomp/CSEgen.cmo : asmcomp/reg.cmi asmcomp/proc.cmi asmcomp/mach.cmi \
 asmcomp/CSEgen.cmx : asmcomp/reg.cmx asmcomp/proc.cmx asmcomp/mach.cmx \
     asmcomp/cmm.cmx asmcomp/CSEgen.cmi
 asmcomp/CSEgen.cmi : asmcomp/mach.cmi
-asmcomp/afl_instrument.cmo : bytecomp/lambda.cmi typing/ident.cmi \
+asmcomp/afl_instrument.cmo : typing/ident.cmi \
     middle_end/base_types/debuginfo.cmi asmcomp/cmm.cmi utils/clflags.cmi \
-    parsing/asttypes.cmi asmcomp/afl_instrument.cmi
-asmcomp/afl_instrument.cmx : bytecomp/lambda.cmx typing/ident.cmx \
+    asmcomp/backend_primitives.cmi asmcomp/afl_instrument.cmi
+asmcomp/afl_instrument.cmx : typing/ident.cmx \
     middle_end/base_types/debuginfo.cmx asmcomp/cmm.cmx utils/clflags.cmx \
-    parsing/asttypes.cmi asmcomp/afl_instrument.cmi
+    asmcomp/backend_primitives.cmx asmcomp/afl_instrument.cmi
 asmcomp/afl_instrument.cmi : asmcomp/cmm.cmi
 asmcomp/arch.cmo : utils/config.cmi utils/clflags.cmi
 asmcomp/arch.cmx : utils/config.cmx utils/clflags.cmx
@@ -752,12 +752,12 @@ asmcomp/asmgen.cmo : middle_end/to_clambda/un_anf.cmi \
     asmcomp/linear_invariants.cmi bytecomp/lambda.cmi asmcomp/interval.cmi \
     asmcomp/interf.cmi typing/ident.cmi \
     middle_end/to_clambda/flambda_to_clambda.cmi \
-    middle_end/language/flambda.cmi asmcomp/emitaux.cmi asmcomp/emit.cmi \
-    asmcomp/deadcode.cmi utils/config.cmi asmcomp/compilenv.cmi \
-    asmcomp/comballoc.cmi asmcomp/coloring.cmi asmcomp/cmmgen.cmi \
-    asmcomp/cmm.cmi asmcomp/closure.cmi utils/clflags.cmi asmcomp/clambda.cmi \
-    asmcomp/CSE.cmo middle_end/cmx/build_export_info.cmi \
-    asmcomp/debug/available_regs.cmi asmcomp/asmgen.cmi
+    middle_end/language/flambda_static.cmi asmcomp/emitaux.cmi \
+    asmcomp/emit.cmi asmcomp/deadcode.cmi utils/config.cmi \
+    asmcomp/compilenv.cmi asmcomp/comballoc.cmi asmcomp/coloring.cmi \
+    asmcomp/cmmgen.cmi asmcomp/cmm.cmi asmcomp/closure.cmi utils/clflags.cmi \
+    asmcomp/clambda.cmi asmcomp/CSE.cmo asmcomp/debug/available_regs.cmi \
+    asmcomp/asmgen.cmi
 asmcomp/asmgen.cmx : middle_end/to_clambda/un_anf.cmx \
     asmcomp/trap_analysis.cmx bytecomp/translmod.cmx \
     middle_end/base_types/symbol.cmx asmcomp/split.cmx asmcomp/spill.cmx \
@@ -770,14 +770,14 @@ asmcomp/asmgen.cmx : middle_end/to_clambda/un_anf.cmx \
     asmcomp/linear_invariants.cmx bytecomp/lambda.cmx asmcomp/interval.cmx \
     asmcomp/interf.cmx typing/ident.cmx \
     middle_end/to_clambda/flambda_to_clambda.cmx \
-    middle_end/language/flambda.cmx asmcomp/emitaux.cmx asmcomp/emit.cmx \
-    asmcomp/deadcode.cmx utils/config.cmx asmcomp/compilenv.cmx \
-    asmcomp/comballoc.cmx asmcomp/coloring.cmx asmcomp/cmmgen.cmx \
-    asmcomp/cmm.cmx asmcomp/closure.cmx utils/clflags.cmx asmcomp/clambda.cmx \
-    asmcomp/CSE.cmx middle_end/cmx/build_export_info.cmx \
-    asmcomp/debug/available_regs.cmx asmcomp/asmgen.cmi
+    middle_end/language/flambda_static.cmx asmcomp/emitaux.cmx \
+    asmcomp/emit.cmx asmcomp/deadcode.cmx utils/config.cmx \
+    asmcomp/compilenv.cmx asmcomp/comballoc.cmx asmcomp/coloring.cmx \
+    asmcomp/cmmgen.cmx asmcomp/cmm.cmx asmcomp/closure.cmx utils/clflags.cmx \
+    asmcomp/clambda.cmx asmcomp/CSE.cmx asmcomp/debug/available_regs.cmx \
+    asmcomp/asmgen.cmi
 asmcomp/asmgen.cmi : bytecomp/lambda.cmi typing/ident.cmi \
-    middle_end/language/flambda.cmi asmcomp/cmm.cmi \
+    middle_end/language/flambda_static.cmi asmcomp/cmm.cmi \
     middle_end/to_clambda/backend_intf.cmi
 asmcomp/asmlibrarian.cmo : utils/misc.cmi parsing/location.cmi \
     middle_end/cmx/export_info.cmi utils/config.cmi asmcomp/compilenv.cmi \
@@ -1038,15 +1038,15 @@ asmcomp/scheduling.cmo : asmcomp/schedgen.cmi asmcomp/scheduling.cmi
 asmcomp/scheduling.cmx : asmcomp/schedgen.cmx asmcomp/scheduling.cmi
 asmcomp/scheduling.cmi : asmcomp/linearize.cmi
 asmcomp/selectgen.cmo : utils/tbl.cmi bytecomp/simplif.cmi asmcomp/reg.cmi \
-    asmcomp/proc.cmi utils/misc.cmi asmcomp/mach.cmi bytecomp/lambda.cmi \
-    typing/ident.cmi middle_end/base_types/debuginfo.cmi utils/config.cmi \
-    asmcomp/cmm.cmi asmcomp/clambda.cmi parsing/asttypes.cmi asmcomp/arch.cmo \
-    asmcomp/selectgen.cmi
+    asmcomp/proc.cmi utils/misc.cmi asmcomp/mach.cmi typing/ident.cmi \
+    middle_end/base_types/debuginfo.cmi utils/config.cmi asmcomp/cmm.cmi \
+    asmcomp/clambda.cmi asmcomp/backend_primitives.cmi parsing/asttypes.cmi \
+    asmcomp/arch.cmo asmcomp/selectgen.cmi
 asmcomp/selectgen.cmx : utils/tbl.cmx bytecomp/simplif.cmx asmcomp/reg.cmx \
-    asmcomp/proc.cmx utils/misc.cmx asmcomp/mach.cmx bytecomp/lambda.cmx \
-    typing/ident.cmx middle_end/base_types/debuginfo.cmx utils/config.cmx \
-    asmcomp/cmm.cmx asmcomp/clambda.cmx parsing/asttypes.cmi asmcomp/arch.cmx \
-    asmcomp/selectgen.cmi
+    asmcomp/proc.cmx utils/misc.cmx asmcomp/mach.cmx typing/ident.cmx \
+    middle_end/base_types/debuginfo.cmx utils/config.cmx asmcomp/cmm.cmx \
+    asmcomp/clambda.cmx asmcomp/backend_primitives.cmx parsing/asttypes.cmi \
+    asmcomp/arch.cmx asmcomp/selectgen.cmi
 asmcomp/selectgen.cmi : asmcomp/reg.cmi asmcomp/mach.cmi typing/ident.cmi \
     middle_end/base_types/debuginfo.cmi asmcomp/cmm.cmi asmcomp/arch.cmo
 asmcomp/selection.cmo : asmcomp/spacetime_profiling.cmi \
@@ -1057,13 +1057,15 @@ asmcomp/selection.cmx : asmcomp/spacetime_profiling.cmx \
     asmcomp/cmm.cmx utils/clflags.cmx asmcomp/arch.cmx asmcomp/selection.cmi
 asmcomp/selection.cmi : asmcomp/mach.cmi asmcomp/cmm.cmi
 asmcomp/spacetime_profiling.cmo : asmcomp/selectgen.cmi asmcomp/proc.cmi \
-    utils/misc.cmi asmcomp/mach.cmi bytecomp/lambda.cmi typing/ident.cmi \
+    utils/misc.cmi asmcomp/mach.cmi typing/ident.cmi \
     middle_end/base_types/debuginfo.cmi utils/config.cmi asmcomp/cmm.cmi \
-    parsing/asttypes.cmi asmcomp/arch.cmo asmcomp/spacetime_profiling.cmi
+    asmcomp/backend_primitives.cmi asmcomp/arch.cmo \
+    asmcomp/spacetime_profiling.cmi
 asmcomp/spacetime_profiling.cmx : asmcomp/selectgen.cmx asmcomp/proc.cmx \
-    utils/misc.cmx asmcomp/mach.cmx bytecomp/lambda.cmx typing/ident.cmx \
+    utils/misc.cmx asmcomp/mach.cmx typing/ident.cmx \
     middle_end/base_types/debuginfo.cmx utils/config.cmx asmcomp/cmm.cmx \
-    parsing/asttypes.cmi asmcomp/arch.cmx asmcomp/spacetime_profiling.cmi
+    asmcomp/backend_primitives.cmx asmcomp/arch.cmx \
+    asmcomp/spacetime_profiling.cmi
 asmcomp/spacetime_profiling.cmi : asmcomp/selectgen.cmi
 asmcomp/spill.cmo : asmcomp/reg.cmi asmcomp/proc.cmi utils/misc.cmi \
     asmcomp/mach.cmi asmcomp/cmm.cmi utils/clflags.cmi asmcomp/spill.cmi
@@ -1077,12 +1079,12 @@ asmcomp/split.cmx : asmcomp/reg.cmx utils/misc.cmx asmcomp/mach.cmx \
 asmcomp/split.cmi : asmcomp/mach.cmi
 asmcomp/strmatch.cmo : parsing/location.cmi bytecomp/lambda.cmi \
     typing/ident.cmi middle_end/base_types/debuginfo.cmi asmcomp/cmm.cmi \
-    asmcomp/clambda.cmi parsing/asttypes.cmi asmcomp/arch.cmo \
-    asmcomp/strmatch.cmi
+    asmcomp/clambda.cmi asmcomp/backend_primitives.cmi parsing/asttypes.cmi \
+    asmcomp/arch.cmo asmcomp/strmatch.cmi
 asmcomp/strmatch.cmx : parsing/location.cmx bytecomp/lambda.cmx \
     typing/ident.cmx middle_end/base_types/debuginfo.cmx asmcomp/cmm.cmx \
-    asmcomp/clambda.cmx parsing/asttypes.cmi asmcomp/arch.cmx \
-    asmcomp/strmatch.cmi
+    asmcomp/clambda.cmx asmcomp/backend_primitives.cmx parsing/asttypes.cmi \
+    asmcomp/arch.cmx asmcomp/strmatch.cmi
 asmcomp/strmatch.cmi : parsing/location.cmi \
     middle_end/base_types/debuginfo.cmi asmcomp/cmm.cmi
 asmcomp/trap_analysis.cmo : utils/numbers.cmi utils/misc.cmi \
@@ -1180,6 +1182,16 @@ middle_end/base_types/closure_origin.cmx : \
 middle_end/base_types/closure_origin.cmi : utils/identifiable.cmi \
     middle_end/base_types/compilation_unit.cmi \
     middle_end/base_types/closure_id.cmi
+middle_end/base_types/code_id.cmo : utils/identifiable.cmi \
+    middle_end/base_types/id_types.cmi \
+    middle_end/base_types/compilation_unit.cmi \
+    middle_end/base_types/code_id.cmi
+middle_end/base_types/code_id.cmx : utils/identifiable.cmx \
+    middle_end/base_types/id_types.cmx \
+    middle_end/base_types/compilation_unit.cmx \
+    middle_end/base_types/code_id.cmi
+middle_end/base_types/code_id.cmi : utils/identifiable.cmi \
+    middle_end/base_types/compilation_unit.cmi
 middle_end/base_types/compilation_unit.cmo : utils/misc.cmi \
     middle_end/base_types/linkage_name.cmi utils/identifiable.cmi \
     typing/ident.cmi middle_end/base_types/compilation_unit.cmi
@@ -1315,34 +1327,9 @@ middle_end/base_types/variable.cmx : utils/misc.cmx utils/identifiable.cmx \
     middle_end/base_types/variable.cmi
 middle_end/base_types/variable.cmi : utils/identifiable.cmi typing/ident.cmi \
     middle_end/base_types/compilation_unit.cmi
-middle_end/cmx/build_export_info.cmo : middle_end/base_types/variable.cmi \
-    middle_end/base_types/var_within_closure.cmi \
-    middle_end/base_types/tag.cmi middle_end/base_types/symbol.cmi \
-    middle_end/base_types/set_of_closures_id.cmi \
-    middle_end/base_types/parameter.cmi utils/misc.cmi \
-    middle_end/analysis/invariant_params.cmi \
-    middle_end/language/flambda_utils.cmi middle_end/language/flambda.cmi \
-    middle_end/cmx/export_info.cmi middle_end/base_types/export_id.cmi \
-    middle_end/base_types/continuation.cmi asmcomp/compilenv.cmi \
-    middle_end/base_types/closure_id.cmi utils/clflags.cmi \
-    middle_end/to_clambda/backend_intf.cmi \
-    middle_end/language/allocated_const.cmi \
-    middle_end/cmx/build_export_info.cmi
-middle_end/cmx/build_export_info.cmx : middle_end/base_types/variable.cmx \
-    middle_end/base_types/var_within_closure.cmx \
-    middle_end/base_types/tag.cmx middle_end/base_types/symbol.cmx \
-    middle_end/base_types/set_of_closures_id.cmx \
-    middle_end/base_types/parameter.cmx utils/misc.cmx \
-    middle_end/analysis/invariant_params.cmx \
-    middle_end/language/flambda_utils.cmx middle_end/language/flambda.cmx \
-    middle_end/cmx/export_info.cmx middle_end/base_types/export_id.cmx \
-    middle_end/base_types/continuation.cmx asmcomp/compilenv.cmx \
-    middle_end/base_types/closure_id.cmx utils/clflags.cmx \
-    middle_end/to_clambda/backend_intf.cmi \
-    middle_end/language/allocated_const.cmx \
-    middle_end/cmx/build_export_info.cmi
-middle_end/cmx/build_export_info.cmi : middle_end/language/flambda.cmi \
-    middle_end/cmx/export_info.cmi middle_end/to_clambda/backend_intf.cmi
+middle_end/cmx/build_export_info.cmo : middle_end/cmx/build_export_info.cmi
+middle_end/cmx/build_export_info.cmx : middle_end/cmx/build_export_info.cmi
+middle_end/cmx/build_export_info.cmi :
 middle_end/cmx/export_info.cmo : middle_end/base_types/variable.cmi \
     middle_end/base_types/var_within_closure.cmi \
     middle_end/base_types/symbol.cmi \
@@ -1469,9 +1456,11 @@ middle_end/from_lambda/closure_conversion.cmo : \
     middle_end/language/simple.cmi typing/primitive.cmi \
     middle_end/base_types/parameter.cmi utils/numbers.cmi \
     middle_end/base_types/name.cmi middle_end/base_types/mutable_variable.cmi \
-    utils/misc.cmi middle_end/base_types/linkage_name.cmi bytecomp/lambda.cmi \
-    middle_end/base_types/immediate.cmi middle_end/from_lambda/ilambda.cmi \
-    typing/ident.cmi middle_end/language/flambda_utils.cmi \
+    utils/misc.cmi middle_end/base_types/linkage_name.cmi \
+    middle_end/from_lambda/lambda_to_flambda_primitives.cmi \
+    bytecomp/lambda.cmi middle_end/base_types/immediate.cmi \
+    middle_end/from_lambda/ilambda.cmi typing/ident.cmi \
+    middle_end/language/flambda_utils.cmi \
     middle_end/language/flambda_type.cmi \
     middle_end/language/flambda_static0.cmi \
     middle_end/language/flambda_static.cmi \
@@ -1492,9 +1481,11 @@ middle_end/from_lambda/closure_conversion.cmx : \
     middle_end/language/simple.cmx typing/primitive.cmx \
     middle_end/base_types/parameter.cmx utils/numbers.cmx \
     middle_end/base_types/name.cmx middle_end/base_types/mutable_variable.cmx \
-    utils/misc.cmx middle_end/base_types/linkage_name.cmx bytecomp/lambda.cmx \
-    middle_end/base_types/immediate.cmx middle_end/from_lambda/ilambda.cmx \
-    typing/ident.cmx middle_end/language/flambda_utils.cmx \
+    utils/misc.cmx middle_end/base_types/linkage_name.cmx \
+    middle_end/from_lambda/lambda_to_flambda_primitives.cmx \
+    bytecomp/lambda.cmx middle_end/base_types/immediate.cmx \
+    middle_end/from_lambda/ilambda.cmx typing/ident.cmx \
+    middle_end/language/flambda_utils.cmx \
     middle_end/language/flambda_type.cmx \
     middle_end/language/flambda_static0.cmx \
     middle_end/language/flambda_static.cmx \
@@ -1543,7 +1534,7 @@ middle_end/from_lambda/cps_conversion.cmo : \
     utils/numbers.cmi middle_end/base_types/num_continuation_uses.cmi \
     utils/misc.cmi parsing/location.cmi bytecomp/lambda.cmi \
     middle_end/from_lambda/ilambda.cmi typing/ident.cmi \
-    middle_end/base_types/continuation.cmi \
+    middle_end/base_types/continuation.cmi parsing/asttypes.cmi \
     middle_end/from_lambda/cps_conversion.cmi
 middle_end/from_lambda/cps_conversion.cmx : \
     middle_end/base_types/trap_id.cmx bytecomp/printlambda.cmx \
@@ -1551,10 +1542,10 @@ middle_end/from_lambda/cps_conversion.cmx : \
     utils/numbers.cmx middle_end/base_types/num_continuation_uses.cmx \
     utils/misc.cmx parsing/location.cmx bytecomp/lambda.cmx \
     middle_end/from_lambda/ilambda.cmx typing/ident.cmx \
-    middle_end/base_types/continuation.cmx \
+    middle_end/base_types/continuation.cmx parsing/asttypes.cmi \
     middle_end/from_lambda/cps_conversion.cmi
-middle_end/from_lambda/cps_conversion.cmi : bytecomp/lambda.cmi \
-    middle_end/from_lambda/ilambda.cmi
+middle_end/from_lambda/cps_conversion.cmi : utils/numbers.cmi \
+    bytecomp/lambda.cmi middle_end/from_lambda/ilambda.cmi
 middle_end/from_lambda/ilambda.cmo : middle_end/base_types/trap_id.cmi \
     bytecomp/printlambda.cmi parsing/location.cmi bytecomp/lambda.cmi \
     typing/ident.cmi middle_end/base_types/continuation.cmi \
@@ -1567,7 +1558,7 @@ middle_end/from_lambda/ilambda.cmi : middle_end/base_types/trap_id.cmi \
     parsing/location.cmi bytecomp/lambda.cmi typing/ident.cmi \
     middle_end/base_types/continuation.cmi parsing/asttypes.cmi
 middle_end/from_lambda/lambda_to_flambda_primitives.cmo : \
-    middle_end/base_types/variable.cmi typing/types.cmi utils/targetint.cmi \
+    middle_end/base_types/variable.cmi utils/targetint.cmi \
     middle_end/base_types/tag.cmi middle_end/language/simple.cmi \
     bytecomp/printlambda.cmi utils/misc.cmi bytecomp/lambda.cmi \
     middle_end/base_types/immediate.cmi \
@@ -1577,7 +1568,7 @@ middle_end/from_lambda/lambda_to_flambda_primitives.cmo : \
     middle_end/base_types/continuation.cmi parsing/asttypes.cmi \
     middle_end/from_lambda/lambda_to_flambda_primitives.cmi
 middle_end/from_lambda/lambda_to_flambda_primitives.cmx : \
-    middle_end/base_types/variable.cmx typing/types.cmx utils/targetint.cmx \
+    middle_end/base_types/variable.cmx utils/targetint.cmx \
     middle_end/base_types/tag.cmx middle_end/language/simple.cmx \
     bytecomp/printlambda.cmx utils/misc.cmx bytecomp/lambda.cmx \
     middle_end/base_types/immediate.cmx \
@@ -1602,7 +1593,8 @@ middle_end/from_lambda/prepare_lambda.cmx : typing/types.cmx \
     bytecomp/matching.cmx parsing/location.cmx bytecomp/lambda.cmx \
     typing/ident.cmx middle_end/base_types/compilation_unit.cmx \
     utils/clflags.cmx middle_end/from_lambda/prepare_lambda.cmi
-middle_end/from_lambda/prepare_lambda.cmi : bytecomp/lambda.cmi
+middle_end/from_lambda/prepare_lambda.cmi : utils/numbers.cmi \
+    bytecomp/lambda.cmi
 middle_end/inlining/continuation_approx.cmo : middle_end/language/simple.cmi \
     utils/misc.cmi middle_end/language/flambda_arity.cmi \
     middle_end/language/flambda.cmi middle_end/base_types/continuation.cmi \
@@ -1714,7 +1706,8 @@ middle_end/inlining/inlining_transforms.cmo : \
     middle_end/base_types/variable.cmi \
     middle_end/base_types/var_within_closure.cmi \
     middle_end/simplify/simplify_env_and_result.cmi \
-    middle_end/base_types/parameter.cmi middle_end/inlining/inlining_cost.cmi \
+    middle_end/language/simple.cmi middle_end/base_types/parameter.cmi \
+    middle_end/inlining/inlining_cost.cmi \
     middle_end/language/flambda_utils.cmi \
     middle_end/language/flambda_type.cmi middle_end/language/flambda_kind.cmi \
     middle_end/language/flambda.cmi middle_end/base_types/closure_id.cmi \
@@ -1723,7 +1716,8 @@ middle_end/inlining/inlining_transforms.cmx : \
     middle_end/base_types/variable.cmx \
     middle_end/base_types/var_within_closure.cmx \
     middle_end/simplify/simplify_env_and_result.cmx \
-    middle_end/base_types/parameter.cmx middle_end/inlining/inlining_cost.cmx \
+    middle_end/language/simple.cmx middle_end/base_types/parameter.cmx \
+    middle_end/inlining/inlining_cost.cmx \
     middle_end/language/flambda_utils.cmx \
     middle_end/language/flambda_type.cmx middle_end/language/flambda_kind.cmx \
     middle_end/language/flambda.cmx middle_end/base_types/closure_id.cmx \
@@ -1948,10 +1942,11 @@ middle_end/language/flambda_type.cmx : middle_end/base_types/variable.cmx \
 middle_end/language/flambda_type.cmi : middle_end/base_types/variable.cmi \
     utils/targetint.cmi middle_end/base_types/tag.cmi \
     middle_end/base_types/symbol.cmi middle_end/language/simple.cmi \
-    utils/numbers.cmi middle_end/base_types/immediate.cmi \
-    middle_end/language/flambda_kind.cmi \
+    utils/numbers.cmi middle_end/base_types/name.cmi \
+    middle_end/base_types/immediate.cmi middle_end/language/flambda_kind.cmi \
     middle_end/language/flambda_arity.cmi middle_end/language/flambda0.cmi \
-    middle_end/base_types/continuation.cmi
+    middle_end/base_types/continuation.cmi \
+    middle_end/base_types/closure_id.cmi
 middle_end/language/flambda_type0.cmo : middle_end/base_types/variable.cmi \
     middle_end/base_types/var_within_closure.cmi utils/targetint.cmi \
     middle_end/base_types/tag.cmi \
@@ -1962,7 +1957,7 @@ middle_end/language/flambda_type0.cmo : middle_end/base_types/variable.cmi \
     middle_end/base_types/immediate.cmi utils/identifiable.cmi \
     middle_end/language/freshening.cmi middle_end/language/flambda_kind.cmi \
     middle_end/base_types/export_id.cmi middle_end/base_types/debuginfo.cmi \
-    middle_end/base_types/continuation.cmi \
+    middle_end/base_types/continuation.cmi middle_end/base_types/code_id.cmi \
     middle_end/base_types/closure_origin.cmi \
     middle_end/base_types/closure_id.cmi \
     middle_end/language/flambda_type0.cmi
@@ -1976,7 +1971,7 @@ middle_end/language/flambda_type0.cmx : middle_end/base_types/variable.cmx \
     middle_end/base_types/immediate.cmx utils/identifiable.cmx \
     middle_end/language/freshening.cmx middle_end/language/flambda_kind.cmx \
     middle_end/base_types/export_id.cmx middle_end/base_types/debuginfo.cmx \
-    middle_end/base_types/continuation.cmx \
+    middle_end/base_types/continuation.cmx middle_end/base_types/code_id.cmx \
     middle_end/base_types/closure_origin.cmx \
     middle_end/base_types/closure_id.cmx \
     middle_end/language/flambda_type0.cmi
@@ -1993,7 +1988,7 @@ middle_end/language/flambda_type0_intf.cmo : \
     middle_end/base_types/immediate.cmi utils/identifiable.cmi \
     middle_end/language/flambda_kind.cmi middle_end/base_types/export_id.cmi \
     middle_end/base_types/debuginfo.cmi \
-    middle_end/base_types/continuation.cmi \
+    middle_end/base_types/continuation.cmi middle_end/base_types/code_id.cmi \
     middle_end/base_types/closure_origin.cmi \
     middle_end/base_types/closure_id.cmi
 middle_end/language/flambda_type0_intf.cmx : \
@@ -2007,7 +2002,7 @@ middle_end/language/flambda_type0_intf.cmx : \
     middle_end/base_types/immediate.cmx utils/identifiable.cmx \
     middle_end/language/flambda_kind.cmx middle_end/base_types/export_id.cmx \
     middle_end/base_types/debuginfo.cmx \
-    middle_end/base_types/continuation.cmx \
+    middle_end/base_types/continuation.cmx middle_end/base_types/code_id.cmx \
     middle_end/base_types/closure_origin.cmx \
     middle_end/base_types/closure_id.cmx
 middle_end/language/flambda_utils.cmo : middle_end/base_types/variable.cmi \
@@ -2335,7 +2330,8 @@ middle_end/simplify/simplify_expr.cmo : utils/warnings.cmi \
     parsing/location.cmi middle_end/inlining/inlining_decision.cmi \
     middle_end/inlining/inlining_cost.cmi middle_end/base_types/immediate.cmi \
     middle_end/language/freshening.cmi middle_end/language/flambda_type.cmi \
-    middle_end/language/flambda_kind.cmi middle_end/language/flambda0.cmi \
+    middle_end/language/flambda_kind.cmi \
+    middle_end/language/flambda_arity.cmi middle_end/language/flambda0.cmi \
     middle_end/language/flambda.cmi middle_end/base_types/debuginfo.cmi \
     middle_end/inlining/continuation_approx.cmi \
     middle_end/base_types/continuation.cmi \
@@ -2353,7 +2349,8 @@ middle_end/simplify/simplify_expr.cmx : utils/warnings.cmx \
     parsing/location.cmx middle_end/inlining/inlining_decision.cmx \
     middle_end/inlining/inlining_cost.cmx middle_end/base_types/immediate.cmx \
     middle_end/language/freshening.cmx middle_end/language/flambda_type.cmx \
-    middle_end/language/flambda_kind.cmx middle_end/language/flambda0.cmx \
+    middle_end/language/flambda_kind.cmx \
+    middle_end/language/flambda_arity.cmx middle_end/language/flambda0.cmx \
     middle_end/language/flambda.cmx middle_end/base_types/debuginfo.cmx \
     middle_end/inlining/continuation_approx.cmx \
     middle_end/base_types/continuation.cmx \
@@ -2420,9 +2417,8 @@ middle_end/simplify/simplify_primitive.cmi : \
 middle_end/simplify/simplify_program.cmo : utils/targetint.cmi \
     middle_end/base_types/symbol.cmi middle_end/simplify/simplify_named.cmi \
     middle_end/simplify/simplify_env_and_result.cmi \
-    middle_end/simplify/simplify.cmi middle_end/base_types/parameter.cmi \
-    utils/numbers.cmi utils/misc.cmi middle_end/base_types/immediate.cmi \
-    middle_end/language/flambda_type.cmi \
+    middle_end/base_types/parameter.cmi utils/numbers.cmi utils/misc.cmi \
+    middle_end/base_types/immediate.cmi middle_end/language/flambda_type.cmi \
     middle_end/language/flambda_static.cmi \
     middle_end/language/flambda_primitive.cmi \
     middle_end/language/flambda_kind.cmi middle_end/language/flambda.cmi \
@@ -2433,9 +2429,8 @@ middle_end/simplify/simplify_program.cmo : utils/targetint.cmi \
 middle_end/simplify/simplify_program.cmx : utils/targetint.cmx \
     middle_end/base_types/symbol.cmx middle_end/simplify/simplify_named.cmx \
     middle_end/simplify/simplify_env_and_result.cmx \
-    middle_end/simplify/simplify.cmx middle_end/base_types/parameter.cmx \
-    utils/numbers.cmx utils/misc.cmx middle_end/base_types/immediate.cmx \
-    middle_end/language/flambda_type.cmx \
+    middle_end/base_types/parameter.cmx utils/numbers.cmx utils/misc.cmx \
+    middle_end/base_types/immediate.cmx middle_end/language/flambda_type.cmx \
     middle_end/language/flambda_static.cmx \
     middle_end/language/flambda_primitive.cmx \
     middle_end/language/flambda_kind.cmx middle_end/language/flambda.cmx \
@@ -2492,6 +2487,7 @@ middle_end/simplify/simplify_unary_primitive.cmo : utils/targetint.cmi \
     middle_end/language/flambda_type.cmi \
     middle_end/language/flambda_primitive.cmi \
     middle_end/language/flambda_kind.cmi middle_end/language/flambda.cmi \
+    middle_end/base_types/closure_id.cmi \
     middle_end/simplify/simplify_unary_primitive.cmi
 middle_end/simplify/simplify_unary_primitive.cmx : utils/targetint.cmx \
     middle_end/base_types/tag.cmx middle_end/simplify/simplify_simple.cmx \
@@ -2502,6 +2498,7 @@ middle_end/simplify/simplify_unary_primitive.cmx : utils/targetint.cmx \
     middle_end/language/flambda_type.cmx \
     middle_end/language/flambda_primitive.cmx \
     middle_end/language/flambda_kind.cmx middle_end/language/flambda.cmx \
+    middle_end/base_types/closure_id.cmx \
     middle_end/simplify/simplify_unary_primitive.cmi
 middle_end/simplify/simplify_unary_primitive.cmi : \
     middle_end/simplify/simplify_env_and_result.cmi \
@@ -2550,40 +2547,12 @@ middle_end/to_clambda/closure_offsets.cmi : \
     middle_end/base_types/var_within_closure.cmi \
     middle_end/language/flambda.cmi middle_end/base_types/closure_id.cmi
 middle_end/to_clambda/flambda_to_clambda.cmo : \
-    middle_end/base_types/variable.cmi \
-    middle_end/base_types/var_within_closure.cmi \
-    middle_end/base_types/trap_id.cmi middle_end/base_types/tag.cmi \
-    middle_end/base_types/symbol.cmi \
-    middle_end/base_types/set_of_closures_id.cmi typing/primitive.cmi \
-    middle_end/base_types/parameter.cmi utils/numbers.cmi \
-    middle_end/base_types/mutable_variable.cmi utils/misc.cmi \
-    middle_end/base_types/linkage_name.cmi typing/ident.cmi \
-    middle_end/language/flambda_utils.cmi middle_end/language/flambda.cmi \
-    middle_end/cmx/export_info.cmi middle_end/base_types/debuginfo.cmi \
-    middle_end/base_types/continuation.cmi asmcomp/compilenv.cmi \
-    middle_end/to_clambda/closure_offsets.cmi \
-    middle_end/base_types/closure_id.cmi utils/clflags.cmi \
-    asmcomp/clambda.cmi middle_end/language/allocated_const.cmi \
     middle_end/to_clambda/flambda_to_clambda.cmi
 middle_end/to_clambda/flambda_to_clambda.cmx : \
-    middle_end/base_types/variable.cmx \
-    middle_end/base_types/var_within_closure.cmx \
-    middle_end/base_types/trap_id.cmx middle_end/base_types/tag.cmx \
-    middle_end/base_types/symbol.cmx \
-    middle_end/base_types/set_of_closures_id.cmx typing/primitive.cmx \
-    middle_end/base_types/parameter.cmx utils/numbers.cmx \
-    middle_end/base_types/mutable_variable.cmx utils/misc.cmx \
-    middle_end/base_types/linkage_name.cmx typing/ident.cmx \
-    middle_end/language/flambda_utils.cmx middle_end/language/flambda.cmx \
-    middle_end/cmx/export_info.cmx middle_end/base_types/debuginfo.cmx \
-    middle_end/base_types/continuation.cmx asmcomp/compilenv.cmx \
-    middle_end/to_clambda/closure_offsets.cmx \
-    middle_end/base_types/closure_id.cmx utils/clflags.cmx \
-    asmcomp/clambda.cmx middle_end/language/allocated_const.cmx \
     middle_end/to_clambda/flambda_to_clambda.cmi
 middle_end/to_clambda/flambda_to_clambda.cmi : \
-    middle_end/base_types/symbol.cmi middle_end/language/flambda.cmi \
-    middle_end/cmx/export_info.cmi asmcomp/clambda.cmi
+    middle_end/base_types/symbol.cmi middle_end/language/flambda_static.cmi \
+    asmcomp/clambda.cmi
 middle_end/to_clambda/un_anf.cmo : middle_end/to_clambda/un_cps.cmi \
     bytecomp/semantics_of_primitives.cmi asmcomp/printclambda.cmi \
     utils/misc.cmi bytecomp/lambda.cmi typing/ident.cmi \
@@ -2772,6 +2741,16 @@ middle_end/base_types/closure_origin.cmx : \
 middle_end/base_types/closure_origin.cmi : utils/identifiable.cmi \
     middle_end/base_types/compilation_unit.cmi \
     middle_end/base_types/closure_id.cmi
+middle_end/base_types/code_id.cmo : utils/identifiable.cmi \
+    middle_end/base_types/id_types.cmi \
+    middle_end/base_types/compilation_unit.cmi \
+    middle_end/base_types/code_id.cmi
+middle_end/base_types/code_id.cmx : utils/identifiable.cmx \
+    middle_end/base_types/id_types.cmx \
+    middle_end/base_types/compilation_unit.cmx \
+    middle_end/base_types/code_id.cmi
+middle_end/base_types/code_id.cmi : utils/identifiable.cmi \
+    middle_end/base_types/compilation_unit.cmi
 middle_end/base_types/compilation_unit.cmo : utils/misc.cmi \
     middle_end/base_types/linkage_name.cmi utils/identifiable.cmi \
     typing/ident.cmi middle_end/base_types/compilation_unit.cmi

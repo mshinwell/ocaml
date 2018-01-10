@@ -176,16 +176,12 @@ end) = struct
          : Targetint.Set.t ty_naked_number
         -> Targetint.Set.t ty_naked_number of_kind_value_boxed_number
 
-  and closures = {
-    set_of_closures : ty_fabricated;
-    closure_id : Closure_id.t;
-  }
-
   and inlinable_function_declaration = {
     closure_origin : Closure_origin.t;
     continuation_param : Continuation.t;
     is_classic_mode : bool;
     params : (Parameter.t * t) list;
+    code_id : Code_id.t;
     body : expr;
     free_names_in_body : Name.Set.t;
     result : t list;
@@ -210,10 +206,12 @@ end) = struct
     | Inlinable of inlinable_function_declaration
 
   and set_of_closures = {
-    set_of_closures_id : Set_of_closures_id.t;
-    set_of_closures_origin : Set_of_closures_origin.t;
     function_decls : function_declaration Closure_id.Map.t;
     closure_elements : ty_value Var_within_closure.Map.t;
+  }
+
+  and closures = {
+    by_closure_id : ty_fabricated Closure_id.Map.t;
   }
 
   and 'a of_kind_naked_number =
@@ -375,10 +373,12 @@ end) = struct
 
   and _unused = Expr.print
 
-  and print_closure ppf ({ closure_id; set_of_closures; } : closures) =
+  and print_closure _ppf (_ : closures) = assert false
+(*
     Format.fprintf ppf "@[(Closures@ @[<2>[@ %a @[<2>from@ %a@];@ ]@])@]"
       Closure_id.print closure_id
-      print_ty_fabricated set_of_closures
+    print_ty_fabricated set_of_closures
+*)  
 
   and print_inlinable_function_declaration ppf
         (decl : inlinable_function_declaration) =
@@ -445,12 +445,8 @@ end) = struct
 
   and print_set_of_closures ppf set =
     Format.fprintf ppf
-      "@[(@[(set_of_closures_id@ %a)@]@,\
-          @[(set_of_closures_origin@ %a)@]@,\
-          @[(function_decls@ %a)@]@,\
+      "@[(@[(function_decls@ %a)@]@,\
           @[(closure_elements@ %a)@])@]"
-      Set_of_closures_id.print set.set_of_closures_id
-      Set_of_closures_origin.print set.set_of_closures_origin
       print_function_declarations set.function_decls
       (Var_within_closure.Map.print print_ty_value) set.closure_elements
 
@@ -508,6 +504,14 @@ end) = struct
   let create_typing_environment () =
     let existential_freshening = Freshening.activate Freshening.empty in
     { names_to_types = Name.Map.empty;
+      levels_to_names = Scope_level.Map.empty;
+      existentials = Name.Set.empty;
+      existential_freshening;
+    }
+
+  let singleton_typing_environment name t =
+    let existential_freshening = Freshening.activate Freshening.empty in
+    { names_to_types = Name.Map.add name t Name.Map.empty;
       levels_to_names = Scope_level.Map.empty;
       existentials = Name.Set.empty;
       existential_freshening;
@@ -593,8 +597,8 @@ end) = struct
       free_names_ty free_names_of_kind_naked_number n acc
     | Boxed_number (Boxed_nativeint n) ->
       free_names_ty free_names_of_kind_naked_number n acc
-    | Closure { set_of_closures; closure_id = _; } ->
-      free_names_ty free_names_of_kind_fabricated set_of_closures acc
+    | Closure _ -> assert false
+(*      free_names_ty free_names_of_kind_fabricated set_of_closures acc*)
     | String _ -> acc
 
   and free_names_of_kind_fabricated (of_kind : of_kind_fabricated) acc =
@@ -1558,6 +1562,7 @@ end) = struct
       is_classic_mode;
       params;
       body;
+      code_id = Code_id.create (Compilation_unit.get_current_exn ());
       free_names_in_body = Expr.free_names body;
       result_env_extension = create_typing_environment ();
       result;
@@ -1578,24 +1583,22 @@ end) = struct
       direct_call_surrogate;
     }
 
-  let closure ~set_of_closures closure_id : t =
+  let closure ~set_of_closures:_ _closure_id : t = assert false
+(*
     (* CR mshinwell: pass a description to the "force" functions *)
     let set_of_closures = force_to_kind_fabricated set_of_closures in
     Value (No_alias (Join [Closure { set_of_closures; closure_id; }]))
+*)
 
-  let create_set_of_closures ~set_of_closures_id ~set_of_closures_origin
-        ~function_decls ~closure_elements : set_of_closures =
-    { set_of_closures_id;
-      set_of_closures_origin;
-      function_decls;
+  let create_set_of_closures ~function_decls ~closure_elements
+        : set_of_closures =
+    { function_decls;
       closure_elements;
     }
 
-  let set_of_closures ~set_of_closures_id ~set_of_closures_origin
-        ~function_decls ~closure_elements =
+  let set_of_closures ~function_decls ~closure_elements =
     let set_of_closures =
-      create_set_of_closures ~set_of_closures_id ~set_of_closures_origin
-        ~function_decls ~closure_elements
+      create_set_of_closures ~function_decls ~closure_elements
     in
     Fabricated (No_alias (Join [Set_of_closures set_of_closures]))
 
@@ -1890,9 +1893,13 @@ end) = struct
     | Ok of 'a
     | Bottom
 
+  type judgements_from_meet = (Name.t * t) list
+
   module type Meet_and_join_spec = sig
     type of_kind_foo
     type unk
+
+    val to_type : (of_kind_foo, unk) ty -> t
 
     val force_to_kind : t -> (of_kind_foo, unk) ty
 
@@ -1901,7 +1908,7 @@ end) = struct
     val meet_of_kind_foo
        : (of_kind_foo
       -> of_kind_foo
-      -> of_kind_foo or_bottom) type_accessor
+      -> (of_kind_foo * judgements_from_meet) or_bottom) type_accessor
 
     val meet_unk : unk -> unk -> unk
 
@@ -1928,11 +1935,12 @@ end) = struct
       -> (of_kind_foo, unk) ty
       -> (of_kind_foo, unk) ty) type_accessor
 
-    (* Greatest lower bound of two types of a particular kind. *)
+    (* Greatest lower bound of two types of a particular kind.
+       The computation of such may yield new judgements. *)
     val meet_ty
        : ((of_kind_foo, unk) ty
       -> (of_kind_foo, unk) ty
-      -> (of_kind_foo, unk) ty) type_accessor
+      -> (of_kind_foo, unk) ty * judgements_from_meet) type_accessor
   end
 
   (* CR mshinwell: Work out which properties we need to prove, e.g.
@@ -2012,33 +2020,37 @@ end) = struct
     let rec meet_on_unknown_or_join ~type_of_name
           (ou1 : (S.of_kind_foo, S.unk) unknown_or_join)
           (ou2 : (S.of_kind_foo, S.unk) unknown_or_join)
-          : (S.of_kind_foo, S.unk) unknown_or_join =
+          : (S.of_kind_foo, S.unk) unknown_or_join * judgements_from_meet =
       match ou1, ou2 with
-      | Unknown unk1, Unknown unk2 -> Unknown (S.meet_unk unk1 unk2)
-      | Unknown _, ou2 -> ou2
-      | ou1, Unknown _ -> ou1
+      | Unknown unk1, Unknown unk2 -> Unknown (S.meet_unk unk1 unk2), []
+      | Unknown _, ou2 -> ou2, []
+      | ou1, Unknown _ -> ou1, []
       | Join of_kind_foos1, Join of_kind_foos2 ->
-        let of_kind_foos =
-          List.fold_left (fun of_kind_foos of_kind_foo ->
-              Misc.Stdlib.List.filter_map (fun of_kind_foo' ->
-                  let meet =
-                    S.meet_of_kind_foo ~type_of_name of_kind_foo of_kind_foo'
-                  in
-                  match meet with
-                  | Ok of_kind_foo -> Some of_kind_foo
-                  | Bottom -> None)
-                of_kind_foos)
-            of_kind_foos2
+        let of_kind_foos, judgements =
+          List.fold_left (fun (of_kind_foos, judgements) of_kind_foo ->
+              let new_judgements = ref [] in
+              let of_kind_foos =
+                Misc.Stdlib.List.filter_map (fun of_kind_foo' ->
+                    let meet =
+                      S.meet_of_kind_foo ~type_of_name of_kind_foo of_kind_foo'
+                    in
+                    match meet with
+                    | Ok (of_kind_foo, new_judgements') ->
+                      new_judgements := new_judgements' @ !new_judgements;
+                      Some of_kind_foo
+                    | Bottom -> None)
+                  of_kind_foos
+              in
+              of_kind_foos, !new_judgements @ judgements)
+            (of_kind_foos2, [])
             of_kind_foos1
         in
-        Join of_kind_foos
+        Join of_kind_foos, judgements
 
     and meet_ty ~type_of_name
           (or_alias1 : (S.of_kind_foo, S.unk) ty)
           (or_alias2 : (S.of_kind_foo, S.unk) ty)
-          : (S.of_kind_foo, S.unk) ty =
-      (* CR mshinwell: We should maybe be returning equations when we
-         meet types equipped with alias information. *)
+          : (S.of_kind_foo, S.unk) ty * judgements_from_meet =
       let unknown_or_join1, canonical_name1 =
         resolve_aliases_and_squash_unresolved_names_on_ty ~type_of_name
           ~force_to_kind:S.force_to_kind
@@ -2051,15 +2063,24 @@ end) = struct
           ~unknown_payload:S.unknown_payload
           or_alias2
       in
-      match canonical_name1, canonical_name2 with
-      | Some name1, Some name2 when Name.equal name1 name2 ->
-        Type_of name1
-      | _, _ ->
-        let unknown_or_join =
+      let normal_case ~names_to_bind =
+        let unknown_or_join, new_judgements =
           meet_on_unknown_or_join ~type_of_name
             unknown_or_join1 unknown_or_join2
         in
-        No_alias unknown_or_join
+        let new_judgements' =
+          List.map (fun name -> name, S.to_type (No_alias unknown_or_join))
+            names_to_bind
+        in
+        No_alias unknown_or_join, new_judgements @ new_judgements'
+      in
+      match canonical_name1, canonical_name2 with
+      | Some name1, Some name2 when Name.equal name1 name2 ->
+        Type_of name1, []
+      | Some name1, Some name2 -> normal_case ~names_to_bind:[name1; name2]
+      | Some name1, None -> normal_case ~names_to_bind:[name1]
+      | None, Some name2 -> normal_case ~names_to_bind:[name2]
+      | None, None -> normal_case ~names_to_bind:[]
   end
 
   module rec Meet_and_join_value : sig
@@ -2070,6 +2091,7 @@ end) = struct
     type of_kind_foo = of_kind_value
     type unk = K.Value_kind.t
 
+    let to_type ty : t = Value ty
     let force_to_kind = force_to_kind_value
 
     let unknown_payload = K.Value_kind.Unknown
@@ -2116,12 +2138,13 @@ end) = struct
            } : singleton_block)
           ({ env_extension = env_extension2;
              fields = fields2;
-           } : singleton_block) : singleton_block =
+           } : singleton_block) : singleton_block * judgements_from_meet =
       let env_extension =
         Meet_and_join.meet_typing_environment ~type_of_name
           env_extension1 env_extension2
       in
       assert (Array.length fields1 = Array.length fields2);
+      let judgements = ref [] in
       let fields =
         Array.map2
           (fun (field1 : _ mutable_or_immutable)
@@ -2129,13 +2152,17 @@ end) = struct
             match field1, field2 with
             | Mutable, _ | _, Mutable -> Mutable
             | Immutable field1, Immutable field2 ->
-              Immutable (Meet_and_join.meet ~type_of_name field1 field2))
+              let field, new_judgements =
+                Meet_and_join.meet ~type_of_name field1 field2
+              in
+              judgements := new_judgements @ !judgements;
+              Immutable field)
           fields1
           fields2
       in
       { env_extension;
         fields;
-      }
+      }, !judgements
 
     let join_singleton_block ~type_of_name
           ({ env_extension = env_extension1;
@@ -2167,17 +2194,22 @@ end) = struct
     let meet_block_cases ~type_of_name
           ((Join { by_length = singleton_blocks1; }) : block_cases)
           ((Join { by_length = singleton_blocks2; }) : block_cases)
-          : block_cases or_bottom =
+          : (block_cases * judgements_from_meet) or_bottom =
+      let judgements = ref [] in
       let by_length =
         Targetint.OCaml.Map.inter_merge
           (fun singleton_block1 singleton_block2 ->
-            meet_singleton_block ~type_of_name
-              singleton_block1 singleton_block2)
+            let singleton_block, new_judgements =
+              meet_singleton_block ~type_of_name
+                singleton_block1 singleton_block2
+            in
+            judgements := new_judgements @ !judgements;
+            singleton_block)
           singleton_blocks1
           singleton_blocks2
       in
       if Targetint.OCaml.Map.is_empty by_length then Bottom
-      else Ok ((Join { by_length; }) : block_cases)
+      else Ok (((Join { by_length; }) : block_cases), !judgements)
 
     let join_block_cases ~type_of_name
           ((Join { by_length = singleton_blocks1; }) : block_cases)
@@ -2194,16 +2226,19 @@ end) = struct
       Join { by_length; }
 
     let meet_blocks ~type_of_name blocks1 blocks2 : _ or_bottom =
+      let judgements = ref [] in
       let blocks =
         Tag.Map.inter (fun block_cases1 block_cases2 ->
             match meet_block_cases ~type_of_name block_cases1 block_cases2 with
-            | Ok block_cases -> Some block_cases
+            | Ok (block_cases, new_judgements) ->
+              judgements := new_judgements @ !judgements;
+              Some block_cases
             | Bottom -> None)
           blocks1
           blocks2
       in
       if Tag.Map.is_empty blocks then Bottom
-      else Ok blocks
+      else Ok (blocks, !judgements)
 
     let join_blocks ~type_of_name blocks1 blocks2 =
       Tag.Map.union_merge (fun block_cases1 block_cases2 ->
@@ -2214,11 +2249,11 @@ end) = struct
     let meet_blocks_and_tagged_immediates ~type_of_name
           { blocks = blocks1; immediates = imms1; }
           { blocks = blocks2; immediates = imms2; }
-          : blocks_and_tagged_immediates or_bottom =
-      let blocks =
+          : (blocks_and_tagged_immediates * judgements_from_meet) or_bottom =
+      let blocks, judgements =
         match meet_blocks ~type_of_name blocks1 blocks2 with
-        | Bottom -> Tag.Map.empty
-        | Ok blocks -> blocks
+        | Bottom -> Tag.Map.empty, []
+        | Ok (blocks, judgements) -> blocks, judgements
       in
       let immediates : _ or_unknown =
         match imms1, imms2 with
@@ -2237,7 +2272,7 @@ end) = struct
              end
       in
       if is_bottom then Bottom
-      else Ok { blocks; immediates; }
+      else Ok ({ blocks; immediates; }, judgements)
 
     let join_blocks_and_tagged_immediates ~type_of_name
           { blocks = blocks1; immediates = imms1; }
@@ -2254,7 +2289,7 @@ end) = struct
 
     let meet_of_kind_foo ~type_of_name
           (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
-          : of_kind_value or_bottom =
+          : (of_kind_value * judgements_from_meet) or_bottom =
       match of_kind1, of_kind2 with
       | Blocks_and_tagged_immediates blocks_imms1,
           Blocks_and_tagged_immediates blocks_imms2 ->
@@ -2263,40 +2298,40 @@ end) = struct
             blocks_imms1 blocks_imms2
         in
         begin match blocks_imms with
-        | Ok blocks_imms ->
-          Ok (Blocks_and_tagged_immediates blocks_imms)
+        | Ok (blocks_imms, judgements) ->
+          Ok (Blocks_and_tagged_immediates blocks_imms, judgements)
         | Bottom -> Bottom
         end
       | Boxed_number (Boxed_float n1),
           Boxed_number (Boxed_float n2) ->
-        let n : _ ty_naked_number =
+        let (n : _ ty_naked_number), judgements =
           Meet_and_join_naked_float.meet_ty ~type_of_name n1 n2
         in
-        Ok (Boxed_number (Boxed_float n))
+        Ok (Boxed_number (Boxed_float n), judgements)
       | Boxed_number (Boxed_int32 n1),
           Boxed_number (Boxed_int32 n2) ->
-        let n : _ ty_naked_number =
+        let (n : _ ty_naked_number), judgements =
           Meet_and_join_naked_int32.meet_ty ~type_of_name n1 n2
         in
-        Ok (Boxed_number (Boxed_int32 n))
+        Ok (Boxed_number (Boxed_int32 n), judgements)
       | Boxed_number (Boxed_int64 n1),
           Boxed_number (Boxed_int64 n2) ->
-        let n : _ ty_naked_number =
+        let (n : _ ty_naked_number), judgements =
           Meet_and_join_naked_int64.meet_ty ~type_of_name n1 n2
         in
-        Ok (Boxed_number (Boxed_int64 n))
+        Ok (Boxed_number (Boxed_int64 n), judgements)
       | Boxed_number (Boxed_nativeint n1),
           Boxed_number (Boxed_nativeint n2) ->
-        let n : _ ty_naked_number =
+        let (n : _ ty_naked_number), judgements =
           Meet_and_join_naked_nativeint.meet_ty ~type_of_name n1 n2
         in
-        Ok (Boxed_number (Boxed_nativeint n))
+        Ok (Boxed_number (Boxed_nativeint n), judgements)
       | Closure closures1, Closure _closures2 ->
-        Ok (Closure closures1) (* XXX pchambart to fix *)
+        Ok (Closure closures1, []) (* XXX pchambart to fix *)
       | String strs1, String strs2 ->
         let strs = String_info.Set.inter strs1 strs2 in
         if String_info.Set.is_empty strs then Bottom
-        else Ok (String strs)
+        else Ok (String strs, [])
       | (Blocks_and_tagged_immediates _
           | Boxed_number _
           | Closure _
@@ -2363,6 +2398,7 @@ end) = struct
     type of_kind_foo = Immediate.Set.t of_kind_naked_number
     type unk = unit
 
+    let to_type ty : t = Naked_number (ty, Naked_immediate)
     let force_to_kind = force_to_kind_naked_immediate
 
     let unknown_payload = ()
@@ -2370,12 +2406,13 @@ end) = struct
     let meet_of_kind_foo ~type_of_name:_
           (of_kind1 : Immediate.Set.t of_kind_naked_number)
           (of_kind2 : Immediate.Set.t of_kind_naked_number)
-          : Immediate.Set.t of_kind_naked_number or_bottom =
+          : (Immediate.Set.t of_kind_naked_number * judgements_from_meet)
+              or_bottom =
       match of_kind1, of_kind2 with
       | Immediate fs1, Immediate fs2 ->
         let fs = Immediate.Set.inter fs1 fs2 in
         if Immediate.Set.is_empty fs then Bottom
-        else Ok (Immediate fs)
+        else Ok (Immediate fs, [])
       | _, _ -> Bottom
 
     let meet_unk () () = ()
@@ -2401,6 +2438,7 @@ end) = struct
     type of_kind_foo = Float_by_bit_pattern.Set.t of_kind_naked_number
     type unk = unit
 
+    let to_type ty = Naked_number (ty, Naked_float)
     let force_to_kind = force_to_kind_naked_float
 
     let unknown_payload = ()
@@ -2408,12 +2446,13 @@ end) = struct
     let meet_of_kind_foo ~type_of_name:_
           (of_kind1 : Float_by_bit_pattern.Set.t of_kind_naked_number)
           (of_kind2 : Float_by_bit_pattern.Set.t of_kind_naked_number)
-          : Float_by_bit_pattern.Set.t of_kind_naked_number or_bottom =
+          : (Float_by_bit_pattern.Set.t of_kind_naked_number
+              * judgements_from_meet) or_bottom =
       match of_kind1, of_kind2 with
       | Float fs1, Float fs2 ->
         let fs = Float_by_bit_pattern.Set.inter fs1 fs2 in
         if Float_by_bit_pattern.Set.is_empty fs then Bottom
-        else Ok (Float fs)
+        else Ok (Float fs, [])
       | _, _ -> Bottom
 
     let meet_unk () () = ()
@@ -2437,6 +2476,7 @@ end) = struct
     type of_kind_foo = Int32.Set.t of_kind_naked_number
     type unk = unit
 
+    let to_type ty : t = Naked_number (ty, Naked_int32)
     let force_to_kind = force_to_kind_naked_int32
 
     let unknown_payload = ()
@@ -2444,12 +2484,13 @@ end) = struct
     let meet_of_kind_foo ~type_of_name:_
           (of_kind1 : Int32.Set.t of_kind_naked_number)
           (of_kind2 : Int32.Set.t of_kind_naked_number)
-          : Int32.Set.t of_kind_naked_number or_bottom =
+          : (Int32.Set.t of_kind_naked_number * judgements_from_meet)
+              or_bottom =
       match of_kind1, of_kind2 with
       | Int32 is1, Int32 is2 ->
         let is = Int32.Set.inter is1 is2 in
         if Int32.Set.is_empty is then Bottom
-        else Ok (Int32 is)
+        else Ok (Int32 is, [])
       | _, _ -> Bottom
 
     let meet_unk () () = ()
@@ -2473,6 +2514,7 @@ end) = struct
     type of_kind_foo = Int64.Set.t of_kind_naked_number
     type unk = unit
 
+    let to_type ty : t = Naked_number (ty, Naked_int64)
     let force_to_kind = force_to_kind_naked_int64
 
     let unknown_payload = ()
@@ -2480,12 +2522,13 @@ end) = struct
     let meet_of_kind_foo ~type_of_name:_
           (of_kind1 : Int64.Set.t of_kind_naked_number)
           (of_kind2 : Int64.Set.t of_kind_naked_number)
-          : Int64.Set.t of_kind_naked_number or_bottom =
+          : (Int64.Set.t of_kind_naked_number * judgements_from_meet)
+              or_bottom =
       match of_kind1, of_kind2 with
       | Int64 is1, Int64 is2 ->
         let is = Int64.Set.inter is1 is2 in
         if Int64.Set.is_empty is then Bottom
-        else Ok (Int64 is)
+        else Ok (Int64 is, [])
       | _, _ -> Bottom
 
     let meet_unk () () = ()
@@ -2509,6 +2552,7 @@ end) = struct
     type of_kind_foo = Targetint.Set.t of_kind_naked_number
     type unk = unit
 
+    let to_type ty : t = Naked_number (ty, Naked_nativeint)
     let force_to_kind = force_to_kind_naked_nativeint
 
     let unknown_payload = ()
@@ -2516,12 +2560,13 @@ end) = struct
     let meet_of_kind_foo ~type_of_name:_
           (of_kind1 : Targetint.Set.t of_kind_naked_number)
           (of_kind2 : Targetint.Set.t of_kind_naked_number)
-          : Targetint.Set.t of_kind_naked_number or_bottom =
+          : (Targetint.Set.t of_kind_naked_number * judgements_from_meet)
+              or_bottom =
       match of_kind1, of_kind2 with
       | Nativeint is1, Nativeint is2 ->
         let is = Targetint.Set.inter is1 is2 in
         if Targetint.Set.is_empty is then Bottom
-        else Ok (Nativeint is)
+        else Ok (Nativeint is, [])
       | _, _ -> Bottom
 
     let meet_unk () () = ()
@@ -2545,13 +2590,14 @@ end) = struct
     type of_kind_foo = of_kind_fabricated
     type unk = K.Value_kind.t
 
+    let to_type ty : t = Fabricated ty
     let force_to_kind = force_to_kind_fabricated
 
     let unknown_payload = K.Value_kind.Unknown
 
     let meet_of_kind_foo ~type_of_name
           (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
-          : of_kind_fabricated or_bottom =
+          : (of_kind_fabricated * judgements_from_meet) or_bottom =
       match of_kind1, of_kind2 with
       | Tag tags1, Tag tags2 ->
         let tags =
@@ -2568,9 +2614,9 @@ end) = struct
             tags1
             tags2
         in
-        Ok (Tag tags)
+        Ok (Tag tags, [])
       | Set_of_closures set1, Set_of_closures _set2 ->
-        Ok (Set_of_closures set1)  (* XXX pchambart to fix *)
+        Ok (Set_of_closures set1, [])  (* XXX pchambart to fix *)
       | (Tag _ | Set_of_closures _), _ -> Bottom
 
     let meet_unk value_kind1 value_kind2 =
@@ -2609,70 +2655,71 @@ end) = struct
     type of_kind_foo = of_kind_phantom
     type unk = K.Phantom_kind.t
 
+    let to_type ty : t = Phantom ty
     let force_to_kind = force_to_kind_phantom
 
     let unknown_payload = K.Phantom_kind.Unknown
 
     let meet_of_kind_foo ~type_of_name
           (of_kind1 : of_kind_phantom) (of_kind2 : of_kind_phantom)
-          : of_kind_phantom or_bottom =
+          : (of_kind_phantom * judgements_from_meet) or_bottom =
       match of_kind1, of_kind2 with
       | Value ty_value1, Value ty_value2 ->
-        let ty_value =
+        let ty_value, judgements =
           Meet_and_join_value.meet_ty ~type_of_name ty_value1 ty_value2
         in
         (* CR mshinwell: Should this be tested for bottom and then we return
            Bottom if that succeeds?
            If not, then we should factor code about between this and [join],
            below. *)
-        Ok ((Value ty_value) : of_kind_phantom)
+        Ok (((Value ty_value) : of_kind_phantom), judgements)
       | Naked_number (ty_naked_number1, kind1),
           Naked_number (ty_naked_number2, kind2) ->
         let module N = K.Naked_number in
         begin match kind1, kind2 with
         | N.Naked_immediate, N.Naked_immediate ->
-          let ty_naked_number =
+          let ty_naked_number, judgements =
             Meet_and_join_naked_immediate.meet_ty ~type_of_name
               ty_naked_number1 ty_naked_number2
           in
-          Ok ((Naked_number (ty_naked_number, N.Naked_immediate))
-            : of_kind_phantom)
+          Ok (((Naked_number (ty_naked_number, N.Naked_immediate))
+            : of_kind_phantom), judgements)
         | N.Naked_float, N.Naked_float ->
-          let ty_naked_number =
+          let ty_naked_number, judgements =
             Meet_and_join_naked_float.meet_ty ~type_of_name
               ty_naked_number1 ty_naked_number2
           in
-          Ok ((Naked_number (ty_naked_number, N.Naked_float))
-            : of_kind_phantom)
+          Ok (((Naked_number (ty_naked_number, N.Naked_float))
+            : of_kind_phantom), judgements)
         | N.Naked_int32, N.Naked_int32 ->
-          let ty_naked_number =
+          let ty_naked_number, judgements =
             Meet_and_join_naked_int32.meet_ty ~type_of_name
               ty_naked_number1 ty_naked_number2
           in
-          Ok ((Naked_number (ty_naked_number, N.Naked_int32))
-            : of_kind_phantom)
+          Ok (((Naked_number (ty_naked_number, N.Naked_int32))
+            : of_kind_phantom), judgements)
         | N.Naked_int64, N.Naked_int64 ->
-          let ty_naked_number =
+          let ty_naked_number, judgements =
             Meet_and_join_naked_int64.meet_ty ~type_of_name
               ty_naked_number1 ty_naked_number2
           in
-          Ok ((Naked_number (ty_naked_number, N.Naked_int64))
-            : of_kind_phantom)
+          Ok (((Naked_number (ty_naked_number, N.Naked_int64))
+            : of_kind_phantom), judgements)
         | N.Naked_nativeint, N.Naked_nativeint ->
-          let ty_naked_number =
+          let ty_naked_number, judgements =
             Meet_and_join_naked_nativeint.meet_ty ~type_of_name
               ty_naked_number1 ty_naked_number2
           in
-          Ok ((Naked_number (ty_naked_number, N.Naked_nativeint))
-            : of_kind_phantom)
+          Ok (((Naked_number (ty_naked_number, N.Naked_nativeint))
+            : of_kind_phantom), judgements)
         | _, _ -> Bottom
         end
       | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
-        let ty_fabricated =
+        let ty_fabricated, judgements =
           Meet_and_join_fabricated.meet_ty ~type_of_name
             ty_fabricated1 ty_fabricated2
         in
-        Ok ((Fabricated ty_fabricated) : of_kind_phantom)
+        Ok (((Fabricated ty_fabricated) : of_kind_phantom), judgements)
       | (Value _ | Naked_number _ | Fabricated _), _ -> Bottom
 
     let meet_unk phantom_kind1 phantom_kind2 =
@@ -2745,7 +2792,7 @@ end) = struct
     val meet :
       (typing_environment -> t -> t -> typing_environment * t) type_accessor
 *)
-    val meet : (t -> t -> t) type_accessor
+    val meet : (t -> t -> t * judgements_from_meet) type_accessor
 
     val join : (t -> t -> t) type_accessor
 
@@ -2759,58 +2806,58 @@ end) = struct
       -> typing_environment
       -> typing_environment) type_accessor
   end = struct
-    let meet ~type_of_name (t1 : t) (t2 : t) : t =
+    let meet ~type_of_name (t1 : t) (t2 : t) : t * judgements_from_meet =
       match t1, t2 with
       | Value ty_value1, Value ty_value2 ->
-        let ty_value =
+        let ty_value, judgements =
           Meet_and_join_value.meet_ty ~type_of_name ty_value1 ty_value2
         in
-        Value ty_value
+        Value ty_value, judgements
       | Naked_number (ty_naked_number1, kind1),
           Naked_number (ty_naked_number2, kind2) ->
         let module N = K.Naked_number in
         begin match kind1, kind2 with
         | N.Naked_immediate, N.Naked_immediate ->
-          let ty_naked_number =
+          let ty_naked_number, judgements =
             Meet_and_join_naked_immediate.meet_ty ~type_of_name
               ty_naked_number1 ty_naked_number2
           in
-          Naked_number (ty_naked_number, N.Naked_immediate)
+          Naked_number (ty_naked_number, N.Naked_immediate), judgements
         | N.Naked_float, N.Naked_float ->
-          let ty_naked_number =
+          let ty_naked_number, judgements =
             Meet_and_join_naked_float.meet_ty ~type_of_name
               ty_naked_number1 ty_naked_number2
           in
-          Naked_number (ty_naked_number, N.Naked_float)
+          Naked_number (ty_naked_number, N.Naked_float), judgements
         | N.Naked_int32, N.Naked_int32 ->
-          let ty_naked_number =
+          let ty_naked_number, judgements =
             Meet_and_join_naked_int32.meet_ty ~type_of_name
               ty_naked_number1 ty_naked_number2
           in
-          Naked_number (ty_naked_number, N.Naked_int32)
+          Naked_number (ty_naked_number, N.Naked_int32), judgements
         | N.Naked_int64, N.Naked_int64 ->
-          let ty_naked_number =
+          let ty_naked_number, judgements =
             Meet_and_join_naked_int64.meet_ty ~type_of_name
               ty_naked_number1 ty_naked_number2
           in
-          Naked_number (ty_naked_number, N.Naked_int64)
+          Naked_number (ty_naked_number, N.Naked_int64), judgements
         | N.Naked_nativeint, N.Naked_nativeint ->
-          let ty_naked_number =
+          let ty_naked_number, judgements =
             Meet_and_join_naked_nativeint.meet_ty ~type_of_name
               ty_naked_number1 ty_naked_number2
           in
-          Naked_number (ty_naked_number, N.Naked_nativeint)
+          Naked_number (ty_naked_number, N.Naked_nativeint), judgements
         | _, _ ->
           Misc.fatal_errorf "Kind mismatch upon meet: %a versus %a"
             print t1
             print t2
         end
       | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
-        let ty_fabricated =
+        let ty_fabricated, judgements =
           Meet_and_join_fabricated.meet_ty ~type_of_name
             ty_fabricated1 ty_fabricated2
         in
-        Fabricated ty_fabricated
+        Fabricated ty_fabricated, judgements
       | (Value _ | Naked_number _ | Fabricated _ | Phantom _), _ ->
         Misc.fatal_errorf "Kind mismatch upon meet: %a versus %a"
           print t1
@@ -2910,7 +2957,9 @@ end) = struct
           (t1 : typing_environment) (t2 : typing_environment) =
       let names_to_types =
         Name.Map.union_merge (fun ty1 ty2 ->
-            meet ~type_of_name ty1 ty2)
+            (* CR mshinwell: Should we make use of these judgements? *)
+            let ty, _judgements = meet ~type_of_name ty1 ty2 in
+            ty)
           t1.names_to_types
           t2.names_to_types
       in
@@ -2940,10 +2989,21 @@ end) = struct
       }
   end
 
-  let meet = Meet_and_join.meet
-  let join = Meet_and_join.join
+  let meet ~type_of_name t1 t2 =
+    let t, judgements = Meet_and_join.meet ~type_of_name t1 t2 in
+    let envs =
+      List.map (fun (name, t) -> singleton_typing_environment name t)
+        judgements
+    in
+    let env =
+      List.fold_left (fun output_env env ->
+          Meet_and_join.meet_typing_environment ~type_of_name output_env env)
+        (create_typing_environment ())
+        envs
+    in
+    t, env
 
-(*  let meet_ty_value = Meet_and_join_value.meet_ty *)
+  let join = Meet_and_join.join
   let join_ty_value = Meet_and_join_value.join_ty
 
   module Typing_environment = struct

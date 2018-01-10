@@ -42,7 +42,7 @@ let simplify_project_closure env r prim ~closure ~set_of_closures dbg =
      thing which is used for unboxing of free variables of closures *)
   match proof with
   | Proved set_of_closures ->
-    begin T.Set_of_closures.project_closure set_of_closures closure with
+    begin match T.Set_of_closures.project_closure set_of_closures closure with
     | Not_in_set -> invalid ()
     | Ok closure_ty ->
       Reachable.reachable (original_term ()), closure_ty, r
@@ -65,7 +65,7 @@ let simplify_move_within_set_of_closures env r prim ~move_from ~move_to
     begin match Closure_id.Map.find move_from by_closure_id with
     | exception Not_found -> invalid ()
     | set_of_closures_name, set_of_closures ->
-      begin T.Set_of_closures.project_closure set_of_closures move_to with
+      begin match T.Set_of_closures.project_closure set_of_closures move_to with
       | Not_in_set -> invalid ()
       | Ok closure_ty ->
         begin match set_of_closures_name with
@@ -100,10 +100,8 @@ let simplify_project_var env r prim ~closure_id ~var_within_closure
   match proof with
   | Proved by_closure_id ->
     begin match Closure_id.Map.find move_from by_closure_id with
-    | exception Not_found ->
-
-    | ... ->
-
+    | exception Not_found -> ()
+    | _ -> ()
     end
   | Unknown ->
     Reachable.reachable (original_term ()), T.any_value (), r
