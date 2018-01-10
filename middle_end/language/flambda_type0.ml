@@ -1559,6 +1559,7 @@ end) = struct
       params;
       body;
       free_names_in_body = Expr.free_names body;
+      result_env_extension = create_typing_environment ();
       result;
       stub;
       dbg;
