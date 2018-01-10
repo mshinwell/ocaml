@@ -605,14 +605,11 @@ and close_named t env (named : Ilambda.named)
     let symbol = t.symbol_for_global' id in
     t.imported_symbols <- Symbol.Set.add symbol t.imported_symbols;
     cont (Simple (Simple.symbol symbol))
-  | Prim _ -> assert false
-(*
   | Prim { prim; args; loc; exception_continuation } ->
     Lambda_to_flambda_primitives.convert_and_bind prim
       ~args:(Env.find_simples env args)
       ~exception_continuation
       (Debuginfo.from_location loc) cont
-*)
   | Assign { being_assigned; new_value; } ->
     cont (Assign {
       being_assigned = Env.find_mutable_var env being_assigned;
