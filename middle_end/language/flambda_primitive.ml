@@ -446,9 +446,12 @@ type unary_primitive =
   | Boolean_not
   | Unbox_number of Flambda_kind.Boxable_number.t
   | Box_number of Flambda_kind.Boxable_number.t
-  | Project_closure of Closure_id.Set.t
-  | Move_within_set_of_closures of Closure_id.t Closure_id.Map.t
-  | Project_var of Var_within_closure.t Closure_id.Map.t
+  | Project_closure of Closure_id.t
+  | Move_within_set_of_closures of {
+      move_from : Closure_id.t;
+      move_to : Closure_id.t;
+    }
+  | Project_var of Closure_id.t * Var_within_closure.t
 
 let compare_unary_primitive p1 p2 =
   let unary_primitive_numbering p =

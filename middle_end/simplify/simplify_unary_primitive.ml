@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2017 OCamlPro SAS                                    *)
-(*   Copyright 2014--2017 Jane Street Group LLC                           *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -30,100 +30,72 @@ module Int64 = Numbers.Int64
 module Named = Flambda.Named
 module Reachable = Flambda.Reachable
 
-(* To fix with Pierre
-
-(* Simplify an expression that takes a set of closures and projects an
-   individual closure from it. *)
-let simplify_project_closure env r
-      ~(project_closure : Projection.Project_closure.t) : named_simplifier =
-  let set_of_closures, set_of_closures_ty =
-    freshen_and_squash_aliases env project_closure.set_of_closures
+let simplify_project_closure env r prim ~closure ~set_of_closures dbg =
+  let arg, ty = S.simplify_simple env arg in
+  let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
+  let invalid () =
+    Reachable.invalid (), T.bottom (K.value Definitely_pointer),
+      R.map_benefit r (B.remove_primitive (Unary prim))
   in
-  let closure_id = project_closure.closure_id in
-  let importer = E.importer env in
-  match T.prove_set_of_closures ~importer set_of_closures_ty with
-  | Wrong ->
-    let ty = Flambda_type.bottom (K.value Must_scan) in
-    let term = Reachable.invalid () in
-    [], ty, term
+  let proof = (E.type_accessor env T.prove_set_of_closures) ty in
+  (* CR mshinwell: We need to think about the old "project_var Projection.t"
+     thing which is used for unboxing of free variables of closures *)
+  match proof with
+  | Proved set_of_closures ->
+    begin T.Set_of_closures.project_closure set_of_closures closure with
+    | Not_in_set -> invalid ()
+    | Ok closure_ty ->
+      Reachable.reachable (original_term ()), closure_ty, r
+    end
   | Unknown ->
-    let ty = Flambda_type.bottom (K.value Must_scan) in
-    let term =
-      Reachable.reachable (Project_closure {
-        set_of_closures;
-        closure_id;
-      })
-    in
-    [], ty, term
-  | Known set ->
-(*
-    begin match Closure_id.Set.elements closure_id with
-      | _ :: _ :: _ ->
-        Format.printf "Set of closures type is not a singleton \
-            in project closure@ %a@ %a@."
-          T.print set_of_closures_type
-          Projection.print_project_closure project_closure
-      | [] ->
-        Format.printf "Set of closures type is empty in project \
-            closure@ %a@ %a@."
-          T.print set_of_closures_type
-          Projection.print_project_closure project_closure
-      | _ ->
-        ()
-    end;
-*)
-    let projecting_from =
-      match Flambda_type.Set_of_closures.set_of_closures_var set with
-      | None -> None
-      | Some set_of_closures_var ->
-        let projection : Projection.t =
-          Project_closure {
-            set_of_closures = set_of_closures_var;
-            closure_id;
-          }
-        in
-        match E.find_projection env ~projection with
-        | None -> None
-        | Some var -> Some (var, projection)
-    in
-    match projecting_from with
-    | Some (var, projection) ->
-      let var, var_ty = freshen_and_squash_aliases env var in
-      let r = R.map_benefit r (B.remove_projection projection) in
-      if Flambda_type.is_bottom ~importer var_ty then
-        [], Reachable.invalid (), r
-      else
-        [], Reachable.reachable (Var var), r
-    | None ->
-      assert false
-(* XXX for pchambart to fix: 
-      let if_not_reference_recursive_function_directly ()
-        : (Variable.t * Named.t) list * Named.t_reachable
-            * R.t =
-        let set_of_closures_var =
-          match set_of_closures_var with
-          | Some set_of_closures_var' when E.mem env set_of_closures_var' ->
-            set_of_closures_var
-          | Some _ | None -> None
-        in
-        let ty =
-          T.closure ?set_of_closures_var
-            (Closure_id.Map.of_set (fun _ -> value_set_of_closures)
-                closure_id)
-        in
-        [], Reachable (Project_closure { set_of_closures; closure_id; }),
-          ty
-      in
-      match Closure_id.Set.get_singleton closure_id with
-      | None ->
-        if_not_reference_recursive_function_directly ()
-      | Some closure_id ->
-        match reference_recursive_function_directly env closure_id with
-        | Some (flam, ty) -> [], Reachable flam, ty
-        | None ->
-          if_not_reference_recursive_function_directly ()
-*)
+    Reachable.reachable (original_term ()), T.any_closure (), r
+  | Invalid -> invalid ()
 
+let simplify_move_within_set_of_closures env r prim ~move_from ~move_to
+      ~closure dbg =
+  let arg, ty = S.simplify_simple env arg in
+  let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
+  let invalid () =
+    Reachable.invalid (), T.bottom (K.value Definitely_pointer),
+      R.map_benefit r (B.remove_primitive (Unary prim))
+  in
+  let proof = (E.type_accessor env T.prove_closures) ty in
+  match proof with
+  | Proved by_closure_id ->
+    begin match Closure_id.Map.find move_from by_closure_id with
+    | exception Not_found ->
+
+    | ... ->
+
+    end
+  | Unknown ->
+    Reachable.reachable (original_term ()), T.any_closure (), r
+  | Invalid -> invalid ()
+
+
+let simplify_project_var env r prim ~closure_id ~var_within_closure
+      ~closure dbg =
+  let arg, ty = S.simplify_simple env arg in
+  let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
+  let invalid () =
+    Reachable.invalid (), T.bottom (K.value Unknown)
+      R.map_benefit r (B.remove_primitive (Unary prim))
+  in
+  let proof = (E.type_accessor env T.prove_closures) ty in
+  match proof with
+  | Proved by_closure_id ->
+    begin match Closure_id.Map.find move_from by_closure_id with
+    | exception Not_found ->
+
+    | ... ->
+
+    end
+  | Unknown ->
+    Reachable.reachable (original_term ()), T.any_value (), r
+  | Invalid -> invalid ()
+
+
+(*
 (* Simplify an expression that, given one closure within some set of
    closures, returns another closure (possibly the same one) within the
    same set. *)
@@ -945,18 +917,11 @@ let simplify_unary_primitive env r (prim : Flambda_primitive.unary_primitive)
     Simplify_box_number_int64.simplify env r prim arg dbg
   | Box_number Naked_nativeint ->
     Simplify_box_number_nativeint.simplify env r prim arg dbg
-  | Project_closure _closures ->
-    assert false
-(*
-    simplify_project_closure env r closures
-*)
-  | Move_within_set_of_closures _by_closure_id ->
-    assert false
-(*
-    simplify_move_within_set_of_closures env r by_closure_id
-*)
-  | Project_var _by_closure_id ->
-    assert false
-(*
-    simplify_project_var env r by_closure_id
-*)
+  | Project_closure closure ->
+    simplify_project_closure env r prim ~closure ~set_of_closures:arg dbg
+  | Move_within_set_of_closures { move_from; move_to; } ->
+    simplify_move_within_set_of_closures env r prim ~move_from ~move_to
+      ~closure:arg dbg
+  | Project_var (closure_id, var_within_closure) ->
+    simplify_project_var env r prim ~closure_id ~var_within_closure
+      ~closure:arg dbg

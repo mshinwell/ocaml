@@ -189,6 +189,7 @@ end) = struct
     body : expr;
     free_names_in_body : Name.Set.t;
     result : t list;
+    result_env_extension : typing_environment;
     stub : bool;
     dbg : Debuginfo.t;
     inline : inline_attribute;

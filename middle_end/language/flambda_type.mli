@@ -244,10 +244,14 @@ val prove_of_kind_naked_float
    : (t
   -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number) type_accessor
 
-(*
-(** As for [prove_tagged_immediate] but for closures. *)
-val prove_closures : (t -> Joined_closures.t known_values) type_accessor
+type closure =
+  | Inlinable of Closure_id.t * inlinable_function_declaration
+  | Non_inlinable of unit  (* CR mshinwell: pchambart to fix *)
 
+(** As for [prove_tagged_immediate] but for closures. *)
+val prove_closures : (t -> closure proof) type_accessor
+
+(*
 (** As for [prove_closures] but for sets of closures. *)
 val prove_sets_of_closures
    : (t -> Joined_sets_of_closures.t known_values) type_accessor

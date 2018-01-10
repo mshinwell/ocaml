@@ -185,6 +185,7 @@ module type S = sig
     body : expr;
     free_names_in_body : Name.Set.t;
     result : t list;
+    result_env_extension : typing_environment;
     stub : bool;
     dbg : Debuginfo.t;
     inline : inline_attribute;
@@ -328,6 +329,8 @@ module type S = sig
   val any_naked_int32 : unit -> t
   val any_naked_int64 : unit -> t
   val any_naked_nativeint : unit -> t
+
+  val any_closure : unit -> t
 
   val any_fabricated : unit -> t
   val any_phantom : unit -> t

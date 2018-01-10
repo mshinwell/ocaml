@@ -940,101 +940,70 @@ and simplify_function_application env r (apply : Flambda.Apply.t)
       exn_continuation;
     }), r
   in
-  unknown_closures ()
-(* XXX To be worked out with Pierre, although this should be nearly ok
-  let module JC = T.Joined_closures in
-  let module JSC = T.Joined_sets_of_closures in
-  match (E.type_accessor env T.prove_closures) callee_ty with
-  | Proved (Exactly joined) ->
-    let sets_of_closures = JC.sets_of_closures joined in
-    begin match Closure_id.Map.get_singleton sets_of_closures with
-    | None -> unknown_closures ()
-    | Some (callee's_closure_id, sets) ->
-      begin match (E.type_accessor env T.prove_sets_of_closures) sets with
-      | Proved (Exactly joined) ->
-        begin match JSC.to_unique_set_of_closures joined with
-        | None -> unknown_closures ()
-        | Some set_of_closures ->
-          let function_decls = set_of_closures.function_decls in
-          begin match
-            Closure_id.Map.find callee's_closure_id function_decls
-          with
-          | exception Not_found ->
-            Misc.fatal_errorf "Closure type specifies callee's closure ID as \
-                %a but this closure ID does not occur in the joined set of \
-                closures.  Type of the callee: %a"
-              Closure_id.print callee's_closure_id
-              T.print callee_ty
-          | Inlinable function_decl ->
-            let arity_of_application =
-              Flambda.Call_kind.return_arity apply.call_kind
-            in
-            let result_arity =
-              List.map (E.type_accessor env T.kind) function_decl.result
-            in
-            let arity_mismatch =
-              not (Flambda_arity.equal arity_of_application result_arity)
-            in
-            if arity_mismatch then begin
-              Misc.fatal_errorf "Application of %a (%a):@,function has return \
-                  arity %a but the application expression is expecting it \
-                  to have arity %a.  Function declaration is:@,%a"
-                Name.print callee
-                Simple.List.print args
-                Flambda_arity.print result_arity
-                Flambda_arity.print arity_of_application
-                T.print_inlinable_function_declaration function_decl
-            end;
-            let r =
-              match call with
-              | Indirect_unknown_arity ->
-                R.map_benefit r
-                  Inlining_cost.Benefit.direct_call_of_indirect_unknown_arity
-              | Indirect_known_arity _ ->
-                (* CR mshinwell: This should check that the [param_arity] inside
-                   the call kind is compatible with the kinds of [args]. *)
-                R.map_benefit r
-                  Inlining_cost.Benefit.direct_call_of_indirect_known_arity
-              | Direct _ -> r
-            in
-            let provided_num_args = List.length args in
-            let num_args = List.length function_decl.params in
-            let result, r =
-              if provided_num_args = num_args then
-                simplify_full_application env r
-                  ~callee ~callee's_closure_id ~function_decl ~set_of_closures
-                  ~args ~arg_tys ~continuation ~exn_continuation ~dbg
-                  ~inline_requested ~specialise_requested
-              else if provided_num_args > num_args then
-                simplify_over_application env r ~args ~arg_tys ~continuation
-                  ~exn_continuation ~callee ~callee's_closure_id ~function_decl
-                  ~set_of_closures ~dbg ~inline_requested
-                  ~specialise_requested
-              else if provided_num_args > 0 && provided_num_args < num_args then
-                simplify_partial_application env r ~callee ~callee's_closure_id
-                  ~function_decl ~args ~continuation ~exn_continuation ~dbg
-                  ~inline_requested ~specialise_requested
-              else
-                Misc.fatal_errorf "Function with %d/%d args when simplifying \
-                    application expression: %a"
-                  provided_num_args
-                  num_args
-                  Flambda.Apply.print apply
-            in
-            (* wrap <-- for direct call surrogates *) result, r
-          | Non_inlinable _function_decl ->
-            (* CR mshinwell: I'm not sure this is right.  Shouldn't we store
-               enough information to do a direct call? *)
-            unknown_closures ()
-          end
-        end
-      | Proved Not_all_values_known -> unknown_closures ()
-      | Invalid -> Expr.invalid (), r
-      end
-    end
-  | Proved Not_all_values_known -> unknown_closures ()
+  match (E.type_accessor env T.prove_closures_for_inlining) callee_ty with
+  | Proved (Inlinable (callee's_closure_id, function_decl)) ->
+    let arity_of_application =
+      Flambda.Call_kind.return_arity apply.call_kind
+    in
+    let result_arity =
+      List.map (E.type_accessor env T.kind) function_decl.result
+    in
+    let arity_mismatch =
+      not (Flambda_arity.equal arity_of_application result_arity)
+    in
+    if arity_mismatch then begin
+      Misc.fatal_errorf "Application of %a (%a):@,function has return \
+          arity %a but the application expression is expecting it \
+          to have arity %a.  Function declaration is:@,%a"
+        Name.print callee
+        Simple.List.print args
+        Flambda_arity.print result_arity
+        Flambda_arity.print arity_of_application
+        T.print_inlinable_function_declaration function_decl
+    end;
+    let r =
+      match call with
+      | Indirect_unknown_arity ->
+        R.map_benefit r
+          Inlining_cost.Benefit.direct_call_of_indirect_unknown_arity
+      | Indirect_known_arity _ ->
+        (* CR mshinwell: This should check that the [param_arity] inside
+           the call kind is compatible with the kinds of [args]. *)
+        R.map_benefit r
+          Inlining_cost.Benefit.direct_call_of_indirect_known_arity
+      | Direct _ -> r
+    in
+    let provided_num_args = List.length args in
+    let num_args = List.length function_decl.params in
+    let result, r =
+      if provided_num_args = num_args then
+        simplify_full_application env r
+          ~callee ~callee's_closure_id ~function_decl ~set_of_closures
+          ~args ~arg_tys ~continuation ~exn_continuation ~dbg
+          ~inline_requested ~specialise_requested
+      else if provided_num_args > num_args then
+        simplify_over_application env r ~args ~arg_tys ~continuation
+          ~exn_continuation ~callee ~callee's_closure_id ~function_decl
+          ~set_of_closures ~dbg ~inline_requested
+          ~specialise_requested
+      else if provided_num_args > 0 && provided_num_args < num_args then
+        simplify_partial_application env r ~callee ~callee's_closure_id
+          ~function_decl ~args ~continuation ~exn_continuation ~dbg
+          ~inline_requested ~specialise_requested
+      else
+        Misc.fatal_errorf "Function with %d/%d args when simplifying \
+            application expression: %a"
+          provided_num_args
+          num_args
+          Flambda.Apply.print apply
+    in
+    (* wrap <-- for direct call surrogates *) result, r
+  | Proved (Non_inlinable ()) ->
+    (* CR mshinwell: Pierre to implement *)
+    unknown_closures ()
+  | Unknown -> unknown_closures ()
   | Invalid -> Expr.invalid (), r
-*)
+
 (* CR mshinwell: Have disabled direct call surrogates just for the moment
     let callee, callee's_closure_id,
           value_set_of_closures, env, wrap =
