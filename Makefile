@@ -278,11 +278,10 @@ MIDDLE_END_CODE_MOTION=\
 MIDDLE_END_FROM_LAMBDA=\
   middle_end/from_lambda/prepare_lambda.cmo \
   middle_end/from_lambda/ilambda.cmo \
+  middle_end/from_lambda/lambda_to_flambda_primitives.cmo \
   middle_end/from_lambda/closure_conversion_aux.cmo \
   middle_end/from_lambda/closure_conversion.cmo \
   middle_end/from_lambda/cps_conversion.cmo
-
-#  middle_end/from_lambda/lambda_to_flambda_primitives.cmo \
 
 # CR mshinwell: Wart: simplify modules in the inlining stanza below
 

@@ -18,6 +18,7 @@
 
 module P = Flambda_primitive
 module I = Flambda_kind.Standard_int
+module I_or_f = Flambda_kind.Standard_int_or_float
 module Named = Flambda.Named
 module Expr = Flambda.Expr
 module K = Flambda_kind
@@ -37,7 +38,7 @@ val of_block_shape : Lambda.block_shape -> num_fields:int -> t
 let of_block_shape (shape : Lambda.block_shape) ~num_fields =
   match shape with
   | None ->
-    List.init num_fields (fun _field -> Flambda_kind.value Unknown)
+    List.init num_fields (fun _field : Flambda_kind.Value_kind.t -> Unknown)
   | Some shape ->
     let shape_length = List.length shape in
     if num_fields <> shape_length then begin
@@ -46,12 +47,13 @@ let of_block_shape (shape : Lambda.block_shape) ~num_fields =
         num_fields
         shape_length
     end;
-    List.map (fun (kind : Lambda.value_kind) ->
+    List.map (fun (kind : Lambda.value_kind) : Flambda_kind.Value_kind.t ->
         match kind with
-        | Pgenval -> Flambda_kind.value Unknown
-        | Pfloatval | Pboxedintval _ -> Flambda_kind.value Definitely_pointer
-        | Pintval -> Flambda_kind.value Definitely_immediate
-        | Pnaked_intval -> Flambda_kind.naked_immediate ())
+        | Pgenval -> Unknown
+        | Pfloatval | Pboxedintval _ -> Definitely_pointer
+        | Pintval -> Definitely_immediate
+        | Pnaked_intval ->
+          Misc.fatal_error "a block cannot contain a naked integer")
       shape
 
 let convert_mutable_flag (flag : Asttypes.mutable_flag)
@@ -60,14 +62,14 @@ let convert_mutable_flag (flag : Asttypes.mutable_flag)
   | Mutable -> Mutable
   | Immutable -> Immutable
 
-let convert_comparison (comp : Lambda.comparison) : P.comparison =
+let convert_comparison (comp : Lambda.comparison) : P.binary_primitive =
   match comp with
-  | Ceq -> Eq
-  | Cneq -> Neq
-  | Clt -> Lt
-  | Cgt -> Gt
-  | Cle -> Le
-  | Cge -> Ge
+  | Ceq -> Eq_comp (K.value Definitely_immediate, Eq)
+  | Cneq -> Eq_comp (K.value Definitely_immediate, Neq)
+  | Clt -> Int_comp (I.Tagged_immediate, Signed, Lt)
+  | Cgt -> Int_comp (I.Tagged_immediate, Signed, Gt)
+  | Cle -> Int_comp (I.Tagged_immediate, Signed, Le)
+  | Cge -> Int_comp (I.Tagged_immediate, Signed, Ge)
 
 let boxable_number_of_boxed_integer (bint : Lambda.boxed_integer)
   : Flambda_kind.Boxable_number.t =
@@ -83,43 +85,50 @@ let standard_int_of_boxed_integer (bint : Lambda.boxed_integer)
   | Pint32 -> Naked_int32
   | Pint64 -> Naked_int64
 
-let const_of_boxed_integer (i:int32) (bint : Lambda.boxed_integer)
-  : Simple.Const.t =
+let standard_int_or_float_of_boxed_integer (bint : Lambda.boxed_integer)
+  : Flambda_kind.Standard_int_or_float.t =
   match bint with
-  | Pnativeint -> Naked_nativeint (Targetint.of_int32 i)
-  | Pint32 -> Naked_int32 i
-  | Pint64 -> Naked_int64 (Int64.of_int32 i)
+  | Pnativeint -> Naked_nativeint
+  | Pint32 -> Naked_int32
+  | Pint64 -> Naked_int64
 
-let convert_record_representation (repr : Types.record_representation)
-   : P.record_representation =
-  match repr with
-  | Record_regular -> Regular
-  | Record_float -> Float
-  | Record_unboxed inlined -> Unboxed { inlined }
-  | Record_inlined tag -> Inlined (Tag.Scannable.create_exn tag)
-  | Record_extension -> Extension
+(* let const_of_boxed_integer (i:int32) (bint : Lambda.boxed_integer) *)
+(*   : Simple.Const.t = *)
+(*   match bint with *)
+(*   | Pnativeint -> Naked_nativeint (Targetint.of_int32 i) *)
+(*   | Pint32 -> Naked_int32 i *)
+(*   | Pint64 -> Naked_int64 (Int64.of_int32 i) *)
 
-let convert_immediate_or_pointer_to_scanning i_or_p =
-  match i_or_p with
-  | Lambda.Immediate -> K.Can_scan
-  | Lambda.Pointer -> K.Must_scan
+(* let convert_record_representation (repr : Types.record_representation) *)
+(*    : P.record_representation = *)
+(*   match repr with *)
+(*   | Record_regular -> Regular *)
+(*   | Record_float -> Float *)
+(*   | Record_unboxed inlined -> Unboxed { inlined } *)
+(*   | Record_inlined tag -> Inlined (Tag.Scannable.create_exn tag) *)
+(*   | Record_extension -> Extension *)
 
-let convert_init_or_assign (i_or_a : Lambda.initialization_or_assignment)
-   : P.init_or_assign =
-  match i_or_a with
-  | Assignment -> Assignment
-  | Heap_initialization -> Initialization
-  (* Root initialization cannot exist in lambda. This is
-     represented by the static part of expressions in flambda. *)
-  | Root_initialization -> assert false
+(* let convert_immediate_or_pointer_to_scanning i_or_p = *)
+(*   match i_or_p with *)
+(*   | Lambda.Immediate -> K.Can_scan *)
+(*   | Lambda.Pointer -> K.Must_scan *)
 
-let convert_array_kind (kind : Lambda.array_kind)
-   : P.array_kind =
-  match kind with
-  | Pgenarray -> Dynamic_must_scan_or_naked_float
-  | Paddrarray -> Must_scan
-  | Pintarray -> Can_scan
-  | Pfloatarray -> Naked_float
+(* let convert_init_or_assign (i_or_a : Lambda.initialization_or_assignment) *)
+(*    : P.init_or_assign = *)
+(*   match i_or_a with *)
+(*   | Assignment -> Assignment *)
+(*   | Heap_initialization -> Initialization *)
+(*   (\* Root initialization cannot exist in lambda. This is *)
+(*      represented by the static part of expressions in flambda. *\) *)
+(*   | Root_initialization -> assert false *)
+
+(* let convert_array_kind (kind : Lambda.array_kind) *)
+(*    : P.array_kind = *)
+(*   match kind with *)
+(*   | Pgenarray -> Dynamic_must_scan_or_naked_float *)
+(*   | Paddrarray -> Must_scan *)
+(*   | Pintarray -> Can_scan *)
+(*   | Pfloatarray -> Naked_float *)
 
 [@@@ocaml.warning "-37"]
 
@@ -201,7 +210,7 @@ and bind_rec_primitive
   | Prim p ->
     let var = Variable.create "prim" in
     let cont named =
-      Flambda.Expr.create_let var (Flambda_kind.value Must_scan) named
+      Flambda.Expr.create_let var (Flambda_kind.value Unknown) named
         (cont (Simple.var var))
     in
     bind_rec p dbg ~exception_continuation cont
@@ -227,6 +236,22 @@ let bint_shift bi prim arg1 arg2 =
     (Binary (Int_shift (standard_int_of_boxed_integer bi, prim),
              unbox_bint bi arg1, unbox_bint bi arg2))
 
+let string_or_bytes_ref kind arg1 arg2 dbg =
+  Checked {
+    primitive = Binary (String_or_bigstring_load (kind, Eight), arg1, arg2);
+    validity_condition =
+      Binary (Int_comp (I.Tagged_immediate, Unsigned, Lt),
+              (* CR pchambart:
+                 Int_comp_unsigned assumes that the arguments are naked
+                 integers, but it is correct for tagged integers too as
+                 untagging of both arguments doesn't change the result. *)
+              tagged_immediate_as_naked_nativeint arg2,
+              tagged_immediate_as_naked_nativeint
+                (Prim (Unary (String_length String, arg1))));
+    failure = Index_out_of_bound;
+    dbg;
+  }
+
 
 let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
       (dbg : Debuginfo.t) : expr_primitive =
@@ -235,17 +260,28 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
   | Pmakeblock (tag, flag, shape), _ ->
     let flag = convert_mutable_flag flag in
     let arity = of_block_shape shape ~num_fields:(List.length args) in
-    Variadic (Make_block (Tag.Scannable.create_exn tag, flag, arity), args)
+    Variadic (Make_block (Full_of_values (Tag.Scannable.create_exn tag, arity), flag), args)
   | Pmakearray (kind, mutability), _ ->
-    let mutability = convert_mutable_flag mutability in
-    Variadic (Make_array (convert_array_kind kind, mutability), args)
+    let flag = convert_mutable_flag mutability in
+    let kind =
+      match kind with
+      | Pgenarray ->
+        P.Generic_array_specialisation.no_specialisation ()
+      | Paddrarray ->
+        P.Generic_array_specialisation.full_of_arbitrary_values_but_not_floats ()
+      | Pintarray ->
+        P.Generic_array_specialisation.full_of_immediates ()
+      | Pfloatarray ->
+        P.Generic_array_specialisation.full_of_naked_floats ()
+    in
+    Variadic (Make_block (Generic_array kind, flag), args)
   | Popaque, [arg] ->
     Unary (Opaque_identity, arg)
-  | Pduprecord (repr, num_fields), [arg] ->
-    Unary (Duplicate_record {
-      repr = convert_record_representation repr;
-      num_fields;
-    }, arg)
+  (* | Pduprecord (repr, num_fields), [arg] -> *)
+  (*   Unary (Duplicate_record { *)
+  (*     repr = convert_record_representation repr; *)
+  (*     num_fields; *)
+  (*   }, arg) *)
   | Pnegint, [arg] ->
     Unary (Int_arith (I.Tagged_immediate, Neg), arg)
   | Paddint, [arg1; arg2] ->
@@ -269,11 +305,15 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
   | Pnot, [arg] ->
     Unary (Boolean_not, arg)
   | Pintcomp comp, [arg1; arg2] ->
-    Binary (Int_comp (I.Tagged_immediate, convert_comparison comp), arg1, arg2)
+    Binary (convert_comparison comp, arg1, arg2)
   | Pintoffloat, [arg] ->
-    Unary (Int_of_float, unbox_float arg)
+    let src = K.Standard_int_or_float.Naked_float in
+    let dst = K.Standard_int_or_float.Tagged_immediate in
+    Unary (Num_conv {src; dst}, unbox_float arg)
   | Pfloatofint, [arg] ->
-    box_float (Unary (Float_of_int, arg))
+    let src = K.Standard_int_or_float.Tagged_immediate in
+    let dst = K.Standard_int_or_float.Naked_float in
+    box_float (Unary (Num_conv {src; dst}, arg))
   | Pnegfloat, [arg] ->
     box_float (Unary (Float_arith Neg, unbox_float arg))
   | Pabsfloat, [arg] ->
@@ -286,54 +326,43 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     box_float (Binary (Float_arith Mul, unbox_float arg1, unbox_float arg2))
   | Pdivfloat, [arg1; arg2] ->
     box_float (Binary (Float_arith Div, unbox_float arg1, unbox_float arg2))
-  | Pfloatcomp comp, [arg1; arg2] ->
-    Binary (Float_comp (convert_comparison comp),
-            unbox_float arg1, unbox_float arg2)
-  | Pfield_computed, [obj; field] ->
-    Binary (Block_load_computed_index, obj, field)
-  | Psetfield_computed (imm_or_pointer, init_or_assign), [obj; field; value] ->
-    let scanning =
-      convert_immediate_or_pointer_to_scanning imm_or_pointer
-    in
-    Ternary
-      (Block_set_computed
-         (scanning, convert_init_or_assign init_or_assign),
-       obj, field, value)
-  | Parraylength kind, [arg] ->
-    Unary (Array_length (convert_array_kind kind), arg)
-  | Pduparray (kind, mutability), [arg] ->
-    Unary (Duplicate_array (convert_array_kind kind,
-                            convert_mutable_flag mutability), arg)
+  (* | Pfloatcomp comp, [arg1; arg2] -> *)
+  (*   Binary (Float_comp (convert_comparison comp), *)
+  (*           unbox_float arg1, unbox_float arg2) *)
+  (* | Pfield_computed, [obj; field] -> *)
+  (*   Binary (Block_load_computed_index, obj, field) *)
+  (* | Psetfield_computed (imm_or_pointer, init_or_assign), [obj; field; value] -> *)
+  (*   let scanning = *)
+  (*     convert_immediate_or_pointer_to_scanning imm_or_pointer *)
+  (*   in *)
+  (*   Ternary *)
+  (*     (Block_set_computed *)
+  (*        (scanning, convert_init_or_assign init_or_assign), *)
+  (*      obj, field, value) *)
+  (* | Parraylength kind, [arg] -> *)
+  (*   Unary (Array_length (convert_array_kind kind), arg) *)
+  (* | Pduparray (kind, mutability), [arg] -> *)
+  (*   Unary (Duplicate_array (convert_array_kind kind, *)
+  (*                           convert_mutable_flag mutability), arg) *)
   | Pstringlength, [arg] ->
     Unary (String_length String, arg)
   | Pbyteslength, [arg] ->
     Unary (String_length Bytes, arg)
-  | Pstringrefu, [arg1; arg2] ->
-    Binary (String_load Eight, arg1, arg2)
-  | Pbytesrefu, [arg1; arg2] ->
-    Binary (String_load Eight, arg1, arg2)
-  | (Pstringrefs | Pbytesrefs), [arg1; arg2] ->
-    Checked {
-      primitive = Binary (String_load Eight, arg1, arg2);
-      validity_condition =
-        Binary (Int_comp_unsigned Lt,
-                (* CR pchambart:
-                   Int_comp_unsigned assumes that the arguments are naked
-                   integers, but it is correct for tagged integers too as
-                   untagging of both arguments doesn't change the result. *)
-                tagged_immediate_as_naked_nativeint arg2,
-                tagged_immediate_as_naked_nativeint
-                  (Prim (Unary (String_length String, arg1))));
-      failure = Index_out_of_bound;
-      dbg;
-    }
+  (* | Pstringrefu, [arg1; arg2] -> *)
+  (*   Binary (String_load Eight, arg1, arg2) *)
+  (* | Pbytesrefu, [arg1; arg2] -> *)
+  (*   Binary (String_load Eight, arg1, arg2) *)
+  | Pbytesrefs, [arg1; arg2] ->
+    string_or_bytes_ref Bytes arg1 arg2 dbg
+  | Pstringrefs, [arg1; arg2] ->
+    string_or_bytes_ref String arg1 arg2 dbg
 
-  | Pstring_load_16 true (* unsafe *), [arg1; arg2] ->
-    Binary (String_load Sixteen, arg1, arg2)
-  | Pstring_load_32 true (* unsafe *), [arg1; arg2] ->
-    Binary (String_load Thirty_two, arg1, arg2)
-  | Pstring_load_64 true (* unsafe *), [arg1; arg2] ->
-    Binary (String_load Sixty_four, arg1, arg2)
+  (* | Pstring_load_16 true (\* unsafe *\), [arg1; arg2] -> *)
+  (*   Binary (String_load Sixteen, arg1, arg2) *)
+  (* | Pstring_load_32 true (\* unsafe *\), [arg1; arg2] -> *)
+  (*   Binary (String_load Thirty_two, arg1, arg2) *)
+  (* | Pstring_load_64 true (\* unsafe *\), [arg1; arg2] -> *)
+  (*   Binary (String_load Sixty_four, arg1, arg2) *)
 
   (* TODO *)
   (* | (Pstring_load_16 false) (\* safe *\), [arg1; arg2] -> *)
@@ -351,32 +380,32 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
   (*     failure = Index_out_of_bound; *)
   (*     dbg; *)
   (*   } *)
-  | Pbittest, [arg1; arg2] ->
-    Binary (Bit_test, arg1, arg2)
+  (* | Pbittest, [arg1; arg2] -> *)
+  (*   Binary (Bit_test, arg1, arg2) *)
 
   | Pisint, [arg] ->
     Unary (Is_int, arg)
-  | Pgettag, [arg] ->
-    Unary (Get_tag, arg)
+  | Pgettag { tags_to_sizes }, [arg] ->
+    Unary (Get_tag { tags_to_sizes }, arg)
   | Pisout, [arg1; arg2] ->
-    Binary (Int_comp_unsigned Lt,
+    Binary (Int_comp (I.Tagged_immediate, Unsigned, Lt),
             tagged_immediate_as_naked_nativeint arg1,
             tagged_immediate_as_naked_nativeint arg2)
   | Pbintofint bi, [arg] ->
-    let dst = standard_int_of_boxed_integer bi in
+    let dst = standard_int_or_float_of_boxed_integer bi in
     Unary (
       Box_number
         (boxable_number_of_boxed_integer bi),
-      Prim (Unary (Int_conv { src = I.Tagged_immediate; dst }, arg)))
+      Prim (Unary (Num_conv { src = I_or_f.Tagged_immediate; dst }, arg)))
   | Pintofbint bi, [arg] ->
-    let src = standard_int_of_boxed_integer bi in
+    let src = standard_int_or_float_of_boxed_integer bi in
     Unary (
-      Int_conv { src; dst = I.Tagged_immediate },
+      Num_conv { src; dst = I_or_f.Tagged_immediate },
       Prim (Unary (Unbox_number (boxable_number_of_boxed_integer bi), arg)))
   | Pcvtbint (source, destination), [arg] ->
     box_bint destination
-      (Unary (Int_conv { src = standard_int_of_boxed_integer source;
-                         dst = standard_int_of_boxed_integer destination },
+      (Unary (Num_conv { src = standard_int_or_float_of_boxed_integer source;
+                         dst = standard_int_or_float_of_boxed_integer destination },
               unbox_bint source arg))
   | Pnegbint bi, [arg] ->
     box_bint bi (Unary (Int_arith (standard_int_of_boxed_integer bi, Neg), unbox_bint bi arg))
@@ -398,89 +427,93 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     bint_shift bi Lsr arg1 arg2
   | Pasrbint bi, [arg1; arg2] ->
     bint_shift bi Asr arg1 arg2
-  | Poffsetint n, [arg] ->
-    let const =
-      Simple.const
-        (Simple.Const.Tagged_immediate
-           (Immediate.int (Targetint.of_int n)))
-    in
-    Binary (Int_arith (I.Tagged_immediate, Add), arg, Simple const)
+  (* | Poffsetint n, [arg] -> *)
+  (*   let const = *)
+  (*     Simple.const *)
+  (*       (Simple.Const.Tagged_immediate *)
+  (*          (Immediate.int (Targetint.of_int n))) *)
+  (*   in *)
+  (*   Binary (Int_arith (I.Tagged_immediate, Add), arg, Simple const) *)
   | Pfield field, [arg] ->
     (* CR pchambart: every load is annotated as mutable we must be
        careful to update that when we know it is not. This should not
        be an error.
        We need more type propagations to be precise here *)
-    Unary (Block_load (field, Not_a_float, Mutable), arg)
+    let imm = Immediate.int (Targetint.OCaml.of_int field) in
+    let field = Simple.const (Simple.Const.Tagged_immediate imm) in
+    Binary (Block_load (Block Any_value, Mutable), Simple field, arg)
   | Pfloatfield field, [arg] ->
-    Unary (Block_load (field, Float, Mutable), arg)
-  | Psetfield (field, immediate_or_pointer, initialization_or_assignment),
-    [block; value] ->
-    let set_kind : P.block_set_kind =
-      match immediate_or_pointer with
-        | Immediate -> Immediate
-        | Pointer -> Pointer
-    in
-    let init_or_assign : P.init_or_assign =
-      convert_init_or_assign initialization_or_assignment
-    in
-    Binary (Block_set (field, set_kind, init_or_assign), block, value)
+    let imm = Immediate.int (Targetint.OCaml.of_int field) in
+    let field = Simple.const (Simple.Const.Tagged_immediate imm) in
+    Binary (Block_load (Block Naked_float, Mutable), Simple field, arg)
+  (* | Psetfield (field, immediate_or_pointer, initialization_or_assignment), *)
+  (*   [block; value] -> *)
+  (*   let set_kind : P.block_set_kind = *)
+  (*     match immediate_or_pointer with *)
+  (*       | Immediate -> Immediate *)
+  (*       | Pointer -> Pointer *)
+  (*   in *)
+  (*   let init_or_assign : P.init_or_assign = *)
+  (*     convert_init_or_assign initialization_or_assignment *)
+  (*   in *)
+  (*   Binary (Block_set (field, set_kind, init_or_assign), block, value) *)
 
-  | Psetfloatfield (field, init_or_assign), [block; value] ->
-    Binary (Block_set (field, Float, convert_init_or_assign init_or_assign),
-      block, value)
-  | Pdivint Safe, [arg1; arg2] ->
-    Checked {
-      primitive =
-        Binary (Int_arith (I.Tagged_immediate, Div), arg1, arg2);
-      validity_condition =
-        Binary (Int_comp (I.Tagged_immediate, Eq), arg2,
-                Simple
-                  (Simple.const
-                     (Simple.Const.Tagged_immediate
-                        (Immediate.int (Targetint.zero)))));
-      failure = Division_by_zero;
-      dbg;
-    }
+  (* | Psetfloatfield (field, init_or_assign), [block; value] -> *)
+  (*   Binary (Block_set (field, Float, convert_init_or_assign init_or_assign), *)
+  (*     block, value) *)
+  (* | Pdivint Safe, [arg1; arg2] -> *)
+  (*   Checked { *)
+  (*     primitive = *)
+  (*       Binary (Int_arith (I.Tagged_immediate, Div), arg1, arg2); *)
+  (*     validity_condition = *)
+  (*       Binary (Int_comp (I.Tagged_immediate, Eq), arg2, *)
+  (*               Simple *)
+  (*                 (Simple.const *)
+  (*                    (Simple.Const.Tagged_immediate *)
+  (*                       (Immediate.int (Targetint.zero))))); *)
+  (*     failure = Division_by_zero; *)
+  (*     dbg; *)
+  (*   } *)
 
-  | Pmodint Safe, [arg1; arg2] ->
-    Checked {
-      primitive =
-        Binary (Int_arith (I.Tagged_immediate, Mod), arg1, arg2);
-      validity_condition =
-        Binary (Int_comp (I.Tagged_immediate, Eq), arg2,
-                Simple
-                  (Simple.const
-                     (Simple.Const.Tagged_immediate
-                        (Immediate.int (Targetint.zero)))));
-      failure = Division_by_zero;
-      dbg;
-    }
+  (* | Pmodint Safe, [arg1; arg2] -> *)
+  (*   Checked { *)
+  (*     primitive = *)
+  (*       Binary (Int_arith (I.Tagged_immediate, Mod), arg1, arg2); *)
+  (*     validity_condition = *)
+  (*       Binary (Int_comp (I.Tagged_immediate, Eq), arg2, *)
+  (*               Simple *)
+  (*                 (Simple.const *)
+  (*                    (Simple.Const.Tagged_immediate *)
+  (*                       (Immediate.int (Targetint.zero))))); *)
+  (*     failure = Division_by_zero; *)
+  (*     dbg; *)
+  (*   } *)
 
-  | Pdivbint { size; is_safe = Safe }, [arg1; arg2] ->
-    let bi = standard_int_of_boxed_integer size in
-    Checked {
-      primitive =
-        bint_binary_prim size Div arg1 arg2;
-      validity_condition =
-        Binary (Int_comp (bi, Eq), unbox_bint size arg2,
-                Simple (Simple.const
-                  (const_of_boxed_integer 0l size)));
-      failure = Division_by_zero;
-      dbg;
-    }
+  (* | Pdivbint { size; is_safe = Safe }, [arg1; arg2] -> *)
+  (*   let bi = standard_int_of_boxed_integer size in *)
+  (*   Checked { *)
+  (*     primitive = *)
+  (*       bint_binary_prim size Div arg1 arg2; *)
+  (*     validity_condition = *)
+  (*       Binary (Int_comp (bi, Eq), unbox_bint size arg2, *)
+  (*               Simple (Simple.const *)
+  (*                 (const_of_boxed_integer 0l size))); *)
+  (*     failure = Division_by_zero; *)
+  (*     dbg; *)
+  (*   } *)
 
-  | Pmodbint { size; is_safe = Safe }, [arg1; arg2] ->
-    let bi = standard_int_of_boxed_integer size in
-    Checked {
-      primitive =
-        bint_binary_prim size Mod arg1 arg2;
-      validity_condition =
-        Binary (Int_comp (bi, Eq), unbox_bint size arg2,
-                Simple (Simple.const
-                  (const_of_boxed_integer 0l size)));
-      failure = Division_by_zero;
-      dbg;
-    }
+  (* | Pmodbint { size; is_safe = Safe }, [arg1; arg2] -> *)
+  (*   let bi = standard_int_of_boxed_integer size in *)
+  (*   Checked { *)
+  (*     primitive = *)
+  (*       bint_binary_prim size Mod arg1 arg2; *)
+  (*     validity_condition = *)
+  (*       Binary (Int_comp (bi, Eq), unbox_bint size arg2, *)
+  (*               Simple (Simple.const *)
+  (*                 (const_of_boxed_integer 0l size))); *)
+  (*     failure = Division_by_zero; *)
+  (*     dbg; *)
+  (*   } *)
 
   | ( Pdivint Unsafe | Pmodint Unsafe
     | Pdivbint { is_safe = Unsafe } | Pmodbint { is_safe = Unsafe }
@@ -496,7 +529,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
   | ( Pfield _ | Pnegint | Pnot | Poffsetint _
     | Pintoffloat | Pfloatofint
     | Pnegfloat | Pabsfloat | Pstringlength
-    | Pbyteslength | Pisint | Pgettag
+    | Pbyteslength | Pisint | Pgettag _
     | Pbintofint _
     | Pintofbint _
     | Pnegbint _
@@ -566,6 +599,16 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
   | Pctconst _, _
     (* It's not obvious when this one should be converted. *)
     -> failwith "TODO"
+
+  | ((Psetfield_computed (_, _), _::_::_::[])|(Pdivint Safe, _::_::[])|
+     (Pmodint Safe, _::_::[])|(Psetfield (_, _, _), _::_::[])|
+     (Pfloatcomp _, _::_::[])|(Pstringrefu, _::_::[])|(Pbytesrefu, _::_::[])|
+     (Pfield_computed, _::_::[])|
+     (Pdivbint {is_safe=Safe; _ }, _::_::[])|
+     (Pmodbint {is_safe=Safe; _ }, _::_::[])|(Pbittest, _::_::[])|
+     (Psetfloatfield (_, _), _::_::[])|(Poffsetint _, _::[])|
+     (Pduprecord (_, _), _::[])|(Parraylength _, _::[])|(Pduparray (_, _), _::[]))
+    -> failwith "TODO again"
 
   | ( Pbytes_to_string
     | Pbytes_of_string
