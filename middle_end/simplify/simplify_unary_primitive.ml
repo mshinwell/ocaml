@@ -63,15 +63,30 @@ let simplify_move_within_set_of_closures env r prim ~move_from ~move_to
   match proof with
   | Proved by_closure_id ->
     begin match Closure_id.Map.find move_from by_closure_id with
-    | exception Not_found ->
-
-    | ... ->
-
+    | exception Not_found -> invalid ()
+    | set_of_closures_name, set_of_closures ->
+      begin T.Set_of_closures.project_closure set_of_closures move_to with
+      | Not_in_set -> invalid ()
+      | Ok closure_ty ->
+        begin match set_of_closures_name with
+        | None ->
+          Reachable.reachable (original_term ()), closure_ty, r
+        | Some name ->
+          let r =
+            R.map_benefit
+              (R.map_benefit r (B.remove_primitive (Unary prim)))
+              (B.add_primitive (Unary Project_closure))
+          in
+          let new_term : Named.t =
+            Prim (Unary (Project_closure move_to, Simple.name name), dbg)
+          in
+          Reachable.reachable new_term, closure_ty, r
+        end
+      end
     end
   | Unknown ->
     Reachable.reachable (original_term ()), T.any_closure (), r
   | Invalid -> invalid ()
-
 
 let simplify_project_var env r prim ~closure_id ~var_within_closure
       ~closure dbg =

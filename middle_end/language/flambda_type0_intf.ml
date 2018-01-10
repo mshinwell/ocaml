@@ -165,13 +165,6 @@ module type S = sig
          : Targetint.Set.t ty_naked_number
         -> Targetint.Set.t ty_naked_number of_kind_value_boxed_number
 
-  and closures = private {
-    (* CR pchambart: should Unknown or Bottom really be allowed here ? *)
-    (* XXX what exactly is needed here?  It needs to represent the join *)
-    set_of_closures : ty_fabricated;
-    closure_id : Closure_id.t;
-  }
-
   and inlinable_function_declaration = private {
     closure_origin : Closure_origin.t;
     continuation_param : Continuation.t;
@@ -214,6 +207,13 @@ module type S = sig
     set_of_closures_origin : Set_of_closures_origin.t;
     function_decls : function_declaration Closure_id.Map.t;
     closure_elements : ty_value Var_within_closure.Map.t;
+  }
+
+  and closures = private {
+    (* CR pchambart: should Unknown or Bottom really be allowed here ? *)
+    (* XXX what exactly is needed here?  It needs to represent the join *)
+    set_of_closures : ty_fabricated;
+    closure_id : Closure_id.t;
   }
 
   and 'a of_kind_naked_number = private
