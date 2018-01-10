@@ -513,11 +513,16 @@ let compare_unary_primitive p1 p2 =
   | Box_number kind1, Box_number kind2 ->
     K.Boxable_number.compare kind1 kind2
   | Project_closure set1, Project_closure set2 ->
-    Closure_id.Set.compare set1 set2
-  | Move_within_set_of_closures map1, Move_within_set_of_closures map2 ->
-    Closure_id.Map.compare Closure_id.compare map1 map2
-  | Project_var map1, Project_var map2 ->
-    Closure_id.Map.compare Var_within_closure.compare map1 map2
+    Closure_id.compare set1 set2
+  | Move_within_set_of_closures { move_from = from1; move_to = to1 },
+    Move_within_set_of_closures { move_from = from2; move_to = to2 } ->
+    let c = Closure_id.compare from1 from2 in
+    if c <> 0 then c
+    else Closure_id.compare to1 to2
+  | Project_var (id1, var1), Project_var (id2, var2) ->
+    let c = Closure_id.compare id1 id2 in
+    if c <> 0 then c
+    else Var_within_closure.compare var1 var2
   | (Duplicate_block _
     | Is_int
     | Get_tag _
@@ -565,15 +570,17 @@ let print_unary_primitive ppf p =
     fprintf ppf "unbox_%a" K.Boxable_number.print_lowercase k
   | Box_number k ->
     fprintf ppf "box_%a" K.Boxable_number.print_lowercase k
-  | Project_closure set ->
+  | Project_closure closure_id ->
     Format.fprintf ppf "(project_closure@ %a)"
-      Closure_id.Set.print set
-  | Move_within_set_of_closures moves ->
-    Format.fprintf ppf "(move_within_set_of_closures@ %a)"
-      (Closure_id.Map.print Closure_id.print) moves
-  | Project_var by_closure ->
-    Format.fprintf ppf "(project_var@ %a)"
-      (Closure_id.Map.print Var_within_closure.print) by_closure
+      Closure_id.print closure_id
+  | Move_within_set_of_closures { move_from; move_to } ->
+    Format.fprintf ppf "(move_within_set_of_closures@ from %a to %a)"
+      Closure_id.print move_from
+      Closure_id.print move_to
+  | Project_var (closure, var) ->
+    Format.fprintf ppf "(project_var@ %a in %a)"
+      Var_within_closure.print var
+      Closure_id.print closure
 
 let arg_kind_of_unary_primitive p =
   match p with
