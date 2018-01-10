@@ -50,12 +50,12 @@ let middle_end ppf ~prefixname ~backend
       ignore flam;
       ignore prefixname
     in
-    let print_prepared_lambda lam =
+    let print_prepared_lambda (lam, recursive_static_catches) =
       if not !Clflags.dump_rawflambda then begin
-        lam
+        lam, recursive_static_catches
       end else begin
         Format.fprintf ppf "After Prepare_lambda:@ %a@." Printlambda.lambda lam;
-        lam
+        lam, recursive_static_catches
       end
     in
     let print_ilambda (ilam : Ilambda.program) =

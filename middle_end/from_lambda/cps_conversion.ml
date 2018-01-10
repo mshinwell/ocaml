@@ -49,6 +49,7 @@ let name_for_function (func : Lambda.lfunction) =
 let static_exn_env = ref Numbers.Int.Map.empty
 let try_stack = ref []
 let try_stack_at_handler = ref Continuation.Map.empty
+let recursive_static_catches = ref Numbers.Int.Set.empty
 
 let _print_stack ppf stack =
   Format.fprintf ppf "%a"
@@ -299,6 +300,12 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
     let result_var = Ident.create "staticcatch_result" in
     let body, _k_count = cps_tail body after_continuation k_exn in
     let handler, _k_count = cps_tail handler after_continuation k_exn in
+    let recursive : Asttypes.rec_flag =
+      if Numbers.Int.Set.mem static_exn !recursive_static_catches then
+        Recursive
+      else
+        Nonrecursive
+    in
     Let_cont {
       name = after_continuation;
       administrative = false;
@@ -311,9 +318,7 @@ let rec cps_non_tail (lam : L.lambda) (k : Ident.t -> Ilambda.t)
           administrative = false;
           is_exn_handler = false;
           params = args;
-          (* CR-someday mshinwell: Maybe we could improve this by communicating
-             from [Prepare_lambda] which catches are recursive. *)
-          recursive = Recursive;
+          recursive;
           body;
           handler;
         };
@@ -548,12 +553,18 @@ and cps_tail (lam : L.lambda) (k : Continuation.t) (k_exn : Continuation.t)
       !try_stack_at_handler;
     let body, k_count_body = cps_tail body k k_exn in
     let handler, k_count_handler = cps_tail handler k k_exn in
+    let recursive : Asttypes.rec_flag =
+      if Numbers.Int.Set.mem static_exn !recursive_static_catches then
+        Recursive
+      else
+        Nonrecursive
+    in
     Let_cont {
       name = continuation;
       administrative = false;
       is_exn_handler = false;
       params = args;
-      recursive = Recursive;  (* see CR comment above *)
+      recursive;
       body;
       handler;
     }, N.(+) k_count_body k_count_handler;
@@ -745,13 +756,15 @@ and cps_switch (switch : proto_switch) ~scrutinee (k : Continuation.t)
   in
   ilam, !k_count_ref
 
-let lambda_to_ilambda lam : Ilambda.program =
+let lambda_to_ilambda (lam, recursive_static_catches') : Ilambda.program =
   static_exn_env := Numbers.Int.Map.empty;
   try_stack := [];
   try_stack_at_handler := Continuation.Map.empty;
+  recursive_static_catches := recursive_static_catches';
   let the_end = Continuation.create () in
   let the_end_exn = Continuation.create () in
   let ilam, _k_count = cps_tail lam the_end the_end_exn in
   { expr = ilam;
     return_continuation = the_end;
-    exception_continuation = the_end_exn; }
+    exception_continuation = the_end_exn;
+  }

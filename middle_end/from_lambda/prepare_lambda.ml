@@ -360,8 +360,18 @@ end = struct
         t.current_exception_continuation
     in
     head
-
 end
+
+(* CR-soon mshinwell: Remove mutable state *)
+let recursive_static_catches = ref Numbers.Int.Set.empty
+
+let mark_as_recursive_static_catch cont =
+  if Numbers.Int.Set.mem cont !recursive_static_catches then begin
+    Misc.fatal_errorf "Static catch with continuation %d already marked as \
+        recursive -- is it being redefined?"
+      cont
+  end;
+  recursive_static_catches := Numbers.Int.Set.add cont !recursive_static_catches
 
 let sequence (lam1, lam2) =
   let ident = Ident.create "sequence" in
@@ -638,6 +648,7 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
     prepare env (L.Llet (Strict, Pgenval, ident, lam1, lam2)) k
   | Lwhile (cond, body) ->
     let cont = L.next_raise_count () in
+    mark_as_recursive_static_catch cont;
     let cond_result = Ident.create "cond_result" in
     let lam : L.lambda =
       Lstaticcatch (
@@ -654,6 +665,7 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
   | Lfor (ident, start, stop, dir, body) ->
     let loc = Location.none in
     let cont = L.next_raise_count () in
+    mark_as_recursive_static_catch cont;
     let stop_ident = Ident.create "stop" in
     let test =
       match dir with
@@ -714,6 +726,7 @@ and prepare_option env lam_opt k =
   | Some lam -> prepare env lam (fun lam -> k (Some lam))
 
 let run lam =
+  recursive_static_catches := Numbers.Int.Set.empty;
   let current_unit_id =
     Compilation_unit.get_persistent_ident
       (Compilation_unit.get_current_exn ())
@@ -725,4 +738,4 @@ let run lam =
   Format.eprintf "After Prepare_lambda:@ \n%a\n%!"
     Printlambda.lambda lam;
 *)
-  lam
+  lam, !recursive_static_catches
