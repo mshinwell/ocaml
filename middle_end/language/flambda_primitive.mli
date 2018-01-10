@@ -212,11 +212,16 @@ type unary_primitive =
   | Unbox_number of Flambda_kind.Boxable_number.t
   | Box_number of Flambda_kind.Boxable_number.t
   | Project_closure of Closure_id.t
+    (** Extract a closure from some set of closures, ready for function
+        application, etc. *)
   | Move_within_set_of_closures of {
       move_from : Closure_id.t;
       move_to : Closure_id.t;
     }
+    (** Given the pointer to one closure in some particular set of closures,
+        return the pointer to another closure in the same set. *)
   | Project_var of Closure_id.t * Var_within_closure.t
+    (** Read a value from the environment of a closure. *)
 
 (** Binary arithmetic operations on integers. *)
 type binary_int_arith_op =
