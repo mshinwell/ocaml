@@ -2300,6 +2300,64 @@ end) = struct
     let meet_closure ~type_of_name (closure1 : closure) (closure2 : closure)
           : (closure * judgements_from_meet) or_bottom =
 
+      let function_decls : function_declaration =
+        match closure1.function_decls, closure2.function_decls with
+        | Non_inlinable None, Non_inlinable None -> Non_inlinable None
+
+        | Non_inlinable (Some non_inlinable1), Non_inlinable None ->
+
+        | Non_inlinable None, Non_inlinable (Some non_inlinable2) ->
+
+        | Non_inlinable (Some non_inlinable1),
+            Non_inlinable (Some non_inlinable2) ->
+
+        | Non_inlinable (Some non_inlinable), Inlinable inlinable
+        | Inlinable inlinable, Non_inlinable (Some non_inlinable) ->
+
+        | Inlinable inlinable1, Inlinable inlinable2 ->
+          let same_arity =
+            List.compare_lengths inlinable1.params inlinable2.params = 0
+          in
+          let same_num_results =
+            List.compare_lengths inlinable1.result inlinable2.result = 0
+          in
+          let type_of_name name_or_export_id =
+            type_of_name ~local_env:??? name_or_export_id
+          in
+          let judgements = ref [] in
+          let params : _ or_bottom =
+            if not same_arity then Bottom
+            else
+              let params =
+                List.map2 (fun (param1, t1) (param2, t2) ->
+                    assert (Parameter.equal param1 param2);
+                    let t, new_judgements =
+                      Meet_and_join.meet ~type_of_name t1 t2
+                    in
+                    judgements := new_judgements @ !judgements;
+                    param, t)
+                  inlinable1.params
+                  inlinable2.params
+              in
+              let has_bottom =
+                List.exists (fun (_param, t) ->
+                    is_bottom ~type_of_name t)
+                  params
+              in
+              if has_bottom then Bottom
+              else Ok params
+          in
+          let result : _ or_bottom =
+
+
+          in
+          match params, result with
+          | Ok params, Ok result ->
+
+          | Ok _, Bottom | Bottom, Ok _ | Bottom, Bottom ->
+            (* definitely different *)
+
+
 
     let join_closure ~type_of_name (closure1 : closure) (closure2 : closure)
           : closure =
@@ -2404,6 +2462,16 @@ end) = struct
             (* CR mshinwell: Add documentation for this -- the types provide
                information about the calling context rather than the code of
                the function. *)
+            let result_env_extension =
+              Meet_and_join.join_typing_environment ~type_of_name
+                inlinable1.result_env_extension
+                inlinable2.result_env_extension
+            in
+            (* CR mshinwell: Should we actually have [meet] and [join] take
+               two environments, one per type? *)
+            let type_of_name name_or_export_id =
+              type_of_name ~local_env:result_env_extension name_or_export_id
+            in
             let params =
               List.map2 (fun (param1, t1) (param2, t2) ->
                   assert (Parameter.equal param1 param2);
@@ -2417,11 +2485,6 @@ end) = struct
                   Meet_and_join.join ~type_of_name t1 t2)
                 inlinable1.result
                 inlinable2.result
-            in
-            let result_env_extension =
-              Meet_and_join.join_typing_environment ~type_of_name
-                inlinable1.result_env_extension
-                inlinable2.result_env_extension
             in
             let direct_call_surrogate =
               match direct_call_surrogate1, direct_call_surrogate2 with

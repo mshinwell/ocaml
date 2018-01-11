@@ -134,6 +134,7 @@ module type Env = sig
 
   val type_of_name
      : t
+    -> ?local_env:Flambda_type.typing_environment
     -> Flambda_type.Name_or_export_id.t
     -> Flambda_type.t option
 

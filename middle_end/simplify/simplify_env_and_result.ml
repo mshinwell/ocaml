@@ -193,13 +193,16 @@ end = struct
       continuation_scope_level = Scope_level.initial;
     }
 
-  let find_variable t var =
-    let ty, binding_type = TE.find t.typing_environment (Name.var var) in
+  let find_variable0 typing_environment var =
+    let ty, binding_type = TE.find typing_environment (Name.var var) in
     match binding_type with
     | Normal -> ty
     | Existential ->
       Misc.fatal_errorf "Variable %a is not in scope"
         Variable.print var
+
+  let find_variable t var =
+    find_variable0 t.typing_environment var
 
   let find_variable_opt t var =
     match TE.find_opt t.typing_environment (Name.var var) with
@@ -240,9 +243,9 @@ end = struct
     in
     { t with typing_environment; }
 
-  let find_symbol t sym =
+  let find_symbol0 typing_environment sym =
     let ty, binding_type =
-      TE.find t.typing_environment (Name.symbol sym)
+      TE.find typing_environment (Name.symbol sym)
     in
     match binding_type with
     | Normal -> ty
@@ -250,6 +253,9 @@ end = struct
       Misc.fatal_errorf "Symbols cannot be existentially bound in the typing \
           environment: %a"
         Symbol.print sym
+
+  let find_symbol t sym =
+    find_symbol0 t.typing_environment sym
 
   let find_symbol_opt t sym =
     match TE.find_opt t.typing_environment (Name.symbol sym) with
@@ -290,12 +296,17 @@ end = struct
           already defined"
         Symbol.print sym
 
-  let type_of_name t (name_or_export_id : T.Name_or_export_id.t) =
+  let type_of_name t ?local_env (name_or_export_id : T.Name_or_export_id.t) =
+    let env =
+      match local_env with
+      | None -> t.typing_environment
+      | Some local_env -> local_env
+    in
     match name_or_export_id with
     | Name name ->
       begin match name with
-      | Var var -> Some (find_variable t var)
-      | Symbol sym -> Some (find_symbol t sym)
+      | Var var -> Some (find_variable0 env var)
+      | Symbol sym -> Some (find_symbol0 env sym)
       end
     | Export_id _export_id ->
       (* CR mshinwell: The loading from .cmx files should slot in here. *)

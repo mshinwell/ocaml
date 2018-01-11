@@ -178,7 +178,7 @@ module type S = sig
     code_id : Code_id.t;
     body : expr;
     free_names_in_body : Name.Set.t;
-    result : t list;
+    result : t list;  (* CR mshinwell: make plural *)
     (* CR mshinwell: Is this name misleading?  The quantifiers are before
        the parameters *)
     result_env_extension : typing_environment;
@@ -257,7 +257,11 @@ module type S = sig
 
   (** Annotation for functions that may require examination of the current
       simplification environment. *)
-  type 'a type_accessor = type_of_name:(Name_or_export_id.t -> t option) -> 'a
+  type 'a type_accessor =
+    type_of_name:(?local_env:typing_environment
+      -> Name_or_export_id.t
+      -> t option)
+    -> 'a
 
   (** If the given type has kind [Phantom], return it; otherwise form the
       correct type of kind [Phantom] describing the given type. *)
