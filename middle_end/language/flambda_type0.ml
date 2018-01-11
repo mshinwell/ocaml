@@ -2299,65 +2299,167 @@ end) = struct
        surrogate. *)
     let meet_closure ~type_of_name (closure1 : closure) (closure2 : closure)
           : (closure * judgements_from_meet) or_bottom =
-
-      let function_decls : function_declaration =
+      let set_of_closures, judgements =
+        Meet_and_join_fabricated.meet_ty ~type_of_name
+          closure1.set_of_closures closure2.set_of_closures
+      in
+      let cannot_prove_different ~params1 ~params2 ~result1 ~result2
+            ~result_env_extension1 ~result_env_extension2 : _ or_bottom =
+        let same_arity =
+          List.compare_lengths params1 params2 = 0
+        in
+        let same_num_results =
+          List.compare_lengths result1 result2 = 0
+        in
+        let result_env_extension =
+          Meet_and_join.meet_typing_environment ~type_of_name
+            result_env_extension1
+            result_env_extension2
+        in
+        let type_of_name name_or_export_id =
+          type_of_name ~local_env:result_env_extension name_or_export_id
+        in
+        let judgements = ref [] in
+        let has_bottom params =
+          List.exists (fun (_param, t) ->
+              is_bottom ~type_of_name t)
+            params
+        in
+        let params : _ or_bottom =
+          if not same_arity then Bottom
+          else
+            let params =
+              List.map2 (fun t1, t2 ->
+                  let t, new_judgements =
+                    Meet_and_join.meet ~type_of_name t1 t2
+                  in
+                  judgements := new_judgements @ !judgements;
+                  t)
+                params1
+                params2
+            in
+            if has_bottom params then Bottom
+            else Ok params
+        in
+        let result : _ or_bottom =
+          if not same_num_results then Bottom
+          else
+            let result =
+              List.map2 (fun t1 t2 ->
+                  let t, new_judgements =
+                    Meet_and_join.join ~type_of_name t1 t2
+                  in
+                  judgements := new_judgements @ !judgements;
+                  t)
+                result1
+                result2
+            in
+            if has_bottom result then Bottom
+            else Ok result
+        in
+        match params, result with
+        | Ok params, Ok result ->
+          Ok (params, result, result_env_extension, !judgements)
+        | _, _ -> Bottom
+      in
+      let function_decls : function_declaration or_bottom =
         match closure1.function_decls, closure2.function_decls with
+        | Inlinable inlinable1, Inlinable inlinable2 ->
+          let params1 = List.map snd inlinable1.params in
+          let params2 = List.map snd inlinable2.params in
+          let result =
+            cannot_prove_different ~params1 ~params2
+              ~result1:inlinable1.result
+              ~result2:inlinable2.result
+              ~result_env_extension1:inlinable1.result_env_extension
+              ~result_env_extension2:inlinable2.result_env_extension
+          in
+          begin match result with
+          | Ok (params, result, result_env_extension, judgements) ->
+            (* [closure1.function_decls] and [closure2.function_decls] may be
+               different, but we cannot prove it.  We arbitrarily pick
+               [closure1.function_decls] to return, with parameter and result
+               types refined. *)
+            let inlinable_function_decl =
+              { inlinable with
+                params;
+                result;
+                result_env_extension;
+              }
+            in
+            Ok (Inlinable inlinable_function_decl, judgements)
+          | Bottom ->
+            (* [closure1] and [closure2] are definitely different. *)
+            Bottom
+          end
         | Non_inlinable None, Non_inlinable None -> Non_inlinable None
-
-        | Non_inlinable (Some non_inlinable1), Non_inlinable None ->
-
-        | Non_inlinable None, Non_inlinable (Some non_inlinable2) ->
-
+        | Non_inlinable (Some non_inlinable), Non_inlinable None ->
+        | Non_inlinable None, Non_inlinable (Some non_inlinable) ->
+          (* We can arbitrarily pick one side or the other: we choose the
+             side which gives a more precise type. *)
+          Non_inlinable (Some non_inlinable)
         | Non_inlinable (Some non_inlinable1),
             Non_inlinable (Some non_inlinable2) ->
-
+          let result =
+            cannot_prove_different
+              ~params1:inlinable1.params
+              ~params2:inlinable2.params
+              ~result1:inlinable1.result
+              ~result2:inlinable2.result
+              ~result_env_extension1:inlinable1.result_env_extension
+              ~result_env_extension2:inlinable2.result_env_extension
+          in
+          begin match result with
+          | Ok (params, result, result_env_extension, judgements) ->
+            let non_inlinable_function_decl =
+              { non_inlinable1 with
+                params;
+                result;
+                result_env_extension;
+              }
+            in
+            Ok (Non_inlinable non_inlinable_function_decl, judgements)
+          | Bottom ->
+            Bottom
+          end
         | Non_inlinable (Some non_inlinable), Inlinable inlinable
         | Inlinable inlinable, Non_inlinable (Some non_inlinable) ->
-
-        | Inlinable inlinable1, Inlinable inlinable2 ->
-          let same_arity =
-            List.compare_lengths inlinable1.params inlinable2.params = 0
+          let params1 = List.map snd inlinable.params in
+          let result =
+            cannot_prove_different
+              ~params1
+              ~params2:non_inlinable.params
+              ~result1:inlinable.result
+              ~result2:non_inlinable.result
+              ~result_env_extension1:inlinable.result_env_extension
+              ~result_env_extension2:non_inlinable.result_env_extension
           in
-          let same_num_results =
-            List.compare_lengths inlinable1.result inlinable2.result = 0
-          in
-          let type_of_name name_or_export_id =
-            type_of_name ~local_env:??? name_or_export_id
-          in
-          let judgements = ref [] in
-          let params : _ or_bottom =
-            if not same_arity then Bottom
-            else
-              let params =
-                List.map2 (fun (param1, t1) (param2, t2) ->
-                    assert (Parameter.equal param1 param2);
-                    let t, new_judgements =
-                      Meet_and_join.meet ~type_of_name t1 t2
-                    in
-                    judgements := new_judgements @ !judgements;
-                    param, t)
-                  inlinable1.params
-                  inlinable2.params
-              in
-              let has_bottom =
-                List.exists (fun (_param, t) ->
-                    is_bottom ~type_of_name t)
-                  params
-              in
-              if has_bottom then Bottom
-              else Ok params
-          in
-          let result : _ or_bottom =
-
-
-          in
-          match params, result with
-          | Ok params, Ok result ->
-
-          | Ok _, Bottom | Bottom, Ok _ | Bottom, Bottom ->
-            (* definitely different *)
-
-
+          begin match result with
+          | Ok (params, result, result_env_extension, judgements) ->
+            (* For the arbitrary choice, we pick the inlinable declaration,
+               since it gives more information. *)
+            let inlinable_function_decl =
+              { inlinable with
+                params;
+                result;
+                result_env_extension;
+              }
+            in
+            Ok (Inlinable inlinable_function_decl, judgements)
+          | Bottom ->
+            Bottom
+          end
+      in
+      match set_of_closures, function_decls with
+      | Bottom, _ | _, Bottom -> Bottom
+      | Ok (set_of_closures, judgements1), Ok (function_decls, judgements2) ->
+        let judgements = judgements1 @ judgements2 in
+        let closure : closure =
+          { set_of_closures;
+            function_decls;
+          }
+        in
+        Ok (closure, judgements)
 
     let join_closure ~type_of_name (closure1 : closure) (closure2 : closure)
           : closure =

@@ -197,9 +197,9 @@ module type S = sig
   }
 
   and non_inlinable_function_declaration = private {
-    arity : Flambda_arity.t;
-    (* CR mshinwell: We could add [params] here *)
+    params : t list;
     result : t list;
+    result_env_extension : typing_environment;
     direct_call_surrogate : Closure_id.t option;
   }
 
@@ -472,6 +472,8 @@ module type S = sig
   (** Construct a type equal to the type of the given name.  (The name
       must be present in the given environment when calling e.g. [join].) *)
   val alias_type_of : Flambda_kind.t -> Name.t -> t
+
+  val alias_type_of_as_ty_value : Flambda_kind.t -> Name.t -> ty_value
 
   val alias_type : Flambda_kind.t -> Export_id.t -> t
 

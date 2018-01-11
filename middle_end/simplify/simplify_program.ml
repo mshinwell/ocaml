@@ -29,7 +29,8 @@ type 'a or_invalid =
   | Ok of 'a
   | Invalid
 
-let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
+let simplify_static_part env ~symbol_being_defined
+      (static_part : Static_part.t) : _ or_invalid =
   let type_of_name = E.type_of_name env in
   let simplify_float_fields (mut : Flambda_primitive.mutable_or_immutable)
         fields =
@@ -120,17 +121,35 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
       | Mutable ->
         List.for_all (fun ty -> not (T.is_known ~type_of_name ty))
           field_types);
+    (* Each field of the block is identified by a [Symbol_field] name.  This
+       means that, by looking at types, we can see which values are built up
+       using only the contents of symbols.  This information enables us to
+       make lifting decisions during simplification. *)
+    let extra_bindings =
+      List.mapi (fun field field_type ->
+          let field = Targetint.OCaml.of_int field in
+          let name = Name.symbol_field symbol_being_defined field in
+          name, field_type)
+        field_types
+    in
     let field_types =
-      List.map (fun field_type : _ T.mutable_or_immutable ->
-          Immutable (T.force_to_kind_value field_type))
+      List.mapi (fun field field_type : _ T.mutable_or_immutable ->
+          match mut with
+          | Mutable -> Mutable
+          | Immutable ->
+            let field = Targetint.OCaml.of_int field in
+            let name = Name.symbol_field symbol_being_defined field in
+            let kind = (E.type_accessor env T.kind) field_type in
+            let ty_value = T.alias_type_of_as_ty_value kind name in
+            Immutable ty_value)
         field_types
     in
     let ty = T.block_of_values tag ~fields:(Array.of_list field_types) in
-    Ok (Static_part.Block (tag, mut, fields), ty)
+    Ok (Static_part.Block (tag, mut, fields), ty, extra_bindings)
   | Set_of_closures set ->
     let r = R.create () in
     let set, ty, _r = Simplify_named.simplify_set_of_closures env r set in
-    Ok (Static_part.Set_of_closures set, ty)
+    Ok (Static_part.Set_of_closures set, ty, [])
   | Closure _ -> assert false (* XXX to do with Pierre (sym, closure_id) ->
     let ty = E.find_symbol env sym in
     begin match T.prove_sets_of_closures ~type_of_name ty with
@@ -143,13 +162,13 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
       Ok (static_part, T.any_value Definitely_pointer)
     | Invalid -> Invalid
     end*)
-  | Boxed_float (Const f) -> Ok (static_part, T.this_boxed_float f)
+  | Boxed_float (Const f) -> Ok (static_part, T.this_boxed_float f, [])
   | Mutable_string { initial_value = Const str; } ->
     let size = Targetint.OCaml.of_int (String.length str) in
-    Ok (static_part, T.mutable_string ~size)
+    Ok (static_part, T.mutable_string ~size, [])
   | Immutable_string (Const str) ->
     let ty = T.this_immutable_string str in
-    Ok (static_part, ty)
+    Ok (static_part, ty, [])
   | Boxed_float (Var var) ->
     (* CR mshinwell: Share code between these float/int32/int64/nativeint cases.
        [Number_adjuncts] may help *)
@@ -161,17 +180,17 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
       | Proved fs ->
         begin match Numbers.Float_by_bit_pattern.Set.get_singleton fs with
         | Some f ->
-          Ok (Static_part.Boxed_float (Const f), T.this_boxed_float f)
+          Ok (Static_part.Boxed_float (Const f), T.this_boxed_float f, [])
         | None ->
-          Ok (static_part, T.any_boxed_float ())
+          Ok (static_part, T.any_boxed_float (), [])
         end
-      | Unknown -> Ok (static_part, T.any_boxed_float ())
+      | Unknown -> Ok (static_part, T.any_boxed_float (), [])
       | Invalid -> Invalid
       end
-    | Unknown -> Ok (static_part, T.any_boxed_float ())
+    | Unknown -> Ok (static_part, T.any_boxed_float (), [])
     | Invalid -> Invalid
     end
-  | Boxed_int32 (Const n) -> Ok (static_part, T.this_boxed_int32 n)
+  | Boxed_int32 (Const n) -> Ok (static_part, T.this_boxed_int32 n, [])
   | Boxed_int32 (Var var) ->
     let ty = E.find_variable env var in
     begin match T.prove_boxed_int32 ~type_of_name ty with
@@ -181,17 +200,17 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
       | Proved fs ->
         begin match Numbers.Int32.Set.get_singleton fs with
         | Some f ->
-          Ok (Static_part.Boxed_int32 (Const f), T.this_boxed_int32 f)
+          Ok (Static_part.Boxed_int32 (Const f), T.this_boxed_int32 f, [])
         | None ->
-          Ok (static_part, T.any_boxed_int32 ())
+          Ok (static_part, T.any_boxed_int32 (), [])
         end
-      | Unknown -> Ok (static_part, T.any_boxed_int32 ())
+      | Unknown -> Ok (static_part, T.any_boxed_int32 (), [])
       | Invalid -> Invalid
       end
-    | Unknown -> Ok (static_part, T.any_boxed_int32 ())
+    | Unknown -> Ok (static_part, T.any_boxed_int32 (), [])
     | Invalid -> Invalid
     end
-  | Boxed_int64 (Const n) -> Ok (static_part, T.this_boxed_int64 n)
+  | Boxed_int64 (Const n) -> Ok (static_part, T.this_boxed_int64 n, [])
   | Boxed_int64 (Var var) ->
     let ty = E.find_variable env var in
     begin match T.prove_boxed_int64 ~type_of_name ty with
@@ -201,17 +220,17 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
       | Proved fs ->
         begin match Numbers.Int64.Set.get_singleton fs with
         | Some f ->
-          Ok (Static_part.Boxed_int64 (Const f), T.this_boxed_int64 f)
+          Ok (Static_part.Boxed_int64 (Const f), T.this_boxed_int64 f, [])
         | None ->
-          Ok (static_part, T.any_boxed_int64 ())
+          Ok (static_part, T.any_boxed_int64 (), [])
         end
-      | Unknown -> Ok (static_part, T.any_boxed_int64 ())
+      | Unknown -> Ok (static_part, T.any_boxed_int64 (), [])
       | Invalid -> Invalid
       end
-    | Unknown -> Ok (static_part, T.any_boxed_int64 ())
+    | Unknown -> Ok (static_part, T.any_boxed_int64 (), [])
     | Invalid -> Invalid
     end
-  | Boxed_nativeint (Const n) -> Ok (static_part, T.this_boxed_nativeint n)
+  | Boxed_nativeint (Const n) -> Ok (static_part, T.this_boxed_nativeint n, [])
   | Boxed_nativeint (Var var) ->
     let ty = E.find_variable env var in
     begin match T.prove_boxed_nativeint ~type_of_name ty with
@@ -221,14 +240,15 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
       | Proved fs ->
         begin match Targetint.Set.get_singleton fs with
         | Some f ->
-          Ok (Static_part.Boxed_nativeint (Const f), T.this_boxed_nativeint f)
+          Ok (Static_part.Boxed_nativeint (Const f), T.this_boxed_nativeint f,
+            [])
         | None ->
-          Ok (static_part, T.any_boxed_nativeint ())
+          Ok (static_part, T.any_boxed_nativeint (), [])
         end
       | Unknown -> Ok (static_part, T.any_boxed_nativeint ())
       | Invalid -> Invalid
       end
-    | Unknown -> Ok (static_part, T.any_boxed_nativeint ())
+    | Unknown -> Ok (static_part, T.any_boxed_nativeint (), [])
     | Invalid -> Invalid
     end
   | Mutable_float_array { initial_value = fields; } ->
@@ -237,8 +257,8 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
     in
     let size = Targetint.OCaml.of_int (List.length fields) in
     let ty = T.mutable_float_array ~size in
-    if not done_something then Ok (static_part, ty)
-    else Ok (Static_part.Mutable_float_array { initial_value; }, ty)
+    if not done_something then Ok (static_part, ty, [])
+    else Ok (Static_part.Mutable_float_array { initial_value; }, ty, [])
   | Immutable_float_array fields ->
     let done_something, static_part_fields, fields =
       simplify_float_fields Immutable fields
@@ -251,8 +271,8 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
         fields
     in
     let ty = T.immutable_float_array (Array.of_list fields) in
-    if not done_something then Ok (static_part, ty)
-    else Ok (Static_part.Immutable_float_array static_part_fields, ty)
+    if not done_something then Ok (static_part, ty, [])
+    else Ok (Static_part.Immutable_float_array static_part_fields, ty, [])
   | Mutable_string { initial_value = Var var; } ->
     let ty = E.find_variable env var in
     begin match T.prove_string ~type_of_name ty with
@@ -261,14 +281,14 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
       | Some str ->
         let ty = T.mutable_string ~size:str.size in
         begin match str.contents with
-        | Unknown_or_mutable -> Ok (static_part, ty)
+        | Unknown_or_mutable -> Ok (static_part, ty, [])
         | Contents str ->
           Ok (Static_part.Mutable_string { initial_value = Const str; }, ty)
         end
-      | None -> Ok (static_part, T.any_value Definitely_pointer)
+      | None -> Ok (static_part, T.any_value Definitely_pointer, [])
       end
     | Unknown ->
-      Ok (static_part, T.any_value Definitely_pointer)
+      Ok (static_part, T.any_value Definitely_pointer, [])
     | Invalid -> Invalid
     end
   | Immutable_string (Var var) ->
@@ -280,15 +300,15 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
         begin match str.contents with
         | Contents s ->
           let ty = T.this_immutable_string s in
-          Ok (Static_part.Immutable_string (Const s), ty)
+          Ok (Static_part.Immutable_string (Const s), ty, [])
         | Unknown_or_mutable ->
           let ty = T.immutable_string ~size:str.size in
           Ok (static_part, ty)
         end
-      | None -> Ok (static_part, T.any_value Definitely_pointer)
+      | None -> Ok (static_part, T.any_value Definitely_pointer, [])
       end
     | Unknown ->
-      Ok (static_part, T.any_value Definitely_pointer)
+      Ok (static_part, T.any_value Definitely_pointer, [])
     | Invalid -> Invalid
     end
 
@@ -300,11 +320,17 @@ let simplify_static_structure initial_env (recursive : Flambda.recursive) str =
           acc
         else
           match simplify_static_part initial_env static_part with
-          | Ok (static_part, ty) ->
+          | Ok (static_part, ty, extra_bindings) ->
             let env =
               match recursive with
               | Non_recursive -> E.add_symbol env sym ty
               | Recursive -> E.redefine_symbol env sym ty
+            in
+            let env =
+              List.fold_left (fun env (name, ty) ->
+                  E.add_name env name ty)
+                env
+                extra_bindings
             in
             false, env, ((sym, static_part) :: str)
           | Invalid ->

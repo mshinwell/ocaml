@@ -44,6 +44,7 @@ module Static_part : sig
     | Boxed_int32 of Int32.t or_variable
     | Boxed_int64 of Int64.t or_variable
     | Boxed_nativeint of Targetint.t or_variable
+    (* CR mshinwell: Unify arrays and blocks, as in the type language? *)
     | Mutable_float_array of
         { initial_value : Numbers.Float_by_bit_pattern.t or_variable list; }
     | Immutable_float_array of Numbers.Float_by_bit_pattern.t or_variable list
