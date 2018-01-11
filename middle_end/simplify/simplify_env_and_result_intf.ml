@@ -128,8 +128,6 @@ module type Env = sig
 
   val find_symbol : t -> Symbol.t -> Flambda_type.t
 
-  val add_name : t -> Name.t -> Flambda_type.t -> t
-
   val mem_simple : t -> Simple.t -> bool
 
   val mem_name : t -> Name.t -> bool
