@@ -196,30 +196,25 @@ module type S = sig
     direct_call_surrogate : Closure_id.t option;
   }
 
-  and non_inlinable_function_declaration = private {
+  and non_inlinable_function_declarations = private {
     params : t list;
     result : t list;
     result_env_extension : typing_environment;
     direct_call_surrogate : Closure_id.t option;
   }
 
-  and function_declaration = private
-    | Non_inlinable of non_inlinable_function_declaration option
+  and function_declarations = private
+    | Non_inlinable of non_inlinable_function_declarations option
     | Inlinable of inlinable_function_declaration
 
-  and closure = private {
+  (* CR mshinwell: should the closure types contain environment extensions? *)
+
+  and closures_entry = private {
     set_of_closures : ty_fabricated;
-    (* CR mshinwell: Is this singular or plural? *)
-    function_decls : function_declaration;
   }
 
-  (* CR mshinwell: should [closures] contain environment extensions? *)
-  and closures = closure Closure_id.Map.t
-
-  and set_of_closures = private {
-    closures : ty_value;
-    closure_elements : ty_value Var_within_closure.Map.t;
-  }
+  and closures = private
+    closures_entry Closure_id.Map.t
 
   and 'a of_kind_naked_number = private
     | Immediate : Immediate.Set.t -> Immediate.Set.t of_kind_naked_number
@@ -239,6 +234,16 @@ module type S = sig
        top element) *)
     | Tag of tag_case Tag.Map.t
     | Set_of_closures of set_of_closures
+    | Closure of closure
+
+  and set_of_closures = private {
+    closures : ty_fabricated Closure_id.Map.t;
+    closure_elements : ty_value Var_within_closure.Map.t;
+  }
+
+  and closure = private {
+    function_decls : function_declarations;
+  }
 
   and of_kind_phantom = private
     | Value of ty_value
