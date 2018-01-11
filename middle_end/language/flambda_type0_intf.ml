@@ -179,6 +179,8 @@ module type S = sig
     body : expr;
     free_names_in_body : Name.Set.t;
     result : t list;
+    (* CR mshinwell: Is this name misleading?  The quantifiers are before
+       the parameters *)
     result_env_extension : typing_environment;
     stub : bool;
     dbg : Debuginfo.t;
@@ -196,19 +198,22 @@ module type S = sig
 
   and non_inlinable_function_declaration = private {
     arity : Flambda_arity.t;
+    (* CR mshinwell: We could add [params] here *)
     result : t list;
     direct_call_surrogate : Closure_id.t option;
   }
 
   and function_declaration = private
-    | Non_inlinable of non_inlinable_function_declaration
+    | Non_inlinable of non_inlinable_function_declaration option
     | Inlinable of inlinable_function_declaration
 
   and closure = private {
     set_of_closures : ty_fabricated;
+    (* CR mshinwell: Is this singular or plural? *)
     function_decls : function_declaration;
   }
 
+  (* CR mshinwell: should [closures] contain environment extensions? *)
   and closures = closure Closure_id.Map.t
 
   and set_of_closures = private {

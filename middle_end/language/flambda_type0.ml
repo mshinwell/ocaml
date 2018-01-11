@@ -202,16 +202,19 @@ end) = struct
   }
 
   and function_declaration =
-    | Non_inlinable of non_inlinable_function_declaration
+    | Non_inlinable of non_inlinable_function_declaration option
     | Inlinable of inlinable_function_declaration
 
-  and set_of_closures = {
-    function_decls : function_declaration Closure_id.Map.t;
-    closure_elements : ty_value Var_within_closure.Map.t;
+  and closure = private {
+    set_of_closures : ty_fabricated;
+    function_decls : function_declaration;
   }
 
-  and closures = {
-    by_closure_id : ty_fabricated Closure_id.Map.t;
+  and closures = closure Closure_id.Map.t
+
+  and set_of_closures = private {
+    closures : ty_value;
+    closure_elements : ty_value Var_within_closure.Map.t;
   }
 
   and 'a of_kind_naked_number =
@@ -2289,6 +2292,173 @@ end) = struct
       in
       { blocks; immediates; }
 
+    (* CR mshinwell: We need to work out how to stop direct call
+       surrogates from being dropped e.g. when in a second round, a
+       function type (with a surrogate) propagated from the first round is
+       put into a meet with a type for the same function, but a new
+       surrogate. *)
+    let meet_closure ~type_of_name (closure1 : closure) (closure2 : closure)
+          : (closure * judgements_from_meet) or_bottom =
+
+
+    let join_closure ~type_of_name (closure1 : closure) (closure2 : closure)
+          : closure =
+      (* CR mshinwell: We need to be sure this cannot yield an infinite loop
+         between set_of_closures <-> closures joining. *)
+      let set_of_closures =
+        Meet_and_join_fabricated.join_ty ~type_of_name
+          closure1.set_of_closures closure2.set_of_closures
+      in
+      let produce_non_inlinable ~arity1 ~arity2 ~result1 ~result2
+            ~direct_call_surrogate1 ~direct_call_surrogate2 =
+        let same_arity =
+          Flambda_arity.equal arity1 arity2
+        in
+        let same_num_results =
+          List.compare_lengths result1 result2 = 0
+        in
+        if same_arity && same_num_results then
+          let result =
+            List.map2 (fun t1 t2 ->
+                Meet_and_join.join ~type_of_name t1 t2)
+              result1
+              result2
+          in
+          let direct_call_surrogate =
+            match direct_call_surrogate1, direct_call_surrogate2 with
+            | Some closure_id1, Some closure_id2
+                when Closure_id.equal closure_id1 closure_id2 ->
+              Some closure_id1
+            | _, _ -> None
+          in
+          let non_inlinable : non_inlinable_function_declaration =
+            { arity = arity1;
+              result;
+              direct_call_surrogate;
+            }
+          in
+          Non_inlinable (Some non_inlinable)
+        else
+          Non_inlinable None
+      in
+      let function_decls : function_declaration =
+        match closure1.function_decls, closure2.function_decls with
+        | Non_inlinable None, _ | _, Non_inlinable None -> Non_inlinable None
+        | Non_inlinable (Some non_inlinable1),
+            Non_inlinable (Some non_inlinable2) ->
+          produce_non_inlinable
+            ~arity1:non_inlinable1.arity
+            ~arity2:non_inlinable2.arity
+            ~result1:non_inlinable1.result
+            ~result2:non_inlinable2.result
+            ~direct_call_surrogate1:non_inlinable1.direct_call_surrogate
+            ~direct_call_surrogate2:non_inlinable2.direct_call_surrogate
+        | Non_inlinable (Some non_inlinable), Inlinable inlinable
+        | Inlinable inlinable, Non_inlinable (Some non_inlinable) ->
+          produce_non_inlinable
+            ~arity1:inlinable.arity
+            ~arity2:non_inlinable.arity
+            ~result1:inlinable.result
+            ~result2:non_inlinable.result
+            ~direct_call_surrogate1:inlinable.direct_call_surrogate
+            ~direct_call_surrogate2:non_inlinable.direct_call_surrogate
+        | Inlinable inlinable1, Inlinable inlinable2 ->
+          if not (Code_id.equal inlinable1.code_id inlinable2.code_id)
+          then begin
+            produce_non_inlinable
+              ~arity1:inlinable1.arity
+              ~arity2:inlinable2.arity
+              ~result1:inlinable1.result
+              ~result2:inlinable2.result
+              ~direct_call_surrogate1:inlinable1.direct_call_surrogate
+              ~direct_call_surrogate2:inlinable2.direct_call_surrogate
+          end else begin
+            if !Clflags.flambda_invariant_checks then begin
+              assert (Closure_origin.equal inlinable1.closure_origin
+                inlinable2.closure_origin);
+              assert (Continuation.equal inlinable1.continuation_param
+                inlinable2.continuation_param);
+              assert (Pervasives.(=) inlinable1.is_classic_mode
+                inlinable2.is_classic_mode);
+              assert (List.compare_lengths inlinable1.params inlinable2.params
+                = 0);
+              assert (List.compare_lengths inlinable1.result inlinable2.result
+                = 0);
+              assert (Name.Set.equal inlinable1.free_names_in_body
+                inlinable2.free_names_in_body);
+              assert (Pervasives.(=) inlinable1.stub inlinable2.stub);
+              assert (Debuginfo.equal inlinable1.dbg inlinable2.dbg);
+              assert (Pervasives.(=) inlinable1.inline inlinable2.inline);
+              assert (Pervasives.(=) inlinable1.specialise
+                inlinable2.specialise);
+              assert (Pervasives.(=) inlinable1.is_a_functor
+                inlinable2.is_a_functor);
+              assert (Variable.Set.equal
+                (Lazy.force inlinable1.invariant_params)
+                (Lazy.force inlinable2.invariant_params));
+              assert (Pervasives.(=)
+                (Lazy.force inlinable1.size)
+                (Lazy.force inlinable2.size))
+            end;
+            (* Parameter types are treated covariantly. *)
+            (* CR mshinwell: Add documentation for this -- the types provide
+               information about the calling context rather than the code of
+               the function. *)
+            let params =
+              List.map2 (fun (param1, t1) (param2, t2) ->
+                  assert (Parameter.equal param1 param2);
+                  let t = Meet_and_join.join ~type_of_name t1 t2 in
+                  param, t)
+                inlinable1.params
+                inlinable2.params
+            in
+            let result =
+              List.map2 (fun t1 t2 ->
+                  Meet_and_join.join ~type_of_name t1 t2)
+                inlinable1.result
+                inlinable2.result
+            in
+            let result_env_extension =
+              Meet_and_join.join_typing_environment ~type_of_name
+                inlinable1.result_env_extension
+                inlinable2.result_env_extension
+            in
+            let direct_call_surrogate =
+              match direct_call_surrogate1, direct_call_surrogate2 with
+              | Some closure_id1, Some closure_id2
+                  when Closure_id.equal closure_id1 closure_id2 ->
+                Some closure_id1
+              | _, _ -> None
+            in
+            Inlinable {
+              closure_origin = inlinable1.closure_origin;
+              continuation_param = inlinable1.continuation_param;
+              is_classic_mode = inlinable1.is_classic_mode;
+              params;
+              code_id = inlinable1.code_id;
+              body = inlinable1.body;
+              free_names_in_body = inlinable1.free_names_in_body;
+              result;
+              result_env_extension;
+              stub = inlinable1.stub;
+              dbg = inlinable1.dbg;
+              inline = inlinable1.inline;
+              specialise = inlinable1.inline;
+              is_a_functor = inlinable1.is_a_functor;
+              invariant_params = inlinable1.invariant_params;
+              size = inlinable1.size;
+              direct_call_surrogate;
+            }
+          end
+      in
+      { set_of_closures;
+        function_decls;
+      }
+
+    let join_of_kind_foo ~type_of_name
+          (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
+          : of_kind_fabricated or_unknown =
+
     let meet_of_kind_foo ~type_of_name
           (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
           : (of_kind_value * judgements_from_meet) or_bottom =
@@ -2328,8 +2498,16 @@ end) = struct
           Meet_and_join_naked_nativeint.meet_ty ~type_of_name n1 n2
         in
         Ok (Boxed_number (Boxed_nativeint n), judgements)
-      | Closure closures1, Closure _closures2 ->
-        Ok (Closure closures1, []) (* XXX pchambart to fix *)
+      | Closure closures1, Closure closures2 ->
+        let judgements = ref [] in
+        Closure_id.Map.inter (fun closure1 closure2 ->
+            match meet_closure ~type_of_name closure1 closure2 with
+            | Ok (closures, new_judgements) ->
+              judgements := new_judgements @ !judgements;
+              Some closures
+            | Bottom -> None)
+          closures1
+          closures2
       | String strs1, String strs2 ->
         let strs = String_info.Set.inter strs1 strs2 in
         if String_info.Set.is_empty strs then Bottom
@@ -2377,8 +2555,11 @@ end) = struct
           Meet_and_join_naked_nativeint.join_ty ~type_of_name n1 n2
         in
         Known (Boxed_number (Boxed_nativeint n))
-      | Closure closures1, Closure _closures2 ->
-        Known (Closure closures1) (* XXX pchambart to fix *)
+      | Closure closures1, Closure closures2 ->
+        Closure_id.Map.union_merge (fun closure1 closure2 ->
+            join_closure ~type_of_name closure1 closure2)
+          closures1
+          closures2
       | String strs1, String strs2 ->
         let strs = String_info.Set.union strs1 strs2 in
         Known (String strs)
