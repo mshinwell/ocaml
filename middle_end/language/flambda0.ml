@@ -1717,7 +1717,7 @@ end = struct
     in
     fprintf ppf
       "@[<2>(%a%s%s%s%s@ (origin %a)@ =@ \
-        fun@[<2> <%a> <exn %a>@] %a@[<2>@ :: %a@]@ ->@ @[<2>%a@])@]@ "
+        fun@[<2> <%a> <exn %a>@] %a@ @[<2>@ :: %a@]@ ->@ @[<2>%a@])@]@ "
       Closure_id.print closure_id
       stub
       is_a_functor inline specialise
@@ -1844,11 +1844,10 @@ end = struct
       && equal_type ty1 ty2
       && Flambda_kind.equal kind1 kind2
 
-  let print ppf { param; equalities; ty; kind = _; } =
-    Format.fprintf ppf "@[(%a : %a%a)@]"
+  let print ppf { param; equalities = _; ty; kind = _; } =
+    Format.fprintf ppf "(%a : %a)"
       Parameter.print param
       Flambda_type.print ty
-      Flambda_primitive.With_fixed_value.Set.print equalities
 
   module List = struct
     type nonrec t = t list

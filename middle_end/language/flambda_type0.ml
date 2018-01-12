@@ -304,11 +304,11 @@ end) = struct
         (o : _ unknown_or_join) =
     match o with
     | Unknown payload ->
-      Format.fprintf ppf "@[(Unknown %a)@]" print_unknown_payload payload
+      Format.fprintf ppf "@[Unknown %a@]" print_unknown_payload payload
     | Join [] -> Format.fprintf ppf "Bottom"
     | Join [contents] -> print_contents ppf contents
     | Join incompatibles ->
-      Format.fprintf ppf "@[(Join_incompatible@ @[(%a)@])@]"
+      Format.fprintf ppf "@[Join_incompatible@ (%a)@]"
         (Format.pp_print_list print_contents) incompatibles
 
   let print_ty_generic print_contents print_unknown_payload ppf ty =
