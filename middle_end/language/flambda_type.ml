@@ -19,7 +19,7 @@
 module F0 = Flambda0
 module K = Flambda_kind
 
-module Expr = F0.Expr
+(* module Expr = F0.Expr *)
 module Named = F0.Named
 
 module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
@@ -85,9 +85,10 @@ let this_naked_int64_named n : Named.t * t =
 let this_naked_nativeint_named n : Named.t * t =
   Simple (Simple.const (Naked_nativeint n)), this_naked_nativeint n
 
+(*
 let _equal_function_declaration ~equal_type
-      (decl1 : function_declaration)
-      (decl2 : function_declaration) =
+      (decl1 : function_declarations)
+      (decl2 : function_declarations) =
   match decl1, decl2 with
   | Inlinable {
       closure_origin = closure_origin1;
@@ -158,6 +159,7 @@ let _equal_function_declaration ~equal_type
         direct_call_surrogate1 direct_call_surrogate2
   | Inlinable _, Non_inlinable _
   | Non_inlinable _, Inlinable _ -> false
+*)
 
 (*
 let is_float_array t =
@@ -845,7 +847,7 @@ let reify ~type_of_name ~allow_free_variables t
             end
           end
       | Ok (Boxed_number _) -> try_name ()
-      | Ok (Closure _ | String _) -> try_name ()
+      | Ok (Closures _ | String _) -> try_name ()
       end
     | Simplified_type.Naked_number (ty_naked_number, _) ->
       begin match ty_naked_number with
@@ -912,7 +914,7 @@ let prove_tagged_immediate ~type_of_name t
           Proved (Immediate.Map.keys imms)
         end
     | Ok (Boxed_number _) -> Invalid
-    | Ok (Closure _ | String _) -> Invalid
+    | Ok (Closures _ | String _) -> Invalid
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _
@@ -944,7 +946,7 @@ let prove_is_tagged_immediate ~type_of_name t : bool proof =
        with the "is_int" primitive, then these next cases could probably
        all be [Invalid]. *)
     | Ok (Boxed_number _) -> Proved false
-    | Ok (Closure _ | String _) -> Proved false
+    | Ok (Closures _ | String _) -> Proved false
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _
@@ -1110,7 +1112,7 @@ let prove_get_field_from_block ~type_of_name t ~index ~field_kind : t proof =
           | Some field_ty -> Proved field_ty
         end 
     | Ok (Boxed_number _) -> Invalid
-    | Ok (Closure _ | String _) -> Invalid
+    | Ok (Closures _ | String _) -> Invalid
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _
@@ -1162,7 +1164,7 @@ let prove_is_a_block ~type_of_name t ~kind_of_all_fields : bool proof =
         if tags_all_valid then Proved true else Invalid
       end
     | Ok (Boxed_number _) -> Proved false
-    | Ok (Closure _ | String _) -> Proved false
+    | Ok (Closures _ | String _) -> Proved false
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _
@@ -1228,7 +1230,7 @@ let prove_tags ~type_of_name t : Tag.Set.t proof =
       Proved (Tag.Set.singleton Tag.custom_tag)
     | Ok (Boxed_number (Boxed_nativeint _)) ->
       Proved (Tag.Set.singleton Tag.custom_tag)
-    | Ok (Closure _) ->
+    | Ok (Closures _) ->
       Proved (Tag.Set.singleton Tag.closure_tag)
     | Ok (String _) ->
       Proved (Tag.Set.singleton Tag.string_tag)
@@ -1249,7 +1251,7 @@ let prove_string ~type_of_name t : String_info.Set.t proof =
     | Unknown _ -> Unknown
     | Bottom -> Invalid
     | Ok (String strs) -> Proved strs
-    | Ok (Blocks_and_tagged_immediates _ | Closure _) -> Invalid
+    | Ok (Blocks_and_tagged_immediates _ | Closures _) -> Invalid
     | Ok (Boxed_number _) -> Invalid
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
@@ -1439,7 +1441,7 @@ let prove_lengths_of_arrays_or_blocks ~type_of_name t
         Proved lengths
       end
     | Ok (Boxed_number _) -> Invalid
-    | Ok (Closure _ | String _) -> Invalid
+    | Ok (Closures _ | String _) -> Invalid
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _
@@ -1598,8 +1600,8 @@ let structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
         end
       | Boxed_number _, _ -> true
       | _, Boxed_number _ -> true
-      | Closure _, Closure _ -> false
-      | Closure _, _ | _, Closure _ -> true
+      | Closures _, Closures _ -> false
+      | Closures _, _ | _, Closures _ -> true
       | String strs1, String strs2 ->
         String_info.Set.is_empty (String_info.Set.inter strs1 strs2)
       end
@@ -1696,7 +1698,7 @@ let int_switch_arms ~type_of_name t ~arms =
             Targetint.OCaml.Map.empty
       end
     | Ok (Boxed_number _) -> invalid ()
-    | Ok (Closure _ | String _) -> invalid ()
+    | Ok (Closures _ | String _) -> invalid ()
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _
@@ -1729,7 +1731,7 @@ let tag_switch_arms ~type_of_name t ~arms =
             Tag.Map.add arm (env_extension, cont) result)
         arms
         Tag.Map.empty
-    | Ok (Set_of_closures _) -> invalid ()
+    | Ok (Set_of_closures _) | Ok (Closure _) -> invalid ()
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Value _ | Phantom _ -> wrong_kind ()
