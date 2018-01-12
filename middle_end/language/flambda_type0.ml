@@ -141,7 +141,7 @@ end) = struct
   and of_kind_value =
     | Blocks_and_tagged_immediates of blocks_and_tagged_immediates
     | Boxed_number : _ of_kind_value_boxed_number -> of_kind_value
-    | Closure of closures
+    | Closures of closures
     | String of String_info.Set.t
 
   and immediate_case = {
@@ -211,8 +211,7 @@ end) = struct
     set_of_closures : ty_fabricated;
   }
 
-  and closures = private
-    closures_entry Closure_id.Map.t
+  and closures = closures_entry Closure_id.Map.t
 
   and 'a of_kind_naked_number =
     | Immediate : Immediate.Set.t -> Immediate.Set.t of_kind_naked_number
@@ -253,6 +252,18 @@ end) = struct
     existentials : Name.Set.t;
     existential_freshening : Freshening.t;
   }
+
+  let ty_is_obviously_bottom (ty : _ ty) =
+    match ty with
+    | No_alias (Join []) -> true
+    | _ -> false
+
+  let is_obviously_bottom (t : t) =
+    match t with
+    | Value ty -> ty_is_obviously_bottom ty
+    | Naked_number (ty, _) -> ty_is_obviously_bottom ty
+    | Fabricated ty -> ty_is_obviously_bottom ty
+    | Phantom ty -> ty_is_obviously_bottom ty
 
   let print_mutable_or_immutable print_contents ppf
         (mut : _ mutable_or_immutable) =
@@ -367,7 +378,7 @@ end) = struct
     | Boxed_number n ->
       Format.fprintf ppf "[@(Boxed_number %a)@]"
         print_of_kind_value_boxed_number n
-    | Closure closure -> print_closure ppf closure
+    | Closures closures -> print_closures ppf closures
     | String str_infos ->
       Format.fprintf ppf "@[(Strings (%a))@]" String_info.Set.print str_infos
 
@@ -383,12 +394,13 @@ end) = struct
 
   and _unused = Expr.print
 
-  and print_closure _ppf (_ : closures) = assert false
-(*
-    Format.fprintf ppf "@[(Closures@ @[<2>[@ %a @[<2>from@ %a@];@ ]@])@]"
-      Closure_id.print closure_id
-    print_ty_fabricated set_of_closures
-*)  
+  and print_closures ppf (closures : closures) =
+    Format.fprintf ppf "@[(Closures %a)@]"
+      (Closure_id.Map.print print_closures_entry) closures
+
+  and print_closures_entry ppf (entry : closures_entry) =
+    Format.fprintf ppf "@[(set_of_closures %a)@]"
+      print_ty_fabricated entry.set_of_closures
 
   and print_inlinable_function_declaration ppf
         (decl : inlinable_function_declaration) =
@@ -431,10 +443,10 @@ end) = struct
       (Misc.Stdlib.Option.print Format.pp_print_int) (Lazy.force decl.size)
       (Misc.Stdlib.Option.print Closure_id.print) decl.direct_call_surrogate
 
-  and print_non_inlinable_function_declaration ppf
-        (decl : non_inlinable_function_declaration) =
+  and print_non_inlinable_function_declarations ppf
+        (decl : non_inlinable_function_declarations) =
     Format.fprintf ppf
-      "@[(non_inlinable@ \
+      "@[(Non_inlinable@ \
         @[(result (%a))@]@,\
         @[(direct_call_surrogate %a)@])@]"
       (Format.pp_print_list ~pp_sep:(fun ppf () -> Format.fprintf ppf ", ")
@@ -443,22 +455,25 @@ end) = struct
             print ty)) decl.result
       (Misc.Stdlib.Option.print Closure_id.print) decl.direct_call_surrogate
 
-  and print_function_declaration ppf (decl : function_declaration) =
+  and print_function_declarations ppf (decl : function_declarations) =
     match decl with
     | Inlinable decl -> print_inlinable_function_declaration ppf decl
-    | Non_inlinable decl -> print_non_inlinable_function_declaration ppf decl
+    | Non_inlinable decl ->
+      begin match decl with
+      | None -> Format.fprintf ppf "Non_inlinable"
+      | Some decl -> print_non_inlinable_function_declarations ppf decl
+      end
 
-  and print_function_declarations ppf function_decls =
-    Format.fprintf ppf "%a"
-      (Closure_id.Map.print print_function_declaration)
-      function_decls
-
-  and print_set_of_closures ppf set =
+  and print_set_of_closures ppf (set : set_of_closures) =
     Format.fprintf ppf
-      "@[(@[(function_decls@ %a)@]@,\
+      "@[(@[(closures@ %a)@]@,\
           @[(closure_elements@ %a)@])@]"
-      print_function_declarations set.function_decls
+      (Closure_id.Map.print print_ty_fabricated) set.closures
       (Var_within_closure.Map.print print_ty_value) set.closure_elements
+
+  and print_closure ppf (closure : closure) =
+    Format.fprintf ppf "@[(Closure (function_decls %a))@]"
+      print_function_declarations closure.function_decls
 
   and print_tag_case ppf ({ env_extension; } : tag_case) =
     Format.fprintf ppf "@[(env_extension %a)@]"
@@ -469,6 +484,7 @@ end) = struct
     | Tag tag_map ->
       Format.fprintf ppf "@[(Tags %a)@]" (Tag.Map.print print_tag_case) tag_map
     | Set_of_closures set -> print_set_of_closures ppf set
+    | Closure closure -> print_closure ppf closure
 
   and print_ty_fabricated ppf (ty : ty_fabricated) =
     print_ty_generic print_of_kind_fabricated K.Value_kind.print ppf ty
@@ -607,8 +623,11 @@ end) = struct
       free_names_ty free_names_of_kind_naked_number n acc
     | Boxed_number (Boxed_nativeint n) ->
       free_names_ty free_names_of_kind_naked_number n acc
-    | Closure _ -> assert false
-(*      free_names_ty free_names_of_kind_fabricated set_of_closures acc*)
+    | Closures closures ->
+      Closure_id.Map.fold (fun _closure_id (entry : closures_entry) acc ->
+          free_names_ty free_names_of_kind_fabricated entry.set_of_closures acc)
+        closures
+        acc
     | String _ -> acc
 
   and free_names_of_kind_fabricated (of_kind : of_kind_fabricated) acc =
@@ -620,31 +639,34 @@ end) = struct
         acc
     | Set_of_closures set ->
       let acc =
-        Var_within_closure.Map.fold (fun _var ty_value acc ->
-            free_names_ty free_names_of_kind_value ty_value acc)
-          set.closure_elements acc
+        Closure_id.Map.fold (fun _closure_id ty_fabricated acc ->
+            free_names_ty free_names_of_kind_fabricated ty_fabricated acc)
+          set.closures acc
       in
-      Closure_id.Map.fold
-        (fun _closure_id (decl : function_declaration) acc ->
-          match decl with
-          | Inlinable decl ->
-            let acc =
-              List.fold_left (fun acc t ->
-                free_names t acc)
-                acc
-                decl.result
-            in
-            List.fold_left (fun acc (_param, t) ->
-                free_names t acc)
-              acc
-              decl.params
-          | Non_inlinable decl ->
-            List.fold_left (fun acc t ->
-              free_names t acc)
-              acc
-              decl.result)
-        set.function_decls
+      Var_within_closure.Map.fold (fun _var ty_value acc ->
+          free_names_ty free_names_of_kind_value ty_value acc)
+        set.closure_elements acc
+    | Closure closure -> free_names_of_closure closure acc
+
+  and free_names_of_closure (closure : closure) acc =
+    match closure.function_decls with
+    | Inlinable decl ->
+      let acc =
+        List.fold_left (fun acc t ->
+          free_names t acc)
+          acc
+          decl.result
+      in
+      List.fold_left (fun acc (_param, t) ->
+          free_names t acc)
         acc
+        decl.params
+    | Non_inlinable None -> acc
+    | Non_inlinable (Some decls) ->
+      List.fold_left (fun acc t ->
+        free_names t acc)
+        acc
+        decls.result
 
   and free_names_of_kind_phantom (of_kind : of_kind_phantom) acc =
     match of_kind with
@@ -723,7 +745,12 @@ end) = struct
     end)
   end
 
-  type 'a type_accessor = type_of_name:(Name_or_export_id.t -> t option) -> 'a
+  type type_of_name =
+       ?local_env:typing_environment
+    -> Name_or_export_id.t
+    -> t option
+
+  type 'a type_accessor = type_of_name:type_of_name -> 'a
 
   let alias_type_of (kind : K.t) name : t =
     match kind with
@@ -740,6 +767,8 @@ end) = struct
       Naked_number (Type_of name, K.Naked_number.Naked_nativeint)
     | Fabricated _ -> Fabricated (Type_of name)
     | Phantom _ -> Phantom (Type_of name)
+
+  let alias_type_of_as_ty_value name : ty_value = Type_of name
 
   let alias_type (kind : K.t) export_id : t =
     match kind with
@@ -1314,7 +1343,7 @@ end) = struct
 *)
 
   let resolve_aliases_on_ty (type a)
-        ~(type_of_name : Name_or_export_id.t -> t option)
+        ~(type_of_name : type_of_name)
         ~(force_to_kind : t -> (a, _) ty)
         (ty : (a, _) ty)
         : (a, _) ty * (Name.t option) =
@@ -1449,7 +1478,7 @@ end) = struct
                   | Known _ | Unknown ->
                     Unknown
                   end
-              | Boxed_number _ | Closure _ | String _ -> Definitely_pointer
+              | Boxed_number _ | Closures _ | String _ -> Definitely_pointer
             in
             K.Value_kind.join result this_kind)
           K.Value_kind.Bottom
@@ -1479,7 +1508,8 @@ end) = struct
             let this_kind : K.Value_kind.t =
               match of_kind_fabricated with
               | Tag _ -> K.Value_kind.Definitely_immediate
-              | Set_of_closures _ -> K.Value_kind.Definitely_pointer
+              | Set_of_closures _
+              | Closure _ -> K.Value_kind.Definitely_pointer
             in
             K.Value_kind.join result this_kind)
           K.Value_kind.Bottom
@@ -1565,7 +1595,7 @@ end) = struct
   let create_inlinable_function_declaration ~is_classic_mode ~closure_origin
         ~continuation_param ~params ~body ~result ~stub ~dbg ~inline
         ~specialise ~is_a_functor ~invariant_params ~size ~direct_call_surrogate
-        : function_declaration =
+        : function_declarations =
     Inlinable {
       closure_origin;
       continuation_param;
@@ -1586,31 +1616,36 @@ end) = struct
       direct_call_surrogate;
     }
 
-  let create_non_inlinable_function_declaration ~result ~direct_call_surrogate
-        : function_declaration =
-    Non_inlinable {
-      result;
-      direct_call_surrogate;
-    }
+  let create_non_inlinable_function_declaration ~params ~result
+        ~result_env_extension ~direct_call_surrogate
+        : function_declarations =
+    let decl : non_inlinable_function_declarations =
+      { params;
+        result;
+        result_env_extension;
+        direct_call_surrogate;
+      }
+    in
+    Non_inlinable (Some decl)
 
-  let closure ~set_of_closures:_ _closure_id : t = assert false
-(*
-    (* CR mshinwell: pass a description to the "force" functions *)
-    let set_of_closures = force_to_kind_fabricated set_of_closures in
-    Value (No_alias (Join [Closure { set_of_closures; closure_id; }]))
-*)
+  let create_closure function_decls : closure =
+    { function_decls; }
 
-  let create_set_of_closures ~function_decls ~closure_elements
-        : set_of_closures =
-    { function_decls;
+  let closure (closure : closure) =
+    Fabricated (No_alias (Join [Closure closure]))
+
+  let create_set_of_closures ~closures ~closure_elements : set_of_closures =
+    { closures;
       closure_elements;
     }
 
-  let set_of_closures ~function_decls ~closure_elements =
-    let set_of_closures =
-      create_set_of_closures ~function_decls ~closure_elements
-    in
-    Fabricated (No_alias (Join [Set_of_closures set_of_closures]))
+  let set_of_closures (set_of_closures : set_of_closures) =
+    if Closure_id.Map.is_empty set_of_closures.closures
+      || Var_within_closure.Map.is_empty set_of_closures.closure_elements
+    then
+      Fabricated (No_alias (Join []))
+    else
+      Fabricated (No_alias (Join [Set_of_closures set_of_closures]))
 
 
 (*
@@ -2299,10 +2334,6 @@ end) = struct
       in
       { blocks; immediates; }
 
-    let join_of_kind_foo ~type_of_name
-          (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
-          : of_kind_fabricated or_unknown =
-
     let meet_of_kind_foo ~type_of_name
           (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
           : (of_kind_value * judgements_from_meet) or_bottom =
@@ -2342,23 +2373,35 @@ end) = struct
           Meet_and_join_naked_nativeint.meet_ty ~type_of_name n1 n2
         in
         Ok (Boxed_number (Boxed_nativeint n), judgements)
-      | Closure closures1, Closure closures2 ->
+      | Closures closures1, Closures closures2 ->
         let judgements = ref [] in
-        Closure_id.Map.inter (fun closure1 closure2 ->
-            match meet_closure ~type_of_name closure1 closure2 with
-            | Ok (closures, new_judgements) ->
-              judgements := new_judgements @ !judgements;
-              Some closures
-            | Bottom -> None)
-          closures1
-          closures2
+        let closures =
+          Closure_id.Map.inter
+            (fun (closures_entry1 : closures_entry)
+                 (closures_entry2 : closures_entry) : closures_entry option ->
+              let set1 = closures_entry1.set_of_closures in
+              let set2 = closures_entry2.set_of_closures in
+              let set, new_judgements =
+                Meet_and_join_fabricated.meet_ty ~type_of_name set1 set2
+              in
+              if ty_is_obviously_bottom set then begin
+                None
+              end else begin
+                judgements := new_judgements @ !judgements;
+                Some { set_of_closures = set; }
+              end)
+            closures1
+            closures2
+        in
+        if Closure_id.Map.is_empty closures then Bottom
+        else Ok (Closures closures, !judgements)
       | String strs1, String strs2 ->
         let strs = String_info.Set.inter strs1 strs2 in
         if String_info.Set.is_empty strs then Bottom
         else Ok (String strs, [])
       | (Blocks_and_tagged_immediates _
           | Boxed_number _
-          | Closure _
+          | Closures _
           | String _), _ ->
         Bottom
 
@@ -2399,17 +2442,27 @@ end) = struct
           Meet_and_join_naked_nativeint.join_ty ~type_of_name n1 n2
         in
         Known (Boxed_number (Boxed_nativeint n))
-      | Closure closures1, Closure closures2 ->
-        Closure_id.Map.union_merge (fun closure1 closure2 ->
-            join_closure ~type_of_name closure1 closure2)
-          closures1
-          closures2
+      | Closures closures1, Closures closures2 ->
+        let closures =
+          Closure_id.Map.union_merge
+            (fun (closures_entry1 : closures_entry)
+                 (closures_entry2 : closures_entry) : closures_entry ->
+              let set1 = closures_entry1.set_of_closures in
+              let set2 = closures_entry2.set_of_closures in
+              let set =
+                Meet_and_join_fabricated.join_ty ~type_of_name set1 set2
+              in
+              { set_of_closures = set; })
+            closures1
+            closures2
+        in
+        Known (Closures closures)
       | String strs1, String strs2 ->
         let strs = String_info.Set.union strs1 strs2 in
         Known (String strs)
       | (Blocks_and_tagged_immediates _
           | Boxed_number _
-          | Closure _
+          | Closures _
           | String _), _ ->
         Unknown
 
@@ -2627,12 +2680,9 @@ end) = struct
        function type (with a surrogate) propagated from the first round is
        put into a meet with a type for the same function, but a new
        surrogate. *)
-    let meet_closure ~type_of_name (closure1 : closure) (closure2 : closure)
+    let meet_closure ~(type_of_name : type_of_name)
+          (closure1 : closure) (closure2 : closure)
           : (closure * judgements_from_meet) or_bottom =
-      let set_of_closures, judgements =
-        Meet_and_join_fabricated.meet_ty ~type_of_name
-          closure1.set_of_closures closure2.set_of_closures
-      in
       let cannot_prove_different ~params1 ~params2 ~result1 ~result2
             ~result_env_extension1 ~result_env_extension2 : _ or_bottom =
         let same_arity =
@@ -2646,20 +2696,22 @@ end) = struct
             result_env_extension1
             result_env_extension2
         in
-        let type_of_name name_or_export_id =
-          type_of_name ~local_env:result_env_extension name_or_export_id
+        let type_of_name ?local_env name_or_export_id =
+          match local_env with
+          | None ->
+            type_of_name ~local_env:result_env_extension name_or_export_id
+          | Some local_env ->
+            type_of_name ~local_env name_or_export_id
         in
         let judgements = ref [] in
         let has_bottom params =
-          List.exists (fun (_param, t) ->
-              is_bottom ~type_of_name t)
-            params
+          List.exists is_obviously_bottom params
         in
         let params : _ or_bottom =
           if not same_arity then Bottom
           else
             let params =
-              List.map2 (fun t1, t2 ->
+              List.map2 (fun t1 t2 ->
                   let t, new_judgements =
                     Meet_and_join.meet ~type_of_name t1 t2
                   in
@@ -2677,7 +2729,7 @@ end) = struct
             let result =
               List.map2 (fun t1 t2 ->
                   let t, new_judgements =
-                    Meet_and_join.join ~type_of_name t1 t2
+                    Meet_and_join.meet ~type_of_name t1 t2
                   in
                   judgements := new_judgements @ !judgements;
                   t)
@@ -2692,7 +2744,7 @@ end) = struct
           Ok (params, result, result_env_extension, !judgements)
         | _, _ -> Bottom
       in
-      let function_decls : function_declaration or_bottom =
+      let function_decls : _ or_bottom =
         match closure1.function_decls, closure2.function_decls with
         | Inlinable inlinable1, Inlinable inlinable2 ->
           let params1 = List.map snd inlinable1.params in
@@ -2710,8 +2762,13 @@ end) = struct
                different, but we cannot prove it.  We arbitrarily pick
                [closure1.function_decls] to return, with parameter and result
                types refined. *)
+            let params =
+              List.map2 (fun (param, _old_ty) new_ty -> param, new_ty)
+                inlinable1.params
+                params
+            in
             let inlinable_function_decl =
-              { inlinable with
+              { inlinable1 with
                 params;
                 result;
                 result_env_extension;
@@ -2722,22 +2779,26 @@ end) = struct
             (* [closure1] and [closure2] are definitely different. *)
             Bottom
           end
-        | Non_inlinable None, Non_inlinable None -> Non_inlinable None
-        | Non_inlinable (Some non_inlinable), Non_inlinable None ->
+        | Non_inlinable None, Non_inlinable None -> Ok (Non_inlinable None, [])
+        | Non_inlinable (Some non_inlinable), Non_inlinable None
         | Non_inlinable None, Non_inlinable (Some non_inlinable) ->
           (* We can arbitrarily pick one side or the other: we choose the
              side which gives a more precise type. *)
-          Non_inlinable (Some non_inlinable)
+          Ok (Non_inlinable (Some non_inlinable), [])
+        | Non_inlinable None, Inlinable inlinable
+        | Inlinable inlinable, Non_inlinable None ->
+          (* Likewise. *)
+          Ok (Inlinable inlinable, [])
         | Non_inlinable (Some non_inlinable1),
             Non_inlinable (Some non_inlinable2) ->
           let result =
             cannot_prove_different
-              ~params1:inlinable1.params
-              ~params2:inlinable2.params
-              ~result1:inlinable1.result
-              ~result2:inlinable2.result
-              ~result_env_extension1:inlinable1.result_env_extension
-              ~result_env_extension2:inlinable2.result_env_extension
+              ~params1:non_inlinable1.params
+              ~params2:non_inlinable2.params
+              ~result1:non_inlinable1.result
+              ~result2:non_inlinable2.result
+              ~result_env_extension1:non_inlinable1.result_env_extension
+              ~result_env_extension2:non_inlinable2.result_env_extension
           in
           begin match result with
           | Ok (params, result, result_env_extension, judgements) ->
@@ -2748,7 +2809,7 @@ end) = struct
                 result_env_extension;
               }
             in
-            Ok (Non_inlinable non_inlinable_function_decl, judgements)
+            Ok (Non_inlinable (Some non_inlinable_function_decl), judgements)
           | Bottom ->
             Bottom
           end
@@ -2768,6 +2829,11 @@ end) = struct
           | Ok (params, result, result_env_extension, judgements) ->
             (* For the arbitrary choice, we pick the inlinable declaration,
                since it gives more information. *)
+            let params =
+              List.map2 (fun (param, _old_ty) new_ty -> param, new_ty)
+                inlinable.params
+                params
+            in
             let inlinable_function_decl =
               { inlinable with
                 params;
@@ -2780,34 +2846,30 @@ end) = struct
             Bottom
           end
       in
-      match set_of_closures, function_decls with
-      | Bottom, _ | _, Bottom -> Bottom
-      | Ok (set_of_closures, judgements1), Ok (function_decls, judgements2) ->
-        let judgements = judgements1 @ judgements2 in
-        let closure : closure =
-          { set_of_closures;
-            function_decls;
-          }
-        in
-        Ok (closure, judgements)
+      match function_decls with
+      | Bottom -> Bottom
+      | Ok (function_decls, judgements) ->
+        Ok (({ function_decls; } : closure), judgements)
 
-    let join_closure ~type_of_name (closure1 : closure) (closure2 : closure)
+    let join_closure ~(type_of_name : type_of_name)
+          (closure1 : closure) (closure2 : closure)
           : closure =
-      (* CR mshinwell: We need to be sure this cannot yield an infinite loop
-         between set_of_closures <-> closures joining. *)
-      let set_of_closures =
-        Meet_and_join_fabricated.join_ty ~type_of_name
-          closure1.set_of_closures closure2.set_of_closures
-      in
-      let produce_non_inlinable ~arity1 ~arity2 ~result1 ~result2
+      let produce_non_inlinable ~params1 ~params2 ~result1 ~result2
+            ~result_env_extension1 ~result_env_extension2
             ~direct_call_surrogate1 ~direct_call_surrogate2 =
         let same_arity =
-          Flambda_arity.equal arity1 arity2
+          List.compare_lengths params1 params2 = 0
         in
         let same_num_results =
           List.compare_lengths result1 result2 = 0
         in
         if same_arity && same_num_results then
+          let params =
+            List.map2 (fun t1 t2 ->
+                Meet_and_join.join ~type_of_name t1 t2)
+              params1
+              params2
+          in
           let result =
             List.map2 (fun t1 t2 ->
                 Meet_and_join.join ~type_of_name t1 t2)
@@ -2821,9 +2883,15 @@ end) = struct
               Some closure_id1
             | _, _ -> None
           in
-          let non_inlinable : non_inlinable_function_declaration =
-            { arity = arity1;
+          let result_env_extension =
+            Meet_and_join.join_typing_environment ~type_of_name
+              result_env_extension1
+              result_env_extension2
+          in
+          let non_inlinable : non_inlinable_function_declarations =
+            { params;
               result;
+              result_env_extension;
               direct_call_surrogate;
             }
           in
@@ -2831,35 +2899,44 @@ end) = struct
         else
           Non_inlinable None
       in
-      let function_decls : function_declaration =
+      let function_decls : function_declarations =
         match closure1.function_decls, closure2.function_decls with
         | Non_inlinable None, _ | _, Non_inlinable None -> Non_inlinable None
         | Non_inlinable (Some non_inlinable1),
             Non_inlinable (Some non_inlinable2) ->
           produce_non_inlinable
-            ~arity1:non_inlinable1.arity
-            ~arity2:non_inlinable2.arity
+            ~params1:non_inlinable1.params
+            ~params2:non_inlinable2.params
             ~result1:non_inlinable1.result
             ~result2:non_inlinable2.result
+            ~result_env_extension1:non_inlinable1.result_env_extension
+            ~result_env_extension2:non_inlinable2.result_env_extension
             ~direct_call_surrogate1:non_inlinable1.direct_call_surrogate
             ~direct_call_surrogate2:non_inlinable2.direct_call_surrogate
         | Non_inlinable (Some non_inlinable), Inlinable inlinable
         | Inlinable inlinable, Non_inlinable (Some non_inlinable) ->
+          let params1 = List.map snd inlinable.params in
           produce_non_inlinable
-            ~arity1:inlinable.arity
-            ~arity2:non_inlinable.arity
+            ~params1
+            ~params2:non_inlinable.params
             ~result1:inlinable.result
             ~result2:non_inlinable.result
+            ~result_env_extension1:inlinable.result_env_extension
+            ~result_env_extension2:non_inlinable.result_env_extension
             ~direct_call_surrogate1:inlinable.direct_call_surrogate
             ~direct_call_surrogate2:non_inlinable.direct_call_surrogate
         | Inlinable inlinable1, Inlinable inlinable2 ->
           if not (Code_id.equal inlinable1.code_id inlinable2.code_id)
           then begin
+            let params1 = List.map snd inlinable1.params in
+            let params2 = List.map snd inlinable2.params in
             produce_non_inlinable
-              ~arity1:inlinable1.arity
-              ~arity2:inlinable2.arity
+              ~params1
+              ~params2
               ~result1:inlinable1.result
               ~result2:inlinable2.result
+              ~result_env_extension1:inlinable1.result_env_extension
+              ~result_env_extension2:inlinable2.result_env_extension
               ~direct_call_surrogate1:inlinable1.direct_call_surrogate
               ~direct_call_surrogate2:inlinable2.direct_call_surrogate
           end else begin
@@ -2901,14 +2978,18 @@ end) = struct
             in
             (* CR mshinwell: Should we actually have [meet] and [join] take
                two environments, one per type? *)
-            let type_of_name name_or_export_id =
-              type_of_name ~local_env:result_env_extension name_or_export_id
+            let type_of_name ?local_env name_or_export_id =
+              match local_env with
+              | None ->
+                type_of_name ~local_env:result_env_extension name_or_export_id
+              | Some local_env ->
+                type_of_name ~local_env name_or_export_id
             in
             let params =
               List.map2 (fun (param1, t1) (param2, t2) ->
                   assert (Parameter.equal param1 param2);
                   let t = Meet_and_join.join ~type_of_name t1 t2 in
-                  param, t)
+                  param1, t)
                 inlinable1.params
                 inlinable2.params
             in
@@ -2919,7 +3000,9 @@ end) = struct
                 inlinable2.result
             in
             let direct_call_surrogate =
-              match direct_call_surrogate1, direct_call_surrogate2 with
+              match inlinable1.direct_call_surrogate,
+                    inlinable2.direct_call_surrogate
+              with
               | Some closure_id1, Some closure_id2
                   when Closure_id.equal closure_id1 closure_id2 ->
                 Some closure_id1
@@ -2938,7 +3021,7 @@ end) = struct
               stub = inlinable1.stub;
               dbg = inlinable1.dbg;
               inline = inlinable1.inline;
-              specialise = inlinable1.inline;
+              specialise = inlinable1.specialise;
               is_a_functor = inlinable1.is_a_functor;
               invariant_params = inlinable1.invariant_params;
               size = inlinable1.size;
@@ -2946,67 +3029,66 @@ end) = struct
             }
           end
       in
-      { set_of_closures;
-        function_decls;
-      }
-
-    (* CR mshinwell: Implement more functions in [Identifiable] so that we
-       can avoid exceptions / refs. *)
-    exception Is_bottom
+      { function_decls; }
 
     let meet_set_of_closures ~type_of_name
           (set1 : set_of_closures) (set2 : set_of_closures)
           : (set_of_closures * judgements_from_meet) or_bottom =
       let judgements = ref [] in
-      try
-        let closures =
-          Closure_id.Map.union_merge (fun ty_fabricated1 ty_fabricated2 ->
-              let meet =
-                Meet_and_join_fabricated.meet_ty ~type_of_name
-                  ty_fabricated1 ty_fabricated2
-              in
-              match meet with
-              | Ok (ty_fabricated, new_judgements) ->
-                judgements := new_judgements @ !judgements;
-                ty_fabricated
-              | Bottom -> raise Bottom)
-            set1.closures
-            set2.closures
-        in
-        let closure_elements =
-          Closure_id.Map.union_merge (fun ty_value1 ty_value2 ->
-              let meet =
-                Meet_and_join_value.meet_ty ~type_of_name
-                  ty_value1 ty_value2
-              in
-              match meet with
-              | Ok (ty_value, new_judgements) ->
-                judgements := new_judgements @ !judgements;
-                ty_value
-              | Bottom -> raise Bottom)
-            set1.closure_elements
-            set2.closure_elements
-        in
+      let closures =
+        Closure_id.Map.inter (fun ty_fabricated1 ty_fabricated2 ->
+            let ty_fabricated, new_judgements =
+              Meet_and_join_fabricated.meet_ty ~type_of_name
+                ty_fabricated1 ty_fabricated2
+            in
+            if ty_is_obviously_bottom ty_fabricated then begin
+              None
+            end else begin
+              judgements := new_judgements @ !judgements;
+              Some ty_fabricated
+            end)
+          set1.closures
+          set2.closures
+      in
+      let closure_elements =
+        Var_within_closure.Map.inter (fun ty_value1 ty_value2 ->
+            let ty_value, new_judgements =
+              Meet_and_join_value.meet_ty ~type_of_name
+                ty_value1 ty_value2
+            in
+            if ty_is_obviously_bottom ty_value then begin
+              None
+            end else begin
+              judgements := new_judgements @ !judgements;
+              Some ty_value
+            end)
+          set1.closure_elements
+          set2.closure_elements
+      in
+      if Closure_id.Map.is_empty closures
+        || Var_within_closure.Map.is_empty closure_elements
+      then
+        Bottom
+      else
         let set : set_of_closures =
           { closures;
             closure_elements;
           }
         in
         Ok (set, !judgements)
-      with Is_bottom -> Bottom
 
     let join_set_of_closures ~type_of_name
           (set1 : set_of_closures) (set2 : set_of_closures)
           : set_of_closures =
       let closures =
-        Closure_id.Map.inter_merge (fun ty_fabricated1 ty_fabricated2 ->
+        Closure_id.Map.union_merge (fun ty_fabricated1 ty_fabricated2 ->
             Meet_and_join_fabricated.join_ty ~type_of_name
               ty_fabricated1 ty_fabricated2)
           set1.closures
           set2.closures
       in
       let closure_elements =
-        Closure_id.Map.inter_merge (fun ty_value1 ty_value2 ->
+        Var_within_closure.Map.union_merge (fun ty_value1 ty_value2 ->
             Meet_and_join_value.join_ty ~type_of_name
               ty_value1 ty_value2)
           set1.closure_elements
@@ -3037,9 +3119,7 @@ end) = struct
         in
         Ok (Tag tags, [])
       | Set_of_closures set1, Set_of_closures set2 ->
-        begin match
-          meet_set_of_closures ~type_of_name set_of_closures1 set_of_closures2
-        with
+        begin match meet_set_of_closures ~type_of_name set1 set2 with
         | Ok (set_of_closures, judgements) ->
           Ok (Set_of_closures set_of_closures, judgements)
         | Bottom -> Bottom
@@ -3073,10 +3153,8 @@ end) = struct
             tags2
         in
         Known (Tag tags)
-      | Set_of_closures set1, Set_of_closures _set2 ->
-        let set_of_closures =
-          join_set_of_closures ~type_of_name set_of_closures1 set_of_closures2
-        in
+      | Set_of_closures set1, Set_of_closures set2 ->
+        let set_of_closures = join_set_of_closures ~type_of_name set1 set2 in
         Known (Set_of_closures set_of_closures)
       | Closure closure1, Closure closure2 ->
         let closure = join_closure ~type_of_name closure1 closure2 in
@@ -3595,7 +3673,7 @@ end) = struct
                   Known imm_map
               in
               Blocks_and_tagged_immediates { blocks; immediates; }
-            | Boxed_number _ | Closure _ | String _ -> of_kind_value)
+            | Boxed_number _ | Closures _ | String _ -> of_kind_value)
           of_kind_values
       in
       Value (No_alias (Join of_kind_values))
@@ -3614,7 +3692,8 @@ end) = struct
                   tag_map
               in
               Tag tag_map
-            | Set_of_closures _ -> of_kind_fabricated)
+            | Set_of_closures _
+            | Closure _ -> of_kind_fabricated)
           of_kind_fabricateds
       in
       Fabricated (No_alias (Join of_kind_fabricateds))

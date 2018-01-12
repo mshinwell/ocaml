@@ -119,7 +119,7 @@ module type S = sig
   and of_kind_value = private
     | Blocks_and_tagged_immediates of blocks_and_tagged_immediates
     | Boxed_number : _ of_kind_value_boxed_number -> of_kind_value
-    | Closure of closures
+    | Closures of closures
     | String of String_info.Set.t
 
   and immediate_case = private {
@@ -262,11 +262,13 @@ module type S = sig
 
   (** Annotation for functions that may require examination of the current
       simplification environment. *)
-  type 'a type_accessor =
-    type_of_name:(?local_env:typing_environment
-      -> Name_or_export_id.t
-      -> t option)
-    -> 'a
+
+  type type_of_name =
+       ?local_env:typing_environment
+    -> Name_or_export_id.t
+    -> t option
+
+  type 'a type_accessor = type_of_name:type_of_name -> 'a
 
   (** If the given type has kind [Phantom], return it; otherwise form the
       correct type of kind [Phantom] describing the given type. *)
@@ -344,7 +346,7 @@ module type S = sig
   val any_naked_int64 : unit -> t
   val any_naked_nativeint : unit -> t
 
-  val any_closure : unit -> t
+(*  val any_closure : unit -> t *)
 
   val any_fabricated : unit -> t
   val any_phantom : unit -> t
@@ -455,30 +457,31 @@ module type S = sig
     -> invariant_params:Variable.Set.t lazy_t
     -> size:int option lazy_t
     -> direct_call_surrogate:Closure_id.t option
-    -> function_declaration
+    -> function_declarations
 
   val create_non_inlinable_function_declaration
-     : result:t list
+     : params:t list
+    -> result:t list
+    -> result_env_extension:typing_environment
     -> direct_call_surrogate:Closure_id.t option
-    -> function_declaration
+    -> function_declarations
 
-  val closure : set_of_closures:t -> Closure_id.t -> t
+  val create_closure : function_declarations -> closure
+
+  val closure : closure -> t
 
   val create_set_of_closures
-     : function_decls:function_declaration Closure_id.Map.t
+     : closures:ty_fabricated Closure_id.Map.t
     -> closure_elements:ty_value Var_within_closure.Map.t
     -> set_of_closures
 
-  val set_of_closures
-     : function_decls:function_declaration Closure_id.Map.t
-    -> closure_elements:ty_value Var_within_closure.Map.t
-    -> t
+  val set_of_closures : set_of_closures -> t
 
   (** Construct a type equal to the type of the given name.  (The name
       must be present in the given environment when calling e.g. [join].) *)
   val alias_type_of : Flambda_kind.t -> Name.t -> t
 
-  val alias_type_of_as_ty_value : Flambda_kind.t -> Name.t -> ty_value
+  val alias_type_of_as_ty_value : Name.t -> ty_value
 
   val alias_type : Flambda_kind.t -> Export_id.t -> t
 
@@ -502,66 +505,9 @@ module type S = sig
   val join_ty_value : (ty_value -> ty_value -> ty_value) type_accessor
 
   (** Greatest lower bound of two types.
-      This can introduce new judgements into the typing environment. *)
-  (* CR mshinwell: maybe we'd better do that part later *)
-  val meet : (t -> t -> t) type_accessor
-(*
-  val meet :
-     (typing_environment -> t -> t -> typing_environment * t) type_accessor
-*)
-
-(*
-  (** Least upper bound of an arbitrary number of types. *)
-  val join_list : (Flambda_kind.t -> t list -> t) type_accessor
-
-  (** Least upper bound of two types known to be of kind [Naked_float]. *)
-  val join_ty_naked_float
-     : (ty_naked_float -> ty_naked_float -> ty_naked_float) type_accessor
-
-  (** Least upper bound of two types known to be of kind [Naked_int32]. *)
-  val join_ty_naked_int32
-     : (ty_naked_int32 -> ty_naked_int32 -> ty_naked_int32) type_accessor
-
-  (** Least upper bound of two types known to be of kind [Naked_int64]. *)
-  val join_ty_naked_int64
-     : (ty_naked_int64 -> ty_naked_int64 -> ty_naked_int64) type_accessor
-
-  (** Least upper bound of two types known to be of kind [Naked_nativeint]. *)
-  val join_ty_naked_nativeint
-     : (ty_naked_nativeint -> ty_naked_nativeint -> ty_naked_nativeint)
-         type_accessor
-
-  (** Greatest lower bound of an arbitrary number of types. *)
-  val meet_list
-     : (typing_environment
-     -> Flambda_kind.t
-     -> t list
-     -> typing_environment * t) type_accessor
-
-  (** Greatest lower bound of two types known to be of kind [Value]. *)
-  val meet_ty_value
-     : (typing_environment * ty_value
-    -> ty_value
-    -> typing_environment * ty_value) type_accessor
-
-  (** Greatest lower bound of two types known to be of kind [Naked_float]. *)
-  val meet_ty_naked_float
-     : (ty_naked_float -> ty_naked_float -> ty_naked_float) type_accessor
-
-  (** Greatest lower bound of two types known to be of kind [Naked_int32]. *)
-  val meet_ty_naked_int32
-     : (ty_naked_int32 -> ty_naked_int32 -> ty_naked_int32) type_accessor
-
-  (** Greatest lower bound of two types known to be of kind [Naked_int64]. *)
-  val meet_ty_naked_int64
-     : (ty_naked_int64 -> ty_naked_int64 -> ty_naked_int64) type_accessor
-
-  (** Greatest lower bound of two types known to be of kind
-      [Naked_nativeint]. *)
-  val meet_ty_naked_nativeint
-     : (ty_naked_nativeint -> ty_naked_nativeint -> ty_naked_nativeint)
-         type_accessor
-*)
+      This can introduce new judgements, which are returned as an
+      environment. *)
+  val meet : (t -> t -> t * typing_environment) type_accessor
 
   (* CR mshinwell: We may not need to expose all of the following functions *)
 
@@ -609,17 +555,4 @@ module type S = sig
   val force_to_kind_phantom : t -> ty_phantom
 
   val check_of_kind : (t -> Flambda_kind.t -> unit) type_accessor
-
-(*
-  type cleaning_spec =
-    | Available
-    | Available_different_name of Variable.t
-    | Unavailable
-
-  (** Adjust a type so that all of the free variables it references are in
-      scope in some context. The context is expressed by a function that says
-      whether the variable is available under its existing name, available
-      under another name, or unavailable. *)
-  val clean : (t -> (Variable.t -> cleaning_spec) -> t) type_accessor
-*)
 end
