@@ -52,23 +52,6 @@ let which_function_parameters_can_we_specialise ~params ~args
 
 *)
 
-(** Fold over all variables bound by the given closure, which is bound to the
-    variable [callee], and corresponds to the given
-    [function_decls].  Each variable bound by the closure is passed to the
-    user-specified function as an [Flambda.Named.t] value that projects the
-    variable from its closure. *)
-let fold_over_projections_of_vars_bound_by_closure ~callee's_closure_id
-      ~callee ~(set_of_closures : T.set_of_closures) dbg
-      ~init ~f =
-  Var_within_closure.Map.fold (fun var _ty acc ->
-      let var_map = Closure_id.Map.singleton callee's_closure_id var in
-      let expr : Flambda.Named.t =
-        Prim (Unary (Project_var var_map, Simple.name callee), dbg)
-      in
-      f ~acc ~var ~expr)
-    set_of_closures.closure_elements
-    init
-
 let set_inline_attribute_on_all_apply body inline specialise =
   Flambda.Expr.Mappers.Toplevel_only.map_expr (function
       | Apply apply -> Apply { apply with inline; specialise }
@@ -129,6 +112,8 @@ let inline_by_copying_function_body ~env ~r
       ~callee's_closure_id
       ~(function_decl : T.inlinable_function_declaration) ~args
       ~continuation ~dbg =
+  ignore set_of_closures;
+  ignore callee's_closure_id;
   assert (E.mem_name env callee);
   assert (List.for_all (E.mem_simple env) args);
   let r =
@@ -179,39 +164,11 @@ let inline_by_copying_function_body ~env ~r
     in
     Flambda.Expr.bind ~body ~bindings
   in
-  (* Add bindings for the variables bound by the closure. *)
-  let bindings_for_vars_bound_by_closure_and_params_to_args =
-    fold_over_projections_of_vars_bound_by_closure ~callee's_closure_id
-      ~callee ~set_of_closures dbg ~init:bindings_for_params_to_args
-      ~f:(fun ~acc:body ~var ~expr ->
-        let var = Var_within_closure.unwrap var in
-        let kind = Flambda_kind.value Unknown in
-        Flambda.Expr.create_let var kind expr body)
-  in
-  (* Add bindings for variables corresponding to the functions introduced by
-     the whole set of closures.  Each such variable will be bound to a closure;
-     each such closure is in turn produced by moving from the closure being
-     applied to another closure in the same set.
-  *)
-  let all_closure_ids_in_set =
-    Closure_id.Map.keys set_of_closures.function_decls
-  in
   let expr =
-    Closure_id.Set.fold (fun another_closure_in_set expr ->
-        let move =
-          Closure_id.Map.singleton callee's_closure_id
-            another_closure_in_set
-        in
-        let another_closure_in_set =
-          Closure_id.unwrap another_closure_in_set
-        in
-        Flambda.Expr.create_let another_closure_in_set
-          (Flambda_kind.value Definitely_pointer)
-          (Prim (Unary (Move_within_set_of_closures move, Simple.name callee),
-            dbg))
-          expr)
-      all_closure_ids_in_set
-      bindings_for_vars_bound_by_closure_and_params_to_args
+    Flambda.Expr.create_let function_decl.my_closure
+      (Flambda_kind.value Definitely_pointer)
+      (Simple (Simple.name callee))
+      bindings_for_params_to_args
   in
   let env = E.activate_freshening (E.set_never_inline env) in
   let env = E.set_inline_debuginfo ~dbg env in

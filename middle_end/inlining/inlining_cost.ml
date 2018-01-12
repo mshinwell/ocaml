@@ -236,6 +236,9 @@ module Benefit = struct
   let remove_call t = { t with remove_call = t.remove_call + 1; }
   let remove_alloc t = { t with remove_alloc = t.remove_alloc + 1; }
 
+  let add_primitive _prim t =
+    { t with remove_prim = t.remove_prim - 1; }
+
   let remove_primitive _prim t =
     { t with remove_prim = t.remove_prim + 1; }
 

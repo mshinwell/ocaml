@@ -229,7 +229,10 @@ end = struct
     let ty =
       match find_variable_opt t var with
       | None -> ty
-      | Some existing_ty -> T.meet ~type_of_name ty existing_ty
+      | Some existing_ty ->
+        (* CR mshinwell: Should we add [judgements] to the env. here? *)
+        let ty, _judgements = T.meet ~type_of_name ty existing_ty in
+        ty
     in
     let typing_environment =
       TE.add_or_replace t.typing_environment

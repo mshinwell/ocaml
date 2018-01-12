@@ -51,7 +51,7 @@ let inline env r ~callee
     ~callee's_closure_id
     ~(function_decl : T.inlinable_function_declaration)
     ~(set_of_closures : T.set_of_closures)
-    ~only_use_of_function ~original ~recursive
+    ~only_use_of_function ~original ~recursive:_
     ~(args : Simple.t list) ~continuation ~size_from_approximation ~dbg
     ~(inline_requested : Flambda.inline_attribute)
     ~(specialise_requested : Flambda.specialise_attribute)
@@ -59,16 +59,20 @@ let inline env r ~callee
   let toplevel = E.at_toplevel env in
   let branch_depth = E.branch_depth env in
   let unrolling, always_inline, never_inline, env =
-    let unrolling =
+    let unrolling = None in
+(* CR mshinwell for pchambart: What do we do here?
       E.actively_unrolling env set_of_closures.set_of_closures_origin
     in
+*)
     match unrolling with
     | Some count ->
       if count > 0 then
+(*
         let env =
           E.continue_actively_unrolling env
             set_of_closures.set_of_closures_origin
         in
+*)
         true, true, false, env
       else false, false, true, env
     | None -> begin
@@ -90,10 +94,12 @@ let inline env r ~callee
         | Default_inline -> false, false, false, env
         | Unroll count ->
           if count > 0 then
+(*
             let env =
               E.start_actively_unrolling env
                 set_of_closures.set_of_closures_origin (count - 1)
             in
+*)
             true, true, false, env
           else false, false, true, env
       end
@@ -115,9 +121,11 @@ let inline env r ~callee
       Try_it
     else if never_inline then
       Don't_try_it S.Not_inlined.Annotation
+(*
     else if not (E.unrolling_allowed env set_of_closures.set_of_closures_origin)
          && (Lazy.force recursive) then
       Don't_try_it S.Not_inlined.Unrolling_depth_exceeded
+*)
     else if remaining_inlining_threshold = IT.Never_inline then
       let threshold =
         match inlining_threshold with
@@ -239,11 +247,13 @@ Format.eprintf "Inlining application of %a whose body is:@ \n%a\n%!"
         R.map_benefit r_inlined (Inlining_cost.Benefit.(+) (R.benefit r))
       in
       let env = E.note_entering_inlined env in
+(*
       let env =
         (* We decrement the unrolling count even if the function is not
            recursive to avoid having to check whether or not it is recursive *)
         E.inside_unrolled_function env set_of_closures.set_of_closures_origin
       in
+*)
       let env = E.inside_inlined_function env function_decl.closure_origin in
       let env =
         if E.inlining_level env = 0
@@ -280,11 +290,13 @@ Format.eprintf "Inlining application of %a whose body is:@ \n%a\n%!"
       end else begin
         let env = E.inlining_level_up env in
         let env = E.note_entering_inlined env in
+(*
         let env =
           (* We decrement the unrolling count even if the function is recursive
              to avoid having to check whether or not it is recursive *)
           E.inside_unrolled_function env set_of_closures.set_of_closures_origin
         in
+*)
         (* CR mshinwell: note: this next line was missing in the old Flambda *)
         let env = E.inside_inlined_function env function_decl.closure_origin in
         let r_inlined =
@@ -560,9 +572,12 @@ let for_call_site ~env ~r
   let inline_requested : Flambda.inline_attribute =
     match (inline_requested : Flambda.inline_attribute) with
     | Unroll _ ->
+      let unrolling = None in
+(*
       let unrolling =
         E.actively_unrolling env set_of_closures.set_of_closures_origin
       in
+*)
       begin match unrolling with
       | Some _ -> Default_inline
       | None -> inline_requested
@@ -629,10 +644,13 @@ Format.eprintf "Application of %a (%a): inline_requested=%a self_call=%b\n%!"
         ~closure_id:callee's_closure_id ~dbg:dbg
     in
     let simpl =
+      let self_call = false in (* XXX *)
+(*
       let self_call =
         E.inside_set_of_closures_declaration
           set_of_closures.set_of_closures_origin env
       in
+*)
       let try_inlining =
         if self_call then
           Don't_try_it S.Not_inlined.Self_call
@@ -653,12 +671,14 @@ Format.eprintf "Application of %a (%a): inline_requested=%a self_call=%b\n%!"
             ~function_decl ~args ~continuation ~dbg
         in
         let env = E.note_entering_inlined env in
+(*
         let env =
           (* We decrement the unrolling count, even if the function is not
              recursive, to avoid having to check whether or not it is
              recursive. *)
           E.inside_unrolled_function env set_of_closures.set_of_closures_origin
         in
+*)
         let env =
           E.inside_inlined_function env function_decl.closure_origin
         in
@@ -740,10 +760,12 @@ Format.eprintf "Application of %a (%a): inline_requested=%a self_call=%b\n%!"
       else if E.inlining_level env >= max_level then
         Original (D.Prevented Level_exceeded)
       else begin
-        let self_call =
+        let self_call = false in (* XXX *)
+(*
           E.inside_set_of_closures_declaration
             set_of_closures.set_of_closures_origin env
         in
+*)
         let fun_cost =
           lazy
             (Inlining_cost.can_try_inlining function_decl.body

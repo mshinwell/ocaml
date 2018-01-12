@@ -30,12 +30,12 @@ module Int64 = Numbers.Int64
 module Named = Flambda.Named
 module Reachable = Flambda.Reachable
 
-let refine_set_of_closures_type_to_identify_projection r ~result_var
-      ~closure_id =
+let refine_set_of_closures_type_to_identify_projection r
+      ~set_of_closures_name ~result_var ~closure_id =
   let set_of_closures_ty =
     let closure_ty = T.alias_type_of_as_ty_fabricated (Name.var result_var) in
     let closures =
-      Closure_id.Map.add closure closure_ty Closure_id.Map.singleton
+      Closure_id.Map.add closure_id closure_ty Closure_id.Map.empty
     in
     let closure_elements = Var_within_closure.Map.empty in
     let set_of_closures =
@@ -44,10 +44,10 @@ let refine_set_of_closures_type_to_identify_projection r ~result_var
     in
     T.set_of_closures set_of_closures
   in
-  R.add_or_meet_typing_judgement r set_of_closures set_of_closures_ty
+  R.add_or_meet_typing_judgement r set_of_closures_name set_of_closures_ty
 
-let refine_set_of_closures_type_to_identify_closure_element r ~result_var
-      ~var_within_closure =
+let refine_set_of_closures_type_to_identify_closure_element r
+      ~set_of_closures_name ~result_var ~var_within_closure =
   let set_of_closures_ty =
     let closures = Closure_id.Map.empty in
     let var_within_closure_ty = T.alias_type_of_as_ty_value result_var in
@@ -61,7 +61,7 @@ let refine_set_of_closures_type_to_identify_closure_element r ~result_var
     in
     T.set_of_closures set_of_closures
   in
-  R.add_or_meet_typing_judgement r set_of_closures set_of_closures_ty
+  R.add_or_meet_typing_judgement r set_of_closures_var set_of_closures_ty
 
 let simplify_project_closure env r prim ~closure ~set_of_closures dbg
       ~result_var =
@@ -72,8 +72,13 @@ let simplify_project_closure env r prim ~closure ~set_of_closures dbg
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
   let r =
-    refine_set_of_closures_type_to_identify_projection r ~result_var
-      ~closure_id
+    match set_of_closures with
+    | Const _ -> r
+    | Name set_of_closures_name ->
+      refine_set_of_closures_type_to_identify_projection r
+        ~set_of_closures_name
+        ~result_var
+        ~closure_id
   in
   let proof = (E.type_accessor env T.prove_set_of_closures) ty in
   match proof with
@@ -95,16 +100,21 @@ let simplify_move_within_set_of_closures env r prim ~move_from ~move_to
     Reachable.invalid (), T.bottom (K.value Definitely_pointer),
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
-  let r =
-    refine_set_of_closures_type_to_identify_projection r ~result_var
-      ~closure_id
-  in
   let proof = (E.type_accessor env T.prove_closures) ty in
   match proof with
   | Proved by_closure_id ->
     begin match Closure_id.Map.find move_from by_closure_id with
     | exception Not_found -> invalid ()
     | set_of_closures_name, set_of_closures ->
+      let r =
+        match set_of_closures_name with
+        | None -> r
+        | Some set_of_closures_name ->
+          refine_set_of_closures_type_to_identify_projection r
+          ~set_of_closures_name
+          ~result_var
+          ~closure_id
+      in
       begin match T.Set_of_closures.project_closure set_of_closures move_to with
       | Not_in_set -> invalid ()
       | Ok closure_ty ->
@@ -136,10 +146,6 @@ let simplify_project_var env r prim ~closure_id ~var_within_closure
     Reachable.invalid (), T.bottom (K.value Unknown)
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
-  let r =
-    refine_set_of_closures_type_to_identify_projection r ~result_var
-      ~var_within_closure
-  in
   let proof = (E.type_accessor env T.prove_closures) ty in
   match proof with
   | Proved by_closure_id ->
@@ -148,7 +154,14 @@ let simplify_project_var env r prim ~closure_id ~var_within_closure
     | { set_of_closures = set; } ->
       let proof = (E.type_accessor env T.prove_set_of_closures) set in
       begin match proof with
-      | Proved set ->
+      | Proved (set_of_closures_name, set) ->
+        let r =
+          match set_of_closures_name with
+          | None -> r
+          | Some set_of_closures_name ->
+            refine_set_of_closures_type_to_identify_projection r
+              ~set_of_closures_name ~result_var ~var_within_closure
+        in
         begin match
           Var_within_closure.Map.find var_within_closure set.closure_elements
         with
@@ -160,10 +173,6 @@ let simplify_project_var env r prim ~closure_id ~var_within_closure
         Reachable.reachable (original_term ()), T.any_value (), r
       | Invalid -> invalid ()
       end
-      let r =
-        refine_set_of_closures_type_to_identify_closure_element r ~result_var
-          ~var_within_closure
-      in
     end
   | Unknown ->
     Reachable.reachable (original_term ()), T.any_value (), r

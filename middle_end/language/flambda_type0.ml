@@ -202,6 +202,7 @@ end) = struct
     invariant_params : Variable.Set.t lazy_t;
     size : int option lazy_t;
     direct_call_surrogate : Closure_id.t option;
+    my_closure : Variable.t;
   }
 
   and non_inlinable_function_declarations = {
@@ -435,7 +436,8 @@ end) = struct
         @[(is_a_functor %b)@]@,\
         @[(invariant_params %a)@]@,\
         @[(size %a)@]@,\
-        @[(direct_call_surrogate %a)@])@]"
+        @[(direct_call_surrogate %a)@]@,\
+        @[(my_closure %a)@])@]"
       Closure_origin.print decl.closure_origin
       Continuation.print decl.continuation_param
       decl.is_classic_mode
@@ -457,6 +459,7 @@ end) = struct
       Variable.Set.print (Lazy.force decl.invariant_params)
       (Misc.Stdlib.Option.print Format.pp_print_int) (Lazy.force decl.size)
       (Misc.Stdlib.Option.print Closure_id.print) decl.direct_call_surrogate
+      Variable.print decl.my_closure
 
   and print_non_inlinable_function_declarations ppf
         (decl : non_inlinable_function_declarations) =
@@ -1557,7 +1560,7 @@ end) = struct
   let create_inlinable_function_declaration ~is_classic_mode ~closure_origin
         ~continuation_param ~params ~body ~result ~stub ~dbg ~inline
         ~specialise ~is_a_functor ~invariant_params ~size ~direct_call_surrogate
-        : function_declarations =
+        ~my_closure : function_declarations =
     Inlinable {
       closure_origin;
       continuation_param;
@@ -1576,6 +1579,7 @@ end) = struct
       invariant_params;
       size;
       direct_call_surrogate;
+      my_closure;
     }
 
   let create_non_inlinable_function_declaration ~params ~result
@@ -2643,7 +2647,9 @@ end) = struct
                 (Lazy.force inlinable2.invariant_params));
               assert (Pervasives.(=)
                 (Lazy.force inlinable1.size)
-                (Lazy.force inlinable2.size))
+                (Lazy.force inlinable2.size));
+              assert (Variable.equal inlinable1.my_closure
+                inlinable2.my_closure)
             end;
             (* Parameter types are treated covariantly. *)
             (* CR mshinwell: Add documentation for this -- the types provide
@@ -2704,6 +2710,7 @@ end) = struct
               invariant_params = inlinable1.invariant_params;
               size = inlinable1.size;
               direct_call_surrogate;
+              my_closure = inlinable1.my_closure;
             }
           end
       in

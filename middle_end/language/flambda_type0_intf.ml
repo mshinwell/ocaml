@@ -198,6 +198,7 @@ module type S = sig
     (** For functions that are very likely to be inlined, the size of the
         function's body. *)
     direct_call_surrogate : Closure_id.t option;
+    my_closure : Variable.t;
   }
 
   and non_inlinable_function_declarations = private {
@@ -467,6 +468,7 @@ module type S = sig
     -> invariant_params:Variable.Set.t lazy_t
     -> size:int option lazy_t
     -> direct_call_surrogate:Closure_id.t option
+    -> my_closure:Variable.t
     -> function_declarations
 
   val create_non_inlinable_function_declaration

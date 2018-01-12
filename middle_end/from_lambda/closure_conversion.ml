@@ -760,7 +760,7 @@ and close_functions t external_env function_declarations : Flambda.Named.t =
         if Variable.Set.mem var free_var_of_body then
           let projection =
             Flambda_primitive.Project_var
-              (Closure_id.Map.singleton my_closure_id var_within_closure)
+              (my_closure_id, var_within_closure)
           in
           Flambda.Expr.create_let var
             (Flambda_kind.value Definitely_pointer)
