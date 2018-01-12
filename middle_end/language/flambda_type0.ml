@@ -196,26 +196,23 @@ end) = struct
     direct_call_surrogate : Closure_id.t option;
   }
 
-  and non_inlinable_function_declaration = {
+  and non_inlinable_function_declarations = {
+    params : t list;
     result : t list;
+    result_env_extension : typing_environment;
     direct_call_surrogate : Closure_id.t option;
   }
 
-  and function_declaration =
-    | Non_inlinable of non_inlinable_function_declaration option
+  and function_declarations =
+    | Non_inlinable of non_inlinable_function_declarations option
     | Inlinable of inlinable_function_declaration
 
-  and closure = private {
+  and closures_entry = {
     set_of_closures : ty_fabricated;
-    function_decls : function_declaration;
   }
 
-  and closures = closure Closure_id.Map.t
-
-  and set_of_closures = private {
-    closures : ty_value;
-    closure_elements : ty_value Var_within_closure.Map.t;
-  }
+  and closures = private
+    closures_entry Closure_id.Map.t
 
   and 'a of_kind_naked_number =
     | Immediate : Immediate.Set.t -> Immediate.Set.t of_kind_naked_number
@@ -232,6 +229,16 @@ end) = struct
   and of_kind_fabricated =
     | Tag of tag_case Tag.Map.t
     | Set_of_closures of set_of_closures
+    | Closure of closure
+
+  and set_of_closures = {
+    closures : ty_fabricated Closure_id.Map.t;
+    closure_elements : ty_value Var_within_closure.Map.t;
+  }
+
+  and closure = {
+    function_decls : function_declarations;
+  }
 
   and of_kind_phantom =
     | Value of ty_value
@@ -2292,6 +2299,329 @@ end) = struct
       in
       { blocks; immediates; }
 
+    let join_of_kind_foo ~type_of_name
+          (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
+          : of_kind_fabricated or_unknown =
+
+    let meet_of_kind_foo ~type_of_name
+          (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
+          : (of_kind_value * judgements_from_meet) or_bottom =
+      match of_kind1, of_kind2 with
+      | Blocks_and_tagged_immediates blocks_imms1,
+          Blocks_and_tagged_immediates blocks_imms2 ->
+        let blocks_imms =
+          meet_blocks_and_tagged_immediates ~type_of_name
+            blocks_imms1 blocks_imms2
+        in
+        begin match blocks_imms with
+        | Ok (blocks_imms, judgements) ->
+          Ok (Blocks_and_tagged_immediates blocks_imms, judgements)
+        | Bottom -> Bottom
+        end
+      | Boxed_number (Boxed_float n1),
+          Boxed_number (Boxed_float n2) ->
+        let (n : _ ty_naked_number), judgements =
+          Meet_and_join_naked_float.meet_ty ~type_of_name n1 n2
+        in
+        Ok (Boxed_number (Boxed_float n), judgements)
+      | Boxed_number (Boxed_int32 n1),
+          Boxed_number (Boxed_int32 n2) ->
+        let (n : _ ty_naked_number), judgements =
+          Meet_and_join_naked_int32.meet_ty ~type_of_name n1 n2
+        in
+        Ok (Boxed_number (Boxed_int32 n), judgements)
+      | Boxed_number (Boxed_int64 n1),
+          Boxed_number (Boxed_int64 n2) ->
+        let (n : _ ty_naked_number), judgements =
+          Meet_and_join_naked_int64.meet_ty ~type_of_name n1 n2
+        in
+        Ok (Boxed_number (Boxed_int64 n), judgements)
+      | Boxed_number (Boxed_nativeint n1),
+          Boxed_number (Boxed_nativeint n2) ->
+        let (n : _ ty_naked_number), judgements =
+          Meet_and_join_naked_nativeint.meet_ty ~type_of_name n1 n2
+        in
+        Ok (Boxed_number (Boxed_nativeint n), judgements)
+      | Closure closures1, Closure closures2 ->
+        let judgements = ref [] in
+        Closure_id.Map.inter (fun closure1 closure2 ->
+            match meet_closure ~type_of_name closure1 closure2 with
+            | Ok (closures, new_judgements) ->
+              judgements := new_judgements @ !judgements;
+              Some closures
+            | Bottom -> None)
+          closures1
+          closures2
+      | String strs1, String strs2 ->
+        let strs = String_info.Set.inter strs1 strs2 in
+        if String_info.Set.is_empty strs then Bottom
+        else Ok (String strs, [])
+      | (Blocks_and_tagged_immediates _
+          | Boxed_number _
+          | Closure _
+          | String _), _ ->
+        Bottom
+
+    let meet_unk value_kind1 value_kind2 =
+      K.Value_kind.meet value_kind1 value_kind2
+
+    let join_of_kind_foo ~type_of_name
+          (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
+          : of_kind_value or_unknown =
+      match of_kind1, of_kind2 with
+      | Blocks_and_tagged_immediates blocks_imms1,
+          Blocks_and_tagged_immediates blocks_imms2 ->
+        let blocks_imms =
+          join_blocks_and_tagged_immediates ~type_of_name
+            blocks_imms1 blocks_imms2
+        in
+        Known (Blocks_and_tagged_immediates blocks_imms)
+      | Boxed_number (Boxed_float n1), Boxed_number (Boxed_float n2) ->
+        let n : _ ty_naked_number =
+          Meet_and_join_naked_float.join_ty ~type_of_name n1 n2
+        in
+        Known (Boxed_number (Boxed_float n))
+      | Boxed_number (Boxed_int32 n1),
+          Boxed_number (Boxed_int32 n2) ->
+        let n : _ ty_naked_number =
+          Meet_and_join_naked_int32.join_ty ~type_of_name n1 n2
+        in
+        Known (Boxed_number (Boxed_int32 n))
+      | Boxed_number (Boxed_int64 n1),
+          Boxed_number (Boxed_int64 n2) ->
+        let n : _ ty_naked_number =
+          Meet_and_join_naked_int64.join_ty ~type_of_name n1 n2
+        in
+        Known (Boxed_number (Boxed_int64 n))
+      | Boxed_number (Boxed_nativeint n1),
+          Boxed_number (Boxed_nativeint n2) ->
+        let n : _ ty_naked_number =
+          Meet_and_join_naked_nativeint.join_ty ~type_of_name n1 n2
+        in
+        Known (Boxed_number (Boxed_nativeint n))
+      | Closure closures1, Closure closures2 ->
+        Closure_id.Map.union_merge (fun closure1 closure2 ->
+            join_closure ~type_of_name closure1 closure2)
+          closures1
+          closures2
+      | String strs1, String strs2 ->
+        let strs = String_info.Set.union strs1 strs2 in
+        Known (String strs)
+      | (Blocks_and_tagged_immediates _
+          | Boxed_number _
+          | Closure _
+          | String _), _ ->
+        Unknown
+
+    let join_unk value_kind1 value_kind2 =
+      K.Value_kind.join value_kind1 value_kind2
+  end) and Meet_and_join_naked_immediate : sig
+    (* CR mshinwell: See if we can abstract these naked number cases some
+       more? *)
+    include Meet_and_join
+      with type of_kind_foo := Immediate.Set.t of_kind_naked_number
+      with type unk := unit
+  end = Make_meet_and_join (struct
+    type of_kind_foo = Immediate.Set.t of_kind_naked_number
+    type unk = unit
+
+    let to_type ty : t = Naked_number (ty, Naked_immediate)
+    let force_to_kind = force_to_kind_naked_immediate
+
+    let unknown_payload = ()
+
+    let meet_of_kind_foo ~type_of_name:_
+          (of_kind1 : Immediate.Set.t of_kind_naked_number)
+          (of_kind2 : Immediate.Set.t of_kind_naked_number)
+          : (Immediate.Set.t of_kind_naked_number * judgements_from_meet)
+              or_bottom =
+      match of_kind1, of_kind2 with
+      | Immediate fs1, Immediate fs2 ->
+        let fs = Immediate.Set.inter fs1 fs2 in
+        if Immediate.Set.is_empty fs then Bottom
+        else Ok (Immediate fs, [])
+      | _, _ -> Bottom
+
+    let meet_unk () () = ()
+
+    let join_of_kind_foo ~type_of_name:_
+          (of_kind1 : Immediate.Set.t of_kind_naked_number)
+          (of_kind2 : Immediate.Set.t of_kind_naked_number)
+          : Immediate.Set.t of_kind_naked_number or_unknown =
+      match of_kind1, of_kind2 with
+      | Immediate fs1, Immediate fs2 ->
+        let fs = Immediate.Set.union fs1 fs2 in
+        Known (Immediate fs)
+      | _, _ -> Unknown
+
+    let join_unk () () = ()
+  end) and Meet_and_join_naked_float : sig
+    (* CR mshinwell: See if we can abstract these naked number cases some
+       more? *)
+    include Meet_and_join
+      with type of_kind_foo := Float_by_bit_pattern.Set.t of_kind_naked_number
+      with type unk := unit
+  end = Make_meet_and_join (struct
+    type of_kind_foo = Float_by_bit_pattern.Set.t of_kind_naked_number
+    type unk = unit
+
+    let to_type ty = Naked_number (ty, Naked_float)
+    let force_to_kind = force_to_kind_naked_float
+
+    let unknown_payload = ()
+
+    let meet_of_kind_foo ~type_of_name:_
+          (of_kind1 : Float_by_bit_pattern.Set.t of_kind_naked_number)
+          (of_kind2 : Float_by_bit_pattern.Set.t of_kind_naked_number)
+          : (Float_by_bit_pattern.Set.t of_kind_naked_number
+              * judgements_from_meet) or_bottom =
+      match of_kind1, of_kind2 with
+      | Float fs1, Float fs2 ->
+        let fs = Float_by_bit_pattern.Set.inter fs1 fs2 in
+        if Float_by_bit_pattern.Set.is_empty fs then Bottom
+        else Ok (Float fs, [])
+      | _, _ -> Bottom
+
+    let meet_unk () () = ()
+
+    let join_of_kind_foo ~type_of_name:_
+          (of_kind1 : Float_by_bit_pattern.Set.t of_kind_naked_number)
+          (of_kind2 : Float_by_bit_pattern.Set.t of_kind_naked_number)
+          : Float_by_bit_pattern.Set.t of_kind_naked_number or_unknown =
+      match of_kind1, of_kind2 with
+      | Float fs1, Float fs2 ->
+        let fs = Float_by_bit_pattern.Set.union fs1 fs2 in
+        Known (Float fs)
+      | _, _ -> Unknown
+
+    let join_unk () () = ()
+  end) and Meet_and_join_naked_int32 : sig
+    include Meet_and_join
+      with type of_kind_foo := Int32.Set.t of_kind_naked_number
+      with type unk := unit
+  end = Make_meet_and_join (struct
+    type of_kind_foo = Int32.Set.t of_kind_naked_number
+    type unk = unit
+
+    let to_type ty : t = Naked_number (ty, Naked_int32)
+    let force_to_kind = force_to_kind_naked_int32
+
+    let unknown_payload = ()
+
+    let meet_of_kind_foo ~type_of_name:_
+          (of_kind1 : Int32.Set.t of_kind_naked_number)
+          (of_kind2 : Int32.Set.t of_kind_naked_number)
+          : (Int32.Set.t of_kind_naked_number * judgements_from_meet)
+              or_bottom =
+      match of_kind1, of_kind2 with
+      | Int32 is1, Int32 is2 ->
+        let is = Int32.Set.inter is1 is2 in
+        if Int32.Set.is_empty is then Bottom
+        else Ok (Int32 is, [])
+      | _, _ -> Bottom
+
+    let meet_unk () () = ()
+
+    let join_of_kind_foo ~type_of_name:_
+          (of_kind1 : Int32.Set.t of_kind_naked_number)
+          (of_kind2 : Int32.Set.t of_kind_naked_number)
+          : Int32.Set.t of_kind_naked_number or_unknown =
+      match of_kind1, of_kind2 with
+      | Int32 is1, Int32 is2 ->
+        let is = Int32.Set.union is1 is2 in
+        Known (Int32 is)
+      | _, _ -> Unknown
+
+    let join_unk () () = ()
+  end) and Meet_and_join_naked_int64 : sig
+    include Meet_and_join
+      with type of_kind_foo := Int64.Set.t of_kind_naked_number
+      with type unk := unit
+  end = Make_meet_and_join (struct
+    type of_kind_foo = Int64.Set.t of_kind_naked_number
+    type unk = unit
+
+    let to_type ty : t = Naked_number (ty, Naked_int64)
+    let force_to_kind = force_to_kind_naked_int64
+
+    let unknown_payload = ()
+
+    let meet_of_kind_foo ~type_of_name:_
+          (of_kind1 : Int64.Set.t of_kind_naked_number)
+          (of_kind2 : Int64.Set.t of_kind_naked_number)
+          : (Int64.Set.t of_kind_naked_number * judgements_from_meet)
+              or_bottom =
+      match of_kind1, of_kind2 with
+      | Int64 is1, Int64 is2 ->
+        let is = Int64.Set.inter is1 is2 in
+        if Int64.Set.is_empty is then Bottom
+        else Ok (Int64 is, [])
+      | _, _ -> Bottom
+
+    let meet_unk () () = ()
+
+    let join_of_kind_foo ~type_of_name:_
+          (of_kind1 : Int64.Set.t of_kind_naked_number)
+          (of_kind2 : Int64.Set.t of_kind_naked_number)
+          : Int64.Set.t of_kind_naked_number or_unknown =
+      match of_kind1, of_kind2 with
+      | Int64 is1, Int64 is2 ->
+        let is = Int64.Set.union is1 is2 in
+        Known (Int64 is)
+      | _, _ -> Unknown
+
+    let join_unk () () = ()
+  end) and Meet_and_join_naked_nativeint : sig
+    include Meet_and_join
+      with type of_kind_foo := Targetint.Set.t of_kind_naked_number
+      with type unk := unit
+  end = Make_meet_and_join (struct
+    type of_kind_foo = Targetint.Set.t of_kind_naked_number
+    type unk = unit
+
+    let to_type ty : t = Naked_number (ty, Naked_nativeint)
+    let force_to_kind = force_to_kind_naked_nativeint
+
+    let unknown_payload = ()
+
+    let meet_of_kind_foo ~type_of_name:_
+          (of_kind1 : Targetint.Set.t of_kind_naked_number)
+          (of_kind2 : Targetint.Set.t of_kind_naked_number)
+          : (Targetint.Set.t of_kind_naked_number * judgements_from_meet)
+              or_bottom =
+      match of_kind1, of_kind2 with
+      | Nativeint is1, Nativeint is2 ->
+        let is = Targetint.Set.inter is1 is2 in
+        if Targetint.Set.is_empty is then Bottom
+        else Ok (Nativeint is, [])
+      | _, _ -> Bottom
+
+    let meet_unk () () = ()
+
+    let join_of_kind_foo ~type_of_name:_
+          (of_kind1 : Targetint.Set.t of_kind_naked_number)
+          (of_kind2 : Targetint.Set.t of_kind_naked_number)
+          : Targetint.Set.t of_kind_naked_number or_unknown =
+      match of_kind1, of_kind2 with
+      | Nativeint is1, Nativeint is2 ->
+        let is = Targetint.Set.union is1 is2 in
+        Known (Nativeint is)
+      | _, _ -> Unknown
+
+    let join_unk () () = ()
+  end) and Meet_and_join_fabricated : sig
+    include Meet_and_join
+      with type of_kind_foo := of_kind_fabricated
+      with type unk := K.Value_kind.t
+  end = Make_meet_and_join (struct
+    type of_kind_foo = of_kind_fabricated
+    type unk = K.Value_kind.t
+
+    let to_type ty : t = Fabricated ty
+    let force_to_kind = force_to_kind_fabricated
+
+    let unknown_payload = K.Value_kind.Unknown
+
     (* CR mshinwell: We need to work out how to stop direct call
        surrogates from being dropped e.g. when in a second round, a
        function type (with a surrogate) propagated from the first round is
@@ -2620,328 +2950,71 @@ end) = struct
         function_decls;
       }
 
-    let join_of_kind_foo ~type_of_name
-          (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
-          : of_kind_fabricated or_unknown =
+    (* CR mshinwell: Implement more functions in [Identifiable] so that we
+       can avoid exceptions / refs. *)
+    exception Is_bottom
 
-    let meet_of_kind_foo ~type_of_name
-          (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
-          : (of_kind_value * judgements_from_meet) or_bottom =
-      match of_kind1, of_kind2 with
-      | Blocks_and_tagged_immediates blocks_imms1,
-          Blocks_and_tagged_immediates blocks_imms2 ->
-        let blocks_imms =
-          meet_blocks_and_tagged_immediates ~type_of_name
-            blocks_imms1 blocks_imms2
+    let meet_set_of_closures ~type_of_name
+          (set1 : set_of_closures) (set2 : set_of_closures)
+          : (set_of_closures * judgements_from_meet) or_bottom =
+      let judgements = ref [] in
+      try
+        let closures =
+          Closure_id.Map.union_merge (fun ty_fabricated1 ty_fabricated2 ->
+              let meet =
+                Meet_and_join_fabricated.meet_ty ~type_of_name
+                  ty_fabricated1 ty_fabricated2
+              in
+              match meet with
+              | Ok (ty_fabricated, new_judgements) ->
+                judgements := new_judgements @ !judgements;
+                ty_fabricated
+              | Bottom -> raise Bottom)
+            set1.closures
+            set2.closures
         in
-        begin match blocks_imms with
-        | Ok (blocks_imms, judgements) ->
-          Ok (Blocks_and_tagged_immediates blocks_imms, judgements)
-        | Bottom -> Bottom
-        end
-      | Boxed_number (Boxed_float n1),
-          Boxed_number (Boxed_float n2) ->
-        let (n : _ ty_naked_number), judgements =
-          Meet_and_join_naked_float.meet_ty ~type_of_name n1 n2
+        let closure_elements =
+          Closure_id.Map.union_merge (fun ty_value1 ty_value2 ->
+              let meet =
+                Meet_and_join_value.meet_ty ~type_of_name
+                  ty_value1 ty_value2
+              in
+              match meet with
+              | Ok (ty_value, new_judgements) ->
+                judgements := new_judgements @ !judgements;
+                ty_value
+              | Bottom -> raise Bottom)
+            set1.closure_elements
+            set2.closure_elements
         in
-        Ok (Boxed_number (Boxed_float n), judgements)
-      | Boxed_number (Boxed_int32 n1),
-          Boxed_number (Boxed_int32 n2) ->
-        let (n : _ ty_naked_number), judgements =
-          Meet_and_join_naked_int32.meet_ty ~type_of_name n1 n2
+        let set : set_of_closures =
+          { closures;
+            closure_elements;
+          }
         in
-        Ok (Boxed_number (Boxed_int32 n), judgements)
-      | Boxed_number (Boxed_int64 n1),
-          Boxed_number (Boxed_int64 n2) ->
-        let (n : _ ty_naked_number), judgements =
-          Meet_and_join_naked_int64.meet_ty ~type_of_name n1 n2
-        in
-        Ok (Boxed_number (Boxed_int64 n), judgements)
-      | Boxed_number (Boxed_nativeint n1),
-          Boxed_number (Boxed_nativeint n2) ->
-        let (n : _ ty_naked_number), judgements =
-          Meet_and_join_naked_nativeint.meet_ty ~type_of_name n1 n2
-        in
-        Ok (Boxed_number (Boxed_nativeint n), judgements)
-      | Closure closures1, Closure closures2 ->
-        let judgements = ref [] in
-        Closure_id.Map.inter (fun closure1 closure2 ->
-            match meet_closure ~type_of_name closure1 closure2 with
-            | Ok (closures, new_judgements) ->
-              judgements := new_judgements @ !judgements;
-              Some closures
-            | Bottom -> None)
-          closures1
-          closures2
-      | String strs1, String strs2 ->
-        let strs = String_info.Set.inter strs1 strs2 in
-        if String_info.Set.is_empty strs then Bottom
-        else Ok (String strs, [])
-      | (Blocks_and_tagged_immediates _
-          | Boxed_number _
-          | Closure _
-          | String _), _ ->
-        Bottom
+        Ok (set, !judgements)
+      with Is_bottom -> Bottom
 
-    let meet_unk value_kind1 value_kind2 =
-      K.Value_kind.meet value_kind1 value_kind2
-
-    let join_of_kind_foo ~type_of_name
-          (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
-          : of_kind_value or_unknown =
-      match of_kind1, of_kind2 with
-      | Blocks_and_tagged_immediates blocks_imms1,
-          Blocks_and_tagged_immediates blocks_imms2 ->
-        let blocks_imms =
-          join_blocks_and_tagged_immediates ~type_of_name
-            blocks_imms1 blocks_imms2
-        in
-        Known (Blocks_and_tagged_immediates blocks_imms)
-      | Boxed_number (Boxed_float n1), Boxed_number (Boxed_float n2) ->
-        let n : _ ty_naked_number =
-          Meet_and_join_naked_float.join_ty ~type_of_name n1 n2
-        in
-        Known (Boxed_number (Boxed_float n))
-      | Boxed_number (Boxed_int32 n1),
-          Boxed_number (Boxed_int32 n2) ->
-        let n : _ ty_naked_number =
-          Meet_and_join_naked_int32.join_ty ~type_of_name n1 n2
-        in
-        Known (Boxed_number (Boxed_int32 n))
-      | Boxed_number (Boxed_int64 n1),
-          Boxed_number (Boxed_int64 n2) ->
-        let n : _ ty_naked_number =
-          Meet_and_join_naked_int64.join_ty ~type_of_name n1 n2
-        in
-        Known (Boxed_number (Boxed_int64 n))
-      | Boxed_number (Boxed_nativeint n1),
-          Boxed_number (Boxed_nativeint n2) ->
-        let n : _ ty_naked_number =
-          Meet_and_join_naked_nativeint.join_ty ~type_of_name n1 n2
-        in
-        Known (Boxed_number (Boxed_nativeint n))
-      | Closure closures1, Closure closures2 ->
-        Closure_id.Map.union_merge (fun closure1 closure2 ->
-            join_closure ~type_of_name closure1 closure2)
-          closures1
-          closures2
-      | String strs1, String strs2 ->
-        let strs = String_info.Set.union strs1 strs2 in
-        Known (String strs)
-      | (Blocks_and_tagged_immediates _
-          | Boxed_number _
-          | Closure _
-          | String _), _ ->
-        Unknown
-
-    let join_unk value_kind1 value_kind2 =
-      K.Value_kind.join value_kind1 value_kind2
-  end) and Meet_and_join_naked_immediate : sig
-    (* CR mshinwell: See if we can abstract these naked number cases some
-       more? *)
-    include Meet_and_join
-      with type of_kind_foo := Immediate.Set.t of_kind_naked_number
-      with type unk := unit
-  end = Make_meet_and_join (struct
-    type of_kind_foo = Immediate.Set.t of_kind_naked_number
-    type unk = unit
-
-    let to_type ty : t = Naked_number (ty, Naked_immediate)
-    let force_to_kind = force_to_kind_naked_immediate
-
-    let unknown_payload = ()
-
-    let meet_of_kind_foo ~type_of_name:_
-          (of_kind1 : Immediate.Set.t of_kind_naked_number)
-          (of_kind2 : Immediate.Set.t of_kind_naked_number)
-          : (Immediate.Set.t of_kind_naked_number * judgements_from_meet)
-              or_bottom =
-      match of_kind1, of_kind2 with
-      | Immediate fs1, Immediate fs2 ->
-        let fs = Immediate.Set.inter fs1 fs2 in
-        if Immediate.Set.is_empty fs then Bottom
-        else Ok (Immediate fs, [])
-      | _, _ -> Bottom
-
-    let meet_unk () () = ()
-
-    let join_of_kind_foo ~type_of_name:_
-          (of_kind1 : Immediate.Set.t of_kind_naked_number)
-          (of_kind2 : Immediate.Set.t of_kind_naked_number)
-          : Immediate.Set.t of_kind_naked_number or_unknown =
-      match of_kind1, of_kind2 with
-      | Immediate fs1, Immediate fs2 ->
-        let fs = Immediate.Set.union fs1 fs2 in
-        Known (Immediate fs)
-      | _, _ -> Unknown
-
-    let join_unk () () = ()
-  end) and Meet_and_join_naked_float : sig
-    (* CR mshinwell: See if we can abstract these naked number cases some
-       more? *)
-    include Meet_and_join
-      with type of_kind_foo := Float_by_bit_pattern.Set.t of_kind_naked_number
-      with type unk := unit
-  end = Make_meet_and_join (struct
-    type of_kind_foo = Float_by_bit_pattern.Set.t of_kind_naked_number
-    type unk = unit
-
-    let to_type ty = Naked_number (ty, Naked_float)
-    let force_to_kind = force_to_kind_naked_float
-
-    let unknown_payload = ()
-
-    let meet_of_kind_foo ~type_of_name:_
-          (of_kind1 : Float_by_bit_pattern.Set.t of_kind_naked_number)
-          (of_kind2 : Float_by_bit_pattern.Set.t of_kind_naked_number)
-          : (Float_by_bit_pattern.Set.t of_kind_naked_number
-              * judgements_from_meet) or_bottom =
-      match of_kind1, of_kind2 with
-      | Float fs1, Float fs2 ->
-        let fs = Float_by_bit_pattern.Set.inter fs1 fs2 in
-        if Float_by_bit_pattern.Set.is_empty fs then Bottom
-        else Ok (Float fs, [])
-      | _, _ -> Bottom
-
-    let meet_unk () () = ()
-
-    let join_of_kind_foo ~type_of_name:_
-          (of_kind1 : Float_by_bit_pattern.Set.t of_kind_naked_number)
-          (of_kind2 : Float_by_bit_pattern.Set.t of_kind_naked_number)
-          : Float_by_bit_pattern.Set.t of_kind_naked_number or_unknown =
-      match of_kind1, of_kind2 with
-      | Float fs1, Float fs2 ->
-        let fs = Float_by_bit_pattern.Set.union fs1 fs2 in
-        Known (Float fs)
-      | _, _ -> Unknown
-
-    let join_unk () () = ()
-  end) and Meet_and_join_naked_int32 : sig
-    include Meet_and_join
-      with type of_kind_foo := Int32.Set.t of_kind_naked_number
-      with type unk := unit
-  end = Make_meet_and_join (struct
-    type of_kind_foo = Int32.Set.t of_kind_naked_number
-    type unk = unit
-
-    let to_type ty : t = Naked_number (ty, Naked_int32)
-    let force_to_kind = force_to_kind_naked_int32
-
-    let unknown_payload = ()
-
-    let meet_of_kind_foo ~type_of_name:_
-          (of_kind1 : Int32.Set.t of_kind_naked_number)
-          (of_kind2 : Int32.Set.t of_kind_naked_number)
-          : (Int32.Set.t of_kind_naked_number * judgements_from_meet)
-              or_bottom =
-      match of_kind1, of_kind2 with
-      | Int32 is1, Int32 is2 ->
-        let is = Int32.Set.inter is1 is2 in
-        if Int32.Set.is_empty is then Bottom
-        else Ok (Int32 is, [])
-      | _, _ -> Bottom
-
-    let meet_unk () () = ()
-
-    let join_of_kind_foo ~type_of_name:_
-          (of_kind1 : Int32.Set.t of_kind_naked_number)
-          (of_kind2 : Int32.Set.t of_kind_naked_number)
-          : Int32.Set.t of_kind_naked_number or_unknown =
-      match of_kind1, of_kind2 with
-      | Int32 is1, Int32 is2 ->
-        let is = Int32.Set.union is1 is2 in
-        Known (Int32 is)
-      | _, _ -> Unknown
-
-    let join_unk () () = ()
-  end) and Meet_and_join_naked_int64 : sig
-    include Meet_and_join
-      with type of_kind_foo := Int64.Set.t of_kind_naked_number
-      with type unk := unit
-  end = Make_meet_and_join (struct
-    type of_kind_foo = Int64.Set.t of_kind_naked_number
-    type unk = unit
-
-    let to_type ty : t = Naked_number (ty, Naked_int64)
-    let force_to_kind = force_to_kind_naked_int64
-
-    let unknown_payload = ()
-
-    let meet_of_kind_foo ~type_of_name:_
-          (of_kind1 : Int64.Set.t of_kind_naked_number)
-          (of_kind2 : Int64.Set.t of_kind_naked_number)
-          : (Int64.Set.t of_kind_naked_number * judgements_from_meet)
-              or_bottom =
-      match of_kind1, of_kind2 with
-      | Int64 is1, Int64 is2 ->
-        let is = Int64.Set.inter is1 is2 in
-        if Int64.Set.is_empty is then Bottom
-        else Ok (Int64 is, [])
-      | _, _ -> Bottom
-
-    let meet_unk () () = ()
-
-    let join_of_kind_foo ~type_of_name:_
-          (of_kind1 : Int64.Set.t of_kind_naked_number)
-          (of_kind2 : Int64.Set.t of_kind_naked_number)
-          : Int64.Set.t of_kind_naked_number or_unknown =
-      match of_kind1, of_kind2 with
-      | Int64 is1, Int64 is2 ->
-        let is = Int64.Set.union is1 is2 in
-        Known (Int64 is)
-      | _, _ -> Unknown
-
-    let join_unk () () = ()
-  end) and Meet_and_join_naked_nativeint : sig
-    include Meet_and_join
-      with type of_kind_foo := Targetint.Set.t of_kind_naked_number
-      with type unk := unit
-  end = Make_meet_and_join (struct
-    type of_kind_foo = Targetint.Set.t of_kind_naked_number
-    type unk = unit
-
-    let to_type ty : t = Naked_number (ty, Naked_nativeint)
-    let force_to_kind = force_to_kind_naked_nativeint
-
-    let unknown_payload = ()
-
-    let meet_of_kind_foo ~type_of_name:_
-          (of_kind1 : Targetint.Set.t of_kind_naked_number)
-          (of_kind2 : Targetint.Set.t of_kind_naked_number)
-          : (Targetint.Set.t of_kind_naked_number * judgements_from_meet)
-              or_bottom =
-      match of_kind1, of_kind2 with
-      | Nativeint is1, Nativeint is2 ->
-        let is = Targetint.Set.inter is1 is2 in
-        if Targetint.Set.is_empty is then Bottom
-        else Ok (Nativeint is, [])
-      | _, _ -> Bottom
-
-    let meet_unk () () = ()
-
-    let join_of_kind_foo ~type_of_name:_
-          (of_kind1 : Targetint.Set.t of_kind_naked_number)
-          (of_kind2 : Targetint.Set.t of_kind_naked_number)
-          : Targetint.Set.t of_kind_naked_number or_unknown =
-      match of_kind1, of_kind2 with
-      | Nativeint is1, Nativeint is2 ->
-        let is = Targetint.Set.union is1 is2 in
-        Known (Nativeint is)
-      | _, _ -> Unknown
-
-    let join_unk () () = ()
-  end) and Meet_and_join_fabricated : sig
-    include Meet_and_join
-      with type of_kind_foo := of_kind_fabricated
-      with type unk := K.Value_kind.t
-  end = Make_meet_and_join (struct
-    type of_kind_foo = of_kind_fabricated
-    type unk = K.Value_kind.t
-
-    let to_type ty : t = Fabricated ty
-    let force_to_kind = force_to_kind_fabricated
-
-    let unknown_payload = K.Value_kind.Unknown
+    let join_set_of_closures ~type_of_name
+          (set1 : set_of_closures) (set2 : set_of_closures)
+          : set_of_closures =
+      let closures =
+        Closure_id.Map.inter_merge (fun ty_fabricated1 ty_fabricated2 ->
+            Meet_and_join_fabricated.join_ty ~type_of_name
+              ty_fabricated1 ty_fabricated2)
+          set1.closures
+          set2.closures
+      in
+      let closure_elements =
+        Closure_id.Map.inter_merge (fun ty_value1 ty_value2 ->
+            Meet_and_join_value.join_ty ~type_of_name
+              ty_value1 ty_value2)
+          set1.closure_elements
+          set2.closure_elements
+      in
+      { closures;
+        closure_elements;
+      }
 
     let meet_of_kind_foo ~type_of_name
           (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
@@ -2963,9 +3036,20 @@ end) = struct
             tags2
         in
         Ok (Tag tags, [])
-      | Set_of_closures set1, Set_of_closures _set2 ->
-        Ok (Set_of_closures set1, [])  (* XXX pchambart to fix *)
-      | (Tag _ | Set_of_closures _), _ -> Bottom
+      | Set_of_closures set1, Set_of_closures set2 ->
+        begin match
+          meet_set_of_closures ~type_of_name set_of_closures1 set_of_closures2
+        with
+        | Ok (set_of_closures, judgements) ->
+          Ok (Set_of_closures set_of_closures, judgements)
+        | Bottom -> Bottom
+        end
+      | Closure closure1, Closure closure2 ->
+        begin match meet_closure ~type_of_name closure1 closure2 with
+        | Ok (closure, judgements) -> Ok (Closure closure, judgements)
+        | Bottom -> Bottom
+        end
+      | (Tag _ | Set_of_closures _ | Closure _), _ -> Bottom
 
     let meet_unk value_kind1 value_kind2 =
       K.Value_kind.meet value_kind1 value_kind2
@@ -2990,8 +3074,14 @@ end) = struct
         in
         Known (Tag tags)
       | Set_of_closures set1, Set_of_closures _set2 ->
-        Known (Set_of_closures set1)  (* XXX pchambart to fix *)
-      | _, _ -> Unknown
+        let set_of_closures =
+          join_set_of_closures ~type_of_name set_of_closures1 set_of_closures2
+        in
+        Known (Set_of_closures set_of_closures)
+      | Closure closure1, Closure closure2 ->
+        let closure = join_closure ~type_of_name closure1 closure2 in
+        Known (Closure closure)
+      | (Tag _ | Set_of_closures _ | Closure _), _ -> Unknown
 
     let join_unk value_kind1 value_kind2 =
       K.Value_kind.join value_kind1 value_kind2
