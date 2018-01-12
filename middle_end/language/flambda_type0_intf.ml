@@ -450,6 +450,8 @@ module type S = sig
 
   val bottom_as_ty_value : unit -> ty_value
 
+  val bottom_as_ty_fabricated : unit -> ty_fabricated
+
   val create_inlinable_function_declaration
      : is_classic_mode:bool
     -> closure_origin:Closure_origin.t

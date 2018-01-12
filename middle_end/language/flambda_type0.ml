@@ -808,6 +808,9 @@ end) = struct
   let bottom_as_ty_value () : ty_value =
     No_alias (Join [])
 
+  let bottom_as_ty_fabricated () : ty_fabricated =
+    No_alias (Join [])
+
   let bottom (kind : K.t) : t =
     match kind with
     | Value _ -> Value (bottom_as_ty_value ())
@@ -2710,38 +2713,123 @@ end) = struct
           (set1 : set_of_closures) (set2 : set_of_closures)
           : (set_of_closures * judgements_from_meet) or_bottom =
       let judgements = ref [] in
-      let closures =
-        Closure_id.Map.inter (fun ty_fabricated1 ty_fabricated2 ->
-            let ty_fabricated, new_judgements =
-              Meet_and_join_fabricated.meet_ty ~type_of_name
-                ty_fabricated1 ty_fabricated2
-            in
-            if ty_is_obviously_bottom ty_fabricated then begin
-              None
-            end else begin
-              judgements := new_judgements @ !judgements;
-              Some ty_fabricated
-            end)
-          set1.closures
-          set2.closures
+      (* CR mshinwell: Try to refactor this code to shorten it. *)
+      let closures : _ extensibility =
+        match set1.closures, set2.closures with
+        | Exactly closures1, Exactly closures2 ->
+          let closures =
+            Closure_id.Map.inter (fun ty_fabricated1 ty_fabricated2 ->
+                let ty_fabricated, new_judgements =
+                  Meet_and_join_fabricated.meet_ty ~type_of_name
+                    ty_fabricated1 ty_fabricated2
+                in
+                if ty_is_obviously_bottom ty_fabricated then begin
+                  None
+                end else begin
+                  judgements := new_judgements @ !judgements;
+                  Some ty_fabricated
+                end)
+              closures1
+              closures2
+          in
+          Exactly closures
+        | Exactly closures1, Open closures2
+        | Open closures2, Exactly closures1 ->
+          let closures =
+            Closure_id.Map.filter_map closures1 ~f:(fun closure_id ty1 ->
+              match Closure_id.Map.find closure_id closures2 with
+              | exception Not_found -> Some ty1
+              | ty2 ->
+                let ty_fabricated, new_judgements =
+                  Meet_and_join_fabricated.meet_ty ~type_of_name ty1 ty2
+                in
+                if ty_is_obviously_bottom ty_fabricated then begin
+                  None
+                end else begin
+                  judgements := new_judgements @ !judgements;
+                  Some ty_fabricated
+                end)
+          in
+          Exactly closures
+        | Open closures1, Open closures2 ->
+          let closures =
+            Closure_id.Map.union_merge (fun ty_fabricated1 ty_fabricated2 ->
+                let ty_fabricated, new_judgements =
+                  Meet_and_join_fabricated.meet_ty ~type_of_name
+                    ty_fabricated1 ty_fabricated2
+                in
+                if ty_is_obviously_bottom ty_fabricated then begin
+                  bottom_as_ty_fabricated ()
+                end else begin
+                  judgements := new_judgements @ !judgements;
+                  ty_fabricated
+                end)
+              closures1
+              closures2
+          in
+          Open closures
       in
       let closure_elements =
-        Var_within_closure.Map.inter (fun ty_value1 ty_value2 ->
-            let ty_value, new_judgements =
-              Meet_and_join_value.meet_ty ~type_of_name
-                ty_value1 ty_value2
-            in
-            if ty_is_obviously_bottom ty_value then begin
-              None
-            end else begin
-              judgements := new_judgements @ !judgements;
-              Some ty_value
-            end)
-          set1.closure_elements
-          set2.closure_elements
+        match set1.closure_elements, set2.closure_elements with
+        | Exactly closure_elements1, Exactly closure_elements2 ->
+          let closure_elements =
+            Var_within_closure.Map.inter (fun ty_value1 ty_value2 ->
+                let ty_value, new_judgements =
+                  Meet_and_join_value.meet_ty ~type_of_name
+                    ty_value1 ty_value2
+                in
+                if ty_is_obviously_bottom ty_value then begin
+                  None
+                end else begin
+                  judgements := new_judgements @ !judgements;
+                  Some ty_value
+                end)
+              closure_elements1
+              closure_elements2
+          in
+          Exactly closure_elements
+        | Exactly closure_elements1, Open closure_elements2
+        | Open closure_elements2, Exactly closure_elements1 ->
+          let closure_elements =
+            Var_within_closure.Map.filter_map closure_elements1
+              ~f:(fun closure_id ty1 ->
+                match
+                  Var_within_closure.Map.find closure_id closure_elements2
+                with
+                | exception Not_found -> Some ty1
+                | ty2 ->
+                  let ty_value, new_judgements =
+                    Meet_and_join_value.meet_ty ~type_of_name ty1 ty2
+                  in
+                  if ty_is_obviously_bottom ty_value then begin
+                    None
+                  end else begin
+                    judgements := new_judgements @ !judgements;
+                    Some ty_value
+                  end)
+          in
+          Exactly closure_elements
+        | Open closure_elements1, Open closure_elements2 ->
+          let closure_elements =
+            Var_within_closure.Map.union_merge (fun ty_value1 ty_value2 ->
+                let ty_value, new_judgements =
+                  Meet_and_join_value.meet_ty ~type_of_name
+                    ty_value1 ty_value2
+                in
+                if ty_is_obviously_bottom ty_value then begin
+                  bottom_as_ty_value ()
+                end else begin
+                  judgements := new_judgements @ !judgements;
+                  ty_value
+                end)
+              closure_elements1
+              closure_elements2
+          in
+          Open closure_elements
       in
-      if Closure_id.Map.is_empty closures then Bottom
-      else
+      match closures with
+      | Exactly map when Closure_id.Map.is_empty map -> Bottom
+      | _ ->
         let set : set_of_closures =
           { closures;
             closure_elements;
@@ -2752,19 +2840,77 @@ end) = struct
     let join_set_of_closures ~type_of_name
           (set1 : set_of_closures) (set2 : set_of_closures)
           : set_of_closures =
-      let closures =
-        Closure_id.Map.union_merge (fun ty_fabricated1 ty_fabricated2 ->
-            Meet_and_join_fabricated.join_ty ~type_of_name
-              ty_fabricated1 ty_fabricated2)
-          set1.closures
-          set2.closures
+      let closures : _ extensibility =
+        match set1.closures, set2.closures with
+        | Exactly closures1, Exactly closures2 ->
+          let closures =
+            Closure_id.Map.union_merge
+              (fun ty_fabricated1 ty_fabricated2 ->
+                Meet_and_join_fabricated.join_ty ~type_of_name
+                  ty_fabricated1 ty_fabricated2)
+              closures1
+              closures2
+          in
+          Exactly closures
+        | Exactly closures1, Open closures2
+        | Open closures1, Exactly closures2 ->
+          let closures =
+            Closure_id.Map.union_merge
+              (fun ty_fabricated1 ty_fabricated2 ->
+                Meet_and_join_fabricated.join_ty ~type_of_name
+                  ty_fabricated1 ty_fabricated2)
+              closures1
+              closures2
+          in
+          Open closures
+        | Open closures1, Open closures2 ->
+          let closures =
+            Closure_id.Map.union_both
+              (fun _ty_fabricated ->
+                any_fabricated_as_ty_fabricated Definitely_pointer)
+              (fun ty_fabricated1 ty_fabricated2 ->
+                Meet_and_join_fabricated.join_ty ~type_of_name
+                  ty_fabricated1 ty_fabricated2)
+              closures1
+              closures2
+          in
+          Open closures
       in
-      let closure_elements =
-        Var_within_closure.Map.union_merge (fun ty_value1 ty_value2 ->
-            Meet_and_join_value.join_ty ~type_of_name
-              ty_value1 ty_value2)
-          set1.closure_elements
-          set2.closure_elements
+      let closure_elements : _ extensibility =
+        match set1.closure_elements, set2.closure_elements with
+        | Exactly closure_elements1, Exactly closure_elements2 ->
+          let closure_elements =
+            Var_within_closure.Map.union_merge
+              (fun ty_value1 ty_value2 ->
+                Meet_and_join_value.join_ty ~type_of_name
+                  ty_value1 ty_value2)
+              closure_elements1
+              closure_elements2
+          in
+          Exactly closure_elements
+        | Exactly closure_elements1, Open closure_elements2
+        | Open closure_elements1, Exactly closure_elements2 ->
+          let closure_elements =
+            Var_within_closure.Map.union_merge
+              (fun ty_value1 ty_value2 ->
+                Meet_and_join_value.join_ty ~type_of_name
+                  ty_value1 ty_value2)
+              closure_elements1
+              closure_elements2
+          in
+          Open closure_elements
+        | Open closure_elements1, Open closure_elements2 ->
+          let closure_elements =
+            Var_within_closure.Map.union_both
+              (fun _ty_value ->
+                any_value_as_ty_value Definitely_pointer)
+              (fun ty_value1 ty_value2 ->
+                Meet_and_join_value.join_ty ~type_of_name
+                  ty_value1 ty_value2)
+              closure_elements1
+              closure_elements2
+          in
+          Open closure_elements
       in
       { closures;
         closure_elements;
