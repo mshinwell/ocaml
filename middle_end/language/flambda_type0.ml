@@ -770,6 +770,8 @@ end) = struct
 
   let alias_type_of_as_ty_value name : ty_value = Type_of name
 
+  let alias_type_of_as_ty_fabricated name : ty_fabricated = Type_of name
+
   let alias_type (kind : K.t) export_id : t =
     match kind with
     | Value _ -> Value (Type export_id)
@@ -807,6 +809,9 @@ end) = struct
 
   let any_value_as_ty_value value_kind : ty_value =
     No_alias (Unknown value_kind)
+
+  let any_fabricated_as_ty_fabricated fabricated_kind : ty_fabricated =
+    No_alias (Unknown fabricated_kind)
 
   let any_naked_float_as_ty_naked_float () : _ ty_naked_number =
     No_alias (Unknown ())

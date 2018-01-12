@@ -30,16 +30,53 @@ module Int64 = Numbers.Int64
 module Named = Flambda.Named
 module Reachable = Flambda.Reachable
 
-let simplify_project_closure env r prim ~closure ~set_of_closures dbg =
-  let arg, ty = S.simplify_simple env arg in
-  let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
+let refine_set_of_closures_type_to_identify_projection r ~result_var
+      ~closure_id =
+  let set_of_closures_ty =
+    let closure_ty = T.alias_type_of_as_ty_fabricated (Name.var result_var) in
+    let closures =
+      Closure_id.Map.add closure closure_ty Closure_id.Map.singleton
+    in
+    let closure_elements = Var_within_closure.Map.empty in
+    let set_of_closures =
+      T.create_set_of_closures ~closures ~closure_elements
+    in
+    T.set_of_closures set_of_closures
+  in
+  R.add_or_meet_typing_judgement r set_of_closures set_of_closures_ty
+
+let refine_set_of_closures_type_to_identify_closure_element r ~result_var
+      ~var_within_closure =
+  let set_of_closures_ty =
+    let closure_ty = T.any_fabricated_as_ty_fabricated () in
+    let closures =
+      Closure_id.Map.add closure closure_ty Closure_id.Map.singleton
+    in
+    let var_within_closure_ty = T.alias_type_of_as_ty_value result_var in
+    let closure_elements =
+      Var_within_closure.Map.add var_within_closure var_within_closure_ty
+        Var_within_closure.Map.empty
+    in
+    let set_of_closures =
+      T.create_set_of_closures ~closures ~closure_elements
+    in
+    T.set_of_closures set_of_closures
+  in
+  R.add_or_meet_typing_judgement r set_of_closures set_of_closures_ty
+
+let simplify_project_closure env r prim ~closure ~set_of_closures dbg
+      ~result_var =
+  let set_of_closures, ty = S.simplify_simple env set_of_closures in
+  let original_term () : Named.t = Prim (Unary (prim, set_of_closures), dbg) in
   let invalid () =
     Reachable.invalid (), T.bottom (K.value Definitely_pointer),
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
+  let r =
+    refine_set_of_closures_type_to_identify_projection r ~result_var
+      ~closure_id
+  in
   let proof = (E.type_accessor env T.prove_set_of_closures) ty in
-  (* CR mshinwell: We need to think about the old "project_var Projection.t"
-     thing which is used for unboxing of free variables of closures *)
   match proof with
   | Proved set_of_closures ->
     begin match T.Set_of_closures.project_closure set_of_closures closure with
@@ -52,12 +89,16 @@ let simplify_project_closure env r prim ~closure ~set_of_closures dbg =
   | Invalid -> invalid ()
 
 let simplify_move_within_set_of_closures env r prim ~move_from ~move_to
-      ~closure dbg =
-  let arg, ty = S.simplify_simple env arg in
-  let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
+      ~closures dbg ~result_var =
+  let closures, ty = S.simplify_simple env closures in
+  let original_term () : Named.t = Prim (Unary (prim, closures), dbg) in
   let invalid () =
     Reachable.invalid (), T.bottom (K.value Definitely_pointer),
       R.map_benefit r (B.remove_primitive (Unary prim))
+  in
+  let r =
+    refine_set_of_closures_type_to_identify_projection r ~result_var
+      ~closure_id
   in
   let proof = (E.type_accessor env T.prove_closures) ty in
   match proof with
@@ -96,273 +137,38 @@ let simplify_project_var env r prim ~closure_id ~var_within_closure
     Reachable.invalid (), T.bottom (K.value Unknown)
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
+  let r =
+    refine_set_of_closures_type_to_identify_projection r ~result_var
+      ~var_within_closure
+  in
   let proof = (E.type_accessor env T.prove_closures) ty in
   match proof with
   | Proved by_closure_id ->
-    begin match Closure_id.Map.find move_from by_closure_id with
-    | exception Not_found -> ()
-    | _ -> ()
+    begin match Closure_id.Map.find closure_id by_closure_id with
+    | exception Not_found -> invalid ()
+    | { set_of_closures = set; } ->
+      let proof = (E.type_accessor env T.prove_set_of_closures) set in
+      begin match proof with
+      | Proved set ->
+        begin match
+          Var_within_closure.Map.find var_within_closure set.closure_elements
+        with
+        | exception Not_found -> invalid ()
+        | Ok var_within_closure_ty ->
+          Reachable.reachable (original_term ()), var_within_closure_ty, r
+        end
+      | Unknown ->
+        Reachable.reachable (original_term ()), T.any_value (), r
+      | Invalid -> invalid ()
+      end
+      let r =
+        refine_set_of_closures_type_to_identify_closure_element r ~result_var
+          ~var_within_closure
+      in
     end
   | Unknown ->
     Reachable.reachable (original_term ()), T.any_value (), r
   | Invalid -> invalid ()
-
-
-(*
-(* Simplify an expression that, given one closure within some set of
-   closures, returns another closure (possibly the same one) within the
-   same set. *)
-let simplify_move_within_set_of_closures env r
-      ~(move_within_set_of_closures : Projection.Move_within_set_of_closures.t)
-      : named_simplifier =
-  let closure, closure_ty =
-    freshen_and_squash_aliases env move_within_set_of_closures.closure
-  in
-  match T.prove_closure_allowing_unresolved closure_ty with
-  | Wrong ->
-    Misc.fatal_errorf "Wrong Flambda type when moving within set of \
-        closures.  Flambda type: %a  Term: %a"
-      T.print closure_ty
-      Flambda.print_move_within_set_of_closures move_within_set_of_closures
-  | Unresolved sym ->
-    [], Reachable (Move_within_set_of_closures {
-        closure;
-        move = move_within_set_of_closures.move;
-      }),
-      ret r (T.unresolved_symbol sym)
-  | Unknown ->
-    [], Reachable (Move_within_set_of_closures {
-        closure;
-        move = move_within_set_of_closures.move;
-      }),
-      ret r (T.unknown Value Other)
-  | Unknown_because_of_unresolved_value value ->
-    (* For example: a move upon a (move upon a closure whose .cmx file
-        is missing). *)
-    [], Reachable (Move_within_set_of_closures {
-        closure;
-        move = move_within_set_of_closures.move;
-      }),
-      ret r (T.unknown Value (Unresolved_value value))
-  | Ok (value_closures, set_of_closures_var, set_of_closures_symbol) ->
-    let () =
-      match Closure_id.Map.bindings value_closures with
-      | _ :: _ :: _ ->
-        Format.printf "Closure type is not a singleton in \
-            move@ %a@ %a@."
-          T.print closure_ty
-          Projection.print_move_within_set_of_closures
-          move_within_set_of_closures
-      | [] ->
-        Format.printf "Closure type is empty in move@ %a@ %a@."
-          T.print closure_ty
-          Projection.print_move_within_set_of_closures
-          move_within_set_of_closures
-      | _ ->
-        ()
-    in
-    (* Freshening of the move. *)
-    let move, type_map =
-      Closure_id.Map.fold
-        (fun closure_id_in_type
-              (value_set_of_closures:T.set_of_closures)
-              (move, type_map) ->
-          (* Pas efficace: on refait le freshening de tout pour ne
-             garder que la partie pertinente, mais n'est pas très
-             grave parce que ces map sont petites (normalement) *)
-          let freshened_move =
-            Freshening.freshen_move_within_set_of_closures
-              ~closure_freshening:value_set_of_closures.freshening
-              move_within_set_of_closures.move
-          in
-          let start_from = closure_id_in_type in
-          let move_to =
-            try Closure_id.Map.find start_from freshened_move with
-            | Not_found ->
-              Misc.fatal_errorf "Move %a freshened to %a does not contain \
-                                  projection for %a@.  Type is:@ %a@.\
-                                  Environment:@ %a@."
-                Projection.print_move_within_set_of_closures
-                  move_within_set_of_closures
-                (Closure_id.Map.print Closure_id.print) freshened_move
-                Closure_id.print start_from
-                (Closure_id.Map.print T.print_value_set_of_closures)
-                  value_closures
-                E.print env
-          in
-          assert(not (Closure_id.Map.mem start_from move));
-          Closure_id.Map.add start_from move_to move,
-          Closure_id.Map.add move_to value_set_of_closures type_map)
-        value_closures (Closure_id.Map.empty, Closure_id.Map.empty)
-    in
-    let projection : Projection.t =
-      Move_within_set_of_closures {
-        closure;
-        move;
-      }
-    in
-    match Closure_id.Map.get_singleton value_closures,
-          Closure_id.Map.get_singleton move with
-    | None, Some _ | Some _, None ->
-      (* After the freshening, move and value_closures have the same
-         cardinality *)
-      assert false
-    | None, None ->
-      let ty = T.closure ty_map in
-      let move_within : Projection.Move_within_set_of_closures.t =
-        { closure; move; }
-      in
-      [], Reachable (Move_within_set_of_closures move_within), ty
-    | Some (_start_from, value_set_of_closures),
-      Some (start_from, move_to) ->
-      match E.find_projection env ~projection with
-      | Some var ->
-        freshen_and_squash_aliases_named env var ~f:(fun _env var var_ty ->
-          let r = R.map_benefit r (B.remove_projection projection) in
-          [], Reachable (Var var), var_ty)
-      | None ->
-        match reference_recursive_function_directly env move_to with
-        | Some (flam, ty) -> [], Reachable flam, ty
-        | None ->
-          if Closure_id.equal start_from move_to then
-            (* Moving from one closure to itself is a no-op.  We can return an
-               [Var] since we already have a variable bound to the closure. *)
-            [], Reachable (Var closure), closure_ty
-          else
-            match set_of_closures_var with
-            | Some set_of_closures_var when E.mem env set_of_closures_var ->
-              (* A variable bound to the set of closures is in scope,
-                 meaning we can rewrite the [Move_within_set_of_closures] to a
-                 [Project_closure]. *)
-              let project_closure : Projection.Project_closure.t =
-                { set_of_closures = set_of_closures_var;
-                  closure_id = Closure_id.Set.singleton move_to;
-                }
-              in
-              let ty =
-                T.closure ~set_of_closures_var
-                  (Closure_id.Map.singleton move_to value_set_of_closures)
-              in
-              [], Reachable (Project_closure project_closure), ty
-            | Some _ | None ->
-              match set_of_closures_symbol with
-              | Some set_of_closures_symbol ->
-                let set_of_closures_var = Variable.create "symbol" in
-                let project_closure : Projection.Project_closure.t =
-                  { set_of_closures = set_of_closures_var;
-                    closure_id = Closure_id.Set.singleton move_to;
-                  }
-                in
-                let ty =
-                  T.closure ~set_of_closures_var ~set_of_closures_symbol
-                    (Closure_id.Map.singleton move_to value_set_of_closures)
-                in
-                let bindings : (Variable.t * Named.t) list = [
-                  set_of_closures_var, Symbol set_of_closures_symbol;
-                ]
-                in
-                bindings, Reachable (Project_closure project_closure),
-                  ty
-              | None ->
-                (* The set of closures is not available in scope, and we
-                  have no other information by which to simplify the move. *)
-                let move_within : Projection.Move_within_set_of_closures.t =
-                  { closure; move; }
-                in
-                let ty = T.closure ty_map in
-                [], Reachable (Move_within_set_of_closures move_within), ty
-
-let rec simplify_project_var env r ~(project_var : Projection.Project_var.t)
-      : named_simplifier =
-  let closure, closure_ty =
-    freshen_and_squash_aliases env project_var.closure
-  in
-  match T.prove_closure_allowing_unresolved closure_ty with
-  | Ok (value_closures, _set_of_closures_var, _set_of_closures_symbol) ->
-(*
-    let () =
-      match Closure_id.Map.bindings value_closures with
-        | _ :: _ :: _ ->
-          Format.printf "Closure type is not a singleton in \
-              project@ %a@ %a@."
-            T.print ty
-            Projection.print_project_var project_var
-        | [] ->
-          Format.printf "Closure type is empty in project@ %a@ %a@."
-            T.print ty
-            Projection.print_project_var project_var
-        | _ ->
-          ()
-    in
-*)
-    (* Freshening of the projection *)
-    let project_var_var, ty =
-      Closure_id.Map.fold
-        (fun closure_id_in_type
-          (value_set_of_closures : T.set_of_closures)
-          (project_var_var, set_type) ->
-          let freshened_var =
-            Freshening.freshen_project_var project_var.var
-              ~closure_freshening:value_set_of_closures.freshening
-          in
-          let closure_id = closure_id_in_type in
-          let var =
-            try Closure_id.Map.find closure_id_in_type freshened_var with
-            | Not_found ->
-              Misc.fatal_errorf "When simplifying [Project_var], the \
-                closure ID %a in the type of the set of closures \
-                did not match any closure ID in the [Project_var] term %a \
-                freshened to %a. \
-                Type: %a@."
-                Closure_id.print closure_id_in_type
-                Projection.print_project_var project_var
-                (Closure_id.Map.print Var_within_closure.print) freshened_var
-                Flambda_type.print ty
-          in
-          let set_type =
-            let ty = T.type_for_bound_var value_set_of_closures var in
-            let really_import_type = E.really_import_type env in
-            T.join ~really_import_type ty set_type
-          in
-          Closure_id.Map.add closure_id var project_var_var,
-          set_type)
-        value_closures (Closure_id.Map.empty, T.bottom)
-    in
-    let projection : Projection.t =
-      Project_var {
-        closure;
-        var = project_var_var;
-      }
-    in
-    begin match E.find_projection env ~projection with
-    | Some var ->
-      freshen_and_squash_aliases_named env var ~f:(fun _env var var_ty ->
-        let r = R.map_benefit r (B.remove_projection projection) in
-        [], Reachable (Var var), var_ty)
-    | None ->
-      let expr : Named.t =
-        Project_var { closure; var = project_var_var; }
-      in
-      let expr =
-        match Closure_id.Map.get_singleton project_var_var with
-        | None ->
-          expr
-        | Some (_closure_id, var) ->
-          let unwrapped = Var_within_closure.unwrap var in
-          if E.mem env unwrapped then
-            Flambda.Var unwrapped
-          else
-            expr
-      in
-      simpler_equivalent_term env r expr ty
-    end
-  | Unknown ->
-    [], Reachable.reachable (Project_var { project_var with closure }),
-      r
-  | Wrong ->
-    [], Reachable.invalid (), r
-
-*)
 
 let simplify_duplicate_block _env _r _prim _arg _dbg
       ~(kind : Flambda_primitive.duplicate_block_kind)

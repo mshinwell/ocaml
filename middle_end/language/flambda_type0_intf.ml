@@ -328,6 +328,10 @@ module type S = sig
      : Flambda_kind.Value_kind.t
     -> ty_value
 
+  val any_fabricated_as_ty_fabricated
+     : Flambda_kind.Fabricated_kind.t
+    -> ty_fabricated
+
   val any_tagged_immediate : unit -> t
 
   val any_boxed_float : unit -> t
@@ -482,6 +486,8 @@ module type S = sig
   val alias_type_of : Flambda_kind.t -> Name.t -> t
 
   val alias_type_of_as_ty_value : Name.t -> ty_value
+
+  val alias_type_of_as_ty_fabricated : Name.t -> ty_fabricated
 
   val alias_type : Flambda_kind.t -> Export_id.t -> t
 
