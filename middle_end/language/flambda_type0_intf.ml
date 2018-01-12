@@ -72,6 +72,8 @@ module type S = sig
     | Open of 'a
     | Exactly of 'a
 
+  val extensibility_contents : 'a extensibility -> 'a
+
   type typing_environment
 
   (** Values of type [t] are known as "Flambda types".  Each Flambda type
@@ -218,7 +220,7 @@ module type S = sig
     set_of_closures : ty_fabricated;
   }
 
-  and closures = private
+  and closures =
     closures_entry Closure_id.Map.t
 
   and 'a of_kind_naked_number = private
@@ -326,6 +328,8 @@ module type S = sig
      : 'kind ty_naked_number
     -> 'kind Flambda_kind.Naked_number.t
     -> t
+
+  val of_ty_fabricated : ty_fabricated -> t
 
   (** Construction of top types. *)
   val unknown : Flambda_kind.t -> t

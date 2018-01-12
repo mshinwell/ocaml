@@ -600,4 +600,6 @@ module type Result = sig
     -> Scope_level.t
     -> Flambda_type.t
     -> t) Flambda_type.type_accessor
+
+  val get_typing_judgements : t -> Flambda_type.Typing_environment.t
 end

@@ -1137,4 +1137,6 @@ end = struct
     { t with
       typing_judgements;
     }
+
+  let get_typing_judgements t = t.typing_judgements
 end

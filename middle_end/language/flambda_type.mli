@@ -238,11 +238,9 @@ val prove_of_kind_naked_float
    : (t
   -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number) type_accessor
 
+val prove_closures : (t -> closures proof) type_accessor
+
 (*
-type closure = (Name.t option * set_of_closures) Closure_id.Map.t
-
-val prove_closure : (t -> closure proof) type_accessor
-
 type closure_for_inlining =
   | Inlinable of Closure_id.t * inlinable_function_declaration
   | Non_inlinable of unit  (* CR mshinwell: pchambart to fix *)
@@ -251,11 +249,10 @@ val prove_closures_for_inlining
    : (t -> closure_for_inlining proof) type_accessor
 *)
 
-(*
-(** As for [prove_closures] but for sets of closures. *)
 val prove_sets_of_closures
-   : (t -> Joined_sets_of_closures.t known_values) type_accessor
+   : (t -> (Name.t option * set_of_closures) proof) type_accessor
 
+(*
 (** Prove that the given type:
     - only ever represents one or more tagged immediates ("Proved true");
     - never represents any tagged immediates ("Proved false");

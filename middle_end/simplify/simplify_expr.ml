@@ -56,9 +56,13 @@ let simplify_exn_continuation env r cont =
     ~arity:[Flambda_kind.value Unknown]
 
 let for_defining_expr_of_let (env, r) var kind defining_expr =
+  (* CR mshinwell: This handling of the typing environment in [R] needs to be
+     added to the "simplify newly-introduced let bindings" function, below *)
+  let r = R.clear_typing_judgements r in
   let new_bindings, defining_expr, ty, r =
-    Simplify_named.simplify_named env r defining_expr
+    Simplify_named.simplify_named env r defining_expr ~result_var:var
   in
+  let new_judgements = R.get_typing_judgements r in
   let new_kind = (E.type_accessor env T.kind) ty in
   if not (Flambda_kind.compatible new_kind ~if_used_at:kind) then begin
     Misc.fatal_errorf "Kind error during simplification of [Let] binding for %a"
@@ -72,6 +76,10 @@ let for_defining_expr_of_let (env, r) var kind defining_expr =
       else defining_expr
   in
   let var, freshening = Freshening.add_variable (E.freshening env) var in
+  let env =
+    (E.type_accessor env E.extend_typing_environment) env
+      ~env_extension:new_judgements
+  in
   let env = E.set_freshening env freshening in
   let env = E.add_variable env var ty in
   (env, r), new_bindings, var, new_kind, defining_expr
@@ -129,7 +137,8 @@ let _simplify_newly_introduced_let_bindings env r ~bindings
       bindings
   in
   let new_bindings, around, _ty, r =
-    Simplify_named.simplify_named env r around
+    (* XXX provide [result_var] *)
+    Simplify_named.simplify_named env r around ~result_var:(assert false)
   in
   let around_free_names =
     match around with
@@ -940,7 +949,10 @@ and simplify_function_application env r (apply : Flambda.Apply.t)
       exn_continuation;
     }), r
   in
-  match (E.type_accessor env T.prove_closures_for_inlining) callee_ty with
+  match (E.type_accessor env T.prove_closures) callee_ty with
+  | Proved closures ->
+
+
   | Proved (Inlinable (callee's_closure_id, function_decl)) ->
     let arity_of_application =
       Flambda.Call_kind.return_arity apply.call_kind

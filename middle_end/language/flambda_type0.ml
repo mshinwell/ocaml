@@ -569,6 +569,8 @@ end) = struct
         (kind : n K.Naked_number.t) : t =
     Naked_number (ty_naked_number, kind)
 
+  let of_ty_fabricated ty_fabricated : t = Fabricated ty_fabricated
+
   let free_names_or_alias free_names_contents (or_alias : _ or_alias) acc =
     match or_alias with
     | No_alias contents -> free_names_contents contents acc

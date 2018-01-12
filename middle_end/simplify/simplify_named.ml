@@ -217,7 +217,7 @@ let simplify_set_of_closures original_env r
     - extra [Let]-bindings to be inserted prior to the one being simplified;
     - the simplified [named];
     - the new result structure. *)
-let simplify_named env r (tree : Named.t) =
+let simplify_named env r (tree : Named.t) ~result_var =
   match tree with
   | Simple simple ->
     let simple, ty = Simplify_simple.simplify_simple env simple in
@@ -321,11 +321,14 @@ let simplify_named env r (tree : Named.t) =
     end *)
   | Prim (prim, dbg) ->
     let term, ty, r =
-      Simplify_primitive.simplify_primitive env r prim dbg
+      Simplify_primitive.simplify_primitive env r prim dbg ~result_var
     in
     let remove_primitive () =
       R.map_benefit r (B.remove_primitive_application prim)
     in
+    (* CR mshinwell: Add a check to see if the type does not contain any
+       unknowns and only references symbols.  For values satisfying that, and
+       an appropriate effects check, lifting should happen here. *)
     begin match (E.type_accessor env T.reify) ty ~allow_free_variables:true with
     | Term (simple, ty) ->
       let term : Named.t = Simple simple in

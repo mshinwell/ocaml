@@ -924,66 +924,44 @@ let prove_boxed_nativeint ~type_of_name t
   | Fabricated _
   | Phantom _ -> wrong_kind ()
 
-(*
-let prove_closures ~type_of_name t : Joined_closures.t known_values =
-  let t_evaluated, _canonical_name =
-    Evaluated.create ~type_of_name t
-  in
-  match t_evaluated with
-  | Values values ->
-    begin match values with
-    | Unknown -> Unknown
-    | Closures closures -> Proved closures
-    | Bottom
-    | Boxed_floats _
-    | Blocks_and_tagged_immediates _
-    | Tagged_immediates_only _
-    | Boxed_int32s _
-    | Boxed_int64s _
-    | Boxed_nativeints _
-    | Sets_of_closures _
-    | Strings _
-    | Float_arrays _ -> Invalid
-    end
-  | Naked_immediates _
-  | Naked_floats _
-  | Naked_int32s _
-  | Naked_int64s _
-  | Naked_nativeints _ ->
+let prove_closures ~type_of_name t : closures proof =
+  let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be one or more \
         closures: %a"
       print t
-
-let prove_sets_of_closures ~type_of_name t
-      : Joined_sets_of_closures.t known_values =
-  let t_evaluated, _canonical_name =
-    Evaluated.create ~type_of_name t
   in
-  match t_evaluated with
-  | Values values ->
-    begin match values with
-    | Unknown -> Unknown
-    | Sets_of_closures set -> Proved set
-    | Bottom
-    | Boxed_floats _
-    | Blocks_and_tagged_immediates _
-    | Tagged_immediates_only _
-    | Boxed_int32s _
-    | Boxed_int64s _
-    | Boxed_nativeints _
-    | Closures _
-    | Strings _
-    | Float_arrays _ -> Invalid
+  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  match simplified with
+  | Value ty_value ->
+    begin match ty_value with
+    | Unknown _ -> Unknown
+    | Bottom -> Invalid
+    | Ok (Closures closures) -> Proved closures
+    | Ok _ -> Invalid
     end
-  | Naked_immediates _
-  | Naked_floats _
-  | Naked_int32s _
-  | Naked_int64s _
-  | Naked_nativeints _ ->
+  | Simplified_type.Naked_number _ -> wrong_kind ()
+  | Fabricated _
+  | Phantom _ -> wrong_kind ()
+
+let prove_sets_of_closures ~type_of_name t : _ proof =
+  let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a set of \
         closures: %a"
       print t
-*)
+  in
+  let simplified, canonical_name = Simplified_type.create ~type_of_name t in
+  match simplified with
+  | Fabricated ty_fabricated ->
+    begin match ty_fabricated with
+    | Unknown _ -> Unknown
+    | Bottom -> Invalid
+    | Ok (Set_of_closures set_of_closures) ->
+      Proved (canonical_name, set_of_closures)
+    | Ok _ -> Invalid
+    end
+  | Value _ -> wrong_kind ()
+  | Simplified_type.Naked_number _ -> wrong_kind ()
+  | Phantom _ -> wrong_kind ()
 
 (* XXX What about [Obj.truncate]?
    In fact, what happens regarding this for block access too? *)

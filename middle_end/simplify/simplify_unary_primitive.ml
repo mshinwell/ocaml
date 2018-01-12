@@ -33,7 +33,9 @@ module Reachable = Flambda.Reachable
 let refine_set_of_closures_type_to_identify_projection ~type_of_name
       env r ~set_of_closures_name ~result_var ~closure_id =
   let set_of_closures_ty =
-    let closure_ty = T.alias_type_of_as_ty_fabricated (Name.var result_var) in
+    let closure_ty =
+      T.alias_type_of_as_ty_fabricated (Name.var result_var)
+    in
     let closures =
       Closure_id.Map.add closure_id closure_ty Closure_id.Map.empty
     in
@@ -52,7 +54,9 @@ let refine_set_of_closures_type_to_identify_closure_element ~type_of_name
       env r ~set_of_closures_name ~result_var ~var_within_closure =
   let set_of_closures_ty =
     let closures = Closure_id.Map.empty in
-    let var_within_closure_ty = T.alias_type_of_as_ty_value result_var in
+    let var_within_closure_ty =
+      T.alias_type_of_as_ty_value (Name.var result_var)
+    in
     let closure_elements =
       Var_within_closure.Map.add var_within_closure var_within_closure_ty
         Var_within_closure.Map.empty
@@ -71,7 +75,7 @@ let simplify_project_closure env r prim ~closure ~set_of_closures dbg
       ~result_var =
   let set_of_closures, ty = S.simplify_simple env set_of_closures in
   let original_term () : Named.t = Prim (Unary (prim, set_of_closures), dbg) in
-  let invalid () =
+  let invalid r =
     Reachable.invalid (), T.bottom (K.value Definitely_pointer),
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
@@ -85,103 +89,119 @@ let simplify_project_closure env r prim ~closure ~set_of_closures dbg
         ~result_var
         ~closure_id:closure
   in
-  let proof = (E.type_accessor env T.prove_set_of_closures) ty in
+  let proof = (E.type_accessor env T.prove_sets_of_closures) ty in
   match proof with
-  | Proved set_of_closures ->
-    begin match T.Set_of_closures.project_closure set_of_closures closure with
-    | Not_in_set -> invalid ()
-    | Ok closure_ty ->
-      Reachable.reachable (original_term ()), closure_ty, r
+  | Proved (_set_of_closures_name, set_of_closures) ->
+    let closures = T.extensibility_contents set_of_closures.closures in
+    begin match Closure_id.Map.find closure closures with
+    | exception Not_found -> invalid r
+    | closure_ty ->
+      Reachable.reachable (original_term ()), T.of_ty_fabricated closure_ty, r
     end
   | Unknown ->
-    Reachable.reachable (original_term ()), T.any_closure (), r
-  | Invalid -> invalid ()
+    Reachable.reachable (original_term ()), T.any_value Definitely_pointer, r
+  | Invalid -> invalid r
 
 let simplify_move_within_set_of_closures env r prim ~move_from ~move_to
       ~closures dbg ~result_var =
   let closures, ty = S.simplify_simple env closures in
   let original_term () : Named.t = Prim (Unary (prim, closures), dbg) in
-  let invalid () =
+  let invalid r =
     Reachable.invalid (), T.bottom (K.value Definitely_pointer),
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
   let proof = (E.type_accessor env T.prove_closures) ty in
   match proof with
-  | Proved by_closure_id ->
-    begin match Closure_id.Map.find move_from by_closure_id with
-    | exception Not_found -> invalid ()
-    | set_of_closures_name, set_of_closures ->
-      let r =
-        match set_of_closures_name with
-        | None -> r
-        | Some set_of_closures_name ->
-          refine_set_of_closures_type_to_identify_projection env r
-          ~set_of_closures_name
-          ~result_var
-          ~closure_id
-      in
-      begin match T.Set_of_closures.project_closure set_of_closures move_to with
-      | Not_in_set -> invalid ()
-      | Ok closure_ty ->
-        begin match set_of_closures_name with
-        | None ->
-          Reachable.reachable (original_term ()), closure_ty, r
-        | Some name ->
-          let r =
-            R.map_benefit
-              (R.map_benefit r (B.remove_primitive (Unary prim)))
-              (B.add_primitive (Unary Project_closure))
-          in
-          let new_term : Named.t =
-            Prim (Unary (Project_closure move_to, Simple.name name), dbg)
-          in
-          Reachable.reachable new_term, closure_ty, r
+  | Proved closures ->
+    begin match Closure_id.Map.find move_from closures with
+    | exception Not_found -> invalid r
+    | { set_of_closures = set_ty; } ->
+      let set_ty = T.of_ty_fabricated set_ty in
+      let proof = (E.type_accessor env T.prove_sets_of_closures) set_ty in
+      begin match proof with
+      | Proved (set_of_closures_name, set_of_closures) ->
+        let r =
+          match set_of_closures_name with
+          | None -> r
+          | Some set_of_closures_name ->
+            (E.type_accessor env
+                refine_set_of_closures_type_to_identify_projection)
+              env r
+              ~set_of_closures_name
+              ~result_var
+              ~closure_id:move_to
+        in
+        let closures = T.extensibility_contents set_of_closures.closures in
+        begin match Closure_id.Map.find move_to closures with
+        | exception Not_found -> invalid r
+        | closure_ty ->
+          begin match set_of_closures_name with
+          | None ->
+            Reachable.reachable (original_term ()),
+              T.of_ty_fabricated closure_ty, r
+          | Some name ->
+            let r =
+              R.map_benefit
+                (R.map_benefit r (B.remove_primitive (Unary prim)))
+                (B.add_primitive (Unary (Project_closure move_to)))
+            in
+            let new_term : Named.t =
+              Prim (Unary (Project_closure move_to, Simple.name name), dbg)
+            in
+            Reachable.reachable new_term, T.of_ty_fabricated closure_ty, r
+          end
         end
+      | Unknown
+      | Invalid -> invalid r
       end
     end
   | Unknown ->
-    Reachable.reachable (original_term ()), T.any_closure (), r
-  | Invalid -> invalid ()
+    Reachable.reachable (original_term ()), T.any_value Definitely_pointer, r
+  | Invalid -> invalid r
 
 let simplify_project_var env r prim ~closure_id ~var_within_closure
-      ~closure dbg =
-  let arg, ty = S.simplify_simple env arg in
-  let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
-  let invalid () =
-    Reachable.invalid (), T.bottom (K.value Unknown)
+      ~closures dbg ~result_var =
+  let closures, ty = S.simplify_simple env closures in
+  let original_term () : Named.t = Prim (Unary (prim, closures), dbg) in
+  let invalid r =
+    Reachable.invalid (), T.bottom (K.value Unknown),
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
   let proof = (E.type_accessor env T.prove_closures) ty in
   match proof with
   | Proved by_closure_id ->
     begin match Closure_id.Map.find closure_id by_closure_id with
-    | exception Not_found -> invalid ()
-    | { set_of_closures = set; } ->
-      let proof = (E.type_accessor env T.prove_set_of_closures) set in
+    | exception Not_found -> invalid r
+    | { set_of_closures = set_ty; } ->
+      let set_ty = T.of_ty_fabricated set_ty in
+      let proof = (E.type_accessor env T.prove_sets_of_closures) set_ty in
       begin match proof with
       | Proved (set_of_closures_name, set) ->
         let r =
           match set_of_closures_name with
           | None -> r
           | Some set_of_closures_name ->
-            refine_set_of_closures_type_to_identify_projection env r
-              ~set_of_closures_name ~result_var ~var_within_closure
+            (E.type_accessor env
+                refine_set_of_closures_type_to_identify_closure_element)
+            env r ~set_of_closures_name ~result_var ~var_within_closure
         in
+        let closure_elements = T.extensibility_contents set.closure_elements in
         begin match
-          Var_within_closure.Map.find var_within_closure set.closure_elements
+          Var_within_closure.Map.find var_within_closure closure_elements
         with
-        | exception Not_found -> invalid ()
-        | Ok var_within_closure_ty ->
+        | exception Not_found -> invalid r
+        | var_within_closure_ty ->
+          let var_within_closure_ty = T.of_ty_value var_within_closure_ty in
           Reachable.reachable (original_term ()), var_within_closure_ty, r
         end
       | Unknown ->
-        Reachable.reachable (original_term ()), T.any_value (), r
-      | Invalid -> invalid ()
+        Reachable.reachable (original_term ()), T.any_value Unknown, r
+      | Invalid -> invalid r
       end
     end
   | Unknown ->
-    Reachable.reachable (original_term ()), T.any_value (), r
-  | Invalid -> invalid ()
+    Reachable.reachable (original_term ()), T.any_value Unknown, r
+  | Invalid -> invalid r
 
 let simplify_duplicate_block _env _r _prim _arg _dbg
       ~(kind : Flambda_primitive.duplicate_block_kind)
@@ -685,7 +705,7 @@ let simplify_bigarray_length env r prim bigarray ~dimension:_ dbg =
   Reachable.reachable named, T.unknown result_kind, r
 
 let simplify_unary_primitive env r (prim : Flambda_primitive.unary_primitive)
-      arg dbg : Reachable.t * T.t * R.t =
+      arg dbg ~result_var : Reachable.t * T.t * R.t =
   match prim with
   | Duplicate_block { kind; source_mutability;
       destination_mutability; } ->
@@ -751,9 +771,10 @@ let simplify_unary_primitive env r (prim : Flambda_primitive.unary_primitive)
     Simplify_box_number_nativeint.simplify env r prim arg dbg
   | Project_closure closure ->
     simplify_project_closure env r prim ~closure ~set_of_closures:arg dbg
+      ~result_var
   | Move_within_set_of_closures { move_from; move_to; } ->
     simplify_move_within_set_of_closures env r prim ~move_from ~move_to
-      ~closure:arg dbg
+      ~closures:arg dbg ~result_var
   | Project_var (closure_id, var_within_closure) ->
     simplify_project_var env r prim ~closure_id ~var_within_closure
-      ~closure:arg dbg
+      ~closures:arg dbg ~result_var

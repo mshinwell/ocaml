@@ -16,10 +16,11 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-let simplify_primitive env r (prim : Flambda_primitive.t) dbg =
+let simplify_primitive env r (prim : Flambda_primitive.t) dbg ~result_var =
   match prim with
   | Unary (prim, arg) ->
     Simplify_unary_primitive.simplify_unary_primitive env r prim arg dbg
+      ~result_var
   | Binary (prim, arg1, arg2) ->
     Simplify_binary_primitive.simplify_binary_primitive env r prim arg1 arg2 dbg
   | Ternary (prim, arg1, arg2, arg3) ->
