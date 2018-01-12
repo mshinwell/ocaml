@@ -684,7 +684,7 @@ and simplify_let_cont env r ~body
     end
   end
 
-and _simplify_full_application env r ~callee
+and simplify_full_application env r ~callee
       ~callee's_closure_id ~function_decl ~set_of_closures ~args
       ~arg_tys ~continuation ~exn_continuation ~dbg ~inline_requested
       ~specialise_requested =
@@ -692,7 +692,7 @@ and _simplify_full_application env r ~callee
     ~callee's_closure_id ~function_decl ~args ~arg_tys ~continuation
     ~exn_continuation ~dbg ~inline_requested ~specialise_requested
 
-and _simplify_partial_application env r ~callee
+and simplify_partial_application env r ~callee
       ~callee's_closure_id
       ~(function_decl : Flambda_type.inlinable_function_declaration)
       ~(args : Simple.t list)
@@ -799,7 +799,7 @@ and _simplify_partial_application env r ~callee
   in
   simplify_expr env r (Expr.bind ~bindings ~body:wrapper_taking_remaining_args)
 
-and _simplify_over_application env r ~args ~arg_tys ~continuation
+and simplify_over_application env r ~args ~arg_tys ~continuation
       ~exn_continuation ~callee ~callee's_closure_id
       ~(function_decl : Flambda_type.inlinable_function_declaration)
       ~set_of_closures ~dbg ~inline_requested ~specialise_requested =
@@ -850,7 +850,7 @@ and _simplify_over_application env r ~args ~arg_tys ~continuation
       E.add_continuation env after_full_application
         after_full_application_approx
     in
-    _simplify_full_application env r ~callee ~callee's_closure_id
+    simplify_full_application env r ~callee ~callee's_closure_id
       ~function_decl ~set_of_closures ~args:full_app_args
       ~arg_tys:full_app_types ~continuation:after_full_application
       (* CR mshinwell: check [exn_continuation] is correct *)
@@ -904,7 +904,7 @@ and simplify_apply_shared env r (apply : Flambda.Apply.t)
 
 and simplify_function_application env r (apply : Flambda.Apply.t)
       (call : Flambda.Call_kind.function_call) : Expr.t * R.t =
-  let _callee_ty, _arg_tys, apply, r = simplify_apply_shared env r apply in
+  let callee_ty, arg_tys, apply, r = simplify_apply_shared env r apply in
   let {
     Flambda.Apply. func = callee; args; call_kind = _; dbg;
     inline = inline_requested; specialise = specialise_requested;
@@ -949,11 +949,9 @@ and simplify_function_application env r (apply : Flambda.Apply.t)
       exn_continuation;
     }), r
   in
-  match (E.type_accessor env T.prove_closures) callee_ty with
-  | Proved closures ->
-
-
-  | Proved (Inlinable (callee's_closure_id, function_decl)) ->
+  let inlinable ~callee's_closure_id
+        ~(function_decl : T.inlinable_function_declaration)
+        ~(set_of_closures : T.set_of_closures) =
     let arity_of_application =
       Flambda.Call_kind.return_arity apply.call_kind
     in
@@ -1010,12 +1008,6 @@ and simplify_function_application env r (apply : Flambda.Apply.t)
           Flambda.Apply.print apply
     in
     (* wrap <-- for direct call surrogates *) result, r
-  | Proved (Non_inlinable ()) ->
-    (* CR mshinwell: Pierre to implement *)
-    unknown_closures ()
-  | Unknown -> unknown_closures ()
-  | Invalid -> Expr.invalid (), r
-
 (* CR mshinwell: Have disabled direct call surrogates just for the moment
     let callee, callee's_closure_id,
           value_set_of_closures, env, wrap =
@@ -1056,6 +1048,42 @@ and simplify_function_application env r (apply : Flambda.Apply.t)
         surrogate_var, surrogate, value_set_of_closures, env, wrap
     in
 *)
+  in
+  let non_inlinable ~(function_decls : T.non_inlinable_function_declarations) =
+    ignore function_decls;
+    (* CR mshinwell: Pierre to implement *)
+    unknown_closures ()
+  in
+  match (E.type_accessor env T.prove_closures) callee_ty with
+  | Proved closures ->
+    begin match Closure_id.Map.get_singleton closures with
+    | Some (callee's_closure_id, { set_of_closures = set_ty; }) ->
+      let set_ty = T.of_ty_fabricated set_ty in
+      let proof = (E.type_accessor env T.prove_sets_of_closures) set_ty in
+      begin match proof with
+      | Proved (_set_of_closures_name, set_of_closures) ->
+        let closures = T.extensibility_contents set_of_closures.closures in
+        begin match Closure_id.Map.find callee's_closure_id closures with
+        | exception Not_found -> Expr.invalid (), r
+        | closure_ty ->
+          let closure_ty = T.of_ty_fabricated closure_ty in
+          match (E.type_accessor env T.prove_closure) closure_ty with
+          | Proved { function_decls = Inlinable function_decl; } ->
+            inlinable ~callee's_closure_id ~function_decl ~set_of_closures
+          | Proved { function_decls = Non_inlinable None; } ->
+            unknown_closures ()
+          | Proved { function_decls = Non_inlinable (Some function_decls); } ->
+            non_inlinable ~function_decls
+          | Unknown -> unknown_closures ()
+          | Invalid -> Expr.invalid (), r
+        end
+      | Unknown -> unknown_closures ()
+      | Invalid -> Expr.invalid (), r
+      end
+    | None -> unknown_closures ()
+    end
+  | Unknown -> unknown_closures ()
+  | Invalid -> Expr.invalid (), r
 
 and simplify_method_call env r (apply : Flambda.Apply.t) ~kind ~obj
       : Expr.t * R.t =

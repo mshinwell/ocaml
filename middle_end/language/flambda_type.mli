@@ -240,17 +240,10 @@ val prove_of_kind_naked_float
 
 val prove_closures : (t -> closures proof) type_accessor
 
-(*
-type closure_for_inlining =
-  | Inlinable of Closure_id.t * inlinable_function_declaration
-  | Non_inlinable of unit  (* CR mshinwell: pchambart to fix *)
-
-val prove_closures_for_inlining
-   : (t -> closure_for_inlining proof) type_accessor
-*)
-
 val prove_sets_of_closures
    : (t -> (Name.t option * set_of_closures) proof) type_accessor
+
+val prove_closure : (t -> closure proof) type_accessor
 
 (*
 (** Prove that the given type:

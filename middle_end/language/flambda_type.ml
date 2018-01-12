@@ -963,6 +963,24 @@ let prove_sets_of_closures ~type_of_name t : _ proof =
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Phantom _ -> wrong_kind ()
 
+let prove_closure ~type_of_name t : _ proof =
+  let wrong_kind () =
+    Misc.fatal_errorf "Wrong kind for something claimed to be a closure: %a"
+      print t
+  in
+  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  match simplified with
+  | Fabricated ty_fabricated ->
+    begin match ty_fabricated with
+    | Unknown _ -> Unknown
+    | Bottom -> Invalid
+    | Ok (Closure closure) -> Proved closure
+    | Ok _ -> Invalid
+    end
+  | Value _ -> wrong_kind ()
+  | Simplified_type.Naked_number _ -> wrong_kind ()
+  | Phantom _ -> wrong_kind ()
+
 (* XXX What about [Obj.truncate]?
    In fact, what happens regarding this for block access too? *)
 
