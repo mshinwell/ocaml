@@ -946,11 +946,11 @@ let print_variadic_primitive ppf p =
   let fprintf = Format.fprintf in
   match p with
   | Make_block (kind, mut) ->
-    fprintf ppf "make_block[%a,%a]"
+    fprintf ppf "Make_block %a %a"
       print_make_block_kind kind
       print_mutable_or_immutable mut
-  | Bigarray_set _ -> fprintf ppf "bigarray_set"
-  | Bigarray_load _ -> fprintf ppf "bigarray_load"
+  | Bigarray_set _ -> fprintf ppf "Bigarray_set"
+  | Bigarray_load _ -> fprintf ppf "Bigarray_load"
 
 let args_kind_of_variadic_primitive p : arg_kinds =
   match p with
