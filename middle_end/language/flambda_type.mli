@@ -254,33 +254,6 @@ val prove_closure : (t -> closure proof) type_accessor
 *)
 val prove_is_tagged_immediate : (t -> bool proof) type_accessor
 
-(** Check that the given type is of kind [Value] and can assume the given
-    value kind.  A fatal error is raised if the check fails: kind errors are
-    always compiler bugs. *)
-val force_to_kind_value_with_expected_value_kind
-   : (t
-  -> Flambda_kind.Value_kind.t
-  -> ty_value) type_accessor
-
-(** Like [prove_of_kind_value_with_expected_value_kind] but for a list of
-    types, all of which are checked against the given value kind. *)
-val force_to_kind_value_with_expected_value_kinds
-   : (t list
-  -> Flambda_kind.Value_kind.t
-  -> ty_value) type_accessor
-
-(** Like [prove_of_kind_value_with_expected_value_kinds] but for a list of
-    types, each of which may be tested against a different value kind. *)
-val force_to_kind_value_with_individual_expected_value_kinds
-   : ((t * Flambda_kind.Value_kind.t) list
-  -> ty_value) type_accessor
-
-(** Prove that the given types are all of kind [Naked_float].  If the proof
-    cannot be given then [Invalid] is returned. *)
-val force_to_kind_naked_float_list : t list -> ty_naked_float list
-
-*)
-
 val int_switch_arms
    : (flambda_type
     -> arms:Continuation.t Targetint.OCaml.Map.t
