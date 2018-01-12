@@ -68,6 +68,10 @@ module type S = sig
     | Type of Export_id.t
     | Type_of of Name.t
 
+  type 'a extensibility =
+    | Open of 'a
+    | Exactly of 'a
+
   type typing_environment
 
   (** Values of type [t] are known as "Flambda types".  Each Flambda type
@@ -237,8 +241,8 @@ module type S = sig
     | Closure of closure
 
   and set_of_closures = private {
-    closures : ty_fabricated Closure_id.Map.t;
-    closure_elements : ty_value Var_within_closure.Map.t;
+    closures : ty_fabricated Closure_id.Map.t extensibility;
+    closure_elements : ty_value Var_within_closure.Map.t extensibility;
   }
 
   and closure = private {
@@ -329,7 +333,7 @@ module type S = sig
     -> ty_value
 
   val any_fabricated_as_ty_fabricated
-     : Flambda_kind.Fabricated_kind.t
+     : Flambda_kind.Value_kind.t
     -> ty_fabricated
 
   val any_tagged_immediate : unit -> t
@@ -475,8 +479,8 @@ module type S = sig
   val closure : closure -> t
 
   val create_set_of_closures
-     : closures:ty_fabricated Closure_id.Map.t
-    -> closure_elements:ty_value Var_within_closure.Map.t
+     : closures:ty_fabricated Closure_id.Map.t extensibility
+    -> closure_elements:ty_value Var_within_closure.Map.t extensibility
     -> set_of_closures
 
   val set_of_closures : set_of_closures -> t

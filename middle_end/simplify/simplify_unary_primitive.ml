@@ -39,7 +39,8 @@ let refine_set_of_closures_type_to_identify_projection r ~result_var
     in
     let closure_elements = Var_within_closure.Map.empty in
     let set_of_closures =
-      T.create_set_of_closures ~closures ~closure_elements
+      T.create_set_of_closures ~closures:(Open closures)
+        ~closure_elements:(Open closure_elements)
     in
     T.set_of_closures set_of_closures
   in
@@ -48,17 +49,15 @@ let refine_set_of_closures_type_to_identify_projection r ~result_var
 let refine_set_of_closures_type_to_identify_closure_element r ~result_var
       ~var_within_closure =
   let set_of_closures_ty =
-    let closure_ty = T.any_fabricated_as_ty_fabricated () in
-    let closures =
-      Closure_id.Map.add closure closure_ty Closure_id.Map.singleton
-    in
+    let closures = Closure_id.Map.empty in
     let var_within_closure_ty = T.alias_type_of_as_ty_value result_var in
     let closure_elements =
       Var_within_closure.Map.add var_within_closure var_within_closure_ty
         Var_within_closure.Map.empty
     in
     let set_of_closures =
-      T.create_set_of_closures ~closures ~closure_elements
+      T.create_set_of_closures ~closures:(Open closures)
+        ~closure_elements:(Open closures)
     in
     T.set_of_closures set_of_closures
   in

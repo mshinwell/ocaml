@@ -774,7 +774,7 @@ end = struct
               let arg_tys =
                 List.map2 (fun result this_ty ->
                     let this_ty =
-                      (Env.type_accessor use.env T.add_judgements)
+                     (Env.type_accessor use.env T.add_judgements)
                         this_ty this_env
                     in
                     (Env.type_accessor use.env T.join) result this_ty)

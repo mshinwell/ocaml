@@ -118,6 +118,14 @@ end) = struct
     | Type of Export_id.t
     | Type_of of Name.t
 
+  type 'a extensibility =
+    | Open of 'a
+    | Exactly of 'a
+
+  let extensibility_contents (e : _ extensibility) =
+    match e with
+    | Open contents | Exactly contents -> contents
+
   type t =
     | Value of ty_value
     | Naked_number :
@@ -231,8 +239,8 @@ end) = struct
     | Closure of closure
 
   and set_of_closures = {
-    closures : ty_fabricated Closure_id.Map.t;
-    closure_elements : ty_value Var_within_closure.Map.t;
+    closures : ty_fabricated Closure_id.Map.t extensibility;
+    closure_elements : ty_value Var_within_closure.Map.t extensibility;
   }
 
   and closure = {
@@ -264,6 +272,13 @@ end) = struct
     | Naked_number (ty, _) -> ty_is_obviously_bottom ty
     | Fabricated ty -> ty_is_obviously_bottom ty
     | Phantom ty -> ty_is_obviously_bottom ty
+
+  let print_extensibility print_contents ppf (e : _ extensibility) =
+    match e with
+    | Open contents ->
+      Format.fprintf ppf "@[(Open %a)@]" print_contents contents
+    | Exactly contents ->
+      Format.fprintf ppf "@[(Exactly %a)@]" print_contents contents
 
   let print_mutable_or_immutable print_contents ppf
         (mut : _ mutable_or_immutable) =
@@ -468,8 +483,10 @@ end) = struct
     Format.fprintf ppf
       "@[(@[(closures@ %a)@]@,\
           @[(closure_elements@ %a)@])@]"
-      (Closure_id.Map.print print_ty_fabricated) set.closures
-      (Var_within_closure.Map.print print_ty_value) set.closure_elements
+      (print_extensibility (Closure_id.Map.print print_ty_fabricated))
+        set.closures
+      (print_extensibility (Var_within_closure.Map.print print_ty_value))
+        set.closure_elements
 
   and print_closure ppf (closure : closure) =
     Format.fprintf ppf "@[(Closure (function_decls %a))@]"
@@ -641,11 +658,11 @@ end) = struct
       let acc =
         Closure_id.Map.fold (fun _closure_id ty_fabricated acc ->
             free_names_ty free_names_of_kind_fabricated ty_fabricated acc)
-          set.closures acc
+          (extensibility_contents set.closures) acc
       in
       Var_within_closure.Map.fold (fun _var ty_value acc ->
           free_names_ty free_names_of_kind_value ty_value acc)
-        set.closure_elements acc
+        (extensibility_contents set.closure_elements) acc
     | Closure closure -> free_names_of_closure closure acc
 
   and free_names_of_closure (closure : closure) acc =
@@ -1582,9 +1599,12 @@ end) = struct
     }
 
   let set_of_closures (set_of_closures : set_of_closures) =
-    if Closure_id.Map.is_empty set_of_closures.closures
-      || Var_within_closure.Map.is_empty set_of_closures.closure_elements
-    then
+    let no_closures =
+      match set_of_closures.closures with
+      | Open _ -> false
+      | Exactly map -> Closure_id.Map.is_empty map
+    in
+    if no_closures then
       Fabricated (No_alias (Join []))
     else
       Fabricated (No_alias (Join [Set_of_closures set_of_closures]))
@@ -2720,10 +2740,7 @@ end) = struct
           set1.closure_elements
           set2.closure_elements
       in
-      if Closure_id.Map.is_empty closures
-        || Var_within_closure.Map.is_empty closure_elements
-      then
-        Bottom
+      if Closure_id.Map.is_empty closures then Bottom
       else
         let set : set_of_closures =
           { closures;
