@@ -254,7 +254,7 @@ and lift_expr (expr : Flambda.Expr.t) ~state =
             Set_of_closures set_of_closures
           in
           Flambda.With_free_names.of_named
-            (Flambda_kind.value Definitely_pointer) defining_expr, state
+            (Flambda_kind.fabricated Definitely_pointer) defining_expr, state
         | Read_mutable mut_var ->
           let state = State.use_mutable_variable state mut_var in
           Flambda.With_free_names.of_defining_expr_of_let let_expr, state

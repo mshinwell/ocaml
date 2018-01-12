@@ -437,7 +437,7 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
         (close t env body) function_declarations
     in
     Flambda.Expr.create_let set_of_closures_var
-      (Flambda_kind.value Definitely_pointer)
+      (Flambda_kind.fabricated Definitely_pointer)
       set_of_closures body
   | Let_cont let_cont ->
     if let_cont.is_exn_handler then begin
