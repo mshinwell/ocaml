@@ -45,11 +45,19 @@ module T0 = struct
         && TO.compare t.value TO.hex_ff <= 0
     in
     if print_as_char then
+      Format.fprintf ppf "'%c'"
+        (Char.chr (TO.bottom_byte_to_int t.value))
+    else
+      Format.fprintf ppf "%a"
+        TO.print t.value
+(*
+    if print_as_char then
       Format.fprintf ppf "(immediate '%c')"
         (Char.chr (TO.bottom_byte_to_int t.value))
     else
       Format.fprintf ppf "(immediate %a)"
         TO.print t.value
+*)
 end
 
 module Self = Identifiable.Make (T0)

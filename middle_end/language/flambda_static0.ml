@@ -192,11 +192,11 @@ module Program_body = struct
   }
 
   let print_computation ppf comp =
-    Format.fprintf ppf "@[(\
+    Format.fprintf ppf "@[<2>(\
         @[(expr@ %a)@]@ \
         @[(return_cont@ %a)@]@ \
         @[(exception_cont@ %a)@]@ \
-        @[(computed_values@ @[(%a)@])@])@]"
+        @[(computed_values@ @[%a@])@])@]"
       Flambda.Expr.print comp.expr
       Continuation.print comp.return_cont
       Continuation.print comp.exception_cont
@@ -218,7 +218,7 @@ module Program_body = struct
   }
 
   let print_definition ppf defn =
-    Format.fprintf ppf "@[(\
+    Format.fprintf ppf "@[<v 2>(\
         @[(computation@ %a)@]@ \
         @[(static_structure@ @[(%a)@])@])@]"
       (Misc.Stdlib.Option.print print_computation)
@@ -263,11 +263,11 @@ module Program_body = struct
   let rec print ppf t =
     match t with
     | Define_symbol (defn, t) ->
-      Format.fprintf ppf "@[(Define_symbol@ %a)@]@;"
+      Format.fprintf ppf "@[<v 2>(Define_symbol@ %a)@]@;"
         print_definition defn;
       print ppf t
     | Define_symbol_rec (defn, t) ->
-      Format.fprintf ppf "@[(Define_symbol_rec@ %a)@]@;"
+      Format.fprintf ppf "@[<v 2>(Define_symbol_rec@ %a)@]@;"
         print_definition defn;
       print ppf t
     | Root sym ->

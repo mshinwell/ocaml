@@ -829,7 +829,7 @@ end = struct
         Continuation.print exn_continuation
         Name.print func
         Simple.List.print args
-    | Let { var = id; defining_expr = arg; body; _ } ->
+    | Let { var = id; kind; defining_expr = arg; body; _ } ->
         let rec letbody (ul : t) =
           match ul with
           | Let { var = id; defining_expr = arg; body; _ } ->
@@ -837,8 +837,10 @@ end = struct
               letbody body
           | _ -> ul
         in
-        fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a@ %a@]"
-          Variable.print id Named.print arg;
+        fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a@[@ :: %a@]@ %a@]"
+          Variable.print id
+          Flambda_kind.print kind
+          Named.print arg;
         let expr = letbody body in
         fprintf ppf ")@]@ %a)@]" print expr
     | Let_mutable { var; initial_value; body; contents_type; } ->
@@ -979,7 +981,7 @@ end = struct
     | Set_of_closures set_of_closures ->
       Set_of_closures.print ppf set_of_closures
     | Prim (prim, dbg) ->
-      fprintf ppf "@[<2>(%a@ %a)@]"
+      fprintf ppf "@[<2>(%a%a)@]"
         Flambda_primitive.print prim
         Debuginfo.print_or_elide dbg
     | Read_mutable mut_var ->
@@ -1711,16 +1713,16 @@ end = struct
       | Default_specialise -> ""
     in
     fprintf ppf
-      "@[<2>(%a%s( return arity %a)%s%s%s(origin %a)@ =@ \
-        fun@[<2> <%a,%a>%a@] ->@ @[<2>%a@])@]@ "
+      "@[<2>(%a%s%s%s%s@ (origin %a)@ =@ \
+        fun@[<2> <%a> <exn %a>@] %a@[<2>@ :: %a@]@ ->@ @[<2>%a@])@]@ "
       Closure_id.print closure_id
       stub
-      Flambda_arity.print f.return_arity
       is_a_functor inline specialise
       Closure_origin.print f.closure_origin
       Continuation.print f.continuation_param
       Continuation.print f.exn_continuation_param
       Typed_parameter.List.print f.params
+      Flambda_arity.print f.return_arity
       Expr.print f.body
 end and Typed_parameter : sig
   type t

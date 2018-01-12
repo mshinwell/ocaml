@@ -65,8 +65,8 @@ type mutable_or_immutable = Immutable | Mutable
 
 let print_mutable_or_immutable ppf mut =
   match mut with
-  | Immutable -> Format.pp_print_string ppf "Imm"
-  | Mutable -> Format.pp_print_string ppf "Mut"
+  | Immutable -> Format.pp_print_string ppf "Immutable"
+  | Mutable -> Format.pp_print_string ppf "Mutable"
 
 let compare_mutable_or_immutable mut1 mut2 =
   match mut1, mut2 with
@@ -773,15 +773,15 @@ let print_binary_primitive ppf p =
   let fprintf = Format.fprintf in
   match p with
   | Block_load (kind, mut) ->
-    fprintf ppf "block_load[%a,%a]"
+    fprintf ppf "@[(Block_load %a %a)@]"
       Block_access_kind.print kind
       print_mutable_or_immutable mut
   | String_or_bigstring_load (string_like, width) ->
-    fprintf ppf "string_load[%a,%a]"
+    fprintf ppf "@[(String_load %a %a)@]"
       print_string_like_value string_like
       print_string_accessor_width width
   | Eq_comp (kind, op) ->
-    Format.fprintf ppf "(Eq_comp %a %a)"
+    Format.fprintf ppf "@[(Eq_comp %a %a)@]"
       K.print kind
       print_equality_comparison op
   | Int_arith (_k, op) -> print_binary_int_arith_op ppf op
