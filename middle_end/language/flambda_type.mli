@@ -245,23 +245,14 @@ val prove_sets_of_closures
 
 val prove_closure : (t -> closure proof) type_accessor
 
-(*
-(** Prove that the given type:
-    - only ever represents one or more tagged immediates ("Proved true");
-    - never represents any tagged immediates ("Proved false");
-    - may represent one or more tagged immediates ("Unknown");
-    - is bottom ("Invalid").
-*)
-val prove_is_tagged_immediate : (t -> bool proof) type_accessor
-
 val int_switch_arms
-   : (flambda_type
+   : (t
     -> arms:Continuation.t Targetint.OCaml.Map.t
     -> (Typing_environment.t * Continuation.t) Targetint.OCaml.Map.t)
   type_accessor
 
 val tag_switch_arms
-   : (flambda_type
+   : (t
     -> arms:Continuation.t Tag.Map.t
     -> (Typing_environment.t * Continuation.t) Tag.Map.t)
   type_accessor
