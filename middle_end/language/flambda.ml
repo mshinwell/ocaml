@@ -775,11 +775,9 @@ end = struct
           let new_var = Variable.Map.find var sb in
           let kind : K.t = free_variable_kind var in
           let projection : Named.t =
-            let by_closure_id =
-              Closure_id.Map.singleton closure_id var_within_closure
-            in
             let my_closure = Simple.var my_closure in
-            Prim (Unary (Project_var by_closure_id, my_closure), dbg)
+            Prim (Unary (Project_var (closure_id, var_within_closure),
+              my_closure), dbg)
           in
           match kind with
           | Value _ ->
@@ -842,9 +840,8 @@ end = struct
         ~direct_call_surrogates:Closure_id.Map.empty
     in
     let project_closure : Named.t =
-      let possible_closures = Closure_id.Set.singleton closure_id in
       let set_of_closures = Simple.var set_of_closures_var in
-      Prim (Unary (Project_closure possible_closures, set_of_closures), dbg)
+      Prim (Unary (Project_closure closure_id, set_of_closures), dbg)
     in
     let project_closure_var =
       Variable.create "project_closure" ~current_compilation_unit
@@ -939,7 +936,8 @@ end = struct
         let initial_value_kind = E.kind_of_simple env initial_value in
         let contents_kind =
           Flambda_type.kind ~type_of_name:
-            (fun (id : Flambda_type.Name_or_export_id.t) ->
+            (fun ?local_env (id : Flambda_type.Name_or_export_id.t) ->
+              ignore local_env;
               match id with
               | Name name -> E.type_of_name_option env name
               | Export_id _ -> None)
@@ -1286,23 +1284,17 @@ end = struct
       | Project_closure closure_id, set_of_closures ->
         E.check_simple_is_bound_and_of_kind env set_of_closures
           (K.value Definitely_pointer);
-        Closure_id.Set.iter (fun closure_id ->
-            E.add_use_of_closure_id env closure_id)
-          closure_id
-      | Move_within_set_of_closures move, closure ->
+        E.add_use_of_closure_id env closure_id
+      | Move_within_set_of_closures { move_from; move_to; }, closure ->
         E.check_simple_is_bound_and_of_kind env closure
           (K.value Definitely_pointer);
-        Closure_id.Map.iter (fun closure_id move_to ->
-            E.add_use_of_closure_id env closure_id;
-            E.add_use_of_closure_id env move_to)
-          move
-      | Project_var var, closure ->
+        E.add_use_of_closure_id env move_from;
+        E.add_use_of_closure_id env move_to
+      | Project_var (closure_id, var), closure ->
+        E.add_use_of_closure_id env closure_id;
+        E.add_use_of_var_within_closure env var;
         E.check_simple_is_bound_and_of_kind env closure
-          (K.value Definitely_pointer);
-        Closure_id.Map.iter (fun closure_id var_within_closure ->
-            E.add_use_of_closure_id env closure_id;
-            E.add_use_of_var_within_closure env var_within_closure)
-          var
+          (K.value Definitely_pointer)
       | Duplicate_block _, _
       | Is_int, _
       | Get_tag _, _

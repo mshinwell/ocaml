@@ -277,7 +277,10 @@ let check_name_is_bound_and_of_kind t name desired_kind =
     Misc.fatal_errorf "Unbound name %a" Name.print name
   | ty ->
     let kind =
-      T.kind ty ~type_of_name:(fun (id : T.Name_or_export_id.t) ->
+      (* CR mshinwell: Having to specify this [type_of_name] is pretty
+         horrid.  Is it even correct? *)
+      T.kind ty ~type_of_name:(fun ?local_env (id : T.Name_or_export_id.t) ->
+        ignore local_env;
         match id with
         | Name name -> type_of_name_option t name
         | Export_id _ -> None)
@@ -341,7 +344,8 @@ let kind_of_name t name =
     Misc.fatal_errorf "Unbound name %a" Name.print name
   | ty ->
     (* CR mshinwell: factor this code out *)
-    T.kind ty ~type_of_name:(fun (id : T.Name_or_export_id.t) ->
+    T.kind ty ~type_of_name:(fun ?local_env (id : T.Name_or_export_id.t) ->
+      ignore local_env;
       match id with
       | Name name -> type_of_name_option t name
       | Export_id _ -> None)
@@ -358,7 +362,8 @@ let kind_of_mutable_variable t var =
   | exception Not_found ->
     Misc.fatal_errorf "Unbound mutable variable %a" Mutable_variable.print var
   | ty ->
-    T.kind ty ~type_of_name:(fun (id : T.Name_or_export_id.t) ->
+    T.kind ty ~type_of_name:(fun ?local_env (id : T.Name_or_export_id.t) ->
+      ignore local_env;
       match id with
       | Name name -> type_of_name_option t name
       | Export_id _ -> None)

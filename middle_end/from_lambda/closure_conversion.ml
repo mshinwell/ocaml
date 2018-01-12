@@ -73,8 +73,10 @@ let tupled_function_call_stub
   in
   let body_with_closure_bound =
     let move =
-      P.Move_within_set_of_closures
-        (Closure_id.Map.singleton closure_bound_var unboxed_version)
+      P.Move_within_set_of_closures {
+        move_from = closure_bound_var;
+        move_to = unboxed_version;
+      }
     in
     Flambda.Expr.create_let unboxed_version_var
       (Flambda_kind.value Definitely_pointer)
@@ -423,15 +425,12 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
           let let_rec_ident = Function_decl.let_rec_ident decl in
           let closure_bound_var = Function_decl.closure_bound_var decl in
           let let_bound_var = Env.find_var env let_rec_ident in
-          let closure_id =
-            Closure_id.Set.singleton closure_bound_var
-          in
           (* Inside the body of the [let], each function is referred to by
              a [Project_closure] expression, which projects from the set of
              closures. *)
           (Flambda.Expr.create_let let_bound_var
              (Flambda_kind.value Definitely_pointer)
-             (Prim (Unary (Project_closure closure_id,
+             (Prim (Unary (Project_closure closure_bound_var,
                            Simple.var set_of_closures_var),
                     Debuginfo.none))
             body))
@@ -730,7 +729,7 @@ and close_functions t external_env function_declarations : Flambda.Named.t =
     let params =
       List.map (fun (p, t) ->
         Flambda.Typed_parameter.create (Parameter.wrap p)
-          ~type_of_name:(fun _ -> None)
+          ~type_of_name:(fun ?local_env:_ _ -> None)
           (flambda_type_of_lambda_value_kind t))
         param_vars
     in
@@ -743,8 +742,10 @@ and close_functions t external_env function_declarations : Flambda.Named.t =
       Variable.Map.fold (fun var closure_id body ->
         if Variable.Set.mem var free_var_of_body then
           let move =
-            Flambda_primitive.Move_within_set_of_closures
-              (Closure_id.Map.singleton my_closure_id closure_id)
+            Flambda_primitive.Move_within_set_of_closures {
+              move_from = my_closure_id;
+              move_to = closure_id;
+            }
           in
           Flambda.Expr.create_let var (Flambda_kind.value Definitely_pointer)
             (Prim (Unary (move, Simple.var my_closure), Debuginfo.none))
