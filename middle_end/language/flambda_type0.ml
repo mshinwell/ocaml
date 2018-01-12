@@ -1557,6 +1557,14 @@ end) = struct
         K.print expected_kind
     end
 
+  let bottom_like ~type_of_name t =
+    let kind = kind ~type_of_name t in
+    bottom kind
+
+  let unknown_like ~type_of_name t =
+    let kind = kind ~type_of_name t in
+    unknown kind
+
   let create_inlinable_function_declaration ~is_classic_mode ~closure_origin
         ~continuation_param ~params ~body ~result ~stub ~dbg ~inline
         ~specialise ~is_a_functor ~invariant_params ~size ~direct_call_surrogate
@@ -3356,9 +3364,6 @@ end) = struct
     let print = print_typing_environment
     let create = create_typing_environment
 
-    let meet = Meet_and_join.meet_typing_environment
-    let join = Meet_and_join.join_typing_environment
-
     let add_or_replace t name scope_level ty =
       let names_to_types = Name.Map.add name ty t.names_to_types in
       let levels_to_names =
@@ -3380,6 +3385,16 @@ end) = struct
         Misc.fatal_errorf "Cannot rebind %a in environment: %a"
           Name.print name
           print t
+
+    let add_or_meet ~type_of_name t name scope_level ty =
+      let existing_ty =
+        match Name.Map.find name t.names_to_types with
+        | exception Not_found -> unknown_like ~type_of_name ty
+        | existing_ty -> existing_ty
+      in
+      (* CR mshinwell: Where should the judgements go? *)
+      let ty, _judgements = meet ~type_of_name ty existing_ty in
+      add_or_replace t name scope_level ty
 
     type binding_type = Normal | Existential
 
@@ -3453,6 +3468,9 @@ end) = struct
         existential_freshening;
       }
 *)
+
+    let meet = Meet_and_join.meet_typing_environment
+    let join = Meet_and_join.join_typing_environment
   end
 
   let add_judgements ~type_of_name t env : t =

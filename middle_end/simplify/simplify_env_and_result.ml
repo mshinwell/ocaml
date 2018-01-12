@@ -855,6 +855,7 @@ end = struct
       inlining_threshold : Inlining_cost.Threshold.t option;
       benefit : Inlining_cost.Benefit.t;
       num_direct_applications : int;
+      typing_judgements : T.Typing_environment.t;
     }
 
   let create () =
@@ -863,6 +864,7 @@ end = struct
       inlining_threshold = None;
       benefit = Inlining_cost.Benefit.zero;
       num_direct_applications = 0;
+      typing_judgements = T.Typing_environment.create ();
     }
 
   let union t1 t2 =
@@ -876,6 +878,7 @@ end = struct
       benefit = Inlining_cost.Benefit.(+) t1.benefit t2.benefit;
       num_direct_applications =
         t1.num_direct_applications + t2.num_direct_applications;
+      typing_judgements = T.Typing_environment.create (); (* XXX *)
     }
 
   let use_continuation t env cont kind =
@@ -1120,4 +1123,18 @@ end = struct
 
   let num_direct_applications t =
     t.num_direct_applications
+
+  let clear_typing_judgements t =
+    { t with
+      typing_judgements = T.Typing_environment.create ();
+    }
+
+  let add_or_meet_typing_judgement ~type_of_name t name scope_level ty =
+    let typing_judgements =
+      T.Typing_environment.add_or_meet ~type_of_name
+        t.typing_judgements name scope_level ty
+    in
+    { t with
+      typing_judgements;
+    }
 end

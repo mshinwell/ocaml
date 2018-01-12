@@ -33,12 +33,6 @@ val bottom_types_from_arity : Flambda_arity.t -> t list
 (** For each of the kinds in an arity, create an "unknown" type. *)
 val unknown_types_from_arity : Flambda_arity.t -> t list
 
-(** Create an "bottom" type with the same kind as the given type. *)
-val bottom_like : (t -> t) type_accessor
-
-(** Create an "unknown" type with the same kind as the given type. *)
-val unknown_like : (t -> t) type_accessor
-
 (** Like [unknown_like] but for a array of types. *)
 val unknown_like_array : (t array -> t array) type_accessor
 

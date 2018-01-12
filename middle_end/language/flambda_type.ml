@@ -34,14 +34,6 @@ let bottom_types_from_arity t =
 let unknown_types_from_arity t =
   List.map (fun kind -> unknown kind) t
 
-let bottom_like ~type_of_name t =
-  let kind = kind ~type_of_name t in
-  bottom kind
-
-let unknown_like ~type_of_name t =
-  let kind = kind ~type_of_name t in
-  unknown kind
-
 let unknown_like_array ~type_of_name t_array =
   Array.map (fun t -> unknown_like ~type_of_name t) t_array
 

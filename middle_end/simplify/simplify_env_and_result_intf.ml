@@ -591,4 +591,13 @@ module type Result = sig
     -> Flambda_static.Static_part.t
     -> Symbol.t * t
 *)
+
+  val clear_typing_judgements : t -> t
+
+  val add_or_meet_typing_judgement
+     : (t
+    -> Name.t
+    -> Scope_level.t
+    -> Flambda_type.t
+    -> t) Flambda_type.type_accessor
 end

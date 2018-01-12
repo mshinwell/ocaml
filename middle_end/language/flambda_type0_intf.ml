@@ -288,6 +288,9 @@ module type S = sig
 
     val add : t -> Name.t -> Scope_level.t -> flambda_type -> t
 
+    val add_or_meet
+       : (t -> Name.t -> Scope_level.t -> flambda_type -> t) type_accessor
+
     val add_or_replace : t -> Name.t -> Scope_level.t -> flambda_type -> t
 
     type binding_type = Normal | Existential
@@ -452,6 +455,12 @@ module type S = sig
   val bottom_as_ty_value : unit -> ty_value
 
   val bottom_as_ty_fabricated : unit -> ty_fabricated
+
+  (** Create an "bottom" type with the same kind as the given type. *)
+  val bottom_like : (t -> t) type_accessor
+
+  (** Create an "unknown" type with the same kind as the given type. *)
+  val unknown_like : (t -> t) type_accessor
 
   val create_inlinable_function_declaration
      : is_classic_mode:bool
