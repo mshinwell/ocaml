@@ -830,19 +830,22 @@ end = struct
         Name.print func
         Simple.List.print args
     | Let { var = id; kind; defining_expr = arg; body; _ } ->
-        let rec letbody (ul : t) =
-          match ul with
-          | Let { var = id; defining_expr = arg; body; _ } ->
-              fprintf ppf "@ @[<2>%a@ %a@]" Variable.print id Named.print arg;
-              letbody body
-          | _ -> ul
-        in
-        fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a@[@ :: %a@]@ %a@]"
-          Variable.print id
-          Flambda_kind.print kind
-          Named.print arg;
-        let expr = letbody body in
-        fprintf ppf ")@]@ %a)@]" print expr
+      let rec letbody (ul : t) =
+        match ul with
+        | Let { var = id; defining_expr = arg; body; _ } ->
+          fprintf ppf "@ @[<2>%a@[@ :: %a@]@ %a@]"
+            Variable.print id
+            Flambda_kind.print kind
+            Named.print arg;
+          letbody body
+        | _ -> ul
+      in
+      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a@[@ :: %a@]@ %a@]"
+        Variable.print id
+        Flambda_kind.print kind
+        Named.print arg;
+      let expr = letbody body in
+      fprintf ppf ")@]@ %a)@]" print expr
     | Let_mutable { var; initial_value; body; contents_type; } ->
       fprintf ppf "@[<2>(let_mutable%a@ @[<2>%a@ %a@]@ %a)@]"
         Flambda_type.print contents_type
