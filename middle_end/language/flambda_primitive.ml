@@ -148,10 +148,10 @@ let print_duplicate_block_kind ppf (kind : duplicate_block_kind) =
 
 module Block_access_kind = struct
   type t0 =
-    | Any_value
+    | Any_value  (* XXX this needs to take Value_kind.t *)
     | Definitely_immediate
     | Naked_float
-    | Fabricated
+    | Fabricated_definitely_pointer
 
   type t =
     | Block of t0
@@ -163,11 +163,11 @@ module Block_access_kind = struct
     | Block Any_value -> K.value Unknown
     | Block Definitely_immediate -> K.value Definitely_immediate
     | Block Naked_float -> K.naked_float ()
-    | Block Fabricated -> K.fabricated Unknown
+    | Block Fabricated_definitely_pointer -> K.fabricated Definitely_pointer
     | Array Any_value -> K.value Unknown
     | Array Definitely_immediate -> K.value Definitely_immediate
     | Array Naked_float -> K.naked_float ()
-    | Array Fabricated -> K.fabricated Unknown
+    | Array Fabricated_definitely_pointer -> K.fabricated Definitely_pointer
     | Generic_array _ -> Misc.fatal_error "Not yet implemented"
 
   let kind_all_elements t =
@@ -175,11 +175,11 @@ module Block_access_kind = struct
     | Block Any_value -> K.value Unknown
     | Block Definitely_immediate -> K.value Unknown
     | Block Naked_float -> K.naked_float ()
-    | Block Fabricated -> K.fabricated Unknown
+    | Block Fabricated_definitely_pointer -> K.fabricated Definitely_pointer
     | Array Any_value -> K.value Unknown
     | Array Definitely_immediate -> K.value Definitely_immediate
     | Array Naked_float -> K.naked_float ()
-    | Array Fabricated -> K.fabricated Unknown
+    | Array Fabricated_definitely_pointer -> K.fabricated Definitely_pointer
     | Generic_array _ -> Misc.fatal_error "Not yet implemented"
 
   let compare_t0 (t0_1 : t0) t0_2 = Pervasives.compare t0_1 t0_2
@@ -202,7 +202,8 @@ module Block_access_kind = struct
     | Any_value -> Format.pp_print_string ppf "Any_value"
     | Definitely_immediate -> Format.pp_print_string ppf "Definitely_immediate"
     | Naked_float -> Format.pp_print_string ppf "Naked_float"
-    | Fabricated -> Format.pp_print_string ppf "Fabricated"
+    | Fabricated_definitely_pointer ->
+      Format.pp_print_string ppf "Fabricated_definitely_pointer"
 
   let print ppf kind =
     match kind with

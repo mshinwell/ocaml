@@ -56,14 +56,14 @@ let static_structure name ~vars_with_kinds =
           Misc.fatal_error "Not yet implemented"
       in
       let prim : Flambda_primitive.t =
-        let var = Simple.var var in
+        let var = Simple.name (Name.symbol symbol) in
         match kind with
         | Value _ ->
           Binary (Block_load (Block Any_value, Immutable), var,
             Simple.const (Tagged_immediate Immediate.zero))
         | Fabricated _ ->
-          Binary (Block_load (Block Fabricated, Immutable), var,
-            Simple.const (Tagged_immediate Immediate.zero))
+          Binary (Block_load (Block Fabricated_definitely_pointer, Immutable),
+            var, Simple.const (Tagged_immediate Immediate.zero))
         | Naked_number Naked_float -> Unary (Unbox_number Naked_float, var)
         | Naked_number Naked_int32 -> Unary (Unbox_number Naked_int32, var)
         | Naked_number Naked_int64 -> Unary (Unbox_number Naked_int64, var)
@@ -76,7 +76,7 @@ let static_structure name ~vars_with_kinds =
           Misc.fatal_error "Not yet implemented"
       in
       let binding : Flambda.Named.t = Prim (prim, dbg) in
-      let symbol_kind = K.value Unknown in
+      let symbol_kind = K.value Definitely_pointer in
       assign_symbols (index + 1) ~vars_with_kinds
         ((symbol, symbol_kind, static_part) :: resulting_static_part)
         ((var, kind, binding) :: resulting_bindings)
@@ -99,6 +99,9 @@ let rec lift (expr : Flambda.Expr.t) ~to_copy =
       (* The continuation is unused; delete it. *)
       free_conts_body, lifted, body
     end else if Continuation.Set.equal free_conts_body our_cont then begin
+      (* CR mshinwell: Relax this to allow the distinguished top level
+         exception continuation of the enclosing [computation] too (but no
+         other exception continuations) *)
       (* The body of this [Let_cont] can only return through [name], which
          means that [handler] postdominates [body].  As such we can cut off
          [body] and put it inside a [computation] whose continuation

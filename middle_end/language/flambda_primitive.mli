@@ -64,7 +64,7 @@ module Block_access_kind : sig
     | Any_value
     | Definitely_immediate
     | Naked_float
-    | Fabricated
+    | Fabricated_definitely_pointer
 
   type t =
     | Block of t0
