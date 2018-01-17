@@ -199,7 +199,7 @@ module Make_map (T : Thing_no_hash) = struct
   let print f ppf s =
     let elts ppf s = iter (fun id v ->
         Format.fprintf ppf "@ (@[%a@ %a@])" T.print id f v) s in
-    Format.fprintf ppf "@[<1>{@[%a@ @]}@]" elts s
+    Format.fprintf ppf "@[<1>(@[%a@ @])@]" elts s
 
   module T_set = Set.Make (T)
 
@@ -233,7 +233,7 @@ module Make_set (T : Thing_no_hash) = struct
 
   let print ppf s =
     let elts ppf s = iter (fun e -> Format.fprintf ppf "@ %a" T.print e) s in
-    Format.fprintf ppf "@[<1>{@[%a@ @]}@]" elts s
+    Format.fprintf ppf "@[<1>(@[%a@ @])@]" elts s
 
   let to_string s = Format.asprintf "%a" print s
 

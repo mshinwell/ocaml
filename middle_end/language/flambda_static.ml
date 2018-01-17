@@ -240,20 +240,26 @@ module Program_body = struct
       let free_variables = Flambda.Expr.free_variables computation.expr in
       if not (Variable.Set.is_empty free_variables) then begin
         Misc.fatal_errorf "Toplevel computation is not closed (free \
-            variables %a):@ %a"
+            variable(s) %a):@ %a"
           Variable.Set.print free_variables
           Flambda.Expr.print computation.expr
       end;
       let free_conts = Flambda.Expr.free_continuations computation.expr in
       if not (Continuation.Set.is_empty free_conts) then begin
-        begin match Continuation.Set.get_singleton free_conts with
-        | Some cont when Continuation.equal cont computation.return_cont -> ()
-        | _ ->
+        let allowed =
+          Continuation.Set.of_list [
+            computation.return_cont;
+            computation.exception_cont;
+          ]
+        in
+        let remaining = Continuation.Set.diff free_conts allowed in
+        if not (Continuation.Set.is_empty remaining) then begin
           Misc.fatal_errorf "Toplevel computation has illegal free \
-              continuations (%a); the only permitted free continuation is the \
-              return continuation, %a"
+              continuation(s) (%a);@ the only permitted free continuations are \
+              the return continuation, %a@ and the exception continuation, %a"
             Continuation.Set.print free_conts
             Continuation.print computation.return_cont
+            Continuation.print computation.exception_cont
         end
       end;
       let computation_env =
@@ -270,7 +276,7 @@ module Program_body = struct
       List.iter (fun (var, _kind) ->
           if Invariant_env.variable_is_bound env var then begin
             Misc.fatal_errorf "[computed_values] of a toplevel computation \
-                must contain fresh variables.  %a is not fresh.  \
+                must contain fresh variables.@ %a is not fresh.@ \
                 Computation:@ %a"
               Variable.print var
               Flambda.Expr.print computation.expr;

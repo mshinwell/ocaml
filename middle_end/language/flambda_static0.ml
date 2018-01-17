@@ -133,7 +133,7 @@ module Static_part = struct
     in
     match t with
     | Block (tag, mut, fields) ->
-      fprintf ppf "@[(%sblock [%a: %a])@]"
+      fprintf ppf "@[(%sblock (tag %a) (%a))@]"
         (match mut with Immutable -> "Immutable_" | Mutable -> "Mutable_")
         Tag.Scannable.print tag
         (Format.pp_print_list ~pp_sep:Format.pp_print_space
@@ -142,7 +142,7 @@ module Static_part = struct
       fprintf ppf "@[(Set_of_closures@ (%a))@]"
         F0.Set_of_closures.print set_of_closures
     | Closure (set_of_closures, closure_id) ->
-      fprintf ppf "@[(Closure (%a).%a))@]"
+      fprintf ppf "@[(Closure (set_of_closures %a) (closure_id %a))@]"
         Symbol.print set_of_closures
         Closure_id.print closure_id
     | Boxed_float (Const f) ->

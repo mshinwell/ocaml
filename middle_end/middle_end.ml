@@ -36,7 +36,14 @@ let middle_end ppf ~prefixname ~backend ~size ~filename ~module_ident
   Profile.record_call "flambda" (fun () ->
     let pass_number = ref 0 in
     let round_number = ref 0 in
-    let check flam = Flambda_static.Program.invariant flam in
+    let check flam =
+      try Flambda_static.Program.invariant flam
+      with exn -> begin
+        Format.eprintf "Term which failed invariant check:@ %a\n%!"
+          Flambda_static.Program.print flam;
+        raise exn
+      end
+    in
     let print_prepared_lambda (lam, recursive_static_catches) =
       if not !Clflags.dump_rawflambda then begin
         lam, recursive_static_catches
