@@ -103,7 +103,8 @@ type assign = {
 module Free_var : sig
   type t = {
     var : Variable.t;
-    (* XXX [equalities] isn't right now.  Think about what should replace it *)
+    (* XXX [equalities] isn't right now.  Think about what should replace it
+       (maybe nothing?) *)
     equalities : Flambda_primitive.With_fixed_value.Set.t;
   }
 
@@ -685,7 +686,7 @@ end and Typed_parameter : sig
       type. *)
   type t
 
-  (** Create a typed parameter with no equalities. *)
+  (** Create a typed parameter. *)
   val create : (Parameter.t -> Flambda_type.t -> t) Flambda_type.type_accessor
 
   (** As for [create] except that the parameter is given an unknown type of the
@@ -704,9 +705,6 @@ end and Typed_parameter : sig
 
   (** The kind of the given parameter. *)
   val kind : t -> Flambda_kind.t
-
-  (** Equalities to primitive applications that hold about this parameter. *)
-  val equalities : t -> Flambda_primitive.With_fixed_value.Set.t
 
   (** Replace the type of the given parameter. *)
   val with_type : t -> Flambda_type.t -> t

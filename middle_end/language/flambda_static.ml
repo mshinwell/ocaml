@@ -236,7 +236,9 @@ module Program_body = struct
          of [free_variables] and [free_continuations] in [Expr]. *)
       let free_variables = Flambda.Expr.free_variables computation.expr in
       if not (Variable.Set.is_empty free_variables) then begin
-        Misc.fatal_errorf "Toplevel computation is not closed: %a"
+        Misc.fatal_errorf "Toplevel computation is not closed (free \
+            variables %a):@ %a"
+          Variable.Set.print free_variables
           Flambda.Expr.print computation.expr
       end;
       let free_conts = Flambda.Expr.free_continuations computation.expr in
@@ -266,7 +268,7 @@ module Program_body = struct
           if Invariant_env.variable_is_bound env var then begin
             Misc.fatal_errorf "[computed_values] of a toplevel computation \
                 must contain fresh variables.  %a is not fresh.  \
-                Computation: %a"
+                Computation:@ %a"
               Variable.print var
               Flambda.Expr.print computation.expr;
           end)
@@ -302,7 +304,7 @@ module Program_body = struct
         if not (Name.Set.subset free_names allowed_fns) then begin
           Misc.fatal_errorf "Static part is only allowed to reference \
               the following free names: { %a }, whereas it references \
-              { %a }.  Static part: %a = %a"
+              { %a }.  Static part:@ %a = %a"
             Name.Set.print free_names
             Name.Set.print allowed_fns
             Symbol.print sym
@@ -706,7 +708,7 @@ module Program = struct
       in
       if not (Closure_id.Set.is_empty not_declared_from_current_unit) then begin
         Misc.fatal_errorf "Closure ID(s) { %a } from the current compilation \
-            unit is/are referenced but not declared: %a"
+            unit is/are referenced but not declared:@ %a"
           Closure_id.Set.print not_declared
           print t
       end
@@ -722,7 +724,7 @@ module Program = struct
       if not (Var_within_closure.Set.is_empty not_declared_from_current_unit)
       then begin
         Misc.fatal_errorf "Closure ID(s) { %a } from the current compilation \
-            unit is/are referenced but not declared: %a"
+            unit is/are referenced but not declared:@ %a"
           Var_within_closure.Set.print not_declared
           print t
       end

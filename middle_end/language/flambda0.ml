@@ -677,7 +677,7 @@ end = struct
         dbg = _;
         inline = _;
         specialise = _;
-        } ->
+      } ->
       Continuation.Set.of_list [continuation; exn_continuation]
     | Switch (_scrutinee, Value int_switch) ->
       Continuation.Set.of_list (Targetint.OCaml.Map.data int_switch)
@@ -1642,9 +1642,10 @@ end = struct
 
   let free_names t =
     let my_closure = Name.var t.my_closure in
-    let params = Typed_parameter.List.free_names t.params in
-    let bound = Name.Set.add my_closure params in
-    Name.Set.diff t.free_names_in_body bound
+    let free_in_params = Typed_parameter.List.free_names t.params in
+    let bound_in_params = Typed_parameter.List.bound_names t.params in
+    let bound = Name.Set.add my_closure bound_in_params in
+    Name.Set.diff (Name.Set.union free_in_params t.free_names_in_body) bound
 
   let equal ~equal_type
         { closure_origin = closure_origin1;
@@ -1735,7 +1736,6 @@ end and Typed_parameter : sig
   val simple : t -> Simple.t
   val ty : t -> Flambda_type.t
   val kind : t -> Flambda_kind.t
-  val equalities : t -> Flambda_primitive.With_fixed_value.Set.t
   val with_type : t -> Flambda_type.t -> t
   val map_var : t -> f:(Variable.t -> Variable.t) -> t
   val map_type : t -> f:(Flambda_type.t -> Flambda_type.t) -> t
@@ -1756,6 +1756,7 @@ end and Typed_parameter : sig
     val rename : t -> t
     val arity : t -> Flambda_kind.t list
     val free_names : t -> Name.Set.t
+    val bound_names : t -> Name.Set.t
     val print : Format.formatter -> t -> unit
     val equal
        : equal_type:(Flambda_type.t -> Flambda_type.t -> bool)
@@ -1768,7 +1769,6 @@ end and Typed_parameter : sig
 end = struct
   type t = {
     param : Parameter.t;
-    equalities : Flambda_primitive.With_fixed_value.Set.t;
     (* CR mshinwell: Add an invariant check that [kind] matches [ty] *)
     ty : Flambda_type.t;
     (* [kind] is here so that you don't need an environment, which
@@ -1779,21 +1779,18 @@ end = struct
   let create ~type_of_name param ty =
     let kind = Flambda_type.kind ~type_of_name ty in
     { param;
-      equalities = Flambda_primitive.With_fixed_value.Set.empty;
       ty;
       kind;
     }
 
   let create_from_kind param kind =
     { param;
-      equalities = Flambda_primitive.With_fixed_value.Set.empty;
       ty = Flambda_type.unknown kind;
       kind;
     }
 
   let var t = Parameter.var t.param
   let simple t = Simple.var (var t)
-  let equalities t = t.equalities
   let ty t = t.ty
   let kind t = t.kind
 
@@ -1807,13 +1804,8 @@ end = struct
 
   let free_names t =
     (* The variable within [t] is always presumed to be a binding
-       occurrence, so the only free variables are those within the
-       equality (if such exists) and the type. *)
-    Flambda_primitive.With_fixed_value.Set.fold (fun prim from_equalities ->
-        Name.Set.union from_equalities
-          (Flambda_primitive.With_fixed_value.free_names prim))
-      t.equalities
-      (Flambda_type.free_names t.ty)
+       occurrence. *)
+    Flambda_type.free_names t.ty
 
 (*
   include Identifiable.Make (struct
@@ -1837,23 +1829,19 @@ end = struct
 *)
 
   let equal ~equal_type
-        { param = param1; equalities = equalities1; ty = ty1; kind = kind1; }
-        { param = param2; equalities = equalities2; ty = ty2; kind = kind2; } =
+        { param = param1; ty = ty1; kind = kind1; }
+        { param = param2; ty = ty2; kind = kind2; } =
     Parameter.equal param1 param2
-      && Flambda_primitive.With_fixed_value.Set.equal equalities1 equalities2
       && equal_type ty1 ty2
       && Flambda_kind.equal kind1 kind2
 
-  let print ppf { param; equalities = _; ty; kind = _; } =
+  let print ppf { param; ty; kind = _; } =
     Format.fprintf ppf "(%a : %a)"
       Parameter.print param
       Flambda_type.print ty
 
   module List = struct
     type nonrec t = t list
-
-    let free_names t =
-      Name.Set.union_list (List.map free_names t)
 
     let vars t = List.map var t
 
@@ -1871,6 +1859,11 @@ end = struct
     let rename t = List.map (fun t -> rename t) t
 
     let arity t = List.map (fun t -> kind t) t
+
+    let free_names t =
+      Name.Set.union_list (List.map free_names t)
+
+    let bound_names t = name_set t
 
     let equal ~equal_type t1 t2 =
       List.compare_lengths t1 t2 = 0

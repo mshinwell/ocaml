@@ -31,25 +31,12 @@
 (*           | None -> assert false) *)
 (*         set_of_closures.function_decls.funs) *)
 
-let middle_end ppf ~prefixname ~backend
-    ~size
-    ~filename
-    ~module_ident
-    ~module_initializer =
+let middle_end ppf ~prefixname ~backend ~size ~filename ~module_ident
+      ~module_initializer =
   Profile.record_call "flambda" (fun () ->
     let pass_number = ref 0 in
     let round_number = ref 0 in
-    let check flam =
-      (* if !Clflags.flambda_invariant_checks then begin *)
-      (*   try Flambda_invariants.check_exn flam *)
-      (*   with exn -> *)
-      (*     Misc.fatal_errorf "After Flambda pass %d, round %d:@.%s:@.%a" *)
-      (*       !pass_number !round_number (Printexc.to_string exn) *)
-      (*       Flambda_static.Program.print flam *)
-      (* end *)
-      ignore flam;
-      ignore prefixname
-    in
+    let check flam = Flambda_static.Program.invariant flam in
     let print_prepared_lambda (lam, recursive_static_catches) =
       if not !Clflags.dump_rawflambda then begin
         lam, recursive_static_catches

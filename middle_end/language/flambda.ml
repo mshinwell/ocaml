@@ -921,11 +921,12 @@ end = struct
         begin match named_kind with
         | None -> ()
         | Some named_kind ->
-          if not (K.equal kind named_kind) then begin
-            Misc.fatal_errorf "[Let] expression kind annotation (%a) does not \
-                match the inferred kind (%a) of the defining expression: %a"
-              K.print kind
+          if not (K.compatible named_kind ~if_used_at:kind) then begin
+            Misc.fatal_errorf "[Let] expression inferred kind (%a) is not \
+                compatible with the annotated kind (%a); defining \
+                expression:@ %a"
               K.print named_kind
+              K.print kind
               print t
           end
         end;
@@ -1354,31 +1355,36 @@ end = struct
   (* CR mshinwell: It seems that the type [Flambda_primitive.result_kind]
      should move into [K], now it's used here. *)
   let invariant env t : Flambda_primitive.result_kind =
-    let module E = Invariant_env in
-    match t with
-    | Simple simple ->
-      Singleton (E.kind_of_simple env simple)
-    | Read_mutable mut_var ->
-      Singleton (E.kind_of_mutable_variable env mut_var)
-    | Assign { being_assigned; new_value; } ->
-      let being_assigned_kind = E.kind_of_mutable_variable env being_assigned in
-      let new_value_kind = E.kind_of_simple env new_value in
-      if not (K.equal new_value_kind being_assigned_kind) then begin
-        Misc.fatal_errorf "Cannot put value %a of kind %a into mutable \
-            variable %a with contents kind %a"
-          Simple.print new_value
-          K.print new_value_kind
-          Mutable_variable.print being_assigned
-          K.print being_assigned_kind
-      end;
-      Singleton (K.unit ())
-    | Set_of_closures set_of_closures ->
-      Set_of_closures.invariant env set_of_closures;
-      Singleton (K.value Definitely_pointer)
-    | Prim (prim, dbg) ->
-      primitive_invariant env prim;
-      ignore (dbg : Debuginfo.t);
-      Flambda_primitive.result_kind prim
+    try
+      let module E = Invariant_env in
+      match t with
+      | Simple simple ->
+        Singleton (E.kind_of_simple env simple)
+      | Read_mutable mut_var ->
+        Singleton (E.kind_of_mutable_variable env mut_var)
+      | Assign { being_assigned; new_value; } ->
+        let being_assigned_kind =
+          E.kind_of_mutable_variable env being_assigned
+        in
+        let new_value_kind = E.kind_of_simple env new_value in
+        if not (K.equal new_value_kind being_assigned_kind) then begin
+          Misc.fatal_errorf "Cannot put value %a of kind %a into mutable \
+              variable %a with contents kind %a"
+            Simple.print new_value
+            K.print new_value_kind
+            Mutable_variable.print being_assigned
+            K.print being_assigned_kind
+        end;
+        Singleton (K.unit ())
+      | Set_of_closures set_of_closures ->
+        Set_of_closures.invariant env set_of_closures;
+        Singleton (K.value Definitely_pointer)
+      | Prim (prim, dbg) ->
+        primitive_invariant env prim;
+        ignore (dbg : Debuginfo.t);
+        Flambda_primitive.result_kind prim
+    with Misc.Fatal_error ->
+      Misc.fatal_errorf "(during invariant checks) Context is:@ %a" print t
 end and Let_cont_handlers : sig
   include module type of F0.Let_cont_handlers
 
@@ -1583,12 +1589,12 @@ end = struct
           (* Check that every variable free in the body of the function is
              either the distinguished "own closure" variable or one of the
              function's parameters. *)
-          let acceptable_free_variables =
+          let allowed_free_variables =
             Variable.Set.add my_closure
               (Typed_parameter.List.var_set params)
           in
           let bad =
-            Variable.Set.diff free_variables acceptable_free_variables
+            Variable.Set.diff free_variables allowed_free_variables
           in
           if not (Variable.Set.is_empty bad) then begin
             Misc.fatal_errorf "The function bound to closure ID %a contains \
@@ -1619,7 +1625,8 @@ end = struct
               match Typed_parameter.equalities param with
               | [] -> ()
               | _ ->
-                (* XXX this needs finishing *)
+                (* XXX this needs finishing -- in fact probably not
+                   needed now *)
                 ()
                 (* Old code:
                 let projecting_from = Projection.projecting_from projection in
@@ -1647,7 +1654,7 @@ end = struct
           let body_env =
             E.prepare_for_function_body env ~return_cont
               ~return_cont_arity:return_arity
-              ~allowed_free_variables:free_variables
+              ~allowed_free_variables
           in
           Expr.invariant body_env body;
           all_params, Variable.Set.union free_variables all_free_vars)

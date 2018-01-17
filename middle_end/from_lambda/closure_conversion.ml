@@ -885,7 +885,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
     List.init size
       (fun pos ->
          let pos_str = string_of_int pos in
-         Variable.create ("block_symbol_" ^ pos_str),
+         Variable.create ("block_field_" ^ pos_str),
          Flambda_kind.value Unknown)
   in
   let assign_continuation_body =
@@ -893,7 +893,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
       List.init size
         (fun pos ->
            let pos_str = string_of_int pos in
-           pos, Variable.create ("block_symbol_" ^ pos_str))
+           pos, Variable.create ("block_field_" ^ pos_str))
     in
     let body : Flambda.Expr.t =
       Apply_cont
