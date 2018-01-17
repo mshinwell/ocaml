@@ -37,8 +37,7 @@ let unknown_types_from_arity t =
 let unknown_like_array ~type_of_name t_array =
   Array.map (fun t -> unknown_like ~type_of_name t) t_array
 
-let rename_variables _t ~f:_ =
-  assert false
+let rename_variables t ~f:_ = t
 (* XXX need to fix [Flambda_type0.clean]
   clean t (fun var -> Available_different_name (f var))
 *)

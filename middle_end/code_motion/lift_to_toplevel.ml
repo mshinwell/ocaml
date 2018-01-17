@@ -196,6 +196,9 @@ let rec lift (expr : Flambda.Expr.t) ~to_copy =
       let computation : Program_body.computation =
         { expr;
           return_cont;
+          (* Recall from above that the body cannot raise any
+             exceptions.  As such, the exception continuation may be
+             arbitrarily chosen. *)
           exception_cont = Continuation.create ();
           computed_values = vars_with_kinds;
         }
@@ -263,7 +266,7 @@ let introduce_symbols (defn : Program_body.definition) =
               Misc.Stdlib.Option.map
                 (fun (computation : Program_body.computation) ->
                   let expr =
-                    Flambda.Expr.toplevel_substitution subst expr
+                    Flambda.Expr.toplevel_substitution subst computation.expr
                   in
                   { computation with expr; })
                 defn.computation

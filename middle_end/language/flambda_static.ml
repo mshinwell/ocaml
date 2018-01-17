@@ -255,7 +255,7 @@ module Program_body = struct
         let remaining = Continuation.Set.diff free_conts allowed in
         if not (Continuation.Set.is_empty remaining) then begin
           Misc.fatal_errorf "Toplevel computation has illegal free \
-              continuation(s) (%a);@ the only permitted free continuations are \
+              continuation(s) %a;@ the only permitted free continuations are \
               the return continuation, %a@ and the exception continuation, %a"
             Continuation.Set.print free_conts
             Continuation.print computation.return_cont
