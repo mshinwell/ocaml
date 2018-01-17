@@ -33,45 +33,48 @@ module Static_part = struct
   include Flambda_static0.Static_part
 
   let invariant env t =
-    let module E = Invariant_env in
-    match t with
-    | Block (_tag, _mut, fields) ->
-      List.iter (fun field -> Of_kind_value.invariant env field) fields
-    | Set_of_closures set ->
-      Flambda.Set_of_closures.invariant env set
-    | Closure (sym, _closure_id) ->
-      E.check_symbol_is_bound env sym
-    | Boxed_float (Var v) ->
-      E.check_variable_is_bound_and_of_kind env v
-        (Flambda_kind.naked_float ())
-    | Boxed_int32 (Var v) ->
-      E.check_variable_is_bound_and_of_kind env v
-        (Flambda_kind.naked_int32 ())
-    | Boxed_int64 (Var v) ->
-      E.check_variable_is_bound_and_of_kind env v
-        (Flambda_kind.naked_int64 ())
-    | Boxed_nativeint (Var v) ->
-      E.check_variable_is_bound_and_of_kind env v
-        (Flambda_kind.naked_nativeint ())
-    | Mutable_string { initial_value = Var v; }
-    | Immutable_string (Var v) ->
-      E.check_variable_is_bound_and_of_kind env v
-        (Flambda_kind.value Definitely_pointer)
-    | Boxed_float (Const _)
-    | Boxed_int32 (Const _)
-    | Boxed_int64 (Const _)
-    | Boxed_nativeint (Const _)
-    | Mutable_string { initial_value = Const _; }
-    | Immutable_string (Const _) -> ()
-    | Mutable_float_array { initial_value = fields; }
-    | Immutable_float_array fields ->
-      List.iter (fun (field : _ or_variable) ->
-          match field with
-          | Var v ->
-            E.check_variable_is_bound_and_of_kind env v
-              (Flambda_kind.naked_float ())
-          | Const _ -> ())
-        fields
+    try
+      let module E = Invariant_env in
+      match t with
+      | Block (_tag, _mut, fields) ->
+        List.iter (fun field -> Of_kind_value.invariant env field) fields
+      | Set_of_closures set ->
+        Flambda.Set_of_closures.invariant env set
+      | Closure (sym, _closure_id) ->
+        E.check_symbol_is_bound env sym
+      | Boxed_float (Var v) ->
+        E.check_variable_is_bound_and_of_kind env v
+          (Flambda_kind.naked_float ())
+      | Boxed_int32 (Var v) ->
+        E.check_variable_is_bound_and_of_kind env v
+          (Flambda_kind.naked_int32 ())
+      | Boxed_int64 (Var v) ->
+        E.check_variable_is_bound_and_of_kind env v
+          (Flambda_kind.naked_int64 ())
+      | Boxed_nativeint (Var v) ->
+        E.check_variable_is_bound_and_of_kind env v
+          (Flambda_kind.naked_nativeint ())
+      | Mutable_string { initial_value = Var v; }
+      | Immutable_string (Var v) ->
+        E.check_variable_is_bound_and_of_kind env v
+          (Flambda_kind.value Definitely_pointer)
+      | Boxed_float (Const _)
+      | Boxed_int32 (Const _)
+      | Boxed_int64 (Const _)
+      | Boxed_nativeint (Const _)
+      | Mutable_string { initial_value = Const _; }
+      | Immutable_string (Const _) -> ()
+      | Mutable_float_array { initial_value = fields; }
+      | Immutable_float_array fields ->
+        List.iter (fun (field : _ or_variable) ->
+            match field with
+            | Var v ->
+              E.check_variable_is_bound_and_of_kind env v
+                (Flambda_kind.naked_float ())
+            | Const _ -> ())
+          fields
+    with Misc.Fatal_error ->
+      Misc.fatal_errorf "(during invariant checks) Context is:@ %a" print t
 
   module Iterators = struct
     let iter_toplevel_exprs t ~f =
@@ -293,6 +296,15 @@ module Program_body = struct
           List.map (fun (var, _kind) -> Name.var var)
             computation.computed_values)
     in
+    let static_part_env =
+      match defn.computation with
+      | None -> env
+      | Some computation ->
+        List.fold_left (fun static_part_env (var, kind) ->
+            E.add_variable static_part_env var kind)
+          env
+          computation.computed_values
+    in
     List.iter (fun (sym, static_part) ->
         let free_names = Static_part.free_names static_part in
         (* This will also be caught by [invariant_static_part], but will
@@ -307,7 +319,7 @@ module Program_body = struct
             Symbol.print sym
             Static_part.print static_part
         end;
-        Static_part.invariant env static_part)
+        Static_part.invariant static_part_env static_part)
       defn.static_structure;
     List.fold_left (fun env (sym, _static_part) ->
         match recursive with
