@@ -16,7 +16,6 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module T = Flambda0.Flambda_type
 
 type continuation_kind = Normal | Exn_handler
 
@@ -106,8 +105,8 @@ type t = {
   uses_of_closure_ids_seen : Closure_id.Set.t ref;
   all_var_within_closures_seen : Var_within_closure.Set.t ref;
   uses_of_var_within_closures_seen : Var_within_closure.Set.t ref;
-  names : T.t Name.Map.t;
-  mutable_variables : T.t Mutable_variable.Map.t;
+  names : Flambda_kind.t Name.Map.t;
+  mutable_variables : Flambda_kind.t Mutable_variable.Map.t;
   continuations :
     (Flambda_arity.t * continuation_kind * Continuation_stack.t)
       Continuation.Map.t;
@@ -129,28 +128,7 @@ let create () =
     continuation_stack = Continuation_stack.var ();
   }
 
-let prepare_for_function_body t ~return_cont ~return_cont_arity
-      ~allowed_free_variables =
-  let names =
-    Name.Map.filter (fun (name : Name.t) _ ->
-        match name with
-        | Var var -> Variable.Set.mem var allowed_free_variables
-        | Symbol _ -> true)
-      t.names
-  in
-  let continuation_stack = Continuation_stack.var () in
-  let continuations =
-    Continuation.Map.singleton return_cont
-      (return_cont_arity, Normal, continuation_stack)
-  in
-  { t with
-    names;
-    mutable_variables = Mutable_variable.Map.empty;
-    continuations;
-    continuation_stack;
-  }
-
-let add_variable t var ty =
+let add_variable t var kind =
   let name = Name.var var in
   if Name.Map.mem name t.names then begin
     Misc.fatal_errorf "Duplicate binding of variable %a which is already \
@@ -171,13 +149,13 @@ let add_variable t var ty =
   end;
   t.all_names_seen := Name.Set.add name !(t.all_names_seen);
   { t with
-    names = Name.Map.add name ty t.names;
+    names = Name.Map.add name kind t.names;
   }
 
-let add_variables t vars_and_tys =
-  List.fold_left (fun t (var, ty) -> add_variable t var ty) t vars_and_tys
+let add_variables t vars_and_kinds =
+  List.fold_left (fun t (var, kind) -> add_variable t var kind) t vars_and_kinds
 
-let add_mutable_variable t var ty =
+let add_mutable_variable t var kind =
   if Mutable_variable.Map.mem var t.mutable_variables then begin
     Misc.fatal_errorf "Duplicate binding of mutable variable %a which is \
         already bound in the current scope"
@@ -198,10 +176,10 @@ let add_mutable_variable t var ty =
   t.all_mutable_variables_seen :=
     Mutable_variable.Set.add var !(t.all_mutable_variables_seen);
   { t with
-    mutable_variables = Mutable_variable.Map.add var ty t.mutable_variables;
+    mutable_variables = Mutable_variable.Map.add var kind t.mutable_variables;
   }
 
-let add_symbol t sym ty =
+let add_symbol t sym =
   let name = Name.symbol sym in
   if Name.Map.mem name t.names then begin
     Misc.fatal_errorf "Duplicate binding of symbol %a which is already \
@@ -222,7 +200,7 @@ let add_symbol t sym ty =
   end;
   t.all_names_seen := Name.Set.add name !(t.all_names_seen);
   { t with
-    names = Name.Map.add name ty t.names;
+    names = Name.Map.add name (Flambda_kind.value Definitely_pointer) t.names;
   }
 
 let add_continuation t cont arity kind stack =
@@ -266,31 +244,16 @@ let check_variable_is_bound t var =
 let check_variables_are_bound t vars =
   List.iter (fun var -> check_variable_is_bound t var) vars
 
-let type_of_name_option t name =
-  match Name.Map.find name t.names with
-  | exception Not_found -> None
-  | ty -> Some ty
-
 let check_name_is_bound_and_of_kind t name desired_kind =
   match Name.Map.find name t.names with
   | exception Not_found ->
     Misc.fatal_errorf "Unbound name %a" Name.print name
-  | ty ->
-    let kind =
-      (* CR mshinwell: Having to specify this [type_of_name] is pretty
-         horrid.  Is it even correct? *)
-      T.kind ty ~type_of_name:(fun ?local_env (id : T.Name_or_export_id.t) ->
-        ignore local_env;
-        match id with
-        | Name name -> type_of_name_option t name
-        | Export_id _ -> None)
-    in
+  | kind ->
     if not (Flambda_kind.compatible kind ~if_used_at:desired_kind) then begin
-      Misc.fatal_errorf "Name %a is expected to have kind [%a] but is \
-          of kind %a"
+      Misc.fatal_errorf "Name %a of kind %a cannot be used at kind %a"
         Name.print name
-        Flambda_kind.print desired_kind
         Flambda_kind.print kind
+        Flambda_kind.print desired_kind
       end
 
 let check_simple_is_bound_and_of_kind t (simple : Simple.t) desired_kind =
@@ -299,11 +262,10 @@ let check_simple_is_bound_and_of_kind t (simple : Simple.t) desired_kind =
   | Const const ->
     let actual_kind = Simple.Const.kind const in
     if not (Flambda_kind.equal actual_kind desired_kind) then begin
-      Misc.fatal_errorf "Simple term %a expected to have kind %a but is \
-          of kind %a"
+      Misc.fatal_errorf "Simple term %a of kind %a cannot be used at kind %a"
         Simple.print simple
-        Flambda_kind.print desired_kind
         Flambda_kind.print actual_kind
+        Flambda_kind.print desired_kind
     end
 
 let check_simples_are_bound_and_of_kind t simples desired_kind =
@@ -342,13 +304,7 @@ let kind_of_name t name =
   match Name.Map.find name t.names with
   | exception Not_found ->
     Misc.fatal_errorf "Unbound name %a" Name.print name
-  | ty ->
-    (* CR mshinwell: factor this code out *)
-    T.kind ty ~type_of_name:(fun ?local_env (id : T.Name_or_export_id.t) ->
-      ignore local_env;
-      match id with
-      | Name name -> type_of_name_option t name
-      | Export_id _ -> None)
+  | kind -> kind
 
 let kind_of_simple t (simple : Simple.t) =
   match simple with
@@ -361,12 +317,7 @@ let kind_of_mutable_variable t var =
   match Mutable_variable.Map.find var t.mutable_variables with
   | exception Not_found ->
     Misc.fatal_errorf "Unbound mutable variable %a" Mutable_variable.print var
-  | ty ->
-    T.kind ty ~type_of_name:(fun ?local_env (id : T.Name_or_export_id.t) ->
-      ignore local_env;
-      match id with
-      | Name name -> type_of_name_option t name
-      | Export_id _ -> None)
+  | kind -> kind
 
 let current_continuation_stack t = t.continuation_stack
 
@@ -431,3 +382,29 @@ let closure_ids_not_declared t =
 let var_within_closures_not_declared t =
   Var_within_closure.Set.diff !(t.all_var_within_closures_seen)
     !(t.uses_of_var_within_closures_seen)
+
+let prepare_for_function_body t ~parameters_with_kinds ~my_closure
+      ~return_cont ~return_cont_arity ~exception_cont =
+  (* CR mshinwell for pchambart: Is one continuation stack correct now that
+     we have exception continuations? *)
+  let continuation_stack = Continuation_stack.var () in
+  let continuations =
+    Continuation.Map.singleton return_cont
+      (return_cont_arity, Normal, continuation_stack)
+  in
+  let continuations =
+    Continuation.Map.add exception_cont
+      ([Flambda_kind.value Unknown], Exn_handler, continuation_stack)
+      continuations
+  in
+  let t =
+    { t with
+      names = Name.Map.empty;
+      mutable_variables = Mutable_variable.Map.empty;
+      continuations;
+      continuation_stack;
+    }
+  in
+  add_variables
+    (add_variable t my_closure (Flambda_kind.value Definitely_pointer))
+    parameters_with_kinds

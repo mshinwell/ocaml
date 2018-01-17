@@ -904,8 +904,8 @@ end = struct
     let add_typed_parameters t params =
       List.fold_left (fun t param ->
           let var = Typed_parameter.var param in
-          let ty = Typed_parameter.ty param in
-          E.add_variable t var ty)
+          let kind = Typed_parameter.kind param in
+          E.add_variable t var kind)
         t
         params
     in
@@ -930,10 +930,11 @@ end = struct
               print t
           end
         end;
-        let ty = Flambda_type.unknown kind in
-        let env = E.add_variable env var ty in
+        let env = E.add_variable env var kind in
         loop env body
-      | Let_mutable { var; initial_value; body; contents_type; } ->
+      | Let_mutable _ ->
+        Misc.fatal_errorf "Let_mutable not yet supported"
+(* { var; initial_value; body; contents_type; } ->
         let initial_value_kind = E.kind_of_simple env initial_value in
         let contents_kind =
           Flambda_type.kind ~type_of_name:
@@ -954,6 +955,7 @@ end = struct
         let contents_ty = Flambda_type.unknown contents_kind in
         let env = E.add_mutable_variable env var contents_ty in
         loop env body
+*)
       | Let_cont { body; handlers; } ->
         let handler_stack = E.Continuation_stack.var () in
         let env =
@@ -1593,6 +1595,13 @@ end = struct
             Variable.Set.add my_closure
               (Typed_parameter.List.var_set params)
           in
+          let parameters_with_kinds =
+            List.map (fun param ->
+                let var = Typed_parameter.var param in
+                let kind = Typed_parameter.kind param in
+                var, kind)
+              params
+          in
           let bad =
             Variable.Set.diff free_variables allowed_free_variables
           in
@@ -1652,9 +1661,12 @@ end = struct
           end;
           (* Check the body of the function. *)
           let body_env =
-            E.prepare_for_function_body env ~return_cont
+            E.prepare_for_function_body env
+              ~parameters_with_kinds
+              ~my_closure
+              ~return_cont
               ~return_cont_arity:return_arity
-              ~allowed_free_variables
+              ~exception_cont:exn_continuation_param
           in
           Expr.invariant body_env body;
           all_params, Variable.Set.union free_variables all_free_vars)

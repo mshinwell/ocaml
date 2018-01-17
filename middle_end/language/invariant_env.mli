@@ -39,22 +39,24 @@ val create : unit -> t
 
 val prepare_for_function_body
    : t
+  -> parameters_with_kinds:(Variable.t * Flambda_kind.t) list
+  -> my_closure:Variable.t
   -> return_cont:Continuation.t
   -> return_cont_arity:Flambda_arity.t
-  -> allowed_free_variables:Variable.Set.t
+  -> exception_cont:Continuation.t
   -> t
 
-val add_variable : t -> Variable.t -> Flambda0.Flambda_type.t -> t
+val add_variable : t -> Variable.t -> Flambda_kind.t -> t
 
-val add_variables : t -> (Variable.t * Flambda0.Flambda_type.t) list -> t
+val add_variables : t -> (Variable.t * Flambda_kind.t) list -> t
 
 val add_mutable_variable
    : t
   -> Mutable_variable.t
-  -> Flambda0.Flambda_type.t
+  -> Flambda_kind.t
   -> t
 
-val add_symbol : t -> Symbol.t -> Flambda0.Flambda_type.t -> t
+val add_symbol : t -> Symbol.t -> t
 
 val add_continuation
    : t
@@ -75,9 +77,6 @@ val add_use_of_closure_id : t -> Closure_id.t -> unit
 
 (* XXX this one needs to error upon rebinding *)
 val add_set_of_closures_id : t -> Set_of_closures_id.t -> unit
-
-(** The type of the given name, returning [None] iff the name is unbound. *)
-val type_of_name_option : t -> Name.t -> Flambda0.Flambda_type.t option
 
 val variable_is_bound : t -> Variable.t -> bool
 

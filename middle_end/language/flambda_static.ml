@@ -281,10 +281,7 @@ module Program_body = struct
       | Non_recursive -> env
       | Recursive ->
         List.fold_left (fun env (sym, _static_part) ->
-            let ty =
-              Flambda_type.unknown (Flambda_kind.value Definitely_immediate)
-            in
-            E.add_symbol env sym ty)
+            E.add_symbol env sym)
           env
           defn.static_structure
     in
@@ -313,11 +310,8 @@ module Program_body = struct
         Static_part.invariant env static_part)
       defn.static_structure;
     List.fold_left (fun env (sym, _static_part) ->
-        let ty =
-          Flambda_type.unknown (Flambda_kind.value Definitely_immediate)
-        in
         match recursive with
-        | Non_recursive -> E.add_symbol env sym ty
+        | Non_recursive -> E.add_symbol env sym
         | Recursive ->
           (* If we ever store data about symbols, this place needs updating
              to do a "redefine_symbol" operation on [env]. *)
@@ -731,10 +725,7 @@ module Program = struct
     in
     let env =
       Symbol.Set.fold (fun symbol env ->
-          let ty =
-            Flambda_type.unknown (Flambda_kind.value Definitely_immediate)
-          in
-          E.add_symbol env symbol ty)
+          E.add_symbol env symbol)
         t.imported_symbols
         (E.create ())
     in
