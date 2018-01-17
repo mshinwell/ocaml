@@ -832,7 +832,7 @@ end = struct
     | Let { var = id; kind; defining_expr = arg; body; _ } ->
       let rec letbody (ul : t) =
         match ul with
-        | Let { var = id; defining_expr = arg; body; _ } ->
+        | Let { var = id; kind; defining_expr = arg; body; _ } ->
           fprintf ppf "@ @[<2>%a@[@ :: %a@]@ %a@]"
             Variable.print id
             Flambda_kind.print kind

@@ -27,4 +27,6 @@ val is_all_values : t -> bool
 
 val is_all_naked_floats : t -> bool
 
+val compatible : t -> if_used_at:t -> bool
+
 include Identifiable.S with type t := t

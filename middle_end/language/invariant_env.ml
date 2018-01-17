@@ -130,6 +130,9 @@ let create () =
 
 let add_variable t var kind =
   let name = Name.var var in
+(*Format.eprintf "add_variable %a :: %a\n%s\n%!"
+  Variable.print var Flambda_kind.print kind
+  (Printexc.raw_backtrace_to_string (Printexc.get_callstack 50));*)
   if Name.Map.mem name t.names then begin
     Misc.fatal_errorf "Duplicate binding of variable %a which is already \
         bound in the current scope"

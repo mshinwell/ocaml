@@ -64,8 +64,16 @@ let convert_mutable_flag (flag : Asttypes.mutable_flag)
 
 let convert_comparison_prim (comp : Lambda.comparison) : P.binary_primitive =
   match comp with
-  | Ceq -> Eq_comp (K.value Definitely_immediate, Eq)
-  | Cneq -> Eq_comp (K.value Definitely_immediate, Neq)
+  (* CR mshinwell for pchambart: I changed "Definitely_immediate" to
+     "Unknown" after running into trouble here.  e.g. the argument to this
+     function:
+       let f t =
+         match t with
+         | Foo -> 1
+         | Bar -> 2
+  *)
+  | Ceq -> Eq_comp (K.value Unknown, Eq)
+  | Cneq -> Eq_comp (K.value Unknown, Neq)
   | Clt -> Int_comp (I.Tagged_immediate, Signed, Lt)
   | Cgt -> Int_comp (I.Tagged_immediate, Signed, Gt)
   | Cle -> Int_comp (I.Tagged_immediate, Signed, Le)

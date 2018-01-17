@@ -39,3 +39,13 @@ let is_all_values t =
 
 let is_all_naked_floats t =
   List.for_all Flambda_kind.is_naked_float t
+
+let compatible t ~if_used_at =
+  if List.compare_lengths t if_used_at <> 0 then begin
+    Misc.fatal_errorf "Flambda_arity.compatible: mismatching lengths: %a vs %a"
+      print t
+      print if_used_at
+  end;
+  List.for_all2 (fun kind if_used_at ->
+      Flambda_kind.compatible kind ~if_used_at)
+    t if_used_at

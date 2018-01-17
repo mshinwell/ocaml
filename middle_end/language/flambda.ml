@@ -922,8 +922,8 @@ end = struct
         | None -> ()
         | Some named_kind ->
           if not (K.compatible named_kind ~if_used_at:kind) then begin
-            Misc.fatal_errorf "[Let] expression inferred kind (%a) is not \
-                compatible with the annotated kind (%a); defining \
+            Misc.fatal_errorf "[Let] expression inferred kind (%a)@ is not \
+                compatible with the annotated kind (%a);@ defining \
                 expression:@ %a"
               K.print named_kind
               K.print kind
@@ -1007,19 +1007,20 @@ end = struct
         in
         let stack = E.current_continuation_stack env in
         E.Continuation_stack.unify cont stack cont_stack;
-        if not (Flambda_arity.equal args_arity arity) then begin
+        if not (Flambda_arity.compatible args_arity ~if_used_at:arity)
+        then begin
           Misc.fatal_errorf "Continuation %a called with wrong arity in \
-              this [Apply_cont] term: expected %a but found %a: %a"
+              this [Apply_cont] term: expected %a but found %a:@ %a"
             Continuation.print cont
-            Flambda_arity.print args_arity
             Flambda_arity.print arity
+            Flambda_arity.print args_arity
             print expr
         end;
         begin match kind with
         | Normal -> ()
         | Exn_handler ->
           Misc.fatal_errorf "Continuation %a is an exception handler \
-              but is used in this [Apply_cont] term as a normal continuation: \
+              but is used in this [Apply_cont] term as a normal continuation:@ \
               %a"
             Continuation.print cont
             print expr
@@ -1034,7 +1035,7 @@ end = struct
             | Normal ->
               Misc.fatal_errorf "Continuation %a is a normal continuation  \
                   but is used in the trap action of this [Apply] term as an \
-                  exception handler: %a"
+                  exception handler:@ %a"
                 Continuation.print exn_handler
                 print expr
             end;
@@ -1043,7 +1044,7 @@ end = struct
             if not (Flambda_arity.equal arity expected_arity) then begin
               Misc.fatal_errorf "Exception handler continuation %a has \
                   the wrong arity for the trap handler action of this \
-                  [Apply] term: expected %a but found %a: %a"
+                  [Apply] term: expected %a but found %a:@ %a"
                 Continuation.print cont
                 Flambda_arity.print expected_arity
                 Flambda_arity.print arity
@@ -1089,7 +1090,7 @@ end = struct
             (* CR-someday mshinwell: We could expose indirect C calls at the
                source language level. *)
             Misc.fatal_errorf "For [C_call] applications the callee must be \
-                directly specified as a [Symbol], not via a [Var]: %a"
+                directly specified as a [Symbol], not via a [Var]:@ %a"
               Apply.print apply
           end
         end;
@@ -1101,14 +1102,15 @@ end = struct
           | Normal -> ()
           | Exn_handler ->
             Misc.fatal_errorf "Continuation %a is an exception handler \
-                but is used in this [Apply] term as a return continuation: %a"
+                but is used in this [Apply] term as a return continuation:@ %a"
               Continuation.print continuation
               print expr
           end;
           let expected_arity = Call_kind.return_arity call_kind in
-          if not (Flambda_arity.equal arity expected_arity) then begin
+          if not (Flambda_arity.compatible arity ~if_used_at:expected_arity)
+          then begin
             Misc.fatal_errorf "Continuation %a called with wrong arity in \
-                this [Apply] term: expected %a but found %a: %a"
+                this [Apply] term: expected %a but used at %a:@ %a"
               Continuation.print continuation
               Flambda_arity.print expected_arity
               Flambda_arity.print arity
@@ -1124,7 +1126,7 @@ end = struct
           begin match kind with
           | Normal ->
             Misc.fatal_errorf "Continuation %a is a normal continuation \
-                but is used in this [Apply] term as an exception handler: %a"
+                but is used in this [Apply] term as an exception handler:@ %a"
               Continuation.print continuation
               print expr
           | Exn_handler -> ()
@@ -1132,7 +1134,7 @@ end = struct
           let expected_arity = [Flambda_kind.value Definitely_pointer] in
           if not (Flambda_arity.equal arity expected_arity) then begin
             Misc.fatal_errorf "Exception continuation %a named in this \
-                [Apply] term has the wrong arity: expected %a but have %a: %a"
+                [Apply] term has the wrong arity: expected %a but have %a:@ %a"
               Continuation.print continuation
               Flambda_arity.print expected_arity
               Flambda_arity.print arity
@@ -1148,7 +1150,7 @@ end = struct
         E.check_name_is_bound_and_of_kind env arg
           (K.value Definitely_immediate);
         if Targetint.OCaml.Map.cardinal arms < 1 then begin
-          Misc.fatal_errorf "Empty switch: %a" print t
+          Misc.fatal_errorf "Empty switch:@ %a" print t
         end;
         let check i cont =
           ignore (i : Targetint.OCaml.t);
@@ -1162,7 +1164,7 @@ end = struct
             | Normal -> ()
             | Exn_handler ->
               Misc.fatal_errorf "Continuation %a is an exception handler \
-                  but is used in this [Switch] as a normal continuation: %a"
+                  but is used in this [Switch] as a normal continuation:@ %a"
                 Continuation.print cont
                 print expr
             end;
@@ -1193,7 +1195,7 @@ end = struct
             | Normal -> ()
             | Exn_handler ->
               Misc.fatal_errorf "Continuation %a is an exception handler \
-                  but is used in this [Switch] as a normal continuation: %a"
+                  but is used in this [Switch] as a normal continuation:@ %a"
                 Continuation.print cont
                 print expr
             end;
@@ -1286,7 +1288,7 @@ end = struct
       begin match prim, x0 with
       | Project_closure closure_id, set_of_closures ->
         E.check_simple_is_bound_and_of_kind env set_of_closures
-          (K.value Definitely_pointer);
+          (K.fabricated Definitely_pointer);
         E.add_use_of_closure_id env closure_id
       | Move_within_set_of_closures { move_from; move_to; }, closure ->
         E.check_simple_is_bound_and_of_kind env closure
@@ -1380,7 +1382,7 @@ end = struct
         Singleton (K.unit ())
       | Set_of_closures set_of_closures ->
         Set_of_closures.invariant env set_of_closures;
-        Singleton (K.value Definitely_pointer)
+        Singleton (K.fabricated Definitely_pointer)
       | Prim (prim, dbg) ->
         primitive_invariant env prim;
         ignore (dbg : Debuginfo.t);

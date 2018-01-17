@@ -350,13 +350,41 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
 
   | Let (id, defining_expr, body) ->
     let body_env, var = Env.add_var_like env id in
-    let cont defining_expr =
+    let cont (defining_expr : Flambda.Named.t) =
       (* CR pchambart: Not tail ! *)
       let body = close t body_env body in
-      (* CR pchambart: Kind annotation on let should to go through Ilambda *)
-      Flambda.Expr.create_let var
-        (Flambda_kind.value Unknown)
-        defining_expr body
+      (* CR pchambart: Kind annotation on let should to go through Ilambda
+         mshinwell: I added the following basic inference *)
+      let kind =
+        match defining_expr with
+        | Simple (Name (Symbol _)) ->
+          Flambda_kind.value Definitely_pointer
+        | Simple (Const (Untagged_immediate _)) ->
+          Flambda_kind.naked_immediate ()
+        | Simple (Const (Tagged_immediate _)) ->
+          Flambda_kind.value Definitely_immediate
+        | Simple (Const (Naked_float _)) ->
+          Flambda_kind.naked_float ()
+        | Simple (Const (Naked_int32 _)) ->
+          Flambda_kind.naked_int32 ()
+        | Simple (Const (Naked_int64 _)) ->
+          Flambda_kind.naked_int64 ()
+        | Simple (Const (Naked_nativeint _)) ->
+          Flambda_kind.naked_nativeint ()
+        | Set_of_closures _ ->
+          Flambda_kind.fabricated Definitely_pointer
+        | Assign _ ->
+          Flambda_kind.unit ()
+        | Prim (prim, _dbg) ->
+          begin match Flambda_primitive.result_kind prim with
+          | Singleton kind -> kind
+          | Unit -> Flambda_kind.unit ()
+          | Never_returns -> Flambda_kind.value Unknown
+          end
+        | Simple (Name (Var _))
+        | Read_mutable _ -> Flambda_kind.value Unknown
+      in
+      Flambda.Expr.create_let var kind defining_expr body
     in
     close_named t env defining_expr cont
   | Let_mutable { id; initial_value; contents_kind; body; } ->

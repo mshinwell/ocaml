@@ -604,9 +604,9 @@ let arg_kind_of_unary_primitive p =
   | Bigarray_length _ -> K.value Definitely_pointer
   | Unbox_number _ -> K.value Definitely_pointer
   | Box_number kind -> K.Boxable_number.to_kind kind
-  | Project_closure _
+  | Project_closure _ -> K.fabricated Definitely_pointer
   | Move_within_set_of_closures _
-  | Project_var _ -> K.value Unknown
+  | Project_var _ -> K.value Definitely_pointer
 
 let result_kind_of_unary_primitive p : result_kind =
   match p with
@@ -618,7 +618,7 @@ let result_kind_of_unary_primitive p : result_kind =
     (* This primitive is *only* to be used when the resulting pointer points
        at something which is a valid OCaml value (even if outside of the
        heap). *)
-    Singleton (K.value Unknown)
+    Singleton (K.value Definitely_pointer)
   | Opaque_identity -> Singleton (K.value Unknown)
   | Int_arith (kind, _) -> Singleton (K.Standard_int.to_kind kind)
   | Num_conv { src = _; dst; } ->
@@ -630,7 +630,7 @@ let result_kind_of_unary_primitive p : result_kind =
   | Unbox_number kind -> Singleton (K.Boxable_number.to_kind kind)
   | Box_number _
   | Project_closure _
-  | Move_within_set_of_closures _
+  | Move_within_set_of_closures _ -> Singleton (K.value Definitely_pointer)
   | Project_var _ -> Singleton (K.value Unknown)
 
 let effects_and_coeffects_of_unary_primitive p =
