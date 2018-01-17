@@ -182,7 +182,7 @@ let add_mutable_variable t var kind =
     mutable_variables = Mutable_variable.Map.add var kind t.mutable_variables;
   }
 
-let add_symbol t sym =
+let add_symbol t sym kind =
   let name = Name.symbol sym in
   if Name.Map.mem name t.names then begin
     Misc.fatal_errorf "Duplicate binding of symbol %a which is already \
@@ -203,7 +203,7 @@ let add_symbol t sym =
   end;
   t.all_names_seen := Name.Set.add name !(t.all_names_seen);
   { t with
-    names = Name.Map.add name (Flambda_kind.value Definitely_pointer) t.names;
+    names = Name.Map.add name kind t.names;
   }
 
 let add_continuation t cont arity kind stack =

@@ -56,7 +56,7 @@ val add_mutable_variable
   -> Flambda_kind.t
   -> t
 
-val add_symbol : t -> Symbol.t -> t
+val add_symbol : t -> Symbol.t -> Flambda_kind.t -> t
 
 val add_continuation
    : t

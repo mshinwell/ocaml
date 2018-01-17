@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2017 OCamlPro SAS                                    *)
-(*   Copyright 2014--2017 Jane Street Group LLC                           *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,9 +14,10 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module E = Simplify_env_and_result.Env
+module K = Flambda_kind
 module R = Simplify_env_and_result.Result
 module T = Flambda_type
 
@@ -127,6 +128,12 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
     in
     let ty = T.block_of_values tag ~fields:(Array.of_list field_types) in
     Ok (Static_part.Block (tag, mut, fields), ty)
+  | Fabricated_block field ->
+    let field_ty : _ T.mutable_or_immutable =
+      Immutable (E.find_variable env field)
+    in
+    let ty = T.block Tag.Scannable.zero ~fields:[| field_ty |] in
+    Ok (Static_part.Fabricated_block field, ty)
   | Set_of_closures set ->
     let r = R.create () in
     let set, ty, _r = Simplify_named.simplify_set_of_closures env r set in
@@ -295,7 +302,7 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
 let simplify_static_structure initial_env (recursive : Flambda.recursive) str =
   let unreachable, env, str =
     List.fold_left
-      (fun ((now_unreachable, env, str) as acc) (sym, static_part) ->
+      (fun ((now_unreachable, env, str) as acc) (sym, kind, static_part) ->
         if now_unreachable then
           acc
         else
@@ -306,7 +313,7 @@ let simplify_static_structure initial_env (recursive : Flambda.recursive) str =
               | Non_recursive -> E.add_symbol env sym ty
               | Recursive -> E.redefine_symbol env sym ty
             in
-            false, env, ((sym, static_part) :: str)
+            false, env, ((sym, kind, static_part) :: str)
           | Invalid ->
             true, env, str)
       (false, initial_env, [])
@@ -317,8 +324,8 @@ let simplify_static_structure initial_env (recursive : Flambda.recursive) str =
 let initial_environment_for_recursive_symbols env
       (defn : Program_body.definition) =
   let env =
-    List.fold_left (fun env (symbol, _static_part) ->
-        E.add_symbol env symbol (T.unresolved_symbol symbol))
+    List.fold_left (fun env (symbol, kind, _static_part) ->
+        E.add_symbol env symbol (T.unknown kind))
       env defn.static_structure
   in
   let _unreachable, env, _str =
@@ -328,10 +335,10 @@ let initial_environment_for_recursive_symbols env
 
 let simplify_define_symbol env (recursive : Flambda.recursive)
       (defn : Program_body.definition)
-      : Program_body.definition * E.t =
-  let env, computation =
+      : Program_body.definition * E.t * Flambda_kind.t Symbol.Map.t =
+  let env, computation, newly_imported_symbols =
     match defn.computation with
-    | None -> env, defn.computation
+    | None -> env, defn.computation, Symbol.Map.empty
     | Some computation ->
       let arity =
         List.map (fun (_var, kind) -> kind) computation.computed_values
@@ -352,7 +359,7 @@ let simplify_define_symbol env (recursive : Flambda.recursive)
         let r = R.create () in
         let descr =
           let symbol_names =
-            List.map (fun (sym, _) ->
+            List.map (fun (sym, _, _) ->
                 Format.asprintf "%a" Symbol.print sym)
               defn.static_structure
           in
@@ -397,7 +404,7 @@ let simplify_define_symbol env (recursive : Flambda.recursive)
             computed_values = computation.computed_values;
           } : Program_body.computation)
       in
-      env, computation
+      env, computation, R.newly_imported_symbols r
   in
   let env =
     match recursive with
@@ -464,29 +471,49 @@ let simplify_define_symbol env (recursive : Flambda.recursive)
       computation;
     }
   in
-  definition, env
+  definition, env, newly_imported_symbols
 
-let rec simplify_program_body env (body : Program_body.t) : Program_body.t =
+let rec simplify_program_body env (body : Program_body.t)
+      : Program_body.t * (Flambda_kind.t Symbol.Map.t) =
   match body with
   | Define_symbol (defn, body) ->
-    let defn, env = simplify_define_symbol env Non_recursive defn in
-    let body = simplify_program_body env body in
-    Define_symbol (defn, body)
+    let defn, env, newly_imported_symbols1 =
+      simplify_define_symbol env Non_recursive defn
+    in
+    let body, newly_imported_symbols2 =
+      simplify_program_body env body
+    in
+    let newly_imported_symbols =
+      Symbol.Map.disjoint_union newly_imported_symbols1 newly_imported_symbols2
+    in
+    Define_symbol (defn, body), newly_imported_symbols
   | Define_symbol_rec (defn, body) ->
-    let defn, env = simplify_define_symbol env Recursive defn in
-    let body = simplify_program_body env body in
-    Define_symbol_rec (defn, body)
-  | Root _ -> body
+    let defn, env, newly_imported_symbols1 =
+      simplify_define_symbol env Recursive defn
+    in
+    let body, newly_imported_symbols2 =
+      simplify_program_body env body
+    in
+    let newly_imported_symbols =
+      Symbol.Map.disjoint_union newly_imported_symbols1 newly_imported_symbols2
+    in
+    Define_symbol_rec (defn, body), newly_imported_symbols
+  | Root _ -> body, Symbol.Map.empty
 
 let simplify_program env (program : Program.t) =
   let backend = E.backend env in
   let module Backend = (val backend : Backend_intf.S) in
-  let predef_exn_symbols = Backend.all_predefined_exception_symbols () in
+  let predef_exn_symbols =
+    Symbol.Set.fold (fun symbol predef_exn_symbols ->
+        Symbol.Map.add symbol (K.value Definitely_pointer) predef_exn_symbols)
+      (Backend.all_predefined_exception_symbols ())
+      Symbol.Map.empty
+  in
   let env =
-    Symbol.Set.fold (fun symbol env ->
-        E.add_symbol env symbol (T.any_value Unknown))
-      (Symbol.Set.union program.imported_symbols predef_exn_symbols)
+    Symbol.Map.fold (fun symbol kind env ->
+        E.add_symbol env symbol (T.unknown kind))
+      (Symbol.Map.disjoint_union program.imported_symbols predef_exn_symbols)
       env
   in
-  let body = simplify_program_body env program.body in
-  { program with body; }
+  let body, newly_imported_symbols = simplify_program_body env program.body in
+  { program with body; }, newly_imported_symbols

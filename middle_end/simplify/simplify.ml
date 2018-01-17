@@ -326,11 +326,18 @@ let run ~never_inline ~allow_continuation_inlining
       ~simplify_continuation_use_cannot_inline:
         Simplify_expr.simplify_continuation_use_cannot_inline
   in
-  let program = Simplify_program.simplify_program initial_env program in
-  let free_symbols = Flambda_static.Program.free_symbols program in
+  let program, newly_imported_symbols =
+    Simplify_program.simplify_program initial_env program
+  in
+  let imported_symbols =
+    (* CR mshinwell: Here and elsewhere, these [disjoint_union] calls should
+       raise proper messages *)
+    Symbol.Map.disjoint_union program.imported_symbols
+      newly_imported_symbols
+  in
   let program : Flambda_static.Program.t =
     { program with
-      imported_symbols = Symbol.Set.union program.imported_symbols free_symbols;
+      imported_symbols;
     }
   in
   if !Clflags.inlining_report then begin

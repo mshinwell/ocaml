@@ -38,6 +38,9 @@ module Static_part = struct
       match t with
       | Block (_tag, _mut, fields) ->
         List.iter (fun field -> Of_kind_value.invariant env field) fields
+      | Fabricated_block field ->
+        E.check_variable_is_bound_and_of_kind env field
+          (Flambda_kind.fabricated Unknown)
       | Set_of_closures set ->
         Flambda.Set_of_closures.invariant env set
       | Closure (sym, _closure_id) ->
@@ -82,6 +85,7 @@ module Static_part = struct
       | Set_of_closures set ->
         Flambda.Set_of_closures.Iterators.iter_function_bodies set ~f
       | Block _
+      | Fabricated_block _
       | Closure _
       | Boxed_float _
       | Boxed_int32 _
@@ -96,6 +100,7 @@ module Static_part = struct
       match t with
       | Set_of_closures set -> f set
       | Block _
+      | Fabricated_block _
       | Closure _
       | Boxed_float _
       | Boxed_int32 _
@@ -114,6 +119,7 @@ module Static_part = struct
         let set = Flambda.Set_of_closures.Mappers.map_function_bodies set ~f in
         Set_of_closures set
       | Block _
+      | Fabricated_block _
       | Closure _
       | Boxed_float _
       | Boxed_int32 _
@@ -157,7 +163,7 @@ module Program_body = struct
         f ~continuation_arity computation.return_cont computation.expr;
         Flambda.Expr.Iterators.iter_function_bodies computation.expr ~f
       end;
-      List.iter (fun (_sym, static_part) ->
+      List.iter (fun (_sym, _kind, static_part) ->
           Static_part.Iterators.iter_toplevel_exprs static_part ~f)
         defn.static_structure
 
@@ -175,7 +181,7 @@ module Program_body = struct
       | Some computation ->
         Flambda.Expr.Iterators.iter_sets_of_closures f computation.expr
       end;
-      List.iter (fun (_sym, static_part) ->
+      List.iter (fun (_sym, _kind, static_part) ->
           Static_part.Iterators.iter_sets_of_closures static_part ~f)
         defn.static_structure
 
@@ -206,11 +212,11 @@ module Program_body = struct
           Some { computation with expr; }
       in
       let static_structure =
-        List.map (fun (sym, static_part) ->
+        List.map (fun (sym, kind, static_part) ->
             let static_part =
               Static_part.Mappers.map_toplevel_exprs static_part ~f
             in
-            sym, static_part)
+            sym, kind, static_part)
           defn.static_structure
       in
       { computation;
@@ -289,8 +295,8 @@ module Program_body = struct
       match recursive with
       | Non_recursive -> env
       | Recursive ->
-        List.fold_left (fun env (sym, _static_part) ->
-            E.add_symbol env sym)
+        List.fold_left (fun env (sym, kind, _static_part) ->
+            E.add_symbol env sym kind)
           env
           defn.static_structure
     in
@@ -311,7 +317,7 @@ module Program_body = struct
           env
           computation.computed_values
     in
-    List.iter (fun (sym, static_part) ->
+    List.iter (fun (sym, _kind, static_part) ->
         let free_names = Static_part.free_names static_part in
         (* This will also be caught by [invariant_static_part], but will
            give a better message; and allows some testing of
@@ -327,9 +333,9 @@ module Program_body = struct
         end;
         Static_part.invariant static_part_env static_part)
       defn.static_structure;
-    List.fold_left (fun env (sym, _static_part) ->
+    List.fold_left (fun env (sym, kind, _static_part) ->
         match recursive with
-        | Non_recursive -> E.add_symbol env sym
+        | Non_recursive -> E.add_symbol env sym kind
         | Recursive ->
           (* If we ever store data about symbols, this place needs updating
              to do a "redefine_symbol" operation on [env]. *)
@@ -742,8 +748,8 @@ module Program = struct
       end
     in
     let env =
-      Symbol.Set.fold (fun symbol env ->
-          E.add_symbol env symbol)
+      Symbol.Map.fold (fun symbol kind env ->
+          E.add_symbol env symbol kind)
         t.imported_symbols
         (E.create ())
     in

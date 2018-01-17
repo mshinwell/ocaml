@@ -442,6 +442,11 @@ module type S = sig
      : Numbers.Float_by_bit_pattern.Set.t ty_naked_number array
     -> t
 
+  val block
+     : Tag.Scannable.t
+    -> fields:t mutable_or_immutable array
+    -> t
+
   val block_of_values
      : Tag.Scannable.t
     -> fields:ty_value mutable_or_immutable array

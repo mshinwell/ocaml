@@ -602,4 +602,6 @@ module type Result = sig
     -> t) Flambda_type.type_accessor
 
   val get_typing_judgements : t -> Flambda_type.Typing_environment.t
+
+  val newly_imported_symbols : t -> Flambda_kind.t Symbol.Map.t
 end

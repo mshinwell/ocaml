@@ -204,6 +204,8 @@ let compatible t ~if_used_at =
   match t, if_used_at with
   | Value value_kind, Value if_used_at ->
     Value_kind.compatible value_kind ~if_used_at
+  | Fabricated value_kind, Fabricated if_used_at ->
+    Value_kind.compatible value_kind ~if_used_at
   | _, _ -> equal t if_used_at
 
 let is_value t =

@@ -38,6 +38,7 @@ module Static_part : sig
   type t =
     | Block of Tag.Scannable.t * Flambda.mutable_or_immutable
         * (Of_kind_value.t list)
+    | Fabricated_block of Variable.t
     | Set_of_closures of Flambda0.Set_of_closures.t
     | Closure of Symbol.t * Closure_id.t
     | Boxed_float of Numbers.Float_by_bit_pattern.t or_variable
@@ -74,7 +75,7 @@ module Program_body : sig
         [return_cont]. *)
   }
 
-  type static_structure = (Symbol.t * Static_part.t) list
+  type static_structure = (Symbol.t * Flambda_kind.t * Static_part.t) list
 
   type definition = {
     computation : computation option;
@@ -107,7 +108,7 @@ end
     various values that are assigned to symbols in the object file. *)
 module Program : sig
   type t = {
-    imported_symbols : Symbol.Set.t;
+    imported_symbols : Flambda_kind.t Symbol.Map.t;
     body : Program_body.t;
   }
 

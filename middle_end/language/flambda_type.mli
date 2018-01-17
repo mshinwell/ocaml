@@ -23,10 +23,6 @@
 (** Basic definitions and constructors. *)
 include module type of struct include Flambda0.Flambda_type end
 
-(** The type of a symbol that cannot be resolved (e.g. missing .cmx file).
-    It is assumed that the symbol's value may need scanning by the GC. *)
-val unresolved_symbol : Symbol.t -> t
-
 (** For each of the kinds in an arity, create a "bottom" type. *)
 val bottom_types_from_arity : Flambda_arity.t -> t list
 

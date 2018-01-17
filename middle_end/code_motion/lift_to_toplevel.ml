@@ -41,9 +41,10 @@ let static_structure name ~vars_with_kinds =
       let symbol = make_symbol index in
       let static_part : Flambda_static.Static_part.t =
         match kind with
-        | Value _ | Fabricated _->
+        | Value _ ->
           Block (Tag.Scannable.zero, Immutable,
             [Flambda_static.Of_kind_value.Dynamically_computed var])
+        | Fabricated _ -> Fabricated_block var
         | Naked_number Naked_float -> Boxed_float (Var var)
         | Naked_number Naked_int32 -> Boxed_int32 (Var var)
         | Naked_number Naked_int64 -> Boxed_int64 (Var var)
@@ -57,8 +58,11 @@ let static_structure name ~vars_with_kinds =
       let prim : Flambda_primitive.t =
         let var = Simple.var var in
         match kind with
-        | Value _ | Fabricated _ ->
+        | Value _ ->
           Binary (Block_load (Block Any_value, Immutable), var,
+            Simple.const (Tagged_immediate Immediate.zero))
+        | Fabricated _ ->
+          Binary (Block_load (Block Fabricated, Immutable), var,
             Simple.const (Tagged_immediate Immediate.zero))
         | Naked_number Naked_float -> Unary (Unbox_number Naked_float, var)
         | Naked_number Naked_int32 -> Unary (Unbox_number Naked_int32, var)
@@ -72,8 +76,9 @@ let static_structure name ~vars_with_kinds =
           Misc.fatal_error "Not yet implemented"
       in
       let binding : Flambda.Named.t = Prim (prim, dbg) in
+      let symbol_kind = K.value Unknown in
       assign_symbols (index + 1) ~vars_with_kinds
-        ((symbol, static_part) :: resulting_static_part)
+        ((symbol, symbol_kind, static_part) :: resulting_static_part)
         ((var, kind, binding) :: resulting_bindings)
   in
   assign_symbols 0 ~vars_with_kinds [] []

@@ -22,4 +22,4 @@
 val simplify_program
    : Simplify_env_and_result.Env.t
   -> Flambda_static.Program.t
-  -> Flambda_static.Program.t
+  -> Flambda_static.Program.t * (Flambda_kind.t Symbol.Map.t)

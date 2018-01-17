@@ -856,6 +856,7 @@ end = struct
       benefit : Inlining_cost.Benefit.t;
       num_direct_applications : int;
       typing_judgements : T.Typing_environment.t;
+      newly_imported_symbols : Flambda_kind.t Symbol.Map.t;
     }
 
   let create () =
@@ -865,6 +866,7 @@ end = struct
       benefit = Inlining_cost.Benefit.zero;
       num_direct_applications = 0;
       typing_judgements = T.Typing_environment.create ();
+      newly_imported_symbols = Symbol.Map.empty;
     }
 
   let union t1 t2 =
@@ -879,6 +881,9 @@ end = struct
       num_direct_applications =
         t1.num_direct_applications + t2.num_direct_applications;
       typing_judgements = T.Typing_environment.create (); (* XXX *)
+      newly_imported_symbols =
+        Symbol.Map.disjoint_union t1.newly_imported_symbols
+          t2.newly_imported_symbols;
     }
 
   let use_continuation t env cont kind =
@@ -1139,4 +1144,9 @@ end = struct
     }
 
   let get_typing_judgements t = t.typing_judgements
+
+  (* CR mshinwell: There should be a function here which records the new
+     imports in [newly_imported_symbols]. *)
+
+  let newly_imported_symbols t = t.newly_imported_symbols
 end

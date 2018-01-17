@@ -37,7 +37,7 @@ module Program : sig
   val invariant : t -> unit
 
   (** All symbols imported from other compilation units by the given program. *)
-  val imported_symbols : t -> Symbol.Set.t
+  val imported_symbols : t -> Flambda_kind.t Symbol.Map.t
 
   (** The module block symbol for the given program (the only symbol that
       can never be eliminated). *)

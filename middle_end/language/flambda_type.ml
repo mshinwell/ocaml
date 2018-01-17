@@ -42,9 +42,6 @@ let rename_variables t ~f:_ = t
   clean t (fun var -> Available_different_name (f var))
 *)
 
-let unresolved_symbol _sym =
-  any_value Definitely_immediate
-
 let unit () =
   this_tagged_immediate Immediate.zero
 

@@ -62,6 +62,7 @@ module Static_part = struct
   type t =
     | Block of Tag.Scannable.t * Flambda.mutable_or_immutable
         * (Of_kind_value.t list)
+    | Fabricated_block of Variable.t
     | Set_of_closures of Flambda0.Set_of_closures.t
     | Closure of Symbol.t * Closure_id.t
     | Boxed_float of Numbers.Float_by_bit_pattern.t or_variable
@@ -81,6 +82,7 @@ module Static_part = struct
       | Mutable -> true
       | Immutable -> List.exists Of_kind_value.needs_gc_root fields
       end
+    | Fabricated_block _ -> true
     | Set_of_closures set ->
       not (Var_within_closure.Map.is_empty set.free_vars)
     | Closure _
@@ -100,6 +102,7 @@ module Static_part = struct
           Name.Set.union fvs (Of_kind_value.free_names field))
         Name.Set.empty
         fields
+    | Fabricated_block var -> Name.Set.singleton (Name.var var)
     | Set_of_closures set -> Flambda0.Set_of_closures.free_names set
     | Closure (sym, _) -> Name.Set.singleton (Name.symbol sym)
     | Boxed_float (Var v)
@@ -138,6 +141,9 @@ module Static_part = struct
         Tag.Scannable.print tag
         (Format.pp_print_list ~pp_sep:Format.pp_print_space
           Of_kind_value.print) fields
+    | Fabricated_block field ->
+      fprintf ppf "@[(Fabricated_block %a)@]"
+        Variable.print field
     | Set_of_closures set_of_closures ->
       fprintf ppf "@[(Set_of_closures@ (%a))@]"
         F0.Set_of_closures.print set_of_closures
@@ -210,7 +216,7 @@ module Program_body = struct
   let free_symbols_of_computation comp =
     Flambda.Expr.free_symbols comp.expr
 
-  type static_structure = (Symbol.t * Static_part.t) list
+  type static_structure = (Symbol.t * Flambda_kind.t * Static_part.t) list
 
   type definition = {
     computation : computation option;
@@ -224,9 +230,10 @@ module Program_body = struct
       (Misc.Stdlib.Option.print print_computation)
       defn.computation
       (Format.pp_print_list ~pp_sep:Format.pp_print_space
-        (fun ppf (sym, static_part) ->
-          Format.fprintf ppf "@[(%a@ %a)@]"
+        (fun ppf (sym, kind, static_part) ->
+          Format.fprintf ppf "@[((symbol %a)@ (kind %a)@ (static_part %a))@]"
             Symbol.print sym
+            Flambda_kind.print kind
             Static_part.print static_part))
       defn.static_structure
 
@@ -237,7 +244,8 @@ module Program_body = struct
       | Some computation -> free_symbols_of_computation computation
     in
     let being_defined =
-      Symbol.Set.of_list (List.map (fun (sym, _) -> sym) defn.static_structure)
+      Symbol.Set.of_list (List.map (fun (sym, _, _) -> sym)
+        defn.static_structure)
     in
     let bound_recursively =
       match recursive with
@@ -246,7 +254,7 @@ module Program_body = struct
     in
     let free_in_static_parts =
       let symbols =
-        List.fold_left (fun syms (_sym, static_part) ->
+        List.fold_left (fun syms (_sym, _kind, static_part) ->
             Symbol.Set.union syms (Static_part.free_symbols static_part))
           Symbol.Set.empty
           defn.static_structure
@@ -279,7 +287,9 @@ module Program_body = struct
       | Root _ -> roots
       | Define_symbol (defn, t) | Define_symbol_rec (defn, t) ->
         let roots =
-          List.fold_left (fun roots (sym, static_part) ->
+          List.fold_left (fun roots (sym, _kind, static_part) ->
+              (* CR mshinwell: check [kind] against the result of
+                 [needs_gc_root] *)
               if Static_part.needs_gc_root static_part then
                 Symbol.Set.add sym roots
               else
@@ -304,13 +314,13 @@ end
 
 module Program = struct
   type t = {
-    imported_symbols : Symbol.Set.t;
+    imported_symbols : Flambda_kind.t Symbol.Map.t;
     body : Program_body.t;
   }
 
   let print ppf t =
     Format.fprintf ppf "@[(@[(imported_symbols %a)@]@ @[<1>(body@ %a)@])@]"
-      Symbol.Set.print t.imported_symbols
+      (Symbol.Map.print Flambda_kind.print) t.imported_symbols
       Program_body.print t.body
 
   let gc_roots t =

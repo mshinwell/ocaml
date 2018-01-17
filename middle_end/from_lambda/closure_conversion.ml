@@ -29,6 +29,7 @@ type t = {
   symbol_for_global' : (Ident.t -> Symbol.t);
   filename : string;
   mutable imported_symbols : Symbol.Set.t;
+  (* All symbols in [imported_symbols] are to be of kind [Value]. *)
   mutable declared_symbols :
     (Symbol.t * Flambda_static0.Static_part.t) list;
 }
@@ -64,7 +65,7 @@ let tupled_function_call_stub
            redundancy here (func is also unboxed_version) *)
         call_kind = Function (Direct {
           closure_id = unboxed_version;
-          return_arity = [Flambda_kind.value Unknown];
+          return_arity = [K.value Unknown];
         });
         dbg = Debuginfo.none;
         inline = Default_inline;
@@ -79,7 +80,7 @@ let tupled_function_call_stub
       }
     in
     Flambda.Expr.create_let unboxed_version_var
-      (Flambda_kind.value Definitely_pointer)
+      (K.value Definitely_pointer)
       (Prim (Unary (move, Simple.var my_closure), Debuginfo.none))
       call
   in
@@ -93,7 +94,7 @@ let tupled_function_call_stub
                 Debuginfo.none)
         in
         pos + 1,
-        Flambda.Expr.create_let param (Flambda_kind.value Unknown) lam body)
+        Flambda.Expr.create_let param (K.value Unknown) lam body)
       (0, body_with_closure_bound) params
   in
   let tuple_param =
@@ -105,13 +106,13 @@ let tupled_function_call_stub
     (*       (List.map (fun _ -> Flambda_type.any_value Must_scan Other) params))) *)
 
     Flambda.Typed_parameter.create_from_kind (Parameter.wrap tuple_param_var)
-      (Flambda_kind.value Unknown)
+      (K.value Unknown)
   in
   Flambda.Function_declaration.create
     ~my_closure
     ~params:[tuple_param] ~continuation_param
     ~exn_continuation_param
-    ~return_arity:[Flambda_kind.value Unknown]
+    ~return_arity:[K.value Unknown]
     ~body ~stub:true ~dbg:Debuginfo.none ~inline:Default_inline
     ~specialise:Default_specialise ~is_a_functor:false
     ~closure_origin:(Closure_origin.create closure_bound_var)
@@ -330,7 +331,7 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
         let body_env, boxed_var = Env.add_var_like env id in
         let body = close t body_env body in
         Flambda.Expr.create_let boxed_var
-          (Flambda_kind.value Definitely_pointer)
+          (K.value Definitely_pointer)
           (Prim (Unary (unboxing, Simple.var handler_param), dbg)) body,
           handler_param
     in
@@ -358,31 +359,31 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
       let kind =
         match defining_expr with
         | Simple (Name (Symbol _)) ->
-          Flambda_kind.value Definitely_pointer
+          K.value Definitely_pointer
         | Simple (Const (Untagged_immediate _)) ->
-          Flambda_kind.naked_immediate ()
+          K.naked_immediate ()
         | Simple (Const (Tagged_immediate _)) ->
-          Flambda_kind.value Definitely_immediate
+          K.value Definitely_immediate
         | Simple (Const (Naked_float _)) ->
-          Flambda_kind.naked_float ()
+          K.naked_float ()
         | Simple (Const (Naked_int32 _)) ->
-          Flambda_kind.naked_int32 ()
+          K.naked_int32 ()
         | Simple (Const (Naked_int64 _)) ->
-          Flambda_kind.naked_int64 ()
+          K.naked_int64 ()
         | Simple (Const (Naked_nativeint _)) ->
-          Flambda_kind.naked_nativeint ()
+          K.naked_nativeint ()
         | Set_of_closures _ ->
-          Flambda_kind.fabricated Definitely_pointer
+          K.fabricated Definitely_pointer
         | Assign _ ->
-          Flambda_kind.unit ()
+          K.unit ()
         | Prim (prim, _dbg) ->
           begin match Flambda_primitive.result_kind prim with
           | Singleton kind -> kind
-          | Unit -> Flambda_kind.unit ()
-          | Never_returns -> Flambda_kind.value Unknown
+          | Unit -> K.unit ()
+          | Never_returns -> K.value Unknown
           end
         | Simple (Name (Var _))
-        | Read_mutable _ -> Flambda_kind.value Unknown
+        | Read_mutable _ -> K.value Unknown
       in
       Flambda.Expr.create_let var kind defining_expr body
     in
@@ -457,7 +458,7 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
              a [Project_closure] expression, which projects from the set of
              closures. *)
           (Flambda.Expr.create_let let_bound_var
-             (Flambda_kind.value Definitely_pointer)
+             (K.value Definitely_pointer)
              (Prim (Unary (Project_closure closure_bound_var,
                            Simple.var set_of_closures_var),
                     Debuginfo.none))
@@ -465,7 +466,7 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
         (close t env body) function_declarations
     in
     Flambda.Expr.create_let set_of_closures_var
-      (Flambda_kind.fabricated Definitely_pointer)
+      (K.fabricated Definitely_pointer)
       set_of_closures body
   | Let_cont let_cont ->
     if let_cont.is_exn_handler then begin
@@ -487,7 +488,7 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
         List.map (fun param ->
           Flambda.Typed_parameter.create_from_kind
             (Parameter.wrap param)
-            (Flambda_kind.value Unknown))
+            (K.value Unknown))
           params
       in
       let handler : Flambda.Continuation_handler.t =
@@ -775,7 +776,7 @@ and close_functions t external_env function_declarations : Flambda.Named.t =
               move_to = closure_id;
             }
           in
-          Flambda.Expr.create_let var (Flambda_kind.value Definitely_pointer)
+          Flambda.Expr.create_let var (K.value Definitely_pointer)
             (Prim (Unary (move, Simple.var my_closure), Debuginfo.none))
             body
         else
@@ -791,7 +792,7 @@ and close_functions t external_env function_declarations : Flambda.Named.t =
               (my_closure_id, var_within_closure)
           in
           Flambda.Expr.create_let var
-            (Flambda_kind.value Definitely_pointer)
+            (K.value Definitely_pointer)
             (Prim
                (Unary (projection, Simple.var my_closure),
                 Debuginfo.none))
@@ -818,7 +819,7 @@ and close_functions t external_env function_declarations : Flambda.Named.t =
         ~params
         ~continuation_param:(Function_decl.continuation_param decl)
         ~exn_continuation_param:(Function_decl.exn_continuation_param decl)
-        ~return_arity:[Flambda_kind.value Unknown]
+        ~return_arity:[K.value Unknown]
         ~body ~stub ~dbg ~inline
         ~specialise
         ~is_a_functor:(Function_decl.is_a_functor decl)
@@ -896,13 +897,13 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
   (*   let body = *)
   (*     List.fold_left (fun body (pos, var) -> *)
   (*       Flambda.Expr.create_let var *)
-  (*         (Flambda_kind.value Must_scan) *)
+  (*         (K.value Must_scan) *)
   (*         (Prim (Pfield pos, [block_symbol_var], Debuginfo.none)) *)
   (*         body) *)
   (*       call_continuation field_vars *)
   (*   in *)
   (*   Flambda.Expr.create_let block_symbol_var *)
-  (*     (Flambda_kind.value Must_scan) *)
+  (*     (K.value Must_scan) *)
   (*     (Read_symbol_field { symbol = block_symbol; logical_field = 0 }) *)
   (*     body *)
   (* in *)
@@ -914,7 +915,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
       (fun pos ->
          let pos_str = string_of_int pos in
          Variable.create ("block_field_" ^ pos_str),
-         Flambda_kind.value Unknown)
+         K.value Unknown)
   in
   let assign_continuation_body =
     let field_vars =
@@ -930,7 +931,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
     in
     List.fold_left (fun body (pos, var) ->
       let pos = Immediate.int (Targetint.OCaml.of_int pos) in
-      Flambda.Expr.create_let var (Flambda_kind.value Unknown)
+      Flambda.Expr.create_let var (K.value Unknown)
         (Prim (Binary (Block_load (Block Any_value, Immutable),
                        Simple.var block_var,
                        Simple.const (Tagged_immediate pos)),
@@ -942,7 +943,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
     { params =
         [Flambda.Typed_parameter.create_from_kind
            (Parameter.wrap block_var)
-           (Flambda_kind.value Definitely_pointer)];
+           (K.value Definitely_pointer)];
       stub = true;
       is_exn_handler = false;
       handler = assign_continuation_body;
@@ -973,14 +974,19 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
     Define_symbol
       ({ computation = Some computation;
          static_structure =
-           [module_symbol, static_part]; },
+           [module_symbol, K.value Definitely_pointer, static_part]; },
        (Root module_symbol))
   in
-
+  let imported_symbols =
+    Symbol.Set.fold (fun symbol imported_symbols ->
+        Symbol.Map.add symbol (K.value Definitely_pointer) imported_symbols)
+      t.imported_symbols
+      Symbol.Map.empty
+  in
 (* let module_initialize : Flambda_static.Program_body.Initialize_symbol.t = *)
   (*   { expr = main_module_block_expr; *)
   (*     return_cont = continuation; *)
-  (*     return_arity = List.init size (fun _ -> Flambda_kind.value Must_scan); *)
+  (*     return_arity = List.init size (fun _ -> K.value Must_scan); *)
   (*   } *)
   (* in *)
   (* let module_initializer : Flambda_static.Program_body.t = *)
@@ -999,7 +1005,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
   (*     module_initializer *)
   (*     t.declared_symbols *)
   (* in *)
-  { imported_symbols = t.imported_symbols;
+  { imported_symbols;
     body = program_body;
   }
 
