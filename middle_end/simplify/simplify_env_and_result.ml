@@ -347,7 +347,7 @@ end = struct
   let find_continuation t cont =
     match Continuation.Map.find cont t.continuations with
     | exception Not_found ->
-      Misc.fatal_errorf "Unbound continuation %a.\n@ \n%a\n%!"
+      Misc.fatal_errorf "Unbound continuation %a in environment:@ %a"
         Continuation.print cont
         print t
     | (_scope_level, ty) -> ty
@@ -355,7 +355,7 @@ end = struct
   let scope_level_of_continuation t cont =
     match Continuation.Map.find cont t.continuations with
     | exception Not_found ->
-      Misc.fatal_errorf "Unbound continuation %a.\n@ \n%a\n%!"
+      Misc.fatal_errorf "Unbound continuation %a in environment:@ %a"
         Continuation.print cont
         print t
     | (scope_level, _ty) -> scope_level
