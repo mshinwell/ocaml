@@ -283,7 +283,7 @@ module Free_vars = struct
 
   let print ppf free_vars =
     Var_within_closure.Map.iter (fun inner_var outer_var ->
-        fprintf ppf "@ %a -rename-> %a"
+        fprintf ppf "@ @[(in_closure %a)@]@ @[(outer_var %a)@]"
           Var_within_closure.print inner_var
           Free_var.print outer_var)
       free_vars
@@ -1400,9 +1400,11 @@ end = struct
             Function_declaration.print var ppf decl)
           t
       in
-      fprintf ppf "@[<2>(set_of_closures id=%a@ %a@ @[<2>free_vars={%a@ }@]@ \
-          @[<2>direct_call_surrogates=%a@]@ \
-          @[<2>set_of_closures_origin=%a@]@]"
+      fprintf ppf "@[<2>((@[set_of_closures id %a)@]@ \
+          %a@ \
+          @[<2>(in_closure (%a))@]@ \
+          @[<2>(direct_call_surrogates %a)@]@ \
+          @[<2>(set_of_closures_origin %a)@]@]"
         Set_of_closures_id.print function_decls.set_of_closures_id
         funs function_decls.funs
         Free_vars.print free_vars

@@ -196,10 +196,14 @@ module Make_map (T : Thing_no_hash) = struct
   let map_keys f m =
     of_list (List.map (fun (k, v) -> f k, v) (bindings m))
 
-  let print f ppf s =
-    let elts ppf s = iter (fun id v ->
-        Format.fprintf ppf "@ (@[%a@ %a@])" T.print id f v) s in
-    Format.fprintf ppf "@[<1>(@[%a@ @])@]" elts s
+  let print f ppf t =
+    let print_binding ppf (id, v) =
+      Format.fprintf ppf "@[(%a@ %a)@]" T.print id f v
+    in
+    let bindings = bindings t in
+    Format.fprintf ppf "@[<1>(@[%a@])@]"
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space
+        print_binding) bindings
 
   module T_set = Set.Make (T)
 
@@ -231,9 +235,9 @@ end
 module Make_set (T : Thing_no_hash) = struct
   include Set.Make (T)
 
-  let print ppf s =
-    let elts ppf s = iter (fun e -> Format.fprintf ppf "@ %a" T.print e) s in
-    Format.fprintf ppf "@[<1>(@[%a@ @])@]" elts s
+  let print ppf t =
+    Format.fprintf ppf "@[<1>(@[%a@])@]"
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print) (elements t)
 
   let to_string s = Format.asprintf "%a" print s
 
