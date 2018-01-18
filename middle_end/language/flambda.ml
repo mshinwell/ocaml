@@ -1248,8 +1248,7 @@ end = struct
   let maybe_generative_effects_but_no_coeffects (t : t) =
     match t with
     | Simple _ -> true
-    | Prim (prim, _) ->
-      Flambda_primitive.maybe_generative_effects_but_no_coeffects prim
+    | Prim (prim, _) -> Flambda_primitive.at_most_generative_effects prim
     | Set_of_closures _ -> true
     | Assign _ | Read_mutable _ -> false
 

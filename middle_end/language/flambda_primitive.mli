@@ -374,10 +374,7 @@ val effects_and_coeffects : t -> effects * coeffects
     coeffects. *)
 val no_effects_or_coeffects : t -> bool
 
-(** Returns [true] only when the given primitive has both:
-    (a) no coeffects; and
-    (b) either no effects, or only generative effects. *)
-val maybe_generative_effects_but_no_coeffects : t -> bool
+val at_most_generative_effects : t -> bool
 
 module With_fixed_value : sig
   (** Primitive applications that may be replaced by a variable which is let

@@ -1123,9 +1123,9 @@ let no_effects_or_coeffects t =
   | No_effects, No_coeffects -> true
   | _, _ -> false
 
-let maybe_generative_effects_but_no_coeffects t =
+let at_most_generative_effects t =
   match effects_and_coeffects t with
-  | (No_effects | Only_generative_effects _), No_coeffects -> true
+  | (No_effects | Only_generative_effects _), _ -> true
   | _, _ -> false
 
 type without_args =
