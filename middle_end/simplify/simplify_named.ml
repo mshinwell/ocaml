@@ -323,6 +323,9 @@ let simplify_named env r (tree : Named.t) ~result_var =
     let term, ty, r =
       Simplify_primitive.simplify_primitive env r prim dbg ~result_var
     in
+(*
+Format.eprintf "Prim %a: type %a\n%!" Variable.print result_var T.print ty;
+*)
     let remove_primitive () =
       R.map_benefit r (B.remove_primitive_application prim)
     in
@@ -335,6 +338,9 @@ let simplify_named env r (tree : Named.t) ~result_var =
       [], Flambda.Reachable.reachable term, ty, remove_primitive ()
     | Cannot_reify -> [], term, ty, r
     | Invalid ->
+(*
+Format.eprintf "Prim %a: reify returns bottom\n%!" Variable.print result_var;
+*)
       let ty = (E.type_accessor env T.bottom_like) ty in
       [], Flambda.Reachable.invalid (), ty, remove_primitive ()
     end

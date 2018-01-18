@@ -351,7 +351,7 @@ let simplify_define_symbol env (recursive : Flambda.recursive)
         Continuation_approx.create_unknown ~name:computation.exception_cont
           ~arity:[Flambda_kind.value Unknown]
       in
-      let expr, r, _continuation_uses =
+      let expr, r, continuation_uses =
         let env = E.add_continuation env name return_cont_approx in
         let env =
           E.add_continuation env computation.exception_cont exn_cont_approx
@@ -378,9 +378,14 @@ let simplify_define_symbol env (recursive : Flambda.recursive)
          for Unbox_returns will enable us to handle mutable returned values
          too. *)
       let args_types, _typing_env =
-        R.continuation_args_types r name ~arity
+        R.Continuation_uses.join_of_arg_types continuation_uses ~arity
           ~default_env:(E.get_typing_environment env)
       in
+(*
+Format.eprintf "Args for %a: %a\n%!"
+  Continuation.print name
+  (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print) args_types;
+*)
       assert (List.for_all2 (fun (_var, kind1) ty ->
           let kind2 = T.kind ~type_of_name:(E.type_of_name env) ty in
           Flambda_kind.compatible kind2 ~if_used_at:kind1)
@@ -414,6 +419,8 @@ let simplify_define_symbol env (recursive : Flambda.recursive)
   let unreachable, env, static_structure =
     simplify_static_structure env recursive defn.static_structure
   in
+  (* CR mshinwell: [unreachable] should also be set to [true] if
+     [computation] is [Some (Invalid _)]. *)
   let computation, static_structure =
     (* CR-someday mshinwell: We could imagine propagating an "unreachable"
        (if that's what [invalid ()] turns into, rather than a trap) back to
