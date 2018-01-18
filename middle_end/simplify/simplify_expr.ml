@@ -379,7 +379,7 @@ and simplify_let_cont_handlers env r ~handlers
       Continuation.Map.fold (fun cont
                 (handler : Flambda.Continuation_handler.t) handlers ->
           let cont' = Freshening.apply_continuation freshening cont in
-          let arg_tys, new_env =
+          let arg_tys, _new_env =
             (* CR mshinwell: I have a suspicion that [r] may not contain the
                usage information for the continuation when it's come from
                [Unbox_continuation_params]. Check. *)
@@ -387,10 +387,12 @@ and simplify_let_cont_handlers env r ~handlers
               ~arity:(Flambda.Continuation_handler.param_arity handler)
               ~default_env:(E.get_typing_environment env)
           in
+(* XXX for pchambart: Re-enable this when the environments in types are ok
           (* [new_env] contains everything we know holds at _all_ of the use
              points of the continuation, with anything out of scope at the
              definition site of [cont] marked as existential. *)
           let env = E.replace_typing_environment env new_env in
+*)
           let r, handler =
             simplify_let_cont_handler ~env ~r:(R.create ()) ~cont:cont'
               ~handler ~arg_tys
