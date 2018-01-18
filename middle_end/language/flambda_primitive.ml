@@ -93,10 +93,9 @@ type make_block_kind =
 let print_make_block_kind ppf kind =
   match kind with
   | Full_of_values (tag, arity) ->
-    Format.fprintf ppf "(Full_of_values (tag %a) [%a])"
+    Format.fprintf ppf "(Full_of_values (tag %a) (%a))"
       Tag.Scannable.print tag
-      (Format.pp_print_list ~pp_sep:(fun ppf () ->
-          Format.pp_print_string ppf "; ")
+      (Format.pp_print_list ~pp_sep:Format.pp_print_space
         Flambda_kind.Value_kind.print) arity
   | Full_of_naked_floats -> Format.pp_print_string ppf "Full_of_naked_floats"
   | Generic_array generic ->
