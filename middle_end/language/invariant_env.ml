@@ -264,7 +264,8 @@ let check_simple_is_bound_and_of_kind t (simple : Simple.t) desired_kind =
   | Name name -> check_name_is_bound_and_of_kind t name desired_kind
   | Const const ->
     let actual_kind = Simple.Const.kind const in
-    if not (Flambda_kind.equal actual_kind desired_kind) then begin
+    if not (Flambda_kind.compatible actual_kind ~if_used_at:desired_kind)
+    then begin
       Misc.fatal_errorf "Simple term %a of kind %a cannot be used at kind %a"
         Simple.print simple
         Flambda_kind.print actual_kind
@@ -379,12 +380,12 @@ let add_use_of_var_within_closure t id =
     Var_within_closure.Set.add id !(t.uses_of_var_within_closures_seen)
 
 let closure_ids_not_declared t =
-  Closure_id.Set.diff !(t.all_closure_ids_seen)
-    !(t.uses_of_closure_ids_seen)
+  Closure_id.Set.diff !(t.uses_of_closure_ids_seen)
+    !(t.all_closure_ids_seen)
 
 let var_within_closures_not_declared t =
-  Var_within_closure.Set.diff !(t.all_var_within_closures_seen)
-    !(t.uses_of_var_within_closures_seen)
+  Var_within_closure.Set.diff !(t.uses_of_var_within_closures_seen)
+    !(t.all_var_within_closures_seen)
 
 let prepare_for_function_body t ~parameters_with_kinds ~my_closure
       ~return_cont ~return_cont_arity ~exception_cont =
