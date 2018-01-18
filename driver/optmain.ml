@@ -44,8 +44,17 @@ module Backend = struct
     (fun _ -> assert false)
   let import_export_id =
     (fun _ -> assert false)
-  let all_predefined_exception_symbols = fun _ -> assert false
+
+  let all_predefined_exception_symbols () =
+    let symbols =
+      List.map (fun predef_exn ->
+          assert (Ident.is_predef_exn predef_exn);
+          symbol_for_global' predef_exn)
+        Predef.all_predef_exns
+    in
+    Symbol.Set.of_list symbols
 end
+
 let backend = (module Backend : Backend_intf.S)
 
 let usage = "Usage: ocamlopt <options> <files>\nOptions are:"
