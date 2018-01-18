@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2017 OCamlPro SAS                                    *)
-(*   Copyright 2014--2017 Jane Street Group LLC                           *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -37,18 +37,18 @@ let static_structure name ~vars_with_kinds =
        requiring something more complicated. *)
     match vars_with_kinds with
     | [] -> (List.rev resulting_static_part), (List.rev resulting_bindings)
-    | (var, (kind : K.t))::vars_with_kinds ->
+    | (var, fresh_var, (kind : K.t))::vars_with_kinds ->
       let symbol = make_symbol index in
       let static_part : Flambda_static.Static_part.t =
         match kind with
         | Value _ ->
           Block (Tag.Scannable.zero, Immutable,
-            [Flambda_static.Of_kind_value.Dynamically_computed var])
-        | Fabricated _ -> Fabricated_block var
-        | Naked_number Naked_float -> Boxed_float (Var var)
-        | Naked_number Naked_int32 -> Boxed_int32 (Var var)
-        | Naked_number Naked_int64 -> Boxed_int64 (Var var)
-        | Naked_number Naked_nativeint -> Boxed_nativeint (Var var)
+            [Flambda_static.Of_kind_value.Dynamically_computed fresh_var])
+        | Fabricated _ -> Fabricated_block fresh_var
+        | Naked_number Naked_float -> Boxed_float (Var fresh_var)
+        | Naked_number Naked_int32 -> Boxed_int32 (Var fresh_var)
+        | Naked_number Naked_int64 -> Boxed_int64 (Var fresh_var)
+        | Naked_number Naked_nativeint -> Boxed_nativeint (Var fresh_var)
         | Naked_number Naked_immediate ->
           Misc.fatal_errorf "Not yet implemented"
         | Phantom _ ->
@@ -111,7 +111,12 @@ let rec lift (expr : Flambda.Expr.t) ~to_copy =
          top of each subsequent lifted expression. *)
       let vars = Flambda.Typed_parameter.List.vars params in
       let arity = Flambda.Typed_parameter.List.arity params in
-      let vars_with_kinds = List.combine vars arity in
+      let vars_with_kinds =
+        List.map2 (fun var arity ->
+            let fresh_var = Variable.rename var in
+            var, fresh_var, arity)
+          vars arity
+      in
       let static_structure, to_copy' =
         let name = Format.asprintf "%a" Continuation.print name in
         static_structure name ~vars_with_kinds
@@ -121,13 +126,17 @@ let rec lift (expr : Flambda.Expr.t) ~to_copy =
         lift handler ~to_copy
       in
       let computation : Program_body.computation =
+        let computed_values =
+          List.map (fun (_var, fresh_var, kind) -> fresh_var, kind)
+            vars_with_kinds
+        in
         { expr = body;
           return_cont = name;
           (* Since there is only one free continuation in the body of the
              [Let_cont] and we know that to be a non-exception-handling
              continuation, the body cannot raise any exceptions. *)
           exception_cont = Continuation.create ();
-          computed_values = vars_with_kinds;
+          computed_values;
         }
       in
       let defn : Program_body.definition =
@@ -159,7 +168,8 @@ let rec lift (expr : Flambda.Expr.t) ~to_copy =
       free_conts, lifted, expr
     end
   | Let { var; kind; defining_expr; body; _ } ->
-    let vars_with_kinds = [var, kind] in
+    let fresh_var = Variable.rename var in
+    let vars_with_kinds = [var, fresh_var, kind] in
     let static_part_or_do_not_lift =
       match defining_expr with
       | Simple _ -> Do_not_lift
@@ -208,7 +218,7 @@ let rec lift (expr : Flambda.Expr.t) ~to_copy =
              exceptions.  As such, the exception continuation may be
              arbitrarily chosen. *)
           exception_cont = Continuation.create ();
-          computed_values = vars_with_kinds;
+          computed_values = [fresh_var, kind];
         }
       in
       let defn : Program_body.definition =
@@ -318,9 +328,9 @@ let add_extracted lifted program_body =
 let rec lift_program_body (body : Flambda_static.Program_body.t)
       : Flambda_static.Program_body.t =
   let lift_define_symbol defn body ~rebuild =
-    let introduced, defn = introduce_symbols defn in
+    let lifted, defn = introduce_symbols defn in
     let body = lift_program_body body in
-    add_extracted introduced (rebuild defn body)
+    add_extracted lifted (rebuild defn body)
   in
   match body with
   | Define_symbol (defn, body) ->
