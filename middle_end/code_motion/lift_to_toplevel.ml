@@ -58,11 +58,11 @@ let static_structure name ~vars_with_kinds =
       let prim : Flambda_primitive.t =
         let var = Simple.name (Name.symbol symbol) in
         match kind with
-        | Value _ ->
-          Binary (Block_load (Block (Value Unknown), Immutable), var,
+        | Value kind ->
+          Binary (Block_load (Block (Value kind), Immutable), var,
             Simple.const (Tagged_immediate Immediate.zero))
-        | Fabricated _ ->
-          Binary (Block_load (Block Fabricated_definitely_pointer, Immutable),
+        | Fabricated kind ->
+          Binary (Block_load (Block (Fabricated kind), Immutable),
             var, Simple.const (Tagged_immediate Immediate.zero))
         | Naked_number Naked_float -> Unary (Unbox_number Naked_float, var)
         | Naked_number Naked_int32 -> Unary (Unbox_number Naked_int32, var)

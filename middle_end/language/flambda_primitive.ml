@@ -150,7 +150,7 @@ module Block_access_kind = struct
   type t0 =
     | Value of Flambda_kind.Value_kind.t
     | Naked_float
-    | Fabricated_definitely_pointer
+    | Fabricated of Flambda_kind.Value_kind.t
 
   type t =
     | Block of t0
@@ -161,10 +161,10 @@ module Block_access_kind = struct
     match t with
     | Block (Value kind) -> K.value kind
     | Block Naked_float -> K.naked_float ()
-    | Block Fabricated_definitely_pointer -> K.fabricated Definitely_pointer
+    | Block (Fabricated kind) -> K.fabricated kind
     | Array (Value kind) -> K.value kind
     | Array Naked_float -> K.naked_float ()
-    | Array Fabricated_definitely_pointer -> K.fabricated Definitely_pointer
+    | Array (Fabricated kind) -> K.fabricated kind
     | Generic_array _ -> Misc.fatal_error "Not yet implemented"
 
   let kind_all_elements t =
@@ -174,10 +174,13 @@ module Block_access_kind = struct
     | Block (Value Definitely_immediate)
     | Block (Value Bottom) -> K.value Unknown
     | Block Naked_float -> K.naked_float ()
-    | Block Fabricated_definitely_pointer -> K.fabricated Definitely_pointer
+    | Block (Fabricated Unknown)
+    | Block (Fabricated Definitely_pointer)
+    | Block (Fabricated Definitely_immediate)
+    | Block (Fabricated Bottom) -> K.fabricated Unknown
     | Array (Value kind) -> K.value kind
     | Array Naked_float -> K.naked_float ()
-    | Array Fabricated_definitely_pointer -> K.fabricated Definitely_pointer
+    | Array (Fabricated kind) -> K.fabricated kind
     | Generic_array _ -> Misc.fatal_error "Not yet implemented"
 
   let compare_t0 (t0_1 : t0) t0_2 = Pervasives.compare t0_1 t0_2
@@ -198,11 +201,12 @@ module Block_access_kind = struct
   let print_t0 ppf t0 =
     match t0 with
     | Value kind ->
-      Format.fprintf ppf "@[(Any_value %a)@]"
+      Format.fprintf ppf "@[(Value %a)@]"
         Flambda_kind.Value_kind.print kind
     | Naked_float -> Format.pp_print_string ppf "Naked_float"
-    | Fabricated_definitely_pointer ->
-      Format.pp_print_string ppf "Fabricated_definitely_pointer"
+    | Fabricated kind ->
+      Format.fprintf ppf "@[(Fabricated %a)@]"
+        Flambda_kind.Value_kind.print kind
 
   let print ppf kind =
     match kind with

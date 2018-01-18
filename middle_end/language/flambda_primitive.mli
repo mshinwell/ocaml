@@ -63,7 +63,7 @@ module Block_access_kind : sig
   type t0 =
     | Value of Flambda_kind.Value_kind.t
     | Naked_float
-    | Fabricated_definitely_pointer
+    | Fabricated of Flambda_kind.Value_kind.t
 
   type t =
     | Block of t0
