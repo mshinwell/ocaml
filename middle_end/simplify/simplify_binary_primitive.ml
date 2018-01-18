@@ -1157,7 +1157,7 @@ let simplify_binary_primitive env r (prim : Flambda_primitive.binary_primitive)
   | Block_load (block_access_kind, field_is_mutable) ->
     simplify_block_load env r prim ~block:arg1 ~index:arg2
       ~block_access_kind ~field_is_mutable dbg
-  | Eq_comp (kind, op) -> simplify_eq_comp env r prim dbg kind op arg1 arg2
+  | Phys_equal (kind, op) -> simplify_eq_comp env r prim dbg kind op arg1 arg2
   | Int_arith (kind, op) ->
     begin match kind with
     | Tagged_immediate ->

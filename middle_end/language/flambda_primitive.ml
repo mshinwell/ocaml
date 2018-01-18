@@ -716,7 +716,7 @@ let print_binary_float_arith_op ppf o =
 type binary_primitive =
   | Block_load of Block_access_kind.t * mutable_or_immutable
   | String_or_bigstring_load of string_like_value * string_accessor_width
-  | Eq_comp of Flambda_kind.t * equality_comparison
+  | Phys_equal of Flambda_kind.t * equality_comparison
   | Int_arith of Flambda_kind.Standard_int.t * binary_int_arith_op
   | Int_shift of Flambda_kind.Standard_int.t * int_shift_op
   | Int_comp of Flambda_kind.Standard_int.t * signed_or_unsigned
@@ -729,7 +729,7 @@ let compare_binary_primitive p1 p2 =
     match p with
     | Block_load _ -> 0
     | String_or_bigstring_load _ -> 1
-    | Eq_comp _ -> 2
+    | Phys_equal _ -> 2
     | Int_arith _ -> 3
     | Int_shift _ -> 4
     | Int_comp _ -> 5
@@ -746,7 +746,7 @@ let compare_binary_primitive p1 p2 =
     let c = Pervasives.compare string_like1 string_like2 in
     if c <> 0 then c
     else Pervasives.compare width1 width2
-  | Eq_comp (kind1, comp1), Eq_comp (kind2, comp2) ->
+  | Phys_equal (kind1, comp1), Phys_equal (kind2, comp2) ->
     let c = K.compare kind1 kind2 in
     if c <> 0 then c
     else Pervasives.compare comp1 comp2
@@ -772,7 +772,7 @@ let compare_binary_primitive p1 p2 =
     Pervasives.compare comp1 comp2
   | (Block_load _
     | String_or_bigstring_load _
-    | Eq_comp _
+    | Phys_equal _
     | Int_arith _
     | Int_shift _
     | Int_comp _
@@ -792,8 +792,8 @@ let print_binary_primitive ppf p =
     fprintf ppf "@[(String_load %a %a)@]"
       print_string_like_value string_like
       print_string_accessor_width width
-  | Eq_comp (kind, op) ->
-    Format.fprintf ppf "@[(Eq_comp %a %a)@]"
+  | Phys_equal (kind, op) ->
+    Format.fprintf ppf "@[(Phys_equal %a %a)@]"
       K.print kind
       print_equality_comparison op
   | Int_arith (_k, op) -> print_binary_int_arith_op ppf op
@@ -810,7 +810,7 @@ let args_kind_of_binary_primitive p =
     string_or_bytes_kind, array_like_thing_index_kind
   | String_or_bigstring_load (Bigstring, _) ->
     bigstring_kind, array_like_thing_index_kind
-  | Eq_comp (kind, _) -> kind, kind
+  | Phys_equal (kind, _) -> kind, kind
   | Int_arith (kind, _) ->
     let kind = K.Standard_int.to_kind kind in
     kind, kind
@@ -835,14 +835,14 @@ let result_kind_of_binary_primitive p : result_kind =
   | Int_arith (kind, _)
   | Int_shift (kind, _) -> Singleton (K.Standard_int.to_kind kind)
   | Float_arith _ -> Singleton (K.naked_float ())
-  | Eq_comp _
+  | Phys_equal _
   | Int_comp _
   | Float_comp _ -> Singleton (K.value Definitely_immediate)
 
 let effects_and_coeffects_of_binary_primitive p =
   match p with
   | Block_load _ -> reading_from_an_array_like_thing
-  | Eq_comp _ -> No_effects, No_coeffects
+  | Phys_equal _ -> No_effects, No_coeffects
   | Int_arith (_kind, (Add | Sub | Mul | Div | Mod | And | Or | Xor)) ->
     No_effects, No_coeffects
   | Int_shift _ -> No_effects, No_coeffects

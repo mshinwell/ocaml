@@ -1329,7 +1329,7 @@ end = struct
          are reminded to check upon adding a new primitive. *)
       | Block_load _
       | String_or_bigstring_load _
-      | Eq_comp _
+      | Phys_equal _
       | Int_arith _
       | Int_shift _
       | Int_comp _

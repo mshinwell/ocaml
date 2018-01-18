@@ -72,8 +72,8 @@ let convert_comparison_prim (comp : Lambda.comparison) : P.binary_primitive =
          | Foo -> 1
          | Bar -> 2
   *)
-  | Ceq -> Eq_comp (K.value Unknown, Eq)
-  | Cneq -> Eq_comp (K.value Unknown, Neq)
+  | Ceq -> Phys_equal (K.value Unknown, Eq)
+  | Cneq -> Phys_equal (K.value Unknown, Neq)
   | Clt -> Int_comp (I.Tagged_immediate, Signed, Lt)
   | Cgt -> Int_comp (I.Tagged_immediate, Signed, Gt)
   | Cle -> Int_comp (I.Tagged_immediate, Signed, Le)
@@ -506,7 +506,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
       primitive =
         Binary (Int_arith (I.Tagged_immediate, Div), arg1, arg2);
       validity_condition =
-        Binary (Eq_comp (K.value Definitely_immediate, Eq), arg2,
+        Binary (Phys_equal (K.value Definitely_immediate, Eq), arg2,
                 Simple
                   (Simple.const
                      (Simple.Const.Tagged_immediate
@@ -520,7 +520,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
       primitive =
         Binary (Int_arith (I.Tagged_immediate, Mod), arg1, arg2);
       validity_condition =
-        Binary (Eq_comp (K.value Definitely_immediate, Eq), arg2,
+        Binary (Phys_equal (K.value Definitely_immediate, Eq), arg2,
                 Simple
                   (Simple.const
                      (Simple.Const.Tagged_immediate
