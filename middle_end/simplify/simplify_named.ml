@@ -50,8 +50,7 @@ let simplify_set_of_closures original_env r
   let continuation_param_uses = Continuation.Tbl.create 42 in
   let simplify_function closure_id
         (function_decl : Flambda.Function_declaration.t)
-        (funs, r)
-        : Flambda.Function_declaration.t Closure_id.Map.t * R.t =
+        (funs, r) =
     let closure_env =
       Simplify_aux.prepare_to_simplify_closure ~function_decl
         ~set_of_closures_env
@@ -88,7 +87,7 @@ let simplify_set_of_closures original_env r
       Freshening.add_variable (E.freshening env) function_decl.my_closure
     in
     let closure_env = E.set_freshening closure_env freshening in
-    let body, r =
+    let body, r, return_continuation_uses =
       E.enter_closure closure_env ~closure_id
         ~inline_inside:
           (Inlining_decision.should_inline_inside_declaration function_decl)
@@ -106,8 +105,14 @@ let simplify_set_of_closures original_env r
               ~descr
           in
           Continuation.Tbl.add continuation_param_uses continuation_param uses;
-          body, r)
+          body, r, uses)
     in
+    let result, _typing_env =
+      R.Continuation_uses.join_of_arg_types return_continuation_uses
+        ~arity:function_decl.return_arity
+        ~default_env:(E.get_typing_environment closure_env)  (* XXX *)
+    in
+    (* CR mshinwell: Anything to do with the returned environment? *)
     let inline : Flambda.inline_attribute =
       match function_decl.inline with
       | Default_inline ->
@@ -137,8 +142,28 @@ let simplify_set_of_closures original_env r
         ~my_closure
     in
     let ty =
+      let params =
+        List.map (fun param ->
+            Flambda.Typed_parameter.param param,
+              Flambda.Typed_parameter.ty param)
+          function_decl.params
+      in
+      (* CR mshinwell: Put this conversion in a function somewhere *)
+      let inline : T.inline_attribute =
+        match function_decl.inline with
+        | Always_inline -> Always_inline
+        | Never_inline -> Never_inline
+        | Unroll n -> Unroll n
+        | Default_inline -> Default_inline
+      in
+      let specialise : T.specialise_attribute =
+        match function_decl.specialise with
+        | Always_specialise -> Always_specialise
+        | Never_specialise -> Never_specialise
+        | Default_specialise -> Default_specialise
+      in
       T.create_inlinable_function_declaration
-        ~is_classic_mode:!Clflags.classic_mode
+        ~is_classic_mode:!Clflags.classic_inlining
         ~closure_origin:function_decl.closure_origin
         ~continuation_param
         ~exn_continuation_param
@@ -148,13 +173,12 @@ let simplify_set_of_closures original_env r
         ~stub:function_decl.stub
         ~dbg:function_decl.dbg
         ~inline
-        ~specialise:function_decl.specialise
+        ~specialise
         ~is_a_functor:function_decl.is_a_functor
-        ~invariant_params:(lazy Variable.Set.empty)
-        ~size
-        ~direct_call_surrogate
+        ~invariant_params:(lazy Variable.Set.empty)  (* CR mshinwell: fix *)
+        ~size:(lazy None)  (* CR mshinwell: to fix *)
+        ~direct_call_surrogate:None  (* CR mshinwell: to fix *)
         ~my_closure
-        ~function_declarations
     in
 (* CR mshinwell: temporarily disabled
     let function_decl =
@@ -165,11 +189,14 @@ let simplify_set_of_closures original_env r
 *)
     Closure_id.Map.add closure_id (function_decl, ty) funs, r
   in
-  let funs, r =
+  let funs_with_types, r =
     Closure_id.Map.fold simplify_function function_decls.funs
       (Closure_id.Map.empty, r)
   in
   let function_decls =
+    let funs =
+      Closure_id.Map.map (fun (func_decl, _ty) -> func_decl) funs_with_types
+    in
     Flambda.Function_declarations.update function_decls ~funs
   in
 (*
@@ -197,16 +224,7 @@ let simplify_set_of_closures original_env r
       function_decls ~backend:(E.backend env))
 *)
   in
-(* XXX Closure typing to be fixed later
-  let value_set_of_closures =
-    T.create_set_of_closures ~function_decls
-      ~bound_vars:internal_value_set_of_closures.bound_vars
-      ~size:(lazy (Flambda.Function_declarations.size function_decls))
-      ~invariant_params
-      ~freshening:internal_value_set_of_closures.freshening
-      ~direct_call_surrogates:
-        internal_value_set_of_closures.direct_call_surrogates
-  in
+(* XXX
   let direct_call_surrogates =
     Closure_id.Map.fold (fun existing surrogate surrogates ->
         Variable.Map.add (Closure_id.unwrap existing)
@@ -219,18 +237,26 @@ let simplify_set_of_closures original_env r
     Flambda.Free_vars.map_vars set_of_closures.free_vars ~f:(fun var ->
       (* XXX This should use a variant of [simplify_named] called
          [simplify_var] which always returns [Variable.t], otherwise
-         we're not following aliases via types *)
+         we're not following aliases via types.  (And below) *)
       Freshening.apply_variable (E.freshening env) var)
   in
   let set_of_closures =
-    Flambda.Set_of_closures.create ~function_decls
-      ~in_closure
+    Flambda.Set_of_closures.create ~function_decls ~in_closure
       ~direct_call_surrogates:Closure_id.Map.empty
   in
-(*
-  let ty = T.set_of_closures value_set_of_closures in
-*)
-  let ty = T.unknown (Flambda_kind.fabricated Definitely_pointer) in
+  let closures =
+    Closure_id.Map.map (fun (_func_decl, ty) -> T.closure ty) funs_with_types
+  in
+  let closure_elements =
+    Var_within_closure.Map.map (fun (free_var : Flambda.Free_var.t) ->
+        let var = Freshening.apply_variable (E.freshening env) free_var.var in
+        T.alias_type_of_as_ty_value (Name.var var))
+      set_of_closures.free_vars
+  in
+  let ty =
+    T.set_of_closures ~closures:(Exactly closures)
+      ~closure_elements:(Exactly closure_elements)
+  in
   set_of_closures, ty, r
 
 (** [simplify_named] returns:

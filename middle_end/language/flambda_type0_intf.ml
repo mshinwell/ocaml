@@ -498,16 +498,12 @@ module type S = sig
     -> direct_call_surrogate:Closure_id.t option
     -> function_declarations
 
-  val create_closure : function_declarations -> closure
+  val closure : function_declarations -> ty_fabricated
 
-  val closure : closure -> t
-
-  val create_set_of_closures
+  val set_of_closures
      : closures:ty_fabricated Closure_id.Map.t extensibility
     -> closure_elements:ty_value Var_within_closure.Map.t extensibility
-    -> set_of_closures
-
-  val set_of_closures : set_of_closures -> t
+    -> t
 
   (** Construct a type equal to the type of the given name.  (The name
       must be present in the given environment when calling e.g. [join].) *)

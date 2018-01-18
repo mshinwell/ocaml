@@ -187,6 +187,7 @@ end) = struct
   and inlinable_function_declaration = {
     closure_origin : Closure_origin.t;
     continuation_param : Continuation.t;
+    exn_continuation_param : Continuation.t;
     is_classic_mode : bool;
     params : (Parameter.t * t) list;
     code_id : Code_id.t;
@@ -426,6 +427,7 @@ end) = struct
       "@[(inlinable@ \
         @[(closure_origin@ %a)@]@,\
         @[(continuation_param@ %a)@]@,\
+        @[(exn_continuation_param@ %a)@]@,\
         @[(is_classic_mode@ %b)@]@,\
         @[(params (%a))@]@,\
         @[(body <elided>)@]@,\
@@ -442,6 +444,7 @@ end) = struct
         @[(my_closure@ %a)@])@]"
       Closure_origin.print decl.closure_origin
       Continuation.print decl.continuation_param
+      Continuation.print decl.exn_continuation_param
       decl.is_classic_mode
       (Format.pp_print_list ~pp_sep:(fun ppf () -> Format.fprintf ppf ", ")
         (fun ppf (param, ty) ->
@@ -1606,12 +1609,14 @@ end) = struct
     unknown kind
 
   let create_inlinable_function_declaration ~is_classic_mode ~closure_origin
-        ~continuation_param ~params ~body ~result ~stub ~dbg ~inline
+        ~continuation_param ~exn_continuation_param
+        ~params ~body ~result ~stub ~dbg ~inline
         ~specialise ~is_a_functor ~invariant_params ~size ~direct_call_surrogate
         ~my_closure : function_declarations =
     Inlinable {
       closure_origin;
       continuation_param;
+      exn_continuation_param;
       is_classic_mode;
       params;
       body;
@@ -1642,18 +1647,15 @@ end) = struct
     in
     Non_inlinable (Some decl)
 
-  let create_closure function_decls : closure =
-    { function_decls; }
+  let closure function_decls : ty_fabricated =
+    No_alias (Join [Closure { function_decls; }])
 
-  let closure (closure : closure) =
-    Fabricated (No_alias (Join [Closure closure]))
-
-  let create_set_of_closures ~closures ~closure_elements : set_of_closures =
-    { closures;
-      closure_elements;
-    }
-
-  let set_of_closures (set_of_closures : set_of_closures) =
+  let set_of_closures ~closures ~closure_elements =
+    let set_of_closures : set_of_closures =
+      { closures;
+        closure_elements;
+      }
+    in
     let no_closures =
       match set_of_closures.closures with
       | Open _ -> false
@@ -2675,6 +2677,8 @@ end) = struct
                 inlinable2.closure_origin);
               assert (Continuation.equal inlinable1.continuation_param
                 inlinable2.continuation_param);
+              assert (Continuation.equal inlinable1.exn_continuation_param
+                inlinable2.exn_continuation_param);
               assert (Pervasives.(=) inlinable1.is_classic_mode
                 inlinable2.is_classic_mode);
               assert (List.compare_lengths inlinable1.params inlinable2.params
@@ -2743,6 +2747,7 @@ end) = struct
             Inlinable {
               closure_origin = inlinable1.closure_origin;
               continuation_param = inlinable1.continuation_param;
+              exn_continuation_param = inlinable1.exn_continuation_param;
               is_classic_mode = inlinable1.is_classic_mode;
               params;
               code_id = inlinable1.code_id;

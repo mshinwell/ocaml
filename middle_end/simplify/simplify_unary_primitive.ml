@@ -40,11 +40,8 @@ let refine_set_of_closures_type_to_identify_projection ~type_of_name
       Closure_id.Map.add closure_id closure_ty Closure_id.Map.empty
     in
     let closure_elements = Var_within_closure.Map.empty in
-    let set_of_closures =
-      T.create_set_of_closures ~closures:(Open closures)
-        ~closure_elements:(Open closure_elements)
-    in
-    T.set_of_closures set_of_closures
+    T.set_of_closures ~closures:(Open closures)
+      ~closure_elements:(Open closure_elements)
   in
   R.add_or_meet_typing_judgement ~type_of_name
     r set_of_closures_name
@@ -61,11 +58,8 @@ let refine_set_of_closures_type_to_identify_closure_element ~type_of_name
       Var_within_closure.Map.add var_within_closure var_within_closure_ty
         Var_within_closure.Map.empty
     in
-    let set_of_closures =
-      T.create_set_of_closures ~closures:(Open closures)
-        ~closure_elements:(Open closure_elements)
-    in
-    T.set_of_closures set_of_closures
+    T.set_of_closures ~closures:(Open closures)
+      ~closure_elements:(Open closure_elements)
   in
   R.add_or_meet_typing_judgement ~type_of_name
     r set_of_closures_name

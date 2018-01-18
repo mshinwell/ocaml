@@ -699,6 +699,9 @@ end and Typed_parameter : sig
       need to be provided. *)
   val create_from_kind : Parameter.t -> Flambda_kind.t -> t
 
+  (** The underlying parameter. *)
+  val param : t -> Parameter.t
+
   (** The underlying variable (cf. [Parameter.var]). *)
   val var : t -> Variable.t
 

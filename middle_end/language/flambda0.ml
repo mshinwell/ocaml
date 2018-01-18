@@ -1742,6 +1742,7 @@ end and Typed_parameter : sig
   type t
   val create : (Parameter.t -> Flambda_type.t -> t) Flambda_type.type_accessor
   val create_from_kind : Parameter.t -> Flambda_kind.t -> t
+  val param : t -> Parameter.t
   val var : t -> Variable.t
   val simple : t -> Simple.t
   val ty : t -> Flambda_type.t
@@ -1799,6 +1800,7 @@ end = struct
       kind;
     }
 
+  let param t = t.param
   let var t = Parameter.var t.param
   let simple t = Simple.var (var t)
   let ty t = t.ty
