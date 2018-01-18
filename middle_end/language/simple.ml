@@ -170,6 +170,7 @@ module List = struct
     let hash t =
       Hashtbl.hash (List.map hash t)
 
-    let print ppf t = (Format.pp_print_list print) ppf t
+    let print ppf t =
+      (Format.pp_print_list print ~pp_sep:Format.pp_print_space) ppf t
   end)
 end
