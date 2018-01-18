@@ -870,8 +870,8 @@ end) = struct
   let any_naked_nativeint () : t =
     Naked_number (No_alias (Unknown ()), K.Naked_number.Naked_nativeint)
 
-  let any_fabricated () : t =
-    Fabricated (No_alias (Unknown K.Value_kind.Unknown))
+  let any_fabricated value_kind : t =
+    Fabricated (No_alias (Unknown value_kind))
 
   let any_phantom () : t =
     Phantom (No_alias (Unknown K.Phantom_kind.Unknown))
@@ -884,7 +884,7 @@ end) = struct
     | Naked_number Naked_int32 -> any_naked_int32 ()
     | Naked_number Naked_int64 -> any_naked_int64 ()
     | Naked_number Naked_nativeint -> any_naked_nativeint ()
-    | Fabricated _ -> any_fabricated ()
+    | Fabricated value_kind -> any_fabricated value_kind
     | Phantom _ -> any_phantom ()
 
   let these_naked_immediates (is : Immediate.Set.t) : t =

@@ -78,6 +78,8 @@ module Reachable : sig
 
   val reachable : F0.Named.t -> t
   val invalid : unit -> t
+
+  val print : Format.formatter -> t -> unit
 end
 
 module Let_cont_handlers : sig

@@ -186,6 +186,11 @@ type invalid_term_semantics =
   (** Invalid code should be replaced by an abort trap.  No back-propagation
       is performed. *)
 
+val print_invalid_term_semantics
+   : Format.formatter
+  -> invalid_term_semantics
+  -> unit
+
 type recursive =
   | Non_recursive
   | Recursive

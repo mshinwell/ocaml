@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2017 OCamlPro SAS                                    *)
-(*   Copyright 2014--2017 Jane Street Group LLC                           *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -18,6 +18,7 @@
 
 module B = Inlining_cost.Benefit
 module E = Simplify_env_and_result.Env
+module K = Flambda_kind
 module R = Simplify_env_and_result.Result
 module S = Simplify_simple
 module T = Flambda_type
@@ -65,8 +66,12 @@ let for_defining_expr_of_let (env, r) var kind defining_expr =
   let new_judgements = R.get_typing_judgements r in
   let new_kind = (E.type_accessor env T.kind) ty in
   if not (Flambda_kind.compatible new_kind ~if_used_at:kind) then begin
-    Misc.fatal_errorf "Kind error during simplification of [Let] binding for %a"
+    Misc.fatal_errorf "Kind error during simplification of [Let] binding \
+        which yielded:@ %a :: %a <not compatible with %a> =@ %a"
       Variable.print var
+      K.print new_kind
+      K.print kind
+      Flambda.Reachable.print defining_expr
   end;
   let defining_expr : Flambda.Reachable.t =
     match defining_expr with

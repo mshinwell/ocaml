@@ -383,7 +383,7 @@ let simplify_define_symbol env (recursive : Flambda.recursive)
       in
       assert (List.for_all2 (fun (_var, kind1) ty ->
           let kind2 = T.kind ~type_of_name:(E.type_of_name env) ty in
-          Flambda_kind.equal kind1 kind2)
+          Flambda_kind.compatible kind2 ~if_used_at:kind1)
         computation.computed_values args_types);
       let env =
         List.fold_left2 (fun env (var, _kind) ty ->

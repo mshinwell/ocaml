@@ -364,7 +364,7 @@ module type S = sig
 
 (*  val any_closure : unit -> t *)
 
-  val any_fabricated : unit -> t
+  val any_fabricated : Flambda_kind.Value_kind.t -> t
   val any_phantom : unit -> t
 
   (** Building of types representing tagged / boxed values from specified

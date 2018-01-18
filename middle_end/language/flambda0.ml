@@ -413,6 +413,11 @@ type invalid_term_semantics =
   | Treat_as_unreachable
   | Halt_and_catch_fire
 
+let print_invalid_term_semantics ppf (sem : invalid_term_semantics) =
+  match sem with
+  | Treat_as_unreachable -> Format.pp_print_string ppf "Treat_as_unreachable"
+  | Halt_and_catch_fire -> Format.pp_print_string ppf "Halt_and_catch_fire"
+
 type recursive =
   | Non_recursive
   | Recursive

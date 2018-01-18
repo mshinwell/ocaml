@@ -80,9 +80,9 @@ let simplify_set_of_closures original_env r
       in
       let closure_env =
         E.add_continuation (E.set_freshening closure_env freshening)
-          continuation_param cont_type
+          exn_continuation_param cont_type
       in
-      continuation_param, closure_env
+      exn_continuation_param, closure_env
     in
     let my_closure, freshening =
       Freshening.add_variable (E.freshening env) function_decl.my_closure
@@ -210,7 +210,7 @@ let simplify_set_of_closures original_env r
 (*
   let ty = T.set_of_closures value_set_of_closures in
 *)
-  let ty = T.unknown (Flambda_kind.value Definitely_pointer) in
+  let ty = T.unknown (Flambda_kind.fabricated Definitely_pointer) in
   set_of_closures, ty, r
 
 (** [simplify_named] returns:

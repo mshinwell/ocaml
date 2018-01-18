@@ -97,6 +97,11 @@ module Reachable = struct
       Invalid Treat_as_unreachable
     else
       Invalid Halt_and_catch_fire
+
+  let print ppf t =
+    match t with
+    | Reachable named -> Flambda0.Named.print ppf named
+    | Invalid sem -> Flambda0.print_invalid_term_semantics ppf sem
 end
 
 module Typed_parameter = struct

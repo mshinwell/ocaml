@@ -621,10 +621,9 @@ let valid_block_tag_for_kind ~tag ~(field_kind : K.t) =
      this to handle blocks of the other unboxed number kinds. *)
   match field_kind with
   | Value _ -> Tag.is_structured_block tag
-  | Naked_number Naked_float ->
-    Tag.equal tag Tag.double_array_tag
+  | Fabricated _ -> Tag.equal tag Tag.zero
+  | Naked_number Naked_float -> Tag.equal tag Tag.double_array_tag
   | Naked_number _
-  | Fabricated _
   | Phantom _ ->
     Misc.fatal_errorf "Bad kind for block field: %a"
       K.print field_kind
