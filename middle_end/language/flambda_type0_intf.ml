@@ -174,6 +174,7 @@ module type S = sig
   and inlinable_function_declaration = private {
     closure_origin : Closure_origin.t;
     continuation_param : Continuation.t;
+    exn_continuation_param : Continuation.t;
     (* CR-someday mshinwell: [is_classic_mode] should be changed to use a
        new type which records the combination of inlining (etc) options
        applied to the originating source file. *)
@@ -475,6 +476,7 @@ module type S = sig
      : is_classic_mode:bool
     -> closure_origin:Closure_origin.t
     -> continuation_param:Continuation.t
+    -> exn_continuation_param:Continuation.t
     -> params:(Parameter.t * t) list
     -> body:expr
     -> result:t list

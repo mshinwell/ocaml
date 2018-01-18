@@ -136,6 +136,26 @@ let simplify_set_of_closures original_env r
         ~closure_origin:function_decl.closure_origin
         ~my_closure
     in
+    let ty =
+      T.create_inlinable_function_declaration
+        ~is_classic_mode:!Clflags.classic_mode
+        ~closure_origin:function_decl.closure_origin
+        ~continuation_param
+        ~exn_continuation_param
+        ~params
+        ~body
+        ~result
+        ~stub:function_decl.stub
+        ~dbg:function_decl.dbg
+        ~inline
+        ~specialise:function_decl.specialise
+        ~is_a_functor:function_decl.is_a_functor
+        ~invariant_params:(lazy Variable.Set.empty)
+        ~size
+        ~direct_call_surrogate
+        ~my_closure
+        ~function_declarations
+    in
 (* CR mshinwell: temporarily disabled
     let function_decl =
       match Unrecursify.unrecursify_function ~closure_id ~function_decl with
@@ -143,7 +163,7 @@ let simplify_set_of_closures original_env r
       | Some function_decl -> function_decl
     in
 *)
-    Closure_id.Map.add closure_id function_decl funs, r
+    Closure_id.Map.add closure_id (function_decl, ty) funs, r
   in
   let funs, r =
     Closure_id.Map.fold simplify_function function_decls.funs
