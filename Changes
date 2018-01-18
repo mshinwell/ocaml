@@ -120,6 +120,9 @@ Working version
   (lib{caml,asm}run{d,i}.a)
   (Gabriel Scherer, reminded by Julia Lawall)
 
+- GPR#1563: simplify implementation of LSRINT and ASRINT
+  (Max Mouratov, review by Frédéric Bour)
+
 ### Tools:
 
 - MPR#7643, GPR#1377: ocamldep, fix an exponential blowup in presence of nested
@@ -157,7 +160,7 @@ Working version
   (Gabriel Scherer and Armaël Guéneau,
    review by Valentin Gatien-Baron and Damien Doligez)
 
-- GPR#1519, GPR#1532: migrate expect tests to ocamltest
+- GPR#1519, GPR#1532, GRP#1570: migrate tests to ocamltest
   (Sébastien Hinderer, review by Gabriel Scherer, Valentin Gatien-Baron
   and Nicolás Ojeda Bär)
 
@@ -210,6 +213,9 @@ Working version
 - GPR#1550, GPR#1555: Make pattern matching warnings more robust
   to ill-typed columns
   (Thomas Refis, with help from Gabriel Scherer and Luc Maranget)
+
+- MPR#7704, GPR#1564: use proper variant tag in non-exhaustiveness warning
+  (Jacques Garrigue, report by Thomas Refis)
 
 - MPR#7705, GPR#1558: add missing bounds check in Bigarray.Genarray.nth_dim.
   (Nicolás Ojeda Bär, report by Jeremy Yallop, review by Gabriel Scherer)
