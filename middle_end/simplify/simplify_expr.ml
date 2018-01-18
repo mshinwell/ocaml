@@ -87,7 +87,7 @@ let for_defining_expr_of_let (env, r) var kind defining_expr =
   in
   let env = E.set_freshening env freshening in
   let env = E.add_variable env var ty in
-  (env, r), new_bindings, var, new_kind, defining_expr
+  (env, r), new_bindings, var, kind, defining_expr
 
 let filter_defining_expr_of_let r var (defining_expr : Named.t)
       free_names_of_body =
