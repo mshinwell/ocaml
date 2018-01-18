@@ -28,10 +28,13 @@ include Identifiable.Make (struct
   let hash = Hashtbl.hash
 
   let print ppf t =
-    Format.fprintf ppf "@[%a@]"
-      (Format.pp_print_list ~pp_sep:(fun ppf () -> Format.fprintf ppf ", ")
-        Flambda_kind.print)
-      t
+    match t with
+    | [] -> Format.pp_print_string ppf "Nullary"
+    | _ ->
+      Format.fprintf ppf "@[(%a)@]"
+        (Format.pp_print_list ~pp_sep:(fun ppf () -> Format.fprintf ppf ", ")
+          Flambda_kind.print)
+        t
 end)
 
 let is_all_values t =

@@ -129,4 +129,6 @@ let print_or_elide ppf t =
   end
 
 (* CR mshinwell: provide an sexp printer here *)
-let print = print_compact
+let print ppf t =
+  if is_none t then Format.pp_print_string ppf "None"
+  else print_compact ppf t

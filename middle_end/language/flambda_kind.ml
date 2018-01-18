@@ -62,7 +62,7 @@ module Value_kind = struct
   let print ppf t =
     match t with
     (* CR mshinwell: Change the name of the constructor *)
-    | Unknown -> Format.fprintf ppf "Any_value"
+    | Unknown -> Format.fprintf ppf "Any"
     | Definitely_pointer -> Format.fprintf ppf "Definitely_pointer"
     | Definitely_immediate -> Format.fprintf ppf "Definitely_immediate"
     | Bottom -> Format.fprintf ppf "Bottom"

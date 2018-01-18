@@ -45,7 +45,7 @@ let empty_tbl = {
 let print ppf = function
   | Inactive -> Format.fprintf ppf "Inactive"
   | Active tbl ->
-    Format.fprintf ppf "Active:@ ";
+    Format.fprintf ppf "@[(Active@ (";
     Variable.Map.iter (fun var1 var2 ->
         Format.fprintf ppf "%a -> %a@ "
           Variable.print var1
@@ -70,7 +70,8 @@ let print ppf = function
         Format.fprintf ppf "(cont) %a -> %a@ "
           Continuation.print cont1
           Continuation.print cont2)
-      tbl.sb_exn
+      tbl.sb_exn;
+    Format.fprintf ppf "))@]"
 
 let empty = Inactive
 

@@ -114,26 +114,26 @@ end = struct
 
   let print ppf t =
     Format.fprintf ppf "@[(\
-        @[(round %d)@]@ \
-        @[(typing_environment %a)@]@ \
-        @[(mutable_variables %a)@]@ \
-        @[(continuations %a)@]@ \
-        @[(continuation_scope_level %a)@]\
-        @[(current_functions %a)@]@ \
-        @[(inlining_level %d)@]@ \
-        @[(inside_branch %d)@]@ \
-        @[(freshening %a)@]@ \
-        @[(never_inline %b)@]@ \
-        @[(never_inline_inside_closures %b)@]@ \
-        @[(never_inline_outside_closures %b)@]@ \
-        @[(allow_continuation_inlining %b)@]@ \
-        @[(allow_continuation_specialisation %b)@]@ \
-        @[(unroll_counts %a)@]@ \
-        @[(inlining_counts %a)@]@ \
-        @[(actively_unrolling %a)@]@ \
-        @[(closure_depth %d)@]@ \
-        @[(inlining_stats_closure_stack %a)@]@ \
-        @[(inlined_debuginfo %a)@]@ \
+        @[(round@ %d)@]@ \
+        @[(typing_environment@ %a)@]@ \
+        @[(mutable_variables@ %a)@]@ \
+        @[(continuations@ %a)@]@ \
+        @[(continuation_scope_level@ %a)@]@ \
+        @[(current_functions@ %a)@]@ \
+        @[(inlining_level@ %d)@]@ \
+        @[(inside_branch@ %d)@]@ \
+        @[(freshening@ %a)@]@ \
+        @[(never_inline@ %b)@]@ \
+        @[(never_inline_inside_closures@ %b)@]@ \
+        @[(never_inline_outside_closures@ %b)@]@ \
+        @[(allow_continuation_inlining@ %b)@]@ \
+        @[(allow_continuation_specialisation@ %b)@]@ \
+        @[(unroll_counts@ %a)@]@ \
+        @[(inlining_counts@ %a)@]@ \
+        @[(actively_unrolling@ %a)@]@ \
+        @[(closure_depth@ %d)@]@ \
+        @[(inlining_stats_closure_stack@ %a)@]@ \
+        @[(inlined_debuginfo@ %a)@]\
         )@]"
       t.round
       TE.print t.typing_environment

@@ -63,7 +63,7 @@ let is_alias t =
 
 let print ppf t =
   let print_handlers ppf = function
-    | None -> Format.fprintf ppf "<handlers not known>"
+    | None -> Format.fprintf ppf "Unknown"
     | Some handlers ->
       match handlers with
       | Non_recursive handler ->
@@ -72,7 +72,7 @@ let print ppf t =
       | Recursive handlers ->
         Flambda.Let_cont_handlers.print ppf (Recursive handlers)
   in
-  Format.fprintf ppf "@[((name %a) (arity %a) (handlers %a))@]"
+  Format.fprintf ppf "@[((name %a)@ (arity %a)@ (handlers@ %a))@]"
     Continuation.print t.name
     Flambda_arity.print t.arity
     print_handlers t.handlers

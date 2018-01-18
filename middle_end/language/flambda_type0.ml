@@ -277,9 +277,9 @@ end) = struct
   let print_extensibility print_contents ppf (e : _ extensibility) =
     match e with
     | Open contents ->
-      Format.fprintf ppf "@[(Open %a)@]" print_contents contents
+      Format.fprintf ppf "@[(Open@ %a)@]" print_contents contents
     | Exactly contents ->
-      Format.fprintf ppf "@[(Exactly %a)@]" print_contents contents
+      Format.fprintf ppf "@[(Exactly@ %a)@]" print_contents contents
 
   let print_mutable_or_immutable print_contents ppf
         (mut : _ mutable_or_immutable) =
@@ -321,19 +321,19 @@ end) = struct
   let print_of_kind_naked_number (type n) ppf (n : n of_kind_naked_number) =
     match n with
     | Immediate i ->
-      Format.fprintf ppf "@[(Naked_immediates (%a))@]"
+      Format.fprintf ppf "@[(Naked_immediates@ (%a))@]"
         Immediate.Set.print i
     | Float f ->
-      Format.fprintf ppf "@[(Naked_floats (%a))@]"
+      Format.fprintf ppf "@[(Naked_floats@ (%a))@]"
         Float_by_bit_pattern.Set.print f
     | Int32 i ->
-      Format.fprintf ppf "@[(Naked_int32s (%a))@]"
+      Format.fprintf ppf "@[(Naked_int32s@ (%a))@]"
         Int32.Set.print i
     | Int64 i ->
-      Format.fprintf ppf "@[(Naked_int64s (%a))@]"
+      Format.fprintf ppf "@[(Naked_int64s@ (%a))@]"
         Int64.Set.print i
     | Nativeint i ->
-      Format.fprintf ppf "@[(Naked_nativeints (%a))@]"
+      Format.fprintf ppf "@[(Naked_nativeints@ (%a))@]"
         Targetint.Set.print i
 
   let print_ty_naked_number (type n) ppf (ty : n ty_naked_number) =
@@ -343,20 +343,20 @@ end) = struct
         ppf (n : n of_kind_value_boxed_number) =
     match n with
     | Boxed_float f ->
-      Format.fprintf ppf "@[(Boxed_float (%a))@]"
+      Format.fprintf ppf "@[(Boxed_float@ (%a))@]"
         print_ty_naked_number f
     | Boxed_int32 i ->
-      Format.fprintf ppf "@[(Boxed_int32 (%a))@]"
+      Format.fprintf ppf "@[(Boxed_int32@ (%a))@]"
         print_ty_naked_number i
     | Boxed_int64 i ->
-      Format.fprintf ppf "@[(Boxed_int64 (%a))@]"
+      Format.fprintf ppf "@[(Boxed_int64@ (%a))@]"
         print_ty_naked_number i
     | Boxed_nativeint i ->
-      Format.fprintf ppf "@[(Boxed_nativeint (%a))@]"
+      Format.fprintf ppf "@[(Boxed_nativeint@ (%a))@]"
         print_ty_naked_number i
 
   let rec print_immediate_case ppf ({ env_extension; } : immediate_case) =
-    Format.fprintf ppf "@[(env_extension %a)@]"
+    Format.fprintf ppf "@[(env_extension@ %a)@]"
       print_typing_environment env_extension
 
   and print_fields ppf (fields : t mutable_or_immutable array) =
@@ -367,7 +367,7 @@ end) = struct
       (Array.to_list fields)
 
   and print_singleton_block ppf { env_extension; fields; } =
-    Format.fprintf ppf "@[((env_extension %a) (fields %a))@]"
+    Format.fprintf ppf "@[((env_extension@ %a)@ (fields@ %a))@]"
       print_typing_environment env_extension
       print_fields fields
 
@@ -375,7 +375,7 @@ end) = struct
     match Targetint.OCaml.Map.get_singleton by_length with
     | Some (_length, block) -> print_singleton_block ppf block
     | None ->
-      Format.fprintf ppf "(Join (by_length %a))"
+      Format.fprintf ppf "@[(Join (by_length@ %a))@]"
         (Targetint.OCaml.Map.print print_singleton_block) by_length
 
   and print_immediates ppf cases =
@@ -388,7 +388,9 @@ end) = struct
     match of_kind_value with
     | Blocks_and_tagged_immediates { blocks; immediates; } ->
       Format.fprintf ppf
-        "@[(Blocks_and_immediates@ @[(blocks %a)@]@ @[(immediates %a)@])@]"
+        "@[(Blocks_and_immediates@ \
+         @[(blocks@ %a)@]@ \
+         @[(immediates@ @[%a@])@])@]"
         print_blocks blocks
         (print_or_unknown print_immediates) immediates
     | Boxed_number n ->
@@ -422,22 +424,22 @@ end) = struct
         (decl : inlinable_function_declaration) =
     Format.fprintf ppf
       "@[(inlinable@ \
-        @[(closure_origin %a)@]@,\
-        @[(continuation_param %a)@]@,\
-        @[(is_classic_mode %b)@]@,\
+        @[(closure_origin@ %a)@]@,\
+        @[(continuation_param@ %a)@]@,\
+        @[(is_classic_mode@ %b)@]@,\
         @[(params (%a))@]@,\
         @[(body <elided>)@]@,\
-        @[(free_names_in_body %a)@]@,\
-        @[(result (%a))@]@,\
-        @[(stub %b)@]@,\
-        @[(dbg %a)@]@,\
-        @[(inline %a)@]@,\
-        @[(specialise %a)@]@,\
-        @[(is_a_functor %b)@]@,\
-        @[(invariant_params %a)@]@,\
-        @[(size %a)@]@,\
-        @[(direct_call_surrogate %a)@]@,\
-        @[(my_closure %a)@])@]"
+        @[(free_names_in_body@ %a)@]@,\
+        @[(result@ (%a))@]@,\
+        @[(stub@ %b)@]@,\
+        @[(dbg@ %a)@]@,\
+        @[(inline@ %a)@]@,\
+        @[(specialise@ %a)@]@,\
+        @[(is_a_functor@ %b)@]@,\
+        @[(invariant_params@ %a)@]@,\
+        @[(size@ %a)@]@,\
+        @[(direct_call_surrogate@ %a)@]@,\
+        @[(my_closure@ %a)@])@]"
       Closure_origin.print decl.closure_origin
       Continuation.print decl.continuation_param
       decl.is_classic_mode
@@ -492,7 +494,7 @@ end) = struct
         set.closure_elements
 
   and print_closure ppf (closure : closure) =
-    Format.fprintf ppf "@[(Closure (function_decls %a))@]"
+    Format.fprintf ppf "@[(Closure (function_decls@ %a))@]"
       print_function_declarations closure.function_decls
 
   and print_tag_case ppf ({ env_extension; } : tag_case) =
@@ -527,25 +529,28 @@ end) = struct
   and print ppf (t : t) =
     match t with
     | Value ty ->
-      Format.fprintf ppf "(Value (%a))" print_ty_value ty
+      Format.fprintf ppf "@[(Value@ (%a))@]" print_ty_value ty
     | Naked_number (ty, _kind) ->
-      Format.fprintf ppf "(Naked_number (%a))" print_ty_naked_number ty
+      Format.fprintf ppf "@[(Naked_number@ (%a))@]" print_ty_naked_number ty
     | Fabricated ty ->
-      Format.fprintf ppf "(Fabricated (%a))" print_ty_fabricated ty
+      Format.fprintf ppf "@[(Fabricated@ (%a))@]" print_ty_fabricated ty
     | Phantom ty ->
-      Format.fprintf ppf "(Phantom (%a))" print_ty_phantom ty
+      Format.fprintf ppf "@[(Phantom@ (%a))@]" print_ty_phantom ty
 
   and print_typing_environment ppf { names_to_types; levels_to_names;
         existentials; existential_freshening; } =
-    Format.fprintf ppf
-      "@[((names_to_types %a)@ \
-          (levels_to_names %a)@ \
-          (existentials %a)@ \
-          (existential_freshening %a))@]"
-      (Name.Map.print print) names_to_types
-      (Scope_level.Map.print Name.Set.print) levels_to_names
-      Name.Set.print existentials
-      Freshening.print existential_freshening
+    if Name.Map.is_empty names_to_types then
+      Format.pp_print_string ppf "Empty"
+    else
+      Format.fprintf ppf
+        "@[((names_to_types@ %a)@ \
+            (levels_to_names@ %a)@ \
+            (existentials@ %a)@ \
+            (existential_freshening@ %a))@]"
+        (Name.Map.print print) names_to_types
+        (Scope_level.Map.print Name.Set.print) levels_to_names
+        Name.Set.print existentials
+        Freshening.print existential_freshening
 
   let create_typing_environment () =
     let existential_freshening = Freshening.activate Freshening.empty in
