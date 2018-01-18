@@ -1650,6 +1650,12 @@ end) = struct
   let closure function_decls : ty_fabricated =
     No_alias (Join [Closure { function_decls; }])
 
+  let closures_entry ~set_of_closures : closures_entry =
+    { set_of_closures; }
+
+  let closures by_closure_id : t =
+    Value (No_alias (Join [Closures by_closure_id]))
+
   let set_of_closures ~closures ~closure_elements =
     let set_of_closures : set_of_closures =
       { closures;
@@ -3474,8 +3480,8 @@ end) = struct
      (* XXX     let ty = rename_variables t freshening in *)
           Some (ty, Existential)
 
-    let cut _t ~existential_if_defined_later_than:_ =
-      assert false
+    let cut t ~existential_if_defined_later_than:_ =
+      t  (* XXX *)
 (* N.B.
       let existentials =
         Scope_level.Map.fold (fun scope_level names resulting_existentials ->

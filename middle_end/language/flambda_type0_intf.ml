@@ -505,6 +505,10 @@ module type S = sig
     -> closure_elements:ty_value Var_within_closure.Map.t extensibility
     -> t
 
+  val closures_entry : set_of_closures:ty_fabricated -> closures_entry
+
+  val closures : closures_entry Closure_id.Map.t -> t
+
   (** Construct a type equal to the type of the given name.  (The name
       must be present in the given environment when calling e.g. [join].) *)
   val alias_type_of : Flambda_kind.t -> Name.t -> t

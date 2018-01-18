@@ -69,6 +69,9 @@ let simplify_project_closure env r prim ~closure ~set_of_closures dbg
       ~result_var =
   let set_of_closures, ty = S.simplify_simple env set_of_closures in
   let original_term () : Named.t = Prim (Unary (prim, set_of_closures), dbg) in
+  let unknown r =
+    Reachable.reachable (original_term ()), T.any_value Definitely_pointer, r
+  in
   let invalid r =
     Reachable.invalid (), T.bottom (K.value Definitely_pointer),
       R.map_benefit r (B.remove_primitive (Unary prim))
@@ -89,11 +92,15 @@ let simplify_project_closure env r prim ~closure ~set_of_closures dbg
     let closures = T.extensibility_contents set_of_closures.closures in
     begin match Closure_id.Map.find closure closures with
     | exception Not_found -> invalid r
-    | closure_ty ->
-      Reachable.reachable (original_term ()), T.of_ty_fabricated closure_ty, r
+    | _closure_ty ->
+      (* CR mshinwell: seems a bit ugly to use force_to_kind *)
+      let set_of_closures = T.force_to_kind_fabricated ty in
+      let closures_entry = T.closures_entry ~set_of_closures in
+      let closures = Closure_id.Map.singleton closure closures_entry in
+      let ty = T.closures closures in
+      Reachable.reachable (original_term ()), ty, r
     end
-  | Unknown ->
-    Reachable.reachable (original_term ()), T.any_value Definitely_pointer, r
+  | Unknown -> unknown r
   | Invalid -> invalid r
 
 let simplify_move_within_set_of_closures env r prim ~move_from ~move_to
