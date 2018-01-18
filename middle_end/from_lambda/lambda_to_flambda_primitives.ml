@@ -127,8 +127,8 @@ let standard_int_or_float_of_boxed_integer (bint : Lambda.boxed_integer)
 
 let convert_access_kind i_or_p : P.Block_access_kind.t0 =
   match i_or_p with
-  | Lambda.Immediate -> Definitely_immediate
-  | Lambda.Pointer -> Any_value
+  | Lambda.Immediate -> Value Definitely_immediate
+  | Lambda.Pointer -> Value Unknown
 
 let convert_init_or_assign (i_or_a : Lambda.initialization_or_assignment)
    : P.init_or_assign =
@@ -145,8 +145,8 @@ let convert_array_kind (kind : Lambda.array_kind)
   | Pgenarray ->
     Generic_array
       (P.Generic_array_specialisation.no_specialisation ())
-  | Paddrarray -> Array Any_value
-  | Pintarray -> Array Definitely_immediate
+  | Paddrarray -> Array (Value Unknown)
+  | Pintarray -> Array (Value Definitely_immediate)
   | Pfloatarray -> Array Naked_float
 
 [@@@ocaml.warning "-37"]
@@ -369,7 +369,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     Binary (Float_comp (convert_comparison comp),
             unbox_float arg1, unbox_float arg2)
   | Pfield_computed, [obj; field] ->
-    Binary (Block_load (Block Any_value, Mutable), obj, field)
+    Binary (Block_load (Block (Value Unknown), Mutable), obj, field)
   | Psetfield_computed (imm_or_pointer, init_or_assign), [obj; field; value] ->
     let access_kind =
       convert_access_kind imm_or_pointer
@@ -480,7 +480,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
        We need more type propagations to be precise here *)
     let imm = Immediate.int (Targetint.OCaml.of_int field) in
     let field = Simple.const (Simple.Const.Tagged_immediate imm) in
-    Binary (Block_load (Block Any_value, Mutable), arg, Simple field)
+    Binary (Block_load (Block (Value Unknown), Mutable), arg, Simple field)
   | Pfloatfield field, [arg] ->
     let imm = Immediate.int (Targetint.OCaml.of_int field) in
     let field = Simple.const (Simple.Const.Tagged_immediate imm) in

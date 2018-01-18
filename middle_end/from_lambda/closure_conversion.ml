@@ -88,7 +88,7 @@ let tupled_function_call_stub
     List.fold_left (fun (pos, body) param ->
         let lam : Flambda.Named.t =
           let pos = Immediate.int (Targetint.OCaml.of_int pos) in
-          Prim (Binary (Block_load (Block Any_value, Immutable),
+          Prim (Binary (Block_load (Block (Value Unknown), Immutable),
                         Simple.var tuple_param_var,
                         Simple.const (Tagged_immediate pos)),
                 Debuginfo.none)
@@ -932,7 +932,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
     List.fold_left (fun body (pos, var) ->
       let pos = Immediate.int (Targetint.OCaml.of_int pos) in
       Flambda.Expr.create_let var (K.value Unknown)
-        (Prim (Binary (Block_load (Block Any_value, Immutable),
+        (Prim (Binary (Block_load (Block (Value Unknown), Immutable),
                        Simple.var block_var,
                        Simple.const (Tagged_immediate pos)),
                Debuginfo.none))

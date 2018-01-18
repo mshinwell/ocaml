@@ -148,8 +148,7 @@ let print_duplicate_block_kind ppf (kind : duplicate_block_kind) =
 
 module Block_access_kind = struct
   type t0 =
-    | Any_value  (* XXX this needs to take Value_kind.t *)
-    | Definitely_immediate
+    | Value of Flambda_kind.Value_kind.t
     | Naked_float
     | Fabricated_definitely_pointer
 
@@ -160,24 +159,23 @@ module Block_access_kind = struct
 
   let kind_this_element t =
     match t with
-    | Block Any_value -> K.value Unknown
-    | Block Definitely_immediate -> K.value Definitely_immediate
+    | Block (Value kind) -> K.value kind
     | Block Naked_float -> K.naked_float ()
     | Block Fabricated_definitely_pointer -> K.fabricated Definitely_pointer
-    | Array Any_value -> K.value Unknown
-    | Array Definitely_immediate -> K.value Definitely_immediate
+    | Array (Value kind) -> K.value kind
     | Array Naked_float -> K.naked_float ()
     | Array Fabricated_definitely_pointer -> K.fabricated Definitely_pointer
     | Generic_array _ -> Misc.fatal_error "Not yet implemented"
 
   let kind_all_elements t =
     match t with
-    | Block Any_value -> K.value Unknown
-    | Block Definitely_immediate -> K.value Unknown
+    | Block (Value Unknown)
+    | Block (Value Definitely_pointer)
+    | Block (Value Definitely_immediate)
+    | Block (Value Bottom) -> K.value Unknown
     | Block Naked_float -> K.naked_float ()
     | Block Fabricated_definitely_pointer -> K.fabricated Definitely_pointer
-    | Array Any_value -> K.value Unknown
-    | Array Definitely_immediate -> K.value Definitely_immediate
+    | Array (Value kind) -> K.value kind
     | Array Naked_float -> K.naked_float ()
     | Array Fabricated_definitely_pointer -> K.fabricated Definitely_pointer
     | Generic_array _ -> Misc.fatal_error "Not yet implemented"
@@ -199,8 +197,9 @@ module Block_access_kind = struct
 
   let print_t0 ppf t0 =
     match t0 with
-    | Any_value -> Format.pp_print_string ppf "Any_value"
-    | Definitely_immediate -> Format.pp_print_string ppf "Definitely_immediate"
+    | Value kind ->
+      Format.fprintf ppf "@[(Any_value %a)@]"
+        Flambda_kind.Value_kind.print kind
     | Naked_float -> Format.pp_print_string ppf "Naked_float"
     | Fabricated_definitely_pointer ->
       Format.pp_print_string ppf "Fabricated_definitely_pointer"

@@ -59,7 +59,7 @@ let static_structure name ~vars_with_kinds =
         let var = Simple.name (Name.symbol symbol) in
         match kind with
         | Value _ ->
-          Binary (Block_load (Block Any_value, Immutable), var,
+          Binary (Block_load (Block (Value Unknown), Immutable), var,
             Simple.const (Tagged_immediate Immediate.zero))
         | Fabricated _ ->
           Binary (Block_load (Block Fabricated_definitely_pointer, Immutable),

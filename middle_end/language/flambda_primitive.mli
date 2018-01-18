@@ -61,8 +61,7 @@ module Block_access_kind : sig
      misconceptions about the semantics of the various constructors *)
 
   type t0 =
-    | Any_value
-    | Definitely_immediate
+    | Value of Flambda_kind.Value_kind.t
     | Naked_float
     | Fabricated_definitely_pointer
 
