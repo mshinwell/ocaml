@@ -425,22 +425,22 @@ end) = struct
         (decl : inlinable_function_declaration) =
     Format.fprintf ppf
       "@[(inlinable@ \
-        @[(closure_origin@ %a)@]@,\
-        @[(continuation_param@ %a)@]@,\
-        @[(exn_continuation_param@ %a)@]@,\
-        @[(is_classic_mode@ %b)@]@,\
-        @[(params (%a))@]@,\
-        @[(body <elided>)@]@,\
-        @[(free_names_in_body@ %a)@]@,\
-        @[(result@ (%a))@]@,\
-        @[(stub@ %b)@]@,\
-        @[(dbg@ %a)@]@,\
-        @[(inline@ %a)@]@,\
-        @[(specialise@ %a)@]@,\
-        @[(is_a_functor@ %b)@]@,\
-        @[(invariant_params@ %a)@]@,\
-        @[(size@ %a)@]@,\
-        @[(direct_call_surrogate@ %a)@]@,\
+        @[(closure_origin@ %a)@]@ \
+        @[(continuation_param@ %a)@]@ \
+        @[(exn_continuation_param@ %a)@]@ \
+        @[(is_classic_mode@ %b)@]@ \
+        @[(params (%a))@]@ \
+        @[(body <elided>)@]@ \
+        @[(free_names_in_body@ %a)@]@ \
+        @[(result@ (%a))@]@ \
+        @[(stub@ %b)@]@ \
+        @[(dbg@ %a)@]@ \
+        @[(inline@ %a)@]@ \
+        @[(specialise@ %a)@]@ \
+        @[(is_a_functor@ %b)@]@ \
+        @[(invariant_params@ %a)@]@ \
+        @[(size@ %a)@]@ \
+        @[(direct_call_surrogate@ %a)@]@ \
         @[(my_closure@ %a)@])@]"
       Closure_origin.print decl.closure_origin
       Continuation.print decl.continuation_param
@@ -3433,7 +3433,7 @@ end) = struct
       match Name.Map.find name t.names_to_types with
       | exception Not_found -> add_or_replace t name scope_level ty
       | _ty ->
-        Misc.fatal_errorf "Cannot rebind %a in environment: %a"
+        Misc.fatal_errorf "Cannot rebind %a in environment:@ %a"
           Name.print name
           print t
 
@@ -3452,7 +3452,7 @@ end) = struct
     let find t name =
       match Name.Map.find name t.names_to_types with
       | exception Not_found ->
-        Misc.fatal_errorf "Cannot find %a in environment: %a"
+        Misc.fatal_errorf "Cannot find %a in environment:@ %a"
           Name.print name
           print t
       | ty ->
@@ -3480,8 +3480,8 @@ end) = struct
      (* XXX     let ty = rename_variables t freshening in *)
           Some (ty, Existential)
 
-    let cut t ~existential_if_defined_later_than:_ =
-      t  (* XXX *)
+    let cut _t ~existential_if_defined_later_than:_ =
+      create_typing_environment ()  (* XXX *)
 (* N.B.
       let existentials =
         Scope_level.Map.fold (fun scope_level names resulting_existentials ->
