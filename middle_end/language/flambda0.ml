@@ -1400,11 +1400,13 @@ end = struct
             Function_declaration.print var ppf decl)
           t
       in
-      fprintf ppf "@[<2>((@[set_of_closures id %a)@]@ \
+      fprintf ppf "@[<2>(\
+          @[(set_of_closures id %a)@]@ \
           %a@ \
-          @[<2>(in_closure (%a))@]@ \
-          @[<2>(direct_call_surrogates %a)@]@ \
-          @[<2>(set_of_closures_origin %a)@]@]"
+          @[(in_closure (%a))@]@ \
+          @[(direct_call_surrogates %a)@]@ \
+          @[(set_of_closures_origin %a)@]\
+          )@]"
         Set_of_closures_id.print function_decls.set_of_closures_id
         funs function_decls.funs
         Free_vars.print free_vars
