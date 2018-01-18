@@ -176,12 +176,16 @@ end = struct
   let replace_typing_environment t typing_environment =
     { t with typing_environment; }
 
-  let extend_typing_environment ~type_of_name t ~env_extension =
+  (* CR mshinwell for pchambart: FIXME! *)
+  let extend_typing_environment ~type_of_name:_ t ~env_extension:_ =
+    t
+(*
     let typing_environment =
       T.Typing_environment.meet ~type_of_name
         t.typing_environment env_extension
     in
     { t with typing_environment; }
+*)
 
   let local env =
     { env with

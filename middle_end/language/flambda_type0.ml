@@ -470,7 +470,7 @@ end) = struct
         (decl : non_inlinable_function_declarations) =
     Format.fprintf ppf
       "@[(Non_inlinable@ \
-        @[(result (%a))@]@,\
+        @[(result (%a))@]@ \
         @[(direct_call_surrogate %a)@])@]"
       (Format.pp_print_list ~pp_sep:(fun ppf () -> Format.fprintf ppf ", ")
         (fun ppf ty ->
@@ -489,7 +489,8 @@ end) = struct
 
   and print_set_of_closures ppf (set : set_of_closures) =
     Format.fprintf ppf
-      "@[(@[(closures@ %a)@]@,\
+      "@[(Set_of_closures@ \
+          @[(closures@ %a)@]@ \
           @[(closure_elements@ %a)@])@]"
       (print_extensibility (Closure_id.Map.print print_ty_fabricated))
         set.closures
