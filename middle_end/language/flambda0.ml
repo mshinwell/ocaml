@@ -1726,11 +1726,12 @@ end = struct
       | Default_specialise -> ""
     in
     fprintf ppf
-      "@[<2>(%a%s%s%s%s@ (origin %a)@ =@ \
+      "@[<2>(%a%s%s%s%s@ (my_closure %a)@ (origin %a)@ =@ \
         fun@[<2> <%a> <exn %a>@] %a@ @[<2>@ :: %a@]@ ->@ @[<2>%a@])@]@ "
       Closure_id.print closure_id
       stub
       is_a_functor inline specialise
+      Variable.print f.my_closure
       Closure_origin.print f.closure_origin
       Continuation.print f.continuation_param
       Continuation.print f.exn_continuation_param

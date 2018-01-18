@@ -22,9 +22,16 @@
 *)
 
 module Value_kind : sig
+  (* CR mshinwell: There is some concern that maybe these variations need
+     to be treated more like types rather than kinds---in particular maybe
+     it will be possible to break the kinding from user code *)
   type t =
     | Unknown
     | Definitely_pointer
+    (* CR mshinwell: Should we add an argument "Anywhere | Static_data"
+       to [Definitely_pointer] to prevent root registration for registers that
+       only hold the addresses of symbols?  (Such symbols are already
+       registered as roots with the GC.) *)
     | Definitely_immediate
     | Bottom
 

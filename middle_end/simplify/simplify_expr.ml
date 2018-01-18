@@ -185,12 +185,15 @@ module Make_simplify_switch (S : sig
     -> arms:Continuation.t Arm.Map.t
     -> Expr.t * bool
 
+  val check_kind_of_scrutinee : E.t -> scrutinee:Name.t -> T.t -> unit
+
   val type_of_scrutinee : Arm.t -> T.t
 end) = struct
   let simplify_switch env r ~(scrutinee : Name.t)
         (arms : Continuation.t S.Arm.Map.t)
         : Expr.t * R.t =
     let scrutinee, scrutinee_ty = simplify_name env scrutinee in
+    S.check_kind_of_scrutinee env ~scrutinee scrutinee_ty;
     let arms = (E.type_accessor env S.switch_arms) scrutinee_ty ~arms in
     let destination_is_unreachable cont =
       (* CR mshinwell: This unreachable thing should be tidied up and also
@@ -241,15 +244,37 @@ end
 
 module Simplify_int_switch = Make_simplify_switch (struct
   module Arm = Targetint.OCaml
+
   let switch_arms = T.int_switch_arms
   let create_switch' = Expr.create_int_switch'
+
+  let check_kind_of_scrutinee env ~scrutinee ty =
+    let kind = (E.type_accessor env T.kind) ty in
+    match kind with
+    | Value Definitely_immediate -> ()
+    | _ ->
+      Misc.fatal_errorf "Int-switch scrutinee %a has wrong kind %a"
+        Name.print scrutinee
+        K.print kind
+
   let type_of_scrutinee arm = T.this_tagged_immediate (Immediate.int arm)
 end)
 
 module Simplify_tag_switch = Make_simplify_switch (struct
   module Arm = Tag
+
   let switch_arms = T.tag_switch_arms
   let create_switch' = Expr.create_tag_switch'
+
+  let check_kind_of_scrutinee env ~scrutinee ty =
+    let kind = (E.type_accessor env T.kind) ty in
+    match kind with
+    | Fabricated Definitely_immediate -> ()
+    | _ ->
+      Misc.fatal_errorf "Tag-switch scrutinee %a has wrong kind %a"
+        Name.print scrutinee
+        K.print kind
+
   let type_of_scrutinee arm = T.this_tag arm
 end)
 

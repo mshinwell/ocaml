@@ -250,11 +250,12 @@ let writing_to_an_array_like_thing =
 
 let array_like_thing_index_kind = K.value Definitely_immediate
 
-let bigarray_kind = K.value Definitely_pointer
-let bigstring_kind = K.value Definitely_pointer
-let block_kind = K.value Definitely_pointer
+(* CR mshinwell: Improve naming *)
+let bigarray_kind = K.value Unknown
+let bigstring_kind = K.value Unknown
+let block_kind = K.value Unknown
 let block_element_kind = K.value Unknown
-let string_or_bytes_kind = K.value Definitely_pointer
+let string_or_bytes_kind = K.value Unknown
 
 type comparison = Eq | Neq | Lt | Gt | Le | Ge
 
@@ -991,7 +992,7 @@ let args_kind_of_variadic_primitive p : arg_kinds =
 
 let result_kind_of_variadic_primitive p : result_kind =
   match p with
-  | Make_block _ -> Singleton block_kind
+  | Make_block _ -> Singleton (K.value Definitely_pointer)
   | Bigarray_set _ -> Unit
   | Bigarray_load (_, kind, _) ->
     Singleton (element_kind_of_bigarray_kind kind)
