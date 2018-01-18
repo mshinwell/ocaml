@@ -96,8 +96,9 @@ val is_useful : (t -> bool) type_accessor
 (** Whether all types in the given list do *not* satisfy [useful]. *)
 val all_not_useful : (t list -> bool) type_accessor
 
-type reification_result =
+type reification_result = private
   | Term of Simple.t * t
+  | Lift of Flambda_static0.Static_part.t
   | Cannot_reify
   | Invalid
 

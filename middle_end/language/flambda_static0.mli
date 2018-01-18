@@ -36,7 +36,7 @@ module Static_part : sig
       filled with values computed at runtime.  As might be expected, this is
       isomorphic to a subset of [Flambda_type.t]. *)
   type t =
-    | Block of Tag.Scannable.t * Flambda.mutable_or_immutable
+    | Block of Tag.Scannable.t * Flambda0.mutable_or_immutable
         * (Of_kind_value.t list)
     | Fabricated_block of Variable.t
     | Set_of_closures of Flambda0.Set_of_closures.t
@@ -61,7 +61,7 @@ end
 
 module Program_body : sig
   type computation = {
-    expr : Flambda.Expr.t;
+    expr : Flambda0.Expr.t;
     (** The expression that is to be evaluated.  It must have no free
         variables and call [return_cont] with its results. *)
     return_cont : Continuation.t;

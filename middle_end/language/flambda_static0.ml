@@ -60,7 +60,7 @@ module Static_part = struct
     | Var of Variable.t
 
   type t =
-    | Block of Tag.Scannable.t * Flambda.mutable_or_immutable
+    | Block of Tag.Scannable.t * Flambda0.mutable_or_immutable
         * (Of_kind_value.t list)
     | Fabricated_block of Variable.t
     | Set_of_closures of Flambda0.Set_of_closures.t
@@ -191,7 +191,7 @@ end
 
 module Program_body = struct
   type computation = {
-    expr : Flambda.Expr.t;
+    expr : Flambda0.Expr.t;
     return_cont : Continuation.t;
     exception_cont : Continuation.t;
     computed_values : (Variable.t * Flambda_kind.t) list;
@@ -203,7 +203,7 @@ module Program_body = struct
         @[(return_cont@ %a)@]@ \
         @[(exception_cont@ %a)@]@ \
         @[(computed_values@ @[%a@])@])@]"
-      Flambda.Expr.print comp.expr
+      Flambda0.Expr.print comp.expr
       Continuation.print comp.return_cont
       Continuation.print comp.exception_cont
       (Format.pp_print_list ~pp_sep:Format.pp_print_space
@@ -214,7 +214,7 @@ module Program_body = struct
       comp.computed_values
 
   let free_symbols_of_computation comp =
-    Flambda.Expr.free_symbols comp.expr
+    Flambda0.Expr.free_symbols comp.expr
 
   type static_structure = (Symbol.t * Flambda_kind.t * Static_part.t) list
 
@@ -237,7 +237,7 @@ module Program_body = struct
             Static_part.print static_part))
       defn.static_structure
 
-  let free_symbols_of_definition defn (recursive : Flambda.recursive) =
+  let free_symbols_of_definition defn (recursive : Flambda0.recursive) =
     let free_in_computation =
       match defn.computation with
       | None -> Symbol.Set.empty

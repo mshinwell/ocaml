@@ -386,12 +386,20 @@ let all_not_useful ~type_of_name ts =
 
 type reification_result =
   | Term of Simple.t * t
+  | Lift of Flambda_static0.Static_part.t
   | Cannot_reify
   | Invalid
 
 let reify ~type_of_name ~allow_free_variables t
       : reification_result =
   let t, _canonical_name = resolve_aliases ~type_of_name t in
+  let can_lift =
+    Name.Set.for_all (fun (name : Name.t) ->
+        match name with
+        | Var _ -> false
+        | Symbol _ -> true
+      (free_names t)
+  in
   let simplified, canonical_name = Simplified_type.create ~type_of_name t in
   if Simplified_type.is_bottom simplified then
     Invalid
@@ -460,7 +468,44 @@ let reify ~type_of_name ~allow_free_variables t
         | None -> try_name ()
         end
       end
-    | Fabricated _ | Phantom _ -> Cannot_reify
+    | Fabricated (Set_of_closures set_of_closures) ->
+      if not can_lift then Cannot_reify
+      else
+  and set_of_closures = private {
+    closures : ty_fabricated Closure_id.Map.t extensibility;
+    closure_elements : ty_value Var_within_closure.Map.t extensibility;
+  }
+        let closures =
+
+        in
+        let closure_elements =
+
+        in
+        let cannot_lift = ref false in
+        let funs =
+          Closure_id.Map.map (fun (decls : function_declarations) ->
+              match decls with
+              | Inlinable decl ->
+
+              | Non_inlinable _ ->
+                ...
+                cannot_lift := true)
+            closures
+        in
+        let function_decls =
+          Flambda0.Function_declarations.create ~funs
+  val create : funs:Function_declaration.t Closure_id.Map.t -> t
+        in
+        let in_closure =
+
+        in
+        let set_of_closures =
+          Flambda0.Set_of_closures.create ~function_decls ~in_closure
+            ~direct_call_surrogates:Closure_id.Map.empty (* XXX *)
+        in
+        Flambda_static0.Static_part.Set_of_closures set_of_closures
+    | Fabricated _
+    | Phantom _ -> Cannot_reify
 
 type 'a proof =
   | Proved of 'a
