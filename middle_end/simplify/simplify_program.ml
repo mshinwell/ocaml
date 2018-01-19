@@ -334,11 +334,10 @@ let initial_environment_for_recursive_symbols env
   env
 
 let simplify_define_symbol env (recursive : Flambda.recursive)
-      (defn : Program_body.definition)
-      : Program_body.definition * E.t * Flambda_kind.t Symbol.Map.t =
-  let env, computation, newly_imported_symbols =
+      (defn : Program_body.definition) =
+  let env, computation, newly_imported_symbols, lifted_constants =
     match defn.computation with
-    | None -> env, defn.computation, Symbol.Map.empty
+    | None -> env, defn.computation, Symbol.Map.empty, Symbol.Map.empty
     | Some computation ->
       let arity =
         List.map (fun (_var, kind) -> kind) computation.computed_values
@@ -351,7 +350,7 @@ let simplify_define_symbol env (recursive : Flambda.recursive)
         Continuation_approx.create_unknown ~name:computation.exception_cont
           ~arity:[Flambda_kind.value Unknown]
       in
-      let expr, r, continuation_uses =
+      let expr, r, continuation_uses, lifted_constants =
         let env = E.add_continuation env name return_cont_approx in
         let env =
           E.add_continuation env computation.exception_cont exn_cont_approx
@@ -409,7 +408,7 @@ Format.eprintf "Args for %a: %a\n%!"
             computed_values = computation.computed_values;
           } : Program_body.computation)
       in
-      env, computation, R.newly_imported_symbols r
+      env, computation, R.newly_imported_symbols r, lifted_constants
   in
   let env =
     match recursive with
@@ -478,13 +477,24 @@ Format.eprintf "Args for %a: %a\n%!"
       computation;
     }
   in
-  definition, env, newly_imported_symbols
+  definition, env, newly_imported_symbols, lifted_constants
+
+let add_lifted_constants lifted_constants
+      (definition : Flambda_static.Program_body.definition) =
+  let static_structure =
+    Symbol.Map.fold (fun symbol constant static_structure ->
+        let kind = K.value Definitely_pointer in
+        (symbol, kind, constant) :: static_structure)
+      lifted_constants
+      definition.static_structure
+  in
+  { definition with static_structure; }
 
 let rec simplify_program_body env (body : Program_body.t)
-      : Program_body.t * (Flambda_kind.t Symbol.Map.t) =
+      : Program_body.t * (K.t Symbol.Map.t) =
   match body with
   | Define_symbol (defn, body) ->
-    let defn, env, newly_imported_symbols1 =
+    let defn, env, newly_imported_symbols1, lifted_constants =
       simplify_define_symbol env Non_recursive defn
     in
     let body, newly_imported_symbols2 =
@@ -493,9 +503,10 @@ let rec simplify_program_body env (body : Program_body.t)
     let newly_imported_symbols =
       Symbol.Map.disjoint_union newly_imported_symbols1 newly_imported_symbols2
     in
+    let defn = add_lifted_constants lifted_constants defn in
     Define_symbol (defn, body), newly_imported_symbols
   | Define_symbol_rec (defn, body) ->
-    let defn, env, newly_imported_symbols1 =
+    let defn, env, newly_imported_symbols1, lifted_constants =
       simplify_define_symbol env Recursive defn
     in
     let body, newly_imported_symbols2 =
@@ -504,6 +515,7 @@ let rec simplify_program_body env (body : Program_body.t)
     let newly_imported_symbols =
       Symbol.Map.disjoint_union newly_imported_symbols1 newly_imported_symbols2
     in
+    let defn = add_lifted_constants lifted_constants defn in
     Define_symbol_rec (defn, body), newly_imported_symbols
   | Root _ -> body, Symbol.Map.empty
 

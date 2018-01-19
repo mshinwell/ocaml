@@ -273,6 +273,10 @@ module rec Expr : sig
 
   val free_names : t -> Name.Set.t
 
+  val free_variables : t -> Variable.Set.t
+
+  val free_symbols : t -> Symbol.Set.t
+
   (** Compute _all_ names occurring inside an expression. *)
   val used_names
      : ?ignore_uses_as_callee:unit

@@ -462,6 +462,8 @@ module rec Expr : sig
     -> t
     -> Name.Set.t
   val free_names : t -> Name.Set.t
+  val free_variables : t -> Variable.Set.t
+  val free_symbols : t -> Symbol.Set.t
   val used_names
      : ?ignore_uses_as_callee:unit
     -> ?ignore_uses_as_argument:unit

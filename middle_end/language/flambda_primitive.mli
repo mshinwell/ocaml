@@ -383,6 +383,8 @@ module With_fixed_value : sig
 
   val create : primitive_application -> t option
 
+  val eligible : primitive_application -> bool
+
   val to_primitive : t -> primitive_application
 
   val free_names : t -> Name.Set.t

@@ -45,7 +45,8 @@ module type Env = sig
       -> continuation:Continuation.t
       -> exn_continuation:Continuation.t
       -> descr:string
-      -> Flambda.Expr.t * result * continuation_uses)
+      -> Flambda.Expr.t * result * continuation_uses
+           * Flambda_static.Static_part.t Symbol.Map.t)
     -> simplify_expr:(
          t
       -> result
@@ -83,7 +84,8 @@ module type Env = sig
       -> continuation:Continuation.t
       -> exn_continuation:Continuation.t
       -> descr:string
-      -> Flambda.Expr.t * result * continuation_uses)
+      -> Flambda.Expr.t * result * continuation_uses
+           * Flambda_static.Static_part.t Symbol.Map.t)
 
   val simplify_expr
      : t
@@ -583,14 +585,13 @@ module type Result = sig
   val seen_direct_application : t -> t
   val num_direct_applications : t -> int
 
-(*
-  (* XXX this must be in the snapshotted part. *)
   val new_lifted_constant
      : t
-    -> Env.t
+    -> name:string
     -> Flambda_static.Static_part.t
     -> Symbol.t * t
-*)
+
+  val get_lifted_constants : t -> Flambda_static.Static_part.t Symbol.Map.t
 
   val clear_typing_judgements : t -> t
 

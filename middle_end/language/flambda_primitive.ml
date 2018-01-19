@@ -1144,6 +1144,11 @@ module With_fixed_value = struct
       Some t
     | _, _ -> None
 
+  let eligible t =
+    match create t with
+    | None -> false
+    | Some _ -> true
+
   let to_primitive t = t
 
   let free_names = free_names

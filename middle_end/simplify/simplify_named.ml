@@ -95,7 +95,9 @@ let simplify_set_of_closures original_env r
         ~f:(fun body_env ->
           assert (E.inside_set_of_closures_declaration
             function_decls.set_of_closures_origin body_env);
-          let body, r, uses =
+          (* We don't need to collect the lifted constants separately; they
+             will remain in [r]. *)
+          let body, r, uses, _lifted_constants =
             let descr =
               Format.asprintf "the body of %a" Closure_id.print closure_id
             in
@@ -375,13 +377,25 @@ Format.eprintf "Prim %a: type %a\n%!" Variable.print result_var T.print ty;
     let remove_primitive () =
       R.map_benefit r (B.remove_primitive_application prim)
     in
-    (* CR mshinwell: Add a check to see if the type does not contain any
-       unknowns and only references symbols.  For values satisfying that, and
-       an appropriate effects check, lifting should happen here. *)
     begin match (E.type_accessor env T.reify) ty ~allow_free_variables:true with
     | Term (simple, ty) ->
       let term : Named.t = Simple simple in
       [], Flambda.Reachable.reachable term, ty, remove_primitive ()
+    | Lift static_part ->
+      let effects_and_coeffects_ok =
+        Flambda_primitive.With_fixed_value.eligible prim
+      in
+      if not effects_and_coeffects_ok then [], term, ty, r
+      else
+        let symbol, r =
+          let name = Variable.unique_name result_var in
+          R.new_lifted_constant r ~name static_part
+        in
+        let name = Name.symbol symbol in
+        let kind = K.value Definitely_pointer in
+        let ty = T.alias_type_of kind name in
+        let term : Named.t = Simple (Simple.name name) in
+        [], Flambda.Reachable.reachable term, ty, r
     | Cannot_reify -> [], term, ty, r
     | Invalid ->
 (*

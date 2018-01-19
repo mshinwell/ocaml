@@ -40,6 +40,7 @@ val simplify_toplevel
   -> descr:string
   -> Flambda.Expr.t * Simplify_env_and_result.Result.t
        * Simplify_env_and_result.Result.Continuation_uses.t
+       * Flambda_static.Static_part.t Symbol.Map.t
 
 val duplicate_function
    : env:Simplify_env_and_result.Env.t

@@ -384,20 +384,46 @@ let is_useful ~type_of_name t =
 let all_not_useful ~type_of_name ts =
   List.for_all (fun t -> not (is_useful ~type_of_name t)) ts
 
+type 'a proof =
+  | Proved of 'a
+  | Unknown
+  | Invalid
+
+type 'a known_values = 'a Or_not_all_values_known.t proof
+
+let unknown_proof () = Unknown
+
+let prove_closure ~type_of_name t : _ proof =
+  let wrong_kind () =
+    Misc.fatal_errorf "Wrong kind for something claimed to be a closure: %a"
+      print t
+  in
+  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  match simplified with
+  | Fabricated ty_fabricated ->
+    begin match ty_fabricated with
+    | Unknown _ -> Unknown
+    | Bottom -> Invalid
+    | Ok (Closure closure) -> Proved closure
+    | Ok _ -> Invalid
+    end
+  | Value _ -> wrong_kind ()
+  | Simplified_type.Naked_number _ -> wrong_kind ()
+  | Phantom _ -> wrong_kind ()
+
 type reification_result =
   | Term of Simple.t * t
   | Lift of Flambda_static0.Static_part.t
   | Cannot_reify
   | Invalid
 
-let reify ~type_of_name ~allow_free_variables t
-      : reification_result =
+let reify ~type_of_name ~allow_free_variables t : reification_result =
   let t, _canonical_name = resolve_aliases ~type_of_name t in
   let can_lift =
     Name.Set.for_all (fun (name : Name.t) ->
         match name with
         | Var _ -> false
-        | Symbol _ -> true
+        | Symbol _ -> true)
       (free_names t)
   in
   let simplified, canonical_name = Simplified_type.create ~type_of_name t in
@@ -468,53 +494,90 @@ let reify ~type_of_name ~allow_free_variables t
         | None -> try_name ()
         end
       end
-    | Fabricated (Set_of_closures set_of_closures) ->
+    | Fabricated (Ok (Set_of_closures set_of_closures)) ->
       if not can_lift then Cannot_reify
       else
-  and set_of_closures = private {
-    closures : ty_fabricated Closure_id.Map.t extensibility;
-    closure_elements : ty_value Var_within_closure.Map.t extensibility;
-  }
-        let closures =
-
-        in
-        let closure_elements =
-
-        in
-        let cannot_lift = ref false in
-        let funs =
-          Closure_id.Map.map (fun (decls : function_declarations) ->
-              match decls with
-              | Inlinable decl ->
-
-              | Non_inlinable _ ->
-                ...
-                cannot_lift := true)
-            closures
-        in
-        let function_decls =
-          Flambda0.Function_declarations.create ~funs
-  val create : funs:Function_declaration.t Closure_id.Map.t -> t
-        in
-        let in_closure =
-
-        in
-        let set_of_closures =
-          Flambda0.Set_of_closures.create ~function_decls ~in_closure
-            ~direct_call_surrogates:Closure_id.Map.empty (* XXX *)
-        in
-        Flambda_static0.Static_part.Set_of_closures set_of_closures
+        begin match set_of_closures.closures,
+            set_of_closures.closure_elements
+        with
+        | Open _, _ | _, Open _ -> Cannot_reify
+        | Exactly closures, Exactly closure_elements ->
+          (* The following assertion holds since [can_lift] is [true]. *)
+          assert (Var_within_closure.Map.is_empty closure_elements);
+          let cannot_lift = ref false in
+          let closures =
+            Closure_id.Map.filter_map closures
+              ~f:(fun _closure_id ty_fabricated ->
+                let t = of_ty_fabricated ty_fabricated in
+                match prove_closure ~type_of_name t with
+                | Proved closure -> Some closure.function_decls
+                | Unknown | Invalid ->
+                  cannot_lift := true;
+                  None)
+          in
+          let funs =
+            Closure_id.Map.filter_map closures
+              ~f:(fun _closure_id (decls : function_declarations) ->
+                match decls with
+                | Inlinable decl ->
+                  let params =
+                    List.map (fun (param, ty) ->
+                        Flambda0.Typed_parameter.create ~type_of_name param ty)
+                      decl.params
+                  in
+                  let return_arity =
+                    List.map (fun t -> kind ~type_of_name t) decl.result
+                  in
+                  (* CR mshinwell: Put this conversion in a function
+                     somewhere *)
+                  let inline : Flambda0.inline_attribute =
+                    match decl.inline with
+                    | Always_inline -> Always_inline
+                    | Never_inline -> Never_inline
+                    | Unroll n -> Unroll n
+                    | Default_inline -> Default_inline
+                  in
+                  let specialise : Flambda0.specialise_attribute =
+                    match decl.specialise with
+                    | Always_specialise -> Always_specialise
+                    | Never_specialise -> Never_specialise
+                    | Default_specialise -> Default_specialise
+                  in
+                  let decl =
+                    Flambda0.Function_declaration.create
+                      ~params
+                      ~continuation_param:decl.continuation_param
+                      ~exn_continuation_param:decl.exn_continuation_param
+                      ~return_arity
+                      ~my_closure:decl.my_closure
+                      ~body:decl.body
+                      ~stub:decl.stub
+                      ~dbg:decl.dbg
+                      ~inline
+                      ~specialise
+                      ~is_a_functor:decl.is_a_functor
+                      ~closure_origin:decl.closure_origin
+                  in
+                  Some decl
+                | Non_inlinable _ ->
+                  cannot_lift := true;
+                  None)
+          in
+          if !cannot_lift then Cannot_reify
+          else
+            let function_decls = Flambda0.Function_declarations.create ~funs in
+            let set_of_closures =
+              Flambda0.Set_of_closures.create ~function_decls
+                ~in_closure:Var_within_closure.Map.empty
+                ~direct_call_surrogates:Closure_id.Map.empty (* XXX *)
+            in
+            let static_part =
+              Flambda_static0.Static_part.Set_of_closures set_of_closures
+            in
+            Lift static_part
+        end
     | Fabricated _
     | Phantom _ -> Cannot_reify
-
-type 'a proof =
-  | Proved of 'a
-  | Unknown
-  | Invalid
-
-type 'a known_values = 'a Or_not_all_values_known.t proof
-
-let unknown_proof () = Unknown
 
 let prove_tagged_immediate ~type_of_name t
       : Immediate.Set.t proof =
@@ -997,24 +1060,6 @@ let prove_sets_of_closures ~type_of_name t : _ proof =
     | Bottom -> Invalid
     | Ok (Set_of_closures set_of_closures) ->
       Proved (canonical_name, set_of_closures)
-    | Ok _ -> Invalid
-    end
-  | Value _ -> wrong_kind ()
-  | Simplified_type.Naked_number _ -> wrong_kind ()
-  | Phantom _ -> wrong_kind ()
-
-let prove_closure ~type_of_name t : _ proof =
-  let wrong_kind () =
-    Misc.fatal_errorf "Wrong kind for something claimed to be a closure: %a"
-      print t
-  in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
-  | Fabricated ty_fabricated ->
-    begin match ty_fabricated with
-    | Unknown _ -> Unknown
-    | Bottom -> Invalid
-    | Ok (Closure closure) -> Proved closure
     | Ok _ -> Invalid
     end
   | Value _ -> wrong_kind ()

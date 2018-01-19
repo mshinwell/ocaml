@@ -117,10 +117,6 @@ module rec Expr : sig
   (* CR-someday mshinwell: What about checks for shadowed variables and
      symbols? *)
 
-  val free_variables : t -> Variable.Set.t
-
-  val free_symbols : t -> Symbol.Set.t
-
   (* Given an expression, freshen all variables within it, and form a function
      whose body is the resulting expression.  The variables specified by
      [params] will become the parameters of the function; the closure will be

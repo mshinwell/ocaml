@@ -36,7 +36,8 @@ end = struct
       -> continuation:Continuation.t
       -> exn_continuation:Continuation.t
       -> descr:string
-      -> Flambda.Expr.t * Result.t * Result.Continuation_uses.t);
+      -> Flambda.Expr.t * result * continuation_uses
+           * Flambda_static.Static_part.t Symbol.Map.t);
     simplify_expr:(
          t
       -> Result.t
@@ -832,6 +833,9 @@ end = struct
       { t with application_points; }
   end
 
+  (* CR mshinwell: Rename this module.  It's not just continuation uses now,
+     it's everything we may need to roll back when discarding a speculative
+     path *)
   module Continuation_usage_snapshot = struct
     type t = {
       used_continuations : Continuation_uses.t Continuation.Map.t;
@@ -839,6 +843,7 @@ end = struct
         (Continuation_uses.t * Continuation_approx.t * Env.t
             * Flambda.recursive)
           Continuation.Map.t;
+      lifted_constants : Flambda_static.Static_part.t Symbol.Map.t;
     }
 
     let continuations_defined_between_snapshots ~before ~after =
@@ -861,6 +866,7 @@ end = struct
       num_direct_applications : int;
       typing_judgements : T.Typing_environment.t;
       newly_imported_symbols : Flambda_kind.t Symbol.Map.t;
+      lifted_constants : Flambda_static.Static_part.t Symbol.Map.t;
     }
 
   let create () =
@@ -871,6 +877,7 @@ end = struct
       num_direct_applications = 0;
       typing_judgements = T.Typing_environment.create ();
       newly_imported_symbols = Symbol.Map.empty;
+      lifted_constants = Symbol.Map.empty;
     }
 
   let union t1 t2 =
@@ -888,6 +895,9 @@ end = struct
       newly_imported_symbols =
         Symbol.Map.disjoint_union t1.newly_imported_symbols
           t2.newly_imported_symbols;
+      lifted_constants =
+        Symbol.Map.disjoint_union t1.lifted_constants
+          t2.lifted_constants;
     }
 
   let use_continuation t env cont kind =
@@ -968,6 +978,7 @@ end = struct
     { Continuation_usage_snapshot.
       used_continuations = t.used_continuations;
       defined_continuations = t.defined_continuations;
+      lifted_constants = t.lifted_constants;
     }
 
   let snapshot_and_forget_continuation_uses t =
@@ -980,10 +991,12 @@ end = struct
     in
     snapshot, t
 
+  (* CR mshinwell: Rename these snapshot/rename functions, cf. the CR above *)
   let roll_back_continuation_uses t (snapshot : Continuation_usage_snapshot.t) =
     { t with
       used_continuations = snapshot.used_continuations;
       defined_continuations = snapshot.defined_continuations;
+      lifted_constants = snapshot.lifted_constants;
     }
 
   let continuation_unused t cont =
@@ -1153,4 +1166,18 @@ end = struct
      imports in [newly_imported_symbols]. *)
 
   let newly_imported_symbols t = t.newly_imported_symbols
+
+  let new_lifted_constant t ~name static_part =
+    let symbol =
+      Symbol.create (Compilation_unit.get_current_exn ())
+        (Linkage_name.create name)
+    in
+    let t =
+      { t with
+        lifted_constants = Symbol.Map.add symbol static_part t.lifted_constants;
+      }
+    in
+    symbol, t
+
+  let get_lifted_constants t = t.lifted_constants
 end
