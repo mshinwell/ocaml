@@ -562,29 +562,29 @@ let print_unary_primitive ppf p =
   let fprintf = Format.fprintf in
   match p with
   | Duplicate_block { kind; source_mutability; destination_mutability; } ->
-    fprintf ppf "duplicate_array[%a, %a -> %a]"
+    fprintf ppf "(Duplicate_array %a (source %a) (dest %a)"
       print_duplicate_block_kind kind
       print_mutable_or_immutable source_mutability
       print_mutable_or_immutable destination_mutability
-  | Is_int -> fprintf ppf "is_int"
-  | Get_tag _ -> fprintf ppf "get_tag"
-  | String_length _ -> fprintf ppf "string_length"
-  | Int_as_pointer -> fprintf ppf "int_as_pointer"
-  | Opaque_identity -> fprintf ppf "opaque_identity"
+  | Is_int -> fprintf ppf "Is_int"
+  | Get_tag _ -> fprintf ppf "Get_tag"
+  | String_length _ -> fprintf ppf "String_length"
+  | Int_as_pointer -> fprintf ppf "Int_as_pointer"
+  | Opaque_identity -> fprintf ppf "Opaque_identity"
   | Int_arith (_k, o) -> print_unary_int_arith_op ppf o
   | Num_conv { src; dst; } ->
-    fprintf ppf "conv_%a_to_%a"
+    fprintf ppf "Conv_%a_to_%a"
       Flambda_kind.Standard_int_or_float.print src
       Flambda_kind.Standard_int_or_float.print dst
-  | Boolean_not -> fprintf ppf "boolean_not"
+  | Boolean_not -> fprintf ppf "Boolean_not"
   | Float_arith o -> print_unary_float_arith_op ppf o
-  | Array_length _ -> fprintf ppf "array_length"
+  | Array_length _ -> fprintf ppf "Array_length"
   | Bigarray_length { dimension; } ->
-    fprintf ppf "bigarray_length %a" print_num_dimensions dimension
+    fprintf ppf "Bigarray_length %a" print_num_dimensions dimension
   | Unbox_number k ->
-    fprintf ppf "unbox_%a" K.Boxable_number.print_lowercase k
+    fprintf ppf "Unbox_%a" K.Boxable_number.print_lowercase k
   | Box_number k ->
-    fprintf ppf "box_%a" K.Boxable_number.print_lowercase k
+    fprintf ppf "Box_%a" K.Boxable_number.print_lowercase k
   | Project_closure closure_id ->
     Format.fprintf ppf "@[(Project_closure@ %a)@]"
       Closure_id.print closure_id

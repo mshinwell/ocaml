@@ -80,11 +80,11 @@ module Naked_number_kind = struct
 
   let print ppf t =
     match t with
-    | Naked_immediate -> Format.pp_print_string ppf "naked_immediate"
-    | Naked_float -> Format.pp_print_string ppf "naked_float"
-    | Naked_int32 -> Format.pp_print_string ppf "naked_int32"
-    | Naked_int64 -> Format.pp_print_string ppf "naked_int64"
-    | Naked_nativeint -> Format.pp_print_string ppf "naked_nativeint"
+    | Naked_immediate -> Format.pp_print_string ppf "Naked_immediate"
+    | Naked_float -> Format.pp_print_string ppf "Naked_float"
+    | Naked_int32 -> Format.pp_print_string ppf "Naked_int32"
+    | Naked_int64 -> Format.pp_print_string ppf "Naked_int64"
+    | Naked_nativeint -> Format.pp_print_string ppf "Naked_nativeint"
 
   let join_or_meet t1 t2 =
     match t1, t2 with
@@ -348,9 +348,9 @@ module Naked_number = struct
 
   let print (type a) ppf (t : a t) =
     match t with
-    | Naked_immediate -> Format.pp_print_string ppf "naked_immediate"
-    | Naked_float -> Format.pp_print_string ppf "naked_float"
-    | Naked_int32 -> Format.pp_print_string ppf "naked_int32"
-    | Naked_int64 -> Format.pp_print_string ppf "naked_int64"
-    | Naked_nativeint -> Format.pp_print_string ppf "naked_nativeint"
+    | Naked_immediate -> Format.pp_print_string ppf "Naked_immediate"
+    | Naked_float -> Format.pp_print_string ppf "Naked_float"
+    | Naked_int32 -> Format.pp_print_string ppf "Naked_int32"
+    | Naked_int64 -> Format.pp_print_string ppf "Naked_int64"
+    | Naked_nativeint -> Format.pp_print_string ppf "Naked_nativeint"
 end

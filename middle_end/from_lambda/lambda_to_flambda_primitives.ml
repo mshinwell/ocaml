@@ -169,6 +169,29 @@ and simple_or_prim =
   | Simple of Simple.t
   | Prim of expr_primitive
 
+let rec result_kind_of_expr_primitive (prim : expr_primitive) =
+  let translate_result_kind (result_kind : Flambda_primitive.result_kind) =
+    match result_kind with
+    | Singleton kind -> kind
+    | Unit -> Flambda_kind.unit ()
+    | Never_returns -> Flambda_kind.value Unknown
+  in
+  match prim with
+  | Unary (prim, _) ->
+    translate_result_kind (
+      Flambda_primitive.result_kind_of_unary_primitive prim)
+  | Binary (prim, _, _) ->
+    translate_result_kind (
+      Flambda_primitive.result_kind_of_binary_primitive prim)
+  | Ternary (prim, _, _, _) ->
+    translate_result_kind (
+      Flambda_primitive.result_kind_of_ternary_primitive prim)
+  | Variadic (prim, _) ->
+    translate_result_kind (
+      Flambda_primitive.result_kind_of_variadic_primitive prim)
+  | Checked { primitive; _ } ->
+    result_kind_of_expr_primitive primitive
+
 let rec bind_rec
           (prim : expr_primitive)
           (dbg : Debuginfo.t)
@@ -228,9 +251,9 @@ and bind_rec_primitive
     cont s
   | Prim p ->
     let var = Variable.create "prim" in
+    let result_kind = result_kind_of_expr_primitive p in
     let cont named =
-      Flambda.Expr.create_let var (Flambda_kind.value Unknown) named
-        (cont (Simple.var var))
+      Flambda.Expr.create_let var result_kind named (cont (Simple.var var))
     in
     bind_rec p dbg ~exception_continuation cont
 

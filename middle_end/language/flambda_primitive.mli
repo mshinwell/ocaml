@@ -319,6 +319,11 @@ type result_kind =
   (** The primitive does not terminate normally (e.g. by raising an
       exception). *)
 
+val result_kind_of_unary_primitive : unary_primitive -> result_kind
+val result_kind_of_binary_primitive : binary_primitive -> result_kind
+val result_kind_of_ternary_primitive : ternary_primitive -> result_kind
+val result_kind_of_variadic_primitive : variadic_primitive -> result_kind
+
 (** Describe the kind of the result of the given primitive. *)
 val result_kind : t -> result_kind
 
