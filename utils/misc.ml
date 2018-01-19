@@ -202,8 +202,9 @@ module Stdlib = struct
       | Some a1, Some a2 -> cmp_a a1 a2
 
     let print print_contents ppf = function
-      | None -> ()
-      | Some contents -> print_contents ppf contents
+      | None -> Format.pp_print_string ppf "()"
+      | Some contents ->
+        Format.fprintf ppf "(%a)" print_contents contents
   end
 
   module Array = struct
