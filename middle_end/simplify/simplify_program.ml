@@ -482,7 +482,7 @@ Format.eprintf "Args for %a: %a\n%!"
 let add_lifted_constants lifted_constants
       (definition : Flambda_static.Program_body.definition) =
   let static_structure =
-    Symbol.Map.fold (fun symbol constant static_structure ->
+    Symbol.Map.fold (fun symbol (_ty, constant) static_structure ->
         let kind = K.value Definitely_pointer in
         (symbol, kind, constant) :: static_structure)
       lifted_constants

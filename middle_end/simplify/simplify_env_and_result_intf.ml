@@ -46,7 +46,7 @@ module type Env = sig
       -> exn_continuation:Continuation.t
       -> descr:string
       -> Flambda.Expr.t * result * continuation_uses
-           * Flambda_static.Static_part.t Symbol.Map.t)
+           * (Flambda_type.t * Flambda_static.Static_part.t) Symbol.Map.t)
     -> simplify_expr:(
          t
       -> result
@@ -85,7 +85,7 @@ module type Env = sig
       -> exn_continuation:Continuation.t
       -> descr:string
       -> Flambda.Expr.t * result * continuation_uses
-           * Flambda_static.Static_part.t Symbol.Map.t)
+           * (Flambda_type.t * Flambda_static.Static_part.t) Symbol.Map.t)
 
   val simplify_expr
      : t
@@ -588,10 +588,13 @@ module type Result = sig
   val new_lifted_constant
      : t
     -> name:string
+    -> Flambda_type.t
     -> Flambda_static.Static_part.t
     -> Symbol.t * t
 
-  val get_lifted_constants : t -> Flambda_static.Static_part.t Symbol.Map.t
+  val get_lifted_constants
+     : t
+    -> (Flambda_type.t * Flambda_static.Static_part.t) Symbol.Map.t
 
   val clear_typing_judgements : t -> t
 

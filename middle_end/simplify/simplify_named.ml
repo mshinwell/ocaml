@@ -261,6 +261,34 @@ let simplify_set_of_closures original_env r
   in
   set_of_closures, ty, r
 
+let try_to_reify env r ty ~(term : Flambda.Reachable.t) ~result_var
+      ~remove_term ~can_lift =
+  match term with
+  | Invalid _ -> 
+    let ty = (E.type_accessor env T.bottom_like) ty in
+    [], term, ty, remove_term ()
+  | Reachable _ ->
+    match (E.type_accessor env T.reify) ty ~allow_free_variables:true with
+    | Term (simple, ty) ->
+      let term : Named.t = Simple simple in
+      [], Flambda.Reachable.reachable term, ty, remove_term ()
+    | Lift static_part ->
+      if not can_lift then [], term, ty, r
+      else
+        let symbol, r =
+          let name = Variable.unique_name result_var in
+          R.new_lifted_constant r ~name ty static_part
+        in
+        let name = Name.symbol symbol in
+        let kind = K.value Definitely_pointer in
+        let ty = T.alias_type_of kind name in
+        let term : Named.t = Simple (Simple.name name) in
+        [], Flambda.Reachable.reachable term, ty, r
+    | Cannot_reify -> [], term, ty, r
+    | Invalid ->
+      let ty = (E.type_accessor env T.bottom_like) ty in
+      [], Flambda.Reachable.invalid (), ty, remove_term ()
+
 (** [simplify_named] returns:
     - extra [Let]-bindings to be inserted prior to the one being simplified;
     - the simplified [named];
@@ -285,7 +313,15 @@ let simplify_named env r (tree : Named.t) ~result_var =
     let set_of_closures, ty, r =
       simplify_set_of_closures env r set_of_closures
     in
-    [], Flambda.Reachable.reachable (Set_of_closures set_of_closures), ty, r
+    let term : Named.t = Set_of_closures set_of_closures in
+    let remove_primitive () =
+      R.map_benefit r (B.remove_code_named term)
+    in
+    let can_lift =
+      Var_within_closure.Map.is_empty set_of_closures.free_vars
+    in
+    try_to_reify env r ty ~term:(Flambda.Reachable.reachable term)
+      ~result_var ~remove_term:remove_primitive ~can_lift
 (* XXX Disabled just for the moment -- mshinwell
     let simplify env r ~bindings ~set_of_closures ~pass_name =
       (* If simplifying a set of closures more than once during any given round
@@ -377,33 +413,11 @@ Format.eprintf "Prim %a: type %a\n%!" Variable.print result_var T.print ty;
     let remove_primitive () =
       R.map_benefit r (B.remove_primitive_application prim)
     in
-    begin match (E.type_accessor env T.reify) ty ~allow_free_variables:true with
-    | Term (simple, ty) ->
-      let term : Named.t = Simple simple in
-      [], Flambda.Reachable.reachable term, ty, remove_primitive ()
-    | Lift static_part ->
-      let effects_and_coeffects_ok =
-        Flambda_primitive.With_fixed_value.eligible prim
-      in
-      if not effects_and_coeffects_ok then [], term, ty, r
-      else
-        let symbol, r =
-          let name = Variable.unique_name result_var in
-          R.new_lifted_constant r ~name static_part
-        in
-        let name = Name.symbol symbol in
-        let kind = K.value Definitely_pointer in
-        let ty = T.alias_type_of kind name in
-        let term : Named.t = Simple (Simple.name name) in
-        [], Flambda.Reachable.reachable term, ty, r
-    | Cannot_reify -> [], term, ty, r
-    | Invalid ->
-(*
-Format.eprintf "Prim %a: reify returns bottom\n%!" Variable.print result_var;
-*)
-      let ty = (E.type_accessor env T.bottom_like) ty in
-      [], Flambda.Reachable.invalid (), ty, remove_primitive ()
-    end
+    let effects_and_coeffects_ok =
+      Flambda_primitive.With_fixed_value.eligible prim
+    in
+    try_to_reify env r ty ~term ~result_var ~remove_term:remove_primitive
+      ~can_lift:effects_and_coeffects_ok
   | Assign { being_assigned; new_value; } ->
     let being_assigned =
       Freshening.apply_mutable_variable (E.freshening env) being_assigned

@@ -495,87 +495,94 @@ let reify ~type_of_name ~allow_free_variables t : reification_result =
         end
       end
     | Fabricated (Ok (Set_of_closures set_of_closures)) ->
-      if not can_lift then Cannot_reify
-      else
-        begin match set_of_closures.closures,
-            set_of_closures.closure_elements
-        with
-        | Open _, _ | _, Open _ -> Cannot_reify
-        | Exactly closures, Exactly closure_elements ->
-          (* The following assertion holds since [can_lift] is [true]. *)
-          assert (Var_within_closure.Map.is_empty closure_elements);
-          let cannot_lift = ref false in
-          let closures =
-            Closure_id.Map.filter_map closures
-              ~f:(fun _closure_id ty_fabricated ->
-                let t = of_ty_fabricated ty_fabricated in
-                match prove_closure ~type_of_name t with
-                | Proved closure -> Some closure.function_decls
-                | Unknown | Invalid ->
-                  cannot_lift := true;
-                  None)
-          in
-          let funs =
-            Closure_id.Map.filter_map closures
-              ~f:(fun _closure_id (decls : function_declarations) ->
-                match decls with
-                | Inlinable decl ->
-                  let params =
-                    List.map (fun (param, ty) ->
-                        Flambda0.Typed_parameter.create ~type_of_name param ty)
-                      decl.params
-                  in
-                  let return_arity =
-                    List.map (fun t -> kind ~type_of_name t) decl.result
-                  in
-                  (* CR mshinwell: Put this conversion in a function
-                     somewhere *)
-                  let inline : Flambda0.inline_attribute =
-                    match decl.inline with
-                    | Always_inline -> Always_inline
-                    | Never_inline -> Never_inline
-                    | Unroll n -> Unroll n
-                    | Default_inline -> Default_inline
-                  in
-                  let specialise : Flambda0.specialise_attribute =
-                    match decl.specialise with
-                    | Always_specialise -> Always_specialise
-                    | Never_specialise -> Never_specialise
-                    | Default_specialise -> Default_specialise
-                  in
-                  let decl =
-                    Flambda0.Function_declaration.create
-                      ~params
-                      ~continuation_param:decl.continuation_param
-                      ~exn_continuation_param:decl.exn_continuation_param
-                      ~return_arity
-                      ~my_closure:decl.my_closure
-                      ~body:decl.body
-                      ~stub:decl.stub
-                      ~dbg:decl.dbg
-                      ~inline
-                      ~specialise
-                      ~is_a_functor:decl.is_a_functor
-                      ~closure_origin:decl.closure_origin
-                  in
-                  Some decl
-                | Non_inlinable _ ->
-                  cannot_lift := true;
-                  None)
-          in
-          if !cannot_lift then Cannot_reify
-          else
-            let function_decls = Flambda0.Function_declarations.create ~funs in
-            let set_of_closures =
-              Flambda0.Set_of_closures.create ~function_decls
-                ~in_closure:Var_within_closure.Map.empty
-                ~direct_call_surrogates:Closure_id.Map.empty (* XXX *)
+      begin match canonical_name with
+      | Some ((Symbol _) as name) ->
+        let kind = kind ~type_of_name t in
+        let t = alias_type_of kind name in
+        Term (Simple.name name, t)
+      | Some (Var _) | None ->
+        if not can_lift then Cannot_reify
+        else
+          begin match set_of_closures.closures,
+              set_of_closures.closure_elements
+          with
+          | Open _, _ | _, Open _ -> Cannot_reify
+          | Exactly closures, Exactly closure_elements ->
+            (* The following assertion holds since [can_lift] is [true]. *)
+            assert (Var_within_closure.Map.is_empty closure_elements);
+            let cannot_lift = ref false in
+            let closures =
+              Closure_id.Map.filter_map closures
+                ~f:(fun _closure_id ty_fabricated ->
+                  let t = of_ty_fabricated ty_fabricated in
+                  match prove_closure ~type_of_name t with
+                  | Proved closure -> Some closure.function_decls
+                  | Unknown | Invalid ->
+                    cannot_lift := true;
+                    None)
             in
-            let static_part =
-              Flambda_static0.Static_part.Set_of_closures set_of_closures
+            let funs =
+              Closure_id.Map.filter_map closures
+                ~f:(fun _closure_id (decls : function_declarations) ->
+                  match decls with
+                  | Inlinable decl ->
+                    let params =
+                      List.map (fun (param, ty) ->
+                          Flambda0.Typed_parameter.create ~type_of_name param ty)
+                        decl.params
+                    in
+                    let return_arity =
+                      List.map (fun t -> kind ~type_of_name t) decl.result
+                    in
+                    (* CR mshinwell: Put this conversion in a function
+                      somewhere *)
+                    let inline : Flambda0.inline_attribute =
+                      match decl.inline with
+                      | Always_inline -> Always_inline
+                      | Never_inline -> Never_inline
+                      | Unroll n -> Unroll n
+                      | Default_inline -> Default_inline
+                    in
+                    let specialise : Flambda0.specialise_attribute =
+                      match decl.specialise with
+                      | Always_specialise -> Always_specialise
+                      | Never_specialise -> Never_specialise
+                      | Default_specialise -> Default_specialise
+                    in
+                    let decl =
+                      Flambda0.Function_declaration.create
+                        ~params
+                        ~continuation_param:decl.continuation_param
+                        ~exn_continuation_param:decl.exn_continuation_param
+                        ~return_arity
+                        ~my_closure:decl.my_closure
+                        ~body:decl.body
+                        ~stub:decl.stub
+                        ~dbg:decl.dbg
+                        ~inline
+                        ~specialise
+                        ~is_a_functor:decl.is_a_functor
+                        ~closure_origin:decl.closure_origin
+                    in
+                    Some decl
+                  | Non_inlinable _ ->
+                    cannot_lift := true;
+                    None)
             in
-            Lift static_part
-        end
+            if !cannot_lift then Cannot_reify
+            else
+              let function_decls = Flambda0.Function_declarations.create ~funs in
+              let set_of_closures =
+                Flambda0.Set_of_closures.create ~function_decls
+                  ~in_closure:Var_within_closure.Map.empty
+                  ~direct_call_surrogates:Closure_id.Map.empty (* XXX *)
+              in
+              let static_part =
+                Flambda_static0.Static_part.Set_of_closures set_of_closures
+              in
+              Lift static_part
+          end
+      end
     | Fabricated _
     | Phantom _ -> Cannot_reify
 

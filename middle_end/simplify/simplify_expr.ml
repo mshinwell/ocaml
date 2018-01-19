@@ -60,8 +60,12 @@ let for_defining_expr_of_let (env, r) var kind defining_expr =
   (* CR mshinwell: This handling of the typing environment in [R] needs to be
      added to the "simplify newly-introduced let bindings" function, below *)
   let r = R.clear_typing_judgements r in
+  let already_lifted_constants = R.get_lifted_constants r in
   let new_bindings, defining_expr, ty, r =
     Simplify_named.simplify_named env r defining_expr ~result_var:var
+  in
+  let lifted_constants =
+    Symbol.Map.diff already_lifted_constants (R.get_lifted_constants r)
   in
   let new_judgements = R.get_typing_judgements r in
   let new_kind = (E.type_accessor env T.kind) ty in
@@ -84,6 +88,12 @@ let for_defining_expr_of_let (env, r) var kind defining_expr =
   let env =
     (E.type_accessor env E.extend_typing_environment) env
       ~env_extension:new_judgements
+  in
+  let env =
+    Symbol.Map.fold (fun symbol (ty, _static_part) env ->
+        E.add_symbol env symbol ty)
+      lifted_constants
+      env
   in
   let env = E.set_freshening env freshening in
   let env = E.add_variable env var ty in
