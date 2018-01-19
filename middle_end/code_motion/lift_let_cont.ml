@@ -36,7 +36,7 @@ let bind_things_to_remain ~rev_things ~around =
 
 module State = struct
   type t = {
-    constants : (Variable.t * Simple.t) list;
+    constants : (Variable.t * Flambda_kind.t * Simple.t) list;
     to_be_lifted : Flambda.Let_cont_handlers.t list;
     to_remain : thing_to_lift list;
     continuations_to_remain : Continuation.Set.t;
@@ -57,9 +57,9 @@ module State = struct
       mutable_variables_used = Mutable_variable.Set.empty;
     }
 
-  let add_constant t ~var ~simple =
+  let add_constant t ~var ~kind ~simple =
     { t with
-      constants = (var, simple) :: t.constants;
+      constants = (var, kind, simple) :: t.constants;
     }
 
   let add_constants_from_state t ~from =
@@ -237,10 +237,10 @@ let rec lift_let_cont ~body ~handlers ~state
 
 and lift_expr (expr : Flambda.Expr.t) ~state =
   match expr with
-  | Let ({ var; defining_expr; body; } as let_expr) ->
+  | Let ({ var; kind; defining_expr; body; } as let_expr) ->
     begin match defining_expr with
     | Simple (((Name (Symbol _)) | (Const _)) as simple) ->
-      let state = State.add_constant state ~var ~simple in
+      let state = State.add_constant state ~var ~kind ~simple in
       lift_expr body ~state
     | Simple (Name (Var _)) | Prim _ | Assign _ | Read_mutable _
     | Set_of_closures _ ->
@@ -350,13 +350,13 @@ and lift (expr : Flambda.Expr.t) =
   in
   (* CR mshinwell: Now we have [Simple.t], maybe this can be simplified? *)
   let constants, subst =
-    List.fold_left (fun (constants, subst) (var, (simple : Simple.t)) ->
+    List.fold_left (fun (constants, subst) (var, kind, (simple : Simple.t)) ->
         let new_var, constants =
           match Simple.Map.find simple constants with
           | exception Not_found ->
             let var = Variable.create "simple" in
-            var, Simple.Map.add simple var constants
-          | var ->
+            var, Simple.Map.add simple (kind, var) constants
+          | _kind, var ->
             var, constants
         in
         constants, Variable.Map.add var new_var subst)
@@ -367,13 +367,7 @@ and lift (expr : Flambda.Expr.t) =
   let expr =
     Flambda.Expr.toplevel_substitution subst expr
   in
-  Simple.Map.fold (fun (simple : Simple.t) var expr ->
-      let kind =
-        match simple with
-        | Name (Symbol _) -> Flambda_kind.value Definitely_pointer
-        | Const const -> Simple.Const.kind const
-        | Name (Var _) -> assert false  (* see above *)
-      in
+  Simple.Map.fold (fun (simple : Simple.t) (kind, var) expr ->
       Flambda.Expr.create_let var kind (Simple simple) expr)
     constants
     expr

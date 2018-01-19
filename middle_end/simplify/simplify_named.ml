@@ -277,10 +277,10 @@ let try_to_reify env r ty ~(term : Flambda.Reachable.t) ~result_var
       else
         let symbol, r =
           let name = Variable.unique_name result_var in
-          R.new_lifted_constant r ~name ty static_part
+          R.new_lifted_constant env r ~name ty static_part
         in
         let name = Name.symbol symbol in
-        let kind = K.value Definitely_pointer in
+        let kind = (E.type_accessor env T.kind) ty in
         let ty = T.alias_type_of kind name in
         let term : Named.t = Simple (Simple.name name) in
         [], Flambda.Reachable.reachable term, ty, r

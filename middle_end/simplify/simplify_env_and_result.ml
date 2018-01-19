@@ -37,7 +37,8 @@ end = struct
       -> exn_continuation:Continuation.t
       -> descr:string
       -> Flambda.Expr.t * result * continuation_uses
-           * (Flambda_type.t * Flambda_static.Static_part.t) Symbol.Map.t);
+           * (Flambda_type.t * Flambda_kind.t * Flambda_static.Static_part.t)
+               Symbol.Map.t);
     simplify_expr:(
          t
       -> Result.t
@@ -844,7 +845,8 @@ end = struct
             * Flambda.recursive)
           Continuation.Map.t;
       lifted_constants :
-        (Flambda_type.t * Flambda_static.Static_part.t) Symbol.Map.t;
+        (Flambda_type.t * Flambda_kind.t * Flambda_static.Static_part.t)
+          Symbol.Map.t;
     }
 
     let continuations_defined_between_snapshots ~before ~after =
@@ -868,7 +870,8 @@ end = struct
       typing_judgements : T.Typing_environment.t;
       newly_imported_symbols : Flambda_kind.t Symbol.Map.t;
       lifted_constants :
-        (Flambda_type.t * Flambda_static.Static_part.t) Symbol.Map.t;
+        (Flambda_type.t * Flambda_kind.t * Flambda_static.Static_part.t)
+          Symbol.Map.t;
     }
 
   let create () =
@@ -1169,7 +1172,8 @@ end = struct
 
   let newly_imported_symbols t = t.newly_imported_symbols
 
-  let new_lifted_constant t ~name ty static_part =
+  let new_lifted_constant env t ~name ty static_part =
+    let kind = (Env.type_accessor env T.kind) ty in
     let symbol =
       Symbol.create (Compilation_unit.get_current_exn ())
         (Linkage_name.create name)
@@ -1177,7 +1181,7 @@ end = struct
     let t =
       { t with
         lifted_constants =
-          Symbol.Map.add symbol (ty, static_part) t.lifted_constants;
+          Symbol.Map.add symbol (ty, kind, static_part) t.lifted_constants;
       }
     in
     symbol, t

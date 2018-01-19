@@ -370,6 +370,12 @@ let simplify_define_symbol env (recursive : Flambda.recursive)
           ~exn_continuation:computation.exception_cont
           ~descr
       in
+      let env =
+        Symbol.Map.fold (fun symbol (ty, _kind, _static_part) env ->
+            E.add_symbol env symbol ty)
+          lifted_constants
+          env
+      in
       (* CR mshinwell: Add unboxing of the continuation here.  This will look
          like half of Unbox_returns (same analysis and the same thing to
          happen to [expr]; but instead of generating a function wrapper, we
@@ -479,16 +485,18 @@ Format.eprintf "Args for %a: %a\n%!"
   in
   definition, env, newly_imported_symbols, lifted_constants
 
-let add_lifted_constants lifted_constants
-      (definition : Flambda_static.Program_body.definition) =
-  let static_structure =
-    Symbol.Map.fold (fun symbol (_ty, constant) static_structure ->
-        let kind = K.value Definitely_pointer in
-        (symbol, kind, constant) :: static_structure)
-      lifted_constants
-      definition.static_structure
-  in
-  { definition with static_structure; }
+let add_lifted_constants lifted_constants (body : Program_body.t) =
+  (* CR mshinwell: Dependencies between lifted constants?  Need to get the
+     ordering correct. *)
+  List.fold_left (fun body (symbol, (_ty, kind, constant)) : Program_body.t ->
+      let definition : Program_body.definition =
+        { computation = None;
+          static_structure = [symbol, kind, constant];
+        }
+      in
+      Define_symbol (definition, body))
+    body
+    (Symbol.Map.bindings lifted_constants)
 
 let rec simplify_program_body env (body : Program_body.t)
       : Program_body.t * (K.t Symbol.Map.t) =
@@ -503,8 +511,10 @@ let rec simplify_program_body env (body : Program_body.t)
     let newly_imported_symbols =
       Symbol.Map.disjoint_union newly_imported_symbols1 newly_imported_symbols2
     in
-    let defn = add_lifted_constants lifted_constants defn in
-    Define_symbol (defn, body), newly_imported_symbols
+    let body : Program_body.t =
+      Define_symbol (defn, body)
+    in
+    add_lifted_constants lifted_constants body, newly_imported_symbols
   | Define_symbol_rec (defn, body) ->
     let defn, env, newly_imported_symbols1, lifted_constants =
       simplify_define_symbol env Recursive defn
@@ -515,8 +525,10 @@ let rec simplify_program_body env (body : Program_body.t)
     let newly_imported_symbols =
       Symbol.Map.disjoint_union newly_imported_symbols1 newly_imported_symbols2
     in
-    let defn = add_lifted_constants lifted_constants defn in
-    Define_symbol_rec (defn, body), newly_imported_symbols
+    let body : Program_body.t =
+      Define_symbol_rec (defn, body)
+    in
+    add_lifted_constants lifted_constants body, newly_imported_symbols
   | Root _ -> body, Symbol.Map.empty
 
 let simplify_program env (program : Program.t) =

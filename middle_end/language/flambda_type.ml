@@ -497,7 +497,7 @@ let reify ~type_of_name ~allow_free_variables t : reification_result =
     | Fabricated (Ok (Set_of_closures set_of_closures)) ->
       begin match canonical_name with
       | Some ((Symbol _) as name) ->
-        let kind = kind ~type_of_name t in
+        let kind = K.fabricated Definitely_pointer in
         let t = alias_type_of kind name in
         Term (Simple.name name, t)
       | Some (Var _) | None ->
