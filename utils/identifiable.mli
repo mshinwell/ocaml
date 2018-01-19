@@ -59,6 +59,8 @@ module type Map = sig
   val filter_map : 'a t -> f:(key -> 'a -> 'b option) -> 'b t
   val of_list : (key * 'a) list -> 'a t
 
+  val diff : 'a t -> 'a t -> 'a t
+
   (** [disjoint_union m1 m2] contains all bindings from [m1] and
       [m2]. If some binding is present in both and the associated
       value is not equal, a Fatal_error is raised *)

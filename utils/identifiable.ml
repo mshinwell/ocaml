@@ -54,6 +54,7 @@ module type Map = sig
 
   val filter_map : 'a t -> f:(key -> 'a -> 'b option) -> 'b t
   val of_list : (key * 'a) list -> 'a t
+  val diff : 'a t -> 'a t -> 'a t
   val disjoint_union : ?eq:('a -> 'a -> bool) -> ?print:(Format.formatter -> 'a -> unit) -> 'a t -> 'a t -> 'a t
   val union_right : 'a t -> 'a t -> 'a t
   val union_left : 'a t -> 'a t -> 'a t
@@ -112,6 +113,9 @@ end
 
 module Make_map (T : Thing_no_hash) = struct
   include Map.Make (T)
+
+  let diff t1 t2 =
+    filter (fun key _ -> not (mem key t2)) t1
 
   let filter_map t ~f =
     fold (fun id v map ->
