@@ -22,6 +22,7 @@ module Function_decl = Function_decls.Function_decl
 module IdentSet = Lambda.IdentSet
 module P = Flambda_primitive
 module K = Flambda_kind
+module Program_body = Flambda_static.Program_body
 module Typed_parameter = Flambda.Typed_parameter
 
 type t = {
@@ -957,7 +958,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
         body = close t Env.empty ilam.expr; }
   in
 
-  let computation : Flambda_static.Program_body.computation =
+  let computation : Program_body.computation =
     { expr;
       return_cont = assign_continuation;
       exception_cont = ilam.exception_continuation;
@@ -970,12 +971,27 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
              Dynamically_computed var)
              field_vars)
   in
-  let program_body : Flambda_static.Program_body.t =
+  let program_body : Program_body.t =
     Define_symbol
       ({ computation = Some computation;
          static_structure =
            [module_symbol, K.value Definitely_pointer, static_part]; },
        (Root module_symbol))
+  in
+  let program_body =
+    (* CR mshinwell: Share with [Simplify_program] *)
+    List.fold_left (fun program_body (symbol, static_part) : Program_body.t ->
+        let static_structure =
+          [symbol, K.value Definitely_pointer, static_part]
+        in
+        let definition : Program_body.definition =
+          { computation = None;
+            static_structure;
+          }
+        in
+        Define_symbol (definition, program_body))
+      program_body
+      t.declared_symbols
   in
   let imported_symbols =
     Symbol.Set.fold (fun symbol imported_symbols ->
@@ -983,13 +999,13 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
       t.imported_symbols
       Symbol.Map.empty
   in
-(* let module_initialize : Flambda_static.Program_body.Initialize_symbol.t = *)
+(* let module_initialize : Program_body.Initialize_symbol.t = *)
   (*   { expr = main_module_block_expr; *)
   (*     return_cont = continuation; *)
   (*     return_arity = List.init size (fun _ -> K.value Must_scan); *)
   (*   } *)
   (* in *)
-  (* let module_initializer : Flambda_static.Program_body.t = *)
+  (* let module_initializer : Program_body.t = *)
   (*   Initialize_symbol ( *)
   (*     block_symbol, *)
   (*     block_initialize, *)
@@ -1000,7 +1016,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
   (* in *)
   (* let program_body = *)
   (*   List.fold_left *)
-  (*     (fun program_body (symbol, constant) : Flambda_static.Program_body.t -> *)
+  (*     (fun program_body (symbol, constant) : Program_body.t -> *)
   (*        Let_symbol (symbol, constant, program_body)) *)
   (*     module_initializer *)
   (*     t.declared_symbols *)

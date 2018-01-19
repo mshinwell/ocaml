@@ -171,6 +171,18 @@ val prove_naked_int64
 val prove_naked_nativeint
    : (t -> Targetint.Set.t proof) type_accessor
 
+val prove_unique_naked_float
+   : (t -> Numbers.Float_by_bit_pattern.t proof) type_accessor
+
+val prove_unique_naked_int32
+   : (t -> Numbers.Int32.t proof) type_accessor
+
+val prove_unique_naked_int64
+   : (t -> Numbers.Int64.t proof) type_accessor
+
+val prove_unique_naked_nativeint
+   : (t -> Targetint.t proof) type_accessor
+
 val prove_get_field_from_block
    : (t
     -> index:Targetint.OCaml.t

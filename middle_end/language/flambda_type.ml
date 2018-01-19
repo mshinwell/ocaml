@@ -393,6 +393,129 @@ type 'a known_values = 'a Or_not_all_values_known.t proof
 
 let unknown_proof () = Unknown
 
+let prove_naked_float ~type_of_name t
+      : Numbers.Float_by_bit_pattern.Set.t proof =
+  let wrong_kind () =
+    Misc.fatal_errorf "Wrong kind for something claimed to be a naked \
+        float: %a"
+      print t
+  in
+  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  match simplified with
+  | Simplified_type.Naked_number (ty, K.Naked_number.Naked_float) ->
+    begin match ty with
+    | Unknown _ -> Unknown
+    | Bottom -> Invalid
+    | Ok (Float fs) -> Proved fs
+    | Ok _ ->
+      (* CR mshinwell: Find out why this case is still possible *)
+      wrong_kind ()
+    end
+  | Simplified_type.Naked_number _ -> wrong_kind ()
+  | Value _
+  | Fabricated _
+  | Phantom _ -> wrong_kind ()
+
+let prove_naked_int32 ~type_of_name t : Int32.Set.t proof =
+  let wrong_kind () =
+    Misc.fatal_errorf "Wrong kind for something claimed to be a naked \
+        int32: %a"
+      print t
+  in
+  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  match simplified with
+  | Simplified_type.Naked_number (ty, K.Naked_number.Naked_int32) ->
+    begin match ty with
+    | Unknown _ -> Unknown
+    | Bottom -> Invalid
+    | Ok (Int32 is) -> Proved is
+    | Ok _ -> wrong_kind ()
+    end
+  | Simplified_type.Naked_number _ -> wrong_kind ()
+  | Value _
+  | Fabricated _
+  | Phantom _ -> wrong_kind ()
+
+let prove_naked_int64 ~type_of_name t : Int64.Set.t proof =
+  let wrong_kind () =
+    Misc.fatal_errorf "Wrong kind for something claimed to be a naked \
+        int64: %a"
+      print t
+  in
+  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  match simplified with
+  | Simplified_type.Naked_number (ty, K.Naked_number.Naked_int64) ->
+    begin match ty with
+    | Unknown _ -> Unknown
+    | Bottom -> Invalid
+    | Ok (Int64 is) -> Proved is
+    | Ok _ -> wrong_kind ()
+    end
+  | Simplified_type.Naked_number _ -> wrong_kind ()
+  | Value _
+  | Fabricated _
+  | Phantom _ -> wrong_kind ()
+
+let prove_naked_nativeint ~type_of_name t : Targetint.Set.t proof =
+  let wrong_kind () =
+    Misc.fatal_errorf "Wrong kind for something claimed to be a naked \
+        nativeint: %a"
+      print t
+  in
+  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  match simplified with
+  | Simplified_type.Naked_number (ty, K.Naked_number.Naked_nativeint) ->
+    begin match ty with
+    | Unknown _ -> Unknown
+    | Bottom -> Invalid
+    | Ok (Nativeint is) -> Proved is
+    | Ok _ -> wrong_kind ()
+    end
+  | Simplified_type.Naked_number _ -> wrong_kind ()
+  | Value _
+  | Fabricated _
+  | Phantom _ -> wrong_kind ()
+
+let prove_unique_naked_float ~type_of_name t : _ proof =
+  match prove_naked_float ~type_of_name t with
+  | Proved fs ->
+    begin match Float_by_bit_pattern.Set.get_singleton fs with
+    | Some f -> Proved f
+    | None -> Unknown
+    end
+  | Unknown -> Unknown
+  | Invalid -> Invalid
+
+let prove_unique_naked_int32 ~type_of_name t : _ proof =
+  match prove_naked_int32 ~type_of_name t with
+  | Proved is ->
+    begin match Int32.Set.get_singleton is with
+    | Some f -> Proved f
+    | None -> Unknown
+    end
+  | Unknown -> Unknown
+  | Invalid -> Invalid
+
+let prove_unique_naked_int64 ~type_of_name t : _ proof =
+  match prove_naked_int64 ~type_of_name t with
+  | Proved is ->
+    begin match Int64.Set.get_singleton is with
+    | Some f -> Proved f
+    | None -> Unknown
+    end
+  | Unknown -> Unknown
+  | Invalid -> Invalid
+
+let prove_unique_naked_nativeint ~type_of_name t : _ proof =
+  match prove_naked_nativeint ~type_of_name t with
+  | Proved is ->
+    begin match Targetint.Set.get_singleton is with
+    | Some f -> Proved f
+    | None -> Unknown
+    end
+  | Unknown -> Unknown
+  | Invalid -> Invalid
+
 let prove_closure ~type_of_name t : _ proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a closure: %a"
@@ -461,7 +584,75 @@ let reify ~type_of_name ~allow_free_variables t : reification_result =
             | None -> try_name ()
             end
           end
-      | Ok (Boxed_number _) -> try_name ()
+      | Ok (Boxed_number (Boxed_float ty_naked_number)) ->
+        begin match canonical_name with
+        | Some ((Symbol _) as name) ->
+          let kind = K.value Definitely_pointer in
+          let t = alias_type_of kind name in
+          Term (Simple.name name, t)
+        | Some (Var _) | None ->
+          if not can_lift then Cannot_reify
+          else
+            let contents =
+              of_ty_naked_number ty_naked_number K.Naked_number.Naked_float
+            in
+            match prove_unique_naked_float ~type_of_name contents with
+            | Proved f -> Lift (Boxed_float (Const f))
+            | Unknown -> Cannot_reify
+            | Invalid -> Cannot_reify
+        end
+      (* CR mshinwell: Factor out boxed number cases *)
+      | Ok (Boxed_number (Boxed_int32 ty_naked_number)) ->
+        begin match canonical_name with
+        | Some ((Symbol _) as name) ->
+          let kind = K.value Definitely_pointer in
+          let t = alias_type_of kind name in
+          Term (Simple.name name, t)
+        | Some (Var _) | None ->
+          if not can_lift then Cannot_reify
+          else
+            let contents =
+              of_ty_naked_number ty_naked_number K.Naked_number.Naked_int32
+            in
+            match prove_unique_naked_int32 ~type_of_name contents with
+            | Proved f -> Lift (Boxed_int32 (Const f))
+            | Unknown -> Cannot_reify
+            | Invalid -> Cannot_reify
+        end
+      | Ok (Boxed_number (Boxed_int64 ty_naked_number)) ->
+        begin match canonical_name with
+        | Some ((Symbol _) as name) ->
+          let kind = K.value Definitely_pointer in
+          let t = alias_type_of kind name in
+          Term (Simple.name name, t)
+        | Some (Var _) | None ->
+          if not can_lift then Cannot_reify
+          else
+            let contents =
+              of_ty_naked_number ty_naked_number K.Naked_number.Naked_int64
+            in
+            match prove_unique_naked_int64 ~type_of_name contents with
+            | Proved f -> Lift (Boxed_int64 (Const f))
+            | Unknown -> Cannot_reify
+            | Invalid -> Cannot_reify
+        end
+      | Ok (Boxed_number (Boxed_nativeint ty_naked_number)) ->
+        begin match canonical_name with
+        | Some ((Symbol _) as name) ->
+          let kind = K.value Definitely_pointer in
+          let t = alias_type_of kind name in
+          Term (Simple.name name, t)
+        | Some (Var _) | None ->
+          if not can_lift then Cannot_reify
+          else
+            let contents =
+              of_ty_naked_number ty_naked_number K.Naked_number.Naked_nativeint
+            in
+            match prove_unique_naked_nativeint ~type_of_name contents with
+            | Proved f -> Lift (Boxed_nativeint (Const f))
+            | Unknown -> Cannot_reify
+            | Invalid -> Cannot_reify
+        end
       | Ok (Closures _ | String _) -> try_name ()
       end
     | Simplified_type.Naked_number (ty_naked_number, _) ->
@@ -645,89 +836,6 @@ let prove_is_tagged_immediate ~type_of_name t : bool proof =
     | Ok (Closures _ | String _) -> Proved false
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
-  | Fabricated _
-  | Phantom _ -> wrong_kind ()
-
-let prove_naked_float ~type_of_name t
-      : Numbers.Float_by_bit_pattern.Set.t proof =
-  let wrong_kind () =
-    Misc.fatal_errorf "Wrong kind for something claimed to be a naked \
-        float: %a"
-      print t
-  in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
-  | Simplified_type.Naked_number (ty, K.Naked_number.Naked_float) ->
-    begin match ty with
-    | Unknown _ -> Unknown
-    | Bottom -> Invalid
-    | Ok (Float fs) -> Proved fs
-    | Ok _ ->
-      (* CR mshinwell: Find out why this case is still possible *)
-      wrong_kind ()
-    end
-  | Simplified_type.Naked_number _ -> wrong_kind ()
-  | Value _
-  | Fabricated _
-  | Phantom _ -> wrong_kind ()
-
-let prove_naked_int32 ~type_of_name t : Int32.Set.t proof =
-  let wrong_kind () =
-    Misc.fatal_errorf "Wrong kind for something claimed to be a naked \
-        int32: %a"
-      print t
-  in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
-  | Simplified_type.Naked_number (ty, K.Naked_number.Naked_int32) ->
-    begin match ty with
-    | Unknown _ -> Unknown
-    | Bottom -> Invalid
-    | Ok (Int32 is) -> Proved is
-    | Ok _ -> wrong_kind ()
-    end
-  | Simplified_type.Naked_number _ -> wrong_kind ()
-  | Value _
-  | Fabricated _
-  | Phantom _ -> wrong_kind ()
-
-let prove_naked_int64 ~type_of_name t : Int64.Set.t proof =
-  let wrong_kind () =
-    Misc.fatal_errorf "Wrong kind for something claimed to be a naked \
-        int64: %a"
-      print t
-  in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
-  | Simplified_type.Naked_number (ty, K.Naked_number.Naked_int64) ->
-    begin match ty with
-    | Unknown _ -> Unknown
-    | Bottom -> Invalid
-    | Ok (Int64 is) -> Proved is
-    | Ok _ -> wrong_kind ()
-    end
-  | Simplified_type.Naked_number _ -> wrong_kind ()
-  | Value _
-  | Fabricated _
-  | Phantom _ -> wrong_kind ()
-
-let prove_naked_nativeint ~type_of_name t : Targetint.Set.t proof =
-  let wrong_kind () =
-    Misc.fatal_errorf "Wrong kind for something claimed to be a naked \
-        nativeint: %a"
-      print t
-  in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
-  | Simplified_type.Naked_number (ty, K.Naked_number.Naked_nativeint) ->
-    begin match ty with
-    | Unknown _ -> Unknown
-    | Bottom -> Invalid
-    | Ok (Nativeint is) -> Proved is
-    | Ok _ -> wrong_kind ()
-    end
-  | Simplified_type.Naked_number _ -> wrong_kind ()
-  | Value _
   | Fabricated _
   | Phantom _ -> wrong_kind ()
 
