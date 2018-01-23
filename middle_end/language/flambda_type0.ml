@@ -1847,22 +1847,35 @@ end) = struct
           ~unknown_payload:S.unknown_payload
           or_alias2
       in
-      let normal_case ~names_to_bind =
+      let normal_case ~first_name_to_bind ~names_to_bind =
         let unknown_or_join, new_judgements =
           meet_on_unknown_or_join ~type_of_name
             unknown_or_join1 unknown_or_join2
         in
+        let new_judgement =
+          first_name_to_bind, S.to_type (No_alias unknown_or_join)
+        in
         let new_judgements' =
-          List.map (fun name -> name, S.to_type (No_alias unknown_or_join))
+          List.map (fun name -> name, S.to_type (Type_of first_name_to_bind))
             names_to_bind
         in
-        No_alias unknown_or_join, new_judgements @ new_judgements'
+        Type_of first_name_to_bind,
+          new_judgements @ (new_judgement :: new_judgements')
+      in
+      let normal_case ~names_to_bind =
+        match names_to_bind with
+        | [] ->
+          let unknown_or_join, new_judgements =
+            meet_on_unknown_or_join ~type_of_name
+              unknown_or_join1 unknown_or_join2
+          in
+          No_alias unknown_or_join, new_judgements
+        | first_name_to_bind::names_to_bind ->
+          normal_case ~first_name_to_bind ~names_to_bind
       in
       match canonical_name1, canonical_name2 with
       | Some name1, Some name2 when Name.equal name1 name2 ->
         Type_of name1, []
-      (* XXX This should bind the type to just one of the names, and set the
-         other name equal to that *)
       | Some name1, Some name2 -> normal_case ~names_to_bind:[name1; name2]
       | Some name1, None -> normal_case ~names_to_bind:[name1]
       | None, Some name2 -> normal_case ~names_to_bind:[name2]
