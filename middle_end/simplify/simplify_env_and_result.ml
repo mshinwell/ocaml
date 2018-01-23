@@ -783,10 +783,11 @@ end = struct
       | [use] when Use.Kind.is_inlinable use.kind -> true
       | _ -> false
 
-    let join_of_arg_types_opt t =
+    let join_of_arg_types_opt t ~arity =
       match t.application_points with
       | [] -> None
-      | use::uses ->
+      | uses ->
+        let bottom_arg_tys = T.bottom_types_from_arity arity in
         let arg_tys, env =
           List.fold_left (fun (arg_tys, env) (use : Use.t) ->
               let arg_tys' = Use.Kind.arg_tys use.kind in
@@ -796,9 +797,13 @@ end = struct
                   Continuation.print t.continuation
                   (List.length arg_tys) (List.length arg_tys')
               end;
+(*
+Format.eprintf "Cutting environment for %a\n%!" Continuation.print t.continuation;
+*)
               let this_env =
                 TE.cut (Env.get_typing_environment use.env)
-                  ~existential_if_defined_later_than:t.definition_scope_level
+                  ~existential_if_defined_at_or_later_than:
+                    t.definition_scope_level
               in
               let arg_tys =
                 List.map2 (fun result this_ty ->
@@ -815,13 +820,13 @@ end = struct
                 (Env.type_accessor use.env TE.join) env this_env
               in
               arg_tys, env)
-            (Use.Kind.arg_tys use.kind, TE.create ())
+            (bottom_arg_tys, TE.create ())
             uses
         in
         Some (arg_tys, env)
 
     let join_of_arg_types t ~arity ~default_env =
-      match join_of_arg_types_opt t with
+      match join_of_arg_types_opt t ~arity with
       | None -> T.bottom_types_from_arity arity, default_env
       | Some join -> join
 

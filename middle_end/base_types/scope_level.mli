@@ -24,3 +24,5 @@ val initial : t
 val for_symbols : t
 
 val next : t -> t
+
+val (>=): t -> t -> bool

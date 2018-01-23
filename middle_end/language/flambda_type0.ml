@@ -3481,13 +3481,17 @@ end) = struct
      (* XXX     let ty = rename_variables t freshening in *)
           Some (ty, Existential)
 
-    let cut _t ~existential_if_defined_later_than:_ =
-      create_typing_environment ()  (* XXX *)
-(* N.B.
+    let cut t ~existential_if_defined_at_or_later_than =
+(*
+Format.eprintf "Cutting environment at %a: %a\n%!"
+  Scope_level.print existential_if_defined_at_or_later_than
+  print_typing_environment t;
+*)
       let existentials =
         Scope_level.Map.fold (fun scope_level names resulting_existentials ->
             let will_be_existential =
-              Scope_level.(>=) scope_level minimum_scope_level_to_be_existential
+              Scope_level.(>=)
+                scope_level existential_if_defined_at_or_later_than
             in
             if will_be_existential then
               let non_symbols =
@@ -3509,17 +3513,26 @@ end) = struct
             | Symbol _ ->
               Misc.fatal_error "Symbols cannot be existentially bound"
             | Var var ->
-              let new_var = Variable.rename var in
-              Freshening.add_variable freshening var new_var)
+              let _new_var, freshening =
+                Freshening.add_variable freshening var
+              in
+              freshening)
+          existentials
           t.existential_freshening
       in
+let result =
       (* XXX we actually need to rename in the domain of [names_to_types] *)
       { names_to_types = t.names_to_types;
         levels_to_names = t.levels_to_names;
         existentials;
         existential_freshening;
       }
+in
+(*
+Format.eprintf "Result is: %a\n%!"
+  print_typing_environment result;
 *)
+      result
 
     let meet = Meet_and_join.meet_typing_environment
     let join = Meet_and_join.join_typing_environment

@@ -370,27 +370,28 @@ let simplify_define_symbol env (recursive : Flambda.recursive)
           ~exn_continuation:computation.exception_cont
           ~descr
       in
-      let env =
-        Symbol.Map.fold (fun symbol (ty, _kind, _static_part) env ->
-            E.add_symbol env symbol ty)
-          lifted_constants
-          env
-      in
       (* CR mshinwell: Add unboxing of the continuation here.  This will look
          like half of Unbox_returns (same analysis and the same thing to
          happen to [expr]; but instead of generating a function wrapper, we
          need to do something else here).  Note that the linearity check
          for Unbox_returns will enable us to handle mutable returned values
          too. *)
-      let args_types, _typing_env =
+Format.eprintf "Simplify_program fetching uses for %a\n%!"
+  Continuation.print name;
+      let args_types, typing_env =
         R.Continuation_uses.join_of_arg_types continuation_uses ~arity
           ~default_env:(E.get_typing_environment env)
       in
-(*
 Format.eprintf "Args for %a: %a\n%!"
   Continuation.print name
   (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print) args_types;
-*)
+      let env = E.replace_typing_environment env typing_env in
+      let env =
+        Symbol.Map.fold (fun symbol (ty, _kind, _static_part) env ->
+            E.add_symbol env symbol ty)
+          lifted_constants
+          env
+      in
       assert (List.for_all2 (fun (_var, kind1) ty ->
           let kind2 = T.kind ~type_of_name:(E.type_of_name env) ty in
           Flambda_kind.compatible kind2 ~if_used_at:kind1)

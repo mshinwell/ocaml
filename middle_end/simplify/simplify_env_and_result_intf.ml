@@ -422,10 +422,6 @@ module type Result = sig
       -> arity:Flambda_arity.t
       -> default_env:Flambda_type.Typing_environment.t
       -> Flambda_type.t list * Flambda_type.Typing_environment.t
-
-    val join_of_arg_types_opt
-       : t
-      -> (Flambda_type.t list * Flambda_type.Typing_environment.t) option
   end
 
   module Continuation_usage_snapshot : sig

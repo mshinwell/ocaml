@@ -304,7 +304,7 @@ module type S = sig
 
     val cut
        : t
-      -> existential_if_defined_later_than:Scope_level.t
+      -> existential_if_defined_at_or_later_than:Scope_level.t
       -> t
 
     val join : (t -> t -> t) type_accessor

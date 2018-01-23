@@ -24,3 +24,5 @@ let next t =
     Misc.fatal_error "Cannot increment scope level from [for_symbols]"
   end;
   t + 1
+
+let (>=) (t1 : t) t2 = t1 >= t2
