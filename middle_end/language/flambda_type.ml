@@ -542,6 +542,10 @@ type reification_result =
 
 let reify ~type_of_name ~allow_free_variables t : reification_result =
   let t, canonical_name = resolve_aliases ~type_of_name t in
+(*
+Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
+  canonical_name;
+*)
   let can_lift =
     Name.Set.for_all (fun (name : Name.t) ->
         match name with
@@ -598,7 +602,7 @@ let reify ~type_of_name ~allow_free_variables t : reification_result =
             in
             match prove_unique_naked_float ~type_of_name contents with
             | Proved f -> Lift (Boxed_float (Const f))
-            | Unknown -> Cannot_reify
+            | Unknown -> try_name ()
             | Invalid -> Cannot_reify
         end
       (* CR mshinwell: Factor out boxed number cases *)
@@ -616,7 +620,7 @@ let reify ~type_of_name ~allow_free_variables t : reification_result =
             in
             match prove_unique_naked_int32 ~type_of_name contents with
             | Proved f -> Lift (Boxed_int32 (Const f))
-            | Unknown -> Cannot_reify
+            | Unknown -> try_name ()
             | Invalid -> Cannot_reify
         end
       | Ok (Boxed_number (Boxed_int64 ty_naked_number)) ->
@@ -633,7 +637,7 @@ let reify ~type_of_name ~allow_free_variables t : reification_result =
             in
             match prove_unique_naked_int64 ~type_of_name contents with
             | Proved f -> Lift (Boxed_int64 (Const f))
-            | Unknown -> Cannot_reify
+            | Unknown -> try_name ()
             | Invalid -> Cannot_reify
         end
       | Ok (Boxed_number (Boxed_nativeint ty_naked_number)) ->
@@ -650,7 +654,7 @@ let reify ~type_of_name ~allow_free_variables t : reification_result =
             in
             match prove_unique_naked_nativeint ~type_of_name contents with
             | Proved f -> Lift (Boxed_nativeint (Const f))
-            | Unknown -> Cannot_reify
+            | Unknown -> try_name ()
             | Invalid -> Cannot_reify
         end
       | Ok (Closures _ | String _) -> try_name ()

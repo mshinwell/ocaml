@@ -376,15 +376,19 @@ let simplify_define_symbol env (recursive : Flambda.recursive)
          need to do something else here).  Note that the linearity check
          for Unbox_returns will enable us to handle mutable returned values
          too. *)
+(*
 Format.eprintf "Simplify_program fetching uses for %a\n%!"
   Continuation.print name;
+*)
       let args_types, typing_env =
         R.Continuation_uses.join_of_arg_types continuation_uses ~arity
           ~default_env:(E.get_typing_environment env)
       in
+(*
 Format.eprintf "Args for %a: %a\n%!"
   Continuation.print name
   (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print) args_types;
+*)
       let env = E.replace_typing_environment env typing_env in
       let env =
         Symbol.Map.fold (fun symbol (ty, _kind, _static_part) env ->

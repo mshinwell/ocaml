@@ -107,6 +107,10 @@ let for_defining_expr_of_let (env, r) var kind defining_expr =
   let var, freshening = Freshening.add_variable (E.freshening env) var in
   let env = E.set_freshening env freshening in
   let env = E.add_variable env var ty in
+(*
+Format.eprintf "Variable %a bound to %a in env\n%!"
+  Variable.print var T.print ty;
+*)
   (env, r), new_bindings, var, kind, defining_expr
 
 let filter_defining_expr_of_let r var (defining_expr : Named.t)
