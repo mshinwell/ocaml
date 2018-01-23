@@ -161,19 +161,13 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
     (* CR mshinwell: Share code between these float/int32/int64/nativeint cases.
        [Number_adjuncts] may help *)
     let ty = E.find_variable env var in
-    begin match T.prove_boxed_float ~type_of_name ty with
-    | Proved ty_naked_float ->
-      let ty = T.of_ty_naked_number ty_naked_float Naked_float in
-      begin match T.prove_naked_float ~type_of_name ty with
-      | Proved fs ->
-        begin match Numbers.Float_by_bit_pattern.Set.get_singleton fs with
-        | Some f ->
-          Ok (Static_part.Boxed_float (Const f), T.this_boxed_float f)
-        | None ->
-          Ok (static_part, T.any_boxed_float ())
-        end
-      | Unknown -> Ok (static_part, T.any_boxed_float ())
-      | Invalid -> Invalid
+    begin match T.prove_naked_float ~type_of_name ty with
+    | Proved fs ->
+      begin match Numbers.Float_by_bit_pattern.Set.get_singleton fs with
+      | Some f ->
+        Ok (Static_part.Boxed_float (Const f), T.this_boxed_float f)
+      | None ->
+        Ok (static_part, T.any_boxed_float ())
       end
     | Unknown -> Ok (static_part, T.any_boxed_float ())
     | Invalid -> Invalid
@@ -181,19 +175,13 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
   | Boxed_int32 (Const n) -> Ok (static_part, T.this_boxed_int32 n)
   | Boxed_int32 (Var var) ->
     let ty = E.find_variable env var in
-    begin match T.prove_boxed_int32 ~type_of_name ty with
-    | Proved ty_naked_int32 ->
-      let ty = T.of_ty_naked_number ty_naked_int32 Naked_int32 in
-      begin match T.prove_naked_int32 ~type_of_name ty with
-      | Proved fs ->
-        begin match Numbers.Int32.Set.get_singleton fs with
-        | Some f ->
-          Ok (Static_part.Boxed_int32 (Const f), T.this_boxed_int32 f)
-        | None ->
-          Ok (static_part, T.any_boxed_int32 ())
-        end
-      | Unknown -> Ok (static_part, T.any_boxed_int32 ())
-      | Invalid -> Invalid
+    begin match T.prove_naked_int32 ~type_of_name ty with
+    | Proved fs ->
+      begin match Numbers.Int32.Set.get_singleton fs with
+      | Some f ->
+        Ok (Static_part.Boxed_int32 (Const f), T.this_boxed_int32 f)
+      | None ->
+        Ok (static_part, T.any_boxed_int32 ())
       end
     | Unknown -> Ok (static_part, T.any_boxed_int32 ())
     | Invalid -> Invalid
@@ -201,19 +189,13 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
   | Boxed_int64 (Const n) -> Ok (static_part, T.this_boxed_int64 n)
   | Boxed_int64 (Var var) ->
     let ty = E.find_variable env var in
-    begin match T.prove_boxed_int64 ~type_of_name ty with
-    | Proved ty_naked_int64 ->
-      let ty = T.of_ty_naked_number ty_naked_int64 Naked_int64 in
-      begin match T.prove_naked_int64 ~type_of_name ty with
-      | Proved fs ->
-        begin match Numbers.Int64.Set.get_singleton fs with
-        | Some f ->
-          Ok (Static_part.Boxed_int64 (Const f), T.this_boxed_int64 f)
-        | None ->
-          Ok (static_part, T.any_boxed_int64 ())
-        end
-      | Unknown -> Ok (static_part, T.any_boxed_int64 ())
-      | Invalid -> Invalid
+    begin match T.prove_naked_int64 ~type_of_name ty with
+    | Proved fs ->
+      begin match Numbers.Int64.Set.get_singleton fs with
+      | Some f ->
+        Ok (Static_part.Boxed_int64 (Const f), T.this_boxed_int64 f)
+      | None ->
+        Ok (static_part, T.any_boxed_int64 ())
       end
     | Unknown -> Ok (static_part, T.any_boxed_int64 ())
     | Invalid -> Invalid
@@ -221,19 +203,13 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
   | Boxed_nativeint (Const n) -> Ok (static_part, T.this_boxed_nativeint n)
   | Boxed_nativeint (Var var) ->
     let ty = E.find_variable env var in
-    begin match T.prove_boxed_nativeint ~type_of_name ty with
-    | Proved ty_naked_nativeint ->
-      let ty = T.of_ty_naked_number ty_naked_nativeint Naked_nativeint in
-      begin match T.prove_naked_nativeint ~type_of_name ty with
-      | Proved fs ->
-        begin match Targetint.Set.get_singleton fs with
-        | Some f ->
-          Ok (Static_part.Boxed_nativeint (Const f), T.this_boxed_nativeint f)
-        | None ->
-          Ok (static_part, T.any_boxed_nativeint ())
-        end
-      | Unknown -> Ok (static_part, T.any_boxed_nativeint ())
-      | Invalid -> Invalid
+    begin match T.prove_naked_nativeint ~type_of_name ty with
+    | Proved fs ->
+      begin match Targetint.Set.get_singleton fs with
+      | Some f ->
+        Ok (Static_part.Boxed_nativeint (Const f), T.this_boxed_nativeint f)
+      | None ->
+        Ok (static_part, T.any_boxed_nativeint ())
       end
     | Unknown -> Ok (static_part, T.any_boxed_nativeint ())
     | Invalid -> Invalid
@@ -380,16 +356,27 @@ let simplify_define_symbol env (recursive : Flambda.recursive)
 Format.eprintf "Simplify_program fetching uses for %a\n%!"
   Continuation.print name;
 *)
-      let args_types, typing_env =
-        R.Continuation_uses.join_of_arg_types continuation_uses ~arity
-          ~default_env:(E.get_typing_environment env)
+      let args_types, env_extension =
+        try
+          R.Continuation_uses.join_of_arg_types continuation_uses ~arity
+            ~default_env:(E.get_typing_environment env)
+        with Misc.Fatal_error as exn -> begin
+          Format.eprintf ">> Term resulting from [simplify_toplevel]:@ %a@ \
+              Default environment:@ %a\n%!"
+            Flambda.Expr.print expr
+            E.print env;
+          raise exn
+        end
       in
 (*
 Format.eprintf "Args for %a: %a\n%!"
   Continuation.print name
   (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print) args_types;
 *)
-      let env = E.replace_typing_environment env typing_env in
+      let env =
+        (E.type_accessor env E.extend_typing_environment) env
+          ~env_extension
+      in
       let env =
         Symbol.Map.fold (fun symbol (ty, _kind, _static_part) env ->
             E.add_symbol env symbol ty)

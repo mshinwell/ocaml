@@ -941,8 +941,8 @@ end = struct
         | Some named_kind ->
           if not (K.compatible named_kind ~if_used_at:kind) then begin
             Misc.fatal_errorf "[Let] expression inferred kind (%a)@ is not \
-                compatible with the annotated kind (%a);@ defining \
-                expression:@ %a"
+                compatible with the annotated kind (%a);@ [Let] \
+                expression is:@ %a"
               K.print named_kind
               K.print kind
               print t

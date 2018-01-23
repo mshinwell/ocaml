@@ -794,7 +794,7 @@ and close_functions t external_env function_declarations : Flambda.Named.t =
               (my_closure_id, var_within_closure)
           in
           Flambda.Expr.create_let var
-            (K.value Definitely_pointer)
+            (K.value Unknown)
             (Prim
                (Unary (projection, Simple.var my_closure),
                 Debuginfo.none))

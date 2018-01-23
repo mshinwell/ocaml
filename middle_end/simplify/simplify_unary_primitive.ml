@@ -461,7 +461,7 @@ module Make_simplify_box_number (P : A.Boxable_number_kind) = struct
       | None -> ...
       end *)
       assert (not (P.Num.Set.is_empty nums));
-      Reachable.reachable (original_term ()), P.these_unboxed nums, r
+      Reachable.reachable (original_term ()), P.these_boxed nums, r
     | Unknown ->
       let ty =
         match arg with
