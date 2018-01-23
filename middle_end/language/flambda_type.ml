@@ -541,7 +541,7 @@ type reification_result =
   | Invalid
 
 let reify ~type_of_name ~allow_free_variables t : reification_result =
-  let t, _canonical_name = resolve_aliases ~type_of_name t in
+  let t, canonical_name = resolve_aliases ~type_of_name t in
   let can_lift =
     Name.Set.for_all (fun (name : Name.t) ->
         match name with
@@ -549,7 +549,7 @@ let reify ~type_of_name ~allow_free_variables t : reification_result =
         | Symbol _ -> true)
       (free_names t)
   in
-  let simplified, canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
   if Simplified_type.is_bottom simplified then
     Invalid
   else

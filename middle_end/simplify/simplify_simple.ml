@@ -49,7 +49,7 @@ let simplify_simple env (simple : Simple.t) =
     | Some ty ->
       let reified =
         (E.type_accessor env T.reify)
-          ~allow_free_variables:false
+          ~allow_free_variables:true
           ty
       in
       match reified with

@@ -434,7 +434,8 @@ Format.eprintf "Prim %a: type %a\n%!" Variable.print result_var T.print ty;
     else
       match E.find_coercion env simple desired_kind with
       | Some var ->
-        let ty = E.find_variable env var in
+        assert (E.mem_variable env var);
+        let ty = T.alias_type_of desired_kind (Name.var var) in
         (* CR mshinwell: In cases like this we should be able to just add
            a substitution to [r], to be propagated to [env] for the
            subsequent term, so that we don't need another round of
@@ -445,6 +446,11 @@ Format.eprintf "Prim %a: type %a\n%!" Variable.print result_var T.print ty;
         let actual_kind = (E.type_accessor env T.kind) ty in
         match Flambda_kind.coerce ~actual_kind ~desired_kind with
         | Always_ok ->
+          let ty =
+            match simple with
+            | Name name -> T.alias_type_of desired_kind name
+            | Const _ -> ty
+          in
           [], Flambda.Reachable.reachable (Simple simple), ty, r
         | Needs_runtime_check ->
           let r = R.add_coercion r simple desired_kind result_var in
