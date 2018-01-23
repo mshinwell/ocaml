@@ -395,7 +395,7 @@ end) = struct
         print_blocks blocks
         (print_or_unknown print_immediates) immediates
     | Boxed_number n ->
-      Format.fprintf ppf "[@(Boxed_number %a)@]"
+      Format.fprintf ppf "@[(Boxed_number %a)@]"
         print_of_kind_value_boxed_number n
     | Closures closures -> print_closures ppf closures
     | String str_infos ->
@@ -1243,7 +1243,7 @@ end) = struct
     | Naked_number _
     | Fabricated _
     | Phantom _ ->
-      Misc.fatal_errorf "Type has wrong kind (expected [Value]): %a"
+      Misc.fatal_errorf "Type has wrong kind (expected [Value]):@ %a"
         print t
 
   let force_to_kind_naked_immediate (t : t) : Immediate.Set.t ty_naked_number =
@@ -1255,7 +1255,7 @@ end) = struct
     | Value _
     | Phantom _ ->
       Misc.fatal_errorf
-        "Type has wrong kind (expected [Naked_number Immediate]): %a"
+        "Type has wrong kind (expected [Naked_number Immediate]):@ %a"
         print t
 
   let force_to_kind_naked_float (t : t)
@@ -1268,7 +1268,7 @@ end) = struct
     | Value _
     | Phantom _ ->
       Misc.fatal_errorf
-        "Type has wrong kind (expected [Naked_number Float]): %a"
+        "Type has wrong kind (expected [Naked_number Float]):@ %a"
         print t
 
   let force_to_kind_naked_int32 (t : t) : Int32.Set.t ty_naked_number =
@@ -1280,7 +1280,7 @@ end) = struct
     | Value _
     | Phantom _ ->
       Misc.fatal_errorf
-        "Type has wrong kind (expected [Naked_number Int32]): %a"
+        "Type has wrong kind (expected [Naked_number Int32]):@ %a"
         print t
 
   let force_to_kind_naked_int64 (t : t) : Int64.Set.t ty_naked_number =
@@ -1292,7 +1292,7 @@ end) = struct
     | Value _
     | Phantom _ ->
       Misc.fatal_errorf
-        "Type has wrong kind (expected [Naked_number Int64]): %a"
+        "Type has wrong kind (expected [Naked_number Int64]):@ %a"
         print t
 
   let force_to_kind_naked_nativeint (t : t) : Targetint.Set.t ty_naked_number =
@@ -1304,7 +1304,7 @@ end) = struct
     | Value _
     | Phantom _ ->
       Misc.fatal_errorf
-        "Type has wrong kind (expected [Naked_number Nativeint]): %a"
+        "Type has wrong kind (expected [Naked_number Nativeint]):@ %a"
         print t
 
   let force_to_kind_naked_number (type n) (kind : n K.Naked_number.t) (t : t)
@@ -1329,7 +1329,7 @@ end) = struct
     | Fabricated _, _
     | Value _, _
     | Phantom _, _ ->
-      Misc.fatal_errorf "Type has wrong kind (expected [Naked_number %a]): %a"
+      Misc.fatal_errorf "Type has wrong kind (expected [Naked_number %a]):@ %a"
         K.Naked_number.print kind
         print t
 
@@ -1339,7 +1339,7 @@ end) = struct
     | Value _
     | Naked_number _
     | Phantom _ ->
-      Misc.fatal_errorf "Type has wrong kind (expected [Fabricated]): %a"
+      Misc.fatal_errorf "Type has wrong kind (expected [Fabricated]):@ %a"
         print t
 
   let force_to_kind_phantom t =
@@ -1348,7 +1348,7 @@ end) = struct
     | Value _
     | Naked_number _
     | Fabricated _ ->
-      Misc.fatal_errorf "Type has wrong kind (expected [Phantom]): %a"
+      Misc.fatal_errorf "Type has wrong kind (expected [Phantom]):@ %a"
         print t
 
   let resolve_aliases_on_ty (type a)
@@ -3359,7 +3359,9 @@ end) = struct
       let names_to_types =
         Name.Map.union_merge (fun ty1 ty2 ->
             (* CR mshinwell: Should we make use of these judgements? *)
+Format.eprintf "Meeting@ %a and@ %a ...\n%!" print ty1 print ty2;
             let ty, _judgements = meet ~type_of_name ty1 ty2 in
+Format.eprintf "...giving %a\n%!" print ty;
             ty)
           t1.names_to_types
           t2.names_to_types

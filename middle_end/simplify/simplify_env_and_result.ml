@@ -183,15 +183,12 @@ end = struct
     { t with typing_environment; }
 
   (* CR mshinwell for pchambart: FIXME! *)
-  let extend_typing_environment ~type_of_name:_ t ~env_extension:_ =
-    t
-(*
+  let extend_typing_environment ~type_of_name t ~env_extension =
     let typing_environment =
       T.Typing_environment.meet ~type_of_name
         t.typing_environment env_extension
     in
     { t with typing_environment; }
-*)
 
   (* CR mshinwell: Refactor [t] such there is one field which contains
      everything to be cleared when we do [local]. *)

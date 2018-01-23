@@ -387,17 +387,32 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
   | Invalid -> invalid r
 
 module Make_simplify_unbox_number (P : A.Boxable_number_kind) = struct
-  let simplify env r prim arg dbg =
+  let simplify env r prim arg dbg ~result_var =
     let arg, ty = S.simplify_simple env arg in
     let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
     let proof = (E.type_accessor env P.boxed_prover) ty in
     let kind = K.Standard_int_or_float.to_kind P.kind in
-    let unknown () =
+    let unknown r =
       Reachable.reachable (original_term ()), T.unknown kind, r
     in
-    let invalid () =
+    let invalid r =
       Reachable.invalid (), T.bottom kind,
         R.map_benefit r (B.remove_primitive (Unary prim))
+    in
+    let r =
+      match arg with
+      | Const _ -> r
+      | Name boxed_name ->
+        let kind = K.Standard_int_or_float.to_kind P.kind in
+        let boxed_ty_refinement =
+          P.box (T.alias_type_of kind (Name.var result_var))
+        in
+Format.eprintf "Boxed type refinement for %a is %a, existing type %a\n%!"
+  Name.print boxed_name T.print boxed_ty_refinement T.print ty;
+        R.add_or_meet_typing_judgement ~type_of_name:(E.type_of_name env)
+          r boxed_name
+          (E.continuation_scope_level env)
+          boxed_ty_refinement
     in
     match proof with
     | Proved unboxed_ty ->
@@ -407,15 +422,15 @@ module Make_simplify_unbox_number (P : A.Boxable_number_kind) = struct
       | Proved nums ->
         Reachable.reachable (original_term ()), P.these_unboxed nums,
           R.map_benefit r (B.remove_primitive (Unary prim))
-      | Unknown -> unknown ()
+      | Unknown -> unknown r
         (* In this case, [unboxed_ty] might actually be an alias, meaning
            that we can replace the primitive with a variable.  This will be
            done automagically by the code in [Simplify_named] using
            [reify]. *)
-      | Invalid -> invalid ()
+      | Invalid -> invalid r
       end
-    | Unknown -> unknown ()
-    | Invalid -> invalid ()
+    | Unknown -> unknown r
+    | Invalid -> invalid r
 end
 
 module Simplify_unbox_number_float = Make_simplify_unbox_number (A.For_floats)
@@ -755,13 +770,13 @@ let simplify_unary_primitive env r (prim : Flambda_primitive.unary_primitive)
   | Bigarray_length { dimension : int; } ->
     simplify_bigarray_length env r prim arg ~dimension dbg
   | Unbox_number Naked_float ->
-    Simplify_unbox_number_float.simplify env r prim arg dbg
+    Simplify_unbox_number_float.simplify env r prim arg dbg ~result_var
   | Unbox_number Naked_int32 ->
-    Simplify_unbox_number_int32.simplify env r prim arg dbg
+    Simplify_unbox_number_int32.simplify env r prim arg dbg ~result_var
   | Unbox_number Naked_int64 ->
-    Simplify_unbox_number_int64.simplify env r prim arg dbg
+    Simplify_unbox_number_int64.simplify env r prim arg dbg ~result_var
   | Unbox_number Naked_nativeint ->
-    Simplify_unbox_number_nativeint.simplify env r prim arg dbg
+    Simplify_unbox_number_nativeint.simplify env r prim arg dbg ~result_var
   | Box_number Naked_float ->
     Simplify_box_number_float.simplify env r prim arg dbg
   | Box_number Naked_int32 ->
