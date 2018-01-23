@@ -114,6 +114,9 @@ let simplify_set_of_closures original_env r
         ~arity:function_decl.return_arity
         ~default_env:(E.get_typing_environment closure_env)  (* XXX *)
     in
+    let return_arity =
+      List.map (fun ty -> (E.type_accessor closure_env T.kind) ty) result
+    in
     (* CR mshinwell: Anything to do with the returned environment? *)
     let inline : Flambda.inline_attribute =
       match function_decl.inline with
@@ -136,7 +139,7 @@ let simplify_set_of_closures original_env r
     let function_decl =
       Flambda.Function_declaration.create ~params:function_decl.params
         ~continuation_param ~exn_continuation_param
-        ~return_arity:function_decl.return_arity
+        ~return_arity
         ~body ~stub:function_decl.stub ~dbg:function_decl.dbg
         ~inline ~specialise:function_decl.specialise
         ~is_a_functor:function_decl.is_a_functor
