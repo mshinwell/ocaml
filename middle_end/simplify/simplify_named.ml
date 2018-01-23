@@ -429,12 +429,27 @@ Format.eprintf "Prim %a: type %a\n%!" Variable.print result_var T.print ty;
       T.unit (), r
   | Coerce (Kind (simple, desired_kind)) ->
     let simple, ty = Simplify_simple.simplify_simple env simple in
-    let actual_kind = (E.type_accessor env T.kind) ty in
-    match Flambda_kind.coerce ~actual_kind ~desired_kind with
-    | Always_ok ->
-      [], Flambda.Reachable.reachable (Simple simple), ty, r
-    | Needs_runtime_check ->
-      [], Flambda.Reachable.reachable (Coerce (Kind (simple, desired_kind))),
-        T.unknown desired_kind, r
-    | Always_wrong ->
+    if (E.type_accessor env T.is_bottom) ty then
       [], Flambda.Reachable.invalid (), T.bottom desired_kind, r
+    else
+      match E.find_coercion env simple desired_kind with
+      | Some var ->
+        let ty = E.find_variable env var in
+        (* CR mshinwell: In cases like this we should be able to just add
+           a substitution to [r], to be propagated to [env] for the
+           subsequent term, so that we don't need another round of
+           simplification to remove a trivial alias.  This probably applies in
+           other places too. *)
+        [], Flambda.Reachable.reachable (Simple (Simple.var var)), ty, r
+      | None ->
+        let actual_kind = (E.type_accessor env T.kind) ty in
+        match Flambda_kind.coerce ~actual_kind ~desired_kind with
+        | Always_ok ->
+          [], Flambda.Reachable.reachable (Simple simple), ty, r
+        | Needs_runtime_check ->
+          let r = R.add_coercion r simple desired_kind result_var in
+          [],
+            Flambda.Reachable.reachable (Coerce (Kind (simple, desired_kind))),
+            T.unknown desired_kind, r
+        | Always_wrong ->
+          [], Flambda.Reachable.invalid (), T.bottom desired_kind, r

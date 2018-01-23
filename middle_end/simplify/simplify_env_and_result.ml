@@ -75,6 +75,7 @@ end = struct
     closure_depth : int;
     inlining_stats_closure_stack : Inlining_stats.Closure_stack.t;
     inlined_debuginfo : Debuginfo.t;
+    coercions : Variable.t Simple.With_kind.Map.t;
   }
 
   let create ~never_inline ~allow_continuation_inlining
@@ -107,6 +108,7 @@ end = struct
       inlining_stats_closure_stack =
         Inlining_stats.Closure_stack.create ();
       inlined_debuginfo = Debuginfo.none;
+      coercions = Simple.With_kind.Map.empty;
     }
 
   let print_scope_level_and_continuation_approx ppf (level, approx) =
@@ -136,6 +138,7 @@ end = struct
         @[(closure_depth@ %d)@]@ \
         @[(inlining_stats_closure_stack@ %a)@]@ \
         @[(inlined_debuginfo@ %a)@]\
+        @[(coercions@ %a)@]\
         )@]"
       t.round
       TE.print t.typing_environment
@@ -159,6 +162,7 @@ end = struct
       t.closure_depth
       Inlining_stats.Closure_stack.print t.inlining_stats_closure_stack
       Debuginfo.print t.inlined_debuginfo
+      (Simple.With_kind.Map.print Variable.print) t.coercions
 
   let backend t = t.backend
   let round t = t.round
@@ -189,6 +193,8 @@ end = struct
     { t with typing_environment; }
 *)
 
+  (* CR mshinwell: Refactor [t] such there is one field which contains
+     everything to be cleared when we do [local]. *)
   let local env =
     { env with
       typing_environment = TE.create ();
@@ -197,6 +203,7 @@ end = struct
       freshening = Freshening.empty_preserving_activation_state env.freshening;
       inlined_debuginfo = Debuginfo.none;
       continuation_scope_level = Scope_level.initial;
+      coercions = Simple.With_kind.Map.empty;
     }
 
   let find_variable0 typing_environment var =
@@ -615,6 +622,19 @@ end = struct
     Continuation.Map.map (fun (_scope_level, approx) -> approx)
       t.continuations
 
+  let add_coercion t simple kind var =
+    let with_kind = simple, kind in
+    match Simple.With_kind.Map.find with_kind t.coercions with
+    | exception Not_found ->
+      let coercions = Simple.With_kind.Map.add with_kind var t.coercions in
+      { t with coercions; }
+    | _var -> t
+
+  let find_coercion t simple kind =
+    match Simple.With_kind.Map.find (simple, kind) t.coercions with
+    | exception Not_found -> None
+    | var -> Some var
+
   let invariant t =
     if !Clflags.flambda_invariant_checks then begin
       (* Make sure that freshening a continuation through the given
@@ -872,6 +892,7 @@ end = struct
       lifted_constants :
         (Flambda_type.t * Flambda_kind.t * Flambda_static.Static_part.t)
           Symbol.Map.t;
+      coercions : Variable.t Simple.With_kind.Map.t;
     }
 
   let create () =
@@ -883,6 +904,7 @@ end = struct
       typing_judgements = T.Typing_environment.create ();
       newly_imported_symbols = Symbol.Map.empty;
       lifted_constants = Symbol.Map.empty;
+      coercions = Simple.With_kind.Map.empty;
     }
 
   let union t1 t2 =
@@ -903,6 +925,8 @@ end = struct
       lifted_constants =
         Symbol.Map.disjoint_union t1.lifted_constants
           t2.lifted_constants;
+      coercions =
+        Simple.With_kind.Map.disjoint_union t1.coercions t2.coercions;
     }
 
   let use_continuation t env cont kind =
@@ -1164,6 +1188,21 @@ end = struct
     { t with
       typing_judgements;
     }
+
+  let clear_coercions t =
+    { t with
+      coercions = Simple.With_kind.Map.empty;
+    }
+
+  let add_coercion t simple kind var =
+    let with_kind = simple, kind in
+    match Simple.With_kind.Map.find with_kind t.coercions with
+    | exception Not_found ->
+      let coercions = Simple.With_kind.Map.add with_kind var t.coercions in
+      { t with coercions; }
+    | _var -> t
+
+  let coercions t = t.coercions
 
   let get_typing_judgements t = t.typing_judgements
 

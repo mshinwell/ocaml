@@ -174,3 +174,27 @@ module List = struct
       (Format.pp_print_list print ~pp_sep:Format.pp_print_space) ppf t
   end)
 end
+
+module With_kind = struct
+  type nonrec t = t * Flambda_kind.t
+
+  include Identifiable.Make (struct
+    type nonrec t = t
+
+    let equal (s1, k1) (s2, k2) =
+      equal s1 s2 && Flambda_kind.equal k1 k2
+
+    let compare (s1, k1) (s2, k2) =
+      let c = compare s1 s2 in
+      if c <> 0 then c
+      else Flambda_kind.compare k1 k2
+
+    let hash (s, k) =
+      Hashtbl.hash (hash s, Flambda_kind.hash k)
+
+    let print ppf (s, k) =
+      Format.fprintf ppf "@[(%a :: %a)@]"
+        print s
+        Flambda_kind.print k
+  end)
+end

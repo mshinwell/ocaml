@@ -59,7 +59,10 @@ let simplify_exn_continuation env r cont =
 let for_defining_expr_of_let (env, r) var kind defining_expr =
   (* CR mshinwell: This handling of the typing environment in [R] needs to be
      added to the "simplify newly-introduced let bindings" function, below *)
+  (* CR mshinwell: Add one function in [R] called "local" to do all of
+     these? *)
   let r = R.clear_typing_judgements r in
+  let r = R.clear_coercions r in
   let already_lifted_constants = R.get_lifted_constants r in
   let new_bindings, defining_expr, ty, r =
     Simplify_named.simplify_named env r defining_expr ~result_var:var
@@ -76,6 +79,13 @@ let for_defining_expr_of_let (env, r) var kind defining_expr =
     Symbol.Map.fold (fun symbol (ty, _kind, _static_part) env ->
         E.add_symbol env symbol ty)
       lifted_constants
+      env
+  in
+  let env =
+    let coercions = R.coercions r in
+    Simple.With_kind.Map.fold (fun (simple, kind) var env ->
+        E.add_coercion env simple kind var)
+      coercions
       env
   in
   let new_kind = (E.type_accessor env T.kind) ty in
