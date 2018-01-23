@@ -243,7 +243,7 @@ and lift_expr (expr : Flambda.Expr.t) ~state =
       let state = State.add_constant state ~var ~kind ~simple in
       lift_expr body ~state
     | Simple (Name (Var _)) | Prim _ | Assign _ | Read_mutable _
-    | Set_of_closures _ ->
+    | Set_of_closures _ | Coerce _ ->
       let defining_expr, state =
         match defining_expr with
         | Set_of_closures set_of_closures ->

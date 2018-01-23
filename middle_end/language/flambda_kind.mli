@@ -105,6 +105,13 @@ val unit : unit -> t
 *)
 val compatible : t -> if_used_at:t -> bool
 
+type coercion_result = private
+  | Always_ok
+  | Needs_runtime_check
+  | Always_wrong
+
+val coerce : actual_kind:t -> desired_kind:t -> coercion_result
+
 include Identifiable.S with type t := t
 
 module Standard_int : sig

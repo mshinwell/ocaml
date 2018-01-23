@@ -208,6 +208,19 @@ let compatible t ~if_used_at =
     Value_kind.compatible value_kind ~if_used_at
   | _, _ -> equal t if_used_at
 
+type coercion_result =
+  | Always_ok
+  | Needs_runtime_check
+  | Always_wrong
+
+let coerce ~actual_kind ~desired_kind : coercion_result =
+  if compatible actual_kind ~if_used_at:desired_kind then
+    Always_ok
+  else if compatible desired_kind ~if_used_at:actual_kind then
+    Needs_runtime_check
+  else
+    Always_wrong
+
 let is_value t =
   match t with
   | Value _ -> true

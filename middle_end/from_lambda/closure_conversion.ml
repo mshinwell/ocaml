@@ -385,6 +385,7 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
           end
         | Simple (Name (Var _))
         | Read_mutable _ -> K.value Unknown
+        | Coerce (Kind (_, kind)) -> kind
       in
       Flambda.Expr.create_let var kind defining_expr body
     in

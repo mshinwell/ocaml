@@ -427,3 +427,14 @@ Format.eprintf "Prim %a: type %a\n%!" Variable.print result_var T.print ty;
     let new_value, _ty = Simplify_simple.simplify_simple env new_value in
     [], Flambda.Reachable.reachable (Assign { being_assigned; new_value; }),
       T.unit (), r
+  | Coerce (Kind (simple, desired_kind)) ->
+    let simple, ty = Simplify_simple.simplify_simple env simple in
+    let actual_kind = (E.type_accessor env T.kind) ty in
+    match Flambda_kind.coerce ~actual_kind ~desired_kind with
+    | Always_ok ->
+      [], Flambda.Reachable.reachable (Simple simple), ty, r
+    | Needs_runtime_check ->
+      [], Flambda.Reachable.reachable (Coerce (Kind (simple, desired_kind))),
+        T.unknown desired_kind, r
+    | Always_wrong ->
+      [], Flambda.Reachable.invalid (), T.bottom desired_kind, r

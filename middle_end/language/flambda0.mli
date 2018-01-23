@@ -199,6 +199,9 @@ type mutable_or_immutable =
   | Mutable
   | Immutable
 
+type coercion =
+  | Kind of Simple.t * Flambda_kind.t
+
 module rec Expr : sig
   (** With the exception of applications of primitives ([Prim]), Flambda terms
       are in CPS.
@@ -339,6 +342,7 @@ end and Named : sig
     | Set_of_closures of Set_of_closures.t
     | Assign of assign
     | Read_mutable of Mutable_variable.t
+    | Coerce of coercion
 
   (** Compute the free names of the given term. *)
   val free_names

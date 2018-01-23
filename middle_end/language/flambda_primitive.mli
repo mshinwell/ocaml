@@ -294,6 +294,7 @@ val rename_variables : t -> f:(Variable.t -> Variable.t) -> t
     its arguments. *)
 val arg_kind_of_unary_primitive : unary_primitive -> Flambda_kind.t
 
+(* CR mshinwell: "args_kind" -> "arg_kinds" *)
 val args_kind_of_binary_primitive
    : binary_primitive
   -> Flambda_kind.t * Flambda_kind.t

@@ -426,6 +426,9 @@ type mutable_or_immutable =
   | Mutable
   | Immutable
 
+type coercion =
+  | Kind of Simple.t * Flambda_kind.t
+
 module rec Expr : sig
   type t =
     | Let of Let.t
@@ -794,7 +797,7 @@ end = struct
     and aux_named (named : Named.t) =
       f_named named;
       match named with
-      | Simple _ | Read_mutable _ | Prim _ | Assign _ -> ()
+      | Simple _ | Read_mutable _ | Prim _ | Assign _ | Coerce _ -> ()
       | Set_of_closures { function_decls = funcs; _; } ->
         if not toplevel then begin
           Closure_id.Map.iter (fun _ (decl : Function_declaration.t) ->
@@ -913,6 +916,7 @@ end and Named : sig
     | Set_of_closures of Set_of_closures.t
     | Assign of assign
     | Read_mutable of Mutable_variable.t
+    | Coerce of coercion
 
   val free_names
      : ?ignore_uses_in_project_var:unit
@@ -976,6 +980,8 @@ end = struct
         free_names (Simple.free_names x2)
       | Prim (Variadic (_prim, xs), _dbg) ->
         List.iter (fun x -> free_names (Simple.free_names x)) xs
+      | Coerce (Kind (simple, _kind)) ->
+        free_names (Simple.free_names simple)
       end;
       !free
 
@@ -1000,6 +1006,10 @@ end = struct
       fprintf ppf "@[<2>(assign@ %a@ %a)@]"
         Mutable_variable.print being_assigned
         Simple.print new_value
+    | Coerce (Kind (simple, kind)) ->
+      fprintf ppf "@[<2>(%a :> %a)@]"
+        Simple.print simple
+        Flambda_kind.print kind
 
   let box_value name (kind : Flambda_kind.t) dbg : Named.t * Flambda_kind.t =
     let simple = Simple.name name in
@@ -1059,7 +1069,10 @@ end = struct
         && Simple.equal new_value1 new_value2
     | Read_mutable mut1, Read_mutable mut2 ->
       Mutable_variable.equal mut1 mut2
-    | (Simple _ | Prim _ | Set_of_closures _ | Assign _ | Read_mutable _), _ ->
+    | Coerce (Kind (var1, kind1)), Coerce (Kind (var2, kind2)) ->
+      Simple.equal var1 var2 && Flambda_kind.equal kind1 kind2
+    | (Simple _ | Prim _ | Set_of_closures _ | Assign _ | Read_mutable _
+        | Coerce _), _ ->
       false
 end and Let : sig
   type t = {

@@ -200,30 +200,43 @@ let rec bind_rec
   : Expr.t =
   match prim with
   | Unary (prim, arg) ->
+    let arg_kind = Flambda_primitive.arg_kind_of_unary_primitive prim in
     let cont (arg : Simple.t) =
       cont (Prim (Unary (prim, arg), dbg))
     in
-    bind_rec_primitive arg dbg ~exception_continuation cont
+    bind_rec_primitive arg arg_kind dbg ~exception_continuation cont
   | Binary (prim, arg1, arg2) ->
+    let arg1_kind, arg2_kind =
+      Flambda_primitive.args_kind_of_binary_primitive prim
+    in
     let cont (arg2 : Simple.t) =
       let cont (arg1 : Simple.t) =
         cont (Prim (Binary (prim, arg1, arg2), dbg))
       in
-      bind_rec_primitive arg1 dbg ~exception_continuation cont
+      bind_rec_primitive arg1 arg1_kind dbg ~exception_continuation cont
     in
-    bind_rec_primitive arg2 dbg ~exception_continuation cont
+    bind_rec_primitive arg2 arg2_kind dbg ~exception_continuation cont
   | Ternary (prim, arg1, arg2, arg3) ->
+    let arg1_kind, arg2_kind, arg3_kind =
+      Flambda_primitive.args_kind_of_ternary_primitive prim
+    in
     let cont (arg3 : Simple.t) =
       let cont (arg2 : Simple.t) =
         let cont (arg1 : Simple.t) =
           cont (Prim (Ternary (prim, arg1, arg2, arg3), dbg))
         in
-        bind_rec_primitive arg1 dbg ~exception_continuation cont
+        bind_rec_primitive arg1 arg1_kind dbg ~exception_continuation cont
       in
-      bind_rec_primitive arg2 dbg ~exception_continuation cont
+      bind_rec_primitive arg2 arg2_kind dbg ~exception_continuation cont
     in
-    bind_rec_primitive arg3 dbg ~exception_continuation cont
+    bind_rec_primitive arg3 arg3_kind dbg ~exception_continuation cont
   | Variadic (prim, args) ->
+    let arg_kinds =
+      match Flambda_primitive.args_kind_of_variadic_primitive prim with
+      | Variadic arg_kinds -> arg_kinds
+      | Variadic_all_of_kind kind ->
+        List.init (List.length args) (fun _arg -> kind)
+    in
     let cont args =
       cont (Prim (Variadic (prim, args), dbg))
     in
@@ -231,25 +244,37 @@ let rec bind_rec
       match args_to_convert with
       | [] ->
         cont converted_args
-      | arg :: args_to_convert ->
+      | (arg, arg_kind) :: args_to_convert ->
         let cont arg =
           build_cont args_to_convert (arg :: converted_args)
         in
-        bind_rec_primitive arg dbg ~exception_continuation cont
+        bind_rec_primitive arg arg_kind dbg ~exception_continuation cont
     in
-    build_cont (List.rev args) []
+    build_cont (List.rev (List.combine args arg_kinds)) []
   | Checked _ ->
     failwith "TODO"
 
 and bind_rec_primitive
       (prim : simple_or_prim)
+      kind
       (dbg : Debuginfo.t)
       ~exception_continuation
       (cont : Simple.t -> Expr.t) : Expr.t =
   match prim with
-  | Simple s ->
-    cont s
+  | Simple ((Name (Var var)) as simple) ->
+    let fresh_var = Variable.rename var in
+    let fresh_simple = Simple.var fresh_var in
+    let coercion : Named.t = Coerce (Kind (simple, kind)) in
+    let body = cont fresh_simple in
+    Flambda.Expr.create_let fresh_var kind coercion body
+  | Simple simple ->
+    let fresh_var = Variable.create "coerced" in
+    let fresh_simple = Simple.var fresh_var in
+    let coercion : Named.t = Coerce (Kind (simple, kind)) in
+    let body = cont fresh_simple in
+    Flambda.Expr.create_let fresh_var kind coercion body
   | Prim p ->
+    (* CR mshinwell for pchambart: Should we use [kind] here? *)
     let var = Variable.create "prim" in
     let result_kind = result_kind_of_expr_primitive p in
     let cont named =
@@ -286,7 +311,9 @@ let string_or_bytes_ref kind arg1 arg2 dbg =
               (* CR pchambart:
                  Int_comp_unsigned assumes that the arguments are naked
                  integers, but it is correct for tagged integers too as
-                 untagging of both arguments doesn't change the result. *)
+                 untagging of both arguments doesn't change the result.
+                 mshinwell: this is going to produce a kind error, though---we
+                 will need to change [Flambda_primitive] *)
               tagged_immediate_as_naked_nativeint arg2,
               tagged_immediate_as_naked_nativeint
                 (Prim (Unary (String_length String, arg1))));

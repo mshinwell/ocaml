@@ -179,7 +179,8 @@ let rec lift (expr : Flambda.Expr.t) ~to_copy =
       | Prim _
       | Set_of_closures _
       | Assign _
-      | Read_mutable _ ->
+      | Read_mutable _
+      | Coerce _ ->
         let name = Format.asprintf "%a" Variable.print var in
         let static_structure, bindings =
           static_structure name ~vars_with_kinds

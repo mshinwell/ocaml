@@ -378,7 +378,7 @@ end = struct
     let iter_sets_of_closures f t =
       iter_named (function
           | Set_of_closures clos -> f clos
-          | Simple _ | Read_mutable _ | Assign _ | Prim _ -> ())
+          | Simple _ | Read_mutable _ | Assign _ | Prim _ | Coerce _ -> ())
         t
 
     let iter_function_bodies t ~f =
@@ -466,7 +466,8 @@ end = struct
       and aux_named (id : Variable.t) _kind (named : Named.t) =
         let named : Named.t =
           match named with
-          | Simple _ | Read_mutable _ | Assign _ | Prim _  -> named
+          | Simple _ | Read_mutable _ | Assign _ | Prim _
+          | Coerce _ -> named
           | Set_of_closures ({ function_decls; free_vars;
               direct_call_surrogates }) ->
             if toplevel then named
@@ -570,6 +571,12 @@ end = struct
               named
             else
               Simple new_simple
+          | (Coerce (Kind (simple, kind))) as named ->
+            let new_simple = Simple.map_symbol simple ~f in
+            if new_simple == simple then
+              named
+            else
+              Coerce (Kind (new_simple, kind))
           | (Set_of_closures _ | Read_mutable _ | Prim _ | Assign _)
               as named ->
             named)
@@ -593,7 +600,8 @@ end = struct
             let new_set_of_closures = f set_of_closures in
             if new_set_of_closures == set_of_closures then named
             else Set_of_closures new_set_of_closures
-          | (Simple _ | Assign _ | Prim _ | Read_mutable _) as named -> named)
+          | (Simple _ | Assign _ | Prim _ | Read_mutable _
+              | Coerce _) as named -> named)
         tree
 
     let map_function_bodies ?ignore_stubs t ~f =
@@ -618,7 +626,8 @@ end = struct
               let new_set_of_closures = f set_of_closures in
               if new_set_of_closures == set_of_closures then named
               else Set_of_closures new_set_of_closures
-            | (Simple _ | Read_mutable _ | Prim _ | Assign _) as named ->
+            | (Simple _ | Read_mutable _ | Prim _ | Assign _ | Coerce _)
+                as named ->
               named)
           tree
       end
@@ -747,6 +756,10 @@ end = struct
         Set_of_closures set_of_closures
       | Prim (prim, dbg) ->
         Prim (Flambda_primitive.rename_variables prim ~f:sb, dbg)
+      | Coerce (Kind (simple, kind)) ->
+        let simple' = Simple.map_var simple ~f:sb in
+        if simple == simple' then named
+        else Coerce (Kind (simple', kind))
     in
     if Variable.Map.is_empty sb' then tree
     else Mappers.Toplevel_only.map aux aux_named tree
@@ -1240,14 +1253,14 @@ end = struct
 
   let no_effects_or_coeffects (t : t) =
     match t with
-    | Simple _ -> true
+    | Simple _ | Coerce _ -> true
     | Prim (prim, _) -> Flambda_primitive.no_effects_or_coeffects prim
     | Set_of_closures _ -> true
     | Assign _ | Read_mutable _ -> false
 
   let maybe_generative_effects_but_no_coeffects (t : t) =
     match t with
-    | Simple _ -> true
+    | Simple _ | Coerce _ -> true
     | Prim (prim, _) -> Flambda_primitive.at_most_generative_effects prim
     | Set_of_closures _ -> true
     | Assign _ | Read_mutable _ -> false
@@ -1391,6 +1404,9 @@ end = struct
         primitive_invariant env prim;
         ignore (dbg : Debuginfo.t);
         Flambda_primitive.result_kind prim
+      | Coerce (Kind (simple, kind)) ->
+        let _actual_kind = E.kind_of_simple env simple in
+        Singleton kind
     with Misc.Fatal_error ->
       Misc.fatal_errorf "(during invariant checks) Context is:@ %a" print t
 end and Let_cont_handlers : sig
