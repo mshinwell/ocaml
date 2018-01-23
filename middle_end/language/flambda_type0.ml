@@ -3372,9 +3372,13 @@ end) = struct
       let names_to_types =
         Name.Map.union_merge (fun ty1 ty2 ->
             (* CR mshinwell: Should we make use of these judgements? *)
+(*
 Format.eprintf "Meeting@ %a and@ %a ...\n%!" print ty1 print ty2;
+*)
             let ty, _judgements = meet ~type_of_name ty1 ty2 in
+(*
 Format.eprintf "...giving %a\n%!" print ty;
+*)
             ty)
           t1.names_to_types
           t2.names_to_types

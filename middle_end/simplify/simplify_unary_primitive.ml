@@ -30,10 +30,11 @@ module Int64 = Numbers.Int64
 module Named = Flambda.Named
 module Reachable = Flambda.Reachable
 
-let refine_set_of_closures_type_to_identify_projection ~type_of_name
+let _refine_set_of_closures_type_to_identify_projection ~type_of_name
       env r ~set_of_closures_name ~result_var ~closure_id =
   let set_of_closures_ty =
     let closure_ty =
+      (* XXX this is wrong.  [result_var] is of kind [Value] *)
       T.alias_type_of_as_ty_fabricated (Name.var result_var)
     in
     let closures =
@@ -66,7 +67,7 @@ let refine_set_of_closures_type_to_identify_closure_element ~type_of_name
     (E.continuation_scope_level env) set_of_closures_ty
 
 let simplify_project_closure env r prim ~closure ~set_of_closures dbg
-      ~result_var =
+      ~result_var:_ =
   let set_of_closures, ty = S.simplify_simple env set_of_closures in
   let original_term () : Named.t = Prim (Unary (prim, set_of_closures), dbg) in
   let unknown r =
@@ -76,6 +77,7 @@ let simplify_project_closure env r prim ~closure ~set_of_closures dbg
     Reachable.invalid (), T.bottom (K.value Definitely_pointer),
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
+(*
   let r =
     match set_of_closures with
     | Const _ -> r
@@ -86,6 +88,7 @@ let simplify_project_closure env r prim ~closure ~set_of_closures dbg
         ~result_var
         ~closure_id:closure
   in
+*)
   let proof = (E.type_accessor env T.prove_sets_of_closures) ty in
   match proof with
   | Proved (_set_of_closures_name, set_of_closures) ->
@@ -104,7 +107,7 @@ let simplify_project_closure env r prim ~closure ~set_of_closures dbg
   | Invalid -> invalid r
 
 let simplify_move_within_set_of_closures env r prim ~move_from ~move_to
-      ~closures dbg ~result_var =
+      ~closures dbg ~result_var:_ =
   let closures, ty = S.simplify_simple env closures in
   let original_term () : Named.t = Prim (Unary (prim, closures), dbg) in
   let invalid r =
@@ -121,6 +124,7 @@ let simplify_move_within_set_of_closures env r prim ~move_from ~move_to
       let proof = (E.type_accessor env T.prove_sets_of_closures) set_ty in
       begin match proof with
       | Proved (set_of_closures_name, set_of_closures) ->
+(*
         let r =
           match set_of_closures_name with
           | None -> r
@@ -132,6 +136,7 @@ let simplify_move_within_set_of_closures env r prim ~move_from ~move_to
               ~result_var
               ~closure_id:move_to
         in
+*)
         let closures = T.extensibility_contents set_of_closures.closures in
         begin match Closure_id.Map.find move_to closures with
         | exception Not_found -> invalid r
@@ -407,8 +412,6 @@ module Make_simplify_unbox_number (P : A.Boxable_number_kind) = struct
         let boxed_ty_refinement =
           P.box (T.alias_type_of kind (Name.var result_var))
         in
-Format.eprintf "Boxed type refinement for %a is %a, existing type %a\n%!"
-  Name.print boxed_name T.print boxed_ty_refinement T.print ty;
         R.add_or_meet_typing_judgement ~type_of_name:(E.type_of_name env)
           r boxed_name
           (E.continuation_scope_level env)
@@ -422,11 +425,12 @@ Format.eprintf "Boxed type refinement for %a is %a, existing type %a\n%!"
       | Proved nums ->
         Reachable.reachable (original_term ()), P.these_unboxed nums,
           R.map_benefit r (B.remove_primitive (Unary prim))
-      | Unknown -> unknown r
+      | Unknown ->
         (* In this case, [unboxed_ty] might actually be an alias, meaning
            that we can replace the primitive with a variable.  This will be
            done automagically by the code in [Simplify_named] using
            [reify]. *)
+        Reachable.reachable (original_term ()), unboxed_ty, r
       | Invalid -> invalid r
       end
     | Unknown -> unknown r
