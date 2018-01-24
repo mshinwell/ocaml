@@ -632,6 +632,8 @@ let simplify_boolean_not env r prim arg dbg =
       Reachable.reachable (original_term ()),
         T.these_tagged_immediates imms, r
   | Unknown ->
+    (* CR mshinwell: This should say something like (in the type) "when the
+       input is 0, the value is 1" and vice-versa. *)
     Reachable.reachable (original_term ()),
       T.these_tagged_immediates Immediate.all_bools, r
   | Invalid -> invalid ()
