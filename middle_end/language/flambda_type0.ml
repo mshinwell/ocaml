@@ -131,14 +131,14 @@ end) = struct
     | Naked_number :
         'kind ty_naked_number * 'kind K.Naked_number.t -> t
     | Fabricated of ty_fabricated
-    | Phantom of ty_phantom
+    | Phantom of ty_phantom Flambda_kind.Phantom_kind.occurrences
 
   and flambda_type = t
 
   and ty_value = (of_kind_value, K.Value_kind.t) ty
   and 'a ty_naked_number = ('a of_kind_naked_number, unit) ty
   and ty_fabricated = (of_kind_fabricated, K.Value_kind.t) ty
-  and ty_phantom = (of_kind_phantom, K.Phantom_kind.t) ty
+  and ty_phantom = (of_kind_phantom, K.Phantom_kind.t0) ty
 
   and ('a, 'u) ty = ('a, 'u) unknown_or_join or_alias
 
@@ -273,7 +273,8 @@ end) = struct
     | Value ty -> ty_is_obviously_bottom ty
     | Naked_number (ty, _) -> ty_is_obviously_bottom ty
     | Fabricated ty -> ty_is_obviously_bottom ty
-    | Phantom ty -> ty_is_obviously_bottom ty
+    | Phantom (In_types ty)
+    | Phantom (Debug_only ty) -> ty_is_obviously_bottom ty
 
   let print_extensibility print_contents ppf (e : _ extensibility) =
     match e with
@@ -528,7 +529,7 @@ end) = struct
         print_ty_fabricated ty_fabricated
 
   and print_ty_phantom ppf (ty : ty_phantom) =
-    print_ty_generic print_of_kind_phantom K.Phantom_kind.print ppf ty
+    print_ty_generic print_of_kind_phantom K.Phantom_kind.print_t0 ppf ty
 
   and print ppf (t : t) =
     match t with
@@ -538,8 +539,10 @@ end) = struct
       Format.fprintf ppf "@[(Naked_number@ (%a))@]" print_ty_naked_number ty
     | Fabricated ty ->
       Format.fprintf ppf "@[(Fabricated@ (%a))@]" print_ty_fabricated ty
-    | Phantom ty ->
-      Format.fprintf ppf "@[(Phantom@ (%a))@]" print_ty_phantom ty
+    | Phantom (In_types ty) ->
+      Format.fprintf ppf "@[(Phantom_in_types@ (%a))@]" print_ty_phantom ty
+    | Phantom (Debug_only ty) ->
+      Format.fprintf ppf "@[(Phantom_debug_only@ (%a))@]" print_ty_phantom ty
 
   and print_typing_environment ppf { names_to_types; levels_to_names;
         existentials; existential_freshening; } =
@@ -613,9 +616,7 @@ end) = struct
     | Naked_number (ty, _kind) ->
       free_names_ty free_names_of_kind_naked_number ty acc
     | Fabricated ty -> free_names_ty free_names_of_kind_fabricated ty acc
-    | Phantom ty ->
-      (* CR mshinwell: We need to think more about this.  There may be a need
-         for a normal name / phantom name split. *)
+    | Phantom (In_types ty) | Phantom (Debug_only ty) ->
       free_names_ty free_names_of_kind_phantom ty acc
 
   and free_names_of_kind_value (of_kind : of_kind_value) acc =
@@ -722,29 +723,43 @@ end) = struct
     let free_names = Name.Set.diff all_names bound_names in
     Name.Set.union free_names acc
 
-  let free_names t = free_names t Name.Set.empty
+  let free_names t =
+    let names = free_names t Name.Set.empty in
+    Name_occurrences.create_from_set_in_types names
 
   (* CR-someday mshinwell: Functions such as [alias] and [bottom] could be
      simplified if [K.t] were a GADT. *)
 
-  let phantomize t : t =
+  let phantomize t (f : 'a -> 'a K.Phantom_kind.occurrences) : t =
     match t with
     | Value ty_value ->
       let of_kind_phantom : of_kind_phantom =
         Value ty_value
       in
-      Phantom (No_alias (Join [of_kind_phantom]))
+      Phantom (f (No_alias (Join [of_kind_phantom])))
     | Naked_number (ty_naked_number, kind) ->
       let of_kind_phantom : of_kind_phantom =
         Naked_number (ty_naked_number, kind)
       in
-      Phantom (No_alias (Join [of_kind_phantom]))
+      Phantom (f (No_alias (Join [of_kind_phantom])))
     | Fabricated ty_fabricated ->
       let of_kind_phantom : of_kind_phantom =
         Fabricated ty_fabricated
       in
-      Phantom (No_alias (Join [of_kind_phantom]))
-    | Phantom _ -> t
+      Phantom (f (No_alias (Join [of_kind_phantom])))
+    | Phantom (In_types ty_phantom) ->
+      begin match f ty_phantom with
+      | In_types _ -> t
+      | Debug_only ty_phantom -> Phantom (Debug_only ty_phantom)
+      end
+    | Phantom (Debug_only ty_phantom) ->
+      begin match f ty_phantom with
+      | In_types _ ->
+        Misc.fatal_errorf "Cannot change [Debug_only] phantom type back \
+            into an [In_types]"
+          print t
+      | Debug_only _ -> t
+      end
 
   module Name_or_export_id = struct
     type t =
@@ -797,7 +812,8 @@ end) = struct
     | Naked_number Naked_nativeint ->
       Naked_number (Type_of name, K.Naked_number.Naked_nativeint)
     | Fabricated _ -> Fabricated (Type_of name)
-    | Phantom _ -> Phantom (Type_of name)
+    | Phantom (In_types _) -> Phantom (In_types (Type_of name))
+    | Phantom (Debug_only _) -> Phantom (Debug_only (Type_of name))
 
   let alias_type_of_as_ty_value name : ty_value = Type_of name
 
@@ -817,7 +833,8 @@ end) = struct
     | Naked_number Naked_nativeint ->
       Naked_number (Type export_id, K.Naked_number.Naked_nativeint)
     | Fabricated _ -> Fabricated (Type export_id)
-    | Phantom _ -> Phantom (Type export_id)
+    | Phantom (In_types _) -> Phantom (In_types (Type export_id))
+    | Phantom (Debug_only _) -> Phantom (Debug_only (Type export_id))
 
   let bottom_as_ty_value () : ty_value =
     No_alias (Join [])
@@ -839,7 +856,8 @@ end) = struct
     | Naked_number Naked_nativeint ->
       Naked_number (No_alias (Join []), K.Naked_number.Naked_nativeint)
     | Fabricated _ -> Fabricated (No_alias (Join []))
-    | Phantom _ -> Phantom (No_alias (Join []))
+    | Phantom (In_types _) -> Phantom (In_types (No_alias (Join [])))
+    | Phantom (Debug_only _) -> Phantom (Debug_only (No_alias (Join [])))
 
   let any_value_as_ty_value value_kind : ty_value =
     No_alias (Unknown value_kind)
@@ -877,8 +895,11 @@ end) = struct
   let any_fabricated value_kind : t =
     Fabricated (No_alias (Unknown value_kind))
 
-  let any_phantom () : t =
-    Phantom (No_alias (Unknown K.Phantom_kind.Unknown))
+  let any_phantom_in_types () : t =
+    Phantom (In_types (No_alias (Unknown (K.Phantom_kind.Unknown))))
+
+  let any_phantom_debug_only () : t =
+    Phantom (Debug_only (No_alias (Unknown (K.Phantom_kind.Unknown))))
 
   let unknown (kind : K.t) =
     match kind with
@@ -889,7 +910,8 @@ end) = struct
     | Naked_number Naked_int64 -> any_naked_int64 ()
     | Naked_number Naked_nativeint -> any_naked_nativeint ()
     | Fabricated value_kind -> any_fabricated value_kind
-    | Phantom _ -> any_phantom ()
+    | Phantom (In_types _) -> any_phantom_in_types ()
+    | Phantom (Debug_only _) -> any_phantom_debug_only ()
 
   let these_naked_immediates (is : Immediate.Set.t) : t =
     let of_kind : _ of_kind_naked_number = Immediate is in
@@ -1342,13 +1364,26 @@ end) = struct
       Misc.fatal_errorf "Type has wrong kind (expected [Fabricated]):@ %a"
         print t
 
-  let force_to_kind_phantom t =
+  let force_to_kind_phantom_in_types t =
     match t with
-    | Phantom ty_phantom -> ty_phantom
+    | Phantom (Debug_only ty_phantom) -> ty_phantom
+    | Phantom (In_types _)
     | Value _
     | Naked_number _
     | Fabricated _ ->
-      Misc.fatal_errorf "Type has wrong kind (expected [Phantom]):@ %a"
+      Misc.fatal_errorf
+        "Type has wrong kind (expected [Phantom In_types]):@ %a"
+        print t
+
+  let force_to_kind_phantom_debug_only t =
+    match t with
+    | Phantom (Debug_only ty_phantom) -> ty_phantom
+    | Phantom (In_types _)
+    | Value _
+    | Naked_number _
+    | Fabricated _ ->
+      Misc.fatal_errorf
+        "Type has wrong kind (expected [Phantom Debug_only]):@ %a"
         print t
 
   let resolve_aliases_on_ty (type a)
@@ -1420,12 +1455,18 @@ end) = struct
         resolve_aliases_on_ty ~force_to_kind ~type_of_name ty
       in
       Fabricated ty, canonical_name
-    | Phantom ty ->
-      let force_to_kind = force_to_kind_phantom in
+    | Phantom (In_types ty) ->
+      let force_to_kind = force_to_kind_phantom_in_types in
       let ty, canonical_name =
         resolve_aliases_on_ty ~force_to_kind ~type_of_name ty
       in
-      Phantom ty, canonical_name
+      Phantom (In_types ty), canonical_name
+    | Phantom (Debug_only ty) ->
+      let force_to_kind = force_to_kind_phantom_debug_only in
+      let ty, canonical_name =
+        resolve_aliases_on_ty ~force_to_kind ~type_of_name ty
+      in
+      Phantom (Debug_only ty), canonical_name
 
   let resolve_aliases_and_squash_unresolved_names ~type_of_name t
         : t * (Name.t option) =
@@ -1438,29 +1479,33 @@ end) = struct
       in
       Value (No_alias ty), canonical_name
     | Naked_number (ty, kind) ->
-      let force_to_kind
-          = force_to_kind_naked_number kind in
+      let force_to_kind = force_to_kind_naked_number kind in
       let ty, canonical_name =
         resolve_aliases_and_squash_unresolved_names_on_ty ~force_to_kind
           ~type_of_name ~unknown_payload:() ty
       in
       Naked_number (No_alias ty, kind), canonical_name
     | Fabricated ty ->
-      let force_to_kind
-          = force_to_kind_fabricated in
+      let force_to_kind = force_to_kind_fabricated in
       let ty, canonical_name =
         resolve_aliases_and_squash_unresolved_names_on_ty ~force_to_kind
           ~type_of_name ~unknown_payload:K.Value_kind.Unknown ty
       in
       Fabricated (No_alias ty), canonical_name
-    | Phantom ty ->
-      let force_to_kind
-          = force_to_kind_phantom in
+    | Phantom (In_types ty) ->
+      let force_to_kind = force_to_kind_phantom_in_types in
       let ty, canonical_name =
         resolve_aliases_and_squash_unresolved_names_on_ty ~force_to_kind
-          ~type_of_name ~unknown_payload:K.Phantom_kind.Unknown ty
+          ~type_of_name ~unknown_payload:(K.Phantom_kind.Unknown) ty
       in
-      Phantom (No_alias ty), canonical_name
+      Phantom (In_types (No_alias ty)), canonical_name
+    | Phantom (Debug_only ty) ->
+      let force_to_kind = force_to_kind_phantom_in_types in
+      let ty, canonical_name =
+        resolve_aliases_and_squash_unresolved_names_on_ty ~force_to_kind
+          ~type_of_name ~unknown_payload:(K.Phantom_kind.Unknown) ty
+      in
+      Phantom (Debug_only (No_alias ty)), canonical_name
 
   let value_kind_ty_value ~type_of_name ty =
     let value_kind_ty_value (ty : ty_value) : K.Value_kind.t =
@@ -1530,12 +1575,12 @@ end) = struct
     let value_kind = value_kind_ty_fabricated ~type_of_name ty in
     K.fabricated value_kind
 
-  let phantom_kind_ty_phantom ~type_of_name ty =
+  let phantom_kind_ty_phantom ~type_of_name ~force_to_kind ty =
     let phantom_kind_ty_phantom (ty : ty_phantom)
-          : K.Phantom_kind.t =
+          : K.Phantom_kind.t0 =
       let (ty : _ unknown_or_join), _canonical_name =
         resolve_aliases_and_squash_unresolved_names_on_ty
-          ~force_to_kind:force_to_kind_phantom
+          ~force_to_kind
           ~type_of_name
           ~unknown_payload:K.Phantom_kind.Unknown
           ty
@@ -1544,7 +1589,7 @@ end) = struct
       | Unknown phantom_kind -> phantom_kind
       | Join of_kind_phantoms ->
         List.fold_left (fun result (of_kind_phantom : of_kind_phantom) ->
-            let this_kind : K.Phantom_kind.t =
+            let this_kind : K.Phantom_kind.t0 =
               match of_kind_phantom with
               | Value ty_value ->
                 let value_kind =
@@ -1567,15 +1612,11 @@ end) = struct
                 in
                 Fabricated value_kind
             in
-            K.Phantom_kind.join result this_kind)
+            K.Phantom_kind.join_t0 result this_kind)
           K.Phantom_kind.Bottom
           of_kind_phantoms
     in
     phantom_kind_ty_phantom ty
-
-  let kind_ty_phantom ~type_of_name ty =
-    let phantom_kind = phantom_kind_ty_phantom ~type_of_name ty in
-    K.phantom phantom_kind
 
   let kind ~type_of_name (t : t) =
     match t with
@@ -1591,7 +1632,20 @@ end) = struct
     | Naked_number (_, K.Naked_number.Naked_nativeint) ->
       K.naked_nativeint ()
     | Fabricated ty -> kind_ty_fabricated ~type_of_name ty
-    | Phantom ty -> kind_ty_phantom ~type_of_name ty
+    | Phantom (In_types ty) ->
+      let t0 =
+        phantom_kind_ty_phantom ~type_of_name
+          ~force_to_kind:force_to_kind_phantom_in_types
+          ty
+      in
+      K.phantom (In_types t0)
+    | Phantom (Debug_only ty) ->
+      let t0 =
+        phantom_kind_ty_phantom ~type_of_name
+          ~force_to_kind:force_to_kind_phantom_debug_only
+          ty
+      in
+      K.phantom (Debug_only t0)
 
   let check_of_kind ~type_of_name t (expected_kind : K.t) =
     let actual_kind = kind ~type_of_name t in

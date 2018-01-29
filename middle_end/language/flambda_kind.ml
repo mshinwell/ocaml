@@ -100,15 +100,21 @@ module Naked_number_kind = struct
 end
 
 module Phantom_kind = struct
-  type t =
+  type t0 =
     | Unknown
     | Value of Value_kind.t
     | Naked_number of Naked_number_kind.t
     | Fabricated of Value_kind.t
     | Bottom
 
-  let print ppf t =
-    match t with
+  type 'a occurrences =
+    | In_types of 'a
+    | Debug_only of 'a
+
+  type t = t0 occurrences
+
+  let print_t0 ppf t0 =
+    match t0 with
     | Unknown ->
       Format.pp_print_string ppf "Unknown"
     | Value value_kind ->
@@ -121,8 +127,15 @@ module Phantom_kind = struct
     | Bottom ->
       Format.pp_print_string ppf "Bottom"
 
+  let print ppf t =
+    match t with
+    | In_types t0 ->
+      Format.fprintf ppf "@[(In_types %a)@]" print_t0 t0
+    | Debug_only t0 ->
+      Format.fprintf ppf "@[(Debug_only %a)@]" print_t0 t0
+
   (* CR mshinwell: We should review exactly where this is used *)
-  let join t1 t2 =
+  let join_t0 t1 t2 =
     match t1, t2 with
     | Unknown, _ | _, Unknown -> Unknown
     | Bottom, t2 -> t2
@@ -134,10 +147,22 @@ module Phantom_kind = struct
       Fabricated (Value_kind.join k1 k2)
     | _, _ ->
       Misc.fatal_errorf "Phantom_kind.join: kind error: %a vs. %a"
+        print_t0 t1
+        print_t0 t2
+
+  let join t1 t2 =
+    match t1, t2 with
+    | In_types t0_1, In_types t0_2 ->
+      In_types (join_t0 t0_1 t0_2)
+    | Debug_only t0_1, Debug_only t0_2 ->
+      Debug_only (join_t0 t0_1 t0_2)
+    | In_types _, Debug_only _
+    | Debug_only _, In_types _ ->
+      Misc.fatal_errorf "Phantom_kind.join: kind error: %a vs. %a"
         print t1
         print t2
 
-  let meet t1 t2 =
+  let meet_t0 t1 t2 =
     match t1, t2 with
     | Unknown, t2 -> t2
     | t1, Unknown -> t1
@@ -147,6 +172,18 @@ module Phantom_kind = struct
       Naked_number (Naked_number_kind.join_or_meet k1 k2)
     | Fabricated k1, Fabricated k2 -> Fabricated (Value_kind.meet k1 k2)
     | _, _ ->
+      Misc.fatal_errorf "Phantom_kind.meet: kind error: %a vs. %a"
+        print_t0 t1
+        print_t0 t2
+
+  let meet t1 t2 =
+    match t1, t2 with
+    | In_types t0_1, In_types t0_2 ->
+      In_types (meet_t0 t0_1 t0_2)
+    | Debug_only t0_1, Debug_only t0_2 ->
+      Debug_only (meet_t0 t0_1 t0_2)
+    | In_types _, Debug_only _
+    | Debug_only _, In_types _ ->
       Misc.fatal_errorf "Phantom_kind.meet: kind error: %a vs. %a"
         print t1
         print t2

@@ -83,7 +83,9 @@ module type S = sig
     | Naked_number :
         'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t -> t
     | Fabricated of ty_fabricated
-    | Phantom of ty_phantom
+    (* CR mshinwell: I think we might as well split [Phantom] into two, for
+       the "in types" and "debug only" cases. *)
+    | Phantom of ty_phantom Flambda_kind.Phantom_kind.occurrences
 
   and flambda_type = t
 
@@ -93,7 +95,7 @@ module type S = sig
   and ty_value = (of_kind_value, Flambda_kind.Value_kind.t) ty
   and 'a ty_naked_number = ('a of_kind_naked_number, unit) ty
   and ty_fabricated = (of_kind_fabricated, Flambda_kind.Value_kind.t) ty
-  and ty_phantom = (of_kind_phantom, Flambda_kind.Phantom_kind.t) ty
+  and ty_phantom = (of_kind_phantom, Flambda_kind.Phantom_kind.t0) ty
 
   and ('a, 'u) ty = ('a, 'u) unknown_or_join or_alias
 
@@ -279,8 +281,10 @@ module type S = sig
   type 'a type_accessor = type_of_name:type_of_name -> 'a
 
   (** If the given type has kind [Phantom], return it; otherwise form the
-      correct type of kind [Phantom] describing the given type. *)
-  val phantomize : t -> t
+      correct type of kind [Phantom] describing the given type.  The
+      user-supplied function determines which variety of [Phantom] kind
+      ("in types" or "debug only") is formed. *)
+  val phantomize : t -> ('a -> 'a Flambda_kind.Phantom_kind.occurrences) -> t
 
   module Typing_environment : sig
     type t = typing_environment
@@ -366,7 +370,9 @@ module type S = sig
 (*  val any_closure : unit -> t *)
 
   val any_fabricated : Flambda_kind.Value_kind.t -> t
-  val any_phantom : unit -> t
+
+  val any_phantom_in_types : unit -> t
+  val any_phantom_debug_only : unit -> t
 
   (** Building of types representing tagged / boxed values from specified
       constants. *)

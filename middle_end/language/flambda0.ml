@@ -463,8 +463,8 @@ module rec Expr : sig
     -> ?ignore_uses_in_project_var:unit
     -> ?ignore_uses_in_apply_cont:unit
     -> t
-    -> Name.Set.t
-  val free_names : t -> Name.Set.t
+    -> Name_occurrences.t
+  val free_names : t -> Name_occurrences.t
   val free_variables : t -> Variable.Set.t
   val free_symbols : t -> Symbol.Set.t
   val used_names
@@ -473,7 +473,7 @@ module rec Expr : sig
     -> ?ignore_uses_as_continuation_argument:unit
     -> ?ignore_uses_in_project_var:unit
     -> t
-    -> Name.Set.t
+    -> Name_occurrences.t
   val free_continuations : t -> Continuation.Set.t
   val invalid : unit -> t
   val iter_lets
@@ -601,7 +601,7 @@ end = struct
       ?ignore_uses_as_continuation_argument ?ignore_uses_in_project_var
       ?ignore_uses_in_apply_cont ~all_used_names:false t
 
-  let free_names t : Name.Set.t = free_names t
+  let free_names t : Name_occurrences.t = free_names t
 
   let used_names ?ignore_uses_as_callee ?ignore_uses_as_argument
       ?ignore_uses_as_continuation_argument ?ignore_uses_in_project_var t =
@@ -921,17 +921,17 @@ end and Named : sig
   val free_names
      : ?ignore_uses_in_project_var:unit
     -> t
-    -> Name.Set.t
+    -> Name_occurrences.t
   val free_symbols : t -> Symbol.Set.t
   val free_symbols_helper : Symbol.Set.t ref -> t -> unit
   val used_names
      : ?ignore_uses_in_project_var:unit
     -> t
-    -> Name.Set.t
+    -> Name_occurrences.t
   val name_usage
      : ?ignore_uses_in_project_var:unit
     -> t
-    -> Name.Set.t
+    -> Name_occurrences.t
   val print : Format.formatter -> t -> unit
   val box_value
       : Name.t
@@ -1080,8 +1080,8 @@ end and Let : sig
     kind : Flambda_kind.t;
     defining_expr : Named.t;
     body : Expr.t;
-    free_names_of_defining_expr : Name.Set.t;
-    free_names_of_body : Name.Set.t;
+    free_names_of_defining_expr : Name_occurrences.t;
+    free_names_of_body : Name_occurrences.t;
   }
 
   val map_defining_expr : Let.t -> f:(Named.t -> Named.t) -> Expr.t
@@ -1189,7 +1189,7 @@ end and Let_cont_handlers : sig
       }
     | Recursive of Continuation_handlers.t
 
-  val free_names : t -> Name.Set.t
+  val free_names : t -> Name_occurrences.t
   val bound_continuations : t -> Continuation.Set.t
   val free_continuations : t -> Continuation.Set.t
   type free_and_bound = {
@@ -1391,7 +1391,7 @@ end and Set_of_closures : sig
     -> in_closure:Free_vars.t
     -> direct_call_surrogates:Closure_id.t Closure_id.Map.t
     -> t
-  val free_names : t -> Name.Set.t
+  val free_names : t -> Name_occurrences.t
   val has_empty_environment : t -> bool
   val equal
      : equal_type:(Flambda_type.t -> Flambda_type.t -> bool)
@@ -1472,7 +1472,7 @@ end and Function_declarations : sig
     -> t
     -> bool
   val print : Format.formatter -> t -> unit
-  val free_names : t -> Name.Set.t
+  val free_names : t -> Name_occurrences.t
 end = struct
   include Function_declarations
 
@@ -1547,7 +1547,7 @@ end and Function_declaration : sig
     return_arity : Flambda_arity.t;
     params : Typed_parameter.t list;
     body : Expr.t;
-    free_names_in_body : Name.Set.t;
+    free_names_in_body : Name_occurrences.t;
     stub : bool;
     dbg : Debuginfo.t;
     inline : inline_attribute;
@@ -1578,7 +1578,7 @@ end and Function_declaration : sig
     -> body:Expr.t
     -> t
   val used_params : t -> Variable.Set.t
-  val free_names : t -> Name.Set.t
+  val free_names : t -> Name_occurrences.t
   val equal
      : equal_type:(Flambda_type.t -> Flambda_type.t -> bool)
     -> t
@@ -1765,7 +1765,7 @@ end and Typed_parameter : sig
   val with_type : t -> Flambda_type.t -> t
   val map_var : t -> f:(Variable.t -> Variable.t) -> t
   val map_type : t -> f:(Flambda_type.t -> Flambda_type.t) -> t
-  val free_names : t -> Name.Set.t
+  val free_names : t -> Name_occurrences.t
   val equal
      : equal_type:(Flambda_type.t -> Flambda_type.t -> bool)
     -> t
@@ -1905,8 +1905,8 @@ end = Flambda_type0.Make (Expr)
 
 module With_free_names = struct
   type 'a t =
-    | Expr : Expr.t * Name.Set.t -> Expr.t t
-    | Named : Flambda_kind.t * Named.t * Name.Set.t -> Named.t t
+    | Expr : Expr.t * Name_occurrences.t -> Expr.t t
+    | Named : Flambda_kind.t * Named.t * Name_occurrences.t -> Named.t t
 
   let print (type a) ppf (t : a t) =
     match t with

@@ -1786,7 +1786,8 @@ middle_end/language/flambda0.cmo : middle_end/base_types/variable.cmi \
     middle_end/language/simple.cmi \
     middle_end/base_types/set_of_closures_origin.cmi \
     middle_end/base_types/set_of_closures_id.cmi \
-    middle_end/base_types/parameter.cmi middle_end/base_types/name.cmi \
+    middle_end/base_types/parameter.cmi \
+    middle_end/language/name_occurrences.cmi middle_end/base_types/name.cmi \
     middle_end/base_types/mutable_variable.cmi utils/misc.cmi \
     utils/identifiable.cmi middle_end/language/flambda_type0_intf.cmo \
     middle_end/language/flambda_type0.cmi \
@@ -1805,7 +1806,8 @@ middle_end/language/flambda0.cmx : middle_end/base_types/variable.cmx \
     middle_end/language/simple.cmx \
     middle_end/base_types/set_of_closures_origin.cmx \
     middle_end/base_types/set_of_closures_id.cmx \
-    middle_end/base_types/parameter.cmx middle_end/base_types/name.cmx \
+    middle_end/base_types/parameter.cmx \
+    middle_end/language/name_occurrences.cmx middle_end/base_types/name.cmx \
     middle_end/base_types/mutable_variable.cmx utils/misc.cmx \
     utils/identifiable.cmx middle_end/language/flambda_type0_intf.cmx \
     middle_end/language/flambda_type0.cmx \
@@ -1820,11 +1822,11 @@ middle_end/language/flambda0.cmx : middle_end/base_types/variable.cmx \
 middle_end/language/flambda0.cmi : middle_end/base_types/variable.cmi \
     middle_end/base_types/var_within_closure.cmi \
     middle_end/base_types/trap_id.cmi utils/targetint.cmi \
-    middle_end/base_types/tag.cmi middle_end/base_types/symbol.cmi \
-    middle_end/language/simple.cmi \
+    middle_end/base_types/tag.cmi middle_end/language/simple.cmi \
     middle_end/base_types/set_of_closures_origin.cmi \
     middle_end/base_types/set_of_closures_id.cmi \
-    middle_end/base_types/parameter.cmi middle_end/base_types/name.cmi \
+    middle_end/base_types/parameter.cmi \
+    middle_end/language/name_occurrences.cmi middle_end/base_types/name.cmi \
     middle_end/base_types/mutable_variable.cmi utils/identifiable.cmi \
     middle_end/language/flambda_type0_intf.cmo \
     middle_end/language/flambda_primitive.cmi \
@@ -1926,8 +1928,7 @@ middle_end/language/flambda_type.cmo : \
     middle_end/base_types/immediate.cmi \
     middle_end/language/flambda_static0.cmi \
     middle_end/language/flambda_kind.cmi middle_end/language/flambda0.cmi \
-    middle_end/language/flambda.cmi middle_end/base_types/closure_id.cmi \
-    middle_end/language/flambda_type.cmi
+    middle_end/base_types/closure_id.cmi middle_end/language/flambda_type.cmi
 middle_end/language/flambda_type.cmx : \
     middle_end/base_types/var_within_closure.cmx utils/targetint.cmx \
     middle_end/base_types/tag.cmx middle_end/language/simple.cmx \
@@ -1935,8 +1936,7 @@ middle_end/language/flambda_type.cmx : \
     middle_end/base_types/immediate.cmx \
     middle_end/language/flambda_static0.cmx \
     middle_end/language/flambda_kind.cmx middle_end/language/flambda0.cmx \
-    middle_end/language/flambda.cmx middle_end/base_types/closure_id.cmx \
-    middle_end/language/flambda_type.cmi
+    middle_end/base_types/closure_id.cmx middle_end/language/flambda_type.cmi
 middle_end/language/flambda_type.cmi : middle_end/base_types/variable.cmi \
     utils/targetint.cmi middle_end/base_types/tag.cmi \
     middle_end/language/simple.cmi utils/numbers.cmi \
@@ -2067,6 +2067,11 @@ middle_end/language/invariant_env.cmi : middle_end/base_types/variable.cmi \
     middle_end/language/flambda_arity.cmi \
     middle_end/base_types/continuation.cmi \
     middle_end/base_types/closure_id.cmi
+middle_end/language/name_occurrences.cmo : middle_end/base_types/name.cmi \
+    middle_end/language/name_occurrences.cmi
+middle_end/language/name_occurrences.cmx : middle_end/base_types/name.cmx \
+    middle_end/language/name_occurrences.cmi
+middle_end/language/name_occurrences.cmi : middle_end/base_types/name.cmi
 middle_end/language/number_adjuncts.cmo : utils/targetint.cmi \
     middle_end/language/simple.cmi utils/numbers.cmi utils/misc.cmi \
     middle_end/base_types/immediate.cmi utils/identifiable.cmi \
@@ -2186,7 +2191,9 @@ middle_end/simplify/simplify.cmx : middle_end/base_types/symbol.cmx \
     middle_end/simplify/simplify.cmi
 middle_end/simplify/simplify.cmi : middle_end/base_types/symbol.cmi \
     middle_end/simplify/simplify_env_and_result.cmi \
-    middle_end/language/flambda_static.cmi middle_end/language/flambda.cmi \
+    middle_end/language/flambda_type.cmi \
+    middle_end/language/flambda_static.cmi \
+    middle_end/language/flambda_kind.cmi middle_end/language/flambda.cmi \
     middle_end/base_types/continuation.cmi \
     middle_end/base_types/closure_id.cmi \
     middle_end/to_clambda/backend_intf.cmi
@@ -2325,7 +2332,8 @@ middle_end/simplify/simplify_env_and_result_intf.cmx : \
 middle_end/simplify/simplify_expr.cmo : utils/warnings.cmi \
     middle_end/base_types/variable.cmi \
     middle_end/unboxing/unbox_continuation_params.cmi utils/targetint.cmi \
-    middle_end/base_types/tag.cmi middle_end/simplify/simplify_simple.cmi \
+    middle_end/base_types/tag.cmi middle_end/base_types/symbol.cmi \
+    middle_end/simplify/simplify_simple.cmi \
     middle_end/simplify/simplify_named.cmi \
     middle_end/simplify/simplify_env_and_result.cmi \
     middle_end/simplify/simplify_aux.cmi middle_end/language/simple.cmi \
@@ -2344,7 +2352,8 @@ middle_end/simplify/simplify_expr.cmo : utils/warnings.cmi \
 middle_end/simplify/simplify_expr.cmx : utils/warnings.cmx \
     middle_end/base_types/variable.cmx \
     middle_end/unboxing/unbox_continuation_params.cmx utils/targetint.cmx \
-    middle_end/base_types/tag.cmx middle_end/simplify/simplify_simple.cmx \
+    middle_end/base_types/tag.cmx middle_end/base_types/symbol.cmx \
+    middle_end/simplify/simplify_simple.cmx \
     middle_end/simplify/simplify_named.cmx \
     middle_end/simplify/simplify_env_and_result.cmx \
     middle_end/simplify/simplify_aux.cmx middle_end/language/simple.cmx \

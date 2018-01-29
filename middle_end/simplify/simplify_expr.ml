@@ -115,7 +115,11 @@ Format.eprintf "Variable %a bound to %a in env\n%!"
 
 let filter_defining_expr_of_let r var (defining_expr : Named.t)
       free_names_of_body =
-  if Name.Set.mem (Name.var var) free_names_of_body then
+  let name = Name.var var in
+  if Name.Set.mem name free_names_of_body then
+    r, var, Some defining_expr
+  else if Name.Set.mem name (R.free_names_in_continuation_uses r) then
+    (* XXX [var] should be turned into an existential-only binding *)
     r, var, Some defining_expr
   else if Named.maybe_generative_effects_but_no_coeffects defining_expr then
     match defining_expr with

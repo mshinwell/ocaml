@@ -58,12 +58,25 @@ module Naked_number_kind : sig
 end
 
 module Phantom_kind : sig
-  type t =
+  type t0 =
     | Unknown
     | Value of Value_kind.t
     | Naked_number of Naked_number_kind.t
     | Fabricated of Value_kind.t
     | Bottom
+
+  val print_t0 : Format.formatter -> t0 -> unit
+
+  val join_t0 : t0 -> t0 -> t0
+
+  type 'a occurrences =
+    | In_types of 'a
+    (** The associated variable only occurs in types and not terms. *)
+    | Debug_only of 'a
+    (** The associated variable is being kept only for the purposes of
+        generating debugging information. *)
+
+  type t = t0 occurrences
 
   val join : t -> t -> t
   val meet : t -> t -> t

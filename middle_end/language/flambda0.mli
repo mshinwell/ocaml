@@ -272,13 +272,9 @@ module rec Expr : sig
     -> ?ignore_uses_in_project_var:unit
     -> ?ignore_uses_in_apply_cont:unit
     -> t
-    -> Name.Set.t
+    -> Name_occurrences.t
 
-  val free_names : t -> Name.Set.t
-
-  val free_variables : t -> Variable.Set.t
-
-  val free_symbols : t -> Symbol.Set.t
+  val free_names : t -> Name_occurrences.t
 
   (** Compute _all_ names occurring inside an expression. *)
   val used_names
@@ -287,7 +283,7 @@ module rec Expr : sig
     -> ?ignore_uses_as_continuation_argument:unit
     -> ?ignore_uses_in_project_var:unit
     -> t
-    -> Name.Set.t
+    -> Name_occurrences.t
 
   (* CR mshinwell: Consider if we want to cache these. *)
   val free_continuations : t -> Continuation.Set.t
@@ -348,13 +344,13 @@ end and Named : sig
   val free_names
      : ?ignore_uses_in_project_var:unit
     -> t
-    -> Name.Set.t
+    -> Name_occurrences.t
 
   (** Compute _all_ names occurring inside the given term. *)
   val used_names
      : ?ignore_uses_in_project_var:unit
     -> t
-    -> Name.Set.t
+    -> Name_occurrences.t
 
   (** Build an expression boxing the name.  The returned kind is the
       one of the unboxed version. *)
@@ -386,10 +382,10 @@ end and Let : sig
     body : Expr.t;
     (* CR-someday mshinwell: we could consider having these be keys into some
        kind of global cache, to reduce memory usage. *)
-    free_names_of_defining_expr : Name.Set.t;
+    free_names_of_defining_expr : Name_occurrences.t;
     (** A cache of the free names in the defining expression of the
         [Let]. *)
-    free_names_of_body : Name.Set.t;
+    free_names_of_body : Name_occurrences.t;
     (** A cache of the free variables of the body of the [let].  This is an
         important optimization. *)
   }
@@ -452,7 +448,7 @@ end and Let_cont_handlers : sig
       }
     | Recursive of Continuation_handlers.t
 
-  val free_names : t -> Name.Set.t
+  val free_names : t -> Name_occurrences.t
 
   (** Return all continuations bound in the given handlers (traversing all
       the way down through the handlers, not just the immediately outermost
@@ -541,7 +537,7 @@ end and Set_of_closures : sig
   val print : Format.formatter -> t -> unit
 
   (** All names free in the given set of closures. *)
-  val free_names : t -> Name.Set.t
+  val free_names : t -> Name_occurrences.t
 end and Function_declarations : sig
   (** The representation of a set of function declarations (possibly mutually
       recursive).  Such a set encapsulates the declarations themselves,
@@ -596,7 +592,7 @@ end and Function_declarations : sig
   val print : Format.formatter -> t -> unit
 
   (** All names free in the given function declarations. *)
-  val free_names : t -> Name.Set.t
+  val free_names : t -> Name_occurrences.t
 end and Function_declaration : sig
   type t = private {
     closure_origin : Closure_origin.t;
@@ -620,7 +616,7 @@ end and Function_declaration : sig
         indicate previous specialisation of the function. *)
     body : Expr.t;
     (** The code of the function's body. *)
-    free_names_in_body : Name.Set.t;
+    free_names_in_body : Name_occurrences.t;
     (** All names that occur free in the function's body.  (See note on the
         [free_names] function, below.) *)
     stub : bool;
@@ -691,7 +687,7 @@ end and Function_declaration : sig
   (** All names free in the function declaration.  (Note that this may be
       different from the names free in the function _body_, as per [free_names]
       in the type [t], above.) *)
-  val free_names : t -> Name.Set.t
+  val free_names : t -> Name_occurrences.t
 
   val print : Closure_id.t -> Format.formatter -> t -> unit
 end and Typed_parameter : sig
@@ -733,7 +729,7 @@ end and Typed_parameter : sig
 
   (** Free names in the given parameter's type.  (The variable corresponding
       to the parameter is assumed to be always a binding occurrence.) *)
-  val free_names : t -> Name.Set.t
+  val free_names : t -> Name_occurrences.t
 
   (** Equality on typed parameters. *)
   val equal
@@ -747,7 +743,7 @@ end and Typed_parameter : sig
   module List : sig
     type nonrec t = t list
 
-    val free_names : t -> Name.Set.t
+    val free_names : t -> Name_occurrences.t
 
     (** As for [Parameter.List.vars]. *)
     val vars : t -> Variable.t list
@@ -841,5 +837,5 @@ module With_free_names : sig
   val contents : 'a t -> 'a
 
   (** O(1) time. *)
-  val free_names : _ t -> Name.Set.t
+  val free_names : _ t -> Name_occurrences.t
 end
