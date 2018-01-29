@@ -431,7 +431,7 @@ end) = struct
         @[(exn_continuation_param@ %a)@]@ \
         @[(is_classic_mode@ %b)@]@ \
         @[(params (%a))@]@ \
-        @[(body <elided>)@]@ \
+        @[(body@ %a)@]@ \
         @[(free_names_in_body@ %a)@]@ \
         @[(result@ (%a))@]@ \
         @[(stub@ %b)@]@ \
@@ -452,6 +452,7 @@ end) = struct
           Format.fprintf ppf "@[(%a@ :@ %a)@]"
             Parameter.print param
             print ty)) decl.params
+      Expr.print decl.body
       Name_occurrences.print decl.free_names_in_body
       (Format.pp_print_list ~pp_sep:(fun ppf () -> Format.fprintf ppf ", ")
         (fun ppf ty ->
