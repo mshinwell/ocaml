@@ -274,11 +274,11 @@ let phantomize_in_types t : t =
 let phantomize_debug_only t =
   match t with
   | Value value_kind ->
-    Phantom (In_types (Phantom_kind.Value value_kind))
+    Phantom (Debug_only (Phantom_kind.Value value_kind))
   | Naked_number number_kind ->
-    Phantom (In_types (Phantom_kind.Naked_number number_kind))
+    Phantom (Debug_only (Phantom_kind.Naked_number number_kind))
   | Fabricated fab_kind ->
-    Phantom (In_types (Phantom_kind.Fabricated fab_kind))
+    Phantom (Debug_only (Phantom_kind.Fabricated fab_kind))
   | Phantom (In_types phantom_kind) ->
     Phantom (Phantom_kind.Debug_only phantom_kind)
   | Phantom (Debug_only _) -> t
