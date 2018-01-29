@@ -29,7 +29,7 @@ module K = Flambda_kind
 module Make (Expr : sig
   type t
   val print : Format.formatter -> t -> unit
-  val free_names : t -> Name.Set.t
+  val free_names : t -> Name_occurrences.t
 end) = struct
   type expr = Expr.t
 
@@ -192,7 +192,7 @@ end) = struct
     params : (Parameter.t * t) list;
     code_id : Code_id.t;
     body : expr;
-    free_names_in_body : Name.Set.t;
+    free_names_in_body : Name_occurrences.t;
     result : t list;
     result_env_extension : typing_environment;
     stub : bool;
@@ -452,7 +452,7 @@ end) = struct
           Format.fprintf ppf "@[(%a@ :@ %a)@]"
             Parameter.print param
             print ty)) decl.params
-      Name.Set.print decl.free_names_in_body
+      Name_occurrences.print decl.free_names_in_body
       (Format.pp_print_list ~pp_sep:(fun ppf () -> Format.fprintf ppf ", ")
         (fun ppf ty ->
           Format.fprintf ppf "%a"
@@ -2759,7 +2759,7 @@ end) = struct
                 = 0);
               assert (List.compare_lengths inlinable1.result inlinable2.result
                 = 0);
-              assert (Name.Set.equal inlinable1.free_names_in_body
+              assert (Name_occurrences.equal inlinable1.free_names_in_body
                 inlinable2.free_names_in_body);
               assert (Pervasives.(=) inlinable1.stub inlinable2.stub);
               assert (Debuginfo.equal inlinable1.dbg inlinable2.dbg);

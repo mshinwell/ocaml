@@ -186,7 +186,7 @@ module type S = sig
     params : (Parameter.t * t) list;
     code_id : Code_id.t;
     body : expr;
-    free_names_in_body : Name.Set.t;
+    free_names_in_body : Name_occurrences.t;
     result : t list;  (* CR mshinwell: make plural *)
     (* CR mshinwell: Is this name misleading?  The quantifiers are before
        the parameters *)

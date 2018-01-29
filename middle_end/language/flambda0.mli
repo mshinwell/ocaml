@@ -680,10 +680,6 @@ end and Function_declaration : sig
     -> body:Expr.t
     -> t
 
-  (** Given a function declaration, find which of its parameters (if any)
-      are used in the body. *)
-  val used_params : t -> Variable.Set.t
-
   (** All names free in the function declaration.  (Note that this may be
       different from the names free in the function _body_, as per [free_names]
       in the type [t], above.) *)

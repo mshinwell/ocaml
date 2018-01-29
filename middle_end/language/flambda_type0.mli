@@ -27,5 +27,5 @@
 module Make (Expr : sig
   type t
   val print : Format.formatter -> t -> unit
-  val free_names : t -> Name.Set.t
+  val free_names : t -> Name_occurrences.t
 end) : Flambda_type0_intf.S with type expr = Expr.t

@@ -545,10 +545,6 @@ end = struct
       let new_bound = Name_occurrences.add !bound name Debug_only in
       bound := new_bound
     in
-    let bound_names_in_term names =
-      let new_bound = Name_occurrences.add_set !bound names In_terms in
-      bound := new_bound
-    in
     let bound_name_of_kind name (kind : K.t) =
       match kind with
       | Value _ | Naked_number _ | Fabricated _ -> bound_name_in_term name
@@ -1001,10 +997,6 @@ end = struct
       let free = ref (Name_occurrences.create ()) in
       let free_names names =
         free := Name_occurrences.union !free names
-      in
-      let free_name_in_term name =
-        let new_free = Name_occurrences.add !free name In_terms in
-        free := new_free
       in
       let free_names_in_term names =
         let new_free = Name_occurrences.add_set !free names In_terms in
@@ -1714,17 +1706,13 @@ end = struct
   let update_params t ~params =
     update_params_and_body t ~params ~body:t.body
 
-  let used_params t =
-    Variable.Set.filter (fun param ->
-        Name.Set.mem (Name.var param) (Expr.free_names t.body))
-      (Typed_parameter.List.var_set t.params)
-
   let free_names t =
     let my_closure = Name.var t.my_closure in
     let free_in_params = Typed_parameter.List.free_names t.params in
+    let free = Name_occurrences.union free_in_params t.free_names_in_body in
     let bound_in_params = Typed_parameter.List.bound_names t.params in
-    let bound = Name.Set.add my_closure bound_in_params in
-    Name.Set.diff (Name.Set.union free_in_params t.free_names_in_body) bound
+    let bound = Name_occurrences.add bound_in_params my_closure In_terms in
+    Name_occurrences.diff free bound
 
   let equal ~equal_type
         { closure_origin = closure_origin1;
@@ -1761,7 +1749,7 @@ end = struct
       && Flambda_arity.equal return_arity1 return_arity2
       && Typed_parameter.List.equal ~equal_type params1 params2
       && Expr.equal ~equal_type body1 body2
-      && Name.Set.equal free_names_in_body1 free_names_in_body2
+      && Name_occurrences.equal free_names_in_body1 free_names_in_body2
       && Pervasives.compare stub1 stub2 = 0
       && Debuginfo.equal dbg1 dbg2
       && Pervasives.compare inline1 inline2 = 0
@@ -1836,8 +1824,8 @@ end and Typed_parameter : sig
     val equal_vars : t -> Variable.t list -> bool
     val rename : t -> t
     val arity : t -> Flambda_kind.t list
-    val free_names : t -> Name.Set.t
-    val bound_names : t -> Name.Set.t
+    val free_names : t -> Name_occurrences.t
+    val bound_names : t -> Name_occurrences.t
     val print : Format.formatter -> t -> unit
     val equal
        : equal_type:(Flambda_type.t -> Flambda_type.t -> bool)
@@ -1943,9 +1931,13 @@ end = struct
     let arity t = List.map (fun t -> kind t) t
 
     let free_names t =
-      Name.Set.union_list (List.map free_names t)
+      List.fold_left (fun names t ->
+          Name_occurrences.union names (free_names t))
+        (Name_occurrences.create ())
+        t
 
-    let bound_names t = name_set t
+    let bound_names t =
+      Name_occurrences.create_from_set_in_terms (name_set t)
 
     let equal ~equal_type t1 t2 =
       List.compare_lengths t1 t2 = 0
