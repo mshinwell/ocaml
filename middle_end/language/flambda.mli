@@ -308,9 +308,10 @@ module rec Expr : sig
       -> filter_defining_expr:(
           'b
         -> Variable.t
+        -> Flambda_kind.t
         -> Named.t
         -> Name_occurrences.t
-        -> 'b * Variable.t * (Named.t option))
+        -> 'b * Variable.t * Flambda_kind.t * (Named.t option))
       -> t * 'b
   end
 end and Named : sig

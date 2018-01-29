@@ -67,6 +67,10 @@ let in_terms t = t.in_terms
 let in_types t = t.in_types
 let in_debug_only t = t.in_debug_only
 
+let mem_in_terms t name = Name.Set.mem name t.in_terms
+let mem_in_types t name = Name.Set.mem name t.in_types
+let mem_in_debug_only t name = Name.Set.mem name t.in_debug_only
+
 let everything t =
   Name.Set.union t.in_terms (Name.Set.union t.in_types t.in_debug_only)
 

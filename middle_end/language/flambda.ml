@@ -244,9 +244,10 @@ module rec Expr : sig
       -> filter_defining_expr:(
           'b
         -> Variable.t
+        -> Flambda_kind.t
         -> Named.t
         -> Name_occurrences.t
-        -> 'b * Variable.t * (Named.t option))
+        -> 'b * Variable.t * Flambda_kind.t * (Named.t option))
       -> t * 'b
   end
 end = struct
@@ -633,8 +634,9 @@ end = struct
         let acc, t =
           List.fold_left (fun (acc, t) (var, kind, defining_expr) ->
               let free_names_of_body = W.free_names t in
-              let acc, var, defining_expr =
-                filter_defining_expr acc var defining_expr free_names_of_body
+              let acc, var, kind, defining_expr =
+                filter_defining_expr acc var kind defining_expr
+                  free_names_of_body
               in
               match defining_expr with
               | None ->

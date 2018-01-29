@@ -126,6 +126,10 @@ type coercion_result = private
 
 val coerce : actual_kind:t -> desired_kind:t -> coercion_result
 
+val phantomize_in_types : t -> t
+
+val phantomize_debug_only : t -> t
+
 include Identifiable.S with type t := t
 
 module Standard_int : sig

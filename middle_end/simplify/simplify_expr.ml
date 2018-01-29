@@ -113,25 +113,37 @@ Format.eprintf "Variable %a bound to %a in env\n%!"
 *)
   (env, r), new_bindings, var, kind, defining_expr
 
-let filter_defining_expr_of_let r var (defining_expr : Named.t)
+let filter_defining_expr_of_let r var kind (defining_expr : Named.t)
       free_names_of_body =
   let name = Name.var var in
-  if Name.Set.mem name free_names_of_body then
-    r, var, Some defining_expr
-  else if Name.Set.mem name (R.free_names_in_continuation_uses r) then
-    (* XXX [var] should be turned into an existential-only binding *)
-    r, var, Some defining_expr
+  let r_for_phantomize r =
+    match kind with
+    | Value _ | Naked_number _ | Fabricated _ ->
+      R.map_benefit r (B.remove_code_named defining_expr)
+    | Phantom _ -> r
+  in
+  if Name_occurrences.mem_in_terms name free_names_of_body then
+    r, var, kind, Some defining_expr
+  else if Name_occurrences.mem_in_types name free_names_of_body then
+    let r = r_for_phantomize r in
+    let kind = K.phantomize_in_types kind in
+    r, var, kind, Some defining_expr
+  else if Name_occurrences.mem_in_debug_only name free_names_of_body then
+    let r = r_for_phantomize r in
+    let kind = K.phantomize_debug_only kind in
+    r, var, kind, Some defining_expr
   else if Named.maybe_generative_effects_but_no_coeffects defining_expr then
     match defining_expr with
     | Set_of_closures _ ->
       (* Don't delete closure definitions: there might be a reference to them
          (propagated through Flambda types) that is not in scope. *)
-      r, var, Some defining_expr
+      r, var, kind, Some defining_expr
     | _ ->
-      let r = R.map_benefit r (B.remove_code_named defining_expr) in
-      r, var, None
+      let r = r_for_phantomize r in
+      let kind = K.phantomize_debug_only kind in
+      r, var, kind, None
   else
-    r, var, Some defining_expr
+    r, var, kind, Some defining_expr
 
 (** Simplify a set of [Let]-bindings introduced by a pass such as
     [Unbox_specialised_args] surrounding the term [around] that is in turn

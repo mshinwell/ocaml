@@ -766,9 +766,9 @@ and close_functions t external_env function_declarations : Flambda.Named.t =
     in
     let body = close t closure_env body in
     let free_var_of_body =
-      Flambda.Expr.free_variables body
+      Name.set_to_var_set (Name_occurrences.in_terms (
+        Flambda.Expr.free_names body))
     in
-
     let body =
       Variable.Map.fold (fun var closure_id body ->
         if Variable.Set.mem var free_var_of_body then

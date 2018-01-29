@@ -36,6 +36,12 @@ val add : t -> Name.t -> occurrence_kind -> t
 
 val add_set : t -> Name.Set.t -> occurrence_kind -> t
 
+val mem_in_terms : t -> Name.t -> bool
+
+val mem_in_types : t -> Name.t -> bool
+
+val mem_in_debug_only : t -> Name.t -> bool
+
 val in_terms : t -> Name.Set.t
 
 val in_types : t -> Name.Set.t

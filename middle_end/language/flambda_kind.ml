@@ -258,6 +258,24 @@ let coerce ~actual_kind ~desired_kind : coercion_result =
   else
     Always_wrong
 
+let phantomize_in_types t =
+  match t with
+  | Value value_kind -> Phantom (In_types (Value value_kind))
+  | Naked_number number_kind -> Phantom (In_types (Naked_number number_kind))
+  | Fabricated fab_kind -> Phantom (In_types (Fabricated fab_kind))
+  | Phantom (In_types _) -> t
+  | Phantom (Debug_only _) ->
+    Misc.fatal_errorf "Cannot phantomize kind %a to [In_types]"
+      print t
+
+let phantomize_debug_only t =
+  match t with
+  | Value value_kind -> Phantom (In_types (Value value_kind))
+  | Naked_number number_kind -> Phantom (In_types (Naked_number number_kind))
+  | Fabricated fab_kind -> Phantom (In_types (Fabricated fab_kind))
+  | Phantom (In_types phantom_kind) -> Phantom (Debug_only phantom_kind)
+  | Phantom (Debug_only _) -> t
+
 let is_value t =
   match t with
   | Value _ -> true
