@@ -147,6 +147,8 @@ module type Env = sig
 
   val continuation_scope_level : t -> Scope_level.t
 
+  val increment_continuation_scope_level : t -> t
+
   (* CR mshinwell: The [Continuation.t] is in the [Continuation.approx.t] *)
   val add_continuation : t -> Continuation.t -> Continuation_approx.t -> t
 

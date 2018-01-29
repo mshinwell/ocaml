@@ -448,6 +448,7 @@ and simplify_let_cont_handlers env r ~handlers
              definition site of [cont] marked as existential. *)
           let env = E.replace_typing_environment env new_env in
 *)
+          let env = E.increment_continuation_scope_level env in
           let r, handler =
             simplify_let_cont_handler ~env ~r:(R.create ()) ~cont:cont'
               ~handler ~arg_tys

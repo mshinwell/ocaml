@@ -489,6 +489,7 @@ module type S = sig
     -> params:(Parameter.t * t) list
     -> body:expr
     -> result:t list
+    -> result_env_extension:typing_environment
     -> stub:bool
     -> dbg:Debuginfo.t
     -> inline:inline_attribute

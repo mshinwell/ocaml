@@ -434,6 +434,7 @@ end) = struct
         @[(body@ %a)@]@ \
         @[(free_names_in_body@ %a)@]@ \
         @[(result@ (%a))@]@ \
+        @[(result_env_extension@ (%a))@]@ \
         @[(stub@ %b)@]@ \
         @[(dbg@ %a)@]@ \
         @[(inline@ %a)@]@ \
@@ -458,6 +459,7 @@ end) = struct
         (fun ppf ty ->
           Format.fprintf ppf "%a"
             print ty)) decl.result
+      print_typing_environment decl.result_env_extension
       decl.stub
       Debuginfo.print_compact decl.dbg
       print_inline_attribute decl.inline
@@ -1666,7 +1668,7 @@ end) = struct
 
   let create_inlinable_function_declaration ~is_classic_mode ~closure_origin
         ~continuation_param ~exn_continuation_param
-        ~params ~body ~result ~stub ~dbg ~inline
+        ~params ~body ~result ~result_env_extension ~stub ~dbg ~inline
         ~specialise ~is_a_functor ~invariant_params ~size ~direct_call_surrogate
         ~my_closure : function_declarations =
     Inlinable {
@@ -1678,7 +1680,7 @@ end) = struct
       body;
       code_id = Code_id.create (Compilation_unit.get_current_exn ());
       free_names_in_body = Expr.free_names body;
-      result_env_extension = create_typing_environment ();
+      result_env_extension;
       result;
       stub;
       dbg;

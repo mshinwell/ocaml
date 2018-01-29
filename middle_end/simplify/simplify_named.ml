@@ -109,7 +109,7 @@ let simplify_set_of_closures original_env r
           Continuation.Tbl.add continuation_param_uses continuation_param uses;
           body, r, uses)
     in
-    let result, _typing_env =
+    let result, result_env_extension =
       R.Continuation_uses.join_of_arg_types return_continuation_uses
         ~arity:function_decl.return_arity
         ~default_env:(E.get_typing_environment closure_env)  (* XXX *)
@@ -117,7 +117,6 @@ let simplify_set_of_closures original_env r
     let return_arity =
       List.map (fun ty -> (E.type_accessor closure_env T.kind) ty) result
     in
-    (* CR mshinwell: Anything to do with the returned environment? *)
     let inline : Flambda.inline_attribute =
       match function_decl.inline with
       | Default_inline ->
@@ -175,6 +174,7 @@ let simplify_set_of_closures original_env r
         ~params
         ~body
         ~result
+        ~result_env_extension
         ~stub:function_decl.stub
         ~dbg:function_decl.dbg
         ~inline

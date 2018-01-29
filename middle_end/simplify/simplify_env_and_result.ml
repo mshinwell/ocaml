@@ -172,6 +172,11 @@ end = struct
     t.simplify_continuation_use_cannot_inline
   let continuation_scope_level t = t.continuation_scope_level
 
+  let increment_continuation_scope_level t =
+    { t with
+      continuation_scope_level = Scope_level.next t.continuation_scope_level;
+    }
+
   let const_float_prop _t =
     (* CR mshinwell: Does this need to be in the environment?
        Also, the naming should be made consistent with Clflags *)
@@ -182,7 +187,6 @@ end = struct
   let replace_typing_environment t typing_environment =
     { t with typing_environment; }
 
-  (* CR mshinwell for pchambart: FIXME! *)
   let extend_typing_environment ~type_of_name t ~env_extension =
     let typing_environment =
       T.Typing_environment.meet ~type_of_name
@@ -795,29 +799,37 @@ end = struct
                   (List.length arg_tys) (List.length arg_tys')
               end;
 (*
-Format.eprintf "Cutting environment for %a\n%!" Continuation.print t.continuation;
+Format.eprintf "Cutting environment for %a, level %a\n%!"
+  Continuation.print t.continuation
+  Scope_level.print t.definition_scope_level;
 *)
               let this_env =
                 TE.cut (Env.get_typing_environment use.env)
                   ~existential_if_defined_at_or_later_than:
                     t.definition_scope_level
               in
+(*
+Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
+*)
               let arg_tys =
                 List.map2 (fun result this_ty ->
                     let this_ty =
-                     (Env.type_accessor use.env T.add_judgements)
+                      (Env.type_accessor use.env T.add_judgements)
                         this_ty this_env
                     in
                     (Env.type_accessor use.env T.join) result this_ty)
                   arg_tys arg_tys'
               in
               let env =
-                (* XXX Which environment should be used here for
-                   [type_of_name]? *)
-                (Env.type_accessor use.env TE.join) env this_env
+                match env with
+                | None -> this_env
+                | Some env ->
+                  (* XXX Which environment should be used here for
+                     [type_of_name]? *)
+                  (Env.type_accessor use.env TE.join) env this_env
               in
-              arg_tys, env)
-            (bottom_arg_tys, TE.create ())
+              arg_tys, Some env)
+            (bottom_arg_tys, None)
             uses
         in
         Some (arg_tys, env)
@@ -825,7 +837,8 @@ Format.eprintf "Cutting environment for %a\n%!" Continuation.print t.continuatio
     let join_of_arg_types t ~arity ~default_env =
       match join_of_arg_types_opt t ~arity with
       | None -> T.bottom_types_from_arity arity, default_env
-      | Some join -> join
+      | Some (arg_tys, None) -> arg_tys, default_env
+      | Some (arg_tys, Some env) -> arg_tys, env
 
     let application_points t = t.application_points
   (*
