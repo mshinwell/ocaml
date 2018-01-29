@@ -258,11 +258,14 @@ let coerce ~actual_kind ~desired_kind : coercion_result =
   else
     Always_wrong
 
-let phantomize_in_types t =
+let phantomize_in_types t : t =
   match t with
-  | Value value_kind -> Phantom (In_types (Value value_kind))
-  | Naked_number number_kind -> Phantom (In_types (Naked_number number_kind))
-  | Fabricated fab_kind -> Phantom (In_types (Fabricated fab_kind))
+  | Value value_kind ->
+    Phantom (In_types (Phantom_kind.Value value_kind))
+  | Naked_number number_kind ->
+    Phantom (In_types (Phantom_kind.Naked_number number_kind))
+  | Fabricated fab_kind ->
+    Phantom (In_types (Phantom_kind.Fabricated fab_kind))
   | Phantom (In_types _) -> t
   | Phantom (Debug_only _) ->
     Misc.fatal_errorf "Cannot phantomize kind %a to [In_types]"
@@ -270,10 +273,14 @@ let phantomize_in_types t =
 
 let phantomize_debug_only t =
   match t with
-  | Value value_kind -> Phantom (In_types (Value value_kind))
-  | Naked_number number_kind -> Phantom (In_types (Naked_number number_kind))
-  | Fabricated fab_kind -> Phantom (In_types (Fabricated fab_kind))
-  | Phantom (In_types phantom_kind) -> Phantom (Debug_only phantom_kind)
+  | Value value_kind ->
+    Phantom (In_types (Phantom_kind.Value value_kind))
+  | Naked_number number_kind ->
+    Phantom (In_types (Phantom_kind.Naked_number number_kind))
+  | Fabricated fab_kind ->
+    Phantom (In_types (Phantom_kind.Fabricated fab_kind))
+  | Phantom (In_types phantom_kind) ->
+    Phantom (Phantom_kind.Debug_only phantom_kind)
   | Phantom (Debug_only _) -> t
 
 let is_value t =
@@ -290,6 +297,13 @@ let is_naked_float t =
   | Naked_number _
   | Fabricated _
   | Phantom _ -> false
+
+let is_phantom t =
+  match t with
+  | Value _
+  | Naked_number _
+  | Fabricated _ -> false
+  | Phantom _ -> true
 
 module Standard_int = struct
   type t =

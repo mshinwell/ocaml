@@ -110,6 +110,7 @@ val phantom : Phantom_kind.t -> t
 
 val is_value : t -> bool
 val is_naked_float : t -> bool
+val is_phantom : t -> bool
 
 (** The kind of the unit value. *)
 val unit : unit -> t

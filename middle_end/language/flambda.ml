@@ -1251,7 +1251,7 @@ end and Named : sig
     -> t
     -> t
   val no_effects_or_coeffects : t -> bool
-  val maybe_generative_effects_but_no_coeffects : t -> bool
+  val at_most_generative_effects : t -> bool
   module Iterators : sig
     val iter : (Expr.t -> unit) -> (t -> unit) -> t -> unit
     val iter_named : (t -> unit) -> t -> unit
@@ -1269,7 +1269,7 @@ end = struct
     | Set_of_closures _ -> true
     | Assign _ | Read_mutable _ -> false
 
-  let maybe_generative_effects_but_no_coeffects (t : t) =
+  let at_most_generative_effects (t : t) =
     match t with
     | Simple _ | Coerce _ -> true
     | Prim (prim, _) -> Flambda_primitive.at_most_generative_effects prim

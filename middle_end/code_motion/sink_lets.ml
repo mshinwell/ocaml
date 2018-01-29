@@ -192,7 +192,7 @@ let rec sink_expr (expr : Flambda.Expr.t) ~state : Flambda.Expr.t * State.t =
     let state =
       match sink_into with
       | Some sink_into
-        when Flambda.Named.maybe_generative_effects_but_no_coeffects
+        when Flambda.Named.at_most_generative_effects
           (W.to_named defining_expr) ->
         begin match List.rev sink_into with
         | [] -> state
@@ -221,8 +221,7 @@ let rec sink_expr (expr : Flambda.Expr.t) ~state : Flambda.Expr.t * State.t =
       W.create_let_reusing_defining_expr var defining_expr body
     in
     let only_generative_effects =
-      Flambda.Named.maybe_generative_effects_but_no_coeffects
-        (W.to_named defining_expr)
+      Flambda.Named.at_most_generative_effects (W.to_named defining_expr)
     in
     (* CR mshinwell: Try to improve the structure of the code here and
         above *)

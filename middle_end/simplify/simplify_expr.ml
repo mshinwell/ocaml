@@ -113,7 +113,7 @@ Format.eprintf "Variable %a bound to %a in env\n%!"
 *)
   (env, r), new_bindings, var, kind, defining_expr
 
-let filter_defining_expr_of_let r var kind (defining_expr : Named.t)
+let filter_defining_expr_of_let r var (kind : K.t) (defining_expr : Named.t)
       free_names_of_body =
   let name = Name.var var in
   let r_for_phantomize r =
@@ -122,28 +122,41 @@ let filter_defining_expr_of_let r var kind (defining_expr : Named.t)
       R.map_benefit r (B.remove_code_named defining_expr)
     | Phantom _ -> r
   in
-  if Name_occurrences.mem_in_terms name free_names_of_body then
+  if Name_occurrences.mem_in_terms free_names_of_body name then begin
+    if K.is_phantom kind then begin
+      Misc.fatal_errorf "[Let] binding %a = %a is marked with a phantom \
+          kind yet the bound variable appears in a subsequent term"
+        Variable.print var
+        Named.print defining_expr
+    end;
     r, var, kind, Some defining_expr
-  else if Name_occurrences.mem_in_types name free_names_of_body then
-    let r = r_for_phantomize r in
-    let kind = K.phantomize_in_types kind in
-    r, var, kind, Some defining_expr
-  else if Name_occurrences.mem_in_debug_only name free_names_of_body then
-    let r = r_for_phantomize r in
-    let kind = K.phantomize_debug_only kind in
-    r, var, kind, Some defining_expr
-  else if Named.maybe_generative_effects_but_no_coeffects defining_expr then
-    match defining_expr with
-    | Set_of_closures _ ->
-      (* Don't delete closure definitions: there might be a reference to them
-         (propagated through Flambda types) that is not in scope. *)
+  end else begin
+    let redundant_at_runtime =
+      (* N.B. Don't delete closure definitions: there might be a reference
+         to them (propagated through Flambda types) that is not in scope. *)
+      Named.at_most_generative_effects defining_expr
+        && match defining_expr with
+           | Set_of_closures _ -> false
+           | _ -> true
+    in
+    if not redundant_at_runtime then
       r, var, kind, Some defining_expr
-    | _ ->
+    else if Name_occurrences.mem_in_types free_names_of_body name then
+      let r = r_for_phantomize r in
+      let kind = K.phantomize_in_types kind in
+      r, var, kind, Some defining_expr
+    else if !Clflags.debug then
+      (* CR-someday mshinwell: We could in the future check
+         [Name_occurrences.mem_in_debug_only] if we have some kind of
+         annotation as to which variables should be visible in scope at a
+         particular program point. *)
       let r = r_for_phantomize r in
       let kind = K.phantomize_debug_only kind in
-      r, var, kind, None
-  else
-    r, var, kind, Some defining_expr
+      r, var, kind, Some defining_expr
+    else
+      let r = R.map_benefit r (B.remove_code_named defining_expr) in
+      r, var, kind, Some defining_expr
+  end
 
 (** Simplify a set of [Let]-bindings introduced by a pass such as
     [Unbox_specialised_args] surrounding the term [around] that is in turn
@@ -158,6 +171,7 @@ let filter_defining_expr_of_let r var kind (defining_expr : Named.t)
 
     (In this example, [bindings] would map [x0] through [xn].)
 *)
+(*
 let _simplify_newly_introduced_let_bindings env r ~bindings
       ~(around : Named.t) =
   let bindings, env, r, invalid_term_semantics =
@@ -208,6 +222,7 @@ let _simplify_newly_introduced_let_bindings env r ~bindings
       ((List.rev new_bindings) @ bindings)
   in
   bindings, around, invalid_term_semantics, r
+*)
 
 module Make_simplify_switch (S : sig
   module Arm : sig

@@ -317,7 +317,7 @@ module rec Expr : sig
 end and Named : sig
   include module type of struct include F0.Named end
 
-  val maybe_generative_effects_but_no_coeffects : t -> bool
+  val at_most_generative_effects : t -> bool
 
   val toplevel_substitution : Variable.t Variable.Map.t -> t -> t
 
