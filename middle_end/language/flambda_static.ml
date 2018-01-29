@@ -243,7 +243,10 @@ module Program_body = struct
          continuations, but we can give a better error message by having
          these two specific checks.  It also gives some amount of testing
          of [free_variables] and [free_continuations] in [Expr]. *)
-      let free_variables = Flambda.Expr.free_variables computation.expr in
+      let free_variables =
+        Name.set_to_var_set (Name_occurrences.everything (
+          Flambda.Expr.free_names computation.expr))
+      in
       if not (Variable.Set.is_empty free_variables) then begin
         Misc.fatal_errorf "Toplevel computation is not closed (free \
             variable(s) %a):@ %a"
@@ -308,6 +311,7 @@ module Program_body = struct
           List.map (fun (var, _kind) -> Name.var var)
             computation.computed_values)
     in
+    let allowed_fns = Name_occurrences.create_from_set_in_terms allowed_fns in
     let static_part_env =
       match defn.computation with
       | None -> env
@@ -322,12 +326,12 @@ module Program_body = struct
         (* This will also be caught by [invariant_static_part], but will
            give a better message; and allows some testing of
            [Static_part.free_variables]. *)
-        if not (Name.Set.subset free_names allowed_fns) then begin
+        if not (Name_occurrences.subset free_names allowed_fns) then begin
           Misc.fatal_errorf "Static part is only allowed to reference \
               the following free names: { %a }, whereas it references \
               { %a }.  Static part:@ %a = %a"
-            Name.Set.print free_names
-            Name.Set.print allowed_fns
+            Name_occurrences.print free_names
+            Name_occurrences.print allowed_fns
             Symbol.print sym
             Static_part.print static_part
         end;

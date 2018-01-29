@@ -168,7 +168,10 @@ let rec lift_let_cont ~body ~handlers ~state
         let state =
           List.fold_left (fun state handlers ->
               let fcs = Flambda.Let_cont_handlers.free_continuations handlers in
-              let fvs = Flambda.Let_cont_handlers.free_variables handlers in
+              let fvs =
+                Name.set_to_var_set (Name_occurrences.everything (
+                  Flambda.Let_cont_handlers.free_names handlers))
+              in
               (* Note that we don't have to check any uses of mutable variables
                  in [handler], since any such uses would prevent [handler] from
                  being in [to_be_lifted]. *)
@@ -223,7 +226,10 @@ let rec lift_let_cont ~body ~handlers ~state
       | _ -> assert false
   in
   let fcs = Flambda.Let_cont_handlers.free_continuations handlers in
-  let fvs = Flambda.Let_cont_handlers.free_variables handlers in
+  let fvs =
+    Name.set_to_var_set (Name_occurrences.everything (
+      Flambda.Let_cont_handlers.free_names handlers))
+  in
   let can_lift_handler =
     (not cannot_lift)
       && State.can_lift_if_using_continuations state fcs

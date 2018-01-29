@@ -193,8 +193,12 @@ let rec lift (expr : Flambda.Expr.t) ~to_copy =
          top of each lifted expression. *)
       let to_copy = (var, kind, defining_expr)::to_copy in
       let free_conts, lifted, body = lift body ~to_copy in
+      let body_fvs =
+        Name.set_to_var_set (Name_occurrences.everything (
+          Flambda.Expr.free_names body))
+      in
       let body =
-        if Variable.Set.mem var (Flambda.Expr.free_variables body) then
+        if Variable.Set.mem var body_fvs then
           Flambda.Expr.create_let var kind defining_expr body
         else
           body
@@ -311,8 +315,11 @@ let add_extracted lifted program_body =
           (fun (computation : Flambda_static.Program_body.computation) ->
             let expr =
               List.fold_left (fun expr (var, kind, defining_expr) ->
-                  let fvs = Flambda.Expr.free_variables expr in
-                  if Variable.Set.mem var fvs then
+                  let expr_fvs =
+                    Name.set_to_var_set (Name_occurrences.everything (
+                      Flambda.Expr.free_names expr))
+                  in
+                  if Variable.Set.mem var expr_fvs then
                     Flambda.Expr.create_let var kind defining_expr expr
                   else
                     expr)

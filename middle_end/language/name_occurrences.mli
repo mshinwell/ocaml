@@ -14,6 +14,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(** A structure for keeping track of a set of names together with a form of
+    modal type that describes where particular names occur. *)
+
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 type t
@@ -39,13 +42,21 @@ val in_types : t -> Name.Set.t
 
 val in_debug_only : t -> Name.Set.t
 
+val everything : t -> Name.Set.t
+
 val diff : t -> t -> t
 
 val union : t -> t -> t
 
+val subset : t -> t -> bool
+
 val promote_to_in_types : t -> t
 
 val promote_to_debug_only : t -> t
+
+val variables_only : t -> t
+
+val fold_everything : t -> init:'a -> f:('a -> Name.t -> 'a) -> 'a
 
 val equal : t -> t -> bool
 

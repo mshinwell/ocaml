@@ -73,6 +73,13 @@ include Identifiable.Make (struct
     compare t1 t2 = 0
 end)
 
+let variables_only t =
+  Set.filter (fun name ->
+      match name with
+      | Var _ -> true
+      | Symbol _ -> false)
+    t
+
 let set_to_var_set t =
   Set.fold (fun name vars ->
       match to_var name with

@@ -247,12 +247,12 @@ module Simplified_type : sig
     | Naked_number :
         'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t -> t
     | Fabricated of ty_fabricated
-    | Phantom of ty_phantom
+    | Phantom of ty_phantom Flambda_kind.Phantom_kind.occurrences
 
   and ty_value = (of_kind_value, Flambda_kind.Value_kind.t) ty
   and 'a ty_naked_number = ('a of_kind_naked_number, unit) ty
   and ty_fabricated = (of_kind_fabricated, Flambda_kind.Value_kind.t) ty
-  and ty_phantom = (of_kind_phantom, Flambda_kind.Phantom_kind.t) ty
+  and ty_phantom = (of_kind_phantom, Flambda_kind.Phantom_kind.t0) ty
 
   and ('a, 'u) ty = private
     | Unknown of 'u
@@ -273,12 +273,12 @@ end = struct
     | Naked_number :
         'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t -> t
     | Fabricated of ty_fabricated
-    | Phantom of ty_phantom
+    | Phantom of ty_phantom Flambda_kind.Phantom_kind.occurrences
 
   and ty_value = (of_kind_value, Flambda_kind.Value_kind.t) ty
   and 'a ty_naked_number = ('a of_kind_naked_number, unit) ty
   and ty_fabricated = (of_kind_fabricated, Flambda_kind.Value_kind.t) ty
-  and ty_phantom = (of_kind_phantom, Flambda_kind.Phantom_kind.t) ty
+  and ty_phantom = (of_kind_phantom, Flambda_kind.Phantom_kind.t0) ty
 
   and ('a, 'u) ty =
     | Unknown of 'u
@@ -290,7 +290,8 @@ end = struct
     | Value (Unknown _) -> true
     | Naked_number (Unknown _, _) -> true
     | Fabricated (Unknown _) -> true
-    | Phantom (Unknown _) -> true
+    | Phantom (In_types (Unknown _)) -> true
+    | Phantom (Debug_only (Unknown _)) -> true
     | _ -> false
 
   let is_bottom t =
@@ -298,7 +299,8 @@ end = struct
     | Value Bottom -> true
     | Naked_number (Bottom, _) -> true
     | Fabricated Bottom -> true
-    | Phantom Bottom -> true
+    | Phantom (In_types Bottom) -> true
+    | Phantom (Debug_only Bottom) -> true
     | _ -> false
 
   let ty_from_or_unknown_or_join (unknown_or_join : _ unknown_or_join)
@@ -350,11 +352,11 @@ end = struct
           ~unknown_payload:K.Value_kind.Unknown
       in
       Fabricated ty_fabricated, canonical_name
-    | Phantom ty_phantom ->
+    | Phantom (In_types ty_phantom) ->
       let unknown_or_join, canonical_name =
         resolve_aliases_and_squash_unresolved_names_on_ty
           ~type_of_name
-          ~force_to_kind:force_to_kind_phantom
+          ~force_to_kind:force_to_kind_phantom_in_types
           ~unknown_payload:K.Phantom_kind.Unknown
           ty_phantom
       in
@@ -362,7 +364,20 @@ end = struct
         ty_from_or_unknown_or_join unknown_or_join
           ~unknown_payload:K.Phantom_kind.Unknown
       in
-      Phantom ty_phantom, canonical_name
+      Phantom (In_types ty_phantom), canonical_name
+    | Phantom (Debug_only ty_phantom) ->
+      let unknown_or_join, canonical_name =
+        resolve_aliases_and_squash_unresolved_names_on_ty
+          ~type_of_name
+          ~force_to_kind:force_to_kind_phantom_debug_only
+          ~unknown_payload:K.Phantom_kind.Unknown
+          ty_phantom
+      in
+      let ty_phantom : ty_phantom =
+        ty_from_or_unknown_or_join unknown_or_join
+          ~unknown_payload:K.Phantom_kind.Unknown
+      in
+      Phantom (Debug_only ty_phantom), canonical_name
 end
 
 let is_bottom ~type_of_name t =
@@ -551,7 +566,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
         match name with
         | Var _ -> false
         | Symbol _ -> true)
-      (free_names t)
+      (Name_occurrences.everything (free_names t))
   in
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
   if Simplified_type.is_bottom simplified then

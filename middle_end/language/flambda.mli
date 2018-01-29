@@ -84,8 +84,6 @@ end
 
 module Let_cont_handlers : sig
   include module type of struct include F0.Let_cont_handlers end
-
-  val free_variables : t -> Variable.Set.t
 end
 
 module Continuation_handler : sig
@@ -311,7 +309,7 @@ module rec Expr : sig
           'b
         -> Variable.t
         -> Named.t
-        -> Name.Set.t
+        -> Name_occurrences.t
         -> 'b * Variable.t * (Named.t option))
       -> t * 'b
   end

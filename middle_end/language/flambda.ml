@@ -113,8 +113,6 @@ module rec Expr : sig
 
   val invariant : Invariant_env.t -> t -> unit
   val no_effects_or_coeffects : t -> bool
-  val free_variables : t -> Variable.Set.t
-  val free_symbols : t -> Symbol.Set.t
   val make_closure_declaration
      : id:Variable.t
     -> free_variable_kind:(Variable.t -> K.t)
@@ -247,18 +245,12 @@ module rec Expr : sig
           'b
         -> Variable.t
         -> Named.t
-        -> Name.Set.t
+        -> Name_occurrences.t
         -> 'b * Variable.t * (Named.t option))
       -> t * 'b
   end
 end = struct
   include F0.Expr
-
-  let free_variables t =
-    Name.set_to_var_set (free_names t)
-
-  let free_symbols t =
-    Name.set_to_symbol_set (free_names t)
 
   let rec no_effects_or_coeffects (t : t) =
     match t with
@@ -770,20 +762,37 @@ end = struct
         ~return_arity ~dbg : Expr.t =
     let my_closure = Variable.rename id in
     let closure_id = Closure_id.wrap id in
-    let free_variables = Expr.free_variables body in
-    let param_set = Typed_parameter.List.var_set params in
-    if not (Variable.Set.subset param_set free_variables) then begin
-      Misc.fatal_error "Expr.make_closure_declaration"
+    let free_variables =
+      Name_occurrences.variables_only (Expr.free_names body)
+    in
+    let in_types = Name_occurrences.in_types free_variables in
+    let in_debug_only = Name_occurrences.in_debug_only free_variables in
+    if not (Name.Set.is_empty in_types) then begin
+      Misc.fatal_errorf "Cannot create closure declaration with free \
+          [In_types] names %a: %a"
+        Name.Set.print in_types
+        Expr.print body
     end;
+    if not (Name.Set.is_empty in_debug_only) then begin
+      Misc.fatal_errorf "Cannot create closure declaration with free \
+          [In_debug_only] names %a: %a"
+        Name.Set.print in_debug_only
+        Expr.print body
+    end;
+    let free_variables =
+      Name.set_to_var_set (Name_occurrences.in_terms free_variables)
+    in
     let sb =
-      Variable.Set.fold
-        (fun id sb -> Variable.Map.add id (Variable.rename id) sb)
-        free_variables Variable.Map.empty
+      Variable.Set.fold (fun id sb ->
+          Variable.Map.add id (Variable.rename id) sb)
+        free_variables
+        Variable.Map.empty
     in
     (* CR-soon mshinwell: try to eliminate this [toplevel_substitution].  This
        function is only called from [Simplify], so we should be able
        to do something similar to what happens in [Inlining_transforms] now. *)
     let body = toplevel_substitution sb body in
+    let param_set = Typed_parameter.List.var_set params in
     let vars_within_closure =
       Variable.Map.of_set Var_within_closure.wrap
         (Variable.Set.diff free_variables param_set)
@@ -1412,12 +1421,9 @@ end = struct
 end and Let_cont_handlers : sig
   include module type of F0.Let_cont_handlers
 
-  val free_variables : t -> Variable.Set.t
   val no_effects_or_coeffects : t -> bool
 end = struct
   include F0.Let_cont_handlers
-
-  let free_variables t = Name.set_to_var_set (free_names t)
 
   let no_effects_or_coeffects (t : t) =
     match t with
@@ -1609,7 +1615,10 @@ end = struct
           E.add_closure_id env fun_var;
           ignore (stub : bool);
           ignore (dbg : Debuginfo.t);
-          let free_variables = Expr.free_variables body in
+          let free_variables =
+            Name.set_to_var_set
+              (Name_occurrences.everything (Expr.free_names body))
+          in
           (* Check that every variable free in the body of the function is
              either the distinguished "own closure" variable or one of the
              function's parameters. *)
@@ -1639,15 +1648,18 @@ end = struct
              in the parameter list.  Parameters' types maybe can also depend
              on [my_closure]? *)
           (* Check that free names in parameters' types are bound. *)
-          let _fns_in_parameters'_types =
-            List.fold_left (fun fns_in_types param ->
-                let ty = Typed_parameter.ty param in
-                let fns = Flambda_type.free_names ty in
-                Name.Set.iter (fun fn -> E.check_name_is_bound env fn) fns;
-                Name.Set.union fns fns_in_types)
-              Name.Set.empty
-              params
-          in
+          List.iter (fun param ->
+              let ty = Typed_parameter.ty param in
+              let fns = Flambda_type.free_names ty in
+              (* CR mshinwell: This should make sure that the (set of) kinds
+                 implied by the modal type in [Name_occurrences] matches up
+                 with the kind in the environment.
+                 We should also check this when we see a use of a name.
+                 For example, a [Debug_only] name may not occur inside the
+                 defining expression of a [Let]-binding of kind [Value]. *)
+              Name.Set.iter (fun fn -> E.check_name_is_bound env fn)
+                (Name_occurrences.everything fns))
+            params;
           (* Check that projections on parameters only describe projections
              from other parameters of the same function. *)
           let params' = Typed_parameter.List.var_set params in

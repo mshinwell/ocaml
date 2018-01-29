@@ -202,7 +202,9 @@ let rec sink_expr (expr : Flambda.Expr.t) ~state : Flambda.Expr.t * State.t =
       | _ -> state
     in
     let add_candidates ~sink_into =
-      Name.Set.fold (fun (name : Name.t) state ->
+      Name_occurrences.fold_everything (W.free_names defining_expr)
+        ~init:state
+        ~f:(fun state (name : Name.t)->
           match name with
           | Symbol _ -> state
           | Var var ->
@@ -214,8 +216,6 @@ let rec sink_expr (expr : Flambda.Expr.t) ~state : Flambda.Expr.t * State.t =
             State.add_candidates_to_sink state
               ~sink_into
               ~candidates_to_sink:(Variable.Set.singleton var))
-        (W.free_names defining_expr)
-        state
     in
     let keep_let () =
       W.create_let_reusing_defining_expr var defining_expr body
@@ -260,7 +260,10 @@ let rec sink_expr (expr : Flambda.Expr.t) ~state : Flambda.Expr.t * State.t =
              generative effects" but cannot unconditionally be moved into
              loops. *)
           let new_handler = sink handler.handler in
-          let fvs = Flambda.Expr.free_variables new_handler in
+          let fvs =
+            Name.set_to_var_set (Name_occurrences.everything (
+              Flambda.Expr.free_names new_handler))
+          in
           let state =
             State.add_candidates_to_sink state
               ~sink_into:[]
@@ -275,10 +278,17 @@ let rec sink_expr (expr : Flambda.Expr.t) ~state : Flambda.Expr.t * State.t =
         handlers
         (Continuation.Map.empty, State.create ())
     in
+    let candidates_to_sink =
+      (* CR mshinwell: This pattern comes up sufficiently often that we
+         should add it to [Flambda.Expr], but the name needs to make it clear
+         exactly what it does. *)
+      Name.set_to_var_set (Name_occurrences.everything (
+        Flambda.Expr.free_names body))
+    in
     let state =
       State.add_candidates_to_sink state
         ~sink_into:[]
-        ~candidates_to_sink:(Flambda.Expr.free_variables body)
+        ~candidates_to_sink
     in
     Let_cont { body; handlers = Recursive handlers; }, state
   | Let_cont { body; handlers =
@@ -298,19 +308,25 @@ let rec sink_expr (expr : Flambda.Expr.t) ~state : Flambda.Expr.t * State.t =
     let state = State.add_to_sink_from_state state ~from:handler_state in
     let state =
       let free_names = Flambda.Typed_parameter.List.free_names params in
-      let free_variables = Name.set_to_var_set free_names in
+      let candidates_to_sink =
+        Name.set_to_var_set (Name_occurrences.everything free_names)
+      in
       State.add_candidates_to_sink state
         ~sink_into:[]
-        ~candidates_to_sink:free_variables
+        ~candidates_to_sink
     in
     Let_cont { body; handlers =
       Non_recursive { name; handler = {
         params; stub; is_exn_handler; handler; }; }; }, state
   | Apply _ | Apply_cont _ | Switch _ | Invalid _ ->
+    let candidates_to_sink =
+      Name.set_to_var_set (Name_occurrences.everything (
+        Flambda.Expr.free_names expr))
+    in
     let state =
       State.add_candidates_to_sink state
         ~sink_into:[]
-        ~candidates_to_sink:(Flambda.Expr.free_variables expr)
+        ~candidates_to_sink
     in
     expr, state
 

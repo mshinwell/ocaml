@@ -34,6 +34,8 @@ val to_var : t -> Variable.t option
 
 include Identifiable.S with type t := t
 
+val variables_only : Set.t -> Set.t
+
 val set_to_var_set : Set.t -> Variable.Set.t
 
 val set_to_symbol_set : Set.t -> Symbol.Set.t

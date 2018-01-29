@@ -98,35 +98,43 @@ module Static_part = struct
   let free_names t =
     match t with
     | Block (_tag, _mut, fields) ->
-      List.fold_left (fun fvs field ->
-          Name.Set.union fvs (Of_kind_value.free_names field))
-        Name.Set.empty
-        fields
-    | Fabricated_block var -> Name.Set.singleton (Name.var var)
+      let names =
+        List.fold_left (fun fvs field ->
+            Name.Set.union fvs (Of_kind_value.free_names field))
+          Name.Set.empty
+          fields
+      in
+      Name_occurrences.create_from_set_in_terms names
+    | Fabricated_block var ->
+      Name_occurrences.add (Name_occurrences.create ()) (Name.var var) In_terms
     | Set_of_closures set -> Flambda0.Set_of_closures.free_names set
-    | Closure (sym, _) -> Name.Set.singleton (Name.symbol sym)
+    | Closure (sym, _) ->
+      Name_occurrences.add (Name_occurrences.create ())
+        (Name.symbol sym) In_terms
     | Boxed_float (Var v)
     | Boxed_int32 (Var v)
     | Boxed_int64 (Var v)
     | Boxed_nativeint (Var v)
     | Mutable_string { initial_value = Var v; }
-    | Immutable_string (Var v) -> Name.Set.singleton (Name.var v)
+    | Immutable_string (Var v) ->
+      Name_occurrences.add (Name_occurrences.create ()) (Name.var v) In_terms
     | Boxed_float (Const _)
     | Boxed_int32 (Const _)
     | Boxed_int64 (Const _)
     | Boxed_nativeint (Const _)
     | Mutable_string { initial_value = Const _; }
-    | Immutable_string (Const _) -> Name.Set.empty
+    | Immutable_string (Const _) -> Name_occurrences.create ()
     | Mutable_float_array { initial_value = fields; }
     | Immutable_float_array fields ->
       List.fold_left (fun fns (field : _ or_variable) ->
           match field with
-          | Var v -> Name.Set.add (Name.var v) fns
+          | Var v -> Name_occurrences.add fns (Name.var v) In_terms
           | Const _ -> fns)
-        Name.Set.empty
+        (Name_occurrences.create ())
         fields
 
-  let free_symbols t = Name.set_to_symbol_set (free_names t)
+  let free_symbols t =
+    Name.set_to_symbol_set (Name_occurrences.everything (free_names t))
 
   let print ppf (t : t) =
     let fprintf = Format.fprintf in
@@ -214,7 +222,8 @@ module Program_body = struct
       comp.computed_values
 
   let free_symbols_of_computation comp =
-    Flambda0.Expr.free_symbols comp.expr
+    Name.set_to_symbol_set (Name_occurrences.everything (
+      Flambda0.Expr.free_names comp.expr))
 
   type static_structure = (Symbol.t * Flambda_kind.t * Static_part.t) list
 

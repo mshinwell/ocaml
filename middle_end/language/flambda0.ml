@@ -1712,6 +1712,9 @@ end = struct
     let free = Name_occurrences.union free_in_params t.free_names_in_body in
     let bound_in_params = Typed_parameter.List.bound_names t.params in
     let bound = Name_occurrences.add bound_in_params my_closure In_terms in
+    (* CR mshinwell: We should have a check somewhere to make sure that
+       free names of function declarations / sets of closures are
+       reasonable (e.g. no access to random variables). *)
     Name_occurrences.diff free bound
 
   let equal ~equal_type

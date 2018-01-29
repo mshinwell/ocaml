@@ -67,6 +67,9 @@ let in_terms t = t.in_terms
 let in_types t = t.in_types
 let in_debug_only t = t.in_debug_only
 
+let everything t =
+  Name.Set.union t.in_terms (Name.Set.union t.in_types t.in_debug_only)
+
 let diff t1 t2 =
   { in_terms = Name.Set.diff t1.in_terms t2.in_terms;
     in_types = Name.Set.diff t1.in_types t2.in_types;
@@ -78,6 +81,15 @@ let union t1 t2 =
     in_types = Name.Set.union t1.in_types t2.in_types;
     in_debug_only = Name.Set.union t1.in_debug_only t2.in_debug_only;
   }
+
+let subset
+      { in_terms = in_terms1; in_types = in_types1;
+        in_debug_only = in_debug_only1; }
+      { in_terms = in_terms2; in_types = in_types2;
+        in_debug_only = in_debug_only2; } =
+  Name.Set.subset in_terms1 in_terms2
+    && Name.Set.subset in_types1 in_types2
+    && Name.Set.subset in_debug_only1 in_debug_only2
 
 let promote_to_in_types t =
   if not (Name.Set.is_empty t.in_debug_only) then begin
@@ -93,12 +105,15 @@ let promote_to_in_types t =
   }
 
 let promote_to_debug_only t =
-  let in_debug_only =
-    Name.Set.union t.in_terms (Name.Set.union t.in_types t.in_debug_only)
-  in
   { in_terms = Name.Set.empty;
     in_types = Name.Set.empty;
-    in_debug_only;
+    in_debug_only = everything t;
+  }
+
+let variables_only t =
+  { in_terms = Name.variables_only t.in_terms;
+    in_types = Name.variables_only t.in_types;
+    in_debug_only = Name.variables_only t.in_debug_only;
   }
 
 let equal
@@ -109,3 +124,18 @@ let equal
   Name.Set.equal in_terms1 in_terms2
     && Name.Set.equal in_types1 in_types2
     && Name.Set.equal in_debug_only1 in_debug_only2
+
+let fold_everything t ~init ~f =
+  let acc =
+    Name.Set.fold (fun name acc -> f acc name)
+      t.in_terms
+      init
+  in
+  let acc =
+    Name.Set.fold (fun name acc -> f acc name)
+      t.in_types
+      acc
+  in
+  Name.Set.fold (fun name acc -> f acc name)
+    t.in_debug_only
+    acc
