@@ -3115,16 +3115,23 @@ end) = struct
 
     let join_unk value_kind1 value_kind2 =
       K.Value_kind.join value_kind1 value_kind2
-  end) and Meet_and_join_phantom : sig
+  end) and Make_meet_and_join_phantom : sig
+    val to_type : (of_kind_phantom, K.Phantom_kind.t0) ty -> t
+    val force_to_kind : t -> (of_kind_phantom, K.Phantom_kind.t0) ty
+  end -> sig
     include Meet_and_join
       with type of_kind_foo := of_kind_phantom
-      with type unk := K.Phantom_kind.t
-  end = Make_meet_and_join (struct
+      with type unk := K.Phantom_kind.t0
+  end = functor (P : sig
+    val to_type : (of_kind_phantom, K.Phantom_kind.t0) ty -> t
+    val force_to_kind : t -> (of_kind_phantom, K.Phantom_kind.t0) ty
+  end) ->
+  Make_meet_and_join (struct
     type of_kind_foo = of_kind_phantom
-    type unk = K.Phantom_kind.t
+    type unk = K.Phantom_kind.t0
 
-    let to_type ty : t = Phantom ty
-    let force_to_kind = force_to_kind_phantom
+    let to_type = P.to_type
+    let force_to_kind = P.force_to_kind
 
     let unknown_payload = K.Phantom_kind.Unknown
 
@@ -3191,7 +3198,7 @@ end) = struct
       | (Value _ | Naked_number _ | Fabricated _), _ -> Bottom
 
     let meet_unk phantom_kind1 phantom_kind2 =
-      K.Phantom_kind.meet phantom_kind1 phantom_kind2
+      K.Phantom_kind.meet_t0 phantom_kind1 phantom_kind2
 
     let join_of_kind_foo ~type_of_name
           (of_kind1 : of_kind_phantom) (of_kind2 : of_kind_phantom)
@@ -3254,7 +3261,21 @@ end) = struct
         Unknown
 
     let join_unk phantom_kind1 phantom_kind2 =
-      K.Phantom_kind.join phantom_kind1 phantom_kind2
+      K.Phantom_kind.join_t0 phantom_kind1 phantom_kind2
+  end) and Meet_and_join_phantom_in_types : sig
+    include Meet_and_join
+      with type of_kind_foo := of_kind_phantom
+      with type unk := K.Phantom_kind.t0
+  end = Make_meet_and_join_phantom (struct
+    let to_type ty : t = Phantom (In_types ty)
+    let force_to_kind = force_to_kind_phantom_in_types
+  end) and Meet_and_join_phantom_debug_only : sig
+    include Meet_and_join
+      with type of_kind_foo := of_kind_phantom
+      with type unk := K.Phantom_kind.t0
+  end = Make_meet_and_join_phantom (struct
+    let to_type ty : t = Phantom (Debug_only ty)
+    let force_to_kind = force_to_kind_phantom_debug_only
   end) and Meet_and_join : sig
 (*
     val meet :
@@ -3326,6 +3347,18 @@ end) = struct
             ty_fabricated1 ty_fabricated2
         in
         Fabricated ty_fabricated, judgements
+      | Phantom (In_types ty_phantom1), Phantom (In_types ty_phantom2) ->
+        let ty_phantom, judgements =
+          Meet_and_join_phantom_in_types.meet_ty ~type_of_name
+            ty_phantom1 ty_phantom2
+        in
+        Phantom (In_types ty_phantom), judgements
+      | Phantom (Debug_only ty_phantom1), Phantom (Debug_only ty_phantom2) ->
+        let ty_phantom, judgements =
+          Meet_and_join_phantom_debug_only.meet_ty ~type_of_name
+            ty_phantom1 ty_phantom2
+        in
+        Phantom (Debug_only ty_phantom), judgements
       | (Value _ | Naked_number _ | Fabricated _ | Phantom _), _ ->
         Misc.fatal_errorf "Kind mismatch upon meet: %a versus %a"
           print t1
@@ -3383,6 +3416,18 @@ end) = struct
             ty_fabricated1 ty_fabricated2
         in
         Fabricated ty_fabricated
+      | Phantom (In_types ty_phantom1), Phantom (In_types ty_phantom2) ->
+        let ty_phantom =
+          Meet_and_join_phantom_in_types.join_ty ~type_of_name
+            ty_phantom1 ty_phantom2
+        in
+        Phantom (In_types ty_phantom)
+      | Phantom (Debug_only ty_phantom1), Phantom (Debug_only ty_phantom2) ->
+        let ty_phantom =
+          Meet_and_join_phantom_debug_only.join_ty ~type_of_name
+            ty_phantom1 ty_phantom2
+        in
+        Phantom (Debug_only ty_phantom)
       | (Value _ | Naked_number _ | Fabricated _ | Phantom _), _ ->
         Misc.fatal_errorf "Kind mismatch upon meet: %a versus %a"
           print t1

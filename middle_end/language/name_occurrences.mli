@@ -25,12 +25,28 @@ type occurrence_kind =
 
 val create : unit -> t
 
+val create_from_set_in_terms : Name.Set.t -> t
+
 val create_from_set_in_types : Name.Set.t -> t
 
 val add : t -> Name.t -> occurrence_kind -> t
+
+val add_set : t -> Name.Set.t -> occurrence_kind -> t
 
 val in_terms : t -> Name.Set.t
 
 val in_types : t -> Name.Set.t
 
 val in_debug_only : t -> Name.Set.t
+
+val diff : t -> t -> t
+
+val union : t -> t -> t
+
+val promote_to_in_types : t -> t
+
+val promote_to_debug_only : t -> t
+
+val equal : t -> t -> bool
+
+val print : Format.formatter -> t -> unit

@@ -510,17 +510,57 @@ end = struct
       ?ignore_uses_as_argument ?ignore_uses_as_continuation_argument
       ?ignore_uses_in_project_var ?ignore_uses_in_apply_cont
       ~all_used_names tree =
-    let free = ref Name.Set.empty in
-    let bound = ref Name.Set.empty in
-    let free_names ids = free := Name.Set.union ids !free in
-    let free_name fv = free := Name.Set.add fv !free in
-    let bound_name var = bound := Name.Set.add (Name.var var) !bound in
+    let free = ref (Name_occurrences.create ()) in
+    let bound = ref (Name_occurrences.create ()) in
+    let free_names names =
+      free := Name_occurrences.union !free names
+    in
+    let free_name_in_term name =
+      let new_free = Name_occurrences.add !free name In_terms in
+      free := new_free
+    in
+    let free_names_in_term names =
+      let new_free = Name_occurrences.add_set !free names In_terms in
+      free := new_free
+    in
+    let free_names_promoted_to_kind names (kind : K.t) =
+      match kind with
+      | Value _ | Naked_number _ | Fabricated _ -> free_names names
+      | Phantom (In_types _) ->
+        let names = Name_occurrences.promote_to_in_types names in
+        free_names names
+      | Phantom (Debug_only _) ->
+        let names = Name_occurrences.promote_to_debug_only names in
+        free_names names
+    in
+    let bound_name_in_term name =
+      let new_bound = Name_occurrences.add !bound name In_terms in
+      bound := new_bound
+    in
+    let bound_name_in_types name =
+      let new_bound = Name_occurrences.add !bound name In_types in
+      bound := new_bound
+    in
+    let bound_name_debug_only name =
+      let new_bound = Name_occurrences.add !bound name Debug_only in
+      bound := new_bound
+    in
+    let bound_names_in_term names =
+      let new_bound = Name_occurrences.add_set !bound names In_terms in
+      bound := new_bound
+    in
+    let bound_name_of_kind name (kind : K.t) =
+      match kind with
+      | Value _ | Naked_number _ | Fabricated _ -> bound_name_in_term name
+      | Phantom (In_types _) -> bound_name_in_types name
+      | Phantom (Debug_only _) -> bound_name_debug_only name
+    in
     (* N.B. This function assumes that all bound identifiers are distinct. *)
     let rec aux (flam : t) : unit =
       match flam with
       | Apply { func; args; call_kind; _ } ->
         begin match ignore_uses_as_callee with
-        | None -> free_name func
+        | None -> free_name_in_term func
         | Some () -> ()
         end;
         begin match call_kind with
@@ -528,16 +568,16 @@ end = struct
         | Function Indirect_unknown_arity
         | Function (Indirect_known_arity {
             param_arity = _; return_arity = _; }) -> ()
-        | Method { kind = _; obj; } -> free_name obj
+        | Method { kind = _; obj; } -> free_name_in_term obj
         | C_call { alloc = _; param_arity = _; return_arity = _; } -> ()
         end;
         begin match ignore_uses_as_argument with
-        | None -> free_names (Simple.List.free_names args)
+        | None -> free_names_in_term (Simple.List.free_names args)
         | Some () -> ()
         end
-      | Let { var; free_names_of_defining_expr; free_names_of_body;
+      | Let { var; kind; free_names_of_defining_expr; free_names_of_body;
               defining_expr; body; _ } ->
-        bound_name var;
+        bound_name_of_kind (Name.var var) kind;
         if all_used_names
             || ignore_uses_as_callee <> None
             || ignore_uses_as_argument <> None
@@ -547,52 +587,54 @@ end = struct
         then begin
           (* In these cases we can't benefit from the pre-computed free
              name sets. *)
-          free_names
-            (Named.name_usage ?ignore_uses_in_project_var defining_expr);
+          free_names_promoted_to_kind
+            (Named.name_usage ?ignore_uses_in_project_var defining_expr)
+            kind;
           aux body
         end else begin
-          free_names free_names_of_defining_expr;
+          free_names_promoted_to_kind free_names_of_defining_expr kind;
           free_names free_names_of_body
         end
-      | Let_mutable { initial_value; body; _ } ->
-        free_names (Simple.free_names initial_value);
-        aux body
       | Apply_cont (_, _, args) ->
         (* CR mshinwell: why two names? *)
         begin match ignore_uses_in_apply_cont with
         | Some () -> ()
         | None ->
           match ignore_uses_as_continuation_argument with
-          | None -> free_names (Simple.List.free_names args)
+          | None -> free_names_in_term (Simple.List.free_names args)
           | Some () -> ()
         end
       | Let_cont { handlers; body; } ->
         aux body;
         (* CR-soon mshinwell: Move the following into a separate function in
            the [Let_cont] module. *)
+        let handle_params params =
+          List.iter (fun param ->
+              let var = Typed_parameter.var param in
+              let ty = Typed_parameter.ty param in
+              bound_name_in_term (Name.var var);
+              free_names (Flambda_type.free_names ty))
+            params
+        in
         begin match handlers with
         | Non_recursive { name = _; handler = { Continuation_handler.
             params; handler; _ }; } ->
-          List.iter (fun param -> bound_name (Typed_parameter.var param))
-            params;
+          handle_params params;
           aux handler
         | Recursive handlers ->
           Continuation.Map.iter (fun _name { Continuation_handler.
             params; handler; _ } ->
-              List.iter (fun param ->
-                  bound_name (Typed_parameter.var param))
-                params;
+              handle_params params;
               aux handler)
             handlers
         end
-      | Switch (var, _) -> free_name var
+      | Switch (var, _) -> free_name_in_term var
       | Invalid _ -> ()
+      | Let_mutable _ -> Misc.fatal_error "Let_mutable is being removed"
     in
     aux tree;
-    if all_used_names then
-      !free
-    else
-      Name.Set.diff !free !bound
+    if all_used_names then !free
+    else Name_occurrences.diff !free !bound
 
   let free_names ?ignore_uses_as_callee ?ignore_uses_as_argument
       ?ignore_uses_as_continuation_argument ?ignore_uses_in_project_var
@@ -953,35 +995,46 @@ end = struct
 
   let name_usage ?ignore_uses_in_project_var (t : t) =
     match t with
-    | Simple simple -> Simple.free_names simple
+    | Simple simple ->
+      Name_occurrences.create_from_set_in_terms (Simple.free_names simple)
     | _ ->
-      let free = ref Name.Set.empty in
-      let free_names fvs = free := Name.Set.union fvs !free in
+      let free = ref (Name_occurrences.create ()) in
+      let free_names names =
+        free := Name_occurrences.union !free names
+      in
+      let free_name_in_term name =
+        let new_free = Name_occurrences.add !free name In_terms in
+        free := new_free
+      in
+      let free_names_in_term names =
+        let new_free = Name_occurrences.add_set !free names In_terms in
+        free := new_free
+      in
       begin match t with
-      | Simple simple -> free_names (Simple.free_names simple)
+      | Simple simple -> free_names_in_term (Simple.free_names simple)
       | Read_mutable _ -> ()
       | Assign { being_assigned = _; new_value; } ->
-        free_names (Simple.free_names new_value)
+        free_names_in_term (Simple.free_names new_value)
       | Set_of_closures set ->
         free_names (Set_of_closures.free_names set)
       | Prim (Unary (Project_var _, x0), _dbg) ->
         begin match ignore_uses_in_project_var with
-        | None -> free_names (Simple.free_names x0)
+        | None -> free_names_in_term (Simple.free_names x0)
         | Some () -> ()
         end
       | Prim (Unary (_prim, x0), _dbg) ->
-        free_names (Simple.free_names x0)
+        free_names_in_term (Simple.free_names x0)
       | Prim (Binary (_prim, x0, x1), _dbg) ->
-        free_names (Simple.free_names x0);
-        free_names (Simple.free_names x1)
+        free_names_in_term (Simple.free_names x0);
+        free_names_in_term (Simple.free_names x1)
       | Prim (Ternary (_prim, x0, x1, x2), _dbg) ->
-        free_names (Simple.free_names x0);
-        free_names (Simple.free_names x1);
-        free_names (Simple.free_names x2)
+        free_names_in_term (Simple.free_names x0);
+        free_names_in_term (Simple.free_names x1);
+        free_names_in_term (Simple.free_names x2)
       | Prim (Variadic (_prim, xs), _dbg) ->
-        List.iter (fun x -> free_names (Simple.free_names x)) xs
+        List.iter (fun x -> free_names_in_term (Simple.free_names x)) xs
       | Coerce (Kind (simple, _kind)) ->
-        free_names (Simple.free_names simple)
+        free_names_in_term (Simple.free_names simple)
       end;
       !free
 
@@ -1129,9 +1182,9 @@ end = struct
       && Flambda_kind.equal kind1 kind2
       && Named.equal ~equal_type defining_expr1 defining_expr2
       && Expr.equal ~equal_type body1 body2
-      && Name.Set.equal free_names_of_defining_expr1
+      && Name_occurrences.equal free_names_of_defining_expr1
         free_names_of_defining_expr2
-      && Name.Set.equal free_names_of_body1
+      && Name_occurrences.equal free_names_of_body1
         free_names_of_body2
 end and Let_mutable : sig
   type t = {
@@ -1244,16 +1297,13 @@ end = struct
   let free_continuations t = (free_and_bound_continuations t).free
   let bound_continuations t = (free_and_bound_continuations t).bound
 
+  (* CR mshinwell: This code should be shared with the calculation of
+     free names in [Expr], above.  For the moment there is a hack here. *)
   let free_names (t : t) =
-    Continuation.Map.fold (fun _name
-          { Continuation_handler. params; handler; _ } fvs ->
-        Name.Set.union fvs
-          (Name.Set.union
-            (Typed_parameter.List.free_names params)
-            (Name.Set.diff (Expr.free_names handler)
-              (Typed_parameter.List.name_set params))))
-      (to_continuation_map t)
-      Name.Set.empty
+    Expr.free_names (Let_cont {
+      body = Invalid Halt_and_catch_fire;
+      handlers = t;
+    })
 
   let map (t : t) ~f =
     match t with
@@ -1434,9 +1484,14 @@ end = struct
         Set_of_closures_origin.print function_decls.set_of_closures_origin
 
   let free_names t =
-    let in_decls = Function_declarations.free_names t.function_decls in
-    let in_free_vars = Free_vars.free_names t.free_vars in
-    Name.Set.union in_decls in_free_vars
+    let in_decls =
+      Function_declarations.free_names t.function_decls
+    in
+    let in_free_vars =
+      Name_occurrences.create_from_set_in_terms
+        (Free_vars.free_names t.free_vars)
+    in
+    Name_occurrences.union in_decls in_free_vars
 
   let equal ~equal_type
         { function_decls = function_decls1;
@@ -1521,9 +1576,9 @@ end = struct
   let free_names t =
     Closure_id.Map.fold
       (fun _closure_id (func_decl : Function_declaration.t) syms ->
-        Name.Set.union syms (Function_declaration.free_names func_decl))
+        Name_occurrences.union syms (Function_declaration.free_names func_decl))
       t.funs
-      Name.Set.empty
+      (Name_occurrences.create ())
 
   let equal ~equal_type
         { set_of_closures_id = set_of_closures_id1;

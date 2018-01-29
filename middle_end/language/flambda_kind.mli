@@ -68,6 +68,7 @@ module Phantom_kind : sig
   val print_t0 : Format.formatter -> t0 -> unit
 
   val join_t0 : t0 -> t0 -> t0
+  val meet_t0 : t0 -> t0 -> t0
 
   type 'a occurrences =
     | In_types of 'a

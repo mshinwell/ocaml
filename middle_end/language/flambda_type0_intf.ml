@@ -284,7 +284,10 @@ module type S = sig
       correct type of kind [Phantom] describing the given type.  The
       user-supplied function determines which variety of [Phantom] kind
       ("in types" or "debug only") is formed. *)
-  val phantomize : t -> ('a -> 'a Flambda_kind.Phantom_kind.occurrences) -> t
+  val phantomize
+     : t
+    -> (ty_phantom -> ty_phantom Flambda_kind.Phantom_kind.occurrences)
+    -> t
 
   module Typing_environment : sig
     type t = typing_environment
@@ -526,7 +529,7 @@ module type S = sig
   val alias_type : Flambda_kind.t -> Export_id.t -> t
 
   (** Free names in a type. *)
-  val free_names : t -> Name.Set.t
+  val free_names : t -> Name_occurrences.t
 
   (** Determine the (unique) kind of a type. *)
   val kind : (t -> Flambda_kind.t) type_accessor
@@ -592,7 +595,9 @@ module type S = sig
 
   val force_to_kind_fabricated : t -> ty_fabricated
 
-  val force_to_kind_phantom : t -> ty_phantom
+  val force_to_kind_phantom_in_types : t -> ty_phantom
+
+  val force_to_kind_phantom_debug_only : t -> ty_phantom
 
   val check_of_kind : (t -> Flambda_kind.t -> unit) type_accessor
 end
