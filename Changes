@@ -83,8 +83,9 @@ Working version
   (Armaël Guéneau, with help and review from Florian Angeletti and Gabriel
   Scherer)
 
-- GPR#1552: do not warn about ambiguous variables in guards (warning 57)
-  when the ambiguous values have been filtered by a previous clause
+- GPR#1552, GPR#1577: do not warn about ambiguous variables in guards
+  (warning 57) when the ambiguous values have been filtered by
+  a previous clause
   (Gabriel Scherer and Thomas Refis, review by Luc Maranget)
 
 - GPR#1554: warnings 52 and 57: fix reference to manual detailed explanation
@@ -141,6 +142,10 @@ Working version
 
 - GPR#1540: manual, decouple verbatim and toplevel style in code examples
   (Florian Angeletti, review by Gabriel Scherer)
+
+- PR#7698, GPR#1545: improve wording in OCaml manual in several places,
+  mostly in Chapter 1.  This addresses the easier changes suggested in the PR.
+  (Jim Fehrle, review by Florian Angeletti and David Allsopp)
 
 - GPR#1556: manual, add a consistency test for manual references inside
   the compiler source code.
@@ -224,6 +229,9 @@ Working version
 
 - MPR#7705, GPR#1558: add missing bounds check in Bigarray.Genarray.nth_dim.
   (Nicolás Ojeda Bär, report by Jeremy Yallop, review by Gabriel Scherer)
+
+- MPR#7712, GPR#1576: assertion failure with type abbreviations
+  (Thomas Refis, report by Michael O'Connor, review by Jacques Garrigue)
 
 4.06 maintenance branch
 -----------------------
