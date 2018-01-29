@@ -415,11 +415,11 @@ end) = struct
   and _unused = Expr.print
 
   and print_closures ppf (closures : closures) =
-    Format.fprintf ppf "@[(Closures %a)@]"
+    Format.fprintf ppf "@[(Closures@ %a)@]"
       (Closure_id.Map.print print_closures_entry) closures
 
   and print_closures_entry ppf (entry : closures_entry) =
-    Format.fprintf ppf "@[(set_of_closures %a)@]"
+    Format.fprintf ppf "@[(set_of_closures@ %a)@]"
       print_ty_fabricated entry.set_of_closures
 
   and print_inlinable_function_declaration ppf
