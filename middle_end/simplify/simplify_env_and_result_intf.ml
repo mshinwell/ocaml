@@ -620,6 +620,11 @@ module type Result = sig
     -> Flambda_type.t
     -> t) Flambda_type.type_accessor
 
+  val add_or_meet_typing_judgements
+     : (t
+    -> Flambda_type.Typing_environment.t
+    -> t) Flambda_type.type_accessor
+
   val get_typing_judgements : t -> Flambda_type.Typing_environment.t
 
   val newly_imported_symbols : t -> Flambda_kind.t Symbol.Map.t

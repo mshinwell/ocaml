@@ -56,6 +56,7 @@ let print ppf = function
           Mutable_variable.print mut_var1
           Mutable_variable.print mut_var2)
       tbl.sb_mutable_var;
+(*
     Variable.Map.iter (fun var vars ->
         Format.fprintf ppf "%a -> %a@ "
           Variable.print var
@@ -66,6 +67,7 @@ let print ppf = function
           Mutable_variable.print mut_var
           Mutable_variable.Set.print (Mutable_variable.Set.of_list mut_vars))
       tbl.back_mutable_var;
+*)
     Continuation.Map.iter (fun cont1 cont2 ->
         Format.fprintf ppf "(cont) %a -> %a@ "
           Continuation.print cont1
@@ -323,3 +325,27 @@ let variable_substitution t =
   match t with
   | Inactive -> Variable.Map.empty
   | Active tbl -> tbl.sb_var
+
+let restrict_to_names t allowed =
+  match t with
+  | Inactive -> Inactive
+  | Active tbl ->
+    let sb_var =
+      Variable.Map.filter (fun old_var _new_var ->
+          let old_name = Name.var old_var in
+          Name.Set.mem old_name allowed)
+        tbl.sb_var
+    in
+    let back_var =
+      Variable.Map.filter_map tbl.back_var ~f:(fun _new_var old_vars ->
+        let old_vars =
+          List.filter (fun var -> Name.Set.mem (Name.var var) allowed) old_vars
+        in
+        match old_vars with
+        | [] -> None
+        | _ -> Some old_vars)
+    in
+    Active { tbl with
+      sb_var;
+      back_var;
+    }

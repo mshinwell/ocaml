@@ -118,3 +118,5 @@ val freshen_free_vars_projection_relation'
 *)
 
 val range_of_continuation_freshening : t -> Continuation.Set.t
+
+val restrict_to_names : t -> Name.Set.t -> t

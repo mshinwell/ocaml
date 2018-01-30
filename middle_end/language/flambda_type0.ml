@@ -3657,6 +3657,28 @@ Format.eprintf "Result is: %a\n%!"
 
     let meet = Meet_and_join.meet_typing_environment
     let join = Meet_and_join.join_typing_environment
+
+    let restrict_to_names t allowed =
+      let allowed = Name_occurrences.everything allowed in
+      let names_to_types =
+        Name.Map.filter (fun name _ty -> Name.Set.mem name allowed)
+          t.names_to_types
+      in
+      let levels_to_names =
+        Scope_level.Map.filter_map t.levels_to_names ~f:(fun _level names ->
+          let names = Name.Set.inter names allowed in
+          if Name.Set.is_empty names then None
+          else Some names)
+      in
+      let existentials = Name.Set.inter t.existentials allowed in
+      let existential_freshening =
+        Freshening.restrict_to_names t.existential_freshening allowed
+      in
+      { names_to_types;
+        levels_to_names;
+        existentials;
+        existential_freshening;
+      }
   end
 
   let add_judgements ~type_of_name t env : t =

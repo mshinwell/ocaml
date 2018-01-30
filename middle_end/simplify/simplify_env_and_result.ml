@@ -835,10 +835,38 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
         Some (arg_tys, env)
 
     let join_of_arg_types t ~arity ~default_env =
-      match join_of_arg_types_opt t ~arity with
-      | None -> T.bottom_types_from_arity arity, default_env
-      | Some (arg_tys, None) -> arg_tys, default_env
-      | Some (arg_tys, Some env) -> arg_tys, env
+      let tys, env =
+        match join_of_arg_types_opt t ~arity with
+        | None -> T.bottom_types_from_arity arity, default_env
+        | Some (arg_tys, None) -> arg_tys, default_env
+        | Some (arg_tys, Some env) -> arg_tys, env
+      in
+      let free_names =
+        let type_of_name ?local_env (name : T.Name_or_export_id.t) =
+          (* CR mshinwell: this whole thing seems nasty *)
+          let env =
+            match local_env with
+            | None -> env
+            | Some local_env -> local_env
+          in
+          begin match name with
+          | Name name ->
+            begin match TE.find_opt env name with
+            | None -> None
+            | Some (ty, _binding_type) -> Some ty
+            end
+          | Export_id _ ->
+            Misc.fatal_error "Not yet implemented"
+          end
+        in
+        List.fold_left (fun free_names ty ->
+            Name_occurrences.union free_names
+              (T.free_names_transitive ~type_of_name ty))
+          (Name_occurrences.create ())
+          tys
+      in
+      let env = TE.restrict_to_names env free_names in
+      tys, env
 
     let application_points t = t.application_points
   (*
@@ -1199,6 +1227,15 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
     let typing_judgements =
       T.Typing_environment.add_or_meet ~type_of_name
         t.typing_judgements name scope_level ty
+    in
+    { t with
+      typing_judgements;
+    }
+
+  let add_or_meet_typing_judgements ~type_of_name t typing_env =
+    let typing_judgements =
+      T.Typing_environment.meet ~type_of_name
+        t.typing_judgements typing_env
     in
     { t with
       typing_judgements;

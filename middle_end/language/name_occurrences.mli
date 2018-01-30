@@ -64,6 +64,8 @@ val variables_only : t -> t
 
 val fold_everything : t -> init:'a -> f:('a -> Name.t -> 'a) -> 'a
 
+val choose_and_remove_amongst_everything : t -> (Name.t * t) option
+
 val equal : t -> t -> bool
 
 val print : Format.formatter -> t -> unit

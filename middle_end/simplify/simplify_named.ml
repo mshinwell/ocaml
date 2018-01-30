@@ -192,6 +192,10 @@ let simplify_set_of_closures original_env r
       | Some function_decl -> function_decl
     in
 *)
+    let r =
+      (E.type_accessor original_env) R.add_or_meet_typing_judgements
+        r result_env_extension
+    in
     Closure_id.Map.add closure_id (function_decl, ty) funs, r
   in
   let funs_with_types, r =

@@ -1535,3 +1535,19 @@ let tag_switch_arms ~type_of_name t ~arms =
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Value _ | Phantom _ -> wrong_kind ()
+
+let free_names_transitive ~(type_of_name : type_of_name) t =
+  let all_names = ref (Name_occurrences.create ()) in
+  let rec loop to_follow =
+    all_names := Name_occurrences.union !all_names to_follow;
+    match Name_occurrences.choose_and_remove_amongst_everything to_follow with
+    | None -> ()
+    | Some (name, to_follow) ->
+      match type_of_name (Name_or_export_id.Name name) with
+      | None -> Misc.fatal_errorf "Unbound name %a" Name.print name
+      | Some t ->
+        let names = free_names t in
+        loop (Name_occurrences.union to_follow names)
+  in
+  loop (free_names t);
+  !all_names

@@ -317,6 +317,8 @@ module type S = sig
     val join : (t -> t -> t) type_accessor
 
     val meet : (t -> t -> t) type_accessor
+
+    val restrict_to_names : t -> Name_occurrences.t -> t
   end
 
   val print : Format.formatter -> t -> unit

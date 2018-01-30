@@ -274,3 +274,5 @@ val as_or_more_precise : (t -> than:t -> bool) type_accessor
 (** Type equality.  (This isn't just syntactic.) *)
 val equal : (t -> t -> bool) type_accessor
 *)
+
+val free_names_transitive : (t -> Name_occurrences.t) type_accessor

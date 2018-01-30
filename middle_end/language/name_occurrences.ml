@@ -143,3 +143,32 @@ let fold_everything t ~init ~f =
   Name.Set.fold (fun name acc -> f acc name)
     t.in_debug_only
     acc
+
+let choose_and_remove_amongst_everything t =
+  match Name.Set.get_singleton t.in_terms with
+  | Some name ->
+    let t =
+      { t with
+        in_terms = Name.Set.remove name t.in_terms;
+      }
+    in
+    Some (name, t)
+  | None ->
+    match Name.Set.get_singleton t.in_types with
+    | Some name ->
+      let t =
+        { t with
+          in_types = Name.Set.remove name t.in_types;
+        }
+      in
+      Some (name, t)
+    | None ->
+      match Name.Set.get_singleton t.in_debug_only with
+      | Some name ->
+        let t =
+          { t with
+            in_debug_only = Name.Set.remove name t.in_debug_only;
+          }
+        in
+        Some (name, t)
+      | None -> None
