@@ -339,9 +339,9 @@ val name_lambda: let_kind -> lambda -> (Ident.t -> lambda) -> lambda
 val name_lambda_list: lambda list -> (lambda list -> lambda) -> lambda
 
 val iter: (lambda -> unit) -> lambda -> unit
-module IdentSet = Ident.Set
-val free_variables: lambda -> IdentSet.t
-val free_methods: lambda -> IdentSet.t
+
+val free_variables: lambda -> Ident.Set.t
+val free_methods: lambda -> Ident.Set.t
 
 val transl_normal_path: Path.t -> lambda   (* Path.t is already normal *)
 val transl_path: ?loc:Location.t -> Env.t -> Path.t -> lambda

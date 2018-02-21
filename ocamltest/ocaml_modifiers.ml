@@ -37,6 +37,11 @@ let make_library_modifier library directory =
 let compiler_subdir subdir =
   Filename.make_path (Ocamltest_config.ocamlsrcdir :: subdir)
 
+let config = 
+[
+  Append (Ocaml_variables.directories, (wrap (compiler_subdir ["utils"])));
+]
+
 let testing = make_library_modifier
   "testing" (compiler_subdir ["testsuite"; "lib"])
 
@@ -50,6 +55,11 @@ let bigarray =
 
 let str = make_library_modifier
   "str" (compiler_subdir ["otherlibs"; "str"])
+
+let systhreads =
+  unix @
+  (make_library_modifier
+    "threads" (compiler_subdir ["otherlibs"; "systhreads"]))
 
 let compilerlibs_subdirs =
 [
@@ -65,8 +75,11 @@ let ocamlcommon =
 
 let _ =
   register_modifiers "principal" principal;
+  register_modifiers "config" config;
   register_modifiers "testing" testing;
   register_modifiers "unix" unix;
   register_modifiers "bigarray" bigarray;
   register_modifiers "str" str;
-  register_modifiers "ocamlcommon" ocamlcommon
+  register_modifiers "ocamlcommon" ocamlcommon;
+  register_modifiers "systhreads" systhreads;
+  ()

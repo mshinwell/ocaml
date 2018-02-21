@@ -66,11 +66,10 @@ let rec run_test log common_prefix path behavior = function
     | Run env ->
       let testenv0 = interprete_environment_statements env testenvspec in
       let testenv = List.fold_left apply_modifiers testenv0 env_modifiers in
-      let t = Tests.run log testenv test in
-      (match t with
-      | Actions.Pass env -> "passed", Run env
-      | Actions.Skip _ -> "skipped", Skip_all_tests
-      | Actions.Fail _ -> "failed", Skip_all_tests) in
+      let (result, newenv) = Tests.run log testenv test in
+      let s = Result.string_of_result result in
+      if Result.is_pass result then (s, Run newenv)
+      else (s, Skip_all_tests) in
   Printf.printf "%s\n%!" msg;
   List.iteri (run_test_i log common_prefix path b) subtrees
 and run_test_i log common_prefix path behavior i test_tree =
@@ -125,6 +124,7 @@ let test_file test_filename =
            let log_filename = test_prefix ^ ".log" in
            open_out log_filename
          end in
+       let promote = string_of_bool !Options.promote in
        let install_hook name =
          let hook_name = Filename.make_filename hookname_prefix name in
          if Sys.file_exists hook_name then begin
@@ -142,6 +142,7 @@ let test_file test_filename =
              Builtin_variables.test_source_directory, test_source_directory;
              Builtin_variables.test_build_directory_prefix,
                test_build_directory_prefix;
+             Builtin_variables.promote, promote;
            ] in
        let root_environment =
          interprete_environment_statements

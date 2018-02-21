@@ -94,6 +94,38 @@ let type_open_ ?used_slot ?toplevel ovf env loc lid =
       ignore (extract_sig_open env lid.loc md.md_type);
       assert false
 
+let type_initially_opened_module env module_name =
+  let loc = Location.in_file "compiler internals" in
+  let lid = { Asttypes.loc; txt = Longident.Lident module_name } in
+  let path = Typetexp.lookup_module ~load:true env lid.loc lid.txt in
+  match Env.open_signature_of_initially_opened_module path env with
+  | Some env -> path, env
+  | None ->
+      let md = Env.find_module path env in
+      ignore (extract_sig_open env lid.loc md.md_type);
+      assert false
+
+let initial_env ~loc ~safe_string ~initially_opened_module
+      ~open_implicit_modules =
+  let env =
+    if safe_string then
+      Env.initial_safe_string
+    else
+      Env.initial_unsafe_string
+  in
+  let env =
+    match initially_opened_module with
+    | None -> env
+    | Some name ->
+      snd (type_initially_opened_module env name)
+  in
+  let open_implicit_module env m =
+    let open Asttypes in
+    let lid = {loc; txt = Longident.parse m } in
+    snd (type_open_ Override env lid.loc lid)
+  in
+  List.fold_left open_implicit_module env open_implicit_modules
+
 let type_open ?toplevel env sod =
   let (path, newenv) =
     Builtin_attributes.warning_scope sod.popen_attributes
@@ -1080,7 +1112,7 @@ let enrich_type_decls anchor decls oldenv newenv =
           let id = info.typ_id in
           let info' =
             Mtype.enrich_typedecl oldenv (Pdot(p, Ident.name id, nopos))
-              info.typ_type
+              id info.typ_type
           in
             Env.add_type ~check:true id info' e)
         oldenv decls

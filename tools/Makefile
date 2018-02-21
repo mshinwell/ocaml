@@ -288,9 +288,9 @@ install::
 
 DUMPOBJ=opnames.cmo dumpobj.cmo
 
-$(call byte_and_opt,dumpobj,identifiable.cmo misc.cmo numbers.cmo tbl.cmo \
-                    config.cmo ident.cmo opcodes.cmo bytesections.cmo \
-		    $(DUMPOBJ),)
+$(call byte_and_opt,dumpobj, config.cmo identifiable.cmo misc.cmo \
+                    numbers.cmo arg_helper.cmo clflags.cmo tbl.cmo \
+                    ident.cmo opcodes.cmo bytesections.cmo $(DUMPOBJ),)
 
 make_opcodes.ml: make_opcodes.mll
 	$(CAMLLEX) make_opcodes.mll

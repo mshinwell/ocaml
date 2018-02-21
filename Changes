@@ -12,6 +12,9 @@ Working version
 
 ### Type system:
 
+- MPR#7717, GPR#1593: don't treat unboxed constructor size as statically known
+  (Jeremy Yallop, report by Pierre Chambart, review by Gabriel Scherer)
+
 - MPR#7611, GPR#1491: reject the use of generative functors as applicative
   (Valentin Gatien-Baron)
 
@@ -22,6 +25,16 @@ Working version
 - GPR#1516: Allow float array construction in recursive bindings
   when configured with -no-flat-float-array
   (Jeremy Yallop, report by Gabriel Scherer)
+
+- GPR#1468: Do not enrich type_decls with incoherent manifests
+  (Thomas Refis and Leo White, review by Jacques Garrigue)
+
+- GPR#1583: propagate refined ty_arg to Parmatch checks
+  (Thomas Refis, review by Jacques Garrigue)
+
+- GPR#1513: Allow compilation units to shadow sub-modules of Pervasives.
+  For instance users can now use a largeFile.ml file in their project.
+  (Jérémie Dimino, review by Nicolas Ojeda Bar, Alain Frisch and Gabriel Radanne)
 
 ### Standard library:
 
@@ -91,6 +104,9 @@ Working version
 - GPR#1554: warnings 52 and 57: fix reference to manual detailed explanation
   (Florian Angeletti, review by Thomas Refis and Gabriel Scherer)
 
+- GPR#1618: add the -dno-unique-ids and -dunique-ids compiler flags
+  (Sébastien Hinderer, review by Leo White and Damien Doligez)
+
 ### Code generation and optimizations:
 
 - GPR#1370: Fix code duplication in Cmmgen
@@ -135,6 +151,13 @@ Working version
   structures and signatures (e.g. "include struct … include(struct … end) … end")
   (Florian Angeletti, review by Gabriel Scherer, report by Christophe Raffalli)
 
+- MPR#7710: `ocamldep -sort` should exit with nonzero code in case of
+  cyclic dependencies
+  (Xavier Leroy, report by Mantis user baileyparker)
+
+- GPR#1585: optimize output of "ocamllex -ml"
+  (Alain Frisch, review by Frédéric Bour and Gabriel Scherer)
+
 ### Manual and documentation:
 
 - PR#7647, GPR#1384: emphasize ocaml.org website and forum in README
@@ -177,6 +200,21 @@ Working version
 - GPR#1520: more robust implementation of Misc.no_overflow_mul
   (Max Mouratov, review by Xavier Leroy)
 
+- GPR#1567: register all idents relevant for reraise
+  (Thomas Refis, review by Alain Frisch and Frédéric Bour)
+
+- GPR#1573: emitcode: merge events after instructions reordering
+  (Thomas Refis and Leo White, with help from David Allsopp, review by Frédéric
+  Bour)
+
+- GPR#1586: testsuite: 'make promote' for ocamltest tests
+  (The new "-promote" option for ocamltest is experimental
+  and subject to change/removal).
+  (Gabriel Scherer)
+
+- GPR#1619: expect_test: print all the exceptions, even the unexpected ones
+  (Thomas Refis, review by Jérémie Dimino)
+
 ### Bug fixes
 
 - MPR#5250, GPR#1435: on Cygwin, when ocamlrun searches the path
@@ -209,8 +247,9 @@ Working version
 - MPR#7695, GPR#1541: Fatal error: exception Ctype.Unify(_) with field override
   (Jacques Garrigue, report by Nicolás Ojeda Bär)
 
-- MPR#7702, GPR#1553: refresh raise counts when inlining a function
-  (Vincent Laviron, Xavier Clerc, report by Cheng Sun)
+- MPR#7711, GPR#1581: Internal typechecker error triggered by a constraint on
+   self type in a class type
+  (Jacques Garrigue, report and review by Florian Angeletti)
 
 - GPR#1517: More robust handling of type variables in mcomp
   (Leo White and Thomas Refis, review by Jacques Garrigue)
@@ -227,11 +266,12 @@ Working version
 - MPR#7704, GPR#1564: use proper variant tag in non-exhaustiveness warning
   (Jacques Garrigue, report by Thomas Refis)
 
-- MPR#7705, GPR#1558: add missing bounds check in Bigarray.Genarray.nth_dim.
-  (Nicolás Ojeda Bär, report by Jeremy Yallop, review by Gabriel Scherer)
-
 - MPR#7712, GPR#1576: assertion failure with type abbreviations
   (Thomas Refis, report by Michael O'Connor, review by Jacques Garrigue)
+
+- GPR#1530, GPR#1574: testsuite, fix 'make parallel' and 'make one DIR=...'
+  to work on ocamltest-based tests.
+  (Runhang Li and Sébastien Hinderer, review by Gabriel Scherer)
 
 4.06 maintenance branch
 -----------------------
@@ -243,8 +283,18 @@ Working version
   (Luc Maranget, review by Thomas Refis and Gabriel Scherer, report
   by Abdelraouf Ouadjaout and Thibault Suzanne)
 
+- MPR#7702, GPR#1553: refresh raise counts when inlining a function
+  (Vincent Laviron, Xavier Clerc, report by Cheng Sun)
+
 - MPR#7704, GPR#1559: Soundness issue with private rows and pattern-matching
   (Jacques Garrigue, report by Jeremy Yallop, review by Thomas Refis)
+
+- MPR#7705, GPR#1558: add missing bounds check in Bigarray.Genarray.nth_dim.
+  (Nicolás Ojeda Bär, report by Jeremy Yallop, review by Gabriel Scherer)
+
+- MPR#7713, GPR#1587: Make pattern matching warnings more robust
+  to ill-typed columns; this is a backport of GPR#1550 from 4.07+dev
+  (Thomas Refis, review by Gabriel Scherer, report by Andreas Hauptmann)
 
 - GPR#1470: Don't commute negation with float comparison
   (Leo White, review by Xavier Leroy)
@@ -1219,6 +1269,15 @@ OCaml 4.05.0 (13 Jul 2017):
   an explicit backtrace
   (François Bobot, review by Gabriel Scherer, Xavier Leroy, Damien Doligez,
    Frédéric Bour)
+
+* GPR#1010: pack all standard library modules into a single module Stdlib
+  which is the default opened module (Stdlib itself includes Pervasives) to free
+  up the global namespace for other standard libraries, while still allowing any
+  OCaml standard library module to be referred to as Stdlib.Module). This is
+  implemented efficiently using module aliases (prefixing all modules with
+  Stdlib__, e.g. Stdlib__string).
+  (Jérémie Dimino, David Allsopp and Florian Angeletti, review by David Allsopp
+   and Gabriel Radanne)
 
 ### Manual and documentation:
 
