@@ -142,7 +142,6 @@ end) = struct
   and ty_value = of_kind_value ty
   and 'a ty_naked_number = 'a of_kind_naked_number ty
   and ty_fabricated = of_kind_fabricated ty
-  and ty_phantom = of_kind_phantom ty
 
   and 'a ty = 'a unknown_or_join or_alias
 
@@ -252,13 +251,6 @@ end) = struct
   and closure = {
     function_decls : function_declarations;
   }
-
-  and of_kind_phantom =
-    | Value of ty_value
-    | Naked_number
-         : 'kind ty_naked_number * 'kind K.Naked_number.t
-        -> of_kind_phantom
-    | Fabricated of ty_fabricated
 
   and typing_environment = {
     names_to_types : t Name.Map.t;
@@ -515,21 +507,6 @@ end) = struct
   and print_ty_fabricated ppf (ty : ty_fabricated) =
     print_ty_generic print_of_kind_fabricated ppf ty
 
-  and print_of_kind_phantom ppf (o : of_kind_phantom) =
-    match o with
-    | Value ty_value ->
-      Format.fprintf ppf "[@(Phantom %a)@]"
-        print_ty_value ty_value
-    | Naked_number (ty_naked_number, _kind) ->
-      Format.fprintf ppf "[@(Phantom %a)@]"
-        print_ty_naked_number ty_naked_number
-    | Fabricated ty_fabricated ->
-      Format.fprintf ppf "[@(Fabricated %a)@]"
-        print_ty_fabricated ty_fabricated
-
-  and print_ty_phantom ppf (ty : ty_phantom) =
-    print_ty_generic print_of_kind_phantom ppf ty
-
   and print ppf (t : t) =
     match t.phantom with
     | None -> print_descr ppf t.descr
@@ -781,7 +758,7 @@ end) = struct
 
   type 'a type_accessor = type_of_name:type_of_name -> 'a
 
-  let alias_type_of (type a) (kind : K.t) name : t =
+  let alias_type_of (kind : K.t) name : t =
     match kind with
     | Value ->
       { descr = Value (Type_of name);
@@ -891,7 +868,7 @@ end) = struct
   let bottom_as_ty_fabricated () : ty_fabricated =
     No_alias (Join [])
 
-  let bottom (type a) (kind : K.t) : t =
+  let bottom (kind : K.t) : t =
     match kind with
     | Value ->
       { descr = Value (No_alias (Join []));
@@ -946,7 +923,7 @@ end) = struct
   let any_value_as_ty_value () : ty_value =
     No_alias Unknown
 
-  let any_fabricated_as_ty_fabricated fabricated_kind : ty_fabricated =
+  let any_fabricated_as_ty_fabricated () : ty_fabricated =
     No_alias Unknown
 
   let any_naked_float_as_ty_naked_float () : _ ty_naked_number =
@@ -1446,10 +1423,10 @@ end) = struct
         phantom = None;
       }
 
-  let block_of_unknown_values tag value_kind ~size =
+  let block_of_unknown_values tag ~size =
     let fields =
       Array.init size (fun _index : _ mutable_or_immutable ->
-        Immutable (any_value_as_ty_value value_kind))
+        Immutable (any_value_as_ty_value ()))
     in
     block_of_values tag ~fields
 
@@ -1740,7 +1717,9 @@ end) = struct
     { set_of_closures; }
 
   let closures by_closure_id : t =
-    Value (No_alias (Join [Closures by_closure_id]))
+    { descr = Value (No_alias (Join [Closures by_closure_id]));
+      phantom = None;
+    }
 
   let set_of_closures ~closures ~closure_elements =
     let set_of_closures : set_of_closures =
@@ -1753,10 +1732,15 @@ end) = struct
       | Open _ -> false
       | Exactly map -> Closure_id.Map.is_empty map
     in
-    if no_closures then
-      Fabricated (No_alias (Join []))
-    else
-      Fabricated (No_alias (Join [Set_of_closures set_of_closures]))
+    let descr : descr =
+      if no_closures then
+        Fabricated (No_alias (Join []))
+      else
+        Fabricated (No_alias (Join [Set_of_closures set_of_closures]))
+    in
+    { descr;
+      phantom = None;
+    }
 
   let ensure_phantomness_matches t1 t2 reason =
     match t1.phantom, t2.phantom with
@@ -1765,6 +1749,7 @@ end) = struct
     | Some Debug_only, Some Debug_only -> ()
     | _, _ ->
       Misc.fatal_errorf "Phantom kind mismatch (%s): %a vs. %a"
+        reason
         print t1
         print t2
 
@@ -1816,16 +1801,13 @@ end) = struct
   module Make_meet_and_join (S : Meet_and_join_spec) : sig
     include Meet_and_join
       with type of_kind_foo := S.of_kind_foo
-      with type unk := S.unk
   end = struct
     let rec join_on_unknown_or_join ~type_of_name
-          (uj1 : (S.of_kind_foo, S.unk) unknown_or_join)
-          (uj2 : (S.of_kind_foo, S.unk) unknown_or_join)
-          : (S.of_kind_foo, S.unk) unknown_or_join =
+          (uj1 : S.of_kind_foo unknown_or_join)
+          (uj2 : S.of_kind_foo unknown_or_join)
+          : S.of_kind_foo unknown_or_join =
       match uj1, uj2 with
-      | Unknown unk_left, Unknown unk_right ->
-        Unknown (S.join_unk unk_left unk_right)
-      | Unknown unk, _ | _, Unknown unk -> Unknown unk
+      | Unknown, _ | _, Unknown -> Unknown
       | Join of_kind_foos1, Join of_kind_foos2 ->
         (* We rely on the invariant in flambda_type0_intf.ml.
            Everything in [of_kind_foos1] is mutually incompatible with each
@@ -1859,9 +1841,9 @@ end) = struct
         Join of_kind_foos
 
     and join_ty ~type_of_name
-          (or_alias1 : (S.of_kind_foo, S.unk) ty)
-          (or_alias2 : (S.of_kind_foo, S.unk) ty)
-          : (S.of_kind_foo, S.unk) ty =
+          (or_alias1 : S.of_kind_foo ty)
+          (or_alias2 : S.of_kind_foo ty)
+          : S.of_kind_foo ty =
       let unknown_or_join1, canonical_name1 =
         resolve_aliases_and_squash_unresolved_names_on_ty ~type_of_name
           ~force_to_kind:S.force_to_kind
@@ -1883,13 +1865,12 @@ end) = struct
         No_alias unknown_or_join
 
     let rec meet_on_unknown_or_join ~type_of_name
-          (ou1 : (S.of_kind_foo, S.unk) unknown_or_join)
-          (ou2 : (S.of_kind_foo, S.unk) unknown_or_join)
-          : (S.of_kind_foo, S.unk) unknown_or_join * judgements_from_meet =
+          (ou1 : S.of_kind_foo unknown_or_join)
+          (ou2 : S.of_kind_foo unknown_or_join)
+          : S.of_kind_foo unknown_or_join * judgements_from_meet =
       match ou1, ou2 with
-      | Unknown unk1, Unknown unk2 -> Unknown (S.meet_unk unk1 unk2), []
-      | Unknown _, ou2 -> ou2, []
-      | ou1, Unknown _ -> ou1, []
+      | Unknown, ou2 -> ou2, []
+      | ou1, Unknown -> ou1, []
       | Join of_kind_foos1, Join of_kind_foos2 ->
         let of_kind_foos, judgements =
           List.fold_left (fun (of_kind_foos, judgements) of_kind_foo ->
@@ -1913,9 +1894,9 @@ end) = struct
         Join of_kind_foos, judgements
 
     and meet_ty ~type_of_name
-          (or_alias1 : (S.of_kind_foo, S.unk) ty)
-          (or_alias2 : (S.of_kind_foo, S.unk) ty)
-          : (S.of_kind_foo, S.unk) ty * judgements_from_meet =
+          (or_alias1 : S.of_kind_foo ty)
+          (or_alias2 : S.of_kind_foo ty)
+          : S.of_kind_foo ty * judgements_from_meet =
       let unknown_or_join1, canonical_name1 =
         resolve_aliases_and_squash_unresolved_names_on_ty ~type_of_name
           ~force_to_kind:S.force_to_kind
@@ -1964,12 +1945,10 @@ end) = struct
   module rec Meet_and_join_value : sig
     include Meet_and_join
       with type of_kind_foo := of_kind_value
-      with type unk := K.Value_kind.t
   end = Make_meet_and_join (struct
     type of_kind_foo = of_kind_value
-    type unk = K.Value_kind.t
 
-    let to_type ty : t = Value ty
+    let to_type ty : t = { descr = Value ty; phantom = None; }
     let force_to_kind = force_to_kind_value
 
     let meet_immediate_case ~type_of_name
@@ -2234,9 +2213,6 @@ end) = struct
           | String _), _ ->
         Bottom
 
-    let meet_unk value_kind1 value_kind2 =
-      K.Value_kind.meet value_kind1 value_kind2
-
     let join_of_kind_foo ~type_of_name
           (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
           : of_kind_value or_unknown =
@@ -2294,9 +2270,6 @@ end) = struct
           | Closures _
           | String _), _ ->
         Unknown
-
-    let join_unk value_kind1 value_kind2 =
-      K.Value_kind.join value_kind1 value_kind2
   end) and Meet_and_join_naked_immediate : sig
     (* CR mshinwell: See if we can abstract these naked number cases some
        more? *)
@@ -2305,7 +2278,11 @@ end) = struct
   end = Make_meet_and_join (struct
     type of_kind_foo = Immediate.Set.t of_kind_naked_number
 
-    let to_type ty : t = Naked_number (ty, Naked_immediate)
+    let to_type ty : t =
+      { descr = Naked_number (ty, Naked_immediate);
+        phantom = None;
+      }
+
     let force_to_kind = force_to_kind_naked_immediate
 
     let meet_of_kind_foo ~type_of_name:_
@@ -2337,7 +2314,11 @@ end) = struct
   end = Make_meet_and_join (struct
     type of_kind_foo = Float_by_bit_pattern.Set.t of_kind_naked_number
 
-    let to_type ty = Naked_number (ty, Naked_float)
+    let to_type ty =
+      { descr = Naked_number (ty, Naked_float);
+        phantom = None;
+      }
+
     let force_to_kind = force_to_kind_naked_float
 
     let meet_of_kind_foo ~type_of_name:_
@@ -2367,7 +2348,11 @@ end) = struct
   end = Make_meet_and_join (struct
     type of_kind_foo = Int32.Set.t of_kind_naked_number
 
-    let to_type ty : t = Naked_number (ty, Naked_int32)
+    let to_type ty : t =
+      { descr = Naked_number (ty, Naked_int32);
+        phantom = None;
+      }
+
     let force_to_kind = force_to_kind_naked_int32
 
     let meet_of_kind_foo ~type_of_name:_
@@ -2397,7 +2382,11 @@ end) = struct
   end = Make_meet_and_join (struct
     type of_kind_foo = Int64.Set.t of_kind_naked_number
 
-    let to_type ty : t = Naked_number (ty, Naked_int64)
+    let to_type ty : t =
+      { descr = Naked_number (ty, Naked_int64);
+        phantom = None;
+      }
+
     let force_to_kind = force_to_kind_naked_int64
 
     let meet_of_kind_foo ~type_of_name:_
@@ -2427,7 +2416,11 @@ end) = struct
   end = Make_meet_and_join (struct
     type of_kind_foo = Targetint.Set.t of_kind_naked_number
 
-    let to_type ty : t = Naked_number (ty, Naked_nativeint)
+    let to_type ty : t =
+      { descr = Naked_number (ty, Naked_nativeint);
+        phantom = None;
+      }
+
     let force_to_kind = force_to_kind_naked_nativeint
 
     let meet_of_kind_foo ~type_of_name:_
@@ -2457,7 +2450,11 @@ end) = struct
   end = Make_meet_and_join (struct
     type of_kind_foo = of_kind_fabricated
 
-    let to_type ty : t = Fabricated ty
+    let to_type ty : t =
+      { descr = Fabricated ty;
+        phantom = None;
+      }
+
     let force_to_kind = force_to_kind_fabricated
 
     (* CR mshinwell: We need to work out how to stop direct call
@@ -2980,7 +2977,7 @@ end) = struct
           let closures =
             Closure_id.Map.union_both
               (fun _ty_fabricated ->
-                any_fabricated_as_ty_fabricated Definitely_pointer)
+                any_fabricated_as_ty_fabricated ())
               (fun ty_fabricated1 ty_fabricated2 ->
                 Meet_and_join_fabricated.join_ty ~type_of_name
                   ty_fabricated1 ty_fabricated2)
@@ -3016,7 +3013,7 @@ end) = struct
           let closure_elements =
             Var_within_closure.Map.union_both
               (fun _ty_value ->
-                any_value_as_ty_value Definitely_pointer)
+                any_value_as_ty_value ())
               (fun ty_value1 ty_value2 ->
                 Meet_and_join_value.join_ty ~type_of_name
                   ty_value1 ty_value2)
@@ -3162,13 +3159,13 @@ end) = struct
             print t1
             print t2
       in
-      let t = { t with descr; } in
+      let t = { t1 with descr; } in
       t, judgements
 
     let join ~type_of_name t1 t2 =
       ensure_phantomness_matches t1 t2 "kind mismatch upon join";
       let descr =
-        match t1, t2 with
+        match t1.descr, t2.descr with
         | Value ty_value1, Value ty_value2 ->
           let ty_value =
             Meet_and_join_value.join_ty ~type_of_name ty_value1 ty_value2
@@ -3224,7 +3221,7 @@ end) = struct
             print t1
             print t2
       in
-      { t with descr; }
+      { t1 with descr; }
 
     let join_typing_environment ~type_of_name
           (t1 : typing_environment) (t2 : typing_environment) =
@@ -3352,7 +3349,7 @@ Format.eprintf "...giving %a\n%!" print ty;
     let add_or_meet ~type_of_name t name scope_level ty =
       let existing_ty =
         match Name.Map.find name t.names_to_types with
-        | exception Not_found -> unknown_like ~type_of_name ty
+        | exception Not_found -> unknown_like ty
         | existing_ty -> existing_ty
       in
       (* CR mshinwell: Where should the judgements go? *)
@@ -3473,7 +3470,7 @@ Format.eprintf "Result is: %a\n%!"
 
   let add_judgements ~type_of_name t env : t =
     let t, _canonical_name = resolve_aliases ~type_of_name t in
-    match t with
+    match t.descr with
     | Value (No_alias (Join of_kind_values)) ->
       let of_kind_values =
         List.map
@@ -3517,7 +3514,9 @@ Format.eprintf "Result is: %a\n%!"
             | Boxed_number _ | Closures _ | String _ -> of_kind_value)
           of_kind_values
       in
-      Value (No_alias (Join of_kind_values))
+      { t with
+        descr = Value (No_alias (Join of_kind_values));
+      }
     | Fabricated (No_alias (Join of_kind_fabricateds)) ->
       let of_kind_fabricateds =
         List.map
@@ -3537,8 +3536,10 @@ Format.eprintf "Result is: %a\n%!"
             | Closure _ -> of_kind_fabricated)
           of_kind_fabricateds
       in
-      Fabricated (No_alias (Join of_kind_fabricateds))
-    | Value (Type _ | Type_of _ | No_alias (Unknown _))
-    | Fabricated (Type _ | Type_of _ | No_alias (Unknown _)) -> t
+      { t with
+        descr = Fabricated (No_alias (Join of_kind_fabricateds));
+      }
+    | Value (Type _ | Type_of _ | No_alias Unknown)
+    | Fabricated (Type _ | Type_of _ | No_alias Unknown) -> t
     | Naked_number _ -> t
 end

@@ -457,10 +457,10 @@ module type S = sig
   val bottom_as_ty_fabricated : unit -> ty_fabricated
 
   (** Create an "bottom" type with the same kind as the given type. *)
-  val bottom_like : (t -> t) type_accessor
+  val bottom_like : t -> t
 
   (** Create an "unknown" type with the same kind as the given type. *)
-  val unknown_like : (t -> t) type_accessor
+  val unknown_like : t -> t
 
   val create_inlinable_function_declaration
      : is_classic_mode:bool
@@ -552,10 +552,9 @@ module type S = sig
     -> 'a ty * (Name.t option)) type_accessor
 
   (** Like [resolve_aliases_on_ty], but unresolved names at the top level are
-      changed into [Unknown]s (with payloads given by [unknown_payload]). *)
+      changed into [Unknown]s. *)
   val resolve_aliases_and_squash_unresolved_names_on_ty
      : (force_to_kind:(t -> 'a ty)
-    -> unknown_payload:'b
     -> 'a ty
     -> 'a unknown_or_join * (Name.t option)) type_accessor
 
