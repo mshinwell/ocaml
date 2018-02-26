@@ -338,7 +338,6 @@ end and Named : sig
     | Set_of_closures of Set_of_closures.t
     | Assign of assign
     | Read_mutable of Mutable_variable.t
-    | Coerce of coercion
 
   (** Compute the free names of the given term. *)
   val free_names

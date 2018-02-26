@@ -26,7 +26,7 @@ module Of_kind_value = struct
     | Tagged_immediate _ -> ()
     | Dynamically_computed var ->
       E.check_variable_is_bound_and_of_kind env var
-        (Flambda_kind.value Unknown)
+        (Flambda_kind.value ())
 end
 
 module Static_part = struct
@@ -40,7 +40,7 @@ module Static_part = struct
         List.iter (fun field -> Of_kind_value.invariant env field) fields
       | Fabricated_block field ->
         E.check_variable_is_bound_and_of_kind env field
-          (Flambda_kind.fabricated Unknown)
+          (Flambda_kind.fabricated ())
       | Set_of_closures set ->
         Flambda.Set_of_closures.invariant env set
       | Closure (sym, _closure_id) ->
@@ -60,7 +60,7 @@ module Static_part = struct
       | Mutable_string { initial_value = Var v; }
       | Immutable_string (Var v) ->
         E.check_variable_is_bound_and_of_kind env v
-          (Flambda_kind.value Definitely_pointer)
+          (Flambda_kind.value ())
       | Boxed_float (Const _)
       | Boxed_int32 (Const _)
       | Boxed_int64 (Const _)

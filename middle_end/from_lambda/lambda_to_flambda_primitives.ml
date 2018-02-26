@@ -38,7 +38,8 @@ val of_block_shape : Lambda.block_shape -> num_fields:int -> t
 let of_block_shape (shape : Lambda.block_shape) ~num_fields =
   match shape with
   | None ->
-    List.init num_fields (fun _field : Flambda_kind.Value_kind.t -> Unknown)
+    List.init num_fields
+      (fun _field : Flambda_primitive.Block_access_kind.value_kind -> Unknown)
   | Some shape ->
     let shape_length = List.length shape in
     if num_fields <> shape_length then begin
@@ -47,7 +48,8 @@ let of_block_shape (shape : Lambda.block_shape) ~num_fields =
         num_fields
         shape_length
     end;
-    List.map (fun (kind : Lambda.value_kind) : Flambda_kind.Value_kind.t ->
+    List.map (fun (kind : Lambda.value_kind)
+            : Flambda_primitive.Block_access_kind.value_kind ->
         match kind with
         | Pgenval -> Unknown
         | Pfloatval | Pboxedintval _ -> Definitely_pointer
@@ -72,8 +74,8 @@ let convert_comparison_prim (comp : Lambda.comparison) : P.binary_primitive =
          | Foo -> 1
          | Bar -> 2
   *)
-  | Ceq -> Phys_equal (K.value Unknown, Eq)
-  | Cneq -> Phys_equal (K.value Unknown, Neq)
+  | Ceq -> Phys_equal (K.value (), Eq)
+  | Cneq -> Phys_equal (K.value (), Neq)
   | Clt -> Int_comp (I.Tagged_immediate, Signed, Lt)
   | Cgt -> Int_comp (I.Tagged_immediate, Signed, Gt)
   | Cle -> Int_comp (I.Tagged_immediate, Signed, Le)
@@ -174,7 +176,7 @@ let rec result_kind_of_expr_primitive (prim : expr_primitive) =
     match result_kind with
     | Singleton kind -> kind
     | Unit -> Flambda_kind.unit ()
-    | Never_returns -> Flambda_kind.value Unknown
+    | Never_returns -> Flambda_kind.value ()
   in
   match prim with
   | Unary (prim, _) ->

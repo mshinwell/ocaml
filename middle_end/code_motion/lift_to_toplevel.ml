@@ -41,10 +41,10 @@ let static_structure name ~vars_with_kinds =
       let symbol = make_symbol index in
       let static_part : Flambda_static.Static_part.t =
         match kind with
-        | Value _ ->
+        | Value ->
           Block (Tag.Scannable.zero, Immutable,
             [Flambda_static.Of_kind_value.Dynamically_computed fresh_var])
-        | Fabricated _ -> Fabricated_block fresh_var
+        | Fabricated -> Fabricated_block fresh_var
         | Naked_number Naked_float -> Boxed_float (Var fresh_var)
         | Naked_number Naked_int32 -> Boxed_int32 (Var fresh_var)
         | Naked_number Naked_int64 -> Boxed_int64 (Var fresh_var)
@@ -58,11 +58,11 @@ let static_structure name ~vars_with_kinds =
       let prim : Flambda_primitive.t =
         let var = Simple.name (Name.symbol symbol) in
         match kind with
-        | Value kind ->
-          Binary (Block_load (Block (Value kind), Immutable), var,
+        | Value ->
+          Binary (Block_load (Block (Value Unknown), Immutable), var,
             Simple.const (Tagged_immediate Immediate.zero))
-        | Fabricated kind ->
-          Binary (Block_load (Block (Fabricated kind), Immutable),
+        | Fabricated ->
+          Binary (Block_load (Block (Fabricated Unknown), Immutable),
             var, Simple.const (Tagged_immediate Immediate.zero))
         | Naked_number Naked_float -> Unary (Unbox_number Naked_float, var)
         | Naked_number Naked_int32 -> Unary (Unbox_number Naked_int32, var)
@@ -76,7 +76,7 @@ let static_structure name ~vars_with_kinds =
           Misc.fatal_error "Not yet implemented"
       in
       let binding : Flambda.Named.t = Prim (prim, dbg) in
-      let symbol_kind = K.value Definitely_pointer in
+      let symbol_kind = K.value () in
       assign_symbols (index + 1) ~vars_with_kinds
         ((symbol, symbol_kind, static_part) :: resulting_static_part)
         ((var, kind, binding) :: resulting_bindings)
@@ -179,8 +179,7 @@ let rec lift (expr : Flambda.Expr.t) ~to_copy =
       | Prim _
       | Set_of_closures _
       | Assign _
-      | Read_mutable _
-      | Coerce _ ->
+      | Read_mutable _ ->
         let name = Format.asprintf "%a" Variable.print var in
         let static_structure, bindings =
           static_structure name ~vars_with_kinds
