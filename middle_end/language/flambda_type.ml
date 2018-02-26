@@ -34,8 +34,8 @@ let bottom_types_from_arity t =
 let unknown_types_from_arity t =
   List.map (fun kind -> unknown kind) t
 
-let unknown_like_array ~type_of_name t_array =
-  Array.map (fun t -> unknown_like ~type_of_name t) t_array
+let unknown_like_array t_array =
+  Array.map (fun t -> unknown_like t) t_array
 
 let rename_variables t ~f:_ = t
 (* XXX need to fix [Flambda_type0.clean]
@@ -46,7 +46,7 @@ let unit () =
   this_tagged_immediate Immediate.zero
 
 let unit_bottom () =
-  bottom (K.value Definitely_immediate)
+  bottom (K.value ())
 
 let this_tagged_immediate_named n : Named.t * t =
   Simple (Simple.const (Tagged_immediate n)), this_tagged_immediate n
@@ -242,20 +242,23 @@ module Simplified_type : sig
      - alias information;
      - joins between incompatible types (these turn into "Unknown").
   *)
-  type t = private
+  type t = private {
+    descr : descr;
+    phantom : Flambda_kind.Phantom_kind.occurrences option;
+  }
+
+  and descr = private
     | Value of ty_value
     | Naked_number :
-        'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t -> t
+        'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t -> descr
     | Fabricated of ty_fabricated
-    | Phantom of ty_phantom Flambda_kind.Phantom_kind.occurrences
 
-  and ty_value = (of_kind_value, Flambda_kind.Value_kind.t) ty
-  and 'a ty_naked_number = ('a of_kind_naked_number, unit) ty
-  and ty_fabricated = (of_kind_fabricated, Flambda_kind.Value_kind.t) ty
-  and ty_phantom = (of_kind_phantom, Flambda_kind.Phantom_kind.t0) ty
+  and ty_value = of_kind_value ty
+  and 'a ty_naked_number = 'a of_kind_naked_number ty
+  and ty_fabricated = of_kind_fabricated ty
 
-  and ('a, 'u) ty = private
-    | Unknown of 'u
+  and 'a ty = private
+    | Unknown
     | Ok of 'a
     | Bottom
 
@@ -267,117 +270,103 @@ module Simplified_type : sig
 
   val is_unknown : t -> bool
   val is_bottom : t -> bool
+
+  val is_phantom : t -> bool
+  val check_not_phantom : t -> string -> unit
 end = struct
-  type t =
+  type t = {
+    descr : descr;
+    phantom : Flambda_kind.Phantom_kind.occurrences option;
+  }
+
+  and descr =
     | Value of ty_value
     | Naked_number :
-        'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t -> t
+        'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t -> descr
     | Fabricated of ty_fabricated
-    | Phantom of ty_phantom Flambda_kind.Phantom_kind.occurrences
 
-  and ty_value = (of_kind_value, Flambda_kind.Value_kind.t) ty
-  and 'a ty_naked_number = ('a of_kind_naked_number, unit) ty
-  and ty_fabricated = (of_kind_fabricated, Flambda_kind.Value_kind.t) ty
-  and ty_phantom = (of_kind_phantom, Flambda_kind.Phantom_kind.t0) ty
+  and ty_value = of_kind_value ty
+  and 'a ty_naked_number = 'a of_kind_naked_number ty
+  and ty_fabricated = of_kind_fabricated ty
 
-  and ('a, 'u) ty =
-    | Unknown of 'u
+  and 'a ty =
+    | Unknown
     | Ok of 'a
     | Bottom
 
   let is_unknown t =
-    match t with
-    | Value (Unknown _) -> true
-    | Naked_number (Unknown _, _) -> true
-    | Fabricated (Unknown _) -> true
-    | Phantom (In_types (Unknown _)) -> true
-    | Phantom (Debug_only (Unknown _)) -> true
+    match t.descr with
+    | Value Unknown -> true
+    | Naked_number (Unknown, _) -> true
+    | Fabricated Unknown -> true
     | _ -> false
 
   let is_bottom t =
-    match t with
+    match t.descr with
     | Value Bottom -> true
     | Naked_number (Bottom, _) -> true
     | Fabricated Bottom -> true
-    | Phantom (In_types Bottom) -> true
-    | Phantom (Debug_only Bottom) -> true
     | _ -> false
 
-  let ty_from_or_unknown_or_join (unknown_or_join : _ unknown_or_join)
-        ~unknown_payload : _ ty =
+  let ty_from_or_unknown_or_join (unknown_or_join : _ unknown_or_join) : _ ty =
     match unknown_or_join with
-    | Unknown payload -> Unknown payload
+    | Unknown -> Unknown
     | Join [] -> Bottom
     | Join [of_kind_foo] -> Ok of_kind_foo
-    | Join _ -> Unknown unknown_payload
+    | Join _ -> Unknown
 
   let create ~type_of_name (ty : flambda_type) : t * (Name.t option) =
-    match ty with
-    | Value ty_value ->
-      let unknown_or_join, canonical_name =
-        resolve_aliases_and_squash_unresolved_names_on_ty
-          ~type_of_name
-          ~force_to_kind:force_to_kind_value
-          ~unknown_payload:K.Value_kind.Unknown
-          ty_value
-      in
-      let ty_value : ty_value =
-        ty_from_or_unknown_or_join unknown_or_join
-          ~unknown_payload:K.Value_kind.Unknown
-      in
-      Value ty_value, canonical_name
-    | Naked_number (ty_naked_number, kind) ->
-      let unknown_or_join, canonical_name =
-        resolve_aliases_and_squash_unresolved_names_on_ty
-          ~type_of_name
-          ~force_to_kind:(force_to_kind_naked_number kind)
-          ~unknown_payload:()
-          ty_naked_number
-      in
-      let ty_naked_number : _ ty_naked_number =
-        ty_from_or_unknown_or_join unknown_or_join
-          ~unknown_payload:()
-      in
-      Naked_number (ty_naked_number, kind), canonical_name
-    | Fabricated ty_fabricated ->
-      let unknown_or_join, canonical_name =
-        resolve_aliases_and_squash_unresolved_names_on_ty
-          ~type_of_name
-          ~force_to_kind:force_to_kind_fabricated
-          ~unknown_payload:K.Value_kind.Unknown
-          ty_fabricated
-      in
-      let ty_fabricated : ty_fabricated =
-        ty_from_or_unknown_or_join unknown_or_join
-          ~unknown_payload:K.Value_kind.Unknown
-      in
-      Fabricated ty_fabricated, canonical_name
-    | Phantom (In_types ty_phantom) ->
-      let unknown_or_join, canonical_name =
-        resolve_aliases_and_squash_unresolved_names_on_ty
-          ~type_of_name
-          ~force_to_kind:force_to_kind_phantom_in_types
-          ~unknown_payload:K.Phantom_kind.Unknown
-          ty_phantom
-      in
-      let ty_phantom : ty_phantom =
-        ty_from_or_unknown_or_join unknown_or_join
-          ~unknown_payload:K.Phantom_kind.Unknown
-      in
-      Phantom (In_types ty_phantom), canonical_name
-    | Phantom (Debug_only ty_phantom) ->
-      let unknown_or_join, canonical_name =
-        resolve_aliases_and_squash_unresolved_names_on_ty
-          ~type_of_name
-          ~force_to_kind:force_to_kind_phantom_debug_only
-          ~unknown_payload:K.Phantom_kind.Unknown
-          ty_phantom
-      in
-      let ty_phantom : ty_phantom =
-        ty_from_or_unknown_or_join unknown_or_join
-          ~unknown_payload:K.Phantom_kind.Unknown
-      in
-      Phantom (Debug_only ty_phantom), canonical_name
+    let (descr : descr), canonical_name =
+      match ty.descr with
+      | Value ty_value ->
+        let unknown_or_join, canonical_name =
+          resolve_aliases_and_squash_unresolved_names_on_ty
+            ~type_of_name
+            ~force_to_kind:force_to_kind_value
+            ty_value
+        in
+        let ty_value : ty_value =
+          ty_from_or_unknown_or_join unknown_or_join
+        in
+        Value ty_value, canonical_name
+      | Naked_number (ty_naked_number, kind) ->
+        let unknown_or_join, canonical_name =
+          resolve_aliases_and_squash_unresolved_names_on_ty
+            ~type_of_name
+            ~force_to_kind:(force_to_kind_naked_number kind)
+            ty_naked_number
+        in
+        let ty_naked_number : _ ty_naked_number =
+          ty_from_or_unknown_or_join unknown_or_join
+        in
+        Naked_number (ty_naked_number, kind), canonical_name
+      | Fabricated ty_fabricated ->
+        let unknown_or_join, canonical_name =
+          resolve_aliases_and_squash_unresolved_names_on_ty
+            ~type_of_name
+            ~force_to_kind:force_to_kind_fabricated
+            ty_fabricated
+        in
+        let ty_fabricated : ty_fabricated =
+          ty_from_or_unknown_or_join unknown_or_join
+        in
+        Fabricated ty_fabricated, canonical_name
+    in
+    { descr;
+      phantom = ty.phantom;
+    }, canonical_name
+
+  let is_phantom t =
+    match t.phantom with
+    | None -> false
+    | Some _ -> true
+
+  let check_not_phantom (t : t) reason =
+    match t.phantom with
+    | None -> ()
+    | Some _ ->
+      Misc.fatal_errorf "Simplified type given to [%s] cannot be phantom"
+        reason
 end
 
 let is_bottom ~type_of_name t =
@@ -416,10 +405,11 @@ let prove_naked_float ~type_of_name t
       print t
   in
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
+  Simplified_type.check_not_phantom simplified "prove_naked_float";
+  match simplified.descr with
   | Simplified_type.Naked_number (ty, K.Naked_number.Naked_float) ->
     begin match ty with
-    | Unknown _ -> Unknown
+    | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Float fs) -> Proved fs
     | Ok _ ->
@@ -428,8 +418,7 @@ let prove_naked_float ~type_of_name t
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Value _
-  | Fabricated _
-  | Phantom _ -> wrong_kind ()
+  | Fabricated _ -> wrong_kind ()
 
 let prove_naked_int32 ~type_of_name t : Int32.Set.t proof =
   let wrong_kind () =
@@ -438,18 +427,18 @@ let prove_naked_int32 ~type_of_name t : Int32.Set.t proof =
       print t
   in
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
+  Simplified_type.check_not_phantom simplified "prove_naked_int32";
+  match simplified.descr with
   | Simplified_type.Naked_number (ty, K.Naked_number.Naked_int32) ->
     begin match ty with
-    | Unknown _ -> Unknown
+    | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Int32 is) -> Proved is
     | Ok _ -> wrong_kind ()
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Value _
-  | Fabricated _
-  | Phantom _ -> wrong_kind ()
+  | Fabricated _ -> wrong_kind ()
 
 let prove_naked_int64 ~type_of_name t : Int64.Set.t proof =
   let wrong_kind () =
@@ -458,18 +447,18 @@ let prove_naked_int64 ~type_of_name t : Int64.Set.t proof =
       print t
   in
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
+  Simplified_type.check_not_phantom simplified "prove_naked_int64";
+  match simplified.descr with
   | Simplified_type.Naked_number (ty, K.Naked_number.Naked_int64) ->
     begin match ty with
-    | Unknown _ -> Unknown
+    | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Int64 is) -> Proved is
     | Ok _ -> wrong_kind ()
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Value _
-  | Fabricated _
-  | Phantom _ -> wrong_kind ()
+  | Fabricated _ -> wrong_kind ()
 
 let prove_naked_nativeint ~type_of_name t : Targetint.Set.t proof =
   let wrong_kind () =
@@ -478,18 +467,18 @@ let prove_naked_nativeint ~type_of_name t : Targetint.Set.t proof =
       print t
   in
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
+  Simplified_type.check_not_phantom simplified "prove_naked_nativeint";
+  match simplified.descr with
   | Simplified_type.Naked_number (ty, K.Naked_number.Naked_nativeint) ->
     begin match ty with
-    | Unknown _ -> Unknown
+    | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Nativeint is) -> Proved is
     | Ok _ -> wrong_kind ()
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Value _
-  | Fabricated _
-  | Phantom _ -> wrong_kind ()
+  | Fabricated _ -> wrong_kind ()
 
 let prove_unique_naked_float ~type_of_name t : _ proof =
   match prove_naked_float ~type_of_name t with
@@ -537,17 +526,17 @@ let prove_closure ~type_of_name t : _ proof =
       print t
   in
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
+  Simplified_type.check_not_phantom simplified "prove_closure";
+  match simplified.descr with
   | Fabricated ty_fabricated ->
     begin match ty_fabricated with
-    | Unknown _ -> Unknown
+    | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Closure closure) -> Proved closure
     | Ok _ -> Invalid
     end
   | Value _ -> wrong_kind ()
   | Simplified_type.Naked_number _ -> wrong_kind ()
-  | Phantom _ -> wrong_kind ()
 
 type reification_result =
   | Term of Simple.t * t
@@ -571,6 +560,8 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
   if Simplified_type.is_bottom simplified then
     Invalid
+  else if Simplified_type.is_phantom simplified then
+    Cannot_reify
   else
     let try_name () : reification_result =
       match canonical_name with
@@ -583,14 +574,14 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
              cannot be produced just from the type.  As such, we may wish to
              make the type more precise later, so we return an alias type rather
              than [t]. *)
-          let kind = kind ~type_of_name t in
+          let kind = kind t in
           let t = alias_type_of kind name in
           Term (Simple.name name, t)
     in
-    match simplified with
+    match simplified.descr with
     | Value ty_value ->
       begin match ty_value with
-      | Unknown _ -> try_name ()
+      | Unknown -> try_name ()
       | Bottom -> Invalid
       | Ok (Blocks_and_tagged_immediates blocks_imms) ->
         if not (Tag.Map.is_empty blocks_imms.blocks) then try_name ()
@@ -606,7 +597,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
       | Ok (Boxed_number (Boxed_float ty_naked_number)) ->
         begin match canonical_name with
         | Some ((Symbol _) as name) ->
-          let kind = K.value Definitely_pointer in
+          let kind = K.value () in
           let t = alias_type_of kind name in
           Term (Simple.name name, t)
         | Some (Var _) | None ->
@@ -624,7 +615,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
       | Ok (Boxed_number (Boxed_int32 ty_naked_number)) ->
         begin match canonical_name with
         | Some ((Symbol _) as name) ->
-          let kind = K.value Definitely_pointer in
+          let kind = K.value () in
           let t = alias_type_of kind name in
           Term (Simple.name name, t)
         | Some (Var _) | None ->
@@ -641,7 +632,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
       | Ok (Boxed_number (Boxed_int64 ty_naked_number)) ->
         begin match canonical_name with
         | Some ((Symbol _) as name) ->
-          let kind = K.value Definitely_pointer in
+          let kind = K.value () in
           let t = alias_type_of kind name in
           Term (Simple.name name, t)
         | Some (Var _) | None ->
@@ -658,7 +649,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
       | Ok (Boxed_number (Boxed_nativeint ty_naked_number)) ->
         begin match canonical_name with
         | Some ((Symbol _) as name) ->
-          let kind = K.value Definitely_pointer in
+          let kind = K.value () in
           let t = alias_type_of kind name in
           Term (Simple.name name, t)
         | Some (Var _) | None ->
@@ -676,7 +667,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
       end
     | Simplified_type.Naked_number (ty_naked_number, _) ->
       begin match ty_naked_number with
-      | Unknown _ -> try_name ()
+      | Unknown -> try_name ()
       | Bottom -> Invalid
       | Ok (Immediate imms) ->
         begin match Immediate.Set.get_singleton imms with
@@ -707,7 +698,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
     | Fabricated (Ok (Set_of_closures set_of_closures)) ->
       begin match canonical_name with
       | Some ((Symbol _) as name) ->
-        let kind = K.fabricated Definitely_pointer in
+        let kind = K.fabricated () in
         let t = alias_type_of kind name in
         Term (Simple.name name, t)
       | Some (Var _) | None ->
@@ -738,12 +729,10 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
                   | Inlinable decl ->
                     let params =
                       List.map (fun (param, ty) ->
-                          Flambda0.Typed_parameter.create ~type_of_name param ty)
+                          Flambda0.Typed_parameter.create param ty)
                         decl.params
                     in
-                    let return_arity =
-                      List.map (fun t -> kind ~type_of_name t) decl.result
-                    in
+                    let return_arity = List.map (fun t -> kind t) decl.result in
                     (* CR mshinwell: Put this conversion in a function
                       somewhere *)
                     let inline : Flambda0.inline_attribute =
@@ -793,8 +782,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
               Lift static_part
           end
       end
-    | Fabricated _
-    | Phantom _ -> Cannot_reify
+    | Fabricated _ -> Cannot_reify
 
 let prove_tagged_immediate ~type_of_name t
       : Immediate.Set.t proof =
@@ -804,10 +792,11 @@ let prove_tagged_immediate ~type_of_name t
       print t
   in
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
+  Simplified_type.check_not_phantom simplified "prove_tagged_immediate";
+  match simplified.descr with
   | Value ty_value ->
     begin match ty_value with
-    | Unknown _ -> Unknown
+    | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Blocks_and_tagged_immediates blocks_imms) ->
       if not (Tag.Map.is_empty blocks_imms.blocks) then begin
@@ -823,8 +812,7 @@ let prove_tagged_immediate ~type_of_name t
     | Ok (Closures _ | String _) -> Invalid
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
-  | Fabricated _
-  | Phantom _ -> wrong_kind ()
+  | Fabricated _ -> wrong_kind ()
 
 let prove_is_tagged_immediate ~type_of_name t : bool proof =
   let wrong_kind () =
@@ -833,10 +821,11 @@ let prove_is_tagged_immediate ~type_of_name t : bool proof =
       print t
   in
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
+  Simplified_type.check_not_phantom simplified "prove_is_tagged_immediate";
+  match simplified.descr with
   | Value ty_value ->
     begin match ty_value with
-    | Unknown _ -> Unknown
+    | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Blocks_and_tagged_immediates blocks_imms) ->
       if not (Tag.Map.is_empty blocks_imms.blocks) then begin
@@ -855,18 +844,16 @@ let prove_is_tagged_immediate ~type_of_name t : bool proof =
     | Ok (Closures _ | String _) -> Proved false
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
-  | Fabricated _
-  | Phantom _ -> wrong_kind ()
+  | Fabricated _ -> wrong_kind ()
 
 let valid_block_tag_for_kind ~tag ~(field_kind : K.t) =
   (* CR-someday mshinwell: Note that we could easily extend
      this to handle blocks of the other unboxed number kinds. *)
   match field_kind with
-  | Value _ -> Tag.is_structured_block tag
-  | Fabricated _ -> Tag.equal tag Tag.zero
+  | Value -> Tag.is_structured_block tag
+  | Fabricated -> Tag.equal tag Tag.zero
   | Naked_number Naked_float -> Tag.equal tag Tag.double_array_tag
-  | Naked_number _
-  | Phantom _ ->
+  | Naked_number _ | Phantom _ ->
     Misc.fatal_errorf "Bad kind for block field: %a"
       K.print field_kind
 
@@ -876,10 +863,11 @@ let prove_get_field_from_block ~type_of_name t ~index ~field_kind : t proof =
       print t
   in
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
+  Simplified_type.check_not_phantom simplified "prove_get_field_from_block";
+  match simplified.descr with
   | Value ty_value ->
     begin match ty_value with
-    | Unknown _ -> Unknown
+    | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Blocks_and_tagged_immediates blocks_imms) ->
       if Targetint.OCaml.compare index Targetint.OCaml.zero < 0 then Invalid
@@ -937,8 +925,7 @@ let prove_get_field_from_block ~type_of_name t ~index ~field_kind : t proof =
     | Ok (Closures _ | String _) -> Invalid
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
-  | Fabricated _
-  | Phantom _ -> wrong_kind ()
+  | Fabricated _ -> wrong_kind ()
 
 let prove_is_a_block ~type_of_name t ~kind_of_all_fields : bool proof =
   let wrong_kind () =
@@ -946,10 +933,11 @@ let prove_is_a_block ~type_of_name t ~kind_of_all_fields : bool proof =
       print t
   in
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
+  Simplified_type.check_not_phantom simplified "prove_is_a_block";
+  match simplified.descr with
   | Value ty_value ->
     begin match ty_value with
-    | Unknown _ -> Unknown
+    | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Blocks_and_tagged_immediates blocks_imms) ->
       let no_immediates =
@@ -968,7 +956,7 @@ let prove_is_a_block ~type_of_name t ~kind_of_all_fields : bool proof =
                       match field with
                       | Mutable -> ()
                       | Immutable field ->
-                        let field_kind = kind ~type_of_name field in
+                        let field_kind = kind field in
                         let compatible =
                           K.compatible field_kind ~if_used_at:kind_of_all_fields
                         in
@@ -989,8 +977,7 @@ let prove_is_a_block ~type_of_name t ~kind_of_all_fields : bool proof =
     | Ok (Closures _ | String _) -> Proved false
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
-  | Fabricated _
-  | Phantom _ -> wrong_kind ()
+  | Fabricated _ -> wrong_kind ()
 
 (* This can wait until we fix the unboxing passes.  It will just need to
    return a map from tags to field arrays.
@@ -1037,10 +1024,11 @@ let prove_tags ~type_of_name t : Tag.Set.t proof =
       print t
   in
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
+  Simplified_type.check_not_phantom simplified "prove_tags";
+  match simplified.descr with
   | Value ty_value ->
     begin match ty_value with
-    | Unknown _ -> Unknown
+    | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Blocks_and_tagged_immediates blocks_imms) ->
       Proved (Tag.Map.keys blocks_imms.blocks)
@@ -1058,8 +1046,7 @@ let prove_tags ~type_of_name t : Tag.Set.t proof =
       Proved (Tag.Set.singleton Tag.string_tag)
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
-  | Fabricated _
-  | Phantom _ -> wrong_kind ()
+  | Fabricated _ -> wrong_kind ()
 
 let prove_string ~type_of_name t : String_info.Set.t proof =
   let wrong_kind () =
@@ -1067,18 +1054,18 @@ let prove_string ~type_of_name t : String_info.Set.t proof =
       print t
   in
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
+  Simplified_type.check_not_phantom simplified "prove_string";
+  match simplified.descr with
   | Value ty_value ->
     begin match ty_value with
-    | Unknown _ -> Unknown
+    | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (String strs) -> Proved strs
     | Ok (Blocks_and_tagged_immediates _ | Closures _) -> Invalid
     | Ok (Boxed_number _) -> Invalid
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
-  | Fabricated _
-  | Phantom _ -> wrong_kind ()
+  | Fabricated _ -> wrong_kind ()
 
 let prove_boxed_float ~type_of_name t
       : Float_by_bit_pattern.Set.t ty_naked_number proof =
@@ -1088,17 +1075,17 @@ let prove_boxed_float ~type_of_name t
       print t
   in
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
+  Simplified_type.check_not_phantom simplified "prove_boxed_float";
+  match simplified.descr with
   | Value ty_value ->
     begin match ty_value with
-    | Unknown _ -> Unknown
+    | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Boxed_number (Boxed_float ty_naked_number)) -> Proved ty_naked_number
     | Ok _ -> Invalid
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
-  | Fabricated _
-  | Phantom _ -> wrong_kind ()
+  | Fabricated _ -> wrong_kind ()
 
 let prove_boxed_int32 ~type_of_name t
       : Int32.Set.t ty_naked_number proof =
@@ -1108,17 +1095,17 @@ let prove_boxed_int32 ~type_of_name t
       print t
   in
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
+  Simplified_type.check_not_phantom simplified "prove_boxed_int32";
+  match simplified.descr with
   | Value ty_value ->
     begin match ty_value with
-    | Unknown _ -> Unknown
+    | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Boxed_number (Boxed_int32 ty_naked_number)) -> Proved ty_naked_number
     | Ok _ -> Invalid
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
-  | Fabricated _
-  | Phantom _ -> wrong_kind ()
+  | Fabricated _ -> wrong_kind ()
 
 let prove_boxed_int64 ~type_of_name t
       : Int64.Set.t ty_naked_number proof =
@@ -1128,17 +1115,17 @@ let prove_boxed_int64 ~type_of_name t
       print t
   in
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
+  Simplified_type.check_not_phantom simplified "prove_boxed_int64";
+  match simplified.descr with
   | Value ty_value ->
     begin match ty_value with
-    | Unknown _ -> Unknown
+    | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Boxed_number (Boxed_int64 ty_naked_number)) -> Proved ty_naked_number
     | Ok _ -> Invalid
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
-  | Fabricated _
-  | Phantom _ -> wrong_kind ()
+  | Fabricated _ -> wrong_kind ()
 
 let prove_boxed_nativeint ~type_of_name t
       : Targetint.Set.t ty_naked_number proof =
@@ -1148,18 +1135,18 @@ let prove_boxed_nativeint ~type_of_name t
       print t
   in
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
+  Simplified_type.check_not_phantom simplified "prove_boxed_nativeint";
+  match simplified.descr with
   | Value ty_value ->
     begin match ty_value with
-    | Unknown _ -> Unknown
+    | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Boxed_number (Boxed_nativeint ty_naked_number)) ->
       Proved ty_naked_number
     | Ok _ -> Invalid
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
-  | Fabricated _
-  | Phantom _ -> wrong_kind ()
+  | Fabricated _ -> wrong_kind ()
 
 let prove_closures ~type_of_name t : closures proof =
   let wrong_kind () =
@@ -1168,17 +1155,17 @@ let prove_closures ~type_of_name t : closures proof =
       print t
   in
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
+  Simplified_type.check_not_phantom simplified "prove_closures";
+  match simplified.descr with
   | Value ty_value ->
     begin match ty_value with
-    | Unknown _ -> Unknown
+    | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Closures closures) -> Proved closures
     | Ok _ -> Invalid
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
-  | Fabricated _
-  | Phantom _ -> wrong_kind ()
+  | Fabricated _ -> wrong_kind ()
 
 let prove_sets_of_closures ~type_of_name t : _ proof =
   let wrong_kind () =
@@ -1187,10 +1174,11 @@ let prove_sets_of_closures ~type_of_name t : _ proof =
       print t
   in
   let simplified, canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
+  Simplified_type.check_not_phantom simplified "prove_sets_of_closures";
+  match simplified.descr with
   | Fabricated ty_fabricated ->
     begin match ty_fabricated with
-    | Unknown _ -> Unknown
+    | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Set_of_closures set_of_closures) ->
       Proved (canonical_name, set_of_closures)
@@ -1198,7 +1186,6 @@ let prove_sets_of_closures ~type_of_name t : _ proof =
     end
   | Value _ -> wrong_kind ()
   | Simplified_type.Naked_number _ -> wrong_kind ()
-  | Phantom _ -> wrong_kind ()
 
 (* XXX What about [Obj.truncate]?
    In fact, what happens regarding this for block access too? *)
@@ -1213,10 +1200,12 @@ let prove_lengths_of_arrays_or_blocks ~type_of_name t
       print t
   in
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
+  Simplified_type.check_not_phantom simplified
+    "prove_lengths_of_arrays_or_blocks";
+  match simplified.descr with
   | Value ty_value ->
     begin match ty_value with
-    | Unknown _ -> Unknown
+    | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Blocks_and_tagged_immediates blocks_imms) ->
       let no_immediates =
@@ -1244,13 +1233,11 @@ let prove_lengths_of_arrays_or_blocks ~type_of_name t
     | Ok (Closures _ | String _) -> Invalid
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
-  | Fabricated _
-  | Phantom _ -> wrong_kind ()
+  | Fabricated _ -> wrong_kind ()
 
-let prove_of_kind_value_with_expected_value_kind ~type_of_name
-        t expected_value_kind =
-  let actual_kind = kind ~type_of_name t in
-  let expected_kind = K.value expected_value_kind in
+let prove_of_kind_value t =
+  let actual_kind = kind t in
+  let expected_kind = K.value () in
   if not (Flambda_kind.compatible actual_kind ~if_used_at:expected_kind)
   then begin
     Misc.fatal_errorf "Type should be compatible with kind %a but \
@@ -1261,8 +1248,8 @@ let prove_of_kind_value_with_expected_value_kind ~type_of_name
     end;
   force_to_kind_value t
 
-let prove_of_kind_naked_float ~type_of_name t =
-  let actual_kind = kind ~type_of_name t in
+let prove_of_kind_naked_float t =
+  let actual_kind = kind t in
   let expected_kind = K.naked_float () in
   if not (Flambda_kind.compatible actual_kind ~if_used_at:expected_kind)
   then begin
@@ -1294,17 +1281,19 @@ let physically_equal ~type_of_name:_ (t1 : t) (t2 : t) =
          variables and symbols.) *)
       Name.equal name1 name2
   in
-  match t1, t2 with
-  | Value ty_value1, Value ty_value2 ->
-    check_aliases ty_value1 ty_value2
-  | Naked_number (ty_naked_number1, _), Naked_number (ty_naked_number2, _) ->
-    check_aliases ty_naked_number1 ty_naked_number2
-  | Fabricated _, Fabricated _
-  | Phantom _, Phantom _ -> false
-  | _, _ ->
-    Misc.fatal_errorf "Kind mismatch for [physically_equal]: %a versus %a"
-      print t1
-      print t2
+  match t1.phantom, t2.phantom with
+  | Some _, _ | _, Some _ -> false
+  | None, None ->
+    match t1.descr, t2.descr with
+    | Value ty_value1, Value ty_value2 ->
+      check_aliases ty_value1 ty_value2
+    | Naked_number (ty_naked_number1, _), Naked_number (ty_naked_number2, _) ->
+      check_aliases ty_naked_number1 ty_naked_number2
+    | Fabricated _, Fabricated _ -> false
+    | _, _ ->
+      Misc.fatal_errorf "Kind mismatch for [physically_equal]: %a versus %a"
+        print t1
+        print t2
 
 (* CR mshinwell: We only use [structurally_distinct] on things of kind
    [Value] at the moment (same for [physically_equal], above). *)
@@ -1312,154 +1301,156 @@ let structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
   let simplified1, _canonical_name1 = Simplified_type.create ~type_of_name t1 in
   let simplified2, _canonical_name2 = Simplified_type.create ~type_of_name t2 in
   let module S = Simplified_type in
-  (* Note: this function relies on the fact that sets of "known values" are
-     always exact, and never a subset of the possible known values.  (This
-     distinction would be important if, for example, a type's knowledge has
-     to be cut down because it is getting too large.  Some random subset cannot
-     be chosen: we must forget all of the possible values. *)
-  match simplified1, simplified2 with
-  | Value ty_value1, Value ty_value2 ->
-    begin match ty_value1, ty_value2 with
-    | Unknown _, _ | _, Unknown _ | Bottom, _ | _, Bottom -> false
-    | Ok of_kind_value1, Ok of_kind_value2 ->
-      begin match of_kind_value1, of_kind_value2 with
-      | Blocks_and_tagged_immediates { blocks = blocks1; immediates = imms1; },
-          Blocks_and_tagged_immediates
-            { blocks = blocks2; immediates = imms2; } ->
-        (* CR-someday mshinwell: This could be improved if required. *)
-        if (Tag.Map.is_empty blocks1 && not (Tag.Map.is_empty blocks2))
-          || (not (Tag.Map.is_empty blocks1) && Tag.Map.is_empty blocks2)
-        then
-          true
-        else
-          begin match imms1, imms2 with
-          | Unknown, _ | _, Unknown -> false
-          | Known imms1, Known imms2 ->
-            let imms1 = Immediate.Map.keys imms1 in
-            let imms2 = Immediate.Map.keys imms2 in
-            Immediate.Set.is_empty (Immediate.Set.inter imms1 imms2)
+  if S.is_phantom simplified1 || S.is_phantom simplified2 then false
+  else
+    (* Note: this function relies on the fact that sets of "known values" are
+       always exact, and never a subset of the possible known values.  (This
+       distinction would be important if, for example, a type's knowledge has
+       to be cut down because it is getting too large.  Some random subset cannot
+       be chosen: we must forget all of the possible values. *)
+    match simplified1.descr, simplified2.descr with
+    | Value ty_value1, Value ty_value2 ->
+      begin match ty_value1, ty_value2 with
+      | Unknown, _ | _, Unknown | Bottom, _ | _, Bottom -> false
+      | Ok of_kind_value1, Ok of_kind_value2 ->
+        begin match of_kind_value1, of_kind_value2 with
+        | Blocks_and_tagged_immediates { blocks = blocks1; immediates = imms1; },
+            Blocks_and_tagged_immediates
+              { blocks = blocks2; immediates = imms2; } ->
+          (* CR-someday mshinwell: This could be improved if required. *)
+          if (Tag.Map.is_empty blocks1 && not (Tag.Map.is_empty blocks2))
+            || (not (Tag.Map.is_empty blocks1) && Tag.Map.is_empty blocks2)
+          then
+            true
+          else
+            begin match imms1, imms2 with
+            | Unknown, _ | _, Unknown -> false
+            | Known imms1, Known imms2 ->
+              let imms1 = Immediate.Map.keys imms1 in
+              let imms2 = Immediate.Map.keys imms2 in
+              Immediate.Set.is_empty (Immediate.Set.inter imms1 imms2)
+            end
+        | Blocks_and_tagged_immediates _, _
+        | _, Blocks_and_tagged_immediates _ -> true
+        | Boxed_number (Boxed_float ty_naked_number1),
+            Boxed_number (Boxed_float ty_naked_number2) ->
+          begin match
+            prove_naked_float ~type_of_name
+              (of_ty_naked_number ty_naked_number1
+                K.Naked_number.Naked_float),
+            prove_naked_float ~type_of_name
+              (of_ty_naked_number ty_naked_number2
+                K.Naked_number.Naked_float)
+          with
+          | Proved nums1, Proved nums2 ->
+            Float_by_bit_pattern.Set.is_empty
+              (Float_by_bit_pattern.Set.inter nums1 nums2)
+          | _, _ -> false
           end
-      | Blocks_and_tagged_immediates _, _
-      | _, Blocks_and_tagged_immediates _ -> true
-      | Boxed_number (Boxed_float ty_naked_number1),
-          Boxed_number (Boxed_float ty_naked_number2) ->
-        begin match
-          prove_naked_float ~type_of_name
-            (of_ty_naked_number ty_naked_number1
-              K.Naked_number.Naked_float),
-          prove_naked_float ~type_of_name
-            (of_ty_naked_number ty_naked_number2
-              K.Naked_number.Naked_float)
-        with
-        | Proved nums1, Proved nums2 ->
-          Float_by_bit_pattern.Set.is_empty
-            (Float_by_bit_pattern.Set.inter nums1 nums2)
-        | _, _ -> false
+        | Boxed_number (Boxed_int32 ty_naked_number1),
+            Boxed_number (Boxed_int32 ty_naked_number2) ->
+          begin match
+            prove_naked_int32 ~type_of_name
+              (of_ty_naked_number ty_naked_number1
+                K.Naked_number.Naked_int32),
+            prove_naked_int32 ~type_of_name
+              (of_ty_naked_number ty_naked_number2
+                K.Naked_number.Naked_int32)
+          with
+          | Proved nums1, Proved nums2 ->
+            Int32.Set.is_empty (Int32.Set.inter nums1 nums2)
+          | _, _ -> false
+          end
+        | Boxed_number (Boxed_int64 ty_naked_number1),
+            Boxed_number (Boxed_int64 ty_naked_number2) ->
+          begin match
+            prove_naked_int64 ~type_of_name
+              (of_ty_naked_number ty_naked_number1
+                K.Naked_number.Naked_int64),
+            prove_naked_int64 ~type_of_name
+              (of_ty_naked_number ty_naked_number2
+                K.Naked_number.Naked_int64)
+          with
+          | Proved nums1, Proved nums2 ->
+            Int64.Set.is_empty (Int64.Set.inter nums1 nums2)
+          | _, _ -> false
+          end
+        | Boxed_number (Boxed_nativeint ty_naked_number1),
+            Boxed_number (Boxed_nativeint ty_naked_number2) ->
+          begin match
+            prove_naked_nativeint ~type_of_name
+              (of_ty_naked_number ty_naked_number1
+                K.Naked_number.Naked_nativeint),
+            prove_naked_nativeint ~type_of_name
+              (of_ty_naked_number ty_naked_number2
+                K.Naked_number.Naked_nativeint)
+          with
+          | Proved nums1, Proved nums2 ->
+            Targetint.Set.is_empty (Targetint.Set.inter nums1 nums2)
+          | _, _ -> false
+          end
+        | Boxed_number _, _ -> true
+        | _, Boxed_number _ -> true
+        | Closures _, Closures _ -> false
+        | Closures _, _ | _, Closures _ -> true
+        | String strs1, String strs2 ->
+          String_info.Set.is_empty (String_info.Set.inter strs1 strs2)
         end
-      | Boxed_number (Boxed_int32 ty_naked_number1),
-          Boxed_number (Boxed_int32 ty_naked_number2) ->
-        begin match
-          prove_naked_int32 ~type_of_name
-            (of_ty_naked_number ty_naked_number1
-              K.Naked_number.Naked_int32),
-          prove_naked_int32 ~type_of_name
-            (of_ty_naked_number ty_naked_number2
-              K.Naked_number.Naked_int32)
-        with
-        | Proved nums1, Proved nums2 ->
-          Int32.Set.is_empty (Int32.Set.inter nums1 nums2)
-        | _, _ -> false
-        end
-      | Boxed_number (Boxed_int64 ty_naked_number1),
-          Boxed_number (Boxed_int64 ty_naked_number2) ->
-        begin match
-          prove_naked_int64 ~type_of_name
-            (of_ty_naked_number ty_naked_number1
-              K.Naked_number.Naked_int64),
-          prove_naked_int64 ~type_of_name
-            (of_ty_naked_number ty_naked_number2
-              K.Naked_number.Naked_int64)
-        with
-        | Proved nums1, Proved nums2 ->
-          Int64.Set.is_empty (Int64.Set.inter nums1 nums2)
-        | _, _ -> false
-        end
-      | Boxed_number (Boxed_nativeint ty_naked_number1),
-          Boxed_number (Boxed_nativeint ty_naked_number2) ->
-        begin match
-          prove_naked_nativeint ~type_of_name
-            (of_ty_naked_number ty_naked_number1
-              K.Naked_number.Naked_nativeint),
-          prove_naked_nativeint ~type_of_name
-            (of_ty_naked_number ty_naked_number2
-              K.Naked_number.Naked_nativeint)
-        with
-        | Proved nums1, Proved nums2 ->
-          Targetint.Set.is_empty (Targetint.Set.inter nums1 nums2)
-        | _, _ -> false
-        end
-      | Boxed_number _, _ -> true
-      | _, Boxed_number _ -> true
-      | Closures _, Closures _ -> false
-      | Closures _, _ | _, Closures _ -> true
-      | String strs1, String strs2 ->
-        String_info.Set.is_empty (String_info.Set.inter strs1 strs2)
       end
-    end
-  | S.Naked_number (_ty_naked_number1, K.Naked_number.Naked_immediate),
-      S.Naked_number (_ty_naked_number2, K.Naked_number.Naked_immediate) ->
-    (* CR-someday mshinwell: Support to be implemented later. *)
-    false
-  | S.Naked_number (_, K.Naked_number.Naked_float),
-      S.Naked_number (_, K.Naked_number.Naked_float) ->
-    begin match
-      prove_naked_float ~type_of_name t1,
-        prove_naked_float ~type_of_name t2
-    with
-    | Proved nums1, Proved nums2 ->
-      Float_by_bit_pattern.Set.is_empty
-        (Float_by_bit_pattern.Set.inter nums1 nums2)
-    | _, _ -> false
-    end
-  | S.Naked_number (_, K.Naked_number.Naked_int32),
-      S.Naked_number (_, K.Naked_number.Naked_int32) ->
-    begin match
-      prove_naked_int32 ~type_of_name t1,
-        prove_naked_int32 ~type_of_name t2
-    with
-    | Proved nums1, Proved nums2 ->
-      Int32.Set.is_empty
-        (Int32.Set.inter nums1 nums2)
-    | _, _ -> false
-    end
-  | S.Naked_number (_, K.Naked_number.Naked_int64),
-      S.Naked_number (_, K.Naked_number.Naked_int64) ->
-    begin match
-      prove_naked_int64 ~type_of_name t1,
-        prove_naked_int64 ~type_of_name t2
-    with
-    | Proved nums1, Proved nums2 ->
-      Int64.Set.is_empty
-        (Int64.Set.inter nums1 nums2)
-    | _, _ -> false
-    end
-  | S.Naked_number (_, K.Naked_number.Naked_nativeint),
-      S.Naked_number (_, K.Naked_number.Naked_nativeint) ->
-    begin match
-      prove_naked_nativeint ~type_of_name t1,
-        prove_naked_nativeint ~type_of_name t2
-    with
-    | Proved nums1, Proved nums2 ->
-      Targetint.Set.is_empty
-        (Targetint.Set.inter nums1 nums2)
-    | _, _ -> false
-    end
-  | Fabricated _, Fabricated _
-  | Phantom _, Phantom _ -> false
-  | _, _ ->
-    Misc.fatal_errorf "Kind mismatch for [structurally_different]: %a versus %a"
-      print t1
-      print t2
+    | S.Naked_number (_ty_naked_number1, K.Naked_number.Naked_immediate),
+        S.Naked_number (_ty_naked_number2, K.Naked_number.Naked_immediate) ->
+      (* CR-someday mshinwell: Support to be implemented later. *)
+      false
+    | S.Naked_number (_, K.Naked_number.Naked_float),
+        S.Naked_number (_, K.Naked_number.Naked_float) ->
+      begin match
+        prove_naked_float ~type_of_name t1,
+          prove_naked_float ~type_of_name t2
+      with
+      | Proved nums1, Proved nums2 ->
+        Float_by_bit_pattern.Set.is_empty
+          (Float_by_bit_pattern.Set.inter nums1 nums2)
+      | _, _ -> false
+      end
+    | S.Naked_number (_, K.Naked_number.Naked_int32),
+        S.Naked_number (_, K.Naked_number.Naked_int32) ->
+      begin match
+        prove_naked_int32 ~type_of_name t1,
+          prove_naked_int32 ~type_of_name t2
+      with
+      | Proved nums1, Proved nums2 ->
+        Int32.Set.is_empty
+          (Int32.Set.inter nums1 nums2)
+      | _, _ -> false
+      end
+    | S.Naked_number (_, K.Naked_number.Naked_int64),
+        S.Naked_number (_, K.Naked_number.Naked_int64) ->
+      begin match
+        prove_naked_int64 ~type_of_name t1,
+          prove_naked_int64 ~type_of_name t2
+      with
+      | Proved nums1, Proved nums2 ->
+        Int64.Set.is_empty
+          (Int64.Set.inter nums1 nums2)
+      | _, _ -> false
+      end
+    | S.Naked_number (_, K.Naked_number.Naked_nativeint),
+        S.Naked_number (_, K.Naked_number.Naked_nativeint) ->
+      begin match
+        prove_naked_nativeint ~type_of_name t1,
+          prove_naked_nativeint ~type_of_name t2
+      with
+      | Proved nums1, Proved nums2 ->
+        Targetint.Set.is_empty
+          (Targetint.Set.inter nums1 nums2)
+      | _, _ -> false
+      end
+    | Fabricated _, Fabricated _ -> false
+    | _, _ ->
+      Misc.fatal_errorf "Kind mismatch for [structurally_different]: %a \
+          versus %a"
+        print t1
+        print t2
 
 let int_switch_arms ~type_of_name t ~arms =
   let wrong_kind () =
@@ -1476,10 +1467,10 @@ let int_switch_arms ~type_of_name t ~arms =
   in
   let invalid () = Targetint.OCaml.Map.empty in
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
+  match simplified.descr with
   | Value ty_value ->
     begin match ty_value with
-    | Unknown _ -> unknown ()
+    | Unknown -> unknown ()
     | Bottom -> invalid ()
     | Ok (Blocks_and_tagged_immediates blocks_imms) ->
       if not (Tag.Map.is_empty blocks_imms.blocks) then begin
@@ -1501,8 +1492,7 @@ let int_switch_arms ~type_of_name t ~arms =
     | Ok (Closures _ | String _) -> invalid ()
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
-  | Fabricated _
-  | Phantom _ -> wrong_kind ()
+  | Fabricated _ -> wrong_kind ()
 
 let tag_switch_arms ~type_of_name t ~arms =
   let wrong_kind () =
@@ -1518,10 +1508,11 @@ let tag_switch_arms ~type_of_name t ~arms =
   in
   let invalid () = Tag.Map.empty in
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  match simplified with
+  Simplified_type.check_not_phantom simplified "tag_switch_arms";
+  match simplified.descr with
   | Fabricated ty_fabricated ->
     begin match ty_fabricated with
-    | Unknown _ -> unknown ()
+    | Unknown -> unknown ()
     | Bottom -> invalid ()
     | Ok (Tag tag_map) ->
       Tag.Map.fold (fun arm cont result ->
@@ -1534,7 +1525,7 @@ let tag_switch_arms ~type_of_name t ~arms =
     | Ok (Set_of_closures _) | Ok (Closure _) -> invalid ()
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
-  | Value _ | Phantom _ -> wrong_kind ()
+  | Value _ -> wrong_kind ()
 
 let free_names_transitive ~(type_of_name : type_of_name) t =
   let all_names = ref (Name_occurrences.create ()) in

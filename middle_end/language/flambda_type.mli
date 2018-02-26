@@ -30,7 +30,7 @@ val bottom_types_from_arity : Flambda_arity.t -> t list
 val unknown_types_from_arity : Flambda_arity.t -> t list
 
 (** Like [unknown_like] but for a array of types. *)
-val unknown_like_array : (t array -> t array) type_accessor
+val unknown_like_array : t array -> t array
 
 (*
 (** Create an array of "unknown" types of kind [Value], with the given
@@ -238,11 +238,11 @@ val prove_lengths_of_arrays_or_blocks
 (* CR mshinwell: rename "prove" -> "check"?
    In fact, it seems the common use case is for a check on "bottom" to be done
    before this function is called.  We should roll that all into one. *)
-val prove_of_kind_value : (t -> ty_value) type_accessor
+val prove_of_kind_value : t -> ty_value
 
 val prove_of_kind_naked_float
-   : (t
-  -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number) type_accessor
+   : t
+  -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number
 
 val prove_closures : (t -> closures proof) type_accessor
 
