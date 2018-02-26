@@ -238,10 +238,7 @@ val prove_lengths_of_arrays_or_blocks
 (* CR mshinwell: rename "prove" -> "check"?
    In fact, it seems the common use case is for a check on "bottom" to be done
    before this function is called.  We should roll that all into one. *)
-val prove_of_kind_value_with_expected_value_kind
-   : (t
-  -> Flambda_kind.Value_kind.t
-  -> ty_value) type_accessor
+val prove_of_kind_value : (t -> ty_value) type_accessor
 
 val prove_of_kind_naked_float
    : (t

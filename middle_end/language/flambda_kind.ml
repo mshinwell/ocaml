@@ -16,60 +16,6 @@
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
-module Value_kind = struct
-  type t =
-    | Unknown
-    | Definitely_pointer
-    | Definitely_immediate
-    | Bottom
-
-  (* [Unknown] is the top element.  [Definitely_pointer] and
-     [Definitely_immediate] are incomparable.  [Bottom] is the least
-     element. *)
-
-  let join t0 t1 =
-    match t0, t1 with
-    | Unknown, _
-    | _, Unknown
-    | Definitely_pointer, Definitely_immediate
-    | Definitely_immediate, Definitely_pointer -> Unknown
-    | Definitely_pointer, Definitely_pointer -> Definitely_pointer
-    | Definitely_immediate, Definitely_immediate -> Definitely_immediate
-    | t0, Bottom -> t0
-    | Bottom, t1 -> t1
-
-  let meet t0 t1 =
-    match t0, t1 with
-    | Unknown, t
-    | t, Unknown -> t
-    | _, Bottom | Bottom, _
-    | Definitely_pointer, Definitely_immediate
-    | Definitely_immediate, Definitely_pointer -> Bottom
-    | Definitely_pointer, Definitely_pointer -> Definitely_pointer
-    | Definitely_immediate, Definitely_immediate -> Definitely_immediate
-
-  let compatible t ~if_used_at =
-    match t, if_used_at with
-    | _, Unknown -> true
-    | Unknown, _ -> false
-    | Bottom, _ -> true
-    | _, Bottom -> false
-    | Definitely_pointer, Definitely_immediate
-    | Definitely_immediate, Definitely_pointer -> false
-    | Definitely_pointer, Definitely_pointer -> true
-    | Definitely_immediate, Definitely_immediate -> true
-
-  let print ppf t =
-    match t with
-    (* CR mshinwell: Change the name of the constructor *)
-    | Unknown -> Format.fprintf ppf "Any"
-    | Definitely_pointer -> Format.fprintf ppf "Definitely_pointer"
-    | Definitely_immediate -> Format.fprintf ppf "Definitely_immediate"
-    | Bottom -> Format.fprintf ppf "Bottom"
-
-  let compare = Pervasives.compare
-end
-
 module Naked_number_kind = struct
   type t =
     | Naked_immediate
@@ -85,121 +31,45 @@ module Naked_number_kind = struct
     | Naked_int32 -> Format.pp_print_string ppf "Naked_int32"
     | Naked_int64 -> Format.pp_print_string ppf "Naked_int64"
     | Naked_nativeint -> Format.pp_print_string ppf "Naked_nativeint"
-
-  let join_or_meet t1 t2 =
-    match t1, t2 with
-    | Naked_immediate, Naked_immediate
-    | Naked_float, Naked_float
-    | Naked_int32, Naked_int32
-    | Naked_int64, Naked_int64
-    | Naked_nativeint, Naked_nativeint -> t1
-    | _ ->
-      Misc.fatal_errorf "Naked_number_kind.join: kind error: %a vs. %a"
-        print t1
-        print t2
 end
 
 module Phantom_kind = struct
-  type t0 =
-    | Unknown
-    | Value of Value_kind.t
+  type t =
+    | Value
     | Naked_number of Naked_number_kind.t
-    | Fabricated of Value_kind.t
-    | Bottom
-
-  type 'a occurrences =
-    | In_types of 'a
-    | Debug_only of 'a
-
-  type t = t0 occurrences
-
-  let print_t0 ppf t0 =
-    match t0 with
-    | Unknown ->
-      Format.pp_print_string ppf "Unknown"
-    | Value value_kind ->
-      Format.fprintf ppf "(Value %a)" Value_kind.print value_kind
-    | Naked_number naked_number_kind ->
-      Format.fprintf ppf "(Naked_number %a)"
-        Naked_number_kind.print naked_number_kind
-    | Fabricated value_kind ->
-      Format.fprintf ppf "(Fabricated %a)" Value_kind.print value_kind
-    | Bottom ->
-      Format.pp_print_string ppf "Bottom"
+    | Fabricated
 
   let print ppf t =
     match t with
-    | In_types t0 ->
-      Format.fprintf ppf "@[(In_types %a)@]" print_t0 t0
-    | Debug_only t0 ->
-      Format.fprintf ppf "@[(Debug_only %a)@]" print_t0 t0
+    | Value ->
+      Format.fprintf ppf "Value"
+    | Naked_number naked_number_kind ->
+      Format.fprintf ppf "(Naked_number %a)"
+        Naked_number_kind.print naked_number_kind
+    | Fabricated ->
+      Format.fprintf ppf "Fabricated"
 
-  (* CR mshinwell: We should review exactly where this is used *)
-  let join_t0 t1 t2 =
-    match t1, t2 with
-    | Unknown, _ | _, Unknown -> Unknown
-    | Bottom, t2 -> t2
-    | t1, Bottom -> t1
-    | Value k1, Value k2 -> Value (Value_kind.join k1 k2)
-    | Naked_number k1, Naked_number k2 ->
-      Naked_number (Naked_number_kind.join_or_meet k1 k2)
-    | Fabricated k1, Fabricated k2 ->
-      Fabricated (Value_kind.join k1 k2)
-    | _, _ ->
-      Misc.fatal_errorf "Phantom_kind.join: kind error: %a vs. %a"
-        print_t0 t1
-        print_t0 t2
+  type occurrences =
+    | In_types
+    | Debug_only
 
-  let join t1 t2 =
-    match t1, t2 with
-    | In_types t0_1, In_types t0_2 ->
-      In_types (join_t0 t0_1 t0_2)
-    | Debug_only t0_1, Debug_only t0_2 ->
-      Debug_only (join_t0 t0_1 t0_2)
-    | In_types _, Debug_only _
-    | Debug_only _, In_types _ ->
-      Misc.fatal_errorf "Phantom_kind.join: kind error: %a vs. %a"
-        print t1
-        print t2
-
-  let meet_t0 t1 t2 =
-    match t1, t2 with
-    | Unknown, t2 -> t2
-    | t1, Unknown -> t1
-    | Bottom, _ | _, Bottom -> Bottom
-    | Value k1, Value k2 -> Value (Value_kind.meet k1 k2)
-    | Naked_number k1, Naked_number k2 ->
-      Naked_number (Naked_number_kind.join_or_meet k1 k2)
-    | Fabricated k1, Fabricated k2 -> Fabricated (Value_kind.meet k1 k2)
-    | _, _ ->
-      Misc.fatal_errorf "Phantom_kind.meet: kind error: %a vs. %a"
-        print_t0 t1
-        print_t0 t2
-
-  let meet t1 t2 =
-    match t1, t2 with
-    | In_types t0_1, In_types t0_2 ->
-      In_types (meet_t0 t0_1 t0_2)
-    | Debug_only t0_1, Debug_only t0_2 ->
-      Debug_only (meet_t0 t0_1 t0_2)
-    | In_types _, Debug_only _
-    | Debug_only _, In_types _ ->
-      Misc.fatal_errorf "Phantom_kind.meet: kind error: %a vs. %a"
-        print t1
-        print t2
+  let print_occurrences ppf occs =
+    match occs with
+    | In_types -> Format.pp_print_string ppf "In_types"
+    | Debug_only -> Format.pp_print_string ppf "Debug_only"
 end
 
 type t =
-  | Value of Value_kind.t
+  | Value
   | Naked_number of Naked_number_kind.t
-  | Fabricated of Value_kind.t
-  | Phantom of Phantom_kind.t
+  | Fabricated
+  | Phantom of Phantom_kind.occurrences * Phantom_kind.t
 
 type kind = t
 
-let value value_kind = Value value_kind
+let value () = Value
 
-let unit () = value Definitely_immediate
+let unit () = Value
 
 (* CR mshinwell: can remove lambdas now *)
 let naked_immediate () = Naked_number Naked_immediate
@@ -212,9 +82,9 @@ let naked_int64 () = Naked_number Naked_int64
 
 let naked_nativeint () = Naked_number Naked_nativeint
 
-let fabricated value_kind = Fabricated value_kind
+let fabricated () = Fabricated
 
-let phantom phantom_kind = Phantom phantom_kind
+let phantom occs phantom_kind = Phantom (occs, phantom_kind)
 
 include Identifiable.Make (struct
   type nonrec t = t
@@ -226,83 +96,42 @@ include Identifiable.Make (struct
 
   let print ppf t =
     match t with
-    | Value value_kind ->
-      Format.fprintf ppf "(Value %a)" Value_kind.print value_kind
+    | Value ->
+      Format.fprintf ppf "Value"
     | Naked_number naked_number_kind ->
       Format.fprintf ppf "(Naked_number %a)"
         Naked_number_kind.print naked_number_kind
-    | Fabricated value_kind ->
-      Format.fprintf ppf "(Fabricated %a)" Value_kind.print value_kind
-    | Phantom phantom_kind ->
-      Format.fprintf ppf "(Phantom %a)" Phantom_kind.print phantom_kind
+    | Fabricated ->
+      Format.fprintf ppf "Fabricated"
+    | Phantom (occs, phantom_kind) ->
+      Format.fprintf ppf "(Phantom %a %a)"
+        Phantom_kind.print_occurrences occs
+        Phantom_kind.print phantom_kind
 end)
 
 let compatible t ~if_used_at =
-  match t, if_used_at with
-  | Value value_kind, Value if_used_at ->
-    Value_kind.compatible value_kind ~if_used_at
-  | Fabricated value_kind, Fabricated if_used_at ->
-    Value_kind.compatible value_kind ~if_used_at
-  | _, _ -> equal t if_used_at
-
-type coercion_result =
-  | Always_ok
-  | Needs_runtime_check
-  | Always_wrong
-
-let coerce ~actual_kind ~desired_kind : coercion_result =
-  if compatible actual_kind ~if_used_at:desired_kind then
-    Always_ok
-  else if compatible desired_kind ~if_used_at:actual_kind then
-    Needs_runtime_check
-  else
-    Always_wrong
-
-let phantomize_in_types t : t =
-  match t with
-  | Value value_kind ->
-    Phantom (In_types (Phantom_kind.Value value_kind))
-  | Naked_number number_kind ->
-    Phantom (In_types (Phantom_kind.Naked_number number_kind))
-  | Fabricated fab_kind ->
-    Phantom (In_types (Phantom_kind.Fabricated fab_kind))
-  | Phantom (In_types _) -> t
-  | Phantom (Debug_only _) ->
-    Misc.fatal_errorf "Cannot phantomize kind %a to [In_types]"
-      print t
-
-let phantomize_debug_only t =
-  match t with
-  | Value value_kind ->
-    Phantom (Debug_only (Phantom_kind.Value value_kind))
-  | Naked_number number_kind ->
-    Phantom (Debug_only (Phantom_kind.Naked_number number_kind))
-  | Fabricated fab_kind ->
-    Phantom (Debug_only (Phantom_kind.Fabricated fab_kind))
-  | Phantom (In_types phantom_kind) ->
-    Phantom (Phantom_kind.Debug_only phantom_kind)
-  | Phantom (Debug_only _) -> t
+  equal t if_used_at
 
 let is_value t =
   match t with
-  | Value _ -> true
+  | Value -> true
   | Naked_number _
-  | Fabricated _
+  | Fabricated
   | Phantom _ -> false
 
 let is_naked_float t =
   match t with
   | Naked_number Naked_float -> true
-  | Value _
+  | Value
   | Naked_number _
-  | Fabricated _
+  | Fabricated
   | Phantom _ -> false
 
 let is_phantom t =
   match t with
-  | Value _
+  | Value
   | Naked_number _
-  | Fabricated _ -> false
+  | Fabricated -> false
   | Phantom _ -> true
 
 module Standard_int = struct
@@ -314,7 +143,7 @@ module Standard_int = struct
 
   let to_kind t : kind =
     match t with
-    | Tagged_immediate -> Value Definitely_immediate
+    | Tagged_immediate -> Value
     | Naked_int32 -> Naked_number Naked_int32
     | Naked_int64 -> Naked_number Naked_int64
     | Naked_nativeint -> Naked_number Naked_nativeint
@@ -352,7 +181,7 @@ module Standard_int_or_float = struct
 
   let to_kind t : kind =
     match t with
-    | Tagged_immediate -> Value Definitely_immediate
+    | Tagged_immediate -> Value
     | Naked_float -> Naked_number Naked_float
     | Naked_int32 -> Naked_number Naked_int32
     | Naked_int64 -> Naked_number Naked_int64

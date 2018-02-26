@@ -86,17 +86,15 @@ type coeffects = No_coeffects | Has_coeffects
    a comparison function next to each. *)
 
 type make_block_kind =
-  | Full_of_values of Tag.Scannable.t * (Flambda_kind.Value_kind.t list)
+  | Full_of_values of Tag.Scannable.t
   | Full_of_naked_floats
   | Generic_array of Generic_array_specialisation.t
 
 let print_make_block_kind ppf kind =
   match kind with
-  | Full_of_values (tag, arity) ->
-    Format.fprintf ppf "(Full_of_values (tag %a) (%a))"
+  | Full_of_values tag ->
+    Format.fprintf ppf "(Full_of_values (tag %a))"
       Tag.Scannable.print tag
-      (Format.pp_print_list ~pp_sep:Format.pp_print_space
-        Flambda_kind.Value_kind.print) arity
   | Full_of_naked_floats -> Format.pp_print_string ppf "Full_of_naked_floats"
   | Generic_array generic ->
     Format.fprintf ppf "(Generic %a)"
@@ -104,10 +102,8 @@ let print_make_block_kind ppf kind =
 
 let compare_make_block_kind kind1 kind2 =
   match kind1, kind2 with
-  | Full_of_values (tag1, arity1), Full_of_values (tag2, arity2) ->
-    let c = Tag.Scannable.compare tag1 tag2 in
-    if c <> 0 then c
-    else Misc.Stdlib.List.compare K.Value_kind.compare arity1 arity2
+  | Full_of_values tag1, Full_of_values tag2 ->
+    Tag.Scannable.compare tag1 tag2
   | Full_of_values _, _ -> -1
   | _, Full_of_values _ -> 1
   | Full_of_naked_floats, Full_of_naked_floats -> 0
@@ -117,22 +113,17 @@ let compare_make_block_kind kind1 kind2 =
   | Generic_array _, _ -> 1
 
 type duplicate_block_kind =
-  | Full_of_values_known_length of
-      Tag.Scannable.t * (Flambda_kind.Value_kind.t list)
-  | Full_of_values_unknown_length of Tag.Scannable.t * Flambda_kind.Value_kind.t
+  | Full_of_values_known_length of Tag.Scannable.t
+  | Full_of_values_unknown_length of Tag.Scannable.t
   | Full_of_naked_floats of { length : Targetint.OCaml.t option; }
   | Generic_array of Generic_array_specialisation.t
 
 let print_duplicate_block_kind ppf (kind : duplicate_block_kind) =
   match kind with
-  | Full_of_values_known_length (tag, kinds) ->
-    Format.fprintf ppf "%a: (%a)"
-      Tag.Scannable.print tag
-      (Format.pp_print_list Flambda_kind.Value_kind.print) kinds
-  | Full_of_values_unknown_length (tag, kind) ->
-    Format.fprintf ppf "%a: all %a"
-      Tag.Scannable.print tag
-      Flambda_kind.Value_kind.print kind
+  | Full_of_values_known_length tag ->
+    Format.fprintf ppf "%a" Tag.Scannable.print tag
+  | Full_of_values_unknown_length tag ->
+    Format.fprintf ppf "%a" Tag.Scannable.print tag
   | Full_of_naked_floats { length = None; } ->
     Format.pp_print_string ppf "floats"
   | Full_of_naked_floats { length = Some length; } ->
@@ -146,40 +137,32 @@ let print_duplicate_block_kind ppf (kind : duplicate_block_kind) =
    nativeint. *)
 
 module Block_access_kind = struct
+  type value_kind =
+    | Unknown
+    | Definitely_pointer
+    | Definitely_immediate
+
+  let print_value_kind ppf kind =
+    match kind with
+    | Unknown -> Format.pp_print_string ppf "Unknown"
+    | Definitely_pointer -> Format.pp_print_string ppf "Definitely_pointer"
+    | Definitely_immediate -> Format.pp_print_string ppf "Definitely_immediate"
+
   type t0 =
-    | Value of Flambda_kind.Value_kind.t
+    | Value of value_kind
     | Naked_float
-    | Fabricated of Flambda_kind.Value_kind.t
+    | Fabricated of value_kind
 
   type t =
     | Block of t0
     | Array of t0
     | Generic_array of Generic_array_specialisation.t
 
-  let kind_this_element t =
+  let element_kind t =
     match t with
-    | Block (Value kind) -> K.value kind
-    | Block Naked_float -> K.naked_float ()
-    | Block (Fabricated kind) -> K.fabricated kind
-    | Array (Value kind) -> K.value kind
-    | Array Naked_float -> K.naked_float ()
-    | Array (Fabricated kind) -> K.fabricated kind
-    | Generic_array _ -> Misc.fatal_error "Not yet implemented"
-
-  let kind_all_elements t =
-    match t with
-    | Block (Value Unknown)
-    | Block (Value Definitely_pointer)
-    | Block (Value Definitely_immediate)
-    | Block (Value Bottom) -> K.value Unknown
-    | Block Naked_float -> K.naked_float ()
-    | Block (Fabricated Unknown)
-    | Block (Fabricated Definitely_pointer)
-    | Block (Fabricated Definitely_immediate)
-    | Block (Fabricated Bottom) -> K.fabricated Unknown
-    | Array (Value kind) -> K.value kind
-    | Array Naked_float -> K.naked_float ()
-    | Array (Fabricated kind) -> K.fabricated kind
+    | Block (Value _) | Array (Value _) -> K.value ()
+    | Block Naked_float | Array Naked_float -> K.naked_float ()
+    | Block (Fabricated _) | Array (Fabricated _) -> K.fabricated ()
     | Generic_array _ -> Misc.fatal_error "Not yet implemented"
 
   let compare_t0 (t0_1 : t0) t0_2 = Pervasives.compare t0_1 t0_2
@@ -200,12 +183,10 @@ module Block_access_kind = struct
   let print_t0 ppf t0 =
     match t0 with
     | Value kind ->
-      Format.fprintf ppf "@[(Value %a)@]"
-        Flambda_kind.Value_kind.print kind
+      Format.fprintf ppf "@[(Value %a)@]" print_value_kind kind
     | Naked_float -> Format.pp_print_string ppf "Naked_float"
     | Fabricated kind ->
-      Format.fprintf ppf "@[(Fabricated %a)@]"
-        Flambda_kind.Value_kind.print kind
+      Format.fprintf ppf "@[(Fabricated %a)@]" print_value_kind kind
 
   let print ppf kind =
     match kind with
@@ -247,14 +228,14 @@ let writing_to_an_array_like_thing =
   (* XXX But there are no bounds checks now *)
   effects, Has_coeffects
 
-let array_like_thing_index_kind = K.value Definitely_immediate
+let array_like_thing_index_kind = K.value ()
 
 (* CR mshinwell: Improve naming *)
-let bigarray_kind = K.value Unknown
-let bigstring_kind = K.value Unknown
-let block_kind = K.value Unknown
-let block_element_kind = K.value Unknown
-let string_or_bytes_kind = K.value Unknown
+let bigarray_kind = K.value ()
+let bigstring_kind = K.value ()
+let block_kind = K.value ()
+let block_element_kind = K.value ()
+let string_or_bytes_kind = K.value ()
 
 type comparison = Eq | Neq | Lt | Gt | Le | Ge
 
@@ -311,7 +292,7 @@ type bigarray_kind =
 
 let element_kind_of_bigarray_kind k =
   match k with
-  | Unknown -> K.value Unknown
+  | Unknown -> K.value ()
   | Float32
   | Float64 -> K.naked_float ()
   | Sint8
@@ -325,7 +306,7 @@ let element_kind_of_bigarray_kind k =
   | Complex32
   | Complex64 ->
     (* See [copy_two_doubles] in bigarray_stubs.c. *)
-    K.value Definitely_pointer
+    K.value ()
 
 (*
 let print_bigarray_kind ppf k =
@@ -400,7 +381,7 @@ let byte_width_of_string_accessor_width width =
 
 let kind_of_string_accessor_width width =
   match width with
-  | Eight | Sixteen -> K.value Definitely_immediate
+  | Eight | Sixteen -> K.value ()
   | Thirty_two -> K.naked_int32 ()
   | Sixty_four -> K.naked_int64 ()
 
@@ -600,48 +581,48 @@ let print_unary_primitive ppf p =
 
 let arg_kind_of_unary_primitive p =
   match p with
-  | Duplicate_block _ -> K.value Definitely_pointer
-  | Is_int -> K.value Unknown
-  | Get_tag _ -> K.value Definitely_pointer
-  | String_length _ -> K.value Definitely_pointer
-  | Int_as_pointer -> K.value Definitely_immediate
-  | Opaque_identity -> K.value Unknown
+  | Duplicate_block _ -> K.value ()
+  | Is_int -> K.value ()
+  | Get_tag _ -> K.value ()
+  | String_length _ -> K.value ()
+  | Int_as_pointer -> K.value ()
+  | Opaque_identity -> K.value ()
   | Int_arith (kind, _) -> K.Standard_int.to_kind kind
   | Num_conv { src; dst = _; } -> K.Standard_int_or_float.to_kind src
-  | Boolean_not -> K.value Definitely_immediate
+  | Boolean_not -> K.value ()
   | Float_arith _ -> K.naked_float ()
   | Array_length _
-  | Bigarray_length _ -> K.value Definitely_pointer
-  | Unbox_number _ -> K.value Definitely_pointer
+  | Bigarray_length _ -> K.value ()
+  | Unbox_number _ -> K.value ()
   | Box_number kind -> K.Boxable_number.to_kind kind
-  | Project_closure _ -> K.fabricated Definitely_pointer
+  | Project_closure _ -> K.fabricated ()
   | Move_within_set_of_closures _
-  | Project_var _ -> K.value Definitely_pointer
+  | Project_var _ -> K.value ()
 
 let result_kind_of_unary_primitive p : result_kind =
   match p with
-  | Duplicate_block _ -> Singleton (K.value Definitely_pointer)
+  | Duplicate_block _ -> Singleton (K.value ())
   | Is_int
   | Get_tag _
-  | String_length _ -> Singleton (K.value Definitely_immediate)
+  | String_length _ -> Singleton (K.value ())
   | Int_as_pointer ->
     (* This primitive is *only* to be used when the resulting pointer points
        at something which is a valid OCaml value (even if outside of the
        heap). *)
-    Singleton (K.value Definitely_pointer)
-  | Opaque_identity -> Singleton (K.value Unknown)
+    Singleton (K.value ())
+  | Opaque_identity -> Singleton (K.value ())
   | Int_arith (kind, _) -> Singleton (K.Standard_int.to_kind kind)
   | Num_conv { src = _; dst; } ->
     Singleton (K.Standard_int_or_float.to_kind dst)
-  | Boolean_not -> Singleton (K.value Definitely_immediate)
+  | Boolean_not -> Singleton (K.value ())
   | Float_arith _ -> Singleton (K.naked_float ())
   | Array_length _
-  | Bigarray_length _ -> Singleton (K.value Definitely_immediate)
+  | Bigarray_length _ -> Singleton (K.value ())
   | Unbox_number kind -> Singleton (K.Boxable_number.to_kind kind)
   | Box_number _
   | Project_closure _
-  | Move_within_set_of_closures _ -> Singleton (K.value Definitely_pointer)
-  | Project_var _ -> Singleton (K.value Unknown)
+  | Move_within_set_of_closures _ -> Singleton (K.value ())
+  | Project_var _ -> Singleton (K.value ())
 
 let effects_and_coeffects_of_unary_primitive p =
   match p with
@@ -825,9 +806,9 @@ let args_kind_of_binary_primitive p =
 let result_kind_of_binary_primitive p : result_kind =
   match p with
   | Block_load (block_access_kind, _) ->
-    Singleton (Block_access_kind.kind_this_element block_access_kind)
+    Singleton (Block_access_kind.element_kind block_access_kind)
   | String_or_bigstring_load (_, (Eight | Sixteen)) ->
-    Singleton (K.value Definitely_immediate)
+    Singleton (K.value ())
   | String_or_bigstring_load (_, Thirty_two) ->
     Singleton (K.naked_int32 ())
   | String_or_bigstring_load (_, Sixty_four) ->
@@ -837,7 +818,7 @@ let result_kind_of_binary_primitive p : result_kind =
   | Float_arith _ -> Singleton (K.naked_float ())
   | Phys_equal _
   | Int_comp _
-  | Float_comp _ -> Singleton (K.value Definitely_immediate)
+  | Float_comp _ -> Singleton (K.value ())
 
 let effects_and_coeffects_of_binary_primitive p =
   match p with
@@ -895,7 +876,7 @@ let args_kind_of_ternary_primitive p =
     block_kind, array_like_thing_index_kind, block_element_kind
   | Bytes_or_bigstring_set (Bytes, (Eight | Sixteen)) ->
     string_or_bytes_kind, array_like_thing_index_kind,
-      K.value Definitely_immediate
+      K.value ()
   | Bytes_or_bigstring_set (Bytes, Thirty_two) ->
     string_or_bytes_kind, array_like_thing_index_kind,
       K.naked_int32 ()
@@ -904,7 +885,7 @@ let args_kind_of_ternary_primitive p =
       K.naked_int64 ()
   | Bytes_or_bigstring_set (Bigstring, (Eight | Sixteen)) ->
     bigstring_kind, array_like_thing_index_kind,
-      K.value Definitely_immediate
+      K.value ()
   | Bytes_or_bigstring_set (Bigstring, Thirty_two) ->
     bigstring_kind, array_like_thing_index_kind,
       K.naked_int32 ()
@@ -966,21 +947,18 @@ let print_variadic_primitive ppf p =
 
 let args_kind_of_variadic_primitive p : arg_kinds =
   match p with
-  | Make_block (Full_of_values (_tag, value_kinds), _) ->
-    let kinds =
-      List.map (fun value_kind -> K.value value_kind) value_kinds
-    in
-    Variadic kinds
+  | Make_block (Full_of_values _tag, _) ->
+    Variadic_all_of_kind (K.value ())
   | Make_block (Full_of_naked_floats, _) ->
     Variadic_all_of_kind (K.naked_float ())
   | Make_block (Generic_array No_specialisation, _) ->
-    Variadic_all_of_kind (K.value Unknown)
+    Variadic_all_of_kind (K.value ())
   | Make_block (Generic_array Full_of_naked_floats, _) ->
     Variadic_all_of_kind (K.naked_float ())
   | Make_block (Generic_array Full_of_immediates, _) ->
-    Variadic_all_of_kind (K.value Definitely_immediate)
+    Variadic_all_of_kind (K.value ())
   | Make_block (Generic_array Full_of_arbitrary_values_but_not_floats, _) ->
-    Variadic_all_of_kind (K.value Unknown)
+    Variadic_all_of_kind (K.value ())
   | Bigarray_set (num_dims, kind, _) ->
     let index = List.init num_dims (fun _ -> array_like_thing_index_kind) in
     let new_value = element_kind_of_bigarray_kind kind in
@@ -991,7 +969,7 @@ let args_kind_of_variadic_primitive p : arg_kinds =
 
 let result_kind_of_variadic_primitive p : result_kind =
   match p with
-  | Make_block _ -> Singleton (K.value Definitely_pointer)
+  | Make_block _ -> Singleton (K.value ())
   | Bigarray_set _ -> Unit
   | Bigarray_load (_, kind, _) ->
     Singleton (element_kind_of_bigarray_kind kind)

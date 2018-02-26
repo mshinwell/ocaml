@@ -78,30 +78,28 @@ module type S = sig
 
   (** Values of type [t] are known as "Flambda types".  Each Flambda type
       has a unique kind. *)
-  type t = private
-    | Value of ty_value
-    | Naked_number :
-        'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t -> t
-    | Fabricated of ty_fabricated
-    (* CR mshinwell: I think we might as well split [Phantom] into two, for
-       the "in types" and "debug only" cases. *)
-    | Phantom of ty_phantom Flambda_kind.Phantom_kind.occurrences
+  type t = private {
+    descr : descr;
+    phantom : Flambda_kind.Phantom_kind.occurrences option;
+  }
 
   and flambda_type = t
 
-  (** Types of kind [Value] are equipped with an extra piece of information
-      such that when we are at the top element, [Unknown], we still know
-      whether a root has to be registered. *)
-  and ty_value = (of_kind_value, Flambda_kind.Value_kind.t) ty
-  and 'a ty_naked_number = ('a of_kind_naked_number, unit) ty
-  and ty_fabricated = (of_kind_fabricated, Flambda_kind.Value_kind.t) ty
-  and ty_phantom = (of_kind_phantom, Flambda_kind.Phantom_kind.t0) ty
+  and descr = private
+    | Value of ty_value
+    | Naked_number :
+        'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t -> descr
+    | Fabricated of ty_fabricated
 
-  and ('a, 'u) ty = ('a, 'u) unknown_or_join or_alias
+  and ty_value = of_kind_value ty
+  and 'a ty_naked_number = 'a of_kind_naked_number ty
+  and ty_fabricated = of_kind_fabricated ty
+
+  and 'a ty = 'a unknown_or_join or_alias
 
   (** For each kind there is a lattice of types. *)
-  and ('a, 'u) unknown_or_join = private
-    | Unknown of 'u
+  and 'a unknown_or_join = private
+    | Unknown
     (** "Any value can flow to this point": the top element. *)
     | Join of 'a list
     (** - The list being empty means bottom, the least element: "no value can
@@ -255,13 +253,6 @@ module type S = sig
     function_decls : function_declarations;
   }
 
-  and of_kind_phantom = private
-    | Value of ty_value
-    | Naked_number
-         : 'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t
-        -> of_kind_phantom
-    | Fabricated of ty_fabricated
-
   module Name_or_export_id : sig
     type t =
       | Name of Name.t
@@ -281,12 +272,10 @@ module type S = sig
   type 'a type_accessor = type_of_name:type_of_name -> 'a
 
   (** If the given type has kind [Phantom], return it; otherwise form the
-      correct type of kind [Phantom] describing the given type.  The
-      user-supplied function determines which variety of [Phantom] kind
-      ("in types" or "debug only") is formed. *)
+      correct type of kind [Phantom] describing the given type. *)
   val phantomize
      : t
-    -> (ty_phantom -> ty_phantom Flambda_kind.Phantom_kind.occurrences)
+    -> Flambda_kind.Phantom_kind.occurrences
     -> t
 
   module Typing_environment : sig
@@ -344,15 +333,11 @@ module type S = sig
   (** Construction of top types. *)
   val unknown : Flambda_kind.t -> t
 
-  val any_value : Flambda_kind.Value_kind.t -> t
+  val any_value : unit -> t
+  val any_value_as_ty_value : unit -> ty_value
 
-  val any_value_as_ty_value
-     : Flambda_kind.Value_kind.t
-    -> ty_value
-
-  val any_fabricated_as_ty_fabricated
-     : Flambda_kind.Value_kind.t
-    -> ty_fabricated
+  val any_fabricated : unit -> t
+  val any_fabricated_as_ty_fabricated : unit -> ty_fabricated
 
   val any_tagged_immediate : unit -> t
 
@@ -373,11 +358,6 @@ module type S = sig
   val any_naked_nativeint : unit -> t
 
 (*  val any_closure : unit -> t *)
-
-  val any_fabricated : Flambda_kind.Value_kind.t -> t
-
-  val any_phantom_in_types : unit -> t
-  val any_phantom_debug_only : unit -> t
 
   (** Building of types representing tagged / boxed values from specified
       constants. *)
@@ -466,7 +446,6 @@ module type S = sig
 
   val block_of_unknown_values
      : Tag.Scannable.t
-    -> Flambda_kind.Value_kind.t
     -> size:int
     -> t
 
@@ -535,12 +514,7 @@ module type S = sig
   val free_names : t -> Name_occurrences.t
 
   (** Determine the (unique) kind of a type. *)
-  val kind : (t -> Flambda_kind.t) type_accessor
-
-  (** Given a type known to be of kind [Value], determine the corresponding
-      value kind. *)
-  val value_kind_ty_value
-     : (ty_value -> Flambda_kind.Value_kind.t) type_accessor
+  val kind : t -> Flambda_kind.t
 
   val add_judgements : (t -> Typing_environment.t -> t) type_accessor
 
@@ -573,17 +547,17 @@ module type S = sig
 
   (** Like [resolve_aliases], but for use when you have a [ty], not a [t]. *)
   val resolve_aliases_on_ty
-     : (force_to_kind:(t -> ('a, 'b) ty)
-    -> ('a, 'b) ty
-    -> ('a, 'b) ty * (Name.t option)) type_accessor
+     : (force_to_kind:(t -> 'a ty)
+    -> 'a ty
+    -> 'a ty * (Name.t option)) type_accessor
 
   (** Like [resolve_aliases_on_ty], but unresolved names at the top level are
       changed into [Unknown]s (with payloads given by [unknown_payload]). *)
   val resolve_aliases_and_squash_unresolved_names_on_ty
-     : (force_to_kind:(t -> ('a, 'b) ty)
+     : (force_to_kind:(t -> 'a ty)
     -> unknown_payload:'b
-    -> ('a, 'b) ty
-    -> ('a, 'b) unknown_or_join * (Name.t option)) type_accessor
+    -> 'a ty
+    -> 'a unknown_or_join * (Name.t option)) type_accessor
 
   val force_to_kind_value : t -> ty_value
 
@@ -598,9 +572,5 @@ module type S = sig
 
   val force_to_kind_fabricated : t -> ty_fabricated
 
-  val force_to_kind_phantom_in_types : t -> ty_phantom
-
-  val force_to_kind_phantom_debug_only : t -> ty_phantom
-
-  val check_of_kind : (t -> Flambda_kind.t -> unit) type_accessor
+  val check_of_kind : t -> Flambda_kind.t -> unit
 end

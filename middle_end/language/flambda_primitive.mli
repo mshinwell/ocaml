@@ -42,14 +42,13 @@ module Generic_array_specialisation : sig
 end
 
 type make_block_kind =
-  | Full_of_values of Tag.Scannable.t * (Flambda_kind.Value_kind.t list)
+  | Full_of_values of Tag.Scannable.t
   | Full_of_naked_floats
   | Generic_array of Generic_array_specialisation.t
 
 type duplicate_block_kind =
-  | Full_of_values_known_length of
-      Tag.Scannable.t * (Flambda_kind.Value_kind.t list)
-  | Full_of_values_unknown_length of Tag.Scannable.t * Flambda_kind.Value_kind.t
+  | Full_of_values_known_length of Tag.Scannable.t
+  | Full_of_values_unknown_length of Tag.Scannable.t
   | Full_of_naked_floats of { length : Targetint.OCaml.t option; }
   | Generic_array of Generic_array_specialisation.t
 
@@ -60,22 +59,22 @@ module Block_access_kind : sig
   (* CR mshinwell: This module needs documenting well to avoid any
      misconceptions about the semantics of the various constructors *)
 
+  type value_kind =
+    | Unknown
+    | Definitely_pointer
+    | Definitely_immediate
+
   type t0 =
-    | Value of Flambda_kind.Value_kind.t
+    | Value of value_kind
     | Naked_float
-    | Fabricated of Flambda_kind.Value_kind.t
+    | Fabricated of value_kind
 
   type t =
     | Block of t0
     | Array of t0
     | Generic_array of Generic_array_specialisation.t
 
-  (** The kind of the field of the block being accessed. *)
-  val kind_this_element : t -> Flambda_kind.t
-
-  (** A suitable kind to assign to _all_ the fields of the block being
-      accessed. *)
-  val kind_all_elements : t -> Flambda_kind.t
+  val element_kind : t -> Flambda_kind.t
 end
 
 (* Notes for producing [make_block_kind] / [Duplicate_scannable_block] from

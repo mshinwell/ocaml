@@ -82,7 +82,7 @@ module Const = struct
     let module K = Flambda_kind in
     match t with
     | Untagged_immediate _ -> K.naked_immediate ()
-    | Tagged_immediate _ -> K.value Definitely_immediate
+    | Tagged_immediate _ -> K.value ()
     | Naked_float _ -> K.naked_float ()
     | Naked_int32 _ -> K.naked_int32 ()
     | Naked_int64 _ -> K.naked_int64 ()
