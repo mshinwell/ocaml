@@ -79,7 +79,7 @@ let prepare_to_simplify_set_of_closures ~env
       function_decls.set_of_closures_origin
   in
   let set_of_closures_ty =
-    T.unknown (Flambda_kind.value Definitely_pointer)
+    T.unknown (Flambda_kind.value ())
 (* XXX to fix.  Old code:
     let bound_vars =
       Variable.Map.fold (fun id (_, desc) map ->
@@ -126,7 +126,7 @@ let prepare_to_simplify_closure
   let env =
     (* XXX use the correct my_closure type. *)
     E.add_variable set_of_closures_env my_closure
-      (T.unknown (Flambda_kind.value Definitely_pointer))
+      (T.unknown (Flambda_kind.value ()))
   in
   (* CR mshinwell: Freshening?  And cleaning? *)
   List.fold_left (fun env (param : Flambda.Typed_parameter.t) ->

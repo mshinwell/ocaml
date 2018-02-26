@@ -142,11 +142,9 @@ let inline_by_copying_function_body ~env ~r
      that supplied at the call site. *)
   let handlers =
     (* CR mshinwell: this occurs in [Inlining_decision] too, factor out *)
-    let return_arity =
-      List.map (fun ty -> (E.type_accessor env T.kind) ty) function_decl.result
-    in
+    let return_arity = List.map (fun ty -> T.kind ty) function_decl.result in
     let parameter_types = T.unknown_types_from_arity return_arity in
-    (E.type_accessor env Flambda_utils.make_let_cont_alias)
+    Flambda_utils.make_let_cont_alias
       ~name:function_decl.continuation_param
       ~alias_of:continuation
       ~parameter_types
@@ -157,7 +155,7 @@ let inline_by_copying_function_body ~env ~r
     let bindings =
       List.map2 (fun (param, ty) arg ->
           let var = Parameter.var param in
-          let kind = (E.type_accessor env T.kind) ty in
+          let kind = T.kind ty in
           var, kind, Flambda.Named.Simple arg)
         freshened_params
         args
@@ -166,7 +164,7 @@ let inline_by_copying_function_body ~env ~r
   in
   let expr =
     Flambda.Expr.create_let function_decl.my_closure
-      (Flambda_kind.value Definitely_pointer)
+      (Flambda_kind.value ())
       (Simple (Simple.name callee))
       bindings_for_params_to_args
   in

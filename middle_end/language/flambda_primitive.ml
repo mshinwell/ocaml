@@ -20,6 +20,21 @@
 
 module K = Flambda_kind
 
+module Value_kind = struct
+  type t =
+    | Unknown
+    | Definitely_pointer
+    | Definitely_immediate
+
+  let print ppf t =
+    match t with
+    | Unknown -> Format.pp_print_string ppf "Unknown"
+    | Definitely_pointer -> Format.pp_print_string ppf "Definitely_pointer"
+    | Definitely_immediate -> Format.pp_print_string ppf "Definitely_immediate"
+
+  let compare = Pervasives.compare
+end
+
 module Generic_array_specialisation = struct
   type t =
     | No_specialisation
@@ -86,15 +101,16 @@ type coeffects = No_coeffects | Has_coeffects
    a comparison function next to each. *)
 
 type make_block_kind =
-  | Full_of_values of Tag.Scannable.t
+  | Full_of_values of Tag.Scannable.t * (Value_kind.t list)
   | Full_of_naked_floats
   | Generic_array of Generic_array_specialisation.t
 
 let print_make_block_kind ppf kind =
   match kind with
-  | Full_of_values tag ->
-    Format.fprintf ppf "(Full_of_values (tag %a))"
+  | Full_of_values (tag, shape) ->
+    Format.fprintf ppf "(Full_of_values (tag %a) (%a))"
       Tag.Scannable.print tag
+      (Format.pp_print_list Value_kind.print) shape
   | Full_of_naked_floats -> Format.pp_print_string ppf "Full_of_naked_floats"
   | Generic_array generic ->
     Format.fprintf ppf "(Generic %a)"
@@ -102,8 +118,10 @@ let print_make_block_kind ppf kind =
 
 let compare_make_block_kind kind1 kind2 =
   match kind1, kind2 with
-  | Full_of_values tag1, Full_of_values tag2 ->
-    Tag.Scannable.compare tag1 tag2
+  | Full_of_values (tag1, shape1), Full_of_values (tag2, shape2) ->
+    let c = Tag.Scannable.compare tag1 tag2 in
+    if c <> 0 then c
+    else Misc.Stdlib.List.compare Value_kind.compare shape1 shape2
   | Full_of_values _, _ -> -1
   | _, Full_of_values _ -> 1
   | Full_of_naked_floats, Full_of_naked_floats -> 0
@@ -137,21 +155,10 @@ let print_duplicate_block_kind ppf (kind : duplicate_block_kind) =
    nativeint. *)
 
 module Block_access_kind = struct
-  type value_kind =
-    | Unknown
-    | Definitely_pointer
-    | Definitely_immediate
-
-  let print_value_kind ppf kind =
-    match kind with
-    | Unknown -> Format.pp_print_string ppf "Unknown"
-    | Definitely_pointer -> Format.pp_print_string ppf "Definitely_pointer"
-    | Definitely_immediate -> Format.pp_print_string ppf "Definitely_immediate"
-
   type t0 =
-    | Value of value_kind
+    | Value of Value_kind.t
     | Naked_float
-    | Fabricated of value_kind
+    | Fabricated of Value_kind.t
 
   type t =
     | Block of t0
@@ -183,10 +190,10 @@ module Block_access_kind = struct
   let print_t0 ppf t0 =
     match t0 with
     | Value kind ->
-      Format.fprintf ppf "@[(Value %a)@]" print_value_kind kind
+      Format.fprintf ppf "@[(Value %a)@]" Value_kind.print kind
     | Naked_float -> Format.pp_print_string ppf "Naked_float"
     | Fabricated kind ->
-      Format.fprintf ppf "@[(Fabricated %a)@]" print_value_kind kind
+      Format.fprintf ppf "@[(Fabricated %a)@]" Value_kind.print kind
 
   let print ppf kind =
     match kind with
@@ -947,7 +954,7 @@ let print_variadic_primitive ppf p =
 
 let args_kind_of_variadic_primitive p : arg_kinds =
   match p with
-  | Make_block (Full_of_values _tag, _) ->
+  | Make_block (Full_of_values (_tag, _shape), _) ->
     Variadic_all_of_kind (K.value ())
   | Make_block (Full_of_naked_floats, _) ->
     Variadic_all_of_kind (K.naked_float ())

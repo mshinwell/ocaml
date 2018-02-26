@@ -54,7 +54,7 @@ let simplify_continuation_use_cannot_inline env r cont ~arity =
 
 let simplify_exn_continuation env r cont =
   simplify_continuation_use_cannot_inline env r cont
-    ~arity:[Flambda_kind.value Unknown]
+    ~arity:[Flambda_kind.value ()]
 
 let for_defining_expr_of_let (env, r) var kind defining_expr =
   (* CR mshinwell: This handling of the typing environment in [R] needs to be
@@ -83,7 +83,7 @@ let for_defining_expr_of_let (env, r) var kind defining_expr =
       coercions
       env
   in
-  let new_kind = (E.type_accessor env T.kind) ty in
+  let new_kind = T.kind ty in
   if not (Flambda_kind.compatible new_kind ~if_used_at:kind) then begin
     Misc.fatal_errorf "Kind error during simplification of [Let] binding \
         which yielded:@ %a :: %a <not compatible with %a> =@ %a"
@@ -118,7 +118,7 @@ let filter_defining_expr_of_let r var (kind : K.t) (defining_expr : Named.t)
   let name = Name.var var in
   let r_for_phantomize r =
     match kind with
-    | Value _ | Naked_number _ | Fabricated _ ->
+    | Value | Naked_number _ | Fabricated ->
       R.map_benefit r (B.remove_code_named defining_expr)
     | Phantom _ -> r
   in
@@ -304,7 +304,7 @@ module Simplify_int_switch = Make_simplify_switch (struct
   let create_switch' = Expr.create_int_switch'
 
   let check_kind_of_scrutinee env ~scrutinee ty =
-    let kind = (E.type_accessor env T.kind) ty in
+    let kind = T.kind ty in
     match kind with
     | Value Definitely_immediate -> ()
     | _ ->
@@ -322,7 +322,7 @@ module Simplify_tag_switch = Make_simplify_switch (struct
   let create_switch' = Expr.create_tag_switch'
 
   let check_kind_of_scrutinee env ~scrutinee ty =
-    let kind = (E.type_accessor env T.kind) ty in
+    let kind = T.kind ty in
     match kind with
     | Fabricated Definitely_immediate -> ()
     | _ ->
@@ -858,7 +858,7 @@ and simplify_partial_application env r ~callee
     in
     let params =
       List.map (fun (param, ty) ->
-          let kind = (E.type_accessor env T.kind) ty in
+          let kind = T.kind ty in
           Typed_parameter.create_from_kind param kind)
         remaining_args
     in
@@ -1013,7 +1013,7 @@ and simplify_function_application env r (apply : Flambda.Apply.t)
              should still be conservative.) *)
           List.map (fun arg ->
               let _arg, ty = S.simplify_simple env arg in
-              (E.type_accessor env T.kind) ty)
+              T.kind ty)
             args
         in
         Indirect_known_arity {

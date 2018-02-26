@@ -124,7 +124,6 @@ let lambda_smaller' lam ~than:threshold =
         function_decls.funs
     | Prim (prim, _) ->
       size := !size + prim_size prim
-    | Coerce _ -> ()
   in
   try
     lambda_size lam;
@@ -278,7 +277,7 @@ module Benefit = struct
     | Move_within_set_of_closures _
     | Read_symbol_field _ -> b := remove_prim !b
 *)
-    | Simple _ | Read_mutable _  | Prim _ | Coerce _ -> ()
+    | Simple _ | Read_mutable _  | Prim _ -> ()
 
   let remove_code lam b =
     let b = ref b in

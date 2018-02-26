@@ -426,9 +426,6 @@ type mutable_or_immutable =
   | Mutable
   | Immutable
 
-type coercion =
-  | Kind of Simple.t * Flambda_kind.t
-
 module rec Expr : sig
   type t =
     | Let of Let.t

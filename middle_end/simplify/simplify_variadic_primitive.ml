@@ -35,7 +35,7 @@ let simplify_make_block env r prim dbg
   let args, arg_tys = List.split args_with_tys in
   let original_term () : Named.t = Prim (Variadic (prim, args), dbg) in
   let invalid () =
-    Reachable.invalid (), T.bottom (K.value Definitely_pointer),
+    Reachable.invalid (), T.bottom (K.value ()),
       R.map_benefit r (B.remove_primitive (Variadic prim))
   in
   match make_block_kind with
@@ -50,12 +50,11 @@ let simplify_make_block env r prim dbg
     let found_bottom = ref false in
     let arg_ty_values =
       assert (List.compare_lengths value_kinds arg_tys = 0);
-      List.map2 (fun arg_ty value_kind ->
+      List.map2 (fun arg_ty _value_kind ->
           if (E.type_accessor env T.is_bottom) arg_ty then begin
-             found_bottom := true;
+           found_bottom := true
           end;
-          (E.type_accessor env T.prove_of_kind_value_with_expected_value_kind)
-            arg_ty value_kind)
+          T.force_to_kind_value arg_ty)
         arg_tys value_kinds
     in
     if !found_bottom then begin
@@ -95,7 +94,7 @@ let simplify_make_block env r prim dbg
           if (E.type_accessor env T.is_bottom) arg_ty then begin
              found_bottom := true;
           end;
-          (E.type_accessor env T.prove_of_kind_naked_float) arg_ty)
+          T.prove_of_kind_naked_float arg_ty)
         arg_tys
     in
     if !found_bottom then begin
@@ -176,13 +175,7 @@ let simplify_bigarray_set env r prim dbg ~num_dims ~kind ~layout ~args =
         then begin
           invalid ()
         end else begin
-          let _bigarray_ty_value =
-            (* CR mshinwell: Same remark here as in
-               [Simplify_binary_primitive] -- ideally we would constrain to
-               [Definitely_pointer] here *)
-            (E.type_accessor env T.prove_of_kind_value_with_expected_value_kind)
-              bigarray_ty Unknown
-          in
+          ignore (T.force_to_kind_value bigarray_ty);
           let _indexes, index_tys = List.split indexes_with_tys in
           let indexes_are_invalid =
             bigarray_indexes_are_invalid env layout index_tys
@@ -190,7 +183,7 @@ let simplify_bigarray_set env r prim dbg ~num_dims ~kind ~layout ~args =
           if indexes_are_invalid then begin
             invalid ()
           end else begin
-            (E.type_accessor env T.check_of_kind) new_value_ty element_kind;
+            T.check_of_kind new_value_ty element_kind;
             Reachable.reachable (original_term ()), T.unit (), r
           end
         end
@@ -226,13 +219,7 @@ let simplify_bigarray_load env r prim dbg ~num_dims
         if (E.type_accessor env T.is_bottom) bigarray_ty then begin
           invalid ()
         end else begin
-          let _bigarray_ty_value =
-            (* CR mshinwell: Same remark here as in
-               [Simplify_binary_primitive] -- ideally we would constrain to
-               [Definitely_pointer] here *)
-            (E.type_accessor env T.prove_of_kind_value_with_expected_value_kind)
-              bigarray_ty Unknown
-          in
+          ignore (T.prove_of_kind_value bigarray_ty);
           let _indexes, index_tys = List.split indexes_with_tys in
           let indexes_are_invalid =
             bigarray_indexes_are_invalid env layout index_tys

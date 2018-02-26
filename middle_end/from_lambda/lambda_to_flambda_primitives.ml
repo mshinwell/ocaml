@@ -35,11 +35,10 @@ module K = Flambda_kind
 val of_block_shape : Lambda.block_shape -> num_fields:int -> t
 *)
 
-let of_block_shape (shape : Lambda.block_shape) ~num_fields =
+let convert_block_shape (shape : Lambda.block_shape) ~num_fields =
   match shape with
   | None ->
-    List.init num_fields
-      (fun _field : Flambda_primitive.Block_access_kind.value_kind -> Unknown)
+    List.init num_fields (fun _field : P.Value_kind.t -> Unknown)
   | Some shape ->
     let shape_length = List.length shape in
     if num_fields <> shape_length then begin
@@ -48,8 +47,7 @@ let of_block_shape (shape : Lambda.block_shape) ~num_fields =
         num_fields
         shape_length
     end;
-    List.map (fun (kind : Lambda.value_kind)
-            : Flambda_primitive.Block_access_kind.value_kind ->
+    List.map (fun (kind : Lambda.value_kind) : P.Value_kind.t ->
         match kind with
         | Pgenval -> Unknown
         | Pfloatval | Pboxedintval _ -> Definitely_pointer
@@ -66,14 +64,6 @@ let convert_mutable_flag (flag : Asttypes.mutable_flag)
 
 let convert_comparison_prim (comp : Lambda.comparison) : P.binary_primitive =
   match comp with
-  (* CR mshinwell for pchambart: I changed "Definitely_immediate" to
-     "Unknown" after running into trouble here.  e.g. the argument to this
-     function:
-       let f t =
-         match t with
-         | Foo -> 1
-         | Bar -> 2
-  *)
   | Ceq -> Phys_equal (K.value (), Eq)
   | Cneq -> Phys_equal (K.value (), Neq)
   | Clt -> Int_comp (I.Tagged_immediate, Signed, Lt)
@@ -202,43 +192,30 @@ let rec bind_rec
   : Expr.t =
   match prim with
   | Unary (prim, arg) ->
-    let arg_kind = Flambda_primitive.arg_kind_of_unary_primitive prim in
     let cont (arg : Simple.t) =
       cont (Prim (Unary (prim, arg), dbg))
     in
-    bind_rec_primitive arg arg_kind dbg ~exception_continuation cont
+    bind_rec_primitive arg dbg ~exception_continuation cont
   | Binary (prim, arg1, arg2) ->
-    let arg1_kind, arg2_kind =
-      Flambda_primitive.args_kind_of_binary_primitive prim
-    in
     let cont (arg2 : Simple.t) =
       let cont (arg1 : Simple.t) =
         cont (Prim (Binary (prim, arg1, arg2), dbg))
       in
-      bind_rec_primitive arg1 arg1_kind dbg ~exception_continuation cont
+      bind_rec_primitive arg1 dbg ~exception_continuation cont
     in
-    bind_rec_primitive arg2 arg2_kind dbg ~exception_continuation cont
+    bind_rec_primitive arg2 dbg ~exception_continuation cont
   | Ternary (prim, arg1, arg2, arg3) ->
-    let arg1_kind, arg2_kind, arg3_kind =
-      Flambda_primitive.args_kind_of_ternary_primitive prim
-    in
     let cont (arg3 : Simple.t) =
       let cont (arg2 : Simple.t) =
         let cont (arg1 : Simple.t) =
           cont (Prim (Ternary (prim, arg1, arg2, arg3), dbg))
         in
-        bind_rec_primitive arg1 arg1_kind dbg ~exception_continuation cont
+        bind_rec_primitive arg1 dbg ~exception_continuation cont
       in
-      bind_rec_primitive arg2 arg2_kind dbg ~exception_continuation cont
+      bind_rec_primitive arg2 dbg ~exception_continuation cont
     in
-    bind_rec_primitive arg3 arg3_kind dbg ~exception_continuation cont
+    bind_rec_primitive arg3 dbg ~exception_continuation cont
   | Variadic (prim, args) ->
-    let arg_kinds =
-      match Flambda_primitive.args_kind_of_variadic_primitive prim with
-      | Variadic arg_kinds -> arg_kinds
-      | Variadic_all_of_kind kind ->
-        List.init (List.length args) (fun _arg -> kind)
-    in
     let cont args =
       cont (Prim (Variadic (prim, args), dbg))
     in
@@ -246,37 +223,25 @@ let rec bind_rec
       match args_to_convert with
       | [] ->
         cont converted_args
-      | (arg, arg_kind) :: args_to_convert ->
+      | arg :: args_to_convert ->
         let cont arg =
           build_cont args_to_convert (arg :: converted_args)
         in
-        bind_rec_primitive arg arg_kind dbg ~exception_continuation cont
+        bind_rec_primitive arg dbg ~exception_continuation cont
     in
-    build_cont (List.rev (List.combine args arg_kinds)) []
+    build_cont (List.rev args) []
   | Checked _ ->
     failwith "TODO"
 
 and bind_rec_primitive
       (prim : simple_or_prim)
-      kind
       (dbg : Debuginfo.t)
       ~exception_continuation
       (cont : Simple.t -> Expr.t) : Expr.t =
   match prim with
-  | Simple ((Name (Var var)) as simple) ->
-    let fresh_var = Variable.rename var in
-    let fresh_simple = Simple.var fresh_var in
-    let coercion : Named.t = Coerce (Kind (simple, kind)) in
-    let body = cont fresh_simple in
-    Flambda.Expr.create_let fresh_var kind coercion body
-  | Simple simple ->
-    let fresh_var = Variable.create "coerced" in
-    let fresh_simple = Simple.var fresh_var in
-    let coercion : Named.t = Coerce (Kind (simple, kind)) in
-    let body = cont fresh_simple in
-    Flambda.Expr.create_let fresh_var kind coercion body
+  | Simple s ->
+    cont s
   | Prim p ->
-    (* CR mshinwell for pchambart: Should we use [kind] here? *)
     let var = Variable.create "prim" in
     let result_kind = result_kind_of_expr_primitive p in
     let cont named =
@@ -313,9 +278,7 @@ let string_or_bytes_ref kind arg1 arg2 dbg =
               (* CR pchambart:
                  Int_comp_unsigned assumes that the arguments are naked
                  integers, but it is correct for tagged integers too as
-                 untagging of both arguments doesn't change the result.
-                 mshinwell: this is going to produce a kind error, though---we
-                 will need to change [Flambda_primitive] *)
+                 untagging of both arguments doesn't change the result. *)
               tagged_immediate_as_naked_nativeint arg2,
               tagged_immediate_as_naked_nativeint
                 (Prim (Unary (String_length String, arg1))));
@@ -323,15 +286,16 @@ let string_or_bytes_ref kind arg1 arg2 dbg =
     dbg;
   }
 
-
 let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
       (dbg : Debuginfo.t) : expr_primitive =
   let args = List.map (fun arg : simple_or_prim -> Simple arg) args in
   match prim, args with
   | Pmakeblock (tag, flag, shape), _ ->
     let flag = convert_mutable_flag flag in
-    let arity = of_block_shape shape ~num_fields:(List.length args) in
-    Variadic (Make_block (Full_of_values (Tag.Scannable.create_exn tag, arity), flag), args)
+    let shape = convert_block_shape shape ~num_fields:(List.length args) in
+    Variadic (Make_block (
+        Full_of_values (Tag.Scannable.create_exn tag, shape), flag),
+      args)
   | Pmakearray (kind, mutability), _ ->
     let flag = convert_mutable_flag mutability in
     let kind =
@@ -351,22 +315,16 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
   | Pduprecord (repr, num_fields), [arg] ->
     let kind : P.duplicate_block_kind =
       match repr with
-      | Record_regular ->
-        Full_of_values_known_length
-          (Tag.Scannable.zero,
-           List.init num_fields (fun _ -> K.Value_kind.Unknown))
+      | Record_regular -> Full_of_values_known_length Tag.Scannable.zero
       | Record_float ->
-        Full_of_naked_floats { length = Some (Targetint.OCaml.of_int num_fields) }
+        Full_of_naked_floats
+          { length = Some (Targetint.OCaml.of_int num_fields) }
       | Record_unboxed _ ->
         Misc.fatal_error "Pduprecord of unboxed record"
       | Record_inlined tag ->
-        Full_of_values_known_length
-          (Tag.Scannable.create_exn tag,
-           List.init num_fields (fun _ -> K.Value_kind.Unknown))
+        Full_of_values_known_length (Tag.Scannable.create_exn tag)
       | Record_extension ->
-        Full_of_values_known_length
-          (Tag.Scannable.zero,
-           List.init num_fields (fun _ -> K.Value_kind.Unknown))
+        Full_of_values_known_length Tag.Scannable.zero
     in
     Unary (Duplicate_block {
       kind;
@@ -558,7 +516,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
       primitive =
         Binary (Int_arith (I.Tagged_immediate, Div), arg1, arg2);
       validity_condition =
-        Binary (Phys_equal (K.value Definitely_immediate, Eq), arg2,
+        Binary (Phys_equal (K.value (), Eq), arg2,
                 Simple
                   (Simple.const
                      (Simple.Const.Tagged_immediate
@@ -572,7 +530,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
       primitive =
         Binary (Int_arith (I.Tagged_immediate, Mod), arg1, arg2);
       validity_condition =
-        Binary (Phys_equal (K.value Definitely_immediate, Eq), arg2,
+        Binary (Phys_equal (K.value (), Eq), arg2,
                 Simple
                   (Simple.const
                      (Simple.Const.Tagged_immediate

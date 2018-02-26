@@ -794,7 +794,7 @@ module Binary_int_eq_comp_nativeint =
 let simplify_eq_comp env r prim dbg (kind : K.t)
       (op : Flambda_primitive.equality_comparison) arg1 arg2 =
   begin match kind with
-  | Value _ ->
+  | Value ->
     let arg1, arg1_ty = S.simplify_simple env arg1 in
     let arg2, arg2_ty = S.simplify_simple env arg2 in
     let proof1 =
@@ -847,7 +847,7 @@ let simplify_eq_comp env r prim dbg (kind : K.t)
     Binary_int_eq_comp_int64.simplify env r prim dbg op arg1 arg2
   | Naked_number Naked_nativeint ->
     Binary_int_eq_comp_nativeint.simplify env r prim dbg op arg1 arg2
-  | Fabricated _ | Phantom _ ->
+  | Fabricated | Phantom _ ->
     Misc.fatal_errorf "Bad kind for equality comparison: %a"
       K.print kind
   end
@@ -944,10 +944,10 @@ let simplify_block_load env r prim ~block ~index
   let block, block_ty = S.simplify_simple env block in
   let original_term () : Named.t = Prim (Binary (prim, block, index), dbg) in
   let kind_of_all_fields =
-    Flambda_primitive.Block_access_kind.kind_all_elements block_access_kind
+    Flambda_primitive.Block_access_kind.element_kind block_access_kind
   in
   let field_kind =
-    Flambda_primitive.Block_access_kind.kind_this_element block_access_kind
+    Flambda_primitive.Block_access_kind.element_kind block_access_kind
   in
   let invalid () =
     Reachable.invalid (), T.bottom field_kind,
@@ -1019,10 +1019,6 @@ let simplify_string_or_bigstring_load env r prim dbg
       (* For the moment just check that the bigstring is of kind [Value]. *)
       (* CR mshinwell: Could we tighten [Unknown] to [Definitely_pointer]?
          Not sure this is going to work... *)
-      let _ty_value =
-        (E.type_accessor env T.prove_of_kind_value_with_expected_value_kind)
-          str_ty Unknown
-      in
       (* At the moment we don't track anything in the type system about
          bigarrays. *)
       T.unknown_proof ()
@@ -1045,7 +1041,7 @@ let simplify_string_or_bigstring_load env r prim dbg
     in
     let bottom =
       match width with
-      | Eight | Sixteen -> T.bottom (K.value Definitely_immediate)
+      | Eight | Sixteen -> T.bottom (K.value ())
       | Thirty_two -> T.bottom (K.naked_int32 ())
       | Sixty_four -> T.bottom (K.naked_int64 ())
     in

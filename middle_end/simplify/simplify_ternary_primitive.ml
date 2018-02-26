@@ -35,7 +35,7 @@ let simplify_block_set_known_index env r _prim ~block_access_kind
       T.print block_ty
   end;
   let field_kind =
-    Flambda_primitive.Block_access_kind.kind_this_element block_access_kind
+    Flambda_primitive.Block_access_kind.element_kind block_access_kind
   in
   let result_kind = K.unit () in
   let ok () =
@@ -62,16 +62,16 @@ let simplify_block_set env r prim dbg ~block_access_kind ~init_or_assign
     Prim (Ternary (prim, block, index, new_value), dbg)
   in
   let kind_of_all_fields =
-    Flambda_primitive.Block_access_kind.kind_all_elements block_access_kind
+    Flambda_primitive.Block_access_kind.element_kind block_access_kind
   in
   let field_kind =
-    Flambda_primitive.Block_access_kind.kind_this_element block_access_kind
+    Flambda_primitive.Block_access_kind.element_kind block_access_kind
   in
   let invalid () =
     Reachable.invalid (), T.bottom (K.unit ()),
       R.map_benefit r (B.remove_primitive (Ternary prim))
   in
-  let new_value_kind = (E.type_accessor env T.kind) new_value_ty in
+  let new_value_kind = T.kind new_value_ty in
   if not (K.compatible new_value_kind ~if_used_at:field_kind) then begin
     Misc.fatal_errorf "New value for [Block_set] has kind %a, incompatible \
         with %a.  Block type: %a"
@@ -105,7 +105,7 @@ let simplify_block_set env r prim dbg ~block_access_kind ~init_or_assign
 let simplify_bytes_or_bigstring_set env r prim dbg
       (bytes_like_value : Flambda_primitive.bytes_like_value)
       ~string_accessor_width ~str ~index ~new_value =
-  let str, str_ty = S.simplify_simple env str in
+  let str, _str_ty = S.simplify_simple env str in
   let index, index_ty = S.simplify_simple env index in
   let new_value, new_value_ty = S.simplify_simple env new_value in
   let original_term () : Named.t =
@@ -120,14 +120,10 @@ let simplify_bytes_or_bigstring_set env r prim dbg
   (* For the moment just check that the container is of kind [Value]:
      we don't track anything in the type system about bigarrays or values
      of type [bytes]. *)
-  let _ty_value =
-    (E.type_accessor env T.prove_of_kind_value_with_expected_value_kind)
-      str_ty Unknown
-    (* CR mshinwell: We should do more here (e.g. make sure the type is
-       Unknown) -- it would rule out obviously wrong cases such as
-       being presented with a closure instead of a string. *)
-  in
-  let new_value_kind = (E.type_accessor env T.kind) new_value_ty in
+  (* CR mshinwell: We should do more here (e.g. make sure the type is
+     Unknown) -- it would rule out obviously wrong cases such as
+     being presented with a closure instead of a string. *)
+  let new_value_kind = T.kind new_value_ty in
   let field_kind =
     Flambda_primitive.kind_of_string_accessor_width string_accessor_width
   in

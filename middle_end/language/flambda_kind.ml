@@ -134,6 +134,30 @@ let is_phantom t =
   | Fabricated -> false
   | Phantom _ -> true
 
+let phantomize_in_types t : t =
+  match t with
+  | Value ->
+    Phantom (In_types, Value)
+  | Naked_number number_kind ->
+    Phantom (In_types, Phantom_kind.Naked_number number_kind)
+  | Fabricated ->
+    Phantom (In_types, Fabricated)
+  | Phantom (In_types, _) -> t
+  | Phantom (Debug_only, _) ->
+    Misc.fatal_errorf "Cannot phantomize kind %a to [In_types]"
+      print t
+
+let phantomize_debug_only t =
+  match t with
+  | Value ->
+    Phantom (Debug_only, Value)
+  | Naked_number number_kind ->
+    Phantom (Debug_only, Phantom_kind.Naked_number number_kind)
+  | Fabricated ->
+    Phantom (Debug_only, Fabricated)
+  | Phantom (Debug_only, _) -> t
+  | Phantom (In_types, kind) -> Phantom (Debug_only, kind)
+
 module Standard_int = struct
   type t =
     | Tagged_immediate

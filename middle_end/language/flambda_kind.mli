@@ -80,6 +80,10 @@ val unit : unit -> t
 *)
 val compatible : t -> if_used_at:t -> bool
 
+val phantomize_in_types : t -> t
+
+val phantomize_debug_only : t -> t
+
 include Identifiable.S with type t := t
 
 module Standard_int : sig

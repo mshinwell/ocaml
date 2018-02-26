@@ -28,6 +28,17 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
+module Value_kind : sig
+  type t =
+    | Unknown
+    | Definitely_pointer
+    | Definitely_immediate
+
+  val compare : t -> t -> int
+
+  val print : Format.formatter -> t -> unit
+end
+
 module Generic_array_specialisation : sig
   type t = private
     | No_specialisation
@@ -42,7 +53,7 @@ module Generic_array_specialisation : sig
 end
 
 type make_block_kind =
-  | Full_of_values of Tag.Scannable.t
+  | Full_of_values of Tag.Scannable.t * (Value_kind.t list)
   | Full_of_naked_floats
   | Generic_array of Generic_array_specialisation.t
 
@@ -59,15 +70,10 @@ module Block_access_kind : sig
   (* CR mshinwell: This module needs documenting well to avoid any
      misconceptions about the semantics of the various constructors *)
 
-  type value_kind =
-    | Unknown
-    | Definitely_pointer
-    | Definitely_immediate
-
   type t0 =
-    | Value of value_kind
+    | Value of Value_kind.t
     | Naked_float
-    | Fabricated of value_kind
+    | Fabricated of Value_kind.t
 
   type t =
     | Block of t0
@@ -293,7 +299,6 @@ val rename_variables : t -> f:(Variable.t -> Variable.t) -> t
     its arguments. *)
 val arg_kind_of_unary_primitive : unary_primitive -> Flambda_kind.t
 
-(* CR mshinwell: "args_kind" -> "arg_kinds" *)
 val args_kind_of_binary_primitive
    : binary_primitive
   -> Flambda_kind.t * Flambda_kind.t

@@ -590,8 +590,7 @@ module type Result = sig
   val num_direct_applications : t -> int
 
   val new_lifted_constant
-     : env
-    -> t
+     : t
     -> name:string
     -> Flambda_type.t
     -> Flambda_static.Static_part.t

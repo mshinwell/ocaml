@@ -307,6 +307,7 @@ MIDDLE_END_LANGUAGE=\
   middle_end/language/freshening.cmo \
   middle_end/language/name_occurrences.cmo \
   middle_end/language/flambda_arity.cmo \
+  middle_end/language/repr_type.cmo \
   middle_end/language/flambda_primitive.cmo \
   middle_end/language/allocated_const.cmo \
   middle_end/language/flambda_type0_intf.cmo \

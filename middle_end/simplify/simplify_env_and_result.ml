@@ -1263,8 +1263,8 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
 
   let newly_imported_symbols t = t.newly_imported_symbols
 
-  let new_lifted_constant env t ~name ty static_part =
-    let kind = (Env.type_accessor env T.kind) ty in
+  let new_lifted_constant t ~name ty static_part =
+    let kind = T.kind ty in
     let symbol =
       Symbol.create (Compilation_unit.get_current_exn ())
         (Linkage_name.create name)

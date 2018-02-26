@@ -584,10 +584,7 @@ let for_call_site ~env ~r
       end
     | Always_inline | Default_inline | Never_inline -> inline_requested
   in
-  let return_arity =
-    List.map (fun ty -> (E.type_accessor env T.kind) ty)
-      function_decl.result
-  in
+  let return_arity = List.map (fun ty -> T.kind ty) function_decl.result in
   let original_apply : Flambda.Apply.t =
     { continuation;
       exn_continuation;

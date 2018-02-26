@@ -71,10 +71,10 @@ let simplify_project_closure env r prim ~closure ~set_of_closures dbg
   let set_of_closures, ty = S.simplify_simple env set_of_closures in
   let original_term () : Named.t = Prim (Unary (prim, set_of_closures), dbg) in
   let unknown r =
-    Reachable.reachable (original_term ()), T.any_value Definitely_pointer, r
+    Reachable.reachable (original_term ()), T.any_value (), r
   in
   let invalid r =
-    Reachable.invalid (), T.bottom (K.value Definitely_pointer),
+    Reachable.invalid (), T.bottom (K.value ()),
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
 (*
@@ -111,7 +111,7 @@ let simplify_move_within_set_of_closures env r prim ~move_from ~move_to
   let closures, ty = S.simplify_simple env closures in
   let original_term () : Named.t = Prim (Unary (prim, closures), dbg) in
   let invalid r =
-    Reachable.invalid (), T.bottom (K.value Definitely_pointer),
+    Reachable.invalid (), T.bottom (K.value ()),
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
   let proof = (E.type_accessor env T.prove_closures) ty in
@@ -162,7 +162,7 @@ let simplify_move_within_set_of_closures env r prim ~move_from ~move_to
       end
     end
   | Unknown ->
-    Reachable.reachable (original_term ()), T.any_value Definitely_pointer, r
+    Reachable.reachable (original_term ()), T.any_value (), r
   | Invalid -> invalid r
 
 let simplify_project_var env r prim ~closure_id ~var_within_closure
@@ -170,7 +170,7 @@ let simplify_project_var env r prim ~closure_id ~var_within_closure
   let closures, ty = S.simplify_simple env closures in
   let original_term () : Named.t = Prim (Unary (prim, closures), dbg) in
   let invalid r =
-    Reachable.invalid (), T.bottom (K.value Unknown),
+    Reachable.invalid (), T.bottom (K.value ()),
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
   let proof = (E.type_accessor env T.prove_closures) ty in
@@ -201,12 +201,12 @@ let simplify_project_var env r prim ~closure_id ~var_within_closure
           Reachable.reachable (original_term ()), var_within_closure_ty, r
         end
       | Unknown ->
-        Reachable.reachable (original_term ()), T.any_value Unknown, r
+        Reachable.reachable (original_term ()), T.any_value (), r
       | Invalid -> invalid r
       end
     end
   | Unknown ->
-    Reachable.reachable (original_term ()), T.any_value Unknown, r
+    Reachable.reachable (original_term ()), T.any_value (), r
   | Invalid -> invalid r
 
 let simplify_duplicate_block _env _r _prim _arg _dbg
@@ -216,7 +216,7 @@ let simplify_duplicate_block _env _r _prim _arg _dbg
 (* Let's finish this later
   let arg, ty = S.simplify_simple env arg in
   let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
-  let kind_of_block = K.value Definitely_pointer in
+  let kind_of_block = K.value () in
   let full_of_values ~template =
     let proof = (E.type_accessor env T.prove_block) ty in
     match proof with
@@ -326,7 +326,7 @@ let simplify_is_int env r prim arg dbg =
     Reachable.reachable (original_term ()),
       T.these_tagged_immediates Immediate.all_bools, r
   | Invalid -> 
-    Reachable.invalid (), T.bottom (K.value Definitely_immediate),
+    Reachable.invalid (), T.bottom (K.value ()),
       R.map_benefit r (B.remove_primitive (Unary prim))
 
 let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
@@ -334,7 +334,7 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
   let inferred_tags = (E.type_accessor env T.prove_tags) block_ty in
   let possible_tags = Tag.Scannable.Map.keys tags_to_sizes in
   let invalid r =
-    Reachable.invalid (), T.bottom (K.fabricated Definitely_immediate),
+    Reachable.invalid (), T.bottom (K.fabricated ()),
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
   let result_var_type ~tags_to_sizes =
@@ -342,7 +342,7 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
       Tag.Scannable.Map.fold (fun tag size tags_to_env_extensions ->
           (* CR mshinwell: thikn about this conversion *)
           let size = Targetint.OCaml.to_int size in
-          let block_ty = T.block_of_unknown_values tag Unknown ~size in
+          let block_ty = T.block_of_unknown_values tag ~size in
           let env =
             match block with
             | Const _ ->
@@ -472,7 +472,7 @@ module Make_simplify_box_number (P : A.Boxable_number_kind) = struct
       in
       Reachable.reachable (original_term ()), ty, r
     | Invalid -> 
-      Reachable.invalid (), T.bottom (K.value Definitely_pointer), r
+      Reachable.invalid (), T.bottom (K.value ()), r
 end
 
 module Simplify_box_number_float = Make_simplify_box_number (A.For_floats)
@@ -608,7 +608,7 @@ let simplify_boolean_not env r prim arg dbg =
   let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
   let proof = (E.type_accessor env T.prove_tagged_immediate) ty in
   let invalid () =
-    Reachable.invalid (), T.bottom (K.value Definitely_immediate),
+    Reachable.invalid (), T.bottom (K.value ()),
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
   match proof with
@@ -669,7 +669,7 @@ let simplify_string_length env r prim arg dbg =
   let arg, arg_ty = S.simplify_simple env arg in
   let proof = (E.type_accessor env T.prove_string) arg_ty in
   let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
-  let result_kind = K.value Definitely_immediate in
+  let result_kind = K.value () in
   let result_invalid () =
     Reachable.invalid (), T.bottom result_kind,
       R.map_benefit r (B.remove_primitive (Unary prim))
@@ -702,7 +702,7 @@ let simplify_array_length env r prim arg ~block_access_kind:_ dbg =
     (E.type_accessor env T.prove_lengths_of_arrays_or_blocks) arg_ty
   in
   let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
-  let result_kind = K.value Definitely_immediate in
+  let result_kind = K.value () in
   let result_invalid () =
     Reachable.invalid (), T.bottom result_kind,
       R.map_benefit r (B.remove_primitive (Unary prim))
@@ -724,12 +724,9 @@ let simplify_array_length env r prim arg ~block_access_kind:_ dbg =
   | Invalid -> result_invalid ()
 
 let simplify_bigarray_length env r prim bigarray ~dimension:_ dbg =
-  let bigarray, bigarray_ty = S.simplify_simple env bigarray in
-  let result_kind = K.value Definitely_immediate in
-  let _ty_value =
-    (E.type_accessor env T.prove_of_kind_value_with_expected_value_kind)
-      bigarray_ty Definitely_pointer
-  in
+  let bigarray, _bigarray_ty = S.simplify_simple env bigarray in
+  (* CR mshinwell: Shouldn't we check [bigarray_ty]? *)
+  let result_kind = K.value () in
   let named : Named.t = Prim (Unary (prim, bigarray), dbg) in
   Reachable.reachable named, T.unknown result_kind, r
 
@@ -748,10 +745,10 @@ let simplify_unary_primitive env r (prim : Flambda_primitive.unary_primitive)
   | Int_as_pointer ->
     let arg, _arg_ty = S.simplify_simple env arg in
     Reachable.reachable (Prim (Unary (prim, arg), dbg)),
-      T.unknown (K.value Unknown), r
+      T.unknown (K.value ()), r
   | Opaque_identity ->
     let arg, arg_ty = S.simplify_simple env arg in
-    let kind = (E.type_accessor env T.kind) arg_ty in
+    let kind = T.kind arg_ty in
     Reachable.reachable (Prim (Unary (prim, arg), dbg)),
       T.unknown kind, r
   | Int_arith (kind, op) ->

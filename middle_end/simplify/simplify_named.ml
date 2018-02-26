@@ -75,7 +75,7 @@ let simplify_set_of_closures original_env r
       in
       let cont_type =
         Continuation_approx.create_unknown ~name:exn_continuation_param
-          ~arity:[K.value Unknown]
+          ~arity:[K.value ()]
       in
       let closure_env =
         E.add_continuation (E.set_freshening closure_env freshening)
@@ -114,9 +114,7 @@ let simplify_set_of_closures original_env r
         ~arity:function_decl.return_arity
         ~default_env:(E.get_typing_environment closure_env)  (* XXX *)
     in
-    let return_arity =
-      List.map (fun ty -> (E.type_accessor closure_env T.kind) ty) result
-    in
+    let return_arity = List.map (fun ty -> T.kind ty) result in
     let inline : Flambda.inline_attribute =
       match function_decl.inline with
       | Default_inline ->
@@ -272,7 +270,7 @@ let try_to_reify env r ty ~(term : Flambda.Reachable.t) ~result_var
       ~remove_term ~can_lift =
   match term with
   | Invalid _ -> 
-    let ty = (E.type_accessor env T.bottom_like) ty in
+    let ty = T.bottom_like ty in
     [], term, ty, remove_term ()
   | Reachable _ ->
     match (E.type_accessor env T.reify) ty ~allow_free_variables:true with
@@ -284,16 +282,16 @@ let try_to_reify env r ty ~(term : Flambda.Reachable.t) ~result_var
       else
         let symbol, r =
           let name = Variable.unique_name result_var in
-          R.new_lifted_constant env r ~name ty static_part
+          R.new_lifted_constant r ~name ty static_part
         in
         let name = Name.symbol symbol in
-        let kind = (E.type_accessor env T.kind) ty in
+        let kind = T.kind ty in
         let ty = T.alias_type_of kind name in
         let term : Named.t = Simple (Simple.name name) in
         [], Flambda.Reachable.reachable term, ty, r
     | Cannot_reify -> [], term, ty, r
     | Invalid ->
-      let ty = (E.type_accessor env T.bottom_like) ty in
+      let ty = T.bottom_like ty in
       [], Flambda.Reachable.invalid (), ty, remove_term ()
 
 (** [simplify_named] returns:
@@ -434,35 +432,3 @@ Format.eprintf "Prim %a: type %a\n%!" Variable.print result_var T.print ty;
     let new_value, _ty = Simplify_simple.simplify_simple env new_value in
     [], Flambda.Reachable.reachable (Assign { being_assigned; new_value; }),
       T.unit (), r
-  | Coerce (Kind (simple, desired_kind)) ->
-    let simple, ty = Simplify_simple.simplify_simple env simple in
-    if (E.type_accessor env T.is_bottom) ty then
-      [], Flambda.Reachable.invalid (), T.bottom desired_kind, r
-    else
-      match E.find_coercion env simple desired_kind with
-      | Some var ->
-        assert (E.mem_variable env var);
-        let ty = T.alias_type_of desired_kind (Name.var var) in
-        (* CR mshinwell: In cases like this we should be able to just add
-           a substitution to [r], to be propagated to [env] for the
-           subsequent term, so that we don't need another round of
-           simplification to remove a trivial alias.  This probably applies in
-           other places too. *)
-        [], Flambda.Reachable.reachable (Simple (Simple.var var)), ty, r
-      | None ->
-        let actual_kind = (E.type_accessor env T.kind) ty in
-        match Flambda_kind.coerce ~actual_kind ~desired_kind with
-        | Always_ok ->
-          let ty =
-            match simple with
-            | Name name -> T.alias_type_of desired_kind name
-            | Const _ -> ty
-          in
-          [], Flambda.Reachable.reachable (Simple simple), ty, r
-        | Needs_runtime_check ->
-          let r = R.add_coercion r simple desired_kind result_var in
-          [],
-            Flambda.Reachable.reachable (Coerce (Kind (simple, desired_kind))),
-            T.unknown desired_kind, r
-        | Always_wrong ->
-          [], Flambda.Reachable.invalid (), T.bottom desired_kind, r
