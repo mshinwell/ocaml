@@ -1263,6 +1263,9 @@ middle_end/base_types/num_continuation_uses.cmo : \
 middle_end/base_types/num_continuation_uses.cmx : \
     middle_end/base_types/num_continuation_uses.cmi
 middle_end/base_types/num_continuation_uses.cmi :
+middle_end/base_types/or_bottom.cmo : middle_end/base_types/or_bottom.cmi
+middle_end/base_types/or_bottom.cmx : middle_end/base_types/or_bottom.cmi
+middle_end/base_types/or_bottom.cmi :
 middle_end/base_types/parameter.cmo : middle_end/base_types/variable.cmi \
     utils/misc.cmi utils/identifiable.cmi middle_end/base_types/parameter.cmi
 middle_end/base_types/parameter.cmx : middle_end/base_types/variable.cmx \
@@ -1965,9 +1968,10 @@ middle_end/language/flambda_type.cmi : middle_end/base_types/variable.cmi \
 middle_end/language/flambda_type0.cmo : middle_end/base_types/variable.cmi \
     middle_end/base_types/var_within_closure.cmi utils/targetint.cmi \
     middle_end/base_types/tag.cmi middle_end/base_types/scope_level.cmi \
-    middle_end/base_types/parameter.cmi utils/numbers.cmi \
-    middle_end/language/name_occurrences.cmi middle_end/base_types/name.cmi \
-    utils/misc.cmi middle_end/base_types/immediate.cmi utils/identifiable.cmi \
+    middle_end/base_types/parameter.cmi middle_end/base_types/or_bottom.cmi \
+    utils/numbers.cmi middle_end/language/name_occurrences.cmi \
+    middle_end/base_types/name.cmi utils/misc.cmi \
+    middle_end/base_types/immediate.cmi utils/identifiable.cmi \
     middle_end/language/freshening.cmi middle_end/language/flambda_kind.cmi \
     middle_end/base_types/export_id.cmi middle_end/base_types/debuginfo.cmi \
     middle_end/base_types/continuation.cmi \
@@ -1979,9 +1983,10 @@ middle_end/language/flambda_type0.cmo : middle_end/base_types/variable.cmi \
 middle_end/language/flambda_type0.cmx : middle_end/base_types/variable.cmx \
     middle_end/base_types/var_within_closure.cmx utils/targetint.cmx \
     middle_end/base_types/tag.cmx middle_end/base_types/scope_level.cmx \
-    middle_end/base_types/parameter.cmx utils/numbers.cmx \
-    middle_end/language/name_occurrences.cmx middle_end/base_types/name.cmx \
-    utils/misc.cmx middle_end/base_types/immediate.cmx utils/identifiable.cmx \
+    middle_end/base_types/parameter.cmx middle_end/base_types/or_bottom.cmx \
+    utils/numbers.cmx middle_end/language/name_occurrences.cmx \
+    middle_end/base_types/name.cmx utils/misc.cmx \
+    middle_end/base_types/immediate.cmx utils/identifiable.cmx \
     middle_end/language/freshening.cmx middle_end/language/flambda_kind.cmx \
     middle_end/base_types/export_id.cmx middle_end/base_types/debuginfo.cmx \
     middle_end/base_types/continuation.cmx \
@@ -2053,6 +2058,9 @@ middle_end/language/freshening.cmi : middle_end/base_types/variable.cmi \
     middle_end/base_types/trap_id.cmi middle_end/base_types/name.cmi \
     middle_end/base_types/mutable_variable.cmi \
     middle_end/base_types/continuation.cmi
+middle_end/language/gc_type.cmo : middle_end/language/gc_type.cmi
+middle_end/language/gc_type.cmx : middle_end/language/gc_type.cmi
+middle_end/language/gc_type.cmi :
 middle_end/language/invariant_env.cmo : middle_end/base_types/variable.cmi \
     middle_end/base_types/var_within_closure.cmi \
     middle_end/base_types/trap_id.cmi middle_end/base_types/symbol.cmi \
@@ -2894,6 +2902,9 @@ middle_end/base_types/num_continuation_uses.cmo : \
 middle_end/base_types/num_continuation_uses.cmx : \
     middle_end/base_types/num_continuation_uses.cmi
 middle_end/base_types/num_continuation_uses.cmi :
+middle_end/base_types/or_bottom.cmo : middle_end/base_types/or_bottom.cmi
+middle_end/base_types/or_bottom.cmx : middle_end/base_types/or_bottom.cmi
+middle_end/base_types/or_bottom.cmi :
 middle_end/base_types/parameter.cmo : middle_end/base_types/variable.cmi \
     utils/misc.cmi utils/identifiable.cmi middle_end/base_types/parameter.cmi
 middle_end/base_types/parameter.cmx : middle_end/base_types/variable.cmx \

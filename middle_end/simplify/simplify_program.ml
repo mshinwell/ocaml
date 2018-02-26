@@ -68,19 +68,19 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
   in
   match static_part with
   | Block (tag, mut, fields) ->
-    let or_unknown scanning ty =
+    let or_unknown ty =
       match mut with
       | Immutable -> ty
-      | Mutable -> T.any_value scanning
+      | Mutable -> T.any_value ()
     in
     let fields_and_types =
       List.map (fun (field : Of_kind_value.t) ->
           match field with
           | Symbol sym ->
             let ty = E.find_symbol env sym in
-            field, or_unknown Definitely_immediate ty
+            field, or_unknown ty
           | Tagged_immediate imm ->
-            field, or_unknown Definitely_immediate (T.this_tagged_immediate imm)
+            field, or_unknown (T.this_tagged_immediate imm)
           | Dynamically_computed var ->
             let ty = E.find_variable env var in
             let ty, canonical_name =
@@ -93,25 +93,24 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
             in
             begin match canonical_name with
             | Some (Symbol sym) ->
-              Of_kind_value.Symbol sym, or_unknown Definitely_immediate ty
+              Of_kind_value.Symbol sym, or_unknown ty
             | (Some (Var _)) | None ->
               match T.prove_tagged_immediate ~type_of_name ty with
               | Proved imms ->
                 begin match Immediate.Set.get_singleton imms with
                 | None ->
                   Of_kind_value.Dynamically_computed canonical_var,
-                    or_unknown Unknown ty
+                    or_unknown ty
                 | Some imm ->
                   Of_kind_value.Tagged_immediate imm,
-                    or_unknown Definitely_immediate
-                      (T.this_tagged_immediate imm)
+                    or_unknown (T.this_tagged_immediate imm)
                 end
               | Unknown | Invalid ->
                 (* Note that [Invalid] does not propagate here: all it means
                    is that this is something of kind [Value], but not a
                    tagged immediate.  Such things are still legal in this
                    context. *)
-                Of_kind_value.Dynamically_computed var, or_unknown Unknown ty
+                Of_kind_value.Dynamically_computed var, or_unknown ty
             end)
         fields
     in
@@ -248,10 +247,10 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
         | Contents str ->
           Ok (Static_part.Mutable_string { initial_value = Const str; }, ty)
         end
-      | None -> Ok (static_part, T.any_value Definitely_pointer)
+      | None -> Ok (static_part, T.any_value ())
       end
     | Unknown ->
-      Ok (static_part, T.any_value Definitely_pointer)
+      Ok (static_part, T.any_value ())
     | Invalid -> Invalid
     end
   | Immutable_string (Var var) ->
@@ -268,10 +267,10 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
           let ty = T.immutable_string ~size:str.size in
           Ok (static_part, ty)
         end
-      | None -> Ok (static_part, T.any_value Definitely_pointer)
+      | None -> Ok (static_part, T.any_value ())
       end
     | Unknown ->
-      Ok (static_part, T.any_value Definitely_pointer)
+      Ok (static_part, T.any_value ())
     | Invalid -> Invalid
     end
 
@@ -324,7 +323,7 @@ let simplify_define_symbol env (recursive : Flambda.recursive)
       in
       let exn_cont_approx =
         Continuation_approx.create_unknown ~name:computation.exception_cont
-          ~arity:[Flambda_kind.value Unknown]
+          ~arity:[Flambda_kind.value ()]
       in
       let expr, r, continuation_uses, lifted_constants =
         let env = E.add_continuation env name return_cont_approx in
@@ -384,8 +383,7 @@ Format.eprintf "Args for %a: %a\n%!"
           env
       in
       assert (List.for_all2 (fun (_var, kind1) ty ->
-          let kind2 = T.kind ~type_of_name:(E.type_of_name env) ty in
-          Flambda_kind.compatible kind2 ~if_used_at:kind1)
+          Flambda_kind.compatible (T.kind ty) ~if_used_at:kind1)
         computation.computed_values args_types);
       let env =
         List.fold_left2 (fun env (var, _kind) ty ->
@@ -528,7 +526,7 @@ let simplify_program env (program : Program.t) =
   let module Backend = (val backend : Backend_intf.S) in
   let predef_exn_symbols =
     Symbol.Set.fold (fun symbol predef_exn_symbols ->
-        Symbol.Map.add symbol (K.value Definitely_pointer) predef_exn_symbols)
+        Symbol.Map.add symbol (K.value ()) predef_exn_symbols)
       (Backend.all_predefined_exception_symbols ())
       Symbol.Map.empty
   in

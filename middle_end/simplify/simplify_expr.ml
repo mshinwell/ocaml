@@ -303,10 +303,11 @@ module Simplify_int_switch = Make_simplify_switch (struct
   let switch_arms = T.int_switch_arms
   let create_switch' = Expr.create_int_switch'
 
-  let check_kind_of_scrutinee env ~scrutinee ty =
+  (* CR mshinwell: Is this check needed now? We must already check [ty] *)
+  let check_kind_of_scrutinee _env ~scrutinee ty =
     let kind = T.kind ty in
     match kind with
-    | Value Definitely_immediate -> ()
+    | Value -> ()
     | _ ->
       Misc.fatal_errorf "Int-switch scrutinee %a has wrong kind %a"
         Name.print scrutinee
@@ -321,10 +322,10 @@ module Simplify_tag_switch = Make_simplify_switch (struct
   let switch_arms = T.tag_switch_arms
   let create_switch' = Expr.create_tag_switch'
 
-  let check_kind_of_scrutinee env ~scrutinee ty =
+  let check_kind_of_scrutinee _env ~scrutinee ty =
     let kind = T.kind ty in
     match kind with
-    | Fabricated Definitely_immediate -> ()
+    | Fabricated -> ()
     | _ ->
       Misc.fatal_errorf "Tag-switch scrutinee %a has wrong kind %a"
         Name.print scrutinee
@@ -822,7 +823,7 @@ and simplify_partial_application env r ~callee
   in
   let return_arity =
     (* CR mshinwell: Move to [Flambda_type] *)
-    List.map (E.type_accessor env T.kind) function_decl.result
+    List.map (fun ty -> T.kind ty) function_decl.result
   in
   let wrapper_continuation_param = Continuation.create () in
   let wrapper_taking_remaining_args =
@@ -881,7 +882,7 @@ and simplify_partial_application env r ~callee
   let bindings =
     List.map (fun ((param, param_ty), arg) ->
         let param_var = Parameter.var param in
-        let param_kind = (E.type_accessor env T.kind) param_ty in
+        let param_kind = T.kind param_ty in
         param_var, param_kind, Named.Simple arg)
       applied_args
   in
@@ -893,7 +894,7 @@ and simplify_over_application env r ~args ~arg_tys ~continuation
       ~set_of_closures ~dbg ~inline_requested ~specialise_requested =
   let return_arity =
     (* CR mshinwell: Move to [Flambda_type] *)
-    List.map (E.type_accessor env T.kind) function_decl.result
+    List.map (fun ty -> T.kind ty) function_decl.result
   in
   let continuation, r =
     simplify_continuation_use_cannot_inline env r continuation
@@ -905,7 +906,7 @@ and simplify_over_application env r ~args ~arg_tys ~continuation
   let full_app_args, remaining_args = Misc.Stdlib.List.split_at arity args in
   let full_app_types, _ = Misc.Stdlib.List.split_at arity arg_tys in
   let func_var = Variable.create "full_apply" in
-  let func_var_kind = Flambda_kind.value Definitely_pointer in
+  let func_var_kind = Flambda_kind.value () in
   let func_param =
     Flambda.Typed_parameter.create_from_kind (Parameter.wrap func_var)
       func_var_kind
@@ -1044,7 +1045,7 @@ and simplify_function_application env r (apply : Flambda.Apply.t)
       Flambda.Call_kind.return_arity apply.call_kind
     in
     let result_arity =
-      List.map (E.type_accessor env T.kind) function_decl.result
+      List.map (fun ty -> T.kind ty) function_decl.result
     in
     let arity_mismatch =
       not (Flambda_arity.equal arity_of_application result_arity)
@@ -1176,7 +1177,7 @@ and simplify_function_application env r (apply : Flambda.Apply.t)
 and simplify_method_call env r (apply : Flambda.Apply.t) ~kind ~obj
       : Expr.t * R.t =
   let callee_ty, _args_tys, apply, r = simplify_apply_shared env r apply in
-  let callee_kind = (E.type_accessor env T.kind) callee_ty in
+  let callee_kind = (fun ty -> T.kind ty) callee_ty in
   if not (Flambda_kind.is_value callee_kind) then begin
     Misc.fatal_errorf "Method call with callee of wrong kind %a: %a"
       Flambda_kind.print callee_kind
@@ -1193,7 +1194,7 @@ and simplify_method_call env r (apply : Flambda.Apply.t) ~kind ~obj
 and simplify_c_call env r apply ~alloc:_ ~param_arity:_ ~return_arity:_
       : Expr.t * R.t =
   let callee_ty, _args_tys, apply, r = simplify_apply_shared env r apply in
-  let callee_kind = (E.type_accessor env T.kind) callee_ty in
+  let callee_kind = (fun ty -> T.kind ty) callee_ty in
   if not (Flambda_kind.is_value callee_kind) then begin
     Misc.fatal_errorf "C call with callee of wrong kind %a: %a"
       Flambda_kind.print callee_kind
@@ -1209,7 +1210,7 @@ and simplify_apply_cont env r cont ~(trap_action : Flambda.Trap_action.t option)
   let cont = Continuation_approx.name cont_approx in
   let args_and_types = S.simplify_simples env args in
   let args, arg_tys = List.split args_and_types in
-  let param_arity_of_exn_handler = [Flambda_kind.value Unknown] in
+  let param_arity_of_exn_handler = [Flambda_kind.value ()] in
   let freshen_trap_action env r (trap_action : Flambda.Trap_action.t) =
     match trap_action with
     | Push { id; exn_handler; } ->
@@ -1293,10 +1294,10 @@ and simplify_expr env r (tree : Expr.t) : Expr.t * R.t =
       Freshening.add_mutable_variable (E.freshening env) var
     in
     let env = E.set_freshening env freshening in
-    let contents_kind = (E.type_accessor env T.kind) contents_type in
+    let contents_kind = (fun ty -> T.kind ty) contents_type in
     let ty = T.unknown contents_kind in
     let body, r = simplify_expr (E.add_mutable env var ty) r body in
-    let initial_value_kind = (E.type_accessor env T.kind) initial_value_ty in
+    let initial_value_kind = (fun ty -> T.kind ty) initial_value_ty in
     if not (Flambda_kind.compatible initial_value_kind
         ~if_used_at:contents_kind)
     then begin
