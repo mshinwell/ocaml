@@ -57,7 +57,7 @@ and function_declaration =
     body : t;
     attr : Lambda.function_attribute;
     loc : Location.t;
-    free_idents_of_body : Lambda.IdentSet.t;
+    free_idents_of_body : Ident.Set.t;
     stub : bool;
   }
 

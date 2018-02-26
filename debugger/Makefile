@@ -35,8 +35,8 @@ INCLUDES=\
 
 OTHEROBJS=\
   $(UNIXDIR)/unix.cma \
-  ../utils/config.cmo ../utils/tbl.cmo ../utils/misc.cmo \
-  ../utils/identifiable.cmo ../utils/numbers.cmo \
+  ../utils/config.cmo ../utils/tbl.cmo ../utils/identifiable.cmo \
+  ../utils/misc.cmo ../utils/numbers.cmo \
   ../utils/arg_helper.cmo ../utils/clflags.cmo \
   ../utils/consistbl.cmo ../utils/warnings.cmo \
   ../utils/terminfo.cmo \

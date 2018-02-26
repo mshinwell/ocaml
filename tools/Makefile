@@ -321,8 +321,8 @@ objinfo_helper$(EXE): objinfo_helper.c ../byterun/caml/s.h
 OBJINFO=../compilerlibs/ocamlcommon.cma \
         ../compilerlibs/ocamlbytecomp.cma \
         ../compilerlibs/ocamlmiddleend.cma \
+        ../asmcomp/backend_primitives.cmo \
         ../asmcomp/printclambda.cmo \
-        ../asmcomp/export_info.cmo \
         objinfo.cmo
 
 $(call byte_and_opt,ocamlobjinfo,$(OBJINFO),objinfo_helper$(EXE))
@@ -337,7 +337,6 @@ LINTAPIDIFF=../compilerlibs/ocamlcommon.cmxa \
         ../compilerlibs/ocamlbytecomp.cmxa \
         ../compilerlibs/ocamlmiddleend.cmxa \
         ../asmcomp/printclambda.cmx \
-        ../asmcomp/export_info.cmx \
 	../otherlibs/str/str.cmxa \
 	lintapidiff.cmx
 

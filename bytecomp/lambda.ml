@@ -736,7 +736,7 @@ let rec size_of_lambda' env lam =
   | Lvar id ->
       begin try Ident.find_same id env with Not_found -> RHS_nonrec end
   | Lfunction{params} as funct ->
-      RHS_function (1 + IdentSet.cardinal(free_variables funct),
+      RHS_function (1 + Ident.Set.cardinal(free_variables funct),
                     List.length params)
   | Llet (Strict, _k, id, Lprim (Pduprecord (kind, size), _, _), body)
     when check_recordwith_updates id body ->

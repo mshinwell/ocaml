@@ -19,7 +19,6 @@
 module Env = Closure_conversion_aux.Env
 module Function_decls = Closure_conversion_aux.Function_decls
 module Function_decl = Function_decls.Function_decl
-module IdentSet = Lambda.IdentSet
 module P = Flambda_primitive
 module K = Flambda_kind
 module Program_body = Flambda_static.Program_body
@@ -653,7 +652,7 @@ and close_functions t external_env function_declarations : Flambda.Named.t =
   let all_free_idents =
     (* Filter out predefined exception identifiers, since they will be
        turned into symbols when we closure-convert the body. *)
-    IdentSet.filter (fun ident ->
+    Ident.Set.filter (fun ident ->
         not (Ident.is_predef_exn ident))
       (Function_decls.all_free_idents function_declarations)
   in
