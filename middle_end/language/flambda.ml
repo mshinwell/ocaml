@@ -809,7 +809,7 @@ end = struct
               my_closure), dbg)
           in
           match kind with
-          | Value _ ->
+          | Value ->
             Expr.create_let new_var kind projection body
           | Naked_number _ ->
             let boxed_var = Variable.rename new_var in
@@ -818,7 +818,7 @@ end = struct
             in
             Expr.create_let boxed_var boxed_kind projection
               (Expr.create_let new_var kind unbox body)
-          | Phantom _ | Fabricated _ ->
+          | Fabricated | Phantom _ ->
             Misc.fatal_error "Not yet implemented" (* XXX *) )
         vars_within_closure body
     in
@@ -839,13 +839,13 @@ end = struct
           let var, boxed_vars =
             let kind = free_variable_kind id in
             match kind with
-            | Value _ ->
+            | Value ->
               id, boxed_vars
             | Naked_number _ ->
               let boxed_var = Variable.rename id in
               let box, boxed_kind = Named.box_value (Name.var id) kind dbg in
               boxed_var, (boxed_var, boxed_kind, box) :: boxed_vars
-            | Phantom _ | Fabricated _ ->
+            | Phantom _ | Fabricated ->
               Misc.fatal_error "Not yet implemented" (* XXX *)
           in
           let free_var = Free_var.create var in
@@ -876,9 +876,9 @@ end = struct
       Variable.create "project_closure" ~current_compilation_unit
     in
     let body =
-      Expr.create_let set_of_closures_var (K.value Definitely_pointer)
+      Expr.create_let set_of_closures_var (K.value ())
         (Set_of_closures set_of_closures)
-        (Expr.create_let project_closure_var (K.value Definitely_pointer)
+        (Expr.create_let project_closure_var (K.value ())
           project_closure
           (Apply_cont (continuation, None, [Simple.var project_closure_var])))
     in
@@ -944,7 +944,7 @@ end = struct
         let named_kind =
           match Named.invariant env defining_expr with
           | Singleton kind -> Some kind
-          | Unit -> Some (K.value Definitely_immediate)
+          | Unit -> Some (K.value ())
           | Never_returns -> None
         in
         begin match named_kind with
@@ -1069,7 +1069,7 @@ end = struct
                 print expr
             end;
             assert (not (Continuation.equal cont exn_handler));
-            let expected_arity = [K.value Unknown] in
+            let expected_arity = [K.value ()] in
             if not (Flambda_arity.equal arity expected_arity) then begin
               Misc.fatal_errorf "Exception handler continuation %a has \
                   the wrong arity for the trap handler action of this \
@@ -1096,20 +1096,20 @@ end = struct
       | Apply ({ func; continuation; exn_continuation; args; call_kind; dbg;
                  inline; specialise; } as apply) ->
         let stack = E.current_continuation_stack env in
-        E.check_name_is_bound_and_of_kind env func (K.value Definitely_pointer);
+        E.check_name_is_bound_and_of_kind env func (K.value ());
         begin match call_kind with
         | Function (Direct { closure_id = _; return_arity = _; }) ->
           (* Note that [return_arity] is checked for all the cases below. *)
           E.check_simples_are_bound env args
         | Function Indirect_unknown_arity ->
-          E.check_simples_are_bound_and_of_kind env args (K.value Unknown)
+          E.check_simples_are_bound_and_of_kind env args (K.value ())
         | Function (Indirect_known_arity { param_arity; return_arity = _; }) ->
           ignore (param_arity : Flambda_arity.t);
           E.check_simples_are_bound env args
         | Method { kind; obj; } ->
           ignore (kind : Call_kind.method_kind);
-          E.check_name_is_bound_and_of_kind env obj (K.value Unknown);
-          E.check_simples_are_bound_and_of_kind env args (K.value Unknown)
+          E.check_name_is_bound_and_of_kind env obj (K.value ());
+          E.check_simples_are_bound_and_of_kind env args (K.value ())
         | C_call { alloc = _; param_arity = _; return_arity = _; } ->
           (* CR mshinwell: Check exactly what Cmmgen can compile and then
              add further checks on [param_arity] and [return_arity] *)
@@ -1160,7 +1160,7 @@ end = struct
               print expr
           | Exn_handler -> ()
           end;
-          let expected_arity = [Flambda_kind.value Definitely_pointer] in
+          let expected_arity = [Flambda_kind.value ()] in
           if not (Flambda_arity.equal arity expected_arity) then begin
             Misc.fatal_errorf "Exception continuation %a named in this \
                 [Apply] term has the wrong arity: expected %a but have %a:@ %a"
@@ -1177,7 +1177,7 @@ end = struct
       | Switch (arg, Value arms) ->
         (* CR mshinwell: Can we check this?  It might be of kind "unknown" *)
         E.check_name_is_bound_and_of_kind env arg
-          (K.value Definitely_immediate);
+          (K.value ());
         if Targetint.OCaml.Map.cardinal arms < 1 then begin
           Misc.fatal_errorf "Empty switch:@ %a" print t
         end;
@@ -1208,7 +1208,7 @@ end = struct
       (* CR mshinwell: Factor out and share with case above *)
       | Switch (arg, Fabricated arms) ->
         E.check_name_is_bound_and_of_kind env arg
-          (K.value Definitely_immediate);
+          (K.value ());
         if Tag.Map.cardinal arms < 1 then begin
           Misc.fatal_errorf "Empty switch: %a" print t
         end;
@@ -1282,7 +1282,7 @@ end = struct
     let cont = Continuation.create () in
     let expr : Expr.t =
       Expr.create_let var
-        (K.value Unknown (* arbitrary *)) t
+        (K.value () (* arbitrary *)) t
         (Apply_cont (cont, None, []))
     in
     match Expr.toplevel_substitution sb expr with
@@ -1316,18 +1316,18 @@ end = struct
       begin match prim, x0 with
       | Project_closure closure_id, set_of_closures ->
         E.check_simple_is_bound_and_of_kind env set_of_closures
-          (K.fabricated Definitely_pointer);
+          (K.fabricated ());
         E.add_use_of_closure_id env closure_id
       | Move_within_set_of_closures { move_from; move_to; }, closure ->
         E.check_simple_is_bound_and_of_kind env closure
-          (K.value Definitely_pointer);
+          (K.value ());
         E.add_use_of_closure_id env move_from;
         E.add_use_of_closure_id env move_to
       | Project_var (closure_id, var), closure ->
         E.add_use_of_closure_id env closure_id;
         E.add_use_of_var_within_closure env var;
         E.check_simple_is_bound_and_of_kind env closure
-          (K.value Definitely_pointer)
+          (K.value ())
       | Duplicate_block _, _
       | Is_int, _
       | Get_tag _, _
@@ -1410,7 +1410,7 @@ end = struct
         Singleton (K.unit ())
       | Set_of_closures set_of_closures ->
         Set_of_closures.invariant env set_of_closures;
-        Singleton (K.fabricated Definitely_pointer)
+        Singleton (K.fabricated ())
       | Prim (prim, dbg) ->
         primitive_invariant env prim;
         ignore (dbg : Debuginfo.t);

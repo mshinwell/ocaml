@@ -398,7 +398,7 @@ let prepare_for_function_body t ~parameters_with_kinds ~my_closure
   in
   let continuations =
     Continuation.Map.add exception_cont
-      ([Flambda_kind.value Unknown], Exn_handler, continuation_stack)
+      ([Flambda_kind.value ()], Exn_handler, continuation_stack)
       continuations
   in
   let t =
@@ -410,5 +410,5 @@ let prepare_for_function_body t ~parameters_with_kinds ~my_closure
     }
   in
   add_variables
-    (add_variable t my_closure (Flambda_kind.value Definitely_pointer))
+    (add_variable t my_closure (Flambda_kind.value ()))
     parameters_with_kinds
