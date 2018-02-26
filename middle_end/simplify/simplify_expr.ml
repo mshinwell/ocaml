@@ -84,7 +84,8 @@ let for_defining_expr_of_let (env, r) var kind defining_expr =
       env
   in
   let new_kind = T.kind ty in
-  if not (Flambda_kind.compatible new_kind ~if_used_at:kind) then begin
+  if not (Flambda_kind.compatible_allowing_phantom new_kind ~if_used_at:kind)
+  then begin
     Misc.fatal_errorf "Kind error during simplification of [Let] binding \
         which yielded:@ %a :: %a <not compatible with %a> =@ %a"
       Variable.print var
@@ -1023,10 +1024,6 @@ and simplify_function_application env r (apply : Flambda.Apply.t)
         }
     in
     let call_kind = Flambda.Call_kind.Function function_call in
-    let arity = Flambda.Call_kind.return_arity call_kind in
-    let continuation, r =
-      simplify_continuation_use_cannot_inline env r continuation ~arity
-    in
     Apply ({
       func = callee;
       args;

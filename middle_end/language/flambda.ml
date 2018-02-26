@@ -936,7 +936,8 @@ end = struct
         begin match named_kind with
         | None -> ()
         | Some named_kind ->
-          if not (K.compatible named_kind ~if_used_at:kind) then begin
+          if not (K.compatible_allowing_phantom named_kind ~if_used_at:kind)
+          then begin
             Misc.fatal_errorf "[Let] expression inferred kind (%a)@ is not \
                 compatible with the annotated kind (%a);@ [Let] \
                 expression is:@ %a"

@@ -112,6 +112,18 @@ end)
 let compatible t ~if_used_at =
   equal t if_used_at
 
+let compatible_allowing_phantom t ~if_used_at =
+  let without_phantom : t =
+    match if_used_at with
+    | Value
+    | Naked_number _
+    | Fabricated -> t
+    | Phantom (_, Value) -> Value
+    | Phantom (_, Naked_number kind) -> Naked_number kind
+    | Phantom (_, Fabricated) -> Fabricated
+  in
+  compatible t ~if_used_at:without_phantom
+
 let is_value t =
   match t with
   | Value -> true

@@ -80,6 +80,10 @@ val unit : unit -> t
 *)
 val compatible : t -> if_used_at:t -> bool
 
+(** Like [compatible], but allows [if_used_at] to be a phantom version of
+    the kind being checked against. *)
+val compatible_allowing_phantom : t -> if_used_at:t -> bool
+
 val phantomize_in_types : t -> t
 
 val phantomize_debug_only : t -> t

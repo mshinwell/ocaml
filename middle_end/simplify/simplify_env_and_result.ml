@@ -981,17 +981,17 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
         (Format.pp_print_list Simple.print) args
         Env.print env
     end;
-  (*
-  let k = 6589 in
+(*
+  let k = 23 in
   if Continuation.to_int cont = k then begin
   Format.eprintf "Adding use of continuation k%d, args %a approxs %a:\n%s\n%!"
     k
-    Variable.print_list args
+    Simple.List.print args
     (Format.pp_print_list Flambda_type.print)
-    (Continuation_uses.Use.Kind.args_approxs kind)
+    (Continuation_uses.Use.Kind.arg_tys kind)
     (Printexc.raw_backtrace_to_string (Printexc.get_callstack 20))
   end;
-  *)
+*)
     let uses =
       match Continuation.Map.find cont t.used_continuations with
       | exception Not_found ->
