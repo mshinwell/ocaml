@@ -1194,7 +1194,7 @@ end = struct
       (* CR mshinwell: Factor out and share with case above *)
       | Switch (arg, Fabricated arms) ->
         E.check_name_is_bound_and_of_kind env arg
-          (K.value ());
+          (K.fabricated ());
         if Tag.Map.cardinal arms < 1 then begin
           Misc.fatal_errorf "Empty switch: %a" print t
         end;

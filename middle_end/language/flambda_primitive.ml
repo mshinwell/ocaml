@@ -610,8 +610,8 @@ let result_kind_of_unary_primitive p : result_kind =
   match p with
   | Duplicate_block _ -> Singleton (K.value ())
   | Is_int
-  | Get_tag _
   | String_length _ -> Singleton (K.value ())
+  | Get_tag _ -> Singleton (K.fabricated ())
   | Int_as_pointer ->
     (* This primitive is *only* to be used when the resulting pointer points
        at something which is a valid OCaml value (even if outside of the
