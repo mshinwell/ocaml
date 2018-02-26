@@ -76,7 +76,7 @@ module Call_kind = struct
     match call with
     | Direct { return_arity; _ }
     | Indirect_known_arity { return_arity; _ } -> return_arity
-    | Indirect_unknown_arity -> [Flambda_kind.value Unknown]
+    | Indirect_unknown_arity -> [Flambda_kind.value ()]
 
   type method_kind = Self | Public | Cached
 
@@ -139,7 +139,7 @@ module Call_kind = struct
   let return_arity t : Flambda_arity.t =
     match t with
     | Function call -> return_arity_function_call call
-    | Method _ -> [Flambda_kind.value Unknown]
+    | Method _ -> [Flambda_kind.value ()]
     | C_call { return_arity; _ } -> return_arity
 end
 
@@ -525,11 +525,11 @@ end = struct
     in
     let free_names_promoted_to_kind names (kind : K.t) =
       match kind with
-      | Value _ | Naked_number _ | Fabricated _ -> free_names names
-      | Phantom (In_types _) ->
+      | Value | Naked_number _ | Fabricated -> free_names names
+      | Phantom (In_types, _) ->
         let names = Name_occurrences.promote_to_in_types names in
         free_names names
-      | Phantom (Debug_only _) ->
+      | Phantom (Debug_only, _) ->
         let names = Name_occurrences.promote_to_debug_only names in
         free_names names
     in
@@ -547,9 +547,9 @@ end = struct
     in
     let bound_name_of_kind name (kind : K.t) =
       match kind with
-      | Value _ | Naked_number _ | Fabricated _ -> bound_name_in_term name
-      | Phantom (In_types _) -> bound_name_in_types name
-      | Phantom (Debug_only _) -> bound_name_debug_only name
+      | Value | Naked_number _ | Fabricated -> bound_name_in_term name
+      | Phantom (In_types, _) -> bound_name_in_types name
+      | Phantom (Debug_only, _) -> bound_name_debug_only name
     in
     (* N.B. This function assumes that all bound identifiers are distinct. *)
     let rec aux (flam : t) : unit =
@@ -1059,22 +1059,18 @@ end = struct
   let box_value name (kind : Flambda_kind.t) dbg : Named.t * Flambda_kind.t =
     let simple = Simple.name name in
     match kind with
-    | Value _ -> Simple simple, kind
+    | Value -> Simple simple, kind
     | Naked_number Naked_immediate ->
       Misc.fatal_error "Not yet supported"
     | Naked_number Naked_float ->
-      Prim (Unary (Box_number Naked_float, simple), dbg),
-        K.value Definitely_pointer
+      Prim (Unary (Box_number Naked_float, simple), dbg), K.value ()
     | Naked_number Naked_int32 ->
-      Prim (Unary (Box_number Naked_int32, simple), dbg),
-        K.value Definitely_pointer
+      Prim (Unary (Box_number Naked_int32, simple), dbg), K.value ()
     | Naked_number Naked_int64 ->
-      Prim (Unary (Box_number Naked_int64, simple), dbg),
-        K.value Definitely_pointer
+      Prim (Unary (Box_number Naked_int64, simple), dbg), K.value ()
     | Naked_number Naked_nativeint ->
-      Prim (Unary (Box_number Naked_nativeint, simple), dbg),
-        K.value Definitely_pointer
-    | Fabricated _ ->
+      Prim (Unary (Box_number Naked_nativeint, simple), dbg), K.value ()
+    | Fabricated ->
       Misc.fatal_error "Cannot box values of [Fabricated] kind"
     | Phantom _ ->
       (* CR mshinwell: this should probably be supported? *)
@@ -1083,7 +1079,7 @@ end = struct
   let unbox_value name (kind : Flambda_kind.t) dbg : Named.t * Flambda_kind.t =
     let simple = Simple.name name in
     match kind with
-    | Value _ -> Simple simple, kind
+    | Value -> Simple simple, kind
     | Naked_number Naked_immediate ->
       Misc.fatal_error "Not yet supported"
     | Naked_number Naked_float ->
@@ -1095,7 +1091,7 @@ end = struct
     | Naked_number Naked_nativeint ->
       Prim (Unary (Unbox_number Naked_nativeint, simple), dbg),
         K.naked_nativeint ()
-    | Fabricated _ ->
+    | Fabricated ->
       Misc.fatal_error "Cannot box values of [Fabricated] kind"
     | Phantom _ ->
       (* CR mshinwell: this should probably be supported? *)
@@ -1801,7 +1797,7 @@ end = struct
       Expr.print f.body
 end and Typed_parameter : sig
   type t
-  val create : (Parameter.t -> Flambda_type.t -> t) Flambda_type.type_accessor
+  val create : Parameter.t -> Flambda_type.t -> t
   val create_from_kind : Parameter.t -> Flambda_kind.t -> t
   val param : t -> Parameter.t
   val var : t -> Variable.t
@@ -1843,29 +1839,23 @@ end = struct
     param : Parameter.t;
     (* CR mshinwell: Add an invariant check that [kind] matches [ty] *)
     ty : Flambda_type.t;
-    (* [kind] is here so that you don't need an environment, which
-       [Flambda_type.kind] needs, to determine the parameter's kind. *)
-    kind : Flambda_kind.t;
   }
 
-  let create ~type_of_name param ty =
-    let kind = Flambda_type.kind ~type_of_name ty in
+  let create param ty =
     { param;
       ty;
-      kind;
     }
 
   let create_from_kind param kind =
     { param;
       ty = Flambda_type.unknown kind;
-      kind;
     }
 
   let param t = t.param
   let var t = Parameter.var t.param
   let simple t = Simple.var (var t)
   let ty t = t.ty
-  let kind t = t.kind
+  let kind t = Flambda_type.kind t.ty
 
   let with_type t ty = { t with ty; }
 
@@ -1902,13 +1892,12 @@ end = struct
 *)
 
   let equal ~equal_type
-        { param = param1; ty = ty1; kind = kind1; }
-        { param = param2; ty = ty2; kind = kind2; } =
+        { param = param1; ty = ty1; }
+        { param = param2; ty = ty2; } =
     Parameter.equal param1 param2
       && equal_type ty1 ty2
-      && Flambda_kind.equal kind1 kind2
 
-  let print ppf { param; ty; kind = _; } =
+  let print ppf { param; ty; } =
     Format.fprintf ppf "(%a : %a)"
       Parameter.print param
       Flambda_type.print ty

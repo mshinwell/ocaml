@@ -692,11 +692,10 @@ end and Typed_parameter : sig
   type t
 
   (** Create a typed parameter. *)
-  val create : (Parameter.t -> Flambda_type.t -> t) Flambda_type.type_accessor
+  val create : Parameter.t -> Flambda_type.t -> t
 
   (** As for [create] except that the parameter is given an unknown type of the
-      specified kind.  This means that the [type_accessor] functions do not
-      need to be provided. *)
+      specified kind. *)
   val create_from_kind : Parameter.t -> Flambda_kind.t -> t
 
   (** The underlying parameter. *)
