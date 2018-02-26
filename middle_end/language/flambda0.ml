@@ -865,15 +865,23 @@ end = struct
     match t with
     | Apply ({ func; continuation; exn_continuation; args; call_kind; inline;
                specialise; dbg; }) ->
-      fprintf ppf "@[<2>(apply %a %a%a%a@ <Kr=%a Ke=%a> %a %a)@]"
+      Format.fprintf ppf "@[<2>(apply@ \
+          (func %a)@ \
+          (args %a)@ \
+          (call_kind %a)@ \
+          (inline %a)@ \
+          (specialise %a)@ \
+          (dbg %a)@ \
+          (continuation %a)@ \
+          (exn_continuation %a))@]"
+        Name.print func
+        Simple.List.print args
         Call_kind.print call_kind
         print_inline_attribute inline
         print_specialise_attribute specialise
         Debuginfo.print_or_elide dbg
         Continuation.print continuation
         Continuation.print exn_continuation
-        Name.print func
-        Simple.List.print args
     | Let { var = id; kind; defining_expr = arg; body; _ } ->
       let rec letbody (ul : t) =
         match ul with
