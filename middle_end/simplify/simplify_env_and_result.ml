@@ -770,6 +770,8 @@ end = struct
       | [use] when Use.Kind.is_inlinable use.kind -> true
       | _ -> false
 
+    (* CR mshinwell: Use lwhite's suggestion of doing the existential
+       introduction at [Switch] time *)
     let join_of_arg_types_opt t ~arity ~default_env =
       match t.application_points with
       | [] -> None
