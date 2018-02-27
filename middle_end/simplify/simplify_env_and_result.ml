@@ -223,6 +223,9 @@ end = struct
         Misc.fatal_errorf "Variable %a is not in scope"
           Variable.print var
 
+  let scope_level_of_name t name =
+    TE.scope_level t.typing_environment name
+
   let mem_variable t var =
     match find_variable_opt t var with
     | None -> false
@@ -234,18 +237,16 @@ end = struct
     in
     { t with typing_environment; }
 
-  let add_or_meet_variable ~type_of_name t var ty =
-    let ty =
-      match find_variable_opt t var with
-      | None -> ty
-      | Some existing_ty ->
-        (* CR mshinwell: Should we add [judgements] to the env. here? *)
-        let ty, _judgements = T.meet ~type_of_name ty existing_ty in
-        ty
-    in
+  let add_or_replace_meet_variable ~type_of_name t var ty =
     let typing_environment =
-      TE.add_or_replace t.typing_environment
+      TE.add_or_replace_meet ~type_of_name t.typing_environment
         (Name.var var) t.continuation_scope_level ty
+    in
+    { t with typing_environment; }
+
+  let replace_meet_variable ~type_of_name t var ty =
+    let typing_environment =
+      TE.replace_meet ~type_of_name t.typing_environment (Name.var var) ty
     in
     { t with typing_environment; }
 
@@ -1230,7 +1231,7 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
 
   let add_or_meet_typing_judgement ~type_of_name t name scope_level ty =
     let typing_judgements =
-      T.Typing_environment.add_or_meet ~type_of_name
+      T.Typing_environment.add_or_replace_meet ~type_of_name
         t.typing_judgements name scope_level ty
     in
     { t with

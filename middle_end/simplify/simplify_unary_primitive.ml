@@ -350,8 +350,9 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
                  [Const] *)
               T.Typing_environment.create ()
             | Name block ->
+              let scope_level = E.scope_level_of_name env block in
               T.Typing_environment.add (T.Typing_environment.create ())
-                block (E.continuation_scope_level env) block_ty
+                block scope_level block_ty
           in
           Tag.Map.add (Tag.Scannable.to_tag tag) env tags_to_env_extensions)
         tags_to_sizes

@@ -287,8 +287,17 @@ module type S = sig
 
     val add : t -> Name.t -> Scope_level.t -> flambda_type -> t
 
-    val add_or_meet
-       : (t -> Name.t -> Scope_level.t -> flambda_type -> t) type_accessor
+    (** Refine the type of a name that is currently bound in the
+        environment.  (It is an error to call this function with a name that
+        is not bound in the given environment.) *)
+    val replace_meet : (t -> Name.t -> flambda_type -> t) type_accessor
+
+    val add_or_replace_meet
+       : (t
+      -> Name.t
+      -> Scope_level.t
+      -> flambda_type
+      -> t) type_accessor
 
     val add_or_replace : t -> Name.t -> Scope_level.t -> flambda_type -> t
 
@@ -297,6 +306,8 @@ module type S = sig
     val find : t -> Name.t -> flambda_type * binding_type
 
     val find_opt : t -> Name.t -> (flambda_type * binding_type) option
+
+    val scope_level : t -> Name.t -> Scope_level.t
 
     val cut
        : t

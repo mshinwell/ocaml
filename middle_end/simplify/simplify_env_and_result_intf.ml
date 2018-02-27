@@ -112,7 +112,13 @@ module type Env = sig
       environment. *)
   val add_variable : t -> Variable.t -> Flambda_type.t -> t
 
-  val add_or_meet_variable
+  val add_or_replace_meet_variable
+     : (t
+    -> Variable.t
+    -> Flambda_type.t
+    -> t) Flambda_type.type_accessor
+
+  val replace_meet_variable
      : (t
     -> Variable.t
     -> Flambda_type.t
@@ -125,6 +131,8 @@ module type Env = sig
 
   (** Whether the given variable is in scope. *)
   val mem_variable : t -> Variable.t -> bool
+
+  val scope_level_of_name : t -> Name.t -> Scope_level.t
 
   val add_symbol : t -> Symbol.t -> Flambda_type.t -> t
 

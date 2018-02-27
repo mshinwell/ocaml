@@ -240,6 +240,7 @@ end) = struct
   let simplify_switch env r ~(scrutinee : Name.t)
         (arms : Continuation.t S.Arm.Map.t)
         : Expr.t * R.t =
+Format.eprintf "Simplifying switch on %a\n%!" Name.print scrutinee;
     let scrutinee, scrutinee_ty = simplify_name env scrutinee in
     S.check_kind_of_scrutinee env ~scrutinee scrutinee_ty;
     let arms = (E.type_accessor env S.switch_arms) scrutinee_ty ~arms in
@@ -266,16 +267,17 @@ end) = struct
           let cont, r =
             let scrutinee_ty = S.type_of_scrutinee arm in
             let env =
-              match scrutinee with
-              | Var scrutinee ->
-                (E.type_accessor env E.add_or_meet_variable)
-                  env scrutinee scrutinee_ty
-              | Symbol _ -> env
-            in
-            let env =
               (E.type_accessor env E.extend_typing_environment) env
                 ~env_extension
             in
+            let env =
+              match scrutinee with
+              | Var scrutinee ->
+                (E.type_accessor env E.replace_meet_variable)
+                  env scrutinee scrutinee_ty
+              | Symbol _ -> env
+            in
+Format.eprintf "Environment for switch arm:@ %a\n%!" E.print env;
             simplify_continuation_use_cannot_inline env r cont ~arity:[]
           in
           let arms = S.Arm.Map.add arm cont arms in

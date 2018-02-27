@@ -26,3 +26,5 @@ val for_symbols : t
 val next : t -> t
 
 val (>=): t -> t -> bool
+
+val to_int : t -> int

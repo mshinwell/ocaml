@@ -26,3 +26,5 @@ let next t =
   t + 1
 
 let (>=) (t1 : t) t2 = t1 >= t2
+
+let to_int t = t
