@@ -308,6 +308,8 @@ module type S = sig
     val meet : (t -> t -> t) type_accessor
 
     val restrict_to_names : t -> Name_occurrences.t -> t
+
+    val domain : t -> Name_occurrences.t
   end
 
   val print : Format.formatter -> t -> unit

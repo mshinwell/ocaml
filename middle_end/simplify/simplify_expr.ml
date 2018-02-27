@@ -62,7 +62,6 @@ let for_defining_expr_of_let (env, r) var kind defining_expr =
   (* CR mshinwell: Add one function in [R] called "local" to do all of
      these? *)
   let r = R.clear_typing_judgements r in
-  let r = R.clear_coercions r in
   let already_lifted_constants = R.get_lifted_constants r in
   let new_bindings, defining_expr, ty, r =
     Simplify_named.simplify_named env r defining_expr ~result_var:var
@@ -74,13 +73,6 @@ let for_defining_expr_of_let (env, r) var kind defining_expr =
     Symbol.Map.fold (fun symbol (ty, _kind, _static_part) env ->
         E.add_symbol env symbol ty)
       lifted_constants
-      env
-  in
-  let env =
-    let coercions = R.coercions r in
-    Simple.With_kind.Map.fold (fun (simple, kind) var env ->
-        E.add_coercion env simple kind var)
-      coercions
       env
   in
   let new_kind = T.kind ty in
@@ -393,17 +385,15 @@ let environment_for_let_cont_handler ~env cont
     (E.set_freshening env freshening)
     params
 
-let rec simplify_let_cont_handler ~env ~r ~cont ~handler ~arg_tys =
+let rec simplify_let_cont_handler ~env ~r ~cont
+      ~(handler : Flambda.Continuation_handler.t) ~arg_tys =
   let env = environment_for_let_cont_handler ~env cont ~handler ~arg_tys in
-  let { Flambda.Continuation_handler. params; stub; is_exn_handler; handler; } =
-    handler
-  in
-  let handler, r = simplify_expr (E.inside_branch env) r handler in
+  let new_handler, r = simplify_expr (E.inside_branch env) r handler.handler in
   let handler : Flambda.Continuation_handler.t =
-    { params;
-      stub;
-      is_exn_handler;
-      handler;
+    { params = handler.params;
+      stub = handler.stub;
+      is_exn_handler = handler.is_exn_handler;
+      handler = new_handler;
     }
   in
   r, handler
@@ -436,7 +426,7 @@ and simplify_let_cont_handlers env r ~handlers
       Continuation.Map.fold (fun cont
                 (handler : Flambda.Continuation_handler.t) handlers ->
           let cont' = Freshening.apply_continuation freshening cont in
-          let arg_tys, _new_env =
+          let arg_tys, new_env =
             (* CR mshinwell: I have a suspicion that [r] may not contain the
                usage information for the continuation when it's come from
                [Unbox_continuation_params]. Check. *)
@@ -444,12 +434,12 @@ and simplify_let_cont_handlers env r ~handlers
               ~arity:(Flambda.Continuation_handler.param_arity handler)
               ~default_env:(E.get_typing_environment env)
           in
-(* XXX for pchambart: Re-enable this when the environments in types are ok
-          (* [new_env] contains everything we know holds at _all_ of the use
-             points of the continuation, with anything out of scope at the
-             definition site of [cont] marked as existential. *)
+          Format.eprintf "Environment for %a:@ %a@ Arg types:@ %a\n%!"
+            Continuation.print cont
+            T.Typing_environment.print new_env
+            (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print)
+              arg_tys;
           let env = E.replace_typing_environment env new_env in
-*)
           let env = E.increment_continuation_scope_level env in
           let r, handler =
             simplify_let_cont_handler ~env ~r:(R.create ()) ~cont:cont'

@@ -75,7 +75,6 @@ end = struct
     closure_depth : int;
     inlining_stats_closure_stack : Inlining_stats.Closure_stack.t;
     inlined_debuginfo : Debuginfo.t;
-    coercions : Variable.t Simple.With_kind.Map.t;
   }
 
   let create ~never_inline ~allow_continuation_inlining
@@ -108,7 +107,6 @@ end = struct
       inlining_stats_closure_stack =
         Inlining_stats.Closure_stack.create ();
       inlined_debuginfo = Debuginfo.none;
-      coercions = Simple.With_kind.Map.empty;
     }
 
   let print_scope_level_and_continuation_approx ppf (level, approx) =
@@ -138,7 +136,6 @@ end = struct
         @[(closure_depth@ %d)@]@ \
         @[(inlining_stats_closure_stack@ %a)@]@ \
         @[(inlined_debuginfo@ %a)@]\
-        @[(coercions@ %a)@]\
         )@]"
       t.round
       TE.print t.typing_environment
@@ -162,7 +159,6 @@ end = struct
       t.closure_depth
       Inlining_stats.Closure_stack.print t.inlining_stats_closure_stack
       Debuginfo.print t.inlined_debuginfo
-      (Simple.With_kind.Map.print Variable.print) t.coercions
 
   let backend t = t.backend
   let round t = t.round
@@ -204,7 +200,6 @@ end = struct
       freshening = Freshening.empty_preserving_activation_state env.freshening;
       inlined_debuginfo = Debuginfo.none;
       continuation_scope_level = Scope_level.initial;
-      coercions = Simple.With_kind.Map.empty;
     }
 
   let find_variable0 typing_environment var =
@@ -623,19 +618,6 @@ end = struct
     Continuation.Map.map (fun (_scope_level, approx) -> approx)
       t.continuations
 
-  let add_coercion t simple kind var =
-    let with_kind = simple, kind in
-    match Simple.With_kind.Map.find with_kind t.coercions with
-    | exception Not_found ->
-      let coercions = Simple.With_kind.Map.add with_kind var t.coercions in
-      { t with coercions; }
-    | _var -> t
-
-  let find_coercion t simple kind =
-    match Simple.With_kind.Map.find (simple, kind) t.coercions with
-    | exception Not_found -> None
-    | var -> Some var
-
   let invariant t =
     if !Clflags.flambda_invariant_checks then begin
       (* Make sure that freshening a continuation through the given
@@ -674,13 +656,13 @@ end = struct
           in
           match t with
           | Not_inlinable_or_specialisable args_tys ->
-            Format.fprintf ppf "(Not_inlinable_or_specialisable %a)"
+            Format.fprintf ppf "(Not_inlinable_or_specialisable (%a))"
               (Format.pp_print_list T.print) args_tys
           | Inlinable_and_specialisable args_and_tys ->
-            Format.fprintf ppf "(Inlinable_and_specialisable %a)"
+            Format.fprintf ppf "(Inlinable_and_specialisable (%a))"
               (Format.pp_print_list print_arg_and_ty) args_and_tys
           | Only_specialisable args_and_tys ->
-            Format.fprintf ppf "(Only_specialisable %a)"
+            Format.fprintf ppf "(Only_specialisable (%a))"
               (Format.pp_print_list print_arg_and_ty) args_and_tys
 
         let args t =
@@ -720,7 +702,10 @@ end = struct
         env : Env.t;
       }
 
-      let print ppf t = Kind.print ppf t.kind
+      let print ppf t =
+        Format.fprintf ppf "@[((kind@ %a)@ (env@ %a))@]"
+          Kind.print t.kind
+          Env.print t.env
     end
 
     type t = {
@@ -751,7 +736,7 @@ end = struct
       }
 
     let print ppf t =
-      Format.fprintf ppf "(%a application_points = (%a))"
+      Format.fprintf ppf "(%a application_points =@ (%a))"
         Continuation.print t.continuation
         (Format.pp_print_list Use.print) t.application_points
 
@@ -784,7 +769,7 @@ end = struct
       | [use] when Use.Kind.is_inlinable use.kind -> true
       | _ -> false
 
-    let join_of_arg_types_opt t ~arity =
+    let join_of_arg_types_opt t ~arity ~default_env =
       match t.application_points with
       | [] -> None
       | uses ->
@@ -806,13 +791,28 @@ Format.eprintf "Cutting environment for %a, level %a\n%!"
               let this_env =
                 TE.cut (Env.get_typing_environment use.env)
                   ~existential_if_defined_at_or_later_than:
-                    t.definition_scope_level
+                    (Scope_level.next t.definition_scope_level)
               in
 (*
 Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
 *)
               let arg_tys =
                 List.map2 (fun result this_ty ->
+                    let free_names_this_ty =
+                      (Env.type_accessor use.env T.free_names_transitive)
+                        this_ty
+                    in
+(*
+                    Format.eprintf "Argument for %a:@ Type:@ %a@ Env:@ %a\n%!"
+                      Continuation.print t.continuation
+                      T.print this_ty
+                      TE.print this_env;
+*)
+                    let this_env =
+                      TE.restrict_to_names this_env
+                        (Name_occurrences.union free_names_this_ty
+                          (TE.domain default_env))
+                    in
                     let this_ty =
                       (Env.type_accessor use.env T.add_judgements)
                         this_ty this_env
@@ -836,11 +836,12 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
 
     let join_of_arg_types t ~arity ~default_env =
       let tys, env =
-        match join_of_arg_types_opt t ~arity with
+        match join_of_arg_types_opt t ~arity ~default_env with
         | None -> T.bottom_types_from_arity arity, default_env
         | Some (arg_tys, None) -> arg_tys, default_env
         | Some (arg_tys, Some env) -> arg_tys, env
       in
+(*
       let free_names =
         let type_of_name ?local_env (name : T.Name_or_export_id.t) =
           (* CR mshinwell: this whole thing seems nasty *)
@@ -865,7 +866,11 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
           (Name_occurrences.create ())
           tys
       in
-      let env = TE.restrict_to_names env free_names in
+      let allowed_names =
+        Name_occurrences.union free_names (TE.domain default_env)
+      in
+*)
+      let env = TE.restrict_to_names env (TE.domain default_env) in
       tys, env
 
     let application_points t = t.application_points
@@ -935,7 +940,6 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
       lifted_constants :
         (Flambda_type.t * Flambda_kind.t * Flambda_static.Static_part.t)
           Symbol.Map.t;
-      coercions : Variable.t Simple.With_kind.Map.t;
     }
 
   let create () =
@@ -947,7 +951,6 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
       typing_judgements = T.Typing_environment.create ();
       newly_imported_symbols = Symbol.Map.empty;
       lifted_constants = Symbol.Map.empty;
-      coercions = Simple.With_kind.Map.empty;
     }
 
   let union t1 t2 =
@@ -968,8 +971,6 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
       lifted_constants =
         Symbol.Map.disjoint_union t1.lifted_constants
           t2.lifted_constants;
-      coercions =
-        Simple.With_kind.Map.disjoint_union t1.coercions t2.coercions;
     }
 
   let use_continuation t env cont kind =
@@ -1080,9 +1081,13 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
   let continuation_args_types t cont ~arity ~default_env =
     match Continuation.Map.find cont t.used_continuations with
     | exception Not_found ->
+      Format.eprintf "No uses of continuation %a\n%!" Continuation.print cont;
       let tys = List.map (fun kind -> T.bottom kind) arity in
       tys, default_env
     | uses ->
+      Format.eprintf "Continuation uses for %a:@ %a\n%!"
+        Continuation.print cont
+        Continuation_uses.print uses;
       Continuation_uses.join_of_arg_types uses ~arity ~default_env
 
   let continuation_args_types' t cont ~arity =
@@ -1240,21 +1245,6 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
     { t with
       typing_judgements;
     }
-
-  let clear_coercions t =
-    { t with
-      coercions = Simple.With_kind.Map.empty;
-    }
-
-  let add_coercion t simple kind var =
-    let with_kind = simple, kind in
-    match Simple.With_kind.Map.find with_kind t.coercions with
-    | exception Not_found ->
-      let coercions = Simple.With_kind.Map.add with_kind var t.coercions in
-      { t with coercions; }
-    | _var -> t
-
-  let coercions t = t.coercions
 
   let get_typing_judgements t = t.typing_judgements
 

@@ -494,13 +494,13 @@ end) = struct
       print_function_declarations closure.function_decls
 
   and print_tag_case ppf ({ env_extension; } : tag_case) =
-    Format.fprintf ppf "@[(env_extension %a)@]"
+    Format.fprintf ppf "@[(env_extension@ %a)@]"
       print_typing_environment env_extension
 
   and print_of_kind_fabricated ppf (o : of_kind_fabricated) =
     match o with
     | Tag tag_map ->
-      Format.fprintf ppf "@[(Tags %a)@]" (Tag.Map.print print_tag_case) tag_map
+      Format.fprintf ppf "@[(Tags@ %a)@]" (Tag.Map.print print_tag_case) tag_map
     | Set_of_closures set -> print_set_of_closures ppf set
     | Closure closure -> print_closure ppf closure
 
@@ -3466,6 +3466,12 @@ Format.eprintf "Result is: %a\n%!"
         existentials;
         existential_freshening;
       }
+
+    let domain t =
+      let domain =
+        Name.Set.diff (Name.Map.keys t.names_to_types) t.existentials
+      in
+      Name_occurrences.create_from_set_in_terms domain
   end
 
   let add_judgements ~type_of_name t env : t =

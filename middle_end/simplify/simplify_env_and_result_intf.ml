@@ -365,10 +365,6 @@ module type Env = sig
   val add_inlined_debuginfo : t -> dbg:Debuginfo.t -> Debuginfo.t
 
   val continuations_in_scope : t -> Continuation_approx.t Continuation.Map.t
-
-  val add_coercion : t -> Simple.t -> Flambda_kind.t -> Variable.t -> t
-
-  val find_coercion : t -> Simple.t -> Flambda_kind.t -> Variable.t option
 end
 
 module type Result = sig
@@ -603,12 +599,6 @@ module type Result = sig
 
   (* CR mshinwell: Should this be restructured so that [r] explicitly
      contains (some subset of?) an [env]? *)
-
-  val clear_coercions : t -> t
-
-  val add_coercion : t -> Simple.t -> Flambda_kind.t -> Variable.t -> t
-
-  val coercions : t -> Variable.t Simple.With_kind.Map.t
 
   val clear_typing_judgements : t -> t
 
