@@ -391,8 +391,13 @@ let rec simplify_let_cont_handler ~env ~r ~cont
       ~(handler : Flambda.Continuation_handler.t) ~arg_tys =
   let env = environment_for_let_cont_handler ~env cont ~handler ~arg_tys in
   let new_handler, r = simplify_expr (E.inside_branch env) r handler.handler in
+  let params =
+    List.map2 (fun param arg_ty ->
+        Flambda.Typed_parameter.with_type param arg_ty)
+      handler.params arg_tys
+  in
   let handler : Flambda.Continuation_handler.t =
-    { params = handler.params;
+    { params;
       stub = handler.stub;
       is_exn_handler = handler.is_exn_handler;
       handler = new_handler;
