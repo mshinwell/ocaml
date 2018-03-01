@@ -367,7 +367,7 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
     T.these_tags tags_to_env_extensions
   in
   match inferred_tags with
-  | Proved inferred_tags ->
+  | Proved (Exactly inferred_tags) ->
     let inferred_tags = Tag.to_scannable_set inferred_tags in
     let tags = Tag.Scannable.Set.inter inferred_tags possible_tags in
     let r =
@@ -389,6 +389,9 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
       let result_var_type = result_var_type ~tags_to_sizes in
       Reachable.reachable term, result_var_type, r
     end
+  | Proved (Answer_given_by name) ->
+    Reachable.reachable (original_term ()),
+      T.alias_type_of (K.value ()) name, r
   | Unknown ->
     let prim : Flambda_primitive.unary_primitive =
       Get_tag { tags_to_sizes; }
