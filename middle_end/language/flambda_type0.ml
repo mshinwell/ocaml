@@ -167,11 +167,17 @@ end) = struct
   and block_cases =
     | Join of { by_length : singleton_block Targetint.OCaml.Map.t; }
 
+  and 'a or_unknown_immediates =
+    | Exactly of 'a
+    | Unknown of { is_int : Name.t option; }
+
+  and 'a or_unknown_blocks =
+    | Exactly of 'a
+    | Unknown of { get_tag : Name.t option; }
+
   and blocks_and_tagged_immediates = {
-    immediates : immediate_case Immediate.Map.t or_unknown;
-    blocks : block_cases Tag.Map.t;
-    is_int : t;
-    get_tag : t;
+    immediates : immediate_case Immediate.Map.t or_unknown_immediates;
+    blocks : block_cases Tag.Map.t or_unknown_blocks;
   }
 
   and 'a of_kind_value_boxed_number =
@@ -324,6 +330,22 @@ end;
     | Known contents -> print_contents ppf contents
     | Unknown -> Format.pp_print_string ppf "<unknown>"
 
+  let print_or_unknown_immediates print_contents ppf
+        (or_unknown : _ or_unknown_immediates) =
+    match or_unknown with
+    | Exactly contents -> print_contents ppf contents
+    | Unknown { is_int = None; } -> Format.pp_print_string ppf "<unknown>"
+    | Unknown { is_int = Some is_int; } ->
+      Format.pp_print_string ppf "<is_int=%a>" Name.print is_int
+
+  let print_or_unknown_blocks print_contents ppf
+        (or_unknown : _ or_unknown_blocks) =
+    match or_unknown with
+    | Exactly contents -> print_contents ppf contents
+    | Unknown { is_int = None; } -> Format.pp_print_string ppf "<unknown>"
+    | Unknown { get_tag = Some get_tag; } ->
+      Format.pp_print_string ppf "<get_tag=%a>" Name.print get_tag
+
   let print_or_alias print_descr ppf (or_alias : _ or_alias) =
     match or_alias with
     | No_alias descr -> print_descr ppf descr
@@ -415,10 +437,10 @@ end;
     | Blocks_and_tagged_immediates { blocks; immediates; } ->
       Format.fprintf ppf
         "@[(Blocks_and_immediates@ \
-         @[(blocks@ %a)@]@ \
+         @[(blocks@ @[%a@])@]@ \
          @[(immediates@ @[%a@])@])@]"
-        print_blocks blocks
-        (print_or_unknown print_immediates) immediates
+        (print_or_unknown_block print_blocks) blocks
+        (print_or_unknown_immediates print_immediates) immediates
     | Boxed_number n ->
       Format.fprintf ppf "@[(Boxed_number %a)@]"
         print_of_kind_value_boxed_number n
@@ -626,24 +648,29 @@ end;
     match of_kind with
     | Blocks_and_tagged_immediates { blocks; immediates; } ->
       let acc =
-        Tag.Map.fold (fun _tag ((Join { by_length; }) : block_cases) acc ->
-            Targetint.OCaml.Map.fold
-              (fun _length (singleton : singleton_block) acc ->
-                let acc =
-                  free_names_of_typing_environment singleton.env_extension acc
-                in
-                Array.fold_left (fun acc (field : _ mutable_or_immutable) ->
-                    match field with
-                    | Immutable t -> free_names t acc
-                    | Mutable -> acc)
-                  acc singleton.fields)
-              by_length
-              acc)
-          blocks
-          acc
+        match blocks with
+        | Unknown { get_tag = None; } -> acc
+        | Unknown { get_tag = Some get_tag; } -> Name.Set.add get_tag acc
+        | Known blocks ->
+          Tag.Map.fold (fun _tag ((Join { by_length; }) : block_cases) acc ->
+              Targetint.OCaml.Map.fold
+                (fun _length (singleton : singleton_block) acc ->
+                  let acc =
+                    free_names_of_typing_environment singleton.env_extension acc
+                  in
+                  Array.fold_left (fun acc (field : _ mutable_or_immutable) ->
+                      match field with
+                      | Immutable t -> free_names t acc
+                      | Mutable -> acc)
+                    acc singleton.fields)
+                by_length
+                acc)
+            blocks
+            acc
       in
       begin match immediates with
-      | Unknown -> acc
+      | Unknown { is_int = None; } -> acc
+      | Unknown { is_int = Some is_int; } -> Name.Set.add is_int acc
       | Known immediates ->
         Immediate.Map.fold (fun _imm (case : immediate_case) acc ->
             free_names_of_typing_environment case.env_extension acc)
@@ -958,8 +985,8 @@ end;
   let any_tagged_immediate () : t =
     { descr =
         Value (No_alias (Join [Blocks_and_tagged_immediates {
-          blocks = Tag.Map.empty;
-          immediates = Unknown;
+          blocks = Exactly Tag.Map.empty;
+          immediates = Unknown { is_int = None; };
         }]));
       phantom = None;
     }
@@ -1209,7 +1236,7 @@ end;
       (* CR mshinwell: See if we can have a creation function for this *)
       let blocks_and_tagged_immediates : blocks_and_tagged_immediates =
         { immediates = Known immediates;
-          blocks = Tag.Map.empty;
+          blocks = Exactly Tag.Map.empty;
         }
       in
       { descr =
@@ -1324,8 +1351,8 @@ end;
       Tag.Map.add Tag.double_array_tag block_cases Tag.Map.empty
     in
     let blocks_imms : blocks_and_tagged_immediates =
-      { immediates = Known Immediate.Map.empty;
-        blocks;
+      { immediates = Exactly Immediate.Map.empty;
+        blocks = Exactly blocks;
       }
     in
     { descr =
@@ -1363,8 +1390,8 @@ end;
         Tag.Map.add Tag.double_array_tag block_cases Tag.Map.empty
       in
       let blocks_imms : blocks_and_tagged_immediates =
-        { immediates = Known Immediate.Map.empty;
-          blocks;
+        { immediates = Exactly Immediate.Map.empty;
+          blocks = Exactly blocks;
         }
       in
       { descr =
@@ -1378,9 +1405,6 @@ end;
     in
     let fields = Array.map make_field fields in
     immutable_float_array fields
-
-  let is_int_default = these_tagged_immediates Immediate.all_bools
-  let get_tag_default = any_fabricated ()
 
   let block tag ~fields =
     let tag = Tag.Scannable.to_tag tag in
@@ -1408,10 +1432,8 @@ end;
       let block_cases : block_cases = Join { by_length; } in
       let blocks = Tag.Map.add tag block_cases Tag.Map.empty in
       let blocks_imms : blocks_and_tagged_immediates =
-        { immediates = Known Immediate.Map.empty;
-          blocks;
-          is_int = is_int_default;
-          get_tag = get_tag_default;
+        { immediates = Exactly Immediate.Map.empty;
+          blocks = Exactly blocks;
         }
       in
       { descr =
@@ -1447,10 +1469,8 @@ end;
       let block_cases : block_cases = Join { by_length; } in
       let blocks = Tag.Map.add tag block_cases Tag.Map.empty in
       let blocks_imms : blocks_and_tagged_immediates =
-        { immediates = Known Immediate.Map.empty;
-          blocks;
-          is_int = is_int_default;
-          get_tag = get_tag_default;
+        { immediates = Exactly Immediate.Map.empty;
+          blocks = Exactly blocks;
         }
       in
       { descr =
@@ -1465,12 +1485,10 @@ end;
     in
     block_of_values tag ~fields
 
-  let block_whose_discriminants_are ~is_int ~get_tag : t =
+  let variant_whose_discriminants_are ~is_int ~get_tag : t =
     let blocks_imms : blocks_and_tagged_immediates =
-      { immediates = Known Immediate.Map.empty;
-        blocks;
-        is_int = alias_type_of (K.fabricated ()) is_int;
-        get_tag = alias_type_of (K.fabricated ()) get_tag;
+      { immediates = Unknown { is_int = Some is_int; };
+        blocks = Unknown { get_tag = Some get_tag; };
       }
     in
     { descr =

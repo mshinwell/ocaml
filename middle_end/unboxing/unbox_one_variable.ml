@@ -474,7 +474,7 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
   in
   let unboxee_ty =
     let unboxee_discriminants =
-      T.block_whose_discriminants_are ~is_int ~get_tag
+      T.variant_whose_discriminants_are ~is_int ~get_tag
     in
     (E.type_accessor env T.join) unboxee_ty unboxee_discriminants
   in

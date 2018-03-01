@@ -498,11 +498,11 @@ module type S = sig
     -> size:int
     -> t
 
-  (** The type of a block [b] for which the result of the [Is_int] primitive
-      on [b] has the type [is_int] and the result of the [Get_tag] primitive
-      on [b] has the type [get_tag].  (Used for unboxing transformations; the
-      supplied types will typically be [Alias]es to variables.) *)
-  val block_whose_discriminants_are : is_int:t -> get_tag:t -> t
+  (** The type of a value [v] for which the result of the [Is_int] primitive on
+      [v] is given by the name [is_int] and the result of the [Get_tag]
+      primitive on [v] is given by the name [get_tag]. (Used for unboxing
+      transformations.) *)
+  val variant_whose_discriminants_are : is_int:Name.t -> get_tag:Name.t -> t
 
   (** The bottom type for the given kind ("no value can flow to this point"). *)
   val bottom : Flambda_kind.t -> t
