@@ -151,19 +151,21 @@ module type S = sig
         the length, which we can make explicit using a map.
         Invariant: the map is always non-empty. *)
 
+  and 'a or_unknown_immediates = private
+    | Exactly of 'a
+    | Unknown of { is_int : Name.t option; }
+
+  and 'a or_unknown_blocks = private
+    | Exactly of 'a
+    | Unknown of { get_tag : Name.t option; }
+
   and blocks_and_tagged_immediates = private {
-    immediates : immediate_case Immediate.Map.t or_unknown;
+    immediates : immediate_case Immediate.Map.t or_unknown_immediates;
     (** Cases for constant constructors (in the case of variants) and
         arbitrary tagged immediates. *)
-    blocks : block_cases Tag.Map.t;
+    blocks : block_cases Tag.Map.t or_unknown_blocks;
     (** Cases for non-constant constructors (in the case of variants) and
         normal blocks. *)
-    is_int : t;
-    (** The type of the result of the [Is_int] primitive on the
-        corresponding block. *)
-    get_tag : t;
-    (** The type of the result of the [Get_tag] primitive on the
-        corresponding block. *)
   }
 
   and 'a of_kind_value_boxed_number = private

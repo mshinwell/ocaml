@@ -814,7 +814,12 @@ let prove_tagged_immediate ~type_of_name t
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _ -> wrong_kind ()
 
-let prove_is_tagged_immediate ~type_of_name t : bool proof =
+type is_tagged_immediate =
+  | Not_a_tagged_immediate
+  | Is_a_tagged_immediate
+  | Answer_given_by of Name.t
+
+let prove_is_tagged_immediate ~type_of_name t : is_tagged_immediate proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a tagged \
         immediate: %a"
@@ -829,19 +834,20 @@ let prove_is_tagged_immediate ~type_of_name t : bool proof =
     | Bottom -> Invalid
     | Ok (Blocks_and_tagged_immediates blocks_imms) ->
       if not (Tag.Map.is_empty blocks_imms.blocks) then begin
-        Proved false
+        Proved Not_a_tagged_immediate
       end else begin
         match blocks_imms.immediates with
-        | Unknown -> Proved true
+        | Unknown { is_int = None; } -> Unknown
+        | Unknown { is_int = Some is_int; } -> Proved (Answer_given_by is_int)
         | Known imms ->
           assert (not (Immediate.Map.is_empty imms));
-          Proved true
+          Proved Is_a_tagged_immediate
       end
     (* CR mshinwell: If we marked this function as specifically for dealing
        with the "is_int" primitive, then these next cases could probably
        all be [Invalid]. *)
-    | Ok (Boxed_number _) -> Proved false
-    | Ok (Closures _ | String _) -> Proved false
+    | Ok (Boxed_number _) -> Proved Not_a_tagged_immediate
+    | Ok (Closures _ | String _) -> Proved Not_a_tagged_immediate
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _ -> wrong_kind ()

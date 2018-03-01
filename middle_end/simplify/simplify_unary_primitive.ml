@@ -316,12 +316,18 @@ let simplify_is_int env r prim arg dbg =
   let arg, ty = S.simplify_simple env arg in
   let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
   let proof = (E.type_accessor env T.prove_is_tagged_immediate) ty in
-  match proof with
-  | Proved is_tagged_immediate ->
+  let proved ~is_tagged_immediate =
     let simple = Simple.const_bool is_tagged_immediate in
     let imm = Immediate.bool is_tagged_immediate in
     Reachable.reachable (Simple simple), T.this_tagged_immediate imm,
       R.map_benefit r (B.remove_primitive (Unary prim))
+  in
+  match proof with
+  | Proved Is_a_tagged_immediate -> proved ~is_tagged_immediate:true
+  | Proved Not_a_tagged_immediate -> proved ~is_tagged_immediate:false
+  | Proved (Answer_given_by name) ->
+    Reachable.reachable (original_term ()),
+      T.alias_type_of (K.value ()) name, r
   | Unknown ->
     Reachable.reachable (original_term ()),
       T.these_tagged_immediates Immediate.all_bools, r

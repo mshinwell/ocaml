@@ -479,8 +479,10 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
     (E.type_accessor env T.join) unboxee_ty unboxee_discriminants
   in
   let is_int =
+(* same as below.
     if no_constant_ctors then []
     else
+*)
       let is_int_ty =
         let by_constant_ctor_index =
           Targetint.OCaml.Set.fold (fun ctor_index by_constant_ctor_index ->
@@ -505,11 +507,20 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
               !env)
             tags_to_sizes
         in
-        let discriminant_ty = T.these_tags by_tag in
+        let discriminant_env_is_int =
+          T.Typing_environment.add discriminant
+            (E.continuation_scope_level env)
+            (T.these_tags by_constant_ctor_index)
+        in
+        let discriminant_env_is_block =
+          T.Typing_environment.add discriminant
+            (E.continuation_scope_level env)
+            (T.these_tags by_tag)
+        in
         let by_is_int_result =
           Immediate.Map.of_list [
-            Immediate.const_true, by_constant_ctor_index;
-            Immediate.const_false, by_tag;
+            Immediate.const_true, discriminant_env_is_int;
+            Immediate.const_false, discriminant_env_is_block;
           ]
         in
         T.these_tagged_immediates_with_envs by_is_int_result

@@ -1379,6 +1379,9 @@ end;
     let fields = Array.map make_field fields in
     immutable_float_array fields
 
+  let is_int_default = these_tagged_immediates Immediate.all_bools
+  let get_tag_default = any_fabricated ()
+
   let block tag ~fields =
     let tag = Tag.Scannable.to_tag tag in
     match Targetint.OCaml.of_int_option (Array.length fields) with
@@ -1407,6 +1410,8 @@ end;
       let blocks_imms : blocks_and_tagged_immediates =
         { immediates = Known Immediate.Map.empty;
           blocks;
+          is_int = is_int_default;
+          get_tag = get_tag_default;
         }
       in
       { descr =
@@ -1444,8 +1449,8 @@ end;
       let blocks_imms : blocks_and_tagged_immediates =
         { immediates = Known Immediate.Map.empty;
           blocks;
-          is_int = any_fabricated ();
-          get_tag = any_fabricated ();
+          is_int = is_int_default;
+          get_tag = get_tag_default;
         }
       in
       { descr =
