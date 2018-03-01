@@ -353,6 +353,7 @@ module type S = sig
   val any_fabricated_as_ty_fabricated : unit -> ty_fabricated
 
   val any_tagged_immediate : unit -> t
+  val any_tagged_bool : unit -> t
 
   val any_boxed_float : unit -> t
   val any_boxed_int32 : unit -> t
@@ -537,10 +538,8 @@ module type S = sig
   (** Least upper bound of two types known to be of kind [Value]. *)
   val join_ty_value : (ty_value -> ty_value -> ty_value) type_accessor
 
-  (** Greatest lower bound of two types.
-      This can introduce new judgements, which are returned as an
-      environment. *)
-  val meet : (t -> t -> t * typing_environment) type_accessor
+  (** Greatest lower bound of two types. *)
+  val meet : (t -> t -> t) type_accessor
 
   (* CR mshinwell: We may not need to expose all of the following functions *)
 

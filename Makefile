@@ -344,12 +344,12 @@ MIDDLE_END_SIMPLIFY=\
   middle_end/simplify/simplify.cmo
 
 MIDDLE_END_UNBOXING=\
+  middle_end/unboxing/unbox_one_variable.cmo \
   middle_end/unboxing/unbox_continuation_params.cmo
 
   # middle_end/unboxing/augment_specialised_args.cmo \
   # middle_end/unboxing/unbox_closures.cmo \
   # middle_end/unboxing/unbox_free_vars_of_closures.cmo \
-  # middle_end/unboxing/unbox_one_variable.cmo \
   # middle_end/unboxing/unbox_returns.cmo \
   # middle_end/unboxing/unbox_specialised_args.cmo
 

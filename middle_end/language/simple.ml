@@ -28,6 +28,13 @@ module Const = struct
   let const_true = Tagged_immediate (Immediate.bool_true)
   let const_false = Tagged_immediate (Immediate.bool_false)
 
+  let const_int i =
+    let imm = Immediate.int (Targetint.OCaml.of_int i) in
+    Tagged_immediate imm
+
+  let const_zero = const_false
+  let const_unit = const_zero
+
   include Identifiable.Make (struct
     type nonrec t = t
 
@@ -102,6 +109,9 @@ let const_bool b = Const (if b then Const.const_true else Const.const_false)
 
 let const_true = Const Const.const_true
 let const_false = Const Const.const_false
+
+let const_zero = Const Const.const_zero
+let unit = Const Const.const_unit
 
 let free_names t =
   match t with

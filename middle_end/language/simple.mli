@@ -46,11 +46,17 @@ val symbol : Symbol.t -> t
 
 val const : Const.t -> t
 
+val const_int : int -> t
+
 val const_bool : bool -> t
 
 val const_true : t
 
 val const_false : t
+
+val const_zero : t
+
+val unit : t
 
 val free_names : t -> Name.Set.t
 

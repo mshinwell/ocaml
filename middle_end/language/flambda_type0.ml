@@ -1219,6 +1219,13 @@ end;
   let this_tagged_immediate imm =
     these_tagged_immediates (Immediate.Set.singleton imm)
 
+  let any_tagged_bool () =
+    let bools =
+      Immediate.Set.add Immediate.bool_false
+        (Immediate.Set.add Immediate.bool_true Immediate.Set.empty)
+    in
+    these_tagged_immediates bools
+
   let this_boxed_float f = box_float (this_naked_float f)
   let this_boxed_int32 f = box_int32 (this_naked_int32 f)
   let this_boxed_int64 f = box_int64 (this_naked_int64 f)
@@ -3455,7 +3462,7 @@ Format.eprintf "...giving %a\n%!" print ty;
           ~scope_level ~existing_ty ty
   end
 
-  let meet ~type_of_name:_ _t1 _t2 =
+  let meet ~type_of_name _t1 _t2 =
     Misc.fatal_error "May not be needed"
 (*
     let t, judgements = Meet_and_join.meet ~type_of_name t1 t2 in
