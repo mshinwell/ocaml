@@ -170,6 +170,8 @@ end) = struct
   and blocks_and_tagged_immediates = {
     immediates : immediate_case Immediate.Map.t or_unknown;
     blocks : block_cases Tag.Map.t;
+    is_int : t;
+    get_tag : t;
   }
 
   and 'a of_kind_value_boxed_number =
@@ -1442,6 +1444,8 @@ end;
       let blocks_imms : blocks_and_tagged_immediates =
         { immediates = Known Immediate.Map.empty;
           blocks;
+          is_int = any_fabricated ();
+          get_tag = any_fabricated ();
         }
       in
       { descr =
@@ -1455,6 +1459,19 @@ end;
         Immutable (any_value_as_ty_value ()))
     in
     block_of_values tag ~fields
+
+  let block_whose_discriminants_are ~is_int ~get_tag : t =
+    let blocks_imms : blocks_and_tagged_immediates =
+      { immediates = Known Immediate.Map.empty;
+        blocks;
+        is_int = alias_type_of (K.fabricated ()) is_int;
+        get_tag = alias_type_of (K.fabricated ()) get_tag;
+      }
+    in
+    { descr =
+        Value (No_alias (Join [Blocks_and_tagged_immediates blocks_imms]));
+      phantom = None;
+    }
 
   let any_boxed_float () = box_float (any_naked_float ())
   let any_boxed_int32 () = box_int32 (any_naked_int32 ())

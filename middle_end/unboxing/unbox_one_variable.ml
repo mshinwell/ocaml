@@ -25,6 +25,7 @@ module How_to_unbox = struct
     add_bindings_in_wrapper : Flambda.Expr.t -> Flambda.Expr.t;
     new_arguments_for_call_in_wrapper : Variable.t list;
     new_params : Flambda.Typed_parameter.t list;
+    new_unboxee_types : (Variable.t * Flambda_type.t) list;
     build_boxed_value_from_new_params :
       (Flambda.Typed_parameter.t * (Flambda.Expr.t -> Flambda.Expr.t)) list;
   }
@@ -34,6 +35,7 @@ module How_to_unbox = struct
       add_bindings_in_wrapper = (fun expr -> expr);
       new_arguments_for_call_in_wrapper = [];
       new_params = [];
+      new_unboxee_types = [];
       build_boxed_value_from_new_params = [];
     }
 
@@ -51,6 +53,7 @@ module How_to_unbox = struct
         t1.new_arguments_for_call_in_wrapper
           @ t2.new_arguments_for_call_in_wrapper;
       new_params = t1.new_params @ t2.new_params;
+      new_unboxee_types = t1.new_unboxee_types @ t2.new_unboxee_types;
       build_boxed_value_from_new_params =
         t1.build_boxed_value_from_new_params
           @ t2.build_boxed_value_from_new_params;
@@ -469,12 +472,50 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
     in
     [boxed, build]
   in
+  let unboxee_ty =
+    let unboxee_discriminants =
+      T.block_whose_discriminants_are ~is_int ~get_tag
+    in
+    (E.type_accessor env T.join) unboxee_ty unboxee_discriminants
+  in
   let is_int =
     if no_constant_ctors then []
     else
+      let is_int_ty =
+        let by_constant_ctor_index =
+          Targetint.OCaml.Set.fold (fun ctor_index by_constant_ctor_index ->
+              let tag = Tag.of_targetint_ocaml ctor_index in
+              let env = T.Typing_environment.create () in
+              Tag.Map.add tag env by_constant_ctor_index)
+            constant_ctors
+            Tag.Map.empty
+        in
+        let by_tag =
+          Tag.Map.map (fun size ->
+              let env = ref (T.Typing_environment.create ()) in
+              for field = 0 to size - 1 do
+                let field = fields_with_projections0.(field) in
+                let field_scope_level = E.continuation_scope_level env in
+                (* CR mshinwell: We could refine the types of the actual fields
+                   themselves according to the tag. *)
+                let field_ty = T.any_value () in
+                env := T.Typing_environment.add !env field field_scope_level
+                  field_ty
+              done;
+              !env)
+            tags_to_sizes
+        in
+        let discriminant_ty = T.these_tags by_tag in
+        let by_is_int_result =
+          Immediate.Map.of_list [
+            Immediate.const_true, by_constant_ctor_index;
+            Immediate.const_false, by_tag;
+          ]
+        in
+        T.these_tagged_immediates_with_envs by_is_int_result
+      in
       let is_int = Parameter.wrap is_int in
-      Flambda.Typed_parameter.create is_int (T.any_tagged_bool ())
-(* else [is_int, Projection.Prim (Pisint, [unboxee])] *)
+      [Flambda.Typed_parameter.create is_int is_int_ty]
   in
   let discriminant =
 (* We probably still need this now in all cases to get the extra type info,
@@ -483,22 +524,6 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
     if not needs_discriminant then []
     else [discriminant, Projection.Prim (Pgettag, [unboxee])] *)
     let discriminant = Parameter.wrap discriminant in
-    let by_tag =
-      Tag.Map.map (fun size ->
-          let env = ref (T.Typing_environment.create ()) in
-          for field = 0 to size - 1 do
-            let field = fields_with_projections0.(field) in
-            let field_scope_level = E.continuation_scope_level env in
-            (* CR mshinwell: We could refine the types of the actual fields
-               themselves according to the tag. *)
-            let field_ty = T.any_value () in
-            env := T.Typing_environment.add !env field field_scope_level
-              field_ty
-          done;
-          !env)
-        tags_to_sizes
-    in
-    let discriminant_ty = T.these_tags by_tag in
     Flambda.Typed_parameter.create discriminant discriminant_ty
   in
   let fields =
@@ -507,11 +532,13 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
         Flambda.Typed_parameter.create field (T.any_value ()))
       fields_with_projections
   in
+  let 
   { unboxee_to_wrapper_params_unboxee;
     add_bindings_in_wrapper;
     new_arguments_for_call_in_wrapper;
     new_type_for_unboxees = [unboxee, unboxee_ty];
     new_params = is_int @ discriminant @ fields;
+    new_unboxee_types = [unboxee, unboxee_ty];
     build_boxed_value_from_new_params;
   }
 
@@ -779,124 +806,4 @@ end
         | Sixty_four -> custom_block_size + 1
         end
       | Boxed Nativeint -> custom_block_size + 1
-*)
-(*
-
-discr : {
-  tag 0 |->
-    tag : { tag 0 |-> env = { boxed : tag0, [| =field0; =field1 |] } };
-  int 0;
-  int 1;
-  int 2;
-}
-
-int_switch (Pis_int boxed):
-| ...
-
-
-
-int_switch is_int:
-| false ->
-  tag_switch tag:
-  | 0 ->
-    learn: boxed : tag0, [| =field0; =field1 |]
-    ...
-| true ->
-  learn: boxed : { int 0 | int 1 | int 2 }
-  switch boxed:
-  | ...
-
-
-
-  let index = get_const_ctor_index boxed in
-  int_switch index:
-  | 0 -> ...
-
-
-  let tag = get_tag boxed in
-  tag_switch tag:
-  | 0 -> ...
-
-
-Pint_discr : int :: Value -> discr :: Fabricated
-
-Pdiscr : _ :: Value -> discr :: Fabricated
-
-
-let discr : variant_discriminant :: Fabricated =
-  if is_int v then v
-  else -(1 + get_tag v)
-in
-switch discr:
-| int 0 ->
-| ...
-| tag 0 ->
-| ...
-
-
-
-k' (discr : variant_discriminant) field0 .. fieldn (boxed : my discr = discr) =
-  let old_discr = Pdiscr boxed in
-  switch old_discr:
-  | int 0 ->
-  | ...
-  | tag 0 ->
-  | ...
-
-k' (discr : variant_discriminant) field0 .. fieldn boxed =
-  switch discr:
-  | int 0 ->
-  | ...
-  | tag 0 ->
-  | ...
-
-
-
-
-k boxed =
-  ...
-
-tag : { 0 |-> env = { boxed : tag0, [| =field0; =field1 |] } }
-
-k' (new_)is_int const_ctor_index tag field0 .. fieldn boxed =
-
-
-k' is_int tag field0 .. fieldn boxed =
-
-
-  let i = Pnew_is_int boxed in  -->  let i = new_is_int in
-  int_switch i:
-  | 0 -> ...
-  | 1 -> ...
-  | 2 -> ...
-  | -1 ->  (* not an int *)
-    let tag = get_tag boxed in
-    tag_switch tag:
-    | 0 ->
-      we learn:  boxed : tag0, [| = field0; = field1; |]
-      let x = Prim (Field (boxed, 0)) in  -->  let x = field 0 in
-
-  let i = Pis_int boxed in  -->  let i = is_int in
-  if not i then
-    int_switch boxed:  --hack--> int_switch const_ctor_index
-    | 0 -> ...
-    | 1 -> ...
-  else
-    let tag = get_tag boxed in
-    tag_switch tag:
-    | 0 ->
-      we learn:  boxed : tag0, [| = field0; = field1; |]
-      let x = Prim (Field (boxed, 0)) in  -->  let x = field 0 in
-
-
-k boxed =
-  let is_int = Prim is_int boxed in
-  if is_int then
-    k' true (boxed : int) "tag 0" () .. ()
-    k' (0 | 1 | 2) (boxed : int) "tag 0" () .. ()
-  else
-    switch (get_tag boxed):
-    | tag 0 -> k' (-1) "0" (tag 0 : tag) field0 .. field2 () .. fieldn
-    | ...
-
 *)

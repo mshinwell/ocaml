@@ -153,7 +153,17 @@ module type S = sig
 
   and blocks_and_tagged_immediates = private {
     immediates : immediate_case Immediate.Map.t or_unknown;
+    (** Cases for constant constructors (in the case of variants) and
+        arbitrary tagged immediates. *)
     blocks : block_cases Tag.Map.t;
+    (** Cases for non-constant constructors (in the case of variants) and
+        normal blocks. *)
+    is_int : t;
+    (** The type of the result of the [Is_int] primitive on the
+        corresponding block. *)
+    get_tag : t;
+    (** The type of the result of the [Get_tag] primitive on the
+        corresponding block. *)
   }
 
   and 'a of_kind_value_boxed_number = private
@@ -388,6 +398,10 @@ module type S = sig
   val this_immutable_string : string -> t
   val this_immutable_float_array : Numbers.Float_by_bit_pattern.t array -> t
 
+  val these_tagged_immediates_with_envs
+     : typing_environment Immediate.Map.t
+    -> t
+
   (** Building of types representing untagged / unboxed values from
       specified constants. *)
   val this_naked_immediate : Immediate.t -> t
@@ -439,35 +453,64 @@ module type S = sig
      we can avoid the exception case *)
   val tag_immediate : t -> t
 *)
+
+  (** Given the type of a naked floating-point number, return the type of the
+      corresponding boxed version. *)
   val box_float : t -> t
+
+  (** Given the type of a naked int32 number, return the type of the
+      corresponding boxed version. *)
   val box_int32 : t -> t
+
+  (** Given the type of a naked int64 number, return the type of the
+      corresponding boxed version. *)
   val box_int64 : t -> t
+
+  (** Given the type of a naked nativeint number, return the type of the
+      corresponding boxed version. *)
   val box_nativeint : t -> t
 
+  (** The type of a float array containing the given floating-point numbers. *)
   val immutable_float_array
      : Numbers.Float_by_bit_pattern.Set.t ty_naked_number array
     -> t
 
+  (** The type of a block with a known tag, size and field types (which will
+      must be of kind [Value] otherwise a fatal error will result). *)
   val block
      : Tag.Scannable.t
     -> fields:t mutable_or_immutable array
     -> t
 
+  (** Like [block], except that the field types are statically known to be
+      of kind [Value]). *)
   val block_of_values
      : Tag.Scannable.t
     -> fields:ty_value mutable_or_immutable array
     -> t
 
+  (** The type of a block with a known tag and size but unknown content,
+      save that the contents are all of kind [Value]. *)
   val block_of_unknown_values
      : Tag.Scannable.t
     -> size:int
     -> t
 
+  (** The type of a block [b] for which the result of the [Is_int] primitive
+      on [b] has the type [is_int] and the result of the [Get_tag] primitive
+      on [b] has the type [get_tag].  (Used for unboxing transformations; the
+      supplied types will typically be [Alias]es to variables.) *)
+  val block_whose_discriminants_are : is_int:t -> get_tag:t -> t
+
   (** The bottom type for the given kind ("no value can flow to this point"). *)
   val bottom : Flambda_kind.t -> t
 
+  (** The bottom type for kind [Value] expressed as a type whose kind is
+      statically known. *)
   val bottom_as_ty_value : unit -> ty_value
 
+  (** The bottom type for kind [Fabricated] expressed as a type whose kind is
+      statically known. *)
   val bottom_as_ty_fabricated : unit -> ty_fabricated
 
   (** Create an "bottom" type with the same kind as the given type. *)
@@ -476,6 +519,7 @@ module type S = sig
   (** Create an "unknown" type with the same kind as the given type. *)
   val unknown_like : t -> t
 
+  (** Create a description of a function declaration whose code is known. *)
   val create_inlinable_function_declaration
      : is_classic_mode:bool
     -> closure_origin:Closure_origin.t
@@ -496,6 +540,8 @@ module type S = sig
     -> my_closure:Variable.t
     -> function_declarations
 
+  (** Create a description of a function declaration whose code is unknown.
+      The lack of knowledge about the code will prevent inlining. *)
   val create_non_inlinable_function_declaration
      : params:t list
     -> result:t list
