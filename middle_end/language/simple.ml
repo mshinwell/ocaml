@@ -107,6 +107,8 @@ let const t = Const t
 
 let const_bool b = Const (if b then Const.const_true else Const.const_false)
 
+let const_int i = Const (Const.const_int i)
+
 let const_true = Const Const.const_true
 let const_false = Const Const.const_false
 

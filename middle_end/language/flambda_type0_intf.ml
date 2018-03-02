@@ -155,7 +155,7 @@ module type S = sig
     immediates : immediate_case Immediate.Map.t or_unknown;
     (** Cases for constant constructors (in the case of variants) and
         arbitrary tagged immediates. *)
-    blocks : block_cases Tag.Map.t;
+    blocks : block_cases Tag.Map.t or_unknown;
     (** Cases for non-constant constructors (in the case of variants) and
         normal blocks. *)
     is_int : Name.t option;

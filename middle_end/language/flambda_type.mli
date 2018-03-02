@@ -121,8 +121,6 @@ type 'a proof = private
   | Unknown
   | Invalid
 
-type 'a known_values = 'a Or_not_all_values_known.t proof
-
 val unknown_proof : unit -> _ proof
 
 (* CR mshinwell: Add unit tests to check that the condition about the result

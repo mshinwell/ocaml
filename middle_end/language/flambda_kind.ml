@@ -57,6 +57,9 @@ module Phantom_kind = struct
     match occs with
     | In_types -> Format.pp_print_string ppf "In_types"
     | Debug_only -> Format.pp_print_string ppf "Debug_only"
+
+  let equal_occurrences occs1 occs2 =
+    Pervasives.compare occs1 occs2 = 0
 end
 
 type t =

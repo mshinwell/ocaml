@@ -169,7 +169,7 @@ end) = struct
 
   and blocks_and_tagged_immediates = {
     immediates : immediate_case Immediate.Map.t or_unknown;
-    blocks : block_cases Tag.Map.t;
+    blocks : block_cases Tag.Map.t or_unknown;
     is_int : Name.t option;
     get_tag : Name.t option;
   }
@@ -324,22 +324,6 @@ end;
     | Known contents -> print_contents ppf contents
     | Unknown -> Format.pp_print_string ppf "<unknown>"
 
-  let print_or_unknown_immediates print_contents ppf
-        (or_unknown : _ or_unknown_immediates) =
-    match or_unknown with
-    | Exactly contents -> print_contents ppf contents
-    | Unknown { is_int = None; } -> Format.pp_print_string ppf "<unknown>"
-    | Unknown { is_int = Some is_int; } ->
-      Format.pp_print_string ppf "<is_int=%a>" Name.print is_int
-
-  let print_or_unknown_blocks print_contents ppf
-        (or_unknown : _ or_unknown_blocks) =
-    match or_unknown with
-    | Exactly contents -> print_contents ppf contents
-    | Unknown { is_int = None; } -> Format.pp_print_string ppf "<unknown>"
-    | Unknown { get_tag = Some get_tag; } ->
-      Format.pp_print_string ppf "<get_tag=%a>" Name.print get_tag
-
   let print_or_alias print_descr ppf (or_alias : _ or_alias) =
     match or_alias with
     | No_alias descr -> print_descr ppf descr
@@ -428,13 +412,17 @@ end;
 
   and print_of_kind_value ppf (of_kind_value : of_kind_value) =
     match of_kind_value with
-    | Blocks_and_tagged_immediates { blocks; immediates; } ->
+    | Blocks_and_tagged_immediates { blocks; immediates; is_int; get_tag; } ->
       Format.fprintf ppf
         "@[(Blocks_and_immediates@ \
          @[(blocks@ @[%a@])@]@ \
-         @[(immediates@ @[%a@])@])@]"
-        (print_or_unknown_block print_blocks) blocks
-        (print_or_unknown_immediates print_immediates) immediates
+         @[(immediates@ @[%a@])@]@ \
+         @[(is_int@ %a)@]@ \
+         @[(get_tag@ %a)@])@]"
+        (print_or_unknown print_blocks) blocks
+        (print_or_unknown print_immediates) immediates
+        (Misc.Stdlib.Option.print Name.print) is_int
+        (Misc.Stdlib.Option.print Name.print) get_tag
     | Boxed_number n ->
       Format.fprintf ppf "@[(Boxed_number %a)@]"
         print_of_kind_value_boxed_number n
@@ -643,8 +631,7 @@ end;
     | Blocks_and_tagged_immediates { blocks; immediates; } ->
       let acc =
         match blocks with
-        | Unknown { get_tag = None; } -> acc
-        | Unknown { get_tag = Some get_tag; } -> Name.Set.add get_tag acc
+        | Unknown -> acc
         | Known blocks ->
           Tag.Map.fold (fun _tag ((Join { by_length; }) : block_cases) acc ->
               Targetint.OCaml.Map.fold
@@ -663,8 +650,7 @@ end;
             acc
       in
       begin match immediates with
-      | Unknown { is_int = None; } -> acc
-      | Unknown { is_int = Some is_int; } -> Name.Set.add is_int acc
+      | Unknown -> acc
       | Known immediates ->
         Immediate.Map.fold (fun _imm (case : immediate_case) acc ->
             free_names_of_typing_environment case.env_extension acc)
@@ -979,8 +965,10 @@ end;
   let any_tagged_immediate () : t =
     { descr =
         Value (No_alias (Join [Blocks_and_tagged_immediates {
-          blocks = Exactly Tag.Map.empty;
-          immediates = Unknown { is_int = None; };
+          immediates = Unknown;
+          blocks = Known Tag.Map.empty;
+          is_int = None;
+          get_tag = None;
         }]));
       phantom = None;
     }
@@ -1212,8 +1200,6 @@ end;
         print t
 
   let these_tagged_immediates imms : t =
-    (* CR mshinwell: Hmm, or should this return "any_tagged_immediate" if the
-       set is empty? *)
     if Immediate.Set.is_empty imms then
       bottom (K.value ())
     else
@@ -1230,7 +1216,33 @@ end;
       (* CR mshinwell: See if we can have a creation function for this *)
       let blocks_and_tagged_immediates : blocks_and_tagged_immediates =
         { immediates = Known immediates;
-          blocks = Exactly Tag.Map.empty;
+          blocks = Known Tag.Map.empty;
+          is_int = None;
+          get_tag = None;
+        }
+      in
+      { descr =
+          Value (No_alias (Join [Blocks_and_tagged_immediates
+            blocks_and_tagged_immediates]));
+        phantom = None;
+      }
+
+  (* CR mshinwell: share code with previous function *)
+  let these_tagged_immediates_with_envs env_map =
+    if Immediate.Map.is_empty env_map then
+      bottom (K.value ())
+    else
+      let immediates =
+        Immediate.Map.map (fun env_extension : immediate_case ->
+            { env_extension;
+            })
+          env_map
+      in
+      let blocks_and_tagged_immediates : blocks_and_tagged_immediates =
+        { immediates = Known immediates;
+          blocks = Known Tag.Map.empty;
+          is_int = None;
+          get_tag = None;
         }
       in
       { descr =
@@ -1345,8 +1357,10 @@ end;
       Tag.Map.add Tag.double_array_tag block_cases Tag.Map.empty
     in
     let blocks_imms : blocks_and_tagged_immediates =
-      { immediates = Exactly Immediate.Map.empty;
-        blocks = Exactly blocks;
+      { immediates = Known Immediate.Map.empty;
+        blocks = Known blocks;
+        is_int = None;
+        get_tag = None;
       }
     in
     { descr =
@@ -1384,8 +1398,10 @@ end;
         Tag.Map.add Tag.double_array_tag block_cases Tag.Map.empty
       in
       let blocks_imms : blocks_and_tagged_immediates =
-        { immediates = Exactly Immediate.Map.empty;
-          blocks = Exactly blocks;
+        { immediates = Known Immediate.Map.empty;
+          blocks = Known blocks;
+          is_int = None;
+          get_tag = None;
         }
       in
       { descr =
@@ -1426,8 +1442,10 @@ end;
       let block_cases : block_cases = Join { by_length; } in
       let blocks = Tag.Map.add tag block_cases Tag.Map.empty in
       let blocks_imms : blocks_and_tagged_immediates =
-        { immediates = Exactly Immediate.Map.empty;
-          blocks = Exactly blocks;
+        { immediates = Known Immediate.Map.empty;
+          blocks = Known blocks;
+          is_int = None;
+          get_tag = None;
         }
       in
       { descr =
@@ -1463,8 +1481,10 @@ end;
       let block_cases : block_cases = Join { by_length; } in
       let blocks = Tag.Map.add tag block_cases Tag.Map.empty in
       let blocks_imms : blocks_and_tagged_immediates =
-        { immediates = Exactly Immediate.Map.empty;
-          blocks = Exactly blocks;
+        { immediates = Known Immediate.Map.empty;
+          blocks = Known blocks;
+          is_int = None;
+          get_tag = None;
         }
       in
       { descr =
@@ -1481,8 +1501,10 @@ end;
 
   let variant_whose_discriminants_are ~is_int ~get_tag : t =
     let blocks_imms : blocks_and_tagged_immediates =
-      { immediates = Unknown { is_int = Some is_int; };
-        blocks = Unknown { get_tag = Some get_tag; };
+      { immediates = Unknown;
+        blocks = Unknown;
+        is_int = Some is_int;
+        get_tag = Some get_tag;
       }
     in
     { descr =
@@ -2198,13 +2220,19 @@ end;
         blocks2
 
     let meet_blocks_and_tagged_immediates ~type_of_name
-          { blocks = blocks1; immediates = imms1; }
-          { blocks = blocks2; immediates = imms2; }
+          { blocks = blocks1; immediates = imms1; is_int = is_int1;
+            get_tag = get_tag1; }
+          { blocks = blocks2; immediates = imms2; is_int = is_int2;
+            get_tag = get_tag2; }
           : (blocks_and_tagged_immediates * judgements_from_meet) Or_bottom.t =
-      let blocks, judgements =
-        match meet_blocks ~type_of_name blocks1 blocks2 with
-        | Bottom -> Tag.Map.empty, []
-        | Ok (blocks, judgements) -> blocks, judgements
+      let (blocks : _ or_unknown), judgements =
+        match blocks1, blocks2 with
+        | Unknown, _ -> blocks2, []
+        | _, Unknown -> blocks1, []
+        | Known blocks1, Known blocks2 ->
+          match meet_blocks ~type_of_name blocks1 blocks2 with
+          | Bottom -> Known Tag.Map.empty, []
+          | Ok (blocks, judgements) -> Known blocks, judgements
       in
       let immediates : _ or_unknown =
         match imms1, imms2 with
@@ -2215,8 +2243,27 @@ end;
           | Bottom -> Known Immediate.Map.empty
           | Ok immediates -> Known immediates
       in
+      let is_int =
+        match is_int1, is_int2 with
+        | None, None -> None
+        | None, Some _ -> is_int2
+        | Some _, None -> is_int1
+        | Some is_int1, Some is_int2 ->
+          if Name.equal is_int1 is_int2 then Some is_int1 else None
+      in
+      let get_tag =
+        match get_tag1, get_tag2 with
+        | None, None -> None
+        | None, Some _ -> get_tag2
+        | Some _, None -> get_tag1
+        | Some get_tag1, Some get_tag2 ->
+          if Name.equal get_tag1 get_tag2 then Some get_tag1 else None
+      in
       let is_bottom =
-        Tag.Map.is_empty blocks
+        begin match blocks with
+        | Known blocks when Tag.Map.is_empty blocks -> true
+        | Known _ | Unknown -> false
+        end
           && begin match immediates with
              | Known imms when Immediate.Map.is_empty imms -> true
              | Known _ | Unknown -> false
@@ -2232,33 +2279,60 @@ end;
           | Known imms ->
             if not (Immediate.Map.is_empty imms) then judgements
             else  (* CR mshinwell: This should maybe meet across all blocks *)
-              begin match Tag.Map.get_singleton blocks with
-              | None -> judgements
-              | Some (_, Join { by_length; }) ->
-                match Targetint.OCaml.Map.get_singleton by_length with
+              match blocks with
+              | Unknown -> judgements
+              | Known blocks ->
+                match Tag.Map.get_singleton blocks with
                 | None -> judgements
-                | Some (_, singleton_block) ->
-                  let new_judgements =
-                    judgements_of_typing_environment
-                      singleton_block.env_extension
-                  in
-                  new_judgements @ judgements
-              end
+                | Some (_, Join { by_length; }) ->
+                  match Targetint.OCaml.Map.get_singleton by_length with
+                  | None -> judgements
+                  | Some (_, singleton_block) ->
+                    let new_judgements =
+                      judgements_of_typing_environment
+                        singleton_block.env_extension
+                    in
+                    new_judgements @ judgements
         in
-        Ok ({ blocks; immediates; }, judgements)
+        Ok ({ blocks; immediates; is_int; get_tag; }, judgements)
 
     let join_blocks_and_tagged_immediates ~type_of_name
-          { blocks = blocks1; immediates = imms1; }
-          { blocks = blocks2; immediates = imms2; }
+          { blocks = blocks1; immediates = imms1; is_int = is_int1;
+            get_tag = get_tag1; }
+          { blocks = blocks2; immediates = imms2; is_int = is_int2;
+            get_tag = get_tag2; }
           : blocks_and_tagged_immediates =
-      let blocks = join_blocks ~type_of_name blocks1 blocks2 in
+      let blocks : _ or_unknown =
+        match blocks1, blocks2 with
+        | Unknown, _ | _, Unknown -> Unknown
+        | Known blocks1, Known blocks2 ->
+          Known (join_blocks ~type_of_name blocks1 blocks2)
+      in
       let immediates : _ or_unknown =
         match imms1, imms2 with
         | Unknown, _ | _, Unknown -> Unknown
         | Known imms1, Known imms2 ->
           Known (join_immediates ~type_of_name imms1 imms2)
       in
-      { blocks; immediates; }
+      (* CR mshinwell: Refactor between is_int / get_tag; then share with
+         meet. *)
+      let is_int =
+        match is_int1, is_int2 with
+        | None, None -> None
+        | None, Some _ -> is_int2
+        | Some _, None -> is_int1
+        | Some is_int1, Some is_int2 ->
+          if Name.equal is_int1 is_int2 then Some is_int1 else None
+      in
+      let get_tag =
+        match get_tag1, get_tag2 with
+        | None, None -> None
+        | None, Some _ -> get_tag2
+        | Some _, None -> get_tag1
+        | Some get_tag1, Some get_tag2 ->
+          if Name.equal get_tag1 get_tag2 then Some get_tag1 else None
+      in
+      { blocks; immediates; is_int; get_tag; }
 
     let meet_of_kind_foo ~type_of_name
           (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
@@ -3496,10 +3570,10 @@ Format.eprintf "...giving %a\n%!" print ty;
           ~scope_level ~existing_ty ty
   end
 
-  let meet ~type_of_name _t1 _t2 =
-    Misc.fatal_error "May not be needed"
+  let meet ~type_of_name t1 t2 =
+    let t, _judgements = Meet_and_join.meet ~type_of_name t1 t2 in
+    t
 (*
-    let t, judgements = Meet_and_join.meet ~type_of_name t1 t2 in
     let env =
       List.fold_left (fun output_env (name, t) ->
           replace_meet_typing_environment ~type_of_name output_env name t)
@@ -3682,22 +3756,29 @@ Format.eprintf "Result is: %a\n%!"
         List.map
           (fun (of_kind_value : of_kind_value) : of_kind_value ->
             match of_kind_value with
-            | Blocks_and_tagged_immediates { blocks; immediates; } ->
-              let blocks =
-                Tag.Map.map
-                  (fun ((Join { by_length }) : block_cases) : block_cases ->
-                    let by_length =
-                      Targetint.OCaml.Map.map
-                        (fun (block : singleton_block) : singleton_block ->
-                          let env_extension =
-                            Typing_environment.meet ~type_of_name
-                              block.env_extension env
-                          in
-                          { block with env_extension; })
-                        by_length
-                    in
-                    Join { by_length; })
-                  blocks
+            | Blocks_and_tagged_immediates { blocks; immediates;
+                is_int; get_tag; } ->
+              let blocks : _ or_unknown =
+                match blocks with
+                | Unknown -> Unknown
+                | Known blocks ->
+                  let blocks =
+                    Tag.Map.map
+                      (fun ((Join { by_length }) : block_cases) : block_cases ->
+                        let by_length =
+                          Targetint.OCaml.Map.map
+                            (fun (block : singleton_block) : singleton_block ->
+                              let env_extension =
+                                Typing_environment.meet ~type_of_name
+                                  block.env_extension env
+                              in
+                              { block with env_extension; })
+                            by_length
+                        in
+                        Join { by_length; })
+                      blocks
+                  in
+                  Known blocks
               in
               let immediates : _ or_unknown =
                 match immediates with
@@ -3716,7 +3797,8 @@ Format.eprintf "Result is: %a\n%!"
                   in
                   Known imm_map
               in
-              Blocks_and_tagged_immediates { blocks; immediates; }
+              Blocks_and_tagged_immediates { blocks; immediates; is_int;
+                get_tag; }
             | Boxed_number _ | Closures _ | String _ -> of_kind_value)
           of_kind_values
       in

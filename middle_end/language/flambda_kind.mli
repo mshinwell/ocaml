@@ -43,6 +43,8 @@ module Phantom_kind : sig
     | Debug_only
     (** The associated variable is being kept only for the purposes of
         generating debugging information. *)
+
+  val equal_occurrences : occurrences -> occurrences -> bool
 end
 
 (* CR mshinwell: Once disambiguation works on GADTs, consider turning [t]

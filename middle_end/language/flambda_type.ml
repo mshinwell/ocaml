@@ -119,7 +119,8 @@ and equal_descr (descr1 : descr) (descr2 : descr) =
 and equal_ty_value ty_value1 ty_value2 =
   equal_ty equal_of_kind_value ty_value1 ty_value2
 
-and equal_ty_naked_number ty_naked_number1 ty_naked_number2 =
+and equal_ty_naked_number (type a) (ty_naked_number1 : a ty_naked_number)
+      (ty_naked_number2 : a ty_naked_number) =
   equal_ty equal_of_kind_naked_number ty_naked_number1 ty_naked_number2
 
 and equal_ty_fabricated ty_fabricated1 ty_fabricated2 =
@@ -155,7 +156,7 @@ and equal_of_kind_value (v1 : of_kind_value1) (v2 : of_kind_value2) =
 
 and equal_immediate_case ({ env_extension = env_extension1; } : immediate_case)
       ({ env_extension = env_extension2; } : immediate_case) =
-
+  equal_typing_environment env_extension1 env_extension2
 
 and equal_singleton_block
       ({ env_extension = env_extension1; fields = fields1; } : singleton_block)
