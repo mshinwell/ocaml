@@ -63,34 +63,16 @@ module How_to_unbox = struct
     Variable.Map.fold (fun _param t1 t2 -> merge t1 t2) t_map (create ())
 end
 
-let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
-      ~unboxee_ty ~unbox_returns : How_to_unbox.t =
-  let dbg = Debuginfo.none in
-  let num_constant_ctors = Numbers.Int.Set.cardinal constant_ctors in
-  assert (num_constant_ctors >= 0);
-  (* CR mshinwell: We need to think about this more.
-     Suppose we have code that deconstructs an "int option".  That code uses
-     Pisint.  However we know that the thing is only ever going to be
-     "Some x" and try to elide the "_is_int" parameter.  However that means
-     we don't know that Pisint foo_option = false.  For the moment we don't
-     elide the "_is_int".  Note that for Unbox_continuation_params the
-     extra argument isn't really a problem---it will be removed---but for
-     Unbox_returns we really don't want to generate an extra return value
-     if it isn't needed.
-     Follow-up: think this might be ok for Unbox_returns only, since we don't
-     need the Pisint = false judgements etc.
-  *)
-  let no_constant_ctors = 
-    if unbox_returns then num_constant_ctors = 0
-    else false
-  in
-  let num_tags = Tag.Map.cardinal blocks in
-  assert (num_tags >= 1);  (* see below *)
-  let wrapper_param_unboxee = Variable.rename unboxee in
-  let unboxee_to_wrapper_params_unboxee =
-    Variable.Map.add unboxee wrapper_param_unboxee
-      Variable.Map.empty
-  in
+module type Unboxing_spec = sig
+  val unboxed_kind : Flambda_kind.t
+
+end
+
+module Unboxing_spec_variant : Unboxing_spec = struct
+  let unboxed_kind = K.value ()
+
+
+
   let is_int = Variable.rename ~append:"_is_int" unboxee in
   let is_int_in_wrapper = Variable.rename is_int in
   let is_int_known_value =
@@ -122,15 +104,6 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
     | None -> true
     | Some _ -> false
   in
-  let max_size =
-    Tag.Map.fold (fun _tag fields max_size ->
-        max (Array.length fields) max_size)
-      blocks 0
-  in
-  let field_arguments_for_call_in_wrapper =
-    Array.to_list (Array.init max_size (fun index ->
-      Variable.create (Printf.sprintf "field%d" index)))
-  in
   let is_int_in_wrapper' = Variable.rename is_int_in_wrapper in
   let discriminant_in_wrapper' = Variable.rename discriminant_in_wrapper in
   let new_arguments_for_call_in_wrapper =
@@ -141,6 +114,159 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
       if not needs_discriminant then [] else [discriminant_in_wrapper']
     in
     is_int @ discriminant @ field_arguments_for_call_in_wrapper
+  in
+
+
+
+  (* for unbox_returns: *)
+  let boxing_is_int_cont = Continuation.create () in
+  let boxing_is_block_cont = Continuation.create () in
+  let boxing_is_int_switch =
+    let arms =
+      Targetint.OCaml.Map.of_list [
+        Targetint.OCaml.zero, boxing_is_block_cont;
+        Targetint.OCaml.one, boxing_is_int_cont;
+      ]
+    in
+    Flambda.Expr.create_int_switch ~scrutinee:is_int ~arms
+  in
+  let boxing_switch =
+    let arms =
+      Tag.Map.map (fun (_size, boxing_cont) -> boxing_cont)
+        tags_to_sizes_and_boxing_conts
+    in
+    Flambda.Expr.create_tag_switch ~scrutinee:discriminant ~arms
+  in
+
+
+  let unboxee_ty =
+    let unboxee_discriminants =
+      T.variant_whose_discriminants_are ~is_int ~get_tag
+    in
+    (E.type_accessor env T.join) unboxee_ty unboxee_discriminants
+  in
+  let is_int =
+(* same as below.
+    if no_constant_ctors then []
+    else
+*)
+      let is_int_ty =
+        let by_constant_ctor_index =
+          Targetint.OCaml.Set.fold (fun ctor_index by_constant_ctor_index ->
+              let tag = Tag.of_targetint_ocaml ctor_index in
+              let env = T.Typing_environment.create () in
+              Tag.Map.add tag env by_constant_ctor_index)
+            constant_ctors
+            Tag.Map.empty
+        in
+        let by_tag =
+          Tag.Map.map (fun size ->
+              let env = ref (T.Typing_environment.create ()) in
+              for field = 0 to size - 1 do
+                let field, kind = fields_with_kinds0.(field) in
+                let field_scope_level = E.continuation_scope_level env in
+                (* CR mshinwell: We could refine the types of the actual fields
+                   themselves according to the tag. *)
+                let field_ty = T.unknown kind in
+                env := T.Typing_environment.add !env field field_scope_level
+                  field_ty
+              done;
+              !env)
+            tags_to_sizes
+        in
+        let discriminant_env_is_int =
+          T.Typing_environment.add discriminant
+            (E.continuation_scope_level env)
+            (T.these_tags by_constant_ctor_index)
+        in
+        let discriminant_env_is_block =
+          T.Typing_environment.add discriminant
+            (E.continuation_scope_level env)
+            (T.these_tags by_tag)
+        in
+        let by_is_int_result =
+          Immediate.Map.of_list [
+            Immediate.const_true, discriminant_env_is_int;
+            Immediate.const_false, discriminant_env_is_block;
+          ]
+        in
+        T.these_tagged_immediates_with_envs by_is_int_result
+      in
+      let is_int = Parameter.wrap is_int in
+      [Flambda.Typed_parameter.create is_int is_int_ty]
+  in
+  let discriminant =
+(* We probably still need this now in all cases to get the extra type info,
+   or else we need another special case in here to refine the type of
+   [unboxee] unilaterally.
+    if not needs_discriminant then []
+    else [discriminant, Projection.Prim (Pgettag, [unboxee])] *)
+    let discriminant = Parameter.wrap discriminant in
+    Flambda.Typed_parameter.create discriminant discriminant_ty
+  in
+end
+
+module Unboxing_spec_naked_number (N : sig
+
+end) : Unboxing_spec = struct
+
+end
+
+module Unboxing_spec_float = Unboxing_spec_naked_number (struct
+
+end
+
+module Unboxing_spec_int32 = Unboxing_spec_naked_number (struct
+
+end
+
+module Unboxing_spec_int64 = Unboxing_spec_naked_number (struct
+
+end
+
+module Unboxing_spec_nativeint = Unboxing_spec_naked_number (struct
+
+end
+
+let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
+      ~unboxee_ty ~unbox_returns : How_to_unbox.t =
+  let dbg = Debuginfo.none in
+  let num_constant_ctors = Numbers.Int.Set.cardinal constant_ctors in
+  assert (num_constant_ctors >= 0);
+  (* CR mshinwell: We need to think about this more.
+     Suppose we have code that deconstructs an "int option".  That code uses
+     Pisint.  However we know that the thing is only ever going to be
+     "Some x" and try to elide the "_is_int" parameter.  However that means
+     we don't know that Pisint foo_option = false.  For the moment we don't
+     elide the "_is_int".  Note that for Unbox_continuation_params the
+     extra argument isn't really a problem---it will be removed---but for
+     Unbox_returns we really don't want to generate an extra return value
+     if it isn't needed.
+     Follow-up: think this might be ok for Unbox_returns only, since we don't
+     need the Pisint = false judgements etc.
+  *)
+  let no_constant_ctors = 
+    if unbox_returns then num_constant_ctors = 0
+    else false
+  in
+  let num_tags = Tag.Map.cardinal blocks in
+  assert (num_tags >= 1);  (* see below *)
+  let wrapper_param_unboxee = Variable.rename unboxee in
+  let unboxee_to_wrapper_params_unboxee =
+    Variable.Map.add unboxee wrapper_param_unboxee
+      Variable.Map.empty
+  in
+  let max_size =
+    Tag.Map.fold (fun _tag fields max_size ->
+        max (Array.length fields) max_size)
+      blocks 0
+  in
+  let field_arguments_for_call_in_wrapper =
+    Array.to_list (Array.init max_size (fun index ->
+      Variable.create (Printf.sprintf "field%d" index)))
+  in
+  let new_arguments_for_call_in_wrapper =
+    S.new_arguments_for_call_in_wrapper @ field_arguments_for_call_in_wrapper
   in
   let new_arguments_for_call_in_wrapper_with_types =
     (* CR mshinwell: should be able to do better for the type here *)
@@ -311,36 +437,15 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
         }
       })
   in
-  let fields_with_projections0 =  (* CR mshinwell: rename this *)
+  let fields_with_kinds0 =
     Array.init max_size (fun index ->
       let append = string_of_int index in
       let var = Variable.rename ~append unboxee in
-(*
-      let projection : Projection.t = Field (index, unboxee) in
-*)
-      var (*, projection*)  )
+      var, field_kind)
   in
-  let fields_with_projections = Array.to_list fields_with_projections0 in
+  let fields_with_kinds = Array.to_list fields_with_kinds0 in
   (* CR mshinwell: This next section is only needed for [Unbox_returns] at
      present; we shouldn't run it unless required. *)
-  let boxing_is_int_cont = Continuation.create () in
-  let boxing_is_block_cont = Continuation.create () in
-  let boxing_is_int_switch =
-    let arms =
-      Targetint.OCaml.Map.of_list [
-        Targetint.OCaml.zero, boxing_is_block_cont;
-        Targetint.OCaml.one, boxing_is_int_cont;
-      ]
-    in
-    Flambda.Expr.create_int_switch ~scrutinee:is_int ~arms
-  in
-  let boxing_switch =
-    let arms =
-      Tag.Map.map (fun (_size, boxing_cont) -> boxing_cont)
-        tags_to_sizes_and_boxing_conts
-    in
-    Flambda.Expr.create_tag_switch ~scrutinee:discriminant ~arms
-  in
   let build_boxed_value_from_new_params =
     let boxed = Variable.rename ~append:"_boxed" unboxee in
     let boxed_param = Parameter.wrap boxed in
@@ -389,7 +494,7 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
                     if index >= size then fields, index + 1
                     else (field :: fields), index + 1)
                   ([], 0)
-                  fields_with_projections
+                  fields_with_kinds
               in
               List.rev fields
             in
@@ -496,11 +601,11 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
           Tag.Map.map (fun size ->
               let env = ref (T.Typing_environment.create ()) in
               for field = 0 to size - 1 do
-                let field = fields_with_projections0.(field) in
+                let field, kind = fields_with_kinds0.(field) in
                 let field_scope_level = E.continuation_scope_level env in
                 (* CR mshinwell: We could refine the types of the actual fields
                    themselves according to the tag. *)
-                let field_ty = T.any_value () in
+                let field_ty = T.unknown kind in
                 env := T.Typing_environment.add !env field field_scope_level
                   field_ty
               done;
@@ -538,10 +643,10 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
     Flambda.Typed_parameter.create discriminant discriminant_ty
   in
   let fields =
-    List.map (fun field ->
+    List.map (fun (field, kind) ->
         let field = Parameter.wrap field in
-        Flambda.Typed_parameter.create field (T.any_value ()))
-      fields_with_projections
+        Flambda.Typed_parameter.create field KIND)
+      fields_with_kinds
   in
   let 
   { unboxee_to_wrapper_params_unboxee;
@@ -554,41 +659,40 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
   }
 
 let how_to_unbox ~type_of_name ~env ~unboxee ~unboxee_ty ~unbox_returns =
-  match T.check_approx_for_variant unboxee_ty with
+  match T.prove_blocks_and_immediates unboxee_ty with
   | Wrong -> None
-  | Ok approx ->
-(*
-Format.eprintf "how_to_unbox %a: %a\n%!"
-  Variable.print unboxee
-  T.print unboxee_approx;
-*)
-    let constant_ctors =
-      match approx with
-      | Blocks _ -> Numbers.Int.Set.empty
-      | Blocks_and_immediates (_, imms) | Immediates imms ->
-        let module I = T.Unionable.Immediate in
-        I.Set.fold (fun (approx : I.t) ctor_indexes ->
-            let ctor_index =
-              match approx with
-              | Int i -> i
-              | Char c -> Char.code c
-              | Constptr p -> p
-            in
-            Numbers.Int.Set.add ctor_index ctor_indexes)
-          imms
-          Numbers.Int.Set.empty
-    in
-    let blocks =
-      match approx with
-      | Blocks blocks | Blocks_and_immediates (blocks, _) -> blocks
-      | Immediates _ -> Tag.Map.empty
-    in
-    (* CR mshinwell: This is sometimes returning "new_params" being empty;
-       this should be an error presumably *)
-    if Tag.Map.is_empty blocks then None
-    else
-      Some (how_to_unbox_core ~constant_ctors ~blocks ~unboxee
-        ~unbox_returns)
+  | Ok blocks_and_immediates ->
+    (* Don't unbox a given variable more than once. *)
+    match blocks_and_immediates.is_int with
+    | Some _ -> None
+    | None ->
+      let constant_ctors =
+        match approx with
+        | Blocks _ -> Numbers.Int.Set.empty
+        | Blocks_and_immediates (_, imms) | Immediates imms ->
+          let module I = T.Unionable.Immediate in
+          I.Set.fold (fun (approx : I.t) ctor_indexes ->
+              let ctor_index =
+                match approx with
+                | Int i -> i
+                | Char c -> Char.code c
+                | Constptr p -> p
+              in
+              Numbers.Int.Set.add ctor_index ctor_indexes)
+            imms
+            Numbers.Int.Set.empty
+      in
+      let blocks =
+        match approx with
+        | Blocks blocks | Blocks_and_immediates (blocks, _) -> blocks
+        | Immediates _ -> Tag.Map.empty
+      in
+      (* CR mshinwell: This is sometimes returning "new_params" being empty;
+         this should be an error presumably *)
+      if Tag.Map.is_empty blocks then None
+      else
+        Some (how_to_unbox_core ~constant_ctors ~blocks ~unboxee
+          ~unbox_returns)
 
 (* Some new ideas
 module Unboxable = struct

@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2017 OCamlPro SAS                                    *)
-(*   Copyright 2014--2017 Jane Street Group LLC                           *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -75,6 +75,21 @@ val is_useful : (t -> bool) type_accessor
 (** Whether all types in the given list do *not* satisfy [useful]. *)
 val all_not_useful : (t list -> bool) type_accessor
 
+(** Type equality. *)
+val equal : (t -> t -> bool) type_accessor
+
+(** Returns [true] if the given type is known to provide strictly more
+    information about the corresponding value than the supplied type [than]. *)
+val strictly_more_precise : (t -> than:t -> bool) type_accessor
+
+(** Whether values of the given two types will always be physically equal
+    to each other. *)
+val values_physically_equal : (t -> t -> bool) type_accessor
+
+(** Whether values of the given two types will always have a different
+    structure from each other. *)
+val values_structurally_distinct : (t -> t -> bool) type_accessor
+
 type reification_result = private
   | Term of Simple.t * t
   | Lift of Flambda_static0.Static_part.t
@@ -100,14 +115,6 @@ val reify
    : (allow_free_variables:bool
   -> t
   -> reification_result) type_accessor
-
-(** Whether values of the given two types will always be physically equal
-    to each other. *)
-val physically_equal : (t -> t -> bool) type_accessor
-
-(** Whether values of the given two types will always have a different
-    structure from each other. *)
-val structurally_distinct : (t -> t -> bool) type_accessor
 
 type 'a proof = private
   | Proved of 'a
@@ -230,6 +237,19 @@ val prove_sets_of_closures
 
 val prove_closure : (t -> closure proof) type_accessor
 
+type unboxable_proof = private
+  | Variant of blocks_and_tagged_immediates
+  | Boxed_float of Numbers.Float_by_bit_pattern.Set.t ty_naked_number
+  | Boxed_int32 of Numbers.Int32.Set.t ty_naked_number
+  | Boxed_int64 of Numbers.Int64.Set.t ty_naked_number
+  | Boxed_nativeint of Targetint.Set.t ty_naked_number
+  | Closures of closures
+  | Cannot_unbox
+
+(** Prove that a value is of a type that makes the value eligible for
+    being unboxed. *)
+val prove_unboxable : (unboxee_ty:t -> unboxable_proof) type_accessor
+
 val int_switch_arms
    : (t
     -> arms:Continuation.t Targetint.OCaml.Map.t
@@ -241,12 +261,5 @@ val tag_switch_arms
     -> arms:Continuation.t Tag.Map.t
     -> (Typing_environment.t * Continuation.t) Tag.Map.t)
   type_accessor
-
-(** Returns [true] iff the given type provides the same or strictly more
-    information about the corresponding value than the supplied type [than]. *)
-val as_or_more_precise : (t -> than:t -> bool) type_accessor
-
-(** Type equality.  (This isn't just syntactic.) *)
-val equal : (t -> t -> bool) type_accessor
 
 val free_names_transitive : (t -> Name_occurrences.t) type_accessor

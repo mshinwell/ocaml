@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2017 OCamlPro SAS                                          *)
-(*   Copyright 2017 Jane Street Group LLC                                 *)
+(*   Copyright 2017--2018 OCamlPro SAS                                    *)
+(*   Copyright 2017--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,9 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
-
-(*
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module H = Unbox_one_variable.How_to_unbox
 (*module CAV = Invariant_params.Continuations.Continuation_and_variable*)
@@ -112,9 +110,6 @@ Format.eprintf "Invariant params:\n@;%a\n"
     unboxings_by_cont unboxings_by_cont'
 *)
 
-*)
-
-(*
 let for_continuations ~continuation_uses ~handlers ~backend
       : Flambda_utils.with_wrapper Continuation.Map.t option =
 (*
@@ -159,15 +154,6 @@ Format.eprintf "Unbox_continuation_params starting with continuations %a\n%!"
                 ~specialised_args:handler.specialised_args
                 ~freshening_already_assigned
             in
-            (* Make sure we don't keep unboxing the same variable over and over
-               by checking that we have increased the known-projections
-               information. *)
-            (* CR mshinwell: make sure this is really needed.  (Does this
-               depend on the order of simplification of the handlers or
-               something horrid?  The only reference when the result of this
-               unboxing transformation gets simplified the first time, to the
-               new continuation (the renamed original one), will be in the
-               stub. *)
             let new_specialised_args =
               Variable.Map.filter (fun _arg
                       (spec_to : Flambda.specialised_to) ->
@@ -238,14 +224,12 @@ Format.eprintf "Unbox_continuation_params starting with continuations %a\n%!"
                     stub = handler.stub;
                     is_exn_handler = false;
                     handler = handler.handler;
-                    specialised_args;
                   };
                   wrapper_handler = {
                     params = wrapper_params;
                     stub = true;
                     is_exn_handler = false;
                     handler = wrapper_body;
-                    specialised_args = wrapper_specialised_args;
                   };
                 }
             in
@@ -253,13 +237,10 @@ Format.eprintf "Unbox_continuation_params starting with continuations %a\n%!"
         handlers
         Continuation.Map.empty
     in
-    Some with_wrappers
   end
-*)
 
-let for_non_recursive_continuation ~name:_ ~handler ~args_types:_ ~backend:_
+let for_non_recursive_continuation ~name:_ ~handler ~arg_tys:_ ~backend:_
       : Flambda.Expr.with_wrapper = Unchanged { handler; }
-(*
 (*
 Format.eprintf "Unbox_continuation_params starting: nonrecursive %a\n%!"
   Continuation.print name;
@@ -280,17 +261,13 @@ Format.eprintf "Unbox_continuation_params starting: nonrecursive %a\n%!"
       with_wrapper
     | _ -> assert false
 
-*)
-
-let for_recursive_continuations ~handlers ~args_types:_ ~backend:_ =
+let for_recursive_continuations ~handlers ~arg_tys:_ ~backend:_ =
 (*
 Format.eprintf "Unbox_continuation_params starting: recursive %a\n%!"
   Continuation.Set.print (Continuation.Map.keys handlers);
 *)
-  let result = None
-(*
+  let result =
     for_continuations ~continuation_uses:args_tys ~handlers ~backend
-*)
   in
   match result with
   | None ->

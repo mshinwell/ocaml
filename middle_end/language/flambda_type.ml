@@ -138,7 +138,20 @@ and equal_unknown_or_join equal_of_kind_foo (uj1 : _ unknown_or_join)
   | Join _, _ -> false
 
 and equal_of_kind_value (v1 : of_kind_value1) (v2 : of_kind_value2) =
-
+  match v1, v2 with
+  | Blocks_and_tagged_immediates blocks1,
+      Blocks_and_tagged_immediates blocks2 ->
+    equal_blocks_and_tagged_immediates blocks1 blocks2
+  | Boxed_number of_kind_value_boxed_number1,
+      Boxed_number of_kind_value_boxed_number2 ->
+    equal_of_kind_value_boxed_number of_kind_value_boxed_number1
+      of_kind_value_boxed_number2
+  | Closures closures1, Closures closures2 ->
+    equal_closures closures1 closures2
+  | String string_set1, String string_set2 ->
+    String_info.Set.equal string_set1 string_set2
+  | (Blocks_and_tagged_immediates _ | Boxed_number _
+      | Closures _ | String _), _ -> false
 
 and equal_immediate_case ({ env_extension = env_extension1; } : immediate_case)
       ({ env_extension = env_extension2; } : immediate_case) =
@@ -289,7 +302,55 @@ and equal_closures_entry
 and equal_closures closures1 closures2 =
   Closure_id.Map.equal equal_closures_entry closures1 closures2
 
-let as_or_more_precise ~type_of_name t ~than =
+and equal_of_kind_naked_number (type a)
+      (of_kind_naked_number1 : a of_kind_naked_number)
+      (of_kind_naked_number2 : a of_kind_naked_number) =
+  match of_kind_naked_number1, of_kind_naked_number2 with
+  | Immediate imms1, Immediate imms2 -> Immediate.Set.equal imms1 imms2
+  | Float floats1, Float floats2 ->
+    Numbers.Float_by_bit_pattern.Set.equal floats1 floats2
+  | Int32 ints1, Int32 ints2 -> Int32.Set.equal ints1 ints2
+  | Int64 ints1, Int64 ints2 -> Int64.Set.equal ints1 ints2
+  | Nativeint ints1, Nativeint ints2 -> Nativeint.Set.equal ints1 ints2
+
+and equal_tag_case ({ env_extension = env_extension1; } : tag_case)
+      ({ env_extension = env_extension2; } : tag_case) =
+  equal_typing_environment env_extension1 env_extension2
+
+and equal_of_kind_fabricated (of_kind_fabricated1 : of_kind_fabricated)
+      (of_kind_fabricated2 : of_kind_fabricated) =
+  match of_kind_fabricated1, of_kind_fabricated2 with
+  | Tag tags1, Tag tags2 ->
+    Tag.Map.equal equal_tag_case tags1 tags2
+  | Set_of_closures1 set1, Set_of_closures set2 ->
+    equal_set_of_closures set1 set2
+  | Closure closure1, Closure closure2 ->
+    equal_closure closure1 closure2
+
+and equal_set_of_closures
+      ({ closures = closures1; closure_elements = closure_elements1; }
+        : set_of_closures)
+      ({ closures = closures2; closure_elements = closure_elements2; }
+        : set_of_closures) =
+  equal_extensibility (Closure_id.Map.equal equal_ty_fabricated)
+      closures1 closures2
+    && equal_extensibility (Var_within_closure.Map.equal equal_ty_value)
+         closure_elements1 closure_elements2
+
+and equal_closure ({ function_decls = function_decls1; } : closure)
+      ({ function_decls = function_decls2; } : closure) =
+  equal_function_declarations function_decls1 function_decls2
+
+and equal_typing_environment
+      { names_to_types = names_to_types1; existentials = existentials1; _ }
+      { names_to_types = names_to_types2; existentials = existentials2; _ } =
+  let equal_scope_and_t (scope1, t1) (scope2, t2) =
+    Scope_level.equal scope1 scope2 && equal t1 t2
+  in
+  Name.Map.equal equal_scope_and_t names_to_types1 names_to_types2
+    && Name.Set.equal existentials1 existentials2
+
+let strictly_more_precise ~type_of_name t ~than =
   not (equal than (meet ~type_of_name t ~than))
 
 type 'a or_wrong =
@@ -1324,7 +1385,7 @@ let prove_of_kind_naked_float t =
     end;
   force_to_kind_naked_float t
 
-let physically_equal ~type_of_name:_ (t1 : t) (t2 : t) =
+let values_physically_equal ~type_of_name:_ (t1 : t) (t2 : t) =
   let check_aliases (ty1 : _ ty) (ty2 : _ ty) =
     match ty1, ty2 with
     | No_alias _, _ | _, No_alias _ ->
@@ -1358,9 +1419,7 @@ let physically_equal ~type_of_name:_ (t1 : t) (t2 : t) =
         print t1
         print t2
 
-(* CR mshinwell: We only use [structurally_distinct] on things of kind
-   [Value] at the moment (same for [physically_equal], above). *)
-let structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
+let values_structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
   let simplified1, _canonical_name1 = Simplified_type.create ~type_of_name t1 in
   let simplified2, _canonical_name2 = Simplified_type.create ~type_of_name t2 in
   let module S = Simplified_type in
@@ -1605,3 +1664,42 @@ let free_names_transitive ~(type_of_name : type_of_name) t =
   in
   loop (free_names t);
   !all_names
+
+type unboxable_proof =
+  | Variant of blocks_and_tagged_immediates
+  | Boxed_float of Numbers.Float_by_bit_pattern.Set.t ty_naked_number
+  | Boxed_int32 of Numbers.Int32.Set.t ty_naked_number
+  | Boxed_int64 of Numbers.Int64.Set.t ty_naked_number
+  | Boxed_nativeint of Targetint.Set.t ty_naked_number
+  | Closures of closures
+  | Cannot_unbox
+
+let prove_unboxable ~type_of_name ~unboxee_ty : unboxable_proof =
+  match T.prove_blocks_and_immediates ~type_of_name unboxee_ty with
+  | Proved blocks_and_immediates
+      when not (Tag.Map.is_empty blocks_and_immediate.blocks) ->
+    Variant blocks_and_immediates
+  | Invalid -> Cannot_unbox
+  | Unknown ->
+    match T.prove_boxed_float ~type_of_name unboxee_ty with
+    | Proved ty_naked_number -> Boxed_float ty_naked_number
+    | Invalid -> Cannot_unbox
+    | Unknown ->
+      match T.prove_boxed_int32 ~type_of_name unboxee_ty with
+      | Proved ty_naked_number -> Boxed_int32 ty_naked_number
+      | Invalid -> Cannot_unbox
+      | Unknown ->
+        match T.prove_boxed_int64 ~type_of_name unboxee_ty with
+        | Proved ty_naked_number -> Boxed_int64 ty_naked_number
+        | Invalid -> Cannot_unbox
+        | Unknown ->
+          match T.prove_boxed_nativeint ~type_of_name unboxee_ty with
+          | Proved ty_naked_number -> Boxed_nativeint ty_naked_number
+          | Invalid -> Cannot_unbox
+          | Unknown -> Cannot_unbox
+(*
+            match T.prove_closures ~type_of_name unboxee_ty with
+            | Proved closures -> Closures closures
+            | Invalid -> Cannot_unbox
+            | Unknown -> Cannot_unbox
+*)

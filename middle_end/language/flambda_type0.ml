@@ -167,17 +167,11 @@ end) = struct
   and block_cases =
     | Join of { by_length : singleton_block Targetint.OCaml.Map.t; }
 
-  and 'a or_unknown_immediates =
-    | Exactly of 'a
-    | Unknown of { is_int : Name.t option; }
-
-  and 'a or_unknown_blocks =
-    | Exactly of 'a
-    | Unknown of { get_tag : Name.t option; }
-
   and blocks_and_tagged_immediates = {
-    immediates : immediate_case Immediate.Map.t or_unknown_immediates;
-    blocks : block_cases Tag.Map.t or_unknown_blocks;
+    immediates : immediate_case Immediate.Map.t or_unknown;
+    blocks : block_cases Tag.Map.t;
+    is_int : Name.t option;
+    get_tag : Name.t option;
   }
 
   and 'a of_kind_value_boxed_number =
