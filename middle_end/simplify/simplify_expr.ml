@@ -641,6 +641,12 @@ and simplify_let_cont env r ~body
             ~arity:(Flambda.Continuation_handler.param_arity handler)
             ~default_env:(E.get_typing_environment env)
         in
+        (* CR mshinwell/lwhite: We could maybe introduce the unboxed
+           parameters into the environment every time, then check if they
+           were used, and if so then add the wrapper.  This doesn't introduce
+           the "reverse environment" thing but would mitigate against
+           unnecessary unboxing for later rounds to clean up (e.g. in the
+           case where a parameter being unboxed is only used boxed). *)
         Unbox_continuation_params.for_non_recursive_continuation ~handler
           ~args_types ~name ~backend:(E.backend env)
     in

@@ -19,50 +19,6 @@
 module E = Simplify_env_and_result.Env
 module T = Flambda_type
 
-module How_to_unbox = struct
-  type t = {
-    unboxee_to_wrapper_params_unboxee : Variable.t Variable.Map.t;
-    add_bindings_in_wrapper : Flambda.Expr.t -> Flambda.Expr.t;
-    new_arguments_for_call_in_wrapper : Variable.t list;
-    new_params : Flambda.Typed_parameter.t list;
-    new_unboxee_types : (Variable.t * Flambda_type.t) list;
-    build_boxed_value_from_new_params :
-      (Flambda.Typed_parameter.t * (Flambda.Expr.t -> Flambda.Expr.t)) list;
-  }
-
-  let create () =
-    { unboxee_to_wrapper_params_unboxee = Variable.Map.empty;
-      add_bindings_in_wrapper = (fun expr -> expr);
-      new_arguments_for_call_in_wrapper = [];
-      new_params = [];
-      new_unboxee_types = [];
-      build_boxed_value_from_new_params = [];
-    }
-
-  let merge t1 t2 =
-    { unboxee_to_wrapper_params_unboxee =
-        Variable.Map.union (fun _ param1 param2 ->
-            assert (Variable.equal param1 param2);
-            Some param1)
-          t1.unboxee_to_wrapper_params_unboxee
-          t2.unboxee_to_wrapper_params_unboxee;
-      add_bindings_in_wrapper = (fun expr ->
-        t2.add_bindings_in_wrapper (
-          t1.add_bindings_in_wrapper expr));
-      new_arguments_for_call_in_wrapper =
-        t1.new_arguments_for_call_in_wrapper
-          @ t2.new_arguments_for_call_in_wrapper;
-      new_params = t1.new_params @ t2.new_params;
-      new_unboxee_types = t1.new_unboxee_types @ t2.new_unboxee_types;
-      build_boxed_value_from_new_params =
-        t1.build_boxed_value_from_new_params
-          @ t2.build_boxed_value_from_new_params;
-    }
-
-  let merge_variable_map t_map =
-    Variable.Map.fold (fun _param t1 t2 -> merge t1 t2) t_map (create ())
-end
-
 type unboxing_spec = {
   constant_ctors : Immediate.Set.t;
   block_sizes_by_tag : Targetint.OCaml.t Tag.Map.t;
@@ -96,15 +52,21 @@ module Unboxing_spec_variant : Unboxing_spec = struct
 
   let create (proof : T.unboxable_proof) =
     match proof with
-    | Variant blocks_and_tagged_immediates ->
+    | Variant variant ->
+      let no_discriminant_needed =
+        match Tag.Map.get_singleton variant.block_sizes_by_tag with
+        | Some (tag, _) -> Some tag
+        | None -> None
+      in
       let t : t =
         { is_int_param = Name.create "is_int";
           get_tag_param = Name.create "get_tag";
+          no_discriminant_needed;
         }
       in
       let unboxing_spec : unboxing_spec =
-        { constant_ctors = blocks_and_tagged_immediates.immediates;
-          block_sizes_by_tag = blocks_and_tagged_immediates.block_sizes_by_tag;
+        { constant_ctors = variant.immediates;
+          block_sizes_by_tag = variant.block_sizes_by_tag;
         }
       in
       Some (t, unboxing_spec)
@@ -113,6 +75,8 @@ module Unboxing_spec_variant : Unboxing_spec = struct
   let unboxed_kind = K.value ()
 
   let get_field ~boxed_value ~index dbg : Flambda.Named.t =
+    (* CR mshinwell: We should be able to do better than
+       [Unknown], based on the type of the unboxee. *)
     Prim (Binary (Block_load (Value Unknown, Immutable), boxed_value, index),
       dbg)
 
@@ -187,12 +151,6 @@ end) = struct
     | _ ->
       Misc.fatal_errorf "Bad number of fields for [refine_unboxee_ty]: %d"
         (List.length fields)
-
-    let unboxee_discriminants =
-      T.variant_whose_discriminants_are ~is_int:t.is_int_param
-        ~get_tag:t.get_tag_param
-    in
-    T.join ~type_of_name unboxee_ty unboxee_discriminants
 end
 
 module Unboxing_spec_float = Unboxing_spec_naked_number (struct
@@ -231,8 +189,53 @@ module Unboxing_spec_nativeint = Unboxing_spec_naked_number (struct
     | _ -> None
 end)
 
-let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
-      ~unboxee_ty ~unbox_returns : How_to_unbox.t =
+module How_to_unbox = struct
+  type t = {
+    unboxee_to_wrapper_params_unboxee : Variable.t Variable.Map.t;
+    add_bindings_in_wrapper : Flambda.Expr.t -> Flambda.Expr.t;
+    new_arguments_for_call_in_wrapper : Variable.t list;
+    new_params : Flambda.Typed_parameter.t list;
+    new_unboxee_types : (Variable.t * Flambda_type.t) list;
+    build_boxed_value_from_new_params :
+      (Flambda.Typed_parameter.t * (Flambda.Expr.t -> Flambda.Expr.t)) list;
+  }
+
+  let create () =
+    { unboxee_to_wrapper_params_unboxee = Variable.Map.empty;
+      add_bindings_in_wrapper = (fun expr -> expr);
+      new_arguments_for_call_in_wrapper = [];
+      new_params = [];
+      new_unboxee_types = [];
+      build_boxed_value_from_new_params = [];
+    }
+
+  let merge t1 t2 =
+    { unboxee_to_wrapper_params_unboxee =
+        Variable.Map.union (fun _ param1 param2 ->
+            assert (Variable.equal param1 param2);
+            Some param1)
+          t1.unboxee_to_wrapper_params_unboxee
+          t2.unboxee_to_wrapper_params_unboxee;
+      add_bindings_in_wrapper = (fun expr ->
+        t2.add_bindings_in_wrapper (
+          t1.add_bindings_in_wrapper expr));
+      new_arguments_for_call_in_wrapper =
+        t1.new_arguments_for_call_in_wrapper
+          @ t2.new_arguments_for_call_in_wrapper;
+      new_params = t1.new_params @ t2.new_params;
+      new_unboxee_types = t1.new_unboxee_types @ t2.new_unboxee_types;
+      build_boxed_value_from_new_params =
+        t1.build_boxed_value_from_new_params
+          @ t2.build_boxed_value_from_new_params;
+    }
+
+  let merge_variable_map t_map =
+    Variable.Map.fold (fun _param t1 t2 -> merge t1 t2) t_map (create ())
+end
+
+let how_to_unbox_core ~type_of_name ~env ~unboxee ~unboxee_ty
+      ~unboxing_spec_user_data ~unboxing_spec ~is_unbox_returns
+      : How_to_unbox.t =
   let dbg = Debuginfo.none in
   let num_constant_ctors = Numbers.Int.Set.cardinal constant_ctors in
   assert (num_constant_ctors >= 0);
@@ -243,15 +246,11 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
      we don't know that Pisint foo_option = false.  For the moment we don't
      elide the "_is_int".  Note that for Unbox_continuation_params the
      extra argument isn't really a problem---it will be removed---but for
-     Unbox_returns we really don't want to generate an extra return value
+     is_unbox_returns we really don't want to generate an extra return value
      if it isn't needed.
-     Follow-up: think this might be ok for Unbox_returns only, since we don't
+     Follow-up: think this might be ok for is_unbox_returns only, since we don't
      need the Pisint = false judgements etc.
   *)
-  let no_constant_ctors = 
-    if unbox_returns then num_constant_ctors = 0
-    else false
-  in
   let num_tags = Tag.Map.cardinal blocks in
   assert (num_tags >= 1);  (* see below *)
   let wrapper_param_unboxee = Variable.rename unboxee in
@@ -371,8 +370,6 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
                 match var_opt with
                 | None -> filler
                 | Some var ->
-                  (* CR mshinwell: We should be able to do better than
-                     [Unknown], based on the type of the unboxee. *)
                   Flambda.Expr.create_let var
                     (S.get_field ~boxed_value:wrapper_param_unboxee ~index dbg)
                     filler)
@@ -485,7 +482,7 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
       var, field_kind)
   in
   let fields_with_kinds = Array.to_list fields_with_kinds0 in
-  (* CR mshinwell: This next section is only needed for [Unbox_returns] at
+  (* CR mshinwell: This next section is only needed for [is_unbox_returns] at
      present; we shouldn't run it unless required. *)
   let boxing_is_int_cont = Continuation.create () in
   let boxing_is_block_cont = Continuation.create () in
@@ -558,9 +555,7 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
               List.rev fields
             in
             let handler : Flambda.Expr.t =
-              Flambda.Expr.create_let boxed
-                (Prim (Pmakeblock (Tag.to_int tag, Immutable, None),
-                  fields, dbg))
+              Flambda.Expr.create_let boxed (S.box fields dbg)
                 (Flambda.Apply_cont (join_cont, None, [boxed]))
             in
             Let_cont {
@@ -606,7 +601,7 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
                    to do CSE on "Pisint discriminant" (which would rewrite to
                    the "is_int" variable returned from the callee).  This would
                    require propagation of the projection information from the
-                   stub function generated by Unbox_returns to the place it's
+                   stub function generated by is_unbox_returns to the place it's
                    being inlined. *)
                 handler = add_constant_ctor_conts constant_ctor_switch;
                 stub = true;
@@ -636,12 +631,9 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
     in
     [boxed, build]
   in
-  let unboxee_ty = ... in
   let is_int =
-(* same as below.
     if no_constant_ctors then []
     else
-*)
       let is_int_ty =
         let by_constant_ctor_index =
           Targetint.OCaml.Set.fold (fun ctor_index by_constant_ctor_index ->
@@ -688,13 +680,10 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
       [Flambda.Typed_parameter.create is_int is_int_ty]
   in
   let discriminant =
-(* We probably still need this now in all cases to get the extra type info,
-   or else we need another special case in here to refine the type of
-   [unboxee] unilaterally.
     if not needs_discriminant then []
-    else [discriminant, Projection.Prim (Pgettag, [unboxee])] *)
-    let discriminant = Parameter.wrap discriminant in
-    Flambda.Typed_parameter.create discriminant discriminant_ty
+    else
+      let discriminant = Parameter.wrap discriminant in
+      [Flambda.Typed_parameter.create discriminant discriminant_ty]
   in
   let fields =
     List.map (fun (field, kind) ->
@@ -702,7 +691,13 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
         Flambda.Typed_parameter.create field S.unboxed_kind)
       fields_with_kinds
   in
-  let 
+  let unboxee_ty =
+    let all_fields =
+      List.map (fun (field, _kind) -> field) fields_with_kinds
+    in
+    S.refine_unboxee_ty ~type_of_name unboxing_spec_user_data
+      ~unboxee_ty ~all_fields
+  in
   { unboxee_to_wrapper_params_unboxee;
     add_bindings_in_wrapper;
     new_arguments_for_call_in_wrapper;
@@ -712,269 +707,31 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
     build_boxed_value_from_new_params;
   }
 
-let how_to_unbox ~type_of_name ~env ~unboxee ~unboxee_ty ~unbox_returns =
+let how_to_unbox ~type_of_name ~env ~unboxee ~unboxee_ty ~is_unbox_returns =
+  let unbox ~unboxing_spec_user_data ~unboxing_spec =
+    Some (how_to_unbox_core ~type_of_name ~env ~unboxee ~unboxee_ty
+      ~unboxing_spec_user_data ~unboxing_spec ~is_unbox_returns)
+  in
   match T.prove_unboxable ~type_of_name ~unboxee_ty with
   | Cannot_unbox -> None
-
-
-  | Variant blocks_and_immediates ->
-    (* Don't unbox a given variable more than once. *)
-    match blocks_and_immediates.is_int with
-    | Some _ -> None
+  | proof ->
+    match Unboxing_spec_variant.create proof with
+    | Some (unboxing_spec_user_data, unboxing_spec) ->
+      unbox ~unboxing_spec_user_data ~unboxing_spec
     | None ->
-      let constant_ctors =
-        match approx with
-        | Blocks _ -> Numbers.Int.Set.empty
-        | Blocks_and_immediates (_, imms) | Immediates imms ->
-          let module I = T.Unionable.Immediate in
-          I.Set.fold (fun (approx : I.t) ctor_indexes ->
-              let ctor_index =
-                match approx with
-                | Int i -> i
-                | Char c -> Char.code c
-                | Constptr p -> p
-              in
-              Numbers.Int.Set.add ctor_index ctor_indexes)
-            imms
-            Numbers.Int.Set.empty
-      in
-      let blocks =
-        match approx with
-        | Blocks blocks | Blocks_and_immediates (blocks, _) -> blocks
-        | Immediates _ -> Tag.Map.empty
-      in
-      (* CR mshinwell: This is sometimes returning "new_params" being empty;
-         this should be an error presumably *)
-      if Tag.Map.is_empty blocks then None
-      else
-        Some (how_to_unbox_core ~constant_ctors ~blocks ~unboxee
-          ~unbox_returns)
-
-(* Some new ideas
-module Unboxable = struct
-  type immediate_valued =
-    | Yes of { unique_known_value : Immediate.t option; }
-    | No
-
-  module encoded_or_boxed = struct
-    type how_to_create =
-      | Call_external of { function_name : string; }
-      | Allocate of {
-          sizes_by_tag : int Tag.Map.t;
-          max_size : int;
-        }
-
-    type t = {
-      how_to_create : how_to_create;
-      arity : Flambda_kind.t list;
-      projection : (field:int -> Projection.t);
-      projection_code : (field:int -> Flambda0.Named.t);
-    }
-
-    let how_to_create t = t.how_to_create
-    let arity t = t.arity
-    let projection t ~field = t.projection ~field
-    let projection_code t ~field = t.projection_code ~field
-  end
-
-  type encoded_or_boxed =
-    | Yes of encoded_or_boxed.t
-    | No
-
-  type t = {
-    immediate_valued : immediate_valued;
-    encoded_or_boxed : encoded_or_boxed;
-  }
-
-  let immediate_valued t = t.immediate_valued
-  let encoded_or_boxed t = t.encoded_or_boxed
-
-  let check_field_within_range ~field ~max_size =
-    if field < 0 || field >= max_size then begin
-      Misc.fatal_errorf "Field index %d out of range when forming \
-          [Unboxable.t]"
-        field
-    end
-
-  let create_blocks_internal ~immediate_valued ~sizes_by_tag : t =
-    if Tag.Map.cardinal sizes_by_tag < 1 then begin
-      Misc.fatal_error "create_blocks_internal: empty [sizes_by_tag]"
-    end;
-    let max_size = Tag.Set.max_elt (Tag.Map.keys sizes_by_tag) in
-    { immediate_valued = No;
-      encoded_or_boxed = {
-        how_to_create = Allocate_empty { sizes_by_tag; };
-        arity = Array.to_list (Array.create max_size (Flambda_kind.value ()));
-        projection = (fun ~unboxee ~field : Projection.t ->
-          (* This bounds check isn't completely watertight (any particular
-             constructor may have fewer arguments than [max_size]), but it's
-             better than nothing. *)
-          check_field_within_range ~field ~max_size;
-          Field (unboxee, field));
-        projection_code = (fun ~unboxee ~field dbg : Flambda0.Named.t ->
-          check_field_within_range ~field ~max_size;
-          Prim (Pfield field, [unboxee], dbg));
-      };
-    }
-
-  let create_blocks_and_immediates ~unique_immediate_value ~sizes_by_tag =
-    create_blocks_internal
-      ~immediate_valued:(Yes { unique_known_value = unique_immediate_value; })
-      ~tag ~sizes_by_tag
-
-  let create_blocks ~sizes_by_tag =
-    create_blocks_internal ~immediate_valued:No ~sizes_by_tag
-
-  let create_boxed_float () : t =
-    match Flambda_kind.naked_float () with
-    | None -> None
-    | Some naked_float_kind ->
-      { immediate_valued = No;
-        encoded_or_boxed = {
-          how_to_create = Allocate_and_fill Pbox_float;
-          arity = [naked_float_kind];
-          projection = (fun ~unboxee ~field : Projection.t ->
-            check_field_within_range ~field ~max_size:1;
-            Prim (Punbox_float, [unboxee]));
-          projection_code = (fun ~unboxee ~field dbg : Flambda0.Named.t ->
-            check_field_within_range ~field ~max_size:1;
-            Prim (Punbox_float, [unboxee], dbg));
-        };
-      }
-
-  let create_boxed_int32 () : t =
-    { immediate_valued = No;
-      encoded_or_boxed = {
-        how_to_create = Allocate_and_fill Pbox_int32;
-        arity = [Flambda_kind.naked_int32 ()];
-        projection = (fun ~unboxee ~field : Projection.t ->
-          check_field_within_range ~field ~max_size:1;
-          Prim (Punbox_int32, [unboxee]));
-        projection_code = (fun ~unboxee ~field dbg : Flambda0.Named.t ->
-          check_field_within_range ~field ~max_size:1;
-          Prim (Punbox_int32 field, [unboxee], dbg));
-      };
-    }
-
-  let create_boxed_int64 () : t =
-    match Flambda_kind.naked_int64 () with
-    | None -> None
-    | Some naked_int64_kind ->
-      { immediate_valued = No;
-        encoded_or_boxed = {
-          how_to_create = Allocate_and_fill Pbox_int64;
-          arity = [naked_int64_kind];
-          projection = (fun ~unboxee ~field : Projection.t ->
-            check_field_within_range ~field ~max_size:1;
-            Prim (Punbox_int64, [unboxee]));
-          projection_code = (fun ~unboxee ~field dbg : Flambda0.Named.t ->
-            check_field_within_range ~field ~max_size:1;
-            Prim (Punbox_int64 field, [unboxee], dbg));
-        };
-      }
-
-  let create_boxed_nativeint () : t =
-    { immediate_valued = No;
-      encoded_or_boxed = {
-        how_to_create = Allocate_and_fill Pbox_nativeint;
-        arity = [Flambda_kind.naked_nativeint ()];
-        projection = (fun ~unboxee ~field : Projection.t ->
-          check_field_within_range ~field ~max_size:1;
-          Prim (Punbox_nativeint, [unboxee]));
-        projection_code = (fun ~unboxee ~field dbg : Flambda0.Named.t ->
-          check_field_within_range ~field ~max_size:1;
-          Prim (Punbox_nativeint, [unboxee], dbg));
-      };
-    }
-
-  let create_tagged_immediate () : t =
-    { immediate_valued = No;
-      encoded_or_boxed = {
-        how_to_create = Allocate_and_fill Ptag_int;
-        arity = [Flambda_kind.naked_immediate ()];
-        projection = (fun ~unboxee ~field : Projection.t ->
-          check_field_within_range ~field ~max_size:1;
-          Prim (Puntag_immediate, [unboxee]));
-        projection_code = (fun ~unboxee ~field dbg : Flambda0.Named.t ->
-          check_field_within_range ~field ~max_size:1;
-          Prim (Puntag_immediate, [unboxee], dbg));
-      };
-    }
-end
-
-module Unboxable_or_untaggable : sig
-  (** Witness that values of a particular Flambda type may be unboxed or
-      untagged.  We call the contents of such values the "constitutuents"
-      of the value.  (For example, each boxed float value has a naked
-      float constitutent; each tagged immediate has a naked immediate
-      constituent; a pair has two constituents of kind [Value].)  Constituents
-      of values are ordered (following field numbers for blocks) starting at
-      zero.
-
-      The functions in this module provide a basic abstraction over unboxing
-      and untagging which can be built on to perform unboxing transformations
-      (cf. [Unbox_one_variable]).
-  *)
-
-  type how_to_create = private
-    | Allocate_and_fill of Flambda_primitive.t
-    (** The boxed or encoded value is to be completely constructed using the
-        given primitive.  The constituents of the value are specified as the
-        usual [Variable.t]s in the [Prim] term (cf. [Flambda0.Named.t]). *)
-    | Allocate_empty of {
-        sizes_by_tag : int Tag.Map.t;
-      }
-    (** The value is to be allocated, according to the desired tag, using
-        [Pmakeblock]---but the caller is responsible for filling it. *)
-
-  (** For each constituent of the value, in order, which value kind is required
-      to represent that component.  When unboxing variants the arity
-      corresponds to the maximum number of fields across all possible
-      tags. *)
-  val arity : t -> Flambda_kind.t list
-
-  (** Values of variant type with mixed constant and non-constant
-      constructors take on immediate values in addition to boxed values.
-      Such immediate values are returned by this function.  (Note that this
-      is unrelated to immediate values that might be taken on by a variable
-      that always holds tagged immediates and is being untagged.  That case
-      is one of those for which this function returns [None].) *)
-  val forms_union_with_immediates : t -> Immediate.Set.t option
-
-  (** The [Projection.t] value that describes the given projection out of
-      the block. *)
-  val projection
-     : t
-    -> unboxee:Variable.t
-    -> field:int
-    -> Projection.t
-
-  (** The code required to perform the given projection out of the block. *)
-  val projection_code
-     : t
-    -> unboxee:Variable.t
-    -> field:int
-    -> Debuginfo.t
-    -> Flambda0.Named.t
-end
-*)
-
-
-(* We'll want this at some point
-    let num_words_allocated_excluding_header t =
-      let custom_block_size = 2 in
-      match t with
-      | Encoded Tagged_int -> 0
-      | Boxed Float ->
-        begin match Targetint.num_bits with
-        | Thirty_two -> 2
-        | Sixty_four -> 1
-        end
-      | Boxed Int32 -> custom_block_size + 1
-      | Boxed Int64 ->
-        begin match Targetint.num_bits with
-        | Thirty_two -> custom_block_size + 2
-        | Sixty_four -> custom_block_size + 1
-        end
-      | Boxed Nativeint -> custom_block_size + 1
-*)
+      match Unboxing_spec_float.create proof with
+      | Some (unboxing_spec_user_data, unboxing_spec) ->
+        unbox ~unboxing_spec_user_data ~unboxing_spec
+      | None ->
+        match Unboxing_spec_int32.create proof with
+        | Some (unboxing_spec_user_data, unboxing_spec) ->
+          unbox ~unboxing_spec_user_data ~unboxing_spec
+        | None ->
+          match Unboxing_spec_int64.create proof with
+          | Some (unboxing_spec_user_data, unboxing_spec) ->
+            unbox ~unboxing_spec_user_data ~unboxing_spec
+          | None ->
+            match Unboxing_spec_nativeint.create proof with
+            | Some (unboxing_spec_user_data, unboxing_spec) ->
+              unbox ~unboxing_spec_user_data ~unboxing_spec
+            | None -> None

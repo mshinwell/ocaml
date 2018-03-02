@@ -30,9 +30,6 @@ let find_unboxings ~continuation_uses ~handlers =
         | params ->
           match Continuation.Map.find cont continuation_uses with
           | exception Not_found ->
-(*
-Format.eprintf "No definition for %a\n%!" Continuation.print cont;
-*)
             None
           | args_tys ->
             let params = Parameter.List.vars params in
@@ -182,10 +179,6 @@ Format.eprintf "Unbox_continuation_params starting with continuations %a\n%!"
                   Flambda.Expr.print handler.handler
               in
 *)
-              let specialised_args =
-                Variable.Map.disjoint_union handler.specialised_args
-                  new_specialised_args
-              in
               let wrapper_body =
                 let initial_body : Flambda.Expr.t =
                   Apply_cont (new_cont, None,

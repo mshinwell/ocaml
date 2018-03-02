@@ -1671,7 +1671,6 @@ type unboxable_proof =
   | Boxed_int32 of Numbers.Int32.Set.t ty_naked_number
   | Boxed_int64 of Numbers.Int64.Set.t ty_naked_number
   | Boxed_nativeint of Targetint.Set.t ty_naked_number
-  | Closures of closures
   | Cannot_unbox
 
 let prove_unboxable ~type_of_name ~unboxee_ty : unboxable_proof =
@@ -1697,9 +1696,3 @@ let prove_unboxable ~type_of_name ~unboxee_ty : unboxable_proof =
           | Proved ty_naked_number -> Boxed_nativeint ty_naked_number
           | Invalid -> Cannot_unbox
           | Unknown -> Cannot_unbox
-(*
-            match T.prove_closures ~type_of_name unboxee_ty with
-            | Proved closures -> Closures closures
-            | Invalid -> Cannot_unbox
-            | Unknown -> Cannot_unbox
-*)

@@ -14,7 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Given a variable and its type, devise a strategy to unbox it. *)
+(** Given a variable (expected to be a parameter of a function or
+    continuation) and its type, devise a strategy to unbox it. *)
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
@@ -33,7 +34,8 @@ module How_to_unbox : sig
 end
 
 val how_to_unbox
-   : being_unboxed:Variable.t
-  -> being_unboxed_approx:Flambda_type.t
-  -> unbox_returns:bool
-  -> How_to_unbox.t option
+   : (env:Simplify_env_and_result.t
+  -> unboxee:Variable.t
+  -> unboxee_ty:Flambda_type.t
+  -> is_unbox_returns:bool
+  -> How_to_unbox.t option) Flambda_type.type_accessor
