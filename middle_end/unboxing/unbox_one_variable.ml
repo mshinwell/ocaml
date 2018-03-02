@@ -63,16 +63,211 @@ module How_to_unbox = struct
     Variable.Map.fold (fun _param t1 t2 -> merge t1 t2) t_map (create ())
 end
 
+type unboxing_spec = {
+  constant_ctors : Immediate.Set.t;
+  block_sizes_by_tag : Targetint.OCaml.t Tag.Map.t;
+}
+
 module type Unboxing_spec = sig
+  type t
+
+  val create : T.unboxable_proof -> (t * unboxing_spec) option
+
   val unboxed_kind : Flambda_kind.t
 
+  val get_field
+     : boxed_value:Simple.t
+    -> index:int
+    -> Debuginfo.t
+    -> Flambda.Named.t
+
+  val box : Simple.t list -> Debuginfo.t -> Flambda.Named.t
+
+  val refine_unboxee_ty
+     : (t -> unboxee_ty:T.t -> all_fields:Name.t list -> T.t) T.type_accessor
 end
 
 module Unboxing_spec_variant : Unboxing_spec = struct
+  type t = {
+    is_int_param : Name.t;
+    get_tag_param : Name.t;
+    no_discriminant_needed : Tag.t option;
+  }
+
+  let create (proof : T.unboxable_proof) =
+    match proof with
+    | Variant blocks_and_tagged_immediates ->
+      let t : t =
+        { is_int_param = Name.create "is_int";
+          get_tag_param = Name.create "get_tag";
+        }
+      in
+      let unboxing_spec : unboxing_spec =
+        { constant_ctors = blocks_and_tagged_immediates.immediates;
+          block_sizes_by_tag = blocks_and_tagged_immediates.block_sizes_by_tag;
+        }
+      in
+      Some (t, unboxing_spec)
+    | _ -> None
+
   let unboxed_kind = K.value ()
 
+  let get_field ~boxed_value ~index dbg : Flambda.Named.t =
+    Prim (Binary (Block_load (Value Unknown, Immutable), boxed_value, index),
+      dbg)
 
+  let box fields dbg : Flambda.Named.t =
+    Prim (Variadic (Make_block (Value Unknown, Immutable), fields), dbg)
 
+  let refine_unboxee_ty ~type_of_name t ~unboxee_ty ~all_fields =
+    match t.no_discriminant_needed with
+    | None ->
+      let unboxee_discriminants =
+        T.variant_whose_discriminants_are ~is_int:t.is_int_param
+          ~get_tag:t.get_tag_param
+      in
+      T.join ~type_of_name unboxee_ty unboxee_discriminants
+    | Some unique_tag ->
+      let fields =
+        List.map (fun field -> T.alias_type_of unboxed_kind field) all_fields
+      in
+      T.block unique_tag ~fields:(Immutable (Array.of_list fields))
+end
+
+module Unboxing_spec_naked_number (N : sig
+  include Number_adjuncts.Boxable_number_kind
+
+  val ty_naked_number_of_proof : T.unboxable_proof -> t T.ty_naked_number option
+end) = struct
+  type t = {
+    contents : N.t T.ty_naked_number;
+  }
+
+  let create (proof : T.unboxable_proof) =
+    match S.ty_naked_number_of_proof proof with
+    | None -> None
+    | Some ty_naked_number ->
+      let t : t =
+        { contents = ty_naked_number;
+        }
+      in
+      let block_sizes_by_tag =
+        (* The choice of [Tag.custom_tag] is correct in some sense, but
+           arbitrary: since there is only one possible tag, no discriminant will
+           be generated in any case. *)
+        Tag.Map.singleton Tag.custom_tag Targetint.OCaml.one
+      in
+      let unboxing_spec : unboxing_spec =
+        { constant_ctors = Immediate.Set.empty;
+          block_sizes_by_tag;
+        }
+      in
+      Some (t, unboxing_spec)
+
+  let unboxed_kind = Flambda_kind.Standard_int_or_float.to_kind N.kind
+
+  let get_field ~boxed_value ~index dbg : Flambda.Named.t =
+    if index <> 0 then begin
+      Misc.fatal_errorf "Bad field index %d for [get_field]" index
+    end;
+    Prim (Unary (Unbox_number N.boxable_number_kind, boxed_value), dbg)
+
+  let box fields dbg : Flambda.Named.t =
+    match fields with
+    | [naked_number] ->
+      Prim (Unary (Box_number N.boxable_number_kind, naked_number), dbg)
+    | _ ->
+      Misc.fatal_errorf "Bad number of fields for [box]: %d"
+        (List.length fields)
+
+  let refine_unboxee_ty ~type_of_name:_ t ~unboxee_ty:_ ~all_fields =
+    match all_fields with
+    | [naked_number] ->
+      N.box (T.alias_type_of unboxed_kind naked_number)
+    | _ ->
+      Misc.fatal_errorf "Bad number of fields for [refine_unboxee_ty]: %d"
+        (List.length fields)
+
+    let unboxee_discriminants =
+      T.variant_whose_discriminants_are ~is_int:t.is_int_param
+        ~get_tag:t.get_tag_param
+    in
+    T.join ~type_of_name unboxee_ty unboxee_discriminants
+end
+
+module Unboxing_spec_float = Unboxing_spec_naked_number (struct
+  include Number_adjuncts.For_floats
+
+  let ty_naked_number_of_proof (proof : T.unboxable_proof) =
+    match proof with
+    | Boxed_float ty_naked_number -> Some ty_naked_number
+    | _ -> None
+end)
+
+module Unboxing_spec_int32 = Unboxing_spec_naked_number (struct
+  include Number_adjuncts.For_int32s
+
+  let ty_naked_number_of_proof (proof : T.unboxable_proof) =
+    match proof with
+    | Boxed_int32 ty_naked_number -> Some ty_naked_number
+    | _ -> None
+end)
+
+module Unboxing_spec_int64 = Unboxing_spec_naked_number (struct
+  include Number_adjuncts.For_int64s
+
+  let ty_naked_number_of_proof (proof : T.unboxable_proof) =
+    match proof with
+    | Boxed_int64 ty_naked_number -> Some ty_naked_number
+    | _ -> None
+end)
+
+module Unboxing_spec_nativeint = Unboxing_spec_naked_number (struct
+  include Number_adjuncts.For_nativeints
+
+  let ty_naked_number_of_proof (proof : T.unboxable_proof) =
+    match proof with
+    | Boxed_nativeint ty_naked_number -> Some ty_naked_number
+    | _ -> None
+end)
+
+let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
+      ~unboxee_ty ~unbox_returns : How_to_unbox.t =
+  let dbg = Debuginfo.none in
+  let num_constant_ctors = Numbers.Int.Set.cardinal constant_ctors in
+  assert (num_constant_ctors >= 0);
+  (* CR mshinwell: We need to think about this more.
+     Suppose we have code that deconstructs an "int option".  That code uses
+     Pisint.  However we know that the thing is only ever going to be
+     "Some x" and try to elide the "_is_int" parameter.  However that means
+     we don't know that Pisint foo_option = false.  For the moment we don't
+     elide the "_is_int".  Note that for Unbox_continuation_params the
+     extra argument isn't really a problem---it will be removed---but for
+     Unbox_returns we really don't want to generate an extra return value
+     if it isn't needed.
+     Follow-up: think this might be ok for Unbox_returns only, since we don't
+     need the Pisint = false judgements etc.
+  *)
+  let no_constant_ctors = 
+    if unbox_returns then num_constant_ctors = 0
+    else false
+  in
+  let num_tags = Tag.Map.cardinal blocks in
+  assert (num_tags >= 1);  (* see below *)
+  let wrapper_param_unboxee = Variable.rename unboxee in
+  let unboxee_to_wrapper_params_unboxee =
+    Variable.Map.add unboxee wrapper_param_unboxee
+      Variable.Map.empty
+  in
+  let max_size =
+    Tag.Map.fold (fun _tag fields max_size ->
+        max (Array.length fields) max_size)
+      blocks 0
+  in
+  let field_arguments_for_call_in_wrapper =
+    Array.to_list (Array.init max_size (fun index ->
+      Variable.create (Printf.sprintf "field%d" index)))
+  in
   let is_int = Variable.rename ~append:"_is_int" unboxee in
   let is_int_in_wrapper = Variable.rename is_int in
   let is_int_known_value =
@@ -114,159 +309,6 @@ module Unboxing_spec_variant : Unboxing_spec = struct
       if not needs_discriminant then [] else [discriminant_in_wrapper']
     in
     is_int @ discriminant @ field_arguments_for_call_in_wrapper
-  in
-
-
-
-  (* for unbox_returns: *)
-  let boxing_is_int_cont = Continuation.create () in
-  let boxing_is_block_cont = Continuation.create () in
-  let boxing_is_int_switch =
-    let arms =
-      Targetint.OCaml.Map.of_list [
-        Targetint.OCaml.zero, boxing_is_block_cont;
-        Targetint.OCaml.one, boxing_is_int_cont;
-      ]
-    in
-    Flambda.Expr.create_int_switch ~scrutinee:is_int ~arms
-  in
-  let boxing_switch =
-    let arms =
-      Tag.Map.map (fun (_size, boxing_cont) -> boxing_cont)
-        tags_to_sizes_and_boxing_conts
-    in
-    Flambda.Expr.create_tag_switch ~scrutinee:discriminant ~arms
-  in
-
-
-  let unboxee_ty =
-    let unboxee_discriminants =
-      T.variant_whose_discriminants_are ~is_int ~get_tag
-    in
-    (E.type_accessor env T.join) unboxee_ty unboxee_discriminants
-  in
-  let is_int =
-(* same as below.
-    if no_constant_ctors then []
-    else
-*)
-      let is_int_ty =
-        let by_constant_ctor_index =
-          Targetint.OCaml.Set.fold (fun ctor_index by_constant_ctor_index ->
-              let tag = Tag.of_targetint_ocaml ctor_index in
-              let env = T.Typing_environment.create () in
-              Tag.Map.add tag env by_constant_ctor_index)
-            constant_ctors
-            Tag.Map.empty
-        in
-        let by_tag =
-          Tag.Map.map (fun size ->
-              let env = ref (T.Typing_environment.create ()) in
-              for field = 0 to size - 1 do
-                let field, kind = fields_with_kinds0.(field) in
-                let field_scope_level = E.continuation_scope_level env in
-                (* CR mshinwell: We could refine the types of the actual fields
-                   themselves according to the tag. *)
-                let field_ty = T.unknown kind in
-                env := T.Typing_environment.add !env field field_scope_level
-                  field_ty
-              done;
-              !env)
-            tags_to_sizes
-        in
-        let discriminant_env_is_int =
-          T.Typing_environment.add discriminant
-            (E.continuation_scope_level env)
-            (T.these_tags by_constant_ctor_index)
-        in
-        let discriminant_env_is_block =
-          T.Typing_environment.add discriminant
-            (E.continuation_scope_level env)
-            (T.these_tags by_tag)
-        in
-        let by_is_int_result =
-          Immediate.Map.of_list [
-            Immediate.const_true, discriminant_env_is_int;
-            Immediate.const_false, discriminant_env_is_block;
-          ]
-        in
-        T.these_tagged_immediates_with_envs by_is_int_result
-      in
-      let is_int = Parameter.wrap is_int in
-      [Flambda.Typed_parameter.create is_int is_int_ty]
-  in
-  let discriminant =
-(* We probably still need this now in all cases to get the extra type info,
-   or else we need another special case in here to refine the type of
-   [unboxee] unilaterally.
-    if not needs_discriminant then []
-    else [discriminant, Projection.Prim (Pgettag, [unboxee])] *)
-    let discriminant = Parameter.wrap discriminant in
-    Flambda.Typed_parameter.create discriminant discriminant_ty
-  in
-end
-
-module Unboxing_spec_naked_number (N : sig
-
-end) : Unboxing_spec = struct
-
-end
-
-module Unboxing_spec_float = Unboxing_spec_naked_number (struct
-
-end
-
-module Unboxing_spec_int32 = Unboxing_spec_naked_number (struct
-
-end
-
-module Unboxing_spec_int64 = Unboxing_spec_naked_number (struct
-
-end
-
-module Unboxing_spec_nativeint = Unboxing_spec_naked_number (struct
-
-end
-
-let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
-      ~unboxee_ty ~unbox_returns : How_to_unbox.t =
-  let dbg = Debuginfo.none in
-  let num_constant_ctors = Numbers.Int.Set.cardinal constant_ctors in
-  assert (num_constant_ctors >= 0);
-  (* CR mshinwell: We need to think about this more.
-     Suppose we have code that deconstructs an "int option".  That code uses
-     Pisint.  However we know that the thing is only ever going to be
-     "Some x" and try to elide the "_is_int" parameter.  However that means
-     we don't know that Pisint foo_option = false.  For the moment we don't
-     elide the "_is_int".  Note that for Unbox_continuation_params the
-     extra argument isn't really a problem---it will be removed---but for
-     Unbox_returns we really don't want to generate an extra return value
-     if it isn't needed.
-     Follow-up: think this might be ok for Unbox_returns only, since we don't
-     need the Pisint = false judgements etc.
-  *)
-  let no_constant_ctors = 
-    if unbox_returns then num_constant_ctors = 0
-    else false
-  in
-  let num_tags = Tag.Map.cardinal blocks in
-  assert (num_tags >= 1);  (* see below *)
-  let wrapper_param_unboxee = Variable.rename unboxee in
-  let unboxee_to_wrapper_params_unboxee =
-    Variable.Map.add unboxee wrapper_param_unboxee
-      Variable.Map.empty
-  in
-  let max_size =
-    Tag.Map.fold (fun _tag fields max_size ->
-        max (Array.length fields) max_size)
-      blocks 0
-  in
-  let field_arguments_for_call_in_wrapper =
-    Array.to_list (Array.init max_size (fun index ->
-      Variable.create (Printf.sprintf "field%d" index)))
-  in
-  let new_arguments_for_call_in_wrapper =
-    S.new_arguments_for_call_in_wrapper @ field_arguments_for_call_in_wrapper
   in
   let new_arguments_for_call_in_wrapper_with_types =
     (* CR mshinwell: should be able to do better for the type here *)
@@ -332,8 +374,7 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
                   (* CR mshinwell: We should be able to do better than
                      [Unknown], based on the type of the unboxee. *)
                   Flambda.Expr.create_let var
-                    (Prim (Binary (Block_load (Value Unknown, Immutable),
-                      wrapper_param_unboxee, index), dbg))
+                    (S.get_field ~boxed_value:wrapper_param_unboxee ~index dbg)
                     filler)
               fields
               filler
@@ -446,6 +487,24 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
   let fields_with_kinds = Array.to_list fields_with_kinds0 in
   (* CR mshinwell: This next section is only needed for [Unbox_returns] at
      present; we shouldn't run it unless required. *)
+  let boxing_is_int_cont = Continuation.create () in
+  let boxing_is_block_cont = Continuation.create () in
+  let boxing_is_int_switch =
+    let arms =
+      Targetint.OCaml.Map.of_list [
+        Targetint.OCaml.zero, boxing_is_block_cont;
+        Targetint.OCaml.one, boxing_is_int_cont;
+      ]
+    in
+    Flambda.Expr.create_int_switch ~scrutinee:is_int ~arms
+  in
+  let boxing_switch =
+    let arms =
+      Tag.Map.map (fun (_size, boxing_cont) -> boxing_cont)
+        tags_to_sizes_and_boxing_conts
+    in
+    Flambda.Expr.create_tag_switch ~scrutinee:discriminant ~arms
+  in
   let build_boxed_value_from_new_params =
     let boxed = Variable.rename ~append:"_boxed" unboxee in
     let boxed_param = Parameter.wrap boxed in
@@ -577,12 +636,7 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
     in
     [boxed, build]
   in
-  let unboxee_ty =
-    let unboxee_discriminants =
-      T.variant_whose_discriminants_are ~is_int ~get_tag
-    in
-    (E.type_accessor env T.join) unboxee_ty unboxee_discriminants
-  in
+  let unboxee_ty = ... in
   let is_int =
 (* same as below.
     if no_constant_ctors then []
@@ -645,7 +699,7 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
   let fields =
     List.map (fun (field, kind) ->
         let field = Parameter.wrap field in
-        Flambda.Typed_parameter.create field KIND)
+        Flambda.Typed_parameter.create field S.unboxed_kind)
       fields_with_kinds
   in
   let 
@@ -659,9 +713,11 @@ let how_to_unbox_core ~type_of_name ~env ~constant_ctors ~blocks ~unboxee
   }
 
 let how_to_unbox ~type_of_name ~env ~unboxee ~unboxee_ty ~unbox_returns =
-  match T.prove_blocks_and_immediates unboxee_ty with
-  | Wrong -> None
-  | Ok blocks_and_immediates ->
+  match T.prove_unboxable ~type_of_name ~unboxee_ty with
+  | Cannot_unbox -> None
+
+
+  | Variant blocks_and_immediates ->
     (* Don't unbox a given variable more than once. *)
     match blocks_and_immediates.is_int with
     | Some _ -> None

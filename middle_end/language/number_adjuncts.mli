@@ -97,6 +97,8 @@ end
 module type Boxable = sig
   module Num : Identifiable.S
 
+  val boxable_number_kind : Flambda_kind.Boxable_number.t
+
   val boxed_prover
      : (Flambda_type.t
          -> Num.Set.t Flambda_type.ty_naked_number Flambda_type.proof)

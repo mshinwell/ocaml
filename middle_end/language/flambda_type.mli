@@ -237,6 +237,11 @@ val prove_sets_of_closures
 
 val prove_closure : (t -> closure proof) type_accessor
 
+type unboxable_blocks_and_tagged_immediates = private {
+  immediates : Immediate.Set.t;
+  block_sizes_by_tag : Targetint.OCaml.t Tag.Map.t;
+}
+
 type unboxable_proof = private
   | Variant of blocks_and_tagged_immediates
   | Boxed_float of Numbers.Float_by_bit_pattern.Set.t ty_naked_number
