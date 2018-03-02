@@ -73,19 +73,141 @@ let this_naked_int64_named n : Named.t * t =
 let this_naked_nativeint_named n : Named.t * t =
   Simple (Simple.const (Naked_nativeint n)), this_naked_nativeint n
 
-(*
-let _equal_function_declaration ~equal_type
+let equal_mutable_or_immutable equal_contents (mut1 : _ mutable_or_immutable)
+      (mut2 : _ mutable_or_immutable) =
+  match mut1, mut2 with
+  | Immutable contents1, Immutable contents2 ->
+    equal_contents contents1 contents2
+  | Mutable, Mutable -> true
+  | (Immutable _ | Mutable), _ -> false
+
+let equal_or_alias equal_contents (or_alias1 : _ or_alias)
+      (or_alias2 : _ or_alias) =
+  match or_alias1, or_alias2 with
+  | No_alias contents1, No_alias contents2 -> equal_contents contents1 contents2
+  | Type export_id1, Type export_id2 -> Export_id.equal export_id1 export_id2
+  | Type_of name1, Type_of name2 -> Name.equal name1 name2
+  | (No_alias _ | Type _ | Type_of _), _ -> false
+
+let equal_extensibility equal_contents
+      (ex1 : _ extensibility) (ex2 : _ extensibility) =
+  match ex1, ex2 with
+  | Open contents1, Open contents2
+  | Exactly contents1, Exactly contents2 -> equal_contents contents1 contents2
+  | (Open _ | Exactly _), _ -> false
+
+let rec equal ({ descr = descr1; phantom = phantom1; } : t)
+      ({ descr = descr2; phantom = phantom2; } : t) =
+  equal_descr descr1 descr2
+    && Misc.Stdlib.Option.equal Flambda_kind.Phantom_kind.equal_occurrences
+      phantom1 phantom2
+
+and equal_descr (descr1 : descr) (descr2 : descr) =
+  match descr1, descr2 with
+  | Value ty_value1, Value ty_value2 ->
+    equal_ty_value ty_value1 ty_value2
+  | Naked_number (ty_naked_number1, kind1),
+      Naked_number (ty_naked_number2, kind2) ->
+    equal_ty_naked_number ty_naked_number1 ty_naked_number2
+      && Flambda_kind.Naked_number.equal kind1 kind2
+  | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
+    equal_ty_fabricated ty_fabricated1 ty_fabricated2
+  | Value _, _ -> false
+  | Naked_number _, _ -> false
+  | Fabricated _, _ -> false
+
+and equal_ty_value ty_value1 ty_value2 =
+  equal_ty equal_of_kind_value ty_value1 ty_value2
+
+and equal_ty_naked_number ty_naked_number1 ty_naked_number2 =
+  equal_ty equal_of_kind_naked_number ty_naked_number1 ty_naked_number2
+
+and equal_ty_fabricated ty_fabricated1 ty_fabricated2 =
+  equal_ty equal_of_kind_fabricated ty_fabricated1 ty_fabricated2
+
+and equal_ty equal_of_kind_foo ty1 ty2 =
+  equal_or_alias (equal_unknown_or_join equal_of_kind_foo) ty1 ty2
+
+and equal_unknown_or_join equal_of_kind_foo (uj1 : _ unknown_or_join)
+      (uj2 : unknown_or_join) =
+  match uj1, uj2 with
+  | Unknown, Unknown -> true
+  | Join join1, Join join2 ->
+    Misc.Stdlib.List.equal equal_of_kind_foo join1 join2
+  | Unknown, _
+  | Join _, _ -> false
+
+and equal_of_kind_value (v1 : of_kind_value1) (v2 : of_kind_value2) =
+
+
+and equal_immediate_case ({ env_extension = env_extension1; } : immediate_case)
+      ({ env_extension = env_extension2; } : immediate_case) =
+
+
+and equal_singleton_block
+      ({ env_extension = env_extension1; fields = fields1; } : singleton_block)
+      ({ env_extension = env_extension2; fields = fields2; } : singleton_block)
+      =
+  equal_typing_environment env_extension1 env_extension2
+    && Misc.Stdlib.Array.equal (equal_mutable_or_immutable equal)
+         fields1 fields2
+
+and equal_block_cases (Join { by_length = by_length1; })
+      (Join { by_length = by_length2; }) =
+  Targetint.OCaml.Map.equal equal_singleton_block by_length1 by_length2
+
+and equal_or_unknown_immediates equal_contents (ou1 : _ or_unknown_immediates)
+      (ou2 : _ or_unknown_immediates) =
+  match ou with
+  | Exactly contents1, Exactly contents2 -> equal_contents contents1 contents2
+  | Unknown { is_int = is_int1; }, Unknown { is_int = is_int2; } ->
+    Misc.Stdlib.Option.equal Name.equal is_int1 is_int2
+  | (Exactly _ | Unknown _), _ -> false
+
+and equal_or_unknown_blocks equal_contents (ou1 : _ or_unknown_blocks)
+      (ou2 : _ or_unknown_blocks) =
+  match ou with
+  | Exactly contents1, Exactly contents2 -> equal_contents contents1 contents2
+  | Unknown { get_tag = get_tag1; }, Unknown { get_tag = get_tag2; } ->
+    Misc.Stdlib.Option.equal Name.equal get_tag1 get_tag2
+  | (Exactly _ | Unknown _), _ -> false
+
+and equal_blocks_and_tagged_immediates
+      ({ immediates = immediates1; blocks = blocks1; })
+      ({ immediates = immediates2; blocks = blocks2; }) =
+  equal_or_unknown_immediates (Immediate.Map.equal equal_immediate_case)
+      immediates1 immediates2
+    && equal_or_unknown_blocks (Tag.Map.equal equal_block_cases)
+         blocks1 blocks2
+
+and equal_of_kind_value_boxed_number (type a)
+      (kind1 : a of_kind_value_boxed_number)
+      (kind2 : a of_kind_value_boxed_number) =
+  match kind1, kind2 with
+  | Boxed_float ty_naked_number1, Boxed_float ty_naked_number2 ->
+    equal_ty_naked_number ty_naked_number1 ty_naked_number2
+  | Boxed_int32 ty_naked_number1, Boxed_int32 ty_naked_number2 ->
+    equal_ty_naked_number ty_naked_number1 ty_naked_number2
+  | Boxed_int64 ty_naked_number1, Boxed_int64 ty_naked_number2 ->
+    equal_ty_naked_number ty_naked_number1 ty_naked_number2
+  | Boxed_nativeint ty_naked_number1, Boxed_nativeint ty_naked_number2 ->
+    equal_ty_naked_number ty_naked_number1 ty_naked_number2
+
+and equal_function_declaration
       (decl1 : function_declarations)
       (decl2 : function_declarations) =
   match decl1, decl2 with
   | Inlinable {
       closure_origin = closure_origin1;
       continuation_param = continuation_param1;
+      exn_continuation_param = exn_continuation_param1;
       is_classic_mode = is_classic_mode1;
       params = params1;
-      body = body1;
-      free_names_in_body = free_names_in_body1;
+      code_id = code_id1;
+      body = _;
+      free_names_in_body = _;
       result = result1;
+      result_env_extension = result_env_extension1;
       stub = stub1;
       dbg = dbg1;
       inline = inline1;
@@ -94,15 +216,19 @@ let _equal_function_declaration ~equal_type
       invariant_params = invariant_params1;
       size = size1;
       direct_call_surrogate = direct_call_surrogate1;
+      my_closure = my_closure1;
     },
     Inlinable {
       closure_origin = closure_origin2;
       continuation_param = continuation_param2;
+      exn_continuation_param = exn_continuation_param2;
       is_classic_mode = is_classic_mode2;
       params = params2;
-      body = body2;
-      free_names_in_body = free_names_in_body2;
+      code_id = code_id2;
+      body = _;
+      free_names_in_body = _;
       result = result2;
+      result_env_extension = result_env_extension2;
       stub = stub2;
       dbg = dbg2;
       inline = inline2;
@@ -111,15 +237,16 @@ let _equal_function_declaration ~equal_type
       invariant_params = invariant_params2;
       size = size2;
       direct_call_surrogate = direct_call_surrogate2;
+      my_closure = my_closure2;
     } ->
     Closure_origin.equal closure_origin1 closure_origin2
       && Continuation.equal continuation_param1 continuation_param2
+      && Continuation.equal exn_continuation_param1 exn_continuation_param2
       && Pervasives.compare is_classic_mode1 is_classic_mode2 = 0
       && Misc.Stdlib.List.equal (fun (param1, t1) (param2, t2) ->
           Parameter.equal param1 param2 && equal_type t1 t2)
         params1 params2
-      && Expr.equal ~equal_type body1 body2
-      && Name.Set.equal free_names_in_body1 free_names_in_body2
+      && Code_id.equal code_id1 code_id2
       && Misc.Stdlib.List.equal equal_type result1 result2
       && Pervasives.compare stub1 stub2 = 0
       && Debuginfo.equal dbg1 dbg2
@@ -132,110 +259,42 @@ let _equal_function_declaration ~equal_type
            (Lazy.force size1) (Lazy.force size2)
       && Misc.Stdlib.Option.equal Closure_id.equal
         direct_call_surrogate1 direct_call_surrogate2
+      && Variable.equal my_closure1 my_closure2
   | Non_inlinable {
+      params = params1;
       result = result1;
+      result_env_extension = result_env_extension1;
       direct_call_surrogate = direct_call_surrogate1;
     },
     Non_inlinable {
+      params = params2;
       result = result2;
+      result_env_extension = result_env_extension2;
       direct_call_surrogate = direct_call_surrogate2;
     } ->
-    List.compare_lengths result1 result2 = 0
-      && List.for_all2 (fun t1 t2 -> equal_type t1 t2)
-        result1 result2
+    Misc.Stdlib.List.equal (fun (param1, t1) (param2, t2) ->
+          Parameter.equal param1 param2 && equal_type t1 t2)
+        params1 params2
+      && Misc.Stdlib.List.equal equal_type result1 result2
       && Misc.Stdlib.Option.equal Closure_id.equal
         direct_call_surrogate1 direct_call_surrogate2
   | Inlinable _, Non_inlinable _
   | Non_inlinable _, Inlinable _ -> false
-*)
 
-(*
-let is_float_array t =
-  match descr t with
-  | Float_array _ -> true
-  | Unknown _ | Bottom | Union _
-  | Immutable_string _ | Mutable_string _
-  | Sets_of_closures _ | Closure _ | Load_lazily _ | Boxed_number _
-  | Unboxed_float _ | Unboxed_int32 _ | Unboxed_int64 _
-  | Unboxed_nativeint _ -> false
+and equal_closures_entry
+      ({ set_of_closures = set_of_closures1; } : closures_entry)
+      ({ set_of_closures = set_of_closures2; } : closures_entry) =
+  equal_ty_fabricated set_of_closures1 set_of_closures2
 
-let type_for_bound_var (set_of_closures : set_of_closures) var =
-  try Var_within_closure.Map.find var set_of_closures.bound_vars
-  with Not_found ->
-    Misc.fatal_errorf "The set-of-closures type %a@ does not \
-        bind the variable %a@.%s@."
-      print_set_of_closures set_of_closures
-      Var_within_closure.print var
-      (Printexc.raw_backtrace_to_string (Printexc.get_callstack max_int))
+and equal_closures closures1 closures2 =
+  Closure_id.Map.equal equal_closures_entry closures1 closures2
 
-let reify_as_unboxed_float_array (fa : float_array) : float list option =
-  match fa.contents with
-  | Unknown_or_mutable -> None
-  | Contents contents ->
-    Array.fold_right (fun elt acc ->
-        match acc, descr elt with
-        | Some acc, Unboxed_float fs ->
-          begin match Float_by_bit_pattern.Set.get_singleton fs with
-          | None -> None
-          | Some f -> Some (f :: acc)
-          end
-        | None, _
-        | Some _, _ -> None)
-      contents (Some [])
-
-let reify_as_string t : string option =
-  match descr t with
-  | Immutable_string str -> Some str
-  | Union _ | Boxed_number _ | Unboxed_float _ | Unboxed_int32 _
-  | Unboxed_int64 _ | Unboxed_nativeint _ | Unknown _ | Mutable_string _
-  | Float_array _ | Bottom | Sets_of_closures _ | Closure _
-  | Load_lazily _ -> None
-
-*)
+let as_or_more_precise ~type_of_name t ~than =
+  not (equal than (meet ~type_of_name t ~than))
 
 type 'a or_wrong =
   | Ok of 'a
   | Wrong
-
-module Or_not_all_values_known = struct
-  type 'a t =
-    | Exactly of 'a
-    | Not_all_values_known
-
-  let _join join_contents t1 t2 : _ t or_wrong =
-    match t1, t2 with
-    | Exactly e1, Exactly e2 ->
-      begin match join_contents e1 e2 with
-      | Ok e -> Ok (Exactly e)
-      | Wrong -> Wrong
-      end
-    | Exactly _, Not_all_values_known
-    | Not_all_values_known, Exactly _
-    | Not_all_values_known, Not_all_values_known -> Ok Not_all_values_known
-
-  let _meet meet_contents t1 t2 : _ t or_wrong =
-    match t1, t2 with
-    | Exactly e1, Exactly e2 ->
-      begin match meet_contents e1 e2 with
-      | Ok e -> Ok (Exactly e)
-      | Wrong -> Wrong
-      end
-    | Exactly _, Not_all_values_known -> Ok t1
-    | Not_all_values_known, Exactly _ -> Ok t2
-    | Not_all_values_known, Not_all_values_known -> Ok Not_all_values_known
-
-  let _equal equal_contents t1 t2 =
-    match t1, t2 with
-    | Exactly c1, Exactly c2 -> equal_contents c1 c2
-    | Not_all_values_known, Not_all_values_known -> true
-    | Exactly _, Not_all_values_known
-    | Not_all_values_known, Exactly _ -> false
-
-  let _print f ppf t =
-    match t with
-    | Exactly thing -> f ppf thing
-    | Not_all_values_known -> Format.pp_print_string ppf "Not_all_values_known"
-end
 
 module Simplified_type : sig
   (* Simplified types omit the following at top level:
@@ -392,8 +451,6 @@ type 'a proof =
   | Proved of 'a
   | Unknown
   | Invalid
-
-type 'a known_values = 'a Or_not_all_values_known.t proof
 
 let unknown_proof () = Unknown
 

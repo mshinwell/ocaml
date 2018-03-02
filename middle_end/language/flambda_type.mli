@@ -32,15 +32,6 @@ val unknown_types_from_arity : Flambda_arity.t -> t list
 (** Like [unknown_like] but for a array of types. *)
 val unknown_like_array : t array -> t array
 
-(*
-(** Create an array of "unknown" types of kind [Value], with the given
-    [value_kind]s. *)
-val unknowns_from_value_kinds : Flambda_kind.Value_kind.t list -> t array
-
-val this_many_unknowns : int -> Flambda_kind.t -> t array
-
-*)
-
 (** Rename free variables in a type. *)
 (* CR mshinwell: and bound ones too, now... *)
 val rename_variables : t -> f:(Variable.t -> Variable.t) -> t
@@ -68,18 +59,6 @@ val unit_bottom : unit -> t
 type 'a or_wrong = private
   | Ok of 'a
   | Wrong
-
-module Or_not_all_values_known : sig
-  type 'a t = private
-    | Exactly of 'a
-    | Not_all_values_known
-end
-
-
-(*
-
-  val possible_tags : (t -> Tag.Set.t) type_accessor
-*)
 
 (** Whether the given type says that a term of that type can never be
     constructed (in other words, it is [Invalid]). *)
@@ -263,13 +242,11 @@ val tag_switch_arms
     -> (Typing_environment.t * Continuation.t) Tag.Map.t)
   type_accessor
 
-(*
 (** Returns [true] iff the given type provides the same or strictly more
     information about the corresponding value than the supplied type [than]. *)
 val as_or_more_precise : (t -> than:t -> bool) type_accessor
 
 (** Type equality.  (This isn't just syntactic.) *)
 val equal : (t -> t -> bool) type_accessor
-*)
 
 val free_names_transitive : (t -> Name_occurrences.t) type_accessor
