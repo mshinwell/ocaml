@@ -323,12 +323,14 @@ let simplify_is_int env r prim arg dbg =
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
   match proof with
-  | Proved Is_a_tagged_immediate -> proved ~is_tagged_immediate:true
-  | Proved Not_a_tagged_immediate -> proved ~is_tagged_immediate:false
+  | Proved Always_a_tagged_immediate -> proved ~is_tagged_immediate:true
+  | Proved Never_a_tagged_immediate -> proved ~is_tagged_immediate:false
   | Proved (Answer_given_by name) ->
     Reachable.reachable (original_term ()),
       T.alias_type_of (K.value ()) name, r
   | Unknown ->
+    (* CR mshinwell: This should use the [result_var] as the [is_int] in a
+       refined type of [arg]. *)
     Reachable.reachable (original_term ()),
       T.these_tagged_immediates Immediate.all_bools, r
   | Invalid -> 

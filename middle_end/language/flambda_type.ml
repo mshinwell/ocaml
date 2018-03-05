@@ -956,8 +956,8 @@ let prove_tagged_immediate ~type_of_name t
   | Fabricated _ -> wrong_kind ()
 
 type is_tagged_immediate =
-  | Not_a_tagged_immediate
-  | Is_a_tagged_immediate
+  | Never_a_tagged_immediate
+  | Always_a_tagged_immediate
   | Answer_given_by of Name.t
 
 let prove_is_tagged_immediate ~type_of_name t : is_tagged_immediate proof =
@@ -974,28 +974,23 @@ let prove_is_tagged_immediate ~type_of_name t : is_tagged_immediate proof =
     | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Blocks_and_tagged_immediates blocks_imms) ->
-      begin match blocks_imms.blocks with
-      | Unknown -> Unknown
-      | Known blocks ->
-        if not (Tag.Map.is_empty blocks) then begin
-          Proved Not_a_tagged_immediate
-        end else begin
-          match blocks_imms.immediates with
-          | Unknown ->
-            begin match blocks_imms.is_int with
-            | None -> Unknown
-            | Some is_int -> Proved (Answer_given_by is_int)
-            end
-          | Known imms ->
-            assert (not (Immediate.Map.is_empty imms));
-            Proved Is_a_tagged_immediate
+      let use_is_int () =
+        begin match blocks_imms.is_int with
+        | None -> Unknown
+        | Some is_int -> Proved (Answer_given_by is_int)
         end
+      in
+      begin match blocks_imms.blocks, blocks_imms.immediates with
+      | Unknown, _ | _, Unknown -> use_is_int ()
+      | Known blocks, Known imms ->
+        match Tag.Map.is_empty blocks, Immediate.Map.is_empty imms with
+        | true, true -> Invalid
+        | false, false -> use_is_int ()
+        | true, false -> Proved Always_a_tagged_immediate
+        | false, true -> Proved Never_a_tagged_immediate
       end
-    (* CR mshinwell: If we marked this function as specifically for dealing
-       with the "is_int" primitive, then these next cases could probably
-       all be [Invalid]. *)
-    | Ok (Boxed_number _) -> Proved Not_a_tagged_immediate
-    | Ok (Closures _ | String _) -> Proved Not_a_tagged_immediate
+    | Ok (Boxed_number _) -> Invalid
+    | Ok (Closures _ | String _) -> Invalid
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _ -> wrong_kind ()

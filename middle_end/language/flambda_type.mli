@@ -134,8 +134,8 @@ val unknown_proof : unit -> _ proof
 val prove_tagged_immediate : (t -> Immediate.Set.t proof) type_accessor
 
 type is_tagged_immediate = private
-  | Not_a_tagged_immediate
-  | Is_a_tagged_immediate
+  | Never_a_tagged_immediate
+  | Always_a_tagged_immediate
   | Answer_given_by of Name.t
 
 val prove_is_tagged_immediate : (t -> is_tagged_immediate proof) type_accessor

@@ -240,9 +240,11 @@ end) = struct
   let simplify_switch env r ~(scrutinee : Name.t)
         (arms : Continuation.t S.Arm.Map.t)
         : Expr.t * R.t =
-Format.eprintf "Simplifying switch on %a\n%!" Name.print scrutinee;
+Format.eprintf "Simplifying switch on %a in env %a.\n%!" Name.print scrutinee
+  E.print env;
     let scrutinee, scrutinee_ty = simplify_name env scrutinee in
     S.check_kind_of_scrutinee env ~scrutinee scrutinee_ty;
+Format.eprintf "Type of switch scrutinee is %a\n%!" T.print scrutinee_ty;
     let arms = (E.type_accessor env S.switch_arms) scrutinee_ty ~arms in
     let destination_is_unreachable cont =
       (* CR mshinwell: This unreachable thing should be tidied up and also
@@ -277,7 +279,8 @@ Format.eprintf "Simplifying switch on %a\n%!" Name.print scrutinee;
                   env scrutinee scrutinee_ty
               | Symbol _ -> env
             in
-Format.eprintf "Environment for switch arm:@ %a\n%!" E.print env;
+Format.eprintf "Environment for %a switch arm:@ %a\n%!"
+  Continuation.print cont E.print env;
             simplify_continuation_use_cannot_inline env r cont ~arity:[]
           in
           let arms = S.Arm.Map.add arm cont arms in
