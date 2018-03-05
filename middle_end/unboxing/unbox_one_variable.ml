@@ -38,7 +38,7 @@ module type Unboxing_spec = sig
     -> Debuginfo.t
     -> Flambda.Named.t
 
-  val box : Tag.t -> Simple.t list -> Debuginfo.t -> Flambda.Named.t
+  val box : t -> Tag.t -> Simple.t list -> Debuginfo.t -> Flambda.Named.t
 
   val refine_unboxee_ty
      : (t -> unboxee_ty:T.t -> all_fields:Name.t list -> T.t) T.type_accessor
@@ -53,23 +53,23 @@ module Unboxing_spec_variant : Unboxing_spec = struct
 
   let create (proof : T.unboxable_proof) =
     match proof with
-    | Variant { block_sizes_by_tag; block_contents_kind; constant_ctors; } ->
+    | Variant_or_block_of_values { block_sizes_by_tag; constant_ctors; } ->
       let no_discriminant_needed =
         match Tag.Scannable.Map.get_singleton block_sizes_by_tag with
         | Some (tag, _) -> Some tag
         | None -> None
-      in
-      let block_sizes_by_tag =
-        Tag.Scannable.Map.fold (fun tag size block_sizes_by_tag ->
-            Tag.Map.add (Tag.Scannable.to_tag tag) size block_sizes_by_tag)
-          block_sizes_by_tag
-          Tag.Map.empty
       in
       let t : t =
         { is_int_param = Name.var (Variable.create "is_int");
           get_tag_param = Name.var (Variable.create "get_tag");
           no_discriminant_needed;
         }
+      in
+      let block_sizes_by_tag =
+        Tag.Scannable.Map.fold (fun tag size ->
+            Tag.Map.add (Tag.Scannable.to_tag tag) size)
+          block_sizes_by_tag
+          Tag.Map.empty
       in
       let unboxing_spec : unboxing_spec =
         { constant_ctors;
@@ -88,14 +88,16 @@ module Unboxing_spec_variant : Unboxing_spec = struct
         boxed_value, Simple.const_int index),
       dbg)
 
-  let box tag fields dbg : Flambda.Named.t =
+  let box t tag fields dbg : Flambda.Named.t =
     let kinds =
-      (* CR mshinwell: We should be able to do better than [Unknown] based
-         on the Flambda types of the fields *)
+      (* CR mshinwell: We should be able to do better than [Unknown] *)
       List.map (fun _field -> Flambda_primitive.Value_kind.Unknown) fields
     in
-    Prim (Variadic (Make_block (Full_of_values (tag, kinds), Immutable),
-      fields), dbg)
+    match Tag.Scannable.of_tag tag with
+    | Some tag ->
+      Prim (Variadic (Make_block (Full_of_values (tag, kinds), Immutable),
+        fields), dbg)
+    | None -> assert false  (* See [create], above. *)
 
   let refine_unboxee_ty ~type_of_name t ~unboxee_ty ~all_fields =
     match t.no_discriminant_needed with
@@ -111,30 +113,60 @@ module Unboxing_spec_variant : Unboxing_spec = struct
             Immutable (T.alias_type_of unboxed_kind field))
           all_fields
       in
-      T.block unique_tag ~fields:(Array.of_list fields)
+      T.block (Tag.Scannable.to_tag unique_tag) ~fields:(Array.of_list fields)
+end
+
+module Unboxing_spec_float_array = struct
+  type t = unit
+
+  let create (proof : T.unboxable_proof) =
+    match proof with
+    | Float_array { length; } ->
+      let block_sizes_by_tag =
+        (* The choice of [Tag.double_array_tag] is correct in some sense, but
+           arbitrary: since there is only one possible tag, no discriminant will
+           be generated in any case. *)
+        Tag.Map.singleton Tag.double_array_tag length
+      in
+      let unboxing_spec : unboxing_spec =
+        { constant_ctors = Immediate.Set.empty;
+          block_sizes_by_tag;
+        }
+      in
+      Some ((), unboxing_spec)
+    | _ -> None
+
+  let unboxed_kind = K.naked_float ()
+
+  let get_field ~boxed_value ~index dbg : Flambda.Named.t =
+    Prim (Binary (Block_load (Block Naked_float, Immutable),
+        boxed_value, Simple.const_int index),
+      dbg)
+
+  let box t _tag fields dbg : Flambda.Named.t =
+    Prim (Variadic (Make_block (Full_of_naked_floats, Immutable), fields), dbg)
+
+  let refine_unboxee_ty ~type_of_name:_ _t ~unboxee_ty:_ ~all_fields =
+    let fields =
+      List.map (fun field : T.t T.mutable_or_immutable ->
+          Immutable (T.alias_type_of (K.naked_float ()) field))
+        all_fields
+    in
+    T.block Tag.double_array_tag ~fields:(Array.of_list fields)
 end
 
 module Unboxing_spec_naked_number (N : sig
   include Number_adjuncts.Boxable_number_kind
 
-  val ty_naked_number_of_proof : T.unboxable_proof -> t T.ty_naked_number option
+  val check_proof : T.unboxable_proof -> bool
 end) = struct
-  type t = {
-    contents : N.t T.ty_naked_number;
-  }
+  type t = unit
 
   let create (proof : T.unboxable_proof) =
-    match S.ty_naked_number_of_proof proof with
-    | None -> None
-    | Some ty_naked_number ->
-      let t : t =
-        { contents = ty_naked_number;
-        }
-      in
+    if not (N.check_proof proof) then None
+    else
       let block_sizes_by_tag =
-        (* The choice of [Tag.custom_tag] is correct in some sense, but
-           arbitrary: since there is only one possible tag, no discriminant will
-           be generated in any case. *)
+        (* [Tag.custom_tag] is arbitrary, as above. *)
         Tag.Map.singleton Tag.custom_tag Targetint.OCaml.one
       in
       let unboxing_spec : unboxing_spec =
@@ -142,7 +174,7 @@ end) = struct
           block_sizes_by_tag;
         }
       in
-      Some (t, unboxing_spec)
+      Some ((), unboxing_spec)
 
   let unboxed_kind = Flambda_kind.Standard_int_or_float.to_kind N.kind
 
@@ -152,7 +184,7 @@ end) = struct
     end;
     Prim (Unary (Unbox_number N.boxable_number_kind, boxed_value), dbg)
 
-  let box _tag fields dbg : Flambda.Named.t =
+  let box _t _tag fields dbg : Flambda.Named.t =
     match fields with
     | [naked_number] ->
       Prim (Unary (Box_number N.boxable_number_kind, naked_number), dbg)
@@ -166,43 +198,43 @@ end) = struct
       N.box (T.alias_type_of unboxed_kind naked_number)
     | _ ->
       Misc.fatal_errorf "Bad number of fields for [refine_unboxee_ty]: %d"
-        (List.length fields)
+        (List.length all_fields)
 end
 
-module Unboxing_spec_float = Unboxing_spec_naked_number (struct
+module Unboxing_spec_boxed_float = Unboxing_spec_naked_number (struct
   include Number_adjuncts.For_floats
 
-  let ty_naked_number_of_proof (proof : T.unboxable_proof) =
+  let check_proof (proof : T.unboxable_proof) =
     match proof with
-    | Boxed_float ty_naked_number -> Some ty_naked_number
-    | _ -> None
+    | Boxed_float -> true
+    | _ -> false
 end)
 
-module Unboxing_spec_int32 = Unboxing_spec_naked_number (struct
+module Unboxing_spec_boxed_int32 = Unboxing_spec_naked_number (struct
   include Number_adjuncts.For_int32s
 
-  let ty_naked_number_of_proof (proof : T.unboxable_proof) =
+  let check_proof (proof : T.unboxable_proof) =
     match proof with
-    | Boxed_int32 ty_naked_number -> Some ty_naked_number
-    | _ -> None
+    | Boxed_int32 -> true
+    | _ -> false
 end)
 
-module Unboxing_spec_int64 = Unboxing_spec_naked_number (struct
+module Unboxing_spec_boxed_int64 = Unboxing_spec_naked_number (struct
   include Number_adjuncts.For_int64s
 
-  let ty_naked_number_of_proof (proof : T.unboxable_proof) =
+  let check_proof (proof : T.unboxable_proof) =
     match proof with
-    | Boxed_int64 ty_naked_number -> Some ty_naked_number
-    | _ -> None
+    | Boxed_int64 -> true
+    | _ -> false
 end)
 
-module Unboxing_spec_nativeint = Unboxing_spec_naked_number (struct
+module Unboxing_spec_boxed_nativeint = Unboxing_spec_naked_number (struct
   include Number_adjuncts.For_nativeints
 
-  let ty_naked_number_of_proof (proof : T.unboxable_proof) =
+  let check_proof (proof : T.unboxable_proof) =
     match proof with
-    | Boxed_nativeint ty_naked_number -> Some ty_naked_number
-    | _ -> None
+    | Boxed_nativeint -> true
+    | _ -> false
 end)
 
 module How_to_unbox = struct
@@ -253,7 +285,9 @@ let how_to_unbox_core ~type_of_name ~env ~unboxee ~unboxee_ty
       ~unboxing_spec_user_data ~unboxing_spec ~is_unbox_returns
       : How_to_unbox.t =
   let dbg = Debuginfo.none in
-  let num_constant_ctors = Numbers.Int.Set.cardinal constant_ctors in
+  let constant_ctors = unboxing_spec.constant_ctors in
+  let blocks = unboxing_spec.block_sizes_by_tag in
+  let num_constant_ctors = Immediate.Set.cardinal constant_ctors in
   assert (num_constant_ctors >= 0);
   (* CR mshinwell: We need to think about this more.
      Suppose we have code that deconstructs an "int option".  That code uses
@@ -276,8 +310,8 @@ let how_to_unbox_core ~type_of_name ~env ~unboxee ~unboxee_ty
   in
   let max_size =
     Tag.Map.fold (fun _tag fields max_size ->
-        max (Array.length fields) max_size)
-      blocks 0
+        Targetint.OCaml.max (Array.length fields) max_size)
+      blocks Targetint.OCaml.zero
   in
   let field_arguments_for_call_in_wrapper =
     Array.to_list (Array.init max_size (fun index ->
@@ -735,19 +769,23 @@ let how_to_unbox ~type_of_name ~env ~unboxee ~unboxee_ty ~is_unbox_returns =
     | Some (unboxing_spec_user_data, unboxing_spec) ->
       unbox ~unboxing_spec_user_data ~unboxing_spec
     | None ->
-      match Unboxing_spec_float.create proof with
+      match Unboxing_spec_float_array.create proof with
       | Some (unboxing_spec_user_data, unboxing_spec) ->
         unbox ~unboxing_spec_user_data ~unboxing_spec
       | None ->
-        match Unboxing_spec_int32.create proof with
+        match Unboxing_spec_boxed_float.create proof with
         | Some (unboxing_spec_user_data, unboxing_spec) ->
           unbox ~unboxing_spec_user_data ~unboxing_spec
         | None ->
-          match Unboxing_spec_int64.create proof with
+          match Unboxing_spec_boxed_int32.create proof with
           | Some (unboxing_spec_user_data, unboxing_spec) ->
             unbox ~unboxing_spec_user_data ~unboxing_spec
           | None ->
-            match Unboxing_spec_nativeint.create proof with
+            match Unboxing_spec_boxed_int64.create proof with
             | Some (unboxing_spec_user_data, unboxing_spec) ->
               unbox ~unboxing_spec_user_data ~unboxing_spec
-            | None -> None
+            | None ->
+              match Unboxing_spec_boxed_nativeint.create proof with
+              | Some (unboxing_spec_user_data, unboxing_spec) ->
+                unbox ~unboxing_spec_user_data ~unboxing_spec
+              | None -> None

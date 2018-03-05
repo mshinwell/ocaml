@@ -1417,7 +1417,7 @@ end;
     immutable_float_array fields
 
   let block tag ~fields =
-    let tag = Tag.Scannable.to_tag tag in
+    (* CR mshinwell: We should check the field kinds against the tag. *)
     match Targetint.OCaml.of_int_option (Array.length fields) with
     | None ->
       Misc.fatal_error "Block too long for target"

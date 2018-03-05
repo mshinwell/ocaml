@@ -475,10 +475,9 @@ module type S = sig
      : Numbers.Float_by_bit_pattern.Set.t ty_naked_number array
     -> t
 
-  (** The type of a block with a known tag, size and field types (which will
-      must be of kind [Value] otherwise a fatal error will result). *)
+  (** The type of a block with a known tag, size and field types. *)
   val block
-     : Tag.Scannable.t
+     : Tag.t
     -> fields:t mutable_or_immutable array
     -> t
 

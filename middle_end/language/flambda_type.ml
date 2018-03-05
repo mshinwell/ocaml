@@ -1143,26 +1143,25 @@ let prove_is_a_block ~type_of_name t ~kind_of_all_fields : bool proof =
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _ -> wrong_kind ()
 
-type unboxable_variant_or_block0 = {
+type unboxable_variant_or_block_of_values0 = {
   block_sizes_by_tag : Targetint.OCaml.t Tag.Scannable.Map.t;
-  block_contents_kind : K.t;
   constant_ctors : Immediate.Set.t;
 }
 
-type unboxable_variant_or_block =
-  | Unboxable of unboxable_variant_or_block0
+type unboxable_variant_or_block_of_values =
+  | Unboxable of unboxable_variant_or_block_of_values0
   | Not_unboxable
 
-let prove_unboxable_variant_or_block ~type_of_name t
-      : unboxable_variant_or_block proof =
+let prove_unboxable_variant_or_block_of_values ~type_of_name t
+      : unboxable_variant_or_block_of_values proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a \
-        variant or block: %a"
+        variant or block of values: %a"
       print t
   in
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
   Simplified_type.check_not_phantom simplified
-    "prove_unboxable_variant_or_block";
+    "prove_unboxable_variant_or_block_of_values";
   match simplified.descr with
   | Value ty_value ->
     begin match ty_value with
@@ -1199,18 +1198,65 @@ let prove_unboxable_variant_or_block ~type_of_name t
             if tags_all_valid t blocks ~kind_of_all_fields:(K.value ()) then
               Proved (Unboxable {
                 block_sizes_by_tag;
-                block_contents_kind = K.value ();
-                constant_ctors = imms;
-              })
-            else if tags_all_valid t blocks
-               ~kind_of_all_fields:(K.naked_float ())
-            then
-              Proved (Unboxable {
-                block_sizes_by_tag;
-                block_contents_kind = K.naked_float ();
                 constant_ctors = imms;
               })
             else Proved Not_unboxable
+      end
+    | Ok (Boxed_number _) | Ok (Closures _ | String _) -> Invalid
+    end
+  | Simplified_type.Naked_number _ -> wrong_kind ()
+  | Fabricated _ -> wrong_kind ()
+
+type float_array_proof =
+  | Of_length of Targetint.OCaml.t
+  | Not_unique_length
+
+(* CR mshinwell: This should probably return the field types rather than
+   just the length; then it can be exposed in the .mli. *)
+let prove_float_array ~type_of_name t : float_array_proof proof =
+  let wrong_kind () =
+    Misc.fatal_errorf "Wrong kind for something claimed to be a float array: \
+        %a"
+      print t
+  in
+  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  Simplified_type.check_not_phantom simplified "prove_float_array";
+  match simplified.descr with
+  | Value ty_value ->
+    begin match ty_value with
+    | Unknown -> Unknown
+    | Bottom -> Invalid
+    | Ok (Blocks_and_tagged_immediates blocks_imms) ->
+      begin match blocks_imms.blocks, blocks_imms.immediates with
+      | Unknown, _ | _, Unknown -> Unknown
+      | Known blocks, Known imms ->
+        if Tag.Map.is_empty blocks
+          || not (Immediate.Map.is_empty imms)
+        then Invalid
+        else
+          let cannot_unbox = ref false in
+          (* CR mshinwell: share with previous function (maybe) *)
+          let block_sizes_by_tag =
+            Tag.Map.fold (fun tag (Join { by_length; }) blocks ->
+                match Targetint.OCaml.Map.get_singleton by_length with
+                | Some (length, _) ->
+                  Tag.Map.add tag length blocks
+                | None ->
+                  cannot_unbox := true;
+                  blocks)
+              blocks
+              Tag.Map.empty
+          in
+          if !cannot_unbox then Proved Not_unique_length
+          else if tags_all_valid t blocks ~kind_of_all_fields:(K.naked_float ())
+          then
+            match Tag.Map.get_singleton block_sizes_by_tag with
+            | Some (tag, size) ->
+              if Tag.equal tag Tag.double_array_tag then
+                Proved (Of_length size)
+              else Invalid
+            | None -> Invalid (* CR mshinwell: double-check *)
+          else Invalid
       end
     | Ok (Boxed_number _) | Ok (Closures _ | String _) -> Invalid
     end
@@ -1772,31 +1818,36 @@ let free_names_transitive ~(type_of_name : type_of_name) t =
   !all_names
 
 type unboxable_proof =
-  | Variant_or_block of unboxable_variant_or_block0
-  | Boxed_float of Numbers.Float_by_bit_pattern.Set.t ty_naked_number
-  | Boxed_int32 of Numbers.Int32.Set.t ty_naked_number
-  | Boxed_int64 of Numbers.Int64.Set.t ty_naked_number
-  | Boxed_nativeint of Targetint.Set.t ty_naked_number
+  | Variant_or_block_of_values of unboxable_variant_or_block_of_values0
+  | Float_array of { length : Targetint.OCaml.t; }
+  | Boxed_float
+  | Boxed_int32
+  | Boxed_int64
+  | Boxed_nativeint
   | Cannot_unbox
 
 let prove_unboxable ~type_of_name ~unboxee_ty : unboxable_proof =
-  match prove_unboxable_variant_or_block ~type_of_name unboxee_ty with
-  | Proved (Unboxable unboxable) -> Variant_or_block unboxable
+  match prove_unboxable_variant_or_block_of_values ~type_of_name unboxee_ty with
+  | Proved (Unboxable unboxable) -> Variant_or_block_of_values unboxable
   | Invalid | Proved Not_unboxable -> Cannot_unbox
   | Unknown ->
-    match prove_boxed_float ~type_of_name unboxee_ty with
-    | Proved ty_naked_number -> Boxed_float ty_naked_number
-    | Invalid -> Cannot_unbox
+    match prove_float_array ~type_of_name unboxee_ty with
+    | Proved (Of_length length) -> Float_array { length; }
+    | Invalid | Proved Not_unique_length -> Cannot_unbox
     | Unknown ->
-      match prove_boxed_int32 ~type_of_name unboxee_ty with
-      | Proved ty_naked_number -> Boxed_int32 ty_naked_number
+      match prove_boxed_float ~type_of_name unboxee_ty with
+      | Proved _ty_naked_number -> Boxed_float
       | Invalid -> Cannot_unbox
       | Unknown ->
-        match prove_boxed_int64 ~type_of_name unboxee_ty with
-        | Proved ty_naked_number -> Boxed_int64 ty_naked_number
+        match prove_boxed_int32 ~type_of_name unboxee_ty with
+        | Proved _ty_naked_number -> Boxed_int32
         | Invalid -> Cannot_unbox
         | Unknown ->
-          match prove_boxed_nativeint ~type_of_name unboxee_ty with
-          | Proved ty_naked_number -> Boxed_nativeint ty_naked_number
+          match prove_boxed_int64 ~type_of_name unboxee_ty with
+          | Proved _ty_naked_number -> Boxed_int64
           | Invalid -> Cannot_unbox
-          | Unknown -> Cannot_unbox
+          | Unknown ->
+            match prove_boxed_nativeint ~type_of_name unboxee_ty with
+            | Proved _ty_naked_number -> Boxed_nativeint
+            | Invalid -> Cannot_unbox
+            | Unknown -> Cannot_unbox

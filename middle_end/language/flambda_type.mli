@@ -240,18 +240,18 @@ val prove_sets_of_closures
 
 val prove_closure : (t -> closure proof) type_accessor
 
-type unboxable_variant_or_block0 = private {
+type unboxable_variant_or_block_of_values0 = private {
   block_sizes_by_tag : Targetint.OCaml.t Tag.Scannable.Map.t;
-  block_contents_kind : Flambda_kind.t;
   constant_ctors : Immediate.Set.t;
 }
 
 type unboxable_proof = private
-  | Variant_or_block of unboxable_variant_or_block0
-  | Boxed_float of Numbers.Float_by_bit_pattern.Set.t ty_naked_number
-  | Boxed_int32 of Numbers.Int32.Set.t ty_naked_number
-  | Boxed_int64 of Numbers.Int64.Set.t ty_naked_number
-  | Boxed_nativeint of Targetint.Set.t ty_naked_number
+  | Variant_or_block_of_values of unboxable_variant_or_block_of_values0
+  | Float_array of { length : Targetint.OCaml.t; }
+  | Boxed_float
+  | Boxed_int32
+  | Boxed_int64
+  | Boxed_nativeint
   | Cannot_unbox
 
 (** Prove that a value is of a type that makes the value eligible for
