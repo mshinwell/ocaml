@@ -52,7 +52,7 @@ module Unboxing_spec_variant : Unboxing_spec = struct
 
   let create (proof : T.unboxable_proof) =
     match proof with
-    | Variant variant ->
+    | Variant (block_sizes_by_tag, constant_ctors) ->
       let no_discriminant_needed =
         match Tag.Map.get_singleton variant.block_sizes_by_tag with
         | Some (tag, _) -> Some tag
@@ -65,7 +65,7 @@ module Unboxing_spec_variant : Unboxing_spec = struct
         }
       in
       let unboxing_spec : unboxing_spec =
-        { constant_ctors = variant.immediates;
+        { constant_ctors;
           block_sizes_by_tag = variant.block_sizes_by_tag;
         }
       in

@@ -73,7 +73,7 @@ let this_naked_int64_named n : Named.t * t =
 let this_naked_nativeint_named n : Named.t * t =
   Simple (Simple.const (Naked_nativeint n)), this_naked_nativeint n
 
-let equal_mutable_or_immutable equal_contents (mut1 : _ mutable_or_immutable)
+let _equal_mutable_or_immutable equal_contents (mut1 : _ mutable_or_immutable)
       (mut2 : _ mutable_or_immutable) =
   match mut1, mut2 with
   | Immutable contents1, Immutable contents2 ->
@@ -81,7 +81,7 @@ let equal_mutable_or_immutable equal_contents (mut1 : _ mutable_or_immutable)
   | Mutable, Mutable -> true
   | (Immutable _ | Mutable), _ -> false
 
-let equal_or_alias equal_contents (or_alias1 : _ or_alias)
+let _equal_or_alias equal_contents (or_alias1 : _ or_alias)
       (or_alias2 : _ or_alias) =
   match or_alias1, or_alias2 with
   | No_alias contents1, No_alias contents2 -> equal_contents contents1 contents2
@@ -89,13 +89,14 @@ let equal_or_alias equal_contents (or_alias1 : _ or_alias)
   | Type_of name1, Type_of name2 -> Name.equal name1 name2
   | (No_alias _ | Type _ | Type_of _), _ -> false
 
-let equal_extensibility equal_contents
+let _equal_extensibility equal_contents
       (ex1 : _ extensibility) (ex2 : _ extensibility) =
   match ex1, ex2 with
   | Open contents1, Open contents2
   | Exactly contents1, Exactly contents2 -> equal_contents contents1 contents2
   | (Open _ | Exactly _), _ -> false
 
+(*
 let rec equal ({ descr = descr1; phantom = phantom1; } : t)
       ({ descr = descr2; phantom = phantom2; } : t) =
   equal_descr descr1 descr2
@@ -109,24 +110,29 @@ and equal_descr (descr1 : descr) (descr2 : descr) =
   | Naked_number (ty_naked_number1, kind1),
       Naked_number (ty_naked_number2, kind2) ->
     equal_ty_naked_number ty_naked_number1 ty_naked_number2
-      && Flambda_kind.Naked_number.equal kind1 kind2
+     (* && Flambda_kind.Naked_number.equal kind1 kind2 *)
   | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
     equal_ty_fabricated ty_fabricated1 ty_fabricated2
   | Value _, _ -> false
   | Naked_number _, _ -> false
   | Fabricated _, _ -> false
+  | _, _ -> assert false
 
 and equal_ty_value ty_value1 ty_value2 =
   equal_ty equal_of_kind_value ty_value1 ty_value2
 
-and equal_ty_naked_number (type a) (ty_naked_number1 : a ty_naked_number)
-      (ty_naked_number2 : a ty_naked_number) =
-  equal_ty equal_of_kind_naked_number ty_naked_number1 ty_naked_number2
+and equal_ty_naked_number :  type a b. a ty_naked_number ->
+b ty_naked_number -> bool = fun
+      (ty_naked_number1 : a ty_naked_number)
+      (ty_naked_number2 : b ty_naked_number) ->
+(*  equal_ty equal_of_kind_naked_number ty_naked_number1 ty_naked_number2*)
+  equal_or_alias (equal_unknown_or_join equal_of_kind_naked_number) ty1 ty2
 
 and equal_ty_fabricated ty_fabricated1 ty_fabricated2 =
   equal_ty equal_of_kind_fabricated ty_fabricated1 ty_fabricated2
 
-and equal_ty equal_of_kind_foo ty1 ty2 =
+and equal_ty : type a. (a -> a -> bool) -> a ty -> a ty -> bool =
+fun equal_of_kind_foo ty1 ty2 ->
   equal_or_alias (equal_unknown_or_join equal_of_kind_foo) ty1 ty2
 
 and equal_unknown_or_join equal_of_kind_foo (uj1 : _ unknown_or_join)
@@ -194,9 +200,9 @@ and equal_blocks_and_tagged_immediates
     && equal_or_unknown_blocks (Tag.Map.equal equal_block_cases)
          blocks1 blocks2
 
-and equal_of_kind_value_boxed_number (type a)
+and equal_of_kind_value_boxed_number (type a) (type b)
       (kind1 : a of_kind_value_boxed_number)
-      (kind2 : a of_kind_value_boxed_number) =
+      (kind2 : b of_kind_value_boxed_number) =
   match kind1, kind2 with
   | Boxed_float ty_naked_number1, Boxed_float ty_naked_number2 ->
     equal_ty_naked_number ty_naked_number1 ty_naked_number2
@@ -206,6 +212,10 @@ and equal_of_kind_value_boxed_number (type a)
     equal_ty_naked_number ty_naked_number1 ty_naked_number2
   | Boxed_nativeint ty_naked_number1, Boxed_nativeint ty_naked_number2 ->
     equal_ty_naked_number ty_naked_number1 ty_naked_number2
+  | Boxed_float _, _ -> false
+  | Boxed_int32 _, _ -> false
+  | Boxed_int64 _, _ -> false
+  | Boxed_nativeint _, _ -> false
 
 and equal_function_declaration
       (decl1 : function_declarations)
@@ -303,9 +313,9 @@ and equal_closures_entry
 and equal_closures closures1 closures2 =
   Closure_id.Map.equal equal_closures_entry closures1 closures2
 
-and equal_of_kind_naked_number (type a)
-      (of_kind_naked_number1 : a of_kind_naked_number)
-      (of_kind_naked_number2 : a of_kind_naked_number) =
+and equal_of_kind_naked_number : type a b.
+  a of_kind_naked_number -> b of_kind_naked_number -> bool =
+fun of_kind_naked_number1 of_kind_naked_number2 ->
   match of_kind_naked_number1, of_kind_naked_number2 with
   | Immediate imms1, Immediate imms2 -> Immediate.Set.equal imms1 imms2
   | Float floats1, Float floats2 ->
@@ -313,6 +323,11 @@ and equal_of_kind_naked_number (type a)
   | Int32 ints1, Int32 ints2 -> Int32.Set.equal ints1 ints2
   | Int64 ints1, Int64 ints2 -> Int64.Set.equal ints1 ints2
   | Nativeint ints1, Nativeint ints2 -> Nativeint.Set.equal ints1 ints2
+  | Immediate _, _ -> false
+  | Float _, _ -> false
+  | Int32 _, _ -> false
+  | Int64 _, _ -> false
+  | Nativeint _, _ -> false
 
 and equal_tag_case ({ env_extension = env_extension1; } : tag_case)
       ({ env_extension = env_extension2; } : tag_case) =
@@ -350,13 +365,12 @@ and equal_typing_environment
   in
   Name.Map.equal equal_scope_and_t names_to_types1 names_to_types2
     && Name.Set.equal existentials1 existentials2
+*)
+
+let equal ~type_of_name:_ _ _ = false
 
 let strictly_more_precise ~type_of_name t ~than =
-  not (equal than (meet ~type_of_name t ~than))
-
-type 'a or_wrong =
-  | Ok of 'a
-  | Wrong
+  not (equal ~type_of_name than (meet ~type_of_name t than))
 
 module Simplified_type : sig
   (* Simplified types omit the following at top level:
@@ -703,16 +717,20 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
       | Unknown -> try_name ()
       | Bottom -> Invalid
       | Ok (Blocks_and_tagged_immediates blocks_imms) ->
-        if not (Tag.Map.is_empty blocks_imms.blocks) then try_name ()
-        else
-          begin match blocks_imms.immediates with
-          | Unknown -> try_name ()
-          | Known imms ->
-            begin match Immediate.Map.get_singleton imms with
-            | Some (imm, _) -> Term (Simple.const (Tagged_immediate imm), t)
-            | None -> try_name ()
+        begin match blocks_imms.blocks with
+        | Unknown -> try_name ()
+        | Known blocks ->
+          if not (Tag.Map.is_empty blocks) then try_name ()
+          else
+            begin match blocks_imms.immediates with
+            | Unknown -> try_name ()
+            | Known imms ->
+              begin match Immediate.Map.get_singleton imms with
+              | Some (imm, _) -> Term (Simple.const (Tagged_immediate imm), t)
+              | None -> try_name ()
+              end
             end
-          end
+        end
       | Ok (Boxed_number (Boxed_float ty_naked_number)) ->
         begin match canonical_name with
         | Some ((Symbol _) as name) ->
@@ -918,15 +936,19 @@ let prove_tagged_immediate ~type_of_name t
     | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Blocks_and_tagged_immediates blocks_imms) ->
-      if not (Tag.Map.is_empty blocks_imms.blocks) then begin
-        Invalid
-      end else begin
-        match blocks_imms.immediates with
-        | Unknown -> Unknown
-        | Known imms ->
-          assert (not (Immediate.Map.is_empty imms));
-          Proved (Immediate.Map.keys imms)
-        end
+      begin match blocks_imms.blocks with
+      | Unknown -> Unknown
+      | Known blocks ->
+        if not (Tag.Map.is_empty blocks) then begin
+          Invalid
+        end else begin
+          match blocks_imms.immediates with
+          | Unknown -> Unknown
+          | Known imms ->
+            assert (not (Immediate.Map.is_empty imms));
+            Proved (Immediate.Map.keys imms)
+          end
+      end
     | Ok (Boxed_number _) -> Invalid
     | Ok (Closures _ | String _) -> Invalid
     end
@@ -952,15 +974,22 @@ let prove_is_tagged_immediate ~type_of_name t : is_tagged_immediate proof =
     | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Blocks_and_tagged_immediates blocks_imms) ->
-      if not (Tag.Map.is_empty blocks_imms.blocks) then begin
-        Proved Not_a_tagged_immediate
-      end else begin
-        match blocks_imms.immediates with
-        | Unknown { is_int = None; } -> Unknown
-        | Unknown { is_int = Some is_int; } -> Proved (Answer_given_by is_int)
-        | Known imms ->
-          assert (not (Immediate.Map.is_empty imms));
-          Proved Is_a_tagged_immediate
+      begin match blocks_imms.blocks with
+      | Unknown -> Unknown
+      | Known blocks ->
+        if not (Tag.Map.is_empty blocks) then begin
+          Proved Not_a_tagged_immediate
+        end else begin
+          match blocks_imms.immediates with
+          | Unknown ->
+            begin match blocks_imms.is_int with
+            | None -> Unknown
+            | Some is_int -> Proved (Answer_given_by is_int)
+            end
+          | Known imms ->
+            assert (not (Immediate.Map.is_empty imms));
+            Proved Is_a_tagged_immediate
+        end
       end
     (* CR mshinwell: If we marked this function as specifically for dealing
        with the "is_int" primitive, then these next cases could probably
@@ -1005,46 +1034,49 @@ let prove_get_field_from_block ~type_of_name t ~index ~field_kind : t proof =
         if not no_immediates then begin
           Invalid
         end else begin
-          assert (not (Tag.Map.is_empty blocks_imms.blocks));
-          let field_ty =
-            Tag.Map.fold
-              (fun tag ((Join { by_length; }) : block_cases) field_ty ->
-                let tag_is_valid =
-                  valid_block_tag_for_kind ~tag ~field_kind
-                in
-                if not tag_is_valid then field_ty
-                else
-                  Targetint.OCaml.Map.fold
-                    (fun len (block : singleton_block) field_ty ->
-                      if Targetint.OCaml.compare index len >= 0 then begin
-                        None
-                      end else begin
-                        (* CR mshinwell: Should this check the kind of all
-                           fields, like [prove_is_a_block] below? *)
-                        (* CR mshinwell: should use more robust conversion *)
-                        let index = Targetint.OCaml.to_int index in
-                        assert (Array.length block.fields > index);
-                        let this_field_ty =
-                          match block.fields.(index) with
-                          | Immutable this_field_ty -> this_field_ty
-                          | Mutable -> unknown field_kind
-                        in
-                        match field_ty with
-                        | None -> None
-                        | Some field_ty ->
-                          let field_ty =
-                            join ~type_of_name this_field_ty field_ty
+          match blocks_imms.blocks with
+          | Unknown -> Unknown
+          | Known blocks ->
+            assert (not (Tag.Map.is_empty blocks));
+            let field_ty =
+              Tag.Map.fold
+                (fun tag ((Join { by_length; }) : block_cases) field_ty ->
+                  let tag_is_valid =
+                    valid_block_tag_for_kind ~tag ~field_kind
+                  in
+                  if not tag_is_valid then field_ty
+                  else
+                    Targetint.OCaml.Map.fold
+                      (fun len (block : singleton_block) field_ty ->
+                        if Targetint.OCaml.compare index len >= 0 then begin
+                          None
+                        end else begin
+                          (* CR mshinwell: Should this check the kind of all
+                             fields, like [prove_is_a_block] below? *)
+                          (* CR mshinwell: should use more robust conversion *)
+                          let index = Targetint.OCaml.to_int index in
+                          assert (Array.length block.fields > index);
+                          let this_field_ty =
+                            match block.fields.(index) with
+                            | Immutable this_field_ty -> this_field_ty
+                            | Mutable -> unknown field_kind
                           in
-                          Some field_ty
-                      end)
-                    by_length
-                    field_ty)
-              blocks_imms.blocks
-              (Some (bottom field_kind))
-          in
-          match field_ty with
-          | None -> Invalid
-          | Some field_ty -> Proved field_ty
+                          match field_ty with
+                          | None -> None
+                          | Some field_ty ->
+                            let field_ty =
+                              join ~type_of_name this_field_ty field_ty
+                            in
+                            Some field_ty
+                        end)
+                      by_length
+                      field_ty)
+                blocks
+                (Some (bottom field_kind))
+            in
+            match field_ty with
+            | None -> Invalid
+            | Some field_ty -> Proved field_ty
         end 
     | Ok (Boxed_number _) -> Invalid
     | Ok (Closures _ | String _) -> Invalid
@@ -1073,30 +1105,36 @@ let prove_is_a_block ~type_of_name t ~kind_of_all_fields : bool proof =
       if not no_immediates then begin
         Invalid
       end else begin
-        assert (not (Tag.Map.is_empty blocks_imms.blocks));
-        let tags_all_valid =
-          Tag.Map.for_all (fun tag ((Join { by_length; }) : block_cases) ->
-              Targetint.OCaml.Map.iter (fun _length (block : singleton_block) ->
-                  Array.iter (fun (field : _ mutable_or_immutable) ->
-                      match field with
-                      | Mutable -> ()
-                      | Immutable field ->
-                        let field_kind = kind field in
-                        let compatible =
-                          K.compatible field_kind ~if_used_at:kind_of_all_fields
-                        in
-                        if not compatible then begin
-                          Misc.fatal_errorf "Kind %a is not compatible with \
-                              all fields of this block: %a"
-                            K.print kind_of_all_fields
-                            print t
-                        end)
-                    block.fields)
-                by_length;
-              valid_block_tag_for_kind ~tag ~field_kind:kind_of_all_fields)
-            blocks_imms.blocks
-        in
-        if tags_all_valid then Proved true else Invalid
+        match blocks_imms.blocks with
+        | Unknown -> Unknown
+        | Known blocks ->
+          if Tag.Map.is_empty blocks then Invalid
+          else
+            let tags_all_valid =
+              Tag.Map.for_all (fun tag ((Join { by_length; }) : block_cases) ->
+                  Targetint.OCaml.Map.iter
+                    (fun _length (block : singleton_block) ->
+                      Array.iter (fun (field : _ mutable_or_immutable) ->
+                          match field with
+                          | Mutable -> ()
+                          | Immutable field ->
+                            let field_kind = kind field in
+                            let compatible =
+                              K.compatible field_kind
+                                ~if_used_at:kind_of_all_fields
+                            in
+                            if not compatible then begin
+                              Misc.fatal_errorf "Kind %a is not compatible \
+                                  with all fields of this block: %a"
+                                K.print kind_of_all_fields
+                                print t
+                            end)
+                        block.fields)
+                    by_length;
+                  valid_block_tag_for_kind ~tag ~field_kind:kind_of_all_fields)
+                blocks
+            in
+            if tags_all_valid then Proved true else Invalid
       end
     | Ok (Boxed_number _) -> Proved false
     | Ok (Closures _ | String _) -> Proved false
@@ -1104,38 +1142,43 @@ let prove_is_a_block ~type_of_name t ~kind_of_all_fields : bool proof =
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _ -> wrong_kind ()
 
-(* This can wait until we fix the unboxing passes.  It will just need to
-   return a map from tags to field arrays.
+type unboxable_variant =
+  | Unboxable of block_cases Tag.Map.t * immediate_case Immediate.Map.t
+  | Not_unboxable
 
-let prove_blocks_and_immediates ~type_of_name t
-      : (Blocks.t * (Immediate.Set.t Or_not_all_values_known.t)) proof =
-  let t_evaluated, _canonical_name =
-    Evaluated.create ~type_of_name t
-  in
-  match t_evaluated with
-  | Values values ->
-    begin match values with
-    | Unknown -> Unknown
-    | Blocks_and_tagged_immediates (blocks, imms) -> Proved (blocks, imms)
-    | Tagged_immediates_only _
-    | Boxed_floats _
-    | Bottom
-    | Boxed_int32s _
-    | Boxed_int64s _
-    | Boxed_nativeints _
-    | Closures _
-    | Sets_of_closures _
-    | Strings _
-    | Float_arrays _ -> Invalid
-    end
-  | Naked_immediates _
-  | Naked_floats _
-  | Naked_int32s _
-  | Naked_int64s _
-  | Naked_nativeints _ ->
+let prove_unboxable_variant ~type_of_name t : unboxable_variant proof =
+  let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a variant: %a"
       print t
-*)
+  in
+  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  Simplified_type.check_not_phantom simplified "prove_unboxable_variant";
+  match simplified.descr with
+  | Value ty_value ->
+    begin match ty_value with
+    | Unknown -> Unknown
+    | Bottom -> Invalid
+    | Ok (Blocks_and_tagged_immediates blocks_imms) ->
+      begin match blocks_imms.blocks, blocks_imms.immediates with
+      | Unknown, _ | _, Unknown -> Unknown
+      | Known blocks, Known imms ->
+        (* CR mshinwell: Should this have the "tags all valid" check
+           (like [prove_is_a_block], above)?  It probably should.  On the
+           other hand we could maybe fix the types to statically enforce
+           this (add a type for structured + double-array tags). *)
+        if Tag.Map.is_empty blocks then
+          Proved Not_unboxable
+        else
+          Proved (Unboxable (blocks, imms))
+      end
+    | Ok (Boxed_number _) | Ok (Closures _ | String _) -> Invalid
+    end
+  | Simplified_type.Naked_number _ -> wrong_kind ()
+  | Fabricated _ -> wrong_kind ()
+
+type tags =
+  | Tags of Tag.Set.t
+  | Answer_given_by of Name.t
 
 (* CR mshinwell: There's a bit of a wart here (in conjunction with the
    [Get_tag] primitive -- some of these tags don't really make any sense in
@@ -1143,7 +1186,7 @@ let prove_blocks_and_immediates ~type_of_name t
    [Blocks_and_tagged_immediates] description for them.  Double_array_tag
    is of course an exception... maybe there should be a submodule of Tag
    which permits < No_scan_tag and also Double_array_tag? *)
-let prove_tags ~type_of_name t : Tag.Set.t proof =
+let prove_tags ~type_of_name t : tags proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a value: %a"
       print t
@@ -1156,19 +1199,25 @@ let prove_tags ~type_of_name t : Tag.Set.t proof =
     | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Blocks_and_tagged_immediates blocks_imms) ->
-      Proved (Tag.Map.keys blocks_imms.blocks)
+      begin match blocks_imms.blocks with
+      | Known blocks -> Proved (Tags (Tag.Map.keys blocks))
+      | Unknown ->
+        match blocks_imms.get_tag with
+        | None -> Unknown
+        | Some get_tag -> Proved (Answer_given_by get_tag)
+        end
     | Ok (Boxed_number (Boxed_float _)) ->
-      Proved (Tag.Set.singleton Tag.double_tag)
+      Proved (Tags (Tag.Set.singleton Tag.double_tag))
     | Ok (Boxed_number (Boxed_int32 _)) ->
-      Proved (Tag.Set.singleton Tag.custom_tag)
+      Proved (Tags (Tag.Set.singleton Tag.custom_tag))
     | Ok (Boxed_number (Boxed_int64 _)) ->
-      Proved (Tag.Set.singleton Tag.custom_tag)
+      Proved (Tags (Tag.Set.singleton Tag.custom_tag))
     | Ok (Boxed_number (Boxed_nativeint _)) ->
-      Proved (Tag.Set.singleton Tag.custom_tag)
+      Proved (Tags (Tag.Set.singleton Tag.custom_tag))
     | Ok (Closures _) ->
-      Proved (Tag.Set.singleton Tag.closure_tag)
+      Proved (Tags (Tag.Set.singleton Tag.closure_tag))
     | Ok (String _) ->
-      Proved (Tag.Set.singleton Tag.string_tag)
+      Proved (Tags (Tag.Set.singleton Tag.string_tag))
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _ -> wrong_kind ()
@@ -1341,18 +1390,22 @@ let prove_lengths_of_arrays_or_blocks ~type_of_name t
       if not no_immediates then begin
         Invalid
       end else begin
-        assert (not (Tag.Map.is_empty blocks_imms.blocks));
-        let lengths =
-          Tag.Map.fold (fun _tag ((Join { by_length; }) : block_cases) result ->
-              Targetint.OCaml.Map.fold (fun length _block result ->
-                  Targetint.OCaml.Set.add length result)
-                by_length
-                result)
-            blocks_imms.blocks
-            Targetint.OCaml.Set.empty
-        in
-        assert (not (Targetint.OCaml.Set.is_empty lengths));
-        Proved lengths
+        match blocks_imms.blocks with
+        | Unknown -> Unknown
+        | Known blocks ->
+          assert (not (Tag.Map.is_empty blocks));
+          let lengths =
+            Tag.Map.fold
+              (fun _tag ((Join { by_length; }) : block_cases) result ->
+                Targetint.OCaml.Map.fold (fun length _block result ->
+                    Targetint.OCaml.Set.add length result)
+                  by_length
+                  result)
+              blocks
+              Targetint.OCaml.Set.empty
+          in
+          assert (not (Targetint.OCaml.Set.is_empty lengths));
+          Proved lengths
       end
     | Ok (Boxed_number _) -> Invalid
     | Ok (Closures _ | String _) -> Invalid
@@ -1437,22 +1490,29 @@ let values_structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
       | Unknown, _ | _, Unknown | Bottom, _ | _, Bottom -> false
       | Ok of_kind_value1, Ok of_kind_value2 ->
         begin match of_kind_value1, of_kind_value2 with
-        | Blocks_and_tagged_immediates { blocks = blocks1; immediates = imms1; },
+        | Blocks_and_tagged_immediates
+            { blocks = blocks1; immediates = imms1;
+              is_int = _; get_tag = _; },
             Blocks_and_tagged_immediates
-              { blocks = blocks2; immediates = imms2; } ->
+              { blocks = blocks2; immediates = imms2;
+                is_int = _; get_tag = _; } ->
           (* CR-someday mshinwell: This could be improved if required. *)
-          if (Tag.Map.is_empty blocks1 && not (Tag.Map.is_empty blocks2))
-            || (not (Tag.Map.is_empty blocks1) && Tag.Map.is_empty blocks2)
-          then
-            true
-          else
-            begin match imms1, imms2 with
-            | Unknown, _ | _, Unknown -> false
-            | Known imms1, Known imms2 ->
-              let imms1 = Immediate.Map.keys imms1 in
-              let imms2 = Immediate.Map.keys imms2 in
-              Immediate.Set.is_empty (Immediate.Set.inter imms1 imms2)
-            end
+          begin match blocks1, blocks2 with
+          | Unknown, _ | _, Unknown -> false
+          | Known blocks1, Known blocks2 ->
+            if (Tag.Map.is_empty blocks1 && not (Tag.Map.is_empty blocks2))
+              || (not (Tag.Map.is_empty blocks1) && Tag.Map.is_empty blocks2)
+            then
+              true
+            else
+              begin match imms1, imms2 with
+              | Unknown, _ | _, Unknown -> false
+              | Known imms1, Known imms2 ->
+                let imms1 = Immediate.Map.keys imms1 in
+                let imms2 = Immediate.Map.keys imms2 in
+                Immediate.Set.is_empty (Immediate.Set.inter imms1 imms2)
+              end
+          end
         | Blocks_and_tagged_immediates _, _
         | _, Blocks_and_tagged_immediates _ -> true
         | Boxed_number (Boxed_float ty_naked_number1),
@@ -1596,20 +1656,24 @@ let int_switch_arms ~type_of_name t ~arms =
     | Unknown -> unknown ()
     | Bottom -> invalid ()
     | Ok (Blocks_and_tagged_immediates blocks_imms) ->
-      if not (Tag.Map.is_empty blocks_imms.blocks) then begin
-        invalid ()
-      end else begin
-        match blocks_imms.immediates with
-        | Unknown -> unknown ()
-        | Known imms ->
-          assert (not (Immediate.Map.is_empty imms));
-          Targetint.OCaml.Map.fold (fun arm cont result ->
-              match Immediate.Map.find (Immediate.int arm) imms with
-              | exception Not_found -> result
-              | { env_extension; } ->
-                Targetint.OCaml.Map.add arm (env_extension, cont) result)
-            arms
-            Targetint.OCaml.Map.empty
+      begin match blocks_imms.blocks with
+      | Unknown -> unknown ()
+      | Known blocks ->
+        if not (Tag.Map.is_empty blocks) then begin
+          invalid ()
+        end else begin
+          match blocks_imms.immediates with
+          | Unknown -> unknown ()
+          | Known imms ->
+            assert (not (Immediate.Map.is_empty imms));
+            Targetint.OCaml.Map.fold (fun arm cont result ->
+                match Immediate.Map.find (Immediate.int arm) imms with
+                | exception Not_found -> result
+                | { env_extension; } ->
+                  Targetint.OCaml.Map.add arm (env_extension, cont) result)
+              arms
+              Targetint.OCaml.Map.empty
+        end
       end
     | Ok (Boxed_number _) -> invalid ()
     | Ok (Closures _ | String _) -> invalid ()
@@ -1667,7 +1731,7 @@ let free_names_transitive ~(type_of_name : type_of_name) t =
   !all_names
 
 type unboxable_proof =
-  | Variant of blocks_and_tagged_immediates
+  | Variant of block_cases Tag.Map.t * immediate_case Immediate.Map.t
   | Boxed_float of Numbers.Float_by_bit_pattern.Set.t ty_naked_number
   | Boxed_int32 of Numbers.Int32.Set.t ty_naked_number
   | Boxed_int64 of Numbers.Int64.Set.t ty_naked_number
@@ -1675,25 +1739,23 @@ type unboxable_proof =
   | Cannot_unbox
 
 let prove_unboxable ~type_of_name ~unboxee_ty : unboxable_proof =
-  match T.prove_blocks_and_immediates ~type_of_name unboxee_ty with
-  | Proved blocks_and_immediates
-      when not (Tag.Map.is_empty blocks_and_immediate.blocks) ->
-    Variant blocks_and_immediates
-  | Invalid -> Cannot_unbox
+  match prove_unboxable_variant ~type_of_name unboxee_ty with
+  | Proved (Unboxable (blocks, imms)) -> Variant (blocks, imms)
+  | Invalid | Proved Not_unboxable -> Cannot_unbox
   | Unknown ->
-    match T.prove_boxed_float ~type_of_name unboxee_ty with
+    match prove_boxed_float ~type_of_name unboxee_ty with
     | Proved ty_naked_number -> Boxed_float ty_naked_number
     | Invalid -> Cannot_unbox
     | Unknown ->
-      match T.prove_boxed_int32 ~type_of_name unboxee_ty with
+      match prove_boxed_int32 ~type_of_name unboxee_ty with
       | Proved ty_naked_number -> Boxed_int32 ty_naked_number
       | Invalid -> Cannot_unbox
       | Unknown ->
-        match T.prove_boxed_int64 ~type_of_name unboxee_ty with
+        match prove_boxed_int64 ~type_of_name unboxee_ty with
         | Proved ty_naked_number -> Boxed_int64 ty_naked_number
         | Invalid -> Cannot_unbox
         | Unknown ->
-          match T.prove_boxed_nativeint ~type_of_name unboxee_ty with
+          match prove_boxed_nativeint ~type_of_name unboxee_ty with
           | Proved ty_naked_number -> Boxed_nativeint ty_naked_number
           | Invalid -> Cannot_unbox
           | Unknown -> Cannot_unbox

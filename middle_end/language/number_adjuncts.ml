@@ -97,6 +97,8 @@ end
 module type Boxable = sig
   module Num : Identifiable.S
 
+  val boxable_number_kind : Flambda_kind.Boxable_number.t
+
   val boxed_prover
      : (Flambda_type.t
          -> Num.Set.t Flambda_type.ty_naked_number Flambda_type.proof)
@@ -214,6 +216,8 @@ module For_floats : Boxable_number_kind = struct
 
   let kind : K.Standard_int_or_float.t = Naked_float
 
+  let boxable_number_kind = K.Boxable_number.Naked_float
+
   let unboxed_prover = T.prove_naked_float
   let this_unboxed = T.this_naked_float
   let these_unboxed = T.these_naked_floats
@@ -269,6 +273,7 @@ module For_int32s : Boxable_int_number_kind = struct
 
   let kind : K.Standard_int_or_float.t = Naked_int32
   let standard_int_kind : K.Standard_int.t = Naked_int32
+  let boxable_number_kind = K.Boxable_number.Naked_int32
 
   let unboxed_prover = T.prove_naked_int32
   let this_unboxed = T.this_naked_int32
@@ -325,6 +330,7 @@ module For_int64s : Boxable_int_number_kind = struct
 
   let kind : K.Standard_int_or_float.t = Naked_int64
   let standard_int_kind : K.Standard_int.t = Naked_int64
+  let boxable_number_kind = K.Boxable_number.Naked_int64
 
   let unboxed_prover = T.prove_naked_int64
   let this_unboxed = T.this_naked_int64
@@ -381,6 +387,7 @@ module For_nativeints : Boxable_int_number_kind = struct
 
   let kind : K.Standard_int_or_float.t = Naked_nativeint
   let standard_int_kind : K.Standard_int.t = Naked_nativeint
+  let boxable_number_kind = K.Boxable_number.Naked_nativeint
 
   let unboxed_prover = T.prove_naked_nativeint
   let this_unboxed = T.this_naked_nativeint

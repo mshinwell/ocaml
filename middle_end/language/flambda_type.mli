@@ -56,10 +56,6 @@ val unit : unit -> t
 
 val unit_bottom : unit -> t
 
-type 'a or_wrong = private
-  | Ok of 'a
-  | Wrong
-
 (** Whether the given type says that a term of that type can never be
     constructed (in other words, it is [Invalid]). *)
 val is_bottom : (t -> bool) type_accessor
@@ -137,7 +133,12 @@ val unknown_proof : unit -> _ proof
 *)
 val prove_tagged_immediate : (t -> Immediate.Set.t proof) type_accessor
 
-val prove_is_tagged_immediate : (t -> bool proof) type_accessor
+type is_tagged_immediate = private
+  | Not_a_tagged_immediate
+  | Is_a_tagged_immediate
+  | Answer_given_by of Name.t
+
+val prove_is_tagged_immediate : (t -> is_tagged_immediate proof) type_accessor
 
 (** Similar to [prove_tagged_immediate], but for naked float values. *)
 val prove_naked_float
@@ -204,9 +205,13 @@ val prove_boxed_nativeint
    : (t -> Targetint.Set.t ty_naked_number proof)
        type_accessor
 
+type tags = private
+  | Tags of Tag.Set.t
+  | Answer_given_by of Name.t
+
 (** Determine which tags values of the given type may take on. *)
 (* CR mshinwell: duplicate return value (Proved empty_set, and Invalid) *)
-val prove_tags : (t -> Tag.Set.t proof) type_accessor
+val prove_tags : (t -> tags proof) type_accessor
 
 (** Determine the set of all possible length(s) of the array(s) or structured
     block(s) (i.e. blocks with tag less than [No_scan_tag]) described by the
@@ -235,13 +240,8 @@ val prove_sets_of_closures
 
 val prove_closure : (t -> closure proof) type_accessor
 
-type unboxable_variant = private {
-  immediates : Immediate.Set.t;
-  block_sizes_by_tag : Targetint.OCaml.t Tag.Map.t;
-}
-
 type unboxable_proof = private
-  | Variant of unboxable_variant
+  | Variant of block_cases Tag.Map.t * immediate_case Immediate.Map.t
   | Boxed_float of Numbers.Float_by_bit_pattern.Set.t ty_naked_number
   | Boxed_int32 of Numbers.Int32.Set.t ty_naked_number
   | Boxed_int64 of Numbers.Int64.Set.t ty_naked_number

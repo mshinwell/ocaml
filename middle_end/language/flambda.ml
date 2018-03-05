@@ -1318,6 +1318,8 @@ end = struct
       | Duplicate_block _, _
       | Is_int, _
       | Get_tag _, _
+      | Int_to_tag, _
+      | Tag_to_int, _
       | Array_length _, _
       | Bigarray_length _, _
       | String_length _, _
