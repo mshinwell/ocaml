@@ -140,7 +140,7 @@ let simplify_bytes_or_bigstring_set env r prim dbg
     let max_string_length =
       match bytes_like_value with
       | Bytes -> Targetint.OCaml.max_string_length
-      | Bigstring -> Targetint.OCaml.max
+      | Bigstring -> Targetint.OCaml.max_value
     in
     let all_indexes_out_of_range =
       Simplify_aux.all_indexes_out_of_range ~width:string_accessor_width

@@ -636,11 +636,12 @@ and simplify_let_cont env r ~body
       if handler.stub || E.never_unbox_continuations env
       then Unchanged { handler; }
       else
-        let args_types =
+        let arg_tys, new_env =
           R.continuation_args_types r name
             ~arity:(Flambda.Continuation_handler.param_arity handler)
             ~default_env:(E.get_typing_environment env)
         in
+        let env = E.replace_typing_environment env new_env in
         (* CR mshinwell/lwhite: We could maybe introduce the unboxed
            parameters into the environment every time, then check if they
            were used, and if so then add the wrapper.  This doesn't introduce
@@ -648,7 +649,7 @@ and simplify_let_cont env r ~body
            unnecessary unboxing for later rounds to clean up (e.g. in the
            case where a parameter being unboxed is only used boxed). *)
         Unbox_continuation_params.for_non_recursive_continuation ~handler
-          ~args_types ~name ~backend:(E.backend env)
+          ~env ~arg_tys ~name
     in
     let simplify_one_handler env r ~name ~handler ~body
             : Expr.t * R.t =
@@ -711,7 +712,8 @@ and simplify_let_cont env r ~body
     begin match handlers with
     | None -> body, r
     | Some _handlers ->
-      let args_types =
+      let new_env = ref (T.Typing_environment.create ()) in
+      let arg_tys =
         Continuation.Map.mapi (fun cont
                   (handler : Flambda.Continuation_handler.t) ->
             let cont =
@@ -720,11 +722,19 @@ and simplify_let_cont env r ~body
             (* N.B. If [cont]'s handler was deleted, the following function
                will produce [Value_bottom] for the arguments, rather than
                failing. *)
-            R.defined_continuation_args_types r cont
-              ~arity:(Flambda.Continuation_handler.param_arity handler)
-              ~default_env:(E.get_typing_environment env))
+            let arg_tys, new_env' =
+              R.defined_continuation_args_types r cont
+                ~arity:(Flambda.Continuation_handler.param_arity handler)
+                ~default_env:(E.get_typing_environment env)
+            in
+            (* XXX mshinwell: Which environment should be used here? *)
+            new_env :=
+              (E.type_accessor env T.Typing_environment.meet)
+              !new_env new_env';
+            arg_tys)
           original_handlers
       in
+      let new_env = !new_env in
       let handlers = original_handlers in
       let r = original_r in
       let handlers, env, update_use_env =
@@ -732,8 +742,9 @@ and simplify_let_cont env r ~body
           handlers, body_env, []
         else
           let with_wrappers =
-            Unbox_continuation_params.for_recursive_continuations
-              ~handlers ~args_types ~backend:(E.backend env)
+            let env = E.replace_typing_environment env new_env in
+            Unbox_continuation_params.for_recursive_continuations ~handlers
+              ~env ~arg_tys
           in
           (* CR mshinwell: move to Flambda, probably *)
           Continuation.Map.fold (fun cont

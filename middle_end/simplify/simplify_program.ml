@@ -131,7 +131,7 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
     let field_ty : _ T.mutable_or_immutable =
       Immutable (E.find_variable env field)
     in
-    let ty = T.block Tag.Scannable.zero ~fields:[| field_ty |] in
+    let ty = T.block Tag.zero ~fields:[| field_ty |] in
     Ok (Static_part.Fabricated_block field, ty)
   | Set_of_closures set ->
     let r = R.create () in

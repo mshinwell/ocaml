@@ -338,17 +338,28 @@ let simplify_is_int env r prim arg dbg =
 let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
   let block, block_ty = S.simplify_simple env block in
   let inferred_tags = (E.type_accessor env T.prove_tags) block_ty in
-  let possible_tags = Tag.Scannable.Map.keys tags_to_sizes in
+  let possible_tags = Tag.Map.keys tags_to_sizes in
   let invalid r =
     Reachable.invalid (), T.bottom (K.fabricated ()),
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
   let result_var_type ~tags_to_sizes =
     let tags_to_env_extensions =
-      Tag.Scannable.Map.fold (fun tag size tags_to_env_extensions ->
-          (* CR mshinwell: thikn about this conversion *)
+      Tag.Map.fold (fun tag size tags_to_env_extensions ->
+          (* CR mshinwell: think about this conversion *)
           let size = Targetint.OCaml.to_int size in
-          let block_ty = T.block_of_unknown_values tag ~size in
+          let block_ty =
+            let tag =
+              match Tag.Scannable.of_tag tag with
+              | Some tag -> tag
+              | None ->
+                (* CR mshinwell: We need to get our story straight here as
+                   to which blocks [Get_tag] may be used on.  Then that should
+                   be exactly reflected in the types. *)
+                assert false
+            in
+            T.block_of_unknown_values tag ~size
+          in
           let env =
             match block with
             | Const _ ->
@@ -360,7 +371,7 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
               T.Typing_environment.add (T.Typing_environment.create ())
                 block scope_level block_ty
           in
-          Tag.Map.add (Tag.Scannable.to_tag tag) env tags_to_env_extensions)
+          Tag.Map.add tag env tags_to_env_extensions)
         tags_to_sizes
         Tag.Map.empty
     in
@@ -368,20 +379,19 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
   in
   match inferred_tags with
   | Proved (Tags inferred_tags) ->
-    let inferred_tags = Tag.to_scannable_set inferred_tags in
-    let tags = Tag.Scannable.Set.inter inferred_tags possible_tags in
+    let tags = Tag.Set.inter inferred_tags possible_tags in
     let r =
       R.map_benefit r (B.remove_primitive (Unary (Get_tag { tags_to_sizes; })))
     in
-    if Tag.Scannable.Set.is_empty tags then begin
+    if Tag.Set.is_empty tags then begin
       invalid r
     end else begin
       let tags_to_sizes =
-        Tag.Scannable.Map.filter
-          (fun tag _size -> Tag.Scannable.Set.mem tag inferred_tags)
+        Tag.Map.filter
+          (fun tag _size -> Tag.Set.mem tag inferred_tags)
           tags_to_sizes
       in
-      assert (not (Tag.Scannable.Map.is_empty tags_to_sizes));
+      assert (not (Tag.Map.is_empty tags_to_sizes));
       let prim : Flambda_primitive.unary_primitive =
         Get_tag { tags_to_sizes; }
       in
@@ -390,8 +400,8 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
       Reachable.reachable term, result_var_type, r
     end
   | Proved (Answer_given_by name) ->
-    Reachable.reachable (original_term ()),
-      T.alias_type_of (K.value ()) name, r
+    let term : Named.t = Prim (Unary (prim, block), dbg) in
+    Reachable.reachable term, T.alias_type_of (K.value ()) name, r
   | Unknown ->
     let prim : Flambda_primitive.unary_primitive =
       Get_tag { tags_to_sizes; }
@@ -750,6 +760,8 @@ let simplify_unary_primitive env r (prim : Flambda_primitive.unary_primitive)
   | Is_int -> simplify_is_int env r prim arg dbg
   | Get_tag { tags_to_sizes; } ->
     simplify_get_tag env r  prim ~tags_to_sizes ~block:arg dbg
+  | Tag_to_int -> Misc.fatal_error "FIXME"
+  | Int_to_tag -> Misc.fatal_error "FIXME"
   | String_length _string_or_bytes ->
     simplify_string_length env r prim arg dbg
   | Int_as_pointer ->

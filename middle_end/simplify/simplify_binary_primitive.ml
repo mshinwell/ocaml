@@ -808,11 +808,11 @@ let simplify_eq_comp env r prim dbg (kind : K.t)
       Binary_int_eq_comp_tagged_immediate.simplify env r prim dbg op arg1 arg2
     | _, _ ->
       let physically_equal =
-        (E.type_accessor env T.physically_equal) arg1_ty arg2_ty
+        (E.type_accessor env T.values_physically_equal) arg1_ty arg2_ty
       in
       let physically_distinct =
         (* Structural inequality implies physical inequality. *)
-        (E.type_accessor env T.structurally_distinct) arg1_ty arg2_ty
+        (E.type_accessor env T.values_structurally_distinct) arg1_ty arg2_ty
       in
       let const bool =
         Reachable.reachable (Simple (Simple.const_bool bool)),
@@ -1137,7 +1137,7 @@ let simplify_string_or_bigstring_load env r prim dbg
     let max_string_length =
       match string_like_value with
       | String | Bytes -> Targetint.OCaml.max_string_length
-      | Bigstring -> Targetint.OCaml.max
+      | Bigstring -> Targetint.OCaml.max_value
     in
     let all_indexes_out_of_range =
       Simplify_aux.all_indexes_out_of_range indexes ~width ~max_string_length
