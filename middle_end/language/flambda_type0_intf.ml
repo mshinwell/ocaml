@@ -297,6 +297,8 @@ module type S = sig
 
     val add : t -> Name.t -> Scope_level.t -> flambda_type -> t
 
+    val singleton : Name.t -> Scope_level.t -> flambda_type -> t
+
     (** Refine the type of a name that is currently bound in the
         environment.  (It is an error to call this function with a name that
         is not bound in the given environment.) *)

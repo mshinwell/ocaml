@@ -1811,6 +1811,7 @@ end and Typed_parameter : sig
   val rename : t -> t
   module List : sig
     type nonrec t = t list
+    val create : (Parameter.t * Flambda_type.t) list -> t
     val vars : t -> Variable.t list
     val simples : t -> Simple.t list
     val var_set : t -> Variable.Set.t
@@ -1899,6 +1900,9 @@ end = struct
 
   module List = struct
     type nonrec t = t list
+
+    let create params_and_tys =
+      List.map (fun (param, ty) -> create param ty) params_and_tys
 
     let vars t = List.map var t
 

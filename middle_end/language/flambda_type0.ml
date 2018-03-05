@@ -3613,6 +3613,9 @@ Format.eprintf "(TE replace_meet) Judgements holding now:@ %a\n%!"
           Name.print name
           print t
 
+    let singleton name scope_level ty =
+      add (create ()) name scope_level ty
+
     type binding_type = Normal | Existential
 
     let find t name =

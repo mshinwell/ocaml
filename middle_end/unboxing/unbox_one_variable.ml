@@ -88,7 +88,7 @@ module Unboxing_spec_variant : Unboxing_spec = struct
         boxed_value, Simple.const_int index),
       dbg)
 
-  let box t tag fields dbg : Flambda.Named.t =
+  let box _t tag fields dbg : Flambda.Named.t =
     let kinds =
       (* CR mshinwell: We should be able to do better than [Unknown] *)
       List.map (fun _field -> Flambda_primitive.Value_kind.Unknown) fields
@@ -143,7 +143,7 @@ module Unboxing_spec_float_array = struct
         boxed_value, Simple.const_int index),
       dbg)
 
-  let box t _tag fields dbg : Flambda.Named.t =
+  let box _t _tag fields dbg : Flambda.Named.t =
     Prim (Variadic (Make_block (Full_of_naked_floats, Immutable), fields), dbg)
 
   let refine_unboxee_ty ~type_of_name:_ _t ~unboxee_ty:_ ~all_fields =
@@ -192,7 +192,7 @@ end) = struct
       Misc.fatal_errorf "Bad number of fields for [box]: %d"
         (List.length fields)
 
-  let refine_unboxee_ty ~type_of_name:_ t ~unboxee_ty:_ ~all_fields =
+  let refine_unboxee_ty ~type_of_name:_ _t ~unboxee_ty:_ ~all_fields =
     match all_fields with
     | [naked_number] ->
       N.box (T.alias_type_of unboxed_kind naked_number)
@@ -282,8 +282,8 @@ module How_to_unbox = struct
 end
 
 module Make (S : Unboxing_spec) = struct
-  let how_to_unbox_core ~type_of_name ~env ~unboxee ~unboxee_ty
-        ~unboxing_spec_user_data ~unboxing_spec ~is_unbox_returns
+  let unbox ~type_of_name ~env ~unboxee ~unboxee_ty
+        ~unboxing_spec_user_data ~unboxing_spec ~is_unbox_returns:_
         : How_to_unbox.t =
     let dbg = Debuginfo.none in
     let constant_ctors = unboxing_spec.constant_ctors in
@@ -369,7 +369,6 @@ module Make (S : Unboxing_spec) = struct
         new_arguments_for_call_in_wrapper
     in
     let tags_to_sizes = blocks in (* CR mshinwell: remove alias *)
-    let all_tags = Tag.Map.keys blocks in
     let sizes_to_filler_conts =
       List.fold_left (fun sizes_to_filler_conts size ->
           Immediate.Map.add (Immediate.int size) (Continuation.create ())
@@ -522,7 +521,8 @@ module Make (S : Unboxing_spec) = struct
                     (match discriminant_known_value with
                      | Some known -> known
                      | None ->
-                       Prim (Unary (Get_tag, wrapper_param_unboxee), dbg))
+                       Prim (Unary (Get_tag { tags_to_sizes; },
+                         Simple.var wrapper_param_unboxee), dbg))
                     (add_fill_fields_conts fill_fields_switch);
                 stub = true;
                 is_exn_handler = false;
@@ -542,10 +542,11 @@ module Make (S : Unboxing_spec) = struct
         })
     in
     let fields_with_kinds0 =
-      Array.init max_size (fun index ->
+      Array.init (Targetint.OCaml.to_int_exn max_size) (fun index ->
         let append = string_of_int index in
         let var = Variable.rename ~append unboxee in
-        var, field_kind)
+        (* CR mshinwell: per-field kinds are not needed *)
+        var, S.unboxed_kind)
     in
     let fields_with_kinds = Array.to_list fields_with_kinds0 in
     (* CR mshinwell: This next section is only needed for [is_unbox_returns] at
@@ -559,24 +560,30 @@ module Make (S : Unboxing_spec) = struct
           Targetint.OCaml.one, boxing_is_int_cont;
         ]
       in
-      Flambda.Expr.create_int_switch ~scrutinee:is_int ~arms
+      Flambda.Expr.create_int_switch ~scrutinee:(Name.var is_int) ~arms
     in
     let boxing_switch =
       let arms =
         Tag.Map.map (fun (_size, boxing_cont) -> boxing_cont)
           tags_to_sizes_and_boxing_conts
       in
-      Flambda.Expr.create_tag_switch ~scrutinee:discriminant ~arms
+      Flambda.Expr.create_tag_switch ~scrutinee:(Name.var discriminant) ~arms
     in
     let build_boxed_value_from_new_params =
       let boxed = Variable.rename ~append:"_boxed" unboxee in
       let boxed_param = Parameter.wrap boxed in
       (* CR mshinwell: Should be able to do better for [boxed_ty] *)
       let boxed_ty = T.any_value () in
+      let boxed_typed_param =
+        Flambda.Typed_parameter.create boxed_param boxed_ty
+      in
       let join_cont = Continuation.create () in
       let build (expr : Flambda.Expr.t) : Flambda.Expr.t =
         let arms =
           Immediate.Set.fold (fun ctor_index arms ->
+              let ctor_index =
+                Targetint.OCaml.to_int (Immediate.to_targetint ctor_index)
+              in
               let tag = Tag.create_exn ctor_index in
               let cont = Continuation.create () in
               Tag.Map.add tag cont arms)
@@ -584,45 +591,47 @@ module Make (S : Unboxing_spec) = struct
             Tag.Map.empty
         in
         let constant_ctor_switch =
-          Flambda.Expr.create_int_switch ~scrutinee:discriminant ~arms
+          Flambda.Expr.create_tag_switch ~scrutinee:(Name.var discriminant)
+            ~arms
         in
         let add_constant_ctor_conts expr =
-          List.fold_left (fun expr (ctor_index, cont) ->
-              let ctor_index_var = Variable.create "ctor_index" in
-              Flambda.Expr.create_let ctor_index_var
-                (Simple (Simple.int ctor_index))
-                (Let_cont {
-                  body = expr;
-                  handlers = Non_recursive {
-                    name = cont;
-                    handler = {
-                      handler = Apply_cont (
-                        join_cont, None, [Simple.var ctor_index_var]);
-                      params = [];
-                      stub = true;
-                      is_exn_handler = false;
-                    };
+          Tag.Map.fold (fun ctor_index cont expr : Flambda.Expr.t ->
+              let ctor_index = Tag.to_int ctor_index in
+              Let_cont {
+                body = expr;
+                handlers = Non_recursive {
+                  name = cont;
+                  handler = {
+                    handler = Apply_cont (
+                      join_cont, None, [Simple.const_int ctor_index]);
+                    params = [];
+                    stub = true;
+                    is_exn_handler = false;
                   };
-                }))
+                };
+              })
+            arms
             expr
-            consts
         in
         let add_boxing_conts expr =
           Tag.Map.fold (fun tag (size, boxing_cont) expr : Flambda.Expr.t ->
+              let size = Targetint.OCaml.to_int size in
               let boxed = Variable.rename boxed in
               let fields =
                 let fields, _index =
-                  List.fold_left (fun (fields, index) field ->
+                  List.fold_left (fun (fields, index) (field, _kind) ->
                       if index >= size then fields, index + 1
-                      else (field :: fields), index + 1)
+                      else (Simple.var field :: fields), index + 1)
                     ([], 0)
                     fields_with_kinds
                 in
                 List.rev fields
               in
               let handler : Flambda.Expr.t =
-                Flambda.Expr.create_let boxed (S.box tag fields dbg)
-                  (Flambda.Apply_cont (join_cont, None, [boxed]))
+                Flambda.Expr.create_let boxed
+                  (K.value ())
+                  (S.box unboxing_spec_user_data tag fields dbg)
+                  (Apply_cont (join_cont, None, [Simple.var boxed]))
               in
               Let_cont {
                 body = expr;
@@ -689,21 +698,27 @@ module Make (S : Unboxing_spec) = struct
         let body =
           match is_int_known_value with
           | None -> body
-          | Some named -> Flambda.Expr.create_let is_int named body
+          | Some named ->
+            Flambda.Expr.create_let is_int (K.value ()) named body
         in
         match discriminant_known_value with
         | None -> body
-        | Some named -> Flambda.Expr.create_let discriminant named body
+        | Some named ->
+          Flambda.Expr.create_let discriminant (K.fabricated ()) named body
       in
-      [boxed, build]
+      [boxed_typed_param, build]
     in
     let is_int =
       if no_constant_ctors then []
       else
         let is_int_ty =
           let by_constant_ctor_index =
-            Targetint.OCaml.Set.fold (fun ctor_index by_constant_ctor_index ->
-                let tag = Tag.of_targetint_ocaml ctor_index in
+            Immediate.Set.fold (fun ctor_index by_constant_ctor_index ->
+                (* CR mshinwell: bad conversion *)
+                let tag =
+                  Tag.create_exn (Targetint.OCaml.to_int (
+                    Immediate.to_targetint ctor_index))
+                in
                 let env = T.Typing_environment.create () in
                 Tag.Map.add tag env by_constant_ctor_index)
               constant_ctors
@@ -711,33 +726,35 @@ module Make (S : Unboxing_spec) = struct
           in
           let by_tag =
             Tag.Map.map (fun size ->
+                (* CR mshinwell: rewrite for-loop to avoid conversion *)
+                let size = Targetint.OCaml.to_int size in
+                let field_scope_level = E.continuation_scope_level env in
                 let env = ref (T.Typing_environment.create ()) in
                 for field = 0 to size - 1 do
                   let field, kind = fields_with_kinds0.(field) in
-                  let field_scope_level = E.continuation_scope_level env in
                   (* CR mshinwell: We could refine the types of the actual fields
                      themselves according to the tag. *)
                   let field_ty = T.unknown kind in
-                  env := T.Typing_environment.add !env field field_scope_level
-                    field_ty
+                  env := T.Typing_environment.add !env (Name.var field)
+                    field_scope_level field_ty
                 done;
                 !env)
               tags_to_sizes
           in
           let discriminant_env_is_int =
-            T.Typing_environment.add discriminant
+            T.Typing_environment.singleton (Name.var discriminant)
               (E.continuation_scope_level env)
               (T.these_tags by_constant_ctor_index)
           in
           let discriminant_env_is_block =
-            T.Typing_environment.add discriminant
+            T.Typing_environment.singleton (Name.var discriminant)
               (E.continuation_scope_level env)
               (T.these_tags by_tag)
           in
           let by_is_int_result =
             Immediate.Map.of_list [
-              Immediate.const_true, discriminant_env_is_int;
-              Immediate.const_false, discriminant_env_is_block;
+              Immediate.bool_true, discriminant_env_is_int;
+              Immediate.bool_false, discriminant_env_is_block;
             ]
           in
           T.these_tagged_immediates_with_envs by_is_int_result
@@ -749,17 +766,20 @@ module Make (S : Unboxing_spec) = struct
       if not needs_discriminant then []
       else
         let discriminant = Parameter.wrap discriminant in
+        let discriminant_ty = T.any_fabricated () in (* CR mshinwell: improve *)
         [Flambda.Typed_parameter.create discriminant discriminant_ty]
     in
     let fields =
-      List.map (fun (field, kind) ->
+      List.map (fun (field, _kind) ->
           let field = Parameter.wrap field in
-          Flambda.Typed_parameter.create field S.unboxed_kind)
+          Flambda.Typed_parameter.create_from_kind field S.unboxed_kind)
         fields_with_kinds
     in
     let unboxee_ty =
       let all_fields =
-        List.map (fun (field, _kind) -> field) fields_with_kinds
+        (* CR mshinwell: Just make [fields_with_kinds] a value (renamed) of
+           type [Name.t list]? *)
+        List.map (fun (field, _kind) -> Name.var field) fields_with_kinds
       in
       S.refine_unboxee_ty ~type_of_name unboxing_spec_user_data
         ~unboxee_ty ~all_fields
@@ -767,7 +787,6 @@ module Make (S : Unboxing_spec) = struct
     { unboxee_to_wrapper_params_unboxee;
       add_bindings_in_wrapper;
       new_arguments_for_call_in_wrapper;
-      new_type_for_unboxees = [unboxee, unboxee_ty];
       new_params = is_int @ discriminant @ fields;
       new_unboxee_types = [unboxee, unboxee_ty];
       build_boxed_value_from_new_params;
@@ -782,35 +801,38 @@ module Unbox_boxed_int64 = Make (Unboxing_spec_boxed_int64)
 module Unbox_boxed_nativeint = Make (Unboxing_spec_boxed_nativeint)
 
 let how_to_unbox ~type_of_name ~env ~unboxee ~unboxee_ty ~is_unbox_returns =
-  let unbox ~unboxing_spec_user_data ~unboxing_spec =
-    Some (how_to_unbox_core ~type_of_name ~env ~unboxee ~unboxee_ty
+  let unbox ~f ~unboxing_spec_user_data ~unboxing_spec =
+    Some (f ~type_of_name ~env ~unboxee ~unboxee_ty
       ~unboxing_spec_user_data ~unboxing_spec ~is_unbox_returns)
   in
   match T.prove_unboxable ~type_of_name ~unboxee_ty with
   | Cannot_unbox -> None
   | proof ->
-    match Unbox_variant.create proof with
+    match Unboxing_spec_variant.create proof with
     | Some (unboxing_spec_user_data, unboxing_spec) ->
-      Unbox_variant.unbox ~unboxing_spec_user_data ~unboxing_spec
+      unbox ~f:Unbox_variant.unbox ~unboxing_spec_user_data ~unboxing_spec
     | None ->
-      match Unbox_float_array.create proof with
+      match Unboxing_spec_float_array.create proof with
       | Some (unboxing_spec_user_data, unboxing_spec) ->
-        Unbox_float_array.unbox ~unboxing_spec_user_data ~unboxing_spec
+        unbox ~f:Unbox_float_array.unbox ~unboxing_spec_user_data ~unboxing_spec
       | None ->
-        match Unbox_boxed_float.create proof with
+        match Unboxing_spec_boxed_float.create proof with
         | Some (unboxing_spec_user_data, unboxing_spec) ->
-          Unbox_boxed_float.unbox ~unboxing_spec_user_data ~unboxing_spec
+          unbox ~f:Unbox_boxed_float.unbox ~unboxing_spec_user_data
+            ~unboxing_spec
         | None ->
-          match Unbox_boxed_int32.create proof with
+          match Unboxing_spec_boxed_int32.create proof with
           | Some (unboxing_spec_user_data, unboxing_spec) ->
-            Unbox_boxed_int32.unbox ~unboxing_spec_user_data ~unboxing_spec
+            unbox ~f:Unbox_boxed_int32.unbox ~unboxing_spec_user_data
+              ~unboxing_spec
           | None ->
-            match Unbox_boxed_int64.create proof with
+            match Unboxing_spec_boxed_int64.create proof with
             | Some (unboxing_spec_user_data, unboxing_spec) ->
-              Unbox_boxed_int64.unbox ~unboxing_spec_user_data ~unboxing_spec
+              unbox ~f:Unbox_boxed_int64.unbox ~unboxing_spec_user_data
+                ~unboxing_spec
             | None ->
-              match Unbox_boxed_nativeint.create proof with
+              match Unboxing_spec_boxed_nativeint.create proof with
               | Some (unboxing_spec_user_data, unboxing_spec) ->
-                Unbox_boxed_nativeint.unbox ~unboxing_spec_user_data
+                unbox ~f:Unbox_boxed_nativeint.unbox ~unboxing_spec_user_data
                   ~unboxing_spec
               | None -> None

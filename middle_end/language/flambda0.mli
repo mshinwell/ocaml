@@ -734,6 +734,8 @@ end and Typed_parameter : sig
   module List : sig
     type nonrec t = t list
 
+    val create : (Parameter.t * Flambda_type.t) list -> t
+
     val free_names : t -> Name_occurrences.t
 
     (** As for [Parameter.List.vars]. *)

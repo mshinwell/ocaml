@@ -21,10 +21,11 @@
 
 module How_to_unbox : sig
   type t = private {
-    being_unboxed_to_wrapper_params_being_unboxed : Variable.t Variable.Map.t;
+    unboxee_to_wrapper_params_unboxee : Variable.t Variable.Map.t;
     add_bindings_in_wrapper : Flambda.Expr.t -> Flambda.Expr.t;
     new_arguments_for_call_in_wrapper : Variable.t list;
-    new_type_for_unboxee : Flambda_type.t;
+    new_params : Flambda.Typed_parameter.t list;
+    new_unboxee_types : (Variable.t * Flambda_type.t) list;
     build_boxed_value_from_new_params :
       (Flambda.Typed_parameter.t * (Flambda.Expr.t -> Flambda.Expr.t)) list;
   }

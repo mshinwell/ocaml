@@ -435,6 +435,12 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
   | Pisint, [arg] ->
     Unary (Is_int, arg)
   | Pgettag { tags_to_sizes }, [arg] ->
+    let tags_to_sizes =
+      Tag.Scannable.Map.fold (fun tag size ->
+          Tag.Map.add (Tag.Scannable.to_tag tag) size)
+        tags_to_sizes
+        Tag.Map.empty
+    in
     Unary (Get_tag { tags_to_sizes }, arg)
   | Pisout, [arg1; arg2] ->
     Binary (Int_comp (I.Tagged_immediate, Unsigned, Lt),

@@ -430,7 +430,7 @@ type unary_primitive =
     }
   | Is_int
   | Get_tag of {
-      tags_to_sizes : Targetint.OCaml.t Tag.Scannable.Map.t;
+      tags_to_sizes : Targetint.OCaml.t Tag.Map.t;
     }
   | Tag_to_int
   | Int_to_tag
@@ -497,7 +497,7 @@ let compare_unary_primitive p1 p2 =
   | Is_int, Is_int -> 0
   | Get_tag { tags_to_sizes = tags_to_sizes1; },
       Get_tag { tags_to_sizes = tags_to_sizes2; } ->
-    Tag.Scannable.Map.compare Targetint.OCaml.compare
+    Tag.Map.compare Targetint.OCaml.compare
       tags_to_sizes1 tags_to_sizes2
   | Int_to_tag, Int_to_tag
   | Tag_to_int, Tag_to_int -> 0
