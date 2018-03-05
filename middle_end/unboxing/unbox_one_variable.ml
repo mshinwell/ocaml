@@ -327,17 +327,20 @@ module Make (S : Unboxing_spec) = struct
     in
     let is_int = Variable.rename ~append:"_is_int" unboxee in
     let is_int_in_wrapper = Variable.rename is_int in
-    let is_int_known_value =
-      if no_constant_ctors then Some (Simple Simple.const_zero : Flambda.Named.t)
-      else None
+    let is_int_known_value, is_int_ty =
+      if no_constant_ctors then
+        Some (Simple Simple.const_zero : Flambda.Named.t),
+          T.this_tagged_immediate Immediate.bool_false
+      else
+        None, T.any_tagged_bool ()
     in
     (* CR-soon mshinwell: On [discriminant] add information that tells us
        about the individual unboxed field parameters _given that_ we are
        in some particular case of a match on [discriminant] (GADT-style). *)
     let discriminant = Variable.rename ~append:"_discr" unboxee in
     let discriminant_in_wrapper = Variable.rename discriminant in
-    let discriminant_known_value =
-      let discriminant_possible_values =
+    let discriminant_known_value, discriminant_ty =
+      let discriminant_possible_values, discriminant_ty =
         let all_tags =
           Tag.Map.fold (fun tag _ all_tags ->
               Immediate.Set.add (Immediate.int (Targetint.OCaml.of_int (
@@ -345,34 +348,73 @@ module Make (S : Unboxing_spec) = struct
             blocks
             Immediate.Set.empty
         in
-        Immediate.Set.union constant_ctors all_tags
+        let by_tag =
+          Immediate.Set.fold (fun ctor_index by_tag ->
+              let tag =
+                (* CR mshinwell: too verbose *)
+                Tag.create_exn (
+                  Targetint.OCaml.to_int (Immediate.to_targetint ctor_index))
+              in
+              Tag.Map.add tag (T.Typing_environment.create ()) by_tag)
+            constant_ctors
+            Tag.Map.empty
+        in
+        let by_tag =
+          Tag.Map.fold (fun tag _ by_tag ->
+              Tag.Map.add tag (T.Typing_environment.create ()) by_tag)
+            blocks
+            by_tag
+        in
+        Immediate.Set.union constant_ctors all_tags,
+          T.these_tags by_tag
       in
       match Immediate.Set.elements discriminant_possible_values with
       | [] -> assert false  (* see the bottom of [how_to_unbox], below *)
       | [tag] ->
-        Some (Simple (Simple.const (Tagged_immediate tag)) : Flambda.Named.t)
-      | _tags -> None
+        Some (Simple (Simple.const (Tagged_immediate tag)) : Flambda.Named.t),
+          discriminant_ty
+      | _tags -> None, discriminant_ty
     in
     let needs_discriminant =
       match discriminant_known_value with
       | None -> true
       | Some _ -> false
     in
+    (* CR mshinwell: Form discriminant type using the known value *)
     let is_int_in_wrapper' = Variable.rename is_int_in_wrapper in
     let discriminant_in_wrapper' = Variable.rename discriminant_in_wrapper in
-    let new_arguments_for_call_in_wrapper =
+    let new_arguments_for_call_in_wrapper,
+        new_arguments_for_call_in_wrapper_with_types =
       let is_int =
         if no_constant_ctors then [] else [is_int_in_wrapper']
       in
       let discriminant =
         if not needs_discriminant then [] else [discriminant_in_wrapper']
       in
-      is_int @ discriminant @ field_arguments_for_call_in_wrapper
-    in
-    let new_arguments_for_call_in_wrapper_with_types =
-      (* CR mshinwell: should be able to do better for the type here *)
-      List.map (fun arg -> Parameter.wrap arg, T.any_value ())
-        new_arguments_for_call_in_wrapper
+      let without_types =
+        is_int @ discriminant @ field_arguments_for_call_in_wrapper
+      in
+      let with_types =
+        (* XXX These should just get the same types as the is_int/discr.
+           in the main handler. *)
+        let is_int =
+          (* CR mshinwell: these "map"s are gross, remove *)
+          List.map (fun is_int -> Parameter.wrap is_int, is_int_ty)
+            is_int
+        in
+        let discriminant =
+          List.map (fun discriminant ->
+              Parameter.wrap discriminant, discriminant_ty)
+            discriminant
+        in
+        let args =
+          (* CR mshinwell: should be able to do better for the type here *)
+          List.map (fun arg -> Parameter.wrap arg, T.unknown S.unboxed_kind)
+            field_arguments_for_call_in_wrapper
+        in
+        is_int @ discriminant @ args
+      in
+      without_types, with_types
     in
     let tags_to_sizes = blocks in (* CR mshinwell: remove alias *)
     let sizes_to_filler_conts =
@@ -773,6 +815,7 @@ module Make (S : Unboxing_spec) = struct
       else
         let discriminant = Parameter.wrap discriminant in
         let discriminant_ty = T.any_fabricated () in (* CR mshinwell: improve *)
+        (* XXX better calc. for [discriminant_ty] is above, maybe *)
         [Flambda.Typed_parameter.create discriminant discriminant_ty]
     in
     let fields =

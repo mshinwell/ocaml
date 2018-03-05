@@ -134,8 +134,8 @@ Format.eprintf "Unbox_continuation_params starting with continuations %a\n%!"
             let wrapper_body =
               let initial_body : Flambda.Expr.t =
                 let args =
-                  Flambda.Typed_parameter.List.vars wrapper_params
-                    @ how_to_unbox.new_arguments_for_call_in_wrapper
+                  how_to_unbox.new_arguments_for_call_in_wrapper
+                    @ (Flambda.Typed_parameter.List.vars wrapper_params)
                 in
                 let args = List.map (fun var -> Simple.var var) args in
                 Apply_cont (new_cont, None, args)
@@ -144,17 +144,17 @@ Format.eprintf "Unbox_continuation_params starting with continuations %a\n%!"
             in
             assert (not handler.is_exn_handler);
             let with_wrapper : Flambda.Expr.with_wrapper =
-              let params = handler.params @ how_to_unbox.new_params in
+              let params = how_to_unbox.new_params @ handler.params in
   Format.eprintf "Unbox_continuation_params has unboxed:\n@;%a\n%!"
     Flambda.Let_cont_handlers.print (Flambda.Let_cont_handlers.Recursive
       (Continuation.Map.add cont handler Continuation.Map.empty));
   Format.eprintf "Unboxed version has \
-      wrapper (params %a)\n@ %a = %a\n@ and \
-      new handler (params %a):\n@ %a = %a\n%!"
+      wrapper (params@ %a)\n@ %a = %a\n@ and \
+      new handler (params@ %a):\n@ %a = %a\n%!"
     Flambda.Typed_parameter.List.print wrapper_params
     Continuation.print cont
     Flambda.Expr.print wrapper_body
-    Flambda.Typed_parameter.List.print wrapper_params
+    Flambda.Typed_parameter.List.print params
     Continuation.print new_cont
     Flambda.Expr.print handler.handler;
                 With_wrapper {
