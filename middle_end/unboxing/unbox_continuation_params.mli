@@ -22,13 +22,12 @@
 val for_non_recursive_continuation
    : name:Continuation.t
   -> handler:Flambda.Continuation_handler.t
-  -> arg_tys:(Flambda_type.t list * Flambda_type.Typing_environment.t)
-  -> backend:(module Backend_intf.S)
+  -> env:Simplify_env_and_result.Env.t
+  -> arg_tys:Flambda_type.t list
   -> Flambda.Expr.with_wrapper
 
 val for_recursive_continuations
    : handlers:Flambda.Continuation_handlers.t
-  -> arg_tys:(Flambda_type.t list * Flambda_type.Typing_environment.t)
-       Continuation.Map.t
-  -> backend:(module Backend_intf.S)
+  -> env:Simplify_env_and_result.Env.t
+  -> arg_tys:Flambda_type.t list Continuation.Map.t
   -> Flambda.Expr.with_wrapper Continuation.Map.t

@@ -21,7 +21,8 @@
 
 module How_to_unbox : sig
   type t = private {
-    unboxee_to_wrapper_params_unboxee : Variable.t Variable.Map.t;
+    unboxee_to_wrapper_params_unboxee :
+      Flambda.Typed_parameter.t Parameter.Map.t;
     add_bindings_in_wrapper : Flambda.Expr.t -> Flambda.Expr.t;
     new_arguments_for_call_in_wrapper : Variable.t list;
     new_params : Flambda.Typed_parameter.t list;

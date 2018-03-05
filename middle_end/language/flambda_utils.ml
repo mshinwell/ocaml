@@ -85,65 +85,26 @@ let parameters_specialised_to_the_same_variable
     function_decls.funs
 *)
 
-(*
-let create_wrapper_params ~params ~specialised_args
-      ~freshening_already_assigned =
+let create_wrapper_params ~params ~freshening_already_assigned =
+  let module Typed_parameter = Flambda.Typed_parameter in
   let renaming =
-    List.map (fun param ->
+    List.map (fun typed_param ->
+        let param = Typed_parameter.param typed_param in
         match Parameter.Map.find param freshening_already_assigned with
-        | exception Not_found -> param, Parameter.rename param
+        | exception Not_found ->
+          param, Typed_parameter.rename typed_param
         | renamed_param -> param, renamed_param)
       params
   in
   let renaming_map = Parameter.Map.of_list renaming in
-  let freshen_param param =
+  let freshen_typed_param typed_param =
+    let param = Typed_parameter.param typed_param in
     match Parameter.Map.find param renaming_map with
     | exception Not_found -> assert false
     | param -> param
   in
-  let wrapper_params = List.map freshen_param params in
-  (* CR mshinwell: We need to sort out this nonsense.  Should specialised
-     args be Parameter.Map.t, for example? *)
-  let renaming_map' =
-    Variable.Map.of_list (
-      List.map (fun (param, renamed_param) ->
-          Parameter.var param, Parameter.var renamed_param)
-        renaming)
-  in
-  let freshen_param param =
-    match Variable.Map.find param renaming_map' with
-    | exception Not_found -> assert false
-    | param -> param
-  in
-  let params = Parameter.Set.vars params in
-  let wrapper_specialised_args =
-    Variable.Map.fold (fun param (spec_to : Flambda.specialised_to)
-            wrapper_specialised_args ->
-        if not (Variable.Set.mem param params) then begin
-          (* A specialised argument of one of the other functions in the set
-             of closures / continuations. *)
-          wrapper_specialised_args
-        end else begin
-          let param = freshen_param param in
-          let projection =
-            match spec_to.projection with
-            | None -> None
-            | Some projection ->
-              Some (Projection.map_projecting_from projection
-                ~f:(fun param -> freshen_param param))
-          in
-          let spec_to : Flambda.specialised_to =
-            { var = spec_to.var;
-              projection;
-            }
-          in
-          Variable.Map.add param spec_to wrapper_specialised_args
-        end)
-      specialised_args
-      Variable.Map.empty
-  in
-  renaming_map, wrapper_params, wrapper_specialised_args
-*)
+  let wrapper_params = List.map freshen_typed_param params in
+  renaming_map, wrapper_params
 
 let make_let_cont_alias ~name ~alias_of
       ~parameter_types : Flambda.Let_cont_handlers.t =

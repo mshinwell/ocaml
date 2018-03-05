@@ -121,8 +121,8 @@ module rec Expr : sig
      identified by [id].  [params] must only reference variables that are
      free variables of [body]. *)
   (* CR-soon mshinwell: consider improving name and names of arguments
-    lwhite: the params restriction seems odd, perhaps give a reason
-    in the comment. *)
+     lwhite: the params restriction seems odd, perhaps give a reason
+     in the comment. *)
   val make_closure_declaration
      : id:Variable.t
     -> free_variable_kind:(Variable.t -> Flambda_kind.t)
@@ -169,7 +169,7 @@ module rec Expr : sig
     -> t
 
   (* CR-soon mshinwell: we need to document whether these iterators follow any
-    particular order. *)
+     particular order. *)
   module Iterators : sig
     val iter : (t -> unit) -> (Named.t -> unit) -> t -> unit
 

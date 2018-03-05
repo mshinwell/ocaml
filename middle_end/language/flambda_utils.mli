@@ -55,14 +55,10 @@ val parameters_specialised_to_the_same_variable
   -> specialised_to_same_as list Variable.Map.t
 *)
 
-(*
 val create_wrapper_params
    : params:Flambda.Typed_parameter.t list
-  -> freshening_already_assigned:
-    Flambda.Typed_parameter.t Flambda.Typed_parameter.Map.t
-  -> Flambda.Typed_parameter.t Flambda.Typed_parameter.Map.t
-    * Flambda.Typed_parameter.t list
-*)
+  -> freshening_already_assigned:Flambda.Typed_parameter.t Parameter.Map.t
+  -> Flambda.Typed_parameter.t Parameter.Map.t * Flambda.Typed_parameter.t list
 
 val make_let_cont_alias
    : name:Continuation.t

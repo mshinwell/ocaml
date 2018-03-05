@@ -239,7 +239,8 @@ end)
 
 module How_to_unbox = struct
   type t = {
-    unboxee_to_wrapper_params_unboxee : Variable.t Variable.Map.t;
+    unboxee_to_wrapper_params_unboxee :
+      Flambda.Typed_parameter.t Parameter.Map.t;
     add_bindings_in_wrapper : Flambda.Expr.t -> Flambda.Expr.t;
     new_arguments_for_call_in_wrapper : Variable.t list;
     new_params : Flambda.Typed_parameter.t list;
@@ -249,7 +250,7 @@ module How_to_unbox = struct
   }
 
   let create () =
-    { unboxee_to_wrapper_params_unboxee = Variable.Map.empty;
+    { unboxee_to_wrapper_params_unboxee = Parameter.Map.empty;
       add_bindings_in_wrapper = (fun expr -> expr);
       new_arguments_for_call_in_wrapper = [];
       new_params = [];
@@ -259,8 +260,9 @@ module How_to_unbox = struct
 
   let merge t1 t2 =
     { unboxee_to_wrapper_params_unboxee =
-        Variable.Map.union (fun _ param1 param2 ->
-            assert (Variable.equal param1 param2);
+        Parameter.Map.union (fun _ param1 param2 ->
+            let module TP = Flambda.Typed_parameter in
+            assert (Parameter.equal (TP.param param1) (TP.param param2));
             Some param1)
           t1.unboxee_to_wrapper_params_unboxee
           t2.unboxee_to_wrapper_params_unboxee;
@@ -307,8 +309,12 @@ module Make (S : Unboxing_spec) = struct
     assert (num_tags >= 1);  (* see below *)
     let wrapper_param_unboxee = Variable.rename unboxee in
     let unboxee_to_wrapper_params_unboxee =
-      Variable.Map.add unboxee wrapper_param_unboxee
-        Variable.Map.empty
+      let wrapper_param_unboxee =
+        Flambda.Typed_parameter.create (Parameter.wrap wrapper_param_unboxee)
+          unboxee_ty
+      in
+      Parameter.Map.add (Parameter.wrap unboxee) wrapper_param_unboxee
+        Parameter.Map.empty
     in
     let max_size =
       Tag.Map.fold (fun _tag size max_size -> Targetint.OCaml.max size max_size)
