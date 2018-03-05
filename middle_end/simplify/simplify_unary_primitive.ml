@@ -367,7 +367,7 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
     T.these_tags tags_to_env_extensions
   in
   match inferred_tags with
-  | Proved (Exactly inferred_tags) ->
+  | Proved (Tags inferred_tags) ->
     let inferred_tags = Tag.to_scannable_set inferred_tags in
     let tags = Tag.Scannable.Set.inter inferred_tags possible_tags in
     let r =

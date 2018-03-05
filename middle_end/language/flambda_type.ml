@@ -1143,7 +1143,7 @@ let prove_is_a_block ~type_of_name t ~kind_of_all_fields : bool proof =
   | Fabricated _ -> wrong_kind ()
 
 type unboxable_variant =
-  | Unboxable of block_cases Tag.Map.t * immediate_case Immediate.Map.t
+  | Unboxable of Targetint.OCaml.t Tag.Map.t * Immediate.Set.t
   | Not_unboxable
 
 let prove_unboxable_variant ~type_of_name t : unboxable_variant proof =
@@ -1169,7 +1169,19 @@ let prove_unboxable_variant ~type_of_name t : unboxable_variant proof =
         if Tag.Map.is_empty blocks then
           Proved Not_unboxable
         else
-          Proved (Unboxable (blocks, imms))
+          let cannot_unbox = ref false in
+          let blocks =
+            Tag.Map.filter_map blocks ~f:(fun _tag (Join { by_length; }) ->
+              match Targetint.OCaml.Map.get_singleton by_length with
+              | Some (length, _) -> Some length
+              | None ->
+                cannot_unbox := true;
+                None)
+          in
+          if !cannot_unbox then Proved Not_unboxable
+          else
+            let imms = Immediate.Map.keys imms in
+            Proved (Unboxable (blocks, imms))
       end
     | Ok (Boxed_number _) | Ok (Closures _ | String _) -> Invalid
     end
@@ -1731,7 +1743,7 @@ let free_names_transitive ~(type_of_name : type_of_name) t =
   !all_names
 
 type unboxable_proof =
-  | Variant of block_cases Tag.Map.t * immediate_case Immediate.Map.t
+  | Variant of Targetint.OCaml.t Tag.Map.t * Immediate.Set.t
   | Boxed_float of Numbers.Float_by_bit_pattern.Set.t ty_naked_number
   | Boxed_int32 of Numbers.Int32.Set.t ty_naked_number
   | Boxed_int64 of Numbers.Int64.Set.t ty_naked_number

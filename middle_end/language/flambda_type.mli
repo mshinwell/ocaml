@@ -241,7 +241,7 @@ val prove_sets_of_closures
 val prove_closure : (t -> closure proof) type_accessor
 
 type unboxable_proof = private
-  | Variant of block_cases Tag.Map.t * immediate_case Immediate.Map.t
+  | Variant of Targetint.OCaml.t Tag.Map.t * Immediate.Set.t
   | Boxed_float of Numbers.Float_by_bit_pattern.Set.t ty_naked_number
   | Boxed_int32 of Numbers.Int32.Set.t ty_naked_number
   | Boxed_int64 of Numbers.Int64.Set.t ty_naked_number

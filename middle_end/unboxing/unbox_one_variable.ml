@@ -54,19 +54,19 @@ module Unboxing_spec_variant : Unboxing_spec = struct
     match proof with
     | Variant (block_sizes_by_tag, constant_ctors) ->
       let no_discriminant_needed =
-        match Tag.Map.get_singleton variant.block_sizes_by_tag with
+        match Tag.Map.get_singleton block_sizes_by_tag with
         | Some (tag, _) -> Some tag
         | None -> None
       in
       let t : t =
-        { is_int_param = Name.create "is_int";
-          get_tag_param = Name.create "get_tag";
+        { is_int_param = Name.var (Variable.create "is_int");
+          get_tag_param = Name.var (Variable.create "get_tag");
           no_discriminant_needed;
         }
       in
       let unboxing_spec : unboxing_spec =
         { constant_ctors;
-          block_sizes_by_tag = variant.block_sizes_by_tag;
+          block_sizes_by_tag;
         }
       in
       Some (t, unboxing_spec)
