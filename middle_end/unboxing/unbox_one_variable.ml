@@ -17,6 +17,7 @@
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
 module E = Simplify_env_and_result.Env
+module K = Flambda_kind
 module T = Flambda_type
 
 type unboxing_spec = {
@@ -37,7 +38,7 @@ module type Unboxing_spec = sig
     -> Debuginfo.t
     -> Flambda.Named.t
 
-  val box : Simple.t list -> Debuginfo.t -> Flambda.Named.t
+  val box : Tag.t -> Simple.t list -> Debuginfo.t -> Flambda.Named.t
 
   val refine_unboxee_ty
      : (t -> unboxee_ty:T.t -> all_fields:Name.t list -> T.t) T.type_accessor
@@ -47,16 +48,22 @@ module Unboxing_spec_variant : Unboxing_spec = struct
   type t = {
     is_int_param : Name.t;
     get_tag_param : Name.t;
-    no_discriminant_needed : Tag.t option;
+    no_discriminant_needed : Tag.Scannable.t option;
   }
 
   let create (proof : T.unboxable_proof) =
     match proof with
-    | Variant (block_sizes_by_tag, constant_ctors) ->
+    | Variant { block_sizes_by_tag; block_contents_kind; constant_ctors; } ->
       let no_discriminant_needed =
-        match Tag.Map.get_singleton block_sizes_by_tag with
+        match Tag.Scannable.Map.get_singleton block_sizes_by_tag with
         | Some (tag, _) -> Some tag
         | None -> None
+      in
+      let block_sizes_by_tag =
+        Tag.Scannable.Map.fold (fun tag size block_sizes_by_tag ->
+            Tag.Map.add (Tag.Scannable.to_tag tag) size block_sizes_by_tag)
+          block_sizes_by_tag
+          Tag.Map.empty
       in
       let t : t =
         { is_int_param = Name.var (Variable.create "is_int");
@@ -77,11 +84,18 @@ module Unboxing_spec_variant : Unboxing_spec = struct
   let get_field ~boxed_value ~index dbg : Flambda.Named.t =
     (* CR mshinwell: We should be able to do better than
        [Unknown], based on the type of the unboxee. *)
-    Prim (Binary (Block_load (Value Unknown, Immutable), boxed_value, index),
+    Prim (Binary (Block_load (Block (Value Unknown), Immutable),
+        boxed_value, Simple.const_int index),
       dbg)
 
-  let box fields dbg : Flambda.Named.t =
-    Prim (Variadic (Make_block (Value Unknown, Immutable), fields), dbg)
+  let box tag fields dbg : Flambda.Named.t =
+    let kinds =
+      (* CR mshinwell: We should be able to do better than [Unknown] based
+         on the Flambda types of the fields *)
+      List.map (fun _field -> Flambda_primitive.Value_kind.Unknown) fields
+    in
+    Prim (Variadic (Make_block (Full_of_values (tag, kinds), Immutable),
+      fields), dbg)
 
   let refine_unboxee_ty ~type_of_name t ~unboxee_ty ~all_fields =
     match t.no_discriminant_needed with
@@ -93,9 +107,11 @@ module Unboxing_spec_variant : Unboxing_spec = struct
       T.join ~type_of_name unboxee_ty unboxee_discriminants
     | Some unique_tag ->
       let fields =
-        List.map (fun field -> T.alias_type_of unboxed_kind field) all_fields
+        List.map (fun field : T.t T.mutable_or_immutable ->
+            Immutable (T.alias_type_of unboxed_kind field))
+          all_fields
       in
-      T.block unique_tag ~fields:(Immutable (Array.of_list fields))
+      T.block unique_tag ~fields:(Array.of_list fields)
 end
 
 module Unboxing_spec_naked_number (N : sig
@@ -136,7 +152,7 @@ end) = struct
     end;
     Prim (Unary (Unbox_number N.boxable_number_kind, boxed_value), dbg)
 
-  let box fields dbg : Flambda.Named.t =
+  let box _tag fields dbg : Flambda.Named.t =
     match fields with
     | [naked_number] ->
       Prim (Unary (Box_number N.boxable_number_kind, naked_number), dbg)
@@ -555,7 +571,7 @@ let how_to_unbox_core ~type_of_name ~env ~unboxee ~unboxee_ty
               List.rev fields
             in
             let handler : Flambda.Expr.t =
-              Flambda.Expr.create_let boxed (S.box fields dbg)
+              Flambda.Expr.create_let boxed (S.box tag fields dbg)
                 (Flambda.Apply_cont (join_cont, None, [boxed]))
             in
             Let_cont {

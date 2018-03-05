@@ -240,8 +240,14 @@ val prove_sets_of_closures
 
 val prove_closure : (t -> closure proof) type_accessor
 
+type unboxable_variant_or_block0 = private {
+  block_sizes_by_tag : Targetint.OCaml.t Tag.Scannable.Map.t;
+  block_contents_kind : Flambda_kind.t;
+  constant_ctors : Immediate.Set.t;
+}
+
 type unboxable_proof = private
-  | Variant of Targetint.OCaml.t Tag.Map.t * Immediate.Set.t
+  | Variant_or_block of unboxable_variant_or_block0
   | Boxed_float of Numbers.Float_by_bit_pattern.Set.t ty_naked_number
   | Boxed_int32 of Numbers.Int32.Set.t ty_naked_number
   | Boxed_int64 of Numbers.Int64.Set.t ty_naked_number

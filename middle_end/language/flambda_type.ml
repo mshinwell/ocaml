@@ -1084,6 +1084,30 @@ let prove_get_field_from_block ~type_of_name t ~index ~field_kind : t proof =
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _ -> wrong_kind ()
 
+let tags_all_valid t blocks ~kind_of_all_fields =
+  Tag.Map.for_all (fun tag ((Join { by_length; }) : block_cases) ->
+      Targetint.OCaml.Map.iter
+        (fun _length (block : singleton_block) ->
+          Array.iter (fun (field : _ mutable_or_immutable) ->
+              match field with
+              | Mutable -> ()
+              | Immutable field ->
+                let field_kind = kind field in
+                let compatible =
+                  K.compatible field_kind
+                    ~if_used_at:kind_of_all_fields
+                in
+                if not compatible then begin
+                  Misc.fatal_errorf "Kind %a is not compatible \
+                      with all fields of this block: %a"
+                    K.print kind_of_all_fields
+                    print t
+                end)
+            block.fields)
+        by_length;
+      valid_block_tag_for_kind ~tag ~field_kind:kind_of_all_fields)
+    blocks
+
 let prove_is_a_block ~type_of_name t ~kind_of_all_fields : bool proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a block: %a"
@@ -1110,30 +1134,7 @@ let prove_is_a_block ~type_of_name t ~kind_of_all_fields : bool proof =
         | Known blocks ->
           if Tag.Map.is_empty blocks then Invalid
           else
-            let tags_all_valid =
-              Tag.Map.for_all (fun tag ((Join { by_length; }) : block_cases) ->
-                  Targetint.OCaml.Map.iter
-                    (fun _length (block : singleton_block) ->
-                      Array.iter (fun (field : _ mutable_or_immutable) ->
-                          match field with
-                          | Mutable -> ()
-                          | Immutable field ->
-                            let field_kind = kind field in
-                            let compatible =
-                              K.compatible field_kind
-                                ~if_used_at:kind_of_all_fields
-                            in
-                            if not compatible then begin
-                              Misc.fatal_errorf "Kind %a is not compatible \
-                                  with all fields of this block: %a"
-                                K.print kind_of_all_fields
-                                print t
-                            end)
-                        block.fields)
-                    by_length;
-                  valid_block_tag_for_kind ~tag ~field_kind:kind_of_all_fields)
-                blocks
-            in
+            let tags_all_valid = tags_all_valid t blocks ~kind_of_all_fields in
             if tags_all_valid then Proved true else Invalid
       end
     | Ok (Boxed_number _) -> Proved false
@@ -1142,17 +1143,26 @@ let prove_is_a_block ~type_of_name t ~kind_of_all_fields : bool proof =
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _ -> wrong_kind ()
 
-type unboxable_variant =
-  | Unboxable of Targetint.OCaml.t Tag.Map.t * Immediate.Set.t
+type unboxable_variant_or_block0 = {
+  block_sizes_by_tag : Targetint.OCaml.t Tag.Scannable.Map.t;
+  block_contents_kind : K.t;
+  constant_ctors : Immediate.Set.t;
+}
+
+type unboxable_variant_or_block =
+  | Unboxable of unboxable_variant_or_block0
   | Not_unboxable
 
-let prove_unboxable_variant ~type_of_name t : unboxable_variant proof =
+let prove_unboxable_variant_or_block ~type_of_name t
+      : unboxable_variant_or_block proof =
   let wrong_kind () =
-    Misc.fatal_errorf "Wrong kind for something claimed to be a variant: %a"
+    Misc.fatal_errorf "Wrong kind for something claimed to be a \
+        variant or block: %a"
       print t
   in
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
-  Simplified_type.check_not_phantom simplified "prove_unboxable_variant";
+  Simplified_type.check_not_phantom simplified
+    "prove_unboxable_variant_or_block";
   match simplified.descr with
   | Value ty_value ->
     begin match ty_value with
@@ -1162,26 +1172,45 @@ let prove_unboxable_variant ~type_of_name t : unboxable_variant proof =
       begin match blocks_imms.blocks, blocks_imms.immediates with
       | Unknown, _ | _, Unknown -> Unknown
       | Known blocks, Known imms ->
-        (* CR mshinwell: Should this have the "tags all valid" check
-           (like [prove_is_a_block], above)?  It probably should.  On the
-           other hand we could maybe fix the types to statically enforce
-           this (add a type for structured + double-array tags). *)
         if Tag.Map.is_empty blocks then
           Proved Not_unboxable
         else
           let cannot_unbox = ref false in
-          let blocks =
-            Tag.Map.filter_map blocks ~f:(fun _tag (Join { by_length; }) ->
-              match Targetint.OCaml.Map.get_singleton by_length with
-              | Some (length, _) -> Some length
-              | None ->
-                cannot_unbox := true;
-                None)
+          let block_sizes_by_tag =
+            Tag.Map.fold (fun tag (Join { by_length; }) blocks ->
+                match Targetint.OCaml.Map.get_singleton by_length with
+                | Some (length, _) ->
+                  begin match Tag.Scannable.of_tag tag with
+                  | Some tag ->
+                    Tag.Scannable.Map.add tag length blocks
+                  | None ->
+                    cannot_unbox := true;
+                    blocks
+                  end
+                | None ->
+                  cannot_unbox := true;
+                  blocks)
+              blocks
+              Tag.Scannable.Map.empty
           in
           if !cannot_unbox then Proved Not_unboxable
           else
             let imms = Immediate.Map.keys imms in
-            Proved (Unboxable (blocks, imms))
+            if tags_all_valid t blocks ~kind_of_all_fields:(K.value ()) then
+              Proved (Unboxable {
+                block_sizes_by_tag;
+                block_contents_kind = K.value ();
+                constant_ctors = imms;
+              })
+            else if tags_all_valid t blocks
+               ~kind_of_all_fields:(K.naked_float ())
+            then
+              Proved (Unboxable {
+                block_sizes_by_tag;
+                block_contents_kind = K.naked_float ();
+                constant_ctors = imms;
+              })
+            else Proved Not_unboxable
       end
     | Ok (Boxed_number _) | Ok (Closures _ | String _) -> Invalid
     end
@@ -1743,7 +1772,7 @@ let free_names_transitive ~(type_of_name : type_of_name) t =
   !all_names
 
 type unboxable_proof =
-  | Variant of Targetint.OCaml.t Tag.Map.t * Immediate.Set.t
+  | Variant_or_block of unboxable_variant_or_block0
   | Boxed_float of Numbers.Float_by_bit_pattern.Set.t ty_naked_number
   | Boxed_int32 of Numbers.Int32.Set.t ty_naked_number
   | Boxed_int64 of Numbers.Int64.Set.t ty_naked_number
@@ -1751,8 +1780,8 @@ type unboxable_proof =
   | Cannot_unbox
 
 let prove_unboxable ~type_of_name ~unboxee_ty : unboxable_proof =
-  match prove_unboxable_variant ~type_of_name unboxee_ty with
-  | Proved (Unboxable (blocks, imms)) -> Variant (blocks, imms)
+  match prove_unboxable_variant_or_block ~type_of_name unboxee_ty with
+  | Proved (Unboxable unboxable) -> Variant_or_block unboxable
   | Invalid | Proved Not_unboxable -> Cannot_unbox
   | Unknown ->
     match prove_boxed_float ~type_of_name unboxee_ty with
