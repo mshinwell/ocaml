@@ -46,6 +46,8 @@ val bool : bool -> t
 val int : Targetint.OCaml.t -> t
 val char : char -> t
 
+val tag : Tag.t -> t
+
 val map : t -> f:(Targetint.OCaml.t -> Targetint.OCaml.t) -> t
 
 val to_targetint : t -> Targetint.OCaml.t

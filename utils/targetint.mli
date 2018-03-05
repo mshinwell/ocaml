@@ -238,8 +238,8 @@ module OCaml : sig
 
   *)
 
-  val min : t
-  val max : t
+  val min_value : t
+  val max_value : t
   val max_string_length : t
 
   val minus_one : t
@@ -266,6 +266,7 @@ module OCaml : sig
   val to_float : t -> float
 
   val to_int : t -> int
+  val to_int_exn : t -> int
   val to_int_option : t -> int option
   val to_int32 : t -> int32
   val to_int64 : t -> int64
@@ -288,6 +289,10 @@ module OCaml : sig
   val shift_left : t -> int -> t
   val shift_right : t -> int -> t
   val shift_right_logical : t -> int -> t
+
+  val max : t -> t -> t
+
+  (* CR mshinwell: Add an [Array] module *)
 
   include Identifiable.S with type t := t
 

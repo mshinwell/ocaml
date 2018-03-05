@@ -85,8 +85,8 @@ module type S = sig
   module OCaml : sig
     type t
     type targetint_ocaml = t
-    val min : t
-    val max : t
+    val min_value : t
+    val max_value : t
     val max_string_length : t
     val minus_one : t
     val zero : t
@@ -104,6 +104,7 @@ module type S = sig
 
     val to_float : t -> float
     val to_int : t -> int
+    val to_int_exn : t -> int
     val to_int_option : t -> int option
     val to_int32 : t -> int32
     val to_int64 : t -> int64
@@ -126,6 +127,8 @@ module type S = sig
     val shift_left : t -> int -> t
     val shift_right : t -> int -> t
     val shift_right_logical : t -> int -> t
+
+    val max : t -> t -> t
 
     include Identifiable.S with type t := t
 
@@ -236,8 +239,8 @@ module Int32 = struct
 
     (* XXX Implement correctly *)
 
-    let min = Int32.min_int
-    let max = Int32.max_int
+    let min_value = Int32.min_int
+    let max_value = Int32.max_int
 
     let sub = Int32.sub
     let neg = Int32.neg
@@ -285,6 +288,11 @@ module Int32 = struct
     let to_int_option t = (* XXX this is wrong, implement correctly *)
       Some (to_int t)
 
+    let to_int_exn t =
+      match to_int_option t with
+      | Some i -> i
+      | None -> Misc.fatal_errorf "Targetint.OCaml.to_int_exn %ld" t
+
     (* CR mshinwell: Overflow semantics? *)
     let of_targetint t = t
 
@@ -295,6 +303,9 @@ module Int32 = struct
 
     let max_string_length =
       Int32.sub (Int32.mul 4l max_array_length) 1l
+
+    let max t1 t2 =
+      if Pervasives.compare t1 t2 < 0 then t2 else t1
 
     (* CR mshinwell: implement *)
     let get_least_significant_16_bits_then_byte_swap _t = assert false
@@ -415,8 +426,8 @@ module Int64 = struct
     let hex_ff = 0xffL
 
     (* XXX Implement correctly *)
-    let min = Int64.min_int
-    let max = Int64.max_int
+    let min_value = Int64.min_int
+    let max_value = Int64.max_int
 
     (* XXX Implement correctly *)
     let sub = Int64.sub
@@ -448,6 +459,11 @@ module Int64 = struct
     let to_int_option t = (* XXX this is wrong, implement correctly *)
       Some (to_int t)
 
+    let to_int_exn t =
+      match to_int_option t with
+      | Some i -> i
+      | None -> Misc.fatal_errorf "Targetint.OCaml.to_int_exn %Ld" t
+
     let of_int32 t = Int64.of_int32 t
     let of_int64 t = t (* CR mshinwell: Overflow semantics? *)
     let of_float t = Int64.bits_of_float t
@@ -466,6 +482,9 @@ module Int64 = struct
 
     let max_string_length =
       Int64.sub (Int64.mul 8L max_array_length) 1L
+
+    let max t1 t2 =
+      if Pervasives.compare t1 t2 < 0 then t2 else t1
 
     (* CR mshinwell: implement *)
     let get_least_significant_16_bits_then_byte_swap _t = assert false

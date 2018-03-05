@@ -126,6 +126,8 @@ let char value = {
   print_as_char = true;
 }
 
+let tag tag = int (TO.of_int (Tag.to_int tag))
+
 let to_targetint t = t.value
 
 let map t ~f =
