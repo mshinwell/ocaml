@@ -773,18 +773,34 @@ module Make (S : Unboxing_spec) = struct
               Tag.Map.empty
           in
           let by_tag =
-            Tag.Map.map (fun size ->
+            Tag.Map.mapi (fun tag size ->
                 (* CR mshinwell: rewrite for-loop to avoid conversion *)
                 let size = Targetint.OCaml.to_int size in
-                let field_scope_level = E.continuation_scope_level env in
-                let env = ref (T.Typing_environment.create ()) in
+                let scope_level = E.continuation_scope_level env in
+                let unboxee_ty_refinement =
+                  let fields =
+                    match Misc.Stdlib.List.first_n fields_with_kinds size with
+                    | Some (fields_with_kinds, _) ->
+                      List.map (fun (field, kind) : _ T.mutable_or_immutable ->
+                          let field = Name.var field in
+                          Immutable (T.alias_type_of kind field))
+                        fields_with_kinds
+                    | None -> assert false
+                  in
+                  T.block tag ~fields:(Array.of_list fields)
+                in
+                let initial_env =
+                  T.Typing_environment.singleton (Name.var unboxee) scope_level
+                    unboxee_ty_refinement
+                in
+                let env = ref initial_env in
                 for field = 0 to size - 1 do
                   let field, kind = fields_with_kinds0.(field) in
                   (* CR mshinwell: We could refine the types of the actual fields
                      themselves according to the tag. *)
                   let field_ty = T.unknown kind in
                   env := T.Typing_environment.add !env (Name.var field)
-                    field_scope_level field_ty
+                    scope_level field_ty
                 done;
                 !env)
               tags_to_sizes
