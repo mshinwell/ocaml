@@ -73,6 +73,8 @@ val add_trap : t -> Trap_id.t -> Trap_id.t * t
     If no renaming is specified in [t] for [var] it is returned unchanged. *)
 val apply_variable : t -> Variable.t -> Variable.t
 
+val apply_name : t -> Name.t -> Name.t
+
 (** As for [apply_variable], but for mutable variables. *)
 val apply_mutable_variable : t -> Mutable_variable.t -> Mutable_variable.t
 

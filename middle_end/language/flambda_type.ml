@@ -921,6 +921,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
       end
     | Fabricated _ -> Cannot_reify
 
+(* CR mshinwell: rename to "prove_must_be_tagged_immediate" *)
 let prove_tagged_immediate ~type_of_name t
       : Immediate.Set.t proof =
   let wrong_kind () =
@@ -936,18 +937,14 @@ let prove_tagged_immediate ~type_of_name t
     | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Blocks_and_tagged_immediates blocks_imms) ->
-      begin match blocks_imms.blocks with
-      | Unknown -> Unknown
-      | Known blocks ->
-        if not (Tag.Map.is_empty blocks) then begin
-          Invalid
-        end else begin
-          match blocks_imms.immediates with
-          | Unknown -> Unknown
-          | Known imms ->
-            assert (not (Immediate.Map.is_empty imms));
-            Proved (Immediate.Map.keys imms)
-          end
+      begin match blocks_imms.blocks, blocks_imms.immediates with
+      | Unknown, _ | _, Unknown -> Unknown
+      | Known blocks, Known imms ->
+        match Tag.Map.is_empty blocks, Immediate.Map.is_empty imms with
+        | true, true -> Invalid
+        | false, false -> Unknown
+        | true, false -> Proved (Immediate.Map.keys imms)
+        | false, true -> Invalid
       end
     | Ok (Boxed_number _) -> Invalid
     | Ok (Closures _ | String _) -> Invalid
@@ -1013,6 +1010,10 @@ let prove_get_field_from_block ~type_of_name t ~index ~field_kind : t proof =
   in
   let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
   Simplified_type.check_not_phantom simplified "prove_get_field_from_block";
+(*
+Format.eprintf "get_field_from_block index %a type@ %a\n"
+  Targetint.OCaml.print index print t;
+*)
   match simplified.descr with
   | Value ty_value ->
     begin match ty_value with
@@ -1021,57 +1022,53 @@ let prove_get_field_from_block ~type_of_name t ~index ~field_kind : t proof =
     | Ok (Blocks_and_tagged_immediates blocks_imms) ->
       if Targetint.OCaml.compare index Targetint.OCaml.zero < 0 then Invalid
       else
-        let no_immediates =
-          match blocks_imms.immediates with
-          | Known imms when Immediate.Map.is_empty imms -> true
-          | Known _ | Unknown -> false
-        in
-        if not no_immediates then begin
-          Invalid
-        end else begin
-          match blocks_imms.blocks with
-          | Unknown -> Unknown
-          | Known blocks ->
-            assert (not (Tag.Map.is_empty blocks));
-            let field_ty =
-              Tag.Map.fold
-                (fun tag ((Join { by_length; }) : block_cases) field_ty ->
-                  let tag_is_valid =
-                    valid_block_tag_for_kind ~tag ~field_kind
-                  in
-                  if not tag_is_valid then field_ty
-                  else
-                    Targetint.OCaml.Map.fold
-                      (fun len (block : singleton_block) field_ty ->
-                        if Targetint.OCaml.compare index len >= 0 then begin
-                          None
-                        end else begin
-                          (* CR mshinwell: Should this check the kind of all
-                             fields, like [prove_is_a_block] below? *)
-                          (* CR mshinwell: should use more robust conversion *)
-                          let index = Targetint.OCaml.to_int index in
-                          assert (Array.length block.fields > index);
-                          let this_field_ty =
-                            match block.fields.(index) with
-                            | Immutable this_field_ty -> this_field_ty
-                            | Mutable -> unknown field_kind
+        begin match blocks_imms.blocks with
+        | Unknown -> Unknown
+        | Known blocks ->
+          assert (not (Tag.Map.is_empty blocks));
+          let field_ty =
+            Tag.Map.fold
+              (fun tag ((Join { by_length; }) : block_cases) field_ty ->
+                let tag_is_valid =
+                  valid_block_tag_for_kind ~tag ~field_kind
+                in
+                if not tag_is_valid then field_ty
+                else
+                  Targetint.OCaml.Map.fold
+                    (fun len (block : singleton_block) field_ty ->
+                      if Targetint.OCaml.compare index len >= 0 then begin
+                        None
+                      end else begin
+                        (* CR mshinwell: Should this check the kind of all
+                           fields, like [prove_is_a_block] below? *)
+                        (* CR mshinwell: should use more robust conversion *)
+                        let index = Targetint.OCaml.to_int index in
+                        assert (Array.length block.fields > index);
+                        let this_field_ty =
+                          match block.fields.(index) with
+                          | Immutable this_field_ty -> this_field_ty
+                          | Mutable -> unknown field_kind
+                        in
+                        match field_ty with
+                        | None -> None
+                        | Some field_ty ->
+                          let field_ty =
+                            join ~type_of_name this_field_ty field_ty
                           in
-                          match field_ty with
-                          | None -> None
-                          | Some field_ty ->
-                            let field_ty =
-                              join ~type_of_name this_field_ty field_ty
-                            in
-                            Some field_ty
-                        end)
-                      by_length
-                      field_ty)
-                blocks
-                (Some (bottom field_kind))
-            in
-            match field_ty with
-            | None -> Invalid
-            | Some field_ty -> Proved field_ty
+                          Some field_ty
+                      end)
+                    by_length
+                    field_ty)
+              blocks
+              (Some (bottom field_kind))
+          in
+(*
+Format.eprintf "returned field type is %a\n"
+  (Misc.Stdlib.Option.print print) field_ty;
+*)
+          match field_ty with
+          | None -> Invalid
+          | Some field_ty -> Proved field_ty
         end 
     | Ok (Boxed_number _) -> Invalid
     | Ok (Closures _ | String _) -> Invalid
@@ -1103,7 +1100,7 @@ let tags_all_valid t blocks ~kind_of_all_fields =
       valid_block_tag_for_kind ~tag ~field_kind:kind_of_all_fields)
     blocks
 
-let prove_is_a_block ~type_of_name t ~kind_of_all_fields : bool proof =
+let prove_must_be_a_block ~type_of_name t ~kind_of_all_fields : unit proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a block: %a"
       print t
@@ -1116,24 +1113,19 @@ let prove_is_a_block ~type_of_name t ~kind_of_all_fields : bool proof =
     | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Blocks_and_tagged_immediates blocks_imms) ->
-      let no_immediates =
-        match blocks_imms.immediates with
-        | Known imms when Immediate.Map.is_empty imms -> true
-        | Known _ | Unknown -> false
-      in
-      if not no_immediates then begin
-        Invalid
-      end else begin
-        match blocks_imms.blocks with
-        | Unknown -> Unknown
-        | Known blocks ->
-          if Tag.Map.is_empty blocks then Invalid
-          else
-            let tags_all_valid = tags_all_valid t blocks ~kind_of_all_fields in
-            if tags_all_valid then Proved true else Invalid
+      begin match blocks_imms.blocks, blocks_imms.immediates with
+      | Unknown, _ | _, Unknown -> Unknown
+      | Known blocks, Known imms ->
+        match Tag.Map.is_empty blocks, Immediate.Map.is_empty imms with
+        | true, true -> Invalid
+        | false, false -> Unknown
+        | true, false -> Invalid
+        | false, true ->
+          let tags_all_valid = tags_all_valid t blocks ~kind_of_all_fields in
+          if tags_all_valid then Proved () else Invalid
       end
-    | Ok (Boxed_number _) -> Proved false
-    | Ok (Closures _ | String _) -> Proved false
+    | Ok (Boxed_number _) -> Invalid
+    | Ok (Closures _ | String _) -> Invalid
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _ -> wrong_kind ()

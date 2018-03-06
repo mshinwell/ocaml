@@ -1400,6 +1400,7 @@ end and Continuation_handler : sig
     -> t
     -> t
     -> bool
+  val print : Format.formatter -> t -> unit
 end = struct
   include Continuation_handler
 
@@ -1412,6 +1413,15 @@ end = struct
       && Pervasives.compare stub1 stub2 = 0
       && Pervasives.compare is_exn_handler1 is_exn_handler2 = 0
       && Expr.equal ~equal_type handler1 handler2
+
+  let print ppf { params; stub; handler; is_exn_handler; } =
+    fprintf ppf "%s%s%s%a%s=@ %a"
+      (if stub then "*stub* " else "")
+      (if is_exn_handler then "*exn* " else "")
+      (match params with [] -> "" | _ -> "(")
+      Typed_parameter.List.print params
+      (match params with [] -> "" | _ -> ") ")
+      Expr.print handler
 end and Set_of_closures : sig
   type t = {
     function_decls : Function_declarations.t;

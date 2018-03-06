@@ -980,9 +980,9 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
     let args = Continuation_uses.Use.Kind.args kind in
     if not (List.for_all (fun arg -> Env.mem_simple env arg) args) then begin
       Misc.fatal_errorf "use_continuation %a: argument(s) (%a) not in \
-          environment %a"
+          environment:@ %a"
         Continuation.print cont
-        (Format.pp_print_list Simple.print) args
+        (Format.pp_print_list ~pp_sep:Format.pp_print_space Simple.print) args
         Env.print env
     end;
 (*
@@ -1088,9 +1088,11 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
       let tys = List.map (fun kind -> T.bottom kind) arity in
       tys, default_env
     | uses ->
+(*
       Format.eprintf "Continuation uses for %a:@ %a\n%!"
         Continuation.print cont
         Continuation_uses.print uses;
+*)
       Continuation_uses.join_of_arg_types uses ~arity ~default_env
 
   let continuation_args_types' t cont ~arity =

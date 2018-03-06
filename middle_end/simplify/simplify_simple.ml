@@ -30,6 +30,7 @@ let type_for_const (const : Simple.Const.t) =
   | Naked_nativeint n -> T.this_naked_nativeint n
 
 let simplify_name env name =
+  let name = Freshening.apply_name (E.freshening env) name in
   match E.type_of_name env (Name name) with
   | None ->
     Misc.fatal_errorf "Unbound name %a" Name.print name
@@ -43,6 +44,7 @@ let simplify_simple env (simple : Simple.t) =
   match simple with
   | Const c -> simple, type_for_const c
   | Name name ->
+    let name = Freshening.apply_name (E.freshening env) name in
     match E.type_of_name env (Name name) with
     | None ->
       Misc.fatal_errorf "Unbound name %a" Name.print name
@@ -54,8 +56,8 @@ let simplify_simple env (simple : Simple.t) =
       in
       match reified with
       | Term (simple, ty) -> simple, ty
-      | Cannot_reify | Lift _ -> simple, ty
-      | Invalid -> simple, T.bottom_like ty
+      | Cannot_reify | Lift _ -> Simple.name name, ty
+      | Invalid -> Simple.name name, T.bottom_like ty
 
 let simplify_simples env simples =
   List.map (fun simple -> simplify_simple env simple) simples

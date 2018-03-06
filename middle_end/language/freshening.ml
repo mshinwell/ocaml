@@ -202,6 +202,11 @@ let apply_variable t var =
    try Variable.Map.find var t.sb_var with
    | Not_found -> var
 
+let apply_name t (name : Name.t) =
+  match name with
+  | Var var -> Name.var (apply_variable t var)
+  | Symbol _ -> name
+
 let apply_mutable_variable t mut_var =
   match t with
   | Inactive -> mut_var

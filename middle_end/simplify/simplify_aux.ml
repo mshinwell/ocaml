@@ -19,17 +19,6 @@
 module E = Simplify_env_and_result.Env
 module T = Flambda_type
 
-let simplify_name env name =
-  let ty = E.type_of_name env (Name name) in
-  match ty with
-  | None ->
-    Misc.fatal_errorf "Unbound name %a" Name.print name
-  | Some ty ->
-    let ty, canonical_name = (E.type_accessor env T.resolve_aliases) ty in
-    match canonical_name with
-    | None -> name, ty
-    | Some canonical_name -> canonical_name, ty
-
 type bounds_check_result =
   | In_range
   | Out_of_range

@@ -27,7 +27,7 @@ module Expr = Flambda.Expr
 module Named = Flambda.Named
 module Typed_parameter = Flambda.Typed_parameter
 
-let simplify_name = Simplify_aux.simplify_name
+let simplify_name = Simplify_simple.simplify_name
 
 let freshen_continuation env cont =
   Freshening.apply_continuation (E.freshening env) cont
@@ -92,6 +92,7 @@ let for_defining_expr_of_let (env, r) var kind defining_expr =
       if (E.type_accessor env T.is_bottom) ty then Flambda.Reachable.invalid ()
       else defining_expr
   in
+  let _old_var = var in
   let var, freshening = Freshening.add_variable (E.freshening env) var in
   let env = E.set_freshening env freshening in
   let env = E.add_variable env var ty in
@@ -101,8 +102,8 @@ let for_defining_expr_of_let (env, r) var kind defining_expr =
       ~env_extension:new_judgements
   in
 (*
-Format.eprintf "Variable %a bound to %a in env\n%!"
-  Variable.print var T.print ty;
+Format.eprintf "Variable %a (previously: %a) bound to %a in env\n%!"
+  Variable.print var Variable.print old_var T.print ty;
 *)
   (env, r), new_bindings, var, kind, defining_expr
 
@@ -148,7 +149,7 @@ let filter_defining_expr_of_let r var (kind : K.t) (defining_expr : Named.t)
       r, var, kind, Some defining_expr
     else
       let r = R.map_benefit r (B.remove_code_named defining_expr) in
-      r, var, kind, Some defining_expr
+      r, var, kind, None
   end
 
 (** Simplify a set of [Let]-bindings introduced by a pass such as
@@ -240,11 +241,15 @@ end) = struct
   let simplify_switch env r ~(scrutinee : Name.t)
         (arms : Continuation.t S.Arm.Map.t)
         : Expr.t * R.t =
+(*
 Format.eprintf "Simplifying switch on %a in env %a.\n%!" Name.print scrutinee
   E.print env;
+*)
     let scrutinee, scrutinee_ty = simplify_name env scrutinee in
     S.check_kind_of_scrutinee env ~scrutinee scrutinee_ty;
+(*
 Format.eprintf "Type of switch scrutinee is %a\n%!" T.print scrutinee_ty;
+*)
     let arms = (E.type_accessor env S.switch_arms) scrutinee_ty ~arms in
     let destination_is_unreachable cont =
       (* CR mshinwell: This unreachable thing should be tidied up and also
@@ -279,8 +284,10 @@ Format.eprintf "Type of switch scrutinee is %a\n%!" T.print scrutinee_ty;
                   env scrutinee scrutinee_ty
               | Symbol _ -> env
             in
+(*
 Format.eprintf "Environment for %a switch arm:@ %a\n%!"
   Continuation.print cont E.print env;
+*)
             simplify_continuation_use_cannot_inline env r cont ~arity:[]
           in
           let arms = S.Arm.Map.add arm cont arms in
@@ -408,7 +415,7 @@ let rec simplify_let_cont_handler ~env ~r ~cont
   in
   r, handler
 
-and simplify_let_cont_handlers env r ~handlers
+and simplify_let_cont_handlers0 env r ~handlers
       ~(recursive : Flambda.recursive) ~freshening
       : Flambda.Let_cont_handlers.t option * R.t =
   Continuation.Map.iter (fun cont _handler ->
@@ -560,6 +567,16 @@ and simplify_let_cont_handlers env r ~handlers
         | Some (name, handler) ->
           Some (Flambda.Let_cont_handlers.Non_recursive { name; handler; }), r
         | None -> Some (Flambda.Let_cont_handlers.Recursive handlers), r
+
+and simplify_let_cont_handlers env r ~handlers ~recursive ~freshening =
+  try simplify_let_cont_handlers0 env r ~handlers ~recursive ~freshening
+  with Misc.Fatal_error -> begin
+    Format.eprintf "\n%sContext is: simplify_let_cont_handlers:%s@ %a\n"
+      (Misc_color.bold_red ())
+      (Misc_color.reset ())
+      (Continuation.Map.print Flambda.Continuation_handler.print) handlers;
+    raise Misc.Fatal_error
+  end
 
 and simplify_let_cont env r ~body
       ~(handlers : Flambda.Let_cont_handlers.t) : Expr.t * R.t =
@@ -1219,11 +1236,13 @@ and simplify_c_call env r apply ~alloc:_ ~param_arity:_ ~return_arity:_
 (** Simplify an application of a continuation. *)
 and simplify_apply_cont env r cont ~(trap_action : Flambda.Trap_action.t option)
       ~(args : Simple.t list) : Expr.t * R.t =
+  let original_cont = cont in
+  let original_args = args in
   let cont = freshen_continuation env cont in
   let cont_approx = E.find_continuation env cont in
   let cont = Continuation_approx.name cont_approx in
   let args_and_types = S.simplify_simples env args in
-  let args, arg_tys = List.split args_and_types in
+  let args, _arg_tys = List.split args_and_types in
   let param_arity_of_exn_handler = [Flambda_kind.value ()] in
   let freshen_trap_action env r (trap_action : Flambda.Trap_action.t) =
     match trap_action with
@@ -1253,7 +1272,6 @@ and simplify_apply_cont env r cont ~(trap_action : Flambda.Trap_action.t option)
     let env = E.activate_freshening env in
     let env = E.disallow_continuation_inlining (E.set_never_inline env) in
     let env = E.disallow_continuation_specialisation env in
-    let env = environment_for_let_cont_handler ~env cont ~handler ~arg_tys in
     let stub's_body : Expr.t =
       match trap_action with
       | None -> handler.handler
@@ -1272,7 +1290,38 @@ and simplify_apply_cont env r cont ~(trap_action : Flambda.Trap_action.t option)
           };
         }
     in
-    simplify_expr env r stub's_body
+    let bindings_of_params_to_args =
+      if List.compare_lengths handler.params args_and_types <> 0 then
+        Misc.fatal_errorf "Cannot simplify application of %a to %a:@ \
+            mismatch between parameters and arguments"
+          Continuation.print original_cont
+          (Format.pp_print_list ~pp_sep:Format.pp_print_space Simple.print)
+          original_args
+      else
+        List.map2 (fun param (arg, ty) ->
+            let param = Flambda.Typed_parameter.var param in
+            param, T.kind ty, Named.Simple arg)
+          handler.params args_and_types
+    in
+    let stub's_body =
+      Flambda.Expr.bind ~bindings:bindings_of_params_to_args
+        ~body:stub's_body
+    in
+    begin
+      try simplify_expr env r stub's_body
+      with Misc.Fatal_error -> begin
+        Format.eprintf "\n%sContext is: inlining application of stub%s \
+            \"%a (%a)\".@ The inlined body was:@ %a@ in environment:@ %a\n"
+          (Misc_color.bold_red ())
+          (Misc_color.reset ())
+          Continuation.print original_cont
+          (Format.pp_print_list ~pp_sep:Format.pp_print_space Simple.print)
+          original_args
+          Flambda.Expr.print stub's_body
+          E.print env;
+        raise Misc.Fatal_error
+      end
+    end
   | Some _ | None ->
     let r =
       let kind : R.Continuation_uses.Use.Kind.t =

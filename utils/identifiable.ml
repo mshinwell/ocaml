@@ -14,6 +14,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+[@@@ocaml.warning "+a-4-30-40-41-42"]
+
 module type Thing = sig
   type t
 
@@ -202,7 +204,11 @@ module Make_map (T : Thing_no_hash) = struct
 
   let print f ppf t =
     let print_binding ppf (id, v) =
-      Format.fprintf ppf "@[(%a@ %a)@]" T.print id f v
+      Format.fprintf ppf "@[(%s%a%s@ %a)@]"
+        (Misc_color.bold_green ())
+        T.print id
+        (Misc_color.reset ())
+        f v
     in
     let bindings = bindings t in
     Format.fprintf ppf "@[<1>(@[%a@])@]"

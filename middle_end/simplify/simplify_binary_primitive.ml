@@ -940,6 +940,10 @@ let simplify_block_load_known_index env r prim ~block ~block_ty ~index
    wrapper *)
 let simplify_block_load env r prim ~block ~index
       ~block_access_kind ~field_is_mutable dbg =
+(*
+Format.eprintf "simplify_block_load %a.(%a)\n%!"
+  Simple.print block Simple.print index;
+*)
   let index, index_ty = S.simplify_simple env index in
   let block, block_ty = S.simplify_simple env block in
   let original_term () : Named.t = Prim (Binary (prim, block, index), dbg) in
@@ -955,12 +959,12 @@ let simplify_block_load env r prim ~block ~index
   in
   let unique_index_unknown () =
     let proof =
-      (E.type_accessor env T.prove_is_a_block) block_ty ~kind_of_all_fields
+      (E.type_accessor env T.prove_must_be_a_block) block_ty ~kind_of_all_fields
     in
     match proof with
-    | Unknown | Proved true ->
+    | Unknown | Proved () ->
       Reachable.reachable (original_term ()), T.unknown field_kind, r
-    | Proved false | Invalid -> invalid ()
+    | Invalid -> invalid ()
   in
   let proof = (E.type_accessor env T.prove_tagged_immediate) index_ty in
   match proof with

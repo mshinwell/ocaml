@@ -492,6 +492,8 @@ end and Continuation_handler : sig
     *)
     handler : Expr.t;
   }
+
+  val print : Format.formatter -> t -> unit
 end and Set_of_closures : sig
   type t = private {
     function_decls : Function_declarations.t;

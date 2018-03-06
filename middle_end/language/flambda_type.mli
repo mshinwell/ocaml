@@ -174,10 +174,10 @@ val prove_get_field_from_block
     -> field_kind:Flambda_kind.t
     -> t proof) type_accessor
 
-val prove_is_a_block
+val prove_must_be_a_block
    : (t
     -> kind_of_all_fields:Flambda_kind.t
-    -> bool proof) type_accessor
+    -> unit proof) type_accessor
 
 (** As for [prove_tagged_immediate], but for strings. *)
 val prove_string : (t -> String_info.Set.t proof) type_accessor

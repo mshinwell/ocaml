@@ -82,12 +82,12 @@ let simplify_block_set env r prim dbg ~block_access_kind ~init_or_assign
   let index_proof = (E.type_accessor env T.prove_tagged_immediate) index_ty in
   let unique_index_unknown () =
     let block_proof =
-      (E.type_accessor env T.prove_is_a_block) block_ty ~kind_of_all_fields
+      (E.type_accessor env T.prove_must_be_a_block) block_ty ~kind_of_all_fields
     in
     match block_proof with
-    | Unknown | Proved true ->
+    | Unknown | Proved () ->
       Reachable.reachable (original_term ()), T.unknown field_kind, r
-    | Proved false | Invalid -> invalid ()
+    | Invalid -> invalid ()
   in
   match index_proof with
   | Proved indexes ->
