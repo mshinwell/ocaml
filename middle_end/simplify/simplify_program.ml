@@ -325,6 +325,7 @@ let simplify_define_symbol env (recursive : Flambda.recursive)
         Continuation_approx.create_unknown ~name:computation.exception_cont
           ~arity:[Flambda_kind.value ()]
       in
+      let default_env = E.get_typing_environment env in
       let expr, r, continuation_uses, lifted_constants =
         let env = E.add_continuation env name return_cont_approx in
         let env =
@@ -360,7 +361,7 @@ Format.eprintf "Simplify_program fetching uses for %a\n%!"
       let args_types, env_extension =
         try
           R.Continuation_uses.join_of_arg_types continuation_uses ~arity
-            ~default_env:(E.get_typing_environment env)
+            ~default_env
         with Misc.Fatal_error as exn -> begin
           Format.eprintf "\n%sContext: Term resulting from \
               [simplify_toplevel]:%s@ %a@ \
@@ -480,6 +481,7 @@ Format.eprintf "Args for %a: %a\n%!"
       computation;
     }
   in
+Format.eprintf "Final environment after define_symbol:@ %a\n%!" E.print env;
   definition, env, newly_imported_symbols, lifted_constants
 
 let add_lifted_constants lifted_constants (body : Program_body.t) =
