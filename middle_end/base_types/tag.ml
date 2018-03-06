@@ -24,6 +24,10 @@ include Identifiable.Make (Numbers.Int)
 let min_tag = 0
 let max_tag = 255
 
+let create tag =
+  if tag < min_tag || tag > max_tag then None
+  else Some tag
+
 let create_exn tag =
   if tag < min_tag || tag > max_tag then
     Misc.fatal_error (Printf.sprintf "Tag.create_exn %d" tag)

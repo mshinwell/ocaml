@@ -799,6 +799,8 @@ Format.eprintf "Cutting environment for %a, level %a\n%!"
 (*
 Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
 *)
+              (* CR mshinwell: Add [List.map2i]. *)
+              let arg_number = ref 0 in
               let arg_tys =
                 List.map2 (fun result this_ty ->
                     let free_names_this_ty =
@@ -820,7 +822,19 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
                       (Env.type_accessor use.env T.add_judgements)
                         this_ty this_env
                     in
-                    (Env.type_accessor use.env T.join) result this_ty)
+                    let join =
+                      try (Env.type_accessor use.env T.join) result this_ty
+                      with Misc.Fatal_error -> begin
+                        Format.eprintf "\n%sContext is: argument number %d \
+                            (0 is the first argument)%s\n"
+                          (Misc_color.bold_red ())
+                          !arg_number
+                          (Misc_color.reset ());
+                        raise Misc.Fatal_error
+                      end
+                    in
+                    incr arg_number;
+                    join)
                   arg_tys arg_tys'
               in
               let env =

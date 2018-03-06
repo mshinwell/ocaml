@@ -22,6 +22,7 @@ include Identifiable.S
 
 type tag = t
 
+val create : int -> t option
 val create_exn : int -> t
 
 val to_int : t -> int

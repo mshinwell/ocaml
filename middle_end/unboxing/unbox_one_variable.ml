@@ -547,13 +547,20 @@ module Make (S : Unboxing_spec) = struct
                       if no_constant_ctors then []
                       else [Simple.var is_int_in_wrapper]
                     in
-                    let wrapper_param_unboxee =
-                      if not needs_discriminant then []
-                      else [Simple.var wrapper_param_unboxee]
+                    let wrapper_param_unboxee_as_tag =
+                      Variable.create "as_tag"
                     in
-                    Apply_cont (join_cont, None,
-                      is_int_in_wrapper @ wrapper_param_unboxee
-                        @ all_units));
+                    let wrapper_param_unboxee' =
+                      if not needs_discriminant then []
+                      else [Simple.var wrapper_param_unboxee_as_tag]
+                    in
+                    Flambda.Expr.create_let wrapper_param_unboxee_as_tag
+                      (K.fabricated ())
+                      (Prim (Unary (
+                        Int_to_tag, Simple.var wrapper_param_unboxee), dbg))
+                      (Apply_cont (join_cont, None,
+                        is_int_in_wrapper @ wrapper_param_unboxee'
+                          @ all_units)));
                   stub = true;
                   is_exn_handler = false;
                 };

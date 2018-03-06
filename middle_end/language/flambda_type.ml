@@ -952,6 +952,55 @@ let prove_tagged_immediate ~type_of_name t
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _ -> wrong_kind ()
 
+let prove_tagged_immediate_as_tags ~type_of_name t
+      : Typing_environment.t Tag.Map.t proof =
+  let wrong_kind () =
+    Misc.fatal_errorf "Wrong kind for something claimed to be a tagged \
+        immediate: %a"
+      print t
+  in
+  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  Simplified_type.check_not_phantom simplified "prove_tagged_immediate_as_tags";
+  match simplified.descr with
+  | Value ty_value ->
+    begin match ty_value with
+    | Unknown -> Unknown
+    | Bottom -> Invalid
+    | Ok (Blocks_and_tagged_immediates blocks_imms) ->
+      begin match blocks_imms.blocks, blocks_imms.immediates with
+      | Unknown, _ | _, Unknown -> Unknown
+      | Known blocks, Known imms ->
+        match Tag.Map.is_empty blocks, Immediate.Map.is_empty imms with
+        | true, true -> Invalid
+        | false, false -> Unknown
+        | true, false ->
+          let by_tag =
+            Immediate.Map.fold (fun imm (imm_case : immediate_case) by_tag ->
+                let bad_tag () =
+                  Misc.fatal_errorf "Immediate %a cannot be interpreted \
+                      as a tag.  In type: %a"
+                    Immediate.print imm
+                    print t
+                in
+                let imm = Immediate.to_targetint imm in
+                match Targetint.OCaml.to_int_option imm with
+                | None -> bad_tag ()
+                | Some int ->
+                  match Tag.create int with
+                  | None -> bad_tag ()
+                  | Some tag -> Tag.Map.add tag imm_case.env_extension by_tag)
+              imms
+              Tag.Map.empty
+          in
+          Proved by_tag
+        | false, true -> Invalid
+      end
+    | Ok (Boxed_number _) -> Invalid
+    | Ok (Closures _ | String _) -> Invalid
+    end
+  | Simplified_type.Naked_number _ -> wrong_kind ()
+  | Fabricated _ -> wrong_kind ()
+
 type is_tagged_immediate =
   | Never_a_tagged_immediate
   | Always_a_tagged_immediate

@@ -687,6 +687,22 @@ let simplify_unary_float_arith_op env r prim
   | Proved _ | Unknown -> result_unknown ()
   | Invalid -> result_invalid ()
 
+let simplify_int_to_tag env r prim arg dbg =
+  let arg, arg_ty = S.simplify_simple env arg in
+  let proof = (E.type_accessor env T.prove_tagged_immediate_as_tags) arg_ty in
+  let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
+  let result_kind = K.fabricated () in
+  let result_invalid () =
+    Reachable.invalid (), T.bottom result_kind,
+      R.map_benefit r (B.remove_primitive (Unary prim))
+  in
+  match proof with
+  | Proved by_tag ->
+    Reachable.reachable (original_term ()), T.these_tags by_tag, r
+  | Unknown ->
+    Reachable.reachable (original_term ()), T.unknown result_kind, r
+  | Invalid -> result_invalid ()
+
 let simplify_string_length env r prim arg dbg =
   let arg, arg_ty = S.simplify_simple env arg in
   let proof = (E.type_accessor env T.prove_string) arg_ty in
@@ -763,7 +779,8 @@ let simplify_unary_primitive env r (prim : Flambda_primitive.unary_primitive)
   | Get_tag { tags_to_sizes; } ->
     simplify_get_tag env r  prim ~tags_to_sizes ~block:arg dbg
   | Tag_to_int -> Misc.fatal_error "FIXME"
-  | Int_to_tag -> Misc.fatal_error "FIXME"
+  | Int_to_tag ->
+    simplify_int_to_tag env r prim arg dbg
   | String_length _string_or_bytes ->
     simplify_string_length env r prim arg dbg
   | Int_as_pointer ->
