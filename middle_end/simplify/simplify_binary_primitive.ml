@@ -932,9 +932,7 @@ let simplify_block_load_known_index env r prim ~block ~block_ty ~index
   in
   begin match proof with
   | Proved ty ->
-(*
-    Format.eprintf "Block load has known index and returns %a\n%!" T.print ty;
-*)
+    Format.eprintf "Block load has known index and returns@ %a\n%!" T.print ty;
     Reachable.reachable (original_term ()), ty, r
   | Unknown -> unknown ()
   | Invalid -> invalid ()

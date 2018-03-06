@@ -3514,7 +3514,7 @@ Format.eprintf "...giving %a\n%!" print ty;
           all_levels_to_names
       in
       let existentials =
-        Name.Set.inter env1.existentials env2.existentials
+        Name.Set.union env1.existentials env2.existentials
       in
       let existential_freshening =
         env1.existential_freshening (* XXX *)
