@@ -43,6 +43,7 @@ let simplify_set_of_closures original_env r
   in
 *)
   let env = E.increase_closure_depth original_env in
+  let env = E.increment_continuation_scope_level env in (* XXX wrong *)
   let function_decls, _set_of_closures_ty, set_of_closures_env =
     Simplify_aux.prepare_to_simplify_set_of_closures ~env
       ~set_of_closures ~function_decls:set_of_closures.function_decls

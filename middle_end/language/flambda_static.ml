@@ -330,8 +330,8 @@ module Program_body = struct
           Misc.fatal_errorf "Static part is only allowed to reference \
               the following free names: { %a }, whereas it references \
               { %a }.  Static part:@ %a = %a"
-            Name_occurrences.print free_names
             Name_occurrences.print allowed_fns
+            Name_occurrences.print free_names
             Symbol.print sym
             Static_part.print static_part
         end;

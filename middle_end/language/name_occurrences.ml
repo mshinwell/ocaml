@@ -74,10 +74,14 @@ let mem_in_debug_only t name = Name.Set.mem name t.in_debug_only
 let everything t =
   Name.Set.union t.in_terms (Name.Set.union t.in_types t.in_debug_only)
 
+(* CR mshinwell: Rename to "diff_free_and_bound" or something?
+   Also double-check the semantics are correct here *)
 let diff t1 t2 =
   { in_terms = Name.Set.diff t1.in_terms t2.in_terms;
-    in_types = Name.Set.diff t1.in_types t2.in_types;
-    in_debug_only = Name.Set.diff t1.in_debug_only t2.in_debug_only;
+    in_types = Name.Set.diff t1.in_types
+      (Name.Set.union t2.in_terms t2.in_types);
+    in_debug_only = Name.Set.diff t1.in_debug_only
+      (Name.Set.union t2.in_terms t2.in_debug_only);
   }
 
 let union t1 t2 =
