@@ -1047,6 +1047,9 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
 
   let continuation_uses t = t.used_continuations
 
+  let continuation_uses_for t cont =
+    Continuation.Map.find cont t.used_continuations
+
   let no_continuations_in_scope t =
     Continuation.Map.is_empty t.used_continuations
 

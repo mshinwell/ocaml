@@ -3356,7 +3356,7 @@ end;
             in
             Naked_number (ty_naked_number, N.Naked_nativeint), judgements
           | _, _ ->
-            Misc.fatal_errorf "Kind mismatch upon meet: %a versus %a"
+            Misc.fatal_errorf "Kind mismatch upon meet:@ %a@ versus@ %a"
               print t1
               print t2
           end
@@ -3367,7 +3367,7 @@ end;
           in
           Fabricated ty_fabricated, judgements
         | (Value _ | Naked_number _ | Fabricated _), _ ->
-          Misc.fatal_errorf "Kind mismatch upon meet: %a versus %a"
+          Misc.fatal_errorf "Kind mismatch upon meet:@ %a@ versus@ %a"
             print t1
             print t2
       in
@@ -3418,7 +3418,7 @@ end;
             in
             Naked_number (ty_naked_number, N.Naked_nativeint)
           | _, _ ->
-            Misc.fatal_errorf "Kind mismatch upon join: %a versus %a"
+            Misc.fatal_errorf "Kind mismatch upon join:@ %a@ versus %a"
               print t1
               print t2
           end
@@ -3429,7 +3429,7 @@ end;
           in
           Fabricated ty_fabricated
         | (Value _ | Naked_number _ | Fabricated _), _ ->
-          Misc.fatal_errorf "Kind mismatch upon join: %a versus %a"
+          Misc.fatal_errorf "Kind mismatch upon join:@ %a@ versus %a"
             print t1
             print t2
       in

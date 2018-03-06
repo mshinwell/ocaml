@@ -447,9 +447,20 @@ and simplify_let_cont_handlers0 env r ~handlers
             (* CR mshinwell: I have a suspicion that [r] may not contain the
                usage information for the continuation when it's come from
                [Unbox_continuation_params]. Check. *)
-            R.continuation_args_types r cont
-              ~arity:(Flambda.Continuation_handler.param_arity handler)
-              ~default_env:(E.get_typing_environment env)
+            try
+              R.continuation_args_types r cont
+                ~arity:(Flambda.Continuation_handler.param_arity handler)
+                ~default_env:(E.get_typing_environment env)
+            with Misc.Fatal_error -> begin
+              let uses = R.continuation_uses_for r cont in
+              Format.eprintf "\n%sContext is: computing join of argument \
+                  types for %a, its uses are:%s@ %a\n"
+                (Misc_color.bold_red ())
+                Continuation.print cont
+                (Misc_color.reset ())
+                R.Continuation_uses.print uses;
+              raise Misc.Fatal_error
+            end
           in
           Format.eprintf "Environment for %a:@ %a@ Arg types:@ %a\n%!"
             Continuation.print cont

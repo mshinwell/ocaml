@@ -504,6 +504,8 @@ module type Result = sig
       a [Let_cont] but before [define_continuation] has been called. *)
   val continuation_uses : t -> Continuation_uses.t Continuation.Map.t
 
+  val continuation_uses_for : t -> Continuation.t -> Continuation_uses.t
+
   val non_recursive_continuations_used_linearly_in_inlinable_position
      : t
     -> Continuation.Set.t

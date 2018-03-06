@@ -31,7 +31,7 @@
 (*           | None -> assert false) *)
 (*         set_of_closures.function_decls.funs) *)
 
-let middle_end ppf ~prefixname ~backend ~size ~filename ~module_ident
+let middle_end0 ppf ~prefixname ~backend ~size ~filename ~module_ident
       ~module_initializer =
   Profile.record_call "flambda" (fun () ->
     let pass_number = ref 0 in
@@ -224,3 +224,16 @@ let middle_end ppf ~prefixname ~backend ~size ~filename ~module_ident
       (* dump_function_sizes flam ~backend; *)
       flam)
   )
+
+let middle_end ppf ~prefixname ~backend ~size ~filename ~module_ident
+      ~module_initializer =
+  try
+    middle_end0 ppf ~prefixname ~backend ~size ~filename ~module_ident
+      ~module_initializer
+  with Misc.Fatal_error -> begin
+    Format.eprintf "\n%sOriginal backtrace is:%s\n%s\n"
+      (Misc_color.bold_red ())
+      (Misc_color.reset ())
+      (Printexc.raw_backtrace_to_string (Misc.fatal_error_callstack ()));
+    raise Misc.Fatal_error
+  end
