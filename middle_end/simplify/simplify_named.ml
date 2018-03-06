@@ -43,7 +43,6 @@ let simplify_set_of_closures original_env r
   in
 *)
   let env = E.increase_closure_depth original_env in
-  let env = E.increment_continuation_scope_level env in (* XXX wrong *)
   let function_decls, _set_of_closures_ty, set_of_closures_env =
     Simplify_aux.prepare_to_simplify_set_of_closures ~env
       ~set_of_closures ~function_decls:set_of_closures.function_decls
@@ -52,10 +51,7 @@ let simplify_set_of_closures original_env r
   let simplify_function closure_id
         (function_decl : Flambda.Function_declaration.t)
         (funs, r) =
-    let closure_env =
-      Simplify_aux.prepare_to_simplify_closure ~function_decl
-        ~set_of_closures_env
-    in
+    let closure_env = set_of_closures_env in
     let continuation_param, closure_env =
       let continuation_param, freshening =
         freshen_continuation closure_env function_decl.continuation_param
@@ -83,6 +79,11 @@ let simplify_set_of_closures original_env r
           exn_continuation_param cont_type
       in
       exn_continuation_param, closure_env
+    in
+    let closure_env =
+      let env = E.increment_continuation_scope_level closure_env in
+      Simplify_aux.prepare_to_simplify_closure ~function_decl
+        ~set_of_closures_env:env
     in
     let my_closure, freshening =
       Freshening.add_variable (E.freshening env) function_decl.my_closure
