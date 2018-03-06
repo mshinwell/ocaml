@@ -211,9 +211,12 @@ end = struct
     let ty, binding_type = TE.find typing_environment (Name.var var) in
     match binding_type with
     | Normal -> ty
-    | Existential ->
+    | Existential -> ty
+
+(* XXX We need to identify when existential ones are acceptable
       Misc.fatal_errorf "Variable %a is not in scope"
         Variable.print var
+*)
 
   let find_variable t var =
     find_variable0 t.typing_environment var
@@ -777,7 +780,7 @@ end = struct
 
     (* CR mshinwell: Use lwhite's suggestion of doing the existential
        introduction at [Switch] time *)
-    let join_of_arg_types_opt t ~arity ~default_env =
+    let join_of_arg_types_opt t ~arity ~default_env:_ =
       match t.application_points with
       | [] -> None
       | uses ->
@@ -808,17 +811,24 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
                       (Env.type_accessor use.env T.free_names_transitive)
                         this_ty
                     in
-(*
-                    Format.eprintf "Argument for %a:@ Type:@ %a@ Env:@ %a\n%!"
+                    Format.eprintf "Argument for %a:@ Type:@ %a@ \
+                        Free names:@ %a@ Env:@ %a\n%!"
                       Continuation.print t.continuation
                       T.print this_ty
+                      Name_occurrences.print free_names_this_ty
                       TE.print this_env;
-*)
                     let this_env =
-                      TE.restrict_to_names this_env
+                      (* XXX We should presumably allow things from outer
+                         levels so long as our types for them are more
+                         precise. *)
+                      TE.restrict_to_names this_env free_names_this_ty
+(*
                         (Name_occurrences.union free_names_this_ty
                           (TE.domain default_env))
+*)
                     in
+                    Format.eprintf "Restricted env:@ %a\n%!"
+                      TE.print this_env;
                     let this_ty =
                       (Env.type_accessor use.env T.add_judgements)
                         this_ty this_env
@@ -888,7 +898,7 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
         Name_occurrences.union free_names (TE.domain default_env)
       in
 *)
-      let env = TE.restrict_to_names env (TE.domain default_env) in
+(*      let env = TE.restrict_to_names env (TE.domain default_env) in *)
       tys, env
 
     let application_points t = t.application_points

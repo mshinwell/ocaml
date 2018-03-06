@@ -325,13 +325,13 @@ let simplify_define_symbol env (recursive : Flambda.recursive)
         Continuation_approx.create_unknown ~name:computation.exception_cont
           ~arity:[Flambda_kind.value ()]
       in
+      let default_env0 = env in
       let default_env = E.get_typing_environment env in
       let expr, r, continuation_uses, lifted_constants =
         let env = E.add_continuation env name return_cont_approx in
         let env =
           E.add_continuation env computation.exception_cont exn_cont_approx
         in
-        let env = E.increment_continuation_scope_level env in
         let env = E.increment_continuation_scope_level env in
         let r = R.create () in
         let descr =
@@ -373,21 +373,29 @@ Format.eprintf "Simplify_program fetching uses for %a\n%!"
           raise exn
         end
       in
+Format.eprintf "\nEnv extension (cont %a) is@ %a\n\n%!"
+  Continuation.print name T.Typing_environment.print env_extension;
 (*
 Format.eprintf "Args for %a: %a\n%!"
   Continuation.print name
   (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print) args_types;
 *)
       let env =
-        (E.type_accessor env E.extend_typing_environment) env
+        (E.type_accessor env E.extend_typing_environment) default_env0
           ~env_extension
       in
+Format.eprintf "default_env0 (cont %a) is@ %a\n\n%!"
+  Continuation.print name E.print default_env0;
+Format.eprintf "Extended env (cont %a) is@ %a\n\n%!"
+  Continuation.print name E.print env;
+(* XXX Work out why these symbols are already bound
       let env =
         Symbol.Map.fold (fun symbol (ty, _kind, _static_part) env ->
             E.add_symbol env symbol ty)
           lifted_constants
           env
       in
+*)
       let env = E.increment_continuation_scope_level env in
       assert (List.for_all2 (fun (_var, kind1) ty ->
           Flambda_kind.compatible (T.kind ty) ~if_used_at:kind1)
