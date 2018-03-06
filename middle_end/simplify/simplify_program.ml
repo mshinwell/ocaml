@@ -330,6 +330,8 @@ let simplify_define_symbol env (recursive : Flambda.recursive)
         let env =
           E.add_continuation env computation.exception_cont exn_cont_approx
         in
+        let env = E.increment_continuation_scope_level env in
+        let env = E.increment_continuation_scope_level env in
         let r = R.create () in
         let descr =
           let symbol_names =
@@ -360,8 +362,11 @@ Format.eprintf "Simplify_program fetching uses for %a\n%!"
           R.Continuation_uses.join_of_arg_types continuation_uses ~arity
             ~default_env:(E.get_typing_environment env)
         with Misc.Fatal_error as exn -> begin
-          Format.eprintf ">> Term resulting from [simplify_toplevel]:@ %a@ \
+          Format.eprintf "\n%sContext: Term resulting from \
+              [simplify_toplevel]:%s@ %a@ \
               Default environment:@ %a\n%!"
+            (Misc_color.bold_red ())
+            (Misc_color.reset ())
             Flambda.Expr.print expr
             E.print env;
           raise exn
@@ -382,6 +387,7 @@ Format.eprintf "Args for %a: %a\n%!"
           lifted_constants
           env
       in
+      let env = E.increment_continuation_scope_level env in
       assert (List.for_all2 (fun (_var, kind1) ty ->
           Flambda_kind.compatible (T.kind ty) ~if_used_at:kind1)
         computation.computed_values args_types);
@@ -404,6 +410,7 @@ Format.eprintf "Args for %a: %a\n%!"
             computed_values = computation.computed_values;
           } : Program_body.computation)
       in
+      let env = E.decrement_continuation_scope_level env in
       env, computation, R.newly_imported_symbols r, lifted_constants
   in
   let env =

@@ -23,6 +23,7 @@ include Identifiable.S with type t := t
 val initial : t
 val for_symbols : t
 
+val prev : t -> t
 val next : t -> t
 
 val (>=): t -> t -> bool

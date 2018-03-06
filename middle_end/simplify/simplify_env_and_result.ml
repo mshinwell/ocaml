@@ -173,6 +173,11 @@ end = struct
       continuation_scope_level = Scope_level.next t.continuation_scope_level;
     }
 
+  let decrement_continuation_scope_level t =
+    { t with
+      continuation_scope_level = Scope_level.prev t.continuation_scope_level;
+    }
+
   let const_float_prop _t =
     (* CR mshinwell: Does this need to be in the environment?
        Also, the naming should be made consistent with Clflags *)
@@ -786,19 +791,15 @@ end = struct
                   Continuation.print t.continuation
                   (List.length arg_tys) (List.length arg_tys')
               end;
-(*
 Format.eprintf "Cutting environment for %a, level %a\n%!"
   Continuation.print t.continuation
   Scope_level.print t.definition_scope_level;
-*)
               let this_env =
                 TE.cut (Env.get_typing_environment use.env)
                   ~existential_if_defined_at_or_later_than:
                     (Scope_level.next t.definition_scope_level)
               in
-(*
 Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
-*)
               (* CR mshinwell: Add [List.map2i]. *)
               let arg_number = ref 0 in
               let arg_tys =

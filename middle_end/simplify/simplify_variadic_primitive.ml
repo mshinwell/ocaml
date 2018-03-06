@@ -49,13 +49,15 @@ let simplify_make_block env r prim dbg
     (* CR mshinwell: This could probably be done more neatly. *)
     let found_bottom = ref false in
     let arg_ty_values =
-      assert (List.compare_lengths value_kinds arg_tys = 0);
-      List.map2 (fun arg_ty _value_kind ->
+      assert (List.compare_lengths value_kinds args_with_tys = 0);
+      List.map2 (fun ((arg : Simple.t), arg_ty) _value_kind ->
           if (E.type_accessor env T.is_bottom) arg_ty then begin
            found_bottom := true
           end;
-          T.force_to_kind_value arg_ty)
-        arg_tys value_kinds
+          match arg with
+          | Const _ -> T.force_to_kind_value arg_ty
+          | Name name -> T.alias_type_of_as_ty_value name)
+        args_with_tys value_kinds
     in
     if !found_bottom then begin
       invalid ()

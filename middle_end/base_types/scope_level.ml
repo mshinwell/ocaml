@@ -16,14 +16,22 @@
 
 include Numbers.Int
 
-let initial = 0
-let for_symbols = (-1)
+let for_symbols = 0
+let initial = for_symbols
 
 let next t =
+(*
   if t < 0 then begin
     Misc.fatal_error "Cannot increment scope level from [for_symbols]"
   end;
+*)
   t + 1
+
+let prev t =
+  if t <= initial then begin
+    Misc.fatal_error "Cannot decrement scope level past the initial level"
+  end;
+  t - 1
 
 let (>=) (t1 : t) t2 = t1 >= t2
 

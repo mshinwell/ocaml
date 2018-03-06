@@ -931,7 +931,11 @@ let simplify_block_load_known_index env r prim ~block ~block_ty ~index
       ~field_kind
   in
   begin match proof with
-  | Proved ty -> Reachable.reachable (original_term ()), ty, r
+  | Proved ty ->
+(*
+    Format.eprintf "Block load has known index and returns %a\n%!" T.print ty;
+*)
+    Reachable.reachable (original_term ()), ty, r
   | Unknown -> unknown ()
   | Invalid -> invalid ()
   end
@@ -940,12 +944,10 @@ let simplify_block_load_known_index env r prim ~block ~block_ty ~index
    wrapper *)
 let simplify_block_load env r prim ~block ~index
       ~block_access_kind ~field_is_mutable dbg =
-(*
-Format.eprintf "simplify_block_load %a.(%a)\n%!"
-  Simple.print block Simple.print index;
-*)
   let index, index_ty = S.simplify_simple env index in
   let block, block_ty = S.simplify_simple env block in
+Format.eprintf "simplify_block_load %a.(%a).  Block type:@ %a\n%!"
+  Simple.print block Simple.print index T.print block_ty;
   let original_term () : Named.t = Prim (Binary (prim, block, index), dbg) in
   let kind_of_all_fields =
     Flambda_primitive.Block_access_kind.element_kind block_access_kind
