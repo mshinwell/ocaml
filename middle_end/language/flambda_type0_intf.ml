@@ -85,6 +85,8 @@ module type S = sig
 
   and flambda_type = t
 
+  and t_in_context = typing_environment * t
+
   and descr = private
     | Value of ty_value
     | Naked_number :
@@ -271,16 +273,6 @@ module type S = sig
     include Identifiable.S with type t := t
   end
 
-  (** Annotation for functions that may require examination of the current
-      simplification environment. *)
-
-  type type_of_name =
-       ?local_env:typing_environment
-    -> Name_or_export_id.t
-    -> t option
-
-  type 'a type_accessor = type_of_name:type_of_name -> 'a
-
   (** If the given type has kind [Phantom], return it; otherwise form the
       correct type of kind [Phantom] describing the given type. *)
   val phantomize
@@ -293,23 +285,22 @@ module type S = sig
 
     val print : Format.formatter -> t -> unit
 
-    val create : unit -> t
+    val create_root : resolver:(Export_id.t -> flambda_type option) -> t
+
+    val create : parent:t -> t
 
     val add : t -> Name.t -> Scope_level.t -> flambda_type -> t
 
-    val singleton : Name.t -> Scope_level.t -> flambda_type -> t
+    (** The same as [add] on a newly-[create]d environment with the given
+        [parent]. *)
+    val singleton : parent:t -> Name.t -> Scope_level.t -> flambda_type -> t
 
     (** Refine the type of a name that is currently bound in the
         environment.  (It is an error to call this function with a name that
         is not bound in the given environment.) *)
-    val replace_meet : (t -> Name.t -> flambda_type -> t) type_accessor
+    val replace_meet : t -> Name.t -> t_in_context -> t
 
-    val add_or_replace_meet
-       : (t
-      -> Name.t
-      -> Scope_level.t
-      -> flambda_type
-      -> t) type_accessor
+    val add_or_replace_meet : t -> Name.t -> Scope_level.t -> t_in_context -> t
 
     val add_or_replace : t -> Name.t -> Scope_level.t -> flambda_type -> t
 
@@ -326,14 +317,18 @@ module type S = sig
       -> existential_if_defined_at_or_later_than:Scope_level.t
       -> t
 
-    val join : (t -> t -> t) type_accessor
+    val join : t_in_context -> t_in_context -> t
 
-    val meet : (t -> t -> t) type_accessor
+    val meet : t_in_context -> t_in_context -> t
 
     val restrict_to_names : t -> Name_occurrences.t -> t
 
     val domain : t -> Name_occurrences.t
   end
+
+  (** Annotation for functions that may require examination of the current
+      environment (in particular to resolve [Type] or [Type_of] aliases). *)
+  type 'a type_accessor = Typing_environment.t -> 'a
 
   val print : Format.formatter -> t -> unit
 
@@ -577,16 +572,16 @@ module type S = sig
   (** Determine the (unique) kind of a type. *)
   val kind : t -> Flambda_kind.t
 
-  val add_judgements : (t -> Typing_environment.t -> t) type_accessor
+  val add_judgements : t -> Typing_environment.t -> t
 
   (** Least upper bound of two types. *)
-  val join : (t -> t -> t) type_accessor
+  val join : t_in_context -> t_in_context -> t
 
   (** Least upper bound of two types known to be of kind [Value]. *)
-  val join_ty_value : (ty_value -> ty_value -> ty_value) type_accessor
+  val join_ty_value : ty_value_in_context -> ty_value_in_context -> ty_value
 
   (** Greatest lower bound of two types. *)
-  val meet : (t -> t -> t) type_accessor
+  val meet : t_in_context -> t_in_context -> t
 
   (* CR mshinwell: We may not need to expose all of the following functions *)
 
@@ -597,25 +592,25 @@ module type S = sig
       the furthest-away [Name.t] in any chain of aliases leading from the given
       type.  (The chain may also involve [Export_id.t] links either before or
       after any returned canonical name.) *)
-  val resolve_aliases : (t -> t * (Name.t option)) type_accessor
+  val resolve_aliases : t_in_context -> t * (Name.t option)
 
   (** Like [resolve_aliases], but unresolved names at the top level are
       changed into [Unknown]s. *)
   val resolve_aliases_and_squash_unresolved_names
-     : (t -> t * (Name.t option)) type_accessor
+     : t_in_context -> t * (Name.t option)
 
   (** Like [resolve_aliases], but for use when you have a [ty], not a [t]. *)
   val resolve_aliases_on_ty
-     : (force_to_kind:(t -> 'a ty)
-    -> 'a ty
-    -> 'a ty * (Name.t option)) type_accessor
+     : force_to_kind:(t -> 'a ty)
+    -> 'a ty_in_context
+    -> 'a ty * (Name.t option)
 
   (** Like [resolve_aliases_on_ty], but unresolved names at the top level are
       changed into [Unknown]s. *)
   val resolve_aliases_and_squash_unresolved_names_on_ty
-     : (force_to_kind:(t -> 'a ty)
-    -> 'a ty
-    -> 'a unknown_or_join * (Name.t option)) type_accessor
+     : force_to_kind:(t -> 'a ty)
+    -> 'a ty_in_context
+    -> 'a unknown_or_join * (Name.t option)
 
   val force_to_kind_value : t -> ty_value
 

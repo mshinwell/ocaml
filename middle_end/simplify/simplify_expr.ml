@@ -89,7 +89,7 @@ let for_defining_expr_of_let (env, r) var kind defining_expr =
     match defining_expr with
     | Invalid _ -> defining_expr
     | Reachable _ ->
-      if (E.type_accessor env T.is_bottom) ty then Flambda.Reachable.invalid ()
+      if T.is_bottom env ty then Flambda.Reachable.invalid ()
       else defining_expr
   in
   let _old_var = var in
@@ -98,7 +98,7 @@ let for_defining_expr_of_let (env, r) var kind defining_expr =
   let env = E.add_variable env var ty in
   let env =
     let new_judgements = R.get_typing_judgements r in
-    (E.type_accessor env E.extend_typing_environment) env
+    E.extend_typing_environment env env
       ~env_extension:new_judgements
   in
 (*
@@ -250,7 +250,7 @@ Format.eprintf "Simplifying switch on %a in env %a.\n%!" Name.print scrutinee
 (*
 Format.eprintf "Type of switch scrutinee is %a\n%!" T.print scrutinee_ty;
 *)
-    let arms = (E.type_accessor env S.switch_arms) scrutinee_ty ~arms in
+    let arms = S.switch_arms env scrutinee_ty ~arms in
     let destination_is_unreachable cont =
       (* CR mshinwell: This unreachable thing should be tidied up and also
          done on [Apply_cont]. *)
@@ -274,13 +274,13 @@ Format.eprintf "Type of switch scrutinee is %a\n%!" T.print scrutinee_ty;
           let cont, r =
             let scrutinee_ty = S.type_of_scrutinee arm in
             let env =
-              (E.type_accessor env E.extend_typing_environment) env
+              E.extend_typing_environment env env
                 ~env_extension
             in
             let env =
               match scrutinee with
               | Var scrutinee ->
-                (E.type_accessor env E.replace_meet_variable)
+                E.replace_meet_variable env
                   env scrutinee scrutinee_ty
               | Symbol _ -> env
             in
@@ -373,7 +373,7 @@ let environment_for_let_cont_handler ~env cont
 (*
         let param_ty = Typed_parameter.ty param in
         if !Clflags.flambda_invariant_checks then begin
-          if not ((E.type_accessor env T.as_or_more_precise)
+          if not (T.as_or_more_precise env
             arg_ty ~than:param_ty)
           then begin
             Misc.fatal_errorf "Parameter %a of continuation %a supplied \
@@ -760,7 +760,7 @@ and simplify_let_cont env r ~body
             in
             (* XXX mshinwell: Which environment should be used here? *)
             new_env :=
-              (E.type_accessor env T.Typing_environment.meet)
+              T.Typing_environment.meet env
               !new_env new_env';
             arg_tys)
           original_handlers
@@ -1185,12 +1185,12 @@ and simplify_function_application env r (apply : Flambda.Apply.t)
     (* CR mshinwell: Pierre to implement *)
     unknown_closures ()
   in
-  match (E.type_accessor env T.prove_closures) callee_ty with
+  match T.prove_closures env callee_ty with
   | Proved closures ->
     begin match Closure_id.Map.get_singleton closures with
     | Some (callee's_closure_id, { set_of_closures = set_ty; }) ->
       let set_ty = T.of_ty_fabricated set_ty in
-      let proof = (E.type_accessor env T.prove_sets_of_closures) set_ty in
+      let proof = T.prove_sets_of_closures env set_ty in
       begin match proof with
       | Proved (_set_of_closures_name, set_of_closures) ->
         let closures = T.extensibility_contents set_of_closures.closures in
@@ -1198,7 +1198,7 @@ and simplify_function_application env r (apply : Flambda.Apply.t)
         | exception Not_found -> Expr.invalid (), r
         | closure_ty ->
           let closure_ty = T.of_ty_fabricated closure_ty in
-          match (E.type_accessor env T.prove_closure) closure_ty with
+          match T.prove_closure env closure_ty with
           | Proved { function_decls = Inlinable function_decl; } ->
             inlinable ~callee's_closure_id ~function_decl ~set_of_closures
           | Proved { function_decls = Non_inlinable None; } ->

@@ -133,6 +133,8 @@ end) = struct
 
   and flambda_type = t
 
+  and t_in_context = typing_environment * t
+
   and descr =
     | Value of ty_value
     | Naked_number :
@@ -255,19 +257,29 @@ end) = struct
   }
 
   and typing_environment = {
+    resolver : (Export_id.t -> t option);
+    parent : typing_environment option;
     names_to_types : (Scope_level.t * t) Name.Map.t;
     levels_to_names : Name.Set.t Scope_level.Map.t;
     existentials : Name.Set.t;
     existential_freshening : Freshening.t;
   }
 
-  let create_typing_environment () =
+  let create_typing_environment0 ~resolver ~parent =
     let existential_freshening = Freshening.activate Freshening.empty in
-    { names_to_types = Name.Map.empty;
+    { resolver;
+      parent;
+      names_to_types = Name.Map.empty;
       levels_to_names = Scope_level.Map.empty;
       existentials = Name.Set.empty;
       existential_freshening;
     }
+
+  let root_typing_environment ~resolver =
+    create_typing_environment0 ~resolver ~parent:None
+
+  let create_typing_environment ~(parent : typing_environment) =
+    create_typing_environment0 ~resolver:parent.resolver ~parent:(Some parent)
 
   let add_or_replace_typing_environment t name scope_level ty =
     (* CR mshinwell: We should add a comment here explaining where this can
@@ -294,6 +306,25 @@ end;
       names_to_types;
       levels_to_names;
     }
+
+  type binding_type = Normal | Existential
+
+  let find_typing_environment t name =
+    match Name.Map.find name t.names_to_types with
+    | exception Not_found ->
+      Misc.fatal_errorf "Cannot find %a in environment:@ %a"
+        Name.print name
+        print t
+    | _scope_level, ty ->
+      let binding_type =
+        if Name.Set.mem name t.existentials then Existential
+        else Normal
+      in
+      match binding_type with
+      | Normal -> ty, Normal
+      | Existential ->
+   (* XXX     let ty = rename_variables t freshening in *)
+        ty, Existential
 
   let ty_is_obviously_bottom (ty : _ ty) =
     match ty with
@@ -1614,101 +1645,6 @@ end;
       Misc.fatal_errorf "Type has wrong kind (expected [Fabricated]):@ %a"
         print t
 
-  let resolve_aliases_on_ty (type a)
-        ~(type_of_name : type_of_name)
-        ~(force_to_kind : t -> a ty)
-        (ty : a ty)
-        : a ty * (Name.t option) =
-    let rec resolve_aliases names_seen ~canonical_name (ty : a ty) =
-      let resolve (name : Name_or_export_id.t) =
-        if Name_or_export_id.Set.mem name names_seen then begin
-          (* CR-soon mshinwell: Improve message -- but this means passing the
-             printing functions to this function. *)
-          Misc.fatal_errorf "Loop on %a whilst resolving aliases"
-            Name_or_export_id.print name
-        end;
-        let canonical_name =
-          match name with
-          | Name name -> Some name
-          | Export_id _ -> None
-        in
-        begin match type_of_name name with
-        | None ->
-          (* The type could not be obtained but we still wish to keep the
-             name (in case for example a .cmx file subsequently becomes
-             available). *)
-          ty, canonical_name
-        | Some t ->
-          let names_seen = Name_or_export_id.Set.add name names_seen in
-          let ty = force_to_kind t in
-          resolve_aliases names_seen ~canonical_name ty
-        end
-      in
-      match ty with
-      | No_alias _ -> ty, canonical_name
-      | Type export_id -> resolve (Name_or_export_id.Export_id export_id)
-      | Type_of name -> resolve (Name_or_export_id.Name name)
-    in
-    resolve_aliases Name_or_export_id.Set.empty ~canonical_name:None ty
-
-  let resolve_aliases_and_squash_unresolved_names_on_ty ~type_of_name
-        ~force_to_kind ty =
-    let ty, canonical_name =
-      resolve_aliases_on_ty ~force_to_kind ~type_of_name ty
-    in
-    let ty =
-      match ty with
-      | No_alias ty -> ty
-      | Type _ | Type_of _ -> Unknown
-    in
-    ty, canonical_name
-
-  let resolve_aliases ~type_of_name t : t * (Name.t option) =
-    match t.descr with
-    | Value ty ->
-      let force_to_kind = force_to_kind_value in
-      let ty, canonical_name =
-        resolve_aliases_on_ty ~force_to_kind ~type_of_name ty
-      in
-      { t with descr = Value ty; }, canonical_name
-    | Naked_number (ty, kind) ->
-      let force_to_kind = force_to_kind_naked_number kind in
-      let ty, canonical_name =
-        resolve_aliases_on_ty ~force_to_kind ~type_of_name ty
-      in
-      { t with descr = Naked_number (ty, kind); }, canonical_name
-    | Fabricated ty ->
-      let force_to_kind = force_to_kind_fabricated in
-      let ty, canonical_name =
-        resolve_aliases_on_ty ~force_to_kind ~type_of_name ty
-      in
-      { t with descr = Fabricated ty; }, canonical_name
-
-  let resolve_aliases_and_squash_unresolved_names ~type_of_name t
-        : t * (Name.t option) =
-    match t.descr with
-    | Value ty ->
-      let force_to_kind = force_to_kind_value in
-      let ty, canonical_name =
-        resolve_aliases_and_squash_unresolved_names_on_ty ~force_to_kind
-          ~type_of_name ty
-      in
-      { t with descr = Value (No_alias ty); }, canonical_name
-    | Naked_number (ty, kind) ->
-      let force_to_kind = force_to_kind_naked_number kind in
-      let ty, canonical_name =
-        resolve_aliases_and_squash_unresolved_names_on_ty ~force_to_kind
-          ~type_of_name ty
-      in
-      { t with descr = Naked_number (No_alias ty, kind); }, canonical_name
-    | Fabricated ty ->
-      let force_to_kind = force_to_kind_fabricated in
-      let ty, canonical_name =
-        resolve_aliases_and_squash_unresolved_names_on_ty ~force_to_kind
-          ~type_of_name ty
-      in
-      { t with descr = Fabricated (No_alias ty); }, canonical_name
-
   let kind (t : t) =
     match t.phantom with
     | None ->
@@ -1752,6 +1688,85 @@ end;
 
   let bottom_like t = bottom (kind t)
   let unknown_like t = unknown (kind t)
+
+  let resolve_aliases_on_ty (type a) env ~expected_kind ~force_to_kind
+        (ty : a ty) (t : t) : a t * (Name.t option) =
+    let rec resolve_aliases names_seen ~canonical_name (ty : a ty) (t : t) =
+      let resolve (name : Name_or_export_id.t) =
+        if Name_or_export_id.Set.mem name names_seen then begin
+          Misc.fatal_errorf "Loop on %a whilst resolving aliases:@ %a"
+            Name_or_export_id.print name
+            print t
+        end;
+        let continue_resolving t ~canonical_name =
+          let names_seen = Name_or_export_id.Set.add name names_seen in
+          let ty = force_to_kind t in
+          resolve_aliases names_seen ~canonical_name ty t
+        in
+        match name with
+        | Name name ->
+          let t, _binding_type = find_typing_environment env name in
+          continue_resolving t ~canonical_name:(Some name)
+        | Export_id export_id ->
+          match env.resolver export_id with
+          | Some t -> continue_resolving t ~canonical_name
+          | None -> t, None
+        end
+      in
+      match ty with
+      | No_alias _ -> t, canonical_name
+      | Type export_id -> resolve (Name_or_export_id.Export_id export_id)
+      | Type_of name -> resolve (Name_or_export_id.Name name)
+    in
+    resolve_aliases Name_or_export_id.Set.empty ~canonical_name:None ty t
+
+  let resolve_aliases_and_squash_unresolved_names_on_ty env ~force_to_kind ty =
+    let ty, canonical_name = resolve_aliases_on_ty ~force_to_kind env ty in
+    let ty =
+      match ty with
+      | No_alias ty -> ty
+      | Type _ | Type_of _ -> Unknown
+    in
+    ty, canonical_name
+
+  let resolve_aliases env t : t * (Name.t option) =
+    let expected_kind = kind t in
+    match t.descr with
+    | Value ty ->
+      resolve_aliases_on_ty env ~expected_kind ty t
+    | Naked_number (ty, kind) ->
+      let force_to_kind = force_to_kind_naked_number kind in
+      let ty, canonical_name =
+        resolve_aliases_on_ty ~force_to_kind ~type_of_name ty
+      in
+      { t with descr = Naked_number (ty, kind); }, canonical_name
+    | Fabricated ty ->
+      let force_to_kind = force_to_kind_fabricated in
+      let ty, canonical_name =
+        resolve_aliases_on_ty ~force_to_kind ~type_of_name ty
+      in
+      { t with descr = Fabricated ty; }, canonical_name
+
+  let resolve_aliases_and_squash_unresolved_names env t : t * (Name.t option) =
+    match t.descr with
+    | Value ty ->
+      let force_to_kind = force_to_kind_value in
+      let ty, canonical_name =
+        resolve_aliases_and_squash_unresolved_names_on_ty env ~force_to_kind ty
+      in
+      { t with descr = Value (No_alias ty); }, canonical_name
+    | Naked_number (ty, kind) ->
+      let force_to_kind = force_to_kind_naked_number kind in
+      let ty, canonical_name =
+        resolve_aliases_and_squash_unresolved_names_on_ty env ~force_to_kind ty
+      in
+      { t with descr = Naked_number (No_alias ty, kind); }, canonical_name
+    | Fabricated ty ->
+      let force_to_kind = force_to_kind_fabricated in
+      let ty, canonical_name =
+        resolve_aliases_and_squash_unresolved_names_on_ty env ~force_to_kind ty
+      in
+      { t with descr = Fabricated (No_alias ty); }, canonical_name
 
   let create_inlinable_function_declaration ~is_classic_mode ~closure_origin
         ~continuation_param ~exn_continuation_param
@@ -1881,9 +1896,11 @@ end;
     val force_to_kind : t -> of_kind_foo ty
 
     val meet_of_kind_foo
-       : (of_kind_foo
+       : typing_environment
+      -> typing_environment
       -> of_kind_foo
-      -> (of_kind_foo * judgements_from_meet) Or_bottom.t) type_accessor
+      -> of_kind_foo
+      -> (of_kind_foo * judgements_from_meet) Or_bottom.t
 
     (* If the supplied types are compatible, the join must be pushed inside
        their structure, and [Ok] returned.  Otherwise [Unknown] must be
@@ -1891,9 +1908,11 @@ end;
     (* CR mshinwell: add comment about requirement for equivalence
        relationness *)
     val join_of_kind_foo
-       : (of_kind_foo
+       : typing_environment
+      -> typing_environment
       -> of_kind_foo
-      -> of_kind_foo or_unknown) type_accessor
+      -> of_kind_foo
+      -> of_kind_foo or_unknown
   end
 
   module type Meet_and_join = sig
@@ -1901,16 +1920,20 @@ end;
 
     (* Least upper bound of two types of a particular kind. *)
     val join_ty
-       : (of_kind_foo ty
+       : typing_environment
+      -> typing_environment
       -> of_kind_foo ty
-      -> of_kind_foo ty) type_accessor
+      -> of_kind_foo ty
+      -> of_kind_foo ty
 
     (* Greatest lower bound of two types of a particular kind.
        The computation of such may yield new judgements. *)
     val meet_ty
-       : (of_kind_foo ty
+       : typing_environment
+      -> typing_environment
       -> of_kind_foo ty
-      -> of_kind_foo ty * judgements_from_meet) type_accessor
+      -> of_kind_foo ty
+      -> of_kind_foo ty * judgements_from_meet
   end
 
   (* CR mshinwell: Work out which properties we need to prove, e.g.
@@ -1920,7 +1943,7 @@ end;
     include Meet_and_join
       with type of_kind_foo := S.of_kind_foo
   end = struct
-    let rec join_on_unknown_or_join ~type_of_name
+    let rec join_on_unknown_or_join env1 env2
           (uj1 : S.of_kind_foo unknown_or_join)
           (uj2 : S.of_kind_foo unknown_or_join)
           : S.of_kind_foo unknown_or_join =
@@ -1938,7 +1961,7 @@ end;
               let joined =
                 List.map (fun of_kind_foo' ->
                     let join =
-                      S.join_of_kind_foo ~type_of_name of_kind_foo of_kind_foo'
+                      S.join_of_kind_foo env1 env2 of_kind_foo of_kind_foo'
                     in
                     match join with
                     | Known of_kind_foo ->
@@ -1958,17 +1981,17 @@ end;
         in
         Join of_kind_foos
 
-    and join_ty ~type_of_name
+    and join_ty env1 env2
           (or_alias1 : S.of_kind_foo ty)
           (or_alias2 : S.of_kind_foo ty)
           : S.of_kind_foo ty =
       let unknown_or_join1, canonical_name1 =
-        resolve_aliases_and_squash_unresolved_names_on_ty ~type_of_name
+        resolve_aliases_and_squash_unresolved_names_on_ty env1
           ~force_to_kind:S.force_to_kind
           or_alias1
       in
       let unknown_or_join2, canonical_name2 =
-        resolve_aliases_and_squash_unresolved_names_on_ty ~type_of_name
+        resolve_aliases_and_squash_unresolved_names_on_ty env2
           ~force_to_kind:S.force_to_kind
           or_alias2
       in
@@ -1982,7 +2005,7 @@ end;
         in
         No_alias unknown_or_join
 
-    let rec meet_on_unknown_or_join ~type_of_name
+    let rec meet_on_unknown_or_join env1 env2
           (ou1 : S.of_kind_foo unknown_or_join)
           (ou2 : S.of_kind_foo unknown_or_join)
           : S.of_kind_foo unknown_or_join * judgements_from_meet =
@@ -1996,7 +2019,7 @@ end;
               let of_kind_foos =
                 Misc.Stdlib.List.filter_map (fun of_kind_foo' ->
                     let meet =
-                      S.meet_of_kind_foo ~type_of_name of_kind_foo of_kind_foo'
+                      S.meet_of_kind_foo env1 env2 of_kind_foo of_kind_foo'
                     in
                     match meet with
                     | Ok (of_kind_foo, new_judgements') ->
@@ -2011,23 +2034,23 @@ end;
         in
         Join of_kind_foos, judgements
 
-    and meet_ty ~type_of_name
+    and meet_ty env1 env2
           (or_alias1 : S.of_kind_foo ty)
           (or_alias2 : S.of_kind_foo ty)
           : S.of_kind_foo ty * judgements_from_meet =
       let unknown_or_join1, canonical_name1 =
-        resolve_aliases_and_squash_unresolved_names_on_ty ~type_of_name
+        resolve_aliases_and_squash_unresolved_names_on_ty env1
           ~force_to_kind:S.force_to_kind
           or_alias1
       in
       let unknown_or_join2, canonical_name2 =
-        resolve_aliases_and_squash_unresolved_names_on_ty ~type_of_name
+        resolve_aliases_and_squash_unresolved_names_on_ty env2
           ~force_to_kind:S.force_to_kind
           or_alias2
       in
       let normal_case ~first_name_to_bind ~names_to_bind =
         let unknown_or_join, new_judgements =
-          meet_on_unknown_or_join ~type_of_name
+          meet_on_unknown_or_join env1 env2
             unknown_or_join1 unknown_or_join2
         in
         let new_judgement =
@@ -2044,7 +2067,7 @@ end;
         match names_to_bind with
         | [] ->
           let unknown_or_join, new_judgements =
-            meet_on_unknown_or_join ~type_of_name
+            meet_on_unknown_or_join env1 env2
               unknown_or_join1 unknown_or_join2
           in
           No_alias unknown_or_join, new_judgements
@@ -3218,7 +3241,7 @@ end;
         closure_elements;
       }
 
-    let meet_of_kind_foo ~type_of_name
+    let meet_of_kind_foo env1 env2
           (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
           : (of_kind_fabricated * judgements_from_meet) Or_bottom.t =
       match of_kind1, of_kind2 with
@@ -3229,7 +3252,7 @@ end;
                   ({ env_extension = env_extension2; } : tag_case)
                   : tag_case ->
               let env_extension =
-                Meet_and_join.meet_typing_environment ~type_of_name
+                Meet_and_join.meet_typing_environment env1 env2
                   env_extension1 env_extension2
               in
               (* CR mshinwell: Do we ever flip back to [Bottom] here? *)
@@ -3245,13 +3268,13 @@ end;
         in
         Ok (Tag tags, judgements)
       | Set_of_closures set1, Set_of_closures set2 ->
-        begin match meet_set_of_closures ~type_of_name set1 set2 with
+        begin match meet_set_of_closures env1 env2 set1 set2 with
         | Ok (set_of_closures, judgements) ->
           Ok (Set_of_closures set_of_closures, judgements)
         | Bottom -> Bottom
         end
       | Closure closure1, Closure closure2 ->
-        begin match meet_closure ~type_of_name closure1 closure2 with
+        begin match meet_closure env1 env2 closure1 closure2 with
         | Ok (closure, judgements) -> Ok (Closure closure, judgements)
         | Bottom -> Bottom
         end
@@ -3284,41 +3307,41 @@ end;
         Known (Closure closure)
       | (Tag _ | Set_of_closures _ | Closure _), _ -> Unknown
   end) and Meet_and_join : sig
-    val meet : (t -> t -> t * judgements_from_meet) type_accessor
+    val meet : t_in_context -> t_in_context -> t * judgements_from_meet
 
-    val join : (t -> t -> t) type_accessor
+    val join : t_in_context -> t_in_context -> t
 
     val meet_typing_environment
-       : (typing_environment
+       : typing_environment
       -> typing_environment
-      -> typing_environment) type_accessor
+      -> typing_environment
 
     val join_typing_environment
-       : (typing_environment
+       : typing_environment
       -> typing_environment
-      -> typing_environment) type_accessor
+      -> typing_environment
 
     val replace_meet_typing_environment0
-       : (typing_environment
-        -> Name.t
-        -> scope_level:Scope_level.t
-        -> existing_ty:t
-        -> t
-        -> typing_environment) type_accessor
+       : typing_environment
+      -> Name.t
+      -> scope_level:Scope_level.t
+      -> existing_ty:t
+      -> t
+      -> typing_environment
 
     val replace_meet_typing_environment
-       : (typing_environment
-        -> Name.t
-        -> t
-        -> typing_environment) type_accessor
+       : typing_environment
+      -> Name.t
+      -> t
+      -> typing_environment
   end = struct
-    let meet ~type_of_name (t1 : t) (t2 : t) : t * judgements_from_meet =
+    let meet (env1, (t1 : t)) (env2, (t2 : t)) : t * judgements_from_meet =
       ensure_phantomness_matches t1 t2 "kind mismatch upon meet";
       let descr, judgements =
         match t1.descr, t2.descr with
         | Value ty_value1, Value ty_value2 ->
           let ty_value, judgements =
-            Meet_and_join_value.meet_ty ~type_of_name ty_value1 ty_value2
+            Meet_and_join_value.meet_ty env1 env2 ty_value1 ty_value2
           in
           Value ty_value, judgements
         | Naked_number (ty_naked_number1, kind1),
@@ -3327,31 +3350,31 @@ end;
           begin match kind1, kind2 with
           | N.Naked_immediate, N.Naked_immediate ->
             let ty_naked_number, judgements =
-              Meet_and_join_naked_immediate.meet_ty ~type_of_name
+              Meet_and_join_naked_immediate.meet_ty env1 env2
                 ty_naked_number1 ty_naked_number2
             in
             Naked_number (ty_naked_number, N.Naked_immediate), judgements
           | N.Naked_float, N.Naked_float ->
             let ty_naked_number, judgements =
-              Meet_and_join_naked_float.meet_ty ~type_of_name
+              Meet_and_join_naked_float.meet_ty env1 env2
                 ty_naked_number1 ty_naked_number2
             in
             Naked_number (ty_naked_number, N.Naked_float), judgements
           | N.Naked_int32, N.Naked_int32 ->
             let ty_naked_number, judgements =
-              Meet_and_join_naked_int32.meet_ty ~type_of_name
+              Meet_and_join_naked_int32.meet_ty env1 env2
                 ty_naked_number1 ty_naked_number2
             in
             Naked_number (ty_naked_number, N.Naked_int32), judgements
           | N.Naked_int64, N.Naked_int64 ->
             let ty_naked_number, judgements =
-              Meet_and_join_naked_int64.meet_ty ~type_of_name
+              Meet_and_join_naked_int64.meet_ty env1 env2
                 ty_naked_number1 ty_naked_number2
             in
             Naked_number (ty_naked_number, N.Naked_int64), judgements
           | N.Naked_nativeint, N.Naked_nativeint ->
             let ty_naked_number, judgements =
-              Meet_and_join_naked_nativeint.meet_ty ~type_of_name
+              Meet_and_join_naked_nativeint.meet_ty env1 env2
                 ty_naked_number1 ty_naked_number2
             in
             Naked_number (ty_naked_number, N.Naked_nativeint), judgements
@@ -3362,7 +3385,7 @@ end;
           end
         | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
           let ty_fabricated, judgements =
-            Meet_and_join_fabricated.meet_ty ~type_of_name
+            Meet_and_join_fabricated.meet_ty env1 env2
               ty_fabricated1 ty_fabricated2
           in
           Fabricated ty_fabricated, judgements
@@ -3374,13 +3397,13 @@ end;
       let t = { t1 with descr; } in
       t, judgements
 
-    let join ~type_of_name t1 t2 =
+    let join (env1, (t1 : t)) (env2, (t2 : t)) =
       ensure_phantomness_matches t1 t2 "kind mismatch upon join";
       let descr =
         match t1.descr, t2.descr with
         | Value ty_value1, Value ty_value2 ->
           let ty_value =
-            Meet_and_join_value.join_ty ~type_of_name ty_value1 ty_value2
+            Meet_and_join_value.join_ty env1 env2 ty_value1 ty_value2
           in
           Value ty_value
         | Naked_number (ty_naked_number1, kind1),
@@ -3389,31 +3412,31 @@ end;
           begin match kind1, kind2 with
           | N.Naked_immediate, N.Naked_immediate ->
             let ty_naked_number =
-              Meet_and_join_naked_immediate.join_ty ~type_of_name
+              Meet_and_join_naked_immediate.join_ty env1 env2
                 ty_naked_number1 ty_naked_number2
             in
             Naked_number (ty_naked_number, N.Naked_immediate)
           | N.Naked_float, N.Naked_float ->
             let ty_naked_number =
-              Meet_and_join_naked_float.join_ty ~type_of_name
+              Meet_and_join_naked_float.join_ty env1 env2
                 ty_naked_number1 ty_naked_number2
             in
             Naked_number (ty_naked_number, N.Naked_float)
           | N.Naked_int32, N.Naked_int32 ->
             let ty_naked_number =
-              Meet_and_join_naked_int32.join_ty ~type_of_name
+              Meet_and_join_naked_int32.join_ty env1 env2
                 ty_naked_number1 ty_naked_number2
             in
             Naked_number (ty_naked_number, N.Naked_int32)
           | N.Naked_int64, N.Naked_int64 ->
             let ty_naked_number =
-              Meet_and_join_naked_int64.join_ty ~type_of_name
+              Meet_and_join_naked_int64.join_ty env1 env2
                 ty_naked_number1 ty_naked_number2
             in
             Naked_number (ty_naked_number, N.Naked_int64)
           | N.Naked_nativeint, N.Naked_nativeint ->
             let ty_naked_number =
-              Meet_and_join_naked_nativeint.join_ty ~type_of_name
+              Meet_and_join_naked_nativeint.join_ty env1 env2
                 ty_naked_number1 ty_naked_number2
             in
             Naked_number (ty_naked_number, N.Naked_nativeint)
@@ -3424,7 +3447,7 @@ end;
           end
         | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
           let ty_fabricated =
-            Meet_and_join_fabricated.join_ty ~type_of_name
+            Meet_and_join_fabricated.join_ty env1 env2
               ty_fabricated1 ty_fabricated2
           in
           Fabricated ty_fabricated
@@ -3435,8 +3458,8 @@ end;
       in
       { t1 with descr; }
 
-    let join_typing_environment ~type_of_name
-          (t1 : typing_environment) (t2 : typing_environment) =
+    let join_typing_environment (t1 : typing_environment)
+          (t2 : typing_environment) =
       let names_to_types =
         Name.Map.inter_merge (fun (level1, ty1) (level2, ty2) ->
             if not (Scope_level.equal level1 level2) then begin
@@ -3475,8 +3498,8 @@ end;
         existential_freshening;
       }
 
-    let rec meet_typing_environment ~type_of_name
-          (env1 : typing_environment) (env2 : typing_environment) =
+    let rec meet_typing_environment (env1 : typing_environment)
+          (env2 : typing_environment) =
       let judgements = ref [] in
       let names_to_types =
         Name.Map.union_merge (fun (level1, ty1) (level2, ty2) ->
@@ -3526,7 +3549,7 @@ Format.eprintf "...giving %a\n%!" print ty;
           existential_freshening;
         }
       in
-      meet_typing_environment_with_judgements ~type_of_name ~num_iterations:0
+      meet_typing_environment_with_judgements ~num_iterations:0
         env ~judgements:!judgements
 
     and meet_typing_environment_with_judgements ~type_of_name ~num_iterations
@@ -3616,24 +3639,9 @@ Format.eprintf "(TE replace_meet) Judgements holding now:@ %a\n%!"
     let singleton name scope_level ty =
       add (create ()) name scope_level ty
 
-    type binding_type = Normal | Existential
+    type nonrec binding_type = binding_type
 
-    let find t name =
-      match Name.Map.find name t.names_to_types with
-      | exception Not_found ->
-        Misc.fatal_errorf "Cannot find %a in environment:@ %a"
-          Name.print name
-          print t
-      | _scope_level, ty ->
-        let binding_type =
-          if Name.Set.mem name t.existentials then Existential
-          else Normal
-        in
-        match binding_type with
-        | Normal -> ty, Normal
-        | Existential ->
-     (* XXX     let ty = rename_variables t freshening in *)
-          ty, Existential
+    let find = find_typing_environment
 
     let scope_level t name =
       match Name.Map.find name t.names_to_types with

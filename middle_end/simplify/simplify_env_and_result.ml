@@ -211,12 +211,9 @@ end = struct
     let ty, binding_type = TE.find typing_environment (Name.var var) in
     match binding_type with
     | Normal -> ty
-    | Existential -> ty
-
-(* XXX We need to identify when existential ones are acceptable
-      Misc.fatal_errorf "Variable %a is not in scope"
+    | Existential ->
+      Misc.fatal_errorf "Variable %a is existentially bound"
         Variable.print var
-*)
 
   let find_variable t var =
     find_variable0 t.typing_environment var
@@ -228,7 +225,7 @@ end = struct
       match binding_type with
       | Normal -> Some ty
       | Existential ->
-        Misc.fatal_errorf "Variable %a is not in scope"
+        Misc.fatal_errorf "Variable %a is existentially bound"
           Variable.print var
 
   let scope_level_of_name t name =
@@ -316,24 +313,6 @@ end = struct
       Misc.fatal_errorf "Symbol %a cannot be redefined when it is not \
           already defined"
         Symbol.print sym
-
-  let type_of_name t ?local_env (name_or_export_id : T.Name_or_export_id.t) =
-    let env =
-      match local_env with
-      | None -> t.typing_environment
-      | Some local_env -> local_env
-    in
-    match name_or_export_id with
-    | Name name ->
-      begin match name with
-      | Var var -> Some (find_variable0 env var)
-      | Symbol sym -> Some (find_symbol0 env sym)
-      end
-    | Export_id _export_id ->
-      (* CR mshinwell: The loading from .cmx files should slot in here. *)
-      None
-
-  let type_accessor t f = f ~type_of_name:(type_of_name t)
 
   let add_mutable t mut_var ty =
     { t with mutable_variables =

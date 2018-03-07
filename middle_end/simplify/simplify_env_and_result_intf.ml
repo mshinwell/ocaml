@@ -70,13 +70,6 @@ module type Env = sig
       at runtime.) *)
   val const_float_prop : t -> bool
 
-  (** Prepare an [Flambda_type.type_accessor] function for use in the current
-      environment. *)
-  val type_accessor
-     : t
-    -> 'a Flambda_type.type_accessor
-    -> 'a
-
   val simplify_toplevel
      : t
     -> (t
@@ -143,12 +136,6 @@ module type Env = sig
   val mem_simple : t -> Simple.t -> bool
 
   val mem_name : t -> Name.t -> bool
-
-  val type_of_name
-     : t
-    -> ?local_env:Flambda_type.typing_environment
-    -> Flambda_type.Name_or_export_id.t
-    -> Flambda_type.t option
 
   (** Like [add_variable], but for mutable variables. *)
   val add_mutable : t -> Mutable_variable.t -> Flambda_type.t -> t

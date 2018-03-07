@@ -275,7 +275,7 @@ let try_to_reify env r ty ~(term : Flambda.Reachable.t) ~result_var
     let ty = T.bottom_like ty in
     [], term, ty, remove_term ()
   | Reachable _ ->
-    match (E.type_accessor env T.reify) ty ~allow_free_variables:true with
+    match T.reify env ty ~allow_free_variables:true with
     | Term (simple, ty) ->
       let term : Named.t = Simple simple in
       [], Flambda.Reachable.reachable term, ty, remove_term ()
