@@ -158,6 +158,9 @@ end) = struct
     | String of String_info.Set.t
 
   and immediate_case = {
+    (* Environment extensions have an [option] type so that the information
+       required to create a typing environment isn't required for various
+       trivial functions such as [these_tagged_immediates]. *)
     env_extension : typing_environment option;
   }
  
@@ -239,7 +242,7 @@ end) = struct
     | Nativeint : Targetint.Set.t -> Targetint.Set.t of_kind_naked_number
 
   and tag_case = {
-    env_extension : typing_environment;
+    env_extension : typing_environment option;
   }
 
   and of_kind_fabricated =
@@ -1385,9 +1388,7 @@ end;
     }
 
   let this_tag_as_ty_fabricated tag =
-    let tags_to_env_extensions =
-      Tag.Map.add tag (create_typing_environment ()) Tag.Map.empty
-    in
+    let tags_to_env_extensions = Tag.Map.add tag None Tag.Map.empty in
     these_tags_as_ty_fabricated tags_to_env_extensions
 
   let this_tag tag : t =
@@ -1758,10 +1759,14 @@ end;
   let bottom_like t = bottom (kind t)
   let unknown_like t = unknown (kind t)
 
-  let resolve_aliases_on_ty (type a) env ~expected_kind ~force_to_kind
-        (ty : a ty) (t : t) : a t * (Name.t option) =
+  type still_unresolved =
+    | Resolved
+    | Still_unresolved
+
+  let resolve_aliases_on_ty0 (type a) env ~force_to_kind
+        (ty : a ty) (t : t) : t * (Name.t option) * still_unresolved =
     let rec resolve_aliases names_seen ~canonical_name (ty : a ty) (t : t) =
-      let resolve (name : Name_or_export_id.t) =
+      let resolve (name : Name_or_export_id.t) : _ * _ * still_unresolved =
         if Name_or_export_id.Set.mem name names_seen then begin
           Misc.fatal_errorf "Loop on %a whilst resolving aliases:@ %a"
             Name_or_export_id.print name
@@ -1779,63 +1784,58 @@ end;
         | Export_id export_id ->
           match env.resolver export_id with
           | Some t -> continue_resolving t ~canonical_name
-          | None -> t, None
+          | None -> t, None, Still_unresolved
       in
       match ty with
-      | No_alias _ -> t, canonical_name
+      | No_alias _ -> t, canonical_name, Resolved
       | Type export_id -> resolve (Name_or_export_id.Export_id export_id)
       | Type_of name -> resolve (Name_or_export_id.Name name)
     in
     resolve_aliases Name_or_export_id.Set.empty ~canonical_name:None ty t
 
-  let resolve_aliases_and_squash_unresolved_names_on_ty env ~force_to_kind ty =
-    let ty, canonical_name = resolve_aliases_on_ty ~force_to_kind env ty in
-    let ty =
-      match ty with
-      | No_alias ty -> ty
-      | Type _ | Type_of _ -> Unknown
+  let resolve_aliases_on_ty env ~force_to_kind ty t =
+    let t, canonical_name, _still_unresolved =
+      resolve_aliases_on_ty0 env ~force_to_kind ty t
     in
-    ty, canonical_name
+    t, canonical_name
+
+  let resolve_aliases_and_squash_unresolved_names_on_ty env ~kind
+        ~force_to_kind ty t =
+    let t, canonical_name, still_unresolved =
+      resolve_aliases_on_ty0 env ~force_to_kind ty t
+    in
+    match still_unresolved with
+    | Resolved -> t, canonical_name
+    | Still_unresolved -> unknown kind, canonical_name
 
   let resolve_aliases (env, t) : t * (Name.t option) =
-    let expected_kind = kind t in
-    match t.descr with
-    | Value ty ->
-      resolve_aliases_on_ty env ~expected_kind ty t
-    | Naked_number (ty, kind) ->
-      let force_to_kind = force_to_kind_naked_number kind in
-      let ty, canonical_name =
-        resolve_aliases_on_ty ~force_to_kind ~type_of_name ty
-      in
-      { t with descr = Naked_number (ty, kind); }, canonical_name
-    | Fabricated ty ->
-      let force_to_kind = force_to_kind_fabricated in
-      let ty, canonical_name =
-        resolve_aliases_on_ty ~force_to_kind ~type_of_name ty
-      in
-      { t with descr = Fabricated ty; }, canonical_name
-
-  let resolve_aliases_and_squash_unresolved_names (env, t)
-        : t * (Name.t option) =
     match t.descr with
     | Value ty ->
       let force_to_kind = force_to_kind_value in
-      let ty, canonical_name =
-        resolve_aliases_and_squash_unresolved_names_on_ty env ~force_to_kind ty
-      in
-      { t with descr = Value (No_alias ty); }, canonical_name
+      resolve_aliases_on_ty env ~force_to_kind ty t
     | Naked_number (ty, kind) ->
       let force_to_kind = force_to_kind_naked_number kind in
-      let ty, canonical_name =
-        resolve_aliases_and_squash_unresolved_names_on_ty env ~force_to_kind ty
-      in
-      { t with descr = Naked_number (No_alias ty, kind); }, canonical_name
+      resolve_aliases_on_ty env ~force_to_kind ty t
     | Fabricated ty ->
       let force_to_kind = force_to_kind_fabricated in
-      let ty, canonical_name =
-        resolve_aliases_and_squash_unresolved_names_on_ty env ~force_to_kind ty
-      in
-      { t with descr = Fabricated (No_alias ty); }, canonical_name
+      resolve_aliases_on_ty env ~force_to_kind ty t
+
+  let resolve_aliases_and_squash_unresolved_names (env, t)
+        : t * (Name.t option) =
+    let kind = kind t in
+    match t.descr with
+    | Value ty ->
+      let force_to_kind = force_to_kind_value in
+      resolve_aliases_and_squash_unresolved_names_on_ty env ~kind
+        ~force_to_kind ty t
+    | Naked_number (ty, naked_number_kind) ->
+      let force_to_kind = force_to_kind_naked_number naked_number_kind in
+      resolve_aliases_and_squash_unresolved_names_on_ty env ~kind
+        ~force_to_kind ty t
+    | Fabricated ty ->
+      let force_to_kind = force_to_kind_fabricated in
+      resolve_aliases_and_squash_unresolved_names_on_ty env
+        ~kind ~force_to_kind ty t
 
   let create_inlinable_function_declaration ~is_classic_mode ~closure_origin
         ~continuation_param ~exn_continuation_param
@@ -1993,6 +1993,9 @@ end;
       -> typing_environment
       -> of_kind_foo ty
       -> of_kind_foo ty
+      -> t
+      -> t
+      -> Flambda_kind.t
       -> of_kind_foo ty
 
     (* Greatest lower bound of two types of a particular kind.
@@ -2002,6 +2005,9 @@ end;
       -> typing_environment
       -> of_kind_foo ty
       -> of_kind_foo ty
+      -> t
+      -> t
+      -> Flambda_kind.t
       -> of_kind_foo ty * judgements_from_meet
   end
 
@@ -2051,25 +2057,28 @@ end;
         Join of_kind_foos
 
     and join_ty env1 env2
-          (or_alias1 : S.of_kind_foo ty)
-          (or_alias2 : S.of_kind_foo ty)
+          (or_alias1 : S.of_kind_foo ty) t1
+          (or_alias2 : S.of_kind_foo ty) t2
+          ~kind
           : S.of_kind_foo ty =
       let unknown_or_join1, canonical_name1 =
         resolve_aliases_and_squash_unresolved_names_on_ty env1
+          ~kind
           ~force_to_kind:S.force_to_kind
-          or_alias1
+          or_alias1 t1
       in
       let unknown_or_join2, canonical_name2 =
         resolve_aliases_and_squash_unresolved_names_on_ty env2
+          ~kind
           ~force_to_kind:S.force_to_kind
-          or_alias2
+          or_alias2 t2
       in
       match canonical_name1, canonical_name2 with
       | Some name1, Some name2 when Name.equal name1 name2 ->
         Type_of name1
       | _, _ ->
         let unknown_or_join =
-          join_on_unknown_or_join ~type_of_name
+          join_on_unknown_or_join env1 env2
             unknown_or_join1 unknown_or_join2
         in
         No_alias unknown_or_join
@@ -2104,18 +2113,21 @@ end;
         Join of_kind_foos, judgements
 
     and meet_ty env1 env2
-          (or_alias1 : S.of_kind_foo ty)
-          (or_alias2 : S.of_kind_foo ty)
+          (or_alias1 : S.of_kind_foo ty) t1
+          (or_alias2 : S.of_kind_foo ty) t2
+          ~kind
           : S.of_kind_foo ty * judgements_from_meet =
       let unknown_or_join1, canonical_name1 =
         resolve_aliases_and_squash_unresolved_names_on_ty env1
           ~force_to_kind:S.force_to_kind
-          or_alias1
+          ~kind
+          or_alias1 t1
       in
       let unknown_or_join2, canonical_name2 =
         resolve_aliases_and_squash_unresolved_names_on_ty env2
           ~force_to_kind:S.force_to_kind
-          or_alias2
+          ~kind
+          or_alias2 t2
       in
       let normal_case ~first_name_to_bind ~names_to_bind =
         let unknown_or_join, new_judgements =
