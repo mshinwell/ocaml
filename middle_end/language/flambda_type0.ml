@@ -14,7 +14,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 (* CR mshinwell: This warning appears to be broken (e.g. it claims
    [Meet_and_join_value] is unused) *)
@@ -309,12 +309,16 @@ end;
 
   type binding_type = Normal | Existential
 
-  let find_typing_environment t name =
+  let rec find_typing_environment t name =
     match Name.Map.find name t.names_to_types with
     | exception Not_found ->
-      Misc.fatal_errorf "Cannot find %a in environment:@ %a"
-        Name.print name
-        print t
+      begin match t.parent with
+      | Some parent -> find_typing_environment parent name
+      | None ->
+        Misc.fatal_errorf "Cannot find %a in environment:@ %a"
+          Name.print name
+          print t
+      end
     | _scope_level, ty ->
       let binding_type =
         if Name.Set.mem name t.existentials then Existential
@@ -564,9 +568,9 @@ end;
     Format.fprintf ppf "@[(Closure (function_decls@ %a))@]"
       print_function_declarations closure.function_decls
 
-  and print_tag_case ppf ({ env_extension; } : tag_case) =
+  and print_tag_case ~env_cache ppf ({ env_extension; } : tag_case) =
     Format.fprintf ppf "@[(env_extension@ %a)@]"
-      print_typing_environment env_extension
+      print_typing_environment env_cache env_extension
 
   and print_of_kind_fabricated ppf (o : of_kind_fabricated) =
     match o with
@@ -578,14 +582,6 @@ end;
   and print_ty_fabricated ppf (ty : ty_fabricated) =
     print_ty_generic print_of_kind_fabricated ppf ty
 
-  and print ppf (t : t) =
-    match t.phantom with
-    | None -> print_descr ppf t.descr
-    | Some In_types ->
-      Format.fprintf ppf "@[(Phantom_in_types@ (%a))@]" print_descr t.descr
-    | Some Debug_only ->
-      Format.fprintf ppf "@[(Phantom_debug_only@ (%a))@]" print_descr t.descr
-
   and print_descr ppf (descr : descr) =
     match descr with
     | Value ty ->
@@ -595,21 +591,44 @@ end;
     | Fabricated ty ->
       Format.fprintf ppf "@[(Fabricated@ (%a))@]" print_ty_fabricated ty
 
-  and print_typing_environment ppf { names_to_types; levels_to_names;
-        existentials; existential_freshening; } =
+  and print_with_caches ~env_cache ppf (t : t) =
+    match t.phantom with
+    | None -> print_descr ~env_cache ppf t.descr
+    | Some In_types ->
+      Format.fprintf ppf "@[(Phantom_in_types@ (%a))@]"
+        (print_descr ~env_cache) t.descr
+    | Some Debug_only ->
+      Format.fprintf ppf "@[(Phantom_debug_only@ (%a))@]"
+        (print_descr ~env_cache) t.descr
+
+  and print ppf (t : t) =
+    let env_cache : typing_environment Printing_cache.t =
+      Printing_cache.create "env"
+    in
+    print_with_caches ~env_cache ppf t
+
+  and print_typing_environment ~env_cache ppf
+        ({ resolver; parent; names_to_types;
+           levels_to_names; existentials; existential_freshening; } as env) =
     if Name.Map.is_empty names_to_types then
       Format.pp_print_string ppf "Empty"
     else
-      let print_scope_level_and_type ppf (_scope_level, ty) = print ppf ty in
-      Format.fprintf ppf
-        "@[((names_to_types@ %a)@ \
-            (levels_to_names@ %a)@ \
-            (existentials@ %a)@ \
-            (existential_freshening@ %a))@]"
-        (Name.Map.print print_scope_level_and_type) names_to_types
-        (Scope_level.Map.print Name.Set.print) levels_to_names
-        Name.Set.print existentials
-        Freshening.print existential_freshening
+      Printing_cache.with_cache cache ppf env (fun ppf () ->
+        let print_scope_level_and_type ppf (_scope_level, ty) =
+          print_with_caches ~env_cache ppf ty
+        in
+        Format.fprintf ppf
+          (* CR mshinwell: add memoised printing where big values that are
+             printed are named and printed at most once *)
+          "@[((parent <elided>)@ \
+              (names_to_types@ %a)@ \
+              (levels_to_names@ %a)@ \
+              (existentials@ %a)@ \
+              (existential_freshening@ %a))@]"
+          (Name.Map.print print_scope_level_and_type) names_to_types
+          (Scope_level.Map.print Name.Set.print) levels_to_names
+          Name.Set.print existentials
+          Freshening.print existential_freshening)
 
   let of_ty_value ty_value : t =
     { descr = Value ty_value;
@@ -2092,43 +2111,43 @@ end;
     let to_type ty : t = { descr = Value ty; phantom = None; }
     let force_to_kind = force_to_kind_value
 
-    let meet_immediate_case ~type_of_name
+    let meet_immediate_case _env1 _env2
           ({ env_extension = env_extension1; } : immediate_case)
           ({ env_extension = env_extension2; } : immediate_case)
           : immediate_case =
       let env_extension =
-        Meet_and_join.meet_typing_environment ~type_of_name
+        Meet_and_join.meet_typing_environment env1 env2
           env_extension1 env_extension2
       in
       { env_extension; }
 
-    let join_immediate_case ~type_of_name
+    let join_immediate_case _env1 _env2
           ({ env_extension = env_extension1; } : immediate_case)
           ({ env_extension = env_extension2; } : immediate_case)
           : immediate_case =
       let env_extension =
-        Meet_and_join.join_typing_environment ~type_of_name
+        Meet_and_join.join_typing_environment
           env_extension1 env_extension2
       in
       { env_extension; }
 
-    let meet_immediates ~type_of_name immediates1 immediates2 : _ Or_bottom.t =
+    let meet_immediates env1 env2 immediates1 immediates2 : _ Or_bottom.t =
       let immediates =
         Immediate.Map.inter_merge (fun imm1 imm2 ->
-            meet_immediate_case ~type_of_name imm1 imm2)
+            meet_immediate_case env1 env2 imm1 imm2)
           immediates1
           immediates2
       in
       if Immediate.Map.is_empty immediates then Bottom
       else Ok immediates
 
-    let join_immediates ~type_of_name immediates1 immediates2 =
+    let join_immediates env1 env2 immediates1 immediates2 =
       Immediate.Map.union_merge (fun imm1 imm2 ->
-          join_immediate_case ~type_of_name imm1 imm2)
+          join_immediate_case env1 env2 imm1 imm2)
         immediates1
         immediates2
 
-    let meet_singleton_block ~type_of_name
+    let meet_singleton_block env1 env2
           ({ env_extension = env_extension1;
              fields = fields1;
            } : singleton_block)
@@ -2136,7 +2155,7 @@ end;
              fields = fields2;
            } : singleton_block) : singleton_block * judgements_from_meet =
       let env_extension =
-        Meet_and_join.meet_typing_environment ~type_of_name
+        Meet_and_join.meet_typing_environment
           env_extension1 env_extension2
       in
       assert (Array.length fields1 = Array.length fields2);
@@ -2149,7 +2168,7 @@ end;
             | Mutable, _ | _, Mutable -> Mutable
             | Immutable field1, Immutable field2 ->
               let field, new_judgements =
-                Meet_and_join.meet ~type_of_name field1 field2
+                Meet_and_join.meet env1 env2 field1 field2
               in
               judgements := new_judgements @ !judgements;
               Immutable field)
@@ -3759,7 +3778,7 @@ Format.eprintf "Result is: %a\n%!"
       Name_occurrences.create_from_set_in_terms domain
   end
 
-  let add_judgements ~type_of_name t env : t =
+  let add_judgements (env, t) : t =
     let t, _canonical_name = resolve_aliases ~type_of_name t in
     match t.descr with
     | Value (No_alias (Join of_kind_values)) ->

@@ -572,7 +572,7 @@ module type S = sig
   (** Determine the (unique) kind of a type. *)
   val kind : t -> Flambda_kind.t
 
-  val add_judgements : t -> Typing_environment.t -> t
+  val add_judgements : t_in_context -> t
 
   (** Least upper bound of two types. *)
   val join : t_in_context -> t_in_context -> t
