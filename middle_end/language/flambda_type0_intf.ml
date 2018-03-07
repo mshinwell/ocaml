@@ -5,14 +5,18 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2017 OCamlPro SAS                                    *)
-(*   Copyright 2014--2017 Jane Street Group LLC                           *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
 (*   special exception on linking described in the file LICENSE.          *)
 (*                                                                        *)
 (**************************************************************************)
+
+(** The interface to [Flambda_type0] once the type system has been
+    instantiated for a particular expression language (typically
+    [Flambda0]). *)
 
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
@@ -171,6 +175,8 @@ module type S = sig
         primitive on the corresponding block. *)
   }
 
+  (** Boxed integer and floating-point numbers together with the types
+      of their contents. *)
   and 'a of_kind_value_boxed_number = private
     | Boxed_float
          : Numbers.Float_by_bit_pattern.Set.t ty_naked_number
@@ -186,6 +192,8 @@ module type S = sig
          : Targetint.Set.t ty_naked_number
         -> Targetint.Set.t ty_naked_number of_kind_value_boxed_number
 
+  (** A function declaration which is inlinable (which in particular implies
+      that the code of the function's body is known). *)
   and inlinable_function_declaration = private {
     closure_origin : Closure_origin.t;
     continuation_param : Continuation.t;
@@ -219,6 +227,8 @@ module type S = sig
     my_closure : Variable.t;
   }
 
+  (** A function declaration that is not inlinable (typically because the
+      code is unknown, possibly due to being deliberately discarded). *)
   and non_inlinable_function_declarations = private {
     params : t list;
     result : t list;
@@ -236,9 +246,12 @@ module type S = sig
     set_of_closures : ty_fabricated;
   }
 
+  (** The various closures which flow to a particular program point. *)
   and closures =
     closures_entry Closure_id.Map.t
 
+  (** Unboxed ("naked") integer and floating-point numbers together with
+      any information known about which particular numbers they might be. *)
   and 'a of_kind_naked_number = private
     | Immediate : Immediate.Set.t -> Immediate.Set.t of_kind_naked_number
     | Float : Numbers.Float_by_bit_pattern.Set.t
@@ -247,6 +260,8 @@ module type S = sig
     | Int64 : Numbers.Int64.Set.t -> Numbers.Int64.Set.t of_kind_naked_number
     | Nativeint : Targetint.Set.t -> Targetint.Set.t of_kind_naked_number
 
+  (** Judgements known to hold if a particular value has been shown to have
+      a particular block tag. *)
   and tag_case = private {
     env_extension : typing_environment;
   }
@@ -256,8 +271,14 @@ module type S = sig
        troublesome since the obvious Fabricated_kind.t wouldn't have a unique
        top element) *)
     | Tag of tag_case Tag.Map.t
+      (** A block tag (or constant constructor which has undergone a
+          kind-cast to kind [Fabricated] using the [Int_as_tag] primitive). *)
     | Set_of_closures of set_of_closures
+      (** A possibly mutually-recursive collection of closure values, which
+          at runtime will be represented by a single block. *)
     | Closure of closure
+      (** One element of a set of closures.  (Note that this is distinct
+          from the [Closures] case, above, in kind [Value].) *)
 
   and set_of_closures = private {
     closures : ty_fabricated Closure_id.Map.t extensibility;
@@ -284,9 +305,12 @@ module type S = sig
     -> t
 
   module Typing_environment : sig
-    type t = typing_environment
+    (** A "traditional" typing environment or context: an assignment from
+        names to types.  The environment also encapsulates the knowledge,
+        via the [resolver], required to import types from .cmx files (or
+        other external source). *)
 
-    val print : Format.formatter -> t -> unit
+    type t = typing_environment
 
     val create_root : resolver:(Export_id.t -> flambda_type option) -> t
 
@@ -307,26 +331,48 @@ module type S = sig
 
     val add_or_replace : t -> Name.t -> Scope_level.t -> flambda_type -> t
 
+    (** Whether a name bound by the environment is normally-accessible or
+        has been made existential (as a result of [cut], below). *)
     type binding_type = Normal | Existential
 
+    (** Perform a lookup in a type environment.  It is an error to provide a
+        name which does not occur in the given environment. *)
     val find : t -> Name.t -> flambda_type * binding_type
 
+    (** Like [find], but returns [None] iff the given name is not in the
+        specified environment. *)
     val find_opt : t -> Name.t -> (flambda_type * binding_type) option
 
+    (** The continuation scoping level at which the given name, which must
+        occur in the given typing context, was declared. *)
     val scope_level : t -> Name.t -> Scope_level.t
 
+    (** Rearrange the given typing environment so that names defined at or
+        deeper than the given scope level are made existential.  This means
+        that they may be referred to from types but may never occur normally
+        in terms (or be produced from a reification of a type, c.f.
+        [Flambda_type.reify], etc). *)
     val cut
        : t
       -> existential_if_defined_at_or_later_than:Scope_level.t
       -> t
 
+    (** Least upper bound of two typing environments. *)
     val join : t_in_context -> t_in_context -> t
 
+    (** Greatest lower bound of two typing environments. *)
     val meet : t_in_context -> t_in_context -> t
 
+    (** Adjust the domain of the given typing environment so that it only
+        mentions the names in the given name occurrences structure. *)
     val restrict_to_names : t -> Name_occurrences.t -> t
 
+    (** The names for which the given typing environment specifies a type
+        assignment. *)
     val domain : t -> Name_occurrences.t
+
+    (** Print the given typing environment to a formatter. *)
+    val print : Format.formatter -> t -> unit
   end
 
   (** Annotation for functions that may require examination of the current
@@ -382,11 +428,14 @@ module type S = sig
      : unit
     -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number
 
+  (** The top type for unboxed 32-bit numbers. *)
   val any_naked_int32 : unit -> t
-  val any_naked_int64 : unit -> t
-  val any_naked_nativeint : unit -> t
 
-(*  val any_closure : unit -> t *)
+  (** The top type for unboxed 64-bit numbers. *)
+  val any_naked_int64 : unit -> t
+
+  (** The top type for unboxed "nativeint" numbers. *)
+  val any_naked_nativeint : unit -> t
 
   (** Building of types representing tagged / boxed values from specified
       constants. *)
