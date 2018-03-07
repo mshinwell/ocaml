@@ -14,8 +14,8 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-type 'a t
+type t
 
-val create : string -> 'a t
+val create : unit -> 'a t
 
-val with_cache : 'a t -> 'a -> (unit -> unit) -> unit
+val with_cache : 'a t -> string -> 'a -> (unit -> unit) -> unit

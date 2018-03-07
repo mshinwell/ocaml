@@ -500,6 +500,7 @@ module rec Expr : sig
     -> t
     -> bool
   val print : Format.formatter -> t -> unit
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 end = struct
   include Expr
 
@@ -861,7 +862,7 @@ end = struct
     | (Let _ | Let_mutable _ | Let_cont _ | Apply _ | Apply_cont _
         | Switch _ | Invalid _), _ -> false
 
-  let rec print ppf (t : t) =
+  let rec print_with_cache ~cache ppf (t : t) =
     match t with
     | Apply ({ func; continuation; exn_continuation; args; call_kind; inline;
                specialise; dbg; }) ->
@@ -901,7 +902,7 @@ end = struct
       fprintf ppf ")@]@ %a)@]" print expr
     | Let_mutable { var; initial_value; body; contents_type; } ->
       fprintf ppf "@[<2>(let_mutable%a@ @[<2>%a@ %a@]@ %a)@]"
-        Flambda_type.print contents_type
+        (Flambda_type.print_with_cache ~cache) contents_type
         Mutable_variable.print var
         Simple.print initial_value
         print body
@@ -932,7 +933,7 @@ end = struct
         fprintf ppf "@[<2>(let_cont@ @[<hv 1>(@[<2>%a@]"
           Let_cont_handlers.print handlers;
         let expr = let_cont_body body in
-        fprintf ppf ")@]@ %a)@]" print expr
+        fprintf ppf ")@]@ %a)@]" (print_with_cache ~cache) expr
       end else begin
         (* CR mshinwell: Share code with ilambda.ml *)
         let rec gather_let_conts let_conts (t : t) =
@@ -944,14 +945,14 @@ end = struct
         let let_conts, body = gather_let_conts [] t in
         let pp_sep ppf () = fprintf ppf "@ " in
         fprintf ppf "@[<2>(@[<v 0>%a@;@[<v 0>%a@]@])@]"
-          Expr.print body
+          (print_with_cache ~cache) body
           (Format.pp_print_list ~pp_sep
             Let_cont_handlers.print_using_where) let_conts
       end
     | Invalid _ -> fprintf ppf "unreachable"
 
-  let print ppf t =
-    fprintf ppf "%a" print t
+  let print ppf (t : t) =
+    print_with_cache ~cache:(Printing_cache.create ()) ppf t
 end and Named : sig
   type t =
     | Simple of Simple.t
@@ -974,7 +975,7 @@ end and Named : sig
      : ?ignore_uses_in_project_var:unit
     -> t
     -> Name_occurrences.t
-  val print : Format.formatter -> t -> unit
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
   val box_value
       : Name.t
      -> Flambda_kind.t
@@ -1038,11 +1039,11 @@ end = struct
   let used_names ?ignore_uses_in_project_var named =
     name_usage ?ignore_uses_in_project_var named
 
-  let print ppf (t : t) =
+  let print_with_cache ppf (t : t) =
     match t with
     | Simple simple -> Simple.print ppf simple
     | Set_of_closures set_of_closures ->
-      Set_of_closures.print ppf set_of_closures
+      Set_of_closures.print_with_cache ~cache ppf set_of_closures
     | Prim (prim, dbg) ->
       fprintf ppf "@[<2>(%a%a)@]"
         Flambda_primitive.print prim
@@ -1240,8 +1241,12 @@ end and Let_cont_handlers : sig
     -> t
     -> t
     -> bool
-  val print : Format.formatter -> t -> unit
-  val print_using_where : Format.formatter -> t -> unit
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+  val print_using_where_with_cache
+     : cache:Printing_cache.t
+    -> Format.formatter
+    -> t
+    -> unit
 end = struct
   include Let_cont_handlers
 
@@ -1311,7 +1316,7 @@ end = struct
     | Non_recursive _, Recursive _
     | Recursive _, Non_recursive _ -> false
 
-  let print_using_where ppf (t : t) =
+  let print_using_where_with_cache ~cache ppf (t : t) =
     match t with
     | Non_recursive {
         name;
@@ -1322,9 +1327,9 @@ end = struct
         (if stub then " *stub*" else "")
             (if is_exn_handler then "*exn* " else "")
         (match params with [] -> "" | _ -> " (")
-        Typed_parameter.List.print params
+        (Typed_parameter.List.print_with_cache ~cache) params
         (match params with [] -> "" | _ -> ")")
-        Expr.print handler
+        (Expr.print_with_cache ~cache) handler
     | Recursive handlers ->
       let first = ref true in
       fprintf ppf "@[<v 2>where rec ";
@@ -1338,14 +1343,14 @@ end = struct
             (if stub then " *stub*" else "")
             (if is_exn_handler then "*exn* " else "")
             (match params with [] -> "" | _ -> " (")
-            Typed_parameter.List.print params
+            (Typed_parameter.List.print_with_cache ~cache) params
             (match params with [] -> "" | _ -> ")")
-            Expr.print handler;
+            (Expr.print_with_cache ~cache) handler;
           first := false)
         handlers;
       fprintf ppf "@]"
 
-  let print ppf (t : t) =
+  let print_with_cache ~cache ppf (t : t) =
     match t with
     | Non_recursive { name; handler = {
         params; stub; handler; is_exn_handler; }; } ->
@@ -1354,9 +1359,9 @@ end = struct
         (if stub then "*stub* " else "")
         (if is_exn_handler then "*exn* " else "")
         (match params with [] -> "" | _ -> "(")
-        Typed_parameter.List.print params
+        (Typed_parameter.List.print_with_cache ~cache) params
         (match params with [] -> "" | _ -> ") ")
-        Expr.print handler
+        (Expr.print_with_cache ~cache) handler
     | Recursive handlers ->
       let first = ref true in
       Continuation.Map.iter (fun name
@@ -1371,9 +1376,9 @@ end = struct
             (if stub then "*stub* " else "")
             (if is_exn_handler then "*exn* " else "")
             (match params with [] -> "" | _ -> "(")
-            Typed_parameter.List.print params
+            (Typed_parameter.List.print_with_cache ~cache) params
             (match params with [] -> "" | _ -> ") ")
-            Expr.print handler;
+            (Expr.print_with_cache ~cache) handler;
           first := false)
         handlers
 end and Continuation_handlers : sig
@@ -1400,7 +1405,7 @@ end and Continuation_handler : sig
     -> t
     -> t
     -> bool
-  val print : Format.formatter -> t -> unit
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 end = struct
   include Continuation_handler
 
@@ -1414,7 +1419,7 @@ end = struct
       && Pervasives.compare is_exn_handler1 is_exn_handler2 = 0
       && Expr.equal ~equal_type handler1 handler2
 
-  let print ppf { params; stub; handler; is_exn_handler; } =
+  let print_with_cache ~cache ppf { params; stub; handler; is_exn_handler; } =
     fprintf ppf "%s%s%s%a%s=@ %a"
       (if stub then "*stub* " else "")
       (if is_exn_handler then "*exn* " else "")
@@ -1441,7 +1446,7 @@ end and Set_of_closures : sig
     -> t
     -> t
     -> bool
-  val print : Format.formatter -> t -> unit
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 end = struct
   include Set_of_closures
 
@@ -1455,12 +1460,12 @@ end = struct
   let has_empty_environment t =
     Var_within_closure.Map.is_empty t.free_vars
 
-  let print ppf t =
+  let print_with_cache ~cache ppf t =
     match t with
     | { function_decls; free_vars; direct_call_surrogates = _; } ->
       let funs ppf t =
         Closure_id.Map.iter (fun var decl ->
-            Function_declaration.print var ppf decl)
+            (Function_declaration.print_with_cache ~cache) var ppf decl)
           t
       in
       fprintf ppf "@[<2>(\
@@ -1519,7 +1524,7 @@ end and Function_declarations : sig
     -> t
     -> t
     -> bool
-  val print : Format.formatter -> t -> unit
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
   val free_names : t -> Name_occurrences.t
 end = struct
   include Function_declarations
@@ -1557,10 +1562,10 @@ end = struct
       funs = function_decls.funs;
     }
 
-  let print ppf (t : t) =
+  let print_with_cache ~cache ppf (t : t) =
     let funs ppf t =
       Closure_id.Map.iter (fun var decl ->
-          Function_declaration.print var ppf decl)
+          (Function_declaration.print_with_cache ~cache) var ppf decl)
         t
     in
     fprintf ppf "@[<2>(%a)(origin = %a)@]" funs t.funs
@@ -1632,7 +1637,7 @@ end and Function_declaration : sig
     -> t
     -> t
     -> bool
-  val print : Closure_id.t -> Format.formatter -> t -> unit
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 end = struct
   include Function_declaration
 
@@ -1761,7 +1766,7 @@ end = struct
       && Pervasives.compare is_a_functor1 is_a_functor2 = 0
       && Variable.equal my_closure1 my_closure2
 
-  let print closure_id ppf (f : t) =
+  let print_with_cache ~cache closure_id ppf (f : t) =
     let stub =
       if f.stub then
         " *stub*"
@@ -1797,9 +1802,9 @@ end = struct
       Closure_origin.print f.closure_origin
       Continuation.print f.continuation_param
       Continuation.print f.exn_continuation_param
-      Typed_parameter.List.print f.params
+      (Typed_parameter.List.print_with_cache ~cache) f.params
       Flambda_arity.print f.return_arity
-      Expr.print f.body
+      (Expr.print_with_cache ~cache) f.body
 end and Typed_parameter : sig
   type t
   val create : Parameter.t -> Flambda_type.t -> t
@@ -1831,7 +1836,11 @@ end and Typed_parameter : sig
     val arity : t -> Flambda_kind.t list
     val free_names : t -> Name_occurrences.t
     val bound_names : t -> Name_occurrences.t
-    val print : Format.formatter -> t -> unit
+    val print_with_cache
+       : cache:Printing_cache.t
+      -> Format.formatter
+      -> t
+      -> unit
     val equal
        : equal_type:(Flambda_type.t -> Flambda_type.t -> bool)
       -> t
@@ -1839,7 +1848,8 @@ end and Typed_parameter : sig
       -> bool
   end
 (*  include Identifiable.S with type t := t *)
-  val print : Format.formatter -> t -> unit
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t
+    -> unit
 end = struct
   type t = {
     param : Parameter.t;
@@ -1903,10 +1913,10 @@ end = struct
     Parameter.equal param1 param2
       && equal_type ty1 ty2
 
-  let print ppf { param; ty; } =
+  let print_with_cache ~cache ppf { param; ty; } =
     Format.fprintf ppf "(%a : %a)"
       Parameter.print param
-      Flambda_type.print ty
+      (Flambda_type.print_with_cache ~cache) ty
 
   module List = struct
     type nonrec t = t list
@@ -1944,9 +1954,9 @@ end = struct
       List.compare_lengths t1 t2 = 0
         && List.for_all2 (equal ~equal_type) t1 t2
 
-    let print ppf t =
-      Format.pp_print_list ~pp_sep:Format.pp_print_space print ppf t
-  end
+    let print_with_cache ~cache ppf t =
+      Format.pp_print_list ~pp_sep:Format.pp_print_space
+        (print_with_cache ~cache) ppf t
 end and Flambda_type : sig
   include Flambda_type0_intf.S with type expr := Expr.t
 end = Flambda_type0.Make (Expr)

@@ -26,6 +26,6 @@
 (** The type system is parameterised over the expression language. *)
 module Make (Expr : sig
   type t
-  val print : Format.formatter -> t -> unit
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
   val free_names : t -> Name_occurrences.t
 end) : Flambda_type0_intf.S with type expr = Expr.t

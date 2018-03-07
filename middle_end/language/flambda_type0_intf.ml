@@ -330,7 +330,12 @@ module type S = sig
       environment (in particular to resolve [Type] or [Type_of] aliases). *)
   type 'a type_accessor = Typing_environment.t -> 'a
 
+  (** Print a type to the given formatter. *)
   val print : Format.formatter -> t -> unit
+
+  (** Like [print] except uses a cache to prevent repeated printing of
+      shared sub-components. *)
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
   val print_ty_value : Format.formatter -> ty_value -> unit
 

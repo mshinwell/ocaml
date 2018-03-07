@@ -416,48 +416,71 @@ end;
       Format.fprintf ppf "@[(Boxed_nativeint@ (%a))@]"
         print_ty_naked_number i
 
-  let rec print_immediate_case ppf ({ env_extension; } : immediate_case) =
+  let rec print_immediate_case ~cache ppf
+        ({ env_extension; } : immediate_case) =
     Format.fprintf ppf "@[(env_extension@ %a)@]"
-      print_typing_environment env_extension
+      (print_typing_environment cache) env_extension
 
-  and print_fields ppf (fields : t mutable_or_immutable array) =
+  and print_fields ~cache ppf (fields : t mutable_or_immutable array) =
     Format.fprintf ppf "@[[| %a |]@]"
       (Format.pp_print_list
         ~pp_sep:(fun ppf () -> Format.pp_print_string ppf ";@ ")
-        (print_mutable_or_immutable print))
+        (print_mutable_or_immutable (print_with_cache ~cache)))
       (Array.to_list fields)
 
-  and print_singleton_block ppf { env_extension; fields; } =
+  and print_singleton_block ~cache ppf { env_extension; fields; } =
     Format.fprintf ppf "@[((env_extension@ %a)@ (fields@ %a))@]"
-      print_typing_environment env_extension
-      print_fields fields
+      (print_typing_environment ~cache) env_extension
+      (print_fields ~cache) fields
 
-  and print_block_cases ppf ((Join { by_length; }) : block_cases) =
+  and print_block_cases ~cache ppf ((Join { by_length; }) : block_cases) =
     match Targetint.OCaml.Map.get_singleton by_length with
-    | Some (_length, block) -> print_singleton_block ppf block
+    | Some (_length, block) -> print_singleton_block ~cache ppf block
     | None ->
       Format.fprintf ppf "@[(Join (by_length@ %a))@]"
-        (Targetint.OCaml.Map.print print_singleton_block) by_length
+        (Targetint.OCaml.Map.print (print_singleton_block ~cache)) by_length
 
-  and print_immediates ppf cases =
-    Immediate.Map.print print_immediate_case ppf cases
+  and print_immediates ~cache ppf cases =
+    Immediate.Map.print (print_immediate_case ~cache) ppf cases
 
-  and print_blocks ppf cases =
-    Tag.Map.print print_block_cases ppf cases
+  and print_blocks ~cache ppf cases =
+    Tag.Map.print (print_block_cases ~cache) ppf cases
 
   and print_of_kind_value ppf (of_kind_value : of_kind_value) =
     match of_kind_value with
     | Blocks_and_tagged_immediates { blocks; immediates; is_int; get_tag; } ->
-      Format.fprintf ppf
-        "@[(Blocks_and_immediates@ \
-         @[(blocks@ @[%a@])@]@ \
-         @[(immediates@ @[%a@])@]@ \
-         @[(is_int@ %a)@]@ \
-         @[(get_tag@ %a)@])@]"
-        (print_or_unknown print_blocks) blocks
-        (print_or_unknown print_immediates) immediates
-        (Misc.Stdlib.Option.print Name.print) is_int
-        (Misc.Stdlib.Option.print Name.print) get_tag
+      begin match blocks, immediates, is_int, get_tag with
+      | Known blocks, Known immediates, None, None
+          when not (Tag.Map.is_empty blocks)
+            && Immediate.Map.is_empty immediates ->
+        Format.fprintf ppf "@[(blocks@ @[%a@])@])@]"
+          (print_or_unknown print_blocks) blocks
+      | Known blocks, Known immediates, None, None
+          when Tag.Map.is_empty blocks
+            && not (Immediate.Map.is_empty immediates) ->
+        Format.fprintf ppf "@[(immediates@ @[%a@])@])@]"
+          (print_or_unknown print_immediates) immediates
+      | _ ->
+        match is_int, get_tag with
+        | None, None ->
+          Format.fprintf ppf
+            "@[(Blocks_and_immediates@ \
+             @[(blocks@ @[%a@])@]@ \
+             @[(immediates@ @[%a@])@])@]"
+            (print_or_unknown print_blocks) blocks
+            (print_or_unknown print_immediates) immediates
+        | _, _ ->
+          Format.fprintf ppf
+            "@[(Blocks_and_immediates@ \
+             @[(blocks@ @[%a@])@]@ \
+             @[(immediates@ @[%a@])@]@ \
+             @[(is_int@ %a)@]@ \
+             @[(get_tag@ %a)@])@]"
+            (print_or_unknown print_blocks) blocks
+            (print_or_unknown print_immediates) immediates
+            (Misc.Stdlib.Option.print Name.print) is_int
+            (Misc.Stdlib.Option.print Name.print) get_tag
+      end
     | Boxed_number n ->
       Format.fprintf ppf "@[(Boxed_number %a)@]"
         print_of_kind_value_boxed_number n
@@ -465,75 +488,76 @@ end;
     | String str_infos ->
       Format.fprintf ppf "@[(Strings (%a))@]" String_info.Set.print str_infos
 
-  and print_ty_value ppf (ty : ty_value) =
-    print_ty_generic print_of_kind_value ppf ty
+  and print_ty_value ~cache ppf (ty : ty_value) =
+    print_ty_generic (print_of_kind_value ~cache) ppf ty
 
-  and print_ty_value_array ppf ty_values =
+  and print_ty_value_array ~cache ppf ty_values =
     Format.fprintf ppf "@[[| %a |]@]"
       (Format.pp_print_list
         ~pp_sep:(fun ppf () -> Format.pp_print_string ppf ";@ ")
-        print_ty_value)
+        (print_ty_value ~cache))
       (Array.to_list ty_values)
 
   and _unused = Expr.print
 
-  and print_closures ppf (closures : closures) =
+  and print_closures ~cache ppf (closures : closures) =
     Format.fprintf ppf "@[(Closures@ %a)@]"
-      (Closure_id.Map.print print_closures_entry) closures
+      (Closure_id.Map.print (print_closures_entry ~cache)) closures
 
-  and print_closures_entry ppf (entry : closures_entry) =
+  and print_closures_entry ~cache ppf (entry : closures_entry) =
     Format.fprintf ppf "@[(set_of_closures@ %a)@]"
-      print_ty_fabricated entry.set_of_closures
+      (print_ty_fabricated ~cache) entry.set_of_closures
 
-  and print_inlinable_function_declaration ppf
+  and print_inlinable_function_declaration ~cache ppf
         (decl : inlinable_function_declaration) =
-    Format.fprintf ppf
-      "@[(inlinable@ \
-        @[(closure_origin@ %a)@]@ \
-        @[(continuation_param@ %a)@]@ \
-        @[(exn_continuation_param@ %a)@]@ \
-        @[(is_classic_mode@ %b)@]@ \
-        @[(params (%a))@]@ \
-        @[(body@ %a)@]@ \
-        @[(free_names_in_body@ %a)@]@ \
-        @[(result@ (%a))@]@ \
-        @[(result_env_extension@ (%a))@]@ \
-        @[(stub@ %b)@]@ \
-        @[(dbg@ %a)@]@ \
-        @[(inline@ %a)@]@ \
-        @[(specialise@ %a)@]@ \
-        @[(is_a_functor@ %b)@]@ \
-        @[(invariant_params@ %a)@]@ \
-        @[(size@ %a)@]@ \
-        @[(direct_call_surrogate@ %a)@]@ \
-        @[(my_closure@ %a)@])@]"
-      Closure_origin.print decl.closure_origin
-      Continuation.print decl.continuation_param
-      Continuation.print decl.exn_continuation_param
-      decl.is_classic_mode
-      (Format.pp_print_list ~pp_sep:(fun ppf () -> Format.fprintf ppf ", ")
-        (fun ppf (param, ty) ->
-          Format.fprintf ppf "@[(%a@ :@ %a)@]"
-            Parameter.print param
-            print ty)) decl.params
-      Expr.print decl.body
-      Name_occurrences.print decl.free_names_in_body
-      (Format.pp_print_list ~pp_sep:(fun ppf () -> Format.fprintf ppf ", ")
-        (fun ppf ty ->
-          Format.fprintf ppf "%a"
-            print ty)) decl.result
-      print_typing_environment decl.result_env_extension
-      decl.stub
-      Debuginfo.print_compact decl.dbg
-      print_inline_attribute decl.inline
-      print_specialise_attribute decl.specialise
-      decl.is_a_functor
-      Variable.Set.print (Lazy.force decl.invariant_params)
-      (Misc.Stdlib.Option.print Format.pp_print_int) (Lazy.force decl.size)
-      (Misc.Stdlib.Option.print Closure_id.print) decl.direct_call_surrogate
-      Variable.print decl.my_closure
+    Printing_cache.with_cache cache ppf "inlinable_fundecl" decl (fun ppf () ->
+      Format.fprintf ppf
+        "@[(inlinable@ \
+          @[(closure_origin@ %a)@]@ \
+          @[(continuation_param@ %a)@]@ \
+          @[(exn_continuation_param@ %a)@]@ \
+          @[(is_classic_mode@ %b)@]@ \
+          @[(params (%a))@]@ \
+          @[(body@ %a)@]@ \
+          @[(free_names_in_body@ %a)@]@ \
+          @[(result@ (%a))@]@ \
+          @[(result_env_extension@ (%a))@]@ \
+          @[(stub@ %b)@]@ \
+          @[(dbg@ %a)@]@ \
+          @[(inline@ %a)@]@ \
+          @[(specialise@ %a)@]@ \
+          @[(is_a_functor@ %b)@]@ \
+          @[(invariant_params@ %a)@]@ \
+          @[(size@ %a)@]@ \
+          @[(direct_call_surrogate@ %a)@]@ \
+          @[(my_closure@ %a)@])@]"
+        Closure_origin.print decl.closure_origin
+        Continuation.print decl.continuation_param
+        Continuation.print decl.exn_continuation_param
+        decl.is_classic_mode
+        (Format.pp_print_list ~pp_sep:(fun ppf () -> Format.fprintf ppf ", ")
+          (fun ppf (param, ty) ->
+            Format.fprintf ppf "@[(%a@ :@ %a)@]"
+              Parameter.print param
+              (print_with_cache ~cache) ty)) decl.params
+        (Expr.print_with_cache ~cache) decl.body
+        Name_occurrences.print decl.free_names_in_body
+        (Format.pp_print_list ~pp_sep:(fun ppf () -> Format.fprintf ppf ", ")
+          (fun ppf ty ->
+            Format.fprintf ppf "%a"
+              print ty)) decl.result
+        print_typing_environment decl.result_env_extension
+        decl.stub
+        Debuginfo.print_compact decl.dbg
+        print_inline_attribute decl.inline
+        print_specialise_attribute decl.specialise
+        decl.is_a_functor
+        Variable.Set.print (Lazy.force decl.invariant_params)
+        (Misc.Stdlib.Option.print Format.pp_print_int) (Lazy.force decl.size)
+        (Misc.Stdlib.Option.print Closure_id.print) decl.direct_call_surrogate
+        Variable.print decl.my_closure)
 
-  and print_non_inlinable_function_declarations ppf
+  and print_non_inlinable_function_declarations ppf ~cache
         (decl : non_inlinable_function_declarations) =
     Format.fprintf ppf
       "@[(Non_inlinable@ \
@@ -542,80 +566,84 @@ end;
       (Format.pp_print_list ~pp_sep:(fun ppf () -> Format.fprintf ppf ", ")
         (fun ppf ty ->
           Format.fprintf ppf "%a"
-            print ty)) decl.result
+            (print_with_cache ~cache) ty)) decl.result
       (Misc.Stdlib.Option.print Closure_id.print) decl.direct_call_surrogate
 
-  and print_function_declarations ppf (decl : function_declarations) =
+  and print_function_declarations ~cache ppf
+        (decl : function_declarations) =
     match decl with
-    | Inlinable decl -> print_inlinable_function_declaration ppf decl
+    | Inlinable decl ->
+      print_inlinable_function_declaration ~cache ppf decl
     | Non_inlinable decl ->
       begin match decl with
       | None -> Format.fprintf ppf "Non_inlinable"
-      | Some decl -> print_non_inlinable_function_declarations ppf decl
+      | Some decl ->
+        print_non_inlinable_function_declarations ~cache ppf decl
       end
 
-  and print_set_of_closures ppf (set : set_of_closures) =
+  and print_set_of_closures ~cache ppf (set : set_of_closures) =
     Format.fprintf ppf
       "@[(Set_of_closures@ \
           @[(closures@ %a)@]@ \
           @[(closure_elements@ %a)@])@]"
-      (print_extensibility (Closure_id.Map.print print_ty_fabricated))
+      (print_extensibility (
+          Closure_id.Map.print (print_ty_fabricated ~cache)))
         set.closures
-      (print_extensibility (Var_within_closure.Map.print print_ty_value))
+      (print_extensibility (
+          Var_within_closure.Map.print (print_ty_value ~cache)))
         set.closure_elements
 
   and print_closure ppf (closure : closure) =
     Format.fprintf ppf "@[(Closure (function_decls@ %a))@]"
       print_function_declarations closure.function_decls
 
-  and print_tag_case ~env_cache ppf ({ env_extension; } : tag_case) =
+  and print_tag_case ~cache ppf ({ env_extension; } : tag_case) =
     Format.fprintf ppf "@[(env_extension@ %a)@]"
-      print_typing_environment env_cache env_extension
+      print_typing_environment cache env_extension
 
   and print_of_kind_fabricated ppf (o : of_kind_fabricated) =
     match o with
     | Tag tag_map ->
       Format.fprintf ppf "@[(Tags@ %a)@]" (Tag.Map.print print_tag_case) tag_map
-    | Set_of_closures set -> print_set_of_closures ppf set
-    | Closure closure -> print_closure ppf closure
+    | Set_of_closures set -> print_set_of_closures ~cache ppf set
+    | Closure closure -> print_closure ~cache ppf closure
 
-  and print_ty_fabricated ppf (ty : ty_fabricated) =
-    print_ty_generic print_of_kind_fabricated ppf ty
+  and print_ty_fabricated ~cache ppf (ty : ty_fabricated) =
+    print_ty_generic (print_of_kind_fabricated ~cache) ppf ty
 
-  and print_descr ppf (descr : descr) =
+  and print_descr ~cache ppf (descr : descr) =
     match descr with
     | Value ty ->
-      Format.fprintf ppf "@[(Value@ (%a))@]" print_ty_value ty
+      Format.fprintf ppf "@[(Value@ (%a))@]" (print_ty_value ~cache) ty
     | Naked_number (ty, _kind) ->
       Format.fprintf ppf "@[(Naked_number@ (%a))@]" print_ty_naked_number ty
     | Fabricated ty ->
-      Format.fprintf ppf "@[(Fabricated@ (%a))@]" print_ty_fabricated ty
+      Format.fprintf ppf "@[(Fabricated@ (%a))@]"
+        (print_ty_fabricated ~cache) ty
 
-  and print_with_caches ~env_cache ppf (t : t) =
+  and print_with_cache ~cache ppf (t : t) =
     match t.phantom with
-    | None -> print_descr ~env_cache ppf t.descr
+    | None -> print_descr ~cache ppf t.descr
     | Some In_types ->
       Format.fprintf ppf "@[(Phantom_in_types@ (%a))@]"
-        (print_descr ~env_cache) t.descr
+        (print_descr ~cache) t.descr
     | Some Debug_only ->
       Format.fprintf ppf "@[(Phantom_debug_only@ (%a))@]"
-        (print_descr ~env_cache) t.descr
+        (print_descr ~cache) t.descr
 
   and print ppf (t : t) =
-    let env_cache : typing_environment Printing_cache.t =
-      Printing_cache.create "env"
-    in
-    print_with_caches ~env_cache ppf t
+    let cache : Printing_cache.t = Printing_cache.create () in
+    print_with_cache ~cache ppf t
 
-  and print_typing_environment ~env_cache ppf
+  and print_typing_environment ~cache ppf
         ({ resolver = _; parent; names_to_types;
            levels_to_names; existentials; existential_freshening; } as env) =
     if Name.Map.is_empty names_to_types then
       Format.pp_print_string ppf "Empty"
     else
-      Printing_cache.with_cache cache ppf env (fun ppf () ->
+      Printing_cache.with_cache cache ppf "env" env (fun ppf () ->
         let print_scope_level_and_type ppf (_scope_level, ty) =
-          print_with_caches ~env_cache ppf ty
+          print_with_cache ~cache ppf ty
         in
         Format.fprintf ppf
           "@[((parent@ %a)@ \
@@ -623,7 +651,7 @@ end;
               (levels_to_names@ %a)@ \
               (existentials@ %a)@ \
               (existential_freshening@ %a))@]"
-          (print_typing_environment ~env_cache) parent
+          (print_typing_environment ~cache) parent
           (Name.Map.print print_scope_level_and_type) names_to_types
           (Scope_level.Map.print Name.Set.print) levels_to_names
           Name.Set.print existentials
