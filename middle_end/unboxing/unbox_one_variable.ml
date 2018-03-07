@@ -99,14 +99,14 @@ module Unboxing_spec_variant : Unboxing_spec = struct
         fields), dbg)
     | None -> assert false  (* See [create], above. *)
 
-  let refine_unboxee_ty ~type_of_name t ~unboxee_ty ~all_fields =
+  let refine_unboxee_ty env t ~unboxee_ty ~all_fields =
     match t.no_discriminant_needed with
     | None ->
       let unboxee_discriminants =
         T.variant_whose_discriminants_are ~is_int:t.is_int_param
           ~get_tag:t.get_tag_param
       in
-      T.join ~type_of_name unboxee_ty unboxee_discriminants
+      T.join env unboxee_ty unboxee_discriminants
     | Some unique_tag ->
       let fields =
         List.map (fun field : T.t T.mutable_or_immutable ->
@@ -146,7 +146,7 @@ module Unboxing_spec_float_array = struct
   let box _t _tag fields dbg : Flambda.Named.t =
     Prim (Variadic (Make_block (Full_of_naked_floats, Immutable), fields), dbg)
 
-  let refine_unboxee_ty ~type_of_name:_ _t ~unboxee_ty:_ ~all_fields =
+  let refine_unboxee_ty env:_ _t ~unboxee_ty:_ ~all_fields =
     let fields =
       List.map (fun field : T.t T.mutable_or_immutable ->
           Immutable (T.alias_type_of (K.naked_float ()) field))
@@ -192,7 +192,7 @@ end) = struct
       Misc.fatal_errorf "Bad number of fields for [box]: %d"
         (List.length fields)
 
-  let refine_unboxee_ty ~type_of_name:_ _t ~unboxee_ty:_ ~all_fields =
+  let refine_unboxee_ty env:_ _t ~unboxee_ty:_ ~all_fields =
     match all_fields with
     | [naked_number] ->
       N.box (T.alias_type_of unboxed_kind naked_number)
@@ -284,7 +284,7 @@ module How_to_unbox = struct
 end
 
 module Make (S : Unboxing_spec) = struct
-  let unbox ~type_of_name ~env ~unboxee ~unboxee_ty
+  let unbox env ~env ~unboxee ~unboxee_ty
         ~unboxing_spec_user_data ~unboxing_spec ~is_unbox_returns:_
         : How_to_unbox.t =
     let dbg = Debuginfo.none in
@@ -853,7 +853,7 @@ module Make (S : Unboxing_spec) = struct
            type [Name.t list]? *)
         List.map (fun (field, _kind) -> Name.var field) fields_with_kinds
       in
-      S.refine_unboxee_ty ~type_of_name unboxing_spec_user_data
+      S.refine_unboxee_ty env unboxing_spec_user_data
         ~unboxee_ty ~all_fields
     in
     { unboxee_to_wrapper_params_unboxee;
@@ -872,12 +872,12 @@ module Unbox_boxed_int32 = Make (Unboxing_spec_boxed_int32)
 module Unbox_boxed_int64 = Make (Unboxing_spec_boxed_int64)
 module Unbox_boxed_nativeint = Make (Unboxing_spec_boxed_nativeint)
 
-let how_to_unbox ~type_of_name ~env ~unboxee ~unboxee_ty ~is_unbox_returns =
+let how_to_unbox env ~env ~unboxee ~unboxee_ty ~is_unbox_returns =
   let unbox ~f ~unboxing_spec_user_data ~unboxing_spec =
-    Some (f ~type_of_name ~env ~unboxee ~unboxee_ty
+    Some (f env ~env ~unboxee ~unboxee_ty
       ~unboxing_spec_user_data ~unboxing_spec ~is_unbox_returns)
   in
-  match T.prove_unboxable ~type_of_name ~unboxee_ty with
+  match T.prove_unboxable env ~unboxee_ty with
   | Cannot_unbox -> None
   | proof ->
     match Unboxing_spec_variant.create proof with

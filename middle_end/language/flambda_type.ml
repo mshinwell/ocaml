@@ -367,10 +367,10 @@ and equal_typing_environment
     && Name.Set.equal existentials1 existentials2
 *)
 
-let equal ~type_of_name:_ _ _ = false
+let equal env:_ _ _ = false
 
-let strictly_more_precise ~type_of_name t ~than =
-  not (equal ~type_of_name than (meet ~type_of_name t than))
+let strictly_more_precise env t ~than =
+  not (equal env than (meet env t than))
 
 module Simplified_type : sig
   (* Simplified types omit the following at top level:
@@ -450,13 +450,13 @@ end = struct
     | Join [of_kind_foo] -> Ok of_kind_foo
     | Join _ -> Unknown
 
-  let create ~type_of_name (ty : flambda_type) : t * (Name.t option) =
+  let create env (ty : flambda_type) : t * (Name.t option) =
     let (descr : descr), canonical_name =
       match ty.descr with
       | Value ty_value ->
         let unknown_or_join, canonical_name =
           resolve_aliases_and_squash_unresolved_names_on_ty
-            ~type_of_name
+            env
             ~force_to_kind:force_to_kind_value
             ty_value
         in
@@ -467,7 +467,7 @@ end = struct
       | Naked_number (ty_naked_number, kind) ->
         let unknown_or_join, canonical_name =
           resolve_aliases_and_squash_unresolved_names_on_ty
-            ~type_of_name
+            env
             ~force_to_kind:(force_to_kind_naked_number kind)
             ty_naked_number
         in
@@ -478,7 +478,7 @@ end = struct
       | Fabricated ty_fabricated ->
         let unknown_or_join, canonical_name =
           resolve_aliases_and_squash_unresolved_names_on_ty
-            ~type_of_name
+            env
             ~force_to_kind:force_to_kind_fabricated
             ty_fabricated
         in
@@ -504,24 +504,24 @@ end = struct
         reason
 end
 
-let is_bottom ~type_of_name t =
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+let is_bottom env t =
+  let simplified, _canonical_name = Simplified_type.create env t in
   Simplified_type.is_bottom simplified
 
-let is_unknown ~type_of_name t =
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+let is_unknown env t =
+  let simplified, _canonical_name = Simplified_type.create env t in
   Simplified_type.is_unknown simplified
 
-let is_known ~type_of_name t =
-  not (is_unknown ~type_of_name t)
+let is_known env t =
+  not (is_unknown env t)
 
-let is_useful ~type_of_name t =
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+let is_useful env t =
+  let simplified, _canonical_name = Simplified_type.create env t in
   (not (Simplified_type.is_unknown simplified))
     && (not (Simplified_type.is_bottom simplified))
 
-let all_not_useful ~type_of_name ts =
-  List.for_all (fun t -> not (is_useful ~type_of_name t)) ts
+let all_not_useful env ts =
+  List.for_all (fun t -> not (is_useful env t)) ts
 
 type 'a proof =
   | Proved of 'a
@@ -530,14 +530,14 @@ type 'a proof =
 
 let unknown_proof () = Unknown
 
-let prove_naked_float ~type_of_name t
+let prove_naked_float env t
       : Numbers.Float_by_bit_pattern.Set.t proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a naked \
         float: %a"
       print t
   in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, _canonical_name = Simplified_type.create env t in
   Simplified_type.check_not_phantom simplified "prove_naked_float";
   match simplified.descr with
   | Simplified_type.Naked_number (ty, K.Naked_number.Naked_float) ->
@@ -553,13 +553,13 @@ let prove_naked_float ~type_of_name t
   | Value _
   | Fabricated _ -> wrong_kind ()
 
-let prove_naked_int32 ~type_of_name t : Int32.Set.t proof =
+let prove_naked_int32 env t : Int32.Set.t proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a naked \
         int32: %a"
       print t
   in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, _canonical_name = Simplified_type.create env t in
   Simplified_type.check_not_phantom simplified "prove_naked_int32";
   match simplified.descr with
   | Simplified_type.Naked_number (ty, K.Naked_number.Naked_int32) ->
@@ -573,13 +573,13 @@ let prove_naked_int32 ~type_of_name t : Int32.Set.t proof =
   | Value _
   | Fabricated _ -> wrong_kind ()
 
-let prove_naked_int64 ~type_of_name t : Int64.Set.t proof =
+let prove_naked_int64 env t : Int64.Set.t proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a naked \
         int64: %a"
       print t
   in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, _canonical_name = Simplified_type.create env t in
   Simplified_type.check_not_phantom simplified "prove_naked_int64";
   match simplified.descr with
   | Simplified_type.Naked_number (ty, K.Naked_number.Naked_int64) ->
@@ -593,13 +593,13 @@ let prove_naked_int64 ~type_of_name t : Int64.Set.t proof =
   | Value _
   | Fabricated _ -> wrong_kind ()
 
-let prove_naked_nativeint ~type_of_name t : Targetint.Set.t proof =
+let prove_naked_nativeint env t : Targetint.Set.t proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a naked \
         nativeint: %a"
       print t
   in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, _canonical_name = Simplified_type.create env t in
   Simplified_type.check_not_phantom simplified "prove_naked_nativeint";
   match simplified.descr with
   | Simplified_type.Naked_number (ty, K.Naked_number.Naked_nativeint) ->
@@ -613,8 +613,8 @@ let prove_naked_nativeint ~type_of_name t : Targetint.Set.t proof =
   | Value _
   | Fabricated _ -> wrong_kind ()
 
-let prove_unique_naked_float ~type_of_name t : _ proof =
-  match prove_naked_float ~type_of_name t with
+let prove_unique_naked_float env t : _ proof =
+  match prove_naked_float env t with
   | Proved fs ->
     begin match Float_by_bit_pattern.Set.get_singleton fs with
     | Some f -> Proved f
@@ -623,8 +623,8 @@ let prove_unique_naked_float ~type_of_name t : _ proof =
   | Unknown -> Unknown
   | Invalid -> Invalid
 
-let prove_unique_naked_int32 ~type_of_name t : _ proof =
-  match prove_naked_int32 ~type_of_name t with
+let prove_unique_naked_int32 env t : _ proof =
+  match prove_naked_int32 env t with
   | Proved is ->
     begin match Int32.Set.get_singleton is with
     | Some f -> Proved f
@@ -633,8 +633,8 @@ let prove_unique_naked_int32 ~type_of_name t : _ proof =
   | Unknown -> Unknown
   | Invalid -> Invalid
 
-let prove_unique_naked_int64 ~type_of_name t : _ proof =
-  match prove_naked_int64 ~type_of_name t with
+let prove_unique_naked_int64 env t : _ proof =
+  match prove_naked_int64 env t with
   | Proved is ->
     begin match Int64.Set.get_singleton is with
     | Some f -> Proved f
@@ -643,8 +643,8 @@ let prove_unique_naked_int64 ~type_of_name t : _ proof =
   | Unknown -> Unknown
   | Invalid -> Invalid
 
-let prove_unique_naked_nativeint ~type_of_name t : _ proof =
-  match prove_naked_nativeint ~type_of_name t with
+let prove_unique_naked_nativeint env t : _ proof =
+  match prove_naked_nativeint env t with
   | Proved is ->
     begin match Targetint.Set.get_singleton is with
     | Some f -> Proved f
@@ -653,12 +653,12 @@ let prove_unique_naked_nativeint ~type_of_name t : _ proof =
   | Unknown -> Unknown
   | Invalid -> Invalid
 
-let prove_closure ~type_of_name t : _ proof =
+let prove_closure env t : _ proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a closure: %a"
       print t
   in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, _canonical_name = Simplified_type.create env t in
   Simplified_type.check_not_phantom simplified "prove_closure";
   match simplified.descr with
   | Fabricated ty_fabricated ->
@@ -677,8 +677,8 @@ type reification_result =
   | Cannot_reify
   | Invalid
 
-let reify ~type_of_name ~allow_free_variables t : reification_result =
-  let t, canonical_name = resolve_aliases ~type_of_name t in
+let reify env ~allow_free_variables t : reification_result =
+  let t, canonical_name = resolve_aliases env t in
 (*
 Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
   canonical_name;
@@ -690,7 +690,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
         | Symbol _ -> true)
       (Name_occurrences.everything (free_names t))
   in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, _canonical_name = Simplified_type.create env t in
   if Simplified_type.is_bottom simplified then
     Invalid
   else if Simplified_type.is_phantom simplified then
@@ -743,7 +743,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
             let contents =
               of_ty_naked_number ty_naked_number K.Naked_number.Naked_float
             in
-            match prove_unique_naked_float ~type_of_name contents with
+            match prove_unique_naked_float env contents with
             | Proved f -> Lift (Boxed_float (Const f))
             | Unknown -> try_name ()
             | Invalid -> Cannot_reify
@@ -761,7 +761,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
             let contents =
               of_ty_naked_number ty_naked_number K.Naked_number.Naked_int32
             in
-            match prove_unique_naked_int32 ~type_of_name contents with
+            match prove_unique_naked_int32 env contents with
             | Proved f -> Lift (Boxed_int32 (Const f))
             | Unknown -> try_name ()
             | Invalid -> Cannot_reify
@@ -778,7 +778,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
             let contents =
               of_ty_naked_number ty_naked_number K.Naked_number.Naked_int64
             in
-            match prove_unique_naked_int64 ~type_of_name contents with
+            match prove_unique_naked_int64 env contents with
             | Proved f -> Lift (Boxed_int64 (Const f))
             | Unknown -> try_name ()
             | Invalid -> Cannot_reify
@@ -795,7 +795,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
             let contents =
               of_ty_naked_number ty_naked_number K.Naked_number.Naked_nativeint
             in
-            match prove_unique_naked_nativeint ~type_of_name contents with
+            match prove_unique_naked_nativeint env contents with
             | Proved f -> Lift (Boxed_nativeint (Const f))
             | Unknown -> try_name ()
             | Invalid -> Cannot_reify
@@ -853,7 +853,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
               Closure_id.Map.filter_map closures
                 ~f:(fun _closure_id ty_fabricated ->
                   let t = of_ty_fabricated ty_fabricated in
-                  match prove_closure ~type_of_name t with
+                  match prove_closure env t with
                   | Proved closure -> Some closure.function_decls
                   | Unknown | Invalid ->
                     cannot_lift := true;
@@ -922,14 +922,14 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
     | Fabricated _ -> Cannot_reify
 
 (* CR mshinwell: rename to "prove_must_be_tagged_immediate" *)
-let prove_tagged_immediate ~type_of_name t
+let prove_tagged_immediate env t
       : Immediate.Set.t proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a tagged \
         immediate: %a"
       print t
   in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, _canonical_name = Simplified_type.create env t in
   Simplified_type.check_not_phantom simplified "prove_tagged_immediate";
   match simplified.descr with
   | Value ty_value ->
@@ -952,14 +952,14 @@ let prove_tagged_immediate ~type_of_name t
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _ -> wrong_kind ()
 
-let prove_tagged_immediate_as_tags ~type_of_name t
+let prove_tagged_immediate_as_tags env t
       : Typing_environment.t Tag.Map.t proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a tagged \
         immediate: %a"
       print t
   in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, _canonical_name = Simplified_type.create env t in
   Simplified_type.check_not_phantom simplified "prove_tagged_immediate_as_tags";
   match simplified.descr with
   | Value ty_value ->
@@ -1006,13 +1006,13 @@ type is_tagged_immediate =
   | Always_a_tagged_immediate
   | Answer_given_by of Name.t
 
-let prove_is_tagged_immediate ~type_of_name t : is_tagged_immediate proof =
+let prove_is_tagged_immediate env t : is_tagged_immediate proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a tagged \
         immediate: %a"
       print t
   in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, _canonical_name = Simplified_type.create env t in
   Simplified_type.check_not_phantom simplified "prove_is_tagged_immediate";
   match simplified.descr with
   | Value ty_value ->
@@ -1052,12 +1052,12 @@ let valid_block_tag_for_kind ~tag ~(field_kind : K.t) =
     Misc.fatal_errorf "Bad kind for block field: %a"
       K.print field_kind
 
-let prove_get_field_from_block ~type_of_name t ~index ~field_kind : t proof =
+let prove_get_field_from_block env t ~index ~field_kind : t proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a block: %a"
       print t
   in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, _canonical_name = Simplified_type.create env t in
   Simplified_type.check_not_phantom simplified "prove_get_field_from_block";
 (*
 Format.eprintf "get_field_from_block index %a type@ %a\n"
@@ -1102,7 +1102,7 @@ Format.eprintf "get_field_from_block index %a type@ %a\n"
                         | None -> None
                         | Some field_ty ->
                           let field_ty =
-                            join ~type_of_name this_field_ty field_ty
+                            join env this_field_ty field_ty
                           in
                           Some field_ty
                       end)
@@ -1149,12 +1149,12 @@ let tags_all_valid t blocks ~kind_of_all_fields =
       valid_block_tag_for_kind ~tag ~field_kind:kind_of_all_fields)
     blocks
 
-let prove_must_be_a_block ~type_of_name t ~kind_of_all_fields : unit proof =
+let prove_must_be_a_block env t ~kind_of_all_fields : unit proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a block: %a"
       print t
   in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, _canonical_name = Simplified_type.create env t in
   Simplified_type.check_not_phantom simplified "prove_is_a_block";
   match simplified.descr with
   | Value ty_value ->
@@ -1188,14 +1188,14 @@ type unboxable_variant_or_block_of_values =
   | Unboxable of unboxable_variant_or_block_of_values0
   | Not_unboxable
 
-let prove_unboxable_variant_or_block_of_values ~type_of_name t
+let prove_unboxable_variant_or_block_of_values env t
       : unboxable_variant_or_block_of_values proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a \
         variant or block of values: %a"
       print t
   in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, _canonical_name = Simplified_type.create env t in
   Simplified_type.check_not_phantom simplified
     "prove_unboxable_variant_or_block_of_values";
   match simplified.descr with
@@ -1249,13 +1249,13 @@ type float_array_proof =
 
 (* CR mshinwell: This should probably return the field types rather than
    just the length; then it can be exposed in the .mli. *)
-let prove_float_array ~type_of_name t : float_array_proof proof =
+let prove_float_array env t : float_array_proof proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a float array: \
         %a"
       print t
   in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, _canonical_name = Simplified_type.create env t in
   Simplified_type.check_not_phantom simplified "prove_float_array";
   match simplified.descr with
   | Value ty_value ->
@@ -1309,12 +1309,12 @@ type tags =
    [Blocks_and_tagged_immediates] description for them.  Double_array_tag
    is of course an exception... maybe there should be a submodule of Tag
    which permits < No_scan_tag and also Double_array_tag? *)
-let prove_tags ~type_of_name t : tags proof =
+let prove_tags env t : tags proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a value: %a"
       print t
   in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, _canonical_name = Simplified_type.create env t in
   Simplified_type.check_not_phantom simplified "prove_tags";
   match simplified.descr with
   | Value ty_value ->
@@ -1345,12 +1345,12 @@ let prove_tags ~type_of_name t : tags proof =
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _ -> wrong_kind ()
 
-let prove_string ~type_of_name t : String_info.Set.t proof =
+let prove_string env t : String_info.Set.t proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a string: %a"
       print t
   in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, _canonical_name = Simplified_type.create env t in
   Simplified_type.check_not_phantom simplified "prove_string";
   match simplified.descr with
   | Value ty_value ->
@@ -1364,14 +1364,14 @@ let prove_string ~type_of_name t : String_info.Set.t proof =
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _ -> wrong_kind ()
 
-let prove_boxed_float ~type_of_name t
+let prove_boxed_float env t
       : Float_by_bit_pattern.Set.t ty_naked_number proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a boxed \
         float: %a"
       print t
   in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, _canonical_name = Simplified_type.create env t in
   Simplified_type.check_not_phantom simplified "prove_boxed_float";
   match simplified.descr with
   | Value ty_value ->
@@ -1384,14 +1384,14 @@ let prove_boxed_float ~type_of_name t
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _ -> wrong_kind ()
 
-let prove_boxed_int32 ~type_of_name t
+let prove_boxed_int32 env t
       : Int32.Set.t ty_naked_number proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a boxed \
         int32: %a"
       print t
   in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, _canonical_name = Simplified_type.create env t in
   Simplified_type.check_not_phantom simplified "prove_boxed_int32";
   match simplified.descr with
   | Value ty_value ->
@@ -1404,14 +1404,14 @@ let prove_boxed_int32 ~type_of_name t
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _ -> wrong_kind ()
 
-let prove_boxed_int64 ~type_of_name t
+let prove_boxed_int64 env t
       : Int64.Set.t ty_naked_number proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a boxed \
         int64: %a"
       print t
   in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, _canonical_name = Simplified_type.create env t in
   Simplified_type.check_not_phantom simplified "prove_boxed_int64";
   match simplified.descr with
   | Value ty_value ->
@@ -1424,14 +1424,14 @@ let prove_boxed_int64 ~type_of_name t
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _ -> wrong_kind ()
 
-let prove_boxed_nativeint ~type_of_name t
+let prove_boxed_nativeint env t
       : Targetint.Set.t ty_naked_number proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a boxed \
         nativeint: %a"
       print t
   in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, _canonical_name = Simplified_type.create env t in
   Simplified_type.check_not_phantom simplified "prove_boxed_nativeint";
   match simplified.descr with
   | Value ty_value ->
@@ -1445,13 +1445,13 @@ let prove_boxed_nativeint ~type_of_name t
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _ -> wrong_kind ()
 
-let prove_closures ~type_of_name t : closures proof =
+let prove_closures env t : closures proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be one or more \
         closures: %a"
       print t
   in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, _canonical_name = Simplified_type.create env t in
   Simplified_type.check_not_phantom simplified "prove_closures";
   match simplified.descr with
   | Value ty_value ->
@@ -1464,13 +1464,13 @@ let prove_closures ~type_of_name t : closures proof =
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _ -> wrong_kind ()
 
-let prove_sets_of_closures ~type_of_name t : _ proof =
+let prove_sets_of_closures env t : _ proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a set of \
         closures: %a"
       print t
   in
-  let simplified, canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, canonical_name = Simplified_type.create env t in
   Simplified_type.check_not_phantom simplified "prove_sets_of_closures";
   match simplified.descr with
   | Fabricated ty_fabricated ->
@@ -1490,13 +1490,13 @@ let prove_sets_of_closures ~type_of_name t : _ proof =
 (* XXX Lengths of strings: for this, I think we can assume that Obj.truncate
    is always illegal here *)
 
-let prove_lengths_of_arrays_or_blocks ~type_of_name t
+let prove_lengths_of_arrays_or_blocks env t
       : Targetint.OCaml.Set.t proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a block: %a"
       print t
   in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, _canonical_name = Simplified_type.create env t in
   Simplified_type.check_not_phantom simplified
     "prove_lengths_of_arrays_or_blocks";
   match simplified.descr with
@@ -1562,7 +1562,7 @@ let prove_of_kind_naked_float t =
     end;
   force_to_kind_naked_float t
 
-let values_physically_equal ~type_of_name:_ (t1 : t) (t2 : t) =
+let values_physically_equal env:_ (t1 : t) (t2 : t) =
   let check_aliases (ty1 : _ ty) (ty2 : _ ty) =
     match ty1, ty2 with
     | No_alias _, _ | _, No_alias _ ->
@@ -1596,9 +1596,9 @@ let values_physically_equal ~type_of_name:_ (t1 : t) (t2 : t) =
         print t1
         print t2
 
-let values_structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
-  let simplified1, _canonical_name1 = Simplified_type.create ~type_of_name t1 in
-  let simplified2, _canonical_name2 = Simplified_type.create ~type_of_name t2 in
+let values_structurally_distinct (env1, (t1 : t)) (env2, (t2 : t)) =
+  let simplified1, _canonical_name1 = Simplified_type.create env t1 in
+  let simplified2, _canonical_name2 = Simplified_type.create env t2 in
   let module S = Simplified_type in
   if S.is_phantom simplified1 || S.is_phantom simplified2 then false
   else
@@ -1641,10 +1641,10 @@ let values_structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
         | Boxed_number (Boxed_float ty_naked_number1),
             Boxed_number (Boxed_float ty_naked_number2) ->
           begin match
-            prove_naked_float ~type_of_name
+            prove_naked_float env1
               (of_ty_naked_number ty_naked_number1
                 K.Naked_number.Naked_float),
-            prove_naked_float ~type_of_name
+            prove_naked_float env2
               (of_ty_naked_number ty_naked_number2
                 K.Naked_number.Naked_float)
           with
@@ -1656,10 +1656,10 @@ let values_structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
         | Boxed_number (Boxed_int32 ty_naked_number1),
             Boxed_number (Boxed_int32 ty_naked_number2) ->
           begin match
-            prove_naked_int32 ~type_of_name
+            prove_naked_int32 env1
               (of_ty_naked_number ty_naked_number1
                 K.Naked_number.Naked_int32),
-            prove_naked_int32 ~type_of_name
+            prove_naked_int32 env2
               (of_ty_naked_number ty_naked_number2
                 K.Naked_number.Naked_int32)
           with
@@ -1670,10 +1670,10 @@ let values_structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
         | Boxed_number (Boxed_int64 ty_naked_number1),
             Boxed_number (Boxed_int64 ty_naked_number2) ->
           begin match
-            prove_naked_int64 ~type_of_name
+            prove_naked_int64 env1
               (of_ty_naked_number ty_naked_number1
                 K.Naked_number.Naked_int64),
-            prove_naked_int64 ~type_of_name
+            prove_naked_int64 env2
               (of_ty_naked_number ty_naked_number2
                 K.Naked_number.Naked_int64)
           with
@@ -1684,10 +1684,10 @@ let values_structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
         | Boxed_number (Boxed_nativeint ty_naked_number1),
             Boxed_number (Boxed_nativeint ty_naked_number2) ->
           begin match
-            prove_naked_nativeint ~type_of_name
+            prove_naked_nativeint env1
               (of_ty_naked_number ty_naked_number1
                 K.Naked_number.Naked_nativeint),
-            prove_naked_nativeint ~type_of_name
+            prove_naked_nativeint env2
               (of_ty_naked_number ty_naked_number2
                 K.Naked_number.Naked_nativeint)
           with
@@ -1710,8 +1710,8 @@ let values_structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
     | S.Naked_number (_, K.Naked_number.Naked_float),
         S.Naked_number (_, K.Naked_number.Naked_float) ->
       begin match
-        prove_naked_float ~type_of_name t1,
-          prove_naked_float ~type_of_name t2
+        prove_naked_float env1 t1,
+          prove_naked_float env2 t2
       with
       | Proved nums1, Proved nums2 ->
         Float_by_bit_pattern.Set.is_empty
@@ -1721,8 +1721,8 @@ let values_structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
     | S.Naked_number (_, K.Naked_number.Naked_int32),
         S.Naked_number (_, K.Naked_number.Naked_int32) ->
       begin match
-        prove_naked_int32 ~type_of_name t1,
-          prove_naked_int32 ~type_of_name t2
+        prove_naked_int32 env1 t1,
+          prove_naked_int32 env2 t2
       with
       | Proved nums1, Proved nums2 ->
         Int32.Set.is_empty
@@ -1732,8 +1732,8 @@ let values_structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
     | S.Naked_number (_, K.Naked_number.Naked_int64),
         S.Naked_number (_, K.Naked_number.Naked_int64) ->
       begin match
-        prove_naked_int64 ~type_of_name t1,
-          prove_naked_int64 ~type_of_name t2
+        prove_naked_int64 env1 t1,
+          prove_naked_int64 env2 t2
       with
       | Proved nums1, Proved nums2 ->
         Int64.Set.is_empty
@@ -1743,8 +1743,8 @@ let values_structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
     | S.Naked_number (_, K.Naked_number.Naked_nativeint),
         S.Naked_number (_, K.Naked_number.Naked_nativeint) ->
       begin match
-        prove_naked_nativeint ~type_of_name t1,
-          prove_naked_nativeint ~type_of_name t2
+        prove_naked_nativeint env1 t1,
+          prove_naked_nativeint env2 t2
       with
       | Proved nums1, Proved nums2 ->
         Targetint.Set.is_empty
@@ -1758,7 +1758,7 @@ let values_structurally_distinct ~type_of_name (t1 : t) (t2 : t) =
         print t1
         print t2
 
-let int_switch_arms ~type_of_name t ~arms =
+let int_switch_arms env t ~arms =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a tagged \
         immediate: %a"
@@ -1772,7 +1772,7 @@ let int_switch_arms ~type_of_name t ~arms =
       Targetint.OCaml.Map.empty
   in
   let invalid () = Targetint.OCaml.Map.empty in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, _canonical_name = Simplified_type.create env t in
   match simplified.descr with
   | Value ty_value ->
     begin match ty_value with
@@ -1804,7 +1804,7 @@ let int_switch_arms ~type_of_name t ~arms =
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _ -> wrong_kind ()
 
-let tag_switch_arms ~type_of_name t ~arms =
+let tag_switch_arms env t ~arms =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a tag: %a"
       print t
@@ -1817,7 +1817,7 @@ let tag_switch_arms ~type_of_name t ~arms =
       Tag.Map.empty
   in
   let invalid () = Tag.Map.empty in
-  let simplified, _canonical_name = Simplified_type.create ~type_of_name t in
+  let simplified, _canonical_name = Simplified_type.create env t in
   Simplified_type.check_not_phantom simplified "tag_switch_arms";
   match simplified.descr with
   | Fabricated ty_fabricated ->
@@ -1862,28 +1862,28 @@ type unboxable_proof =
   | Boxed_nativeint
   | Cannot_unbox
 
-let prove_unboxable ~type_of_name ~unboxee_ty : unboxable_proof =
-  match prove_unboxable_variant_or_block_of_values ~type_of_name unboxee_ty with
+let prove_unboxable env ~unboxee_ty : unboxable_proof =
+  match prove_unboxable_variant_or_block_of_values env unboxee_ty with
   | Proved (Unboxable unboxable) -> Variant_or_block_of_values unboxable
   | Invalid | Proved Not_unboxable -> Cannot_unbox
   | Unknown ->
-    match prove_float_array ~type_of_name unboxee_ty with
+    match prove_float_array env unboxee_ty with
     | Proved (Of_length length) -> Float_array { length; }
     | Invalid | Proved Not_unique_length -> Cannot_unbox
     | Unknown ->
-      match prove_boxed_float ~type_of_name unboxee_ty with
+      match prove_boxed_float env unboxee_ty with
       | Proved _ty_naked_number -> Boxed_float
       | Invalid -> Cannot_unbox
       | Unknown ->
-        match prove_boxed_int32 ~type_of_name unboxee_ty with
+        match prove_boxed_int32 env unboxee_ty with
         | Proved _ty_naked_number -> Boxed_int32
         | Invalid -> Cannot_unbox
         | Unknown ->
-          match prove_boxed_int64 ~type_of_name unboxee_ty with
+          match prove_boxed_int64 env unboxee_ty with
           | Proved _ty_naked_number -> Boxed_int64
           | Invalid -> Cannot_unbox
           | Unknown ->
-            match prove_boxed_nativeint ~type_of_name unboxee_ty with
+            match prove_boxed_nativeint env unboxee_ty with
             | Proved _ty_naked_number -> Boxed_nativeint
             | Invalid -> Cannot_unbox
             | Unknown -> Cannot_unbox
