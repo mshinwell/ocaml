@@ -608,7 +608,7 @@ end;
     print_with_caches ~env_cache ppf t
 
   and print_typing_environment ~env_cache ppf
-        ({ resolver; parent; names_to_types;
+        ({ resolver = _; parent; names_to_types;
            levels_to_names; existentials; existential_freshening; } as env) =
     if Name.Map.is_empty names_to_types then
       Format.pp_print_string ppf "Empty"
@@ -618,13 +618,12 @@ end;
           print_with_caches ~env_cache ppf ty
         in
         Format.fprintf ppf
-          (* CR mshinwell: add memoised printing where big values that are
-             printed are named and printed at most once *)
-          "@[((parent <elided>)@ \
+          "@[((parent@ %a)@ \
               (names_to_types@ %a)@ \
               (levels_to_names@ %a)@ \
               (existentials@ %a)@ \
               (existential_freshening@ %a))@]"
+          (print_typing_environment ~env_cache) parent
           (Name.Map.print print_scope_level_and_type) names_to_types
           (Scope_level.Map.print Name.Set.print) levels_to_names
           Name.Set.print existentials

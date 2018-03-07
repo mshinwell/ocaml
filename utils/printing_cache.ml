@@ -36,7 +36,7 @@ let with_cache t ppf obj printer =
     | [] ->
       let name = Printf.sprintf "%s%d" t.prefix t.next_id in
       t.next_id <- t.next_id + 1;
-      t.printed <- (S (name obj)) :: t.printed;
+      t.printed <- (S (name, obj)) :: t.printed;
       Format.fprintf ppf "@[&%s =@ %a@]" printer ()
   in
   find t.printed
