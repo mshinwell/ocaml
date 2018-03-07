@@ -375,6 +375,8 @@ Format.eprintf "Simplify_program fetching uses for %a\n%!"
       in
 Format.eprintf "\nEnv extension (cont %a) is@ %a\n\n%!"
   Continuation.print name T.Typing_environment.print env_extension;
+Format.eprintf "default_env0 (cont %a) is@ %a\n\n%!"
+  Continuation.print name E.print default_env0;
 (*
 Format.eprintf "Args for %a: %a\n%!"
   Continuation.print name
@@ -384,8 +386,6 @@ Format.eprintf "Args for %a: %a\n%!"
         (E.type_accessor env E.extend_typing_environment) default_env0
           ~env_extension
       in
-Format.eprintf "default_env0 (cont %a) is@ %a\n\n%!"
-  Continuation.print name E.print default_env0;
 Format.eprintf "Extended env (cont %a) is@ %a\n\n%!"
   Continuation.print name E.print env;
 (* XXX Work out why these symbols are already bound
