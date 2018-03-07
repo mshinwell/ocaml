@@ -16,6 +16,12 @@
 
 type t
 
-val create : unit -> 'a t
+val create : unit -> t
 
-val with_cache : 'a t -> string -> 'a -> (unit -> unit) -> unit
+val with_cache
+   : t 
+  -> Format.formatter
+  -> string
+  -> 'a
+  -> (Format.formatter -> unit -> unit)
+  -> unit

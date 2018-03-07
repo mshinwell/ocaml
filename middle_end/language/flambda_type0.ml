@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2017 OCamlPro SAS                                    *)
-(*   Copyright 2014--2017 Jane Street Group LLC                           *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -28,7 +28,7 @@ module K = Flambda_kind
 
 module Make (Expr : sig
   type t
-  val print : Format.formatter -> t -> unit
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
   val free_names : t -> Name_occurrences.t
 end) = struct
   type expr = Expr.t
@@ -158,11 +158,11 @@ end) = struct
     | String of String_info.Set.t
 
   and immediate_case = {
-    env_extension : typing_environment;
+    env_extension : typing_environment option;
   }
  
   and singleton_block = {
-    env_extension : typing_environment;
+    env_extension : typing_environment option;
     fields : t mutable_or_immutable array;
   }
 
@@ -201,7 +201,7 @@ end) = struct
     body : expr;
     free_names_in_body : Name_occurrences.t;
     result : t list;
-    result_env_extension : typing_environment;
+    result_env_extension : typing_environment option;
     stub : bool;
     dbg : Debuginfo.t;
     inline : inline_attribute;
@@ -216,7 +216,7 @@ end) = struct
   and non_inlinable_function_declarations = {
     params : t list;
     result : t list;
-    result_env_extension : typing_environment;
+    result_env_extension : typing_environment option;
     direct_call_surrogate : Closure_id.t option;
   }
 
@@ -264,82 +264,6 @@ end) = struct
     existentials : Name.Set.t;
     existential_freshening : Freshening.t;
   }
-
-  let create_typing_environment0 ~resolver ~parent =
-    let existential_freshening = Freshening.activate Freshening.empty in
-    { resolver;
-      parent;
-      names_to_types = Name.Map.empty;
-      levels_to_names = Scope_level.Map.empty;
-      existentials = Name.Set.empty;
-      existential_freshening;
-    }
-
-  let root_typing_environment ~resolver =
-    create_typing_environment0 ~resolver ~parent:None
-
-  let create_typing_environment ~(parent : typing_environment) =
-    create_typing_environment0 ~resolver:parent.resolver ~parent:(Some parent)
-
-  let add_or_replace_typing_environment t name scope_level ty =
-    (* CR mshinwell: We should add a comment here explaining where this can
-       be used and what it cannot be used for (e.g. changing a name's scope
-       level) *)
-(*
-if Scope_level.to_int scope_level = 2
-  && not (Name.Map.mem name t.names_to_types)
-then begin
-  Format.eprintf "AoR for %a:@ %s\n%!"
-    Name.print name
-    (Printexc.raw_backtrace_to_string (Printexc.get_callstack 20))
-end;
-*)
-    let names_to_types = Name.Map.add name (scope_level, ty) t.names_to_types in
-    let levels_to_names =
-      Scope_level.Map.update scope_level
-        (function
-           | None -> Some (Name.Set.singleton name)
-           | Some names -> Some (Name.Set.add name names))
-        t.levels_to_names
-    in
-    { t with
-      names_to_types;
-      levels_to_names;
-    }
-
-  type binding_type = Normal | Existential
-
-  let rec find_typing_environment t name =
-    match Name.Map.find name t.names_to_types with
-    | exception Not_found ->
-      begin match t.parent with
-      | Some parent -> find_typing_environment parent name
-      | None ->
-        Misc.fatal_errorf "Cannot find %a in environment:@ %a"
-          Name.print name
-          print t
-      end
-    | _scope_level, ty ->
-      let binding_type =
-        if Name.Set.mem name t.existentials then Existential
-        else Normal
-      in
-      match binding_type with
-      | Normal -> ty, Normal
-      | Existential ->
-   (* XXX     let ty = rename_variables t freshening in *)
-        ty, Existential
-
-  let ty_is_obviously_bottom (ty : _ ty) =
-    match ty with
-    | No_alias (Join []) -> true
-    | _ -> false
-
-  let is_obviously_bottom (t : t) =
-    match t.descr with
-    | Value ty -> ty_is_obviously_bottom ty
-    | Naked_number (ty, _) -> ty_is_obviously_bottom ty
-    | Fabricated ty -> ty_is_obviously_bottom ty
 
   let print_extensibility print_contents ppf (e : _ extensibility) =
     match e with
@@ -419,7 +343,8 @@ end;
   let rec print_immediate_case ~cache ppf
         ({ env_extension; } : immediate_case) =
     Format.fprintf ppf "@[(env_extension@ %a)@]"
-      (print_typing_environment cache) env_extension
+      (Misc.Stdlib.Option.print (print_typing_environment_with_cache ~cache))
+      env_extension
 
   and print_fields ~cache ppf (fields : t mutable_or_immutable array) =
     Format.fprintf ppf "@[[| %a |]@]"
@@ -430,7 +355,8 @@ end;
 
   and print_singleton_block ~cache ppf { env_extension; fields; } =
     Format.fprintf ppf "@[((env_extension@ %a)@ (fields@ %a))@]"
-      (print_typing_environment ~cache) env_extension
+      (Misc.Stdlib.Option.print (print_typing_environment_with_cache ~cache))
+      env_extension
       (print_fields ~cache) fields
 
   and print_block_cases ~cache ppf ((Join { by_length; }) : block_cases) =
@@ -446,7 +372,7 @@ end;
   and print_blocks ~cache ppf cases =
     Tag.Map.print (print_block_cases ~cache) ppf cases
 
-  and print_of_kind_value ppf (of_kind_value : of_kind_value) =
+  and print_of_kind_value ~cache ppf (of_kind_value : of_kind_value) =
     match of_kind_value with
     | Blocks_and_tagged_immediates { blocks; immediates; is_int; get_tag; } ->
       begin match blocks, immediates, is_int, get_tag with
@@ -454,12 +380,12 @@ end;
           when not (Tag.Map.is_empty blocks)
             && Immediate.Map.is_empty immediates ->
         Format.fprintf ppf "@[(blocks@ @[%a@])@])@]"
-          (print_or_unknown print_blocks) blocks
+          (print_blocks ~cache) blocks
       | Known blocks, Known immediates, None, None
           when Tag.Map.is_empty blocks
             && not (Immediate.Map.is_empty immediates) ->
         Format.fprintf ppf "@[(immediates@ @[%a@])@])@]"
-          (print_or_unknown print_immediates) immediates
+          (print_immediates ~cache) immediates
       | _ ->
         match is_int, get_tag with
         | None, None ->
@@ -467,8 +393,8 @@ end;
             "@[(Blocks_and_immediates@ \
              @[(blocks@ @[%a@])@]@ \
              @[(immediates@ @[%a@])@])@]"
-            (print_or_unknown print_blocks) blocks
-            (print_or_unknown print_immediates) immediates
+            (print_or_unknown (print_blocks ~cache)) blocks
+            (print_or_unknown (print_immediates ~cache)) immediates
         | _, _ ->
           Format.fprintf ppf
             "@[(Blocks_and_immediates@ \
@@ -476,15 +402,15 @@ end;
              @[(immediates@ @[%a@])@]@ \
              @[(is_int@ %a)@]@ \
              @[(get_tag@ %a)@])@]"
-            (print_or_unknown print_blocks) blocks
-            (print_or_unknown print_immediates) immediates
+            (print_or_unknown (print_blocks ~cache)) blocks
+            (print_or_unknown (print_immediates ~cache)) immediates
             (Misc.Stdlib.Option.print Name.print) is_int
             (Misc.Stdlib.Option.print Name.print) get_tag
       end
     | Boxed_number n ->
       Format.fprintf ppf "@[(Boxed_number %a)@]"
         print_of_kind_value_boxed_number n
-    | Closures closures -> print_closures ppf closures
+    | Closures closures -> print_closures ~cache ppf closures
     | String str_infos ->
       Format.fprintf ppf "@[(Strings (%a))@]" String_info.Set.print str_infos
 
@@ -497,8 +423,6 @@ end;
         ~pp_sep:(fun ppf () -> Format.pp_print_string ppf ";@ ")
         (print_ty_value ~cache))
       (Array.to_list ty_values)
-
-  and _unused = Expr.print
 
   and print_closures ~cache ppf (closures : closures) =
     Format.fprintf ppf "@[(Closures@ %a)@]"
@@ -546,7 +470,8 @@ end;
           (fun ppf ty ->
             Format.fprintf ppf "%a"
               print ty)) decl.result
-        print_typing_environment decl.result_env_extension
+        (Misc.Stdlib.Option.print (print_typing_environment_with_cache ~cache))
+          decl.result_env_extension
         decl.stub
         Debuginfo.print_compact decl.dbg
         print_inline_attribute decl.inline
@@ -593,18 +518,20 @@ end;
           Var_within_closure.Map.print (print_ty_value ~cache)))
         set.closure_elements
 
-  and print_closure ppf (closure : closure) =
+  and print_closure ~cache ppf (closure : closure) =
     Format.fprintf ppf "@[(Closure (function_decls@ %a))@]"
-      print_function_declarations closure.function_decls
+      (print_function_declarations ~cache) closure.function_decls
 
   and print_tag_case ~cache ppf ({ env_extension; } : tag_case) =
     Format.fprintf ppf "@[(env_extension@ %a)@]"
-      print_typing_environment cache env_extension
+      (Misc.Stdlib.Option.print (print_typing_environment_with_cache ~cache))
+        env_extension
 
-  and print_of_kind_fabricated ppf (o : of_kind_fabricated) =
+  and print_of_kind_fabricated ~cache ppf (o : of_kind_fabricated) =
     match o with
     | Tag tag_map ->
-      Format.fprintf ppf "@[(Tags@ %a)@]" (Tag.Map.print print_tag_case) tag_map
+      Format.fprintf ppf "@[(Tags@ %a)@]"
+        (Tag.Map.print (print_tag_case ~cache)) tag_map
     | Set_of_closures set -> print_set_of_closures ~cache ppf set
     | Closure closure -> print_closure ~cache ppf closure
 
@@ -635,7 +562,7 @@ end;
     let cache : Printing_cache.t = Printing_cache.create () in
     print_with_cache ~cache ppf t
 
-  and print_typing_environment ~cache ppf
+  and print_typing_environment_with_cache ~cache ppf
         ({ resolver = _; parent; names_to_types;
            levels_to_names; existentials; existential_freshening; } as env) =
     if Name.Map.is_empty names_to_types then
@@ -651,11 +578,92 @@ end;
               (levels_to_names@ %a)@ \
               (existentials@ %a)@ \
               (existential_freshening@ %a))@]"
-          (print_typing_environment ~cache) parent
+          (Misc.Stdlib.Option.print (
+            print_typing_environment_with_cache ~cache)) parent
           (Name.Map.print print_scope_level_and_type) names_to_types
           (Scope_level.Map.print Name.Set.print) levels_to_names
           Name.Set.print existentials
           Freshening.print existential_freshening)
+
+  let print_typing_environment ppf env =
+    print_typing_environment_with_cache ~cache:(Printing_cache.create ())
+      ppf env
+
+  let create_typing_environment0 ~resolver ~parent =
+    let existential_freshening = Freshening.activate Freshening.empty in
+    { resolver;
+      parent;
+      names_to_types = Name.Map.empty;
+      levels_to_names = Scope_level.Map.empty;
+      existentials = Name.Set.empty;
+      existential_freshening;
+    }
+
+  let root_typing_environment ~resolver =
+    create_typing_environment0 ~resolver ~parent:None
+
+  let create_typing_environment ~(parent : typing_environment) =
+    create_typing_environment0 ~resolver:parent.resolver ~parent:(Some parent)
+
+  let add_or_replace_typing_environment t name scope_level ty =
+    (* CR mshinwell: We should add a comment here explaining where this can
+       be used and what it cannot be used for (e.g. changing a name's scope
+       level) *)
+(*
+if Scope_level.to_int scope_level = 2
+  && not (Name.Map.mem name t.names_to_types)
+then begin
+  Format.eprintf "AoR for %a:@ %s\n%!"
+    Name.print name
+    (Printexc.raw_backtrace_to_string (Printexc.get_callstack 20))
+end;
+*)
+    let names_to_types = Name.Map.add name (scope_level, ty) t.names_to_types in
+    let levels_to_names =
+      Scope_level.Map.update scope_level
+        (function
+           | None -> Some (Name.Set.singleton name)
+           | Some names -> Some (Name.Set.add name names))
+        t.levels_to_names
+    in
+    { t with
+      names_to_types;
+      levels_to_names;
+    }
+
+  type binding_type = Normal | Existential
+
+  let rec find_typing_environment env name =
+    match Name.Map.find name env.names_to_types with
+    | exception Not_found ->
+      begin match env.parent with
+      | Some parent -> find_typing_environment parent name
+      | None ->
+        Misc.fatal_errorf "Cannot find %a in environment:@ %a"
+          Name.print name
+          print_typing_environment env
+      end
+    | _scope_level, ty ->
+      let binding_type =
+        if Name.Set.mem name env.existentials then Existential
+        else Normal
+      in
+      match binding_type with
+      | Normal -> ty, Normal
+      | Existential ->
+   (* XXX     let ty = rename_variables t freshening in *)
+        ty, Existential
+
+  let ty_is_obviously_bottom (ty : _ ty) =
+    match ty with
+    | No_alias (Join []) -> true
+    | _ -> false
+
+  let is_obviously_bottom (t : t) =
+    match t.descr with
+    | Value ty -> ty_is_obviously_bottom ty
+    | Naked_number (ty, _) -> ty_is_obviously_bottom ty
+    | Fabricated ty -> ty_is_obviously_bottom ty
 
   let of_ty_value ty_value : t =
     { descr = Value ty_value;
@@ -705,7 +713,7 @@ end;
 
   and free_names_of_kind_value (of_kind : of_kind_value) acc =
     match of_kind with
-    | Blocks_and_tagged_immediates { blocks; immediates; } ->
+    | Blocks_and_tagged_immediates { blocks; immediates; is_int; get_tag; } ->
       let acc =
         match blocks with
         | Unknown -> acc
@@ -714,7 +722,7 @@ end;
               Targetint.OCaml.Map.fold
                 (fun _length (singleton : singleton_block) acc ->
                   let acc =
-                    free_names_of_typing_environment singleton.env_extension acc
+                    free_names_of_env_extension singleton.env_extension acc
                   in
                   Array.fold_left (fun acc (field : _ mutable_or_immutable) ->
                       match field with
@@ -726,13 +734,23 @@ end;
             blocks
             acc
       in
-      begin match immediates with
-      | Unknown -> acc
-      | Known immediates ->
-        Immediate.Map.fold (fun _imm (case : immediate_case) acc ->
-            free_names_of_typing_environment case.env_extension acc)
-          immediates
-          acc
+      let acc =
+        match immediates with
+        | Unknown -> acc
+        | Known immediates ->
+          Immediate.Map.fold (fun _imm (case : immediate_case) acc ->
+              free_names_of_env_extension case.env_extension acc)
+            immediates
+            acc
+      in
+      let acc =
+        match is_int with
+        | None -> acc
+        | Some is_int -> Name.Set.add is_int acc
+      in
+      begin match get_tag with
+      | None -> acc
+      | Some get_tag -> Name.Set.add get_tag acc
       end
     | Boxed_number (Boxed_float n) ->
       free_names_ty free_names_of_kind_naked_number n acc
@@ -753,7 +771,7 @@ end;
     match of_kind with
     | Tag tag_map ->
       Tag.Map.fold (fun _tag ({ env_extension; } : tag_case) acc ->
-          free_names_of_typing_environment env_extension acc)
+          free_names_of_env_extension env_extension acc)
         tag_map
         acc
     | Set_of_closures set ->
@@ -800,6 +818,11 @@ end;
     in
     let free_names = Name.Set.diff all_names bound_names in
     Name.Set.union free_names acc
+
+  and free_names_of_env_extension env_extension acc =
+    match env_extension with
+    | None -> acc
+    | Some env_extension -> free_names_of_typing_environment env_extension acc
 
   let free_names t =
     let names = free_names t Name.Set.empty in
@@ -1283,7 +1306,7 @@ end;
       let immediates =
         Immediate.Set.fold (fun imm map ->
             let case : immediate_case =
-              { env_extension = create_typing_environment ();
+              { env_extension = None;
               }
             in
             Immediate.Map.add imm case map)
@@ -1311,7 +1334,7 @@ end;
     else
       let immediates =
         Immediate.Map.map (fun env_extension : immediate_case ->
-            { env_extension;
+            { env_extension = Some env_extension;
             })
           env_map
       in
@@ -1421,7 +1444,7 @@ end;
         (fun _index : _ mutable_or_immutable -> Mutable)
     in
     let singleton_block : singleton_block =
-      { env_extension = create_typing_environment ();
+      { env_extension = None;
         fields;
       }
     in
@@ -1462,7 +1485,7 @@ end;
           fields
       in
       let singleton_block : singleton_block =
-        { env_extension = create_typing_environment ();
+        { env_extension = None;
           fields;
         }
       in
@@ -1508,7 +1531,7 @@ end;
           fields
       in
       let singleton_block : singleton_block =
-        { env_extension = create_typing_environment ();
+        { env_extension = None;
           fields;
         }
       in
@@ -1547,7 +1570,7 @@ end;
           fields
       in
       let singleton_block : singleton_block =
-        { env_extension = create_typing_environment ();
+        { env_extension = None;
           fields;
         }
       in
@@ -1757,7 +1780,6 @@ end;
           match env.resolver export_id with
           | Some t -> continue_resolving t ~canonical_name
           | None -> t, None
-        end
       in
       match ty with
       | No_alias _ -> t, canonical_name
@@ -1775,7 +1797,7 @@ end;
     in
     ty, canonical_name
 
-  let resolve_aliases env t : t * (Name.t option) =
+  let resolve_aliases (env, t) : t * (Name.t option) =
     let expected_kind = kind t in
     match t.descr with
     | Value ty ->
@@ -1793,7 +1815,8 @@ end;
       in
       { t with descr = Fabricated ty; }, canonical_name
 
-  let resolve_aliases_and_squash_unresolved_names env t : t * (Name.t option) =
+  let resolve_aliases_and_squash_unresolved_names (env, t)
+        : t * (Name.t option) =
     match t.descr with
     | Value ty ->
       let force_to_kind = force_to_kind_value in
@@ -2143,8 +2166,11 @@ end;
           ({ env_extension = env_extension2; } : immediate_case)
           : immediate_case =
       let env_extension =
-        Meet_and_join.meet_typing_environment env1 env2
-          env_extension1 env_extension2
+        match env_extension1, env_extension2 with
+        | None, None -> None
+        | Some env_extension, None | None, Some env_extension -> env
+        | Some env_extension1, Some env_extension2 ->
+          Meet_and_join.meet_typing_environment env_extension1 env_extension2
       in
       { env_extension; }
 
@@ -2153,8 +2179,11 @@ end;
           ({ env_extension = env_extension2; } : immediate_case)
           : immediate_case =
       let env_extension =
-        Meet_and_join.join_typing_environment
-          env_extension1 env_extension2
+        match env_extension1, env_extension2 with
+        | None, None -> None
+        | Some env_extension, None | None, Some env_extension -> env
+        | Some env_extension1, Some env_extension2 ->
+          Meet_and_join.join_typing_environment env_extension1 env_extension2
       in
       { env_extension; }
 
@@ -2182,8 +2211,11 @@ end;
              fields = fields2;
            } : singleton_block) : singleton_block * judgements_from_meet =
       let env_extension =
-        Meet_and_join.meet_typing_environment
-          env_extension1 env_extension2
+        match env_extension1, env_extension2 with
+        | None, None -> None
+        | Some env_extension, None | None, Some env_extension -> env
+        | Some env_extension1, Some env_extension2 ->
+          Meet_and_join.meet_typing_environment env_extension1 env_extension2
       in
       assert (Array.length fields1 = Array.length fields2);
       let judgements = ref [] in
@@ -2206,7 +2238,7 @@ end;
         fields;
       }, !judgements
 
-    let join_singleton_block ~type_of_name
+    let join_singleton_block env1 env2
           ({ env_extension = env_extension1;
              fields = fields1;
            } : singleton_block)
@@ -2214,8 +2246,12 @@ end;
              fields = fields2;
            } : singleton_block) : singleton_block =
       let env_extension =
-        Meet_and_join.join_typing_environment ~type_of_name
-          env_extension1 env_extension2
+        (* CR mshinwell: factor this little bit out *)
+        match env_extension1, env_extension2 with
+        | None, None -> None
+        | Some env_extension, None | None, Some env_extension -> env
+        | Some env_extension1, Some env_extension2 ->
+          Meet_and_join.join_typing_environment env_extension1 env_extension2
       in
       assert (Array.length fields1 = Array.length fields2);
       let fields =
@@ -2225,7 +2261,7 @@ end;
             match field1, field2 with
             | Mutable, _ | _, Mutable -> Mutable
             | Immutable field1, Immutable field2 ->
-              Immutable (Meet_and_join.join ~type_of_name field1 field2))
+              Immutable (Meet_and_join.join env1 env2 field1 field2))
           fields1
           fields2
       in
@@ -2233,7 +2269,7 @@ end;
         fields;
       }
 
-    let meet_block_cases ~type_of_name
+    let meet_block_cases env1 env2
           ((Join { by_length = singleton_blocks1; }) : block_cases)
           ((Join { by_length = singleton_blocks2; }) : block_cases)
           : (block_cases * judgements_from_meet) Or_bottom.t =
@@ -2242,7 +2278,7 @@ end;
         Targetint.OCaml.Map.inter_merge
           (fun singleton_block1 singleton_block2 ->
             let singleton_block, new_judgements =
-              meet_singleton_block ~type_of_name
+              meet_singleton_block env1 env2
                 singleton_block1 singleton_block2
             in
             judgements := new_judgements @ !judgements;
@@ -2253,25 +2289,25 @@ end;
       if Targetint.OCaml.Map.is_empty by_length then Bottom
       else Ok (((Join { by_length; }) : block_cases), !judgements)
 
-    let join_block_cases ~type_of_name
+    let join_block_cases env1 env2
           ((Join { by_length = singleton_blocks1; }) : block_cases)
           ((Join { by_length = singleton_blocks2; }) : block_cases)
           : block_cases =
       let by_length =
         Targetint.OCaml.Map.union_merge
           (fun singleton_block1 singleton_block2 ->
-            join_singleton_block ~type_of_name
+            join_singleton_block env1 env2
               singleton_block1 singleton_block2)
           singleton_blocks1
           singleton_blocks2
       in
       Join { by_length; }
 
-    let meet_blocks ~type_of_name blocks1 blocks2 : _ Or_bottom.t =
+    let meet_blocks env1 env2 blocks1 blocks2 : _ Or_bottom.t =
       let judgements = ref [] in
       let blocks =
         Tag.Map.inter (fun block_cases1 block_cases2 ->
-            match meet_block_cases ~type_of_name block_cases1 block_cases2 with
+            match meet_block_cases env1 env2 block_cases1 block_cases2 with
             | Ok (block_cases, new_judgements) ->
               judgements := new_judgements @ !judgements;
               Some block_cases
@@ -2282,13 +2318,13 @@ end;
       if Tag.Map.is_empty blocks then Bottom
       else Ok (blocks, !judgements)
 
-    let join_blocks ~type_of_name blocks1 blocks2 =
+    let join_blocks env1 env2 blocks1 blocks2 =
       Tag.Map.union_merge (fun block_cases1 block_cases2 ->
-          join_block_cases ~type_of_name block_cases1 block_cases2)
+          join_block_cases env1 env2 block_cases1 block_cases2)
         blocks1
         blocks2
 
-    let meet_blocks_and_tagged_immediates ~type_of_name
+    let meet_blocks_and_tagged_immediates env1 env2
           { blocks = blocks1; immediates = imms1; is_int = is_int1;
             get_tag = get_tag1; }
           { blocks = blocks2; immediates = imms2; is_int = is_int2;
@@ -2365,7 +2401,7 @@ end;
         in
         Ok ({ blocks; immediates; is_int; get_tag; }, judgements)
 
-    let join_blocks_and_tagged_immediates ~type_of_name
+    let join_blocks_and_tagged_immediates env1 env2
           { blocks = blocks1; immediates = imms1; is_int = is_int1;
             get_tag = get_tag1; }
           { blocks = blocks2; immediates = imms2; is_int = is_int2;
@@ -2375,13 +2411,13 @@ end;
         match blocks1, blocks2 with
         | Unknown, _ | _, Unknown -> Unknown
         | Known blocks1, Known blocks2 ->
-          Known (join_blocks ~type_of_name blocks1 blocks2)
+          Known (join_blocks env1 env2 blocks1 blocks2)
       in
       let immediates : _ or_unknown =
         match imms1, imms2 with
         | Unknown, _ | _, Unknown -> Unknown
         | Known imms1, Known imms2 ->
-          Known (join_immediates ~type_of_name imms1 imms2)
+          Known (join_immediates env1 env2 imms1 imms2)
       in
       (* CR mshinwell: Refactor between is_int / get_tag; then share with
          meet. *)
@@ -2403,14 +2439,14 @@ end;
       in
       { blocks; immediates; is_int; get_tag; }
 
-    let meet_of_kind_foo ~type_of_name
+    let meet_of_kind_foo env1 env2
           (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
           : (of_kind_value * judgements_from_meet) Or_bottom.t =
       match of_kind1, of_kind2 with
       | Blocks_and_tagged_immediates blocks_imms1,
           Blocks_and_tagged_immediates blocks_imms2 ->
         let blocks_imms =
-          meet_blocks_and_tagged_immediates ~type_of_name
+          meet_blocks_and_tagged_immediates env1 env2
             blocks_imms1 blocks_imms2
         in
         begin match blocks_imms with
@@ -2421,25 +2457,25 @@ end;
       | Boxed_number (Boxed_float n1),
           Boxed_number (Boxed_float n2) ->
         let (n : _ ty_naked_number), judgements =
-          Meet_and_join_naked_float.meet_ty ~type_of_name n1 n2
+          Meet_and_join_naked_float.meet_ty env1 env2 n1 n2
         in
         Ok (Boxed_number (Boxed_float n), judgements)
       | Boxed_number (Boxed_int32 n1),
           Boxed_number (Boxed_int32 n2) ->
         let (n : _ ty_naked_number), judgements =
-          Meet_and_join_naked_int32.meet_ty ~type_of_name n1 n2
+          Meet_and_join_naked_int32.meet_ty env1 env2 n1 n2
         in
         Ok (Boxed_number (Boxed_int32 n), judgements)
       | Boxed_number (Boxed_int64 n1),
           Boxed_number (Boxed_int64 n2) ->
         let (n : _ ty_naked_number), judgements =
-          Meet_and_join_naked_int64.meet_ty ~type_of_name n1 n2
+          Meet_and_join_naked_int64.meet_ty env1 env2 n1 n2
         in
         Ok (Boxed_number (Boxed_int64 n), judgements)
       | Boxed_number (Boxed_nativeint n1),
           Boxed_number (Boxed_nativeint n2) ->
         let (n : _ ty_naked_number), judgements =
-          Meet_and_join_naked_nativeint.meet_ty ~type_of_name n1 n2
+          Meet_and_join_naked_nativeint.meet_ty env1 env2 n1 n2
         in
         Ok (Boxed_number (Boxed_nativeint n), judgements)
       | Closures closures1, Closures closures2 ->
@@ -2451,7 +2487,7 @@ end;
               let set1 = closures_entry1.set_of_closures in
               let set2 = closures_entry2.set_of_closures in
               let set, new_judgements =
-                Meet_and_join_fabricated.meet_ty ~type_of_name set1 set2
+                Meet_and_join_fabricated.meet_ty env1 env2 set1 set2
               in
               if ty_is_obviously_bottom set then begin
                 None
@@ -2474,38 +2510,38 @@ end;
           | String _), _ ->
         Bottom
 
-    let join_of_kind_foo ~type_of_name
+    let join_of_kind_foo env1 env2
           (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
           : of_kind_value or_unknown =
       match of_kind1, of_kind2 with
       | Blocks_and_tagged_immediates blocks_imms1,
           Blocks_and_tagged_immediates blocks_imms2 ->
         let blocks_imms =
-          join_blocks_and_tagged_immediates ~type_of_name
+          join_blocks_and_tagged_immediates env1 env2
             blocks_imms1 blocks_imms2
         in
         Known (Blocks_and_tagged_immediates blocks_imms)
       | Boxed_number (Boxed_float n1), Boxed_number (Boxed_float n2) ->
         let n : _ ty_naked_number =
-          Meet_and_join_naked_float.join_ty ~type_of_name n1 n2
+          Meet_and_join_naked_float.join_ty env1 env2 n1 n2
         in
         Known (Boxed_number (Boxed_float n))
       | Boxed_number (Boxed_int32 n1),
           Boxed_number (Boxed_int32 n2) ->
         let n : _ ty_naked_number =
-          Meet_and_join_naked_int32.join_ty ~type_of_name n1 n2
+          Meet_and_join_naked_int32.join_ty env1 env2 n1 n2
         in
         Known (Boxed_number (Boxed_int32 n))
       | Boxed_number (Boxed_int64 n1),
           Boxed_number (Boxed_int64 n2) ->
         let n : _ ty_naked_number =
-          Meet_and_join_naked_int64.join_ty ~type_of_name n1 n2
+          Meet_and_join_naked_int64.join_ty env1 env2 n1 n2
         in
         Known (Boxed_number (Boxed_int64 n))
       | Boxed_number (Boxed_nativeint n1),
           Boxed_number (Boxed_nativeint n2) ->
         let n : _ ty_naked_number =
-          Meet_and_join_naked_nativeint.join_ty ~type_of_name n1 n2
+          Meet_and_join_naked_nativeint.join_ty env1 env2 n1 n2
         in
         Known (Boxed_number (Boxed_nativeint n))
       | Closures closures1, Closures closures2 ->
@@ -2516,7 +2552,7 @@ end;
               let set1 = closures_entry1.set_of_closures in
               let set2 = closures_entry2.set_of_closures in
               let set =
-                Meet_and_join_fabricated.join_ty ~type_of_name set1 set2
+                Meet_and_join_fabricated.join_ty env1 env2 set1 set2
               in
               { set_of_closures = set; })
             closures1
@@ -2546,7 +2582,7 @@ end;
 
     let force_to_kind = force_to_kind_naked_immediate
 
-    let meet_of_kind_foo ~type_of_name:_
+    let meet_of_kind_foo _env1 _env2
           (of_kind1 : Immediate.Set.t of_kind_naked_number)
           (of_kind2 : Immediate.Set.t of_kind_naked_number)
           : (Immediate.Set.t of_kind_naked_number * judgements_from_meet)
@@ -2558,7 +2594,7 @@ end;
         else Ok (Immediate fs, [])
       | _, _ -> Bottom
 
-    let join_of_kind_foo ~type_of_name:_
+    let join_of_kind_foo _env1 _env2
           (of_kind1 : Immediate.Set.t of_kind_naked_number)
           (of_kind2 : Immediate.Set.t of_kind_naked_number)
           : Immediate.Set.t of_kind_naked_number or_unknown =
@@ -2582,7 +2618,7 @@ end;
 
     let force_to_kind = force_to_kind_naked_float
 
-    let meet_of_kind_foo ~type_of_name:_
+    let meet_of_kind_foo _env1 _env2
           (of_kind1 : Float_by_bit_pattern.Set.t of_kind_naked_number)
           (of_kind2 : Float_by_bit_pattern.Set.t of_kind_naked_number)
           : (Float_by_bit_pattern.Set.t of_kind_naked_number
@@ -2594,7 +2630,7 @@ end;
         else Ok (Float fs, [])
       | _, _ -> Bottom
 
-    let join_of_kind_foo ~type_of_name:_
+    let join_of_kind_foo _env1 _env2
           (of_kind1 : Float_by_bit_pattern.Set.t of_kind_naked_number)
           (of_kind2 : Float_by_bit_pattern.Set.t of_kind_naked_number)
           : Float_by_bit_pattern.Set.t of_kind_naked_number or_unknown =
@@ -2616,7 +2652,7 @@ end;
 
     let force_to_kind = force_to_kind_naked_int32
 
-    let meet_of_kind_foo ~type_of_name:_
+    let meet_of_kind_foo _env1 _env2
           (of_kind1 : Int32.Set.t of_kind_naked_number)
           (of_kind2 : Int32.Set.t of_kind_naked_number)
           : (Int32.Set.t of_kind_naked_number * judgements_from_meet)
@@ -2628,7 +2664,7 @@ end;
         else Ok (Int32 is, [])
       | _, _ -> Bottom
 
-    let join_of_kind_foo ~type_of_name:_
+    let join_of_kind_foo _env1 _env2
           (of_kind1 : Int32.Set.t of_kind_naked_number)
           (of_kind2 : Int32.Set.t of_kind_naked_number)
           : Int32.Set.t of_kind_naked_number or_unknown =
@@ -2650,7 +2686,7 @@ end;
 
     let force_to_kind = force_to_kind_naked_int64
 
-    let meet_of_kind_foo ~type_of_name:_
+    let meet_of_kind_foo _env1 _env2
           (of_kind1 : Int64.Set.t of_kind_naked_number)
           (of_kind2 : Int64.Set.t of_kind_naked_number)
           : (Int64.Set.t of_kind_naked_number * judgements_from_meet)
@@ -2662,7 +2698,7 @@ end;
         else Ok (Int64 is, [])
       | _, _ -> Bottom
 
-    let join_of_kind_foo ~type_of_name:_
+    let join_of_kind_foo _env1 _env2
           (of_kind1 : Int64.Set.t of_kind_naked_number)
           (of_kind2 : Int64.Set.t of_kind_naked_number)
           : Int64.Set.t of_kind_naked_number or_unknown =
@@ -2684,7 +2720,7 @@ end;
 
     let force_to_kind = force_to_kind_naked_nativeint
 
-    let meet_of_kind_foo ~type_of_name:_
+    let meet_of_kind_foo _env1 _env2
           (of_kind1 : Targetint.Set.t of_kind_naked_number)
           (of_kind2 : Targetint.Set.t of_kind_naked_number)
           : (Targetint.Set.t of_kind_naked_number * judgements_from_meet)
@@ -2696,7 +2732,7 @@ end;
         else Ok (Nativeint is, [])
       | _, _ -> Bottom
 
-    let join_of_kind_foo ~type_of_name:_
+    let join_of_kind_foo _env1 _env2
           (of_kind1 : Targetint.Set.t of_kind_naked_number)
           (of_kind2 : Targetint.Set.t of_kind_naked_number)
           : Targetint.Set.t of_kind_naked_number or_unknown =
@@ -2723,7 +2759,7 @@ end;
        function type (with a surrogate) propagated from the first round is
        put into a meet with a type for the same function, but a new
        surrogate. *)
-    let meet_closure ~(type_of_name : type_of_name)
+    let meet_closure env1 env2
           (closure1 : closure) (closure2 : closure)
           : (closure * judgements_from_meet) Or_bottom.t =
       let cannot_prove_different ~params1 ~params2 ~result1 ~result2
@@ -2894,7 +2930,7 @@ end;
       | Ok (function_decls, judgements) ->
         Ok (({ function_decls; } : closure), judgements)
 
-    let join_closure ~(type_of_name : type_of_name)
+    let join_closure env1 env2
           (closure1 : closure) (closure2 : closure)
           : closure =
       let produce_non_inlinable ~params1 ~params2 ~result1 ~result2
@@ -3080,7 +3116,7 @@ end;
       in
       { function_decls; }
 
-    let meet_set_of_closures ~type_of_name
+    let meet_set_of_closures env1 env2
           (set1 : set_of_closures) (set2 : set_of_closures)
           : (set_of_closures * judgements_from_meet) Or_bottom.t =
       let judgements = ref [] in
@@ -3091,7 +3127,7 @@ end;
           let closures =
             Closure_id.Map.inter (fun ty_fabricated1 ty_fabricated2 ->
                 let ty_fabricated, new_judgements =
-                  Meet_and_join_fabricated.meet_ty ~type_of_name
+                  Meet_and_join_fabricated.meet_ty env1 env2
                     ty_fabricated1 ty_fabricated2
                 in
                 if ty_is_obviously_bottom ty_fabricated then begin
@@ -3112,7 +3148,7 @@ end;
               | exception Not_found -> Some ty1
               | ty2 ->
                 let ty_fabricated, new_judgements =
-                  Meet_and_join_fabricated.meet_ty ~type_of_name ty1 ty2
+                  Meet_and_join_fabricated.meet_ty env1 env2 ty1 ty2
                 in
                 if ty_is_obviously_bottom ty_fabricated then begin
                   None
@@ -3126,7 +3162,7 @@ end;
           let closures =
             Closure_id.Map.union_merge (fun ty_fabricated1 ty_fabricated2 ->
                 let ty_fabricated, new_judgements =
-                  Meet_and_join_fabricated.meet_ty ~type_of_name
+                  Meet_and_join_fabricated.meet_ty env1 env2
                     ty_fabricated1 ty_fabricated2
                 in
                 if ty_is_obviously_bottom ty_fabricated then begin
@@ -3146,7 +3182,7 @@ end;
           let closure_elements =
             Var_within_closure.Map.inter (fun ty_value1 ty_value2 ->
                 let ty_value, new_judgements =
-                  Meet_and_join_value.meet_ty ~type_of_name
+                  Meet_and_join_value.meet_ty env1 env2
                     ty_value1 ty_value2
                 in
                 if ty_is_obviously_bottom ty_value then begin
@@ -3170,7 +3206,7 @@ end;
                 | exception Not_found -> Some ty1
                 | ty2 ->
                   let ty_value, new_judgements =
-                    Meet_and_join_value.meet_ty ~type_of_name ty1 ty2
+                    Meet_and_join_value.meet_ty env1 env2 ty1 ty2
                   in
                   if ty_is_obviously_bottom ty_value then begin
                     None
@@ -3184,7 +3220,7 @@ end;
           let closure_elements =
             Var_within_closure.Map.union_merge (fun ty_value1 ty_value2 ->
                 let ty_value, new_judgements =
-                  Meet_and_join_value.meet_ty ~type_of_name
+                  Meet_and_join_value.meet_ty env1 env2
                     ty_value1 ty_value2
                 in
                 if ty_is_obviously_bottom ty_value then begin
@@ -3208,7 +3244,7 @@ end;
         in
         Ok (set, !judgements)
 
-    let join_set_of_closures ~type_of_name
+    let join_set_of_closures env1 env2
           (set1 : set_of_closures) (set2 : set_of_closures)
           : set_of_closures =
       let closures : _ extensibility =
@@ -3217,7 +3253,7 @@ end;
           let closures =
             Closure_id.Map.union_merge
               (fun ty_fabricated1 ty_fabricated2 ->
-                Meet_and_join_fabricated.join_ty ~type_of_name
+                Meet_and_join_fabricated.join_ty env1 env2
                   ty_fabricated1 ty_fabricated2)
               closures1
               closures2
@@ -3228,7 +3264,7 @@ end;
           let closures =
             Closure_id.Map.union_merge
               (fun ty_fabricated1 ty_fabricated2 ->
-                Meet_and_join_fabricated.join_ty ~type_of_name
+                Meet_and_join_fabricated.join_ty env1 env2
                   ty_fabricated1 ty_fabricated2)
               closures1
               closures2
@@ -3240,7 +3276,7 @@ end;
               (fun _ty_fabricated ->
                 any_fabricated_as_ty_fabricated ())
               (fun ty_fabricated1 ty_fabricated2 ->
-                Meet_and_join_fabricated.join_ty ~type_of_name
+                Meet_and_join_fabricated.join_ty env1 env2
                   ty_fabricated1 ty_fabricated2)
               closures1
               closures2
@@ -3253,7 +3289,7 @@ end;
           let closure_elements =
             Var_within_closure.Map.union_merge
               (fun ty_value1 ty_value2 ->
-                Meet_and_join_value.join_ty ~type_of_name
+                Meet_and_join_value.join_ty env1 env2
                   ty_value1 ty_value2)
               closure_elements1
               closure_elements2
@@ -3264,7 +3300,7 @@ end;
           let closure_elements =
             Var_within_closure.Map.union_merge
               (fun ty_value1 ty_value2 ->
-                Meet_and_join_value.join_ty ~type_of_name
+                Meet_and_join_value.join_ty env1 env2
                   ty_value1 ty_value2)
               closure_elements1
               closure_elements2
@@ -3276,7 +3312,7 @@ end;
               (fun _ty_value ->
                 any_value_as_ty_value ())
               (fun ty_value1 ty_value2 ->
-                Meet_and_join_value.join_ty ~type_of_name
+                Meet_and_join_value.join_ty env1 env2
                   ty_value1 ty_value2)
               closure_elements1
               closure_elements2
@@ -3298,8 +3334,12 @@ end;
                   ({ env_extension = env_extension2; } : tag_case)
                   : tag_case ->
               let env_extension =
-                Meet_and_join.meet_typing_environment env1 env2
-                  env_extension1 env_extension2
+                match env_extension1, env_extension2 with
+                | None, None -> None
+                | Some env_extension, None | None, Some env_extension -> env
+                | Some env_extension1, Some env_extension2 ->
+                  Meet_and_join.meet_typing_environment env_extension1
+                    env_extension2
               in
               (* CR mshinwell: Do we ever flip back to [Bottom] here? *)
               { env_extension; })
@@ -3326,7 +3366,7 @@ end;
         end
       | (Tag _ | Set_of_closures _ | Closure _), _ -> Bottom
 
-    let join_of_kind_foo ~type_of_name
+    let join_of_kind_foo env1 env2
           (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
           : of_kind_fabricated or_unknown =
       match of_kind1, of_kind2 with
@@ -3337,8 +3377,12 @@ end;
                   ({ env_extension = env_extension2; } : tag_case)
                   : tag_case ->
               let env_extension =
-                Meet_and_join.join_typing_environment ~type_of_name
-                  env_extension1 env_extension2
+                match env_extension1, env_extension2 with
+                | None, None -> None
+                | Some env_extension, None | None, Some env_extension -> env
+                | Some env_extension1, Some env_extension2 ->
+                  Meet_and_join.join_typing_environment env_extension1
+                    env_extension2
               in
               { env_extension; })
             tags1
@@ -3346,10 +3390,10 @@ end;
         in
         Known (Tag tags)
       | Set_of_closures set1, Set_of_closures set2 ->
-        let set_of_closures = join_set_of_closures ~type_of_name set1 set2 in
+        let set_of_closures = join_set_of_closures env1 env2 set1 set2 in
         Known (Set_of_closures set_of_closures)
       | Closure closure1, Closure closure2 ->
-        let closure = join_closure ~type_of_name closure1 closure2 in
+        let closure = join_closure env1 env2 closure1 closure2 in
         Known (Closure closure)
       | (Tag _ | Set_of_closures _ | Closure _), _ -> Unknown
   end) and Meet_and_join : sig
@@ -3504,8 +3548,8 @@ end;
       in
       { t1 with descr; }
 
-    let join_typing_environment (t1 : typing_environment)
-          (t2 : typing_environment) =
+    let join_typing_environment (env1 : typing_environment)
+          (env2 : typing_environment) =
       let names_to_types =
         Name.Map.inter_merge (fun (level1, ty1) (level2, ty2) ->
             if not (Scope_level.equal level1 level2) then begin
@@ -3514,16 +3558,16 @@ end;
                 print ty1
                 print ty2
             end;
-            let ty = join ~type_of_name ty1 ty2 in
+            let ty = join (env1, ty1) (env2, ty2) in
             level1, ty)
-          t1.names_to_types
-          t2.names_to_types
+          env1.names_to_types
+          env2.names_to_types
       in
       let all_levels_to_names =
         Scope_level.Map.union_merge
           (fun names1 names2 -> Name.Set.union names1 names2)
-          t1.levels_to_names
-          t2.levels_to_names
+          env1.levels_to_names
+          env2.levels_to_names
       in
       let levels_to_names =
         Scope_level.Map.map (fun names ->
@@ -3533,10 +3577,10 @@ end;
           all_levels_to_names
       in
       let existentials =
-        Name.Set.union t1.existentials t2.existentials
+        Name.Set.union env1.existentials env2.existentials
       in
       let existential_freshening =
-        t1.existential_freshening (* XXX *)
+        env1.existential_freshening (* XXX *)
       in
       { names_to_types;
         levels_to_names;
@@ -3560,7 +3604,7 @@ end;
 (*
 Format.eprintf "Meeting@ %a and@ %a ...\n%!" print ty1 print ty2;
 *)
-            let ty, new_judgements = meet ~type_of_name ty1 ty2 in
+            let ty, new_judgements = meet (env1, ty1) (env2, ty2) in
 (*
 Format.eprintf "...giving %a\n%!" print ty;
 *)
@@ -3598,7 +3642,8 @@ Format.eprintf "...giving %a\n%!" print ty;
       meet_typing_environment_with_judgements ~num_iterations:0
         env ~judgements:!judgements
 
-    and meet_typing_environment_with_judgements ~type_of_name ~num_iterations
+    (* CR mshinwell: Should the judgements come with environments? *)
+    and meet_typing_environment_with_judgements ~num_iterations
           (env : typing_environment) ~(judgements : judgements_from_meet) =
       if num_iterations >= 10 then env
       else
@@ -3612,7 +3657,7 @@ Format.eprintf "...giving %a\n%!" print ty;
               Name.print name
               print_typing_environment env
           | scope_level, existing_ty ->
-            let ty, new_judgements = meet ~type_of_name ty existing_ty in
+            let ty, new_judgements = meet (env, ty) (env, existing_ty) in
             let env =
               add_or_replace_typing_environment env name scope_level ty
             in
@@ -3620,9 +3665,9 @@ Format.eprintf "...giving %a\n%!" print ty;
             meet_typing_environment_with_judgements ~type_of_name
               ~num_iterations:(num_iterations + 1) env ~judgements
 
-    and replace_meet_typing_environment0 ~type_of_name env name
+    and replace_meet_typing_environment0 env name
           ~scope_level ~existing_ty ty =
-      let ty, judgements = meet ~type_of_name ty existing_ty in
+      let ty, judgements = meet ty existing_ty in
       let env = add_or_replace_typing_environment env name scope_level ty in
       meet_typing_environment_with_judgements ~type_of_name
         ~num_iterations:0 env ~judgements
@@ -3639,8 +3684,8 @@ Format.eprintf "...giving %a\n%!" print ty;
           ~scope_level ~existing_ty ty
   end
 
-  let meet ~type_of_name t1 t2 =
-    let t, _judgements = Meet_and_join.meet ~type_of_name t1 t2 in
+  let meet tc1 tc2 =
+    let t, _judgements = Meet_and_join.meet tc1 tc2 in
     t
 (*
     let env =
@@ -3699,11 +3744,11 @@ Format.eprintf "(TE replace_meet) Judgements holding now:@ %a\n%!"
 
     let replace_meet = Meet_and_join.replace_meet_typing_environment
 
-    let add_or_replace_meet ~type_of_name t name scope_level ty =
+    let add_or_replace_meet t name scope_level ty =
       match Name.Map.find name t.names_to_types with
       | exception Not_found -> add t name scope_level ty
       | scope_level, existing_ty ->
-        Meet_and_join.replace_meet_typing_environment0 ~type_of_name t name
+        Meet_and_join.replace_meet_typing_environment0 t name
           ~scope_level ~existing_ty ty
 
     let find_opt t name =
@@ -3806,7 +3851,7 @@ Format.eprintf "Result is: %a\n%!"
   end
 
   let add_judgements (env, t) : t =
-    let t, _canonical_name = resolve_aliases ~type_of_name t in
+    let t, _canonical_name = resolve_aliases (env, t) in
     match t.descr with
     | Value (No_alias (Join of_kind_values)) ->
       let of_kind_values =

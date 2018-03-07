@@ -14,13 +14,16 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-module One_cache = struct
-  type seen = S : _ * string -> seen
+module String = struct
+  include String
+  module Map = Map.Make (String)
+end
 
+module One_cache = struct
   type t = {
     prefix : string;
     mutable next_id : int;
-    mutable printed : seen list;
+    mutable printed : (string * Obj.t) list;
   }
 
   let create prefix =
@@ -30,20 +33,21 @@ module One_cache = struct
     }
 
   let with_cache t ppf obj printer =
+    let obj = Obj.repr obj in
     let rec find = function
-      | (S (name, obj'))::printed ->
+      | (name, obj')::printed ->
         if obj == obj' then Format.fprintf ppf "*%s" name
         else find printed
       | [] ->
         let name = Printf.sprintf "%s%d" t.prefix t.next_id in
         t.next_id <- t.next_id + 1;
-        t.printed <- (S (name, obj)) :: t.printed;
-        Format.fprintf ppf "@[&%s =@ %a@]" printer ()
+        t.printed <- (name, obj) :: t.printed;
+        Format.fprintf ppf "@[&%s =@ %a@]" name printer ()
     in
     find t.printed
 end
 
-type t = one_cache String.Map.t
+type t = One_cache.t String.Map.t
 
 let create () = String.Map.empty
 

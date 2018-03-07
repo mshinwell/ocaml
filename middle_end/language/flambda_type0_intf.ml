@@ -94,10 +94,13 @@ module type S = sig
     | Fabricated of ty_fabricated
 
   and ty_value = of_kind_value ty
+  and ty_value_in_context = typing_environment * ty_value
+
   and 'a ty_naked_number = 'a of_kind_naked_number ty
   and ty_fabricated = of_kind_fabricated ty
 
   and 'a ty = 'a unknown_or_join or_alias
+  and 'a ty_in_context = typing_environment * ('a ty)
 
   (** For each kind there is a lattice of types. *)
   and 'a unknown_or_join = private
@@ -131,12 +134,12 @@ module type S = sig
     | String of String_info.Set.t
 
   and immediate_case = private {
-    env_extension : typing_environment;
+    env_extension : typing_environment option;
   }
  
   and singleton_block = private {
     (* CR mshinwell: Should this indicate if the block is an array? *)
-    env_extension : typing_environment;
+    env_extension : typing_environment option;
     (* CR mshinwell: We should note explicitly that these are logical fields
        (I think this only matters for float arrays on 32-bit targets) *)
     fields : t mutable_or_immutable array;
@@ -200,7 +203,7 @@ module type S = sig
     result : t list;  (* CR mshinwell: make plural *)
     (* CR mshinwell: Is this name misleading?  The quantifiers are before
        the parameters *)
-    result_env_extension : typing_environment;
+    result_env_extension : typing_environment option;
     stub : bool;
     dbg : Debuginfo.t;
     inline : inline_attribute;
@@ -219,7 +222,7 @@ module type S = sig
   and non_inlinable_function_declarations = private {
     params : t list;
     result : t list;
-    result_env_extension : typing_environment;
+    result_env_extension : typing_environment option;
     direct_call_surrogate : Closure_id.t option;
   }
 
@@ -400,6 +403,9 @@ module type S = sig
   val this_immutable_string : string -> t
   val this_immutable_float_array : Numbers.Float_by_bit_pattern.t array -> t
 
+  (** A type representing a set of tagged immediates combined with typing
+      judgements that will be used if the set contains, or is subsequently
+      refined to contain, only a unique element. *)
   val these_tagged_immediates_with_envs
      : typing_environment Immediate.Map.t
     -> t
@@ -423,38 +429,37 @@ module type S = sig
       size of such values. *)
   val immutable_string : size:Targetint.OCaml.t -> t
 
-  (** Building of types corresponding to mutable values. *)
+  (** The type corresponding to a mutable string of length [size]. *)
   val mutable_string : size:Targetint.OCaml.t -> t
 
+  (** The type corresponding to a mutable float array holding [size]
+      naked floats. *)
   val mutable_float_array : size:Targetint.OCaml.t -> t
 
   (** Building of types corresponding to values that did not exist at
       source level. *)
 
   (** The given block tag. *)
-  val this_tag_as_ty_fabricated : Tag.t -> ty_fabricated
   val this_tag : Tag.t -> t
+
+  (** Like [this_tag], but returns the [ty_fabricated], rather than a value
+      of type [t]. *)
+  val this_tag_as_ty_fabricated : Tag.t -> ty_fabricated
 
   (** The given block tags coupled with the equations that hold if the
       corresponding block can be shown to have one of the tags. *)
-  val these_tags_as_ty_fabricated
-     : typing_environment Tag.Map.t
-    -> ty_fabricated
   val these_tags
      : typing_environment Tag.Map.t
     -> t
 
+  (** Like [these_tags], but returns the [ty_fabricated], rather than a
+      value of type [t]. *)
+  val these_tags_as_ty_fabricated
+     : typing_environment Tag.Map.t
+    -> ty_fabricated
+
   (** Any block tag. *)
   val any_tag_as_ty_fabricated : unit -> ty_fabricated
-
-(*
-
-  (** Building of types from other types.  These functions will fail with
-      a fatal error if the supplied type is not of the correct kind. *)
-  (* XXX maybe we should change all of these to the "ty_..." variants, so
-     we can avoid the exception case *)
-  val tag_immediate : t -> t
-*)
 
   (** Given the type of a naked floating-point number, return the type of the
       corresponding boxed version. *)
@@ -529,7 +534,7 @@ module type S = sig
     -> params:(Parameter.t * t) list
     -> body:expr
     -> result:t list
-    -> result_env_extension:typing_environment
+    -> result_env_extension:typing_environment option
     -> stub:bool
     -> dbg:Debuginfo.t
     -> inline:inline_attribute
@@ -546,29 +551,44 @@ module type S = sig
   val create_non_inlinable_function_declaration
      : params:t list
     -> result:t list
-    -> result_env_extension:typing_environment
+    -> result_env_extension:typing_environment option
     -> direct_call_surrogate:Closure_id.t option
     -> function_declarations
 
+  (** Create a type of kind [Fabricated] describing a closure in terms of
+      either non-inlinable or inlinable function declarations.  Note that
+      this concept is different from that of closure types of kind [Value]
+      (see [closures], below). *)
   val closure : function_declarations -> ty_fabricated
 
+  (** Create a type of kind [Fabricated] describing the given set(s) of
+      closures. *)
   val set_of_closures
      : closures:ty_fabricated Closure_id.Map.t extensibility
     -> closure_elements:ty_value Var_within_closure.Map.t extensibility
     -> t
 
+  (** Used to create the data in the map required for the [closures]
+      function. *)
   val closures_entry : set_of_closures:ty_fabricated -> closures_entry
 
+  (** Create a type of kind [Value] describing the given possibilities for
+      closure value. *)
   val closures : closures_entry Closure_id.Map.t -> t
 
   (** Construct a type equal to the type of the given name.  (The name
       must be present in the given environment when calling e.g. [join].) *)
   val alias_type_of : Flambda_kind.t -> Name.t -> t
 
+  (** Like [alias_type_of], but for types of kind [Value], and returns the
+      [ty] rather than a [t]. *)
   val alias_type_of_as_ty_value : Name.t -> ty_value
 
+  (** Like [alias_type_of_as_ty_value] but for types of [Fabricated] kind. *)
   val alias_type_of_as_ty_fabricated : Name.t -> ty_fabricated
 
+  (** The type that is equal to another type, found in a .cmx file, named
+      by export identifier. *)
   val alias_type : Flambda_kind.t -> Export_id.t -> t
 
   (** Free names in a type. *)
@@ -577,6 +597,33 @@ module type S = sig
   (** Determine the (unique) kind of a type. *)
   val kind : t -> Flambda_kind.t
 
+  (** Enforce that a type is of kind [Value], returning the corresponding
+      [ty]. *)
+  val force_to_kind_value : t -> ty_value
+
+  (** Enforce that a type is of a naked number kind, returning the
+      corresponding [ty]. *)
+  val force_to_kind_naked_number
+     : 'kind Flambda_kind.Naked_number.t
+    -> t
+    -> 'kind ty_naked_number
+
+  (** Enforce that a type is of naked float kind, returning the corresponding
+      [ty]. *)
+  val force_to_kind_naked_float
+     : t
+    -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number
+
+  (** Enforce that a type is of fabricated kind, returning the corresponding
+      [ty]. *)
+  val force_to_kind_fabricated : t -> ty_fabricated
+
+  (** Enforce that a type is of a given kind. *)
+  val check_of_kind : t -> Flambda_kind.t -> unit
+
+  (** Push judgements from the given typing environment down to the
+      uppermost places in the type where such information can be hold
+      (i.e. underneath tagged immediate, block and tag maps). *)
   val add_judgements : t_in_context -> t
 
   (** Least upper bound of two types. *)
@@ -588,8 +635,6 @@ module type S = sig
   (** Greatest lower bound of two types. *)
   val meet : t_in_context -> t_in_context -> t
 
-  (* CR mshinwell: We may not need to expose all of the following functions *)
-
   (** Follow chains of [Alias]es until either a [No_alias] type is reached
       or a name cannot be resolved.
 
@@ -598,37 +643,4 @@ module type S = sig
       type.  (The chain may also involve [Export_id.t] links either before or
       after any returned canonical name.) *)
   val resolve_aliases : t_in_context -> t * (Name.t option)
-
-  (** Like [resolve_aliases], but unresolved names at the top level are
-      changed into [Unknown]s. *)
-  val resolve_aliases_and_squash_unresolved_names
-     : t_in_context -> t * (Name.t option)
-
-  (** Like [resolve_aliases], but for use when you have a [ty], not a [t]. *)
-  val resolve_aliases_on_ty
-     : force_to_kind:(t -> 'a ty)
-    -> 'a ty_in_context
-    -> 'a ty * (Name.t option)
-
-  (** Like [resolve_aliases_on_ty], but unresolved names at the top level are
-      changed into [Unknown]s. *)
-  val resolve_aliases_and_squash_unresolved_names_on_ty
-     : force_to_kind:(t -> 'a ty)
-    -> 'a ty_in_context
-    -> 'a unknown_or_join * (Name.t option)
-
-  val force_to_kind_value : t -> ty_value
-
-  val force_to_kind_naked_number
-     : 'kind Flambda_kind.Naked_number.t
-    -> t
-    -> 'kind ty_naked_number
-
-  val force_to_kind_naked_float
-     : t
-    -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number
-
-  val force_to_kind_fabricated : t -> ty_fabricated
-
-  val check_of_kind : t -> Flambda_kind.t -> unit
 end
