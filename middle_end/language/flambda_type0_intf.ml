@@ -380,6 +380,8 @@ module type S = sig
 
     (** Print the given typing environment to a formatter. *)
     val print : Format.formatter -> t -> unit
+
+    val resolver : t -> (Export_id.t -> flambda_type option)
   end
 
   (** Annotation for functions that may require examination of the current

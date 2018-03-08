@@ -106,7 +106,7 @@ module Unboxing_spec_variant : Unboxing_spec = struct
         T.variant_whose_discriminants_are ~is_int:t.is_int_param
           ~get_tag:t.get_tag_param
       in
-      T.join env unboxee_ty unboxee_discriminants
+      T.join (env, unboxee_ty) (env, unboxee_discriminants)
     | Some unique_tag ->
       let fields =
         List.map (fun field : T.t T.mutable_or_immutable ->
@@ -146,7 +146,7 @@ module Unboxing_spec_float_array = struct
   let box _t _tag fields dbg : Flambda.Named.t =
     Prim (Variadic (Make_block (Full_of_naked_floats, Immutable), fields), dbg)
 
-  let refine_unboxee_ty env:_ _t ~unboxee_ty:_ ~all_fields =
+  let refine_unboxee_ty _env _t ~unboxee_ty:_ ~all_fields =
     let fields =
       List.map (fun field : T.t T.mutable_or_immutable ->
           Immutable (T.alias_type_of (K.naked_float ()) field))
@@ -192,7 +192,7 @@ end) = struct
       Misc.fatal_errorf "Bad number of fields for [box]: %d"
         (List.length fields)
 
-  let refine_unboxee_ty env:_ _t ~unboxee_ty:_ ~all_fields =
+  let refine_unboxee_ty _env _t ~unboxee_ty:_ ~all_fields =
     match all_fields with
     | [naked_number] ->
       N.box (T.alias_type_of unboxed_kind naked_number)
@@ -284,9 +284,10 @@ module How_to_unbox = struct
 end
 
 module Make (S : Unboxing_spec) = struct
-  let unbox env ~env ~unboxee ~unboxee_ty
+  let unbox ~env ~unboxee ~unboxee_ty
         ~unboxing_spec_user_data ~unboxing_spec ~is_unbox_returns:_
         : How_to_unbox.t =
+    let resolver = E.resolver env in
     let dbg = Debuginfo.none in
     let constant_ctors = unboxing_spec.constant_ctors in
     let blocks = unboxing_spec.block_sizes_by_tag in
@@ -355,13 +356,13 @@ module Make (S : Unboxing_spec) = struct
                 Tag.create_exn (
                   Targetint.OCaml.to_int (Immediate.to_targetint ctor_index))
               in
-              Tag.Map.add tag (T.Typing_environment.create ()) by_tag)
+              Tag.Map.add tag (T.Typing_environment.create ~resolver) by_tag)
             constant_ctors
             Tag.Map.empty
         in
         let by_tag =
           Tag.Map.fold (fun tag _ by_tag ->
-              Tag.Map.add tag (T.Typing_environment.create ()) by_tag)
+              Tag.Map.add tag (T.Typing_environment.create ~resolver) by_tag)
             blocks
             by_tag
         in
@@ -774,7 +775,7 @@ module Make (S : Unboxing_spec) = struct
                   Tag.create_exn (Targetint.OCaml.to_int (
                     Immediate.to_targetint ctor_index))
                 in
-                let env = T.Typing_environment.create () in
+                let env = T.Typing_environment.create ~resolver in
                 Tag.Map.add tag env by_constant_ctor_index)
               constant_ctors
               Tag.Map.empty
@@ -797,8 +798,8 @@ module Make (S : Unboxing_spec) = struct
                   T.block tag ~fields:(Array.of_list fields)
                 in
                 let initial_env =
-                  T.Typing_environment.singleton (Name.var unboxee) scope_level
-                    unboxee_ty_refinement
+                  T.Typing_environment.singleton ~resolver
+                    (Name.var unboxee) scope_level unboxee_ty_refinement
                 in
                 let env = ref initial_env in
                 for field = 0 to size - 1 do
@@ -813,12 +814,12 @@ module Make (S : Unboxing_spec) = struct
               tags_to_sizes
           in
           let discriminant_env_is_int =
-            T.Typing_environment.singleton (Name.var discriminant)
+            T.Typing_environment.singleton ~resolver (Name.var discriminant)
               (E.continuation_scope_level env)
               (T.these_tags by_constant_ctor_index)
           in
           let discriminant_env_is_block =
-            T.Typing_environment.singleton (Name.var discriminant)
+            T.Typing_environment.singleton ~resolver (Name.var discriminant)
               (E.continuation_scope_level env)
               (T.these_tags by_tag)
           in
@@ -853,8 +854,8 @@ module Make (S : Unboxing_spec) = struct
            type [Name.t list]? *)
         List.map (fun (field, _kind) -> Name.var field) fields_with_kinds
       in
-      S.refine_unboxee_ty env unboxing_spec_user_data
-        ~unboxee_ty ~all_fields
+      S.refine_unboxee_ty (E.get_typing_environment env)
+        unboxing_spec_user_data ~unboxee_ty ~all_fields
     in
     { unboxee_to_wrapper_params_unboxee;
       add_bindings_in_wrapper;
@@ -872,12 +873,12 @@ module Unbox_boxed_int32 = Make (Unboxing_spec_boxed_int32)
 module Unbox_boxed_int64 = Make (Unboxing_spec_boxed_int64)
 module Unbox_boxed_nativeint = Make (Unboxing_spec_boxed_nativeint)
 
-let how_to_unbox env ~env ~unboxee ~unboxee_ty ~is_unbox_returns =
+let how_to_unbox ~env ~unboxee ~unboxee_ty ~is_unbox_returns =
   let unbox ~f ~unboxing_spec_user_data ~unboxing_spec =
-    Some (f env ~env ~unboxee ~unboxee_ty
+    Some (f ~env ~unboxee ~unboxee_ty
       ~unboxing_spec_user_data ~unboxing_spec ~is_unbox_returns)
   in
-  match T.prove_unboxable env ~unboxee_ty with
+  match T.prove_unboxable (E.get_typing_environment env) ~unboxee_ty with
   | Cannot_unbox -> None
   | proof ->
     match Unboxing_spec_variant.create proof with

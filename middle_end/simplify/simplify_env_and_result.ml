@@ -162,6 +162,7 @@ end = struct
       Inlining_stats.Closure_stack.print t.inlining_stats_closure_stack
       Debuginfo.print t.inlined_debuginfo
 
+  let resolver t = TE.resolver t.typing_environment
   let backend t = t.backend
   let round t = t.round
   let simplify_toplevel t = t.simplify_toplevel
@@ -269,8 +270,7 @@ end = struct
     match binding_type with
     | Normal -> ty
     | Existential ->
-      Misc.fatal_errorf "Symbols cannot be existentially bound in the typing \
-          environment: %a"
+      Misc.fatal_errorf "Symbol %a is existentially bound"
         Symbol.print sym
 
   let find_symbol t sym =
@@ -283,9 +283,21 @@ end = struct
       match binding_type with
       | Normal -> Some ty
       | Existential ->
-        Misc.fatal_errorf "Symbols cannot be existentially bound in the typing \
-            environment: %a"
+        Misc.fatal_errorf "Symbol %a is existentially bound"
           Symbol.print sym
+
+  (* CR mshinwell: Use this code as a basis for the find-by-variable/symbol
+     functions, above *)
+  let find_name0 typing_environment name =
+    let ty, binding_type = TE.find typing_environment name in
+    match binding_type with
+    | Normal -> ty
+    | Existential ->
+      Misc.fatal_errorf "Name %a is existentially bound"
+        Name.print name
+
+  let find_name t name =
+    find_name0 t.typing_environment name
 
   let mem_symbol t sym =
     match find_symbol_opt t sym with

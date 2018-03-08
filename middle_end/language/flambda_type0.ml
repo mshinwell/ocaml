@@ -3985,6 +3985,8 @@ Format.eprintf "Result is: %a\n%!"
         Name.Set.diff (Name.Map.keys t.names_to_types) t.existentials
       in
       Name_occurrences.create_from_set_in_terms domain
+
+    let resolver t = t.resolver
   end
 
   let add_judgements (env, t) : t =

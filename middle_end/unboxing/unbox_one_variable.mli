@@ -36,8 +36,8 @@ module How_to_unbox : sig
 end
 
 val how_to_unbox
-   : (env:Simplify_env_and_result.Env.t
+   : env:Simplify_env_and_result.Env.t
   -> unboxee:Variable.t
   -> unboxee_ty:Flambda_type.t
   -> is_unbox_returns:bool
-  -> How_to_unbox.t option) Flambda_type.type_accessor
+  -> How_to_unbox.t option

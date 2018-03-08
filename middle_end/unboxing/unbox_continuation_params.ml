@@ -40,8 +40,8 @@ let find_unboxings ~env ~continuation_uses ~handlers =
             let unboxings =
               Variable.Map.filter_map params_to_tys
                 ~f:(fun unboxee unboxee_ty ->
-                  (E.type_accessor env Unbox_one_variable.how_to_unbox)
-                    ~env ~unboxee ~unboxee_ty ~is_unbox_returns:false)
+                  Unbox_one_variable.how_to_unbox ~env
+                    ~unboxee ~unboxee_ty ~is_unbox_returns:false)
             in
             if Variable.Map.is_empty unboxings then None
             else Some unboxings)

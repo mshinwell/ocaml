@@ -31,33 +31,29 @@ let type_for_const (const : Simple.Const.t) =
 
 let simplify_name env name =
   let name = Freshening.apply_name (E.freshening env) name in
-  match E.type_of_name env (Name name) with
-  | None ->
-    Misc.fatal_errorf "Unbound name %a" Name.print name
-  | Some ty ->
-    let ty, canonical_name = (E.type_accessor env T.resolve_aliases) ty in
-    match canonical_name with
-    | None -> name, ty
-    | Some canonical_name -> canonical_name, ty
+  let ty = E.find_name env name in
+  let ty, canonical_name =
+    T.resolve_aliases (E.get_typing_environment env, ty)
+  in
+  match canonical_name with
+  | None -> name, ty
+  | Some canonical_name -> canonical_name, ty
 
 let simplify_simple env (simple : Simple.t) =
   match simple with
   | Const c -> simple, type_for_const c
   | Name name ->
     let name = Freshening.apply_name (E.freshening env) name in
-    match E.type_of_name env (Name name) with
-    | None ->
-      Misc.fatal_errorf "Unbound name %a" Name.print name
-    | Some ty ->
-      let reified =
-        (E.type_accessor env T.reify)
-          ~allow_free_variables:true
-          ty
-      in
-      match reified with
-      | Term (simple, ty) -> simple, ty
-      | Cannot_reify | Lift _ -> Simple.name name, ty
-      | Invalid -> Simple.name name, T.bottom_like ty
+    let ty = E.find_name env name in
+    let reified =
+      T.reify ~allow_free_variables:true
+        (E.get_typing_environment env)
+        ty
+    in
+    match reified with
+    | Term (simple, ty) -> simple, ty
+    | Cannot_reify | Lift _ -> Simple.name name, ty
+    | Invalid -> Simple.name name, T.bottom_like ty
 
 let simplify_simples env simples =
   List.map (fun simple -> simplify_simple env simple) simples

@@ -39,11 +39,7 @@ let all_types_not_useful env simples =
   List.for_all (fun (simple : Simple.t) ->
       match simple with
       | Name name ->
-        let ty = E.type_of_name env (Name name) in
-        begin match ty with
-        | None -> true
-        | Some ty -> not ((E.type_accessor env T.is_useful) ty)
-        end
+        not (T.is_useful (E.get_typing_environment env) (E.find_name env name))
       | Const _ -> false)
     simples
 

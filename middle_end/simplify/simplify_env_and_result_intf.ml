@@ -65,6 +65,8 @@ module type Env = sig
       compiler backend being used for compilation. *)
   val backend : t -> (module Backend_intf.S)
 
+  val resolver : t -> (Export_id.t -> Flambda_type.t option)
+
   (** Whether floating-point arithmetic operations may be evaluated by the
       compiler.  (Typically [false] when the user may change rounding modes
       at runtime.) *)
@@ -134,6 +136,8 @@ module type Env = sig
   val find_symbol : t -> Symbol.t -> Flambda_type.t
 
   val mem_simple : t -> Simple.t -> bool
+
+  val find_name : t -> Name.t -> Flambda_type.t
 
   val mem_name : t -> Name.t -> bool
 
