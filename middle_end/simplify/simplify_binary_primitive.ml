@@ -121,8 +121,8 @@ end = struct
     let module P = Possible_result in
     let arg1, arg_ty1 = S.simplify_simple env arg1 in
     let arg2, arg_ty2 = S.simplify_simple env arg2 in
-    let proof1 = (E.type_accessor env N.prover_lhs) arg_ty1 in
-    let proof2 = (E.type_accessor env N.prover_rhs) arg_ty2 in
+    let proof1 = N.prover_lhs (E.get_typing_environment env) arg_ty1 in
+    let proof2 = N.prover_rhs (E.get_typing_environment env) arg_ty2 in
     let kind = K.Standard_int_or_float.to_kind N.kind in
     let original_term () : Named.t = Prim (Binary (prim, arg1, arg2), dbg) in
     let result_unknown () =
@@ -798,21 +798,21 @@ let simplify_eq_comp env r prim dbg (kind : K.t)
     let arg1, arg1_ty = S.simplify_simple env arg1 in
     let arg2, arg2_ty = S.simplify_simple env arg2 in
     let proof1 =
-      (E.type_accessor env T.prove_tagged_immediate) arg1_ty
+      T.prove_tagged_immediate (E.get_typing_environment env) arg1_ty
     in
     let proof2 =
-      (E.type_accessor env T.prove_tagged_immediate) arg2_ty
+      T.prove_tagged_immediate (E.get_typing_environment env) arg2_ty
     in
     begin match proof1, proof2 with
     | Proved _, Proved _ ->
       Binary_int_eq_comp_tagged_immediate.simplify env r prim dbg op arg1 arg2
     | _, _ ->
       let physically_equal =
-        (E.type_accessor env T.values_physically_equal) arg1_ty arg2_ty
+        T.values_physically_equal (E.get_typing_environment env) arg1_ty arg2_ty
       in
       let physically_distinct =
         (* Structural inequality implies physical inequality. *)
-        (E.type_accessor env T.values_structurally_distinct) arg1_ty arg2_ty
+        T.values_structurally_distinct (E.get_typing_environment env) arg1_ty arg2_ty
       in
       let const bool =
         Reachable.reachable (Simple (Simple.const_bool bool)),
@@ -910,7 +910,7 @@ let refine_block_ty_upon_access _env r ~block:_ ~block_ty ~field_index:_
     | Generic_array _ -> Misc.fatal_error "Not yet implemented"
   in
   let block_ty =
-    (E.type_accessor env T.meet) block_ty block_ty_refinement
+    T.meet (E.get_typing_environment env) block_ty block_ty_refinement
   in
   let r = R.add_typing_judgement r block block_ty in
 *)
@@ -926,7 +926,7 @@ let simplify_block_load_known_index env r prim ~block ~block_ty ~index
     Reachable.reachable (original_term ()), T.unknown field_kind, r
   in
   let proof =
-    (E.type_accessor env T.prove_get_field_from_block) block_ty
+    T.prove_get_field_from_block (E.get_typing_environment env) block_ty
       ~index:(Immediate.to_targetint index)
       ~field_kind
   in
@@ -959,14 +959,14 @@ Format.eprintf "simplify_block_load %a.(%a).  Block type:@ %a\n%!"
   in
   let unique_index_unknown () =
     let proof =
-      (E.type_accessor env T.prove_must_be_a_block) block_ty ~kind_of_all_fields
+      T.prove_must_be_a_block (E.get_typing_environment env) block_ty ~kind_of_all_fields
     in
     match proof with
     | Unknown | Proved () ->
       Reachable.reachable (original_term ()), T.unknown field_kind, r
     | Invalid -> invalid ()
   in
-  let proof = (E.type_accessor env T.prove_tagged_immediate) index_ty in
+  let proof = T.prove_tagged_immediate (E.get_typing_environment env) index_ty in
   match proof with
   | Proved indexes ->
     begin match Immediate.Set.get_singleton indexes with
@@ -1018,7 +1018,7 @@ let simplify_string_or_bigstring_load env r prim dbg
   in
   let str_proof : T.String_info.Set.t T.proof =
     match string_like_value with
-    | String | Bytes -> (E.type_accessor env T.prove_string) str_ty
+    | String | Bytes -> T.prove_string (E.get_typing_environment env) str_ty
     | Bigstring ->
       (* For the moment just check that the bigstring is of kind [Value]. *)
       (* CR mshinwell: Could we tighten [Unknown] to [Definitely_pointer]?
@@ -1027,7 +1027,7 @@ let simplify_string_or_bigstring_load env r prim dbg
          bigarrays. *)
       T.unknown_proof ()
   in
-  let index_proof = (E.type_accessor env T.prove_tagged_immediate) index_ty in
+  let index_proof = T.prove_tagged_immediate (E.get_typing_environment env) index_ty in
   let all_the_empty_string strs =
     T.String_info.Set.for_all (fun (info : T.String_info.t) ->
         Targetint.OCaml.equal info.size Targetint.OCaml.zero)
@@ -1125,7 +1125,7 @@ let simplify_string_or_bigstring_load env r prim dbg
                     in
                     T.this_naked_int64 result
             in
-            (E.type_accessor env T.join) this_ty ty)
+            T.join (E.get_typing_environment env) this_ty ty)
         strs_and_indexes
         bottom
     in

@@ -30,6 +30,7 @@ module Int64 = Numbers.Int64
 module Named = Flambda.Named
 module Reachable = Flambda.Reachable
 
+(*
 let _refine_set_of_closures_type_to_identify_projection ~type_of_name
       env r ~set_of_closures_name ~result_var ~closure_id =
   let set_of_closures_ty =
@@ -44,11 +45,12 @@ let _refine_set_of_closures_type_to_identify_projection ~type_of_name
     T.set_of_closures ~closures:(Open closures)
       ~closure_elements:(Open closure_elements)
   in
-  R.add_or_meet_typing_judgement ~type_of_name
+  R.add_or_meet_typing_judgement
     r set_of_closures_name
     (E.continuation_scope_level env) set_of_closures_ty
+*)
 
-let refine_set_of_closures_type_to_identify_closure_element ~type_of_name
+let refine_set_of_closures_type_to_identify_closure_element
       env r ~set_of_closures_name ~result_var ~var_within_closure =
   let set_of_closures_ty =
     let closures = Closure_id.Map.empty in
@@ -62,7 +64,7 @@ let refine_set_of_closures_type_to_identify_closure_element ~type_of_name
     T.set_of_closures ~closures:(Open closures)
       ~closure_elements:(Open closure_elements)
   in
-  R.add_or_meet_typing_judgement ~type_of_name
+  R.add_or_meet_typing_judgement
     r set_of_closures_name
     (E.continuation_scope_level env) set_of_closures_ty
 
@@ -82,14 +84,14 @@ let simplify_project_closure env r prim ~closure ~set_of_closures dbg
     match set_of_closures with
     | Const _ -> r
     | Name set_of_closures_name ->
-      (E.type_accessor env refine_set_of_closures_type_to_identify_projection)
+      refine_set_of_closures_type_to_identify_projection (E.get_typing_environment env)
         env r
         ~set_of_closures_name
         ~result_var
         ~closure_id:closure
   in
 *)
-  let proof = (E.type_accessor env T.prove_sets_of_closures) ty in
+  let proof = T.prove_sets_of_closures (E.get_typing_environment env) ty in
   match proof with
   | Proved (_set_of_closures_name, set_of_closures) ->
     let closures = T.extensibility_contents set_of_closures.closures in
@@ -114,14 +116,16 @@ let simplify_move_within_set_of_closures env r prim ~move_from ~move_to
     Reachable.invalid (), T.bottom (K.value ()),
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
-  let proof = (E.type_accessor env T.prove_closures) ty in
+  let proof = T.prove_closures (E.get_typing_environment env) ty in
   match proof with
   | Proved closures ->
     begin match Closure_id.Map.find move_from closures with
     | exception Not_found -> invalid r
     | { set_of_closures = set_ty; } ->
       let set_ty = T.of_ty_fabricated set_ty in
-      let proof = (E.type_accessor env T.prove_sets_of_closures) set_ty in
+      let proof =
+        T.prove_sets_of_closures (E.get_typing_environment env) set_ty
+      in
       begin match proof with
       | Proved (set_of_closures_name, set_of_closures) ->
 (*
@@ -173,23 +177,24 @@ let simplify_project_var env r prim ~closure_id ~var_within_closure
     Reachable.invalid (), T.bottom (K.value ()),
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
-  let proof = (E.type_accessor env T.prove_closures) ty in
+  let proof = T.prove_closures (E.get_typing_environment env) ty in
   match proof with
   | Proved by_closure_id ->
     begin match Closure_id.Map.find closure_id by_closure_id with
     | exception Not_found -> invalid r
     | { set_of_closures = set_ty; } ->
       let set_ty = T.of_ty_fabricated set_ty in
-      let proof = (E.type_accessor env T.prove_sets_of_closures) set_ty in
+      let proof = 
+        T.prove_sets_of_closures (E.get_typing_environment env) set_ty
+      in
       begin match proof with
       | Proved (set_of_closures_name, set) ->
         let r =
           match set_of_closures_name with
           | None -> r
           | Some set_of_closures_name ->
-            (E.type_accessor env
-                refine_set_of_closures_type_to_identify_closure_element)
-            env r ~set_of_closures_name ~result_var ~var_within_closure
+            refine_set_of_closures_type_to_identify_closure_element
+              env r ~set_of_closures_name ~result_var ~var_within_closure
         in
         let closure_elements = T.extensibility_contents set.closure_elements in
         begin match
@@ -218,7 +223,7 @@ let simplify_duplicate_block _env _r _prim _arg _dbg
   let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
   let kind_of_block = K.value () in
   let full_of_values ~template =
-    let proof = (E.type_accessor env T.prove_block) ty in
+    let proof = T.prove_block (E.get_typing_environment env) ty in
     match proof with
     | Proved blocks ->
       let new_block_tys =
@@ -238,10 +243,10 @@ let simplify_duplicate_block _env _r _prim _arg _dbg
                 | Immutable ->
                   B.to_type block
               in
-              let ty = (E.type_accessor env T.meet_of_kind_value) ty template in
+              let ty = T.meet_of_kind_value (E.get_typing_environment env) ty template in
               ty :: new_block_tys)
       in
-      let type_of_new_block = (E.type_accessor env T.join) new_block_tys in
+      let type_of_new_block = T.join (E.get_typing_environment env) new_block_tys in
       Reachable.reachable (original_term ()), type_of_new_block
     | Unknown ->
       let type_of_new_block =
@@ -250,14 +255,14 @@ let simplify_duplicate_block _env _r _prim _arg _dbg
           | Mutable -> T.unknown kind_of_block Other
           | Immutable -> ty
         in
-        (E.type_accessor env T.meet_of_kind_value) ty template
+        T.meet_of_kind_value (E.get_typing_environment env) ty template
       in
       Reachable.reachable (original_term ()), type_of_new_block
     | Invalid ->
       Reachable.invalid (), T.bottom kind_of_block
   in
   let full_of_naked_floats ~template =
-    let proof = (E.type_accessor env T.prove_float_array) ty in
+    let proof = T.prove_float_array (E.get_typing_environment env) ty in
     match proof with
     | Proved arrays ->
       let new_block_tys =
@@ -269,13 +274,13 @@ let simplify_duplicate_block _env _r _prim _arg _dbg
               | Immutable -> T.immutable_float_array fields
             in
             let ty =
-              (E.type_accessor env T.meet_of_kind_naked_float) ty template
+              T.meet_of_kind_naked_float (E.get_typing_environment env) ty template
             in
             ty :: new_block_tys)
           arrays
           []
       in
-      let type_of_new_block = (E.type_accessor env T.join) new_block_tys in
+      let type_of_new_block = T.join (E.get_typing_environment env) new_block_tys in
       Reachable.reachable (original_term ()), type_of_new_block
     | Unknown ->
       let type_of_new_block =
@@ -284,7 +289,7 @@ let simplify_duplicate_block _env _r _prim _arg _dbg
           | Mutable -> T.unknown kind_of_block Other
           | Immutable -> ty
         in
-        (E.type_accessor env T.meet_of_kind_value) ty template
+        T.meet_of_kind_value (E.get_typing_environment env) ty template
       in
       Reachable.reachable (original_term ()), type_of_new_block
     | Invalid ->
@@ -315,7 +320,7 @@ let simplify_duplicate_block _env _r _prim _arg _dbg
 let simplify_is_int env r prim arg dbg =
   let arg, ty = S.simplify_simple env arg in
   let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
-  let proof = (E.type_accessor env T.prove_is_tagged_immediate) ty in
+  let proof = T.prove_is_tagged_immediate (E.get_typing_environment env) ty in
   let proved ~is_tagged_immediate =
     let simple = Simple.const_bool is_tagged_immediate in
     let imm = Immediate.bool is_tagged_immediate in
@@ -339,7 +344,7 @@ let simplify_is_int env r prim arg dbg =
 
 let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
   let block, block_ty = S.simplify_simple env block in
-  let inferred_tags = (E.type_accessor env T.prove_tags) block_ty in
+  let inferred_tags = T.prove_tags (E.get_typing_environment env) block_ty in
   let possible_tags = Tag.Map.keys tags_to_sizes in
   let invalid r =
     Reachable.invalid (), T.bottom (K.fabricated ()),
@@ -367,10 +372,11 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
             | Const _ ->
               (* CR mshinwell: This is kind of silly---it will never be a
                  [Const] *)
-              T.Typing_environment.create ()
+              T.Typing_environment.create ~resolver:(E.resolver env)
             | Name block ->
               let scope_level = E.scope_level_of_name env block in
-              T.Typing_environment.add (T.Typing_environment.create ())
+              T.Typing_environment.add
+                (T.Typing_environment.create ~resolver:(E.resolver env))
                 block scope_level block_ty
           in
           Tag.Map.add tag env tags_to_env_extensions)
@@ -417,7 +423,7 @@ module Make_simplify_unbox_number (P : A.Boxable_number_kind) = struct
   let simplify env r prim arg dbg ~result_var =
     let arg, ty = S.simplify_simple env arg in
     let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
-    let proof = (E.type_accessor env P.boxed_prover) ty in
+    let proof = P.boxed_prover (E.get_typing_environment env) ty in
     let kind = K.Standard_int_or_float.to_kind P.kind in
     let unknown r =
       Reachable.reachable (original_term ()), T.unknown kind, r
@@ -434,7 +440,7 @@ module Make_simplify_unbox_number (P : A.Boxable_number_kind) = struct
         let boxed_ty_refinement =
           P.box (T.alias_type_of kind (Name.var result_var))
         in
-        R.add_or_meet_typing_judgement ~type_of_name:(E.type_of_name env)
+        R.add_or_meet_typing_judgement
           r boxed_name
           (E.continuation_scope_level env)
           boxed_ty_refinement
@@ -442,7 +448,7 @@ module Make_simplify_unbox_number (P : A.Boxable_number_kind) = struct
     match proof with
     | Proved unboxed_ty ->
       let unboxed_ty = P.t_of_ty unboxed_ty in
-      let proof = (E.type_accessor env P.unboxed_prover) unboxed_ty in
+      let proof = P.unboxed_prover (E.get_typing_environment env) unboxed_ty in
       begin match proof with
       | Proved nums ->
         Reachable.reachable (original_term ()), P.these_unboxed nums,
@@ -471,7 +477,7 @@ module Make_simplify_box_number (P : A.Boxable_number_kind) = struct
        much work... *)
     let arg, ty = S.simplify_simple env arg in
     let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
-    let proof = (E.type_accessor env P.unboxed_prover) ty in
+    let proof = P.unboxed_prover (E.get_typing_environment env) ty in
     match proof with
     | Proved nums ->
       (* begin match P.Num.Set.get_singleton nums with
@@ -506,7 +512,7 @@ module Simplify_box_number_nativeint =
 module Unary_int_arith (I : A.Int_number_kind) = struct
   let simplify env r prim dbg (op : Flambda_primitive.unary_int_arith_op) arg =
     let arg, arg_ty = S.simplify_simple env arg in
-    let proof = (E.type_accessor env I.unboxed_prover) arg_ty in
+    let proof = I.unboxed_prover (E.get_typing_environment env) arg_ty in
     let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
     let result_unknown () =
       (* One might imagine doing something complicated to [ty] to reflect
@@ -552,14 +558,14 @@ module Make_simplify_int_conv (N : A.Number_kind) = struct
   let simplify env r prim arg ~(dst : K.Standard_int_or_float.t) dbg =
     let arg, arg_ty = S.simplify_simple env arg in
     if K.Standard_int_or_float.equal N.kind dst then
-      if (E.type_accessor env T.is_bottom) arg_ty then
+      if T.is_bottom (E.get_typing_environment env) arg_ty then
         Reachable.invalid (),
           T.bottom (K.Standard_int_or_float.to_kind dst),
           R.map_benefit r (B.remove_primitive (Unary prim))
       else
         Reachable.reachable (Flambda.Named.Simple arg), arg_ty, r
     else
-      let proof = (E.type_accessor env N.unboxed_prover) arg_ty in
+      let proof = N.unboxed_prover (E.get_typing_environment env) arg_ty in
       let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
       match proof with
       | Proved is ->
@@ -628,7 +634,7 @@ module Simplify_int_conv_naked_nativeint =
 let simplify_boolean_not env r prim arg dbg =
   let arg, ty = S.simplify_simple env arg in
   let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
-  let proof = (E.type_accessor env T.prove_tagged_immediate) ty in
+  let proof = T.prove_tagged_immediate (E.get_typing_environment env) ty in
   let invalid () =
     Reachable.invalid (), T.bottom (K.value ()),
       R.map_benefit r (B.remove_primitive (Unary prim))
@@ -664,7 +670,7 @@ let simplify_unary_float_arith_op env r prim
       (op : Flambda_primitive.unary_float_arith_op) arg dbg =
   let module F = Numbers.Float_by_bit_pattern in
   let arg, arg_ty = S.simplify_simple env arg in
-  let proof = (E.type_accessor env T.prove_naked_float) arg_ty in
+  let proof = T.prove_naked_float (E.get_typing_environment env) arg_ty in
   let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
   let result_unknown () =
     Reachable.reachable (original_term ()), T.unknown (K.naked_float ()), r
@@ -689,7 +695,7 @@ let simplify_unary_float_arith_op env r prim
 
 let simplify_int_to_tag env r prim arg dbg =
   let arg, arg_ty = S.simplify_simple env arg in
-  let proof = (E.type_accessor env T.prove_tagged_immediate_as_tags) arg_ty in
+  let proof = T.prove_tagged_immediate_as_tags (E.get_typing_environment env) arg_ty in
   let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
   let result_kind = K.fabricated () in
   let result_invalid () =
@@ -698,6 +704,13 @@ let simplify_int_to_tag env r prim arg dbg =
   in
   match proof with
   | Proved by_tag ->
+    let by_tag =
+      Tag.Map.map (fun env_extension_opt ->
+          match env_extension_opt with
+          | None -> T.Typing_environment.create ~resolver:(E.resolver env)
+          | Some env -> env)
+        by_tag
+    in
     Reachable.reachable (original_term ()), T.these_tags by_tag, r
   | Unknown ->
     Reachable.reachable (original_term ()), T.unknown result_kind, r
@@ -705,7 +718,7 @@ let simplify_int_to_tag env r prim arg dbg =
 
 let simplify_string_length env r prim arg dbg =
   let arg, arg_ty = S.simplify_simple env arg in
-  let proof = (E.type_accessor env T.prove_string) arg_ty in
+  let proof = T.prove_string (E.get_typing_environment env) arg_ty in
   let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
   let result_kind = K.value () in
   let result_invalid () =
@@ -737,7 +750,7 @@ let simplify_array_length env r prim arg ~block_access_kind:_ dbg =
      ...hmm, but in Flambda we should only be using "logical" block
      numbering, so this may be irrelevant *)
   let proof =
-    (E.type_accessor env T.prove_lengths_of_arrays_or_blocks) arg_ty
+    T.prove_lengths_of_arrays_or_blocks (E.get_typing_environment env) arg_ty
   in
   let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
   let result_kind = K.value () in
