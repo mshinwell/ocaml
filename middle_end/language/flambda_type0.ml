@@ -3850,6 +3850,8 @@ Format.eprintf "(TE replace_meet) Judgements holding now:@ %a\n%!"
     let print = print_typing_environment
     let create = create_typing_environment
 
+    let create_using_resolver_from t = create ~resolver:t.resolver
+
     let add_or_replace = add_or_replace_typing_environment
 
     let add t name scope_level ty =

@@ -890,14 +890,14 @@ end = struct
           fprintf ppf "@ @[<2>%a@[@ :: %a@]@ %a@]"
             Variable.print id
             Flambda_kind.print kind
-            Named.print arg;
+            (Named.print_with_cache ~cache) arg;
           letbody body
         | _ -> ul
       in
       fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a@[@ :: %a@]@ %a@]"
         Variable.print id
         Flambda_kind.print kind
-        Named.print arg;
+        (Named.print_with_cache ~cache) arg;
       let expr = letbody body in
       fprintf ppf ")@]@ %a)@]" print expr
     | Let_mutable { var; initial_value; body; contents_type; } ->
@@ -926,12 +926,13 @@ end = struct
         let rec let_cont_body (ul : t) =
           match ul with
           | Let_cont { body; handlers; } ->
-            fprintf ppf "@ @[<2>%a@]" Let_cont_handlers.print handlers;
+            fprintf ppf "@ @[<2>%a@]"
+              (Let_cont_handlers.print_with_cache ~cache) handlers;
             let_cont_body body
           | _ -> ul
         in
         fprintf ppf "@[<2>(let_cont@ @[<hv 1>(@[<2>%a@]"
-          Let_cont_handlers.print handlers;
+          (Let_cont_handlers.print_with_cache ~cache) handlers;
         let expr = let_cont_body body in
         fprintf ppf ")@]@ %a)@]" (print_with_cache ~cache) expr
       end else begin
@@ -947,7 +948,7 @@ end = struct
         fprintf ppf "@[<2>(@[<v 0>%a@;@[<v 0>%a@]@])@]"
           (print_with_cache ~cache) body
           (Format.pp_print_list ~pp_sep
-            Let_cont_handlers.print_using_where) let_conts
+            (Let_cont_handlers.print_using_where_with_cache ~cache)) let_conts
       end
     | Invalid _ -> fprintf ppf "unreachable"
 
@@ -975,6 +976,7 @@ end and Named : sig
      : ?ignore_uses_in_project_var:unit
     -> t
     -> Name_occurrences.t
+  val print : Format.formatter -> t -> unit
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
   val box_value
       : Name.t
@@ -1039,7 +1041,7 @@ end = struct
   let used_names ?ignore_uses_in_project_var named =
     name_usage ?ignore_uses_in_project_var named
 
-  let print_with_cache ppf (t : t) =
+  let print_with_cache ~cache ppf (t : t) =
     match t with
     | Simple simple -> Simple.print ppf simple
     | Set_of_closures set_of_closures ->
@@ -1054,6 +1056,8 @@ end = struct
       fprintf ppf "@[<2>(assign@ %a@ %a)@]"
         Mutable_variable.print being_assigned
         Simple.print new_value
+
+  let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
   let box_value name (kind : Flambda_kind.t) dbg : Named.t * Flambda_kind.t =
     let simple = Simple.name name in
@@ -1241,6 +1245,7 @@ end and Let_cont_handlers : sig
     -> t
     -> t
     -> bool
+  val print : Format.formatter -> t -> unit
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
   val print_using_where_with_cache
      : cache:Printing_cache.t
@@ -1381,6 +1386,9 @@ end = struct
             (Expr.print_with_cache ~cache) handler;
           first := false)
         handlers
+
+  let print ppf t =
+    print_with_cache ~cache:(Printing_cache.create ()) ppf t
 end and Continuation_handlers : sig
   type t = Continuation_handler.t Continuation.Map.t
   val equal
@@ -1405,7 +1413,10 @@ end and Continuation_handler : sig
     -> t
     -> t
     -> bool
+  val print : Format.formatter -> t -> unit
+(*
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+*)
 end = struct
   include Continuation_handler
 
@@ -1424,9 +1435,11 @@ end = struct
       (if stub then "*stub* " else "")
       (if is_exn_handler then "*exn* " else "")
       (match params with [] -> "" | _ -> "(")
-      Typed_parameter.List.print params
+      (Typed_parameter.List.print_with_cache ~cache) params
       (match params with [] -> "" | _ -> ") ")
       Expr.print handler
+
+  let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 end and Set_of_closures : sig
   type t = {
     function_decls : Function_declarations.t;
@@ -1446,6 +1459,7 @@ end and Set_of_closures : sig
     -> t
     -> t
     -> bool
+  val print : Format.formatter -> t -> unit
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 end = struct
   include Set_of_closures
@@ -1463,11 +1477,6 @@ end = struct
   let print_with_cache ~cache ppf t =
     match t with
     | { function_decls; free_vars; direct_call_surrogates = _; } ->
-      let funs ppf t =
-        Closure_id.Map.iter (fun var decl ->
-            (Function_declaration.print_with_cache ~cache) var ppf decl)
-          t
-      in
       fprintf ppf "@[<2>(\
           @[(set_of_closures id %a)@]@ \
           %a@ \
@@ -1476,10 +1485,12 @@ end = struct
           @[(set_of_closures_origin %a)@]\
           )@]"
         Set_of_closures_id.print function_decls.set_of_closures_id
-        funs function_decls.funs
+        (Function_declarations.print_with_cache ~cache) function_decls
         Free_vars.print free_vars
         (Closure_id.Map.print Closure_id.print) t.direct_call_surrogates
         Set_of_closures_origin.print function_decls.set_of_closures_origin
+
+  let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
   let free_names t =
     let in_decls =
@@ -1524,6 +1535,7 @@ end and Function_declarations : sig
     -> t
     -> t
     -> bool
+  val print : Format.formatter -> t -> unit
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
   val free_names : t -> Name_occurrences.t
 end = struct
@@ -1570,6 +1582,8 @@ end = struct
     in
     fprintf ppf "@[<2>(%a)(origin = %a)@]" funs t.funs
       Set_of_closures_origin.print t.set_of_closures_origin
+
+  let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
   let free_names t =
     Closure_id.Map.fold
@@ -1637,7 +1651,13 @@ end and Function_declaration : sig
     -> t
     -> t
     -> bool
-  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+  val print_with_cache
+     : cache:Printing_cache.t
+    -> Closure_id.t
+    -> Format.formatter
+    -> t
+    -> unit
+  val print : Closure_id.t -> Format.formatter -> t -> unit
 end = struct
   include Function_declaration
 
@@ -1805,6 +1825,8 @@ end = struct
       (Typed_parameter.List.print_with_cache ~cache) f.params
       Flambda_arity.print f.return_arity
       (Expr.print_with_cache ~cache) f.body
+
+  let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
 end and Typed_parameter : sig
   type t
   val create : Parameter.t -> Flambda_type.t -> t
@@ -1841,6 +1863,7 @@ end and Typed_parameter : sig
       -> Format.formatter
       -> t
       -> unit
+    val print : Format.formatter -> t -> unit
     val equal
        : equal_type:(Flambda_type.t -> Flambda_type.t -> bool)
       -> t
@@ -1848,8 +1871,11 @@ end and Typed_parameter : sig
       -> bool
   end
 (*  include Identifiable.S with type t := t *)
+(*
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t
     -> unit
+*)
+  val print : Format.formatter -> t -> unit
 end = struct
   type t = {
     param : Parameter.t;
@@ -1918,6 +1944,8 @@ end = struct
       Parameter.print param
       (Flambda_type.print_with_cache ~cache) ty
 
+  let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
+
   module List = struct
     type nonrec t = t list
 
@@ -1957,6 +1985,9 @@ end = struct
     let print_with_cache ~cache ppf t =
       Format.pp_print_list ~pp_sep:Format.pp_print_space
         (print_with_cache ~cache) ppf t
+
+    let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
+  end
 end and Flambda_type : sig
   include Flambda_type0_intf.S with type expr := Expr.t
 end = Flambda_type0.Make (Expr)

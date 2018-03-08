@@ -367,10 +367,10 @@ and equal_typing_environment
     && Name.Set.equal existentials1 existentials2
 *)
 
-let equal env:_ _ _ = false
+let equal _env _ _ = false
 
 let strictly_more_precise env t ~than =
-  not (equal env than (meet env t than))
+  not (equal env than (meet (env, t) (env, than)))
 
 module Simplified_type : sig
   (* Simplified types omit the following at top level:
@@ -409,6 +409,8 @@ module Simplified_type : sig
   val is_phantom : t -> bool
   val check_not_phantom : t -> string -> unit
 end = struct
+  type 'a normal_ty = 'a ty
+
   type t = {
     descr : descr;
     phantom : Flambda_kind.Phantom_kind.occurrences option;
@@ -443,52 +445,32 @@ end = struct
     | Fabricated Bottom -> true
     | _ -> false
 
-  let ty_from_or_unknown_or_join (unknown_or_join : _ unknown_or_join) : _ ty =
-    match unknown_or_join with
-    | Unknown -> Unknown
-    | Join [] -> Bottom
-    | Join [of_kind_foo] -> Ok of_kind_foo
-    | Join _ -> Unknown
+  let ty_from_ty (ty : _ normal_ty) : _ ty =
+    match ty with
+    | Type _ | Type_of _ -> Unknown
+    | No_alias unknown_or_join ->
+      match unknown_or_join with
+      | Unknown -> Unknown
+      | Join [] -> Bottom
+      | Join [of_kind_foo] -> Ok of_kind_foo
+      | Join _ -> Unknown
 
-  let create env (ty : flambda_type) : t * (Name.t option) =
-    let (descr : descr), canonical_name =
-      match ty.descr with
+  let create env (t : flambda_type) : t * (Name.t option) =
+    let t, canonical_name = resolve_aliases (env, t) in
+    let (descr : descr) =
+      match t.descr with
       | Value ty_value ->
-        let unknown_or_join, canonical_name =
-          resolve_aliases_and_squash_unresolved_names_on_ty
-            env
-            ~force_to_kind:force_to_kind_value
-            ty_value
-        in
-        let ty_value : ty_value =
-          ty_from_or_unknown_or_join unknown_or_join
-        in
-        Value ty_value, canonical_name
+        let ty_value : ty_value = ty_from_ty ty_value in
+        Value ty_value
       | Naked_number (ty_naked_number, kind) ->
-        let unknown_or_join, canonical_name =
-          resolve_aliases_and_squash_unresolved_names_on_ty
-            env
-            ~force_to_kind:(force_to_kind_naked_number kind)
-            ty_naked_number
-        in
-        let ty_naked_number : _ ty_naked_number =
-          ty_from_or_unknown_or_join unknown_or_join
-        in
-        Naked_number (ty_naked_number, kind), canonical_name
+        let ty_naked_number : _ ty_naked_number = ty_from_ty ty_naked_number in
+        Naked_number (ty_naked_number, kind)
       | Fabricated ty_fabricated ->
-        let unknown_or_join, canonical_name =
-          resolve_aliases_and_squash_unresolved_names_on_ty
-            env
-            ~force_to_kind:force_to_kind_fabricated
-            ty_fabricated
-        in
-        let ty_fabricated : ty_fabricated =
-          ty_from_or_unknown_or_join unknown_or_join
-        in
-        Fabricated ty_fabricated, canonical_name
+        let ty_fabricated : ty_fabricated = ty_from_ty ty_fabricated in
+        Fabricated ty_fabricated
     in
     { descr;
-      phantom = ty.phantom;
+      phantom = t.phantom;
     }, canonical_name
 
   let is_phantom t =
@@ -678,7 +660,7 @@ type reification_result =
   | Invalid
 
 let reify env ~allow_free_variables t : reification_result =
-  let t, canonical_name = resolve_aliases env t in
+  let t, canonical_name = resolve_aliases (env, t) in
 (*
 Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
   canonical_name;
@@ -953,7 +935,7 @@ let prove_tagged_immediate env t
   | Fabricated _ -> wrong_kind ()
 
 let prove_tagged_immediate_as_tags env t
-      : Typing_environment.t Tag.Map.t proof =
+      : Typing_environment.t option Tag.Map.t proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a tagged \
         immediate: %a"
@@ -1102,7 +1084,7 @@ Format.eprintf "get_field_from_block index %a type@ %a\n"
                         | None -> None
                         | Some field_ty ->
                           let field_ty =
-                            join env this_field_ty field_ty
+                            join (env, this_field_ty) (env, field_ty)
                           in
                           Some field_ty
                       end)
@@ -1562,7 +1544,7 @@ let prove_of_kind_naked_float t =
     end;
   force_to_kind_naked_float t
 
-let values_physically_equal env:_ (t1 : t) (t2 : t) =
+let values_physically_equal (t1 : t) (t2 : t) =
   let check_aliases (ty1 : _ ty) (ty2 : _ ty) =
     match ty1, ty2 with
     | No_alias _, _ | _, No_alias _ ->
@@ -1597,8 +1579,8 @@ let values_physically_equal env:_ (t1 : t) (t2 : t) =
         print t2
 
 let values_structurally_distinct (env1, (t1 : t)) (env2, (t2 : t)) =
-  let simplified1, _canonical_name1 = Simplified_type.create env t1 in
-  let simplified2, _canonical_name2 = Simplified_type.create env t2 in
+  let simplified1, _canonical_name1 = Simplified_type.create env1 t1 in
+  let simplified2, _canonical_name2 = Simplified_type.create env2 t2 in
   let module S = Simplified_type in
   if S.is_phantom simplified1 || S.is_phantom simplified2 then false
   else
@@ -1758,14 +1740,14 @@ let values_structurally_distinct (env1, (t1 : t)) (env2, (t2 : t)) =
         print t1
         print t2
 
-let int_switch_arms env t ~arms =
+let int_switch_arms (env : Typing_environment.t) t ~arms =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a tagged \
         immediate: %a"
       print t
   in
   let unknown () =
-    let empty_env = Typing_environment.create () in
+    let empty_env = Typing_environment.create_using_resolver_from env in
     Targetint.OCaml.Map.fold (fun arm cont result ->
         Targetint.OCaml.Map.add arm (empty_env, cont) result)
       arms
@@ -1793,7 +1775,10 @@ let int_switch_arms env t ~arms =
                 match Immediate.Map.find (Immediate.int arm) imms with
                 | exception Not_found -> result
                 | { env_extension; } ->
-                  Targetint.OCaml.Map.add arm (env_extension, cont) result)
+                  match env_extension with
+                  | None -> result
+                  | Some env_extension ->
+                    Targetint.OCaml.Map.add arm (env_extension, cont) result)
               arms
               Targetint.OCaml.Map.empty
         end
@@ -1810,7 +1795,7 @@ let tag_switch_arms env t ~arms =
       print t
   in
   let unknown () =
-    let empty_env = Typing_environment.create () in
+    let empty_env = Typing_environment.create_using_resolver_from env in
     Tag.Map.fold (fun arm cont result ->
         Tag.Map.add arm (empty_env, cont) result)
       arms
@@ -1829,7 +1814,10 @@ let tag_switch_arms env t ~arms =
           match Tag.Map.find arm tag_map with
           | exception Not_found -> result
           | { env_extension; } ->
-            Tag.Map.add arm (env_extension, cont) result)
+            match env_extension with
+            | None -> result
+            | Some env_extension ->
+              Tag.Map.add arm (env_extension, cont) result)
         arms
         Tag.Map.empty
     | Ok (Set_of_closures _) | Ok (Closure _) -> invalid ()
@@ -1837,18 +1825,16 @@ let tag_switch_arms env t ~arms =
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Value _ -> wrong_kind ()
 
-let free_names_transitive ~(type_of_name : type_of_name) t =
+let free_names_transitive env t =
   let all_names = ref (Name_occurrences.create ()) in
   let rec loop to_follow =
     all_names := Name_occurrences.union !all_names to_follow;
     match Name_occurrences.choose_and_remove_amongst_everything to_follow with
     | None -> ()
     | Some (name, to_follow) ->
-      match type_of_name (Name_or_export_id.Name name) with
-      | None -> Misc.fatal_errorf "Unbound name %a" Name.print name
-      | Some t ->
-        let names = free_names t in
-        loop (Name_occurrences.union to_follow names)
+      let t, _binding_type = Typing_environment.find env name in
+      let names = free_names t in
+      loop (Name_occurrences.union to_follow names)
   in
   loop (free_names t);
   !all_names

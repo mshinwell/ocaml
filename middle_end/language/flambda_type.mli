@@ -80,11 +80,11 @@ val strictly_more_precise : (t -> than:t -> bool) type_accessor
 
 (** Whether values of the given two types will always be physically equal
     to each other. *)
-val values_physically_equal : (t -> t -> bool) type_accessor
+val values_physically_equal : t -> t -> bool
 
 (** Whether values of the given two types will always have a different
     structure from each other. *)
-val values_structurally_distinct : (t -> t -> bool) type_accessor
+val values_structurally_distinct : t_in_context -> t_in_context -> bool
 
 type reification_result = private
   | Term of Simple.t * t
@@ -134,7 +134,7 @@ val unknown_proof : unit -> _ proof
 val prove_tagged_immediate : (t -> Immediate.Set.t proof) type_accessor
 
 val prove_tagged_immediate_as_tags
-   : (t -> Typing_environment.t Tag.Map.t proof) type_accessor
+   : Typing_environment.t -> t -> Typing_environment.t option Tag.Map.t proof
 
 type is_tagged_immediate = private
   | Never_a_tagged_immediate

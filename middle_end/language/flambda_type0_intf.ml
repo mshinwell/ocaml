@@ -321,6 +321,8 @@ module type S = sig
 
     val create : resolver:(Export_id.t -> flambda_type option) -> t
 
+    val create_using_resolver_from : t -> t
+
     val add : t -> Name.t -> Scope_level.t -> flambda_type -> t
 
     (** The same as [add] on a newly-[create]d environment. *)
