@@ -142,10 +142,12 @@ end) = struct
     | Fabricated of ty_fabricated
 
   and ty_value = of_kind_value ty
+  and ty_value_in_context = typing_environment * ty_value
   and 'a ty_naked_number = 'a of_kind_naked_number ty
   and ty_fabricated = of_kind_fabricated ty
 
   and 'a ty = 'a unknown_or_join or_alias
+  and 'a ty_in_context = typing_environment * ('a ty)
 
   and 'a unknown_or_join =
     | Unknown
@@ -261,7 +263,6 @@ end) = struct
 
   and typing_environment = {
     resolver : (Export_id.t -> t option);
-    parent : typing_environment option;
     names_to_types : (Scope_level.t * t) Name.Map.t;
     levels_to_names : Name.Set.t Scope_level.Map.t;
     existentials : Name.Set.t;
@@ -566,7 +567,7 @@ end) = struct
     print_with_cache ~cache ppf t
 
   and print_typing_environment_with_cache ~cache ppf
-        ({ resolver = _; parent; names_to_types;
+        ({ resolver = _; names_to_types;
            levels_to_names; existentials; existential_freshening; } as env) =
     if Name.Map.is_empty names_to_types then
       Format.pp_print_string ppf "Empty"
@@ -576,13 +577,10 @@ end) = struct
           print_with_cache ~cache ppf ty
         in
         Format.fprintf ppf
-          "@[((parent@ %a)@ \
-              (names_to_types@ %a)@ \
+          "@[((names_to_types@ %a)@ \
               (levels_to_names@ %a)@ \
               (existentials@ %a)@ \
               (existential_freshening@ %a))@]"
-          (Misc.Stdlib.Option.print (
-            print_typing_environment_with_cache ~cache)) parent
           (Name.Map.print print_scope_level_and_type) names_to_types
           (Scope_level.Map.print Name.Set.print) levels_to_names
           Name.Set.print existentials
@@ -591,98 +589,6 @@ end) = struct
   let print_typing_environment ppf env =
     print_typing_environment_with_cache ~cache:(Printing_cache.create ())
       ppf env
-
-  let create_typing_environment0 ~resolver ~parent =
-    let existential_freshening = Freshening.activate Freshening.empty in
-    { resolver;
-      parent;
-      names_to_types = Name.Map.empty;
-      levels_to_names = Scope_level.Map.empty;
-      existentials = Name.Set.empty;
-      existential_freshening;
-    }
-
-  let root_typing_environment ~resolver =
-    create_typing_environment0 ~resolver ~parent:None
-
-  let create_typing_environment ~(parent : typing_environment) =
-    create_typing_environment0 ~resolver:parent.resolver ~parent:(Some parent)
-
-  let add_or_replace_typing_environment t name scope_level ty =
-    (* CR mshinwell: We should add a comment here explaining where this can
-       be used and what it cannot be used for (e.g. changing a name's scope
-       level) *)
-(*
-if Scope_level.to_int scope_level = 2
-  && not (Name.Map.mem name t.names_to_types)
-then begin
-  Format.eprintf "AoR for %a:@ %s\n%!"
-    Name.print name
-    (Printexc.raw_backtrace_to_string (Printexc.get_callstack 20))
-end;
-*)
-    let names_to_types = Name.Map.add name (scope_level, ty) t.names_to_types in
-    let levels_to_names =
-      Scope_level.Map.update scope_level
-        (function
-           | None -> Some (Name.Set.singleton name)
-           | Some names -> Some (Name.Set.add name names))
-        t.levels_to_names
-    in
-    { t with
-      names_to_types;
-      levels_to_names;
-    }
-
-  type binding_type = Normal | Existential
-
-  let rec find_typing_environment env name =
-    match Name.Map.find name env.names_to_types with
-    | exception Not_found ->
-      begin match env.parent with
-      | Some parent -> find_typing_environment parent name
-      | None ->
-        Misc.fatal_errorf "Cannot find %a in environment:@ %a"
-          Name.print name
-          print_typing_environment env
-      end
-    | _scope_level, ty ->
-      let binding_type =
-        if Name.Set.mem name env.existentials then Existential
-        else Normal
-      in
-      match binding_type with
-      | Normal -> ty, Normal
-      | Existential ->
-   (* XXX     let ty = rename_variables t freshening in *)
-        ty, Existential
-
-  let ty_is_obviously_bottom (ty : _ ty) =
-    match ty with
-    | No_alias (Join []) -> true
-    | _ -> false
-
-  let is_obviously_bottom (t : t) =
-    match t.descr with
-    | Value ty -> ty_is_obviously_bottom ty
-    | Naked_number (ty, _) -> ty_is_obviously_bottom ty
-    | Fabricated ty -> ty_is_obviously_bottom ty
-
-  let of_ty_value ty_value : t =
-    { descr = Value ty_value;
-      phantom = None;
-    }
-
-  let of_ty_naked_number (type n) (ty_naked_number : n ty_naked_number)
-        (kind : n K.Naked_number.t) : t =
-    { descr = Naked_number (ty_naked_number, kind);
-      phantom = None;
-    }
-
-  let of_ty_fabricated ty_fabricated : t =
-    { descr = Fabricated ty_fabricated;
-      phantom = None;
-    }
 
   let free_names_or_alias free_names_contents (or_alias : _ or_alias) acc =
     match or_alias with
@@ -827,9 +733,105 @@ end;
     | None -> acc
     | Some env_extension -> free_names_of_typing_environment env_extension acc
 
+  let free_names_set t =
+    free_names t Name.Set.empty
+
   let free_names t =
-    let names = free_names t Name.Set.empty in
-    Name_occurrences.create_from_set_in_types names
+    Name_occurrences.create_from_set_in_types (free_names_set t)
+
+  let create_typing_environment ~resolver =
+    let existential_freshening = Freshening.activate Freshening.empty in
+    { resolver;
+      names_to_types = Name.Map.empty;
+      levels_to_names = Scope_level.Map.empty;
+      existentials = Name.Set.empty;
+      existential_freshening;
+    }
+
+  let add_or_replace_typing_environment env name scope_level t =
+    (* CR mshinwell: We should add a comment here explaining where this can
+       be used and what it cannot be used for (e.g. changing a name's scope
+       level) *)
+(*
+if Scope_level.to_int scope_level = 2
+  && not (Name.Map.mem name t.names_to_types)
+then begin
+  Format.eprintf "AoR for %a:@ %s\n%!"
+    Name.print name
+    (Printexc.raw_backtrace_to_string (Printexc.get_callstack 20))
+end;
+*)
+    if !Clflags.flambda_invariant_checks then begin
+      let free_names = free_names_set t in
+      let domain = Name.Map.keys env.names_to_types in
+      if not (Name.Set.subset free_names domain) then begin
+        Misc.fatal_errorf "Adding binding of %a to@ %a@ would cause typing \
+            environment to not be closed: %a"
+          Name.print name
+          print t
+          print_typing_environment env
+      end
+    end;
+    let names_to_types =
+      Name.Map.add name (scope_level, t) env.names_to_types
+    in
+    let levels_to_names =
+      Scope_level.Map.update scope_level
+        (function
+           | None -> Some (Name.Set.singleton name)
+           | Some names -> Some (Name.Set.add name names))
+        env.levels_to_names
+    in
+    { env with
+      names_to_types;
+      levels_to_names;
+    }
+
+  type binding_type = Normal | Existential
+
+  let find_typing_environment env name =
+    match Name.Map.find name env.names_to_types with
+    | exception Not_found ->
+      Misc.fatal_errorf "Cannot find %a in environment:@ %a"
+        Name.print name
+        print_typing_environment env
+    | _scope_level, ty ->
+      let binding_type =
+        if Name.Set.mem name env.existentials then Existential
+        else Normal
+      in
+      match binding_type with
+      | Normal -> ty, Normal
+      | Existential ->
+   (* XXX     let ty = rename_variables t freshening in *)
+        ty, Existential
+
+  let ty_is_obviously_bottom (ty : _ ty) =
+    match ty with
+    | No_alias (Join []) -> true
+    | _ -> false
+
+  let is_obviously_bottom (t : t) =
+    match t.descr with
+    | Value ty -> ty_is_obviously_bottom ty
+    | Naked_number (ty, _) -> ty_is_obviously_bottom ty
+    | Fabricated ty -> ty_is_obviously_bottom ty
+
+  let of_ty_value ty_value : t =
+    { descr = Value ty_value;
+      phantom = None;
+    }
+
+  let of_ty_naked_number (type n) (ty_naked_number : n ty_naked_number)
+        (kind : n K.Naked_number.t) : t =
+    { descr = Naked_number (ty_naked_number, kind);
+      phantom = None;
+    }
+
+  let of_ty_fabricated ty_fabricated : t =
+    { descr = Fabricated ty_fabricated;
+      phantom = None;
+    }
 
   (* CR-someday mshinwell: Functions such as [alias] and [bottom] could be
      simplified if [K.t] were a GADT. *)
@@ -882,12 +884,7 @@ end;
     end)
   end
 
-  type type_of_name =
-       ?local_env:typing_environment
-    -> Name_or_export_id.t
-    -> t option
-
-  type 'a type_accessor = type_of_name:type_of_name -> 'a
+  type 'a type_accessor = typing_environment -> 'a
 
   let alias_type_of (kind : K.t) name : t =
     match kind with
@@ -1377,7 +1374,7 @@ end;
   let these_tags_as_ty_fabricated tags_to_env_extensions : ty_fabricated =
     let tag_map =
       Tag.Map.map (fun env : tag_case ->
-          { env_extension = env; })
+          { env_extension = Some env; })
         tags_to_env_extensions
     in
     No_alias (Join [Tag tag_map])
@@ -1389,7 +1386,12 @@ end;
 
   let this_tag_as_ty_fabricated tag =
     let tags_to_env_extensions = Tag.Map.add tag None Tag.Map.empty in
-    these_tags_as_ty_fabricated tags_to_env_extensions
+    let tag_map =
+      Tag.Map.map (fun env : tag_case ->
+          { env_extension = env; })
+        tags_to_env_extensions
+    in
+    No_alias (Join [Tag tag_map])
 
   let this_tag tag : t =
     { descr = Fabricated (this_tag_as_ty_fabricated tag);
@@ -1799,7 +1801,7 @@ end;
     in
     t, canonical_name
 
-  let resolve_aliases_and_squash_unresolved_names_on_ty env ~kind
+  let resolve_aliases_and_squash_unresolved_names_on_ty env ~kind:_
         ~force_to_kind ~unknown ty =
     let ty, canonical_name, still_unresolved =
       resolve_aliases_on_ty0 env ~force_to_kind ty
@@ -1809,7 +1811,7 @@ end;
     | Still_unresolved -> unknown, canonical_name
 
   (* CR mshinwell: choose this function or the one above *)
-  let resolve_aliases_and_squash_unresolved_names_on_ty' env ~kind
+  let resolve_aliases_and_squash_unresolved_names_on_ty' env ~kind:_
         ~force_to_kind ~unknown:_ ty : _ unknown_or_join * (Name.t option) =
     let ty, canonical_name, _still_unresolved =
       resolve_aliases_on_ty0 env ~force_to_kind ty
@@ -1835,7 +1837,7 @@ end;
       let ty, canonical_name = resolve_aliases_on_ty env ~force_to_kind ty in
       { t with descr = Fabricated ty; }, canonical_name
 
-  let resolve_aliases_and_squash_unresolved_names (env, t)
+  let _resolve_aliases_and_squash_unresolved_names (env, t)
         : t * (Name.t option) =
     let kind = kind t in
     match t.descr with
@@ -3537,13 +3539,13 @@ end;
       -> Name.t
       -> scope_level:Scope_level.t
       -> existing_ty:t
-      -> t
+      -> t_in_context
       -> typing_environment
 
     val replace_meet_typing_environment
        : typing_environment
       -> Name.t
-      -> t
+      -> t_in_context
       -> typing_environment
   end = struct
     let meet (env1, (t1 : t)) (env2, (t2 : t)) : t * judgements_from_meet =
@@ -3671,7 +3673,6 @@ end;
 
     let join_typing_environment (env1 : typing_environment)
           (env2 : typing_environment) =
-      (* XXX How are the parent environments treated here? *)
       let names_to_types =
         Name.Map.inter_merge (fun (level1, ty1) (level2, ty2) ->
             if not (Scope_level.equal level1 level2) then begin
@@ -3680,6 +3681,10 @@ end;
                 print ty1
                 print ty2
             end;
+            (* When joining (or meeting) environments, all free names in the
+               types in such environments must be in those environments
+               themselves, otherwise the well-formedness condition for
+               environments being closed would not be respected. *)
             let ty = join (env1, ty1) (env2, ty2) in
             level1, ty)
           env1.names_to_types
@@ -3704,7 +3709,8 @@ end;
       let existential_freshening =
         env1.existential_freshening (* XXX *)
       in
-      { parent = names_to_types;
+      { resolver = env1.resolver;
+        names_to_types;
         levels_to_names;
         existentials;
         existential_freshening;
@@ -3755,7 +3761,8 @@ Format.eprintf "...giving %a\n%!" print ty;
         env1.existential_freshening (* XXX *)
       in
       let env =
-        { names_to_types;
+        { resolver = env1.resolver;
+          names_to_types;
           levels_to_names;
           existentials;
           existential_freshening;
@@ -3779,22 +3786,24 @@ Format.eprintf "...giving %a\n%!" print ty;
               Name.print name
               print_typing_environment env
           | scope_level, existing_ty ->
+            (* CR mshinwell: How do we know that [env] is the correct
+               environment for [judgements]? *)
             let ty, new_judgements = meet (env, ty) (env, existing_ty) in
             let env =
               add_or_replace_typing_environment env name scope_level ty
             in
             let judgements = new_judgements @ judgements in
-            meet_typing_environment_with_judgements ~type_of_name
+            meet_typing_environment_with_judgements
               ~num_iterations:(num_iterations + 1) env ~judgements
 
     and replace_meet_typing_environment0 env name
-          ~scope_level ~existing_ty ty =
-      let ty, judgements = meet ty existing_ty in
+          ~scope_level ~existing_ty ty_in_context =
+      let ty, judgements = meet ty_in_context (env, existing_ty) in
       let env = add_or_replace_typing_environment env name scope_level ty in
-      meet_typing_environment_with_judgements ~type_of_name
+      meet_typing_environment_with_judgements
         ~num_iterations:0 env ~judgements
 
-    and replace_meet_typing_environment ~type_of_name env name ty =
+    and replace_meet_typing_environment env name t_in_context =
       match Name.Map.find name env.names_to_types with
       | exception Not_found ->
         Misc.fatal_errorf "Cannot meet types for name %a which is unbound \
@@ -3802,8 +3811,8 @@ Format.eprintf "...giving %a\n%!" print ty;
           Name.print name
           print_typing_environment env
       | scope_level, existing_ty ->
-        replace_meet_typing_environment0 ~type_of_name env name
-          ~scope_level ~existing_ty ty
+        replace_meet_typing_environment0 env name
+          ~scope_level ~existing_ty t_in_context
   end
 
   let meet tc1 tc2 =
@@ -3828,7 +3837,9 @@ Format.eprintf "(TE replace_meet) Judgements holding now:@ %a\n%!"
 *)
 
   let join = Meet_and_join.join
-  let join_ty_value = Meet_and_join_value.join_ty
+
+  let join_ty_value (env1, ty_value1) (env2, ty_value2) =
+    Meet_and_join_value.join_ty env1 env2 ty_value1 ty_value2
 
   module Typing_environment = struct
     type t = typing_environment
@@ -3849,10 +3860,8 @@ Format.eprintf "(TE replace_meet) Judgements holding now:@ %a\n%!"
           Name.print name
           print t
 
-    let singleton name scope_level ty =
-      add (create ()) name scope_level ty
-
-    type nonrec binding_type = binding_type
+    let singleton ~resolver name scope_level ty =
+      add (create ~resolver) name scope_level ty
 
     let find = find_typing_environment
 
@@ -3870,8 +3879,10 @@ Format.eprintf "(TE replace_meet) Judgements holding now:@ %a\n%!"
       match Name.Map.find name t.names_to_types with
       | exception Not_found -> add t name scope_level ty
       | scope_level, existing_ty ->
+        (* CR mshinwell: We need to think about this some more.  Is [ty]
+           supposed to only have free names in [t]? *)
         Meet_and_join.replace_meet_typing_environment0 t name
-          ~scope_level ~existing_ty ty
+          ~scope_level ~existing_ty (t, ty)
 
     let find_opt t name =
       match Name.Map.find name t.names_to_types with
@@ -3928,7 +3939,8 @@ Format.eprintf "Cutting environment at %a: %a\n%!"
       in
 let result =
       (* XXX we actually need to rename in the domain of [names_to_types] *)
-      { names_to_types = t.names_to_types;
+      { resolver = t.resolver;
+        names_to_types = t.names_to_types;
         levels_to_names = t.levels_to_names;
         existentials;
         existential_freshening;
@@ -3959,7 +3971,8 @@ Format.eprintf "Result is: %a\n%!"
       let existential_freshening =
         Freshening.restrict_to_names t.existential_freshening allowed
       in
-      { names_to_types;
+      { resolver = t.resolver;
+        names_to_types;
         levels_to_names;
         existentials;
         existential_freshening;
@@ -3993,10 +4006,12 @@ Format.eprintf "Result is: %a\n%!"
                           Targetint.OCaml.Map.map
                             (fun (block : singleton_block) : singleton_block ->
                               let env_extension =
-                                Typing_environment.meet ~type_of_name
-                                  block.env_extension env
+                                match block.env_extension with
+                                | None -> env
+                                | Some env_extension ->
+                                  Typing_environment.meet env_extension env
                               in
-                              { block with env_extension; })
+                              { block with env_extension = Some env_extension; })
                             by_length
                         in
                         Join { by_length; })
@@ -4013,10 +4028,12 @@ Format.eprintf "Result is: %a\n%!"
                       (fun ({ env_extension; } : immediate_case)
                             : immediate_case ->
                         let env_extension =
-                          Typing_environment.meet ~type_of_name
-                            env_extension env
+                          match env_extension with
+                          | None -> env
+                          | Some env_extension ->
+                            Typing_environment.meet env_extension env
                         in
-                        { env_extension; })
+                        { env_extension = Some env_extension; })
                       imm_map
                   in
                   Known imm_map
@@ -4038,9 +4055,12 @@ Format.eprintf "Result is: %a\n%!"
               let tag_map =
                 Tag.Map.map (fun ({ env_extension; } : tag_case) : tag_case ->
                     let env_extension =
-                      Typing_environment.meet ~type_of_name env_extension env
+                      match env_extension with
+                      | None -> env
+                      | Some env_extension ->
+                        Typing_environment.meet env_extension env
                     in
-                    { env_extension; })
+                    { env_extension = Some env_extension; })
                   tag_map
               in
               Tag tag_map

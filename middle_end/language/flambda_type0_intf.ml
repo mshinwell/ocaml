@@ -263,7 +263,7 @@ module type S = sig
   (** Judgements known to hold if a particular value has been shown to have
       a particular block tag. *)
   and tag_case = private {
-    env_extension : typing_environment;
+    env_extension : typing_environment option;
   }
 
   and of_kind_fabricated = private
@@ -304,36 +304,41 @@ module type S = sig
     -> Flambda_kind.Phantom_kind.occurrences
     -> t
 
+  (** Whether a name bound by the environment is normally-accessible or
+      has been made existential (as a result of [cut], below). *)
+  type binding_type = private Normal | Existential
+
   module Typing_environment : sig
     (** A "traditional" typing environment or context: an assignment from
         names to types.  The environment also encapsulates the knowledge,
         via the [resolver], required to import types from .cmx files (or
-        other external source). *)
+        other external source).
+
+        Typing environments must be closed.
+    *)
 
     type t = typing_environment
 
-    val create_root : resolver:(Export_id.t -> flambda_type option) -> t
-
-    val create : parent:t -> t
+    val create : resolver:(Export_id.t -> flambda_type option) -> t
 
     val add : t -> Name.t -> Scope_level.t -> flambda_type -> t
 
-    (** The same as [add] on a newly-[create]d environment with the given
-        [parent]. *)
-    val singleton : parent:t -> Name.t -> Scope_level.t -> flambda_type -> t
+    (** The same as [add] on a newly-[create]d environment. *)
+    val singleton
+       : resolver:(Export_id.t -> flambda_type option)
+      -> Name.t
+      -> Scope_level.t
+      -> flambda_type
+      -> t
 
     (** Refine the type of a name that is currently bound in the
         environment.  (It is an error to call this function with a name that
         is not bound in the given environment.) *)
     val replace_meet : t -> Name.t -> t_in_context -> t
 
-    val add_or_replace_meet : t -> Name.t -> Scope_level.t -> t_in_context -> t
+    val add_or_replace_meet : t -> Name.t -> Scope_level.t -> flambda_type -> t
 
     val add_or_replace : t -> Name.t -> Scope_level.t -> flambda_type -> t
-
-    (** Whether a name bound by the environment is normally-accessible or
-        has been made existential (as a result of [cut], below). *)
-    type binding_type = Normal | Existential
 
     (** Perform a lookup in a type environment.  It is an error to provide a
         name which does not occur in the given environment. *)
@@ -358,10 +363,10 @@ module type S = sig
       -> t
 
     (** Least upper bound of two typing environments. *)
-    val join : t_in_context -> t_in_context -> t
+    val join : t -> t -> t
 
     (** Greatest lower bound of two typing environments. *)
-    val meet : t_in_context -> t_in_context -> t
+    val meet : t -> t -> t
 
     (** Adjust the domain of the given typing environment so that it only
         mentions the names in the given name occurrences structure. *)
@@ -386,12 +391,21 @@ module type S = sig
       shared sub-components. *)
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
-  val print_ty_value : Format.formatter -> ty_value -> unit
+  val print_ty_value
+     : cache:Printing_cache.t
+    -> Format.formatter
+    -> ty_value
+    -> unit
 
-  val print_ty_value_array : Format.formatter -> ty_value array -> unit
+  val print_ty_value_array
+     : cache:Printing_cache.t
+    -> Format.formatter
+    -> ty_value array
+    -> unit
 
   val print_inlinable_function_declaration
-     : Format.formatter
+     : cache:Printing_cache.t
+    -> Format.formatter
     -> inlinable_function_declaration
     -> unit
 
