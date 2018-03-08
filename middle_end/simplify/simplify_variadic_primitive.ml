@@ -51,7 +51,7 @@ let simplify_make_block env r prim dbg
     let arg_ty_values =
       assert (List.compare_lengths value_kinds args_with_tys = 0);
       List.map2 (fun ((arg : Simple.t), arg_ty) _value_kind ->
-          if (E.type_accessor env T.is_bottom) arg_ty then begin
+          if T.is_bottom (E.get_typing_environment env) arg_ty then begin
            found_bottom := true
           end;
           match arg with
@@ -93,7 +93,7 @@ let simplify_make_block env r prim dbg
     let found_bottom = ref false in
     let arg_ty_naked_numbers =
       List.map (fun arg_ty ->
-          if (E.type_accessor env T.is_bottom) arg_ty then begin
+          if T.is_bottom (E.get_typing_environment env) arg_ty then begin
              found_bottom := true;
           end;
           T.prove_of_kind_naked_float arg_ty)
@@ -125,7 +125,7 @@ let bigarray_indexes_are_invalid env
       (layout : Flambda_primitive.bigarray_layout) indexes =
   let index_proofs =
     List.map (fun index ->
-        (E.type_accessor env T.prove_tagged_immediate) index)
+        T.prove_tagged_immediate (E.get_typing_environment env) index)
       indexes
   in
   List.fold_left
@@ -172,8 +172,8 @@ let simplify_bigarray_set env r prim dbg ~num_dims ~kind ~layout ~args =
     | Some (indexes_with_tys, args_with_tys) ->
       begin match args_with_tys with
       | [_new_value, new_value_ty] ->
-        if (E.type_accessor env T.is_bottom) bigarray_ty
-          || (E.type_accessor env T.is_bottom) new_value_ty
+        if T.is_bottom (E.get_typing_environment env) bigarray_ty
+          || T.is_bottom (E.get_typing_environment env) new_value_ty
         then begin
           invalid ()
         end else begin
@@ -218,7 +218,7 @@ let simplify_bigarray_load env r prim dbg ~num_dims
     | Some (indexes_with_tys, args_with_tys) ->
       begin match args_with_tys with
       | [] ->
-        if (E.type_accessor env T.is_bottom) bigarray_ty then begin
+        if T.is_bottom (E.get_typing_environment env) bigarray_ty then begin
           invalid ()
         end else begin
           ignore (T.prove_of_kind_value bigarray_ty);

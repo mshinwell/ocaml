@@ -408,8 +408,7 @@ module type S = sig
     -> unit
 
   val print_inlinable_function_declaration
-     : cache:Printing_cache.t
-    -> Format.formatter
+     : Format.formatter
     -> inlinable_function_declaration
     -> unit
 

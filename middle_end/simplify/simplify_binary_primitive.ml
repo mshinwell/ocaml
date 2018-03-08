@@ -808,11 +808,12 @@ let simplify_eq_comp env r prim dbg (kind : K.t)
       Binary_int_eq_comp_tagged_immediate.simplify env r prim dbg op arg1 arg2
     | _, _ ->
       let physically_equal =
-        T.values_physically_equal (E.get_typing_environment env) arg1_ty arg2_ty
+        T.values_physically_equal arg1_ty arg2_ty
       in
       let physically_distinct =
         (* Structural inequality implies physical inequality. *)
-        T.values_structurally_distinct (E.get_typing_environment env) arg1_ty arg2_ty
+        let env = E.get_typing_environment env in
+        T.values_structurally_distinct (env, arg1_ty) (env, arg2_ty)
       in
       let const bool =
         Reachable.reachable (Simple (Simple.const_bool bool)),
@@ -1125,7 +1126,8 @@ let simplify_string_or_bigstring_load env r prim dbg
                     in
                     T.this_naked_int64 result
             in
-            T.join (E.get_typing_environment env) this_ty ty)
+            let env = E.get_typing_environment env in
+            T.join (env, this_ty) (env, ty))
         strs_and_indexes
         bottom
     in

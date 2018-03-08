@@ -45,7 +45,7 @@ let simplify_block_set_known_index env r _prim ~block_access_kind
     (* Even though we're setting not getting, the "prove get field" function
        does exactly what we want in terms of checks on the block, to determine
        if the set is invalid. *)
-    (E.type_accessor env T.prove_get_field_from_block) block_ty ~index
+    T.prove_get_field_from_block (E.get_typing_environment env) block_ty ~index
       ~field_kind
   in
   begin match proof with
@@ -79,10 +79,13 @@ let simplify_block_set env r prim dbg ~block_access_kind ~init_or_assign
       K.print field_kind
       T.print block_ty
   end;
-  let index_proof = (E.type_accessor env T.prove_tagged_immediate) index_ty in
+  let index_proof =
+    T.prove_tagged_immediate (E.get_typing_environment env) index_ty
+  in
   let unique_index_unknown () =
     let block_proof =
-      (E.type_accessor env T.prove_must_be_a_block) block_ty ~kind_of_all_fields
+      T.prove_must_be_a_block (E.get_typing_environment env)
+        block_ty ~kind_of_all_fields
     in
     match block_proof with
     | Unknown | Proved () ->
@@ -133,7 +136,7 @@ let simplify_bytes_or_bigstring_set env r prim dbg
       K.print new_value_kind
       K.print field_kind
   end;
-  let index_proof = (E.type_accessor env T.prove_tagged_immediate) index_ty in
+  let index_proof = T.prove_tagged_immediate (E.get_typing_environment env) index_ty in
   match index_proof with
   | Proved indexes ->
     assert (not (Immediate.Set.is_empty indexes));

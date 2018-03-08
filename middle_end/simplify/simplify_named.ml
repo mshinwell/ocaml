@@ -174,7 +174,7 @@ let simplify_set_of_closures original_env r
         ~params
         ~body
         ~result
-        ~result_env_extension
+        ~result_env_extension:(Some result_env_extension)
         ~stub:function_decl.stub
         ~dbg:function_decl.dbg
         ~inline
@@ -193,8 +193,7 @@ let simplify_set_of_closures original_env r
     in
 *)
     let r =
-      (E.type_accessor original_env) R.add_or_meet_typing_judgements
-        r result_env_extension
+      R.add_or_meet_typing_judgements r result_env_extension
     in
     Closure_id.Map.add closure_id (function_decl, ty) funs, r
   in
@@ -327,7 +326,8 @@ let simplify_named env r (tree : Named.t) ~result_var =
     let can_lift =
       Var_within_closure.Map.is_empty set_of_closures.free_vars
     in
-    try_to_reify env r ty ~term:(Flambda.Reachable.reachable term)
+    try_to_reify (E.get_typing_environment env) r ty
+      ~term:(Flambda.Reachable.reachable term)
       ~result_var ~remove_term:remove_primitive ~can_lift
 (* XXX Disabled just for the moment -- mshinwell
     let simplify env r ~bindings ~set_of_closures ~pass_name =
@@ -423,7 +423,8 @@ Format.eprintf "Prim %a: type %a\n%!" Variable.print result_var T.print ty;
     let effects_and_coeffects_ok =
       Flambda_primitive.With_fixed_value.eligible prim
     in
-    try_to_reify env r ty ~term ~result_var ~remove_term:remove_primitive
+    try_to_reify (E.get_typing_environment env) r ty
+      ~term ~result_var ~remove_term:remove_primitive
       ~can_lift:effects_and_coeffects_ok
   | Assign { being_assigned; new_value; } ->
     let being_assigned =

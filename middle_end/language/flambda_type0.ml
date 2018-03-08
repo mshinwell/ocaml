@@ -436,7 +436,7 @@ end) = struct
     Format.fprintf ppf "@[(set_of_closures@ %a)@]"
       (print_ty_fabricated ~cache) entry.set_of_closures
 
-  and print_inlinable_function_declaration ~cache ppf
+  and print_inlinable_function_declaration_with_cache ~cache ppf
         (decl : inlinable_function_declaration) =
     Printing_cache.with_cache cache ppf "inlinable_fundecl" decl (fun ppf () ->
       Format.fprintf ppf
@@ -486,6 +486,11 @@ end) = struct
         (Misc.Stdlib.Option.print Closure_id.print) decl.direct_call_surrogate
         Variable.print decl.my_closure)
 
+  and print_inlinable_function_declaration ppf decl =
+    print_inlinable_function_declaration_with_cache
+      ~cache:(Printing_cache.create ())
+      ppf decl
+
   and print_non_inlinable_function_declarations ppf ~cache
         (decl : non_inlinable_function_declarations) =
     Format.fprintf ppf
@@ -502,7 +507,7 @@ end) = struct
         (decl : function_declarations) =
     match decl with
     | Inlinable decl ->
-      print_inlinable_function_declaration ~cache ppf decl
+      print_inlinable_function_declaration_with_cache ~cache ppf decl
     | Non_inlinable decl ->
       begin match decl with
       | None -> Format.fprintf ppf "Non_inlinable"

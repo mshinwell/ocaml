@@ -89,8 +89,10 @@ let for_defining_expr_of_let (env, r) var kind defining_expr =
     match defining_expr with
     | Invalid _ -> defining_expr
     | Reachable _ ->
-      if T.is_bottom env ty then Flambda.Reachable.invalid ()
-      else defining_expr
+      if T.is_bottom (E.get_typing_environment env) ty then
+        Flambda.Reachable.invalid ()
+      else
+        defining_expr
   in
   let _old_var = var in
   let var, freshening = Freshening.add_variable (E.freshening env) var in
@@ -98,8 +100,7 @@ let for_defining_expr_of_let (env, r) var kind defining_expr =
   let env = E.add_variable env var ty in
   let env =
     let new_judgements = R.get_typing_judgements r in
-    E.extend_typing_environment env env
-      ~env_extension:new_judgements
+    E.extend_typing_environment env ~env_extension:new_judgements
   in
 (*
 Format.eprintf "Variable %a (previously: %a) bound to %a in env\n%!"
@@ -250,7 +251,9 @@ Format.eprintf "Simplifying switch on %a in env %a.\n%!" Name.print scrutinee
 (*
 Format.eprintf "Type of switch scrutinee is %a\n%!" T.print scrutinee_ty;
 *)
-    let arms = S.switch_arms env scrutinee_ty ~arms in
+    let arms =
+      S.switch_arms (E.get_typing_environment env) scrutinee_ty ~arms
+    in
     let destination_is_unreachable cont =
       (* CR mshinwell: This unreachable thing should be tidied up and also
          done on [Apply_cont]. *)
@@ -273,15 +276,12 @@ Format.eprintf "Type of switch scrutinee is %a\n%!" T.print scrutinee_ty;
       S.Arm.Map.fold (fun arm (env_extension, cont) (arms, r) ->
           let cont, r =
             let scrutinee_ty = S.type_of_scrutinee arm in
-            let env =
-              E.extend_typing_environment env env
-                ~env_extension
-            in
+            let env = E.extend_typing_environment env ~env_extension in
             let env =
               match scrutinee with
               | Var scrutinee ->
-                E.replace_meet_variable env
-                  env scrutinee scrutinee_ty
+                E.replace_meet_variable env scrutinee
+                  (E.get_typing_environment env, scrutinee_ty)
               | Symbol _ -> env
             in
 (*
@@ -470,8 +470,8 @@ and simplify_let_cont_handlers0 env r ~handlers
           let env = E.replace_typing_environment env new_env in
           let env = E.increment_continuation_scope_level env in
           let r, handler =
-            simplify_let_cont_handler ~env ~r:(R.create ()) ~cont:cont'
-              ~handler ~arg_tys
+            let r = R.create ~resolver:(E.resolver env) in
+            simplify_let_cont_handler ~env ~r ~cont:cont' ~handler ~arg_tys
           in
           Continuation.Map.add cont' (handler, env, r) handlers)
         handlers
@@ -743,7 +743,9 @@ and simplify_let_cont env r ~body
     begin match handlers with
     | None -> body, r
     | Some _handlers ->
-      let new_env = ref (T.Typing_environment.create ()) in
+      let new_env =
+        ref (T.Typing_environment.create ~resolver:(E.resolver env))
+      in
       let arg_tys =
         Continuation.Map.mapi (fun cont
                   (handler : Flambda.Continuation_handler.t) ->
@@ -758,10 +760,7 @@ and simplify_let_cont env r ~body
                 ~arity:(Flambda.Continuation_handler.param_arity handler)
                 ~default_env:(E.get_typing_environment env)
             in
-            (* XXX mshinwell: Which environment should be used here? *)
-            new_env :=
-              T.Typing_environment.meet env
-              !new_env new_env';
+            new_env := T.Typing_environment.meet !new_env new_env';
             arg_tys)
           original_handlers
       in
