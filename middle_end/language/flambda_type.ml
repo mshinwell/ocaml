@@ -1741,13 +1741,13 @@ let values_structurally_distinct (env1, (t1 : t)) (env2, (t2 : t)) =
         print t2
 
 let int_switch_arms (env : Typing_environment.t) t ~arms =
+  let empty_env = Typing_environment.create_using_resolver_from env in
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a tagged \
         immediate: %a"
       print t
   in
   let unknown () =
-    let empty_env = Typing_environment.create_using_resolver_from env in
     Targetint.OCaml.Map.fold (fun arm cont result ->
         Targetint.OCaml.Map.add arm (empty_env, cont) result)
       arms
@@ -1775,10 +1775,12 @@ let int_switch_arms (env : Typing_environment.t) t ~arms =
                 match Immediate.Map.find (Immediate.int arm) imms with
                 | exception Not_found -> result
                 | { env_extension; } ->
-                  match env_extension with
-                  | None -> result
-                  | Some env_extension ->
-                    Targetint.OCaml.Map.add arm (env_extension, cont) result)
+                  let env_extension =
+                    match env_extension with
+                    | None -> empty_env
+                    | Some env_extension -> env_extension
+                  in
+                  Targetint.OCaml.Map.add arm (env_extension, cont) result)
               arms
               Targetint.OCaml.Map.empty
         end
@@ -1790,12 +1792,12 @@ let int_switch_arms (env : Typing_environment.t) t ~arms =
   | Fabricated _ -> wrong_kind ()
 
 let tag_switch_arms env t ~arms =
+  let empty_env = Typing_environment.create_using_resolver_from env in
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a tag: %a"
       print t
   in
   let unknown () =
-    let empty_env = Typing_environment.create_using_resolver_from env in
     Tag.Map.fold (fun arm cont result ->
         Tag.Map.add arm (empty_env, cont) result)
       arms
@@ -1814,10 +1816,12 @@ let tag_switch_arms env t ~arms =
           match Tag.Map.find arm tag_map with
           | exception Not_found -> result
           | { env_extension; } ->
-            match env_extension with
-            | None -> result
-            | Some env_extension ->
-              Tag.Map.add arm (env_extension, cont) result)
+            let env_extension =
+              match env_extension with
+              | None -> empty_env
+              | Some env_extension -> env_extension
+            in
+            Tag.Map.add arm (env_extension, cont) result)
         arms
         Tag.Map.empty
     | Ok (Set_of_closures _) | Ok (Closure _) -> invalid ()

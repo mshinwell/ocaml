@@ -561,7 +561,7 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
             let consts_switch : L.lambda_switch =
               { sw_numconsts = switch.sw_numconsts;
                 sw_consts = List.combine const_nums sw_consts;
-                sw_numblocks = 0;
+                sw_numblocks = -1;
                 sw_blocks = [];
                 sw_failaction;
               }
@@ -592,7 +592,8 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
               }
             in
             let consts_switch : L.lambda =
-              L.Lswitch (scrutinee, consts_switch, loc)
+              L.Lswitch (Lprim (Pint_to_scrutinee, [scrutinee], Location.none),
+                consts_switch, loc)
             in
             let blocks_switch : L.lambda =
               L.Lswitch (
@@ -602,7 +603,7 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
             let isint_switch : L.lambda_switch =
               { sw_numconsts = 2;
                 sw_consts = [0, blocks_switch; 1, consts_switch];
-                sw_numblocks = 0;
+                sw_numblocks = -1;
                 sw_blocks = [];
                 sw_failaction = None;
               }
@@ -611,7 +612,9 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
               if switch.sw_numconsts = 0 then blocks_switch
               else if switch.sw_numblocks = 0 then consts_switch
               else
-                L.Lswitch (Lprim (Pisint, [scrutinee], Location.none),
+                L.Lswitch (Lprim (Pint_to_scrutinee,
+                    [L.Lprim (Pisint, [scrutinee], Location.none)],
+                    Location.none),
                   isint_switch, loc)
             in
             k (wrap_switch switch)))))
@@ -636,13 +639,14 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
           let switch : Lambda.lambda_switch =
             { sw_numconsts = 2;
               sw_consts = [0, ifnot; 1, ifso];
-              sw_numblocks = 0;
+              sw_numblocks = -1;
               sw_blocks = [];
               sw_failaction = None;
             }
           in
           (* CR-soon mshinwell: Add location to Lifthenelse. *)
-          k (L.Lswitch (cond, switch, Location.none)))))
+          k (L.Lswitch (Lprim (Pint_to_scrutinee, [cond], Location.none),
+            switch, Location.none)))))
   | Lsequence (lam1, lam2) ->
     let ident = Ident.create "sequence" in
     prepare env (L.Llet (Strict, Pgenval, ident, lam1, lam2)) k

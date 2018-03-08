@@ -442,6 +442,8 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
         Tag.Map.empty
     in
     Unary (Get_tag { tags_to_sizes }, arg)
+  | Pint_to_scrutinee, [arg] ->
+    Unary (Int_to_tag, arg)
   | Pisout, [arg1; arg2] ->
     Binary (Int_comp (I.Tagged_immediate, Unsigned, Lt),
             tagged_immediate_as_naked_nativeint arg1,
@@ -595,6 +597,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     | Pduparray _
     | Pfloatfield _
     | Pcvtbint _
+    | Pint_to_scrutinee
     ),
     ([] |  _ :: _ :: _) ->
     Misc.fatal_errorf "Closure_conversion.convert_primitive: \

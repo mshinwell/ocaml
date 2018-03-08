@@ -157,7 +157,7 @@ let for_primitive (prim : Lambda.primitive) =
   | Psequor ->
       (* Removed by [Prepare_lambda] in the Flambda pipeline. *)
       No_effects, No_coeffects
-  | Pread_mutable _ ->
+  | Pread_mutable _ | Pint_to_scrutinee ->
       Misc.fatal_error "Pread_mutable should only exist between \
         Prepare_lambda and Closure_conversion"
 

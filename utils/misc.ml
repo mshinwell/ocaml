@@ -21,7 +21,11 @@ let fatal_error_callstack = ref (Printexc.get_callstack 1)
 
 let fatal_error msg =
   fatal_error_callstack := Printexc.get_callstack 1000;
-  prerr_string ">> Fatal error: "; prerr_endline msg; raise Fatal_error
+  prerr_string (Misc_color.bold_red ());
+  prerr_string ">> Fatal error: ";
+  prerr_string (Misc_color.reset ());
+  prerr_endline msg;
+  raise Fatal_error
 
 let fatal_errorf fmt = Format.kasprintf fatal_error fmt
 

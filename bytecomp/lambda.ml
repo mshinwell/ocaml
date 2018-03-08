@@ -157,6 +157,7 @@ type primitive =
   (* Reading of an identifier bound with a [Variable] let.  Uses of this
      primitive only exist during the conversion of Lambda to Flambda. *)    
   | Pread_mutable of Ident.t
+  | Pint_to_scrutinee
 
 and comparison =
     Ceq | Cneq | Clt | Cgt | Cle | Cge

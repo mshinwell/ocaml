@@ -240,7 +240,7 @@ module Program_body = struct
       defn.computation
       (Format.pp_print_list ~pp_sep:Format.pp_print_space
         (fun ppf (sym, kind, static_part) ->
-          Format.fprintf ppf "@[((symbol %a)@ (kind %a)@ (static_part %a))@]"
+          Format.fprintf ppf "@[((symbol %a)@ (kind %a)@ (static_part@ %a))@]"
             Symbol.print sym
             Flambda_kind.print kind
             Static_part.print static_part))

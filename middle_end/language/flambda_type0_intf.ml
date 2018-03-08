@@ -270,6 +270,9 @@ module type S = sig
     (* CR mshinwell: Should tags be represented as naked immediates?  (A bit
        troublesome since the obvious Fabricated_kind.t wouldn't have a unique
        top element) *)
+    (* XXX Tag.Map.t isn't sufficient, it needs to be something which permits
+       up to the largest constant constructor index.  Maybe use
+       "Scrutinee"? *)
     | Tag of tag_case Tag.Map.t
       (** A block tag (or constant constructor which has undergone a
           kind-cast to kind [Fabricated] using the [Int_as_tag] primitive). *)
@@ -377,6 +380,8 @@ module type S = sig
     (** The names for which the given typing environment specifies a type
         assignment. *)
     val domain : t -> Name_occurrences.t
+
+    val is_empty : t -> bool
 
     (** Print the given typing environment to a formatter. *)
     val print : Format.formatter -> t -> unit

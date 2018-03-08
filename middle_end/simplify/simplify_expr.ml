@@ -296,6 +296,9 @@ Format.eprintf "Environment for %a switch arm:@ %a\n%!"
         (S.Arm.Map.empty, r)
     in
     let switch, removed_branch =
+(*
+Format.eprintf "Switch has %d arms\n%!" (S.Arm.Map.cardinal arms);
+*)
       S.create_switch' ~scrutinee:scrutinee ~arms
     in
     if removed_branch then switch, R.map_benefit r B.remove_branch

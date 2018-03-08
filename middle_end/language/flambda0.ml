@@ -1327,11 +1327,11 @@ end = struct
         name;
         handler = { params; stub; handler; is_exn_handler; };
       } ->
-      fprintf ppf "@[<v 2>where %a%s%s%s@[%a@]%s =@ %a@]"
+      fprintf ppf "@[<v 2>where %a%s%s@ %s@[%a@]%s =@ %a@]"
         Continuation.print name
         (if stub then " *stub*" else "")
-            (if is_exn_handler then "*exn* " else "")
-        (match params with [] -> "" | _ -> " (")
+        (if is_exn_handler then "*exn* " else "")
+        (match params with [] -> "" | _ -> "(")
         (Typed_parameter.List.print_with_cache ~cache) params
         (match params with [] -> "" | _ -> ")")
         (Expr.print_with_cache ~cache) handler
@@ -1940,7 +1940,7 @@ end = struct
       && equal_type ty1 ty2
 
   let print_with_cache ~cache ppf { param; ty; } =
-    Format.fprintf ppf "(%a : %a)"
+    Format.fprintf ppf "(%a :@ %a)"
       Parameter.print param
       (Flambda_type.print_with_cache ~cache) ty
 

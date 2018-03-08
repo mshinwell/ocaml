@@ -47,14 +47,19 @@ module One_cache = struct
     find t.printed
 end
 
-type t = One_cache.t String.Map.t
+type t = {
+  mutable by_prefix : One_cache.t String.Map.t;
+}
 
-let create () = String.Map.empty
+let create () = {
+  by_prefix = String.Map.empty;
+}
 
 let with_cache t ppf prefix obj printer =
-  match String.Map.find prefix t with
+  match String.Map.find prefix t.by_prefix with
   | exception Not_found ->
     let cache = One_cache.create prefix in
+    t.by_prefix <- String.Map.add prefix cache t.by_prefix;
     One_cache.with_cache cache ppf obj printer
   | cache ->
     One_cache.with_cache cache ppf obj printer

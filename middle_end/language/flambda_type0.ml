@@ -387,9 +387,15 @@ end) = struct
           (print_blocks ~cache) blocks
       | Known blocks, Known immediates, None, None
           when Tag.Map.is_empty blocks
-            && not (Immediate.Map.is_empty immediates) ->
-        Format.fprintf ppf "@[(immediates@ @[%a@])@])@]"
-          (print_immediates ~cache) immediates
+            && not (Immediate.Map.is_empty immediates)
+            && Immediate.Map.for_all
+                 (fun _imm ({ env_extension; } : immediate_case) ->
+                   match env_extension with
+                   | None -> true
+                   | Some env -> Name.Map.is_empty env.names_to_types)
+                 immediates ->
+        Format.fprintf ppf "@[(immediates@ @[(%a)@])@]"
+          Immediate.Set.print (Immediate.Map.keys immediates)
       | _ ->
         match is_int, get_tag with
         | None, None ->
@@ -3786,9 +3792,10 @@ Format.eprintf "...giving %a\n%!" print ty;
         | (name, ty)::judgements ->
           match Name.Map.find name env.names_to_types with
           | exception Not_found ->
-            Misc.fatal_errorf "Cannot apply judgement for name %a which is \
-                unbound in the environment: %a"
+            Misc.fatal_errorf "Cannot apply judgement for name %a (to type@ \
+                %a)@ which is unbound in the environment:@ %a"
               Name.print name
+              print ty
               print_typing_environment env
           | scope_level, existing_ty ->
             (* CR mshinwell: How do we know that [env] is the correct
@@ -3984,6 +3991,8 @@ Format.eprintf "Result is: %a\n%!"
         existentials;
         existential_freshening;
       }
+
+    let is_empty t = Name.Map.is_empty t.names_to_types
 
     let domain t =
       let domain =

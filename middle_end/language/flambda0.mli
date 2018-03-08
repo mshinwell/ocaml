@@ -167,6 +167,7 @@ module Switch : sig
       contain branches for all possible values of the scrutinee.
       Invariant: the maps are always non-empty. *)
   (* CR mshinwell: add invariant function *)
+  (* XXX Change to just one type of switch, on Scrutinee *)
   type t = private
     | Value of Continuation.t Targetint.OCaml.Map.t
     | Fabricated of Continuation.t Tag.Map.t
