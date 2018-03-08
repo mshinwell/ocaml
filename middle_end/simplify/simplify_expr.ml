@@ -462,11 +462,13 @@ and simplify_let_cont_handlers0 env r ~handlers
               raise Misc.Fatal_error
             end
           in
+(*
           Format.eprintf "Environment for %a:@ %a@ Arg types:@ %a\n%!"
             Continuation.print cont
             T.Typing_environment.print new_env
             (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print)
               arg_tys;
+*)
           let env = E.replace_typing_environment env new_env in
           let env = E.increment_continuation_scope_level env in
           let r, handler =

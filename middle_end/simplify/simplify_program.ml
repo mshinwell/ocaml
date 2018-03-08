@@ -377,10 +377,12 @@ Format.eprintf "Simplify_program fetching uses for %a\n%!"
           raise exn
         end
       in
+(*
 Format.eprintf "\nEnv extension (cont %a) is@ %a\n\n%!"
   Continuation.print name T.Typing_environment.print env_extension;
 Format.eprintf "default_env0 (cont %a) is@ %a\n\n%!"
   Continuation.print name E.print default_env0;
+*)
 (*
 Format.eprintf "Args for %a: %a\n%!"
   Continuation.print name
@@ -389,8 +391,10 @@ Format.eprintf "Args for %a: %a\n%!"
       let env =
         E.extend_typing_environment default_env0 ~env_extension
       in
+(*
 Format.eprintf "Extended env (cont %a) is@ %a\n\n%!"
   Continuation.print name E.print env;
+*)
 (* XXX Work out why these symbols are already bound
       let env =
         Symbol.Map.fold (fun symbol (ty, _kind, _static_part) env ->
@@ -492,8 +496,11 @@ Format.eprintf "Extended env (cont %a) is@ %a\n\n%!"
       computation;
     }
   in
+  definition, env, newly_imported_symbols, lifted_constants
+(*
 Format.eprintf "Final environment after define_symbol:@ %a\n%!" E.print env;
   definition, env, newly_imported_symbols, lifted_constants
+*)
 
 let add_lifted_constants lifted_constants (body : Program_body.t) =
   (* CR mshinwell: Dependencies between lifted constants?  Need to get the

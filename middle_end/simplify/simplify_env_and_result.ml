@@ -786,15 +786,19 @@ end = struct
                   Continuation.print t.continuation
                   (List.length arg_tys) (List.length arg_tys')
               end;
+(*
 Format.eprintf "Cutting environment for %a, level %a\n%!"
   Continuation.print t.continuation
   Scope_level.print t.definition_scope_level;
+*)
               let this_env =
                 TE.cut (Env.get_typing_environment use.env)
                   ~existential_if_defined_at_or_later_than:
                     (Scope_level.next t.definition_scope_level)
               in
+(*
 Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
+*)
               (* CR mshinwell: Add [List.map2i]. *)
               let arg_number = ref 0 in
               let arg_tys =
@@ -804,13 +808,15 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
                         (Env.get_typing_environment use.env)
                         this_ty
                     in
+(*
                     Format.eprintf "Argument for %a:@ Type:@ %a@ \
                         Free names:@ %a@ Env:@ %a\n%!"
                       Continuation.print t.continuation
                       T.print this_ty
                       Name_occurrences.print free_names_this_ty
                       TE.print this_env;
-                    let this_env =
+*)
+                    let _this_env =
                       (* XXX We should presumably allow things from outer
                          levels so long as our types for them are more
                          precise. *)
@@ -820,8 +826,10 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
                           (TE.domain default_env))
 *)
                     in
+(*
                     Format.eprintf "Restricted env:@ %a\n%!"
                       TE.print this_env;
+*)
                     let use_env = Env.get_typing_environment use.env in
                     let this_ty = T.add_judgements (use_env, this_ty) in
                     let join =

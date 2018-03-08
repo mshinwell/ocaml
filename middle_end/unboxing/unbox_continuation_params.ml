@@ -99,8 +99,10 @@ Format.eprintf "Invariant params:\n@;%a\n"
 
 let for_continuations ~env ~continuation_uses ~handlers ~backend
       : Flambda.Expr.with_wrapper Continuation.Map.t option =
+(*
 Format.eprintf "Unbox_continuation_params starting with continuations %a\n%!"
   Continuation.Set.print (Continuation.Map.keys handlers);
+*)
   let unboxings_by_cont = find_unboxings ~env ~continuation_uses ~handlers in
   if Continuation.Map.is_empty unboxings_by_cont then begin
     None
@@ -145,6 +147,7 @@ Format.eprintf "Unbox_continuation_params starting with continuations %a\n%!"
             assert (not handler.is_exn_handler);
             let with_wrapper : Flambda.Expr.with_wrapper =
               let params = how_to_unbox.new_params @ handler.params in
+(*
   Format.eprintf "Unbox_continuation_params has unboxed:\n@;%a\n%!"
     Flambda.Let_cont_handlers.print (Flambda.Let_cont_handlers.Recursive
       (Continuation.Map.add cont handler Continuation.Map.empty));
@@ -157,6 +160,7 @@ Format.eprintf "Unbox_continuation_params starting with continuations %a\n%!"
     Flambda.Typed_parameter.List.print params
     Continuation.print new_cont
     Flambda.Expr.print handler.handler;
+*)
                 With_wrapper {
                   new_cont;
                   new_handler = {

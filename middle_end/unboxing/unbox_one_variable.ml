@@ -785,32 +785,37 @@ module Make (S : Unboxing_spec) = struct
                 (* CR mshinwell: rewrite for-loop to avoid conversion *)
                 let size = Targetint.OCaml.to_int size in
                 let scope_level = E.continuation_scope_level env in
-                let unboxee_ty_refinement =
-                  let fields =
+                let initial_env =
+                  T.Typing_environment.create ~resolver:(E.resolver env)
+                in
+                let unboxee_ty_refinement, initial_env =
+                  let fields, initial_env =
                     match Misc.Stdlib.List.first_n fields_with_kinds size with
                     | Some (fields_with_kinds, _) ->
-                      List.map (fun (field, kind) : _ T.mutable_or_immutable ->
-                          let field = Name.var field in
-                          Immutable (T.alias_type_of kind field))
-                        fields_with_kinds
+                      let fields =
+                        List.map
+                          (fun (field, kind) : _ T.mutable_or_immutable ->
+                            let field = Name.var field in
+                            Immutable (T.alias_type_of kind field))
+                          fields_with_kinds
+                      in
+                      let initial_env =
+                        List.fold_left (fun initial_env (field, kind) ->
+                            (* CR mshinwell: We could refine the types of the
+                               actual fields themselves according to the tag. *)
+                            let ty = T.unknown kind in
+                            T.Typing_environment.add initial_env
+                              (Name.var field) scope_level ty)
+                          initial_env
+                          fields_with_kinds
+                      in
+                      fields, initial_env
                     | None -> assert false
                   in
-                  T.block tag ~fields:(Array.of_list fields)
+                  T.block tag ~fields:(Array.of_list fields), initial_env
                 in
-                let initial_env =
-                  T.Typing_environment.singleton ~resolver
-                    (Name.var unboxee) scope_level unboxee_ty_refinement
-                in
-                let env = ref initial_env in
-                for field = 0 to size - 1 do
-                  let field, kind = fields_with_kinds0.(field) in
-                  (* CR mshinwell: We could refine the types of the actual fields
-                     themselves according to the tag. *)
-                  let field_ty = T.unknown kind in
-                  env := T.Typing_environment.add !env (Name.var field)
-                    scope_level field_ty
-                done;
-                !env)
+                T.Typing_environment.add initial_env
+                  (Name.var unboxee) scope_level unboxee_ty_refinement)
               tags_to_sizes
           in
           let discriminant_env_is_int =
