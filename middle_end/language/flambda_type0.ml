@@ -759,6 +759,22 @@ end) = struct
       existential_freshening;
     }
 
+  let add_or_replace_typing_environment' env name scope_level t =
+    let names_to_types =
+      Name.Map.add name (scope_level, t) env.names_to_types
+    in
+    let levels_to_names =
+      Scope_level.Map.update scope_level
+        (function
+           | None -> Some (Name.Set.singleton name)
+           | Some names -> Some (Name.Set.add name names))
+        env.levels_to_names
+    in
+    { env with
+      names_to_types;
+      levels_to_names;
+    }
+
   let add_or_replace_typing_environment env name scope_level t =
     (* CR mshinwell: We should add a comment here explaining where this can
        be used and what it cannot be used for (e.g. changing a name's scope
@@ -783,20 +799,7 @@ end;
           print_typing_environment env
       end
     end;
-    let names_to_types =
-      Name.Map.add name (scope_level, t) env.names_to_types
-    in
-    let levels_to_names =
-      Scope_level.Map.update scope_level
-        (function
-           | None -> Some (Name.Set.singleton name)
-           | Some names -> Some (Name.Set.add name names))
-        env.levels_to_names
-    in
-    { env with
-      names_to_types;
-      levels_to_names;
-    }
+    add_or_replace_typing_environment' env name scope_level t
 
   type binding_type = Normal | Existential
 
@@ -3727,7 +3730,63 @@ end;
         existential_freshening;
       }
 
-    let rec meet_typing_environment (env1 : typing_environment)
+    let print_judgements ppf judgements =
+      Format.pp_print_list ~pp_sep:Format.pp_print_space
+        (fun ppf (name, ty) ->
+          Format.fprintf ppf "@[(%s%a%s@ %a)@]"
+            (Misc_color.bold_green ())
+            Name.print name
+            (Misc_color.reset ())
+            print ty)
+        ppf judgements
+
+    (* CR mshinwell: Should the judgements come with environments? *)
+    let rec meet_typing_environment_with_judgements ~num_iterations
+          (env : typing_environment) ~(judgements : judgements_from_meet) =
+      try
+        if num_iterations >= 10 then env
+        else begin
+          match judgements with
+          | [] -> env
+          | (name, ty)::judgements ->
+            let scope_level, existing_ty =
+              match Name.Map.find name env.names_to_types with
+              | exception Not_found ->
+                (* XXX we need a correct level here *)
+                Scope_level.initial, unknown (kind ty)
+              | scope_level, existing_ty ->
+                scope_level, existing_ty
+            in
+            (* XXX I suspect we need an "add in parallel" operation on
+               typing environments which does the additions then checks
+               the closedness invariant. *)
+            (* CR mshinwell: How do we know that [env] is the correct
+               environment for [judgements]? *)
+            let ty, new_judgements = meet (env, ty) (env, existing_ty) in
+            let env =
+              add_or_replace_typing_environment' env name scope_level ty
+            in
+            let judgements = new_judgements @ judgements in
+            meet_typing_environment_with_judgements
+              ~num_iterations:(num_iterations + 1) env ~judgements
+        end
+      with Misc.Fatal_error -> begin
+        Format.eprintf "\n%sContext is: applying judgements:%s\
+            @ %a\n"
+          (Misc_color.bold_red ())
+          (Misc_color.reset ())
+          print_judgements judgements;
+        raise Misc.Fatal_error
+      end
+
+    and replace_meet_typing_environment0 env name
+          ~scope_level ~existing_ty ty_in_context =
+      let ty, judgements = meet ty_in_context (env, existing_ty) in
+      let env = add_or_replace_typing_environment env name scope_level ty in
+      meet_typing_environment_with_judgements
+        ~num_iterations:0 env ~judgements
+
+    let meet_typing_environment (env1 : typing_environment)
           (env2 : typing_environment) =
       let judgements = ref [] in
       let names_to_types =
@@ -3779,43 +3838,22 @@ Format.eprintf "...giving %a\n%!" print ty;
           existential_freshening;
         }
       in
-      meet_typing_environment_with_judgements ~num_iterations:0
-        env ~judgements:!judgements
+      try
+        meet_typing_environment_with_judgements ~num_iterations:0
+          env ~judgements:!judgements
+      with Misc.Fatal_error -> begin
+        Format.eprintf "\n%sContext is: meeting two typing environments:%s\
+            @ %a\n\n%sand%s:@ %a\n"
+          (Misc_color.bold_red ())
+          (Misc_color.reset ())
+          print_typing_environment env1
+          (Misc_color.bold_red ())
+          (Misc_color.reset ())
+          print_typing_environment env2;
+        raise Misc.Fatal_error
+      end
 
-    (* CR mshinwell: Should the judgements come with environments? *)
-    and meet_typing_environment_with_judgements ~num_iterations
-          (env : typing_environment) ~(judgements : judgements_from_meet) =
-      if num_iterations >= 10 then env
-      else
-        match judgements with
-        | [] -> env
-        | (name, ty)::judgements ->
-          match Name.Map.find name env.names_to_types with
-          | exception Not_found ->
-            Misc.fatal_errorf "Cannot apply judgement for name %a (to type@ \
-                %a)@ which is unbound in the environment:@ %a"
-              Name.print name
-              print ty
-              print_typing_environment env
-          | scope_level, existing_ty ->
-            (* CR mshinwell: How do we know that [env] is the correct
-               environment for [judgements]? *)
-            let ty, new_judgements = meet (env, ty) (env, existing_ty) in
-            let env =
-              add_or_replace_typing_environment env name scope_level ty
-            in
-            let judgements = new_judgements @ judgements in
-            meet_typing_environment_with_judgements
-              ~num_iterations:(num_iterations + 1) env ~judgements
-
-    and replace_meet_typing_environment0 env name
-          ~scope_level ~existing_ty ty_in_context =
-      let ty, judgements = meet ty_in_context (env, existing_ty) in
-      let env = add_or_replace_typing_environment env name scope_level ty in
-      meet_typing_environment_with_judgements
-        ~num_iterations:0 env ~judgements
-
-    and replace_meet_typing_environment env name t_in_context =
+    let replace_meet_typing_environment env name t_in_context =
       match Name.Map.find name env.names_to_types with
       | exception Not_found ->
         Misc.fatal_errorf "Cannot meet types for name %a which is unbound \
@@ -3823,8 +3861,21 @@ Format.eprintf "...giving %a\n%!" print ty;
           Name.print name
           print_typing_environment env
       | scope_level, existing_ty ->
-        replace_meet_typing_environment0 env name
-          ~scope_level ~existing_ty t_in_context
+        try
+          replace_meet_typing_environment0 env name
+            ~scope_level ~existing_ty t_in_context
+        with Misc.Fatal_error -> begin
+          Format.eprintf "\n%sContext is: replace-meet on a member %a of a \
+              typing environment:%s@ Existing type:@ %a@ \
+              Refined type:@ %a@ Environment of refined type:@ %a\n"
+            (Misc_color.bold_red ())
+            Name.print name
+            (Misc_color.reset ())
+            print existing_ty
+            print (snd t_in_context)
+            print_typing_environment (fst t_in_context);
+          raise Misc.Fatal_error
+        end
   end
 
   let meet tc1 tc2 =
