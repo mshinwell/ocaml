@@ -1184,12 +1184,14 @@ and simplify_function_application env r (apply : Flambda.Apply.t)
     (* CR mshinwell: Pierre to implement *)
     unknown_closures ()
   in
-  match T.prove_closures env callee_ty with
+  match T.prove_closures (E.get_typing_environment env) callee_ty with
   | Proved closures ->
     begin match Closure_id.Map.get_singleton closures with
     | Some (callee's_closure_id, { set_of_closures = set_ty; }) ->
       let set_ty = T.of_ty_fabricated set_ty in
-      let proof = T.prove_sets_of_closures env set_ty in
+      let proof =
+        T.prove_sets_of_closures (E.get_typing_environment env) set_ty
+      in
       begin match proof with
       | Proved (_set_of_closures_name, set_of_closures) ->
         let closures = T.extensibility_contents set_of_closures.closures in
@@ -1197,7 +1199,7 @@ and simplify_function_application env r (apply : Flambda.Apply.t)
         | exception Not_found -> Expr.invalid (), r
         | closure_ty ->
           let closure_ty = T.of_ty_fabricated closure_ty in
-          match T.prove_closure env closure_ty with
+          match T.prove_closure (E.get_typing_environment env) closure_ty with
           | Proved { function_decls = Inlinable function_decl; } ->
             inlinable ~callee's_closure_id ~function_decl ~set_of_closures
           | Proved { function_decls = Non_inlinable None; } ->

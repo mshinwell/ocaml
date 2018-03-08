@@ -31,7 +31,6 @@ type 'a or_invalid =
   | Invalid
 
 let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
-  let type_of_name = E.type_of_name env in
   let simplify_float_fields (mut : Flambda_primitive.mutable_or_immutable)
         fields =
     let or_unknown field =
@@ -46,7 +45,9 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
           | Const f -> done_something, ((field, or_unknown f) :: fields_rev)
           | Var var ->
             let ty = E.find_variable env var in
-            begin match T.prove_naked_float env ty with
+            begin match
+              T.prove_naked_float (E.get_typing_environment env) ty
+            with
             | Unknown ->
               done_something, ((field, None) :: fields_rev)
             | Proved fs ->
@@ -84,7 +85,7 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
           | Dynamically_computed var ->
             let ty = E.find_variable env var in
             let ty, canonical_name =
-              T.resolve_aliases env ty
+              T.resolve_aliases (E.get_typing_environment env, ty)
             in
             let canonical_var =
               match canonical_name with
@@ -95,7 +96,9 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
             | Some (Symbol sym) ->
               Of_kind_value.Symbol sym, or_unknown ty
             | (Some (Var _)) | None ->
-              match T.prove_tagged_immediate env ty with
+              match
+                T.prove_tagged_immediate (E.get_typing_environment env) ty
+              with
               | Proved imms ->
                 begin match Immediate.Set.get_singleton imms with
                 | None ->
@@ -118,7 +121,8 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
     assert (match mut with
       | Immutable -> true
       | Mutable ->
-        List.for_all (fun ty -> not (T.is_known env ty))
+        List.for_all (fun ty ->
+            not (T.is_known (E.get_typing_environment env) ty))
           field_types);
     let field_types =
       List.map (fun field_type : _ T.mutable_or_immutable ->
@@ -134,7 +138,7 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
     let ty = T.block Tag.zero ~fields:[| field_ty |] in
     Ok (Static_part.Fabricated_block field, ty)
   | Set_of_closures set ->
-    let r = R.create () in
+    let r = R.create ~resolver:(E.resolver env) in
     let set, ty, _r = Simplify_named.simplify_set_of_closures env r set in
     Ok (Static_part.Set_of_closures set, ty)
   | Closure _ -> assert false (* XXX to do with Pierre (sym, closure_id) ->
@@ -160,7 +164,7 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
     (* CR mshinwell: Share code between these float/int32/int64/nativeint cases.
        [Number_adjuncts] may help *)
     let ty = E.find_variable env var in
-    begin match T.prove_naked_float env ty with
+    begin match T.prove_naked_float (E.get_typing_environment env) ty with
     | Proved fs ->
       begin match Numbers.Float_by_bit_pattern.Set.get_singleton fs with
       | Some f ->
@@ -174,7 +178,7 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
   | Boxed_int32 (Const n) -> Ok (static_part, T.this_boxed_int32 n)
   | Boxed_int32 (Var var) ->
     let ty = E.find_variable env var in
-    begin match T.prove_naked_int32 env ty with
+    begin match T.prove_naked_int32 (E.get_typing_environment env) ty with
     | Proved fs ->
       begin match Numbers.Int32.Set.get_singleton fs with
       | Some f ->
@@ -188,7 +192,7 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
   | Boxed_int64 (Const n) -> Ok (static_part, T.this_boxed_int64 n)
   | Boxed_int64 (Var var) ->
     let ty = E.find_variable env var in
-    begin match T.prove_naked_int64 env ty with
+    begin match T.prove_naked_int64 (E.get_typing_environment env) ty with
     | Proved fs ->
       begin match Numbers.Int64.Set.get_singleton fs with
       | Some f ->
@@ -202,7 +206,7 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
   | Boxed_nativeint (Const n) -> Ok (static_part, T.this_boxed_nativeint n)
   | Boxed_nativeint (Var var) ->
     let ty = E.find_variable env var in
-    begin match T.prove_naked_nativeint env ty with
+    begin match T.prove_naked_nativeint (E.get_typing_environment env) ty with
     | Proved fs ->
       begin match Targetint.Set.get_singleton fs with
       | Some f ->
@@ -237,7 +241,7 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
     else Ok (Static_part.Immutable_float_array static_part_fields, ty)
   | Mutable_string { initial_value = Var var; } ->
     let ty = E.find_variable env var in
-    begin match T.prove_string env ty with
+    begin match T.prove_string (E.get_typing_environment env) ty with
     | Proved strs ->
       begin match T.String_info.Set.get_singleton strs with
       | Some str ->
@@ -255,7 +259,7 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
     end
   | Immutable_string (Var var) ->
     let ty = E.find_variable env var in
-    begin match T.prove_string env ty with
+    begin match T.prove_string (E.get_typing_environment env) ty with
     | Proved strs ->
       begin match T.String_info.Set.get_singleton strs with
       | Some str ->
@@ -333,7 +337,7 @@ let simplify_define_symbol env (recursive : Flambda.recursive)
           E.add_continuation env computation.exception_cont exn_cont_approx
         in
         let env = E.increment_continuation_scope_level env in
-        let r = R.create () in
+        let r = R.create ~resolver:(E.resolver env) in
         let descr =
           let symbol_names =
             List.map (fun (sym, _, _) ->
@@ -383,8 +387,7 @@ Format.eprintf "Args for %a: %a\n%!"
   (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print) args_types;
 *)
       let env =
-        (E.type_accessor env E.extend_typing_environment) default_env0
-          ~env_extension
+        E.extend_typing_environment default_env0 ~env_extension
       in
 Format.eprintf "Extended env (cont %a) is@ %a\n\n%!"
   Continuation.print name E.print env;
