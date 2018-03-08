@@ -106,16 +106,16 @@ module type Env = sig
   val add_variable : t -> Variable.t -> Flambda_type.t -> t
 
   val add_or_replace_meet_variable
-     : (t
+     : t
     -> Variable.t
     -> Flambda_type.t
-    -> t) Flambda_type.type_accessor
+    -> t
 
   val replace_meet_variable
-     : (t
+     : t
     -> Variable.t
-    -> Flambda_type.t
-    -> t) Flambda_type.type_accessor
+    -> Flambda_type.t_in_context
+    -> t
 
   (** Find the type of a given variable, raising a fatal error if the
       environment does not know about the variable, or if the variable is
@@ -187,9 +187,9 @@ module type Env = sig
   val get_typing_environment : t -> Flambda_type.Typing_environment.t
 
   val extend_typing_environment
-     : (t
+     : t
     -> env_extension:Flambda_type.Typing_environment.t
-    -> t) Flambda_type.type_accessor
+    -> t
 
   val replace_typing_environment
      : t
@@ -429,7 +429,7 @@ module type Result = sig
 
   type t
 
-  val create : unit -> t
+  val create : resolver:(Export_id.t -> Flambda_type.t option) -> t
 
   val union : t -> t -> t
 
@@ -601,16 +601,16 @@ module type Result = sig
   val clear_typing_judgements : t -> t
 
   val add_or_meet_typing_judgement
-     : (t
+     : t
     -> Name.t
     -> Scope_level.t
     -> Flambda_type.t
-    -> t) Flambda_type.type_accessor
+    -> t
 
   val add_or_meet_typing_judgements
-     : (t
+     : t
     -> Flambda_type.Typing_environment.t
-    -> t) Flambda_type.type_accessor
+    -> t
 
   val get_typing_judgements : t -> Flambda_type.Typing_environment.t
 

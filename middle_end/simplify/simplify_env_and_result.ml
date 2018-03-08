@@ -245,8 +245,8 @@ end = struct
 
   let add_or_replace_meet_variable t var ty =
     let typing_environment =
-      TE.add_or_replace_meet t.typing_environment
-        (Name.var var) t.continuation_scope_level ty
+      TE.add_or_replace_meet t.typing_environment (Name.var var)
+        t.continuation_scope_level ty
     in
     { t with typing_environment; }
 
@@ -1243,7 +1243,7 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
       typing_judgements = T.Typing_environment.create ~resolver:t.resolver;
     }
 
-  let add_or_meet_typing_judgement ~type_of_name t name scope_level ty =
+  let add_or_meet_typing_judgement t name scope_level ty =
     let typing_judgements =
       T.Typing_environment.add_or_replace_meet
         t.typing_judgements name scope_level ty
@@ -1252,7 +1252,7 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
       typing_judgements;
     }
 
-  let add_or_meet_typing_judgements ~type_of_name t typing_env =
+  let add_or_meet_typing_judgements t typing_env =
     let typing_judgements =
       T.Typing_environment.meet t.typing_judgements typing_env
     in
