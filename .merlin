@@ -4,8 +4,38 @@ B ./asmcomp
 S ./middle_end
 B ./middle_end
 
+S ./middle_end/analysis
+B ./middle_end/analysis
+
 S ./middle_end/base_types
 B ./middle_end/base_types
+
+S ./middle_end/cmx
+B ./middle_end/cmx
+
+S ./middle_end/code_motion
+B ./middle_end/code_motion
+
+S ./middle_end/from_lambda
+B ./middle_end/from_lambda
+
+S ./middle_end/inlining
+B ./middle_end/inlining
+
+S ./middle_end/language
+B ./middle_end/language
+
+S ./middle_end/removal
+B ./middle_end/removal
+
+S ./middle_end/simplify
+B ./middle_end/simplify
+
+S ./middle_end/to_clambda
+B ./middle_end/to_clambda
+
+S ./middle_end/unboxing
+B ./middle_end/unboxing
 
 S ./bytecomp
 B ./bytecomp

@@ -81,12 +81,14 @@ end = struct
         ~allow_continuation_specialisation ~round ~backend
         ~simplify_toplevel ~simplify_expr
         ~simplify_continuation_use_cannot_inline =
+    (* XXX [resolver] should come from [backend] *)
+    let resolver _export_id = None in
     { backend;
       round;
       simplify_toplevel;
       simplify_expr;
       simplify_continuation_use_cannot_inline;
-      typing_environment = TE.create ();
+      typing_environment = TE.create ~resolver;
       mutable_variables = Mutable_variable.Map.empty;
       continuations = Continuation.Map.empty;
       continuation_scope_level = Scope_level.initial;
@@ -188,10 +190,9 @@ end = struct
   let replace_typing_environment t typing_environment =
     { t with typing_environment; }
 
-  let extend_typing_environment ~type_of_name t ~env_extension =
+  let extend_typing_environment t ~env_extension =
     let typing_environment =
-      T.Typing_environment.meet ~type_of_name
-        t.typing_environment env_extension
+      T.Typing_environment.meet t.typing_environment env_extension
     in
     { t with typing_environment; }
 
@@ -199,7 +200,7 @@ end = struct
      everything to be cleared when we do [local]. *)
   let local env =
     { env with
-      typing_environment = TE.create ();
+      typing_environment = TE.create_using_resolver_from env.typing_environment;
       continuations = Continuation.Map.empty;
 (*      projections = Projection.Map.empty; *)
       freshening = Freshening.empty_preserving_activation_state env.freshening;
@@ -242,16 +243,16 @@ end = struct
     in
     { t with typing_environment; }
 
-  let add_or_replace_meet_variable ~type_of_name t var ty =
+  let add_or_replace_meet_variable t var ty =
     let typing_environment =
-      TE.add_or_replace_meet ~type_of_name t.typing_environment
+      TE.add_or_replace_meet t.typing_environment
         (Name.var var) t.continuation_scope_level ty
     in
     { t with typing_environment; }
 
-  let replace_meet_variable ~type_of_name t var ty =
+  let replace_meet_variable t var ty =
     let typing_environment =
-      TE.replace_meet ~type_of_name t.typing_environment (Name.var var) ty
+      TE.replace_meet t.typing_environment (Name.var var) ty
     in
     { t with typing_environment; }
 
@@ -787,7 +788,8 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
               let arg_tys =
                 List.map2 (fun result this_ty ->
                     let free_names_this_ty =
-                      (Env.type_accessor use.env T.free_names_transitive)
+                      T.free_names_transitive
+                        (Env.get_typing_environment use.env)
                         this_ty
                     in
                     Format.eprintf "Argument for %a:@ Type:@ %a@ \
@@ -808,12 +810,11 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
                     in
                     Format.eprintf "Restricted env:@ %a\n%!"
                       TE.print this_env;
-                    let this_ty =
-                      (Env.type_accessor use.env T.add_judgements)
-                        this_ty this_env
-                    in
+                    let use_env = Env.get_typing_environment use.env in
+                    let this_ty = T.add_judgements (use_env, this_ty) in
                     let join =
-                      try (Env.type_accessor use.env T.join) result this_ty
+                      (* XXX Think carefully about which environments to use *)
+                      try T.join (use_env, result) (use_env, this_ty)
                       with Misc.Fatal_error -> begin
                         Format.eprintf "\n%sContext is: argument number %d \
                             (0 is the first argument)%s\n"
@@ -830,10 +831,7 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
               let env =
                 match env with
                 | None -> this_env
-                | Some env ->
-                  (* XXX Which environment should be used here for
-                     [type_of_name]? *)
-                  (Env.type_accessor use.env TE.join) env this_env
+                | Some env -> TE.join env this_env
               in
               arg_tys, Some env)
             (bottom_arg_tys, None)
@@ -933,7 +931,8 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
   type env = Env.t
 
   type t =
-    { (* CR mshinwell: What about combining these next two? *)
+    { resolver : (Export_id.t -> Flambda_type.t option);
+      (* CR mshinwell: What about combining these next two? *)
       used_continuations : Continuation_uses.t Continuation.Map.t;
       defined_continuations :
         (Continuation_uses.t * Continuation_approx.t * Env.t
@@ -949,19 +948,21 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
           Symbol.Map.t;
     }
 
-  let create () =
-    { used_continuations = Continuation.Map.empty;
+  let create ~resolver =
+    { resolver;
+      used_continuations = Continuation.Map.empty;
       defined_continuations = Continuation.Map.empty;
       inlining_threshold = None;
       benefit = Inlining_cost.Benefit.zero;
       num_direct_applications = 0;
-      typing_judgements = T.Typing_environment.create ();
+      typing_judgements = T.Typing_environment.create ~resolver;
       newly_imported_symbols = Symbol.Map.empty;
       lifted_constants = Symbol.Map.empty;
     }
 
   let union t1 t2 =
-    { used_continuations =
+    { resolver = t1.resolver;
+      used_continuations =
         Continuation.Map.union_merge Continuation_uses.union
           t1.used_continuations t2.used_continuations;
       defined_continuations =
@@ -971,7 +972,9 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
       benefit = Inlining_cost.Benefit.(+) t1.benefit t2.benefit;
       num_direct_applications =
         t1.num_direct_applications + t2.num_direct_applications;
-      typing_judgements = T.Typing_environment.create (); (* XXX *)
+      typing_judgements =
+        T.Typing_environment.meet
+          t1.typing_judgements t2.typing_judgements;
       newly_imported_symbols =
         Symbol.Map.disjoint_union t1.newly_imported_symbols
           t2.newly_imported_symbols;
@@ -1105,7 +1108,7 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
   let continuation_args_types' t cont ~arity =
     let tys, _env =
       continuation_args_types t cont ~arity
-        ~default_env:(T.Typing_environment.create ())
+        ~default_env:(T.Typing_environment.create ~resolver:t.resolver)
     in
     tys
   
@@ -1237,12 +1240,12 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
 
   let clear_typing_judgements t =
     { t with
-      typing_judgements = T.Typing_environment.create ();
+      typing_judgements = T.Typing_environment.create ~resolver:t.resolver;
     }
 
   let add_or_meet_typing_judgement ~type_of_name t name scope_level ty =
     let typing_judgements =
-      T.Typing_environment.add_or_replace_meet ~type_of_name
+      T.Typing_environment.add_or_replace_meet
         t.typing_judgements name scope_level ty
     in
     { t with
@@ -1251,8 +1254,7 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
 
   let add_or_meet_typing_judgements ~type_of_name t typing_env =
     let typing_judgements =
-      T.Typing_environment.meet ~type_of_name
-        t.typing_judgements typing_env
+      T.Typing_environment.meet t.typing_judgements typing_env
     in
     { t with
       typing_judgements;
