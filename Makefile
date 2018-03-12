@@ -322,12 +322,12 @@ MIDDLE_END_LANGUAGE=\
   middle_end/language/flambda_utils.cmo
 
 MIDDLE_END_REMOVAL=\
+  middle_end/removal/remove_unused_continuation_params.cmo
   # middle_end/removal/initialize_symbol_to_let_symbol.cmo \
   # middle_end/removal/ref_to_variables.cmo \
   # middle_end/removal/remove_free_vars_equal_to_args.cmo \
   # middle_end/removal/remove_unused_arguments.cmo \
   # middle_end/removal/remove_unused_closure_vars.cmo \
-  # middle_end/removal/remove_unused_continuation_params.cmo \
   # middle_end/removal/remove_unused_program_constructs.cmo \
   # middle_end/removal/unrecursify.cmo
 

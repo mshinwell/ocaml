@@ -1866,6 +1866,7 @@ end and Typed_parameter : sig
     val simples : t -> Simple.t list
     val var_set : t -> Variable.Set.t
     val name_set : t -> Name.Set.t
+    val param_set : t -> Parameter.Set.t
     val equal_vars : t -> Variable.t list -> bool
     val rename : t -> t
     val arity : t -> Flambda_kind.t list
@@ -1972,6 +1973,8 @@ end = struct
     let var_set t = Variable.Set.of_list (vars t)
 
     let name_set t = Name.Set.of_list (List.map Name.var (vars t))
+
+    let param_set t = Parameter.Set.of_list (List.map param t)
 
     let rename t = List.map (fun t -> rename t) t
 

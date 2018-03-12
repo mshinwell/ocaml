@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2017 OCamlPro SAS                                          *)
-(*   Copyright 2017 Jane Street Group LLC                                 *)
+(*   Copyright 2017--2018 OCamlPro SAS                                    *)
+(*   Copyright 2017--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -14,19 +14,31 @@
 (*                                                                        *)
 (**************************************************************************)
 
-[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+[@@@ocaml.warning "+a-4-30-40-41-42"]
 
 (* CR-someday mshinwell: If we can get the types in [Flambda] to be uniform
    enough between functions and continuations then we can probably share
    code for doing remove-unused-parameters. *)
 
-(* XXX needs fixing
+(* CR mshinwell: Add support for phantom parameters *)
 
-This also needs to remove unused continuation params from the return
-continuations in [Program_body.t] symbol definitions.
+(* XXX This also needs to remove unused continuation params from the return
+   continuations in toplevel symbol definitions.
+*)
+
+module T = Flambda_type
 
 let remove_parameters ~(handler : Flambda.Continuation_handler.t)
-        ~to_remove : Flambda.with_wrapper =
+        ~to_remove : Flambda.Expr.with_wrapper =
+  let params_to_kinds =
+    List.fold_left (fun params_to_kinds typed_param ->
+        let param = Flambda.Typed_parameter.param typed_param in
+        let ty = Flambda.Typed_parameter.ty typed_param in
+        let kind = T.kind ty in
+        Parameter.Map.add param kind params_to_kinds)
+      Parameter.Map.empty
+      handler.params
+  in
   let freshened_params =
     List.map (fun param -> param, Flambda.Typed_parameter.rename param)
       handler.params
@@ -37,44 +49,17 @@ let remove_parameters ~(handler : Flambda.Continuation_handler.t)
   in
   let wrapper_params_not_unused =
     Misc.Stdlib.List.filter_map (fun (param, freshened_param) ->
-        if Parameter.Set.mem param to_remove then None
-        else Some (Parameter.var freshened_param))
+        if Parameter.Set.mem (Flambda.Typed_parameter.param param) to_remove
+        then None
+        else
+          let var = Flambda.Typed_parameter.var freshened_param in
+          Some (Simple.var var))
       freshened_params
   in
   let new_params =
-    List.filter (fun param -> not (Parameter.Set.mem param to_remove))
+    List.filter (fun param ->
+        not (Parameter.Set.mem (Flambda.Typed_parameter.param param) to_remove))
       handler.params
-  in
-  let freshening = Parameter.Map.of_list freshened_params in
-  let freshen param =
-    match Parameter.Map.find param freshening with
-    | param -> param
-    | exception Not_found -> assert false
-  in
-  let new_specialised_args =
-    Flambda_utils.clean_specialised_args_projections (
-      Variable.Map.filter (fun param _spec_to ->
-          not (Parameter.Set.mem (Parameter.wrap param) to_remove))
-        handler.specialised_args)
-  in
-  let wrapper_specialised_args =
-    Variable.Map.fold (fun var (spec_to : Flambda.specialised_to)
-            wrapper_specialised_args ->
-        let var = Parameter.var (freshen (Parameter.wrap var)) in
-        let projection =
-          Misc.Stdlib.Option.map (fun projection ->
-              Projection.map_projecting_from projection ~f:(fun from ->
-                Parameter.var (freshen (Parameter.wrap from))))
-            spec_to.projection
-        in
-        let spec_to : Flambda.specialised_to =
-          { var = spec_to.var;
-            projection;
-          }
-        in
-        Variable.Map.add var spec_to wrapper_specialised_args)
-      handler.specialised_args
-      Variable.Map.empty
   in
   let new_cont = Continuation.create () in
   let wrapper_handler : Flambda.Continuation_handler.t =
@@ -82,13 +67,15 @@ let remove_parameters ~(handler : Flambda.Continuation_handler.t)
       stub = true;
       is_exn_handler = false;
       handler = Apply_cont (new_cont, None, wrapper_params_not_unused);
-      specialised_args = wrapper_specialised_args;
     }
   in
   assert (not handler.is_exn_handler);
   let new_handler =
     Parameter.Set.fold (fun param body ->
-        Flambda.Expr.create_let (Parameter.var param) (Const (Const_pointer 0)) body)
+        let kind = Parameter.Map.find param params_to_kinds in
+        let dummy_value = Flambda.Named.dummy_value kind in
+        Flambda.Expr.create_let (Parameter.var param) kind
+          dummy_value body)
       to_remove
       handler.handler
   in
@@ -97,7 +84,6 @@ let remove_parameters ~(handler : Flambda.Continuation_handler.t)
       stub = handler.stub;
       is_exn_handler = false;
       handler = new_handler;
-      specialised_args = new_specialised_args;
     }
   in
   With_wrapper {
@@ -106,7 +92,8 @@ let remove_parameters ~(handler : Flambda.Continuation_handler.t)
     wrapper_handler;
   }
 
-let for_continuation ~body ~unused ~(handlers : Flambda.Continuation_handler.ts)
+let for_continuation ~body ~unused
+      ~(handlers : Flambda.Continuation_handlers.t)
       ~original ~recursive : Flambda.Expr.t =
   if Parameter.Set.is_empty unused then
     original
@@ -115,9 +102,10 @@ let for_continuation ~body ~unused ~(handlers : Flambda.Continuation_handler.ts)
       Continuation.Map.fold (fun cont
               (handler : Flambda.Continuation_handler.t) handlers ->
           let to_remove =
-            Parameter.Set.inter unused (Parameter.Set.of_list handler.params)
+            Parameter.Set.inter unused
+              (Flambda.Typed_parameter.List.param_set handler.params)
           in
-          let with_wrapper : Flambda_utils.with_wrapper =
+          let with_wrapper : Flambda.Expr.with_wrapper =
             if handler.stub || Parameter.Set.is_empty to_remove then
               Unchanged { handler; }
             else
@@ -127,43 +115,49 @@ let for_continuation ~body ~unused ~(handlers : Flambda.Continuation_handler.ts)
         handlers
         Continuation.Map.empty
     in
-    Flambda_utils.build_let_cont_with_wrappers ~body ~recursive
+    Flambda.Expr.build_let_cont_with_wrappers ~body ~recursive
       ~with_wrappers:handlers
 
-let run program ~backend =
+let run program ~backend:_ =
   (* CR mshinwell: This is very inefficient, given the deeply-nested
      continuation structures that are typical.  The continuation declarations
      should probably be added one by one as they are encountered inside
      [Invariant_params] itself. *)
-  Flambda_static.Program.Mappers.map_toplevel_exprs program ~f:(fun expr ->
-    Flambda.Expr.Mappers.map_expr (fun (expr : Flambda.Expr.t) ->
-        match expr with
-        | Let_cont { body = _; handlers = Non_recursive { name = _; handler = {
-            is_exn_handler = true; _ }; }; } -> expr
-        | Let_cont { body; handlers = Non_recursive { name; handler; } } ->
-          let unused =
-            let fvs = Flambda.Expr.free_variables handler.handler in
-            let params = Parameter.Set.of_list handler.params in
-            Parameter.Set.filter (fun param ->
-                not (Variable.Set.mem (Parameter.var param) fvs))
-              params
-          in
-          let handlers =
-            Continuation.Map.add name handler Continuation.Map.empty
-          in
-          for_continuation ~body ~handlers ~unused ~original:expr
-            ~recursive:Flambda.Non_recursive
-        | Let_cont { body; handlers = Recursive handlers; } ->
-          let unused =
-            Invariant_params.Continuations.unused_arguments handlers ~backend
-          in
-          let unused = Parameter.Set.wrap unused in
-          for_continuation ~body ~handlers ~unused ~original:expr
-            ~recursive:Flambda.Recursive
-        | Let _ | Let_mutable _ | Apply _ | Apply_cont _ | Switch _
-        | Invalid _ -> expr)
-      expr)
-
-*)
-
-let run program ~backend:_ = program
+  Flambda_static.Program.Mappers.map_toplevel_exprs program
+    ~f:(fun ~continuation_arity:_ _cont expr ->
+      Flambda.Expr.Mappers.map_expr (fun (expr : Flambda.Expr.t) ->
+          match expr with
+          | Let_cont { body = _; handlers = Non_recursive {
+              name = _; handler = {is_exn_handler = true; _ }; }; } -> expr
+          | Let_cont { body; handlers = Non_recursive { name; handler; } } ->
+            let unused =
+              let free_names = Flambda.Expr.free_names handler.handler in
+              let params =
+                Flambda.Typed_parameter.List.param_set handler.params
+              in
+              Parameter.Set.filter (fun param ->
+                  let param = Name.var (Parameter.var param) in
+                  not (Name_occurrences.mem free_names param))
+                params
+            in
+            let handlers =
+              Continuation.Map.add name handler Continuation.Map.empty
+            in
+            for_continuation ~body ~handlers ~unused ~original:expr
+              ~recursive:Non_recursive
+          | Let_cont { body; handlers = Recursive handlers; } ->
+            ignore body;
+            ignore handlers;
+            (* XXX fix this *)
+            expr
+  (*
+            let unused =
+              Invariant_params.Continuations.unused_arguments handlers ~backend
+            in
+            let unused = Parameter.Set.wrap unused in
+            for_continuation ~body ~handlers ~unused ~original:expr
+              ~recursive:Flambda.Recursive
+  *)
+          | Let _ | Let_mutable _ | Apply _ | Apply_cont _ | Switch _
+          | Invalid _ -> expr)
+        expr)

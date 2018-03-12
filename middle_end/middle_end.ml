@@ -162,10 +162,8 @@ let middle_end0 ppf ~prefixname ~backend ~size ~filename ~module_ident
                 ~allow_continuation_inlining:false
                 ~allow_continuation_specialisation:true
                 ~backend ~prefixname ~round)
-(*
           +-+ ("Remove_unused_continuation_params",
                 Remove_unused_continuation_params.run ~backend)
-*)
           +-+ ("Simplify (func. inlining off, cont. inlining on)",
                 Simplify.run ~never_inline:true
                   ~allow_continuation_inlining:true

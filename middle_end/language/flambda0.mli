@@ -745,6 +745,9 @@ end and Typed_parameter : sig
     (** As for [var_set] but returns a set of [Name]s. *)
     val name_set : t -> Name.Set.t
 
+    (** As for [var_set] but returns a set of [Parameter]s. *)
+    val param_set : t -> Parameter.Set.t
+
     val equal_vars : t -> Variable.t list -> bool
 
     val rename : t -> t

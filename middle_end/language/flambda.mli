@@ -319,6 +319,10 @@ end and Named : sig
 
   val at_most_generative_effects : t -> bool
 
+  (** Return a value which is kind-correct, but not necessarily
+      type-correct, at the given kind. *)
+  val dummy_value : Flambda_kind.t -> t
+
   val toplevel_substitution : Variable.t Variable.Map.t -> t -> t
 
   module Iterators : sig

@@ -1239,6 +1239,7 @@ end and Named : sig
     -> t
   val no_effects_or_coeffects : t -> bool
   val at_most_generative_effects : t -> bool
+  val dummy_value : Flambda_kind.t -> t
   module Iterators : sig
     val iter : (Expr.t -> unit) -> (t -> unit) -> t -> unit
     val iter_named : (t -> unit) -> t -> unit
@@ -1262,6 +1263,36 @@ end = struct
     | Prim (prim, _) -> Flambda_primitive.at_most_generative_effects prim
     | Set_of_closures _ -> true
     | Assign _ | Read_mutable _ -> false
+
+  let dummy_value (kind : K.t) : t =
+    let simple = 
+      match kind with
+      | Value -> Simple.const_zero
+      | Naked_number Naked_immediate ->
+        Simple.const (Untagged_immediate Immediate.zero)
+      | Naked_number Naked_float ->
+        Simple.const (Naked_float Numbers.Float_by_bit_pattern.zero)
+      | Naked_number Naked_int32 ->
+        Simple.const (Naked_int32 Int32.zero)
+      | Naked_number Naked_int64 ->
+        Simple.const (Naked_int64 Int64.zero)
+      | Naked_number Naked_nativeint ->
+        Simple.const (Naked_nativeint Targetint.zero)
+      | Fabricated -> Simple.tag (Tag.create_exn 0)
+      | Phantom (_occs, Value) -> Simple.const_zero
+      | Phantom (_occs, Naked_number Naked_immediate) ->
+        Simple.const (Untagged_immediate Immediate.zero)
+      | Phantom (_occs, Naked_number Naked_float) ->
+        Simple.const (Naked_float Numbers.Float_by_bit_pattern.zero)
+      | Phantom (_occs, Naked_number Naked_int32) ->
+        Simple.const (Naked_int32 Int32.zero)
+      | Phantom (_occs, Naked_number Naked_int64) ->
+        Simple.const (Naked_int64 Int64.zero)
+      | Phantom (_occs, Naked_number Naked_nativeint) ->
+        Simple.const (Naked_nativeint Targetint.zero)
+      | Phantom (_occs, Fabricated) -> Simple.tag (Tag.create_exn 0)
+    in
+    Simple simple
 
   (* CR mshinwell: Implement this properly. *)
   let toplevel_substitution sb (t : t) =
