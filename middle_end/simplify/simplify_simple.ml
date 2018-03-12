@@ -53,7 +53,8 @@ let simplify_simple env (simple : Simple.t) =
     in
     match reified with
     | Term (simple, ty) -> simple, ty
-    | Cannot_reify | Lift _ -> Simple.name name, ty
+    | Cannot_reify | Lift _ ->
+      Simple.name name, T.alias_type_of (T.kind ty) name
     | Invalid -> Simple.name name, T.bottom_like ty
 
 let simplify_simples env simples =
