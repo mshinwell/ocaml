@@ -41,11 +41,17 @@ module type Unboxing_spec = sig
   val box : t -> Tag.t -> Simple.t list -> Debuginfo.t -> Flambda.Named.t
 
   val refine_unboxee_ty
-     : (t -> unboxee_ty:T.t -> all_fields:Name.t list -> T.t) T.type_accessor
+     : (t
+     -> unboxee_ty:T.t
+     -> all_fields:Name.t list
+     -> is_int:Name.t option
+     -> get_tag:Name.t option
+     -> T.t) T.type_accessor
 end
 
 module Unboxing_spec_variant : Unboxing_spec = struct
   type t = {
+    (* CR mshinwell: What are these two names being used for? *)
     is_int_param : Name.t;
     get_tag_param : Name.t;
     no_discriminant_needed : Tag.Scannable.t option;
@@ -99,12 +105,13 @@ module Unboxing_spec_variant : Unboxing_spec = struct
         fields), dbg)
     | None -> assert false  (* See [create], above. *)
 
-  let refine_unboxee_ty env t ~unboxee_ty ~all_fields =
+  let refine_unboxee_ty env t ~unboxee_ty ~all_fields ~is_int ~get_tag =
     match t.no_discriminant_needed with
     | None ->
+      (* XXX Check we can't get here when there is no [is_int] (i.e. no
+         constant ctors or one unique one). *)
       let unboxee_discriminants =
-        T.variant_whose_discriminants_are ~is_int:t.is_int_param
-          ~get_tag:t.get_tag_param
+        T.variant_whose_discriminants_are ~is_int ~get_tag
       in
       T.join (env, unboxee_ty) (env, unboxee_discriminants)
     | Some unique_tag ->
@@ -146,7 +153,7 @@ module Unboxing_spec_float_array = struct
   let box _t _tag fields dbg : Flambda.Named.t =
     Prim (Variadic (Make_block (Full_of_naked_floats, Immutable), fields), dbg)
 
-  let refine_unboxee_ty _env _t ~unboxee_ty:_ ~all_fields =
+  let refine_unboxee_ty _env _t ~unboxee_ty:_ ~all_fields ~is_int:_ ~get_tag:_ =
     let fields =
       List.map (fun field : T.t T.mutable_or_immutable ->
           Immutable (T.alias_type_of (K.naked_float ()) field))
@@ -192,7 +199,8 @@ end) = struct
       Misc.fatal_errorf "Bad number of fields for [box]: %d"
         (List.length fields)
 
-  let refine_unboxee_ty _env _t ~unboxee_ty:_ ~all_fields =
+  let refine_unboxee_ty _env _t ~unboxee_ty:_ ~all_fields ~is_int:_
+        ~get_tag:_ =
     match all_fields with
     | [naked_number] ->
       N.box (T.alias_type_of unboxed_kind naked_number)
@@ -244,7 +252,7 @@ module How_to_unbox = struct
     add_bindings_in_wrapper : Flambda.Expr.t -> Flambda.Expr.t;
     new_arguments_for_call_in_wrapper : Variable.t list;
     new_params : Flambda.Typed_parameter.t list;
-    new_unboxee_types : (Variable.t * Flambda_type.t) list;
+    new_unboxee_types : Flambda_type.t Variable.Map.t;
     build_boxed_value_from_new_params :
       (Flambda.Typed_parameter.t * (Flambda.Expr.t -> Flambda.Expr.t)) list;
   }
@@ -254,7 +262,7 @@ module How_to_unbox = struct
       add_bindings_in_wrapper = (fun expr -> expr);
       new_arguments_for_call_in_wrapper = [];
       new_params = [];
-      new_unboxee_types = [];
+      new_unboxee_types = Variable.Map.empty;
       build_boxed_value_from_new_params = [];
     }
 
@@ -273,7 +281,8 @@ module How_to_unbox = struct
         t1.new_arguments_for_call_in_wrapper
           @ t2.new_arguments_for_call_in_wrapper;
       new_params = t1.new_params @ t2.new_params;
-      new_unboxee_types = t1.new_unboxee_types @ t2.new_unboxee_types;
+      new_unboxee_types =
+        Variable.Map.disjoint_union t1.new_unboxee_types t2.new_unboxee_types;
       build_boxed_value_from_new_params =
         t1.build_boxed_value_from_new_params
           @ t2.build_boxed_value_from_new_params;
@@ -856,7 +865,7 @@ module Make (S : Unboxing_spec) = struct
     let fields =
       List.map (fun (field, _kind) ->
           let field = Parameter.wrap field in
-          Flambda.Typed_parameter.create_from_kind field S.unboxed_kind)
+          Flambda.Typed_parameter.create field (T.bottom S.unboxed_kind))
         fields_with_kinds
     in
     let unboxee_ty =
@@ -865,14 +874,29 @@ module Make (S : Unboxing_spec) = struct
            type [Name.t list]? *)
         List.map (fun (field, _kind) -> Name.var field) fields_with_kinds
       in
+      (* XXX this is ugly *)
+      let is_int =
+        match is_int with
+        | [] -> None
+        | [is_int] -> Some (Name.var (Flambda.Typed_parameter.var is_int))
+        | _ -> assert false
+      in
+      let get_tag =
+        match discriminant with
+        | [] -> None
+        | [discriminant] ->
+          Some (Name.var (Flambda.Typed_parameter.var discriminant))
+        | _ -> assert false
+      in
       S.refine_unboxee_ty (E.get_typing_environment env)
-        unboxing_spec_user_data ~unboxee_ty ~all_fields
+        unboxing_spec_user_data ~unboxee_ty ~all_fields ~is_int ~get_tag
     in
+    let new_unboxee_types = Variable.Map.singleton unboxee unboxee_ty in
     { unboxee_to_wrapper_params_unboxee;
       add_bindings_in_wrapper;
       new_arguments_for_call_in_wrapper;
       new_params = is_int @ discriminant @ fields;
-      new_unboxee_types = [unboxee, unboxee_ty];
+      new_unboxee_types;
       build_boxed_value_from_new_params;
     }
 end

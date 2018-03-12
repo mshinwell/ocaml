@@ -19,10 +19,12 @@
 module Env = Closure_conversion_aux.Env
 module Function_decls = Closure_conversion_aux.Function_decls
 module Function_decl = Function_decls.Function_decl
-module P = Flambda_primitive
-module K = Flambda_kind
 module Program_body = Flambda_static.Program_body
 module Typed_parameter = Flambda.Typed_parameter
+
+module K = Flambda_kind
+module P = Flambda_primitive
+module T = Flambda_type
 
 type t = {
   current_unit_id : Ident.t;
@@ -105,8 +107,8 @@ let tupled_function_call_stub
     (*     (Array.of_list *)
     (*       (List.map (fun _ -> Flambda_type.any_value Must_scan Other) params))) *)
 
-    Flambda.Typed_parameter.create_from_kind (Parameter.wrap tuple_param_var)
-      (K.value ())
+    Flambda.Typed_parameter.create (Parameter.wrap tuple_param_var)
+      (T.any_value ())
   in
   Flambda.Function_declaration.create
     ~my_closure
@@ -335,18 +337,20 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
           (Prim (Unary (unboxing, Simple.var handler_param), dbg)) body,
           handler_param
     in
-    let handler : Flambda.Continuation_handler.t = {
-      params =
-        [ Typed_parameter.create_from_kind
-            (Parameter.wrap handler_param)
-            return_kind ];
-      stub = false;
-      is_exn_handler = false;
-      handler = cont;
-    } in
+    let handler : Flambda.Continuation_handler.t =
+      let param =
+        Typed_parameter.create (Parameter.wrap handler_param)
+          (T.bottom return_kind)
+      in
+      { params = [param];
+        stub = false;
+        is_exn_handler = false;
+        handler = cont;
+      }
+    in
     Let_cont {
       body = call;
-      handlers = Non_recursive { name = continuation; handler };
+      handlers = Non_recursive { name = continuation; handler; };
     };
 
   | Let (id, defining_expr, body) ->
@@ -486,9 +490,8 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
       let handler_env, params = Env.add_vars_like env let_cont.params in
       let params =
         List.map (fun param ->
-          Flambda.Typed_parameter.create_from_kind
-            (Parameter.wrap param)
-            (K.value ()))
+          Flambda.Typed_parameter.create (Parameter.wrap param)
+            (T.bottom (K.value ())))
           params
       in
       let handler : Flambda.Continuation_handler.t =
@@ -940,9 +943,9 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
   in
   let assign_cont_def : Flambda.Continuation_handler.t =
     { params =
-        [Flambda.Typed_parameter.create_from_kind
+        [Flambda.Typed_parameter.create
            (Parameter.wrap block_var)
-           (K.value ())];
+           (T.bottom (K.value ()))];
       stub = true;
       is_exn_handler = false;
       handler = assign_continuation_body;

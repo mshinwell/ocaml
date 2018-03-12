@@ -387,8 +387,8 @@ let environment_for_let_cont_handler ~env cont
           Typed_parameter.map_var param
             ~f:(fun var -> Freshening.apply_variable freshening var)
         in
-(*
         let param_ty = Typed_parameter.ty param in
+(*
         if !Clflags.flambda_invariant_checks then begin
           if not (T.as_or_more_precise env
             arg_ty ~than:param_ty)
@@ -402,7 +402,11 @@ let environment_for_let_cont_handler ~env cont
         end;
 *)
         let ty =
-          T.rename_variables arg_ty
+          let ty =
+            T.meet (E.get_typing_environment env, arg_ty)
+              (E.get_typing_environment env, param_ty)
+          in
+          T.rename_variables ty
             ~f:(fun var -> Freshening.apply_variable freshening var)
         in
         Typed_parameter.with_type param ty)
@@ -924,7 +928,7 @@ and simplify_partial_application env r ~callee
     let params =
       List.map (fun (param, ty) ->
           let kind = T.kind ty in
-          Typed_parameter.create_from_kind param kind)
+          Typed_parameter.create param (T.unknown kind))
         remaining_args
     in
     (* CR mshinwell: [make_closure_declaration] is only used here and it also
@@ -972,8 +976,8 @@ and simplify_over_application env r ~args ~arg_tys ~continuation
   let func_var = Variable.create "full_apply" in
   let func_var_kind = Flambda_kind.value () in
   let func_param =
-    Flambda.Typed_parameter.create_from_kind (Parameter.wrap func_var)
-      func_var_kind
+    Flambda.Typed_parameter.create (Parameter.wrap func_var)
+      (T.unknown func_var_kind)
   in
   let handler : Flambda.Continuation_handler.t =
     { stub = false;

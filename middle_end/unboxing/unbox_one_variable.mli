@@ -26,7 +26,7 @@ module How_to_unbox : sig
     add_bindings_in_wrapper : Flambda.Expr.t -> Flambda.Expr.t;
     new_arguments_for_call_in_wrapper : Variable.t list;
     new_params : Flambda.Typed_parameter.t list;
-    new_unboxee_types : (Variable.t * Flambda_type.t) list;
+    new_unboxee_types : Flambda_type.t Variable.Map.t;
     build_boxed_value_from_new_params :
       (Flambda.Typed_parameter.t * (Flambda.Expr.t -> Flambda.Expr.t)) list;
   }

@@ -581,7 +581,10 @@ module type S = sig
       [v] is given by the name [is_int] and the result of the [Get_tag]
       primitive on [v] is given by the name [get_tag]. (Used for unboxing
       transformations.) *)
-  val variant_whose_discriminants_are : is_int:Name.t -> get_tag:Name.t -> t
+  val variant_whose_discriminants_are
+     : is_int:Name.t option
+    -> get_tag:Name.t option
+    -> t
 
   (** The bottom type for the given kind ("no value can flow to this point"). *)
   val bottom : Flambda_kind.t -> t

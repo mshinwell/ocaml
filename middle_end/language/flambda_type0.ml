@@ -1620,8 +1620,8 @@ end;
     let blocks_imms : blocks_and_tagged_immediates =
       { immediates = Unknown;
         blocks = Unknown;
-        is_int = Some is_int;
-        get_tag = Some get_tag;
+        is_int;
+        get_tag;
       }
     in
     { descr =

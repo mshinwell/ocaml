@@ -688,10 +688,6 @@ end and Typed_parameter : sig
   (** Create a typed parameter. *)
   val create : Parameter.t -> Flambda_type.t -> t
 
-  (** As for [create] except that the parameter is given an unknown type of the
-      specified kind. *)
-  val create_from_kind : Parameter.t -> Flambda_kind.t -> t
-
   (** The underlying parameter. *)
   val param : t -> Parameter.t
 
