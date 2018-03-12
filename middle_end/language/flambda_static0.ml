@@ -280,15 +280,22 @@ module Program_body = struct
   let rec print ppf t =
     match t with
     | Define_symbol (defn, t) ->
-      Format.fprintf ppf "@[<v 2>(Define_symbol@ %a)@]@;"
+      Format.fprintf ppf "@[<v 2>(%sDefine_symbol%s@ %a)@]@;"
+        (Misc_color.bold_yellow ())
+        (Misc_color.reset ())
         print_definition defn;
       print ppf t
     | Define_symbol_rec (defn, t) ->
-      Format.fprintf ppf "@[<v 2>(Define_symbol_rec@ %a)@]@;"
+      Format.fprintf ppf "@[<v 2>(%sDefine_symbol_rec%s@ %a)@]@;"
+        (Misc_color.bold_yellow ())
+        (Misc_color.reset ())
         print_definition defn;
       print ppf t
     | Root sym ->
-      Format.fprintf ppf "@[(Root %a)@]" Symbol.print sym
+      Format.fprintf ppf "@[(%sRoot%s %a)@]"
+        (Misc_color.bold_yellow ())
+        (Misc_color.reset ())
+        Symbol.print sym
 
   let gc_roots t =
     let rec gc_roots t roots =
