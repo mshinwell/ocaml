@@ -220,27 +220,24 @@ let _simplify_newly_introduced_let_bindings env r ~bindings
 *)
 
 module Make_simplify_switch (S : sig
-  module Arm : sig
-    type t
-    module Map : Map.S with type key = t
-  end
+  module Arm : Identifiable.S
 
   val switch_arms
      : (T.t
       -> arms:Continuation.t Arm.Map.t
       -> (T.Typing_environment.t * Continuation.t) Arm.Map.t) T.type_accessor
 
-  val create_switch'
+  val create_switch
      : scrutinee:Name.t
     -> arms:Continuation.t Arm.Map.t
-    -> Expr.t * bool
+    -> Expr.t
 
   val check_kind_of_scrutinee : E.t -> scrutinee:Name.t -> T.t -> unit
 
   val type_of_scrutinee : Arm.t -> T.t
 end) = struct
   let simplify_switch env r ~(scrutinee : Name.t)
-        (arms : Continuation.t S.Arm.Map.t)
+        (arms : Continuation.t S.Arm.Map.t) ~simplify_apply_cont
         : Expr.t * R.t =
 (*
 Format.eprintf "Simplifying switch on %a in env %a.\n%!" Name.print scrutinee
@@ -252,12 +249,14 @@ Format.eprintf "Simplifying switch on %a in env %a.\n%!" Name.print scrutinee
 Format.eprintf "Type of switch scrutinee is %a\n%!" T.print scrutinee_ty;
 *)
     let arms =
+      S.Arm.Map.map (fun cont -> freshen_continuation env cont) arms
+    in
+    let arms =
       S.switch_arms (E.get_typing_environment env) scrutinee_ty ~arms
     in
     let destination_is_unreachable cont =
       (* CR mshinwell: This unreachable thing should be tidied up and also
          done on [Apply_cont]. *)
-      let cont = freshen_continuation env cont in
       let cont_type = E.find_continuation env cont in
       match Continuation_approx.handlers cont_type with
       | None | Some (Recursive _) -> false
@@ -271,45 +270,49 @@ Format.eprintf "Type of switch scrutinee is %a\n%!" T.print scrutinee_ty;
           not (destination_is_unreachable cont))
         arms
     in
-    let env = E.inside_branch env in
-    let arms, r =
-      S.Arm.Map.fold (fun arm (env_extension, cont) (arms, r) ->
-          let cont, r =
-            let scrutinee_ty = S.type_of_scrutinee arm in
-            let env = E.extend_typing_environment env ~env_extension in
-            let env =
-              match scrutinee with
-              | Var scrutinee ->
-                E.replace_meet_variable env scrutinee
-                  (E.get_typing_environment env, scrutinee_ty)
-              | Symbol _ -> env
-            in
-(*
-Format.eprintf "Environment for %a switch arm:@ %a\n%!"
-  Continuation.print cont E.print env;
-*)
-            simplify_continuation_use_cannot_inline env r cont ~arity:[]
-          in
-          let arms = S.Arm.Map.add arm cont arms in
-          arms, r)
-        arms
-        (S.Arm.Map.empty, r)
-    in
-    let switch, removed_branch =
 (*
 Format.eprintf "Switch has %d arms\n%!" (S.Arm.Map.cardinal arms);
 *)
-      S.create_switch' ~scrutinee:scrutinee ~arms
-    in
-    if removed_branch then switch, R.map_benefit r B.remove_branch
-    else switch, r
+    let env = E.inside_branch env in
+    if S.Arm.Map.cardinal arms < 1 then
+      Expr.invalid (), R.map_benefit r B.remove_branch
+    else
+      match S.Arm.Map.get_singleton arms with
+      | Some (_, (_env, cont)) ->
+        simplify_apply_cont env r cont ~trap_action:None ~args:[]
+      | None ->
+        let arms, r =
+          S.Arm.Map.fold (fun arm (env_extension, cont) (arms, r) ->
+              let cont, r =
+                let scrutinee_ty = S.type_of_scrutinee arm in
+                let env = E.extend_typing_environment env ~env_extension in
+                let env =
+                  match scrutinee with
+                  | Var scrutinee ->
+                    E.replace_meet_variable env scrutinee
+                      (E.get_typing_environment env, scrutinee_ty)
+                  | Symbol _ -> env
+                in
+    (*
+    Format.eprintf "Environment for %a switch arm:@ %a\n%!"
+      Continuation.print cont E.print env;
+    *)
+                simplify_continuation_use_cannot_inline env r cont ~arity:[]
+              in
+              let arms = S.Arm.Map.add arm cont arms in
+              arms, r)
+            arms
+            (S.Arm.Map.empty, r)
+        in
+        let switch = S.create_switch ~scrutinee:scrutinee ~arms in
+        switch, r
 end
 
 module Simplify_int_switch = Make_simplify_switch (struct
   module Arm = Targetint.OCaml
 
   let switch_arms = T.int_switch_arms
-  let create_switch' = Expr.create_int_switch'
+  let create_switch = Expr.create_int_switch
 
   (* CR mshinwell: Is this check needed now? We must already check [ty] *)
   let check_kind_of_scrutinee _env ~scrutinee ty =
@@ -328,7 +331,7 @@ module Simplify_tag_switch = Make_simplify_switch (struct
   module Arm = Tag
 
   let switch_arms = T.tag_switch_arms
-  let create_switch' = Expr.create_tag_switch'
+  let create_switch = Expr.create_tag_switch
 
   let check_kind_of_scrutinee _env ~scrutinee ty =
     let kind = T.kind ty in
@@ -343,12 +346,14 @@ module Simplify_tag_switch = Make_simplify_switch (struct
 end)
 
 let simplify_switch env r ~(scrutinee : Name.t) (switch : Flambda0.Switch.t)
-      : Expr.t * R.t =
+      ~simplify_apply_cont : Expr.t * R.t =
   match switch with
   | Value arms ->
     Simplify_int_switch.simplify_switch env r ~scrutinee arms
+      ~simplify_apply_cont
   | Fabricated arms ->
     Simplify_tag_switch.simplify_switch env r ~scrutinee arms
+      ~simplify_apply_cont
 
 (* Prepare an environment for the simplification of the given continuation
    handler when its parameters are being used at types [arg_tys]. *)
@@ -1408,5 +1413,5 @@ and simplify_expr env r (tree : Expr.t) : Expr.t * R.t =
   | Apply_cont (cont, trap_action, args) ->
     simplify_apply_cont env r cont ~trap_action ~args
   | Switch (scrutinee, switch) ->
-    simplify_switch env r ~scrutinee switch
+    simplify_switch env r ~scrutinee switch ~simplify_apply_cont
   | Invalid _ -> tree, r

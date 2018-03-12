@@ -239,24 +239,19 @@ module rec Expr : sig
       defining expression and the body.) *)
   val create_let : Variable.t -> Flambda_kind.t -> Named.t -> t -> t
 
-  (** Create a suitable [expr] to represent the given switch.  (The result may
-      not actually be a [Switch].) *)
+  (** Create a [Switch] expression.  The caller is responsible for doing
+      transformations such as generating an [Apply_cont] instead of a
+      single-arm switch.  The only thing that is forbidden here is a zero-arm
+      switch. *)
+  (* CR mshinwell: move into [Switch] *)
   val create_int_switch
      : scrutinee:Name.t
     -> arms:Continuation.t Targetint.OCaml.Map.t
     -> Expr.t
-  val create_int_switch'
-     : scrutinee:Name.t
-    -> arms:Continuation.t Targetint.OCaml.Map.t
-    -> Expr.t * bool  (* CR mshinwell: improve result type *)
   val create_tag_switch
      : scrutinee:Name.t
     -> arms:Continuation.t Tag.Map.t
     -> Expr.t
-  val create_tag_switch'
-     : scrutinee:Name.t
-    -> arms:Continuation.t Tag.Map.t
-    -> Expr.t * bool  (* CR mshinwell: improve result type *)
 
   (** Compute the free names of a term.  (This is O(1) for [Let]s).
       If [ignore_uses_as_callee], all free names inside [Apply] expressions

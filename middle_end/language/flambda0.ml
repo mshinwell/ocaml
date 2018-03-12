@@ -663,44 +663,17 @@ end = struct
     else
       Invalid Halt_and_catch_fire
 
-  module Create_switch (S : sig
-    module T : Identifiable.S
-    val create : Continuation.t T.Map.t -> Switch.t
-  end) = struct
-    let create_switch' ~scrutinee ~arms =
-      let num_possible_values = S.T.Map.cardinal arms in
-      if num_possible_values < 1 then
-        invalid (), true
-      else
-        match S.T.Map.get_singleton arms with
-        | Some (_arm, cont) ->
-          let t : t = Apply_cont (cont, None, []) in
-          t, true
-        | None ->
-          let t : t = Switch (scrutinee, S.create arms) in
-          t, false
-  end
+  let create_int_switch ~scrutinee ~arms : t =
+    if Targetint.OCaml.Map.cardinal arms < 1 then begin
+      Misc.fatal_error "Cannot create zero-arity [Switch]; use [Invalid]"
+    end;
+    Switch (scrutinee, Value arms)
 
-  module Create_int_switch = Create_switch (struct
-    module T = Targetint.OCaml
-    let create map : Switch.t = Value map
-  end)
-
-  module Create_tag_switch = Create_switch (struct
-    module T = Tag
-    let create map : Switch.t = Fabricated map
-  end)
-
-  let create_int_switch' = Create_int_switch.create_switch'
-  let create_tag_switch' = Create_tag_switch.create_switch'
-
-  let create_int_switch ~scrutinee ~arms =
-    let switch, _benefit = create_int_switch' ~scrutinee ~arms in
-    switch
-
-  let create_tag_switch ~scrutinee ~arms =
-    let switch, _benefit = create_tag_switch' ~scrutinee ~arms in
-    switch
+  let create_tag_switch ~scrutinee ~arms : t =
+    if Tag.Map.cardinal arms < 1 then begin
+      Misc.fatal_error "Cannot create zero-arity [Switch]; use [Invalid]"
+    end;
+    Switch (scrutinee, Fabricated arms)
 
   let rec free_continuations (t : t) =
     match t with
