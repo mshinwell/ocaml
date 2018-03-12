@@ -720,7 +720,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
           let t = alias_type_of kind name in
           Term (Simple.name name, t)
         | Some (Var _) | None ->
-          if not can_lift then Cannot_reify
+          if not can_lift then try_name ()
           else
             let contents =
               of_ty_naked_number ty_naked_number K.Naked_number.Naked_float
@@ -728,7 +728,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
             match prove_unique_naked_float env contents with
             | Proved f -> Lift (Boxed_float (Const f))
             | Unknown -> try_name ()
-            | Invalid -> Cannot_reify
+            | Invalid -> try_name ()
         end
       (* CR mshinwell: Factor out boxed number cases *)
       | Ok (Boxed_number (Boxed_int32 ty_naked_number)) ->
@@ -738,7 +738,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
           let t = alias_type_of kind name in
           Term (Simple.name name, t)
         | Some (Var _) | None ->
-          if not can_lift then Cannot_reify
+          if not can_lift then try_name ()
           else
             let contents =
               of_ty_naked_number ty_naked_number K.Naked_number.Naked_int32
@@ -746,7 +746,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
             match prove_unique_naked_int32 env contents with
             | Proved f -> Lift (Boxed_int32 (Const f))
             | Unknown -> try_name ()
-            | Invalid -> Cannot_reify
+            | Invalid -> try_name ()
         end
       | Ok (Boxed_number (Boxed_int64 ty_naked_number)) ->
         begin match canonical_name with
@@ -755,7 +755,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
           let t = alias_type_of kind name in
           Term (Simple.name name, t)
         | Some (Var _) | None ->
-          if not can_lift then Cannot_reify
+          if not can_lift then try_name ()
           else
             let contents =
               of_ty_naked_number ty_naked_number K.Naked_number.Naked_int64
@@ -763,7 +763,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
             match prove_unique_naked_int64 env contents with
             | Proved f -> Lift (Boxed_int64 (Const f))
             | Unknown -> try_name ()
-            | Invalid -> Cannot_reify
+            | Invalid -> try_name ()
         end
       | Ok (Boxed_number (Boxed_nativeint ty_naked_number)) ->
         begin match canonical_name with
@@ -772,7 +772,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
           let t = alias_type_of kind name in
           Term (Simple.name name, t)
         | Some (Var _) | None ->
-          if not can_lift then Cannot_reify
+          if not can_lift then try_name ()
           else
             let contents =
               of_ty_naked_number ty_naked_number K.Naked_number.Naked_nativeint
@@ -780,7 +780,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
             match prove_unique_naked_nativeint env contents with
             | Proved f -> Lift (Boxed_nativeint (Const f))
             | Unknown -> try_name ()
-            | Invalid -> Cannot_reify
+            | Invalid -> try_name ()
         end
       | Ok (Closures _ | String _) -> try_name ()
       end
@@ -821,12 +821,12 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
         let t = alias_type_of kind name in
         Term (Simple.name name, t)
       | Some (Var _) | None ->
-        if not can_lift then Cannot_reify
+        if not can_lift then try_name ()
         else
           begin match set_of_closures.closures,
               set_of_closures.closure_elements
           with
-          | Open _, _ | _, Open _ -> Cannot_reify
+          | Open _, _ | _, Open _ -> try_name ()
           | Exactly closures, Exactly closure_elements ->
             (* The following assertion holds since [can_lift] is [true]. *)
             assert (Var_within_closure.Map.is_empty closure_elements);
@@ -887,7 +887,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
                     cannot_lift := true;
                     None)
             in
-            if !cannot_lift then Cannot_reify
+            if !cannot_lift then try_name ()
             else
               let function_decls = Flambda0.Function_declarations.create ~funs in
               let set_of_closures =
@@ -901,7 +901,15 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
               Lift static_part
           end
       end
-    | Fabricated _ -> Cannot_reify
+    | Fabricated (Ok (Closure _)) -> try_name ()
+    | Fabricated (Ok (Tag tags)) ->
+      begin match Tag.Map.get_singleton tags with
+      | None -> try_name ()
+      | Some (tag, { env_extension = _; }) ->
+        Term (Simple.tag tag, t)
+      end
+    | Fabricated Unknown -> try_name ()
+    | Fabricated Bottom -> Invalid
 
 (* CR mshinwell: rename to "prove_must_be_tagged_immediate" *)
 let prove_tagged_immediate env t
