@@ -681,6 +681,8 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
     let try_name () : reification_result =
       match canonical_name with
       | None -> Cannot_reify
+      | Some name when Typing_environment.is_existential env name ->
+        Cannot_reify
       | Some name ->
         match name with
         | Var _ when not allow_free_variables -> Cannot_reify
@@ -1043,16 +1045,16 @@ let valid_block_tag_for_kind ~tag ~(field_kind : K.t) =
       K.print field_kind
 
 let prove_get_field_from_block env t ~index ~field_kind : t proof =
+(*
+Format.eprintf "get_field_from_block index %a type@ %a\n"
+  Targetint.OCaml.print index print t;
+*)
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a block: %a"
       print t
   in
   let simplified, _canonical_name = Simplified_type.create env t in
   Simplified_type.check_not_phantom simplified "prove_get_field_from_block";
-(*
-Format.eprintf "get_field_from_block index %a type@ %a\n"
-  Targetint.OCaml.print index print t;
-*)
   match simplified.descr with
   | Value ty_value ->
     begin match ty_value with
@@ -1085,7 +1087,13 @@ Format.eprintf "get_field_from_block index %a type@ %a\n"
                         assert (Array.length block.fields > index);
                         let this_field_ty =
                           match block.fields.(index) with
-                          | Immutable this_field_ty -> this_field_ty
+                          | Immutable this_field_ty ->
+(*
+                            Format.eprintf "this_field_ty index %d: %a\n%!"
+                              index
+                              print this_field_ty;
+*)
+                            this_field_ty
                           | Mutable -> unknown field_kind
                         in
                         match field_ty with

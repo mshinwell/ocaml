@@ -2057,6 +2057,11 @@ end;
     include Meet_and_join
       with type of_kind_foo := S.of_kind_foo
   end = struct
+    let unknown_or_join_is_bottom (uj : _ unknown_or_join) =
+      match uj with
+      | Join [] -> true
+      | Unknown | Join _ -> false
+
     let rec join_on_unknown_or_join env1 env2
           (uj1 : S.of_kind_foo unknown_or_join)
           (uj2 : S.of_kind_foo unknown_or_join)
@@ -2116,6 +2121,10 @@ end;
       match canonical_name1, canonical_name2 with
       | Some name1, Some name2 when Name.equal name1 name2 ->
         Type_of name1
+      | Some name1, _ when unknown_or_join_is_bottom unknown_or_join2 ->
+        Type_of name1
+      | _, Some name2 when unknown_or_join_is_bottom unknown_or_join1 ->
+        Type_of name2
       | _, _ ->
         let unknown_or_join =
           join_on_unknown_or_join env1 env2 unknown_or_join1 unknown_or_join2
@@ -3962,6 +3971,12 @@ Format.eprintf "(TE replace_meet) Judgements holding now:@ %a\n%!"
         | Existential ->
      (* XXX     let ty = rename_variables t freshening in *)
           Some (ty, Existential)
+
+    let is_existential t name =
+      let _ty, binding_type = find t name in
+      match binding_type with
+      | Normal -> false
+      | Existential -> true
 
     let cut t ~existential_if_defined_at_or_later_than =
 (*
