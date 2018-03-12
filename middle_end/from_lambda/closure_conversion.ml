@@ -340,7 +340,7 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
     let handler : Flambda.Continuation_handler.t =
       let param =
         Typed_parameter.create (Parameter.wrap handler_param)
-          (T.bottom return_kind)
+          (T.unknown return_kind)
       in
       { params = [param];
         stub = false;
@@ -491,7 +491,7 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
       let params =
         List.map (fun param ->
           Flambda.Typed_parameter.create (Parameter.wrap param)
-            (T.bottom (K.value ())))
+            (T.unknown (K.value ())))
           params
       in
       let handler : Flambda.Continuation_handler.t =
@@ -945,7 +945,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
     { params =
         [Flambda.Typed_parameter.create
            (Parameter.wrap block_var)
-           (T.bottom (K.value ()))];
+           (T.unknown (K.value ()))];
       stub = true;
       is_exn_handler = false;
       handler = assign_continuation_body;

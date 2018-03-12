@@ -460,7 +460,7 @@ Format.eprintf "Extended env (cont %a) is@ %a\n\n%!"
         let params =
           List.map (fun (var, kind) ->
               let param = Parameter.wrap var in
-              Flambda.Typed_parameter.create param (T.bottom kind))
+              Flambda.Typed_parameter.create param (T.unknown kind))
             computation.computed_values
         in
         let expr : Flambda.Expr.t =
