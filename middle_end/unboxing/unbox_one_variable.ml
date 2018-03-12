@@ -835,12 +835,12 @@ module Make (S : Unboxing_spec) = struct
           in
           let discriminant_env_is_int =
             T.Typing_environment.singleton ~resolver (Name.var discriminant)
-              (E.continuation_scope_level env)
+              (Scope_level.next (E.continuation_scope_level env))
               (T.these_tags by_constant_ctor_index)
           in
           let discriminant_env_is_block =
             T.Typing_environment.singleton ~resolver (Name.var discriminant)
-              (E.continuation_scope_level env)
+              (Scope_level.next (E.continuation_scope_level env))
               (T.these_tags by_tag)
           in
           let by_is_int_result =
@@ -859,7 +859,9 @@ module Make (S : Unboxing_spec) = struct
       else
         let discriminant = Parameter.wrap discriminant in
         let discriminant_ty = T.any_fabricated () in (* CR mshinwell: improve *)
-        (* XXX better calc. for [discriminant_ty] is above, maybe *)
+        (* XXX better calc. for [discriminant_ty] is above, maybe
+           ...may not matter though because we've probably matched on the
+           is_int variable first, which will refine the type of the discr. *)
         [Flambda.Typed_parameter.create discriminant discriminant_ty]
     in
     let fields =

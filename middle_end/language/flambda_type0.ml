@@ -820,6 +820,14 @@ end;
    (* XXX     let ty = rename_variables t freshening in *)
         ty, Existential
 
+  let scope_level_typing_environment env name =
+    match Name.Map.find name env.names_to_types with
+    | exception Not_found ->
+      Misc.fatal_errorf "Cannot find %a in environment:@ %a"
+        Name.print name
+        print_typing_environment env
+    | scope_level, _ty -> scope_level
+
   let ty_is_obviously_bottom (ty : _ ty) =
     match ty with
     | No_alias (Join []) -> true
@@ -1991,12 +1999,12 @@ end;
     | _ -> create_typing_environment ()
 *)
 
-  type judgements_from_meet = (Name.t * t) list
+  type judgements_from_meet = (Name.t * Scope_level.t * t) list
 
   let judgements_of_typing_environment (env : typing_environment) =
-    Name.Map.fold (fun name (_level, t) judgements ->
+    Name.Map.fold (fun name (level, t) judgements ->
         if Name.Set.mem name env.existentials then judgements
-        else (name, t) :: judgements)
+        else (name, level, t) :: judgements)
       env.names_to_types
       []
 
@@ -2178,16 +2186,19 @@ end;
           ~unknown:(No_alias Unknown)
           or_alias2
       in
-      let normal_case ~first_name_to_bind ~names_to_bind =
+      let normal_case ~first_name_to_bind ~first_name_to_bind_level
+            ~names_to_bind =
         let unknown_or_join, new_judgements =
           meet_on_unknown_or_join env1 env2
             unknown_or_join1 unknown_or_join2
         in
         let new_judgement =
-          first_name_to_bind, S.to_type (No_alias unknown_or_join)
+          first_name_to_bind, first_name_to_bind_level,
+            S.to_type (No_alias unknown_or_join)
         in
         let new_judgements' =
-          List.map (fun name -> name, S.to_type (Type_of first_name_to_bind))
+          List.map (fun (name, level) ->
+              name, level, S.to_type (Type_of first_name_to_bind))
             names_to_bind
         in
         Type_of first_name_to_bind,
@@ -2201,15 +2212,23 @@ end;
               unknown_or_join1 unknown_or_join2
           in
           No_alias unknown_or_join, new_judgements
-        | first_name_to_bind::names_to_bind ->
-          normal_case ~first_name_to_bind ~names_to_bind
+        | (first_name_to_bind, first_name_to_bind_level)::names_to_bind ->
+          normal_case ~first_name_to_bind ~first_name_to_bind_level
+            ~names_to_bind
       in
       match canonical_name1, canonical_name2 with
       | Some name1, Some name2 when Name.equal name1 name2 ->
         Type_of name1, []
-      | Some name1, Some name2 -> normal_case ~names_to_bind:[name1; name2]
-      | Some name1, None -> normal_case ~names_to_bind:[name1]
-      | None, Some name2 -> normal_case ~names_to_bind:[name2]
+      | Some name1, Some name2 ->
+        let level1 = scope_level_typing_environment env1 name1 in
+        let level2 = scope_level_typing_environment env2 name2 in
+        normal_case ~names_to_bind:[name1, level1; name2, level2]
+      | Some name1, None ->
+        let level1 = scope_level_typing_environment env1 name1 in
+        normal_case ~names_to_bind:[name1, level1]
+      | None, Some name2 ->
+        let level2 = scope_level_typing_environment env2 name2 in
+        normal_case ~names_to_bind:[name2, level2]
       | None, None -> normal_case ~names_to_bind:[]
   end
 
@@ -3741,7 +3760,7 @@ end;
 
     let print_judgements ppf judgements =
       Format.pp_print_list ~pp_sep:Format.pp_print_space
-        (fun ppf (name, ty) ->
+        (fun ppf (name, _level, ty) ->
           Format.fprintf ppf "@[(%s%a%s@ %a)@]"
             (Misc_color.bold_green ())
             Name.print name
@@ -3757,13 +3776,13 @@ end;
         else begin
           match judgements with
           | [] -> env
-          | (name, ty)::judgements ->
+          | (name, scope_level, ty)::judgements ->
             let scope_level, existing_ty =
               match Name.Map.find name env.names_to_types with
               | exception Not_found ->
-                (* XXX we need a correct level here *)
-                Scope_level.initial, unknown (kind ty)
-              | scope_level, existing_ty ->
+                scope_level, unknown (kind ty)
+              | existing_scope_level, existing_ty ->
+                assert (Scope_level.equal scope_level existing_scope_level);
                 scope_level, existing_ty
             in
             (* XXX I suspect we need an "add in parallel" operation on
@@ -3802,9 +3821,12 @@ end;
         Name.Map.union_merge (fun (level1, ty1) (level2, ty2) ->
             if not (Scope_level.equal level1 level2) then begin
               Misc.fatal_errorf "meet_typing_environment: \
-                  Scope levels differ for:@ %a@ and:@ %a@ env1:@ %a@ env2:@ %a"
+                  Scope levels differ for:@ %a@ and:@ %a@ levels1:@ %a@ \
+                  levels2:@ %a@ env1:@ %a@ env2:@ %a"
                 print ty1
                 print ty2
+                (Scope_level.Map.print Name.Set.print) env1.levels_to_names
+                (Scope_level.Map.print Name.Set.print) env2.levels_to_names
                 print_typing_environment env1
                 print_typing_environment env2
             end;
