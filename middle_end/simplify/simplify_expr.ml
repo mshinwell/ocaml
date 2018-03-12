@@ -277,8 +277,17 @@ Format.eprintf "Switch has %d arms\n%!" (S.Arm.Map.cardinal arms);
     if S.Arm.Map.cardinal arms < 1 then
       Expr.invalid (), R.map_benefit r B.remove_branch
     else
-      match S.Arm.Map.get_singleton arms with
-      | Some (_, (_env, cont)) ->
+      let unique_destination =
+        (* For the moment just drop the environment extensions in this
+           case. *)
+        (* CR-someday mshinwell: We could alternatively take the join, but
+           does that actually buy us anything?) *)
+        let arms = S.Arm.Map.map (fun (_env, cont) -> cont) arms in
+        let destinations = S.Arm.Map.data arms in
+        Continuation.Set.get_singleton (Continuation.Set.of_list destinations)
+      in
+      match unique_destination with
+      | Some cont ->
         simplify_apply_cont env r cont ~trap_action:None ~args:[]
       | None ->
         let arms, r =
