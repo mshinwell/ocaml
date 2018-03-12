@@ -170,9 +170,10 @@ module type S = sig
     is_int : Name.t option;
     (** A name that is known to contain the result of the [Is_int]
         primitive on the corresponding block. *)
+    (* CR mshinwell: Rename to get_tag_or_int_to_tag or something *)
     get_tag : Name.t option;
     (** A name that is known to contain the result of the [Get_tag]
-        primitive on the corresponding block. *)
+        or [Int_to_tag] primitive on the corresponding block. *)
   }
 
   (** Boxed integer and floating-point numbers together with the types

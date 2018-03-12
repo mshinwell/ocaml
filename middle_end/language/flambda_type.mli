@@ -133,8 +133,12 @@ val unknown_proof : unit -> _ proof
 *)
 val prove_tagged_immediate : (t -> Immediate.Set.t proof) type_accessor
 
+type tagged_immediate_as_tags_proof = private
+  | By_tag of Typing_environment.t option Tag.Map.t
+  | Answer_given_by of Name.t
+
 val prove_tagged_immediate_as_tags
-   : Typing_environment.t -> t -> Typing_environment.t option Tag.Map.t proof
+   : Typing_environment.t -> t -> tagged_immediate_as_tags_proof proof
 
 type is_tagged_immediate = private
   | Never_a_tagged_immediate

@@ -944,8 +944,12 @@ let prove_tagged_immediate env t
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _ -> wrong_kind ()
 
+type tagged_immediate_as_tags_proof =
+  | By_tag of Typing_environment.t option Tag.Map.t
+  | Answer_given_by of Name.t
+
 let prove_tagged_immediate_as_tags env t
-      : Typing_environment.t option Tag.Map.t proof =
+      : tagged_immediate_as_tags_proof proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a tagged \
         immediate: %a"
@@ -959,12 +963,17 @@ let prove_tagged_immediate_as_tags env t
     | Unknown -> Unknown
     | Bottom -> Invalid
     | Ok (Blocks_and_tagged_immediates blocks_imms) ->
+      let use_get_tag () =
+        match blocks_imms.get_tag with
+        | None -> Unknown
+        | Some get_tag -> Proved (Answer_given_by get_tag)
+      in
       begin match blocks_imms.blocks, blocks_imms.immediates with
-      | Unknown, _ | _, Unknown -> Unknown
+      | Unknown, _ | _, Unknown -> use_get_tag ()
       | Known blocks, Known imms ->
         match Tag.Map.is_empty blocks, Immediate.Map.is_empty imms with
         | true, true -> Invalid
-        | false, false -> Unknown
+        | false, false -> use_get_tag ()
         | true, false ->
           let by_tag =
             Immediate.Map.fold (fun imm (imm_case : immediate_case) by_tag ->
@@ -984,7 +993,7 @@ let prove_tagged_immediate_as_tags env t
               imms
               Tag.Map.empty
           in
-          Proved by_tag
+          Proved (By_tag by_tag)
         | false, true -> Invalid
       end
     | Ok (Boxed_number _) -> Invalid
@@ -1013,10 +1022,9 @@ let prove_is_tagged_immediate env t : is_tagged_immediate proof =
     | Bottom -> Invalid
     | Ok (Blocks_and_tagged_immediates blocks_imms) ->
       let use_is_int () =
-        begin match blocks_imms.is_int with
+        match blocks_imms.is_int with
         | None -> Unknown
         | Some is_int -> Proved (Answer_given_by is_int)
-        end
       in
       begin match blocks_imms.blocks, blocks_imms.immediates with
       | Unknown, _ | _, Unknown -> use_is_int ()

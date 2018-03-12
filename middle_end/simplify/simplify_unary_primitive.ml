@@ -706,7 +706,9 @@ let simplify_unary_float_arith_op env r prim
 
 let simplify_int_to_tag env r prim arg dbg =
   let arg, arg_ty = S.simplify_simple env arg in
-  let proof = T.prove_tagged_immediate_as_tags (E.get_typing_environment env) arg_ty in
+  let proof =
+    T.prove_tagged_immediate_as_tags (E.get_typing_environment env) arg_ty
+  in
   let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
   let result_kind = K.fabricated () in
   let result_invalid () =
@@ -714,7 +716,7 @@ let simplify_int_to_tag env r prim arg dbg =
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
   match proof with
-  | Proved by_tag ->
+  | Proved (By_tag by_tag) ->
     let by_tag =
       Tag.Map.map (fun env_extension_opt ->
           match env_extension_opt with
@@ -723,6 +725,9 @@ let simplify_int_to_tag env r prim arg dbg =
         by_tag
     in
     Reachable.reachable (original_term ()), T.these_tags by_tag, r
+  | Proved (Answer_given_by name) ->
+    Reachable.reachable (original_term ()),
+      T.alias_type_of (K.fabricated ()) name, r
   | Unknown ->
     Reachable.reachable (original_term ()), T.unknown result_kind, r
   | Invalid -> result_invalid ()
