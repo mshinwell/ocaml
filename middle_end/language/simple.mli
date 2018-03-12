@@ -37,6 +37,7 @@ end
 type t = private
   | Name of Name.t
   | Const of Const.t
+  | Tag of Tag.t
 
 val name : Name.t -> t
 
@@ -57,6 +58,8 @@ val const_false : t
 val const_zero : t
 
 val unit : t
+
+val tag : Tag.t -> t
 
 val free_names : t -> Name.Set.t
 

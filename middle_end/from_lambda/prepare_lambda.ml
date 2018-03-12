@@ -612,9 +612,7 @@ and prepare env (lam : L.lambda) (k : L.lambda -> L.lambda) =
               if switch.sw_numconsts = 0 then blocks_switch
               else if switch.sw_numblocks = 0 then consts_switch
               else
-                L.Lswitch (Lprim (Pint_to_scrutinee,
-                    [L.Lprim (Pisint, [scrutinee], Location.none)],
-                    Location.none),
+                L.Lswitch (L.Lprim (Pisint, [scrutinee], Location.none),
                   isint_switch, loc)
             in
             k (wrap_switch switch)))))

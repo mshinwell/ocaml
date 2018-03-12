@@ -116,6 +116,7 @@ let lambda_smaller' lam ~than:threshold =
     match named with
     | Simple (Name _) -> ()
     | Simple (Const _) -> incr size
+    | Simple (Tag _) -> incr size
     | Assign _ -> incr size
     | Read_mutable _ -> ()
     | Set_of_closures ({ function_decls; _ }) ->

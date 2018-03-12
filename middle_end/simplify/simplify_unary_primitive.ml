@@ -321,10 +321,15 @@ let simplify_is_int env r prim arg dbg =
   let arg, ty = S.simplify_simple env arg in
   let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
   let proof = T.prove_is_tagged_immediate (E.get_typing_environment env) ty in
+  (* CR mshinwell: The 0 and 1 constants should be bound somewhere with
+     proper names. *)
   let proved ~is_tagged_immediate =
-    let simple = Simple.const_bool is_tagged_immediate in
-    let imm = Immediate.bool is_tagged_immediate in
-    Reachable.reachable (Simple simple), T.this_tagged_immediate imm,
+    let tag =
+      if is_tagged_immediate then Tag.create_exn 1
+      else Tag.create_exn 0
+    in
+    Reachable.reachable (Simple (Simple.tag tag)),
+      T.this_tag tag,
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
   match proof with
@@ -332,14 +337,20 @@ let simplify_is_int env r prim arg dbg =
   | Proved Never_a_tagged_immediate -> proved ~is_tagged_immediate:false
   | Proved (Answer_given_by name) ->
     Reachable.reachable (original_term ()),
-      T.alias_type_of (K.value ()) name, r
+      T.alias_type_of (K.fabricated ()) name, r
   | Unknown ->
     (* CR mshinwell: This should use the [result_var] as the [is_int] in a
        refined type of [arg]. *)
-    Reachable.reachable (original_term ()),
-      T.these_tagged_immediates Immediate.all_bools, r
+    let empty_env = T.Typing_environment.create ~resolver:(E.resolver env) in
+    let all_results =
+      T.these_tags (Tag.Map.of_list [
+        Tag.create_exn 0, empty_env;
+        Tag.create_exn 1, empty_env;
+      ])
+    in
+    Reachable.reachable (original_term ()), all_results, r
   | Invalid -> 
-    Reachable.invalid (), T.bottom (K.value ()),
+    Reachable.invalid (), T.bottom (K.fabricated ()),
       R.map_benefit r (B.remove_primitive (Unary prim))
 
 let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
@@ -369,9 +380,9 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
           in
           let env =
             match block with
-            | Const _ ->
+            | Const _ | Tag _ ->
               (* CR mshinwell: This is kind of silly---it will never be a
-                 [Const] *)
+                 [Const] or [Tag] *)
               T.Typing_environment.create ~resolver:(E.resolver env)
             | Name block ->
               let scope_level = E.scope_level_of_name env block in
@@ -434,7 +445,7 @@ module Make_simplify_unbox_number (P : A.Boxable_number_kind) = struct
     in
     let r =
       match arg with
-      | Const _ -> r
+      | Const _ | Tag _ -> r
       | Name boxed_name ->
         let kind = K.Standard_int_or_float.to_kind P.kind in
         let boxed_ty_refinement =
@@ -493,7 +504,7 @@ module Make_simplify_box_number (P : A.Boxable_number_kind) = struct
     | Unknown ->
       let ty =
         match arg with
-        | Const _ -> ty
+        | Const _ | Tag _ -> ty
         | Name arg ->
           let kind = K.Standard_int_or_float.to_kind P.kind in
           P.box (T.alias_type_of kind arg)

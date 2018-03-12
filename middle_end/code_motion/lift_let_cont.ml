@@ -245,7 +245,7 @@ and lift_expr (expr : Flambda.Expr.t) ~state =
   match expr with
   | Let ({ var; kind; defining_expr; body; } as let_expr) ->
     begin match defining_expr with
-    | Simple (((Name (Symbol _)) | (Const _)) as simple) ->
+    | Simple (((Name (Symbol _)) | (Const _) | (Tag _)) as simple) ->
       let state = State.add_constant state ~var ~kind ~simple in
       lift_expr body ~state
     | Simple (Name (Var _)) | Prim _ | Assign _ | Read_mutable _

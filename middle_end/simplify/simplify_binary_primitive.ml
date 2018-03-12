@@ -174,6 +174,8 @@ end = struct
                  implementation to be robust. *)
               let _term, ty = S.simplify_simple env simple in
               ty
+            | Some (Simple (Tag _)) ->
+              assert false (* CR mshinwell: fixme *)
             | Some (Exactly _)
             | Some (Prim _)
             | None -> T.unknown kind

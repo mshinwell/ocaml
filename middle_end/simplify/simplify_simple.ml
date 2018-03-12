@@ -42,6 +42,7 @@ let simplify_name env name =
 let simplify_simple env (simple : Simple.t) =
   match simple with
   | Const c -> simple, type_for_const c
+  | Tag t -> simple, T.this_tag t
   | Name name ->
     let name = Freshening.apply_name (E.freshening env) name in
     let ty = E.find_name env name in

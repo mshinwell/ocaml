@@ -236,7 +236,7 @@ let check_name_is_bound t name =
 let check_simple_is_bound t (simple : Simple.t) =
   match simple with
   | Name name -> check_name_is_bound t name
-  | Const _ -> ()
+  | Const _ | Tag _ -> ()
 
 let check_simples_are_bound t simples =
   List.iter (fun simple -> check_simple_is_bound t simple) simples
@@ -264,6 +264,15 @@ let check_simple_is_bound_and_of_kind t (simple : Simple.t) desired_kind =
   | Name name -> check_name_is_bound_and_of_kind t name desired_kind
   | Const const ->
     let actual_kind = Simple.Const.kind const in
+    if not (Flambda_kind.compatible actual_kind ~if_used_at:desired_kind)
+    then begin
+      Misc.fatal_errorf "Simple term %a of kind %a cannot be used at kind %a"
+        Simple.print simple
+        Flambda_kind.print actual_kind
+        Flambda_kind.print desired_kind
+    end
+  | Tag _ ->
+    let actual_kind = Flambda_kind.fabricated () in
     if not (Flambda_kind.compatible actual_kind ~if_used_at:desired_kind)
     then begin
       Misc.fatal_errorf "Simple term %a of kind %a cannot be used at kind %a"
@@ -314,6 +323,7 @@ let kind_of_simple t (simple : Simple.t) =
   match simple with
   | Name name -> kind_of_name t name
   | Const const -> Simple.Const.kind const
+  | Tag _ -> Flambda_kind.fabricated ()
 
 let kind_of_variable t var = kind_of_name t (Name.var var)
 

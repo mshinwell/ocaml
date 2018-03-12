@@ -626,7 +626,7 @@ let arg_kind_of_unary_primitive p =
 let result_kind_of_unary_primitive p : result_kind =
   match p with
   | Duplicate_block _ -> Singleton (K.value ())
-  | Is_int
+  | Is_int -> Singleton (K.fabricated ())
   | String_length _ -> Singleton (K.value ())
   | Get_tag _ -> Singleton (K.fabricated ())
   | Int_to_tag -> Singleton (K.fabricated ())

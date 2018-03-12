@@ -40,7 +40,7 @@ let all_types_not_useful env simples =
       match simple with
       | Name name ->
         not (T.is_useful (E.get_typing_environment env) (E.find_name env name))
-      | Const _ -> false)
+      | Const _ | Tag _ -> false)
     simples
 
 let inline env r ~callee

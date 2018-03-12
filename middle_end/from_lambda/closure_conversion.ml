@@ -372,6 +372,7 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
           K.naked_int64 ()
         | Simple (Const (Naked_nativeint _)) ->
           K.naked_nativeint ()
+        | Simple (Tag _)
         | Set_of_closures _ ->
           K.fabricated ()
         | Assign _ ->

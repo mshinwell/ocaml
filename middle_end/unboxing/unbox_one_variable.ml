@@ -330,10 +330,11 @@ module Make (S : Unboxing_spec) = struct
     let is_int_in_wrapper = Variable.rename is_int in
     let is_int_known_value, is_int_ty =
       if no_constant_ctors then
-        Some (Simple Simple.const_zero : Flambda.Named.t),
+        (* CR mshinwell: Tag.create_exn 0 again *)
+        Some (Simple (Simple.tag (Tag.create_exn 0)) : Flambda.Named.t),
           T.this_tagged_immediate Immediate.bool_false
       else
-        None, T.any_tagged_bool ()
+        None, T.any_fabricated ()
     in
     (* CR-soon mshinwell: On [discriminant] add information that tells us
        about the individual unboxed field parameters _given that_ we are
@@ -438,13 +439,16 @@ module Make (S : Unboxing_spec) = struct
       let join_cont = Continuation.create () in
       let tag = Variable.create "tag" in
       let is_int_switch =
+        (* CR mshinwell: see below on other is-int-switch *)
         let arms =
-          Targetint.OCaml.Map.of_list [
-            Targetint.OCaml.zero, is_block_cont;
-            Targetint.OCaml.one, is_int_cont;
+          Tag.Map.of_list [
+            (* CR mshinwell: add 0/1 constants to [Tag], also use in
+               simplify_unary_primitive for Is_int *)
+            Tag.create_exn 0, is_block_cont;
+            Tag.create_exn 1, is_int_cont;
           ]
         in
-        Flambda.Expr.create_int_switch ~scrutinee:(Name.var is_int_in_wrapper)
+        Flambda.Expr.create_tag_switch ~scrutinee:(Name.var is_int_in_wrapper)
           ~arms
       in
       let add_fill_fields_conts expr =
@@ -532,7 +536,7 @@ module Make (S : Unboxing_spec) = struct
         Flambda.Expr.create_tag_switch ~scrutinee:(Name.var tag) ~arms
       in
       Flambda.Expr.create_let is_int_in_wrapper
-        (K.value ())
+        (K.fabricated ())
         (if no_constant_ctors then Simple Simple.const_zero
          else Prim (Unary (Is_int, Simple.var wrapper_param_unboxee), dbg))
         (Let_cont {
@@ -611,12 +615,14 @@ module Make (S : Unboxing_spec) = struct
     let boxing_is_block_cont = Continuation.create () in
     let boxing_is_int_switch =
       let arms =
-        Targetint.OCaml.Map.of_list [
-          Targetint.OCaml.zero, boxing_is_block_cont;
-          Targetint.OCaml.one, boxing_is_int_cont;
+        Tag.Map.of_list [
+          (* CR mshinwell: add 0/1 constants to [Tag], also use in
+             simplify_unary_primitive for Is_int *)
+          Tag.create_exn 0, boxing_is_block_cont;
+          Tag.create_exn 1, boxing_is_int_cont;
         ]
       in
-      Flambda.Expr.create_int_switch ~scrutinee:(Name.var is_int) ~arms
+      Flambda.Expr.create_tag_switch ~scrutinee:(Name.var is_int) ~arms
     in
     let boxing_switch =
       let arms =
@@ -755,7 +761,7 @@ module Make (S : Unboxing_spec) = struct
           match is_int_known_value with
           | None -> body
           | Some named ->
-            Flambda.Expr.create_let is_int (K.value ()) named body
+            Flambda.Expr.create_let is_int (K.fabricated ()) named body
         in
         match discriminant_known_value with
         | None -> body
@@ -829,12 +835,12 @@ module Make (S : Unboxing_spec) = struct
               (T.these_tags by_tag)
           in
           let by_is_int_result =
-            Immediate.Map.of_list [
-              Immediate.bool_true, discriminant_env_is_int;
-              Immediate.bool_false, discriminant_env_is_block;
+            Tag.Map.of_list [
+              Tag.create_exn 1, discriminant_env_is_int;
+              Tag.create_exn 0, discriminant_env_is_block;
             ]
           in
-          T.these_tagged_immediates_with_envs by_is_int_result
+          T.these_tags by_is_int_result
         in
         let is_int = Parameter.wrap is_int in
         [Flambda.Typed_parameter.create is_int is_int_ty]

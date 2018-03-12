@@ -99,6 +99,7 @@ end
 type t =
   | Name of Name.t
   | Const of Const.t
+  | Tag of Tag.t
 
 let name t = Name t
 let var t = Name (Name.var t)
@@ -115,10 +116,12 @@ let const_false = Const Const.const_false
 let const_zero = Const Const.const_zero
 let unit = Const Const.const_unit
 
+let tag t = Tag t
+
 let free_names t =
   match t with
   | Name name -> Name.Set.singleton name
-  | Const _ -> Name.Set.empty
+  | Const _ | Tag _ -> Name.Set.empty
 
 let map_var t ~f =
   match t with
@@ -126,7 +129,7 @@ let map_var t ~f =
     let name' = Name.map_var name ~f in
     if name == name' then t
     else Name name'
-  | Const _ -> t
+  | Const _ | Tag _ -> t
 
 let map_symbol t ~f =
   match t with
@@ -134,7 +137,7 @@ let map_symbol t ~f =
     let name' = Name.map_symbol name ~f in
     if name == name' then t
     else Name name'
-  | Const _ -> t
+  | Const _ | Tag _ -> t
 
 include Identifiable.Make (struct
   type nonrec t = t
@@ -143,8 +146,13 @@ include Identifiable.Make (struct
     match t1, t2 with
     | Name n1, Name n2 -> Name.compare n1 n2
     | Const c1, Const c2 -> Const.compare c1 c2
+    | Tag t1, Tag t2 -> Tag.compare t1 t2
     | Name _, Const _ -> -1
+    | Name _, Tag _ -> -1
     | Const _, Name _ -> 1
+    | Const _, Tag _ -> -1
+    | Tag _, Name _ -> 1
+    | Tag _, Const _ -> 1
 
   let equal t1 t2 =
     compare t1 t2 = 0
@@ -153,11 +161,13 @@ include Identifiable.Make (struct
     match t with
     | Name name -> Hashtbl.hash (0, Name.hash name)
     | Const c -> Hashtbl.hash (1, Const.hash c)
+    | Tag t -> Hashtbl.hash (2, Tag.hash t)
 
   let print ppf t =
     match t with
     | Name name -> Name.print ppf name
     | Const c -> Const.print ppf c
+    | Tag t -> Tag.print ppf t
 end)
 
 module List = struct
