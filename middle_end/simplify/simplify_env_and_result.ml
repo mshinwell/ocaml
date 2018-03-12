@@ -1114,7 +1114,9 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
   let continuation_args_types t cont ~arity ~default_env =
     match Continuation.Map.find cont t.used_continuations with
     | exception Not_found ->
+(*
       Format.eprintf "No uses of continuation %a\n%!" Continuation.print cont;
+*)
       let tys = List.map (fun kind -> T.bottom kind) arity in
       tys, default_env
     | uses ->

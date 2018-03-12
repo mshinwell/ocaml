@@ -1067,22 +1067,30 @@ include Identifiable.Make_no_hash (struct
   let print ppf t =
     match t with
     | Unary (prim, v0) ->
-      Format.fprintf ppf "@[(Prim %a %a)@]"
+      Format.fprintf ppf "@[(%sprim%s %a %a)@]"
+        (Misc_color.bold_green ())
+        (Misc_color.reset ())
         print_unary_primitive prim
         Simple.print v0
     | Binary (prim, v0, v1) ->
-      Format.fprintf ppf "@[(Prim %a %a %a)@]"
+      Format.fprintf ppf "@[(%sprim%s %a %a %a)@]"
+        (Misc_color.bold_green ())
+        (Misc_color.reset ())
         print_binary_primitive prim
         Simple.print v0
         Simple.print v1
     | Ternary (prim, v0, v1, v2) ->
-      Format.fprintf ppf "@[(Prim %a %a %a %a)@]"
+      Format.fprintf ppf "@[(%sprim%s %a %a %a %a)@]"
+        (Misc_color.bold_green ())
+        (Misc_color.reset ())
         print_ternary_primitive prim
         Simple.print v0
         Simple.print v1
         Simple.print v2
     | Variadic (prim, vs) ->
-      Format.fprintf ppf "@[(Prim %a %a)@]"
+      Format.fprintf ppf "@[(%sprim%s %a %a)@]"
+        (Misc_color.bold_green ())
+        (Misc_color.reset ())
         print_variadic_primitive prim
         (Format.pp_print_list ~pp_sep:Format.pp_print_space Simple.print) vs
 end)

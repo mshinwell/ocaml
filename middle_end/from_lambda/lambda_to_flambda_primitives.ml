@@ -496,9 +496,10 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
        careful to update that when we know it is not. This should not
        be an error.
        We need more type propagations to be precise here *)
+(* XXX *)
     let imm = Immediate.int (Targetint.OCaml.of_int field) in
     let field = Simple.const (Simple.Const.Tagged_immediate imm) in
-    Binary (Block_load (Block (Value Unknown), Mutable), arg, Simple field)
+    Binary (Block_load (Block (Value Unknown), Immutable), arg, Simple field)
   | Pfloatfield field, [arg] ->
     let imm = Immediate.int (Targetint.OCaml.of_int field) in
     let field = Simple.const (Simple.Const.Tagged_immediate imm) in

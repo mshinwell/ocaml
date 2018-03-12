@@ -353,14 +353,22 @@ module Trap_action = struct
     let print ppf t =
       match t with
       | Push { id; exn_handler; } ->
-        fprintf ppf "push %a %a then "
+        fprintf ppf "%spush%s %a %a %sthen%s "
+          (Misc_color.bold_cyan ())
+          (Misc_color.reset ())
           Trap_id.print id
           Continuation.print exn_handler
+          (Misc_color.bold_cyan ())
+          (Misc_color.reset ())
       | Pop { id; exn_handler; take_backtrace; } ->
-        fprintf ppf "pop%s %a %a then "
+        fprintf ppf "%spop%s%s %a %a %sthen%s "
+          (Misc_color.bold_cyan ())
+          (Misc_color.reset ())
           (if take_backtrace then " with backtrace" else "")
           Trap_id.print id
           Continuation.print exn_handler
+          (Misc_color.bold_cyan ())
+          (Misc_color.reset ())
   end)
 
   module Option = struct
@@ -395,15 +403,19 @@ module Switch = struct
       | Value arms ->
         Targetint.OCaml.Map.iter (fun n l ->
             if !spc then fprintf ppf "@ " else spc := true;
-            fprintf ppf "@[<hv 1>| %a ->@ goto %a@]"
+            fprintf ppf "@[<hv 1>| %a ->@ %sgoto%s %a@]"
               Targetint.OCaml.print n
+              (Misc_color.bold_cyan ())
+              (Misc_color.reset ())
               Continuation.print l)
           arms
       | Fabricated arms ->
         Tag.Map.iter (fun tag l ->
             if !spc then fprintf ppf "@ " else spc := true;
-            fprintf ppf "@[<hv 1>| tag %a ->@ goto %a@]"
+            fprintf ppf "@[<hv 1>| tag %a ->@ %sgoto%s %a@]"
               Tag.print tag
+              (Misc_color.bold_cyan ())
+              (Misc_color.reset ())
               Continuation.print l)
           arms
   end)
@@ -887,16 +899,22 @@ end = struct
       let rec letbody (ul : t) =
         match ul with
         | Let { var = id; kind; defining_expr = arg; body; _ } ->
-          fprintf ppf "@ @[<2>%a@[@ :: %a@]@ %a@]"
+          fprintf ppf "@ @[<2>%a@[@ %s:: %a%s@]@ %a@]"
             Variable.print id
+            (Misc_color.bold_white ())
             Flambda_kind.print kind
+            (Misc_color.reset ())
             (Named.print_with_cache ~cache) arg;
           letbody body
         | _ -> ul
       in
-      fprintf ppf "@[<2>(let@ @[<hv 1>(@[<2>%a@[@ :: %a@]@ %a@]"
+      fprintf ppf "@[<2>(%slet%s@ @[<hv 1>(@[<2>%a@[@ %s:: %a%s@]@ %a@]"
+        (Misc_color.bold_cyan ())
+        (Misc_color.reset ())
         Variable.print id
+        (Misc_color.bold_white ())
         Flambda_kind.print kind
+        (Misc_color.reset ())
         (Named.print_with_cache ~cache) arg;
       let expr = letbody body in
       fprintf ppf ")@]@ %a)@]" print expr
@@ -908,15 +926,21 @@ end = struct
         print body
     | Switch (scrutinee, sw) ->
       fprintf ppf
-        "@[<v 1>(switch %a@ @[<v 0>%a@])@]"
+        "@[<v 1>(%sswitch%s %a@ @[<v 0>%a@])@]"
+        (Misc_color.bold_cyan ())
+        (Misc_color.reset ())
         Name.print scrutinee Switch.print sw
     | Apply_cont (i, trap_action, []) ->
-      fprintf ppf "@[<2>(%agoto@ %a)@]"
+      fprintf ppf "@[<2>(%a%sgoto%s@ %a)@]"
         Trap_action.Option.print trap_action
+        (Misc_color.bold_cyan ())
+        (Misc_color.reset ())
         Continuation.print i
     | Apply_cont (i, trap_action, ls) ->
-      fprintf ppf "@[<2>(%aapply_cont@ %a@ %a)@]"
+      fprintf ppf "@[<2>(%a%sapply_cont%s@ %a@ %a)@]"
         Trap_action.Option.print trap_action
+        (Misc_color.bold_cyan ())
+        (Misc_color.reset ())
         Continuation.print i
         Simple.List.print ls
     | Let_cont { body; handlers; } ->
@@ -931,7 +955,9 @@ end = struct
             let_cont_body body
           | _ -> ul
         in
-        fprintf ppf "@[<2>(let_cont@ @[<hv 1>(@[<2>%a@]"
+        fprintf ppf "@[<2>(%slet_cont%s@ @[<hv 1>(@[<2>%a@]"
+          (Misc_color.bold_cyan ())
+          (Misc_color.reset ())
           (Let_cont_handlers.print_with_cache ~cache) handlers;
         let expr = let_cont_body body in
         fprintf ppf ")@]@ %a)@]" (print_with_cache ~cache) expr
@@ -950,7 +976,10 @@ end = struct
           (Format.pp_print_list ~pp_sep
             (Let_cont_handlers.print_using_where_with_cache ~cache)) let_conts
       end
-    | Invalid _ -> fprintf ppf "unreachable"
+    | Invalid _ ->
+      fprintf ppf "%sunreachable%s"
+          (Misc_color.bold_cyan ())
+          (Misc_color.reset ())
 
   let print ppf (t : t) =
     print_with_cache ~cache:(Printing_cache.create ()) ppf t
@@ -1043,7 +1072,11 @@ end = struct
 
   let print_with_cache ~cache ppf (t : t) =
     match t with
-    | Simple simple -> Simple.print ppf simple
+    | Simple simple ->
+      Format.fprintf ppf "%s%a%s"
+        (Misc_color.bold_green ())
+        Simple.print simple
+        (Misc_color.reset ())
     | Set_of_closures set_of_closures ->
       Set_of_closures.print_with_cache ~cache ppf set_of_closures
     | Prim (prim, dbg) ->
@@ -1327,7 +1360,9 @@ end = struct
         name;
         handler = { params; stub; handler; is_exn_handler; };
       } ->
-      fprintf ppf "@[<v 2>where %a%s%s@ %s@[%a@]%s =@ %a@]"
+      fprintf ppf "@[<v 2>%swhere%s %a%s%s@ %s@[%a@]%s =@ %a@]"
+        (Misc_color.bold_cyan ())
+        (Misc_color.reset ())
         Continuation.print name
         (if stub then " *stub*" else "")
         (if is_exn_handler then "*exn* " else "")
@@ -1337,7 +1372,9 @@ end = struct
         (Expr.print_with_cache ~cache) handler
     | Recursive handlers ->
       let first = ref true in
-      fprintf ppf "@[<v 2>where rec ";
+      fprintf ppf "@[<v 2>%swhere%s rec "
+        (Misc_color.bold_cyan ())
+        (Misc_color.reset ());
       Continuation.Map.iter (fun name
               { Continuation_handler. params; stub; is_exn_handler;
                 handler; } ->
@@ -1477,13 +1514,15 @@ end = struct
   let print_with_cache ~cache ppf t =
     match t with
     | { function_decls; free_vars; direct_call_surrogates = _; } ->
-      fprintf ppf "@[<2>(\
-          @[(set_of_closures id %a)@]@ \
+      fprintf ppf "@[<2>(%sset_of_closures%s@ \
+          @[(id %a)@]@ \
           %a@ \
           @[(in_closure (%a))@]@ \
           @[(direct_call_surrogates %a)@]@ \
           @[(set_of_closures_origin %a)@]\
           )@]"
+        (Misc_color.bold_green ())
+        (Misc_color.reset ())
         Set_of_closures_id.print function_decls.set_of_closures_id
         (Function_declarations.print_with_cache ~cache) function_decls
         Free_vars.print free_vars
@@ -1814,12 +1853,14 @@ end = struct
     in
     fprintf ppf
       "@[<2>(%a%s%s%s%s@ (my_closure %a)@ (origin %a)@ =@ \
-        fun@[<2> <%a> <exn %a>@] %a@ @[<2>@ :: %a@]@ ->@ @[<2>%a@])@]@ "
+        %sfun%s@[<2> <%a> <exn %a>@] %a@ @[<2>@ :: %a@]@ ->@ @[<2>%a@])@]@ "
       Closure_id.print closure_id
       stub
       is_a_functor inline specialise
       Variable.print f.my_closure
       Closure_origin.print f.closure_origin
+      (Misc_color.bold_cyan ())
+      (Misc_color.reset ())
       Continuation.print f.continuation_param
       Continuation.print f.exn_continuation_param
       (Typed_parameter.List.print_with_cache ~cache) f.params

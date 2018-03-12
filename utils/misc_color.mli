@@ -42,5 +42,7 @@ val set_color_tag_handling : Format.formatter -> unit
 
 val bold_green : unit -> string
 val bold_red : unit -> string
+val bold_cyan : unit -> string
+val bold_white : unit -> string
 
 val reset : unit -> string
