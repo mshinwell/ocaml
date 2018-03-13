@@ -100,6 +100,8 @@ let for_defining_expr_of_let (env, r) var kind defining_expr =
   let env = E.add_variable env var ty in
   let env =
     let new_judgements = R.get_typing_judgements r in
+    Format.eprintf "New judgements:@ %a\n%!"
+      T.Typing_environment.print new_judgements;
     E.extend_typing_environment env ~env_extension:new_judgements
   in
 (*
@@ -380,47 +382,61 @@ let environment_for_let_cont_handler ~env cont
       Typed_parameter.List.print params
       (List.length arg_tys)
   end;
-  let params =
-    List.map (fun (param, arg_ty) : Typed_parameter.t ->
+  List.fold_left (fun env (param, arg_ty) ->
 (*        let unfreshened_param = param in *)
-        let param =
-          Typed_parameter.map_var param
-            ~f:(fun var -> Freshening.apply_variable freshening var)
-        in
-        let param_ty = Typed_parameter.ty param in
+      let param =
+        Typed_parameter.map_var param
+          ~f:(fun var -> Freshening.apply_variable freshening var)
+      in
+      let param_ty = Typed_parameter.ty param in
 (*
-        if !Clflags.flambda_invariant_checks then begin
-          if not (T.as_or_more_precise env
-            arg_ty ~than:param_ty)
-          then begin
-            Misc.fatal_errorf "Parameter %a of continuation %a supplied \
-                with argument which has regressed in preciseness of type: %a"
-              Typed_parameter.print unfreshened_param
-              Continuation.print cont
-              T.print arg_ty
-          end
-        end;
+      if !Clflags.flambda_invariant_checks then begin
+        if not (T.as_or_more_precise env
+          arg_ty ~than:param_ty)
+        then begin
+          Misc.fatal_errorf "Parameter %a of continuation %a supplied \
+              with argument which has regressed in preciseness of type: %a"
+            Typed_parameter.print unfreshened_param
+            Continuation.print cont
+            T.print arg_ty
+        end
+      end;
 *)
+      let env_extension, ty =
+        let env_extension, ty =
+          (* CR mshinwell: More thought required.  The order of arguments
+             to [meet] is important: if there are two [Type_of]s, then the
+             one from the first type is the one which sticks (as we want
+             for relations between parameters).
+             It seems like instead we should try to work out how to remove
+             this meet entirely. *)
+          T.meet ~resolver:(E.resolver env)
+            (E.get_typing_environment env, param_ty)
+            (E.get_typing_environment env, arg_ty)
+        in
         let ty =
-          let ty =
-            T.meet (E.get_typing_environment env, arg_ty)
-              (E.get_typing_environment env, param_ty)
-          in
           T.rename_variables ty
             ~f:(fun var -> Freshening.apply_variable freshening var)
         in
-        Typed_parameter.with_type param ty)
-      (List.combine params arg_tys)
-  in
-  List.fold_left (fun env param ->
+        env_extension, ty
+      in
+      let env = E.extend_typing_environment env ~env_extension in
+      let param = Typed_parameter.with_type param ty in
       E.add_variable env (Typed_parameter.var param)
         (Typed_parameter.ty param))
     (E.set_freshening env freshening)
-    params
+    (List.combine params arg_tys)
 
 let rec simplify_let_cont_handler ~env ~r ~cont
       ~(handler : Flambda.Continuation_handler.t) ~arg_tys =
   let env = environment_for_let_cont_handler ~env cont ~handler ~arg_tys in
+  Format.eprintf "Environment for %a:@ %a@ \nArg types:@ %a@ \n\
+      Params:@ %a\n%!"
+    Continuation.print cont
+    T.Typing_environment.print (E.get_typing_environment env)
+    (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print) arg_tys
+    (Format.pp_print_list ~pp_sep:Format.pp_print_space
+      Flambda.Typed_parameter.print) handler.params;
   let new_handler, r = simplify_expr (E.inside_branch env) r handler.handler in
   let params =
     List.map2 (fun param arg_ty ->
@@ -483,13 +499,6 @@ and simplify_let_cont_handlers0 env r ~handlers
               raise Misc.Fatal_error
             end
           in
-(*
-          Format.eprintf "Environment for %a:@ %a@ Arg types:@ %a\n%!"
-            Continuation.print cont
-            T.Typing_environment.print new_env
-            (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print)
-              arg_tys;
-*)
           let env = E.replace_typing_environment env new_env in
           let env = E.increment_continuation_scope_level env in
           let r, handler =

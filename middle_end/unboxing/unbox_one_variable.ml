@@ -32,6 +32,13 @@ module type Unboxing_spec = sig
 
   val unboxed_kind : K.t
 
+  val never_is_int : bool
+
+  val int_to_tag
+     : wrapper_param_unboxee:Variable.t
+    -> Debuginfo.t
+    -> Flambda.Named.t
+
   val get_field
      : boxed_value:Simple.t
     -> index:int
@@ -87,12 +94,17 @@ module Unboxing_spec_variant : Unboxing_spec = struct
 
   let unboxed_kind = K.value ()
 
+  let never_is_int = false
+
   let get_field ~boxed_value ~index dbg : Flambda.Named.t =
     (* CR mshinwell: We should be able to do better than
        [Unknown], based on the type of the unboxee. *)
     Prim (Binary (Block_load (Block (Value Unknown), Immutable),
         boxed_value, Simple.const_int index),
       dbg)
+
+  let int_to_tag ~wrapper_param_unboxee dbg : Flambda.Named.t =
+    (Prim (Unary (Int_to_tag, Simple.var wrapper_param_unboxee), dbg))
 
   let box _t tag fields dbg : Flambda.Named.t =
     let kinds =
@@ -123,7 +135,7 @@ module Unboxing_spec_variant : Unboxing_spec = struct
       T.block (Tag.Scannable.to_tag unique_tag) ~fields:(Array.of_list fields)
 end
 
-module Unboxing_spec_float_array = struct
+module Unboxing_spec_float_array : Unboxing_spec = struct
   type t = unit
 
   let create (proof : T.unboxable_proof) =
@@ -145,6 +157,11 @@ module Unboxing_spec_float_array = struct
 
   let unboxed_kind = K.naked_float ()
 
+  let never_is_int = true
+
+  let int_to_tag ~wrapper_param_unboxee:_ _dbg : Flambda.Named.t =
+    Simple (Simple.tag (Tag.create_exn 0))  (* Will always be dead code. *)
+
   let get_field ~boxed_value ~index dbg : Flambda.Named.t =
     Prim (Binary (Block_load (Block Naked_float, Immutable),
         boxed_value, Simple.const_int index),
@@ -162,11 +179,11 @@ module Unboxing_spec_float_array = struct
     T.block Tag.double_array_tag ~fields:(Array.of_list fields)
 end
 
-module Unboxing_spec_naked_number (N : sig
+module Unboxing_spec_boxed_number (N : sig
   include Number_adjuncts.Boxable_number_kind
 
   val check_proof : T.unboxable_proof -> bool
-end) = struct
+end) : Unboxing_spec = struct
   type t = unit
 
   let create (proof : T.unboxable_proof) =
@@ -184,6 +201,11 @@ end) = struct
       Some ((), unboxing_spec)
 
   let unboxed_kind = Flambda_kind.Standard_int_or_float.to_kind N.kind
+
+  let never_is_int = true
+
+  let int_to_tag ~wrapper_param_unboxee:_ _dbg : Flambda.Named.t =
+    Simple (Simple.tag (Tag.create_exn 0))  (* Will always be dead code. *)
 
   let get_field ~boxed_value ~index dbg : Flambda.Named.t =
     if index <> 0 then begin
@@ -209,7 +231,7 @@ end) = struct
         (List.length all_fields)
 end
 
-module Unboxing_spec_boxed_float = Unboxing_spec_naked_number (struct
+module Unboxing_spec_boxed_float = Unboxing_spec_boxed_number (struct
   include Number_adjuncts.For_floats
 
   let check_proof (proof : T.unboxable_proof) =
@@ -218,7 +240,7 @@ module Unboxing_spec_boxed_float = Unboxing_spec_naked_number (struct
     | _ -> false
 end)
 
-module Unboxing_spec_boxed_int32 = Unboxing_spec_naked_number (struct
+module Unboxing_spec_boxed_int32 = Unboxing_spec_boxed_number (struct
   include Number_adjuncts.For_int32s
 
   let check_proof (proof : T.unboxable_proof) =
@@ -227,7 +249,7 @@ module Unboxing_spec_boxed_int32 = Unboxing_spec_naked_number (struct
     | _ -> false
 end)
 
-module Unboxing_spec_boxed_int64 = Unboxing_spec_naked_number (struct
+module Unboxing_spec_boxed_int64 = Unboxing_spec_boxed_number (struct
   include Number_adjuncts.For_int64s
 
   let check_proof (proof : T.unboxable_proof) =
@@ -236,7 +258,7 @@ module Unboxing_spec_boxed_int64 = Unboxing_spec_naked_number (struct
     | _ -> false
 end)
 
-module Unboxing_spec_boxed_nativeint = Unboxing_spec_naked_number (struct
+module Unboxing_spec_boxed_nativeint = Unboxing_spec_boxed_number (struct
   include Number_adjuncts.For_nativeints
 
   let check_proof (proof : T.unboxable_proof) =
@@ -338,10 +360,10 @@ module Make (S : Unboxing_spec) = struct
     let is_int = Variable.rename ~append:"_is_int" unboxee in
     let is_int_in_wrapper = Variable.rename is_int in
     let is_int_known_value, is_int_ty =
-      if no_constant_ctors then
+      if no_constant_ctors || S.never_is_int then
         (* CR mshinwell: Tag.create_exn 0 again *)
         Some (Simple (Simple.tag (Tag.create_exn 0)) : Flambda.Named.t),
-          T.this_tagged_immediate Immediate.bool_false
+          T.this_tag (Tag.create_exn 0)
       else
         None, T.any_fabricated ()
     in
@@ -382,7 +404,9 @@ module Make (S : Unboxing_spec) = struct
       match Immediate.Set.elements discriminant_possible_values with
       | [] -> assert false  (* see the bottom of [how_to_unbox], below *)
       | [tag] ->
-        Some (Simple (Simple.const (Tagged_immediate tag)) : Flambda.Named.t),
+        (* XXX Shouldn't be using [Immediate] *)
+        let tag = Targetint.OCaml.to_int (Immediate.to_targetint tag) in
+        Some (Simple (Simple.tag (Tag.create_exn tag)) : Flambda.Named.t),
           discriminant_ty
       | _tags -> None, discriminant_ty
     in
@@ -546,7 +570,7 @@ module Make (S : Unboxing_spec) = struct
       in
       Flambda.Expr.create_let is_int_in_wrapper
         (K.fabricated ())
-        (if no_constant_ctors then Simple Simple.const_zero
+        (if no_constant_ctors then Simple (Simple.tag (Tag.create_exn 0))
          else Prim (Unary (Is_int, Simple.var wrapper_param_unboxee), dbg))
         (Let_cont {
           body = Let_cont {
@@ -570,8 +594,7 @@ module Make (S : Unboxing_spec) = struct
                     in
                     Flambda.Expr.create_let wrapper_param_unboxee_as_tag
                       (K.fabricated ())
-                      (Prim (Unary (
-                        Int_to_tag, Simple.var wrapper_param_unboxee), dbg))
+                      (S.int_to_tag ~wrapper_param_unboxee dbg)
                       (Apply_cont (join_cont, None,
                         is_int_in_wrapper @ wrapper_param_unboxee'
                           @ all_units)));
@@ -867,7 +890,7 @@ module Make (S : Unboxing_spec) = struct
     let fields =
       List.map (fun (field, _kind) ->
           let field = Parameter.wrap field in
-          Flambda.Typed_parameter.create field (T.bottom S.unboxed_kind))
+          Flambda.Typed_parameter.create field (T.unknown S.unboxed_kind))
         fields_with_kinds
     in
     let unboxee_ty =

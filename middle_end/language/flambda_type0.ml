@@ -1842,6 +1842,9 @@ end;
     | No_alias uoj -> uoj, canonical_name
     | Type _ | Type_of _ -> Unknown, canonical_name
 
+  (* CR mshinwell: this should return not just the canonical name but all
+     other aliases encountered, so the meet functions can add judgements
+     for those. *)
   let resolve_aliases (env, t) : t * (Name.t option) =
     match t.descr with
     | Value ty ->
@@ -3909,26 +3912,29 @@ Format.eprintf "...giving %a\n%!" print ty;
         end
   end
 
-  let meet tc1 tc2 =
-    let t, _judgements = Meet_and_join.meet tc1 tc2 in
-    t
-(*
+  let meet ~resolver tc1 tc2 =
+    let t, judgements = Meet_and_join.meet tc1 tc2 in
     let env =
-      List.fold_left (fun output_env (name, t) ->
-          replace_meet_typing_environment ~type_of_name output_env name t)
-        (create_typing_environment ())
+      List.fold_left (fun output_env (name, scope_level, ty) ->
+          let env, _ty =
+            (* We can choose either the environment from [tc1] or [tc2],
+               since [t] is the meet of the type components of those. *)
+            tc1
+          in
+          match Name.Map.find name output_env.names_to_types with
+          | exception Not_found ->
+            Meet_and_join.replace_meet_typing_environment0 output_env
+              name ~scope_level ~existing_ty:(unknown (kind ty))
+              (env, ty)
+          | existing_scope_level, existing_ty ->
+            assert (Scope_level.equal scope_level existing_scope_level);
+            Meet_and_join.replace_meet_typing_environment0 output_env
+              name ~scope_level ~existing_ty
+              (env, ty))
+        (create_typing_environment ~resolver)
         judgements
     in
-    t, env
-*)
-(*
-      let extra_env = judgements_holding_now ~type_of_name ty in
-Format.eprintf "(TE replace_meet) Judgements holding now:@ %a\n%!"
-  print_typing_environment extra_env;
-      if Name.Map.is_empty extra_env.names_to_types then env
-      else
-        Meet_and_join.meet_typing_environment ~type_of_name env extra_env
-*)
+    env, t
 
   let join = Meet_and_join.join
 

@@ -716,7 +716,11 @@ module type S = sig
   val join_ty_value : ty_value_in_context -> ty_value_in_context -> ty_value
 
   (** Greatest lower bound of two types. *)
-  val meet : t_in_context -> t_in_context -> t
+  val meet
+     : resolver:(Export_id.t -> flambda_type option)
+    -> t_in_context
+    -> t_in_context
+    -> t_in_context
 
   (** Follow chains of [Alias]es until either a [No_alias] type is reached
       or a name cannot be resolved.

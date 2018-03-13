@@ -1879,25 +1879,21 @@ type unboxable_proof =
 let prove_unboxable env ~unboxee_ty : unboxable_proof =
   match prove_unboxable_variant_or_block_of_values env unboxee_ty with
   | Proved (Unboxable unboxable) -> Variant_or_block_of_values unboxable
-  | Invalid | Proved Not_unboxable -> Cannot_unbox
-  | Unknown ->
+  | Proved Not_unboxable -> Cannot_unbox
+  | Invalid | Unknown ->
     match prove_float_array env unboxee_ty with
     | Proved (Of_length length) -> Float_array { length; }
-    | Invalid | Proved Not_unique_length -> Cannot_unbox
-    | Unknown ->
+    | Proved Not_unique_length -> Cannot_unbox
+    | Invalid | Unknown ->
       match prove_boxed_float env unboxee_ty with
       | Proved _ty_naked_number -> Boxed_float
-      | Invalid -> Cannot_unbox
-      | Unknown ->
+      | Invalid | Unknown ->
         match prove_boxed_int32 env unboxee_ty with
         | Proved _ty_naked_number -> Boxed_int32
-        | Invalid -> Cannot_unbox
-        | Unknown ->
+        | Invalid | Unknown ->
           match prove_boxed_int64 env unboxee_ty with
           | Proved _ty_naked_number -> Boxed_int64
-          | Invalid -> Cannot_unbox
-          | Unknown ->
+          | Invalid | Unknown ->
             match prove_boxed_nativeint env unboxee_ty with
             | Proved _ty_naked_number -> Boxed_nativeint
-            | Invalid -> Cannot_unbox
-            | Unknown -> Cannot_unbox
+            | Invalid | Unknown -> Cannot_unbox
