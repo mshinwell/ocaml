@@ -445,16 +445,19 @@ module Make_simplify_unbox_number (P : A.Boxable_number_kind) = struct
     in
     let r =
       match arg with
-      | Const _ | Tag _ -> r
-      | Name boxed_name ->
+      | Const _ | Tag _ | Name (Symbol _) -> r
+      | Name ((Var _) as boxed_name) ->
         let kind = K.Standard_int_or_float.to_kind P.kind in
         let boxed_ty_refinement =
           P.box (T.alias_type_of kind (Name.var result_var))
         in
-        R.add_or_meet_typing_judgement
-          r boxed_name
-          (E.continuation_scope_level env)
-          boxed_ty_refinement
+        let r =
+          let scope_level = E.continuation_scope_level env in
+          R.add_or_meet_typing_judgement r (Name.var result_var)
+            scope_level (T.unknown kind)
+        in
+        R.add_or_meet_typing_judgement r boxed_name
+          (E.scope_level_of_name env boxed_name) boxed_ty_refinement
     in
     match proof with
     | Proved unboxed_ty ->

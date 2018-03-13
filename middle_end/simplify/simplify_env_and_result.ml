@@ -778,7 +778,7 @@ end = struct
       | uses ->
         let bottom_arg_tys = T.bottom_types_from_arity arity in
         let arg_tys, env =
-          List.fold_left (fun (arg_tys, env) (use : Use.t) ->
+          List.fold_left (fun (arg_tys, meet_env) (use : Use.t) ->
               let arg_tys' = Use.Kind.arg_tys use.kind in
               if List.length arg_tys <> List.length arg_tys' then begin
                 Misc.fatal_errorf "join_of_arg_tys_opt %a: approx length %d, \
@@ -791,7 +791,7 @@ Format.eprintf "Cutting environment for %a, level %a\n%!"
   Continuation.print t.continuation
   Scope_level.print t.definition_scope_level;
 *)
-              let this_env =
+              let use_env =
                 TE.cut (Env.get_typing_environment use.env)
                   ~existential_if_defined_at_or_later_than:
                     (Scope_level.next t.definition_scope_level)
@@ -800,10 +800,15 @@ Format.eprintf "Cutting environment for %a, level %a\n%!"
 Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
 *)
               (* CR mshinwell: Add [List.map2i]. *)
+              let meet_env =
+                match meet_env with
+                | None -> TE.create ~resolver:(Env.resolver use.env)
+                | Some meet_env -> meet_env
+              in
               let arg_number = ref 0 in
               let arg_tys =
-                List.map2 (fun result this_ty ->
-                    let free_names_this_ty =
+                List.map2 (fun joined_ty this_ty ->
+                    let _free_names_this_ty =
                       T.free_names_transitive
                         (Env.get_typing_environment use.env)
                         this_ty
@@ -816,25 +821,25 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
                       Name_occurrences.print free_names_this_ty
                       TE.print this_env;
 *)
+(*
                     let _this_env =
                       (* XXX We should presumably allow things from outer
                          levels so long as our types for them are more
                          precise. *)
                       TE.restrict_to_names this_env free_names_this_ty
+                    in
+*)
 (*
                         (Name_occurrences.union free_names_this_ty
                           (TE.domain default_env))
 *)
-                    in
 (*
                     Format.eprintf "Restricted env:@ %a\n%!"
                       TE.print this_env;
 *)
-                    let use_env = Env.get_typing_environment use.env in
                     let this_ty = T.add_judgements (use_env, this_ty) in
-                    let join =
-                      (* XXX Think carefully about which environments to use *)
-                      try T.join (use_env, result) (use_env, this_ty)
+                    let joined_ty =
+                      try T.join (meet_env, joined_ty) (use_env, this_ty)
                       with Misc.Fatal_error -> begin
                         Format.eprintf "\n%sContext is: argument number %d \
                             (0 is the first argument)%s\n"
@@ -845,15 +850,11 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
                       end
                     in
                     incr arg_number;
-                    join)
+                    joined_ty)
                   arg_tys arg_tys'
               in
-              let env =
-                match env with
-                | None -> this_env
-                | Some env -> TE.join env this_env
-              in
-              arg_tys, Some env)
+              let meet_env = TE.meet meet_env use_env in
+              arg_tys, Some meet_env)
             (bottom_arg_tys, None)
             uses
         in

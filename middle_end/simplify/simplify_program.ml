@@ -314,6 +314,27 @@ let initial_environment_for_recursive_symbols env
 
 let simplify_define_symbol env (recursive : Flambda.recursive)
       (defn : Program_body.definition) =
+  if !Clflags.flambda_invariant_checks then begin
+    let typing_env = E.get_typing_environment env in
+    let domain = T.Typing_environment.domain typing_env in
+    Name.Set.iter (fun (name : Name.t) ->
+        match name with
+        | Symbol _ -> ()
+        | Var _ ->
+          if not (T.Typing_environment.is_existential typing_env name)
+          then begin
+            Misc.fatal_errorf "No variable that is not existentially-bound@ \
+                should be in the environment when starting to simplify a@ \
+                define-symbol construction.  Example offender: %a.@ \
+                Environment:@ %a"
+              Name.print name
+              E.print env
+          end)
+      (Name_occurrences.everything domain)
+  end;
+(*
+Format.eprintf "\n\nsimplify_define_symbol:\n\n%!";
+*)
   let env, computation, newly_imported_symbols, lifted_constants =
     match defn.computation with
     | None -> env, defn.computation, Symbol.Map.empty, Symbol.Map.empty
@@ -437,6 +458,13 @@ Format.eprintf "Extended env (cont %a) is@ %a\n\n%!"
   let unreachable, env, static_structure =
     simplify_static_structure env recursive defn.static_structure
   in
+  let typing_env = E.get_typing_environment env in
+  let typing_env =
+    T.Typing_environment.cut typing_env
+      ~existential_if_defined_at_or_later_than:
+        (Scope_level.next Scope_level.initial)
+  in
+  let env = E.replace_typing_environment env typing_env in
   (* CR mshinwell: [unreachable] should also be set to [true] if
      [computation] is [Some (Invalid _)]. *)
   let computation, static_structure =
@@ -496,11 +524,10 @@ Format.eprintf "Extended env (cont %a) is@ %a\n\n%!"
       computation;
     }
   in
-  definition, env, newly_imported_symbols, lifted_constants
 (*
-Format.eprintf "Final environment after define_symbol:@ %a\n%!" E.print env;
-  definition, env, newly_imported_symbols, lifted_constants
+Format.eprintf "\n\n>> Final environment after define_symbol:@ %a\n%!" E.print env;
 *)
+  definition, env, newly_imported_symbols, lifted_constants
 
 let add_lifted_constants lifted_constants (body : Program_body.t) =
   (* CR mshinwell: Dependencies between lifted constants?  Need to get the

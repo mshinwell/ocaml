@@ -4006,20 +4006,14 @@ Format.eprintf "Cutting environment at %a: %a\n%!"
   Scope_level.print existential_if_defined_at_or_later_than
   print_typing_environment t;
 *)
-      let existentials =
+      let new_existentials =
         Scope_level.Map.fold (fun scope_level names resulting_existentials ->
             let will_be_existential =
               Scope_level.(>=)
                 scope_level existential_if_defined_at_or_later_than
             in
             if will_be_existential then
-              let non_symbols =
-                Name.Set.filter (fun (name : Name.t) ->
-                    match name with
-                    | Var _ -> true
-                    | Symbol _ -> false)
-                  names
-              in
+              let non_symbols = Name.variables_only names in
               Name.Set.union non_symbols resulting_existentials
             else
               resulting_existentials)
@@ -4036,7 +4030,7 @@ Format.eprintf "Cutting environment at %a: %a\n%!"
                 Freshening.add_variable freshening var
               in
               freshening)
-          existentials
+          new_existentials
           t.existential_freshening
       in
 let result =
@@ -4044,7 +4038,7 @@ let result =
       { resolver = t.resolver;
         names_to_types = t.names_to_types;
         levels_to_names = t.levels_to_names;
-        existentials;
+        existentials = Name.Set.union t.existentials new_existentials;
         existential_freshening;
       }
 in
