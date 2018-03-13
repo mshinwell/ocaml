@@ -38,6 +38,7 @@ endif
 OBJS=dynlinkaux.cmo dynlink.cmo
 
 COMPILEROBJS=\
+  ../../utils/misc_color.cmo \
   ../../utils/identifiable.cmo \
   ../../utils/misc.cmo ../../utils/config.cmo \
   ../../utils/numbers.cmo \
@@ -45,6 +46,7 @@ COMPILEROBJS=\
   ../../utils/tbl.cmo ../../utils/consistbl.cmo \
   ../../utils/terminfo.cmo ../../utils/warnings.cmo \
   ../../utils/targetint.cmo \
+  ../../utils/build_path_prefix_map.cmo \
   ../../parsing/asttypes.cmi \
   ../../parsing/location.cmo ../../parsing/longident.cmo \
   ../../parsing/docstrings.cmo ../../parsing/syntaxerr.cmo \

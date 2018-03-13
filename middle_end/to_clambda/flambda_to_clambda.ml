@@ -13,6 +13,9 @@
 (*   special exception on linking described in the file LICENSE.          *)
 (*                                                                        *)
 (**************************************************************************)
+
+(* CR mshinwell: Recognise patterns for CFnlt etc. *)
+
 (*
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 

@@ -290,9 +290,14 @@ let mk_not dbg cmm =
   | Cop(Caddi, [Cop(Clsl, [c; Cconst_int 1], _); Cconst_int 1], dbg') -> begin
       match c with
       | Cop(Ccmpi cmp, [c1; c2], dbg'') ->
-          tag_int (Cop(Ccmpi (negate_comparison cmp), [c1; c2], dbg'')) dbg'
+          tag_int
+            (Cop(Ccmpi (negate_integer_comparison cmp), [c1; c2], dbg'')) dbg'
       | Cop(Ccmpa cmp, [c1; c2], dbg'') ->
-          tag_int (Cop(Ccmpa (negate_comparison cmp), [c1; c2], dbg'')) dbg'
+          tag_int
+            (Cop(Ccmpa (negate_integer_comparison cmp), [c1; c2], dbg'')) dbg'
+      | Cop(Ccmpf cmp, [c1; c2], dbg'') ->
+          tag_int
+            (Cop(Ccmpf (negate_float_comparison cmp), [c1; c2], dbg'')) dbg'
       | _ ->
         (* 0 -> 3, 1 -> 1 *)
         Cop(Csubi, [Cconst_int 3; Cop(Clsl, [c; Cconst_int 1], dbg)], dbg)
@@ -866,13 +871,9 @@ let curry_function n =
 
 (* Comparisons *)
 
-let transl_comparison = function
-    P.Ceq -> Ceq
-  | P.Cneq -> Cne
-  | P.Cge -> Cge
-  | P.Cgt -> Cgt
-  | P.Cle -> Cle
-  | P.Clt -> Clt
+let transl_int_comparison cmp = cmp
+
+let transl_float_comparison cmp = cmp
 
 (* Translate structured constants *)
 
@@ -1359,7 +1360,7 @@ let simplif_primitive_32bits = function
   | Plsrbint Pint64 -> Pccall (default_prim "caml_int64_shift_right_unsigned")
   | Pasrbint Pint64 -> Pccall (default_prim "caml_int64_shift_right")
   | Pbintcomp(Pint64, Ceq) -> Pccall (default_prim "caml_equal")
-  | Pbintcomp(Pint64, Cneq) -> Pccall (default_prim "caml_notequal")
+  | Pbintcomp(Pint64, Cne) -> Pccall (default_prim "caml_notequal")
   | Pbintcomp(Pint64, Clt) -> Pccall (default_prim "caml_lessthan")
   | Pbintcomp(Pint64, Cgt) -> Pccall (default_prim "caml_greaterthan")
   | Pbintcomp(Pint64, Cle) -> Pccall (default_prim "caml_lessequal")
@@ -2270,7 +2271,7 @@ and transl_prim_2 env p arg1 arg2 dbg =
       Cop(Cor, [asr_int (transl env arg1) (untag_int(transl env arg2) dbg) dbg;
                 Cconst_int 1], dbg)
   | Pintcomp cmp ->
-      tag_int(Cop(Ccmpi(transl_comparison cmp),
+      tag_int(Cop(Ccmpi(transl_int_comparison cmp),
                   [transl env arg1; transl env arg2], dbg)) dbg
   | Pisout ->
       transl_isout (transl env arg1) (transl env arg2) dbg
@@ -2292,8 +2293,8 @@ and transl_prim_2 env p arg1 arg2 dbg =
           [transl env arg1; transl env arg2],
           dbg)
   | Pfloatcomp cmp ->
-      tag_int(Cop(Ccmpf(transl_comparison cmp),
-                  [transl env arg1; transl env arg2],
+      tag_int(Cop(Ccmpf(transl_float_comparison cmp),
+                  [transl_unbox_float dbg env arg1; transl_unbox_float dbg env arg2],
                   dbg)) dbg
 
   (* String operations *)
@@ -2487,7 +2488,7 @@ and transl_prim_2 env p arg1 arg2 dbg =
                      [transl_unbox_int dbg env bi arg1;
                       untag_int(transl env arg2) dbg], dbg))
   | Pbintcomp(bi, cmp) ->
-      tag_int (Cop(Ccmpi(transl_comparison cmp),
+      tag_int (Cop(Ccmpi(transl_int_comparison cmp),
                      [transl_unbox_int dbg env bi arg1;
                       transl_unbox_int dbg env bi arg2], dbg)) dbg
   | _prim -> assert false

@@ -168,8 +168,10 @@ let record_event ev =
   let path = ev.ev_loc.Location.loc_start.Lexing.pos_fname in
   let abspath = Location.absolute_path path in
   debug_dirs := StringSet.add (Filename.dirname abspath) !debug_dirs;
-  if Filename.is_relative path then
-    debug_dirs := StringSet.add (Sys.getcwd ()) !debug_dirs;
+  if Filename.is_relative path then begin
+    let cwd = Location.rewrite_absolute_path (Sys.getcwd ()) in
+    debug_dirs := StringSet.add cwd !debug_dirs;
+  end;
   ev.ev_pos <- !out_position;
   events := ev :: !events
 
@@ -185,12 +187,12 @@ let init () =
 (* Emission of one instruction *)
 
 let emit_comp = function
-| Ceq -> out opEQ    | Cneq -> out opNEQ
+| Ceq -> out opEQ    | Cne -> out opNEQ
 | Clt -> out opLTINT | Cle -> out opLEINT
 | Cgt -> out opGTINT | Cge -> out opGEINT
 
 and emit_branch_comp = function
-| Ceq -> out opBEQ    | Cneq -> out opBNEQ
+| Ceq -> out opBEQ    | Cne -> out opBNEQ
 | Clt -> out opBLTINT | Cle -> out opBLEINT
 | Cgt -> out opBGTINT | Cge -> out opBGEINT
 
@@ -321,7 +323,7 @@ let rec emit = function
         emit rem
   | Kpush::Kconst k::Kintcomp c::Kbranchifnot lbl::rem
       when is_immed_const k ->
-        emit_branch_comp (negate_comparison c) ;
+        emit_branch_comp (negate_integer_comparison c) ;
         out_const k ;
         out_label lbl ;
         emit rem

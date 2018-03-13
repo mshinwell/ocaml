@@ -62,23 +62,27 @@ let convert_mutable_flag (flag : Asttypes.mutable_flag)
   | Mutable -> Mutable
   | Immutable -> Immutable
 
-let convert_comparison_prim (comp : Lambda.comparison) : P.binary_primitive =
+let convert_integer_comparison_prim (comp : Lambda.integer_comparison)
+      : P.binary_primitive =
   match comp with
   | Ceq -> Phys_equal (K.value (), Eq)
-  | Cneq -> Phys_equal (K.value (), Neq)
+  | Cne -> Phys_equal (K.value (), Neq)
   | Clt -> Int_comp (I.Tagged_immediate, Signed, Lt)
   | Cgt -> Int_comp (I.Tagged_immediate, Signed, Gt)
   | Cle -> Int_comp (I.Tagged_immediate, Signed, Le)
   | Cge -> Int_comp (I.Tagged_immediate, Signed, Ge)
 
-let convert_comparison (comp : Lambda.comparison) : P.comparison =
+let convert_float_comparison (comp : Lambda.float_comparison) : P.comparison =
   match comp with
-  | Ceq -> Eq
-  | Cneq -> Neq
-  | Clt -> Lt
-  | Cgt -> Gt
-  | Cle -> Le
-  | Cge -> Ge
+  | CFeq -> Eq
+  | CFneq -> Neq
+  | CFlt -> Lt
+  | CFgt -> Gt
+  | CFle -> Le
+  | CFge -> Ge
+  | CFnlt | CFngt | CFnle | CFnge ->
+    Misc.fatal_error "Negated floating-point comparisons should have been \
+      removed by [Prepare_lambda]"
 
 let boxable_number_of_boxed_integer (bint : Lambda.boxed_integer)
   : Flambda_kind.Boxable_number.t =
@@ -354,7 +358,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
   | Pnot, [arg] ->
     Unary (Boolean_not, arg)
   | Pintcomp comp, [arg1; arg2] ->
-    Binary (convert_comparison_prim comp, arg1, arg2)
+    Binary (convert_integer_comparison_prim comp, arg1, arg2)
   | Pintoffloat, [arg] ->
     let src = K.Standard_int_or_float.Naked_float in
     let dst = K.Standard_int_or_float.Tagged_immediate in
@@ -376,7 +380,7 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
   | Pdivfloat, [arg1; arg2] ->
     box_float (Binary (Float_arith Div, unbox_float arg1, unbox_float arg2))
   | Pfloatcomp comp, [arg1; arg2] ->
-    Binary (Float_comp (convert_comparison comp),
+    Binary (Float_comp (convert_float_comparison comp),
             unbox_float arg1, unbox_float arg2)
   | Pfield_computed, [obj; field] ->
     Binary (Block_load (Block (Value Unknown), Mutable), obj, field)

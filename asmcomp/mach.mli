@@ -24,8 +24,8 @@ type label = Cmm.label
 type trap_stack = int list
 
 type integer_comparison =
-    Isigned of Cmm.comparison
-  | Iunsigned of Cmm.comparison
+    Isigned of Cmm.integer_comparison
+  | Iunsigned of Cmm.integer_comparison
 
 type integer_operation =
     Iadd | Isub | Imul | Imulh | Idiv | Imod
@@ -37,12 +37,14 @@ type integer_operation =
         second being the pointer to the trie node for the current function
         (and the first being as per non-Spacetime mode). *)
 
+type float_comparison = Cmm.float_comparison
+
 type test =
     Itruetest
   | Ifalsetest
   | Iinttest of integer_comparison
   | Iinttest_imm of integer_comparison * int
-  | Ifloattest of Cmm.comparison * bool
+  | Ifloattest of float_comparison
   | Ioddtest
   | Ieventest
 

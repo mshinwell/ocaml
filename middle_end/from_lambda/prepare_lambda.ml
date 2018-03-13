@@ -438,6 +438,14 @@ let rec simplify_primitive env (prim : L.primitive) args loc =
       | Pdivbint { is_safe = Safe } | Pmodbint { is_safe = Safe }), _
       when not !Clflags.fast ->
     Misc.fatal_error "Pdivint / Pmodint must have exactly two arguments"
+  | Pfloatcomp CFnlt, args ->
+    L.Lprim (Pnot, [L.Lprim (Pfloatcomp CFlt, args, loc)], loc)
+  | Pfloatcomp CFngt, args ->
+    L.Lprim (Pnot, [L.Lprim (Pfloatcomp CFgt, args, loc)], loc)
+  | Pfloatcomp CFnle, args ->
+    L.Lprim (Pnot, [L.Lprim (Pfloatcomp CFle, args, loc)], loc)
+  | Pfloatcomp CFnge, args ->
+    L.Lprim (Pnot, [L.Lprim (Pfloatcomp CFge, args, loc)], loc)
   | Psequor, [arg1; arg2] ->
     let const_true = Ident.create "const_true" in
     let cond = Ident.create "cond_sequor" in

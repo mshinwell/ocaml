@@ -76,7 +76,7 @@ type t =
   | Pdivint of is_safe | Pmodint of is_safe
   | Pandint | Porint | Pxorint
   | Plslint | Plsrint | Pasrint
-  | Pintcomp of comparison
+  | Pintcomp of integer_comparison
   | Poffsetint of int
   | Poffsetref of int
   (* Float operations *)
@@ -88,7 +88,7 @@ type t =
   | Psubfloat
   | Pmulfloat
   | Pdivfloat
-  | Pfloatcomp of comparison
+  | Pfloatcomp of float_comparison
   (* String operations *)
   | Pstringlength | Pstringrefu  | Pstringrefs
   | Pbyteslength | Pbytesrefu | Pbytessetu | Pbytesrefs | Pbytessets
@@ -127,7 +127,7 @@ type t =
   | Plslbint of boxed_integer
   | Plsrbint of boxed_integer
   | Pasrbint of boxed_integer
-  | Pbintcomp of boxed_integer * comparison
+  | Pbintcomp of boxed_integer * integer_comparison
   (* Operations on big arrays: (unsafe, #dimensions, kind, layout, boxed) *)
   | Pbigarrayref of bool * int * bigarray_kind * bigarray_layout * boxed
   | Pbigarrayset of bool * int * bigarray_kind * bigarray_layout * boxed
@@ -176,8 +176,11 @@ type t =
   | Puntag_immediate
   | Ptag_immediate
 
-and comparison =
-    Ceq | Cneq | Clt | Cgt | Cle | Cge
+and integer_comparison =
+    Ceq | Cne | Clt | Cgt | Cle | Cge
+
+and float_comparison =
+    CFeq | CFneq | CFlt | CFnlt | CFgt | CFngt | CFle | CFnle | CFge | CFnge
 
 and array_kind =
     Pgenarray | Paddrarray | Pintarray | Pfloatarray
@@ -211,3 +214,43 @@ and raise_kind =
   | Raise_regular
   | Raise_reraise
   | Raise_notrace
+
+let negate_integer_comparison = function
+  | Ceq -> Cne
+  | Cne -> Ceq
+  | Clt -> Cge
+  | Cle -> Cgt
+  | Cgt -> Cle
+  | Cge -> Clt
+
+let swap_integer_comparison = function
+  | Ceq -> Ceq
+  | Cne -> Cne
+  | Clt -> Cgt
+  | Cle -> Cge
+  | Cgt -> Clt
+  | Cge -> Cle
+
+let negate_float_comparison = function
+  | CFeq -> CFneq
+  | CFneq -> CFeq
+  | CFlt -> CFnlt
+  | CFnlt -> CFlt
+  | CFgt -> CFngt
+  | CFngt -> CFgt
+  | CFle -> CFnle
+  | CFnle -> CFle
+  | CFge -> CFnge
+  | CFnge -> CFge
+
+let swap_float_comparison = function
+  | CFeq -> CFeq
+  | CFneq -> CFneq
+  | CFlt -> CFgt
+  | CFnlt -> CFngt
+  | CFle -> CFge
+  | CFnle -> CFnge
+  | CFgt -> CFlt
+  | CFngt -> CFnlt
+  | CFge -> CFle
+  | CFnge -> CFnle

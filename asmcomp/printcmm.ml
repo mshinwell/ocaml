@@ -41,13 +41,25 @@ let machtype ppf mty =
 let machtype_list ppf mty_list =
   Array.iter (fprintf ppf "%a " machtype) mty_list
 
-let comparison = function
+let integer_comparison = function
   | Ceq -> "=="
   | Cne -> "!="
   | Clt -> "<"
   | Cle -> "<="
   | Cgt -> ">"
   | Cge -> ">="
+
+let float_comparison = function
+  | CFeq -> "=="
+  | CFneq -> "!="
+  | CFlt -> "<"
+  | CFnlt -> "!<"
+  | CFle -> "<="
+  | CFnle -> "!<="
+  | CFgt -> ">"
+  | CFngt -> "!>"
+  | CFge -> ">="
+  | CFnge -> "!>="
 
 let chunk = function
   | Byte_unsigned -> "unsigned int8"
@@ -95,10 +107,10 @@ let operation d = function
   | Clsl -> "<<"
   | Clsr -> ">>u"
   | Casr -> ">>s"
-  | Ccmpi c -> comparison c
+  | Ccmpi c -> integer_comparison c
   | Caddv -> "+v"
   | Cadda -> "+a"
-  | Ccmpa c -> Printf.sprintf "%sa" (comparison c)
+  | Ccmpa c -> Printf.sprintf "%sa" (integer_comparison c)
   | Cnegf -> "~f"
   | Cabsf -> "absf"
   | Caddf -> "+f"
@@ -107,7 +119,7 @@ let operation d = function
   | Cdivf -> "/f"
   | Cfloatofint -> "floatofint"
   | Cintoffloat -> "intoffloat"
-  | Ccmpf c -> Printf.sprintf "%sf" (comparison c)
+  | Ccmpf c -> Printf.sprintf "%sf" (float_comparison c)
   | Craise k -> Format.asprintf "%a%s" raise_kind k (Debuginfo.to_string d)
   | Ccheckbound -> "checkbound" ^ Debuginfo.to_string d
   | Cpushtrap cont -> Format.sprintf "pushtrap %d" cont

@@ -89,24 +89,21 @@ let size_machtype mty =
   done;
   !size
 
-type comparison =
-    Ceq
-  | Cne
-  | Clt
-  | Cle
-  | Cgt
-  | Cge
+type integer_comparison = Backend_primitives.integer_comparison =
+  | Ceq | Cne | Clt | Cgt | Cle | Cge
 
-let negate_comparison = function
-    Ceq -> Cne | Cne -> Ceq
-  | Clt -> Cge | Cle -> Cgt
-  | Cgt -> Cle | Cge -> Clt
+let negate_integer_comparison = Backend_primitives.negate_integer_comparison
 
-let swap_comparison = function
-    Ceq -> Ceq | Cne -> Cne
-  | Clt -> Cgt | Cle -> Cge
-  | Cgt -> Clt | Cge -> Cle
+let swap_integer_comparison = Backend_primitives.swap_integer_comparison
 
+(* With floats [not (x < y)] is not the same as [x >= y] due to NaNs,
+   so we provide additional comparisons to represent the negations.*)
+type float_comparison = Backend_primitives.float_comparison =
+  | CFeq | CFneq | CFlt | CFnlt | CFgt | CFngt | CFle | CFnle | CFge | CFnge
+
+let negate_float_comparison = Backend_primitives.negate_float_comparison
+
+let swap_float_comparison = Backend_primitives.swap_float_comparison
 type label = int
 
 let label_counter = ref 99
@@ -144,13 +141,13 @@ and operation =
   | Cmultiload of int
   | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi
   | Cand | Cor | Cxor | Clsl | Clsr | Casr
-  | Ccmpi of comparison
+  | Ccmpi of integer_comparison
   | Caddv | Cadda
-  | Ccmpa of comparison
+  | Ccmpa of integer_comparison
   | Cnegf | Cabsf
   | Caddf | Csubf | Cmulf | Cdivf
   | Cfloatofint | Cintoffloat
-  | Ccmpf of comparison
+  | Ccmpf of float_comparison
   | Craise of raise_kind
   | Ccheckbound
   | Cpushtrap of int
