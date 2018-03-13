@@ -427,6 +427,18 @@ let environment_for_let_cont_handler ~env cont
     (E.set_freshening env freshening)
     (List.combine params arg_tys)
 
+(* New strategy:
+- Deal with the Unknown on k37's param which is probably destroying
+  the alias
+- This should mean that the arguments reflect the unboxed/boxed pair
+  correctly at the use of k34
+- Form a mapping from parameters (e.g. of k34) to any "type_of" aliases
+- Apply this substitution to the types; any variables that remain
+  existential then need to be cleaned.  (Done in one pass.)
+- Then we should end up with the unboxed/boxed pair on the param types
+  of k34 without needing the meet.
+*)
+
 let rec simplify_let_cont_handler ~env ~r ~cont
       ~(handler : Flambda.Continuation_handler.t) ~arg_tys =
   let env = environment_for_let_cont_handler ~env cont ~handler ~arg_tys in
