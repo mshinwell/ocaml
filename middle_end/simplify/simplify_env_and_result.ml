@@ -778,7 +778,7 @@ end = struct
       | uses ->
         let bottom_arg_tys = T.bottom_types_from_arity arity in
         let arg_tys, env =
-          List.fold_left (fun (arg_tys, meet_env) (use : Use.t) ->
+          List.fold_left (fun (arg_tys, joined_env) (use : Use.t) ->
               let arg_tys' = Use.Kind.arg_tys use.kind in
               if List.length arg_tys <> List.length arg_tys' then begin
                 Misc.fatal_errorf "join_of_arg_tys_opt %a: approx length %d, \
@@ -800,10 +800,10 @@ Format.eprintf "Cutting environment for %a, level %a\n%!"
 Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
 *)
               (* CR mshinwell: Add [List.map2i]. *)
-              let meet_env =
-                match meet_env with
+              let joined_env =
+                match joined_env with
                 | None -> TE.create ~resolver:(Env.resolver use.env)
-                | Some meet_env -> meet_env
+                | Some joined_env -> joined_env
               in
               let arg_number = ref 0 in
               let arg_tys =
@@ -839,7 +839,7 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
 *)
                     let this_ty = T.add_judgements (use_env, this_ty) in
                     let joined_ty =
-                      try T.join (meet_env, joined_ty) (use_env, this_ty)
+                      try T.join (joined_env, joined_ty) (use_env, this_ty)
                       with Misc.Fatal_error -> begin
                         Format.eprintf "\n%sContext is: argument number %d \
                             (0 is the first argument)%s\n"
@@ -853,8 +853,8 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
                     joined_ty)
                   arg_tys arg_tys'
               in
-              let meet_env = TE.meet meet_env use_env in
-              arg_tys, Some meet_env)
+              let joined_env = TE.join joined_env use_env in
+              arg_tys, Some joined_env)
             (bottom_arg_tys, None)
             uses
         in

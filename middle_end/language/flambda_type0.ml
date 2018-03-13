@@ -3716,7 +3716,7 @@ end;
     let join_typing_environment (env1 : typing_environment)
           (env2 : typing_environment) =
       let names_to_types =
-        Name.Map.inter_merge (fun (level1, ty1) (level2, ty2) ->
+        Name.Map.union_merge (fun (level1, ty1) (level2, ty2) ->
             if not (Scope_level.equal level1 level2) then begin
               Misc.fatal_errorf "join_typing_environment: \
                   Scope levels differ for:@ %a@ and:@ %a"
