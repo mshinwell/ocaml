@@ -316,7 +316,7 @@ let continuation_arity t cont =
 let kind_of_name t name =
   match Name.Map.find name t.names with
   | exception Not_found ->
-    Misc.fatal_errorf "Unbound name %a" Name.print name
+    Misc.fatal_errorf "Unbound name %a" Name.print_sexp name
   | kind -> kind
 
 let kind_of_simple t (simple : Simple.t) =
@@ -411,9 +411,10 @@ let prepare_for_function_body t ~parameters_with_kinds ~my_closure
       ([Flambda_kind.value ()], Exn_handler, continuation_stack)
       continuations
   in
+  let names = Name.symbols_only_map t.names in
   let t =
     { t with
-      names = Name.Map.empty;
+      names;
       mutable_variables = Mutable_variable.Map.empty;
       continuations;
       continuation_stack;

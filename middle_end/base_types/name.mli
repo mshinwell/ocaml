@@ -34,7 +34,11 @@ val to_var : t -> Variable.t option
 
 include Identifiable.S with type t := t
 
+val print_sexp : Format.formatter -> t -> unit
+
 val variables_only : Set.t -> Set.t
+
+val symbols_only_map : 'a Map.t -> 'a Map.t
 
 val set_to_var_set : Set.t -> Variable.Set.t
 

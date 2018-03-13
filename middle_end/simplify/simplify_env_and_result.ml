@@ -201,7 +201,7 @@ end = struct
      everything to be cleared when we do [local]. *)
   let local env =
     { env with
-      typing_environment = TE.create_using_resolver_from env.typing_environment;
+      typing_environment = TE.restrict_to_symbols env.typing_environment;
       continuations = Continuation.Map.empty;
 (*      projections = Projection.Map.empty; *)
       freshening = Freshening.empty_preserving_activation_state env.freshening;

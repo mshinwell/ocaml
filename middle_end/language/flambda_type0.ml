@@ -4057,8 +4057,7 @@ Format.eprintf "Result is: %a\n%!"
     let meet = Meet_and_join.meet_typing_environment
     let join = Meet_and_join.join_typing_environment
 
-    let restrict_to_names t allowed =
-      let allowed = Name_occurrences.everything allowed in
+    let restrict_to_names0 t allowed =
       let names_to_types =
         Name.Map.filter (fun name _ty -> Name.Set.mem name allowed)
           t.names_to_types
@@ -4079,6 +4078,14 @@ Format.eprintf "Result is: %a\n%!"
         existentials;
         existential_freshening;
       }
+
+    let restrict_to_names t allowed =
+      let allowed = Name_occurrences.everything allowed in
+      restrict_to_names0 t allowed
+
+    let restrict_to_symbols t =
+      let symbols = Name.symbols_only_map t.names_to_types in
+      restrict_to_names0 t (Name.Map.keys symbols)
 
     let is_empty t = Name.Map.is_empty t.names_to_types
 

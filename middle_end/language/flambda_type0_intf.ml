@@ -382,6 +382,10 @@ module type S = sig
         mentions the names in the given name occurrences structure. *)
     val restrict_to_names : t -> Name_occurrences.t -> t
 
+    (** Adjust the domain of the given typing environment so that it only
+        mentions names which are symbols, not variables. *)
+    val restrict_to_symbols : t -> t
+
     (** The names for which the given typing environment specifies a type
         assignment. *)
     val domain : t -> Name_occurrences.t

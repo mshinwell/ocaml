@@ -80,6 +80,13 @@ let variables_only t =
       | Symbol _ -> false)
     t
 
+let symbols_only_map t =
+  Map.filter (fun name _ ->
+      match name with
+      | Var _ -> false
+      | Symbol _ -> true)
+    t
+
 let set_to_var_set t =
   Set.fold (fun name vars ->
       match to_var name with
@@ -95,3 +102,8 @@ let set_to_symbol_set t =
       | Some sym -> Symbol.Set.add sym syms)
     t
     Symbol.Set.empty
+
+let print_sexp ppf t =
+  match t with
+  | Var var -> Format.fprintf ppf "@[(Var %a)@]" Variable.print var
+  | Symbol sym -> Format.fprintf ppf "@[(Symbol %a)@]" Symbol.print sym
