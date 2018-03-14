@@ -776,7 +776,10 @@ end = struct
 
     (* CR mshinwell: Use lwhite's suggestion of doing the existential
        introduction at [Switch] time *)
-    let join_of_arg_types_opt t ~default_env =
+    (* XXX Needs documentation.  Change name of [default_env].  Note that
+       this environment must contain entries for all parameters of
+       the relevant continuation *)
+    let join_of_arg_types_opt t ~freshening ~default_env =
       match t.application_points with
       | [] -> None
       | uses ->
@@ -784,6 +787,7 @@ end = struct
         let param_tys =
           List.map (fun param ->
               let var = Flambda.Typed_parameter.var param in
+              let var = Freshening.apply_variable freshening var in
               let kind = Flambda.Typed_parameter.kind param in
               T.alias_type_of kind (Name.var var))
             t.params
@@ -811,6 +815,7 @@ Format.eprintf "Cutting environment for %a, level %a\n%!"
               let use_env =
                 List.fold_left (fun use_env param ->
                     let var = Flambda.Typed_parameter.var param in
+                    let var = Freshening.apply_variable freshening var in
                     let name = Name.var var in
                     Format.eprintf "Copying type for param %a\n%!"
                       Variable.print var;
@@ -830,7 +835,7 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
                   (fun (use_env, arg_tys_this_use_rev) param_ty arg_ty ->
                     let use_env, arg_ty =
                       T.meet ~output_env:use_env
-                        ~bias_towards:(joined_env, param_ty)
+                        ~bias_towards:(use_env, param_ty)
                         (use_env, arg_ty)
                     in
 Format.eprintf "New use_env after meet:@ %a\n%!"
@@ -899,9 +904,9 @@ Format.eprintf "New use_env after meet:@ %a\n%!"
         in
         Some (arg_tys, env)
 
-    let join_of_arg_types t ~arity ~default_env =
+    let join_of_arg_types t ~freshening ~arity ~default_env =
       let tys, env =
-        match join_of_arg_types_opt t ~default_env with
+        match join_of_arg_types_opt t ~freshening ~default_env with
         | None -> T.bottom_types_from_arity arity, default_env
         | Some (arg_tys, env) -> arg_tys, env
       in
@@ -1151,7 +1156,7 @@ Format.eprintf "New use_env after meet:@ %a\n%!"
   let continuation_defined t cont =
     Continuation.Map.mem cont t.defined_continuations
 
-  let continuation_args_types t cont ~arity ~default_env =
+  let continuation_args_types t cont ~arity ~freshening ~default_env =
     match Continuation.Map.find cont t.used_continuations with
     | exception Not_found ->
 (*
@@ -1165,22 +1170,22 @@ Format.eprintf "New use_env after meet:@ %a\n%!"
         Continuation.print cont
         Continuation_uses.print uses;
 *)
-      Continuation_uses.join_of_arg_types uses ~arity ~default_env
+      Continuation_uses.join_of_arg_types uses ~freshening ~arity ~default_env
 
-  let continuation_args_types' t cont ~arity =
+  let continuation_args_types' t cont ~arity ~freshening =
     let tys, _env =
-      continuation_args_types t cont ~arity
+      continuation_args_types t cont ~arity ~freshening
         ~default_env:(T.Typing_environment.create ~resolver:t.resolver)
     in
     tys
   
-  let defined_continuation_args_types t cont ~arity ~default_env =
+  let defined_continuation_args_types t cont ~arity ~freshening ~default_env =
     match Continuation.Map.find cont t.defined_continuations with
     | exception Not_found ->
       let tys = List.map (fun kind -> T.bottom kind) arity in
       tys, default_env
     | (uses, _approx, _env, _recursive) ->
-      Continuation_uses.join_of_arg_types uses ~arity ~default_env
+      Continuation_uses.join_of_arg_types uses ~arity ~freshening ~default_env
 
   let exit_scope_of_let_cont t env cont ~params =
     let t, uses =

@@ -422,6 +422,7 @@ module type Result = sig
 
     val join_of_arg_types
        : t
+      -> freshening:Freshening.t
       -> arity:Flambda_arity.t
       -> default_env:Flambda_type.Typing_environment.t
       -> Flambda_type.t list * Flambda_type.Typing_environment.t
@@ -480,6 +481,7 @@ module type Result = sig
      : t
     -> Continuation.t
     -> arity:Flambda_arity.t
+    -> freshening:Freshening.t
     -> default_env:Flambda_type.Typing_environment.t
     -> Flambda_type.t list * Flambda_type.Typing_environment.t
 
@@ -489,12 +491,14 @@ module type Result = sig
      : t
     -> Continuation.t
     -> arity:Flambda_arity.t
+    -> freshening:Freshening.t
     -> Flambda_type.t list
 
   val defined_continuation_args_types
      : t
     -> Continuation.t
     -> arity:Flambda_arity.t
+    -> freshening:Freshening.t
     -> default_env:Flambda_type.Typing_environment.t
     -> Flambda_type.t list * Flambda_type.Typing_environment.t
 

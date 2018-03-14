@@ -388,10 +388,24 @@ Format.eprintf "\n\nsimplify_define_symbol:\n\n%!";
 Format.eprintf "Simplify_program fetching uses for %a\n%!"
   Continuation.print name;
 *)
-      let args_types, env_extension =
+      let _args_types, env_extension =
+        let default_env =
+          (* CR mshinwell: move to auxiliary function; share with
+             [Simplify_named] *)
+          List.fold_left (fun env param ->
+              let var = Flambda.Typed_parameter.var param in
+              let scope_level =
+                Scope_level.next (E.continuation_scope_level default_env0)
+              in
+              let ty = Flambda.Typed_parameter.ty param in
+              T.Typing_environment.add env (Name.var var) scope_level ty)
+            default_env
+            return_cont_params
+        in
         try
           R.Continuation_uses.join_of_arg_types continuation_uses
             ~arity:(Flambda.Typed_parameter.List.arity return_cont_params)
+            ~freshening:(E.freshening default_env0)
             ~default_env
         with Misc.Fatal_error as exn -> begin
           Format.eprintf "\n%sContext: Term resulting from \
@@ -431,6 +445,7 @@ Format.eprintf "Extended env (cont %a) is@ %a\n\n%!"
       in
 *)
       let env = E.increment_continuation_scope_level env in
+(*
       assert (List.for_all2 (fun (_var, kind1) ty ->
           Flambda_kind.compatible (T.kind ty) ~if_used_at:kind1)
         computation.computed_values args_types);
@@ -440,6 +455,7 @@ Format.eprintf "Extended env (cont %a) is@ %a\n\n%!"
           env
           computation.computed_values args_types
       in
+*)
       let computation =
         match expr with
         | Apply_cont (cont, None, []) ->

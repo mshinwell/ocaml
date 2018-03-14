@@ -497,6 +497,7 @@ and simplify_let_cont_handlers0 env r ~handlers
             try
               R.continuation_args_types r cont
                 ~arity:(Flambda.Continuation_handler.param_arity handler)
+                ~freshening:(E.freshening env)
                 ~default_env:(E.get_typing_environment env)
             with Misc.Fatal_error -> begin
               let uses = R.continuation_uses_for r cont in
@@ -711,10 +712,14 @@ and simplify_let_cont env r ~body
       if handler.stub || E.never_unbox_continuations env
       then Unchanged { handler; }
       else
+        let default_env =
+          environment_for_let_cont_handler ~env name ~handler
+        in
         let arg_tys, new_env =
           R.continuation_args_types r name
             ~arity:(Flambda.Continuation_handler.param_arity handler)
-            ~default_env:(E.get_typing_environment env)
+            ~freshening:(E.freshening default_env)
+            ~default_env:(E.get_typing_environment default_env)
         in
         let env = E.replace_typing_environment env new_env in
         (* CR mshinwell/lwhite: We could maybe introduce the unboxed
@@ -802,6 +807,7 @@ and simplify_let_cont env r ~body
             let arg_tys, new_env' =
               R.defined_continuation_args_types r cont
                 ~arity:(Flambda.Continuation_handler.param_arity handler)
+                ~freshening:(E.freshening env)
                 ~default_env:(E.get_typing_environment env)
             in
             new_env := T.Typing_environment.meet !new_env new_env';
