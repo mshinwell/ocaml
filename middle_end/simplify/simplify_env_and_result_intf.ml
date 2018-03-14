@@ -543,6 +543,13 @@ module type Result = sig
     -> then_add_to_env:(Continuation.t * Continuation_approx.t)
     -> t
 
+  (* CR mshinwell: maybe combine with previous function? *)
+  val update_continuation_parameters
+     : t
+    -> Continuation.t
+    -> params:Flambda.Typed_parameter.t list
+    -> t
+
   (** Update the approximation for a defined continuation. *)
   val update_defined_continuation_approx
      : t

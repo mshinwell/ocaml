@@ -482,6 +482,8 @@ and simplify_let_cont_handlers0 env r ~handlers
           let env =
             environment_for_let_cont_handler ~env cont ~handler
           in
+Format.eprintf "simplify_let_cont_handler, params %a\n%!"
+  Flambda.Typed_parameter.List.print handler.params;
 (*
           Format.eprintf "Environment for %a:@ %a@ \nArg types:@ %a@ \n\
               Params:@ %a\n%!"
@@ -497,7 +499,7 @@ and simplify_let_cont_handlers0 env r ~handlers
             try
               R.continuation_args_types r cont
                 ~arity:(Flambda.Continuation_handler.param_arity handler)
-                ~freshening:(E.freshening env)
+                ~freshening
                 ~default_env:(E.get_typing_environment env)
             with Misc.Fatal_error -> begin
               let uses = R.continuation_uses_for r cont in
@@ -752,6 +754,10 @@ and simplify_let_cont env r ~body
     begin match with_wrapper with
     | Unchanged _ -> simplify_one_handler env r ~name ~handler ~body
     | With_wrapper { new_cont; new_handler; wrapper_handler; } ->
+      let r =
+        R.update_continuation_parameters r name
+          ~params:wrapper_handler.params
+      in
       let ty =
         Continuation_approx.create_unknown ~name:new_cont
           ~params:new_handler.params

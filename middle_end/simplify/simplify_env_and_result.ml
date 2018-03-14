@@ -726,6 +726,11 @@ end = struct
         application_points = [];
       }
 
+    let update_parameters t ~params =
+      { t with
+        params;
+      }
+
     let union t1 t2 =
       if not (Continuation.equal t1.continuation t2.continuation) then begin
         Misc.fatal_errorf "Cannot union [Continuation_uses.t] for two \
@@ -802,9 +807,10 @@ end = struct
                   Continuation.print t.continuation
                   (List.length arg_tys) (List.length arg_tys_this_use)
               end;
-Format.eprintf "Cutting environment for %a, level %a\n%!"
+Format.eprintf "Cutting environment for %a, level %a, freshening is:@ %a\n%!"
   Continuation.print t.continuation
-  Scope_level.print t.definition_scope_level;
+  Scope_level.print t.definition_scope_level
+  Freshening.print freshening;
               let use_env =
                 TE.cut (Env.get_typing_environment use.env)
                   ~existential_if_defined_at_or_later_than:
@@ -1221,6 +1227,33 @@ Format.eprintf "New use_env after meet:@ %a\n%!"
               ~if_present_in_env ~then_add_to_env
           in
           uses, approx, env, recursive)
+        t.defined_continuations
+    in
+    { t with
+      used_continuations;
+      defined_continuations;
+    }
+
+  let update_continuation_parameters t cont
+        ~params =
+    let used_continuations =
+      Continuation.Map.mapi (fun cont' uses ->
+          if not (Continuation.equal cont cont') then uses
+          else
+            Continuation_uses.update_parameters
+              uses ~params)
+        t.used_continuations
+    in
+    let defined_continuations =
+      Continuation.Map.mapi (fun cont' (uses, approx, env, recursive) ->
+          if not (Continuation.equal cont cont') then
+            uses, approx, env, recursive
+          else
+            let uses =
+              Continuation_uses.update_parameters
+                uses ~params
+            in
+            uses, approx, env, recursive)
         t.defined_continuations
     in
     { t with
