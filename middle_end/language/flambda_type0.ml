@@ -797,6 +797,13 @@ end;
           Name.print name
           print t
           print_typing_environment env
+      end;
+      if Name.Set.mem name free_names then begin
+        Misc.fatal_errorf "Adding binding of %a to@ %a@ would cause a \
+            direct circularity in a type.  Environment: %a"
+          Name.print name
+          print t
+          print_typing_environment env
       end
     end;
     add_or_replace_typing_environment' env name scope_level t
@@ -1813,7 +1820,12 @@ end;
       match ty with
       | No_alias _ -> ty, canonical_name, Resolved
       | Type export_id -> resolve (Name_or_export_id.Export_id export_id)
-      | Type_of name -> resolve (Name_or_export_id.Name name)
+      | Type_of name ->
+(*
+        Format.eprintf "recursing on %a, seen %a\n%!" Name.print name
+          Name_or_export_id.Set.print names_seen;
+*)
+        resolve (Name_or_export_id.Name name)
     in
     resolve_aliases Name_or_export_id.Set.empty ~canonical_name:None ty
 
@@ -1835,6 +1847,9 @@ end;
   (* CR mshinwell: choose this function or the one above *)
   let resolve_aliases_and_squash_unresolved_names_on_ty' env ~kind:_
         ~force_to_kind ~unknown:_ ty : _ unknown_or_join * (Name.t option) =
+(*
+Format.eprintf "---starting to resolve---\n%!";
+*)
     let ty, canonical_name, _still_unresolved =
       resolve_aliases_on_ty0 env ~force_to_kind ty
     in
