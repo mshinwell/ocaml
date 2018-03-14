@@ -3914,9 +3914,9 @@ Format.eprintf "...giving %a\n%!" print ty;
         end
   end
 
-  let meet ~resolver tc1 tc2 =
+  let meet ~output_env tc1 tc2 =
     let t, judgements = Meet_and_join.meet tc1 tc2 in
-    let env =
+    let output_env =
       List.fold_left (fun output_env (name, scope_level, ty) ->
           let env, _ty =
             (* We can choose either the environment from [tc1] or [tc2],
@@ -3933,12 +3933,14 @@ Format.eprintf "...giving %a\n%!" print ty;
             Meet_and_join.replace_meet_typing_environment0 output_env
               name ~scope_level ~existing_ty
               (env, ty))
-        (create_typing_environment ~resolver)
+        output_env
         judgements
     in
-    env, t
+    output_env, t
 
-  let meet ~resolver ~bias_towards tc2 = meet ~resolver bias_towards tc2
+  let meet ~output_env ~bias_towards tc2 =
+    meet ~output_env bias_towards tc2
+
   let join = Meet_and_join.join
 
   let join_ty_value (env1, ty_value1) (env2, ty_value2) =
@@ -3977,6 +3979,12 @@ Format.eprintf "...giving %a\n%!" print ty;
           Name.print name
           print t
       | scope_level, _ty -> scope_level
+
+    (* CR mshinwell: improve efficiency *)
+    let find_with_scope_level t name =
+      let ty, binding_type = find t name in
+      let scope_level = scope_level t name in
+      ty, scope_level, binding_type
 
     let replace_meet = Meet_and_join.replace_meet_typing_environment
 

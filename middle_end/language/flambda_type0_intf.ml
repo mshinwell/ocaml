@@ -350,6 +350,11 @@ module type S = sig
         name which does not occur in the given environment. *)
     val find : t -> Name.t -> flambda_type * binding_type
 
+    val find_with_scope_level
+       : t
+      -> Name.t
+      -> flambda_type * Scope_level.t * binding_type
+
     (** Like [find], but returns [None] iff the given name is not in the
         specified environment. *)
     val find_opt : t -> Name.t -> (flambda_type * binding_type) option
@@ -720,7 +725,7 @@ module type S = sig
       name from the [bias_towards] side.  (A returned judgement will contain an
       equality to the name on the other side.) *)
   val meet
-     : resolver:(Export_id.t -> flambda_type option)
+     : output_env:Typing_environment.t
     -> bias_towards:t_in_context
     -> t_in_context
     -> t_in_context

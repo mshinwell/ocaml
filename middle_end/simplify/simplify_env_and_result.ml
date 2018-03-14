@@ -806,25 +806,37 @@ Format.eprintf "Cutting environment for %a, level %a\n%!"
                   ~existential_if_defined_at_or_later_than:
                     (Scope_level.next t.definition_scope_level)
               in
+              (* XXX This is kind of gross, and is putting out-of-scope 
+                 variables in the use environments. *)
+              let use_env =
+                List.fold_left (fun use_env param ->
+                    let var = Flambda.Typed_parameter.var param in
+                    let name = Name.var var in
+                    Format.eprintf "Copying type for param %a\n%!"
+                      Variable.print var;
+                    let ty, scope_level, _binding_type =
+                      TE.find_with_scope_level joined_env name
+                    in
+                    TE.add use_env name scope_level ty)
+                  use_env
+                  t.params
+              in
 (*
 Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
 *)
-              let resolver = Env.resolver use.env in
               (* CR mshinwell: Add [List.map2i]. *)
-              let joined_env, arg_tys_this_use_rev =
+              let use_env, arg_tys_this_use_rev =
                 List.fold_left2
-                  (fun (joined_env, arg_tys_this_use_rev) param_ty arg_ty ->
-                    let env_extension, arg_ty =
-                      T.meet ~resolver ~bias_towards:(joined_env, param_ty)
+                  (fun (use_env, arg_tys_this_use_rev) param_ty arg_ty ->
+                    let use_env, arg_ty =
+                      T.meet ~output_env:use_env
+                        ~bias_towards:(joined_env, param_ty)
                         (use_env, arg_ty)
                     in
-Format.eprintf "New judgements for joined_env:@ %a\n%!"
-  TE.print env_extension;
-                    let joined_env =
-                      T.Typing_environment.meet joined_env env_extension
-                    in
-                    joined_env, arg_ty :: arg_tys_this_use_rev)
-                  (joined_env, [])
+Format.eprintf "New use_env after meet:@ %a\n%!"
+  TE.print use_env;
+                    use_env, arg_ty :: arg_tys_this_use_rev)
+                  (use_env, [])
                   param_tys
                   arg_tys_this_use
               in
@@ -832,11 +844,13 @@ Format.eprintf "New judgements for joined_env:@ %a\n%!"
               let arg_number = ref 0 in
               let arg_tys =
                 List.map2 (fun joined_ty this_ty ->
+(*
                     let _free_names_this_ty =
                       T.free_names_transitive
-                        (Env.get_typing_environment use.env)
+                        (Env.get_typing_environment use_env)
                         this_ty
                     in
+*)
 (*
                     Format.eprintf "Argument for %a:@ Type:@ %a@ \
                         Free names:@ %a@ Env:@ %a\n%!"
