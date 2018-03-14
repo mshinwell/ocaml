@@ -131,7 +131,8 @@ let check_toplevel_simplification_result r expr ~continuation
    regressing in preciseness, even if we are now robust against that
    possibility. *)
 
-let simplify_toplevel env r expr ~continuation ~exn_continuation ~descr =
+let simplify_toplevel env r expr ~continuation ~continuation_params
+     ~exn_continuation ~descr =
   if not (Continuation.Map.mem continuation (E.continuations_in_scope env))
   then begin
     Misc.fatal_errorf "The continuation parameter (%a) must be in the \
@@ -204,8 +205,13 @@ let simplify_toplevel env r expr ~continuation ~exn_continuation ~descr =
      slightly less precise.  Any subsequent round of simplification will
      calculate the improved Flambda type anyway. *)
   (* CR mshinwell: try to fix the above *)
-  let r, uses = R.exit_scope_of_let_cont r env continuation in
-  let r, _uses = R.exit_scope_of_let_cont r env exn_continuation in
+  let r, uses =
+    R.exit_scope_of_let_cont r env continuation ~params:continuation_params
+  in
+  let r, _uses =
+    R.exit_scope_of_let_cont r env exn_continuation
+      ~params:(Simplify_aux.params_for_exception_handler ())
+  in
   let lifted_constants = R.get_lifted_constants r in
   let r = R.roll_back_continuation_uses r continuation_uses_snapshot in
   (* At this stage:

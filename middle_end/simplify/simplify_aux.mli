@@ -53,3 +53,5 @@ val initial_inlining_threshold : round:int -> Inlining_cost.Threshold.t
 (** Command line argument "-inline-toplevel". *)
 val initial_inlining_toplevel_threshold
   : round:int -> Inlining_cost.Threshold.t
+
+val params_for_exception_handler : unit -> Flambda.Typed_parameter.t list

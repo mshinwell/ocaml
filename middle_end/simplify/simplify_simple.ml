@@ -5,8 +5,8 @@
 (*                       Pierre Chambart, OCamlPro                        *)
 (*           Mark Shinwell and Leo White, Jane Street Europe              *)
 (*                                                                        *)
-(*   Copyright 2013--2017 OCamlPro SAS                                    *)
-(*   Copyright 2014--2017 Jane Street Group LLC                           *)
+(*   Copyright 2013--2018 OCamlPro SAS                                    *)
+(*   Copyright 2014--2018 Jane Street Group LLC                           *)
 (*                                                                        *)
 (*   All rights reserved.  This file is distributed under the terms of    *)
 (*   the GNU Lesser General Public License version 2.1, with the          *)
@@ -29,6 +29,32 @@ let type_for_const (const : Simple.Const.t) =
   | Naked_int64 n -> T.this_naked_int64 n
   | Naked_nativeint n -> T.this_naked_nativeint n
 
+let simplify_name_for_let env name =
+  let name = Freshening.apply_name (E.freshening env) name in
+  let ty = E.find_name env name in
+  let ty, canonical_name =
+    T.resolve_aliases (E.get_typing_environment env, ty)
+  in
+  let name =
+    match canonical_name with
+    | None -> name
+    | Some canonical_name -> canonical_name
+  in
+  name, T.alias_type_of (T.kind ty) name
+
+let simplify_simple_for_let env (simple : Simple.t) =
+  match simple with
+  | Const c -> simple, type_for_const c
+  | Tag t -> simple, T.this_tag t
+  | Name name ->
+let orig_name = name in
+    let name, ty = simplify_name_for_let env name in
+Format.eprintf "simplify_simple_for_let %a --> %a : %a\n%!"
+  Name.print orig_name
+  Name.print name
+  T.print ty;
+    Simple.name name, ty
+
 let simplify_name env name =
   let name = Freshening.apply_name (E.freshening env) name in
   let ty = E.find_name env name in
@@ -40,6 +66,17 @@ let simplify_name env name =
   | Some canonical_name -> canonical_name, ty
 
 let simplify_simple env (simple : Simple.t) =
+(*
+let orig_ty =
+  match simple with
+  | Const c -> type_for_const c
+  | Tag t -> T.this_tag t
+  | Name name ->
+    let name = Freshening.apply_name (E.freshening env) name in
+    E.find_name env name
+in
+*)
+let new_simple, ty =
   match simple with
   | Const c -> simple, type_for_const c
   | Tag t -> simple, T.this_tag t
@@ -53,9 +90,17 @@ let simplify_simple env (simple : Simple.t) =
     in
     match reified with
     | Term (simple, ty) -> simple, ty
-    | Cannot_reify | Lift _ ->
-      Simple.name name, T.alias_type_of (T.kind ty) name
+    | Cannot_reify | Lift _ -> Simple.name name, ty
     | Invalid -> Simple.name name, T.bottom_like ty
+in
+(*
+Format.eprintf "simplify_simple %a : %a --> %a : %a\n%!"
+  Simple.print simple
+  T.print orig_ty
+  Simple.print new_simple
+  T.print ty;
+*)
+new_simple, ty
 
 let simplify_simples env simples =
   List.map (fun simple -> simplify_simple env simple) simples

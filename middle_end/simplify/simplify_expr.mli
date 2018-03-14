@@ -26,7 +26,7 @@ val simplify_continuation_use_cannot_inline
    : Simplify_env_and_result.Env.t
   -> Simplify_env_and_result.Result.t
   -> Continuation.t
-  -> arity:Flambda_arity.t
+  -> params:Flambda.Typed_parameter.t list
   -> Continuation.t * Simplify_env_and_result.Result.t
 
 (* CR mshinwell: Rename function (it doesn't take Let_cont_handlers.t) *)

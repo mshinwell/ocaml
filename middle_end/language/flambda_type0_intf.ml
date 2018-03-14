@@ -715,10 +715,13 @@ module type S = sig
   (** Least upper bound of two types known to be of kind [Value]. *)
   val join_ty_value : ty_value_in_context -> ty_value_in_context -> ty_value
 
-  (** Greatest lower bound of two types. *)
+  (** Greatest lower bound of two types.
+      When meeting two aliases the returned type will be an alias holding the
+      name from the [bias_towards] side.  (A returned judgement will contain an
+      equality to the name on the other side.) *)
   val meet
      : resolver:(Export_id.t -> flambda_type option)
-    -> t_in_context
+    -> bias_towards:t_in_context
     -> t_in_context
     -> t_in_context
 

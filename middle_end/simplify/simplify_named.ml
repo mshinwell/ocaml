@@ -18,7 +18,6 @@
 
 module B = Inlining_cost.Benefit
 module E = Simplify_env_and_result.Env
-module K = Flambda_kind
 module R = Simplify_env_and_result.Result
 module T = Flambda_type
 
@@ -52,13 +51,23 @@ let simplify_set_of_closures original_env r
         (function_decl : Flambda.Function_declaration.t)
         (funs, r) =
     let closure_env = set_of_closures_env in
+    let return_cont_params =
+      (* CR mshinwell: Move into utility function *)
+      List.mapi (fun index kind ->
+          let name = Format.sprintf "return_cont_param%d" index in
+          let var = Variable.create name in
+          let param = Parameter.wrap var in
+          let ty = T.unknown kind in
+          Flambda.Typed_parameter.create param ty)
+        function_decl.return_arity
+    in
     let continuation_param, closure_env =
       let continuation_param, freshening =
         freshen_continuation closure_env function_decl.continuation_param
       in
       let cont_type =
         Continuation_approx.create_unknown ~name:continuation_param
-          ~arity:function_decl.return_arity
+          ~params:return_cont_params
       in
       let closure_env =
         E.add_continuation (E.set_freshening closure_env freshening)
@@ -72,7 +81,7 @@ let simplify_set_of_closures original_env r
       in
       let cont_type =
         Continuation_approx.create_unknown ~name:exn_continuation_param
-          ~arity:[K.value ()]
+          ~params:(Simplify_aux.params_for_exception_handler ())
       in
       let closure_env =
         E.add_continuation (E.set_freshening closure_env freshening)
@@ -105,6 +114,7 @@ let simplify_set_of_closures original_env r
             in
             (E.simplify_toplevel body_env) body_env r function_decl.body
               ~continuation:continuation_param
+              ~continuation_params:return_cont_params
               ~exn_continuation:exn_continuation_param
               ~descr
           in
@@ -302,7 +312,7 @@ let try_to_reify env r ty ~(term : Flambda.Reachable.t) ~result_var
 let simplify_named env r (tree : Named.t) ~result_var =
   match tree with
   | Simple simple ->
-    let simple, ty = Simplify_simple.simplify_simple env simple in
+    let simple, ty = Simplify_simple.simplify_simple_for_let env simple in
     [], Flambda.Reachable.reachable (Simple simple), ty, r
   | Read_mutable mut_var ->
     (* See comment on the [Assign] case. *)

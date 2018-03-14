@@ -34,6 +34,7 @@ end = struct
       -> Result.t
       -> Flambda.Expr.t
       -> continuation:Continuation.t
+      -> continuation_params:Flambda.Typed_parameter.t list
       -> exn_continuation:Continuation.t
       -> descr:string
       -> Flambda.Expr.t * result * continuation_uses
@@ -48,7 +49,7 @@ end = struct
          t
       -> Result.t
       -> Continuation.t
-      -> arity:Flambda_arity.t
+      -> params:Flambda.Typed_parameter.t list
       -> Continuation.t * Result.t);
     round : int;
     typing_environment : TE.t;
@@ -712,13 +713,15 @@ end = struct
     type t = {
       backend : (module Backend_intf.S);
       continuation : Continuation.t;
+      params : Flambda.Typed_parameter.t list;
       definition_scope_level : Scope_level.t;
       application_points : Use.t list;
     }
 
-    let create ~continuation ~definition_scope_level ~backend =
+    let create ~continuation ~params ~definition_scope_level ~backend =
       { backend;
         continuation;
+        params;
         definition_scope_level;
         application_points = [];
       }
@@ -732,6 +735,7 @@ end = struct
       end;
       { backend = t1.backend;
         continuation = t1.continuation;
+        params = t1.params;
         definition_scope_level = t1.definition_scope_level;
         application_points = t1.application_points @ t2.application_points;
       }
@@ -772,25 +776,31 @@ end = struct
 
     (* CR mshinwell: Use lwhite's suggestion of doing the existential
        introduction at [Switch] time *)
-    let join_of_arg_types_opt t ~arity ~default_env:_ =
+    let join_of_arg_types_opt t ~default_env =
       match t.application_points with
       | [] -> None
       | uses ->
+        let arity = Flambda.Typed_parameter.List.arity t.params in
+        let param_tys =
+          List.map (fun param ->
+              let var = Flambda.Typed_parameter.var param in
+              let kind = Flambda.Typed_parameter.kind param in
+              T.alias_type_of kind (Name.var var))
+            t.params
+        in
         let bottom_arg_tys = T.bottom_types_from_arity arity in
         let arg_tys, env =
           List.fold_left (fun (arg_tys, joined_env) (use : Use.t) ->
-              let arg_tys' = Use.Kind.arg_tys use.kind in
-              if List.length arg_tys <> List.length arg_tys' then begin
+              let arg_tys_this_use = Use.Kind.arg_tys use.kind in
+              if List.length arg_tys <> List.length arg_tys_this_use then begin
                 Misc.fatal_errorf "join_of_arg_tys_opt %a: approx length %d, \
                     use length %d"
                   Continuation.print t.continuation
-                  (List.length arg_tys) (List.length arg_tys')
+                  (List.length arg_tys) (List.length arg_tys_this_use)
               end;
-(*
 Format.eprintf "Cutting environment for %a, level %a\n%!"
   Continuation.print t.continuation
   Scope_level.print t.definition_scope_level;
-*)
               let use_env =
                 TE.cut (Env.get_typing_environment use.env)
                   ~existential_if_defined_at_or_later_than:
@@ -799,12 +809,26 @@ Format.eprintf "Cutting environment for %a, level %a\n%!"
 (*
 Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
 *)
+              let resolver = Env.resolver use.env in
               (* CR mshinwell: Add [List.map2i]. *)
-              let joined_env =
-                match joined_env with
-                | None -> TE.create ~resolver:(Env.resolver use.env)
-                | Some joined_env -> joined_env
+              let joined_env, arg_tys_this_use_rev =
+                List.fold_left2
+                  (fun (joined_env, arg_tys_this_use_rev) param_ty arg_ty ->
+                    let env_extension, arg_ty =
+                      T.meet ~resolver ~bias_towards:(joined_env, param_ty)
+                        (use_env, arg_ty)
+                    in
+Format.eprintf "New judgements for joined_env:@ %a\n%!"
+  TE.print env_extension;
+                    let joined_env =
+                      T.Typing_environment.meet joined_env env_extension
+                    in
+                    joined_env, arg_ty :: arg_tys_this_use_rev)
+                  (joined_env, [])
+                  param_tys
+                  arg_tys_this_use
               in
+              let arg_tys_this_use = List.rev arg_tys_this_use_rev in
               let arg_number = ref 0 in
               let arg_tys =
                 List.map2 (fun joined_ty this_ty ->
@@ -846,26 +870,26 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
                           (Misc_color.bold_red ())
                           !arg_number
                           (Misc_color.reset ());
+
                         raise Misc.Fatal_error
                       end
                     in
                     incr arg_number;
                     joined_ty)
-                  arg_tys arg_tys'
+                  arg_tys arg_tys_this_use
               in
               let joined_env = TE.join joined_env use_env in
-              arg_tys, Some joined_env)
-            (bottom_arg_tys, None)
+              arg_tys, joined_env)
+            (bottom_arg_tys, default_env)
             uses
         in
         Some (arg_tys, env)
 
     let join_of_arg_types t ~arity ~default_env =
       let tys, env =
-        match join_of_arg_types_opt t ~arity ~default_env with
+        match join_of_arg_types_opt t ~default_env with
         | None -> T.bottom_types_from_arity arity, default_env
-        | Some (arg_tys, None) -> arg_tys, default_env
-        | Some (arg_tys, Some env) -> arg_tys, env
+        | Some (arg_tys, env) -> arg_tys, env
       in
 (*
       let free_names =
@@ -1004,7 +1028,7 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
           t2.lifted_constants;
     }
 
-  let use_continuation t env cont kind =
+  let use_continuation t env cont ~params kind =
     let args = Continuation_uses.Use.Kind.args kind in
     if not (List.for_all (fun arg -> Env.mem_simple env arg) args) then begin
       Misc.fatal_errorf "use_continuation %a: argument(s) (%a) not in \
@@ -1027,7 +1051,8 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
     let uses =
       match Continuation.Map.find cont t.used_continuations with
       | exception Not_found ->
-        Continuation_uses.create ~continuation:cont ~backend:(Env.backend env)
+        Continuation_uses.create ~continuation:cont ~params
+          ~backend:(Env.backend env)
           ~definition_scope_level:(Env.scope_level_of_continuation env cont)
       | uses -> uses
     in
@@ -1143,12 +1168,13 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
     | (uses, _approx, _env, _recursive) ->
       Continuation_uses.join_of_arg_types uses ~arity ~default_env
 
-  let exit_scope_of_let_cont t env cont =
+  let exit_scope_of_let_cont t env cont ~params =
     let t, uses =
       match Continuation.Map.find cont t.used_continuations with
       | exception Not_found ->
         let uses =
-          Continuation_uses.create ~continuation:cont ~backend:(Env.backend env)
+          Continuation_uses.create ~continuation:cont ~params
+            ~backend:(Env.backend env)
             ~definition_scope_level:(Env.scope_level_of_continuation env cont)
         in
         t, uses

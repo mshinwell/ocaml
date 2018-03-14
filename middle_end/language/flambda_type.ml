@@ -370,7 +370,8 @@ and equal_typing_environment
 let equal _env _ _ = false
 
 let strictly_more_precise env t ~than =
-  not (equal env than (meet (env, t) (env, than)))
+  (* The [bias_towards] choice is arbitrary here. *)
+  not (equal env than (meet ~bias_towards:(env, t) (env, than)))
 
 module Simplified_type : sig
   (* Simplified types omit the following at top level:

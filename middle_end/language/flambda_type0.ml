@@ -2223,6 +2223,8 @@ end;
       | Some name1, Some name2 when Name.equal name1 name2 ->
         Type_of name1, []
       | Some name1, Some name2 ->
+        (* N.B. This needs to respect the [bias_towards] argument on the
+           [meet] function exposed in the interface (below). *)
         let level1 = scope_level_typing_environment env1 name1 in
         let level2 = scope_level_typing_environment env2 name2 in
         normal_case ~names_to_bind:[name1, level1; name2, level2]
@@ -3936,6 +3938,7 @@ Format.eprintf "...giving %a\n%!" print ty;
     in
     env, t
 
+  let meet ~resolver ~bias_towards tc2 = meet ~resolver bias_towards tc2
   let join = Meet_and_join.join
 
   let join_ty_value (env1, ty_value1) (env2, ty_value2) =

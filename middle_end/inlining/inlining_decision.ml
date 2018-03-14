@@ -581,6 +581,15 @@ let for_call_site ~env ~r
     | Always_inline | Default_inline | Never_inline -> inline_requested
   in
   let return_arity = List.map (fun ty -> T.kind ty) function_decl.result in
+  let return_cont_params =
+    (* CR mshinwell: Move into utility function *)
+    List.mapi (fun index ty ->
+        let name = Format.sprintf "return_cont_param%d" index in
+        let var = Variable.create name in
+        let param = Parameter.wrap var in
+        Flambda.Typed_parameter.create param ty)
+      function_decl.result
+  in
   let original_apply : Flambda.Apply.t =
     { continuation;
       exn_continuation;
@@ -599,7 +608,7 @@ let for_call_site ~env ~r
   let original r =
     let continuation, r =
       (E.simplify_continuation_use_cannot_inline env) env r
-        continuation ~arity:return_arity
+        continuation ~params:return_cont_params
     in
     let original_expr : Flambda.Expr.t =
       Apply {

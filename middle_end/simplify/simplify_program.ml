@@ -339,16 +339,20 @@ Format.eprintf "\n\nsimplify_define_symbol:\n\n%!";
     match defn.computation with
     | None -> env, defn.computation, Symbol.Map.empty, Symbol.Map.empty
     | Some computation ->
-      let arity =
-        List.map (fun (_var, kind) -> kind) computation.computed_values
-      in
       let name = computation.return_cont in
+      let return_cont_params =
+        List.map (fun (var, kind) ->
+            let param = Parameter.wrap var in
+            let ty = T.unknown kind in
+            Flambda.Typed_parameter.create param ty)
+          computation.computed_values
+      in
       let return_cont_approx =
-        Continuation_approx.create_unknown ~name ~arity
+        Continuation_approx.create_unknown ~name ~params:return_cont_params
       in
       let exn_cont_approx =
         Continuation_approx.create_unknown ~name:computation.exception_cont
-          ~arity:[Flambda_kind.value ()]
+          ~params:(Simplify_aux.params_for_exception_handler ())
       in
       let default_env0 = env in
       let default_env = E.get_typing_environment env in
@@ -370,6 +374,7 @@ Format.eprintf "\n\nsimplify_define_symbol:\n\n%!";
         in
         (E.simplify_toplevel env) env r computation.expr
           ~continuation:name
+          ~continuation_params:return_cont_params
           ~exn_continuation:computation.exception_cont
           ~descr
       in
@@ -385,7 +390,8 @@ Format.eprintf "Simplify_program fetching uses for %a\n%!"
 *)
       let args_types, env_extension =
         try
-          R.Continuation_uses.join_of_arg_types continuation_uses ~arity
+          R.Continuation_uses.join_of_arg_types continuation_uses
+            ~arity:(Flambda.Typed_parameter.List.arity return_cont_params)
             ~default_env
         with Misc.Fatal_error as exn -> begin
           Format.eprintf "\n%sContext: Term resulting from \

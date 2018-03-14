@@ -36,6 +36,7 @@ val simplify_toplevel
   -> Simplify_env_and_result.Result.t
   -> Flambda.Expr.t
   -> continuation:Continuation.t
+  -> continuation_params:Flambda.Typed_parameter.t list
   -> exn_continuation:Continuation.t
   -> descr:string
   -> Flambda.Expr.t * Simplify_env_and_result.Result.t

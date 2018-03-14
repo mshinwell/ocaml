@@ -23,23 +23,24 @@ type continuation_handlers =
 type t = {
   name : Continuation.t;
   handlers : continuation_handlers option;
-  arity : Flambda_arity.t;
+  params : Flambda.Typed_parameter.t list;
 }
 
-let create ~name ~(handlers : continuation_handlers) ~arity =
+let create ~name ~(handlers : continuation_handlers) ~params =
   { name;
     handlers = Some handlers;
-    arity;
+    params;
   }
 
-let create_unknown ~name ~arity =
+let create_unknown ~name ~params =
   { name;
     handlers = None;
-    arity;
+    params;
   }
 
 let name t = t.name
-let arity t = t.arity
+let params t = t.params
+let arity t = Flambda.Typed_parameter.List.arity t.params
 let handlers t = t.handlers
 
 let is_alias t =
@@ -72,7 +73,9 @@ let print ppf t =
       | Recursive handlers ->
         Flambda.Let_cont_handlers.print ppf (Recursive handlers)
   in
-  Format.fprintf ppf "@[((name %a)@ (arity %a)@ (handlers@ %a))@]"
+  Format.fprintf ppf "@[((name %a)@ (params (%a))@ (handlers@ %a))@]"
     Continuation.print t.name
-    Flambda_arity.print t.arity
+    (Format.pp_print_list ~pp_sep:Format.pp_print_space
+      Flambda.Typed_parameter.print)
+    t.params
     print_handlers t.handlers

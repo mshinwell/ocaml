@@ -43,6 +43,7 @@ module type Env = sig
       -> result
       -> Flambda.Expr.t
       -> continuation:Continuation.t
+      -> continuation_params:Flambda.Typed_parameter.t list
       -> exn_continuation:Continuation.t
       -> descr:string
       -> Flambda.Expr.t * result * continuation_uses
@@ -57,7 +58,7 @@ module type Env = sig
          t
       -> result
       -> Continuation.t
-      -> arity:Flambda_arity.t
+      -> params:Flambda.Typed_parameter.t list
       -> Continuation.t * result)
     -> t
 
@@ -78,6 +79,7 @@ module type Env = sig
       -> result
       -> Flambda.Expr.t
       -> continuation:Continuation.t
+      -> continuation_params:Flambda.Typed_parameter.t list
       -> exn_continuation:Continuation.t
       -> descr:string
       -> Flambda.Expr.t * result * continuation_uses
@@ -96,7 +98,7 @@ module type Env = sig
     -> (t
       -> result
       -> Continuation.t
-      -> arity:Flambda_arity.t
+      -> params:Flambda.Typed_parameter.t list
       -> Continuation.t * result)
 
   (** Which simplification round we are currently in. *)
@@ -400,11 +402,14 @@ module type Result = sig
 
     type t
 
+(*
     val create
        : continuation:Continuation.t
+      -> params:Flambda.Typed_parameter.t list
       -> definition_scope_level:Scope_level.t
       -> backend:(module Backend_intf.S)
       -> t
+*)
 
     val print : Format.formatter -> t -> unit
 
@@ -447,6 +452,7 @@ module type Result = sig
     : t
     -> env
     -> Continuation.t
+    -> params:Flambda.Typed_parameter.t list
     -> Continuation_uses.Use.Kind.t
     -> t
 
@@ -508,6 +514,7 @@ module type Result = sig
      : t
     -> env
     -> Continuation.t
+    -> params:Flambda.Typed_parameter.t list
     -> t * Continuation_uses.t
 
   (** Record the post-simplification definition of a continuation. *)

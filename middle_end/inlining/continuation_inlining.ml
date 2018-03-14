@@ -73,7 +73,7 @@ let for_toplevel_expression expr r =
           let approx =
             Continuation_approx.create ~name
               ~handlers:(Non_recursive handler)
-              ~arity:(Flambda.Continuation_handler.param_arity handler)
+              ~params:handler.params
           in
           r := R.update_defined_continuation_approx !r name approx;
           Let_cont { body; handlers = Non_recursive { name; handler; }; }
@@ -98,7 +98,7 @@ let for_toplevel_expression expr r =
             let approx =
               Continuation_approx.create ~name
                 ~handlers:(Recursive handlers)
-                ~arity:(Flambda.Continuation_handler.param_arity handler)
+                ~params:handler.params
             in
             r := R.update_defined_continuation_approx !r name approx)
           handlers;

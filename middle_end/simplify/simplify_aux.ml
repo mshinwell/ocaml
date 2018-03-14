@@ -148,3 +148,8 @@ let initial_inlining_toplevel_threshold ~round : Inlining_cost.Threshold.t =
      mshinwell: later *)
   Can_inline_if_no_larger_than
     (unscaled * Inlining_cost.scale_inline_threshold_by)
+
+let params_for_exception_handler () =
+  let param = Parameter.wrap (Variable.create "exn") in
+  let ty = T.any_value () in
+  [Flambda.Typed_parameter.create param ty]

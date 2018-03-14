@@ -25,13 +25,19 @@ type continuation_handlers =
 val create
    : name:Continuation.t
   -> handlers:continuation_handlers
-  -> arity:Flambda_arity.t
+  -> params:Flambda.Typed_parameter.t list
   -> t
 
-val create_unknown : name:Continuation.t -> arity:Flambda_arity.t -> t
+(* CR mshinwell: Bad name.  Only the code of the continuation itself is
+   unknown. *)
+val create_unknown
+   : name:Continuation.t
+  -> params:Flambda.Typed_parameter.t list
+  -> t
 
 val name : t -> Continuation.t
 
+val params : t -> Flambda.Typed_parameter.t list
 val arity : t -> Flambda_arity.t
 val handlers : t -> continuation_handlers option
 
