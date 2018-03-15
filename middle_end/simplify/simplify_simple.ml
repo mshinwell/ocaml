@@ -17,6 +17,7 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 module E = Simplify_env_and_result.Env
+module R = Simplify_env_and_result.Result
 module T = Flambda_type
 
 let type_for_const (const : Simple.Const.t) =
@@ -29,7 +30,7 @@ let type_for_const (const : Simple.Const.t) =
   | Naked_int64 n -> T.this_naked_int64 n
   | Naked_nativeint n -> T.this_naked_nativeint n
 
-let simplify_name_for_let env name =
+let simplify_name_for_let env r ~bound_name name =
   let name = Freshening.apply_name (E.freshening env) name in
   let ty = E.find_name env name in
   let ty, canonical_name =
@@ -40,20 +41,21 @@ let simplify_name_for_let env name =
     | None -> name
     | Some canonical_name -> canonical_name
   in
-  name, T.alias_type_of (T.kind ty) name
+  let r = R.add_alias r ~canonical_name:name ~alias:bound_name in
+  name, T.alias_type_of (T.kind ty) name, r
 
-let simplify_simple_for_let env (simple : Simple.t) =
+let simplify_simple_for_let env r ~bound_name (simple : Simple.t) =
   match simple with
-  | Const c -> simple, type_for_const c
-  | Tag t -> simple, T.this_tag t
+  | Const c -> simple, type_for_const c, r
+  | Tag t -> simple, T.this_tag t, r
   | Name name ->
 let orig_name = name in
-    let name, ty = simplify_name_for_let env name in
+    let name, ty, r = simplify_name_for_let env r ~bound_name name in
 Format.eprintf "simplify_simple_for_let %a --> %a : %a\n%!"
   Name.print orig_name
   Name.print name
   T.print ty;
-    Simple.name name, ty
+    Simple.name name, ty, r
 
 let simplify_name env name =
   let name = Freshening.apply_name (E.freshening env) name in

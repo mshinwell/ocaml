@@ -622,6 +622,8 @@ module type Result = sig
 
   val clear_typing_judgements : t -> t
 
+  val add_alias : t -> canonical_name:Name.t -> alias:Name.t -> t
+
   val add_or_meet_typing_judgement
      : t
     -> Name.t

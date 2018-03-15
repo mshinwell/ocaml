@@ -263,6 +263,7 @@ end) = struct
 
   and typing_environment = {
     resolver : (Export_id.t -> t option);
+    canonical_names_to_aliases : Name.Set.t Name.Map.t;
     names_to_types : (Scope_level.t * t) Name.Map.t;
     levels_to_names : Name.Set.t Scope_level.Map.t;
     existentials : Name.Set.t;
@@ -578,7 +579,7 @@ end) = struct
     print_with_cache ~cache ppf t
 
   and print_typing_environment_with_cache ~cache ppf
-        ({ resolver = _; names_to_types;
+        ({ resolver = _; canonical_names_to_aliases; names_to_types;
            levels_to_names; existentials; existential_freshening; } as env) =
     if Name.Map.is_empty names_to_types then
       Format.pp_print_string ppf "Empty"
@@ -591,11 +592,13 @@ end) = struct
           "@[((names_to_types@ %a)@ \
               (levels_to_names@ %a)@ \
               (existentials@ %a)@ \
-              (existential_freshening@ %a))@]"
+              (existential_freshening@ %a)@ \
+              (canonical_names_to_aliases@ %a))@]"
           (Name.Map.print print_scope_level_and_type) names_to_types
           (Scope_level.Map.print Name.Set.print) levels_to_names
           Name.Set.print existentials
-          Freshening.print existential_freshening)
+          Freshening.print existential_freshening
+          (Name.Map.print Name.print) canonical_names_to_aliases)
 
   let print_typing_environment ppf env =
     print_typing_environment_with_cache ~cache:(Printing_cache.create ())
@@ -753,11 +756,40 @@ end) = struct
   let create_typing_environment ~resolver =
     let existential_freshening = Freshening.activate Freshening.empty in
     { resolver;
+      canonical_names_to_aliases = Name.Map.empty;
       names_to_types = Name.Map.empty;
       levels_to_names = Scope_level.Map.empty;
       existentials = Name.Set.empty;
       existential_freshening;
     }
+
+  let add_alias_typing_environment env ~canonical_name ~alias =
+    if not (Name.Map.mem canonical_name t.names_to_types) then begin
+      Misc.fatal_errorf "Cannot add alias %a of canonical name %a: the \
+          canonical name is not bound in the environment"
+        Name.print alias
+        Name.print canonical_name
+    end;
+    if not (Name.Map.mem canonical_name t.names_to_types) then begin
+      Misc.fatal_errorf "Cannot add alias %a of canonical name %a: the \
+          alias is not bound in the environment"
+        Name.print alias
+        Name.print canonical_name
+    end;
+    let canonical_names_to_aliases =
+      Name.Map.add canonical_name alias t.canonical_names_to_aliases
+    in
+    { t with
+      canonical_names_to_aliases;
+    }
+
+  let aliases_typing_environment env ~canonical_name =
+    match Name.Map.find canonical_name env.canonical_names_to_aliases with
+    | exception Not_found ->
+      Misc.fatal_errorf "Cannot find aliases of canonical name %a which is \
+          not bound in the environment"
+        Name.print canonical_name
+    | aliases -> aliases
 
   let add_or_replace_typing_environment' env name scope_level t =
     let names_to_types =
@@ -1794,12 +1826,11 @@ end;
     | Resolved
     | Still_unresolved
 
-  let resolve_aliases_on_ty0 (type a) env ~force_to_kind
+  let resolve_aliases_on_ty0 (type a) env ~force_to_kind ~print_ty
         (ty : a ty) : (a ty) * (Name.t option) * still_unresolved =
     let rec resolve_aliases names_seen ~canonical_name (ty : a ty) =
       let resolve (name : Name_or_export_id.t) : _ * _ * still_unresolved =
         if Name_or_export_id.Set.mem name names_seen then begin
-          (* CR mshinwell: Pass in printing functions to improve this *)
           Misc.fatal_errorf "Loop on %a whilst resolving aliases"
             Name_or_export_id.print name
         end;
@@ -1845,13 +1876,21 @@ end;
     | Still_unresolved -> unknown, canonical_name
 
   (* CR mshinwell: choose this function or the one above *)
-  let resolve_aliases_and_squash_unresolved_names_on_ty' env ~kind:_
-        ~force_to_kind ~unknown:_ ty : _ unknown_or_join * (Name.t option) =
-(*
-Format.eprintf "---starting to resolve---\n%!";
-*)
+  let resolve_aliases_and_squash_unresolved_names_on_ty' env ~kind
+        ~print_ty ~force_to_kind ~unknown:_ ty
+        : _ unknown_or_join * (Name.t option) =
     let ty, canonical_name, _still_unresolved =
-      resolve_aliases_on_ty0 env ~force_to_kind ty
+      try resolve_aliases_on_ty0 env ~force_to_kind ty
+      with Misc.fatal_error -> begin
+        Format.eprintf "\n%sContext is: \
+            resolve_aliases_and_squash_unresolved_names_on_ty':%s\
+            @ %a@ Environment:@ %a\n"
+          (Misc_color.bold_red ())
+          (Misc_color.reset ())
+          print_ty ty
+          print_typing_environment env;
+        raise Misc.Fatal_error
+      end
     in
     match ty with
     | No_alias uoj -> uoj, canonical_name
@@ -3735,6 +3774,11 @@ Format.eprintf "---starting to resolve---\n%!";
 
     let join_typing_environment (env1 : typing_environment)
           (env2 : typing_environment) =
+      let canonical_names_to_aliases =
+        Name.Map.union_merge Name.Set.union
+          env1.canonical_names_to_aliases
+          env2.canonical_names_to_aliases
+      in
       let names_to_types =
         Name.Map.union_merge (fun (level1, ty1) (level2, ty2) ->
             if not (Scope_level.equal level1 level2) then begin
@@ -3772,6 +3816,7 @@ Format.eprintf "---starting to resolve---\n%!";
         env1.existential_freshening (* XXX *)
       in
       { resolver = env1.resolver;
+        canonical_names_to_aliases;
         names_to_types;
         levels_to_names;
         existentials;
@@ -3837,6 +3882,11 @@ Format.eprintf "---starting to resolve---\n%!";
     let meet_typing_environment (env1 : typing_environment)
           (env2 : typing_environment) =
       let judgements = ref [] in
+      let canonical_names_to_aliases =
+        Name.Map.union_merge Name.Set.union
+          env1.canonical_names_to_aliases
+          env2.canonical_names_to_aliases
+      in
       let names_to_types =
         Name.Map.union_merge (fun (level1, ty1) (level2, ty2) ->
             if not (Scope_level.equal level1 level2) then begin
@@ -3883,6 +3933,7 @@ Format.eprintf "...giving %a\n%!" print ty;
       in
       let env =
         { resolver = env1.resolver;
+          canonical_names_to_aliases;
           names_to_types;
           levels_to_names;
           existentials;
@@ -4073,6 +4124,9 @@ let result =
         existentials = Name.Set.union t.existentials new_existentials;
         existential_freshening;
       }
+
+  let add_alias = add_alias_typing_environment
+  let aliases = aliases_typing_environment
 in
 (*
 Format.eprintf "Result is: %a\n%!"

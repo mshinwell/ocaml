@@ -401,6 +401,10 @@ module type S = sig
     val print : Format.formatter -> t -> unit
 
     val resolver : t -> (Export_id.t -> flambda_type option)
+
+    val add_alias : t -> canonical_name:Name.t -> alias:Name.t -> t
+
+    val aliases : t -> canonical_name:Name.t -> Name.Set.t
   end
 
   (** Annotation for functions that may require examination of the current

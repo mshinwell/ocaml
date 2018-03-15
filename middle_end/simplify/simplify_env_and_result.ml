@@ -1344,6 +1344,14 @@ Format.eprintf "New use_env after meet:@ %a\n%!"
       typing_judgements = T.Typing_environment.create ~resolver:t.resolver;
     }
 
+  let add_alias t ~canonical_name ~alias =
+    let typing_judgements =
+      T.Typing_environment.add_alias t.typing_judgements ~canonical_name ~alias
+    in
+    { t with
+      typing_judgements;
+    }
+
   let add_or_meet_typing_judgement t name scope_level ty =
     let typing_judgements =
       T.Typing_environment.add_or_replace_meet
