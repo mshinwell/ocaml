@@ -1174,9 +1174,7 @@ end = struct
         ignore (inline : inline_attribute);
         ignore (specialise : specialise_attribute)
       | Switch (arg, switch) ->
-        (* CR mshinwell: Can we check this?  It might be of kind "unknown" *)
-        E.check_name_is_bound_and_of_kind env arg
-          (K.value ());
+        E.check_name_is_bound_and_of_kind env arg (K.fabricated ());
 (* XXX Move into [Switch]
         if Targetint.OCaml.Map.cardinal arms < 1 then begin
           Misc.fatal_errorf "Empty switch:@ %a" print t
