@@ -161,7 +161,9 @@ module Trap_action : sig
 end
 
 module Switch : sig
-  (** Conditional control flow (the only such form). *)
+  (** Conditional control flow (the only such form).  Scrutinees of [Switch]es
+      are [Discriminant]s of kind [Fabricated]---not regular integers, or
+      similar. *)
 
   (* CR mshinwell: add invariant function *)
   type t
