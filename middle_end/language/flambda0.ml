@@ -1796,7 +1796,7 @@ end = struct
     in
     fprintf ppf
       "@[<2>(%a%s%s%s%s@ (my_closure %a)@ (origin %a)@ =@ \
-        %sfun%s@[<2> <%a> <exn %a>@] %a@ @[<2>@ :: %a@]@ ->@ @[<2>%a@])@]@ "
+        %sfun%s@[<2> <%a> <exn %a>@] %a@ @[<2>@ :: %s%a%s@]@ ->@ @[<2>%a@])@]@ "
       Closure_id.print closure_id
       stub
       is_a_functor inline specialise
@@ -1807,7 +1807,9 @@ end = struct
       Continuation.print f.continuation_param
       Continuation.print f.exn_continuation_param
       (Typed_parameter.List.print_with_cache ~cache) f.params
+      (Misc_color.bold_white ())
       Flambda_arity.print f.return_arity
+      (Misc_color.reset ())
       (Expr.print_with_cache ~cache) f.body
 
   let print ppf t = print_with_cache ~cache:(Printing_cache.create ()) ppf t
