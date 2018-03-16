@@ -292,9 +292,9 @@ end) = struct
     match or_alias with
     | No_alias descr -> print_descr ppf descr
     | Equals name ->
-      Format.fprintf ppf "@[(= type_of %a)@]" Name.print name
+      Format.fprintf ppf "@[(= %a)@]" Name.print name
     | Type export_id ->
-      Format.fprintf ppf "@[(= %a)@]" Export_id.print export_id
+      Format.fprintf ppf "@[(=export_id %a)@]" Export_id.print export_id
 
   let print_unknown_or_join print_contents ppf (o : _ unknown_or_join) =
     match o with
