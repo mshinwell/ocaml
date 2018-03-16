@@ -299,12 +299,13 @@ end) = struct
       Format.fprintf ppf "@[(=export_id %a)@]" Export_id.print export_id
 
   let print_unknown_or_join print_contents ppf (o : _ unknown_or_join) =
+    let colour = Misc_color.bold_red () in
     match o with
-    | Unknown -> Format.fprintf ppf "Unknown"
-    | Join [] -> Format.fprintf ppf "Bottom"
+    | Unknown -> Format.fprintf ppf "%sT%s" colour (Misc_color.reset ())
+    | Join [] -> Format.fprintf ppf "%s_|_%s" colour (Misc_color.reset ())
     | Join [contents] -> print_contents ppf contents
     | Join incompatibles ->
-      Format.fprintf ppf "@[Join_incompatible@ (%a)@]"
+      Format.fprintf ppf "@[(Join_incompatible@ (%a))@]"
         (Format.pp_print_list print_contents) incompatibles
 
   let print_ty_generic print_contents ppf ty =
@@ -580,12 +581,12 @@ end) = struct
   and print_descr ~cache ppf (descr : descr) =
     match descr with
     | Value ty ->
-      Format.fprintf ppf "@[(Value@ (%a))@]"
+      Format.fprintf ppf "@[(Value@ %a)@]"
         (print_ty_value_with_cache ~cache) ty
     | Naked_number (ty, _kind) ->
-      Format.fprintf ppf "@[(Naked_number@ (%a))@]" print_ty_naked_number ty
+      Format.fprintf ppf "@[(Naked_number@ %a)@]" print_ty_naked_number ty
     | Fabricated ty ->
-      Format.fprintf ppf "@[(Fabricated@ (%a))@]"
+      Format.fprintf ppf "@[(Fabricated@ %a)@]"
         (print_ty_fabricated_with_cache ~cache) ty
 
   and print_with_cache ~cache ppf (t : t) =
@@ -611,6 +612,19 @@ end) = struct
       Printing_cache.with_cache cache ppf "env" env (fun ppf () ->
         let print_scope_level_and_type ppf (_scope_level, ty) =
           print_with_cache ~cache ppf ty
+        in
+        (* CR mshinwell: Add flag to disable this filtering *)
+        let names_to_types =
+          Name.Map.filter (fun name _ty ->
+              not (Name.is_predefined_exception name))
+            names_to_types
+        in
+        let levels_to_names =
+          Scope_level.Map.map (fun names ->
+              Name.Set.filter (fun name ->
+                  not (Name.is_predefined_exception name))
+                names)
+            levels_to_names
         in
         Format.fprintf ppf
           "@[((names_to_types@ %a)@ \

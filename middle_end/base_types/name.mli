@@ -43,3 +43,5 @@ val symbols_only_map : 'a Map.t -> 'a Map.t
 val set_to_var_set : Set.t -> Variable.Set.t
 
 val set_to_symbol_set : Set.t -> Symbol.Set.t
+
+val is_predefined_exception : t -> bool

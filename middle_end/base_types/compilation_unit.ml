@@ -73,8 +73,8 @@ let get_current_exn () =
 let get_current_id_exn () = get_persistent_ident (get_current_exn ())
 
 let predefined_exception_t =
-  create (Ident.create_persistent "predef exn")
-    (Linkage_name.create "predef exn")
+  create (Ident.create_persistent ".predef_exn")
+    (Linkage_name.create ".predef_exn")
 
 let predefined_exception () =
   predefined_exception_t
@@ -83,8 +83,8 @@ let is_predefined_exception t =
   equal t predefined_exception_t
 
 let external_symbols_t =
-  create (Ident.create_persistent "extern")
-    (Linkage_name.create "extern")
+  create (Ident.create_persistent ".extern")
+    (Linkage_name.create ".extern")
 
 let external_symbols () =
   external_symbols_t

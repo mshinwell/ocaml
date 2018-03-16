@@ -107,3 +107,8 @@ let print_sexp ppf t =
   match t with
   | Var var -> Format.fprintf ppf "@[(Var %a)@]" Variable.print var
   | Symbol sym -> Format.fprintf ppf "@[(Symbol %a)@]" Symbol.print sym
+
+let is_predefined_exception t =
+  match t with
+  | Var _ -> false
+  | Symbol sym -> Symbol.is_predefined_exception sym
