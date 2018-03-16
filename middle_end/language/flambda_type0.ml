@@ -116,7 +116,7 @@ end) = struct
   type 'a or_alias =
     | No_alias of 'a
     | Type of Export_id.t
-    | Type_of of Name.t
+    | Equals of Name.t
 
   type 'a extensibility =
     | Open of 'a
@@ -291,7 +291,7 @@ end) = struct
   let print_or_alias print_descr ppf (or_alias : _ or_alias) =
     match or_alias with
     | No_alias descr -> print_descr ppf descr
-    | Type_of name ->
+    | Equals name ->
       Format.fprintf ppf "@[(= type_of %a)@]" Name.print name
     | Type export_id ->
       Format.fprintf ppf "@[(= %a)@]" Export_id.print export_id
@@ -615,7 +615,7 @@ end) = struct
     match or_alias with
     | No_alias contents -> free_names_contents contents acc
     | Type _export_id -> acc
-    | Type_of name -> Name.Set.add name acc
+    | Equals name -> Name.Set.add name acc
 
   let free_names_unknown_or_join free_names_contents (o : _ unknown_or_join)
         acc =
@@ -958,56 +958,56 @@ end;
   let alias_type_of (kind : K.t) name : t =
     match kind with
     | Value ->
-      { descr = Value (Type_of name);
+      { descr = Value (Equals name);
         phantom = None;
       }
     | Naked_number Naked_immediate ->
-      { descr = Naked_number (Type_of name, K.Naked_number.Naked_immediate);
+      { descr = Naked_number (Equals name, K.Naked_number.Naked_immediate);
         phantom = None;
       }
     | Naked_number Naked_float ->
-      { descr = Naked_number (Type_of name, K.Naked_number.Naked_float);
+      { descr = Naked_number (Equals name, K.Naked_number.Naked_float);
         phantom = None;
       }
     | Naked_number Naked_int32 ->
-      { descr = Naked_number (Type_of name, K.Naked_number.Naked_int32);
+      { descr = Naked_number (Equals name, K.Naked_number.Naked_int32);
         phantom = None;
       }
     | Naked_number Naked_int64 ->
-      { descr = Naked_number (Type_of name, K.Naked_number.Naked_int64);
+      { descr = Naked_number (Equals name, K.Naked_number.Naked_int64);
         phantom = None;
       }
     | Naked_number Naked_nativeint ->
-      { descr = Naked_number (Type_of name, K.Naked_number.Naked_nativeint);
+      { descr = Naked_number (Equals name, K.Naked_number.Naked_nativeint);
         phantom = None;
       }
     | Fabricated ->
-      { descr = Fabricated (Type_of name);
+      { descr = Fabricated (Equals name);
         phantom = None;
       }
     | Phantom (occs, phantom_kind) ->
       let descr : descr =
         match phantom_kind with
-        | Value -> Value (Type_of name)
+        | Value -> Value (Equals name)
         | Naked_number Naked_immediate ->
-          Naked_number (Type_of name, K.Naked_number.Naked_immediate)
+          Naked_number (Equals name, K.Naked_number.Naked_immediate)
         | Naked_number Naked_float ->
-          Naked_number (Type_of name, K.Naked_number.Naked_float)
+          Naked_number (Equals name, K.Naked_number.Naked_float)
         | Naked_number Naked_int32 ->
-          Naked_number (Type_of name, K.Naked_number.Naked_int32)
+          Naked_number (Equals name, K.Naked_number.Naked_int32)
         | Naked_number Naked_int64 ->
-          Naked_number (Type_of name, K.Naked_number.Naked_int64)
+          Naked_number (Equals name, K.Naked_number.Naked_int64)
         | Naked_number Naked_nativeint ->
-          Naked_number (Type_of name, K.Naked_number.Naked_nativeint)
-        | Fabricated -> Fabricated (Type_of name)
+          Naked_number (Equals name, K.Naked_number.Naked_nativeint)
+        | Fabricated -> Fabricated (Equals name)
       in
       { descr;
         phantom = Some occs;
       }
 
-  let alias_type_of_as_ty_value name : ty_value = Type_of name
+  let alias_type_of_as_ty_value name : ty_value = Equals name
 
-  let alias_type_of_as_ty_fabricated name : ty_fabricated = Type_of name
+  let alias_type_of_as_ty_fabricated name : ty_fabricated = Equals name
 
   let alias_type (kind : K.t) export_id : t =
     match kind with
@@ -1859,7 +1859,7 @@ end;
       match ty with
       | No_alias _ -> ty, canonical_name, Resolved
       | Type export_id -> resolve (Name_or_export_id.Export_id export_id)
-      | Type_of name ->
+      | Equals name ->
 (*
         Format.eprintf "recursing on %a, seen %a\n%!" Name.print name
           Name_or_export_id.Set.print names_seen;
@@ -1902,7 +1902,7 @@ end;
     in
     match ty with
     | No_alias uoj -> uoj, canonical_name
-    | Type _ | Type_of _ -> Unknown, canonical_name
+    | Type _ | Equals _ -> Unknown, canonical_name
 
   (* CR mshinwell: this should return not just the canonical name but all
      other aliases encountered, so the meet functions can add judgements
@@ -2197,11 +2197,11 @@ end;
       in
       match canonical_name1, canonical_name2 with
       | Some name1, Some name2 when Name.equal name1 name2 ->
-        Type_of name1
+        Equals name1
       | Some name1, _ when unknown_or_join_is_bottom unknown_or_join2 ->
-        Type_of name1
+        Equals name1
       | _, Some name2 when unknown_or_join_is_bottom unknown_or_join1 ->
-        Type_of name2
+        Equals name2
       | _, _ ->
         let unknown_or_join =
           join_on_unknown_or_join env1 env2 unknown_or_join1 unknown_or_join2
@@ -2269,10 +2269,10 @@ end;
         in
         let new_judgements' =
           List.map (fun (name, level) ->
-              name, level, S.to_type (Type_of first_name_to_bind))
+              name, level, S.to_type (Equals first_name_to_bind))
             names_to_bind
         in
-        Type_of first_name_to_bind,
+        Equals first_name_to_bind,
           new_judgements @ (new_judgement :: new_judgements')
       in
       let normal_case ~names_to_bind =
@@ -2289,7 +2289,7 @@ end;
       in
       match canonical_name1, canonical_name2 with
       | Some name1, Some name2 when Name.equal name1 name2 ->
-        Type_of name1, []
+        Equals name1, []
       | Some name1, Some name2 ->
         (* N.B. This needs to respect the [bias_towards] argument on the
            [meet] function exposed in the interface (below). *)
@@ -4288,7 +4288,7 @@ Format.eprintf "Result is: %a\n%!"
       { t with
         descr = Fabricated (No_alias (Join of_kind_fabricateds));
       }
-    | Value (Type _ | Type_of _ | No_alias Unknown)
-    | Fabricated (Type _ | Type_of _ | No_alias Unknown) -> t
+    | Value (Type _ | Equals _ | No_alias Unknown)
+    | Fabricated (Type _ | Equals _ | No_alias Unknown) -> t
     | Naked_number _ -> t
 end

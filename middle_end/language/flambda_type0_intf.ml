@@ -70,7 +70,7 @@ module type S = sig
   type 'a or_alias = private
     | No_alias of 'a
     | Type of Export_id.t
-    | Type_of of Name.t
+    | Equals of Name.t
 
   type 'a extensibility =
     | Open of 'a
@@ -408,7 +408,7 @@ module type S = sig
   end
 
   (** Annotation for functions that may require examination of the current
-      environment (in particular to resolve [Type] or [Type_of] aliases). *)
+      environment (in particular to resolve [Type] or [Equals] aliases). *)
   type 'a type_accessor = Typing_environment.t -> 'a
 
   (** Print a type to the given formatter. *)

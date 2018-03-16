@@ -86,8 +86,8 @@ let _equal_or_alias equal_contents (or_alias1 : _ or_alias)
   match or_alias1, or_alias2 with
   | No_alias contents1, No_alias contents2 -> equal_contents contents1 contents2
   | Type export_id1, Type export_id2 -> Export_id.equal export_id1 export_id2
-  | Type_of name1, Type_of name2 -> Name.equal name1 name2
-  | (No_alias _ | Type _ | Type_of _), _ -> false
+  | Equals name1, Equals name2 -> Name.equal name1 name2
+  | (No_alias _ | Type _ | Equals _), _ -> false
 
 let _equal_extensibility equal_contents
       (ex1 : _ extensibility) (ex2 : _ extensibility) =
@@ -448,7 +448,7 @@ end = struct
 
   let ty_from_ty (ty : _ normal_ty) : _ ty =
     match ty with
-    | Type _ | Type_of _ -> Unknown
+    | Type _ | Equals _ -> Unknown
     | No_alias unknown_or_join ->
       match unknown_or_join with
       | Unknown -> Unknown
@@ -1581,7 +1581,7 @@ let values_physically_equal (t1 : t) (t2 : t) =
       (* CR mshinwell: Presumably we could look up the Export_id.t in the
          environment and continue?  Maybe not worth it. *)
       false
-    | Type_of name1, Type_of name2 ->
+    | Equals name1, Equals name2 ->
       (* CR mshinwell: (see comment in simplify_primitives.ml in the existing
          Flambda)  We didn't used to check equality on variable aliases in case
          the variables weren't bound.  However everything should be bound now,
