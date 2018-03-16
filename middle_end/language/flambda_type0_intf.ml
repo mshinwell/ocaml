@@ -244,7 +244,7 @@ module type S = sig
     | Non_inlinable of non_inlinable_function_declarations option
     | Inlinable of inlinable_function_declaration
 
-  (* CR mshinwell: should the closure types contain environment extensions? *)
+  (* CR mshinwell: should the closure types contain equations? *)
 
   and closures_entry = private {
     set_of_closures : ty_fabricated;
