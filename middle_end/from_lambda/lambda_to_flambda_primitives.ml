@@ -410,11 +410,14 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
   | Pstringrefs, [arg1; arg2] ->
     string_or_bytes_ref String arg1 arg2 dbg
 
-  | Pstring_load_16 true (* unsafe *), [arg1; arg2] ->
+  | Pstring_load_16 true (* unsafe *), [arg1; arg2]
+  | Pbytes_load_16 true (* unsafe *), [arg1; arg2] ->
     Binary (String_or_bigstring_load (String, Sixteen), arg1, arg2)
-  | Pstring_load_32 true (* unsafe *), [arg1; arg2] ->
+  | Pstring_load_32 true (* unsafe *), [arg1; arg2]
+  | Pbytes_load_32 true (* unsafe *), [arg1; arg2] ->
     Binary (String_or_bigstring_load (String, Thirty_two), arg1, arg2)
-  | Pstring_load_64 true (* unsafe *), [arg1; arg2] ->
+  | Pstring_load_64 true (* unsafe *), [arg1; arg2]
+  | Pbytes_load_64 true (* unsafe *), [arg1; arg2] ->
     Binary (String_or_bigstring_load (String, Sixty_four), arg1, arg2)
 
   (* TODO *)
@@ -686,9 +689,12 @@ let convert_lprim (prim : Lambda.primitive) (args : Simple.t list)
     | Pstring_load_16 _
     | Pstring_load_32 _
     | Pstring_load_64 _
-    | Pstring_set_16 _
-    | Pstring_set_32 _
-    | Pstring_set_64 _
+    | Pbytes_load_16 _
+    | Pbytes_load_32 _
+    | Pbytes_load_64 _
+    | Pbytes_set_16 _
+    | Pbytes_set_32 _
+    | Pbytes_set_64 _
     | Pbigstring_load_16 _
     | Pbigstring_load_32 _
     | Pbigstring_load_64 _

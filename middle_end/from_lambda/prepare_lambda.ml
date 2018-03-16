@@ -72,7 +72,7 @@ type letrec = {
   pre : Lambda.lambda -> Lambda.lambda;
   effects : Lambda.lambda;
   functions : (Ident.t * Lambda.lfunction) list;
-  substitution : Lambda.lambda Ident.tbl;
+  substitution : Lambda.lambda Ident.Map.t;
   (* Alias to recursive variables should be forbidden, but they are
      not really. To prevent any problem, we apply a substitution
      to every expression *)
@@ -210,7 +210,8 @@ let rec prepare_letrec recursive_set current_var (lam:Lambda.lambda) letrec =
       prepare_letrec recursive_set current_var body letrec
   | Lvar _ ->
     (* This cannot be a mutable variable: it is ok to copy it *)
-    { letrec with substitution = Ident.add current_var lam letrec.substitution }
+    { letrec with
+      substitution = Ident.Map.add current_var lam letrec.substitution }
   | _ ->
     (* This cannot be recursive, otherwise it should have been caught
        by the well formedness check. Hence it is ok to evaluate it
@@ -242,7 +243,7 @@ let dissect_letrec ~bindings ~body =
         pre = (fun x -> x);
         effects = body;
         functions = [];
-        substitution = Ident.empty;
+        substitution = Ident.Map.empty;
       }
   in
   let preallocations =
@@ -286,7 +287,7 @@ let dissect_letrec ~bindings ~body =
       letrec.consts
   in
   let substituted =
-    Lambda.subst_lambda letrec.substitution with_constants
+    Lambda.subst letrec.substitution with_constants
   in
 (*
   Format.printf "dissected@ %a@.@."
@@ -450,9 +451,7 @@ let rec simplify_primitive env (prim : L.primitive) args loc =
     let const_true = Ident.create "const_true" in
     let cond = Ident.create "cond_sequor" in
     prepare env (
-      (* CR mshinwell: N.B. This used to say "Const_int" which I think is
-         wrong; "true" and "false" are "Const_pointer". *)
-      L.Llet (Strict, Pgenval, const_true, Lconst (Const_pointer 1),
+      L.Llet (Strict, Pgenval, const_true, Lconst (Const_base (Const_int 1)),
         (L.Llet (Strict, Pgenval, cond, arg1,
           (Lifthenelse (Lvar cond, Lvar const_true, arg2))))))
       (fun lam -> lam)
@@ -462,14 +461,14 @@ let rec simplify_primitive env (prim : L.primitive) args loc =
     (* CR mshinwell: This recursion is a bit ugly.  Factor out a helper
        function for constructing if-then-else-like switches? *)
     prepare env (
-      L.Llet (Strict, Pgenval, const_false, Lconst (Const_pointer 0),
+      L.Llet (Strict, Pgenval, const_false, Lconst (Const_base (Const_int 0)),
         (L.Llet (Strict, Pgenval, cond, arg1,
           (Lifthenelse (Lvar cond, arg2, Lvar const_false))))))
       (fun lam -> lam)
   | (Psequand | Psequor), _ ->
     Misc.fatal_error "Psequand / Psequor must have exactly two arguments"
   | Pidentity, [arg] -> arg
-  | Pignore, [_arg] -> L.Lconst (Const_pointer 0)
+  | Pignore, [_arg] -> L.Lconst (Const_base (Const_int 0))
   | Pdirapply, [funct; arg]
   | Prevapply, [arg; funct] ->
     let apply : L.lambda_apply =

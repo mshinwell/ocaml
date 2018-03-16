@@ -161,12 +161,6 @@ let rec declare_const t (const : Lambda.structured_constant)
     let c = Targetint.of_int64 (Int64.of_nativeint c) in
     register_const t (Static_part.Boxed_nativeint (Const c))
       "nativeint"
-  | Const_pointer c ->
-    (* XCR pchambart: the kind needs to be propagated somewhere to
-       say that this value must be scanned
-       mshinwell: I don't think it does need to be scanned?
-    *)
-    Tagged_immediate (Immediate.int (Targetint.OCaml.of_int c)), "pointer"
   | Const_immstring c ->
     register_const t (Static_part.Immutable_string (Const c)) "immstring"
   | Const_float_array c ->

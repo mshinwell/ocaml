@@ -52,15 +52,16 @@ let which_function_parameters_can_we_specialise ~params ~args
 
 *)
 
+(* XXX Needs fixing
 let fold_over_projections_of_vars_bound_by_closures
       ~closure_id_being_applied
       ~lhs_of_application
-      ~(function_decls : Flambda.function_declarations)
+      ~(function_decls : Flambda.Function_declarations.t)
       ~init
       ~f =
   let function_names = Variable.Map.keys function_decls.funs in
   Variable.Map.fold
-    (fun _function_var (function_decl : Flambda.function_declaration) acc ->
+    (fun _function_var (function_decl : Flambda.Function_declaration.t) acc ->
        let (--) = Variable.Set.diff in
        let function_free_vars = function_decl.free_variables in
        let function_params = Parameter.Set.vars function_decl.params in
@@ -81,6 +82,7 @@ let fold_over_projections_of_vars_bound_by_closures
          acc)
     function_decls.funs
     init
+*)
 
 let set_inline_attribute_on_all_apply body inline specialise =
   Flambda.Expr.Mappers.Toplevel_only.map_expr (function

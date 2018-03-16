@@ -634,17 +634,10 @@ let rec subst s lam =
       Lletrec(List.map (subst_decl s) decl, subst s body)
   | Lprim(p, args, loc) -> Lprim(p, subst_list s args, loc)
   | Lswitch(arg, sw, loc) ->
-<<<<<<< HEAD
-      Lswitch(subst arg,
-              {sw with sw_consts = List.map subst_case sw.sw_consts;
-                       sw_blocks = List.map subst_block_case sw.sw_blocks;
-                       sw_failaction = subst_opt  sw.sw_failaction; },
-=======
       Lswitch(subst s arg,
               {sw with sw_consts = List.map (subst_case s) sw.sw_consts;
-                       sw_blocks = List.map (subst_case s) sw.sw_blocks;
+                       sw_blocks = List.map (subst_case' s) sw.sw_blocks;
                        sw_failaction = subst_opt s sw.sw_failaction; },
->>>>>>> ocaml/trunk
               loc)
   | Lstringswitch (arg,cases,default,loc) ->
       Lstringswitch
@@ -665,31 +658,17 @@ let rec subst s lam =
       assert(not (Ident.Map.mem id s));
       Lassign(id, subst s e)
   | Lsend (k, met, obj, args, loc) ->
-<<<<<<< HEAD
-      Lsend (k, subst met, subst obj, List.map subst args, loc)
-  | Levent (lam, evt) -> Levent (subst lam, evt)
-  | Lifused (v, e) -> Lifused (v, subst e)
-  and subst_decl (id, exp) = (id, subst exp)
-  and subst_case (key, case) = (key, subst case)
-  and subst_block_case (key, case) = (key, subst case)
-  and subst_strcase (key, case) = (key, subst case)
-  and subst_opt = function
-    | None -> None
-    | Some e -> Some (subst e)
-  in subst lam
-=======
       Lsend (k, subst s met, subst s obj, subst_list s args, loc)
   | Levent (lam, evt) -> Levent (subst s lam, evt)
   | Lifused (v, e) -> Lifused (v, subst s e)
 and subst_list s l = List.map (subst s) l
 and subst_decl s (id, exp) = (id, subst s exp)
 and subst_case s (key, case) = (key, subst s case)
+and subst_case' s (key, case) = (key, subst s case)
 and subst_strcase s (key, case) = (key, subst s case)
 and subst_opt s = function
   | None -> None
   | Some e -> Some (subst s e)
-
->>>>>>> ocaml/trunk
 
 let rec map f lam =
   let lam =

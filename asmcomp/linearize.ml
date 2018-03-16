@@ -410,7 +410,6 @@ Format.eprintf "Body of Icatch binding %a will continue at label %d\n%!"
 
 let fundecl f =
   exit_label := [];
-  let fun_body = linear f.Mach.fun_body end_instr in
   { fun_name = f.Mach.fun_name;
     fun_body = linear f.Mach.fun_body end_instr;
     fun_fast = not (List.mem Cmm.Reduce_code_size f.Mach.fun_codegen_options);
