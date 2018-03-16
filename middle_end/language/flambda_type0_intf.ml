@@ -418,7 +418,7 @@ module type S = sig
       shared sub-components. *)
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
 
-  val print_ty_value
+  val print_ty_value_with_cache
      : cache:Printing_cache.t
     -> Format.formatter
     -> ty_value

@@ -425,14 +425,17 @@ end) = struct
     | String str_infos ->
       Format.fprintf ppf "@[(Strings (%a))@]" String_info.Set.print str_infos
 
-  and print_ty_value ~cache ppf (ty : ty_value) =
+  and print_ty_value_with_cache ~cache ppf (ty : ty_value) =
     print_ty_generic (print_of_kind_value ~cache) ppf ty
+
+  and print_ty_value ppf (ty : ty_value) =
+    print_ty_value_with_cache ~cache:(Printing_cache.create ()) ppf ty
 
   and print_ty_value_array ~cache ppf ty_values =
     Format.fprintf ppf "@[[| %a |]@]"
       (Format.pp_print_list
         ~pp_sep:(fun ppf () -> Format.pp_print_string ppf ";@ ")
-        (print_ty_value ~cache))
+        (print_ty_value_with_cache ~cache))
       (Array.to_list ty_values)
 
   and print_closures ~cache ppf (closures : closures) =
@@ -441,7 +444,7 @@ end) = struct
 
   and print_closures_entry ~cache ppf (entry : closures_entry) =
     Format.fprintf ppf "@[(set_of_closures@ %a)@]"
-      (print_ty_fabricated ~cache) entry.set_of_closures
+      (print_ty_fabricated_with_cache ~cache) entry.set_of_closures
 
   and print_inlinable_function_declaration_with_cache ~cache ppf
         (decl : inlinable_function_declaration) =
@@ -528,10 +531,10 @@ end) = struct
           @[(closures@ %a)@]@ \
           @[(closure_elements@ %a)@])@]"
       (print_extensibility (
-          Closure_id.Map.print (print_ty_fabricated ~cache)))
+          Closure_id.Map.print (print_ty_fabricated_with_cache ~cache)))
         set.closures
       (print_extensibility (
-          Var_within_closure.Map.print (print_ty_value ~cache)))
+          Var_within_closure.Map.print (print_ty_value_with_cache ~cache)))
         set.closure_elements
 
   and print_closure ~cache ppf (closure : closure) =
@@ -551,18 +554,22 @@ end) = struct
     | Set_of_closures set -> print_set_of_closures ~cache ppf set
     | Closure closure -> print_closure ~cache ppf closure
 
-  and print_ty_fabricated ~cache ppf (ty : ty_fabricated) =
+  and print_ty_fabricated_with_cache ~cache ppf (ty : ty_fabricated) =
     print_ty_generic (print_of_kind_fabricated ~cache) ppf ty
+
+  and print_ty_fabricated ppf (ty : ty_fabricated) =
+    print_ty_fabricated_with_cache ~cache:(Printing_cache.create ()) ppf ty
 
   and print_descr ~cache ppf (descr : descr) =
     match descr with
     | Value ty ->
-      Format.fprintf ppf "@[(Value@ (%a))@]" (print_ty_value ~cache) ty
+      Format.fprintf ppf "@[(Value@ (%a))@]"
+        (print_ty_value_with_cache ~cache) ty
     | Naked_number (ty, _kind) ->
       Format.fprintf ppf "@[(Naked_number@ (%a))@]" print_ty_naked_number ty
     | Fabricated ty ->
       Format.fprintf ppf "@[(Fabricated@ (%a))@]"
-        (print_ty_fabricated ~cache) ty
+        (print_ty_fabricated_with_cache ~cache) ty
 
   and print_with_cache ~cache ppf (t : t) =
     match t.phantom with
@@ -598,7 +605,7 @@ end) = struct
           (Scope_level.Map.print Name.Set.print) levels_to_names
           Name.Set.print existentials
           Freshening.print existential_freshening
-          (Name.Map.print Name.print) canonical_names_to_aliases)
+          (Name.Map.print Name.Set.print) canonical_names_to_aliases)
 
   let print_typing_environment ppf env =
     print_typing_environment_with_cache ~cache:(Printing_cache.create ())
@@ -764,22 +771,25 @@ end) = struct
     }
 
   let add_alias_typing_environment env ~canonical_name ~alias =
-    if not (Name.Map.mem canonical_name t.names_to_types) then begin
+    if not (Name.Map.mem canonical_name env.names_to_types) then begin
       Misc.fatal_errorf "Cannot add alias %a of canonical name %a: the \
           canonical name is not bound in the environment"
         Name.print alias
         Name.print canonical_name
     end;
-    if not (Name.Map.mem canonical_name t.names_to_types) then begin
+    if not (Name.Map.mem canonical_name env.names_to_types) then begin
       Misc.fatal_errorf "Cannot add alias %a of canonical name %a: the \
           alias is not bound in the environment"
         Name.print alias
         Name.print canonical_name
     end;
     let canonical_names_to_aliases =
-      Name.Map.add canonical_name alias t.canonical_names_to_aliases
+      Name.Map.update canonical_name (function
+          | None -> Some (Name.Set.singleton alias)
+          | Some aliases -> Some (Name.Set.add alias aliases))
+        env.canonical_names_to_aliases
     in
-    { t with
+    { env with
       canonical_names_to_aliases;
     }
 
@@ -1826,7 +1836,7 @@ end;
     | Resolved
     | Still_unresolved
 
-  let resolve_aliases_on_ty0 (type a) env ~force_to_kind ~print_ty
+  let resolve_aliases_on_ty0 (type a) env ~force_to_kind
         (ty : a ty) : (a ty) * (Name.t option) * still_unresolved =
     let rec resolve_aliases names_seen ~canonical_name (ty : a ty) =
       let resolve (name : Name_or_export_id.t) : _ * _ * still_unresolved =
@@ -1876,12 +1886,12 @@ end;
     | Still_unresolved -> unknown, canonical_name
 
   (* CR mshinwell: choose this function or the one above *)
-  let resolve_aliases_and_squash_unresolved_names_on_ty' env ~kind
+  let resolve_aliases_and_squash_unresolved_names_on_ty' env ~kind:_
         ~print_ty ~force_to_kind ~unknown:_ ty
         : _ unknown_or_join * (Name.t option) =
     let ty, canonical_name, _still_unresolved =
       try resolve_aliases_on_ty0 env ~force_to_kind ty
-      with Misc.fatal_error -> begin
+      with Misc.Fatal_error -> begin
         Format.eprintf "\n%sContext is: \
             resolve_aliases_and_squash_unresolved_names_on_ty':%s\
             @ %a@ Environment:@ %a\n"
@@ -2074,6 +2084,8 @@ end;
 
     val force_to_kind : t -> of_kind_foo ty
 
+    val print_ty : Format.formatter -> of_kind_foo ty -> unit
+
     val meet_of_kind_foo
        : typing_environment
       -> typing_environment
@@ -2174,6 +2186,7 @@ end;
           ~kind:S.kind
           ~force_to_kind:S.force_to_kind
           ~unknown:(No_alias Unknown)
+          ~print_ty:S.print_ty
           or_alias1
       in
       let unknown_or_join2, canonical_name2 =
@@ -2181,6 +2194,7 @@ end;
           ~kind:S.kind
           ~force_to_kind:S.force_to_kind
           ~unknown:(No_alias Unknown)
+          ~print_ty:S.print_ty
           or_alias2
       in
       match canonical_name1, canonical_name2 with
@@ -2234,6 +2248,7 @@ end;
           ~kind:S.kind
           ~force_to_kind:S.force_to_kind
           ~unknown:(No_alias Unknown)
+          ~print_ty:S.print_ty
           or_alias1
       in
       let unknown_or_join2, canonical_name2 =
@@ -2241,6 +2256,7 @@ end;
           ~kind:S.kind
           ~force_to_kind:S.force_to_kind
           ~unknown:(No_alias Unknown)
+          ~print_ty:S.print_ty
           or_alias2
       in
       let normal_case ~first_name_to_bind ~first_name_to_bind_level
@@ -2301,6 +2317,7 @@ end;
 
     let to_type ty : t = { descr = Value ty; phantom = None; }
     let force_to_kind = force_to_kind_value
+    let print_ty = print_ty_value
 
     let meet_immediate_case _env1 _env2
           ({ env_extension = env_extension1; } : immediate_case)
@@ -2744,6 +2761,8 @@ end;
 
     let force_to_kind = force_to_kind_naked_immediate
 
+    let print_ty = print_ty_naked_number
+
     let meet_of_kind_foo _env1 _env2
           (of_kind1 : Immediate.Set.t of_kind_naked_number)
           (of_kind2 : Immediate.Set.t of_kind_naked_number)
@@ -2781,6 +2800,7 @@ end;
       }
 
     let force_to_kind = force_to_kind_naked_float
+    let print_ty = print_ty_naked_number
 
     let meet_of_kind_foo _env1 _env2
           (of_kind1 : Float_by_bit_pattern.Set.t of_kind_naked_number)
@@ -2817,6 +2837,7 @@ end;
       }
 
     let force_to_kind = force_to_kind_naked_int32
+    let print_ty = print_ty_naked_number
 
     let meet_of_kind_foo _env1 _env2
           (of_kind1 : Int32.Set.t of_kind_naked_number)
@@ -2853,6 +2874,7 @@ end;
       }
 
     let force_to_kind = force_to_kind_naked_int64
+    let print_ty = print_ty_naked_number
 
     let meet_of_kind_foo _env1 _env2
           (of_kind1 : Int64.Set.t of_kind_naked_number)
@@ -2889,6 +2911,7 @@ end;
       }
 
     let force_to_kind = force_to_kind_naked_nativeint
+    let print_ty = print_ty_naked_number
 
     let meet_of_kind_foo _env1 _env2
           (of_kind1 : Targetint.Set.t of_kind_naked_number)
@@ -2925,6 +2948,7 @@ end;
       }
 
     let force_to_kind = force_to_kind_fabricated
+    let print_ty = print_ty_fabricated
 
     (* CR mshinwell: We need to work out how to stop direct call
        surrogates from being dropped e.g. when in a second round, a
@@ -4119,20 +4143,21 @@ Format.eprintf "Cutting environment at %a: %a\n%!"
 let result =
       (* XXX we actually need to rename in the domain of [names_to_types] *)
       { resolver = t.resolver;
+        canonical_names_to_aliases = t.canonical_names_to_aliases;
         names_to_types = t.names_to_types;
         levels_to_names = t.levels_to_names;
         existentials = Name.Set.union t.existentials new_existentials;
         existential_freshening;
       }
-
-  let add_alias = add_alias_typing_environment
-  let aliases = aliases_typing_environment
 in
 (*
 Format.eprintf "Result is: %a\n%!"
   print_typing_environment result;
 *)
       result
+
+  let add_alias = add_alias_typing_environment
+  let aliases = aliases_typing_environment
 
     let meet = Meet_and_join.meet_typing_environment
     let join = Meet_and_join.join_typing_environment
@@ -4153,6 +4178,7 @@ Format.eprintf "Result is: %a\n%!"
         Freshening.restrict_to_names t.existential_freshening allowed
       in
       { resolver = t.resolver;
+        canonical_names_to_aliases = t.canonical_names_to_aliases;
         names_to_types;
         levels_to_names;
         existentials;
