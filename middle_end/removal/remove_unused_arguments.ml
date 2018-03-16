@@ -37,7 +37,11 @@ let remove_params unused (fun_decl: Flambda.Function_declaration.t) =
   in
   let body =
     List.fold_left (fun body param ->
+<<<<<<< HEAD:middle_end/removal/remove_unused_arguments.ml
         Flambda.Expr.create_let (Parameter.var param) (Const (Const_pointer 0)) body)
+=======
+        Flambda.create_let (Parameter.var param) (Const (Int 0)) body)
+>>>>>>> ocaml/trunk:middle_end/remove_unused_arguments.ml
       fun_decl.body
       unused_params
   in

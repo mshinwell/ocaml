@@ -412,8 +412,8 @@ let fundecl f =
   exit_label := [];
   let fun_body = linear f.Mach.fun_body end_instr in
   { fun_name = f.Mach.fun_name;
-    fun_body;
-    fun_fast = f.Mach.fun_fast;
+    fun_body = linear f.Mach.fun_body end_instr;
+    fun_fast = not (List.mem Cmm.Reduce_code_size f.Mach.fun_codegen_options);
     fun_dbg  = f.Mach.fun_dbg;
     fun_spacetime_shape = f.Mach.fun_spacetime_shape;
   }
