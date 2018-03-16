@@ -294,9 +294,15 @@ end) = struct
     match or_alias with
     | No_alias descr -> print_descr ppf descr
     | Equals name ->
-      Format.fprintf ppf "@[(= %a)@]" Name.print name
+      Format.fprintf ppf "@[(%s=%s %a)@]"
+        (Misc_color.bold_red ())
+        (Misc_color.reset ())
+        Name.print name
     | Type export_id ->
-      Format.fprintf ppf "@[(=export_id %a)@]" Export_id.print export_id
+      Format.fprintf ppf "@[(%s=export_id%s %a)@]"
+        (Misc_color.bold_red ())
+        (Misc_color.reset ())
+        Export_id.print export_id
 
   let print_unknown_or_join print_contents ppf (o : _ unknown_or_join) =
     let colour = Misc_color.bold_red () in
@@ -362,10 +368,18 @@ end) = struct
       (Array.to_list fields)
 
   and print_singleton_block ~cache ppf { equations; fields; } =
-    Format.fprintf ppf "@[((equations@ %a)@ (fields@ %a))@]"
-      (Misc.Stdlib.Option.print (print_typing_environment_with_cache ~cache))
-      equations
-      (print_fields ~cache) fields
+    let no_equations =
+      match equations with
+      | None -> true
+      | Some equations -> Name.Map.is_empty equations.names_to_types
+    in
+    if no_equations then
+      print_fields ~cache ppf fields
+    else
+      Format.fprintf ppf "@[((equations@ %a)@ (fields@ %a))@]"
+        (Misc.Stdlib.Option.print (print_typing_environment_with_cache ~cache))
+        equations
+        (print_fields ~cache) fields
 
   and print_block_cases ~cache ppf ((Join { by_length; }) : block_cases) =
     match Targetint.OCaml.Map.get_singleton by_length with
@@ -398,7 +412,7 @@ end) = struct
                    | None -> true
                    | Some env -> Name.Map.is_empty env.names_to_types)
                  immediates ->
-        Format.fprintf ppf "@[(immediates@ @[(%a)@])@]"
+        Format.fprintf ppf "@[%a@]"
           Immediate.Set.print (Immediate.Map.keys immediates)
       | _ ->
         match is_int, get_tag with
@@ -562,12 +576,12 @@ end) = struct
               Name.Map.is_empty equations.names_to_types)
           discriminant_map
       in
-      if no_equations then
+      if not no_equations then
         Format.fprintf ppf "@[(Discriminant@ %a)@]"
           (Discriminant.Map.print (print_discriminant_case ~cache))
           discriminant_map
       else
-        Format.fprintf ppf "@[(Discriminant@ %a)@]"
+        Format.fprintf ppf "@[%a@]"
           Discriminant.Set.print (Discriminant.Map.keys discriminant_map)
     | Set_of_closures set -> print_set_of_closures ~cache ppf set
     | Closure closure -> print_closure ~cache ppf closure
@@ -581,12 +595,12 @@ end) = struct
   and print_descr ~cache ppf (descr : descr) =
     match descr with
     | Value ty ->
-      Format.fprintf ppf "@[(Value@ %a)@]"
+      Format.fprintf ppf "@[(Val@ %a)@]"
         (print_ty_value_with_cache ~cache) ty
     | Naked_number (ty, _kind) ->
-      Format.fprintf ppf "@[(Naked_number@ %a)@]" print_ty_naked_number ty
+      Format.fprintf ppf "@[(Naked@ %a)@]" print_ty_naked_number ty
     | Fabricated ty ->
-      Format.fprintf ppf "@[(Fabricated@ %a)@]"
+      Format.fprintf ppf "@[(Fab@ %a)@]"
         (print_ty_fabricated_with_cache ~cache) ty
 
   and print_with_cache ~cache ppf (t : t) =

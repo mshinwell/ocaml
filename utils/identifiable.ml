@@ -245,12 +245,6 @@ end
 module Make_set (T : Thing_no_hash) = struct
   include Set.Make (T)
 
-  let print ppf t =
-    Format.fprintf ppf "@[<1>(@[%a@])@]"
-      (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print) (elements t)
-
-  let to_string s = Format.asprintf "%a" print s
-
   let of_list l = match l with
     | [] -> empty
     | [t] -> singleton t
@@ -265,6 +259,16 @@ module Make_set (T : Thing_no_hash) = struct
     match elements t with
     | [elt] -> Some elt
     | _ -> None
+
+  let print ppf t =
+    match get_singleton t with
+    | None ->
+      Format.fprintf ppf "@[<1>(@[%a@])@]"
+        (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print)
+        (elements t)
+    | Some elt -> T.print ppf elt
+
+  let to_string s = Format.asprintf "%a" print s
 end
 
 module Make_tbl (T : Thing) = struct
