@@ -836,12 +836,12 @@ module Make (S : Unboxing_spec) = struct
                   in
                   T.block tag ~fields:(Array.of_list fields), initial_env
                 in
-                let env_extension =
+                let equations =
                   T.Typing_environment.add initial_env
                     (Name.var unboxee) scope_level unboxee_ty_refinement
                 in
                 let discr = Discriminant.of_tag tag in
-                Discriminant.Map.add discr env_extension by_tag)
+                Discriminant.Map.add discr equations by_tag)
               unboxing_spec.block_sizes_by_tag
               Discriminant.Map.empty
           in

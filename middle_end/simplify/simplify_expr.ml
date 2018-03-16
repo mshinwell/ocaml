@@ -107,7 +107,7 @@ Format.eprintf "Simplifying let %a = %a\n%!"
     let new_judgements = R.get_typing_judgements r in
     Format.eprintf "New judgements:@ %a\n%!"
       T.Typing_environment.print new_judgements;
-    E.extend_typing_environment env ~env_extension:new_judgements
+    E.extend_typing_environment env ~equations:new_judgements
   in
 (*
 Format.eprintf "Variable %a (previously: %a) bound to %a in env\n%!"
@@ -280,10 +280,10 @@ Format.eprintf "Switch has %d arms\n%!" (Discriminant.Map.cardinal arms);
       simplify_apply_cont env r cont ~trap_action:None ~args:[]
     | None ->
       let arms, r =
-        Discriminant.Map.fold (fun arm (env_extension, cont) (arms, r) ->
+        Discriminant.Map.fold (fun arm (equations, cont) (arms, r) ->
             let cont, r =
               let scrutinee_ty = T.this_discriminant arm in
-              let env = E.extend_typing_environment env ~env_extension in
+              let env = E.extend_typing_environment env ~equations in
               let env =
                 match scrutinee with
                 | Var scrutinee ->
@@ -342,8 +342,8 @@ let environment_for_let_cont_handler ~env _cont
       end;
 *)
 (*
-      let env_extension, ty =
-        let env_extension, ty =
+      let equations, ty =
+        let equations, ty =
           (* CR mshinwell: More thought required.  The order of arguments
              to [meet] is important: if there are two [Type_of]s, then the
              one from the first type is the one which sticks (as we want
@@ -354,9 +354,9 @@ let environment_for_let_cont_handler ~env _cont
             (E.get_typing_environment env, param_ty)
             (E.get_typing_environment env, arg_ty)
         in
-        env_extension, ty
+        equations, ty
       in
-      let env = E.extend_typing_environment env ~env_extension in
+      let env = E.extend_typing_environment env ~equations in
       let arg_ty =
         T.adjust_variables arg_ty ~f:(fun var : T.variable_adjustment ->
           Keep (Freshening.apply_variable freshening var))

@@ -163,11 +163,11 @@ end) = struct
     (* Environment extensions have an [option] type so that the information
        required to create a typing environment isn't required for various
        trivial functions such as [these_tagged_immediates]. *)
-    env_extension : typing_environment option;
+    equations : typing_environment option;
   }
  
   and singleton_block = {
-    env_extension : typing_environment option;
+    equations : typing_environment option;
     fields : t mutable_or_immutable array;
   }
 
@@ -206,7 +206,7 @@ end) = struct
     body : expr;
     free_names_in_body : Name_occurrences.t;
     result : t list;
-    result_env_extension : typing_environment option;
+    result_equations : typing_environment option;
     stub : bool;
     dbg : Debuginfo.t;
     inline : inline_attribute;
@@ -221,7 +221,7 @@ end) = struct
   and non_inlinable_function_declarations = {
     params : t list;
     result : t list;
-    result_env_extension : typing_environment option;
+    result_equations : typing_environment option;
     direct_call_surrogate : Closure_id.t option;
   }
 
@@ -244,7 +244,7 @@ end) = struct
     | Nativeint : Targetint.Set.t -> Targetint.Set.t of_kind_naked_number
 
   and discriminant_case = {
-    env_extension : typing_environment option;
+    equations : typing_environment option;
   }
 
   and of_kind_fabricated =
@@ -346,10 +346,10 @@ end) = struct
         print_ty_naked_number i
 
   let rec print_immediate_case ~cache ppf
-        ({ env_extension; } : immediate_case) =
-    Format.fprintf ppf "@[(env_extension@ %a)@]"
+        ({ equations; } : immediate_case) =
+    Format.fprintf ppf "@[(equations@ %a)@]"
       (Misc.Stdlib.Option.print (print_typing_environment_with_cache ~cache))
-      env_extension
+      equations
 
   and print_fields ~cache ppf (fields : t mutable_or_immutable array) =
     Format.fprintf ppf "@[[| %a |]@]"
@@ -358,10 +358,10 @@ end) = struct
         (print_mutable_or_immutable (print_with_cache ~cache)))
       (Array.to_list fields)
 
-  and print_singleton_block ~cache ppf { env_extension; fields; } =
-    Format.fprintf ppf "@[((env_extension@ %a)@ (fields@ %a))@]"
+  and print_singleton_block ~cache ppf { equations; fields; } =
+    Format.fprintf ppf "@[((equations@ %a)@ (fields@ %a))@]"
       (Misc.Stdlib.Option.print (print_typing_environment_with_cache ~cache))
-      env_extension
+      equations
       (print_fields ~cache) fields
 
   and print_block_cases ~cache ppf ((Join { by_length; }) : block_cases) =
@@ -390,8 +390,8 @@ end) = struct
           when Tag.Map.is_empty blocks
             && not (Immediate.Map.is_empty immediates)
             && Immediate.Map.for_all
-                 (fun _imm ({ env_extension; } : immediate_case) ->
-                   match env_extension with
+                 (fun _imm ({ equations; } : immediate_case) ->
+                   match equations with
                    | None -> true
                    | Some env -> Name.Map.is_empty env.names_to_types)
                  immediates ->
@@ -459,7 +459,7 @@ end) = struct
           @[(body@ %a)@]@ \
           @[(free_names_in_body@ %a)@]@ \
           @[(result@ (%a))@]@ \
-          @[(result_env_extension@ (%a))@]@ \
+          @[(result_equations@ (%a))@]@ \
           @[(stub@ %b)@]@ \
           @[(dbg@ %a)@]@ \
           @[(inline@ %a)@]@ \
@@ -485,7 +485,7 @@ end) = struct
             Format.fprintf ppf "%a"
               print ty)) decl.result
         (Misc.Stdlib.Option.print (print_typing_environment_with_cache ~cache))
-          decl.result_env_extension
+          decl.result_equations
         decl.stub
         Debuginfo.print_compact decl.dbg
         print_inline_attribute decl.inline
@@ -541,22 +541,22 @@ end) = struct
     Format.fprintf ppf "@[(Closure (function_decls@ %a))@]"
       (print_function_declarations ~cache) closure.function_decls
 
-  and print_discriminant_case ~cache ppf ({ env_extension; } : discriminant_case) =
-    Format.fprintf ppf "@[(env_extension@ %a)@]"
+  and print_discriminant_case ~cache ppf ({ equations; } : discriminant_case) =
+    Format.fprintf ppf "@[(equations@ %a)@]"
       (Misc.Stdlib.Option.print (print_typing_environment_with_cache ~cache))
-        env_extension
+        equations
 
   and print_of_kind_fabricated ~cache ppf (o : of_kind_fabricated) =
     match o with
     | Discriminant discriminant_map ->
       let no_equations =
         Discriminant.Map.for_all
-          (fun _ ({ env_extension; } : discriminant_case) ->
+          (fun _ ({ equations; } : discriminant_case) ->
             (* CR mshinwell: add [is_empty_typing_environment] *)
-            match env_extension with
+            match equations with
             | None -> true
-            | Some env_extension ->
-              Name.Map.is_empty env_extension.names_to_types)
+            | Some equations ->
+              Name.Map.is_empty equations.names_to_types)
           discriminant_map
       in
       if no_equations then
@@ -667,7 +667,7 @@ end) = struct
               Targetint.OCaml.Map.fold
                 (fun _length (singleton : singleton_block) acc ->
                   let acc =
-                    free_names_of_env_extension singleton.env_extension acc
+                    free_names_of_equations singleton.equations acc
                   in
                   Array.fold_left (fun acc (field : _ mutable_or_immutable) ->
                       match field with
@@ -684,7 +684,7 @@ end) = struct
         | Unknown -> acc
         | Known immediates ->
           Immediate.Map.fold (fun _imm (case : immediate_case) acc ->
-              free_names_of_env_extension case.env_extension acc)
+              free_names_of_equations case.equations acc)
             immediates
             acc
       in
@@ -716,8 +716,8 @@ end) = struct
     match of_kind with
     | Discriminant discriminant_map ->
       Discriminant.Map.fold
-        (fun _discriminant ({ env_extension; } : discriminant_case) acc ->
-          free_names_of_env_extension env_extension acc)
+        (fun _discriminant ({ equations; } : discriminant_case) acc ->
+          free_names_of_equations equations acc)
         discriminant_map
         acc
     | Set_of_closures set ->
@@ -765,10 +765,10 @@ end) = struct
     let free_names = Name.Set.diff all_names bound_names in
     Name.Set.union free_names acc
 
-  and free_names_of_env_extension env_extension acc =
-    match env_extension with
+  and free_names_of_equations equations acc =
+    match equations with
     | None -> acc
-    | Some env_extension -> free_names_of_typing_environment env_extension acc
+    | Some equations -> free_names_of_typing_environment equations acc
 
   let free_names_set t =
     free_names t Name.Set.empty
@@ -1391,7 +1391,7 @@ end;
       let immediates =
         Immediate.Set.fold (fun imm map ->
             let case : immediate_case =
-              { env_extension = None;
+              { equations = None;
               }
             in
             Immediate.Map.add imm case map)
@@ -1418,8 +1418,8 @@ end;
       bottom (K.value ())
     else
       let immediates =
-        Immediate.Map.map (fun env_extension : immediate_case ->
-            { env_extension = Some env_extension;
+        Immediate.Map.map (fun equations : immediate_case ->
+            { equations = Some equations;
             })
           env_map
       in
@@ -1456,28 +1456,28 @@ end;
   let these_boxed_int64s f = box_int64 (these_naked_int64s f)
   let these_boxed_nativeints f = box_nativeint (these_naked_nativeints f)
 
-  let these_discriminants_as_ty_fabricated discriminants_to_env_extensions : ty_fabricated =
+  let these_discriminants_as_ty_fabricated discriminants_to_equationss : ty_fabricated =
     let discriminant_map =
       Discriminant.Map.map (fun env : discriminant_case ->
-          { env_extension = Some env; })
-        discriminants_to_env_extensions
+          { equations = Some env; })
+        discriminants_to_equationss
     in
     No_alias (Join [Discriminant discriminant_map])
 
-  let these_discriminants discriminants_to_env_extensions : t =
+  let these_discriminants discriminants_to_equationss : t =
     { descr = Fabricated (
-        these_discriminants_as_ty_fabricated discriminants_to_env_extensions);
+        these_discriminants_as_ty_fabricated discriminants_to_equationss);
       phantom = None;
     }
 
   let this_discriminant_as_ty_fabricated discriminant =
-    let discriminants_to_env_extensions =
+    let discriminants_to_equationss =
       Discriminant.Map.add discriminant None Discriminant.Map.empty
     in
     let discriminant_map =
       Discriminant.Map.map (fun env : discriminant_case ->
-          { env_extension = env; })
-        discriminants_to_env_extensions
+          { equations = env; })
+        discriminants_to_equationss
     in
     No_alias (Join [Discriminant discriminant_map])
 
@@ -1535,7 +1535,7 @@ end;
         (fun _index : _ mutable_or_immutable -> Mutable)
     in
     let singleton_block : singleton_block =
-      { env_extension = None;
+      { equations = None;
         fields;
       }
     in
@@ -1576,7 +1576,7 @@ end;
           fields
       in
       let singleton_block : singleton_block =
-        { env_extension = None;
+        { equations = None;
           fields;
         }
       in
@@ -1622,7 +1622,7 @@ end;
           fields
       in
       let singleton_block : singleton_block =
-        { env_extension = None;
+        { equations = None;
           fields;
         }
       in
@@ -1661,7 +1661,7 @@ end;
           fields
       in
       let singleton_block : singleton_block =
-        { env_extension = None;
+        { equations = None;
           fields;
         }
       in
@@ -1974,7 +1974,7 @@ end;
 
   let create_inlinable_function_declaration ~is_classic_mode ~closure_origin
         ~continuation_param ~exn_continuation_param
-        ~params ~body ~result ~result_env_extension ~stub ~dbg ~inline
+        ~params ~body ~result ~result_equations ~stub ~dbg ~inline
         ~specialise ~is_a_functor ~invariant_params ~size ~direct_call_surrogate
         ~my_closure : function_declarations =
     Inlinable {
@@ -1986,7 +1986,7 @@ end;
       body;
       code_id = Code_id.create (Compilation_unit.get_current_exn ());
       free_names_in_body = Expr.free_names body;
-      result_env_extension;
+      result_equations;
       result;
       stub;
       dbg;
@@ -2000,12 +2000,12 @@ end;
     }
 
   let create_non_inlinable_function_declaration ~params ~result
-        ~result_env_extension ~direct_call_surrogate
+        ~result_equations ~direct_call_surrogate
         : function_declarations =
     let decl : non_inlinable_function_declarations =
       { params;
         result;
-        result_env_extension;
+        result_equations;
         direct_call_surrogate;
       }
     in
@@ -2071,14 +2071,14 @@ end;
           | Some (_, Join { by_length; }) ->
             match Targetint.OCaml.Map.get_singleton by_length with
             | None -> create_typing_environment ()
-            | Some (_, singleton_block) -> singleton_block.env_extension
+            | Some (_, singleton_block) -> singleton_block.equations
           end
       end
     | Naked_number _ -> create_typing_environment ()
     | Fabricated (No_alias (Join [Tag map])) ->
       begin match Tag.Map.get_singleton map with
       | None -> create_typing_environment ()
-      | Some (_, discriminant_case) -> discriminant_case.env_extension
+      | Some (_, discriminant_case) -> discriminant_case.equations
       end
     | _ -> create_typing_environment ()
 *)
@@ -2337,39 +2337,39 @@ end;
     let print_ty = print_ty_value
 
     let meet_immediate_case _env1 _env2
-          ({ env_extension = env_extension1; } : immediate_case)
-          ({ env_extension = env_extension2; } : immediate_case)
+          ({ equations = equations1; } : immediate_case)
+          ({ equations = equations2; } : immediate_case)
           : immediate_case =
-      let env_extension =
-        match env_extension1, env_extension2 with
+      let equations =
+        match equations1, equations2 with
         | None, None -> None
-        | Some env_extension, None | None, Some env_extension ->
-          Some env_extension
-        | Some env_extension1, Some env_extension2 ->
-          let env_extension =
-            Meet_and_join.meet_typing_environment env_extension1 env_extension2
+        | Some equations, None | None, Some equations ->
+          Some equations
+        | Some equations1, Some equations2 ->
+          let equations =
+            Meet_and_join.meet_typing_environment equations1 equations2
           in
-          Some env_extension
+          Some equations
       in
-      { env_extension; }
+      { equations; }
 
     let join_immediate_case _env1 _env2
-          ({ env_extension = env_extension1; } : immediate_case)
-          ({ env_extension = env_extension2; } : immediate_case)
+          ({ equations = equations1; } : immediate_case)
+          ({ equations = equations2; } : immediate_case)
           : immediate_case =
       (* CR mshinwell: share with the meet function above *)
-      let env_extension =
-        match env_extension1, env_extension2 with
+      let equations =
+        match equations1, equations2 with
         | None, None -> None
-        | Some env_extension, None | None, Some env_extension ->
-          Some env_extension
-        | Some env_extension1, Some env_extension2 ->
-          let env_extension =
-            Meet_and_join.join_typing_environment env_extension1 env_extension2
+        | Some equations, None | None, Some equations ->
+          Some equations
+        | Some equations1, Some equations2 ->
+          let equations =
+            Meet_and_join.join_typing_environment equations1 equations2
           in
-          Some env_extension
+          Some equations
       in
-      { env_extension; }
+      { equations; }
 
     let meet_immediates env1 env2 immediates1 immediates2 : _ Or_bottom.t =
       let immediates =
@@ -2388,22 +2388,22 @@ end;
         immediates2
 
     let meet_singleton_block env1 env2
-          ({ env_extension = env_extension1;
+          ({ equations = equations1;
              fields = fields1;
            } : singleton_block)
-          ({ env_extension = env_extension2;
+          ({ equations = equations2;
              fields = fields2;
            } : singleton_block) : singleton_block * judgements_from_meet =
-      let env_extension =
-        match env_extension1, env_extension2 with
+      let equations =
+        match equations1, equations2 with
         | None, None -> None
-        | Some env_extension, None | None, Some env_extension ->
-          Some env_extension
-        | Some env_extension1, Some env_extension2 ->
-          let env_extension =
-            Meet_and_join.meet_typing_environment env_extension1 env_extension2
+        | Some equations, None | None, Some equations ->
+          Some equations
+        | Some equations1, Some equations2 ->
+          let equations =
+            Meet_and_join.meet_typing_environment equations1 equations2
           in
-          Some env_extension
+          Some equations
       in
       assert (Array.length fields1 = Array.length fields2);
       let judgements = ref [] in
@@ -2422,28 +2422,28 @@ end;
           fields1
           fields2
       in
-      { env_extension;
+      { equations;
         fields;
       }, !judgements
 
     let join_singleton_block env1 env2
-          ({ env_extension = env_extension1;
+          ({ equations = equations1;
              fields = fields1;
            } : singleton_block)
-          ({ env_extension = env_extension2;
+          ({ equations = equations2;
              fields = fields2;
            } : singleton_block) : singleton_block =
-      let env_extension =
+      let equations =
         (* CR mshinwell: factor this little bit out *)
-        match env_extension1, env_extension2 with
+        match equations1, equations2 with
         | None, None -> None
-        | Some env_extension, None | None, Some env_extension ->
-          Some env_extension
-        | Some env_extension1, Some env_extension2 ->
-          let env_extension =
-            Meet_and_join.join_typing_environment env_extension1 env_extension2
+        | Some equations, None | None, Some equations ->
+          Some equations
+        | Some equations1, Some equations2 ->
+          let equations =
+            Meet_and_join.join_typing_environment equations1 equations2
           in
-          Some env_extension
+          Some equations
       in
       assert (Array.length fields1 = Array.length fields2);
       let fields =
@@ -2457,7 +2457,7 @@ end;
           fields1
           fields2
       in
-      { env_extension;
+      { equations;
         fields;
       }
 
@@ -2586,10 +2586,10 @@ end;
                   | None -> judgements
                   | Some (_, singleton_block) ->
                     let new_judgements =
-                      match singleton_block.env_extension with
+                      match singleton_block.equations with
                       | None -> []
-                      | Some env_extension ->
-                        judgements_of_typing_environment env_extension
+                      | Some equations ->
+                        judgements_of_typing_environment equations
                     in
                     new_judgements @ judgements
         in
@@ -2976,24 +2976,24 @@ end;
           (closure1 : closure) (closure2 : closure)
           : (closure * judgements_from_meet) Or_bottom.t =
       let cannot_prove_different ~params1 ~params2 ~result1 ~result2
-            ~result_env_extension1 ~result_env_extension2 : _ Or_bottom.t =
+            ~result_equations1 ~result_equations2 : _ Or_bottom.t =
         let same_arity =
           List.compare_lengths params1 params2 = 0
         in
         let same_num_results =
           List.compare_lengths result1 result2 = 0
         in
-        let result_env_extension =
-          match result_env_extension1, result_env_extension2 with
+        let result_equations =
+          match result_equations1, result_equations2 with
           | None, None -> None
-          | Some env_extension, None | None, Some env_extension ->
-            Some env_extension
-          | Some env_extension1, Some env_extension2 ->
-            let env_extension =
-              Meet_and_join.meet_typing_environment env_extension1
-                env_extension2
+          | Some equations, None | None, Some equations ->
+            Some equations
+          | Some equations1, Some equations2 ->
+            let equations =
+              Meet_and_join.meet_typing_environment equations1
+                equations2
             in
-            Some env_extension
+            Some equations
         in
         let judgements = ref [] in
         let has_bottom params =
@@ -3020,19 +3020,19 @@ end;
           else
             let result =
               List.map2 (fun t1 t2 ->
-                  let result_env_extension1 =
-                    match result_env_extension1 with
+                  let result_equations1 =
+                    match result_equations1 with
                     | None -> env1
                     | Some env -> env
                   in
-                  let result_env_extension2 =
-                    match result_env_extension2 with
+                  let result_equations2 =
+                    match result_equations2 with
                     | None -> env2
                     | Some env -> env
                   in
                   let t, new_judgements =
-                    Meet_and_join.meet (result_env_extension1, t1)
-                      (result_env_extension2, t2)
+                    Meet_and_join.meet (result_equations1, t1)
+                      (result_equations2, t2)
                   in
                   judgements := new_judgements @ !judgements;
                   t)
@@ -3044,7 +3044,7 @@ end;
         in
         match params, result with
         | Ok params, Ok result ->
-          Ok (params, result, result_env_extension, !judgements)
+          Ok (params, result, result_equations, !judgements)
         | _, _ -> Bottom
       in
       let function_decls : _ Or_bottom.t =
@@ -3056,11 +3056,11 @@ end;
             cannot_prove_different ~params1 ~params2
               ~result1:inlinable1.result
               ~result2:inlinable2.result
-              ~result_env_extension1:inlinable1.result_env_extension
-              ~result_env_extension2:inlinable2.result_env_extension
+              ~result_equations1:inlinable1.result_equations
+              ~result_equations2:inlinable2.result_equations
           in
           begin match result with
-          | Ok (params, result, result_env_extension, judgements) ->
+          | Ok (params, result, result_equations, judgements) ->
             (* [closure1.function_decls] and [closure2.function_decls] may be
                different, but we cannot prove it.  We arbitrarily pick
                [closure1.function_decls] to return, with parameter and result
@@ -3074,7 +3074,7 @@ end;
               { inlinable1 with
                 params;
                 result;
-                result_env_extension;
+                result_equations;
               }
             in
             Ok (Inlinable inlinable_function_decl, judgements)
@@ -3100,16 +3100,16 @@ end;
               ~params2:non_inlinable2.params
               ~result1:non_inlinable1.result
               ~result2:non_inlinable2.result
-              ~result_env_extension1:non_inlinable1.result_env_extension
-              ~result_env_extension2:non_inlinable2.result_env_extension
+              ~result_equations1:non_inlinable1.result_equations
+              ~result_equations2:non_inlinable2.result_equations
           in
           begin match result with
-          | Ok (params, result, result_env_extension, judgements) ->
+          | Ok (params, result, result_equations, judgements) ->
             let non_inlinable_function_decl =
               { non_inlinable1 with
                 params;
                 result;
-                result_env_extension;
+                result_equations;
               }
             in
             Ok (Non_inlinable (Some non_inlinable_function_decl), judgements)
@@ -3125,11 +3125,11 @@ end;
               ~params2:non_inlinable.params
               ~result1:inlinable.result
               ~result2:non_inlinable.result
-              ~result_env_extension1:inlinable.result_env_extension
-              ~result_env_extension2:non_inlinable.result_env_extension
+              ~result_equations1:inlinable.result_equations
+              ~result_equations2:non_inlinable.result_equations
           in
           begin match result with
-          | Ok (params, result, result_env_extension, judgements) ->
+          | Ok (params, result, result_equations, judgements) ->
             (* For the arbitrary choice, we pick the inlinable declaration,
                since it gives more information. *)
             let params =
@@ -3141,7 +3141,7 @@ end;
               { inlinable with
                 params;
                 result;
-                result_env_extension;
+                result_equations;
               }
             in
             Ok (Inlinable inlinable_function_decl, judgements)
@@ -3158,7 +3158,7 @@ end;
           (closure1 : closure) (closure2 : closure)
           : closure =
       let produce_non_inlinable ~params1 ~params2 ~result1 ~result2
-            ~result_env_extension1 ~result_env_extension2
+            ~result_equations1 ~result_equations2
             ~direct_call_surrogate1 ~direct_call_surrogate2 =
         let same_arity =
           List.compare_lengths params1 params2 = 0
@@ -3174,19 +3174,19 @@ end;
               params2
           in
           let result =
-            let result_env_extension1 =
-              match result_env_extension1 with
+            let result_equations1 =
+              match result_equations1 with
               | None -> env1
               | Some env -> env
             in
-            let result_env_extension2 =
-              match result_env_extension2 with
+            let result_equations2 =
+              match result_equations2 with
               | None -> env2
               | Some env -> env
             in
             List.map2 (fun t1 t2 ->
-                Meet_and_join.join (result_env_extension1, t1)
-                  (result_env_extension2, t2))
+                Meet_and_join.join (result_equations1, t1)
+                  (result_equations2, t2))
               result1
               result2
           in
@@ -3197,22 +3197,22 @@ end;
               Some closure_id1
             | _, _ -> None
           in
-          let result_env_extension =
-            match result_env_extension1, result_env_extension2 with
+          let result_equations =
+            match result_equations1, result_equations2 with
             | None, None -> None
-            | Some env_extension, None | None, Some env_extension ->
-              Some env_extension
-            | Some env_extension1, Some env_extension2 ->
-              let env_extension =
-                Meet_and_join.join_typing_environment env_extension1
-                  env_extension2
+            | Some equations, None | None, Some equations ->
+              Some equations
+            | Some equations1, Some equations2 ->
+              let equations =
+                Meet_and_join.join_typing_environment equations1
+                  equations2
               in
-              Some env_extension
+              Some equations
           in
           let non_inlinable : non_inlinable_function_declarations =
             { params;
               result;
-              result_env_extension;
+              result_equations;
               direct_call_surrogate;
             }
           in
@@ -3230,8 +3230,8 @@ end;
             ~params2:non_inlinable2.params
             ~result1:non_inlinable1.result
             ~result2:non_inlinable2.result
-            ~result_env_extension1:non_inlinable1.result_env_extension
-            ~result_env_extension2:non_inlinable2.result_env_extension
+            ~result_equations1:non_inlinable1.result_equations
+            ~result_equations2:non_inlinable2.result_equations
             ~direct_call_surrogate1:non_inlinable1.direct_call_surrogate
             ~direct_call_surrogate2:non_inlinable2.direct_call_surrogate
         | Non_inlinable (Some non_inlinable), Inlinable inlinable
@@ -3242,8 +3242,8 @@ end;
             ~params2:non_inlinable.params
             ~result1:inlinable.result
             ~result2:non_inlinable.result
-            ~result_env_extension1:inlinable.result_env_extension
-            ~result_env_extension2:non_inlinable.result_env_extension
+            ~result_equations1:inlinable.result_equations
+            ~result_equations2:non_inlinable.result_equations
             ~direct_call_surrogate1:inlinable.direct_call_surrogate
             ~direct_call_surrogate2:non_inlinable.direct_call_surrogate
         | Inlinable inlinable1, Inlinable inlinable2 ->
@@ -3256,8 +3256,8 @@ end;
               ~params2
               ~result1:inlinable1.result
               ~result2:inlinable2.result
-              ~result_env_extension1:inlinable1.result_env_extension
-              ~result_env_extension2:inlinable2.result_env_extension
+              ~result_equations1:inlinable1.result_equations
+              ~result_equations2:inlinable2.result_equations
               ~direct_call_surrogate1:inlinable1.direct_call_surrogate
               ~direct_call_surrogate2:inlinable2.direct_call_surrogate
           end else begin
@@ -3296,19 +3296,19 @@ end;
             (* CR mshinwell: Add documentation for this -- the types provide
                information about the calling context rather than the code of
                the function. *)
-            let result_env_extension =
-              match inlinable1.result_env_extension,
-                inlinable2.result_env_extension
+            let result_equations =
+              match inlinable1.result_equations,
+                inlinable2.result_equations
               with
               | None, None -> None
-              | Some env_extension, None | None, Some env_extension ->
-                Some env_extension
-              | Some env_extension1, Some env_extension2 ->
-                let env_extension =
-                  Meet_and_join.join_typing_environment env_extension1
-                    env_extension2
+              | Some equations, None | None, Some equations ->
+                Some equations
+              | Some equations1, Some equations2 ->
+                let equations =
+                  Meet_and_join.join_typing_environment equations1
+                    equations2
                 in
-                Some env_extension
+                Some equations
             in
             let params =
               List.map2 (fun (param1, t1) (param2, t2) ->
@@ -3320,19 +3320,19 @@ end;
             in
             let result =
               (* CR mshinwell: must share with above *)
-              let result_env_extension1 =
-                match inlinable1.result_env_extension with
+              let result_equations1 =
+                match inlinable1.result_equations with
                 | None -> env1
                 | Some env -> env
               in
-              let result_env_extension2 =
-                match inlinable2.result_env_extension with
+              let result_equations2 =
+                match inlinable2.result_equations with
                 | None -> env2
                 | Some env -> env
               in
               List.map2 (fun t1 t2 ->
-                  Meet_and_join.join (result_env_extension1, t1)
-                    (result_env_extension2, t2))
+                  Meet_and_join.join (result_equations1, t1)
+                    (result_equations2, t2))
                 inlinable1.result
                 inlinable2.result
             in
@@ -3355,7 +3355,7 @@ end;
               body = inlinable1.body;
               free_names_in_body = inlinable1.free_names_in_body;
               result;
-              result_env_extension;
+              result_equations;
               stub = inlinable1.stub;
               dbg = inlinable1.dbg;
               inline = inlinable1.inline;
@@ -3584,23 +3584,23 @@ end;
       | Discriminant discriminants1, Discriminant discriminants2 ->
         let discriminants =
           Discriminant.Map.inter_merge
-            (fun ({ env_extension = env_extension1; } : discriminant_case)
-                  ({ env_extension = env_extension2; } : discriminant_case)
+            (fun ({ equations = equations1; } : discriminant_case)
+                  ({ equations = equations2; } : discriminant_case)
                   : discriminant_case ->
-              let env_extension =
-                match env_extension1, env_extension2 with
+              let equations =
+                match equations1, equations2 with
                 | None, None -> None
-                | Some env_extension, None | None, Some env_extension ->
-                  Some env_extension
-                | Some env_extension1, Some env_extension2 ->
-                  let env_extension =
-                    Meet_and_join.meet_typing_environment env_extension1
-                      env_extension2
+                | Some equations, None | None, Some equations ->
+                  Some equations
+                | Some equations1, Some equations2 ->
+                  let equations =
+                    Meet_and_join.meet_typing_environment equations1
+                      equations2
                   in
-                  Some env_extension
+                  Some equations
               in
               (* CR mshinwell: Do we ever flip back to [Bottom] here? *)
-              { env_extension; })
+              { equations; })
             discriminants1
             discriminants2
         in
@@ -3608,10 +3608,10 @@ end;
           match Discriminant.Map.get_singleton discriminants with
           | None -> []
           | Some (_, discriminant_case) ->
-            match discriminant_case.env_extension with
+            match discriminant_case.equations with
             | None -> []
-            | Some env_extension ->
-              judgements_of_typing_environment env_extension
+            | Some equations ->
+              judgements_of_typing_environment equations
         in
         Ok (Discriminant discriminants, judgements)
       | Set_of_closures set1, Set_of_closures set2 ->
@@ -3634,22 +3634,22 @@ end;
       | Discriminant discriminants1, Discriminant discriminants2 ->
         let discriminants =
           Discriminant.Map.union_merge
-            (fun ({ env_extension = env_extension1; } : discriminant_case)
-                  ({ env_extension = env_extension2; } : discriminant_case)
+            (fun ({ equations = equations1; } : discriminant_case)
+                  ({ equations = equations2; } : discriminant_case)
                   : discriminant_case ->
-              let env_extension =
-                match env_extension1, env_extension2 with
+              let equations =
+                match equations1, equations2 with
                 | None, None -> None
-                | Some env_extension, None | None, Some env_extension ->
-                  Some env_extension
-                | Some env_extension1, Some env_extension2 ->
-                  let env_extension =
-                    Meet_and_join.join_typing_environment env_extension1
-                      env_extension2
+                | Some equations, None | None, Some equations ->
+                  Some equations
+                | Some equations1, Some equations2 ->
+                  let equations =
+                    Meet_and_join.join_typing_environment equations1
+                      equations2
                   in
-                  Some env_extension
+                  Some equations
               in
-              { env_extension; })
+              { equations; })
             discriminants1
             discriminants2
         in
@@ -4241,13 +4241,13 @@ Format.eprintf "Result is: %a\n%!"
                         let by_length =
                           Targetint.OCaml.Map.map
                             (fun (block : singleton_block) : singleton_block ->
-                              let env_extension =
-                                match block.env_extension with
+                              let equations =
+                                match block.equations with
                                 | None -> env
-                                | Some env_extension ->
-                                  Typing_environment.meet env_extension env
+                                | Some equations ->
+                                  Typing_environment.meet equations env
                               in
-                              { block with env_extension = Some env_extension; })
+                              { block with equations = Some equations; })
                             by_length
                         in
                         Join { by_length; })
@@ -4261,15 +4261,15 @@ Format.eprintf "Result is: %a\n%!"
                 | Known imm_map ->
                   let imm_map =
                     Immediate.Map.map
-                      (fun ({ env_extension; } : immediate_case)
+                      (fun ({ equations; } : immediate_case)
                             : immediate_case ->
-                        let env_extension =
-                          match env_extension with
+                        let equations =
+                          match equations with
                           | None -> env
-                          | Some env_extension ->
-                            Typing_environment.meet env_extension env
+                          | Some equations ->
+                            Typing_environment.meet equations env
                         in
-                        { env_extension = Some env_extension; })
+                        { equations = Some equations; })
                       imm_map
                   in
                   Known imm_map
@@ -4290,15 +4290,15 @@ Format.eprintf "Result is: %a\n%!"
             | Discriminant discriminant_map ->
               let discriminant_map =
                 Discriminant.Map.map
-                  (fun ({ env_extension; } : discriminant_case)
+                  (fun ({ equations; } : discriminant_case)
                         : discriminant_case ->
-                    let env_extension =
-                      match env_extension with
+                    let equations =
+                      match equations with
                       | None -> env
-                      | Some env_extension ->
-                        Typing_environment.meet env_extension env
+                      | Some equations ->
+                        Typing_environment.meet equations env
                     in
-                    { env_extension = Some env_extension; })
+                    { equations = Some equations; })
                   discriminant_map
               in
               Discriminant discriminant_map

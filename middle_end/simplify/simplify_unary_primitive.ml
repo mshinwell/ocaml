@@ -362,8 +362,8 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
   let result_var_type ~tags_to_sizes =
-    let discriminants_to_env_extensions =
-      Tag.Map.fold (fun tag size discriminants_to_env_extensions ->
+    let discriminants_to_equationss =
+      Tag.Map.fold (fun tag size discriminants_to_equationss ->
           (* CR mshinwell: think about this conversion *)
           let size = Targetint.OCaml.to_int size in
           let block_ty =
@@ -391,11 +391,11 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
                 block scope_level block_ty
           in
           let discriminant = Discriminant.of_tag tag in
-          Discriminant.Map.add discriminant env discriminants_to_env_extensions)
+          Discriminant.Map.add discriminant env discriminants_to_equationss)
         tags_to_sizes
         Discriminant.Map.empty
     in
-    T.these_discriminants discriminants_to_env_extensions
+    T.these_discriminants discriminants_to_equationss
   in
   match inferred_tags with
   | Proved (Tags inferred_tags) ->
@@ -723,8 +723,8 @@ let simplify_discriminant_of_int env r prim arg dbg =
   match proof with
   | Proved (By_discriminant by_discriminant) ->
     let by_discriminant =
-      Discriminant.Map.map (fun env_extension_opt ->
-          match env_extension_opt with
+      Discriminant.Map.map (fun equations_opt ->
+          match equations_opt with
           | None -> T.Typing_environment.create ~resolver:(E.resolver env)
           | Some env -> env)
         by_discriminant

@@ -904,7 +904,7 @@ let refine_block_ty_upon_access _env r ~block:_ ~block_ty ~field_index:_
     | Any_value | Definitely_immediate ->
       let block_case =
         T.block_case_size_possibly_longer
-          ~env_extension:(T.Type_environment.create ())
+          ~equations:(T.Type_environment.create ())
           ~first_fields
       in
       T.block ~tag:Unknown ~block_case

@@ -160,15 +160,15 @@ and equal_of_kind_value (v1 : of_kind_value1) (v2 : of_kind_value2) =
   | (Blocks_and_tagged_immediates _ | Boxed_number _
       | Closures _ | String _), _ -> false
 
-and equal_immediate_case ({ env_extension = env_extension1; } : immediate_case)
-      ({ env_extension = env_extension2; } : immediate_case) =
-  equal_typing_environment env_extension1 env_extension2
+and equal_immediate_case ({ equations = equations1; } : immediate_case)
+      ({ equations = equations2; } : immediate_case) =
+  equal_typing_environment equations1 equations2
 
 and equal_singleton_block
-      ({ env_extension = env_extension1; fields = fields1; } : singleton_block)
-      ({ env_extension = env_extension2; fields = fields2; } : singleton_block)
+      ({ equations = equations1; fields = fields1; } : singleton_block)
+      ({ equations = equations2; fields = fields2; } : singleton_block)
       =
-  equal_typing_environment env_extension1 env_extension2
+  equal_typing_environment equations1 equations2
     && Misc.Stdlib.Array.equal (equal_mutable_or_immutable equal)
          fields1 fields2
 
@@ -231,7 +231,7 @@ and equal_function_declaration
       body = _;
       free_names_in_body = _;
       result = result1;
-      result_env_extension = result_env_extension1;
+      result_equations = result_equations1;
       stub = stub1;
       dbg = dbg1;
       inline = inline1;
@@ -252,7 +252,7 @@ and equal_function_declaration
       body = _;
       free_names_in_body = _;
       result = result2;
-      result_env_extension = result_env_extension2;
+      result_equations = result_equations2;
       stub = stub2;
       dbg = dbg2;
       inline = inline2;
@@ -287,13 +287,13 @@ and equal_function_declaration
   | Non_inlinable {
       params = params1;
       result = result1;
-      result_env_extension = result_env_extension1;
+      result_equations = result_equations1;
       direct_call_surrogate = direct_call_surrogate1;
     },
     Non_inlinable {
       params = params2;
       result = result2;
-      result_env_extension = result_env_extension2;
+      result_equations = result_equations2;
       direct_call_surrogate = direct_call_surrogate2;
     } ->
     Misc.Stdlib.List.equal (fun (param1, t1) (param2, t2) ->
@@ -329,9 +329,9 @@ fun of_kind_naked_number1 of_kind_naked_number2 ->
   | Int64 _, _ -> false
   | Nativeint _, _ -> false
 
-and equal_tag_case ({ env_extension = env_extension1; } : tag_case)
-      ({ env_extension = env_extension2; } : tag_case) =
-  equal_typing_environment env_extension1 env_extension2
+and equal_tag_case ({ equations = equations1; } : tag_case)
+      ({ equations = equations2; } : tag_case) =
+  equal_typing_environment equations1 equations2
 
 and equal_of_kind_fabricated (of_kind_fabricated1 : of_kind_fabricated)
       (of_kind_fabricated2 : of_kind_fabricated) =
@@ -908,7 +908,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
     | Fabricated (Ok (Discriminant discriminants)) ->
       begin match Discriminant.Map.get_singleton discriminants with
       | None -> try_name ()
-      | Some (discriminant, { env_extension = _; }) ->
+      | Some (discriminant, { equations = _; }) ->
         Term (Simple.discriminant discriminant, t)
       end
     | Fabricated Unknown -> try_name ()
@@ -989,7 +989,7 @@ let prove_tagged_immediate_as_discriminants env t
                 match Discriminant.create imm with
                 | None -> bad_discriminant ()
                 | Some discr ->
-                  Discriminant.Map.add discr imm_case.env_extension by_discr)
+                  Discriminant.Map.add discr imm_case.equations by_discr)
               imms
               Discriminant.Map.empty
           in
@@ -1789,13 +1789,13 @@ let switch_arms env t ~arms =
       Discriminant.Map.fold (fun arm cont result ->
           match Discriminant.Map.find arm discriminant_map with
           | exception Not_found -> result
-          | { env_extension; } ->
-            let env_extension =
-              match env_extension with
+          | { equations; } ->
+            let equations =
+              match equations with
               | None -> empty_env
-              | Some env_extension -> env_extension
+              | Some equations -> equations
             in
-            Discriminant.Map.add arm (env_extension, cont) result)
+            Discriminant.Map.add arm (equations, cont) result)
         arms
         Discriminant.Map.empty
     | Ok (Set_of_closures _) | Ok (Closure _) -> invalid ()

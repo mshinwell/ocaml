@@ -194,7 +194,7 @@ module type Env = sig
 
   val extend_typing_environment
      : t
-    -> env_extension:Flambda_type.Typing_environment.t
+    -> equations:Flambda_type.Typing_environment.t
     -> t
 
   val replace_typing_environment

@@ -388,7 +388,7 @@ Format.eprintf "\n\nsimplify_define_symbol:\n\n%!";
 Format.eprintf "Simplify_program fetching uses for %a\n%!"
   Continuation.print name;
 *)
-      let _args_types, env_extension =
+      let _args_types, equations =
         let default_env =
           (* CR mshinwell: move to auxiliary function; share with
              [Simplify_named] *)
@@ -420,7 +420,7 @@ Format.eprintf "Simplify_program fetching uses for %a\n%!"
       in
 (*
 Format.eprintf "\nEnv extension (cont %a) is@ %a\n\n%!"
-  Continuation.print name T.Typing_environment.print env_extension;
+  Continuation.print name T.Typing_environment.print equations;
 Format.eprintf "default_env0 (cont %a) is@ %a\n\n%!"
   Continuation.print name E.print default_env0;
 *)
@@ -430,7 +430,7 @@ Format.eprintf "Args for %a: %a\n%!"
   (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print) args_types;
 *)
       let env =
-        E.extend_typing_environment default_env0 ~env_extension
+        E.extend_typing_environment default_env0 ~equations
       in
 (*
 Format.eprintf "Extended env (cont %a) is@ %a\n\n%!"

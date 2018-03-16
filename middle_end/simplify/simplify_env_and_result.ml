@@ -192,9 +192,9 @@ end = struct
   let replace_typing_environment t typing_environment =
     { t with typing_environment; }
 
-  let extend_typing_environment t ~env_extension =
+  let extend_typing_environment t ~equations =
     let typing_environment =
-      T.Typing_environment.meet t.typing_environment env_extension
+      T.Typing_environment.meet t.typing_environment equations
     in
     { t with typing_environment; }
 

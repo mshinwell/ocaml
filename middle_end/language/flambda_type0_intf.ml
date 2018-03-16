@@ -138,12 +138,12 @@ module type S = sig
     | String of String_info.Set.t
 
   and immediate_case = private {
-    env_extension : typing_environment option;
+    equations : typing_environment option;
   }
  
   and singleton_block = private {
     (* CR mshinwell: Should this indicate if the block is an array? *)
-    env_extension : typing_environment option;
+    equations : typing_environment option;
     (* CR mshinwell: We should note explicitly that these are logical fields
        (I think this only matters for float arrays on 32-bit targets) *)
     fields : t mutable_or_immutable array;
@@ -212,7 +212,7 @@ module type S = sig
     result : t list;  (* CR mshinwell: make plural *)
     (* CR mshinwell: Is this name misleading?  The quantifiers are before
        the parameters *)
-    result_env_extension : typing_environment option;
+    result_equations : typing_environment option;
     stub : bool;
     dbg : Debuginfo.t;
     inline : inline_attribute;
@@ -233,7 +233,7 @@ module type S = sig
   and non_inlinable_function_declarations = private {
     params : t list;
     result : t list;
-    result_env_extension : typing_environment option;
+    result_equations : typing_environment option;
     direct_call_surrogate : Closure_id.t option;
   }
 
@@ -264,7 +264,7 @@ module type S = sig
   (** Judgements known to hold if a particular value has been shown to match
       some discriminant. *)
   and discriminant_case = private {
-    env_extension : typing_environment option;
+    equations : typing_environment option;
   }
 
   and of_kind_fabricated = private
@@ -625,7 +625,7 @@ module type S = sig
     -> params:(Parameter.t * t) list
     -> body:expr
     -> result:t list
-    -> result_env_extension:typing_environment option
+    -> result_equations:typing_environment option
     -> stub:bool
     -> dbg:Debuginfo.t
     -> inline:inline_attribute
@@ -642,7 +642,7 @@ module type S = sig
   val create_non_inlinable_function_declaration
      : params:t list
     -> result:t list
-    -> result_env_extension:typing_environment option
+    -> result_equations:typing_environment option
     -> direct_call_surrogate:Closure_id.t option
     -> function_declarations
 
