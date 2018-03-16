@@ -80,6 +80,9 @@ module type S = sig
 
   type typing_environment
 
+  (* CR mshinwell: make [equations] abstract. *)
+  type equations = typing_environment option
+
   (** Values of type [t] are known as "Flambda types".  Each Flambda type
       has a unique kind. *)
   type t = private {
@@ -138,12 +141,12 @@ module type S = sig
     | String of String_info.Set.t
 
   and immediate_case = private {
-    equations : typing_environment option;
+    equations : equations;
   }
  
   and singleton_block = private {
     (* CR mshinwell: Should this indicate if the block is an array? *)
-    equations : typing_environment option;
+    equations : equations;
     (* CR mshinwell: We should note explicitly that these are logical fields
        (I think this only matters for float arrays on 32-bit targets) *)
     fields : t mutable_or_immutable array;
@@ -212,7 +215,7 @@ module type S = sig
     result : t list;  (* CR mshinwell: make plural *)
     (* CR mshinwell: Is this name misleading?  The quantifiers are before
        the parameters *)
-    result_equations : typing_environment option;
+    result_equations : equations;
     stub : bool;
     dbg : Debuginfo.t;
     inline : inline_attribute;
@@ -233,7 +236,7 @@ module type S = sig
   and non_inlinable_function_declarations = private {
     params : t list;
     result : t list;
-    result_equations : typing_environment option;
+    result_equations : equations;
     direct_call_surrogate : Closure_id.t option;
   }
 
@@ -264,7 +267,7 @@ module type S = sig
   (** Judgements known to hold if a particular value has been shown to match
       some discriminant. *)
   and discriminant_case = private {
-    equations : typing_environment option;
+    equations : equations;
   }
 
   and of_kind_fabricated = private

@@ -163,11 +163,11 @@ end) = struct
     (* Environment extensions have an [option] type so that the information
        required to create a typing environment isn't required for various
        trivial functions such as [these_tagged_immediates]. *)
-    equations : typing_environment option;
+    equations : equations;
   }
  
   and singleton_block = {
-    equations : typing_environment option;
+    equations : equations;
     fields : t mutable_or_immutable array;
   }
 
@@ -206,7 +206,7 @@ end) = struct
     body : expr;
     free_names_in_body : Name_occurrences.t;
     result : t list;
-    result_equations : typing_environment option;
+    result_equations : equations;
     stub : bool;
     dbg : Debuginfo.t;
     inline : inline_attribute;
@@ -221,7 +221,7 @@ end) = struct
   and non_inlinable_function_declarations = {
     params : t list;
     result : t list;
-    result_equations : typing_environment option;
+    result_equations : equations;
     direct_call_surrogate : Closure_id.t option;
   }
 
@@ -244,7 +244,7 @@ end) = struct
     | Nativeint : Targetint.Set.t -> Targetint.Set.t of_kind_naked_number
 
   and discriminant_case = {
-    equations : typing_environment option;
+    equations : equations;
   }
 
   and of_kind_fabricated =
@@ -269,6 +269,8 @@ end) = struct
     existentials : Name.Set.t;
     existential_freshening : Freshening.t;
   }
+
+  and equations = typing_environment option
 
   let print_extensibility print_contents ppf (e : _ extensibility) =
     match e with
