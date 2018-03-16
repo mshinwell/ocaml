@@ -25,6 +25,8 @@ type tag = t
 val create : int -> t option
 val create_exn : int -> t
 
+val create_from_targetint : Targetint.OCaml.t -> t option
+
 val to_int : t -> int
 val to_targetint : t -> Targetint.t
 

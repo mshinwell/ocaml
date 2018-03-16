@@ -104,7 +104,7 @@ module Unboxing_spec_variant : Unboxing_spec = struct
       dbg)
 
   let int_to_tag ~wrapper_param_unboxee dbg : Flambda.Named.t =
-    (Prim (Unary (Int_to_tag, Simple.var wrapper_param_unboxee), dbg))
+    (Prim (Unary (Discriminant_of_int, Simple.var wrapper_param_unboxee), dbg))
 
   let box _t tag fields dbg : Flambda.Named.t =
     let kinds =
@@ -160,7 +160,7 @@ module Unboxing_spec_float_array : Unboxing_spec = struct
   let never_is_int = true
 
   let int_to_tag ~wrapper_param_unboxee:_ _dbg : Flambda.Named.t =
-    Simple (Simple.tag (Tag.create_exn 0))  (* Will always be dead code. *)
+    Simple (Simple.discriminant Discriminant.zero)  (* Always dead code. *)
 
   let get_field ~boxed_value ~index dbg : Flambda.Named.t =
     Prim (Binary (Block_load (Block Naked_float, Immutable),
@@ -205,7 +205,7 @@ end) : Unboxing_spec = struct
   let never_is_int = true
 
   let int_to_tag ~wrapper_param_unboxee:_ _dbg : Flambda.Named.t =
-    Simple (Simple.tag (Tag.create_exn 0))  (* Will always be dead code. *)
+    Simple (Simple.discriminant Discriminant.zero)  (* Always dead code. *)
 
   let get_field ~boxed_value ~index dbg : Flambda.Named.t =
     if index <> 0 then begin
@@ -321,7 +321,15 @@ module Make (S : Unboxing_spec) = struct
     let resolver = E.resolver env in
     let dbg = Debuginfo.none in
     let constant_ctors = unboxing_spec.constant_ctors in
-    let blocks = unboxing_spec.block_sizes_by_tag in
+    let blocks, max_size =
+      Tag.Map.fold (fun tag size (blocks, max_size) ->
+          let discr = Discriminant.of_tag tag in
+          let blocks = Discriminant.Map.add discr size blocks in
+          let max_size = Targetint.OCaml.max size max_size in
+          blocks, max_size)
+        unboxing_spec.block_sizes_by_tag
+        (Discriminant.Map.empty, Targetint.OCaml.zero)
+    in
     let num_constant_ctors = Immediate.Set.cardinal constant_ctors in
     assert (num_constant_ctors >= 0);
     let no_constant_ctors = (num_constant_ctors = 0) in
@@ -337,7 +345,7 @@ module Make (S : Unboxing_spec) = struct
        Follow-up: think this might be ok for is_unbox_returns only, since we don't
        need the Pisint = false judgements etc.
     *)
-    let num_tags = Tag.Map.cardinal blocks in
+    let num_tags = Discriminant.Map.cardinal blocks in
     assert (num_tags >= 1);  (* see below *)
     let wrapper_param_unboxee = Variable.rename unboxee in
     let unboxee_to_wrapper_params_unboxee =
@@ -348,11 +356,6 @@ module Make (S : Unboxing_spec) = struct
       Parameter.Map.add (Parameter.wrap unboxee) wrapper_param_unboxee
         Parameter.Map.empty
     in
-    let max_size =
-      Tag.Map.fold (fun _tag size max_size -> Targetint.OCaml.max size max_size)
-        blocks
-        Targetint.OCaml.zero
-    in
     let field_arguments_for_call_in_wrapper =
       Array.to_list (Array.init (Targetint.OCaml.to_int max_size) (fun index ->
         Variable.create (Printf.sprintf "field%d" index)))
@@ -361,9 +364,10 @@ module Make (S : Unboxing_spec) = struct
     let is_int_in_wrapper = Variable.rename is_int in
     let is_int_known_value, is_int_ty =
       if no_constant_ctors || S.never_is_int then
-        (* CR mshinwell: Tag.create_exn 0 again *)
-        Some (Simple (Simple.tag (Tag.create_exn 0)) : Flambda.Named.t),
-          T.this_tag (Tag.create_exn 0)
+        let is_int_known_value = Discriminant.bool_false in
+        Some (Simple (
+            Simple.discriminant is_int_known_value) : Flambda.Named.t),
+          T.this_discriminant is_int_known_value
       else
         None, T.any_fabricated ()
     in
@@ -374,39 +378,31 @@ module Make (S : Unboxing_spec) = struct
     let discriminant_in_wrapper = Variable.rename discriminant in
     let discriminant_known_value, discriminant_ty =
       let discriminant_possible_values, discriminant_ty =
-        let all_tags =
-          Tag.Map.fold (fun tag _ all_tags ->
-              Immediate.Set.add (Immediate.int (Targetint.OCaml.of_int (
-                Tag.to_int tag))) all_tags)
-            blocks
-            Immediate.Set.empty
-        in
-        let by_tag =
-          Immediate.Set.fold (fun ctor_index by_tag ->
-              let tag =
-                (* CR mshinwell: too verbose *)
-                Tag.create_exn (
-                  Targetint.OCaml.to_int (Immediate.to_targetint ctor_index))
-              in
-              Tag.Map.add tag (T.Typing_environment.create ~resolver) by_tag)
+        let all_discriminants = Discriminant.Map.keys blocks in
+        let by_discriminant =
+          Immediate.Set.fold (fun ctor_index by_discriminant ->
+              let ctor_index = Immediate.to_targetint ctor_index in
+              Discriminant.Map.add (Discriminant.create_exn ctor_index)
+                (T.Typing_environment.create ~resolver)
+                by_discriminant)
             constant_ctors
-            Tag.Map.empty
+            Discriminant.Map.empty
         in
-        let by_tag =
-          Tag.Map.fold (fun tag _ by_tag ->
-              Tag.Map.add tag (T.Typing_environment.create ~resolver) by_tag)
+        let constant_ctors = Discriminant.Map.keys by_discriminant in
+        let by_discriminant =
+          Discriminant.Map.fold (fun discr _ by_discriminant ->
+              Discriminant.Map.add discr (T.Typing_environment.create ~resolver)
+                by_discriminant)
             blocks
-            by_tag
+            by_discriminant
         in
-        Immediate.Set.union constant_ctors all_tags,
-          T.these_tags by_tag
+        Discriminant.Set.union constant_ctors all_discriminants,
+          T.these_discriminants by_discriminant
       in
-      match Immediate.Set.elements discriminant_possible_values with
+      match Discriminant.Set.elements discriminant_possible_values with
       | [] -> assert false  (* see the bottom of [how_to_unbox], below *)
-      | [tag] ->
-        (* XXX Shouldn't be using [Immediate] *)
-        let tag = Targetint.OCaml.to_int (Immediate.to_targetint tag) in
-        Some (Simple (Simple.tag (Tag.create_exn tag)) : Flambda.Named.t),
+      | [discr] ->
+        Some (Simple (Simple.discriminant discr) : Flambda.Named.t),
           discriminant_ty
       | _tags -> None, discriminant_ty
     in
@@ -451,16 +447,16 @@ module Make (S : Unboxing_spec) = struct
       in
       without_types, with_types
     in
-    let tags_to_sizes = blocks in (* CR mshinwell: remove alias *)
     let sizes_to_filler_conts =
       List.fold_left (fun sizes_to_filler_conts size ->
           Immediate.Map.add (Immediate.int size) (Continuation.create ())
             sizes_to_filler_conts)
         Immediate.Map.empty
-        (Tag.Map.data tags_to_sizes)
+        (Tag.Map.data unboxing_spec.block_sizes_by_tag)
     in
     let tags_to_sizes_and_boxing_conts =
-      Tag.Map.map (fun size -> size, Continuation.create ()) tags_to_sizes
+      Tag.Map.map (fun size -> size, Continuation.create ())
+        unboxing_spec.block_sizes_by_tag
     in
     let all_units =
       Array.to_list (Array.init (Targetint.OCaml.to_int_exn max_size)
@@ -472,17 +468,8 @@ module Make (S : Unboxing_spec) = struct
       let join_cont = Continuation.create () in
       let tag = Variable.create "tag" in
       let is_int_switch =
-        (* CR mshinwell: see below on other is-int-switch *)
-        let arms =
-          Tag.Map.of_list [
-            (* CR mshinwell: add 0/1 constants to [Tag], also use in
-               simplify_unary_primitive for Is_int *)
-            Tag.create_exn 0, is_block_cont;
-            Tag.create_exn 1, is_int_cont;
-          ]
-        in
-        Flambda.Expr.create_tag_switch ~scrutinee:(Name.var is_int_in_wrapper)
-          ~arms
+        Flambda.Expr.if_then_else ~scrutinee:(Name.var is_int_in_wrapper)
+          ~if_true:is_int_cont ~if_false:is_block_cont
       in
       let add_fill_fields_conts expr =
         Immediate.Map.fold (fun size filler_cont expr : Flambda.Expr.t ->
@@ -556,21 +543,22 @@ module Make (S : Unboxing_spec) = struct
         let arms =
           Immediate.Map.fold (fun size filler_cont arms ->
               let size = Immediate.to_targetint size in
-              Tag.Map.fold (fun tag this_size arms ->
+              Discriminant.Map.fold (fun tag this_size arms ->
                   if Targetint.OCaml.equal this_size size then
-                    Tag.Map.add tag filler_cont arms
+                    Discriminant.Map.add tag filler_cont arms
                   else
                     arms)
                 blocks
                 arms)
             sizes_to_filler_conts
-            Tag.Map.empty
+            Discriminant.Map.empty
         in
-        Flambda.Expr.create_tag_switch ~scrutinee:(Name.var tag) ~arms
+        Flambda.Expr.create_switch ~scrutinee:(Name.var tag) ~arms
       in
       Flambda.Expr.create_let is_int_in_wrapper
         (K.fabricated ())
-        (if no_constant_ctors then Simple (Simple.tag (Tag.create_exn 0))
+        (if no_constant_ctors then
+           Simple (Simple.discriminant Discriminant.bool_false)
          else Prim (Unary (Is_int, Simple.var wrapper_param_unboxee), dbg))
         (Let_cont {
           body = Let_cont {
@@ -613,7 +601,8 @@ module Make (S : Unboxing_spec) = struct
                     (match discriminant_known_value with
                      | Some known -> known
                      | None ->
-                       Prim (Unary (Get_tag { tags_to_sizes; },
+                       Prim (Unary (Get_tag {
+                           tags_to_sizes = unboxing_spec.block_sizes_by_tag; },
                          Simple.var wrapper_param_unboxee), dbg))
                     (add_fill_fields_conts fill_fields_switch);
                 stub = true;
@@ -646,22 +635,18 @@ module Make (S : Unboxing_spec) = struct
     let boxing_is_int_cont = Continuation.create () in
     let boxing_is_block_cont = Continuation.create () in
     let boxing_is_int_switch =
-      let arms =
-        Tag.Map.of_list [
-          (* CR mshinwell: add 0/1 constants to [Tag], also use in
-             simplify_unary_primitive for Is_int *)
-          Tag.create_exn 0, boxing_is_block_cont;
-          Tag.create_exn 1, boxing_is_int_cont;
-        ]
-      in
-      Flambda.Expr.create_tag_switch ~scrutinee:(Name.var is_int) ~arms
+      Flambda.Expr.if_then_else ~scrutinee:(Name.var is_int)
+        ~if_true:boxing_is_int_cont ~if_false:boxing_is_block_cont
     in
     let boxing_switch =
       let arms =
-        Tag.Map.map (fun (_size, boxing_cont) -> boxing_cont)
+        Tag.Map.fold (fun tag (_size, boxing_cont) arms ->
+            let tag = Discriminant.of_tag tag in
+            Discriminant.Map.add tag boxing_cont arms)
           tags_to_sizes_and_boxing_conts
+          Discriminant.Map.empty
       in
-      Flambda.Expr.create_tag_switch ~scrutinee:(Name.var discriminant) ~arms
+      Flambda.Expr.create_switch ~scrutinee:(Name.var discriminant) ~arms
     in
     let build_boxed_value_from_new_params =
       let boxed = Variable.rename ~append:"_boxed" unboxee in
@@ -675,29 +660,29 @@ module Make (S : Unboxing_spec) = struct
       let build (expr : Flambda.Expr.t) : Flambda.Expr.t =
         let arms =
           Immediate.Set.fold (fun ctor_index arms ->
-              let ctor_index =
-                Targetint.OCaml.to_int (Immediate.to_targetint ctor_index)
-              in
-              let tag = Tag.create_exn ctor_index in
+              let ctor_index = Immediate.to_targetint ctor_index in
+              let discriminant = Discriminant.create_exn ctor_index in
               let cont = Continuation.create () in
-              Tag.Map.add tag cont arms)
+              Discriminant.Map.add discriminant cont arms)
             constant_ctors
-            Tag.Map.empty
+            Discriminant.Map.empty
         in
         let constant_ctor_switch =
-          Flambda.Expr.create_tag_switch ~scrutinee:(Name.var discriminant)
-            ~arms
+          Flambda.Expr.create_switch ~scrutinee:(Name.var discriminant) ~arms
         in
         let add_constant_ctor_conts expr =
-          Tag.Map.fold (fun ctor_index cont expr : Flambda.Expr.t ->
-              let ctor_index = Tag.to_int ctor_index in
+          Discriminant.Map.fold (fun ctor_index cont expr : Flambda.Expr.t ->
+              let ctor_index =
+                Immediate.int (Discriminant.to_int ctor_index)
+              in
               Let_cont {
                 body = expr;
                 handlers = Non_recursive {
                   name = cont;
                   handler = {
                     handler = Apply_cont (
-                      join_cont, None, [Simple.const_int ctor_index]);
+                      join_cont, None,
+                        [Simple.const (Tagged_immediate ctor_index)]);
                     params = [];
                     stub = true;
                     is_exn_handler = false;
@@ -809,17 +794,16 @@ module Make (S : Unboxing_spec) = struct
           let by_constant_ctor_index =
             Immediate.Set.fold (fun ctor_index by_constant_ctor_index ->
                 (* CR mshinwell: bad conversion *)
-                let tag =
-                  Tag.create_exn (Targetint.OCaml.to_int (
-                    Immediate.to_targetint ctor_index))
+                let discr =
+                  Discriminant.create_exn (Immediate.to_targetint ctor_index)
                 in
                 let env = T.Typing_environment.create ~resolver in
-                Tag.Map.add tag env by_constant_ctor_index)
+                Discriminant.Map.add discr env by_constant_ctor_index)
               constant_ctors
-              Tag.Map.empty
+              Discriminant.Map.empty
           in
           let by_tag =
-            Tag.Map.mapi (fun tag size ->
+            Tag.Map.fold (fun tag size by_tag ->
                 (* CR mshinwell: rewrite for-loop to avoid conversion *)
                 let size = Targetint.OCaml.to_int size in
                 let scope_level = E.continuation_scope_level env in
@@ -852,27 +836,32 @@ module Make (S : Unboxing_spec) = struct
                   in
                   T.block tag ~fields:(Array.of_list fields), initial_env
                 in
-                T.Typing_environment.add initial_env
-                  (Name.var unboxee) scope_level unboxee_ty_refinement)
-              tags_to_sizes
+                let env_extension =
+                  T.Typing_environment.add initial_env
+                    (Name.var unboxee) scope_level unboxee_ty_refinement
+                in
+                let discr = Discriminant.of_tag tag in
+                Discriminant.Map.add discr env_extension by_tag)
+              unboxing_spec.block_sizes_by_tag
+              Discriminant.Map.empty
           in
           let discriminant_env_is_int =
             T.Typing_environment.singleton ~resolver (Name.var discriminant)
               (Scope_level.next (E.continuation_scope_level env))
-              (T.these_tags by_constant_ctor_index)
+              (T.these_discriminants by_constant_ctor_index)
           in
           let discriminant_env_is_block =
             T.Typing_environment.singleton ~resolver (Name.var discriminant)
               (Scope_level.next (E.continuation_scope_level env))
-              (T.these_tags by_tag)
+              (T.these_discriminants by_tag)
           in
           let by_is_int_result =
-            Tag.Map.of_list [
-              Tag.create_exn 1, discriminant_env_is_int;
-              Tag.create_exn 0, discriminant_env_is_block;
+            Discriminant.Map.of_list [
+              Discriminant.bool_true, discriminant_env_is_int;
+              Discriminant.bool_false, discriminant_env_is_block;
             ]
           in
-          T.these_tags by_is_int_result
+          T.these_discriminants by_is_int_result
         in
         let is_int = Parameter.wrap is_int in
         [Flambda.Typed_parameter.create is_int is_int_ty]

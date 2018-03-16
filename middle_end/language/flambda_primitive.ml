@@ -432,8 +432,7 @@ type unary_primitive =
   | Get_tag of {
       tags_to_sizes : Targetint.OCaml.t Tag.Map.t;
     }
-  | Tag_to_int
-  | Int_to_tag
+  | Discriminant_of_int
   | Array_length of Block_access_kind.t
   | Bigarray_length of { dimension : int; }
   | String_length of string_or_bytes
@@ -461,22 +460,21 @@ let compare_unary_primitive p1 p2 =
     | Duplicate_block _ -> 0
     | Is_int -> 1
     | Get_tag _ -> 2
-    | Tag_to_int -> 3
-    | Int_to_tag -> 4
-    | Array_length _ -> 5
-    | Bigarray_length _ -> 6
-    | String_length _ -> 7
-    | Int_as_pointer -> 8
-    | Opaque_identity -> 9
-    | Int_arith _ -> 10
-    | Float_arith _ -> 11
-    | Num_conv _ -> 12
-    | Boolean_not -> 13
-    | Unbox_number _ -> 14
-    | Box_number _ -> 15
-    | Project_closure _ -> 16
-    | Move_within_set_of_closures _ -> 17
-    | Project_var _ -> 18
+    | Discriminant_of_int -> 3
+    | Array_length _ -> 4
+    | Bigarray_length _ -> 5
+    | String_length _ -> 6
+    | Int_as_pointer -> 7
+    | Opaque_identity -> 8
+    | Int_arith _ -> 9
+    | Float_arith _ -> 10
+    | Num_conv _ -> 11
+    | Boolean_not -> 12
+    | Unbox_number _ -> 13
+    | Box_number _ -> 14
+    | Project_closure _ -> 15
+    | Move_within_set_of_closures _ -> 16
+    | Project_var _ -> 17
   in
   match p1, p2 with
   | Duplicate_block { kind = kind1;
@@ -499,8 +497,7 @@ let compare_unary_primitive p1 p2 =
       Get_tag { tags_to_sizes = tags_to_sizes2; } ->
     Tag.Map.compare Targetint.OCaml.compare
       tags_to_sizes1 tags_to_sizes2
-  | Int_to_tag, Int_to_tag
-  | Tag_to_int, Tag_to_int -> 0
+  | Discriminant_of_int, Discriminant_of_int -> 0
   | String_length kind1, String_length kind2 ->
     Pervasives.compare kind1 kind2
   | Int_arith (kind1, op1), Int_arith (kind2, op2) ->
@@ -540,8 +537,7 @@ let compare_unary_primitive p1 p2 =
   | (Duplicate_block _
     | Is_int
     | Get_tag _
-    | Tag_to_int
-    | Int_to_tag
+    | Discriminant_of_int
     | String_length _
     | Int_as_pointer
     | Opaque_identity
@@ -569,8 +565,7 @@ let print_unary_primitive ppf p =
       print_mutable_or_immutable destination_mutability
   | Is_int -> fprintf ppf "Is_int"
   | Get_tag _ -> fprintf ppf "Get_tag"
-  | Tag_to_int -> fprintf ppf "Tag_to_int"
-  | Int_to_tag -> fprintf ppf "Int_to_tag"
+  | Discriminant_of_int -> fprintf ppf "Discriminant_of_int"
   | String_length _ -> fprintf ppf "String_length"
   | Int_as_pointer -> fprintf ppf "Int_as_pointer"
   | Opaque_identity -> fprintf ppf "Opaque_identity"
@@ -606,8 +601,7 @@ let arg_kind_of_unary_primitive p =
   | Duplicate_block _ -> K.value ()
   | Is_int -> K.value ()
   | Get_tag _ -> K.value ()
-  | Int_to_tag -> K.value ()
-  | Tag_to_int -> K.fabricated ()
+  | Discriminant_of_int -> K.value ()
   | String_length _ -> K.value ()
   | Int_as_pointer -> K.value ()
   | Opaque_identity -> K.value ()
@@ -629,8 +623,7 @@ let result_kind_of_unary_primitive p : result_kind =
   | Is_int -> Singleton (K.fabricated ())
   | String_length _ -> Singleton (K.value ())
   | Get_tag _ -> Singleton (K.fabricated ())
-  | Int_to_tag -> Singleton (K.fabricated ())
-  | Tag_to_int -> Singleton (K.value ())
+  | Discriminant_of_int -> Singleton (K.fabricated ())
   | Int_as_pointer ->
     (* This primitive is *only* to be used when the resulting pointer points
        at something which is a valid OCaml value (even if outside of the
@@ -667,7 +660,7 @@ let effects_and_coeffects_of_unary_primitive p =
   | Get_tag _ ->
     if Config.ban_obj_dot_truncate then No_effects, No_coeffects
     else No_effects, Has_coeffects
-  | Int_to_tag | Tag_to_int -> No_effects, No_coeffects
+  | Discriminant_of_int -> No_effects, No_coeffects
   | String_length _ -> reading_from_an_array_like_thing
   | Int_as_pointer
   | Opaque_identity -> Arbitrary_effects, Has_coeffects

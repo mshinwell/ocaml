@@ -94,15 +94,10 @@ and apply_kind =
 (** Tag block switches must be encoded as [Pgettag] followed by a [Tag] switch
     on constants.  String switches must be expanded out. *)
 and switch =
-  { kind : switch_kind;
-    numconsts : int;
+  { numconsts : int;
     consts : (int * Continuation.t) list;
     failaction : Continuation.t option;
   }
-
-and switch_kind =
-  | Int
-  | Tag
 
 type program =
   { expr : t;

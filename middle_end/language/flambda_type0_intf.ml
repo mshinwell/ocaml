@@ -261,9 +261,9 @@ module type S = sig
     | Int64 : Numbers.Int64.Set.t -> Numbers.Int64.Set.t of_kind_naked_number
     | Nativeint : Targetint.Set.t -> Targetint.Set.t of_kind_naked_number
 
-  (** Judgements known to hold if a particular value has been shown to have
-      a particular block tag. *)
-  and tag_case = private {
+  (** Judgements known to hold if a particular value has been shown to match
+      some discriminant. *)
+  and discriminant_case = private {
     env_extension : typing_environment option;
   }
 
@@ -271,12 +271,11 @@ module type S = sig
     (* CR mshinwell: Should tags be represented as naked immediates?  (A bit
        troublesome since the obvious Fabricated_kind.t wouldn't have a unique
        top element) *)
-    (* XXX Tag.Map.t isn't sufficient, it needs to be something which permits
-       up to the largest constant constructor index.  Maybe use
-       "Scrutinee"? *)
-    | Tag of tag_case Tag.Map.t
-      (** A block tag (or constant constructor which has undergone a
-          kind-cast to kind [Fabricated] using the [Int_as_tag] primitive). *)
+    | Discriminant of discriminant_case Discriminant.Map.t
+      (** Either:
+          - a block tag, as returned by the [Get_tag] primitive; or
+          - a constant constructor which has undergone a kind-cast to kind
+            [Fabricated] using the [Discriminant_of_int] primitive. *)
     | Set_of_closures of set_of_closures
       (** A possibly mutually-recursive collection of closure values, which
           at runtime will be represented by a single block. *)
@@ -528,27 +527,27 @@ module type S = sig
   (** Building of types corresponding to values that did not exist at
       source level. *)
 
-  (** The given block tag. *)
-  val this_tag : Tag.t -> t
+  (** The given discriminant. *)
+  val this_discriminant : Discriminant.t -> t
 
-  (** Like [this_tag], but returns the [ty_fabricated], rather than a value
-      of type [t]. *)
-  val this_tag_as_ty_fabricated : Tag.t -> ty_fabricated
+  (** Like [this_discriminant], but returns the [ty_fabricated], rather than
+      a value of type [t]. *)
+  val this_discriminant_as_ty_fabricated : Discriminant.t -> ty_fabricated
 
-  (** The given block tags coupled with the equations that hold if the
-      corresponding block can be shown to have one of the tags. *)
-  val these_tags
-     : typing_environment Tag.Map.t
+  (** The given block discriminants coupled with the equations that hold if the
+      corresponding block can be shown to have one of the discriminants. *)
+  val these_discriminants
+     : typing_environment Discriminant.Map.t
     -> t
 
-  (** Like [these_tags], but returns the [ty_fabricated], rather than a
-      value of type [t]. *)
-  val these_tags_as_ty_fabricated
-     : typing_environment Tag.Map.t
+  (** Like [these_discriminants], but returns the [ty_fabricated], rather than
+      a value of type [t]. *)
+  val these_discriminants_as_ty_fabricated
+     : typing_environment Discriminant.Map.t
     -> ty_fabricated
 
-  (** Any block tag. *)
-  val any_tag_as_ty_fabricated : unit -> ty_fabricated
+  (** Any discriminant. *)
+  val any_discriminant_as_ty_fabricated : unit -> ty_fabricated
 
   (** Given the type of a naked floating-point number, return the type of the
       corresponding boxed version. *)

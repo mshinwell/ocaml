@@ -37,7 +37,7 @@ end
 type t = private
   | Name of Name.t
   | Const of Const.t
-  | Tag of Tag.t
+  | Discriminant of Discriminant.t
 
 val name : Name.t -> t
 
@@ -59,7 +59,7 @@ val const_zero : t
 
 val unit : t
 
-val tag : Tag.t -> t
+val discriminant : Discriminant.t -> t
 
 val free_names : t -> Name.Set.t
 

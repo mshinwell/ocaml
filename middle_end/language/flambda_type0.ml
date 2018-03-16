@@ -243,12 +243,12 @@ end) = struct
     | Int64 : Int64.Set.t -> Int64.Set.t of_kind_naked_number
     | Nativeint : Targetint.Set.t -> Targetint.Set.t of_kind_naked_number
 
-  and tag_case = {
+  and discriminant_case = {
     env_extension : typing_environment option;
   }
 
   and of_kind_fabricated =
-    | Tag of tag_case Tag.Map.t
+    | Discriminant of discriminant_case Discriminant.Map.t
     | Set_of_closures of set_of_closures
     | Closure of closure
 
@@ -541,16 +541,31 @@ end) = struct
     Format.fprintf ppf "@[(Closure (function_decls@ %a))@]"
       (print_function_declarations ~cache) closure.function_decls
 
-  and print_tag_case ~cache ppf ({ env_extension; } : tag_case) =
+  and print_discriminant_case ~cache ppf ({ env_extension; } : discriminant_case) =
     Format.fprintf ppf "@[(env_extension@ %a)@]"
       (Misc.Stdlib.Option.print (print_typing_environment_with_cache ~cache))
         env_extension
 
   and print_of_kind_fabricated ~cache ppf (o : of_kind_fabricated) =
     match o with
-    | Tag tag_map ->
-      Format.fprintf ppf "@[(Tags@ %a)@]"
-        (Tag.Map.print (print_tag_case ~cache)) tag_map
+    | Discriminant discriminant_map ->
+      let no_equations =
+        Discriminant.Map.for_all
+          (fun _ ({ env_extension; } : discriminant_case) ->
+            (* CR mshinwell: add [is_empty_typing_environment] *)
+            match env_extension with
+            | None -> true
+            | Some env_extension ->
+              Name.Map.is_empty env_extension.names_to_types)
+          discriminant_map
+      in
+      if no_equations then
+        Format.fprintf ppf "@[(Discriminant@ %a)@]"
+          (Discriminant.Map.print (print_discriminant_case ~cache))
+          discriminant_map
+      else
+        Format.fprintf ppf "@[(Discriminant@ %a)@]"
+          Discriminant.Set.print (Discriminant.Map.keys discriminant_map)
     | Set_of_closures set -> print_set_of_closures ~cache ppf set
     | Closure closure -> print_closure ~cache ppf closure
 
@@ -699,10 +714,11 @@ end) = struct
 
   and free_names_of_kind_fabricated (of_kind : of_kind_fabricated) acc =
     match of_kind with
-    | Tag tag_map ->
-      Tag.Map.fold (fun _tag ({ env_extension; } : tag_case) acc ->
+    | Discriminant discriminant_map ->
+      Discriminant.Map.fold
+        (fun _discriminant ({ env_extension; } : discriminant_case) acc ->
           free_names_of_env_extension env_extension acc)
-        tag_map
+        discriminant_map
         acc
     | Set_of_closures set ->
       let acc =
@@ -1440,34 +1456,37 @@ end;
   let these_boxed_int64s f = box_int64 (these_naked_int64s f)
   let these_boxed_nativeints f = box_nativeint (these_naked_nativeints f)
 
-  let these_tags_as_ty_fabricated tags_to_env_extensions : ty_fabricated =
-    let tag_map =
-      Tag.Map.map (fun env : tag_case ->
+  let these_discriminants_as_ty_fabricated discriminants_to_env_extensions : ty_fabricated =
+    let discriminant_map =
+      Discriminant.Map.map (fun env : discriminant_case ->
           { env_extension = Some env; })
-        tags_to_env_extensions
+        discriminants_to_env_extensions
     in
-    No_alias (Join [Tag tag_map])
+    No_alias (Join [Discriminant discriminant_map])
 
-  let these_tags tags_to_env_extensions : t =
-    { descr = Fabricated (these_tags_as_ty_fabricated tags_to_env_extensions);
+  let these_discriminants discriminants_to_env_extensions : t =
+    { descr = Fabricated (
+        these_discriminants_as_ty_fabricated discriminants_to_env_extensions);
       phantom = None;
     }
 
-  let this_tag_as_ty_fabricated tag =
-    let tags_to_env_extensions = Tag.Map.add tag None Tag.Map.empty in
-    let tag_map =
-      Tag.Map.map (fun env : tag_case ->
+  let this_discriminant_as_ty_fabricated discriminant =
+    let discriminants_to_env_extensions =
+      Discriminant.Map.add discriminant None Discriminant.Map.empty
+    in
+    let discriminant_map =
+      Discriminant.Map.map (fun env : discriminant_case ->
           { env_extension = env; })
-        tags_to_env_extensions
+        discriminants_to_env_extensions
     in
-    No_alias (Join [Tag tag_map])
+    No_alias (Join [Discriminant discriminant_map])
 
-  let this_tag tag : t =
-    { descr = Fabricated (this_tag_as_ty_fabricated tag);
+  let this_discriminant discriminant : t =
+    { descr = Fabricated (this_discriminant_as_ty_fabricated discriminant);
       phantom = None;
     }
 
-  let any_tag_as_ty_fabricated () : ty_fabricated =
+  let any_discriminant_as_ty_fabricated () : ty_fabricated =
     No_alias Unknown
 
   let this_immutable_string_as_ty_value str : ty_value =
@@ -2059,7 +2078,7 @@ end;
     | Fabricated (No_alias (Join [Tag map])) ->
       begin match Tag.Map.get_singleton map with
       | None -> create_typing_environment ()
-      | Some (_, tag_case) -> tag_case.env_extension
+      | Some (_, discriminant_case) -> discriminant_case.env_extension
       end
     | _ -> create_typing_environment ()
 *)
@@ -3562,12 +3581,12 @@ end;
           (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
           : (of_kind_fabricated * judgements_from_meet) Or_bottom.t =
       match of_kind1, of_kind2 with
-      | Tag tags1, Tag tags2 ->
-        let tags =
-          Tag.Map.inter_merge
-            (fun ({ env_extension = env_extension1; } : tag_case)
-                  ({ env_extension = env_extension2; } : tag_case)
-                  : tag_case ->
+      | Discriminant discriminants1, Discriminant discriminants2 ->
+        let discriminants =
+          Discriminant.Map.inter_merge
+            (fun ({ env_extension = env_extension1; } : discriminant_case)
+                  ({ env_extension = env_extension2; } : discriminant_case)
+                  : discriminant_case ->
               let env_extension =
                 match env_extension1, env_extension2 with
                 | None, None -> None
@@ -3582,19 +3601,19 @@ end;
               in
               (* CR mshinwell: Do we ever flip back to [Bottom] here? *)
               { env_extension; })
-            tags1
-            tags2
+            discriminants1
+            discriminants2
         in
         let judgements =
-          match Tag.Map.get_singleton tags with
+          match Discriminant.Map.get_singleton discriminants with
           | None -> []
-          | Some (_, tag_case) ->
-            match tag_case.env_extension with
+          | Some (_, discriminant_case) ->
+            match discriminant_case.env_extension with
             | None -> []
             | Some env_extension ->
               judgements_of_typing_environment env_extension
         in
-        Ok (Tag tags, judgements)
+        Ok (Discriminant discriminants, judgements)
       | Set_of_closures set1, Set_of_closures set2 ->
         begin match meet_set_of_closures env1 env2 set1 set2 with
         | Ok (set_of_closures, judgements) ->
@@ -3606,18 +3625,18 @@ end;
         | Ok (closure, judgements) -> Ok (Closure closure, judgements)
         | Bottom -> Bottom
         end
-      | (Tag _ | Set_of_closures _ | Closure _), _ -> Bottom
+      | (Discriminant _ | Set_of_closures _ | Closure _), _ -> Bottom
 
     let join_of_kind_foo env1 env2
           (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
           : of_kind_fabricated or_unknown =
       match of_kind1, of_kind2 with
-      | Tag tags1, Tag tags2 ->
-        let tags =
-          Tag.Map.union_merge
-            (fun ({ env_extension = env_extension1; } : tag_case)
-                  ({ env_extension = env_extension2; } : tag_case)
-                  : tag_case ->
+      | Discriminant discriminants1, Discriminant discriminants2 ->
+        let discriminants =
+          Discriminant.Map.union_merge
+            (fun ({ env_extension = env_extension1; } : discriminant_case)
+                  ({ env_extension = env_extension2; } : discriminant_case)
+                  : discriminant_case ->
               let env_extension =
                 match env_extension1, env_extension2 with
                 | None, None -> None
@@ -3631,17 +3650,17 @@ end;
                   Some env_extension
               in
               { env_extension; })
-            tags1
-            tags2
+            discriminants1
+            discriminants2
         in
-        Known (Tag tags)
+        Known (Discriminant discriminants)
       | Set_of_closures set1, Set_of_closures set2 ->
         let set_of_closures = join_set_of_closures env1 env2 set1 set2 in
         Known (Set_of_closures set_of_closures)
       | Closure closure1, Closure closure2 ->
         let closure = join_closure env1 env2 closure1 closure2 in
         Known (Closure closure)
-      | (Tag _ | Set_of_closures _ | Closure _), _ -> Unknown
+      | (Discriminant _ | Set_of_closures _ | Closure _), _ -> Unknown
   end) and Meet_and_join : sig
     val meet : t_in_context -> t_in_context -> t * judgements_from_meet
 
@@ -4268,9 +4287,11 @@ Format.eprintf "Result is: %a\n%!"
         List.map
           (fun (of_kind_fabricated : of_kind_fabricated) : of_kind_fabricated ->
             match of_kind_fabricated with
-            | Tag tag_map ->
-              let tag_map =
-                Tag.Map.map (fun ({ env_extension; } : tag_case) : tag_case ->
+            | Discriminant discriminant_map ->
+              let discriminant_map =
+                Discriminant.Map.map
+                  (fun ({ env_extension; } : discriminant_case)
+                        : discriminant_case ->
                     let env_extension =
                       match env_extension with
                       | None -> env
@@ -4278,9 +4299,9 @@ Format.eprintf "Result is: %a\n%!"
                         Typing_environment.meet env_extension env
                     in
                     { env_extension = Some env_extension; })
-                  tag_map
+                  discriminant_map
               in
-              Tag tag_map
+              Discriminant discriminant_map
             | Set_of_closures _
             | Closure _ -> of_kind_fabricated)
           of_kind_fabricateds

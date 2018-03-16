@@ -194,8 +194,7 @@ type unary_primitive =
   | Get_tag of {
       tags_to_sizes : Targetint.OCaml.t Tag.Map.t;
     }
-  | Tag_to_int
-  | Int_to_tag
+  | Discriminant_of_int
   | Array_length of Block_access_kind.t
   | Bigarray_length of { dimension : int; }
     (* CR mshinwell/xclerc: Invariant check: dimension >= 0 *)

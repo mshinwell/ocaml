@@ -370,7 +370,7 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
           K.naked_int64 ()
         | Simple (Const (Naked_nativeint _)) ->
           K.naked_nativeint ()
-        | Simple (Tag _)
+        | Simple (Discriminant _)
         | Set_of_closures _ ->
           K.fabricated ()
         | Assign _ ->
@@ -553,51 +553,26 @@ let rec close t env (lam : Ilambda.t) : Flambda.Expr.t =
       Apply_cont (cont, trap_action, List.map Simple.var args)
     end
   | Switch (scrutinee, sw) ->
-    begin match sw.kind with
-    | Int ->
-      let arms =
-        List.map (fun (case, arm) -> Targetint.OCaml.of_int case, arm)
-          sw.consts
-      in
-      let arms =
-        match sw.failaction with
-        | None ->
-          Targetint.OCaml.Map.of_list arms
-        | Some default ->
-          Numbers.Int.Set.fold (fun case cases ->
-            let case = Targetint.OCaml.of_int case in
-            if Targetint.OCaml.Map.mem case cases then
-              cases
-            else
-              Targetint.OCaml.Map.add case default cases)
-            (Numbers.Int.zero_to_n (sw.numconsts - 1))
-            (Targetint.OCaml.Map.of_list arms)
-      in
-      Flambda.Expr.create_int_switch ~scrutinee:(Env.find_name env scrutinee)
-        ~arms
-    | Tag ->
-      (* CR mshinwell: work out how to share code with case above *)
-      let arms =
-        List.map (fun (case, arm) -> Tag.create_exn case, arm)
-          sw.consts
-      in
-      let arms =
-        match sw.failaction with
-        | None ->
-          Tag.Map.of_list arms
-        | Some default ->
-          Numbers.Int.Set.fold (fun case cases ->
-            let case = Tag.create_exn case in
-            if Tag.Map.mem case cases then
-              cases
-            else
-              Tag.Map.add case default cases)
-            (Numbers.Int.zero_to_n (sw.numconsts - 1))
-            (Tag.Map.of_list arms)
-      in
-      Flambda.Expr.create_tag_switch ~scrutinee:(Env.find_name env scrutinee)
-        ~arms
-    end
+    (* CR mshinwell: work out how to share code with case above *)
+    let arms =
+      List.map (fun (case, arm) -> Discriminant.of_int_exn case, arm)
+        sw.consts
+    in
+    let arms =
+      match sw.failaction with
+      | None ->
+        Discriminant.Map.of_list arms
+      | Some default ->
+        Numbers.Int.Set.fold (fun case cases ->
+          let case = Discriminant.of_int_exn case in
+          if Discriminant.Map.mem case cases then
+            cases
+          else
+            Discriminant.Map.add case default cases)
+          (Numbers.Int.zero_to_n (sw.numconsts - 1))
+          (Discriminant.Map.of_list arms)
+    in
+    Flambda.Expr.create_switch ~scrutinee:(Env.find_name env scrutinee) ~arms
   | Event (ilam, _) -> close t env ilam
 
 and close_named t env (named : Ilambda.named)

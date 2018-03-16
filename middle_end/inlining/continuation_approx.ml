@@ -53,7 +53,7 @@ let is_alias t =
         Misc.Stdlib.List.filter_map (fun (arg : Simple.t) ->
             match arg with
             | Name (Var var) -> Some var
-            | Name (Symbol _) | Const _ | Tag _ -> None)
+            | Name (Symbol _) | Const _ | Discriminant _ -> None)
           args
       in
       if List.compare_lengths args args' = 0

@@ -313,7 +313,7 @@ end = struct
   let mem_simple t (simple : Simple.t) =
     match simple with
     | Name name -> mem_name t name
-    | Const _ | Tag _ -> true
+    | Const _ | Discriminant _ -> true
 
   let redefine_symbol t sym ty =
     match find_symbol_opt t sym with

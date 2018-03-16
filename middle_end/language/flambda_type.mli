@@ -133,12 +133,14 @@ val unknown_proof : unit -> _ proof
 *)
 val prove_tagged_immediate : (t -> Immediate.Set.t proof) type_accessor
 
-type tagged_immediate_as_tags_proof = private
-  | By_tag of Typing_environment.t option Tag.Map.t
+type tagged_immediate_as_discriminants_proof = private
+  | By_discriminant of Typing_environment.t option Discriminant.Map.t
   | Answer_given_by of Name.t
 
-val prove_tagged_immediate_as_tags
-   : Typing_environment.t -> t -> tagged_immediate_as_tags_proof proof
+val prove_tagged_immediate_as_discriminants
+   : Typing_environment.t
+  -> t
+  -> tagged_immediate_as_discriminants_proof proof
 
 type is_tagged_immediate = private
   | Never_a_tagged_immediate
@@ -265,16 +267,10 @@ type unboxable_proof = private
     being unboxed. *)
 val prove_unboxable : (unboxee_ty:t -> unboxable_proof) type_accessor
 
-val int_switch_arms
+val switch_arms
    : (t
-    -> arms:Continuation.t Targetint.OCaml.Map.t
-    -> (Typing_environment.t * Continuation.t) Targetint.OCaml.Map.t)
-  type_accessor
-
-val tag_switch_arms
-   : (t
-    -> arms:Continuation.t Tag.Map.t
-    -> (Typing_environment.t * Continuation.t) Tag.Map.t)
+    -> arms:Continuation.t Discriminant.Map.t
+    -> (Typing_environment.t * Continuation.t) Discriminant.Map.t)
   type_accessor
 
 val free_names_transitive : (t -> Name_occurrences.t) type_accessor

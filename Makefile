@@ -146,6 +146,7 @@ TYPING=typing/ident.cmo typing/path.cmo \
 COMP=\
   middle_end/base_types/debuginfo.cmo \
   middle_end/base_types/tag.cmo \
+  middle_end/base_types/discriminant.cmo \
   middle_end/base_types/linkage_name.cmo \
   middle_end/base_types/compilation_unit.cmo \
   middle_end/base_types/variable.cmo \

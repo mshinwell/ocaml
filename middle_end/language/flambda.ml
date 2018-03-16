@@ -112,6 +112,11 @@ module rec Expr : sig
   include module type of F0.Expr
 
   val invariant : Invariant_env.t -> t -> unit
+  val if_then_else
+     : scrutinee:Name.t
+    -> if_true:Continuation.t
+    -> if_false:Continuation.t
+    -> t
   val no_effects_or_coeffects : t -> bool
   val make_closure_declaration
      : id:Variable.t
@@ -252,6 +257,15 @@ module rec Expr : sig
   end
 end = struct
   include F0.Expr
+
+  let if_then_else ~scrutinee ~if_true ~if_false =
+    let arms =
+      Discriminant.Map.of_list [
+        Discriminant.bool_true, if_true;
+        Discriminant.bool_false, if_false;
+      ]
+    in
+    create_switch ~scrutinee ~arms
 
   let rec no_effects_or_coeffects (t : t) =
     match t with
@@ -899,10 +913,8 @@ end = struct
         | Apply_cont (cont, Some (Pop { exn_handler; _ }), _) ->
           use cont;
           use exn_handler
-        | Switch (_, Value switch) ->
-          Targetint.OCaml.Map.iter (fun _value cont -> use cont) switch
-        | Switch (_, Fabricated switch) ->
-          Tag.Map.iter (fun _value cont -> use cont) switch
+        | Switch (_, switch) ->
+          Switch.iter switch ~f:(fun _value cont -> use cont)
         | Let _ | Let_mutable _ | Let_cont _ | Invalid _ -> ())
       (fun _named -> ())
       expr;
@@ -1161,15 +1173,17 @@ end = struct
         ignore (dbg : Debuginfo.t);
         ignore (inline : inline_attribute);
         ignore (specialise : specialise_attribute)
-      | Switch (arg, Value arms) ->
+      | Switch (arg, switch) ->
         (* CR mshinwell: Can we check this?  It might be of kind "unknown" *)
         E.check_name_is_bound_and_of_kind env arg
           (K.value ());
+(* XXX Move into [Switch]
         if Targetint.OCaml.Map.cardinal arms < 1 then begin
           Misc.fatal_errorf "Empty switch:@ %a" print t
         end;
-        let check i cont =
-          ignore (i : Targetint.OCaml.t);
+*)
+        let check discr cont =
+          ignore (discr : Discriminant.t);
           match E.find_continuation_opt env cont with
           | None ->
             unbound_continuation cont "[Switch] term"
@@ -1191,38 +1205,7 @@ end = struct
                 Flambda_arity.print arity
             end
         in
-        Targetint.OCaml.Map.iter check arms
-      (* CR mshinwell: Factor out and share with case above *)
-      | Switch (arg, Fabricated arms) ->
-        E.check_name_is_bound_and_of_kind env arg
-          (K.fabricated ());
-        if Tag.Map.cardinal arms < 1 then begin
-          Misc.fatal_errorf "Empty switch: %a" print t
-        end;
-        let check i cont =
-          ignore (i : Tag.t);
-          match E.find_continuation_opt env cont with
-          | None ->
-            unbound_continuation cont "[Switch] term"
-          | Some (arity, kind, cont_stack) ->
-            let current_stack = E.current_continuation_stack env in
-            E.Continuation_stack.unify cont cont_stack current_stack;
-            begin match kind with
-            | Normal -> ()
-            | Exn_handler ->
-              Misc.fatal_errorf "Continuation %a is an exception handler \
-                  but is used in this [Switch] as a normal continuation:@ %a"
-                Continuation.print cont
-                print expr
-            end;
-            if List.length arity <> 0 then begin
-              Misc.fatal_errorf "Continuation %a is used in this [Switch] \
-                  and thus must have arity [], but has arity %a"
-                Continuation.print cont
-                Flambda_arity.print arity
-            end
-        in
-        Tag.Map.iter check arms
+        Switch.iter switch ~f:check
       | Invalid _ -> ()
     in
     loop env expr
@@ -1267,30 +1250,24 @@ end = struct
   let dummy_value (kind : K.t) : t =
     let simple = 
       match kind with
-      | Value -> Simple.const_zero
-      | Naked_number Naked_immediate ->
+      | Value | Phantom (_, Value) -> Simple.const_zero
+      | Naked_number Naked_immediate
+      | Phantom (_, Naked_number Naked_immediate) ->
         Simple.const (Untagged_immediate Immediate.zero)
-      | Naked_number Naked_float ->
+      | Naked_number Naked_float
+      | Phantom (_, Naked_number Naked_float) ->
         Simple.const (Naked_float Numbers.Float_by_bit_pattern.zero)
-      | Naked_number Naked_int32 ->
+      | Naked_number Naked_int32
+      | Phantom (_, Naked_number Naked_int32) ->
         Simple.const (Naked_int32 Int32.zero)
-      | Naked_number Naked_int64 ->
+      | Naked_number Naked_int64
+      | Phantom (_, Naked_number Naked_int64) ->
         Simple.const (Naked_int64 Int64.zero)
-      | Naked_number Naked_nativeint ->
+      | Naked_number Naked_nativeint
+      | Phantom (_, Naked_number Naked_nativeint) ->
         Simple.const (Naked_nativeint Targetint.zero)
-      | Fabricated -> Simple.tag (Tag.create_exn 0)
-      | Phantom (_occs, Value) -> Simple.const_zero
-      | Phantom (_occs, Naked_number Naked_immediate) ->
-        Simple.const (Untagged_immediate Immediate.zero)
-      | Phantom (_occs, Naked_number Naked_float) ->
-        Simple.const (Naked_float Numbers.Float_by_bit_pattern.zero)
-      | Phantom (_occs, Naked_number Naked_int32) ->
-        Simple.const (Naked_int32 Int32.zero)
-      | Phantom (_occs, Naked_number Naked_int64) ->
-        Simple.const (Naked_int64 Int64.zero)
-      | Phantom (_occs, Naked_number Naked_nativeint) ->
-        Simple.const (Naked_nativeint Targetint.zero)
-      | Phantom (_occs, Fabricated) -> Simple.tag (Tag.create_exn 0)
+      | Fabricated | Phantom (_, Fabricated) ->
+        Simple.discriminant Discriminant.zero
     in
     Simple simple
 
@@ -1349,8 +1326,7 @@ end = struct
       | Duplicate_block _, _
       | Is_int, _
       | Get_tag _, _
-      | Int_to_tag, _
-      | Tag_to_int, _
+      | Discriminant_of_int, _
       | Array_length _, _
       | Bigarray_length _, _
       | String_length _, _

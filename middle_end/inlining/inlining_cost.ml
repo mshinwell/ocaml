@@ -92,12 +92,8 @@ let lambda_smaller' lam ~than:threshold =
       lambda_named_size defining_expr;
       lambda_size body
     | Let_mutable { body } -> lambda_size body
-    | Switch (_, Value arms) ->
-      let aux = function _::_::_ -> size := !size + 5 | _ -> () in
-      aux (Targetint.OCaml.Map.bindings arms)
-    | Switch (_, Fabricated arms) ->
-      let aux = function _::_::_ -> size := !size + 5 | _ -> () in
-      aux (Tag.Map.bindings arms)
+    | Switch (_, switch) ->
+      size := !size + (5 * Flambda.Switch.num_arms switch)
     | Apply_cont _ -> incr size
     | Let_cont { body; handlers; } ->
       lambda_size body;
@@ -116,7 +112,7 @@ let lambda_smaller' lam ~than:threshold =
     match named with
     | Simple (Name _) -> ()
     | Simple (Const _) -> incr size
-    | Simple (Tag _) -> incr size
+    | Simple (Discriminant _) -> incr size
     | Assign _ -> incr size
     | Read_mutable _ -> ()
     | Set_of_closures ({ function_decls; _ }) ->

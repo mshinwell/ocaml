@@ -905,11 +905,11 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
           end
       end
     | Fabricated (Ok (Closure _)) -> try_name ()
-    | Fabricated (Ok (Tag tags)) ->
-      begin match Tag.Map.get_singleton tags with
+    | Fabricated (Ok (Discriminant discriminants)) ->
+      begin match Discriminant.Map.get_singleton discriminants with
       | None -> try_name ()
-      | Some (tag, { env_extension = _; }) ->
-        Term (Simple.tag tag, t)
+      | Some (discriminant, { env_extension = _; }) ->
+        Term (Simple.discriminant discriminant, t)
       end
     | Fabricated Unknown -> try_name ()
     | Fabricated Bottom -> Invalid
@@ -945,19 +945,20 @@ let prove_tagged_immediate env t
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Fabricated _ -> wrong_kind ()
 
-type tagged_immediate_as_tags_proof =
-  | By_tag of Typing_environment.t option Tag.Map.t
+type tagged_immediate_as_discriminants_proof =
+  | By_discriminant of Typing_environment.t option Discriminant.Map.t
   | Answer_given_by of Name.t
 
-let prove_tagged_immediate_as_tags env t
-      : tagged_immediate_as_tags_proof proof =
+let prove_tagged_immediate_as_discriminants env t
+      : tagged_immediate_as_discriminants_proof proof =
   let wrong_kind () =
     Misc.fatal_errorf "Wrong kind for something claimed to be a tagged \
         immediate: %a"
       print t
   in
   let simplified, _canonical_name = Simplified_type.create env t in
-  Simplified_type.check_not_phantom simplified "prove_tagged_immediate_as_tags";
+  Simplified_type.check_not_phantom simplified
+    "prove_tagged_immediate_as_discriminants";
   match simplified.descr with
   | Value ty_value ->
     begin match ty_value with
@@ -976,25 +977,23 @@ let prove_tagged_immediate_as_tags env t
         | true, true -> Invalid
         | false, false -> use_get_tag ()
         | true, false ->
-          let by_tag =
-            Immediate.Map.fold (fun imm (imm_case : immediate_case) by_tag ->
-                let bad_tag () =
+          let by_discr =
+            Immediate.Map.fold (fun imm (imm_case : immediate_case) by_discr ->
+                let bad_discriminant () =
                   Misc.fatal_errorf "Immediate %a cannot be interpreted \
-                      as a tag.  In type: %a"
+                      as a discriminant.  In type: %a"
                     Immediate.print imm
                     print t
                 in
                 let imm = Immediate.to_targetint imm in
-                match Targetint.OCaml.to_int_option imm with
-                | None -> bad_tag ()
-                | Some int ->
-                  match Tag.create int with
-                  | None -> bad_tag ()
-                  | Some tag -> Tag.Map.add tag imm_case.env_extension by_tag)
+                match Discriminant.create imm with
+                | None -> bad_discriminant ()
+                | Some discr ->
+                  Discriminant.Map.add discr imm_case.env_extension by_discr)
               imms
-              Tag.Map.empty
+              Discriminant.Map.empty
           in
-          Proved (By_tag by_tag)
+          Proved (By_discriminant by_discr)
         | false, true -> Invalid
       end
     | Ok (Boxed_number _) -> Invalid
@@ -1765,80 +1764,30 @@ let values_structurally_distinct (env1, (t1 : t)) (env2, (t2 : t)) =
         print t1
         print t2
 
-let int_switch_arms (env : Typing_environment.t) t ~arms =
+let switch_arms env t ~arms =
   let empty_env = Typing_environment.create_using_resolver_from env in
   let wrong_kind () =
-    Misc.fatal_errorf "Wrong kind for something claimed to be a tagged \
-        immediate: %a"
+    Misc.fatal_errorf
+      "Wrong kind for something claimed to be a discriminant: %a"
       print t
   in
   let unknown () =
-    Targetint.OCaml.Map.fold (fun arm cont result ->
-        Targetint.OCaml.Map.add arm (empty_env, cont) result)
+    Discriminant.Map.fold (fun arm cont result ->
+        Discriminant.Map.add arm (empty_env, cont) result)
       arms
-      Targetint.OCaml.Map.empty
+      Discriminant.Map.empty
   in
-  let invalid () = Targetint.OCaml.Map.empty in
+  let invalid () = Discriminant.Map.empty in
   let simplified, _canonical_name = Simplified_type.create env t in
-  match simplified.descr with
-  | Value ty_value ->
-    begin match ty_value with
-    | Unknown -> unknown ()
-    | Bottom -> invalid ()
-    | Ok (Blocks_and_tagged_immediates blocks_imms) ->
-      begin match blocks_imms.blocks with
-      | Unknown -> unknown ()
-      | Known blocks ->
-        if not (Tag.Map.is_empty blocks) then begin
-          invalid ()
-        end else begin
-          match blocks_imms.immediates with
-          | Unknown -> unknown ()
-          | Known imms ->
-            assert (not (Immediate.Map.is_empty imms));
-            Targetint.OCaml.Map.fold (fun arm cont result ->
-                match Immediate.Map.find (Immediate.int arm) imms with
-                | exception Not_found -> result
-                | { env_extension; } ->
-                  let env_extension =
-                    match env_extension with
-                    | None -> empty_env
-                    | Some env_extension -> env_extension
-                  in
-                  Targetint.OCaml.Map.add arm (env_extension, cont) result)
-              arms
-              Targetint.OCaml.Map.empty
-        end
-      end
-    | Ok (Boxed_number _) -> invalid ()
-    | Ok (Closures _ | String _) -> invalid ()
-    end
-  | Simplified_type.Naked_number _ -> wrong_kind ()
-  | Fabricated _ -> wrong_kind ()
-
-let tag_switch_arms env t ~arms =
-  let empty_env = Typing_environment.create_using_resolver_from env in
-  let wrong_kind () =
-    Misc.fatal_errorf "Wrong kind for something claimed to be a tag: %a"
-      print t
-  in
-  let unknown () =
-    Tag.Map.fold (fun arm cont result ->
-        Tag.Map.add arm (empty_env, cont) result)
-      arms
-      Tag.Map.empty
-  in
-  let invalid () = Tag.Map.empty in
-  let simplified, _canonical_name = Simplified_type.create env t in
-  Simplified_type.check_not_phantom simplified "tag_switch_arms";
+  Simplified_type.check_not_phantom simplified "discriminant_switch_arms";
   match simplified.descr with
   | Fabricated ty_fabricated ->
     begin match ty_fabricated with
     | Unknown -> unknown ()
     | Bottom -> invalid ()
-    | Ok (Tag tag_map) ->
-      Tag.Map.fold (fun arm cont result ->
-          match Tag.Map.find arm tag_map with
+    | Ok (Discriminant discriminant_map) ->
+      Discriminant.Map.fold (fun arm cont result ->
+          match Discriminant.Map.find arm discriminant_map with
           | exception Not_found -> result
           | { env_extension; } ->
             let env_extension =
@@ -1846,9 +1795,9 @@ let tag_switch_arms env t ~arms =
               | None -> empty_env
               | Some env_extension -> env_extension
             in
-            Tag.Map.add arm (env_extension, cont) result)
+            Discriminant.Map.add arm (env_extension, cont) result)
         arms
-        Tag.Map.empty
+        Discriminant.Map.empty
     | Ok (Set_of_closures _) | Ok (Closure _) -> invalid ()
     end
   | Simplified_type.Naked_number _ -> wrong_kind ()

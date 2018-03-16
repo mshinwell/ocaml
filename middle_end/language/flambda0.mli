@@ -163,14 +163,12 @@ end
 module Switch : sig
   (** Conditional control flow (the only such form). *)
 
-  (** Values of type [t] are indexed by the kind of the scrutinee.  They
-      contain branches for all possible values of the scrutinee.
-      Invariant: the maps are always non-empty. *)
   (* CR mshinwell: add invariant function *)
-  (* XXX Change to just one type of switch, on Scrutinee *)
-  type t = private
-    | Value of Continuation.t Targetint.OCaml.Map.t
-    | Fabricated of Continuation.t Tag.Map.t
+  type t
+
+  val iter : t -> f:(Discriminant.t -> Continuation.t -> unit) -> unit
+
+  val num_arms : t -> int
 
   include Identifiable.S_no_hash with type t := t
 end
@@ -243,15 +241,14 @@ module rec Expr : sig
       transformations such as generating an [Apply_cont] instead of a
       single-arm switch.  The only thing that is forbidden here is a zero-arm
       switch. *)
-  (* CR mshinwell: move into [Switch] *)
-  val create_int_switch
+  val create_switch
      : scrutinee:Name.t
-    -> arms:Continuation.t Targetint.OCaml.Map.t
+    -> arms:Continuation.t Discriminant.Map.t
     -> Expr.t
-  val create_tag_switch
+  val create_switch'
      : scrutinee:Name.t
-    -> arms:Continuation.t Tag.Map.t
-    -> Expr.t
+    -> arms:Continuation.t Discriminant.Map.t
+    -> Expr.t * bool
 
   (** Compute the free names of a term.  (This is O(1) for [Let]s).
       If [ignore_uses_as_callee], all free names inside [Apply] expressions

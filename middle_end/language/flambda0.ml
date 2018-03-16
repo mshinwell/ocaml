@@ -379,45 +379,29 @@ module Trap_action = struct
 end
 
 module Switch = struct
-  type t =
-    | Value of Continuation.t Targetint.OCaml.Map.t
-    | Fabricated of Continuation.t Tag.Map.t
+  type t = Continuation.t Discriminant.Map.t
+
+  let iter t ~f = Discriminant.Map.iter f t
+
+  let num_arms t = Discriminant.Map.cardinal t
 
   include Identifiable.Make_no_hash (struct
     type nonrec t = t
 
-    let compare t1 t2 =
-      match t1, t2 with
-      | Value _, Fabricated _ -> -1
-      | Fabricated _, Value _ -> 1
-      | Value arms1, Value arms2 ->
-        Targetint.OCaml.Map.compare Continuation.compare arms1 arms2
-      | Fabricated arms1, Fabricated arms2 ->
-        Tag.Map.compare Continuation.compare arms1 arms2
+    let compare = Discriminant.Map.compare Continuation.compare
 
     let equal t1 t2 = (compare t1 t2 = 0)
 
     let print ppf (t : t) =
       let spc = ref false in
-      match t with
-      | Value arms ->
-        Targetint.OCaml.Map.iter (fun n l ->
-            if !spc then fprintf ppf "@ " else spc := true;
-            fprintf ppf "@[<hv 1>| %a ->@ %sgoto%s %a@]"
-              Targetint.OCaml.print n
-              (Misc_color.bold_cyan ())
-              (Misc_color.reset ())
-              Continuation.print l)
-          arms
-      | Fabricated arms ->
-        Tag.Map.iter (fun tag l ->
-            if !spc then fprintf ppf "@ " else spc := true;
-            fprintf ppf "@[<hv 1>| tag %a ->@ %sgoto%s %a@]"
-              Tag.print tag
-              (Misc_color.bold_cyan ())
-              (Misc_color.reset ())
-              Continuation.print l)
-          arms
+      Discriminant.Map.iter (fun discriminant l ->
+          if !spc then fprintf ppf "@ " else spc := true;
+          fprintf ppf "@[<hv 1>| %a ->@ %sgoto%s %a@]"
+            Discriminant.print discriminant
+            (Misc_color.bold_cyan ())
+            (Misc_color.reset ())
+            Continuation.print l)
+        t
   end)
 end
 
@@ -449,21 +433,13 @@ module rec Expr : sig
     | Invalid of invalid_term_semantics
 
   val create_let : Variable.t -> Flambda_kind.t -> Named.t -> t -> t
-  val create_int_switch
+  val create_switch
      : scrutinee:Name.t
-    -> arms:Continuation.t Targetint.OCaml.Map.t
+    -> arms:Continuation.t Discriminant.Map.t
     -> Expr.t
-  val create_int_switch'
+  val create_switch'
      : scrutinee:Name.t
-    -> arms:Continuation.t Targetint.OCaml.Map.t
-    -> Expr.t * bool
-  val create_tag_switch
-     : scrutinee:Name.t
-    -> arms:Continuation.t Tag.Map.t
-    -> Expr.t
-  val create_tag_switch'
-     : scrutinee:Name.t
-    -> arms:Continuation.t Tag.Map.t
+    -> arms:Continuation.t Discriminant.Map.t
     -> Expr.t * bool
   val free_names_advanced
      : ?ignore_uses_as_callee:unit
@@ -663,17 +639,11 @@ end = struct
     else
       Invalid Halt_and_catch_fire
 
-  let create_int_switch ~scrutinee ~arms : t =
-    if Targetint.OCaml.Map.cardinal arms < 1 then begin
+  let create_switch ~scrutinee ~arms : t =
+    if Discriminant.Map.cardinal arms < 1 then begin
       Misc.fatal_error "Cannot create zero-arity [Switch]; use [Invalid]"
     end;
-    Switch (scrutinee, Value arms)
-
-  let create_tag_switch ~scrutinee ~arms : t =
-    if Tag.Map.cardinal arms < 1 then begin
-      Misc.fatal_error "Cannot create zero-arity [Switch]; use [Invalid]"
-    end;
-    Switch (scrutinee, Fabricated arms)
+    Switch (scrutinee, arms)
 
   let rec free_continuations (t : t) =
     match t with
@@ -710,10 +680,8 @@ end = struct
         specialise = _;
       } ->
       Continuation.Set.of_list [continuation; exn_continuation]
-    | Switch (_scrutinee, Value int_switch) ->
-      Continuation.Set.of_list (Targetint.OCaml.Map.data int_switch)
-    | Switch (_scrutinee, Fabricated tag_switch) ->
-      Continuation.Set.of_list (Tag.Map.data tag_switch)
+    | Switch (_scrutinee, switch) ->
+      Continuation.Set.of_list (Discriminant.Map.data switch)
     | Invalid _ -> Continuation.Set.empty
 
   let create_let var kind defining_expr body : t =

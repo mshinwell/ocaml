@@ -101,6 +101,13 @@ module rec Expr : sig
 
   val invariant : Invariant_env.t -> t -> unit
 
+  (** Build a [Switch] corresponding to a traditional if-then-else. *)
+  val if_then_else
+     : scrutinee:Name.t
+    -> if_true:Continuation.t
+    -> if_false:Continuation.t
+    -> t
+
   (** Returns [true] if the given expression has neither effects nor
       coeffects (see [Flambda_primitive] for documentation on such). *)
   val no_effects_or_coeffects : t -> bool
