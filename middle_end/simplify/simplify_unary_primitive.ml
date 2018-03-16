@@ -324,12 +324,12 @@ let simplify_is_int env r prim arg dbg =
   (* CR mshinwell: The 0 and 1 constants should be bound somewhere with
      proper names. *)
   let proved ~is_tagged_immediate =
-    let tag =
-      if is_tagged_immediate then Tag.create_exn 1
-      else Tag.create_exn 0
+    let discriminant =
+      if is_tagged_immediate then Discriminant.bool_true
+      else Discriminant.bool_false
     in
-    Reachable.reachable (Simple (Simple.tag tag)),
-      T.this_tag tag,
+    Reachable.reachable (Simple (Simple.discriminant discriminant)),
+      T.this_discriminant discriminant,
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
   match proof with
@@ -343,9 +343,9 @@ let simplify_is_int env r prim arg dbg =
        refined type of [arg]. *)
     let empty_env = T.Typing_environment.create ~resolver:(E.resolver env) in
     let all_results =
-      T.these_tags (Tag.Map.of_list [
-        Tag.create_exn 0, empty_env;
-        Tag.create_exn 1, empty_env;
+      T.these_discriminants (Discriminant.Map.of_list [
+        Discriminant.bool_false, empty_env;
+        Discriminant.bool_true, empty_env;
       ])
     in
     Reachable.reachable (original_term ()), all_results, r
@@ -362,8 +362,8 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
   let result_var_type ~tags_to_sizes =
-    let tags_to_env_extensions =
-      Tag.Map.fold (fun tag size tags_to_env_extensions ->
+    let discriminants_to_env_extensions =
+      Tag.Map.fold (fun tag size discriminants_to_env_extensions ->
           (* CR mshinwell: think about this conversion *)
           let size = Targetint.OCaml.to_int size in
           let block_ty =
@@ -380,9 +380,9 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
           in
           let env =
             match block with
-            | Const _ | Tag _ ->
+            | Const _ | Discriminant _ ->
               (* CR mshinwell: This is kind of silly---it will never be a
-                 [Const] or [Tag] *)
+                 [Const] or [Discriminant] *)
               T.Typing_environment.create ~resolver:(E.resolver env)
             | Name block ->
               let scope_level = E.scope_level_of_name env block in
@@ -390,11 +390,12 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
                 (T.Typing_environment.create ~resolver:(E.resolver env))
                 block scope_level block_ty
           in
-          Tag.Map.add tag env tags_to_env_extensions)
+          let discriminant = Discriminant.of_tag tag in
+          Discriminant.Map.add discriminant env discriminants_to_env_extensions)
         tags_to_sizes
-        Tag.Map.empty
+        Discriminant.Map.empty
     in
-    T.these_tags tags_to_env_extensions
+    T.these_discriminants discriminants_to_env_extensions
   in
   match inferred_tags with
   | Proved (Tags inferred_tags) ->
@@ -445,7 +446,7 @@ module Make_simplify_unbox_number (P : A.Boxable_number_kind) = struct
     in
     let r =
       match arg with
-      | Const _ | Tag _ | Name (Symbol _) -> r
+      | Const _ | Discriminant _ | Name (Symbol _) -> r
       | Name ((Var _) as boxed_name) ->
         let kind = K.Standard_int_or_float.to_kind P.kind in
         let boxed_ty_refinement =
@@ -507,7 +508,7 @@ module Make_simplify_box_number (P : A.Boxable_number_kind) = struct
     | Unknown ->
       let ty =
         match arg with
-        | Const _ | Tag _ -> ty
+        | Const _ | Discriminant _ -> ty
         | Name arg ->
           let kind = K.Standard_int_or_float.to_kind P.kind in
           P.box (T.alias_type_of kind arg)
@@ -707,10 +708,11 @@ let simplify_unary_float_arith_op env r prim
   | Proved _ | Unknown -> result_unknown ()
   | Invalid -> result_invalid ()
 
-let simplify_int_to_tag env r prim arg dbg =
+let simplify_discriminant_of_int env r prim arg dbg =
   let arg, arg_ty = S.simplify_simple env arg in
   let proof =
-    T.prove_tagged_immediate_as_tags (E.get_typing_environment env) arg_ty
+    T.prove_tagged_immediate_as_discriminants (E.get_typing_environment env)
+      arg_ty
   in
   let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
   let result_kind = K.fabricated () in
@@ -719,15 +721,16 @@ let simplify_int_to_tag env r prim arg dbg =
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
   match proof with
-  | Proved (By_tag by_tag) ->
-    let by_tag =
-      Tag.Map.map (fun env_extension_opt ->
+  | Proved (By_discriminant by_discriminant) ->
+    let by_discriminant =
+      Discriminant.Map.map (fun env_extension_opt ->
           match env_extension_opt with
           | None -> T.Typing_environment.create ~resolver:(E.resolver env)
           | Some env -> env)
-        by_tag
+        by_discriminant
     in
-    Reachable.reachable (original_term ()), T.these_tags by_tag, r
+    Reachable.reachable (original_term ()),
+      T.these_discriminants by_discriminant, r
   | Proved (Answer_given_by name) ->
     Reachable.reachable (original_term ()),
       T.alias_type_of (K.fabricated ()) name, r
@@ -810,9 +813,7 @@ let simplify_unary_primitive env r (prim : Flambda_primitive.unary_primitive)
   | Is_int -> simplify_is_int env r prim arg dbg
   | Get_tag { tags_to_sizes; } ->
     simplify_get_tag env r  prim ~tags_to_sizes ~block:arg dbg
-  | Tag_to_int -> Misc.fatal_error "FIXME"
-  | Int_to_tag ->
-    simplify_int_to_tag env r prim arg dbg
+  | Discriminant_of_int -> simplify_discriminant_of_int env r prim arg dbg
   | String_length _string_or_bytes ->
     simplify_string_length env r prim arg dbg
   | Int_as_pointer ->

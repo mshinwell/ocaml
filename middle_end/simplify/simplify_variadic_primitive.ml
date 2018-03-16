@@ -57,7 +57,7 @@ let simplify_make_block env r prim dbg
           match arg with
           | Const _ -> T.force_to_kind_value arg_ty
           | Name name -> T.alias_type_of_as_ty_value name
-          | Tag _ -> assert false  (* CR mshinwell: proper error! *) )
+          | Discriminant _ -> assert false  (* CR mshinwell: proper error! *) )
         args_with_tys value_kinds
     in
     if !found_bottom then begin

@@ -47,7 +47,7 @@ let simplify_name_for_let env r ~bound_name name =
 let simplify_simple_for_let env r ~bound_name (simple : Simple.t) =
   match simple with
   | Const c -> simple, type_for_const c, r
-  | Tag t -> simple, T.this_tag t, r
+  | Discriminant t -> simple, T.this_discriminant t, r
   | Name name ->
 let orig_name = name in
     let name, ty, r = simplify_name_for_let env r ~bound_name name in
@@ -81,7 +81,7 @@ in
 let new_simple, ty =
   match simple with
   | Const c -> simple, type_for_const c
-  | Tag t -> simple, T.this_tag t
+  | Discriminant t -> simple, T.this_discriminant t
   | Name name ->
     let name = Freshening.apply_name (E.freshening env) name in
     let ty = E.find_name env name in

@@ -385,6 +385,8 @@ module Switch = struct
 
   let num_arms t = Discriminant.Map.cardinal t
 
+  let arms t = t
+
   include Identifiable.Make_no_hash (struct
     type nonrec t = t
 

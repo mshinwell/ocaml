@@ -168,6 +168,8 @@ module Switch : sig
 
   val iter : t -> f:(Discriminant.t -> Continuation.t -> unit) -> unit
 
+  val arms : t -> Continuation.t Discriminant.Map.t
+
   val num_arms : t -> int
 
   include Identifiable.S_no_hash with type t := t
