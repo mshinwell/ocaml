@@ -771,18 +771,15 @@ end) = struct
     }
 
   let add_alias_typing_environment env ~canonical_name ~alias =
+(* XXX This check is inconvenient for [r]
     if not (Name.Map.mem canonical_name env.names_to_types) then begin
       Misc.fatal_errorf "Cannot add alias %a of canonical name %a: the \
-          canonical name is not bound in the environment"
+          canonical name is not bound in the environment: %a"
         Name.print alias
         Name.print canonical_name
+        print_typing_environment env
     end;
-    if not (Name.Map.mem canonical_name env.names_to_types) then begin
-      Misc.fatal_errorf "Cannot add alias %a of canonical name %a: the \
-          alias is not bound in the environment"
-        Name.print alias
-        Name.print canonical_name
-    end;
+*)
     let canonical_names_to_aliases =
       Name.Map.update canonical_name (function
           | None -> Some (Name.Set.singleton alias)
@@ -797,8 +794,9 @@ end) = struct
     match Name.Map.find canonical_name env.canonical_names_to_aliases with
     | exception Not_found ->
       Misc.fatal_errorf "Cannot find aliases of canonical name %a which is \
-          not bound in the environment"
+          not bound in the environment: %a"
         Name.print canonical_name
+        print_typing_environment env
     | aliases -> aliases
 
   let add_or_replace_typing_environment' env name scope_level t =
