@@ -1765,7 +1765,7 @@ let values_structurally_distinct (env1, (t1 : t)) (env2, (t2 : t)) =
         print t2
 
 let switch_arms env t ~arms =
-  let no_equations = Equations.create_using_resolver_from_env env in
+  let no_equations = Equations.create () in
   let wrong_kind () =
     Misc.fatal_errorf
       "Wrong kind for something claimed to be a discriminant: %a"
