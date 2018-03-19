@@ -151,7 +151,9 @@ Format.eprintf "Unbox_continuation_params starting with continuations %a\n%!"
                       Variable.Map.find var how_to_unbox.new_unboxee_types
                     with
                     | exception Not_found -> param
-                    | ty -> Flambda.Typed_parameter.with_type param ty)
+                    | _ ->
+                      let ty = Flambda_type.any_value () in
+                      Flambda.Typed_parameter.with_type param ty)
                   handler.params
               in
               let params = how_to_unbox.new_params @ existing_params in
@@ -171,13 +173,13 @@ Format.eprintf "Unbox_continuation_params starting with continuations %a\n%!"
                   new_cont;
                   new_handler = {
                     params;
-                    stub = handler.stub;
+                    stub = false; (* handler.stub; XXX *)
                     is_exn_handler = false;
                     handler = handler.handler;
                   };
                   wrapper_handler = {
                     params = wrapper_params;
-                    stub = true;
+                    stub = (* true; XXX *) false;
                     is_exn_handler = false;
                     handler = wrapper_body;
                   };

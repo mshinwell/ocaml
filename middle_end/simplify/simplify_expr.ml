@@ -68,6 +68,8 @@ let for_defining_expr_of_let (env, r) var kind defining_expr =
 Format.eprintf "Simplifying let %a = %a\n%!"
   Variable.print var
   Named.print defining_expr;
+  let _old_var = var in
+  let var, freshening = Freshening.add_variable (E.freshening env) var in
   let new_bindings, defining_expr, ty, r =
     Simplify_named.simplify_named env r defining_expr ~result_var:var
   in
@@ -99,8 +101,6 @@ Format.eprintf "Simplifying let %a = %a\n%!"
       else
         defining_expr
   in
-  let _old_var = var in
-  let var, freshening = Freshening.add_variable (E.freshening env) var in
   let env = E.set_freshening env freshening in
   let env = E.add_variable env var ty in
   let env =

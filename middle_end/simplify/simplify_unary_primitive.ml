@@ -317,7 +317,7 @@ let simplify_duplicate_block _env _r _prim _arg _dbg
   term, ty, r
 *)
 
-let simplify_is_int env r prim arg dbg =
+let simplify_is_int env r prim arg dbg ~result_var =
   let arg, ty = S.simplify_simple env arg in
   let original_term () : Named.t = Prim (Unary (prim, arg), dbg) in
   let proof = T.prove_is_tagged_immediate (E.get_typing_environment env) ty in
@@ -331,6 +331,22 @@ let simplify_is_int env r prim arg dbg =
     Reachable.reachable (Simple (Simple.discriminant discriminant)),
       T.this_discriminant discriminant,
       R.map_benefit r (B.remove_primitive (Unary prim))
+  in
+  let r =
+    match arg with
+    | Const _ | Discriminant _ -> r
+    | Name arg ->
+      let arg_ty =
+        T.variant_whose_discriminants_are
+          ~is_int:(Some (Name.var result_var)) ~get_tag:None
+      in
+      let r =
+        R.add_or_meet_equation r (Name.var result_var)
+          (E.continuation_scope_level env)
+          (T.unknown (K.fabricated ()))
+      in
+      let scope_level = E.scope_level_of_name env arg in
+      R.add_or_meet_equation r arg scope_level arg_ty
   in
   match proof with
   | Proved Always_a_tagged_immediate -> proved ~is_tagged_immediate:true
@@ -353,7 +369,7 @@ let simplify_is_int env r prim arg dbg =
     Reachable.invalid (), T.bottom (K.fabricated ()),
       R.map_benefit r (B.remove_primitive (Unary prim))
 
-let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
+let simplify_get_tag env r prim ~tags_to_sizes ~block dbg ~result_var =
   let block, block_ty = S.simplify_simple env block in
   let inferred_tags = T.prove_tags (E.get_typing_environment env) block_ty in
   let possible_tags = Tag.Map.keys tags_to_sizes in
@@ -395,6 +411,22 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
         Discriminant.Map.empty
     in
     T.these_discriminants discriminants_to_equations
+  in
+  let r =
+    match block with
+    | Const _ | Discriminant _ -> r
+    | Name block ->
+      let block_ty =
+        T.variant_whose_discriminants_are ~is_int:None
+          ~get_tag:(Some (Name.var result_var))
+      in
+      let r =
+        R.add_or_meet_equation r (Name.var result_var)
+          (E.continuation_scope_level env)
+          (T.unknown (K.fabricated ()))
+      in
+      let scope_level = E.scope_level_of_name env block in
+      R.add_or_meet_equation r block scope_level block_ty
   in
   match inferred_tags with
   | Proved (Tags inferred_tags) ->
@@ -802,9 +834,9 @@ let simplify_unary_primitive env r (prim : Flambda_primitive.unary_primitive)
       destination_mutability; } ->
     simplify_duplicate_block env r prim arg dbg ~kind
       ~source_mutability ~destination_mutability
-  | Is_int -> simplify_is_int env r prim arg dbg
+  | Is_int -> simplify_is_int env r prim arg dbg ~result_var
   | Get_tag { tags_to_sizes; } ->
-    simplify_get_tag env r  prim ~tags_to_sizes ~block:arg dbg
+    simplify_get_tag env r prim ~tags_to_sizes ~block:arg dbg ~result_var
   | Discriminant_of_int -> simplify_discriminant_of_int env r prim arg dbg
   | String_length _string_or_bytes ->
     simplify_string_length env r prim arg dbg
