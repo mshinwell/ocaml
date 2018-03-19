@@ -80,8 +80,7 @@ module type S = sig
 
   type typing_environment
 
-  (* CR mshinwell: make [equations] abstract. *)
-  type equations = typing_environment option
+  type equations
 
   (** Values of type [t] are known as "Flambda types".  Each Flambda type
       has a unique kind. *)
@@ -409,6 +408,12 @@ module type S = sig
     val aliases : t -> canonical_name:Name.t -> Name.Set.t
   end
 
+  module Equations : sig
+    type t = equations
+
+    val create : unit -> t
+  end
+
   (** Annotation for functions that may require examination of the current
       environment (in particular to resolve [Type] or [Equals] aliases). *)
   type 'a type_accessor = Typing_environment.t -> 'a
@@ -497,9 +502,7 @@ module type S = sig
   (** A type representing a set of tagged immediates combined with typing
       judgements that will be used if the set contains, or is subsequently
       refined to contain, only a unique element. *)
-  val these_tagged_immediates_with_envs
-     : typing_environment Immediate.Map.t
-    -> t
+  val these_tagged_immediates_with_envs : equations Immediate.Map.t -> t
 
   (** Building of types representing untagged / unboxed values from
       specified constants. *)
@@ -539,14 +542,12 @@ module type S = sig
 
   (** The given block discriminants coupled with the equations that hold if the
       corresponding block can be shown to have one of the discriminants. *)
-  val these_discriminants
-     : typing_environment Discriminant.Map.t
-    -> t
+  val these_discriminants : equations Discriminant.Map.t -> t
 
   (** Like [these_discriminants], but returns the [ty_fabricated], rather than
       a value of type [t]. *)
   val these_discriminants_as_ty_fabricated
-     : typing_environment Discriminant.Map.t
+     : equations Discriminant.Map.t
     -> ty_fabricated
 
   (** Any discriminant. *)
@@ -628,7 +629,7 @@ module type S = sig
     -> params:(Parameter.t * t) list
     -> body:expr
     -> result:t list
-    -> result_equations:typing_environment option
+    -> result_equations:equations
     -> stub:bool
     -> dbg:Debuginfo.t
     -> inline:inline_attribute
@@ -645,7 +646,7 @@ module type S = sig
   val create_non_inlinable_function_declaration
      : params:t list
     -> result:t list
-    -> result_equations:typing_environment option
+    -> result_equations:equations
     -> direct_call_surrogate:Closure_id.t option
     -> function_declarations
 

@@ -270,7 +270,21 @@ end) = struct
     existential_freshening : Freshening.t;
   }
 
-  and equations = typing_environment option
+  and equations = {
+    (* The "option" is so that we don't need to pass [resolver] to lots of
+       the type-constructing functions. *)
+    typing_judgements : typing_environment option;
+  }
+
+  (* CR mshinwell: think about existentials *)
+  let is_empty_typing_environment (env : typing_environment) =
+    Name.Map.is_empty env.names_to_types
+
+  let is_empty_equations (equations : equations) =
+    match equations.typing_judgements with
+    | None -> true
+    | Some typing_judgements ->
+      is_empty_typing_environment typing_judgements
 
   let print_extensibility print_contents ppf (e : _ extensibility) =
     match e with
@@ -357,8 +371,7 @@ end) = struct
   let rec print_immediate_case ~cache ppf
         ({ equations; } : immediate_case) =
     Format.fprintf ppf "@[(equations@ %a)@]"
-      (Misc.Stdlib.Option.print (print_typing_environment_with_cache ~cache))
-      equations
+      (print_equations_with_cache ~cache) equations
 
   and print_fields ~cache ppf (fields : t mutable_or_immutable array) =
     Format.fprintf ppf "@[[| %a |]@]"
@@ -368,17 +381,12 @@ end) = struct
       (Array.to_list fields)
 
   and print_singleton_block ~cache ppf { equations; fields; } =
-    let no_equations =
-      match equations with
-      | None -> true
-      | Some equations -> Name.Map.is_empty equations.names_to_types
-    in
+    let no_equations = is_empty_equations equations in
     if no_equations then
       print_fields ~cache ppf fields
     else
       Format.fprintf ppf "@[((equations@ %a)@ (fields@ %a))@]"
-        (Misc.Stdlib.Option.print (print_typing_environment_with_cache ~cache))
-        equations
+        (print_equations_with_cache ~cache) equations
         (print_fields ~cache) fields
 
   and print_block_cases ~cache ppf ((Join { by_length; }) : block_cases) =
@@ -408,9 +416,7 @@ end) = struct
             && not (Immediate.Map.is_empty immediates)
             && Immediate.Map.for_all
                  (fun _imm ({ equations; } : immediate_case) ->
-                   match equations with
-                   | None -> true
-                   | Some env -> Name.Map.is_empty env.names_to_types)
+                   is_empty_equations equations)
                  immediates ->
         Format.fprintf ppf "@[%a@]"
           Immediate.Set.print (Immediate.Map.keys immediates)
@@ -501,8 +507,7 @@ end) = struct
           (fun ppf ty ->
             Format.fprintf ppf "%a"
               print ty)) decl.result
-        (Misc.Stdlib.Option.print (print_typing_environment_with_cache ~cache))
-          decl.result_equations
+        (print_equations_with_cache ~cache) decl.result_equations
         decl.stub
         Debuginfo.print_compact decl.dbg
         print_inline_attribute decl.inline
@@ -560,8 +565,7 @@ end) = struct
 
   and print_discriminant_case ~cache ppf ({ equations; } : discriminant_case) =
     Format.fprintf ppf "@[(equations@ %a)@]"
-      (Misc.Stdlib.Option.print (print_typing_environment_with_cache ~cache))
-        equations
+      (print_equations_with_cache ~cache) equations
 
   and print_of_kind_fabricated ~cache ppf (o : of_kind_fabricated) =
     match o with
@@ -569,11 +573,7 @@ end) = struct
       let no_equations =
         Discriminant.Map.for_all
           (fun _ ({ equations; } : discriminant_case) ->
-            (* CR mshinwell: add [is_empty_typing_environment] *)
-            match equations with
-            | None -> true
-            | Some equations ->
-              Name.Map.is_empty equations.names_to_types)
+            is_empty_equations equations)
           discriminant_map
       in
       if not no_equations then
@@ -651,6 +651,12 @@ end) = struct
           Name.Set.print existentials
           Freshening.print existential_freshening
           (Name.Map.print Name.Set.print) canonical_names_to_aliases)
+
+  and print_equations_with_cache ~cache ppf equations =
+    match equations.typing_judgements with
+    | None -> Format.pp_print_string ppf "()"
+    | Some typing_judgements ->
+      print_typing_environment_with_cache ~cache ppf typing_judgements
 
   let print_typing_environment ppf env =
     print_typing_environment_with_cache ~cache:(Printing_cache.create ())
@@ -795,10 +801,11 @@ end) = struct
     let free_names = Name.Set.diff all_names bound_names in
     Name.Set.union free_names acc
 
-  and free_names_of_equations equations acc =
-    match equations with
+  and free_names_of_equations { typing_judgements; } acc =
+    match typing_judgements with
     | None -> acc
-    | Some equations -> free_names_of_typing_environment equations acc
+    | Some typing_judgements ->
+      free_names_of_typing_environment typing_judgements acc
 
   let free_names_set t =
     free_names t Name.Set.empty
@@ -920,6 +927,10 @@ end;
         Name.print name
         print_typing_environment env
     | scope_level, _ty -> scope_level
+
+  let create_equations () =
+    { typing_judgements = None;
+    }
 
   let ty_is_obviously_bottom (ty : _ ty) =
     match ty with
@@ -1421,7 +1432,7 @@ end;
       let immediates =
         Immediate.Set.fold (fun imm map ->
             let case : immediate_case =
-              { equations = None;
+              { equations = create_equations ();
               }
             in
             Immediate.Map.add imm case map)
@@ -1449,8 +1460,7 @@ end;
     else
       let immediates =
         Immediate.Map.map (fun equations : immediate_case ->
-            { equations = Some equations;
-            })
+            { equations; })
           env_map
       in
       let blocks_and_tagged_immediates : blocks_and_tagged_immediates =
@@ -1486,33 +1496,31 @@ end;
   let these_boxed_int64s f = box_int64 (these_naked_int64s f)
   let these_boxed_nativeints f = box_nativeint (these_naked_nativeints f)
 
-  let these_discriminants_as_ty_fabricated discriminants_to_equationss : ty_fabricated =
+  let these_discriminants_as_ty_fabricated discriminants_to_equations
+        : ty_fabricated =
     let discriminant_map =
-      Discriminant.Map.map (fun env : discriminant_case ->
-          { equations = Some env; })
-        discriminants_to_equationss
+      Discriminant.Map.map (fun equations : discriminant_case ->
+          { equations; })
+        discriminants_to_equations
     in
     No_alias (Join [Discriminant discriminant_map])
 
-  let these_discriminants discriminants_to_equationss : t =
+  let these_discriminants discriminants_to_equations : t =
     { descr = Fabricated (
-        these_discriminants_as_ty_fabricated discriminants_to_equationss);
+        these_discriminants_as_ty_fabricated discriminants_to_equations);
       phantom = None;
     }
 
   let this_discriminant_as_ty_fabricated discriminant =
-    let discriminants_to_equationss =
-      Discriminant.Map.add discriminant None Discriminant.Map.empty
-    in
     let discriminant_map =
-      Discriminant.Map.map (fun env : discriminant_case ->
-          { equations = env; })
-        discriminants_to_equationss
+      Discriminant.Map.singleton discriminant
+        ({ equations = create_equations (); } : discriminant_case)
     in
     No_alias (Join [Discriminant discriminant_map])
 
   let this_discriminant discriminant : t =
-    { descr = Fabricated (this_discriminant_as_ty_fabricated discriminant);
+    { descr = Fabricated (
+        this_discriminant_as_ty_fabricated discriminant);
       phantom = None;
     }
 
@@ -1565,7 +1573,7 @@ end;
         (fun _index : _ mutable_or_immutable -> Mutable)
     in
     let singleton_block : singleton_block =
-      { equations = None;
+      { equations = create_equations ();
         fields;
       }
     in
@@ -1606,7 +1614,7 @@ end;
           fields
       in
       let singleton_block : singleton_block =
-        { equations = None;
+        { equations = create_equations ();
           fields;
         }
       in
@@ -1652,7 +1660,7 @@ end;
           fields
       in
       let singleton_block : singleton_block =
-        { equations = None;
+        { equations = create_equations ();
           fields;
         }
       in
@@ -1691,7 +1699,7 @@ end;
           fields
       in
       let singleton_block : singleton_block =
-        { equations = None;
+        { equations = create_equations ();
           fields;
         }
       in
@@ -2115,12 +2123,22 @@ end;
 
   type judgements_from_meet = (Name.t * Scope_level.t * t) list
 
-  let judgements_of_typing_environment (env : typing_environment) =
-    Name.Map.fold (fun name (level, t) judgements ->
-        if Name.Set.mem name env.existentials then judgements
-        else (name, level, t) :: judgements)
-      env.names_to_types
-      []
+  let judgements_of_equations { typing_judgements; } =
+    match typing_judgements with
+    | None -> []
+    | Some typing_judgements ->
+      Name.Map.fold (fun name (level, t) judgements ->
+          if Name.Set.mem name typing_judgements.existentials then judgements
+          else
+            let t = phantomize t In_types in
+            (name, level, t) :: judgements)
+        typing_judgements.names_to_types
+        []
+
+  let to_typing_environment_equations ~resolver { typing_judgements; } =
+    match typing_judgements with
+    | None -> create_typing_environment ~resolver
+    | Some typing_judgements -> typing_judgements
 
   module type Meet_and_join_spec = sig
     type of_kind_foo
@@ -2371,15 +2389,7 @@ end;
           ({ equations = equations2; } : immediate_case)
           : immediate_case =
       let equations =
-        match equations1, equations2 with
-        | None, None -> None
-        | Some equations, None | None, Some equations ->
-          Some equations
-        | Some equations1, Some equations2 ->
-          let equations =
-            Meet_and_join.meet_typing_environment equations1 equations2
-          in
-          Some equations
+        Meet_and_join.meet_equations equations1 equations2
       in
       { equations; }
 
@@ -2387,17 +2397,8 @@ end;
           ({ equations = equations1; } : immediate_case)
           ({ equations = equations2; } : immediate_case)
           : immediate_case =
-      (* CR mshinwell: share with the meet function above *)
       let equations =
-        match equations1, equations2 with
-        | None, None -> None
-        | Some equations, None | None, Some equations ->
-          Some equations
-        | Some equations1, Some equations2 ->
-          let equations =
-            Meet_and_join.join_typing_environment equations1 equations2
-          in
-          Some equations
+        Meet_and_join.join_equations equations1 equations2
       in
       { equations; }
 
@@ -2425,15 +2426,7 @@ end;
              fields = fields2;
            } : singleton_block) : singleton_block * judgements_from_meet =
       let equations =
-        match equations1, equations2 with
-        | None, None -> None
-        | Some equations, None | None, Some equations ->
-          Some equations
-        | Some equations1, Some equations2 ->
-          let equations =
-            Meet_and_join.meet_typing_environment equations1 equations2
-          in
-          Some equations
+        Meet_and_join.meet_equations equations1 equations2
       in
       assert (Array.length fields1 = Array.length fields2);
       let judgements = ref [] in
@@ -2464,16 +2457,7 @@ end;
              fields = fields2;
            } : singleton_block) : singleton_block =
       let equations =
-        (* CR mshinwell: factor this little bit out *)
-        match equations1, equations2 with
-        | None, None -> None
-        | Some equations, None | None, Some equations ->
-          Some equations
-        | Some equations1, Some equations2 ->
-          let equations =
-            Meet_and_join.join_typing_environment equations1 equations2
-          in
-          Some equations
+        Meet_and_join.join_equations equations1 equations2
       in
       assert (Array.length fields1 = Array.length fields2);
       let fields =
@@ -2616,10 +2600,7 @@ end;
                   | None -> judgements
                   | Some (_, singleton_block) ->
                     let new_judgements =
-                      match singleton_block.equations with
-                      | None -> []
-                      | Some equations ->
-                        judgements_of_typing_environment equations
+                      judgements_of_equations singleton_block.equations
                     in
                     new_judgements @ judgements
         in
@@ -3014,16 +2995,7 @@ end;
           List.compare_lengths result1 result2 = 0
         in
         let result_equations =
-          match result_equations1, result_equations2 with
-          | None, None -> None
-          | Some equations, None | None, Some equations ->
-            Some equations
-          | Some equations1, Some equations2 ->
-            let equations =
-              Meet_and_join.meet_typing_environment equations1
-                equations2
-            in
-            Some equations
+          Meet_and_join.meet_equations result_equations1 result_equations2
         in
         let judgements = ref [] in
         let has_bottom params =
@@ -3050,19 +3022,12 @@ end;
           else
             let result =
               List.map2 (fun t1 t2 ->
-                  let result_equations1 =
-                    match result_equations1 with
-                    | None -> env1
-                    | Some env -> env
-                  in
-                  let result_equations2 =
-                    match result_equations2 with
-                    | None -> env2
-                    | Some env -> env
-                  in
                   let t, new_judgements =
-                    Meet_and_join.meet (result_equations1, t1)
-                      (result_equations2, t2)
+                    Meet_and_join.meet
+                      (to_typing_environment_equations ~resolver:env1.resolver
+                         result_equations1, t1)
+                      (to_typing_environment_equations ~resolver:env2.resolver
+                         result_equations2, t2)
                   in
                   judgements := new_judgements @ !judgements;
                   t)
@@ -3204,19 +3169,12 @@ end;
               params2
           in
           let result =
-            let result_equations1 =
-              match result_equations1 with
-              | None -> env1
-              | Some env -> env
-            in
-            let result_equations2 =
-              match result_equations2 with
-              | None -> env2
-              | Some env -> env
-            in
             List.map2 (fun t1 t2 ->
-                Meet_and_join.join (result_equations1, t1)
-                  (result_equations2, t2))
+                Meet_and_join.join
+                  (to_typing_environment_equations ~resolver:env1.resolver
+                     result_equations1, t1)
+                  (to_typing_environment_equations ~resolver:env2.resolver
+                     result_equations2, t2))
               result1
               result2
           in
@@ -3228,16 +3186,7 @@ end;
             | _, _ -> None
           in
           let result_equations =
-            match result_equations1, result_equations2 with
-            | None, None -> None
-            | Some equations, None | None, Some equations ->
-              Some equations
-            | Some equations1, Some equations2 ->
-              let equations =
-                Meet_and_join.join_typing_environment equations1
-                  equations2
-              in
-              Some equations
+            Meet_and_join.join_equations result_equations1 result_equations2
           in
           let non_inlinable : non_inlinable_function_declarations =
             { params;
@@ -3327,18 +3276,8 @@ end;
                information about the calling context rather than the code of
                the function. *)
             let result_equations =
-              match inlinable1.result_equations,
+              Meet_and_join.join_equations inlinable1.result_equations
                 inlinable2.result_equations
-              with
-              | None, None -> None
-              | Some equations, None | None, Some equations ->
-                Some equations
-              | Some equations1, Some equations2 ->
-                let equations =
-                  Meet_and_join.join_typing_environment equations1
-                    equations2
-                in
-                Some equations
             in
             let params =
               List.map2 (fun (param1, t1) (param2, t2) ->
@@ -3349,20 +3288,12 @@ end;
                 inlinable2.params
             in
             let result =
-              (* CR mshinwell: must share with above *)
-              let result_equations1 =
-                match inlinable1.result_equations with
-                | None -> env1
-                | Some env -> env
-              in
-              let result_equations2 =
-                match inlinable2.result_equations with
-                | None -> env2
-                | Some env -> env
-              in
               List.map2 (fun t1 t2 ->
-                  Meet_and_join.join (result_equations1, t1)
-                    (result_equations2, t2))
+                  Meet_and_join.join
+                    (to_typing_environment_equations ~resolver:env1.resolver
+                       inlinable1.result_equations, t1)
+                    (to_typing_environment_equations ~resolver:env2.resolver
+                       inlinable2.result_equations, t2))
                 inlinable1.result
                 inlinable2.result
             in
@@ -3618,16 +3549,7 @@ end;
                   ({ equations = equations2; } : discriminant_case)
                   : discriminant_case ->
               let equations =
-                match equations1, equations2 with
-                | None, None -> None
-                | Some equations, None | None, Some equations ->
-                  Some equations
-                | Some equations1, Some equations2 ->
-                  let equations =
-                    Meet_and_join.meet_typing_environment equations1
-                      equations2
-                  in
-                  Some equations
+                Meet_and_join.meet_equations equations1 equations2
               in
               (* CR mshinwell: Do we ever flip back to [Bottom] here? *)
               { equations; })
@@ -3638,10 +3560,7 @@ end;
           match Discriminant.Map.get_singleton discriminants with
           | None -> []
           | Some (_, discriminant_case) ->
-            match discriminant_case.equations with
-            | None -> []
-            | Some equations ->
-              judgements_of_typing_environment equations
+            judgements_of_equations discriminant_case.equations
         in
         Ok (Discriminant discriminants, judgements)
       | Set_of_closures set1, Set_of_closures set2 ->
@@ -3668,16 +3587,7 @@ end;
                   ({ equations = equations2; } : discriminant_case)
                   : discriminant_case ->
               let equations =
-                match equations1, equations2 with
-                | None, None -> None
-                | Some equations, None | None, Some equations ->
-                  Some equations
-                | Some equations1, Some equations2 ->
-                  let equations =
-                    Meet_and_join.join_typing_environment equations1
-                      equations2
-                  in
-                  Some equations
+                Meet_and_join.join_equations equations1 equations2
               in
               { equations; })
             discriminants1
@@ -3705,6 +3615,16 @@ end;
        : typing_environment
       -> typing_environment
       -> typing_environment
+
+    val meet_equations
+       : equations
+      -> equations
+      -> equations
+
+    val join_equations
+       : equations
+      -> equations
+      -> equations
 
     val replace_meet_typing_environment0
        : typing_environment
@@ -4049,6 +3969,30 @@ Format.eprintf "...giving %a\n%!" print ty;
             print_typing_environment (fst t_in_context);
           raise Misc.Fatal_error
         end
+
+    let meet_equations { typing_judgements = typing_judgements1; }
+          { typing_judgements = typing_judgements2; } =
+      let typing_judgements =
+        match typing_judgements1, typing_judgements2 with
+        | None, None -> None
+        | Some typing_judgements, None
+        | None, Some typing_judgements -> Some typing_judgements
+        | Some typing_judgements1, Some typing_judgements2 ->
+          Some (meet_typing_environment typing_judgements1 typing_judgements2)
+      in
+      { typing_judgements; }
+
+    let join_equations { typing_judgements = typing_judgements1; }
+          { typing_judgements = typing_judgements2; } =
+      let typing_judgements =
+        match typing_judgements1, typing_judgements2 with
+        | None, None -> None
+        | Some typing_judgements, None
+        | None, Some typing_judgements -> Some typing_judgements
+        | Some typing_judgements1, Some typing_judgements2 ->
+          Some (join_typing_environment typing_judgements1 typing_judgements2)
+      in
+      { typing_judgements; }
   end
 
   let meet ~output_env tc1 tc2 =
@@ -4203,8 +4147,8 @@ Format.eprintf "Result is: %a\n%!"
 *)
       result
 
-  let add_alias = add_alias_typing_environment
-  let aliases = aliases_typing_environment
+    let add_alias = add_alias_typing_environment
+    let aliases = aliases_typing_environment
 
     let meet = Meet_and_join.meet_typing_environment
     let join = Meet_and_join.join_typing_environment
@@ -4248,7 +4192,30 @@ Format.eprintf "Result is: %a\n%!"
       in
       Name_occurrences.create_from_set_in_terms domain
 
+    let _add_equations t equations =
+      match equations.typing_judgements with
+      | None -> t
+      | Some typing_judgements -> meet t typing_judgements
+
     let resolver t = t.resolver
+  end
+
+  module Equations = struct
+    type t = equations
+
+    let create () =
+      { typing_judgements = None;
+      }
+
+    let meet_with_environment t env =
+      let typing_judgements =
+        match t.typing_judgements with
+        | None -> env
+        | Some typing_judgements ->
+          Typing_environment.meet typing_judgements env
+      in
+      { typing_judgements = Some typing_judgements;
+      }
   end
 
   let add_judgements (env, t) : t =
@@ -4272,12 +4239,10 @@ Format.eprintf "Result is: %a\n%!"
                           Targetint.OCaml.Map.map
                             (fun (block : singleton_block) : singleton_block ->
                               let equations =
-                                match block.equations with
-                                | None -> env
-                                | Some equations ->
-                                  Typing_environment.meet equations env
+                                Equations.meet_with_environment
+                                  block.equations env
                               in
-                              { block with equations = Some equations; })
+                              { block with equations; })
                             by_length
                         in
                         Join { by_length; })
@@ -4294,12 +4259,9 @@ Format.eprintf "Result is: %a\n%!"
                       (fun ({ equations; } : immediate_case)
                             : immediate_case ->
                         let equations =
-                          match equations with
-                          | None -> env
-                          | Some equations ->
-                            Typing_environment.meet equations env
+                          Equations.meet_with_environment equations env
                         in
-                        { equations = Some equations; })
+                        { equations; })
                       imm_map
                   in
                   Known imm_map
@@ -4323,12 +4285,9 @@ Format.eprintf "Result is: %a\n%!"
                   (fun ({ equations; } : discriminant_case)
                         : discriminant_case ->
                     let equations =
-                      match equations with
-                      | None -> env
-                      | Some equations ->
-                        Typing_environment.meet equations env
+                      Equations.meet_with_environment equations env
                     in
-                    { equations = Some equations; })
+                    { equations; })
                   discriminant_map
               in
               Discriminant discriminant_map

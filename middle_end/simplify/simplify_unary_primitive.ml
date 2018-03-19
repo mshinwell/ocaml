@@ -725,7 +725,7 @@ let simplify_discriminant_of_int env r prim arg dbg =
     let by_discriminant =
       Discriminant.Map.map (fun equations_opt ->
           match equations_opt with
-          | None -> T.Typing_environment.create ~resolver:(E.resolver env)
+          | None -> T.Equations.create ()
           | Some env -> env)
         by_discriminant
     in

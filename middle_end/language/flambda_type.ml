@@ -946,7 +946,7 @@ let prove_tagged_immediate env t
   | Fabricated _ -> wrong_kind ()
 
 type tagged_immediate_as_discriminants_proof =
-  | By_discriminant of Typing_environment.t option Discriminant.Map.t
+  | By_discriminant of Equations.t Discriminant.Map.t
   | Answer_given_by of Name.t
 
 let prove_tagged_immediate_as_discriminants env t
@@ -1765,7 +1765,7 @@ let values_structurally_distinct (env1, (t1 : t)) (env2, (t2 : t)) =
         print t2
 
 let switch_arms env t ~arms =
-  let empty_env = Typing_environment.create_using_resolver_from env in
+  let no_equations = Equations.create_using_resolver_from_env env in
   let wrong_kind () =
     Misc.fatal_errorf
       "Wrong kind for something claimed to be a discriminant: %a"
@@ -1773,7 +1773,7 @@ let switch_arms env t ~arms =
   in
   let unknown () =
     Discriminant.Map.fold (fun arm cont result ->
-        Discriminant.Map.add arm (empty_env, cont) result)
+        Discriminant.Map.add arm (no_equations, cont) result)
       arms
       Discriminant.Map.empty
   in
@@ -1790,11 +1790,6 @@ let switch_arms env t ~arms =
           match Discriminant.Map.find arm discriminant_map with
           | exception Not_found -> result
           | { equations; } ->
-            let equations =
-              match equations with
-              | None -> empty_env
-              | Some equations -> equations
-            in
             Discriminant.Map.add arm (equations, cont) result)
         arms
         Discriminant.Map.empty

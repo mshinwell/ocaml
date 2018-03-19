@@ -36,6 +36,9 @@ val unknown_like_array : t array -> t array
 (* CR mshinwell: and bound ones too, now... *)
 val rename_variables : t -> f:(Variable.t -> Variable.t) -> t
 
+(** Return all names occurring in the type and all types referenced by it. *)
+val free_names_transitive : (t -> Name_occurrences.t) type_accessor
+
 (** Building of types and terms representing tagged / boxed values from
     specified constants. *)
 val this_tagged_bool_named : bool -> Flambda0.Named.t * t
@@ -134,13 +137,11 @@ val unknown_proof : unit -> _ proof
 val prove_tagged_immediate : (t -> Immediate.Set.t proof) type_accessor
 
 type tagged_immediate_as_discriminants_proof = private
-  | By_discriminant of Typing_environment.t option Discriminant.Map.t
+  | By_discriminant of Equations.t Discriminant.Map.t
   | Answer_given_by of Name.t
 
 val prove_tagged_immediate_as_discriminants
-   : Typing_environment.t
-  -> t
-  -> tagged_immediate_as_discriminants_proof proof
+   : (t -> tagged_immediate_as_discriminants_proof proof) type_accessor
 
 type is_tagged_immediate = private
   | Never_a_tagged_immediate
@@ -249,11 +250,14 @@ val prove_sets_of_closures
 
 val prove_closure : (t -> closure proof) type_accessor
 
+(** Evidence that a variant or block (with all components of kind [Value])
+    may be unboxed. *)
 type unboxable_variant_or_block_of_values0 = private {
   block_sizes_by_tag : Targetint.OCaml.t Tag.Scannable.Map.t;
   constant_ctors : Immediate.Set.t;
 }
 
+(** Evidence that a given value may be unboxed. *)
 type unboxable_proof = private
   | Variant_or_block_of_values of unboxable_variant_or_block_of_values0
   | Float_array of { length : Targetint.OCaml.t; }
@@ -267,10 +271,12 @@ type unboxable_proof = private
     being unboxed. *)
 val prove_unboxable : (unboxee_ty:t -> unboxable_proof) type_accessor
 
+(** Given the type of a [Switch] scrutinee and the arms of the [Switch], return
+    which cases may be taken together with, for each such case, the destination
+    continuation and any equations known to hold at the jump from the [Switch]
+    to that continuation. *)
 val switch_arms
    : (t
     -> arms:Continuation.t Discriminant.Map.t
-    -> (Typing_environment.t * Continuation.t) Discriminant.Map.t)
+    -> (Equations.t * Continuation.t) Discriminant.Map.t)
   type_accessor
-
-val free_names_transitive : (t -> Name_occurrences.t) type_accessor
