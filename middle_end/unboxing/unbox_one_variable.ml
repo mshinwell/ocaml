@@ -846,13 +846,13 @@ module Make (S : Unboxing_spec) = struct
           let discriminant_env_is_int =
             T.Equations.singleton ~resolver
               (Name.var discriminant)
-              (Scope_level.next (E.continuation_scope_level env))
+              (E.continuation_scope_level env)
               (T.these_discriminants by_constant_ctor_index)
           in
           let discriminant_env_is_block =
             T.Equations.singleton ~resolver
               (Name.var discriminant)
-              (Scope_level.next (E.continuation_scope_level env))
+              (E.continuation_scope_level env)
               (T.these_discriminants by_tag)
           in
           let by_is_int_result =

@@ -19,7 +19,16 @@
 type t = int
 type tag = t
 
-include Identifiable.Make (Numbers.Int)
+include Identifiable.Make (struct
+  type nonrec t = t
+
+  let compare = Numbers.Int.compare
+  let equal = Numbers.Int.equal
+  let hash = Numbers.Int.hash
+
+  let print ppf t =
+    Format.fprintf ppf "@[tag_%d@]" t
+end)
 
 let min_tag = 0
 let max_tag = 255

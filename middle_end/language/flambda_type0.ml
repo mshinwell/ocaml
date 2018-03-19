@@ -640,17 +640,26 @@ end) = struct
                 names)
             levels_to_names
         in
-        Format.fprintf ppf
-          "@[((names_to_types@ %a)@ \
-              (levels_to_names@ %a)@ \
-              (existentials@ %a)@ \
-              (existential_freshening@ %a)@ \
-              (canonical_names_to_aliases@ %a))@]"
-          (Name.Map.print print_scope_level_and_type) names_to_types
-          (Scope_level.Map.print Name.Set.print) levels_to_names
-          Name.Set.print existentials
-          Freshening.print existential_freshening
-          (Name.Map.print Name.Set.print) canonical_names_to_aliases)
+        if Name.Set.is_empty existentials then
+          Format.fprintf ppf
+            "@[((names_to_types@ %a)@ \
+                (levels_to_names@ %a)@ \
+                (canonical_names_to_aliases@ %a))@]"
+            (Name.Map.print print_scope_level_and_type) names_to_types
+            (Scope_level.Map.print Name.Set.print) levels_to_names
+            (Name.Map.print Name.Set.print) canonical_names_to_aliases
+        else
+          Format.fprintf ppf
+            "@[((names_to_types@ %a)@ \
+                (levels_to_names@ %a)@ \
+                (existentials@ %a)@ \
+                (existential_freshening@ %a)@ \
+                (canonical_names_to_aliases@ %a))@]"
+            (Name.Map.print print_scope_level_and_type) names_to_types
+            (Scope_level.Map.print Name.Set.print) levels_to_names
+            Name.Set.print existentials
+            Freshening.print existential_freshening
+            (Name.Map.print Name.Set.print) canonical_names_to_aliases)
 
   and print_equations_with_cache ~cache ppf equations =
     match equations.typing_judgements with
@@ -2129,9 +2138,7 @@ end;
     | Some typing_judgements ->
       Name.Map.fold (fun name (level, t) judgements ->
           if Name.Set.mem name typing_judgements.existentials then judgements
-          else
-            let t = phantomize t In_types in
-            (name, level, t) :: judgements)
+          else (name, level, t) :: judgements)
         typing_judgements.names_to_types
         []
 

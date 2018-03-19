@@ -16,7 +16,7 @@
 
 [@@@ocaml.warning "+a-4-30-40-41-42"]
 
-include Targetint.OCaml
+type t = Targetint.OCaml.t
 
 let create i =
   if Targetint.OCaml.compare i Targetint.OCaml.zero < 0 then None
@@ -48,3 +48,14 @@ let zero = Targetint.OCaml.zero
 
 let bool_false = zero
 let bool_true = Targetint.OCaml.one
+
+include Identifiable.Make (struct
+  type nonrec t = t
+
+  let compare = Targetint.OCaml.compare
+  let equal = Targetint.OCaml.equal
+  let hash = Targetint.OCaml.hash
+
+  let print ppf t =
+    Format.fprintf ppf "@[discr_%a@]" Targetint.OCaml.print t
+end)

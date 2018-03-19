@@ -823,12 +823,12 @@ Format.eprintf "Cutting environment for %a, level %a, freshening is:@ %a\n%!"
                     let var = Flambda.Typed_parameter.var param in
                     let var = Freshening.apply_variable freshening var in
                     let name = Name.var var in
-                    Format.eprintf "Copying type for param %a\n%!"
-                      Variable.print var;
                     let ty, scope_level, _binding_type =
                       TE.find_with_scope_level joined_env name
                     in
-                    TE.add use_env name scope_level ty)
+                    Format.eprintf "Copying type for param %a level %a\n%!"
+                      Variable.print var Scope_level.print scope_level;
+                    TE.add_or_replace_meet use_env name scope_level ty)
                   use_env
                   t.params
               in
@@ -855,13 +855,9 @@ Format.eprintf "New use_env after meet:@ %a\n%!"
               let arg_number = ref 0 in
               let arg_tys =
                 List.map2 (fun joined_ty this_ty ->
-(*
-                    let _free_names_this_ty =
-                      T.free_names_transitive
-                        (Env.get_typing_environment use_env)
-                        this_ty
+                    let free_names_this_ty =
+                      T.free_names_transitive use_env this_ty
                     in
-*)
 (*
                     Format.eprintf "Argument for %a:@ Type:@ %a@ \
                         Free names:@ %a@ Env:@ %a\n%!"
@@ -870,14 +866,12 @@ Format.eprintf "New use_env after meet:@ %a\n%!"
                       Name_occurrences.print free_names_this_ty
                       TE.print this_env;
 *)
-(*
-                    let _this_env =
+                    let restricted_use_env =
                       (* XXX We should presumably allow things from outer
                          levels so long as our types for them are more
                          precise. *)
-                      TE.restrict_to_names this_env free_names_this_ty
+                      TE.restrict_to_names use_env free_names_this_ty
                     in
-*)
 (*
                         (Name_occurrences.union free_names_this_ty
                           (TE.domain default_env))
@@ -886,7 +880,9 @@ Format.eprintf "New use_env after meet:@ %a\n%!"
                     Format.eprintf "Restricted env:@ %a\n%!"
                       TE.print this_env;
 *)
-                    let this_ty = T.add_judgements (use_env, this_ty) in
+                    let this_ty =
+                      T.add_judgements (restricted_use_env, this_ty)
+                    in
                     let joined_ty =
                       try T.join (joined_env, joined_ty) (use_env, this_ty)
                       with Misc.Fatal_error -> begin

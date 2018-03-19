@@ -420,7 +420,7 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
     end
   | Proved (Answer_given_by name) ->
     let term : Named.t = Prim (Unary (prim, block), dbg) in
-    Reachable.reachable term, T.alias_type_of (K.value ()) name, r
+    Reachable.reachable term, T.alias_type_of (K.fabricated ()) name, r
   | Unknown ->
     let prim : Flambda_primitive.unary_primitive =
       Get_tag { tags_to_sizes; }
