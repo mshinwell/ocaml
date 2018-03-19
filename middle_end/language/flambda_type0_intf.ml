@@ -313,6 +313,44 @@ module type S = sig
       has been made existential (as a result of [cut], below). *)
   type binding_type = private Normal | Existential
 
+  module Equations : sig
+    type t = equations
+
+    val create : unit -> t
+
+    val add
+       : resolver:(Export_id.t -> flambda_type option)
+      -> t
+      -> Name.t
+      -> Scope_level.t
+      -> flambda_type
+      -> t
+
+    val add_or_replace_meet
+       : resolver:(Export_id.t -> flambda_type option)
+      -> t
+      -> Name.t
+      -> Scope_level.t
+      -> flambda_type
+      -> t
+
+    val singleton
+       : resolver:(Export_id.t -> flambda_type option)
+      -> Name.t
+      -> Scope_level.t
+      -> flambda_type
+      -> t
+
+    val add_alias
+       : resolver:(Export_id.t -> flambda_type option)
+      -> t
+      -> canonical_name:Name.t
+      -> alias:Name.t
+      -> t
+
+    val meet : t -> t -> t
+  end
+
   module Typing_environment : sig
     (** A "traditional" typing environment or context: an assignment from
         names to types.  The environment also encapsulates the knowledge,
@@ -406,12 +444,14 @@ module type S = sig
     val add_alias : t -> canonical_name:Name.t -> alias:Name.t -> t
 
     val aliases : t -> canonical_name:Name.t -> Name.Set.t
-  end
 
-  module Equations : sig
-    type t = equations
+    (** By using a [meet] operation add the given equations into the given
+        typing environment. *)
+    val add_equations : t -> Equations.t -> t
 
-    val create : unit -> t
+    (** Create an equations structure whose typing judgements are those of
+        the given typing environment. *)
+    val to_equations : t -> Equations.t
   end
 
   (** Annotation for functions that may require examination of the current

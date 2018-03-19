@@ -194,7 +194,7 @@ module type Env = sig
 
   val extend_typing_environment
      : t
-    -> equations:Flambda_type.Typing_environment.t
+    -> equations:Flambda_type.Equations.t
     -> t
 
   val replace_typing_environment
@@ -618,25 +618,17 @@ module type Result = sig
          Symbol.Map.t
 
   (* CR mshinwell: Should this be restructured so that [r] explicitly
-     contains (some subset of?) an [env]? *)
+     contains an [Equations.t]? *)
 
-  val clear_typing_judgements : t -> t
+  val clear_equations : t -> t
 
   val add_alias : t -> canonical_name:Name.t -> alias:Name.t -> t
 
-  val add_or_meet_typing_judgement
-     : t
-    -> Name.t
-    -> Scope_level.t
-    -> Flambda_type.t
-    -> t
+  val add_or_meet_equation : t -> Name.t -> Scope_level.t -> Flambda_type.t -> t
 
-  val add_or_meet_typing_judgements
-     : t
-    -> Flambda_type.Typing_environment.t
-    -> t
+  val add_or_meet_equations : t -> Flambda_type.Equations.t -> t
 
-  val get_typing_judgements : t -> Flambda_type.Typing_environment.t
+  val get_equations : t -> Flambda_type.Equations.t
 
   val newly_imported_symbols : t -> Flambda_kind.t Symbol.Map.t
 end

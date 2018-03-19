@@ -383,7 +383,7 @@ module Make (S : Unboxing_spec) = struct
           Immediate.Set.fold (fun ctor_index by_discriminant ->
               let ctor_index = Immediate.to_targetint ctor_index in
               Discriminant.Map.add (Discriminant.create_exn ctor_index)
-                (T.Typing_environment.create ~resolver)
+                (T.Equations.create ())
                 by_discriminant)
             constant_ctors
             Discriminant.Map.empty
@@ -391,7 +391,7 @@ module Make (S : Unboxing_spec) = struct
         let constant_ctors = Discriminant.Map.keys by_discriminant in
         let by_discriminant =
           Discriminant.Map.fold (fun discr _ by_discriminant ->
-              Discriminant.Map.add discr (T.Typing_environment.create ~resolver)
+              Discriminant.Map.add discr (T.Equations.create ())
                 by_discriminant)
             blocks
             by_discriminant
@@ -797,8 +797,8 @@ module Make (S : Unboxing_spec) = struct
                 let discr =
                   Discriminant.create_exn (Immediate.to_targetint ctor_index)
                 in
-                let env = T.Typing_environment.create ~resolver in
-                Discriminant.Map.add discr env by_constant_ctor_index)
+                let equations = T.Equations.create () in
+                Discriminant.Map.add discr equations by_constant_ctor_index)
               constant_ctors
               Discriminant.Map.empty
           in
@@ -807,11 +807,9 @@ module Make (S : Unboxing_spec) = struct
                 (* CR mshinwell: rewrite for-loop to avoid conversion *)
                 let size = Targetint.OCaml.to_int size in
                 let scope_level = E.continuation_scope_level env in
-                let initial_env =
-                  T.Typing_environment.create ~resolver:(E.resolver env)
-                in
-                let unboxee_ty_refinement, initial_env =
-                  let fields, initial_env =
+                let equations = T.Equations.create () in
+                let unboxee_ty_refinement, equations =
+                  let fields, equations =
                     match Misc.Stdlib.List.first_n fields_with_kinds size with
                     | Some (fields_with_kinds, _) ->
                       let fields =
@@ -821,23 +819,23 @@ module Make (S : Unboxing_spec) = struct
                             Immutable (T.alias_type_of kind field))
                           fields_with_kinds
                       in
-                      let initial_env =
-                        List.fold_left (fun initial_env (field, kind) ->
+                      let equations =
+                        List.fold_left (fun equations (field, kind) ->
                             (* CR mshinwell: We could refine the types of the
                                actual fields themselves according to the tag. *)
                             let ty = T.unknown kind in
-                            T.Typing_environment.add initial_env
+                            T.Equations.add ~resolver equations
                               (Name.var field) scope_level ty)
-                          initial_env
+                          equations
                           fields_with_kinds
                       in
-                      fields, initial_env
+                      fields, equations
                     | None -> assert false
                   in
-                  T.block tag ~fields:(Array.of_list fields), initial_env
+                  T.block tag ~fields:(Array.of_list fields), equations
                 in
                 let equations =
-                  T.Typing_environment.add initial_env
+                  T.Equations.add ~resolver equations
                     (Name.var unboxee) scope_level unboxee_ty_refinement
                 in
                 let discr = Discriminant.of_tag tag in
@@ -846,12 +844,14 @@ module Make (S : Unboxing_spec) = struct
               Discriminant.Map.empty
           in
           let discriminant_env_is_int =
-            T.Typing_environment.singleton ~resolver (Name.var discriminant)
+            T.Equations.singleton ~resolver
+              (Name.var discriminant)
               (Scope_level.next (E.continuation_scope_level env))
               (T.these_discriminants by_constant_ctor_index)
           in
           let discriminant_env_is_block =
-            T.Typing_environment.singleton ~resolver (Name.var discriminant)
+            T.Equations.singleton ~resolver
+              (Name.var discriminant)
               (Scope_level.next (E.continuation_scope_level env))
               (T.these_discriminants by_tag)
           in

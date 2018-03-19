@@ -131,10 +131,13 @@ let simplify_set_of_closures original_env r
           (E.get_typing_environment original_env)
           return_cont_params
       in
-      R.Continuation_uses.join_of_arg_types return_continuation_uses
-        ~arity:function_decl.return_arity
-        ~freshening:(E.freshening original_env)
-        ~default_env
+      let result, result_env =
+        R.Continuation_uses.join_of_arg_types return_continuation_uses
+          ~arity:function_decl.return_arity
+          ~freshening:(E.freshening original_env)
+          ~default_env
+      in
+      result, T.Typing_environment.to_equations result_env
     in
     let return_arity = List.map (fun ty -> T.kind ty) result in
     let inline : Flambda.inline_attribute =
@@ -194,7 +197,7 @@ let simplify_set_of_closures original_env r
         ~params
         ~body
         ~result
-        ~result_equations:(Some result_equations)
+        ~result_equations
         ~stub:function_decl.stub
         ~dbg:function_decl.dbg
         ~inline
@@ -213,7 +216,7 @@ let simplify_set_of_closures original_env r
     in
 *)
     let r =
-      R.add_or_meet_typing_judgements r result_equations
+      R.add_or_meet_equations r result_equations
     in
     Closure_id.Map.add closure_id (function_decl, ty) funs, r
   in

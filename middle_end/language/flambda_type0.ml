@@ -2265,6 +2265,8 @@ end;
       match canonical_name1, canonical_name2 with
       | Some name1, Some name2 when Name.equal name1 name2 ->
         Equals name1
+      (* CR mshinwell: The symmetrical cases ("is unknown") should be
+         present on the [meet] function, below. *)
       | Some name1, _ when unknown_or_join_is_bottom unknown_or_join2 ->
         Equals name1
       | _, Some name2 when unknown_or_join_is_bottom unknown_or_join1 ->
@@ -4192,10 +4194,14 @@ Format.eprintf "Result is: %a\n%!"
       in
       Name_occurrences.create_from_set_in_terms domain
 
-    let _add_equations t equations =
+    let add_equations t equations =
       match equations.typing_judgements with
       | None -> t
       | Some typing_judgements -> meet t typing_judgements
+
+    let to_equations t : equations =
+      { typing_judgements = Some t;
+      }
 
     let resolver t = t.resolver
   end
@@ -4207,6 +4213,28 @@ Format.eprintf "Result is: %a\n%!"
       { typing_judgements = None;
       }
 
+    let singleton ~resolver name scope_level ty =
+      { typing_judgements =
+          Some (Typing_environment.singleton ~resolver name scope_level ty);
+      }
+
+    let add ~resolver t name scope_level ty =
+      match t.typing_judgements with
+      | None -> singleton ~resolver name scope_level ty
+      | Some typing_judgements ->
+        { typing_judgements =
+            Some (Typing_environment.add typing_judgements name scope_level ty);
+        }
+
+    let add_or_replace_meet ~resolver t name scope_level ty =
+      match t.typing_judgements with
+      | None -> singleton ~resolver name scope_level ty
+      | Some typing_judgements ->
+        { typing_judgements =
+            Some (Typing_environment.add_or_replace_meet typing_judgements
+              name scope_level ty);
+        }
+
     let meet_with_environment t env =
       let typing_judgements =
         match t.typing_judgements with
@@ -4215,6 +4243,30 @@ Format.eprintf "Result is: %a\n%!"
           Typing_environment.meet typing_judgements env
       in
       { typing_judgements = Some typing_judgements;
+      }
+
+    let add_alias ~resolver t ~canonical_name ~alias =
+      let typing_judgements =
+        match t.typing_judgements with
+        | None ->
+          let typing_judgements = create_typing_environment ~resolver in
+          Typing_environment.add_alias typing_judgements ~canonical_name ~alias
+        | Some typing_judgements ->
+          Typing_environment.add_alias typing_judgements ~canonical_name ~alias
+      in
+      { typing_judgements = Some typing_judgements;
+      }
+
+    let meet t1 t2 =
+      let typing_judgements =
+        match t1.typing_judgements, t2.typing_judgements with
+        | None, None -> None
+        | Some typing_judgements, None
+        | None, Some typing_judgements -> Some typing_judgements
+        | Some typing_judgements1, Some typing_judgements2 ->
+          Some (Typing_environment.meet typing_judgements1 typing_judgements2)
+      in
+      { typing_judgements;
       }
   end
 

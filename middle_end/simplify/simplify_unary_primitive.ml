@@ -341,11 +341,11 @@ let simplify_is_int env r prim arg dbg =
   | Unknown ->
     (* CR mshinwell: This should use the [result_var] as the [is_int] in a
        refined type of [arg]. *)
-    let empty_env = T.Typing_environment.create ~resolver:(E.resolver env) in
+    let no_equations = T.Equations.create () in
     let all_results =
       T.these_discriminants (Discriminant.Map.of_list [
-        Discriminant.bool_false, empty_env;
-        Discriminant.bool_true, empty_env;
+        Discriminant.bool_false, no_equations;
+        Discriminant.bool_true, no_equations;
       ])
     in
     Reachable.reachable (original_term ()), all_results, r
@@ -362,8 +362,8 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
   let result_var_type ~tags_to_sizes =
-    let discriminants_to_equationss =
-      Tag.Map.fold (fun tag size discriminants_to_equationss ->
+    let discriminants_to_equations =
+      Tag.Map.fold (fun tag size discriminants_to_equations ->
           (* CR mshinwell: think about this conversion *)
           let size = Targetint.OCaml.to_int size in
           let block_ty =
@@ -383,19 +383,18 @@ let simplify_get_tag env r prim ~tags_to_sizes ~block dbg =
             | Const _ | Discriminant _ ->
               (* CR mshinwell: This is kind of silly---it will never be a
                  [Const] or [Discriminant] *)
-              T.Typing_environment.create ~resolver:(E.resolver env)
+              T.Equations.create ()
             | Name block ->
               let scope_level = E.scope_level_of_name env block in
-              T.Typing_environment.add
-                (T.Typing_environment.create ~resolver:(E.resolver env))
+              T.Equations.singleton ~resolver:(E.resolver env)
                 block scope_level block_ty
           in
           let discriminant = Discriminant.of_tag tag in
-          Discriminant.Map.add discriminant env discriminants_to_equationss)
+          Discriminant.Map.add discriminant env discriminants_to_equations)
         tags_to_sizes
         Discriminant.Map.empty
     in
-    T.these_discriminants discriminants_to_equationss
+    T.these_discriminants discriminants_to_equations
   in
   match inferred_tags with
   | Proved (Tags inferred_tags) ->
@@ -722,13 +721,6 @@ let simplify_discriminant_of_int env r prim arg dbg =
   in
   match proof with
   | Proved (By_discriminant by_discriminant) ->
-    let by_discriminant =
-      Discriminant.Map.map (fun equations_opt ->
-          match equations_opt with
-          | None -> T.Equations.create ()
-          | Some env -> env)
-        by_discriminant
-    in
     Reachable.reachable (original_term ()),
       T.these_discriminants by_discriminant, r
   | Proved (Answer_given_by name) ->

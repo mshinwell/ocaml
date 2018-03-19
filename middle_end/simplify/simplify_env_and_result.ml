@@ -194,7 +194,7 @@ end = struct
 
   let extend_typing_environment t ~equations =
     let typing_environment =
-      T.Typing_environment.meet t.typing_environment equations
+      T.Typing_environment.add_equations t.typing_environment equations
     in
     { t with typing_environment; }
 
@@ -1011,7 +1011,7 @@ Format.eprintf "New use_env after meet:@ %a\n%!"
       inlining_threshold : Inlining_cost.Threshold.t option;
       benefit : Inlining_cost.Benefit.t;
       num_direct_applications : int;
-      typing_judgements : T.Typing_environment.t;
+      equations : T.Equations.t;
       newly_imported_symbols : Flambda_kind.t Symbol.Map.t;
       lifted_constants :
         (Flambda_type.t * Flambda_kind.t * Flambda_static.Static_part.t)
@@ -1025,7 +1025,7 @@ Format.eprintf "New use_env after meet:@ %a\n%!"
       inlining_threshold = None;
       benefit = Inlining_cost.Benefit.zero;
       num_direct_applications = 0;
-      typing_judgements = T.Typing_environment.create ~resolver;
+      equations = T.Equations.create ();
       newly_imported_symbols = Symbol.Map.empty;
       lifted_constants = Symbol.Map.empty;
     }
@@ -1042,9 +1042,7 @@ Format.eprintf "New use_env after meet:@ %a\n%!"
       benefit = Inlining_cost.Benefit.(+) t1.benefit t2.benefit;
       num_direct_applications =
         t1.num_direct_applications + t2.num_direct_applications;
-      typing_judgements =
-        T.Typing_environment.meet
-          t1.typing_judgements t2.typing_judgements;
+      equations = T.Equations.meet t1.equations t2.equations;
       newly_imported_symbols =
         Symbol.Map.disjoint_union t1.newly_imported_symbols
           t2.newly_imported_symbols;
@@ -1339,37 +1337,36 @@ Format.eprintf "New use_env after meet:@ %a\n%!"
   let num_direct_applications t =
     t.num_direct_applications
 
-  let clear_typing_judgements t =
+  let clear_equations t =
     { t with
-      typing_judgements = T.Typing_environment.create ~resolver:t.resolver;
+      equations = T.Equations.create ();
     }
 
   let add_alias t ~canonical_name ~alias =
-    let typing_judgements =
-      T.Typing_environment.add_alias t.typing_judgements ~canonical_name ~alias
+    let equations =
+      T.Equations.add_alias ~resolver:t.resolver
+        t.equations ~canonical_name ~alias
     in
     { t with
-      typing_judgements;
+      equations;
     }
 
-  let add_or_meet_typing_judgement t name scope_level ty =
-    let typing_judgements =
-      T.Typing_environment.add_or_replace_meet
-        t.typing_judgements name scope_level ty
+  let add_or_meet_equation t name scope_level ty =
+    let equations =
+      T.Equations.add_or_replace_meet ~resolver:t.resolver
+        t.equations name scope_level ty
     in
     { t with
-      typing_judgements;
+      equations;
     }
 
-  let add_or_meet_typing_judgements t typing_env =
-    let typing_judgements =
-      T.Typing_environment.meet t.typing_judgements typing_env
-    in
+  let add_or_meet_equations t equations =
+    let equations = T.Equations.meet t.equations equations in
     { t with
-      typing_judgements;
+      equations;
     }
 
-  let get_typing_judgements t = t.typing_judgements
+  let get_equations t = t.equations
 
   (* CR mshinwell: There should be a function here which records the new
      imports in [newly_imported_symbols]. *)
