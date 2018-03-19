@@ -45,7 +45,7 @@ let _refine_set_of_closures_type_to_identify_projection ~type_of_name
     T.set_of_closures ~closures:(Open closures)
       ~closure_elements:(Open closure_elements)
   in
-  R.add_or_meet_typing_judgement
+  R.add_or_meet_equation
     r set_of_closures_name
     (E.continuation_scope_level env) set_of_closures_ty
 *)
@@ -64,9 +64,9 @@ let refine_set_of_closures_type_to_identify_closure_element
     T.set_of_closures ~closures:(Open closures)
       ~closure_elements:(Open closure_elements)
   in
-  R.add_or_meet_typing_judgement
-    r set_of_closures_name
-    (E.continuation_scope_level env) set_of_closures_ty
+  R.add_or_meet_equation r
+    set_of_closures_name (E.continuation_scope_level env)
+    set_of_closures_ty
 
 let simplify_project_closure env r prim ~closure ~set_of_closures dbg
       ~result_var:_ =
@@ -453,10 +453,10 @@ module Make_simplify_unbox_number (P : A.Boxable_number_kind) = struct
         in
         let r =
           let scope_level = E.continuation_scope_level env in
-          R.add_or_meet_typing_judgement r (Name.var result_var)
+          R.add_or_meet_equation r (Name.var result_var)
             scope_level (T.unknown kind)
         in
-        R.add_or_meet_typing_judgement r boxed_name
+        R.add_or_meet_equation r boxed_name
           (E.scope_level_of_name env boxed_name) boxed_ty_refinement
     in
     match proof with

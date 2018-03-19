@@ -63,7 +63,7 @@ let for_defining_expr_of_let (env, r) var kind defining_expr =
      added to the "simplify newly-introduced let bindings" function, below *)
   (* CR mshinwell: Add one function in [R] called "local" to do all of
      these? *)
-  let r = R.clear_typing_judgements r in
+  let r = R.clear_equations r in
   let already_lifted_constants = R.get_lifted_constants r in
 Format.eprintf "Simplifying let %a = %a\n%!"
   Variable.print var
@@ -104,10 +104,12 @@ Format.eprintf "Simplifying let %a = %a\n%!"
   let env = E.set_freshening env freshening in
   let env = E.add_variable env var ty in
   let env =
-    let new_judgements = R.get_typing_judgements r in
-    Format.eprintf "New judgements:@ %a\n%!"
-      T.Typing_environment.print new_judgements;
-    E.extend_typing_environment env ~equations:new_judgements
+    let new_equations = R.get_equations r in
+(*
+    Format.eprintf "New equations:@ %a\n%!"
+      T.Equations.print new_equations;
+*)
+    E.extend_typing_environment env ~equations:new_equations
   in
 (*
 Format.eprintf "Variable %a (previously: %a) bound to %a in env\n%!"
