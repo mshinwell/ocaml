@@ -978,8 +978,19 @@ end;
         existential_freshening;
       }
     in
-    invariant_typing_environment t;
-    t
+    try
+      invariant_typing_environment t;
+      t
+    with Misc.Fatal_error -> begin
+      Format.eprintf "\n%sContext is: \
+          restrict_to_names0_typing_environment:%s\
+          @ Restricting to: %a@ \nEnvironment:@ %a\n"
+        (Misc_color.bold_red ())
+        (Misc_color.reset ())
+        Name.Set.print allowed
+        print_typing_environment t;
+      raise Misc.Fatal_error
+    end
 
   (* CR mshinwell: Move back to Flambda_type *)
   let free_names_transitive env t =
