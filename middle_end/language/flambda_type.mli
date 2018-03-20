@@ -75,11 +75,11 @@ val is_useful : (t -> bool) type_accessor
 val all_not_useful : (t list -> bool) type_accessor
 
 (** Type equality. *)
-val equal : (t -> t -> bool) type_accessor
+val equal : t -> t -> bool
 
 (** Returns [true] if the given type is known to provide strictly more
     information about the corresponding value than the supplied type [than]. *)
-val strictly_more_precise : (t -> than:t -> bool) type_accessor
+val strictly_more_precise : t_in_context -> than:t_in_context -> bool
 
 (** Whether values of the given two types will always be physically equal
     to each other. *)
@@ -280,3 +280,11 @@ val switch_arms
     -> arms:Continuation.t Discriminant.Map.t
     -> (Equations.t * Continuation.t) Discriminant.Map.t)
   type_accessor
+
+module Typing_environment : sig
+  include module type of struct include Typing_environment0 end
+
+  (** [diff t1 t2] returns the environment [t1] minus any bindings for which
+      [t2] is known to specify an equally precise, or less precise, type. *)
+  val diff : t -> t -> t
+end

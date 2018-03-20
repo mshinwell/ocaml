@@ -238,6 +238,10 @@ module Stdlib = struct
           loop (succ i)
       in
       loop 0
+
+    let equal f t1 t2 =
+      if Array.length t1 <> Array.length t2 then false
+      else for_all2 f t1 t2
   end
 
   module Set_once = struct

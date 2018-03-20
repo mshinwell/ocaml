@@ -349,9 +349,15 @@ module type S = sig
       -> t
 
     val meet : t -> t -> t
+
+    val equal
+       : equal_type:(flambda_type -> flambda_type -> bool)
+      -> t
+      -> t
+      -> bool
   end
 
-  module Typing_environment : sig
+  module Typing_environment0 : sig
     (** A "traditional" typing environment or context: an assignment from
         names to types.  The environment also encapsulates the knowledge,
         via the [resolver], required to import types from .cmx files (or
@@ -454,11 +460,17 @@ module type S = sig
     (** Create an equations structure whose typing judgements are those of
         the given typing environment. *)
     val to_equations : t -> Equations.t
+
+    val diff
+       : strictly_more_precise:(t_in_context -> than:t_in_context -> bool)
+      -> t
+      -> t
+      -> t
   end
 
   (** Annotation for functions that may require examination of the current
       environment (in particular to resolve [Type] or [Equals] aliases). *)
-  type 'a type_accessor = Typing_environment.t -> 'a
+  type 'a type_accessor = Typing_environment0.t -> 'a
 
   (** Print a type to the given formatter. *)
   val print : Format.formatter -> t -> unit
@@ -774,7 +786,7 @@ module type S = sig
       name from the [bias_towards] side.  (A returned judgement will contain an
       equality to the name on the other side.) *)
   val meet
-     : output_env:Typing_environment.t
+     : output_env:Typing_environment0.t
     -> bias_towards:t_in_context
     -> t_in_context
     -> t_in_context

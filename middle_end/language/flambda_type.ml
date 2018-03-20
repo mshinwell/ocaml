@@ -73,7 +73,7 @@ let this_naked_int64_named n : Named.t * t =
 let this_naked_nativeint_named n : Named.t * t =
   Simple (Simple.const (Naked_nativeint n)), this_naked_nativeint n
 
-let _equal_mutable_or_immutable equal_contents (mut1 : _ mutable_or_immutable)
+let equal_mutable_or_immutable equal_contents (mut1 : _ mutable_or_immutable)
       (mut2 : _ mutable_or_immutable) =
   match mut1, mut2 with
   | Immutable contents1, Immutable contents2 ->
@@ -81,7 +81,7 @@ let _equal_mutable_or_immutable equal_contents (mut1 : _ mutable_or_immutable)
   | Mutable, Mutable -> true
   | (Immutable _ | Mutable), _ -> false
 
-let _equal_or_alias equal_contents (or_alias1 : _ or_alias)
+let equal_or_alias equal_contents (or_alias1 : _ or_alias)
       (or_alias2 : _ or_alias) =
   match or_alias1, or_alias2 with
   | No_alias contents1, No_alias contents2 -> equal_contents contents1 contents2
@@ -89,14 +89,33 @@ let _equal_or_alias equal_contents (or_alias1 : _ or_alias)
   | Equals name1, Equals name2 -> Name.equal name1 name2
   | (No_alias _ | Type _ | Equals _), _ -> false
 
-let _equal_extensibility equal_contents
-      (ex1 : _ extensibility) (ex2 : _ extensibility) =
+let equal_extensibility equal_contents
+     (ex1 : _ extensibility) (ex2 : _ extensibility) =
   match ex1, ex2 with
   | Open contents1, Open contents2
   | Exactly contents1, Exactly contents2 -> equal_contents contents1 contents2
   | (Open _ | Exactly _), _ -> false
 
-(*
+let equal_unknown_or_join equal_of_kind_foo (uj1 : _ unknown_or_join)
+      (uj2 : _ unknown_or_join) =
+  match uj1, uj2 with
+  | Unknown, Unknown -> true
+  | Join join1, Join join2 ->
+    Misc.Stdlib.List.equal equal_of_kind_foo join1 join2
+  | Unknown, _
+  | Join _, _ -> false
+
+let equal_or_unknown equal_contents
+      (or_unknown1 : _ or_unknown) (or_unknown2 : _ or_unknown) =
+  match or_unknown1, or_unknown2 with
+  | Unknown, Unknown -> true
+  | Known contents1, Known contents2 -> equal_contents contents1 contents2
+  | Unknown, Known _
+  | Known _, Unknown -> false
+
+let equal_ty equal_of_kind_foo ty1 ty2 =
+  equal_or_alias (equal_unknown_or_join equal_of_kind_foo) ty1 ty2
+
 let rec equal ({ descr = descr1; phantom = phantom1; } : t)
       ({ descr = descr2; phantom = phantom2; } : t) =
   equal_descr descr1 descr2
@@ -107,52 +126,57 @@ and equal_descr (descr1 : descr) (descr2 : descr) =
   match descr1, descr2 with
   | Value ty_value1, Value ty_value2 ->
     equal_ty_value ty_value1 ty_value2
-  | Naked_number (ty_naked_number1, kind1),
-      Naked_number (ty_naked_number2, kind2) ->
+  | Naked_number (ty_naked_number1, Naked_immediate),
+      Naked_number (ty_naked_number2, Naked_immediate) ->
     equal_ty_naked_number ty_naked_number1 ty_naked_number2
-     (* && Flambda_kind.Naked_number.equal kind1 kind2 *)
+  | Naked_number (ty_naked_number1, Naked_float),
+      Naked_number (ty_naked_number2, Naked_float) ->
+    equal_ty_naked_number ty_naked_number1 ty_naked_number2
+  | Naked_number (ty_naked_number1, Naked_int32),
+      Naked_number (ty_naked_number2, Naked_int32) ->
+    equal_ty_naked_number ty_naked_number1 ty_naked_number2
+  | Naked_number (ty_naked_number1, Naked_int64),
+      Naked_number (ty_naked_number2, Naked_int64) ->
+    equal_ty_naked_number ty_naked_number1 ty_naked_number2
+  | Naked_number (ty_naked_number1, Naked_nativeint),
+      Naked_number (ty_naked_number2, Naked_nativeint) ->
+    equal_ty_naked_number ty_naked_number1 ty_naked_number2
   | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
     equal_ty_fabricated ty_fabricated1 ty_fabricated2
   | Value _, _ -> false
   | Naked_number _, _ -> false
   | Fabricated _, _ -> false
-  | _, _ -> assert false
 
 and equal_ty_value ty_value1 ty_value2 =
   equal_ty equal_of_kind_value ty_value1 ty_value2
 
-and equal_ty_naked_number :  type a b. a ty_naked_number ->
-b ty_naked_number -> bool = fun
-      (ty_naked_number1 : a ty_naked_number)
-      (ty_naked_number2 : b ty_naked_number) ->
-(*  equal_ty equal_of_kind_naked_number ty_naked_number1 ty_naked_number2*)
-  equal_or_alias (equal_unknown_or_join equal_of_kind_naked_number) ty1 ty2
+and equal_ty_naked_number
+      : type a. a ty_naked_number -> a ty_naked_number -> bool =
+fun (ty_naked_number1 : a ty_naked_number)
+    (ty_naked_number2 : a ty_naked_number) ->
+  equal_or_alias (equal_unknown_or_join equal_of_kind_naked_number)
+    ty_naked_number1 ty_naked_number2
 
 and equal_ty_fabricated ty_fabricated1 ty_fabricated2 =
   equal_ty equal_of_kind_fabricated ty_fabricated1 ty_fabricated2
 
-and equal_ty : type a. (a -> a -> bool) -> a ty -> a ty -> bool =
-fun equal_of_kind_foo ty1 ty2 ->
-  equal_or_alias (equal_unknown_or_join equal_of_kind_foo) ty1 ty2
-
-and equal_unknown_or_join equal_of_kind_foo (uj1 : _ unknown_or_join)
-      (uj2 : unknown_or_join) =
-  match uj1, uj2 with
-  | Unknown, Unknown -> true
-  | Join join1, Join join2 ->
-    Misc.Stdlib.List.equal equal_of_kind_foo join1 join2
-  | Unknown, _
-  | Join _, _ -> false
-
-and equal_of_kind_value (v1 : of_kind_value1) (v2 : of_kind_value2) =
+and equal_of_kind_value (v1 : of_kind_value) (v2 : of_kind_value) =
   match v1, v2 with
   | Blocks_and_tagged_immediates blocks1,
       Blocks_and_tagged_immediates blocks2 ->
     equal_blocks_and_tagged_immediates blocks1 blocks2
-  | Boxed_number of_kind_value_boxed_number1,
-      Boxed_number of_kind_value_boxed_number2 ->
-    equal_of_kind_value_boxed_number of_kind_value_boxed_number1
-      of_kind_value_boxed_number2
+  | Boxed_number (Boxed_float ty_naked_number1),
+      Boxed_number (Boxed_float ty_naked_number2) ->
+    equal_ty_naked_number ty_naked_number1 ty_naked_number2
+  | Boxed_number (Boxed_int32 ty_naked_number1),
+      Boxed_number (Boxed_int32 ty_naked_number2) ->
+    equal_ty_naked_number ty_naked_number1 ty_naked_number2
+  | Boxed_number (Boxed_int64 ty_naked_number1),
+      Boxed_number (Boxed_int64 ty_naked_number2) ->
+    equal_ty_naked_number ty_naked_number1 ty_naked_number2
+  | Boxed_number (Boxed_nativeint ty_naked_number1),
+      Boxed_number (Boxed_nativeint ty_naked_number2) ->
+    equal_ty_naked_number ty_naked_number1 ty_naked_number2
   | Closures closures1, Closures closures2 ->
     equal_closures closures1 closures2
   | String string_set1, String string_set2 ->
@@ -162,13 +186,13 @@ and equal_of_kind_value (v1 : of_kind_value1) (v2 : of_kind_value2) =
 
 and equal_immediate_case ({ equations = equations1; } : immediate_case)
       ({ equations = equations2; } : immediate_case) =
-  equal_typing_environment equations1 equations2
+  equal_equations equations1 equations2
 
 and equal_singleton_block
       ({ equations = equations1; fields = fields1; } : singleton_block)
       ({ equations = equations2; fields = fields2; } : singleton_block)
       =
-  equal_typing_environment equations1 equations2
+  equal_equations equations1 equations2
     && Misc.Stdlib.Array.equal (equal_mutable_or_immutable equal)
          fields1 fields2
 
@@ -176,48 +200,19 @@ and equal_block_cases (Join { by_length = by_length1; })
       (Join { by_length = by_length2; }) =
   Targetint.OCaml.Map.equal equal_singleton_block by_length1 by_length2
 
-and equal_or_unknown_immediates equal_contents (ou1 : _ or_unknown_immediates)
-      (ou2 : _ or_unknown_immediates) =
-  match ou with
-  | Exactly contents1, Exactly contents2 -> equal_contents contents1 contents2
-  | Unknown { is_int = is_int1; }, Unknown { is_int = is_int2; } ->
-    Misc.Stdlib.Option.equal Name.equal is_int1 is_int2
-  | (Exactly _ | Unknown _), _ -> false
-
-and equal_or_unknown_blocks equal_contents (ou1 : _ or_unknown_blocks)
-      (ou2 : _ or_unknown_blocks) =
-  match ou with
-  | Exactly contents1, Exactly contents2 -> equal_contents contents1 contents2
-  | Unknown { get_tag = get_tag1; }, Unknown { get_tag = get_tag2; } ->
-    Misc.Stdlib.Option.equal Name.equal get_tag1 get_tag2
-  | (Exactly _ | Unknown _), _ -> false
-
 and equal_blocks_and_tagged_immediates
-      ({ immediates = immediates1; blocks = blocks1; })
-      ({ immediates = immediates2; blocks = blocks2; }) =
-  equal_or_unknown_immediates (Immediate.Map.equal equal_immediate_case)
+      ({ immediates = immediates1; blocks = blocks1;
+         is_int = is_int1; get_tag = get_tag1; })
+      ({ immediates = immediates2; blocks = blocks2;
+         is_int = is_int2; get_tag = get_tag2; }) =
+  equal_or_unknown (Immediate.Map.equal equal_immediate_case)
       immediates1 immediates2
-    && equal_or_unknown_blocks (Tag.Map.equal equal_block_cases)
+    && equal_or_unknown (Tag.Map.equal equal_block_cases)
          blocks1 blocks2
+    && Misc.Stdlib.Option.equal Name.equal is_int1 is_int2
+    && Misc.Stdlib.Option.equal Name.equal get_tag1 get_tag2
 
-and equal_of_kind_value_boxed_number (type a) (type b)
-      (kind1 : a of_kind_value_boxed_number)
-      (kind2 : b of_kind_value_boxed_number) =
-  match kind1, kind2 with
-  | Boxed_float ty_naked_number1, Boxed_float ty_naked_number2 ->
-    equal_ty_naked_number ty_naked_number1 ty_naked_number2
-  | Boxed_int32 ty_naked_number1, Boxed_int32 ty_naked_number2 ->
-    equal_ty_naked_number ty_naked_number1 ty_naked_number2
-  | Boxed_int64 ty_naked_number1, Boxed_int64 ty_naked_number2 ->
-    equal_ty_naked_number ty_naked_number1 ty_naked_number2
-  | Boxed_nativeint ty_naked_number1, Boxed_nativeint ty_naked_number2 ->
-    equal_ty_naked_number ty_naked_number1 ty_naked_number2
-  | Boxed_float _, _ -> false
-  | Boxed_int32 _, _ -> false
-  | Boxed_int64 _, _ -> false
-  | Boxed_nativeint _, _ -> false
-
-and equal_function_declaration
+and equal_function_declarations
       (decl1 : function_declarations)
       (decl2 : function_declarations) =
   match decl1, decl2 with
@@ -268,10 +263,11 @@ and equal_function_declaration
       && Continuation.equal exn_continuation_param1 exn_continuation_param2
       && Pervasives.compare is_classic_mode1 is_classic_mode2 = 0
       && Misc.Stdlib.List.equal (fun (param1, t1) (param2, t2) ->
-          Parameter.equal param1 param2 && equal_type t1 t2)
+          Parameter.equal param1 param2 && equal t1 t2)
         params1 params2
       && Code_id.equal code_id1 code_id2
-      && Misc.Stdlib.List.equal equal_type result1 result2
+      && Misc.Stdlib.List.equal equal result1 result2
+      && equal_equations result_equations1 result_equations2
       && Pervasives.compare stub1 stub2 = 0
       && Debuginfo.equal dbg1 dbg2
       && Pervasives.compare inline1 inline2 = 0
@@ -284,22 +280,25 @@ and equal_function_declaration
       && Misc.Stdlib.Option.equal Closure_id.equal
         direct_call_surrogate1 direct_call_surrogate2
       && Variable.equal my_closure1 my_closure2
-  | Non_inlinable {
+  | Non_inlinable None, Non_inlinable None -> true
+  | Non_inlinable None, Non_inlinable (Some _)
+  | Non_inlinable (Some _), Non_inlinable None -> false
+  | Non_inlinable (Some {
       params = params1;
       result = result1;
       result_equations = result_equations1;
       direct_call_surrogate = direct_call_surrogate1;
-    },
-    Non_inlinable {
+    }),
+    Non_inlinable (Some {
       params = params2;
       result = result2;
       result_equations = result_equations2;
       direct_call_surrogate = direct_call_surrogate2;
-    } ->
-    Misc.Stdlib.List.equal (fun (param1, t1) (param2, t2) ->
-          Parameter.equal param1 param2 && equal_type t1 t2)
+    }) ->
+    Misc.Stdlib.List.equal (fun param1 param2 -> equal param1 param2)
         params1 params2
-      && Misc.Stdlib.List.equal equal_type result1 result2
+      && Misc.Stdlib.List.equal equal result1 result2
+      && equal_equations result_equations1 result_equations2
       && Misc.Stdlib.Option.equal Closure_id.equal
         direct_call_surrogate1 direct_call_surrogate2
   | Inlinable _, Non_inlinable _
@@ -322,26 +321,29 @@ fun of_kind_naked_number1 of_kind_naked_number2 ->
     Numbers.Float_by_bit_pattern.Set.equal floats1 floats2
   | Int32 ints1, Int32 ints2 -> Int32.Set.equal ints1 ints2
   | Int64 ints1, Int64 ints2 -> Int64.Set.equal ints1 ints2
-  | Nativeint ints1, Nativeint ints2 -> Nativeint.Set.equal ints1 ints2
+  | Nativeint ints1, Nativeint ints2 -> Targetint.Set.equal ints1 ints2
   | Immediate _, _ -> false
   | Float _, _ -> false
   | Int32 _, _ -> false
   | Int64 _, _ -> false
   | Nativeint _, _ -> false
 
-and equal_tag_case ({ equations = equations1; } : tag_case)
-      ({ equations = equations2; } : tag_case) =
-  equal_typing_environment equations1 equations2
+and equal_discriminant_case ({ equations = equations1; } : discriminant_case)
+      ({ equations = equations2; } : discriminant_case) =
+  equal_equations equations1 equations2
 
 and equal_of_kind_fabricated (of_kind_fabricated1 : of_kind_fabricated)
       (of_kind_fabricated2 : of_kind_fabricated) =
   match of_kind_fabricated1, of_kind_fabricated2 with
-  | Tag tags1, Tag tags2 ->
-    Tag.Map.equal equal_tag_case tags1 tags2
-  | Set_of_closures1 set1, Set_of_closures set2 ->
+  | Discriminant discrs1, Discriminant discrs2 ->
+    Discriminant.Map.equal equal_discriminant_case discrs1 discrs2
+  | Set_of_closures set1, Set_of_closures set2 ->
     equal_set_of_closures set1 set2
   | Closure closure1, Closure closure2 ->
     equal_closure closure1 closure2
+  | Discriminant _, _
+  | Set_of_closures _, _
+  | Closure _, _ -> false
 
 and equal_set_of_closures
       ({ closures = closures1; closure_elements = closure_elements1; }
@@ -357,21 +359,18 @@ and equal_closure ({ function_decls = function_decls1; } : closure)
       ({ function_decls = function_decls2; } : closure) =
   equal_function_declarations function_decls1 function_decls2
 
-and equal_typing_environment
-      { names_to_types = names_to_types1; existentials = existentials1; _ }
-      { names_to_types = names_to_types2; existentials = existentials2; _ } =
-  let equal_scope_and_t (scope1, t1) (scope2, t2) =
-    Scope_level.equal scope1 scope2 && equal t1 t2
-  in
-  Name.Map.equal equal_scope_and_t names_to_types1 names_to_types2
-    && Name.Set.equal existentials1 existentials2
-*)
+and equal_equations equations1 equations2 =
+  Equations.equal ~equal_type:equal equations1 equations2
 
-let equal _env _ _ = false
-
-let strictly_more_precise env t ~than =
+let strictly_more_precise (t_env, t) ~than:(than_env, than) =
   (* The [bias_towards] choice is arbitrary here. *)
-  not (equal env than (meet ~bias_towards:(env, t) (env, than)))
+  let _env, meet =
+    let output_env =
+      Typing_environment0.create_using_resolver_from t_env
+    in
+    meet ~output_env ~bias_towards:(t_env, t) (than_env, than)
+  in
+  not (equal than meet)
 
 module Simplified_type : sig
   (* Simplified types omit the following at top level:
@@ -682,7 +681,7 @@ Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
     let try_name () : reification_result =
       match canonical_name with
       | None -> Cannot_reify
-      | Some name when Typing_environment.is_existential env name ->
+      | Some name when Typing_environment0.is_existential env name ->
         Cannot_reify
       | Some name ->
         match name with
@@ -1805,7 +1804,7 @@ let free_names_transitive env t =
     match Name_occurrences.choose_and_remove_amongst_everything to_follow with
     | None -> ()
     | Some (name, to_follow) ->
-      let t, _binding_type = Typing_environment.find env name in
+      let t, _binding_type = Typing_environment0.find env name in
       let names = free_names t in
       loop (Name_occurrences.union to_follow names)
   in
@@ -1845,3 +1844,9 @@ let prove_unboxable env ~unboxee_ty : unboxable_proof =
               match prove_boxed_nativeint env unboxee_ty with
               | Proved _ty_naked_number -> Boxed_nativeint
               | Invalid | Unknown -> Cannot_unbox
+
+module Typing_environment = struct
+  include Typing_environment0
+
+  let diff t1 t2 = diff ~strictly_more_precise t1 t2
+end

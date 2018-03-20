@@ -798,15 +798,9 @@ end = struct
             t.params
         in
         let bottom_arg_tys = T.bottom_types_from_arity arity in
-        let arg_tys, env =
-          List.fold_left (fun (arg_tys, joined_env) (use : Use.t) ->
-              let arg_tys_this_use = Use.Kind.arg_tys use.kind in
-              if List.length arg_tys <> List.length arg_tys_this_use then begin
-                Misc.fatal_errorf "join_of_arg_tys_opt %a: approx length %d, \
-                    use length %d"
-                  Continuation.print t.continuation
-                  (List.length arg_tys) (List.length arg_tys_this_use)
-              end;
+        let arg_tys_with_envs_rev, joined_env =
+          List.fold_left
+            (fun (arg_tys_with_envs_rev, joined_env) (use : Use.t) ->
 Format.eprintf "Cutting environment for %a, level %a, freshening is:@ %a\n%!"
   Continuation.print t.continuation
   Scope_level.print t.definition_scope_level
@@ -816,6 +810,9 @@ Format.eprintf "Cutting environment for %a, level %a, freshening is:@ %a\n%!"
                   ~existential_if_defined_at_or_later_than:
                     (Scope_level.next t.definition_scope_level)
               in
+(*
+Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
+*)
               (* XXX This is kind of gross, and is putting out-of-scope 
                  variables in the use environments. *)
               let use_env =
@@ -832,9 +829,7 @@ Format.eprintf "Cutting environment for %a, level %a, freshening is:@ %a\n%!"
                   use_env
                   t.params
               in
-(*
-Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
-*)
+              let arg_tys_this_use = Use.Kind.arg_tys use.kind in
               (* CR mshinwell: Add [List.map2i]. *)
               let use_env, arg_tys_this_use_rev =
                 List.fold_left2
@@ -852,68 +847,61 @@ Format.eprintf "New use_env after meet:@ %a\n%!"
                   arg_tys_this_use
               in
               let arg_tys_this_use = List.rev arg_tys_this_use_rev in
-              let arg_number = ref 0 in
-              let arg_tys =
-                List.map2 (fun (param, joined_ty) this_ty ->
-                    let free_names_this_ty =
-                      T.free_names_transitive use_env this_ty
-                    in
-                    Format.eprintf "Argument for %a:@ Type:@ %a@ \
-                        Free names:@ %a@ Env:@ %a\n%!"
-                      Continuation.print t.continuation
-                      T.print this_ty
-                      Name_occurrences.print free_names_this_ty
-                      TE.print use_env;
-                    (* XXX We should presumably allow things from outer
-                        levels so long as our types for them are more
-                        precise. *)
-                    let restricted_use_env =
-                      TE.restrict_to_names use_env free_names_this_ty
-                    in
-(*
-                        (Name_occurrences.union free_names_this_ty
-                          (TE.domain default_env))
-*)
-                    Format.eprintf "Restricted env:@ %a\n%!"
-                      TE.print restricted_use_env;
-                    let _param = Flambda.Typed_parameter.name param in
-(*
-                    let restricted_use_env =
-                      T.Typing_environment.filter restricted_use_env
-                        ~f:(fun name (_level, ty) ->
-                          let name =
-                            match T.resolve_aliases (use_env, ty) with
-                            | _ty, None -> name
-                            | _ty, Some canonical_name -> canonical_name
-                          in
-                          not (Name.equal name param))
-                    in
-*)
-                    let this_ty =
-                      T.add_judgements (restricted_use_env, this_ty)
-                    in
-                    let joined_ty =
-                      try T.join (joined_env, joined_ty) (use_env, this_ty)
-                      with Misc.Fatal_error -> begin
-                        Format.eprintf "\n%sContext is: argument number %d \
-                            (0 is the first argument)%s\n"
-                          (Misc_color.bold_red ())
-                          !arg_number
-                          (Misc_color.reset ());
-
-                        raise Misc.Fatal_error
-                      end
-                    in
-                    incr arg_number;
-                    joined_ty)
-                  (List.combine t.params arg_tys) arg_tys_this_use
-              in
               let joined_env = TE.join joined_env use_env in
-              arg_tys, joined_env)
-            (bottom_arg_tys, default_env)
+              (arg_tys_this_use, use_env) :: arg_tys_with_envs_rev,
+                joined_env)
+            ([], default_env)
             uses
         in
-        Some (arg_tys, env)
+        let arg_tys =
+          List.fold_left (fun joined_arg_tys (arg_tys, use_env) ->
+              let arg_number = ref 0 in
+              List.map2 (fun joined_ty this_ty ->
+                  let free_names_this_ty =
+                    T.free_names_transitive use_env this_ty
+                  in
+                  Format.eprintf "Argument for %a:@ Type:@ %a@ \
+                      Free names:@ %a@ Env:@ %a\n%!"
+                    Continuation.print t.continuation
+                    T.print this_ty
+                    Name_occurrences.print free_names_this_ty
+                    TE.print use_env;
+                  (* XXX We should presumably allow things from outer
+                     levels so long as our types for them are more
+                     precise. *)
+                  let restricted_use_env =
+                    TE.diff
+                      (TE.restrict_to_names use_env free_names_this_ty)
+                      joined_env
+                  in
+(*
+                      (Name_occurrences.union free_names_this_ty
+                        (TE.domain default_env))
+*)
+                  Format.eprintf "Restricted env:@ %a\n%!"
+                    TE.print restricted_use_env;
+                  let this_ty =
+                    T.add_judgements (restricted_use_env, this_ty)
+                  in
+                  let joined_ty =
+                    try T.join (joined_env, joined_ty) (use_env, this_ty)
+                    with Misc.Fatal_error -> begin
+                      Format.eprintf "\n%sContext is: argument number %d \
+                          (0 is the first argument)%s\n"
+                        (Misc_color.bold_red ())
+                        !arg_number
+                        (Misc_color.reset ());
+
+                      raise Misc.Fatal_error
+                    end
+                  in
+                  incr arg_number;
+                  joined_ty)
+                joined_arg_tys arg_tys)
+            bottom_arg_tys
+            (List.rev arg_tys_with_envs_rev)
+        in
+        Some (arg_tys, joined_env)
 
     let join_of_arg_types t ~freshening ~arity ~default_env =
       let tys, env =

@@ -117,6 +117,8 @@ module Stdlib : sig
        different lengths. *)
 
     val for_all2 : ('a -> 'b -> bool) -> 'a array -> 'b array -> bool
+
+    val equal : ('a -> 'a -> bool) -> 'a array -> 'a array -> bool
   end
 
   module Set_once : sig

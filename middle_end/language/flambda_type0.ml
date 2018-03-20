@@ -4036,7 +4036,7 @@ Format.eprintf "...giving %a\n%!" print ty;
   let join_ty_value (env1, ty_value1) (env2, ty_value2) =
     Meet_and_join_value.join_ty env1 env2 ty_value1 ty_value2
 
-  module Typing_environment = struct
+  module Typing_environment0 = struct
     type t = typing_environment
 
     (* CR mshinwell: Add invariant check.  First one: symbols should never be
@@ -4221,6 +4221,41 @@ Format.eprintf "Result is: %a\n%!"
       }
 
     let resolver t = t.resolver
+
+    let equal ~equal_type
+          { resolver = _;
+            canonical_names_to_aliases = canonical_names_to_aliases1;
+            names_to_types = names_to_types1;
+            levels_to_names = _;
+            existentials = existentials1;
+            existential_freshening = _;
+          }
+          { resolver = _;
+            canonical_names_to_aliases = canonical_names_to_aliases2;
+            names_to_types = names_to_types2;
+            levels_to_names = _;
+            existentials = existentials2;
+            existential_freshening = _;
+          } =
+      let equal_scope_and_type (scope1, t1) (scope2, t2) =
+        Scope_level.equal scope1 scope2 && equal_type t1 t2
+      in
+      Name.Map.equal equal_scope_and_type names_to_types1 names_to_types2
+        && Name.Map.equal Name.Set.equal canonical_names_to_aliases1
+             canonical_names_to_aliases2
+        && Name.Set.equal existentials1 existentials2
+
+    let diff ~strictly_more_precise t1 t2 =
+      let names_to_types =
+        Name.Map.filter (fun name (level1, ty1) ->
+            match Name.Map.find name t2.names_to_types with
+            | exception Not_found -> true
+            | (level2, ty2) ->
+              assert (Scope_level.equal level1 level2);
+              strictly_more_precise (t1, ty1) ~than:(t2, ty2))
+          t1.names_to_types
+      in
+      restrict_to_names0 t1 (Name.Map.keys names_to_types)
   end
 
   module Equations = struct
@@ -4232,7 +4267,7 @@ Format.eprintf "Result is: %a\n%!"
 
     let singleton ~resolver name scope_level ty =
       { typing_judgements =
-          Some (Typing_environment.singleton ~resolver name scope_level ty);
+          Some (Typing_environment0.singleton ~resolver name scope_level ty);
       }
 
     let add ~resolver t name scope_level ty =
@@ -4240,7 +4275,7 @@ Format.eprintf "Result is: %a\n%!"
       | None -> singleton ~resolver name scope_level ty
       | Some typing_judgements ->
         { typing_judgements =
-            Some (Typing_environment.add typing_judgements name scope_level ty);
+            Some (Typing_environment0.add typing_judgements name scope_level ty);
         }
 
     let add_or_replace_meet ~resolver t name scope_level ty =
@@ -4248,7 +4283,7 @@ Format.eprintf "Result is: %a\n%!"
       | None -> singleton ~resolver name scope_level ty
       | Some typing_judgements ->
         { typing_judgements =
-            Some (Typing_environment.add_or_replace_meet typing_judgements
+            Some (Typing_environment0.add_or_replace_meet typing_judgements
               name scope_level ty);
         }
 
@@ -4257,7 +4292,7 @@ Format.eprintf "Result is: %a\n%!"
         match t.typing_judgements with
         | None -> env
         | Some typing_judgements ->
-          Typing_environment.meet typing_judgements env
+          Typing_environment0.meet typing_judgements env
       in
       { typing_judgements = Some typing_judgements;
       }
@@ -4267,9 +4302,9 @@ Format.eprintf "Result is: %a\n%!"
         match t.typing_judgements with
         | None ->
           let typing_judgements = create_typing_environment ~resolver in
-          Typing_environment.add_alias typing_judgements ~canonical_name ~alias
+          Typing_environment0.add_alias typing_judgements ~canonical_name ~alias
         | Some typing_judgements ->
-          Typing_environment.add_alias typing_judgements ~canonical_name ~alias
+          Typing_environment0.add_alias typing_judgements ~canonical_name ~alias
       in
       { typing_judgements = Some typing_judgements;
       }
@@ -4281,10 +4316,18 @@ Format.eprintf "Result is: %a\n%!"
         | Some typing_judgements, None
         | None, Some typing_judgements -> Some typing_judgements
         | Some typing_judgements1, Some typing_judgements2 ->
-          Some (Typing_environment.meet typing_judgements1 typing_judgements2)
+          Some (Typing_environment0.meet typing_judgements1 typing_judgements2)
       in
       { typing_judgements;
       }
+
+    let equal ~equal_type
+          { typing_judgements = typing_judgements1;
+          }
+          { typing_judgements = typing_judgements2;
+          } =
+      Misc.Stdlib.Option.equal (Typing_environment0.equal ~equal_type)
+        typing_judgements1 typing_judgements2
   end
 
   let add_judgements (env, t) : t =
