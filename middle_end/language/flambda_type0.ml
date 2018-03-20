@@ -643,8 +643,8 @@ end) = struct
         if Name.Set.is_empty existentials then
           Format.fprintf ppf
             "@[<hov 1>(\
-                @[<hov 1>(names_to_types@ %a)@]@,\
-                @[<hov 1>(levels_to_names@ %a)@]@,\
+                @[<hov 1>(names_to_types@ %a)@]@ \
+                @[<hov 1>(levels_to_names@ %a)@]@ \
                 @[<hov 1>(canonical_names_to_aliases@ %a)@])@]"
             (Name.Map.print print_scope_level_and_type) names_to_types
             (Scope_level.Map.print Name.Set.print) levels_to_names

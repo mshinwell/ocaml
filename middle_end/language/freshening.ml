@@ -46,7 +46,7 @@ let print ppf = function
   | Inactive -> Format.fprintf ppf "Inactive"
   | Active tbl ->
     Format.fprintf ppf "@[<hov 1>(Active@ \
-        @[<hov 1>(variables@ %a)@]@,\
+        @[<hov 1>(variables@ %a)@]@ \
         @[<hov 1>(continuations@ %a)@])@]"
       (Variable.Map.print Variable.print) tbl.variables
       (Continuation.Map.print Continuation.print) tbl.continuations
