@@ -695,6 +695,8 @@ end and Typed_parameter : sig
   (** The underlying variable (cf. [Parameter.var]). *)
   val var : t -> Variable.t
 
+  val name : t -> Name.t
+
   (** As for [var], but returns a [Simple.t] describing the variable. *)
   val simple : t -> Simple.t
 

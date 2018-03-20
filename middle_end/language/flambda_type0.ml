@@ -4193,6 +4193,16 @@ Format.eprintf "Result is: %a\n%!"
       let symbols = Name.symbols_only_map t.names_to_types in
       restrict_to_names0 t (Name.Map.keys symbols)
 
+    let filter t ~f =
+      let allowed =
+        Name.Map.fold (fun name ty allowed ->
+            if f name ty then Name.Set.add name allowed
+            else allowed)
+          t.names_to_types
+          Name.Set.empty
+      in
+      restrict_to_names0 t allowed
+
     let is_empty t = Name.Map.is_empty t.names_to_types
 
     let domain t =

@@ -854,31 +854,40 @@ Format.eprintf "New use_env after meet:@ %a\n%!"
               let arg_tys_this_use = List.rev arg_tys_this_use_rev in
               let arg_number = ref 0 in
               let arg_tys =
-                List.map2 (fun joined_ty this_ty ->
+                List.map2 (fun (param, joined_ty) this_ty ->
                     let free_names_this_ty =
                       T.free_names_transitive use_env this_ty
                     in
-(*
                     Format.eprintf "Argument for %a:@ Type:@ %a@ \
                         Free names:@ %a@ Env:@ %a\n%!"
                       Continuation.print t.continuation
                       T.print this_ty
                       Name_occurrences.print free_names_this_ty
-                      TE.print this_env;
-*)
+                      TE.print use_env;
+                    (* XXX We should presumably allow things from outer
+                        levels so long as our types for them are more
+                        precise. *)
                     let restricted_use_env =
-                      (* XXX We should presumably allow things from outer
-                         levels so long as our types for them are more
-                         precise. *)
                       TE.restrict_to_names use_env free_names_this_ty
                     in
 (*
                         (Name_occurrences.union free_names_this_ty
                           (TE.domain default_env))
 *)
-(*
                     Format.eprintf "Restricted env:@ %a\n%!"
-                      TE.print this_env;
+                      TE.print restricted_use_env;
+                    let _param = Flambda.Typed_parameter.name param in
+(*
+                    let restricted_use_env =
+                      T.Typing_environment.filter restricted_use_env
+                        ~f:(fun name (_level, ty) ->
+                          let name =
+                            match T.resolve_aliases (use_env, ty) with
+                            | _ty, None -> name
+                            | _ty, Some canonical_name -> canonical_name
+                          in
+                          not (Name.equal name param))
+                    in
 *)
                     let this_ty =
                       T.add_judgements (restricted_use_env, this_ty)
@@ -897,7 +906,7 @@ Format.eprintf "New use_env after meet:@ %a\n%!"
                     in
                     incr arg_number;
                     joined_ty)
-                  arg_tys arg_tys_this_use
+                  (List.combine t.params arg_tys) arg_tys_this_use
               in
               let joined_env = TE.join joined_env use_env in
               arg_tys, joined_env)

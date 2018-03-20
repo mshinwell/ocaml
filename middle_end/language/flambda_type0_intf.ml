@@ -430,6 +430,8 @@ module type S = sig
         mentions names which are symbols, not variables. *)
     val restrict_to_symbols : t -> t
 
+    val filter : t -> f:(Name.t -> (Scope_level.t * flambda_type) -> bool) -> t
+
     (** The names for which the given typing environment specifies a type
         assignment. *)
     val domain : t -> Name_occurrences.t

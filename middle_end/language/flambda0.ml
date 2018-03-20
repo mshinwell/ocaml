@@ -1818,6 +1818,7 @@ end and Typed_parameter : sig
   val create : Parameter.t -> Flambda_type.t -> t
   val param : t -> Parameter.t
   val var : t -> Variable.t
+  val name : t -> Name.t
   val simple : t -> Simple.t
   val ty : t -> Flambda_type.t
   val kind : t -> Flambda_kind.t
@@ -1876,6 +1877,7 @@ end = struct
 
   let param t = t.param
   let var t = Parameter.var t.param
+  let name t = Name.var (var t)
   let simple t = Simple.var (var t)
   let ty t = t.ty
   let kind t = Flambda_type.kind t.ty
