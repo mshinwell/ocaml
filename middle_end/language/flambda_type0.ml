@@ -955,6 +955,34 @@ end;
         print_typing_environment env
     | scope_level, _ty -> scope_level
 
+  let restrict_to_names0_typing_environment t allowed =
+    let names_to_types =
+      Name.Map.filter (fun name _ty -> Name.Set.mem name allowed)
+        t.names_to_types
+    in
+    let levels_to_names =
+      Scope_level.Map.filter_map t.levels_to_names ~f:(fun _level names ->
+        let names = Name.Set.inter names allowed in
+        if Name.Set.is_empty names then None
+        else Some names)
+    in
+    let existentials = Name.Set.inter t.existentials allowed in
+    let existential_freshening =
+      Freshening.restrict_to_names t.existential_freshening allowed
+    in
+    let t =
+      { must_be_closed = t.must_be_closed;
+        resolver = t.resolver;
+        canonical_names_to_aliases = t.canonical_names_to_aliases;
+        names_to_types;
+        levels_to_names;
+        existentials;
+        existential_freshening;
+      }
+    in
+    invariant_typing_environment t;
+    t
+
   let create_equations () =
     { typing_judgements = None;
     }
@@ -4026,31 +4054,79 @@ Format.eprintf "...giving %a\n%!" print ty;
           raise Misc.Fatal_error
         end
 
-    let meet_equations env { typing_judgements = typing_judgements1; }
-          { typing_judgements = typing_judgements2; } =
-      let typing_judgements =
-        match typing_judgements1, typing_judgements2 with
-        | None, None -> None
-        | Some typing_judgements, None
-        | None, Some typing_judgements -> Some typing_judgements
-        | Some typing_judgements1, Some typing_judgements2 ->
-          
-
-          Some (meet_typing_environment typing_judgements1 typing_judgements2)
+    let equations_to_typing_environment ~resolver
+          ({ typing_judgements; } as equations) : typing_environment =
+      let all_free_names =
+        match typing_judgements.names_to_types with
+        | None -> Name.Set.empty
+        | Some names_to_types ->
+          let names =
+            Name.Map.fold (fun _name (_level, t) all_free_names ->
+                Name.Set.add (free_names_transitive t) all_free_names)
+              typing_judgements.names_to_types
+          in
+          Name.Set.diff all_free_names
+            (Name.Map.keys typing_judgements.names_to_types)
       in
-      { typing_judgements; }
-
-    let join_equations { typing_judgements = typing_judgements1; }
-          { typing_judgements = typing_judgements2; } =
-      let typing_judgements =
-        match typing_judgements1, typing_judgements2 with
-        | None, None -> None
-        | Some typing_judgements, None
-        | None, Some typing_judgements -> Some typing_judgements
-        | Some typing_judgements1, Some typing_judgements2 ->
-          Some (join_typing_environment typing_judgements1 typing_judgements2)
+      let equations =
+        Name.Set.fold (fun name resulting_equations ->
+            let kind, level =
+              match equations.typing_judgements with
+              | Some typing_judgements ->
+                let level, ty =
+                  Name.Map.find name typing_judgements.names_to_types
+                in
+                let kind = kind ty in
+                kind, level
+              | None -> assert false
+            in
+            let ty = unknown kind in
+            add ~resolver resulting_equations name level ty)
+          all_free_names
+          equations
       in
-      { typing_judgements; }
+      let env =
+        match equations.typing_judgements with
+        | None -> Typing_environment.create ~resolver
+        | Some env ->
+          { env with
+            must_be_closed = true;
+          }
+      in
+      Typing_environment.invariant env;
+      env
+
+    let meet_or_join_equations ~resolver ~meet_or_join
+          env equations1 equations2 =
+      let env =
+        let env1 = equations_to_typing_environment ~resolver equations1 in
+        let env2 = equations_to_typing_environment ~resolver equations2 in
+        meet_or_join env1 env2
+      in
+      let typing_judgements =
+        let allowed_names =
+          Name.Map.fold (fun name (_level, ty) allowed_names ->
+              if is_unknown ~resolver env ty then allowed_names
+              else Name.Set.add name allowed_names)
+            env.names_to_types
+            Name.Set.empty
+        in
+        restrict_to_names0_typing_environment env allowed_names
+      in
+      let typing_judgements =
+        { typing_judgements with
+          must_be_closed = false;
+        }
+      in
+      { typing_judgements = Some typing_judgements; }
+
+    let meet_equations ~resolver env equations1 equations2 =
+      meet_or_join_equations ~resolver ~meet_or_join:meet_typing_environment
+        env equations1 equations2
+
+    let join_equations ~resolver env equations1 equations2 =
+      meet_or_join_equations ~resolver ~meet_or_join:join_typing_environment
+        env equations1 equations2
   end
 
   let meet ~output_env tc1 tc2 =
@@ -4218,41 +4294,13 @@ Format.eprintf "Result is: %a\n%!"
     let meet = Meet_and_join.meet_typing_environment
     let join = Meet_and_join.join_typing_environment
 
-    let restrict_to_names0 t allowed =
-      let names_to_types =
-        Name.Map.filter (fun name _ty -> Name.Set.mem name allowed)
-          t.names_to_types
-      in
-      let levels_to_names =
-        Scope_level.Map.filter_map t.levels_to_names ~f:(fun _level names ->
-          let names = Name.Set.inter names allowed in
-          if Name.Set.is_empty names then None
-          else Some names)
-      in
-      let existentials = Name.Set.inter t.existentials allowed in
-      let existential_freshening =
-        Freshening.restrict_to_names t.existential_freshening allowed
-      in
-      let t =
-        { must_be_closed = t.must_be_closed;
-          resolver = t.resolver;
-          canonical_names_to_aliases = t.canonical_names_to_aliases;
-          names_to_types;
-          levels_to_names;
-          existentials;
-          existential_freshening;
-        }
-      in
-      invariant_typing_environment t;
-      t
-
     let restrict_to_names t allowed =
       let allowed = Name_occurrences.everything allowed in
-      restrict_to_names0 t allowed
+      restrict_to_names0_typing_environment t allowed
 
     let restrict_to_symbols t =
       let symbols = Name.symbols_only_map t.names_to_types in
-      restrict_to_names0 t (Name.Map.keys symbols)
+      restrict_to_names0_typing_environment t (Name.Map.keys symbols)
 
     (* CR mshinwell: The "derived" functions should be in Flambda_type *)
     let remove t name =
@@ -4279,12 +4327,18 @@ Format.eprintf "Result is: %a\n%!"
       in
       Name_occurrences.create_from_set_in_terms domain
 
-    let add_equations t equations =
-      match equations.typing_judgements with
-      | None -> t
-      | Some typing_judgements -> meet t typing_judgements
+    let add_equations ~resolver t equations =
+      let equations_as_env =
+        Meet_or_join.equations_to_typing_environment ~resolver equations
+      in
+      meet t equations_as_env
 
-    let to_equations t : equations =
+    let to_equations ~resolver t =
+      let t =
+        { t with
+          must_be_closed = false;
+        }
+      in
       { typing_judgements = Some t;
       }
 
@@ -4411,39 +4465,6 @@ Format.eprintf "Result is: %a\n%!"
       Misc.Stdlib.Option.equal (Typing_environment0.equal ~equal_type)
         typing_judgements1 typing_judgements2
   end
-
-  let equations_to_typing_environment ~resolver
-        ({ typing_judgements; } as equations) =
-    let all_free_names =
-      match typing_judgements.names_to_types with
-      | None -> Name.Set.empty
-      | Some names_to_types ->
-        let names =
-          Name.Map.fold (fun _name (_level, t) all_free_names ->
-              Name.Set.add (free_names_transitive t) all_free_names)
-            typing_judgements.names_to_types
-        in
-        Name.Set.diff all_free_names
-          (Typing_environment0.domain typing_judgements)
-    in
-    let equations =
-      Name.Set.fold (fun name resulting_equations ->
-          let kind, level = Equations.kind_and_level equations name in
-          let ty = unknown kind in
-          Equations.add ~resolver resulting_equations name level ty)
-        all_free_names
-        equations
-    in
-    let env =
-      match equations.typing_judgements with
-      | None -> Typing_environment.create ~resolver
-      | Some env ->
-        { env with
-          must_be_closed = true;
-        }
-    in
-    Typing_environment.invariant env;
-    env
 
   let add_equations (env, t) equations_to_add : t =
     let t, _canonical_name = resolve_aliases (env, t) in
