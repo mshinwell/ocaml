@@ -370,7 +370,7 @@ end) = struct
 
   let rec print_immediate_case ~cache ppf
         ({ equations; } : immediate_case) =
-    Format.fprintf ppf "@[(equations@ %a)@]"
+    Format.fprintf ppf "@[<hov 1>(equations@ %a)@]"
       (print_equations_with_cache ~cache) equations
 
   and print_fields ~cache ppf (fields : t mutable_or_immutable array) =
@@ -385,7 +385,9 @@ end) = struct
     if no_equations then
       print_fields ~cache ppf fields
     else
-      Format.fprintf ppf "@[((equations@ %a)@ (fields@ %a))@]"
+      Format.fprintf ppf "@[<hov 1>(\
+          @[<hov 1>(equations@ %a)@]@ \
+          @[<hov 1>(fields@ %a)@])@]"
         (print_equations_with_cache ~cache) equations
         (print_fields ~cache) fields
 
@@ -424,18 +426,18 @@ end) = struct
         match is_int, get_tag with
         | None, None ->
           Format.fprintf ppf
-            "@[<hv 1>(Blocks_and_immediates@ \
-             @[(blocks@ @[%a@])@]@ \
-             @[(immediates@ @[%a@])@])@]"
+            "@[<hov 1>(Blocks_and_immediates@ \
+               @[<hov 1>(blocks@ %a)@]@ \
+               @[<hov 1>(immediates@ %a)@])@]"
             (print_or_unknown (print_blocks ~cache)) blocks
             (print_or_unknown (print_immediates ~cache)) immediates
         | _, _ ->
           Format.fprintf ppf
-            "@[<hv 1>(Blocks_and_immediates@ \
-             @[(blocks@ @[%a@])@]@ \
-             @[(immediates@ @[%a@])@]@ \
-             @[(is_int@ %a)@]@ \
-             @[(get_tag@ %a)@])@]"
+            "@[<hov 1>(Blocks_and_immediates@ \
+               @[<hov 1>(blocks@ %a)@]@ \
+               @[<hov 1>(immediates@ %a)@]@ \
+               @[<hov 1>(is_int@ %a)@]@ \
+               @[<hov 1>(get_tag@ %a)@])@]"
             (print_or_unknown (print_blocks ~cache)) blocks
             (print_or_unknown (print_immediates ~cache)) immediates
             (Misc.Stdlib.Option.print Name.print) is_int
