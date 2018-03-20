@@ -868,7 +868,7 @@ Format.eprintf "The joined environment for %a is:@ %a\n%!"
         let joined_arg_tys =
           List.fold_left (fun joined_arg_tys (arg_tys, use_env) ->
               let arg_number = ref 0 in
-              List.map2 (fun joined_ty this_ty ->
+              List.map2 (fun joined_ty (param, this_ty) ->
                   let free_names_this_ty =
                     T.free_names_transitive use_env this_ty
                   in
@@ -891,6 +891,13 @@ Format.eprintf "The joined environment for %a is:@ %a\n%!"
                   in
                   Format.eprintf "Restricted env after diff:@ %a\n%!"
                     TE.print restricted_use_env;
+                  (* XXX should take into account aliases of [param] too *)
+                  let param = Flambda.Typed_parameter.name param in
+                  let restricted_use_env =
+                    TE.remove restricted_use_env param
+                  in
+                  Format.eprintf "Final restricted env:@ %a\n%!"
+                    TE.print restricted_use_env;
 (*
                       (Name_occurrences.union free_names_this_ty
                         (TE.domain default_env))
@@ -911,7 +918,7 @@ Format.eprintf "The joined environment for %a is:@ %a\n%!"
                   in
                   incr arg_number;
                   joined_ty)
-                joined_arg_tys arg_tys)
+                joined_arg_tys (List.combine t.params arg_tys))
             bottom_arg_tys
             (List.rev arg_tys_with_envs_rev)
         in

@@ -4224,6 +4224,13 @@ Format.eprintf "Result is: %a\n%!"
       let symbols = Name.symbols_only_map t.names_to_types in
       restrict_to_names0 t (Name.Map.keys symbols)
 
+    (* CR mshinwell: The "derived" functions should be in Flambda_type *)
+    let remove t name =
+      let allowed =
+        Name.Set.remove name (Name.Map.keys t.names_to_types)
+      in
+      restrict_to_names0 t allowed
+
     let filter t ~f =
       let allowed =
         Name.Map.fold (fun name ty allowed ->
