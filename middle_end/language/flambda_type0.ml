@@ -476,25 +476,25 @@ end) = struct
         (decl : inlinable_function_declaration) =
     Printing_cache.with_cache cache ppf "inlinable_fundecl" decl (fun ppf () ->
       Format.fprintf ppf
-        "@[<hv 1>(inlinable@ \
-          @[(closure_origin@ %a)@]@ \
-          @[(continuation_param@ %a)@]@ \
-          @[(exn_continuation_param@ %a)@]@ \
-          @[(is_classic_mode@ %b)@]@ \
-          @[(params (%a))@]@ \
-          @[(body@ %a)@]@ \
-          @[(free_names_in_body@ %a)@]@ \
-          @[(result@ (%a))@]@ \
-          @[(result_equations@ (%a))@]@ \
-          @[(stub@ %b)@]@ \
-          @[(dbg@ %a)@]@ \
-          @[(inline@ %a)@]@ \
-          @[(specialise@ %a)@]@ \
-          @[(is_a_functor@ %b)@]@ \
-          @[(invariant_params@ %a)@]@ \
-          @[(size@ %a)@]@ \
-          @[(direct_call_surrogate@ %a)@]@ \
-          @[(my_closure@ %a)@])@]"
+        "@[<hov 1>(inlinable@ \
+          @[<hov 1>(closure_origin@ %a)@]@ \
+          @[<hov 1>(continuation_param@ %a)@]@ \
+          @[<hov 1>(exn_continuation_param@ %a)@]@ \
+          @[<hov 1>(is_classic_mode@ %b)@]@ \
+          @[<hov 1>(params (%a))@]@ \
+          @[<hov 1>(body@ %a)@]@ \
+          @[<hov 1>(free_names_in_body@ %a)@]@ \
+          @[<hov 1>(result@ (%a))@]@ \
+          @[<hov 1>(result_equations@ (%a))@]@ \
+          @[<hov 1>(stub@ %b)@]@ \
+          @[<hov 1>(dbg@ %a)@]@ \
+          @[<hov 1>(inline@ %a)@]@ \
+          @[<hov 1>(specialise@ %a)@]@ \
+          @[<hov 1>(is_a_functor@ %b)@]@ \
+          @[<hov 1>(invariant_params@ %a)@]@ \
+          @[<hov 1>(size@ %a)@]@ \
+          @[<hov 1>(direct_call_surrogate@ %a)@]@ \
+          @[<hov 1>(my_closure@ %a)@])@]"
         Closure_origin.print decl.closure_origin
         Continuation.print decl.continuation_param
         Continuation.print decl.exn_continuation_param
@@ -552,9 +552,9 @@ end) = struct
 
   and print_set_of_closures ~cache ppf (set : set_of_closures) =
     Format.fprintf ppf
-      "@[(Set_of_closures@ \
-          @[(closures@ %a)@]@ \
-          @[(closure_elements@ %a)@])@]"
+      "@[<hov 1>(Set_of_closures@ \
+          @[<hov 1>(closures@ %a)@]@ \
+          @[<hov 1>(closure_elements@ %a)@])@]"
       (print_extensibility (
           Closure_id.Map.print (print_ty_fabricated_with_cache ~cache)))
         set.closures
@@ -563,11 +563,11 @@ end) = struct
         set.closure_elements
 
   and print_closure ~cache ppf (closure : closure) =
-    Format.fprintf ppf "@[(Closure (function_decls@ %a))@]"
+    Format.fprintf ppf "@[<hov 1>(Closure (function_decls@ %a))@]"
       (print_function_declarations ~cache) closure.function_decls
 
   and print_discriminant_case ~cache ppf ({ equations; } : discriminant_case) =
-    Format.fprintf ppf "@[(equations@ %a)@]"
+    Format.fprintf ppf "@[<hov 1>(equations@ %a)@]"
       (print_equations_with_cache ~cache) equations
 
   and print_of_kind_fabricated ~cache ppf (o : of_kind_fabricated) =
@@ -580,7 +580,7 @@ end) = struct
           discriminant_map
       in
       if not no_equations then
-        Format.fprintf ppf "@[(Discriminant@ %a)@]"
+        Format.fprintf ppf "@[<hov 1>(Discriminant@ %a)@]"
           (Discriminant.Map.print (print_discriminant_case ~cache))
           discriminant_map
       else
@@ -894,7 +894,8 @@ end) = struct
       in
       let domain = Name.Map.keys env.names_to_types in
       if not (Name.Set.subset free_names domain) then begin
-        Misc.fatal_errorf "Typing environment is not closed: %a"
+        Misc.fatal_errorf "Typing environment is not closed (%a free):@ %a"
+          Name.Set.print (Name.Set.diff free_names domain)
           print_typing_environment env
       end
     end
