@@ -262,6 +262,7 @@ end) = struct
   }
 
   and typing_environment = {
+    must_be_closed : bool;
     resolver : (Export_id.t -> t option);
     canonical_names_to_aliases : Name.Set.t Name.Map.t;
     names_to_types : (Scope_level.t * t) Name.Map.t;
@@ -621,7 +622,8 @@ end) = struct
 
   and print_typing_environment_with_cache ~cache ppf
         ({ resolver = _; canonical_names_to_aliases; names_to_types;
-           levels_to_names; existentials; existential_freshening; } as env) =
+           levels_to_names; existentials; existential_freshening;
+           must_be_closed = _; } as env) =
     if Name.Map.is_empty names_to_types then
       Format.pp_print_string ppf "Empty"
     else
@@ -826,15 +828,19 @@ end) = struct
   let free_names t =
     Name_occurrences.create_from_set_in_types (free_names_set t)
 
-  let create_typing_environment ~resolver =
+  let create_typing_environment0 ~resolver ~must_be_closed =
     let existential_freshening = Freshening.activate Freshening.empty in
-    { resolver;
+    { must_be_closed;
+      resolver;
       canonical_names_to_aliases = Name.Map.empty;
       names_to_types = Name.Map.empty;
       levels_to_names = Scope_level.Map.empty;
       existentials = Name.Set.empty;
       existential_freshening;
     }
+
+  let create_typing_environment ~resolver ~must_be_closed =
+    create_typing_environment0 ~resolver ~must_be_closed:false
 
   let add_alias_typing_environment env ~canonical_name ~alias =
 (* XXX This check is inconvenient for [r]
@@ -881,6 +887,21 @@ end) = struct
       levels_to_names;
     }
 
+  let invariant_typing_environment env =
+    if !Clflags.flambda_invariant_checks && env.must_be_closed then begin
+      let free_names =
+        Name.Map.fold (fun _name (_level, t) free_names ->
+            Name.Set.union (free_names_set t) free_names)
+          env.names_to_types
+          Name.Set.empty
+      in
+      let domain = Name.Map.keys env.names_to_types in
+      if not (Name.Set.subset free_names domain) then begin
+        Misc.fatal_errorf "Typing environment is not closed: %a"
+          print_typing_environment env
+      end
+    end
+
   let add_or_replace_typing_environment env name scope_level t =
     (* CR mshinwell: We should add a comment here explaining where this can
        be used and what it cannot be used for (e.g. changing a name's scope
@@ -895,15 +916,8 @@ then begin
 end;
 *)
     if !Clflags.flambda_invariant_checks then begin
+      invariant_typing_environment env;
       let free_names = free_names_set t in
-      let domain = Name.Map.keys env.names_to_types in
-      if not (Name.Set.subset free_names domain) then begin
-        Misc.fatal_errorf "Adding binding of %a to@ %a@ would cause typing \
-            environment to not be closed: %a"
-          Name.print name
-          print t
-          print_typing_environment env
-      end;
       if Name.Set.mem name free_names then begin
         Misc.fatal_errorf "Adding binding of %a to@ %a@ would cause a \
             direct circularity in a type.  Environment: %a"
@@ -2148,7 +2162,7 @@ end;
 
   let to_typing_environment_equations ~resolver { typing_judgements; } =
     match typing_judgements with
-    | None -> create_typing_environment ~resolver
+    | None -> create_typing_environment ~resolver ~must_be_closed:false
     | Some typing_judgements -> typing_judgements
 
   module type Meet_and_join_spec = sig
@@ -3846,7 +3860,8 @@ Format.eprintf "JOIN %a and %a -> %a\n%!"
       let existential_freshening =
         env1.existential_freshening (* XXX *)
       in
-      { resolver = env1.resolver;
+      { must_be_closed = env1.must_be_closed || env2.must_be_closed;
+        resolver = env1.resolver;
         canonical_names_to_aliases;
         names_to_types;
         levels_to_names;
@@ -3963,7 +3978,8 @@ Format.eprintf "...giving %a\n%!" print ty;
         env1.existential_freshening (* XXX *)
       in
       let env =
-        { resolver = env1.resolver;
+        { must_be_closed = env1.must_be_closed || env2.must_be_closed;
+          resolver = env1.resolver;
           canonical_names_to_aliases;
           names_to_types;
           levels_to_names;
@@ -4010,7 +4026,7 @@ Format.eprintf "...giving %a\n%!" print ty;
           raise Misc.Fatal_error
         end
 
-    let meet_equations { typing_judgements = typing_judgements1; }
+    let meet_equations env { typing_judgements = typing_judgements1; }
           { typing_judgements = typing_judgements2; } =
       let typing_judgements =
         match typing_judgements1, typing_judgements2 with
@@ -4018,6 +4034,8 @@ Format.eprintf "...giving %a\n%!" print ty;
         | Some typing_judgements, None
         | None, Some typing_judgements -> Some typing_judgements
         | Some typing_judgements1, Some typing_judgements2 ->
+          
+
           Some (meet_typing_environment typing_judgements1 typing_judgements2)
       in
       { typing_judgements; }
@@ -4074,7 +4092,9 @@ Format.eprintf "...giving %a\n%!" print ty;
        existential *)
 
     let print = print_typing_environment
-    let create = create_typing_environment
+
+    let create ~resolver =
+      create_typing_environment ~resolver ~must_be_closed:true
 
     let create_using_resolver_from t = create ~resolver:t.resolver
 
@@ -4088,8 +4108,12 @@ Format.eprintf "...giving %a\n%!" print ty;
           Name.print name
           print t
 
+    let singleton0 ~resolver name scope_level ty ~must_be_closed =
+      add (create_typing_environment ~resolver ~must_be_closed)
+        name scope_level ty
+
     let singleton ~resolver name scope_level ty =
-      add (create ~resolver) name scope_level ty
+      singleton0 ~resolver name scope_level ty ~must_be_closed:true
 
     let find = find_typing_environment
 
@@ -4173,7 +4197,8 @@ Format.eprintf "Cutting environment at %a: %a\n%!"
       in
 let result =
       (* XXX we actually need to rename in the domain of [names_to_types] *)
-      { resolver = t.resolver;
+      { must_be_closed = t.must_be_closed;
+        resolver = t.resolver;
         canonical_names_to_aliases = t.canonical_names_to_aliases;
         names_to_types = t.names_to_types;
         levels_to_names = t.levels_to_names;
@@ -4208,13 +4233,18 @@ Format.eprintf "Result is: %a\n%!"
       let existential_freshening =
         Freshening.restrict_to_names t.existential_freshening allowed
       in
-      { resolver = t.resolver;
-        canonical_names_to_aliases = t.canonical_names_to_aliases;
-        names_to_types;
-        levels_to_names;
-        existentials;
-        existential_freshening;
-      }
+      let t =
+        { must_be_closed = t.must_be_closed;
+          resolver = t.resolver;
+          canonical_names_to_aliases = t.canonical_names_to_aliases;
+          names_to_types;
+          levels_to_names;
+          existentials;
+          existential_freshening;
+        }
+      in
+      invariant_typing_environment t;
+      t
 
     let restrict_to_names t allowed =
       let allowed = Name_occurrences.everything allowed in
@@ -4261,14 +4291,16 @@ Format.eprintf "Result is: %a\n%!"
     let resolver t = t.resolver
 
     let equal ~equal_type
-          { resolver = _;
+          { must_be_closed = must_be_closed1;
+            resolver = _;
             canonical_names_to_aliases = canonical_names_to_aliases1;
             names_to_types = names_to_types1;
             levels_to_names = _;
             existentials = existentials1;
             existential_freshening = _;
           }
-          { resolver = _;
+          { must_be_closed = must_be_closed2;
+            resolver = _;
             canonical_names_to_aliases = canonical_names_to_aliases2;
             names_to_types = names_to_types2;
             levels_to_names = _;
@@ -4278,12 +4310,13 @@ Format.eprintf "Result is: %a\n%!"
       let equal_scope_and_type (scope1, t1) (scope2, t2) =
         Scope_level.equal scope1 scope2 && equal_type t1 t2
       in
-      Name.Map.equal equal_scope_and_type names_to_types1 names_to_types2
+      must_be_closed1 = must_be_closed2
+        && Name.Map.equal equal_scope_and_type names_to_types1 names_to_types2
         && Name.Map.equal Name.Set.equal canonical_names_to_aliases1
              canonical_names_to_aliases2
         && Name.Set.equal existentials1 existentials2
 
-    let diff ~strictly_more_precise t1 t2 =
+    let diff ~strictly_more_precise t1 t2 : equations =
       let names_to_types =
         Name.Map.filter (fun name (level1, ty1) ->
             match Name.Map.find name t2.names_to_types with
@@ -4293,7 +4326,18 @@ Format.eprintf "Result is: %a\n%!"
               strictly_more_precise (t1, ty1) ~than:(t2, ty2))
           t1.names_to_types
       in
-      restrict_to_names0 t1 (Name.Map.keys names_to_types)
+      let t1 =
+        { t1 with
+          must_be_closed = false;
+        }
+      in
+      let t =
+        restrict_to_names0 t1 (Name.Map.keys names_to_types)
+      in
+      { typing_judgements = Some t;
+      }
+
+    let invariant = invariant_typing_environment
   end
 
   module Equations = struct
@@ -4303,9 +4347,17 @@ Format.eprintf "Result is: %a\n%!"
       { typing_judgements = None;
       }
 
+    let invariant t =
+      match t.typing_judgements with
+      | None -> ()
+      | Some typing_judgements ->
+        assert (not typing_judgements.must_be_closed);
+        Typing_environment0.invariant typing_judgements
+
     let singleton ~resolver name scope_level ty =
       { typing_judgements =
-          Some (Typing_environment0.singleton ~resolver name scope_level ty);
+          Some (Typing_environment0.singleton0 ~resolver name scope_level ty
+            ~must_be_closed:false);
       }
 
     let add ~resolver t name scope_level ty =
@@ -4339,7 +4391,9 @@ Format.eprintf "Result is: %a\n%!"
       let typing_judgements =
         match t.typing_judgements with
         | None ->
-          let typing_judgements = create_typing_environment ~resolver in
+          let typing_judgements =
+            create_typing_environment ~resolver ~must_be_closed:false
+          in
           Typing_environment0.add_alias typing_judgements ~canonical_name ~alias
         | Some typing_judgements ->
           Typing_environment0.add_alias typing_judgements ~canonical_name ~alias
@@ -4347,17 +4401,7 @@ Format.eprintf "Result is: %a\n%!"
       { typing_judgements = Some typing_judgements;
       }
 
-    let meet t1 t2 =
-      let typing_judgements =
-        match t1.typing_judgements, t2.typing_judgements with
-        | None, None -> None
-        | Some typing_judgements, None
-        | None, Some typing_judgements -> Some typing_judgements
-        | Some typing_judgements1, Some typing_judgements2 ->
-          Some (Typing_environment0.meet typing_judgements1 typing_judgements2)
-      in
-      { typing_judgements;
-      }
+    let meet = Meet_and_join.meet_equations
 
     let equal ~equal_type
           { typing_judgements = typing_judgements1;
@@ -4368,7 +4412,7 @@ Format.eprintf "Result is: %a\n%!"
         typing_judgements1 typing_judgements2
   end
 
-  let add_judgements (env, t) : t =
+  let add_equations (env, t) equations_to_add : t =
     let t, _canonical_name = resolve_aliases (env, t) in
     match t.descr with
     | Value (No_alias (Join of_kind_values)) ->
@@ -4389,8 +4433,8 @@ Format.eprintf "Result is: %a\n%!"
                           Targetint.OCaml.Map.map
                             (fun (block : singleton_block) : singleton_block ->
                               let equations =
-                                Equations.meet_with_environment
-                                  block.equations env
+                                Equations.meet env
+                                  block.equations equations_to_add
                               in
                               { block with equations; })
                             by_length
@@ -4409,7 +4453,7 @@ Format.eprintf "Result is: %a\n%!"
                       (fun ({ equations; } : immediate_case)
                             : immediate_case ->
                         let equations =
-                          Equations.meet_with_environment equations env
+                          Equations.meet env equations equations_to_add
                         in
                         { equations; })
                       imm_map
@@ -4435,7 +4479,7 @@ Format.eprintf "Result is: %a\n%!"
                   (fun ({ equations; } : discriminant_case)
                         : discriminant_case ->
                     let equations =
-                      Equations.meet_with_environment equations env
+                      Equations.meet env equations equations_to_add
                     in
                     { equations; })
                   discriminant_map

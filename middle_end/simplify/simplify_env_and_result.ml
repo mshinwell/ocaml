@@ -886,24 +886,16 @@ Format.eprintf "The joined environment for %a is:@ %a\n%!"
                   in
                   Format.eprintf "Restricted env before diff:@ %a\n%!"
                     TE.print restricted_use_env;
-                  let restricted_use_env =
-                    TE.diff restricted_use_env joined_env
-                  in
-                  Format.eprintf "Restricted env after diff:@ %a\n%!"
-                    TE.print restricted_use_env;
+                  let equations = TE.diff equations joined_env in
+                  Format.eprintf "Equations after diff:@ %a\n%!"
+                    T.Equations.print equations;
                   (* XXX should take into account aliases of [param] too *)
                   let param = Flambda.Typed_parameter.name param in
-                  let restricted_use_env =
-                    TE.remove restricted_use_env param
-                  in
-                  Format.eprintf "Final restricted env:@ %a\n%!"
-                    TE.print restricted_use_env;
-(*
-                      (Name_occurrences.union free_names_this_ty
-                        (TE.domain default_env))
-*)
+                  let equations = T.Equations.remove equations param in
+                  Format.eprintf "Final equations:@ %a\n%!"
+                    T.Equations.print equations;
                   let this_ty =
-                    T.add_judgements (restricted_use_env, this_ty)
+                    T.add_equations (joined_env, this_ty) equations
                   in
                   let joined_ty =
                     try T.join (joined_env, joined_ty) (use_env, this_ty)

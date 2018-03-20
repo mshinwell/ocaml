@@ -316,6 +316,8 @@ module type S = sig
   module Equations : sig
     type t = equations
 
+    val invariant : t -> unit
+
     val create : unit -> t
 
     val add
@@ -348,7 +350,7 @@ module type S = sig
       -> alias:Name.t
       -> t
 
-    val meet : t -> t -> t
+    val meet : typing_environment -> t -> t -> t
 
     val equal
        : equal_type:(flambda_type -> flambda_type -> bool)
@@ -367,6 +369,8 @@ module type S = sig
     *)
 
     type t = typing_environment
+
+    val invariant : t -> unit
 
     val create : resolver:(Export_id.t -> flambda_type option) -> t
 
@@ -467,7 +471,7 @@ module type S = sig
        : strictly_more_precise:(t_in_context -> than:t_in_context -> bool)
       -> t
       -> t
-      -> t
+      -> Equations.t
   end
 
   (** Annotation for functions that may require examination of the current
@@ -772,10 +776,12 @@ module type S = sig
   (** Enforce that a type is of a given kind. *)
   val check_of_kind : t -> Flambda_kind.t -> unit
 
-  (** Push judgements from the given typing environment down to the
-      uppermost places in the type where such information can be hold
-      (i.e. underneath tagged immediate, block and tag maps). *)
-  val add_judgements : t_in_context -> t
+  (** Push judgements from the given equations down to the uppermost places in
+      the type where such information can be hold (i.e. underneath tagged
+      immediate, block and tag maps).
+      Since a set of [equations] does not have to be closed, the caller must
+      provide an environment. *)
+  val add_equations : t_in_context -> Equations.t -> t
 
   (** Least upper bound of two types. *)
   val join : t_in_context -> t_in_context -> t

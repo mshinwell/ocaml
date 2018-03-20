@@ -284,7 +284,8 @@ val switch_arms
 module Typing_environment : sig
   include module type of struct include Typing_environment0 end
 
-  (** [diff t1 t2] returns the environment [t1] minus any bindings for which
-      [t2] is known to specify an equally precise, or less precise, type. *)
-  val diff : t -> t -> t
+  (** [diff t1 t2] returns judgements from the environment [t1] excepting any
+      for which [t2] is known to specify an equally precise, or less precise,
+      type. *)
+  val diff : t -> t -> Equations.t
 end
