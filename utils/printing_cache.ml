@@ -42,7 +42,7 @@ module One_cache = struct
         let name = Printf.sprintf "%s%d" t.prefix t.next_id in
         t.next_id <- t.next_id + 1;
         t.printed <- (name, obj) :: t.printed;
-        Format.fprintf ppf "@[&%s =@ %a@]" name printer ()
+        Format.fprintf ppf "@[<hv 2>&%s =@ %a@]" name printer ()
     in
     find t.printed
 end

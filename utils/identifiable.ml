@@ -204,16 +204,19 @@ module Make_map (T : Thing_no_hash) = struct
 
   let print f ppf t =
     let print_binding ppf (id, v) =
-      Format.fprintf ppf "@[(%s%a%s@ %a)@]"
+      Format.fprintf ppf "@[<hov 1>(%s%a%s@ %a)@]"
         (Misc_color.bold_green ())
         T.print id
         (Misc_color.reset ())
         f v
     in
     let bindings = bindings t in
-    Format.fprintf ppf "@[<1>(@[%a@])@]"
-      (Format.pp_print_list ~pp_sep:Format.pp_print_space
-        print_binding) bindings
+    match bindings with
+    | [] -> Format.fprintf ppf "()"
+    | _ ->
+      Format.fprintf ppf "@[<hov 1>(%a)@]"
+        (Format.pp_print_list ~pp_sep:Format.pp_print_space
+          print_binding) bindings
 
   module T_set = Set.Make (T)
 
@@ -263,7 +266,7 @@ module Make_set (T : Thing_no_hash) = struct
   let print ppf t =
     match get_singleton t with
     | None ->
-      Format.fprintf ppf "@[<1>(@[%a@])@]"
+      Format.fprintf ppf "@[<hov 1>(%a)@]"
         (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print)
         (elements t)
     | Some elt -> T.print ppf elt

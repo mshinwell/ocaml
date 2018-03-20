@@ -821,7 +821,7 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
                     let var = Freshening.apply_variable freshening var in
                     let name = Name.var var in
                     let ty, scope_level, _binding_type =
-                      TE.find_with_scope_level joined_env name
+                      TE.find_with_scope_level default_env name
                     in
                     Format.eprintf "Copying type for param %a level %a\n%!"
                       Variable.print var Scope_level.print scope_level;
@@ -847,13 +847,25 @@ Format.eprintf "New use_env after meet:@ %a\n%!"
                   arg_tys_this_use
               in
               let arg_tys_this_use = List.rev arg_tys_this_use_rev in
-              let joined_env = TE.join joined_env use_env in
+              let joined_env =
+                match joined_env with
+                | None -> use_env
+                | Some joined_env -> TE.join joined_env use_env
+              in
               (arg_tys_this_use, use_env) :: arg_tys_with_envs_rev,
-                joined_env)
-            ([], default_env)
+                Some joined_env)
+            ([], None)
             uses
         in
-        let arg_tys =
+        let joined_env =
+          match joined_env with
+          | None -> default_env
+          | Some joined_env -> joined_env
+        in
+Format.eprintf "The joined environment for %a is:@ %a\n%!"
+  Continuation.print t.continuation
+  TE.print joined_env;
+        let joined_arg_tys =
           List.fold_left (fun joined_arg_tys (arg_tys, use_env) ->
               let arg_number = ref 0 in
               List.map2 (fun joined_ty this_ty ->
@@ -891,7 +903,6 @@ Format.eprintf "New use_env after meet:@ %a\n%!"
                         (Misc_color.bold_red ())
                         !arg_number
                         (Misc_color.reset ());
-
                       raise Misc.Fatal_error
                     end
                   in
@@ -901,7 +912,19 @@ Format.eprintf "New use_env after meet:@ %a\n%!"
             bottom_arg_tys
             (List.rev arg_tys_with_envs_rev)
         in
-        Some (arg_tys, joined_env)
+        let free_names_in_joined_arg_tys =
+          List.fold_left (fun free_names_in_joined_arg_tys joined_arg_ty ->
+              let names = T.free_names_transitive joined_env joined_arg_ty in
+              Name_occurrences.union names free_names_in_joined_arg_tys)
+            (Name_occurrences.create ())
+            joined_arg_tys
+        in
+        let joined_env =
+          TE.restrict_to_names joined_env
+            (Name_occurrences.union free_names_in_joined_arg_tys
+              (TE.domain joined_env))
+        in
+        Some (joined_arg_tys, joined_env)
 
     let join_of_arg_types t ~freshening ~arity ~default_env =
       let tys, env =

@@ -409,7 +409,7 @@ end) = struct
       | Known blocks, Known immediates, None, None
           when not (Tag.Map.is_empty blocks)
             && Immediate.Map.is_empty immediates ->
-        Format.fprintf ppf "@[(blocks@ @[%a@])@])@]"
+        Format.fprintf ppf "@[<hv 1>(blocks@ @[%a@])@])@]"
           (print_blocks ~cache) blocks
       | Known blocks, Known immediates, None, None
           when Tag.Map.is_empty blocks
@@ -424,14 +424,14 @@ end) = struct
         match is_int, get_tag with
         | None, None ->
           Format.fprintf ppf
-            "@[(Blocks_and_immediates@ \
+            "@[<hv 1>(Blocks_and_immediates@ \
              @[(blocks@ @[%a@])@]@ \
              @[(immediates@ @[%a@])@])@]"
             (print_or_unknown (print_blocks ~cache)) blocks
             (print_or_unknown (print_immediates ~cache)) immediates
         | _, _ ->
           Format.fprintf ppf
-            "@[(Blocks_and_immediates@ \
+            "@[<hv 1>(Blocks_and_immediates@ \
              @[(blocks@ @[%a@])@]@ \
              @[(immediates@ @[%a@])@]@ \
              @[(is_int@ %a)@]@ \
@@ -473,7 +473,7 @@ end) = struct
         (decl : inlinable_function_declaration) =
     Printing_cache.with_cache cache ppf "inlinable_fundecl" decl (fun ppf () ->
       Format.fprintf ppf
-        "@[(inlinable@ \
+        "@[<hv 1>(inlinable@ \
           @[(closure_origin@ %a)@]@ \
           @[(continuation_param@ %a)@]@ \
           @[(exn_continuation_param@ %a)@]@ \
@@ -595,12 +595,12 @@ end) = struct
   and print_descr ~cache ppf (descr : descr) =
     match descr with
     | Value ty ->
-      Format.fprintf ppf "@[(Val@ %a)@]"
+      Format.fprintf ppf "@[<hov 1>(Val@ %a)@]"
         (print_ty_value_with_cache ~cache) ty
     | Naked_number (ty, _kind) ->
-      Format.fprintf ppf "@[(Naked@ %a)@]" print_ty_naked_number ty
+      Format.fprintf ppf "@[<hov 1>(Naked@ %a)@]" print_ty_naked_number ty
     | Fabricated ty ->
-      Format.fprintf ppf "@[(Fab@ %a)@]"
+      Format.fprintf ppf "@[<hov 1>(Fab@ %a)@]"
         (print_ty_fabricated_with_cache ~cache) ty
 
   and print_with_cache ~cache ppf (t : t) =
@@ -642,19 +642,21 @@ end) = struct
         in
         if Name.Set.is_empty existentials then
           Format.fprintf ppf
-            "@[((names_to_types@ %a)@ \
-                (levels_to_names@ %a)@ \
-                (canonical_names_to_aliases@ %a))@]"
+            "@[<hov 1>(\
+                @[<hov 1>(names_to_types@ %a)@]@,\
+                @[<hov 1>(levels_to_names@ %a)@]@,\
+                @[<hov 1>(canonical_names_to_aliases@ %a)@])@]"
             (Name.Map.print print_scope_level_and_type) names_to_types
             (Scope_level.Map.print Name.Set.print) levels_to_names
             (Name.Map.print Name.Set.print) canonical_names_to_aliases
         else
           Format.fprintf ppf
-            "@[((names_to_types@ %a)@ \
-                (levels_to_names@ %a)@ \
-                (existentials@ %a)@ \
-                (existential_freshening@ %a)@ \
-                (canonical_names_to_aliases@ %a))@]"
+            "@[<hov 1>(\
+                @[<hov 1>(names_to_types@ %a)@]@ \
+                @[<hov 1>(levels_to_names@ %a)@]@ \
+                @[<hov 1>(existentials@ %a)@]@ \
+                @[<hov 1>(existential_freshening@ %a)@]@ \
+                @[<hov 1>(canonical_names_to_aliases@ %a)@])@]"
             (Name.Map.print print_scope_level_and_type) names_to_types
             (Scope_level.Map.print Name.Set.print) levels_to_names
             Name.Set.print existentials
@@ -3780,7 +3782,7 @@ end;
           env2.canonical_names_to_aliases
       in
       let names_to_types =
-        Name.Map.union_merge (fun (level1, ty1) (level2, ty2) ->
+        Name.Map.inter_merge (fun (level1, ty1) (level2, ty2) ->
             if not (Scope_level.equal level1 level2) then begin
               Misc.fatal_errorf "join_typing_environment: \
                   Scope levels differ for:@ %a@ and:@ %a"
@@ -3792,9 +3794,36 @@ end;
                themselves, otherwise the well-formedness condition for
                environments being closed would not be respected. *)
             let ty = join (env1, ty1) (env2, ty2) in
+(*
+Format.eprintf "JOIN %a and %a -> %a\n%!"
+  print ty1
+  print ty2
+  print ty;
+*)
             level1, ty)
           env1.names_to_types
           env2.names_to_types
+      in
+      let in_env1_only =
+        Name.Map.filter (fun name _ ->
+            not (Name.Map.mem name names_to_types))
+          env1.names_to_types
+      in
+      let in_env2_only =
+        Name.Map.filter (fun name _ ->
+            not (Name.Map.mem name names_to_types))
+          env2.names_to_types
+      in
+      let in_one_env_only =
+        Name.Map.disjoint_union in_env1_only in_env2_only
+      in
+      let names_to_types =
+        Name.Map.fold (fun name (scope_level, ty) names_to_types ->
+            let ty = unknown (kind ty) in
+            assert (not (Name.Map.mem name names_to_types));
+            Name.Map.add name (scope_level, ty) names_to_types)
+          in_one_env_only
+          names_to_types
       in
       let all_levels_to_names =
         Scope_level.Map.union_merge
