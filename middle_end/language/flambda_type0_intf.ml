@@ -350,13 +350,17 @@ module type S = sig
       -> alias:Name.t
       -> t
 
-    val meet : typing_environment -> t -> t -> t
+    val meet : resolver:(Export_id.t -> flambda_type option) -> t -> t -> t
 
     val equal
        : equal_type:(flambda_type -> flambda_type -> bool)
       -> t
       -> t
       -> bool
+
+    val remove : t -> Name.t -> t
+
+    val print : Format.formatter -> t -> unit
   end
 
   module Typing_environment0 : sig
@@ -407,8 +411,6 @@ module type S = sig
     (** Like [find], but returns [None] iff the given name is not in the
         specified environment. *)
     val find_opt : t -> Name.t -> (flambda_type * binding_type) option
-
-    val remove : t -> Name.t -> t
 
     (** Returns [true] if the given name, which must be bound in the given
         environment, is existentially bound. *)
@@ -748,6 +750,9 @@ module type S = sig
 
   (** Free names in a type. *)
   val free_names : t -> Name_occurrences.t
+
+  (** Return all names occurring in the type and all types referenced by it. *)
+  val free_names_transitive : (t -> Name_occurrences.t) type_accessor
 
   (** Determine the (unique) kind of a type. *)
   val kind : t -> Flambda_kind.t

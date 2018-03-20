@@ -1797,20 +1797,6 @@ let switch_arms env t ~arms =
   | Simplified_type.Naked_number _ -> wrong_kind ()
   | Value _ -> wrong_kind ()
 
-let free_names_transitive env t =
-  let all_names = ref (Name_occurrences.create ()) in
-  let rec loop to_follow =
-    all_names := Name_occurrences.union !all_names to_follow;
-    match Name_occurrences.choose_and_remove_amongst_everything to_follow with
-    | None -> ()
-    | Some (name, to_follow) ->
-      let t, _binding_type = Typing_environment0.find env name in
-      let names = free_names t in
-      loop (Name_occurrences.union to_follow names)
-  in
-  loop (free_names t);
-  !all_names
-
 type unboxable_proof =
   | Variant_or_block_of_values of unboxable_variant_or_block_of_values0
   | Float_array of { length : Targetint.OCaml.t; }

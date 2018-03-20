@@ -36,9 +36,6 @@ val unknown_like_array : t array -> t array
 (* CR mshinwell: and bound ones too, now... *)
 val rename_variables : t -> f:(Variable.t -> Variable.t) -> t
 
-(** Return all names occurring in the type and all types referenced by it. *)
-val free_names_transitive : (t -> Name_occurrences.t) type_accessor
-
 (** Building of types and terms representing tagged / boxed values from
     specified constants. *)
 val this_tagged_bool_named : bool -> Flambda0.Named.t * t

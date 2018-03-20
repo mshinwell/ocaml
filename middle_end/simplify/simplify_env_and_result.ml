@@ -886,7 +886,7 @@ Format.eprintf "The joined environment for %a is:@ %a\n%!"
                   in
                   Format.eprintf "Restricted env before diff:@ %a\n%!"
                     TE.print restricted_use_env;
-                  let equations = TE.diff equations joined_env in
+                  let equations = TE.diff restricted_use_env joined_env in
                   Format.eprintf "Equations after diff:@ %a\n%!"
                     T.Equations.print equations;
                   (* XXX should take into account aliases of [param] too *)
@@ -1063,7 +1063,8 @@ Format.eprintf "The joined arg tys for %a are:@ %a\n%!"
       benefit = Inlining_cost.Benefit.(+) t1.benefit t2.benefit;
       num_direct_applications =
         t1.num_direct_applications + t2.num_direct_applications;
-      equations = T.Equations.meet t1.equations t2.equations;
+      equations = T.Equations.meet ~resolver:t1.resolver
+        t1.equations t2.equations;
       newly_imported_symbols =
         Symbol.Map.disjoint_union t1.newly_imported_symbols
           t2.newly_imported_symbols;
@@ -1382,7 +1383,9 @@ Format.eprintf "The joined arg tys for %a are:@ %a\n%!"
     }
 
   let add_or_meet_equations t equations =
-    let equations = T.Equations.meet t.equations equations in
+    let equations =
+      T.Equations.meet ~resolver:t.resolver t.equations equations
+    in
     { t with
       equations;
     }
