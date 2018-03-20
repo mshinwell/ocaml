@@ -4412,6 +4412,39 @@ Format.eprintf "Result is: %a\n%!"
         typing_judgements1 typing_judgements2
   end
 
+  let equations_to_typing_environment ~resolver
+        ({ typing_judgements; } as equations) =
+    let all_free_names =
+      match typing_judgements.names_to_types with
+      | None -> Name.Set.empty
+      | Some names_to_types ->
+        let names =
+          Name.Map.fold (fun _name (_level, t) all_free_names ->
+              Name.Set.add (free_names_transitive t) all_free_names)
+            typing_judgements.names_to_types
+        in
+        Name.Set.diff all_free_names
+          (Typing_environment0.domain typing_judgements)
+    in
+    let equations =
+      Name.Set.fold (fun name resulting_equations ->
+          let kind, level = Equations.kind_and_level equations name in
+          let ty = unknown kind in
+          Equations.add ~resolver resulting_equations name level ty)
+        all_free_names
+        equations
+    in
+    let env =
+      match equations.typing_judgements with
+      | None -> Typing_environment.create ~resolver
+      | Some env ->
+        { env with
+          must_be_closed = true;
+        }
+    in
+    Typing_environment.invariant env;
+    env
+
   let add_equations (env, t) equations_to_add : t =
     let t, _canonical_name = resolve_aliases (env, t) in
     match t.descr with
