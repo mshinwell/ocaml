@@ -136,7 +136,7 @@ module Static_part = struct
   let free_symbols t =
     Name.set_to_symbol_set (Name_occurrences.everything (free_names t))
 
-  let print ppf (t : t) =
+  let print_with_cache ~cache ppf (t : t) =
     let fprintf = Format.fprintf in
     let print_float_array_field ppf = function
       | Const f -> fprintf ppf "%a" Numbers.Float_by_bit_pattern.print f
@@ -154,7 +154,7 @@ module Static_part = struct
         Variable.print field
     | Set_of_closures set_of_closures ->
       fprintf ppf "@[(Set_of_closures@ (%a))@]"
-        F0.Set_of_closures.print set_of_closures
+        (F0.Set_of_closures.print_with_cache ~cache) set_of_closures
     | Closure (set_of_closures, closure_id) ->
       fprintf ppf "@[(Closure (set_of_closures %a) (closure_id %a))@]"
         Symbol.print set_of_closures
@@ -195,6 +195,9 @@ module Static_part = struct
       fprintf ppf "@[(Immutable_string@ \"%s\")@]" s
     | Immutable_string (Var v) ->
       fprintf ppf "@[(Immutable_string@ %a)@]" Variable.print v
+
+  let print ppf t =
+    print_with_cache ~cache:(Printing_cache.create ()) ppf t
 end
 
 module Program_body = struct
@@ -232,7 +235,7 @@ module Program_body = struct
     static_structure : static_structure;
   }
 
-  let print_definition ppf defn =
+  let print_definition_with_cache ~cache ppf defn =
     Format.fprintf ppf "@[<v 2>(\
         @[(computation@ %a)@]@ \
         @[(static_structure@ @[(%a)@])@])@]"
@@ -243,7 +246,7 @@ module Program_body = struct
           Format.fprintf ppf "@[((symbol %a)@ (kind %a)@ (static_part@ %a))@]"
             Symbol.print sym
             Flambda_kind.print kind
-            Static_part.print static_part))
+            (Static_part.print_with_cache ~cache) static_part))
       defn.static_structure
 
   let free_symbols_of_definition defn (recursive : Flambda0.recursive) =
@@ -277,25 +280,28 @@ module Program_body = struct
     | Define_symbol_rec of definition * t
     | Root of Symbol.t
 
-  let rec print ppf t =
+  let rec print_with_cache ~cache ppf t =
     match t with
     | Define_symbol (defn, t) ->
       Format.fprintf ppf "@[<v 2>(%sDefine_symbol%s@ %a)@]@;"
         (Misc_color.bold_blue ())
         (Misc_color.reset ())
-        print_definition defn;
-      print ppf t
+        (print_definition_with_cache ~cache) defn;
+      print_with_cache ~cache ppf t
     | Define_symbol_rec (defn, t) ->
       Format.fprintf ppf "@[<v 2>(%sDefine_symbol_rec%s@ %a)@]@;"
         (Misc_color.bold_blue ())
         (Misc_color.reset ())
-        print_definition defn;
-      print ppf t
+        (print_definition_with_cache ~cache) defn;
+      print_with_cache ~cache ppf t
     | Root sym ->
       Format.fprintf ppf "@[(%sRoot%s %a)@]"
         (Misc_color.bold_blue ())
         (Misc_color.reset ())
         Symbol.print sym
+
+  let print ppf t =
+    print_with_cache ~cache:(Printing_cache.create ()) ppf t
 
   let gc_roots t =
     let rec gc_roots t roots =

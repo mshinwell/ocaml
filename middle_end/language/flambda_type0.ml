@@ -262,6 +262,8 @@ end) = struct
   }
 
   and typing_environment = {
+    (* CR mshinwell: Once we're sure that [equations] being closed is the
+       right decision, remove [must_be_closed] *)
     must_be_closed : bool;
     resolver : (Export_id.t -> t option);
     canonical_names_to_aliases : Name.Set.t Name.Map.t;
@@ -489,7 +491,7 @@ end) = struct
           @[<hov 1>(continuation_param@ %a)@]@ \
           @[<hov 1>(exn_continuation_param@ %a)@]@ \
           @[<hov 1>(is_classic_mode@ %b)@]@ \
-          @[<hov 1>(params (%a))@]@ \
+          @[<hov 1>(params@ (%a))@]@ \
           @[<hov 1>(body@ %a)@]@ \
           @[<hov 1>(free_names_in_body@ %a)@]@ \
           @[<hov 1>(result@ (%a))@]@ \
@@ -509,7 +511,7 @@ end) = struct
         decl.is_classic_mode
         (Format.pp_print_list ~pp_sep:(fun ppf () -> Format.fprintf ppf ", ")
           (fun ppf (param, ty) ->
-            Format.fprintf ppf "@[(%a@ :@ %a)@]"
+            Format.fprintf ppf "@[<hov 1>(%a : %a)@]"
               Parameter.print param
               (print_with_cache ~cache) ty)) decl.params
         (Expr.print_with_cache ~cache) decl.body
@@ -684,6 +686,12 @@ end) = struct
   let print_typing_environment ppf env =
     print_typing_environment_with_cache ~cache:(Printing_cache.create ())
       ppf env
+
+  let print_equations ppf { typing_judgements; } =
+    match typing_judgements with
+    | None -> Format.pp_print_string ppf "()"
+    | Some typing_judgements ->
+      print_typing_environment ppf typing_judgements
 
   let free_names_or_alias free_names_contents (or_alias : _ or_alias) acc =
     match or_alias with
@@ -2303,170 +2311,178 @@ end;
           (uj1 : S.of_kind_foo unknown_or_join)
           (uj2 : S.of_kind_foo unknown_or_join)
           : S.of_kind_foo unknown_or_join =
-      match uj1, uj2 with
-      | Unknown, _ | _, Unknown -> Unknown
-      | Join of_kind_foos1, Join of_kind_foos2 ->
-        (* We rely on the invariant in flambda_type0_intf.ml.
-           Everything in [of_kind_foos1] is mutually incompatible with each
-           other; likewise in [of_kind_foos2]. *)
-        let of_kind_foos =
-          List.fold_left (fun of_kind_foos of_kind_foo ->
-              (* [of_kind_foo] can be compatible with at most one of the
-                 elements of [of_kind_foos]. *)
-              let found_one = ref false in
-              let joined =
-                List.map (fun of_kind_foo' ->
-                    let join =
-                      S.join_of_kind_foo env1 env2 of_kind_foo of_kind_foo'
-                    in
-                    match join with
-                    | Known of_kind_foo ->
-                      if !found_one then begin
-                        (* CR mshinwell: Add detail showing what was wrong. *)
-                        Misc.fatal_errorf "Invariant broken for [Join]"
-                      end;
-                      found_one := true;
-                      of_kind_foo
-                    | Unknown -> of_kind_foo')
-                  of_kind_foos
-              in
-              if not !found_one then of_kind_foo :: of_kind_foos
-              else joined)
-            of_kind_foos2
-            of_kind_foos1
-        in
-        Join of_kind_foos
+      if env1 == env2 && uj1 == uj2 then uj1
+      else
+        match uj1, uj2 with
+        | Unknown, _ | _, Unknown -> Unknown
+        | Join of_kind_foos1, Join of_kind_foos2 ->
+          (* We rely on the invariant in flambda_type0_intf.ml.
+             Everything in [of_kind_foos1] is mutually incompatible with each
+             other; likewise in [of_kind_foos2]. *)
+          let of_kind_foos =
+            List.fold_left (fun of_kind_foos of_kind_foo ->
+                (* [of_kind_foo] can be compatible with at most one of the
+                   elements of [of_kind_foos]. *)
+                let found_one = ref false in
+                let joined =
+                  List.map (fun of_kind_foo' ->
+                      let join =
+                        S.join_of_kind_foo env1 env2 of_kind_foo of_kind_foo'
+                      in
+                      match join with
+                      | Known of_kind_foo ->
+                        if !found_one then begin
+                          (* CR mshinwell: Add detail showing what was wrong. *)
+                          Misc.fatal_errorf "Invariant broken for [Join]"
+                        end;
+                        found_one := true;
+                        of_kind_foo
+                      | Unknown -> of_kind_foo')
+                    of_kind_foos
+                in
+                if not !found_one then of_kind_foo :: of_kind_foos
+                else joined)
+              of_kind_foos2
+              of_kind_foos1
+          in
+          Join of_kind_foos
 
     and join_ty env1 env2
           (or_alias1 : S.of_kind_foo ty)
           (or_alias2 : S.of_kind_foo ty)
           : S.of_kind_foo ty =
-      let unknown_or_join1, canonical_name1 =
-        resolve_aliases_and_squash_unresolved_names_on_ty' env1
-          ~kind:S.kind
-          ~force_to_kind:S.force_to_kind
-          ~unknown:(No_alias Unknown)
-          ~print_ty:S.print_ty
-          or_alias1
-      in
-      let unknown_or_join2, canonical_name2 =
-        resolve_aliases_and_squash_unresolved_names_on_ty' env2
-          ~kind:S.kind
-          ~force_to_kind:S.force_to_kind
-          ~unknown:(No_alias Unknown)
-          ~print_ty:S.print_ty
-          or_alias2
-      in
-      match canonical_name1, canonical_name2 with
-      | Some name1, Some name2 when Name.equal name1 name2 ->
-        Equals name1
-      (* CR mshinwell: The symmetrical cases ("is unknown") should be
-         present on the [meet] function, below. *)
-      | Some name1, _ when unknown_or_join_is_bottom unknown_or_join2 ->
-        Equals name1
-      | _, Some name2 when unknown_or_join_is_bottom unknown_or_join1 ->
-        Equals name2
-      | _, _ ->
-        let unknown_or_join =
-          join_on_unknown_or_join env1 env2 unknown_or_join1 unknown_or_join2
+      if env1 == env2 && or_alias1 == or_alias2 then or_alias1
+      else
+        let unknown_or_join1, canonical_name1 =
+          resolve_aliases_and_squash_unresolved_names_on_ty' env1
+            ~kind:S.kind
+            ~force_to_kind:S.force_to_kind
+            ~unknown:(No_alias Unknown)
+            ~print_ty:S.print_ty
+            or_alias1
         in
-        No_alias unknown_or_join
+        let unknown_or_join2, canonical_name2 =
+          resolve_aliases_and_squash_unresolved_names_on_ty' env2
+            ~kind:S.kind
+            ~force_to_kind:S.force_to_kind
+            ~unknown:(No_alias Unknown)
+            ~print_ty:S.print_ty
+            or_alias2
+        in
+        match canonical_name1, canonical_name2 with
+        | Some name1, Some name2 when Name.equal name1 name2 ->
+          Equals name1
+        (* CR mshinwell: The symmetrical cases ("is unknown") should be
+           present on the [meet] function, below. *)
+        | Some name1, _ when unknown_or_join_is_bottom unknown_or_join2 ->
+          Equals name1
+        | _, Some name2 when unknown_or_join_is_bottom unknown_or_join1 ->
+          Equals name2
+        | _, _ ->
+          let unknown_or_join =
+            join_on_unknown_or_join env1 env2 unknown_or_join1 unknown_or_join2
+          in
+          No_alias unknown_or_join
 
     let rec meet_on_unknown_or_join env1 env2
           (ou1 : S.of_kind_foo unknown_or_join)
           (ou2 : S.of_kind_foo unknown_or_join)
           : S.of_kind_foo unknown_or_join * judgements_from_meet =
-      match ou1, ou2 with
-      | Unknown, ou2 -> ou2, []
-      | ou1, Unknown -> ou1, []
-      | Join of_kind_foos1, Join of_kind_foos2 ->
-        let of_kind_foos, judgements =
-          List.fold_left (fun (of_kind_foos, judgements) of_kind_foo ->
-              let new_judgements = ref [] in
-              let of_kind_foos =
-                Misc.Stdlib.List.filter_map (fun of_kind_foo' ->
-                    let meet =
-                      S.meet_of_kind_foo env1 env2 of_kind_foo of_kind_foo'
-                    in
-                    match meet with
-                    | Ok (of_kind_foo, new_judgements') ->
-                      new_judgements := new_judgements' @ !new_judgements;
-                      Some of_kind_foo
-                    | Bottom -> None)
-                  of_kind_foos
-              in
-              of_kind_foos, !new_judgements @ judgements)
-            (of_kind_foos2, [])
-            of_kind_foos1
-        in
-        Join of_kind_foos, judgements
+      if env1 == env2 && ou1 == ou2 then ou1, []
+      else
+        match ou1, ou2 with
+        | Unknown, ou2 -> ou2, []
+        | ou1, Unknown -> ou1, []
+        | Join of_kind_foos1, Join of_kind_foos2 ->
+          let of_kind_foos, judgements =
+            List.fold_left (fun (of_kind_foos, judgements) of_kind_foo ->
+                let new_judgements = ref [] in
+                let of_kind_foos =
+                  Misc.Stdlib.List.filter_map (fun of_kind_foo' ->
+                      let meet =
+                        S.meet_of_kind_foo env1 env2 of_kind_foo of_kind_foo'
+                      in
+                      match meet with
+                      | Ok (of_kind_foo, new_judgements') ->
+                        new_judgements := new_judgements' @ !new_judgements;
+                        Some of_kind_foo
+                      | Bottom -> None)
+                    of_kind_foos
+                in
+                of_kind_foos, !new_judgements @ judgements)
+              (of_kind_foos2, [])
+              of_kind_foos1
+          in
+          Join of_kind_foos, judgements
 
     and meet_ty env1 env2
           (or_alias1 : S.of_kind_foo ty)
           (or_alias2 : S.of_kind_foo ty)
           : S.of_kind_foo ty * judgements_from_meet =
-      let unknown_or_join1, canonical_name1 =
-        resolve_aliases_and_squash_unresolved_names_on_ty' env1
-          ~kind:S.kind
-          ~force_to_kind:S.force_to_kind
-          ~unknown:(No_alias Unknown)
-          ~print_ty:S.print_ty
-          or_alias1
-      in
-      let unknown_or_join2, canonical_name2 =
-        resolve_aliases_and_squash_unresolved_names_on_ty' env2
-          ~kind:S.kind
-          ~force_to_kind:S.force_to_kind
-          ~unknown:(No_alias Unknown)
-          ~print_ty:S.print_ty
-          or_alias2
-      in
-      let normal_case ~first_name_to_bind ~first_name_to_bind_level
-            ~names_to_bind =
-        let unknown_or_join, new_judgements =
-          meet_on_unknown_or_join env1 env2
-            unknown_or_join1 unknown_or_join2
+      if env1 == env2 && or_alias1 == or_alias2 then or_alias1, []
+      else
+        let unknown_or_join1, canonical_name1 =
+          resolve_aliases_and_squash_unresolved_names_on_ty' env1
+            ~kind:S.kind
+            ~force_to_kind:S.force_to_kind
+            ~unknown:(No_alias Unknown)
+            ~print_ty:S.print_ty
+            or_alias1
         in
-        let new_judgement =
-          first_name_to_bind, first_name_to_bind_level,
-            S.to_type (No_alias unknown_or_join)
+        let unknown_or_join2, canonical_name2 =
+          resolve_aliases_and_squash_unresolved_names_on_ty' env2
+            ~kind:S.kind
+            ~force_to_kind:S.force_to_kind
+            ~unknown:(No_alias Unknown)
+            ~print_ty:S.print_ty
+            or_alias2
         in
-        let new_judgements' =
-          List.map (fun (name, level) ->
-              name, level, S.to_type (Equals first_name_to_bind))
-            names_to_bind
-        in
-        Equals first_name_to_bind,
-          new_judgements @ (new_judgement :: new_judgements')
-      in
-      let normal_case ~names_to_bind =
-        match names_to_bind with
-        | [] ->
+        let normal_case ~first_name_to_bind ~first_name_to_bind_level
+              ~names_to_bind =
           let unknown_or_join, new_judgements =
             meet_on_unknown_or_join env1 env2
               unknown_or_join1 unknown_or_join2
           in
-          No_alias unknown_or_join, new_judgements
-        | (first_name_to_bind, first_name_to_bind_level)::names_to_bind ->
-          normal_case ~first_name_to_bind ~first_name_to_bind_level
-            ~names_to_bind
-      in
-      match canonical_name1, canonical_name2 with
-      | Some name1, Some name2 when Name.equal name1 name2 ->
-        Equals name1, []
-      | Some name1, Some name2 ->
-        (* N.B. This needs to respect the [bias_towards] argument on the
-           [meet] function exposed in the interface (below). *)
-        let level1 = scope_level_typing_environment env1 name1 in
-        let level2 = scope_level_typing_environment env2 name2 in
-        normal_case ~names_to_bind:[name1, level1; name2, level2]
-      | Some name1, None ->
-        let level1 = scope_level_typing_environment env1 name1 in
-        normal_case ~names_to_bind:[name1, level1]
-      | None, Some name2 ->
-        let level2 = scope_level_typing_environment env2 name2 in
-        normal_case ~names_to_bind:[name2, level2]
-      | None, None -> normal_case ~names_to_bind:[]
+          let new_judgement =
+            first_name_to_bind, first_name_to_bind_level,
+              S.to_type (No_alias unknown_or_join)
+          in
+          let new_judgements' =
+            List.map (fun (name, level) ->
+                name, level, S.to_type (Equals first_name_to_bind))
+              names_to_bind
+          in
+          Equals first_name_to_bind,
+            new_judgements @ (new_judgement :: new_judgements')
+        in
+        let normal_case ~names_to_bind =
+          match names_to_bind with
+          | [] ->
+            let unknown_or_join, new_judgements =
+              meet_on_unknown_or_join env1 env2
+                unknown_or_join1 unknown_or_join2
+            in
+            No_alias unknown_or_join, new_judgements
+          | (first_name_to_bind, first_name_to_bind_level)::names_to_bind ->
+            normal_case ~first_name_to_bind ~first_name_to_bind_level
+              ~names_to_bind
+        in
+        match canonical_name1, canonical_name2 with
+        | Some name1, Some name2 when Name.equal name1 name2 ->
+          Equals name1, []
+        | Some name1, Some name2 ->
+          (* N.B. This needs to respect the [bias_towards] argument on the
+             [meet] function exposed in the interface (below). *)
+          let level1 = scope_level_typing_environment env1 name1 in
+          let level2 = scope_level_typing_environment env2 name2 in
+          normal_case ~names_to_bind:[name1, level1; name2, level2]
+        | Some name1, None ->
+          let level1 = scope_level_typing_environment env1 name1 in
+          normal_case ~names_to_bind:[name1, level1]
+        | None, Some name2 ->
+          let level2 = scope_level_typing_environment env2 name2 in
+          normal_case ~names_to_bind:[name2, level2]
+        | None, None -> normal_case ~names_to_bind:[]
   end
 
   module rec Meet_and_join_value : sig
@@ -3087,353 +3103,388 @@ end;
     let meet_closure env1 env2
           (closure1 : closure) (closure2 : closure)
           : (closure * judgements_from_meet) Or_bottom.t =
-      let cannot_prove_different ~params1 ~params2 ~result1 ~result2
-            ~result_equations1 ~result_equations2 : _ Or_bottom.t =
-        let same_arity =
-          List.compare_lengths params1 params2 = 0
+      if env1 == env2 && closure1 == closure2 then begin
+        Ok (closure1, [])
+      end else begin
+        let cannot_prove_different ~params1 ~params2 ~result1 ~result2
+              ~result_equations1 ~result_equations2 : _ Or_bottom.t =
+          let same_arity =
+            List.compare_lengths params1 params2 = 0
+          in
+          let same_num_results =
+            List.compare_lengths result1 result2 = 0
+          in
+          let result_equations =
+            Meet_and_join.meet_equations ~resolver:env1.resolver
+              result_equations1 result_equations2
+          in
+          let result_or_equations_changed =
+            (* CR mshinwell: This should be improved *)
+            ref (not (is_empty_equations result_equations))
+          in
+          let judgements = ref [] in
+          let has_bottom params =
+            List.exists is_obviously_bottom params
+          in
+          let params_changed = ref false in
+          let params : _ Or_bottom.t =
+            if not same_arity then Bottom
+            else
+              let params =
+                List.map2 (fun t1 t2 ->
+                    let t, new_judgements =
+                      Meet_and_join.meet (env1, t1) (env2, t2)
+                    in
+                    if not (t == t1 && t == t2) then begin
+                      params_changed := true
+                    end;
+                    judgements := new_judgements @ !judgements;
+                    t)
+                  params1
+                  params2
+              in
+              if has_bottom params then Bottom
+              else Ok params
+          in
+          let result : _ Or_bottom.t =
+            if not same_num_results then Bottom
+            else
+              let result =
+                List.map2 (fun t1 t2 ->
+                    let t, new_judgements =
+                      Meet_and_join.meet
+                        (to_typing_environment_equations ~resolver:env1.resolver
+                           result_equations1, t1)
+                        (to_typing_environment_equations ~resolver:env2.resolver
+                           result_equations2, t2)
+                    in
+                    if not (t == t1 && t == t2) then begin
+                      result_or_equations_changed := true
+                    end;
+                    judgements := new_judgements @ !judgements;
+                    t)
+                  result1
+                  result2
+              in
+              if has_bottom result then Bottom
+              else Ok result
+          in
+          match params, result with
+          | Ok params, Ok result ->
+            Ok (params, !params_changed, result, result_equations,
+                !result_or_equations_changed, !judgements)
+          | _, _ -> Bottom
         in
-        let same_num_results =
-          List.compare_lengths result1 result2 = 0
+        let function_decls : _ Or_bottom.t =
+          match closure1.function_decls, closure2.function_decls with
+          | Inlinable inlinable1, Inlinable inlinable2 ->
+            let params1 = List.map snd inlinable1.params in
+            let params2 = List.map snd inlinable2.params in
+            let result =
+              cannot_prove_different ~params1 ~params2
+                ~result1:inlinable1.result
+                ~result2:inlinable2.result
+                ~result_equations1:inlinable1.result_equations
+                ~result_equations2:inlinable2.result_equations
+            in
+            begin match result with
+            | Ok (params, params_changed, result, result_equations,
+                  result_or_equations_changed, judgements) ->
+              (* [closure1.function_decls] and [closure2.function_decls] may be
+                 different, but we cannot prove it.  We arbitrarily pick
+                 [closure1.function_decls] to return, with parameter and result
+                 types refined. *)
+              let params =
+                List.map2 (fun (param, _old_ty) new_ty ->
+                    param, new_ty)
+                  inlinable1.params
+                  params
+              in
+              let inlinable_function_decl =
+                if params_changed then
+                  { inlinable1 with
+                    params;
+                  }
+                else
+                  inlinable1
+              in
+              let inlinable_function_decl =
+                if result_or_equations_changed then
+                  { inlinable_function_decl with
+                    result;
+                    result_equations;
+                  }
+                else
+                  inlinable_function_decl
+              in
+              Ok (Inlinable inlinable_function_decl, judgements)
+            | Bottom ->
+              (* [closure1] and [closure2] are definitely different. *)
+              Bottom
+            end
+          | Non_inlinable None, Non_inlinable None ->
+            Ok (Non_inlinable None, [])
+          | Non_inlinable (Some non_inlinable), Non_inlinable None
+          | Non_inlinable None, Non_inlinable (Some non_inlinable) ->
+            (* We can arbitrarily pick one side or the other: we choose the
+               side which gives a more precise type. *)
+            Ok (Non_inlinable (Some non_inlinable), [])
+          | Non_inlinable None, Inlinable inlinable
+          | Inlinable inlinable, Non_inlinable None ->
+            (* Likewise. *)
+            Ok (Inlinable inlinable, [])
+          | Non_inlinable (Some non_inlinable1),
+              Non_inlinable (Some non_inlinable2) ->
+            let result =
+              cannot_prove_different
+                ~params1:non_inlinable1.params
+                ~params2:non_inlinable2.params
+                ~result1:non_inlinable1.result
+                ~result2:non_inlinable2.result
+                ~result_equations1:non_inlinable1.result_equations
+                ~result_equations2:non_inlinable2.result_equations
+            in
+            begin match result with
+            | Ok (params, _params_changed, result, result_equations,
+                  _result_or_equations_changed, judgements) ->
+              let non_inlinable_function_decl =
+                { non_inlinable1 with
+                  params;
+                  result;
+                  result_equations;
+                }
+              in
+              Ok (Non_inlinable (Some non_inlinable_function_decl), judgements)
+            | Bottom ->
+              Bottom
+            end
+          | Non_inlinable (Some non_inlinable), Inlinable inlinable
+          | Inlinable inlinable, Non_inlinable (Some non_inlinable) ->
+            let params1 = List.map snd inlinable.params in
+            let result =
+              cannot_prove_different
+                ~params1
+                ~params2:non_inlinable.params
+                ~result1:inlinable.result
+                ~result2:non_inlinable.result
+                ~result_equations1:inlinable.result_equations
+                ~result_equations2:non_inlinable.result_equations
+            in
+            begin match result with
+            | Ok (params, _params_changed, result, result_equations,
+                  _result_or_equations_changed, judgements) ->
+              (* For the arbitrary choice, we pick the inlinable declaration,
+                 since it gives more information. *)
+              let params =
+                List.map2 (fun (param, _old_ty) new_ty -> param, new_ty)
+                  inlinable.params
+                  params
+              in
+              let inlinable_function_decl =
+                { inlinable with
+                  params;
+                  result;
+                  result_equations;
+                }
+              in
+              Ok (Inlinable inlinable_function_decl, judgements)
+            | Bottom ->
+              Bottom
+            end
         in
-        let result_equations =
-          Meet_and_join.meet_equations ~resolver:env1.resolver
-            result_equations1 result_equations2
-        in
-        let judgements = ref [] in
-        let has_bottom params =
-          List.exists is_obviously_bottom params
-        in
-        let params : _ Or_bottom.t =
-          if not same_arity then Bottom
-          else
+        match function_decls with
+        | Bottom -> Bottom
+        | Ok (function_decls, judgements) ->
+          Ok (({ function_decls; } : closure), judgements)
+      end
+
+    let join_closure env1 env2
+          (closure1 : closure) (closure2 : closure)
+          : closure =
+      if env1 == env2 && closure1 == closure2 then begin
+        closure1
+      end else begin
+        let produce_non_inlinable ~params1 ~params2 ~result1 ~result2
+              ~result_equations1 ~result_equations2
+              ~direct_call_surrogate1 ~direct_call_surrogate2 =
+          let same_arity =
+            List.compare_lengths params1 params2 = 0
+          in
+          let same_num_results =
+            List.compare_lengths result1 result2 = 0
+          in
+          if same_arity && same_num_results then
             let params =
               List.map2 (fun t1 t2 ->
-                  let t, new_judgements =
-                    Meet_and_join.meet (env1, t1) (env2, t2)
-                  in
-                  judgements := new_judgements @ !judgements;
-                  t)
+                  Meet_and_join.join (env1, t1) (env2, t2))
                 params1
                 params2
             in
-            if has_bottom params then Bottom
-            else Ok params
-        in
-        let result : _ Or_bottom.t =
-          if not same_num_results then Bottom
-          else
             let result =
               List.map2 (fun t1 t2 ->
-                  let t, new_judgements =
-                    Meet_and_join.meet
-                      (to_typing_environment_equations ~resolver:env1.resolver
-                         result_equations1, t1)
-                      (to_typing_environment_equations ~resolver:env2.resolver
-                         result_equations2, t2)
-                  in
-                  judgements := new_judgements @ !judgements;
-                  t)
+                  Meet_and_join.join
+                    (to_typing_environment_equations ~resolver:env1.resolver
+                       result_equations1, t1)
+                    (to_typing_environment_equations ~resolver:env2.resolver
+                       result_equations2, t2))
                 result1
                 result2
             in
-            if has_bottom result then Bottom
-            else Ok result
-        in
-        match params, result with
-        | Ok params, Ok result ->
-          Ok (params, result, result_equations, !judgements)
-        | _, _ -> Bottom
-      in
-      let function_decls : _ Or_bottom.t =
-        match closure1.function_decls, closure2.function_decls with
-        | Inlinable inlinable1, Inlinable inlinable2 ->
-          let params1 = List.map snd inlinable1.params in
-          let params2 = List.map snd inlinable2.params in
-          let result =
-            cannot_prove_different ~params1 ~params2
-              ~result1:inlinable1.result
-              ~result2:inlinable2.result
-              ~result_equations1:inlinable1.result_equations
-              ~result_equations2:inlinable2.result_equations
-          in
-          begin match result with
-          | Ok (params, result, result_equations, judgements) ->
-            (* [closure1.function_decls] and [closure2.function_decls] may be
-               different, but we cannot prove it.  We arbitrarily pick
-               [closure1.function_decls] to return, with parameter and result
-               types refined. *)
-            let params =
-              List.map2 (fun (param, _old_ty) new_ty -> param, new_ty)
-                inlinable1.params
-                params
+            let direct_call_surrogate =
+              match direct_call_surrogate1, direct_call_surrogate2 with
+              | Some closure_id1, Some closure_id2
+                  when Closure_id.equal closure_id1 closure_id2 ->
+                Some closure_id1
+              | _, _ -> None
             in
-            let inlinable_function_decl =
-              { inlinable1 with
-                params;
+            let result_equations =
+              Meet_and_join.join_equations ~resolver:env1.resolver
+                result_equations1 result_equations2
+            in
+            let non_inlinable : non_inlinable_function_declarations =
+              { params;
                 result;
                 result_equations;
+                direct_call_surrogate;
               }
             in
-            Ok (Inlinable inlinable_function_decl, judgements)
-          | Bottom ->
-            (* [closure1] and [closure2] are definitely different. *)
-            Bottom
-          end
-        | Non_inlinable None, Non_inlinable None -> Ok (Non_inlinable None, [])
-        | Non_inlinable (Some non_inlinable), Non_inlinable None
-        | Non_inlinable None, Non_inlinable (Some non_inlinable) ->
-          (* We can arbitrarily pick one side or the other: we choose the
-             side which gives a more precise type. *)
-          Ok (Non_inlinable (Some non_inlinable), [])
-        | Non_inlinable None, Inlinable inlinable
-        | Inlinable inlinable, Non_inlinable None ->
-          (* Likewise. *)
-          Ok (Inlinable inlinable, [])
-        | Non_inlinable (Some non_inlinable1),
-            Non_inlinable (Some non_inlinable2) ->
-          let result =
-            cannot_prove_different
+            Non_inlinable (Some non_inlinable)
+          else
+            Non_inlinable None
+        in
+        let function_decls : function_declarations =
+          match closure1.function_decls, closure2.function_decls with
+          | Non_inlinable None, _ | _, Non_inlinable None -> Non_inlinable None
+          | Non_inlinable (Some non_inlinable1),
+              Non_inlinable (Some non_inlinable2) ->
+            produce_non_inlinable
               ~params1:non_inlinable1.params
               ~params2:non_inlinable2.params
               ~result1:non_inlinable1.result
               ~result2:non_inlinable2.result
               ~result_equations1:non_inlinable1.result_equations
               ~result_equations2:non_inlinable2.result_equations
-          in
-          begin match result with
-          | Ok (params, result, result_equations, judgements) ->
-            let non_inlinable_function_decl =
-              { non_inlinable1 with
-                params;
-                result;
-                result_equations;
-              }
-            in
-            Ok (Non_inlinable (Some non_inlinable_function_decl), judgements)
-          | Bottom ->
-            Bottom
-          end
-        | Non_inlinable (Some non_inlinable), Inlinable inlinable
-        | Inlinable inlinable, Non_inlinable (Some non_inlinable) ->
-          let params1 = List.map snd inlinable.params in
-          let result =
-            cannot_prove_different
+              ~direct_call_surrogate1:non_inlinable1.direct_call_surrogate
+              ~direct_call_surrogate2:non_inlinable2.direct_call_surrogate
+          | Non_inlinable (Some non_inlinable), Inlinable inlinable
+          | Inlinable inlinable, Non_inlinable (Some non_inlinable) ->
+            let params1 = List.map snd inlinable.params in
+            produce_non_inlinable
               ~params1
               ~params2:non_inlinable.params
               ~result1:inlinable.result
               ~result2:non_inlinable.result
               ~result_equations1:inlinable.result_equations
               ~result_equations2:non_inlinable.result_equations
-          in
-          begin match result with
-          | Ok (params, result, result_equations, judgements) ->
-            (* For the arbitrary choice, we pick the inlinable declaration,
-               since it gives more information. *)
-            let params =
-              List.map2 (fun (param, _old_ty) new_ty -> param, new_ty)
-                inlinable.params
-                params
-            in
-            let inlinable_function_decl =
-              { inlinable with
+              ~direct_call_surrogate1:inlinable.direct_call_surrogate
+              ~direct_call_surrogate2:non_inlinable.direct_call_surrogate
+          | Inlinable inlinable1, Inlinable inlinable2 ->
+            if not (Code_id.equal inlinable1.code_id inlinable2.code_id)
+            then begin
+              let params1 = List.map snd inlinable1.params in
+              let params2 = List.map snd inlinable2.params in
+              produce_non_inlinable
+                ~params1
+                ~params2
+                ~result1:inlinable1.result
+                ~result2:inlinable2.result
+                ~result_equations1:inlinable1.result_equations
+                ~result_equations2:inlinable2.result_equations
+                ~direct_call_surrogate1:inlinable1.direct_call_surrogate
+                ~direct_call_surrogate2:inlinable2.direct_call_surrogate
+            end else begin
+              if !Clflags.flambda_invariant_checks then begin
+                assert (Closure_origin.equal inlinable1.closure_origin
+                  inlinable2.closure_origin);
+                assert (Continuation.equal inlinable1.continuation_param
+                  inlinable2.continuation_param);
+                assert (Continuation.equal inlinable1.exn_continuation_param
+                  inlinable2.exn_continuation_param);
+                assert (Pervasives.(=) inlinable1.is_classic_mode
+                  inlinable2.is_classic_mode);
+                assert (List.compare_lengths inlinable1.params inlinable2.params
+                  = 0);
+                assert (List.compare_lengths inlinable1.result inlinable2.result
+                  = 0);
+                assert (Name_occurrences.equal inlinable1.free_names_in_body
+                  inlinable2.free_names_in_body);
+                assert (Pervasives.(=) inlinable1.stub inlinable2.stub);
+                assert (Debuginfo.equal inlinable1.dbg inlinable2.dbg);
+                assert (Pervasives.(=) inlinable1.inline inlinable2.inline);
+                assert (Pervasives.(=) inlinable1.specialise
+                  inlinable2.specialise);
+                assert (Pervasives.(=) inlinable1.is_a_functor
+                  inlinable2.is_a_functor);
+                assert (Variable.Set.equal
+                  (Lazy.force inlinable1.invariant_params)
+                  (Lazy.force inlinable2.invariant_params));
+                assert (Pervasives.(=)
+                  (Lazy.force inlinable1.size)
+                  (Lazy.force inlinable2.size));
+                assert (Variable.equal inlinable1.my_closure
+                  inlinable2.my_closure)
+              end;
+              (* Parameter types are treated covariantly. *)
+              (* CR mshinwell: Add documentation for this -- the types provide
+                 information about the calling context rather than the code of
+                 the function. *)
+              let result_equations =
+                Meet_and_join.join_equations ~resolver:env1.resolver
+                  inlinable1.result_equations
+                  inlinable2.result_equations
+              in
+              let params =
+                List.map2 (fun (param1, t1) (param2, t2) ->
+                    assert (Parameter.equal param1 param2);
+                    let t = Meet_and_join.join (env1, t1) (env2, t2) in
+                    param1, t)
+                  inlinable1.params
+                  inlinable2.params
+              in
+              let result =
+                List.map2 (fun t1 t2 ->
+                    Meet_and_join.join
+                      (to_typing_environment_equations ~resolver:env1.resolver
+                         inlinable1.result_equations, t1)
+                      (to_typing_environment_equations ~resolver:env2.resolver
+                         inlinable2.result_equations, t2))
+                  inlinable1.result
+                  inlinable2.result
+              in
+              let direct_call_surrogate =
+                match inlinable1.direct_call_surrogate,
+                      inlinable2.direct_call_surrogate
+                with
+                | Some closure_id1, Some closure_id2
+                    when Closure_id.equal closure_id1 closure_id2 ->
+                  Some closure_id1
+                | _, _ -> None
+              in
+              Inlinable {
+                closure_origin = inlinable1.closure_origin;
+                continuation_param = inlinable1.continuation_param;
+                exn_continuation_param = inlinable1.exn_continuation_param;
+                is_classic_mode = inlinable1.is_classic_mode;
                 params;
+                code_id = inlinable1.code_id;
+                body = inlinable1.body;
+                free_names_in_body = inlinable1.free_names_in_body;
                 result;
                 result_equations;
+                stub = inlinable1.stub;
+                dbg = inlinable1.dbg;
+                inline = inlinable1.inline;
+                specialise = inlinable1.specialise;
+                is_a_functor = inlinable1.is_a_functor;
+                invariant_params = inlinable1.invariant_params;
+                size = inlinable1.size;
+                direct_call_surrogate;
+                my_closure = inlinable1.my_closure;
               }
-            in
-            Ok (Inlinable inlinable_function_decl, judgements)
-          | Bottom ->
-            Bottom
-          end
-      in
-      match function_decls with
-      | Bottom -> Bottom
-      | Ok (function_decls, judgements) ->
-        Ok (({ function_decls; } : closure), judgements)
-
-    let join_closure env1 env2
-          (closure1 : closure) (closure2 : closure)
-          : closure =
-      let produce_non_inlinable ~params1 ~params2 ~result1 ~result2
-            ~result_equations1 ~result_equations2
-            ~direct_call_surrogate1 ~direct_call_surrogate2 =
-        let same_arity =
-          List.compare_lengths params1 params2 = 0
+            end
         in
-        let same_num_results =
-          List.compare_lengths result1 result2 = 0
-        in
-        if same_arity && same_num_results then
-          let params =
-            List.map2 (fun t1 t2 ->
-                Meet_and_join.join (env1, t1) (env2, t2))
-              params1
-              params2
-          in
-          let result =
-            List.map2 (fun t1 t2 ->
-                Meet_and_join.join
-                  (to_typing_environment_equations ~resolver:env1.resolver
-                     result_equations1, t1)
-                  (to_typing_environment_equations ~resolver:env2.resolver
-                     result_equations2, t2))
-              result1
-              result2
-          in
-          let direct_call_surrogate =
-            match direct_call_surrogate1, direct_call_surrogate2 with
-            | Some closure_id1, Some closure_id2
-                when Closure_id.equal closure_id1 closure_id2 ->
-              Some closure_id1
-            | _, _ -> None
-          in
-          let result_equations =
-            Meet_and_join.join_equations ~resolver:env1.resolver
-              result_equations1 result_equations2
-          in
-          let non_inlinable : non_inlinable_function_declarations =
-            { params;
-              result;
-              result_equations;
-              direct_call_surrogate;
-            }
-          in
-          Non_inlinable (Some non_inlinable)
-        else
-          Non_inlinable None
-      in
-      let function_decls : function_declarations =
-        match closure1.function_decls, closure2.function_decls with
-        | Non_inlinable None, _ | _, Non_inlinable None -> Non_inlinable None
-        | Non_inlinable (Some non_inlinable1),
-            Non_inlinable (Some non_inlinable2) ->
-          produce_non_inlinable
-            ~params1:non_inlinable1.params
-            ~params2:non_inlinable2.params
-            ~result1:non_inlinable1.result
-            ~result2:non_inlinable2.result
-            ~result_equations1:non_inlinable1.result_equations
-            ~result_equations2:non_inlinable2.result_equations
-            ~direct_call_surrogate1:non_inlinable1.direct_call_surrogate
-            ~direct_call_surrogate2:non_inlinable2.direct_call_surrogate
-        | Non_inlinable (Some non_inlinable), Inlinable inlinable
-        | Inlinable inlinable, Non_inlinable (Some non_inlinable) ->
-          let params1 = List.map snd inlinable.params in
-          produce_non_inlinable
-            ~params1
-            ~params2:non_inlinable.params
-            ~result1:inlinable.result
-            ~result2:non_inlinable.result
-            ~result_equations1:inlinable.result_equations
-            ~result_equations2:non_inlinable.result_equations
-            ~direct_call_surrogate1:inlinable.direct_call_surrogate
-            ~direct_call_surrogate2:non_inlinable.direct_call_surrogate
-        | Inlinable inlinable1, Inlinable inlinable2 ->
-          if not (Code_id.equal inlinable1.code_id inlinable2.code_id)
-          then begin
-            let params1 = List.map snd inlinable1.params in
-            let params2 = List.map snd inlinable2.params in
-            produce_non_inlinable
-              ~params1
-              ~params2
-              ~result1:inlinable1.result
-              ~result2:inlinable2.result
-              ~result_equations1:inlinable1.result_equations
-              ~result_equations2:inlinable2.result_equations
-              ~direct_call_surrogate1:inlinable1.direct_call_surrogate
-              ~direct_call_surrogate2:inlinable2.direct_call_surrogate
-          end else begin
-            if !Clflags.flambda_invariant_checks then begin
-              assert (Closure_origin.equal inlinable1.closure_origin
-                inlinable2.closure_origin);
-              assert (Continuation.equal inlinable1.continuation_param
-                inlinable2.continuation_param);
-              assert (Continuation.equal inlinable1.exn_continuation_param
-                inlinable2.exn_continuation_param);
-              assert (Pervasives.(=) inlinable1.is_classic_mode
-                inlinable2.is_classic_mode);
-              assert (List.compare_lengths inlinable1.params inlinable2.params
-                = 0);
-              assert (List.compare_lengths inlinable1.result inlinable2.result
-                = 0);
-              assert (Name_occurrences.equal inlinable1.free_names_in_body
-                inlinable2.free_names_in_body);
-              assert (Pervasives.(=) inlinable1.stub inlinable2.stub);
-              assert (Debuginfo.equal inlinable1.dbg inlinable2.dbg);
-              assert (Pervasives.(=) inlinable1.inline inlinable2.inline);
-              assert (Pervasives.(=) inlinable1.specialise
-                inlinable2.specialise);
-              assert (Pervasives.(=) inlinable1.is_a_functor
-                inlinable2.is_a_functor);
-              assert (Variable.Set.equal
-                (Lazy.force inlinable1.invariant_params)
-                (Lazy.force inlinable2.invariant_params));
-              assert (Pervasives.(=)
-                (Lazy.force inlinable1.size)
-                (Lazy.force inlinable2.size));
-              assert (Variable.equal inlinable1.my_closure
-                inlinable2.my_closure)
-            end;
-            (* Parameter types are treated covariantly. *)
-            (* CR mshinwell: Add documentation for this -- the types provide
-               information about the calling context rather than the code of
-               the function. *)
-            let result_equations =
-              Meet_and_join.join_equations ~resolver:env1.resolver
-                inlinable1.result_equations
-                inlinable2.result_equations
-            in
-            let params =
-              List.map2 (fun (param1, t1) (param2, t2) ->
-                  assert (Parameter.equal param1 param2);
-                  let t = Meet_and_join.join (env1, t1) (env2, t2) in
-                  param1, t)
-                inlinable1.params
-                inlinable2.params
-            in
-            let result =
-              List.map2 (fun t1 t2 ->
-                  Meet_and_join.join
-                    (to_typing_environment_equations ~resolver:env1.resolver
-                       inlinable1.result_equations, t1)
-                    (to_typing_environment_equations ~resolver:env2.resolver
-                       inlinable2.result_equations, t2))
-                inlinable1.result
-                inlinable2.result
-            in
-            let direct_call_surrogate =
-              match inlinable1.direct_call_surrogate,
-                    inlinable2.direct_call_surrogate
-              with
-              | Some closure_id1, Some closure_id2
-                  when Closure_id.equal closure_id1 closure_id2 ->
-                Some closure_id1
-              | _, _ -> None
-            in
-            Inlinable {
-              closure_origin = inlinable1.closure_origin;
-              continuation_param = inlinable1.continuation_param;
-              exn_continuation_param = inlinable1.exn_continuation_param;
-              is_classic_mode = inlinable1.is_classic_mode;
-              params;
-              code_id = inlinable1.code_id;
-              body = inlinable1.body;
-              free_names_in_body = inlinable1.free_names_in_body;
-              result;
-              result_equations;
-              stub = inlinable1.stub;
-              dbg = inlinable1.dbg;
-              inline = inlinable1.inline;
-              specialise = inlinable1.specialise;
-              is_a_functor = inlinable1.is_a_functor;
-              invariant_params = inlinable1.invariant_params;
-              size = inlinable1.size;
-              direct_call_surrogate;
-              my_closure = inlinable1.my_closure;
-            }
-          end
-      in
-      { function_decls; }
+        { function_decls; }
+      end
 
     let meet_set_of_closures env1 env2
           (set1 : set_of_closures) (set2 : set_of_closures)
@@ -3754,127 +3805,133 @@ end;
       -> typing_environment
   end = struct
     let meet (env1, (t1 : t)) (env2, (t2 : t)) : t * judgements_from_meet =
-      ensure_phantomness_matches t1 t2 "kind mismatch upon meet";
-      let descr, judgements =
-        match t1.descr, t2.descr with
-        | Value ty_value1, Value ty_value2 ->
-          let ty_value, judgements =
-            Meet_and_join_value.meet_ty env1 env2 ty_value1 ty_value2
-          in
-          Value ty_value, judgements
-        | Naked_number (ty_naked_number1, kind1),
-            Naked_number (ty_naked_number2, kind2) ->
-          let module N = K.Naked_number in
-          begin match kind1, kind2 with
-          | N.Naked_immediate, N.Naked_immediate ->
-            let ty_naked_number, judgements =
-              Meet_and_join_naked_immediate.meet_ty env1 env2
-                ty_naked_number1 ty_naked_number2
+      if env1 == env2 && t1 == t2 then t1, []
+      else begin
+        ensure_phantomness_matches t1 t2 "kind mismatch upon meet";
+        let descr, judgements =
+          match t1.descr, t2.descr with
+          | Value ty_value1, Value ty_value2 ->
+            let ty_value, judgements =
+              Meet_and_join_value.meet_ty env1 env2 ty_value1 ty_value2
             in
-            Naked_number (ty_naked_number, N.Naked_immediate), judgements
-          | N.Naked_float, N.Naked_float ->
-            let ty_naked_number, judgements =
-              Meet_and_join_naked_float.meet_ty env1 env2
-                ty_naked_number1 ty_naked_number2
+            Value ty_value, judgements
+          | Naked_number (ty_naked_number1, kind1),
+              Naked_number (ty_naked_number2, kind2) ->
+            let module N = K.Naked_number in
+            begin match kind1, kind2 with
+            | N.Naked_immediate, N.Naked_immediate ->
+              let ty_naked_number, judgements =
+                Meet_and_join_naked_immediate.meet_ty env1 env2
+                  ty_naked_number1 ty_naked_number2
+              in
+              Naked_number (ty_naked_number, N.Naked_immediate), judgements
+            | N.Naked_float, N.Naked_float ->
+              let ty_naked_number, judgements =
+                Meet_and_join_naked_float.meet_ty env1 env2
+                  ty_naked_number1 ty_naked_number2
+              in
+              Naked_number (ty_naked_number, N.Naked_float), judgements
+            | N.Naked_int32, N.Naked_int32 ->
+              let ty_naked_number, judgements =
+                Meet_and_join_naked_int32.meet_ty env1 env2
+                  ty_naked_number1 ty_naked_number2
+              in
+              Naked_number (ty_naked_number, N.Naked_int32), judgements
+            | N.Naked_int64, N.Naked_int64 ->
+              let ty_naked_number, judgements =
+                Meet_and_join_naked_int64.meet_ty env1 env2
+                  ty_naked_number1 ty_naked_number2
+              in
+              Naked_number (ty_naked_number, N.Naked_int64), judgements
+            | N.Naked_nativeint, N.Naked_nativeint ->
+              let ty_naked_number, judgements =
+                Meet_and_join_naked_nativeint.meet_ty env1 env2
+                  ty_naked_number1 ty_naked_number2
+              in
+              Naked_number (ty_naked_number, N.Naked_nativeint), judgements
+            | _, _ ->
+              Misc.fatal_errorf "Kind mismatch upon meet:@ %a@ versus@ %a"
+                print t1
+                print t2
+            end
+          | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
+            let ty_fabricated, judgements =
+              Meet_and_join_fabricated.meet_ty env1 env2
+                ty_fabricated1 ty_fabricated2
             in
-            Naked_number (ty_naked_number, N.Naked_float), judgements
-          | N.Naked_int32, N.Naked_int32 ->
-            let ty_naked_number, judgements =
-              Meet_and_join_naked_int32.meet_ty env1 env2
-                ty_naked_number1 ty_naked_number2
-            in
-            Naked_number (ty_naked_number, N.Naked_int32), judgements
-          | N.Naked_int64, N.Naked_int64 ->
-            let ty_naked_number, judgements =
-              Meet_and_join_naked_int64.meet_ty env1 env2
-                ty_naked_number1 ty_naked_number2
-            in
-            Naked_number (ty_naked_number, N.Naked_int64), judgements
-          | N.Naked_nativeint, N.Naked_nativeint ->
-            let ty_naked_number, judgements =
-              Meet_and_join_naked_nativeint.meet_ty env1 env2
-                ty_naked_number1 ty_naked_number2
-            in
-            Naked_number (ty_naked_number, N.Naked_nativeint), judgements
-          | _, _ ->
+            Fabricated ty_fabricated, judgements
+          | (Value _ | Naked_number _ | Fabricated _), _ ->
             Misc.fatal_errorf "Kind mismatch upon meet:@ %a@ versus@ %a"
               print t1
               print t2
-          end
-        | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
-          let ty_fabricated, judgements =
-            Meet_and_join_fabricated.meet_ty env1 env2
-              ty_fabricated1 ty_fabricated2
-          in
-          Fabricated ty_fabricated, judgements
-        | (Value _ | Naked_number _ | Fabricated _), _ ->
-          Misc.fatal_errorf "Kind mismatch upon meet:@ %a@ versus@ %a"
-            print t1
-            print t2
-      in
-      let t = { t1 with descr; } in
-      t, judgements
+        in
+        let t = { t1 with descr; } in
+        t, judgements
+      end
 
     let join (env1, (t1 : t)) (env2, (t2 : t)) =
-      ensure_phantomness_matches t1 t2 "kind mismatch upon join";
-      let descr =
-        match t1.descr, t2.descr with
-        | Value ty_value1, Value ty_value2 ->
-          let ty_value =
-            Meet_and_join_value.join_ty env1 env2 ty_value1 ty_value2
-          in
-          Value ty_value
-        | Naked_number (ty_naked_number1, kind1),
-            Naked_number (ty_naked_number2, kind2) ->
-          let module N = K.Naked_number in
-          begin match kind1, kind2 with
-          | N.Naked_immediate, N.Naked_immediate ->
-            let ty_naked_number =
-              Meet_and_join_naked_immediate.join_ty env1 env2
-                ty_naked_number1 ty_naked_number2
+      if env1 == env2 && t1 == t2 then t1
+      else begin
+        ensure_phantomness_matches t1 t2 "kind mismatch upon join";
+        let descr =
+          match t1.descr, t2.descr with
+          | Value ty_value1, Value ty_value2 ->
+            let ty_value =
+              Meet_and_join_value.join_ty env1 env2 ty_value1 ty_value2
             in
-            Naked_number (ty_naked_number, N.Naked_immediate)
-          | N.Naked_float, N.Naked_float ->
-            let ty_naked_number =
-              Meet_and_join_naked_float.join_ty env1 env2
-                ty_naked_number1 ty_naked_number2
+            Value ty_value
+          | Naked_number (ty_naked_number1, kind1),
+              Naked_number (ty_naked_number2, kind2) ->
+            let module N = K.Naked_number in
+            begin match kind1, kind2 with
+            | N.Naked_immediate, N.Naked_immediate ->
+              let ty_naked_number =
+                Meet_and_join_naked_immediate.join_ty env1 env2
+                  ty_naked_number1 ty_naked_number2
+              in
+              Naked_number (ty_naked_number, N.Naked_immediate)
+            | N.Naked_float, N.Naked_float ->
+              let ty_naked_number =
+                Meet_and_join_naked_float.join_ty env1 env2
+                  ty_naked_number1 ty_naked_number2
+              in
+              Naked_number (ty_naked_number, N.Naked_float)
+            | N.Naked_int32, N.Naked_int32 ->
+              let ty_naked_number =
+                Meet_and_join_naked_int32.join_ty env1 env2
+                  ty_naked_number1 ty_naked_number2
+              in
+              Naked_number (ty_naked_number, N.Naked_int32)
+            | N.Naked_int64, N.Naked_int64 ->
+              let ty_naked_number =
+                Meet_and_join_naked_int64.join_ty env1 env2
+                  ty_naked_number1 ty_naked_number2
+              in
+              Naked_number (ty_naked_number, N.Naked_int64)
+            | N.Naked_nativeint, N.Naked_nativeint ->
+              let ty_naked_number =
+                Meet_and_join_naked_nativeint.join_ty env1 env2
+                  ty_naked_number1 ty_naked_number2
+              in
+              Naked_number (ty_naked_number, N.Naked_nativeint)
+            | _, _ ->
+              Misc.fatal_errorf "Kind mismatch upon join:@ %a@ versus %a"
+                print t1
+                print t2
+            end
+          | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
+            let ty_fabricated =
+              Meet_and_join_fabricated.join_ty env1 env2
+                ty_fabricated1 ty_fabricated2
             in
-            Naked_number (ty_naked_number, N.Naked_float)
-          | N.Naked_int32, N.Naked_int32 ->
-            let ty_naked_number =
-              Meet_and_join_naked_int32.join_ty env1 env2
-                ty_naked_number1 ty_naked_number2
-            in
-            Naked_number (ty_naked_number, N.Naked_int32)
-          | N.Naked_int64, N.Naked_int64 ->
-            let ty_naked_number =
-              Meet_and_join_naked_int64.join_ty env1 env2
-                ty_naked_number1 ty_naked_number2
-            in
-            Naked_number (ty_naked_number, N.Naked_int64)
-          | N.Naked_nativeint, N.Naked_nativeint ->
-            let ty_naked_number =
-              Meet_and_join_naked_nativeint.join_ty env1 env2
-                ty_naked_number1 ty_naked_number2
-            in
-            Naked_number (ty_naked_number, N.Naked_nativeint)
-          | _, _ ->
+            Fabricated ty_fabricated
+          | (Value _ | Naked_number _ | Fabricated _), _ ->
             Misc.fatal_errorf "Kind mismatch upon join:@ %a@ versus %a"
               print t1
               print t2
-          end
-        | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
-          let ty_fabricated =
-            Meet_and_join_fabricated.join_ty env1 env2
-              ty_fabricated1 ty_fabricated2
-          in
-          Fabricated ty_fabricated
-        | (Value _ | Naked_number _ | Fabricated _), _ ->
-          Misc.fatal_errorf "Kind mismatch upon join:@ %a@ versus %a"
-            print t1
-            print t2
-      in
-      { t1 with descr; }
+        in
+        { t1 with descr; }
+      end
 
     let join_typing_environment (env1 : typing_environment)
           (env2 : typing_environment) =
@@ -4113,7 +4170,11 @@ Format.eprintf "...giving %a\n%!" print ty;
         end
 
     let equations_to_typing_environment ~resolver
-          ({ typing_judgements; } as equations) : typing_environment =
+          { typing_judgements; } : typing_environment =
+      match typing_judgements with
+      | None -> create_typing_environment0 ~resolver ~must_be_closed:true
+      | Some env -> env
+(*
       let all_free_names =
         match typing_judgements with
         | None -> Name.Set.empty
@@ -4163,6 +4224,7 @@ Format.eprintf "...giving %a\n%!" print ty;
       in
       invariant_typing_environment env;
       env
+*)
 
     let meet_or_join_equations ~resolver ~meet_or_join
           equations1 equations2 =
@@ -4536,11 +4598,7 @@ Format.eprintf "Result is: %a\n%!"
       Misc.Stdlib.Option.equal (Typing_environment0.equal ~equal_type)
         typing_judgements1 typing_judgements2
 
-    let print ppf { typing_judgements; } =
-      match typing_judgements with
-      | None -> Format.pp_print_string ppf "()"
-      | Some typing_judgements ->
-        print_typing_environment ppf typing_judgements
+    let print = print_equations
 
     let remove ({ typing_judgements; } as t) name =
       match typing_judgements with

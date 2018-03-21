@@ -137,6 +137,10 @@ let simplify_set_of_closures original_env r
           ~freshening:(E.freshening original_env)
           ~default_env
       in
+      let result_env =
+        T.Typing_environment.restrict_names_to_those_occurring_in_types
+          result_env result
+      in
       result, T.Typing_environment.to_equations result_env
     in
     let return_arity = List.map (fun ty -> T.kind ty) result in

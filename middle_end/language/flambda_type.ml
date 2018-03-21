@@ -42,6 +42,12 @@ let rename_variables t ~f:_ = t
   clean t (fun var -> Available_different_name (f var))
 *)
 
+let free_names_transitive_list env ts =
+  List.fold_left (fun names t ->
+      Name_occurrences.union names (free_names_transitive env t))
+    (Name_occurrences.create ())
+    ts
+
 let unit () =
   this_tagged_immediate Immediate.zero
 
@@ -116,11 +122,13 @@ let equal_or_unknown equal_contents
 let equal_ty equal_of_kind_foo ty1 ty2 =
   equal_or_alias (equal_unknown_or_join equal_of_kind_foo) ty1 ty2
 
-let rec equal ({ descr = descr1; phantom = phantom1; } : t)
-      ({ descr = descr2; phantom = phantom2; } : t) =
-  equal_descr descr1 descr2
-    && Misc.Stdlib.Option.equal Flambda_kind.Phantom_kind.equal_occurrences
-      phantom1 phantom2
+let rec equal (({ descr = descr1; phantom = phantom1; } : t) as t1)
+      (({ descr = descr2; phantom = phantom2; } : t) as t2) =
+  if t1 == t2 then true
+  else
+    equal_descr descr1 descr2
+      && Misc.Stdlib.Option.equal Flambda_kind.Phantom_kind.equal_occurrences
+        phantom1 phantom2
 
 and equal_descr (descr1 : descr) (descr2 : descr) =
   match descr1, descr2 with
@@ -1602,6 +1610,7 @@ let values_physically_equal (t1 : t) (t2 : t) =
         print t2
 
 let values_structurally_distinct (env1, (t1 : t)) (env2, (t2 : t)) =
+Format.eprintf "SD check: %a vs %a\n%!" print t1 print t2;
   let simplified1, _canonical_name1 = Simplified_type.create env1 t1 in
   let simplified2, _canonical_name2 = Simplified_type.create env2 t2 in
   let module S = Simplified_type in
@@ -1628,18 +1637,22 @@ let values_structurally_distinct (env1, (t1 : t)) (env2, (t2 : t)) =
           begin match blocks1, blocks2 with
           | Unknown, _ | _, Unknown -> false
           | Known blocks1, Known blocks2 ->
-            if (Tag.Map.is_empty blocks1 && not (Tag.Map.is_empty blocks2))
-              || (not (Tag.Map.is_empty blocks1) && Tag.Map.is_empty blocks2)
-            then
-              true
-            else
-              begin match imms1, imms2 with
-              | Unknown, _ | _, Unknown -> false
-              | Known imms1, Known imms2 ->
-                let imms1 = Immediate.Map.keys imms1 in
-                let imms2 = Immediate.Map.keys imms2 in
-                Immediate.Set.is_empty (Immediate.Set.inter imms1 imms2)
-              end
+            begin match imms1, imms2 with
+            | Unknown, _ | _, Unknown -> false
+            | Known imms1, Known imms2 ->
+              (* CR mshinwell: This should actually collect a set of
+                 (tag, block length) pairs and prove the intersection of two
+                 such sets is empty. *)
+              let tag_intersection =
+                Tag.Set.inter (Tag.Map.keys blocks1) (Tag.Map.keys blocks2)
+              in
+              let imm_intersection =
+                Immediate.Set.inter (Immediate.Map.keys imms1)
+                  (Immediate.Map.keys imms2)
+              in
+              Tag.Set.is_empty tag_intersection
+                && Immediate.Set.is_empty imm_intersection
+            end
           end
         | Blocks_and_tagged_immediates _, _
         | _, Blocks_and_tagged_immediates _ -> true
@@ -1835,4 +1848,8 @@ module Typing_environment = struct
   include Typing_environment0
 
   let diff t1 t2 = diff ~strictly_more_precise t1 t2
+
+  let restrict_names_to_those_occurring_in_types t tys =
+    let free_names = free_names_transitive_list t tys in
+    restrict_to_names t free_names
 end

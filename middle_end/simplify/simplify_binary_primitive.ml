@@ -793,7 +793,7 @@ module Binary_int_eq_comp_int64 =
 module Binary_int_eq_comp_nativeint =
   Binary_arith_like (Int_ops_for_binary_eq_comp_nativeint)
 
-let simplify_eq_comp env r prim dbg (kind : K.t)
+let simplify_phys_equal env r prim dbg (kind : K.t)
       (op : Flambda_primitive.equality_comparison) arg1 arg2 =
   begin match kind with
   | Value ->
@@ -822,6 +822,11 @@ let simplify_eq_comp env r prim dbg (kind : K.t)
           T.this_tagged_immediate (Immediate.bool bool),
           R.map_benefit r (B.remove_primitive (Binary prim))
       in
+Format.eprintf "%a vs %a: eq %b dist %b\n%!"
+  Simple.print arg1
+  Simple.print arg2
+  physically_equal
+  physically_distinct;
       begin match op, physically_equal, physically_distinct with
       | Eq, true, _ -> const true
       | Neq, true, _ -> const false
@@ -1165,7 +1170,7 @@ let simplify_binary_primitive env r (prim : Flambda_primitive.binary_primitive)
   | Block_load (block_access_kind, field_is_mutable) ->
     simplify_block_load env r prim ~block:arg1 ~index:arg2
       ~block_access_kind ~field_is_mutable dbg
-  | Phys_equal (kind, op) -> simplify_eq_comp env r prim dbg kind op arg1 arg2
+  | Phys_equal (kind, op) -> simplify_phys_equal env r prim dbg kind op arg1 arg2
   | Int_arith (kind, op) ->
     begin match kind with
     | Tagged_immediate ->

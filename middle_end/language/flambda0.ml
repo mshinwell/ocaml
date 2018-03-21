@@ -817,7 +817,7 @@ end = struct
     | (Let _ | Let_mutable _ | Let_cont _ | Apply _ | Apply_cont _
         | Switch _ | Invalid _), _ -> false
 
-  let rec print_with_cache ~cache ppf (t : t) =
+  let rec print_with_cache0 ~cache ppf (t : t) =
     match t with
     | Apply ({ func; continuation; exn_continuation; args; call_kind; inline;
                specialise; dbg; }) ->
@@ -903,7 +903,7 @@ end = struct
           (Misc_color.reset ())
           (Let_cont_handlers.print_with_cache ~cache) handlers;
         let expr = let_cont_body body in
-        fprintf ppf ")@]@ %a)@]" (print_with_cache ~cache) expr
+        fprintf ppf ")@]@ %a)@]" (print_with_cache0 ~cache) expr
       end else begin
         (* CR mshinwell: Share code with ilambda.ml *)
         let rec gather_let_conts let_conts (t : t) =
@@ -915,7 +915,7 @@ end = struct
         let let_conts, body = gather_let_conts [] t in
         let pp_sep ppf () = fprintf ppf "@ " in
         fprintf ppf "@[<2>(@[<v 0>%a@;@[<v 0>%a@]@])@]"
-          (print_with_cache ~cache) body
+          (print_with_cache0 ~cache) body
           (Format.pp_print_list ~pp_sep
             (Let_cont_handlers.print_using_where_with_cache ~cache)) let_conts
       end
@@ -923,6 +923,10 @@ end = struct
       fprintf ppf "%sunreachable%s"
           (Misc_color.bold_cyan ())
           (Misc_color.reset ())
+
+  let print_with_cache ~cache ppf (t : t) =
+    Printing_cache.with_cache cache ppf "expr" t
+      (fun ppf () -> print_with_cache0 ~cache ppf t)
 
   let print ppf (t : t) =
     print_with_cache ~cache:(Printing_cache.create ()) ppf t

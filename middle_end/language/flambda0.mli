@@ -531,6 +531,8 @@ end and Set_of_closures : sig
 
   val print : Format.formatter -> t -> unit
 
+  val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
+
   (** All names free in the given set of closures. *)
   val free_names : t -> Name_occurrences.t
 end and Function_declarations : sig

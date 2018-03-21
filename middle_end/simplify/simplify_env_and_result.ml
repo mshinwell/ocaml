@@ -882,7 +882,8 @@ Format.eprintf "The joined environment for %a is:@ %a\n%!"
                      levels so long as our types for them are more
                      precise. *)
                   let restricted_use_env =
-                    TE.restrict_to_names use_env free_names_this_ty
+                    TE.restrict_names_to_those_occurring_in_types use_env
+                      [this_ty]
                   in
                   Format.eprintf "Restricted env before diff:@ %a\n%!"
                     TE.print restricted_use_env;
@@ -917,6 +918,7 @@ Format.eprintf "The joined environment for %a is:@ %a\n%!"
 Format.eprintf "The joined arg tys for %a are:@ %a\n%!"
   Continuation.print t.continuation
   (Format.pp_print_list ~pp_sep:Format.pp_print_space T.print) joined_arg_tys;
+(*
         let free_names_in_joined_arg_tys =
           List.fold_left (fun free_names_in_joined_arg_tys joined_arg_ty ->
               let names = T.free_names_transitive joined_env joined_arg_ty in
@@ -929,6 +931,7 @@ Format.eprintf "The joined arg tys for %a are:@ %a\n%!"
             (Name_occurrences.union free_names_in_joined_arg_tys
               (TE.domain joined_env))
         in
+*)
         Some (joined_arg_tys, joined_env)
 
     let join_of_arg_types t ~freshening ~arity ~default_env =
