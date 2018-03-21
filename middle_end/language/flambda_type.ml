@@ -1851,5 +1851,7 @@ module Typing_environment = struct
 
   let restrict_names_to_those_occurring_in_types t tys =
     let free_names = free_names_transitive_list t tys in
+Format.eprintf "Restricting to: %a\n%!"
+  Name_occurrences.print free_names;
     restrict_to_names t free_names
 end

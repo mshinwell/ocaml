@@ -836,6 +836,7 @@ let result_kind_of_binary_primitive p : result_kind =
   | Int_arith (kind, _)
   | Int_shift (kind, _) -> Singleton (K.Standard_int.to_kind kind)
   | Float_arith _ -> Singleton (K.naked_float ())
+  (* CR mshinwell: Change [Phys_equal] to return kind [Fabricated] *)
   | Phys_equal _
   | Int_comp _
   | Float_comp _ -> Singleton (K.value ())

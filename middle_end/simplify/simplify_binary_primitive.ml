@@ -822,11 +822,6 @@ let simplify_phys_equal env r prim dbg (kind : K.t)
           T.this_tagged_immediate (Immediate.bool bool),
           R.map_benefit r (B.remove_primitive (Binary prim))
       in
-Format.eprintf "%a vs %a: eq %b dist %b\n%!"
-  Simple.print arg1
-  Simple.print arg2
-  physically_equal
-  physically_distinct;
       begin match op, physically_equal, physically_distinct with
       | Eq, true, _ -> const true
       | Neq, true, _ -> const false
@@ -971,14 +966,17 @@ Format.eprintf "simplify_block_load %a.(%a).  Block type:@ %a\n%!"
   in
   let unique_index_unknown () =
     let proof =
-      T.prove_must_be_a_block (E.get_typing_environment env) block_ty ~kind_of_all_fields
+      T.prove_must_be_a_block (E.get_typing_environment env) block_ty
+        ~kind_of_all_fields
     in
     match proof with
     | Unknown | Proved () ->
       Reachable.reachable (original_term ()), T.unknown field_kind, r
     | Invalid -> invalid ()
   in
-  let proof = T.prove_tagged_immediate (E.get_typing_environment env) index_ty in
+  let proof =
+    T.prove_tagged_immediate (E.get_typing_environment env) index_ty
+  in
   match proof with
   | Proved indexes ->
     begin match Immediate.Set.get_singleton indexes with

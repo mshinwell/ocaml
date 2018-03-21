@@ -379,7 +379,7 @@ end) = struct
   and print_fields ~cache ppf (fields : t mutable_or_immutable array) =
     Format.fprintf ppf "@[[| %a |]@]"
       (Format.pp_print_list
-        ~pp_sep:(fun ppf () -> Format.pp_print_string ppf ";@ ")
+        ~pp_sep:(fun ppf () -> Format.fprintf ppf ";@ ")
         (print_mutable_or_immutable (print_with_cache ~cache)))
       (Array.to_list fields)
 
@@ -470,7 +470,7 @@ end) = struct
   and print_ty_value_array ~cache ppf ty_values =
     Format.fprintf ppf "@[[| %a |]@]"
       (Format.pp_print_list
-        ~pp_sep:(fun ppf () -> Format.pp_print_string ppf ";@ ")
+        ~pp_sep:(fun ppf () -> Format.fprintf ppf ";@ ")
         (print_ty_value_with_cache ~cache))
       (Array.to_list ty_values)
 
@@ -707,7 +707,7 @@ end) = struct
     | Join contents_list ->
       List.fold_left (fun free_names contents ->
           free_names_contents contents free_names)
-        Name.Set.empty
+        acc
         contents_list
 
   let free_names_ty free_names_contents ty acc =
@@ -843,7 +843,12 @@ end) = struct
     free_names t Name.Set.empty
 
   let free_names t =
+let result =
     Name_occurrences.create_from_set_in_types (free_names_set t)
+in
+Format.eprintf "Free names %a from: %a\n%!"
+  Name_occurrences.print result print t;
+result
 
   let create_typing_environment0 ~resolver ~must_be_closed =
     let existential_freshening = Freshening.activate Freshening.empty in
@@ -4400,7 +4405,7 @@ Format.eprintf "...giving %a\n%!" print ty;
       in
       let typing_judgements =
         { typing_judgements with
-          must_be_closed = false;
+          must_be_closed = true;
         }
       in
       { typing_judgements = Some typing_judgements; }
@@ -4622,7 +4627,7 @@ Format.eprintf "Result is: %a\n%!"
     let to_equations t =
       let t =
         { t with
-          must_be_closed = false;
+          must_be_closed = true;
         }
       in
       { typing_judgements = Some t;
@@ -4666,6 +4671,12 @@ Format.eprintf "Result is: %a\n%!"
               strictly_more_precise (t1, ty1) ~than:(t2, ty2))
           t1.names_to_types
       in
+      let free_names =
+        Name.Map.fold (fun _name (_level, ty) free_names ->
+            Name_occurrences.union free_names (free_names_transitive t1 ty))
+          names_to_types
+          (Name_occurrences.create ())
+      in
       let t1 =
         { t1 with
           must_be_closed = false;
@@ -4673,6 +4684,26 @@ Format.eprintf "Result is: %a\n%!"
       in
       let t =
         restrict_to_names0_typing_environment t1 (Name.Map.keys names_to_types)
+      in
+      let unbound =
+        Name.Set.diff (Name_occurrences.everything free_names)
+          (Name.Map.keys names_to_types)
+      in
+      let t =
+        Name.Set.fold (fun unbound t ->
+            let level, kind =
+              match Name.Map.find unbound t1.names_to_types with
+              | exception Not_found -> assert false
+              | (level, ty) -> level, kind ty
+            in
+            add_or_replace_typing_environment t unbound level (unknown kind))
+          unbound
+          t
+      in
+      let t =
+        { t with
+          must_be_closed = true;
+        }
       in
       { typing_judgements = Some t;
       }

@@ -739,7 +739,7 @@ let simplify_unary_float_arith_op env r prim
   | Proved _ | Unknown -> result_unknown ()
   | Invalid -> result_invalid ()
 
-let simplify_discriminant_of_int env r prim arg dbg =
+let simplify_discriminant_of_int env r prim arg dbg ~result_var:_ =
   let arg, arg_ty = S.simplify_simple env arg in
   let proof =
     T.prove_tagged_immediate_as_discriminants (E.get_typing_environment env)
@@ -751,6 +751,25 @@ let simplify_discriminant_of_int env r prim arg dbg =
     Reachable.invalid (), T.bottom result_kind,
       R.map_benefit r (B.remove_primitive (Unary prim))
   in
+(*
+  (* XXX Experiment about identity switches *)
+  let r =
+    match arg with
+    | Const _ | Discriminant _ -> r
+    | Name arg ->
+      let arg_ty =
+        T.variant_whose_discriminants_are ~is_int:None
+          ~get_tag:(Some (Name.var result_var))
+      in
+      let r =
+        R.add_or_meet_equation r (Name.var result_var)
+          (E.continuation_scope_level env)
+          (T.unknown (K.fabricated ()))
+      in
+      let scope_level = E.scope_level_of_name env arg in
+      R.add_or_meet_equation r arg scope_level arg_ty
+  in
+*)
   match proof with
   | Proved (By_discriminant by_discriminant) ->
     Reachable.reachable (original_term ()),
@@ -837,7 +856,8 @@ let simplify_unary_primitive env r (prim : Flambda_primitive.unary_primitive)
   | Is_int -> simplify_is_int env r prim arg dbg ~result_var
   | Get_tag { tags_to_sizes; } ->
     simplify_get_tag env r prim ~tags_to_sizes ~block:arg dbg ~result_var
-  | Discriminant_of_int -> simplify_discriminant_of_int env r prim arg dbg
+  | Discriminant_of_int ->
+    simplify_discriminant_of_int env r prim arg dbg ~result_var
   | String_length _string_or_bytes ->
     simplify_string_length env r prim arg dbg
   | Int_as_pointer ->
