@@ -67,6 +67,7 @@ module type Map = sig
     -> 'a t
     -> 'a t
     -> 'a t
+  val for_all2_opt : ('a -> 'b -> bool) -> 'a t -> 'b t -> bool option
   val inter : ('a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
   val inter_merge : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
   val rename : key t -> key -> key
@@ -243,6 +244,19 @@ module Make_map (T : Thing_no_hash) = struct
     match bindings t with
     | [key, value] -> Some (key, value)
     | _ -> None
+
+  let for_all2_opt f t1 t2 =
+    (* CR mshinwell: Provide a proper implementation *)
+    if cardinal t1 <> cardinal t2 then None
+    else
+      let t1 = bindings t1 in
+      let t2 = bindings t2 in
+      let for_all2 =
+        List.for_all2 (fun (key1, datum1) (key2, datum2) ->
+            T.compare key1 key2 = 0 && f datum1 datum2)
+          t1 t2
+      in
+      Some for_all2
 end
 
 module Make_set (T : Thing_no_hash) = struct

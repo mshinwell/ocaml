@@ -87,6 +87,8 @@ module type Map = sig
     -> 'a t
     -> 'a t
 
+  val for_all2_opt : ('a -> 'b -> bool) -> 'a t -> 'b t -> bool option
+
   val inter : ('a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
 
   val inter_merge : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t

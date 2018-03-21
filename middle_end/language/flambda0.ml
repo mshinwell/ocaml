@@ -925,8 +925,11 @@ end = struct
           (Misc_color.reset ())
 
   let print_with_cache ~cache ppf (t : t) =
+    print_with_cache0 ~cache ppf t
+(*
     Printing_cache.with_cache cache ppf "expr" t
       (fun ppf () -> print_with_cache0 ~cache ppf t)
+*)
 
   let print ppf (t : t) =
     print_with_cache ~cache:(Printing_cache.create ()) ppf t

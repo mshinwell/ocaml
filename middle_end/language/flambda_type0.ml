@@ -561,16 +561,17 @@ end) = struct
       end
 
   and print_set_of_closures ~cache ppf (set : set_of_closures) =
-    Format.fprintf ppf
-      "@[<hov 1>(Set_of_closures@ \
-          @[<hov 1>(closures@ %a)@]@ \
-          @[<hov 1>(closure_elements@ %a)@])@]"
-      (print_extensibility (
-          Closure_id.Map.print (print_ty_fabricated_with_cache ~cache)))
-        set.closures
-      (print_extensibility (
-          Var_within_closure.Map.print (print_ty_value_with_cache ~cache)))
-        set.closure_elements
+    Printing_cache.with_cache cache ppf "set" set (fun ppf () ->
+      Format.fprintf ppf
+        "@[<hov 1>(Set_of_closures@ \
+            @[<hov 1>(closures@ %a)@]@ \
+            @[<hov 1>(closure_elements@ %a)@])@]"
+        (print_extensibility (
+            Closure_id.Map.print (print_ty_fabricated_with_cache ~cache)))
+          set.closures
+        (print_extensibility (
+            Var_within_closure.Map.print (print_ty_value_with_cache ~cache)))
+          set.closure_elements)
 
   and print_closure ~cache ppf (closure : closure) =
     Format.fprintf ppf "@[<hov 1>(Closure (function_decls@ %a))@]"
@@ -2257,6 +2258,27 @@ end;
     | None -> create_typing_environment0 ~resolver ~must_be_closed:false
     | Some typing_judgements -> typing_judgements
 
+  type changes = Neither | Left | Right | Both
+
+  let join_changes (changes1 : changes) (changes2 : changes) =
+    match changes1, changes2 with
+    | Neither, Neither -> Neither
+    | Neither, Left -> Left
+    | Neither, Right -> Right
+    | Neither, Both -> Both
+    | Left, Neither -> Left
+    | Left, Left -> Left
+    | Left, Right -> Both
+    | Left, Both -> Both
+    | Right, Neither -> Right
+    | Right, Left -> Both
+    | Right, Right -> Right
+    | Right, Both -> Both
+    | Both, Neither -> Both
+    | Both, Left -> Both
+    | Both, Right -> Both
+    | Both, Both -> Both
+
   module type Meet_and_join_spec = sig
     type of_kind_foo
 
@@ -2392,9 +2414,24 @@ end;
           Equals name1
         | _, Some name2 when unknown_or_join_is_bottom unknown_or_join1 ->
           Equals name2
+        | None, None ->
+          let unknown_or_join =
+            join_on_unknown_or_join env1 env2
+              unknown_or_join1 unknown_or_join2
+          in
+          if unknown_or_join == unknown_or_join1 then begin
+            assert (match or_alias1 with No_alias _ -> true | _ -> false);
+            or_alias1
+          end else if unknown_or_join == unknown_or_join2 then begin
+            assert (match or_alias2 with No_alias _ -> true | _ -> false);
+            or_alias2
+          end else begin
+            No_alias unknown_or_join
+          end
         | _, _ ->
           let unknown_or_join =
-            join_on_unknown_or_join env1 env2 unknown_or_join1 unknown_or_join2
+            join_on_unknown_or_join env1 env2
+              unknown_or_join1 unknown_or_join2
           in
           No_alias unknown_or_join
 
@@ -2427,7 +2464,15 @@ end;
               (of_kind_foos2, [])
               of_kind_foos1
           in
-          Join of_kind_foos, judgements
+          let same_as input_of_kind_foos =
+            List.compare_lengths input_of_kind_foos of_kind_foos = 0
+              && List.for_all2 (fun input_of_kind_foo of_kind_foo ->
+                     input_of_kind_foo == of_kind_foo)
+                   input_of_kind_foos of_kind_foos
+          in
+          if same_as of_kind_foos1 then ou1, judgements
+          else if same_as of_kind_foos2 then ou2, judgements
+          else Join of_kind_foos, judgements
 
     and meet_ty env1 env2
           (or_alias1 : S.of_kind_foo ty)
@@ -3122,27 +3167,6 @@ end;
     let force_to_kind = force_to_kind_fabricated
     let print_ty = print_ty_fabricated
 
-    type changes = Neither | Left | Right | Both
-
-    let join_changes (changes1 : changes) (changes2 : changes) =
-      match changes1, changes2 with
-      | Neither, Neither -> Neither
-      | Neither, Left -> Left
-      | Neither, Right -> Right
-      | Neither, Both -> Both
-      | Left, Neither -> Left
-      | Left, Left -> Left
-      | Left, Right -> Both
-      | Left, Both -> Both
-      | Right, Neither -> Right
-      | Right, Left -> Both
-      | Right, Right -> Right
-      | Right, Both -> Both
-      | Both, Neither -> Both
-      | Both, Left -> Both
-      | Both, Right -> Both
-      | Both, Both -> Both
-
     (* CR mshinwell: We need to work out how to stop direct call
        surrogates from being dropped e.g. when in a second round, a
        function type (with a surrogate) propagated from the first round is
@@ -3266,19 +3290,17 @@ end;
                   inlinable1.params
                   params
               in
-              let inlinable_function_decl =
-                match changed with
-                | Neither -> inlinable1
-                | Left -> inlinable2
-                | Right -> inlinable1
-                | Both ->
-                  { inlinable1 with
-                    params;
-                    result;
-                    result_equations;
-                  }
-              in
-              Ok (Inlinable inlinable_function_decl, judgements)
+              begin match changed with
+              | Neither -> Ok (closure1.function_decls, judgements)
+              | Left -> Ok (closure2.function_decls, judgements)
+              | Right -> Ok (closure1.function_decls, judgements)
+              | Both ->
+                Ok (Inlinable { inlinable1 with
+                  params;
+                  result;
+                  result_equations;
+                }, judgements)
+              end
             | Bottom ->
               (* [closure1] and [closure2] are definitely different. *)
               Bottom
@@ -3356,7 +3378,12 @@ end;
         match function_decls with
         | Bottom -> Bottom
         | Ok (function_decls, judgements) ->
-          Ok (({ function_decls; } : closure), judgements)
+          if function_decls == closure1.function_decls then
+            Ok (closure1, judgements)
+          else if function_decls == closure2.function_decls then
+            Ok (closure2, judgements)
+          else
+            Ok (({ function_decls; } : closure), judgements)
       end
 
     let join_closure env1 env2
@@ -3570,7 +3597,21 @@ end;
               closures1
               closures2
           in
-          Exactly closures
+          (* CR mshinwell: Try to move this check into the intersection
+             operation above (although note we still need to check the
+             cardinality) *)
+          let same_as_closures old_closures =
+            match
+              Closure_id.Map.for_all2_opt (fun ty_fabricated1 ty_fabricated2 ->
+                  ty_fabricated1 == ty_fabricated2)
+                old_closures closures
+            with
+            | None -> false
+            | Some same -> same
+          in
+          if same_as_closures closures1 then set1.closures
+          else if same_as_closures closures2 then set2.closures
+          else Exactly closures
         | Exactly closures1, Open closures2
         | Open closures2, Exactly closures1 ->
           let closures =
@@ -3625,7 +3666,21 @@ end;
               closure_elements1
               closure_elements2
           in
-          Exactly closure_elements
+          let same_as_closure_elements old_closure_elements =
+            match
+              Var_within_closure.Map.for_all2_opt (fun ty_value1 ty_value2 ->
+                  ty_value1 == ty_value2)
+                old_closure_elements closure_elements
+            with
+            | None -> false
+            | Some same -> same
+          in
+          if same_as_closure_elements closure_elements1 then
+            set1.closure_elements
+          else if same_as_closure_elements closure_elements2 then
+            set2.closure_elements
+          else
+            Exactly closure_elements
         | Exactly closure_elements1, Open closure_elements2
         | Open closure_elements2, Exactly closure_elements1 ->
           let closure_elements =
@@ -3668,12 +3723,28 @@ end;
       match closures with
       | Exactly map when Closure_id.Map.is_empty map -> Bottom
       | _ ->
-        let set : set_of_closures =
-          { closures;
-            closure_elements;
-          }
-        in
-        Ok (set, !judgements)
+Format.eprintf "CLOSURES %b %b ELEMENTS %b %b\n%!"
+        (closures == set1.closures)
+        (closure_elements == set1.closure_elements)
+        (closures == set2.closures)
+        (closure_elements == set2.closure_elements);
+
+        if closures == set1.closures
+          && closure_elements == set1.closure_elements
+        then
+          Ok (set1, !judgements)
+        else if closures == set2.closures
+          && closure_elements == set2.closure_elements
+        then
+          Ok (set2, !judgements)
+        else begin
+          let set : set_of_closures =
+            { closures;
+              closure_elements;
+            }
+          in
+          Ok (set, !judgements)
+        end
 
     let join_set_of_closures env1 env2
           (set1 : set_of_closures) (set2 : set_of_closures)
@@ -3750,9 +3821,18 @@ end;
           in
           Open closure_elements
       in
-      { closures;
-        closure_elements;
-      }
+      if closures == set1.closures
+        && closure_elements == set1.closure_elements
+      then
+        set1
+      else if closures == set2.closures
+        && closure_elements == set2.closure_elements
+      then
+        set2
+      else
+        { closures;
+          closure_elements;
+        }
 
     let meet_of_kind_foo env1 env2
           (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
@@ -3783,12 +3863,20 @@ end;
       | Set_of_closures set1, Set_of_closures set2 ->
         begin match meet_set_of_closures env1 env2 set1 set2 with
         | Ok (set_of_closures, judgements) ->
-          Ok (Set_of_closures set_of_closures, judgements)
+          if set_of_closures == set1 then
+            Ok (of_kind1, judgements)
+          else if set_of_closures == set2 then
+            Ok (of_kind2, judgements)
+          else
+            Ok (Set_of_closures set_of_closures, judgements)
         | Bottom -> Bottom
         end
       | Closure closure1, Closure closure2 ->
         begin match meet_closure env1 env2 closure1 closure2 with
-        | Ok (closure, judgements) -> Ok (Closure closure, judgements)
+        | Ok (closure, judgements) ->
+          if closure == closure1 then Ok (of_kind1, judgements)
+          else if closure == closure2 then Ok (of_kind2, judgements)
+          else Ok (Closure closure, judgements)
         | Bottom -> Bottom
         end
       | (Discriminant _ | Set_of_closures _ | Closure _), _ -> Bottom
@@ -3922,7 +4010,9 @@ end;
               Meet_and_join_fabricated.meet_ty env1 env2
                 ty_fabricated1 ty_fabricated2
             in
-            Fabricated ty_fabricated, judgements
+            if ty_fabricated == ty_fabricated1 then t1.descr, judgements
+            else if ty_fabricated == ty_fabricated2 then t2.descr, judgements
+            else Fabricated ty_fabricated, judgements
           | (Value _ | Naked_number _ | Fabricated _), _ ->
             Misc.fatal_errorf "Kind mismatch upon meet:@ %a@ versus@ %a"
               print t1
@@ -3946,7 +4036,9 @@ end;
             let ty_value =
               Meet_and_join_value.join_ty env1 env2 ty_value1 ty_value2
             in
-            Value ty_value
+            if ty_value == ty_value1 then t1.descr
+            else if ty_value == ty_value2 then t2.descr
+            else Value ty_value
           | Naked_number (ty_naked_number1, kind1),
               Naked_number (ty_naked_number2, kind2) ->
             let module N = K.Naked_number in
@@ -3991,7 +4083,9 @@ end;
               Meet_and_join_fabricated.join_ty env1 env2
                 ty_fabricated1 ty_fabricated2
             in
-            Fabricated ty_fabricated
+            if ty_fabricated == ty_fabricated1 then t1.descr
+            else if ty_fabricated == ty_fabricated2 then t2.descr
+            else Fabricated ty_fabricated
           | (Value _ | Naked_number _ | Fabricated _), _ ->
             Misc.fatal_errorf "Kind mismatch upon join:@ %a@ versus %a"
               print t1
