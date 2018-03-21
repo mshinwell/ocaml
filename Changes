@@ -225,6 +225,10 @@ Working version
 - MPR#7687: deprecate -thread option, which is equivalent to -I +threads.
   (Nicolás Ojeda Bär, report by Daniel Bünzli)
 
+- GPR#1667: add command-line options -no-propt, -no-version, -no-time,
+  -no-breakpoint and -topdirs-path to ocamldebug
+  (Sébastien Hinderer, review by Damien Doligez)
+
 ### Manual and documentation:
 
 - PR#7647, GPR#1384: emphasize ocaml.org website and forum in README
@@ -249,6 +253,10 @@ Working version
 - MPR#7679: make sure .a files are erased before calling ar rc, otherwise
   leftover .a files from an earlier compilation may contain unwanted modules
   (Xavier Leroy)
+
+- GPR#1571: do not perform architecture tests on 32-bit platforms, allowing
+  64-bit back-ends to use 64-bit specific constructs
+  (Xavier Clerc, review by Damien Doligez)
 
 ### Internal/compiler-libs changes:
 
