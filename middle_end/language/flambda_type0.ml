@@ -400,7 +400,15 @@ end) = struct
         (Targetint.OCaml.Map.print (print_singleton_block ~cache)) by_length
 
   and print_immediates ~cache ppf cases =
-    Immediate.Map.print (print_immediate_case ~cache) ppf cases
+    let no_equations =
+      Immediate.Map.for_all (fun _imm { equations; } ->
+          is_empty_equations equations)
+        cases
+    in
+    if no_equations then
+      Immediate.Set.print ppf (Immediate.Map.keys cases)
+    else
+      Immediate.Map.print (print_immediate_case ~cache) ppf cases
 
   and print_blocks ~cache ppf cases =
     Tag.Map.print (print_block_cases ~cache) ppf cases
