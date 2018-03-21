@@ -3723,12 +3723,6 @@ end;
       match closures with
       | Exactly map when Closure_id.Map.is_empty map -> Bottom
       | _ ->
-Format.eprintf "CLOSURES %b %b ELEMENTS %b %b\n%!"
-        (closures == set1.closures)
-        (closure_elements == set1.closure_elements)
-        (closures == set2.closures)
-        (closure_elements == set2.closure_elements);
-
         if closures == set1.closures
           && closure_elements == set1.closure_elements
         then
