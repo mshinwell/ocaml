@@ -1008,6 +1008,20 @@ end;
       raise Misc.Fatal_error
     end
 
+  let phys_equal_typing_environment env1 env2 =
+    env1 == env2
+      || (Name.Map.is_empty env1.names_to_types
+            && Name.Map.is_empty env2.names_to_types)
+
+  let phys_equal_equations { typing_judgements = typing_judgements1; }
+        { typing_judgements = typing_judgements2; } =
+    typing_judgements1 == typing_judgements2
+      || match typing_judgements1, typing_judgements2 with
+         | None, None -> true
+         | None, Some _ | Some _, None -> false
+         | Some env1, Some env2 ->
+           phys_equal_typing_environment env1 env2
+
   (* CR mshinwell: Move back to Flambda_type *)
   let free_names_transitive env t =
     let all_names = ref (Name_occurrences.create ()) in
@@ -2482,7 +2496,20 @@ end;
         | None, Some name2 ->
           let level2 = scope_level_typing_environment env2 name2 in
           normal_case ~names_to_bind:[name2, level2]
-        | None, None -> normal_case ~names_to_bind:[]
+        | None, None ->
+          let unknown_or_join, new_judgements =
+            meet_on_unknown_or_join env1 env2
+              unknown_or_join1 unknown_or_join2
+          in
+          if unknown_or_join == unknown_or_join1 then begin
+            assert (match or_alias1 with No_alias _ -> true | _ -> false);
+            or_alias1, new_judgements
+          end else if unknown_or_join == unknown_or_join2 then begin
+            assert (match or_alias2 with No_alias _ -> true | _ -> false);
+            or_alias2, new_judgements
+          end else begin
+            No_alias unknown_or_join, new_judgements
+          end
   end
 
   module rec Meet_and_join_value : sig
@@ -3095,6 +3122,27 @@ end;
     let force_to_kind = force_to_kind_fabricated
     let print_ty = print_ty_fabricated
 
+    type changes = Neither | Left | Right | Both
+
+    let join_changes (changes1 : changes) (changes2 : changes) =
+      match changes1, changes2 with
+      | Neither, Neither -> Neither
+      | Neither, Left -> Left
+      | Neither, Right -> Right
+      | Neither, Both -> Both
+      | Left, Neither -> Left
+      | Left, Left -> Left
+      | Left, Right -> Both
+      | Left, Both -> Both
+      | Right, Neither -> Right
+      | Right, Left -> Both
+      | Right, Right -> Right
+      | Right, Both -> Both
+      | Both, Neither -> Both
+      | Both, Left -> Both
+      | Both, Right -> Both
+      | Both, Both -> Both
+
     (* CR mshinwell: We need to work out how to stop direct call
        surrogates from being dropped e.g. when in a second round, a
        function type (with a surrogate) propagated from the first round is
@@ -3114,19 +3162,11 @@ end;
           let same_num_results =
             List.compare_lengths result1 result2 = 0
           in
-          let result_equations =
-            Meet_and_join.meet_equations ~resolver:env1.resolver
-              result_equations1 result_equations2
-          in
-          let result_or_equations_changed =
-            (* CR mshinwell: This should be improved *)
-            ref (not (is_empty_equations result_equations))
-          in
           let judgements = ref [] in
           let has_bottom params =
             List.exists is_obviously_bottom params
           in
-          let params_changed = ref false in
+          let params_changed = ref Neither in
           let params : _ Or_bottom.t =
             if not same_arity then Bottom
             else
@@ -3135,8 +3175,11 @@ end;
                     let t, new_judgements =
                       Meet_and_join.meet (env1, t1) (env2, t2)
                     in
-                    if not (t == t1 && t == t2) then begin
-                      params_changed := true
+                    if not (t == t1) then begin
+                      params_changed := join_changes !params_changed Left
+                    end;
+                    if not (t == t2) then begin
+                      params_changed := join_changes !params_changed Right
                     end;
                     judgements := new_judgements @ !judgements;
                     t)
@@ -3146,6 +3189,7 @@ end;
               if has_bottom params then Bottom
               else Ok params
           in
+          let result_changed = ref Neither in
           let result : _ Or_bottom.t =
             if not same_num_results then Bottom
             else
@@ -3158,8 +3202,11 @@ end;
                         (to_typing_environment_equations ~resolver:env2.resolver
                            result_equations2, t2)
                     in
-                    if not (t == t1 && t == t2) then begin
-                      result_or_equations_changed := true
+                    if not (t == t1) then begin
+                      result_changed := join_changes !result_changed Left
+                    end;
+                    if not (t == t2) then begin
+                      result_changed := join_changes !result_changed Right
                     end;
                     judgements := new_judgements @ !judgements;
                     t)
@@ -3169,10 +3216,30 @@ end;
               if has_bottom result then Bottom
               else Ok result
           in
+          let result_equations =
+            Meet_and_join.meet_equations ~resolver:env1.resolver
+              result_equations1 result_equations2
+          in
+          let result_equations_changed : changes =
+            let changed1 =
+              not (phys_equal_equations result_equations1 result_equations)
+            in
+            let changed2 =
+              not (phys_equal_equations result_equations2 result_equations)
+            in
+            match changed1, changed2 with
+            | false, false -> Neither
+            | true, false -> Left
+            | false, true -> Right
+            | true, true -> Both
+          in
           match params, result with
           | Ok params, Ok result ->
-            Ok (params, !params_changed, result, result_equations,
-                !result_or_equations_changed, !judgements)
+            let changed =
+              join_changes !params_changed
+                (join_changes !result_changed result_equations_changed)
+            in
+            Ok (params, changed, result, result_equations, !judgements)
           | _, _ -> Bottom
         in
         let function_decls : _ Or_bottom.t =
@@ -3188,8 +3255,7 @@ end;
                 ~result_equations2:inlinable2.result_equations
             in
             begin match result with
-            | Ok (params, params_changed, result, result_equations,
-                  result_or_equations_changed, judgements) ->
+            | Ok (params, changed, result, result_equations, judgements) ->
               (* [closure1.function_decls] and [closure2.function_decls] may be
                  different, but we cannot prove it.  We arbitrarily pick
                  [closure1.function_decls] to return, with parameter and result
@@ -3201,21 +3267,16 @@ end;
                   params
               in
               let inlinable_function_decl =
-                if params_changed then
+                match changed with
+                | Neither -> inlinable1
+                | Left -> inlinable2
+                | Right -> inlinable1
+                | Both ->
                   { inlinable1 with
                     params;
-                  }
-                else
-                  inlinable1
-              in
-              let inlinable_function_decl =
-                if result_or_equations_changed then
-                  { inlinable_function_decl with
                     result;
                     result_equations;
                   }
-                else
-                  inlinable_function_decl
               in
               Ok (Inlinable inlinable_function_decl, judgements)
             | Bottom ->
@@ -3246,7 +3307,7 @@ end;
             in
             begin match result with
             | Ok (params, _params_changed, result, result_equations,
-                  _result_or_equations_changed, judgements) ->
+                  judgements) ->
               let non_inlinable_function_decl =
                 { non_inlinable1 with
                   params;
@@ -3272,7 +3333,7 @@ end;
             in
             begin match result with
             | Ok (params, _params_changed, result, result_equations,
-                  _result_or_equations_changed, judgements) ->
+                  judgements) ->
               (* For the arbitrary choice, we pick the inlinable declaration,
                  since it gives more information. *)
               let params =
@@ -3814,7 +3875,9 @@ end;
             let ty_value, judgements =
               Meet_and_join_value.meet_ty env1 env2 ty_value1 ty_value2
             in
-            Value ty_value, judgements
+            if ty_value == ty_value1 then t1.descr, judgements
+            else if ty_value == ty_value2 then t2.descr, judgements
+            else Value ty_value, judgements
           | Naked_number (ty_naked_number1, kind1),
               Naked_number (ty_naked_number2, kind2) ->
             let module N = K.Naked_number in
@@ -3865,7 +3928,11 @@ end;
               print t1
               print t2
         in
-        let t = { t1 with descr; } in
+        let t =
+          if t1.descr == descr then t1
+          else if t2.descr == descr then t2
+          else { t1 with descr; }
+        in
         t, judgements
       end
 
