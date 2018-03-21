@@ -846,8 +846,10 @@ end) = struct
 let result =
     Name_occurrences.create_from_set_in_types (free_names_set t)
 in
+(*
 Format.eprintf "Free names %a from: %a\n%!"
   Name_occurrences.print result print t;
+*)
 result
 
   let create_typing_environment0 ~resolver ~must_be_closed =
