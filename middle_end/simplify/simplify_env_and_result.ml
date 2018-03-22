@@ -870,7 +870,7 @@ Format.eprintf "The joined environment for %a is:@ %a\n%!"
               let arg_number = ref 0 in
               List.map2 (fun joined_ty (param, this_ty) ->
                   let free_names_this_ty =
-                    T.free_names_transitive use_env this_ty
+                    TE.free_names_transitive use_env this_ty
                   in
                   Format.eprintf "Argument for %a:@ Type:@ %a@ \
                       Free names:@ %a@ Env:@ %a\n%!"

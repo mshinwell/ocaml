@@ -33,7 +33,7 @@ let simplify_name_for_let env r name =
   let name = Freshening.apply_name (E.freshening env) name in
   let ty = E.find_name env name in
   let ty, canonical_name =
-    T.resolve_aliases (E.get_typing_environment env, ty)
+    T.Typing_environment.resolve_aliases (E.get_typing_environment env, ty)
   in
   let name =
     match canonical_name with
@@ -54,7 +54,7 @@ let simplify_name env name =
   let name = Freshening.apply_name (E.freshening env) name in
   let ty = E.find_name env name in
   let ty, canonical_name =
-    T.resolve_aliases (E.get_typing_environment env, ty)
+    T.Typing_environment.resolve_aliases (E.get_typing_environment env, ty)
   in
   match canonical_name with
   | None -> name, ty

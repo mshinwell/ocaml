@@ -85,7 +85,8 @@ let simplify_static_part env (static_part : Static_part.t) : _ or_invalid =
           | Dynamically_computed var ->
             let ty = E.find_variable env var in
             let ty, canonical_name =
-              T.resolve_aliases (E.get_typing_environment env, ty)
+              T.Typing_environment.resolve_aliases
+                (E.get_typing_environment env, ty)
             in
             let canonical_var =
               match canonical_name with

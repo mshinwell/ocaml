@@ -455,7 +455,7 @@ end = struct
       | Join _ -> Unknown
 
   let create env (t : flambda_type) : t * (Name.t option) =
-    let t, canonical_name = resolve_aliases (env, t) in
+    let t, canonical_name = Typing_environment0.resolve_aliases (env, t) in
     let (descr : descr) =
       match t.descr with
       | Value ty_value ->
@@ -659,7 +659,7 @@ type reification_result =
   | Invalid
 
 let reify env ~allow_free_variables t : reification_result =
-  let t, canonical_name = resolve_aliases (env, t) in
+  let t, canonical_name = Typing_environment0.resolve_aliases (env, t) in
 (*
 Format.eprintf "CN is %a\n%!" (Misc.Stdlib.Option.print Name.print)
   canonical_name;
