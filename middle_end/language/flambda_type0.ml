@@ -852,6 +852,246 @@ Format.eprintf "Free names %a from: %a\n%!"
 *)
 result
 
+  let force_to_kind_value t =
+    match t.descr with
+    | Value ty_value -> ty_value
+    | Naked_number _
+    | Fabricated _ ->
+      Misc.fatal_errorf "Type has wrong kind (expected [Value]):@ %a"
+        print t
+
+  let force_to_kind_naked_immediate (t : t) : Immediate.Set.t ty_naked_number =
+    match t.descr with
+    | Naked_number (ty_naked_number, K.Naked_number.Naked_immediate) ->
+      ty_naked_number
+    | Naked_number _
+    | Fabricated _
+    | Value _ ->
+      Misc.fatal_errorf
+        "Type has wrong kind (expected [Naked_number Immediate]):@ %a"
+        print t
+
+  let force_to_kind_naked_float (t : t)
+        : Float_by_bit_pattern.Set.t ty_naked_number =
+    match t.descr with
+    | Naked_number (ty_naked_number, K.Naked_number.Naked_float) ->
+      ty_naked_number
+    | Naked_number _
+    | Fabricated _
+    | Value _ ->
+      Misc.fatal_errorf
+        "Type has wrong kind (expected [Naked_number Float]):@ %a"
+        print t
+
+  let force_to_kind_naked_int32 (t : t) : Int32.Set.t ty_naked_number =
+    match t.descr with
+    | Naked_number (ty_naked_number, K.Naked_number.Naked_int32) ->
+      ty_naked_number
+    | Naked_number _
+    | Fabricated _
+    | Value _ ->
+      Misc.fatal_errorf
+        "Type has wrong kind (expected [Naked_number Int32]):@ %a"
+        print t
+
+  let force_to_kind_naked_int64 (t : t) : Int64.Set.t ty_naked_number =
+    match t.descr with
+    | Naked_number (ty_naked_number, K.Naked_number.Naked_int64) ->
+      ty_naked_number
+    | Naked_number _
+    | Fabricated _
+    | Value _ ->
+      Misc.fatal_errorf
+        "Type has wrong kind (expected [Naked_number Int64]):@ %a"
+        print t
+
+  let force_to_kind_naked_nativeint (t : t) : Targetint.Set.t ty_naked_number =
+    match t.descr with
+    | Naked_number (ty_naked_number, K.Naked_number.Naked_nativeint) ->
+      ty_naked_number
+    | Naked_number _
+    | Fabricated _
+    | Value _ ->
+      Misc.fatal_errorf
+        "Type has wrong kind (expected [Naked_number Nativeint]):@ %a"
+        print t
+
+  let force_to_kind_naked_number (type n) (kind : n K.Naked_number.t) (t : t)
+        : n ty_naked_number =
+    match t.descr, kind with
+    | Naked_number (ty_naked_number, K.Naked_number.Naked_immediate),
+        K.Naked_number.Naked_immediate ->
+      ty_naked_number
+    | Naked_number (ty_naked_number, K.Naked_number.Naked_float),
+        K.Naked_number.Naked_float ->
+      ty_naked_number
+    | Naked_number (ty_naked_number, K.Naked_number.Naked_int32),
+        K.Naked_number.Naked_int32 ->
+      ty_naked_number
+    | Naked_number (ty_naked_number, K.Naked_number.Naked_int64),
+        K.Naked_number.Naked_int64 ->
+      ty_naked_number
+    | Naked_number (ty_naked_number, K.Naked_number.Naked_nativeint),
+        K.Naked_number.Naked_nativeint ->
+      ty_naked_number
+    | Naked_number _, _
+    | Fabricated _, _
+    | Value _, _ ->
+      Misc.fatal_errorf "Type has wrong kind (expected [Naked_number %a]):@ %a"
+        K.Naked_number.print kind
+        print t
+
+  let force_to_kind_fabricated t =
+    match t.descr with
+    | Fabricated ty_fabricated -> ty_fabricated
+    | Value _
+    | Naked_number _ ->
+      Misc.fatal_errorf "Type has wrong kind (expected [Fabricated]):@ %a"
+        print t
+
+  module Name_or_export_id = struct
+    type t =
+      | Name of Name.t
+      | Export_id of Export_id.t
+
+    include Identifiable.Make (struct
+      type nonrec t = t
+
+      let compare t1 t2 =
+        match t1, t2 with
+        | Name _, Export_id _ -> -1
+        | Export_id _, Name _ -> 1
+        | Name name1, Name name2 -> Name.compare name1 name2
+        | Export_id id1, Export_id id2 -> Export_id.compare id1 id2
+
+      let equal t1 t2 =
+        compare t1 t2 = 0
+ 
+      let hash t =
+        match t with
+        | Name name -> Hashtbl.hash (0, Name.hash name)
+        | Export_id id -> Hashtbl.hash (1, Export_id.hash id)
+
+      let print ppf t =
+        match t with
+        | Name name -> Name.print ppf name
+        | Export_id id -> Export_id.print ppf id
+    end)
+  end
+
+  type binding_type = Normal | Existential
+
+  let find_typing_environment env name =
+    match Name.Map.find name env.names_to_types with
+    | exception Not_found ->
+      Misc.fatal_errorf "Cannot find %a in environment:@ %a"
+        Name.print name
+        print_typing_environment env
+    | _scope_level, ty ->
+      let binding_type =
+        if Name.Set.mem name env.existentials then Existential
+        else Normal
+      in
+      match binding_type with
+      | Normal -> ty, Normal
+      | Existential ->
+   (* XXX     let ty = rename_variables t freshening in *)
+        ty, Existential
+
+  type still_unresolved =
+    | Resolved
+    | Still_unresolved
+
+  let resolve_aliases_on_ty0 (type a) env ~force_to_kind
+        (ty : a ty) : (a ty) * (Name.t option) * still_unresolved =
+    let rec resolve_aliases names_seen ~canonical_name (ty : a ty) =
+      let resolve (name : Name_or_export_id.t) : _ * _ * still_unresolved =
+        if Name_or_export_id.Set.mem name names_seen then begin
+          Misc.fatal_errorf "Loop on %a whilst resolving aliases"
+            Name_or_export_id.print name
+        end;
+        let continue_resolving t ~canonical_name =
+          let names_seen = Name_or_export_id.Set.add name names_seen in
+          let ty = force_to_kind t in
+          resolve_aliases names_seen ~canonical_name ty
+        in
+        match name with
+        | Name name ->
+          let t, _binding_type = find_typing_environment env name in
+          continue_resolving t ~canonical_name:(Some name)
+        | Export_id export_id ->
+          match env.resolver export_id with
+          | Some t -> continue_resolving t ~canonical_name
+          | None -> ty, None, Still_unresolved
+      in
+      match ty with
+      | No_alias _ -> ty, canonical_name, Resolved
+      | Type export_id -> resolve (Name_or_export_id.Export_id export_id)
+      | Equals name ->
+(*
+        Format.eprintf "recursing on %a, seen %a\n%!" Name.print name
+          Name_or_export_id.Set.print names_seen;
+*)
+        resolve (Name_or_export_id.Name name)
+    in
+    resolve_aliases Name_or_export_id.Set.empty ~canonical_name:None ty
+
+  let resolve_aliases_on_ty env ~force_to_kind ty =
+    let t, canonical_name, _still_unresolved =
+      resolve_aliases_on_ty0 env ~force_to_kind ty
+    in
+    t, canonical_name
+
+  let resolve_aliases_and_squash_unresolved_names_on_ty env ~kind:_
+        ~force_to_kind ~unknown ty =
+    let ty, canonical_name, still_unresolved =
+      resolve_aliases_on_ty0 env ~force_to_kind ty
+    in
+    match still_unresolved with
+    | Resolved -> ty, canonical_name
+    | Still_unresolved -> unknown, canonical_name
+
+  (* CR mshinwell: choose this function or the one above *)
+  let resolve_aliases_and_squash_unresolved_names_on_ty' env ~kind:_
+        ~print_ty ~force_to_kind ~unknown:_ ty
+        : _ unknown_or_join * (Name.t option) =
+    let ty, canonical_name, _still_unresolved =
+      try resolve_aliases_on_ty0 env ~force_to_kind ty
+      with Misc.Fatal_error -> begin
+        Format.eprintf "\n%sContext is: \
+            resolve_aliases_and_squash_unresolved_names_on_ty':%s\
+            @ %a@ Environment:@ %a\n"
+          (Misc_color.bold_red ())
+          (Misc_color.reset ())
+          print_ty ty
+          print_typing_environment env;
+        raise Misc.Fatal_error
+      end
+    in
+    match ty with
+    | No_alias uoj -> uoj, canonical_name
+    | Type _ | Equals _ -> Unknown, canonical_name
+
+  (* CR mshinwell: this should return not just the canonical name but all
+     other aliases encountered, so the meet functions can add judgements
+     for those. *)
+  let resolve_aliases (env, t) : t * (Name.t option) =
+    match t.descr with
+    | Value ty ->
+      let force_to_kind = force_to_kind_value in
+      let ty, canonical_name =
+        resolve_aliases_on_ty env ~force_to_kind ty
+      in
+      { t with descr = Value ty; }, canonical_name
+    | Naked_number (ty, kind) ->
+      let force_to_kind = force_to_kind_naked_number kind in
+      let ty, canonical_name = resolve_aliases_on_ty env ~force_to_kind ty in
+      { t with descr = Naked_number (ty, kind); }, canonical_name
+    | Fabricated ty ->
+      let force_to_kind = force_to_kind_fabricated in
+      let ty, canonical_name = resolve_aliases_on_ty env ~force_to_kind ty in
+      { t with descr = Fabricated ty; }, canonical_name
+
   let create_typing_environment0 ~resolver ~must_be_closed =
     let existential_freshening = Freshening.activate Freshening.empty in
     { must_be_closed;
@@ -903,10 +1143,16 @@ result
            | Some names -> Some (Name.Set.add name names))
         env.levels_to_names
     in
-    { env with
-      names_to_types;
-      levels_to_names;
-    }
+    let env =
+      { env with
+        names_to_types;
+        levels_to_names;
+      }
+    in
+    match resolve_aliases (env, t) with
+    | _t, None -> env
+    | _t, Some canonical_name ->
+      add_alias_typing_environment env ~canonical_name ~alias:name
 
   let invariant_typing_environment env =
     if !Clflags.flambda_invariant_checks && env.must_be_closed then begin
@@ -949,25 +1195,6 @@ end;
       end
     end;
     add_or_replace_typing_environment' env name scope_level t
-
-  type binding_type = Normal | Existential
-
-  let find_typing_environment env name =
-    match Name.Map.find name env.names_to_types with
-    | exception Not_found ->
-      Misc.fatal_errorf "Cannot find %a in environment:@ %a"
-        Name.print name
-        print_typing_environment env
-    | _scope_level, ty ->
-      let binding_type =
-        if Name.Set.mem name env.existentials then Existential
-        else Normal
-      in
-      match binding_type with
-      | Normal -> ty, Normal
-      | Existential ->
-   (* XXX     let ty = rename_variables t freshening in *)
-        ty, Existential
 
   let scope_level_typing_environment env name =
     match Name.Map.find name env.names_to_types with
@@ -1096,36 +1323,6 @@ end;
             into an [In_types]"
           print t
       end
-
-  module Name_or_export_id = struct
-    type t =
-      | Name of Name.t
-      | Export_id of Export_id.t
-
-    include Identifiable.Make (struct
-      type nonrec t = t
-
-      let compare t1 t2 =
-        match t1, t2 with
-        | Name _, Export_id _ -> -1
-        | Export_id _, Name _ -> 1
-        | Name name1, Name name2 -> Name.compare name1 name2
-        | Export_id id1, Export_id id2 -> Export_id.compare id1 id2
-
-      let equal t1 t2 =
-        compare t1 t2 = 0
- 
-      let hash t =
-        match t with
-        | Name name -> Hashtbl.hash (0, Name.hash name)
-        | Export_id id -> Hashtbl.hash (1, Export_id.hash id)
-
-      let print ppf t =
-        match t with
-        | Name name -> Name.print ppf name
-        | Export_id id -> Export_id.print ppf id
-    end)
-  end
 
   type 'a type_accessor = typing_environment -> 'a
 
@@ -1863,103 +2060,6 @@ end;
   let any_boxed_int64 () = box_int64 (any_naked_int64 ())
   let any_boxed_nativeint () = box_nativeint (any_naked_nativeint ())
 
-  let force_to_kind_value t =
-    match t.descr with
-    | Value ty_value -> ty_value
-    | Naked_number _
-    | Fabricated _ ->
-      Misc.fatal_errorf "Type has wrong kind (expected [Value]):@ %a"
-        print t
-
-  let force_to_kind_naked_immediate (t : t) : Immediate.Set.t ty_naked_number =
-    match t.descr with
-    | Naked_number (ty_naked_number, K.Naked_number.Naked_immediate) ->
-      ty_naked_number
-    | Naked_number _
-    | Fabricated _
-    | Value _ ->
-      Misc.fatal_errorf
-        "Type has wrong kind (expected [Naked_number Immediate]):@ %a"
-        print t
-
-  let force_to_kind_naked_float (t : t)
-        : Float_by_bit_pattern.Set.t ty_naked_number =
-    match t.descr with
-    | Naked_number (ty_naked_number, K.Naked_number.Naked_float) ->
-      ty_naked_number
-    | Naked_number _
-    | Fabricated _
-    | Value _ ->
-      Misc.fatal_errorf
-        "Type has wrong kind (expected [Naked_number Float]):@ %a"
-        print t
-
-  let force_to_kind_naked_int32 (t : t) : Int32.Set.t ty_naked_number =
-    match t.descr with
-    | Naked_number (ty_naked_number, K.Naked_number.Naked_int32) ->
-      ty_naked_number
-    | Naked_number _
-    | Fabricated _
-    | Value _ ->
-      Misc.fatal_errorf
-        "Type has wrong kind (expected [Naked_number Int32]):@ %a"
-        print t
-
-  let force_to_kind_naked_int64 (t : t) : Int64.Set.t ty_naked_number =
-    match t.descr with
-    | Naked_number (ty_naked_number, K.Naked_number.Naked_int64) ->
-      ty_naked_number
-    | Naked_number _
-    | Fabricated _
-    | Value _ ->
-      Misc.fatal_errorf
-        "Type has wrong kind (expected [Naked_number Int64]):@ %a"
-        print t
-
-  let force_to_kind_naked_nativeint (t : t) : Targetint.Set.t ty_naked_number =
-    match t.descr with
-    | Naked_number (ty_naked_number, K.Naked_number.Naked_nativeint) ->
-      ty_naked_number
-    | Naked_number _
-    | Fabricated _
-    | Value _ ->
-      Misc.fatal_errorf
-        "Type has wrong kind (expected [Naked_number Nativeint]):@ %a"
-        print t
-
-  let force_to_kind_naked_number (type n) (kind : n K.Naked_number.t) (t : t)
-        : n ty_naked_number =
-    match t.descr, kind with
-    | Naked_number (ty_naked_number, K.Naked_number.Naked_immediate),
-        K.Naked_number.Naked_immediate ->
-      ty_naked_number
-    | Naked_number (ty_naked_number, K.Naked_number.Naked_float),
-        K.Naked_number.Naked_float ->
-      ty_naked_number
-    | Naked_number (ty_naked_number, K.Naked_number.Naked_int32),
-        K.Naked_number.Naked_int32 ->
-      ty_naked_number
-    | Naked_number (ty_naked_number, K.Naked_number.Naked_int64),
-        K.Naked_number.Naked_int64 ->
-      ty_naked_number
-    | Naked_number (ty_naked_number, K.Naked_number.Naked_nativeint),
-        K.Naked_number.Naked_nativeint ->
-      ty_naked_number
-    | Naked_number _, _
-    | Fabricated _, _
-    | Value _, _ ->
-      Misc.fatal_errorf "Type has wrong kind (expected [Naked_number %a]):@ %a"
-        K.Naked_number.print kind
-        print t
-
-  let force_to_kind_fabricated t =
-    match t.descr with
-    | Fabricated ty_fabricated -> ty_fabricated
-    | Value _
-    | Naked_number _ ->
-      Misc.fatal_errorf "Type has wrong kind (expected [Fabricated]):@ %a"
-        print t
-
   let kind (t : t) =
     match t.phantom with
     | None ->
@@ -2003,100 +2103,6 @@ end;
 
   let bottom_like t = bottom (kind t)
   let unknown_like t = unknown (kind t)
-
-  type still_unresolved =
-    | Resolved
-    | Still_unresolved
-
-  let resolve_aliases_on_ty0 (type a) env ~force_to_kind
-        (ty : a ty) : (a ty) * (Name.t option) * still_unresolved =
-    let rec resolve_aliases names_seen ~canonical_name (ty : a ty) =
-      let resolve (name : Name_or_export_id.t) : _ * _ * still_unresolved =
-        if Name_or_export_id.Set.mem name names_seen then begin
-          Misc.fatal_errorf "Loop on %a whilst resolving aliases"
-            Name_or_export_id.print name
-        end;
-        let continue_resolving t ~canonical_name =
-          let names_seen = Name_or_export_id.Set.add name names_seen in
-          let ty = force_to_kind t in
-          resolve_aliases names_seen ~canonical_name ty
-        in
-        match name with
-        | Name name ->
-          let t, _binding_type = find_typing_environment env name in
-          continue_resolving t ~canonical_name:(Some name)
-        | Export_id export_id ->
-          match env.resolver export_id with
-          | Some t -> continue_resolving t ~canonical_name
-          | None -> ty, None, Still_unresolved
-      in
-      match ty with
-      | No_alias _ -> ty, canonical_name, Resolved
-      | Type export_id -> resolve (Name_or_export_id.Export_id export_id)
-      | Equals name ->
-(*
-        Format.eprintf "recursing on %a, seen %a\n%!" Name.print name
-          Name_or_export_id.Set.print names_seen;
-*)
-        resolve (Name_or_export_id.Name name)
-    in
-    resolve_aliases Name_or_export_id.Set.empty ~canonical_name:None ty
-
-  let resolve_aliases_on_ty env ~force_to_kind ty =
-    let t, canonical_name, _still_unresolved =
-      resolve_aliases_on_ty0 env ~force_to_kind ty
-    in
-    t, canonical_name
-
-  let resolve_aliases_and_squash_unresolved_names_on_ty env ~kind:_
-        ~force_to_kind ~unknown ty =
-    let ty, canonical_name, still_unresolved =
-      resolve_aliases_on_ty0 env ~force_to_kind ty
-    in
-    match still_unresolved with
-    | Resolved -> ty, canonical_name
-    | Still_unresolved -> unknown, canonical_name
-
-  (* CR mshinwell: choose this function or the one above *)
-  let resolve_aliases_and_squash_unresolved_names_on_ty' env ~kind:_
-        ~print_ty ~force_to_kind ~unknown:_ ty
-        : _ unknown_or_join * (Name.t option) =
-    let ty, canonical_name, _still_unresolved =
-      try resolve_aliases_on_ty0 env ~force_to_kind ty
-      with Misc.Fatal_error -> begin
-        Format.eprintf "\n%sContext is: \
-            resolve_aliases_and_squash_unresolved_names_on_ty':%s\
-            @ %a@ Environment:@ %a\n"
-          (Misc_color.bold_red ())
-          (Misc_color.reset ())
-          print_ty ty
-          print_typing_environment env;
-        raise Misc.Fatal_error
-      end
-    in
-    match ty with
-    | No_alias uoj -> uoj, canonical_name
-    | Type _ | Equals _ -> Unknown, canonical_name
-
-  (* CR mshinwell: this should return not just the canonical name but all
-     other aliases encountered, so the meet functions can add judgements
-     for those. *)
-  let resolve_aliases (env, t) : t * (Name.t option) =
-    match t.descr with
-    | Value ty ->
-      let force_to_kind = force_to_kind_value in
-      let ty, canonical_name =
-        resolve_aliases_on_ty env ~force_to_kind ty
-      in
-      { t with descr = Value ty; }, canonical_name
-    | Naked_number (ty, kind) ->
-      let force_to_kind = force_to_kind_naked_number kind in
-      let ty, canonical_name = resolve_aliases_on_ty env ~force_to_kind ty in
-      { t with descr = Naked_number (ty, kind); }, canonical_name
-    | Fabricated ty ->
-      let force_to_kind = force_to_kind_fabricated in
-      let ty, canonical_name = resolve_aliases_on_ty env ~force_to_kind ty in
-      { t with descr = Fabricated ty; }, canonical_name
 
   let _resolve_aliases_and_squash_unresolved_names (env, t)
         : t * (Name.t option) =
@@ -4580,7 +4586,6 @@ Format.eprintf "Result is: %a\n%!"
 *)
       result
 
-    let add_alias = add_alias_typing_environment
     let aliases = aliases_typing_environment
 
     let meet = Meet_and_join.meet_typing_environment
@@ -4749,32 +4754,6 @@ Format.eprintf "Result is: %a\n%!"
             Some (Typing_environment0.add_or_replace_meet typing_judgements
               name scope_level ty);
         }
-
-(*
-    let meet_with_environment t env =
-      let typing_judgements =
-        match t.typing_judgements with
-        | None -> env
-        | Some typing_judgements ->
-          Typing_environment0.meet typing_judgements env
-      in
-      { typing_judgements = Some typing_judgements;
-      }
-*)
-
-    let add_alias ~resolver t ~canonical_name ~alias =
-      let typing_judgements =
-        match t.typing_judgements with
-        | None ->
-          let typing_judgements =
-            create_typing_environment0 ~resolver ~must_be_closed:false
-          in
-          Typing_environment0.add_alias typing_judgements ~canonical_name ~alias
-        | Some typing_judgements ->
-          Typing_environment0.add_alias typing_judgements ~canonical_name ~alias
-      in
-      { typing_judgements = Some typing_judgements;
-      }
 
     let meet = Meet_and_join.meet_equations
 

@@ -329,10 +329,7 @@ let try_to_reify env r ty ~(term : Flambda.Reachable.t) ~result_var
 let simplify_named env r (tree : Named.t) ~result_var =
   match tree with
   | Simple simple ->
-    let simple, ty, r =
-      Simplify_simple.simplify_simple_for_let env r
-        ~bound_name:(Name.var result_var) simple
-    in
+    let simple, ty, r = Simplify_simple.simplify_simple_for_let env r simple in
     [], Flambda.Reachable.reachable (Simple simple), ty, r
   | Read_mutable mut_var ->
     (* See comment on the [Assign] case. *)

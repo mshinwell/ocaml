@@ -343,13 +343,6 @@ module type S = sig
       -> flambda_type
       -> t
 
-    val add_alias
-       : resolver:(Export_id.t -> flambda_type option)
-      -> t
-      -> canonical_name:Name.t
-      -> alias:Name.t
-      -> t
-
     val meet : resolver:(Export_id.t -> flambda_type option) -> t -> t -> t
 
     val equal
@@ -456,8 +449,6 @@ module type S = sig
     val print : Format.formatter -> t -> unit
 
     val resolver : t -> (Export_id.t -> flambda_type option)
-
-    val add_alias : t -> canonical_name:Name.t -> alias:Name.t -> t
 
     val aliases : t -> canonical_name:Name.t -> Name.Set.t
 

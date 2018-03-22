@@ -1367,15 +1367,6 @@ Format.eprintf "The joined arg tys for %a are:@ %a\n%!"
       equations = T.Equations.create ();
     }
 
-  let add_alias t ~canonical_name ~alias =
-    let equations =
-      T.Equations.add_alias ~resolver:t.resolver
-        t.equations ~canonical_name ~alias
-    in
-    { t with
-      equations;
-    }
-
   let add_or_meet_equation t name scope_level ty =
     let equations =
       T.Equations.add_or_replace_meet ~resolver:t.resolver

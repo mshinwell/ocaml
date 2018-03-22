@@ -622,8 +622,6 @@ module type Result = sig
 
   val clear_equations : t -> t
 
-  val add_alias : t -> canonical_name:Name.t -> alias:Name.t -> t
-
   val add_or_meet_equation : t -> Name.t -> Scope_level.t -> Flambda_type.t -> t
 
   val add_or_meet_equations : t -> Flambda_type.Equations.t -> t

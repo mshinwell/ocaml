@@ -17,7 +17,6 @@
 [@@@ocaml.warning "+a-4-9-30-40-41-42"]
 
 module E = Simplify_env_and_result.Env
-module R = Simplify_env_and_result.Result
 module T = Flambda_type
 
 let type_for_const (const : Simple.Const.t) =
@@ -30,7 +29,7 @@ let type_for_const (const : Simple.Const.t) =
   | Naked_int64 n -> T.this_naked_int64 n
   | Naked_nativeint n -> T.this_naked_nativeint n
 
-let simplify_name_for_let env r ~bound_name name =
+let simplify_name_for_let env r name =
   let name = Freshening.apply_name (E.freshening env) name in
   let ty = E.find_name env name in
   let ty, canonical_name =
@@ -41,20 +40,14 @@ let simplify_name_for_let env r ~bound_name name =
     | None -> name
     | Some canonical_name -> canonical_name
   in
-  let r = R.add_alias r ~canonical_name:name ~alias:bound_name in
   name, T.alias_type_of (T.kind ty) name, r
 
-let simplify_simple_for_let env r ~bound_name (simple : Simple.t) =
+let simplify_simple_for_let env r (simple : Simple.t) =
   match simple with
   | Const c -> simple, type_for_const c, r
   | Discriminant t -> simple, T.this_discriminant t, r
   | Name name ->
-let orig_name = name in
-    let name, ty, r = simplify_name_for_let env r ~bound_name name in
-Format.eprintf "simplify_simple_for_let %a --> %a : %a\n%!"
-  Name.print orig_name
-  Name.print name
-  T.print ty;
+    let name, ty, r = simplify_name_for_let env r name in
     Simple.name name, ty, r
 
 let simplify_name env name =
@@ -68,17 +61,6 @@ let simplify_name env name =
   | Some canonical_name -> canonical_name, ty
 
 let simplify_simple env (simple : Simple.t) =
-(*
-let orig_ty =
-  match simple with
-  | Const c -> type_for_const c
-  | Tag t -> T.this_tag t
-  | Name name ->
-    let name = Freshening.apply_name (E.freshening env) name in
-    E.find_name env name
-in
-*)
-let new_simple, ty =
   match simple with
   | Const c -> simple, type_for_const c
   | Discriminant t -> simple, T.this_discriminant t
@@ -94,15 +76,6 @@ let new_simple, ty =
     | Term (simple, ty) -> simple, ty
     | Cannot_reify | Lift _ -> Simple.name name, ty
     | Invalid -> Simple.name name, T.bottom_like ty
-in
-(*
-Format.eprintf "simplify_simple %a : %a --> %a : %a\n%!"
-  Simple.print simple
-  T.print orig_ty
-  Simple.print new_simple
-  T.print ty;
-*)
-new_simple, ty
 
 let simplify_simples env simples =
   List.map (fun simple -> simplify_simple env simple) simples
