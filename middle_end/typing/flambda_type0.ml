@@ -3240,7 +3240,8 @@ end;
         Ok (closure1, create_equations ())
       end else begin
         let resolver = env1.resolver in
-        let cannot_prove_different ~params1 ~params2 ~result1 ~result2
+        let cannot_prove_different ~params1 ~params2
+              ~param_names1 ~param_names2 ~result1 ~result2
               ~result_equations1 ~result_equations2 : _ Or_bottom.t =
           let same_arity = List.compare_lengths params1 params2 = 0 in
           let same_num_results = List.compare_lengths result1 result2 = 0 in
@@ -3271,18 +3272,45 @@ end;
               if has_bottom params then Bottom
               else Ok params
           in
+          let env_for_result env ~params ~param_names =
+            match param_names with
+            | None -> env
+            | Some param_names ->
+              List.fold_left2 (fun env param param_ty ->
+                  let param_name = Parameter.name param in
+                  let level = Scope_level.initial in
+                  add_typing_environment env param_name level param_ty)
+                env
+                param_names params
+          in
           let result_changed = ref Neither in
           let result : _ Or_bottom.t =
             if not same_num_results then Bottom
             else
               let result =
                 List.map2 (fun t1 t2 ->
+                    let result_equations1 =
+                      to_typing_environment_equations ~resolver:env1.resolver
+                       result_equations1
+                    in
+                    let result_equations2 =
+                      to_typing_environment_equations ~resolver:env1.resolver
+                       result_equations2
+                    in
+                    let result_env1 =
+                      Meet_and_join.meet_typing_environment
+                        (env_for_result env1 ~params:params1
+                          ~param_names:param_names1)
+                        result_equations1
+                    in
+                    let result_env2 =
+                      Meet_and_join.meet_typing_environment
+                        (env_for_result env2 ~params:params2
+                          ~param_names:param_names2)
+                        result_equations2
+                    in
                     let t, new_equations_from_meet =
-                      Meet_and_join.meet
-                        (to_typing_environment_equations ~resolver:env1.resolver
-                           result_equations1, t1)
-                        (to_typing_environment_equations ~resolver:env2.resolver
-                           result_equations2, t2)
+                      Meet_and_join.meet (result_env1, t1) (result_env2, t2)
                     in
                     if not (t == t1) then begin
                       result_changed := join_changes !result_changed Left
@@ -3331,8 +3359,12 @@ end;
           | Inlinable inlinable1, Inlinable inlinable2 ->
             let params1 = List.map snd inlinable1.params in
             let params2 = List.map snd inlinable2.params in
+            let param_names1 = List.map fst inlinable1.params in
+            let param_names2 = List.map fst inlinable2.params in
             let result =
               cannot_prove_different ~params1 ~params2
+                ~param_names1:(Some param_names1)
+                ~param_names2:(Some param_names2)
                 ~result1:inlinable1.result
                 ~result2:inlinable2.result
                 ~result_equations1:inlinable1.result_equations
@@ -3383,6 +3415,8 @@ end;
               cannot_prove_different
                 ~params1:non_inlinable1.params
                 ~params2:non_inlinable2.params
+                ~param_names1:None
+                ~param_names2:None
                 ~result1:non_inlinable1.result
                 ~result2:non_inlinable2.result
                 ~result_equations1:non_inlinable1.result_equations
@@ -3406,10 +3440,13 @@ end;
           | Non_inlinable (Some non_inlinable), Inlinable inlinable
           | Inlinable inlinable, Non_inlinable (Some non_inlinable) ->
             let params1 = List.map snd inlinable.params in
+            let param_names1 = List.map fst inlinable.params in
             let result =
               cannot_prove_different
                 ~params1
                 ~params2:non_inlinable.params
+                ~param_names1:(Some param_names1)
+                ~param_names2:None
                 ~result1:inlinable.result
                 ~result2:non_inlinable.result
                 ~result_equations1:inlinable.result_equations
@@ -3470,6 +3507,8 @@ end;
                 params1
                 params2
             in
+            (* XXX needs fixing as regards environments for the result, see
+               meet function above *)
             let result =
               List.map2 (fun t1 t2 ->
                   Meet_and_join.join
@@ -4308,19 +4347,23 @@ Format.eprintf "JOIN %a and %a -> %a\n%!"
       meet_typing_environment env equations_from_meet
 
     and meet_typing_environment env1 env2 =
-      try
-        meet_typing_environment0 env1 env2
-      with Misc.Fatal_error -> begin
-        Format.eprintf "\n%sContext is: meeting two typing environments:%s\
-            @ %a\n\n%sand%s:@ %a\n"
-          (Misc_color.bold_red ())
-          (Misc_color.reset ())
-          print_typing_environment env1
-          (Misc_color.bold_red ())
-          (Misc_color.reset ())
-          print_typing_environment env2;
-        raise Misc.Fatal_error
-      end
+      if env1 == env2 then env1
+      else if is_empty_typing_environment env1 then env2
+      else if is_empty_typing_environment env2 then env1
+      else
+        try
+          meet_typing_environment0 env1 env2
+        with Misc.Fatal_error -> begin
+          Format.eprintf "\n%sContext is: meeting two typing environments:%s\
+              @ %a\n\n%sand%s:@ %a\n"
+            (Misc_color.bold_red ())
+            (Misc_color.reset ())
+            print_typing_environment env1
+            (Misc_color.bold_red ())
+            (Misc_color.reset ())
+            print_typing_environment env2;
+          raise Misc.Fatal_error
+        end
 
     let replace_meet_typing_environment env name (ty_env, ty) =
       match Name.Map.find name env.names_to_types with
