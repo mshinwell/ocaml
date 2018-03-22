@@ -270,7 +270,8 @@ MIDDLE_END_BASE_TYPES=\
   middle_end/base_types/set_of_closures_id.cmo \
   middle_end/base_types/set_of_closures_origin.cmo \
   middle_end/base_types/var_within_closure.cmo \
-  middle_end/base_types/or_bottom.cmo
+  middle_end/base_types/or_bottom.cmo \
+  middle_end/language/name_occurrences.cmo
 
 MIDDLE_END_CODE_MOTION=\
   middle_end/code_motion/lift_let_cont.cmo \
@@ -304,19 +305,18 @@ MIDDLE_END_INLINING=\
   # middle_end/inlining/continuation_specialisation.cmo \
   # middle_end/inlining/continuation_with_specialised_args.cmo \
 
-MIDDLE_END_LANGUAGE=\
-  middle_end/language/flambda_kind.cmo \
+MIDDLE_END_LANGUAGE_AND_TYPING=\
+  middle_end/typing/flambda_kind.cmo \
   middle_end/language/simple.cmo \
   middle_end/language/freshening.cmo \
-  middle_end/language/name_occurrences.cmo \
-  middle_end/language/flambda_arity.cmo \
+  middle_end/typing/flambda_arity.cmo \
   middle_end/language/flambda_primitive.cmo \
   middle_end/language/allocated_const.cmo \
-  middle_end/language/flambda_type0_intf.cmo \
-  middle_end/language/flambda_type0.cmo \
+  middle_end/typing/flambda_type0_intf.cmo \
+  middle_end/typing/flambda_type0.cmo \
   middle_end/language/flambda0.cmo \
   middle_end/language/flambda_static0.cmo \
-  middle_end/language/flambda_type.cmo \
+  middle_end/typing/flambda_type.cmo \
   middle_end/language/number_adjuncts.cmo \
   middle_end/language/invariant_env.cmo \
   middle_end/language/flambda.cmo \
