@@ -3722,42 +3722,53 @@ result
               let blocks : _ or_unknown =
                 match blocks with
                 | Unknown -> Unknown
-                | Known blocks ->
-                  let blocks =
-                    Tag.Map.map
-                      (fun ((Blocks { by_length }) : block_cases)
-                            : block_cases ->
-                        let by_length =
-                          Targetint.OCaml.Map.map
-                            (fun (block : singleton_block) : singleton_block ->
-                              let equations =
-                                Equations.meet ~resolver:env.resolver
-                                  block.equations equations_to_add
-                              in
-                              { block with equations; })
-                            by_length
-                        in
-                        Blocks { by_length; })
-                      blocks
+                | (Known blocks) as blocks' ->
+                  let only_one_case =
+                    match Tag.Map.get_singleton blocks with
+                    | None -> false
+                    | Some (_, Blocks { by_length; }) ->
+                      Targetint.OCaml.Map.cardinal by_length = 1
                   in
-                  Known blocks
+                  if only_one_case then blocks'
+                  else
+                    let blocks =
+                      Tag.Map.map
+                        (fun ((Blocks { by_length }) : block_cases)
+                              : block_cases ->
+                          let by_length =
+                            Targetint.OCaml.Map.map
+                              (fun (block : singleton_block)
+                                    : singleton_block ->
+                                let equations =
+                                  Equations.meet ~resolver:env.resolver
+                                    block.equations equations_to_add
+                                in
+                                { block with equations; })
+                              by_length
+                          in
+                          Blocks { by_length; })
+                        blocks
+                    in
+                    Known blocks
               in
               let immediates : _ or_unknown =
                 match immediates with
                 | Unknown -> Unknown
                 | Known imm_map ->
-                  let imm_map =
-                    Immediate.Map.map
-                      (fun ({ equations; } : immediate_case)
-                            : immediate_case ->
-                        let equations =
-                          Equations.meet ~resolver:env.resolver
-                            equations equations_to_add
-                        in
-                        { equations; })
-                      imm_map
-                  in
-                  Known imm_map
+                  if Immediate.Map.cardinal imm_map <= 1 then immediates
+                  else
+                    let imm_map =
+                      Immediate.Map.map
+                        (fun ({ equations; } : immediate_case)
+                              : immediate_case ->
+                          let equations =
+                            Equations.meet ~resolver:env.resolver
+                              equations equations_to_add
+                          in
+                          { equations; })
+                        imm_map
+                    in
+                    Known imm_map
               in
               Blocks_and_tagged_immediates { blocks; immediates; is_int;
                 get_tag; }
@@ -3773,18 +3784,21 @@ result
           (fun (of_kind_fabricated : of_kind_fabricated) : of_kind_fabricated ->
             match of_kind_fabricated with
             | Discriminant discriminant_map ->
-              let discriminant_map =
-                Discriminant.Map.map
-                  (fun ({ equations; } : discriminant_case)
-                        : discriminant_case ->
-                    let equations =
-                      Equations.meet ~resolver:env.resolver
-                        equations equations_to_add
-                    in
-                    { equations; })
-                  discriminant_map
-              in
-              Discriminant discriminant_map
+              if Discriminant.Map.cardinal discriminant_map <= 1 then
+                of_kind_fabricated
+              else
+                let discriminant_map =
+                  Discriminant.Map.map
+                    (fun ({ equations; } : discriminant_case)
+                          : discriminant_case ->
+                      let equations =
+                        Equations.meet ~resolver:env.resolver
+                          equations equations_to_add
+                      in
+                      { equations; })
+                    discriminant_map
+                in
+                Discriminant discriminant_map
             | Set_of_closures _
             | Closure _ -> of_kind_fabricated)
           of_kind_fabricateds
