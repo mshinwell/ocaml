@@ -36,8 +36,6 @@ val unknown_like_array : t array -> t array
 (* CR mshinwell: and bound ones too, now... *)
 val rename_variables : t -> f:(Variable.t -> Variable.t) -> t
 
-val free_names_transitive_list : (t list -> Name_occurrences.t) type_accessor
-
 (** Building of types and terms representing tagged / boxed values from
     specified constants. *)
 val this_tagged_bool_named : bool -> Flambda0.Named.t * t
@@ -287,9 +285,4 @@ module Typing_environment : sig
       for which [t2] is known to specify an equally precise, or less precise,
       type. *)
   val diff : t -> t -> Equations.t
-
-  val restrict_names_to_those_occurring_in_types
-     : t
-    -> flambda_type list
-    -> t
 end

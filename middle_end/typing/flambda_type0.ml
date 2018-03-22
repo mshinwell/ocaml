@@ -1295,7 +1295,6 @@ end;
          | Some env1, Some env2 ->
            phys_equal_typing_environment env1 env2
 
-  (* CR mshinwell: Move back to Flambda_type *)
   let free_names_transitive env t =
     let all_names = ref (Name_occurrences.create ()) in
     let rec loop to_follow =
@@ -1310,6 +1309,12 @@ end;
     loop (free_names t);
     !all_names
 
+  let free_names_transitive_list env ts =
+    List.fold_left (fun names t ->
+        Name_occurrences.union names (free_names_transitive env t))
+      (Name_occurrences.create ())
+      ts
+
   let create_equations () =
     { typing_judgements = None;
     }
@@ -1320,12 +1325,23 @@ end;
           ~must_be_closed:false);
     }
 
+(*
   let add_equations ~resolver t name scope_level ty =
     match t.typing_judgements with
     | None -> singleton_equations ~resolver name scope_level ty
     | Some typing_judgements ->
       { typing_judgements =
           Some (add_typing_environment typing_judgements name scope_level ty);
+      }
+*)
+
+  let add_or_replace_equations ~resolver t name scope_level ty =
+    match t.typing_judgements with
+    | None -> singleton_equations ~resolver name scope_level ty
+    | Some typing_judgements ->
+      { typing_judgements =
+          Some (add_or_replace_typing_environment typing_judgements name
+            scope_level ty);
       }
 
   let ty_is_obviously_bottom (ty : _ ty) =
@@ -2465,6 +2481,7 @@ end;
           (ou1 : S.of_kind_foo unknown_or_join)
           (ou2 : S.of_kind_foo unknown_or_join)
           : S.of_kind_foo unknown_or_join * equations =
+      let resolver = env1.resolver in
       if env1 == env2 && ou1 == ou2 then ou1, create_equations ()
       else
         match ou1, ou2 with
@@ -2483,15 +2500,15 @@ end;
                       match meet with
                       | Ok (of_kind_foo, new_equations_from_meet') ->
                         new_equations_from_meet :=
-                          Meet_and_join.meet_equations
+                          Meet_and_join.meet_equations ~resolver
                             new_equations_from_meet' !new_equations_from_meet;
                         Some of_kind_foo
                       | Bottom -> None)
                     of_kind_foos
                 in
                 let equations_from_meet =
-                  Meet_and_join.meet_equations
-                    new_equations_from_meet' !new_equations_from_meet;
+                  Meet_and_join.meet_equations ~resolver
+                    equations_from_meet !new_equations_from_meet;
                 in
                 of_kind_foos, equations_from_meet)
               (of_kind_foos2, create_equations ())
@@ -2511,6 +2528,7 @@ end;
           (or_alias1 : S.of_kind_foo ty)
           (or_alias2 : S.of_kind_foo ty)
           : S.of_kind_foo ty * equations =
+      let resolver = env1.resolver in
       if env1 == env2 && or_alias1 == or_alias2 then
         or_alias1, create_equations ()
       else
@@ -2542,13 +2560,14 @@ end;
             meet_on_unknown_or_join env1 env2
               unknown_or_join1 unknown_or_join2
           in
-          let meet_ty = S.to_type (No_alias unknown_or_join) in
+          let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
           let equations_from_meet =
-            add_or_replace_equations equations_from_meet name1 level1 meet_ty
+            add_or_replace_equations ~resolver equations_from_meet
+              name1 level1 meet_ty
           in
           let equations_from_meet =
-            add_or_replace_equations equations_from_meet name2 level2 meet_ty
-              (S.to_type (Equals name1))
+            add_or_replace_equations ~resolver equations_from_meet
+              name2 level2 (S.to_type (Equals name1))
           in
           Equals name1, equations_from_meet
         | Some name1, None ->
@@ -2557,9 +2576,10 @@ end;
             meet_on_unknown_or_join env1 env2
               unknown_or_join1 unknown_or_join2
           in
-          let meet_ty = S.to_type (No_alias unknown_or_join) in
+          let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
           let equations_from_meet =
-            add_or_replace_equations equations_from_meet name1 level1 meet_ty
+            add_or_replace_equations ~resolver equations_from_meet
+              name1 level1 meet_ty
           in
           Equals name1, equations_from_meet
         | None, Some name2 ->
@@ -2568,9 +2588,10 @@ end;
             meet_on_unknown_or_join env1 env2
               unknown_or_join1 unknown_or_join2
           in
-          let meet_ty = S.to_type (No_alias unknown_or_join) in
+          let meet_ty = S.to_type (No_alias meet_unknown_or_join) in
           let equations_from_meet =
-            add_or_replace_equations equations_from_meet name2 level2 meet_ty
+            add_or_replace_equations ~resolver equations_from_meet
+              name2 level2 meet_ty
           in
           Equals name2, equations_from_meet
         | None, None ->
@@ -2659,7 +2680,7 @@ end;
                 Meet_and_join.meet (env1, field1) (env2, field2)
               in
               equations_from_meet :=
-                Meet_and_join.meet_equations new_equations_from_meet
+                Meet_and_join.meet_equations ~resolver new_equations_from_meet
                   !equations_from_meet;
               Immutable field)
           fields1
@@ -2700,6 +2721,7 @@ end;
           ((Join { by_length = singleton_blocks1; }) : block_cases)
           ((Join { by_length = singleton_blocks2; }) : block_cases)
           : (block_cases * equations) Or_bottom.t =
+      let resolver = env1.resolver in
       let equations_from_meet = ref (create_equations ()) in
       let by_length =
         Targetint.OCaml.Map.inter_merge
@@ -2709,7 +2731,7 @@ end;
                 singleton_block1 singleton_block2
             in
             equations_from_meet :=
-              Meet_and_join.meet_equations new_equations_from_meet
+              Meet_and_join.meet_equations ~resolver new_equations_from_meet
                 !equations_from_meet;
             singleton_block)
           singleton_blocks1
@@ -2733,13 +2755,14 @@ end;
       Join { by_length; }
 
     let meet_blocks env1 env2 blocks1 blocks2 : _ Or_bottom.t =
+      let resolver = env1.resolver in
       let equations_from_meet = ref (create_equations ()) in
       let blocks =
         Tag.Map.inter (fun block_cases1 block_cases2 ->
             match meet_block_cases env1 env2 block_cases1 block_cases2 with
             | Ok (block_cases, new_equations_from_meet) ->
               equations_from_meet :=
-                Meet_and_join.meet_equations new_equations_from_meet
+                Meet_and_join.meet_equations ~resolver new_equations_from_meet
                   !equations_from_meet;
               Some block_cases
             | Bottom -> None)
@@ -2761,6 +2784,7 @@ end;
           { blocks = blocks2; immediates = imms2; is_int = is_int2;
             get_tag = get_tag2; }
           : (blocks_and_tagged_immediates * equations) Or_bottom.t =
+      let resolver = env1.resolver in
       let (blocks : _ or_unknown), equations_from_meet =
         match blocks1, blocks2 with
         | Unknown, _ -> blocks2, create_equations ()
@@ -2827,10 +2851,8 @@ end;
                   match Targetint.OCaml.Map.get_singleton by_length with
                   | None -> equations_from_meet
                   | Some (_, singleton_block) ->
-                    let new_equations_from_meet =
-                      to_typing_environment_equations singleton_block.equations
-                    in
-                    new_equations_from_meet @ equations_from_meet
+                    Meet_and_join.meet_equations ~resolver
+                      singleton_block.equations equations_from_meet
         in
         Ok ({ blocks; immediates; is_int; get_tag; }, equations_from_meet)
 
@@ -2875,6 +2897,7 @@ end;
     let meet_of_kind_foo env1 env2
           (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
           : (of_kind_value * equations) Or_bottom.t =
+      let resolver = env1.resolver in
       match of_kind1, of_kind2 with
       | Blocks_and_tagged_immediates blocks_imms1,
           Blocks_and_tagged_immediates blocks_imms2 ->
@@ -2926,8 +2949,8 @@ end;
                 None
               end else begin
                 equations_from_meet :=
-                  Meet_and_join.meet_equations new_equations_from_meet
-                    !equations_from_meet;
+                  Meet_and_join.meet_equations ~resolver
+                    new_equations_from_meet !equations_from_meet;
                 Some { set_of_closures = set; }
               end)
             closures1
@@ -3344,16 +3367,16 @@ end;
               Bottom
             end
           | Non_inlinable None, Non_inlinable None ->
-            Ok (Non_inlinable None, [])
+            Ok (Non_inlinable None, create_equations ())
           | Non_inlinable (Some non_inlinable), Non_inlinable None
           | Non_inlinable None, Non_inlinable (Some non_inlinable) ->
             (* We can arbitrarily pick one side or the other: we choose the
                side which gives a more precise type. *)
-            Ok (Non_inlinable (Some non_inlinable), [])
+            Ok (Non_inlinable (Some non_inlinable), create_equations ())
           | Non_inlinable None, Inlinable inlinable
           | Inlinable inlinable, Non_inlinable None ->
             (* Likewise. *)
-            Ok (Inlinable inlinable, [])
+            Ok (Inlinable inlinable, create_equations ())
           | Non_inlinable (Some non_inlinable1),
               Non_inlinable (Some non_inlinable2) ->
             let result =
@@ -3899,14 +3922,14 @@ end;
             discriminants2
         in
         begin match Discriminant.Map.get_singleton discriminants with
-        | None -> Ok (create_equations (), discriminants)
+        | None -> Ok (Discriminant discriminants, create_equations ())
         | Some (discriminant, discriminant_case) ->
           let equations_from_meet = discriminant_case.equations in
           let discriminants =
             Discriminant.Map.singleton discriminant
-              { equations = create_equations (); }
+              ({ equations = create_equations (); } : discriminant_case)
           in
-          Ok (equations_from_meet, discriminants)
+          Ok (Discriminant discriminants, equations_from_meet)
         end
       | Set_of_closures set1, Set_of_closures set2 ->
         begin match meet_set_of_closures env1 env2 set1 set2 with
@@ -3953,7 +3976,7 @@ end;
         Known (Closure closure)
       | (Discriminant _ | Set_of_closures _ | Closure _), _ -> Unknown
   end) and Meet_and_join : sig
-    val meet : t_in_context -> t_in_context -> t * typing_environment
+    val meet : t_in_context -> t_in_context -> t * equations
 
     val join : t_in_context -> t_in_context -> t
 
@@ -3983,14 +4006,6 @@ end;
       -> equations
       -> equations
       -> equations
-
-    val replace_meet_typing_environment0
-       : typing_environment
-      -> Name.t
-      -> scope_level:Scope_level.t
-      -> existing_ty:t
-      -> t_in_context
-      -> typing_environment
 
     val replace_meet_typing_environment
        : typing_environment
@@ -4228,8 +4243,9 @@ Format.eprintf "JOIN %a and %a -> %a\n%!"
 
     (* CR mshinwell: Perhaps this function needs an iteration bound *)
     let rec meet_typing_environment0 (env1 : typing_environment)
-          (env2 : typing_environment) =
-      let equations_from_meet = ref [] in
+          (env2 : typing_environment) : typing_environment =
+      let resolver = env1.resolver in
+      let equations_from_meet = ref (create_equations ()) in
       let canonical_names_to_aliases =
         Name.Map.union_merge Name.Set.union
           env1.canonical_names_to_aliases
@@ -4248,9 +4264,9 @@ Format.eprintf "JOIN %a and %a -> %a\n%!"
                 print_typing_environment env1
                 print_typing_environment env2
             end;
-            let ty, equations_from_meet = meet (env1, ty1) (env2, ty2) in
-            equations_from_meet :=
-              meet_equations new_equations_from_meet !equations_from_meet;
+            let ty, new_equations_from_meet = meet (env1, ty1) (env2, ty2) in
+            equations_from_meet := Meet_and_join.meet_equations ~resolver
+              new_equations_from_meet !equations_from_meet;
             level1, ty)
           env1.names_to_types
           env2.names_to_types
@@ -4285,11 +4301,15 @@ Format.eprintf "JOIN %a and %a -> %a\n%!"
         }
       in
       invariant_typing_environment env;
-      meet_typing_environment env !equations_from_meet
+      let equations_from_meet =
+        to_typing_environment_equations ~resolver:env.resolver
+          !equations_from_meet
+      in
+      meet_typing_environment env equations_from_meet
 
     and meet_typing_environment env1 env2 =
       try
-        meet_typing_environment_with_equations0 env1 env2
+        meet_typing_environment0 env1 env2
       with Misc.Fatal_error -> begin
         Format.eprintf "\n%sContext is: meeting two typing environments:%s\
             @ %a\n\n%sand%s:@ %a\n"
@@ -4302,29 +4322,18 @@ Format.eprintf "JOIN %a and %a -> %a\n%!"
         raise Misc.Fatal_error
       end
 
-    let replace_meet_typing_environment env name t_in_context =
+    let replace_meet_typing_environment env name (ty_env, ty) =
       match Name.Map.find name env.names_to_types with
       | exception Not_found ->
         Misc.fatal_errorf "Cannot meet types for name %a which is unbound \
             in the environment: %a"
           Name.print name
           print_typing_environment env
-      | scope_level, existing_ty ->
-        try
-          replace_meet_typing_environment0 env name
-            ~scope_level ~existing_ty t_in_context
-        with Misc.Fatal_error -> begin
-          Format.eprintf "\n%sContext is: replace-meet on a member %a of a \
-              typing environment:%s@ Existing type:@ %a@ \
-              Refined type:@ %a@ Environment of refined type:@ %a\n"
-            (Misc_color.bold_red ())
-            Name.print name
-            (Misc_color.reset ())
-            print existing_ty
-            print (snd t_in_context)
-            print_typing_environment (fst t_in_context);
-          raise Misc.Fatal_error
-        end
+      | scope_level, _existing_ty ->
+        let ty_env =
+          add_typing_environment ty_env name scope_level ty
+        in
+        meet_typing_environment env ty_env
 
     let equations_to_typing_environment ~resolver
           { typing_judgements; } : typing_environment =
@@ -4365,7 +4374,9 @@ Format.eprintf "JOIN %a and %a -> %a\n%!"
         equations1 equations2
   end
 
-  let meet = Meet_and_join.meet
+  let meet ~bias_towards:(env1, ty1) (env2, ty2) =
+    Meet_and_join.meet (env1, ty1) (env2, ty2)
+
   let join = Meet_and_join.join
 
   let join_ty_value (env1, ty_value1) (env2, ty_value2) =
@@ -4388,7 +4399,7 @@ Format.eprintf "JOIN %a and %a -> %a\n%!"
 
     let add = add_typing_environment
 
-    let singleton0 = singleton_typing_environment0
+    let singleton0 = singleton0_typing_environment
 
     let singleton ~resolver name scope_level ty =
       singleton0 ~resolver name scope_level ty ~must_be_closed:true
@@ -4414,11 +4425,10 @@ Format.eprintf "JOIN %a and %a -> %a\n%!"
     let add_or_replace_meet t name scope_level ty =
       match Name.Map.find name t.names_to_types with
       | exception Not_found -> add t name scope_level ty
-      | scope_level, existing_ty ->
+      | _ ->
         (* CR mshinwell: We need to think about this some more.  Is [ty]
            supposed to only have free names in [t]? *)
-        Meet_and_join.replace_meet_typing_environment0 t name
-          ~scope_level ~existing_ty (t, ty)
+        Meet_and_join.replace_meet_typing_environment t name (t, ty)
 
     let find_opt t name =
       match Name.Map.find name t.names_to_types with
@@ -4620,6 +4630,12 @@ Format.eprintf "Result is: %a\n%!"
       }
 
     let invariant = invariant_typing_environment
+
+    let restrict_names_to_those_occurring_in_types t tys =
+      let free_names = free_names_transitive_list t tys in
+  Format.eprintf "Restricting to: %a\n%!"
+    Name_occurrences.print free_names;
+      restrict_to_names t free_names
   end
 
   module Equations = struct

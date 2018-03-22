@@ -465,6 +465,11 @@ module type S = sig
       -> t
       -> t
       -> Equations.t
+
+    val restrict_names_to_those_occurring_in_types
+       : t
+      -> flambda_type list
+      -> t
   end
 
   (** Annotation for functions that may require examination of the current
@@ -745,6 +750,8 @@ module type S = sig
   (** Return all names occurring in the type and all types referenced by it. *)
   val free_names_transitive : (t -> Name_occurrences.t) type_accessor
 
+  val free_names_transitive_list : (t list -> Name_occurrences.t) type_accessor
+
   (** Determine the (unique) kind of a type. *)
   val kind : t -> Flambda_kind.t
 
@@ -791,7 +798,7 @@ module type S = sig
   val meet
      : bias_towards:t_in_context
     -> t_in_context
-    -> Equations.t * t
+    -> t * Equations.t
 
   (** Follow chains of [Alias]es until either a [No_alias] type is reached
       or a name cannot be resolved.

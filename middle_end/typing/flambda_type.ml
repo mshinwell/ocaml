@@ -42,12 +42,6 @@ let rename_variables t ~f:_ = t
   clean t (fun var -> Available_different_name (f var))
 *)
 
-let free_names_transitive_list env ts =
-  List.fold_left (fun names t ->
-      Name_occurrences.union names (free_names_transitive env t))
-    (Name_occurrences.create ())
-    ts
-
 let unit () =
   this_tagged_immediate Immediate.zero
 
@@ -1848,10 +1842,4 @@ module Typing_environment = struct
   include Typing_environment0
 
   let diff t1 t2 = diff ~strictly_more_precise t1 t2
-
-  let restrict_names_to_those_occurring_in_types t tys =
-    let free_names = free_names_transitive_list t tys in
-Format.eprintf "Restricting to: %a\n%!"
-  Name_occurrences.print free_names;
-    restrict_to_names t free_names
 end
