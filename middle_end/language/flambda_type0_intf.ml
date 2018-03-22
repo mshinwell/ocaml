@@ -786,14 +786,12 @@ module type S = sig
   val join_ty_value : ty_value_in_context -> ty_value_in_context -> ty_value
 
   (** Greatest lower bound of two types.
-      When meeting two aliases the returned type will be an alias holding the
-      name from the [bias_towards] side.  (A returned judgement will contain an
-      equality to the name on the other side.) *)
+      When meeting two aliases the resulting type will be an alias holding the
+      name from the [bias_towards] side. *)
   val meet
-     : output_env:Typing_environment0.t
-    -> bias_towards:t_in_context
+     : bias_towards:t_in_context
     -> t_in_context
-    -> t_in_context
+    -> Equations.t * t
 
   (** Follow chains of [Alias]es until either a [No_alias] type is reached
       or a name cannot be resolved.

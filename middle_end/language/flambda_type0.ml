@@ -1219,6 +1219,21 @@ end;
     end;
     add_or_replace_typing_environment' env name scope_level t
 
+  let add_typing_environment env name scope_level ty =
+    match Name.Map.find name env.names_to_types with
+    | exception Not_found ->
+      add_or_replace_typing_environment env name scope_level ty
+    | _ty ->
+      Misc.fatal_errorf "Cannot rebind %a in environment:@ %a"
+        Name.print name
+        print_typing_environment env
+
+  let singleton0_typing_environment ~resolver name scope_level ty
+        ~must_be_closed =
+    add_typing_environment
+      (create_typing_environment0 ~resolver ~must_be_closed)
+      name scope_level ty
+
   let scope_level_typing_environment env name =
     match Name.Map.find name env.names_to_types with
     | exception Not_found ->
@@ -1298,6 +1313,20 @@ end;
   let create_equations () =
     { typing_judgements = None;
     }
+
+  let singleton_equations ~resolver name scope_level ty =
+    { typing_judgements =
+        Some (singleton0_typing_environment ~resolver name scope_level ty
+          ~must_be_closed:false);
+    }
+
+  let add_equations ~resolver t name scope_level ty =
+    match t.typing_judgements with
+    | None -> singleton_equations ~resolver name scope_level ty
+    | Some typing_judgements ->
+      { typing_judgements =
+          Some (add_typing_environment typing_judgements name scope_level ty);
+      }
 
   let ty_is_obviously_bottom (ty : _ ty) =
     match ty with
@@ -2248,47 +2277,6 @@ end;
         print t1
         print t2
 
-(*
-  let judgements_holding_now ~type_of_name t =
-    let t, _canonical_name =
-      resolve_aliases_and_squash_unresolved_names ~type_of_name t
-    in
-    match t.descr with
-    | Value (No_alias (Join [Blocks_and_tagged_immediates blocks_imms])) ->
-      begin match blocks_imms.immediates with
-      | Unknown -> create_typing_environment ()
-      | Known imms ->
-        if not (Immediate.Map.is_empty imms) then create_typing_environment ()
-        else
-          begin match Tag.Map.get_singleton blocks_imms.blocks with
-          | None -> create_typing_environment ()
-          | Some (_, Join { by_length; }) ->
-            match Targetint.OCaml.Map.get_singleton by_length with
-            | None -> create_typing_environment ()
-            | Some (_, singleton_block) -> singleton_block.equations
-          end
-      end
-    | Naked_number _ -> create_typing_environment ()
-    | Fabricated (No_alias (Join [Tag map])) ->
-      begin match Tag.Map.get_singleton map with
-      | None -> create_typing_environment ()
-      | Some (_, discriminant_case) -> discriminant_case.equations
-      end
-    | _ -> create_typing_environment ()
-*)
-
-  type judgements_from_meet = (Name.t * Scope_level.t * t) list
-
-  let judgements_of_equations { typing_judgements; } =
-    match typing_judgements with
-    | None -> []
-    | Some typing_judgements ->
-      Name.Map.fold (fun name (level, t) judgements ->
-          if Name.Set.mem name typing_judgements.existentials then judgements
-          else (name, level, t) :: judgements)
-        typing_judgements.names_to_types
-        []
-
   let to_typing_environment_equations ~resolver { typing_judgements; } =
     match typing_judgements with
     | None -> create_typing_environment0 ~resolver ~must_be_closed:false
@@ -2331,7 +2319,7 @@ end;
       -> typing_environment
       -> of_kind_foo
       -> of_kind_foo
-      -> (of_kind_foo * judgements_from_meet) Or_bottom.t
+      -> (of_kind_foo * equations) Or_bottom.t
 
     (* If the supplied types are compatible, the join must be pushed inside
        their structure, and [Ok] returned.  Otherwise [Unknown] must be
@@ -2357,23 +2345,25 @@ end;
       -> of_kind_foo ty
       -> of_kind_foo ty
 
-    (* Greatest lower bound of two types of a particular kind.
-       The computation of such may yield new judgements. *)
+    (* Greatest lower bound of two types of a particular kind. *)
     val meet_ty
        : typing_environment
       -> typing_environment
       -> of_kind_foo ty
       -> of_kind_foo ty
-      -> of_kind_foo ty * judgements_from_meet
+      -> of_kind_foo ty * equations
   end
 
   (* CR mshinwell: Work out which properties we need to prove, e.g.
      Distributivity of meet over join:
        X n (X' u Y') == (X n X') u (X n Y'). *)
-  module Make_meet_and_join (S : Meet_and_join_spec) : sig
-    include Meet_and_join
-      with type of_kind_foo := S.of_kind_foo
-  end = struct
+  module rec Make_meet_and_join : functor
+       (S : Meet_and_join_spec)
+    -> sig
+         include Meet_and_join
+         with type of_kind_foo := S.of_kind_foo
+       end =
+  functor (S : Meet_and_join_spec) -> struct
     let unknown_or_join_is_bottom (uj : _ unknown_or_join) =
       match uj with
       | Join [] -> true
@@ -2474,30 +2464,37 @@ end;
     let rec meet_on_unknown_or_join env1 env2
           (ou1 : S.of_kind_foo unknown_or_join)
           (ou2 : S.of_kind_foo unknown_or_join)
-          : S.of_kind_foo unknown_or_join * judgements_from_meet =
-      if env1 == env2 && ou1 == ou2 then ou1, []
+          : S.of_kind_foo unknown_or_join * equations =
+      if env1 == env2 && ou1 == ou2 then ou1, create_equations ()
       else
         match ou1, ou2 with
-        | Unknown, ou2 -> ou2, []
-        | ou1, Unknown -> ou1, []
+        | Unknown, ou2 -> ou2, create_equations ()
+        | ou1, Unknown -> ou1, create_equations ()
         | Join of_kind_foos1, Join of_kind_foos2 ->
-          let of_kind_foos, judgements =
-            List.fold_left (fun (of_kind_foos, judgements) of_kind_foo ->
-                let new_judgements = ref [] in
+          let of_kind_foos, equations_from_meet =
+            List.fold_left
+              (fun (of_kind_foos, equations_from_meet) of_kind_foo ->
+                let new_equations_from_meet = ref (create_equations ()) in
                 let of_kind_foos =
                   Misc.Stdlib.List.filter_map (fun of_kind_foo' ->
                       let meet =
                         S.meet_of_kind_foo env1 env2 of_kind_foo of_kind_foo'
                       in
                       match meet with
-                      | Ok (of_kind_foo, new_judgements') ->
-                        new_judgements := new_judgements' @ !new_judgements;
+                      | Ok (of_kind_foo, new_equations_from_meet') ->
+                        new_equations_from_meet :=
+                          Meet_and_join.meet_equations
+                            new_equations_from_meet' !new_equations_from_meet;
                         Some of_kind_foo
                       | Bottom -> None)
                     of_kind_foos
                 in
-                of_kind_foos, !new_judgements @ judgements)
-              (of_kind_foos2, [])
+                let equations_from_meet =
+                  Meet_and_join.meet_equations
+                    new_equations_from_meet' !new_equations_from_meet;
+                in
+                of_kind_foos, equations_from_meet)
+              (of_kind_foos2, create_equations ())
               of_kind_foos1
           in
           let same_as input_of_kind_foos =
@@ -2506,15 +2503,16 @@ end;
                      input_of_kind_foo == of_kind_foo)
                    input_of_kind_foos of_kind_foos
           in
-          if same_as of_kind_foos1 then ou1, judgements
-          else if same_as of_kind_foos2 then ou2, judgements
-          else Join of_kind_foos, judgements
+          if same_as of_kind_foos1 then ou1, equations_from_meet
+          else if same_as of_kind_foos2 then ou2, equations_from_meet
+          else Join of_kind_foos, equations_from_meet
 
     and meet_ty env1 env2
           (or_alias1 : S.of_kind_foo ty)
           (or_alias2 : S.of_kind_foo ty)
-          : S.of_kind_foo ty * judgements_from_meet =
-      if env1 == env2 && or_alias1 == or_alias2 then or_alias1, []
+          : S.of_kind_foo ty * equations =
+      if env1 == env2 && or_alias1 == or_alias2 then
+        or_alias1, create_equations ()
       else
         let unknown_or_join1, canonical_name1 =
           resolve_aliases_and_squash_unresolved_names_on_ty' env1
@@ -2532,68 +2530,64 @@ end;
             ~print_ty:S.print_ty
             or_alias2
         in
-        let normal_case ~first_name_to_bind ~first_name_to_bind_level
-              ~names_to_bind =
-          let unknown_or_join, new_judgements =
-            meet_on_unknown_or_join env1 env2
-              unknown_or_join1 unknown_or_join2
-          in
-          let new_judgement =
-            first_name_to_bind, first_name_to_bind_level,
-              S.to_type (No_alias unknown_or_join)
-          in
-          let new_judgements' =
-            List.map (fun (name, level) ->
-                name, level, S.to_type (Equals first_name_to_bind))
-              names_to_bind
-          in
-          Equals first_name_to_bind,
-            new_judgements @ (new_judgement :: new_judgements')
-        in
-        let normal_case ~names_to_bind =
-          match names_to_bind with
-          | [] ->
-            let unknown_or_join, new_judgements =
-              meet_on_unknown_or_join env1 env2
-                unknown_or_join1 unknown_or_join2
-            in
-            No_alias unknown_or_join, new_judgements
-          | (first_name_to_bind, first_name_to_bind_level)::names_to_bind ->
-            normal_case ~first_name_to_bind ~first_name_to_bind_level
-              ~names_to_bind
-        in
         match canonical_name1, canonical_name2 with
         | Some name1, Some name2 when Name.equal name1 name2 ->
-          Equals name1, []
+          Equals name1, create_equations ()
         | Some name1, Some name2 ->
           (* N.B. This needs to respect the [bias_towards] argument on the
              [meet] function exposed in the interface (below). *)
           let level1 = scope_level_typing_environment env1 name1 in
           let level2 = scope_level_typing_environment env2 name2 in
-          normal_case ~names_to_bind:[name1, level1; name2, level2]
+          let meet_unknown_or_join, equations_from_meet =
+            meet_on_unknown_or_join env1 env2
+              unknown_or_join1 unknown_or_join2
+          in
+          let meet_ty = S.to_type (No_alias unknown_or_join) in
+          let equations_from_meet =
+            add_or_replace_equations equations_from_meet name1 level1 meet_ty
+          in
+          let equations_from_meet =
+            add_or_replace_equations equations_from_meet name2 level2 meet_ty
+              (S.to_type (Equals name1))
+          in
+          Equals name1, equations_from_meet
         | Some name1, None ->
           let level1 = scope_level_typing_environment env1 name1 in
-          normal_case ~names_to_bind:[name1, level1]
+          let meet_unknown_or_join, equations_from_meet =
+            meet_on_unknown_or_join env1 env2
+              unknown_or_join1 unknown_or_join2
+          in
+          let meet_ty = S.to_type (No_alias unknown_or_join) in
+          let equations_from_meet =
+            add_or_replace_equations equations_from_meet name1 level1 meet_ty
+          in
+          Equals name1, equations_from_meet
         | None, Some name2 ->
           let level2 = scope_level_typing_environment env2 name2 in
-          normal_case ~names_to_bind:[name2, level2]
+          let meet_unknown_or_join, equations_from_meet =
+            meet_on_unknown_or_join env1 env2
+              unknown_or_join1 unknown_or_join2
+          in
+          let meet_ty = S.to_type (No_alias unknown_or_join) in
+          let equations_from_meet =
+            add_or_replace_equations equations_from_meet name2 level2 meet_ty
+          in
+          Equals name2, equations_from_meet
         | None, None ->
-          let unknown_or_join, new_judgements =
+          let unknown_or_join, equations_from_meet =
             meet_on_unknown_or_join env1 env2
               unknown_or_join1 unknown_or_join2
           in
           if unknown_or_join == unknown_or_join1 then begin
             assert (match or_alias1 with No_alias _ -> true | _ -> false);
-            or_alias1, new_judgements
+            or_alias1, equations_from_meet
           end else if unknown_or_join == unknown_or_join2 then begin
             assert (match or_alias2 with No_alias _ -> true | _ -> false);
-            or_alias2, new_judgements
+            or_alias2, equations_from_meet
           end else begin
-            No_alias unknown_or_join, new_judgements
+            No_alias unknown_or_join, equations_from_meet
           end
-  end
-
-  module rec Meet_and_join_value : sig
+  end and Meet_and_join_value : sig
     include Meet_and_join
       with type of_kind_foo := of_kind_value
   end = Make_meet_and_join (struct
@@ -2647,13 +2641,13 @@ end;
            } : singleton_block)
           ({ equations = equations2;
              fields = fields2;
-           } : singleton_block) : singleton_block * judgements_from_meet =
+           } : singleton_block) : singleton_block * equations =
       let resolver = env1.resolver in
       let equations =
         Meet_and_join.meet_equations ~resolver equations1 equations2
       in
       assert (Array.length fields1 = Array.length fields2);
-      let judgements = ref [] in
+      let equations_from_meet = ref (create_equations ()) in
       let fields =
         Array.map2
           (fun (field1 : _ mutable_or_immutable)
@@ -2661,17 +2655,19 @@ end;
             match field1, field2 with
             | Mutable, _ | _, Mutable -> Mutable
             | Immutable field1, Immutable field2 ->
-              let field, new_judgements =
+              let field, new_equations_from_meet =
                 Meet_and_join.meet (env1, field1) (env2, field2)
               in
-              judgements := new_judgements @ !judgements;
+              equations_from_meet :=
+                Meet_and_join.meet_equations new_equations_from_meet
+                  !equations_from_meet;
               Immutable field)
           fields1
           fields2
       in
       { equations;
         fields;
-      }, !judgements
+      }, !equations_from_meet
 
     let join_singleton_block env1 env2
           ({ equations = equations1;
@@ -2703,22 +2699,24 @@ end;
     let meet_block_cases env1 env2
           ((Join { by_length = singleton_blocks1; }) : block_cases)
           ((Join { by_length = singleton_blocks2; }) : block_cases)
-          : (block_cases * judgements_from_meet) Or_bottom.t =
-      let judgements = ref [] in
+          : (block_cases * equations) Or_bottom.t =
+      let equations_from_meet = ref (create_equations ()) in
       let by_length =
         Targetint.OCaml.Map.inter_merge
           (fun singleton_block1 singleton_block2 ->
-            let singleton_block, new_judgements =
+            let singleton_block, new_equations_from_meet =
               meet_singleton_block env1 env2
                 singleton_block1 singleton_block2
             in
-            judgements := new_judgements @ !judgements;
+            equations_from_meet :=
+              Meet_and_join.meet_equations new_equations_from_meet
+                !equations_from_meet;
             singleton_block)
           singleton_blocks1
           singleton_blocks2
       in
       if Targetint.OCaml.Map.is_empty by_length then Bottom
-      else Ok (((Join { by_length; }) : block_cases), !judgements)
+      else Ok (((Join { by_length; }) : block_cases), !equations_from_meet)
 
     let join_block_cases env1 env2
           ((Join { by_length = singleton_blocks1; }) : block_cases)
@@ -2735,19 +2733,21 @@ end;
       Join { by_length; }
 
     let meet_blocks env1 env2 blocks1 blocks2 : _ Or_bottom.t =
-      let judgements = ref [] in
+      let equations_from_meet = ref (create_equations ()) in
       let blocks =
         Tag.Map.inter (fun block_cases1 block_cases2 ->
             match meet_block_cases env1 env2 block_cases1 block_cases2 with
-            | Ok (block_cases, new_judgements) ->
-              judgements := new_judgements @ !judgements;
+            | Ok (block_cases, new_equations_from_meet) ->
+              equations_from_meet :=
+                Meet_and_join.meet_equations new_equations_from_meet
+                  !equations_from_meet;
               Some block_cases
             | Bottom -> None)
           blocks1
           blocks2
       in
       if Tag.Map.is_empty blocks then Bottom
-      else Ok (blocks, !judgements)
+      else Ok (blocks, !equations_from_meet)
 
     let join_blocks env1 env2 blocks1 blocks2 =
       Tag.Map.union_merge (fun block_cases1 block_cases2 ->
@@ -2760,15 +2760,16 @@ end;
             get_tag = get_tag1; }
           { blocks = blocks2; immediates = imms2; is_int = is_int2;
             get_tag = get_tag2; }
-          : (blocks_and_tagged_immediates * judgements_from_meet) Or_bottom.t =
-      let (blocks : _ or_unknown), judgements =
+          : (blocks_and_tagged_immediates * equations) Or_bottom.t =
+      let (blocks : _ or_unknown), equations_from_meet =
         match blocks1, blocks2 with
-        | Unknown, _ -> blocks2, []
-        | _, Unknown -> blocks1, []
+        | Unknown, _ -> blocks2, create_equations ()
+        | _, Unknown -> blocks1, create_equations ()
         | Known blocks1, Known blocks2 ->
           match meet_blocks env1 env2 blocks1 blocks2 with
-          | Bottom -> Known Tag.Map.empty, []
-          | Ok (blocks, judgements) -> Known blocks, judgements
+          | Bottom -> Known Tag.Map.empty, create_equations ()
+          | Ok (blocks, equations_from_meet) ->
+            Known blocks, equations_from_meet
       in
       let immediates : _ or_unknown =
         match imms1, imms2 with
@@ -2809,27 +2810,29 @@ end;
          as a judgement? *)
       if is_bottom then Bottom
       else
-        let judgements =
+        let equations_from_meet =
           match immediates with
-          | Unknown -> judgements
+          | Unknown -> equations_from_meet
           | Known imms ->
-            if not (Immediate.Map.is_empty imms) then judgements
+            if not (Immediate.Map.is_empty imms) then equations_from_meet
             else  (* CR mshinwell: This should maybe meet across all blocks *)
               match blocks with
-              | Unknown -> judgements
+              | Unknown -> equations_from_meet
               | Known blocks ->
                 match Tag.Map.get_singleton blocks with
-                | None -> judgements
+                | None -> equations_from_meet
                 | Some (_, Join { by_length; }) ->
+                  (* CR mshinwell: This should remove equations propagated
+                     upwards from the block cases *)
                   match Targetint.OCaml.Map.get_singleton by_length with
-                  | None -> judgements
+                  | None -> equations_from_meet
                   | Some (_, singleton_block) ->
-                    let new_judgements =
-                      judgements_of_equations singleton_block.equations
+                    let new_equations_from_meet =
+                      to_typing_environment_equations singleton_block.equations
                     in
-                    new_judgements @ judgements
+                    new_equations_from_meet @ equations_from_meet
         in
-        Ok ({ blocks; immediates; is_int; get_tag; }, judgements)
+        Ok ({ blocks; immediates; is_int; get_tag; }, equations_from_meet)
 
     let join_blocks_and_tagged_immediates env1 env2
           { blocks = blocks1; immediates = imms1; is_int = is_int1;
@@ -2871,7 +2874,7 @@ end;
 
     let meet_of_kind_foo env1 env2
           (of_kind1 : of_kind_value) (of_kind2 : of_kind_value)
-          : (of_kind_value * judgements_from_meet) Or_bottom.t =
+          : (of_kind_value * equations) Or_bottom.t =
       match of_kind1, of_kind2 with
       | Blocks_and_tagged_immediates blocks_imms1,
           Blocks_and_tagged_immediates blocks_imms2 ->
@@ -2880,60 +2883,62 @@ end;
             blocks_imms1 blocks_imms2
         in
         begin match blocks_imms with
-        | Ok (blocks_imms, judgements) ->
-          Ok (Blocks_and_tagged_immediates blocks_imms, judgements)
+        | Ok (blocks_imms, equations_from_meet) ->
+          Ok (Blocks_and_tagged_immediates blocks_imms, equations_from_meet)
         | Bottom -> Bottom
         end
       | Boxed_number (Boxed_float n1),
           Boxed_number (Boxed_float n2) ->
-        let (n : _ ty_naked_number), judgements =
+        let (n : _ ty_naked_number), equations_from_meet =
           Meet_and_join_naked_float.meet_ty env1 env2 n1 n2
         in
-        Ok (Boxed_number (Boxed_float n), judgements)
+        Ok (Boxed_number (Boxed_float n), equations_from_meet)
       | Boxed_number (Boxed_int32 n1),
           Boxed_number (Boxed_int32 n2) ->
-        let (n : _ ty_naked_number), judgements =
+        let (n : _ ty_naked_number), equations_from_meet =
           Meet_and_join_naked_int32.meet_ty env1 env2 n1 n2
         in
-        Ok (Boxed_number (Boxed_int32 n), judgements)
+        Ok (Boxed_number (Boxed_int32 n), equations_from_meet)
       | Boxed_number (Boxed_int64 n1),
           Boxed_number (Boxed_int64 n2) ->
-        let (n : _ ty_naked_number), judgements =
+        let (n : _ ty_naked_number), equations_from_meet =
           Meet_and_join_naked_int64.meet_ty env1 env2 n1 n2
         in
-        Ok (Boxed_number (Boxed_int64 n), judgements)
+        Ok (Boxed_number (Boxed_int64 n), equations_from_meet)
       | Boxed_number (Boxed_nativeint n1),
           Boxed_number (Boxed_nativeint n2) ->
-        let (n : _ ty_naked_number), judgements =
+        let (n : _ ty_naked_number), equations_from_meet =
           Meet_and_join_naked_nativeint.meet_ty env1 env2 n1 n2
         in
-        Ok (Boxed_number (Boxed_nativeint n), judgements)
+        Ok (Boxed_number (Boxed_nativeint n), equations_from_meet)
       | Closures closures1, Closures closures2 ->
-        let judgements = ref [] in
+        let equations_from_meet = ref (create_equations ()) in
         let closures =
           Closure_id.Map.inter
             (fun (closures_entry1 : closures_entry)
                  (closures_entry2 : closures_entry) : closures_entry option ->
               let set1 = closures_entry1.set_of_closures in
               let set2 = closures_entry2.set_of_closures in
-              let set, new_judgements =
+              let set, new_equations_from_meet =
                 Meet_and_join_fabricated.meet_ty env1 env2 set1 set2
               in
               if ty_is_obviously_bottom set then begin
                 None
               end else begin
-                judgements := new_judgements @ !judgements;
+                equations_from_meet :=
+                  Meet_and_join.meet_equations new_equations_from_meet
+                    !equations_from_meet;
                 Some { set_of_closures = set; }
               end)
             closures1
             closures2
         in
         if Closure_id.Map.is_empty closures then Bottom
-        else Ok (Closures closures, !judgements)
+        else Ok (Closures closures, !equations_from_meet)
       | String strs1, String strs2 ->
         let strs = String_info.Set.inter strs1 strs2 in
         if String_info.Set.is_empty strs then Bottom
-        else Ok (String strs, [])
+        else Ok (String strs, create_equations ())
       | (Blocks_and_tagged_immediates _
           | Boxed_number _
           | Closures _
@@ -3019,13 +3024,13 @@ end;
     let meet_of_kind_foo _env1 _env2
           (of_kind1 : Immediate.Set.t of_kind_naked_number)
           (of_kind2 : Immediate.Set.t of_kind_naked_number)
-          : (Immediate.Set.t of_kind_naked_number * judgements_from_meet)
+          : (Immediate.Set.t of_kind_naked_number * equations)
               Or_bottom.t =
       match of_kind1, of_kind2 with
       | Immediate fs1, Immediate fs2 ->
         let fs = Immediate.Set.inter fs1 fs2 in
         if Immediate.Set.is_empty fs then Bottom
-        else Ok (Immediate fs, [])
+        else Ok (Immediate fs, create_equations ())
       | _, _ -> Bottom
 
     let join_of_kind_foo _env1 _env2
@@ -3059,12 +3064,12 @@ end;
           (of_kind1 : Float_by_bit_pattern.Set.t of_kind_naked_number)
           (of_kind2 : Float_by_bit_pattern.Set.t of_kind_naked_number)
           : (Float_by_bit_pattern.Set.t of_kind_naked_number
-              * judgements_from_meet) Or_bottom.t =
+              * equations) Or_bottom.t =
       match of_kind1, of_kind2 with
       | Float fs1, Float fs2 ->
         let fs = Float_by_bit_pattern.Set.inter fs1 fs2 in
         if Float_by_bit_pattern.Set.is_empty fs then Bottom
-        else Ok (Float fs, [])
+        else Ok (Float fs, create_equations ())
       | _, _ -> Bottom
 
     let join_of_kind_foo _env1 _env2
@@ -3095,13 +3100,12 @@ end;
     let meet_of_kind_foo _env1 _env2
           (of_kind1 : Int32.Set.t of_kind_naked_number)
           (of_kind2 : Int32.Set.t of_kind_naked_number)
-          : (Int32.Set.t of_kind_naked_number * judgements_from_meet)
-              Or_bottom.t =
+          : (Int32.Set.t of_kind_naked_number * equations) Or_bottom.t =
       match of_kind1, of_kind2 with
       | Int32 is1, Int32 is2 ->
         let is = Int32.Set.inter is1 is2 in
         if Int32.Set.is_empty is then Bottom
-        else Ok (Int32 is, [])
+        else Ok (Int32 is, create_equations ())
       | _, _ -> Bottom
 
     let join_of_kind_foo _env1 _env2
@@ -3132,13 +3136,12 @@ end;
     let meet_of_kind_foo _env1 _env2
           (of_kind1 : Int64.Set.t of_kind_naked_number)
           (of_kind2 : Int64.Set.t of_kind_naked_number)
-          : (Int64.Set.t of_kind_naked_number * judgements_from_meet)
-              Or_bottom.t =
+          : (Int64.Set.t of_kind_naked_number * equations) Or_bottom.t =
       match of_kind1, of_kind2 with
       | Int64 is1, Int64 is2 ->
         let is = Int64.Set.inter is1 is2 in
         if Int64.Set.is_empty is then Bottom
-        else Ok (Int64 is, [])
+        else Ok (Int64 is, create_equations ())
       | _, _ -> Bottom
 
     let join_of_kind_foo _env1 _env2
@@ -3169,13 +3172,12 @@ end;
     let meet_of_kind_foo _env1 _env2
           (of_kind1 : Targetint.Set.t of_kind_naked_number)
           (of_kind2 : Targetint.Set.t of_kind_naked_number)
-          : (Targetint.Set.t of_kind_naked_number * judgements_from_meet)
-              Or_bottom.t =
+          : (Targetint.Set.t of_kind_naked_number * equations) Or_bottom.t =
       match of_kind1, of_kind2 with
       | Nativeint is1, Nativeint is2 ->
         let is = Targetint.Set.inter is1 is2 in
         if Targetint.Set.is_empty is then Bottom
-        else Ok (Nativeint is, [])
+        else Ok (Nativeint is, create_equations ())
       | _, _ -> Bottom
 
     let join_of_kind_foo _env1 _env2
@@ -3210,29 +3212,24 @@ end;
        surrogate. *)
     let meet_closure env1 env2
           (closure1 : closure) (closure2 : closure)
-          : (closure * judgements_from_meet) Or_bottom.t =
+          : (closure * equations) Or_bottom.t =
       if env1 == env2 && closure1 == closure2 then begin
-        Ok (closure1, [])
+        Ok (closure1, create_equations ())
       end else begin
+        let resolver = env1.resolver in
         let cannot_prove_different ~params1 ~params2 ~result1 ~result2
               ~result_equations1 ~result_equations2 : _ Or_bottom.t =
-          let same_arity =
-            List.compare_lengths params1 params2 = 0
-          in
-          let same_num_results =
-            List.compare_lengths result1 result2 = 0
-          in
-          let judgements = ref [] in
-          let has_bottom params =
-            List.exists is_obviously_bottom params
-          in
+          let same_arity = List.compare_lengths params1 params2 = 0 in
+          let same_num_results = List.compare_lengths result1 result2 = 0 in
+          let equations_from_meet = ref (create_equations ()) in
+          let has_bottom params = List.exists is_obviously_bottom params in
           let params_changed = ref Neither in
           let params : _ Or_bottom.t =
             if not same_arity then Bottom
             else
               let params =
                 List.map2 (fun t1 t2 ->
-                    let t, new_judgements =
+                    let t, new_equations_from_meet =
                       Meet_and_join.meet (env1, t1) (env2, t2)
                     in
                     if not (t == t1) then begin
@@ -3241,7 +3238,9 @@ end;
                     if not (t == t2) then begin
                       params_changed := join_changes !params_changed Right
                     end;
-                    judgements := new_judgements @ !judgements;
+                    equations_from_meet :=
+                      Meet_and_join.meet_equations ~resolver
+                        new_equations_from_meet !equations_from_meet;
                     t)
                   params1
                   params2
@@ -3255,7 +3254,7 @@ end;
             else
               let result =
                 List.map2 (fun t1 t2 ->
-                    let t, new_judgements =
+                    let t, new_equations_from_meet =
                       Meet_and_join.meet
                         (to_typing_environment_equations ~resolver:env1.resolver
                            result_equations1, t1)
@@ -3268,7 +3267,9 @@ end;
                     if not (t == t2) then begin
                       result_changed := join_changes !result_changed Right
                     end;
-                    judgements := new_judgements @ !judgements;
+                    equations_from_meet :=
+                      Meet_and_join.meet_equations ~resolver
+                        new_equations_from_meet !equations_from_meet;
                     t)
                   result1
                   result2
@@ -3299,7 +3300,7 @@ end;
               join_changes !params_changed
                 (join_changes !result_changed result_equations_changed)
             in
-            Ok (params, changed, result, result_equations, !judgements)
+            Ok (params, changed, result, result_equations, !equations_from_meet)
           | _, _ -> Bottom
         in
         let function_decls : _ Or_bottom.t =
@@ -3315,7 +3316,8 @@ end;
                 ~result_equations2:inlinable2.result_equations
             in
             begin match result with
-            | Ok (params, changed, result, result_equations, judgements) ->
+            | Ok (params, changed, result, result_equations,
+                  equations_from_meet) ->
               (* [closure1.function_decls] and [closure2.function_decls] may be
                  different, but we cannot prove it.  We arbitrarily pick
                  [closure1.function_decls] to return, with parameter and result
@@ -3327,15 +3329,15 @@ end;
                   params
               in
               begin match changed with
-              | Neither -> Ok (closure1.function_decls, judgements)
-              | Left -> Ok (closure2.function_decls, judgements)
-              | Right -> Ok (closure1.function_decls, judgements)
+              | Neither -> Ok (closure1.function_decls, equations_from_meet)
+              | Left -> Ok (closure2.function_decls, equations_from_meet)
+              | Right -> Ok (closure1.function_decls, equations_from_meet)
               | Both ->
                 Ok (Inlinable { inlinable1 with
                   params;
                   result;
                   result_equations;
-                }, judgements)
+                }, equations_from_meet)
               end
             | Bottom ->
               (* [closure1] and [closure2] are definitely different. *)
@@ -3365,7 +3367,7 @@ end;
             in
             begin match result with
             | Ok (params, _params_changed, result, result_equations,
-                  judgements) ->
+                  equations_from_meet) ->
               let non_inlinable_function_decl =
                 { non_inlinable1 with
                   params;
@@ -3373,7 +3375,8 @@ end;
                   result_equations;
                 }
               in
-              Ok (Non_inlinable (Some non_inlinable_function_decl), judgements)
+              Ok (Non_inlinable (Some non_inlinable_function_decl),
+                equations_from_meet)
             | Bottom ->
               Bottom
             end
@@ -3391,7 +3394,7 @@ end;
             in
             begin match result with
             | Ok (params, _params_changed, result, result_equations,
-                  judgements) ->
+                  equations_from_meet) ->
               (* For the arbitrary choice, we pick the inlinable declaration,
                  since it gives more information. *)
               let params =
@@ -3406,20 +3409,20 @@ end;
                   result_equations;
                 }
               in
-              Ok (Inlinable inlinable_function_decl, judgements)
+              Ok (Inlinable inlinable_function_decl, equations_from_meet)
             | Bottom ->
               Bottom
             end
         in
         match function_decls with
         | Bottom -> Bottom
-        | Ok (function_decls, judgements) ->
+        | Ok (function_decls, equations_from_meet) ->
           if function_decls == closure1.function_decls then
-            Ok (closure1, judgements)
+            Ok (closure1, equations_from_meet)
           else if function_decls == closure2.function_decls then
-            Ok (closure2, judgements)
+            Ok (closure2, equations_from_meet)
           else
-            Ok (({ function_decls; } : closure), judgements)
+            Ok (({ function_decls; } : closure), equations_from_meet)
       end
 
     let join_closure env1 env2
@@ -3612,22 +3615,25 @@ end;
 
     let meet_set_of_closures env1 env2
           (set1 : set_of_closures) (set2 : set_of_closures)
-          : (set_of_closures * judgements_from_meet) Or_bottom.t =
-      let judgements = ref [] in
+          : (set_of_closures * equations) Or_bottom.t =
+      let resolver = env1.resolver in
+      let equations_from_meet = ref (create_equations ()) in
       (* CR mshinwell: Try to refactor this code to shorten it. *)
       let closures : _ extensibility =
         match set1.closures, set2.closures with
         | Exactly closures1, Exactly closures2 ->
           let closures =
             Closure_id.Map.inter (fun ty_fabricated1 ty_fabricated2 ->
-                let ty_fabricated, new_judgements =
+                let ty_fabricated, new_equations_from_meet =
                   Meet_and_join_fabricated.meet_ty env1 env2
                     ty_fabricated1 ty_fabricated2
                 in
                 if ty_is_obviously_bottom ty_fabricated then begin
                   None
                 end else begin
-                  judgements := new_judgements @ !judgements;
+                  equations_from_meet :=
+                    Meet_and_join.meet_equations ~resolver
+                      new_equations_from_meet !equations_from_meet;
                   Some ty_fabricated
                 end)
               closures1
@@ -3655,13 +3661,15 @@ end;
               match Closure_id.Map.find closure_id closures2 with
               | exception Not_found -> Some ty1
               | ty2 ->
-                let ty_fabricated, new_judgements =
+                let ty_fabricated, new_equations_from_meet =
                   Meet_and_join_fabricated.meet_ty env1 env2 ty1 ty2
                 in
                 if ty_is_obviously_bottom ty_fabricated then begin
                   None
                 end else begin
-                  judgements := new_judgements @ !judgements;
+                  equations_from_meet :=
+                    Meet_and_join.meet_equations ~resolver
+                      new_equations_from_meet !equations_from_meet;
                   Some ty_fabricated
                 end)
           in
@@ -3669,14 +3677,16 @@ end;
         | Open closures1, Open closures2 ->
           let closures =
             Closure_id.Map.union_merge (fun ty_fabricated1 ty_fabricated2 ->
-                let ty_fabricated, new_judgements =
+                let ty_fabricated, new_equations_from_meet =
                   Meet_and_join_fabricated.meet_ty env1 env2
                     ty_fabricated1 ty_fabricated2
                 in
                 if ty_is_obviously_bottom ty_fabricated then begin
                   bottom_as_ty_fabricated ()
                 end else begin
-                  judgements := new_judgements @ !judgements;
+                  equations_from_meet :=
+                    Meet_and_join.meet_equations ~resolver
+                      new_equations_from_meet !equations_from_meet;
                   ty_fabricated
                 end)
               closures1
@@ -3689,14 +3699,16 @@ end;
         | Exactly closure_elements1, Exactly closure_elements2 ->
           let closure_elements =
             Var_within_closure.Map.inter (fun ty_value1 ty_value2 ->
-                let ty_value, new_judgements =
+                let ty_value, new_equations_from_meet =
                   Meet_and_join_value.meet_ty env1 env2
                     ty_value1 ty_value2
                 in
                 if ty_is_obviously_bottom ty_value then begin
                   None
                 end else begin
-                  judgements := new_judgements @ !judgements;
+                  equations_from_meet :=
+                    Meet_and_join.meet_equations ~resolver
+                      new_equations_from_meet !equations_from_meet;
                   Some ty_value
                 end)
               closure_elements1
@@ -3727,13 +3739,15 @@ end;
                 with
                 | exception Not_found -> Some ty1
                 | ty2 ->
-                  let ty_value, new_judgements =
+                  let ty_value, new_equations_from_meet =
                     Meet_and_join_value.meet_ty env1 env2 ty1 ty2
                   in
                   if ty_is_obviously_bottom ty_value then begin
                     None
                   end else begin
-                    judgements := new_judgements @ !judgements;
+                    equations_from_meet :=
+                      Meet_and_join.meet_equations ~resolver
+                        new_equations_from_meet !equations_from_meet;
                     Some ty_value
                   end)
           in
@@ -3741,14 +3755,16 @@ end;
         | Open closure_elements1, Open closure_elements2 ->
           let closure_elements =
             Var_within_closure.Map.union_merge (fun ty_value1 ty_value2 ->
-                let ty_value, new_judgements =
+                let ty_value, new_equations_from_meet =
                   Meet_and_join_value.meet_ty env1 env2
                     ty_value1 ty_value2
                 in
                 if ty_is_obviously_bottom ty_value then begin
                   bottom_as_ty_value ()
                 end else begin
-                  judgements := new_judgements @ !judgements;
+                  equations_from_meet :=
+                    Meet_and_join.meet_equations ~resolver new_equations_from_meet
+                      !equations_from_meet;
                   ty_value
                 end)
               closure_elements1
@@ -3761,19 +3777,17 @@ end;
       | _ ->
         if closures == set1.closures
           && closure_elements == set1.closure_elements
-        then
-          Ok (set1, !judgements)
+        then Ok (set1, !equations_from_meet)
         else if closures == set2.closures
           && closure_elements == set2.closure_elements
-        then
-          Ok (set2, !judgements)
+        then Ok (set2, !equations_from_meet)
         else begin
           let set : set_of_closures =
             { closures;
               closure_elements;
             }
           in
-          Ok (set, !judgements)
+          Ok (set, !equations_from_meet)
         end
 
     let join_set_of_closures env1 env2
@@ -3866,7 +3880,8 @@ end;
 
     let meet_of_kind_foo env1 env2
           (of_kind1 : of_kind_fabricated) (of_kind2 : of_kind_fabricated)
-          : (of_kind_fabricated * judgements_from_meet) Or_bottom.t =
+          : (of_kind_fabricated * equations) Or_bottom.t =
+      let resolver = env1.resolver in
       match of_kind1, of_kind2 with
       | Discriminant discriminants1, Discriminant discriminants2 ->
         let discriminants =
@@ -3875,7 +3890,7 @@ end;
                   ({ equations = equations2; } : discriminant_case)
                   : discriminant_case ->
               let equations =
-                Meet_and_join.meet_equations ~resolver:env1.resolver
+                Meet_and_join.meet_equations ~resolver
                   equations1 equations2
               in
               (* CR mshinwell: Do we ever flip back to [Bottom] here? *)
@@ -3883,30 +3898,30 @@ end;
             discriminants1
             discriminants2
         in
-        let judgements =
-          match Discriminant.Map.get_singleton discriminants with
-          | None -> []
-          | Some (_, discriminant_case) ->
-            judgements_of_equations discriminant_case.equations
-        in
-        Ok (Discriminant discriminants, judgements)
+        begin match Discriminant.Map.get_singleton discriminants with
+        | None -> Ok (create_equations (), discriminants)
+        | Some (discriminant, discriminant_case) ->
+          let equations_from_meet = discriminant_case.equations in
+          let discriminants =
+            Discriminant.Map.singleton discriminant
+              { equations = create_equations (); }
+          in
+          Ok (equations_from_meet, discriminants)
+        end
       | Set_of_closures set1, Set_of_closures set2 ->
         begin match meet_set_of_closures env1 env2 set1 set2 with
-        | Ok (set_of_closures, judgements) ->
-          if set_of_closures == set1 then
-            Ok (of_kind1, judgements)
-          else if set_of_closures == set2 then
-            Ok (of_kind2, judgements)
-          else
-            Ok (Set_of_closures set_of_closures, judgements)
+        | Ok (set_of_closures, equations_from_meet) ->
+          if set_of_closures == set1 then Ok (of_kind1, equations_from_meet)
+          else if set_of_closures == set2 then Ok (of_kind2, equations_from_meet)
+          else Ok (Set_of_closures set_of_closures, equations_from_meet)
         | Bottom -> Bottom
         end
       | Closure closure1, Closure closure2 ->
         begin match meet_closure env1 env2 closure1 closure2 with
-        | Ok (closure, judgements) ->
-          if closure == closure1 then Ok (of_kind1, judgements)
-          else if closure == closure2 then Ok (of_kind2, judgements)
-          else Ok (Closure closure, judgements)
+        | Ok (closure, equations_from_meet) ->
+          if closure == closure1 then Ok (of_kind1, equations_from_meet)
+          else if closure == closure2 then Ok (of_kind2, equations_from_meet)
+          else Ok (Closure closure, equations_from_meet)
         | Bottom -> Bottom
         end
       | (Discriminant _ | Set_of_closures _ | Closure _), _ -> Bottom
@@ -3938,7 +3953,7 @@ end;
         Known (Closure closure)
       | (Discriminant _ | Set_of_closures _ | Closure _), _ -> Unknown
   end) and Meet_and_join : sig
-    val meet : t_in_context -> t_in_context -> t * judgements_from_meet
+    val meet : t_in_context -> t_in_context -> t * typing_environment
 
     val join : t_in_context -> t_in_context -> t
 
@@ -3983,66 +3998,74 @@ end;
       -> t_in_context
       -> typing_environment
   end = struct
-    let meet (env1, (t1 : t)) (env2, (t2 : t)) : t * judgements_from_meet =
-      if env1 == env2 && t1 == t2 then t1, []
+    let meet (env1, (t1 : t)) (env2, (t2 : t)) : t * equations =
+      if env1 == env2 && t1 == t2 then t1, create_equations ()
       else begin
         ensure_phantomness_matches t1 t2 "kind mismatch upon meet";
-        let descr, judgements =
+        let descr, equations_from_meet =
           match t1.descr, t2.descr with
           | Value ty_value1, Value ty_value2 ->
-            let ty_value, judgements =
+            let ty_value, equations_from_meet =
               Meet_and_join_value.meet_ty env1 env2 ty_value1 ty_value2
             in
-            if ty_value == ty_value1 then t1.descr, judgements
-            else if ty_value == ty_value2 then t2.descr, judgements
-            else Value ty_value, judgements
+            if ty_value == ty_value1 then t1.descr, equations_from_meet
+            else if ty_value == ty_value2 then t2.descr, equations_from_meet
+            else Value ty_value, equations_from_meet
           | Naked_number (ty_naked_number1, kind1),
               Naked_number (ty_naked_number2, kind2) ->
             let module N = K.Naked_number in
             begin match kind1, kind2 with
             | N.Naked_immediate, N.Naked_immediate ->
-              let ty_naked_number, judgements =
+              let ty_naked_number, equations_from_meet =
                 Meet_and_join_naked_immediate.meet_ty env1 env2
                   ty_naked_number1 ty_naked_number2
               in
-              Naked_number (ty_naked_number, N.Naked_immediate), judgements
+              Naked_number (ty_naked_number, N.Naked_immediate),
+                equations_from_meet
             | N.Naked_float, N.Naked_float ->
-              let ty_naked_number, judgements =
+              let ty_naked_number, equations_from_meet =
                 Meet_and_join_naked_float.meet_ty env1 env2
                   ty_naked_number1 ty_naked_number2
               in
-              Naked_number (ty_naked_number, N.Naked_float), judgements
+              Naked_number (ty_naked_number, N.Naked_float),
+                equations_from_meet
             | N.Naked_int32, N.Naked_int32 ->
-              let ty_naked_number, judgements =
+              let ty_naked_number, equations_from_meet =
                 Meet_and_join_naked_int32.meet_ty env1 env2
                   ty_naked_number1 ty_naked_number2
               in
-              Naked_number (ty_naked_number, N.Naked_int32), judgements
+              Naked_number (ty_naked_number, N.Naked_int32),
+                equations_from_meet
             | N.Naked_int64, N.Naked_int64 ->
-              let ty_naked_number, judgements =
+              let ty_naked_number, equations_from_meet =
                 Meet_and_join_naked_int64.meet_ty env1 env2
                   ty_naked_number1 ty_naked_number2
               in
-              Naked_number (ty_naked_number, N.Naked_int64), judgements
+              Naked_number (ty_naked_number, N.Naked_int64),
+                equations_from_meet
             | N.Naked_nativeint, N.Naked_nativeint ->
-              let ty_naked_number, judgements =
+              let ty_naked_number, equations_from_meet =
                 Meet_and_join_naked_nativeint.meet_ty env1 env2
                   ty_naked_number1 ty_naked_number2
               in
-              Naked_number (ty_naked_number, N.Naked_nativeint), judgements
+              Naked_number (ty_naked_number, N.Naked_nativeint),
+                equations_from_meet
             | _, _ ->
               Misc.fatal_errorf "Kind mismatch upon meet:@ %a@ versus@ %a"
                 print t1
                 print t2
             end
           | Fabricated ty_fabricated1, Fabricated ty_fabricated2 ->
-            let ty_fabricated, judgements =
+            let ty_fabricated, equations_from_meet =
               Meet_and_join_fabricated.meet_ty env1 env2
                 ty_fabricated1 ty_fabricated2
             in
-            if ty_fabricated == ty_fabricated1 then t1.descr, judgements
-            else if ty_fabricated == ty_fabricated2 then t2.descr, judgements
-            else Fabricated ty_fabricated, judgements
+            if ty_fabricated == ty_fabricated1 then
+              t1.descr, equations_from_meet
+            else if ty_fabricated == ty_fabricated2 then
+              t2.descr, equations_from_meet
+            else
+              Fabricated ty_fabricated, equations_from_meet
           | (Value _ | Naked_number _ | Fabricated _), _ ->
             Misc.fatal_errorf "Kind mismatch upon meet:@ %a@ versus@ %a"
               print t1
@@ -4053,7 +4076,7 @@ end;
           else if t2.descr == descr then t2
           else { t1 with descr; }
         in
-        t, judgements
+        t, equations_from_meet
       end
 
     let join (env1, (t1 : t)) (env2, (t2 : t)) =
@@ -4203,65 +4226,10 @@ Format.eprintf "JOIN %a and %a -> %a\n%!"
         existential_freshening;
       }
 
-    let print_judgements ppf judgements =
-      Format.pp_print_list ~pp_sep:Format.pp_print_space
-        (fun ppf (name, _level, ty) ->
-          Format.fprintf ppf "@[(%s%a%s@ %a)@]"
-            (Misc_color.bold_green ())
-            Name.print name
-            (Misc_color.reset ())
-            print ty)
-        ppf judgements
-
-    (* CR mshinwell: Should the judgements come with environments? *)
-    let rec meet_typing_environment_with_judgements ~num_iterations
-          (env : typing_environment) ~(judgements : judgements_from_meet) =
-      try
-        if num_iterations >= 10 then env
-        else begin
-          match judgements with
-          | [] -> env
-          | (name, scope_level, ty)::judgements ->
-            let scope_level, existing_ty =
-              match Name.Map.find name env.names_to_types with
-              | exception Not_found ->
-                scope_level, unknown (kind ty)
-              | existing_scope_level, existing_ty ->
-                assert (Scope_level.equal scope_level existing_scope_level);
-                scope_level, existing_ty
-            in
-            (* XXX I suspect we need an "add in parallel" operation on
-               typing environments which does the additions then checks
-               the closedness invariant. *)
-            (* CR mshinwell: How do we know that [env] is the correct
-               environment for [judgements]? *)
-            let ty, new_judgements = meet (env, ty) (env, existing_ty) in
-            let env =
-              add_or_replace_typing_environment' env name scope_level ty
-            in
-            let judgements = new_judgements @ judgements in
-            meet_typing_environment_with_judgements
-              ~num_iterations:(num_iterations + 1) env ~judgements
-        end
-      with Misc.Fatal_error -> begin
-        Format.eprintf "\n%sContext is: applying judgements:%s\
-            @ %a\n"
-          (Misc_color.bold_red ())
-          (Misc_color.reset ())
-          print_judgements judgements;
-        raise Misc.Fatal_error
-      end
-
-    and replace_meet_typing_environment0 env name
-          ~scope_level ~existing_ty ty_in_context =
-      let ty, judgements = meet ty_in_context (env, existing_ty) in
-      let env = add_or_replace_typing_environment env name scope_level ty in
-      meet_typing_environment_with_judgements
-        ~num_iterations:0 env ~judgements
-
-    let meet_typing_environment (env1 : typing_environment)
+    (* CR mshinwell: Perhaps this function needs an iteration bound *)
+    let rec meet_typing_environment0 (env1 : typing_environment)
           (env2 : typing_environment) =
-      let judgements = ref [] in
+      let equations_from_meet = ref [] in
       let canonical_names_to_aliases =
         Name.Map.union_merge Name.Set.union
           env1.canonical_names_to_aliases
@@ -4280,14 +4248,9 @@ Format.eprintf "JOIN %a and %a -> %a\n%!"
                 print_typing_environment env1
                 print_typing_environment env2
             end;
-(*
-Format.eprintf "Meeting@ %a and@ %a ...\n%!" print ty1 print ty2;
-*)
-            let ty, new_judgements = meet (env1, ty1) (env2, ty2) in
-(*
-Format.eprintf "...giving %a\n%!" print ty;
-*)
-            judgements := new_judgements @ !judgements;
+            let ty, equations_from_meet = meet (env1, ty1) (env2, ty2) in
+            equations_from_meet :=
+              meet_equations new_equations_from_meet !equations_from_meet;
             level1, ty)
           env1.names_to_types
           env2.names_to_types
@@ -4321,9 +4284,12 @@ Format.eprintf "...giving %a\n%!" print ty;
           existential_freshening;
         }
       in
+      invariant_typing_environment env;
+      meet_typing_environment env !equations_from_meet
+
+    and meet_typing_environment env1 env2 =
       try
-        meet_typing_environment_with_judgements ~num_iterations:0
-          env ~judgements:!judgements
+        meet_typing_environment_with_equations0 env1 env2
       with Misc.Fatal_error -> begin
         Format.eprintf "\n%sContext is: meeting two typing environments:%s\
             @ %a\n\n%sand%s:@ %a\n"
@@ -4365,57 +4331,6 @@ Format.eprintf "...giving %a\n%!" print ty;
       match typing_judgements with
       | None -> create_typing_environment0 ~resolver ~must_be_closed:true
       | Some env -> env
-(*
-      let all_free_names =
-        match typing_judgements with
-        | None -> Name.Set.empty
-        | Some typing_judgements ->
-          let names =
-            Name.Map.fold (fun _name (_level, t) all_free_names ->
-                Name.Set.union (free_names_set t) all_free_names)
-              typing_judgements.names_to_types
-              Name.Set.empty
-          in
-          Name.Set.diff names (Name.Map.keys typing_judgements.names_to_types)
-      in
-      let equations =
-        Name.Set.fold (fun name (resulting_equations : equations) ->
-            let kind, level =
-              match equations.typing_judgements with
-              | Some typing_judgements ->
-                let level, ty =
-                  Name.Map.find name typing_judgements.names_to_types
-                in
-                let kind = kind ty in
-                kind, level
-              | None -> assert false
-            in
-            let typing_judgements =
-              match resulting_equations.typing_judgements with
-              | None ->
-                create_typing_environment0 ~resolver ~must_be_closed:false
-              | Some typing_judgements -> typing_judgements
-            in
-            assert (not (Name.Map.mem name typing_judgements.names_to_types));
-            let typing_judgements =
-              add_or_replace_typing_environment typing_judgements name level
-                (unknown kind)
-            in
-            { typing_judgements = Some typing_judgements; })
-          all_free_names
-          equations
-      in
-      let env =
-        match equations.typing_judgements with
-        | None -> create_typing_environment0 ~resolver ~must_be_closed:true
-        | Some env ->
-          { env with
-            must_be_closed = true;
-          }
-      in
-      invariant_typing_environment env;
-      env
-*)
 
     let meet_or_join_equations ~resolver ~meet_or_join
           equations1 equations2 =
@@ -4450,33 +4365,7 @@ Format.eprintf "...giving %a\n%!" print ty;
         equations1 equations2
   end
 
-  let meet ~output_env tc1 tc2 =
-    let t, judgements = Meet_and_join.meet tc1 tc2 in
-    let output_env =
-      List.fold_left (fun output_env (name, scope_level, ty) ->
-          let env, _ty =
-            (* We can choose either the environment from [tc1] or [tc2],
-               since [t] is the meet of the type components of those. *)
-            tc1
-          in
-          match Name.Map.find name output_env.names_to_types with
-          | exception Not_found ->
-            Meet_and_join.replace_meet_typing_environment0 output_env
-              name ~scope_level ~existing_ty:(unknown (kind ty))
-              (env, ty)
-          | existing_scope_level, existing_ty ->
-            assert (Scope_level.equal scope_level existing_scope_level);
-            Meet_and_join.replace_meet_typing_environment0 output_env
-              name ~scope_level ~existing_ty
-              (env, ty))
-        output_env
-        judgements
-    in
-    output_env, t
-
-  let meet ~output_env ~bias_towards tc2 =
-    meet ~output_env bias_towards tc2
-
+  let meet = Meet_and_join.meet
   let join = Meet_and_join.join
 
   let join_ty_value (env1, ty_value1) (env2, ty_value2) =
@@ -4497,17 +4386,9 @@ Format.eprintf "...giving %a\n%!" print ty;
 
     let add_or_replace = add_or_replace_typing_environment
 
-    let add t name scope_level ty =
-      match Name.Map.find name t.names_to_types with
-      | exception Not_found -> add_or_replace t name scope_level ty
-      | _ty ->
-        Misc.fatal_errorf "Cannot rebind %a in environment:@ %a"
-          Name.print name
-          print t
+    let add = add_typing_environment
 
-    let singleton0 ~resolver name scope_level ty ~must_be_closed =
-      add (create_typing_environment0 ~resolver ~must_be_closed)
-        name scope_level ty
+    let singleton0 = singleton_typing_environment0
 
     let singleton ~resolver name scope_level ty =
       singleton0 ~resolver name scope_level ty ~must_be_closed:true
@@ -4744,9 +4625,7 @@ Format.eprintf "Result is: %a\n%!"
   module Equations = struct
     type t = equations
 
-    let create () =
-      { typing_judgements = None;
-      }
+    let create = create_equations
 
     let invariant t =
       match t.typing_judgements with
@@ -4755,11 +4634,7 @@ Format.eprintf "Result is: %a\n%!"
         assert (not typing_judgements.must_be_closed);
         Typing_environment0.invariant typing_judgements
 
-    let singleton ~resolver name scope_level ty =
-      { typing_judgements =
-          Some (Typing_environment0.singleton0 ~resolver name scope_level ty
-            ~must_be_closed:false);
-      }
+    let singleton = singleton_equations
 
     let add ~resolver t name scope_level ty =
       match t.typing_judgements with
