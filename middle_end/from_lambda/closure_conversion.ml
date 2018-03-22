@@ -915,7 +915,7 @@ let ilambda_to_flambda ~backend ~module_ident ~size ~filename
         [Flambda.Typed_parameter.create
            (Parameter.wrap block_var)
            (T.unknown (K.value ()))];
-      stub = true;
+      stub = false; (* XXX for debugging only, change back to true *)
       is_exn_handler = false;
       handler = assign_continuation_body;
     }

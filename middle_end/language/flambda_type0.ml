@@ -289,6 +289,11 @@ end) = struct
     | Some typing_judgements ->
       is_empty_typing_environment typing_judgements
 
+  let domain_equations (equations : equations) =
+    match equations.typing_judgements with
+    | None -> Name.Set.empty
+    | Some typing_judgements -> Name.Map.keys typing_judgements.names_to_types
+
   let print_extensibility print_contents ppf (e : _ extensibility) =
     match e with
     | Open contents ->
@@ -802,11 +807,25 @@ end) = struct
   and free_names_of_closure (closure : closure) acc =
     match closure.function_decls with
     | Inlinable decl ->
-      let acc =
+      let param_names =
+        List.fold_left (fun param_names (param, _t) ->
+            let name = Parameter.name param in
+            Name.Set.add name param_names)
+          Name.Set.empty
+          decl.params
+      in
+      let free_names_result =
         List.fold_left (fun acc t ->
           free_names t acc)
-          acc
+          Name.Set.empty
           decl.result
+      in
+      let result_equations_domain = domain_equations decl.result_equations in
+      let acc =
+        Name.Set.union acc
+          (Name.Set.diff
+            (Name.Set.diff free_names_result result_equations_domain)
+            param_names)
       in
       List.fold_left (fun acc (_param, t) ->
           free_names t acc)
@@ -819,7 +838,10 @@ end) = struct
         acc
         decls.result
 
-  and free_names_of_typing_environment (env : typing_environment) acc =
+  and free_names_of_typing_environment (_env : typing_environment) acc =
+    (* Typing environments are always closed. *)
+    acc
+(*
     let all_names =
       Name.Map.fold (fun _bound_name (_scope_level, t) all_names ->
           free_names t all_names)
@@ -832,6 +854,7 @@ end) = struct
     in
     let free_names = Name.Set.diff all_names bound_names in
     Name.Set.union free_names acc
+*)
 
   and free_names_of_equations { typing_judgements; } acc =
     match typing_judgements with

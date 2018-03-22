@@ -113,16 +113,16 @@ let prepare_to_simplify_closure
       function_decl.my_closure
   in
   let env =
-    (* XXX use the correct my_closure type. *)
-    E.add_variable set_of_closures_env my_closure
-      (T.unknown (Flambda_kind.value ()))
+    List.fold_left (fun env (param : Flambda.Typed_parameter.t) ->
+        let var = Flambda.Typed_parameter.var param in
+        let ty = Flambda.Typed_parameter.ty param in
+        E.add_variable env var ty)
+      set_of_closures_env function_decl.params
   in
-  (* CR mshinwell: Freshening?  And cleaning? *)
-  List.fold_left (fun env (param : Flambda.Typed_parameter.t) ->
-      let var = Flambda.Typed_parameter.var param in
-      let ty = Flambda.Typed_parameter.ty param in
-      E.add_variable env var ty)
-    env function_decl.params
+  let env = E.increment_continuation_scope_level env in
+  (* XXX use the correct my_closure type. *)
+  E.add_variable env my_closure
+    (T.unknown (Flambda_kind.value ()))
 
 let initial_inlining_threshold ~round : Inlining_cost.Threshold.t =
   let unscaled =

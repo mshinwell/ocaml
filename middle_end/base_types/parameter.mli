@@ -31,6 +31,8 @@ val wrap : Variable.t -> t
 
 val var : t -> Variable.t
 
+val name : t -> Name.t
+
 (** Rename the inner variable of the parameter *)
 val rename
    : ?current_compilation_unit:Compilation_unit.t

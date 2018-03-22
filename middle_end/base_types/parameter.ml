@@ -28,6 +28,8 @@ let wrap var = { var; }
 
 let var t = t.var
 
+let name t = Name.var (var t)
+
 module M =
   Identifiable.Make (struct
     type t = parameter

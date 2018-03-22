@@ -263,13 +263,13 @@ MIDDLE_END_BASE_TYPES=\
   middle_end/base_types/immediate.cmo \
   middle_end/base_types/mutable_variable.cmo \
   middle_end/base_types/num_continuation_uses.cmo \
+  middle_end/base_types/symbol.cmo \
+  middle_end/base_types/name.cmo \
   middle_end/base_types/parameter.cmo \
   middle_end/base_types/scope_level.cmo \
   middle_end/base_types/set_of_closures_id.cmo \
   middle_end/base_types/set_of_closures_origin.cmo \
-  middle_end/base_types/symbol.cmo \
   middle_end/base_types/var_within_closure.cmo \
-  middle_end/base_types/name.cmo \
   middle_end/base_types/or_bottom.cmo
 
 MIDDLE_END_CODE_MOTION=\

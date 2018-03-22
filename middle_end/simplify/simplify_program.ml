@@ -388,7 +388,11 @@ Format.eprintf "\n\nsimplify_define_symbol:\n\n%!";
 Format.eprintf "Simplify_program fetching uses for %a\n%!"
   Continuation.print name;
 *)
-      let _args_types, env_extension =
+Format.eprintf "TOPLEVEL:@ \n%a\n"
+  Flambda.Expr.print expr;
+Format.eprintf "default_env0 (cont %a) is@ %a\n\n%!"
+  Continuation.print name E.print default_env0;
+      let _args_types, equations =
         let default_env =
           (* CR mshinwell: move to auxiliary function; share with
              [Simplify_named] *)
@@ -418,12 +422,8 @@ Format.eprintf "Simplify_program fetching uses for %a\n%!"
           raise exn
         end
       in
-(*
 Format.eprintf "\nEnv extension (cont %a) is@ %a\n\n%!"
   Continuation.print name T.Typing_environment.print equations;
-Format.eprintf "default_env0 (cont %a) is@ %a\n\n%!"
-  Continuation.print name E.print default_env0;
-*)
 (*
 Format.eprintf "Args for %a: %a\n%!"
   Continuation.print name
@@ -431,7 +431,7 @@ Format.eprintf "Args for %a: %a\n%!"
 *)
       let env =
         E.extend_typing_environment default_env0
-          ~equations:(T.Typing_environment.to_equations env_extension)
+          ~equations:(T.Typing_environment.to_equations equations)
       in
 (*
 Format.eprintf "Extended env (cont %a) is@ %a\n\n%!"

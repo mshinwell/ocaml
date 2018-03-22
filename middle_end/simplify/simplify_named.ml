@@ -90,9 +90,8 @@ let simplify_set_of_closures original_env r
       exn_continuation_param, closure_env
     in
     let closure_env =
-      let env = E.increment_continuation_scope_level closure_env in
       Simplify_aux.prepare_to_simplify_closure ~function_decl
-        ~set_of_closures_env:env
+        ~set_of_closures_env:closure_env
     in
     let my_closure, freshening =
       Freshening.add_variable (E.freshening env) function_decl.my_closure
