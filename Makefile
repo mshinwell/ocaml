@@ -82,6 +82,7 @@ MIDDLE_END_INCLUDES=\
   -I middle_end/removal \
   -I middle_end/simplify \
   -I middle_end/to_clambda \
+  -I middle_end/typing \
   -I middle_end/unboxing \
   -I middle_end
 
@@ -271,7 +272,7 @@ MIDDLE_END_BASE_TYPES=\
   middle_end/base_types/set_of_closures_origin.cmo \
   middle_end/base_types/var_within_closure.cmo \
   middle_end/base_types/or_bottom.cmo \
-  middle_end/language/name_occurrences.cmo
+  middle_end/base_types/name_occurrences.cmo
 
 MIDDLE_END_CODE_MOTION=\
   middle_end/code_motion/lift_let_cont.cmo \
@@ -361,7 +362,7 @@ MIDDLE_END_TOPLEVEL=\
 
 MIDDLE_END=\
   $(MIDDLE_END_BASE_TYPES) \
-  $(MIDDLE_END_LANGUAGE) \
+  $(MIDDLE_END_LANGUAGE_AND_TYPING) \
   $(MIDDLE_END_ANALYSIS) \
   $(MIDDLE_END_CODE_MOTION) \
   $(MIDDLE_END_FROM_LAMBDA) \
@@ -1383,7 +1384,11 @@ beforedepend:: bytecomp/opcodes.ml
 
 partialclean::
 	for d in utils parsing typing bytecomp asmcomp $(MIDDLE_END_DIRS) \
-	         middle_end/base_types asmcomp/debug driver toplevel tools; do \
+	         middle_end/base_types middle_end/analysis middle_end/base_types \
+           middle_end/cmx middle_end/code_motion middle_end/from_lambda \
+           middle_end/inlining middle_end/language middle_end/typing \
+           middle_end/removal middle_end/simplify middle_end/to_clambda \
+           middle_end/unboxing asmcomp/debug driver toplevel tools; do \
 	  rm -f $$d/*.cm[ioxt] $$d/*.cmti $$d/*.annot $$d/*.$(S) \
 	    $$d/*.$(O) $$d/*.$(SO) $d/*~; \
 	done
@@ -1392,7 +1397,11 @@ partialclean::
 .PHONY: depend
 depend: beforedepend
 	(for d in utils parsing typing bytecomp asmcomp $(MIDDLE_END_DIRS) \
-	 middle_end/base_types asmcomp/debug driver toplevel; \
+	   middle_end/base_types middle_end/analysis middle_end/base_types \
+     middle_end/cmx middle_end/code_motion middle_end/from_lambda \
+     middle_end/inlining middle_end/language middle_end/typing \
+     middle_end/removal middle_end/simplify middle_end/to_clambda \
+     middle_end/unboxing asmcomp/debug driver toplevel ; \
 	 do $(CAMLDEP) -slash $(DEPFLAGS) $$d/*.mli $$d/*.ml || exit; \
 	 done) > .depend
 	$(CAMLDEP) -slash $(DEPFLAGS) -native \
