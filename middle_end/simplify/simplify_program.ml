@@ -321,7 +321,8 @@ let simplify_define_symbol env (recursive : Flambda.recursive)
     Name.Set.iter (fun (name : Name.t) ->
         match name with
         | Symbol _ -> ()
-        | Var _ ->
+        | Var _ -> ()
+(* XXX Parameters appearing in return types fall foul of this
           if not (T.Typing_environment.is_existential typing_env name)
           then begin
             Misc.fatal_errorf "No variable that is not existentially-bound@ \
@@ -330,7 +331,9 @@ let simplify_define_symbol env (recursive : Flambda.recursive)
                 Environment:@ %a"
               Name.print name
               E.print env
-          end)
+          end
+*)
+)
       (Name_occurrences.everything domain)
   end;
 (*

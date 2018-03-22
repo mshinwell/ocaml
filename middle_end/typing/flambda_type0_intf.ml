@@ -154,7 +154,7 @@ module type S = sig
   and block_cases = private
     (* CR mshinwell: This should use a different type which is capped at
        max array / block size *)
-    | Join of { by_length : singleton_block Targetint.OCaml.Map.t; }
+    | Blocks of { by_length : singleton_block Targetint.OCaml.Map.t; }
     (** This is similar to the [Join] case at the top level of types:
         no two [singleton_block]s in one of these [Join]s can have a
         compatible structure.

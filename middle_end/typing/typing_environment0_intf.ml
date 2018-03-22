@@ -21,6 +21,8 @@ module type S = sig
   type equations
   type flambda_type
   type t_in_context
+  type 'a ty
+  type 'a unknown_or_join
 
   type t = typing_environment
 
@@ -150,9 +152,28 @@ module type S = sig
 
   val free_names_transitive_list : t -> flambda_type list -> Name_occurrences.t
 
-  val replace_meet_typing_environment
-     : typing_environment
+  val singleton0
+     : resolver:(Export_id.t -> flambda_type option)
     -> Name.t
-    -> t_in_context
-    -> typing_environment
+    -> Scope_level.t
+    -> flambda_type
+    -> must_be_closed:bool
+    -> t
+
+  val resolve_aliases_and_squash_unresolved_names_on_ty'
+     : t
+    -> kind:Flambda_kind.t
+    -> print_ty:(Format.formatter -> 'a ty -> unit)
+    -> force_to_kind:(flambda_type -> 'a ty)
+    -> unknown:'b
+    -> 'a ty
+    -> 'a unknown_or_join * (Name.t option)
+
+  val equal
+     : equal_type:(flambda_type -> flambda_type -> bool)
+    -> t
+    -> t
+    -> bool
+
+  val phys_equal : t -> t -> bool
 end

@@ -20,8 +20,10 @@ module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
 module Int32 = Numbers.Int32
 module Int64 = Numbers.Int64
 
-module S_impl = struct
-  type expr
+module S_impl (Expr : sig
+  type t
+end) = struct
+  type expr = Expr.t
 
   type inline_attribute =
     | Always_inline
@@ -162,7 +164,7 @@ module S_impl = struct
   }
 
   and block_cases =
-    | Join of { by_length : singleton_block Targetint.OCaml.Map.t; }
+    | Blocks of { by_length : singleton_block Targetint.OCaml.Map.t; }
 
   and blocks_and_tagged_immediates = {
     immediates : immediate_case Immediate.Map.t or_unknown;
@@ -300,4 +302,9 @@ module S_impl = struct
   end
 end
 
-module type S = module type of struct include S_impl end
+module type S = sig
+  type expr
+
+  include module type of struct include S_impl (struct type t = expr end) end
+    with type expr := expr
+end

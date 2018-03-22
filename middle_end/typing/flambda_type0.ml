@@ -24,6 +24,8 @@ module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
 module Int32 = Numbers.Int32
 module Int64 = Numbers.Int64
 
+module Real_typing_environment0 = Typing_environment0
+
 module K = Flambda_kind
 
 module Make (Expr : sig
@@ -31,13 +33,8 @@ module Make (Expr : sig
   val print_with_cache : cache:Printing_cache.t -> Format.formatter -> t -> unit
   val free_names : t -> Name_occurrences.t
 end) = struct
-  type expr = Expr.t
-
-  module T = struct
-    include Flambda_type0_internal_intf.S_impl with type expr := expr
-  end
-
-  open T
+  module T = Flambda_type0_internal_intf.S_impl (Expr)
+  include T
 
   (* CR mshinwell: think about existentials *)
   let is_empty_typing_environment (env : typing_environment) =
@@ -163,7 +160,7 @@ end) = struct
         (print_equations_with_cache ~cache) equations
         (print_fields ~cache) fields
 
-  and print_block_cases ~cache ppf ((Join { by_length; }) : block_cases) =
+  and print_block_cases ~cache ppf ((Blocks { by_length; }) : block_cases) =
     match Targetint.OCaml.Map.get_singleton by_length with
     | Some (_length, block) -> print_singleton_block ~cache ppf block
     | None ->
@@ -172,7 +169,7 @@ end) = struct
 
   and print_immediates ~cache ppf cases =
     let no_equations =
-      Immediate.Map.for_all (fun _imm { equations; } ->
+      Immediate.Map.for_all (fun _imm ({ equations; } : immediate_case) ->
           is_empty_equations equations)
         cases
     in
@@ -500,7 +497,7 @@ end) = struct
         match blocks with
         | Unknown -> acc
         | Known blocks ->
-          Tag.Map.fold (fun _tag ((Join { by_length; }) : block_cases) acc ->
+          Tag.Map.fold (fun _tag ((Blocks { by_length; }) : block_cases) acc ->
               Targetint.OCaml.Map.fold
                 (fun _length (singleton : singleton_block) acc ->
                   let acc =
@@ -1355,7 +1352,7 @@ result
       Targetint.OCaml.Map.add size singleton_block
         Targetint.OCaml.Map.empty
     in
-    let block_cases : block_cases = Join { by_length; } in
+    let block_cases : block_cases = Blocks { by_length; } in
     let blocks =
       Tag.Map.add Tag.double_array_tag block_cases Tag.Map.empty
     in
@@ -1396,7 +1393,7 @@ result
         Targetint.OCaml.Map.add length singleton_block
           Targetint.OCaml.Map.empty
       in
-      let block_cases : block_cases = Join { by_length; } in
+      let block_cases : block_cases = Blocks { by_length; } in
       let blocks =
         Tag.Map.add Tag.double_array_tag block_cases Tag.Map.empty
       in
@@ -1442,7 +1439,7 @@ result
         Targetint.OCaml.Map.add length singleton_block
           Targetint.OCaml.Map.empty
       in
-      let block_cases : block_cases = Join { by_length; } in
+      let block_cases : block_cases = Blocks { by_length; } in
       let blocks = Tag.Map.add tag block_cases Tag.Map.empty in
       let blocks_imms : blocks_and_tagged_immediates =
         { immediates = Known Immediate.Map.empty;
@@ -1481,7 +1478,7 @@ result
         Targetint.OCaml.Map.add length singleton_block
           Targetint.OCaml.Map.empty
       in
-      let block_cases : block_cases = Join { by_length; } in
+      let block_cases : block_cases = Blocks { by_length; } in
       let blocks = Tag.Map.add tag block_cases Tag.Map.empty in
       let blocks_imms : blocks_and_tagged_immediates =
         { immediates = Known Immediate.Map.empty;
@@ -2045,7 +2042,7 @@ result
             | Mutable, _ | _, Mutable -> Mutable
             | Immutable field1, Immutable field2 ->
               let field, new_equations_from_meet =
-                Meet_and_join.meet (env1, field1) (env2, field2)
+                Meet_and_join.meet ~bias_towards:(env1, field1) (env2, field2)
               in
               equations_from_meet :=
                 Meet_and_join.meet_equations ~resolver new_equations_from_meet
@@ -2086,8 +2083,8 @@ result
       }
 
     let meet_block_cases env1 env2
-          ((Join { by_length = singleton_blocks1; }) : block_cases)
-          ((Join { by_length = singleton_blocks2; }) : block_cases)
+          ((Blocks { by_length = singleton_blocks1; }) : block_cases)
+          ((Blocks { by_length = singleton_blocks2; }) : block_cases)
           : (block_cases * equations) Or_bottom.t =
       let resolver = env1.resolver in
       let equations_from_meet = ref (Equations.create ()) in
@@ -2106,11 +2103,11 @@ result
           singleton_blocks2
       in
       if Targetint.OCaml.Map.is_empty by_length then Bottom
-      else Ok (((Join { by_length; }) : block_cases), !equations_from_meet)
+      else Ok (((Blocks { by_length; }) : block_cases), !equations_from_meet)
 
     let join_block_cases env1 env2
-          ((Join { by_length = singleton_blocks1; }) : block_cases)
-          ((Join { by_length = singleton_blocks2; }) : block_cases)
+          ((Blocks { by_length = singleton_blocks1; }) : block_cases)
+          ((Blocks { by_length = singleton_blocks2; }) : block_cases)
           : block_cases =
       let by_length =
         Targetint.OCaml.Map.union_merge
@@ -2120,7 +2117,7 @@ result
           singleton_blocks1
           singleton_blocks2
       in
-      Join { by_length; }
+      Blocks { by_length; }
 
     let meet_blocks env1 env2 blocks1 blocks2 : _ Or_bottom.t =
       let resolver = env1.resolver in
@@ -2213,7 +2210,7 @@ result
               | Known blocks ->
                 match Tag.Map.get_singleton blocks with
                 | None -> equations_from_meet
-                | Some (_, Join { by_length; }) ->
+                | Some (_, Blocks { by_length; }) ->
                   (* CR mshinwell: This should remove equations propagated
                      upwards from the block cases *)
                   match Targetint.OCaml.Map.get_singleton by_length with
@@ -2622,7 +2619,7 @@ result
               let params =
                 List.map2 (fun t1 t2 ->
                     let t, new_equations_from_meet =
-                      Meet_and_join.meet (env1, t1) (env2, t2)
+                      Meet_and_join.meet ~bias_towards:(env1, t1) (env2, t2)
                     in
                     if not (t == t1) then begin
                       params_changed := join_changes !params_changed Left
@@ -2646,8 +2643,10 @@ result
             | Some param_names ->
               List.fold_left2 (fun env param param_ty ->
                   let param_name = Parameter.name param in
+                  (* CR mshinwell: This level shouldn't be hard-coded *)
                   let level = Scope_level.initial in
-                  Typing_environment0.add env param_name level param_ty)
+                  Typing_environment0.add_or_replace_meet env
+                    param_name level param_ty)
                 env
                 param_names params
           in
@@ -2666,19 +2665,20 @@ result
                        result_equations2
                     in
                     let result_env1 =
-                      Meet_and_join.meet_typing_environment
+                      Typing_environment0.meet
                         (env_for_result env1 ~params:params1
                           ~param_names:param_names1)
                         result_equations1
                     in
                     let result_env2 =
-                      Meet_and_join.meet_typing_environment
+                      Typing_environment0.meet
                         (env_for_result env2 ~params:params2
                           ~param_names:param_names2)
                         result_equations2
                     in
                     let t, new_equations_from_meet =
-                      Meet_and_join.meet (result_env1, t1) (result_env2, t2)
+                      Meet_and_join.meet ~bias_towards:(result_env1, t1)
+                        (result_env2, t2)
                     in
                     if not (t == t1) then begin
                       result_changed := join_changes !result_changed Left
@@ -3383,24 +3383,9 @@ result
         Known (Closure closure)
       | (Discriminant _ | Set_of_closures _ | Closure _), _ -> Unknown
   end) and Meet_and_join : sig
-    val meet : t_in_context -> t_in_context -> t * equations
+    val meet : bias_towards:t_in_context -> t_in_context -> t * equations
 
     val join : t_in_context -> t_in_context -> t
-
-    val meet_typing_environment
-       : typing_environment
-      -> typing_environment
-      -> typing_environment
-
-    val join_typing_environment
-       : typing_environment
-      -> typing_environment
-      -> typing_environment
-
-    val equations_to_typing_environment
-       : resolver:(Export_id.t -> t option)
-      -> equations
-      -> typing_environment
 
     val meet_equations
        : resolver:(Export_id.t -> t option)
@@ -3414,7 +3399,7 @@ result
       -> equations
       -> equations
   end = struct
-    let meet (env1, (t1 : t)) (env2, (t2 : t)) : t * equations =
+    let meet ~bias_towards:(env1, (t1 : t)) (env2, (t2 : t)) : t * equations =
       if env1 == env2 && t1 == t2 then t1, Equations.create ()
       else begin
         ensure_phantomness_matches t1 t2 "kind mismatch upon meet";
@@ -3563,91 +3548,6 @@ result
         { t1 with descr; }
       end
 
-    let join_typing_environment (env1 : typing_environment)
-          (env2 : typing_environment) =
-      let canonical_names_to_aliases =
-        Name.Map.union_merge Name.Set.union
-          env1.canonical_names_to_aliases
-          env2.canonical_names_to_aliases
-      in
-      let names_to_types =
-        Name.Map.inter_merge (fun (level1, ty1) (level2, ty2) ->
-            if not (Scope_level.equal level1 level2) then begin
-              Misc.fatal_errorf "join_typing_environment: \
-                  Scope levels differ for:@ %a@ and:@ %a"
-                print ty1
-                print ty2
-            end;
-            (* When joining (or meeting) environments, all free names in the
-               types in such environments must be in those environments
-               themselves, otherwise the well-formedness condition for
-               environments being closed would not be respected. *)
-            let ty = join (env1, ty1) (env2, ty2) in
-(*
-Format.eprintf "JOIN %a and %a -> %a\n%!"
-  print ty1
-  print ty2
-  print ty;
-*)
-            level1, ty)
-          env1.names_to_types
-          env2.names_to_types
-      in
-      let in_env1_only =
-        Name.Map.filter (fun name _ ->
-            not (Name.Map.mem name names_to_types))
-          env1.names_to_types
-      in
-      let in_env2_only =
-        Name.Map.filter (fun name _ ->
-            not (Name.Map.mem name names_to_types))
-          env2.names_to_types
-      in
-      let in_one_env_only =
-        Name.Map.disjoint_union in_env1_only in_env2_only
-      in
-      let names_to_types =
-        Name.Map.fold (fun name (scope_level, ty) names_to_types ->
-            let ty = unknown (kind ty) in
-            assert (not (Name.Map.mem name names_to_types));
-            Name.Map.add name (scope_level, ty) names_to_types)
-          in_one_env_only
-          names_to_types
-      in
-      let all_levels_to_names =
-        Scope_level.Map.union_merge
-          (fun names1 names2 -> Name.Set.union names1 names2)
-          env1.levels_to_names
-          env2.levels_to_names
-      in
-      let levels_to_names =
-        Scope_level.Map.map (fun names ->
-            Name.Set.filter (fun name ->
-                Name.Map.mem name names_to_types)
-              names)
-          all_levels_to_names
-      in
-      let existentials =
-        Name.Set.union env1.existentials env2.existentials
-      in
-      let existential_freshening =
-        env1.existential_freshening (* XXX *)
-      in
-      { must_be_closed = env1.must_be_closed || env2.must_be_closed;
-        resolver = env1.resolver;
-        canonical_names_to_aliases;
-        names_to_types;
-        levels_to_names;
-        existentials;
-        existential_freshening;
-      }
-
-    let equations_to_typing_environment ~resolver
-          { typing_judgements; } : typing_environment =
-      match typing_judgements with
-      | None -> Typing_environment0.create ~resolver
-      | Some env -> env
-
     let meet_or_join_equations ~resolver ~meet_or_join
           equations1 equations2 =
       let typing_judgements =
@@ -3687,36 +3587,26 @@ Format.eprintf "JOIN %a and %a -> %a\n%!"
       with type equations := equations
       with type flambda_type := flambda_type
       with type t_in_context := t_in_context
-
-    val singleton0
-       : resolver:(Export_id.t -> flambda_type option)
-      -> Name.t
-      -> Scope_level.t
-      -> flambda_type
-      -> must_be_closed:bool
-      -> t
-
-    val resolve_aliases_and_squash_unresolved_names_on_ty'
-       : Typing_environment0.t
-      -> kind:Flambda_kind.t
-      -> print_ty:(Format.formatter -> 'a ty -> unit)
-      -> force_to_kind:(flambda_type -> 'a ty)
-      -> unknown:'b
-      -> 'a ty
-      -> 'a unknown_or_join * (Name.t option)
-
-    val equal
-       : equal_type:(flambda_type -> flambda_type -> bool)
-      -> t
-      -> t
-      -> bool
-
-    val phys_equal : t -> t -> bool
-  end = Typing_environment0.Make (struct
+      with type 'a ty = 'a ty
+      with type 'a unknown_or_join = 'a unknown_or_join
+  end = Real_typing_environment0.Make (struct
     include T
 
-  end)
-  and Equations : sig
+    module Equations = Equations
+
+    let is_empty_typing_environment = is_empty_typing_environment
+    let meet = Meet_and_join.meet
+    let join = Meet_and_join.join
+    let kind = kind
+    let force_to_kind_fabricated = force_to_kind_fabricated
+    let force_to_kind_naked_number = force_to_kind_naked_number
+    let force_to_kind_value = force_to_kind_value
+    let unknown = unknown
+    let free_names_set = free_names_set
+    let free_names = free_names
+    let print_typing_environment = print_typing_environment
+    let print = print
+  end) and Equations : sig
     include Equations_intf.S
       with type equations := equations
       with type typing_environment := typing_environment
@@ -3813,9 +3703,7 @@ Format.eprintf "JOIN %a and %a -> %a\n%!"
       | Some typing_judgements -> typing_judgements
   end
 
-  let meet ~bias_towards:(env1, ty1) (env2, ty2) =
-    Meet_and_join.meet (env1, ty1) (env2, ty2)
-
+  let meet = Meet_and_join.meet
   let join = Meet_and_join.join
 
   let join_ty_value (env1, ty_value1) (env2, ty_value2) =
@@ -3837,7 +3725,8 @@ Format.eprintf "JOIN %a and %a -> %a\n%!"
                 | Known blocks ->
                   let blocks =
                     Tag.Map.map
-                      (fun ((Join { by_length }) : block_cases) : block_cases ->
+                      (fun ((Blocks { by_length }) : block_cases)
+                            : block_cases ->
                         let by_length =
                           Targetint.OCaml.Map.map
                             (fun (block : singleton_block) : singleton_block ->
@@ -3848,7 +3737,7 @@ Format.eprintf "JOIN %a and %a -> %a\n%!"
                               { block with equations; })
                             by_length
                         in
-                        Join { by_length; })
+                        Blocks { by_length; })
                       blocks
                   in
                   Known blocks

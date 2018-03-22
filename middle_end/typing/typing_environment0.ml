@@ -26,7 +26,11 @@ module Make (T : sig
     -> typing_environment
     -> unit
 
+  val free_names : flambda_type -> Name_occurrences.t
+
   val free_names_set : flambda_type -> Name.Set.t
+
+  val unknown : Flambda_kind.t -> t
 
   val force_to_kind_value : t -> of_kind_value ty
 
@@ -44,14 +48,25 @@ module Make (T : sig
     with type typing_environment := typing_environment
     with type flambda_type := flambda_type
 
+  val join : t_in_context -> t_in_context -> t
+
   val meet
      : bias_towards:t_in_context
     -> t_in_context
     -> t * Equations.t
+
+  val is_empty_typing_environment : typing_environment -> bool
 end) = struct
   type t = T.typing_environment
 
   open T
+
+  type typing_environment = T.typing_environment
+  type equations = T.Equations.t
+  type flambda_type = T.flambda_type
+  type t_in_context = T.t_in_context
+  type 'a ty = 'a T.ty
+  type 'a unknown_or_join = 'a T.unknown_or_join
 
   (* CR mshinwell: Add invariant check.  First one: symbols should never be
      existential *)
@@ -96,7 +111,7 @@ end) = struct
         print_typing_environment env
     | aliases -> aliases
 
-  let invariant_typing_environment env =
+  let invariant env =
     if !Clflags.flambda_invariant_checks && env.must_be_closed then begin
       let free_names =
         Name.Map.fold (fun _name (_level, t) free_names ->
@@ -291,7 +306,7 @@ then begin
 end;
 *)
     if !Clflags.flambda_invariant_checks then begin
-      invariant_typing_environment env;
+      invariant env;
       let free_names = free_names_set t in
       if Name.Set.mem name free_names then begin
         Misc.fatal_errorf "Adding binding of %a to@ %a@ would cause a \
@@ -344,7 +359,7 @@ end;
       }
     in
     try
-      invariant_typing_environment t;
+      invariant t;
       t
     with Misc.Fatal_error -> begin
       Format.eprintf "\n%sContext is: \
@@ -410,17 +425,17 @@ end;
             Misc.fatal_errorf "meet_typing_environment: \
                 Scope levels differ for:@ %a@ and:@ %a@ levels1:@ %a@ \
                 levels2:@ %a@ env1:@ %a@ env2:@ %a"
-              print ty1
-              print ty2
+              T.print ty1
+              T.print ty2
               (Scope_level.Map.print Name.Set.print) env1.levels_to_names
               (Scope_level.Map.print Name.Set.print) env2.levels_to_names
-              print_typing_environment env1
-              print_typing_environment env2
+              print env1
+              print env2
           end;
           let ty, new_equations_from_meet =
             meet ~bias_towards:(env1, ty1) (env2, ty2)
           in
-          equations_from_meet := Meet_and_join.meet_equations ~resolver
+          equations_from_meet := Equations.meet ~resolver
             new_equations_from_meet !equations_from_meet;
           level1, ty)
         env1.names_to_types
@@ -455,7 +470,7 @@ end;
         existential_freshening;
       }
     in
-    Typing_environment0.invariant env;
+    invariant env;
     let equations_from_meet =
       Equations.to_typing_environment ~resolver:env.resolver
         !equations_from_meet
@@ -481,6 +496,85 @@ end;
         raise Misc.Fatal_error
       end
 
+  let join_typing_environment (env1 : typing_environment)
+        (env2 : typing_environment) =
+    let canonical_names_to_aliases =
+      Name.Map.union_merge Name.Set.union
+        env1.canonical_names_to_aliases
+        env2.canonical_names_to_aliases
+    in
+    let names_to_types =
+      Name.Map.inter_merge (fun (level1, ty1) (level2, ty2) ->
+          if not (Scope_level.equal level1 level2) then begin
+            Misc.fatal_errorf "join_typing_environment: \
+                Scope levels differ for:@ %a@ and:@ %a"
+              T.print ty1
+              T.print ty2
+          end;
+          (* When joining (or meeting) environments, all free names in the
+              types in such environments must be in those environments
+              themselves, otherwise the well-formedness condition for
+              environments being closed would not be respected. *)
+          let ty = join (env1, ty1) (env2, ty2) in
+(*
+Format.eprintf "JOIN %a and %a -> %a\n%!"
+print ty1
+print ty2
+print ty;
+*)
+          level1, ty)
+        env1.names_to_types
+        env2.names_to_types
+    in
+    let in_env1_only =
+      Name.Map.filter (fun name _ ->
+          not (Name.Map.mem name names_to_types))
+        env1.names_to_types
+    in
+    let in_env2_only =
+      Name.Map.filter (fun name _ ->
+          not (Name.Map.mem name names_to_types))
+        env2.names_to_types
+    in
+    let in_one_env_only =
+      Name.Map.disjoint_union in_env1_only in_env2_only
+    in
+    let names_to_types =
+      Name.Map.fold (fun name (scope_level, ty) names_to_types ->
+          let ty = unknown (kind ty) in
+          assert (not (Name.Map.mem name names_to_types));
+          Name.Map.add name (scope_level, ty) names_to_types)
+        in_one_env_only
+        names_to_types
+    in
+    let all_levels_to_names =
+      Scope_level.Map.union_merge
+        (fun names1 names2 -> Name.Set.union names1 names2)
+        env1.levels_to_names
+        env2.levels_to_names
+    in
+    let levels_to_names =
+      Scope_level.Map.map (fun names ->
+          Name.Set.filter (fun name ->
+              Name.Map.mem name names_to_types)
+            names)
+        all_levels_to_names
+    in
+    let existentials =
+      Name.Set.union env1.existentials env2.existentials
+    in
+    let existential_freshening =
+      env1.existential_freshening (* XXX *)
+    in
+    { must_be_closed = env1.must_be_closed || env2.must_be_closed;
+      resolver = env1.resolver;
+      canonical_names_to_aliases;
+      names_to_types;
+      levels_to_names;
+      existentials;
+      existential_freshening;
+    }
+
   let replace_meet env name (ty_env, ty) =
     match Name.Map.find name env.names_to_types with
     | exception Not_found ->
@@ -489,18 +583,18 @@ end;
         Name.print name
         print_typing_environment env
     | scope_level, _existing_ty ->
-      let ty_env =
-        Typing_environment0.add ty_env name scope_level ty
-      in
-      Typing_environment0.meet env ty_env
+      let ty_env = add ty_env name scope_level ty in
+      meet_typing_environment env ty_env
 
   let add_or_replace_meet t name scope_level ty =
     match Name.Map.find name t.names_to_types with
     | exception Not_found -> add t name scope_level ty
-    | _ ->
+    | scope_level, _existing_ty ->
       (* CR mshinwell: We need to think about this some more.  Is [ty]
          supposed to only have free names in [t]? *)
-      replace_meet t name (t, ty)
+      let new_t = create ~resolver:t.resolver in
+      let ty_env = add new_t name scope_level ty in
+      meet_typing_environment t ty_env
 
   let find_opt t name =
     match Name.Map.find name t.names_to_types with
@@ -574,9 +668,6 @@ print_typing_environment result;
 
   let aliases = aliases_typing_environment
 
-  let meet = Meet_and_join.meet_typing_environment
-  let join = Meet_and_join.join_typing_environment
-
   let restrict_to_names t allowed =
     let allowed = Name_occurrences.everything allowed in
     restrict_to_names0_typing_environment t allowed
@@ -612,10 +703,10 @@ print_typing_environment result;
 
   let add_equations t equations =
     let equations_as_env =
-      Meet_and_join.equations_to_typing_environment ~resolver:t.resolver
+      Equations.to_typing_environment ~resolver:t.resolver
         equations
     in
-    meet t equations_as_env
+    meet_typing_environment t equations_as_env
 
   let to_equations t =
     let t =
@@ -662,7 +753,7 @@ print_typing_environment result;
       | None -> ()
       | Some (name, to_follow) ->
         let t, _binding_type = find env name in
-        let names = free_names t in
+        let names = T.free_names t in
         loop (Name_occurrences.union to_follow names)
     in
     loop (free_names t);
@@ -721,11 +812,12 @@ print_typing_environment result;
     { typing_judgements = Some t;
     }
 
-  let invariant = invariant_typing_environment
-
   let restrict_names_to_those_occurring_in_types t tys =
     let free_names = free_names_transitive_list t tys in
 Format.eprintf "Restricting to: %a\n%!"
   Name_occurrences.print free_names;
     restrict_to_names t free_names
+
+  let meet = meet_typing_environment
+  let join = join_typing_environment
 end

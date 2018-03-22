@@ -198,8 +198,8 @@ and equal_singleton_block
     && Misc.Stdlib.Array.equal (equal_mutable_or_immutable equal)
          fields1 fields2
 
-and equal_block_cases (Join { by_length = by_length1; })
-      (Join { by_length = by_length2; }) =
+and equal_block_cases (Blocks { by_length = by_length1; })
+      (Blocks { by_length = by_length2; }) =
   Targetint.OCaml.Map.equal equal_singleton_block by_length1 by_length2
 
 and equal_blocks_and_tagged_immediates
@@ -1075,7 +1075,7 @@ Format.eprintf "get_field_from_block index %a type@ %a\n"
           assert (not (Tag.Map.is_empty blocks));
           let field_ty =
             Tag.Map.fold
-              (fun tag ((Join { by_length; }) : block_cases) field_ty ->
+              (fun tag ((Blocks { by_length; }) : block_cases) field_ty ->
                 let tag_is_valid =
                   valid_block_tag_for_kind ~tag ~field_kind
                 in
@@ -1130,7 +1130,7 @@ Format.eprintf "returned field type is %a\n"
   | Fabricated _ -> wrong_kind ()
 
 let tags_all_valid t blocks ~kind_of_all_fields =
-  Tag.Map.for_all (fun tag ((Join { by_length; }) : block_cases) ->
+  Tag.Map.for_all (fun tag ((Blocks { by_length; }) : block_cases) ->
       Targetint.OCaml.Map.iter
         (fun _length (block : singleton_block) ->
           Array.iter (fun (field : _ mutable_or_immutable) ->
@@ -1216,7 +1216,7 @@ let prove_unboxable_variant_or_block_of_values env t
         else
           let cannot_unbox = ref false in
           let block_sizes_by_tag =
-            Tag.Map.fold (fun tag (Join { by_length; }) blocks ->
+            Tag.Map.fold (fun tag (Blocks { by_length; }) blocks ->
                 match Targetint.OCaml.Map.get_singleton by_length with
                 | Some (length, _) ->
                   begin match Tag.Scannable.of_tag tag with
@@ -1277,7 +1277,7 @@ let prove_float_array env t : float_array_proof proof =
           let cannot_unbox = ref false in
           (* CR mshinwell: share with previous function (maybe) *)
           let block_sizes_by_tag =
-            Tag.Map.fold (fun tag (Join { by_length; }) blocks ->
+            Tag.Map.fold (fun tag (Blocks { by_length; }) blocks ->
                 match Targetint.OCaml.Map.get_singleton by_length with
                 | Some (length, _) ->
                   Tag.Map.add tag length blocks
@@ -1523,7 +1523,7 @@ let prove_lengths_of_arrays_or_blocks env t
           assert (not (Tag.Map.is_empty blocks));
           let lengths =
             Tag.Map.fold
-              (fun _tag ((Join { by_length; }) : block_cases) result ->
+              (fun _tag ((Blocks { by_length; }) : block_cases) result ->
                 Targetint.OCaml.Map.fold (fun length _block result ->
                     Targetint.OCaml.Set.add length result)
                   by_length
