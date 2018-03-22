@@ -366,11 +366,8 @@ and equal_equations equations1 equations2 =
 
 let strictly_more_precise (t_env, t) ~than:(than_env, than) =
   (* The [bias_towards] choice is arbitrary here. *)
-  let _env, meet =
-    let output_env =
-      Typing_environment0.create_using_resolver_from t_env
-    in
-    meet ~output_env ~bias_towards:(t_env, t) (than_env, than)
+  let meet, _equations =
+    meet ~bias_towards:(t_env, t) (than_env, than)
   in
   not (equal than meet)
 

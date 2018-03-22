@@ -834,11 +834,11 @@ Format.eprintf "...result of cut is %a\n%!" TE.print this_env;
               let use_env, arg_tys_this_use_rev =
                 List.fold_left2
                   (fun (use_env, arg_tys_this_use_rev) param_ty arg_ty ->
-                    let use_env, arg_ty =
-                      T.meet ~output_env:use_env
-                        ~bias_towards:(use_env, param_ty)
+                    let arg_ty, new_equations =
+                      T.meet ~bias_towards:(use_env, param_ty)
                         (use_env, arg_ty)
                     in
+                    let use_env = TE.add_equations use_env new_equations in
 Format.eprintf "New use_env after meet:@ %a\n%!"
   TE.print use_env;
                     use_env, arg_ty :: arg_tys_this_use_rev)
