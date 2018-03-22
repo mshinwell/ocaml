@@ -1,0 +1,303 @@
+(**************************************************************************)
+(*                                                                        *)
+(*                                 OCaml                                  *)
+(*                                                                        *)
+(*                       Pierre Chambart, OCamlPro                        *)
+(*           Mark Shinwell and Leo White, Jane Street Europe              *)
+(*                                                                        *)
+(*   Copyright 2018 OCamlPro SAS                                          *)
+(*   Copyright 2018 Jane Street Group LLC                                 *)
+(*                                                                        *)
+(*   All rights reserved.  This file is distributed under the terms of    *)
+(*   the GNU Lesser General Public License version 2.1, with the          *)
+(*   special exception on linking described in the file LICENSE.          *)
+(*                                                                        *)
+(**************************************************************************)
+
+[@@@ocaml.warning "+a-4-9-30-40-41-42"]
+
+module Float_by_bit_pattern = Numbers.Float_by_bit_pattern
+module Int32 = Numbers.Int32
+module Int64 = Numbers.Int64
+
+module S_impl = struct
+  type expr
+
+  type inline_attribute =
+    | Always_inline
+    | Never_inline
+    | Unroll of int
+    | Default_inline
+
+  let print_inline_attribute ppf attr =
+    let fprintf = Format.fprintf in
+    match attr with
+    | Always_inline -> fprintf ppf "Always_inline"
+    | Never_inline -> fprintf ppf "Never_inline"
+    | Unroll n -> fprintf ppf "@[(Unroll %d)@]" n
+    | Default_inline -> fprintf ppf "Default_inline"
+
+  type specialise_attribute =
+    | Always_specialise
+    | Never_specialise
+    | Default_specialise
+
+  let print_specialise_attribute ppf attr =
+    let fprintf = Format.fprintf in
+    match attr with
+    | Always_specialise -> fprintf ppf "Always_specialise"
+    | Never_specialise -> fprintf ppf "Never_specialise"
+    | Default_specialise -> fprintf ppf "Default_specialise"
+
+  type string_contents =
+    | Contents of string
+    | Unknown_or_mutable
+
+  module String_info = struct
+    type t = {
+      contents : string_contents;
+      size : Targetint.OCaml.t;
+    }
+
+    include Identifiable.Make (struct
+      type nonrec t = t
+
+      let compare t1 t2 =
+        let c =
+          match t1.contents, t2.contents with
+          | Contents s1, Contents s2 -> String.compare s1 s2
+          | Unknown_or_mutable, Unknown_or_mutable -> 0
+          | Contents _, Unknown_or_mutable -> -1
+          | Unknown_or_mutable, Contents _ -> 1
+        in
+        if c <> 0 then c
+        else Pervasives.compare t1.size t2.size
+
+      let equal t1 t2 =
+        compare t1 t2 = 0
+
+      let hash t = Hashtbl.hash t
+
+      let print ppf { contents; size; } =
+        match contents with
+        | Unknown_or_mutable ->
+          Format.fprintf ppf "(size %a)" Targetint.OCaml.print size
+        | Contents s ->
+          let s, dots =
+            let max_size = Targetint.OCaml.ten in
+            let long = Targetint.OCaml.compare size max_size > 0 in
+            if long then String.sub s 0 8, "..."
+            else s, ""
+          in
+          Format.fprintf ppf "(size %a) (contents \"%S\"%s)"
+            Targetint.OCaml.print size
+            s dots
+    end)
+  end
+
+  type 'a mutable_or_immutable =
+    | Immutable of 'a
+    | Mutable
+
+  type 'a or_unknown =
+    | Known of 'a
+    | Unknown
+
+  type 'a or_alias =
+    | No_alias of 'a
+    | Type of Export_id.t
+    | Equals of Name.t
+
+  type 'a extensibility =
+    | Open of 'a
+    | Exactly of 'a
+
+  let extensibility_contents (e : _ extensibility) =
+    match e with
+    | Open contents | Exactly contents -> contents
+
+  type t = {
+    descr : descr;
+    phantom : Flambda_kind.Phantom_kind.occurrences option;
+  }
+
+  and flambda_type = t
+
+  and t_in_context = typing_environment * t
+
+  and descr =
+    | Value of ty_value
+    | Naked_number :
+        'kind ty_naked_number * 'kind Flambda_kind.Naked_number.t -> descr
+    | Fabricated of ty_fabricated
+
+  and ty_value = of_kind_value ty
+  and ty_value_in_context = typing_environment * ty_value
+  and 'a ty_naked_number = 'a of_kind_naked_number ty
+  and ty_fabricated = of_kind_fabricated ty
+
+  and 'a ty = 'a unknown_or_join or_alias
+  and 'a ty_in_context = typing_environment * ('a ty)
+
+  and 'a unknown_or_join =
+    | Unknown
+    | Join of 'a list
+
+  and of_kind_value =
+    | Blocks_and_tagged_immediates of blocks_and_tagged_immediates
+    | Boxed_number : _ of_kind_value_boxed_number -> of_kind_value
+    | Closures of closures
+    | String of String_info.Set.t
+
+  and immediate_case = {
+    (* Environment extensions have an [option] type so that the information
+       required to create a typing environment isn't required for various
+       trivial functions such as [these_tagged_immediates]. *)
+    equations : equations;
+  }
+ 
+  and singleton_block = {
+    equations : equations;
+    fields : t mutable_or_immutable array;
+  }
+
+  and block_cases =
+    | Join of { by_length : singleton_block Targetint.OCaml.Map.t; }
+
+  and blocks_and_tagged_immediates = {
+    immediates : immediate_case Immediate.Map.t or_unknown;
+    blocks : block_cases Tag.Map.t or_unknown;
+    is_int : Name.t option;
+    get_tag : Name.t option;
+  }
+
+  and 'a of_kind_value_boxed_number =
+    | Boxed_float
+         : Numbers.Float_by_bit_pattern.Set.t ty_naked_number
+        -> Numbers.Float_by_bit_pattern.Set.t ty_naked_number
+             of_kind_value_boxed_number
+    | Boxed_int32
+         : Int32.Set.t ty_naked_number
+        -> Int32.Set.t ty_naked_number of_kind_value_boxed_number
+    | Boxed_int64
+         : Int64.Set.t ty_naked_number
+        -> Int64.Set.t ty_naked_number of_kind_value_boxed_number
+    | Boxed_nativeint
+         : Targetint.Set.t ty_naked_number
+        -> Targetint.Set.t ty_naked_number of_kind_value_boxed_number
+
+  and inlinable_function_declaration = {
+    closure_origin : Closure_origin.t;
+    continuation_param : Continuation.t;
+    exn_continuation_param : Continuation.t;
+    is_classic_mode : bool;
+    params : (Parameter.t * t) list;
+    code_id : Code_id.t;
+    body : expr;
+    free_names_in_body : Name_occurrences.t;
+    result : t list;
+    result_equations : equations;
+    stub : bool;
+    dbg : Debuginfo.t;
+    inline : inline_attribute;
+    specialise : specialise_attribute;
+    is_a_functor : bool;
+    invariant_params : Variable.Set.t lazy_t;
+    size : int option lazy_t;
+    direct_call_surrogate : Closure_id.t option;
+    my_closure : Variable.t;
+  }
+
+  and non_inlinable_function_declarations = {
+    params : t list;
+    result : t list;
+    result_equations : equations;
+    direct_call_surrogate : Closure_id.t option;
+  }
+
+  and function_declarations =
+    | Non_inlinable of non_inlinable_function_declarations option
+    | Inlinable of inlinable_function_declaration
+
+  and closures_entry = {
+    set_of_closures : ty_fabricated;
+  }
+
+  and closures = closures_entry Closure_id.Map.t
+
+  and 'a of_kind_naked_number =
+    | Immediate : Immediate.Set.t -> Immediate.Set.t of_kind_naked_number
+    | Float : Numbers.Float_by_bit_pattern.Set.t
+        -> Numbers.Float_by_bit_pattern.Set.t of_kind_naked_number
+    | Int32 : Int32.Set.t -> Int32.Set.t of_kind_naked_number
+    | Int64 : Int64.Set.t -> Int64.Set.t of_kind_naked_number
+    | Nativeint : Targetint.Set.t -> Targetint.Set.t of_kind_naked_number
+
+  and discriminant_case = {
+    equations : equations;
+  }
+
+  and of_kind_fabricated =
+    | Discriminant of discriminant_case Discriminant.Map.t
+    | Set_of_closures of set_of_closures
+    | Closure of closure
+
+  and set_of_closures = {
+    closures : ty_fabricated Closure_id.Map.t extensibility;
+    closure_elements : ty_value Var_within_closure.Map.t extensibility;
+  }
+
+  and closure = {
+    function_decls : function_declarations;
+  }
+
+  and typing_environment = {
+    (* CR mshinwell: Once we're sure that [equations] being closed is the
+       right decision, remove [must_be_closed] *)
+    must_be_closed : bool;
+    resolver : (Export_id.t -> t option);
+    canonical_names_to_aliases : Name.Set.t Name.Map.t;
+    names_to_types : (Scope_level.t * t) Name.Map.t;
+    levels_to_names : Name.Set.t Scope_level.Map.t;
+    existentials : Name.Set.t;
+    existential_freshening : Freshening.t;
+  }
+
+  and equations = {
+    (* The "option" is so that we don't need to pass [resolver] to lots of
+       the type-constructing functions. *)
+    typing_judgements : typing_environment option;
+  }
+
+  module Name_or_export_id = struct
+    type t =
+      | Name of Name.t
+      | Export_id of Export_id.t
+
+    include Identifiable.Make (struct
+      type nonrec t = t
+
+      let compare t1 t2 =
+        match t1, t2 with
+        | Name _, Export_id _ -> -1
+        | Export_id _, Name _ -> 1
+        | Name name1, Name name2 -> Name.compare name1 name2
+        | Export_id id1, Export_id id2 -> Export_id.compare id1 id2
+
+      let equal t1 t2 =
+        compare t1 t2 = 0
+ 
+      let hash t =
+        match t with
+        | Name name -> Hashtbl.hash (0, Name.hash name)
+        | Export_id id -> Hashtbl.hash (1, Export_id.hash id)
+
+      let print ppf t =
+        match t with
+        | Name name -> Name.print ppf name
+        | Export_id id -> Export_id.print ppf id
+    end)
+  end
+end
+
+module type S = module type of struct include S_impl end

@@ -149,4 +149,10 @@ module type S = sig
   val free_names_transitive : t -> flambda_type -> Name_occurrences.t
 
   val free_names_transitive_list : t -> flambda_type list -> Name_occurrences.t
+
+  val replace_meet_typing_environment
+     : typing_environment
+    -> Name.t
+    -> t_in_context
+    -> typing_environment
 end
