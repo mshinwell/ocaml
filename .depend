@@ -3924,9 +3924,9 @@ middle_end/typing/flambda_type0.cmo : middle_end/base_types/variable.cmi \
     middle_end/typing/typing_environment0.cmi utils/targetint.cmi \
     middle_end/base_types/tag.cmi middle_end/base_types/scope_level.cmi \
     utils/printing_cache.cmi middle_end/base_types/parameter.cmi \
-    middle_end/base_types/or_unknown.cmi middle_end/base_types/or_bottom.cmi \
-    utils/numbers.cmi middle_end/base_types/name_occurrences.cmi \
-    middle_end/base_types/name.cmi utils/misc_color.cmi utils/misc.cmi \
+    middle_end/base_types/or_unknown.cmi utils/numbers.cmi \
+    middle_end/base_types/name_occurrences.cmi middle_end/base_types/name.cmi \
+    utils/misc_color.cmi utils/misc.cmi \
     middle_end/typing/meet_and_join_value.cmi \
     middle_end/typing/meet_and_join_spec_intf.cmo \
     middle_end/typing/meet_and_join_intf.cmo \
@@ -3948,9 +3948,9 @@ middle_end/typing/flambda_type0.cmx : middle_end/base_types/variable.cmx \
     middle_end/typing/typing_environment0.cmx utils/targetint.cmx \
     middle_end/base_types/tag.cmx middle_end/base_types/scope_level.cmx \
     utils/printing_cache.cmx middle_end/base_types/parameter.cmx \
-    middle_end/base_types/or_unknown.cmx middle_end/base_types/or_bottom.cmx \
-    utils/numbers.cmx middle_end/base_types/name_occurrences.cmx \
-    middle_end/base_types/name.cmx utils/misc_color.cmx utils/misc.cmx \
+    middle_end/base_types/or_unknown.cmx utils/numbers.cmx \
+    middle_end/base_types/name_occurrences.cmx middle_end/base_types/name.cmx \
+    utils/misc_color.cmx utils/misc.cmx \
     middle_end/typing/meet_and_join_value.cmx \
     middle_end/typing/meet_and_join_spec_intf.cmx \
     middle_end/typing/meet_and_join_intf.cmx \
@@ -4071,6 +4071,31 @@ middle_end/typing/meet_and_join_intf.cmo : \
     middle_end/base_types/export_id.cmi
 middle_end/typing/meet_and_join_intf.cmx : \
     middle_end/base_types/export_id.cmx
+middle_end/typing/meet_and_join_naked_number.cmo : \
+    middle_end/typing/typing_environment0_intf.cmo utils/targetint.cmi \
+    middle_end/base_types/or_unknown.cmi middle_end/base_types/or_bottom.cmi \
+    utils/numbers.cmi middle_end/typing/meet_and_join_spec_intf.cmo \
+    middle_end/typing/meet_and_join_intf.cmo \
+    middle_end/base_types/immediate.cmi \
+    middle_end/typing/flambda_type0_internal_intf.cmo \
+    middle_end/typing/flambda_kind.cmi middle_end/typing/equations_intf.cmo \
+    middle_end/typing/meet_and_join_naked_number.cmi
+middle_end/typing/meet_and_join_naked_number.cmx : \
+    middle_end/typing/typing_environment0_intf.cmx utils/targetint.cmx \
+    middle_end/base_types/or_unknown.cmx middle_end/base_types/or_bottom.cmx \
+    utils/numbers.cmx middle_end/typing/meet_and_join_spec_intf.cmx \
+    middle_end/typing/meet_and_join_intf.cmx \
+    middle_end/base_types/immediate.cmx \
+    middle_end/typing/flambda_type0_internal_intf.cmx \
+    middle_end/typing/flambda_kind.cmx middle_end/typing/equations_intf.cmx \
+    middle_end/typing/meet_and_join_naked_number.cmi
+middle_end/typing/meet_and_join_naked_number.cmi : \
+    middle_end/typing/typing_environment0_intf.cmo utils/targetint.cmi \
+    utils/numbers.cmi middle_end/typing/meet_and_join_spec_intf.cmo \
+    middle_end/typing/meet_and_join_intf.cmo \
+    middle_end/base_types/immediate.cmi \
+    middle_end/typing/flambda_type0_internal_intf.cmo \
+    middle_end/typing/equations_intf.cmo
 middle_end/typing/meet_and_join_spec_intf.cmo : \
     middle_end/base_types/or_unknown.cmi middle_end/base_types/or_bottom.cmi \
     middle_end/typing/flambda_kind.cmi

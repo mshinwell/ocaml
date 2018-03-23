@@ -1916,255 +1916,7 @@ result
             No_alias unknown_or_join, equations_from_meet
           end
       end
-  end and Meet_and_join_value : sig
-    include Meet_and_join_intf.S
-      with type of_kind_foo := of_kind_value
-      with type typing_environment := typing_environment
-      with type equations := equations
-      with type 'a ty := 'a ty
-  end = Real_meet_and_join_value.Make (struct
-      include T
-
-      let print_ty_value = print_ty_value
-      let ty_is_obviously_bottom = ty_is_obviously_bottom
-      let force_to_kind_value = force_to_kind_value
-    end)
-    (Make_meet_and_join)
-    (Meet_and_join_naked_immediate)
-    (Meet_and_join_naked_float)
-    (Meet_and_join_naked_int32)
-    (Meet_and_join_naked_int64)
-    (Meet_and_join_naked_nativeint)
-    (Meet_and_join_fabricated)
-    (Meet_and_join)
-    (Typing_environment0)
-    (Equations)
-  and Meet_and_join_naked_immediate : sig
-    (* CR mshinwell: See if we can abstract these naked number cases some
-       more? *)
-    include Meet_and_join_intf.S
-      with type of_kind_foo := Immediate.Set.t of_kind_naked_number
-      with type typing_environment := typing_environment
-      with type equations := equations
-      with type 'a ty := 'a ty
-  end = Make_meet_and_join (struct
-    type of_kind_foo = Immediate.Set.t of_kind_naked_number
-
-    let kind = K.naked_immediate ()
-
-    let to_type ty : t =
-      { descr = Naked_number (ty, Naked_immediate);
-        phantom = None;
-      }
-
-    let force_to_kind = force_to_kind_naked_immediate
-
-    let print_ty = print_ty_naked_number
-
-    let meet_of_kind_foo _env1 _env2
-          (of_kind1 : Immediate.Set.t of_kind_naked_number)
-          (of_kind2 : Immediate.Set.t of_kind_naked_number)
-          : (Immediate.Set.t of_kind_naked_number * equations)
-              Or_bottom.t =
-      match of_kind1, of_kind2 with
-      | Immediate fs1, Immediate fs2 ->
-        let fs = Immediate.Set.inter fs1 fs2 in
-        if Immediate.Set.is_empty fs then Bottom
-        else Ok (Immediate fs, Equations.create ())
-      | _, _ -> Bottom
-
-    let join_of_kind_foo _env1 _env2
-          (of_kind1 : Immediate.Set.t of_kind_naked_number)
-          (of_kind2 : Immediate.Set.t of_kind_naked_number)
-          : Immediate.Set.t of_kind_naked_number Or_unknown.t =
-      match of_kind1, of_kind2 with
-      | Immediate fs1, Immediate fs2 ->
-        let fs = Immediate.Set.union fs1 fs2 in
-        Known (Immediate fs)
-      | _, _ -> Unknown
-  end) and Meet_and_join_naked_float : sig
-    (* CR mshinwell: See if we can abstract these naked number cases some
-       more? *)
-    include Meet_and_join_intf.S
-      with type of_kind_foo := Float_by_bit_pattern.Set.t of_kind_naked_number
-      with type typing_environment := typing_environment
-      with type equations := equations
-      with type 'a ty := 'a ty
-  end = Make_meet_and_join (struct
-    type of_kind_foo = Float_by_bit_pattern.Set.t of_kind_naked_number
-
-    let kind = K.naked_float ()
-
-    let to_type ty =
-      { descr = Naked_number (ty, Naked_float);
-        phantom = None;
-      }
-
-    let force_to_kind = force_to_kind_naked_float
-    let print_ty = print_ty_naked_number
-
-    let meet_of_kind_foo _env1 _env2
-          (of_kind1 : Float_by_bit_pattern.Set.t of_kind_naked_number)
-          (of_kind2 : Float_by_bit_pattern.Set.t of_kind_naked_number)
-          : (Float_by_bit_pattern.Set.t of_kind_naked_number
-              * equations) Or_bottom.t =
-      match of_kind1, of_kind2 with
-      | Float fs1, Float fs2 ->
-        let fs = Float_by_bit_pattern.Set.inter fs1 fs2 in
-        if Float_by_bit_pattern.Set.is_empty fs then Bottom
-        else Ok (Float fs, Equations.create ())
-      | _, _ -> Bottom
-
-    let join_of_kind_foo _env1 _env2
-          (of_kind1 : Float_by_bit_pattern.Set.t of_kind_naked_number)
-          (of_kind2 : Float_by_bit_pattern.Set.t of_kind_naked_number)
-          : Float_by_bit_pattern.Set.t of_kind_naked_number Or_unknown.t =
-      match of_kind1, of_kind2 with
-      | Float fs1, Float fs2 ->
-        let fs = Float_by_bit_pattern.Set.union fs1 fs2 in
-        Known (Float fs)
-      | _, _ -> Unknown
-  end) and Meet_and_join_naked_int32 : sig
-    include Meet_and_join_intf.S
-      with type of_kind_foo := Int32.Set.t of_kind_naked_number
-      with type typing_environment := typing_environment
-      with type equations := equations
-      with type 'a ty := 'a ty
-  end = Make_meet_and_join (struct
-    type of_kind_foo = Int32.Set.t of_kind_naked_number
-
-    let kind = K.naked_int32 ()
-
-    let to_type ty : t =
-      { descr = Naked_number (ty, Naked_int32);
-        phantom = None;
-      }
-
-    let force_to_kind = force_to_kind_naked_int32
-    let print_ty = print_ty_naked_number
-
-    let meet_of_kind_foo _env1 _env2
-          (of_kind1 : Int32.Set.t of_kind_naked_number)
-          (of_kind2 : Int32.Set.t of_kind_naked_number)
-          : (Int32.Set.t of_kind_naked_number * equations) Or_bottom.t =
-      match of_kind1, of_kind2 with
-      | Int32 is1, Int32 is2 ->
-        let is = Int32.Set.inter is1 is2 in
-        if Int32.Set.is_empty is then Bottom
-        else Ok (Int32 is, Equations.create ())
-      | _, _ -> Bottom
-
-    let join_of_kind_foo _env1 _env2
-          (of_kind1 : Int32.Set.t of_kind_naked_number)
-          (of_kind2 : Int32.Set.t of_kind_naked_number)
-          : Int32.Set.t of_kind_naked_number Or_unknown.t =
-      match of_kind1, of_kind2 with
-      | Int32 is1, Int32 is2 ->
-        let is = Int32.Set.union is1 is2 in
-        Known (Int32 is)
-      | _, _ -> Unknown
-  end) and Meet_and_join_naked_int64 : sig
-    include Meet_and_join_intf.S
-      with type of_kind_foo := Int64.Set.t of_kind_naked_number
-      with type typing_environment := typing_environment
-      with type equations := equations
-      with type 'a ty := 'a ty
-  end = Make_meet_and_join (struct
-    type of_kind_foo = Int64.Set.t of_kind_naked_number
-
-    let kind = K.naked_int64 ()
-
-    let to_type ty : t =
-      { descr = Naked_number (ty, Naked_int64);
-        phantom = None;
-      }
-
-    let force_to_kind = force_to_kind_naked_int64
-    let print_ty = print_ty_naked_number
-
-    let meet_of_kind_foo _env1 _env2
-          (of_kind1 : Int64.Set.t of_kind_naked_number)
-          (of_kind2 : Int64.Set.t of_kind_naked_number)
-          : (Int64.Set.t of_kind_naked_number * equations) Or_bottom.t =
-      match of_kind1, of_kind2 with
-      | Int64 is1, Int64 is2 ->
-        let is = Int64.Set.inter is1 is2 in
-        if Int64.Set.is_empty is then Bottom
-        else Ok (Int64 is, Equations.create ())
-      | _, _ -> Bottom
-
-    let join_of_kind_foo _env1 _env2
-          (of_kind1 : Int64.Set.t of_kind_naked_number)
-          (of_kind2 : Int64.Set.t of_kind_naked_number)
-          : Int64.Set.t of_kind_naked_number Or_unknown.t =
-      match of_kind1, of_kind2 with
-      | Int64 is1, Int64 is2 ->
-        let is = Int64.Set.union is1 is2 in
-        Known (Int64 is)
-      | _, _ -> Unknown
-  end) and Meet_and_join_naked_nativeint : sig
-    include Meet_and_join_intf.S
-      with type of_kind_foo := Targetint.Set.t of_kind_naked_number
-      with type typing_environment := typing_environment
-      with type equations := equations
-      with type 'a ty := 'a ty
-  end = Make_meet_and_join (struct
-    type of_kind_foo = Targetint.Set.t of_kind_naked_number
-
-    let kind = K.naked_nativeint ()
-
-    let to_type ty : t =
-      { descr = Naked_number (ty, Naked_nativeint);
-        phantom = None;
-      }
-
-    let force_to_kind = force_to_kind_naked_nativeint
-    let print_ty = print_ty_naked_number
-
-    let meet_of_kind_foo _env1 _env2
-          (of_kind1 : Targetint.Set.t of_kind_naked_number)
-          (of_kind2 : Targetint.Set.t of_kind_naked_number)
-          : (Targetint.Set.t of_kind_naked_number * equations) Or_bottom.t =
-      match of_kind1, of_kind2 with
-      | Nativeint is1, Nativeint is2 ->
-        let is = Targetint.Set.inter is1 is2 in
-        if Targetint.Set.is_empty is then Bottom
-        else Ok (Nativeint is, Equations.create ())
-      | _, _ -> Bottom
-
-    let join_of_kind_foo _env1 _env2
-          (of_kind1 : Targetint.Set.t of_kind_naked_number)
-          (of_kind2 : Targetint.Set.t of_kind_naked_number)
-          : Targetint.Set.t of_kind_naked_number Or_unknown.t =
-      match of_kind1, of_kind2 with
-      | Nativeint is1, Nativeint is2 ->
-        let is = Targetint.Set.union is1 is2 in
-        Known (Nativeint is)
-      | _, _ -> Unknown
-  end) and Meet_and_join_fabricated : sig
-    include Meet_and_join_intf.S
-      with type of_kind_foo := of_kind_fabricated
-      with type typing_environment := typing_environment
-      with type equations := equations
-      with type 'a ty := 'a ty
-  end = Real_meet_and_join_fabricated.Make (struct
-      include T
-
-      let print_ty_fabricated = print_ty_fabricated
-      let is_obviously_bottom = is_obviously_bottom
-      let ty_is_obviously_bottom = ty_is_obviously_bottom
-      let force_to_kind_fabricated = force_to_kind_fabricated
-      let bottom_as_ty_fabricated = bottom_as_ty_fabricated
-      let bottom_as_ty_value = bottom_as_ty_value
-      let any_fabricated_as_ty_fabricated = any_fabricated_as_ty_fabricated
-      let any_value_as_ty_value = any_value_as_ty_value
-    end)
-    (Make_meet_and_join)
-    (Meet_and_join_value)
-    (Meet_and_join)
-    (Typing_environment0)
-    (Equations)
-  and Meet_and_join : sig
+  end and Meet_and_join : sig
     include Meet_and_join_intf.S_for_types
       with type t_in_context := t_in_context
       with type equations := equations
@@ -2392,6 +2144,126 @@ result
     let join_equations ~resolver equations1 equations2 =
       meet_or_join_equations ~resolver ~meet_or_join:Typing_environment0.join
         equations1 equations2
+  end and Meet_and_join_value : sig
+    include Meet_and_join_intf.S
+      with type of_kind_foo := of_kind_value
+      with type typing_environment := typing_environment
+      with type equations := equations
+      with type 'a ty := 'a ty
+  end = Real_meet_and_join_value.Make (struct
+      include T
+
+      let print_ty_value = print_ty_value
+      let ty_is_obviously_bottom = ty_is_obviously_bottom
+      let force_to_kind_value = force_to_kind_value
+    end)
+    (Make_meet_and_join)
+    (Meet_and_join_naked_immediate)
+    (Meet_and_join_naked_float)
+    (Meet_and_join_naked_int32)
+    (Meet_and_join_naked_int64)
+    (Meet_and_join_naked_nativeint)
+    (Meet_and_join_fabricated)
+    (Meet_and_join)
+    (Typing_environment0)
+    (Equations)
+  and Meet_and_join_naked_immediate : sig
+    (* CR mshinwell: See if we can abstract these naked number cases some
+       more? *)
+    include Meet_and_join_intf.S
+      with type of_kind_foo := Immediate.Set.t of_kind_naked_number
+      with type typing_environment := typing_environment
+      with type equations := equations
+      with type 'a ty := 'a ty
+  end = Real_meet_and_join_naked_number.Naked_immediate.Make (struct
+      include T
+
+    end)
+    (Make_meet_and_join)
+    (Meet_and_join)
+    (Typing_environment0)
+    (Equations)
+  and Meet_and_join_naked_float : sig
+    (* CR mshinwell: See if we can abstract these naked number cases some
+       more? *)
+    include Meet_and_join_intf.S
+      with type of_kind_foo := Float_by_bit_pattern.Set.t of_kind_naked_number
+      with type typing_environment := typing_environment
+      with type equations := equations
+      with type 'a ty := 'a ty
+  end = Real_meet_and_join_naked_number.Naked_float.Make (struct
+      include T
+
+    end)
+    (Make_meet_and_join)
+    (Meet_and_join)
+    (Typing_environment0)
+    (Equations)
+  and Meet_and_join_naked_int32 : sig
+    include Meet_and_join_intf.S
+      with type of_kind_foo := Int32.Set.t of_kind_naked_number
+      with type typing_environment := typing_environment
+      with type equations := equations
+      with type 'a ty := 'a ty
+  end = Real_meet_and_join_naked_number.Naked_int32.Make (struct
+      include T
+
+    end)
+    (Make_meet_and_join)
+    (Meet_and_join)
+    (Typing_environment0)
+    (Equations)
+  and Meet_and_join_naked_int64 : sig
+    include Meet_and_join_intf.S
+      with type of_kind_foo := Int64.Set.t of_kind_naked_number
+      with type typing_environment := typing_environment
+      with type equations := equations
+      with type 'a ty := 'a ty
+  end = Real_meet_and_join_naked_number.Naked_int64.Make (struct
+      include T
+
+    end)
+    (Make_meet_and_join)
+    (Meet_and_join)
+    (Typing_environment0)
+    (Equations)
+  and Meet_and_join_naked_nativeint : sig
+    include Meet_and_join_intf.S
+      with type of_kind_foo := Targetint.Set.t of_kind_naked_number
+      with type typing_environment := typing_environment
+      with type equations := equations
+      with type 'a ty := 'a ty
+  end = Real_meet_and_join_naked_number.Naked_nativeint.Make (struct
+      include T
+
+    end)
+    (Make_meet_and_join)
+    (Meet_and_join)
+    (Typing_environment0)
+    (Equations)
+  and Meet_and_join_fabricated : sig
+    include Meet_and_join_intf.S
+      with type of_kind_foo := of_kind_fabricated
+      with type typing_environment := typing_environment
+      with type equations := equations
+      with type 'a ty := 'a ty
+  end = Real_meet_and_join_fabricated.Make (struct
+      include T
+
+      let print_ty_fabricated = print_ty_fabricated
+      let is_obviously_bottom = is_obviously_bottom
+      let ty_is_obviously_bottom = ty_is_obviously_bottom
+      let force_to_kind_fabricated = force_to_kind_fabricated
+      let bottom_as_ty_fabricated = bottom_as_ty_fabricated
+      let bottom_as_ty_value = bottom_as_ty_value
+      let any_fabricated_as_ty_fabricated = any_fabricated_as_ty_fabricated
+      let any_value_as_ty_value = any_value_as_ty_value
+    end)
+    (Make_meet_and_join)
+    (Meet_and_join_value)
+    (Meet_and_join)
+    (Typing_environment0)
+    (Equations)
   end and Typing_environment0 : sig
     include Typing_environment0_intf.S
       with type typing_environment := typing_environment

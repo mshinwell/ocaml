@@ -321,6 +321,7 @@ MIDDLE_END_LANGUAGE_AND_TYPING=\
   middle_end/typing/typing_environment0.cmo \
   middle_end/typing/meet_and_join_intf.cmo \
   middle_end/typing/meet_and_join_spec_intf.cmo \
+  middle_end/typing/meet_and_join_naked_number.cmo \
   middle_end/typing/meet_and_join_fabricated.cmo \
   middle_end/typing/meet_and_join_value.cmo \
   middle_end/typing/flambda_type0.cmo \
