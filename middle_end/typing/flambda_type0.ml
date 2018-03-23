@@ -27,8 +27,9 @@ module Int64 = Numbers.Int64
 module K = Flambda_kind
 
 module Real_typing_environment0 = Typing_environment0
-module Real_meet_and_join_fabricated = Meet_and_join_fabricated
 module Real_meet_and_join_value = Meet_and_join_value
+module Real_meet_and_join_naked_number = Meet_and_join_naked_number
+module Real_meet_and_join_fabricated = Meet_and_join_fabricated
 
 module Make (Expr : sig
   type t
